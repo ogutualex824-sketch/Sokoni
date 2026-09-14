@@ -40,19 +40,68 @@ const SPos = (function () {
        guarded so a single failure (e.g. an old/partial POS cache) can NEVER blank the shell or
        block Inventory/Cashier. In degraded mode the app still launches and renders from canonical
        Firestore; a small non-blocking status says the local cache is unavailable. */
-    await PosDB.init().catch(() => {});
+    /* LAST RESORT, armed before the first await so it survives a stall ANYWHERE below,
+       including in a step added later. A merchant staring at a black screen cannot act
+       on it; a degraded till still takes cash.
+
+       It reveals whatever the SAME authority the normal decision uses says is right -
+       the app for a signed-in or embedded operator, otherwise the first-run wizard. It
+       never reveals the app to someone the normal path would not have, so no gate moves. */
+    try {
+      setTimeout(function () {
+        try {
+          var app = document.getElementById('pos-app');
+          var wiz = document.getElementById('pos-wizard');
+          var appHidden = !app || app.classList.contains('hidden');
+          var wizShown  = !!wiz && wiz.style.display !== 'none' && wiz.style.display !== '';
+          if (!appHidden || wizShown) return;   /* something is on screen: not the dead state */
+          _stage('watchdog:dead-state');
+          try { window._posDbDegraded = true; } catch (_) {}
+          if (_launchAuthority()) {
+            if (wiz) { wiz.style.pointerEvents = 'none'; wiz.style.display = 'none'; }
+            if (app) app.classList.remove('hidden');
+            _activate();
+            _stage('watchdog:revealed-app');
+          } else if (wiz) {
+            wiz.style.display = 'flex';
+            _stage('watchdog:revealed-wizard');
+          }
+        } catch (_) {}
+      }, 15000);
+    } catch (_) {}
+
+    await _bounded(PosDB.init(), 8000, undefined, 'db-init');
     try { if (PosDB.isDegraded && PosDB.isDegraded()) window._posDbDegraded = true; } catch (_) {}
-    try { state.settings = await PosDB.settings.getAll(); } catch (_) { state.settings = state.settings || {}; }
-    try { await PosDB.categories.seedDefaults(); } catch (_) {}
+    state.settings = (await _bounded(PosDB.settings.getAll(), 5000, state.settings || {}, 'db-settings')) || {};
+    await _bounded(PosDB.categories.seedDefaults(), 5000, undefined, 'db-seed');
 
     const isSetup = state.settings.setupComplete === true || state.settings.setupComplete === 'true';
     /* The first-run setup wizard must NOT block the app when the POS is embedded in the merchant
-       shell — embedded → launch straight to the requested panel; setup stays an explicit module. */
-    const embedded = (function () { try { return window.parent && window.parent !== window; } catch (_) { return true; } })();
+       shell — embedded → launch straight to the requested panel; setup stays an explicit module.
+       Both that rule and the signed-in rule now live in _launchAuthority(), which the boot
+       watchdog reads too; a second copy here would have been free to diverge from it. */
     try {
-      if (isSetup || embedded) {
+      /* ── A SIGNED-IN MERCHANT NEVER MEETS THE BUSINESS WIZARD ────────────
+         `isSetup` reads state.settings.setupComplete, which comes from
+         PosDB.settings — IndexedDB. That is a DEVICE cache, and it answers
+         "has this browser been set up", not "does this account have an
+         approved business". Only the server can answer the second.
+
+         It became reachable far more often once the PosDB blocked-open
+         deadlock was fixed: a blocked open now RESOLVES DEGRADED instead of
+         hanging, and a degraded cache returns EMPTY settings — so setupComplete
+         is absent and the wizard was shown to merchants whose business already
+         exists. The deadlock fix was correct; this decision was simply reading
+         the wrong authority behind it.
+
+         Same markers auth-guard.js and the pos.html boot guard use, so there is
+         one convention rather than three. A signed-in account launches the app;
+         SokoniPosContext then renders the real answer in place — open the till,
+         or offer POS Setup for DEVICE pairing. Business registration belongs to
+         the application-and-approval flow, never to opening a till. */
+      if (isSetup || _launchAuthority()) {
         await launchApp();
-        if (!isSetup && embedded) { try { window._posNeedsSetup = true; } catch (_) {} }
+        if (!isSetup && _launchAuthority()) { try { window._posNeedsSetup = true; } catch (_) {} }
       } else {
         var _wz = document.getElementById('pos-wizard'); if (_wz) _wz.style.display = 'flex';
       }
@@ -62,12 +111,28 @@ const SPos = (function () {
       console.warn('[SmartPOS] launch degraded:', e && e.message);
       try { document.getElementById('pos-app').classList.remove('hidden'); } catch (_) {}
       try { var _wz2 = document.getElementById('pos-wizard'); if (_wz2) _wz2.style.display = 'none'; } catch (_) {}
+      /* Revealing without wiring navigation is how a 'graceful' degrade became a dead screen. */
+      _activate();
     }
 
     if (window._posDbDegraded) _showPosDbDegradedStatus();
 
     /* Remaining boot steps — each isolated; none may abort the render. */
-    try { await PosBarcode.init(); PosBarcode.setCallback(handleBarcodeGlobal); } catch (_) {}
+    /* SCANNER INIT MUST NOT FAIL SILENTLY.
+       This was `catch (_) {}`. The hardware wedge listener is only armed once
+       setCallback() has run, so if init() threw, every barcode a cashier scanned did
+       NOTHING — no error, no log, no visible difference from a scanner that is simply
+       unplugged. "The scanner stopped working" is unanswerable when the failure left no
+       trace. Boot still continues (the isolation is deliberate); it just says so now. */
+    try {
+      await PosBarcode.init();
+      PosBarcode.setCallback(handleBarcodeGlobal);
+      state.scannerReady = true;
+    } catch (err) {
+      state.scannerReady = false;
+      console.error('[POS] barcode scanner init failed — hardware scanning is OFF:',
+                    (err && err.message) || err);
+    }
     try { setInterval(updateClock, 1000); updateClock(); } catch (_) {}
     try {
       window.addEventListener('online',  () => updateOnlineStatus(true));
@@ -91,20 +156,105 @@ const SPos = (function () {
     } catch (_) {}
   }
 
+  /* Boot stage markers. pos-crash-breadcrumbs.js exposes window.sokoniStage and
+     writes each stage to localStorage SYNCHRONOUSLY, so a stage recorded here
+     survives the tab being killed — and /pos?diag=crash can then name the exact
+     point launchApp reached. pos.js previously reported NOTHING, which is why the
+     crash panel could see the script graph but never the app boot.
+     Never throws, never changes behaviour. */
+  function _stage(n) { try { if (window.sokoniStage) window.sokoniStage('launch:' + n); } catch (_) {} }
+
+  /* A HANG IS NOT AN EXCEPTION. try/catch cannot see a promise that never settles,
+     so an IndexedDB read that blocks stops every step after it - and each step below
+     is what reveals the till. Bound them: the POS opens DEGRADED (canonical Firestore,
+     local cache marked unavailable) rather than not opening at all. The timeout records
+     a stage, so ?diag=crash NAMES the stall instead of reporting a blank page with no
+     last stage. */
+  /* THE TILL MUST END UP INTERACTIVE, by whichever route it got on screen.
+     nav.init() sat at the very end of launchApp, behind eight awaits, so a stall or a
+     throw anywhere among them produced a fully rendered POS that answered no taps - and
+     the degrade catch, which reveals the app, never wired navigation either. Idempotent
+     via state.ready (checked nowhere else), so calling it from several places is safe. */
+  function _activate () {
+    try { if (state.ready) return; } catch (_) { return; }
+    try { nav.init(); } catch (e) { console.warn('[SmartPOS] nav degraded:', e && e.message); }
+    try { state.ready = true; } catch (_) {}
+    _stage('interactive');
+    try { if (window.PosPlugins) PosPlugins.emit('boot:after', { settings: state.settings }); } catch (_) {}
+  }
+
+  function _bounded (p, ms, fallback, label) {
+    _stage(label + ':start');
+    /* Latched, NOT Promise.race: race does not cancel the loser, so the timer would
+       still fire on a healthy boot and falsely mark the session degraded. */
+    var done = false, timer = null;
+    return new Promise(function (resolve) {
+      timer = setTimeout(function () {
+        if (done) return;
+        done = true;
+        try { window._posDbDegraded = true; } catch (_) {}
+        _stage(label + ':TIMEOUT');
+        resolve(fallback);
+      }, ms);
+      Promise.resolve(p).then(function (v) {
+        if (done) return;
+        done = true; try { clearTimeout(timer); } catch (_) {}
+        _stage(label + ':ok');
+        resolve(v);
+      }, function (e) {
+        if (done) return;
+        done = true; try { clearTimeout(timer); } catch (_) {}
+        _stage(label + ':error');
+        resolve(fallback);
+      });
+    });
+  }
+
+  /* ONE predicate, read by the launch decision AND by the watchdog below. Two copies of
+     this rule would be free to disagree, which is the exact defect shape that has bitten
+     this shell repeatedly (a sender and a receiver nobody checks agree). Deliberately
+     does NOT consult state.settings: the watchdog may run at a point where the settings
+     read never returned, and this must stay answerable. */
+  function _launchAuthority () {
+    var embedded = true;
+    try { embedded = !!(window.parent && window.parent !== window); } catch (_) { embedded = true; }
+    if (embedded) return true;
+    try {
+      return localStorage.getItem('loggedIn') === 'true'
+        || !!JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+    } catch (_) { return false; }
+  }
+
   async function launchApp() {
-    state.settings = await PosDB.settings.getAll();
+    _stage('begin');
+    state.settings = (await _bounded(PosDB.settings.getAll(), 5000, state.settings || {}, 'launch-settings')) || {};
+    _stage('settings');
+    /* Null-guarded: launchApp dereferenced this with no check, so removing the
+       wizard markup — which is the direction this is heading — would throw here
+       and blank the app before it ever rendered. */
     const wiz = document.getElementById('pos-wizard');
-    wiz.style.transition = 'opacity 0.18s ease';
-    wiz.style.opacity = '0';
-    wiz.style.pointerEvents = 'none';
-    setTimeout(() => { wiz.style.display = 'none'; }, 190);
+    if (wiz) {
+      wiz.style.transition = 'opacity 0.18s ease';
+      wiz.style.opacity = '0';
+      wiz.style.pointerEvents = 'none';
+      setTimeout(() => { try { wiz.style.display = 'none'; } catch (_) {} }, 190);
+    }
     document.getElementById('pos-app').classList.remove('hidden');
+    _stage('app-visible');
+
+    /* Backstop. Everything below this line is catalogue/branding/plugin loading - useful,
+       never a precondition for taking a sale. If any of it stalls past this window the
+       till still becomes navigable; _activate is idempotent, so the normal path simply
+       finds the work already done. */
+    try { setTimeout(_activate, 8000); } catch (_) {}
 
     /* Populate header */
     _setVal('hdr-biz-name', state.settings.bizName || 'SOKONI SmartPOS');
 
     /* Load products */
-    await products.reload();
+    _stage('products:start');
+    await _bounded(products.reload(), 8000, undefined, 'products');
+    _stage('products:done');
 
     /* Sync the merchant's CANONICAL products into the POS. The POS store was fed only by the
        separate `posProducts` collection, so a shop whose products live in the canonical
@@ -146,7 +296,9 @@ const SPos = (function () {
     } catch (_) {}
 
     /* Load category chips */
-    await ui.loadCategories();
+    _stage('categories:start');
+    await _bounded(ui.loadCategories(), 5000, undefined, 'categories');
+    _stage('categories:done');
 
     /* Init BOS modules */
     if (window.PosBoss) {
@@ -170,10 +322,10 @@ const SPos = (function () {
     /* Boot new modules */
     if (window.PosPlugins) {
       PosPlugins.installBuiltins();
-      await PosPlugins.restoreEnabled();
+      await _bounded(PosPlugins.restoreEnabled(), 5000, undefined, 'plugins');
     }
     if (window.PosNotify) {
-      await PosNotify.requestPermission().catch(() => {});
+      await _bounded(PosNotify.requestPermission(), 3000, undefined, 'notify-permission');
     }
     if (window.PosOmni && state.settings.bizPin) {
       PosOmni.startSync(state.settings.bizPin);
@@ -184,7 +336,7 @@ const SPos = (function () {
        load reset it). The PIN still gates the FIRST login and switching cashiers; the
        separate manager-PIN still gates refunds/voids/discounts. Only prompt if nothing valid
        was restored. */
-    const cashiers = await PosDB.cashiers.getAll();
+    const cashiers = (await _bounded(PosDB.cashiers.getAll(), 5000, [], 'cashiers')) || [];
     if (cashiers.length > 0) {
       const restored = await cashier.restoreSession(cashiers);
       if (!restored) cashier.showSwitchDialog();
@@ -219,13 +371,10 @@ const SPos = (function () {
     if (window.PosMobile) PosMobile.init();
 
     /* Boot terminal management */
-    if (window.PosTerminals) await PosTerminals.init();
+    if (window.PosTerminals) await _bounded(PosTerminals.init(), 5000, undefined, 'terminals');
 
     /* Wire the navigation service: URL-hash deep-linking + Back/Forward. */
-    nav.init();
-
-    state.ready = true;
-    if (window.PosPlugins) PosPlugins.emit('boot:after', { settings: state.settings });
+    _activate();
   }
 
   /* ═══════════════════════════════════════════════════════════
@@ -606,28 +755,98 @@ const SPos = (function () {
   /* Back-compat alias — existing boot call site (and any others) keep working. */
   async function _seedCatalogueFromCanonical () { return refreshInventoryFromCanonical(); }
 
-  /* Push a POS stock change to the CANONICAL products.stock so in-store sales/edits reflect on
+  /* Push a POS stock DELTA to the CANONICAL products.stock so in-store sales/edits reflect on
      the marketplace + seller dashboard (interim inventory convergence). Proper transaction —
-     read → floor at 0 → write stock + inventoryVersion + updatedAt together (the inventory
-     guardrail) — best-effort + online-only, never blocks the sale. Full convergence (routing
-     the terminal through posCompleteCheckout) is planned separately. */
+     read → floor at 0 → write stock + sold + inventoryVersion + updatedAt together (the
+     inventory guardrail) — online-only, never blocks the sale. Full convergence (routing the
+     terminal through posCompleteCheckout) is planned separately.
+
+     This is the terminal's ONLY writer of canonical products/{id}.stock. The legacy
+     PosOmni.pushStock — which wrote an ABSOLUTE local level with no transaction and replayed
+     stale absolute values from an offline queue — was retired alongside this change, because
+     canonical 10 → buyer orders 3 → server sets 7 → POS pushes local 9 erased the sale.
+
+     A failure here is REPORTED, never swallowed: see the catch block. */
+
+  let _canonDenyToastAt = 0;
+
+  function _posCanonicalOutcome (status, detail) {
+    try { window.dispatchEvent(new CustomEvent('pos:canonical-stock', { detail: { status, ...detail } })); } catch (_) {}
+    return status;
+  }
+
   window._posSyncCanonicalStock = async function (id, delta, reason) {
+    delta = Number(delta) || 0;
+    const r = String(reason || '');
+    if (!id || !delta)      return _posCanonicalOutcome('skipped',     { id, delta, reason: r });
+    if (!window.firebaseDB) return _posCanonicalOutcome('unavailable', { id, delta, reason: r });
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      /* Offline is a DEFERRED write, not a success — and deliberately NOT queued. A queue that
+         replays a delta double-counts it; the absolute-value queue that used to exist erased
+         concurrent marketplace sales. Canonical reconcile is the recovery path, not replay. */
+      return _posCanonicalOutcome('deferred', { id, delta, reason: r });
+    }
+
+    /* Marketplace-linked rows carry the canonical doc id in `marketplaceId`; catalogue-seeded
+       rows reuse the canonical id as their local id. Resolving both preserves exactly the
+       linkage pushStock provided, so retiring it removes a defect, not a capability. */
+    let canonicalId = String(id);
     try {
-      if (!id || !delta || !window.firebaseDB || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+      const local = await PosDB.products.get(id);
+      if (local && local.marketplaceId) canonicalId = String(local.marketplaceId);
+    } catch (_) {}
+
+    /* `sold` mirrors a sale and its reversals only. Receiving stock or correcting a count is
+       not a sale, so it must not inflate the figure analytics and the seller dashboard read. */
+    const soldDelta = /^sale:/.test(r)                      ? -delta   /* delta < 0 on a sale     */
+                    : /^(refund|void|rollback):/.test(r)    ? -delta   /* delta > 0 on a reversal */
+                    : 0;
+
+    try {
       const m   = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-      const ref = m.doc(window.firebaseDB, 'products', String(id));
-      await m.runTransaction(window.firebaseDB, async (tx) => {
+      const ref = m.doc(window.firebaseDB, 'products', canonicalId);
+      const applied = await m.runTransaction(window.firebaseDB, async (tx) => {
         const snap = await tx.get(ref);
-        if (!snap.exists()) return;                        /* not a canonical product — skip */
-        const next = Math.max(0, Number(snap.data().stock || 0) + Number(delta));   /* floored at zero */
-        tx.update(ref, {
-          stock: next,
+        if (!snap.exists()) return null;                   /* not a canonical product — skip */
+        const d     = snap.data() || {};
+        const patch = {
+          stock:            Math.max(0, Number(d.stock || 0) + delta),   /* floored at zero */
           inventoryVersion: m.increment(1),
-          lastStockSource: 'pos:' + (reason || 'adjust'),
-          updatedAt: m.serverTimestamp(),
-        });
+          lastStockSource:  'pos:' + (r || 'adjust'),
+          updatedAt:        m.serverTimestamp(),
+        };
+        if (soldDelta) patch.sold = Math.max(0, Number(d.sold || 0) + soldDelta);
+        tx.update(ref, patch);
+        return { stock: patch.stock, sold: patch.sold };
       });
-    } catch (_) { /* best-effort — local IndexedDB stock stays authoritative for the session */ }
+
+      if (!applied) return _posCanonicalOutcome('not-canonical', { id, canonicalId, delta, reason: r });
+      if (window.PosHealth) PosHealth.recordMetric('canonical_stock_sync', 1);
+      return _posCanonicalOutcome('synced', { id, canonicalId, delta, reason: r, ...applied });
+
+    } catch (err) {
+      /* A DENIED write is a correctness defect, not a logging gap. A cashier or branch till
+         whose uid is not the product's sellerUid is rejected by the products `allow update`
+         rule, and swallowing that leaves the merchant believing the marketplace converged —
+         the same class of defect as a success toast shown before the write lands. */
+      const code   = (err && (err.code || err.message)) || 'unknown';
+      /* Denial does not always surface as a code — some SDK paths carry it only in the
+         message ("Missing or insufficient permissions."). Match both, or a real denial
+         degrades to a generic 'failed' and the cashier is never told. */
+      const denied = /permission[-_ ]denied|insufficient permissions/i
+        .test(String(code) + ' ' + String((err && err.message) || ''));
+      console.error('[POS] canonical stock sync failed:', canonicalId, code, err);
+      if (window.PosHealth) {
+        PosHealth.recordError(denied ? 'canonical_stock_denied' : 'canonical_stock_failed',
+          String((err && err.message) || code), { id, canonicalId, delta, reason: r });
+      }
+      /* One toast per minute — a five-line sale on an unauthorised till must inform, not spam. */
+      if (denied && Date.now() - _canonDenyToastAt > 60000) {
+        _canonDenyToastAt = Date.now();
+        toast('Marketplace stock NOT updated — this till is not authorised to change this product. Sale saved locally.', 'error');
+      }
+      return _posCanonicalOutcome(denied ? 'denied' : 'failed', { id, canonicalId, delta, reason: r, code: String(code) });
+    }
   };
 
   /* Checkout-convergence SHADOW (Phase 1) — dry-run the canonical posCompleteCheckout and store a
@@ -927,7 +1146,7 @@ const SPos = (function () {
           <div class="cart-item-name">
             ${_esc(item.name)}
             <small>KES ${Number(item.price).toFixed(2)} / ${item.unit || 'piece'}
-              <button class="cart-price-override" title="Override price" onclick="SPos.cart.overridePrice('${item.id}','${_esc(item.name)}',${item.price})" style="background:none;border:none;cursor:pointer;color:var(--txt3);font-size:11px;padding:0 2px;margin-left:2px">✏</button>
+              <button class="cart-price-override" title="Override price" onclick="SPos.cart.overridePrice('${item.id}','${_esc(item.name)}',${item.price})" style="background:none;border:none;cursor:pointer;color:var(--txt3);font-size:11px;padding:0 2px;margin-left:2px">✏</button><button class="cart-price-override" title="Request manager approval for a price override" onclick="SPos.cart.requestPriceOverrideApproval('${item.id}','${_esc(item.name)}',${item.price})" style="background:none;border:none;cursor:pointer;color:var(--txt3);font-size:11px;padding:0 2px">🔑</button>
             </small>
           </div>
           <div class="cart-item-qty">
@@ -1022,6 +1241,38 @@ const SPos = (function () {
       if (val > 0) toast(`Discount applied: ${state.discountType === 'pct' ? val + '%' : 'KES ' + val}`, 'success');
     },
 
+    /* ── REQUEST MANAGER APPROVAL ─────────────────────────────────────────────
+       Raises a BOUND request and returns. It does NOT apply the discount: no
+       mutation consumes an approval yet, so approving is a recorded decision and
+       nothing more. The PIN path in applyDiscount is untouched and still gates
+       execution. See docs/MANAGER_APPROVAL_ARCHITECTURE.md. */
+    async requestDiscountApproval() {
+      const val = parseFloat(_v('disc-value')) || 0;
+      if (!(val > 0)) { toast('Enter a discount value first', 'error'); return; }
+      const isPct = state.discountType === 'pct';
+      /* The binding must carry the exact figure the manager will see. A percentage is
+         resolved to money against the current subtotal, so "20%" can never be approved
+         and later read as "KES 20". */
+      const sub = cart.getSubtotal();
+      const amount = isPct ? Math.round(sub * (val / 100) * 100) / 100 : val;
+      await PosApprovalRequest.request('discount', { amount: amount }, {
+        reason: isPct ? (val + '% of ' + sub) : 'flat amount',
+        requestedByName: state.currentCashier && state.currentCashier.name,
+      });
+    },
+
+    async requestPriceOverrideApproval(id, name, currentPrice) {
+      const raw = window.prompt('New price for ' + name + ' (current KES ' + currentPrice + ')');
+      if (raw === null) return;
+      const next = parseFloat(raw);
+      if (!isFinite(next) || next < 0) { toast('Enter a valid price', 'error'); return; }
+      await PosApprovalRequest.request('price_override',
+        { productId: String(id), amount: next }, {
+          reason: name + ': KES ' + currentPrice + ' → KES ' + next,
+          requestedByName: state.currentCashier && state.currentCashier.name,
+        });
+    },
+
     removeDiscount() {
       state.discountVal = 0;
       cart.render();
@@ -1043,18 +1294,21 @@ const SPos = (function () {
 
       const total = cart.getTotal();
       const isM   = method === 'mpesa';
+      const isT   = method === 'mpesa_till';
       const isC   = method === 'card';
       const payBtn = document.getElementById('pay-btn');
-      payBtn.className = 'pos-pay-btn' + (isM ? ' mpesa' : isC ? ' card' : '');
+      payBtn.className = 'pos-pay-btn' + (isM || isT ? ' mpesa' : isC ? ' card' : '');
       payBtn.textContent = isM
         ? `📱 Pay KES ${total.toFixed(2)} via M-PESA`
+        : isT
+        ? `🏪 Record KES ${total.toFixed(2)} Till payment`
         : isC
         ? `💳 Charge KES ${total.toFixed(2)} via Card`
         : `Charge KES ${total.toFixed(2)}`;
       payBtn.disabled = total <= 0;
       /* Sync mobile charge button label + style */
       const _mBtn2 = document.getElementById('mobile-pay-btn');
-      if (_mBtn2) { _mBtn2.textContent = payBtn.textContent; _mBtn2.className = 'cart-mobile-pay-btn' + (isM ? ' mpesa' : ''); }
+      if (_mBtn2) { _mBtn2.textContent = payBtn.textContent; _mBtn2.className = 'cart-mobile-pay-btn' + (isM || isT ? ' mpesa' : ''); }
 
       _setVal('numpad-label', method === 'cash' ? 'Amount tendered' : 'Amount');
     },
@@ -1083,6 +1337,15 @@ const SPos = (function () {
         _setVal('mpesa-amount-disp', total.toFixed(2));
         /* Pre-fill with customer phone if available */
         if (state.currentCustomer?.phone) _setVal('mpesa-phone', state.currentCustomer.phone);
+        return;
+      }
+
+      if (method === 'mpesa_till') {
+        modal.open('mpesa-till-modal');
+        _setVal('mpesa-till-amount-disp', total.toFixed(2));
+        const _ref = document.getElementById('mpesa-till-ref');
+        if (_ref) { _ref.value = ''; _ref.focus(); }
+        mpesaTill.onInput();
         return;
       }
 
@@ -1162,6 +1425,63 @@ const SPos = (function () {
         change:         payInfo.change || 0,
         mpesaRef:       payInfo.mpesaRef,
         mpesaPhone:     payInfo.mpesaPhone,
+
+        /* ── TENDER ARRAY — the receipt's payment section reads THIS ───────────
+           PosPrintService renders its payment block from `payments`
+           (sokoni-pos-print-service.js:1243 → payment()). Nothing ever populated
+           it, so POS receipts have been printing with NO payment section at all:
+           no method, no code, no tendered, no change. The renderer supported all
+           of it; the array was simply never built.
+
+           Building it here is what lets a Till reference reach the paper, and it
+           restores the payment section for cash and card at the same time.
+
+           `amount` is what was applied to the sale; `tendered` is what the
+           customer handed over. They differ for cash, and conflating them would
+           overstate takings on every cash receipt. */
+        payments: (function () {
+          /* A SPLIT sale is TWO tenders, and must be recorded as two.
+             `payment.complete` receives method:'split' with splitCash/splitMpesa
+             (see the split monkey-patch below). Emitting a single line labelled
+             "split" would put the M-PESA code against a tender that does not
+             name a payment method, and print exactly that on the customer's
+             receipt. PosPrintService groups by method and prints a code per
+             tender precisely so this case renders correctly. */
+          if (payInfo.method === 'split') {
+            const lines = [];
+            const cashPart  = Number(payInfo.splitCash)  || 0;
+            const mpesaPart = Number(payInfo.splitMpesa) || 0;
+            if (cashPart > 0)  lines.push({ method: 'cash',  amount: cashPart });
+            if (mpesaPart > 0) {
+              const m = { method: 'mpesa', amount: mpesaPart };
+              if (payInfo.mpesaRef) m.ref = payInfo.mpesaRef;
+              lines.push(m);
+            }
+            /* Never return an empty tender set — a sale always has a tender. */
+            if (lines.length) return lines;
+          }
+
+          const line = {
+            method: payInfo.method,
+            amount: Number(total) || 0,
+          };
+          if (payInfo.mpesaRef) line.ref = payInfo.mpesaRef;
+          if (payInfo.cardRef || payInfo.cardAuthCode) line.ref = payInfo.cardRef || payInfo.cardAuthCode;
+          if (payInfo.method === 'cash') {
+            line.tendered = Number(payInfo.amountPaid) || 0;
+            line.change   = Number(payInfo.change) || 0;
+          }
+          return [line];
+        })(),
+
+        /* Operator-attested, NOT independently confirmed. Set only for the manual
+           Till path: SOKONI holds no Safaricom record for it. Other methods are
+           deliberately left untouched rather than assigned a verification status
+           this function cannot establish — an invented `true` would be worse than
+           an absent field. */
+        ...(payInfo.method === 'mpesa_till_manual'
+          ? { paymentVerified: false, paymentAttestedBy: 'operator' }
+          : {}),
         cashierId:      state.currentCashier?.id,
         cashierName:    state.currentCashier?.name,
         shiftId:        state.currentShift?.id,
@@ -1293,6 +1613,22 @@ const SPos = (function () {
       if (state.settings.autoPrint || payInfo.method === 'card') {
         if (window.PosPrintService && typeof PosPrintService.printReceipt === 'function') {
           PosPrintService.printReceipt(receiptData, { method: payInfo.method, payments: txn.payments })
+            .then((r) => {
+              /* THE SALE IS DONE EITHER WAY — settlement is decoupled and must never be held
+                 up by a printer. But a receipt that did not come out has to be SAID, or the
+                 cashier hands the customer nothing and believes the till printed.
+                 The promise RESOLVING is not success: it resolves with the outcome. */
+              const st = (r && r.status) || '';
+              if (st === 'failed') {
+                toast('Sale completed — but the receipt did NOT print. Reprint from Orders.', 'error');
+              } else if (st === 'queued_offline') {
+                toast('Sale completed — no printer connected, receipt queued.', 'warn');
+              } else if (st === 'unknown') {
+                /* NEVER auto-reprint here: the job may already be on paper, and a duplicate
+                   receipt for one sale is its own defect. The cashier decides. */
+                toast('Sale completed — the printer did not confirm. Check the paper before reprinting.', 'warn');
+              }
+            })
             .catch(() => { /* service already falls back internally; last-ditch guard below */
               if (window.SokoniPrint) SokoniPrint.print('receipt', receiptData).catch(() => window.PosPrinter && PosPrinter.printBrowser(receiptData));
             });
@@ -1351,12 +1687,10 @@ const SPos = (function () {
       /* Recommendations invalidation */
       if (window.PosAIEngine) PosAIEngine.recommendations.invalidate();
 
-      /* Omnichannel stock push for marketplace-linked products */
-      if (window.PosOmni) {
-        for (const item of txn.items) {
-          if (item.marketplaceId) PosOmni.pushStock(item.id).catch(() => {});
-        }
-      }
+      /* Canonical stock for marketplace-linked products already converged in Step 2 above:
+         adjustStock() → _posSyncCanonicalStock() applies the true signed delta in one
+         transaction. The former PosOmni.pushStock() loop here wrote an absolute local level
+         a second time and is retired — see _posSyncCanonicalStock for why. */
 
       /* Check for low stock and notify */
       for (const item of txn.items) {
@@ -1389,6 +1723,94 @@ const SPos = (function () {
   /* ═══════════════════════════════════════════════════════════
      M-PESA
   ═══════════════════════════════════════════════════════════ */
+  /* ══════════════════════════════════════════════════════════════════════════
+     MANUAL M-PESA TILL PAYMENT
+
+     The customer has already paid the merchant's own Till directly. The cashier
+     records the confirmation code against this sale.
+
+     WHAT THIS DOES AND DOES NOT MEAN
+     Recording is not verification. With no C2B webhook or STK callback on this
+     path, SOKONI has no way to ask Safaricom whether the money arrived, so the
+     record says "the cashier recorded a Till payment and supplied this
+     reference" — never "SOKONI confirmed this payment". The distinction is kept
+     in the DATA (`paymentMethod: 'mpesa_till_manual'`, `paymentVerified: false`)
+     so that a future C2B or STK origin is distinguishable from this one rather
+     than collapsing into an undifferentiated "mpesa".
+
+     UNIQUENESS IS CLAIMED SERVER-SIDE, NOT HERE
+     The check below is a courtesy that catches the common case early. It CANNOT
+     be the guard: this POS is offline-first, so two devices can accept the same
+     reference with neither able to see the other. The authoritative claim is a
+     deterministic transactional write at sync — see functions/pos-mpesa-refs.js.
+     ══════════════════════════════════════════════════════════════════════════ */
+  const MPESA_REF_RE = /^[A-Z0-9]{10}$/;
+
+  /** Normalise operator input: strip spaces/punctuation, uppercase. */
+  function _normaliseMpesaRef(raw) {
+    return String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
+  const mpesaTill = {
+    _normalise: _normaliseMpesaRef,
+    isValid(raw) { return MPESA_REF_RE.test(_normaliseMpesaRef(raw)); },
+
+    onInput() {
+      const el   = document.getElementById('mpesa-till-ref');
+      const btn  = document.getElementById('mpesa-till-confirm-btn');
+      const hint = document.getElementById('mpesa-till-hint');
+      if (!el) return;
+      const norm = _normaliseMpesaRef(el.value);
+      if (el.value !== norm) el.value = norm;      /* show exactly what will be stored */
+      const ok = MPESA_REF_RE.test(norm);
+      if (btn) btn.disabled = !ok;
+      if (hint) {
+        hint.textContent = !norm.length
+          ? "10 characters, from the customer's M-PESA SMS."
+          : ok ? '✓ Looks like a valid M-PESA code.'
+               : `${norm.length}/10 characters.`;
+        hint.style.color = ok ? '#00a84e' : 'var(--txt2)';
+      }
+    },
+
+    async confirm() {
+      const el = document.getElementById('mpesa-till-ref');
+      const ref = _normaliseMpesaRef(el && el.value);
+      if (!MPESA_REF_RE.test(ref)) {
+        toast('Enter the 10-character M-PESA confirmation code', 'error');
+        return;
+      }
+
+      /* Early duplicate check against THIS device's history. Not the guard —
+         see the module note. A local hit is always a real duplicate, so it is
+         worth refusing here rather than at sync. */
+      try {
+        const prior = await PosDB.transactions.getAll();
+        if ((prior || []).some(t => t && t.mpesaRef === ref && t.status === 'completed')) {
+          const res = document.getElementById('mpesa-till-result');
+          if (res) {
+            res.style.display    = 'block';
+            res.style.background = 'rgba(255,59,48,0.10)';
+            res.style.color      = '#ff3b30';
+            res.textContent      = `${ref} is already recorded against another sale on this device.`;
+          }
+          toast('That M-PESA code is already used on this device', 'error');
+          return;
+        }
+      } catch (_) { /* history unavailable — the server claim still applies */ }
+
+      const total = cart.getTotal();
+      modal.close('mpesa-till-modal');
+      await payment.complete({
+        method:     'mpesa_till_manual',
+        amountPaid: total,
+        change:     0,
+        mpesaRef:   ref,
+        mpesaPhone: (state.currentCustomer && state.currentCustomer.phone) || null,
+      });
+    },
+  };
+
   const mpesa = {
     /* RETIRED — the POS no longer stores merchant M-Pesa credentials.
        This wrote darajaConsumerSecret and darajaPassKey to Firestore from the
@@ -1537,6 +1959,35 @@ const SPos = (function () {
       PosBarcode.stopCamera();
       state.scannerForField = null;
       PosBarcode.setCallback(handleBarcodeGlobal);
+    },
+
+    /* ── PREMIUM SCANNER ──────────────────────────────────────────────────
+       Camera + image-upload + torch + continuous scanning, in its own surface.
+
+       IT IS HANDED THE SAME CALLBACK AS EVERY OTHER SCAN PATH. handleBarcodeGlobal
+       is the one place a scanned value becomes a cart line:
+
+         value → PosBarcode.submitScannedCode → PosDB.products.getByBarcode → cart.addByProduct
+
+       The premium module decodes and nothing else; passing it this callback is what
+       keeps the catalogue the single product authority. Passing it anything else —
+       or letting it resolve for itself — would create a second one.
+
+       THE MODULE IS LAZY. window.PosPremiumScanner is a shim installed in pos.html;
+       touching .open() is what fetches sokoni-premium-scanner.js. Nothing here is
+       parsed to open a till, and this call site must never be changed to an eager
+       import to make it feel faster. */
+    async openPremium() {
+      if (barcode.scannerOpen) barcode.closeScanner();
+      try {
+        const ok = await PosPremiumScanner.open(handleBarcodeGlobal);
+        /* The lazy shim resolves undefined when the module cannot be fetched. Say so
+           rather than leaving a merchant tapping a button that does nothing. */
+        if (ok === undefined) toast('Premium Scanner could not be loaded', 'error');
+      } catch (err) {
+        toast('Premium Scanner unavailable', 'error');
+        console.error('[POS] premium scanner failed to open:', (err && err.message) || err);
+      }
     },
 
     async scanForField(fieldId) {
@@ -2048,7 +2499,7 @@ const SPos = (function () {
           <thead><tr><th>Date</th><th>Receipt</th><th>Items</th><th class="td-right">Total</th><th>Payment</th><th>Actions</th></tr></thead>
           <tbody>${txns.map(t => `<tr>
             <td style="font-size:11px">${new Date(t.completedAt || t.timestamp).toLocaleString('en-KE')}</td>
-            <td style="font-family:monospace;font-size:11px">${t.receiptNo || '-'}</td>
+            <td style="font-family:monospace;font-size:11px">${receiptIdOf(t) || '-'}</td>
             <td>${(t.items||[]).length}</td>
             <td class="td-right">KES ${_fmt(t.total)}</td>
             <td><span class="stock-badge ${t.paymentMethod==='mpesa'?'stock-ok':'stock-low'}">${(t.paymentMethod||'cash').toUpperCase()}</span></td>
@@ -2387,7 +2838,7 @@ const SPos = (function () {
 
     _setVal('suc-total',      'KES ' + _fmt(receiptData.total));
     _setVal('suc-method',     (receiptData.paymentMethod || 'CASH').toUpperCase());
-    _setVal('suc-receipt-no', receiptData.receiptNo || '');
+    _setVal('suc-receipt-no', receiptIdOf(receiptData) || '');
     _setVal('suc-customer',   receiptData.customerName || 'Walk-in');
     _setVal('suc-cashier',    receiptData.cashierName  || '');
 
@@ -2424,7 +2875,7 @@ const SPos = (function () {
         const e164 = cleaned.startsWith('254') ? cleaned : cleaned.startsWith('0') ? '254' + cleaned.slice(1) : cleaned;
         const lines = [
           `*${receiptData.businessName || 'SOKONI SmartPOS'}*`,
-          `Receipt: ${receiptData.receiptNo}`,
+          `Receipt: ${receiptIdOf(receiptData)}`,
           `Date: ${new Date().toLocaleString('en-KE')}`,
           '',
           ...(receiptData.items || []).map(i => `${i.name} x${i.qty} — KES ${_fmt(i.qty * i.price)}`),
@@ -2735,7 +3186,7 @@ const SPos = (function () {
         : '<span class="ord-badge ord-ok">Completed</span>';
       const method = (t.paymentMethod || 'cash').toUpperCase();
       const n = (t.items || []).length;
-      const idLabel = t.receiptNo || ('POS-' + String(t.id || '').slice(-6));
+      const idLabel = receiptIdOf(t) || ('POS-' + String(t.id || '').slice(-6));
       return `<div class="ord-card">
         <div class="ord-card-top">
           <div>
@@ -2771,7 +3222,7 @@ const SPos = (function () {
       ov.className = 'ord-det-overlay';
       ov.onclick = e => { if (e.target === ov) ov.remove(); };
       ov.innerHTML = `<div class="ord-det-card">
-        <div class="ord-det-head"><strong>Sale #${_esc(t.receiptNo || String(t.id || '').slice(-6))}</strong><button aria-label="Close" onclick="this.closest('.ord-det-overlay').remove()">✕</button></div>
+        <div class="ord-det-head"><strong>Sale #${_esc(receiptIdOf(t) || String(t.id || '').slice(-6))}</strong><button aria-label="Close" onclick="this.closest('.ord-det-overlay').remove()">✕</button></div>
         <div class="ord-det-body">
           <div class="ord-det-row"><span>Customer</span><span>${_esc(t.customerName || 'Walk-in')}</span></div>
           <div class="ord-det-row"><span>Cashier</span><span>${_esc(t.cashierName || '-')}</span></div>
@@ -2812,7 +3263,7 @@ const SPos = (function () {
         <thead><tr><th>Date &amp; Time</th><th>Receipt</th><th>Cashier</th><th>Customer</th><th>Items</th><th class="td-right">Total</th><th>Method</th><th>Actions</th></tr></thead>
         <tbody>${txns.map(t => `<tr>
           <td style="font-size:11px;white-space:nowrap">${new Date(t.completedAt||t.timestamp).toLocaleString('en-KE')}</td>
-          <td style="font-family:monospace;font-size:11px">${t.receiptNo||'-'}</td>
+          <td style="font-family:monospace;font-size:11px">${receiptIdOf(t)||'-'}</td>
           <td style="font-size:11px">${_esc(t.cashierName||'-')}</td>
           <td style="font-size:11px">${_esc(t.customerName||'Walk-in')}</td>
           <td style="font-size:11px">${(t.items||[]).length}</td>
@@ -2868,7 +3319,7 @@ const SPos = (function () {
 
       const body = `
         <div style="font-size:12px;color:var(--txt2);margin-bottom:10px">
-          Receipt <strong>${t.receiptNo}</strong> · KES ${_fmt(t.total)} · ${new Date(t.completedAt||t.timestamp).toLocaleString('en-KE')}
+          Receipt <strong>${receiptIdOf(t)}</strong> · KES ${_fmt(t.total)} · ${new Date(t.completedAt||t.timestamp).toLocaleString('en-KE')}
         </div>
         <div style="font-size:11px;font-weight:800;letter-spacing:.05em;color:var(--txt3);margin-bottom:6px">SELECT ITEMS TO REFUND</div>
         ${itemsHtml}
@@ -2890,6 +3341,8 @@ const SPos = (function () {
             <option value="credit">Store Credit</option>
           </select>
         </div>
+          <button type="button" class="row-btn" style="width:100%;margin-top:14px;min-height:46px;font-weight:800" onclick="SPos.sales.requestRefundApproval('${txnId}')">Request manager approval</button>
+          <div style="font-size:11.5px;color:var(--txt3);margin-top:6px;line-height:1.45">Sends the exact operation to a manager. It does not carry it out.</div>
       `;
 
       confirm.show('Process Refund', body, async () => {
@@ -2935,7 +3388,7 @@ const SPos = (function () {
       const refundTxn = {
         type:            'refund',
         originalTxnId:   originalTxn.id,
-        originalReceiptNo: originalTxn.receiptNo,
+        originalReceiptNo: receiptIdOf(originalTxn),
         items:           refundItems,
         total:           refundTotal,
         paymentMethod:   method,
@@ -2989,6 +3442,35 @@ const SPos = (function () {
       }).catch(() => {});
     },
 
+    /* ── REQUEST MANAGER APPROVAL ─────────────────────────────────────────────
+       Creates a bound request and returns. It does NOT refund and does NOT void —
+       `_consumeApproval` has zero mutation call sites, so an approval is a recorded
+       decision, not an authorisation to execute. _processRefund / _processVoid are
+       untouched and still run their own checks. */
+    async requestRefundApproval(txnId) {
+      const t = await PosDB.transactions.getById(txnId);
+      if (!t) { toast('Transaction not found', 'error'); return; }
+      /* Only the selected lines, so the manager approves the amount actually asked
+         for rather than the whole sale. */
+      let amount = 0;
+      document.querySelectorAll('[id^="ref-item-"]').forEach((el) => {
+        if (el.checked) amount += (Number(el.dataset.qty) || 0) * (Number(el.dataset.price) || 0);
+      });
+      if (!(amount > 0)) amount = Number(t.total) || 0;
+      const reason = document.getElementById('refund-reason')?.value || 'customer_request';
+      await PosApprovalRequest.request('refund',
+        { saleId: String(txnId), amount: Math.round(amount * 100) / 100 },
+        { reason: reason, requestedByName: state.currentCashier && state.currentCashier.name });
+    },
+
+    async requestVoidApproval(txnId) {
+      const t = await PosDB.transactions.getById(txnId);
+      if (!t) { toast('Transaction not found', 'error'); return; }
+      const reason = document.getElementById('void-reason')?.value || 'manager_error';
+      await PosApprovalRequest.request('void', { saleId: String(txnId) },
+        { reason: reason, requestedByName: state.currentCashier && state.currentCashier.name });
+    },
+
     async voidDialog(txnId) {
       const t = await PosDB.transactions.getById(txnId);
       if (!t) { toast('Transaction not found', 'error'); return; }
@@ -3001,7 +3483,7 @@ const SPos = (function () {
           This action cannot be undone.
         </div>
         <div style="background:var(--card);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px">
-          Receipt <strong>${_esc(t.receiptNo || t.id)}</strong><br>
+          Receipt <strong>${_esc(receiptIdOf(t) || t.id)}</strong><br>
           Total: <strong>KES ${_fmt(t.total)}</strong> · ${new Date(t.completedAt || t.timestamp).toLocaleString('en-KE')}
         </div>
         <div>
@@ -3013,7 +3495,9 @@ const SPos = (function () {
             <option value="system_error">System Error</option>
             <option value="other">Other</option>
           </select>
-        </div>`;
+        </div>
+          <button type="button" class="row-btn" style="width:100%;margin-top:14px;min-height:46px;font-weight:800" onclick="SPos.sales.requestVoidApproval('${txnId}')">Request manager approval</button>
+          <div style="font-size:11.5px;color:var(--txt3);margin-top:6px;line-height:1.45">Sends the exact operation to a manager. It does not carry it out.</div>`;
 
       confirm.show('Void Transaction', body, async () => {
         await sales._processVoid(t);
@@ -3050,7 +3534,7 @@ const SPos = (function () {
 
       await products.reload();
       await sales.showHistory();
-      toast(`Transaction ${txn.receiptNo || txn.id} voided`, 'info');
+      toast(`Transaction ${receiptIdOf(txn) || txn.id} voided`, 'info');
     },
   };
 
@@ -3774,7 +4258,7 @@ const SPos = (function () {
   };
 
   return {
-    state, wizard, ui, nav, products, cart, payment, mpesa,
+    state, wizard, ui, nav, products, cart, payment, mpesa, mpesaTill,
     barcode, inv, reports, customers, cashier, shift,
     settings, profile, sync, data, modal, printerSetup, bos,
     sales, orders, more, po, cats, split,

@@ -44,6 +44,9 @@ const admin = require('firebase-admin');
 const REGION      = 'us-central1';
 const LEDGER      = 'commissionLedger';
 const RESTRICTION = 'sellerRestrictions';
+/* Deterministic settlement claims, keyed on the provider payment reference —
+   the idempotency record that makes a webhook redelivery a no-op. */
+const SETTLEMENT = 'commissionSettlements';
 const PENALTY_DOC = 'revenueConfig/commission_penalty';
 
 const DUE_HOURS      = 48;
@@ -267,6 +270,50 @@ async function settleConfirmedPayment({ sellerUid, amountKES, paymentRef, source
   const db = _db();
   const uid = String(sellerUid);
 
+  /* ── IDEMPOTENCY — the payment reference is the identity ─────────────────
+     Webhooks arrive more than once; that is normal, not exceptional. This
+     function previously queried OPEN rows and settled them by amount, with no
+     lookup on paymentRef at all — so a redelivery of the SAME payment settled a
+     SECOND tranche of rows. One real payment would clear twice the debt, and
+     lift a restriction that should still stand.
+
+     The reference is now CLAIMED in a transaction before any row is touched,
+     using a deterministic id so the claim itself cannot be duplicated. This is
+     the same shape darajaSTKCallback already uses to claim the
+     pending→completed transition, and that commissionLedger/{paymentId} and
+     sellerPayments/{checkoutId} use for their ids.
+
+     A redelivery therefore becomes a NO-OP: no second ledger settlement, no
+     second unlock, no duplicate audit event.
+     See docs/COMMISSION_ENFORCEMENT_CONTRACT.md §6. */
+  const ref = String(paymentRef || '').trim();
+  if (!ref) {
+    /* No reference means no idempotency key, and an unrepeatable settlement is
+       not safer for being unguarded — it is simply unauditable. Refuse. */
+    console.error('[commission-settle] refused: no paymentRef', { uid, amountKES });
+    return { settled: 0, stillOwed: -1, restrictionCleared: false, reason: 'no_payment_ref' };
+  }
+
+  const claimRef = db.collection(SETTLEMENT).doc(ref);
+  const claimed = await db.runTransaction(async (txn) => {
+    const prior = await txn.get(claimRef);
+    if (prior.exists) return false;          /* already applied — redelivery */
+    txn.set(claimRef, {
+      paymentRef: ref,
+      sellerUid: uid,
+      amountKES: Number(amountKES || 0),
+      source: String(source || 'unknown'),
+      status: 'applying',
+      createdAt: _ts(),
+    });
+    return true;
+  });
+
+  if (!claimed) {
+    console.log(`[commission-settle] redelivery ignored ref=${ref} uid=${uid}`);
+    return { settled: 0, stillOwed: 0, restrictionCleared: false, reason: 'already_settled' };
+  }
+
   const snap = await db.collection(LEDGER)
     .where('sellerUid', '==', uid)
     .where('billingModel', '==', 'PER_SALE_48H')
@@ -327,6 +374,9 @@ async function settleConfirmedPayment({ sellerUid, amountKES, paymentRef, source
       updatedAt: _ts(),
     }, { merge: true });
   }
+
+  await claimRef.set({ status: 'applied', settled, stillOwed,
+    restrictionCleared: stillOwed === 0, appliedAt: _ts() }, { merge: true });
 
   console.log(`[commission-settle] uid=${uid} ref=${paymentRef} settled=${settled} openRowsLeft=${stillOwed} restrictionCleared=${stillOwed === 0}`);
   return { settled, stillOwed, restrictionCleared: stillOwed === 0 };

@@ -132,6 +132,11 @@ exports.savePaymentDestination = onCall(
     const destinationType   = String(req.data?.destinationType || '').toUpperCase().trim();
     const destinationNumber = String(req.data?.destinationNumber || '').trim();
     const accountName       = String(req.data?.accountName || '').trim().slice(0, 120);
+    /* PAYBILL ONLY. A PayBill payment is incomplete without an account number: the
+       customer is prompted for one by M-PESA, and without it their money reaches the
+       paybill unattributable to any order. A TILL needs none and stores null — absent
+       and "blank" must not look alike to a later reader. */
+    const accountReference  = String(req.data?.accountReference || '').trim().slice(0, 64);
 
     if (!TYPES.includes(destinationType)) {
       throw new HttpsError('invalid-argument', 'destinationType must be TILL or PAYBILL.');
@@ -142,6 +147,10 @@ exports.savePaymentDestination = onCall(
     if (!accountName) {
       throw new HttpsError('invalid-argument', 'Business / account name is required.');
     }
+    if (destinationType === 'PAYBILL' && !accountReference) {
+      throw new HttpsError('invalid-argument',
+        'A PayBill requires the account number or reference customers must enter when paying.');
+    }
 
     const ref  = _db().collection(COLL).doc(scope.sellerUid);
     const snap = await ref.get();
@@ -151,9 +160,14 @@ exports.savePaymentDestination = onCall(
     /* Re-staging the destination that is already live is a no-op, not a
        re-verification. Otherwise a merchant could knock their own live
        destination back into PENDING_TEST by pressing Save twice. */
+    /* accountReference participates in the comparison: changing the account a
+       PayBill customer must quote is a DIFFERENT destination, even on the same
+       paybill number, and must re-enter PENDING_TEST rather than silently taking
+       effect on a destination already verified under the old reference. */
     if (active
         && active.destinationType === destinationType
-        && active.destinationNumber === destinationNumber) {
+        && active.destinationNumber === destinationNumber
+        && (active.accountReference || null) === (accountReference || null)) {
       return { ok: true, unchanged: true, ..._publicView(cur) };
     }
 
@@ -162,6 +176,8 @@ exports.savePaymentDestination = onCall(
       destinationType,
       destinationNumber,
       accountName,
+      /* null for TILL — see the validation note above. */
+      accountReference: destinationType === 'PAYBILL' ? accountReference : null,
       status: STATUS.PENDING_TEST,
       stagedAt: new Date().toISOString(),
       stagedBy: scope.sellerUid,
@@ -233,6 +249,10 @@ async function confirmVerified(sellerUid, checkoutId) {
       destinationType:   pending.destinationType,
       destinationNumber: pending.destinationNumber,
       accountName:       pending.accountName,
+      /* Copied explicitly, like its siblings. Omitting it would verify a PayBill
+         and then present customers no account to quote — the money would arrive
+         attributable to nothing. `?? null` keeps TILL absent rather than undefined. */
+      accountReference:  pending.accountReference ?? null,
       status:            STATUS.VERIFIED,
       verifiedAt:        now,
       verifiedByCheckoutId: String(checkoutId),

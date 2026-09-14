@@ -11,7 +11,16 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 
 const REGION = 'us-central1';
-const adminOs = require('./admin-os');
+/* admin-os owns the 41 original ops; admin-commission-trace adds the read-only Merchant
+   Subscription / commission traceability ops. Merged into ONE registry so the dispatcher's
+   op lookup, its "valid ops" error text and its auth path stay unchanged — a second dispatcher
+   would be a second admin surface to keep in step. The trace module writes nothing and guards
+   every op with the same admin/superAdmin check. */
+const adminOs = (() => {
+  const base = require('./admin-os');
+  const trace = require('./admin-commission-trace');
+  return Object.assign({}, base, { _h: Object.assign({}, base._h, trace._h) });
+})();
 
 const _OPTS = {
   region:          REGION,

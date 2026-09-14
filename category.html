@@ -64,9 +64,41 @@
     body.adult-products-theme .cat-page-header { background:linear-gradient(135deg,rgba(200,80,120,0.12),rgba(150,40,80,0.08),rgba(0,0,0,0)) !important; border-bottom:1px solid rgba(200,80,120,0.18) !important; }
     body.adult-products-theme #catTitle { background:linear-gradient(135deg,#e8738a,#c84060); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
 
+    /* ── Screen-reader-only label (search input needs an accessible name) ── */
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+      clip:rect(0 0 0 0);white-space:nowrap;border:0;}
+
+    /* ── Search row ─────────────────────────────────────────────────────────
+       Full width and OUTSIDE the horizontally-scrolling sort bar, so the Shop
+       page's primary control can never be scrolled off-screen. */
+    .cat-search-row{padding:8px 16px 2px;}
+    .cat-search-input{
+      width:100%;box-sizing:border-box;min-height:46px;padding:12px 16px;
+      background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);
+      border-radius:12px;color:#fff;font-size:15px;   /* >=16px-ish: iOS Safari zooms
+                                                        the whole page on focus below
+                                                        16px, which was throwing this
+                                                        layout out on every tap */
+      font-family:inherit;outline:none;transition:border-color .18s,background .18s;
+    }
+    .cat-search-input::placeholder{color:rgba(255,255,255,0.38);}
+    .cat-search-input:focus{border-color:rgba(113,255,0,0.45);background:rgba(255,255,255,0.07);}
+    .cat-search-input:focus-visible{outline:2px solid #71ff00;outline-offset:2px;}
+    @media(max-width:600px){
+      .cat-search-row{padding:10px 12px 4px;}
+      .cat-search-input{font-size:16px;}   /* exactly 16px = no iOS zoom-on-focus */
+    }
+
     /* ── Sort bar buttons: auto-width so they stay in one row ── */
-    .cat-sort-bar .cat-filter-btn{width:auto !important;padding:9px 16px !important;text-align:center !important;}
-    .cat-sort-bar{flex-wrap:nowrap !important;overflow-x:auto;gap:8px;padding:14px 16px 10px;}
+    .cat-sort-bar .cat-filter-btn{width:auto !important;padding:10px 16px !important;
+      min-height:44px !important;   /* WCAG 2.5.8 target size — was ~35px */
+      display:inline-flex !important;align-items:center !important;
+      text-align:center !important;white-space:nowrap;}
+    .cat-sort-bar{flex-wrap:nowrap !important;overflow-x:auto;gap:8px;padding:8px 16px 10px;
+      align-items:center;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+    .cat-sort-bar::-webkit-scrollbar{display:none;}
+    .cat-sort-bar .sort-label{flex-shrink:0;}
+    @media(max-width:600px){ .cat-sort-bar{padding:8px 12px 10px;} }
 
     /* ── Variant filter bar ──────────────────────────────────────────────
        Horizontally scrollable so a long colour list never wraps the page or
@@ -99,8 +131,61 @@
     .age-deny{padding:13px 28px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.55);font-weight:700;font-size:14px;border-radius:12px;cursor:pointer;font-family:inherit;flex:1;}
     .age-disclaimer{font-size:10px;color:rgba(255,255,255,0.25);margin-top:14px;line-height:1.5;}
 
+    /* ── Compact title rail (replaces the 206px centred hero) ───────────────
+       One line: icon · title · count. Left-aligned, because a centred 40px
+       heading under a fixed header reads as a second page header rather than as
+       a label for the grid below it. The decorative .cat-page-bg image is gone —
+       at brightness(0.18) behind an opaque panel it was invisible in practice and
+       cost an extra full-width image request on every category view. */
+    .cat-page-header{
+      padding:14px 16px 6px !important;text-align:left !important;
+      background:linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0)) !important;
+    }
+    .cat-title-rail{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;}
+    .cat-page-icon{font-size:22px !important;margin:0 !important;display:inline !important;line-height:1;}
+    .cat-page-header h1{
+      font-size:20px !important;font-weight:900 !important;margin:0 !important;
+      color:#fff;line-height:1.25;
+    }
+    .cat-count-text{
+      margin:0 !important;font-size:12px !important;font-weight:700;
+      color:rgba(255,255,255,0.42) !important;white-space:nowrap;
+    }
+    @media(min-width:769px){
+      .cat-page-header{padding:20px 32px 8px !important;}
+      .cat-page-header h1{font-size:26px !important;}
+      .cat-page-icon{font-size:26px !important;}
+      .cat-count-text{font-size:13px !important;}
+    }
+    @media(max-width:600px){
+      .cat-page-header{padding:10px 12px 4px !important;}
+      .cat-page-header h1{font-size:17px !important;}
+      .cat-page-icon{font-size:18px !important;}
+    }
+    /* Collapse the stacked-hero margins these elements inherited from style.css /
+       premium.css / sokoni-desktop.css. They were designed for a centred column
+       (h1 above count above pills); on one rail they are just dead vertical space.
+       Scoped through .cat-page-header so it outranks sokoni-desktop.css, which is
+       linked AFTER this <style> block and otherwise wins at equal specificity. */
+    .cat-page-header .cat-title-rail h1,
+    .cat-page-header .cat-title-rail .cat-count-text,
+    .cat-page-header .cat-page-icon { margin:0 !important; }
+    .cat-page-header .cat-nav-pills { margin-top:6px !important; padding-top:6px !important; padding-bottom:6px !important; }
+    .cat-page-header .cat-pills-wrap { margin-top:0 !important; }
+
     /* ── Category pills scroll arrows ── */
     .cat-pills-wrap{position:relative;width:100%;}
+    /* Comfortable tap target for the pills themselves (was ~35px tall). */
+    .cat-nav-pills .cat-pill{min-height:40px;display:inline-flex;align-items:center;
+      white-space:nowrap;flex-shrink:0;}
+    /* The arrows are a mouse affordance. On touch the strip scrolls natively, so
+       they are pure clutter over an already-tight row — and at 32px they were
+       under-sized as tap targets anyway. Hide them where there is no fine pointer
+       and give the strip its padding back. */
+    @media(hover:none) and (pointer:coarse){
+      .cat-pills-arrow{display:none !important;}
+      .cat-nav-pills{padding-left:12px !important;padding-right:12px !important;}
+    }
     .cat-pills-arrow{
       position:absolute;top:50%;transform:translateY(-50%);z-index:10;
       width:32px;height:32px;border-radius:50%;
@@ -213,24 +298,39 @@
   </div>
 </div>
 
-<!-- NAVBAR -->
-<nav class="navbar">
-  <div class="logo-section">
-    <a href="/"><img loading="lazy" src="assets/sokoni-logo-dark.png" class="main-logo" alt="Sokoni"></a>
-  </div>
-  <div class="nav-actions">
-    <a href="wishlist.html" class="wishlist-nav-btn">❤️</a>
-    <a href="cart.html" class="cart-btn" style="text-decoration:none">🛒 <span id="catCartCount">0</span></a>
-  </div>
-</nav>
+<!-- NO PAGE-LOCAL NAVBAR.
+     shared-header.js injects the fixed global header (#sk-top-nav) on this page —
+     logo/home, marketplace search, activity, messages, CART, account and the menu
+     drawer. The <nav class="navbar"> that used to sit here repeated the logo and a
+     SECOND cart badge directly underneath it; category.js still carries the comment
+     describing the two pips "sitting on screen disagreeing".
 
-<!-- CATEGORY HEADER -->
+     On mobile the duplicate was especially expensive: style.css turns .navbar into
+     flex-direction:column with 20px padding below 768px, so it stacked the logo above
+     the icons and consumed ~120px of the first screen before any product was visible.
+
+     Nothing is lost. Cart and account are in the global header; Wishlist is in the
+     global menu drawer (shared-header.js), which is where every other page reaches
+     it from — this page was the anomaly, not the rule. -->
+
+<!-- CATEGORY HEADER — compact title rail.
+
+     This was a 206px centred hero: a background-image band, a 52px emoji on its
+     own line, a 40px H1 and the count, all stacked ABOVE the category pills. It
+     restated what the fixed global header and the bottom nav's "Shop" tab already
+     say, and on a phone it pushed the first product row off the initial screen.
+
+     Now icon + title + count sit on ONE line and the pills follow immediately.
+     The <h1> is kept (this page ships schema.org CollectionPage markup and is an
+     SEO landing page) — it is restyled, not removed, and #catIcon / #catTitle /
+     #catCount keep their IDs because category.js writes all three per category. -->
 <section class="cat-page-header">
-  <div class="cat-page-bg"></div>
   <div class="cat-page-info">
-    <div class="cat-page-icon" id="catIcon">🛍️</div>
-    <h1 id="catTitle">🛍️ All Products</h1>
-    <p id="catCount" class="cat-count-text">Loading...</p>
+    <div class="cat-title-rail">
+      <span class="cat-page-icon" id="catIcon" aria-hidden="true">🛍️</span>
+      <h1 id="catTitle">🛍️ All Products</h1>
+      <p id="catCount" class="cat-count-text" role="status" aria-live="polite">Loading…</p>
+    </div>
     <div class="cat-pills-wrap" id="pillsWrap">
       <button type="button" class="cat-pills-arrow left hidden" id="arrowLeft" onclick="scrollPills(-1)" aria-label="Scroll left">‹</button>
       <div class="cat-nav-pills" id="pillsScroll">
@@ -270,10 +370,20 @@
 
 <!-- SORT + PRODUCTS -->
 <section class="cat-page-body">
-  <div class="cat-sort-bar">
-    <input type="text" id="catSearch" placeholder="🔍 Search products…" oninput="searchCatProducts()"
-      style="flex:1;min-width:140px;padding:8px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:13px;font-family:inherit;outline:none;"
+  <!-- Search gets its OWN full-width row.
+       It used to be the first child of .cat-sort-bar, which this page sets to
+       flex-wrap:nowrap + overflow-x:auto. On a 390px phone the label plus four sort
+       chips overflowed that row, so the search field was squeezed to its 140px
+       min-width AND could be scrolled horizontally out of sight — the primary control
+       on the Shop page hidden behind a sideways swipe. Sorting still scrolls; search
+       no longer does. -->
+  <div class="cat-search-row">
+    <label for="catSearch" class="sr-only">Search products in this category</label>
+    <input type="search" id="catSearch" class="cat-search-input" placeholder="🔍 Search products…"
+      autocomplete="off" enterkeyhint="search" oninput="searchCatProducts()"
       onkeydown="if(event.key==='Enter'&&this.value.trim()){event.preventDefault();location.href='search.html?q='+encodeURIComponent(this.value.trim());}">
+  </div>
+  <div class="cat-sort-bar">
     <span class="sort-label">Sort:</span>
     <button type="button" class="cat-filter-btn active-filter" onclick="sortProducts('default',this)">Newest</button>
     <button type="button" class="cat-filter-btn" onclick="sortProducts('low',this)">Price ↑</button>

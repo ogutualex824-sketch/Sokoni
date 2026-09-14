@@ -41,6 +41,50 @@ function _uid(req) {
 /* Provider's effective commission rate — resolved through the canonical
    subscription-core seam (unifies providerSubscriptions + accountSubscriptions),
    so the provider hub and UEOE can never disagree on the rate charged. */
+/* ── Publishable-service ceiling, per hub (owner decision 2026-09-13) ────────────────────
+ * Healthcare accounts are priced by the three Healthcare plans and express capacity as
+ * `limits.services`. Every other provider keeps the generic five-tier behaviour, reading
+ * `limits.listings` off providerSubscriptions exactly as before.
+ *
+ * THIS FUNCTION EXISTS BECAUSE THE OBVIOUS SHORTCUT FAILS OPEN. Pointing the old code at a
+ * healthcare subscription would have read `limits.listings` from a plan that only carries
+ * `limits.doctors`:
+ *
+ *     Number(undefined)                    -> NaN
+ *     (NaN !== -1 && activeCount >= NaN)   -> false        // the guard never fires
+ *
+ * A comparison against NaN is always false, so the cap would not have errored — it would have
+ * silently stopped existing, and a Clinic could publish unlimited services. Every return path
+ * below is therefore a finite number, and anything unresolvable lands on the floor rather than
+ * on NaN. `limits.listings` is never consulted for healthcare, not even as a fallback.
+ *
+ * -1 means unlimited and is the ONLY non-positive value that widens the cap.
+ */
+const _SERVICE_FLOOR = 1;                 /* unchanged: a provider with no subscription gets 1 */
+
+async function _serviceCapFor(uid) {
+  let hub = 'provider';
+  try {
+    hub = await require('./provider-hub').resolveProviderHub(_db(), uid);
+  } catch (_) { /* unresolvable hub -> generic path, which is the stricter of the two */ }
+
+  if (hub === 'healthcare') {
+    try {
+      const { capabilitiesFor } = require('./capability-authority');
+      const cap = await capabilitiesFor(uid, { hub: 'healthcare' });
+      const n = Number(cap.capabilities.serviceLimit);
+      return Number.isFinite(n) ? n : _SERVICE_FLOOR;
+    } catch (_) {
+      return _SERVICE_FLOOR;              /* fail CLOSED: unreadable plan is not unlimited */
+    }
+  }
+
+  const snap = await _db().collection('providerSubscriptions').doc(uid).get().catch(() => null);
+  if (!snap || !snap.exists) return _SERVICE_FLOOR;
+  const n = Number(snap.data().limits?.listings);
+  return Number.isFinite(n) ? n : _SERVICE_FLOOR;
+}
+
 async function _commissionRate(uid) {
   return subCore.getCommissionRate(uid, { role: 'provider' });
 }
@@ -95,8 +139,12 @@ async function _disburseHeldFunds(data, ref, opts) {
   let forfeitCommissionC = 0;
   if (forfeitC > 0) {
     const { calculateCommission } = require('./finos-utils');
-    const fc = await calculateCommission(_db(), { orderAmountCents: forfeitC, category: 'services',
-      sellerId: data.providerId, hubId: 'provider', subscriptionRole: 'provider' });
+    /* Same engine, same table; the hub the booking was CREATED under selects the inputs
+       (ADR-015). A forfeited deposit is priced exactly like the completion it replaces —
+       a healthcare no-show must not be charged the plan rate a healthcare completion isn't. */
+    const fc = await calculateCommission(_db(), { orderAmountCents: forfeitC,
+      sellerId: data.providerId,
+      ...require('./provider-hub').commissionArgsForHub(data.commissionHub) });
     forfeitCommissionC = fc.commissionCents || 0;
   }
   const providerNetC     = Math.max(0, forfeitC - forfeitCommissionC);
@@ -216,12 +264,17 @@ _h.providerCompleteBooking = async (req) => {
    * providers without a deploy. An operator retires compatibility mode by writing
    * revenueConfig/hub_provider — no code change. */
   const { calculateCommission } = require('./finos-utils');
+  /* ── WHICH inputs, per hub (ADR-015) ──────────────────────────────────────────────────
+   * Healthcare bookings are priced at the approved 5% from the SAME canonical table
+   * (commission-config.RATES.healthcare); every other provider booking keeps the plan rate
+   * through compatibility mode, byte-identical to before. The selection lives in
+   * provider-hub.commissionArgsForHub so this call site and the forfeited-deposit one above
+   * cannot drift, and `commissionHub` is the server-resolved snapshot taken at booking
+   * creation — never the client-supplied `hubType`, and never the provider's own category. */
   const comm = await calculateCommission(_db(), {
     orderAmountCents: gross,
-    category:         'services',
     sellerId:         uid,
-    hubId:            'provider',
-    subscriptionRole: 'provider',   /* compatibility mode: the plan rate is authoritative */
+    ...require('./provider-hub').commissionArgsForHub(data.commissionHub),
   });
 
   const commission = comm.commissionCents;
@@ -729,12 +782,11 @@ _h.providerAddService = async (req) => {
   const name = _san(d.name, 200).trim();
   if (!name) throw new HttpsError('invalid-argument', 'Service name is required.');
 
-  const [subSnap, svcSnap] = await Promise.all([
-    _db().collection('providerSubscriptions').doc(uid).get(),
+  const [svcSnap, cap] = await Promise.all([
     _db().collection('providerServices').where('providerId', '==', uid).limit(200).get(),
+    _serviceCapFor(uid),
   ]);
   const activeCount = svcSnap.docs.filter((d) => d.data().active !== false).length;
-  const cap = subSnap.exists ? Number(subSnap.data().limits?.listings) : 1;
   if (cap !== -1 && activeCount >= cap) {
     throw new HttpsError('resource-exhausted',
       `Your plan allows ${cap} active service${cap === 1 ? '' : 's'}. Upgrade to add more.`);
@@ -782,16 +834,15 @@ _h.providerDuplicateService = async (req) => {
   const id  = _san(req.data?.serviceId, 128);
   if (!id) throw new HttpsError('invalid-argument', 'serviceId is required.');
   const srcRef = _db().collection('providerServices').doc(id);
-  const [srcSnap, subSnap, listSnap] = await Promise.all([
+  const [srcSnap, cap, listSnap] = await Promise.all([
     srcRef.get(),
-    _db().collection('providerSubscriptions').doc(uid).get(),
+    _serviceCapFor(uid),
     _db().collection('providerServices').where('providerId', '==', uid).limit(200).get(),
   ]);
   if (!srcSnap.exists) throw new HttpsError('not-found', 'Service not found.');
   const s = srcSnap.data();
   if (s.providerId !== uid) throw new HttpsError('permission-denied', 'Not your service.');
   const activeCount = listSnap.docs.filter((d) => d.data().active !== false).length;
-  const cap = subSnap.exists ? Number(subSnap.data().limits?.listings) : 1;
   if (cap !== -1 && activeCount >= cap) {
     throw new HttpsError('resource-exhausted', `Your plan allows ${cap} active service${cap === 1 ? '' : 's'}. Upgrade or delete one to duplicate.`);
   }

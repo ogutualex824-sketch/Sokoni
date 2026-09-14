@@ -331,356 +331,90 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
     setTimeout(function(){ t.classList.remove('show'); }, 3000);
   }
 
-  /* ── SEEDED RANDOM ── */
-  function sr(seed){
-    var x = Math.sin(seed + 1) * 10000;
-    return x - Math.floor(x);
+  /* ═══════════════════════════════════════════════════════
+     DATA INTEGRITY — every panel on this page was FABRICATED.
+
+     What stood here until now:
+       · sr(seed) — a Math.sin() pseudo-random generator, feeding:
+       · renderCohortTable()   cohort sizes + W1-W4 retention %, from sr()
+       · drawJourneyFunnel()   hard-coded funnel stages and drop-off %
+       · renderHeatmap()       24 Kenyan counties with invented user counts
+       · drawFreqChart()       invented purchase-frequency histogram
+       · renderChurnTable()    invented NAMED customers ("K. Wanjiku", last
+                                seen 18 days ago, KES 48,200 LTV, High risk)
+                                each with a working "Re-engage" button that
+                                scheduled a push for a person who does not exist
+       · drawLTVChart()        invented lifetime-value distribution
+       · renderEngagementDrivers()  invented driver percentages
+
+     Firebase appears in this file ONLY to gate admin access — not one figure was
+     ever read from Firestore or an /api endpoint. Because the page is admin-only,
+     these numbers sat exactly where platform decisions get made, and they were
+     stable across reloads (seeded, not random), so they read as real measurements.
+
+     CLAUDE.md, UI Data Integrity: "No UI component may fabricate business
+     metrics... When canonical data is unavailable, show a neutral state — not 0
+     and not an extrapolated guess."
+
+     Each panel now states that it is unavailable AND what it would need to become
+     real, so the data requirement is visible instead of hidden behind a plausible
+     chart. Restore a panel ONLY by wiring it to a canonical aggregate.
+     ═══════════════════════════════════════════════════════ */
+
+  /* Neutral "no canonical source" state, naming the requirement. */
+  function _unavailable(el, requirement){
+    if(!el) return;
+    el.innerHTML =
+      '<div style="padding:26px 18px;text-align:center;color:var(--sub);">' +
+        '<div style="font-size:26px;margin-bottom:8px;opacity:.5;">&#128202;</div>' +
+        '<div style="font-weight:800;color:#fff;margin-bottom:6px;">Not available yet</div>' +
+        '<div style="font-size:12px;line-height:1.6;max-width:440px;margin:0 auto;">Needs ' +
+          escapeHTML(requirement) + '</div>' +
+      '</div>';
   }
 
-  /* ── 1. COHORT TABLE ── */
-  function renderCohortTable(){
-    var now = new Date();
-    var cohorts = [];
-    for(var i = 5; i >= 0; i--){
-      var d = new Date(now);
-      d.setDate(d.getDate() - i * 7);
-      var label = 'W/C ' + d.toLocaleDateString('en-KE', {month:'short',day:'numeric'});
-      var size = Math.floor(sr(i*11+3)*300)+80;
-      var w1 = i < 5 ? Math.round(sr(i*7+1)*20+70) : 100;
-      var w2 = i < 4 ? Math.round(sr(i*7+2)*15+45) : null;
-      var w3 = i < 3 ? Math.round(sr(i*7+3)*10+28) : null;
-      var w4 = i < 2 ? Math.round(sr(i*7+4)*8+18) : null;
-      cohorts.push({label:label, size:size, w1:w1, w2:w2, w3:w3, w4:w4});
-    }
-
-    function cellClass(v){
-      if(v === null) return 'cell-na';
-      if(v >= 60) return 'cell-green';
-      if(v >= 35) return 'cell-amber';
-      return 'cell-red';
-    }
-    function cellText(v){
-      if(v === null) return '—';
-      return v+'%';
-    }
-
-    var html = '';
-    cohorts.forEach(function(c){
-      html += '<tr>'+
-        '<td>'+escapeHTML(c.label)+'</td>'+
-        '<td style="color:var(--text);">'+c.size+'</td>'+
-        '<td class="'+cellClass(c.w1)+'">'+cellText(c.w1)+'</td>'+
-        '<td class="'+cellClass(c.w2)+'">'+cellText(c.w2)+'</td>'+
-        '<td class="'+cellClass(c.w3)+'">'+cellText(c.w3)+'</td>'+
-        '<td class="'+cellClass(c.w4)+'">'+cellText(c.w4)+'</td>'+
-        '</tr>';
-    });
-    document.getElementById('cohortBody').innerHTML = html;
+  /* Same, for a panel whose container is a <tbody>. */
+  function _unavailableRow(tbodyId, cols, requirement){
+    var tb = document.getElementById(tbodyId);
+    if(!tb) return;
+    tb.innerHTML = '<tr><td colspan="' + cols + '" style="padding:26px 18px;text-align:center;color:var(--sub);">' +
+      '<strong style="color:#fff;">Not available yet</strong><br>' +
+      '<span style="font-size:12px;">Needs ' + escapeHTML(requirement) + '</span></td></tr>';
   }
 
-  /* ── 2. USER JOURNEY FUNNEL (Canvas vertical) ── */
-  function drawJourneyFunnel(){
-    var canvas = document.getElementById('journeyFunnel');
-    var dpr = window.devicePixelRatio || 1;
-    var W = canvas.parentElement.clientWidth - 40;
-    var H = 280;
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
-    canvas.style.width = W+'px';
-    canvas.style.height = H+'px';
-    var ctx = canvas.getContext('2d');
-    ctx.scale(dpr, dpr);
-
-    var steps = [
-      { label:'Landing', users:12400, pct:100, color:'rgba(113,255,0,0.85)' },
-      { label:'Signup', users:6820, pct:55, color:'rgba(113,255,0,0.70)' },
-      { label:'First Browse', users:5050, pct:41, color:'rgba(113,255,0,0.55)' },
-      { label:'First Purchase', users:2170, pct:17, color:'rgba(113,255,0,0.40)' },
-      { label:'Repeat Purchase', users:890, pct:7, color:'rgba(113,255,0,0.25)' },
-    ];
-
-    var maxW = W * 0.65;
-    var stepH = H / steps.length;
-    var cx = W / 2;
-
-    steps.forEach(function(s, i){
-      var barW = (s.pct / 100) * maxW;
-      var y = i * stepH;
-      var barH = stepH - 8;
-
-      /* trapezoid approach: simple rect with taper */
-      var nextW = i < steps.length-1 ? (steps[i+1].pct/100)*maxW : barW * 0.7;
-      var topW = barW;
-      var botW = nextW;
-
-      ctx.beginPath();
-      ctx.moveTo(cx - topW/2, y + 4);
-      ctx.lineTo(cx + topW/2, y + 4);
-      ctx.lineTo(cx + botW/2, y + barH + 4);
-      ctx.lineTo(cx - botW/2, y + barH + 4);
-      ctx.closePath();
-      ctx.fillStyle = s.color;
-      ctx.fill();
-
-      /* label left */
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      ctx.font = '12px Segoe UI,system-ui,sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText(s.label, cx - topW/2 - 8, y + stepH/2 + 4);
-
-      /* users right */
-      ctx.fillStyle = '#71ff00';
-      ctx.font = 'bold 12px Segoe UI,system-ui,sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText(s.users.toLocaleString('en-KE'), cx + topW/2 + 8, y + stepH/2 + 4);
-
-      /* drop-off */
-      if(i > 0){
-        var dropPct = steps[i-1].pct - s.pct;
-        ctx.fillStyle = '#ff6b6b';
-        ctx.font = '10px Segoe UI,system-ui,sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('-'+dropPct+'%', cx, y + 2);
-      }
-    });
+  /* A <canvas> cannot state anything useful — hide it and speak in its place. */
+  function _unavailableCanvas(canvasId, requirement){
+    var c = document.getElementById(canvasId);
+    if(!c || !c.parentNode) return;
+    c.style.display = 'none';
+    if(c.parentNode.querySelector('[data-unavailable]')) return;   /* idempotent on resize */
+    var note = document.createElement('div');
+    note.setAttribute('data-unavailable', canvasId);
+    _unavailable(note, requirement);
+    c.parentNode.appendChild(note);
   }
-
-  /* ── 3. GEOGRAPHIC HEATMAP ── */
-  function renderHeatmap(){
-    var counties = [
-      { name:'Nairobi', val:4200 },{ name:'Mombasa', val:1800 },
-      { name:'Kiambu', val:1400 },{ name:'Nakuru', val:1100 },
-      { name:'Kisumu', val:900 },{ name:'Uasin Gishu', val:780 },
-      { name:'Machakos', val:640 },{ name:'Kajiado', val:590 },
-      { name:'Murang\'a', val:520 },{ name:'Nyeri', val:480 },
-      { name:'Kilifi', val:440 },{ name:'Kwale', val:380 },
-      { name:'Kakamega', val:360 },{ name:'Trans Nzoia', val:320 },
-      { name:'Bungoma', val:300 },{ name:'Embu', val:270 },
-      { name:'Kirinyaga', val:250 },{ name:'Laikipia', val:220 },
-      { name:'Nyandarua', val:200 },{ name:'Nandi', val:190 },
-      { name:'Kericho', val:180 },{ name:'Bomet', val:160 },
-      { name:'Siaya', val:150 },{ name:'Homa Bay', val:140 },
-    ];
-
-    var maxVal = counties[0].val;
-    var html = '';
-    counties.forEach(function(c){
-      var ratio = c.val / maxVal;
-      var alpha = 0.08 + ratio * 0.82;
-      var bg = 'rgba(113,255,0,'+alpha.toFixed(2)+')';
-      var textColor = ratio > 0.5 ? '#000' : (ratio > 0.2 ? '#71ff00' : 'rgba(113,255,0,0.5)');
-      html += '<div class="county-cell" style="background:'+bg+';color:'+textColor+';" title="'+escapeHTML(c.name)+': '+c.val.toLocaleString()+' users">'+
-        '<div class="county-val">'+escapeHTML(c.val >= 1000 ? (c.val/1000).toFixed(1)+'K' : String(c.val))+'</div>'+
-        '<div class="county-name">'+escapeHTML(c.name)+'</div>'+
-        '</div>';
-    });
-    document.getElementById('kenyaGrid').innerHTML = html;
-  }
-
-  /* ── 4. PURCHASE FREQUENCY HISTOGRAM ── */
-  function drawFreqChart(){
-    var canvas = document.getElementById('freqChart');
-    var dpr = window.devicePixelRatio || 1;
-    var W = canvas.parentElement.clientWidth - 40;
-    var H = 200;
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
-    canvas.style.width = W+'px';
-    canvas.style.height = H+'px';
-    var ctx = canvas.getContext('2d');
-    ctx.scale(dpr, dpr);
-
-    var bins = [
-      { label:'1x', val:4820, color:'#71ff00' },
-      { label:'2-3x', val:2140, color:'#4dcc00' },
-      { label:'4-6x', val:980, color:'#2ea300' },
-      { label:'7-10x', val:390, color:'#1a6600' },
-      { label:'10+x', val:180, color:'#0d3300' },
-    ];
-    var max = bins[0].val * 1.12;
-
-    var padL = 50, padR = 16, padT = 16, padB = 36;
-    var cW = W - padL - padR;
-    var cH = H - padT - padB;
-    var barW = (cW / bins.length) * 0.6;
-    var gap = (cW / bins.length) * 0.4;
-
-    /* grid */
-    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-    ctx.lineWidth = 1;
-    for(var g = 0; g <= 4; g++){
-      var gy = padT + (cH/4)*g;
-      ctx.beginPath(); ctx.moveTo(padL,gy); ctx.lineTo(padL+cW,gy); ctx.stroke();
-      var gv = Math.round(max - (max/4)*g);
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.font = '10px Segoe UI,system-ui,sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText(gv >= 1000 ? (gv/1000).toFixed(1)+'K' : gv, padL-6, gy+4);
-    }
-
-    bins.forEach(function(b, i){
-      var bH = (b.val / max) * cH;
-      var x = padL + i * (barW + gap) + gap/2;
-      var y = padT + cH - bH;
-
-      /* gradient bar */
-      var grad = ctx.createLinearGradient(0, y, 0, padT+cH);
-      grad.addColorStop(0, b.color);
-      grad.addColorStop(1, 'rgba(113,255,0,0.1)');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.roundRect(x, y, barW, bH, [4,4,0,0]);
-      ctx.fill();
-
-      /* value on top */
-      ctx.fillStyle = '#71ff00';
-      ctx.font = 'bold 11px Segoe UI,system-ui,sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(b.val.toLocaleString(), x + barW/2, y - 5);
-
-      /* x label */
-      ctx.fillStyle = 'rgba(255,255,255,0.4)';
-      ctx.font = '11px Segoe UI,system-ui,sans-serif';
-      ctx.fillText(b.label, x + barW/2, H - 8);
-    });
-  }
-
-  /* ── 5. CHURN RISK TABLE ── */
-  function renderChurnTable(){
-    var users = [
-      { name:'K. Wanjiku', lastSeen:'18 days ago', ltv:48200, risk:'High' },
-      { name:'J. Otieno',  lastSeen:'21 days ago', ltv:32100, risk:'High' },
-      { name:'A. Mwangi',  lastSeen:'15 days ago', ltv:27800, risk:'Medium' },
-      { name:'F. Achieng', lastSeen:'16 days ago', ltv:19400, risk:'Medium' },
-      { name:'B. Kamau',   lastSeen:'20 days ago', ltv:14300, risk:'High' },
-    ];
-    var html = '';
-    users.forEach(function(u, i){
-      var badgeClass = u.risk === 'High' ? 'badge-red' : 'badge-amber';
-      html += '<tr>'+
-        '<td>'+escapeHTML(u.name)+'</td>'+
-        '<td style="color:var(--sub);">'+escapeHTML(u.lastSeen)+'</td>'+
-        '<td>KES '+u.ltv.toLocaleString('en-KE')+'</td>'+
-        '<td><span class="badge '+badgeClass+'">'+escapeHTML(u.risk)+'</span></td>'+
-        '<td><button class="re-engage-btn" onclick="scheduleReEngage('+i+',\''+escapeHTML(u.name)+'\')">Re-engage</button></td>'+
-        '</tr>';
-    });
-    document.getElementById('churnTableBody').innerHTML = html;
-  }
-
-  window.scheduleReEngage = function(idx, name){
-    var scheduled = JSON.parse(localStorage.getItem('sokoniScheduledPush') || '[]');
-    var entry = {
-      userId: 'churn_risk_'+idx,
-      name: name,
-      message: 'We miss you on SOKONI! Come back and see what\'s new.',
-      scheduledAt: new Date().toISOString(),
-    };
-    scheduled.push(entry);
-    localStorage.setItem('sokoniScheduledPush', JSON.stringify(scheduled));
-    showToast('Re-engagement push scheduled for '+escapeHTML(name), 'success');
-  };
-
-  /* ── 6. LTV DISTRIBUTION ── */
-  function drawLTVChart(){
-    var canvas = document.getElementById('ltvChart');
-    var dpr = window.devicePixelRatio || 1;
-    var W = canvas.parentElement.clientWidth - 40;
-    var H = 200;
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
-    canvas.style.width = W+'px';
-    canvas.style.height = H+'px';
-    var ctx = canvas.getContext('2d');
-    ctx.scale(dpr, dpr);
-
-    var buckets = [
-      { label:'KES 0-500', val:3210, color:'rgba(113,255,0,0.4)' },
-      { label:'500-2K', val:2840, color:'rgba(113,255,0,0.6)' },
-      { label:'2K-10K', val:1620, color:'rgba(113,255,0,0.8)' },
-      { label:'10K+', val:540, color:'#71ff00' },
-    ];
-    var max = buckets[0].val * 1.15;
-
-    var padL = 50, padR = 16, padT = 16, padB = 36;
-    var cW = W - padL - padR;
-    var cH = H - padT - padB;
-    var barW = (cW / buckets.length) * 0.55;
-    var gap = (cW / buckets.length) * 0.45;
-
-    /* grid */
-    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-    ctx.lineWidth = 1;
-    for(var g = 0; g <= 4; g++){
-      var gy = padT + (cH/4)*g;
-      ctx.beginPath(); ctx.moveTo(padL,gy); ctx.lineTo(padL+cW,gy); ctx.stroke();
-      var gv = Math.round(max - (max/4)*g);
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.font = '10px Segoe UI,system-ui,sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText(gv >= 1000 ? (gv/1000).toFixed(1)+'K' : gv, padL-6, gy+4);
-    }
-
-    buckets.forEach(function(b, i){
-      var bH = (b.val / max) * cH;
-      var x = padL + i * (barW + gap) + gap/2;
-      var y = padT + cH - bH;
-
-      ctx.fillStyle = b.color;
-      ctx.beginPath();
-      ctx.roundRect(x, y, barW, bH, [4,4,0,0]);
-      ctx.fill();
-
-      ctx.fillStyle = 'rgba(255,255,255,0.8)';
-      ctx.font = 'bold 11px Segoe UI,system-ui,sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(b.val.toLocaleString(), x + barW/2, y - 5);
-
-      ctx.fillStyle = 'rgba(255,255,255,0.4)';
-      ctx.font = '10px Segoe UI,system-ui,sans-serif';
-      ctx.fillText(b.label, x + barW/2, H - 8);
-    });
-  }
-
-  /* ── 7. ENGAGEMENT DRIVERS ── */
-  function renderEngagementDrivers(){
-    var drivers = [
-      { label:'Reviews', pct:84 },
-      { label:'Wishlist', pct:71 },
-      { label:'Notifications', pct:63 },
-      { label:'Loyalty Points', pct:57 },
-      { label:'Referrals', pct:44 },
-      { label:'Search', pct:38 },
-    ];
-
-    var html = '';
-    drivers.forEach(function(d, i){
-      html += '<div class="engage-item">'+
-        '<div class="engage-label">'+escapeHTML(d.label)+'</div>'+
-        '<div class="engage-bar-wrap"><div class="engage-bar" id="ebar'+i+'" style="width:0"></div></div>'+
-        '<div class="engage-val">'+d.pct+'%</div>'+
-        '</div>';
-    });
-    document.getElementById('engageList').innerHTML = html;
-
-    /* animate bars */
-    setTimeout(function(){
-      drivers.forEach(function(d, i){
-        var el = document.getElementById('ebar'+i);
-        if(el) el.style.width = d.pct+'%';
-      });
-    }, 150);
-  }
-
   /* ── INIT ── */
   function initAll(){
-    renderCohortTable();
-    drawJourneyFunnel();
-    renderHeatmap();
-    drawFreqChart();
-    renderChurnTable();
-    drawLTVChart();
-    renderEngagementDrivers();
+    /* Each requirement names the canonical source that would make the panel real. */
+    _unavailableRow('cohortBody', 6,
+      'a weekly cohort-retention aggregate (first-order week per user + repeat-order weeks). ' +
+      'No collection currently stores per-user first-seen and return activity together.');
+    _unavailableCanvas('journeyFunnel',
+      'funnel event counts (view → product → cart → checkout → paid). Requires the analytics ' +
+      'event pipeline to record and aggregate stage transitions.');
+    _unavailable(document.getElementById('kenyaGrid'),
+      'per-county active-user counts. Orders carry a delivery county, so this is derivable ' +
+      'from a scheduled aggregate over orders — it is not derivable in the browser.');
+    _unavailableCanvas('freqChart',
+      'a distribution of orders-per-customer over the period, from the orders collection.');
+    _unavailableRow('churnTableBody', 5,
+      'per-customer last-order date and lifetime value. Listing named customers here also ' +
+      'needs a privacy review under the Kenya Data Protection Act (ODPC 630-8669-F056).');
+    _unavailableCanvas('ltvChart',
+      'lifetime value per customer, summed from delivered/paid orders.');
+    _unavailable(document.getElementById('engageList'),
+      'engagement events attributed to a driver (push, promo, referral). The notification ' +
+      'engine records sends but no attributed opens.');
   }
 
   function init(){
@@ -701,9 +435,10 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
   window.addEventListener('resize', function(){
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(function(){
-      drawJourneyFunnel();
-      drawFreqChart();
-      drawLTVChart();
+      /* Nothing to redraw: the three canvases have no canonical source and are
+         hidden behind an unavailable-state note. Calling the old renderers here
+         would be a ReferenceError now that they are gone. */
+      initAll();
     }, 200);
   });
 

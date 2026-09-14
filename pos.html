@@ -9,7 +9,7 @@
      rules in its own stylesheet below, its consent modal is guarded at source in security.js,
      and it calls no SokoniInShell API. So the shared module is deliberately NOT loaded here —
      that keeps the POS boot path at its previous script count instead of adding to it. -->
-<script>(function(){try{if(!window.parent||window.parent===window)return;var p=window.parent.location.pathname||"";var i=p.lastIndexOf("/");var last=(i<0?p:p.slice(i+1)).toLowerCase();if(last==="merchant"||last==="merchant.html"||window.parent.SokoniShell){document.documentElement.className+=" sk-in-shell";document.documentElement.setAttribute("data-sk-shell","merchant");}}catch(e){}})();</script>
+<script>(function(){try{if(!window.parent||window.parent===window)return;var p=window.parent.location.pathname||"";var i=p.lastIndexOf("/");var last=(i<0?p:p.slice(i+1)).toLowerCase();if(last==="merchant"||last==="merchant.html"||last==="merchant-v2"||last==="merchant-v2.html"||window.parent.SokoniShell){document.documentElement.className+=" sk-in-shell";document.documentElement.setAttribute("data-sk-shell","merchant");}}catch(e){}})();</script>
   <!-- P0 crash instrumentation. Diagnostic only, additive, removable in one line.
        MUST be first: it installs breadcrumbs before anything can crash. -->
   <script src="pos-crash-breadcrumbs.js"></script>
@@ -45,27 +45,109 @@
   // standalone pos-setup flow — so an embedded merchant who never ran the wizard was hard-
   // redirected to pos-setup.html on EVERY POS/Inventory entry (the splash). POS Setup stays
   // reachable as the explicit sidebar module. Standalone first-run still redirects.
+  /* Mark the document when it is hosted by the shell, so CSS can hide the chrome the
+     shell already provides. Independent of the redirect guard below: one flag read by
+     styles rather than per-element JavaScript. */
+  (function () {
+    try {
+      if (window.parent && window.parent !== window) {
+        document.documentElement.classList.add('in-merchant-shell');
+      }
+    } catch (_) {}
+  })();
+
   (function() {
     try { if (window.parent && window.parent !== window) return; } catch (_) { return; }
-    var setupDone = localStorage.getItem('sokoni_setup_complete');
-    if (!setupDone || setupDone !== '1') {
-      // Check if this is a fresh device (no merchantId stored)
-      var merchantId = localStorage.getItem('sokoni_merchant_id');
-      if (!merchantId) {
-        window.location.replace('pos-setup.html');
-      }
-    }
+    /* A diagnostic URL must never redirect itself away. ?diag=crash exists to read
+       the breadcrumbs left by a session that died; if this guard fires first the
+       page replaces itself with the setup wizard and the evidence is unreachable
+       on exactly the device that has it. Scoped to ?diag= so normal first-run
+       behaviour is unchanged. */
+    if (/[?&]diag=/.test(location.search)) return;
+
+    /* A SIGNED-IN merchant is never sent to BUSINESS setup by a missing device
+       flag. `sokoni_setup_complete` and `sokoni_merchant_id` are localStorage,
+       and pos.js keeps its own `setupComplete` in IndexedDB — three device-local
+       answers to a question only the server can settle. Their absence means
+       "new browser", not "new business", so on a new phone an already-configured
+       merchant was being redirected into shop creation, M-PESA setup and admin
+       account creation all over again.
+
+       Until the shop record carries an authoritative POS-initialised signal
+       (`posEnabled` is queried by pos-bi.js and pos-shift-scheduler.js but is
+       ABSENT on every sellers document, so those queries match nothing), the
+       honest interim rule is: if SOKONI already knows this account, let the app
+       boot and decide after identity resolves. Fail toward the POS shell, not
+       toward re-registration.
+
+       Same markers auth-guard.js uses — not a new convention. POS Setup remains
+       reachable as an explicit sidebar module, which is what makes the wizard a
+       DELIBERATE state rather than something that ambushes a returning merchant. */
+    var _signedIn = false;
+    try {
+      _signedIn = localStorage.getItem('loggedIn') === 'true'
+        || !!JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+    } catch (_) { _signedIn = false; }
+    if (_signedIn) return;
+
+    /* ── /pos NO LONGER ROUTES ANYONE INTO BUSINESS REGISTRATION ──────────
+       What stood here redirected to pos-setup.html whenever two localStorage
+       flags were absent. Those flags answer "has THIS BROWSER run the wizard",
+       which is not the question. The question is "does this account have an
+       approved business", and only the server can answer it.
+
+       The consequence was the reported one: an approved merchant opening POS on
+       a new phone — or after clearing site data — was pushed back through shop
+       creation, M-PESA registration and admin-account setup, for a business that
+       already existed. Business setup belongs to registration and approval, not
+       to opening a till.
+
+       SokoniPosContext now owns this decision, resolved from the server:
+         open-pos          the device is paired      -> nothing happens
+         pair-device       unknown device            -> offers POS Setup, which is
+                                                        DEVICE pairing, not business
+                                                        registration
+         device-suspended  suspended                 -> says so; never offers
+                                                        re-registration as a way round it
+         paired-elsewhere  another merchant's device -> refused
+         retry             the check failed          -> says so, POS still boots
+
+       Nothing redirects. The page renders its answer in place, so a slow or
+       failed resolve leaves POS booting rather than bouncing the merchant to a
+       wizard. A genuinely new merchant reaches business onboarding through
+       registration — the same path everyone else takes — and POS Setup stays
+       reachable as an explicit module for pairing a device on purpose.
+
+       The last device-local flag that could route a merchant anywhere is gone.
+       `sokoni_setup_complete` and `sokoni_merchant_id` are still written by the
+       existing setup flow and still read by pos.js as a CACHE; they simply no
+       longer decide who is a new business. */
   })();
 
   (function(){
-    /* iOS visual viewport keyboard avoidance for #pos-wizard */
+    /* iOS visual viewport keyboard avoidance.
+       Two consumers, one measurement:
+         · #pos-wizard  — padded directly (first-run setup, pre-CSS).
+         · the CHECKOUT surface — exposed as --pos-kb-inset on <html>, which
+           pos-mobile.css adds to the payment panel and the M-PESA modal.
+       The payment prompt previously had NO keyboard handling at all: typing a
+       customer's phone number raised the keyboard directly over the button that
+       sends the STK push, so the merchant could enter the number and then not
+       reach the control that charges it. Publishing the inset as a variable
+       keeps the layout decision in CSS and this handler purely a sensor. */
     function _adjustForKeyboard() {
-      var wizard = document.getElementById('pos-wizard');
-      if (!wizard || wizard.style.display === 'none') return;
       if (!window.visualViewport) return;
       var vv = window.visualViewport;
       var keyboardH = window.innerHeight - vv.height - vv.offsetTop;
-      if (keyboardH > 50) {
+      var open = keyboardH > 50;
+
+      /* Checkout surface — CSS decides what to do with it. */
+      document.documentElement.style.setProperty(
+        '--pos-kb-inset', open ? Math.round(keyboardH) + 'px' : '0px');
+
+      var wizard = document.getElementById('pos-wizard');
+      if (!wizard || wizard.style.display === 'none') return;
+      if (open) {
         /* Keyboard is open — add extra bottom padding */
         wizard.style.paddingBottom = Math.max(keyboardH + 40, 140) + 'px';
       } else {
@@ -448,6 +530,13 @@
           <div class="pay-method-grid">
             <button class="pay-method-btn active" data-method="cash" onclick="SPos.payment.setMethod('cash')"><span class="method-icon">💵</span>Cash</button>
             <button class="pay-method-btn mpesa" data-method="mpesa" onclick="SPos.payment.setMethod('mpesa')"><span class="method-icon">📱</span>M-PESA</button>
+            <!-- Manual Till payment: the customer has ALREADY paid the merchant's own
+                 M-PESA Till directly, and the cashier records the confirmation code.
+                 Deliberately distinct from the "M-PESA" button above, which initiates an
+                 STK Push. Recording that a payment happened is not the same act as
+                 initiating one, and the transaction record must be able to tell them
+                 apart later — see docs/POS_MANUAL_TILL_PAYMENT.md. -->
+            <button class="pay-method-btn mpesa" data-method="mpesa_till" onclick="SPos.payment.setMethod('mpesa_till')"><span class="method-icon">🏪</span>M-PESA Till</button>
             <button class="pay-method-btn" data-method="card" onclick="SPos.payment.setMethod('card')"><span class="method-icon">💳</span>Card</button>
             <button class="pay-method-btn" data-method="split" onclick="SPos.payment.setMethod('split')"><span class="method-icon">✂️</span>Split</button>
             <button class="pay-method-btn" id="qr-pay-method-btn" data-method="qr" onclick="SPos.payment.setMethod('qr'); SPosQR.open()" aria-label="QR Code payment"><span class="method-icon" aria-hidden="true">⬛</span>QR Pay</button>
@@ -602,20 +691,69 @@
           /* Build-version evidence — shows what this DEVICE is running vs. what's DEPLOYED,
              so "is it live?" is answered on screen. Refreshes each time Settings opens. */
           (function () {
+            /* A DETERMINISTIC STATE MACHINE, not a one-shot reading.
+
+               It previously ran exactly once — setTimeout(_posShowBuild, 1500) —
+               and nothing re-ran it when Settings opened, despite the comment
+               above claiming it refreshed each time. So the row showed whatever
+               was true 1.5s after page load, forever: "no update" could be both
+               displayed and wrong.
+
+               It also returned silently when the helper had not loaded yet,
+               leaving "Checking…" on screen permanently — indistinguishable from
+               a check still in flight. A diagnostic that cannot say "I failed" is
+               worse than one that is absent.
+
+               Four states, always one of them:
+                 CHECKING  ·  UP TO DATE  ·  UPDATE AVAILABLE  ·  UNABLE TO CHECK */
+            var _busy = false;
+
+            function _set(el, html) { if (el) el.innerHTML = html; }
+
             async function _posShowBuild() {
               var el = document.getElementById('pos-build-info');
-              if (!el || !window.sokoniBuildInfo) return;
+              if (!el || _busy) return;
+              var btn = document.getElementById('pos-build-update');
+              _busy = true;
+              _set(el, 'Checking…');
               try {
+                if (!window.sokoniBuildInfo) throw new Error('build helper not loaded');
                 var b = await window.sokoniBuildInfo();
-                el.innerHTML = 'Running ' + (b.runningCache || '?') + ' · Deployed ' + (b.deployedCache || '?') +
+                _set(el, 'Running ' + (b.runningCache || '?') + ' · Deployed ' + (b.deployedCache || '?') +
                   (b.deployedCommit ? ' · ' + b.deployedCommit : '') +
                   (b.stale ? ' — <span style="color:#ff8c00;font-weight:800;">update available</span>'
-                           : ' — <span style="color:#71ff00;">up to date</span>');
-                var btn = document.getElementById('pos-build-update');
+                           : ' — <span style="color:#71ff00;">up to date</span>'));
                 if (btn) btn.style.display = b.stale ? '' : 'none';
-              } catch (_) { el.textContent = 'unavailable'; }
+              } catch (e) {
+                /* Say so. Never leave "Checking…" standing in for a failure, and
+                   never report "up to date" for a check that did not complete. */
+                _set(el, '<span style="color:#ff8c00;">unable to check</span> — ' +
+                  '<a href="#" id="pos-build-retry" style="color:#71ff00">check again</a>');
+                if (btn) btn.style.display = 'none';
+                var r = document.getElementById('pos-build-retry');
+                if (r) r.addEventListener('click', function (ev) {
+                  ev.preventDefault(); _posShowBuild();
+                });
+              } finally { _busy = false; }
             }
             window._posShowBuild = _posShowBuild;
+
+            /* Re-check whenever the row actually becomes visible — which is what
+               "Settings opens" means in practice — without needing to know how
+               the settings panel is implemented. */
+            function _watch() {
+              var el = document.getElementById('pos-build-info');
+              if (!el) return;
+              try {
+                new IntersectionObserver(function (entries) {
+                  entries.forEach(function (en) { if (en.isIntersecting) _posShowBuild(); });
+                }, { threshold: 0.1 }).observe(el);
+              } catch (_) { /* no IO support: the initial check below still runs */ }
+            }
+
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', _watch, { once: true });
+            } else { _watch(); }
             setTimeout(_posShowBuild, 1500);
           })();
         </script>
@@ -729,6 +867,11 @@
     <div class="modal-body" style="padding:12px">
       <video id="scanner-video" playsinline muted style="width:100%;border-radius:10px;background:#000;display:block;aspect-ratio:4/3"></video>
       <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--txt2)">Hardware scanner works automatically. Camera requires browser support.</div>
+        <!-- Premium Scanner. The module is LAZY — tapping this is what fetches it. -->
+        <button class="inv-btn inv-btn-green" style="width:100%;margin-top:10px"
+                id="premium-scan-btn" onclick="SPos.barcode.openPremium()">
+          &#10024; Premium Scanner &mdash; camera, image upload &amp; torch
+        </button>
       <div style="margin-top:8px;display:flex;gap:8px">
         <input class="form-input" style="flex:1" id="manual-barcode" placeholder="Type barcode + Enter" onkeydown="if(event.key==='Enter'&&this.value.trim()){SPos.barcode.manualEntry(this.value.trim());this.value=''}">
         <button class="inv-btn inv-btn-green" onclick="if(document.getElementById('manual-barcode').value.trim()){SPos.barcode.manualEntry(document.getElementById('manual-barcode').value.trim());document.getElementById('manual-barcode').value=''}">Go</button>
@@ -738,6 +881,40 @@
 </div>
 
 <!-- M-PESA payment -->
+<!-- ── Manual M-PESA Till payment ───────────────────────────────────────────────
+     The customer has already paid the merchant's Till directly. The cashier records
+     the confirmation code against THIS sale.
+
+     The wording is deliberate. This screen says the cashier is RECORDING a payment,
+     not that SOKONI verified one: with no C2B or STK integration on this path there
+     is no way to confirm with Safaricom that the money arrived. A screen that implied
+     verification would be making a claim the system cannot support. -->
+<div class="modal-overlay" id="mpesa-till-modal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header"><span class="modal-title">M-PESA Till Payment</span><button class="modal-close" onclick="SPos.modal.close('mpesa-till-modal')">✕</button></div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--txt2);margin-bottom:14px">Amount: <strong style="color:#00a84e;font-size:20px">KES <span id="mpesa-till-amount-disp">0</span></strong></div>
+      <div class="wiz-field">
+        <div class="wiz-label">M-PESA CONFIRMATION CODE</div>
+        <input class="wiz-input" id="mpesa-till-ref" placeholder="e.g. QK72ABC123" maxlength="10"
+               autocomplete="off" autocapitalize="characters" spellcheck="false"
+               style="text-transform:uppercase;letter-spacing:2px;font-family:monospace;font-size:18px"
+               oninput="SPos.mpesaTill.onInput()" onkeydown="if(event.key==='Enter')SPos.mpesaTill.confirm()">
+        <div id="mpesa-till-hint" style="font-size:12px;color:var(--txt2);margin-top:6px">10 characters, from the customer's M-PESA SMS.</div>
+      </div>
+      <div style="font-size:12px;color:var(--txt2);background:rgba(255,176,32,.10);border-left:3px solid #ffb020;padding:9px 11px;border-radius:8px;line-height:1.5">
+        This records that the customer paid the Till and supplies the reference.
+        It is <strong>not</strong> an independent confirmation from Safaricom.
+      </div>
+      <div id="mpesa-till-result" style="display:none;margin-top:12px;font-size:13px;padding:10px 12px;border-radius:10px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-ghost" onclick="SPos.modal.close('mpesa-till-modal')">Cancel</button>
+      <button class="modal-btn" id="mpesa-till-confirm-btn" onclick="SPos.mpesaTill.confirm()" disabled style="background:#00a84e;color:#fff;flex:2">Record Payment</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="mpesa-modal">
   <div class="modal" style="max-width:380px">
     <div class="modal-header"><span class="modal-title">M-PESA Payment</span><button class="modal-close" onclick="SPos.modal.close('mpesa-modal')">✕</button></div>
@@ -781,6 +958,7 @@
     </div>
     <div class="modal-footer">
       <button class="modal-btn modal-btn-ghost" onclick="SPos.cart.removeDiscount()">Remove</button>
+      <button class="modal-btn" onclick="SPos.cart.requestDiscountApproval()">Request manager approval</button>
       <button class="modal-btn modal-btn-primary" onclick="SPos.cart.applyDiscount()">Apply</button>
     </div>
   </div>
@@ -1569,18 +1747,149 @@ html[data-pos-chrome="checkout"] .pos-tabs { display: none !important; }
 <script src="sokoni-receipt-engine.js" defer></script>
 <script src="sokoni-label-engine.js" defer></script>
 <script src="sokoni-pos-print.js" defer></script>
+<!-- The universal engine MUST load before the manager and the print service.
+     sokoni-printer-manager.js is a thin WRAPPER: its `connected` getter reads
+     window.SokoniPrinter?.connected and its _eng() THROWS when the engine is absent.
+     Without this tag PrinterManager reported "not connected" permanently, Test Print
+     did nothing and Connect could never reach a chooser - the till had no printer
+     stack at all, only a wrapper around a missing one. -->
+<script src="sokoni-universal-printer.js" defer></script>
 <script src="sokoni-bluetooth-printer.js" defer></script>
 <script src="sokoni-printer-manager.js" defer></script>
-<script src="sokoni-pos-print-service.js" defer></script>
-<script src="pos-manager-auth.js" defer></script>
+<script src="sokoni-receipt-id.js" defer></script><script src="sokoni-pos-print-service.js" defer></script>
+<!-- ── LAZY MODULES ──────────────────────────────────────────────────────────
+     Nothing below is reachable from the first usable POS screen. Together they were
+     ~160 KB of a 2,148 KB startup payload, parsed on every till boot including the
+     many that never open them.
+
+     MANAGER APPROVAL IS DEFERRED, NOT REMOVED. The control is unchanged: the same
+     eight operations, the same server-side posStaff verification, the same rate
+     limiting. It FAILS CLOSED — if the module cannot be fetched, request() resolves
+     FALSE, the same value a declined approval produces, so the caller's existing
+     `if (!ok) return;` refuses the operation. A load failure must never read as an
+     approval, and must never throw into a handler not written to catch it.
+
+     DELIBERATELY STILL EAGER: pos-plugins.js and pos-omni.js run AT BOOT
+     (installBuiltins / restoreEnabled / startSync) behind `if (window.X)` guards, so
+     deferring them would silently disable plugins and omni sync — a functional change
+     wearing a performance change's clothes. pos-ai-engine.js uses nested namespaces
+     (PosAIEngine.pricing.optimizeAll) that a flat forwarder cannot represent.
+
+     Other pages (manager-auth.html, commissioning.html, pos-checkout.html) load the
+     real modules directly and are unaffected. -->
+<script>
+(function () {
+  var URL_ = 'pos-manager-auth.js';
+  var real = null, pending = null;
+
+  function load () {
+    if (real) return Promise.resolve(real);
+    if (pending) return pending;
+    pending = new Promise(function (resolve) {
+      var shim = window.ManagerAuth;
+      var s = document.createElement('script');
+      s.src = URL_;
+      s.onload = function () {
+        real = (window.ManagerAuth && window.ManagerAuth !== shim) ? window.ManagerAuth : null;
+        if (!real) console.error('[ManagerAuth] loaded but did not register');
+        resolve(real);
+      };
+      s.onerror = function () {
+        console.error('[ManagerAuth] module failed to load — approval unavailable');
+        resolve(null);
+      };
+      document.head.appendChild(s);
+    });
+    return pending;
+  }
+
+  function proxy (name, whenUnavailable) {
+    return function () {
+      var args = arguments;
+      return load().then(function (m) {
+        if (!m || typeof m[name] !== 'function') return whenUnavailable;
+        return m[name].apply(m, args);
+      });
+    };
+  }
+
+  window.ManagerAuth = {
+    __lazy: true,
+    /* false === denied. The one value that must never be optimistic. */
+    request:              proxy('request', false),
+    requestPriceOverride: proxy('requestPriceOverride', null),
+    respondMobileRequest: proxy('respondMobileRequest', false),
+    getConfig:            proxy('getConfig', null),
+    listManagers:         proxy('listManagers', null),
+    getManagerQRData:     proxy('getManagerQRData', null),
+    getAuditLog:          proxy('getAuditLog', null),
+    addManager:           proxy('addManager', null),
+    updateManager:        proxy('updateManager', null),
+    removeManager:        proxy('removeManager', null),
+    enrollNFC:            proxy('enrollNFC', null),
+    enrollBiometric:      proxy('enrollBiometric', null),
+    preload:              load,
+  };
+
+  /* WHY A PROXY for the feature modules: enumerating methods means a call site added
+     later silently becomes undefined. The Proxy forwards ANY property, so a new caller
+     keeps working. `if (window.PosAnalytics)` guards stay TRUE — the shim is a real
+     object — so existing feature checks behave exactly as before. When the real module
+     loads it assigns its own global, replacing the shim. */
+  function lazyGlobal (name, url) {
+    var pending2 = null;
+    function load2 () {
+      if (pending2) return pending2;
+      pending2 = new Promise(function (resolve) {
+        var shim = window[name];
+        var s = document.createElement("script");
+        s.src = url;
+        s.onload = function () {
+          resolve((window[name] && window[name] !== shim) ? window[name] : null);
+        };
+        s.onerror = function () {
+          console.error("[lazy] " + url + " failed to load — " + name + " unavailable");
+          resolve(null);
+        };
+        document.head.appendChild(s);
+      });
+      return pending2;
+    }
+    return new Proxy({}, {
+      get: function (_t, prop) {
+        if (prop === "__lazy") return true;
+        if (prop === "preload") return load2;
+        if (prop === "then") return undefined;   /* never a thenable */
+        return function () {
+          var args = arguments;
+          return load2().then(function (m) {
+            if (!m || typeof m[prop] !== "function") return undefined;
+            return m[prop].apply(m, args);
+          });
+        };
+      },
+    });
+  }
+  window.PosAnalytics      = lazyGlobal("PosAnalytics",      "pos-analytics.js");
+  window.PosReports        = lazyGlobal("PosReports",        "pos-reports.js");
+  window.SokonPOSAnalytics = lazyGlobal("SokonPOSAnalytics", "pos-analytics-live.js");
+  window.PosVoice          = lazyGlobal("PosVoice",          "pos-voice.js");
+  window.PosAI             = lazyGlobal("PosAI",             "pos-ai.js");
+  /* Premium Scanner: camera + image decode UI. Never parsed to open a till. */
+  window.PosPremiumScanner = lazyGlobal("PosPremiumScanner", "sokoni-premium-scanner.js");
+  /* Sales / Employees / Shift. Read-only views over existing authorities. */
+  window.PosSalesView      = lazyGlobal("PosSalesView",      "sokoni-pos-sales.js");
+  window.PosApprovalRequest = lazyGlobal("PosApprovalRequest", "sokoni-pos-approval-request.js");
+})();
+</script>
 <script src="pos-terminals.js" defer></script>
 <script src="pos-device-manager.js" defer></script>
 <script src="pos-barcode.js" defer></script>
-<script src="pos-ai.js" defer></script>
-<script src="pos-analytics.js" defer></script>
+
+
 <script src="pos-boss.js" defer></script>
 <script src="pos-plugins.js" defer></script>
-<script src="pos-voice.js" defer></script>
+
 <script src="pos-ai-engine.js" defer></script>
 <script src="pos-finance.js" defer></script>
 <script src="pos-audit.js" defer></script>
@@ -1589,6 +1898,14 @@ html[data-pos-chrome="checkout"] .pos-tabs { display: none !important; }
 <script src="pos-mobile.js" defer></script>
 <script src="pos-lifecycle.js" defer></script>
 <script src="pos.js" defer></script>
+<!-- POS boot decision. Loaded LAST and deferred: it must never delay the module
+     graph or first paint, and it runs only after `load`. It changes which STATE
+     /pos shows — business/branch/device resolved from the server instead of from
+     localStorage flags — and touches no sale, payment, caching or SW behaviour.
+     It fails toward POS: any error, timeout or unreachable Firestore leaves the
+     page booting exactly as it does today. It never navigates. -->
+<script src="sokoni-pos-context.js" defer></script>
+<script src="sokoni-pos-boot.js" defer></script>
 <script defer src="sokoni-form-engine.js"></script>
 <!-- ══ Scale + observability stack ══ -->
 <script defer src="sokoni-scale.js"></script>
@@ -2030,7 +2347,7 @@ var SPosBranch = (function(){
 <script src="pos-sales.js" defer></script>
 <script src="pos-customers.js" defer></script>
 <script src="pos-suppliers.js" defer></script>
-<script src="pos-reports.js" defer></script>
+
 
 <script>
 /* Auto-init universal print engine after POS loads */
@@ -2333,6 +2650,15 @@ window.SPosQR = (function() {
 </script>
 
 <!-- ════ SMARTPOS 4.0 QUICK-NAV STRIP ════ -->
+<!-- Hidden inside the merchant shell: the shell already provides navigation, and a
+     second nav bar inside the panel is what made POS feel like a separate app rather
+     than a section of one. Standalone POS still needs it, so this is display-only and
+     driven by the framing check below — nothing is removed. -->
+<style>
+/* Display only. Removing the element would break standalone POS, which genuinely
+   needs its own navigation. */
+html.in-merchant-shell .pos-quick-nav { display: none !important; }
+</style>
 <nav class="pos-quick-nav" role="navigation" aria-label="SmartPOS quick navigation">
   <a href="pos.html" class="pos-quick-nav-item active" aria-current="page" title="POS Checkout">
     <span class="pqn-icon" aria-hidden="true">🏠</span>
@@ -2360,7 +2686,7 @@ window.SPosQR = (function() {
 <script defer src="pos-session-manager.js"></script>
 <script defer src="pos-terminal-driver.js"></script>
 <script defer src="pos-receipt-engine.js"></script>
-<script defer src="pos-analytics-live.js"></script>
+
 
 <!-- ════ SmartPOS 2.0 — Universal Plug & Play Ecosystem ════ -->
 <script defer src="sokoni-redis.js"></script>

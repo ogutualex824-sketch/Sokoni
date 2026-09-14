@@ -1779,7 +1779,7 @@ async function _loadBusinesses() {
       const b = d.data();
       const emoji = { marketplace:'🛍️', food:'🍽️', services:'🔧', healthcare:'🏥', events:'🎪', property:'🏠' }[b.type] || '🏢';
       return `
-        <div class="ac-biz-card" onclick="location.href='/merchant'">
+        <div class="ac-biz-card" data-merchant-entry="store" role="button" tabindex="0">
           <div class="ac-biz-icon">${emoji}</div>
           <div class="ac-biz-info">
             <div class="ac-biz-name">${_esc(b.name || 'Unnamed Business')}</div>
@@ -2278,5 +2278,6 @@ window.acShow = window.acShow || function(id) {
 };
 </script>
 <script src="sokoni-merchant-diag.js" defer></script>
+<script src="sokoni-merchant-entry.js" defer></script>
 </body>
 </html>

@@ -22,6 +22,9 @@ Each ADR states the decision, the evidence that produced it, and — most useful
 | [010](ADR-010-financial-append-only-operational-event-driven.md) | Financial records append-only; operational records event-driven until dispatch | **Accepted** · design | `RECEIPT_ARCHITECTURE.md` |
 | [011](ADR-011-server-authoritative-pricing.md) | The server prices, the client displays; reject a mismatch, never substitute it | Accepted |
 | [012](ADR-012-engine-layering.md) | Merchant pricing must never depend on logistics; the dependency is one-way | Accepted |
+| [013](ADR-013-pos-write-authority.md) | Clients express intent; the server establishes authoritative state and money (POS + Marketplace, separate rails) | **Accepted** · implementation NOT authorized | served ruleset `59af870d`; two sale rails, two inventory models |
+| [014](ADR-014-healthcare-provider-identity-convergence.md) | A healthcare provider is a `providers/{uid}`; `healthProviders` is retired as identity and authority | **Accepted** · implementation NOT authorized | prod census 2026-09-12: 1 synthetic fixture, 0 real providers, 0 clinical records |
+| [015](ADR-015-healthcare-payment-convergence.md) | A healthcare consultation is a service booking; IntaSend is the only rail, card separately gated | **Accepted** · implementation NOT authorized | conforms to `BOOKING_PAYMENT_CONTRACT.md` v1.0; `providerBookings` = 4 in production |
 | [018](ADR-018-legacy-retirement-graph.md) | An endpoint retires only on zero code-callers AND zero production traffic — never traffic alone | **Accepted** · 18b executed, 18c blocked | `docs/cf-invocation-census.json`; `test-retire-18b.js` 20/20 |
 
 ## The rule that governs all of them

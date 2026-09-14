@@ -84,12 +84,24 @@ console.log('\nC. Minimum commission — the reason "flat 5%" would be a lie\n')
   ck('KES 200 sale -> KES 10 (the crossover)', eff(200) === 10 && raw(200) === 10);
 }
 
-/* ── 4. Seller-facing text discloses BOTH the rate and the minimum ──────── */
-console.log('\nD. Disclosure — every seller-facing surface\n');
+/* ── 4. Seller-facing text discloses BOTH LANES and the minimum ─────────── */
+/* The commercial rule changed on 2026-09-07 from one flat 5% to two lanes:
+   MARKETPLACE orders are priced by the seller's plan (15/10/5/0) and POS/TILL
+   sales are a flat 5%. A disclosure that still says only "5% per sale" is now
+   INACCURATE for a Free seller by a factor of three, so each surface must state
+   both lanes — and must not be allowed to satisfy this check by mentioning 5%
+   alone, which every one of them already did under the old rule. */
+console.log('\nD. Disclosure — every seller-facing surface states BOTH lanes\n');
 for (const f of ['legal.html', 'seller-terms.html', 'seller.html', 'hub-register.js']) {
   const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
-  ck(f + ' states 5%', /5%\s*commission|commission[^.]{0,40}5%|5% per-sale|5% per completed/i.test(src));
-  ck('  ...and discloses the KES 10 minimum', /minimum commission of KES 10|min KES 10|minimum of KES 10/i.test(src));
+  ck(f + ' discloses the MARKETPLACE plan ladder',
+     /marketplace[\s\S]{0,400}?(plan|Free)[\s\S]{0,400}?15%|Free\s*1?5?%?[\s\S]{0,80}?15%/i.test(src)
+     || /marketplacePct/.test(src));
+  ck('  ...and the flat POS / Till rate',
+     /(POS|Till)[\s\S]{0,300}?5%/i.test(src) || /posPct/.test(src));
+  ck('  ...and discloses the KES 10 minimum',
+     /minimum commission of KES 10|min KES 10|minimum of KES 10|minimum commission of KES '/i.test(src)
+     || /MIN_COMMISSION_KES/.test(src));
   ck('  ...and does NOT claim commission is deducted from the payment',
      !/deducted (from the buyer|automatically before payout)/i.test(src));
 }
@@ -112,8 +124,20 @@ console.log('\nE. Generated client snapshot\n');
 console.log('\nF. Approval gate — server-side, in applicationDecide\n');
 const LIFECYCLE = fs.readFileSync(path.join(ROOT, 'functions', 'application-lifecycle.js'), 'utf8');
 {
+  /* SCOPED BY STRUCTURE, NOT DISTANCE. This used to span the two anchors with
+     `[\s\S]{0,400}?`. When the healthcare branch was added to the same block
+     (2026-09-13 — healthcare is gated on canonical legalAcceptances, not on this
+     boolean) the gate moved ~1,900 characters further down and the detector went
+     red while the thing it tests was still true. A window measured in characters
+     rots on the next edit; extract the block the same way the negative control
+     below already does, and assert inside it. */
+  const approveBlock = (LIFECYCLE.match(/if \(decision === 'approve'\) \{[\s\S]*?\n    \}\n/) || [''])[0];
+  ck('the approve block is still extractable (guards the two checks below)',
+     approveBlock.length > 0);
   ck('approve is gated on agreementAccepted === true',
-     /if \(decision === 'approve'\)[\s\S]{0,400}?agreementAccepted !== true[\s\S]{0,300}?HttpsError/.test(LIFECYCLE));
+     /agreementAccepted !== true/.test(approveBlock) && /HttpsError/.test(approveBlock));
+  ck('  ...and healthcare is gated on the CANONICAL record instead of that boolean',
+     /_role === 'health'/.test(approveBlock) && /complianceFor/.test(approveBlock));
   ck('  ...and the gate is ONLY on approve (reject/suspend/request_info still work)',
      /if \(decision === 'approve'\) \{/.test(LIFECYCLE)
      && !/agreementAccepted !== true[\s\S]{0,200}?decision === 'reject'/.test(LIFECYCLE));
@@ -150,12 +174,25 @@ console.log('\nG. Application document carries the acknowledgement\n');
   const sj = fs.readFileSync(path.join(ROOT, 'seller.js'), 'utf8');
   ck('seller.js verification also gates on the checkbox',
      /agree\.checked[\s\S]{0,200}?return;/.test(sj));
-  ck('seller.js agreement version matches hub-register',
-     /SELLER_AGREEMENT_VERSION = "2026-08-25-commission-5pct"/.test(sj));
+  /* DERIVED, never pinned. This used to assert a literal version string, so every
+     terms change required editing the test — and the day someone forgot, the suite
+     would certify a version that no longer shipped. What matters is not WHICH
+     string it is, but that it is a dated version and that all THREE surfaces carry
+     the same one: one acknowledgement must mean one text. */
+  ck('seller.js carries a dated agreement version',
+     /SELLER_AGREEMENT_VERSION = "20\d\d-\d\d-\d\d[^"]*"/.test(sj),
+     (sj.match(/SELLER_AGREEMENT_VERSION = "([^"]+)"/) || [])[1]);
   const hr = fs.readFileSync(path.join(ROOT, 'hub-register.js'), 'utf8');
   const a = (sj.match(/SELLER_AGREEMENT_VERSION = "([^"]+)"/) || [])[1];
   const b = (hr.match(/AGREEMENT_VERSION = '([^']+)'/) || [])[1];
   ck('  ...verified equal, so one acknowledgement means one text', a === b, a + ' vs ' + b);
+  /* THREE surfaces write this acknowledgement, not two. sokoni-merchant-application.js
+     (the 2A intake) was added later and was missed by the original pair-check — which is
+     exactly how two of three drift apart while a green suite reports agreement. */
+  const ma = fs.readFileSync(path.join(ROOT, 'sokoni-merchant-application.js'), 'utf8');
+  const c = (ma.match(/AGREEMENT_VERSION = '([^']+)'/) || [])[1];
+  ck('  ...and sokoni-merchant-application.js carries the SAME version',
+     c === b && !!c, c + ' vs ' + b);
   ck('seller.js states plainly that this screen is client-only',
      /THIS SCREEN IS CLIENT-ONLY/.test(sj));
 }

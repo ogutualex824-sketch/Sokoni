@@ -1,0 +1,10 @@
+{
+ "darajaSTKPush": "AMBIGUOUS (both)",
+ "darajaSTKCallback": "INTASEND",
+ "validateDarajaCredentials": "DARAJA-EXCLUSIVE",
+ "sendTestSTKPush": "DARAJA-EXCLUSIVE",
+ "initiateSTKPush": "INTASEND",
+ "webhookMpesa": "NEITHER (inspect)",
+ "mpesaC2BValidation": "NEITHER (inspect)",
+ "mpesaC2BConfirmation": "NEITHER (inspect)"
+}

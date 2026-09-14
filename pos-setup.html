@@ -1381,6 +1381,31 @@
     .pd-note.bad  { background: rgba(255,68,68,.07); border-color: rgba(255,68,68,.28); color: #ffb3b3; }
     .pd-note strong { color: var(--sk-text, #fff); }
     @media (min-width: 600px) { .pd-seg button { flex: 1 1 0; } }
+
+    /* Destination approval — deliberately weightier than a throwaway "I agree".
+       The row is a real target (min 44px), the copy wraps rather than truncating,
+       and checking it visibly commits the card. */
+    .pd-approve {
+      display: flex; align-items: flex-start; gap: 11px; cursor: pointer;
+      min-height: 44px; padding: 12px 13px; margin-top: 14px;
+      border: 1px solid var(--sk-line, rgba(255,255,255,.10)); border-radius: 12px;
+      background: rgba(255,255,255,.03);
+      font-size: 13px; line-height: 1.5; color: var(--sk-text, rgba(255,255,255,.9));
+    }
+    .pd-approve:has(input:checked) {
+      border-color: rgba(113,255,0,.35); background: rgba(113,255,0,.06);
+    }
+    .pd-approve input[type="checkbox"] {
+      width: 20px; height: 20px; margin: 1px 0 0; flex: 0 0 auto; cursor: pointer;
+      accent-color: var(--sk-green, #71ff00);
+    }
+    .pd-approve span { min-width: 0; overflow-wrap: anywhere; }
+    .pd-approve input:focus-visible { outline: 2px solid var(--sk-green, #71ff00); outline-offset: 2px; }
+    .pd-approve-note {
+      font-size: 11.5px; line-height: 1.5; margin: 8px 2px 0;
+      color: var(--sk-muted, rgba(255,255,255,.55));
+    }
+    .pd-approve-note strong { color: var(--sk-text, rgba(255,255,255,.85)); }
   </style>
 </head>
 <body>
@@ -3371,7 +3396,13 @@ const PD = {
   status: 'NOT_CONFIGURED', active: null, pending: null,
   productionAuthorized: false, lastFailureReason: null,
   draftType: 'TILL', draftNumber: '', draftName: '',
+  approved: false,        /* the merchant's acknowledgement — gates SAVE only */
 };
+
+/* Does a destination exist server-side (active or staged)?
+   Derived from the getPaymentDestination RESPONSE, never from the checkbox —
+   ticking a box must not be able to unlock the POS. */
+let _destinationSaved = false;
 
 const PD_LABEL = {
   NOT_CONFIGURED: 'Not configured', PENDING_TEST: 'Awaiting verification',
@@ -3398,6 +3429,11 @@ async function renderPaymentDestination() {
     if (selected && d.shopId && String(selected) !== String(d.shopId)) {
       PD.mode = 'readonly';
       PD.reason = 'Payment details for this business are managed from its own owner account.';
+      /* Fail open for the same reason as the permission-denied branch: this
+         operator cannot configure THIS business's destination, so the
+         requirement is not theirs to satisfy and must not block the POS. */
+      _destinationSaved = true;
+      _syncOpenGate();
       _pdPaint();
       return;
     }
@@ -3416,6 +3452,9 @@ async function renderPaymentDestination() {
     }
     PD.mode = 'owner';
     PD.loaded = true;
+    /* Server-derived: a destination exists if one is active or staged. */
+    _destinationSaved = !!(PD.active || PD.pending);
+    _syncOpenGate();
     _pdPaint();
     _pdSyncReadyTile();
   } catch (e) {
@@ -3430,6 +3469,13 @@ async function renderPaymentDestination() {
       PD.mode = 'error';
       PD.err = (e && e.message) || 'Payment settings could not be loaded.';
     }
+    /* FAIL OPEN. A cashier cannot READ paymentDestinations at all — the rules
+       restrict it to owner/admin — so gating Open POS on a destination they
+       are not permitted to see would lock every till operator out of the POS.
+       The same applies to a transient read failure. The destination
+       requirement is the OWNER's to satisfy; it is not a staff turnstile. */
+    _destinationSaved = true;
+    _syncOpenGate();
     _pdPaint();
   }
 }
@@ -3507,7 +3553,31 @@ function _pdPaint() {
     '<input id="pd-name" class="pd-in" maxlength="120" placeholder="Name on your M-PESA account" ' +
       'value="' + esc(PD.draftName) + '">';
 
-  const canSave = /^\d{5,7}$/.test(PD.draftNumber) && PD.draftName.trim().length > 0 && !PD.busy;
+  /* ── Destination approval ──────────────────────────────────────────────
+     ACKNOWLEDGEMENT, NOT AN AGREEMENT. This confirms the merchant recognises
+     the number as theirs before it is staged — a mis-typed Till is money sent
+     to a stranger, and that is worth one deliberate act to prevent.
+
+     It is deliberately NOT a second 5% agreement. The commercial terms are
+     accepted once, through SokoniLegalGate (role: merchant -> seller-terms),
+     which already sits above on this same step. Three agreement states for one
+     obligation would leave nobody able to say which one is authoritative.
+
+     It also grants nothing: the box gates the SAVE BUTTON only. Saving stages
+     into `pending`; only confirmVerified() — reachable solely from the Daraja
+     STK callback on resultCode 0 — can promote a destination to active. */
+  const numberOk = /^\d{5,7}$/.test(PD.draftNumber) && PD.draftName.trim().length > 0;
+  const typeWord = PD.draftType === 'PAYBILL' ? 'PayBill' : 'Till';
+  h += '<label class="pd-approve" for="pd-approve">' +
+         '<input type="checkbox" id="pd-approve" data-pd="approve"' + (PD.approved ? ' checked' : '') + '>' +
+         '<span>I confirm this ' + esc(typeWord) + ' belongs to this business and approve it ' +
+           'for my SOKONI payments.</span>' +
+       '</label>' +
+       '<div class="pd-approve-note">Approving records your intent. Your ' + esc(typeWord) +
+         ' stays <strong>Awaiting verification</strong> until SOKONI verifies it — ' +
+         'no payments are routed to it before then.</div>';
+
+  const canSave = numberOk && PD.approved && !PD.busy;
   h += '<button class="pd-btn solid" data-pd="save"' + (canSave ? '' : ' disabled') + '>' +
        (PD.busy ? 'Saving…' : 'Save payment destination') + '</button>';
 
@@ -3547,7 +3617,20 @@ document.addEventListener('click', function (ev) {
   const el = ev.target && ev.target.closest ? ev.target.closest('[data-pd]') : null;
   if (!el) return;
   const act = el.getAttribute('data-pd');
-  if (act === 'type') { PD.draftType = el.getAttribute('data-v') || 'TILL'; _pdPaint(); return; }
+  if (act === 'type') {
+    /* Changing Till <-> PayBill re-opens the question of what is being
+       approved, so the acknowledgement is withdrawn rather than carried over. */
+    PD.draftType = el.getAttribute('data-v') || 'TILL';
+    PD.approved = false;
+    _pdPaint();
+    return;
+  }
+  if (act === 'approve') {
+    PD.approved = !!el.checked;
+    const sv = document.querySelector('[data-pd="save"]');
+    if (sv) sv.disabled = !(/^\d{5,7}$/.test(PD.draftNumber) && PD.draftName.trim().length > 0 && PD.approved && !PD.busy);
+    return;
+  }
   if (act === 'save') { _pdSave(); return; }
 });
 
@@ -3562,7 +3645,7 @@ document.addEventListener('input', function (ev) {
     PD.draftName = el.value || '';
   } else return;
   const btn = document.querySelector('[data-pd="save"]');
-  if (btn) btn.disabled = !(/^\d{5,7}$/.test(PD.draftNumber) && PD.draftName.trim().length > 0 && !PD.busy);
+  if (btn) btn.disabled = !(/^\d{5,7}$/.test(PD.draftNumber) && PD.draftName.trim().length > 0 && PD.approved && !PD.busy);
 });
 
 async function _pdSave() {
@@ -3575,6 +3658,7 @@ async function _pdSave() {
       accountName:       PD.draftName,
     });
     PD.busy = false;
+    PD.approved = false;
     await renderPaymentDestination();
   } catch (e) {
     PD.busy = false;
@@ -3600,12 +3684,20 @@ function renderLegalGate() {
   });
 }
 
-/* Open POS stays gated until legal agreements are accepted. */
+/* Open POS stays gated until BOTH the legal agreements are accepted AND a
+   payment destination exists server-side.
+
+   `_destinationSaved` comes from getPaymentDestination, never from the approval
+   checkbox — a merchant who ticked a box without saving must not reach the POS,
+   and equally a ticked box must never be able to unlock it. It fails OPEN for
+   non-owners and read failures (see renderPaymentDestination) so staff are not
+   locked out of a till by a document they cannot read. */
 function _syncOpenGate() {
   const open = document.getElementById('btn-open-pos');
   if (!open) return;
-  open.setAttribute('aria-disabled', _legalOk ? 'false' : 'true');
-  open.style.opacity = _legalOk ? '' : '0.55';
+  const ok = _legalOk && _destinationSaved;
+  open.setAttribute('aria-disabled', ok ? 'false' : 'true');
+  open.style.opacity = ok ? '' : '0.55';
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -3773,6 +3865,14 @@ document.getElementById('btn-open-pos').addEventListener('click', () => {
     toast('Please accept the required agreements first.', 'error');
     const g = document.getElementById('legal-gate');
     if (g) g.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  /* Second condition. Points at the payment card rather than repeating the
+     legal-gate message, so the merchant is told which of the two is missing. */
+  if (!_destinationSaved) {
+    toast('Add and save your M-PESA payment destination first.', 'error');
+    const p = document.getElementById('pd-card-wrap');
+    if (p) p.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
   window.location.href = 'pos.html';

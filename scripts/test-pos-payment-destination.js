@@ -173,5 +173,93 @@ console.log('\nI. Output escaping\n');
   ck('server error text is escaped', /esc\(PD\.err\)/.test(H));
 }
 
+/* ══ J. Till approval acknowledgement ════════════════════════════════════
+   Added after the destination card: an explicit approval that gates SAVE.
+   It is an ACKNOWLEDGEMENT, not a commercial agreement — the 5% terms are
+   accepted once via SokoniLegalGate, and a second agreement state would leave
+   nobody able to say which is authoritative. */
+console.log('\nJ. Till approval acknowledgement\n');
+{
+  ck('approval checkbox exists', /id="pd-approve"/.test(H));
+  ck('  ...with the agreed wording',
+     /I confirm this ' \+ esc\(typeWord\) \+ ' belongs to this business and approve it/.test(H));
+  ck('  ...naming Till or PayBill, not a generic "destination"',
+     /const typeWord = PD\.draftType === 'PAYBILL' \? 'PayBill' : 'Till';/.test(H));
+  ck('  ...and states approval does NOT verify',
+     /stays <strong>Awaiting verification<\/strong> until SOKONI verifies it/.test(H));
+
+  /* Every path that decides the Save button's enabled-ness must require it.
+     There are THREE and they are not written identically: the render path uses
+     the pre-computed `numberOk`, while the two live-update handlers inline the
+     regex. Counting only one spelling would leave a path unguarded and green. */
+  const inlineForm = (H.match(/PD\.draftName\.trim\(\)\.length > 0 && PD\.approved/g) || []).length;
+  const renderForm = (H.match(/const canSave = numberOk && PD\.approved && !PD\.busy;/g) || []).length;
+  const unguarded  = (H.match(/PD\.draftName\.trim\(\)\.length > 0 && !PD\.busy/g) || []).length
+                   + (H.match(/const canSave = numberOk && !PD\.busy;/g) || []).length;
+  ck('ALL THREE save-enable paths require approval',
+     inlineForm === 2 && renderForm === 1 && unguarded === 0,
+     inlineForm + ' inline + ' + renderForm + ' render, ' + unguarded + ' unguarded');
+
+  ck('approval is withdrawn when Till/PayBill type changes',
+     /PD\.draftType = el\.getAttribute\('data-v'\)[\s\S]{0,120}?PD\.approved = false;/.test(H));
+  ck('approval is consumed by a successful save',
+     /PD\.busy = false;\s*\n\s*PD\.approved = false;\s*\n\s*await renderPaymentDestination\(\);/.test(H));
+  ck('no second 5% agreement was introduced',
+     !/agreementAccepted|agreementVersion|5% per-sale commission\.<\/span>/.test(H));
+  ck('SokoniLegalGate left exactly as it was',
+     /window\.SokoniLegalGate\.mount\(wrap, \{\s*\n\s*role: 'merchant',/.test(H));
+}
+
+/* ══ K. Open POS requires BOTH conditions ════════════════════════════════ */
+console.log('\nK. Open POS gate\n');
+{
+  ck('gate requires legal acceptance AND a saved destination',
+     /const ok = _legalOk && _destinationSaved;/.test(H));
+  ck('  ...and the click handler blocks on the destination too',
+     /if \(!_destinationSaved\) \{[\s\S]{0,220}?scrollIntoView/.test(H));
+  ck('  ...pointing at the payment card, not the legal gate',
+     /if \(!_destinationSaved\)[\s\S]{0,200}?getElementById\('pd-card-wrap'\)/.test(H));
+
+  /* THE ASSERTION THAT MATTERS: the gate is server-derived. A checkbox that
+     could unlock the POS would be a client-side authority over setup state. */
+  ck('_destinationSaved comes from the SERVER response, never the checkbox',
+     /_destinationSaved = !!\(PD\.active \|\| PD\.pending\);/.test(H));
+  ck('  ...and PD.approved never feeds the Open POS gate',
+     !/_destinationSaved\s*=\s*PD\.approved/.test(H)
+     && !/_legalOk && PD\.approved/.test(H));
+
+  /* Fail-open: a cashier cannot READ paymentDestinations (owner/admin only),
+     so gating on it would lock every till operator out of the POS. */
+  const failOpen = (H.match(/_destinationSaved = true;/g) || []).length;
+  ck('fails OPEN for non-owner and read failure (staff not locked out)', failOpen === 2,
+     failOpen + ' fail-open branches (expect 2: permission-denied, business mismatch)');
+}
+
+/* ══ L. The security boundary is unchanged ═══════════════════════════════ */
+console.log('\nL. Approval grants nothing\n');
+{
+  ck('the checkbox never sets VERIFIED', !/PD\.approved[\s\S]{0,120}?VERIFIED/.test(H));
+  ck('the checkbox never sets productionAuthorized',
+     !/PD\.approved[\s\S]{0,120}?productionAuthorized\s*=/.test(H));
+  ck('save still only STAGES via savePaymentDestination',
+     /CF\('savePaymentDestination'\)/.test(H) && !/CF\('confirmVerified'\)/.test(H));
+  ck('PENDING_TEST / Awaiting verification semantics preserved',
+     /PENDING_TEST: 'Awaiting verification'/.test(H));
+  ck('Daraja gate wording untouched', /awaiting payment-provider/.test(H));
+}
+
+/* ══ M. Responsive/a11y for the new control ══════════════════════════════ */
+console.log('\nM. Approval control — responsive and accessible\n');
+{
+  ck('approval row meets the 44px target', /\.pd-approve \{[\s\S]{0,260}?min-height: 44px;/.test(H));
+  ck('checkbox itself is 20px with its own hit area',
+     /\.pd-approve input\[type="checkbox"\] \{[\s\S]{0,120}?width: 20px; height: 20px;/.test(H));
+  ck('label text wraps instead of overflowing',
+     /\.pd-approve span \{ min-width: 0; overflow-wrap: anywhere; \}/.test(H));
+  ck('focus is visible on the checkbox', /\.pd-approve input:focus-visible/.test(H));
+  ck('checked state is visually distinct', /\.pd-approve:has\(input:checked\)/.test(H));
+  ck('label is bound to the input', /<label class="pd-approve" for="pd-approve">/.test(H));
+}
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
 process.exit(fail ? 1 : 0);

@@ -539,6 +539,71 @@ const KENYA_CITIES = {
 let buyerLocation = null;   /* { lat, lng } */
 let buyerCity     = null;   /* e.g. "nairobi" */
 
+/* ── LOCATION AUTHORITY: sokoniDeliveryCity ─────────────────────────────────────────
+   Two location pickers existed and only one of them ran. index.html's bottom-sheet
+   picker (the ACTIVE one) writes localStorage['sokoniDeliveryCity'] as a DISPLAY NAME
+   ("Nyali", "Kondele"). This file's older `_setDeliveryCity` wrote
+   localStorage['sokoniBuyerCity'] as a CITY KEY ("mombasa") — and script.js:707 defers
+   to whichever picker already exists, so the older path never ran.
+
+   Two mismatches, either of which alone hides the section:
+     key    sokoniDeliveryCity  written   vs  sokoniBuyerCity  read
+     shape  "Nyali"             written   vs  "nairobi"        compared
+
+   Products carry a city KEY in `.location` (production: nairobi 55, mombasa 1,
+   remote 4), so the comparison `p.location === buyerCity` can only ever match a key.
+
+   The active picker wins. This normalises its display value to a canonical key. */
+
+/* Resolve a picker display name to a supported KENYA_CITIES key, or null.
+   MATCHES ONLY WHAT IT CAN JUSTIFY: an exact city name, or a label that CONTAINS one
+   ("Nairobi CBD" -> nairobi). It deliberately does NOT guess catchments — whether Diani
+   (30km from Mombasa) or Malindi (120km) count as "near" Mombasa is a commercial claim
+   about proximity, not a string-matching problem, and getting it wrong tells a shopper a
+   seller is nearby when they are a two-hour drive away.
+
+   The picker offers 106 towns; 6 cities are supported. Everything unmatched returns
+   null, and null keeps the EXISTING no-location behaviour rather than inventing one. */
+const CITY_ALIAS = {
+  /* Reviewed name -> canonical key. EMPTY ON PURPOSE. Each entry is a decision that a
+     town's shoppers should see another city's sellers, so adding one needs a person.
+     e.g. westlands: 'nairobi'  — only with that decision made. */
+};
+
+function _canonicalCityKey(raw){
+    const s = String(raw || '').trim().toLowerCase();
+    if (!s) return null;
+    /* OWN properties only. A bare `KENYA_CITIES[s]` walks the prototype chain, so
+       "__proto__" and "constructor" both return truthy and were accepted as city keys —
+       caught by the certification, not by review. A stored value is attacker-influenced
+       (it is whatever sits in localStorage), so this must not be a lookup that inherited
+       members can satisfy. */
+    const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+    if (own(KENYA_CITIES, s)) return s;                             /* already a key */
+    const alias = own(CITY_ALIAS, s) ? CITY_ALIAS[s] : null;
+    if (alias && own(KENYA_CITIES, alias)) return alias;            /* reviewed alias */
+    /* a label that names a supported city: "Nairobi CBD", "Mombasa Island" */
+    for (const key of Object.keys(KENYA_CITIES)) {
+        const name = String(KENYA_CITIES[key].name || key).toLowerCase();
+        if (s === name) return key;
+        if (new RegExp('(^|\\s)' + name + '(\\s|$)').test(s)) return key;
+    }
+    return null;
+}
+
+/* The one place buyerCity is derived. Prefers the ACTIVE picker; falls back to the
+   legacy key so anyone already carrying one keeps working. Returns null when nothing
+   resolves to a SUPPORTED city — a stored value alone must not reveal the section. */
+function _resolveBuyerCity(){
+    let v = null;
+    try { v = localStorage.getItem('sokoniDeliveryCity'); } catch (_) {}
+    let key = _canonicalCityKey(v);
+    if (!key) {
+        try { key = _canonicalCityKey(localStorage.getItem('sokoniBuyerCity')); } catch (_) {}
+    }
+    return key;
+}
+
 function haversineKm(lat1, lng1, lat2, lng2){
     const R = 6371;
     const dLat = (lat2-lat1)*Math.PI/180;
@@ -590,6 +655,10 @@ function initNearbyLocation(){
 
 function displayNearbySection(){
     const section = document.getElementById("nearbySection");
+    /* Derive from the ACTIVE picker when geolocation has not already set it. Geolocation
+       wins when present: it produced a key from real coordinates, which is better evidence
+       than a name the shopper typed. */
+    if (!buyerCity) buyerCity = _resolveBuyerCity();
     if(!section || !buyerCity || !products.length) return;
 
     const nearby = products.filter(p => p.location === buyerCity || p.location === "worldwide");
@@ -665,6 +734,11 @@ function displayNearbySection(){
 }
 
 window.initNearbyLocation = initNearbyLocation;
+/* Exposed so index.html's location picker can announce a change without duplicating any
+   rendering logic. The picker stores the value; this decides whether it reveals anything.
+   `_canonicalCityKey` goes with it so the normalisation is testable from outside. */
+window.displayNearbySection = displayNearbySection;
+window._canonicalCityKey = _canonicalCityKey;
 
 /* ── Delivery location picker — triggered by nav location pill ── */
 function pickDeliveryLocation(){
@@ -3211,6 +3285,13 @@ window.addEventListener("storage", (e) => {
 ═══════════════════════════════════════════════════════════════ */
 
 let _activeStories  = [];
+/* Canonical stories from Firestore. undefined = not read yet, null = read failed,
+   array = authoritative answer. Never seeded from localStorage: a device-local
+   story is invisible to every other shopper, which is what made the ring look
+   permanently empty in production. */
+let _canonicalStories = undefined;
+let _storiesUnsub     = null;
+let _storyExpiryTimer = null;
 let _storyTimerID   = null;
 let _storyViewIdx   = 0;
 let _storyMuted     = false;   /* persists across stories in one session */
@@ -3265,10 +3346,16 @@ function loadStoriesSection(){
 
     const now  = Date.now();
 
-    /* Real user stories from localStorage */
-    let saved = [];
-    try { saved = JSON.parse(localStorage.getItem("sokoniStories")) || []; } catch(e){}
-    const realActive = saved.filter(s => s.expiresAt > now);
+    /* CANONICAL SOURCE — stories live in Firestore, not localStorage.
+       _canonicalStories is owned by the SokoniDB subscription below:
+           undefined -> not read yet        (do not decide; stay hidden)
+           null      -> the read FAILED     (do not fabricate; stay hidden)
+           []        -> genuinely no stories (honest empty state)
+       Reading localStorage here was the original defect: a story was visible
+       only in the browser that posted it, so every other shopper saw an empty
+       ring and the feature looked dead. */
+    if (_canonicalStories === undefined) { if(section) section.style.display = "none"; return; }
+    const realActive = (_canonicalStories || []).filter(s => s.expiresAt > now);
 
     /* Demo premium stories are dev-only — real users must never be shown
        fabricated "premium seller" promos (Kaspa Prints, TechNairobi, …). Gate
@@ -3590,24 +3677,53 @@ function postQuickStory(){
     const sellerName = user.name || user.storeName || "My Store";
     const caption    = document.getElementById("quickStoryCaption")?.value.trim() || "";
 
-    function _commitStory(obj){
-        let stories = [];
-        try { stories = JSON.parse(localStorage.getItem("sokoniStories")) || []; } catch(ex){}
-        stories.unshift(obj);
-        /* Trim payload to avoid localStorage bloat — keep max 40 stories, drop old videoSrc strings */
-        stories = stories.slice(0,40);
+    /* Media has to reach Firebase Storage before the story document can name it.
+       A dataURL would blow Firestore's 1 MiB document limit, and an IndexedDB
+       key names a blob that exists only on this device — neither is visible to
+       the shoppers the story is for. */
+    async function _uploadStoryMedia(src, path){
+        if(!window.SokoniUpload || typeof window.SokoniUpload.uploadToStorage !== "function")
+            throw new Error("media upload unavailable — reload and try again");
+        const blob = (typeof src === "string") ? window._dataURLtoBlob(src) : src;
+        return await window.SokoniUpload.uploadToStorage(blob, path);
+    }
+
+    async function _commitStory(obj){
         try {
-            localStorage.setItem("sokoniStories", JSON.stringify(stories));
-        } catch(e){
-            /* Storage full: strip any raw videoSrc blobs and retry */
-            stories.forEach(function(st){ if(st.videoSrc && st.videoSrc.length > 500) delete st.videoSrc; });
-            try { localStorage.setItem("sokoniStories", JSON.stringify(stories)); } catch(e2){}
+            if(!window.SokoniDB || typeof window.SokoniDB.publishStory !== "function")
+                throw new Error("story service still loading — try again in a moment");
+
+            const uid  = (window.SokoniDB.currentUid && window.SokoniDB.currentUid()) || "anon";
+            const base = "stories/" + uid + "/" + obj.id;
+
+            if(obj.media && /^data:/.test(obj.media)){
+                obj.media = await _uploadStoryMedia(obj.media, base + "_photo");
+            }
+            if(obj.videoIDBKey && window._storyIDBGet){
+                const blob = await window._storyIDBGet(obj.videoIDBKey);
+                if(blob) obj.videoSrc = await _uploadStoryMedia(blob, base + "_video");
+                delete obj.videoIDBKey;          /* device-local key must not be published */
+            } else if(obj.videoSrc && /^data:/.test(obj.videoSrc)){
+                obj.videoSrc = await _uploadStoryMedia(obj.videoSrc, base + "_video");
+            }
+
+            await window.SokoniDB.publishStory(obj);
+
+            /* Announced only after the canonical write resolved. */
+            if(status){ status.textContent = "✅ Story live!"; status.style.color = "#71ff00"; }
+            setTimeout(() => {
+                document.getElementById("quickStoryModal")?.remove();
+                loadStoriesSection();
+            }, 1200);
+        } catch(err){
+            /* A failed post must say so — never report a story as live when it
+               is not, and let the user retry rather than closing the composer. */
+            if(status){
+                status.textContent = "❌ " + ((err && err.message) || "Could not post story");
+                status.style.color = "#ff6b6b";
+            }
+            if(postArea) postArea.style.display = "";
         }
-        if(status){ status.textContent = "✅ Story live!"; status.style.color = "#71ff00"; }
-        setTimeout(() => {
-            document.getElementById("quickStoryModal")?.remove();
-            loadStoriesSection();
-        }, 1200);
     }
 
     function _buildBase(){
@@ -4319,12 +4435,47 @@ window.viewStoryProduct  = viewStoryProduct;
 window.openStoryAt       = openStoryAt;
 window.closeStoryViewer  = closeStoryViewer;
 
+/* ── Canonical stories subscription ──────────────────────────────────────────
+   The ring renders from Firestore via SokoniDB. Until the first snapshot lands
+   _canonicalStories stays undefined and loadStoriesSection keeps the section
+   hidden, so a slow read never flashes an empty ring and never shows stale
+   device-local data.
+
+   EXPIRY. Stories are meant to vanish 24h after posting. Two mechanisms are
+   needed, because neither alone is sufficient:
+     1. the query filters `expiresAt > now`, which handles page load;
+     2. a timer re-renders periodically, because a listener's time comparison is
+        evaluated when the query is BUILT — on a tab left open overnight the
+        server never revokes the doc, so without (2) an expired story would sit
+        on screen until reload. loadStoriesSection re-filters on every call, so
+        re-rendering is all that is required. */
+function _subscribeStories(){
+    if(_storiesUnsub) return;
+    if(!window.SokoniDB || typeof window.SokoniDB.listenStories !== "function") return;
+    _storiesUnsub = window.SokoniDB.listenStories(function(rows){
+        /* null = the read failed. Keep it distinct from [] so a denied rule is
+           never rendered as "this platform has no stories". */
+        _canonicalStories = rows;
+        if(rows === null) console.warn("[stories] canonical read failed — ring stays hidden");
+        loadStoriesSection();
+    });
+    if(!_storyExpiryTimer){
+        _storyExpiryTimer = setInterval(function(){
+            if(Array.isArray(_canonicalStories) && _canonicalStories.length) loadStoriesSection();
+        }, 60000);
+    }
+}
+
 /* Load on init */
 if(document.readyState === "complete" || document.readyState === "interactive"){
     loadStoriesSection();
 } else {
     window.addEventListener("DOMContentLoaded", loadStoriesSection);
 }
+/* SokoniDB is a module and may resolve after this file runs; try now and on its
+   ready event, whichever comes first. */
+_subscribeStories();
+window.addEventListener("sokoniDbReady", _subscribeStories);
 
 /* ═══════════════════════════════════════════════════════
    SELLER BROADCAST LISTENER (buyer-side)

@@ -106,6 +106,12 @@ const TYPES = {
   subscription_expired: { priority: 'commerce',  category: 'subscriptions', smsTemplate: 'subscription_expired' },
   seller_verified:      { priority: 'commerce',  category: 'marketplace',   smsTemplate: 'seller_verified' },
   merchant_approved:    { priority: 'commerce',  category: 'marketplace',   smsTemplate: 'merchant_approved' },
+  /* POS/Till commission — the 07:00 settlement gate. The REMINDER is deliberately its own
+     type from the CLOSURE: one is a courtesy the merchant may mute, the other tells them
+     why their till has stopped and must reach them. Being gated should never be the first
+     time a merchant hears about it. */
+  pos_commission_due:   { priority: 'commerce',  category: 'payments',      smsTemplate: 'pos_commission_due' },
+  pos_commission_gate:  { priority: 'critical',  category: 'payments',      smsTemplate: 'pos_commission_gate' },
   rider_approved:       { priority: 'commerce',  category: 'marketplace',   smsTemplate: 'rider_approved' },
   /* Loyalty & rewards. These reach the user through the engine now, so they get an
      IN-APP notification as well as a push. Previously loyalty.js pushed directly and

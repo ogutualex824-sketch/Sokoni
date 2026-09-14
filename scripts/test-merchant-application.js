@@ -72,9 +72,14 @@ function makeStore(seed = {}) {
   };
 }
 
+/* `agreementAccepted: true` is part of the DEFAULT because it is part of a
+   real submission: applicationDecide refuses to approve without it, so an
+   application filed without one is un-approvable by construction. PART F
+   exercises its absence explicitly. */
 const submit = (store, over = {}) => MA.submit({
   uid: SELLER_A, shopId: SHOP_B, shopIdSource: 'active_shop',
   profile: PROFILE, nowISO: NOW, source: 'onboarding-seller',
+  agreementAccepted: true,
   fs: store.adapter, ...over,
 });
 
@@ -225,7 +230,8 @@ console.log('\nPART C — a request is not a grant\n');
    account we already know is divergent. It proves nothing about the flow. */
 {
   const store = makeStore();
-  const r = await MA.submit({ uid: KASS, shopId: SHOP_B, profile: PROFILE, nowISO: NOW, fs: store.adapter });
+  const r = await MA.submit({ uid: KASS, shopId: SHOP_B, profile: PROFILE, nowISO: NOW,
+    agreementAccepted: true, fs: store.adapter });
   ck('C10 control: KASS submits by the same rules, no special case',
     r.ok === true && store.data[`applications/${KASS}--merchant`].status === 'pending_review');
 }
@@ -279,6 +285,132 @@ console.log('\nPART D — mutation control\n');
     } catch (e) { detail = 'mutant crashed: ' + e.message; caught = true; }
     ck(mu.label + ' → detected', caught, detail);
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PART E — the Seller Agreement acknowledgement
+
+   applicationDecide throws failed-precondition unless the application carries
+   `agreementAccepted === true`. An application filed without it is therefore
+   not "pending" — it is UN-APPROVABLE, and looks identical to a pending one in
+   every dashboard. The submission must refuse rather than create one.
+   ═══════════════════════════════════════════════════════════════════════════ */
+console.log('\nPART E — an application that could never be approved is never created\n');
+
+{
+  const store = makeStore();
+  const r = await submit(store, { agreementAccepted: undefined });
+  ck('E1  submission WITHOUT the acknowledgement is refused',
+    r.ok === false && r.reason === 'agreement_required', r.reason);
+  ck('E2  ...and writes NO document (not an un-approvable one)',
+    store.writes.length === 0 && !store.data[`applications/${SELLER_A}--merchant`],
+    'writes=' + store.writes.length);
+  ck('E3  the refusal explains what to do', /Seller Agreement/i.test(r.message || ''), r.message);
+}
+
+{
+  /* Truthy is not true. `agreementAccepted: 'yes'` from a careless call site
+     must not satisfy a gate the SERVER evaluates with ===. */
+  for (const v of ['yes', 1, 'true', {}, []]) {
+    const store = makeStore();
+    const r = await submit(store, { agreementAccepted: v });
+    ck(`E4  truthy-but-not-true (${JSON.stringify(v)}) is refused`,
+      r.ok === false && r.reason === 'agreement_required', r.reason);
+  }
+}
+
+{
+  const store = makeStore();
+  await submit(store);
+  const doc = store.data[`applications/${SELLER_A}--merchant`];
+  ck('E5  an accepted submission carries agreementAccepted === true',
+    doc.agreementAccepted === true, doc.agreementAccepted);
+  ck('E6  ...with the version of the text that was shown',
+    doc.agreementVersion === MA.AGREEMENT_VERSION && !!MA.AGREEMENT_VERSION, doc.agreementVersion);
+  ck('E7  ...and the acceptance time', doc.agreementAcceptedAt === NOW, doc.agreementAcceptedAt);
+  ck('E8  the SERVER-stamped verification is NOT client-writable',
+    !('agreementVerifiedAt' in doc) && !('agreementVerifiedVersion' in doc));
+}
+
+{
+  /* A resubmission must re-state the acknowledgement against the CURRENT
+     version, not inherit a stale one from the rejected attempt. */
+  const store = makeStore({
+    [`applications/${SELLER_A}--merchant`]: {
+      status: 'rejected', agreementAccepted: true, agreementVersion: 'ANCIENT-TERMS-v0',
+    },
+  });
+  const r = await submit(store, { nowISO: '2026-09-07T00:00:00.000Z' });
+  const doc = store.data[`applications/${SELLER_A}--merchant`];
+  ck('E9  a resubmission restates the acknowledgement at the current version',
+    r.action === 'resubmit' && doc.agreementVersion === MA.AGREEMENT_VERSION, doc.agreementVersion);
+
+  const store2 = makeStore({
+    [`applications/${SELLER_A}--merchant`]: { status: 'rejected', agreementAccepted: true },
+  });
+  const r2 = await submit(store2, { agreementAccepted: false });
+  ck('E10 a resubmission WITHOUT a fresh acknowledgement is refused — the stale one does not carry',
+    r2.ok === false && r2.reason === 'agreement_required', r2.reason);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PART F — the CALL SITES, not just the module
+
+   The suite injects its own adapter, so it exercised submit() perfectly while
+   the only real caller (onboarding-seller.html) built an adapter and never
+   passed it — submit() threw "a firestore adapter is required" on every
+   submission and no merchant could apply at all. A green module suite over a
+   dead call site is exactly the failure this part exists to prevent.
+   ═══════════════════════════════════════════════════════════════════════════ */
+console.log('\nPART F — every real call site passes what submit() requires\n');
+
+{
+  /* Extract the argument object of each `.submit({...})` by brace matching, so
+     multi-line call sites and nested objects are read correctly. */
+  const SELF = path.basename(__filename);
+  const files = fs.readdirSync(ROOT)
+    .filter((f) => /\.(html|js)$/i.test(f))
+    .filter((f) => f !== 'sokoni-merchant-application.js');
+
+  const sites = [];
+  for (const f of files) {
+    const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    if (!src.includes('SokoniMerchantApplication')) continue;
+    const re = /SokoniMerchantApplication\s*\.\s*submit\s*\(\s*\{/g;
+    let m;
+    while ((m = re.exec(src))) {
+      const open = m.index + m[0].length - 1;
+      let depth = 0, end = -1;
+      for (let i = open; i < src.length; i++) {
+        if (src[i] === '{') depth++;
+        else if (src[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
+      }
+      if (end === -1) continue;
+      sites.push({ file: f, line: src.slice(0, m.index).split('\n').length, arg: src.slice(open, end + 1) });
+    }
+  }
+
+  ck('F1  at least one real call site exists (the detector can see)', sites.length > 0, sites.length + ' site(s)');
+
+  for (const s of sites) {
+    const where = `${s.file}:${s.line}`;
+    ck(`F2  ${where} passes the required \`fs\` adapter`, /(^|[\s,{])fs\s*:/.test(s.arg),
+      /(^|[\s,{])fs\s*:/.test(s.arg) ? '' : 'submit() throws without it — no application is ever filed');
+    ck(`F3  ${where} passes \`agreementAccepted\``, /(^|[\s,{])agreementAccepted\s*:/.test(s.arg),
+      /(^|[\s,{])agreementAccepted\s*:/.test(s.arg) ? '' : 'the application would be un-approvable');
+    ck(`F4  ${where} does not hard-code the acknowledgement to a literal true`,
+      !/agreementAccepted\s*:\s*true\b/.test(s.arg),
+      'the merchant must actually tick it');
+  }
+
+  /* Adversarial: the detector must FAIL on a call site missing `fs`. Without
+     this, F2 passing proves only that the regex ran. */
+  const mutant = "SokoniMerchantApplication.submit({ uid: u, profile: p, agreementAccepted: x })";
+  const mOpen = mutant.indexOf('{');
+  const mArg = mutant.slice(mOpen, mutant.lastIndexOf('}') + 1);
+  ck('F5  the detector REJECTS a call site with no `fs` (adversarial control)',
+    !/(^|[\s,{])fs\s*:/.test(mArg));
+  void SELF;
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

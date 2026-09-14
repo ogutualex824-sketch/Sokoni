@@ -45,6 +45,17 @@
   /* ── Collection route map ─────────────────────────────────── */
   /* Maps sync_queue type → Firestore collection + merge strategy */
   const ROUTES = {
+    /* CALLABLE, not a document write — see _syncCallable. Registration must reach a
+       callable because only the server can bind the acting merchant and cashier. */
+    shift_registration: {
+      /* Reached through the DISPATCHER, not by name. pos-staff-ops handlers are
+         'fully consolidated into smartPosDispatch' (functions/index.js) and none is
+         exported individually — httpsCallable('registerClientShift') would resolve to
+         nothing, fail, retry eight times and sit in the DLQ forever. */
+      callable: 'smartPosDispatch',
+      op:       'registerClientShift',
+      idKey:    'clientShiftId',
+    },
     transaction: {
       collection: 'posTransactions',
       merge:      false,          // full document — never partial merge
@@ -149,12 +160,68 @@
   }
 
   /* ── Sync a single item to Firestore ─────────────────────── */
+
+  /* ── Callable routes ─────────────────────────────────────────────────────
+     Every route above writes a Firestore document. Shift registration cannot: only the
+     server can bind the acting merchant and cashier, and a client document write binds
+     nothing. So this queue carries one callable route.
+
+     THE PAYLOAD IS AN ALLOW-LIST, NEVER A SPREAD. A queued item lives in IndexedDB where a
+     compromised or corrupted entry could otherwise smuggle a cashier or merchant identity
+     into the call. Only the fields named below are ever sent; the server derives the rest
+     and would reject a forged merchant anyway. Belt and braces, cheaply.
+
+     Retry and success handling come from the existing engine — a throw here becomes
+     markRetry (and eventually the DLQ), a return becomes markDone. No new machinery. */
+  let _fnsGetFunctions = null, _fnsHttpsCallable = null;
+
+  async function _ensureFns() {
+    if (_fnsHttpsCallable) return true;
+    try {
+      const fns = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+      _fnsGetFunctions  = fns.getFunctions;
+      _fnsHttpsCallable = fns.httpsCallable;
+      return true;
+    } catch (_) { return false; }
+  }
+
+  const CALLABLE_PAYLOAD = {
+    /* type -> the ONLY keys that may leave the queue */
+    shift_registration: ['sellerId', 'clientShiftId', 'openingCash', 'branchId', 'cashierName'],
+  };
+
+  async function _syncCallable(item, route) {
+    if (!await _ensureFns()) throw new Error('functions SDK unavailable');
+    const app = window.firebaseApp || (window.firebase && window.firebase.app && window.firebase.app());
+    if (!app) throw new Error('firebase app not initialised');
+
+    const allowed = CALLABLE_PAYLOAD[item.type] || [];
+    const src = item.data || {};
+    const payload = {};
+    allowed.forEach((k) => { if (src[k] !== undefined) payload[k] = src[k]; });
+
+    /* The join key is the whole point of the call; without it there is nothing to register
+       and retrying forever would only fill the DLQ. */
+    if (!payload.clientShiftId) throw new Error('shift_registration without a clientShiftId');
+
+    /* The dispatcher routes by op name and adds no authorization of its own; the
+       handler's own gate is the entire gate. */
+    const body = route.op ? Object.assign({ op: route.op }, payload) : payload;
+    const callable = _fnsHttpsCallable(_fnsGetFunctions(app), route.callable);
+    const res = await callable(body);
+    return res && res.data;
+  }
+
   async function _syncItem(db, item, circuitName) {
     const route = ROUTES[item.type];
     if (!route) {
       console.warn(`[PosSyncEngine] Unknown sync type: ${item.type} — skipping`);
       return;
     }
+
+    /* A callable route never touches a document. Branch before the write path so the
+       existing sale sync is untouched by this addition. */
+    if (route.callable) return _syncCallable(item, route);
 
     const data    = item.data;
     const docId   = data[route.idKey];
@@ -185,7 +252,26 @@
         await _fsUpdateDoc(invRef, {
           qty:       _fsIncrement(delta),
           updatedAt: new Date().toISOString(),
-        }).catch(() => {}); // non-fatal: inventory doc may not exist for new products
+        }).catch((err) => {
+          /* Still swallowed, deliberately: rethrowing would fail the queue item and change
+             retry/DLQ behaviour, and that is a synchronisation decision this change may not
+             make on its own.
+
+             But a DENIAL is not a missing document. The `inventory` collection has no
+             security rule and there is no catch-all — verified against the SERVED ruleset
+             59af870d-72eb-4791-a3b6-2f4de7eb8ff7 on 2026-09-01 — so in production this write
+             is refused while the posStockMovements record above succeeds. The quantity and
+             the audit trail then diverge permanently, and the old `.catch(() => {})` made
+             that invisible by treating every failure as an absent document.
+
+             A genuinely absent doc for a new product stays benign, exactly as before. */
+          const code = (err && err.code) || '';
+          if (code === 'permission-denied') {
+            console.error('[PosSync] inventory quantity NOT applied — permission-denied on ' +
+              'inventory/' + invId + '. The posStockMovements record WAS written, so the ' +
+              'quantity and the audit trail have diverged for product ' + data.productId + '.');
+          }
+        });
       }
     };
 

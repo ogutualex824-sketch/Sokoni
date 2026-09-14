@@ -86,6 +86,14 @@
     .wiz-btn.primary:hover{filter:brightness(1.08);}
     .wiz-btn.ghost{background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.1);}
     .wiz-btn.ghost:hover{background:rgba(255,255,255,0.09);color:#fff;}
+    .wiz-btn[disabled]{opacity:.45;cursor:not-allowed;filter:none;}
+    .wiz-btn[disabled]:hover{filter:none;}
+    .wiz-agreement{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:14px;font-size:13px;line-height:1.55;color:rgba(255,255,255,0.72);}
+    .wiz-agreement p{margin:0 0 8px;}
+    .wiz-agreement p:last-child{margin-bottom:0;}
+    .wiz-agreement strong{color:#fff;}
+    .wiz-agreement a{color:#71ff00;}
+    .wiz-agree-note{font-size:12px;color:rgba(255,255,255,0.45);margin-top:8px;line-height:1.5;}
 
     /* ── Multi-select chips ── */
     .wiz-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
@@ -286,9 +294,47 @@
       <input class="wiz-input" id="exprRate" type="number" placeholder="e.g. 350" min="0" inputmode="numeric">
     </div>
 
+    <!-- ── Seller Agreement acknowledgement ──────────────────────────────────
+         `applicationDecide` REFUSES to approve an application whose
+         `agreementAccepted` is not exactly true (failed-precondition). Without
+         this block every application filed from this wizard was permanently
+         un-approvable: the merchant saw "pending review" forever and the
+         reviewer got an error they could not clear from the dashboard.
+
+         The disabled button is a convenience gate only. The authority is the
+         server check; sokoni-merchant-application.js also refuses to build a
+         document without the acknowledgement, so a bypassed checkbox produces a
+         stated refusal rather than a silent un-approvable application. -->
+    <div class="wiz-field">
+      <label class="wiz-label">Seller Agreement</label>
+      <!-- The rates below are NOT typed here. They are read from
+           sokoni-commission-rates.js, which is generated from
+           functions/commission-config.js — the one file allowed to define a
+           commission rate. A number hand-written into this page is how a seller
+           ends up shown one rate and charged another; this platform has already
+           had that exact split once. The static text is the fallback for a page
+           that somehow loads without the snapshot, and the script below
+           overwrites it with the real schedule. -->
+      <div class="wiz-agreement">
+        <p><strong>Commission &mdash; two separate rates</strong></p>
+        <p><strong>Marketplace orders</strong> (orders SOKONI brings you) depend on your plan:
+          <span id="agreeMktRates">Free 15% &middot; Basic 10% &middot; Pro 5% &middot; Enterprise 0%</span>.</p>
+        <p><strong>In-shop POS / Till sales</strong> &mdash; sales you make yourself at your own counter &mdash;
+          are a flat <span id="agreePosRate">5%</span> on every plan. Your plan changes your marketplace rate; it does not change your till rate.</p>
+        <p>A <strong>minimum commission of KES <span id="agreeMinKes">10</span> per sale</strong> applies, except where your plan&rsquo;s rate is 0%.</p>
+        <p>Full terms, including how and when commission is collected, are in the
+          <a href="/seller-terms" target="_blank" rel="noopener">Seller Agreement</a>.</p>
+      </div>
+      <label class="wiz-check-label" for="wizAgree" style="margin-top:12px;align-items:flex-start;">
+        <input type="checkbox" id="wizAgree" onchange="syncAgree()">
+        <span>I have read and agree to the SOKONI Seller Agreement and the 5% per-sale commission.</span>
+      </label>
+      <div class="wiz-agree-note">Required. Your shop is created when an administrator approves your application &mdash; not when you submit it.</div>
+    </div>
+
     <div class="wiz-btn-row">
       <button class="wiz-btn ghost" onclick="goToStep(2)">&#8592; Back</button>
-      <button class="wiz-btn primary" onclick="step4Complete()">Complete Setup ✓</button>
+      <button class="wiz-btn primary" id="wizSubmitBtn" disabled aria-disabled="true" onclick="step4Complete()">Complete Setup ✓</button>
     </div>
   </div>
 
@@ -300,8 +346,12 @@
        modal states the real state and offers no live-selling controls. -->
   <div class="wiz-modal-bg" id="successModal" style="display:none;">
     <div class="wiz-modal">
-      <div class="modal-icon">📋</div>
-      <h2>Application submitted</h2>
+      <!-- The icon and heading are set from the OUTCOME (see step4Complete).
+           They used to be fixed at "📋 Application submitted" while the body
+           below could say "Not submitted." — a failure wearing a success
+           heading, which is the one thing this modal must never do. -->
+      <div class="modal-icon" id="wizSubmitIcon">📋</div>
+      <h2 id="wizSubmitTitle">Application submitted</h2>
       <p id="wizSubmitMsg">Your merchant application is <strong>pending review</strong>. Our team checks new merchants before a shop goes live — we'll notify you by SMS as soon as it's decided.</p>
       <div class="wiz-modal-btns">
         <button class="wiz-modal-btn primary" onclick="window.location.href='profile.html'">Back to my account</button>
@@ -313,6 +363,9 @@
   <script type="module" src="firebase.js"></script>
   <!-- The ONE merchant-application primitive. Loaded without `defer` so it is
        defined before step4Complete() can run. -->
+  <!-- Generated from functions/commission-config.js. Loaded so the agreement above
+       states the REAL schedule rather than a number typed into this page. -->
+  <script src="sokoni-commission-rates.js"></script>
   <script src="sokoni-merchant-application.js"></script>
   <script src="sokoni-trust.js" defer></script>
   <script src="kass-widget.js" defer></script>
@@ -441,6 +494,35 @@
     }
 
     /* ── Step 4: complete ── */
+    /* Keep the submit button in step with the acknowledgement. A convenience
+       gate only — step4Complete re-reads the checkbox, the application
+       primitive refuses to build a document without it, and applicationDecide
+       refuses approval server-side. A disabled attribute is not an authority. */
+    /* Paint the agreement's rates from the generated schedule, so this page cannot
+       state a rate the engine does not charge. If the snapshot is missing the
+       static fallback stands — never a blank, and never an invented number. */
+    function paintAgreementRates(){
+      var C = window.SokoniCommission;
+      if (!C || typeof C.marketplacePct !== 'function') return;
+      var set = function (id, text) { var el = document.getElementById(id); if (el) el.textContent = text; };
+      set('agreeMktRates',
+        'Free ' + C.marketplacePct('seller_free') + '%'
+        + ' · Basic ' + C.marketplacePct('seller_basic') + '%'
+        + ' · Pro ' + C.marketplacePct('seller_pro') + '%'
+        + ' · Enterprise ' + C.marketplacePct('seller_enterprise') + '%');
+      set('agreePosRate', C.posPct() + '%');
+      if (typeof C.MIN_COMMISSION_KES === 'number') set('agreeMinKes', String(C.MIN_COMMISSION_KES));
+    }
+
+    function syncAgree(){
+      var box = document.getElementById('wizAgree');
+      var btn = document.getElementById('wizSubmitBtn');
+      if(!btn) return;
+      var ok = !!(box && box.checked);
+      btn.disabled = !ok;
+      btn.setAttribute('aria-disabled', String(!ok));
+    }
+
     async function step4Complete(){
       var methods = [];
       if(document.getElementById('delSelf').checked)   methods.push('self');
@@ -516,11 +598,21 @@
           if (active) { shopId = active; shopIdSource = 'active_shop'; }
         } catch (_) {}
 
+        /* `fs` is REQUIRED by submit() — it throws without it. The adapter above
+           was built and never handed over, so every submission from this page
+           failed with "a firestore adapter is required" and the merchant was
+           told their application was not submitted. The module's own test suite
+           could not catch it: it injects its own adapter and so exercises the
+           module, never this call site. */
         submitted = await window.SokoniMerchantApplication.submit({
+          fs: adapter,
           uid: auth2.currentUser.uid,
           shopId: shopId,
           shopIdSource: shopIdSource,
           source: 'onboarding-seller',
+          /* Read at submit time, not cached from an earlier step — the merchant
+             may untick it after ticking it. */
+          agreementAccepted: !!(document.getElementById('wizAgree') || {}).checked,
           profile: {
             name:            sellerData.storeName || sellerData.businessName || '',
             businessName:    sellerData.businessName || sellerData.storeName || '',
@@ -541,12 +633,22 @@
         console.warn('[SellerOnboarding] application submit failed:', submitError);
       }
 
-      /* Never announce a submission that did not happen. */
-      var msgEl = document.getElementById('wizSubmitMsg');
+      /* Never announce a submission that did not happen. The heading and icon
+         move with the body text, so a refusal cannot be read as a success at a
+         glance. */
+      var msgEl   = document.getElementById('wizSubmitMsg');
+      var titleEl = document.getElementById('wizSubmitTitle');
+      var iconEl  = document.getElementById('wizSubmitIcon');
+      var _fail = function (title) {
+        if (titleEl) titleEl.textContent = title;
+        if (iconEl)  iconEl.textContent  = '⚠️';
+      };
       if (submitError) {
+        _fail('Not submitted');
         if (msgEl) msgEl.innerHTML = '<strong>Not submitted.</strong> ' + submitError
           + ' Your answers are saved on this device — reopen this page to try again.';
       } else if (submitted && !submitted.ok) {
+        _fail(submitted.reason === 'agreement_required' ? 'Agreement required' : 'Not submitted');
         if (msgEl) msgEl.innerHTML = submitted.message || 'This account already has a merchant application.';
       } else if (submitted && submitted.action === 'update') {
         if (msgEl) msgEl.innerHTML = 'Your existing application was <strong>updated</strong> and remains <strong>pending review</strong>. We\'ll notify you by SMS as soon as it\'s decided.';
@@ -564,6 +666,12 @@
         if(saved) sellerData = JSON.parse(saved);
       } catch(e){}
       updateProgressUI();
+      /* The acknowledgement is deliberately NOT restored from localStorage —
+         it must be given again on this visit, against the text shown on this
+         visit. Re-sync so a browser that restored the checkbox state on reload
+         cannot leave the button enabled over an unticked box, or vice versa. */
+      syncAgree();
+      paintAgreementRates();
     });
   </script>
   <script>

@@ -105,11 +105,14 @@ const PLANS = {
     { tier: 'professional', label: 'Professional', price: 249900, commission: 0.06, limits: { outlets: 5 }, features: ['5 Outlets', 'KDS', 'Analytics'], popular: true },
     { tier: 'enterprise',   label: 'Enterprise',   price: 499900, commission: 0.04, limits: { outlets: -1}, features: ['Unlimited', 'White-label App', 'API'] },
   ],
-  healthcare: [
-    { tier: 'clinic',    label: 'Clinic',    price: 249900, commission: 0.03, limits: { doctors: 5  }, features: ['5 Doctors', 'Appointments', 'EMR'] },
-    { tier: 'hospital',  label: 'Hospital',  price: 499900, commission: 0.02, limits: { doctors: 20 }, features: ['20 Doctors', 'Full EMR', 'Lab', 'Pharmacy'], popular: true },
-    { tier: 'enterprise',label: 'Enterprise',price: 999900, commission: 0.01, limits: { doctors: -1 }, features: ['Unlimited', 'API', 'NHIF Integration'] },
-  ],
+  /* Healthcare is defined ONCE, in functions/healthcare-plans.js — the canonical table for
+     the Healthcare hub. It used to be inline here with `commission: 0.03 / 0.02 / 0.01`,
+     which contradicted the ratified 5% Healthcare booking rate (ADR-015) and would have
+     become a second rate authority the moment anything read it. The plans now carry capacity
+     only: `limits.doctors` (practitioner seats) and `limits.services` (publishable services),
+     never `limits.listings`, whose absence used to make the service cap evaluate to NaN and
+     silently disappear. */
+  healthcare: require('./healthcare-plans').clientPlanList(),
   employer: [
     { tier: 'free',       label: 'Free',       price: 0,      commission: 0, limits: { jobs: 1  }, features: ['1 Active Job', 'Basic Search'] },
     { tier: 'starter',    label: 'Starter',    price: 249900, commission: 0, limits: { jobs: 5  }, features: ['5 Jobs', 'Featured Listing', 'Applicant Tracking'] },
@@ -251,6 +254,33 @@ _h.onbActivateSubscription = async (req) => {
   const plans = PLANS[role] || _genericPlan(role);
   const plan = plans.find(p => p.tier === tier);
   if (!plan) throw new HttpsError('not-found', `Plan "${tier}" not found for role "${role}".`);
+
+  /* ── THE TYPO AND THE SECURITY MUST LAND TOGETHER ──────────────────────────────────────
+   * Below, the write said `paymentRef,` while the only binding in scope was `payRef`. In
+   * strict mode that is a ReferenceError, so this handler threw on EVERY call, for every
+   * role — verified by execution. The three Healthcare plans were returned by onbGetPlans
+   * and displayed to customers, but could not be purchased.
+   *
+   * Repairing that one character alone would NOT have restored a feature. It would have
+   * armed an unverified paid-subscription path for every role at once: the handler took
+   * `paymentRef` from the request, never verified it, and wrote status:'active' with the
+   * plan's commissionRate and limits. Its deadness was, accidentally, the only thing
+   * containing it.
+   *
+   * So the guard lands with the fix. A priced plan cannot be activated from the client;
+   * money becomes capability only through the canonical path — createPaymentIntent (the
+   * server derives the amount) -> IntaSend -> entitlement-engine verification -> activation.
+   * For Healthcare that is purpose `healthcare_subscription`, whose engine handler writes
+   * accountSubscriptions itself.
+   *
+   * A zero-price tier stays self-serve: there is no payment to verify, so nothing to forge. */
+  const planPriceCents = Math.max(0, Math.round(Number(plan.price) || 0));
+  if (planPriceCents > 0) {
+    throw new HttpsError('failed-precondition',
+      'A paid plan cannot be activated from the client. Start a payment with '
+      + 'createPaymentIntent; the subscription activates once the payment is verified.');
+  }
+
   const db = getFirestore();
   const subId = _genId('SUB');
   const now = new Date();
@@ -266,7 +296,8 @@ _h.onbActivateSubscription = async (req) => {
     currentPeriodStart: FieldValue.serverTimestamp(),
     currentPeriodEnd: Timestamp.fromDate(end),
     renewalAt: Timestamp.fromDate(end),
-    paymentRef, paymentMethod: req.data?.paymentMethod || null,
+    paymentRef: payRef || null,   /* was `paymentRef,` — an undeclared binding; see the guard above */
+    paymentMethod: req.data?.paymentMethod || null,
     commissionRate: plan.commission ?? 0,
     limits: plan.limits || {}, features: plan.features || [],
     cancelledAt: null,

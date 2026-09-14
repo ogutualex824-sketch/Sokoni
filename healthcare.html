@@ -512,8 +512,8 @@
       </div>
       <div style="background:rgba(0,200,120,0.04);border:1px solid rgba(0,200,120,0.12);border-radius:16px;padding:18px;text-align:center;">
         <div style="font-size:30px;margin-bottom:8px;">2️⃣</div>
-        <div style="font-size:13px;font-weight:800;color:white;margin-bottom:4px;">Pay via M-Pesa</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);">From KES 500 — secure payment</div>
+        <div style="font-size:13px;font-weight:800;color:white;margin-bottom:4px;">Doctor Confirms</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">You're called back to confirm the slot and the fee</div>
       </div>
       <div style="background:rgba(0,200,120,0.04);border:1px solid rgba(0,200,120,0.12);border-radius:16px;padding:18px;text-align:center;">
         <div style="font-size:30px;margin-bottom:8px;">3️⃣</div>
@@ -568,7 +568,7 @@
       </div>
       <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Symptoms / Reason for Consult</label>
       <textarea id="tcSymptoms" class="modal-input" style="min-height:80px;resize:vertical;margin-bottom:14px;" placeholder="Briefly describe your symptoms or what you'd like to discuss with the doctor..."></textarea>
-      <button type="button" class="modal-btn" onclick="bookTeleconsult()">📱 Book Teleconsult &amp; Pay via M-Pesa</button>
+      <button type="button" class="modal-btn" onclick="bookTeleconsult()">📱 Request Teleconsult</button>
       <div id="tcMsg" style="font-size:12px;margin-top:10px;min-height:16px;"></div>
     </div>
 
@@ -964,20 +964,28 @@ function renderProviders(){
 }
 
 /*  Appointment modal  */
+/*  Booking entry.
+
+    A healthcare consultation IS a service booking, so a provider who can take money takes
+    it through the ONE canonical rail — SokoniBookService → bookingCreateService (server
+    prices from providerServices) → createPaymentIntent → IntaSend STK → webhook → paid_held
+    → Phase C settlement (docs/BOOKING_PAYMENT_CONTRACT.md, ADR-015). There is no healthcare
+    payment path; there is the platform payment path.
+
+    This used to call SokoniPay.bookNow, which collects money FIRST and lets the legacy
+    webhook `type:'booking'` branch credit the provider's wallet immediately — violating
+    contract invariant 1 (a single provider credit point, at completion). It is gone.
+
+    The directory below is sample reference data: those entries carry no `providerId`, so
+    there is no seller, no rate card, no availability and nothing to charge. They open an
+    appointment REQUEST, which moves no money and claims no confirmation. A real onboarded
+    healthcare provider (one with a uid) books canonically. */
 function openAppt(id, name){
   const prov = PROVIDERS.find(p=>p.id===id);
-  if(typeof SokoniPay!=='undefined'){
-    try{
-      SokoniPay.bookNow({
-        providerName: name,
-        category: 'healthcare',
-        serviceDesc: 'Medical Appointment — '+(prov?.type||'Healthcare'),
-        providerPhone: prov?.phone||''
-      }, function(ref){
-        _showApptForm(id, name);
-      });
-      return;
-    }catch(e){}
+  const providerId = prov?.providerId || prov?.uid || null;
+  if(providerId && window.SokoniBookService){
+    SokoniBookService.open({ providerId, providerName: name });
+    return;
   }
   _showApptForm(id, name);
 }
@@ -1008,35 +1016,30 @@ function submitAppt(){
   const btn = document.querySelector('#apptModal .modal-btn');
   if(btn){ btn.disabled = true; btn.textContent = '⏳ Booking...'; }
   const apptId = _apptId || ("APT" + Date.now());
-  const appt = { id:apptId, providerId:apptTarget?.id, providerName:apptTarget?.name, patientName:name, phone, service:svc, date, time, notes:document.getElementById("apptNotes").value, status:"confirmed", createdAt:new Date().toLocaleDateString() };
+  /* `requested` — the honest state. The client cannot establish that a provider has accepted
+     an appointment, so it does not write "confirmed"; the facility confirms out of band. */
+  const appt = { id:apptId, providerId:apptTarget?.id, providerName:apptTarget?.name, patientName:name, phone, service:svc, date, time, notes:document.getElementById("apptNotes").value, status:"requested", createdAt:new Date().toLocaleDateString() };
 
-  function _finalise(method){
-    let appts = [];
-    try { appts = JSON.parse(localStorage.getItem("sokoniAppointments"))||[]; } catch(e){}
-    appts.push(appt);
-    localStorage.setItem("sokoniAppointments", JSON.stringify(appts));
-    if(window.SokoniHealth) SokoniHealth.saveAppointment(appt).catch(e=>console.warn('[HC] appt:',e.message));
-    closeAppt();
-    if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:svc,category:'Healthcare',qty:1,price:apptTarget?.consultationFee||0}],subtotal:apptTarget?.consultationFee||0,total:apptTarget?.consultationFee||0,paymentMethod:method||'Pay at Facility',paymentRef:apptId,sellerName:apptTarget?.name||'SOKONI Healthcare',date:new Date().toISOString(),notes:date+' at '+time});},500);
-    else (window._skToast||alert)(`✅ Appointment confirmed!\n\n🏥 ${apptTarget?.name}\n📅 ${date} at ${time}\n🩺 ${svc}\n\nReference: ${apptId}\nYou'll receive a confirmation SMS to ${phone} shortly.`);
-  }
+  /* NO MONEY ON THIS PATH.
 
-  /* If provider has Daraja configured, collect consultation fee now */
-  if(apptTarget?.sellerUid && apptTarget?.consultationFee > 0 && window.SokoniMpesa){
-    SokoniMpesa.pay({
-      sellerUid: apptTarget.sellerUid,
-      amount: apptTarget.consultationFee,
-      phone,
-      orderId: apptId,
-      hub: 'healthcare',
-      sellerName: apptTarget.name,
-      description: svc + ' Consultation',
-      onSuccess: r => _finalise('M-Pesa · '+(r.mpesaCode||'')),
-      onFailure: reason => { if(btn){ btn.disabled = false; btn.textContent = '📅 Confirm Booking'; } if(reason !== 'cancelled' && reason !== 'timeout') _finalise('Pending Payment'); }
-    });
-    return;
-  }
-  _finalise('Pay at Facility');
+     This used to collect the consultation fee through SokoniMpesa.pay → darajaSTKPush,
+     which pushes STK against the SELLER'S OWN Daraja credentials: the money lands in the
+     provider's till, so the platform gets no payment document, no held funds, no commission,
+     no refund capability and no reconciliation — and the booking was then "confirmed" on a
+     client-side onSuccess callback. Its onFailure handler also called _finalise('Pending
+     Payment'), so a FAILED payment still produced a confirmed appointment and an invoice.
+
+     Healthcare payments are IntaSend-only (ADR-015). A provider who can charge is booked
+     through SokoniBookService in openAppt() above, where the server prices the booking and
+     holds the funds. This form is the no-charge request path, so it mints no invoice —
+     an invoice for money nobody collected is a fabricated financial record. */
+  let appts = [];
+  try { appts = JSON.parse(localStorage.getItem("sokoniAppointments"))||[]; } catch(e){}
+  appts.push(appt);
+  localStorage.setItem("sokoniAppointments", JSON.stringify(appts));
+  if(window.SokoniHealth) SokoniHealth.saveAppointment(appt).catch(e=>console.warn('[HC] appt:',e.message));
+  closeAppt();
+  (window._skToast||alert)(`📅 Appointment requested\n\n🏥 ${apptTarget?.name}\n📅 ${date} at ${time}\n🩺 ${svc}\n\nReference: ${apptId}\nThe facility will contact ${phone} to confirm. Payment, if any, is arranged with the facility.`);
 }
 
 /*  Medicine delivery modal  */
@@ -1061,8 +1064,9 @@ function submitMed(){
   if(window.SokoniHealth) SokoniHealth.saveMedOrder(order).catch(e=>console.warn('[HC] med:',e.message));
 
   closeMed();
-  if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'order',buyerName:'Customer',buyerPhone:phone,items:[{name:med,category:'Pharmacy',qty:1,price:0}],subtotal:0,total:0,paymentMethod:'M-Pesa on Delivery',paymentRef:order.id,sellerName:'SOKONI Pharmacy',date:new Date().toISOString(),notes:address+' · '+(urgency==='express'?'Express <1hr':'Standard 2-3hrs')});},500);
-  else (window._skToast||alert)(`✅ Medicine order placed!\n\n💊 ${med}\n📍 ${address}\n⏱ ${urgency==="express"?"Express — under 1 hour":"Standard — 2–3 hours"}\n\nA pharmacist will confirm and dispatch. Pay via M-PESA on delivery.\nOrder ID: ${order.id}`);
+  /* No KES 0 "invoice" for an order that has not been priced or paid. Pharmacy product
+     orders converge on the canonical `product_order` payment purpose — a separate gate. */
+  (window._skToast||alert)(`💊 Medicine request sent\n\n💊 ${med}\n📍 ${address}\n⏱ ${urgency==="express"?"Express — under 1 hour":"Standard — 2–3 hours"}\n\nA pharmacist will confirm availability, price and dispatch.\nOrder ID: ${order.id}`);
 }
 
 /*  Register Facility  */
@@ -1460,10 +1464,13 @@ function renderTCDoctors(){
     </div>`).join('');
 }
 
+/* Teleconsult has no seller, no rate card and no availability behind it, so it cannot take
+   payment. It used to open SokoniPay.bookNow with a hardcoded KES 500 fallback fee — money
+   collected against a fabricated amount for a provider that does not exist on the platform.
+   Removed (ADR-015); the form below records a request. */
 function startTCWith(name, fee){
   document.getElementById('tcName') && (document.getElementById('tcName').focus());
-  if(window.SokoniPay) SokoniPay.bookNow({service:'Teleconsultation with '+name,provider:name,amount:Number(fee)||500});
-  else (window._skToast||alert)('To book teleconsult with '+name+': fill the booking form above.');
+  (window._skToast||alert)('To request a teleconsult with '+name+': fill the booking form above.');
 }
 
 function bookTeleconsult(){
@@ -1489,8 +1496,8 @@ function bookTeleconsult(){
      rules permit. */
   if(window.SokoniHealth) SokoniHealth.saveTelemedicine({...tc,providerName:'Sokoni Teleconsult'}).catch(e=>console.warn('[HC] tc:',e.message));
   _tcRef=null;
-  if(tcBtn){tcBtn.disabled=false;tcBtn.textContent='📱 Book Teleconsult & Pay via M-Pesa';}
-  if(msgEl){msgEl.innerHTML=`✅ Booked! Ref: <strong style="color:#00c878;">${ref}</strong><br>A doctor will call ${phone} at your chosen time.`;msgEl.style.color='#00c878';}
+  if(tcBtn){tcBtn.disabled=false;tcBtn.textContent='📱 Request Teleconsult';}
+  if(msgEl){msgEl.innerHTML=`📋 Teleconsult requested. Ref: <strong style="color:#00c878;">${ref}</strong><br>A doctor will call ${phone} to confirm your slot. Payment, if any, is arranged then.`;msgEl.style.color='#00c878';}
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1560,8 +1567,8 @@ function bookLabTest(){
   /* Lab bookings belong in healthLabBookings (owner-writable), not the
      server-only healthAppointments collection. */
   if(window.SokoniHealth) SokoniHealth.saveLabBooking({...booking,providerName:booking.lab||'Sokoni Lab',service:'Lab Test'}).catch(e=>console.warn('[HC] lab:',e.message));
-  if(window.SokoniInvoice) setTimeout(()=>SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:tests,category:'Lab Tests',qty:1,price:0}],subtotal:0,total:0,paymentMethod:'Pay at Lab',paymentRef:ref,sellerName:booking.lab||'Sokoni Labs',date:new Date().toISOString()}),500);
-  if(msgEl){msgEl.innerHTML=`✅ Lab booking confirmed! Ref: <strong style="color:#00c878;">${ref}</strong><br>The lab will contact ${phone} to confirm the date and home collection if selected.`;msgEl.style.color='#00c878';}
+  /* No KES 0 "invoice" for a lab request that has not been priced or paid. */
+  if(msgEl){msgEl.innerHTML=`📋 Lab test requested. Ref: <strong style="color:#00c878;">${ref}</strong><br>The lab will contact ${phone} to confirm the date, price and home collection if selected.`;msgEl.style.color='#00c878';}
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1695,7 +1702,9 @@ async function toggleHcOpenNow(btn) {
     if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
   }catch(e){}
 })();
-</script><script src="sokoni-mpesa.js" defer></script>
+</script><!-- sokoni-mpesa.js (darajaSTKPush → the SELLER'S own till) is deliberately NOT loaded:
+     healthcare takes payment only through the canonical IntaSend booking rail (ADR-015). -->
+<script src="sokoni-book-service.js" defer></script>
 <script src="sokoni-social.js" defer></script>
 <script src="sokoni-referral.js" defer></script>
 <script src="sokoni-inbox.js" defer></script>

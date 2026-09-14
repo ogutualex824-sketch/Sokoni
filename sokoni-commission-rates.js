@@ -128,6 +128,23 @@
     "ai_services": "digital_products"
   };
 
+  /* MARKETPLACE lane — commission by the seller's PLAN, on orders SOKONI brought them. */
+  var MARKETPLACE_PLAN_PCT = {
+    "free": 16,
+    "professional": 12,
+    "business": 8,
+    "enterprise": 4
+  };
+
+  /* POS / TILL lane — shop sales the merchant made themselves. FLAT, every plan. A
+     subscription buys a better marketplace rate and changes NOTHING at the till. */
+  var POS_FLAT_PCT = 5;
+
+  /* RAW category labels priced by the plan ladder. "pos" is deliberately ABSENT even though
+     it ALIASES to marketplace — keying on the resolved category would put every till sale on
+     the ladder and triple a Free merchant's till commission. */
+  var MARKETPLACE_CATEGORIES = ["marketplace","product","products","shopping","b2b"];
+
   var MIN_COMMISSION_KES = 10;
 
   /* Resolve a hub OR category name to its rate. Mirrors commission-config.resolveRate(). */
@@ -149,6 +166,26 @@
     RATES: RATES,
     ALIASES: ALIASES,
     MIN_COMMISSION_KES: MIN_COMMISSION_KES,
+
+    /* The rate a seller on planId pays on a MARKETPLACE order. An unrecognised or absent
+       plan resolves to Free — the HIGHEST rate — so a display can never under-quote. */
+    marketplacePct: function (planId) {
+      var k = String(planId || '').trim().toLowerCase();
+      /* Mirrors commission-config.MARKETPLACE_TIER_ALIASES exactly. 'starter' and
+         'business' are deliberately absent there and must stay absent here — a client
+         that resolved them would quote a rate the server does not charge. */
+      var alias = { free:'seller_free', basic:'seller_basic', pro:'seller_pro',
+                    enterprise:'seller_enterprise' };
+      if (!Object.prototype.hasOwnProperty.call(MARKETPLACE_PLAN_PCT, k)) k = alias[k] || 'seller_free';
+      return MARKETPLACE_PLAN_PCT[k];
+    },
+    /* The rate on a POS / till sale. Takes no plan, because it does not depend on one. */
+    posPct: function () { return POS_FLAT_PCT; },
+    isMarketplaceSellerSale: function (cat) {
+      return MARKETPLACE_CATEGORIES.indexOf(String(cat || '').trim().toLowerCase()) !== -1;
+    },
+    MARKETPLACE_PLAN_PCT: MARKETPLACE_PLAN_PCT,
+    POS_FLAT_PCT: POS_FLAT_PCT,
 
     /* Refresh from the server so a rate change reaches clients without a client rebuild.
        Merges in place, so anything already rendered keeps working. */

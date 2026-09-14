@@ -10,7 +10,13 @@
  *   ratingsSummary/{targetId}             — denormalised avg+count
  *   reviewRateLimits/{uid}_{action}_{day} — daily rate-limit counters
  *
- * targetId format: "{type}_{entityId}"  e.g. "product_abc", "seller_xyz"
+ * targetId: the CANONICAL id of the target entity, resolved SERVER-SIDE by
+ * _resolveCanonicalTarget(). Never the caller's raw input, never a display name.
+ *
+ * NOTE: this header previously documented a prefixed composite key
+ * ("{type}_{entityId}"). No caller and no query in this file ever produced or
+ * consumed that form, so it was corrected rather than implemented — adopting it
+ * now would orphan every existing review document.
  *
  * Security hardening v1.1:
  *   - Per-user daily rate limits on submit/flag/helpful
@@ -81,6 +87,76 @@ async function _assertReviewEligible(uid) {
   }
 }
 
+/* ── canonical target resolution ────────────────────────────────────────────
+   The caller may IDENTIFY a target; only the server may DECIDE its id.
+
+   Before this, targetId was stored exactly as supplied. Nothing checked that it
+   resolved to a real entity, so a caller passing a display name or a stale id
+   silently created reviews and a ratingsSummary/{thatString} document that no
+   surface would ever query — "approved but invisible".
+
+   Each targetType maps to an ordered list of source collections. The FIRST hit
+   wins. A doc whose id is already the canonical key resolves to itself; an
+   indirect record (businesses/{merchantId}) resolves through its owner field,
+   because shops/ and sellers/ are keyed by owner uid while businesses/ is keyed
+   by a generated merchantId — two different id spaces for the same real shop.
+
+   Unresolvable input is REJECTED. Manufacturing a summary under an identifier
+   nothing can query is the defect this function exists to prevent. */
+const _TARGET_SOURCES = {
+  /* shops/{uid} and sellers/{uid} are uid-keyed, so the doc id IS canonical.
+     businesses/{merchantId} is not — resolve it through its owner field. */
+  seller:        [{ col: 'sellers' }, { col: 'shops' },
+                  { col: 'businesses', ownerField: ['uid', 'ownerId'] }],
+  product:       [{ col: 'products' }],
+  service:       [{ col: 'services' }, { col: 'providers' }],
+  driver:        [{ col: 'drivers' }],
+  education:     [{ col: 'courses' }, { col: 'providers' }],
+  food:          [{ col: 'listings' }, { col: 'providers' }, { col: 'services' }],
+  healthcare:    [{ col: 'providers' }, { col: 'services' }],
+  entertainment: [{ col: 'listings' }, { col: 'providers' }, { col: 'services' }],
+  legal:         [{ col: 'providers' }, { col: 'services' }],
+};
+
+/**
+ * Resolve caller-supplied identification to the authoritative target id.
+ * @returns {Promise<{canonicalId:string, submittedId:string, source:string}>}
+ * @throws  HttpsError('not-found') when the target does not resolve.
+ */
+async function _resolveCanonicalTarget(targetType, rawId) {
+  const sources = _TARGET_SOURCES[targetType];
+  if (!sources) throw new HttpsError('invalid-argument', 'Unsupported targetType.');
+
+  const db = _db();
+  const submittedId = String(rawId || '').trim();
+  if (!submittedId) throw new HttpsError('invalid-argument', 'targetId required.');
+
+  for (const src of sources) {
+    let snap;
+    try { snap = await db.collection(src.col).doc(submittedId).get(); }
+    catch (e) { continue; }
+    if (!snap.exists) continue;
+
+    if (!src.ownerField) {
+      return { canonicalId: submittedId, submittedId, source: src.col };
+    }
+    const data = snap.data() || {};
+    for (const f of src.ownerField) {
+      const owner = data[f];
+      if (owner && typeof owner === 'string') {
+        return { canonicalId: owner, submittedId, source: src.col + '.' + f };
+      }
+    }
+    /* The record exists but carries no owner link — it cannot be attributed, and
+       guessing would attach the review to the wrong entity. */
+    throw new HttpsError('failed-precondition',
+      'Target exists but has no canonical owner; cannot attribute this review.');
+  }
+
+  throw new HttpsError('not-found',
+    'Review target does not resolve to a known ' + targetType + '.');
+}
+
 /** Recalculate and update ratingsSummary for a target */
 async function _recalcSummary(targetId) {
   const db = _db();
@@ -130,9 +206,15 @@ exports.submitReview = onCall({ region: "us-central1" }, async (req) => {
 
   const db = _db();
 
+  /* The server decides the id. Runs BEFORE the duplicate check so "one review per
+     user per target" is enforced against the canonical target — otherwise the same
+     shop reached by two different identifiers would accept two reviews. */
+  const _resolved   = await _resolveCanonicalTarget(targetType, targetId);
+  const canonicalId = _resolved.canonicalId;
+
   // One review per user per target
   const existing = await db.collection("reviews")
-    .where("targetId", "==", targetId)
+    .where("targetId", "==", canonicalId)
     .where("authorUid", "==", uid)
     .limit(1).get();
   if (!existing.empty) throw new HttpsError("already-exists", "You have already reviewed this.");
@@ -159,7 +241,11 @@ exports.submitReview = onCall({ region: "us-central1" }, async (req) => {
 
   const reviewRef = db.collection("reviews").doc();
   await reviewRef.set({
-    targetId,
+    targetId: canonicalId,
+    /* What the caller actually sent. Kept for audit and for diagnosing legacy
+       rows — never used as a key. */
+    submittedTargetId: _resolved.submittedId,
+    targetResolvedFrom: _resolved.source,
     targetType,
     targetName: _sanitize(targetName, 120),
     authorUid:  uid,
@@ -175,21 +261,32 @@ exports.submitReview = onCall({ region: "us-central1" }, async (req) => {
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  if (autoApprove) await _recalcSummary(targetId);
+  if (autoApprove) await _recalcSummary(canonicalId);
 
-  return { reviewId: reviewRef.id, status: autoApprove ? "approved" : "pending" };
+  return { reviewId: reviewRef.id, status: autoApprove ? "approved" : "pending", targetId: canonicalId };
 });
 
 // ── getReviews ────────────────────────────────────────────────────────────────
 exports.getReviews = onCall({ region: "us-central1" }, async (req) => {
-  const { targetId, sort = "recent", limit: lim = 20, startAfter } = req.data;
+  const { targetId, targetType, sort = "recent", limit: lim = 20, startAfter } = req.data;
   if (!targetId) throw new HttpsError("invalid-argument", "targetId required.");
+
+  /* Reads MUST canonicalise the same way writes do, or a caller identifying a shop
+     by one id would query a key writes never produce. targetType is optional so
+     existing callers keep working; when absent the raw id is used unchanged. */
+  let queryId = String(targetId).trim();
+  let legacyId = null;
+  if (targetType) {
+    const r = await _resolveCanonicalTarget(targetType, targetId);
+    queryId = r.canonicalId;
+    if (r.submittedId !== r.canonicalId) legacyId = r.submittedId;
+  }
 
   const safeLimit = Math.min(50, Math.max(1, Number(lim) || 20));
   const db = _db();
 
   let q = db.collection("reviews")
-    .where("targetId", "==", targetId)
+    .where("targetId", "==", queryId)
     .where("status", "==", "approved");
 
   if (sort === "highest")  q = q.orderBy("rating", "desc").orderBy("createdAt", "desc");
@@ -202,10 +299,24 @@ exports.getReviews = onCall({ region: "us-central1" }, async (req) => {
     if (cursorDoc.exists) q = q.startAfter(cursorDoc);
   }
 
-  const snap = await q.limit(safeLimit).get();
+  let snap = await q.limit(safeLimit).get();
+
+  /* TRANSITIONAL. Reviews written before canonicalisation are stored under the
+     id the caller sent. Rather than rewrite history (a migration decision, not a
+     read-path one), fall back to that id when the canonical key has nothing. */
+  if (snap.empty && legacyId) {
+    let lq = db.collection("reviews")
+      .where("targetId", "==", legacyId)
+      .where("status", "==", "approved");
+    if (sort === "highest")      lq = lq.orderBy("rating", "desc").orderBy("createdAt", "desc");
+    else if (sort === "lowest")  lq = lq.orderBy("rating", "asc").orderBy("createdAt", "desc");
+    else if (sort === "helpful") lq = lq.orderBy("helpful", "desc").orderBy("createdAt", "desc");
+    else                         lq = lq.orderBy("createdAt", "desc");
+    snap = await lq.limit(safeLimit).get();
+  }
 
   // Fetch summary
-  const summaryDoc = await db.collection("ratingsSummary").doc(targetId).get();
+  const summaryDoc = await db.collection("ratingsSummary").doc(queryId).get();
   const summary    = summaryDoc.exists ? summaryDoc.data() : { avg: 0, count: 0 };
 
   const reviews = snap.docs.map(d => {

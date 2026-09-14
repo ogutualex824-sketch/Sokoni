@@ -2,8 +2,16 @@
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
+/* closeShift's catch block calls logger.error. It was never imported, so EVERY failure in
+   that handler — including the legitimate "No open shift found for this cashier" — threw
+   ReferenceError: logger is not defined BEFORE the `if (err instanceof HttpsError) throw err`
+   line could re-raise the real one. Callers saw an opaque crash instead of the reason. */
+const logger = require('firebase-functions/logger');
 const admin = require('firebase-admin');
 const { _assertBusinessPermission } = require('./workforce-identity');
+/* The tenant resolver: ownerUid -> canonical merchantId. No new store; it reads the
+   existing businesses.ownerId relationship and refuses when it is ambiguous. */
+const { resolveMerchantIdForOwner, looksLikeOwnerForm, REASON: TENANT_REASON } = require('./tenant-identity');
 if (!admin.apps.length) admin.initializeApp();
 
 exports._h = {}; // handler registry — consumed by smartpos-dispatch.js
@@ -35,17 +43,56 @@ function _requireRole(auth, minRole) {
    Authorization now goes through workforce-identity's _assertBusinessPermission,
    the canonical capability engine, rather than a second one grown here.
 
-   The uid === sellerId short-circuit covers a seller operating their own POS
-   without a Firestore read, and without depending on whether sellerId is a
-   businesses/{id} key — which is NOT uniform across this codebase. Staff go
-   through the membership check. */
+   SUPERSEDED, 2026-09-01. That fix left one thing open, and this note used to
+   describe it as a feature: the `uid === sellerId` short-circuit returned the uid
+   "without depending on whether sellerId is a businesses/{id} key — which is NOT
+   uniform across this codebase". It is now established WHY it was not uniform, and
+   that the non-uniformity was itself the defect: two tenant spaces, one key name.
+   The short-circuit is gone and every path resolves to the canonical merchantId. */
+/* CANONICAL TENANT IDENTITY.
+
+   This used to return whatever the caller sent. An owner passing their own uid got the uid
+   back; staff passing a merchantId got the merchantId back. Both then flowed into
+   `where('sellerId','==',sellerId)` across fourteen queries in this file — so ONE shop was
+   addressed by TWO keys depending on who was acting, and a staff-raised approval was
+   invisible to an owner-manager listing approvals. See docs/TENANT_IDENTITY_CENSUS.md §3.
+
+   The output is now always the canonical merchantId — the `businesses` document id — no
+   matter which form arrived:
+
+     owner sends uid        -> resolved forward to their merchantId
+     owner sends merchantId -> accepted once it matches the one they own
+     staff sends merchantId -> membership verified through the existing capability engine
+     anything ambiguous     -> refused, never guessed
+
+   A client-supplied value never overrides server-derived identity: the uid form is only
+   RECOGNISED, and what it resolves to comes from `businesses where ownerId == auth.uid`. */
 async function _requireSeller(auth, data) {
-  const sellerId = data && data.sellerId;
-  if (!sellerId || typeof sellerId !== 'string')
+  const requested = data && data.sellerId;
+  if (!requested || typeof requested !== 'string')
     throw new HttpsError('invalid-argument', 'sellerId is required');
-  if (auth.uid === sellerId) return sellerId;
-  await _assertBusinessPermission(auth.uid, sellerId, 'pos');
-  return sellerId;
+
+  /* LEGACY OWNER FORM. Recognised, then resolved forward — not trusted. */
+  if (looksLikeOwnerForm(requested, auth.uid)) {
+    const owned = await resolveMerchantIdForOwner(auth.uid);
+    if (!owned.ok) {
+      if (owned.reason === TENANT_REASON.AMBIGUOUS) {
+        throw new HttpsError('failed-precondition',
+          'This account owns more than one business. Send the merchant id explicitly.');
+      }
+      throw new HttpsError('failed-precondition',
+        'No active business is linked to this account.');
+    }
+    return owned.merchantId;
+  }
+
+  /* A merchant id was sent. If the caller owns exactly that merchant, accept it without a
+     membership read; otherwise they must be a member of it. */
+  const owned = await resolveMerchantIdForOwner(auth.uid);
+  if (owned.ok && owned.merchantId === requested) return requested;
+
+  await _assertBusinessPermission(auth.uid, requested, 'pos');
+  return requested;
 }
 
 function _today() {
@@ -92,6 +139,23 @@ exports.openShift = onCall(_CF, exports._h.openShift = async (req) => {
   const branchId = data.branchId || 'default';
   const openingCash = Number(data.openingCash ?? 0);
 
+  /* THE OFFLINE-ORIGIN SHIFT ID.
+
+     A till opens its shift before it has a server: pos-sales.js is offline-first by design
+     ("IndexedDB -> Firestore, never lose a sale") and mints a local uid at that moment.
+     Cash events then carry THAT id, while posRetailSales carries the posShifts document id
+     — two identity spaces for one shift, which is why closeShift cannot find a shift cash
+     events.
+
+     The posShifts DOCUMENT remains the shift. The local id is recorded on it as an alias, so
+     events raised before the server knew about the shift can still be joined to it. No new
+     collection, no second authority: one field on the existing one.
+
+     It is a JOIN KEY, never a permission. Nothing authorises on it, and the caller still
+     cannot select another shift — the open shift is resolved from sellerId + auth.uid. */
+  const clientShiftId = typeof data.clientShiftId === 'string'
+    ? data.clientShiftId.trim().slice(0, 128) : null;
+
   if (isNaN(openingCash) || openingCash < 0)
     throw new HttpsError('invalid-argument', 'openingCash must be a non-negative number');
 
@@ -115,6 +179,7 @@ exports.openShift = onCall(_CF, exports._h.openShift = async (req) => {
     cashierName,
     branchId,
     status: 'open',
+    clientShiftId,
     openingCash,
     closingCash: null,
     openedAt: _TS(),
@@ -136,6 +201,119 @@ exports.openShift = onCall(_CF, exports._h.openShift = async (req) => {
   await shiftRef.set(shiftData);
 
   return { shiftId: shiftRef.id, message: 'Shift opened successfully', openingCash };
+});
+
+
+/**
+ * registerClientShift — join an offline-born shift to its server record.
+ *
+ * A till opens its shift with no network: pos-sales.js mints a local uid and sells against
+ * it. When connectivity returns, this attaches that id to the authoritative posShifts
+ * document so cash events raised offline can be joined to the shift they belong to.
+ *
+ * Input: { sellerId, clientShiftId, openingCash?, branchId?, cashierName? }
+ *
+ * EVERY IDENTITY IS SERVER-DERIVED. The caller supplies one opaque string and ordinary
+ * shift-opening data. The merchant comes from _requireSeller, the cashier from auth.uid.
+ * A caller cannot name another merchant, another cashier, or an existing server shift —
+ * `data.shiftId` is never read.
+ *
+ * IDEMPOTENT BY (actor, clientShiftId). A device reconnecting repeatedly must not create
+ * duplicate shifts, so a second registration returns the same shift and changes nothing.
+ *
+ * COLLISIONS REFUSE. If the id is already bound to a different cashier or a different
+ * merchant, or the caller's open shift already carries a different id, the request fails —
+ * nothing is overwritten, merged or guessed.
+ *
+ * clientShiftId IS NOT A PERMISSION. It is only ever matched, never trusted to select a
+ * shift for mutation: closeShift continues to resolve the active shift from
+ * sellerId + auth.uid.
+ */
+exports.registerClientShift = onCall(_CF, exports._h.registerClientShift = async (req) => {
+  const auth = _requireAuth(req);
+  const { data } = req;
+  const sellerId = await _requireSeller(auth, data);
+  const cashierUid = auth.uid;
+
+  const clientShiftId = typeof data.clientShiftId === 'string'
+    ? data.clientShiftId.trim().slice(0, 128) : '';
+  if (!clientShiftId) {
+    throw new HttpsError('invalid-argument', 'clientShiftId is required');
+  }
+
+  /* 1 · already registered? Two matches means the data is ambiguous, which is a collision,
+        not something to resolve by picking the first. */
+  const bound = await db.collection('posShifts')
+    .where('clientShiftId', '==', clientShiftId)
+    .limit(2)
+    .get();
+
+  if (bound.size > 1) {
+    throw new HttpsError('failed-precondition',
+      'That shift id is already recorded against more than one shift.');
+  }
+  if (!bound.empty) {
+    const doc = bound.docs[0];
+    const v = doc.data() || {};
+    /* Fail closed on a different actor or a different shop — never reassign. */
+    if (v.cashierUid !== cashierUid || v.sellerId !== sellerId) {
+      throw new HttpsError('permission-denied',
+        'That shift id belongs to another cashier or shop.');
+    }
+    return { shiftId: doc.id, clientShiftId, reused: true, created: false };
+  }
+
+  /* 2 · attach to this cashier's OPEN shift when it carries no id yet. */
+  const openSnap = await db.collection('posShifts')
+    .where('sellerId', '==', sellerId)
+    .where('cashierUid', '==', cashierUid)
+    .where('status', '==', 'open')
+    .limit(1)
+    .get();
+
+  if (!openSnap.empty) {
+    const doc = openSnap.docs[0];
+    const existingId = (doc.data() || {}).clientShiftId;
+    if (existingId && existingId !== clientShiftId) {
+      throw new HttpsError('failed-precondition',
+        'This shift is already registered under a different device shift id.');
+    }
+    await doc.ref.update({ clientShiftId, updatedAt: _TS() });
+    return { shiftId: doc.id, clientShiftId, reused: !!existingId, created: false, attached: true };
+  }
+
+  /* 3 · no open shift — create one carrying the offline-origin id. */
+  const openingCash = Number(data.openingCash ?? 0);
+  if (isNaN(openingCash) || openingCash < 0) {
+    throw new HttpsError('invalid-argument', 'openingCash must be a non-negative number');
+  }
+  const shiftRef = db.collection('posShifts').doc();
+  await shiftRef.set({
+    sellerId,
+    cashierUid,
+    cashierName: data.cashierName || auth.token?.name || 'Unknown',
+    branchId: data.branchId || 'default',
+    status: 'open',
+    clientShiftId,
+    openingCash,
+    closingCash: null,
+    openedAt: _TS(),
+    closedAt: null,
+    totalSales: 0,
+    totalTransactions: 0,
+    cashSales: 0,
+    mpesaSales: 0,
+    cardSales: 0,
+    qrSales: 0,
+    discountsGiven: 0,
+    refundsGiven: 0,
+    voidCount: 0,
+    notes: data.notes || '',
+    registeredOffline: true,
+    createdAt: _TS(),
+    updatedAt: _TS(),
+  });
+  return { shiftId: shiftRef.id, clientShiftId, reused: false, created: true };
 });
 
 /**
@@ -730,6 +908,109 @@ exports.getCommissionsSummary = onCall(_CF, exports._h.getCommissionsSummary = a
 // D. APPROVAL WORKFLOWS
 // ---------------------------------------------------------------------------
 
+/* ── THE APPROVAL BINDING ────────────────────────────────────────────────────
+   The minimum immutable description of the operation a manager agreed to. Each
+   field is one whose alteration would change the decision. Everything else stays
+   in `requestData`, which is caller data and carries no authority.
+
+   AMOUNTS ARE SHILLINGS. This file is shillings throughout — _round2, openingCash,
+   closingCash — and posProcessRefund computes refundTotal the same way.
+   pos-cash-manager.js works in CENTS; that convention is deliberately not imported
+   here, because a binding that silently changed unit would authorise 100x the
+   amount the manager actually saw. */
+const APPROVAL_BINDING = {
+  discount:       ['amount'],
+  refund:         ['saleId', 'amount'],
+  void:           ['saleId'],
+  price_override: ['productId', 'amount'],
+  drawer_open:    [],          /* no target, no amount — opening the drawer is the whole act */
+};
+
+function _bindingValue(field, raw) {
+  if (field === 'amount') {
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0)
+      throw new HttpsError('invalid-argument', 'binding amount must be a non-negative number');
+    return _round2(n);
+  }
+  const s = typeof raw === 'string' ? raw.trim() : '';
+  if (!s || s.length > 128)
+    throw new HttpsError('invalid-argument', `binding ${field} is required for this approval type`);
+  return s;
+}
+
+function _buildBinding(type, requestData) {
+  const fields = APPROVAL_BINDING[type] || [];
+  const out = {};
+  for (const f of fields) out[f] = _bindingValue(f, requestData[f]);
+  return out;
+}
+
+/* ── CONSUMPTION ─────────────────────────────────────────────────────────────
+   Reviewing an approval and SPENDING it are different events. reviewApproval moves
+   pending -> approved. This moves approved -> consumed inside a transaction, so a
+   replay finds it already spent rather than racing.
+
+   It is a module function and NOT a callable, deliberately: an approval must be
+   spent by the server operation it authorises, as part of that operation's own
+   work. A client saying "I used it" is not consumption.
+
+   NOTHING CONSUMES ONE YET. Each protected mutation adopting this is its own slice,
+   and manager approval is not enforceable end-to-end until they do. */
+async function _consumeApproval(approvalId, expected) {
+  if (!approvalId || typeof approvalId !== 'string')
+    throw new HttpsError('invalid-argument', 'approvalId is required');
+  const exp = expected || {};
+  const ref = db.collection('posApprovals').doc(approvalId);
+
+  return db.runTransaction(async (txn) => {
+    const snap = await txn.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'Approval not found');
+    const a = snap.data();
+
+    /* Already-spent is reported distinctly from never-approved: a replay and a
+       forgery are different incidents and must not look identical in logs. */
+    if (a.status === 'consumed')
+      throw new HttpsError('failed-precondition', 'Approval has already been used');
+    if (a.status !== 'approved')
+      throw new HttpsError('failed-precondition', `Approval is ${a.status}, not approved`);
+
+    const expiresAt = _toDate(a.expiresAt);
+    if (expiresAt && new Date() > expiresAt)
+      throw new HttpsError('deadline-exceeded', 'Approval has expired');
+
+    if (exp.sellerId && a.sellerId !== exp.sellerId)
+      throw new HttpsError('permission-denied', 'Approval belongs to another shop');
+    if (exp.type && a.type !== exp.type)
+      throw new HttpsError('permission-denied', 'Approval authorises a different operation');
+
+    /* Every bound field must match what was approved, exactly. */
+    const fields = APPROVAL_BINDING[a.type] || [];
+    const want = exp.binding || {};
+    const stored = a.binding || {};
+    for (const f of fields) {
+      const asked = f === 'amount' ? _round2(Number(want[f])) : want[f];
+      if (stored[f] !== asked)
+        throw new HttpsError('permission-denied', `Approval does not authorise this ${f}`);
+    }
+
+    txn.update(ref, {
+      status:     'consumed',
+      consumedBy: exp.consumerUid || null,
+      consumedAt: _TS(),
+      updatedAt:  _TS(),
+    });
+    return {
+      approvalId, sellerId: a.sellerId, type: a.type, binding: stored,
+      reviewedBy: a.reviewedBy || null, requestedBy: a.requestedBy || null,
+    };
+  });
+}
+
+/* Exposed as an OBJECT, following the `_h` precedent, so the Functions loader sees
+   no bare function export that could be mistaken for a trigger. */
+exports._approvals = { consume: _consumeApproval, BINDING: APPROVAL_BINDING, build: _buildBinding };
+
 /**
  * createApprovalRequest — creates a pending approval workflow item.
  * Expires in 5 minutes.
@@ -745,9 +1026,17 @@ exports.createApprovalRequest = onCall(_CF, exports._h.createApprovalRequest = a
   const requestedBy = auth.uid;
   const requestedByName = data.requestedByName || auth.token?.name || 'Unknown';
 
-  const VALID_TYPES = ['discount', 'refund', 'void', 'price_override', 'drawer_open'];
+  const VALID_TYPES = Object.keys(APPROVAL_BINDING);
   if (!VALID_TYPES.includes(data.type))
     throw new HttpsError('invalid-argument', `type must be one of: ${VALID_TYPES.join(', ')}`);
+
+  /* WHAT, EXACTLY, IS BEING APPROVED.
+     `requestData` was stored as an arbitrary client blob, so an approval carried no
+     statement of the operation it authorised: one granted for a KES 50 refund was
+     indistinguishable from one for KES 50,000 on a different sale. `binding` is the
+     minimum set of fields whose alteration would change what the manager agreed to.
+     It is written top-level and never read back from requestData. */
+  const binding = _buildBinding(data.type, data.requestData || {});
 
   const now = new Date();
   const expiresAt = new Date(now.getTime() + 5 * 60 * 1000); // +5 minutes
@@ -759,6 +1048,7 @@ exports.createApprovalRequest = onCall(_CF, exports._h.createApprovalRequest = a
     requestedBy,
     requestedByName,
     requestData: data.requestData || {},
+    binding,
     status: 'pending',
     reviewedBy: null,
     reviewedAt: null,
@@ -798,6 +1088,25 @@ exports.reviewApproval = onCall(_CF, exports._h.reviewApproval = async (req) => 
   if (!doc.exists) throw new HttpsError('not-found', 'Approval request not found');
 
   const approval = doc.data();
+
+  /* NO SELF-APPROVAL. The reviewer's role was checked, but never their identity, so
+     anyone holding the supervisor claim could approve their own request — which
+     removes the four-eyes property that is the entire purpose of the workflow. */
+  if (approval.requestedBy && approval.requestedBy === auth.uid)
+    throw new HttpsError('permission-denied', 'You cannot approve your own request.');
+
+  /* THE REVIEWER MUST BELONG TO THE APPROVAL'S SHOP.
+     _requireRole proves the caller is a supervisor SOMEWHERE, not here, so a
+     supervisor at one shop could approve another shop's request. The seller id comes
+     from the APPROVAL DOCUMENT and never from req.data — a forged client identifier
+     has nothing to attach to, because none is read.
+
+     This reuses _assertBusinessPermission, the helper every other handler in this
+     file already goes through (see the PRIVILEGE ESCALATION FIX note above), with
+     the same uid === sellerId owner short-circuit. It therefore declares no new
+     canonical employee store; the authority architecture is unchanged. */
+  if (auth.uid !== approval.sellerId)
+    await _assertBusinessPermission(auth.uid, approval.sellerId, 'pos');
 
   if (approval.status !== 'pending')
     throw new HttpsError('failed-precondition', `Approval already ${approval.status}`);

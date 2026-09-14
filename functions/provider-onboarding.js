@@ -276,6 +276,36 @@ exports._h.providerActivateSubscription = _h.providerActivateSubscription = asyn
   if (!plan || !PLANS[plan]) throw new HttpsError('invalid-argument', 'Invalid plan.');
 
   const p   = PLANS[plan];
+
+  /* ── A CLIENT-SUPPLIED paymentRef IS NOT PROOF OF PAYMENT ──────────────────────────────
+   * This handler used to take `paymentRef` from the request, never verify it, and write
+   * status:'active' along with the plan's commissionRate and limits. It is reachable from
+   * the browser (provider-dispatch.js -> sokoni-provider.js), so any provider could
+   * self-grant `enterprise` — KES 9,999/month — for nothing, taking unlimited listings and
+   * moving their own commission from 20% to 5%.
+   *
+   * The platform already has the one correct mechanism for turning money into capability:
+   * entitlement-engine.js, whose stated invariant is `one payment reference => exactly one
+   * entitlements/{paymentRef}`, and whose own header names "bookings trust a client-supplied
+   * paymentId" as one of the six defects it was built to fix. This is that defect.
+   *
+   * So a PRICED plan cannot be activated here at all. The purchase path is the canonical one
+   * — createPaymentIntent (server derives the amount) -> IntaSend -> verified payment ->
+   * activation — and this handler is not part of it.
+   *
+   * free_trial stays self-serve because it costs nothing: there is no payment to verify, so
+   * there is nothing to forge. That keeps onboarding working while the hole closes.
+   *
+   * NOTE FOR THE PAID PROVIDER PATH: refusing here removes the only route that existed, and
+   * it was the insecure one. Wiring priced provider plans through the intent flow is a
+   * follow-up; until then a provider upgrades through support rather than by asserting it. */
+  const priceCents = billingCycle === 'yearly' ? Number(p.yearly) : Number(p.monthly);
+  if (Number.isFinite(priceCents) && priceCents > 0) {
+    logger.warn('[provider] refused unverified paid activation', { uid, plan, hadRef: !!paymentRef });
+    throw new HttpsError('failed-precondition',
+      'A paid plan cannot be activated from the client. Start a payment with '
+      + 'createPaymentIntent; the subscription activates once the payment is verified.');
+  }
   const now = new Date();
   const renewalDate = plan === 'free_trial'
     ? new Date(now.getTime() + p.trialDays * 86400000)
@@ -307,10 +337,52 @@ exports._h.providerActivateSubscription = _h.providerActivateSubscription = asyn
   return { subscriptionId: subId, plan, status: plan === 'free_trial' ? 'trialing' : 'active', renewalDate: renewalDate.toISOString() };
 };
 
+/* ── OB-6 — WHICH AGREEMENTS APPLY TO THIS ACCOUNT ────────────────────────────
+   `assertLegalCompliance(uid, role)` selects an agreement set by role, and the role
+   was hardcoded to 'provider'. A healthcare provider would therefore have been
+   evaluated against the Service Provider set — never against the Healthcare
+   Provider Agreement or the Medical Compliance Declaration. Dormant today because
+   enforcement is dark per role, and wrong the moment it is switched on.
+
+   The canonical role CANNOT be read from `users/{uid}.roles[]`: role-authority maps
+   health → 'provider' there (ROLE_KEY), so a clinician and a plumber are
+   indistinguishable in that field by design. It cannot be read from the draft
+   either — that is applicant-authored. The one authoritative record is the
+   application's own `role`, written by the intake patch from resolveRole(), which
+   is the same vocabulary `_catalogueFor` consumes (ROLE_ALIASES maps health →
+   healthcare there).
+
+   No application means no classification — 'provider' is then correct, not a
+   guess, and after OB-1 such an account cannot activate anyway. A lookup that
+   FAILS is different from one that finds nothing: defaulting to 'provider' on an
+   error would silently reinstate this very defect, so it refuses instead. */
+async function _agreementRoleFor(uid) {
+  let snap;
+  try {
+    snap = await _db().collection('applications').where('uid', '==', uid).limit(10).get();
+  } catch (e) {
+    logger.error('[provider] agreement-role lookup failed', { uid, error: e.message });
+    throw new HttpsError('failed-precondition',
+      'Could not determine which agreements apply to this account. Please try again.');
+  }
+  if (!snap || snap.empty) return 'provider';
+  const apps = snap.docs.map((d) => d.data() || {});
+  /* A DECIDED application is the account's standing classification; an undecided one
+     is only what they asked for. Prefer the former, fall back to the latter. */
+  const decided = apps.find((a) => ['approved', 'active', 'verified'].includes(String(a.status || '').toLowerCase()));
+  const chosen = decided || apps[0];
+  return _san(chosen.role, 40) || 'provider';
+}
+exports._h._agreementRoleFor = _h._agreementRoleFor = _agreementRoleFor;   /* exported for tests */
+
 /* ── 5. providerPublish ──────────────────────────────────────────────────────── */
 exports._h.providerPublish = _h.providerPublish = async (req) => {
   const uid = _uid(req);
-  await require('./legal-agreements').assertLegalCompliance(uid, 'provider'); // publish profile — dark-launched
+  /* Role-correct, not hardcoded — see _agreementRoleFor. Still dark-launched:
+     enforcement is off per role in legalConfig/enforcement, so this returns
+     compliant for everyone until that is deliberately enabled. This gate makes the
+     lookup right; it does not turn enforcement on. */
+  await require('./legal-agreements').assertLegalCompliance(uid, await _agreementRoleFor(uid));
   const snap = await _db().collection('providerProfiles').doc(uid).get();
   if (!snap.exists) throw new HttpsError('not-found', 'No draft profile found. Complete the onboarding first.');
 
@@ -321,7 +393,32 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
   if (!draft.coverage) throw new HttpsError('failed-precondition', 'Coverage step incomplete.');
   if (!d.plan)         throw new HttpsError('failed-precondition', 'Subscription not activated.');
 
-  const providerId = d.providerId || await _genProviderId();
+  /* ── PUBLISH WRITES CONTENT. THE APPLICATION LIFECYCLE OWNS PUBLIC STATE. ────
+     Until this check existed, completing the self-service wizard wrote
+     providers/{uid} with status:'active', searchable:true, acceptsBookings:true
+     and minted claims.provider — with no application, no admin decision and no
+     audit record. That is a second authority path into the canonical registry:
+     applicationDecide's admin gate, the agreement requirement and the audit trail
+     all governed the application route while this one reached the same document
+     unguarded. `assertLegalCompliance` above does not close it either — it is
+     dark-launched per role, so today it returns compliant for everybody.
+
+     The fix is not another approval mechanism. It is that publishing may only
+     ever write CONTENT: name, bio, categories, coverage, pricing, availability.
+     The fields that make a provider publicly discoverable and bookable —
+     status, searchable, isPublic, acceptsBookings, available — are written by
+     projectProvider() when an administrator approves the application, and by
+     nothing else.
+
+     Read the canonical registry to decide which of the two we are doing. Note
+     what `approved` deliberately excludes: a SUSPENDED or DEACTIVATED provider
+     is not approved, so re-running this wizard cannot restore them — the state
+     fields are simply not written, and merge:true leaves the suspension intact. */
+  const _regSnap = await _db().collection('providers').doc(uid).get();
+  const _regCur  = _regSnap.exists ? (_regSnap.data() || {}) : {};
+  const approved = _regSnap.exists && ['active', 'approved'].includes(_regCur.status);
+
+  const providerId = d.providerId || _regCur.providerId || await _genProviderId();
   /* /provider/{providerId} has no hosting rewrite — firebase.json routes
      /shop, /@, /card and /pay, but not /provider — so every QR code and
      profile link built from it resolved to a 404. The public profile page is
@@ -347,7 +444,11 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
     bookingConfig: draft.bookings || {},
     notifications: draft.notifications || { sms: true, email: true, push: true },
     qrCode: qrData, rating: 0, reviewCount: 0, bookingCount: 0,
-    featured: false, verified: false, searchable: true,
+    featured: false, verified: false,
+    /* `searchable` gates providerSearchProviders, which queries THIS collection
+       (`where status == 'active' and searchable == true`). Hardcoding true made
+       the self-service wizard a public-listing switch. Approval decides it. */
+    searchable: approved,
     updatedAt: _ts(),
   }, { merge: true });
 
@@ -383,11 +484,23 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
     location:    _pubLoc,
     city:        _pubCity,
     skills:      _pubSkills,
-    status:      'active',
-    searchable:  true,
-    isPublic:    true,
-    acceptsBookings: true,
-    available:   true,
+    /* THE STATE FIELDS — written on FIRST CREATION ONLY, and then closed.
+       If the registry row already exists, publishing writes no state at all: the
+       lifecycle owns it, and merge:true leaves whatever it set. That is what makes
+       this safe in both directions — an approved provider stays active, and a
+       SUSPENDED or DEACTIVATED one stays suspended rather than being quietly
+       downgraded to `pending_approval`, which would itself be a step back toward
+       activation. A first publish creates the row explicitly closed: it exists so
+       the provider and a reviewer can see it, and booking-service refuses it
+       (ACTIVE_PROVIDER_STATES = ['active','approved'] — `pending_approval` is
+       deliberately neither). */
+    ...(_regSnap.exists ? {} : {
+      status:          'pending_approval',
+      searchable:      false,
+      isPublic:        false,
+      acceptsBookings: false,
+      available:       false,
+    }),
     /* Index inline — do NOT rely on the create-only indexProviderCreate trigger,
        which never fires on a re-publish of an existing doc. */
     nameLower:       _pubName ? _pubName.toLowerCase() : '',
@@ -395,8 +508,14 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
     /* Booking fee projected onto the flat rate/rateType the directory card reads. */
     ...(_pubRate || {}),
     /* Verification and featuring are admin decisions and are never granted by
-       the act of publishing. merge:true leaves an existing admin value alone. */
-    rating: 0, reviewCount: 0, jobsCompleted: 0,
+       the act of publishing. merge:true leaves an existing admin value alone.
+
+       Counters are seeded on FIRST CREATION ONLY — the same rule projectProvider
+       states as "never reset a live provider's rating or history by re-approving
+       them". Writing them unconditionally meant a provider who edited their
+       profile and republished lost every review and completed job they had
+       earned. */
+    ...(_regSnap.exists ? {} : { rating: 0, reviewCount: 0, jobsCompleted: 0 }),
     publishedAt: _ts(), updatedAt: _ts(),
   }, { merge: true });
 
@@ -420,8 +539,16 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
     uid, ...(draft.notifications || { sms: true, email: true, push: true }), updatedAt: _ts(),
   }, { merge: true });
 
-  // Set custom auth claim
-  await _auth().setCustomUserClaims(uid, { ...(await _auth().getUser(uid)).customClaims, provider: true, providerId });
+  /* Custom auth claim — ONLY for an already-approved provider.
+     Minting `provider: true` here was the second half of the bypass: the wizard
+     granted the very claim that marks an approved provider, so self-service
+     produced both the registry row and the authority. `grantAccountRole` (via
+     applicationDecide → applicationLifecycle) is the one writer of that claim.
+     For an approved provider this is idempotent and merely re-stamps providerId;
+     for everyone else the account's claims are left exactly as they were. */
+  if (approved) {
+    await _auth().setCustomUserClaims(uid, { ...(await _auth().getUser(uid)).customClaims, provider: true, providerId });
+  }
 
   await batch.commit();
   logger.info('[provider] profile published', { uid, providerId });
@@ -847,17 +974,85 @@ exports._h.providerGenerateQR = _h.providerGenerateQR = async (req) => {
 /* ── 15. providerSubmitVerification ──────────────────────────────────────────── */
 exports._h.providerSubmitVerification = _h.providerSubmitVerification = async (req) => {
   const uid = _uid(req);
-  const { nationalIdUrl, businessRegUrl, licenceUrl, kraPinUrl, selfieUrl } = req.data || {};
-  if (!nationalIdUrl) throw new HttpsError('invalid-argument', 'National ID / Passport upload required.');
+  /* D1 — THE APPLICANT SAYS WHICH DOCUMENT, THE SERVER SAYS WHERE.
+     This used to take `nationalIdUrl` and friends as client-supplied strings and store them
+     verbatim. The server never created the object, never confirmed it existed, and never
+     confirmed it lived in a bucket SOKONI controls — so provenance was asserted rather than
+     established, and a disposal job could not be guaranteed able to delete the material a
+     verification record points at. A path the server constructs is a path the server can delete.
 
-  await _db().collection('providerVerification').doc(uid).set({
+     A submitted URL is now REFUSED rather than ignored: silently dropping it would let a client
+     believe it had supplied evidence the reviewer will never see. */
+  const _vAuth = require('./verification-authority');
+  const _data = req.data || {};
+  const _suppliedUrls = ['nationalIdUrl', 'businessRegUrl', 'licenceUrl', 'kraPinUrl', 'selfieUrl']
+    .filter((k) => _data[k] !== undefined);
+  if (_suppliedUrls.length) {
+    throw new HttpsError('invalid-argument',
+      'Document URLs are no longer accepted (' + _suppliedUrls.join(', ') + '). '
+      + 'Upload to your own documents path and submit the document KINDS instead.');
+  }
+  const _kinds = Array.isArray(_data.documents) ? _data.documents : [];
+  if (_kinds.indexOf('nationalId') === -1) {
+    throw new HttpsError('invalid-argument', 'National ID / Passport upload required.');
+  }
+  let _docPaths;
+  try { _docPaths = _vAuth.resolveSubmittedDocuments(uid, _kinds); }
+  catch (e) { throw new HttpsError('invalid-argument', e.message); }
+
+  /* A RE-SUBMISSION MUST NOT ERASE A DECISION.
+     This is a merge:true write of status:'pending_review', so before OB-3 a
+     provider whose documents had been REJECTED could simply upload again and
+     silently return themselves to the queue with the rejection — and its reason —
+     gone. The reviewer who picked the record up next had no way to see that it had
+     already been refused once.
+
+     Re-submitting is the correct remedy after a rejection and stays allowed. What
+     changes is that the prior decision is carried into an append-only history
+     first, so the record still says it was rejected, by whom and why. The
+     applicant can move themselves back to `pending_review`; they can never move
+     themselves to a verified state — only adminDecideProviderVerification writes
+     those, and this callable cannot set them. */
+  const _vRef  = _db().collection('providerVerification').doc(uid);
+  const _vPrev = await _vRef.get();
+  const _prior = _vPrev.exists ? (_vPrev.data() || {}) : {};
+  const _decided = _prior.status && _prior.status !== 'pending_review';
+
+  await _vRef.set({
     uid,
-    nationalIdUrl:   _san(nationalIdUrl, 500),
-    businessRegUrl:  businessRegUrl  ? _san(businessRegUrl, 500)  : null,
-    licenceUrl:      licenceUrl      ? _san(licenceUrl, 500)      : null,
-    kraPinUrl:       kraPinUrl       ? _san(kraPinUrl, 500)       : null,
-    selfieUrl:       selfieUrl       ? _san(selfieUrl, 500)       : null,
+    ...(_decided ? {
+      priorDecisions: (Array.isArray(_prior.priorDecisions) ? _prior.priorDecisions : []).slice(-9).concat([{
+        status:     _prior.status,
+        reviewedBy: _prior.reviewedBy || null,
+        reviewedAt: _prior.reviewedAt || null,
+        reason:     _prior.reviewNotes || null,
+        supersededAt: new Date().toISOString(),
+      }]),
+      resubmittedAt: _ts(),
+      /* Clear the decided-record fields on the LIVE row. They are preserved in
+         priorDecisions above; leaving them here would show a record that reads
+         `pending_review` while still carrying a reviewer, a timestamp and a
+         rejection reason — a reviewer would reasonably read that as already
+         handled. The live row describes the current state only. */
+      reviewedBy:  null,
+      reviewedAt:  null,
+      reviewNotes: null,
+      basis:       null,
+    } : {}),
+    /* Server-derived storage references. The applicant named the KINDS; these paths are
+       constructed from the authenticated uid, so every one of them is deletable by the disposal
+       job once the surviving-evidence contract is settled. */
+    ..._docPaths,
+    submittedKinds:  _kinds,
     status:          'pending_review',
+    /* Re-submission clears the review seats. Carrying a reviewer forward would let a resubmitted
+       application inherit half of an earlier two-reviewer decision. */
+    reviewer1:       null,
+    reviewedAt1:     null,
+    reviewer2:       null,
+    reviewedAt2:     null,
+    humanDecision:   null,
+    decisionPending: null,
     submittedAt:     _ts(),
     updatedAt:       _ts(),
   }, { merge: true });
@@ -881,6 +1076,18 @@ exports._h.providerGetPublicProfile = _h.providerGetPublicProfile = async (req) 
     .get();
   if (snap.empty) throw new HttpsError('not-found', 'Provider not found or not yet active.');
   const d = snap.docs[0].data();
+  /* `providerProfiles.status` is the ONBOARDING state — it means "the draft is
+     complete and published", not "an administrator approved this provider". This
+     endpoint is public and unauthenticated, so it must answer to the canonical
+     registry instead: providers/{uid} is what applicationDecide writes and what
+     booking-service consults. Without this, a self-service provider who never
+     reached an application was still publicly fetchable by providerId, complete
+     with their self-entered `qualifications`. */
+  const _reg = await _db().collection('providers').doc(d.uid).get();
+  const _st  = _reg.exists ? (_reg.data() || {}).status : null;
+  if (!['active', 'approved'].includes(_st)) {
+    throw new HttpsError('not-found', 'Provider not found or not yet active.');
+  }
   return {
     providerId: d.providerId, name: d.name, bio: d.bio, category: d.category,
     subcategory: d.subcategory, experience: d.experience, qualifications: d.qualifications,

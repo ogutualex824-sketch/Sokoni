@@ -168,8 +168,13 @@ async function nextSeq(sellerUid) {
    previous inline implementation across 5,100 fuzz cases (scripts/test-etims-tax-
    engine.js §7), so this is behaviour-preserving. Do NOT reintroduce inline VAT math
    here or elsewhere — extend the engine instead. */
-function calcLine(item, vatStatus) {
-  return TaxEngine.computeLine(item, vatStatus);
+/* `taxConfig` is threaded rather than defaulted. TaxEngine treats an absent config
+   as VAT-INCLUSIVE (`cfg.inclusive !== false`), which meant every caller here was
+   silently adopting a tax position nobody had chosen. Passing it explicitly lets a
+   caller that HAS a decided policy state it, and leaves existing callers on exactly
+   the behaviour they already had. See functions/commission-vat-policy.js. */
+function calcLine(item, vatStatus, taxConfig) {
+  return TaxEngine.computeLine(item, vatStatus, taxConfig);
 }
 
 function calcTotals(lines) {
@@ -184,9 +189,13 @@ function _trunc(s,n)  { return String(s||"").slice(0,n); }
 /* ══════════════════════════════════════════════════════════════════════
    KRA PAYLOAD BUILDER
 ══════════════════════════════════════════════════════════════════════ */
-function buildKraPayload({ profile, invcNo, pmtMethod, lineItems, buyer, remark }) {
+function buildKraPayload({ profile, invcNo, pmtMethod, lineItems, buyer, remark, taxConfig }) {
   const now    = new Date();
-  const lines  = lineItems.map((item, i) => calcLine({ ...item, seq: i+1 }, profile.vatStatus));
+  /* Same taxConfig as the stored lineItems. Computing the KRA payload with a
+     different VAT treatment than the invoice document would put two different
+     tax positions on one transaction — one filed with KRA, one shown to the
+     merchant. */
+  const lines  = lineItems.map((item, i) => calcLine({ ...item, seq: i+1 }, profile.vatStatus, taxConfig));
   const totals = calcTotals(lines);
 
   const pmtTyCd = pmtMethod === "cash" ? "03"   // Cash
@@ -921,10 +930,23 @@ const etimsBulkGenerate = onCall({ secrets: _ALL_SECRETS, timeoutSeconds:300, en
   }
 });
 
-/* 10 ─ SOKONI platform invoice (commissions, subscriptions, etc.) */
-const etimsPlatformInvoice = onCall({ secrets: _ALL_SECRETS, enforceAppCheck: true }, async req => {
-  if (!_ac.isAdmin(req)) throw new HttpsError("permission-denied","Admins only");
-  const { sellerUid, feeType, amount, reference, description } = req.data;
+/* 10 ─ SOKONI platform invoice (commissions, subscriptions, etc.)
+ *
+ * The body is extracted so the 48-hour commission generator can reuse it rather
+ * than growing a second invoice implementation. There is exactly ONE place that
+ * issues a SOKONI platform invoice, and this is it — see
+ * docs/COMMISSION_INVOICE_SPEC.md §0.
+ *
+ * `vatInclusive` is REQUIRED and has no default. TaxEngine would otherwise treat
+ * an absent config as inclusive, which is how an undecided tax position became a
+ * library default. A caller must state the treatment it is issuing under.
+ */
+async function _issuePlatformInvoice({ sellerUid, feeType, amount, reference, description, vatInclusive }) {
+  if (typeof vatInclusive !== "boolean") {
+    throw new HttpsError("failed-precondition",
+      "vatInclusive must be stated explicitly — a VAT treatment may not be inferred.");
+  }
+  const taxConfig = { inclusive: vatInclusive };
 
   const FEE_LABELS = {
     commission:"Platform Commission Fee", subscription:"Subscription Fee",
@@ -948,7 +970,7 @@ const etimsPlatformInvoice = onCall({ secrets: _ALL_SECRETS, enforceAppCheck: tr
 
   const platProfile = { kraPin:platPin, businessName:COMPANY.legalName, regNo:COMPANY.registrationNumber, branchId:"00", vatStatus:"registered", address:COMPANY.address, postal:postalLine(), invoicePrefix:"SOKONI" };
   const lineItems   = [{ name: FEE_LABELS[feeType]+(description?`: ${description}`:""), quantity:1, unitPrice:amount, discountRate:0 }];
-  const kraLines    = lineItems.map((it,i) => calcLine({...it,seq:i+1},"registered"));
+  const kraLines    = lineItems.map((it,i) => calcLine({...it,seq:i+1},"registered",taxConfig));
   const totals      = calcTotals(kraLines);
 
   let buyer = null;
@@ -981,7 +1003,7 @@ const etimsPlatformInvoice = onCall({ secrets: _ALL_SECRETS, enforceAppCheck: tr
 
   try {
     const platClient = new EtimsClient({ tin:platPin, bhfId:"00", deviceSerial:"SOKONI-VSCU-001", taxpayerSecret:platSecret });
-    const kraPayload = buildKraPayload({ profile:platProfile, invcNo, lineItems, buyer, remark:`${feeType} — ${reference||""}` });
+    const kraPayload = buildKraPayload({ profile:platProfile, invcNo, lineItems, buyer, remark:`${feeType} — ${reference||""}`, taxConfig });
     const kraResult  = await submitToKra(platClient, kraPayload);
     await invRef.update({ ...kraResult, updatedAt:new Date().toISOString() });
     if (buyer?.email) emailBuyer({ invoice:{...invDoc,...kraResult,invoiceId:invRef.id}, profile:platProfile, buyer });
@@ -991,6 +1013,43 @@ const etimsPlatformInvoice = onCall({ secrets: _ALL_SECRETS, enforceAppCheck: tr
     await enqueue({ invoiceId:invRef.id, sellerUid:"_platform", priority:2 });
     return { success:true, invoiceId:invRef.id, invoiceNumber:invNo, status:"queued" };
   }
+}
+
+/* Admin-facing wrapper.
+ *
+ * The VAT gate is scoped to `commission` DELIBERATELY. The open tax question is
+ * about the 5% platform commission specifically — terms.html and legal-hub.html
+ * contradict each other on that fee, and the seller agreement is silent on it.
+ * Subscriptions, advertising, delivery, verification and premium are separate
+ * commercial instruments with no such dispute on record.
+ *
+ * Gating all of them on the commission decision would take working billing
+ * offline to protect a question that does not apply to them — an unrelated
+ * production regression. So commission fails closed, and the others keep exactly
+ * the behaviour they already had.
+ *
+ * `true` for the others is NOT a new decision: it is the treatment TaxEngine has
+ * always applied to them via `cfg.inclusive !== false`, now stated out loud
+ * instead of inherited from a default. If any of those fee types is ever found
+ * to have its own unresolved VAT position, it needs its own gate — not this one
+ * widened. */
+const VAT_GATED_FEE_TYPES = new Set(["commission"]);
+
+const etimsPlatformInvoice = onCall({ secrets: _ALL_SECRETS, enforceAppCheck: true }, async req => {
+  if (!_ac.isAdmin(req)) throw new HttpsError("permission-denied","Admins only");
+  const { sellerUid, feeType, amount, reference, description } = req.data;
+
+  let vatInclusive = true;                      /* preserved prior behaviour */
+  if (VAT_GATED_FEE_TYPES.has(feeType)) {
+    const { loadVatPolicy, UNSET_REASON } = require("./commission-vat-policy");
+    const policy = await loadVatPolicy(db);
+    if (!policy) throw new HttpsError("failed-precondition", UNSET_REASON);
+    vatInclusive = policy.inclusive;
+  }
+
+  return _issuePlatformInvoice({
+    sellerUid, feeType, amount, reference, description, vatInclusive,
+  });
 });
 
 /* 11 ─ Get buyer receipts */
@@ -1262,6 +1321,10 @@ module.exports = {
   etimsProcessQueue,
   etimsBulkGenerate,
   etimsPlatformInvoice,
+  /* The single platform-invoice implementation. Exported so the 48-hour
+     commission generator reuses it instead of growing a second one. Callers must
+     supply `vatInclusive` — it has no default by design. */
+  _issuePlatformInvoice,
   etimsGetBuyerReceipts,
   etimsDownloadReceipt,
   etimsGetSellerStats,

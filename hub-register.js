@@ -216,7 +216,7 @@
       '<input id="sreg_name" class="sreg-input" placeholder="e.g. Nairobi Quick Cleaners" autocomplete="organization">' +
 
       '<label class="sreg-label">Business Type *</label>' +
-      '<select id="sreg_cat" class="sreg-input">' + _catOptions(preCategory) + '</select>' +
+      '<select id="sreg_cat" class="sreg-input" onchange="HubRegister._syncHealthNotice()">' + _catOptions(preCategory) + '</select>' +
 
       '<label class="sreg-label">Phone Number *</label>' +
       '<input id="sreg_phone" class="sreg-input" type="tel" placeholder="07XX XXX XXX" inputmode="tel">' +
@@ -276,15 +276,36 @@
          server-verifiable — applicationDecide refuses to approve without it.
          The checkbox is a convenience gate; the server check is the authority. */
       '<div class="sreg-label" style="margin-top:18px;">Seller Agreement</div>' +
+      '<div id="sreg_health_notice" style="display:none;background:rgba(224,163,62,.10);border:1px solid rgba(224,163,62,.38);border-radius:12px;padding:12px 14px;margin-top:8px;font-size:12.5px;line-height:1.55;color:#e8c07a;">' +
+        '<strong style="color:#f0d3a0;">Healthcare providers accept a different agreement.</strong> ' +
+        'The commission terms below are the Seller Agreement and do <strong>not</strong> apply to healthcare. ' +
+        'The Healthcare Provider Agreement and Medical Compliance Declaration are not published yet, so a ' +
+        'healthcare application is received and held for review rather than approved.' +
+      '</div>' +
       '<div id="sreg_agreement" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:14px;font-size:12.5px;line-height:1.55;color:rgba(255,255,255,0.72);">' +
-        '<p style="margin:0 0 8px;"><strong style="color:#fff;">Commission: 5% per completed sale</strong></p>' +
-        '<p style="margin:0 0 8px;">SOKONI charges a <strong>5% commission</strong> on each completed marketplace sale, subject to a <strong>minimum commission of KES 10 per sale</strong>.</p>' +
+        '<p style="margin:0 0 8px;"><strong style="color:#fff;">Commission &mdash; two separate rates</strong></p>' +
+        /* Rates are READ from the generated schedule (sokoni-commission-rates.js,
+           built from functions/commission-config.js), never typed here. A number
+           hand-written into an intake form is how a seller is shown one rate and
+           charged another — this platform has already had that split once. The
+           literals below are the fallback for a page loaded without the snapshot. */
+        '<p style="margin:0 0 8px;"><strong>Marketplace orders</strong> (orders SOKONI brings you) depend on your plan: ' +
+          '<span id="sreg_mkt_rates">' + _mktRatesText() + '</span>.</p>' +
+        '<p style="margin:0 0 8px;"><strong>In-shop POS / Till sales</strong> &mdash; sales you make yourself at your own counter &mdash; ' +
+          'are a flat <span id="sreg_pos_rate">' + _posRateText() + '</span> on every plan.</p>' +
+        '<p style="margin:0 0 8px;">A <strong>minimum commission of KES ' + _minKesText() + ' per sale</strong> applies, ' +
+          'except where your plan&rsquo;s rate is 0%.</p>' +
         '<p style="margin:0;">Customer payments are sent directly to your configured payment destination. SOKONI does <strong>not</strong> deduct this commission from the customer\'s payment; the commission is recorded as payable to SOKONI under the ' +
         '<a href="/seller-terms" target="_blank" rel="noopener" style="color:#71ff00;">Seller Agreement</a>.</p>' +
+          /* Full text in-page, not a new tab: a merchant who leaves the form to read
+             the agreement often does not come back to it. The text is FETCHED from
+             /seller-terms rather than copied here — one authoritative source, so a
+             legal update reaches this modal without anyone remembering to mirror it. */
+          '<button type="button" id="sreg_view_agreement" onclick="HubRegister._openAgreement()" style="margin-top:10px;background:transparent;border:1px solid rgba(113,255,0,.45);color:#71ff00;border-radius:8px;padding:8px 14px;font-size:12.5px;cursor:pointer;font-weight:700;">📄 View full agreement</button>' +
       '</div>' +
       '<label for="sreg_agree" style="display:flex;align-items:flex-start;gap:10px;margin-top:12px;cursor:pointer;font-size:13px;color:rgba(255,255,255,0.85);">' +
         '<input type="checkbox" id="sreg_agree" onchange="HubRegister._syncAgree()" style="margin-top:2px;width:18px;height:18px;flex-shrink:0;cursor:pointer;">' +
-        '<span>I have read and agree to the SOKONI Seller Agreement and the 5% per-sale commission.</span>' +
+        '<span>I have read and agree to the SOKONI Seller Agreement and its commission rates — by plan on marketplace orders, and 5% on in-shop POS / Till sales.</span>' +
       '</label>' +
       '<button class="sreg-btn" id="sreg_submit" disabled aria-disabled="true" style="opacity:.5;cursor:not-allowed;" onclick="HubRegister._submit()">✅ Register My Business</button>' +
       '<div id="sreg_msg" class="sreg-msg"></div>';
@@ -305,7 +326,28 @@
      Bump this whenever the commercial terms change, so an acknowledgement can
      be tied to the exact text the seller saw. A bare `true` cannot answer
      "agreed to WHAT?" years later, which is the question a dispute asks. */
-  var AGREEMENT_VERSION = '2026-08-25-commission-5pct';
+  var AGREEMENT_VERSION = '2026-09-07-lanes-mkt-ladder-pos-5pct';
+
+  /* Rate copy, read from the generated schedule. Each falls back to the published
+     figure rather than to a blank or an invented number: an agreement that renders
+     "Free % · Basic %" is worse than one showing a slightly stale rate, and a
+     fabricated rate is worse than both. */
+  function _mktRatesText() {
+    var C = window.SokoniCommission;
+    if (!C || typeof C.marketplacePct !== 'function') return 'Free 15% · Basic 10% · Pro 5% · Enterprise 0%';
+    return 'Free ' + C.marketplacePct('seller_free') + '%'
+         + ' · Basic ' + C.marketplacePct('seller_basic') + '%'
+         + ' · Pro ' + C.marketplacePct('seller_pro') + '%'
+         + ' · Enterprise ' + C.marketplacePct('seller_enterprise') + '%';
+  }
+  function _posRateText() {
+    var C = window.SokoniCommission;
+    return (C && typeof C.posPct === 'function' ? C.posPct() : 5) + '%';
+  }
+  function _minKesText() {
+    var C = window.SokoniCommission;
+    return String(C && typeof C.MIN_COMMISSION_KES === 'number' ? C.MIN_COMMISSION_KES : 10);
+  }
 
   /* Keep the submit button in step with the acknowledgement. This is a
      convenience gate only — _submit re-checks, and applicationDecide refuses
@@ -321,8 +363,117 @@
     if (num) num.placeholder = (window._sokoniRegDest === 'PAYBILL' ? 'PayBill' : 'Till') + ' number (5–7 digits)';
   }
 
+  /* ════════════════════════════════════════════════════════════════════════
+     FULL AGREEMENT VIEWER
+
+     Opens the complete Seller Agreement over the application, scrollable, with the
+     acceptance tick inside it. Closing returns to the form.
+
+     THE TEXT IS FETCHED, NEVER COPIED. /seller-terms is the authoritative document;
+     duplicating its clauses here would create a second copy that drifts the moment
+     legal edits one and not the other — the failure this codebase already carries in
+     nine commission tables and three invoice schemas.
+
+     `sreg_agree` REMAINS THE ONLY ACCEPTANCE AUTHORITY. The viewer's tick drives that
+     same checkbox rather than adding a second flag, so `_submit()` and the server-side
+     approval gate are untouched. Closing without ticking leaves it unchecked — opening
+     or closing the viewer can never itself mark acceptance.
+     ════════════════════════════════════════════════════════════════════════ */
+  var _agreementLoaded = false;
+
+  function _openAgreement() {
+    var ov = document.getElementById('sreg_agreement_overlay');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'sreg_agreement_overlay';
+      ov.setAttribute('role', 'dialog');
+      ov.setAttribute('aria-modal', 'true');
+      ov.setAttribute('aria-label', 'SOKONI Seller Agreement');
+      ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.86);display:flex;flex-direction:column;';
+      ov.innerHTML =
+        '<div style="flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.12);background:#0b0b0b;">' +
+          '<strong style="color:#fff;font-size:15px;">SOKONI Seller Agreement</strong>' +
+          '<button type="button" onclick="HubRegister._closeAgreement()" aria-label="Close agreement" style="background:transparent;border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;">Close</button>' +
+        '</div>' +
+        '<div id="sreg_agreement_body" style="flex:1 1 auto;overflow-y:auto;padding:18px 16px 24px;color:rgba(255,255,255,.86);font-size:13.5px;line-height:1.6;max-width:820px;margin:0 auto;width:100%;">Loading the agreement…</div>' +
+        '<div style="flex:0 0 auto;padding:14px 16px;border-top:1px solid rgba(255,255,255,.12);background:#0b0b0b;">' +
+          '<label for="sreg_agree_modal" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13.5px;color:rgba(255,255,255,.9);max-width:820px;margin:0 auto;">' +
+            '<input type="checkbox" id="sreg_agree_modal" onchange="HubRegister._agreeFromModal(this.checked)" style="margin-top:2px;width:18px;height:18px;flex-shrink:0;cursor:pointer;">' +
+            '<span>I have read and agree to the SOKONI Seller Agreement and its commission rates — by plan on marketplace orders, and 5% on in-shop POS / Till sales.</span>' +
+          '</label>' +
+        '</div>';
+      document.body.appendChild(ov);
+    }
+    /* Reflect current state — reopening must not silently reset a tick. */
+    var main  = document.getElementById('sreg_agree');
+    var modal = document.getElementById('sreg_agree_modal');
+    if (main && modal) modal.checked = !!main.checked;
+
+    ov.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    _loadAgreementText();
+  }
+
+  function _loadAgreementText() {
+    if (_agreementLoaded) return;
+    var body = document.getElementById('sreg_agreement_body');
+    if (!body) return;
+    fetch('/seller-terms', { credentials: 'same-origin' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(function (html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var src = doc.querySelector('main, article, .legal-body') || doc.body;
+        /* Scripts/styles stripped: this is a reading surface, and the fetched page
+           must never execute anything inside the application. */
+        src.querySelectorAll('script, style, link, iframe, nav, header, footer').forEach(function (n) { n.remove(); });
+        var text = src.innerHTML.trim();
+        if (!text) throw new Error('empty');
+        body.innerHTML = text;
+        _agreementLoaded = true;
+      })
+      .catch(function () {
+        /* Never leave the merchant with nothing — fall back to the canonical
+           document, never to an invented summary of its terms. */
+        body.innerHTML =
+          '<p>The agreement could not be loaded here.</p>' +
+          '<p><a href="/seller-terms" target="_blank" rel="noopener" style="color:#71ff00;">' +
+          'Open the SOKONI Seller Agreement in a new tab</a> to read it in full.</p>';
+      });
+  }
+
+  function _closeAgreement() {
+    var ov = document.getElementById('sreg_agreement_overlay');
+    if (ov) ov.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+
+  /* The viewer's tick drives the ONE authoritative checkbox. */
+  function _agreeFromModal(checked) {
+    var main = document.getElementById('sreg_agree');
+    if (main) main.checked = !!checked;
+    _syncAgree();
+    _syncHealthNotice();   /* a pre-selected healthcare category must show the notice immediately */
+  }
+
+  /* Healthcare accepts a different instrument from the Seller Agreement rendered below the
+     category picker. Submitting omits the seller acknowledgement for these categories (see
+     the submit handler), so without this notice the applicant would tick a box whose terms
+     do not apply to them and whose acceptance is not recorded — agreeing to nothing, told
+     nothing. The notice states what is true today; it does not summarise or paraphrase any
+     agreement, and the canonical text remains the only source of terms. */
+  function _syncHealthNotice() {
+    var sel = document.getElementById('sreg_cat');
+    var box = document.getElementById('sreg_health_notice');
+    if (!sel || !box) return;
+    var c = CATS.filter(function (x) { return x.id === sel.value; })[0];
+    box.style.display = (c && c.hub === 'healthcare') ? 'block' : 'none';
+  }
+
   function _syncAgree() {
     var cb  = document.getElementById('sreg_agree');
+    var modal = document.getElementById('sreg_agree_modal');
+    /* Keep both views of the same state consistent in either direction. */
+    if (modal && cb) modal.checked = !!cb.checked;
     var btn = document.getElementById('sreg_submit');
     if (!btn) return;
     var ok = !!(cb && cb.checked);
@@ -436,7 +587,7 @@
 
     var agreeEl = document.getElementById('sreg_agree');
     if (!agreeEl || !agreeEl.checked) {
-      _err('Please read and accept the Seller Agreement and the 5% per-sale commission.');
+      _err('Please read and accept the Seller Agreement and its commission rates.');
       return;
     }
 
@@ -494,9 +645,27 @@
          the client under firestore.rules; applicationDecide stamps a SERVER
          timestamp (agreementVerifiedAt) at approval, which is the one to trust
          for anything legal. */
-      agreementAccepted:   true,
-      agreementVersion:    AGREEMENT_VERSION,
-      agreementAcceptedAt: new Date().toISOString(),
+      /* HEALTHCARE ACCEPTS A DIFFERENT INSTRUMENT.
+         AGREEMENT_VERSION here is the SELLER Agreement — the marketplace listing ladder
+         and the POS commission rate, served from /seller-terms. A hospital, clinic,
+         pharmacy or laboratory is not a marketplace seller, and this form must not record
+         that they accepted a merchant's commercial terms as their undertaking.
+
+         The canonical healthcare instruments are `healthcare-provider-agreement` and
+         `medical-compliance-declaration` (functions/legal-agreements.js ROLE_AGREEMENTS),
+         accepted through legalAccept into the versioned, immutable `legalAcceptances` —
+         and applicationDecide verifies THAT record for role 'health', ignoring the field
+         below. So omitting it changes no approval outcome; it stops the application
+         asserting something untrue about what this applicant agreed to.
+
+         Those two documents have no published text yet, so a healthcare application
+         cannot yet be approved. That is the intended state, not an oversight: the queue
+         holds until legal publishes them. `reject` and `request_info` still work. */
+      ...(catObj.hub === 'healthcare' ? {} : {
+        agreementAccepted:   true,
+        agreementVersion:    AGREEMENT_VERSION,
+        agreementAcceptedAt: new Date().toISOString(),
+      }),
 
       /* ── Payment destination AS SUBMITTED ─────────────────────────────────
          Deliberately namespaced `requested*` and carrying no status field. This
@@ -562,8 +731,12 @@
     },
     _selectPlan: _selectPlan,
     _syncAgree:  _syncAgree,
+    _syncHealthNotice: _syncHealthNotice,
     _selectDest: _selectDest,
     _submit:     _submit,
+    _openAgreement:  _openAgreement,
+    _closeAgreement: _closeAgreement,
+    _agreeFromModal: _agreeFromModal,
     AGREEMENT_VERSION: AGREEMENT_VERSION
   };
 

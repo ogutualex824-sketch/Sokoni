@@ -58,9 +58,27 @@ const DRAWER_OPEN_TYPES = new Set([
   'sale', 'split_cash', 'manual', 'shift_open', 'shift_close',
   'refund', 'exchange', 'test',
 ]);
+/* THE CANONICAL CASH VOCABULARY, not a narrower one.
+
+   sokoni-shift.js — which calls itself THE SHIFT / TILL AUTHORITY and states it uses
+   "the vocabulary of functions/pos-cash-manager.js:66. Not a new one" — posts its events
+   to cdRecordCashEvent. This set accepted only six of the ten it sends, so cash_sale,
+   cash_refund and float_adjustment were REJECTED with invalid-argument and never
+   reached posTillEvents at all.
+
+   That single gap explains the rest of the shift-summary damage: with no cash_sale events
+   to read, cdGetShiftSummary had to infer sales from HARDWARE DRAWER-OPEN entries in
+   posDrawerLog — which is why a phone till with no drawer reported zero cash sales — and
+   with no float_adjustment it could not carry the "+ adjustments" term of the ratified
+   contract at all.
+
+   register_open/register_close are included because the authority emits them; they carry no
+   amount into the balance and are ignored by the summation. */
 const TILL_EVENT_TYPES = new Set([
   'cash_in', 'cash_out', 'safe_drop', 'cash_pickup',
   'opening_float', 'closing_float',
+  'cash_sale', 'cash_refund', 'float_adjustment',
+  'register_open', 'register_close',
 ]);
 
 /* ════════════════════════════════════════════════════════════════════
@@ -256,32 +274,42 @@ exports.cdGetShiftSummary = onCall(OPTS, async (req) => {
   if (shiftId)    q = q.where('shiftId',    '==', _san(shiftId,    64));
 
   const tillSnap = await q.get();
-  const till = { openingFloat: 0, cashSales: 0, cashIn: 0, cashOut: 0, safeDrop: 0, cashPickup: 0 };
+  const till = { openingFloat: 0, cashSales: 0, cashRefunds: 0, cashIn: 0, cashOut: 0,
+                 safeDrop: 0, cashPickup: 0, adjustments: 0 };
   tillSnap.forEach(d => {
-    const { type, amountCents } = d.data();
-    if (type === 'opening_float') till.openingFloat = amountCents;
-    if (type === 'cash_in')       till.cashIn       += amountCents;
-    if (type === 'cash_out')      till.cashOut      += amountCents;
-    if (type === 'safe_drop')     till.safeDrop     += amountCents;
-    if (type === 'cash_pickup')   till.cashPickup   += amountCents;
+    const { type, amountCents, adjustmentCents } = d.data();
+    if (type === 'opening_float')  till.openingFloat = amountCents;
+    if (type === 'cash_sale')      till.cashSales    += amountCents;
+    if (type === 'cash_refund')    till.cashRefunds  += amountCents;
+    if (type === 'cash_in')        till.cashIn       += amountCents;
+    if (type === 'cash_out')       till.cashOut      += amountCents;
+    if (type === 'safe_drop')      till.safeDrop     += amountCents;
+    if (type === 'cash_pickup')    till.cashPickup   += amountCents;
+    /* Signed, and the only term that may legitimately be negative. */
+    if (type === 'float_adjustment') till.adjustments += (Number(adjustmentCents) || 0);
   });
 
-  // Sum cash sales from posDrawerLog (type=sale, outcome=success)
-  let dq = _db().collection('posDrawerLog')
-    .where('merchantId', '==', _san(merchantId, 64))
-    .where('type', '==', 'sale')
-    .where('outcome', '==', 'success');
-  if (branchId)   dq = dq.where('branchId',   '==', _san(branchId,   64));
-  if (registerId) dq = dq.where('registerId', '==', _san(registerId, 64));
-  if (shiftId)    dq = dq.where('shiftId',    '==', _san(shiftId,    64));
-  const drawerSnap = await dq.get();
-  drawerSnap.forEach(d => {
-    const { amount } = d.data();
-    if (amount) till.cashSales += _safeCents(amount);
-  });
+  /* SALES AND REFUNDS COME FROM THE CASH LEDGER, NOT THE DRAWER LOG.
 
-  const expectedCents = till.openingFloat + till.cashSales + till.cashIn
-                      - till.cashOut - till.safeDrop + till.cashPickup;
+     They were summed from posDrawerLog sale/refund entries — records of a HARDWARE
+     DRAWER OPENING. That was never a cash ledger, and using it as one had two consequences:
+     a phone till never opens a drawer, so it reported ZERO cash sales against real takings;
+     and the figure counted openings rather than money.
+
+     The reason the drawer log was used at all is that TILL_EVENT_TYPES rejected cash_sale
+       and cash_refund, so those events never reached posTillEvents. That rejection is gone,
+     and both are now read above from the same event stream, with the same names, that the
+     canonical _computeBalance uses.
+
+     COUNTING BOTH SOURCES WAS REJECTED AS THE FIX: a hardware till emits a drawer entry AND
+     a cash_sale for the same sale, so summing them would double every figure.
+
+     MIGRATION CONSEQUENCE, stated rather than hidden: events rejected before this change do
+     not exist. A till whose sales were only ever recorded as drawer openings reports 0 cash
+     sales until it records cash_sale events. */
+  const expectedCents = till.openingFloat + till.cashSales - till.cashRefunds + till.cashIn
+                      - till.cashOut - till.safeDrop - till.cashPickup
+                      + till.adjustments;
   const actualCents   = closingFloat != null ? _safeCents(closingFloat) : null;
   const varianceCents = actualCents != null ? (actualCents - expectedCents) : null;
 

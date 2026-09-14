@@ -284,6 +284,7 @@ window.PosSales = (() => {
     _shiftId   = shift.id;
     _cashierId = cashierId;
     _queueFirestore('posShifts', shift.id, shift);
+    _queueShiftRegistration(shift);
     emit('shift:opened', shift);
     return shift;
   }
@@ -398,6 +399,38 @@ window.PosSales = (() => {
   }
 
   function stopMarketplaceListener() { if (_mktUnsub) { try { _mktUnsub(); } catch (_) {} _mktUnsub = null; } }
+
+  /* ── Shift registration queue ─────────────────────────────────────────────
+     The shift exists the moment the till opens it, with no network. This queues the intent
+     to tell the server about it; PosSync delivers when connectivity returns and retries
+     until it does.
+
+     The local shift and any sales against it are unaffected by whether this ever succeeds.
+     That is the offline-first guarantee, and registration must not weaken it — hence the
+     early returns and the swallowed throw. A sale must never depend on a registration.
+
+     Only the join key and ordinary opening data are queued. The server derives the merchant
+     and the cashier; the sellerId sent here is validated by _requireSeller, not trusted. */
+  function _queueShiftRegistration(shift) {
+    if (!window.PosSync || typeof PosSync.queue !== 'function') return;
+    try {
+      const sellerId = window._posMerchantId
+        || localStorage.getItem('sokoni_merchant_id')
+        || (window.firebase && window.firebase.auth && window.firebase.auth().currentUser
+            && window.firebase.auth().currentUser.uid)
+        || null;
+      if (!sellerId) return;   /* nothing to register against yet; not an error */
+      PosSync.queue({
+        type: 'shift_registration',
+        data: {
+          clientShiftId: shift.id,
+          sellerId:      sellerId,
+          openingCash:   shift.openingCash,
+          branchId:      shift.branchId,
+        },
+      });
+    } catch (_) { /* best-effort by design */ }
+  }
 
   /* ── Firestore queue ── */
   function _queueFirestore(collection, docId, data) {

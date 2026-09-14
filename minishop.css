@@ -684,6 +684,23 @@ ul, ol {
   padding: 10px 16px;
   overflow-x: auto;
   scrollbar-width: none;
+
+  /* The strip scrolls, so a pill brought into view can land flush against the
+     edge and read as clipped. `scroll-padding-inline` keeps a gutter on both
+     sides of any scrolled-to pill — matching the container's own 16px padding,
+     which browsers otherwise drop at the scroll extremes.
+
+     NOT `justify-content: center`: on a flex container whose content overflows,
+     centring pushes overflow to BOTH ends and makes the leading pill ("All")
+     unreachable — you cannot scroll back to it. That trades a cosmetic problem
+     for a functional one. */
+  scroll-padding-inline: 16px;
+  scroll-behavior: smooth;
+}
+
+/* Honour a reduced-motion preference for the programmatic centring below. */
+@media (prefers-reduced-motion: reduce) {
+  .ms-catalog-filter { scroll-behavior: auto; }
 }
 
 .ms-catalog-filter::-webkit-scrollbar {

@@ -13,13 +13,16 @@
  */
 
 const { onCall, HttpsError }  = require('firebase-functions/v2/https');
-const _custScope = require('./pos-customer-scope');
 const { onSchedule }          = require('firebase-functions/v2/scheduler');
 const { defineSecret }        = require('firebase-functions/params');
 const admin                   = require('firebase-admin');
 
 const SENDGRID_KEY = defineSecret('SENDGRID_API_KEY');
 const { COMPANY }  = require('./company-identity');
+/* Employee authority (workspaceMemberships) and the ownerUid -> merchantId resolver.
+   Neither introduces a store; both are the already-canonical engines. */
+const { _assertBusinessPermission } = require('./workforce-identity');
+const { resolveMerchantIdForOwner } = require('./tenant-identity');
 
 exports._h = {}; // handler registry — consumed by smartpos-dispatch.js
 
@@ -50,6 +53,32 @@ function _adminOrSeller(req) {
   return auth;
 }
 
+/* TENANT BINDING for every handler that takes a sellerId.
+
+   Seven handlers in this file read `sellerId || auth.uid` — a DEFAULT, not a binding, so
+   the payload won whenever it was present. Five sat behind _adminOrSeller (any seller could
+   read any shop's analytics, alerts, insights and reorder data); getBranchComparison and
+   initiateInventoryTransfer sat behind _authRequired alone, so ANY authenticated user could
+   read another merchant's branch revenue, or inject a pending transfer into their queue and
+   emit a platform event carrying the forged shop id.
+
+   Ownership is the sellers/{id} document id, which is the owner's uid — the same basis
+   recordPOSSale was bound on. No employee store is consulted, so this introduces no
+   authority; it only stops a caller naming someone else.
+
+   CONSEQUENCE, deliberate and fail-closed: an employee cannot read these on behalf of an
+   owner, because no employee store may be chosen here. Restored by the authority-convergence
+   slice, not this one. */
+function _boundSellerId(auth, requested) {
+  const claims  = auth.token || {};
+  const isAdmin = !!(claims.admin || claims.role === 'admin' ||
+                     claims.superAdmin || claims.role === 'super_admin');
+  const sid = _san(requested || auth.uid, 40);
+  if (!isAdmin && sid !== auth.uid) {
+    throw new HttpsError('permission-denied', 'You can only access your own shop.');
+  }
+  return sid;
+}
 /* Receipt ID generator */
 function _receiptId() {
   const d   = new Date();
@@ -106,21 +135,19 @@ function _calcPoints(amount) { return Math.floor(amount / 10); }
  * CF: getPOSCustomer — look up by phone or customerId
  * Returns customer profile + loyalty status
  */
-/* The second unscoped read path, closed the same way as posLookupCustomer: this
-   also looked a customer up by phone across the whole collection. */
 exports.getPOSCustomer = onCall({ enforceAppCheck: true }, exports._h.getPOSCustomer = async (req) => {
-  const auth = _adminOrSeller(req);
+  _adminOrSeller(req);
   const { phone, customerId } = req.data || {};
-  const owner = _custScope.resolveOwner(auth, req.data && req.data.sellerId);
-  const fdb = admin.firestore();
 
   let snap;
   if (customerId) {
-    snap = await _custScope.getOwned(fdb, owner, _san(customerId, 40));
+    snap = await admin.firestore().collection('posCustomers').doc(_san(customerId, 40)).get();
   } else if (phone) {
     const normalized = _normalizePhone(phone);
     if (!normalized) throw new HttpsError('invalid-argument', 'Invalid phone number');
-    snap = await _custScope.findOwned(fdb, owner, 'phone', normalized);
+    const q = await admin.firestore().collection('posCustomers')
+      .where('phone', '==', normalized).limit(1).get();
+    snap = q.empty ? null : q.docs[0];
   } else {
     throw new HttpsError('invalid-argument', 'phone or customerId required');
   }
@@ -135,59 +162,41 @@ exports.getPOSCustomer = onCall({ enforceAppCheck: true }, exports._h.getPOSCust
 /**
  * CF: upsertPOSCustomer — create or update customer profile
  */
-/* The WRITE-SIDE twin of the disclosure, and the reason this is a data-model fix
-   rather than a query fix.
-
-   The "existing customer" lookup was collection-wide by phone, so a second
-   merchant upserting a phone number already on file UPDATED THE FIRST
-   MERCHANT'S customer document — one record shared between two businesses, with
-   the later name and email overwriting the earlier. And nothing on the create
-   path recorded an owner at all, which is why no reader could filter by one.
-
-   Both halves are fixed here: the lookup is scoped to the caller, and every
-   create is stamped with the resolved owner so the record can be filtered from
-   now on. A legacy record with no owner is invisible to this lookup, so the next
-   upsert creates a correctly-owned one — the path heals forward without a
-   backfill, at the cost of the old record's history. */
 exports.upsertPOSCustomer = onCall({ enforceAppCheck: true }, exports._h.upsertPOSCustomer = async (req) => {
-  const auth = _adminOrSeller(req);
+  _adminOrSeller(req);
   const { customerId, phone, name, email } = req.data || {};
-  const owner = _custScope.resolveOwner(auth, req.data && req.data.sellerId);
-  const fdb = admin.firestore();
 
   const normalized = _normalizePhone(phone);
   if (!normalized) throw new HttpsError('invalid-argument', 'Invalid phone number');
 
-  /* Look up an existing customer OF THIS MERCHANT by phone. */
-  const existingDoc = await _custScope.findOwned(fdb, owner, 'phone', normalized);
+  /* Look up existing by phone */
+  const existing = await admin.firestore().collection('posCustomers')
+    .where('phone', '==', normalized).limit(1).get();
 
-  const docRef = existingDoc
-    ? existingDoc.ref
+  const docRef = !existing.empty
+    ? existing.docs[0].ref
     : (customerId
-        ? fdb.collection('posCustomers').doc(_san(customerId, 40))
-        : fdb.collection('posCustomers').doc());
+        ? admin.firestore().collection('posCustomers').doc(_san(customerId, 40))
+        : admin.firestore().collection('posCustomers').doc());
 
   const payload = {
     phone:         normalized,
-    name:          name ? _san(name, 100)  : (!existingDoc ? 'Guest Customer' : admin.firestore.FieldValue.delete()),
+    name:          name ? _san(name, 100)  : (existing.empty ? 'Guest Customer' : admin.firestore.FieldValue.delete()),
     email:         email ? _san(email, 200) : admin.firestore.FieldValue.delete(),
     updatedAt:     now(),
   };
 
-  if (!existingDoc) {
-    /* New customer — stamped with its owner, so it can be scoped ever after. */
+  if (existing.empty) {
+    /* New customer */
     await docRef.set({
       ...payload,
-      ..._custScope.ownerStamp(owner),
       loyaltyPoints: 0,
       totalSpend:    0,
       visitCount:    0,
       createdAt:     now(),
     });
   } else {
-    /* An existing record keeps its owner; re-stamping repairs one created before
-       the owner field existed but reached here through a composite id. */
-    await docRef.update({ ...payload, ..._custScope.ownerStamp(owner) });
+    await docRef.update(payload);
   }
 
   const snap = await docRef.get();
@@ -217,7 +226,55 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
   if (!items || !items.length) throw new HttpsError('invalid-argument', 'items required');
   if (!payment || !payment.amount) throw new HttpsError('invalid-argument', 'payment required');
 
+  /* ── TENANT BINDING ───────────────────────────────────────────────────────
+     _adminOrSeller establishes that the caller IS a seller. It does not establish
+     WHICH shop's books they may write to. Before this, `sellerId` and `cashierUid`
+     were taken from the payload and only defaulted to auth.uid, so any caller
+     holding a seller claim could record a sale into another shop's posSales, and
+     attribute it to any cashier.
+
+     `sellers/{id}` is keyed by the owner's uid — pos-onboard.html writes
+     sellers/{currentUser.uid} — so identity here IS the document id, exactly as
+     shops/{uid} is in resolveActor. There is no ownerId field to forge.
+
+     The cashier is whoever invoked this call; there is no legitimate reason to
+     declare someone else. This matches posCompleteCheckout, where cashierId is
+     auth.uid unconditionally. */
+  const _claims  = auth.token || {};
+  const _isAdmin = !!(_claims.admin || _claims.role === 'admin' || _claims.role === 'super_admin');
+  const _sellerId  = _san(sellerId || auth.uid, 40);
+  const _cashierUid = auth.uid;
+  if (!_isAdmin && _sellerId !== auth.uid) {
+    throw new HttpsError('permission-denied',
+      'A sale can only be recorded for your own shop.');
+  }
+
   const fdb = admin.firestore();
+
+  /* ══ THE COMMISSION GATE — the second sale rail ═══════════════════════════════════════
+     `posCompleteCheckout` is not the only way to create a sale. This callable is reachable
+     directly and through `smartPosDispatch({op:'recordPOSSale'})`, and it was recording sales
+     with no commission gate at all — so a merchant whose till was closed at 07:00 could keep
+     trading by calling this one instead. A gate on one of two doors is not a gate.
+
+     `_sellerId` is SAFE to gate on here because the tenant binding above already proved it:
+     a non-admin caller is refused unless `_sellerId === auth.uid`. That check is what makes
+     enforcement meaningful rather than a control keyed on a forgeable field.
+
+     An unreadable ledger throws rather than reporting "owes nothing", and that throw refuses
+     the sale. Refusing to sell during an outage is the conservative failure; the alternative
+     is untracked trading that reconciliation can never recover. */
+  try {
+    await require('./pos-commission-rail').assertGateOpen(fdb, String(_sellerId), Date.now());
+  } catch (gateErr) {
+    if (gateErr && gateErr.code === 'POS_GATE_CLOSED') {
+      throw new HttpsError('failed-precondition', gateErr.message);
+    }
+    throw new HttpsError('unavailable',
+      'Your commission balance could not be checked, so this sale was not recorded. ' +
+      'Nothing has been charged.');
+  }
+
   const saleRef = fdb.collection('posSales').doc();
   const saleId  = saleRef.id;
   const receiptId = _receiptId();
@@ -266,7 +323,7 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
   const tier          = _tier(pointsTotal);
 
   /* Store info from seller profile */
-  const sellerSnap = await fdb.collection('sellers').doc(_san(sellerId || auth.uid, 40)).get();
+  const sellerSnap = await fdb.collection('sellers').doc(_sellerId).get();
   const store = sellerSnap.exists ? {
     name:    sellerSnap.data().businessName || sellerSnap.data().name || 'SOKONI Store',
     address: sellerSnap.data().address || '',
@@ -287,6 +344,25 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
 
       for (let i = 0; i < snaps.length; i++) {
         if (!snaps[i].exists) continue;
+
+        /* THE PRODUCT MUST BELONG TO THIS SHOP.
+           `productId` is caller-supplied and this transaction decrements
+           `products/{id}.stock`. Without an ownership check a seller could record a sale in
+           their OWN books naming ANOTHER merchant's product and decrement that merchant's
+           inventory — an authoritative outcome driven entirely by attacker-controlled input.
+           The oversell guard below protects the QUANTITY; it never protected the IDENTITY.
+
+           `sellerUid` is canonical: the served rule creates products with
+           `request.resource.data.sellerUid == request.auth.uid`. The other two are tolerance
+           for older documents. A product with no owner field at all still passes, for the
+           reason recorded at the void path. */
+        const owner = snaps[i].data().sellerUid || snaps[i].data().sellerId ||
+                      snaps[i].data().merchantId;
+        if (owner && owner !== _sellerId) {
+          throw new HttpsError('permission-denied',
+            `"${stockItems[i].name}" belongs to another shop and cannot be sold here.`);
+        }
+
         const currentStock = snaps[i].data().stock;
         if (typeof currentStock === 'number' && currentStock < stockItems[i].qty) {
           throw new HttpsError('failed-precondition',
@@ -312,10 +388,10 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
   batch.set(saleRef, {
     saleId,
     receiptId,
-    sellerId:      sellerId || auth.uid,
+    sellerId:      _sellerId,
     branchId:      branchId ? _san(branchId, 40) : null,
     sessionId:     sessionId ? _san(sessionId, 40) : null,
-    cashierUid:    cashierUid || auth.uid,
+    cashierUid:    _cashierUid,
     cashierName:   cashierName ? _san(cashierName, 100) : 'Unknown',
     customerId:    customer ? (customerDocRef?.id || null) : null,
     customerName:  customer?.name || null,
@@ -337,7 +413,7 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
   batch.set(receiptRef, {
     receiptId,
     saleId,
-    sellerId: sellerId || auth.uid,
+    sellerId: _sellerId,
     store,
     sale: {
       date:     new Date().toISOString(),
@@ -362,6 +438,40 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
 
   await batch.commit();
 
+  /* ── THE COMMISSION LIABILITY ─────────────────────────────────────────────────────────
+     The gate above reads liability rows; this rail was writing none, so every sale recorded
+     here was invisible to it. Gating one rail while the other accrues nothing would let a
+     merchant run their whole day through this callable and owe nothing on paper.
+
+     AFTER the commit, deliberately: a liability for a sale that then failed to write would
+     bill a merchant for money they never took. This order can only fail the other way — a
+     completed sale whose liability write failed — which is recoverable by reconciling against
+     posSales and is visible in the log.
+
+     Idempotent on the sale id. Best-effort: a failure here never fails a sale the customer has
+     already paid for. CUSTODY is TILL_DIRECT — this rail records sales the merchant took
+     themselves, so the merchant is holding the money and owes the commission. `planId: null`
+     because POS/Till is a flat 5% on every plan; passing null records honestly that no plan
+     was resolved rather than stamping one nobody verified. */
+  try {
+    const _rail = require('./pos-commission-rail');
+    const _P = require('./pos-sale-commission');
+    const _MA = require('./money-authority');
+    const _rec = _P.planSaleCommission({
+      rail: 'TILL_DIRECT',
+      gross: _MA.fromMinor(Math.round(Number(total || 0) * 100)),
+      planId: null,
+      soldAtMs: Date.now(),
+      saleId: String(saleId),
+      merchantUid: String(_sellerId),
+    });
+    await _rail.recordSaleLiability(fdb, _rec);
+  } catch (commErr) {
+    console.error('[recordPOSSale] commission liability not recorded', {
+      saleId, sellerId: _sellerId, error: commErr && commErr.message,
+    });
+  }
+
   /* Award loyalty points (outside batch — ok if this fails) */
   if (customerDocRef && pointsEarned > 0) {
     await customerDocRef.update({
@@ -375,7 +485,7 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
 
   /* Emit platform event */
   await _emitEvent('pos.checkout.completed', {
-    saleId, receiptId, sellerId: sellerId || auth.uid, total, itemCount: validatedItems.length,
+    saleId, receiptId, sellerId: _sellerId, total, itemCount: validatedItems.length,
     paymentMethod: payment.method, customerId: customer ? customerDocRef?.id : null,
   });
 
@@ -413,41 +523,156 @@ exports.voidPOSSale = onCall({ enforceAppCheck: true }, exports._h.voidPOSSale =
   const canVoid = claims.admin || claims.role === 'admin' || claims.posRole === 'manager'
                || claims.posRole === 'supervisor' || claims.posRole === 'owner';
   if (!canVoid) throw new HttpsError('permission-denied', 'Manager permission required to void sales');
+  const isAdmin = !!(claims.admin || claims.role === 'admin' || claims.superAdmin || claims.role === 'super_admin');
 
   const { saleId, reason } = req.data || {};
   if (!saleId)  throw new HttpsError('invalid-argument', 'saleId required');
   if (!reason)  throw new HttpsError('invalid-argument', 'void reason required');
 
-  const ref  = admin.firestore().collection('posSales').doc(_san(saleId, 40));
-  const snap = await ref.get();
-  if (!snap.exists) throw new HttpsError('not-found', 'Sale not found');
-  if (snap.data().status === 'voided') throw new HttpsError('already-exists', 'Sale already voided');
+  const fdb  = admin.firestore();
+  const ref  = fdb.collection('posSales').doc(_san(saleId, 40));
 
-  await ref.update({
-    status:      'voided',
-    voidReason:  _san(reason, 500),
-    voidedBy:    auth.uid,
-    voidedAt:    now(),
+
+  /* ── WHO MAY VOID THIS SALE ────────────────────────────────────────────────
+     Priority 7 bound the void to ownership because no employee store could be chosen
+     without silently declaring one canonical. That decision is now taken:
+     workspaceMemberships is the employee authority, keyed by businessId === merchantId.
+
+     THE TWO TENANT SPACES HAVE TO BE BRIDGED HERE. `posSales.sellerId` is an owner uid
+     (sellers/{uid}); a membership is keyed by the generated merchantId. So the sale's owner
+     is resolved forward through `businesses where ownerId == sellerId` — the same resolver
+     the tenant convergence uses — and the membership is checked against THAT merchant.
+
+     THE ROLE GATE ABOVE STILL APPLIES, and it has to: `cashier` carries `refunds` in
+     ROLE_PERMISSIONS, so that permission alone would let any cashier void. Authority is the
+     conjunction — a manager/supervisor/owner CLAIM and an active membership holding the
+     capability for the merchant that owns this sale.
+
+     AUTHORIZATION HAPPENS BEFORE THE TRANSACTION. The capability engine reads Firestore, and
+     a transaction's reads must go through txn.get — so the actor is authorized first, and the
+     transaction re-reads the sale and re-checks the tenant as its atomic guard. */
+  const preSnap = await ref.get();
+  if (!preSnap.exists) throw new HttpsError('not-found', 'Sale not found');
+  const authorizedSellerId = (preSnap.data() || {}).sellerId || null;
+
+  if (!isAdmin && authorizedSellerId !== auth.uid) {
+    if (!authorizedSellerId) {
+      throw new HttpsError('failed-precondition',
+        'This sale has no shop recorded, so authority for it cannot be established.');
+    }
+    const owned = await resolveMerchantIdForOwner(authorizedSellerId);
+    if (!owned.ok) {
+      /* No canonical merchant for the shop that owns this sale — refuse rather than
+         fall back to a looser check. */
+      throw new HttpsError('permission-denied',
+        'You can only void sales belonging to your own shop.');
+    }
+    /* Throws permission-denied when there is no active membership, or the membership
+       lacks the capability. Never widened here. */
+    await _assertBusinessPermission(auth.uid, owned.merchantId, 'refunds');
+  }
+
+  /* ── ONE TRANSACTION ──────────────────────────────────────────────────────
+     Before this, the sale was updated, then inventory was restored in a separate
+     Promise.all whose failures were discarded by `.catch(() => {})`. A partial
+     restore therefore left a VOIDED sale with unrecovered stock and returned
+     success. The sale state and the stock it releases are one fact and now commit
+     or fail together.
+
+     All reads happen before any write, as Firestore requires. */
+  const result = await fdb.runTransaction(async (txn) => {
+    const snap = await txn.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'Sale not found');
+    const sale = snap.data() || {};
+    if (sale.status === 'voided') throw new HttpsError('already-exists', 'Sale already voided');
+
+    /* ── THE SALE MUST BELONG TO THE CALLER'S SHOP ──────────────────────────
+       The claim check above proves the caller is a manager SOMEWHERE. It never
+       proved anything about THIS sale, so a manager at one shop could void
+       another merchant's sale — and, because the void restores stock, increment
+       that merchant's inventory.
+
+       The shop is read from the SALE, never from the payload. Ownership is the
+       `sellers/{id}` document id, which is the owner's uid (pos-onboard.html
+       writes sellers/{currentUser.uid}), exactly as recordPOSSale binds it. No
+       employee store is consulted, so this introduces no authority.
+
+       CONSEQUENCE, deliberate and fail-closed: an EMPLOYEE manager can no longer
+       void, because their uid is not the shop id and no employee store may be
+       chosen here. That is narrower than before and is the safe direction; it is
+       restored when the employee-authority convergence decision is taken. */
+    /* TOCTOU guard: the sale must still belong to the shop that was authorized above.
+       For the owner path authorizedSellerId IS auth.uid, so this is exactly the Priority 7
+       check; for the employee path it pins the sale that authority was granted for. */
+    if (!isAdmin && sale.sellerId !== authorizedSellerId) {
+      throw new HttpsError('permission-denied',
+        'You can only void sales belonging to your own shop.');
+    }
+
+    /* Read every product BEFORE writing anything. A product that has gone missing
+       fails the whole void rather than silently skipping its stock. */
+    const items = (sale.items || []).filter(i => i && i.productId);
+    const productRefs = items.map(i => fdb.collection('products').doc(String(i.productId)));
+    const productSnaps = productRefs.length ? await txn.getAll.apply(txn, productRefs) : [];
+
+    productSnaps.forEach((p, idx) => {
+      if (!p.exists) {
+        throw new HttpsError('failed-precondition',
+          'Cannot void: product ' + items[idx].productId + ' no longer exists, so its stock ' +
+          'cannot be restored. Nothing has been changed.');
+      }
+      /* Never restore stock into another shop's product.
+
+         `sellerUid` FIRST, and that ordering is the whole point: the served rule creates
+         products with `request.resource.data.sellerUid == request.auth.uid`, so sellerUid is
+         the canonical owner field. This check originally read only `sellerId || merchantId` —
+         fields a product does not carry — so `owner` was undefined and the guard was SKIPPED
+         on every real document. The suite did not catch it because its fixture used
+         `sellerId` too: a control proved against a shape production does not have.
+
+         The remaining fallbacks are tolerance for older documents, not the contract.
+
+         KNOWN LIMIT, recorded rather than papered over: a product carrying NO owner field at
+         all still passes, because failing closed there would block sales of any legacy
+         product that lacks it, and how many exist is a production-data question. */
+      const owner = p.data() && (p.data().sellerUid || p.data().sellerId || p.data().merchantId);
+      if (owner && sale.sellerId && owner !== sale.sellerId) {
+        throw new HttpsError('failed-precondition',
+          'Cannot void: product ' + items[idx].productId + ' belongs to another shop.');
+      }
+    });
+
+    txn.update(ref, {
+      status:     'voided',
+      voidReason: _san(reason, 500),
+      voidedBy:   auth.uid,
+      voidedAt:   now(),
+    });
+
+    productSnaps.forEach((p, idx) => {
+      const qty = _num(items[idx].qty, 0);
+      if (qty > 0) txn.update(p.ref, { stock: incr(qty), soldCount: incr(-qty) });
+    });
+
+    /* The audit row is part of the same commit: a void that is not audited, or an
+       audit row for a void that did not happen, are both wrong. */
+    txn.set(fdb.collection('posAuditLog').doc(), {
+      action:      'void_sale',
+      saleId,
+      sellerId:    sale.sellerId || null,
+      reason:      _san(reason, 500),
+      actorUid:    auth.uid,
+      itemsRestored: productSnaps.length,
+      timestamp:   now(),
+    });
+
+    return { restored: productSnaps.length };
   });
 
-  /* Restore inventory */
-  const items = snap.data().items || [];
-  await Promise.all(items.filter(i => i.productId).map(i =>
-    admin.firestore().collection('products').doc(i.productId)
-      .update({ stock: incr(i.qty), soldCount: incr(-i.qty) }).catch(() => {})
-  ));
-
-  /* Audit log */
-  await admin.firestore().collection('posAuditLog').add({
-    action:    'void_sale',
-    saleId,
-    reason:    _san(reason, 500),
-    actorUid:  auth.uid,
-    timestamp: now(),
-  });
-
+  /* Emitted only AFTER the transaction commits — an event for a void that did not
+     happen is worse than no event. */
   await _emitEvent('pos.sale.voided', { saleId, reason: _san(reason, 200), actorUid: auth.uid });
-  return { saleId, status: 'voided' };
+  return { saleId, status: 'voided', itemsRestored: result.restored };
 });
 
 /* ══════════════════════════════════════════════════════════════
@@ -566,7 +791,7 @@ exports.emailReceipt = onCall(
 exports.getInventoryAlerts = onCall({ enforceAppCheck: true }, exports._h.getInventoryAlerts = async (req) => {
   const auth = _adminOrSeller(req);
   const { sellerId, branchId, limit: lim = 50 } = req.data || {};
-  const sid = sellerId || auth.uid;
+  const sid = _boundSellerId(auth, sellerId);
 
   const fdb = admin.firestore();
 
@@ -632,7 +857,7 @@ exports.getInventoryAlerts = onCall({ enforceAppCheck: true }, exports._h.getInv
 exports.getInventoryInsights = onCall({ enforceAppCheck: true }, exports._h.getInventoryInsights = async (req) => {
   const auth = _adminOrSeller(req);
   const { sellerId, days = 30, limit: lim = 20 } = req.data || {};
-  const sid = sellerId || auth.uid;
+  const sid = _boundSellerId(auth, sellerId);
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
   const fdb = admin.firestore();
@@ -692,7 +917,7 @@ exports.getInventoryInsights = onCall({ enforceAppCheck: true }, exports._h.getI
 exports.getReorderSuggestions = onCall({ enforceAppCheck: true }, exports._h.getReorderSuggestions = async (req) => {
   const auth = _adminOrSeller(req);
   const { sellerId } = req.data || {};
-  const sid = sellerId || auth.uid;
+  const sid = _boundSellerId(auth, sellerId);
   const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   /* Get sales velocity from last 30 days */
@@ -757,7 +982,7 @@ exports.getReorderSuggestions = onCall({ enforceAppCheck: true }, exports._h.get
 exports.getPOSAnalytics = onCall({ enforceAppCheck: true }, exports._h.getPOSAnalytics = async (req) => {
   const auth = _adminOrSeller(req);
   const { sellerId, branchId, startDate, endDate, groupBy = 'day' } = req.data || {};
-  const sid = sellerId || auth.uid;
+  const sid = _boundSellerId(auth, sellerId);
 
   const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const end   = endDate   ? new Date(endDate)   : new Date();
@@ -859,7 +1084,7 @@ exports.getPOSAnalytics = onCall({ enforceAppCheck: true }, exports._h.getPOSAna
 exports.getLivePOSMetrics = onCall({ enforceAppCheck: true }, exports._h.getLivePOSMetrics = async (req) => {
   const auth = _adminOrSeller(req);
   const { sellerId } = req.data || {};
-  const sid = sellerId || auth.uid;
+  const sid = _boundSellerId(auth, sellerId);
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
@@ -1020,13 +1245,13 @@ exports.getShiftSummary = onCall({ enforceAppCheck: true }, exports._h.getShiftS
  * CF: getBranchComparison — HQ cross-branch revenue comparison
  */
 exports.getBranchComparison = onCall({ enforceAppCheck: true }, exports._h.getBranchComparison = async (req) => {
-  const auth   = _authRequired(req);
+  const auth   = _adminOrSeller(req);
   const claims = auth.token || {};
   const isAdmin = claims.admin || claims.role === 'admin' || claims.posRole === 'owner';
   if (!isAdmin) throw new HttpsError('permission-denied', 'Owner access required');
 
   const { sellerId, days = 30 } = req.data || {};
-  const sid   = sellerId || auth.uid;
+  const sid   = _boundSellerId(auth, sellerId);
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
   /* Get all branches for this seller */
@@ -1071,18 +1296,23 @@ exports.getBranchComparison = onCall({ enforceAppCheck: true }, exports._h.getBr
  * CF: initiateInventoryTransfer — request stock transfer between branches
  */
 exports.initiateInventoryTransfer = onCall({ enforceAppCheck: true }, exports._h.initiateInventoryTransfer = async (req) => {
-  const auth = _authRequired(req);
+  const auth = _adminOrSeller(req);
   const { fromBranchId, toBranchId, items, sellerId } = req.data || {};
 
   if (!fromBranchId || !toBranchId) throw new HttpsError('invalid-argument', 'fromBranchId and toBranchId required');
   if (!items || !items.length)       throw new HttpsError('invalid-argument', 'items required');
+
+  /* The transfer is filed against the caller's own shop. Before this, any authenticated
+     user could inject a pending transfer into another merchant's queue — pos-hq lists them
+     by sellerId — and emit a platform event carrying that forged shop id. */
+  const _sellerId = _boundSellerId(auth, sellerId);
 
   const transferRef = admin.firestore().collection('inventoryTransfers').doc();
   const transferId  = transferRef.id;
 
   await transferRef.set({
     transferId,
-    sellerId:     sellerId || auth.uid,
+    sellerId:     _sellerId,
     fromBranchId: _san(fromBranchId, 40),
     toBranchId:   _san(toBranchId, 40),
     items:        items.map(i => ({
@@ -1096,7 +1326,7 @@ exports.initiateInventoryTransfer = onCall({ enforceAppCheck: true }, exports._h
     updatedAt:    now(),
   });
 
-  await _emitEvent('inventory.transfer.initiated', { transferId, fromBranchId, toBranchId, sellerId: sellerId || auth.uid });
+  await _emitEvent('inventory.transfer.initiated', { transferId, fromBranchId, toBranchId, sellerId: _sellerId });
   return { transferId, status: 'pending' };
 });
 

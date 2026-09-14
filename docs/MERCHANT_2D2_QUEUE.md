@@ -39,6 +39,7 @@
 | `posLogReprint` accepts an uncorroborated `merchantId`; mutates any order's reprint counter | **open** — medium | — |
 | `posGetQueueMetrics` queries `posCheckoutMetrics` by client-supplied `merchantId` | **open** — medium | — |
 | `posReceipts` rule gates on `sellerId`; 3 of 4 writers emit `merchantId` | **open** — medium | — |
+| **`posRetailSales` rule gates on `sellerId`/`cashierUid`; SOLE writer emits `merchantId`/`cashierId`; client filters `merchantId` -> EVERY read denied, POS sales silently absent from Orders/Analytics/Revenue** | **open** — **high** (reporting integrity) | — |
 | `bootstrapDevice` — no owner check; returns any merchant's bundle AND writes `posDevices` with client scope, `merge:true`, `status:'active'` | **open** — **critical** | — |
 | `lockDevice`/`unlockDevice`/`remoteLogout`/`remoteUpdate`/`decommissionDevice`/`deviceHeartbeat` — auth only, client `deviceId` | **open** — **critical** | — |
 | `getDeviceList` — auth only, client `merchantId` | **open** — high | — |
@@ -53,6 +54,23 @@
 | `handleFailedDelivery` — auth only; fails any delivery and strips its rider | ✅ fixed in code — NOT DEPLOYED | `b8b0428` |
 | `dispatchDelivery` — auth only; starts the cascade on any delivery | ✅ fixed in code — NOT DEPLOYED | `b8b0428` |
 | `optimizeBatchRoute` — auth only; bulk address disclosure | ✅ fixed in code — NOT DEPLOYED | `b8b0428` |
+
+### Control-level coverage — the clickable census
+
+`node scripts/census-merchant-clickables.js` ([[MERCHANT_CLICKABLE_CENSUS]]) enumerates every
+control DECLARATION across the shell and all 27 surfaces it mounts — **725 controls** — and
+fails on a dead route, an unbound action attribute, a shell escape, or a route no merchant can
+open. **Clean at this commit: 32/32 routes reachable, 0 defects.**
+
+It exists because the other four gates all pass while an ordinary button is missing: routes is
+structural, actions covers chip bars only, the route gate walks DESTINATIONS not controls, and
+shell-boundary counts headers. This is the gate that answers *"every button that worked before
+consolidation still works after it"*.
+
+Static — declarations, not rendered DOM, so it sees controls an unauthenticated harness never
+renders. Pair it with `test-merchant-route-gate.js --all`; neither replaces the other. The still-
+open hole is unchanged and is the larger one: **the gate has never tested an authenticated
+merchant.**
 
 Receipts/Tax detail: [[MERCHANT_RECEIPTS_TAX_AUTHORITY]]. Devices detail: [[MERCHANT_DEVICES_AUTHORITY]]. Fulfilment detail: [[MERCHANT_FULFILMENT_AUTHORITY]].
 
@@ -178,3 +196,37 @@ Same as every stage so far: trace the write path before choosing a scope
 identifier, judge each authority by its opened body rather than its name, and
 keep a client-supplied scope id out of the authorization boundary. Three findings
 in a row have come from that last one.
+
+---
+
+## `posRetailSales` — a REPORTING defect, tracked separately from Merchant certification
+
+Found by the rules-derived ownership census (`docs/MERCHANT_DATA_OWNERSHIP.md`, regenerate with
+`scripts/census-merchant-data-ownership.js --live`) on branch `fix/merchant-auth-boundary`.
+Derived from the **LIVE** ruleset `53e1185c`, not the working copy.
+
+```
+writer   functions/pos-zero-friction.js:326 (SOLE)   merchantId · branchId · cashierId
+rule     allow read if sellerId == uid || cashierUid == uid
+client   seller.html filters on merchantId
+result   permission-denied → swallowed → renders as EMPTY
+         → POS sales omitted from Orders / Analytics / Revenue
+```
+
+Neither field the rule accepts is written by the only writer, **and** the field the client
+filters on is not one the rule accepts. Third instance of the class already tracked above
+(`posReceipts`, `posDevices`) — this is the first one that reaches **revenue reporting**, which
+is why it is rated higher.
+
+**This is NOT a Merchant certification blocker.** The Merchant shell, its routing, containment and
+in-shell walk are all proven green; this defect lives in the POS→reporting data path. Do not make
+it a prerequisite for proving Merchant navigation unless the production-seller run shows POS or
+Revenue functionality is itself broken by it.
+
+**Do not "fix" it by relaxing the certification harness.** The harness deliberately asserts the
+PREDICTION (`permission-denied`) rather than asserting ownership it cannot establish, so the day
+this is remediated the assertion flips and forces the census to be re-derived.
+
+Remediation is a rules change and therefore constrained by the compiled-size ceiling and by the
+fact that the worktree ruleset is known not to be releasable — it belongs to the release owner,
+not to either certification branch.

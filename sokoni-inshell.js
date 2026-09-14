@@ -41,7 +41,21 @@
     if (embedded) {
       /* Same-origin check — reading .location.pathname throws cross-origin. */
       var pp = global.parent.location.pathname || '';
-      shellParent = /\/merchant(\.html)?$/.test(pp) || !!global.parent.SokoniShell;
+      /* `-v\d+` MATTERS. This shipped as /\/merchant(\.html)?$/, which knows "merchant" and
+         "merchant.html" but NOT the shell that actually embeds these modules today,
+         merchant-v2. For every page whose only boundary is this file, `.sk-in-shell` then
+         landed solely via the SokoniShell global on this same line — i.e. only when the shell
+         had already executed the statement defining it. A race, so it worked sometimes; when
+         it lost, nothing was scoped: the consent scrim covered the panel from the bottom up
+         and the shared bottom nav stacked under the shell's own. Reported on plans, returns,
+         the delivery hub, fulfilment, verification, stories and POS alike — one missing
+         branch, every embedded page.
+
+         The version suffix is matched generically so a v3 shell does not repeat this, and
+         scripts/test-inshell-chrome.js derives the expected name from the ROUTES CONTRACT and
+         EXECUTES this regex against it, so a rename to something else still fails loudly
+         instead of silently resurrecting the race. */
+      shellParent = /\/merchant(-v\d+)?(\.html)?$/.test(pp) || !!global.parent.SokoniShell;
     }
   } catch (_) { embedded = true; shellParent = false; }
 
@@ -77,6 +91,23 @@
       '.sk-in-shell #sokoniScrollTop{display:none !important}',
       /* A module must never paint its own app-level header inside the shell. */
       '.sk-in-shell .sk-shared-header,.sk-in-shell #shared-header{display:none !important}',
+      /* THE BOTTOM NAV WAS NEVER HIDDEN, AND THAT IS THE DOUBLE NAVIGATION.
+
+         Every embedded module loads shared-header.js, which injects the customer bar
+         (Home / Shop / Services / Messages). This boundary removed the HEADER and left
+         the BAR, so it stacked under the merchant shell own navigation on fulfilment,
+         verification, returns, plans, minishop and the delivery hub alike. One missing
+         rule, every embedded page.
+
+         .bottom-nav also matches the nav a seller dashboard paints itself
+         (shared-header.js:3029 records that those exist and are NOT the injected one),
+         so a module that brings its own bar is covered by the same rule.
+
+         The clearance variable goes with it: hiding a fixed bar while leaving the space
+         reserved for it trades a double nav for a dead strip at the bottom of a panel. */
+      '.sk-in-shell .bottom-nav{display:none !important}',
+      '.sk-in-shell{--sk-bottom-nav-h:0px !important;--bnav-h:0px !important}',
+      '.sk-in-shell body{padding-bottom:0 !important}',
       /* The module viewport IS the panel: never let a module reserve space for chrome
          that the shell already accounts for, and never let it scroll horizontally. */
       '.sk-in-shell,.sk-in-shell body{max-width:100% !important;overflow-x:hidden !important}'

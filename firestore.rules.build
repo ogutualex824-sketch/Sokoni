@@ -172,6 +172,30 @@ service cloud.firestore {
   allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields());
   allow delete: if isAdmin() || isOwner();
   }
+  match /posCommissionLiabilities/{saleId} {
+  allow read:   if isAdmin() || (isAuthed() && resource.data.merchantUid == request.auth.uid);
+  allow create: if false;
+  allow update: if false;
+  allow delete: if false;
+  }
+  match /posCommissionSettlements/{settlementRef} {
+  allow read:   if isAdmin() || (isAuthed() && resource.data.merchantUid == request.auth.uid);
+  allow create: if false;
+  allow update: if false;
+  allow delete: if false;
+  }
+  match /businessWallets/{shopId} {
+  allow read:   if isAdmin() || (isAuthed() && resource.data.ownerUid == request.auth.uid);
+  allow create: if false;
+  allow update: if false;
+  allow delete: if false;
+  }
+  match /businessWalletEntries/{ref} {
+  allow read:   if isAdmin() || (isAuthed() && resource.data.ownerUid == request.auth.uid);
+  allow create: if false;
+  allow update: if false;
+  allow delete: if false;
+  }
   match /invitations/{inviteId} {
   allow read:   if isAdmin();
   allow create: if false;
@@ -320,6 +344,14 @@ service cloud.firestore {
   allow read:   if isAuthed() && (resource.data.uid == request.auth.uid || isAdmin());
   allow create, update, delete: if false;
   }
+  match /sokoniTills/{sokoniTillId} {
+  allow read:  if isAdmin()
+  || (isAuthed() && resource.data.merchantUid == request.auth.uid);
+  allow write: if false;
+  }
+  match /shopTillCounters/{shopId} {
+  allow read, write: if false;
+  }
   match /financialEngineFailures/{ref} {
   allow read:   if isAdmin();
   allow create, update, delete: if false;
@@ -355,8 +387,9 @@ service cloud.firestore {
   .hasOnly(['status','sellerNote','readyAt','trackingNo','updatedAt']))
   || (isAuthed() && resource.data.assignedDriverUid == request.auth.uid
   && uidUnchanged() && validOrderStatus()
+  && !(request.resource.data.status in ['delivered','completed'])
   && request.resource.data.diff(resource.data).affectedKeys()
-  .hasOnly(['status','driverNote','updatedAt','pickedUpAt','deliveredAt','etaMin']));
+  .hasOnly(['status','driverNote','updatedAt','pickedUpAt','etaMin']));
   allow delete: if isAdmin();
   match /events/{eventId} {
   allow create: if isAdmin()
@@ -625,7 +658,13 @@ service cloud.firestore {
   && get(/databases/$(database)/documents/conversations/$(convId))
   .data.participants.hasAny([request.auth.uid]);
   }
-  allow read: if inConvo();
+  function joinedAtMap() {
+  return get(/databases/$(database)/documents/conversations/$(convId))
+  .data.get('participantJoinedAt', {});
+  }
+  allow read: if inConvo()
+  && (!(request.auth.uid in joinedAtMap())
+  || resource.data.timestamp >= joinedAtMap()[request.auth.uid]);
   allow create: if false;
   allow update: if isAdmin()
   || (isAuthed()
@@ -914,6 +953,23 @@ service cloud.firestore {
   && request.resource.data.offerPrice < request.resource.data.originalPrice;
   allow update: if isAdmin();
   allow delete: if isAdmin();
+  }
+  match /stories/{storyId} {
+  allow read:   if true;
+  allow create: if isAuthed()
+  && request.resource.data.uid == request.auth.uid
+  && request.resource.data.postedAt  is number
+  && request.resource.data.expiresAt is number
+  && request.resource.data.expiresAt >  request.time.toMillis()
+  && request.resource.data.expiresAt <= request.time.toMillis() + 86460000;
+  allow update: if isAuthed()
+  && resource.data.uid == request.auth.uid
+  && request.resource.data.uid == resource.data.uid
+  && request.resource.data.expiresAt is number
+  && request.resource.data.expiresAt >  request.time.toMillis()
+  && request.resource.data.expiresAt <= request.time.toMillis() + 86460000;
+  allow delete: if isAdmin()
+  || (isAuthed() && resource.data.uid == request.auth.uid);
   }
   match /withdrawals/{withdrawalId} {
   allow create: if isAuthed()
@@ -1376,6 +1432,14 @@ service cloud.firestore {
   match /sellerSubscriptions/{sellerUid} {
   allow read:  if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
   allow write: if isAdmin();
+  }
+  match /paymentDestinations/{sellerUid} {
+  allow read:  if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
+  allow write: if false;
+  }
+  match /sellerRestrictions/{sellerUid} {
+  allow read:  if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
+  allow write: if false;
   }
   match /commissionLedger/{entryId} {
   allow read:  if isAdmin()
@@ -3050,8 +3114,6 @@ service cloud.firestore {
   }
   match /shopFollowers/{docId} {
   allow read:  if true;
-  allow create: if isAuthed() && request.resource.data.uid == request.auth.uid;
-  allow delete: if isAuthed() && resource.data.uid == request.auth.uid;
   }
   match /minishopCampaigns/{campaignId} {
   allow read:  if isAuthed() && resource.data.uid == request.auth.uid || isAdmin();
@@ -3478,7 +3540,9 @@ service cloud.firestore {
   allow write: if false;
   }
   match /healthProviders/{providerId} {
-  allow read:  if resource.data.status == 'active' || isAdmin();
+  allow read:  if resource.data.status == 'active'
+  || (isAuthed() && resource.data.uid == request.auth.uid)
+  || isAdmin();
   allow write: if false;
   }
   match /healthAppointments/{apptId} {
@@ -4115,16 +4179,6 @@ service cloud.firestore {
   allow update: if isAdmin()
   || (isAuthed() && resource.data.employerUid == request.auth.uid && noAdminFields());
   allow delete: if isAdmin() || (isAuthed() && resource.data.employerUid == request.auth.uid);
-  }
-  match /healthProviders/{providerId} {
-  allow read:   if resource.data.status == 'active' || resource.data.status == 'approved'
-  || (isAuthed() && resource.data.uid == request.auth.uid)
-  || isAdmin();
-  allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
-  allow update: if isAdmin()
-  || (isAuthed() && resource.data.uid == request.auth.uid
-  && uidUnchanged() && noAdminFields());
-  allow delete: if isAdmin();
   }
   match /stores/{storeId} {
   allow read:   if true;

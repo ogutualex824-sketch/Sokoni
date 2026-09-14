@@ -287,6 +287,283 @@ function resolveRate(key) {
   return { pct: r.pct, fixedKES: r.fixedKES, category, matched: true };
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+   THE POS LANE — an absolute, plan-keyed schedule inside this same authority
+   ══════════════════════════════════════════════════════════════════════════════════════════
+   AMENDMENT TO THE CONTRACT ABOVE, made deliberately and recorded here rather than by
+   quietly editing the rule it qualifies:
+
+     Marketplace plans continue to ADJUST the marketplace base rate and never replace it.
+     POS is an INDEPENDENTLY DEFINED LANE. Its rates are ABSOLUTE lane rates and are NOT
+     interpreted as discounts against the marketplace base.
+
+   Why this does not reopen the defect that killed the legacy PLANS table: that table
+   advertised absolute rates (free 15%, business 4%) as though they were MARKETPLACE rates,
+   so when the base moved from ~15% to 3% the "discount" silently became a penalty. These
+   rates are not relative to anything. They cannot drift when the marketplace base moves,
+   because they never reference it.
+
+   SINGLE SOURCE IS PRESERVED. This lives in commission-config.js — the one file
+   scripts/verify-commission-single-source.js sanctions. It must NEVER be copied into
+   sub-billing.js, which is not allow-listed, or into any client.
+
+   ── NO COMMERCIAL CHANGE ON THIS LANE (owner ruling 2026-09-07) ──────────────────────────
+   Live today, POS resolves through ALIASES to marketplace: 5% for every merchant. This lane
+   now defines the SAME 5%, absolutely and plan-independently:
+
+       Free        5%  ->  5%     unchanged
+       Basic       5%  ->  5%     unchanged
+       Pro         5%  ->  5%     unchanged
+       Enterprise  5%  ->  5%     unchanged
+
+   Nobody's POS bill moves. An earlier draft of this lane carried a 15/10/5/0 plan ladder and
+   would have tripled the Free merchant's till commission; that ladder was countermanded and
+   moved to the MARKETPLACE lane, where a subscription is buying something SOKONI actually
+   provides — the order. See MARKETPLACE_PLAN_RATES below.
+
+   ── NOT YET WIRED, AND WHY THE ALIAS IS STILL HERE ───────────────────────────────────────
+   `pos: 'marketplace'` in ALIASES does TWO jobs, and only one of them is pricing:
+
+     1. pricing            resolveRate('pos') -> marketplace 5%
+     2. settlement term    index.js:4852 `_is48hCommission()` treats any hub resolving to
+                           'marketplace' as subject to the 48-HOUR commission deadline;
+                           everything else keeps MONTHLY invoicing.
+
+   Removing the alias — or adding a `pos` key to RATES, since RATES is checked BEFORE
+   ALIASES — would move POS from a 48-hour obligation to monthly billing as a side effect of
+   a pricing change. That is a separate commercial decision and it is not made here.
+
+   So this lane is exported for the resolver and is NOT reachable through resolveRate() yet.
+   Live pricing and live settlement terms are unchanged by its presence. Breaking the alias
+   is a deliberate follow-up that must decide the settlement term at the same time.
+   ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── OWNER RULING 2026-09-07: POS IS FLAT 5%, AND IT IS PLAN-INDEPENDENT ────────────────
+   This table previously carried a plan ladder (free 15 / basic 10 / pro 5 / enterprise 0)
+   on the POS lane. That ladder was COUNTERMANDED and moved to where it belongs:
+
+       MARKETPLACE (online orders)   plan ladder 15 / 10 / 5 / 0   -> MARKETPLACE_PLAN_RATES
+       POS / TILL   (shop sales)     FLAT 5%, every plan           -> here
+
+   The two are separate commercial products. A merchant's subscription buys them a better
+   rate on the MARKETPLACE orders SOKONI brings them; it buys nothing on sales they made
+   themselves in their own shop, where SOKONI provided the till and nothing else.
+
+   The ladder was never wired on this lane (`pos-sale-commission.js` says "NOT INTEGRATED,
+   NOT DEPLOYED. Nothing calls this."), so no live sale was ever charged by it and no
+   migration is needed. It is corrected rather than deleted precisely because it was
+   unreachable: a countermanded schedule left sitting in the sanctioned config file is a
+   trap for whoever wires this lane next.
+
+   FRACTIONS, not percentages: 0.05 is 5%. The platform carries three competing conventions
+   (`pct: 5`, `commission_pct: 10`, `commission_discount_pct: 2`) and writing 5 where 0.05
+   is meant charges 500%.
+
+   This matches what POS is charged TODAY through `ALIASES.pos -> marketplace` (5%), so the
+   lane and the live alias agree. That agreement is deliberate: while both exist, they must
+   not be able to disagree about what a POS sale costs. */
+const POS_FLAT_RATE_FRACTION = 0.05;
+
+/* Kept as a map so the resolver's shape, provenance and callers are unchanged — but every
+   plan resolves to the same rate, which is the point. Written explicitly rather than
+   collapsed to a constant so that "Pro pays the same as Free at the till" is visible to
+   anyone reading the schedule instead of implied by an absent table. */
+const POS_PLAN_RATES = {
+  seller_free:       { rateFraction: POS_FLAT_RATE_FRACTION, floorExempt: false },
+  seller_basic:      { rateFraction: POS_FLAT_RATE_FRACTION, floorExempt: false },
+  seller_pro:        { rateFraction: POS_FLAT_RATE_FRACTION, floorExempt: false },
+  seller_enterprise: { rateFraction: POS_FLAT_RATE_FRACTION, floorExempt: false },
+};
+
+/* A merchant on no recognised plan is treated as Free. Under a flat schedule that is the
+   same rate as every other plan, which is exactly why the fallback is stated rather than
+   removed: if this lane ever becomes plan-keyed again, an unknown plan must resolve to the
+   HIGHEST rate and never to a free pass. Undercharging is the failure that stays invisible
+   until reconciliation. */
+const POS_DEFAULT_PLAN = 'seller_free';
+
+/**
+ * Resolve the POS commission for a seller plan.
+ *
+ * Returns the rate AND the floor policy AND its provenance, so the arithmetic engine stays
+ * deliberately dumb: `computeCommission()` never infers whether a zero rate should escape
+ * the minimum, because this says so explicitly.
+ *
+ * `source` and `plan` are returned so a receipt, a merchant UI, a reconciliation or an audit
+ * can explain WHY a particular sale was charged what it was — a rate with no provenance is
+ * exactly what made nine disagreeing tables survivable for so long.
+ *
+ * @param {string} planId  e.g. 'seller_pro'
+ * @returns {{rateFraction:number, floorExempt:boolean, source:string, plan:string,
+ *            lane:string, matched:boolean, pct:number}}
+ */
+function resolvePosRate(planId) {
+  const key = String(planId || '').trim().toLowerCase();
+  const matched = Object.prototype.hasOwnProperty.call(POS_PLAN_RATES, key);
+  const plan = matched ? key : POS_DEFAULT_PLAN;
+  const r = POS_PLAN_RATES[plan];
+  return {
+    rateFraction: r.rateFraction,
+    pct: r.rateFraction * 100,
+    floorExempt: r.floorExempt,
+    source: 'commission-config.POS_PLAN_RATES',
+    plan,
+    lane: 'pos',
+    matched
+  };
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+   THE MARKETPLACE LANE — absolute commission by seller plan   (owner ruling 2026-09-07)
+   ══════════════════════════════════════════════════════════════════════════════════════════
+   A SOKONI marketplace order is one SOKONI brought the merchant. What a subscription buys is
+   a smaller cut of it:
+
+       seller_free        15%
+       seller_basic       10%
+       seller_pro          5%
+       seller_enterprise   0%
+
+   POS AND TILL ARE NOT ON THIS LADDER. A till sale is one the merchant made themselves, in
+   their own shop, to their own customer; SOKONI provided the till and nothing else, so it is
+   FLAT 5% on every plan (POS_PLAN_RATES above). The two lanes are separate commercial
+   products and must never be collapsed into one rate.
+
+   ── WHY ABSOLUTE, WHEN THE FILE ABOVE WARNS ABOUT ABSOLUTE PLAN RATES ────────────────────
+   The legacy PLANS table was lethal because it advertised absolute rates (free 15%,
+   business 4%) while being APPLIED as a discount against a moving marketplace base. When the
+   base fell to ~3% the "discount" silently became a penalty.
+
+   These are absolute AND applied absolutely: `resolveMarketplaceRate` REPLACES the base
+   rather than adjusting it, and nothing here references `RATES.marketplace`. They cannot
+   drift when the base moves, because they never read it. That is the same reasoning the POS
+   lane above already uses.
+
+   `applyPlanAdjustment` (the discount mechanism) still exists and still governs every OTHER
+   category — provider bookings, services, hubs. It is not replaced; it is simply not the
+   authority for a marketplace seller sale.
+
+   ── THE UNIT IS A FRACTION ───────────────────────────────────────────────────────────────
+   0.15 is 15%. This file also speaks `pct` (whole numbers) in RATES, and sub-billing speaks
+   `commission_discount_pct`. Writing 15 where 0.15 is meant charges 1500%. Both spellings
+   are returned below so a caller cannot pick the wrong one by accident.
+
+   ── SINGLE SOURCE ────────────────────────────────────────────────────────────────────────
+   This lives in commission-config.js, the one file scripts/verify-commission-single-source.js
+   sanctions. It must NEVER be copied into sub-billing.js, into a client, or into a second
+   table. The platform once had NINE commission tables that disagreed.
+   ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── CANONICAL MERCHANT PACKAGES (owner decision 2026-09-13) ───────────────────────────────
+ * free / professional / business / enterprise at 16 / 12 / 8 / 4 percent.
+ *
+ * THIS IS A PRICE RISE AT EVERY TIER, and it is recorded as such rather than presented as a
+ * restructure. The retired ladder was seller_free 15 / seller_basic 10 / seller_pro 5 /
+ * seller_enterprise 0, so the change is +1 / +2 / +3 / +4 points, and Enterprise moves from
+ * FREE to 4%. Anyone reconciling a historical settlement against these numbers will get a
+ * different answer than the ledger holds; the ledger is right for its date.
+ *
+ * The `seller_*` vocabulary is retired as a CUSTOMER-FACING package name. It survives only in
+ * MARKETPLACE_TIER_ALIASES below, so subscriptions already written with the old ids keep
+ * resolving — a merchant must never fall to the Free rate because their stored tier used
+ * yesterday's spelling.
+ */
+const MARKETPLACE_PLAN_RATES = {
+  free:         { rateFraction: 0.16, floorExempt: false },
+  professional: { rateFraction: 0.12, floorExempt: false },
+  business:     { rateFraction: 0.08, floorExempt: false },
+  /* floorExempt becomes FALSE, and this is a consequence of the repricing rather than a
+     separate decision.
+
+     The exemption existed for exactly one reason, stated where it was written: "advertising
+     0% while charging a minimum is a dispute merchants would win." At 4% there is nothing to
+     dispute — the platform charges a rate like every other package. The invariant the rest of
+     the codebase asserts is "only a genuine 0% rate is floor-exempt"
+     (scripts/test-pos-sale-commission.js), and leaving Enterprise exempt at 4% would make it
+     the single non-zero rate escaping MIN_COMMISSION_KES, for no stated reason.
+
+     FLAGGED, because it is a real effect on small orders: a KES 50 Enterprise sale now pays
+     the KES 10 floor rather than KES 2. If the pricing owner wants Enterprise to keep the
+     exemption, this line is the one to change — but the invariant above should then be
+     restated, not silently contradicted. */
+  enterprise:   { rateFraction: 0.04, floorExempt: false },
+};
+
+/* A seller on no recognised plan is treated as Free — the HIGHEST rate, never the lowest.
+   Every existing subscription document predates this ladder, so this fallback is the normal
+   path, not an edge case: it must be the rate we are willing to charge everybody. */
+const MARKETPLACE_DEFAULT_PLAN = 'free';
+
+/* Legacy spellings -> canonical package.
+   Plan ids and tier names are both in circulation (`seller_pro` the id, `pro` the tier), and
+   `_resolveSellerPlan` returns the TIER — so accepting only one spelling would silently send
+   paying merchants to the Free rate. EVERY id any store may already hold must appear here.
+
+   The `starter` / `business` mapping below is the COMMERCIAL decision of 2026-09-13, which is
+   exactly what the previous version of this comment was waiting for: it declined to map them
+   because nobody had decided, and a guess would have undercharged. Now decided. */
+const MARKETPLACE_TIER_ALIASES = {
+  /* the retired seller_* ladder, in order */
+  seller_free: 'free', seller_basic: 'professional', seller_pro: 'business',
+  seller_enterprise: 'enterprise',
+  /* subscription-catalog spellings */
+  starter: 'professional', growth: 'business',
+  /* bare spellings seen across stores and pricing pages */
+  basic: 'professional', pro: 'business',
+  /* `free`, `professional`, `business` and `enterprise` need no alias — they ARE the keys.
+     An unrecognised tier still falls to MARKETPLACE_DEFAULT_PLAN ('free'), which is now the
+     HIGHEST rate at 16%: the fail-safe direction is unchanged, and an unknown spelling can
+     never buy a discount. */
+};
+
+/**
+ * Resolve the marketplace commission for a seller plan.
+ *
+ * Returns the rate, the floor policy AND the provenance, so the arithmetic engine stays
+ * deliberately dumb: it never infers whether a zero rate should escape the minimum, because
+ * this says so explicitly. A rate with no provenance is exactly what let nine disagreeing
+ * tables survive for so long.
+ *
+ * @param {string} planIdOrTier  'seller_pro' or 'pro'
+ */
+function resolveMarketplaceRate(planIdOrTier) {
+  const raw = String(planIdOrTier == null ? '' : planIdOrTier).trim().toLowerCase();
+  const key = Object.prototype.hasOwnProperty.call(MARKETPLACE_PLAN_RATES, raw)
+    ? raw
+    : (MARKETPLACE_TIER_ALIASES[raw] || null);
+  const matched = key !== null;
+  const plan = matched ? key : MARKETPLACE_DEFAULT_PLAN;
+  const r = MARKETPLACE_PLAN_RATES[plan];
+  return {
+    rateFraction: r.rateFraction,
+    pct: r.rateFraction * 100,
+    floorExempt: r.floorExempt,
+    source: 'commission-config.MARKETPLACE_PLAN_RATES',
+    plan,
+    lane: 'marketplace',
+    matched,
+  };
+}
+
+/* Which RAW category labels are a marketplace SELLER sale, and therefore priced by the
+   ladder above.
+
+   Keyed on the RAW label the caller passed, NOT on the resolved category — because
+   `ALIASES.pos = 'marketplace'` means a POS sale RESOLVES to the marketplace category. If
+   this were keyed on the resolved value, POS would inherit the ladder and a Free merchant's
+   till commission would triple. `pos` is deliberately absent from this set, and that absence
+   is load-bearing. The alias itself must stay: it also decides the SETTLEMENT TERM
+   (index.js `_is48hCommission`), and moving that is a separate decision. */
+const MARKETPLACE_SELLER_CATEGORIES = Object.freeze(new Set([
+  'marketplace', 'product', 'products', 'shopping', 'b2b',
+]));
+
+/** True when `rawCategory` is a marketplace seller sale priced by the plan ladder. */
+function isMarketplaceSellerSale(rawCategory) {
+  return MARKETPLACE_SELLER_CATEGORIES.has(String(rawCategory == null ? '' : rawCategory).trim().toLowerCase());
+}
+
 /** Every category name a caller may legitimately pass. Used by the drift guard and admin UIs. */
 function listCategories() {
   return Object.keys(RATES);
@@ -307,7 +584,19 @@ module.exports = {
   planRolloutEnabled,
   PLAN_MIN_PCT,
   PLAN_MAX_DISCOUNT,
+  resolvePosRate,
+  POS_DEFAULT_PLAN,
+  resolveMarketplaceRate,
+  MARKETPLACE_DEFAULT_PLAN,
+  isMarketplaceSellerSale,
+  MARKETPLACE_SELLER_CATEGORIES,
+  /* READ-ONLY for the client-snapshot generator and admin dashboards. Never mutate:
+     these are the schedules, not a copy of them. */
+  MARKETPLACE_PLAN_RATES: Object.freeze(MARKETPLACE_PLAN_RATES),
+  POS_PLAN_RATES: Object.freeze(POS_PLAN_RATES),
+  POS_FLAT_RATE_FRACTION,
   /* Exposed READ-ONLY for admin dashboards and the client rate endpoint. Never mutate. */
   RATES: Object.freeze(RATES),
   ALIASES: Object.freeze(ALIASES),
+  POS_PLAN_RATES: Object.freeze(POS_PLAN_RATES),
 };

@@ -140,7 +140,7 @@
            'displays it, and mints dynamic (POS-sale) QRs; it does not itself create a Till.' },
 
     { id:'deliveries', name:'Delivery Hub', icon:'🛵', tier:'primary',
-      kind:'page', src:'seller-delivery.html',
+      kind:'page', src:'seller-delivery.html?shell=merchant',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'deliveries',
       note:'Was dispatch.html — the ADMIN dispatch console (data-require-role="admin"). It ' +
@@ -157,7 +157,7 @@
       mobile:true, desktop:true, activeKey:'receipts' },
 
     { id:'returns', name:'Returns', icon:'↩️', tier:'primary',
-      kind:'page', src:'returns.html',
+      kind:'page', src:'returns.html?shell=merchant',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'returns',
       note:'Bounded 12s load with terminal error+Retry — always reaches READY/EMPTY/ERROR (1d81f11).' },
@@ -234,7 +234,7 @@
            'inside the merchant shell, the double-shell defect e0dbdca fixed.' },
 
     { id:'minishop', name:'My MiniShop', icon:'🏪', tier:'hidden',
-      kind:'page', src:'minishop-admin.html', dynamic:true,
+      kind:'page', src:'minishop-admin.html?shell=merchant', dynamic:true,
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'minishop',
       note:'src resolves at click time from the canonical claimed-shop record (window.__miniShopUrl): ' +
@@ -317,12 +317,12 @@
            'derives from the shopFollowers relationship made CF-only in Store Stage 1B.' },
 
     { id:'fulfilment', name:'Fulfilment', icon:'🚚', tier:'more',
-      kind:'page', src:'seller-fulfilment.html',
+      kind:'page', src:'seller-fulfilment.html?shell=merchant',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'fulfilment' },
 
     { id:'riders', name:'Riders', icon:'🏍️', tier:'more',
-      kind:'page', src:'seller-delivery.html#riders',
+      kind:'page', src:'seller-delivery.html?shell=merchant#riders',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'riders',
       note:'Was driver.html — the RIDER-FACING app. A seller tapping "Riders" in their own ' +
@@ -332,7 +332,7 @@
            'account, this = the seller\'s delivery operation, track.html = a buyer\'s own order.' },
 
     { id:'verification', name:'Verification', icon:'✅', tier:'more',
-      kind:'page', src:'verification.html',
+      kind:'page', src:'verification.html?shell=merchant',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID],
       mobile:true, desktop:true, activeKey:'verification' },
 
@@ -362,7 +362,7 @@
            'customer Sales. Reads only: every figure comes from the merchant-scoped ' +
            'procurement engine, and approve/send/receive/pay keep their own authority gates.' },
     { id:'pos-setup', name:'POS Setup', icon:'🖨️', tier:'more',
-      kind:'page', src:'pos-printer-setup.html',
+      kind:'page', src:'pos-printer-setup.html?shell=merchant',
       role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID],
       mobile:true, desktop:true, activeKey:'pos-setup' },
 
@@ -377,6 +377,120 @@
     'dashboard', 'plan', 'sell', 'products', 'inventory', 'pos', 'orders', 'analytics', 'revenue',
     'payments', 'till', 'deliveries', 'returns', 'receipts', 'staff', 'messages', 'disputes', 'settings'
   ];
+
+  /* ── Sidebar grouping for the `more` tier ──────────────────────────────────────
+     The primary tier is one flat ordered list (PRIMARY_ORDER). Everything below it
+     rendered under a single "More" divider: 13 unrelated destinations in declaration
+     order — Marketing next to Riders next to POS Setup. That is a list, not navigation.
+
+     Declared explicitly, like PRIMARY_ORDER, so regrouping is a one-line reviewable
+     change. validate() enforces a TOTAL PARTITION in both directions: every tier:'more'
+     route appears in exactly one group, and no group names a route that is not
+     tier:'more'. A destination therefore cannot be silently dropped from the sidebar by
+     a regroup, which is the same guarantee PRIMARY_ORDER already gives the tier above.
+
+     This is grouping only. No destination is added, removed, renamed or re-targeted —
+     the sidebar renders exactly the same 13 routes it did before, under headings. */
+  var MORE_GROUPS = [
+    { key:'main',       label:'Main',
+      ids:['reports','availability','shop','fulfilment','riders','verification','supply'] },
+    { key:'growth',     label:'Growth',
+      ids:['marketing','flash-sale','stories','customers'] },
+    /* KRA Tax groups with Operations rather than Main: it is back-office compliance
+       configured once alongside Devices and POS Setup, not a surface a merchant reads
+       daily the way they read Reports. */
+    { key:'operations', label:'Operations',
+      ids:['kra-tax','devices','pos-setup'] }
+  ];
+
+  /* ── ROUTE ACTION CHIPS ─────────────────────────────────────────────────────────
+     THE SHELL DECLARES. THE SURFACE OWNER RENDERS.
+
+     Every contextual chip bar in /merchant is declared here, and nowhere else, so that
+     "what controls does this destination offer" is a reviewable property of the registry
+     rather than a fact you can only discover by reading four renderers.
+
+     What this is NOT: a shell-owned chip bar. Orders, Analytics, Revenue, Reports,
+     Payments and Availability already render their own filter bars, and those bars own
+     real state (_ordState, _anRange, _payTab). Rendering a second row from the shell
+     would put two filter bars on Orders — the same "two of everything" defect that
+     test-merchant-shell-boundary.js exists to prevent, just one layer down. So the
+     registry ADOPTS the existing bars: it names their handler, and the gate proves the
+     handler is really there. Nothing is re-plumbed and no proven surface is touched.
+
+     `owner` is the surface that renders the bar, and therefore the file the gate greps:
+       native → merchant.html's own renderer      seller → seller.html / seller.js
+       pos    → pos.html
+     `status`:
+       live    → rendered today. MUST name a handler, and the gate asserts that handler
+                 is defined in the owner's file. A live bar whose handler has been renamed
+                 or deleted fails the gate rather than becoming a dead control.
+       planned → declared, deliberately NOT rendered, and MUST NOT name a handler. This is
+                 how a capability we have agreed to build stays visible without shipping a
+                 button that does nothing. A planned bar renders no chips at all — the
+                 registry never causes a control to appear before its capability exists.
+
+     The whole point of the `status` split is that a chip cannot be decorative. Either it
+     is bound to a handler the gate can find, or it is not on screen. ── */
+  var ACTION_OWNERS = ['native','seller','pos'];
+  var ACTION_STATUS = ['live','planned'];
+
+  var ACTIONS = {
+    /* Adopted — these bars exist and are rendered by merchant.html today. */
+    orders: { owner:'native', bars:[
+      { key:'tab', status:'live', handler:'__ordTab', chips:[
+        { id:'all',       label:'All'       }, { id:'pickup',    label:'Pickup'    },
+        { id:'pending',   label:'Pending'   }, { id:'completed', label:'Completed' },
+        { id:'refunded',  label:'Refunded'  }, { id:'cancelled', label:'Cancelled' } ] },
+      { key:'range', status:'live', handler:'__ordRange', chips:[
+        { id:'today', label:'Today' }, { id:'week', label:'This Week' },
+        { id:'month', label:'This Month' }, { id:'all', label:'All Time' } ] }
+    ] },
+
+    /* Analytics, Revenue and Reports are three views of ONE renderer (renderAnalytics),
+       so they share one handler that takes the view as its first argument. Declared per
+       route anyway — a merchant reading Revenue is on the Revenue destination, and the
+       registry should say what Revenue offers without the reader having to know that
+       three ids collapse into one function. */
+    analytics: { owner:'native', bars:[ { key:'range', status:'live', handler:'__anRange', view:'analytics', chips:[
+      { id:'today', label:'Today' }, { id:'week', label:'This Week' },
+      { id:'month', label:'This Month' }, { id:'all', label:'All Time' } ] } ] },
+    revenue:   { owner:'native', bars:[ { key:'range', status:'live', handler:'__anRange', view:'revenue', chips:[
+      { id:'today', label:'Today' }, { id:'week', label:'This Week' },
+      { id:'month', label:'This Month' }, { id:'all', label:'All Time' } ] } ] },
+    reports:   { owner:'native', bars:[ { key:'range', status:'live', handler:'__anRange', view:'reports', chips:[
+      { id:'today', label:'Today' }, { id:'week', label:'This Week' },
+      { id:'month', label:'This Month' }, { id:'all', label:'All Time' } ] } ] },
+
+    payments: { owner:'native', bars:[ { key:'tab', status:'live', handler:'__payTab', chips:[
+      { id:'payouts', label:'Payouts' }, { id:'methods', label:'Methods' } ] } ] },
+
+    availability: { owner:'native', bars:[ { key:'shop', status:'live', handler:'__avToggleShop', chips:[
+      { id:'shop', label:'Shop open' } ] } ] },
+
+    /* ── Declared, not yet rendered ────────────────────────────────────────────────
+       Products and POS are owned by seller.html and pos.html respectively. Their chips
+       are agreed but unbuilt; they stay `planned` so the completion matrix can track
+       them and the gate can report them, without a single dead button reaching a shop.
+
+       Dashboard's Export is the honest case that proves the rule: there is no export
+       capability anywhere in merchant.html today, so Export is declared and NOT drawn.
+       Rendering it as a live chip would be exactly the "hard-coded fake button" this
+       registry exists to make impossible. */
+    products: { owner:'seller', bars:[
+      { key:'actions', status:'planned', chips:[
+        { id:'add',   label:'Add Product' }, { id:'stock', label:'Stock' },
+        { id:'flash', label:'Flash Sale'  }, { id:'scan',  label:'Scan'  } ] } ] },
+
+    pos: { owner:'pos', bars:[
+      { key:'actions', status:'planned', chips:[
+        { id:'scan',     label:'Scan'     }, { id:'cart',     label:'Cart'     },
+        { id:'customer', label:'Customer' }, { id:'discount', label:'Discount' },
+        { id:'pay',      label:'Pay'      } ] } ] },
+
+    dashboard: { owner:'native', bars:[
+      { key:'export', status:'planned', chips:[ { id:'export', label:'Export' } ] } ] }
+  };
 
   /* Legacy route ids -> canonical ids. Phase 2 renamed several destinations; a merchant
      with a bookmark, an open tab, or a deep link on the old id must land on the right
@@ -521,6 +635,79 @@
         errs.push('route "' + r.id + '" is tier:primary but missing from PRIMARY_ORDER — it would have no sidebar position');
     });
 
+    /* MORE_GROUPS must be a TOTAL PARTITION of the `more` tier — same both-directions
+       guarantee PRIMARY_ORDER gets above, so a regroup cannot orphan a destination. */
+    var grouped = {};
+    MORE_GROUPS.forEach(function (g) {
+      if (!g.key)   errs.push('a more-group has no key');
+      if (!g.label) errs.push('more-group "' + g.key + '" has no label');
+      (g.ids || []).forEach(function (id) {
+        if (!byId[id]) errs.push('more-group "' + g.key + '" lists unknown route "' + id + '"');
+        else if (byId[id].tier !== 'more')
+          errs.push('more-group "' + g.key + '" lists "' + id + '" but its tier is "' + byId[id].tier + '"');
+        if (grouped[id])
+          errs.push('route "' + id + '" is in more-groups "' + grouped[id] + '" AND "' + g.key + '"');
+        grouped[id] = g.key;
+      });
+    });
+    ROUTES.forEach(function (r) {
+      if (r.tier === 'more' && !grouped[r.id])
+        errs.push('route "' + r.id + '" is tier:more but in no MORE_GROUPS group — it would have no sidebar position');
+    });
+
+    /* ── ACTION CHIPS ────────────────────────────────────────────────────────────
+       The invariant: a chip is bound to a real handler, or it is not rendered. Both
+       halves are enforced here. Whether a `live` handler actually exists in the owner's
+       file is a cross-file fact this dependency-free module cannot see — that half is
+       proven by scripts/test-merchant-actions.js, which greps the owning surface. */
+    Object.keys(ACTIONS).forEach(function (id) {
+      var a = ACTIONS[id], at = 'actions "' + id + '"';
+      if (!byId[id])                            errs.push(at + ': not a registered route');
+      else if (byId[id].kind === 'exit')        errs.push(at + ': an exit route mounts nothing and cannot own chips');
+      if (ACTION_OWNERS.indexOf(a.owner) < 0)   errs.push(at + ': invalid owner "' + a.owner + '"');
+      /* The declared owner must match how the route is actually mounted, or the gate would
+         grep the wrong file and "prove" a handler that the merchant never reaches. */
+      if (byId[id] && a.owner === 'native' && byId[id].kind !== 'native')
+        errs.push(at + ': owner "native" but route kind is "' + byId[id].kind + '"');
+      if (byId[id] && a.owner === 'seller' && byId[id].kind !== 'seller')
+        errs.push(at + ': owner "seller" but route kind is "' + byId[id].kind + '"');
+      if (byId[id] && a.owner === 'pos' && byId[id].kind !== 'pos')
+        errs.push(at + ': owner "pos" but route kind is "' + byId[id].kind + '"');
+
+      if (!Array.isArray(a.bars) || !a.bars.length) { errs.push(at + ': declares no bars'); return; }
+
+      var barKeys = {}, handlers = {};
+      a.bars.forEach(function (b) {
+        var bat = at + ' bar "' + b.key + '"';
+        if (!b.key)                             errs.push(at + ': a bar has no key');
+        if (barKeys[b.key])                     errs.push(bat + ': duplicate bar key');
+        barKeys[b.key] = true;
+        if (ACTION_STATUS.indexOf(b.status) < 0) errs.push(bat + ': invalid status "' + b.status + '"');
+
+        /* The two halves of the no-fake-button rule. */
+        if (b.status === 'live' && !b.handler)  errs.push(bat + ': live bar must name a handler — an unbound chip is a decorative control');
+        if (b.status === 'planned' && b.handler) errs.push(bat + ': planned bar must not name a handler — it is not rendered, so a handler here is a lie about what ships');
+
+        /* Two bars on one route sharing a handler means one of them silently drives the
+           other's state — the Orders tab bar and range bar are separate for a reason. */
+        if (b.handler) {
+          if (handlers[b.handler])              errs.push(bat + ': handler "' + b.handler + '" is already used by bar "' + handlers[b.handler] + '"');
+          handlers[b.handler] = b.key;
+          if (!/^__[A-Za-z][A-Za-z0-9]*$/.test(b.handler))
+            errs.push(bat + ': handler "' + b.handler + '" must be a __-prefixed global, matching the shell\'s existing chip handlers');
+        }
+
+        if (!Array.isArray(b.chips) || !b.chips.length) { errs.push(bat + ': declares no chips'); return; }
+        var chipIds = {};
+        b.chips.forEach(function (c) {
+          if (!c.id)                            errs.push(bat + ': a chip has no id');
+          if (!c.label)                         errs.push(bat + ' chip "' + c.id + '": has no label');
+          if (chipIds[c.id])                    errs.push(bat + ' chip "' + c.id + '": duplicate id');
+          chipIds[c.id] = true;
+        });
+      });
+    });
+
     return errs;
   }
 
@@ -546,6 +733,47 @@
       return PRIMARY_ORDER.map(function (id) { return byId[id]; }).filter(Boolean);
     },
     more:    function () { return ROUTES.filter(function (r) { return r.tier === 'more'; }); },
+    MORE_GROUPS: MORE_GROUPS,
+    /* The grouped projection of the `more` tier. Returns [{key,label,routes[]}] in
+       sidebar order. Because validate() enforces a total partition, the concatenation
+       of every group's routes is exactly more() — the sidebar cannot show fewer. */
+    moreGroups: function () {
+      return MORE_GROUPS.map(function (g) {
+        return {
+          key: g.key, label: g.label,
+          routes: g.ids.map(function (id) { return byId[id]; }).filter(Boolean)
+        };
+      });
+    },
+    ACTIONS: ACTIONS,
+    ACTION_OWNERS: ACTION_OWNERS,
+    /* Chips a destination offers. `status` filters to what is actually on screen:
+       actions(id,'live') is what a merchant can touch right now, actions(id) is
+       everything declared including the planned gaps. Returns [] for a route with no
+       chips, so a caller never has to null-check before rendering. */
+    actions: function (id, status) {
+      var a = ACTIONS[this.resolve(id) || id];
+      if (!a) return [];
+      return a.bars
+        .filter(function (b) { return !status || b.status === status; })
+        .map(function (b) {
+          return { key:b.key, owner:a.owner, status:b.status, handler:b.handler || null,
+                   view:b.view || null, chips:b.chips.slice() };
+        });
+    },
+    /* Every declared-but-unrendered bar, for the completion matrix and the gate report.
+       This is the list that must shrink to empty before Merchant OS is "chip complete". */
+    plannedActions: function () {
+      var out = [];
+      Object.keys(ACTIONS).forEach(function (id) {
+        ACTIONS[id].bars.forEach(function (b) {
+          if (b.status === 'planned')
+            out.push({ route:id, bar:b.key, owner:ACTIONS[id].owner,
+                       chips:b.chips.map(function (c) { return c.id; }) });
+        });
+      });
+      return out;
+    },
     /* Context sufficiency — a route is refused BEFORE mount when its context is
        missing, so the merchant sees an honest reason instead of a blank panel. */
     missingContext: function (id, ctx) {

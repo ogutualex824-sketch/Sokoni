@@ -726,6 +726,8 @@
 <script type="module" src="firebase.js"></script>
 <script src="sokoni-appcheck.js"></script>
 <script src="sokoni-availability.js"></script>
+<!-- Shape adapter — must load before this page's script block reads _SAS. -->
+<script src="sokoni-availability-schedule.js"></script>
 
 <script>
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -743,6 +745,11 @@ let _uid      = null;
 let _config   = {};
 let _holidays = [];   // { date, label, closed, periods }
 let _avail    = null; // SokoniAvailability instance
+
+/* Shape adapter: turns the timetable this page manages into the projection
+   effectiveForShop()/publicShopState() actually reads. It decides nothing about
+   open/closed — that resolver stays server-side and untouched. */
+const _SAS = window.SokoniAvailabilitySchedule;
 
 const STATUS_COLORS = {
   available:"#10b981", busy:"#f59e0b", away:"#6b7280", offline:"#9ca3af",
@@ -1290,6 +1297,8 @@ async function _loadHolidays() {
     });
   } catch (_) {}
   _renderCustomHolidays();
+  /* Repair the buyer projection for sellers who only ever had the legacy shape. */
+  _repairCanonicalProjection();
 }
 
 function _renderCustomHolidays() {
@@ -1348,6 +1357,48 @@ function toggleHolPeriods() {
   document.getElementById("holPeriods").style.display = closed ? "none" : "block";
 }
 
+/* ── Buyer-projection repair ──────────────────────────────────────────────────
+   A seller who last saved before the projection existed has `schedule` and override
+   documents but no `hours`/`overrides` map — so buyers see reason:'no_schedule' and
+   the shop reads as permanently open. Rebuild the projection FROM the legacy data,
+   which stays the source of truth here.
+
+   Deliberately narrow: it runs only for the signed-in seller on their own document,
+   only writes the two projection fields, and never touches `schedule` or the override
+   subcollection — so legacy data cannot be lost by a repair. Silent no-op when the
+   projection already matches, so opening the page does not churn writes. This is NOT
+   a mass backfill; other sellers are repaired when they next open their own page. */
+async function _repairCanonicalProjection() {
+  if (!_SAS || !_uid) return;
+  try {
+    const proj = _SAS.project(_config, _holidays);
+    if (!proj.needsRepair) return;
+    await db.collection("providerAvailability").doc(_uid).set({
+      hours:     proj.hours,
+      overrides: proj.overrides,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    _config.hours = proj.hours;
+    _config.overrides = proj.overrides;
+    console.info("[availability] buyer projection repaired from legacy schedule");
+  } catch (e) {
+    /* Non-fatal: the page still works and Save will write the projection anyway.
+       Never blame the seller's settings for a projection write failure. */
+    console.warn("[availability] projection repair failed", e && e.code, e && e.message);
+  }
+}
+
+/* Keep the override MAP in step with the override SUBCOLLECTION. The subcollection
+   feeds the slot engine; the map is what effectiveForShop() reads. Writing one
+   without the other is precisely the divergence this batch exists to remove. */
+async function _syncOverrideMap() {
+  if (!_SAS || !_uid) return;
+  await db.collection("providerAvailability").doc(_uid).set({
+    overrides: _SAS.toCanonicalOverrides(_holidays),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+}
+
 async function saveCustomHoliday() {
   const date  = document.getElementById("newHolDate").value;
   const label = document.getElementById("newHolLabel").value.trim();
@@ -1367,6 +1418,7 @@ async function saveCustomHoliday() {
       .collection("overrides").doc(date).set(overrideData);
     _holidays.push(overrideData);
     _holidays.sort((a,b) => a.date.localeCompare(b.date));
+    await _syncOverrideMap();     /* the half buyers actually read */
     _renderCustomHolidays();
     document.getElementById("addHolidayForm").style.display = "none";
     document.getElementById("newHolDate").value = "";
@@ -1383,6 +1435,7 @@ async function deleteHoliday(date) {
     await db.collection("providerAvailability").doc(_uid)
       .collection("overrides").doc(date).delete();
     _holidays = _holidays.filter(h => h.date !== date);
+    await _syncOverrideMap();     /* removing it from one store only would leave it live for buyers */
     _renderCustomHolidays();
     showToast("Date removed.");
   } catch (e) {
@@ -1440,11 +1493,21 @@ async function saveAll() {
     const apptEnabled = document.getElementById("apptEnabled").checked;
     const vacActive   = document.getElementById("vacActive").checked;
 
+    /* Read the timetable ONCE. Both stored representations are derived from this single
+       value, which is what makes them impossible to edit independently. */
+    const _sched = _readSchedule();
+
     const config = {
       businessName:    document.getElementById("businessName").value.trim(),
       hubType:         document.getElementById("hubType").value,
       modes,
-      schedule:        _readSchedule(),
+      schedule:        _sched,
+      /* CANONICAL BUYER PROJECTION — generated from the SAME _sched model above, never
+         edited separately. effectiveForShop() reads `hours` keyed mon…sun; the legacy
+         `schedule` (monday…sunday) is what the appointment/slot engine in
+         functions/availability.js consumes. Both are written in one set() so they
+         cannot drift. Without this the seller's timetable reached no buyer at all. */
+      hours:           _SAS.toCanonicalHours(_sched),
       appt: {
         enabled:         apptEnabled,
         durationMins:    Number(document.getElementById("apptDuration").value) || 30,

@@ -1246,9 +1246,15 @@ window.followBiz = function(id) {
     import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
       const u = (() => { try{ return JSON.parse(localStorage.getItem('sokoniUser')); }catch(e){ return null; }})();
       if(!u?.uid) return;
-      const followId = u.uid+'--biz--'+id;
+      /* CANONICAL id + fields: follows/{uid}--{type}--{entityId} carrying
+         {uid,type,entityId,entityName}. This wrote type 'biz' in the doc ID but
+         'business' in the body, and used followerId/followingId — so the SAME
+         business followed from business.html produced a SECOND, different
+         document, and profile.html (which filters on `entityId`) never saw
+         either. One entity, one relationship, one field set. */
+      const followId = u.uid+'--business--'+String(id).replace(/[^a-zA-Z0-9]/g,'_');
       if(_bizFollows[id]) {
-        m.setDoc(m.doc(window.firebaseDB,'follows',followId),{ followerId:u.uid, followingId:id, type:'business', createdAt:m.serverTimestamp() }).catch(()=>{});
+        m.setDoc(m.doc(window.firebaseDB,'follows',followId),{ uid:u.uid, type:'business', entityId:String(id), entityName:(biz&&biz.name)||'', createdAt:m.serverTimestamp() },{merge:true}).catch(()=>{});
       } else {
         m.deleteDoc(m.doc(window.firebaseDB,'follows',followId)).catch(()=>{});
       }
@@ -1273,9 +1279,13 @@ window.toggleFollowUser = function(uid, name) {
     import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
       const me = (() => { try{ return JSON.parse(localStorage.getItem('sokoniUser')); }catch(e){ return null; }})();
       if(!me?.uid || me.uid===uid) return;
-      const fid = me.uid+'--'+uid;
+      /* Canonical THREE-segment id — this was {uid}--{otherUid}, which happens to
+         satisfy the rule regex but carries no `type`, so a user and a store with
+         colliding ids were indistinguishable and profile.html could not group
+         them. Everything followable is {uid}--{type}--{entityId}. */
+      const fid = me.uid+'--user--'+String(uid).replace(/[^a-zA-Z0-9]/g,'_');
       if(_followedUsers[uid]) {
-        m.setDoc(m.doc(window.firebaseDB,'follows',fid),{ followerId:me.uid, followingId:uid, createdAt:m.serverTimestamp() }).catch(()=>{});
+        m.setDoc(m.doc(window.firebaseDB,'follows',fid),{ uid:me.uid, type:'user', entityId:String(uid), entityName:name||'', createdAt:m.serverTimestamp() },{merge:true}).catch(()=>{});
       } else {
         m.deleteDoc(m.doc(window.firebaseDB,'follows',fid)).catch(()=>{});
       }

@@ -93,6 +93,50 @@ function _computeBalance(events, openingFloatCents = 0) {
            cashOut, safeDrops, cashPickups, adjustments, expected };
 }
 
+
+/* ── THE RECONCILIATION IS DERIVED, NEVER ACCEPTED ──────────────────────────
+   `expectedCents` and `varianceCents` arrived in the request body and were stored as
+   sent. They are not decoration: cmGetShiftReport computes the balance itself with
+   _computeBalance and then reports the variance from the stored value, deriving
+   balanced/over/short from it; cmGetEndOfDay, cmGetCashierPerformance and
+   cmGetBranchSummary aggregate the same figure. So a cashier could close a till five
+   thousand short, send varianceCents: 0, and every manager-facing surface agreed.
+
+   Everything needed to derive it is already on the server: _computeBalance over the
+   shift's own events gives the expectation, and the close event's `amountCents` is the
+   counted cash.
+
+   NOT COMPUTABLE IS NULL, NEVER ZERO. A close with no opening event, or with no counted
+   amount, records null — because "we cannot say" and "it balanced" are different facts,
+   and a fabricated zero reads as the second.
+
+   `varianceExplanation` is deliberately untouched. It is prose, not arithmetic; a cashier
+   accounting for a shortfall is exactly what it is for. */
+async function _deriveClose (doc) {
+  if (doc.type !== 'register_close') return { expectedCents: null, varianceCents: null };
+  if (!doc.merchantId || !doc.shiftId) return { expectedCents: null, varianceCents: null };
+
+  let evts = [];
+  try {
+    const snap = await db().collection('posCashEvents')
+      .where('merchantId', '==', doc.merchantId)
+      .where('shiftId', '==', doc.shiftId)
+      .get();
+    evts = snap.docs.map(d => d.data());
+  } catch (_) {
+    return { expectedCents: null, varianceCents: null };
+  }
+
+  const open = evts.find(e => e.type === 'register_open');
+  if (!open) return { expectedCents: null, varianceCents: null };
+
+  const bal = _computeBalance(evts, open.amountCents || 0);
+  const counted = Number(doc.amountCents);
+  if (!Number.isFinite(counted)) return { expectedCents: bal.expected, varianceCents: null };
+
+  return { expectedCents: bal.expected, varianceCents: counted - bal.expected };
+}
+
 /* ════════════════════════════════════════════════════════════════
    cmRecordCashEvent — universal event logger (all event types)
    Called by the client SDK queue for offline sync + real-time.
@@ -139,13 +183,28 @@ async function cmRecordCashEvent(req) {
     openingDenoms:       openingDenoms && typeof openingDenoms === 'object' ? openingDenoms : null,
     countedDenoms:       countedDenoms && typeof countedDenoms === 'object' ? countedDenoms : null,
     varianceExplanation: _san(varianceExplanation || '', 512),
-    expectedCents:       _cents(expectedCents),
-    varianceCents:       Math.round(Number(varianceCents) || 0),
+    /* Filled from _deriveClose below. The payload values are read only so a
+       mismatch can be logged; they never reach the document. */
+    expectedCents:       null,
+    varianceCents:       null,
     devices:             devices && typeof devices === 'object' ? devices : null,
     uid:                 auth.uid,
     ts:                  now(),
     clientTs:            Number(clientTs) || Date.now(),
   };
+
+  const derived = await _deriveClose(doc);
+  doc.expectedCents = derived.expectedCents;
+  doc.varianceCents = derived.varianceCents;
+  if (doc.type === 'register_close' && varianceCents != null &&
+      derived.varianceCents != null &&
+      Math.round(Number(varianceCents)) !== derived.varianceCents) {
+    /* Security signal, not an error: the till reported a different reconciliation from
+       the one its own events support. The derived figure is the record. */
+    logger.warn('[CashMgr] client variance ignored', {
+      merchantId: doc.merchantId, shiftId: doc.shiftId,
+      claimed: Math.round(Number(varianceCents)), derived: derived.varianceCents });
+  }
 
   const ref = await db().collection('posCashEvents').add(doc);
 
@@ -319,9 +378,13 @@ async function cmGetShiftReport(req) {
     balance:       bal,
     variance:      closeEv ? {
       varianceCents: closeEv.varianceCents,
-      varianceKES:   (closeEv.varianceCents || 0) / 100,
-      status:        closeEv.varianceCents === 0 ? 'balanced'
-                   : closeEv.varianceCents  > 0  ? 'over' : 'short',
+      varianceKES:   closeEv.varianceCents == null ? null : closeEv.varianceCents / 100,
+      /* NULL FIRST. A close the server could not reconcile has no variance, and the old
+         expression fell through to 'short' — reporting an unknown as a shortfall, which is
+         the same defect class as showing an unknown figure as zero. */
+      status:        closeEv.varianceCents == null ? 'not-reconcilable'
+                   : closeEv.varianceCents === 0   ? 'balanced'
+                   : closeEv.varianceCents  >  0   ? 'over' : 'short',
       explanation:   closeEv.varianceExplanation || '',
     } : null,
     events,
@@ -660,6 +723,51 @@ async function cmGetBranchSummary(req) {
   };
 }
 
+
+/* ── THE CLOSE APPROVAL CARRIES SERVER FACTS ────────────────────────────────
+   cmRequestCloseApproval took `countedCents` AND `varianceCents` from the till, stored
+   both, and the manager queue rendered the variance straight back out — so the number a
+   manager signed off on was the number the cashier chose. A till five thousand short
+   could request approval claiming zero and be approved on that basis.
+
+   The request carries no shiftId, so the shift is resolved here: the most recent
+   register_open on that register whose shift has no register_close. Expected cash comes
+   from _computeBalance over that shift's own events; variance is counted minus expected.
+
+   The resolved shiftId is stored too, so the approval is bound to a specific close rather
+   than to a register in general.
+
+   NOT RECONCILABLE IS NULL. No open shift, or no counted amount, records null — never a
+   zero that would read as "balanced". */
+async function _deriveOpenShiftClose (merchantId, registerId, countedCents) {
+  const none = { shiftId: null, expectedCents: null, varianceCents: null };
+  if (!merchantId || !registerId) return none;
+
+  let evts = [];
+  try {
+    const snap = await db().collection('posCashEvents')
+      .where('merchantId', '==', merchantId)
+      .where('registerId', '==', registerId)
+      .get();
+    evts = snap.docs.map(d => d.data());
+  } catch (_) { return none; }
+
+  const closedShifts = new Set(evts.filter(e => e.type === 'register_close').map(e => e.shiftId));
+  const open = evts
+    .filter(e => e.type === 'register_open' && !closedShifts.has(e.shiftId))
+    .sort((a, b) => (b.clientTs || 0) - (a.clientTs || 0))[0];
+  if (!open) return none;
+
+  const shiftEvts = evts.filter(e => e.shiftId === open.shiftId);
+  const bal = _computeBalance(shiftEvts, open.amountCents || 0);
+  const counted = Number(countedCents);
+  if (!Number.isFinite(counted)) {
+    return { shiftId: open.shiftId, expectedCents: bal.expected, varianceCents: null };
+  }
+  return { shiftId: open.shiftId, expectedCents: bal.expected,
+           varianceCents: counted - bal.expected };
+}
+
 /* ════════════════════════════════════════════════════════════════
    cmRequestCloseApproval — cashier submits close for manager sign-off
 ════════════════════════════════════════════════════════════════ */
@@ -680,6 +788,16 @@ async function cmRequestCloseApproval(req) {
     return { ok: true, id: doc.id, reused: true };
   }
 
+  const derived = await _deriveOpenShiftClose(_san(merchantId, 64), _san(registerId, 64), countedCents);
+  if (varianceCents != null && derived.varianceCents != null &&
+      Math.round(Number(varianceCents)) !== derived.varianceCents) {
+    /* Security signal: the till asked a manager to approve a different reconciliation
+       from the one its own events support. */
+    logger.warn('[CashMgr] close-approval variance ignored', {
+      merchantId, registerId, claimed: Math.round(Number(varianceCents)),
+      derived: derived.varianceCents });
+  }
+
   const id  = `clappr_${_san(merchantId,32)}_${_san(registerId,32)}_${Date.now()}`;
   await db().collection('posCloseApprovals').doc(id).set({
     id,
@@ -688,7 +806,10 @@ async function cmRequestCloseApproval(req) {
     requestedBy:         req.auth.uid,
     requestedByName:     _san(req.auth.token?.name || 'Unknown', 128),
     countedCents:        _cents(countedCents),
-    varianceCents:       Math.round(Number(varianceCents) || 0),
+    /* Server-derived. The payload variance is read only so a mismatch can be logged. */
+    shiftId:             derived.shiftId,
+    expectedCents:       derived.expectedCents,
+    varianceCents:       derived.varianceCents,
     varianceExplanation: _san(varianceExplanation, 512),
     status:      'pending',
     requestedAt: Date.now(),

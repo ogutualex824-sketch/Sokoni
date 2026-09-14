@@ -4771,6 +4771,39 @@ exports.updateSellerSubscription = onCall({ timeoutSeconds: 15, cors: true }, as
     if (payData.status !== "completed" || payData.uid !== uid) {
       throw new HttpsError("permission-denied", "Payment is not completed or does not belong to this account.");
     }
+
+    /* ── AMOUNT (added 2026-09-13) ────────────────────────────────────────────────────────
+     * Status and ownership were checked; SUFFICIENCY was not. A completed KES 1 payment
+     * therefore activated any tier — the payer was right, the payment was real, and it bought
+     * the wrong thing. Underpayment must never grant, which is the rule the entitlement
+     * engine states for every other domain.
+     *
+     * Cents where both sides expose them, whole shillings otherwise, and a MISSING expectation
+     * is not treated as satisfied — an unreadable amount refuses rather than passes. */
+    const expectCents = Math.round(Number(priceKES) * 100) * Math.max(1, Number(months) || 1);
+    const paidCents = Number.isFinite(Number(payData.amountCents))
+      ? Number(payData.amountCents)
+      : (Number.isFinite(Number(payData.amount)) ? Math.round(Number(payData.amount) * 100) : NaN);
+    if (!Number.isFinite(paidCents) || paidCents < expectCents) {
+      logger.error("[subs] refused underpaid activation", {
+        targetUid, plan, expectCents, paidCents: Number.isFinite(paidCents) ? paidCents : null, paymentRef,
+      });
+      throw new HttpsError("failed-precondition",
+        "The payment does not cover this plan. Please start the purchase again.");
+    }
+
+    /* ── IDEMPOTENCY ──────────────────────────────────────────────────────────────────────
+     * One payment reference buys ONE subscription period. Without this, replaying the same
+     * completed reference extends the subscription indefinitely for a single payment. */
+    const claimRef = db.collection("subscriptionPaymentRefs").doc(String(paymentRef));
+    try {
+      await claimRef.create({
+        paymentRef: String(paymentRef), uid: targetUid, plan,
+        amountCents: paidCents, claimedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (_) {
+      throw new HttpsError("already-exists", "This payment has already been applied to a subscription.");
+    }
   }
   const startDate = admin.firestore.Timestamp.now();
   const endDate   = admin.firestore.Timestamp.fromMillis(Date.now() + Number(months) * 30 * 86400000);
@@ -4788,6 +4821,35 @@ exports.updateSellerSubscription = onCall({ timeoutSeconds: 15, cors: true }, as
     autoRenew:  true,
     paymentRef: paymentRef || null,
     updatedAt:  admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  /* ── CANONICAL MERCHANT SUBSCRIPTION (2026-09-13) ────────────────────────────────────────
+   * `sellerSubscriptions` is read by three sites in this file and by NOTHING in
+   * subscription-core — so a subscription written only there resolved as UNSUBSCRIBED for
+   * commission, listing limits and every capability. `merchantSubscriptions/{uid}` is the
+   * store the resolver reads (_fromMerchant), and `package` carries the canonical vocabulary
+   * (free | professional | business | enterprise) rather than the retired seller_* ids.
+   *
+   * BOTH are written during the migration window. The legacy write stays because three
+   * readers in this file still depend on it; removing them is a separate change, and a rename
+   * that silently blanks an admin report is not an improvement. Production holds 0
+   * sellerSubscriptions rows, so nothing is being migrated — only the path ahead is fixed. */
+  const CANON = { free: 'free', pro: 'business', business: 'business', enterprise: 'enterprise' };
+  await db.collection("merchantSubscriptions").doc(targetUid).set({
+    uid:         targetUid,
+    package:     CANON[plan] || 'free',
+    legacyPlan:  plan,
+    status:      "active",
+    price:       priceKES * 100,
+    currency:    "KES",
+    billingCycle: Number(months) > 1 ? `${months}_month` : "monthly",
+    limits:      { listings: maxListings },
+    activatedAt: startDate,
+    currentPeriodEnd: endDate,
+    expiresAt:   endDate,
+    paymentRef:  paymentRef || null,
+    source:      "updateSellerSubscription",
+    updatedAt:   admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
 
   if (priceKES > 0) {
@@ -6180,12 +6242,19 @@ exports.initiateSTKPush = onCall(
            To migrate the next caller: point it at createPaymentIntent, deploy
            the client FIRST, then add its category here. Adding the category
            before the client ships breaks that flow's payments. */
-        const _enforcedCategories = ["subscription"];
-        const _category = String((meta && meta.category) || "").toLowerCase();
+        /* The list and its normalisation live in ./stk-intent-enforcement so the decision can
+           be tested exhaustively as a pure function. Two changes came with the extraction:
+           `healthcare_subscription` is enforced (no legacy client exists to break, and its
+           purchase path mints a server-priced intent by construction), and the comparison now
+           TRIMS — the previous `.toLowerCase()` without `.trim()` let
+           " healthcare_subscription " fall through to the legacy client-amount branch. */
+        const _stkEnf = require("./stk-intent-enforcement");
+        const _enf = _stkEnf.isEnforcedPaymentCategory(meta);
+        const _category = _stkEnf.normalise(meta && meta.category);
 
-        if (_enforcedCategories.includes(_category)) {
+        if (_enf.enforced) {
           logger.error("[STK] STAGE_1B_REFUSED — enforced caller sent no payment intent", {
-            ref, amount: amountKES, category: _category, uid: request.auth.uid,
+            ref, amount: amountKES, category: _enf.matched, uid: request.auth.uid,
           });
           throw new HttpsError("failed-precondition",
             "This payment could not be verified. Please start the purchase again.");
@@ -12635,3 +12704,38 @@ exports.applicationLifecycle  = _appLife.applicationLifecycle;   // trigger: app
 exports.applicationDecide     = _appLife.applicationDecide;      // onCall (admin)
 exports.applicationReconcile  = _appLife.applicationReconcile;   // onCall (admin) — drift repair
 exports.applicationList       = _appLife.applicationList;        // onCall (admin) — one canonical read
+
+/* ── POS / TILL COMMISSION RAIL ───────────────────────────────────────────────
+   The 5% per-sale POS/Till commission, its 07:00 Africa/Nairobi collection gate,
+   and the 06:00 reminder that goes out an hour before it.
+
+   Three certified pure modules (money-authority, pos-sale-commission,
+   commission-settlement-authority) had existed for weeks with NOTHING CALLING
+   THEM — the same pattern that produced six unreachable commission authorities
+   on this platform. `pos-commission-rail` is the persistence that closes the
+   loop; these are the only deployable entry points to it.
+
+   Re-exported BY NAME, deliberately: a scheduled function that is not exported
+   under its exact name is simply never deployed, and its absence looks identical
+   to a job that ran and found nothing to do. */
+const _posComm = require('./pos-commission-surface');
+exports.posGateStatus         = _posComm.posGateStatus;         // onCall — what do I owe, may I trade?
+exports.posSettleCommission   = _posComm.posSettleCommission;   // onCall — pay it, at any time
+exports.posCommissionReminder = _posComm.posCommissionReminder; // schedule 06:00 EAT — one hour before the gate
+
+/* ── HEALTHCARE SUBSCRIPTION ACTIVATION ───────────────────────────────────────
+   A verified Healthcare subscription payment becomes an active subscription.
+
+   Without this, a customer could pay for Clinic/Hospital/Enterprise and receive
+   nothing: the intent was minted, IntaSend collected, payments/{ref} went
+   COMPLETE, and the only caller of entitlement-engine.activate() was the
+   reconciliation sweep — which heals ONLY when
+   _systemConfig/reconciliation.subscriptionAutoHeal is true, and that defaults
+   false and fails closed.
+
+   Re-exported BY NAME, deliberately: a trigger that is not exported under its
+   exact name is never deployed, and its absence is indistinguishable from a
+   trigger that fired and found nothing to activate — which is precisely the
+   failure this module exists to make impossible. */
+const _hcSubAct = require('./healthcare-subscription-activation');
+exports.hcActivateSubscriptionOnPayment = _hcSubAct.hcActivateSubscriptionOnPayment; // trigger: payments/{paymentId}

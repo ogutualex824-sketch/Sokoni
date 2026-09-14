@@ -41,6 +41,49 @@ function _grossCents(order) {
   return Math.max(0, Math.round((total - delivery) * 100));
 }
 
+/* ── THE DELIVERY PROOF GATE ────────────────────────────────────────────────────────────
+   Money does not move on an unproven delivery.
+
+   The buyer's PIN is issued WITH the order and entered at the door; `delivery-complete.js`
+   records the result as `deliveryAuthorizedBy` — `rider_pin` when the rider submitted the
+   buyer's PIN, `buyer_confirmation` when the buyer confirmed directly. One event, two
+   witnesses. Without one of them the delivery is a claim, not a fact, and settling on a
+   claim pays the seller for goods nobody can show were handed over.
+
+   THREE PROPERTIES, each of which was a choice:
+
+   1. THE HOLD IS NOT TERMINAL. An unproven delivery order goes to HELD with
+      `settlementNote: 'awaiting_delivery_proof'` and settles the moment proof arrives —
+      the sweep and the status trigger both re-enter here. A permanent refusal would
+      strand real money belonging to a seller who did nothing wrong.
+
+   2. NON-DELIVERY ORDERS STILL SETTLE. A pickup or digital order has no delivery to prove.
+      They record `deliveryProof: 'not_required'` rather than being silently exempt, so
+      "how much settled without proof, and why" is a number an auditor can read rather than
+      an assumption they have to trust.
+
+   3. IT KEYS ON THE ORDER'S OWN SHAPE, not on a caller's assertion. A caller that could
+      pass `skipProof` would be the bypass. */
+const PROOF_METHODS = ['rider_pin', 'buyer_confirmation'];
+
+/* Does this order involve a delivery that must be proven? Read from the order document, and
+   deliberately INCLUSIVE: anything carrying a rider, a delivery reference or a delivery fee
+   is a delivery. Guessing "not a delivery" is the failure that releases money early, so the
+   ambiguous case resolves towards requiring proof. */
+function _isDeliveryOrder(o) {
+  if (!o) return false;
+  if (o.fulfilmentType === 'pickup' || o.fulfillmentType === 'pickup') return false;
+  return !!(o.assignedDriverUid || o.riderId || o.assignedRiderId || o.deliveryRef ||
+            Number(o.deliveryFee || 0) > 0 || o.deliveryAddress);
+}
+
+/* The proof, or null. Only the two witnessed methods count — a truthy string of any other
+   shape is not a proof, and accepting one would let a future writer invent an authority. */
+function _deliveryProofOf(o) {
+  const m = o && o.deliveryAuthorizedBy;
+  return (typeof m === 'string' && PROOF_METHODS.indexOf(m) !== -1) ? m : null;
+}
+
 /* Settle ONE fulfilled product order exactly once. Reuses the canonical engine for the
    breakdown, credits the seller's withdrawable wallet, writes settlement + wallet txn +
    balanced ledger, and advances the state machine. Idempotent + replay-safe. */
@@ -71,6 +114,25 @@ async function settleOrder(db, adminSdk, orderId) {
     /* Only a held/eligible, non-cancelled/refunded order settles. */
     if (['cancelled', 'refunded'].includes(o.status)) return { outcome: 'terminal-skip' };
     if (!sellerId) { t.update(orderRef, { settlementStatus: STATES.SETTLED, settlementNote: 'no-seller', settledAt: FV.serverTimestamp() }); return { outcome: 'no-seller' }; }
+
+    /* ── DELIVERY PROOF GATE ────────────────────────────────────────────────────────
+       Read INSIDE the transaction, from the order snapshot the transaction itself took —
+       not from the pre-read above. Proof can arrive between the two, and a gate that reads
+       a stale snapshot either holds an order that is already proven or, worse, releases one
+       on a snapshot taken before a reversal.
+
+       HELD is not a refusal, it is a wait: the sweep and the status trigger both re-enter
+       settleOrder, and the order settles on the next pass once the buyer's PIN lands. */
+    const isDelivery = _isDeliveryOrder(o);
+    const proof = _deliveryProofOf(o);
+    if (isDelivery && !proof) {
+      t.update(orderRef, {
+        settlementStatus: STATES.HELD,
+        settlementNote: 'awaiting_delivery_proof',
+        updatedAt: FV.serverTimestamp(),
+      });
+      return { outcome: 'awaiting-delivery-proof', sellerId, grossCents };
+    }
     if (!breakdown || grossCents <= 0) { t.update(orderRef, { settlementStatus: STATES.SETTLED, settlementNote: 'zero-gross', settledAt: FV.serverTimestamp() }); return { outcome: 'zero-gross' }; }
 
     const netCents = Number(breakdown.sellerNetCents) || 0;
@@ -104,6 +166,11 @@ async function settleOrder(db, adminSdk, orderId) {
     t.set(settleRef, {
       orderId, sellerId, grossCents, commissionCents, sellerNetCents: netCents,
       netShillingsCredited: netShillings, category: 'marketplace',
+      /* WHAT AUTHORISED THIS RELEASE. 'not_required' is recorded rather than omitted so
+         "how much settled without delivery proof, and why" is a query an auditor can run
+         instead of an assumption they have to accept. */
+      deliveryProof: isDelivery ? proof : 'not_required',
+      deliveryProvenAt: isDelivery ? (o.deliveredAt || null) : null,
       ledgerPlan: breakdown.ledgerPlan || [],   /* immutable snapshot → post-settlement reversal swaps it */
       engineVersion: 'settlement-engine', status: 'settled', createdAt: FV.serverTimestamp(),
     });

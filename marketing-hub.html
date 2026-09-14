@@ -201,7 +201,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
   <a href="/" class="mh-logo">🎯 SOKONI <span>Marketing</span></a>
   <div class="mh-nav-links">
     <a href="marketing.html" class="mh-nav-btn outline">🚀 Boost Listing</a>
-    <a href="/merchant" class="mh-nav-btn outline keep">🏪 My Store</a>
+    <a href="/merchant" data-merchant-entry="store" class="mh-nav-btn outline keep">🏪 My Store</a>
     <button class="mh-nav-btn orange" onclick="openPostProject()">💼 Post a Project</button>
     <a href="notifications.html" class="mh-notif" title="Notifications" style="text-decoration:none;position:relative;">🔔<span id="mhNotifBadge" style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:white;border-radius:50%;font-size:9px;font-weight:900;width:16px;height:16px;display:none;align-items:center;justify-content:center;line-height:1;"></span></a>
   </div>
@@ -765,5 +765,6 @@ function hexToRgb(hex) {
   <script defer src="sokoni-observability.js"></script>
   <script defer src="sokoni-gateway.js"></script>
   <script>window.addEventListener('load',function(){if(window.SokoniFormNav)SokoniFormNav.init({backUrl:'index.html',title:'Marketing Hub'});});</script>
+<script src="sokoni-merchant-entry.js" defer></script>
 </body>
 </html>

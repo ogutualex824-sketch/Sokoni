@@ -337,36 +337,154 @@ function _fCacheSet(m){ try{ localStorage.setItem('sokoniFollowing',JSON.stringi
 /* Sync check for instant render — the UI cache (hydrated from Firestore on load). */
 function isFollowing(id,type){ return !!_fCache()[_fKey(type,id)]; }
 
-function _bumpCount(id,d){ try{ var c=JSON.parse(localStorage.getItem('sokoniFollowerCounts')||'{}'); c[id]=Math.max(0,(c[id]||0)+d); localStorage.setItem('sokoniFollowerCounts',JSON.stringify(c)); }catch(e){} }
-function getFollowerCount(id){ try{ return JSON.parse(localStorage.getItem('sokoniFollowerCounts')||'{}')[id]||0; }catch(e){ return 0; } }
+/* ── Follower counts ───────────────────────────────────────────────────────
+   followerCounts/{type}--{id} has NO Firestore rule, so BOTH reads and writes
+   are denied by default. There is therefore no canonical follower count a
+   client can obtain today.
 
-/* The ONE canonical write. Firestore authoritative + optimistic UI cache. */
-function _writeFollow(type,id,name,on){
-  var m=_fCache();
-  if(on) m[_fKey(type,id)]={type:type||'store',entityId:String(id),entityName:name||'',followedAt:Date.now()}; else delete m[_fKey(type,id)];
-  _fCacheSet(m); _bumpCount(id,on?1:-1);
-  var uid=_fUid(), db=_fDb();
-  if(!uid||!db) return Promise.resolve();
-  var fid=_fDocId(uid,type,id), cid=(type||'store')+'--'+String(id), FV=firebase.firestore.FieldValue;
-  /* Follower count is BEST-EFFORT (deferred aggregation) — it must never fail the follow. */
-  db.collection('followerCounts').doc(cid).set({count:FV.increment(on?1:-1),type:type||'store',entityId:String(id),entityName:name||''},{merge:true}).catch(function(){});
-  return on
-    ? db.collection('follows').doc(fid).set({uid:uid,type:type||'store',entityId:String(id),entityName:name||'',createdAt:FV.serverTimestamp()},{merge:true}).catch(function(e){ console.warn('[social] follow write failed',e&&e.message); })
-    : db.collection('follows').doc(fid).delete().catch(function(e){ console.warn('[social] unfollow write failed',e&&e.message); });
+   This used to keep a localStorage tally (`sokoniFollowerCounts`) that was
+   bumped by +1 whenever THIS device followed, and rendered as "1 followers".
+   That is a fabricated business metric — the exact pattern CLAUDE.md's UI Data
+   Integrity rule forbids — and it was per-device, so two phones disagreed.
+
+   Per that rule an unknown count must render as a neutral state, not an
+   invented number. getFollowerCount() therefore returns null ("unknown") and
+   every caller omits the count entirely rather than printing a guess. The
+   count reappears automatically the moment a canonical source exists.
+
+   REQUIRED to make counts real (see CHANGELOG — currently BLOCKED):
+     1. a `followerCounts` rule (read public, ±1-constrained authed write), and
+     2. ideally a Cloud Function aggregator so the number is not client-writable.
+   Blocked because the compiled ruleset is ~72B under Firestore's 256KB cap; an
+   over-size ruleset uploads fine and then cannot be activated. Do not add the
+   rule until that ceiling is reclaimed. */
+function getFollowerCount(){ return null; }
+
+/* Error → user-facing sentence. Technical detail goes to the console, never
+   to the user. Replaces the single generic "Action failed — try again". */
+function _fErrMsg(e){
+  var c=((e&&(e.code||e.message))||'').toString();
+  if(/permission-denied/i.test(c))              return "You don't have permission to follow this.";
+  if(/unauthenticated/i.test(c))                return 'Please sign in to follow.';
+  if(/not-found/i.test(c))                      return 'That page is no longer available.';
+  if(/resource-exhausted|quota/i.test(c))       return 'Too many requests — try again in a moment.';
+  if(/unavailable|deadline|network|Failed to fetch|offline/i.test(c))
+                                                return 'You appear to be offline — that was not saved.';
+  return 'Could not save that — please try again.';
 }
 
-/* Back-compat wrappers (any external caller still works). */
-function followStore(data){ _writeFollow(data.type,data.id,data.name,true); return getFollowerCount(data.id); }
-function unfollowStore(id,type){ _writeFollow(type,id,'',false); return getFollowerCount(id); }
+/* Every follow message goes through the CANONICAL toast engine (SokoniUI.toast),
+   so it inherits the responsive containment in sokoni-toast.css. Never alert(). */
+function _fToast(msg,type,opts){
+  try{ if(window.SokoniUI && typeof SokoniUI.toast==='function') return SokoniUI.toast(msg,type||'info',opts||{}); }catch(e){}
+  try{ if(typeof window._sokoniToast==='function') return window._sokoniToast(msg,type||'info',3500); }catch(e){}
+  try{ console.warn('[social]',msg); }catch(e){}
+}
 
-/* ONE entry point for every follow button — entity-agnostic via `type`. */
+/* The ONE canonical write. Firestore is authoritative; localStorage is a UI
+   cache only. Returns a REAL promise that rejects on failure — the previous
+   version swallowed every error into console.warn, so a denied write left the
+   button reading "Following" forever while nothing had persisted. */
+function _writeFollow(type,id,name,on){
+  var uid=_fUid(), db=_fDb();
+  if(!uid) return Promise.reject({code:'unauthenticated'});
+  if(!db)  return Promise.reject({code:'unavailable'});
+  var fid=_fDocId(uid,type,id), FV=firebase.firestore.FieldValue;
+  var ref=db.collection('follows').doc(fid);
+
+  function _commit(){
+    /* Only commit the UI cache once Firestore has ACCEPTED the write. */
+    var m=_fCache();
+    if(on) m[_fKey(type,id)]={type:type||'store',entityId:String(id),entityName:name||'',followedAt:Date.now()};
+    else   delete m[_fKey(type,id)];
+    _fCacheSet(m);
+    return {ok:true,following:on};
+  }
+
+  var p = on
+    ? ref.set({uid:uid,type:type||'store',entityId:String(id),entityName:name||'',createdAt:FV.serverTimestamp()},{merge:true})
+    : ref.delete();
+
+  return p.then(_commit).catch(function(e){
+    /* RECONCILE, don't accuse.
+
+       The deployed rule grants create/read/delete but NOT update, so writing a
+       follow document that ALREADY EXISTS is rejected permission-denied. That
+       happens whenever this device's cache disagrees with the server — follow on
+       phone A, open the page on phone B whose cache still says "Follow", tap it.
+       Reporting "You don't have permission to follow this" there would be both
+       wrong and alarming: the user IS following, which is what they wanted.
+
+       Proven against the real rules file — scripts/test-follow-rules.js,
+       "re-follow an existing doc is an UPDATE -> DENIED".
+
+       So on a denied FOLLOW, read the document once. If it exists we are already
+       in the intended end state; converge silently. Anything else is a genuine
+       denial and is re-thrown. (Unfollow needs no such branch: deleting an absent
+       document is permitted, so it converges on its own.) */
+    var code=((e&&(e.code||e.message))||'').toString();
+    if(!on || !/permission-denied/i.test(code)) throw e;
+    return ref.get().then(function(sn){
+      if(sn.exists) return _commit();
+      throw e;
+    }, function(){ throw e; });
+  });
+}
+
+/* Back-compat wrappers (any external caller still works). Now return the promise
+   so callers can await the real outcome instead of a stale local number. */
+function followStore(data){ return _writeFollow(data.type,data.id,data.name,true); }
+function unfollowStore(id,type){ return _writeFollow(type,id,'',false); }
+
+/* Double-tap / race guard. Keyed per entity so following two shops at once is
+   still allowed; a second tap on the SAME button while a write is in flight is
+   ignored rather than queued into a duplicate write. */
+var _fBusy=Object.create(null);
+
+/* ONE entry point for every follow button — entity-agnostic via `type`.
+   Returns a promise so callers can chain; never throws at the call site. */
 function toggleFollow(storeId,storeName,btn,type){
-  if(!_fUid()){ if(confirm('Sign in to follow?')) location.href='login.html?next='+encodeURIComponent(location.pathname+location.search); return; }
-  var willFollow=!isFollowing(storeId,type);
-  _updateFollowBtn(btn,willFollow,getFollowerCount(storeId));   /* optimistic */
-  var span=document.getElementById('_fcount_'+String(storeId).replace(/[^a-z0-9]/gi,'_'));
-  if(span) span.textContent=getFollowerCount(storeId).toLocaleString()+' followers';
-  _writeFollow(type,storeId,storeName,willFollow);   /* idempotent — safe even if the label was stale cross-device */
+  var key=_fKey(type,storeId);
+
+  if(!_fUid()){
+    /* Sign-in required. The old confirm() dialog was not the canonical toast
+       system and, if dismissed, silently dropped the user's intent. */
+    var next=location.pathname+location.search;
+    _fToast('Sign in to follow '+(storeName||'this'),'info',{
+      action:{ label:'Sign in', onClick:function(){
+        location.href='login.html?next='+encodeURIComponent(next);
+      }}
+    });
+    return Promise.resolve({ok:false,reason:'unauthenticated'});
+  }
+
+  if(_fBusy[key]) return Promise.resolve({ok:false,reason:'in-flight'});
+  _fBusy[key]=true;
+
+  var wasFollowing=isFollowing(storeId,type);
+  var willFollow=!wasFollowing;
+
+  /* Optimistic paint — now with a real rollback path (see catch). */
+  _updateFollowBtn(btn,willFollow);
+  if(btn) btn.setAttribute('aria-busy','true');
+
+  return _writeFollow(type,storeId,storeName,willFollow)
+    .then(function(r){
+      _fToast(willFollow?('Following '+(storeName||'')).trim():'Unfollowed','success',{duration:2000});
+      return r;
+    })
+    .catch(function(e){
+      /* ROLLBACK — the write did not land, so the button must not claim it did. */
+      _updateFollowBtn(btn,wasFollowing);
+      try{ console.warn('[social] follow write failed',(e&&(e.code||e.message))||e); }catch(_){}
+      _fToast(_fErrMsg(e),'error');
+      return {ok:false,reason:(e&&e.code)||'error'};
+    })
+    .then(function(r){
+      _fBusy[key]=false;
+      if(btn) btn.removeAttribute('aria-busy');
+      return r;
+    });
 }
 
 /* Cross-device hydration: load THIS user's follows from Firestore into the cache on
@@ -382,29 +500,41 @@ function _hydrateFollows(){
       var following=sn.exists, ck=_fKey(type,id);
       if(following) cache[ck]={type:type,entityId:String(id),entityName:'',followedAt:Date.now()}; else delete cache[ck];
       _fCacheSet(cache);
-      _updateFollowBtn(el, following, getFollowerCount(id));
+      _updateFollowBtn(el, following);
     }).catch(function(){});
   });
 }
 
-function _updateFollowBtn(btn,nowFollowing,count){
+/* Paints follow state onto a button. Idempotent, and safe to call with the
+   PREVIOUS state to roll an optimistic update back. Sets aria-pressed so the
+   control is announced correctly by screen readers. */
+function _updateFollowBtn(btn,nowFollowing){
   if(!btn) return;
   btn.textContent=nowFollowing?'✓ Following':'+ Follow';
   btn.style.color=nowFollowing?'#71ff00':'rgba(255,255,255,0.7)';
   btn.style.borderColor=nowFollowing?'rgba(113,255,0,0.4)':'rgba(255,255,255,0.18)';
   btn.style.background=nowFollowing?'rgba(113,255,0,0.1)':'rgba(255,255,255,0.05)';
+  try{
+    btn.setAttribute('aria-pressed',nowFollowing?'true':'false');
+    btn.setAttribute('aria-label',(nowFollowing?'Following':'Follow')+(btn.dataset&&btn.dataset.followName?' '+btn.dataset.followName:''));
+  }catch(e){}
 }
 
-/* Render an inline follow button into a container element */
+/* Render an inline follow button into a container element.
+
+   data-follow-id / data-follow-type are stamped here so _hydrateFollows() can do
+   an authoritative per-doc lookup and show the correct label on a NEW DEVICE —
+   the known follow-up recorded when follow persistence was converged.
+
+   No follower count is rendered: there is no canonical source for it (see
+   getFollowerCount above). Showing the old localStorage tally here is what made
+   a freshly-followed shop claim "1 followers" on one phone and "0" on another. */
 function renderFollowBtn(storeId,storeName,container,type){
   if(!container) return;
   var f=isFollowing(storeId,type);
-  var count=getFollowerCount(storeId);
-  var sid=storeId.replace(/[^a-z0-9]/gi,'_');
   container.innerHTML=
-    '<button type="button" data-follow-id="'+_esc(storeId)+'" data-follow-type="'+_esc(type||'store')+'" onclick="window.SokoniSocial.toggleFollow(\''+_esc(storeId)+'\',\''+_esc(storeName)+'\',this,\''+_esc(type||'store')+'\')" '+
-    'style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:999px;border:1px solid '+(f?'rgba(113,255,0,0.4)':'rgba(255,255,255,0.18)')+';background:'+(f?'rgba(113,255,0,0.1)':'rgba(255,255,255,0.05)')+';color:'+(f?'#71ff00':'rgba(255,255,255,0.7)')+';font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .18s;-webkit-tap-highlight-color:transparent;touch-action:manipulation;">'+(f?'✓ Following':'+ Follow')+'</button>' +
-    (count>0?'<span id="_fcount_'+sid+'" style="font-size:11px;color:rgba(255,255,255,0.35);margin-left:5px;">'+count.toLocaleString()+' followers</span>':'');
+    '<button type="button" aria-pressed="'+(f?'true':'false')+'" data-follow-id="'+_esc(storeId)+'" data-follow-name="'+_esc(storeName)+'" data-follow-type="'+_esc(type||'store')+'" onclick="window.SokoniSocial.toggleFollow(\''+_esc(storeId)+'\',\''+_esc(storeName)+'\',this,\''+_esc(type||'store')+'\')" '+
+    'style="display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:10px 18px;border-radius:999px;border:1px solid '+(f?'rgba(113,255,0,0.4)':'rgba(255,255,255,0.18)')+';background:'+(f?'rgba(113,255,0,0.1)':'rgba(255,255,255,0.05)')+';color:'+(f?'#71ff00':'rgba(255,255,255,0.7)')+';font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .18s;-webkit-tap-highlight-color:transparent;touch-action:manipulation;">'+(f?'✓ Following':'+ Follow')+'</button>';
 }
 
 function _esc(s){ return (s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
@@ -504,7 +634,10 @@ function _refreshSellerFollowerStat(){
   var user=null; try{user=JSON.parse(localStorage.getItem('sokoniUser')||'null');}catch(e){}
   var storeId=(profile&&profile.id)||(user&&user.uid)||'seller';
   var count=getFollowerCount(storeId);
-  stat.innerHTML='<div style="font-size:24px;font-weight:900;color:#71ff00;">'+count.toLocaleString()+'</div><div style="font-size:10px;color:rgba(255,255,255,0.35);font-weight:700;text-transform:uppercase;letter-spacing:.8px;">Followers</div>';
+  /* null = no canonical source (see getFollowerCount). Render the neutral em-dash
+     rather than a number this page cannot actually substantiate. */
+  var shown=(typeof count==='number')?count.toLocaleString():'—';
+  stat.innerHTML='<div style="font-size:24px;font-weight:900;color:#71ff00;">'+shown+'</div><div style="font-size:10px;color:rgba(255,255,255,0.35);font-weight:700;text-transform:uppercase;letter-spacing:.8px;">Followers</div>';
 }
 
 /* ═══════════════════════════════════════════════════════════

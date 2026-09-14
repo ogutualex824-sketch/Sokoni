@@ -64,6 +64,25 @@ async function _hideMerchantSurfaces(uid) {
     if (cur.preDeactivationVisible == null) patch.preDeactivationVisible = cur.isVisible !== false;
     await shopRef.set(patch, { merge: true });
   }
+
+  /* OB-5 — the onboarding projection is a third customer-reachable surface.
+     providerSearchProviders queries `providerProfiles` for
+     `status == 'active' AND searchable == true`, so deactivating the canonical
+     record while leaving this one alone kept a deactivated provider listed.
+
+     The prior value is STASHED rather than assumed, exactly as the shop branch
+     above stashes visibility — and here it matters more: `searchable` is false for
+     any provider who was never approved (OB-1), so restoring blindly to true would
+     publish someone who had never been approved at all. Only this one flag is
+     touched; no profile content is altered. */
+  const profRef  = db.collection('providerProfiles').doc(uid);
+  const profSnap = await profRef.get();
+  if (profSnap.exists) {
+    const cur = profSnap.data() || {};
+    const patch = { searchable: false, deactivated: true, updatedAt: now };
+    if (cur.preDeactivationSearchable == null) patch.preDeactivationSearchable = cur.searchable === true;
+    await profRef.set(patch, { merge: true });
+  }
 }
 
 async function _restoreMerchantSurfaces(uid) {
@@ -87,6 +106,24 @@ async function _restoreMerchantSurfaces(uid) {
     const wasVisible = cur.preDeactivationVisible !== false; /* default true if unknown */
     await shopRef.set({
       isVisible: wasVisible, deactivated: false, updatedAt: now, preDeactivationVisible: del,
+    }, { merge: true });
+  }
+
+  /* OB-5 — restore the projection to WHAT IT WAS, not to a default.
+     Note the deliberate asymmetry with the shop branch above: that one defaults to
+     VISIBLE when the stash is missing, because a shop that predates the stash was
+     visible. This one defaults to NOT searchable, because an absent stash here more
+     likely means the provider was never approved — and a reactivation must never be
+     the moment an unapproved provider becomes discoverable. Reactivation restores
+     access; approval is what grants discoverability, and it is not this function's
+     to give. */
+  const profRef  = db.collection('providerProfiles').doc(uid);
+  const profSnap = await profRef.get();
+  if (profSnap.exists) {
+    const cur = profSnap.data() || {};
+    const wasSearchable = cur.preDeactivationSearchable === true;
+    await profRef.set({
+      searchable: wasSearchable, deactivated: false, updatedAt: now, preDeactivationSearchable: del,
     }, { merge: true });
   }
 }

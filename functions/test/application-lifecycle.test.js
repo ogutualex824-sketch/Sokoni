@@ -252,6 +252,18 @@ describe('projectDriver / projectProvider — written shape', () => {
       _docs: docs,
     };
   }
+  /* projectDriver provisions the driver's Business through business-bootstrap, which uses its
+     OWN Firestore handle rather than the stub passed in. The projection therefore takes an
+     injectable provisioner so these unit tests stay hermetic; the emulator-backed suite
+     scripts/test-d1a-driver-business-provisioning.js exercises the real one. */
+  const bizCalls = [];
+  const STUB_BIZ = {
+    ensureBusiness: async (o) => {
+      bizCalls.push(o);
+      return { created: true, reason: 'provisioned', merchantId: 'SOK-STUB01' };
+    },
+  };
+
   const byPath = (db, p) => db._writes.find((w) => w.path === p);
 
   const RIDER_APP = {
@@ -265,7 +277,7 @@ describe('projectDriver / projectProvider — written shape', () => {
 
   test('writes BOTH dispatch collections — dispatch.js and navigation.js read different ones', async () => {
     const db = stubDb();
-    await L.projectDriver(db, RIDER_APP, 'uid1', true);
+    await L.projectDriver(db, RIDER_APP, 'uid1', true, STUB_BIZ);
     expect(byPath(db, 'rideDrivers/uid1')).toBeTruthy();
     expect(byPath(db, 'drivers/uid1')).toBeTruthy();
   });
@@ -274,7 +286,7 @@ describe('projectDriver / projectProvider — written shape', () => {
     /* firestore.rules grants `allow read: if isAuthed()` on rideDrivers, so a
        National ID here would be readable by every account on the platform. */
     const db = stubDb();
-    await L.projectDriver(db, RIDER_APP, 'uid1', true);
+    await L.projectDriver(db, RIDER_APP, 'uid1', true, STUB_BIZ);
     const ride = byPath(db, 'rideDrivers/uid1').data;
     expect(ride.nationalId).toBeUndefined();
     expect(ride.dlNumber).toBeUndefined();
@@ -287,7 +299,7 @@ describe('projectDriver / projectProvider — written shape', () => {
 
   test('identity documents go to the restricted driverVerification record', async () => {
     const db = stubDb();
-    await L.projectDriver(db, RIDER_APP, 'uid1', true);
+    await L.projectDriver(db, RIDER_APP, 'uid1', true, STUB_BIZ);
     const v = byPath(db, 'driverVerification/uid1').data;
     expect(v.nationalId).toBe('34567890');
     expect(v.dlNumber).toBe('DL/12345/2020');
@@ -295,10 +307,34 @@ describe('projectDriver / projectProvider — written shape', () => {
     expect(v.documentsMissing).toEqual([]);
   });
 
+  test('an approved driver is provisioned a Business, and a retraction is not', async () => {
+    const db = stubDb();
+    bizCalls.length = 0;
+    const r = await L.projectDriver(db, RIDER_APP, 'uid1', true, STUB_BIZ);
+    expect(bizCalls).toHaveLength(1);
+    expect(bizCalls[0].uid).toBe('uid1');
+    /* delivery, so _createBusiness skips the seller subscription a merchant would get */
+    expect(bizCalls[0].businessKind).toBe('delivery');
+    expect(r.business.merchantId).toBe('SOK-STUB01');
+
+    bizCalls.length = 0;
+    const rejected = await L.projectDriver(stubDb(), RIDER_APP, 'uid9', false, STUB_BIZ);
+    expect(bizCalls).toHaveLength(0);           // retraction provisions nothing
+    expect(rejected.business).toBeUndefined();
+  });
+
+  test('the driver record states approval EXPLICITLY, not by status alone', async () => {
+    const db = stubDb();
+    await L.projectDriver(db, RIDER_APP, 'uid1', true, STUB_BIZ);
+    /* rider-eligibility requires approved === true and treats absence as NOT approved, so a
+       projection writing only status:'active' would make every approved driver undispatchable. */
+    expect(byPath(db, 'drivers/uid1').data.approved).toBe(true);
+  });
+
   test('missing paperwork is reported, not assumed checked', async () => {
     const db = stubDb();
     const bare = { applicationId: 'APP-2', name: 'Rider', phone: '0712345678' };
-    const r = await L.projectDriver(db, bare, 'uid2', true);
+    const r = await L.projectDriver(db, bare, 'uid2', true, STUB_BIZ);
     expect(r.documentsMissing).toEqual(
       expect.arrayContaining(['nationalId', 'dlNumber', 'plate', 'vehicleType']));
     expect(byPath(db, 'driverVerification/uid2').data.documentsComplete).toBe(false);
@@ -306,7 +342,7 @@ describe('projectDriver / projectProvider — written shape', () => {
 
   test('a new rider is created OFFLINE — approval is not the same as on the road', async () => {
     const db = stubDb();
-    await L.projectDriver(db, RIDER_APP, 'uid1', true);
+    await L.projectDriver(db, RIDER_APP, 'uid1', true, STUB_BIZ);
     expect(byPath(db, 'rideDrivers/uid1').data.isOnline).toBe(false);
     expect(byPath(db, 'drivers/uid1').data.available).toBe(false);
     expect(byPath(db, 'drivers/uid1').data.onlineStatus).toBe('offline');
@@ -317,7 +353,7 @@ describe('projectDriver / projectProvider — written shape', () => {
        Persisting those as if earned would be fabricated history for someone who
        has completed no deliveries. */
     const db = stubDb();
-    await L.projectDriver(db, RIDER_APP, 'uid1', true);
+    await L.projectDriver(db, RIDER_APP, 'uid1', true, STUB_BIZ);
     const ride = byPath(db, 'rideDrivers/uid1').data;
     expect(ride.rating).toBeUndefined();
     expect(ride.acceptanceRate).toBeUndefined();
@@ -326,13 +362,13 @@ describe('projectDriver / projectProvider — written shape', () => {
 
   test('rejection retracts instead of deleting, and only if a record exists', async () => {
     const db = stubDb();
-    const absent = await L.projectDriver(db, RIDER_APP, 'ghost', false);
+    const absent = await L.projectDriver(db, RIDER_APP, 'ghost', false, STUB_BIZ);
     expect(absent.action).toBe('noop_absent');
 
     const db2 = stubDb();
     db2._docs['rideDrivers/uid1'] = { uid: 'uid1' };
     db2._docs['drivers/uid1'] = { uid: 'uid1' };
-    const r = await L.projectDriver(db2, RIDER_APP, 'uid1', false);
+    const r = await L.projectDriver(db2, RIDER_APP, 'uid1', false, STUB_BIZ);
     expect(r.action).toBe('retracted');
     expect(byPath(db2, 'rideDrivers/uid1').data.isOnline).toBe(false);
     expect(byPath(db2, 'drivers/uid1').data.status).toBe('suspended');
@@ -457,7 +493,7 @@ describe('projectDriver / projectProvider — written shape', () => {
   test('every projected write uses merge so it never clobbers sibling fields', async () => {
     const db = stubDb();
     await L.projectProvider(db, KASINDI, 'WLt0Voww', true);
-    await L.projectDriver(db, RIDER_APP, 'uid1', true);
+    await L.projectDriver(db, RIDER_APP, 'uid1', true, STUB_BIZ);
     expect(db._writes.length).toBeGreaterThan(0);
     db._writes.forEach((w) => expect(w.merge).toBe(true));
   });

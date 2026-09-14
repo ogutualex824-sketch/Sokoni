@@ -1,0 +1,13 @@
+{
+ "darajaSTKPush": "DARAJA-EXCLUSIVE",
+ "darajaSTKCallback": "DARAJA-EXCLUSIVE",
+ "validateDarajaCredentials": "DARAJA-EXCLUSIVE",
+ "sendTestSTKPush": "DARAJA-EXCLUSIVE",
+ "initiateSTKPush": "INTASEND — PROTECT",
+ "webhookMpesa": "DARAJA-EXCLUSIVE",
+ "mpesaC2BValidation": "NEITHER — read it",
+ "mpesaC2BConfirmation": "NEITHER — read it",
+ "claimPosMpesaReference": "NEITHER — read it",
+ "onPosTransactionMpesaRef": "NEITHER — read it",
+ "getMpesaReconciliationSummary": "NEITHER — read it"
+}

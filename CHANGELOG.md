@@ -1721,6 +1721,3958 @@ runs the pre-Gate-C code.
 
 ---
 
+## 2026-09-13 (49) — Daraja outbound retirement COMMITTED via hunk isolation
+
+**Commit `548e15d`. One file, ONE hunk, +35/-11. Nothing deployed.**
+
+Entry 46 recorded the retirement as uncommittable: `functions/index.js` carries another agent's
+in-flight work, including inside `exports.initiateSTKPush` — the IntaSend rail this change makes
+exclusive. That is now resolved by isolating the hunk rather than waiting for their work to land.
+
+### Isolation, proven before staging (10/0)
+
+Hunks were classified by **content markers, not line numbers** — ranges shift as either side edits,
+markers do not — with an unclassified or mixed hunk treated as a hard failure rather than silently
+bucketed. Result: **1 hunk mine, 4 theirs, 0 mixed.**
+
+Separability was proven in **both** directions, because one is not enough — a patch that applies
+while leaving the complement broken has split a file, not isolated a change:
+
+* mine-only applies to the index → the retirement can be staged alone
+* theirs-only also applies → the remainder stays coherent without it
+* mine-only **reverse**-applies to the working tree → the hunk really is the change
+
+Staged with `git apply --cached` (a single-hunk patch); `git add -p` is interactive and
+unavailable. The patch was **regenerated and re-verified immediately before applying**, since the
+other agent is actively editing the file and a patch built minutes earlier could have gone stale.
+
+*Correction to entry 46, which said 3 hunks were mine and 5 theirs: that was a `-U0` view. At the
+`-U3` granularity git actually stages, it is 1 and 4. The separation conclusion was unaffected.*
+
+### Certification
+
+**16/0** against the working tree, and the **staged blob itself** was extracted with
+`git show :functions/index.js` and certified independently: A1-A8 outbound closed, B1-B5 inbound
+**intact**, C1-C2 IntaSend untouched.
+
+The one non-pass, `D1 the file loads`, could only run against a partial directory lacking sibling
+modules — the same harness scores 16/0 against the real tree as a control. It is settled by
+construction instead: this change adds and removes **zero** `require()` lines, and the committed
+blob's require set is **identical to HEAD's — 273 distinct requires** — so load behaviour is
+inherited from an already-deployed state.
+
+### Asymmetry worth recording
+
+The other agent's hunks add three requires beyond HEAD, and **all three are untracked**:
+`./stk-intent-enforcement`, `./healthcare-subscription-activation`, `./pos-commission-surface`.
+**Their side is not yet require-closed; this one is.** That removed "wait for them to land first"
+as a prerequisite.
+
+### Post-commit state
+
+| | |
+|---|---|
+| Their hunks still in the working tree | **4**, untouched |
+| Their untracked modules | 3, still `??`, untouched |
+| Dirty entries | **296 → 296** — correct for a partial commit; `index.js` was ` M` and remains ` M` |
+| Entries that left or appeared | **none** |
+| Working tree certification | still **16/0** |
+| Deployed | **nothing** |
+
+Inbound handlers and `mpesa-c2b.js` remain live pending Safaricom unregistration. Client call sites
+in PROTECTED files are unchanged and now receive a clear `failed-precondition` refusal.
+
+---
+
+## 2026-09-13 (48) — DL-01 provenance closed: the certification artifact is now tracked
+
+**Documentation/provenance only. One file, no product code, nothing deployed.**
+
+`d20b799` shipped the DL-01 eligibility authority to production but left its proof untracked —
+making 41/0 an unreproducible claim about live code. Commit **`64b6dbe`** carries
+`scripts/test-dl01-rider-eligibility.js` and nothing else (243 insertions, 1 file).
+
+### Re-verified at commit time, not quoted from the release
+
+| Check | Result |
+|---|---|
+| working tree vs `d20b799` for `dispatch.js`, `rider-eligibility.js`, `vehicle-classes.js` | **IDENTICAL** — source under test is the source in production |
+| certification | **41/0**, true exit 0 |
+| sabotage | **CAUGHT 12, MISSED 0**, true exit 0, positive control green after restore |
+| artifact files restored | byte-identical, and now confirmed by **`git status`** |
+
+That last row is stronger than it was at release: `rider-eligibility.js` and `vehicle-classes.js`
+became tracked at `d20b799`, so git is now an **independent witness** to the sabotage restore
+rather than relying solely on the harness's own hashes.
+
+Both exit codes were read from unpiped runs redirected to files — see entry 47's cleanup, where a
+piped `exit=0` masked a real failure.
+
+### Scope
+
+Dirty entries **297 → 296**; a before/after diff confirms the only entry that left the set was the
+test file, and none appeared. The other agent's work is untouched. The full DL-01 chain —
+`dispatch.js`, `rider-eligibility.js`, `vehicle-classes.js`, and the suite — is now tracked.
+
+**Not included:** the sabotage harness lives in a session scratchpad and is not committed. Only the
+certification half is reproducible from the repository; the 12 counter-proofs would need rebuilding.
+
+---
+
+## 2026-09-13 (47) — DL-01 DEPLOYED: dispatch enforces the eligibility authority in production
+
+**PRODUCTION FUNCTION DEPLOYMENT.** Two functions. Release commit **`d20b799`**.
+
+### Release provenance — why a worktree, not the working tree
+
+A Firebase functions deploy uploads the **entire** `functions/` directory; there is no
+`functions.ignore` and no `.gcloudignore`. The working tree carried **59 dirty entries** under
+`functions/` (35 modified, 24 untracked) from at least two agents, plus a modified `.env`. Named
+scoping (`--only functions:a,b`) guarantees only those two functions get new revisions — it does
+**not** guarantee the code inside them, because `index.js` is the entrypoint and requires the whole
+module graph at cold start. All five predeploy gates pass on the dirty tree, so **nothing in the
+repo's own guard set would have caught this**; a deploy from the dirty tree would have shipped all
+59 entries inside the two containers.
+
+So the release was built as an isolated artifact:
+
+1. **`d20b799`** commits exactly three files — `dispatch.js`, `rider-eligibility.js`,
+   `vehicle-classes.js` — staged by explicit path, never `git add -A`.
+2. The other agent's work was **not** stashed, deleted or disturbed. Dirty count went 300 → 297,
+   and a before/after diff proves the only entries that left the set were those three.
+3. `git worktree add C:/temp/sokoni-dl01-release d20b799` — a clean detached checkout. `.env` is
+   tracked, so the worktree carries the **committed** value; the dirty change (`DARAJA_SANDBOX_
+   SELLER_UIDS`, unread by the dispatch path) did not ship.
+
+**The third file resolved from evidence, not guessed.** `vehicle-classes.js` is `VOCAB` in the
+certified sabotage harness's own artifact set (`FILES = [TARGET, VOCAB]`). Require closure:
+`dispatch -> rider-eligibility -> vehicle-classes -> sokoni-dispatch`, the last unmodified at HEAD.
+
+**Correction to the gate's premise:** there was no pre-existing "certified DL-01 commit" to resolve
+the third file from — the entire artifact was uncommitted (`dispatch.js` +42/-2 vs HEAD; the other
+two untracked). `d20b799` is the first commit of this work.
+
+### Certification
+
+`scripts/test-dl01-rider-eligibility.js` **41/0**; sabotage **12/0** with both artifact files
+restored byte-identical and the positive control green. The suite is **untracked**, so it is absent
+from the release state — but the three release files are **sha256-identical** between the worktree
+and the certified working tree, so the certification covers exactly the deployed bytes. *The suite
+should be committed in a follow-up; it was outside the authorized 3-file scope.*
+
+### Deployment
+
+```
+packaged C:\temp\sokoni-dl01-release\functions (2.65 MB)
+Loaded environment variables from .env
+updating dispatchDelivery(us-central1)    -> Successful update operation.
+updating respondToDispatch(us-central1)   -> Successful update operation.
+Deploy complete!                          exit 0
+```
+
+All five predeploy gates ran from the release state and passed. Both operations are **updates**, not
+creates. No third function appears anywhere in the output. firebase-tools' "Loading and analyzing
+source code" step loaded the release bundle's `index.js` successfully, which is the evidence that
+the graph has no load-time throw — i.e. cold start is safe.
+
+### Production effect — as designed
+
+| | |
+|---|---|
+| DL-01 rules | already live (`6264c7db`) |
+| Eligibility engine | **LIVE** |
+| Dispatcher | canonical eligibility enforced |
+| Unsafe `isOnline`-only path | **closed** |
+| Current rider | `verification_incomplete:incomplete` |
+| Dispatchable riders | **0** |
+
+The one live rider is online and was dispatchable under the old `isOnline`-only selection. They are
+now refused because `nationalId`, `dlNumber` and `vehicleType` are absent from
+`driverVerification`. **That zero is the point of the change, not a failure of it**, and it is not a
+reason to manufacture verification data.
+
+Note: the census script's "dispatchable TODAY (deployed: isOnline only)" line is now a **historical
+baseline**, not current production — that framing predates this deploy.
+
+### Not included
+
+The `application-lifecycle.js` suspension fix is **not** in this release and not deployed — its
+functions are not part of this deployment and its data effect was already applied by the migration
+(entry 45). It remains uncommitted in the working tree, undisturbed.
+
+`deliveryRiders/xrH21J5GFbW8…` residue and the migration's transaction contention remain separate
+open findings, deliberately not folded in.
+
+---
+
+## 2026-09-13 (46) — Daraja OUTBOUND retired: IntaSend is the only collection route
+
+**Code changed, not deployed.** One function body. The inbound rail is deliberately untouched.
+
+### The decision and the boundary
+
+IntaSend is the only electronic collection route. That is the commercial decision and it is not
+in dispute. What could not be done is the *blanket removal*: **`darajaSTKCallback` and
+`webhookMpesa` are `onRequest` handlers whose URLs are registered in SELLERS' OWN Safaricom
+portals.** Registration was manual, outside version control — there is no `RegisterURL` automation
+in this repo, so a code search returning zero callers does **not** prove the registrations are
+gone. Deleting a handler does not unregister it; it converts a live callback into a silent 404,
+and money Safaricom has already settled then never reconciles **with nothing raising an error**.
+
+`mpesa-c2b.js` is not the Daraja rail at all — no consumer key, secret or passkey, zero outbound
+calls. It was deleted once under a "retire Daraja" sweep (`2165817`) and had to be restored
+verbatim (`822d766`). 7 files mention C2B and 6 of those also mention Daraja, so a name-based
+sweep damages a rail still in use. `initiateSTKPush` is likewise **IntaSend** despite the generic
+STK name.
+
+**Correct order: unregister at Safaricom → observe zero inbound traffic → remove code.** Step one
+is not a code change, so the removal cannot be completed from the repo.
+
+### What changed — one chokepoint
+
+`functions/index.js` — `_darajaToken()` now throws `HttpsError('failed-precondition')` instead of
+requesting an OAuth token. Census of `safaricom.co.ke` across `functions/*.js` returns **exactly
+one file** (index.js) and **exactly three callers**: `darajaSTKPush`, `validateDarajaCredentials`,
+`sendTestSTKPush`. It is the sole producer of both the token and the `base` URL the STK POSTs are
+built from, so closing it closes all three and cannot miss a fourth that does not exist.
+
+Nothing was deleted. Reversible by restoring the body.
+
+### Blast radius, measured in production before closing (read-only)
+
+| | |
+|---|---|
+| `shopSettings` documents | 2 |
+| holding Daraja credentials | **1**, and it is `env: 'sandbox'` |
+| `paymentIntents` with `provider: 'daraja'` | **0** |
+| `payments` with `provider: 'daraja'` | **0** |
+
+No real money has ever moved on this rail. This closes a path that was configured but never used.
+
+### Certification — 16/0, on comment-stripped source
+
+Stripped because the retirement comment names Safaricom and the handlers by design; a naive grep
+would match its own documentation and report the opposite.
+
+* **A1-A8** outbound closed: no Safaricom URL or `fetch` in the chokepoint, refusal via
+  `HttpsError`, no literal Safaricom fetch anywhere, all three callables still exported but
+  unable to reach Safaricom
+* **B1-B5** inbound INTACT: `darajaSTKCallback`, `webhookMpesa`, `mpesaC2BValidation`,
+  `mpesaC2BConfirmation` still exported as `onRequest`; `mpesa-c2b.js` still holds no credentials
+* **C1-C2** IntaSend untouched: `initiateSTKPush` present, send-money endpoint reachable
+* **D1** `functions/index.js` still loads
+
+`scripts/test-daraja-stk-payload.js` still **14/0** — it is static source analysis, unaffected.
+
+### Not done, and why
+
+The client call sites are in **PROTECTED** files and were left alone: `merchant-v2.html:2487`,
+`payments.html:1049/1295/1308`, `pos.js:1856/1984`. They will now receive a clear
+`failed-precondition` refusal rather than a silent failure. Routing those surfaces to IntaSend is
+a separate, wider change. The inbound handlers and `mpesa-c2b.js` remain live pending external
+unregistration.
+
+---
+
+## 2026-09-13 (45) — stale suspension MIGRATED: two production records repaired, nothing else touched
+
+**PRODUCTION WRITE APPLIED.** Two documents, one field each. Nothing deployed. DL-01 function
+release stays paused.
+
+### Scope, enforced in code rather than merely intended
+
+| | |
+|---|---|
+| Identity | `D5Ql2EYr95bt79IpcGTmOMTK0P83` (the only stale identity in the census) |
+| Documents | `drivers/{uid}`, `rideDrivers/{uid}` |
+| Change | `suspendedAt` removed via `FieldValue.delete()` — **one field per document** |
+| Untouched | status, approval, availability, verification, vehicle data, claims, PIN, `deliveryRiders` |
+
+### Safeguards, and what each actually caught
+
+Preconditions ran **inside** `runTransaction`, not before it — reading, checking, then writing
+outside a transaction would let a concurrent suspension land in the gap, and the migration would
+then erase a **real** suspension. Each attempt asserted, on the transactional snapshot:
+
+* both documents exist; `suspendedAt` present; `approved === true`
+* `status` ∈ {`approved`, `active`} — a genuinely suspended record aborts here
+* `approvedAt` exists **and post-dates** `suspendedAt` — the reinstatement signature
+* the document is byte-identical to the pre-read, else abort rather than race a concurrent writer
+* the certified `rider-eligibility` verdict **before** the write is exactly `suspended` — if the
+  live record were refused for any other reason, the migration's premise no longer held and it
+  aborted
+
+A dry run executed every precondition against a live transactional read and rolled back, twice
+(once more after the redaction change), before `--apply` was used.
+
+### Result — verified, not assumed
+
+```
+drivers       suspendedAt absent: true   20 -> 19 fields   other fields changed: 0
+rideDrivers   suspendedAt absent: true   20 -> 19 fields   other fields changed: 0
+
+certified verdict BEFORE : suspended                        (eligible=false)
+certified verdict AFTER  : verification_incomplete:incomplete (eligible=false)
+```
+
+"Other fields changed: 0" is a structural diff of every remaining key against the pre-read
+snapshot, not an eyeball.
+
+### Post-migration census (read-only)
+
+* stale-suspension sweep: **0 across 145 documents**, 12 collections (was 2)
+* classification moved **suspended/rejected 1 → 0** and **approved-but-verification-incomplete
+  0 → 1** — the single intended reclassification
+* **currently dispatchable: 0.** The rider did **not** become dispatchable, which is the required
+  outcome; `nationalId`, `dlNumber` and `vehicleType` remain missing from `driverVerification`
+* the orphaned `deliveryRiders/xrH21J5GFbW8…` residue is **untouched** — separate gate
+
+### Observed and worth recording
+
+The transaction **retried 5 times** before committing (4 aborted attempts). The content-equality
+precondition passed on every attempt, so no writer changed these documents — but something was
+contending on them, and the rider is `isOnline: true` with `rideDrivers` client-writable (the open
+DL-01 finding). Not investigated here; it did not bypass any safeguard.
+
+### Evidence
+
+`migration-evidence.json` (scratchpad) holds before/after documents and both verdicts. Values of
+`pin`, phone and identity fields are **redacted in the artifact**; the unchanged-fields assertion
+ran against the full documents in memory, so redaction did not blind it.
+
+### Bearing on the DL-01 deployment gate
+
+Unchanged by this migration, and still the blocker: the **deployed** dispatcher selects on
+`isOnline` alone, so it would dispatch this rider today; the certified gate refuses them. Deploying
+DL-01 takes live dispatch capability from **1 → 0**. That is a correctness gain and an availability
+change, and it is a decision, not a defect.
+
+---
+
+## 2026-09-13 (44) — suspension lifecycle FIXED: reinstatement now clears the flag the gate reads
+
+**Code changed. No production write, nothing deployed.** Gate A (DL-01 function release) stays paused.
+
+### What was wrong
+
+`projectDriver` was symmetric in intent and asymmetric in fact. Retraction wrote
+`status:'suspended'` **and** `suspendedAt`; re-approval restored `status:'active'`, `approved:true`
+and a fresh `approvedAt` — and left `suspendedAt` exactly where it was. `rider-eligibility.js:61`
+is the **only** authoritative reader of that field, and it refuses on it *before* it looks at
+verification. So a reinstated driver was refused as `suspended` with an approval timestamp a full
+day newer than the suspension. Measured in production (entry 43), not inferred.
+
+### The fix
+
+One convention, not a fourth one. `suspendedAt: FieldValue.delete()`, matching the **OB-5
+precedent at `application-lifecycle.js:506`** that already ships this exact shape for providers.
+Three unsuspend conventions already coexist in this codebase; adding another is how the next
+reader gets it wrong. The clear rides in the **same batched `set()`** as the approval, so no crash
+window can leave a record approved-and-suspended.
+
+### Files affected
+
+* `functions/application-lifecycle.js` — `projectDriver`, approval branch only. The two `batch.set`
+  calls now spread `{ suspendedAt: FieldValue.delete() }` over `rideDoc`/`drvDoc`. Retraction
+  untouched; `rider-eligibility.js` untouched; `super-admin.js`'s convention untouched.
+* `scripts/test-suspension-lifecycle.js` — **NEW**, 27 cases, 27/0.
+
+### What the suite proves
+
+Drives the real `projectDriver` and the real `rider-eligibility.evaluate`; Firestore is the only
+stub, and it models `FieldValue.delete()` faithfully (D1/D2 prove an *unresolved* sentinel is
+truthy and would read as suspended, so a green clear-assertion is load-bearing).
+
+The suspension layers are asserted **separately** — a combined fixture can only show that
+*something* refused. Retraction sets status **and** flag, and the status check runs first, so the
+flag's own proof (B3) runs on a fixture whose status is already eligible: **the live record's exact
+shape.** B6 is the control — the identical shape with no suspension signal is ELIGIBLE, so B3–B5
+are not a gate that refuses everybody.
+
+**A7 deliberately does not assert dispatchability.** The census established that driver is missing
+`nationalId`, `dlNumber` and `vehicleType`. Clearing suspension removes **one independent
+blocker**; the refusal must *move on* to `verification_incomplete`, and that is what A7 asserts.
+
+### Counter-proofs (5/5 caught, sources restored byte-for-byte, sha256-verified)
+
+| # | Sabotage | Result |
+|---|---|---|
+| S1 | fix reverted entirely (pre-fix code) | CAUGHT — 9 fail |
+| S2 | fix applied to `drivers` only, `rideDrivers` left stale | CAUGHT — A5 fails, A4 still passes |
+| S3 | fix applied to `rideDrivers` only, `drivers` left stale | CAUGHT — A4 fails, A5 still passes |
+| S4 | `rider-eligibility`'s `suspendedAt` read neutralised | CAUGHT — B3, C2 fail |
+| S5 | every assertion silenced | CAUGHT — completeness guard fires |
+
+S2/S3 are the point: the two projections are written by adjacent lines, and a fix applied to one
+is invisible while the other works. S2 kills only 3 cases against S3's 8 — the `rideDrivers` half
+is protected *only* by assertions written deliberately for it.
+
+### Database changes
+
+None applied. The write **shape** changes: an approval now removes `suspendedAt` from
+`drivers/{uid}` and `rideDrivers/{uid}` instead of leaving it. **The two live stale records are NOT
+migrated** — they stay refused until an approval re-runs over them, and migrating them needs its
+own authorization.
+
+### API / security / breaking changes
+
+No API change. No rules change. No privilege change — having suspension cleared confers nothing;
+`rider-eligibility` still requires `approved === true`, an eligible status, a verification record
+and a priced vehicle class (C1/C4 pass only because those hold). Not breaking: retraction still
+suspends (C5 proves no one-way latch), and reinstatement is idempotent (A11).
+
+### Regression
+
+Neighbouring suites run **with** and **without** the hunk: `test-dl01-rider-eligibility` 41/0,
+`test-d1-verification-foundation` 48/0, `test-application-decision-authority` 17/0 in both states.
+`test-d1a-driver-business-provisioning` and `test-v1-vehicle-authority` fail **identically in both
+states** — they need the Firestore emulator, which is not running (root `node_modules` also lacks
+`firebase-admin`, so they need `NODE_PATH` pointed at `functions/node_modules`). **Environment gap,
+not a regression** — 0 suites had their outcome altered by this change.
+
+---
+
+## 2026-09-13 (43) — suspension lifecycle: the driver path never got the fix providers already have
+
+**READ-ONLY. No code changed, no production write, nothing deployed.** Gate A deployment stays
+paused.
+
+### The six questions, answered
+
+**1. Writers of `suspendedAt`** — 15 sites. The driver path is `application-lifecycle.js:543,549`,
+and it writes the flag **only on retraction**.
+
+**2. Driver approval/reinstatement paths** — one: `projectDriver`s approved branch. It writes
+`status`, `approved`, `approvedAt` to both `drivers` and `rideDrivers`, and clears nothing.
+
+**3. Is `status=approved` intended to clear suspension? YES — by this file own precedent.**
+`application-lifecycle.js:506` (OB-5) does exactly that for providers:
+`providerProfiles.set({ searchable: true, suspendedAt: FieldValue.delete() })`, with the reasoning
+written out: *"Reinstating a provider must restore their discoverability on the projection too, or
+a reversed suspension leaves them approved-but-unfindable... Symmetry here is what makes the mirror
+a mirror rather than a one-way delist."* **The same defect, already diagnosed and fixed one
+projection over.** For providers it was approved-but-unfindable; for drivers it is
+approved-but-undispatchable. The driver path is an omission, not a deliberate design.
+
+**4. Explicit unsuspend operation?** Yes — `super-admin.js:242`:
+`{ suspended:false, suspendedAt:null, suspendReason:null, suspendedBy:null, reinstatedAt, reinstatedBy }`.
+`projectDriver` does not call it. Note **three different unsuspend conventions** coexist:
+`FieldValue.delete()` (OB-5), `suspendedAt:null` + reinstatement provenance (super-admin), and a
+separate `unsuspendedAt` field (`security-incident-response.js:238`). Whoever fixes this should
+pick one; only the super-admin shape records WHO reinstated and WHEN.
+
+**5. Other consumers treating `suspendedAt` as authoritative?** **Exactly one: `rider-eligibility.js:61`**
+— the module written this session. No other reader depends on the current stale semantics, so
+correcting the projection has **no blast radius on existing consumers**.
+
+**6. Does it exist beyond this driver? NO.** Scanned 145 records across 12 collections:
+**2 stale-suspension records, both the same identity** (`drivers` + `rideDrivers` — the dual
+projection), approval newer than suspension in both. `providers` (10) and `providerProfiles` (2)
+are **clean — precisely because OB-5 exists**. The precedent working is visible as an absence.
+
+### Consequence
+The blast radius is one person and two records, and the fix has an in-repo precedent with its
+rationale already written. Weakening `rider-eligibility` remains the wrong direction: it is the
+only reader, and it is reading fail-closed exactly as intended.
+
+## 2026-09-13 (42) — Gate A census: the impact is one rider, but NOT for the reason predicted
+
+**READ-ONLY. No code changed, nothing deployed.** Ran the CERTIFIED `rider-eligibility.evaluate()`
+against live records rather than re-deriving the rule — a census that reimplements the gate
+measures the reimplementation.
+
+    drivers 1 · driverVerification 1 · rideDrivers 1 · deliveryRiders 2
+
+    dispatchable TODAY  (deployed: isOnline alone)  1
+    dispatchable AFTER  (certified gate)            0
+    WOULD LOSE on deployment                        1
+    would GAIN                                      0
+
+**The expected one-person impact is confirmed. The REASON is not what I predicted.** I said the
+driver would be refused for incomplete verification. The gate refuses earlier, for **`suspended`**.
+
+### A stale flag, and a projection defect behind it
+
+    drivers/D5Ql2…   status=approved  approved=true  approvedAt=2026-08-05T12:48:38
+                                                     suspendedAt=2026-08-04T10:47:28
+
+Suspended on the 4th, re-approved on the 5th — and **`suspendedAt` was never cleared**.
+`projectDriver` retraction sets `suspendedAt`; its approval path sets `status`/`approved`/
+`approvedAt` but does NOT clear it. `rider-eligibility` treats any truthy `suspendedAt` as
+suspension, so **a legitimately re-approved driver is permanently ineligible**. That is not
+specific to this record: once the gate deploys, ANY driver ever suspended and then re-approved is
+permanently undispatchable. Neither side is obviously the bug — the projection leaves stale data,
+the gate reads it fail-closed — and fixing either is outside a census gate.
+
+**Two independent refusals, not one.** Even with suspension resolved the same driver fails
+verification: `documentsMissing: [nationalId, dlNumber, vehicleType]`, `documentsComplete: false`.
+
+### Two more divergences the census surfaced
+**The shard disagrees with the canonical record**: `rideDrivers.isOnline=true` while the same
+record carries `online=false`, and `drivers.available=false` / `onlineStatus=offline`. The
+deployed dispatcher selects on the one field that says online.
+
+**The deprecated KASS uid still holds a presence row.** `deliveryRiders/xrH21J5GFbW8…` exists
+(isOnline=false, isAvailable=false) while that uid is absent from drivers, driverVerification and
+rideDrivers. Residue of the August account merge — the KASS identity repair earlier in this session
+covered `branches` and `workspaceMemberships`, and `deliveryRiders` was not in its scope.
+
+No approval, migration or synthetic verification performed. `dispatchQueue` still does not exist,
+so "dispatchable today" remains a capability, never observed traffic.
+
+## 2026-09-13 (41) — D1 foundation patch: vendor-neutral verification contract
+
+**Files:** `functions/verification-adapter.js` (new), `functions/verification-authority.js` (new),
+`functions/provider-onboarding.js`, `functions/admin-os.js`, `functions/application-lifecycle.js`,
+`scripts/test-d1-verification-foundation.js` (new), `CHANGELOG.md`.
+**NO DEPLOYMENT. No vendor, no region, no retention value, no confidence threshold.**
+
+Six of the seven census gaps. Disposal (G-c) deliberately NOT built — deletion is irreversible and
+the surviving-evidence contract is unsettled.
+
+### Evidence
+    scripts/test-d1-verification-foundation.js   48 / 0
+    sabotage                                      8 caught / 0 missed, files restored
+    scripts/test-dl01-rider-eligibility.js       41 / 0   no regression
+    functions/test/application-lifecycle.test.js 88 / 1   unchanged (the resolveRole case is
+                                                          another agent in-flight work)
+
+### The null adapter is the correct behaviour, not a stub
+"No automated verification configured" routes every applicant to assisted human review. That is a
+working system, and it is also what must happen if a vendor is removed, suspended for a
+demographic-performance breach, or simply down.
+
+### Sabotage found a real hole the first suite could not see
+S1 removed the core presence guard and the suite stayed GREEN — a second layer masked it (with no
+threshold configured, nothing can reach automated). But the masking stops once a threshold IS
+configured: `null < 0.8` is true and lands on assisted by luck, while **`undefined < 0.8` is FALSE
+and falls through to AUTOMATED**. Exactly the `undefined !== false` class. The fixtures used `null`
+and never passed a threshold, so they could not reach it. Now asserted across undefined / null /
+NaN / "" WITH a threshold configured, plus a control proving a complete result still passes.
+
+### A test defect fixed: denial is a permission, not a spelling
+The client-write check required "no write clause at all" and failed on `allow write: if false` —
+both deny. Rewritten to test whether any client write is PERMITTED, with a control proving the
+detector can still see a genuinely open write.
+
+### Effect on an existing suite — measured, not assumed
+`scripts/test-provider-verification-decision.js` (another agent, untracked) was **already red: 21
+failing before this patch**. After: **19**. Diffing the failure sets, this patch **fixed A9, A10
+and C5** and introduced exactly **one** new failure, **F1** — the suite calls
+`providerSubmitVerification({ nationalIdUrl: ... })`, which is now refused by design. One-line fix
+for its owner: `{ documents: ['nationalId'] }`. Not edited here: it is uncommitted in-flight work
+already failing for 18 unrelated reasons, and editing into it risks colliding with that work.
+
+## 2026-09-13 (40) — D1 implementation census: the patch is three call sites, not a rewrite
+
+**Files:** `docs/D1_VERIFICATION_IMPLEMENTATION_CENSUS.md` (new), `CHANGELOG.md`. **READ-ONLY —
+no code changed, nothing deployed. Vendor, topology and the biometric engine remain HOLD.**
+
+### More is already correct than expected
+Both verification collections are **server-write-only in the deployed rules** — `providerVerification`
+and `driverVerification` each have a read clause and **no write clause at all**, so a client cannot
+write verification state today. `documentsComplete` is already DERIVED in `projectDriver`.
+Self-approval is already blocked. A decision cannot be manufactured (the op refuses when no
+submission exists). Rejections already require a reason. Review is already idempotent — which
+matters once "two reviews" becomes the rule. And `priorDecisions[]` is an existing append-only
+decision history: the two-reviewer record should EXTEND it, not replace it.
+
+**`official` does not exist as a field anywhere** — three repo-wide matches, all in search indexers
+and unrelated. The contract introduces it cleanly; nothing to migrate.
+
+### The whole authority surface is three write sites
+`provider-onboarding.js:998` (applicant submit) · `admin-os.js:1754` (reviewer decision) ·
+`application-lifecycle.js:624` (driver projection). A vendor-neutral patch touches three call
+sites, not a scattered rewrite. My first detector under-counted these as READs because all three
+write through a ref variable — the same limitation the KASS census hit; corrected with a ref-aware
+pass.
+
+### Convergence is close to a union, not a third system
+provider has the governed review workflow; driver has the structured identifiers. They already
+share the `verified_on_file` token. Production rows: providerVerification **0**, driverVerification
+**1** — migration cost is one record.
+
+### Seven gaps, sized
+No `verification-adapter.js` · client-supplied document URLs · no disposal · single-reviewer schema
+· any admin is a reviewer (no capability registry) · no reviewer1 != reviewer2 check · two schemas.
+Six are buildable vendor-neutrally now. **Disposal must wait for the surviving-evidence contract** —
+deletion is irreversible, and building the sweep first destroys the record of how a decision was
+reached.
+
+Nothing may hard-code a vendor, region, retention constant or confidence threshold. With a null
+adapter, `faceMatchScore` and `livenessResult` are ABSENT — and absence must route to the assisted
+path, never to a pass.
+
+## 2026-09-13 (39) — rules provenance commit: the repo now matches production
+
+**Commit `13c30ee`** on `release/merchant-launch-rc`. **No deployment, no regeneration, no rules
+change** — the commit records what was already released.
+
+    ruleset  6264c7db-ba56-42d1-9275-5e3cd53e2e4a
+    built    156,676 B  sha c33eb11802c1c34a
+    paths    firestore.rules, firestore.rules.build   (exactly 2)
+    HEAD     20ad1f11 -> 13c30ee7, distance 1
+
+### Verified against the LIVE ruleset, not a saved artifact
+The tree .build IS the served ruleset byte-for-byte, and **rebuilding from `firestore.rules`
+reproduces it** — so the committed source and the committed artifact agree by construction rather
+than coincidence. Without that second check, a future build could diverge from what was committed
+and nobody would notice until a deploy.
+
+### Scope held
+Staged by explicit path. The other agent has **6 dirty entries** in that shared worktree
+(`release-readiness.js`, three test scripts, two new untracked scripts) — none staged, none
+committed, staged count back to 0 afterwards. The repo-versus-served divergence this track existed
+to close is now closed in both directions: production serves the certified rules, and the branch
+records them.
+
+### Still true after this commit
+DL-01 is PARTIAL. `rider-eligibility.js` and `dispatch.js` are certified and NOT deployed, so the
+dispatcher still selects on `isOnline` alone. The rules close the client write vector; they do not
+change what the dispatcher trusts.
+
+## 2026-09-13 (38) — PRODUCTION RULES DEPLOYED: HC-01 closed, DL-01 rules landed
+
+**FIRST PRODUCTION CHANGE OF THIS SESSION.** Firestore rules only, via the canonical path.
+
+    BEFORE  77465364-c6e2-45bf-806a-67f586e31a0f  157,482 B  (rollback target)
+    AFTER   6264c7db-ba56-42d1-9275-5e3cd53e2e4a  156,676 B  sha c33eb11802c1c34a
+    path    firestore.rules -> firebase.json predeploy (guard + build)
+            -> firestore.rules.build -> firebase deploy --only firestore:rules
+
+### Verified AGAINST PRODUCTION, 16/0
+Served content byte-identical to the certified build; artifact name unchanged
+(`firestore.rules.build`); **HC-01 now ONE healthProviders block (was 2)**; `rideDrivers`
+server-only; `deliveryRiders` blocks status/role/isAdmin; bare `/stories/` absent;
+`merchantStories` + `storyAllocations` intact; all four production guards present
+(noPhoneVerificationForgery 3, rolesUnchanged 2, activeRoleApproved 2, isSeller 4).
+
+### Scope held
+**`sokoni-ops` was not even republished** — the CLI reported *"latest version already up to date,
+skipping upload"*, so the authorized no-op republish did not occur at all: ruleset still
+`c76c080c…`, 674 B, sha ee81c9cd04c58720, unchanged. **No index operation**: with
+`--only firestore:rules`, prepare.js sets `firestoreIndexes = false`; the deploy log shows only
+prepare-phase "reading indexes", no create/delete, and `firestore.indexes.json` is unmodified.
+No functions, hosting, storage or auth. The 420 indexes were never in scope and were not touched.
+
+### What is now closed in production
+**HC-01 self-mint is CLOSED** — `healthProviders` was self-mintable by any signed-in user via the
+second unioned block; there is now one block and writes are server-only. **The DL-01 rules half is
+live** — `rideDrivers` can no longer be created or updated by a client, so the presence shard can
+no longer be forged.
+
+### What is NOT closed
+**DL-01 is HALF remediated.** The certified `rider-eligibility` / `dispatch.js` code is still NOT
+deployed, so production still selects riders with `where(isOnline==true)` and no approval check.
+The rules now stop a client WRITING the shard, which removes the practical vector, but the
+dispatcher still trusts that collection. Do not describe Delivery Hub authorization as fixed.
+
+**Worktree left matching production** (`firestore.rules` + `.build` modified, uncommitted).
+Restoring them would immediately recreate the repo-vs-served divergence this track existed to
+close. Committing them needs its own gate.
+
+## 2026-09-13 (37) — G1: lineage guard design. The guard is NOT modified.
+
+**Files:** `docs/RULES_LINEAGE_GUARD_G1_DESIGN.md` (new), `CHANGELOG.md`. **Design only —
+`scripts/guard-rules-lineage.js` untouched, no rules change, no candidate change, no deployment.**
+G2 implementation needs its own authorization.
+
+### Lineage: recommend provenance-by-content-introduction
+Pinning `FIX = 776248b` works today and fails identically the next time security work is
+cherry-picked — it moves the single point of failure rather than removing it. The durable check
+asks *"did this protection enter this history deliberately?"* via a commit REACHABLE FROM HEAD that
+introduced the invariant (`git log -S`), with an explicit SHA allowlist as the migration path.
+Critically, it must not degrade into a text search: a tree that merely CONTAINS the text must fail;
+only a tree where a reachable commit INTRODUCED it may pass. That is the difference between
+authorized provenance and a hand-edited file.
+
+### Content: one hardening the current implementation needs
+The guard selects the users block with `src.match(...)` — **first textual match, no depth
+awareness**. Measured: `match /users/{userId}` at brace depth 2 (top-level) and
+`match /users/{uid}` at depth 3, nested inside `/typingIndicators/`. Today the top-level block
+happens to come first, so the guard reads the right one — **ordering luck, not design**. A nested
+`users` block authored above the top-level one would make the guard validate the wrong block and
+report a protection the deployed rules do not have. Requirement: select by path and nesting depth,
+and ABORT if more than one TOP-LEVEL users block exists, since duplicates UNION and would void the
+first block entirely (the HC-01 failure class).
+
+I checked whether that second block was a live union vulnerability before reporting it as one. It
+is not — depth 3 under `/typingIndicators/` governs a subcollection and unions with nothing.
+
+### G3 criteria
+The owner five, plus three: a tree where the invariant text is present but was never introduced by
+a reachable commit must ABORT; a second top-level users block must ABORT; a nested users block
+above the top-level one must PASS while still reading the top-level block. And case 9 —
+`release/multishop-checkout-certified` — must ABORT: it genuinely lacks two of the three
+constraints, making it the one fixture that is a real stale lineage rather than a synthetic
+mutation. It must NOT be repaired to make a test pass.
+
+## 2026-09-13 (36) — lineage provenance: the guard is mis-calibrated, the fix IS on the release branch
+
+**READ-ONLY. Nothing deployed, no branch modified, no cherry-pick, and `FIX = 80297d4` NOT
+changed** — updating the guard needs its own authorization.
+
+One question asked: is the 80297d4 security fix represented on the release branches under a
+different commit, or is the work genuinely absent? Compared ONLY the `users/{userId}` block.
+
+    80297d4 + audit/employee-attribution   59b7e84fbd03  332 ch  all 3 constraints
+    merchant-launch-rc + SERVED + candidate  da5949d0f291  364 ch  all 3 constraints
+    multishop-checkout-certified           12714a53caca  188 ch  MISSING 2 of 3
+
+**Answer: guard calibration issue.** Canonical release-branch provenance is **`776248b`**
+(2026-08-25, "bring 80297d4 into this lineage so the tree matches production"), whose own body
+reads *"Cherry-pick of 80297d4 (was contained only in audit/employee-attribution)."* It is an
+ancestor of both `release/merchant-launch-rc` HEAD and `8472af9c`. `82cd8bf` later refined it,
+which is why the clause is 364 chars rather than 332. The guard pins the ORIGINAL commit, which
+lives only on `audit/employee-attribution` — so its lineage check cannot pass on a release branch
+by construction, while its content check passes on production, on the branch, and on the candidate.
+
+**Separate finding, not acted on:** `release/multishop-checkout-certified` does NOT contain
+`776248b`, and its clause is missing `uid != userId` AND the `activeRole` exclusion. Deploying
+rules from that branch would re-open the admin self-escalation 80297d4 fixed — consistent with it
+also lacking all four production guards. It is not the deploy target.
+
+## 2026-09-13 (35) — combined release candidate re-certified WITHOUT the bare /stories/ block
+
+**Artifact:** `scratchpad/combined.rules` — 271,453 bytes source -> **156,676 built**, 105,468
+under the ceiling. **NOT DEPLOYED. `2130877b` untouched — the Gate B commit and its Stories
+provenance are left exactly as they are.**
+
+Owner ruling: ship the composition without the bare `/stories/` block, and record the exclusion
+rather than deleting it silently.
+
+### Evidence
+    certify-combined.js                   20 / 0
+    DL-01 rules        vs candidate       12 / 0
+    healthcare HC-01   vs candidate       33 / 0
+    Stories branch model vs candidate     29 / 0   (merchantStories + storyAllocations)
+    exclusion assertion                    0 failures
+    composition sabotage                   4 caught / 0 missed
+
+### The exclusion is recorded IN the ruleset
+A breadcrumb replaces the block and states the reason — zero code consumers, the branch stories
+suite never references it, deleting it left that suite at 29/0 — and then states plainly:
+**"THIS EXCLUSION DOES NOT ADJUDICATE THE STORIES MODEL."** merchantStories + storyAllocations vs
+`/stories/` stays an open architecture decision with no inference drawn. The next person to notice
+Stories missing finds the reason in the file instead of re-deriving it.
+
+### C4 became a test of the DECISION
+The old vector deleted `/stories/` and MISSED at 29/0 — that miss is what produced the exclusion.
+It now RE-ADDS the block and must be caught, so the decision cannot quietly reverse. Caught.
+
+### Three detector defects fixed during this gate
+**A per-collection drift check reported 12 false positives** — `match /databases/{database}` is the
+outer wrapper enclosing the whole ruleset, so "its block" is the entire file. Replaced by a round
+trip that reverts the deltas and restores /stories/, reproducing Gate B semantically.
+**The exclusion assertion first counted 1 block that was not there** — it was matching the
+breadcrumb quoting `match /stories/{storyId}`. Rescoped to STRIPPED source; the raw count of 1 is
+now asserted as the expected comment mention.
+**A size-based check (`combined > gateb`) broke** once the candidate legitimately shrank. It was a
+proxy for "the DL-01 comments survived"; it now asserts those comments directly, and asserts the
+smaller size is explained by the exclusion.
+
+### Still open, deliberately
+The Stories model itself. And the named production deployment of this exact ruleset.
+
+## 2026-09-13 (34) — combined rules candidate built and certified; sabotage exposes an untested Stories block
+
+**Files:** `CHANGELOG.md`. Artifact: `scratchpad/combined.rules` (272,375 bytes source ->
+157,450 built). **NOT DEPLOYED. Not placed in any repo.**
+
+Mechanical composition of two already-certified deltas onto the Gate B base, authorized as
+build+certify only.
+
+### Evidence
+    certify-combined.js                    18 / 0
+    DL-01 rules suite      vs combined     12 / 0
+    healthcare (HC-01)     vs combined     33 / 0
+    stories (mlrc suite)   vs combined     29 / 0
+    composition sabotage                    3 caught / 1 MISSED
+
+Five block identities verified: healthProviders + stories -> Gate B; rideDrivers + deliveryRiders
+-> DL-01; four production guards byte-identical to base 8472af9c. Round trip proves nothing else
+moved: reverting ONLY the two DL-01 blocks reproduces Gate B semantically.
+
+### Two build defects caught before certification
+**The first composition spliced STRIPPED blocks into a SOURCE file.** `dl01-candidate.rules` was
+built from the served build artifact; the Gate B candidate is the commented source. The result
+carried two minified blocks and silently DROPPED the comments explaining why rideDrivers is now
+server-only — in a codebase where the reasoning is the documentation, a real loss. The round-trip
+check caught it at 334 chars adrift. Rebuilt with the deltas AUTHORED in source form, each
+asserted comment-stripped-equal to the certified DL-01 block so it means exactly what was certified.
+The 487 added comment bytes cost **nothing** at deploy: built artifact is 157,450 either way.
+
+**A per-collection drift check reported 12 false positives** — `match /databases/{database}` is the
+OUTER wrapper enclosing the whole ruleset, so "its block" is the entire file. Replaced with the
+round trip, which cannot be fooled that way.
+
+### C4 MISSED — and it is a FINDING, not a harness fault
+Removing the `/stories/` block entirely leaves the stories suite at **29/0**. The reason: the
+merchant-launch-rc "stories" suite exercises **merchantStories and storyAllocations** — it contains
+**zero** references to the bare `/stories/` block. Combined with the Gate B census (0 files on that
+branch reference the bare `stories` collection), the candidate carries a block that is
+**unreferenced, untested, and permissive** (`allow read: if true` + client create/update), and whose
+removal no certification can detect.
+
+No test was written for it: manufacturing coverage for a block whose inclusion is an open owner
+decision would convert an unresolved question into false assurance. The two-Stories-models ruling
+is now a prerequisite for landing this ruleset, not a deferred cleanup.
+
+## 2026-09-13 (33) — provider document retention audit: shipped capability, ZERO retained data
+
+**Files:** `docs/PROVIDER_DOCUMENT_RETENTION_AUDIT.md` (new), `CHANGELOG.md`. **READ-ONLY —
+nothing deleted, modified or deployed. No production object was listed, read or touched; only
+prefix existence was queried.**
+
+Opened parallel to D-02 because this is shipped code independent of the biometric vendor.
+
+### The distinction holds in the strongest direction
+`gs://sokoni-aeb26.firebasestorage.app/` contains exactly `product-images/`, `profile-avatars/`
+and `provider-service-images/`. **`documents/**` matched NO objects.** `providerVerification` has
+never been written, and `driverVerification` one row carries no URL fields at all. **No identity
+document has ever been retained in production** — nothing to delete, nothing to migrate, no
+decision evidence at risk. Not a reason to close it: a live path that accumulates identity
+documents with no disposal mechanism is a defect whether or not anyone has used it.
+
+### The function never uploads
+`provider-onboarding.js` touches Storage nowhere — it accepts `nationalIdUrl`/`selfieUrl`/etc as
+**strings**. Objects are created by CLIENT upload under `storage.rules` ->
+`match /documents/{uid}/{filename}`.
+
+### A defect the audit found: the URL is client-asserted
+The server stores a URL it never validated — it does not create the object, confirm it exists, or
+confirm it lives in a bucket SOKONI controls. So a disposal job may be UNABLE to delete material a
+verification record references, which makes "we dispose of identity documents after 30 days"
+unprovable for that record — precisely the claim D-04a exists to make provable. Same defect class
+as DL-01: a client-asserted value deciding a server question. **Design requirement for D1-B: the
+server must derive or validate the storage path from the authenticated uid. A path the server
+constructs is a path the server can delete.**
+
+### Two smaller observations
+`/documents/{uid}/{filename}` has **no `allow delete`**, so disposal must run server-side with the
+Admin SDK — the right shape for a governed job, but it also means a provider cannot remove their
+own identity document, which is a data-subject-rights question for the DPIA rather than a bug. The
+read/write scopes are already correct (owner-or-admin read, owner-only write, 20 MB, image/PDF).
+The weakness is the absent lifecycle, not the access rules.
+
+### Recommended order — not implemented, not authorized
+Prevent accumulation while D-02 is negotiated (the path is live and unused; gating it is reversible
+and costs nothing today) -> server-derived storage paths so disposal is possible by construction ->
+build the disposal job and its audit record BEFORE first use, designing the surviving evidence
+before the deletion.
+
+## 2026-09-13 (32) — monitoring ruled: two layers, and SOKONI stops claiming what it cannot measure
+
+**Files:** `docs/VERIFICATION_VENDOR_EVIDENCE_REQUEST.md`, `CHANGELOG.md`. **No vendor selected.
+No SDK. No code.** The evidence request no longer contains a requirement SOKONI itself could not
+legitimately satisfy, so it is ready to issue.
+
+SOKONI will NOT collect ethnicity, skin tone, disability status or other sensitive demographic
+attributes solely to monitor biometric fairness. Consented collection was considered and rejected —
+Universal verification does not justify gathering more sensitive data to prove that another
+sensitive-data system is fair.
+
+The consequence is written down rather than papered over: **SOKONI cannot claim to measure
+demographic disparity, because it deliberately does not hold the attributes needed to calculate
+it.** So the contract must not say "SOKONI will monitor demographic disparity". The vendor reports
+aggregate parity from its own population with methodology and sample sizes; SOKONI monitors
+non-sensitive operational metrics sliced by `vendorModelVersion` and `processingRegion`.
+
+**Neither the assisted route nor operational metrics may ever be cited as fairness evidence.**
+Assisted verification covers individual capture failures; operational metrics are an early-warning
+system. Both are protections; neither is proof, and the request now says so explicitly in both
+places so a vendor cannot offer either as a V-g answer.
+
+### A prerequisite that would otherwise be discovered too late
+The model-version control — baseline rates under version A, materially different rates under B,
+investigate — only works if operational metrics are recorded from the FIRST production
+verification. Added when a problem is suspected, there is nothing to compare against. **Metrics
+collection ships with v1.** And "material change" needs its own numeric threshold, for the same
+reason "material disparity" did: an undefined trigger is an investigation nobody is obliged to
+start.
+
+## 2026-09-13 (31) — V-g ruled; vendor evidence request written; two holes in the substitute found
+
+**Files:** `docs/VERIFICATION_VENDOR_EVIDENCE_REQUEST.md` (new), `CHANGELOG.md`.
+**No vendor selected. No SDK. No account. No code.**
+
+V-g ruled Option 2: direct evidence preferred, with a predefined six-part substitute — all six
+components, not a selection. Marketing claims, "bias tested", SOC 2/ISO, a single aggregate
+accuracy figure, internal assertion without methodology, and SOKONI post-launch monitoring are each
+insufficient alone. D-15 assisted verification is explicitly NOT a V-g substitute: it covers
+individual capture failures, never a systematically worse system for a group.
+
+The evidence request is written to be issued identically to Persona and Sumsub, Veriff as benchmark.
+Every item demands a NAMED ARTIFACT — a field, a clause, a report — because prose assurance is what
+the eight requirements exist to exclude. Price is requested last and only from candidates clearing
+every mandatory item.
+
+### Two problems in the substitute package, found while writing it
+
+**"Material demographic disparity" is unenforceable as written.** No metric and no number means
+SOKONI has no test to invoke and the vendor no obligation to fail. The contract must fix the metric
+(FNMR/FMR per group), the comparison (worst group vs overall), a numeric trigger, a measurement
+window and sample floor so it cannot fire on noise, and the remedy ladder — remediate, then suspend
+the affected AUTOMATED path while assisted stays available, then exit. Vendors should propose the
+numbers; one unwilling to is answering with prose.
+
+**The monitoring component collides with data minimisation.** SOKONI does not collect ethnicity,
+skin tone or disability status, and should not start doing so merely to monitor a vendor —
+monitoring demographic disparity directly requires exactly the sensitive data this programme is
+built to avoid holding. Three routes documented: proxy monitoring by `failureClass` /
+`verificationRoute` / region / device, which is buildable today with NO new personal data but cannot
+attribute a problem to a group; vendor-side reporting, which is unverifiable and becomes assurance
+rather than measurement; or consented demographic collection, which measures directly but collects
+sensitive data, needs its own DPIA section, and is refusable so coverage is partial by construction.
+A policy choice, not an engineering one — and it must be settled before the substitute is relied on.
+
+## 2026-09-13 (30) — candidate comparison recorded; the demographic-evidence deadlock named
+
+**Files:** `docs/VERIFICATION_PROVIDER_CONTRACT.md`, `CHANGELOG.md`. **No vendor selected. No SDK.
+No account. No code.**
+
+Persona LEADING not approved; Sumsub a serious finalist; Veriff a benchmark unless it contractually
+defeats its published retention (90d active + 3yr archive, embeddings included).
+
+**Demographic-performance evidence is RED for all three** — a procurement result, not a tie. The
+contingency this creates is now recorded rather than discovered later: V-g is mandatory and
+disqualifying, so if no finalist supplies it, every candidate is disqualified and procurement
+deadlocks — and under D-01=Universal that touches every merchant. Three routes (hold the line and
+reopen D-01; accept a DEFINED substitute; or mitigate through the D-15 assisted path with
+failure-rate monitoring) must be chosen BEFORE the evidence request goes out, not after a
+preference has formed. Option 3 is defensible only because assisted yields the SAME official
+status, and only if that route is actually staffed.
+
+**Two fields added to VerificationResult:** `deletionHandle` — D-04a requires deletion EVIDENCE,
+and without a handle returned at verification time SOKONI can request deletion but cannot prove it
+for a given record; and `vendorReceivedAt` — the vendor retention clock starts at THEIR ingest
+while SOKONI 30 days runs from the DECISION, so both timestamps are needed to check they deleted
+on time.
+
+## 2026-09-13 (29) — D-02/D-03 positions recorded; SOKONI data is ALREADY outside Kenya
+
+**Files:** `docs/VERIFICATION_PROVIDER_CONTRACT.md`, `CHANGELOG.md`. **No SDK installed. No vendor
+account. No vendor selected. No code.**
+
+Persona recorded as **leading candidate, NOT selected**; EU as **recommended target, NOT
+finalized**. Held apart deliberately, the same way every other SOKONI gate separates candidate
+from approved.
+
+### Measured, not assumed — the transfer baseline
+
+    Firestore (default)                nam5          multi-region UNITED STATES
+    Firestore sokoni-ops               europe-west1  Belgium
+    Cloud Functions (all)              us-central1
+    sokoni-aeb26.firebasestorage.app   US-EAST1      <- where document images land
+    sokoni-aeb26-backups               US-CENTRAL1
+
+**A vendor in the EU does not introduce cross-border transfer — it is already the baseline.** Every
+personal data record SOKONI holds is processed in the US today, so a DPIA scoped to the vendor
+alone assesses the smaller half of the problem. The selfies and national ID images
+`provider-onboarding.js` already accepts land in **US-EAST1** with no disposal path — identity
+documents are crossing a border today, not prospectively.
+
+**Choosing EU for the vendor puts TWO jurisdictions in one workflow** — biometric processing in the
+EU, the resulting record and source images in the US. That may still be the right answer; it is
+not automatically the simpler one, and it should be chosen deliberately rather than by default.
+
+**Firestore location is immutable.** `(default)` cannot move from `nam5` without a new database and
+a full migration — worth knowing before residency is promised to anyone. That `sokoni-ops` already
+sits in `europe-west1` proves EU is achievable for a NEW database, and that this project already
+runs two residencies at once.
+
+### Engineering consequence
+The stored artifact must record the **processing region per verification**, alongside
+`vendorModelVersion`. A region held as configuration rather than evidence cannot answer "where was
+this person face processed?" a year later — which is exactly what a transfer audit asks.
+
+### Retention stays a contractual selection criterion
+Public vendor statements are not D-04a completion. The DPA must fix the ~30-day deletion
+instruction, coverage of selfies/ID images/biometric artifacts, backups and DR copies,
+subprocessors, legal-hold exceptions, deletion EVIDENCE, no model-training use, permitted purposes,
+region commitment, transfer safeguards, breach notification and audit rights.
+
+## 2026-09-13 (28) — D-15 RULED: designated reviewers, two for an assisted approval
+
+**Files:** `docs/VERIFICATION_PROVIDER_CONTRACT.md`, `CHANGELOG.md`. **No code — the reviewer
+mechanism is deliberately NOT implemented; vendor, processing location and retention are still
+open.**
+
+Assisted verification may be performed only by designated AdminOS verification reviewers, and an
+assisted approval requires TWO independent reviewers. Separation of duties on the exception path,
+without creating a second identity tier. Absence of a face score is never failure on that route.
+Ordinary AdminOS access must NOT imply verification authority.
+
+### Measured against the code rather than assumed
+**Already implemented — do not rebuild.** `admin-os.js` already prohibits self-approval, with the
+reasoning in place: *"A reviewer may not decide their own submission, whatever claims they hold.
+An administrator is still an applicant when the subject is themselves."* It also refuses to decide
+when no submission exists (a decision ON evidence, never a way to manufacture one), requires an
+actionable reason for rejection, and is idempotent so a double-tapped button cannot manufacture a
+second review event — which matters precisely once "two reviews" becomes the rule.
+
+**Missing, and what the ruling actually adds.** `admin-os-dispatch.js` authorizes *"every op with
+the same admin/superAdmin check"*, so TODAY ANY ADMIN IS A VERIFICATION REVIEWER — the designated
+capability does not exist and cannot be satisfied by configuration. The schema is single-reviewer
+(`reviewedBy`/`reviewedAt`), so two-reviewer approval is a schema change folded into the deferred
+`providerVerification` generalisation. And reviewer1 != reviewer2 needs its own server-side check:
+two approvals from one person is a different failure from self-approval, and the existing
+`uid === actor` guard does not cover it.
+
+## 2026-09-13 (27) — D-02/03/04 evaluation contract + D-15 fallback design
+
+**Files:** `docs/VERIFICATION_PROVIDER_CONTRACT.md` (new), `CHANGELOG.md`.
+**No vendor selected. No code. No deployment.** D-01 is closed as UNIVERSAL; this makes the
+vendor decision evaluable rather than making it.
+
+### SOKONI already had the privacy pattern — twice
+
+`age-verification.js` is the closest analogue and the model for the surviving audit record:
+*"We record the DECISION, not the raw identity data… the national ID is reduced to a salted hash
+plus its last four characters — enough to answer 'is this the same person' and to support an
+investigation, without holding a national ID number in Firestore. A breach of this collection
+should not expose a customer's identity document."* `legal-agreements.js:355` hashes a drawn
+signature rather than storing it, for the same reason. The biometric workflow inherits that shape:
+**verify against the material, retain the decision plus a correlation token, dispose of the
+material.** Nothing about retention needed inventing.
+
+### D-02 as a contract, not a shortlist
+
+The vendor sits behind **`verification-adapter.js`**, matching the existing house pattern
+(`payment-adapters.js`, `etims-kra-adapter.js`, `wallet-money-adapter.js`). That is a requirement:
+it keeps the vendor replaceable, lets the contract be tested with a fake, and stops vendor SDK
+types leaking into `providerVerification`.
+
+Eight mandatory requirements, each disqualifying. The two least obvious: a vendor must return a
+**confidence score rather than a boolean** (a boolean hides the vendor's own threshold choice and
+leaves D-11 nothing to branch on), and must **evidence accuracy across skin tone, age and gender** —
+under Universal scope that is an exclusion risk, not merely a quality one, because it now applies
+to every merchant on the platform.
+
+`vendorModelVersion` is mandatory in the stored record: a score means nothing a year later without
+knowing which model produced it, and a vendor silently changing models would otherwise be invisible.
+
+### D-03 stated as commitments, not a recommendation
+On-device shrinks the biometric surface but shifts trust to a client SOKONI does not control — the
+result must then be server-attested or it is client-asserted, which is the DL-01 defect class
+again. Backend means SOKONI becomes the processor. Vendor cloud is least engineering and most
+contract, and cross-border transfer must be established BEFORE selection.
+
+### D-15 designed, and it is a launch blocker
+Universal scope means no fallback = an applicant who cannot complete face capture cannot become an
+official merchant at all. The design requires failures to be **classified, not merged** —
+`capture_unsupported`, `liveness_indeterminate`, `match_low_confidence`, `applicant_unable` are
+four different situations and only one is a fraud signal; collapsing them turns accessibility into
+rejection. The assisted route yields the **same official status**, or the fallback becomes a
+second-class identity and the exclusion returns by another door. `verificationRoute` is recorded
+explicitly, never inferred from missing scores.
+
+Left open for owner ruling: who may perform assisted verification, and whether it needs two
+reviewers — an authority question, not an engineering one.
+
+## 2026-09-13 (26) — Biometric Verification Decision Record opened; D1-B blocked behind it
+
+**Files:** `docs/BIOMETRIC_VERIFICATION_DECISION_RECORD.md` (new), `CHANGELOG.md`.
+**No code. No vendor selected. No deployment. Nothing migrated.**
+
+Owner ruling: the next gate is a DECISION gate, not a coding gate. This record exists to make
+those decisions makeable — what engineering established is stated as fact, and every genuine
+policy/vendor call is left explicitly OPEN rather than implied through a default.
+
+**Established, not decided:** SOKONI has **no AUTOMATED facial verification** — faceMatch,
+faceVerified, faceEmbedding, faceScan and face-api are 0 files each. But a selfie IS already
+collected: `provider-onboarding.js:977` takes `selfieUrl` with `nationalIdUrl`/`licenceUrl`/`kraPinUrl`
+and AdminOS already human-reviews them (`admin-os.js:1764`), and **those images have NO disposal
+mechanism at all** — 0 matches for disposal/retention/purge. 0 production rows today, so nothing is
+actually retained, but the gap is shipped code rather than a future design concern. The WebAuthn in `manager-auth.html` is device-local POS
+manager auth whose biometric never reaches the server, and is recorded here specifically so it is
+**not** later cited as evidence of capability. `providerVerification` already IS a governed
+review authority (`status`, `priorDecisions[]`, `reviewedBy`, `reviewedAt`, AdminOS reading it at
+`admin-os.js` 475/579/1733) with 0 production rows, while `driverVerification` is a checklist with
+1 row — so the plan is to generalise the former, not create a third schema.
+`legal-agreements.js:355` already hashes a signature rather than storing the image, explicitly
+because it is "biometric-adjacent personal data" — the right data-minimisation shape, and
+explicitly NOT a substitute for whatever artifact a face vendor requires.
+
+**D-01 is the gating decision:** universal biometric verification vs role-based. It sizes
+everything else — under universal, the DPIA, vendor contract, retention and disposal machinery all
+extend to ordinary shop onboarding, and 5 of the 10 live applications are `business`. Answering it
+after procurement would mean assessing a biometric system for a population never meant to be in
+scope.
+
+Fifteen decisions are tracked; two are partially settled (human-reviewer pattern exists but its
+contract does not; P-1's ~30 days extends to face material unless the processing model changes).
+Two were added that the original list did not name: **the vendor's OWN retention** (a vendor that
+keeps images makes SOKONI's policy necessary but not sufficient, so it must be contractual), and
+**what audit evidence survives disposal** — the thing that proves a verification happened after
+the material is gone.
+
+The invariants already ruled do not reopen: `status === 'approved'` is never sufficient alone,
+every component is server-authoritative, `documentsComplete` and `official` stay derived, one
+shared engine with role-specific documents, and no rename or migration of the two verification
+collections until the migration shape is designed.
+
+## 2026-09-13 (25) — D1-A: approved drivers get a Business, and a defect that would have refused them all
+
+**Files:** `functions/application-lifecycle.js`, `functions/business-bootstrap.js`,
+`functions/test/application-lifecycle.test.js`,
+`scripts/test-d1a-driver-business-provisioning.js` (new), `CHANGELOG.md`.
+**No deployment. No rules change. No production data. No shops. No vehicles auto-created.**
+
+### What was wired
+
+`projectDriver` now provisions the business that will OWN the driver's vehicles, reusing the
+canonical primitive rather than writing one: `_ensureBusinessForOwner` allocates a `SOK-XXXXXX`
+id (never `businesses/{uid}`, the open directory-row collision), holds a transactional claim so a
+repeated approval cannot create a second business, and releases that claim on failure so a dead
+run cannot leave a driver permanently unprovisionable. It had **no callers** before this — a
+primitive built for exactly this job and never connected.
+
+Deliberately AFTER the driver batch commits: the driver records are the approval's own effect and
+must not be held hostage to a dependent step. A throw lands as `projectionStatus: 'failed'` and a
+retry re-runs safely because every write is idempotent. `claim-held` is recorded as **deferred**,
+not thrown — it is a race another run will finish, not a failure.
+
+### A delivery business gets NO seller subscription
+
+`_createBusiness` unconditionally wrote `subscriptions/{merchantId}` with `hubType:'seller'`,
+`planId:'seller_free'`, `plan:'trial'` and a trial clock. For a rider that is wrong twice over: it
+enrols them in the merchant subscription population `subscription-core` and the commission engine
+read, and it expires into a seller plan they never asked for. Gated behind `__businessKind` so
+**every existing merchant path is byte-for-byte unchanged** — asserted by a positive control that
+requires a normal merchant provisioning to STILL receive its subscription.
+
+Not replaced with a delivery plan: what subscription a delivery business should carry is a
+commercial decision, and inventing one would be a fabricated plan deciding real money.
+
+### The defect this gate actually caught
+
+`projectDriver` wrote `approvedAt` and `status:'active'` but **no `approved` field**. DL-01's
+eligibility gate requires `approved === true` and treats absence as not-approved — so **every
+driver the real approval path produced would have been refused in production as `not_approved`**,
+including fully verified ones. The DL-01 unit suite could not see it: it builds its own fixtures
+and sets the flag by hand, so it could only ever prove the gate refuses wrong shapes, never that
+it accepts the shape the real projection emits.
+
+Fixed at the projection (`approved: true` written explicitly) rather than by relaxing the gate —
+absence must never read as permission. The missing assertion now exists in the one suite that has
+both halves: *"a driver from the REAL projection, once verified, IS dispatch-eligible."*
+
+### An honest seam, not a hidden dependency
+
+`_ensureBusinessForOwner` closes over business-bootstrap's OWN Firestore handle, not the `db`
+passed to `projectDriver` — so the projection's `db` parameter stopped covering all its writes,
+and the existing jest suite hung. Rather than leave that hidden, the provisioner is injectable and
+declared; production never passes it. The unit suite now stubs it and **also asserts the new
+behaviour** (business provisioned on approval, none on retraction, `approved` written explicitly)
+instead of merely tolerating it.
+
+### Evidence
+
+    scripts/test-d1a-driver-business-provisioning.js  24 / 0   emulator, REAL projection
+    scripts/test-dl01-rider-eligibility.js            41 / 0   no regression
+    functions/test/application-lifecycle.test.js      88 / 1   (see below)
+
+Every negative in the D1-A suite is paired with a positive that proves the probe can see — the
+merchant subscription control exists precisely so "no subscription" cannot pass by looking in the
+wrong place.
+
+**The 1 jest failure is NOT from this work.** `resolveRole` now routes
+`{type:'professional', professionalType:'Lawyer'}` to `provider` where the test expects `legal`.
+That is another agent's in-flight change — this file already carried ~280 lines of their
+uncommitted work before this gate, the failing assertion is pure `resolveRole`, none of this
+gate's diff hunks touch it, and it fails in isolation with every test of mine skipped. Left alone.
+
+### Not done
+D1-B document capture/extraction/human review/30-day disposal, and D1-C vehicle provisioning.
+
+## 2026-09-13 (24) — V-1 authority patch: Delivery Hub no longer depends on the undecided Store model
+
+**Files:** `functions/logistics-plus.js`, `scripts/test-v1-vehicle-authority.js` (new),
+`docs/DELIVERY_D1_VERIFICATION_CONTRACT.md`, `CHANGELOG.md`. **No deployment. No rules change.
+No shops created, migrated or read. No production data.**
+
+### The conflict this resolves
+`vehicles.shopId` resolved through `_assertRole`, which requires `shops/{shopId}` to exist. But
+`business-bootstrap._createBusiness` writes **twelve collections and `shops` is not among them**
+(businesses, branches, merchants, posStaff, posRoles, posSettings, paymentMethods, receiptConfig,
+taxConfig, categories, featureFlags, subscriptions — zero `shops` occurrences in the file). So
+provisioning a driver vehicle would have required inventing a Store record — settling the open
+Business->Store question as a side effect of registering a lorry.
+
+Owner ruling: **vehicle -> business**, not vehicle -> shop -> business.
+
+### The patch, and its boundary
+`_assertVehicleAuthority(uid, businessId)` resolves through `businesses/{businessId}.ownerId`,
+with the existing AdminOS admin path preserved. Applied to the **six `fleet*` functions that
+address the `vehicles` collection**; the other **25 `_assertRole` call sites** (routes, warehouse,
+delivery zones, cargo) are untouched and still shop-bound, because re-authorising them is a
+different gate. Both counts are asserted by the suite, not assumed.
+
+**No delegated tier, deliberately.** `_assertRole`’s employee path queries `shopEmployees`, which
+has NO production footprint — so no delegated access resolves today and none is lost. The helper
+takes no `minRole` parameter precisely so its absence is visible at every call site instead of
+silently ignored. `shopEmployees` was NOT created to "fix" this.
+
+### V-2 lands here too
+The module’s private `_VEHICLE_TYPES` is retired (0 occurrences). Vehicle class now comes from
+the canonical vocabulary, so `bike` stores as **motorcycle** rather than this module meaning
+motorbike while application-lifecycle meant bicycle. The raw submitted token is kept alongside
+the canonical class, so provenance survives.
+
+### Two defects found while patching
+`vehicleId, shopId` in a log payload used `vSnap`, not `snap`, so a scripted replace missed it —
+under `use strict` that line would have thrown a ReferenceError on an undeclared `shopId` at
+runtime. Caught by re-counting occurrences rather than trusting the replace.
+And the plate-uniqueness comment said "unique within shop" while the query had **no owner filter**
+at all. Global is the correct reading — a registration plate identifies one vehicle in the world —
+so the code and comment now agree instead of one describing the other wrongly.
+
+### Evidence
+    scripts/test-v1-vehicle-authority.js   22 / 0   emulator-backed, REAL handlers
+    scripts/test-dl01-rider-eligibility.js 41 / 0   no regression
+
+The suite seeds **zero `shops` documents** on purpose: a passing run is the proof that vehicle
+authority no longer depends on the Store model. It also asserts the vehicle carries `businessId`
+and **no `shopId` at all**, that authority over one business cannot reach another’s vehicles, and
+that the 6/25 split held.
+
+### Not done
+Driver -> business provisioning call (wiring `_ensureBusinessForOwner` into the approved-driver
+lifecycle), and all of D1’s document capture, extraction, human review and 30-day disposal.
+
+## 2026-09-13 (23) — V-2: one canonical vehicle vocabulary, and unknown stops meaning motorcycle
+
+**Files:** `functions/vehicle-classes.js` (new), `functions/rider-eligibility.js`,
+`scripts/test-dl01-rider-eligibility.js`, `docs/DELIVERY_D1_VERIFICATION_CONTRACT.md`,
+`CHANGELOG.md`. **No deployment. No rules change. No production data change.**
+
+Owner rulings recorded: V-1 converge on `vehicles` reusing `shopId`; V-2 as implemented below;
+P-1 ~30-day image retention; P-2 automated extraction with mandatory human review.
+
+### What was wrong
+Three vocabularies, and one token meant two things:
+
+    application-lifecycle VEHICLE_MAP ->  moto  bicycle ebike tuktuk  car van truck
+    sokoni-dispatch VEHICLE_CAPACITY  ->  moto  bicycle ebike tuktuk  car van truck
+    logistics-plus _VEHICLE_TYPES     ->  bike  bicycle  --   tuk_tuk car van truck
+
+`VEHICLE_MAP.bike = bicycle` (8kg) while logistics-plus used `bike` for the motorbike class. And
+`normVehicle` returned `moto` for ANYTHING unmapped, so suv/tractor/trailer silently became
+motorcycles — conservative only by luck, since the default is a fixed class.
+
+### The fix
+`vehicle-classes.js` is the single vocabulary. Two rules carry it:
+**unknown returns NULL, never a default**; and **recognised is not the same as dispatchable** —
+pickup, suv, lorry, trailer and tractor are recognised but have NO authoritative capacity, so
+they are refused rather than given an invented payload. `lorry` previously borrowed truck's
+1000kg; that number described a truck, so it is now unset pending a commercial ruling.
+
+Capacities are DERIVED from the exported `VEHICLE_CAPACITY`, not retyped — a second table that
+agrees by inspection is how the three vocabularies happened. A load-time guard throws if any
+alias points at an undefined class, so a contradictory vocabulary cannot ship.
+
+`dispatchKey()` translates canonical -> the legacy token `scoreRider` understands, because
+`VEHICLE_CAPACITY[type] || VEHICLE_CAPACITY.moto` would otherwise silently mis-size every
+non-motorcycle handed a canonical name — the same defaulting this module removes.
+
+**Checked against production before landing:** live tokens are `moto` (2), `motorcycle` (3),
+`motorbike` (1); `vehicles` is empty; **no record holds the bare token `bike`**, so the semantic
+flip changes no existing document.
+
+### Evidence
+    scripts/test-dl01-rider-eligibility.js   41 / 0
+    sabotage                                 12 caught / 0 missed, both files restored
+
+### Two test defects sabotage found
+**V3 initially MISSED.** Asserting only "bike dispatches" could not catch a regression to
+bicycle — a bicycle is also dispatchable. The test now asserts the resulting CLASS and capacity.
+**V2 initially MISSED** because the load-time vocabulary guard threw instead of a case failing;
+that throw is the designed defence (the corruption cannot ship at all), so the runner now
+distinguishes it from an ordinary crash, which still does not count.
+
+### Not done
+V-1 implementation. "Reuse shopId only" means every approved rider needs a Business record, which
+needs a driver->business provisioning step that does not exist and intersects the open
+`businesses/{uid}` collision. Sized, not started.
+
+## 2026-09-13 (22) — D1 design: the verification gap is an ABSENT pipeline, not a disposal policy
+
+**Files:** `docs/DELIVERY_D1_VERIFICATION_CONTRACT.md` (new), `CHANGELOG.md`. **Design only —
+no code, no rules, no deployment.**
+
+The premise inverted on contact with the evidence. `driver.html:887-912` reads the ID and DL
+photos to base64 and writes them to **localStorage on the applicant device**; the Firestore
+application payload carries neither the images nor the identifiers, and says so in its own
+comment ("no photos — too large"). Verified: **all 10 production applications carry no
+`nationalId`, `dlNumber` or `dlExpiry`.** `projectDriver` reads exactly those fields, so
+`documentsComplete:false` is STRUCTURAL — there has never been anything on the server to verify.
+So there is no disposal policy to design yet; there is a missing intake.
+
+**Ordering consequence:** DL-02 correctly refuses the existing driver. Deploying it before D1
+would impose a control with no legitimate path to satisfy it. D1 intake -> verification ->
+DL-02 -> DL-01 rules -> combined certification.
+
+**No grandfathering clause**, deliberately: production holds 1 driver and 2 approved driver
+applications, so re-verification is a manual afternoon. An exemption flag would outlive the
+handful of records it was written for.
+
+### Two findings that changed the design mid-gate
+**A `vehicles` collection already exists** — `logistics-plus.js:96`, owned by `shopId` (merchant
+FLEET, with `assignedDriverId`), zero production rows. The obvious "add `vehicles` keyed on
+`driverId`" would put two ownership authorities on one collection name — the same shape as the
+`businesses/{uid}` row and the three `wallets` blocks. Raised as decision V-1 rather than picked.
+
+**Three vehicle vocabularies, and `bike` means different things.** `VEHICLE_MAP.bike = bicycle`
+(8 kg); `logistics-plus` uses `bike` for the motorbike class. They never meet today because
+dispatch reads `vehicleType` off `drivers` — convergence is precisely what would make them meet.
+One canonical vocabulary is a prerequisite, not a tidy-up.
+
+Also specified: identity/licence records with `documentsComplete` DERIVED (never client-set),
+licence expiry as a dispatch-time eligibility input, fail-closed vehicle classification (unknown
+-> not dispatch eligible, aliases canonicalised explicitly), a Country->County->City->Hub->Service
+Area hierarchy with GPS as an operational signal not identity, and image handling where disposal
+is designed in from the first commit with its own audit record.
+
+**POLICY DECISIONS REQUIRED, left open:** P-1 image retention period; P-2 manual vs automated
+extraction. The design is neutral to both.
+
+## 2026-09-13 (21) — DL-01: a signed-in stranger could be dispatched real deliveries
+
+**Files:** `functions/rider-eligibility.js` (new), `functions/dispatch.js`,
+`scripts/test-dl01-rider-eligibility.js` (new), `CHANGELOG.md`.
+**No deployment. No production data change. `firestore.rules` NOT modified** — the rules half is
+built and proven in scratch, awaiting a landing target (see below).
+
+### The defect
+
+Served ruleset `77465364-c6e2-45bf-806a-67f586e31a0f` allows any signed-in account to create
+`rideDrivers/{own-uid}`. `noAdminFields()` is a DENYLIST and does not name `status`,
+`suspendedAt` or `isOnline`. `dispatch.js:116` then selected riders with
+
+    collection('rideDrivers').where('isOnline','==',true)
+
+and nothing else — no approval, no verification, no suspension check. So an arbitrary account
+with plausible GPS was dispatched real deliveries, **pickup address and fee included**, and a
+suspended rider stayed dispatchable because `suspendedAt` was both client-clearable and never
+read.
+
+**Bounded, not harmless:** `dispatchQueue` does not exist among the 213 production collections
+and both `deliveryFees` rows are `no-rider|pending`, so no dispatch has ever completed. The hole
+was open; nobody had ridden through it.
+
+### The fix — authority and availability are different questions
+
+`functions/rider-eligibility.js` is now the single answer to "may this account be dispatched?"
+
+    AUTHORITY     drivers + driverVerification   — no client can write either
+    AVAILABILITY  the presence shard             — a client MAY write it
+
+Being online is a fact about a device, not a permission. A client that lies about presence gains
+nothing, because presence only decides WHICH eligible rider is chosen, never WHETHER an account
+is eligible. That is already the shape `application-lifecycle.js::projectDriver` intends — it
+creates approved riders OFFLINE, because approval grants the right to work rather than putting
+someone on the road.
+
+**Not a longer denylist.** Adding `status` to `noAdminFields()` would leave the next unnamed
+field to reopen it — this is the third appearance of this mechanism (HC-01 on healthProviders,
+phoneVerified on users, now DL-01). Statuses are an ALLOWLIST; an unknown status is not eligible.
+
+**DL-02 closed in the same primitive:** `projectDriver` writes `documentsComplete:false`
+alongside `approved:true` — exactly the production state found in the census. Verification now
+gates eligibility instead of sitting beside it.
+
+**Capability is read from the canonical record.** `vehicleType` decides which payloads a rider
+can win, so it comes from `drivers`, never from the writable shard — otherwise an account could
+claim a lorry's capacity.
+
+**Re-checked at ACCEPT, not only at ranking.** `rankedRiders` is a stored snapshot, so a cascade
+outlives the query that built it; a rider suspended after ranking would still have taken the job.
+The accept branch re-evaluates and advances the cascade rather than stalling it. A DECLINE stays
+available to an ineligible rider, or they would block every delivery offered to them.
+
+### Evidence
+
+    scripts/test-dl01-rider-eligibility.js     25 / 0
+    sabotage                                    7 caught / 0 missed, file restored byte-identical
+    rules candidate, emulator (port 8085)      12 / 0
+    rules BEFORE (served) — exploit REPRODUCED  mallory mints her own rideDrivers row
+
+The counter-proof runs the real ranking engine through the OLD selection path and requires the
+exploit to **succeed** there: *"OLD path DISPATCHES an account with no driver record at all."*
+A suite that only shows new code refusing proves the new code refuses, not that this closed.
+Case 12 is the matching control — an eligible, verified, available rider must still dispatch.
+
+### Two things sabotage found that review had not
+
+**A crash is not a refusal.** The first S5 made `evaluate()` return eligible for a null driver.
+The suite exited 1 — with zero FAIL lines, because it CRASHED dereferencing a record it had not
+proved existed. Scored MISSED, correctly. Two fixes followed: a structural `!drv` guard in
+`filterEligible`, and fail-closed per-case handling so a throw is reported as that case failing.
+
+**A defence-in-depth layer needs its own assertion.** With the guard added, sabotaging it away
+broke *nothing* — `evaluate()` already refused. An unobservable layer is indistinguishable from
+dead code the next person deletes. `filterEligible` now takes an optional evaluator so the suite
+can force layer 1 open and require layer 2 to hold alone (13c), plus an assertion that the seam
+is actually reached (13d) rather than silently inert.
+
+### The rules half — built, proven, NOT landed
+
+    rideDrivers     allow write: if false           (read unchanged — the read was never the defect)
+    deliveryRiders  blocked set += status, role, isAdmin
+
+Verified against a candidate built from the **served** ruleset: 12/0 after, and the BEFORE run
+demonstrates both defects live. Not landed because `firestore.rules` in this worktree carries 99
+hunks of another agent's uncommitted work, and the correct base is the
+`release/merchant-launch-rc` lineage. **Landing target is an owner decision.**
+
+### Still open, deliberately untouched
+DL-03 projection convergence (2 approved driver applications, 1 projected identity) ·
+`deliveryFees` admin-client write · `wallets` 3 UNIONing blocks · the `orders` vs
+`packageRequests` two-rail split · `navigation.js` selects from `riderLocations`, a collection
+that **does not exist in production**, so that second dispatch path never matches anyone.
+
+## 2026-09-13 (20) — Gate B2c: the reconciled ruleset preserved in one single-path commit
+
+**Commit `2130877b57c082c1acd80652239359b0e434c3bc`** on `release/merchant-launch-rc`
+(worktree `C:/temp/sokoni-mlrc`). **Not pushed — the branch has no remote ref. No build, no
+release, no deployment.**
+
+    rules: preserve Gate B reconciled artifact
+    1 file changed, 60 insertions(+), 12 deletions(-)
+
+### Why a commit at all
+
+The reconciled ruleset was sitting as an uncommitted modification in a worktree another agent
+is actively editing. During this gate alone that tree grew from one dirty file to six — a
+blanket `git add -A` there would have swept a security ruleset into an unrelated readiness
+commit. Committing it to its own commit removes that exposure without touching their work.
+
+### Isolation, proven from the commit rather than asserted
+
+    paths in the commit           1   (firestore.rules)
+    HEAD advance                  8c4ff733 -> 2130877b, distance exactly 1
+    committed blob                271,880 bytes, byte-identical to the verified artifact
+    verify-reconciled.js on blob  36 / 0
+    diff 8472af9c -> HEAD         exactly 3 hunks (1389 / 4570 / 5330)
+    staged after commit           0
+    other agent's 6 dirty files   all still unstaged, none in the commit
+
+Staged by explicit path (`git add -- firestore.rules`); never `-A`, never `.`, no stash, no
+reset, no rebase.
+
+**On the right invariant:** "the other agent's files are byte-identical before/after" is the
+weaker check — they are editing those files continuously, so it can fail for reasons that have
+nothing to do with this commit. The invariant that actually proves isolation is that the commit
+contains **exactly one path**. Both were checked and both hold (their three baselined files
+hashed `OK`), but only the first is evidence.
+
+`release/multishop-checkout-certified` remains untouched: `firestore.rules` and
+`firestore.rules.build` there are still byte-identical to session start.
+
+## 2026-09-13 (19) — Gate B2a: reconciled ruleset placed on the release worktree, nothing destroyed
+
+**Placement only. No branch movement, no build, no deployment.**
+
+    scratchpad/gateb/reconciled.rules  ->  C:/temp/sokoni-mlrc/firestore.rules   (271,880 bytes)
+
+`C:/temp/sokoni-mlrc` is the dedicated worktree for `release/merchant-launch-rc` — the branch the
+reconciliation was built from. Its `firestore.rules` was **byte-identical to the 8472af9c base**,
+re-verified immediately before the write, so the placement overwrote nothing anyone had modified.
+
+**Why not the active worktree.** `release/multishop-checkout-certified` carries **99 hunks** of
+another agent's uncommitted rules work, and that agent is live — its Firestore emulator still held
+port 8080 throughout, and `firestore.rules.build` there had been regenerated two hours earlier.
+Overwriting it would have destroyed active work to save a copy step. Both files there are verified
+**byte-identical to session start**.
+
+### Verified after the write
+    placed file == verified artifact            byte-identical
+    verify-reconciled.js against the PLACED path   36 / 0
+    mlrc HEAD before/after                      8c4ff733… / 8c4ff733…  (unmoved)
+    mlrc branch                                 release/merchant-launch-rc (unchanged)
+    multishop firestore.rules / .build          unchanged
+
+Rollback: `scratchpad/gateb/mlrc-firestore.rules.before` — the target's pre-placement content,
+which is the 8472af9c base.
+
+### One hazard, stated rather than buried
+
+The placed file sits as an **uncommitted modification inside a worktree another agent is actively
+using**. Between two checks minutes apart that worktree went from one untracked file to two
+modified files plus one untracked — live, concurrent work. A blanket `git add -A` there would
+sweep this ruleset into an unrelated readiness commit. Committing it to a dedicated branch would
+remove that risk, but that is branch movement and was explicitly out of scope for B2a.
+
+## 2026-09-13 (18) — Gate B: rules reconciled onto the served base, 101 hunks reduced to 3
+
+**No deployment. No rules released. `firestore.rules` and `firestore.rules.build` in this
+worktree are BYTE-IDENTICAL to how the session found them** — verified with `cmp` after the
+run. The reconciled ruleset is an artifact awaiting a placement decision, not a repo edit.
+
+**Artifact:** `scratchpad/gateb/reconciled.rules` (5,699 lines, 271,880 bytes raw).
+
+### The direction of the build is the whole safety argument
+
+The worktree diverges from the served base in **101 hunks**. A reconciliation that starts from
+the worktree and subtracts has to be exhaustive to be correct — miss one hunk and it ships.
+So this starts from the **proven base** (`release/merchant-launch-rc @ 8472af9c`, confirmed
+rules-identical to the branch tip `ee06146`) and applies exactly three authorized edits.
+Exclusion becomes the default; inclusion is the deliberate act. `diff base reconciled` = **3
+hunks**, one per authorized edit.
+
+The builder verifies **11 line anchors before mutating anything** — and earned its keep: the
+first run aborted on an off-by-one (`match /stores/` is 5346, not 5345) having written nothing.
+
+### What the 99 excluded hunks actually were
+
+Mostly a systematic "make denial explicit" refactor — ~182 added `allow write: if false`.
+Behaviourally a **no-op**: an absent allow clause already denies. It buys no security and costs
+compiled bytes. The rest add a tenant model (`isTenantMember`/`isTenantAdmin`), an `analytics`
+collection, and ~30 other grants. None of it is authorized, none of it is carried.
+
+### The wallet exclusion is not a naming preference
+
+Live data settles it: `businessWallets` — **`ownerId` 2/2, `ownerUid` 0/2**, both docs keyed
+`SOK-*`. The worktree's `match /businessWallets/{shopId}` reads
+`resource.data.ownerUid == request.auth.uid`, a field that **exists on no live wallet**. That
+block does not rename the model — it **denies every merchant read of their own balance**. Rules
+deploy whole-file, so it would have ridden along with any release from this branch.
+
+The base's block is kept byte-identical, including `businessWalletEntries` deriving ownership
+via `get()` on `resource.data.businessId` rather than a flat uid compare. **Unverified and
+labelled as such: `businessWalletEntries` has 0 live rows, so its read rule is
+source-authorized, never production-exercised.**
+
+### HC-01, closed at the root
+
+The base carried **two** `match /healthProviders/` blocks; Firestore unions them, so the second
+block's `allow create` overrode the first's denial and any signed-in user could write
+`healthProviders/{own-uid}`. Collapsed to one block, writes server-only. The owner read clause
+from the removed block is **deliberately kept** — without it an applicant loses sight of their
+own pending record. `status == 'approved'` is **not** carried forward: no writer produces it,
+and under `write: if false` it is unreachable by construction, so preserving it would encode a
+state the system cannot enter. A breadcrumb comment replaces the deleted block, matching the
+device the base already uses for `/applications`.
+
+### Evidence
+
+    verify-reconciled.js                36 / 0
+    sabotage.js                          5 caught / 0 missed   (positive control clean)
+    test-healthcare-provider-rules.js   33 / 0   emulator, against the candidate
+    test-stories-rules.js               24 / 0   emulator — but see the caveat below
+    stripped size            192,265 / 262,144 bytes   (69,879 free; +554 vs base)
+
+Size is measured with `stripComments` **extracted from `release-firestore-rules.js` itself**,
+not reimplemented — a ceiling check using different stripping logic measures a file nobody will
+release.
+
+**The stories 24/0 is not 24 pieces of evidence about this candidate.** Sections A–D (18
+assertions) ran against the reconciled rules in the emulator. Section E (6) hard-reads
+`firestore.rules.build` and `firestore.rules` from the repo root regardless of `RULES_FILE`, so
+it measured the *worktree* artifact. The candidate-side equivalents (single stories block,
+braces balanced, size under ceiling) are covered by `verify-reconciled.js` instead.
+
+### Two detector faults, fixed in the detectors
+
+`exactly ONE match /healthProviders/` first failed at **3** — it was counting its own HC-01
+comment and the breadcrumb. Rescoped to **stripped** source. `NO ownerUid anywhere` failed at
+**38** — but the base has 38 too; `ownerUid` is legitimate on other collections. The assertion
+was wrong, not the file; replaced with "count unchanged from base" plus a wallet-block-specific
+check. Both are the same lesson: an assertion that the base itself fails is a broken assertion.
+
+### Sabotages (each must fail the RIGHT check, not merely exit non-zero)
+
+    S1  re-add the second healthProviders block      CAUGHT
+    S2  gut noPhoneVerificationForgery to `true`     CAUGHT  <- count check MISSED it; only the
+                                                              definition-body compare fired
+    S3  wallet ownerId -> ownerUid                   CAUGHT
+    S4  shops/{storeId} -> shops/{uid}               CAUGHT
+    S5  remove the stories 24h ceiling               CAUGHT
+
+S2 is why the guard check compares definition bodies and not occurrence counts: a gutted guard
+keeps its name.
+
+### Not done, deliberately
+
+**The artifact was NOT written to `firestore.rules`.** Doing so would discard 99 hunks of
+another process's uncommitted work in this shared repo. That is a placement decision for the
+owner, not a side effect of a reconciliation.
+
+`shops/{storeId}` is carried from the base **unchanged** and asserted byte-identical — the
+Business→Store question remains undecided and un-inferred. Emulator ran on port 8085 because
+another agent holds 8080; its data was never cleared. Three temp files
+(`firestore.rules.gateb`, `firebase.gateb.json`, `scripts/test-stories-rules.gateb.js`) and the
+emulator debug log were removed.
+
+## 2026-09-13 (17) — KASS identity data repair: a branch parented to a person, and a stranded membership
+
+**PRODUCTION DATA CHANGE — no code, no rules, no deployment.** Two documents repaired, one
+created, one marked. `businesses`, `shops`, `businessWallets`, `sokoniTills` and all code
+untouched. `businesses/SOK-WDLNDS.businessId` deliberately NOT written.
+
+### What was wrong, and why
+
+`branches/SOK-E7J2Y8-main` carried `merchantId: D5Ql2EYr95bt79IpcGTmOMTK0P83` — an auth uid —
+where the identity contract (`docs/TENANT_IDENTITY_CENSUS.md`) requires the `businesses` doc id.
+
+Not a creation bug. The document held its own provenance: `mergedFrom: "SOK-E7J2Y8"`,
+`mergedAt`, and `phone: "+254705726803"` — the retired KASS account's number. This is damage
+from the August 2026 account merge (`xrH21J5GFb…` -> canonical `D5Ql2EYr…`), where a
+re-ownership script rewrote uid-bearing fields across the merchant's records and **also rewrote
+`merchantId`, which is not a uid**. The merge treated a business identifier as an owner field —
+the exact Buyer/Business conflation the identity contract now forbids.
+
+No `mergedFrom` writer exists anywhere in the repo or in git history: the script is gone, so the
+damage cannot recur from that path and the repair cannot be silently undone by it.
+
+The same merge stranded `workspaceMemberships/xrH21J5GFb…_SOK-GL58F7` on the retired uid.
+
+### Repair 1 — branch parent
+
+    branches/SOK-E7J2Y8-main.merchantId
+      D5Ql2EYr95bt79IpcGTmOMTK0P83  ->  SOK-E7J2Y8
+
+Canonical value corroborated four independent ways: the doc id prefix, the document's own
+`mergedFrom`, `posStaff` (which the merge missed and which still carried `SOK-E7J2Y8`), and the
+existence of `businesses/SOK-E7J2Y8` owned by that uid.
+
+Field-scoped `update()`, never `set()`, plus `repairedFrom` / `repairedAt` / `repairReason` so
+this write is as explicable later as the merge that caused it — `mergedFrom` is the only reason
+the original value was recoverable at all, and that lesson is worth repeating rather than
+relearning.
+
+### Repair 2 — stranded membership, additive and reversible
+
+    CREATE  workspaceMemberships/D5Ql2EYr…_SOK-GL58F7   role=owner status=active
+    MARK    workspaceMemberships/xrH21J5GFb…_SOK-GL58F7 status active -> superseded
+
+The old document is **preserved, not deleted** — it is the rollback reference. `create()` rather
+than `set()`, so a race throws instead of overwriting.
+
+Merge provenance was proven from the DATA, not from prior notes: `users/xrH….deprecated === true`,
+`users/xrH….canonicalUid === D5Ql2EYr…`, and `users/D5Ql2….linkedAccounts === ["xrH…"]`.
+`posStaff` already listed the canonical uid as owner of that business, so this grants no access
+the account did not already hold through another authority — it makes the membership layer agree
+with the rest.
+
+### Procedure
+
+20 pre-write checks in a separate read-only pass (before-state captured to JSON), then every
+precondition re-verified immediately before each write because state can move between processes.
+Post-write: every field that existed before was compared, and **no unrelated branch field
+changed** — a repair that silently dropped `phone` or `isDefault` would be worse than the defect.
+
+Authorization relationships re-verified after: the branch resolves under its business,
+`posStaff` and `posRoles` intact, and exactly ONE active owner membership for `SOK-GL58F7`
+(previously the only active one was on a retired account).
+
+### After
+
+All six KASS branches now parent to their business; **branches with a uid parent: 0** (was 1).
+One uid-keyed row remains in `businesses` — the `projectSeller` marketplace directory record,
+which is a separate narrowly-scoped gate and was not touched.
+
+### Rollback
+
+    branches/SOK-E7J2Y8-main.merchantId                  -> D5Ql2EYr95bt79IpcGTmOMTK0P83
+    workspaceMemberships/xrH21J5GFb…_SOK-GL58F7.status   -> active
+    delete workspaceMemberships/D5Ql2EYr…_SOK-GL58F7
+
+Before-state JSON retained in the session scratchpad.
+
+## 2026-09-13 (16) — AdminOS commission traceability: four rails, four numbers, zero writes
+
+**Files:** `functions/admin-commission-trace.js` (new), `functions/admin-os-dispatch.js`,
+`scripts/test-merchant-package-convergence.js`, `CHANGELOG.md`.
+**No deployment. No Firestore rules. No KASS Business→Store decision. No businessWallets
+migration. No production data. `finos-utils` untouched. `order-settlement` untouched —
+the settlement authority was verified, not modified.**
+
+### What was invisible
+
+`entitlements` — the payment→capability ledger with 14 live rows — was referenced by **zero**
+admin surfaces. So the chain broke at precisely the link that proves a payment was honoured:
+"which payment reference authorised this package?" was unanswerable from AdminOS.
+`merchantSubscriptions` and `subscriptionPaymentRefs` were equally unreachable.
+
+Four read-only ops now close that, merged into the existing `adminOsDispatch` registry rather
+than a second dispatcher: 59 admin-os ops + 4 = 63, none lost (asserted).
+
+    adminTraceMerchantSubscription   merchant -> subscription -> paymentRef -> payment
+                                     -> intent -> ENTITLEMENT -> activation -> package
+    adminTraceMarketplaceSettlement  order -> package-at-settlement -> gross -> rate
+                                     -> commission -> rider -> net -> walletTransaction
+    adminCommissionByRail            the four separated totals
+    adminListCommissionRecords       filtered rows, explicit type on every one
+
+### Not a second ledger
+
+The fast way to build an admin dashboard is a rollup document updated on every settlement. That
+is a second financial ledger, and a second ledger is how a platform ends up with two answers to
+"how much commission did we earn". Every figure here is aggregated ON READ from the collection
+that authored it — `settlements`, `posCommissionLiabilities`, `providerPayouts`,
+`merchantSubscriptions` — and each rail reports which collection it came from. The module makes
+**zero Firestore writes**, asserted by a detector that is itself proved non-blind.
+
+### Four rails, never one number
+
+    SUBSCRIPTION   what a merchant pays SOKONI          merchantSubscriptions + subscriptions
+    MARKETPLACE    16/12/8/4 on orders SOKONI brought   settlements
+    POS_TILL       flat 5% on the merchant's own sale   posCommissionLiabilities
+    HEALTHCARE     flat 5% on a booking (ADR-015)       providerPayouts
+
+`combinedTotalProvided: false` is returned deliberately — these are different products with
+different payers and different release events, and a combined figure answers no question anyone
+actually has.
+
+**Type is never inferred from the amount.** POS and Healthcare are *both* 5%, so a row's rate
+cannot distinguish them; `commissionType` is read from the record's own provenance and is
+explicit on every row. An unrecognised type is refused rather than defaulted.
+
+### "Real time", stated honestly
+
+Every read hits the authoritative collection at call time, so a caller always sees current state
+— there is no cached copy that can lag. What is **not** provided is server-pushed updates:
+`adminOsDispatch` is a callable, and a callable answers a question rather than holding a
+subscription open. Push would need either a client `onSnapshot` on `settlements` (rules-gated,
+and rules may not change in this gate) or an RTCP channel (certified separately, not to be
+reopened). The response carries `liveness: 'read-through'` and says so. A dashboard should poll
+this; it must not be presented as streaming.
+
+### The net-credit invariant is now checked, not assumed
+
+`adminTraceMarketplaceSettlement` returns `netCreditVerified`, comparing the wallet transaction's
+`netCents` against the settlement's `sellerNetCents` and confirming the credited amount is not
+the gross. A settlement that credited gross fails it — asserted with a fixture that does exactly
+that, so the check is proved capable of failing rather than merely passing.
+
+This verifies the behaviour rather than changing it: `order-settlement.js` already credits
+`withdrawable` derived from `sellerNetCents`, and the wallet never sees gross. That was
+confirmed by reading the code, and the settlement authority was left alone.
+
+### Immutability
+
+There is no write path here, not even an admin correction. A settled rate is a historical fact,
+and an admin who could change 8% to 4% on a past order would erase the evidence it settled at 8%.
+Corrections stay with the existing payout/reversal lifecycle, which appends.
+
+### Security
+
+Every op guards with the same `admin || superAdmin` check admin-os uses. The suite calls **each**
+op as merchant, anonymous, admin and superAdmin — not just the first — because a financial
+aggregation surface one merchant can call is a data breach, not a dashboard. Payment references
+are truncated and no gateway payload, credential or key is returned.
+
+### sellerSubscriptions retirement — enumerated, not yet removed
+
+Readers and writers, complete:
+
+    functions/index.js   get(targetUid)                    read   getSellerSubscription
+    functions/index.js   where(status==active)             read   admin report
+    functions/index.js   set(targetUid)                    WRITE  updateSellerSubscription
+    functions/index.js   update(payload.sellerId)          WRITE  webhook
+    revenue.html         orderBy(updatedAt) limit(100)     read   CLIENT PAGE
+    revenue.html         where(plan==planF) limit(100)     read   CLIENT PAGE
+
+The enumeration found a **fifth reader I had not counted**: `revenue.html` queries the
+collection directly from the browser. Retirement therefore needs that page repointed at
+`merchantSubscriptions`, not just the three server sites — and that is a client change outside
+this gate. Production holds 0 rows, so nothing is stranded meanwhile; both stores are written
+during the migration window.
+
+**The legacy fallback in `subscription-core` stays.** Production's 7 live subscriptions are in
+`subscriptions` (hubType `seller`); removing that source would resolve every one of them to
+Free — a 16% charge on merchants paying for less.
+
+### Verification
+
+`scripts/test-merchant-package-convergence.js` — **77 passed, 0 failed** (was 40).
+
+Controls: `COUNTERPROOF=1` 18 fail across all sections; `SABOTAGE=alias` 1 (the silent-downgrade
+assertion); `SABOTAGE=rate` 4; `SABOTAGE=admin` **4** — exactly the four op guards, proving the
+security assertions are load-bearing rather than incidental.
+
+One detector defect caught and fixed in this gate: the "zero writes" scan matched `seen.add(id)`
+on a **Set** and reported a read-only module as a writer. Rescoped to anchor on
+`collection()`/`doc()` before the write method, and given a positive control so a pass cannot be
+vacuous.
+
+Regressions: healthcare-subscription-foundation 120/0, healthcare-payment-convergence 40/0,
+pos-sale-commission 77/0, commission-5pct-agreement 58/0, commission-settlement-authority 53/0,
+settlement-proof-gate 37/0. Guards: capability-consumers 16/0, commission single-source PASS,
+subscription-consistency PASS.
+
+### Left undecided, as instructed
+
+Enterprise price (7,499 charged / 4,999 catalogue / 9,999 advertised), Professional / Business /
+Enterprise Story allowances, Business vs Enterprise listing differentiation, grandfathering of
+the 7 live subscriptions, and KASS Business→Store. No value was selected for any of them.
+
+## 2026-09-13 (15) — Merchant subscription convergence: one vocabulary, one resolver, one rate table
+
+**Files:** `functions/commission-config.js`, `functions/subscription-catalog.js`,
+`functions/subscription-core.js`, `functions/capability-authority.js`,
+`functions/stories-capability.js`, `functions/ai-subscriptions.js`, `functions/index.js`,
+`sokoni-commission-rates.js` (regenerated), `scripts/test-merchant-package-convergence.js` (new),
+`scripts/test-pos-sale-commission.js`, `CHANGELOG.md`.
+**No deployment. No Firestore rules change. No KASS Business→Store decision. No businessWallets
+migration. No POS commission architecture change. No Healthcare commission change. No production
+data touched. finos-utils untouched.**
+
+### Canonical packages
+
+`free / professional / business / enterprise` replace the retired `seller_*` vocabulary as the
+customer-facing packages, in the two tables that govern money and limits:
+
+    commission     free 16%   professional 12%   business 8%   enterprise 4%
+    listings       FREE 50    PROFESSIONAL 100   BUSINESS -1   ENTERPRISE -1
+
+The `seller_*` ids survive ONLY as aliases, and that is load-bearing rather than tidiness:
+`resolve()` falls back to FREE for anything it cannot place, so a stale alias is not an error —
+it is a **silent downgrade** of every merchant whose stored tier still uses the old spelling.
+Both alias tables (catalogue and commission-config) mirror each other one-for-one; two that
+disagreed would put a merchant on one package for their listing limit and another for their
+commission.
+
+`commission-config`'s previous comment declined to map `starter` and `business` because nobody
+had decided and a guess would undercharge. That decision has now been taken, and the mapping
+records it.
+
+### This is a price rise at every tier
+
+    free 15 -> 16    professional 10 -> 12    business 5 -> 8    enterprise 0 -> 4
+
+Recorded as an increase rather than presented as a restructure. Production holds 7 subscriptions:
+5 `seller_free`, 1 `seller_basic`, 1 `starter`. Anyone reconciling a historical settlement against
+the new numbers will get a different answer than the ledger holds; the ledger is right for its date.
+
+**Enterprise also loses `floorExempt`.** That exemption existed for one stated reason —
+"advertising 0% while charging a minimum is a dispute merchants would win" — and at 4% there is
+nothing to dispute. The invariant the suite asserts is *only a genuine 0% rate is floor-exempt*,
+and leaving Enterprise exempt would make it the single non-zero rate escaping MIN_COMMISSION_KES.
+Flagged because it is a real effect: a KES 50 Enterprise order now pays the KES 10 floor rather
+than KES 2. One line to reverse if the pricing owner disagrees — but the invariant should then be
+restated, not silently contradicted.
+
+POS/Till stays flat 5% on every package. Healthcare stays 5%. Both asserted, because a merchant
+repricing that reached either would be the failure mode.
+
+### FREE listings 50, and the backfill that still hasn't run
+
+The catalogue's own header warned the 10 → 100 raise was "NOT RETROACTIVE ON ITS OWN". It wasn't:
+production holds **11 productCounters at 10 and one at 100**. So the lived allowance is 10 for
+almost every merchant while the catalogue says 100. Against that reality, 50 is a **rise** for
+those 11 and a cut only against a number they were never given. The backfill is still owed.
+`grandfatheredFloor` is unchanged, so no merchant can lose a listing they already hold.
+`CATALOG_VERSION` 2 → 3, which is exactly the signal that field exists to give.
+
+### merchantSubscriptions is the canonical store
+
+A SOKONI merchant is more than a seller — the same relationship carries Shop, POS, Till,
+inventory, orders, Stories and analytics. `sellerSubscriptions` named only the selling half and,
+worse, was read by **nothing** in `subscription-core`: a subscription written there resolved as
+UNSUBSCRIBED for commission, limits and every capability.
+
+`_fromMerchant` reads `merchantSubscriptions/{uid}` FIRST, with `subscriptions` and
+`accountSubscriptions` kept beneath it — production's 7 rows live in the former, and dropping
+that fallback would move every one of them to the 16% Free rate. `role: 'seller'` is accepted
+alongside `'merchant'` because that is what `finos-utils._resolveSellerPlan` already passes; the
+commission path and the capability path must resolve the SAME subscription.
+
+The legacy `sellerSubscriptions` write is retained during the migration window — three readers in
+`index.js` still depend on it, and a rename that silently blanks an admin report is not an
+improvement. Production holds 0 rows there, so nothing is being migrated.
+
+### Activation security
+
+`updateSellerSubscription` checked status and owner but **never the amount** — a completed KES 1
+payment activated any tier. It now compares paid against `priceKES × months`, refuses a missing
+or unreadable amount rather than treating it as satisfied, and claims the reference in
+`subscriptionPaymentRefs` so a replay cannot extend the period on one payment.
+
+`activateAIPlan` demanded a `paymentRef`, recorded it for **idempotency only**, and wrote
+`status:'active'` without ever reading `payments`. Idempotency guarantees a forged reference is
+honoured once; it does not make it real. Paid activation is now refused from the client, matching
+`providerActivateSubscription` and `onbActivateSubscription`.
+
+The obvious fix — calling `assertPaymentHonourable` — was tried and rejected: that function
+requires the intent's purpose to be REGISTERED, and AI bills through its own product rail with no
+registered purpose. Wiring one in is an AI-product decision and out of scope, so the guard refuses
+rather than shipping a check that could never pass. Zero-price plans stay self-serve.
+
+### Stories on all four packages
+
+`stories` is true on every package — not a new grant, since the live rule already allows any
+authenticated user, so an Enterprise-only gate would be a restriction being *introduced*.
+`storyAllowancePerWeek` is **1 for FREE (decided)** and **null for the paid packages
+(undecided)**. Null is not "unlimited" and must not be rendered as a number. `allowanceEnforced`
+is false everywhere, because the counter that would make an allowance real is a rules change and
+rules are not authorised here — reporting a limit nothing enforces is how a dashboard figure gets
+mistaken for a platform constraint.
+
+Advanced analytics and staff publishing DO vary by package, from the catalogue's existing flags.
+
+### Verification
+
+`scripts/test-merchant-package-convergence.js` — **40 passed, 0 failed**, executing the real
+resolvers.
+
+**Controls.** `COUNTERPROOF=1` against HEAD: 18 fail across all six sections. Getting there took
+two fixes to the harness itself — the control initially aborted at section A with a TypeError,
+reporting "4 failed" when sections B–F had simply never run. An aborted control understates
+itself, so both fatal points now report the finding and continue. Targeted mutants on the shipping
+modules: `SABOTAGE=alias` (drop the legacy aliases) → 1 fail, precisely the silent-downgrade
+assertion; `SABOTAGE=rate` (restore 15%) → 4 fail.
+
+Regressions: healthcare-subscription-foundation 120/0, healthcare-payment-convergence 40/0,
+commission-5pct-agreement 58/0, commission-settlement-authority 53/0, settlement-proof-gate 37/0,
+pos-sale-commission 77/0. Guards: commission single-source PASS, subscription-consistency PASS,
+capability-consumers 16/0.
+
+`test-commission-48h-destinations` reports 86/1 — **pre-existing**: the failing check reads
+`payment-destinations.js`, another agent's dirty file, and contains zero commission references.
+
+### One edit outside my change set, declared
+
+`scripts/test-pos-sale-commission.js` is another agent's UNTRACKED file. It asserted
+`resolveMarketplaceRate('seller_enterprise')` is 0% and floor-exempt — the retired rule — so the
+authorised repricing necessarily fails it. One assertion was updated to the new rule and one added
+(that the retired id still maps to a real package). Nothing was deleted or weakened. Flagged
+because preserving other agents' work was an explicit boundary, and this is the one place the
+commission change made that impossible.
+
+## 2026-09-13 (14) — Stories rules: the artifact was stale, not oversized — and regenerating it landed HC-01
+
+**Files:** `firestore.rules.build` (regenerated through `scripts/build-firestore-rules.js`),
+`scripts/test-stories-rules.js` (new), `CHANGELOG.md`.
+**No deployment. No production read. No production data. No source rule authored or edited —
+`firestore.rules` is untouched. No subscription, payment, IntaSend, booking, commission,
+Shop/POS/Till or generic-provider change.**
+
+### The premise was wrong, and the correction matters
+
+An earlier gate reported that `firestore.rules.build` is the deployable artifact and that
+Stories was blocked by the compiled-ruleset size ceiling. Tracing the generation path shows
+neither is true.
+
+`firebase.json` points at **`firestore.rules`**, and `scripts/deploy/release-firestore-rules.js`
+reads that source and **strips comments in flight**, uploading the stripped content — refusing
+to release if stripping altered any rule-bearing line. `firestore.rules.build` is a *parallel*
+artifact produced by `scripts/build-firestore-rules.js` and consumed by the rules test suites
+and `rc-manifest.js`. It is not what a release carries.
+
+So the Stories block was missing from `.build` because that file was **stale** — generated
+before the block was added to the source. Not a size problem, not a security decision, not a
+consolidation question.
+
+### Measured, not inherited
+
+    raw source  firestore.rules        271,077 bytes   103.4% of 256 KiB   (over — hence stripping)
+    built       firestore.rules.build  166,179 bytes    63.4% of 256 KiB   (comfortable)
+
+The "~596 bytes free" figure carried forward from earlier sessions described the *raw* era,
+before release-time stripping existed. Re-measured here rather than reused, per the standing
+rule that a recorded status expires. **There is no size blocker, so no consolidation was
+proposed and no unrelated rule was weakened to make room.**
+
+### Regenerating the artifact also landed HC-01
+
+The regeneration was not cosmetic. Diffing match blocks, before → after:
+
+    + match /stories/{storyId}          the Stories capability
+    ~ match /healthProviders/{...}      2 blocks -> 1
+      total blocks 734 -> 734, nothing else added, removed or changed
+
+The healthProviders collapse is the **HC-01 fix from an earlier gate reaching the built
+artifact for the first time.** That gate deliberately did not regenerate `.build`, so until now
+the artifact still carried TWO `healthProviders` blocks — and duplicate match blocks are
+OR-ed, which is exactly why the second block's
+`allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()`
+made `healthProviders` self-mintable despite the first block's `allow write: if false`. The
+built artifact now has one block, `write: if false`, and that create clause is gone from it
+(7 occurrences → 6; the remaining 6 belong to other collections and are untouched).
+
+### Stories authorization, proven behaviourally
+
+`scripts/test-stories-rules.js` — **24 passed, 0 failed**, emulator-backed and run against the
+BUILT artifact rather than the source, so a stale build fails the suite. That is the point.
+
+All three Healthcare tiers publish, and a fourth unrelated account publishes too — because the
+rule contains **no tier gate at all**. "Clinic can post" and "Enterprise can post" are the same
+assertion made three times, and it is worth making: the failure mode guarded against is someone
+later adding an Enterprise-only restriction and calling it a feature.
+
+Server-side enforcement, each exercised from the other user's session rather than read off the
+rule text: unauthenticated create denied; creating a story owned by someone else denied;
+modifying, seizing ownership of, or deleting another user's story denied; the owner may update
+and delete their own. The 24h ceiling is the server's: a permanent story, an already-expired
+one, a non-numeric `expiresAt`, and extending expiry past the ceiling on update are all
+refused. Reads are public by design, and that is asserted rather than assumed.
+
+`publishStory` in `sokoni-db.js` carries no authorization of its own — it writes, the rule
+decides — and there is exactly one `match /stories/` block, so there is no second authorization
+system to keep in step. The capability-consumer guard stays green at 12/0; no capability key
+was added, because the basic Stories capability is deliberately ungated and inventing a
+subscription restriction to demonstrate capability usage would be exactly backwards.
+
+**Counter-proof:** against HEAD's artifact, **8 fail**, every one `No matching allow statements`
+— the four publish assertions, both owner-operations, and both public reads. That is production
+today: Stories default-denied. The ownership and ceiling refusals pass in both runs, correctly,
+since a total deny satisfies them; only the permissive assertions distinguish the two.
+
+Rules regressions: chat-history-boundary 6/0, follow-rules 40/0, delivery-tracking 22/0,
+delivery-sequence 33/0. `test-auth-email-challenge` reports 62/63 with `J: FAIL` — **pre-existing**,
+reproduced identically against the pre-regeneration artifact, which was then restored
+byte-identically before continuing.
+
+### What this gate could NOT establish
+
+It was run under an explicit no-production-read instruction, so **whether the LIVE ruleset
+already carries Stories is unknown from here.** The source has contained the block for some
+time and the release path derives from the source, so a release performed since then would
+have carried it. Confirming that needs one read of the live ruleset, and belongs in the
+deployment gate rather than here.
+
+## 2026-09-13 (13) — Healthcare subscription payment-intent safety: enforce the intent, and close a whitespace bypass
+
+**Files:** `functions/stk-intent-enforcement.js` (new), `functions/index.js`,
+`scripts/test-healthcare-subscription-foundation.js`, `CHANGELOG.md`.
+**No deployment. No production read. No production configuration change. No new payment rail;
+no IntaSend, pricing, plan-price, 5% commission, entitlement-engine, booking-convergence,
+generic-provider-pricing, KASS wallet or Stories change. `subscriptionAutoHeal` untouched.**
+
+### The gap
+
+`initiateSTKPush` charges a CLIENT-SUPPLIED amount when no `paymentIntents/{ref}` exists. That
+legacy branch is deliberate and stays: closing it for every caller at once would fail POS and
+every booking page together, trading an integrity incident for an availability one. Enforcement
+follows migration — a caller is enforced once its client mints an intent — and the list held one
+entry, `subscription`.
+
+Healthcare activation was already safe: `hcActivateSubscriptionOnPayment` requires
+`paymentIntents/{ref}.purpose === 'healthcare_subscription'`, so an intent-less payment could
+never produce a subscription. What it could still produce is **a charge that delivers nothing**.
+
+Healthcare is enforced from day one because it is the one caller with no shipped client to
+break — its purchase path mints a server-priced intent by construction (ADR-015).
+
+### A second bypass, found while reading the branch
+
+The comparison was `String(meta.category || '').toLowerCase()` — lowercased, never trimmed. So
+`" healthcare_subscription "` compared unequal and fell through to the legacy client-amount
+branch. **One space defeated it.** That hole was not specific to healthcare: the targeted
+sabotage shows `STK-5b` failing too, so the pre-existing `subscription` enforcement had the same
+bypass. Trimming closes both.
+
+`purpose` is now checked alongside `category`, because `createPaymentIntent` speaks that
+vocabulary and a payment announcing itself as an enforced purpose should not escape by using the
+newer word. A non-string category coerces to empty rather than to `"[object Object]"` — it can
+neither dodge enforcement nor accidentally trigger it.
+
+Every change here widens what is REFUSED and never what is allowed, so no previously-accepted
+caller can break unless it was already declaring an enforced category.
+
+### Why a module rather than a two-character edit
+
+The literal lived inline in a 1,500-line callable, where the decision could only be tested by
+provoking the whole function. `stk-intent-enforcement.js` holds the list and its normalisation
+as a pure function, so it is tested exhaustively — including every whitespace and casing variant
+— and `index.js` keeps a three-line call site with no list of its own.
+
+### Verification
+
+`scripts/test-healthcare-subscription-foundation.js` — **120 passed, 0 failed** (was 94).
+
+Proves: a healthcare subscription without an intent is refused; a client-supplied amount cannot
+initiate one; six bypass spellings (leading/trailing/padded whitespace, upper, mixed, tab+newline)
+all refused; declaring it as `purpose` is equally enforced; a non-string category neither dodges
+nor fakes a match; generic `subscription` enforcement unchanged and now also padding-proof; six
+non-migrated callers (`service_booking`, `pos_till_sale`, `product_order`, `hub_registration`,
+empty, absent) still allowed, so nothing fails closed that was open; the refusal sits only in the
+no-intent branch, so a valid intent short-circuits before it; `index.js` delegates and holds no
+literal list; the activation trigger is still exported by name and still requires the healthcare
+intent.
+
+**Counter-proof.** Against HEAD, 23 checks fail — but the module is absent at HEAD, and "the
+module is missing" is the weakest possible control. So `SABOTAGE=stk` restores the PRE-FIX
+behaviour inside the shipping module (healthcare off the list, `toLowerCase()` without `trim()`),
+keeping the module, its exports and its call site: **10 fail**, and the mutation refuses to run
+if either anchor is missing. That is what makes these claims load-bearing rather than incidental.
+
+Regressions green: healthcare payment convergence 40/0, commission-settlement-authority,
+commission-5pct-agreement, settlement-proof-gate, booking-payment-auth, agreement-role,
+suspension-mirror. Guards: capability-consumers 12/0, commission single-source PASS,
+subscription-consistency PASS.
+
+### Still on hold
+
+Deployment remains unauthorised. Stories needs its own rules gate. The deployment closure must be
+recalculated from the final working tree — the 281/44 figure is stale, and this gate added a
+module and touched `index.js` again.
+
+## 2026-09-13 (12) — Close the Healthcare NO-GO blockers: verified activation, and a Shop that can actually trade
+
+**Files:** `functions/healthcare-subscription-activation.js` (new), `functions/provider-shop.js`,
+`functions/provider-dispatch.js`, `functions/index.js` (append-only),
+`scripts/test-healthcare-subscription-foundation.js`, `CHANGELOG.md`.
+**No deployment. No production data read. `subscriptionAutoHeal` NOT enabled. No change to
+production subscriptions, Shops, Tills or wallets; no plan pricing change; no change to the
+Healthcare 5% commission, the booking/payment convergence, Stories rules, AdminOS, provider
+verification, legal agreements or professional registration. No new payment rail. No new
+merchant/POS/Till architecture. Generic provider paid activation remains closed, not restored.**
+
+### Blocker 1 — a customer could pay and receive nothing
+
+Nothing called `entitlement-engine.activate()` on payment. The only production caller was the
+reconciliation sweep, and that sweep heals only when
+`_systemConfig/reconciliation.subscriptionAutoHeal === true`, which defaults false and fails
+closed (`payment-reconciliation.js:601`). The webhook's use of the adapters is
+`shadowCompareSubscription` — it writes a comparison row and grants nothing. So: intent minted
+→ IntaSend collects → `payments/{ref}` COMPLETE → sweep alerts → **no subscription exists.**
+
+`healthcare-subscription-activation.js` hangs activation off the money: a Firestore trigger on
+`payments/{paymentId}` firing on the transition INTO a terminal paid state, which calls
+`engine.activate(ref)`.
+
+Three choices worth recording:
+
+- **A trigger, not a callable.** There is deliberately no client-invocable "activate my
+  subscription". It would be safe in principle — the engine re-verifies everything — but it is
+  an unnecessary surface that invites a later "trust the caller" shortcut.
+- **A trigger, not the webhook.** There are two live IntaSend webhooks that diverge in other
+  branches. Hanging off `payments/{ref}` means activation fires whichever one wrote the payment,
+  stays correct if a third writer appears, and keeps this change out of `index.js`.
+- **Auto-heal stays off.** Reconciliation remains the backstop, not the customer experience: a
+  buyer should not pay and then wait up to ten minutes for a sweep. Both routes converge on the
+  same `engine.activate(ref)` and the same create-only ledger doc, so they can never
+  double-grant.
+
+The module performs **no payment reasoning**. Terminal state, non-reversal, sufficiency,
+ownership and exactly-once all remain in `assertPaymentHonourable` and the engine's ledger.
+Purpose is read from the server-minted **intent**, never from the payment document — a payment
+is a webhook's parse of a third party's callback; the intent is ours.
+
+Exported by name from `index.js` (append-only, 0 deletions): a trigger not exported under its
+exact name is never deployed, and its absence is indistinguishable from one that fired and found
+nothing — the precise failure this module exists to prevent.
+
+### Blocker 2 — a requested Shop could not trade
+
+`providerRequestShop` provisioned only the `projectSeller` projection. The Till and the business
+wallet are provisioned separately in `applyDecision`, so a clinic received a storefront and a
+seller claim and then found POS non-functional. It now makes the same two canonical calls
+merchant approval makes — `mintSokoniTillCore` and `ensureBusinessWallet` — with no
+healthcare-specific variant of either.
+
+The "already exists" early return is gone. An earlier attempt can leave a shop whose Till or
+wallet provisioning failed (both are report-and-continue by design), and short-circuiting on
+"the shop exists" would make that account unrepairable by the only remedy a provider has:
+asking again. Every step is idempotent — deterministic ids and merge, `onExisting:'return'`,
+`ensureBusinessWallet`'s own existence check — so a repeat converges instead of forking.
+
+### A production defect the test caught
+
+With the Till call added, `B2-3b` failed: the Till row was written but `mintSokoniTillCore` threw
+`Signing secret not configured`. That was **not** a test-environment artifact.
+`mintSokoniTillCore` mints a signed QR token with `QR_SIGNING_SECRET`, and a v2 function may only
+read a secret it declares — `providerDispatch` declared none. In production the same call would
+have thrown at runtime **after** writing the Till, leaving a Till that exists while the caller is
+told provisioning failed. `secrets: [QR_SIGNING_SECRET]` added to `providerDispatch`;
+`defineSecret` is keyed by name, so it binds the same parameter `sokoni-till.js` uses rather than
+introducing a second one.
+
+### Verification
+
+`scripts/test-healthcare-subscription-foundation.js` — **94 passed, 0 failed** (was 50).
+
+New coverage proves OPERABILITY rather than existence: shop identity, seller registry,
+`users.activeShopId`, Till actually provisioned, business wallet actually provisioned and keyed
+by shop, POS/Till resolving the merchant identity, shop/till/wallet agreeing on one `shopId`, no
+duplicate Till or wallet on replay, a shop whose Till failed earlier repaired on re-request,
+pending/suspended/absent providers refused, all three tiers provisioning an operable shop, and
+downgrade destroying none of it.
+
+Activation coverage: fires on PENDING→COMPLETE and not on COMPLETE→COMPLETE or FAILED; a verified
+payment activates exactly one subscription at the tier paid for; repeated activation is
+idempotent; unpaid, insufficient, reversed, cancelled and another user's payment each refuse with
+the engine's own code (`payment_not_terminal`, `amount_short`, `payment_reversed`,
+`ownership_mismatch`); paying a Clinic price cannot activate Enterprise; an invented paymentRef
+activates nothing; purpose is read from the intent even when the payment document claims
+otherwise; no dispatcher exposes a client-invocable activation; `subscriptionAutoHeal` still
+defaults false.
+
+**Counter-proof, and an honest upgrade to it.** Against HEAD, 22 checks fail — but for these two
+blockers HEAD reports the modules ABSENT, and "the module is missing" is the weakest possible
+control: indistinguishable from a detector that never ran. So the suite gained **targeted
+sabotage**, applied in memory and never written to the worktree, which mutates the SAME module
+that ships:
+
+    SABOTAGE=b2   drop Till + wallet provisioning, keep the shop projection   -> 11 fail
+    SABOTAGE=b1   neuter engine.activate, keep the module and its edge logic  -> 10 fail
+
+Both refuse to run if their anchor is missing, so a mutation that silently stopped applying
+fails loudly instead of passing vacuously.
+
+Regressions all green: healthcare payment convergence 40/0, commission-settlement-authority,
+commission-5pct-agreement, settlement-proof-gate, agreement-role, suspension-mirror,
+publish-authority, verification-decision, admin-approval. Guards: capability-consumers 12/0,
+commission single-source PASS, subscription-consistency PASS.
+
+`verify-listing-limit-single-source` fails at 57 declarations across 10 files — **pre-existing
+migration debt, not this gate**. Proven by running the guard's own `stripComments` over the two
+files this change touched: HEAD 5/10, worktree 5/10, delta 0. The two files each gained one
+matching line, and both are comments the guard strips.
+
+### Still NO-GO for deployment
+
+Both blockers are closed, but deployment remains unauthorised and the dependency-graph finding
+stands: 281 exported functions across 44 files transitively require a changed module. The
+production read that establishes the baseline has not been taken.
+
+## 2026-09-13 (11) — Healthcare subscription foundation: three canonical plans, one capability authority, verified activation
+
+**Files:** `functions/healthcare-plans.js`, `functions/capability-authority.js`,
+`functions/provider-shop.js`, `functions/stories-capability.js` (all new),
+`functions/subscription-core.js`, `functions/provider-ops.js`, `functions/payment-purposes.js`,
+`functions/entitlement-adapters.js`, `functions/provider-onboarding.js`,
+`functions/universal-onboarding.js`, `functions/application-lifecycle.js`,
+`functions/provider-dispatch.js`, `scripts/verify-capability-consumers.js` (new),
+`scripts/test-healthcare-subscription-foundation.js` (new), `CHANGELOG.md`.
+**No deployment, no production data, no shop deleted, no merchant migrated, no IntaSend
+account or API change, no booking/payment convergence change, no commission change, no
+AdminOS, no provider verification, no legal agreements, no pharmacy, no new POS or Till.**
+
+### Healthcare is its own commercial boundary
+
+Healthcare's subscription is `clinic` | `hospital` | `enterprise` — KES 2,499 / 4,999 / 9,999.
+The five generic provider tiers stay for every other provider role and are no longer
+authoritative for a Healthcare account. `subscription-core._sourcesFor` gains a healthcare
+branch that reads `accountSubscriptions` and **nothing else**: the omission is the point, since
+`providerSubscriptions` is read FIRST for role `provider` and would otherwise win. No
+subscription now means the unsubscribed floor, never a provider tier.
+
+The plans move out of `universal-onboarding.js`'s inline map into `functions/healthcare-plans.js`,
+which universal-onboarding imports. That is not an eleventh catalogue — the table already
+existed, and now it has an owner, a contract and a test.
+
+### Two capacities, because one of them had silently stopped existing
+
+`limits.doctors` is practitioner seats; `limits.services` is publishable services. Clinic 5/10,
+Hospital 20/50, Enterprise unlimited. `limits.listings` is never used for Healthcare, not even
+as a fallback — and that is a correctness requirement, not tidiness:
+
+    Number({doctors: 5}.listings)        -> NaN
+    (NaN !== -1 && activeCount >= NaN)   -> false
+
+Pointing the old service guard at a healthcare subscription would not have errored. Every
+comparison against `NaN` is false, so the cap would have **disappeared** and a Clinic could
+publish unlimited services. `provider-ops._serviceCapFor` now resolves the hub, reads
+`limits.services` for healthcare and `limits.listings` for everyone else, and every return path
+is a finite number — unresolvable lands on the floor of 1, never on NaN. Both enforcement
+sites (add and duplicate) share it so they cannot drift.
+
+### A plan buys capacity, never a rate
+
+The three plans carried `commission: 0.03 / 0.02 / 0.01`, contradicting the ratified 5%
+(ADR-015). The field is gone. `subscription-core.getCommissionRate` reads `commissionRate`, so
+leaving it would have created a second rate authority disagreeing with the first — the exact
+lesson `subscription-catalog.js` records in its own header ("the table was dead the day it was
+written"). Healthcare bookings still settle at 5% regardless of tier, proven by executing the
+real disbursement while the account holds Enterprise.
+
+### Capability authority — and the guard that stops it dying
+
+`capability-authority.js` exposes `capabilitiesFor(uid, {hub})`. It is deliberately **not**
+called an entitlement engine: `entitlement-engine.js` already owns that word for a payment
+ledger ("one payment reference ⇒ exactly one `entitlements/{paymentRef}`"). Entitlement = a
+payment was honoured; capability = a subscription permits an action.
+
+`scripts/verify-capability-consumers.js` fails the build if a declared key has no reader
+outside the declaring file. It immediately caught a key in this very change: `doctorLimit` was
+declared with no enforcement anywhere, so it was **removed** rather than shipped. That is the
+same defect as `subscription-catalog`'s five never-read flags, caught this time by a guard
+instead of by an audit eighteen months later.
+
+### Client-supplied paymentRef is no longer proof of payment
+
+Both activation paths are closed, and they had to close together.
+
+`providerActivateSubscription` was live and reachable from the browser: it took `paymentRef`
+from the request, never verified it, and wrote `status:'active'`. Any provider could self-grant
+`enterprise` — unlimited listings, commission 20% → 5%. Paid plans are now refused outright;
+`free_trial` stays self-serve because a zero price has nothing to forge.
+
+`onbActivateSubscription` was dead — `payRef` declared, `paymentRef` written, a ReferenceError
+on every call for every role. **Repairing that typo alone would not have restored a feature; it
+would have armed the same unverified path platform-wide.** Its deadness was the only thing
+containing it, so the guard landed in the same edit as the fix.
+
+The purchase path is the canonical one: `createPaymentIntent` with the new
+`healthcare_subscription` purpose (the server prices the tier from the plan table; an unknown
+tier is refused, never defaulted) → IntaSend → `entitlement-engine.activate`, which verifies
+the payment is terminal, unreversed, sufficient and **owned by the caller** before any handler
+runs. The engine's ledger doc is create-only under a deterministic id, so replay is idempotent,
+and the subscription is written at `accountSubscriptions/{uid}_healthcare` — a stable id, not
+`.add()`, so a replay cannot mint a second active plan.
+
+### Shop identity is requested, not priced
+
+`providerRequestShop` provisions the SAME `shops`/`sellers`/`businesses` projection merchant
+approval uses — `projectSeller`, now exported, with no healthcare variant. Gated on an
+admin-approved provider record (the admin decision is the authority; OB-1's self-service bypass
+is not reintroduced) and on `shopRequestable`, which is true on **all three tiers**.
+
+A shop is an identity, not a capability, so a downgrade narrows what may be requested next and
+destroys nothing: shop, Till, inventory and order history all survive an expired plan, asserted
+by building them and then expiring the subscription.
+
+### Stories on all three tiers
+
+Available on Clinic, Hospital and Enterprise. This required removing nothing — the live rule is
+`allow create: if isAuthed()`, with no plan, tier or role gate. Tiers differ by depth
+(analytics, staff publishing), not access.
+
+No story ceiling is claimed. `storyCapacityStatus()` reports `enforced:false, limit:null` with
+the blocker named, because a ceiling only means something when rules enforce it and the Stories
+ruleset cannot deploy (~596 bytes free of 256,000). `stories-capability.js` reports capability
+and authorizes nothing — the client writes `stories` directly, so anything "enforced" only
+there could be bypassed by writing to Firestore without asking.
+
+### Verification
+
+`scripts/test-healthcare-subscription-foundation.js` — **50 passed, 0 failed**, covering all 24
+required proofs. The real modules execute against a stubbed data layer whose `where()` actually
+filters.
+
+`COUNTERPROOF=1` — **18 fail against HEAD**, the sharpest being the same handler and fixture
+*self-granting enterprise from a made-up paymentRef*, and `onbActivateSubscription` throwing
+`ReferenceError` (the containment). Honest limits of the control: tests 1–3 pass in **both**
+runs, because an account asking with role `healthcare` already avoided `providerSubscriptions`
+by accident — what was broken is that nothing asked that way, which T10b/T10d do catch (at HEAD
+a Hospital-tier provider could publish exactly **one** service). T10a/T10c/T10e also pass
+pre-fix, but vacuously: the cap was 1, so everything was refused.
+
+Guards: capability-consumers 12/0, commission single-source PASS, subscription-consistency PASS.
+Regressions: healthcare payment convergence 40/0, plus commission-settlement-authority,
+commission-5pct-agreement, settlement-proof-gate, agreement-role, suspension-mirror and
+publish-authority all green.
+
+One harness defect worth recording: the first draft of this suite made
+`test-subscription-consistency.js` fail, because a fixture literal `limits: { listings: -1 }` is
+indistinguishable from a real plan table to a regex — the suite registered *itself* as an
+eleventh catalogue. Fixed in the fixture with a computed key, not by weakening the guard.
+
+### Known consequence, stated rather than buried
+
+Refusing unverified paid activation removes the only route priced provider plans had, and it
+was the insecure one. Wiring priced **provider** (non-healthcare) plans through the intent flow
+is follow-up work; until then a provider upgrades through support rather than by asserting it.
+Healthcare's paid path is complete and verified.
+
+## 2026-09-13 (10) — Healthcare booking + IntaSend payment convergence (Gates 2 + 3)
+
+**Files:** `healthcare.html`, `functions/provider-hub.js` (new), `functions/booking-service.js`,
+`functions/provider-ops.js`, `scripts/test-healthcare-payment-convergence.js` (new),
+`docs/adr/ADR-015-healthcare-payment-convergence.md`, `CHANGELOG.md`. **No card, no IntaSend
+credential or account change, no external IntaSend API call, no new webhook, no registry
+integration, no legal-agreement or enforcement change, no AdminOS, verification, authority,
+directory or pharmacy work. Nothing deployed.**
+
+### What healthcare was doing with money
+
+Two rails, neither of them the platform's. `SokoniPay.bookNow` collected first and let the legacy
+`webhookIntasend` `type:'booking'` branch credit the provider's wallet immediately — violating the
+Booking Payment Contract's first invariant, a single provider credit point at completion.
+`SokoniMpesa.pay` → `darajaSTKPush` pushed STK against the **seller's own Daraja credentials**, so
+the money never touched SOKONI: no payment document, no held funds, no commission, no refund
+capability, no reconciliation — and the booking was confirmed on a client-side `onSuccess`.
+
+Both are gone. A healthcare consultation **is** a service booking, so a provider who can charge is
+booked on the one canonical rail: `bookingCreateService` → `createPaymentIntent` → IntaSend STK →
+webhook → `paid_held` → Phase C settlement.
+
+### The Daraja branch was latent, not live — stated precisely
+
+`PROVIDERS` in `healthcare.html` is a hardcoded array of 28 sample entries. None carries
+`sellerUid` or `consultationFee`, and nothing merges Firestore providers into it, so the guard on
+that branch was always false and every appointment fell through to "Pay at Facility". The removal
+closes a hole that would have opened on the first real provider, not one actively leaking money.
+The three fabricated invoices, the client-written `status:"confirmed"` and the `onFailure` handler
+that called `_finalise('Pending Payment')` — so a **failed** payment still produced a confirmed
+appointment and an invoice — *were* live on every booking. Those are the defects this removed.
+
+Sample entries have no Firestore identity, no rate card and no availability, so they cannot be
+booked canonically and must not take money. They now open an appointment **request** that moves
+none and claims no confirmation. `bookingCreateService` refuses them independently: it fail-closes
+on a missing `providers/{uid}`.
+
+### 5% healthcare commission — the rate existed; nothing could reach it
+
+`commission-config.RATES.healthcare` has said 5% all along. But settlement passed
+`subscriptionRole: 'provider'`, which puts the engine in compatibility mode where the provider's
+**plan** rate is absolute and outranks the category table — so a healthcare provider on Free Trial
+would have been charged **20%**. `provider-hub.commissionArgsForHub` selects the inputs instead:
+`category`/`hubId` `healthcare`, no `subscriptionRole`, and `skipMinimum: true`.
+
+`skipMinimum` is not incidental. The KES 10 platform floor is suppressed for plan-priced bookings
+by the engine's internal `usingSubRate` flag; dropping `subscriptionRole` also drops that
+suppression, which would newly apply a floor this path has never had — a KES 100 consultation at
+5% is KES 5, and the floor would double it. The flag keeps this a rate change and nothing else.
+
+**No second calculator.** `provider-hub.js` computes no rate and no amount; it selects which inputs
+the one engine is called with, over the one table. `commissionRules` and `revenueConfig` still
+outrank it, so governance is unaffected, and `verify-commission-single-source.js` still passes.
+
+### The discriminator is an authority, not a self-declaration
+
+Pricing needs to know a booking is healthcare. `providers/{uid}.category` is the obvious field and
+the wrong one: it is written from `draft.profile.category` through `_san()` and is **never**
+validated against `SERVICE_CATEGORIES`, which is only ever *served* to the client and never used to
+check what comes back. Pricing on it would let any provider type "Healthcare" into their own
+profile and move from up to 20% down to 5% — a self-serve discount this convergence would itself
+have introduced.
+
+The hub comes from the role on the provider's **decided** application, which an admin sets and the
+applicant cannot; an undecided application is only what someone asked for and never moves the rate.
+It is resolved once, server-side, at booking creation and snapshotted as `commissionHub`, so it
+obeys the contract's snapshot invariant alongside `price`/`fee`/`deposit`: a later reclassification
+cannot reprice an existing booking, and settlement performs no extra read. It is deliberately not
+the booking's `hubType`, which is client-supplied. Resolution fails **soft to the higher charge**,
+so an unreadable application can never hand out the cheaper rate.
+
+Both commission call sites — completion and forfeited deposit — take the same selection, so a
+healthcare no-show is not charged a rate its completion is not.
+
+### Cancellation policy inherited, deposit value NOT invented
+
+Contract §3 is authoritative and already implemented (`provider-ops.js`): provider cancel → full
+refund; customer ≥24h → full refund; customer <24h → deposit retained; no-show → deposit forfeited.
+Healthcare inherits it and invents no window and no forfeiture percentage.
+
+The healthcare **deposit value** — the forfeitable portion, a per-service field on
+`providerServices` — is a commercial/clinical decision, is not established in any authoritative
+source, and was therefore not chosen. It defaults to 0, so a late cancel or no-show currently
+forfeits nothing. Contract §4 and §5 also remain headed "(decision to confirm)"; the implementation
+has settled them de facto (full amount upfront, logical hold) but code agreeing with a
+recommendation is not ratification. Recorded in ADR-015 as the open decision.
+
+### Verification
+
+`scripts/test-healthcare-payment-convergence.js` — **40 passed, 0 failed.** The commission
+assertions execute the real `_disburseHeldFunds`, the real `calculateCommission` and the real
+`commission-config` against a stubbed data layer, so they assert on numbers the production code
+produced. Detectors run on comment-stripped source, scoped by brace matching rather than character
+distance; JS comment removal is applied only inside `<script>` blocks, because that scanner
+desynchronises on the first prose apostrophe in HTML ("Gertrude's") and silently swallows the
+comments it is meant to read.
+
+`COUNTERPROOF=1` replays the same exported handlers and the same fixtures against HEAD: **17
+checks fail**, including a healthcare booking settling **2000 cents where it must settle 500**.
+The unchanged-behaviour controls — a generic booking at the plan rate, and a legacy booking with no
+`commissionHub` at all — pass in **both** runs, which is what establishes this as a rate change for
+healthcare and a no-op for every other provider.
+
+One defect this suite caught in its own gate: removing the medicine-order invoice orphaned the
+`else` around it, breaking the entire inline script block. Every structural detector still passed,
+because the text they looked for was correctly absent. A parse check is now part of the suite,
+baselined against HEAD rather than zero.
+
+## 2026-09-13 (9) — OB-6: the compliance lookup asks about the right agreements
+
+**Files:** `functions/provider-onboarding.js`, `functions/legal-agreements.js`,
+`scripts/test-provider-agreement-role.js` (new), `CHANGELOG.md`. **Enforcement NOT enabled, no
+agreement text, no version or effective-date change, no rules, no verification, suspension,
+activation, payment, booking or directory work. Nothing deployed.**
+
+### The hardcoded role
+
+    await require('./legal-agreements').assertLegalCompliance(uid, 'provider');
+
+`assertLegalCompliance` selects an agreement SET by role. Hardcoding 'provider' meant a
+healthcare provider would be measured against the Service Provider set and never against the
+Healthcare Provider Agreement or the Medical Compliance Declaration. Dormant while enforcement
+is dark; wrong the moment it is switched on.
+
+### Canonical role resolution
+
+The role **cannot** come from `users/{uid}.roles[]` — role-authority maps health → 'provider'
+there by design, so a clinician and a plumber are indistinguishable in that field. Nor from the
+draft, which is applicant-authored. The one authoritative record is the application's own
+`role`, written by the intake patch from `resolveRole()` — the same vocabulary `_catalogueFor`
+consumes, where `ROLE_ALIASES` maps health → healthcare.
+
+`_agreementRoleFor(uid)` reads `applications` for the account, prefers a **decided**
+application over an undecided one, and returns its role. No application means no
+classification, so 'provider' is then correct rather than a guess — and after OB-1 such an
+account cannot activate anyway. A lookup that FAILS is treated differently from one that finds
+nothing: defaulting to 'provider' on an error would silently reinstate this very defect, so it
+refuses instead.
+
+### A second alias gap, found by the test
+
+The enforcement flag lookup had the same defect one layer down:
+
+    if (!flags[role] && !flags.all) return { enforced: false, compliant: true };  // dark: allow
+
+`legalConfig/enforcement` is keyed by CATALOGUE key while callers pass INTAKE vocabulary.
+`_catalogueFor` aliases health → healthcare; this guard did not. So
+`{ healthcare: true }` had **no effect whatsoever** on a caller passing 'health' — the guard
+read `flags['health']`, found nothing, and returned compliant. An operator could switch
+healthcare enforcement on and nothing would change: a compliance control failing silently, in
+the permissive direction.
+
+Both spellings are now honoured, so a flag written under either name works, and `.all` is
+unchanged. This was invisible to inspection and surfaced only because the suite forced
+enforcement on in its fixture — the generic-provider case passed while every healthcare case
+did not, which is what pointed at the flag rather than the catalogue.
+
+### Proof, in both directions
+
+`scripts/test-provider-agreement-role.js` — **27 passed, 0 failed**.
+
+Against the **PRE-FIX** source: **22 passed, 5 failed**, and the failures show both directions
+of the harm:
+
+* **the wrong set admits the wrong person** — a healthcare account holding only the Service
+  Provider set publishes successfully (C5);
+* **the wrong set refuses the right one** — a healthcare account that accepted every healthcare
+  instrument is refused, with a message naming *"Service Provider Agreement, Professional
+  Conduct Policy, Booking & Cancellation Policy…"* (C1, D2).
+
+A naive suite would have proven nothing here: enforcement is dark, so fixed and pre-fix produce
+identical outcomes on every ordinary call. So the suite captures the role string actually handed
+to `assertLegalCompliance`, and runs the REAL legal module with enforcement forced on **in the
+fixture** — a stub document. Production `legalConfig` is neither read nor written.
+
+One harness defect was found and fixed: `legal-agreements` caches the enforcement flags for
+**60 seconds** in a module-level variable, so the first publish in the run fixed the flags for
+every later scenario and six fail-closed assertions passed as "allowed" for a reason unrelated
+to the role. The module is now reloaded per scenario. That cache is worth knowing operationally
+too: switching enforcement on will not take effect for up to a minute.
+
+Regression: healthcare-admin-approval 64/0, provider-publish-authority 27/0,
+provider-verification-decision 44/0, provider-suspension-mirror 38/0,
+admin-verification-counters 26/0, healthcare-provisioning 30/0, decision-authority 17/0,
+lifecycle-parity 53/0, approval-primitive 31/0, merchant-application 54/0, commission-5pct 58/0,
+admin-os-render 43/0, role-authority 30/0.
+
+### Enforcement remains disabled
+
+Asserted in the suite: with no enforcement flag present, a missing acceptance still publishes —
+the dark-launch behaviour is unchanged — while the role asked about is nonetheless the correct
+one. `provider-onboarding.js` writes nothing to `legalConfig` and never calls
+`legalSetEnforcement`, and no agreement text, version or effective date was introduced. OB-1,
+OB-3 and OB-5 protections were re-asserted directly and hold. No production data was read or
+written.
+
+## 2026-09-13 (8) — OB-5: suspension reaches the onboarding projection
+
+**Files:** `functions/application-lifecycle.js`, `functions/account-status.js`,
+`scripts/test-provider-suspension-mirror.js` (new), `CHANGELOG.md`. **No collection merge, no
+new registry, no OB-1/OB-3/OB-4 change, no healthcare, agreement, payment, booking or
+directory work. Nothing deployed.**
+
+### The divergence
+
+`providers/{uid}` is the canonical approval state. `providerProfiles/{uid}` is the onboarding
+projection — and a SECOND customer-reachable surface: the only providerProfiles-based
+discovery query is `providerSearchProviders`, which asks for
+`status == 'active' AND searchable == true`.
+
+Suspension wrote only the canonical record. `application-lifecycle.js` contained **zero**
+references to `providerProfiles`, and `account-status.js` covered `providers` and `shops` but
+not the projection. So the canonical record said suspended while the projection still said
+findable, and the provider stayed listed.
+
+OB-1 had already closed the reverse direction (suspended → `providerPublish` → active). This
+closes the divergence itself.
+
+### Canonical writers, and what is mirrored
+
+Two writers suspend a provider, and both now mirror:
+
+* `projectProvider()` retraction (`applicationDecide` → suspend/reject) → `searchable: false`
+  + `suspendedAt` on the projection; and the approval branch restores `searchable: true` and
+  clears the stamp, so a reinstatement does not leave a provider approved-but-unfindable.
+* `_hideMerchantSurfaces` / `_restoreMerchantSurfaces` (account deactivation) → the same flag,
+  with the prior value **stashed** as `preDeactivationSearchable`, exactly as the neighbouring
+  shop branch stashes visibility.
+
+**Only `searchable` is written.** `providerProfiles.status` is the ONBOARDING state ("the draft
+is published"), not an approval — overwriting it here would corrupt a different state machine
+to solve a discovery problem. Clearing one flag is enough to delist, and it destroys nothing:
+name, bio, pricing, coverage and the draft all survive, so a reinstated provider re-enters
+nothing. The projection is told what the canonical record decided; it does not become an
+authority.
+
+### One deliberate asymmetry
+
+The shop branch defaults to VISIBLE when its stash is missing, because a shop predating the
+stash was visible. The projection branch defaults to **NOT searchable**, because an absent
+stash here more likely means the provider was never approved — `searchable` is false for every
+unapproved provider since OB-1. Reactivation restores access; it must never be the moment an
+unapproved provider becomes discoverable. F6/F7 assert exactly that.
+
+### Public-read behaviour, before and after
+
+`providerGetPublicProfile` already answered to the canonical registry (OB-1), so a suspended
+provider was never fetchable by id. The hole was `providerSearchProviders`, which queries the
+projection directly. Before: a suspended provider remained in its results. After: delisted,
+and restored on reinstatement.
+
+### Proof, in both directions
+
+`scripts/test-provider-suspension-mirror.js` — **38 passed, 0 failed**, driving the real
+`projectProvider`, the real `accountDeactivate` / `accountReactivate` callables, the real
+`providerPublish` and the real `providerGetPublicProfile`, and running the actual discovery
+query against the fixture rather than inspecting fields it hopes are equivalent.
+
+Against the **PRE-FIX** source: **29 passed, 9 failed** — the suspended provider stayed
+`searchable: true` and stayed in the discovery results, deactivation left the projection
+listed, and the reinstatement half was missing too.
+
+The negative controls exercise handlers that exist in **both** runs: the counter-proof removes
+the four mirror writes and nothing else. That is deliberate — OB-3's Part B passed degenerately
+because the handler under test was absent in the pre-fix run, and this suite is built not to
+repeat it. Part D's OB-1 assertions correctly still pass in the counter-proof, because OB-1 is
+untouched by the reconstruction.
+
+Three harness defects were fixed rather than worked around:
+`account-status.js` does `const db = admin.firestore()` at **module load**, so a stub bound to
+whichever fixture existed then would have had every later section asserting against the first
+section's data — the stub now proxies to the current fixture on each call. The
+`FieldValue.delete()` sentinel now actually removes the key, or "the suspension stamp is
+cleared" would have asserted against a sentinel object and passed while the field survived.
+And the pre-fix reconstruction's cuts are start..end **inclusive** with a self-check that the
+OB-5 blocks are really gone — a cut that stops short left a dangling brace, the mutant failed
+to compile, and the counter-proof reported nothing detected.
+
+Regression: admin-verification-counters 26/0, provider-verification-decision 44/0,
+provider-publish-authority 27/0, healthcare-admin-approval 64/0, healthcare-provisioning 30/0,
+decision-authority 17/0, lifecycle-parity 53/0, approval-primitive 31/0, merchant-application
+54/0, commission-5pct 58/0, admin-os-render 43/0, role-authority 30/0.
+
+### Scope
+
+Asserted: only `providers` and `providerProfiles` are written by these paths — zero writes to
+`healthProviders`, `healthAppointments`, `healthRecords`, `healthPrescriptions`,
+`legalAcceptances`, `payments`, `paymentIntents`, `providerBookings`, `providerVerification` or
+`applications`. Verification state is untouched by suspension and remains independent of
+approval, as OB-3 established. No production data was read or written.
+
+## 2026-09-13 (7) — OB-4: the verification counters count the field the writer writes
+
+**Files:** `functions/admin-os.js` (two queries + one label),
+`scripts/test-admin-verification-counters.js` (new), `CHANGELOG.md`. **No change to the OB-3
+decision logic, providerSubmitVerification, verification authorization, providers/{uid},
+activation, agreements, payments, booking, directory or indexes. Nothing deployed.**
+
+### Old field versus canonical field
+
+| | queried | writer actually sets |
+|---|---|---|
+| `adminGetExecutiveDashboard` | `providerVerification.verificationStatus == 'pending_review'` | `status` |
+| `adminGetMerchantPipeline` | `providerVerification.verificationStatus in ['verified','approved']` | `status` |
+
+`verificationStatus` is the field the **mirror** on `providerProfiles/{uid}` carries.
+`providerVerification` is written by `providerSubmitVerification` and, since OB-3,
+`adminDecideProviderVerification` — both write **`status`**. The queries matched nothing, so
+the queue reported 0 however much work was waiting.
+
+The pipeline counter was wrong on a second axis: it asked for `['verified','approved']`,
+neither of which any writer produces. OB-3's states are `pending_review` / `verified_on_file` /
+`rejected`.
+
+Those two legacy values are deliberately **not** kept as fallbacks. `verified` is precisely the
+ambiguous word OB-3 exists to avoid, and folding it into this stage would count an unknown
+standard as a known one. If such rows are ever found they need a decision, not an `OR`.
+
+The stage label went from **Verified** to **Docs Verified**: "Verified" alone reads as
+"registration confirmed", and this counts document review only. The funnel renders `label` and
+ignores `key`, so no consumer changes.
+
+### Counter semantics
+
+`pending_review` → pending. `verified_on_file` → verified. `rejected` → neither. **A record
+with no `status` is counted in nothing** — unknown is not pending, and a queue must not be
+inflated by records whose state nobody has established. An empty collection yields 0.
+
+### Proof, in both directions
+
+`scripts/test-admin-verification-counters.js` — **26 passed, 0 failed** against a fixture of
+3 pending / 2 verified_on_file / 1 rejected / 1 with no status at all.
+
+Against the **PRE-FIX** source: **20 passed, 6 failed** — both counters return **0** on that
+same queue, and the assertion that inspects the predicates the handlers actually issued prints
+the stale pair verbatim.
+
+Also asserted: the counters mutate nothing and issue no write of any kind; neither response
+contains a document URL, because `count()` returns a number and never a document body — which
+is what stops an admin overview becoming a way to read restricted verification evidence;
+authorization is unchanged (unauthenticated and ordinary users refused, superAdmin allowed);
+and the five neighbouring pipeline stages — applied, pendingReview, published, subscribed,
+active — still count what they did before.
+
+### The mistake worth recording
+
+The first version of this suite tested the wrong endpoint. The counter sits at
+`admin-os.js:467`, and `adminGetPlatformOverview` is the handler I assumed enclosed it — it
+does not. That handler starts at line 21; line 467 is inside `adminGetExecutiveDashboard`
+(line 427). The suite called the neighbour, got `undefined` for a key that endpoint never
+returns, and three assertions failed for a reason that had nothing to do with the defect.
+Resolving the enclosing function instead of trusting proximity is the difference between
+testing the counter and testing something next to it.
+
+Regression: provider-verification-decision 44/0, provider-publish-authority 27/0,
+healthcare-admin-approval 64/0, healthcare-provisioning 30/0, decision-authority 17/0,
+lifecycle-parity 53/0, approval-primitive 31/0, merchant-application 54/0, commission-5pct
+58/0, admin-os-render 43/0, role-authority 30/0.
+
+### One thing left as-is, deliberately
+
+Every counter in both endpoints carries `.catch(→ 0)`, so a failed query is indistinguishable
+from an empty queue. That is a uniform house convention here, stated in the source as
+"catch→0 (never fabricate)", and changing it for verification alone would make this file
+inconsistent with itself. Worth a decision of its own, because for a *queue* the consequence
+is sharper than for a total: an operator reads "0 pending" and looks away. Reported, not
+changed — it is not the read-model mismatch this gate authorised.
+
+No verification records or other production data were touched: the suite writes only to its
+in-memory fixture, and asserts zero writes.
+
+## 2026-09-13 (6) — OB-3: verification becomes a process, and says exactly what it knows
+
+**Files:** `functions/admin-os.js`, `functions/provider-onboarding.js`,
+`scripts/test-provider-verification-decision.js` (new), `CHANGELOG.md`. **No activation or
+publication changes, no AdminOS counter fix (OB-4 is not this gate), no registry integration,
+no rules, no payment, no booking, no indexes. Nothing deployed.**
+
+### Documents could be submitted and never decided
+
+`providerSubmitVerification` wrote `providerVerification/{uid}` with `status:'pending_review'`
+and nothing anywhere moved it. The only readers were two AdminOS counters. `pending_review`
+was terminal in practice — verification was a collection, not a process.
+
+And because that write is `merge:true`, a **rejected** provider could upload again and
+silently return themselves to the queue with the rejection, its reason and its reviewer
+erased. The next reviewer had no way to see it had already been refused.
+
+### What the decision actually establishes — the part that matters
+
+`adminDecideProviderVerification` lives in `functions/admin-os.js`, reached through the
+existing `adminOsDispatch`, gated by the existing `_requireAdmin`, audited through the
+existing `adminAudit`. No second verification system, no new dispatcher, no new authority.
+
+**SOKONI has no integration with any professional registry.** There is no call to KMPDC, the
+Pharmacy and Poisons Board, the Nursing Council, a veterinary board or any KYC vendor anywhere
+in this codebase. An administrator working this queue is looking at an uploaded image.
+
+That establishes exactly one thing: **the documents are on file and a human looked at them.**
+It does not establish that a registration is real, current, or belongs to this person. So:
+
+    self-declared            licenseNumber / qualifications, typed by the applicant
+    verified_on_file         a reviewer inspected the documents      ← THE ONLY VERIFIED STATE
+    verified_with_authority  the issuing body confirmed it           ← NOT REACHABLE
+
+`verified_with_authority` is deliberately not implementable and the handler refuses to write
+it (E1–E3 assert no writer anywhere produces it). Adding it without an external evidence
+source would turn "an admin saw a PDF" into "this clinician is registered" — the most
+consequential lie this system could tell a patient. When an integration exists it gets its own
+writer, its own evidence fields and its own gate, not a new string in this switch.
+
+The record says so itself rather than relying on a comment: every decision writes a `basis`
+field — *"admin-document-review: a reviewer inspected the uploaded documents. NOT confirmed
+with any issuing authority."* — alongside `documentsReviewed`, the list of uploads that were
+actually present.
+
+### Separation of powers
+
+Verification does not activate, publish or make anyone bookable. Part D asserts a fully
+verified provider is still not `active`, not `searchable`, still refused by
+`ACTIVE_PROVIDER_STATES`, and that the decision **writes nothing to `providers/{uid}` at all**.
+
+It also deliberately does **not** set a bare `verified: true` — that boolean collapses
+on-file and authority-confirmed back into one claim, which is the distinction above being
+discarded at the last step. Only `verificationStatus` is mirrored onto `providerProfiles`,
+for display, matching what the submit step already wrote.
+
+### Guarantees
+
+* **Self-review refused even with the admin claim.** An administrator is still an applicant
+  when the subject is themselves (B4, B5) — and G4 proves that refusal comes from its own
+  check, not from `_requireAdmin`.
+* **Nothing to decide is refused** rather than manufacturing a record (C1, C2): this is a
+  decision *on submitted evidence*, never a way to create one.
+* **Idempotent.** Re-issuing a decision the record already carries changes nothing and writes
+  no second audit entry, so a double-tap cannot manufacture a second review event. A
+  *different* decision is a legitimate correction, applied and audited as the transition.
+* **A rejection needs a reason** the applicant can act on.
+* **Evidence is preserved** — the document URLs are never written by the decision.
+* **Re-submission stays available but no longer erases the decision.** The prior decision,
+  its reviewer and its reason move into an append-only `priorDecisions` history, the live row
+  is cleared of the stale reviewer fields so it cannot read as already handled, and the
+  applicant can only ever reach `pending_review` — never a verified state.
+
+### Proof, in both directions
+
+`scripts/test-provider-verification-decision.js` — **44 passed, 0 failed**.
+Against the **PRE-FIX** source: **22 passed, 18 failed** — no decision handler at all, and the
+rejection vanished on re-submission (`priorDecisions` null, the live row's reviewer fields
+`undefined`).
+
+**Part G is a mutation control, and it exists because of an honest gap.** In the counter-proof
+run every Part B case "passes" for a degenerate reason: the handler does not exist, so
+`NO_HANDLER` reads as a refusal. The counter-proof therefore validates Part A, not Part B. So
+`_requireAdmin` is neutered in a copy of the source and the same calls re-run: an ordinary
+user then succeeds, and the state actually moves. Part B measures the guard.
+
+Two harness defects were fixed rather than worked around, both repeats of traps this
+programme has hit before: the temp-dir sibling shims are now **derived from the sources**
+instead of hand-listed (a hand-kept list rots the moment a module gains a dependency, and the
+mutant then fails to load while reporting "nothing detected"); and the `_requireAdmin` anchor
+is matched by regex because `admin-os.js` is CRLF with a BOM, so an LF template literal never
+matched and the control reported a rotted anchor on an unchanged file.
+
+Regression: provider-publish-authority 27/0, healthcare-admin-approval 64/0,
+healthcare-provisioning 30/0, decision-authority 17/0, lifecycle-parity 53/0,
+approval-primitive 31/0, merchant-application 54/0, commission-5pct 58/0, admin-os-render
+43/0, role-authority 30/0.
+
+### Still open
+
+**OB-4 untouched by instruction** — the AdminOS counters still query `verificationStatus`
+while this collection's writer sets `status`, so they continue to read 0. Now a slightly
+larger correction than before, because there is finally a queue for them to count.
+OB-5's suspension mirror, OB-6, and credential projection for already-approved providers
+remain. No external registry integration was invented, and no healthcare production data was
+touched.
+
+## 2026-09-13 (5) — Self-service publishing stops being a second approval mechanism
+
+**Files:** `functions/provider-onboarding.js`,
+`scripts/test-provider-publish-authority.js` (new), `CHANGELOG.md`. **No rules, no AdminOS, no
+payment, no agreements, no verification-decision implementation. Nothing deployed.**
+
+### Four gates secured one path; this was the door beside it
+
+`providerPublish` wrote `providers/{uid}` with `status:'active', searchable:true,
+isPublic:true, acceptsBookings:true, available:true` and minted `claims.provider = true`, on
+these preconditions only: a self-entered `draft.profile`, a self-entered `draft.coverage`, a
+`plan` (a free trial qualifies), and `assertLegalCompliance(uid,'provider')` — which is
+dark-launched per role and therefore returns compliant for everybody today.
+
+No application. No administrator. No audit record. Meanwhile `booking-service.js:121` asks
+only whether a provider is `active` (`ACTIVE_PROVIDER_STATES = ['active','approved']`) before
+allowing a booking. So the secured route
+
+    applications → AdminOS → applicationDecide → projectProvider → providers/{uid}
+
+governed one path into the canonical registry while this one reached the same document
+unguarded — and could also restore a **suspended** provider, which is HC-02's shape through a
+callable, where Firestore rules do not apply.
+
+### The invariant
+
+**Publishing writes CONTENT. The application lifecycle owns PUBLIC STATE.**
+
+    content       name, bio, categories, coverage, pricing, availability, settings
+    public state  status, searchable, isPublic, acceptsBookings, available   ← projectProvider only
+
+Implemented as: read `providers/{uid}` first; the state fields are written **on first
+creation only**, and then closed (`status:'pending_approval'` and every flag false). If the
+row already exists, publishing writes no state at all — so an approved provider stays active
+and a suspended one stays suspended rather than being quietly downgraded to
+`pending_approval`, which would itself be a step back toward activation.
+
+`claims.provider` is minted only for an already-approved provider. `grantAccountRole` (via
+`applicationDecide` → `applicationLifecycle`) is the one writer of that claim; the wizard
+minting it was the second half of the bypass.
+
+`providerProfiles.searchable` — which gates `providerSearchProviders`, a query against *that*
+collection — was hardcoded `true`. It now follows approval.
+
+`providerGetPublicProfile` gated on `providerProfiles.status == 'active'`, which is the
+ONBOARDING state ("the draft is published"), not an approval. This public, unauthenticated
+endpoint now answers to the canonical registry instead, so a self-service provider who never
+reached an application is no longer fetchable by providerId complete with their self-entered
+`qualifications`.
+
+**Not solved with a `verified` flag**, deliberately. Verification is a separate gate and has
+no authoritative decision step at all — a submit step writes `pending_review` and nothing
+anywhere moves it — so gating on it would gate on something nobody can currently grant.
+
+### One more defect found in the same function
+
+Publishing wrote `rating: 0, reviewCount: 0, jobsCompleted: 0` unconditionally, so a provider
+who edited their profile and republished **lost every review and completed job they had
+earned**. Counters are now seeded on first creation only — the rule `projectProvider` already
+states as "never reset a live provider's rating or history by re-approving them".
+
+### Proof, in both directions
+
+`scripts/test-provider-publish-authority.js` — **27 passed, 0 failed**.
+
+Against the **PRE-FIX** source: **15 passed, 12 failed** — a never-approved provider came out
+`active`, `searchable`, `isPublic`, **bookable**, listed by `providerSearchProviders`, publicly
+fetchable by providerId, with `claims.provider` minted and self-entered qualifications
+published as public skills; and a **suspended provider republished themselves back to active,
+searchable, bookable, with the claim re-minted**.
+
+Three harness defects were found and fixed rather than worked around, each of which would have
+produced a pass for the wrong reason:
+
+* the stub hook was torn down after module load, but `providerPublish` requires
+  `./availability` **lazily** — the real module then loaded against an uninitialised
+  firebase-admin and the publish threw `app/no-app` before writing a field, so A2–A5 "passed"
+  because nothing was written at all;
+* `./search-terms` pulls in the legacy firebase-admin namespace and needed the same stub;
+* `where()` was a no-op, so `_genProviderId` — which probes
+  `providerProfiles.where('providerId','==',id)` — saw every draft in the fixture as a
+  collision and threw. A stub that ignores the predicate does not model the database; it
+  models a different one. It now filters.
+
+Regression: provider-publish-authority 27/0, role-authority 30/0, healthcare-admin-approval
+64/0, healthcare-provisioning 30/0, decision-authority 17/0, lifecycle-parity 53/0,
+approval-primitive 31/0, merchant-application 54/0, commission-5pct 58/0, admin-os-render 43/0.
+
+### Still open, and unchanged by this gate
+
+The verification decision step (OB-3); the AdminOS verification counters reading
+`verificationStatus` where the writer sets `status` (OB-4); suspension not reaching
+`providerProfiles` (OB-5 — the republication half is closed here, the mirror half is not);
+`assertLegalCompliance(uid,'provider')` hardcoded on this path (OB-6); and the credential
+projection for providers who are *already* approved, which belongs with verification.
+
+No healthcare production data was touched: the suite writes only to its in-memory fixture, and
+asserts zero writes to `healthProviders`, `applications`, `payments`, `paymentIntents`,
+`providerBookings`, `healthAppointments`, `healthRecords` and `legalAcceptances`.
+
+## 2026-09-13 (4) — Healthcare stops accepting the Seller Agreement
+
+**Files:** `functions/legal-agreements.js`, `functions/application-lifecycle.js`,
+`sokoni-aos.js`, `hub-register.js`, `scripts/test-healthcare-admin-approval.js`,
+`scripts/test-commission-5pct-agreement.js`, `CHANGELOG.md`. **No new agreement framework,
+no invented legal text, no rules change, no payment work, `docs/BOOKING_PAYMENT_CONTRACT.md`
+untouched. Nothing deployed.**
+
+### A hospital was accepting a POS commission contract
+
+`hub-register.js` carries the eight healthcare facility types and wrote
+
+    agreementAccepted: true,
+    agreementVersion:  '2026-09-07-lanes-mkt-ladder-pos-5pct',
+
+with the text served from `/seller-terms`. `resolveRole` classifies those intakes as role
+`health`, so the application reached the AdminOS queue and `applicationDecide` approved it —
+because the Seller Agreement box had been ticked. The blocked intake
+(`healthcare.html::submitProviderReg`, which collects nothing) was the safer of the two.
+
+The dedicated instruments already existed: `functions/legal-agreements.js` declares
+`healthcare-provider-agreement` and `medical-compliance-declaration` in a versioned,
+immutable, deployed system with 21 operations. Nothing needed inventing.
+
+### A silent under-enforcement, found on the way in
+
+`ROLE_AGREEMENTS` is keyed **`healthcare`**. Applications carry role **`health`**. So
+`_catalogueFor('health')` found no role set and returned the five CORE policies only —
+`assertLegalCompliance(uid, 'health')` would have reported a clinician **compliant** while
+omitting both healthcare instruments. Under-enforcement that presents as success.
+
+`ROLE_ALIASES = { health: 'healthcare' }` reconciles the two vocabularies inside
+`_catalogueFor`, so every caller is fixed at once. An empty role still legitimately means
+"core documents only". `F7b` proves the alias is load-bearing without mutating source:
+accepting the five CORE policies alone is still refused.
+
+### The bridge
+
+`complianceFor(uid, role)` is extracted from the `legalCheckCompliance` handler so server
+modules can ask the same question without a request object. It deliberately does **not**
+consult `legalConfig/enforcement`: that flag decides whether an existing user is blocked
+mid-rollout, which is a different question from whether an application meets its approval
+prerequisite. The callable's published shape is unchanged.
+
+`applicationDecide` now gates **role `health` only** on the canonical record:
+
+    if (_role === 'health')  → complianceFor(uid, 'health') must be compliant
+    else                     → agreementAccepted === true        (unchanged)
+
+`legalAcceptances` stays the one acceptance database — the bridge **reads** it and never
+writes one (asserted, F11). The application's client-written boolean is not consulted for
+healthcare, so an application carrying a Seller Agreement tick is still refused. The check
+fails closed: if the record cannot be read, approval is refused rather than assumed.
+
+Because the two healthcare documents have no published text, **no healthcare application can
+be approved today**. That is the intended state. `reject` and `request_info` still work.
+
+### Both intakes now say the same thing
+
+`hub-register.js` omits the Seller acknowledgement when `catObj.hub === 'healthcare'`, and a
+healthcare registrant is told plainly that the terms shown do not apply to them and that
+their application will be held for review. No agreement text is summarised or invented.
+`healthcare.html` is unchanged — it already asserted nothing, which is now the correct
+behaviour rather than a bug. J5/J6 prove it behaviourally: both intake shapes are refused
+without canonical acceptance and approved with it.
+
+### The reviewer can see the evidence
+
+`applicationList` now returns `agreementAccepted`, `agreementVersion`,
+`agreementAcceptedAt`, `agreementVerifiedAt`, `agreementVerifiedVersion` (the application's
+own fields, no extra read) plus, **for health rows only and capped at 25**, a
+`legalCompliance` block naming the required instruments, their versions and hashes, what was
+accepted and what is outstanding. An unbounded fan-out here is how an admin list becomes the
+most expensive read on the platform; beyond the cap the field stays null rather than
+half-true, and a failed lookup reports the failure instead of reading as "nothing accepted".
+The AdminOS card renders it, and distinguishes the server-verified stamp from the
+self-reported one.
+
+### Results
+
+`scripts/test-healthcare-admin-approval.js` — **64 passed, 0 failed**, including: Seller
+Agreement acceptance is not substituted (F1) and the refusal says so (F2); partial acceptance
+refused (F4, F5); an outdated version refused (F6); CORE-only refused (F7b); client-written
+acceptance fields cannot rescue an approval (F10); no second acceptance record is written
+(F11); sellers still approve on the boolean and are still refused without it (F12, F13);
+both intake shapes behave identically (J5, J6); the reviewer sees the evidence (K1–K8). The
+mutation control still proves the authority guard is what refuses unauthorized callers.
+
+Regression: healthcare-provisioning 30/0, admin-os-render 43/0, decision-authority 17/0,
+lifecycle-parity 53/0, approval-primitive 31/0, merchant-application 54/0,
+commission-5pct-agreement 58/0.
+
+### One detector rescoped, and why
+
+`test-commission-5pct-agreement.js` asserted the approve gate with
+`[\s\S]{0,400}?` between two anchors. The healthcare branch put ~1,900 characters between
+them, so it went red while the thing it tests was still true. A window measured in
+characters rots on the next edit, so it now extracts the approve block **by structure** — the
+same idiom its own negative control already used — and asserts inside it, plus a new
+assertion that healthcare is gated on the canonical record. Its negative control still
+passes, so the detector can still fail.
+
+### Still failing, and still not ours
+
+Both remain from another agent's uncommitted work, unchanged by this gate:
+`test-approval-activates-shop` M5 (*"anchor moved"* — the anchor matches HEAD, not the
+working tree, because an uncommitted `projectSeller` rewrite edited that region) and jest
+`resolveRole` `{type:'professional'} → legal` (an uncommitted `DECLARED_TYPES` block;
+`DECLARED_TYPES` appears 0 times at HEAD, 3 in the working tree).
+
+### Still with legal, not engineering
+
+The text of both healthcare documents; whether practitioners, facilities, pharmacies and
+veterinary need distinct instruments; whether a Data Processing Agreement joins the
+healthcare set (the *merchant* set has one; the healthcare set does not); whether
+`commission-agreement` is added so the 5% rides its own instrument; and professional
+registration verification — `licenseNumber` remains self-asserted, and **no verification was
+implemented here**, deliberately. An agreement can require a valid registration; it cannot
+establish one.
+
+## 2026-09-13 (3) — Healthcare approval authority: the workflow existed; the queue could not be filtered to it
+
+**Files:** `admin-os.html` (one `<option>`), `scripts/test-healthcare-admin-approval.js` (new),
+`CHANGELOG.md`. **No rules, no functions, no payment, no dispatcher, no indexes, no migration.
+Nothing deployed.**
+
+### The audit changed the shape of this gate
+
+The brief was to build the missing healthcare administrative workflow. It is not missing.
+AdminOS already has an **Applications & Approvals** panel that calls the canonical
+`applicationList` / `applicationDecide` / `applicationReconcile`, and every layer beneath it
+is role-agnostic:
+
+* `applicationList` reads `applications` **unfiltered** and filters in memory, computing
+  `role` as `a.role || resolveRole(a).role` — healthcare included.
+* `_appCard` prints whatever role comes back; Approve / Reject / Suspend / Request-info are
+  not role-conditional.
+* `applicationDecide` gates on `_requireAdmin` and acts on an application by id.
+
+The only gap was that the panel's role filter offered seller / provider / driver and **not
+`health`** — so healthcare applications were reviewable under "All roles" and invisible the
+moment a reviewer filtered. The queue looked like it had no healthcare in it.
+
+So the change is one `<option value="health">`. Building a healthcare approval surface would
+have created the second authority system this programme exists to prevent.
+
+`legal` is the identical one-line omission and is deliberately left alone — out of scope, and
+it deserves its own evidence rather than being swept along.
+
+### What the suite proves
+
+`scripts/test-healthcare-admin-approval.js` — 37 assertions, stubbed SDKs, driving the **real**
+`applicationDecide` callable and the **real** lifecycle trigger. **37 passed, 0 failed.**
+
+* **A — the unauthorized path, counter-proved, not assumed.** Unauthenticated, ordinary
+  signed-in user, **the applicant themselves**, an approved `provider`, and a `moderator` are
+  each refused `permission-denied` — for reject as well as approve — and a refused decision
+  writes **nothing at all**.
+* **B — admin and superAdmin are both authoritative**, and each approval writes an immutable
+  `adminAudit` record naming the action, the application and the target uid.
+* **C — approval reaches `providers/{uid}`** through the HC-23 path, active and searchable,
+  with `claims.provider` minted and `users.roles` gaining `provider`.
+* **D — idempotent**: same `providerId`, rating and review history not reset.
+* **E — rejection** stamps the application, creates no active provider, and is audited.
+* **G — zero writes** to `healthProviders`, `healthAppointments`, `healthRecords`,
+  `healthPrescriptions`, `healthProviderAvailability`, `payments`, `paymentIntents`,
+  `providerBookings`, `providerServices`.
+* **H — the queue surfaces healthcare**: `applicationList(role:'health')` returns it,
+  `role:'seller'` does not, and a non-administrator cannot list applications at all.
+
+**I — mutation control.** Part A passing proves the calls were refused; it does not prove
+`_requireAdmin` is what refused them. So the guard is neutered in a copy of the source and the
+same calls re-run: an ordinary user then **succeeds** in approving, and the write reaches the
+application document. The control also asserts its own anchor still matches and that the mutant
+**loads** — a mutation control that silently fails to load reports "not detected" and proves
+nothing.
+
+### A blocker for the onboarding gate, not for this one
+
+`applicationDecide` refuses **every** `approve` — for all roles, not just sellers — unless the
+application carries `agreementAccepted: true`. Healthcare inherits that gate, correctly; F1–F3
+assert it, along with the fact that `reject` and `request_info` still work so a reviewer can
+clear the queue.
+
+But `healthcare.html::submitProviderReg` does not collect an acknowledgement, so a healthcare
+application submitted through today's intake **cannot be approved**. That is a genuine
+dependency for the provider-onboarding gate, and a policy question besides: the gate names the
+*Seller* Agreement and its commission ladder, which is not obviously the right instrument for a
+clinician. Reported, not worked around — widening the gate or exempting healthcare would both
+be the wrong call to make silently.
+
+Regression: `test-admin-os-render` 43/0, `test-healthcare-provisioning` 30/0,
+`test-application-decision-authority` 17/0, `test-lifecycle-parity` 53/0,
+`test-approval-primitive` 31/0.
+
+**Not done, each needing separate authorization:** provider onboarding/storefront (and the
+agreement acknowledgement above), payment convergence to IntaSend, the `services-dispatch`
+`_h` defect, the two missing composite indexes, and removal of the fabricated public
+directory (HC-06).
+
+## 2026-09-13 (2) — HC-23: approved healthcare applicants reach the canonical registry
+
+**Files:** `functions/application-lifecycle.js` (one constant + its comment),
+`scripts/test-healthcare-provisioning.js` (new), `CHANGELOG.md`. **No rules, no AdminOS, no
+payment, no dispatcher, no indexes, no migration. Nothing deployed.**
+
+### The delegation wrote nothing, and hid the projector that would have
+
+    const DELEGATED_ROLES = { health: 'healthProviders', legal: 'legalProviders' };
+
+    } else if (DELEGATED_ROLES[role]) {
+      receipt.writes.push({ collection: DELEGATED_ROLES[role], id: uid, action: 'delegated' });
+    } else {
+      receipt.writes.push(await projectProvider(db, app, uid, approved));
+    }
+
+The branch pushed a receipt object and performed **no write** — and because it MATCHED, it
+also skipped `projectProvider()`. An approved healthcare applicant received
+`claims.provider` and landed in **no registry at all**. Approved, claimed, invisible.
+
+The comment above that constant already told the story for a different role: `seller` was
+removed from the same list for the same defect, after the capability census showed its
+"own onboarding pipeline" did not exist. It then asserted "health and legal genuinely still
+have their own registries." For health that was false in exactly the seller way — the only
+writer of `healthProviders/{uid}` is `registerHealthProvider`, which has no client invoker
+anywhere in the repo, and the 2026-09-12 production census found zero real providers and
+zero applications carrying role `health`.
+
+### The change is one map entry
+
+`health` leaves `DELEGATED_ROLES` and falls through to `projectProvider()` like every other
+provider. Nothing else was needed: `roleKeyFor` already maps `health → 'provider'`, so
+`users.roles` and `claims.provider` were always correct — **only the registry write was
+missing**. `projectProvider` is already idempotent, merge-only, seeds counters solely on
+first creation, and retracts (never deletes) on rejection.
+
+`legal` **stays**, on its own evidence rather than by analogy: `functions/legal-hub.js`
+writes `legalProviders/{uid}`, `legal-admin.html` and `legal-hub.html` read it, and
+`scripts/onboard-batch2.js` onboarded a real firm into it. Removing it would fork legal
+identity across two registries — the opposite of convergence.
+
+### providers/{uid} does not reopen what HC-01 closed
+
+The obvious risk in routing healthcare into a client-writable registry is trading one
+self-mint for another. It does not: the `providers` create rule pins a client-written record
+to `status:'pending'`, and the update rule forbids the owner from touching `status`,
+`verified`, `suspended` or `approved`. Only an admin — or the Admin SDK path exercised here —
+sets `status:'active'`. Part E of the new suite asserts all three against the rules text, so a
+future widening trips this suite as well as the HC-01 one.
+
+### Proof, in both directions
+
+`scripts/test-healthcare-provisioning.js` drives the real trigger against stubbed SDKs — the
+same harness shape as `test-approval-activates-shop.js`, which exists because `seller` had
+this identical defect.
+
+- **current source: 30 passed, 0 failed (exit 0)**
+- **PRE-FIX source (`health` restored to the map): 23 passed, 7 failed (exit 1)** — C1–C6
+  (no `providers/{uid}` at all) and F6.
+
+`C7`/`C8` pass in **both** runs, which is the point: the role field and the claim were never
+the defect. Only the registry write was. A suite that failed on all eight would be measuring
+something other than HC-23.
+
+The suite also asserts **zero writes to `healthProviders`** across the whole approval — read
+off the harness's operation log, not inferred — and zero writes to `healthAppointments`,
+`healthRecords`, `healthPrescriptions`, `healthSlotLocks`, `healthApptIdempotency`,
+`healthProviderAvailability`, `payments`, `paymentIntents` and `providerBookings`.
+
+One assertion was fixed after it passed for the wrong reason: the `legal` control lacked
+`intakeVersion`/`roleResolvedBy`, so the trigger performed the intake pass and returned — "no
+providers record" was true because **nothing ran**. `G5` now pins `decisionAppliedFor` so the
+control cannot pass vacuously again.
+
+### Two pre-existing failures found, belonging to someone else's in-flight work
+
+Neither is caused by this change, and neither is fixed here.
+
+1. `functions/test/application-lifecycle.test.js` — **86 passed, 1 failed**:
+   `{type:'professional', professionalType:'Lawyer'} → legal` now returns `provider`. Cause:
+   an uncommitted `DECLARED_TYPES` block in `resolveRole`, which reads `app.type` only and
+   maps `professional → provider`. `DECLARED_TYPES` appears **0 times at HEAD and 3 times in
+   the working tree**. `resolveRole` (lines 194–247) never references `DELEGATED_ROLES`
+   (637, 825).
+2. `scripts/test-approval-activates-shop.js` — **34 passed, 1 failed**: mutation `M5`
+   reports *"no-op replace — anchor moved"*. Its regex anchor **matches at HEAD and does not
+   match the working tree**, because an uncommitted rewrite of `projectSeller` added
+   `updatedAt: _ts(),` and the "account's active shop" comment in that exact region. The
+   harness correctly refused to count an inert mutation as a pass.
+
+Clean: `test-application-decision-authority` 17/0, `test-lifecycle-parity` 53/0,
+`test-approval-primitive` 31/0.
+
+**Not done, each needing separate authorization:** AdminOS/Super AdminOS healthcare approval
+authority, payment convergence to IntaSend, the `services-dispatch` `_h` defect, the two
+missing composite indexes, removal of the fabricated public directory (HC-06), and the
+provider storefront.
+
+## 2026-09-13 — HC-01: the duplicate healthProviders block is gone; the union closed
+
+**Files:** `firestore.rules` (source only), `scripts/test-healthcare-provider-rules.js` (new),
+`CHANGELOG.md`. **`firestore.rules.build` deliberately NOT regenerated** — it is a predeploy
+artifact and remains byte-identical to the served ruleset. **Nothing deployed.**
+
+### One rule was written; another quietly overrode it
+
+`firestore.rules` carried **two** `match /healthProviders/{providerId}` blocks, both at brace
+depth 2 directly under `match /databases/{database}/documents`. Firestore **unions** duplicate
+match blocks, so the first block's
+
+    allow write: if false;   // CF-only
+
+was **void**. The second block — labelled "publicly discoverable directory" — allowed
+
+    allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
+
+and `noAdminFields()` protects thirteen keys of which `verified` is the only one that mattered
+here. **`status` is not protected. Neither is `licenseNumber`, `specialization`, `rating` or
+`ratingCount`.** So any signed-in user could write `healthProviders/{their-own-uid}` carrying
+`status:'active'` with a self-asserted licence, and the owner-update clause let an
+admin-rejected applicant put themselves back to `active`.
+
+That reached further than the directory. `createHealthRecord` and `createPrescription`
+(`functions/healthcare-hub.js`) authorize on `healthProviders/{uid}.status === 'active'` and
+**nothing else** — no appointment, no consent, no relationship — so the mint reached clinical
+writes against an arbitrary `patientUid`.
+
+The irony is on the page: the comment immediately above the second block warns, about
+`/applications`, *"Do not re-add a second block for this path … or the union quietly widens
+access again."* The healthcare block sitting under that sentence was that exact mistake.
+
+### The change
+
+The two blocks collapse into one, writes become server-only, and the second block becomes a
+tombstone comment so the next reader does not re-add it.
+
+The read surface is **deliberately not narrowed to match**: the removed block was the only one
+carrying the owner clause, and `sokoni-health.js::listenMyProviderProfile` queries
+`where('uid','==',me)` so an applicant can see their own pending status. Dropping it would have
+produced a guard that refuses everybody — a fix by that name is a regression. Public discovery
+(`sokoni-firestore-search`'s guard, `listenProviders`, `getAllProviders`) filters
+`status=='active'` and is untouched. The removed block also admitted `status=='approved'`; no
+writer anywhere produces that value, and with `write:false` it is unreachable by construction,
+so it is dropped rather than carried forward as a state the system cannot enter.
+
+Admin **client** writes are denied along with everyone else's. Approval is a callable, and the
+Cloud Functions use the Admin SDK, which bypasses rules entirely — so this costs no callable
+anything. No AdminOS healthcare surface exists to lose, and the only client mutators
+(`sokoni-health.js` `saveProvider` / `updateProviderStatus` / `verifyProvider` / `deleteProvider`)
+have no caller but the one already-denied registration form.
+
+### Proof, in both directions
+
+`scripts/test-healthcare-provider-rules.js` — 33 assertions, emulator-backed against the real
+rules file.
+
+- **against `firestore.rules`: 33 passed, 0 failed (exit 0)**
+- **against a reconstructed PRE-FIX ruleset: 22 passed, 11 failed (exit 1)** — every failure
+  reading *"Expected request to fail, but it succeeded"*: mint-as-active, mint-as-pending, mint at
+  an arbitrary id, forged licence + 5.0 rating, self-promotion, the bare `{status}` merge shape,
+  un-rejecting oneself, rating forgery, licence rewrite, and admin client update/delete.
+
+A suite that passes against the vulnerable ruleset proves nothing, so the counter-proof is the
+point. The first counter-proof run reported **12** failures; one was an artifact — the
+admin-delete case succeeds under the old rules and removed the document a later read needed. The
+suite now re-seeds before the read section, so each section stands alone and the remaining 11 are
+all genuine vectors. An unattributable failure counted as a result is the trap being avoided.
+
+Structural verification ran on the **stripped** build output, not the source: the source comments
+contain the literal text `match /healthProviders/`, and a naive grep counts 3 where the compiled
+ruleset has exactly 1.
+
+The suite honours `RULES_FILE` and `FIRESTORE_EMULATOR_PORT`. The port is overridable because a
+second emulator was already live on 8080 in this repo; this run used 8099 and never called
+`clearFirestore()` against the other agent's data.
+
+**Not done, each needing separate authorization:** HC-23 (`DELEGATED_ROLES` provisions nothing),
+AdminOS healthcare administration, payment convergence to IntaSend, the `services-dispatch` `_h`
+defect, the two missing composite indexes, removal of the fabricated public directory (HC-06),
+and the provider storefront. No deployment.
+
+## 2026-09-12 — Healthcare Hub: the decisions are recorded; the fixture is removed
+
+**Files:** `docs/adr/ADR-014-healthcare-provider-identity-convergence.md` (new),
+`docs/adr/ADR-015-healthcare-payment-convergence.md` (new), `docs/adr/README.md`,
+`CHANGELOG.md`. **No application code, no rules, no payment code, no deployment.**
+**Database:** one document deleted — `healthProviders/seed-provider-general-001`.
+
+### An audit, then a census, then two decisions — in that order
+
+A read-only audit of the Healthcare Hub returned 22 findings and a NO-GO. The three that
+outranked the roadmap: the served ruleset carries **two** `match /healthProviders/` blocks, so
+the first block's `allow write: if false` is unioned away and any signed-in user can mint
+themselves an `active` provider (HC-01); `createHealthRecord` and `createPrescription` gate on
+that status and nothing else, so a self-minted provider could chart and prescribe against any
+patient uid (HC-03); and the live hub is a static array naming real Kenyan institutions with
+fabricated practitioners attached to them (HC-06).
+
+A fourth was found while closing the authority question. `application-lifecycle.js:613`
+declares `DELEGATED_ROLES = { health: 'healthProviders', legal: 'legalProviders' }`, and the
+matching branch pushes a receipt object and **performs no write** — and because it matches, it
+also skips `projectProvider()`. An approved healthcare applicant would receive
+`claims.provider` and land in no registry at all (HC-23). `legal` has it too.
+
+### The census is what made the decision cheap
+
+Per ADR-008, production was measured before anything was decided. COUNT-only aggregation
+queries and name-masked existence checks; no document bodies, no clinical fields, no writes:
+
+- `healthProviders` = **1** — `seed-provider-general-001`, `active`, `reviewedBy` set, created
+  2026-07-24. Its `uid` equals its own doc id and matches no `providers/{uid}` and no
+  `users/{uid}`: a fixture from `scripts/seed-health-provider.js`, not an account.
+- Self-mint signature (`active` and `reviewedBy == null`) = **0**. HC-01 is **latent**.
+- `healthAppointments`, `healthRecords`, `healthPrescriptions`, `healthSlotLocks`,
+  `healthApptIdempotency` = **0 each.** The HC-03 path has never been exercised.
+- The seven parallel client-written collections = **0 each.**
+- `applications` with `role:'health'` = **0.** Nobody has ever applied as a healthcare
+  provider, so **HC-23 has never fired** and no applicant is stranded.
+- Canonical stack: `providerBookings` = **4**, `providerAvailability` 2, `providerServices` 1.
+  The rail we are converging onto has real production usage.
+
+**So there is nothing to migrate.** The entire legacy healthcare population was one test
+fixture, and that is what makes HC-01 a pure rules change with zero data risk — still required
+before intake opens, because latent is not safe, only unexercised.
+
+### ADR-014 — a healthcare provider is a provider
+
+`providers/{uid}` is the canonical identity; `healthProviders` is retired as identity and
+authority; hospitals are `businesses` + `orgDepartments`; nurses are `workspaceMemberships`
+carrying the `orgRoles` `nurse` that `org-engine.js` already ships. The healthcare-specific
+numeric `role >= 4` gate is retired rather than reconciled — no writer mints a numeric `role`,
+and every rule and `_requireAdmin` already use the boolean claim. Profession is an attribute;
+authority is membership plus verification.
+
+### ADR-015 — a consultation is a service booking
+
+`docs/BOOKING_PAYMENT_CONTRACT.md` v1.0 (ratified 2026-07-28) already names the rail —
+*"Payment authorized (M-Pesa STK via IntaSend)"* — and already decides deposits, held funds,
+the single credit point, forfeits, refunds and expiry. Healthcare simply never adopted it, and
+instead charged through `darajaSTKPush` **directly into the provider's own till**, which is why
+it behaved as M-Pesa-only: Daraja has no card rail, and healthcare was not on IntaSend at all.
+
+All healthcare money converges on `createPaymentIntent({ purpose: 'service_booking' })`.
+Commission is **5%**. Card is required wherever the live IntaSend account enables it and is
+**separately gated**: the only card code on the platform hand-assembles a checkout URL with no
+session, amount, currency or key, and cannot collect money. Whether the account enables card is
+unproven and must be read from the dashboard, not inferred from code or probed via their API.
+
+The ratified contract is unchanged; ADR-015 records conformance and does not restate it.
+
+### The fixture is gone
+
+`healthProviders/seed-provider-general-001` deleted — one document, targeted by id. It was
+publicly readable as `status: 'active'` and invisible only because the hub reads no Firestore
+at all; it would have surfaced as a real bookable provider the moment the directory was wired
+to canonical data. Verified afterwards by count: `healthProviders` = 0.
+
+**Not done, and each requiring separate authorization:** the HC-01 rules fix, HC-23, AdminOS
+healthcare administration, payment convergence, the `services-dispatch` `_h` defect, the two
+missing composite indexes, removal of the fabricated public directory, and the provider
+storefront.
+
+## 2026-09-07 (6) — The POS gate becomes an authority; the logistics vocabularies reconcile
+
+**Files:** `functions/pos-zero-friction.js`, `functions/pos-retail-engine.js`,
+`functions/sokoni-logistics.js`, `scripts/test-pos-gate-behavioural.js` (new),
+`scripts/test-pos-gate-enforcement.js` (new), `scripts/test-delivery-visibility.js`,
+`CHANGELOG.md`. **Nothing deployed.**
+
+### The merchant was declared, not proven — and a comment said otherwise
+
+`posCompleteCheckout` checked `merchantId` for PRESENCE only, then used it as the tenant for
+the entire sale: the products read, the shift query, the sale document, the inventory
+deduction and the commission. A comment asserted this was already handled —
+
+> *"`merchantId` is enforced by resolveActor above (the sale is refused when `!_actor.ok`)"*
+
+— but **nothing refused it.** `_actor` was consumed for discount authority, one error message
+and the receipt's `servedBy` line. The comment described a guarantee the code did not provide,
+which is worse than no comment: the next reader stops looking.
+
+The sale is now refused unless the caller is proven to belong to that shop, by **either** of
+the two authorities the discount check already used — the shop actor (owner keyed off the
+`shops/{uid}` document id, or `shopEmployees`) **or** canonical `workspaceMemberships`.
+Requiring the actor alone would have refused every sale by canonically-employed staff: a live
+till outage dressed as a security fix. The capability asked for is `sales`, not the strictly
+narrower `discounts`, which would have locked out ordinary cashiers.
+
+`merchantProvenBy` is recorded on the sale, so an audit can tell which authority admitted it
+rather than inferring it from a role months later.
+
+### Which is what makes the gate safe to enforce
+
+Gating on a forgeable id is **worse** than not gating: a merchant could pass a clean shop's id
+to dodge their own closed till, or a rival's id to gate an innocent party — and it would look
+like enforcement. Proving the id first was the whole precondition, and the proof runs before
+the gate.
+
+**Both sale rails are now gated.** `posCompleteCheckout` and `recordPOSSale` — the latter
+reachable directly and through `smartPosDispatch({op})`, and previously ungated entirely, so a
+merchant whose till closed at 07:00 could simply call the other one. A gate on one of two
+doors is not a gate. `recordPOSSale` gates on `_sellerId`, which its own tenant binding
+already forces to equal `auth.uid` for non-admins.
+
+**And both rails now WRITE the liability the gate reads.** Nothing was writing them, so every
+merchant looked permanently clear and the gate could never close on anyone. A gate over an
+empty ledger is a decoration. Written AFTER the sale, deliberately: a liability for a sale
+that then failed to write would bill a merchant for money they never took. Idempotent on the
+sale id; best-effort, so a bookkeeping failure never rejects a transaction the customer has
+already paid for.
+
+**Custody comes from `collectionRoute`**, which the sale already computes — not from a second
+reading of the tenders. `CASH_IN_DRAWER` and `DIRECT_TO_SELLER` mean the merchant is holding
+the money and owes; `CENTRAL_MOR` means SOKONI collected it and already netted. An
+**unrecognised** route resolves to OWED: the opposite default would silently write off every
+sale on a route nobody had mapped yet — an under-collection no error surfaces.
+
+**An unreadable ledger refuses the sale.** `assertGateOpen` throws rather than reporting "owes
+nothing", and that throw stops the sale. Refusing to sell during an outage is the conservative
+failure; the alternative is a day of untracked trading reconciliation can never recover.
+
+### Two sabotages walked through the first test suite
+
+The static suite (`test-pos-gate-enforcement.js`, 38/0) checks these properties with regexes
+over the source. **Two deliberate breaks passed it 38/38:**
+
+* `if (!_merchantProven)` → `if (false)` — `_merchantProven` and the refusal message both
+  still EXIST in the file; they are simply unreachable. **A regex cannot tell live code from
+  dead code.**
+* deleting the unreadable-ledger refusal — the assertion
+  `/could not be checked, so this sale was not completed/` **also matches line 446**, the
+  resolveActor catch, a different guard entirely. The test was satisfied by code it was not
+  testing.
+
+`test-pos-gate-behavioural.js` (new, **27/0**) therefore CALLS `posCompleteCheckout` and
+asserts what happens, driving the REAL `pos-commission-rail` through a stub Firestore. Both
+sabotages now fail it with 5 failures each while the static suite still passes them — which is
+the measurement that proves the blind spot was real and is now covered. The three refusals are
+asserted as DISTINCT codes (`permission-denied` / `failed-precondition` / `unavailable`) so
+each names its own guard, and an unproven caller with an overdue ledger is refused as
+UNAUTHORISED — proving the proof runs first, and incidentally not leaking that some other shop
+owes money.
+
+### The logistics vocabularies reconcile
+
+`return_initiated` and `refund_initiated` existed only in the browser copy. The divergence
+mattered more than it looked: `renderNotification` returns null for an unknown stage, and a
+null return is indistinguishable from "nothing to send" — so a server-side return or refund
+reached the customer as **silence**, on exactly the two events people chase support about.
+Nothing errored; the message simply never went.
+
+Both now exist server-side, **with the client copy's own wording** rather than a second
+phrasing of the same event — a buyer must not be told two different things about one refund
+depending on which side sent it. The tracked baseline is now empty, and the assertion is
+symmetric: neither copy may declare a stage the other lacks. The two stages are also named
+individually, so deleting one from BOTH copies is caught — set equality alone would still hold.
+
+### Tests
+
+`test-pos-gate-behavioural` **27/0** (new) · `test-pos-gate-enforcement` **38/0** (new) ·
+`test-delivery-visibility` **28/0**. Sabotage-verified throughout: 6 against the gate, 2
+against the reconciliation. All prior suites green; both guards pass.
+
+## 2026-09-07 (5) — Manager approval now gates a refund; Supply was already converged
+
+**Files:** `functions/pos-zero-friction.js`, `scripts/test-refund-approval-gate.js` (new),
+`CHANGELOG.md`. **Nothing deployed.**
+
+### Supply → merchant-v2: already done, verified not assumed
+
+`supply` is already a first-class merchant-v2 module (`sokoni-merchant-supply.js`, loaded at
+`merchant-v2.html:750`, registered in `MODULES`). Its ctx is deliberately **not** the shop scope
+every other module takes — Supply is keyed on a BUSINESS through `merchantContext()`, which is a
+different identifier space. That matches the ratified rule that supply stays business-scoped
+(`workspaceMemberships` → `_assertBusinessPermission`) and must not be forced through
+`shopEmployees`. Nothing to converge; no change made.
+
+### SCC: the approval authorised nothing
+
+The Sales Control Centre (`sokoni-pos-sales.js`, `PosSalesView`) is healthy — **49/0** with five
+honestly-declared UNPROVEN items. Its own suite named the real gap in its header:
+
+> *"approving here records a decision, it does NOT gate the operation. `_consumeApproval` has zero
+> mutation call sites."*
+
+`_consumeApproval` (`pos-staff-ops.js`) has been complete for weeks — transactional, replay-safe,
+binding-checked, shop-scoped, expiry-checked, and it reports a replay distinctly from a forgery.
+It had **zero callers**. Its own comment said so: *"NOTHING CONSUMES ONE YET."* So a manager could
+approve a refund in the SCC, the decision was recorded, and the refund proceeded on
+`_assertRefundAuthority` alone whether or not anyone had approved it. **An approval that gates
+nothing is theatre** — the same shape as the delivery PIN that was securely issued and released no
+money.
+
+`posProcessRefund` is now the first mutation that actually spends one.
+
+* **OPTIONAL, deliberately.** Refund authority is unchanged: a manager or owner may still refund
+  directly. What changed is that a *presented* approval is now VERIFIED and SPENT rather than
+  decorative — so a shop wanting two-person control can have it and no existing caller breaks.
+  Making it mandatory is a policy decision with a live blast radius, and it is not made here.
+* **CONSUMED BEFORE THE REFUND IS WRITTEN.** The other order refunds first and then tries to spend
+  the approval, so a failure between the two returns money on an authorisation nobody verified.
+  This order fails safe: a burned approval on a refund that did not happen, which a manager can
+  re-approve. Sabotage-proven — swapping the two produces 20 failures.
+* **BOUND TO THIS SALE AND THIS AMOUNT**, and the amount is recomputed from the ORIGINAL sale's own
+  unit prices, never from the caller. A client-supplied total would let the requester choose what
+  the manager appears to have approved.
+* **The refund records who authorised it** — `approvalId`, `approvedBy`, `requestedBy`. `null` is
+  honest: it means nobody approved it separately, not that the approver is unknown. A refund taken
+  on direct manager authority is now visibly distinguishable from one under two-person control.
+
+Refused, each with no refund written and the sale not marked refunded: a different amount, a
+different sale, another shop, a different operation type, pending, already-consumed, rejected,
+expired, and a non-existent id.
+
+### Found on the way: a working-tree-only broken require
+
+`functions/pos-zero-friction.js` requires `./merchant-identity`, and **that module does not exist**
+— not on disk, not in the git tree. It arrived with **another agent's uncommitted work** in that
+file (729 insertions; the ~40 lines above are mine). The module cannot load in this working tree.
+
+The deploy-closure gate still passes because it reads the **git tree**, not the filesystem — which
+is exactly what it is designed to do. So this breaks nobody's deploy today, and it is **not mine to
+fix**: inventing a `merchant-identity.js` would be guessing at another agent's design.
+
+The suite stubs it to run, and **asserts its absence** (`S2`) so the stub cannot quietly outlive
+the problem: the day the module lands, the test fails and says to delete the stub. A silent stub of
+a missing dependency is how a broken deploy graph stays green.
+
+### Tests
+
+`test-refund-approval-gate` (new) **50/0** — five sabotages, all caught, including reverting to
+theatre, trusting the caller's amount, dropping the shop binding, dropping the operation-type
+binding, and the unsafe ordering. `test-sales-control-centre` **49/0** unchanged.
+`test-approval-primitive` **31/0** and `test-pos-cashier-approval-request` **47/0** still green.
+
+## 2026-09-07 (4) — The buyer's PIN now actually releases the money, and the ride to the shop is visible
+
+**Files:** `functions/order-settlement.js`, `functions/sokoni-logistics.js`, `sokoni-logistics.js`,
+`track.html`, `scripts/test-settlement-proof-gate.js` (new),
+`scripts/test-post-pin-money-chain.js` (new), `scripts/test-delivery-visibility.js` (new),
+`CHANGELOG.md`. **Nothing deployed.**
+
+### The PIN authorised nothing
+
+`delivery-complete.js` recorded `deliveryAuthorizedBy` (`rider_pin` | `buyer_confirmation`) when
+the buyer's PIN was entered at the door. **`order-settlement.js` never read it.** The seller was
+credited on the order reaching a settle-able state, whether or not anyone could show the goods had
+been handed over. The PIN existed, was properly secured, and gated nothing.
+
+`settleOrder` now holds a delivery order without proof:
+
+* **The hold is NOT terminal** — `HELD` + `settlementNote: 'awaiting_delivery_proof'`, and the
+  order settles on the next pass once proof lands. A permanent refusal would strand real money
+  belonging to a seller who did nothing wrong.
+* **Non-delivery orders still settle**, recording `deliveryProof: 'not_required'` rather than being
+  silently exempt — so "how much settled without delivery proof, and why" is a query, not an
+  assumption.
+* **Only the two witnessed methods count.** `'true'`, `'yes'`, `'admin_override'`, `'pickup_code'`
+  are all refused; a truthy string is not a proof.
+* **A delivery is recognised inclusively** — rider, delivery ref, delivery fee or address. Guessing
+  "not a delivery" is the failure that releases money early, so the ambiguous case requires proof.
+* **The gate reads the IN-TRANSACTION snapshot**, not the pre-read. Proof can arrive between the
+  two.
+* **The pickup code does not release money.** It proves the goods left the shop; the buyer's PIN
+  proves they arrived. Two secrets, two events, and only the second one pays.
+
+Five sabotages, all caught — including making the hold terminal, and accepting any truthy value as
+proof.
+
+### The two-PIN sequence, certified end to end
+
+```
+buyer buys      -> PIN issued WITH the order            (buyer holds it)
+seller accepts  -> a second, independent code           (starts the delivery leg)
+rider collects  -> that code is entered -> in transit   (releases NO money)
+rider arrives   -> the BUYER's PIN -> delivered         -> THE MONEY SPLITS
+```
+
+`test-post-pin-money-chain.js` proves the splits underneath it: the marketplace plan ladder
+(15/10/5/0) survives `computeSettlement`'s deductions waterfall and reaches the ledger — commission
+to `platform:revenue`, the remainder to `seller:{id}`, the delivery 88% to `rider:{id}` — and the
+double-entry plan still nets to zero. It also proves a POS category settles at the flat 5% on this
+rail rather than the 15% Free ladder rate.
+
+Verified as part of it: the plaintext PIN exists nowhere on the order document (Firestore has no
+field-level read control and the rider legitimately reads the order), `deliveryPins` has no rule at
+all so it is deny-by-default, and `getMyDeliveryPin` proves the caller is the buyer *and* refuses
+the assigned rider explicitly.
+
+### The ride to the shop was invisible — and the timeline ran backwards
+
+The buyer's timeline went **"Rider assigned" → "Picked up"** with nothing between, so the longest
+silent stretch of the journey was unrepresented. That silence is when people call support.
+
+Worse, `TRIP_TO_STAGE` actively discarded the signal that already existed:
+
+| status | mapped to | effect |
+|---|---|---|
+| `en_route_pickup` | `assigned` | timeline stood still while the rider was moving |
+| `arrived_pickup` | `ready` | **earlier** than `assigned` — the timeline went **backwards** |
+
+A progress timeline that can move backwards is worse than one with a missing step: it tells the
+buyer something untrue about their own order. Both now land on a new `to_shop` stage — "Rider
+heading to shop" — which sits after `assigned` and before `picked_up`. Monotonic, and true.
+
+Added `driver_en_route_pickup` to both copies of the logistics notification vocabulary, so the
+buyer is told and not only shown.
+
+**A copy bug found on the way:** `driver_at_seller` — the rider ARRIVING at the shop — announced
+*"has collected your parcel and is heading to you"*. A post-collection message on a pre-collection
+event: a buyer told the parcel is collected, then left waiting while it is still on the counter,
+has been told something untrue. Corrected in both copies.
+
+### Known divergence, tracked not fixed
+
+`sokoni-logistics.js` (client) declares `return_initiated` and `refund_initiated`; the server copy
+does not. Two copies of one module disagreeing about the vocabulary is how a stage silently stops
+notifying — but whether those belong on the server is a product decision, and inventing templates
+to match would fabricate a notification nobody designed. Held as a baseline that can only shrink.
+
+### Tests
+
+`test-settlement-proof-gate` **37/0** (5 sabotages), `test-post-pin-money-chain` **39/0**,
+`test-delivery-visibility` **26/0**. All prior suites green.
+
+## 2026-09-07 (3) — The POS/Till commission rail: 5% per sale, collected at the 07:00 gate
+
+**Files:** `functions/pos-commission-rail.js` (new), `functions/business-wallet.js` (new),
+`functions/pos-commission-surface.js` (new), `functions/application-lifecycle.js`,
+`functions/notify.js`, `functions/index.js`, `firestore.rules`, `firestore.rules.build`,
+`scripts/test-pos-commission-rail.js` (new), `scripts/test-business-wallet.js` (new),
+`docs/POS_COMMISSION_RAIL.md` (new), `CHANGELOG.md`. **Nothing deployed.**
+
+### Four certified modules, and nothing calling any of them
+
+`money-authority`, `pos-sale-commission`, `commission-settlement-authority` and
+`good-morning-gate` were all in the tree, all marked NOT INTEGRATED. Each was internally
+coherent and none was on the path the money takes — the pattern that produced six unreachable
+commission authorities here before. A pure function that summarises an ARRAY cannot gate
+anything, because nobody was writing the array.
+
+`pos-commission-rail` is the persistence that closes the loop: one liability row per
+non-custodial sale, keyed by the SALE ID so a retry converges instead of billing twice; the gate
+re-evaluated from the ledger rather than from an argument; settlement idempotent on an
+authoritative reference. Custodial rails write no row at all — their commission already came out
+of money SOKONI held, and billing them at 07:00 too would look like diligence.
+
+### The order property, found by sabotage
+
+`settleFromBusinessWallet` debits FIRST, then marks the rows settled. The other order clears the
+debt and then tries to take the money — a crash between the two is a free day. **Swapping the two
+statements passed the entire suite**, because every other test threw in the plan step before
+either side effect ran. G19–G21 is the case that separates them: the plan succeeds and the debit
+fails. The safety property had been asserted in a comment and nowhere else.
+
+### The business wallet had to be built first
+
+`assertBusinessWallet()` refused to settle from anything but a BUSINESS wallet and was guarding a
+concept that did not exist — nothing in production carried `kind: BUSINESS`. Settlement could not
+be wired without inventing a mapping onto the personal wallet, which is exactly what the guard
+forbids.
+
+`businessWallets/{shopId}` is separate from `wallets/{uid}` three ways: different collection,
+keyed by SHOP not account, and `balanceMinor` in CENTS where the personal wallet holds SHILLINGS
+— the unit is in the field name because this database already carries both conventions. Every
+movement is ledgered and idempotent on its reference, written in the same transaction as the
+balance. An overdraw is refused with the exact shortfall, never clamped. Provisioned on approval
+beside the Till; never re-owns an existing wallet.
+
+### The reminder, and the off-by-one it hid
+
+`posCommissionReminder` runs at 06:00 EAT, an hour before the gate. The settlement day rolls at
+07:00, not midnight — so at 06:00 the current settlement day is still YESTERDAY, and its gate
+closes in one hour. The first version skipped `settlementDay >= today` as "not due yet", which
+reminded only merchants ALREADY overdue and stayed silent for everyone about to be gated within
+the hour. Caught by running the selection against a fixture instead of reading it.
+
+The reminder is a separate notify type from the closure, so a merchant can mute the courtesy
+without muting the reason their till stopped. The scheduler never decides: an outage means nobody
+is warned, never that nobody is gated.
+
+### Database / API / security
+
+Four new collections, all CLIENT-UNWRITABLE with owner-scoped reads: `posCommissionLiabilities`,
+`posCommissionSettlements`, `businessWallets`, `businessWalletEntries`. Rules rebuilt — 165,810
+bytes, 63.3% of ceiling, braces balanced. Three new callables exported BY NAME. `merchantUid` is
+always the caller; `shopId` is resolved server-side, never taken from the client.
+
+### NOT DONE, and deliberately
+
+`assertGateOpen()` is **not** called by `posCompleteCheckout`, which takes `merchantId` straight
+from the client with only a presence check. Gating on a forgeable id is worse than not gating — a
+merchant could dodge their own gate or gate an innocent party, and it would look like enforcement.
+Blocked on proven POS identity (the Store Identity Gate). The gate is available to the terminal
+via `posGateStatus` but is not yet an authority.
+
+### Tests
+
+`test-pos-commission-rail` **80/0** (6 sabotages, one of which found a real hole),
+`test-business-wallet` **43/0** (5 sabotages). All prior commission suites still green.
+
+## 2026-09-07 (2) — Two commission lanes, and an approval that finishes the job
+
+**Files:** `functions/commission-config.js`, `functions/finos-utils.js`,
+`functions/application-lifecycle.js`, `sokoni-merchant-entry.js`, `sokoni-merchant-application.js`,
+`hub-register.js`, `seller.js`, `onboarding-seller.html`, `seller.html`, `seller-terms.html`,
+`legal.html`, `scripts/build-commission-snapshot.js`, `sokoni-commission-rates.js` (generated),
+`scripts/test-marketplace-plan-ladder.js` (new), `scripts/test-pos-commission-lane.js`,
+`scripts/test-pos-sale-commission.js`, `scripts/test-commission-5pct-agreement.js`,
+`docs/MERCHANT_ONBOARDING_CHAIN.md`, `CHANGELOG.md`. **Nothing deployed.**
+
+### Owner ruling: the two lanes are separate commercial products
+
+```
+MARKETPLACE (orders SOKONI brings you)   Free 15%  Basic 10%  Pro 5%  Enterprise 0%
+POS / TILL  (sales you make yourself)    FLAT 5%, every plan
+```
+
+A subscription buys a smaller cut of the orders SOKONI *provides*. It buys nothing on a sale the
+merchant made at their own counter, where SOKONI provided the till and nothing else.
+
+This **reverses** a half-built schedule that was already in the tree: `POS_PLAN_RATES` carried the
+15/10/5/0 ladder on the POS lane and would have **tripled a Free merchant's till commission**. It
+was never wired (`pos-sale-commission.js` says "NOT INTEGRATED, NOT DEPLOYED"), so no live sale was
+ever charged by it and no migration is needed. It is corrected rather than deleted precisely
+*because* it was unreachable — a countermanded schedule left in the sanctioned config file is a
+trap for whoever wires the lane next.
+
+### The trap that shaped the implementation
+
+`ALIASES.pos = 'marketplace'`, so a POS sale **resolves to** the marketplace category. Keying the
+ladder on the resolved category would therefore put every till sale on it. The ladder is keyed on
+the **RAW** category via `MARKETPLACE_SELLER_CATEGORIES`, and `pos` is deliberately absent. That
+absence is load-bearing and is asserted in both directions.
+
+The alias itself **must survive**: it also decides the settlement term
+(`index.js _is48hCommission` → `categoryForHub(hub) === 'marketplace'`). Deleting it to fix pricing
+would have moved POS from a 48-hour obligation to monthly invoicing as a silent side effect. Also
+asserted.
+
+### Wiring — not another unreachable authority
+
+The ladder is applied at **precedence 3b** inside the live `calculateCommission`, between
+`revenueConfig` and the `subscriptionRole` compatibility path. `commissionRules` and `revenueConfig`
+still outrank it, so an admin can still override one seller. The plan **discount** step now stands
+down when the ladder applied (`planSkipped: 'marketplace_plan_rate_applied'`) — otherwise a Pro
+seller would pay 5% less a Pro discount. `engineVersion` → 3, because the resolution ORDER changed.
+
+Provenance is persisted: `marketplaceLadderApplied`, `marketplacePlan`, `marketplaceRateSource`,
+`marketplacePlanSkipped`, `commissionLane`. `marketplaceLadderApplied: false` is evidence too — it
+proves a till sale was lane-EXEMPT, not merely untiered.
+
+**No plan is not a discount.** Absent, expired, cancelled or unreadable → Free, the HIGHEST rate.
+Every existing subscription document predates the ladder, so that is the normal path.
+
+**The KES 10 floor is KEPT** for marketplace sellers (`usingSubRate` now excludes the ladder, or a
+`subscriptionRole` call site would have silently lost it). Enterprise 0% is floor-EXEMPT — advertising
+0% and charging a minimum is a dispute merchants would win.
+
+### The browser must quote what the server charges
+
+`sokoni-commission-rates.js` now carries both lanes (`marketplacePct(plan)`, `posPct()`,
+`isMarketplaceSellerSale()`), and the suite compares browser against config for **every plan
+spelling**. This platform has already shipped a split where sellers were shown 3% and charged 5%;
+under a ladder the same split is a 3x error.
+
+`starter` and `business` are deliberately **not** mapped. `subscriptions.html` advertises a different
+four-plan vocabulary (free / starter / pro / business at 15/10/7/4) that does not correspond to the
+catalogue, and nothing in the repo says which is which. Guessing `business → seller_pro` would charge
+5% where the fail-safe is 15% — an undercharge decided by an assumption. Unmapped tiers fall to Free.
+**Mapping them is a commercial decision and remains open.**
+
+### Disclosure updated everywhere it is made
+
+`legal.html`, `seller-terms.html`, `seller.html`, `hub-register.js`, `onboarding-seller.html` now
+state both lanes, the plan table and the minimum. The intake surfaces READ the rates from the
+generated schedule rather than carrying typed numbers. `AGREEMENT_VERSION` bumped to
+`2026-09-07-lanes-mkt-ladder-pos-5pct` across **all three** writers (`hub-register.js`, `seller.js`,
+`sokoni-merchant-application.js`) — the old string was consent to different terms.
+
+### Approval now finishes the job
+
+* **Merchants are no longer mis-routed as service providers.** `resolveRole` matched keywords across
+  every descriptive field including the merchant's own product `category`, and `legal`/`health` are
+  tested BEFORE `seller` — so a shop selling health or legal products was projected into a provider
+  registry and never got a shop, a till or a storefront. An explicit intake declaration
+  (`type: 'seller'`, matched exactly) now wins over keyword guessing. Prose types
+  (`type: 'business'`, `'Cleaning Company / Housekeeper'`) still fall through unchanged.
+* **Approved merchants land on the Seller Hub.** `MERCHANT_URL` was `/merchant` here while
+  production already serves `/merchant-v2` — this tree was the one lagging. Verified live before
+  flipping; both routing suites stay green.
+* **The storefront and the directory are both created.** `projectSeller` already wrote
+  `shops/{shopId}` + `sellers/{uid}` (what `store.html` reads) and now also writes
+  `businesses/{uid}`, whose only previous writer was the client-side wizard in `seller.html` — the
+  very path approval replaces. Suspension retracts it too, so the registries move together.
+  `verified` is deliberately NOT set: it drives a trust badge and the homepage seller count, so it
+  stays an explicit admin action rather than a side effect of approval.
+* **Tills were already correct** — `mintSokoniTillCore` runs on approval with `onExisting:'return'`
+  and mints `status: 'ACTIVE'`. Verified, not changed.
+
+### Database / API / security
+
+No migration and no production write. New fields appear on new documents only: `businesses/{uid}`
+(same shape the wizard used), and the commission provenance fields on ledger rows. No new callable.
+No new client-writable authority field.
+
+### Tests
+
+`test-marketplace-plan-ladder.js` (new) **40/0** — five sabotages each caught by exit code,
+including putting POS on the ladder and breaking the alias. `test-pos-commission-lane.js` **92/0**
+and `test-pos-sale-commission.js` **76/0**, both re-pointed to the flat schedule and now **deriving**
+every expected figure from the configured rate instead of pinning it. `test-commission-5pct-agreement.js`
+**56/0**, its hard-coded version literal replaced with a derived three-way equality (it checked only
+two of the three surfaces that write the acknowledgement).
+
+One sabotage found a real hole in the new suite itself: under a flat POS schedule the existing
+"rate is frozen at sale time" control compared a number with itself and could never fail. It now
+compares against the marketplace rate, which genuinely differs.
+
+## 2026-09-07 — A merchant can actually become a merchant
+
+**Files:** `sokoni-merchant-application.js`, `onboarding-seller.html`, `admin-os.html`,
+`sokoni-aos.js`, `functions/admin-os.js`, `scripts/test-merchant-application.js`,
+`scripts/test-admin-os-wiring.js` (new), `scripts/test-application-decision-authority.js`,
+`docs/MERCHANT_ONBOARDING_CHAIN.md` (new), `CHANGELOG.md`.
+**Nothing deployed** — this tree is behind live (`fa5082b` vs production `d592d8f`).
+
+### The chain was broken in three places, none of which looked broken
+
+Tracing browser → account → apply → approve → shop → workspace against production and the repo:
+
+1. **No merchant could file an application.** `onboarding-seller.html` built a Firestore adapter
+   and never passed it. `submit()` requires `fs` and throws without it, so every submission ended
+   in *"Not submitted."* The module's own suite injects its own adapter, so it exercised the
+   module perfectly while the only real call site was dead.
+
+2. **Every filed application was un-approvable.** `applicationDecide` refuses to approve without
+   `agreementAccepted === true`. `hub-register.js` (provider intake) wrote it; the merchant
+   intake never did. Fixing (1) alone would have produced: applies → "pending review" forever →
+   reviewer clicks Approve → `failed-precondition` they cannot clear.
+
+3. **Admin OS could not approve anybody.** 21 panes, no Applications view. Approval lived only in
+   `admin.html`, `moderation.html` and `super-admin.html`.
+
+### What changed
+
+`sokoni-merchant-application.js` — the Seller Agreement acknowledgement is now a **precondition of
+building the document**, at `AGREEMENT_VERSION` shared with `hub-register.js`. Strict `=== true`.
+`agreementVerifiedAt` / `agreementVerifiedVersion` added to `FORBIDDEN` (server-stamped at
+approval). A resubmission must re-acknowledge at the current version; a stale acceptance of
+superseded terms does not carry forward.
+
+`onboarding-seller.html` — passes `fs`; shows the 5% / KES 10 terms; gates the submit button;
+reads the checkbox at submit time. The submitted-modal heading and icon now move with the
+outcome — they were fixed at "📋 Application submitted" while the body could read "Not submitted."
+
+`admin-os.html` + `sokoni-aos.js` — **Applications & Approvals** (approve / reject / suspend /
+request-info / reconcile) through the same `applicationList` + `applicationDecide` +
+`applicationReconcile` the other three surfaces use. Includes the *"approved, not published"*
+filter — a merchant with a role and no shop, invisible in every other view. The toast reports
+what the server says it wrote; an approval whose projection reports no shop is not celebrated.
+A failed read says so instead of rendering an empty table.
+
+**Shops & Sellers** pane + three `_h`-only handlers in `functions/admin-os.js` (`adminGetShops`,
+`adminGetSellers`, `adminGetShopDetail`) — no new Cloud Run service. Employee rows carry the same
+three-way corroboration `listShopEmployees` applies, and rows that fail it are shown as
+**disputed** rather than filtered away, because `firestore.rules` lets any signed-in client create
+a `shopEmployees` document. Product counts are reported three ways (`sellerUid` / `sellerId` /
+`shopId`) — one number would be a guess about which field a shop's writers used.
+
+### Database changes
+
+None. No migration, no production write. New fields on `applications/{uid}--merchant` written by
+new submissions only: `agreementAccepted`, `agreementVersion`, `agreementAcceptedAt` — the same
+three `hub-register.js` already writes, and permitted by the existing `noAdminFields()` rule.
+
+### API changes
+
+Three new `adminOsDispatch` ops (`adminGetShops`, `adminGetSellers`, `adminGetShopDetail`),
+`_h`-registry only. **`adminOsDispatch` must be redeployed before they resolve**; until then it
+answers `not-found` and the pane reports a failed read. The Applications pane needs no functions
+deploy — all three application callables are already live.
+
+### Security
+
+`_requireAdmin` on every new handler. No new client-writable authority field: the acknowledgement
+is the applicant's to give, its *verification* stays server-stamped and is now explicitly
+forbidden to clients. Employee corroboration is applied in the admin console, which is the surface
+people trust most and was the one place a forged `shopEmployees` row would have been believed.
+Document ids reaching inline handlers are escaped for both the JS-string and HTML-attribute layer.
+
+### Tests
+
+`scripts/test-merchant-application.js` 54/0 — PART E (the agreement gate, including truthy-but-not-
+true) and PART F (**every real call site**, the check that would have caught the orphaned adapter).
+`scripts/test-admin-os-wiring.js` (new) 286/0 — nav ↔ pane ↔ loader ↔ backend for every section.
+`scripts/test-application-decision-authority.js` 17/0 — its two mutation controls previously
+reported "mutant failed to load" (`firebase-functions/params` unstubbed) and so proved nothing.
+
+Every detector was sabotage-verified by exit code. One sabotage found a real hole: a conditional
+op string is invisible to a static reader, so deleting `adminGetShops` from the dispatch whitelist
+still passed. Fixed on both sides — the call site names its op as a literal, and check **D0** now
+fails any `_call` site that does not.
+
+### Known debt surfaced (pre-existing, not introduced)
+
+`sokoni-aos.js` calls 11 ops with no backend at all — Marketing campaigns, Cohort/Funnel/Retention,
+Wallet Ops, Escrow, email/SMS blasts. Each throws, is swallowed by its `.catch(() => ({}))`, and
+renders as an empty state, so those panes say "there is nothing here" when the truth is "this was
+never built". Held as a fixed baseline in `test-admin-os-wiring.js` that can only shrink.
+
+### Breaking changes
+
+None in the deployed system. Within this tree, `SokoniMerchantApplication.submit()` now requires
+`agreementAccepted: true`; the only caller passes it.
+
+### Production is still broken and this does not fix it
+
+`sokoni-merchant-application.js` **404s** on production — it is absent from the `d592d8f` tree.
+Live `/onboarding-seller` is the pre-2A build that writes only `onboardingCompleted`; live
+"Start Selling" routes to `/offer` → `seller.html`, which self-mints `sellers/{uid}` +
+`businesses/{uid}` client-side with no application, no approval and no `shops/{shopId}`. The
+approval half is live and correct; the intake half has never shipped. Deploy requirements are in
+`docs/MERCHANT_ONBOARDING_CHAIN.md`.
+
 ## 2026-09-05 — The closure gate becomes exhaustive and self-explanatory
 
 **Files:** `docs/DEPLOY_TREE_DISPOSITIONS.json` (new — governance ledger),

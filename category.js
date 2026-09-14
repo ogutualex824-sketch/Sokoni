@@ -165,23 +165,25 @@ if(_sortParam === "picks") {
 
 document.getElementById("catCount").textContent = `${filtered.length} product${filtered.length !== 1 ? "s" : ""} found`;
 
-/* Cart count — canonical, and counting UNITS (Track 2.3).
-   #catCartCount is the 🛒 pip in this page's nav, beside the header pip that
-   shared-header.js renders with Σ(qty||1). This read array length, so the two badges sat
-   on screen disagreeing whenever an item carried a qty field — the same contradiction
-   fixed on the market-actions surfaces. A cart pip means "how many things are in my
-   cart", so units() is the honest reading. */
+/* Cart count.
+
+   #catCartCount was this page's OWN 🛒 pip, in the page-local <nav class="navbar">
+   that sat directly beneath the global header's pip — two cart badges on screen at
+   once. That duplicate navbar has been removed (see category.html), so the single
+   remaining pip is the canonical one rendered by shared-header.js, which already
+   counts units and already re-reads on "sokoni:cart-changed".
+
+   The lookup is kept, guarded, so the page still works if a future layout re-adds a
+   local pip; it is a no-op today rather than a dangling reference. */
 const updateCartCount = () => {
     const el = document.getElementById("catCartCount");
     if(!el) return;
     const c = window.SokoniCart;
-    /* Without the service there is no count to state. Leaving the markup's placeholder
-       0 in place would assert an empty cart the page cannot actually verify. */
+    /* Without the service there is no count to state. Rendering 0 would assert an
+       empty cart the page cannot actually verify. */
     el.textContent = c ? c.units() : "—";
 };
 updateCartCount();
-/* Also refresh when any other surface changes the cart — previously this pip only
-   updated from this page's own writes and went stale until reload. */
 try { window.addEventListener("sokoni:cart-changed", updateCartCount); } catch (_) {}
 
 /* ── VARIANT FILTERS ────────────────────────────────────────────────────────

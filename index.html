@@ -793,13 +793,13 @@
 
       <!-- LIFE EVENTS — featured full-width card -->
       <a href="life-events.html"
-        style="display:flex;align-items:center;gap:16px;padding:22px 24px;background:linear-gradient(135deg,rgba(113,255,0,0.07),rgba(0,212,255,0.05),rgba(168,85,247,0.05));border:1px solid rgba(113,255,0,0.22);border-radius:20px;text-decoration:none;transition:transform .2s;grid-column:1/-1;position:relative;overflow:hidden;"
+        style="display:flex;align-items:center;gap:16px;padding:22px 24px;background:linear-gradient(135deg,#17240f 0%,#0d1e23 52%,#1a1127 100%);border:1px solid rgba(113,255,0,0.42);border-radius:20px;text-decoration:none;transition:transform .2s;grid-column:1/-1;position:relative;overflow:hidden;isolation:isolate;box-shadow:0 12px 28px rgba(0,0,0,0.28);"
         onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
-        <div style="position:absolute;right:-10px;top:50%;transform:translateY(-50%);font-size:120px;opacity:0.05;line-height:1;">✨</div>
+        <div aria-hidden="true" style="position:absolute;right:-10px;top:50%;transform:translateY(-50%);font-size:120px;opacity:0.10;line-height:1;z-index:-1;">✨</div>
         <span style="font-size:36px;flex-shrink:0;">✨</span>
         <div style="flex:1;">
           <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">Life Events <span style="font-size:10px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);color:#71ff00;padding:2px 8px;border-radius:4px;margin-left:8px;font-weight:800;">NEW</span></div>
-          <div style="font-size:12px;color:rgba(255,255,255,0.45);max-width:500px;line-height:1.6;">Tell Sokoni what you're trying to achieve — Starting a Business, Buying a Car, Moving House, Getting Married — and we connect all the right hubs for you.</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.78);max-width:500px;line-height:1.6;">Tell Sokoni what you're trying to achieve — Starting a Business, Buying a Car, Moving House, Getting Married — and we connect all the right hubs for you.</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
           <button type="button" onclick="event.stopPropagation();location.href='life-events.html'" style="padding:9px 16px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.28);color:#71ff00;font-size:12px;font-weight:800;border-radius:10px;cursor:pointer;font-family:inherit;white-space:nowrap;">🚀 Start a Goal</button>
@@ -2883,6 +2883,10 @@
        is still loading. Not deferred: market-actions.js is, so this evaluates first either
        way. -->
   <script src="sokoni-cart.js"></script>
+  <!-- Story composer uploads photo/video to Firebase Storage before publishing.
+       Without this the homepage "Your Story" flow has no uploader and the post
+       fails with an explicit message instead of silently saving device-local. -->
+  <script type="module" src="sokoni-upload.js"></script>
   <script src="script.js" defer></script>
 <!-- The tag above was missing its </script>. A <script> element with a src still
      requires a closing tag, so the HTML parser treated everything up to the NEXT
@@ -2970,6 +2974,15 @@ import SokoniDB from "./sokoni-db.js";
       var el = document.getElementById('navLocText');
       if(el) el.textContent = city;
       closeSheet();
+      /* Tell the page a location was chosen. Without this the value is stored and nothing
+         re-renders, so "Sellers Near You" stayed hidden until a full reload — which is why
+         it looked removed. script.js owns the reveal; this only announces the change, so
+         the picker keeps its single responsibility and no rendering logic is duplicated
+         here. displayNearbySection() itself decides whether the name resolves to a
+         supported city; a stored value alone must not reveal the section. */
+      try {
+        if (typeof window.displayNearbySection === 'function') window.displayNearbySection();
+      } catch (_) {}
     }
     window._sokoniSetCity = setCity;
 
@@ -4189,7 +4202,6 @@ document.addEventListener('DOMContentLoaded', function() {
 </body>
 
 </html>
-
 
 
 

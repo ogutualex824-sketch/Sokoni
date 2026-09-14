@@ -1,0 +1,22 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{background:#050505;margin:0;padding:16px}</style></head>
+<body><div id="host"></div>
+<script>
+/* Stub the callable so the UI can be driven without auth. */
+window.__sokoniFns = { httpsCallable: function(){ return function(payload){
+  if (payload.op === 'legalGetAgreements') return Promise.resolve({ data: { agreements: [
+    {id:'terms-of-service',name:'Terms of Service',version:'1.0'},
+    {id:'merchant-agreement',name:'Merchant Agreement',version:'1.0',summary:'How you sell on SOKONI.',keyPoints:['You own your listings.','Commission is deducted at settlement.']},
+    {id:'commission-agreement',name:'Commission Agreement',version:'1.0'},
+    {id:'privacy-policy',name:'Privacy Policy',version:'1.0'}
+  ]}});
+  if (payload.op === 'legalAccept') { window.__sent = payload; return Promise.resolve({ data: {
+    count: payload.acceptances.length, acceptanceId:'user123_merchant_33a1b38d',
+    signedName: payload.signature.name, signatureType: payload.signature.type,
+    signatureHash:'e1690cfff8e6642d' }}); }
+  return Promise.resolve({data:{}});
+};}};
+</script>
+<script src="sokoni-legal-sign.js"></script>
+<script>SokoniLegalSign.mount('#host',{role:'merchant',businessId:'BIZ-77',onComplete:function(r){window.__done=r;}});</script>
+</body></html>

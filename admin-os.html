@@ -147,6 +147,21 @@
     .st-open{background:rgba(113,255,0,.15);color:var(--aos-accent)}
     .st-online{background:rgba(76,175,80,.2);color:#a5d6a7}
     .st-offline,.st-unknown{background:rgba(158,158,158,.2);color:#bdbdbd}
+    /* Application lifecycle statuses. Without these an approved/rejected badge
+       rendered as an unstyled pill — legible, but not scannable. */
+    .st-approved{background:rgba(76,175,80,.2);color:#a5d6a7}
+    .st-rejected,.st-info_requested{background:rgba(244,67,54,.2);color:#ef9a9a}
+    /* Applications & estate — cards, and the rows that carry a finding. */
+    .aos-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+    .aos-card{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:14px;display:flex;flex-direction:column;gap:10px}
+    .aos-card-warn{border-color:rgba(255,152,0,.5)}
+    .aos-card-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .aos-card-head strong{flex:1;min-width:0;font-size:14px;overflow-wrap:anywhere}
+    .aos-card-meta{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--aos-text)}
+    .aos-card-meta .aos-mono{font-size:11px;overflow-wrap:anywhere}
+    .aos-card-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
+    .aos-warn-row{background:rgba(255,152,0,.1);border:1px solid rgba(255,152,0,.3);border-radius:8px;padding:8px 10px;font-size:12.5px;color:#ffcc80;line-height:1.5}
+    tr.row-warn td{background:rgba(255,152,0,.07)}
     .prio-critical{background:rgba(244,67,54,.2);color:#ef9a9a}
     .prio-high{background:rgba(255,152,0,.2);color:#ffcc80}
     .prio-normal{background:rgba(33,150,243,.2);color:#90caf9}
@@ -298,10 +313,18 @@
     <div class="nav-group">
       <div class="nav-group-label">People</div>
       <button class="nav-item" data-section="users" data-label="User Management" onclick="SokoniAOS.navigate('users');_closeSidebar()"><span class="nav-icon">&#x1F465;</span>Users</button>
+      <!-- Applications is the ONLY route from "someone applied" to "a shop exists".
+           Admin OS had no view of it at all, so an operator living in this console
+           could see products and orders but could not approve the merchant who
+           would create them, and could not see who was waiting. -->
+      <button class="nav-item" data-section="applications" data-label="Applications &amp; Approvals" onclick="SokoniAOS.navigate('applications');_closeSidebar()"><span class="nav-icon">&#x1F4EC;</span>Applications<span class="nav-badge" id="sidebarAppsBadge" hidden>0</span></button>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Commerce</div>
       <button class="nav-item" data-section="marketplace" data-label="Marketplace" onclick="SokoniAOS.navigate('marketplace');_closeSidebar()"><span class="nav-icon">&#x1F6D2;</span>Marketplace</button>
+      <!-- The registries an approved merchant is projected onto. Products and
+           orders were visible; the shops and sellers that own them were not. -->
+      <button class="nav-item" data-section="estate" data-label="Shops &amp; Sellers" onclick="SokoniAOS.navigate('estate');_closeSidebar()"><span class="nav-icon">&#x1F3EA;</span>Shops &amp; Sellers</button>
       <button class="nav-item" data-section="services" data-label="Service Hubs" onclick="SokoniAOS.navigate('services');_closeSidebar()"><span class="nav-icon">&#x1F527;</span>Service Hubs</button>
       <button class="nav-item" data-section="delivery" data-label="Delivery Operations" onclick="SokoniAOS.navigate('delivery');_closeSidebar()"><span class="nav-icon">&#x1F697;</span>Delivery</button>
     </div>
@@ -419,6 +442,63 @@
             <tbody id="usersBody"><tr><td colspan="7" class="empty-cell"><div class="aos-spinner"><div></div></div></td></tr></tbody>
           </table>
         </div>
+      </div>
+
+      <!-- ══ Applications & Approvals ══
+           Reads the SAME server-side `applicationList` the admin dashboard and
+           the super-admin portal use, and decides through the SAME
+           `applicationDecide`, so the three surfaces cannot disagree about who
+           is waiting or what was decided. Approving here is what runs
+           projectSeller — the step that actually creates the shop. -->
+      <div class="aos-panel" id="panel-applications" hidden>
+        <div class="panel-toolbar">
+          <h2>Applications &amp; Approvals</h2>
+          <select id="appsStatus" class="aos-input" onchange="SokoniAOS.loadApplications()">
+            <option value="pending" selected>Pending decision</option>
+            <option value="">All statuses</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+            <option value="suspended">Suspended</option>
+            <option value="unpublished">&#x26A0; Approved, not published</option>
+          </select>
+          <select id="appsRole" class="aos-input" onchange="SokoniAOS.loadApplications()">
+            <option value="">All roles</option>
+            <option value="seller">Merchants / sellers</option>
+            <option value="provider">Service providers</option>
+            <option value="driver">Riders</option>
+            <!-- `health` is the role applicationList computes for healthcare intakes
+                 (resolveRole maps healthcare/clinic/doctor/hospital/pharmacy/nurse → 'health').
+                 Everything downstream was already role-agnostic: applicationList reads the
+                 collection unfiltered and filters in memory, and _appCard/decideApplication
+                 print and act on whatever role comes back. So healthcare applications have
+                 always been reviewable under "All roles" — they were simply not selectable
+                 as a category, which is what made the queue look like it had none.
+                 `legal` is the same one-line omission and is deliberately NOT added here:
+                 out of scope for this gate. -->
+            <option value="health">Healthcare providers</option>
+          </select>
+          <input id="appsSearch" type="search" class="aos-input" placeholder="Search name / phone&#x2026;" oninput="SokoniAOS.loadApplications()">
+          <span id="appsSummary" style="color:var(--aos-muted);font-size:12px;margin-left:auto"></span>
+        </div>
+        <div id="appsBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
+      <!-- ══ Shops & Sellers ══
+           The registries `projectSeller` writes on approval. "Approved but no
+           shop" is the state this screen exists to surface: an account
+           authorised to sell with nowhere to sell from, invisible everywhere
+           else in this console. -->
+      <div class="aos-panel" id="panel-estate" hidden>
+        <div class="panel-toolbar">
+          <h2>Shops &amp; Sellers</h2>
+          <input id="estateSearch" type="search" class="aos-input" placeholder="Search shop / seller / owner&#x2026;" oninput="SokoniAOS.estateTab()">
+          <span id="estateSummary" style="color:var(--aos-muted);font-size:12px;margin-left:auto"></span>
+        </div>
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="shops" onclick="SokoniAOS.estateTab('shops')">Shops</button>
+          <button class="tab-btn" data-tab="sellers" onclick="SokoniAOS.estateTab('sellers')">Sellers</button>
+        </div>
+        <div id="estateBody"><div class="aos-spinner"><div></div></div></div>
       </div>
 
       <div class="aos-panel" id="panel-marketplace" hidden>

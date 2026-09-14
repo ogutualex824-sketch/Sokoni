@@ -466,16 +466,60 @@ async function calculateCommission(db, opts) {
     }
   }
 
+  /* ── PRECEDENCE 3b: MARKETPLACE SELLER PLAN LADDER (owner ruling 2026-09-07) ────────────
+   * A SOKONI marketplace order is one SOKONI brought the seller, and a subscription buys a
+   * smaller cut of it: Free 15%, Basic 10%, Pro 5%, Enterprise 0%. The schedule is ABSOLUTE
+   * and lives in commission-config.MARKETPLACE_PLAN_RATES — the single sanctioned table.
+   *
+   * Keyed on the RAW `category` the caller passed, NOT on the resolved one. `ALIASES.pos ->
+   * marketplace` means a POS sale RESOLVES to the marketplace category, so keying on the
+   * resolved value would put every till sale on this ladder and triple a Free merchant's POS
+   * commission. POS/Till are a separate commercial product at a flat 5% and are deliberately
+   * absent from MARKETPLACE_SELLER_CATEGORIES.
+   *
+   * PRECEDENCE IS DELIBERATE: commissionRules and revenueConfig still outrank this, so an
+   * admin can still override a specific seller or hub. It outranks `subscriptionRole`, which
+   * is the PROVIDER compatibility path and never applied to marketplace sellers.
+   *
+   * NO SUBSCRIPTION IS NOT A DISCOUNT. An absent, expired or cancelled plan resolves to Free
+   * — the HIGHEST rate. Every existing subscription document predates this ladder, so that
+   * fallback is the normal path rather than an edge case. */
+  let mktPct = null, mktPlan = null, mktFloorExempt = false, mktSource = null, mktSkipped = null;
+  if (!rule && rcPct === null && sellerId && CC.isMarketplaceSellerSale(category)) {
+    let tier = null;
+    try {
+      const sub = await _resolveSellerPlan(sellerId);
+      /* `active` is recomputed from dates by the Subscription Engine, so a stale stored
+         status cannot leak a cheaper rate. An inactive plan is charged as Free. */
+      if (sub && sub.tier && sub.active) tier = sub.tier;
+      else mktSkipped = sub && sub.tier ? 'plan_inactive' : 'no_plan';
+    } catch (_) {
+      /* Subscription unreadable. Fall through to the Free rate — the rate we are willing to
+         charge everybody — never to a cheaper one on the strength of a failed lookup. */
+      mktSkipped = 'plan_lookup_failed';
+    }
+    const m = CC.resolveMarketplaceRate(tier);
+    mktPct = m.pct;
+    mktPlan = m.plan;
+    mktFloorExempt = m.floorExempt;
+    mktSource = m.source;
+  }
+
   const base = CC.resolveRate(category);
   let commissionCents;
   let effectiveRate = rule ? rule.rate
                     : (rcPct !== null ? rcPct
-                    : (subRatePct !== null ? subRatePct : base.pct));
+                    : (mktPct !== null ? mktPct
+                    : (subRatePct !== null ? subRatePct : base.pct)));
   /* Flat fees: a revenueConfig override wins, else the config's own fixedKES (e.g. vehicles). */
   const fixedKES = rcFixedKES || base.fixedKES || 0;
   /* True when the plan rate is the authority for this booking — used below to keep the
      platform minimum off a flow that never had one. */
-  const usingSubRate = (!rule && rcPct === null && subRatePct !== null);
+  /* `mktPct === null` is load-bearing: the marketplace ladder OUTRANKS subRatePct, so without
+     it a call site that passed `subscriptionRole` would still be flagged as "priced by its
+     subscription" and would silently lose the KES 10 platform minimum on marketplace sales.
+     Marketplace sellers KEEP the floor — only the provider path never had one. */
+  const usingSubRate = (!rule && rcPct === null && mktPct === null && subRatePct !== null);
 
   /* ── STEP 4: subscription plan adjustment ──────────────────────────────────────────────
    * Applied to whatever base survived rules -> revenueConfig -> category, so the seller's
@@ -500,7 +544,14 @@ async function calculateCommission(db, opts) {
      Phase 1 costs one cached config read and nothing else. */
   const planCfg = await _planAdjustmentOverrides(db);
 
-  if (!CC.planRolloutEnabled(planCfg)) {
+  if (mktPct !== null) {
+    /* The marketplace ladder IS this seller's plan pricing. Discounting it here would apply
+       the plan twice — a Pro seller would pay 5% less a Pro discount. The ladder is absolute
+       by construction, so the adjustment step stands down and says so. */
+    planSkipped = 'marketplace_plan_rate_applied';
+    planId = mktPlan;
+    planSource = mktSource;
+  } else if (!CC.planRolloutEnabled(planCfg)) {
     planSkipped = 'rollout_disabled';
   } else if (sellerId && !(rule && rule.type === 'fixed')) {
     const sub = await _resolveSellerPlan(sellerId);
@@ -559,7 +610,11 @@ async function calculateCommission(db, opts) {
        KES 4. Introducing the floor here would silently raise it to KES 10 — a 150% increase on
        small bookings, and exactly the kind of unapproved repricing this migration must avoid.
        Compatibility mode means compatible, including at the edges. */
-    if (effectiveRate > 0 && !usingSubRate && !skipMinimum) {
+    /* `!mktFloorExempt` is belt-and-braces for Enterprise 0%: `effectiveRate > 0` already
+       excludes it, but the floor policy is stated by the rate resolver rather than inferred
+       here, so the arithmetic never has to reason about whether an advertised 0% should
+       become KES 10. Advertising 0% and charging a minimum is a dispute merchants would win. */
+    if (effectiveRate > 0 && !usingSubRate && !skipMinimum && !mktFloorExempt) {
       commissionCents = Math.max(commissionCents, CC.MIN_COMMISSION_KES * 100);
     }
     if (fixedKES) commissionCents += fixedKES * 100;
@@ -599,13 +654,27 @@ async function calculateCommission(db, opts) {
     ruleId:     rule ? rule.id : 'default',
     ruleSource: rule ? (rule.entityId ? 'entity_specific' : rule.category)
               : (rcPct !== null ? 'revenue_config'
-              : (usingSubRate ? 'subscription_plan_rate' : 'default_table')),
+              : (mktPct !== null ? 'marketplace_plan_ladder'
+              : (usingSubRate ? 'subscription_plan_rate' : 'default_table'))),
     /* Which authority actually priced this transaction. Written to the ledger so a settlement
        can be explained years later without re-deriving it. */
     pricingSource: rule ? 'commission_rule'
                  : (rcPct !== null ? 'revenue_config'
+                 : (mktPct !== null ? 'marketplace_plan_ladder'
                  : (usingSubRate ? 'subscription_plan_rate (compatibility mode)'
-                 : 'category_default')),
+                 : 'category_default'))),
+
+    /* ── MARKETPLACE LANE PROVENANCE ────────────────────────────────────────────────────
+     * A settlement that records "5%" with no way to prove "5% because Pro" is exactly what
+     * made nine disagreeing tables survivable. `marketplaceLadderApplied: false` is evidence
+     * too — it proves a POS/till sale was lane-EXEMPT, not merely untiered. */
+    marketplaceLadderApplied: mktPct !== null,
+    marketplacePlan:          mktPlan,
+    marketplaceRateSource:    mktSource,
+    marketplacePlanSkipped:   mktSkipped,
+    /* The lane this sale was priced on, stated rather than inferred from the category —
+       'pos' and 'marketplace' resolve to the SAME category and are different products. */
+    commissionLane: mktPct !== null ? 'marketplace' : (String(category || '').toLowerCase() === 'pos' ? 'pos' : null),
 
     /* ── AUDIT BREAKDOWN ────────────────────────────────────────────────────────────────
      * Written verbatim into commissionLedger and shown verbatim to the seller, so a
@@ -627,9 +696,14 @@ async function calculateCommission(db, opts) {
     reason: planApplied
       ? (planLabel || ('Plan: ' + planId))
       : (holidayApplied ? 'Commission holiday'
-        : (rule ? 'Commission rule' : (rcPct !== null ? 'Revenue configuration' : 'Category default'))),
+        : (mktPct !== null ? ('Marketplace plan rate: ' + mktPlan)
+        : (rule ? 'Commission rule' : (rcPct !== null ? 'Revenue configuration' : 'Category default')))),
     calculatedAt: Date.now(),
-    engineVersion: 2,                           /* bumped when the resolution ORDER changes */
+    /* 3: the marketplace seller plan ladder was inserted at precedence 3b, between
+       revenueConfig and the subscriptionRole compatibility path. The resolution ORDER
+       changed, so the version does — a ledger row written at 2 was priced by a different
+       algorithm and must stay explainable under the rules that produced it. */
+    engineVersion: 3,
   };
 }
 

@@ -198,6 +198,11 @@ var STAGES=[
   {k:'preparing',i:'👨‍🍳', l:'Preparing'},
   {k:'ready',    i:'📦', l:'Package ready'},
   {k:'assigned', i:'🏍', l:'Rider assigned'},
+  /* The leg nobody could see. "Rider assigned" then jumped straight to "Picked up", so the
+     buyer had no signal for the longest silent stretch of the journey — the rider accepting
+     and riding to the shop. That silence is when people call support to ask if anything is
+     happening. It is a real stage with a real duration; it gets a real row. */
+  {k:'to_shop',  i:'🏪', l:'Rider heading to shop'},
   {k:'picked_up',i:'🛵', l:'Picked up'},
   {k:'halfway',  i:'🚦', l:'On the way'},
   {k:'near',     i:'📍', l:'Near you'},
@@ -209,7 +214,12 @@ var STAGE_IDX={}; STAGES.forEach(function(s,i){STAGE_IDX[s.k]=i;});
 /* A delivery TRIP only covers the tail of the journey. When we are tracking by
    trip (a shared link with no order id) this is the best we can say about where
    the order as a whole has got to. */
-var TRIP_TO_STAGE={pending:'ready',assigned:'assigned',en_route_pickup:'assigned',arrived_pickup:'ready',
+/* `en_route_pickup` used to map to 'assigned', collapsing the ride-to-the-shop back into the
+   moment the rider was assigned — the timeline stood still while the rider was actually
+   moving. `arrived_pickup` mapped to 'ready', which is EARLIER in the list than 'assigned',
+   so the timeline went BACKWARDS on arrival at the shop. Both now land on 'to_shop', which is
+   after 'assigned' and before 'picked_up': monotonic, and true. */
+var TRIP_TO_STAGE={pending:'ready',assigned:'assigned',en_route_pickup:'to_shop',arrived_pickup:'to_shop',
                    en_route_delivery:'halfway',arrived_delivery:'near',completed:'delivered',cancelled:'accepted'};
 
 /* Timeline is built once, then only classes change — no innerHTML churn on every

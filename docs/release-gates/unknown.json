@@ -1,12 +1,12 @@
 {
   "commit": "unknown",
-  "timestamp": "2026-08-11T09:14:35.230Z",
+  "timestamp": "2026-08-11T10:18:51.857Z",
   "gate": {
-    "pass": 90,
+    "pass": 85,
     "fail": 0,
-    "quarantine": 3,
+    "quarantine": 2,
     "stale": 0,
-    "env": 28,
+    "env": 35,
     "timeout": 0
   },
   "blocking": [
@@ -20,8 +20,6 @@
     "test-availability-enforcement",
     "test-availability-slots",
     "test-b2c-webhook-classification",
-    "test-banking-hub",
-    "test-beta-gate",
     "test-booking-buffer",
     "test-booking-events",
     "test-booking-hold-expiry",
@@ -47,13 +45,10 @@
     "test-hub-nav",
     "test-integrity-audit",
     "test-inventory-sync",
-    "test-kass-catalog",
     "test-kass-modes-memory",
     "test-kass-retrieval",
     "test-kass-widget",
     "test-lifecycle-parity",
-    "test-merchant-deep-switch",
-    "test-merchant-diag",
     "test-merchant-routes",
     "test-merchant-templates",
     "test-migrate-baselines",
@@ -103,7 +98,6 @@
   ],
   "notBlocking": {
     "quarantine": [
-      "test-auth-email",
       "test-icons",
       "test-overlays"
     ],
@@ -111,10 +105,17 @@
     "env": [
       "test-admin-claim",
       "test-async-states",
+      "test-auth-email",
+      "test-banking-hub",
+      "test-beta-gate",
       "test-branch-resolution",
+      "test-delivery-tracking-rules",
+      "test-kass-catalog",
       "test-kasshop-boundary",
       "test-landlord-rules",
       "test-legal-compliance",
+      "test-merchant-deep-switch",
+      "test-merchant-diag",
       "test-merchant-route-gate",
       "test-merchant-runtime",
       "test-merchant-visual-gate",

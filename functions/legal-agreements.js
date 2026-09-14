@@ -88,6 +88,22 @@ const ROLE_AGREEMENTS = {
 };
 ROLE_AGREEMENTS.rider = ROLE_AGREEMENTS.driver; // riders share the driver set
 
+/* ── Intake vocabulary → catalogue key ────────────────────────────────────────
+   `resolveRole()` in application-lifecycle.js classifies every healthcare intake
+   as role **'health'** (ROLE_KEY, DECLARED_TYPES and the keyword pool all emit it).
+   This catalogue is keyed **'healthcare'**. Without an alias `_catalogueFor('health')`
+   finds no role set, returns CORE only, and `assertLegalCompliance(uid, 'health')`
+   reports a clinician COMPLIANT while silently omitting BOTH healthcare instruments.
+   Under-enforcement that presents as success is the worst shape a compliance check
+   can take, so the two vocabularies are reconciled here rather than at each caller.
+
+   Verified: ROLE_AGREEMENTS['healthcare'] has 2 entries, ROLE_AGREEMENTS['health']
+   was undefined. An empty `role` still legitimately means "core documents only" —
+   that is a signed-out or plain user, not a mis-spelled role — so only known
+   aliases are mapped and nothing else changes. */
+const ROLE_ALIASES = { health: 'healthcare' };
+const catalogueKeyFor = (role) => ROLE_ALIASES[role] || role;
+
 const DEFAULT_VERSION = '1.0';
 
 /* The Professional Declaration is versioned independently of the agreements: it
@@ -147,8 +163,9 @@ async function _registry() {
    scheduled version becomes live only once effectiveFrom has PASSED — evaluated on
    the SERVER clock, never the client's. An admin can stage a policy change and it
    activates itself, with no deploy. */
-async function _catalogueFor(role, atMs) {
+async function _catalogueFor(roleIn, atMs) {
   const now = typeof atMs === 'number' ? atMs : Date.now();
+  const role = catalogueKeyFor(roleIn);          /* 'health' → 'healthcare'; see ROLE_ALIASES */
 
   const registered = (await _registry())[role] || [];
   const merged = [...(ROLE_AGREEMENTS[role] || [])];
@@ -201,7 +218,18 @@ async function _enforcementFlags() {
 async function assertLegalCompliance(uid, role) {
   if (!uid) throw new HttpsError('unauthenticated', 'Authentication required.');
   const flags = await _enforcementFlags();
-  if (!flags[role] && !flags.all) return { enforced: false, compliant: true }; // dark: allow
+  /* The enforcement flag is keyed by CATALOGUE key, and callers pass INTAKE vocabulary.
+     `_catalogueFor` already aliases health → healthcare; this lookup did not, so
+     `legalConfig/enforcement = { healthcare: true }` had no effect on a caller passing
+     'health' — the guard read `flags['health']`, found nothing, and returned
+     `{ enforced:false, compliant:true }`. An operator could switch healthcare enforcement
+     on and nothing whatsoever would change, which is the worst way for a compliance
+     control to fail: silently, and in the permissive direction.
+
+     Both spellings are honoured so an existing flag written under either name keeps
+     working, and `.all` is unchanged. */
+  const key = catalogueKeyFor(role);
+  if (!flags[role] && !flags[key] && !flags.all) return { enforced: false, compliant: true }; // dark: allow
   const [required, accSnap] = await Promise.all([
     _catalogueFor(role),
     _db().collection('legalAcceptances').where('userId', '==', uid).limit(500).get(),
@@ -238,20 +266,60 @@ _h.legalGetMyAcceptances = async (req) => {
 };
 
 /* ── legalCheckCompliance({role}) — ENFORCEMENT: which required agreements are missing/outdated ── */
-_h.legalCheckCompliance = async (req) => {
-  const uid  = _uid(req);
-  const role = _san(req.data?.role || '', 40);
+/**
+ * complianceFor(uid, role) — the compliance computation as a plain function.
+ *
+ * Extracted from the callable so OTHER server modules can ask the same question
+ * without going through a request object. `applicationDecide` uses it to gate
+ * healthcare approval on canonical acceptance instead of on a client-written
+ * boolean (see application-lifecycle.js).
+ *
+ * Deliberately does NOT consult `legalConfig/enforcement`: that flag controls
+ * whether an EXISTING user is blocked from an operation mid-rollout, which is a
+ * different question from whether an application meets its approval
+ * prerequisite. Approval must be able to require acceptance before enforcement
+ * is switched on globally. `assertLegalCompliance` keeps the dark-launch
+ * behaviour for the operations that want it.
+ *
+ * Also returns `accepted` — the id→version map — so a caller can show a reviewer
+ * WHICH instrument was signed, not merely that something was.
+ */
+async function complianceFor(uid, role) {
   const [required, accSnap] = await Promise.all([
     _catalogueFor(role),
     _db().collection('legalAcceptances').where('userId', '==', uid).limit(500).get(),
   ]);
   const accepted = {};
-  accSnap.docs.forEach((d) => { const a = d.data(); if (a.accepted) accepted[a.agreementId] = a.version; });
+  const records = {};
+  accSnap.docs.forEach((d) => {
+    const a = d.data();
+    if (!a.accepted) return;
+    accepted[a.agreementId] = a.version;
+    records[a.agreementId] = {
+      agreementId: a.agreementId, name: a.agreementName || null, version: a.version,
+      acceptedAt: a.acceptedAt || null, hash: a.agreementHash || null,
+      signatureType: a.signatureType || null, role: a.role || null,
+    };
+  });
   const missing = required.filter((a) => accepted[a.id] !== a.version).map((a) => ({
     agreementId: a.id, name: a.name, version: a.version,
     reason: accepted[a.id] ? 'outdated' : 'never',
   }));
-  return { role: role || null, compliant: missing.length === 0, missing, requiredCount: required.length };
+  return {
+    role: role || null, compliant: missing.length === 0, missing,
+    requiredCount: required.length,
+    required: required.map((a) => ({ agreementId: a.id, name: a.name, version: a.version, hash: a.hash })),
+    accepted: records,
+  };
+}
+
+_h.legalCheckCompliance = async (req) => {
+  const uid  = _uid(req);
+  const role = _san(req.data?.role || '', 40);
+  const r = await complianceFor(uid, role);
+  /* The callable's published shape is unchanged; the extra keys complianceFor
+     returns are for server callers and are not added here. */
+  return { role: r.role, compliant: r.compliant, missing: r.missing, requiredCount: r.requiredCount };
 };
 
 /* ── legalAccept({role, acceptances:[{agreementId,version}], meta}) — record acceptance ──
@@ -734,8 +802,13 @@ _h.legalGetRegistry = async (req) => {
   return { roles: Object.keys(reg), registry: reg };
 };
 
+/* `_h` MUST stay in this list. A `module.exports = {…}` rebind that omits it leaves
+   legal-dispatch.js spreading `undefined`, and _merge()'s `Object.keys(m || {})`
+   swallows that silently — the dispatcher then serves ZERO legal operations and
+   nothing errors. That is exactly how healthcare-hub.js and property-hub.js lost
+   all of theirs (HC-11). Runtime-checked here: 21 handlers. */
 module.exports = {
-  _h, CORE, ROLE_AGREEMENTS, DEFAULT_VERSION,
+  _h, CORE, ROLE_AGREEMENTS, ROLE_ALIASES, DEFAULT_VERSION,
   DECLARATION_VERSION, DECLARATION_TEXT,
-  assertLegalCompliance,
+  assertLegalCompliance, complianceFor, catalogueKeyFor,
 };

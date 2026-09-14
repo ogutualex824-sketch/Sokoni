@@ -197,6 +197,14 @@ _h.bookingCreateService = async (req) => {
 
   const holdExpiresMs = Date.now() + HOLD_MS;   /* server clock; stamped on booking + lock so the hold self-expires */
 
+  /* ── Commercial hub, resolved SERVER-SIDE and snapshotted (ADR-015) ──────────────────
+     Which hub a booking is priced under is a money input, so it is treated like price/fee/
+     deposit: resolved from an authority the customer and the provider cannot set, stamped
+     once here, and read unchanged at settlement. See functions/provider-hub.js for why it
+     comes from the provider's DECIDED application role rather than the self-declared
+     `providers/{uid}.category`, and why it is NOT the client-supplied `hubType` below. */
+  const commissionHub = await require('./provider-hub').resolveProviderHub(db, providerId);
+
   let outcome = null;
   await db.runTransaction(async (txn) => {
     outcome = null;
@@ -258,7 +266,8 @@ _h.bookingCreateService = async (req) => {
       status,                        /* server-authoritative */
       expiresAt: admin.firestore.Timestamp.fromMillis(holdExpiresMs),   /* pre-payment hold window; cleared on paid_held */
       note: _san(d.note, 300),
-      hubType: _san(d.hubType, 40) || 'services',
+      hubType: _san(d.hubType, 40) || 'services',   /* CLIENT-SUPPLIED, descriptive only — never price on this */
+      commissionHub,                                /* SERVER-RESOLVED, immutable — the settlement rate selector */
       idempotencyKey,
       /* Provenance — which path/engine/rev priced & reserved this booking, so a
          record is reproducible and future engine/pricing revisions need no

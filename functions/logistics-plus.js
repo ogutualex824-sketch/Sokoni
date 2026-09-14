@@ -84,21 +84,61 @@ exports._h = {}; // handler registry for logistics-plus-dispatch.js
 // Collections: vehicles/{id}, vehicleLogs/{id}
 // ─────────────────────────────────────────────────────────────────────────────
 
-const _VEHICLE_TYPES = ['bike', 'car', 'van', 'truck', 'tuk_tuk', 'bicycle'];
+/* V-2 — the canonical vehicle vocabulary replaces this module's private list, which used `bike`
+   for the MOTORBIKE class while application-lifecycle used it for a BICYCLE (8 kg). Three
+   vocabularies were how that collision survived; there is now one. */
+const vehicleClasses = require('./vehicle-classes');
+
+/**
+ * VEHICLE AUTHORITY — resolved through the BUSINESS, never through a shop.
+ *
+ * `_assertRole` below requires `shops/{shopId}` to exist. `shops` is the collection at the centre
+ * of the still-undecided Business->Store question, and the canonical business bootstrap
+ * (`business-bootstrap._createBusiness`) does not create a shops document at all — it writes
+ * businesses, branches, merchants, posStaff/posRoles and settings, and nothing else. So requiring
+ * a shop for vehicle authority would have forced Delivery Hub to invent a Store model as a side
+ * effect of registering a lorry.
+ *
+ * Owner ruling: vehicle -> business, NOT vehicle -> shop -> business. Applied only to the six
+ * `fleet*` functions that address the `vehicles` collection; the other 25 `_assertRole` call
+ * sites (routes, warehouse, delivery zones, cargo) are untouched and still shop-bound, because
+ * re-authorising them is a different gate.
+ *
+ * NO DELEGATED TIER, DELIBERATELY. `_assertRole`'s employee path queries `shopEmployees`, which
+ * has NO production footprint — so no delegated access resolves today and none is lost here.
+ * There is no `minRole` parameter precisely so that its absence is visible at every call site
+ * rather than silently ignored; delegated business management is its own open gate.
+ */
+async function _assertVehicleAuthority(uid, businessId) {
+  if (!businessId) throw new Error('businessId required');
+  const snap = await _db().collection('businesses').doc(businessId).get();
+  if (!snap.exists) throw new Error('business not found');
+  if (snap.data().ownerId === uid) return 'owner';
+  const u = await _db().collection('users').doc(uid).get();
+  if (u.exists && u.data().role === 'admin') return 'admin';
+  throw new Error('forbidden');
+}
 
 exports.fleetVehicleCreate = onCall(_CALL, exports._h.fleetVehicleCreate = async (req) => {
   const uid = _uid(req);
-  const { shopId, make, model, plate, type, capacityKg, capacityM3, year } = req.data;
-  await _assertRole(uid, shopId, 'manager');
+  const { businessId, make, model, plate, type, capacityKg, capacityM3, year } = req.data;
+  await _assertVehicleAuthority(uid, businessId);
   if (!plate || !type) throw new Error('plate and type required');
-  if (!_VEHICLE_TYPES.includes(type)) throw new Error('invalid vehicle type');
-  // Ensure plate is unique within shop
+  /* Canonical class, or refuse. The old check accepted this module's private token list, so an
+     unmapped or foreign spelling either failed here or — worse, on the intake side — silently
+     became a motorcycle. `canonicalise` returns null for anything unrecognised. */
+  const vehicleClass = vehicleClasses.canonicalise(type);
+  if (!vehicleClass) throw new Error('unrecognised vehicle type: ' + type);
+  /* Plate uniqueness is GLOBAL, not per-owner — the original comment said "unique within shop"
+     while the query had no owner filter, and global is the correct reading: a registration plate
+     identifies one vehicle in the world, so the same plate under two businesses is a conflict,
+     not two vehicles. */
   const existing = await _db().collection('vehicles').where('plate', '==', plate.toUpperCase()).limit(1).get();
   if (!existing.empty) throw new Error('vehicle with this plate already registered');
   const id = _id();
   await _db().collection('vehicles').doc(id).set({
-    id, shopId, make: make || '', model: model || '', year: year || null,
-    plate: plate.toUpperCase(), type,
+    id, businessId, make: make || '', model: model || '', year: year || null,
+    plate: plate.toUpperCase(), type, vehicleClass,
     capacityKg: capacityKg || null, capacityM3: capacityM3 || null,
     status: 'active',
     odometer: 0, lastServiceOdometer: 0,
@@ -110,10 +150,12 @@ exports.fleetVehicleCreate = onCall(_CALL, exports._h.fleetVehicleCreate = async
 
 exports.fleetVehicleUpdate = onCall(_CALL, exports._h.fleetVehicleUpdate = async (req) => {
   const uid = _uid(req);
-  const { shopId, vehicleId, status, assignedDriverId, assignedDriverName, odometer } = req.data;
-  await _assertRole(uid, shopId, 'manager');
+  const { businessId, vehicleId, status, assignedDriverId, assignedDriverName, odometer } = req.data;
+  await _assertVehicleAuthority(uid, businessId);
   const snap = await _db().collection('vehicles').doc(vehicleId).get();
-  if (!snap.exists || snap.data().shopId !== shopId) throw new Error('vehicle not found');
+  /* The vehicle must belong to the business the caller was authorised against, or authority over
+     one business would reach every vehicle in the platform. */
+  if (!snap.exists || snap.data().businessId !== businessId) throw new Error('vehicle not found');
   const upd = { updatedAt: _ts() };
   if (status)               upd.status             = status;
   if (assignedDriverId)     upd.assignedDriverId   = assignedDriverId;
@@ -126,9 +168,9 @@ exports.fleetVehicleUpdate = onCall(_CALL, exports._h.fleetVehicleUpdate = async
 
 exports.fleetVehicleList = onCall(_CALL, exports._h.fleetVehicleList = async (req) => {
   const uid = _uid(req);
-  const { shopId, status } = req.data;
-  await _assertRole(uid, shopId, 'employee');
-  const snap = await _db().collection('vehicles').where('shopId', '==', shopId).limit(100).get();
+  const { businessId, status } = req.data;
+  await _assertVehicleAuthority(uid, businessId);
+  const snap = await _db().collection('vehicles').where('businessId', '==', businessId).limit(100).get();
   let vehicles = snap.docs.map(d => d.data());
   if (status) vehicles = vehicles.filter(v => v.status === status);
   return { vehicles };
@@ -136,15 +178,15 @@ exports.fleetVehicleList = onCall(_CALL, exports._h.fleetVehicleList = async (re
 
 exports.fleetLogMaintenance = onCall(_CALL, exports._h.fleetLogMaintenance = async (req) => {
   const uid = _uid(req);
-  const { shopId, vehicleId, type, description, cost, odometerAtService, nextServiceKm } = req.data;
-  await _assertRole(uid, shopId, 'employee');
+  const { businessId, vehicleId, type, description, cost, odometerAtService, nextServiceKm } = req.data;
+  await _assertVehicleAuthority(uid, businessId);
   if (!description) throw new Error('description required');
   const snap = await _db().collection('vehicles').doc(vehicleId).get();
-  if (!snap.exists || snap.data().shopId !== shopId) throw new Error('vehicle not found');
+  if (!snap.exists || snap.data().businessId !== businessId) throw new Error('vehicle not found');
   const logId = _id();
   const batch = _db().batch();
   batch.set(_db().collection('vehicleLogs').doc(logId), {
-    id: logId, vehicleId, shopId, logType: 'maintenance',
+    id: logId, vehicleId, businessId, logType: 'maintenance',
     maintenanceType: type || 'general',
     description, cost: cost || null,
     odometerAtService: odometerAtService || snap.data().odometer || 0,
@@ -163,16 +205,16 @@ exports.fleetLogMaintenance = onCall(_CALL, exports._h.fleetLogMaintenance = asy
 
 exports.fleetLogFuel = onCall(_CALL, exports._h.fleetLogFuel = async (req) => {
   const uid = _uid(req);
-  const { shopId, vehicleId, litres, costPerLitre, odometer, fuelType, station } = req.data;
-  await _assertRole(uid, shopId, 'employee');
+  const { businessId, vehicleId, litres, costPerLitre, odometer, fuelType, station } = req.data;
+  await _assertVehicleAuthority(uid, businessId);
   if (!litres || litres <= 0) throw new Error('litres required');
   const snap = await _db().collection('vehicles').doc(vehicleId).get();
-  if (!snap.exists || snap.data().shopId !== shopId) throw new Error('vehicle not found');
+  if (!snap.exists || snap.data().businessId !== businessId) throw new Error('vehicle not found');
   const totalCost = litres * (costPerLitre || 0);
   const logId = _id();
   const batch = _db().batch();
   batch.set(_db().collection('vehicleLogs').doc(logId), {
-    id: logId, vehicleId, shopId, logType: 'fuel',
+    id: logId, vehicleId, businessId, logType: 'fuel',
     litres, costPerLitre: costPerLitre || null, totalCost,
     fuelType: fuelType || 'petrol', station: station || null,
     odometer: odometer || snap.data().odometer || 0,
@@ -187,10 +229,10 @@ exports.fleetLogFuel = onCall(_CALL, exports._h.fleetLogFuel = async (req) => {
 
 exports.fleetGetVehicleStats = onCall(_CALL, exports._h.fleetGetVehicleStats = async (req) => {
   const uid = _uid(req);
-  const { shopId, vehicleId } = req.data;
-  await _assertRole(uid, shopId, 'employee');
+  const { businessId, vehicleId } = req.data;
+  await _assertVehicleAuthority(uid, businessId);
   const vSnap = await _db().collection('vehicles').doc(vehicleId).get();
-  if (!vSnap.exists || vSnap.data().shopId !== shopId) throw new Error('vehicle not found');
+  if (!vSnap.exists || vSnap.data().businessId !== businessId) throw new Error('vehicle not found');
   const logsSnap = await _db().collection('vehicleLogs')
     .where('vehicleId', '==', vehicleId).limit(200).get();
   const logs = logsSnap.docs.map(d => d.data());

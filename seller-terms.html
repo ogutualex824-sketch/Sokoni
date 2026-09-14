@@ -148,13 +148,26 @@ table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:to
 
   <section class="section" id="commissions">
     <h2>5. Commissions &amp; Fees</h2>
-    <p>SOKONI charges a <strong>5% commission on each completed marketplace sale</strong>, subject to a <strong>minimum commission of KES 10 per sale</strong>.</p>
+    <p>SOKONI charges commission on <strong>two separate rates</strong>. A <strong>marketplace order</strong> is one SOKONI brought you; an <strong>in-shop POS / Till sale</strong> is one you made yourself at your own counter. Your subscription reduces the marketplace rate only.</p>
+    <table class="commission-table" aria-label="Commission by plan and sales channel">
+      <thead>
+        <tr><th>Your plan</th><th>Marketplace orders</th><th>In-shop POS / Till</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Free</td><td><strong>15%</strong></td><td>5%</td></tr>
+        <tr><td>Basic</td><td><strong>10%</strong></td><td>5%</td></tr>
+        <tr><td>Pro</td><td><strong>5%</strong></td><td>5%</td></tr>
+        <tr><td>Enterprise</td><td><strong>0%</strong></td><td>5%</td></tr>
+      </tbody>
+    </table>
+    <p>A <strong>minimum commission of KES 10 per sale</strong> applies, except where your plan&rsquo;s rate for that sale is 0% &mdash; a 0% rate is genuinely zero and is never raised to the minimum.</p>
     <table class="commission-table" aria-label="Commission rates by category">
       <thead>
         <tr><th>Category</th><th>Commission Rate</th></tr>
       </thead>
       <tbody>
-        <tr><td><strong>Marketplace (all product sales)</strong></td><td>5% (min KES 10)</td></tr>
+        <tr><td><strong>Marketplace (all product sales)</strong></td><td>By plan &mdash; see the table above (min KES 10)</td></tr>
+        <tr><td><strong>POS / Till (in-shop sales)</strong></td><td>5% flat, every plan (min KES 10)</td></tr>
         <tr><td><strong>Food Delivery</strong></td><td>5%</td></tr>
         <tr><td><strong>Property</strong></td><td>2%</td></tr>
         <tr><td><strong>Healthcare</strong></td><td>5%</td></tr>
@@ -167,7 +180,7 @@ table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:to
     </table>
     <p style="margin-top:14px;"><strong>How commission is collected.</strong> Customer payments are sent directly to the seller's configured payment destination. SOKONI does <strong>not</strong> deduct commission from the customer's payment — the seller receives the full sale amount, and the commission is recorded as payable to SOKONI and invoiced separately.</p>
     <h3>Subscription Plans</h3>
-    <p>Sellers may opt into SOKONI subscription plans for lower commission rates, priority search placement, advanced analytics, and higher listing limits. Plan details are available in <a href="/subscriptions">Seller Subscriptions</a>.</p>
+    <p>Sellers may opt into SOKONI subscription plans for lower <strong>marketplace</strong> commission rates (POS / Till stays 5% on every plan), priority search placement, advanced analytics, and higher listing limits. Plan details are available in <a href="/subscriptions">Seller Subscriptions</a>.</p>
     <h3>Payment Processing Fee</h3>
     <p>IntaSend payment processing fees (M-Pesa and card) are passed through at cost. Current rates: M-Pesa 0%–1% (M-Pesa charges), Card 2.5%+KES 50. These are shown in your payout dashboard.</p>
   </section>

@@ -199,6 +199,35 @@ function resolveRole(app) {
 
   const test = (re) => re.test(hay);
 
+  /* ── An EXPLICIT declaration beats keyword guessing ──────────────────────
+     The keyword pool below matches on EVERY descriptive field, including the
+     merchant's own product `category`. That is right for the intakes whose
+     `type` is prose ("Cleaning Company / Housekeeper"), and wrong for the ones
+     that declare a canonical role — because `legal` and `health` are tested
+     BEFORE `seller`, so a shop selling health or legal products was routed to a
+     provider registry and never given a shop, a till or a storefront:
+
+         { type:'seller', hub:'marketplace', category:'healthcare' }  ->  health
+         { type:'seller', hub:'marketplace', category:'legal'      }  ->  legal
+
+     Both are merchants. `sokoni-merchant-application.js` writes `type: 'seller'`
+     deliberately as the intake vocabulary, and a stated intake must not be
+     overridden by a guess about what the applicant sells.
+
+     Matched EXACTLY, never as a substring, so prose types (hub-register.js
+     writes `type: 'business'`) still fall through to the keyword pool below and
+     resolve exactly as they did before. */
+  const DECLARED_TYPES = {
+    seller: 'seller', merchant: 'seller', vendor: 'seller',
+    driver: 'driver', rider: 'driver',
+    provider: 'provider', professional: 'provider',
+    legal: 'legal', health: 'health',
+  };
+  const declared = String(app.type == null ? '' : app.type).trim().toLowerCase();
+  if (Object.prototype.hasOwnProperty.call(DECLARED_TYPES, declared)) {
+    return { role: DECLARED_TYPES[declared], by: 'declared' };
+  }
+
   if (test(/\b(driver|rider|boda|bodaboda|courier|dispatch|delivery\s*(guy|partner|person))\b/)) {
     return { role: 'driver', by: 'keyword' };
   }
@@ -366,6 +395,23 @@ async function projectProvider(db, app, uid, approved) {
       available: false, acceptsBookings: false,
       suspendedAt: _ts(), updatedAt: _ts(),
     }, { merge: true });
+    /* OB-5 — MIRROR THE RETRACTION ONTO THE ONBOARDING PROJECTION.
+       `providerProfiles/{uid}` is a second surface a customer can reach: the ONLY
+       providerProfiles-based discovery query is providerSearchProviders, which asks
+       for `status == 'active' AND searchable == true`. Suspending the canonical
+       record left that projection untouched, so a suspended provider stayed listed
+       there — the canonical state said suspended and the projection said findable.
+
+       Only `searchable` is written. `providerProfiles.status` is the ONBOARDING
+       state ("the draft is published"), not an approval, and overwriting it here
+       would corrupt a different state machine to solve a discovery problem.
+       Clearing one flag is sufficient to delist and destroys no profile content;
+       the draft, pricing, coverage and portfolio all survive, so a reinstated
+       provider has nothing to re-enter. providerProfiles does NOT become an
+       authority — it is told what the canonical record decided. */
+    await db.collection('providerProfiles').doc(uid)
+      .set({ searchable: false, suspendedAt: _ts(), updatedAt: _ts() }, { merge: true })
+      .catch(() => {});   /* a provider who never onboarded has no profile to delist */
     return { collection: 'providers', id: uid, action: 'retracted' };
   }
 
@@ -451,6 +497,14 @@ async function projectProvider(db, app, uid, approved) {
   }
 
   await ref.set(doc, { merge: true });
+  /* OB-5 — the same mirror in the other direction. Reinstating a provider must
+     restore their discoverability on the projection too, or a reversed suspension
+     leaves them approved-but-unfindable: the canonical record says active while
+     providerSearchProviders still filters them out. Symmetry here is what makes the
+     mirror a mirror rather than a one-way delist. */
+  await db.collection('providerProfiles').doc(uid)
+    .set({ searchable: true, suspendedAt: FieldValue.delete(), updatedAt: _ts() }, { merge: true })
+    .catch(() => {});
   return { collection: 'providers', id: uid, action: snap.exists ? 'updated' : 'created', providerId };
 }
 
@@ -468,7 +522,15 @@ async function projectProvider(db, app, uid, approved) {
  * sokoni-dispatch.js applies its own neutral defaults, and inventing a 4.0 for
  * someone who has completed no deliveries would be fabricated performance data.
  */
-async function projectDriver(db, app, uid, approved) {
+/* `opts.ensureBusiness` is injectable for one honest reason: `_ensureBusinessForOwner` closes
+   over business-bootstrap's OWN Firestore handle, not the `db` passed here. In production they
+   are the same database so it makes no difference, but it means this function's `db` parameter no
+   longer covers all of its writes — and that parameter exists precisely so the projection can be
+   driven with a stub. Rather than leave that dependency hidden (it silently hung the unit suite),
+   it is declared. Production never passes it. */
+async function projectDriver(db, app, uid, approved, opts) {
+  const ensureBusiness = (opts && opts.ensureBusiness)
+    || ((o) => require('./business-bootstrap')._ensureBusinessForOwner(o));
   const rideRef = db.collection('rideDrivers').doc(uid);
   const drvRef = db.collection('drivers').doc(uid);
   const [rideSnap, drvSnap] = await Promise.all([rideRef.get(), drvRef.get()]);
@@ -527,6 +589,14 @@ async function projectDriver(db, app, uid, approved) {
     phoneNumber: _san(app.phoneNumber, 24),
     vehicleType,
     plate,
+    /* `approved` is written EXPLICITLY, not implied by `status`.
+       rider-eligibility requires `approved === true` and treats an absent flag as NOT approved —
+       absence must never read as permission. This projection previously wrote `approvedAt` and
+       `status:'active'` but NO `approved` field, so every freshly approved driver would have been
+       refused by the dispatch gate as `not_approved`. Unit fixtures hid it by setting the flag by
+       hand; only driving the real projection surfaced it. The one live production `drivers` row
+       already carries `approved: true`, so new records now match the shape already in place. */
+    approved: true,
     status: 'active',
     available: false,
     onlineStatus: 'offline',
@@ -540,8 +610,26 @@ async function projectDriver(db, app, uid, approved) {
   if (!drvSnap.exists) { drvDoc.createdAt = _ts(); drvDoc.completedDeliveries = 0; }
 
   const batch = db.batch();
-  batch.set(rideRef, rideDoc, { merge: true });
-  batch.set(drvRef, drvDoc, { merge: true });
+  /* REINSTATEMENT MUST CLEAR THE SUSPENSION FLAG — the same symmetry OB-5 established for
+     providers a few functions above (`providerProfiles.set({ suspendedAt: FieldValue.delete() })`),
+     which this path never received.
+
+     The retraction branch sets `suspendedAt`; this branch wrote `status:'active'`,
+     `approved:true` and a fresh `approvedAt` and left the flag in place. Measured in production:
+     one driver suspended 2026-08-04 and re-approved 2026-08-05 still carried suspendedAt, so
+     `rider-eligibility` — the ONLY authoritative reader of this field — refused them as suspended
+     with the approval a day newer than the suspension.
+
+     `FieldValue.delete()` rather than `null` or a second `unsuspendedAt` field: three unsuspend
+     conventions already exist in this codebase and adding a fourth is how the next reader gets it
+     wrong. OB-5 is the closest architectural precedent, so this matches it exactly.
+
+     Deleting rather than nulling matters for the reader: `rider-eligibility` treats a TRUTHY
+     suspendedAt as suspension, so null would also work today — but a field that is absent cannot
+     be misread by a future consumer that checks for presence instead. */
+  const _unsuspend = { suspendedAt: FieldValue.delete() };
+  batch.set(rideRef, { ...rideDoc, ..._unsuspend }, { merge: true });
+  batch.set(drvRef, { ...drvDoc, ..._unsuspend }, { merge: true });
 
   /* Restricted verification record. Documents the rider supplied are held here
      — CF-write / admin-read — and flagged when absent so a reviewer knows what
@@ -560,15 +648,69 @@ async function projectDriver(db, app, uid, approved) {
     documentsMissing: missing,
     documentsComplete: missing.length === 0,
     status: missing.length === 0 ? 'verified_on_file' : 'incomplete',
+    /* D1 — converge onto the shared verification contract. The provider record already carried
+       the governed review workflow and the driver record the structured identifiers; this is
+       their union, not a third schema. `verified_on_file` is kept verbatim because renaming a
+       live status token would silently reclassify every record already carrying it.
+
+       `humanDecision` is NOT set here. Documents being ON FILE is a statement about paperwork;
+       it is not a person's approval, and `isOfficial()` requires both. Writing one from the
+       other is exactly the collapse the contract forbids. */
+    verificationRoute: null,
+    humanDecision: null,
+    reviewer1: null,
+    reviewer2: null,
     sourceApplicationId: app.applicationId || null,
     updatedAt: _ts(),
   }, { merge: true });
 
   await batch.commit();
+
+  /* D1-A — the business that will OWN this driver's vehicles.
+   *
+   * `vehicles` is authorised through `businesses/{businessId}.ownerId` (V-1), so a driver with no
+   * business cannot hold a vehicle at all. Provisioning reuses the canonical primitive rather
+   * than writing a business here: `_ensureBusinessForOwner` already allocates a `SOK-XXXXXX` id
+   * (never `businesses/{uid}`, which is the open directory-row collision), holds a transactional
+   * claim so a repeated approval cannot create a second business, and releases that claim on
+   * failure so a dead run cannot leave a driver permanently unprovisionable.
+   *
+   * DELIBERATELY AFTER THE COMMIT. The driver records are the approval's own effect and must not
+   * be held hostage to a dependent step. If provisioning throws, applyDecision's catch records
+   * `projectionStatus: 'failed'`, the operator sees an incomplete approval, and a retry re-runs
+   * everything — safely, because every write in this function is idempotent.
+   *
+   * THIS IS NOT AN APPROVAL PATH. Having a business confers no dispatch eligibility:
+   * `rider-eligibility` reads `drivers` + `driverVerification` and never consults `businesses`.
+   * Provisioning gives an approved driver somewhere to put a vehicle; it cannot make an
+   * unapproved one operational. */
+  let business = null;
+  const res = await ensureBusiness({
+    uid,
+    businessName: name || 'Delivery Rider',
+    category: 'delivery',
+    /* Skips the seller subscription `_createBusiness` writes by default — a rider is not
+       selling marketplace goods, and a trial that downgrades to `seller_free` would enrol them
+       in the merchant commission population. */
+    businessKind: 'delivery',
+    phone: _san(app.phone, 24),
+    county: _san(app.county || app.area, 120),
+    city: _san(app.city, 120),
+  });
+  /* `claim-held` is a RACE, not a failure: a concurrent run owns the claim and will finish it.
+     Recorded as deferred so it is visible, rather than thrown as an error that would mark a
+     perfectly good approval failed. */
+  business = {
+    merchantId: res.merchantId || null,
+    action: res.created ? 'provisioned' : (res.merchantId ? 'already-provisioned' : 'deferred'),
+    reason: res.reason,
+  };
+
   return {
     collection: 'drivers+rideDrivers', id: uid,
     action: rideSnap.exists ? 'updated' : 'created',
     documentsMissing: missing,
+    business,
   };
 }
 
@@ -579,9 +721,33 @@ async function projectDriver(db, app, uid, approved) {
    client-side forms, and `shops/{uid}` had exactly one production writer, inside
    a trigger nothing reaches. So an approved merchant got a role and a claim and
    NO shop — and merchant.html then had no canonical shop to resolve. Seller is
-   projected properly below; health and legal genuinely still have their own
-   registries. */
-const DELEGATED_ROLES = { health: 'healthProviders', legal: 'legalProviders' };
+   projected properly below.
+
+   `health` LEFT for the same reason, 2026-09-13 (HC-23). The claim that it
+   "genuinely still has its own registry" was false in exactly the seller way.
+   The ONLY writer of `healthProviders/{uid}` is `registerHealthProvider`
+   (functions/healthcare-hub.js), which has no client invoker anywhere in the
+   repo; the production census on 2026-09-12 found zero real providers (one
+   synthetic fixture, since deleted) and zero applications carrying role
+   'health'. So an approved healthcare applicant received `claims.provider` and
+   landed in NO registry at all — this branch pushed a receipt object and
+   performed no write, and because it MATCHED it also skipped projectProvider().
+   Approved, claimed, invisible.
+
+   ADR-014 makes `providers/{uid}` the canonical healthcare provider identity
+   and retires healthProviders, so `health` now falls through to
+   projectProvider() like every other provider. Nothing else is needed: roleKeyFor
+   already maps health → 'provider', so the role field and the claim were always
+   correct — only the registry write was missing.
+
+   `legal` STAYS, on its own evidence rather than by analogy. Its delegation is
+   real: functions/legal-hub.js writes `legalProviders/{uid}`, legal-admin.html
+   and legal-hub.html read it, and scripts/onboard-batch2.js onboarded a real
+   firm into it. Removing it here would fork legal identity across two
+   registries — the opposite of convergence. If legal is ever converged it must
+   be re-examined on its own evidence, and with a migration plan health did not
+   need. */
+const DELEGATED_ROLES = { legal: 'legalProviders' };
 
 /* Shop ids that are not shop ids — the same placeholders the client rejects
    (SokoniBranch synthesises {id:'main'} on an empty device). An application
@@ -613,9 +779,21 @@ async function projectSeller(db, app, uid, approved) {
   const shopRef = db.collection('shops').doc(shopId);
   const sellerRef = db.collection('sellers').doc(String(uid));
   const userRef = db.collection('users').doc(String(uid));
+  /* The business DIRECTORY record. Until now its only writer was the shop
+     wizard inside seller.html — a client-side write on the very path approval
+     replaces — so a merchant who became live through APPROVAL existed in the
+     storefront (`shops` + `sellers`, which store.html reads) and was absent from
+     the directory. Same document id and same shape the wizard used, so the two
+     paths converge on one record instead of forking. */
+  const bizRef = db.collection('businesses').doc(String(uid));
 
   const name = _sanText(app.name || app.businessName || app.storeName, 160) || 'My Shop';
-  const existing = await shopRef.get();
+  /* Both reads before any write — the directory record's createdAt must be
+     preserved, and that cannot be decided after the batch has started. */
+  const [existing, bizExisting] = await Promise.all([
+    shopRef.get(),
+    bizRef.get().catch(() => null),
+  ]);
 
   if (!approved) {
     /* A rejection has nothing to retract (no shop was ever created). A
@@ -624,6 +802,10 @@ async function projectSeller(db, app, uid, approved) {
     if (existing.exists) {
       await shopRef.set({ status: 'suspended', suspendedAt: _ts(), updatedAt: _ts() }, { merge: true });
       await sellerRef.set({ status: 'suspended', active: false, updatedAt: _ts() }, { merge: true }).catch(() => {});
+      /* Retract the directory listing too. A suspended merchant that stays
+         discoverable is the same defect as an approved one that never appears —
+         the registries must move together or they disagree about who is live. */
+      await bizRef.set({ status: 'suspended', updatedAt: _ts() }, { merge: true }).catch(() => {});
       return { collection: 'shops', id: shopId, action: 'suspended' };
     }
     return { collection: 'shops', id: shopId, action: 'none' };
@@ -667,7 +849,35 @@ async function projectSeller(db, app, uid, approved) {
     ...(existing.exists ? {} : { createdAt: _ts() }),
   }, { merge: true });
 
-  /* The account's active shop — what merchant.html resolves first. Without
+  /* The business directory listing. `createdAt` is preserved on re-approval so
+     the directory's orderBy('createdAt') cannot silently drop a reinstated
+     merchant.
+
+     `verified` is deliberately NOT written here. The homepage counts
+     `businesses where verified == true` as its seller total and the field drives
+     a trust badge, so setting it would be a trust claim made as a side effect of
+     an approval — a commercial decision, not a projection. It stays an explicit
+     admin action. */
+  batch.set(bizRef, {
+    uid: String(uid),
+    ownerId: String(uid),
+    shopId,
+    name,
+    businessName: name,
+    nameLower: name.toLowerCase(),
+    status: 'active',
+    source: 'application_approval',
+    applicationId: app.applicationId || null,
+    updatedAt: _ts(),
+    ...(bizExisting && bizExisting.exists ? {} : { createdAt: _ts() }),
+    ...(app.category ? { category: _sanText(app.category, 80) } : {}),
+    ...(app.description ? { description: _sanText(app.description, 1000) } : {}),
+    ...(app.phoneNumber || app.phone ? { phone: app.phoneNumber || app.phone } : {}),
+    ...(app.email ? { email: app.email } : {}),
+    ...(app.location || app.city ? { city: _sanText(app.location || app.city, 160) } : {}),
+  }, { merge: true });
+
+  /* The account's active shop — what the Seller Hub resolves first. Without
      this, an approved merchant with a shop still lands in a workspace that
      cannot tell which shop is theirs. */
   batch.set(userRef, { activeShopId: shopId, updatedAt: _ts() }, { merge: true });
@@ -675,9 +885,10 @@ async function projectSeller(db, app, uid, approved) {
   await batch.commit();
 
   return {
-    collection: 'shops+sellers', id: shopId,
+    collection: 'shops+sellers+businesses', id: shopId,
     action: existing.exists ? 'reactivated' : 'created',
     shopId, sellerUid: String(uid), activeShopId: shopId,
+    businessId: String(uid),
     shopIdSource: declared ? 'application.shopId' : 'account_shop',
   };
 }
@@ -790,6 +1001,31 @@ async function applyDecision(appId, app, opts = {}) {
             source: 'application_approval',
           });
           receipt.till = { sokoniTillId: till.sokoniTillId, created: till.created };
+
+          /* The BUSINESS wallet, provisioned in the same breath as the Till and for the
+             same reason: the merchant should not have to find a settings page before the
+             platform works. POS/Till commission is settled from this wallet and NEVER from
+             the merchant's personal `wallets/{uid}` — they are different collections so the
+             two can never be confused. Opens at zero; a wallet that could be created with
+             money in it could be credited without a ledger entry.
+
+             Keyed by SHOP, like the Till, because one owner may run several businesses.
+             Idempotent, and it never re-owns an existing wallet. */
+          try {
+            const { ensureBusinessWallet } = require('./business-wallet');
+            const bw = await ensureBusinessWallet(db, {
+              shopId: shopWrite.shopId, ownerUid: uid, currency: 'KES',
+            });
+            receipt.businessWallet = { shopId: shopWrite.shopId, action: bw.action };
+          } catch (bwErr) {
+            /* An entitlement, not a gate — same as the Till and the trial. A merchant is
+               approved and selling before they owe anything; the wallet is provisioned on
+               first use if this failed. Reported, never a reason to undo an approval. */
+            logger.error('[appLifecycle] business wallet provisioning failed (recoverable)', {
+              appId, uid, shopId: shopWrite.shopId, error: bwErr.message,
+            });
+            receipt.businessWallet = { error: String(bwErr.message || bwErr).slice(0, 300) };
+          }
         } catch (tillErr) {
           logger.error('[appLifecycle] Till issuance failed (recoverable)', {
             appId, uid, shopId: shopWrite.shopId, error: tillErr.message,
@@ -1018,7 +1254,8 @@ exports.applicationDecide = onCall(
 
     /* ── Seller Agreement gate ────────────────────────────────────────────
        A business may not be APPROVED until it has acknowledged the commercial
-       terms it will be bound by — the 5% per-sale commission (minimum KES 10)
+       terms it will be bound by — the marketplace plan ladder (Free 15 / Basic 10 / Pro 5 /
+       Enterprise 0), the flat 5% on POS/till sales, and the KES 10 minimum
        and the fact that SOKONI does not deduct it from the customer's payment.
 
        Enforced here rather than only in the browser: the submit button is a
@@ -1036,11 +1273,60 @@ exports.applicationDecide = onCall(
        send them back for acknowledgement. */
     if (decision === 'approve') {
       const _a = snap.data() || {};
-      if (_a.agreementAccepted !== true) {
+      const _role = _a.role || resolveRole(_a).role;
+
+      if (_role === 'health') {
+        /* ── HEALTHCARE ACCEPTS A DIFFERENT INSTRUMENT ─────────────────────────
+           The boolean below is the *Seller* Agreement acknowledgement — the
+           marketplace listing ladder and the POS commission rate
+           (hub-register.js AGREEMENT_VERSION '…-lanes-mkt-ladder-pos-5pct',
+           text served from /seller-terms). A clinician, a hospital or a pharmacy
+           is not a marketplace seller, and ticking that box must never be
+           accepted as their professional undertaking.
+
+           So healthcare is gated on the CANONICAL record instead: the versioned,
+           immutable `legalAcceptances` written by legalAccept, checked server-side
+           against the catalogue for role 'health' (aliased to 'healthcare' —
+           ROLE_AGREEMENTS is keyed by the latter). `legalAcceptances` remains the
+           one acceptance database; nothing is duplicated here, and the boolean on
+           the application is deliberately NOT consulted for this role, so an
+           application carrying a Seller Agreement tick still cannot be approved.
+
+           Until legal publishes `healthcare-provider-agreement` and
+           `medical-compliance-declaration`, no healthcare application can satisfy
+           this — which is the intended state. `reject` and `request_info` are
+           untouched, so the queue can still be worked. */
+        const uidForLegal = _a.uid || null;
+        if (!uidForLegal) {
+          throw new HttpsError('failed-precondition',
+            'This healthcare application cannot be approved: it carries no account to check ' +
+            'agreement acceptance against.');
+        }
+        let comp;
+        try {
+          comp = await require('./legal-agreements').complianceFor(uidForLegal, 'health');
+        } catch (e) {
+          /* FAIL CLOSED. If the compliance record cannot be read we do not know
+             whether the applicant accepted anything, and "unknown" must not
+             approve a clinician. */
+          logger.error('[appLifecycle] healthcare compliance check failed', { applicationId, error: e.message });
+          throw new HttpsError('failed-precondition',
+            'This healthcare application cannot be approved: the agreement record could not be ' +
+            'verified. Try again, and escalate if it persists.');
+        }
+        if (!comp.compliant) {
+          const names = comp.missing.map((m) => `${m.name} (${m.reason})`).join(', ');
+          throw new HttpsError('failed-precondition',
+            'This healthcare application cannot be approved: the applicant has not accepted the ' +
+            'required healthcare agreements. Outstanding: ' + (names || 'unknown') +
+            '. Use "request_info" to ask them to complete the acceptance. Accepting the Seller ' +
+            'Agreement does not satisfy this.');
+        }
+      } else if (_a.agreementAccepted !== true) {
         throw new HttpsError(
           'failed-precondition',
           'This application cannot be approved: the applicant has not accepted the SOKONI ' +
-          'Seller Agreement and the 5% per-sale commission. Use "request_info" to ask them ' +
+          'Seller Agreement and its commission rates. Use "request_info" to ask them ' +
           'to complete the acknowledgement.'
         );
       }
@@ -1190,6 +1476,21 @@ exports.applicationList = onCall(
         receivedAt: a.receivedAt ? (a.receivedAt.toMillis ? a.receivedAt.toMillis() : a.receivedAt) : null,
         submittedAtRaw: a.submittedAt || null,
         createdAt: a.createdAt ? (a.createdAt.toMillis ? a.createdAt.toMillis() : a.createdAt) : null,
+        /* ── Agreement evidence ────────────────────────────────────────────────
+           A reviewer approving someone should be able to see WHAT they accepted
+           and at which version, not merely discover on failure that they did not.
+           These are the application's own fields, so they cost no extra read.
+           `agreementVerifiedAt` / `agreementVerifiedVersion` are the SERVER-stamped
+           pair written at approval — the ones to rely on; `agreementAcceptedAt` is
+           a browser clock on a client-written document. */
+        agreementAccepted: a.agreementAccepted === true,
+        agreementVersion: a.agreementVersion || null,
+        agreementAcceptedAt: a.agreementAcceptedAt || null,
+        agreementVerifiedAt: a.agreementVerifiedAt
+          ? (a.agreementVerifiedAt.toMillis ? a.agreementVerifiedAt.toMillis() : a.agreementVerifiedAt) : null,
+        agreementVerifiedVersion: a.agreementVerifiedVersion || null,
+        /* Filled below for healthcare only — see the canonical-evidence pass. */
+        legalCompliance: null,
       };
     });
 
@@ -1204,6 +1505,36 @@ exports.applicationList = onCall(
       (i) => i.status === 'approved' && i.projectionStatus !== 'applied'
     ).length;
 
+    /* ── Canonical agreement evidence, healthcare only ─────────────────────────
+       Healthcare approval is gated on `legalAcceptances`, not on the application's
+       boolean, so a reviewer needs to see the canonical record — which instrument,
+       which version, which content hash — before deciding. That costs one query per
+       applicant, so it runs ONLY for role 'health' and is capped: a reviewer works a
+       page at a time, and an unbounded fan-out here is how an admin list becomes the
+       most expensive read on the platform. Beyond the cap the field stays null rather
+       than half-true, and the failure of one lookup never fails the listing. */
+    const HEALTH_EVIDENCE_CAP = 25;
+    const healthItems = items.filter((i) => i.role === 'health').slice(0, HEALTH_EVIDENCE_CAP);
+    if (healthItems.length) {
+      const legal = require('./legal-agreements');
+      await Promise.all(healthItems.map(async (i) => {
+        if (!i.uid) { i.legalCompliance = { error: 'no-account' }; return; }
+        try {
+          const c = await legal.complianceFor(i.uid, 'health');
+          i.legalCompliance = {
+            compliant: c.compliant,
+            requiredCount: c.requiredCount,
+            required: c.required,
+            missing: c.missing,
+            accepted: Object.values(c.accepted || {}),
+          };
+        } catch (e) {
+          /* Say the lookup failed. A null here would read as "nothing accepted". */
+          i.legalCompliance = { error: e.message || 'lookup-failed' };
+        }
+      }));
+    }
+
     return { ok: true, items, counts, unpublished, total: items.length };
   }
 );
@@ -1211,6 +1542,10 @@ exports.applicationList = onCall(
 /* Internals exported for unit tests and for the reconcile script. */
 exports._internal = {
   toE164KE, toLocalKE, splitLocation, resolveRole, canonStatus, normVehicle, _san, _sanText,
-  buildIntakePatch, applyDecision, projectProvider, projectDriver,
+  /* projectSeller is exported so provider-shop.js can provision a healthcare provider's
+     merchant identity through THIS function rather than a healthcare-specific copy. One
+     projection, one shop shape, whether the shop came from merchant approval or from a
+     clinic asking for one. */
+  buildIntakePatch, applyDecision, projectProvider, projectDriver, projectSeller,
   INTAKE_VERSION, KE_COUNTIES,
 };

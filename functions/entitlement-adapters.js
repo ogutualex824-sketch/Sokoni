@@ -251,6 +251,74 @@ const digitalDownload = {
   },
 };
 
+/* ── Healthcare subscription adapter ──────────────────────────────────────
+   Turns a VERIFIED payment into an active Healthcare subscription. The engine has already
+   established that the money is real, terminal, unreversed, sufficient and owned by this
+   caller (assertPaymentHonourable) before this handler is reached — so the handler does no
+   payment reasoning of its own. Re-deriving payment truth in a domain is exactly the mistake
+   that makes a client-supplied paymentRef sufficient to mint a paid plan, which is the defect
+   this adapter exists to close.
+
+   Writes accountSubscriptions/{uid}_healthcare — a DETERMINISTIC id, not .add(). One account
+   holds one Healthcare subscription; an auto-id would let a replay or a second purchase
+   silently create a second active plan, and the resolver would then pick whichever sorted
+   first. Exactly-once is the engine's ledger; a stable id is what makes the domain agree.
+
+   The tier and its capacity come from the INTENT's server-minted metadata, never from the
+   request that triggered activation. */
+const healthcareSubscription = {
+  validate(ctx) {
+    const tier = (ctx.intent.metadata && ctx.intent.metadata.tier) || null;
+    if (!tier) { const e = new Error('Intent carries no Healthcare tier.'); e.code = 'tier_missing'; throw e; }
+    const plans = require('./healthcare-plans');
+    if (!plans.isHealthcareTier(tier)) {
+      const e = new Error(`"${tier}" is not a Healthcare plan.`); e.code = 'tier_invalid'; throw e;
+    }
+  },
+
+  activate(txn, ctx) {
+    const plans = require('./healthcare-plans');
+    const meta  = ctx.intent.metadata || {};
+    const plan  = plans.resolve(meta.tier);
+    const uid   = ctx.ownerUid;
+    const ref   = _db().collection('accountSubscriptions').doc(`${uid}_${plans.HUB}`);
+    const now   = Date.now();
+
+    /* MUST use the supplied transaction — a handler that writes outside it breaks
+       exactly-once, and the engine's own contract calls that a review-blocking defect. */
+    txn.set(ref, {
+      subscriptionId: `${uid}_${plans.HUB}`,
+      accountId:      uid,
+      role:           plans.HUB,          /* what _sourcesFor('healthcare') filters on */
+      product:        'healthcare_plans',
+      tier:           plan.id,
+      planLabel:      plan.label,
+      billingCycle:   'monthly',
+      price:          plan.priceCents,
+      currency:       'KES',
+      status:         'active',
+      trial:          false,
+      /* Capacity SNAPSHOT — what was bought. limits.services is the publishable-service
+         ceiling provider-ops enforces; limits.doctors is practitioner seats. `listings` is
+         deliberately absent: aliasing it for Healthcare is what made the cap evaluate to NaN
+         and disappear. */
+      limits:         { doctors: plan.limits.doctors, services: plan.limits.services },
+      /* NO commissionRate. subscription-core.getCommissionRate reads that field, so writing
+         one here would create a second rate authority disagreeing with ADR-015's 5%. */
+      currentPeriodStart: Timestamp.fromDate(new Date(now)),
+      currentPeriodEnd:   Timestamp.fromDate(new Date(now + PLAN_DAYS * 86400000)),
+      renewalAt:          Timestamp.fromDate(new Date(now + PLAN_DAYS * 86400000)),
+      paymentMethod:  'intasend',
+      updatedAt:      FieldValue.serverTimestamp(),
+      createdAt:      FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    return { ref: ref.path, tier: plan.id };
+  },
+
+  status(ctx) { return { tier: (ctx.intent.metadata || {}).tier || null }; },
+};
+
 /* ── Registration ─────────────────────────────────────────────────────────
    Adding a future paid feature should require exactly this — one entry, zero
    engine modification. Guarded so a double-require cannot throw. */
@@ -259,6 +327,14 @@ function registerAll() {
     engine.registerPurpose('subscription', {
       resourceType: null,          /* the plan rides on intent.planId */
       handler:      subscription,
+      expiresDays:  PLAN_DAYS,
+      refundable:   true,
+    });
+  }
+  if (!engine.getPurpose('healthcare_subscription')) {
+    engine.registerPurpose('healthcare_subscription', {
+      resourceType: 'healthcareSubscription',
+      handler:      healthcareSubscription,
       expiresDays:  PLAN_DAYS,
       refundable:   true,
     });

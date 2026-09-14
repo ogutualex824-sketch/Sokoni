@@ -894,6 +894,33 @@ function updateRoleSelection(){
     /* Visual feedback hook — extend if needed */
 }
 
+/* Resolve merchant entry through the shared authority, loading it on demand so the
+   many pages that include auth.js need no change.
+
+   If it cannot be loaded, this returns null and the caller falls through to the
+   marketplace. It deliberately does NOT fall back to seller.html or to the merchant
+   URL: the first would restore the bypass this replaced, and the second would grant
+   a merchant workspace with no approval check. A missing router means "route
+   normally", never "assume approved". */
+async function _merchantEntry(){
+    try {
+        if (!window.SokoniMerchantEntry) {
+            await new Promise(function (res, rej) {
+                var s = document.createElement('script');
+                s.src = 'sokoni-merchant-entry.js';
+                s.onload = res;
+                s.onerror = function () { rej(new Error('entry router failed to load')); };
+                document.head.appendChild(s);
+            });
+        }
+        if (!window.SokoniMerchantEntry) return null;
+        return await window.SokoniMerchantEntry.resolve();
+    } catch (e) {
+        console.warn('[auth] merchant entry router unavailable — routing to the marketplace', e && e.message);
+        return null;
+    }
+}
+
 async function completeRoleSelection(){
     let user;
     try { user = JSON.parse(localStorage.getItem("sokoniUser")); }
@@ -933,9 +960,41 @@ async function completeRoleSelection(){
 
     let dest = "index.html";
     let label = "Taking you to the marketplace…";
-    if(user.registeredAs.seller){
-        dest  = "seller.html";
-        label = "Opening your Seller Dashboard…";
+
+    /* ── MERCHANT ACCESS IS DECIDED BY THE APPROVAL AUTHORITY ──────────────────
+       This branch used to read `user.registeredAs.seller` — a value parsed from
+       localStorage and set by a CHECKBOX on the signup form — and send it straight
+       to seller.html. Two things were wrong with that, and both mattered:
+
+         · it decided merchant access on a client-forgeable signal. The live
+           `noPrivilegeEscalation()` guards only admin/superAdmin/moderator/isAdmin
+           inside `registeredAs`, so `registeredAs.seller` is writable by the client.
+           Anyone who ticked "I want to sell" was routed as a seller, approved or not.
+         · it bypassed the routing contract entirely. Every visible "My Store" button
+           could route correctly and a seller would still land in the old shell,
+           because signing in had already taken them there.
+
+       Approval now comes from `SokoniMerchantEntry.resolve()` — the same authority the
+       buttons use — which reads the custom claim and users/{uid}.roles, neither of
+       which a browser can write. `registeredAs` survives as profile data below, but
+       it no longer decides access to Merchant. */
+    const entry = await _merchantEntry();
+    if (entry && entry.state === 'approved') {
+        dest  = entry.destination;      /* honours the MERCHANT_URL cutover gate */
+        label = "Opening your Merchant workspace…";
+    } else if (entry && entry.state === 'not-approved' && user.registeredAs.seller) {
+        /* They asked to sell and are not approved yet. `registeredAs.seller` is used
+           ONLY to choose between the marketplace and the seller intake — never to
+           grant merchant access. */
+        dest  = await window.SokoniMerchantEntry.startSelling();
+        label = "Setting up your seller account…";
+    } else if (entry && entry.state === 'signed-out' && user.registeredAs.seller) {
+        /* They asked for merchant access and the session did not survive signup.
+           Sending them onward as though it had would fail at the first read; sign-in
+           is the recoverable answer. Scoped to the seller path deliberately — every
+           other role below keeps the destination it has always had. */
+        dest  = entry.destination;
+        label = "Please sign in to continue…";
     } else if(user.registeredAs.driver){
         dest  = "driver.html";
         label = "Opening Driver Dashboard…";

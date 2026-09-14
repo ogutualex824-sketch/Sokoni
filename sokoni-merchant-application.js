@@ -11,6 +11,8 @@
           ↓                              resolves it to a role
      status: 'pending_review'
           ↓
+     agreementAccepted: true             REQUIRED — applicationDecide refuses to
+          ↓                              approve without it (failed-precondition)
      ADMIN decision (applicationDecide)  ← everything past here is 2B
 
    ── What this module deliberately cannot do ─────────────────────────────────
@@ -60,6 +62,25 @@
   var SUBMITTED = 'pending_review';
   var TYPE = 'seller';
 
+  /* ── Seller Agreement version ───────────────────────────────────────────────
+     `applicationDecide` REFUSES to approve an application whose
+     `agreementAccepted` is not exactly `true` (failed-precondition). Until this
+     module wrote the acknowledgement, every merchant application filed here was
+     permanently un-approvable: the merchant saw "pending review" forever and the
+     reviewer saw an error they could not clear from the dashboard. The
+     acknowledgement is therefore part of the submission, not a later step.
+
+     Same value as hub-register.js — one acknowledgement, one version string, so
+     a seller who applies through either surface is bound to the same text. Bump
+     BOTH when the commercial terms change: a bare `true` cannot answer "agreed
+     to WHAT?" years later, which is the question a dispute asks.
+
+     BUMPED 2026-09-07. The terms changed from a flat 5% to two lanes — a
+     marketplace plan ladder (Free 15 / Basic 10 / Pro 5 / Enterprise 0) and a
+     flat 5% on POS/till sales. Acknowledgements carrying the old string were
+     given against DIFFERENT terms and must not be read as consent to these. */
+  var AGREEMENT_VERSION = '2026-09-07-lanes-mkt-ladder-pos-5pct';
+
   /* Fields that decide, or assert, authority. A submission may never carry one.
      `role`, `approved*`, `verified` and friends are also refused by
      firestore.rules noAdminFields(); the rest are server-owned lifecycle state
@@ -70,6 +91,11 @@
     'flagged', 'adminNote', 'commissionRate', 'featured',
     'claims', 'customClaims', 'sellerClaim',
     'decidedBy', 'decidedAt', 'reviewReason',
+    /* The acknowledgement itself is the applicant's to give (see
+       AGREEMENT_VERSION), but its VERIFICATION is server-stamped at the moment
+       of approval. A client that could write these could make an unacknowledged
+       application look verified. */
+    'agreementVerifiedAt', 'agreementVerifiedVersion',
     'status', 'statusCanonical', 'decisionAppliedFor', 'projectionStatus',
     'projectionError', 'projectionReceipt', 'blockedFor', 'intakeVersion',
     'uid', 'sellerUid', 'applicationId',
@@ -150,6 +176,8 @@
    *   shopIdSource {string}  where shopId came from — 'active_shop' |
    *                          'seller_registry' | 'none_yet'
    *   profile      {object}  merchant-supplied fields (filtered)
+   *   agreementAccepted {boolean} MUST be exactly true — the Seller Agreement
+   *                          acknowledgement applicationDecide gates approval on
    *   existing     {object|null} the current application document, if any
    *   nowISO       {string}  timestamp (injected, so tests are deterministic)
    * @returns {{docId, data, action, reason?, message?}}
@@ -163,6 +191,18 @@
     if (verdict.action === 'refused') {
       return { docId: docId(uid), data: null, action: 'refused',
         reason: verdict.reason, message: verdict.message };
+    }
+
+    /* The acknowledgement is a PRECONDITION of submitting, not a later step.
+       Refusing here — loudly, to the caller — is the only way the merchant
+       learns now rather than discovering it as an approval that never comes.
+       Checked AFTER decideAction so an already-approved or suspended account
+       still gets its own, more specific message. */
+    if (o.agreementAccepted !== true) {
+      return { docId: docId(uid), data: null, action: 'refused',
+        reason: 'agreement_required',
+        message: 'Please accept the SOKONI Seller Agreement and the 5% per-sale ' +
+                 'commission before submitting — an application without it cannot be approved.' };
     }
 
     var now = o.nowISO || new Date().toISOString();
@@ -192,6 +232,15 @@
       submittedAt: now,
       updatedAt: now,
       source: o.source || 'merchant-application',
+
+      /* Commercial acknowledgement — what applicationDecide gates approval on.
+         `agreementAcceptedAt` is a CLIENT clock, so it is evidence of intent and
+         not of time; the server stamps `agreementVerifiedAt` when it approves.
+         Written on every action (create / update / resubmit) so a resubmission
+         cannot silently carry a stale acknowledgement of superseded terms. */
+      agreementAccepted:   true,
+      agreementVersion:    AGREEMENT_VERSION,
+      agreementAcceptedAt: now,
     };
 
     for (var k in profile) if (Object.prototype.hasOwnProperty.call(profile, k)) data[k] = profile[k];
@@ -232,6 +281,7 @@
       existing: existing,
       nowISO: o.nowISO,
       source: o.source,
+      agreementAccepted: o.agreementAccepted,
     });
 
     if (built.action === 'refused') {
@@ -249,6 +299,7 @@
     DOC_SUFFIX: DOC_SUFFIX,
     SUBMITTED: SUBMITTED,
     TYPE: TYPE,
+    AGREEMENT_VERSION: AGREEMENT_VERSION,
     FORBIDDEN: FORBIDDEN,
     PROFILE_FIELDS: PROFILE_FIELDS,
     docId: docId,

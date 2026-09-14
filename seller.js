@@ -1376,26 +1376,34 @@ function promoteProductAsStory(productId, index){
         likes:       0
     };
 
-    /* Save to sokoniStories */
-    let stories = [];
-    try { stories = JSON.parse(localStorage.getItem("sokoniStories") || "[]"); } catch(e) {}
-    /* Remove any existing story for same product to avoid duplicates */
-    stories = stories.filter(function(s){ return s.productId !== p.id; });
-    stories.unshift(story);
-    /* Keep max 50 stories */
-    stories = stories.slice(0, 50);
-    localStorage.setItem("sokoniStories", JSON.stringify(stories));
+    /* PUBLISH CANONICALLY. This used to write localStorage only, which made the
+       story visible in this browser and nowhere else — the shoppers it was
+       written for never saw it. The doc id is derived from the product so
+       re-promoting the same product replaces its story instead of stacking
+       duplicates, preserving the old dedupe intent; rules stop one seller
+       overwriting another's document. */
+    story.id = "story_" + (p.id || Date.now());
 
-    showNotification("📣 Story posted! Visible for 24 hours.", "success");
-
-    /* Flash the story button green briefly */
-    var btn = document.querySelector('[onclick*="promoteProductAsStory(\''+productId+'\'"]');
-    if(btn){
-        var orig = btn.style.background;
-        btn.style.background = "rgba(113,255,0,0.4)";
-        btn.textContent = "✅";
-        setTimeout(function(){ btn.style.background = orig; btn.textContent = "📣"; }, 2000);
+    if(!window.SokoniDB || typeof window.SokoniDB.publishStory !== "function"){
+        showNotification("Story service is still loading — try again in a moment.", "error");
+        return;
     }
+
+    window.SokoniDB.publishStory(story).then(function(){
+        /* Success is announced only after the canonical write resolves. */
+        showNotification("📣 Story posted! Visible for 24 hours.", "success");
+
+        /* Flash the story button green briefly */
+        var btn = document.querySelector('[onclick*="promoteProductAsStory(\''+productId+'\'"]');
+        if(btn){
+            var orig = btn.style.background;
+            btn.style.background = "rgba(113,255,0,0.4)";
+            btn.textContent = "✅";
+            setTimeout(function(){ btn.style.background = orig; btn.textContent = "📣"; }, 2000);
+        }
+    }).catch(function(err){
+        showNotification("Could not post story: " + ((err && err.message) || "please try again"), "error");
+    });
 }
 window.promoteProductAsStory = promoteProductAsStory;
 
@@ -2218,7 +2226,7 @@ window.submitSellerAnswer = submitSellerAnswer;
 
 /* Seller Agreement version shown on this screen. Kept identical to
    hub-register.js AGREEMENT_VERSION so one acknowledgement means one text. */
-const SELLER_AGREEMENT_VERSION = "2026-08-25-commission-5pct";
+const SELLER_AGREEMENT_VERSION = "2026-09-07-lanes-mkt-ladder-pos-5pct";
 
 /* Enable submission only once the agreement is acknowledged. A convenience gate:
    submitVerification re-checks, and the BINDING record lives on the

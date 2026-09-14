@@ -65,6 +65,32 @@ const activateAIPlan = onCall(
     if (!PLANS[planId]) throw new HttpsError('invalid-argument', `Unknown plan: ${planId}`);
     if (!paymentRef && PLANS[planId].price > 0) throw new HttpsError('invalid-argument', 'paymentRef required for paid plans.');
 
+    /* ── A paymentRef IS NOT A PAYMENT (closed 2026-09-13) ──────────────────────────────────
+     * This handler demanded a paymentRef for a paid plan, recorded it in `aiPaymentRefs` for
+     * IDEMPOTENCY, and then wrote status:'active'. It never read `payments`. Idempotency only
+     * guarantees a forged reference is honoured once — it does not make it real. Any string
+     * bought a paid AI plan.
+     *
+     * WHY REFUSAL RATHER THAN VERIFICATION HERE. The obvious fix is to call
+     * entitlement-engine.assertPaymentHonourable — but that function requires the intent's
+     * purpose to be REGISTERED, and AI has no registered purpose because it bills through its
+     * own product rail rather than createPaymentIntent. Wiring it in would mean giving AI a
+     * payment purpose, which is an AI-product decision and outside this gate's scope (AI stays
+     * a separate product and billing authority).
+     *
+     * So a paid plan cannot be activated from the client at all, matching the refusal already
+     * applied to providerActivateSubscription and onbActivateSubscription. Production holds 0
+     * aiSubscriptions and 0 aiPaymentRefs, so this breaks no working flow — it closes a hole
+     * while it is still empty.
+     *
+     * Zero-price plans stay self-serve: nothing to verify, nothing to forge. */
+    if (PLANS[planId].price > 0) {
+      logger.warn('[AISubs] refused unverified paid activation', { uid, planId, hadRef: !!paymentRef });
+      throw new HttpsError('failed-precondition',
+        'A paid AI plan cannot be activated from the client. This purchase path is being '
+        + 'moved onto verified payment; contact support to upgrade in the meantime.');
+    }
+
     /* Idempotency: if this paymentRef was already processed, return early */
     if (paymentRef) {
       const existing = await db().collection('aiPaymentRefs').doc(paymentRef).get();

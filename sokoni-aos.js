@@ -22,8 +22,14 @@ window.SokoniAOS = (() => {
       if (!user) { window.location.href = "login.html"; return; }
       const tok = await user.getIdTokenResult(true);
       if (!tok.claims.admin && !tok.claims.superAdmin) {
-        alert("Access denied: Admin privileges required.");
-        window.location.href = "/";
+        /* Denial must not dump a user on the customer marketplace. When
+           sokoni-admin-guard.js is present it already shows an explicit
+           "Admin access required" panel naming the workspace they DO hold —
+           leave that standing rather than navigating away over the top of it.
+           Only pages without the shared guard need a destination, and it is the
+           admin console's denial route, never "/". */
+        if (window.SokoniAdminGuard) return;
+        window.location.href = "admin-os.html?error=insufficient_privileges";
         return;
       }
       _currentUser = { uid: user.uid, email: user.email, name: user.displayName,
@@ -57,6 +63,8 @@ window.SokoniAOS = (() => {
     const loaders = {
       dashboard:     _loadDashboard,
       users:         () => _loadUsers(),
+      applications:  () => _loadApplications(),
+      estate:        () => _loadEstate(),
       marketplace:   () => _loadMarketplace(),
       services:      () => _loadServices(),
       delivery:      () => _loadDelivery(),
@@ -93,6 +101,9 @@ window.SokoniAOS = (() => {
     'adminSearchUsers','adminSendPushNotification','adminUpdateFeatureFlag','adminUpdateOrderStatus',
     'adminUpdatePlatformSettings','adminUpdateProductStatus','adminUpdateUserRole',
     'adminUpsertCategory','adminUpsertFaq',
+    /* Merchant estate. _h-only handlers: no new Cloud Run service, but
+       adminOsDispatch must be redeployed before they resolve. */
+    'adminGetShops','adminGetSellers','adminGetShopDetail',
   ]);
 
   // ── CF caller ─────────────────────────────────────────────────────────────────
@@ -340,7 +351,12 @@ window.SokoniAOS = (() => {
   async function banUser(uid, currentStatus) {
     const action = currentStatus === "banned" ? "restore" : "ban";
     if (!(await SK.dialog.confirm(`${_titleCase(action)} this user?`, null, null, { title: `${_titleCase(action)} user`, variant: 'danger', confirmLabel: _titleCase(action) }))) return;
-    await _call("tsBanUser", { userId: uid, action }).catch(e => _toast(e.message, "error"));
+    try {
+      await _call("tsBanUser", { userId: uid, action });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("User " + action + "ned successfully", "success");
     _panelCache.users = false; _loadUsers();
   }
@@ -348,7 +364,12 @@ window.SokoniAOS = (() => {
   async function changeRole(uid) {
     const role = prompt("Enter new role:\nbuyer, seller, provider, driver, agent, doctor, lawyer, hotel, freelancer, employee, moderator, admin");
     if (!role) return;
-    await _call("adminUpdateUserRole", { uid, role }).catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminUpdateUserRole", { uid, role });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Role updated", "success");
     _panelCache.users = false; _loadUsers();
   }
@@ -428,7 +449,12 @@ window.SokoniAOS = (() => {
   }
 
   async function updateProduct(id, status) {
-    await _call("adminUpdateProductStatus", { productId: id, status }).catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminUpdateProductStatus", { productId: id, status });
+    } catch (e) {
+      _toast(e.message || "Update failed", "error");
+      return;
+    }
     _toast("Product status updated", "success");
     _marketplaceTab("products");
   }
@@ -436,21 +462,41 @@ window.SokoniAOS = (() => {
   async function updateOrder(id) {
     const status = prompt("New status (pending/processing/completed/cancelled):");
     if (!status) return;
-    await _call("adminUpdateOrderStatus", { orderId: id, status }).catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminUpdateOrderStatus", { orderId: id, status });
+    } catch (e) {
+      _toast(e.message || "Update failed", "error");
+      return;
+    }
     _toast("Order updated", "success");
     _marketplaceTab("orders");
   }
 
   async function moderateReview(id, action) {
-    await _call("adminModerateReview", { reviewId: id, action }).catch(e => _toast(e.message, "error"));
-    _toast("Review " + action + "d", "success");
+    /* The success toast must never fire on a failed call. The previous form
+       swallowed the error in .catch() and then toasted success unconditionally,
+       so an admin saw "Review approved" even when moderation never happened —
+       and the ratingsSummary recalc that makes the review visible to the shop
+       never ran. */
+    try {
+      await _call("adminModerateReview", { reviewId: id, action });
+    } catch (e) {
+      _toast(e.message || "Moderation failed", "error");
+      return;
+    }
+    _toast("Review " + (action === "approve" ? "approved" : action === "reject" ? "rejected" : "restored"), "success");
     _marketplaceTab("reviews");
   }
 
   async function editCategory(id, name) {
     const newName = prompt("Category name:", name);
     if (!newName) return;
-    await _call("adminUpsertCategory", { id, name: newName }).catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminUpsertCategory", { id, name: newName });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Category updated", "success");
     _marketplaceTab("categories");
   }
@@ -459,7 +505,12 @@ window.SokoniAOS = (() => {
     const name = prompt("New category name:");
     if (!name) return;
     const icon = prompt("Icon emoji:", "📦");
-    await _call("adminUpsertCategory", { name, icon: icon || "📦" }).catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminUpsertCategory", { name, icon: icon || "📦" });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Category added", "success");
     _marketplaceTab("categories");
   }
@@ -857,7 +908,12 @@ window.SokoniAOS = (() => {
   async function resolveTicket(id) {
     const note = prompt("Resolution note:");
     if (!note) return;
-    await _call("adminResolveSupportTicket", { ticketId: id, resolution: note }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("adminResolveSupportTicket", { ticketId: id, resolution: note });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Ticket resolved","success"); _panelCache.support = false; _loadSupport();
   }
 
@@ -882,7 +938,12 @@ window.SokoniAOS = (() => {
   async function replyTicket(id) {
     const msg = document.getElementById("ticketReply")?.value;
     if (!msg) return;
-    await _call("adminResolveSupportTicket", { ticketId: id, resolution: msg, keepOpen: true }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("adminResolveSupportTicket", { ticketId: id, resolution: msg, keepOpen: true });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Reply sent","success"); _closeModal();
   }
 
@@ -1005,7 +1066,12 @@ window.SokoniAOS = (() => {
     const target  = document.getElementById("notifTarget")?.value || "all";
     const role    = document.getElementById("notifRole")?.value;
     if (!title || !body) { _toast("Title and body are required","error"); return; }
-    await _call("adminSendPushNotification", { title, body, target, role }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("adminSendPushNotification", { title, body, target, role });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Notification sent to " + target,"success");
     document.getElementById("notifTitle").value = "";
     document.getElementById("notifBody").value  = "";
@@ -1018,7 +1084,12 @@ window.SokoniAOS = (() => {
     const target  = document.getElementById("emailTarget")?.value || "all";
     if (!subject || !html) { _toast("Subject and body are required", "error"); return; }
     if (!(await SK.dialog.confirm(`This will queue emails to all ${target} immediately.`, null, null, { title: `Send email blast to all ${target}?`, variant: "danger", confirmLabel: "Send blast" }))) return;
-    await _call("adminSendEmailBlast", { subject, html, target }).catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminSendEmailBlast", { subject, html, target });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Email blast queued for " + target, "success");
   }
 
@@ -1027,7 +1098,12 @@ window.SokoniAOS = (() => {
     const target  = document.getElementById("smsTarget")?.value || "all";
     if (!message) { _toast("Message body is required", "error"); return; }
     if (!(await SK.dialog.confirm(`Carrier charges apply for every recipient.`, null, null, { title: `Send SMS to all ${target}?`, variant: "danger", confirmLabel: "Send SMS" }))) return;
-    await _call("adminSendSMSBlast", { message, target }).catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminSendSMSBlast", { message, target });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("SMS queued for " + target, "success");
   }
 
@@ -1111,24 +1187,36 @@ window.SokoniAOS = (() => {
     const start  = prompt("Start date (YYYY-MM-DD):");
     const end    = prompt("End date (YYYY-MM-DD):");
     if (!name || !type || !start || !end) return;
-    await _call("adminCreateCampaign", { name, type, target, startDate: start, endDate: end })
-      .catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminCreateCampaign", { name, type, target, startDate: start, endDate: end });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Campaign created", "success");
     _panelCache.content = false;
     _contentTab("campaigns");
   }
 
   async function activateCampaign(id) {
-    await _call("adminUpdateCampaignStatus", { campaignId: id, status: "active" })
-      .catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminUpdateCampaignStatus", { campaignId: id, status: "active" });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Campaign activated", "success");
     _contentTab("campaigns");
   }
 
   async function deleteCampaign(id) {
     if (!(await SK.dialog.confirm("Permanently delete this campaign?", null, null, { title: "Delete campaign", variant: "danger", confirmLabel: "Delete" }))) return;
-    await _call("adminDeleteCampaign", { campaignId: id })
-      .catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminDeleteCampaign", { campaignId: id });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Campaign deleted", "success");
     _panelCache.content = false;
     _contentTab("campaigns");
@@ -1139,7 +1227,12 @@ window.SokoniAOS = (() => {
     const url     = prompt("Image URL:");
     const position = prompt("Position (hero/sidebar/footer):", "hero");
     if (!title || !url) return;
-    await _call("adminSaveBanner", { title, imageUrl: url, position }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("adminSaveBanner", { title, imageUrl: url, position });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Banner added","success"); _panelCache.content = false; _contentTab("banners");
   }
   async function editBanner(id) {
@@ -1151,23 +1244,43 @@ window.SokoniAOS = (() => {
     if (title) patch.title = title;
     if (url) patch.imageUrl = url;
     if (position) patch.position = position;
-    await _call("adminSaveBanner", patch).catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminSaveBanner", patch);
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Banner updated", "success"); _panelCache.content = false; _contentTab("banners");
   }
   async function deleteBanner(id) {
     if (!(await SK.dialog.confirm("Delete this banner?", null, null, { title: "Delete banner", variant: "danger", confirmLabel: "Delete" }))) return;
-    await _call("adminDeleteBanner", { bannerId: id }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("adminDeleteBanner", { bannerId: id });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Banner deleted","success"); _panelCache.content = false; _contentTab("banners");
   }
   async function addFaq() {
     const q = prompt("Question:"); const a = prompt("Answer:");
     if (!q || !a) return;
-    await _call("adminUpsertFaq", { question: q, answer: a }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("adminUpsertFaq", { question: q, answer: a });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("FAQ added","success"); _panelCache.content = false; _contentTab("faqs");
   }
   async function deleteFaq(id) {
     if (!(await SK.dialog.confirm("Delete this FAQ?", null, null, { title: "Delete FAQ", variant: "danger", confirmLabel: "Delete" }))) return;
-    await _call("adminDeleteFaq", { faqId: id }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("adminDeleteFaq", { faqId: id });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("FAQ deleted","success"); _panelCache.content = false; _contentTab("faqs");
   }
   async function addAnnouncement() {
@@ -1175,12 +1288,22 @@ window.SokoniAOS = (() => {
     const body  = prompt("Message:");
     const type  = prompt("Type (info/warning/success):", "info");
     if (!title || !body) return;
-    await _call("adminSaveAnnouncement", { title, body, type }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("adminSaveAnnouncement", { title, body, type });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Announcement posted","success"); _panelCache.content = false; _contentTab("announcements");
   }
   async function deleteAnnouncement(id) {
     if (!(await SK.dialog.confirm("Remove this announcement?", null, null, { title: "Remove announcement", variant: "danger", confirmLabel: "Remove" }))) return;
-    await _call("adminSaveAnnouncement", { id, deleted: true }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("adminSaveAnnouncement", { id, deleted: true });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Removed","success"); _panelCache.content = false; _contentTab("announcements");
   }
 
@@ -1224,8 +1347,12 @@ window.SokoniAOS = (() => {
   }
 
   async function toggleAIModule(name, enabled) {
-    await _call("adminUpdateFeatureFlag", { key: "ai_" + name.toLowerCase().replace(/\s/g,"_"), enabled })
-      .catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminUpdateFeatureFlag", { key: "ai_" + name.toLowerCase().replace(/\s/g,"_"), enabled });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast((enabled?"Enabled":"Disabled") + " " + name, "success");
   }
 
@@ -1280,11 +1407,21 @@ window.SokoniAOS = (() => {
 
   async function reindex() {
     if (!(await SK.dialog.confirm("This will reindex all data. It may take a while.", null, null, { title: "Reindex all data?", confirmLabel: "Reindex" }))) return;
-    await _call("searchFullReindex").catch(e => _toast(e.message,"error"));
+    try {
+      await _call("searchFullReindex");
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Reindex started","success");
   }
   async function repairSearch() {
-    await _call("searchRepairAll").catch(e => _toast(e.message,"error"));
+    try {
+      await _call("searchRepairAll");
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Search repair started","success");
   }
   async function searchReport() {
@@ -1416,7 +1553,12 @@ window.SokoniAOS = (() => {
     const reason = prompt("Void reason (required for audit):");
     if (!reason) return;
     if (!(await SK.dialog.confirm(`Receipt ${receiptId} will be permanently voided. This action is irreversible and will be logged.`, null, null, { title: "Void receipt?", variant: "danger", confirmLabel: "Void receipt" }))) return;
-    await _call("voidTrustReceipt", { receiptId, reason }).catch(e => _toast(e.message, "error"));
+    try {
+      await _call("voidTrustReceipt", { receiptId, reason });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Receipt voided — audit trail recorded", "success");
   }
 
@@ -1438,7 +1580,12 @@ window.SokoniAOS = (() => {
   }
 
   async function reviewReport(id, action) {
-    await _call("tsReviewReport", { reportId: id, action }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("tsReviewReport", { reportId: id, action });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Report " + action + "ed","success"); _closeModal(); _panelCache.fraud = false; _loadFraud();
   }
 
@@ -1673,12 +1820,22 @@ window.SokoniAOS = (() => {
     form.querySelectorAll("[id]").forEach(el => {
       settings[el.id] = el.type === "checkbox" ? el.checked : el.value;
     });
-    await _call("adminUpdatePlatformSettings", { settings }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("adminUpdatePlatformSettings", { settings });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Settings saved","success");
   }
 
   async function updateFlag(key, enabled) {
-    await _call("adminUpdateFeatureFlag", { key, enabled }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("adminUpdateFeatureFlag", { key, enabled });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast((enabled?"Enabled":"Disabled") + " " + key,"success");
   }
 
@@ -1687,7 +1844,12 @@ window.SokoniAOS = (() => {
     if (!form) return;
     const rules = {};
     form.querySelectorAll("[id]").forEach(el => { rules[el.id] = parseFloat(el.value) || 0; });
-    await _call("adminUpdatePlatformSettings", { settings: rules }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("adminUpdatePlatformSettings", { settings: rules });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Commission rules saved","success");
   }
 
@@ -1698,7 +1860,12 @@ window.SokoniAOS = (() => {
     form.querySelectorAll("[id]").forEach(el => {
       schedule[el.id] = el.type === "checkbox" ? el.checked : (isNaN(Number(el.value)) ? el.value : Number(el.value));
     });
-    await _call("adminUpdatePlatformSettings", { settings: schedule }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("adminUpdatePlatformSettings", { settings: schedule });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Payout schedule saved","success");
   }
 
@@ -1840,7 +2007,12 @@ window.SokoniAOS = (() => {
     if (!snap || snap.empty) { _toast("No active sessions to revoke", "info"); return; }
     const batch = _db.batch();
     snap.docs.forEach(d => batch.delete(d.ref));
-    await batch.commit().catch(e => _toast(e.message, "error"));
+    try {
+      await batch.commit();
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast(`${snap.size} session(s) revoked`, "success");
     _panelCache.security = false;
     _loadSecurity();
@@ -1848,19 +2020,32 @@ window.SokoniAOS = (() => {
 
   async function revokeSession(sessionId) {
     if (!(await SK.dialog.confirm("This device will be signed out immediately.", null, null, { title: "Revoke this session?", variant: "danger", confirmLabel: "Revoke" }))) return;
-    await _db.collection("activeSessions").doc(sessionId).delete().catch(e => _toast(e.message,"error"));
+    try {
+      await _db.collection("activeSessions").doc(sessionId).delete();
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Session revoked","success"); _panelCache.security = false; _loadSecurity();
   }
 
   async function approveRequest(id) {
-    await _db.collection("approvalRequests").doc(id).update({ status:"approved", approvedBy: _currentUser.uid, approvedAt: firebase.firestore.FieldValue.serverTimestamp() })
-      .catch(e => _toast(e.message,"error"));
+    try {
+      await _db.collection("approvalRequests").doc(id).update({ status:"approved", approvedBy: _currentUser.uid, approvedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Request approved","success"); _panelCache.security = false; _loadSecurity();
   }
   async function rejectRequest(id) {
     const reason = prompt("Rejection reason:");
-    await _db.collection("approvalRequests").doc(id).update({ status:"rejected", rejectedBy: _currentUser.uid, rejectionReason: reason||"", rejectedAt: firebase.firestore.FieldValue.serverTimestamp() })
-      .catch(e => _toast(e.message,"error"));
+    try {
+      await _db.collection("approvalRequests").doc(id).update({ status:"rejected", rejectedBy: _currentUser.uid, rejectionReason: reason||"", rejectedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Request rejected","success"); _panelCache.security = false; _loadSecurity();
   }
 
@@ -2238,6 +2423,371 @@ window.SokoniAOS = (() => {
   }
 
   // ── Public API ────────────────────────────────────────────────────────────────
+  /* ══════════════════════════════════════════════════════════════════════════
+     APPLICATIONS & APPROVALS
+
+     The only route from "someone applied" to "a shop exists". Approving here
+     calls the SAME server-authoritative `applicationDecide` the admin dashboard
+     and super-admin portal call — which grants the role, mints the claim and
+     runs projectSeller (the step that actually creates shops/{shopId},
+     sellers/{uid} and users.activeShopId). Nothing about the decision is
+     computed in this browser.
+
+     `applicationList` / `applicationDecide` / `applicationReconcile` are
+     standalone deployed callables, NOT adminOsDispatch ops, so they are
+     deliberately absent from _ADMIN_OS_OPS and _call routes them directly.
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Escape for a single-quoted JS string nested inside a double-quoted HTML
+     attribute — JS layer first, then HTML. Firestore document ids are not a
+     trusted alphabet, and an id is what these handlers carry. */
+  function _jsAttr(s) {
+    return _esc(String(s == null ? "" : s).replace(/\\/g, "\\\\").replace(/'/g, "\\'"));
+  }
+
+  let _appsCache = [];
+
+  async function _loadApplications() {
+    const body = document.getElementById("appsBody");
+    if (!body) return;
+    body.innerHTML = _spinner();
+
+    const statusSel = (document.getElementById("appsStatus") || {}).value || "";
+    const role = (document.getElementById("appsRole") || {}).value || "";
+    const search = ((document.getElementById("appsSearch") || {}).value || "").trim().toLowerCase();
+
+    /* "Approved, not published" is not a server status — it is approved WITHOUT
+       a successful projection, which is the difference between "approved" and
+       "actually selling". Ask for approved, then narrow here. */
+    const unpublishedOnly = statusSel === "unpublished";
+    const req = { limit: 300 };
+    if (role) req.role = role;
+    if (statusSel && !unpublishedOnly) req.status = statusSel;
+    if (unpublishedOnly) req.status = "approved";
+
+    let data;
+    try {
+      data = await _call("applicationList", req);
+    } catch (e) {
+      /* Say which call failed and why. A bare empty table here reads as "nobody
+         has applied", which is the most misleading thing this screen can say. */
+      body.innerHTML = `<div class="empty-state"><span>⚠️</span>
+        <p><strong>Could not load applications.</strong></p>
+        <p class="aos-muted">${_esc(e.message || String(e))}</p>
+        <p class="aos-muted">This is not "no applications" — the list could not be read.</p></div>`;
+      _setAppsSummary(null);
+      return;
+    }
+
+    let items = data.items || [];
+    if (unpublishedOnly) items = items.filter((a) => a.projectionStatus !== "applied");
+    if (search) {
+      items = items.filter((a) =>
+        (a.name || "").toLowerCase().includes(search) ||
+        (a.phone || a.phoneNumber || "").toLowerCase().includes(search) ||
+        (a.email || "").toLowerCase().includes(search) ||
+        (a.uid || "").toLowerCase().includes(search));
+    }
+    _appsCache = items;
+    _setAppsSummary(data);
+    _setAppsBadge((data.counts || {}).pending || 0);
+
+    body.innerHTML = items.length
+      ? `<div class="aos-cards">${items.map(_appCard).join("")}</div>`
+      : _emptyMsg(statusSel === "pending"
+          ? "No applications are waiting for a decision."
+          : "No applications match this filter.");
+  }
+
+  function _setAppsSummary(data) {
+    const el = document.getElementById("appsSummary");
+    if (!el) return;
+    if (!data) { el.textContent = "—"; return; }
+    const c = data.counts || {};
+    const bits = [];
+    if (c.pending) bits.push(c.pending + " pending");
+    if (c.approved) bits.push(c.approved + " approved");
+    if (c.rejected) bits.push(c.rejected + " rejected");
+    if (data.unpublished) bits.push("⚠ " + data.unpublished + " approved but not published");
+    el.textContent = bits.length ? bits.join(" · ") : (data.total || 0) + " total";
+  }
+
+  function _setAppsBadge(n) {
+    const b = document.getElementById("sidebarAppsBadge");
+    if (!b) return;
+    b.textContent = String(n || 0);
+    b.hidden = !n;
+  }
+
+  /* What the applicant actually agreed to — shown BEFORE the reviewer decides, not
+     discovered from a failure message afterwards.
+
+     Healthcare is a different instrument from every other role: approval is gated on the
+     canonical, versioned `legalAcceptances` record (Healthcare Provider Agreement +
+     Medical Compliance Declaration), NOT on the Seller Agreement tick that the rest of the
+     queue uses. `legalCompliance` is supplied by applicationList for health rows only, so
+     a reviewer can see which instruments are signed, at which version, and what is still
+     outstanding. Never claim more than the data supports: an absent block says so. */
+  function _agreementLine(a) {
+    if (a.role === "health") {
+      const lc = a.legalCompliance;
+      if (!lc) return '<span class="aos-muted">📄 Agreement: not loaded</span>';
+      if (lc.error) return `<span class="aos-muted">📄 Agreement: could not be read (${_esc(lc.error)})</span>`;
+      if (lc.compliant) {
+        const sigs = (lc.accepted || [])
+          .filter((x) => /healthcare|medical/.test(x.agreementId || ""))
+          .map((x) => `${_esc(x.agreementId)} v${_esc(x.version)}`)
+          .join(", ");
+        return `📄 <strong>Healthcare agreements accepted</strong>${sigs ? " — " + sigs : ""} · ${lc.requiredCount} required`;
+      }
+      const miss = (lc.missing || []).map((m) => `${_esc(m.name || m.agreementId)} (${_esc(m.reason)})`).join(", ");
+      return `<span style="color:var(--aos-warn,#e0a33e)">📄 <strong>Healthcare agreements OUTSTANDING</strong> — ${miss || "unknown"}</span>`;
+    }
+    if (!a.agreementAccepted) return '<span class="aos-muted">📄 Agreement: not accepted</span>';
+    const v = a.agreementVerifiedVersion || a.agreementVersion;
+    /* agreementVerifiedAt is the SERVER stamp taken at approval; agreementAcceptedAt is a
+       browser clock on a client-written document. Prefer the former, and say which. */
+    const when = a.agreementVerifiedAt ? "verified at approval"
+               : (a.agreementAcceptedAt ? "self-reported at submission" : "no timestamp");
+    return `📄 Agreement accepted${v ? " · v" + _esc(v) : ""} <span class="aos-muted">(${when})</span>`;
+  }
+
+  function _appCard(a) {
+    const id = _jsAttr(a.id);
+    const decided = a.status !== "pending";
+    /* Approved with a projection that did not apply is the state that looks
+       fine and is not: the merchant has a role and no shop. Say so on the card. */
+    const unpublished = a.status === "approved" && a.projectionStatus !== "applied";
+    const contact = [a.phone || a.phoneNumber, a.email].filter(Boolean).join(" · ") || "no contact on file";
+    const place = [a.area, a.city, a.location].filter(Boolean).join(", ") || "no location on file";
+    return `<div class="aos-card${unpublished ? " aos-card-warn" : ""}">
+      <div class="aos-card-head">
+        <strong>${_esc(a.name || "(no business name)")}</strong>
+        <span class="status-badge st-${_esc(a.status)}">${_esc(a.status)}</span>
+        <span class="status-badge st-inactive">${_esc(a.role || "unknown role")}</span>
+      </div>
+      <div class="aos-card-meta">
+        <div>📞 ${_esc(contact)}</div>
+        <div>📍 ${_esc(place)}</div>
+        ${a.category ? `<div>🏷️ ${_esc(a.categoryLabel || a.category)}</div>` : ""}
+        <div>${_agreementLine(a)}</div>
+        <div class="aos-mono aos-muted">${_esc(a.uid || "—")}</div>
+      </div>
+      ${a.description ? `<p class="aos-muted">${_esc(String(a.description).slice(0, 240))}</p>` : ""}
+      ${unpublished ? `<div class="aos-warn-row">⚠ Approved, but the projection did not apply${
+        a.projectionError ? ": " + _esc(a.projectionError) : ""
+      }. This merchant has no live shop — reconcile to repair it.</div>` : ""}
+      <div class="aos-card-actions">
+        ${decided ? "" : `<button class="aos-btn-sm success" onclick="SokoniAOS.decideApplication('${id}','approve')">Approve</button>`}
+        ${decided ? "" : `<button class="aos-btn-sm" onclick="SokoniAOS.decideApplication('${id}','request_info')">Request info</button>`}
+        ${decided ? "" : `<button class="aos-btn-sm danger" onclick="SokoniAOS.decideApplication('${id}','reject')">Reject</button>`}
+        ${a.status === "approved" ? `<button class="aos-btn-sm danger" onclick="SokoniAOS.decideApplication('${id}','suspend')">Suspend</button>` : ""}
+        <button class="aos-btn-sm" onclick="SokoniAOS.reconcileApplication('${id}')">Reconcile</button>
+      </div>
+    </div>`;
+  }
+
+  async function decideApplication(applicationId, decision) {
+    const app = _appsCache.find((a) => a.id === applicationId) || {};
+    let reason = null;
+    if (decision !== "approve") {
+      reason = prompt(
+        decision === "request_info"
+          ? "What do you need from the applicant? (they see this)"
+          : "Reason for this decision (recorded in the audit trail):"
+      );
+      if (reason === null) return;                       /* cancelled — do nothing */
+    } else if (!confirm(
+      `Approve "${app.name || applicationId}"?\n\n` +
+      "This grants the account its role and creates its shop. It is a real, " +
+      "immediate change to a live account."
+    )) return;
+
+    let res;
+    try {
+      res = await _call("applicationDecide", { applicationId, decision, reason: reason || undefined });
+    } catch (e) {
+      const msg = e.message || String(e);
+      /* The commonest refusal by far, and the one whose fix is not obvious. */
+      if (/Seller Agreement|agreement/i.test(msg)) {
+        _toast("Cannot approve: the applicant has not accepted the Seller Agreement. Use \"Request info\".", "error");
+      } else {
+        _toast("Decision failed: " + msg, "error");
+      }
+      return;
+    }
+
+    /* Report what the SERVER says it wrote, not what we hoped it would. An
+       approval whose projection failed must not be celebrated. */
+    const r = res && res.receipt;
+    const writes = (r && r.writes) || [];
+    const shopWrite = writes.find((w) => w && w.shopId);
+    if (decision === "approve") {
+      if (shopWrite) _toast(`Approved — shop ${shopWrite.shopId} ${shopWrite.action || "written"}`, "success");
+      else _toast("Approved, but no shop was reported as written. Reconcile and check.", "warn");
+    } else {
+      _toast(`Marked ${_esc(res.status || decision)}`, "success");
+    }
+    _loadApplications();
+  }
+
+  async function reconcileApplication(applicationId) {
+    try {
+      const res = await _call("applicationReconcile", { applicationId });
+      _modal("Reconcile receipt", `<p class="aos-muted">What the server actually wrote for
+        <span class="aos-mono">${_esc(applicationId)}</span>:</p>${_kvHtml(res)}`);
+    } catch (e) {
+      _toast("Reconcile failed: " + (e.message || String(e)), "error");
+      return;
+    }
+    _loadApplications();
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     SHOPS & SELLERS — the registries approval projects onto
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  let _estateTabName = "shops";
+
+  async function _loadEstate() { _estateTab("shops"); }
+
+  async function _estateTab(tab) {
+    if (tab) _estateTabName = tab;
+    const t = _estateTabName;
+    document.querySelectorAll("#panel-estate .tab-btn").forEach((b) => {
+      b.classList.toggle("active", b.dataset.tab === t);
+    });
+    const body = document.getElementById("estateBody");
+    const sum = document.getElementById("estateSummary");
+    if (!body) return;
+    body.innerHTML = _spinner();
+    const search = ((document.getElementById("estateSearch") || {}).value || "").trim();
+
+    const args = search ? { search, limit: 500 } : { limit: 500 };
+    let data;
+    try {
+      /* Each branch names its op as a LITERAL, deliberately. A conditional op
+         string is invisible to scripts/test-admin-os-wiring.js, which reads call
+         sites statically — so an op with no backend would ship undetected and
+         render as an empty registry. This exact site escaped the detector once. */
+      data = t === "shops"
+        ? await _call("adminGetShops", args)
+        : await _call("adminGetSellers", args);
+    } catch (e) {
+      body.innerHTML = `<div class="empty-state"><span>⚠️</span>
+        <p><strong>Could not load ${_esc(t)}.</strong></p>
+        <p class="aos-muted">${_esc(e.message || String(e))}</p>
+        <p class="aos-muted">This is not an empty registry — the read failed.</p></div>`;
+      if (sum) sum.textContent = "—";
+      return;
+    }
+
+    const items = data.items || [];
+    if (t === "shops") {
+      if (sum) sum.textContent = `${data.count || 0} shops · ${data.active || 0} active · ${
+        data.fromApproval || 0} from approval${data.ownerless ? ` · ⚠ ${data.ownerless} ownerless` : ""}`;
+      body.innerHTML = items.length ? `<table class="aos-table"><thead><tr>
+          <th>Shop</th><th>Owner</th><th>Status</th><th>Origin</th><th>Created</th><th></th>
+        </tr></thead><tbody>${items.map((s) => `<tr${s.ownerless ? ' class="row-warn"' : ""}>
+          <td><strong>${_esc(s.name || "(unnamed)")}</strong><br><span class="aos-mono aos-muted">${_esc(s.shopId)}</span></td>
+          <td class="aos-mono aos-muted">${s.ownerless ? "⚠ no owner" : _esc(s.ownerId)}</td>
+          <td><span class="status-badge st-${_esc(s.status || "unknown")}">${_esc(s.status || "unknown")}</span></td>
+          <td class="aos-muted">${_esc(s.source === "application_approval" ? "approval" : (s.source || "—"))}</td>
+          <td class="aos-muted">${_date(s.createdAt)}</td>
+          <td><button class="aos-btn-sm" onclick="SokoniAOS.openShop('${_jsAttr(s.shopId)}')">Open</button></td>
+        </tr>`).join("")}</tbody></table>` : _emptyMsg("No shops match this filter.");
+    } else {
+      if (sum) sum.textContent = `${data.count || 0} sellers · ${data.active || 0} active${
+        data.shopMissing ? ` · ⚠ ${data.shopMissing} with no shop` : ""}`;
+      body.innerHTML = items.length ? `<table class="aos-table"><thead><tr>
+          <th>Seller</th><th>Account</th><th>Shop</th><th>Status</th><th>Updated</th><th></th>
+        </tr></thead><tbody>${items.map((s) => `<tr${s.shopMissing ? ' class="row-warn"' : ""}>
+          <td><strong>${_esc(s.name || "(unnamed)")}</strong></td>
+          <td class="aos-mono aos-muted">${_esc(s.uid)}</td>
+          <td>${s.shopMissing
+              ? '<span class="status-badge st-rejected">no shop</span>'
+              : `<span class="aos-mono">${_esc(s.shopId)}</span>${
+                  s.declaredShopMissing ? ' <span class="status-badge st-pending">declared id missing</span>' : ""}`}</td>
+          <td><span class="status-badge st-${_esc(s.status || "unknown")}">${_esc(s.status || "unknown")}</span></td>
+          <td class="aos-muted">${_date(s.updatedAt)}</td>
+          <td>${s.shopMissing ? "" : `<button class="aos-btn-sm" onclick="SokoniAOS.openShop('${_jsAttr(s.shopId)}')">Open</button>`}</td>
+        </tr>`).join("")}</tbody></table>` : _emptyMsg("No sellers match this filter.");
+    }
+  }
+
+  /* Everything about one shop: who owns it, who works in it, what is in it. */
+  async function openShop(shopId) {
+    _modal("Shop " + shopId, _spinner());
+    let d;
+    try {
+      d = await _call("adminGetShopDetail", { shopId });
+    } catch (e) {
+      document.getElementById("modalBody").innerHTML =
+        `<div class="empty-state"><span>⚠️</span><p>${_esc(e.message || String(e))}</p></div>`;
+      return;
+    }
+
+    const s = d.shop || {}, o = d.owner, c = d.counts || {};
+    /* Three product counts, reported separately. `products` ownership is
+       enforced on sellerUid in the rules, but sellerId and shopId are both
+       queried elsewhere in this codebase — a single number here would be a
+       guess about which field this shop's writers used. A disagreement between
+       the three IS the finding. */
+    const counts = [
+      ["Products (sellerUid)", c.productsBySellerUid],
+      ["Products (sellerId)", c.productsBySellerId],
+      ["Products (shopId)", c.productsByShopId],
+      ["Orders (sellerId)", c.ordersBySellerId],
+    ].map(([k, v]) => `<div class="kv-row"><span>${_esc(k)}</span><strong>${
+      v === null || v === undefined ? "—" : _fmt(v)}</strong></div>`).join("");
+
+    const empRows = (d.employees || []).length
+      ? `<table class="aos-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Active</th></tr></thead>
+         <tbody>${d.employees.map((e) => `<tr>
+           <td>${_esc(e.name || "—")}</td><td class="aos-muted">${_esc(e.email || "—")}</td>
+           <td><span class="status-badge st-active">${_esc(e.role)}</span></td>
+           <td>${e.active ? "yes" : "no"}</td></tr>`).join("")}</tbody></table>`
+      : '<div class="aos-muted">No staff have been added to this shop.</div>';
+
+    /* Disputed rows are SHOWN, not filtered away. firestore.rules lets any
+       signed-in client create a shopEmployees document, so a row that fails
+       corroboration is a forgery attempt an operator needs to see. */
+    const dispRows = (d.disputed || []).length
+      ? `<h3 class="aos-warn-row">⚠ ${d.disputed.length} record(s) claim access to this shop but fail corroboration</h3>
+         <table class="aos-table"><thead><tr><th>Doc</th><th>Claimed uid</th><th>Claimed role</th><th>Why rejected</th></tr></thead>
+         <tbody>${d.disputed.map((e) => `<tr class="row-warn">
+           <td class="aos-mono">${_esc(e.id)}</td><td class="aos-mono">${_esc(e.uid || "—")}</td>
+           <td>${_esc(e.role || "—")}</td><td class="aos-muted">${_esc((e.reasons || []).join("; "))}</td>
+         </tr>`).join("")}</tbody></table>`
+      : "";
+
+    document.getElementById("modalBody").innerHTML = `
+      <div class="kv">
+        <div class="kv-row"><span>Shop id</span><strong class="aos-mono">${_esc(s.shopId)}</strong></div>
+        <div class="kv-row"><span>Name</span><strong>${_esc(s.name || "(unnamed)")}</strong></div>
+        <div class="kv-row"><span>Status</span><strong>${_esc(s.status || "unknown")}</strong></div>
+        <div class="kv-row"><span>Origin</span><strong>${_esc(s.source || "—")}</strong></div>
+        <div class="kv-row"><span>Created</span><strong>${_date(s.createdAt)}</strong></div>
+        ${counts}
+      </div>
+      <h3>Owner</h3>
+      ${o ? `<div class="kv">
+        <div class="kv-row"><span>Account</span><strong class="aos-mono">${_esc(o.uid)}</strong></div>
+        <div class="kv-row"><span>Name</span><strong>${_esc(o.name || "—")}</strong></div>
+        <div class="kv-row"><span>Email</span><strong>${_esc(o.email || "—")}</strong></div>
+        <div class="kv-row"><span>Roles</span><strong>${_esc((o.roles || []).join(", ") || "—")}</strong></div>
+        <div class="kv-row"><span>Active shop</span><strong>${
+          o.activeShopMatches
+            ? "matches this shop"
+            : `⚠ ${_esc(o.activeShopId || "not set")} — the merchant workspace will not resolve to this shop`
+        }</strong></div>
+        <div class="kv-row"><span>Seller registry</span><strong>${o.sellerRegistered ? "present" : "⚠ missing"}</strong></div>
+      </div>` : '<div class="aos-warn-row">⚠ This shop has no owner recorded. It cannot be suspended through its seller, and no merchant can sign in to it.</div>'}
+      <h3>Employees (${c.employees || 0})</h3>
+      ${empRows}
+      ${dispRows}`;
+  }
+
   return {
     init,
     navigate:            _navigate,
@@ -2249,6 +2799,13 @@ window.SokoniAOS = (() => {
     viewUser,
     banUser,
     changeRole,
+    // Applications & approvals
+    loadApplications:    _loadApplications,
+    decideApplication,
+    reconcileApplication,
+    // Shops & sellers
+    estateTab:           _estateTab,
+    openShop,
     // Marketplace
     marketplaceTab:      _marketplaceTab,
     updateProduct,

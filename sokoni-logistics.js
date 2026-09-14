@@ -293,10 +293,22 @@
       email:    function (d) { return { subject: 'Rider Assigned — Order #' + d.orderId, body: 'Your rider ' + d.riderName + ' (' + d.riderPhone + ') is on the way. ETA: ~' + d.etaMin + ' minutes.\n\nTrack live: ' + d.trackUrl }; },
       whatsapp: function (d) { return 'Hi! Your SOKONI delivery has a rider assigned. ' + d.riderName + ' will collect your order soon. ETA: ~' + d.etaMin + ' min. Track here: ' + d.trackUrl; },
     },
+    /* THE RIDE TO THE SHOP. Between `driver_assigned` and the parcel being collected there
+       was no stage at all, so the buyer saw nothing during the longest silent stretch of the
+       journey — which is exactly when they call support to ask whether anything is happening.
+       The rider has accepted and is travelling to the shop; that is a fact worth sending. */
+    driver_en_route_pickup: {
+      push: function (d) { return { title: 'Rider On The Way To The Shop', body: (d.riderName || 'Your rider') + ' has accepted and is heading to the shop to collect your order.' }; },
+      sms:  function (d) { return 'SOKONI: ' + (d.riderName || 'Your rider') + ' is on the way to the shop to collect your order. Track: ' + d.trackUrl; },
+    },
+    /* NAME/COPY MISMATCH, corrected: this stage is the rider ARRIVING AT THE SELLER, but the
+       body announced "has collected your parcel and is heading to you" — a post-collection
+       message on a pre-collection event. A buyer told the parcel is collected, then left
+       waiting while it is still on the counter, has been told something untrue. */
     driver_at_seller: {
-      push:     function (d) { return { title: 'Parcel Collected', body: d.riderName + ' has collected your parcel and is heading to you.' }; },
-      sms:      function ()  { return 'SOKONI: Your parcel has been picked up and is on its way!'; },
-      whatsapp: function (d) { return 'Great news! Your SOKONI order has been collected by ' + d.riderName + ' and is heading your way!'; },
+      push:     function (d) { return { title: 'Rider At The Shop', body: (d.riderName || 'Your rider') + ' has arrived at the shop and is collecting your order.' }; },
+      sms:      function ()  { return 'SOKONI: Your rider is at the shop collecting your order.'; },
+      whatsapp: function (d) { return (d.riderName || 'Your rider') + ' has arrived at the shop and is collecting your SOKONI order now.'; },
     },
     in_transit: {
       push:     function (d) { return { title: 'Out for Delivery', body: 'Your order is on the way. ETA: ' + d.etaMin + ' min.' }; },

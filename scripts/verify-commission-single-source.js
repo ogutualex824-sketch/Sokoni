@@ -74,9 +74,61 @@ const ALLOWLIST = {
 const errors = [];
 const warnings = [];
 
+/* ── WHAT SHIPS, NOT WHAT IS TRACKED ────────────────────────────────────────────────────
+   This enumerated `git ls-files` alone until 2026-09-02. Deployment does not consult the
+   index:
+
+     hosting    firebase.json public: "."  — the repo root, minus hosting.ignore
+     functions  source "functions"        — the whole directory; there is NO .gcloudignore
+
+   So an UNTRACKED file inside the deploy footprint shipped to production while being
+   invisible to this gate. Measured when the gap was found: 21 shipping files unscanned,
+   among them functions/commission-invoice.js and functions/commission-vat-policy.js —
+   commission modules, deploying, never checked. None carried a rate pattern at the time, so
+   the gap was real and unexploited; that is a fact about that day, not a property of a gate.
+
+   Found because a sabotage control planted an UNTRACKED second commission table and this
+   guard PASSED. The control reported itself broken, which is the only reason anyone looked.
+
+   Scope is now tracked ∪ (untracked files that ship). Tracked-but-not-deployed files stay in
+   scope: this is a superset of the old behaviour, so hardening cannot silently stop checking
+   something it used to check. */
+function deployFootprintExtras() {
+  let cfg;
+  try { cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'firebase.json'), 'utf8')); }
+  catch (_) { return []; }              /* no config readable -> add nothing, never fail open louder */
+
+  let hosting = cfg.hosting; if (Array.isArray(hosting)) hosting = hosting[0];
+  const ignore = (hosting && hosting.ignore) || [];
+  const fnSrc = (cfg.functions &&
+    (Array.isArray(cfg.functions) ? cfg.functions[0].source : cfg.functions.source)) || 'functions';
+
+  const toRe = (g) => {
+    let s = g.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+    s = s.replace(/\*\*\//g, '(?:.*/)?').replace(/\*\*/g, '.*').replace(/\*/g, '[^/]*');
+    return new RegExp('^' + s.replace(/\?/g, '[^/]') + '$');
+  };
+  const ignoreRe = ignore.map(toRe);
+
+  let untracked = [];
+  try {
+    untracked = execSync('git ls-files --others --exclude-standard', { cwd: ROOT, encoding: 'utf8' })
+      .split('\n').filter(Boolean);
+  } catch (_) { return []; }
+
+  return untracked.filter((f) => {
+    if (!/\.(js|html)$/.test(f)) return false;
+    if (/(^|\/)node_modules\//.test(f)) return false;
+    if (f === fnSrc || f.indexOf(fnSrc + '/') === 0) return true;        /* functions: all of it */
+    return !ignoreRe.some((re) => re.test(f));                            /* hosting: minus ignore */
+  });
+}
+
 function repoFiles() {
   const out = execSync('git ls-files', { cwd: ROOT, encoding: 'utf8' });
-  return out.split('\n')
+  const tracked = out.split('\n');
+  const all = tracked.concat(deployFootprintExtras());
+  return Array.from(new Set(all))
     .filter(f => /\.(js|html)$/.test(f) && !f.startsWith('node_modules'))
     /* git can still list a file that has been deleted from the working tree — reading it
        throws ENOENT and takes the whole guard down, which fails OPEN. Skip it instead. */

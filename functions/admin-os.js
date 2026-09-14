@@ -464,7 +464,15 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
     /* P1 command-center additions — all canonical counts, catch→0 (never fabricate). */
     db.collection('users').where('status', '==', 'active').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('businesses').where('status', '==', 'active').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
-    db.collection('providerVerification').where('verificationStatus', '==', 'pending_review').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    /* OB-4 — the CANONICAL field on THIS collection is `status`. This queried
+       `verificationStatus`, which is the field the MIRROR on providerProfiles/{uid}
+       carries — not the one the writer of providerVerification sets. Both writers
+       (providerSubmitVerification, adminDecideProviderVerification) write `status`,
+       so this counter matched nothing and the queue read 0 however much work was
+       waiting. A document with no `status` is still excluded, which is correct:
+       unknown is not pending, and a queue must not be inflated by records whose
+       state nobody has established. */
+    db.collection('providerVerification').where('status', '==', 'pending_review').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('applications').where('status', '==', 'pending').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('reviews').where('status', '==', 'pending').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
   ]);
@@ -561,7 +569,14 @@ exports.adminGetMerchantPipeline = onCall({ region: 'us-central1', maxInstances:
   const [applied, pending, verified, published, subscribed, active] = await Promise.all([
     db.collection('applications').count().get().catch(_c0),
     db.collection('applications').where('status', '==', 'pending').count().get().catch(_c0),
-    db.collection('providerVerification').where('verificationStatus', 'in', ['verified', 'approved']).count().get().catch(_c0),
+    /* OB-4 — wrong on BOTH axes: the field (see the note in the overview counter) and
+       the values. OB-3 established this state machine as pending_review /
+       verified_on_file / rejected, and nothing anywhere writes 'verified' or
+       'approved' to this collection. Those two are deliberately NOT kept as legacy
+       fallbacks: 'verified' is precisely the ambiguous word OB-3 exists to avoid, and
+       folding it in here would count an unknown standard as a known one. If such rows
+       are ever found they need a decision, not an OR. */
+    db.collection('providerVerification').where('status', '==', 'verified_on_file').count().get().catch(_c0),
     db.collection('providers').where('status', 'in', ['active', 'approved']).count().get().catch(_c0),
     db.collection('providerSubscriptions').where('status', 'in', ['active', 'trialing']).count().get().catch(_c0),
     db.collection('providers').where('status', '==', 'active').count().get().catch(_c0),
@@ -570,7 +585,9 @@ exports.adminGetMerchantPipeline = onCall({ region: 'us-central1', maxInstances:
     stages: [
       { key: 'applied',       label: 'Applied',        count: applied.data().count },
       { key: 'pendingReview', label: 'Pending Review', count: pending.data().count },
-      { key: 'verified',      label: 'Verified',       count: verified.data().count },
+      /* 'Verified' alone reads as 'registration confirmed'. This stage counts document
+         review only (verified_on_file) — see OB-3. The funnel renders `label`. */
+      { key: 'verified',      label: 'Docs Verified',  count: verified.data().count },
       { key: 'published',     label: 'Published',      count: published.data().count },
       { key: 'subscribed',    label: 'Subscribed',     count: subscribed.data().count },
       { key: 'active',        label: 'Active',         count: active.data().count },
@@ -1401,3 +1418,405 @@ exports._h.adminListFeaturedShops = async (req) => {
     }),
   };
 };
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MERCHANT ESTATE — sellers, shops, and the people who work in them
+
+   Admin OS could see products, orders and users, but had no view of the
+   REGISTRIES an approved merchant is actually projected onto. So the one screen
+   an operator lives in could not answer the questions that matter after an
+   approval:
+
+     • which shops exist, and who owns each one;
+     • which sellers are approved but have no shop (`projectSeller` never ran,
+       or ran and failed) — an account authorised to sell with nowhere to sell
+       from, which is invisible in every other view;
+     • who has been given access to a shop, and in what role.
+
+   These register in the `_h` registry ONLY — no standalone onCall — so they add
+   no new Cloud Run service and ride the already-invokable adminOsDispatch.
+   They do require adminOsDispatch itself to be REDEPLOYED before they resolve;
+   until then the dispatcher answers 'not-found' listing the ops it does know.
+
+   ── Employee rows are CORROBORATED, not merely read ────────────────────────
+   firestore.rules permits any signed-in client to create a `shopEmployees`
+   document, so the collection contains rows nobody vetted. `listShopEmployees`
+   (functions/shop-employees.js) therefore corroborates every row three ways
+   before showing it to a shop owner. An admin console that skipped that would
+   display a forged row as though it were staff — and it is the console people
+   trust most. The SAME contract is applied here, through the same module, and
+   rows that fail it are REPORTED as disputed rather than silently dropped: an
+   operator needs to see a forgery attempt, not be protected from knowing.
+──────────────────────────────────────────────────────────────────────────── */
+
+const _shopEmp = require('./shop-employees');
+
+/* Owner of a shop, in the ONE vocabulary the projection writes. `ownerId` is
+   what server-side ownership checks read; `sellerUid` states the same fact in
+   the merchant vocabulary; `uid` is the legacy spelling on pre-projection
+   documents. Never `shopId === uid` — that conflation is what the Store
+   identity migration exists to remove. */
+const _shopOwner = (x) => (x && (x.ownerId || x.sellerUid || x.uid)) || null;
+
+exports._h.adminGetShops = async (req) => {
+  _requireAdmin(req);
+  const { limit: lim, search, status } = req.data || {};
+  const db = getFirestore();
+  const snap = await db.collection('shops').limit(Math.min(Number(lim) || 500, 2000)).get()
+    .catch(() => ({ docs: [] }));
+
+  let items = (snap.docs || []).map((d) => {
+    const x = d.data() || {};
+    const ownerId = _shopOwner(x);
+    return {
+      shopId: d.id,
+      name: x.name || x.shopName || x.businessName || '',
+      ownerId,
+      /* An operator cannot act on a shop with no owner — it belongs to nobody,
+         cannot be suspended through the seller, and cannot be reconciled. It is
+         a finding, so it is stated rather than rendered as an empty cell. */
+      ownerless: !ownerId,
+      status: x.status || '',
+      category: x.category || '',
+      location: x.location || x.city || '',
+      /* Provenance: 'application_approval' means projectSeller established it.
+         Anything else predates the lifecycle or came from another writer. */
+      source: x.source || null,
+      applicationId: x.applicationId || null,
+      createdAt: _iso(x.createdAt),
+      activatedAt: _iso(x.activatedAt),
+      updatedAt: _iso(x.updatedAt),
+      _ms: _ms(x.createdAt) || _ms(x.activatedAt),
+    };
+  });
+
+  if (status) items = items.filter((s) => String(s.status).toLowerCase() === String(status).toLowerCase());
+  if (search) {
+    const q = String(search).toLowerCase();
+    items = items.filter((s) => (s.name || '').toLowerCase().includes(q)
+      || s.shopId.toLowerCase().includes(q)
+      || String(s.ownerId || '').toLowerCase().includes(q));
+  }
+  items.sort((a, b) => b._ms - a._ms);
+  items.forEach((s) => { delete s._ms; });
+
+  const active = items.filter((s) => String(s.status).toLowerCase() === 'active').length;
+  const ownerless = items.filter((s) => s.ownerless).length;
+  const fromApproval = items.filter((s) => s.source === 'application_approval').length;
+  return _env('shops', items, { active, ownerless, fromApproval });
+};
+
+exports._h.adminGetSellers = async (req) => {
+  _requireAdmin(req);
+  const { limit: lim, search, status } = req.data || {};
+  const db = getFirestore();
+
+  /* Both registries in one read pair, because the question an operator asks is
+     never "list sellers" — it is "which approved sellers have no live shop".
+     Answering that from two screens invites the two screens to disagree. */
+  const [sellerSnap, shopSnap] = await Promise.all([
+    db.collection('sellers').limit(Math.min(Number(lim) || 500, 2000)).get().catch(() => ({ docs: [] })),
+    db.collection('shops').limit(2000).get().catch(() => ({ docs: [] })),
+  ]);
+
+  const shopsById = new Map();
+  const shopsByOwner = new Map();
+  (shopSnap.docs || []).forEach((d) => {
+    const x = d.data() || {};
+    shopsById.set(d.id, { id: d.id, status: x.status || '', name: x.name || '' });
+    const o = _shopOwner(x);
+    if (o && !shopsByOwner.has(o)) shopsByOwner.set(o, { id: d.id, status: x.status || '', name: x.name || '' });
+  });
+
+  let items = (sellerSnap.docs || []).map((d) => {
+    const x = d.data() || {};
+    const declared = x.shopId ? shopsById.get(String(x.shopId)) : null;
+    /* Fall back to ownership, never to `shopId = uid`: a seller whose declared
+       shop does not exist is a DIFFERENT finding from one whose shop is simply
+       recorded under another id, and collapsing them hides the first. */
+    const owned = shopsByOwner.get(d.id) || null;
+    const shop = declared || owned;
+    return {
+      uid: d.id,
+      name: x.name || x.businessName || '',
+      status: x.status || '',
+      active: x.active !== false,
+      declaredShopId: x.shopId || null,
+      shopId: shop ? shop.id : null,
+      shopName: shop ? shop.name : '',
+      shopStatus: shop ? shop.status : '',
+      /* THE state this screen exists to surface: authorised to sell, nowhere to
+         sell from. Reconcile the application to repair it. */
+      shopMissing: !shop,
+      declaredShopMissing: !!(x.shopId && !declared),
+      createdAt: _iso(x.createdAt),
+      updatedAt: _iso(x.updatedAt),
+      _ms: _ms(x.updatedAt) || _ms(x.createdAt),
+    };
+  });
+
+  if (status) items = items.filter((s) => String(s.status).toLowerCase() === String(status).toLowerCase());
+  if (search) {
+    const q = String(search).toLowerCase();
+    items = items.filter((s) => (s.name || '').toLowerCase().includes(q) || s.uid.toLowerCase().includes(q));
+  }
+  items.sort((a, b) => b._ms - a._ms);
+  items.forEach((s) => { delete s._ms; });
+
+  const active = items.filter((s) => s.active && String(s.status).toLowerCase() === 'active').length;
+  const shopMissing = items.filter((s) => s.shopMissing).length;
+  return _env('sellers', items, { active, shopMissing });
+};
+
+/* One shop, whole: the owner, the staff, and how much is actually in it. This
+   is the "everything a shop and their employees" view. */
+exports._h.adminGetShopDetail = async (req) => {
+  _requireAdmin(req);
+  const shopId = req.data && req.data.shopId ? String(req.data.shopId).slice(0, 200) : '';
+  if (!shopId) throw new HttpsError('invalid-argument', 'shopId is required');
+
+  const db = getFirestore();
+  const shopSnap = await db.collection('shops').doc(shopId).get();
+  if (!shopSnap.exists) throw new HttpsError('not-found', 'No shop ' + shopId);
+  const shop = shopSnap.data() || {};
+  const ownerUid = _shopOwner(shop);
+
+  const [empSnap, ownerSnap, sellerSnap] = await Promise.all([
+    db.collection('shopEmployees').where('shopId', '==', shopId).limit(200).get().catch(() => ({ docs: [] })),
+    ownerUid ? db.collection('users').doc(ownerUid).get().catch(() => null) : Promise.resolve(null),
+    ownerUid ? db.collection('sellers').doc(ownerUid).get().catch(() => null) : Promise.resolve(null),
+  ]);
+
+  /* Same three-way corroboration listShopEmployees applies — canonical key,
+     known role, and a shopOwnerId that matches THIS shop's owner. */
+  const employees = [];
+  const disputed = [];
+  (empSnap.docs || []).forEach((d) => {
+    const e = d.data() || {};
+    const reasons = [];
+    if (d.id !== _shopEmp.employeeDocId(shopId, e.uid)) reasons.push('not on the canonical key');
+    if (!_shopEmp.SHOP_ROLES.includes(e.role)) reasons.push('unknown role "' + e.role + '"');
+    if (!ownerUid || String(e.shopOwnerId || '') !== String(ownerUid)) reasons.push('shopOwnerId does not match the shop owner');
+    const row = {
+      id: d.id, uid: e.uid || null, email: e.email || null, name: e.name || null,
+      role: e.role || null, active: e.active !== false, joinedAt: e.joinedAt || null,
+    };
+    if (reasons.length) disputed.push(Object.assign({}, row, { reasons }));
+    else employees.push(row);
+  });
+
+  /* Counts. `products` ownership is enforced on `sellerUid` in firestore.rules,
+     but `sellerId` and `shopId` are both queried elsewhere in this codebase, so
+     all three are counted and REPORTED SEPARATELY. A single number here would
+     be a guess about which field this shop's writers used; three numbers are
+     evidence, and a disagreement between them is itself the finding. */
+  const _count = async (col, field, value) => {
+    if (!value) return null;
+    try { return (await db.collection(col).where(field, '==', value).count().get()).data().count; }
+    catch (_) { return null; }
+  };
+  const [pBySellerUid, pBySellerId, pByShopId, ordersBySellerId] = await Promise.all([
+    _count('products', 'sellerUid', ownerUid),
+    _count('products', 'sellerId', ownerUid),
+    _count('products', 'shopId', shopId),
+    _count('orders', 'sellerId', ownerUid),
+  ]);
+
+  const ownerData = ownerSnap && ownerSnap.exists ? ownerSnap.data() : null;
+  return {
+    ok: true,
+    shop: {
+      shopId,
+      name: shop.name || shop.shopName || '',
+      ownerId: ownerUid,
+      ownerless: !ownerUid,
+      status: shop.status || '',
+      category: shop.category || '',
+      location: shop.location || shop.city || '',
+      phoneNumber: shop.phoneNumber || '',
+      source: shop.source || null,
+      applicationId: shop.applicationId || null,
+      createdAt: _iso(shop.createdAt),
+      activatedAt: _iso(shop.activatedAt),
+      updatedAt: _iso(shop.updatedAt),
+    },
+    owner: ownerData ? {
+      uid: ownerUid,
+      name: ownerData.displayName || ownerData.name || '',
+      email: ownerData.email || '',
+      phone: ownerData.phone || ownerData.phoneNumber || '',
+      roles: Array.isArray(ownerData.roles) ? ownerData.roles : [],
+      /* The field merchant.html resolves first. If this disagrees with shopId,
+         the merchant lands in a workspace that cannot tell which shop is theirs. */
+      activeShopId: ownerData.activeShopId || null,
+      activeShopMatches: String(ownerData.activeShopId || '') === shopId,
+      sellerRegistered: !!(sellerSnap && sellerSnap.exists),
+    } : null,
+    employees,
+    disputed,
+    counts: {
+      employees: employees.length,
+      disputedEmployees: disputed.length,
+      productsBySellerUid: pBySellerUid,
+      productsBySellerId: pBySellerId,
+      productsByShopId: pByShopId,
+      ordersBySellerId: ordersBySellerId,
+    },
+  };
+};
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   OB-3 — PROVIDER VERIFICATION: THE DECISION STEP
+   ═════════════════════════════════════════════════════════════════════════════
+   `providerSubmitVerification` wrote providerVerification/{uid} with
+   status:'pending_review' and NOTHING anywhere moved it. Documents could be
+   submitted and never decided, so "verification" was a collection rather than a
+   process: the only readers were the AdminOS counters, and the state was terminal
+   in practice.
+
+   WHAT THIS DECISION ACTUALLY MEANS — read before extending it.
+
+   SOKONI has NO integration with any professional registry. There is no call to
+   KMPDC, the Pharmacy and Poisons Board, the Nursing Council, a veterinary board,
+   or any KYC vendor anywhere in this codebase. An administrator working this
+   queue is looking at an uploaded image and deciding whether it is legible,
+   plausible and matches the applicant.
+
+   That establishes exactly one thing: THE DOCUMENTS ARE ON FILE AND A HUMAN
+   LOOKED AT THEM. It does NOT establish that the registration is real, current,
+   or belongs to this person. The vocabulary already distinguishes these —
+   driverVerification uses `verified_on_file` for precisely this reason — and the
+   distinction is the whole point:
+
+       self-declared          licenseNumber / qualifications, typed by the applicant
+       verified_on_file       a reviewer saw the documents          ← THE ONLY VERIFIED STATE
+       verified_with_authority the issuing body confirmed it        ← NOT IMPLEMENTABLE TODAY
+
+   `verified_with_authority` is deliberately NOT reachable from here and this
+   handler REFUSES to write it. Adding it without an external evidence source
+   would turn "an admin saw a PDF" into "this clinician is registered", which is
+   the single most consequential lie this system could tell a patient. When an
+   integration exists it gets its own writer, its own evidence fields, and its own
+   gate — not a new string in this switch.
+
+   SEPARATION OF POWERS. Verification does not activate, publish or make anyone
+   bookable. Those live in providers/{uid}.status / searchable / acceptsBookings,
+   written only by projectProvider() on an application decision (and closed to
+   self-service by OB-1). This handler never touches them, and deliberately does
+   NOT set the `verified` boolean either: a bare `verified:true` collapses
+   on-file and authority-confirmed back into one claim, which is the distinction
+   above being thrown away at the last step.
+   ═════════════════════════════════════════════════════════════════════════════ */
+
+const VERIFY_STATE = Object.freeze({
+  PENDING:  'pending_review',
+  ON_FILE:  'verified_on_file',
+  REJECTED: 'rejected',
+});
+
+exports.adminDecideProviderVerification = onCall(
+  { region: 'us-central1', maxInstances: 10, enforceAppCheck: true },
+  exports._h.adminDecideProviderVerification = async (req) => {
+    _requireAdmin(req);
+    /* D1 — AN ADMIN CLAIM IS NOT VERIFICATION AUTHORITY.
+       Every adminOsDispatch op shares one admin/superAdmin check, which made any admin an
+       implicit identity reviewer. Identity and biometric review is narrower than admin
+       user-management: it decides whether a person becomes officially real on the platform.
+       The capability is explicit and its ABSENCE denies. */
+    const _vAuth = require('./verification-authority');
+    _vAuth.assertVerificationReviewer(req.auth?.token || {});
+
+    const db = getFirestore();
+    const actor = req.auth?.uid;
+    const { uid, decision, reason } = req.data || {};
+
+    if (!uid || typeof uid !== 'string') throw new Error('uid required');
+    if (!['verify_documents', 'reject'].includes(decision)) {
+      throw new Error('decision must be "verify_documents" or "reject"');
+    }
+    /* A reviewer may not decide their own submission, whatever claims they hold.
+       An administrator is still an applicant when the subject is themselves. */
+    if (uid === actor) throw new Error('You cannot decide your own verification.');
+
+    const ref  = db.collection('providerVerification').doc(uid);
+    const snap = await ref.get();
+    /* Nothing to decide. Refusing here rather than creating a record keeps this
+       handler a DECISION on submitted evidence, never a way to manufacture one. */
+    if (!snap.exists) throw new Error('No verification submission exists for this provider.');
+    const cur = snap.data() || {};
+
+    const next = decision === 'verify_documents' ? VERIFY_STATE.ON_FILE : VERIFY_STATE.REJECTED;
+    const why  = String(reason || '').slice(0, 500).replace(/[<>]/g, '');
+    if (next === VERIFY_STATE.REJECTED && !why) {
+      throw new Error('A rejection needs a reason the applicant can act on.');
+    }
+
+    /* IDEMPOTENT. Re-issuing the decision a record already carries changes
+       nothing and writes no second audit entry, so a double-tapped button or a
+       retry cannot manufacture a second review event. A DIFFERENT decision is a
+       legitimate correction and is applied — and audited as the transition it is. */
+    if (cur.status === next) {
+      return { success: true, uid, status: next, idempotent: true };
+    }
+
+    /* D1 — TWO INDEPENDENT REVIEWERS on the assisted route.
+       `applyReviewerDecision` is pure and owns the rules: it refuses a reviewer deciding their
+       own submission, refuses one reviewer occupying BOTH seats (a different failure from
+       self-approval, and one the existing `uid === actor` guard does not cover), preserves
+       priorDecisions[], and leaves the record PENDING when only one seat is filled. A single
+       reviewer cannot complete a two-review decision. */
+    const _seat = _vAuth.applyReviewerDecision(cur, {
+      actor, subjectUid: uid,
+      decision: decision === 'verify_documents' ? 'approve' : 'reject',
+      reason: why, claims: req.auth?.token || {},
+    });
+    if (!_seat.complete) {
+      await ref.set({ ..._seat.patch, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      /* No log line: this file has no logging idiom, and introducing one here would widen the
+         patch past its authorized surface. The seat state is in the record and in the return. */
+      return { success: true, uid, status: _seat.patch.status,
+               awaitingSecondReviewer: true,
+               seatsFilled: _seat.seatsFilled, seatsRequired: _seat.seatsRequired };
+    }
+
+    await ref.set({
+      ..._seat.patch,
+      status:         next,
+      reviewedBy:     actor,
+      reviewedAt:     FieldValue.serverTimestamp(),
+      reviewNotes:    why || null,
+      previousStatus: cur.status || null,
+      /* What the reviewer actually had in front of them, recorded with the
+         decision so "verified" can never be read as broader than the evidence.
+         The document URLs themselves are untouched — merge:true preserves them,
+         and a decision must never destroy the evidence it was based on. */
+      documentsReviewed: ['nationalIdUrl', 'businessRegUrl', 'licenceUrl', 'kraPinUrl', 'selfieUrl']
+        .filter((k) => !!cur[k]),
+      /* Says in the record itself what the state means, so a future reader of
+         this document does not have to find this comment to know. */
+      basis: next === VERIFY_STATE.ON_FILE
+        ? 'admin-document-review: a reviewer inspected the uploaded documents. NOT confirmed with any issuing authority.'
+        : 'admin-document-review: rejected on inspection.',
+      updatedAt:      FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    /* Informational mirror onto the provider's own record, matching what
+       providerSubmitVerification already writes. `verified` is NOT set — see the
+       separation-of-powers note above. */
+    await db.collection('providerProfiles').doc(uid)
+      .set({ verificationStatus: next, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+      .catch(() => {});
+
+    await db.collection('adminAudit').add({
+      action: 'provider_verification_' + (next === VERIFY_STATE.ON_FILE ? 'verified_on_file' : 'rejected'),
+      targetUid: uid,
+      fromStatus: cur.status || null,
+      toStatus: next,
+      reason: why || null,
+      performedBy: actor,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    return { success: true, uid, status: next, previousStatus: cur.status || null };
+  }
+);

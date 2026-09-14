@@ -262,5 +262,34 @@ console.log('\nJ. IntaSend MoR boundary kept explicit\n');
      /Central collection \(CENTRAL_MOR\) is enabled but central Daraja credentials are not provisioned/.test(IDX));
 }
 
+/* ══ N. Settlement idempotency — the contract's hard invariant ═══════════
+   Webhooks arrive more than once; that is normal, not exceptional. Before this
+   guard, settleConfirmedPayment queried OPEN rows and settled them by amount
+   with NO lookup on paymentRef — so a redelivery of the SAME payment settled a
+   SECOND tranche of rows. One real payment would clear twice the debt and lift
+   a restriction that should still stand. */
+console.log('\nN. A redelivered webhook settles once\n');
+{
+  ck('a settlement claim collection is declared',
+     /const SETTLEMENT = 'commissionSettlements';/.test(CCOL));
+  ck('the claim id IS the payment reference (deterministic)',
+     /collection\(SETTLEMENT\)\.doc\(ref\)/.test(CCOL));
+  ck('the claim is taken inside a TRANSACTION',
+     /runTransaction\(async \(txn\) => \{[\s\S]{0,300}?txn\.get\(claimRef\)/.test(CCOL));
+  ck('  ...an existing claim aborts the settlement',
+     /if \(prior\.exists\) return false;/.test(CCOL));
+  ck('  ...and a redelivery returns a no-op, not a second settlement',
+     /already_settled/.test(CCOL) && /if \(!claimed\)[\s\S]{0,220}?settled: 0/.test(CCOL));
+  ck('the claim is taken BEFORE any ledger row is read',
+     CCOL.indexOf('collection(SETTLEMENT).doc(ref)') < CCOL.indexOf('.where(\'billingModel\', \'==\', \'PER_SALE_48H\')\n    .where(\'collectionStatus\''));
+  ck('a missing paymentRef is REFUSED rather than settled unguarded',
+     /no_payment_ref/.test(CCOL));
+  ck('the claim records its outcome for audit',
+     /status: 'applied', settled, stillOwed/.test(CCOL));
+  /* Negative control — the detector must be able to see the pre-fix shape. */
+  ck('  negative control: detector DOES flag settlement with no claim',
+     !/const SETTLEMENT/.test('async function settle(){ const s = await db.collection(LEDGER).get(); }'));
+}
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
 process.exit(fail ? 1 : 0);

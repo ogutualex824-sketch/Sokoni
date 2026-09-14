@@ -99,6 +99,15 @@ function installStubs() {
     if (id === 'firebase-functions/v2/https') {
       return { onCall: (_o, h) => h, HttpsError: class extends Error { constructor(c, m) { super(m); this.code = c; } } };
     }
+    /* application-lifecycle.js declares QR_SIGNING_SECRET through defineSecret.
+       Without this stub the MUTANTS (written to a temp path, where
+       functions/node_modules no longer resolves) failed to load, so M1 and M2 —
+       the only checks proving this suite can detect a broken authority guard —
+       reported "mutant failed to load" instead of exercising anything. A
+       mutation control that cannot load its mutant proves nothing. */
+    if (id === 'firebase-functions/params') {
+      return { defineSecret: (name) => ({ name, value: () => 'test-secret' }) };
+    }
     if (id === './notify' || id === './search-terms') {
       return { notify: async () => {}, buildSearchTerms: () => [], searchTerms: () => [] };
     }

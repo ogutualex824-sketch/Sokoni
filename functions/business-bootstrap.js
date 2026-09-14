@@ -974,6 +974,9 @@ async function _ensureBusinessForOwner(o) {
         category: _san(o.category || '', 80).trim() || 'General',
         phone: o.phone || '', county: o.county || '', city: o.city || '',
         __provisionedBy: 'approval',
+        /* Passed through so a DELIVERY provisioning skips the seller subscription. Absent for
+           every existing caller, so merchant onboarding behaves exactly as before. */
+        __businessKind: o.businessKind || null,
       },
     });
     await guard.set({ merchantId: res.merchantId, ok: true,
@@ -1053,7 +1056,22 @@ async function _createBusiness(req) {
   const _graceEnd  = admin.firestore.Timestamp.fromMillis(
     _trialMs + (TRIAL_DAYS + TRIAL_GRACE_DAYS) * 86400000
   );
-  batch.set(db.collection('subscriptions').doc(merchantId), {
+  /* A DELIVERY business gets NO seller subscription.
+   *
+   * This block is what makes a new business a SmartPOS merchant on a trial clock: hubType
+   * 'seller', planId 'seller_free', a trial that expires and downgrades. Correct for a merchant
+   * onboarding; wrong for a delivery rider, who is not selling marketplace goods. Writing it for
+   * a rider would put them in the merchant subscription population that subscription-core and the
+   * commission engine read, and would expire into a seller plan they never asked for.
+   *
+   * NOT replaced with a delivery plan: what subscription (if any) a delivery business should
+   * carry is a COMMERCIAL decision, and inventing one here would be a fabricated plan deciding
+   * real money. Absence is the honest state — subscription-core resolves an absent subscription
+   * to the free tier, which costs a rider nothing because they make no marketplace sales.
+   *
+   * Default is UNCHANGED: only a caller that explicitly asks for a delivery provisioning skips
+   * it, so every existing merchant onboarding path behaves exactly as before. */
+  if (d.__businessKind !== 'delivery') batch.set(db.collection('subscriptions').doc(merchantId), {
     merchantId,
     uid,                                  // required by the expiry notifier (users/{uid})
     hubType:  'seller',                   // drives the post-trial downgrade to `${hubType}_free`

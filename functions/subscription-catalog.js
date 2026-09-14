@@ -36,7 +36,16 @@
    entitlement carries this, so a consumer can record which generation it acted
    on — during a migration that turns "these two screens disagree" into "this
    one resolved v1 and that one resolved v2". */
-const CATALOG_VERSION = 1;
+/* 3 — canonical merchant packages free/professional/business/enterprise, and FREE 100 -> 50
+   (owner decision 2026-09-13). v2 was the 10 -> 100 merchant-beta raise (2026-09-07).
+
+   Bumped because this file's own contract says it increments when pricing or ALLOWANCES
+   change: every productCounters document records the catalogVersion that produced its
+   ceiling, so a counter still showing 10 is self-explaining ("resolved from v1 before the
+   change") rather than the start of an investigation. Production currently holds 11 counters
+   at maxProducts 10 — i.e. still on v1 — which is precisely the signal this field exists to
+   give. */
+const CATALOG_VERSION = 3;
 
 /* COMMISSION IS NOT DEFINED HERE — functions/commission-config.js owns it.
  *
@@ -67,16 +76,32 @@ const PLANS = Object.freeze({
     id: 'FREE',
     label: 'Free',
     priceKES: 0,
-    listingLimit: 10,
+    /* 50 — the canonical FREE allowance (owner decision 2026-09-13). Previously 100 (the
+       2026-09-07 merchant-beta ruling), and 10 before that.
+
+       THE PREVIOUS COMMENT'S WARNING CAME TRUE. It said the 10 -> 100 raise was "NOT
+       RETROACTIVE ON ITS OWN … existing documents keep maxProducts:10 until syncLimit() runs",
+       and the backfill never ran: production holds 11 productCounters at 10 and one at 100.
+       So the LIVED allowance is 10 for almost every merchant while the catalogue says 100.
+
+       Against that reality, 50 is a RISE for the 11 merchants on 10 and a cut only against a
+       number they were never actually given. Either way the backfill is still owed —
+       scripts/backfill-product-counters.js, or the next subscription change per account —
+       and it should run BEFORE anyone reasons about this number again.
+
+       SAFE FOR EXISTING MERCHANTS EITHER WAY. product-limit's grandfatheredFloor is a FLOOR,
+       not an override, so a merchant already holding more than 50 keeps what they hold; this
+       cannot delete or hide a listing. */
+    listingLimit: 50,
     walletEnabled: false,
     premiumAnalytics: false,
     prioritySupport: false,
     multiBranch: false,
     staffSeats: 1,
   }),
-  STARTER: Object.freeze({
-    id: 'STARTER',
-    label: 'Starter',
+  PROFESSIONAL: Object.freeze({
+    id: 'PROFESSIONAL',
+    label: 'Professional',
     priceKES: 99900,
     listingLimit: 100,
     walletEnabled: true,
@@ -85,9 +110,9 @@ const PLANS = Object.freeze({
     multiBranch: false,
     staffSeats: 3,
   }),
-  GROWTH: Object.freeze({
-    id: 'GROWTH',
-    label: 'Growth',
+  BUSINESS: Object.freeze({
+    id: 'BUSINESS',
+    label: 'Business',
     priceKES: 249900,
     listingLimit: -1,            /* -1 is unlimited, everywhere, always */
     walletEnabled: true,
@@ -112,11 +137,27 @@ const PLANS = Object.freeze({
 /* Legacy identifiers seen across the ten catalogues. Mapping them here rather
    than at each call site means a caller never has to know which vocabulary a
    given subsystem happened to use. */
+/* CANONICAL PACKAGES ARE free / professional / business / enterprise (2026-09-13). The
+   STARTER and GROWTH ids they replace MUST stay mapped here: `resolve()` falls back to FREE
+   for anything it cannot place, so a stale alias is not an error — it is a silent downgrade
+   of every merchant whose stored tier still uses the old spelling.
+
+   These deliberately mirror commission-config.MARKETPLACE_TIER_ALIASES one-for-one. Two
+   alias tables that disagree would put a merchant on one package for their listing limit and
+   another for their commission, which is the exact class of divergence this file exists to
+   end — so if either changes, both change. */
 const ALIASES = Object.freeze({
-  free: 'FREE', basic: 'FREE', seller_free: 'FREE', provider_free: 'FREE',
-  starter: 'STARTER', seller_basic: 'STARTER', provider_basic: 'STARTER',
-  pro: 'GROWTH', growth: 'GROWTH', seller_pro: 'GROWTH', provider_pro: 'GROWTH',
-  business: 'ENTERPRISE', enterprise: 'ENTERPRISE', seller_enterprise: 'ENTERPRISE',
+  /* retired seller_* ladder */
+  seller_free: 'FREE', seller_basic: 'PROFESSIONAL', seller_pro: 'BUSINESS',
+  seller_enterprise: 'ENTERPRISE',
+  /* retired catalogue spellings */
+  starter: 'PROFESSIONAL', growth: 'BUSINESS',
+  /* bare spellings in circulation */
+  free: 'FREE', basic: 'PROFESSIONAL', pro: 'BUSINESS',
+  /* provider hub ids — unchanged mapping, this catalogue is not the provider authority */
+  provider_free: 'FREE', provider_basic: 'PROFESSIONAL', provider_pro: 'BUSINESS',
+  /* `professional`, `business` and `enterprise` need no alias — they ARE the keys, matched
+     case-insensitively by resolve(). */
 });
 
 /**

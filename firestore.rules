@@ -321,6 +321,54 @@ service cloud.firestore {
        A client that could create an invitation could grant itself a role, and a
        client that could edit one could mark itself accepted. Admins read the
        dashboard through listInvitations, not by querying this collection. */
+    /* ── POS / TILL COMMISSION AND THE BUSINESS WALLET ────────────────────────
+       Four collections that decide what a merchant owes and hold the float that
+       pays it. Every one is CLIENT-UNWRITABLE without exception.
+
+       A merchant who could write these could clear their own liability, credit
+       their own wallet, or forge the settlement receipt that proves a payment
+       arrived. Reads are owner-scoped so a merchant can see their own position
+       in the POS app; nobody can see anyone else's.
+
+       The Cloud Functions that own these paths use the Admin SDK, which bypasses
+       rules entirely — so denying every client write here costs the platform
+       nothing and removes the entire class of forgery. */
+
+    /* What a merchant owes, one row per non-custodial POS/Till sale. */
+    match /posCommissionLiabilities/{saleId} {
+      allow read:   if isAdmin() || (isAuthed() && resource.data.merchantUid == request.auth.uid);
+      allow create: if false;
+      allow update: if false;   /* clearing your own debt is exactly the attack */
+      allow delete: if false;
+    }
+
+    /* Proof that a settlement actually happened. Forging one of these would mark
+       a liability paid for money that never arrived. */
+    match /posCommissionSettlements/{settlementRef} {
+      allow read:   if isAdmin() || (isAuthed() && resource.data.merchantUid == request.auth.uid);
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    /* The BUSINESS wallet — separate from wallets/{uid}, which is personal.
+       Balance is in MINOR units here and in shillings there; they are different
+       collections precisely so the two can never be confused. */
+    match /businessWallets/{shopId} {
+      allow read:   if isAdmin() || (isAuthed() && resource.data.ownerUid == request.auth.uid);
+      allow create: if false;
+      allow update: if false;   /* a writable balance is not a balance */
+      allow delete: if false;
+    }
+
+    /* Every movement of that wallet, keyed by its idempotency reference. */
+    match /businessWalletEntries/{ref} {
+      allow read:   if isAdmin() || (isAuthed() && resource.data.ownerUid == request.auth.uid);
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
     match /invitations/{inviteId} {
       allow read:   if isAdmin();
       allow create: if false;
@@ -956,7 +1004,20 @@ service cloud.firestore {
             && get(/databases/$(database)/documents/conversations/$(convId))
                  .data.participants.hasAny([request.auth.uid]);
         }
-        allow read: if inConvo();
+          /* HISTORY BOUNDARY. A rider added to an order conversation must not
+             receive the earlier buyer/seller history. addRiderToConversation
+             records participantJoinedAt[uid]; anyone carrying that stamp reads
+             only messages from their join instant onward. Original participants
+             have no stamp, so `in` is false for them and their access is
+             unchanged — this can only narrow a later joiner, never an existing
+             party. */
+          function joinedAtMap() {
+            return get(/databases/$(database)/documents/conversations/$(convId))
+                     .data.get('participantJoinedAt', {});
+          }
+          allow read: if inConvo()
+                      && (!(request.auth.uid in joinedAtMap())
+                          || resource.data.timestamp >= joinedAtMap()[request.auth.uid]);
         // MSG-1: creates go through the sendMessage CF (admin SDK, bypasses rules).
         // Direct client creates are blocked to prevent senderId/senderName spoofing.
         allow create: if false;
@@ -1295,6 +1356,39 @@ service cloud.firestore {
                     && request.resource.data.offerPrice < request.resource.data.originalPrice;
       allow update: if isAdmin();
       allow delete: if isAdmin();
+    }
+
+    /* ── SELLER STORIES ────────────────────────────────────────────────────
+       Ephemeral seller posts rendered in the homepage ring. Public to read,
+       writable only by the authenticated owner.
+
+       THE 24-HOUR LIFETIME IS ENFORCED HERE, not only in the client query.
+       expiresAt is a client-supplied epoch-ms number, so without this ceiling a
+       seller could publish a permanent story simply by sending a larger value —
+       the homepage filter would happily keep showing it. 60s of slack absorbs
+       clock skew between the device and the server.
+
+       uid is immutable across updates, so a story document can never change
+       hands; re-promoting the same product overwrites only the owner's own. */
+    match /stories/{storyId} {
+      allow read:   if true;
+
+      allow create: if isAuthed()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.postedAt  is number
+                    && request.resource.data.expiresAt is number
+                    && request.resource.data.expiresAt >  request.time.toMillis()
+                    && request.resource.data.expiresAt <= request.time.toMillis() + 86460000;
+
+      allow update: if isAuthed()
+                    && resource.data.uid == request.auth.uid
+                    && request.resource.data.uid == resource.data.uid
+                    && request.resource.data.expiresAt is number
+                    && request.resource.data.expiresAt >  request.time.toMillis()
+                    && request.resource.data.expiresAt <= request.time.toMillis() + 86460000;
+
+      allow delete: if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
     }
     match /withdrawals/{withdrawalId} {
       allow create: if isAuthed()
@@ -1920,6 +2014,29 @@ service cloud.firestore {
     match /sellerSubscriptions/{sellerUid} {
       allow read:  if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
       allow write: if isAdmin();
+    }
+
+    /* Merchant payment destinations (Till / PayBill).
+       CLIENT WRITES ARE DENIED OUTRIGHT — this is the whole security model.
+       A merchant who could write this document could set status:'VERIFIED' on
+       any number and have STK push route live customer money to it with no test
+       ever performed. Every field is written by savePaymentDestination /
+       confirmVerified / markFailed through the Admin SDK, which bypasses these
+       rules. Read is owner-or-admin: a Till is not secret, but the verification
+       state and history are not public either — note `shops` is world-readable,
+       which is exactly why this does not live there. */
+    match /paymentDestinations/{sellerUid} {
+      allow read:  if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
+      allow write: if false;
+    }
+
+    /* Commission restriction state — what the premium gate reads.
+       Server-computed ONLY. If a client could write this, a restricted merchant
+       could clear their own restriction and keep trading with an unpaid
+       balance, which is the single thing the gate exists to prevent. */
+    match /sellerRestrictions/{sellerUid} {
+      allow read:  if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
+      allow write: if false;
     }
 
     match /commissionLedger/{entryId} {
@@ -4477,9 +4594,40 @@ service cloud.firestore {
     }
 
     /* ── Healthcare Hub v1.0 ─────────────────────────────────────────────── */
+    /* HC-01 — THE ONE healthProviders BLOCK. A second `match /healthProviders/`
+       lived further down ("publicly discoverable directory"). Firestore UNIONS
+       duplicate match blocks, so the `allow write: if false` written here was
+       VOID: that block's owner create/update let ANY signed-in user write
+       healthProviders/{own-uid}. `status` is not among the keys noAdminFields()
+       protects (only `verified` is), so the payload could carry status:'active'
+       — minting an active provider with a self-asserted licenceNumber and
+       specialization, and letting an admin-rejected applicant restore
+       themselves. createHealthRecord and createPrescription authorize on
+       exactly that status and nothing else, so the mint reached clinical
+       writes against any patientUid.
+
+       ADR-014 retires healthProviders as a provider identity: the canonical
+       identity is providers/{uid}. Writes here are server-only; the Cloud
+       Functions use the Admin SDK, which bypasses rules entirely, so this
+       denies clients without touching any callable.
+
+       Reads are unchanged in substance and deliberately keep the owner clause
+       the removed block supplied — sokoni-health.js::listenMyProviderProfile
+       queries where('uid','==',me) so an applicant can see their own pending
+       status. Public discovery (search guard, listenProviders, getAllProviders)
+       filters status=='active' and is unaffected. The removed block also
+       admitted status=='approved'; no writer anywhere produces that value, and
+       with write:false it is unreachable by construction, so it is dropped
+       rather than carried forward as a state the system cannot enter.
+
+       DO NOT re-add a second block for this path — add clauses to this one, or
+       the union quietly widens access again (the same failure documented on
+       /applications below). */
     match /healthProviders/{providerId} {
-      allow read:  if resource.data.status == 'active' || isAdmin();
-      allow write: if false; // CF-only
+      allow read:  if resource.data.status == 'active'
+                   || (isAuthed() && resource.data.uid == request.auth.uid)
+                   || isAdmin();
+      allow write: if false; // CF-only — Admin SDK bypasses rules
     }
     match /healthAppointments/{apptId} {
       allow read:  if isAuthed() && (
@@ -5363,17 +5511,14 @@ service cloud.firestore {
        see the comment there. Do not re-add a second block for this path — add
        clauses to the one rule instead, or the union quietly widens access again. */
 
-    /* Healthcare providers — publicly discoverable directory */
-    match /healthProviders/{providerId} {
-      allow read:   if resource.data.status == 'active' || resource.data.status == 'approved'
-                    || (isAuthed() && resource.data.uid == request.auth.uid)
-                    || isAdmin();
-      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
-      allow update: if isAdmin()
-                    || (isAuthed() && resource.data.uid == request.auth.uid
-                        && uidUnchanged() && noAdminFields());
-      allow delete: if isAdmin();
-    }
+    /* Healthcare providers — REMOVED (HC-01, 2026-09-13). This was a SECOND
+       `match /healthProviders/` block; Firestore unions duplicates, so its owner
+       create/update silently overrode the `allow write: if false` in the
+       Healthcare Hub v1.0 block above and made an active healthcare provider
+       self-mintable. The single authoritative block is that one — add clauses
+       there, never a second block here. Production carried zero real providers
+       when this was removed, so nothing legitimate depended on it. See
+       docs/adr/ADR-014-healthcare-provider-identity-convergence.md. */
 
     /* Stores (shop catalog entries — same audience as sellers) */
     match /stores/{storeId} {

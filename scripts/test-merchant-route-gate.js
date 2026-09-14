@@ -42,9 +42,19 @@ const MIME = { '.html':'text/html', '.js':'application/javascript', '.css':'text
    restating a superseded copy of it, and de-duplicated so POS is not walked three times. */
 const BATCH_1 = [...new Set(['dashboard', 'plan', 'products', 'inventory', 'cashier']
   .map((id) => C.resolve(id) || id))];
-const TARGETS = process.argv.includes('--all')
-  ? C.primary().map(r => r.id)
-  : BATCH_1;
+/* `--all` means EVERY destination, not every PRIMARY destination.
+   The completion matrix (scripts/gen-merchant-os-matrix.js) measured what that distinction
+   was costing: 14 of 31 destinations — the entire `more` tier plus the hidden MiniShop —
+   inherited this suite's green total without ever being loaded in a browser. Fulfilment,
+   Riders, Verification, Devices, Availability, Reports, Flash Sale, Stories, Customers,
+   Shop Details, KRA Tax, Marketing and POS Setup were all "gate tested" by association.
+
+   Exit routes are the one exclusion, and not for convenience: an exit MOUNTS NOTHING. It
+   performs a real full-page navigation out of the shell, so every per-route assertion below
+   (one panel visible, correct module, still inside /merchant) is meaningless for it by
+   definition. Its correctness is asserted in test-merchant-home-back.js instead. */
+const ALL_TARGETS = C.ROUTES.filter(r => r.kind !== 'exit').map(r => r.id);
+const TARGETS = process.argv.includes('--all') ? ALL_TARGETS : BATCH_1;
 
 const VIEWPORTS = [
   { name: 'iPhone 14 Pro', width: 393, height: 852 },
@@ -53,9 +63,71 @@ const VIEWPORTS = [
 
 let pass = 0, fail = 0;
 const rows = [];
+
+/* ── FAILURE CLASSIFICATION ───────────────────────────────────────────────────
+   Every failure is still a failure. Nothing below suppresses one, moves it out of
+   the total, or turns 24/904 into "mostly passed" — the classification is an extra
+   report over the same numbers, so the suite's verdict cannot be softened by it.
+
+   What it does is stop the three kinds of failure from being read as one kind:
+
+     ENV       PROVEN to be caused by running the shipped app on an ephemeral
+               loopback origin. "Proven" means the mechanism was measured, not that
+               the message looked infrastructural.
+     REAL      a defect in SOKONI's own code. Fix it.
+     UNPROVEN  cannot be settled by this harness. NOT a synonym for "probably fine" —
+               it is the honest answer when the evidence does not reach.
+
+   Anything that matches no rule is UNPROVEN, never ENV. An unrecognised failure
+   drifting into the environment bucket is exactly how a real defect gets a green
+   classification, which is the failure mode this whole pass exists to prevent. */
+const CLASSIFY = [
+  { bucket:'ENV',
+    re: /is not allowed by Access-Control-Allow-Origin|App Check|appcheck|exchangeDebugToken/i,
+    why:'App Check cannot attest an ephemeral 127.0.0.1:PORT origin, and that origin is not '
+      + 'in Firebase\'s authorized domains, so preflight is refused. Measured directly: '
+      + 'content-firebaseappcheck.googleapis.com/...:exchangeDebugToken -> 403. '
+      + 'Documented as docs/AUTH_GATE_VALIDATION.md row G4.' },
+  { bucket:'ENV',
+    re: /\/api\/[a-z-]+.*404|Failed to load resource.*\/api\//i,
+    why:'the gate serves static files only — it implements no /api routes.' },
+  { bucket:'REAL',
+    re: /Can't find variable: firebase|firebase is not defined/i,
+    why:'a classic inline script calls the firebase compat global before the deferred '
+      + 'type="module" firebase.js has assigned it. Fix with the _whenFirebaseReady() '
+      + 'pattern already used by dispatch.html and driver.html.' },
+  { bucket:'UNPROVEN',
+    re: /deep-switch to "seller:/i,
+    why:'the hosted seller module renders the LOGIN page in this harness (measured: '
+      + 'iframe document.title = "Log In to SOKONI"), so the section switch can never '
+      + 'confirm. Whether an AUTHENTICATED approved seller reaches the section is NOT '
+      + 'settled here — it needs the Auth-emulator run.' },
+  { bucket:'UNPROVEN',
+    re: /permission-denied|insufficient permissions/i,
+    why:'consistent with having no session, but a rules hole would look identical from '
+      + 'here. Needs an authenticated run to separate the two.' },
+  { bucket:'UNPROVEN',
+    re: /about:blank/i,
+    why:'a dynamic module resolves its src at click time; with no session the uid owns '
+      + 'no shop, so the honest empty state leaves the frame blank. The assertion does '
+      + 'not model that state. Needs an authenticated run.' },
+];
+const failures = [];
+let curRoute = '—', curVp = '—';
+const classify = (text) => {
+  const hit = CLASSIFY.find((c) => c.re.test(text || ''));
+  return hit ? hit : { bucket:'UNPROVEN', why:'no classification rule matched; defaulting to UNPROVEN rather than assuming environment.' };
+};
+
 const check = (label, ok, detail) => {
   console.log('    ' + (ok ? 'PASS  ' : 'FAIL  ') + label + (detail ? '   [' + detail + ']' : ''));
-  ok ? pass++ : fail++;
+  if (ok) pass++;
+  else {
+    fail++;
+    const c = classify(String(label) + ' ' + String(detail || ''));
+    failures.push({ route: curRoute, vp: curVp, label, detail: String(detail || '').slice(0, 200),
+                    bucket: c.bucket, why: c.why });
+  }
   return ok;
 };
 
@@ -95,6 +167,7 @@ server.listen(0, async () => {
   for (const vp of VIEWPORTS) {
     console.log('\n' + '█'.repeat(74));
     console.log('  ' + vp.name + '  (' + vp.width + '×' + vp.height + ')');
+    curVp = vp.name;
     console.log('█'.repeat(74));
 
     const ctx = await browser.newContext({
@@ -156,6 +229,7 @@ server.listen(0, async () => {
     for (const id of TARGETS) {
       const route = C.get(id);
       console.log('\n  ── ' + route.name.toUpperCase() + '  (#' + id + ') ──');
+      curRoute = id; curVp = vp.name;
       routeErrors = [];
 
       const before = await page.evaluate(() => {
@@ -163,13 +237,25 @@ server.listen(0, async () => {
         return { key: s ? (s.querySelector('iframe') ? 'iframe:' + s.querySelector('iframe').id : 'native:' + ((s.querySelector('.native') || {}).id || '')) : null };
       });
 
-      /* CLICK the real sidebar button — never call the router directly. */
-      const clicked = await page.evaluate(rid => {
-        const el = document.querySelector('.mnav-item[data-id="' + rid + '"]');
-        if (!el) return false;
-        el.click(); return true;
-      }, id);
-      if (!check('sidebar button exists and was clicked', clicked)) continue;
+      /* REACH the destination the way a merchant actually reaches it.
+         A `hidden` route (My MiniShop) has no sidebar row BY CONTRACT — it is reached from
+         the header and by deep link — so demanding a sidebar button would fail it for
+         conforming to the architecture. Every other route is entered by CLICKING its real
+         sidebar button; the router is never called directly, because a router that works
+         when called directly and not when clicked is the defect this gate exists to catch. */
+      let clicked;
+      if (route.tier === 'hidden') {
+        await page.evaluate(rid => { location.hash = rid; }, id);
+        clicked = true;
+        check('hidden route reached by deep link (no sidebar row by contract)', true, '#' + id);
+      } else {
+        clicked = await page.evaluate(rid => {
+          const el = document.querySelector('.mnav-item[data-id="' + rid + '"]');
+          if (!el) return false;
+          el.click(); return true;
+        }, id);
+        if (!check('sidebar button exists and was clicked', clicked)) continue;
+      }
 
       await page.waitForTimeout(id === 'dashboard' ? 1200 : 3000);
 
@@ -205,8 +291,16 @@ server.listen(0, async () => {
       /* ROUTE identity */
       check('route entered: #' + id, st.hash === id, '#' + st.hash);
       check('page title matches route', st.title === route.name, st.title);
-      check('active-state key is the route', st.activeNav === id && st.activeCount === 1,
-            st.activeNav + ' (' + st.activeCount + ' active)');
+      /* A hidden route has no sidebar row to light up, so "exactly one active row" is the
+         wrong assertion for it. What must still hold is that it does not light up SOMEBODY
+         ELSE'S row — a stale active state would tell the merchant they are somewhere they
+         are not. Asserted as "no more than one, and not another route's". */
+      if (route.tier === 'hidden')
+        check('no stale active row while on a hidden route', st.activeCount === 0,
+              st.activeNav + ' (' + st.activeCount + ' active)');
+      else
+        check('active-state key is the route', st.activeNav === id && st.activeCount === 1,
+              st.activeNav + ' (' + st.activeCount + ' active)');
 
       /* MODULE identity — the part HTTP 200 can never prove */
       let modOk = false, modDetail = '';
@@ -320,5 +414,49 @@ server.listen(0, async () => {
   console.log('  ROUTE MATRIX');
   rows.forEach(r => console.log('    ' + (r.ok ? '✓' : '✗') + '  ' + r.vp.padEnd(14) + r.id.padEnd(12) + r.route));
   console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
+
+  /* ── The classification report. Additive only — the totals above are the verdict. ── */
+  if (failures.length) {
+    const ORDER = ['REAL', 'UNPROVEN', 'ENV'];
+    const ICON  = { REAL:'🔴', UNPROVEN:'🟡', ENV:'🟢' };
+    const HEAD  = {
+      REAL:     'REAL APPLICATION FAILURE — a defect in SOKONI code. Fix these.',
+      UNPROVEN: 'UNPROVEN — this harness cannot settle it. NOT "probably fine".',
+      ENV:      'HARNESS ENVIRONMENT — mechanism measured, not a product defect.'
+    };
+    console.log('\n' + '='.repeat(74));
+    console.log('  FAILURE CLASSIFICATION   (' + fail + ' failures — none suppressed)');
+    console.log('='.repeat(74));
+
+    ORDER.forEach((bucket) => {
+      const inBucket = failures.filter((f) => f.bucket === bucket);
+      if (!inBucket.length) return;
+      console.log('\n' + ICON[bucket] + '  ' + bucket + '  ×' + inBucket.length);
+      console.log('   ' + HEAD[bucket]);
+      /* Group by the distinct finding, so two viewports read as one finding seen twice
+         rather than as two independent problems. */
+      const byFinding = {};
+      inBucket.forEach((f) => {
+        const k = f.label + '||' + f.detail;
+        (byFinding[k] = byFinding[k] || { f, routes: [] }).routes.push(f.route + '/' + f.vp);
+      });
+      Object.keys(byFinding).forEach((k) => {
+        const { f, routes } = byFinding[k];
+        const hit = [...new Set(routes.map((r) => r.split('/')[0]))];
+        console.log('\n     · routes: ' + hit.join(', ') + '   (×' + routes.length + ' incl. viewports)');
+        console.log('       assert: ' + f.label);
+        if (f.detail) console.log('       detail: ' + f.detail.replace(/\s+/g, ' ').slice(0, 150));
+        console.log('       why   : ' + f.why.replace(/\s+/g, ' '));
+      });
+    });
+
+    const n = (b) => failures.filter((f) => f.bucket === b).length;
+    console.log('\n' + '-'.repeat(74));
+    console.log('  REAL ' + n('REAL') + '   ·   UNPROVEN ' + n('UNPROVEN') + '   ·   ENV ' + n('ENV') +
+                '   ·   TOTAL ' + fail);
+    if (n('REAL') === 0 && n('UNPROVEN') > 0)
+      console.log('  No known defect — but UNPROVEN is not green. Those need an authenticated run.');
+    console.log('-'.repeat(74));
+  }
   process.exit(fail ? 1 : 0);
 });

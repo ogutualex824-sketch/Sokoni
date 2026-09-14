@@ -7,6 +7,16 @@
  */
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { defineSecret } = require('firebase-functions/params');
+
+/* providerRequestShop provisions a Till through the canonical mintSokoniTillCore, which mints
+   a signed QR token with QR_SIGNING_SECRET. A v2 function may only read a secret it declares:
+   without this, `QR_SIGNING_SECRET.value()` throws "Signing secret not configured" AT RUNTIME,
+   AFTER the Till document has already been written — leaving a Till that exists while the
+   caller is told provisioning failed. Declared here for exactly that one op; every other route
+   ignores it. Same secret name as sokoni-till.js, and defineSecret is keyed by name, so this
+   binds the same parameter rather than introducing a second one. */
+const QR_SIGNING_SECRET = defineSecret('QR_SIGNING_SECRET');
 
 const _OPTS = {
   region:          'us-central1',
@@ -14,6 +24,7 @@ const _OPTS = {
   timeoutSeconds:  120,
   memory:          '512MiB',
   minInstances:    1,     /* keep one warm — the provider dashboard's hot path (no cold start on load) */
+  secrets:         [QR_SIGNING_SECRET],
 };
 
 let _mod;
@@ -26,7 +37,10 @@ function _h() {
       require('./provider-ops')._h,
       require('./booking-service')._h,             /* Phase B: authoritative service create */
       require('./booking-availability-guard')._h,  /* read-only availability-vs-booking impact check */
-      require('./booking-resolution')._h);         /* Slice 2: affected-booking resolution engine */
+      require('./booking-resolution')._h,          /* Slice 2: affected-booking resolution engine */
+      /* Merchant identity on request — provisions the SAME shops/sellers/businesses
+         projection merchant approval uses (provider-shop.js), never a healthcare variant. */
+      { providerRequestShop: require('./provider-shop').providerRequestShop });
   }
   return _mod;
 }
@@ -53,6 +67,7 @@ const ROUTES = [
   'providerSubmitVerification',
   'providerGetPublicProfile',
   'providerSearchProviders',
+  'providerRequestShop',
   'providerGetAnalytics',
   'providerGetPlans',
   // provider-ops — dashboard + service management (post-onboarding)

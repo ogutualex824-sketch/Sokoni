@@ -1,10 +1,10 @@
 {
-  "commit": "7c5bfbb1b6e7b894cd3ac72aa4a29cd78f688d59",
-  "commitShort": "7c5bfbb",
-  "branch": "fix/algolia-batch-poisoning",
-  "buildTime": "2026-08-11T09:09:00.398Z",
+  "commit": "fa5082bc0cc1f541edba9b28950f3ca28fd4e6a6",
+  "commitShort": "fa5082b",
+  "branch": "release/multishop-checkout-certified",
+  "buildTime": "2026-08-30T20:01:33.173Z",
   "serviceWorker": "service-worker.js",
-  "cacheVersion": "sokoni-20260811090859-v513",
+  "cacheVersion": "sokoni-20260830200132-v520",
   "environment": "production",
   "dirtyWorkingTree": true
 }

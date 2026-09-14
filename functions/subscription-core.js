@@ -115,6 +115,30 @@ async function _fromProvider(uid) {
   });
 }
 
+/* merchantSubscriptions/{uid} — the CANONICAL merchant subscription state (2026-09-13).
+ *
+ * A SOKONI merchant is more than a seller: the same relationship carries Shop, POS, Till,
+ * inventory, orders, Stories and analytics. `sellerSubscriptions` named only the selling half
+ * and — worse — was read by nothing in this resolver, so a subscription written there resolved
+ * as UNSUBSCRIBED for commission, listing limits and every capability. This store replaces it
+ * under a name that matches what is actually bought.
+ *
+ * Read FIRST for a merchant, with the legacy sources kept beneath it: production holds 7 live
+ * rows in `subscriptions` (hubType 'seller'), and dropping that fallback would move every one
+ * of them to the Free rate — a 16% charge on merchants who are paying for less. */
+async function _fromMerchant(uid) {
+  const s = await _db().collection('merchantSubscriptions').doc(uid).get();
+  if (!s.exists) return null;
+  const d = s.data();
+  return _canonical('merchant', uid, {
+    role: 'merchant', tier: d.package || d.tier || d.plan, status: d.status,
+    trial: d.trial === true || d.trialStatus === 'active',
+    billingCycle: d.billingCycle, priceCents: d.price, commissionRate: Number(d.commissionRate),
+    limits: d.limits, features: d.features, renewalAt: d.renewalAt || d.currentPeriodEnd,
+    expiryAt: d.expiresAt || d.currentPeriodEnd, paymentMethod: d.paymentMethod, raw: d,
+  });
+}
+
 async function _fromAccount(uid, role) {
   // Single-field equality (auto-indexed) + in-memory role filter → no composite index.
   const snap = await _db().collection('accountSubscriptions').where('accountId', '==', uid).limit(50).get();
@@ -166,7 +190,34 @@ async function _fromAi(uid) {
 
 /* Priority of sources for a given role (most authoritative first). */
 function _sourcesFor(role, hubType) {
+  /* ── HEALTHCARE IS ITS OWN COMMERCIAL BOUNDARY (owner decision 2026-09-13) ──────────────
+   * A Healthcare account's subscription is clinic | hospital | enterprise, held in
+   * accountSubscriptions with role 'healthcare'. The five generic provider tiers are NOT
+   * authoritative for Healthcare.
+   *
+   * This branch reads accountSubscriptions and NOTHING ELSE — in particular it never falls
+   * through to providerSubscriptions. That omission is the whole point: a healthcare account
+   * that also holds a legacy provider subscription must not resolve to it, because the
+   * provider path is read FIRST for role 'provider' and would otherwise win. Two stores
+   * answering the same question with different tiers is the split-brain this boundary exists
+   * to prevent, and a fallback here would quietly reintroduce it.
+   *
+   * No subscription therefore means NONE — the unsubscribed floor — never a provider tier. */
+  if (role === 'healthcare' || hubType === 'healthcare') return [(u) => _fromAccount(u, 'healthcare')];
   if (role === 'provider') return [(u) => _fromProvider(u), (u) => _fromAccount(u, 'provider')];
+  /* ── MERCHANT (2026-09-13) ──────────────────────────────────────────────────────────────
+   * 'seller' is accepted alongside 'merchant' because that is the role finos-utils already
+   * passes (_resolveSellerPlan -> resolveSubscription(uid, {role:'seller'})), and the whole
+   * point of this branch is that the commission path and the capability path resolve the SAME
+   * subscription. Renaming the concept without accepting the old role would have split them.
+   *
+   * Order matters: the canonical store first, then the two legacy stores that actually hold
+   * production data. Removing the fallbacks is a separate migration, not a rename. */
+  if (role === 'merchant' || role === 'seller') {
+    return [(u) => _fromMerchant(u),
+            (u) => _fromBilling(u, hubType || 'seller'),
+            (u) => _fromAccount(u, 'merchant')];
+  }
   if (role === 'ai' || hubType === 'ai') return [(u) => _fromAi(u)];
   if (role) return [(u) => _fromBilling(u, hubType || role), (u) => _fromAccount(u, role)];
   return [(u) => _fromBilling(u, hubType), (u) => _fromAccount(u, null), (u) => _fromProvider(u), (u) => _fromAi(u)];

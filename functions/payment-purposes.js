@@ -236,6 +236,58 @@ const PURPOSES = {
     },
   },
 
+  /* ── Healthcare subscription (clinic | hospital | enterprise) ─────────
+     The price comes from functions/healthcare-plans.js — the one table for the
+     Healthcare hub — and NEVER from the request. The client sends a tier; the
+     server prices it. That is the whole security property: a tier is a menu
+     choice, an amount is an assertion, and only the server may make it.
+
+     The resource is the SUBSCRIBER, not a document the client can point at:
+     resourceId is the caller's own uid, so an intent can never be minted
+     against somebody else's account. Activation is separately gated by the
+     entitlement engine's ownership check, which compares the payment's uid to
+     the intent's owner — belt and braces, and neither is a substitute for the
+     other. */
+  healthcare_subscription: {
+    resourceType: 'healthcareSubscription',
+    async price(uid, data) {
+      const plans = require('./healthcare-plans');
+      const tier = String(data.tier || data.planId || '').trim().toLowerCase();
+      if (!tier) fail('invalid-argument', 'tier is required.');
+
+      const plan = plans.resolve(tier);
+      /* An unknown tier is REFUSED, never defaulted. Defaulting an unrecognised
+         plan to the cheapest one would let a typo buy a subscription, and
+         defaulting to the dearest would charge for something nobody chose. */
+      if (!plan) {
+        fail('invalid-argument',
+          `Unknown Healthcare plan "${tier}". Valid plans: ${plans.TIERS.join(', ')}.`);
+      }
+
+      const cents = Math.max(0, Math.round(Number(plan.priceCents) || 0));
+      if (cents <= 0) fail('failed-precondition', `Healthcare plan "${tier}" has no price.`);
+
+      return {
+        amountCents: cents,
+        currency: 'KES',
+        resourceType: 'healthcareSubscription',
+        resourceId: uid,
+        metadata: {
+          type: 'healthcare-subscription',
+          hub: plans.HUB,
+          tier: plan.id,
+          planLabel: plan.label,
+          /* Capacity is snapshotted so the activated subscription records what was
+             BOUGHT, not what the table happens to say months later — the same
+             snapshot discipline the booking contract applies to price. */
+          limits: { doctors: plan.limits.doctors, services: plan.limits.services },
+          /* NO commission field. commission-config owns the rate, keyed by hub;
+             ADR-015 fixes Healthcare bookings at 5% regardless of tier. */
+        },
+      };
+    },
+  },
+
   /* ── SOKONI Till sale (Q5 of the Till/QR gate) ────────────────────────
      The one registry entry the Till/QR programme adds — no change to
      createPaymentIntent, the webhook, or the reconciler, per this file's own
