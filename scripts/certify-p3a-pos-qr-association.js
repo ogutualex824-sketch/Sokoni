@@ -56,6 +56,31 @@ function sab(id, what, original, mutated, detector) {
   return f ? ok(id, 'SABOTAGE ' + what + ' → detected') : bad(id, 'SABOTAGE ' + what + ' → NOT detected');
 }
 
+/* THE BASELINE THIS GATE IS MEASURED AGAINST.
+   "Compare to HEAD" was correct while the change sat unstaged and became self-referential the
+   moment it was committed: HEAD then CONTAINED the insertion, so "reversing it restores HEAD"
+   could never hold again, and "count my hunks in git diff HEAD" read zero. A suite that only
+   passes in the window before its own commit cannot serve as a regression.
+
+   So the baseline is resolved from history: the first commit that introduced
+   `_associatePosQrCallback`, minus one. Before this gate is committed that commit does not
+   exist yet and HEAD is itself the baseline. Either way the question stays the same one. */
+function p3aBaseline() {
+  try {
+    const out = execSync('git log --format=%H -S_associatePosQrCallback -- functions/index.js',
+      { cwd: ROOT, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }).trim();
+    const first = out.split('\n').filter(Boolean).pop();
+    if (!first) return { ref: 'HEAD', committed: false };
+    /* `~1`, NOT `^`. execSync goes through cmd.exe on Windows, where `^` is the ESCAPE
+       CHARACTER and is silently eaten — so `<sha>^` became `<sha>`, the commit that CONTAINS
+       this change, and every baseline comparison quietly measured the gate against itself.
+       It failed loudly here; a check written the other way round would have passed vacuously. */
+    return { ref: first + '~1', committed: true, at: first };
+  } catch (_) { return { ref: 'HEAD', committed: false }; }
+}
+const BASE = p3aBaseline();
+const baseFile = (p) => { try { return execSync('git show ' + BASE.ref + ':' + p, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }); } catch (_) { return null; } };
+
 function blockOf(src, name) {
   if (!src) return null;
   const i = src.indexOf(name);
@@ -263,9 +288,9 @@ async function main() {
   section('5  THE CERTIFIED ONLINE RAIL IS UNCHANGED');
 
   {
-    const wiHead = blockOf(headFile('functions/index.js'), 'exports.webhookIntasend');
+    const wiHead = blockOf(baseFile('functions/index.js'), 'exports.webhookIntasend');
     const wiNow = blockOf(IDX, 'exports.webhookIntasend');
-    if (!wiHead) { blocked('E5-0', 'cannot read webhookIntasend at HEAD'); }
+    if (!wiHead) { blocked('E5-0', 'cannot read webhookIntasend at ' + BASE.ref); }
     else {
       /* Reverse the insertion and the handler must be byte-identical to HEAD again. That is a
          far stronger statement than "it looks similar": it proves the ONLY change is the seam. */
@@ -275,7 +300,8 @@ async function main() {
         '    if (!snap.exists) { res.status(200).send("OK"); return; }\n');
       check('E5-1', !!inserted, 'the insertion is locatable in the current handler');
       check('E5-2', restored === wiHead,
-        'REVERSING the insertion restores webhookIntasend BYTE-FOR-BYTE to HEAD — nothing else changed',
+        'REVERSING the insertion restores webhookIntasend BYTE-FOR-BYTE to the pre-P3-A baseline ('
+        + BASE.ref + ') — the seam is the ONLY change',
         restored === wiHead ? '' : 'lengths ' + restored.length + ' vs ' + wiHead.length);
 
       const after = wiNow.slice(wiNow.indexOf('const existing = snap.data();'));
@@ -428,7 +454,7 @@ async function main() {
   section('7  PROTECTED RAILS — byte-identical to HEAD');
 
   {
-    const head = headFile('functions/index.js');
+    const head = baseFile('functions/index.js');
     if (!head) { blocked('G7-0', 'cannot read functions/index.js at HEAD'); }
     else {
       for (const n of ['exports.intasendWebhook', 'exports.verifyIntasendPayment',
@@ -443,11 +469,11 @@ async function main() {
       check('G7-initiateSTK', stk !== null && !/_associatePosQrCallback|_qrAssoc|P3-A/.test(stk),
         'initiateSTKPush carries none of THIS gate\'s markers — it differs from HEAD only through another agent\'s work');
     }
-    const c2b = headFile('functions/mpesa-c2b.js');
+    const c2b = baseFile('functions/mpesa-c2b.js');
     check('G7-c2b', c2b !== null && c2b === read('functions/mpesa-c2b.js'),
       'mpesa-c2b.js byte-identical — C2B is not Daraja and not IntaSend; it is untouched either way');
 
-    const qr = headFile('functions/pos-qr.js');
+    const qr = baseFile('functions/pos-qr.js');
     check('G7-posqr', qr !== null && qr === read('functions/pos-qr.js'),
       'pos-qr.js byte-identical — P1\'s completePOSQRPayment remains the ONLY authority for paid');
   }
@@ -464,8 +490,11 @@ async function main() {
       check('H8-' + f.replace(/.*\//, ''), mine.length === 0, f + ' carries none of this gate\'s markers');
     }
 
-    /* index.js is shared. Classify its hunks and require ZERO mixed. */
-    const d = execSync('git diff HEAD -- functions/index.js', { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    /* index.js is shared. Classify its hunks and require ZERO mixed.
+       Measured from the baseline, so this holds before AND after the gate is committed: before,
+       BASE is HEAD and the hunks are the uncommitted ones; after, BASE is the parent commit and
+       they are the committed ones plus whatever else is still in flight. */
+    const d = execSync('git diff ' + BASE.ref + ' -- functions/index.js', { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
     const hs = []; let cur = null;
     d.split('\n').forEach((l) => { if (l.startsWith('@@')) { if (cur) hs.push(cur); cur = [l]; } else if (cur) cur.push(l); });
     if (cur) hs.push(cur);
@@ -478,7 +507,9 @@ async function main() {
     });
     check('H8-hunks', mixed === 0,
       'index.js hunks: ' + mineN + ' mine / ' + theirsN + ' theirs / ' + mixed + ' MIXED — a mixed hunk cannot be staged safely');
-    check('H8-mine', mineN === 3, 'this gate contributes exactly 3 hunks (require, helper, call site) — found ' + mineN);
+    check('H8-mine', mineN === 3,
+      'this gate contributes exactly 3 hunks (require, helper, call site) — found ' + mineN
+      + ' measured from ' + BASE.ref + (BASE.committed ? ' (committed at ' + BASE.at.slice(0, 7) + ')' : ' (not yet committed)'));
   }
 
   /* ══════════════════════════════════════════════════════════════════════════════════════ */
