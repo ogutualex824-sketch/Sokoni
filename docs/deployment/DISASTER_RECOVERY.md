@@ -84,12 +84,12 @@
 **Response:**
 1. Check IntaSend Dashboard for API health
 2. Check Cloudflare for webhook URL accessibility
-3. Check `intasendWebhook` function logs in GCP
+3. Check `webhookIntasend` function logs in GCP
 4. If IntaSend API is down: payments queue up — they will retry on recovery
 5. If webhook is misconfigured:
    ```bash
    # Redeploy webhook function only
-   firebase deploy --only functions:intasendWebhook --project=sokoni-aeb26
+   firebase deploy --only functions:webhookIntasend --project=sokoni-aeb26
    ```
 6. Manually reconcile stuck payments after recovery:
    ```bash

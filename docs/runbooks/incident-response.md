@@ -160,7 +160,7 @@ Within 24 hours, document in `docs/incidents/YYYY-MM-DD-title.md`:
 ### Symptom: STK Push not triggering
 
 1. Check IntaSend dashboard → API logs
-2. Check Cloud Function `intasendWebhook` logs in Firebase Console
+2. Check Cloud Function `webhookIntasend` logs in Firebase Console
 3. Verify `INTASEND_PUBLIC_KEY` in `sokoni-config.js` is the live key (`ISPubKey_live_`)
 4. Test with IntaSend sandbox to isolate platform vs IntaSend issue
 5. If IntaSend is down: notify users, halt checkout — do NOT allow offline approvals

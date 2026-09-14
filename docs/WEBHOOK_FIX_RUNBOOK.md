@@ -97,7 +97,7 @@ Expected output includes:
 ### Step 4: Deploy
 
 ```bash
-firebase deploy --only functions:intasendWebhook
+firebase deploy --only functions:webhookIntasend
 ```
 
 Wait for exit code 0. Do not deploy other functions concurrently.
@@ -113,13 +113,13 @@ returns 500 (not 401), which means the IAM grant or secret version is missing.
 # Should return 200 OK
 # (no payment in Firestore for SMOKE-TEST-1 so the function exits early with 200)
 curl -s -w "\nHTTP %{http_code}\n" \
-  -X POST https://us-central1-sokoni-aeb26.cloudfunctions.net/intasendWebhook \
+  -X POST https://us-central1-sokoni-aeb26.cloudfunctions.net/webhookIntasend \
   -H "Content-Type: application/json" \
   -d '{"challenge":"YOUR_CHALLENGE_VALUE","invoice":{"invoice_id":"SMOKE-TEST-1","state":"PENDING","api_ref":"SMOKE-TEST-1"}}'
 
 # Should return 401 Unauthorized
 curl -s -w "\nHTTP %{http_code}\n" \
-  -X POST https://us-central1-sokoni-aeb26.cloudfunctions.net/intasendWebhook \
+  -X POST https://us-central1-sokoni-aeb26.cloudfunctions.net/webhookIntasend \
   -H "Content-Type: application/json" \
   -d '{"challenge":"wrongvalue","invoice":{"invoice_id":"SMOKE-TEST-2","state":"PENDING","api_ref":"SMOKE-TEST-2"}}'
 ```
@@ -137,7 +137,7 @@ The 500/401/200 distinction is deliberate: 500 = deployment configuration proble
 Check Cloud Logging for startup details:
 ```bash
 gcloud logging read \
-  'resource.type="cloud_run_revision" AND resource.labels.service_name="intasendWebhook"' \
+  'resource.type="cloud_run_revision" AND resource.labels.service_name="webhookIntasend"' \
   --project=sokoni-aeb26 --limit=20 --format=json
 ```
 
@@ -166,7 +166,7 @@ Confirm no `INTASEND_WEBHOOK_CHALLENGE secret is empty` error entry.
 
 ```bash
 curl -s -w "\nHTTP %{http_code}\n" \
-  -X POST https://us-central1-sokoni-aeb26.cloudfunctions.net/intasendWebhook \
+  -X POST https://us-central1-sokoni-aeb26.cloudfunctions.net/webhookIntasend \
   -H "Content-Type: application/json" \
   -d '{
     "challenge": "YOUR_CHALLENGE_VALUE",
@@ -192,7 +192,7 @@ curl -s -w "\nHTTP %{http_code}\n" \
 
 ```bash
 gcloud logging read \
-  'resource.type="cloud_run_revision" AND resource.labels.service_name="intasendWebhook"' \
+  'resource.type="cloud_run_revision" AND resource.labels.service_name="webhookIntasend"' \
   --project=sokoni-aeb26 --limit=30 --format=json
 ```
 
@@ -201,7 +201,7 @@ gcloud logging read \
 | Auth pass | No `challenge mismatch` warning | Challenge verified correctly |
 | Payment claimed | No `Already processed (raced)` | Transaction claimed this invocation |
 | Subscription | `Subscription auto-activated { uid, plan, ref }` | Activation block executed |
-| Subscription miss | `[intasendWebhook] Subscription auto-activation failed` | Activation threw — see Phase 3 |
+| Subscription miss | `[webhookIntasend] Subscription auto-activation failed` | Activation threw — see Phase 3 |
 
 **Firestore** (Firebase console, immediately after replay):
 
@@ -400,4 +400,6 @@ payments/<duplicate> →  status: "COMPLETE", reconciliationStatus: "REFUNDED"
 - `docs/PAYMENT_WEBHOOK_INVALID_SIGNATURE.md` — root cause investigation (confirmed evidence)
 - `docs/ENGINEERING_STANDARD.md` — investigation methodology
 - `functions/index.js:6493` — `exports.webhookIntasend` (canonical, Path B migration)
-- `functions/index.js:5613` — `exports.intasendWebhook` (secondary — pending decommission)
+- `functions/index.js` — `exports.intasendWebhook` — **RETIRED 2026-09-14.** The decommission
+  planned in Phase 4 step 7 above is done: it had received 49 requests in 180 days and answered
+  every one 401 or 405, and IntaSend's server never called it once.

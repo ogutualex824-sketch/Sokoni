@@ -120,7 +120,7 @@ Go to **Firebase Console → Authentication → Sign-in method**:
    ```
 4. Set the secret in Firebase (see section 1 above).
 5. In IntaSend dashboard → Webhooks → add:  
-   `https://us-central1-sokoni-app.cloudfunctions.net/intasendWebhook`
+   `https://us-central1-sokoni-aeb26.cloudfunctions.net/webhookIntasend`
 
 ---
 

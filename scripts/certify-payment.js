@@ -185,15 +185,21 @@ const UNV = (m, d) => rec('UNVERIFIED', m, d);
     if (pay.confirmedAmount != null) PASS(`confirmed amount = ${pay.confirmedAmount}`);
     else FAIL('confirmedAmount missing', 'The webhook never wrote the provider-confirmed amount.');
 
-    /* THE ENDPOINT DISCRIMINATOR — only intasendWebhook writes this field. */
+    /* NOT AN ENDPOINT DISCRIMINATOR. This claimed the field was written by the retired handler alone and,
+       on a miss, told the operator to repoint the dashboard at /intasendWebhook. Both claims
+       were wrong: BOTH handlers write `webhookReceivedAt`, and /intasendWebhook answered 401
+       to all 49 requests it ever received. Following that advice would have pointed production
+       at an endpoint that accepts nothing. `intasendWebhook` was retired on 2026-09-14;
+       `webhookIntasend` is the only IntaSend receiver, and it does create orders, ledger
+       entries and settlement. The field means the webhook ran — nothing about WHICH. */
     if (pay.webhookReceivedAt) {
-      PASS('webhookReceivedAt present -> intasendWebhook fired',
-        'Correct endpoint is configured in the IntaSend dashboard.');
+      PASS('webhookReceivedAt present -> the IntaSend webhook fired',
+        'webhookIntasend recorded the provider callback.');
     } else {
-      FAIL('webhookReceivedAt MISSING -> intasendWebhook did NOT fire',
-        'The IntaSend dashboard is very likely pointing at /webhookIntasend, which records a ' +
-        'webhookPayments row and creates NO order, NO ledger entry and NO settlement. ' +
-        'Repoint it at /intasendWebhook and re-run this trace.');
+      FAIL('webhookReceivedAt MISSING -> no IntaSend webhook has fired for this payment',
+        'Either the callback never arrived, or the dashboard is not pointing at ' +
+        'https://us-central1-sokoni-aeb26.cloudfunctions.net/webhookIntasend — the only ' +
+        'IntaSend receiver. Check its Cloud Run logs for the api_ref.');
     }
     if (pay.intasendState) PASS(`provider state = ${pay.intasendState}`);
   }

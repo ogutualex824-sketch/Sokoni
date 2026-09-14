@@ -6402,9 +6402,9 @@ exports.initiateSTKPush = onCall(
    the guard against double credit. We always credit tx.amount (recorded
    server-side at initiation), never the webhook-supplied amount.
 
-   Lives as one helper (called from both webhookIntasend and the secondary
-   intasendWebhook) rather than a pasted block, so the two endpoints can never
-   drift. Returns true when the ref was a wallet top-up and the caller should ack
+   Lives as one helper rather than an inline block. Its second caller, the secondary
+   `intasendWebhook`, was retired 2026-09-14 after production evidence showed IntaSend had
+   never once called it. Returns true when the ref was a wallet top-up and the caller should ack
    and return; false to fall through to the normal payments path. A transaction
    error propagates (→ 5xx → IntaSend retry), which is the desired recovery. */
 async function _finalizeWalletTopUp(apiRef, state, amount, tag) {
@@ -6469,269 +6469,9 @@ async function _finalizeWalletTopUp(apiRef, state, amount, tag) {
 
 /* Phase E: service-booking payments are HELD, not credited — the provider is credited
    only by Phase C settlement at completion (contract invariant 1). Shared helper lives
-   in booking-payment-sweep.js (unit-tested); called at the top of BOTH IntaSend
-   COMPLETE handlers, returning true when it handled the payment so the caller returns. */
+   in booking-payment-sweep.js (unit-tested); called at the top of the IntaSend COMPLETE
+   handler, returning true when it handled the payment so the caller returns. */
 const { holdServiceBookingPayment: _holdServiceBookingPayment } = require('./booking-payment-sweep');
-
-/* IntaSend Webhook — called by IntaSend servers on payment state change */
-exports.intasendWebhook = onRequest(
-  { timeoutSeconds: 30, secrets: [INTASEND_WEBHOOK_CHALLENGE], invoker: "public", minInstances: 1 },
-  async (req, res) => {
-    if (req.method !== "POST") { res.status(405).send("Method Not Allowed"); return; }
-
-    /* Verify IntaSend challenge — IntaSend authenticates webhooks with a `challenge`
-       value in the request body, not a header-based HMAC. Production evidence:
-         diag.signatureHeaders = ""           → no x-intasend-signature header sent
-         diag.hasChallengeField = true        → body carries a challenge field
-         diag.challengeLen = 12              → 12-char value set in IntaSend dashboard
-       Both values are normalised to a 32-byte HMAC digest before comparison so
-       timingSafeEqual receives same-length buffers regardless of input length. */
-    const challenge         = String((req.body && req.body.challenge) || "");
-    const expectedChallenge = INTASEND_WEBHOOK_CHALLENGE.value();
-    /* Startup guard: a missing or empty secret means the IAM grant or secret
-       version is not in place. 500 is the correct signal — this is a config
-       error, not an auth failure. A 500 does not reveal the secret value. */
-    if (!expectedChallenge) {
-      logger.error("[intasendWebhook] INTASEND_WEBHOOK_CHALLENGE secret is empty — check Secret Manager IAM and secret version");
-      res.status(500).send("Service unavailable");
-      return;
-    }
-    const normKey = Buffer.from("sokoni-intasend-challenge-norm");
-    const a = crypto.createHmac("sha256", normKey).update(challenge).digest();
-    const b = crypto.createHmac("sha256", normKey).update(expectedChallenge).digest();
-    if (!crypto.timingSafeEqual(a, b)) {
-      logger.warn("[intasendWebhook] challenge mismatch — rejecting", {
-        hasChallenge: challenge.length > 0,
-        challengeLen: challenge.length,
-        invoiceId:    req.body?.invoice?.invoice_id || req.body?.invoice_id || "unknown",
-        method:       req.method,
-      });
-      res.status(401).send("Unauthorized");
-      return;
-    }
-
-    /* IntaSend sends a flat payload per official docs — all fields at root level.
-       The `invoice` fallback handles any future nested-object variant gracefully. */
-    const invoice    = req.body?.invoice || {};
-    const state      = String(invoice.state    || req.body?.state    || "FAILED").toUpperCase();
-    const apiRef     = invoice.api_ref         || req.body?.api_ref;
-    const checkoutId = invoice.id              || req.body?.invoice_id;
-    const trackingId = req.body?.tracking_id || invoice.tracking_id || req.body?.file_id || invoice.file_id || null;
-    const amount     = Number(invoice.net_amount || invoice.amount || req.body?.net_amount || req.body?.value || 0);
-
-    /* Log the full payload before any guard (B2C field-name visibility). */
-    try { const _rb = { ...(req.body || {}) }; delete _rb.challenge; delete _rb.signature; delete _rb.secret;
-      console.log("[intasendWebhook] raw payload:", JSON.stringify(_rb).slice(0, 4000)); } catch (_) {}
-
-    /* Seller B2C payouts ("pout_…") — settle FIRST, by ANY identifier (api_ref OR
-       tracking_id/file_id). The docs disagreed on which webhook IntaSend hits, so BOTH
-       webhooks now settle B2C — whichever URL is registered, a confirmation reconciles. */
-    try {
-      for (const r of [apiRef, checkoutId, trackingId].filter(Boolean)) {
-        if (await wallet.finalizeB2CPayoutFromWebhook(db, r, state, req.body)) { res.status(200).send("OK"); return; }
-      }
-    } catch (e) { console.error("[intasendWebhook] B2C payout finalize error:", e.message); }
-
-    /* Below (top-up + collection/payment) is keyed on api_ref. */
-    if (!apiRef) { res.status(400).send("Missing api_ref"); return; }
-
-    /* Wallet top-ups ("wtop_…") have no payments/{ref} doc — finalize them via
-       the shared idempotent claim before the payments path below. */
-    if (await _finalizeWalletTopUp(apiRef, state, amount, "intasendWebhook")) {
-      res.status(200).send("OK");
-      return;
-    }
-
-    const payRef = db.collection("payments").doc(apiRef);
-    const snap   = await payRef.get();
-    if (!snap.exists) { res.status(200).send("OK"); return; }
-
-    const existing = snap.data();
-    if (existing.status === "COMPLETE") { res.status(200).send("OK"); return; }
-
-    const fsStatus = state === "COMPLETE" ? "COMPLETE" : state === "FAILED" ? "FAILED" : "PENDING";
-
-    /* P0-2: atomically CLAIM the transition inside a transaction, exactly as the
-       Daraja callback does (P0-1). IntaSend retries webhooks on timeout/5xx, and the
-       previous code was a non-transactional read-check-write followed by
-       commissionLedger.add() (AUTO-ID) — so two concurrent retries could both pass
-       the "already COMPLETE?" check and both append, producing DUPLICATE commission
-       ledger entries for a single payment (corrupting ledger consistency and any
-       settlement/payout derived from it). Only the single winner writes the ledger,
-       and it writes with a DETERMINISTIC doc id so even a re-run overwrites rather
-       than duplicating. */
-    let claimed = false;
-    await db.runTransaction(async (txn) => {
-      const s = await txn.get(payRef);
-      if (!s.exists) return;
-      if (s.data().status === "COMPLETE") return;   /* a concurrent retry already won */
-      txn.update(payRef, {
-        status:            fsStatus,
-        intasendState:     state,
-        confirmedAmount:   amount,
-        updatedAt:         admin.firestore.FieldValue.serverTimestamp(),
-        webhookReceivedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      claimed = true;
-    });
-
-    if (!claimed) {
-      console.log(`[intasendWebhook] Already processed (raced): ${apiRef}`);
-      res.status(200).send("OK");
-      return;
-    }
-
-    /* Terminal NON-payment for a service booking → release the held slot immediately
-       instead of waiting for the expiry sweep. Keyed off the RAW state, since fsStatus
-       collapses CANCELLED/EXPIRED/REJECTED/TIMEOUT into "PENDING". No-op (returns false)
-       for non-booking intents, so product/wallet failures fall through unchanged. */
-    if (["FAILED", "CANCELLED", "EXPIRED", "REJECTED", "TIMEOUT"].includes(state)) {
-      const { releaseServiceBookingOnTerminalPayment } = require('./booking-payment-sweep');
-      if (await releaseServiceBookingOnTerminalPayment(db, admin, apiRef, existing.intentRef, state)) {
-        res.status(200).send("OK"); return;
-      }
-    }
-
-    if (fsStatus === "COMPLETE") {
-      const payData  = existing;
-      /* Phase E: a service-booking payment is HELD (paid_held), never credited here —
-         the provider is credited only by Phase C settlement at completion. Handled in
-         isolation via the server-minted intent; skips all commission/credit/creation. */
-      if (await _holdServiceBookingPayment(db, admin, apiRef, existing.intentRef, amount)) { res.status(200).send("OK"); return; }
-      const category = payData.meta?.category || "default";
-      /* Commission MUST be calculated by finos-utils — single source of truth for all rates */
-      let sokoniCut = 0, commissionPct = 0;
-      try {
-        const { calculateCommission } = require('./finos-utils');
-        /* `db` is the required first argument. It was omitted, so calculateCommission bound
-           `db` to the options object, `opts` was undefined, destructuring threw, and this
-           landed in the catch below — meaning EVERY payment through this webhook was charged
-           the hardcoded 10% fallback instead of its category's real rate. Legal should be 12%,
-           marketplace 3%, digital 10%... all of them were 10%.
-
-           The second bug is in the success path itself: the function returns `effectiveRate`,
-           not `commissionPct`. So even when it worked, `commissionPct` recorded as 0 and the
-           commissionLedger entry claimed a 0% rate against a non-zero cut. */
-        const commResult = await calculateCommission(db, {
-          orderAmountCents: amount * 100,
-          category,
-          sellerId: payData.uid,
-        });
-        sokoniCut     = commResult.commissionCents ? Math.round(commResult.commissionCents / 100) : 0;
-        commissionPct = commResult.effectiveRate ?? 0;
-      } catch (commErr) {
-        /* Do not apply a hardcoded fallback rate — this would over-charge marketplace
-           sellers (3%) by 7 percentage points. Instead, flag the entry for manual review
-           so the settlement team can apply the correct rate. */
-        console.error('[webhook] Commission calc failed — flagging for manual review', commErr.message);
-        commissionPct = null;
-        sokoniCut = 0;
-        await db.collection("commissionReviewQueue").add({
-          ref: apiRef, amount, category, uid: payData.uid,
-          reason: commErr.message,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        }).catch(() => {});
-      }
-      /* Deterministic doc id — ONE commission entry per payment reference.
-         .set() (not .add()) so a replay/re-run overwrites rather than duplicating. */
-      await db.collection("commissionLedger").doc(apiRef).set({
-        ref: apiRef, checkoutId, uid: payData.uid,
-        providerName:  payData.meta?.providerName || "",
-        category,
-        commissionPct, sokoniCut,
-        providerNet:   amount - sokoniCut,
-        serviceTotal:  amount,
-        status:        "auto_collected",
-        source:        "intasend_webhook",
-        confirmedAt:   admin.firestore.FieldValue.serverTimestamp(),
-        createdAt:     admin.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true }).catch(err => console.error("Commission write failed:", err));
-
-      /* Subscription auto-activation — server-authoritative path.
-         paymentIntents/{ref} (written by createPaymentIntent) carries purpose,
-         planId, and uid. The client-side onSuccess path is fragile (tab close,
-         network drop); this webhook is the authoritative signal that payment
-         completed. Idempotent: same apiRef → same subscriptions/{uid} doc.
-
-         intentRef resolution: the payment document stores intentRef (set by
-         initiateSTKPush since this fix). For legacy payments without that field
-         we fall back to apiRef, which was the original design (same value when
-         the intent has not expired). */
-      try {
-        const intentRef  = existing.intentRef || apiRef;
-        const intentSnap = await db.collection("paymentIntents").doc(intentRef).get();
-        if (intentSnap.exists) {
-          const intent = intentSnap.data();
-          if (intent.purpose === "subscription" && intent.planId && intent.uid) {
-            const subRef  = db.collection("subscriptions").doc(intent.uid);
-            const subSnap = await subRef.get();
-            const subData = subSnap.exists ? subSnap.data() : null;
-            /* Only write if no active subscription exists for this payment ref */
-            if (!subData || subData.paymentRef !== apiRef) {
-              const expiresAt = new Date(Date.now() + 30 * 86400000);
-              await subRef.set({
-                uid:          intent.uid,
-                plan:         intent.planId,
-                planName:     intent.planName || intent.planId,
-                billingCycle: intent.billingCycle || "monthly",
-                status:       "active",
-                paymentRef:   apiRef,
-                amountPaid:   amount,
-                source:       "intasend_webhook",
-                activatedAt:  admin.firestore.FieldValue.serverTimestamp(),
-                expiresAt:    admin.firestore.Timestamp.fromDate(expiresAt),
-                updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
-              });
-              console.log("[intasendWebhook] Subscription auto-activated",
-                { uid: intent.uid, plan: intent.planId, ref: apiRef });
-              /* Audit trail for webhook-path activations */
-              db.collection("subscriptionAuditLog").add({
-                uid:       intent.uid,
-                plan:      intent.planId,
-                paymentRef: apiRef,
-                action:    "ACTIVATED",
-                source:    "intasend_webhook",
-                expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
-                timestamp: admin.firestore.FieldValue.serverTimestamp(),
-              }).catch(e => console.error("[intasendWebhook] Sub-audit log failed:", e.message));
-            }
-          }
-        }
-      } catch (subErr) {
-        /* Non-fatal: commission is already ledgered. Log ref so support can
-           manually activate via activateSubscription CF if needed. */
-        console.error("[intasendWebhook] Subscription auto-activation failed",
-          { ref: apiRef, err: subErr.message });
-      }
-
-      /* SHADOW MODE — Phase 2A+ (entitlement engine dual-run).
-         The legacy path above remains authoritative and has already run. This
-         asks the engine what it WOULD have written and records the comparison
-         to entitlementComparison, which no production reader consumes.
-
-         It cannot grant anything: engine.simulate() never opens a Firestore
-         transaction, so the safety is structural rather than a flag. Awaited
-         (not fire-and-forget) so the comparison is actually recorded before
-         the container can be frozen after the response — but wrapped so a
-         diagnostic can never turn a successful payment acknowledgement into a
-         500. Remove this block to disable shadow mode entirely. */
-      try {
-        const intentSnap2 = await db.collection("paymentIntents").doc(apiRef).get();
-        if (intentSnap2.exists && intentSnap2.data().purpose === "subscription") {
-          const adapters = require("./entitlement-adapters");
-          await adapters.shadowCompareSubscription(apiRef, {
-            uid: intentSnap2.data().uid || intentSnap2.data().ownerUid || null,
-          });
-        }
-      } catch (shadowErr) {
-        console.error("[intasendWebhook] shadow comparison skipped",
-          { ref: apiRef, err: shadowErr && shadowErr.message });
-      }
-    }
-
-    res.status(200).send("OK");
-  }
-);
 
 /* Cancel a pending STK push */
 exports.cancelPayment = onCall({ timeoutSeconds: 15 }, async (request) => {
@@ -7628,9 +7368,12 @@ async function _associatePosQrCallback(apiRef, state, gatewayInvoiceId, tag) {
   }
 }
 
-/* Canonical production receiver — IntaSend is configured to POST to this URL.
-   Challenge-based auth (body.challenge); full payment + subscription activation.
-   intasendWebhook is a secondary deployment that receives no real IntaSend traffic. */
+/* THE IntaSend receiver — IntaSend is configured to POST to this URL, proven from Cloud Run
+   logs: IntaSend's server (157.245.201.212) has only ever called this endpoint.
+   Challenge-based auth (body.challenge); full payment + subscription activation, seller wallet
+   crediting, order finalisation, bookings, deliveries, and the POS QR association (P3-A).
+   A second handler, `intasendWebhook`, was retired 2026-09-14: a strict subset that had
+   received 49 requests in 180 days and answered every one 401 or 405. */
 exports.webhookIntasend = onRequest(
   { timeoutSeconds: 30, secrets: [INTASEND_WEBHOOK_CHALLENGE], invoker: "public", minInstances: 1 },
   async (req, res) => {

@@ -77,7 +77,7 @@ Run this checklist every **Monday morning** before business hours. Log results i
 - [ ] **`firebase deploy --only hosting` succeeds** — run from a clean branch to confirm hosting pipeline is not broken
 - [ ] **Firebase Hosting has ≥2 previous releases** — Firebase Console → Hosting → Release history → confirm at least 2 prior releases are listed (rollback targets exist)
 - [ ] **Redis connectivity** — verify `REDIS_URL` in `functions/.env` resolves; check `redis-monitor.html` for connection status
-- [ ] **IntaSend webhook** — confirm `intasendWebhook` CF is active; verify last successful webhook event in Firestore `payments` collection is recent (< 24h if platform is active)
+- [ ] **IntaSend webhook** — confirm `webhookIntasend` CF is active; verify last successful webhook event in Firestore `payments` collection is recent (< 24h if platform is active)
 
 ---
 
@@ -150,7 +150,7 @@ Run this checklist every **Monday morning** before business hours. Log results i
 
 ### Detection
 
-- `intasendWebhook` CF logs show repeated 4xx/5xx from IntaSend
+- `webhookIntasend` CF logs show repeated 4xx/5xx from IntaSend
 - `payments` Firestore collection shows transactions stuck in `pending` status for >10 minutes
 - Cloudflare monitoring shows spike in checkout page errors
 
@@ -158,7 +158,7 @@ Run this checklist every **Monday morning** before business hours. Log results i
 
 1. **Check IntaSend dashboard** — Log in to app.intasend.com → Dashboard → API Status. Verify:
    - API keys are active and not expired
-   - Webhook URL (`https://us-central1-sokoni-aeb26.cloudfunctions.net/intasendWebhook`) is registered
+   - Webhook URL (`https://us-central1-sokoni-aeb26.cloudfunctions.net/webhookIntasend`) is registered
    - Recent webhook delivery log shows failures with error codes
 
 2. **Disable payment processing** — Update Firestore document `platform/config`:
@@ -368,7 +368,7 @@ gcloud firestore databases describe --project=sokoni-aeb26 --format="json(pointI
 node -e "const Redis = require('ioredis'); const r = new Redis(process.env.REDIS_URL); r.ping().then(v => { console.log('Redis:', v); r.quit(); })"
 
 # Verify IntaSend webhook is reachable
-curl -X POST https://us-central1-sokoni-aeb26.cloudfunctions.net/intasendWebhook \
+curl -X POST https://us-central1-sokoni-aeb26.cloudfunctions.net/webhookIntasend \
   -H "Content-Type: application/json" \
   -d '{"challenge":"ping"}'
 ```

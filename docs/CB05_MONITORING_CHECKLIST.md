@@ -27,7 +27,7 @@ For each: confirm the policy **exists**, is **enabled**, has a sane **threshold*
 
 | # | Alert | Condition (suggested) | Why it matters |
 |---|---|---|---|
-| B1 | **Payment failures** | `intasendWebhook` / `darajaSTKCallback` error-rate > 5% over 5 min | Money silently failing |
+| B1 | **Payment failures** | `webhookIntasend` / `darajaSTKCallback` error-rate > 5% over 5 min | Money silently failing |
 | B2 | **Payment webhook silence** | **0 invocations** of the payment webhooks in 60 min during trading hours | A dead webhook looks identical to "no sales" |
 | B3 | **Authentication failures** | `identitytoolkit` error-rate spike / 403 surge | Lockout or attack |
 | B4 | **Function error rate** | Any CF > 5% errors over 5 min | Broad regression |

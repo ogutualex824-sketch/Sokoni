@@ -1,3 +1,134 @@
+## 2026-09-14 (67) — `intasendWebhook` retired: the handler IntaSend never called
+
+**70 assertions, 0 failed, 0 blocked.** Suite: `scripts/certify-intasend-webhook-retirement.js`
+Regression: **775 assertions across 13 suites, 0 failed, 0 blocked.** Require-closure passes
+(287 relative requires in the staged blob, none missing). **Nothing deployed — the Cloud Run
+service is still live and its deletion is a separate, unauthorised action.**
+
+### A correction to entry 66, stated first
+
+Entry 66 said `intasendWebhook` had **"never received one"** callback in 180 days. That measurement
+filtered Cloud Logging on the `raw payload` line, which the handler writes **after** the challenge
+gate — so it counted callbacks that *authenticated*, not requests *received*.
+
+**Measured properly: 49 requests in 180 days.** The conclusion is unchanged and in fact stronger,
+but the phrasing was wrong.
+
+### What actually settled it was an IP comparison, not a traffic count
+
+| Caller | `intasendWebhook` | `webhookIntasend` |
+|---|---|---|
+| `157.245.201.212` — **IntaSend's own server** | **never, not once** | **14 × 200** |
+| `197.237.85.87` / `.21.106`, one identifying as `curl/8.19.0` | 33 × 401, 14 × 405 | 5 × 401 |
+| **2xx responses** | **ZERO** | 14 |
+
+"No traffic" would have been the weak argument. The strong one is that **the external system that
+matters is provably registered against the other endpoint.** Every request the retired handler ever
+saw came from two Kenyan addresses running the `curl` commands printed in this repository's own
+runbooks. **The only thing calling it was our own documentation.**
+
+### It had never written anything
+
+The two handlers tagged writes differently — `source: "intasend_webhook"` vs `"webhookIntasend"` —
+which is a fingerprint. On production Firestore:
+
+| | retired handler | live handler |
+|---|---:|---:|
+| `commissionLedger` | **0** | 10 |
+| `subscriptionAuditLog` | **0** | 1 |
+
+The right-hand column is the **positive control**. Without it, "0" is indistinguishable from a
+broken query. This agrees with the logs by an independent route: a `401` returns before any write.
+
+### A strict subset, enumerated rather than eyeballed
+
+260 lines against 786. Collections enumerated mechanically from each body: **zero collections and
+zero helpers unique to the retired handler.** With comments stripped, 10 of 144 functional lines
+differed — four log tags, four provenance tags, one error log, and one line **P3-A itself had
+changed** in the live handler.
+
+### The point of the gate was the prose, not the export
+
+D1 removed Daraja's callback URLs and left the instructions telling merchants to register them;
+the UI gate had to come back and finish it. So this gate removed **8 registration surfaces** —
+including `functions/package.json:60`, a registration instruction buried in a package manifest —
+and the **two documents that stated an active intention to repoint production at the dead
+endpoint** (`RIDER_EARNINGS_AUTHORITY.md`, which literally read *"This work therefore gates that
+change"*, and `certify-payment.js`).
+
+**The census itself under-counted, and the suite is what exposed it.** Beyond those 8 there were
+**13 OPERATIONAL instructions** nobody had listed: runbook commands, Cloud Logging queries, a
+monitoring alert, and `firebase deploy --only functions:intasendWebhook` in three separate
+runbooks — a command that now **fails**, and that an on-call engineer would meet during an
+incident. All 13 repointed.
+
+**A false claim went with them.** `certify-payment.js` asserted `webhookReceivedAt` was written
+"only by intasendWebhook" and, on a miss, told the operator to **repoint the dashboard at the dead
+endpoint**. Both handlers wrote that field, so the discriminator never worked — and following its
+advice would have pointed production at something answering 401 to everything.
+
+### What was deliberately KEPT
+
+The July 2026 migration record in `WEBHOOK_FIX_RUNBOOK.md`, including *"After stable observation
+period: decommission intasendWebhook (stub or undeploy)"*. **This gate completes a plan recorded
+two months ago**; erasing the plan would erase the reason. `K10-3` asserts that history survives,
+so §5 is proven to discriminate between an instruction and a record rather than deleting the word.
+
+### A name collision that would have broken a careless removal
+
+`functions/pos-terminal-live.js:971` defines **`_intasendWebhook`** — an unrelated POS card-terminal
+vendor driver on `posTerminalTransactions`. A name-based sweep deletes it. It is asserted
+byte-identical, and `X9-6` sabotages its removal.
+
+### Three suites rotted, and one of them proved its own guard
+
+`certify-p3a-pos-qr-association` and `certify-p3-matchback-removal` asserted the retired handler's
+**existence** — which was never an invariant, only a description of the world. Re-aimed, not
+widened: "is not wired" became "no longer exists"; "both webhooks are present" became "exactly one
+remains"; and a literal one-line drop-match became the invariant it stood for.
+
+**P3-A's `X9-7` sabotage anchored on a line inside the retired handler.** When that vanished the
+mutation stopped applying — and the `mutated !== original` guard **failed the check loudly instead
+of reporting a vacuous pass.** That is precisely the failure that guard was added to catch, caught
+in the wild. Re-aimed at the surviving invariant: exactly one association call site.
+
+### Two defects in this gate's own suite, both caught by running it
+
+* The baseline asked the **working tree** whether the handler still existed. The working tree
+  already had the removal, so it concluded "committed", searched history, and found the commit
+  that **added** the handler years ago — whose `~1` does not exist. Commit state must be asked of
+  a commit.
+* `G7-1` ("adds no Firestore deletion") scanned `git diff` across `functions/ scripts/ *.js` and
+  swept in **every dirty file in the repository**, reporting another agent's legitimate
+  `FieldValue.delete()` suspension work as this gate's deletions. Scoped to this gate's own files,
+  with `index.js` read hunk-by-hunk. *"Does the repository contain X"* is never the question.
+
+### Isolation
+
+`functions/index.js` hunks: **3 mine (+11/−268), 4 theirs, 0 mixed, 0 unclassified**, separability
+proven in both directions before staging. The **staged blob** was verified directly: none of the
+other agent's four markers appear in it, the export is gone, `webhookIntasend` and P3-A's
+association are intact, and all 287 of its relative requires resolve inside the staged tree.
+
+### Files affected
+
+`functions/index.js` (3 isolated hunks) · `functions/package.json` · `deploy-batches.ps1` ·
+`scripts/batch_deploy.sh` · `sokoni-endpoints.js` · `scripts/certify-payment.js` ·
+`scripts/verify-webhook-authority.js` · six runbooks/checklists ·
+`scripts/certify-intasend-webhook-retirement.js` (new) ·
+`docs/INTASEND_WEBHOOK_RETIREMENT_CENSUS.md` (new) · two re-aimed suites
+
+**Database:** none. **API:** one public endpoint removed from the repository — **not from
+production**. **Breaking:** none; it answered 401 to everything. **Deployment:** none.
+
+### Still open
+
+The deployed `intasendWebhook` Cloud Run service is **still live**, still answering 401. Its
+deletion is a separate authorisation, exactly as with the Daraja outbound three in entry 65.
+Production hosting still serves the pre-retirement console. D3 remains blocked.
+
+---
+
 ## 2026-09-14 (66) — P3-A: the callback now says WHICH sale. It still cannot say PAID.
 
 **99 assertions, 0 failed, 0 blocked.** Suite: `scripts/certify-p3a-pos-qr-association.js`

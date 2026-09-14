@@ -119,7 +119,7 @@ Template:
 ### INC-002: Payment Stuck in Pending
 
 1. Check IntaSend dashboard for webhook delivery logs
-2. Check `intasendWebhook` function logs in GCP
+2. Check `webhookIntasend` function logs in GCP
 3. If webhook failed: trigger manual reconciliation
    ```javascript
    // Call via Firebase Admin SDK:

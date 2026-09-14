@@ -7,7 +7,7 @@
     "test:coverage": "jest --testPathPattern=test/ --coverage --forceExit",
     "serve": "firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions",
-    "deploy:payment": "firebase deploy --only functions:initiateSTKPush,functions:intasendWebhook,functions:cancelPayment",
+    "deploy:payment": "firebase deploy --only functions:initiateSTKPush,functions:webhookIntasend,functions:cancelPayment",
     "deploy:subscriptions": "firebase deploy --only functions:activateSubscription",
     "deploy:vouchers": "firebase deploy --only functions:redeemVoucher",
     "deploy:monitoring": "firebase deploy --only functions:recordMetric",
@@ -57,6 +57,6 @@
     "https": "Built into Node.js — no separate package needed",
     "intasend": "Called via HTTPS directly — no SDK needed. Set INTASEND_PRIVATE_KEY via: firebase functions:secrets:set INTASEND_PRIVATE_KEY",
     "intasend_sandbox": "Set INTASEND_SANDBOX env var to 'true' for testing: firebase functions:config:set intasend.sandbox=true",
-    "webhook_url": "Register https://us-central1-sokoni-aeb26.cloudfunctions.net/intasendWebhook as your IntaSend webhook URL"
+    "webhook_url": "Register https://us-central1-sokoni-aeb26.cloudfunctions.net/webhookIntasend as your IntaSend webhook URL"
   }
 }

@@ -34,7 +34,6 @@
 
     /* Payments */
     darajaSTKCallback:        fn('darajaSTKCallback'),
-    intasendWebhook:          fn('intasendWebhook'),
     initiateRefund:           fn('initiateRefund'),
 
     /* Search */

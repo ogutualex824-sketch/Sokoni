@@ -253,8 +253,12 @@ async function main() {
     const vi = blockOf(IDX, 'exports.verifyIntasendPayment');
     check('D4-4', wi && /_associatePosQrCallback\(/.test(wi),
       '…and it is inside webhookIntasend — the handler that receives 100% of production callbacks');
-    check('D4-5', iw && !/_associatePosQrCallback\(/.test(iw),
-      'intasendWebhook is NOT wired — it receives no production traffic and was not touched merely because it exists');
+    /* Was: "intasendWebhook is NOT wired". It has since been RETIRED entirely (2026-09-14),
+       which is the strongest possible form of not-wired. The invariant P3-A cares about is
+       that its association lives in exactly ONE handler, and D4-3 already counts that. */
+    check('D4-5', iw === null,
+      'intasendWebhook no longer exists at all — retired after production logs showed IntaSend '
+      + 'never called it; P3-A never wired it, and now there is nothing to wire');
     check('D4-6', vi && !/_associatePosQrCallback\(/.test(vi),
       'verifyIntasendPayment is NOT modified');
 
@@ -457,7 +461,10 @@ async function main() {
     const head = baseFile('functions/index.js');
     if (!head) { blocked('G7-0', 'cannot read functions/index.js at HEAD'); }
     else {
-      for (const n of ['exports.intasendWebhook', 'exports.verifyIntasendPayment',
+      /* `exports.intasendWebhook` was in this list until 2026-09-14, when it was retired in
+         its own gate. "Byte-identical to HEAD" cannot hold for something that no longer
+         exists; its ABSENCE is asserted at D4-5 instead. */
+      for (const n of ['exports.verifyIntasendPayment',
         'exports.darajaSTKCallback', 'exports.webhookMpesa']) {
         const a = blockOf(head, n), b = blockOf(IDX, n);
         if (a === null) { blocked('G7-' + n, n + ' not found at HEAD'); continue; }
@@ -565,9 +572,16 @@ async function main() {
       return wi.indexOf('_associatePosQrCallback(apiRef') < wi.indexOf('const snap   = await payRef.get();');
     });
 
-  sab('X9-7', 'wiring intasendWebhook as well', IDX,
-    IDX.replace('if (await _finalizeWalletTopUp(apiRef, state, amount, "intasendWebhook")) {',
-      'await _associatePosQrCallback(apiRef, state, checkoutId, "intasendWebhook");\n    if (await _finalizeWalletTopUp(apiRef, state, amount, "intasendWebhook")) {'),
+  /* Was: "wiring intasendWebhook as well", anchored on that handler's wallet-top-up call. The
+     handler is retired, so the anchor vanished and the mutation stopped applying — caught by
+     the `mutated !== original` guard rather than reported as a vacuous pass, which is
+     exactly what that guard exists for. Re-aimed at the surviving invariant: the association
+     must be wired in ONE place, wherever a second one might be added. */
+  sab('X9-7', 'adding a SECOND association call site', IDX,
+    IDX.replace('exports.webhookIntasend = onRequest(',
+      'exports.someOtherWebhook = onRequest({}, async (req, res) => {\n'
+      + '  await _associatePosQrCallback(req.body.api_ref, req.body.state, null, "other");\n'
+      + '  res.status(200).send("OK");\n});\nexports.webhookIntasend = onRequest('),
     (s) => (strip(s).match(/await _associatePosQrCallback\(/g) || []).length !== 1);
 
   sab('X9-8', 'routing the association to paymentAttempts instead', IDX,

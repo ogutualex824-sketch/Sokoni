@@ -92,9 +92,9 @@ firebase functions:secrets:access SECRET_NAME --version=<VERSION_NUMBER>
 
 **Steps:**
 1. Check IntaSend status: https://status.intasend.com
-2. Check CF logs for `intasendWebhook`:
+2. Check CF logs for `webhookIntasend`:
    ```bash
-   firebase functions:log --only intasendWebhook
+   firebase functions:log --only webhookIntasend
    ```
 3. If webhook CF is crashing: check Secret Manager for `INTASEND_PRIVATE_KEY`
    ```bash

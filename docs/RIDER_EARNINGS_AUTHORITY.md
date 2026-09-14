@@ -31,8 +31,12 @@ behind `.catch(() => {})`. **Riders completing by proof-of-delivery are never pa
 Two producers, two failure modes, no authority between them.
 
 > **Ordering consequence.** Both defects are currently theoretical — zero payments have ever
-> completed, so no wallet has been credited by any path. They become live the moment the IntaSend
-> production webhook is repointed to `/intasendWebhook`. **This work therefore gates that change.**
+> completed, so no wallet has been credited by any path. This originally read that they would
+> become live "the moment the IntaSend production webhook is repointed to `/intasendWebhook`",
+> and gated that repoint. **That repoint will never happen.** Cloud Run logs showed IntaSend has
+> only ever called `/webhookIntasend`, and `intasendWebhook` was retired on 2026-09-14. The
+> defects become live when a real payment completes on the live webhook, so this work gates
+> nothing external — it is simply still outstanding.
 
 ---
 

@@ -216,12 +216,19 @@ async function main() {
   }
 
   section('4  WHAT A QR CALLBACK DOES TODAY — recorded, not changed');
-  check('W4-1', (IDX.match(/exports\.intasendWebhook|exports\.webhookIntasend/g) || []).length === 2,
-    'both IntaSend webhooks are present and untouched');
+  /* Was: "both IntaSend webhooks are present". There were two; the dead one was retired on
+     2026-09-14. What P3 needs is that AN IntaSend receiver exists to be reasoned about. */
+  check('W4-1', (IDX.match(/exports\.webhookIntasend/g) || []).length === 1
+    && !/exports\.intasendWebhook/.test(IDX),
+    'exactly ONE IntaSend webhook remains — the second was retired after it was proven dead');
   check('W4-2', /db\.collection\("payments"\)\.doc\(apiRef\)/.test(IDX),
     'they key on api_ref and look up payments/{apiRef}');
-  check('W4-3', /if \(!snap\.exists\) \{ res\.status\(200\)\.send\("OK"\); return; \}/.test(IDX),
-    'an unknown api_ref is acknowledged and DROPPED — nothing is created, nothing corrupted');
+  /* Was: the one-line drop, matched literally. Both copies are gone — P3-A rewrote the
+     surviving handler's into an association branch, and the other handler was retired. The
+     INVARIANT is unchanged and is what gets asserted now: an api_ref with no payments/{ref}
+     document is still acknowledged with 200 and still creates nothing. */
+  check('W4-3', /if \(!snap\.exists\) \{[\s\S]{0,400}?res\.status\(200\)\.send\("OK"\); return;/.test(IDX),
+    'an unknown api_ref is still acknowledged with 200 — nothing is created, nothing corrupted');
   /* W4-4 ROTTED ON 2026-09-14, and that is the correct outcome: it asserted "neither handler
      knows posPayments exists", which was P3's RECORD OF A DEFECT, not an invariant to protect.
      P3-A then closed it in `webhookIntasend`. A gate rots when its finding is fixed, so the

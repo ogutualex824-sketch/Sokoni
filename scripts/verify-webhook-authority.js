@@ -5,12 +5,14 @@
  * verify-webhook-authority.js — is every payment capability reachable through ONE endpoint?
  *
  *   node scripts/verify-webhook-authority.js webhookIntasend
- *   node scripts/verify-webhook-authority.js intasendWebhook --json
+ *   node scripts/verify-webhook-authority.js webhookIntasend --json
  *
- * WHY THIS EXISTS (ADR-0014, 2026-07-24)
- * Two IntaSend collection webhooks are deployed. ADR-0013 names `intasendWebhook`
- * canonical; the entitlement materialisation and the FinOS wallet credit were added
- * to `webhookIntasend`. They have diverged and neither is a superset.
+ * WHY THIS EXISTS (ADR-0014, 2026-07-24) — AND HOW IT WAS ANSWERED (2026-09-14)
+ * Two IntaSend collection webhooks used to exist, diverged, with neither a superset. That is
+ * resolved: `webhookIntasend` was measured to be a STRICT superset — every collection and every
+ * helper of the other — and the second handler, `intasendWebhook`, was RETIRED after production
+ * logs showed IntaSend's server had never called it once. This tool remains useful for the
+ * question it was built to ask: is every payment capability reachable through the one endpoint?
  *
  * The danger is not the divergence itself — it is that a live payment becomes
  * UNINTERPRETABLE while it persists. A payment could exercise the endpoint without

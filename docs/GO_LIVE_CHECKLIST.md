@@ -71,7 +71,7 @@
 - [ ] **IS-2** — Contact email: `info@mysokoni.co.ke`
 - [ ] **IS-3** — Support email: `payments@mysokoni.co.ke`
 - [ ] **IS-4** — Webhook contact: `developers@mysokoni.co.ke`
-- [ ] **IS-5** — Webhook URL confirmed: `https://us-central1-sokoni-aeb26.cloudfunctions.net/intasendWebhook`
+- [ ] **IS-5** — Webhook URL confirmed: `https://us-central1-sokoni-aeb26.cloudfunctions.net/webhookIntasend`
 - [ ] **IS-6** — Webhook retries: 3 attempts, 30s interval
 - [ ] **IS-7** — Settlement account: Bravilex 0686420001 confirmed
 
