@@ -1,3 +1,100 @@
+## 2026-09-14 (62) — POS zero-friction: the QR ownership/status authority, committed without absorbing another agent's work
+
+**38 assertions, 0 failed, 0 blocked.** Suite: `scripts/certify-pos-payment-ownership.js`
+Full regression: **718 assertions across 13 suites, 0 failed, 0 blocked.** Require-closure passes.
+Nothing deployed; **no other agent's file modified.**
+
+### The two proven defects
+
+1. **Ownership could vanish.** The till confirm path guards its shop check with
+   `if (pay.sellerUid && pay.sellerUid !== merchantId …)`. A QR document carries `sellerId`, so
+   `pay.sellerUid` is `undefined`, the condition is false, and **the entire check is skipped** —
+   any shop could confirm against another shop's payment. A check that silently does nothing when
+   its field is missing is worse than no check, because it reads as one.
+2. **The success state belonged to the wrong rail.** It required `completed`, which only
+   `darajaSTKCallback` ever wrote. With Daraja retired outbound (D1), nothing can reach that
+   status, so the check would refuse **every** till payment forever.
+
+### Why the fix is a module and the wiring is not in this commit
+
+The consumer exists only as another agent's **uncommitted** work. Its confirm block arrives as
+
+```
+@@ -172,0 +410,287 @@
+```
+
+— a **pure insertion with no corresponding line in HEAD**. There is therefore no patch that can
+carry a change to it without also carrying their 287 unfinished lines. That is a git-level fact,
+**demonstrated in the suite (§5), not asserted**: `T5-5` proves the consumer is absent from HEAD and
+`T5-6` proves the hunk is insertion-only.
+
+So the decision lives in `functions/shared/pos-payment-ownership.js` — committable, certifiable and
+reviewable on its own — and the wiring is a one-line handover printed by the suite.
+
+### One thing deliberately stricter than my withdrawn draft
+
+**A legacy Daraja document cannot settle a new sale, even reading `completed`.** My first attempt
+accepted `{ completed, paid }` as interchangeable terminal states; that was wrong. Those 13 records
+are historical sandbox traffic, and treating one as settlement would let an old reference be pasted
+in to close a sale being rung up today. The legacy rail is now refused outright — and refused
+*before* ownership, so it cannot be probed for another shop's data either.
+
+### The decision, in order
+
+```
+no document      → refused
+legacy Daraja    → refused (historical, never a payment for a new sale)
+unknown shape    → refused (neither rail, or carrying both discriminators)
+no owner         → refused  ← the defect: this used to be a silent pass
+wrong shop       → refused  ← decided BEFORE status, so a stranger learns nothing about state
+status ≠ paid    → refused
+otherwise        → ok, with the gateway figure for the caller's own sufficiency check
+```
+
+Rails are discriminated by `transactionId` vs `checkoutId` — never by status, which overlaps on
+`pending`.
+
+### It is not a payment authority, and the suite proves it
+
+No Firestore operation of any kind, **no `require` at all** — no gateway, no admin SDK, no network —
+it never assigns a paid status, and it does not mutate the document it is given. It answers one
+question about a payment the server has already recorded.
+
+### Attribution safety was part of the gate
+
+`§5` asserts `functions/pos-zero-friction.js` is **not staged**, that their working copy carries
+none of my markers, and that both their original guard and their original status check stand exactly
+as they wrote them. My earlier edit to their file is fully withdrawn.
+
+Every sabotage asserts **`mutated !== original` before the detector runs** — the rule that would
+have caught all three of this session's mutations-that-never-applied.
+
+### The handover
+
+For whoever owns `functions/pos-zero-friction.js`, once their work lands:
+
+```js
+const _own = require('./shared/pos-payment-ownership');
+…
+const v = _own.assertConfirmable(pay, { merchantId, cashierId });
+if (!v.ok) _e(v.message, v.reason === 'wrong_shop' ? 'permission-denied'
+                        : v.reason === 'no_document' ? 'not-found'
+                        : 'failed-precondition');
+```
+
+It replaces **both** the status check and the ownership check. Their sufficiency check below stays
+theirs — `v.amount` is what it should compare against.
+
+### Files affected
+
+`functions/shared/pos-payment-ownership.js` (new) ·
+`scripts/certify-pos-payment-ownership.js` (new)
+
+**Database:** none. **API:** none. **Breaking:** none — nothing calls it yet, by design.
+**Deployment:** none.
+
+---
+
 ## 2026-09-14 (61) — D1+D2: Daraja outbound retired; posPayments is explicitly the IntaSend QR rail
 
 **41 assertions, 0 failed, 0 blocked.** Suite: `scripts/certify-d1d2-daraja-retirement.js`
