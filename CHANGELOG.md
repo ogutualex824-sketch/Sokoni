@@ -1,3 +1,63 @@
+## 2026-09-14 (56) — handset verification RUN: the narrative is not forwarded. FAIL, recorded.
+
+**Door A opened and used. `initiateSTKPush` deployed from `12fc4e7` (that function only). One KES 1
+push sent to a test handset. Result: FAIL.**
+Record: `docs/STK_NARRATIVE_HANDSET_VERIFICATION.md` §5
+
+### What the buyer saw
+
+Dialog: *"do you want to pay coop bank"*. Confirmation SMS, verbatim:
+
+```
+UIE6Q64WQP Confirmed. Ksh1.00 sent to Co-operative Bank of Kenya.
+for account 085BS on 14/9/26 at 4:14 AM New M-PESA
+```
+
+Absent from both: the shop name, SOKONI, Bravilex, the courteous ask, the ✔ mark. **`narrative` is
+not forwarded to anything the buyer reads.**
+
+Two things the procedure did not anticipate:
+
+* **`api_ref` is not shown either.** We sent `SKN-HSV-MU0JIVMQ`; the buyer's record says
+  `account 085BS`, IntaSend's own identifier on a shared paybill. **Neither string we control
+  appears anywhere in the buyer's M-PESA record.**
+* **The payee is a third party.** The buyer's permanent statement records money *sent to
+  Co-operative Bank of Kenya*. Nothing identifies SOKONI, the shop or the order, so a buyer
+  reconciling a statement or disputing a charge cannot connect that line to a SOKONI purchase.
+
+### What follows from it
+
+The lever is real but invisible on this rail. `narrativeFor` produces the right string, the server
+resolves the shop from the ownership authority, the payload carries it — all certified, none of it
+in question. IntaSend does not surface it to the payer.
+
+**The work is not reverted**, per the consequence written into §5 *before* the test ran: the string
+costs nothing to keep, is the correct thing to send, and becomes visible the moment the collection
+arrangement changes. Reverting would mean paying for it twice.
+
+**But it does not achieve what it was asked to achieve.** No code change can, because the payee name
+and account reference on both surfaces come from the registered collection account. The remaining
+work is commercial — three questions for IntaSend, ordered by cost, in §5b.
+
+### The deploy, and one finding from it
+
+`FUNCTIONS_DISCOVERY_TIMEOUT=180` was needed: `functions/index.js` takes **8.2 s** to load against
+the CLI's **10 s** discovery limit. Roughly 1.8 s of headroom, shrinking as modules are added, and it
+fails on a cold worktree while passing on a warm one — which makes it look intermittent. Worth
+putting in the deploy guidance before somebody rediscovers it under pressure.
+
+Chain of custody verified rather than assumed: tree clean at `12fc4e7`, `narrativeFor` present in the
+packaged source, old ref-narrative absent, `shared/merchant-identity.js` bundled, and **only**
+`initiateSTKPush` updated — Gate C, RES-1 and the delivery-quote functions stayed on their previous
+revisions.
+
+### Files affected
+
+`docs/STK_NARRATIVE_HANDSET_VERIFICATION.md` — status header, §2 preconditions, §5 observation, new
+§5b. No code changed.
+
+---
+
 ## 2026-09-14 (55) — handset verification PREPARED; no prompt sent
 
 **Preparation only. No code path changed. 🔴 No deployment, no sandbox push, nothing sent.**

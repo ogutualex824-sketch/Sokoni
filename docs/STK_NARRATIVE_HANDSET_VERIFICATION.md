@@ -3,8 +3,8 @@
 **Prepared:** 2026-09-14
 **Subject commit:** `76571a1` (prompt construction), `de78918` (shop identity)
 **Repository certification:** `scripts/certify-stk-narrative.js` — 70/70
-**Handset state:** 🟡 **UNPROVEN — no real prompt has been sent**
-**Deployment:** 🔴 NOT AUTHORIZED
+**Handset state:** 🔴 **PROVEN NEGATIVE — the narrative is not forwarded** (2026-09-14, see §5)
+**Deployment:** `initiateSTKPush` only, from `12fc4e7`, 2026-09-14 — authorised as Door A for this test. No other function deployed.
 **Related:** [[project_stk_narrative_names_the_shop]] · [[project_merchant_first_identity]]
 
 ---
@@ -31,10 +31,14 @@ scoped**, and why §6 lists the events that void it.
 
 ---
 
-## 2. Preconditions — neither door is open yet
+## 2. Preconditions — Door A was opened and used on 2026-09-14
 
-Nothing in this repository can send a prompt. One of these must be explicitly authorised first, and
-whoever authorises it must supply the **test MSISDN** and an **amount ceiling**.
+**Door A was authorised, `initiateSTKPush` was deployed from `12fc4e7`, and one KES 1 push was sent.
+The result is in §5 and it is a FAIL.** This section is kept as written because a re-run — after any
+of the §6 voiding events — has to clear the same bar again.
+
+Nothing in this repository sends a prompt by default. One of these must be explicitly authorised,
+and whoever authorises it must supply the **test MSISDN** and an **amount ceiling**.
 
 | | Door A — Production | Door B — Sandbox |
 |---|---|---|
@@ -113,9 +117,33 @@ distinguish handsets across runs.
 
 Append one row per push. Never edit a previous row — a superseded result is evidence too.
 
-| Date (UTC+3) | Door | IntaSend acct | Handset (last 3) | Amount | Case | Dialog? | SMS? | Verdict | Photo ref |
+| Date (UTC+3) | Door | IntaSend acct | Handset (last 3) | Amount | Case | Dialog? | SMS? | Verdict | Evidence ref |
 |---|---|---|---|---|---|---|---|---|---|
-| _(none yet — no prompt has been sent)_ | | | | | | | | | |
+| 2026-09-14 04:14 | A — production | production (Co-operative Bank of Kenya, account `085BS`) | …803 | KES 1 | primary, online, KASS SHOP | **no** | **no** | **FAIL** | M-PESA `UIE6Q64WQP`; `ref=SKN-HSV-MU0JIVMQ`; `checkoutId cfe12504-fbfe-4977-8178-3ac91d4c572c` |
+
+### What the buyer actually saw
+
+Dialog: *"do you want to pay coop bank"*
+
+Confirmation SMS, verbatim:
+
+```
+UIE6Q64WQP Confirmed. Ksh1.00 sent to Co-operative Bank of Kenya.
+for account 085BS on 14/9/26 at 4:14 AM New M-PESA
+```
+
+Absent from both: the shop name, `SOKONI`, `Bravilex`, the courteous ask, and the `✔` mark. **The
+`narrative` field is not forwarded to anything the buyer reads.**
+
+Two further observations that were not anticipated:
+
+* **`api_ref` is not shown either.** We sent `SKN-HSV-MU0JIVMQ`; the buyer's record says
+  `account 085BS` — IntaSend's own account identifier on the shared paybill. So neither of the two
+  strings we control appears anywhere in the buyer's M-PESA record.
+* **The payee is a third party.** The buyer's permanent M-PESA statement records money *sent to
+  Co-operative Bank of Kenya*. Nothing in it identifies SOKONI, the shop, or the order. A buyer
+  reconciling their statement, or disputing a charge, has no way to connect that line to a purchase
+  on SOKONI.
 
 ### Verdicts, and what each one means for the code
 
@@ -130,6 +158,39 @@ Append one row per push. Never edit a previous row — a superseded result is ev
 is carried in `api_ref`-adjacent provider records and may surface on statements, receipts and
 reconciliation views; and the moment the collection account changes, the field may begin to appear.
 Removing it would cost the same effort again.
+
+---
+
+## 5b. What this FAIL means, and what it does not
+
+**The lever we built is real but invisible on this rail.** `narrativeFor` produces the right string,
+the server resolves the shop from the ownership authority, and the payload carries it — all of that
+is certified and none of it is in question. IntaSend simply does not surface it to the payer.
+
+**Do not revert the work on the strength of this result** (§5, stated before the test ran, and it
+still holds). The string costs nothing to keep, it is the correct thing to send, and it becomes
+visible the moment the collection arrangement changes. Reverting would mean paying for it twice.
+
+**But it does not achieve what it was asked to achieve.** The goal was that a buyer paying through
+SOKONI sees SOKONI and the shop. Today they see *Co-operative Bank of Kenya*. No code change can
+alter that, because the payee name and account reference on both the dialog and the SMS come from
+the **registered collection account**, not from the request.
+
+That makes the remaining work commercial, and there are three questions to put to IntaSend — in
+this order, because they differ enormously in cost:
+
+1. **Does their API expose a per-transaction business name / account reference that Safaricom
+   renders?** Some aggregators support a sub-merchant or "account number" field that replaces
+   `085BS`. If so this is a payload change and the existing module already produces the string.
+2. **Can the collection account be registered under a SOKONI-branded name?** Then the dialog and
+   SMS read SOKONI rather than the bank, for every merchant at once.
+3. **Failing both — does SOKONI need its own paybill/till with Safaricom?** That is the only route
+   that puts SOKONI on the buyer's statement independently of any aggregator, and it is an
+   onboarding and compliance project, not an engineering one.
+
+Until one of those lands, the honest position is: **SOKONI has no brand presence in the M-PESA
+payment experience, and a buyer's statement cannot be reconciled to a SOKONI order.** That is worth
+knowing plainly rather than being softened by the fact that the code is correct.
 
 ---
 
