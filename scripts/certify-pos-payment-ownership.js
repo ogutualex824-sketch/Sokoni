@@ -181,7 +181,54 @@ function main() {
     && OWN.assertConfirmable(qr({ sellerId: undefined }), ACTOR).reason === 'no_owner',
     'POST-SABOTAGE — the live module is untouched and still decides correctly');
 
-  section('7  THE WIRING, HANDED OVER');
+  section('7  THE WIRING — SELF-ARMING');
+  {
+    /* ── THIS ASSERTION ARMS ITSELF ───────────────────────────────────────────────────────
+       The authority cannot be wired while its consumer is another agent's UNCOMMITTED work:
+       their confirm block is a pure insertion with no HEAD baseline, so any commit carrying
+       my one line also carries their 287 unfinished lines.
+
+       "Someone has to remember to wire it later" is exactly the failure this session has hit
+       three times — something built, certified, and never reached. So instead of a note, this
+       is a check that is INERT while their work is uncommitted and turns LIVE the moment it
+       lands: from then on the suite FAILS until the wiring exists.
+
+       The trigger is HEAD, not the working tree, because the working tree is theirs to change
+       moment to moment and must not make my suite red. */
+    let head = '';
+    try { head = execSync('git show HEAD:functions/pos-zero-friction.js', { cwd: ROOT, encoding: 'utf8' }); } catch (_) { head = ''; }
+    const consumerLanded = /CONFIRMABLE|collection\('posPayments'\)/.test(head);
+
+    /* An arming mechanism nobody has watched arm is a promise, not a guard. Both branches are
+       exercised here against synthetic content, so the live behaviour is observed today rather
+       than trusted to work on the day it matters. */
+    const armed = (src) => /CONFIRMABLE|collection\('posPayments'\)/.test(src);
+    const wired = (src) => /require\(['"]\.\/shared\/pos-payment-ownership['"]\)/.test(src) && /assertConfirmable\s*\(/.test(src);
+    check('W7-CTL1', armed("const CONFIRMABLE = { mpesa: 1 };") === true,
+      'CONTROL — the trigger fires on content that contains their confirm block');
+    check('W7-CTL2', armed('const x = 1;') === false,
+      'CONTROL — and stays inert on content that does not');
+    check('W7-CTL3', wired("const CONFIRMABLE=1; require('./shared/pos-payment-ownership'); assertConfirmable(p,a);") === true
+      && wired("const CONFIRMABLE = { mpesa: 1 };") === false,
+      'CONTROL — once armed it PASSES on wired content and FAILS on unwired content');
+
+    if (!consumerLanded) {
+      ok('W7-1', 'the consumer is still uncommitted — this check is INERT and will arm itself when their block reaches HEAD');
+      check('W7-2', fs.existsSync(path.join(FN, 'shared', 'pos-payment-ownership.js')),
+        'the authority it will demand is committed and ready');
+    } else {
+      check('W7-1', /require\(['"]\.\/shared\/pos-payment-ownership['"]\)/.test(head),
+        'THEIR BLOCK HAS LANDED — pos-zero-friction must now require the certified authority');
+      check('W7-2', /assertConfirmable\s*\(/.test(head),
+        '…and must call assertConfirmable rather than carrying its own ownership/status checks');
+      check('W7-3', !/if \(pay\.sellerUid && pay\.sellerUid !== merchantId/.test(head),
+        '…and the vanishing-ownership guard must be gone');
+      check('W7-4', !/if \(pay\.status !== 'completed'\)/.test(head),
+        "…and the Daraja-only 'completed' check must be gone");
+    }
+  }
+
+  section('7b  THE WIRING, HANDED OVER');
   console.log('  ○  One line, for whoever owns functions/pos-zero-friction.js, once their work lands:');
   console.log('');
   console.log("       const _own = require('./shared/pos-payment-ownership');");

@@ -1,3 +1,76 @@
+## 2026-09-14 (63) — the POS wiring gate: HELD, and made self-arming instead
+
+**43 assertions, 0 failed, 0 blocked.** Suite: `scripts/certify-pos-payment-ownership.js`
+Full regression: **723 assertions across 13 suites, 0 failed, 0 blocked.** Require-closure passes.
+Nothing deployed. **The wiring was NOT applied, and their file was not touched.**
+
+### Why the gate was held
+
+The gate's precondition was *"only after the other agent's POS confirm block is present in the
+working tree."* It is present in the working tree — but presence was never the blocker.
+**Committedness is.**
+
+`HEAD` is still `1f8ac7b`, and none of their block is in it. Their confirm code remains a pure
+insertion with no HEAD baseline, so **any commit containing the one-line wiring also contains their
+287 unfinished lines.** That makes two of the gate's own requirements mutually exclusive today:
+
+* *"produce an isolated commit"*
+* *"do not stage unrelated work / preserve their insertion verbatim"*
+
+Forcing it would satisfy the first by violating the second. So the wiring was not applied.
+
+**Nor was it left in their working copy.** An uncommitted edit in someone else's dirty file is
+worse than no edit: when they commit, my line lands under their name, in a change they did not
+write and may not understand. That is the same mistake I made and withdrew two gates ago.
+
+### What was done instead — the check arms itself
+
+"Someone has to remember to wire this later" is the exact failure this session has hit three times:
+the PIN protection screen built and never reached; `pendingMpesaPhone` written and never read;
+the delivery quote authority certified while nothing called it. A note in a changelog is the same
+class of promise.
+
+So §7 of the suite is now a check that is **inert while their work is uncommitted and turns live the
+moment it lands**:
+
+```
+their block absent from HEAD   →  inert, green, says so
+their block present in HEAD    →  DEMANDS the wiring, and FAILS until it exists
+```
+
+When armed it requires four things: `pos-zero-friction` requires the certified authority, calls
+`assertConfirmable`, and no longer carries either the vanishing-ownership guard or the Daraja-only
+`completed` check.
+
+The trigger reads **HEAD, not the working tree** — their working copy is theirs to change moment to
+moment and must never make my suite red.
+
+### And the arming itself is observed, not promised
+
+An arming mechanism nobody has watched arm is a promise, not a guard. `W7-CTL1/2/3` exercise both
+branches against synthetic content today: the trigger fires on content containing their block,
+stays inert on content without it, and once armed passes on wired content while failing on unwired
+content. So the behaviour on the day it matters has already been seen.
+
+### Files affected
+
+`scripts/certify-pos-payment-ownership.js` — §7 only.
+
+**Code changed:** none. **Database:** none. **Deployment:** none.
+**`functions/pos-zero-friction.js`:** untouched, unstaged, still theirs.
+
+### What unblocks the wiring
+
+Any one of:
+
+1. the other agent commits their POS work — the check then arms and fails until the one line is
+   applied, which is the intended path;
+2. they apply the one-line wiring themselves (it is printed by the suite, §7b);
+3. an explicit decision to commit their in-flight work on their behalf — which is theirs to make,
+   not mine.
+
+---
+
 ## 2026-09-14 (62) — POS zero-friction: the QR ownership/status authority, committed without absorbing another agent's work
 
 **38 assertions, 0 failed, 0 blocked.** Suite: `scripts/certify-pos-payment-ownership.js`
