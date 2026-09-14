@@ -1,3 +1,65 @@
+## 2026-09-14 (55) — handset verification PREPARED; no prompt sent
+
+**Preparation only. No code path changed. 🔴 No deployment, no sandbox push, nothing sent.**
+Record: `docs/STK_NARRATIVE_HANDSET_VERIFICATION.md` · Helper: `scripts/print-expected-stk-narrative.js`
+
+The one claim repository certification cannot reach is whether IntaSend forwards `narrative` into
+what Safaricom renders. This entry prepares that test without performing any part of it.
+
+### The expectation is generated, never transcribed
+
+`scripts/print-expected-stk-narrative.js` prints the expected string from
+`functions/shared/merchant-identity.js` itself. A transcription into a document drifts from the code
+the first time the ladder is tuned, and the verification then checks against a figure nobody
+maintains — so the procedure tells the tester to run the script and explicitly **not** to copy the
+string into the document.
+
+The script's complete module graph is `path` plus the pure string authority, which requires nothing
+at all. It has no network capability and cannot cause a prompt to be sent.
+
+### What the procedure fixes in advance
+
+* **Which case to push** — the primary one only: the real shop, KES 1, online. Does the field arrive
+  at all is the only question that matters first, and it must use the real shop name, because a
+  crafted test string proves nothing about what production sends.
+* **Six pieces of evidence**, including the confirmation SMS. An absence in the dialog plus a
+  presence in the SMS is a *different result* from an absence in both and leads somewhere different.
+* **Three verdicts with defined consequences.** PARTIAL is the valuable one: where the line cuts is
+  the real character budget, which is the only way to learn it. A FAIL is explicitly **not** grounds
+  for reverting the work.
+* **What voids a PASS** — this is a property of the provider's configuration, not of our code, so a
+  result is recorded dated and account-scoped and expires on account change, environment change, or
+  six months.
+* **Privacy** — the full test MSISDN is not recorded in the repository; last three digits suffice.
+
+### Gate compliance, verified rather than asserted
+
+| Check | Result |
+|---|---|
+| `functions/shared/merchant-identity.js` vs `HEAD` | unchanged |
+| `scripts/certify-stk-narrative.js` vs `HEAD` | unchanged |
+| uncommitted `narrativeFor` changes in `functions/index.js` | none |
+| anything capable of sending an STK prompt created | none |
+| `functions/order-settlement.js` (RES-1b) in any commit of this session | none — dirty from other agents since session start |
+| `scripts/certify-stk-narrative.js` | 70 passed, 0 failed, 0 blocked |
+
+Two flags in my first compliance pass were **my own crude patterns, not real findings**: a
+word-boundary-free grep for `net` matched inside an unrelated word, and a `git status` check on
+`order-settlement.js` reported another agent's pre-existing dirt as mine. Both re-checked properly
+above.
+
+### Still requires explicit authorization
+
+Neither door is open. To reach a phone, one must be chosen, with a test MSISDN and an amount ceiling:
+
+* **A — Production:** deploy `initiateSTKPush`, push once at the ceiling. Moves real money.
+* **B — Sandbox:** `INTASEND_SANDBOX=true` (`functions/index.js:6967`). No money, but weaker
+  evidence — a sandbox pass only transfers if the field mapping matches production.
+
+Handset state remains 🟡 **UNPROVEN**.
+
+---
+
 ## 2026-09-14 (54) — the prompt asks politely, names the amount, and says it the same way at the till
 
 **70 assertions, 0 failed, 0 blocked. Nothing deployed. Handset proof still outstanding.**
