@@ -87,7 +87,7 @@
         <div style="width:44px;height:44px;background:rgba(76,175,80,.15);border:1px solid rgba(76,175,80,.3);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;">📱</div>
         <div>
           <div style="font-size:15px;font-weight:900;color:#fff;">M-Pesa Payment</div>
-          <div style="font-size:11px;color:rgba(255,255,255,.4);">to ${_e(sellerName)} · Safaricom Daraja</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.4);">to ${_e(sellerName)} · M-PESA</div>
         </div>
       </div>
       <div class="_smBdy">
@@ -111,7 +111,7 @@
     <div style="text-align:center;padding:30px 0 8px;">
       <div class="_smSpin" style="margin:0 auto 18px;"></div>
       <div style="font-size:18px;font-weight:900;color:#fff;margin-bottom:6px;">Connecting…</div>
-      <div style="font-size:13px;color:rgba(255,255,255,.4);">Sending request to Safaricom Daraja</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.4);">Sending your M-PESA request</div>
     </div>
   `;
 

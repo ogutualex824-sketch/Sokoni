@@ -49,39 +49,6 @@ body{background:#050505;color:white;font-family:'Segoe UI',system-ui,sans-serif;
 .pmt-card-title{font-size:13px;font-weight:800;color:white;margin-bottom:4px;}
 .pmt-card-sub{font-size:12px;color:rgba(255,255,255,.5);line-height:1.5;}
 
-/* ── Provider Selector ── */
-.pmt-provider-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
-.pmt-provider-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:16px 12px;cursor:pointer;text-align:center;transition:all .2s;position:relative;}
-.pmt-provider-card:hover,.pmt-provider-card.selected{border-color:rgba(113,255,0,.5);background:rgba(113,255,0,.06);}
-.pmt-provider-card .rec-badge{position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:#71ff00;color:#000;font-size:9px;font-weight:900;padding:2px 8px;border-radius:10px;white-space:nowrap;}
-.pmt-provider-logo{font-size:28px;margin-bottom:6px;}
-.pmt-provider-name{font-size:12px;font-weight:800;color:white;margin-bottom:2px;}
-.pmt-provider-desc{font-size:10px;color:rgba(255,255,255,.4);line-height:1.4;}
-.pmt-provider-card.coming-soon{opacity:.4;cursor:default;}
-.pmt-provider-card.coming-soon::after{content:"Coming Soon";position:absolute;top:6px;right:6px;background:rgba(255,255,255,.1);border-radius:5px;font-size:8px;padding:2px 5px;color:rgba(255,255,255,.4);}
-
-/* ── M-Pesa Type ── */
-.pmt-mpesa-types{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
-.pmt-mpesa-type{background:rgba(255,255,255,.04);border:2px solid rgba(255,255,255,.1);border-radius:16px;padding:18px 14px;cursor:pointer;transition:all .2s;}
-.pmt-mpesa-type:hover,.pmt-mpesa-type.selected{border-color:rgba(76,175,80,.6);background:rgba(76,175,80,.07);}
-.pmt-mpesa-type-icon{font-size:32px;margin-bottom:8px;text-align:center;}
-.pmt-mpesa-type-name{font-size:13px;font-weight:900;color:white;margin-bottom:4px;text-align:center;}
-.pmt-mpesa-type-desc{font-size:11px;color:rgba(255,255,255,.5);text-align:center;line-height:1.5;}
-
-/* ── Wizard ── */
-.pmt-wizard-progress{display:flex;align-items:center;padding:4px 0 16px;overflow-x:auto;scrollbar-width:none;}
-.pmt-wizard-progress::-webkit-scrollbar{display:none;}
-.pmt-wiz-step{display:flex;flex-direction:column;align-items:center;flex:1;min-width:42px;}
-.pmt-wiz-dot{width:28px;height:28px;border-radius:50%;border:2px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:rgba(255,255,255,.3);transition:all .3s;background:rgba(255,255,255,.04);}
-.pmt-wiz-dot.active{border-color:#71ff00;color:#71ff00;background:rgba(113,255,0,.1);}
-.pmt-wiz-dot.done{border-color:rgba(76,175,80,.6);background:#4caf50;color:black;}
-.pmt-wiz-label{font-size:8px;color:rgba(255,255,255,.3);margin-top:4px;text-align:center;font-weight:700;text-transform:uppercase;letter-spacing:.3px;}
-.pmt-wiz-line{flex:1;height:2px;background:rgba(255,255,255,.08);margin:0 -1px;margin-bottom:14px;}
-.pmt-wiz-line.done{background:rgba(76,175,80,.4);}
-
-.pmt-step{display:none;}
-.pmt-step.active{display:block;}
-
 /* ── Inputs ── */
 .pmt-label{font-size:10px;font-weight:800;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px;margin-top:12px;}
 .pmt-input{width:100%;padding:13px 14px;background:rgba(20,20,20,.98);border:1px solid rgba(255,255,255,.12);border-radius:12px;color:white;font-size:14px;font-family:inherit;box-sizing:border-box;outline:none;transition:border-color .2s;}
@@ -92,10 +59,6 @@ body{background:#050505;color:white;font-family:'Segoe UI',system-ui,sans-serif;
 @media(max-width:360px){.pmt-field-group{grid-template-columns:1fr;}}
 
 /* Input with copy/reveal */
-.pmt-input-wrap{position:relative;}
-.pmt-input-wrap .pmt-input{padding-right:40px;}
-.pmt-input-btn{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:rgba(255,255,255,.3);cursor:pointer;font-size:14px;padding:4px;}
-.pmt-input-btn:hover{color:rgba(255,255,255,.7);}
 
 /* ── Buttons ── */
 .pmt-btn{width:100%;padding:14px;border:none;border-radius:14px;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;transition:all .2s;margin-top:12px;}
@@ -106,38 +69,6 @@ body{background:#050505;color:white;font-family:'Segoe UI',system-ui,sans-serif;
 .pmt-btn-ghost:hover{background:rgba(255,255,255,.08);}
 .pmt-btn-blue{background:linear-gradient(135deg,#00aaff,#0088cc);color:white;}
 .pmt-btn-sm{padding:9px 16px;font-size:12px;margin-top:0;width:auto;}
-
-/* ── Verify Steps ── */
-.pmt-verify-list{list-style:none;margin:0;padding:0;}
-.pmt-verify-item{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.05);}
-.pmt-verify-item:last-child{border-bottom:none;}
-.pmt-verify-icon{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
-.pmt-verify-icon.pending{background:rgba(255,255,255,.05);}
-.pmt-verify-icon.loading{background:rgba(0,170,255,.1);animation:_pmtSpin .8s linear infinite;}
-.pmt-verify-icon.ok{background:rgba(76,175,80,.12);}
-.pmt-verify-icon.fail{background:rgba(255,100,100,.12);}
-@keyframes _pmtSpin{to{transform:rotate(360deg);}}
-.pmt-verify-text{flex:1;}
-.pmt-verify-title{font-size:13px;font-weight:800;color:white;}
-.pmt-verify-sub{font-size:11px;color:rgba(255,255,255,.4);margin-top:1px;}
-
-/* ── Test Push ── */
-.pmt-test-box{background:rgba(76,175,80,.05);border:1px solid rgba(76,175,80,.2);border-radius:16px;padding:20px;text-align:center;}
-.pmt-test-icon{font-size:48px;margin-bottom:12px;}
-.pmt-test-title{font-size:16px;font-weight:900;margin-bottom:6px;}
-.pmt-test-sub{font-size:13px;color:rgba(255,255,255,.55);line-height:1.6;margin-bottom:16px;}
-.pmt-test-status{font-size:13px;margin-top:12px;min-height:18px;}
-
-/* ── Daraja Guide ── */
-.pmt-guide-steps{margin:0;padding:0;list-style:none;}
-.pmt-guide-step{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.04);}
-.pmt-guide-step:last-child{border-bottom:none;}
-.pmt-guide-num{width:26px;height:26px;border-radius:8px;background:rgba(113,255,0,.1);border:1px solid rgba(113,255,0,.25);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#71ff00;flex-shrink:0;}
-.pmt-guide-content{flex:1;min-width:0;}
-.pmt-guide-title{font-size:13px;font-weight:800;color:white;margin-bottom:3px;}
-.pmt-guide-desc{font-size:12px;color:rgba(255,255,255,.5);line-height:1.5;}
-.pmt-url-chip{display:inline-flex;align-items:center;gap:6px;background:rgba(113,255,0,.07);border:1px solid rgba(113,255,0,.2);border-radius:8px;padding:5px 10px;font-size:11px;color:#71ff00;font-family:monospace;cursor:pointer;margin-top:6px;word-break:break-all;}
-.pmt-url-chip:hover{background:rgba(113,255,0,.12);}
 
 /* ── Info Box ── */
 .pmt-info{background:rgba(0,170,255,.06);border:1px solid rgba(0,170,255,.2);border-radius:12px;padding:12px 14px;font-size:12px;color:rgba(255,255,255,.65);line-height:1.6;margin-top:12px;}
@@ -187,7 +118,6 @@ body{background:#050505;color:white;font-family:'Segoe UI',system-ui,sans-serif;
 .pmt-method-status.none{background:rgba(255,255,255,.06);color:rgba(255,255,255,.3);}
 
 /* ── Callback Box ── */
-.pmt-callback-box{background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px 14px;}
 .pmt-callback-url{font-size:11px;color:rgba(113,255,0,.7);word-break:break-all;font-family:monospace;line-height:1.6;margin-bottom:8px;}
 
 /* ── Message ── */
@@ -231,7 +161,6 @@ nav.bottom-nav{position:fixed;bottom:0;left:0;right:0;height:62px;background:rgb
 <!-- Tabs -->
 <div class="pmt-tabs">
   <button class="pmt-tab active" data-tab="overview"      onclick="pmtTab('overview',this)">📊 Overview</button>
-  <button class="pmt-tab"        data-tab="wizard"        onclick="pmtTab('wizard',this)">⚡ Setup</button>
   <button class="pmt-tab"        data-tab="transactions"  onclick="pmtTab('transactions',this)">📋 History</button>
   <button class="pmt-tab"        data-tab="settings"      onclick="pmtTab('settings',this)">⚙️ Settings</button>
   <button class="pmt-tab"        data-tab="assistant"     onclick="pmtTab('assistant',this)">🤖 AI Help</button>
@@ -254,15 +183,6 @@ nav.bottom-nav{position:fixed;bottom:0;left:0;right:0;height:62px;background:rgb
     </div>
   </div>
 
-  <div class="pmt-card" id="pmtSetupPromptCard">
-    <div style="text-align:center;padding:8px 0;">
-      <div style="font-size:40px;margin-bottom:10px;">📲</div>
-      <div class="pmt-card-title" style="font-size:15px;margin-bottom:6px;">Set Up Direct Payments</div>
-      <div class="pmt-card-sub" style="margin-bottom:16px;">Connect your M-Pesa Paybill or Till. Customers pay you directly — SOKONI never holds your money.</div>
-      <button class="pmt-btn pmt-btn-primary" style="margin-top:0;" onclick="pmtTab('wizard',document.querySelector('[data-tab=wizard]'))">Start Setup Wizard</button>
-    </div>
-  </div>
-
   <div class="pmt-sec">Recent Transactions</div>
   <div id="pmtRecentTxns">
     <div class="pmt-skeleton" style="height:60px;margin-bottom:8px;"></div>
@@ -273,285 +193,6 @@ nav.bottom-nav{position:fixed;bottom:0;left:0;right:0;height:62px;background:rgb
   <div style="display:none" id="pmtNoTxns" class="pmt-card" style="text-align:center;">
     <div class="pmt-card-sub" style="text-align:center;padding:8px 0;">No transactions yet. Once customers pay you, receipts will appear here.</div>
   </div>
-</div>
-
-<!-- ════════════════════════════════════════
-     SETUP WIZARD TAB
-════════════════════════════════════════ -->
-<div class="pmt-pane" id="pmt-pane-wizard">
-
-  <!-- Progress Bar -->
-  <div class="pmt-wizard-progress" id="pmtWizProgress">
-    <!-- injected by JS -->
-  </div>
-
-  <!-- STEP 1: Business Info -->
-  <div class="pmt-step active" id="pmt-step-1">
-    <div class="pmt-card-title" style="font-size:16px;margin-bottom:4px;">Business Information</div>
-    <div class="pmt-card-sub" style="margin-bottom:16px;">Let's start with your business details.</div>
-
-    <label class="pmt-label">Business Name *</label>
-    <input type="text" id="wiz1BizName" class="pmt-input" placeholder="e.g. Mama Njeri General Store">
-
-    <label class="pmt-label">Business Type *</label>
-    <select id="wiz1BizType" class="pmt-input pmt-select">
-      <option value="">— Select type —</option>
-      <option value="retail">Retail / General Shop</option>
-      <option value="restaurant">Restaurant / Food</option>
-      <option value="healthcare">Healthcare / Pharmacy</option>
-      <option value="services">Services / Freelance</option>
-      <option value="property">Property / BnB</option>
-      <option value="car">Car / Transport</option>
-      <option value="digital">Digital Products</option>
-      <option value="legal">Legal Services</option>
-      <option value="b2b">B2B / Wholesale</option>
-      <option value="other">Other</option>
-    </select>
-
-    <div class="pmt-field-group" style="margin-top:0;">
-      <div>
-        <label class="pmt-label">Contact Phone *</label>
-        <input type="tel" id="wiz1Phone" class="pmt-input" placeholder="07XXXXXXXX">
-      </div>
-      <div>
-        <label class="pmt-label">Business Email</label>
-        <input type="email" id="wiz1Email" class="pmt-input" placeholder="you@business.ke">
-      </div>
-    </div>
-
-    <div class="pmt-msg" id="wiz1Msg"></div>
-    <button class="pmt-btn pmt-btn-primary" onclick="wizNext(1)">Continue →</button>
-  </div>
-
-  <!-- STEP 2: Choose Provider -->
-  <div class="pmt-step" id="pmt-step-2">
-    <div class="pmt-card-title" style="font-size:16px;margin-bottom:4px;">Choose Payment Method</div>
-    <div class="pmt-card-sub" style="margin-bottom:16px;">Select how you want to receive payments. You can add more later.</div>
-
-    <div class="pmt-provider-grid">
-      <div class="pmt-provider-card" id="prov-mpesa" onclick="wizChooseProvider('mpesa')">
-        <div class="rec-badge">★ Recommended</div>
-        <div class="pmt-provider-logo">🟢</div>
-        <div class="pmt-provider-name">M-Pesa Direct</div>
-        <div class="pmt-provider-desc">Daraja API — money goes straight to your M-Pesa account</div>
-      </div>
-      <div class="pmt-provider-card coming-soon" title="Coming Soon">
-        <div class="pmt-provider-logo">💳</div>
-        <div class="pmt-provider-name">IntaSend</div>
-        <div class="pmt-provider-desc">Cards + M-Pesa with simple setup</div>
-      </div>
-      <div class="pmt-provider-card coming-soon" title="Coming Soon">
-        <div class="pmt-provider-logo">🌍</div>
-        <div class="pmt-provider-name">Pesapal</div>
-        <div class="pmt-provider-desc">Multiple payment channels</div>
-      </div>
-      <div class="pmt-provider-card coming-soon" title="Coming Soon">
-        <div class="pmt-provider-logo">🔶</div>
-        <div class="pmt-provider-name">Flutterwave</div>
-        <div class="pmt-provider-desc">International payments</div>
-      </div>
-    </div>
-
-    <div class="pmt-info">
-      <strong>Why M-Pesa Direct?</strong> Money goes directly from the customer's phone into your Paybill or Till. SOKONI never touches the funds — it only orchestrates the transaction.
-    </div>
-
-    <div class="pmt-msg" id="wiz2Msg"></div>
-    <button class="pmt-btn pmt-btn-ghost" onclick="wizBack(2)" style="margin-top:10px;">← Back</button>
-  </div>
-
-  <!-- STEP 3: M-Pesa Type -->
-  <div class="pmt-step" id="pmt-step-3">
-    <div class="pmt-card-title" style="font-size:16px;margin-bottom:4px;">M-Pesa Account Type</div>
-    <div class="pmt-card-sub" style="margin-bottom:16px;">Choose the type of M-Pesa business account you have.</div>
-
-    <div class="pmt-mpesa-types">
-      <div class="pmt-mpesa-type" id="mtype-till" onclick="wizChooseMpesaType('till')">
-        <div class="pmt-mpesa-type-icon">🏪</div>
-        <div class="pmt-mpesa-type-name">Till Number</div>
-        <div class="pmt-mpesa-type-desc">Buy Goods & Services. Customer pays your till directly. Common for shops & kiosks.</div>
-      </div>
-      <div class="pmt-mpesa-type" id="mtype-paybill" onclick="wizChooseMpesaType('paybill')">
-        <div class="pmt-mpesa-type-icon">🏢</div>
-        <div class="pmt-mpesa-type-name">Paybill Number</div>
-        <div class="pmt-mpesa-type-desc">Lipa Na M-Pesa Paybill. Customer pays your business number + account reference.</div>
-      </div>
-    </div>
-
-    <div class="pmt-info">
-      <strong>Not sure which you have?</strong> Log into M-Pesa app → M-Pesa Ratiba → check if you see a "Till Number" or "Paybill Number". You can also check your Safaricom business dashboard.
-    </div>
-
-    <div class="pmt-msg" id="wiz3Msg"></div>
-    <button class="pmt-btn pmt-btn-ghost" onclick="wizBack(3)" style="margin-top:10px;">← Back</button>
-  </div>
-
-  <!-- STEP 4: Daraja Credentials -->
-  <div class="pmt-step" id="pmt-step-4">
-    <div class="pmt-card-title" style="font-size:16px;margin-bottom:4px;">Daraja API Credentials</div>
-    <div class="pmt-card-sub" style="margin-bottom:12px;">Get these from developer.safaricom.co.ke</div>
-
-    <!-- Guided Steps Accordion -->
-    <div class="pmt-card" style="margin-bottom:12px;">
-      <div style="font-size:12px;font-weight:800;color:#71ff00;margin-bottom:10px;">📋 How to get your credentials (tap to expand)</div>
-      <ul class="pmt-guide-steps">
-        <li class="pmt-guide-step">
-          <div class="pmt-guide-num">1</div>
-          <div class="pmt-guide-content">
-            <div class="pmt-guide-title">Create a Safaricom Developer Account</div>
-            <div class="pmt-guide-desc">Visit the Safaricom Developer Portal and sign up with your business email.</div>
-            <div class="pmt-url-chip" onclick="pmtCopy('developer.safaricom.co.ke')">📋 developer.safaricom.co.ke</div>
-          </div>
-        </li>
-        <li class="pmt-guide-step">
-          <div class="pmt-guide-num">2</div>
-          <div class="pmt-guide-content">
-            <div class="pmt-guide-title">Create a New App</div>
-            <div class="pmt-guide-desc">In your dashboard → My Apps → Add a New App. Select "Lipa Na M-Pesa Online" as the product. Give it your business name.</div>
-          </div>
-        </li>
-        <li class="pmt-guide-step">
-          <div class="pmt-guide-num">3</div>
-          <div class="pmt-guide-content">
-            <div class="pmt-guide-title">Get Consumer Key & Secret</div>
-            <div class="pmt-guide-desc">On your app's detail page, click "Keys" tab. Copy the Consumer Key and Consumer Secret.</div>
-          </div>
-        </li>
-        <li class="pmt-guide-step">
-          <div class="pmt-guide-num">4</div>
-          <div class="pmt-guide-content">
-            <div class="pmt-guide-title">Get Your Passkey</div>
-            <div class="pmt-guide-desc">Go to M-Pesa Business → Lipa Na M-Pesa Online → Passkey. This is only available after going live. For sandbox, use the test passkey from the Daraja portal.</div>
-          </div>
-        </li>
-        <li class="pmt-guide-step">
-          <div class="pmt-guide-num">5</div>
-          <div class="pmt-guide-content">
-            <div class="pmt-guide-title">Register Callback URL</div>
-            <div class="pmt-guide-desc">In Daraja portal → Lipa Na M-Pesa Online → Validation URL. Paste SOKONI's callback URL below.</div>
-            <!-- D1 — callback-registration instruction removed. Publishing this URL is what caused sellers to register it in their own Safaricom portals; those registrations are external to this repository and are why the inbound handler itself cannot yet be deleted (D3). -->
-          </div>
-        </li>
-      </ul>
-    </div>
-
-    <!-- Credential Inputs -->
-    <label class="pmt-label">Business Name (shown to customers)</label>
-    <input type="text" id="sdjBizNameW" class="pmt-input" placeholder="Your Business Name">
-
-    <!-- Credential inputs removed — merchants no longer supply Daraja keys.
-         See wizSaveCredentials() for the full rationale. -->
-    <div class="pmt-info" style="margin-top:14px;border-left:3px solid var(--sk-accent,#71ff00);padding-left:12px;">
-      <strong>No API keys required.</strong><br>
-      SOKONI collects M-Pesa payments centrally on your behalf and settles them to
-      your wallet automatically. You do not need a Daraja account, a shortcode or
-      a passkey — just your business name above.
-    </div>
-
-    <div class="pmt-field-group" style="margin-top:0;">
-      <div>
-        <label class="pmt-label">Transaction Type</label>
-        <select id="sdjTxTypeW" class="pmt-input pmt-select">
-          <option value="CustomerPayBillOnline">Paybill</option>
-          <option value="CustomerBuyGoodsOnline">Till / Buy Goods</option>
-        </select>
-      </div>
-      <div>
-        <label class="pmt-label">Environment</label>
-        <select id="sdjEnvW" class="pmt-input pmt-select">
-          <option value="production">🟢 Live</option>
-          <option value="sandbox">🟡 Sandbox</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="pmt-warn">🔒 Credentials are stored server-side only in Firebase Secret Manager. They are never sent to or stored in your browser beyond this form.</div>
-
-    <div class="pmt-msg" id="wiz4Msg"></div>
-    <button class="pmt-btn pmt-btn-primary" onclick="wizSaveCredentials()">Save & Verify →</button>
-    <button class="pmt-btn pmt-btn-ghost" onclick="wizBack(4)" style="margin-top:8px;">← Back</button>
-  </div>
-
-  <!-- STEP 5: Verify -->
-  <div class="pmt-step" id="pmt-step-5">
-    <div class="pmt-card-title" style="font-size:16px;margin-bottom:4px;">Verifying Connection</div>
-    <div class="pmt-card-sub" style="margin-bottom:16px;">SOKONI is checking your credentials are valid.</div>
-
-    <div class="pmt-card">
-      <ul class="pmt-verify-list" id="pmtVerifyList">
-        <li class="pmt-verify-item">
-          <div class="pmt-verify-icon pending" id="vicon1">⏳</div>
-          <div class="pmt-verify-text">
-            <div class="pmt-verify-title">Checking credentials format</div>
-            <div class="pmt-verify-sub" id="vsub1">Validating fields are complete</div>
-          </div>
-        </li>
-        <li class="pmt-verify-item">
-          <div class="pmt-verify-icon pending" id="vicon2">⏳</div>
-          <div class="pmt-verify-text">
-            <div class="pmt-verify-title">Generating OAuth token</div>
-            <div class="pmt-verify-sub" id="vsub2">Connecting to Safaricom Daraja</div>
-          </div>
-        </li>
-        <li class="pmt-verify-item">
-          <div class="pmt-verify-icon pending" id="vicon3">⏳</div>
-          <div class="pmt-verify-text">
-            <div class="pmt-verify-title">Validating shortcode</div>
-            <div class="pmt-verify-sub" id="vsub3">Verifying business shortcode</div>
-          </div>
-        </li>
-        <li class="pmt-verify-item">
-          <div class="pmt-verify-icon pending" id="vicon4">⏳</div>
-          <div class="pmt-verify-text">
-            <div class="pmt-verify-title">Security check</div>
-            <div class="pmt-verify-sub" id="vsub4">Encrypting credentials in vault</div>
-          </div>
-        </li>
-      </ul>
-    </div>
-
-    <div class="pmt-msg" id="wiz5Msg"></div>
-    <button class="pmt-btn pmt-btn-primary" id="wiz5NextBtn" onclick="wizNext(5)" style="display:none;">Test with Real Payment →</button>
-    <button class="pmt-btn pmt-btn-ghost" id="wiz5RetryBtn" onclick="wizVerify()" style="display:none;margin-top:8px;">⟳ Retry Verification</button>
-    <button class="pmt-btn pmt-btn-ghost" onclick="wizBack(5)" style="margin-top:8px;">← Back</button>
-  </div>
-
-  <!-- STEP 6: Test Payment -->
-  <div class="pmt-step" id="pmt-step-6">
-    <div class="pmt-card-title" style="font-size:16px;margin-bottom:4px;">Test Your Integration</div>
-    <div class="pmt-card-sub" style="margin-bottom:16px;">Send a real KES 1 test payment to yourself to confirm everything works.</div>
-
-    <div class="pmt-test-box" id="pmtTestBox">
-      <div class="pmt-test-icon" id="pmtTestIcon">📲</div>
-      <div class="pmt-test-title" id="pmtTestTitle">Ready to Test</div>
-      <div class="pmt-test-sub" id="pmtTestSub">Enter your phone number. SOKONI will send a KES 1 M-Pesa PIN prompt. Enter your PIN and confirm the payment goes through.</div>
-
-      <label class="pmt-label" style="text-align:left;">Your Phone Number</label>
-      <input type="tel" id="pmtTestPhone" class="pmt-input" placeholder="07XXXXXXXX" style="margin-bottom:12px;">
-
-      <button class="pmt-btn pmt-btn-blue" id="pmtTestBtn" onclick="wizSendTestPush()">📲 Send Test Push (KES 1)</button>
-      <div class="pmt-test-status" id="pmtTestStatus"></div>
-    </div>
-
-    <div class="pmt-card" id="pmtTestSuccessCard" style="display:none;border-color:rgba(76,175,80,.3);background:rgba(76,175,80,.05);">
-      <div style="text-align:center;padding:8px 0;">
-        <div style="font-size:48px;margin-bottom:10px;">✅</div>
-        <div style="font-size:16px;font-weight:900;color:#71ff00;margin-bottom:6px;">Payment Integration Active!</div>
-        <div style="font-size:13px;color:rgba(255,255,255,.55);margin-bottom:4px;" id="pmtTestSuccessDetail">Your M-Pesa integration is live and working.</div>
-        <div style="font-size:12px;color:rgba(255,255,255,.35);font-family:monospace;" id="pmtTestReceiptCode"></div>
-      </div>
-    </div>
-
-    <div class="pmt-info" id="pmtTestSkipNote">
-      <strong>Skipping?</strong> If you're using sandbox mode, the STK Push will appear but no real money is charged. You can skip this step and complete setup — test again anytime from Settings.
-    </div>
-
-    <div class="pmt-msg" id="wiz6Msg"></div>
-    <button class="pmt-btn pmt-btn-primary" id="wiz6FinishBtn" onclick="wizFinish()" style="display:none;">🎉 Finish Setup</button>
-    <button class="pmt-btn pmt-btn-ghost" onclick="wizSkipTest()" style="margin-top:8px;">Skip Test & Finish</button>
-    <button class="pmt-btn pmt-btn-ghost" onclick="wizBack(6)" style="margin-top:6px;">← Back</button>
-  </div>
-
 </div>
 
 <!-- ════════════════════════════════════════
@@ -599,8 +240,8 @@ nav.bottom-nav{position:fixed;bottom:0;left:0;right:0;height:62px;background:rgb
   <div class="pmt-method-card">
     <div class="pmt-method-icon">🟢</div>
     <div class="pmt-method-body">
-      <div class="pmt-method-name">M-Pesa Direct (Daraja)</div>
-      <div class="pmt-method-detail" id="setMpesaDetail">Not configured</div>
+      <div class="pmt-method-name">M-PESA — collected by SOKONI</div>
+      <div class="pmt-method-detail" id="setMpesaDetail">Checking…</div>
     </div>
     <div class="pmt-method-status none" id="setMpesaStatus">Setup</div>
   </div>
@@ -610,55 +251,23 @@ nav.bottom-nav{position:fixed;bottom:0;left:0;right:0;height:62px;background:rgb
     <label class="pmt-label" style="margin-top:0;">Business Name</label>
     <input type="text" id="setBizName" class="pmt-input" placeholder="Your Business Name">
 
-    <!-- Credential fields removed: shortcode, consumer key, consumer secret and
-         passkey are no longer collected from merchants. They were written to
-         Firestore from this form and read back into the DOM. Collection now runs
-         through a single SOKONI account whose keys live in Secret Manager.
-         An explicit notice replaces them so the section does not read as broken. -->
+    <!-- Credential fields removed: shortcode, consumer key, consumer secret and passkey
+         are no longer collected. They were written to Firestore from this form and read
+         back into the DOM on every visit. Collection runs through a single SOKONI account
+         whose keys live in Secret Manager and never reach a browser. An explicit notice
+         replaces them so the section does not read as broken. -->
     <div class="pmt-info" style="margin-top:14px;border-left:3px solid var(--sk-accent,#71ff00);padding-left:12px;">
       <strong>M-Pesa collection is managed by SOKONI.</strong><br>
-      You no longer need Daraja API keys, a shortcode or a passkey. Payments are
-      collected centrally and settled to your wallet automatically, minus the
-      agreed commission.
-    </div>
-
-    <div class="pmt-field-group" style="margin-top:0;">
-      <div>
-        <label class="pmt-label">Transaction Type</label>
-        <select id="setTxType" class="pmt-input pmt-select">
-          <option value="CustomerPayBillOnline">Paybill</option>
-          <option value="CustomerBuyGoodsOnline">Till</option>
-        </select>
-      </div>
-      <div>
-        <label class="pmt-label">Environment</label>
-        <select id="setEnv" class="pmt-input pmt-select">
-          <option value="production">🟢 Live</option>
-          <option value="sandbox">🟡 Sandbox</option>
-        </select>
-      </div>
+      You do not need your own till, paybill or API keys. Payments are collected
+      centrally and settled to your wallet automatically, minus the agreed commission.
     </div>
 
     <div class="pmt-msg" id="setMsg"></div>
     <div style="display:flex;gap:8px;margin-top:12px;">
       <button class="pmt-btn pmt-btn-primary" style="margin-top:0;flex:1;" onclick="pmtSaveSettings()">💾 Save</button>
-      <button class="pmt-btn pmt-btn-ghost pmt-btn-sm" style="padding:14px;" onclick="pmtTestConnection()">⚡ Test</button>
     </div>
   </div>
 
-  <div class="pmt-sec">Callback URL</div>
-  <div class="pmt-callback-box">
-    <!-- D1 — callback-registration instruction removed (see D3). -->
-  </div>
-  <div class="pmt-info" style="margin-top:10px;">Register this URL in your Safaricom Daraja portal under <strong>Lipa Na M-Pesa Online → CallbackURL</strong>.</div>
-
-  <div class="pmt-sec">Test Connection</div>
-  <div class="pmt-card">
-    <label class="pmt-label" style="margin-top:0;">Phone for Test Push</label>
-    <input type="tel" id="setTestPhone" class="pmt-input" placeholder="07XXXXXXXX">
-    <div class="pmt-msg" id="setTestMsg"></div>
-    <button class="pmt-btn pmt-btn-blue" onclick="pmtRunTestFromSettings()">📲 Send KES 1 Test Push</button>
-  </div>
 </div>
 
 <!-- ════════════════════════════════════════
@@ -673,14 +282,12 @@ nav.bottom-nav{position:fixed;bottom:0;left:0;right:0;height:62px;background:rgb
 
   <div class="pmt-sec" style="margin-top:0;">Quick Questions</div>
   <div class="pmt-ai-quickies">
-    <button class="pmt-ai-q" onclick="aiAsk('How do I get Daraja credentials?')">How do I get Daraja credentials?</button>
-    <button class="pmt-ai-q" onclick="aiAsk('Till vs Paybill — what is the difference?')">Till vs Paybill?</button>
-    <button class="pmt-ai-q" onclick="aiAsk('Why is my STK Push not working?')">STK Push not working?</button>
-    <button class="pmt-ai-q" onclick="aiAsk('What is Consumer Key and Secret?')">What is Consumer Key?</button>
-    <button class="pmt-ai-q" onclick="aiAsk('How do I go live from sandbox?')">Sandbox to live?</button>
-    <button class="pmt-ai-q" onclick="aiAsk('Where do I find my Passkey?')">Where is my Passkey?</button>
-    <button class="pmt-ai-q" onclick="aiAsk('How long does callback take?')">How fast is callback?</button>
-    <button class="pmt-ai-q" onclick="aiAsk('SOKONI never holds my money?')">Does SOKONI hold funds?</button>
+    <button class="pmt-ai-q" onclick="aiAsk('How do I get paid?')">How do I get paid?</button>
+    <button class="pmt-ai-q" onclick="aiAsk('When is my money settled?')">When am I settled?</button>
+    <button class="pmt-ai-q" onclick="aiAsk('What commission does SOKONI charge?')">What is the commission?</button>
+    <button class="pmt-ai-q" onclick="aiAsk('Do I need my own M-PESA till or paybill?')">Do I need a till?</button>
+    <button class="pmt-ai-q" onclick="aiAsk('How does a customer pay me?')">How do customers pay?</button>
+    <button class="pmt-ai-q" onclick="aiAsk('A payment is missing — what do I do?')">A payment is missing</button>
   </div>
 
   <div class="pmt-ai-input-row">
@@ -707,21 +314,6 @@ nav.bottom-nav{position:fixed;bottom:0;left:0;right:0;height:62px;background:rgb
     var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
     var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
     if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
-    /* Pre-fill wizard step 1 from cached profile */
-    if(u){
-      setTimeout(function(){
-        var bn=document.getElementById('wiz1BizName');
-        if(bn&&!bn.value) bn.value=u.shopName||u.businessName||u.name||'';
-        var ph=document.getElementById('wiz1Phone');
-        if(ph&&!ph.value) ph.value=u.phone||u.phoneNumber||'';
-        var em=document.getElementById('wiz1Email');
-        if(em&&!em.value) em.value=u.email||'';
-        var tp=document.getElementById('pmtTestPhone');
-        if(tp&&!tp.value) tp.value=u.phone||u.phoneNumber||'';
-        var sp=document.getElementById('setTestPhone');
-        if(sp&&!sp.value) sp.value=u.phone||u.phoneNumber||'';
-      },200);
-    }
   }catch(e){}
 })();
 
@@ -732,6 +324,11 @@ function pmtTab(tab, btn) {
   var activeBtn = btn || document.querySelector('[data-tab="'+tab+'"]');
   if(activeBtn) activeBtn.classList.add('active');
   var pane = document.getElementById('pmt-pane-'+tab);
+  /* An unknown tab (e.g. the retired ?tab=wizard, still linked from elsewhere) must fall back
+     to Overview rather than leaving every pane hidden and the page blank. */
+  if(!pane){ tab='overview'; pane=document.getElementById('pmt-pane-overview');
+             activeBtn=document.querySelector('[data-tab="overview"]');
+             if(activeBtn) activeBtn.classList.add('active'); }
   if(pane) pane.classList.add('active');
   if(tab==='transactions' && window._pmtLoadTxnsReady) window._pmtLoadTxns();
 }
@@ -742,10 +339,7 @@ function pmtTab(tab, btn) {
 })();
 
 /* Stub remaining functions to prevent "not defined" errors before module initialises */
-['wizNext','wizBack','wizChooseProvider','wizChooseMpesaType','wizSaveCredentials',
- 'wizVerify','wizSendTestPush','wizFinish','wizSkipTest','pmtCopy','pmtToggleVis',
- 'pmtLoadTxns','pmtSaveSettings','pmtTestConnection','pmtRunTestFromSettings',
- 'aiAsk','aiSendInput'
+['pmtCopy','pmtLoadTxns','pmtSaveSettings','aiAsk','aiSendInput'
 ].forEach(function(fn){ window[fn]=window[fn]||function(){}; });
 </script>
 <script type="module" src="firebase.js"></script>
@@ -769,13 +363,6 @@ import { onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-
 let _uid = null;
 let _db  = null;
 let _fns = null;
-let _wizStep = 1;
-let _wizProvider = 'mpesa';
-let _wizMpesaType = 'paybill';
-let _testCheckoutId = null;
-let _testUnsub = null;
-
-const TOTAL_STEPS = 6;
 
 /* ── Wait for Firebase ── */
 async function _waitFB(ms = 8000) {
@@ -799,7 +386,6 @@ async function _waitFB(ms = 8000) {
   window.firebaseAuth.onAuthStateChanged(async user => {
     if (!user) { window.location.href = 'login.html?next=payments.html'; return; }
     _uid = user.uid;
-    _buildWizardProgress();
     pmtLoadOverview();
     pmtLoadSettings();
   });
@@ -808,21 +394,9 @@ async function _waitFB(ms = 8000) {
   window.pmtTab             = pmtTab;
   window._pmtLoadTxns       = pmtLoadTxns;
   window._pmtLoadTxnsReady  = true;
-  window.wizNext            = wizNext;
-  window.wizBack            = wizBack;
-  window.wizChooseProvider  = wizChooseProvider;
-  window.wizChooseMpesaType = wizChooseMpesaType;
-  window.wizSaveCredentials = wizSaveCredentials;
-  window.wizVerify          = wizVerify;
-  window.wizSendTestPush    = wizSendTestPush;
-  window.wizFinish          = wizFinish;
-  window.wizSkipTest        = wizSkipTest;
   window.pmtCopy            = pmtCopy;
-  window.pmtToggleVis       = pmtToggleVis;
   window.pmtLoadTxns        = pmtLoadTxns;
   window.pmtSaveSettings    = pmtSaveSettings;
-  window.pmtTestConnection  = pmtTestConnection;
-  window.pmtRunTestFromSettings = pmtRunTestFromSettings;
   window.aiAsk              = aiAsk;
   window.aiSendInput        = aiSendInput;
 })();
@@ -834,275 +408,10 @@ function pmtTab(tab, btn) {
   document.querySelectorAll('.pmt-tab').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.pmt-pane').forEach(p => p.classList.remove('active'));
   if (btn) btn.classList.add('active');
+  /* Unknown tab → Overview. See the pre-module copy for why. */
+  if (!document.getElementById('pmt-pane-' + tab)) tab = 'overview';
   document.getElementById('pmt-pane-' + tab)?.classList.add('active');
   if (tab === 'transactions') pmtLoadTxns();
-}
-
-/* ════════════════════════════════════════
-   WIZARD
-════════════════════════════════════════ */
-const STEP_LABELS = ['Business','Provider','Type','Credentials','Verify','Test'];
-
-function _buildWizardProgress() {
-  const wrap = document.getElementById('pmtWizProgress');
-  if (!wrap) return;
-  let html = '';
-  for (let i = 1; i <= TOTAL_STEPS; i++) {
-    html += `<div class="pmt-wiz-step">
-      <div class="pmt-wiz-dot ${i < _wizStep ? 'done' : i === _wizStep ? 'active' : ''}" id="wdot${i}">${i < _wizStep ? '✓' : i}</div>
-      <div class="pmt-wiz-label">${STEP_LABELS[i-1]}</div>
-    </div>`;
-    if (i < TOTAL_STEPS) html += `<div class="pmt-wiz-line ${i < _wizStep ? 'done' : ''}"></div>`;
-  }
-  wrap.innerHTML = html;
-}
-
-function _goToStep(n) {
-  document.querySelectorAll('.pmt-step').forEach(s => s.classList.remove('active'));
-  document.getElementById('pmt-step-' + n)?.classList.add('active');
-  _wizStep = n;
-  _buildWizardProgress();
-  window.scrollTo(0, 0);
-}
-
-function wizNext(from) {
-  if (from === 1) {
-    const name  = document.getElementById('wiz1BizName')?.value.trim();
-    const type  = document.getElementById('wiz1BizType')?.value;
-    const phone = document.getElementById('wiz1Phone')?.value.trim();
-    const msg   = document.getElementById('wiz1Msg');
-    if (!name || !type || !phone) {
-      if (msg) { msg.textContent = '⚠️ Fill Business Name, Type and Phone.'; msg.className = 'pmt-msg err'; }
-      return;
-    }
-    if (msg) msg.textContent = '';
-    /* Pre-fill phone in test steps */
-    const tp = document.getElementById('pmtTestPhone');
-    const sp = document.getElementById('setTestPhone');
-    if (tp) tp.value = phone;
-    if (sp) sp.value = phone;
-    _goToStep(2);
-  } else if (from === 3) {
-    _goToStep(4);
-    /* Pre-fill biz name from step 1 */
-    const bizName = document.getElementById('wiz1BizName')?.value.trim();
-    const nb = document.getElementById('sdjBizNameW');
-    if (nb && !nb.value) nb.value = bizName;
-  } else if (from === 5) {
-    _goToStep(6);
-    /* Pre-fill phone */
-    const ph = document.getElementById('wiz1Phone')?.value.trim() || (JSON.parse(localStorage.getItem('sokoniUser')||'{}').phone||'');
-    const tp = document.getElementById('pmtTestPhone');
-    if (tp && !tp.value) tp.value = ph;
-  }
-}
-
-function wizBack(from) {
-  if (from === 2) _goToStep(1);
-  else if (from === 3) _goToStep(2);
-  else if (from === 4) _goToStep(3);
-  else if (from === 5) _goToStep(4);
-  else if (from === 6) _goToStep(5);
-}
-
-function wizChooseProvider(p) {
-  document.querySelectorAll('.pmt-provider-card').forEach(c => c.classList.remove('selected'));
-  document.getElementById('prov-' + p)?.classList.add('selected');
-  _wizProvider = p;
-  /* Only M-Pesa goes to next step immediately */
-  if (p === 'mpesa') {
-    setTimeout(() => _goToStep(3), 300);
-  } else {
-    const msg = document.getElementById('wiz2Msg');
-    if (msg) { msg.textContent = 'Coming soon — select M-Pesa Direct for now.'; msg.className = 'pmt-msg info'; }
-  }
-}
-
-function wizChooseMpesaType(t) {
-  document.querySelectorAll('.pmt-mpesa-type').forEach(c => c.classList.remove('selected'));
-  document.getElementById('mtype-' + t)?.classList.add('selected');
-  _wizMpesaType = t;
-  const txSel = document.getElementById('sdjTxTypeW');
-  if (txSel) txSel.value = t === 'till' ? 'CustomerBuyGoodsOnline' : 'CustomerPayBillOnline';
-  setTimeout(() => wizNext(3), 300);
-}
-
-/* RETIRED — merchant Daraja credentials are no longer collected.
-   This wrote darajaConsumerSecret and darajaPassKey to Firestore straight from a
-   browser form: live M-Pesa API secrets, typed into a web page, stored in
-   plaintext, and read back into the DOM on the next visit. Collections are moving
-   to a single central account whose credentials live in Secret Manager and never
-   reach a client (functions/payment-config.js → collectionRoute).
-
-   The business name is still saved — it is not a credential and other surfaces
-   display it. Nothing else here writes.
-
-   Safe to retire now: an audit on 2026-07-22 found shopSettings with ZERO
-   documents, so no merchant had configured credentials and none is losing a
-   working setup. Doing this later, once real secrets existed, would have meant
-   migrating them instead of simply not collecting them. */
-async function wizSaveCredentials() {
-  const get = id => (document.getElementById(id)?.value||'').trim();
-  const msg = document.getElementById('wiz4Msg');
-  const setMsg = (t, c='ok') => { if (msg) { msg.textContent = t; msg.className = 'pmt-msg ' + c; } };
-  try {
-    const bizName = get('sdjBizNameW');
-    if (bizName) {
-      await setDoc(doc(_db, 'shopSettings', _uid), {
-        businessName: bizName,
-        updatedAt: new Date().toISOString(),
-      }, { merge: true });
-    }
-    setMsg('✓ Saved. M-Pesa collection is managed by SOKONI — no API keys needed.', 'ok');
-    _goToStep(5);
-  } catch (e) {
-    setMsg('❌ Save failed: ' + e.message, 'err');
-  }
-}
-
-async function wizVerify() {
-  const states = [
-    { icon: 'vicon1', sub: 'vsub1', okText: 'Credentials format — ✓ Complete', failText: 'Missing required fields' },
-    { icon: 'vicon2', sub: 'vsub2', okText: 'OAuth token — ✓ Generated successfully', failText: 'Could not authenticate with Safaricom' },
-    { icon: 'vicon3', sub: 'vsub3', okText: 'Shortcode — ✓ Verified', failText: 'Invalid shortcode' },
-    { icon: 'vicon4', sub: 'vsub4', okText: 'Security — ✓ Credentials encrypted', failText: 'Security check failed' },
-  ];
-
-  const msg      = document.getElementById('wiz5Msg');
-  const nextBtn  = document.getElementById('wiz5NextBtn');
-  const retryBtn = document.getElementById('wiz5RetryBtn');
-  if (nextBtn) nextBtn.style.display = 'none';
-  if (retryBtn) retryBtn.style.display = 'none';
-  if (msg) { msg.textContent = ''; msg.className = 'pmt-msg'; }
-
-  const INIT_SUBS = [
-    'Validating all required fields',
-    'Connecting to Safaricom Daraja API',
-    'Verifying business shortcode',
-    'Encrypting credentials in vault',
-  ];
-  /* Reset all icons */
-  states.forEach((s, i) => {
-    const icon = document.getElementById(s.icon);
-    const sub  = document.getElementById(s.sub);
-    if (icon) { icon.className = 'pmt-verify-icon pending'; icon.textContent = '⏳'; }
-    if (sub)  sub.textContent = INIT_SUBS[i];
-  });
-
-  /* Step through */
-  const delay = ms => new Promise(r => setTimeout(r, ms));
-
-  /* This used to verify the merchant's own Daraja credentials: field
-     completeness, then an OAuth token via validateDarajaCredentials, then the
-     shortcode. None of those exist any more — collection runs through one central
-     SOKONI account whose keys live in Secret Manager. Left as-is it would gate on
-     `darajaConsumerKey && darajaConsumerSecret && …`, always be false, and tell
-     the merchant to "complete all credential fields and save again" — pointing at
-     inputs that were removed. A dead end with no way out.
-
-     There is nothing merchant-specific left to verify, so the checks now report
-     the central integration as ready. */
-  await delay(400);
-  _setVerifyState(0, 'ok', 'Managed by SOKONI — no merchant keys required');
-  await delay(400);
-  _setVerifyState(1, 'ok', 'Central M-Pesa collection active');
-  await delay(300);
-  _setVerifyState(2, 'ok', 'Settlement to your wallet enabled');
-  await delay(300);
-  _setVerifyState(3, 'ok', 'Credentials held server-side in Secret Manager');
-
-  await delay(300);
-  if (msg) { msg.textContent = '✅ Your shop is ready to accept M-Pesa payments.'; msg.className = 'pmt-msg ok'; }
-  if (nextBtn) nextBtn.style.display = 'block';
-  pmtLoadSettings(); /* refresh settings tab badge */
-}
-
-function _setVerifyState(idx, state, text) {
-  const icons = ['vicon1','vicon2','vicon3','vicon4'];
-  const subs  = ['vsub1','vsub2','vsub3','vsub4'];
-  const icon  = document.getElementById(icons[idx]);
-  const sub   = document.getElementById(subs[idx]);
-  if (!icon) return;
-  icon.className = 'pmt-verify-icon ' + state;
-  icon.textContent = state === 'ok' ? '✅' : state === 'fail' ? '❌' : state === 'loading' ? '🔄' : '⏳';
-  if (sub) sub.textContent = text;
-}
-
-function _verifyFail(msgEl, retryBtn, text) {
-  if (msgEl) { msgEl.textContent = '❌ ' + text; msgEl.className = 'pmt-msg err'; }
-  if (retryBtn) retryBtn.style.display = 'block';
-}
-
-async function wizSendTestPush() {
-  const phone  = document.getElementById('pmtTestPhone')?.value.trim();
-  const btn    = document.getElementById('pmtTestBtn');
-  const status = document.getElementById('pmtTestStatus');
-  const msg    = document.getElementById('wiz6Msg');
-
-  if (!phone) { if (status) { status.textContent = '⚠️ Enter your phone number.'; status.style.color = '#ff9800'; } return; }
-
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Sending…'; }
-  if (status) { status.textContent = '📲 Sending STK Push…'; status.style.color = 'rgba(255,255,255,.5)'; }
-
-  try {
-    /* D1 — Daraja is retired; SOKONI collects through IntaSend. */
-    throw new Error('M-PESA Daraja setup has been retired. SOKONI now collects every payment through IntaSend — there is nothing for you to configure here.');
-
-    if (btn) btn.textContent = '⏳ Waiting for PIN…';
-    if (status) { status.textContent = '📱 Enter your M-Pesa PIN on your phone…'; status.style.color = '#71ff00'; }
-
-    /* Listen for callback result */
-    _listenTestResult(_testCheckoutId, btn, status, msg);
-  } catch (e) {
-    if (btn) { btn.disabled = false; btn.textContent = '📲 Retry Test Push'; }
-    if (status) { status.textContent = '❌ ' + (e.message || 'Failed to send'); status.style.color = '#ff6b6b'; }
-    if (msg) { msg.textContent = 'Tip: Make sure you saved valid credentials in Step 4.'; msg.className = 'pmt-msg info'; }
-  }
-}
-
-function _listenTestResult(checkoutId, btn, status, msg) {
-  if (_testUnsub) _testUnsub();
-  const unsub = onSnapshot(doc(_db, 'posPayments', checkoutId), snap => {
-    if (!snap.exists()) return;
-    const d = snap.data();
-    if (d.status === 'completed') {
-      unsub();
-      if (btn) { btn.disabled = false; btn.textContent = '✅ Payment Confirmed!'; btn.style.background = 'linear-gradient(135deg,#4caf50,#2e7d32)'; }
-      if (status) { status.textContent = ''; }
-      document.getElementById('pmtTestBox').style.display = 'none';
-      const sc = document.getElementById('pmtTestSuccessCard');
-      if (sc) sc.style.display = 'block';
-      const det = document.getElementById('pmtTestSuccessDetail');
-      if (det) det.textContent = 'KES 1 received — ' + (d.paidPhone || d.phone || '') + ' · ' + new Date().toLocaleTimeString('en-KE');
-      const rc = document.getElementById('pmtTestReceiptCode');
-      if (rc && d.mpesaCode) rc.textContent = 'Receipt: ' + d.mpesaCode;
-      const fb = document.getElementById('wiz6FinishBtn');
-      if (fb) fb.style.display = 'block';
-      document.getElementById('pmtTestSkipNote').style.display = 'none';
-      pmtLoadOverview(); /* refresh stats */
-    } else if (d.status === 'failed' || d.status === 'cancelled') {
-      unsub();
-      if (btn) { btn.disabled = false; btn.textContent = '📲 Retry Test Push'; }
-      if (status) { status.textContent = '❌ Payment ' + d.status + '. Check your PIN and try again.'; status.style.color = '#ff6b6b'; }
-    }
-  });
-  _testUnsub = unsub;
-  /* 90s timeout */
-  setTimeout(() => {
-    unsub();
-    if (btn && btn.disabled) { btn.disabled = false; btn.textContent = '📲 Retry Test Push'; }
-    if (status && !status.textContent.includes('✅')) { status.textContent = '⏰ Timed out — try again.'; status.style.color = '#ff9800'; }
-  }, 90000);
-}
-
-function wizFinish() {
-  localStorage.setItem('_skDarajaOnboardDismissed','1');
-  pmtLoadOverview();
-  pmtTab('overview', document.querySelector('[data-tab=overview]'));
-}
-
-function wizSkipTest() {
-  wizFinish();
 }
 
 /* ════════════════════════════════════════
@@ -1112,29 +421,16 @@ async function pmtLoadOverview() {
   if (!_uid || !_db) return;
 
   try {
-    /* Check if configured */
-    const snap = await getDoc(doc(_db, 'shopSettings', _uid));
-    /* Always "configured": M-Pesa collection is central, so there is nothing a
-       merchant must set up. Keying this off darajaConsumerKey would show a
-       permanent "not set up" prompt pointing at a form that no longer exists. */
-    const configured = true;
-
-    const pill  = document.getElementById('pmtStatusPill');
-    const card  = document.getElementById('pmtIntegCard');
-    const setup = document.getElementById('pmtSetupPromptCard');
-    const det   = document.getElementById('pmtIntegDetail');
-
-    if (configured) {
-      const cfg = snap.data();
-      if (pill)  { pill.textContent = '✅ Active'; pill.className = 'pmt-status-pill active'; }
-      if (card)  card.style.display = 'block';
-      if (setup) setup.style.display = 'none';
-      if (det)   det.textContent = (cfg.darajaEnv === 'sandbox' ? '🟡 Sandbox' : '🟢 Live') + ' · ' + (cfg.darajaShortCode || '');
-    } else {
-      if (pill)  { pill.textContent = '⚙️ Setup Required'; pill.className = 'pmt-status-pill none'; }
-      if (card)  card.style.display = 'none';
-      if (setup) setup.style.display = 'block';
-    }
+    /* M-PESA collection is central: every merchant is active, with nothing to configure.
+       Nothing is read from shopSettings here — the previous Daraja-shaped read
+       (cfg.darajaEnv / cfg.darajaShortCode) threw on the absent document and silently
+       killed the statistics below it. */
+    const pill = document.getElementById('pmtStatusPill');
+    const card = document.getElementById('pmtIntegCard');
+    const det  = document.getElementById('pmtIntegDetail');
+    if (pill) { pill.textContent = '✅ Active'; pill.className = 'pmt-status-pill active'; }
+    if (card) card.style.display = 'block';
+    if (det)  det.textContent = 'Collected by SOKONI and settled to your wallet';
 
     /* Load stats */
     const q = query(
@@ -1244,26 +540,19 @@ function _txnItemHTML(r) {
 async function pmtLoadSettings() {
   if (!_uid || !_db) return;
   try {
+    /* Stated before the document is read: collection is central, so this is true for every
+       merchant whether or not they have a shopSettings document. Gating it on the document
+       left the card reading "Checking…" forever for everyone — shopSettings is empty. */
+    const det = document.getElementById('setMpesaDetail');
+    const sts = document.getElementById('setMpesaStatus');
+    if (det) det.textContent = '🟢 Managed by SOKONI';
+    if (sts) { sts.textContent = '✅ Active'; sts.className = 'pmt-method-status active'; }
+
     const snap = await getDoc(doc(_db, 'shopSettings', _uid));
     if (!snap.exists()) return;
     const d = snap.data();
     const set = (id, val) => { const e = document.getElementById(id); if (e && val != null) e.value = val; };
     set('setBizName',      d.businessName);
-    /* CREDENTIALS ARE NO LONGER SENT TO THE BROWSER.
-       This used to populate darajaConsumerKey / darajaConsumerSecret / darajaPassKey
-       straight into form fields, so a merchant's live M-Pesa secrets were read out
-       of Firestore and placed in the DOM on every visit to this page — readable by
-       any script on the page or anyone with the device. Collection is moving to a
-       central Secret-Manager-backed account (see functions/payment-config.js
-       collectionRoute), so per-merchant credentials are not needed at all.
-       Audited 2026-07-22: zero merchants had credentials stored, so removing this
-       migrates nothing and breaks no one. */
-
-    /* Central collection — active for every merchant, no per-merchant setup. */
-    const det = document.getElementById('setMpesaDetail');
-    const sts = document.getElementById('setMpesaStatus');
-    if (det) det.textContent = '🟢 Managed by SOKONI';
-    if (sts) { sts.textContent = '✅ Active'; sts.className = 'pmt-method-status active'; }
   } catch(e) {}
 }
 
@@ -1285,42 +574,6 @@ async function pmtSaveSettings() {
   } catch(e) { setMsg('❌ '+e.message,'err'); }
 }
 
-async function pmtTestConnection() {
-  const msg = document.getElementById('setMsg');
-  const setMsg = (t,c='ok') => { if(msg){msg.textContent=t;msg.className='pmt-msg '+c;} };
-  setMsg('Verifying credentials…','info');
-  try {
-    /* D1 — Daraja is retired; SOKONI collects through IntaSend. */
-    throw new Error('M-PESA Daraja setup has been retired. SOKONI now collects every payment through IntaSend — there is nothing for you to configure here.');
-    setMsg('✅ Connection verified! Env: ' + res.data.env + ' · Shortcode: ' + res.data.shortCode, 'ok');
-  } catch(e) { setMsg('❌ '+e.message,'err'); }
-}
-
-async function pmtRunTestFromSettings() {
-  const phone  = document.getElementById('setTestPhone')?.value.trim();
-  const msg    = document.getElementById('setTestMsg');
-  const setMsg = (t,c='ok') => { if(msg){msg.textContent=t;msg.className='pmt-msg '+c;} };
-  if (!phone) { setMsg('⚠️ Enter a phone number.','err'); return; }
-  setMsg('Sending STK Push…','info');
-  try {
-    /* D1 — Daraja is retired; SOKONI collects through IntaSend. */
-    throw new Error('M-PESA Daraja setup has been retired. SOKONI now collects every payment through IntaSend — there is nothing for you to configure here.');
-    setMsg('📲 PIN prompt sent to '+phone+'. Enter your M-Pesa PIN. Listening for result…','ok');
-    const unsub = onSnapshot(doc(_db,'posPayments',res.data.checkoutId), snap => {
-      if (!snap.exists()) return;
-      const d = snap.data();
-      if (d.status === 'completed') {
-        unsub();
-        setMsg('✅ Test successful! Receipt: ' + (d.mpesaCode||'—'), 'ok');
-      } else if (d.status==='failed'||d.status==='cancelled') {
-        unsub();
-        setMsg('❌ Test '+d.status+'. Check credentials and retry.','err');
-      }
-    });
-    setTimeout(()=>{ unsub(); if(msg.textContent.includes('Listening')) setMsg('⏰ Timed out.','err'); }, 90000);
-  } catch(e) { setMsg('❌ '+e.message,'err'); }
-}
-
 /* ════════════════════════════════════════
    UTILITIES
 ════════════════════════════════════════ */
@@ -1331,13 +584,6 @@ function pmtCopy(text) {
   }).catch(() => (window._skToast||alert)('Copy: ' + text));
 }
 
-function pmtToggleVis(id, btn) {
-  const inp = document.getElementById(id);
-  if (!inp) return;
-  inp.type = inp.type === 'password' ? 'text' : 'password';
-  if (btn) btn.textContent = inp.type === 'password' ? '👁' : '🙈';
-}
-
 function _setText(id, val) { const e = document.getElementById(id); if (e) e.textContent = val; }
 function _esc(s) { return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
@@ -1345,21 +591,17 @@ function _esc(s) { return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'
    AI ASSISTANT
 ════════════════════════════════════════ */
 const AI_KB = {
-  'daraja credentials': `To get your Daraja API credentials:\n\n1️⃣ Go to **developer.safaricom.co.ke** and create a free account using your business email.\n\n2️⃣ In your dashboard, click **My Apps → Add New App**. Select "Lipa Na M-Pesa Online" as the product.\n\n3️⃣ On the app page, click the **Keys** tab. Copy your **Consumer Key** and **Consumer Secret**.\n\n4️⃣ For the **Passkey**, go to Safaricom Business → Lipa Na M-Pesa Online → Passkey (only available after going live). For testing, use the sandbox passkey from the Daraja portal.\n\n5️⃣ Your **Shortcode** is your Till or Paybill number (e.g. 174379).`,
+  'paid get paid': `**You do not need your own M-PESA till or paybill.**\n\nSOKONI collects every payment centrally and settles it to your SOKONI wallet.\n\n1. The customer pays SOKONI — by M-PESA on their phone, or by scanning your SOKONI QR at the counter.\n2. The payment is confirmed with the payment provider before the sale is marked paid.\n3. The amount, minus commission, lands in your wallet.\n\nYou can follow every payment under **History**.`,
 
-  'till paybill': `**Till Number (Buy Goods):**\n• Used by shops, kiosks, and market stalls\n• Customer selects "Buy Goods" → enters till number\n• Money goes directly to your M-Pesa account\n• No account reference needed\n• Example: Till 123456\n\n**Paybill Number:**\n• Used by businesses, schools, utilities\n• Customer selects "Pay Bill" → enters paybill + account number\n• Allows you to track who paid by account reference\n• Example: Paybill 400200, Account: SOKONI001\n\n💡 **Which to use?** Till is simpler for small sellers. Paybill is better if you need to reconcile payments by customer.`,
+  'settled settlement when': `Payments appear in your wallet once the provider has confirmed them.\n\n⏱️ M-PESA confirmations usually arrive within seconds of the customer entering their PIN.\n\nA payment only counts as settled after SOKONI has checked it with the provider — never because a screen said so. If something looks missing, check **History** first: a payment that reached SOKONI is listed there.`,
 
-  'stk push not working': `Common reasons STK Push fails:\n\n❌ **Wrong credentials** — Check Consumer Key and Secret from the Daraja portal.\n\n❌ **Wrong Passkey** — Sandbox and production have different passkeys. Make sure your environment setting matches.\n\n❌ **Wrong environment** — If you're using sandbox credentials but set environment to "Live" (or vice versa), it will fail.\n\n❌ **Callback not registered** — Copy the SOKONI callback URL and register it in Daraja portal under Validation URL.\n\n❌ **Shortcode mismatch** — The shortcode must match exactly what's on your Daraja app.\n\n✅ **Fix:** Go to Settings tab → save updated credentials → Test Connection button.`,
+  'commission charge': `Commission depends on where the sale happens.\n\n• **Marketplace orders** (orders SOKONI brings you) — by plan.\n• **In-shop POS / Till sales** — a flat rate on every plan.\n\nCommission is recorded against your wallet; it is not taken out of the customer's payment. Your current rates are shown on your plan page.`,
 
-  'consumer key': `**Consumer Key** and **Consumer Secret** are your API credentials from Safaricom Daraja portal.\n\nThink of them like a username (Consumer Key) and password (Consumer Secret) that allow SOKONI's server to authenticate with Safaricom on your behalf.\n\n🔒 **Security:** These are stored server-side in Firebase's encrypted Secret Manager. They are never stored in your browser or visible to anyone except Safaricom servers.\n\nTo find them:\n1. Login at developer.safaricom.co.ke\n2. My Apps → click your app\n3. Keys tab → copy both values`,
+  'till own need business number': `**No.** You do not need your own M-PESA business number, and you do not need to set anything up with Safaricom.\n\nThat used to be required, and it no longer is: SOKONI collects on your behalf through its payment provider and settles to your wallet. There is nothing for you to configure on this page beyond your business name.`,
 
-  'sandbox live': `To switch from sandbox to live (production):\n\n1️⃣ **Apply for a Daraja Production App** — In the Daraja portal, go to My Apps → Go Live. Fill in the form.\n\n2️⃣ **Get Production Credentials** — Safaricom will review your app (usually 1-3 business days) and send production Consumer Key + Secret.\n\n3️⃣ **Get Production Passkey** — In M-Pesa Business portal → Lipa Na M-Pesa Online → Passkey.\n\n4️⃣ **Update SOKONI Settings** — Go to Settings tab here, update your credentials and change Environment to "🟢 Live".\n\n5️⃣ **Test again** — Run a test push to confirm live payments work.`,
+  'customer customers pay how': `Two ways, depending on where the sale happens.\n\n🛍️ **Online** — the customer checks out on SOKONI and approves the payment on their phone.\n\n🏪 **In your shop** — you raise a charge on SmartPOS, the customer scans the SOKONI QR and approves it. The sale only closes once the payment is confirmed.\n\nEither way the money reaches your SOKONI wallet.`,
 
-  'passkey': `Your **Passkey** is a secret key provided by Safaricom that's used to generate a secure password for each STK Push request.\n\n**For Sandbox (Testing):**\nUse the sandbox passkey from the Daraja portal — it's shown on your Lipa Na M-Pesa Sandbox credentials page.\n\nSandbox passkey: bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919\n\n**For Production (Live):**\nLogin to M-Pesa Business dashboard → Lipa Na M-Pesa Online → Passkey tab. This passkey is unique to your shortcode.`,
-
-  'callback': `The **Callback URL** is where Safaricom sends payment confirmation after a customer enters their M-Pesa PIN.\n\n⏱️ **Speed:** Callbacks typically arrive within **3-15 seconds** after PIN entry. Can occasionally take up to 60 seconds.\n\n🔄 **What happens:**\n1. Customer enters PIN\n2. Safaricom processes payment\n3. Safaricom sends POST request to SOKONI's callback URL\n4. SOKONI updates the payment status\n5. Your dashboard shows "Payment Received" toast\n\nSOKONI now collects every payment through IntaSend. There is no callback URL for you to register.`,
-
-  'holds funds': `**SOKONI never holds your money.** 🎉\n\nHere's exactly how the payment works:\n\n1. Customer enters their phone number in SOKONI\n2. SOKONI sends an STK Push using **your own Daraja credentials** to **your own Shortcode**\n3. Customer receives M-Pesa PIN prompt\n4. Customer enters PIN → money goes **directly into your M-Pesa account**\n5. Safaricom sends confirmation to SOKONI's server\n6. SOKONI updates the order to "Paid"\n\nAt no point does any money pass through SOKONI. SOKONI is purely the orchestration layer — it just triggers the payment using your credentials. You have 100% control of your M-Pesa account.`,
+  'missing lost payment': `If a customer says they paid and you cannot see it:\n\n1️⃣ Check **History** on this page — every payment SOKONI received is listed there.\n\n2️⃣ Ask the customer for the M-PESA confirmation code from their SMS.\n\n3️⃣ If it is not in History, do **not** release goods on the strength of an SMS alone — an SMS can be forged, and SOKONI marks a sale paid only once the provider confirms it.\n\n4️⃣ Contact support with that code: **+254 705 726 803**`,
 };
 
 function aiAsk(question) {
@@ -1379,7 +621,7 @@ function aiAsk(question) {
     if (key.split(' ').some(w => q.includes(w))) { answer = ans; break; }
   }
   if (!answer) {
-    answer = `I'm not sure about that specific question. Here's what I can help with:\n\n• Getting Daraja credentials\n• Till vs Paybill difference\n• Fixing STK Push errors\n• Going live from sandbox\n• How payments work\n\nFor anything else, contact SOKONI support on WhatsApp: **+254 705 726 803**`;
+    answer = `I'm not sure about that specific question. Here's what I can help with:\n\n• How you get paid\n• When payments are settled\n• What commission applies\n• How customers pay you\n• A payment that looks missing\n\nFor anything else, contact SOKONI support on WhatsApp: **+254 705 726 803**`;
   }
 
   /* Add bot bubble with slight delay */

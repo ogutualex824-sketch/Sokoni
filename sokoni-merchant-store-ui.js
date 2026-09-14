@@ -557,9 +557,9 @@
         h += '</div>';
       }
 
-      /* Payment. Gated on the SAME backend authorization as the destination
-         test — if SOKONI cannot collect through Daraja yet, a Pay button that
-         appears to start an STK would be a lie about where the money went. */
+      /* Payment. Gated on the SAME backend authorization as the destination test — if
+         SOKONI cannot yet collect through its payment provider, a Pay button that appears
+         to start a charge would be a lie about where the money went. */
       if (!PD.productionAuthorized) {
         h += '<div class="mst-note warn" role="status"><strong>Payment not yet available</strong><br>' +
              'Commission payment is being enabled and is awaiting payment-provider authorization. ' +

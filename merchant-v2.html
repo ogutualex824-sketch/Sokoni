@@ -2477,18 +2477,17 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       callSale: _callable('posCompleteCheckout'),
       callAdjust: _callable('merchantAdjustStock'),
       /* ── M-PESA, as two halves that must stay separate ───────────────────
-         `callStk` REQUESTS the money — it makes the customer's phone ring.
-         `callVerify` READS BACK what the server knows, and is the only thing
-         that may turn a request into a payment. They are wired as distinct
-         callables so no code path can mistake having sent a push for having
-         been paid: darajaSTKPush cannot report success, and verifyPaymentStatus
-         cannot cause a charge. The record they meet on is written by the Daraja
-         callback, which this client cannot reach at all. */
-      /* D1 — Daraja is retired. This wired the Sell screen straight at the Daraja STK
-         callable; SOKONI now collects through IntaSend, and the POS QR rail
-         (generatePOSPaymentQR -> initiatePOSQRPayment -> completePOSQRPayment) is the
-         only path that can request money. Left unset so the caller fails loudly rather
-         than silently doing nothing. */
+         REQUESTING money and BEING PAID are different events, and this client can only
+         ever do the first. `callVerify` reads back what the server already knows and is
+         the only thing that may turn a request into a payment; it cannot itself cause a
+         charge. The record they meet on is written server-side, where this client has no
+         reach at all.
+
+         `callStk` is deliberately unset. The outbound M-PESA-by-phone rail it once
+         pointed at has been retired, and the POS QR rail
+         (generatePOSPaymentQR -> initiatePOSQRPayment -> completePOSQRPayment) is now the
+         only path that can request money. Left null so a caller fails loudly rather than
+         silently appearing to work. */
       callStk: null,
       callVerify: _callable('verifyPaymentStatus'),
       onToast: toast,

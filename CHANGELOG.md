@@ -1,3 +1,123 @@
+## 2026-09-14 (64) — Daraja UI retirement: the console for a rail that cannot transact
+
+**76 assertions, 0 failed, 0 blocked.** Suite: `scripts/certify-daraja-ui-retirement.js`
+Regression: **603 assertions across 11 suites.** Require-closure passes (346 modules, none unresolved).
+Nothing deployed by this commit. No Cloud Function modified; no inbound handler touched.
+
+### What the census found that the estimate did not
+
+The gate opened on "49 Daraja references". Measured: **47 occurrences in `payments.html`** against 8
+IntaSend. More usefully, the census was generated from `git ls-files` rather than a candidate list —
+D1's census hand-listed its files and missed two — and the scan found **a third file no census had
+ever listed**: `sokoni-merchant-store-ui.js`, loaded by `merchant-v2.html` and `merchant.html`,
+asserting in a comment that SOKONI collects through Daraja. That is now three files found by
+scanning and zero found by listing.
+
+### Two findings, both closed here
+
+**1. D1's callback-instruction removal was incomplete.** Entry 51 records "callback-registration
+instructions removed from payments.html (x3)". It removed the **URLs**; it left the **instructions
+telling merchants to register them** — "Paste SOKONI's callback URL below" above nothing, and
+"Register this URL in your Safaricom Daraja portal" above an emptied box. Publishing that URL is
+precisely why sellers registered it in their own Safaricom portals, and those registrations are what
+keep D3 blocked. The instruction, not the URL, was the mechanism.
+
+**2. A live defect that has been hiding money since July.** `configured = true` (`5ee7e3a`,
+2026-07-22) made the read below it unconditional:
+
+```js
+const cfg = snap.data();                    // undefined — shopSettings holds ZERO documents
+… cfg.darajaEnv === 'sandbox' …             // TypeError, swallowed by the enclosing catch
+```
+
+The four hero statistics — Total Received, Today, Pending, Failed — are computed **after** that
+line and were therefore never reached. **Every merchant has seen `—` in all four since 2026-07-22.**
+A Daraja-shaped read outliving Daraja was silently suppressing every merchant's revenue figures.
+The suite asserts the *order* (`F6-4`), not merely the absence: proving the throw is gone is not the
+same as proving the statistics are reached.
+
+### Removed
+
+The whole six-step setup wizard and its tab; the credential guide and the portal it sent merchants
+to; both surviving callback-registration instructions; the OAuth "verification" screen; every
+test-push and credential-validation control; ten dead handlers D1 had left as
+`throw`-then-unreachable-code stubs; the sandbox/live switch and the Daraja transaction-type
+selector; and six of the assistant's eight knowledge-base entries, which walked a merchant through
+obtaining a consumer key, a passkey and a callback registration.
+
+**Removed, not hidden** — `X10-4` sabotages exactly that shortcut: a wizard re-added with
+`display:none` is detected and fails the gate.
+
+The assistant's knowledge base was rewritten to the model that actually applies: how the merchant
+gets paid, when settlement happens, what commission applies, how a customer pays, and what to do
+about a missing payment — including *not* releasing goods on an M-PESA SMS alone, since an SMS can
+be forged and SOKONI marks a sale paid only on provider confirmation.
+
+### Preserved, asserted rather than assumed
+
+Payment history, the statistics, the `posPayments` counts, transaction rendering and the
+business-name setting all survive. `mpesa-c2b.js` is byte-identical to HEAD — **C2B is not Daraja**.
+`darajaSTKCallback` and `webhookMpesa` are byte-identical to HEAD; they are inbound and D3 is
+blocked.
+
+### One thing this gate had to fix that lives in a file it may not edit
+
+`seller.html` drives merchants into the wizard via `payments.html?tab=wizard`, and `seller.html` was
+excluded from scope. Without a guard, that link would deactivate every pane and activate none —
+a blank page. The fallback therefore belongs on the receiving side, and `D4-5/D4-6` assert both
+halves: that the link still exists, and that the page now copes with it.
+
+### Two suite defects found by the suite's own controls
+
+* **`Z7-1` was passing vacuously.** The retired-callable detector required the name to be
+  **quoted**, so it could never match `sokoni-dev-mock.js`'s bare property key `darajaSTKPush:` —
+  or any bare reference at all. It reported "zero invocations" because its set was empty for the
+  wrong reason. `Z7-2`, which asserts what the detector *must* find, is what exposed it. This is the
+  argument for pairing every "nothing found" with a "and here is what it does find".
+* **`P8-initiateSTKPush` made the wrong assertion, for the fourth time this session.**
+  "Byte-identical to HEAD" fails on *another agent's* work, exactly as P1's `T8-1` and P3's `U3-1`
+  did. Narrowed to attribution: the question is never "did this change", it is "did **this gate**
+  change it".
+
+### Isolation
+
+`payments.html`, `merchant-v2.html`, `sokoni-mpesa.js` and `sokoni-merchant-store-ui.js` were all
+clean at `HEAD` before this gate and are wholly its own. Five files carrying other agents'
+uncommitted work — `seller.html`, `pos.js`, `pos.html`, `pos-setup.html`,
+`functions/pos-zero-friction.js` — are **byte-for-byte unchanged**, verified by diff line-counts
+before and after. `§9` asserts this by **content attribution**, not by "the file is unchanged".
+
+`pos.html` still carries a visible "Enter your Daraja API credentials" prompt and `pos.js` carries
+nine more references. Both are dirty with another agent's work and are **recorded, not touched**.
+
+### A pre-existing defect recorded, not fixed here
+
+`scripts/certify-stk-narrative.js` assertion `X8-R` ("POST-SABOTAGE — restored and correct again")
+is **intermittent: it failed 3 of 6 consecutive runs**, with no file on disk changing between them.
+That suite reads none of this gate's files and is clean at HEAD, so it is not a regression — but a
+flaky assertion in a certification suite is a defect in its own right, because a green that depends
+on which run you looked at is not a green. Out of scope here; recorded so it is not lost.
+
+### Files affected
+
+`payments.html` (47 → 3 Daraja occurrences, all in a comment explaining the fix) ·
+`merchant-v2.html` (4 → 0) · `sokoni-mpesa.js` (two customer-visible strings) ·
+`sokoni-merchant-store-ui.js` (stale comment) ·
+`scripts/certify-daraja-ui-retirement.js` (new) · `docs/DARAJA_UI_RETIREMENT_CENSUS.md` (new)
+
+**Database:** none. **API:** none. **Breaking:** merchants can no longer open a Daraja setup wizard
+— there is nothing behind it to set up. **Deployment:** none in this commit.
+
+### Still open
+
+Production still exposes the outbound Daraja callables; that is a deployment action, tracked
+separately. **D3** remains blocked: `darajaSTKCallback` was still receiving POSTs from Safaricom
+(`196.201.212.69`) on 2026-09-06. Those callbacks were **rejected as an unexpected IP** despite
+that address sitting inside Safaricom's published range — a separate finding, recorded in the
+census, moot while nothing new is pushed but not to be lost.
+
+---
+
 ## 2026-09-14 (63) — the POS wiring gate: HELD, and made self-arming instead
 
 **43 assertions, 0 failed, 0 blocked.** Suite: `scripts/certify-pos-payment-ownership.js`
