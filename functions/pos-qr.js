@@ -16,10 +16,20 @@ const { defineSecret }        = require('firebase-functions/params');
 const admin                   = require('firebase-admin');
 const crypto                  = require('crypto');
 
-const QR_SIGNING_SECRET = defineSecret('QR_SIGNING_SECRET');
+const _verify                 = require('./shared/intasend-verify');
 
-const OPT    = { region: 'us-central1', enforceAppCheck: true, memory: '256MiB', secrets: [QR_SIGNING_SECRET] };
-const OPT128 = { region: 'us-central1', enforceAppCheck: true, memory: '128MiB', secrets: [QR_SIGNING_SECRET] };
+const QR_SIGNING_SECRET   = defineSecret('QR_SIGNING_SECRET');
+const INTASEND_PRIVATE_KEY = defineSecret('INTASEND_PRIVATE_KEY');
+
+/* A v2 FUNCTION REACHES A SECRET ONLY IF IT NAMES IT, however correct the code is. B9.4.3 shipped
+   a rail whose signing secret was declared on the two callables that READ handoff codes and missed
+   on the one that MINTS them — in production every acceptance refused NO_SIGNING_KEY. So the
+   completion callable, which is the one that now calls IntaSend, declares the key explicitly.
+   `OPT` keeps the narrower set: nothing else on this rail talks to the gateway. */
+const OPT       = { region: 'us-central1', enforceAppCheck: true, memory: '256MiB', secrets: [QR_SIGNING_SECRET] };
+const OPT128    = { region: 'us-central1', enforceAppCheck: true, memory: '128MiB', secrets: [QR_SIGNING_SECRET] };
+const OPT_VERIFY = { region: 'us-central1', enforceAppCheck: true, memory: '256MiB',
+  secrets: [QR_SIGNING_SECRET, INTASEND_PRIVATE_KEY] };
 
 /* ── helpers ─────────────────────────────────────────────── */
 const fdb   = () => admin.firestore();
@@ -314,16 +324,60 @@ exports.initiatePOSQRPayment = onCall(
    Idempotent.
 ════════════════════════════════════════════════════════════ */
 exports.completePOSQRPayment = onCall(
-  OPT,
+  OPT_VERIFY,
   async (request) => {
     const auth = request.auth;
     if (!_isAuthed(auth)) throw new HttpsError('unauthenticated', 'Login required');
 
+    /* ── P1 — THE CALLER'S REFERENCES ARE NOT EVIDENCE ────────────────────────────────────
+       This used to destructure `mpesaRef` / `intasendRef` from request.data, run them through a
+       length sanitiser, and write `status: 'paid'` plus a completed order. A string is not a
+       payment: the seller was authorising their own sale, and a fabricated reference was
+       indistinguishable from a real one.
+
+       They are still accepted — a cashier reading a code off their phone is a reasonable thing
+       for a UI to send — but they are recorded as a CLAIM and never consulted to decide the
+       outcome. What decides it is `shared/intasend-verify`, asked about the reference WE own.
+
+       STK INITIATION IS NOT PAYMENT CONFIRMATION. P2 may successfully create the IntaSend
+       transaction and put a prompt on the customer's phone; this handler still requires the
+       gateway's own record to report COMPLETE before anything becomes paid. */
     const { transactionId, mpesaRef, intasendRef, paymentMethod } = request.data;
     if (!transactionId) throw new HttpsError('invalid-argument', 'transactionId required');
 
     const db  = fdb();
     const ref = db.collection('posPayments').doc(transactionId);
+
+    /* ── Verify BEFORE the transaction opens ──────────────────────────────────────────────
+       Firestore transactions may not perform network I/O: the retry that makes them atomic
+       would re-issue the call. The read below is therefore a pre-check whose figures are
+       re-asserted inside the transaction against the document as it is then. */
+    const preSnap = await ref.get();
+    if (!preSnap.exists) throw new HttpsError('not-found', 'Payment not found');
+    const pre = preSnap.data() || {};
+    if (pre.status === 'paid') {
+      return { status: 'already_paid', receiptId: pre.receiptId, orderId: pre.orderId };
+    }
+    if (pre.sellerId !== auth.uid && !_isAdmin(auth)) {
+      throw new HttpsError('permission-denied', 'Only the seller can complete this payment');
+    }
+
+    /* The anchor is OUR transactionId — the api_ref P2's sender puts on the gateway record.
+       Deliberately not `intasendRef` from the caller: verifying a reference the caller chose
+       would let them point us at somebody else's completed payment. */
+    const _verdict = await _verify.verifyPayment({
+      reference:      transactionId,
+      expectedAmount: Number(pre.total),
+      privateKey:     INTASEND_PRIVATE_KEY.value(),
+      sandbox:        process.env.INTASEND_SANDBOX === 'true',
+      fetchImpl:      fetch,
+    });
+    if (!_verdict.verified) {
+      /* FAIL CLOSED, AND WRITE NOTHING. Not a status change, not an attempt counter — a refusal
+         that mutated the document would let a caller drive state by failing repeatedly. */
+      throw new HttpsError('failed-precondition',
+        'Payment could not be verified with the provider: ' + _verdict.reason);
+    }
 
     return db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
@@ -345,16 +399,36 @@ exports.completePOSQRPayment = onCall(
         throw new HttpsError('failed-precondition', `Cannot complete payment with status: ${data.status}`);
       }
 
-      const receiptId = `RCP-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
-      const orderId   = `ORD-POS-${Date.now().toString(36).toUpperCase()}`;
+      /* ── P1 — DETERMINISTIC IDS, DERIVED FROM THE TRANSACTION ────────────────────────────
+         These were `Date.now()` plus random bytes, so two confirmations of the SAME payment
+         produced two different orderIds. The status guard above stops the common case, but a
+         retry racing a partial failure could still mint a second order for one sale — and an
+         order id that cannot be recomputed cannot be reconciled afterwards either.
+
+         Derived from `transactionId` instead: the same sale always yields the same pair, so a
+         duplicate confirmation overwrites rather than multiplies. The hash is truncated for
+         readability on a receipt; collision risk across one merchant's sales is negligible and
+         the document id itself is still the transaction. */
+      const _idHash = crypto.createHash('sha256').update(String(transactionId)).digest('hex')
+        .slice(0, 10).toUpperCase();
+      const receiptId = `RCP-${_idHash}`;
+      const orderId   = `ORD-POS-${_idHash}`;
 
       /* Update payment record */
       tx.update(ref, {
         status:         'paid',
         paidAt:         _now(),
         paymentMethod:  _san(paymentMethod || 'mpesa', 20),
-        mpesaRef:       _san(mpesaRef || '', 50),
-        intasendRef:    _san(intasendRef || '', 80),
+        /* The caller's strings are kept as a CLAIM for the cashier's own reconciliation, and
+           named so nobody later mistakes them for proof. What the gateway said is recorded
+           separately, alongside the figure it actually reported. */
+        claimedMpesaRef:    _san(mpesaRef || '', 50),
+        claimedIntasendRef: _san(intasendRef || '', 80),
+        gatewayState:       _verdict.state,
+        gatewayAmount:      _verdict.amount,
+        gatewayInvoiceId:   _verdict.invoiceId || null,
+        gatewayTrackingId:  _verdict.trackingId || null,
+        verifiedAt:         _now(),
         receiptId,
         orderId,
         completedBy:    auth.uid,
@@ -375,7 +449,11 @@ exports.completePOSQRPayment = onCall(
         total:          data.total,
         currency:       data.currency,
         paymentMethod:  _san(paymentMethod || 'mpesa', 20),
-        mpesaRef:       _san(mpesaRef || '', 50),
+        /* The ORDER records what the gateway confirmed, not what the caller typed. An order is
+           the document the rest of the platform reconciles against; a claimed reference on it
+           would propagate the caller's assertion into every downstream reader. */
+        gatewayInvoiceId: _verdict.invoiceId || null,
+        gatewayAmount:    _verdict.amount,
         status:         'completed',
         receiptId,
         transactionId,

@@ -1,3 +1,109 @@
+## 2026-09-14 (58) — P1: a string is not a payment. POS confirmation now asks the gateway.
+
+**46 assertions, 0 failed, 0 blocked.** Suite: `scripts/certify-p1-pos-payment-confirmation.js`
+Full regression: **550 assertions across 9 suites, 0 failed, 0 blocked.** Nothing deployed.
+
+### The defect
+
+`completePOSQRPayment` marked a POS sale paid because the **caller said so**. It took `mpesaRef` /
+`intasendRef` from `request.data`, ran them through a length sanitiser, wrote `status: 'paid'` and
+created a completed `orders/{id}`. A fabricated reference was indistinguishable from a real one —
+the seller was authorising their own sale.
+
+### Why this was the cheapest possible moment to fix it
+
+The census found the QR rail has **never run in production**: all 13 `posPayments` rows are
+Daraja-rail shape, **zero** carry the QR rail's `signature`/`sellerId`, zero carry any payment
+reference, and there are **zero** `orders` with `type: 'pos_qr'`. Nothing to reconcile, no live
+merchant to break — a fabrication path closed before it ever carried traffic.
+
+The deployed rules were also checked rather than assumed: `posPayments` has a **read rule only**, no
+write rule, so it defaults to deny. The Admin-SDK callable really was the only door.
+
+### What changed
+
+* **New `functions/shared/intasend-verify.js`** — the question *"did money actually arrive for this
+  transaction?"*, asked of IntaSend, answered only from IntaSend's reply. Endpoint, list-matching on
+  `invoice_id | tracking_id | api_ref`, `state === COMPLETE`, and an amount cross-check against the
+  **server-stored** total. Every refusal path returns `verified: false`; there is no branch that
+  returns verified on a missing record, an unreadable response or a network error — *a provider that
+  cannot be reached is not a provider that said yes.* `fetchImpl` is injected for the same reason
+  `stk-gateway` injects `https`: a module that reaches for its own network client makes every suite
+  that loads it capable of calling the real provider.
+* **`completePOSQRPayment` verifies before it writes.** The caller's references are still accepted
+  and stored — as `claimedMpesaRef` / `claimedIntasendRef`, named so nobody mistakes them for proof
+  — while `gatewayState`, `gatewayAmount` and `verifiedAt` record what the provider actually said.
+  The order carries the **gateway** figure, because orders are what everything downstream
+  reconciles against.
+* **The anchor is our own `transactionId`**, never the caller's `intasendRef`. A caller who could
+  choose the reference could point us at somebody else's completed payment and collect a receipt for
+  it. `A2-anchor` is the assertion that catches that regression.
+* **Deterministic ids.** `receiptId`/`orderId` were `Date.now()` plus random bytes, so two
+  confirmations of one sale produced two different orders. Now derived by hash from `transactionId`:
+  a retry overwrites rather than multiplies, and an id that can be recomputed can be reconciled.
+* **The secret is declared.** `completePOSQRPayment` now names `INTASEND_PRIVATE_KEY` in its own
+  `secrets` array. B9.4.3 shipped a rail whose signing secret was declared on the callables that
+  READ handoff codes and missed on the one that MINTS them — in production every acceptance refused
+  `NO_SIGNING_KEY`. A v2 function reaches a secret only if it names it.
+
+### Fail closed, and it writes nothing when it does
+
+Eight refusal paths are driven through the live handler — no gateway record, PENDING, FAILED, short
+payment, a COMPLETE payment belonging to a *different* transaction, HTTP 500, socket error, and a
+record with no amount. Each must refuse **and leave the document untouched**: a refusal that mutated
+state would let a caller drive the record by failing repeatedly. A control proves the same forged
+references are harmless when a genuine COMPLETE record exists, so the guard is not simply refusing
+everybody.
+
+### The verifier is pinned to the certified online contract
+
+The online `verifyIntasendPayment` is **not refactored** in this gate — it is load-bearing and
+certified. Instead the suite pins both to the same contract (endpoint, `COMPLETE`, list-matching,
+pagination shape), so the two cannot silently diverge into different meanings of "paid". Unifying
+them is a separate slice.
+
+### Two test bugs, both mine, both instructive
+
+* `X7-1` rebound the exported `COMPLETE` constant — which `intasend-verify` compares against
+  **lexically**, so the patch never reached the running code and the "sabotage" passed while proving
+  nothing. **This session had already recorded that exact rule.** Writing a rule down is not the
+  same as applying it. Replaced with a source mutation plus a control; the behavioural half was
+  always covered by `F-pending` / `F-failed`.
+* `T8-1` asserted `order-settlement.js` had no uncommitted change — but it is dirty from the
+  **refund agent**, and has been since before this gate opened. The claim that matters is that
+  nothing in *this gate* touched it, so it is now checked by content.
+
+### Boundaries held
+
+`settleOrder` untouched; `pos-qr.js` still does not enter the settlement state machine, so the
+census finding is preserved rather than broadened. Seller authorization is unchanged — and
+authorization now runs **before** verification, so an unauthorised caller never causes a gateway
+request. `functions/order-settlement.js` and `functions/finos-utils.js` remain the refund agent's.
+
+### Recorded, NOT fixed
+
+`posPayments` is written by **two rails with different document shapes** — the retired Daraja POS
+rail (`index.js:3935`) and the QR rail. `getPOSPaymentDetails` will read a Daraja-shaped doc and
+find none of the fields it expects. It will bite when the QR rail is switched on; it is not P1.
+
+### Next
+
+P2 — wire the recovered `stk-gateway.js` sender so a till prompt is actually sent. Until then P1
+refuses every completion, because there is no gateway transaction to verify. That is the intended
+sequencing: **GATEWAY_ACCEPTED ≠ PAID.**
+
+### Files affected
+
+`functions/shared/intasend-verify.js` (new) · `functions/pos-qr.js` ·
+`scripts/certify-p1-pos-payment-confirmation.js` (new)
+
+**Database:** `posPayments` gains `claimedMpesaRef`, `claimedIntasendRef`, `gatewayState`,
+`gatewayAmount`, `gatewayInvoiceId`, `gatewayTrackingId`, `verifiedAt`. **Breaking:** a completion
+without a verifiable gateway record now fails — by design, and the rail has no production traffic.
+**Deployment:** none.
+
+---
+
 ## 2026-09-14 (57) — RES-1b: the seller-settlement defect did not exist. Cleanup and a regression lock.
 
 **29 assertions, 0 failed, 0 blocked.** Suite: `scripts/certify-res1b-seller-settlement.js`
