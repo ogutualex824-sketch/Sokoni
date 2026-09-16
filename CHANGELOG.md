@@ -45162,3 +45162,11 @@ surface. The reclaimed action-row space is removed from the layout, while a comp
 inset keeps price details balanced.
 
 **Files:** `script.js`, `compact-grid.css`, `scripts/test-product-card-buttons.js`.
+
+## 2026-09-17 — Commission deploy guard fixture scope corrected
+
+The single-source commission guard now allow-lists only its audit and regression fixtures that
+intentionally contain prohibited legacy-rate patterns. Production code remains fail-closed and
+the guard continues to detect a planted untracked commission table.
+
+**Files:** `scripts/verify-commission-single-source.js`.

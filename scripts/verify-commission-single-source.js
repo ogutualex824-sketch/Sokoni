@@ -38,6 +38,10 @@ const ALLOWLIST = {
   'sokoni-commission-rates.js':     'generated from commission-config.js; verified in check 2',
   'scripts/verify-commission-single-source.js': 'this guard',
   'scripts/build-commission-snapshot.js':       'the generator',
+  'scripts/audit-guard-deploy-footprint.js':    'tests the commission guard against untracked deploy-footprint files',
+  'scripts/test-pos-commission-lane.js':        'certification fixture deliberately plants a prohibited rate for the guard',
+  'scripts/test-healthcare-subscription-foundation.js':
+    'regression fixture preserves legacy subscription documents without applying their rate',
   /* Different concepts that legitimately carry rates. Not commission-per-transaction.
 
      The three entries below had inaccurate reasons until 2026-07-22. Each was
