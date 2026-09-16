@@ -857,7 +857,7 @@ function _variantSummaryHtml(product){
     return s ? `<div class="pcard-variants">${_escHtml(s)}</div>` : "";
 }
 
-function buildProductCard(product, size = "normal"){
+function buildProductCard(product){
     const safeId   = String(product.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
     const badge    = productBadge(product);
     const kebs     = kebsBadge(product);
@@ -882,7 +882,6 @@ function buildProductCard(product, size = "normal"){
     const adultBadge  = isAdult ? `<div class="adult-card-badge">🔞 18+</div>` : "";
     const oos         = product.outOfStock || (product.stock !== undefined && Number(product.stock) === 0);
     const oosOverlay  = oos ? `<div class="oos-overlay">Out of Stock</div>` : "";
-    const btnDisabled = oos ? "disabled" : "";
     const priceBadge    = priceChangeBadge(product);
     const demandBadge   = wishlistDemandBadge(product);
     const distBadge     = distanceBadge(product);
@@ -906,63 +905,8 @@ function buildProductCard(product, size = "normal"){
       : product.verificationStatus === "pending"
       ? `<div style="font-size:10px;font-weight:700;background:rgba(255,152,0,0.08);border:1px solid rgba(255,152,0,0.2);color:#ff9800;padding:3px 8px;border-radius:6px;display:inline-block;margin-bottom:4px;">🔍 Ownership Review</div>`
       : "";
-    const compact    = (size === "compact");
-    const _mkSafeId  = id => String(id||'').replace(/[^a-zA-Z0-9_-]/g,'');
-    /* Asked at render time, so a card cannot disagree with canonical state. */
-    const inWishlist = _isWishlisted(product.id);
-    const stockNum   = Number(product.stock);
-    const stockChip  = !oos && product.stock !== undefined && stockNum > 0 && stockNum <= 5
-        ? `<span class="pcard-stock pcard-stock--low">⚡ Only ${stockNum} left</span>`
-        : '';
-    const SVC_CATS = new Set(["phone-repair","computer-repair","electronics-repair","graphic-design","photography","videography","music-audio","cleaning","laundry","gardening","plumbing","electrical","interior-design","delivery-service","courier","boda-delivery","marketing","accounting","legal","virtual-assistant","printing","tutoring","coaching","events","catering","hair-beauty","fitness","services"]);
-    const DIG_CATS = new Set(["ebook","template","course","software","license"]);
-    const isServiceProd = SVC_CATS.has(product.category) || product.isService;
-    const isDigitalProd = DIG_CATS.has(product.category) || product.isDigital;
-    /* NO "Buy Now" ON A CARD.
-       The card itself is the buy button: clicking it opens the product page, which carries
-       the real purchase flow (price, variants, delivery, quantity). A second Buy on the card
-       started a checkout for a product the shopper had not yet seen, and it cost the row a
-       third control it had no room for — see the strip below. Cart and Wishlist are the two
-       actions that are genuinely useful WITHOUT opening the product. */
-    const cartLabel = isServiceProd ? "📋 Enquire" : isDigitalProd ? "🛒 Buy" : "🛒 Cart";
-
-    /* ── All user-data goes into data-* attributes; zero inline JS injection. ──
-       A single delegated listener on productsContainer handles all interactions.
-       data-name stores the HTML-escaped product name; dataset.name returns the
-       decoded raw value, which the handler then passes to functions. ── */
-    const dName  = _escHtml(product.name);
-    const dPrice = Number(product.price) || 0;
-
-    const btnRow = compact
-        ? `<div class="pcard-actions pcard-actions--compact">
-                <div class="pcard-row">
-                    <button class="pcard-btn pcard-btn--cart" data-action="cart" ${btnDisabled}>
-                        ${isServiceProd ? "📩" : "🛒"} <span>${isServiceProd ? "Book" : "Cart"}</span>
-                    </button>
-                    <button class="pcard-btn pcard-btn--wish${inWishlist?' pcard-btn--wish-active':''}" data-action="wish" title="${inWishlist?'Saved':'Wishlist'}">
-                        ❤
-                    </button>
-                </div>
-           </div>`
-        : `<div class="pcard-actions">
-                <div class="pcard-row">
-                    <button class="pcard-btn pcard-btn--cart" data-action="cart" ${btnDisabled}>
-                        ${isServiceProd ? "📩" : "🛒"} ${cartLabel.replace(/^[^\s]+ /,"")}
-                    </button>
-                    <button class="pcard-btn pcard-btn--wish${inWishlist?' pcard-btn--wish-active':''}" data-action="wish" title="${inWishlist?'Saved':'Wishlist'}">❤</button>
-                </div>
-                <div class="pcard-row pcard-row--secondary">
-                    <button class="pcard-btn pcard-btn--share" data-action="share"
-                            data-name="${dName}" data-price="${dPrice}">
-                        <i class="fab fa-whatsapp"></i> Share
-                    </button>
-                    <button class="pcard-btn pcard-btn--offer" data-action="offer"
-                            data-name="${dName}" data-price="${dPrice}">
-                        ${isServiceProd ? "💬 Chat" : "🏷️ Offer"}
-                    </button>
-                </div>
-           </div>`;
-
+    /* Homepage cards are browse-only: opening one leads to the product page, which
+       owns variants, delivery, Cart and Wishlist. */
     const catEmoji = {electronics:'📱',fashion:'👗',beauty:'💄',shoes:'👟',food:'🛒',computers:'💻',appliances:'🔌',sports:'⚽',furniture:'🛋️',accessories:'👜',construction:'🏗️',printing:'🖨️',services:'🛠️',gas:'🔥',charcoal:'🪵',solar:'☀️'};
     const catLabel = product.category ? (product.category.charAt(0).toUpperCase()+product.category.slice(1).replace(/-/g,' ')) : 'Shop';
 
@@ -976,26 +920,9 @@ function buildProductCard(product, size = "normal"){
         ${product.sellerName ? `<span class="pcard-ov-seller">🏪 ${_escHtml(String(product.sellerName).slice(0, 24))}</span>` : ''}
     </div>`;
 
-    const _soldCnt  = Number(product.soldCount  || 0);
-    const _wishCnt  = Number(product.wishlistCount || 0);
-    const _stripInfo = _soldCnt > 5  ? `✅ ${_soldCnt.toLocaleString()} sold` :
-                       _wishCnt >= 5 ? `🔥 ${_wishCnt} want this` :
-                       product.sellerName ? `🏪 ${_escHtml(product.sellerName.split(' ')[0])}` : '📦 In stock';
-
-    /* data-stop-prop on the strip prevents accidental card-open on strip touch/scroll */
-    const mobileStrip = `<div class="pcard-mobile-strip" data-stop-prop="1">
-        <div class="pcard-m-top-row">
-            <span class="pcard-strip-info">${_stripInfo}</span>${stockChip}
-        </div>
-        <div class="pcard-m-btns">
-            <button class="pcard-m-cart" data-action="cart" ${btnDisabled}>${isServiceProd?'📩':'🛒'} <span>${isServiceProd?'Enquire':'Cart'}</span></button>
-            <button class="pcard-m-wish${inWishlist?' pcard-m-wish--active':''}" data-action="wish" title="${inWishlist?'Saved':'Wishlist'}">❤ <span>${inWishlist?'Saved':'Save'}</span></button>
-        </div>
-    </div>`;
-
     /* data-pid is the single source of truth for which product this card represents */
     return `
-        <div class="product-card ${boosted ? "product-boosted" : ""} ${isAdult ? "adult-card" : ""} ${oos ? "oos-card" : ""}" style="position:relative;animation:cardFadeIn 0.35s ease;" data-pid="${safeId}">
+        <div class="product-card pcard--browse-only ${boosted ? "product-boosted" : ""} ${isAdult ? "adult-card" : ""} ${oos ? "oos-card" : ""}" style="position:relative;animation:cardFadeIn 0.35s ease;" data-pid="${safeId}">
             ${adultBadge}
             ${oosOverlay}
             <div class="product-img-wrap" data-emoji="${catEmoji[product.category]||'🛍️'}">
@@ -1017,8 +944,6 @@ function buildProductCard(product, size = "normal"){
                 </div>
                 ${rating ? `<div class="rating-stars" style="font-size:9px;color:rgba(255,193,7,0.8);font-weight:700;margin-top:2px;">${ratingStarsHtml(rating.avg)} <span style="color:rgba(255,255,255,0.35);font-size:8px;">(${rating.count})</span></div>` : ""}
             </div>
-            ${btnRow}
-            ${mobileStrip}
         </div>
     `;
 }
@@ -1858,7 +1783,7 @@ function _renderNewArrivals(section, grid){
         return tb - ta;
     }).slice(0, 20);
     section.style.display = "block";
-    grid.innerHTML = newest.map(p => buildProductCard(p, "compact")).join("");
+    grid.innerHTML = newest.map(p => buildProductCard(p)).join("");
     /* Without this every card in New Arrivals was inert: cart, wishlist, buy,
        share and the card-tap that opens the product all rely on one delegated
        listener, and it was attached only to #productsContainer. Both sections
@@ -1879,7 +1804,7 @@ function displayRecommendedProducts(){
     // Recommended = shuffle products, show 6 on home page
     const shuffled = [...products].sort(() => Math.random() - 0.5).slice(0, 6);
     section.style.display = "block";
-    container.innerHTML = shuffled.map(p => buildProductCard(p, "large")).join("");
+    container.innerHTML = shuffled.map(p => buildProductCard(p)).join("");
     _attachPcardDelegation(container)
       + (products.length > 6
           ? `<div style="grid-column:1/-1;text-align:center;padding:8px 0 12px;">
@@ -1916,7 +1841,7 @@ function displayFastestSelling(){
         .sort((a, b) => (b.sold || 0) - (a.sold || 0))
         .slice(0, 20);
     if(!top.length) return;
-    grid.innerHTML = top.map(p => buildProductCard(p, "compact")).join("");
+    grid.innerHTML = top.map(p => buildProductCard(p)).join("");
     if(sec) sec.style.display = "block";
 }
 
@@ -1939,7 +1864,7 @@ function displayBiggestDiscounts(){
 
     if(!withDiscount.length) return;
     grid.innerHTML = withDiscount.map(p => {
-        const card = buildProductCard(p, "compact");
+        const card = buildProductCard(p);
         /* Inject a prominent discount pill over the card by wrapping in a relative container */
         return card.replace(
             'style="position:relative;animation:cardFadeIn 0.4s ease;"',
@@ -1971,7 +1896,7 @@ function displayTodaysPicks(){
         [pool[i], pool[j]] = [pool[j], pool[i]];
     }
     const picks = pool.slice(0, 20);
-    grid.innerHTML = picks.map(p => buildProductCard(p, "compact")).join("");
+    grid.innerHTML = picks.map(p => buildProductCard(p)).join("");
     if(sec) sec.style.display = "block";
 }
 

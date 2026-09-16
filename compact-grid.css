@@ -1321,6 +1321,14 @@ body.light-mode #storiesSection {
 :is(.ptrend-grid, #productsContainer, .products-grid, .new-arrivals-grid) .product-card .pcard-actions,
 :is(.ptrend-grid, #productsContainer, .products-grid, .new-arrivals-grid) .product-card .pcard-actions--compact { display: none !important; }
 
+/* Marketplace arrival rails are browse-only: opening a card leads to the product
+   page, which owns Cart and Wishlist.  The renderer omits those controls entirely;
+   this small bottom inset keeps the last price line balanced without preserving an
+   empty action-row gap. */
+.product-card.pcard--browse-only .product-body {
+  padding-bottom: 14px !important;
+}
+
 /* The action strip — shown at EVERY width, in every grid. */
 :is(.ptrend-grid, #productsContainer, .products-grid, .new-arrivals-grid) .product-card .pcard-mobile-strip {
   display: flex !important;

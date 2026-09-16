@@ -45153,4 +45153,12 @@ ADR-011, ADR-012 and index Â· canonical `deliveryConfig` schema.
 `firebase.json`, `docs/` (5 new/updated).
 **API:** delivery fee mismatch now returns `failed-precondition` with `serverDeliveryFee`.
 **Security:** closes a client-controlled pricing input. **Breaking:** none. **Deployed:** no.
+## 2026-09-17 — Marketplace arrival cards route shoppers to product details
 
+Every product card on the marketplace homepage now renders as browse-only. Duplicate Cart
+and Wishlist controls were removed from Trending, Recommended, New Arrivals, Fastest Selling,
+Biggest Discounts and Today’s Picks; the product page remains the single purchase and save
+surface. The reclaimed action-row space is removed from the layout, while a compact bottom
+inset keeps price details balanced.
+
+**Files:** `script.js`, `compact-grid.css`, `scripts/test-product-card-buttons.js`.
