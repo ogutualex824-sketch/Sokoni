@@ -358,6 +358,14 @@
        data-section="security" onclick="_closeSidebar()">
       <span class="nav-icon">&#x1F510;</span>Security Centre
     </a>
+    <!-- INVOICES. A LINK, for the same reason Security is: AdminOS is the canonical admin
+         workspace. It is also SHOP-SCOPED — every invoice callable answers for one shop —
+         so a second copy here would be a second place to pick a shop, free to disagree
+         with the first about what a figure counts. -->
+    <a class="nav-item" href="admin-os.html#invoices" target="_blank" rel="noopener"
+       data-section="invoices" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F9FE;</span>Invoices
+    </a>
     <button class="nav-item" data-section="broadcast" onclick="SA.nav('broadcast');_closeSidebar()">
       <span class="nav-icon">&#x1F4E2;</span>Platform Broadcast
     </button>
@@ -1208,6 +1216,56 @@ const SA={
 
   _renderUsers(list){
     const tb=document.getElementById('saUsersBody');
+
+    // The rich directory, mounted from the SAME module AdminOS uses — one directory
+    // component for the platform, not two that can disagree about what a count means.
+    // Additive: if the module is absent or refuses, the original table renders as before.
+    if(window.SokoniAOSUsers&&typeof window.SokoniAOSUsers.mount==='function'){
+      try{
+        const table=document.getElementById('saUsersTable');
+        const wrap=table&&table.closest('.table-wrap');
+        if(wrap){
+          let rich=document.getElementById('saUsersRich');
+          if(!rich){
+            rich=document.createElement('div');
+            rich.id='saUsersRich';
+            wrap.parentElement.insertBefore(rich,wrap);
+          }
+          const nameFor=uid=>{
+            const u=(this._users||[]).find(x=>x.id===uid)||{};
+            return u.displayName||u.name||u.email||uid;
+          };
+          const shown=window.SokoniAOSUsers.mount({
+            host:rich,
+            // users/{uid} carries no `status` field — suspension is a boolean. Mapped here
+            // so the module never learns this portal's storage shape. `verified` is passed
+            // THROUGH, absent and all: the module then says "not recorded in this source"
+            // instead of reporting an unknown as zero.
+            users:list.map(u=>({
+              id:u.id,
+              displayName:u.displayName||u.name||'',
+              email:u.email||'',
+              phone:u.phone||'',
+              role:u.role||'buyer',
+              status:u.suspended?'suspended':(u.status||'active'),
+              verified:u.verified,
+              createdAt:u.createdAt,
+            })),
+            source:'this portal loads the 50 most recently created accounts, so it is a page '+
+                   'of the newest users and not a platform total',
+            // No viewUser: this portal has no per-user detail view, so the module renders no
+            // View button rather than one wired to nothing.
+            actions:{
+              changeRole:uid=>this.changeRole(uid,nameFor(uid)),
+              banUser:(uid,status)=>this.toggleSuspend(
+                uid,!(status==='suspended'||status==='banned'),nameFor(uid)),
+            },
+          });
+          if(shown){wrap.hidden=true;return;}
+        }
+      }catch(e){console.warn('[SA] user directory unavailable, using table:',e&&e.message);}
+    }
+
     if(!list.length){
       tb.innerHTML='<tr><td colspan="7" class="empty-cell">No users found.</td></tr>';
       return;
@@ -2052,6 +2110,10 @@ const SA={
      must load first because the console reads it on mount. Both are classic scripts
      with no dependency on the firebase compat shim at parse time — the module only
      touches Firestore once a console mounts it, which happens after the auth gate. -->
+<!-- The user directory. The SAME module AdminOS mounts, so the platform has one
+     directory component rather than two that can disagree about what a count means.
+     Super Admin supplies its own source sentence and its own actions. -->
+<script src="sokoni-aos-users.js"></script>
 <script src="sokoni-revenue-intelligence.js"></script>
 <script src="sokoni-reports-builder.js"></script>
 <script src="sokoni-integration-catalogue.js"></script>

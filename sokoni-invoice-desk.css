@@ -1,0 +1,234 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   SOKONI — INVOICE DESK styling
+   sokoni-invoice-desk.css
+
+   Scoped to .ivx-* so it cannot reach the rest of the page, and built on the host's own
+   tokens — finance-invoices.html already defines --accent/--surface/--border/--muted, and
+   an AdminOS-style host defines --aos-*. Both resolve; neither is hardcoded.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.ivx {
+  display: flex; flex-direction: column; gap: 13px;
+
+  --ivx-accent:  var(--aos-accent,  var(--accent, #71ff00));
+  --ivx-info:    var(--info,        #4aa3ff);
+  --ivx-warn:    var(--aos-warn,    var(--warn, #ffb300));
+  --ivx-danger:  var(--aos-danger,  var(--danger, #f44336));
+  --ivx-surface: var(--aos-surface, var(--surface, rgba(255,255,255,.04)));
+  --ivx-border:  var(--aos-border,  var(--border, rgba(255,255,255,.1)));
+  --ivx-text:    var(--aos-text,    var(--txt, rgba(255,255,255,.92)));
+  --ivx-muted:   var(--aos-muted,   var(--muted, rgba(255,255,255,.45)));
+  --ivx-radius:  var(--radius, 13px);
+
+  /* Declared twice: a browser without color-mix keeps the literal. */
+  --ivx-a-10: rgba(113,255,0,.10);
+  --ivx-a-10: color-mix(in srgb, var(--ivx-accent) 10%, transparent);
+  --ivx-a-28: rgba(113,255,0,.28);
+  --ivx-a-28: color-mix(in srgb, var(--ivx-accent) 28%, transparent);
+  --ivx-d-10: rgba(244,67,54,.10);
+  --ivx-d-10: color-mix(in srgb, var(--ivx-danger) 10%, transparent);
+}
+
+/* ── STRIP ────────────────────────────────────────────────────────────────── */
+.ivx-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.ivx-stat {
+  position: relative; overflow: hidden; padding: 13px 14px 11px;
+  border-radius: var(--ivx-radius);
+  background: var(--ivx-surface); border: 1px solid var(--ivx-border);
+}
+.ivx-stat::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: currentColor; opacity: .5;
+}
+.ivx-stat--ok   { color: var(--ivx-accent); }
+.ivx-stat--info { color: var(--ivx-info); }
+.ivx-stat--warn { color: var(--ivx-warn); }
+.ivx-stat--bad  { color: var(--ivx-danger); }
+.ivx-stat-n {
+  font-size: 19px; font-weight: 800; line-height: 1.2; letter-spacing: -.02em;
+  color: currentColor; word-break: break-word;
+}
+.ivx-stat-l { margin-top: 5px; font-size: 12px; font-weight: 600; color: var(--ivx-text); }
+/* The scope caveat rides on every card, so no figure reads as a shop-wide total. */
+.ivx-stat-s { margin-top: 2px; font-size: 9.5px; line-height: 1.45; color: var(--ivx-muted); }
+
+/* ── AGING ────────────────────────────────────────────────────────────────── */
+.ivx-aging {
+  padding: 14px 15px; border-radius: var(--ivx-radius);
+  background: var(--ivx-surface); border: 1px solid var(--ivx-border);
+}
+.ivx-aging-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 11px; }
+.ivx-aging-h b { font-size: 12.5px; font-weight: 700; color: var(--ivx-text); }
+.ivx-aging-h span { font-size: 10px; color: var(--ivx-muted); }
+/* One bar, proportional by amount. Widths come from real sums; there is no percentage
+   printed anywhere, because a share of one page is not a share of the shop. */
+.ivx-aging-bar {
+  display: flex; height: 6px; border-radius: 4px; overflow: hidden;
+  background: rgba(255,255,255,.05); margin-bottom: 12px;
+}
+.ivx-seg { height: 100%; }
+.ivx-seg--cur { background: var(--ivx-accent); }
+.ivx-seg--b30 { background: var(--ivx-warn); }
+.ivx-seg--b60 { background: #ff8a65; }
+.ivx-seg--b90 { background: #ff7043; }
+.ivx-seg--b91 { background: var(--ivx-danger); }
+.ivx-aging-g { display: grid; grid-template-columns: repeat(auto-fit, minmax(126px, 1fr)); gap: 10px; }
+.ivx-age { padding-left: 9px; border-left: 2px solid var(--ivx-border); }
+.ivx-age--cur { border-left-color: var(--ivx-accent); }
+.ivx-age--b30 { border-left-color: var(--ivx-warn); }
+.ivx-age--b60 { border-left-color: #ff8a65; }
+.ivx-age--b90 { border-left-color: #ff7043; }
+.ivx-age--b91 { border-left-color: var(--ivx-danger); }
+.ivx-age-n { font-size: 14px; font-weight: 700; color: var(--ivx-text); }
+.ivx-age-l { margin-top: 2px; font-size: 11px; font-weight: 600; color: var(--ivx-muted); }
+.ivx-age-s { margin-top: 1px; font-size: 9.5px; color: rgba(255,255,255,.3); }
+
+/* ── TABS ─────────────────────────────────────────────────────────────────── */
+.ivx-tabs { display: flex; gap: 7px; flex-wrap: wrap; }
+.ivx-tab {
+  font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  padding: 7px 12px; border-radius: 9px;
+  color: var(--ivx-muted); background: transparent; border: 1px solid var(--ivx-border);
+  transition: color .14s, background .14s, border-color .14s;
+}
+.ivx-tab span {
+  display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 5px;
+  font-size: 10.5px; font-weight: 800; background: rgba(255,255,255,.07);
+}
+.ivx-tab:hover { color: var(--ivx-text); }
+.ivx-tab.is-on { color: var(--ivx-accent); background: var(--ivx-a-10); border-color: var(--ivx-a-28); }
+.ivx-tab--bad.is-on { color: var(--ivx-danger); background: var(--ivx-d-10); border-color: rgba(244,67,54,.3); }
+
+/* ── TOOLBAR ──────────────────────────────────────────────────────────────── */
+.ivx-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ivx-in {
+  flex: 1 1 220px; min-width: 150px; min-height: 36px; padding: 0 11px;
+  font: inherit; font-size: 13px; border-radius: 9px; color: inherit;
+  background: rgba(0,0,0,.28); border: 1px solid var(--ivx-border);
+}
+.ivx-in:focus { outline: none; border-color: var(--ivx-accent); }
+.ivx-showing { margin-left: auto; font-size: 11.5px; color: var(--ivx-muted); }
+
+/* ── TABLE ────────────────────────────────────────────────────────────────── */
+.ivx-tw {
+  overflow-x: auto; border-radius: var(--ivx-radius);
+  background: var(--ivx-surface); border: 1px solid var(--ivx-border);
+}
+.ivx-t { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ivx-t th {
+  text-align: left; padding: 11px 13px; font-size: 10.5px; font-weight: 700;
+  letter-spacing: .05em; text-transform: uppercase; white-space: nowrap;
+  color: var(--ivx-muted); border-bottom: 1px solid var(--ivx-border);
+}
+.ivx-t td { padding: 10px 13px; border-bottom: 1px solid rgba(255,255,255,.04); vertical-align: middle; }
+.ivx-t tbody tr { cursor: pointer; }
+.ivx-t tbody tr:last-child td { border-bottom: none; }
+.ivx-t tbody tr:hover { background: rgba(255,255,255,.025); }
+.ivx-t tbody tr.is-open { background: var(--ivx-a-10); }
+/* A late invoice is marked on the row, not only in a badge that scrolls out of view. */
+.ivx-t tbody tr.is-late td:first-child { box-shadow: inset 2px 0 0 var(--ivx-danger); }
+.ivx-r { text-align: right; white-space: nowrap; }
+.ivx-dim { color: var(--ivx-muted); }
+.ivx-t td small { display: block; font-size: 10px; opacity: .62; }
+.ivx-no { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; font-weight: 700; }
+.ivx-cl { font-size: 12.5px; font-weight: 600; color: var(--ivx-text); }
+.ivx-owed { color: var(--ivx-warn); font-weight: 700; }
+
+.ivx-st {
+  display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: .04em;
+  text-transform: uppercase; padding: 3px 9px; border-radius: 6px; white-space: nowrap;
+}
+.ivx-st--ok    { color: var(--ivx-accent); background: var(--ivx-a-10); }
+.ivx-st--info  { color: var(--ivx-info); background: rgba(74,163,255,.12); }
+.ivx-st--bad   { color: var(--ivx-danger); background: var(--ivx-d-10); }
+.ivx-st--muted { color: rgba(255,255,255,.5); background: rgba(255,255,255,.06); }
+.ivx-late {
+  display: inline-block; margin-left: 6px; font-size: 9.5px; font-weight: 800;
+  color: var(--ivx-danger); white-space: nowrap;
+}
+
+/* ── BUTTONS ──────────────────────────────────────────────────────────────── */
+.ivx-btn {
+  font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  padding: 6px 11px; border-radius: 8px;
+  background: rgba(255,255,255,.05); color: var(--ivx-text);
+  border: 1px solid var(--ivx-border); transition: background .14s, border-color .14s;
+}
+.ivx-btn:hover { background: rgba(255,255,255,.1); }
+.ivx-btn.sm { padding: 5px 9px; font-size: 11px; }
+.ivx-btn.ghost { background: transparent; }
+.ivx-btn.ok { color: var(--ivx-accent); border-color: var(--ivx-a-28); }
+.ivx-btn.danger { color: #ff8a80; border-color: rgba(244,67,54,.28); }
+
+/* ── DETAIL ───────────────────────────────────────────────────────────────── */
+.ivx-detail {
+  padding: 15px 16px; border-radius: var(--ivx-radius);
+  background: var(--ivx-surface); border: 1px solid var(--ivx-border);
+}
+.ivx-d-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding-bottom: 12px; margin-bottom: 13px; border-bottom: 1px solid var(--ivx-border);
+}
+.ivx-d-head h3 {
+  margin: 0 0 6px; font-size: 15px; font-weight: 800; color: var(--ivx-text);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+.ivx-d-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 16px; }
+.ivx-detail h4 {
+  margin: 0 0 8px; font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ivx-muted);
+}
+.ivx-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding: 5px 0; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,.035);
+}
+.ivx-row:last-child { border-bottom: none; }
+.ivx-row span { color: var(--ivx-muted); }
+.ivx-row b { font-weight: 600; color: var(--ivx-text); text-align: right; word-break: break-word; }
+.ivx-row i { font-style: italic; font-weight: 400; color: var(--ivx-muted); }
+.ivx-detail code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px;
+  padding: 1px 5px; border-radius: 4px; background: rgba(255,255,255,.06);
+}
+.ivx-hint { margin-top: 8px; font-size: 10.5px; line-height: 1.55; color: var(--ivx-muted); }
+
+.ivx-items { margin-top: 16px; }
+.ivx-item {
+  display: grid; grid-template-columns: 1fr auto auto auto; gap: 12px; align-items: center;
+  padding: 8px 0; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,.035);
+}
+.ivx-item:last-child { border-bottom: none; }
+.ivx-item b { font-weight: 600; color: var(--ivx-text); }
+.ivx-notes { margin-top: 15px; }
+.ivx-notes p {
+  margin: 0; padding: 10px 12px; border-radius: 9px; font-size: 12px; line-height: 1.55;
+  color: var(--ivx-text); background: rgba(255,255,255,.03);
+  border: 1px solid var(--ivx-border);
+}
+
+.ivx-actions {
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+  margin-top: 15px; padding-top: 13px; border-top: 1px solid var(--ivx-border);
+}
+.ivx-actions .ivx-hint { margin-top: 0; flex: 1 1 250px; }
+
+/* ── EMPTY + NOTE ─────────────────────────────────────────────────────────── */
+.ivx-none {
+  padding: 34px 20px; text-align: center; border-radius: var(--ivx-radius);
+  border: 1px dashed var(--ivx-border);
+}
+.ivx-none b { display: block; font-size: 13px; color: rgba(255,255,255,.55); }
+.ivx-none span { display: block; margin-top: 5px; font-size: 11.5px; color: rgba(255,255,255,.32); }
+
+.ivx-note {
+  padding: 11px 13px; border-radius: 11px; font-size: 11px; line-height: 1.6;
+  color: var(--ivx-muted);
+  background: rgba(255,255,255,.015); border: 1px solid var(--ivx-border);
+}
+.ivx-note b { color: rgba(255,255,255,.62); font-weight: 700; }
+.ivx-note i { font-style: italic; }
+
+@media (max-width: 680px) {
+  .ivx-showing { margin-left: 0; width: 100%; }
+  .ivx-item { grid-template-columns: 1fr auto; }
+}

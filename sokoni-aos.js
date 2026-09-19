@@ -90,6 +90,11 @@ window.SokoniAOS = (() => {
       config:        () => _loadConfig(),
       audit:         () => _loadAudit(),
       security:      () => _loadSecurity(),
+      /* Invoices. NECESSARILY SHOP-SCOPED: every invoice callable takes a shopId and runs
+         _assertShop, which admits a platform admin but still answers for ONE shop. There
+         is no cross-shop invoice query anywhere in functions/, so this panel asks which
+         shop rather than implying a platform-wide ledger it cannot read. */
+      invoices:      () => _loadInvoices(),
       hubs:          () => _loadHubs(),
       workflows:     () => _loadWorkflows(),
       /* Integrations Control Center. Self-contained in sokoni-integrations.js:
@@ -324,6 +329,44 @@ window.SokoniAOS = (() => {
     try {
       const data = await _call("adminSearchUsers", { query, role, status, page, limit: 20 });
       const users = data.users || data.results || [];
+
+      /* USER DIRECTORY. Renders the same result set as a richer surface when
+         sokoni-aos-users.js is loaded, and otherwise falls through to the table below.
+
+         It replaces only the TABLE — the toolbar above stays, because its search and
+         selects re-query the SERVER across all users, which a client-side filter over one
+         loaded page cannot do. The rich view filters what is loaded; the toolbar fetches.
+
+         It also renders `displayName`, which is what adminSearchUsers actually returns; the
+         table below reads `u.name`, `u.lastLogin` and `u.photoURL`, none of which the
+         callable sends — so every legacy row shows an em dash for the name. */
+      if (window.SokoniAOSUsers && typeof window.SokoniAOSUsers.mount === "function") {
+        try {
+          const table = tbody.closest("table");
+          const wrap  = table && table.parentElement;
+          if (wrap) {
+            let rich = document.getElementById("usersRich");
+            if (!rich) {
+              rich = document.createElement("div");
+              rich.id = "usersRich";
+              wrap.parentElement.insertBefore(rich, wrap);
+            }
+            const shown = window.SokoniAOSUsers.mount({
+              host: rich, users,
+              actions: { viewUser, banUser, changeRole },
+            });
+            if (shown) {
+              wrap.hidden = true;
+              const total = document.getElementById("userTotal");
+              if (total) total.textContent = _fmt(users.length) + " loaded";
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn("[AOS] user directory unavailable, using table:", e && e.message);
+        }
+      }
+
       if (!users.length) { tbody.innerHTML = _emptyRow(7, "No users found"); return; }
       tbody.innerHTML = users.map(u => `
         <tr>
@@ -421,8 +464,35 @@ window.SokoniAOS = (() => {
           </td>
         </tr>`).join("")}</tbody></table>` : _emptyMsg("No products");
     } else if (tab === "orders") {
-      const data = await _call("adminGetOrders", { limit: 30 }).catch(() => ({ orders: [] }));
+      // The read is capped at 200 server-side; 30 was a table's worth, not a limit of the
+      // contract. The workspace counts what it loads and says so, so a larger page makes
+      // its figures more useful without making any of them a platform total.
+      const data = await _call("adminGetOrders", { limit: 200 }).catch(() => ({ orders: [] }));
       const orders = data.orders || [];
+
+      // Rich orders workspace. Additive: if the module is absent or declines, the original
+      // table below renders exactly as before.
+      if (window.SokoniAOSOrders && typeof window.SokoniAOSOrders.mount === "function") {
+        try {
+          const rich = document.createElement("div");
+          rich.id = "ordersRich";
+          body.innerHTML = "";
+          body.appendChild(rich);
+          const shown = window.SokoniAOSOrders.mount({
+            host: rich,
+            orders,
+            // The one write this desk offers, delegated to the action AdminOS already owns.
+            // No refund control is passed, because none exists that is safe to click.
+            actions: { updateStatus: (id) => updateOrder(id) },
+          });
+          if (shown) return;
+          body.innerHTML = "";
+        } catch (e) {
+          console.warn("[AOS] orders workspace unavailable, using table:", e && e.message);
+          body.innerHTML = "";
+        }
+      }
+
       body.innerHTML = orders.length ? `<table class="aos-table"><thead><tr>
           <th>Order ID</th><th>Buyer</th><th>Total</th><th>Status</th><th>Date</th><th>Actions</th>
         </tr></thead><tbody>${orders.map(o => `<tr>
@@ -1962,6 +2032,83 @@ window.SokoniAOS = (() => {
   }
 
   // ── Security ──────────────────────────────────────────────────────────────────
+  /* ── INVOICES ────────────────────────────────────────────────────────────────
+     The finance suite's 37 callables were consolidated into ONE Cloud Run service:
+     clients call financeSprintDispatch({op, ...data}). `invoiceList` is NOT exported
+     individually by functions/index.js, so calling it by name would target a function
+     that does not exist. This routes through the dispatcher, like finance-budget.html,
+     finance-expenses.html and finance-reconcile.html already do.
+
+     Shop-scoped by the contract, not by choice — see the section map. */
+  async function _invoiceCall(op, data) {
+    const r = await _fn.httpsCallable("financeSprintDispatch")({ op, ...(data || {}) });
+    return r.data;
+  }
+
+  let _invShop = "";
+
+  async function _loadInvoices() {
+    const body = document.getElementById("invoicesBody");
+    if (!body) return;
+    const shopId = (document.getElementById("invShopId") || {}).value || _invShop;
+    if (!shopId) {
+      body.innerHTML = _emptyMsg(
+        "Choose a shop. Invoices are issued by a shop to its clients, and every invoice " +
+        "callable answers for one shop — there is no platform-wide invoice ledger to show.");
+      return;
+    }
+    _invShop = shopId;
+    body.innerHTML = `<div class="aos-spinner"><div></div></div>`;
+    let invoices = [];
+    try {
+      const data = await _invoiceCall("invoiceList", { shopId, limit: 200 });
+      invoices = (data && data.invoices) || [];
+    } catch (e) {
+      body.innerHTML = _emptyMsg("Could not read invoices for this shop: " + _esc(e.message));
+      return;
+    }
+
+    if (window.SokoniInvoiceDesk && typeof window.SokoniInvoiceDesk.mount === "function") {
+      try {
+        body.innerHTML = "";
+        const host = document.createElement("div");
+        host.id = "invoicesRich";
+        body.appendChild(host);
+        const shown = window.SokoniInvoiceDesk.mount({
+          host, invoices,
+          // The three writes stay with the server handlers that already own them. Each
+          // prompts exactly as the merchant page does, then reloads from the source.
+          actions: {
+            send: (id) => _invoiceAction("invoiceSend", { invoiceId: id, shopId }, "Invoice sent"),
+            markPaid: (id) => {
+              const ref = prompt("Payment reference (M-Pesa transaction ID, etc.):");
+              if (!ref) return;
+              return _invoiceAction("invoiceMarkPaid",
+                { invoiceId: id, shopId, paymentRef: ref, paymentMethod: "mpesa" }, "Marked paid");
+            },
+            voidInvoice: (id) => {
+              const reason = prompt("Void reason (required):");
+              if (!reason) return;
+              return _invoiceAction("invoiceVoid", { invoiceId: id, shopId, reason }, "Invoice voided");
+            },
+          },
+        });
+        if (shown) return;
+      } catch (e) {
+        console.warn("[AOS] invoice desk unavailable:", e && e.message);
+      }
+    }
+    body.innerHTML = _emptyMsg("The invoice desk module did not load.");
+  }
+
+  async function _invoiceAction(op, data, okMsg) {
+    try {
+      await _invoiceCall(op, data);
+      _toast(okMsg, "success");
+      _loadInvoices();
+    } catch (e) { _toast(e.message, "error"); }
+  }
+
   async function _loadSecurity() {
     const body = document.getElementById("securityBody");
     if (!body) return;
@@ -2965,6 +3112,7 @@ window.SokoniAOS = (() => {
     revokeSession,
     revokeAllSessions,
     loadSecurityEvents:  _loadSecurityEvents,
+    loadInvoices:        _loadInvoices,
     approveRequest,
     rejectRequest,
     // SmartPOS

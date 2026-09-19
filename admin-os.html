@@ -355,6 +355,7 @@
       <button class="nav-item" data-section="workflows" data-label="Workflow Center" onclick="SokoniAOS.navigate('workflows');_closeSidebar()"><span class="nav-icon">&#x267B;&#xFE0F;</span>Workflows</button>
       <button class="nav-item" data-section="audit" data-label="Audit Center" onclick="SokoniAOS.navigate('audit');_closeSidebar()"><span class="nav-icon">&#x1F4CB;</span>Audit</button>
       <button class="nav-item" data-section="security" data-label="Security" onclick="SokoniAOS.navigate('security');_closeSidebar()"><span class="nav-icon">&#x1F510;</span>Security</button>
+      <button class="nav-item" data-section="invoices" data-label="Invoices" onclick="SokoniAOS.navigate('invoices');_closeSidebar()"><span class="nav-icon">&#x1F9FE;</span>Invoices</button>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Tools</div>
@@ -682,6 +683,18 @@
         <div id="auditBody"><div class="aos-spinner"><div></div></div></div>
       </div>
 
+      <!-- Invoices. Shop-scoped by contract: every invoice callable takes a shopId and
+           runs _assertShop. There is no cross-shop invoice query in functions/, so the
+           panel asks which shop rather than implying a platform-wide ledger. -->
+      <div class="aos-panel" id="panel-invoices" hidden>
+        <div class="panel-toolbar">
+          <h2>Invoices</h2>
+          <input class="aos-input" id="invShopId" placeholder="Shop ID" style="max-width:220px">
+          <button class="aos-btn" onclick="SokoniAOS.loadInvoices()">Load</button>
+        </div>
+        <div id="invoicesBody"></div>
+      </div>
+
       <div class="aos-panel" id="panel-security" hidden>
         <div class="panel-toolbar"><h2>Security</h2></div>
         <div id="securityBody"><div class="aos-spinner"><div></div></div></div>
@@ -755,6 +768,9 @@
   <!-- SECURITY CENTRE. Additive: it renders into the Security section that already exists
        in the sidebar, and sokoni-aos.js falls back to its original panel if this is absent.
        No other section is affected. -->
+  <script src="sokoni-aos-users.js"></script>
+  <script src="sokoni-aos-orders.js"></script>
+  <script src="sokoni-invoice-desk.js"></script>
   <script src="sokoni-aos-activity.js"></script>
   <script src="sokoni-aos-security.js"></script>
   <script src="sokoni-aos.js"></script>

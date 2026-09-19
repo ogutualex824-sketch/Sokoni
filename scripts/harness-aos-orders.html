@@ -1,0 +1,17 @@
+<!doctype html>
+<!-- SOKONI — Orders workspace harness. scripts/harness-aos-orders.html
+     admin-os.html requires an authenticated admin and redirects to login, so the module is
+     mounted here against a fixed result set to verify RENDERING only. Never linked.
+     The fixtures are the TWO shapes production actually writes — see the module header. -->
+<meta charset="utf-8"><title>Orders workspace harness</title>
+<!-- Carries the module's own CSS id, so injectCss() finds it already present and does
+     not add a second, page-relative link that would 404 from /scripts/. -->
+<link id="sokoni-aos-orders-css" rel="stylesheet" href="/sokoni-aos-orders.css">
+<style>
+ :root{--aos-bg:#060a06;--aos-surface:rgba(255,255,255,0.03);--aos-border:rgba(255,255,255,.08);
+ --aos-accent:#71ff00;--aos-warn:#ff9800;--aos-danger:#f44336;--aos-text:rgba(255,255,255,0.9);
+ --aos-muted:rgba(255,255,255,0.4)}
+ body{background:var(--aos-bg);color:var(--aos-text);font:14px/1.5 system-ui,sans-serif;margin:0;padding:22px}
+</style>
+<div id="ordersRich"></div>
+<script src="/sokoni-aos-orders.js"></script>

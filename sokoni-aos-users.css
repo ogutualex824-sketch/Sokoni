@@ -1,0 +1,181 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   SOKONI — USERS styling (AdminOS)
+   sokoni-aos-users.css
+
+   Scoped to .usx-* so it cannot reach another AdminOS section, and built on the shell's own
+   tokens rather than fresh colours.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.usx {
+  display: flex; flex-direction: column; gap: 13px;
+
+  /* ── HOST TOKENS ────────────────────────────────────────────────────────────
+     This directory mounts in TWO portals with different palettes: AdminOS is green
+     (--aos-*), the Super Admin portal magenta (--accent). Hardcoding either would leave
+     the component looking bolted on in the other, so every colour resolves through the
+     host's own token first and falls back to a literal only when neither exists.
+     Each tint is declared TWICE on purpose — a browser without color-mix keeps the first
+     declaration instead of dropping the rule. */
+  --usx-accent:  var(--aos-accent, var(--accent, #71ff00));
+  --usx-warn:    var(--aos-warn,   #ff9800);
+  --usx-danger:  var(--aos-danger, #f44336);
+  --usx-surface: var(--aos-surface, rgba(255,255,255,.03));
+  --usx-border:  var(--aos-border,  var(--border, rgba(255,255,255,.1)));
+  --usx-text:    var(--aos-text,    var(--text,   rgba(255,255,255,.9)));
+  --usx-muted:   var(--aos-muted,   var(--muted,  rgba(255,255,255,.4)));
+  --usx-dim:     rgba(255,255,255,.62);
+
+  --usx-a-05: rgba(113,255,0,.05);
+  --usx-a-05: color-mix(in srgb, var(--usx-accent) 5%, transparent);
+  --usx-a-08: rgba(113,255,0,.08);
+  --usx-a-08: color-mix(in srgb, var(--usx-accent) 8%, transparent);
+  --usx-a-12: rgba(113,255,0,.12);
+  --usx-a-12: color-mix(in srgb, var(--usx-accent) 12%, transparent);
+  --usx-a-28: rgba(113,255,0,.28);
+  --usx-a-28: color-mix(in srgb, var(--usx-accent) 28%, transparent);
+}
+
+/* ── STRIP ────────────────────────────────────────────────────────────────── */
+.usx-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 11px; }
+.usx-stat {
+  position: relative; overflow: hidden; padding: 14px 15px 12px; border-radius: 13px;
+  background: var(--usx-surface);
+  border: 1px solid var(--usx-border);
+}
+.usx-stat::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: currentColor; opacity: .5;
+}
+.usx-stat--ok   { color: var(--usx-accent); }
+.usx-stat--info { color: #4aa3ff; }
+.usx-stat--warn { color: var(--usx-warn); }
+.usx-stat--bad  { color: var(--usx-danger); }
+.usx-stat-n { font-size: 27px; font-weight: 800; line-height: 1; letter-spacing: -.02em; color: currentColor; }
+.usx-stat-l { margin-top: 6px; font-size: 12.5px; font-weight: 600; color: var(--usx-text); }
+/* The scope caveat sits on every card, so no figure can be read as a platform total. */
+.usx-stat-s { margin-top: 2px; font-size: 10px; color: var(--usx-muted); }
+
+/* ── TOOLBAR ──────────────────────────────────────────────────────────────── */
+.usx-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.usx-in, .usx-sel {
+  min-height: 36px; padding: 0 11px; font: inherit; font-size: 13px; border-radius: 9px;
+  color: inherit; background: rgba(0,0,0,.28);
+  border: 1px solid var(--usx-border);
+}
+.usx-in { flex: 1 1 210px; min-width: 150px; }
+.usx-in:focus, .usx-sel:focus { outline: none; border-color: var(--usx-accent); }
+.usx-showing { margin-left: auto; font-size: 11.5px; color: var(--usx-muted); }
+
+/* ── BULK ─────────────────────────────────────────────────────────────────── */
+.usx-bulk {
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+  padding: 10px 13px; border-radius: 11px;
+  background: var(--usx-a-08); border: 1px solid var(--usx-a-28);
+}
+.usx-bulk-n { font-size: 12.5px; font-weight: 800; color: var(--usx-accent); }
+/* Says plainly that bulk is a loop over the same confirmed action, not a faster path. */
+.usx-bulk-h { flex: 1 1 100%; font-size: 10.5px; color: var(--usx-muted); }
+
+/* ── TABLE ────────────────────────────────────────────────────────────────── */
+.usx-tw {
+  overflow-x: auto; border-radius: 13px;
+  background: var(--usx-surface);
+  border: 1px solid var(--usx-border);
+}
+.usx-t { width: 100%; border-collapse: collapse; font-size: 13px; }
+.usx-t th {
+  text-align: left; padding: 11px 14px; font-size: 10.5px; font-weight: 700;
+  letter-spacing: .05em; text-transform: uppercase; white-space: nowrap;
+  color: var(--usx-muted);
+  border-bottom: 1px solid var(--usx-border);
+}
+.usx-t td { padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,.04); vertical-align: middle; }
+.usx-t tbody tr:last-child td { border-bottom: none; }
+.usx-t tbody tr:hover { background: rgba(255,255,255,.025); }
+.usx-t tbody tr.is-sel { background: var(--usx-a-05); }
+.usx-cbx { width: 36px; }
+.usx-cbx input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--usx-accent); }
+.usx-r { text-align: right; white-space: nowrap; }
+.usx-dim { color: var(--usx-muted); white-space: nowrap; }
+.usx-dim small { display: block; font-size: 10px; opacity: .65; }
+
+/* ── IDENTITY ─────────────────────────────────────────────────────────────── */
+.usx-u { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* Initials, because the directory API sends no photoURL. Requesting one would 404 on every
+   row; deriving one from the name shows something true. */
+.usx-av {
+  flex: 0 0 auto; width: 32px; height: 32px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11.5px; font-weight: 800; letter-spacing: .02em;
+}
+.usx-av--a { background: var(--usx-a-12); color: var(--usx-accent); }
+.usx-av--b { background: rgba(74,163,255,.14); color: #4aa3ff; }
+.usx-av--c { background: rgba(255,152,0,.14); color: #ffb74d; }
+.usx-av--d { background: rgba(244,67,54,.13); color: #ff8a80; }
+.usx-av--e { background: rgba(156,110,255,.16); color: #b892ff; }
+.usx-av--f { background: rgba(0,200,180,.14); color: #4fd6c4; }
+.usx-u-b { min-width: 0; }
+.usx-u-n {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 600; color: var(--usx-text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* A name DERIVED from an email is marked, so nobody mistakes it for one the user gave. */
+.usx-u-n--derived { font-style: italic; color: var(--usx-dim); }
+.usx-vf { font-size: 9.5px; color: var(--usx-accent); }
+.usx-u-e {
+  margin-top: 1px; font-size: 11px; color: var(--usx-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px;
+}
+
+.usx-role {
+  font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 7px;
+  background: rgba(255,255,255,.06); color: var(--usx-text);
+  text-transform: capitalize; white-space: nowrap;
+}
+.usx-st {
+  font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
+  padding: 3px 9px; border-radius: 6px; white-space: nowrap;
+}
+.usx-st--ok    { color: var(--usx-accent); background: var(--usx-a-12); }
+.usx-st--warn  { color: var(--usx-warn); background: rgba(255,152,0,.12); }
+.usx-st--bad   { color: var(--usx-danger); background: rgba(244,67,54,.12); }
+.usx-st--muted { color: rgba(255,255,255,.45); background: rgba(255,255,255,.06); }
+
+/* ── BUTTONS ──────────────────────────────────────────────────────────────── */
+.usx-btn {
+  font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  padding: 6px 11px; border-radius: 8px; margin-left: 5px;
+  background: rgba(255,255,255,.05); color: var(--usx-text);
+  border: 1px solid var(--usx-border);
+  transition: background .14s, border-color .14s;
+}
+.usx-btn:first-child { margin-left: 0; }
+.usx-btn:hover { background: rgba(255,255,255,.1); }
+.usx-btn.sm { padding: 5px 9px; font-size: 11px; }
+.usx-btn--danger { color: #ff8a80; border-color: rgba(244,67,54,.28); }
+.usx-btn--danger:hover { background: rgba(244,67,54,.12); }
+.usx-btn.ghost { background: transparent; }
+
+/* ── EMPTY + NOTE ─────────────────────────────────────────────────────────── */
+.usx-none {
+  padding: 34px 20px; text-align: center; border-radius: 13px;
+  border: 1px dashed var(--usx-border);
+}
+.usx-none b { display: block; font-size: 13px; color: var(--usx-muted); }
+.usx-none span { display: block; margin-top: 5px; font-size: 11.5px; color: rgba(255,255,255,.32); }
+
+/* The standing note naming what this view is not. Quiet on purpose — an alert-coloured box
+   would be ignored within a day. */
+.usx-note {
+  padding: 11px 13px; border-radius: 11px; font-size: 11px; line-height: 1.6;
+  color: var(--usx-muted);
+  background: rgba(255,255,255,.015);
+  border: 1px solid var(--usx-border);
+}
+.usx-note b { color: rgba(255,255,255,.62); font-weight: 700; }
+
+@media (max-width: 680px) {
+  .usx-showing { margin-left: 0; width: 100%; }
+  .usx-u-e { max-width: 150px; }
+}

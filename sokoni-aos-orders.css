@@ -1,0 +1,223 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   SOKONI — ORDERS styling (AdminOS)
+   sokoni-aos-orders.css
+
+   Scoped to .odx-* so it cannot reach another AdminOS section, and built on the host's
+   own tokens rather than fresh colours — the same contract the user directory uses, so
+   the two desks look like one product.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.odx {
+  display: flex; flex-direction: column; gap: 13px;
+
+  /* Host tokens first, literal last. Each tint is declared twice so a browser without
+     color-mix keeps the first declaration instead of dropping the rule. */
+  --odx-accent:  var(--aos-accent, var(--accent, #71ff00));
+  --odx-warn:    var(--aos-warn,   #ff9800);
+  --odx-danger:  var(--aos-danger, #f44336);
+  --odx-info:    #4aa3ff;
+  --odx-surface: var(--aos-surface, rgba(255,255,255,.03));
+  --odx-border:  var(--aos-border,  var(--border, rgba(255,255,255,.1)));
+  --odx-text:    var(--aos-text,    var(--text,   rgba(255,255,255,.9)));
+  --odx-muted:   var(--aos-muted,   var(--muted,  rgba(255,255,255,.4)));
+
+  --odx-a-06: rgba(113,255,0,.06);
+  --odx-a-06: color-mix(in srgb, var(--odx-accent) 6%, transparent);
+  --odx-a-12: rgba(113,255,0,.12);
+  --odx-a-12: color-mix(in srgb, var(--odx-accent) 12%, transparent);
+  --odx-a-30: rgba(113,255,0,.30);
+  --odx-a-30: color-mix(in srgb, var(--odx-accent) 30%, transparent);
+}
+
+/* ── STRIP ────────────────────────────────────────────────────────────────── */
+.odx-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 11px; }
+.odx-stat {
+  position: relative; overflow: hidden; padding: 14px 15px 12px; border-radius: 13px;
+  background: var(--odx-surface); border: 1px solid var(--odx-border);
+}
+.odx-stat::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: currentColor; opacity: .5;
+}
+.odx-stat--ok   { color: var(--odx-accent); }
+.odx-stat--info { color: var(--odx-info); }
+.odx-stat--warn { color: var(--odx-warn); }
+.odx-stat--bad  { color: var(--odx-danger); }
+/* Sized to fit a formatted currency figure, not just a count. */
+.odx-stat-n {
+  font-size: 21px; font-weight: 800; line-height: 1.15; letter-spacing: -.02em;
+  color: currentColor; word-break: break-word;
+}
+.odx-stat-l { margin-top: 6px; font-size: 12.5px; font-weight: 600; color: var(--odx-text); }
+/* The scope caveat sits on every card, so no figure can be read as a platform total. */
+.odx-stat-s { margin-top: 2px; font-size: 10px; line-height: 1.4; color: var(--odx-muted); }
+
+/* ── STATUS TABS ──────────────────────────────────────────────────────────── */
+.odx-tabs { display: flex; gap: 7px; flex-wrap: wrap; }
+.odx-tab {
+  font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  padding: 7px 12px; border-radius: 9px; text-transform: capitalize;
+  color: var(--odx-muted); background: transparent;
+  border: 1px solid var(--odx-border);
+  transition: color .14s, background .14s, border-color .14s;
+}
+.odx-tab span {
+  display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 5px;
+  font-size: 10.5px; font-weight: 800;
+  background: rgba(255,255,255,.07); color: inherit;
+}
+.odx-tab:hover { color: var(--odx-text); }
+.odx-tab.is-on {
+  color: var(--odx-accent); background: var(--odx-a-12); border-color: var(--odx-a-30);
+}
+
+/* ── TOOLBAR ──────────────────────────────────────────────────────────────── */
+.odx-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.odx-in, .odx-sel {
+  min-height: 36px; padding: 0 11px; font: inherit; font-size: 13px; border-radius: 9px;
+  color: inherit; background: rgba(0,0,0,.28); border: 1px solid var(--odx-border);
+}
+.odx-in { flex: 1 1 230px; min-width: 150px; }
+.odx-in:focus, .odx-sel:focus { outline: none; border-color: var(--odx-accent); }
+.odx-showing { margin-left: auto; font-size: 11.5px; color: var(--odx-muted); }
+
+/* ── TABLE ────────────────────────────────────────────────────────────────── */
+.odx-tw {
+  overflow-x: auto; border-radius: 13px;
+  background: var(--odx-surface); border: 1px solid var(--odx-border);
+}
+.odx-t { width: 100%; border-collapse: collapse; font-size: 13px; }
+.odx-t th {
+  text-align: left; padding: 11px 14px; font-size: 10.5px; font-weight: 700;
+  letter-spacing: .05em; text-transform: uppercase; white-space: nowrap;
+  color: var(--odx-muted); border-bottom: 1px solid var(--odx-border);
+}
+.odx-t td { padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,.04); vertical-align: middle; }
+.odx-t tbody tr { cursor: pointer; }
+.odx-t tbody tr:last-child td { border-bottom: none; }
+.odx-t tbody tr:hover { background: rgba(255,255,255,.025); }
+.odx-t tbody tr.is-open { background: var(--odx-a-06); }
+.odx-r { text-align: right; white-space: nowrap; }
+.odx-dim { color: var(--odx-muted); }
+.odx-t td small, .odx-item small { display: block; font-size: 10px; opacity: .62; }
+.odx-id { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; font-weight: 600; }
+
+/* ── CUSTOMER ─────────────────────────────────────────────────────────────── */
+.odx-c { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* Initials, because an order carries no photograph of anybody. */
+.odx-av {
+  flex: 0 0 auto; width: 30px; height: 30px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800;
+}
+.odx-av--a { background: var(--odx-a-12); color: var(--odx-accent); }
+.odx-av--b { background: rgba(74,163,255,.14); color: #4aa3ff; }
+.odx-av--c { background: rgba(255,152,0,.14); color: #ffb74d; }
+.odx-av--d { background: rgba(244,67,54,.13); color: #ff8a80; }
+.odx-av--e { background: rgba(156,110,255,.16); color: #b892ff; }
+.odx-av--f { background: rgba(0,200,180,.14); color: #4fd6c4; }
+.odx-c-n {
+  font-size: 12.5px; font-weight: 600; color: var(--odx-text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 190px;
+}
+/* An identifier standing in for a name is marked, so a uid is never read as one. */
+.odx-c-n--derived { font-style: italic; color: rgba(255,255,255,.62); font-weight: 500; }
+.odx-c-s {
+  margin-top: 1px; font-size: 10.5px; color: var(--odx-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 190px;
+}
+
+.odx-st {
+  font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  padding: 3px 9px; border-radius: 6px; white-space: nowrap;
+}
+.odx-st--ok    { color: var(--odx-accent); background: var(--odx-a-12); }
+.odx-st--info  { color: var(--odx-info); background: rgba(74,163,255,.12); }
+.odx-st--warn  { color: var(--odx-warn); background: rgba(255,152,0,.12); }
+.odx-st--bad   { color: var(--odx-danger); background: rgba(244,67,54,.12); }
+.odx-st--muted { color: rgba(255,255,255,.45); background: rgba(255,255,255,.06); }
+
+/* ── BUTTONS ──────────────────────────────────────────────────────────────── */
+.odx-btn {
+  font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  padding: 6px 11px; border-radius: 8px;
+  background: rgba(255,255,255,.05); color: var(--odx-text);
+  border: 1px solid var(--odx-border);
+  transition: background .14s, border-color .14s;
+}
+.odx-btn:hover { background: rgba(255,255,255,.1); }
+.odx-btn.sm { padding: 5px 9px; font-size: 11px; }
+.odx-btn.ghost { background: transparent; }
+
+/* ── DETAIL ───────────────────────────────────────────────────────────────── */
+.odx-detail {
+  padding: 15px 16px; border-radius: 14px;
+  background: var(--odx-surface); border: 1px solid var(--odx-border);
+}
+.odx-d-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding-bottom: 12px; margin-bottom: 13px; border-bottom: 1px solid var(--odx-border);
+}
+.odx-d-head h3 {
+  margin: 0 0 6px; font-size: 15px; font-weight: 700; color: var(--odx-text);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+.odx-d-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+.odx-detail h4 {
+  margin: 0 0 8px; font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--odx-muted);
+}
+.odx-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding: 5px 0; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,.035);
+}
+.odx-row:last-child { border-bottom: none; }
+.odx-row span { color: var(--odx-muted); text-transform: capitalize; }
+.odx-row b { font-weight: 600; color: var(--odx-text); text-align: right; word-break: break-word; }
+.odx-row i { font-style: italic; font-weight: 400; color: var(--odx-muted); }
+.odx-row small { display: block; font-size: 9.5px; opacity: .6; font-weight: 400; }
+.odx-detail code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px;
+  padding: 1px 5px; border-radius: 4px; background: rgba(255,255,255,.06);
+}
+/* Where a field needs explaining, it is explained in place rather than in a doc. */
+.odx-hint { margin-top: 8px; font-size: 10.5px; line-height: 1.55; color: var(--odx-muted); }
+
+.odx-items { margin-top: 16px; }
+.odx-item {
+  display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center;
+  padding: 8px 0; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,.035);
+}
+.odx-item:last-child { border-bottom: none; }
+.odx-item b { font-weight: 600; color: var(--odx-text); }
+
+.odx-actions {
+  display: flex; align-items: center; gap: 11px; flex-wrap: wrap;
+  margin-top: 15px; padding-top: 13px; border-top: 1px solid var(--odx-border);
+}
+.odx-actions .odx-hint { margin-top: 0; flex: 1 1 260px; }
+
+/* ── EMPTY + NOTE ─────────────────────────────────────────────────────────── */
+.odx-none {
+  padding: 34px 20px; text-align: center; border-radius: 13px;
+  border: 1px dashed var(--odx-border);
+}
+.odx-none b { display: block; font-size: 13px; color: rgba(255,255,255,.55); }
+.odx-none span { display: block; margin-top: 5px; font-size: 11.5px; color: rgba(255,255,255,.32); }
+
+.odx-note {
+  padding: 11px 13px; border-radius: 11px; font-size: 11px; line-height: 1.6;
+  color: var(--odx-muted);
+  background: rgba(255,255,255,.015); border: 1px solid var(--odx-border);
+}
+.odx-note b { color: rgba(255,255,255,.62); font-weight: 700; }
+.odx-note code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px;
+  padding: 1px 4px; border-radius: 3px; background: rgba(255,255,255,.06);
+}
+
+@media (max-width: 680px) {
+  .odx-showing { margin-left: 0; width: 100%; }
+  .odx-c-n, .odx-c-s { max-width: 120px; }
+  .odx-item { grid-template-columns: 1fr auto; }
+}

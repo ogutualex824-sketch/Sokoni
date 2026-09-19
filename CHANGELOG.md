@@ -1,3 +1,269 @@
+## 2026-09-19 (82) — AUDIT LOG VIEW: a second reading of one source, not a second console
+
+**82/0 certification (was 48/0) · rendered in a browser · AdminOS regression green.**
+
+The Audit Logs section gains a row-by-row **Log** view with an in-place event detail, beside
+the existing timeline. Built **inside the existing Activity module**, because AdminOS's
+audit section already mounts it over the same `adminGetAuditLogs` source — a second audit
+component would be two renderings of one collection, free to disagree.
+
+### Files affected
+- `sokoni-aos-activity.js` · `sokoni-aos-activity.css` — view switch, log table, event detail
+- `scripts/test-aos-activity.js` — section 9; `scripts/harness-aos-activity.html` — CSS id
+
+No new module, no new section, no sidebar change, no new file in AdminOS.
+
+### Database changes
+None. ### API changes None, and **no function deploy**.
+
+### What an audit entry here actually is
+`adminAudit` documents carry **`action`, `performedBy`, `createdAt`**, plus whatever that
+particular writer attached (`orderId`, `productId`, `status`, `targetRole`…). So the columns
+the mockup wanted have no source and are not drawn: **no IP address, no device or browser,
+no environment, no risk level, no compliance framework**. The detail says so at the point
+someone would look for it, and shows the writer's own remaining fields instead — the honest
+answer to "what exactly was recorded".
+
+### A live gap this closes
+`normalise` read the target as `targetId | target | entityId`. **No writer in this codebase
+uses any of those** — each names the target for the thing it is. Every row of a real page
+therefore showed "none recorded" while the id sat in the document. The target is now read
+from the typed union (`orderId`, `productId`, `invoiceId`, `shopId`, `payoutId`,
+`notificationId`, …) and the **field name is shown beside the value**, because an id means
+something different under `orderId` than under `shopId`. `uid` and `performedBy` are
+excluded — those are the actor, not the target — and "none recorded" now means it.
+
+### Data integrity
+Severity is still rendered **only where a source states one**; it is never inferred from
+wording, because badging every `delete` as high teaches people to ignore the word. Category
+is derived from the action name and the detail says so rather than implying a stored field.
+Every count remains of the loaded page, with no platform total, no unread state and no
+day-over-day change — unchanged from the timeline, since both readings share one
+`normalise`.
+
+### A defect fixed while here
+The module bound listeners to the host element, and the audit panel remounts on every
+source-tab change — so each remount added another copy and one click would have toggled a
+detail row open and shut. Listeners are now unbound before a remount rebinds them, verified
+in the browser by clicking twice.
+
+### Breaking changes
+None. The timeline remains the default view and is unchanged.
+
+## 2026-09-19 (81) — INVOICE DESK: shop-scoped because the contract is, in both consoles
+
+**91/0 certification · 3/3 sabotage mutations caught · rendered in a browser · AdminOS regression green.**
+
+An invoice workspace — aging, status tabs, detail panel, line items — added to AdminOS as a
+new section, and reached from the Super Admin sidebar by a link to that one page. No
+redesign of either console.
+
+### Files affected
+- `sokoni-invoice-desk.js` · `sokoni-invoice-desk.css` (new) — the desk
+- `sokoni-aos.js` — `invoices` section, shop-scoped loader, dispatcher route
+- `admin-os.html` — nav entry, panel, script tag
+- `super-admin.html` — **a link**, not a second implementation
+- `scripts/test-invoice-desk.js` (new), `scripts/harness-invoice-desk.html` (new)
+
+### Database changes
+None. No new collection, no new field, no index.
+
+### API changes
+None, and **no function deploy**. The desk performs no read or write of its own; send,
+mark-paid and void delegate to the handlers that already own them.
+
+### Why this is shop-scoped, and why there is no platform invoice list
+Every invoice callable — list, get, create, send, markPaid, void — takes a `shopId` and
+runs `_assertShop` (`void` requires `_assertShopManager`). `_assertShop` **does** admit a
+platform admin via `users/{uid}.role === 'admin'`, so an admin can read any one shop's
+invoices — but there is no cross-shop invoice query anywhere in `functions/`. A
+platform-wide ledger would need a new admin-scoped read: a new callable, a deploy (frozen
+by the Artifact Registry forensics notice) and a decision about whether platform operators
+may read every merchant's billing. So the panel **asks which shop** instead of implying a
+total it cannot compute.
+
+### The route that actually exists
+The 37 finance callables were consolidated into ONE Cloud Run service; clients call
+`financeSprintDispatch({op, ...data})`. `functions/index.js` exports no `invoiceList`. This
+loader routes through the dispatcher, as `finance-budget.html`, `finance-expenses.html` and
+`finance-reconcile.html` already do.
+
+### Data integrity
+- **The page is not "the newest".** The query is `.where('shopId','==',shopId).limit(100)`
+  with **no `orderBy`** — Firestore returns an arbitrary hundred and the handler sorts them
+  afterwards. The desk calls it a page, then sorted.
+- **The status filter runs after the cap**, so it answers within that page and never for
+  the shop. Filtering here is client-side over the same page so the two cannot disagree.
+- **Settlement is binary.** `invoiceMarkPaid` flips a status in one transaction; there is
+  no payment ledger and no partial application. The column is named Outstanding and holds
+  the full total or nothing — never an invented remainder or "Balance Due".
+- **Voided invoices are excluded** from every money figure rather than counted as zero.
+- **Overdue is the server's definition**: sent, dated and past due. A draft past its due
+  date is not a claim on anyone, and is neither flagged nor aged — so the aging buckets and
+  the Overdue figure are computed from one rule and cannot disagree. What aging excludes
+  (unsent drafts, undated invoices) is stated on the block rather than silently dropped.
+- **Aging and days-to-pay are real** — both inputs exist — while their month-on-month change
+  is not, and is absent.
+
+### Deliberately not built
+No trend arrows, no shop-wide total, no card brand or last four digits (`paymentMethod`
+defaults to `mpesa`; there is no card rail), no recurrence or billing type, no billing
+period, no purchase order, no stored attachment, and no USD — figures render in the
+currency the document carries. Certification fails if one reappears.
+
+### Finding raised, not repaired
+`finance-invoices.html` calls `invoiceList`, `invoiceCreate`, `invoiceSend`,
+`invoiceMarkPaid` and `invoiceVoid` **by name** via `httpsCallable`. `index.js` exports none
+of them — that page targets five functions that do not exist. Its sibling finance pages
+were migrated to the dispatcher; it was not. Left for its own change: separate surface,
+separate certification.
+
+### Breaking changes
+None. Additive: the module returns `false` if it cannot render. Listeners are unbound
+before a remount rebinds them. Super Admin gains one sidebar link and no panel markup.
+
+## 2026-09-19 (80) — ORDERS WORKSPACE: the order that was never worth zero
+
+**111/0 certification · rendered in a browser · AdminOS regression green.**
+
+The Orders tab was a six-column table of 30 rows. It is now a workspace — status tabs,
+filters, a detail panel and line items — built strictly on what `adminGetOrders` returns
+and what the order writers actually write. No redesign elsewhere, no new sidebar entry:
+Orders stays in the section it already had.
+
+### Files affected
+- `sokoni-aos-orders.js` · `sokoni-aos-orders.css` (new) — the workspace
+- `sokoni-aos.js` — the Orders tab mounts it; the original table remains as fallback
+- `admin-os.html` — script tag only
+- `scripts/test-aos-orders.js` (new), `scripts/harness-aos-orders.html` (new)
+
+### Database changes
+None. No new collection, no new field, no index.
+
+### API changes
+None, and **no function deploy** (Artifact Registry forensics freeze still stands). The
+module performs no read and no write of its own; a status change delegates to
+`adminUpdateOrderStatus`, which AdminOS already owned. The page read was raised from 30
+to 200 — the cap the callable already enforces — so the figures cover more of the page
+without any of them becoming a platform total.
+
+### The defect this replaces
+The legacy table renders `KES ${o.total || 0}`. Orders written by `api-gateway.js` have
+**no `total` field at all** — they record `subtotal` — so every gateway order displayed a
+confident **KES 0**. This desk reads the money union in a declared precedence
+(`total → orderTotal → amount → grandTotal → subtotal`), names the field beside the figure
+whenever it is not `total`, and says "not recorded" when none is present.
+
+### Orders have more than one shape, and this desk does not hide it
+Two server writers alone disagree — `api-gateway` writes `orderId`/`buyerId`/`subtotal`,
+`manual-till-orders` writes `id`/`uid`/`amount`/`total`/`orderTotal` — and
+`order-advance-authority.js` already reads the seller as `sellerUid | sellerId | vendorId`,
+the rider as `riderId | riderUid | driverId | assignedRider` and the buyer as
+`buyerId | uid | userId | customerId`. The workspace reads **the same unions and writes
+none of them**, and surfaces which spelling a given order used. Converging those
+vocabularies is separate work; a ninth spelling invented here would have made it worse.
+
+### Data integrity — eight figures with no source
+Each is declared with its reason, and certification fails if one reappears:
+
+1. **No trend arrows.** No prior-period figure exists anywhere.
+2. **No sparklines.** There is no time series behind a capped page of documents.
+3. **No platform total.** The read returns rows, never counts; every figure says "of those
+   loaded" and the first card is labelled `Loaded`.
+4. **No status facets.** Tab counts are derived from the loaded page, not the collection.
+5. **No card brands.** Payment here is M-PESA and IntaSend; card is not implemented on this
+   platform, so a "Visa •••• 4242" would be a fabrication with a logo on it.
+6. **No carriers, no signature.** Fulfilment is a SOKONI rider and a `trackingCode`. There
+   is no FedEx/UPS/USPS field and nothing captures a signature.
+7. **No marketplace channels.** `channel`, `source` and `hub` render verbatim; there is no
+   Amazon, eBay, Walmart, TikTok Shop or Shopify POS integration to map them onto.
+8. **No gross revenue.** Revenue is a payments question — production payments carry
+   UPPERCASE states and `succeeded` is never written. The strip reports the **value of the
+   loaded orders**, named for exactly what it measures, and excludes rows carrying no
+   figure rather than averaging them in as zeros. A page with two currencies reports
+   "mixed" instead of adding them together.
+
+Absent is never a negative: an order whose writer sets no `paymentVerified` reads "this
+writer records no verification flag", not "no". A zero `shipping` line is printed; an
+absent one is not printed at all.
+
+### Security changes
+None. **There is deliberately no refund control.** On this platform a refund request
+document credits a wallet on creation, so a one-click admin button would be an execution
+path wearing the word "request" — refunds stay cashier-requested and owner-approved with
+the server setting fee and net. The absence is asserted on stripped code, so the paragraph
+explaining it cannot satisfy the check.
+
+### Breaking changes
+None. Additive: the module returns `false` if it cannot render and the original table runs
+untouched. Listeners are unbound before a remount rebinds them.
+
+## 2026-09-19 (79) — USER DIRECTORY: one directory for two portals, and the four figures it refuses to invent
+
+**84/0 certification · both portals rendered in a browser · AdminOS regression green.**
+
+AdminOS and the Super Admin portal both listed users, from **different sources**. Rather
+than polish two directories into two different answers, both now mount the **same module**
+and pass in what differs. No redesign, no new sidebar entry — `Users` and `User Management`
+already existed in their respective sidebars.
+
+### Files affected
+- `sokoni-aos-users.js` · `sokoni-aos-users.css` (new) — the one directory component
+- `sokoni-aos.js` — `_loadUsers` mounts it; the original table remains as fallback
+- `admin-os.html` · `super-admin.html` — script tag and loader wiring only
+- `scripts/test-aos-users.js` (new), `scripts/harness-aos-users.html` (new)
+
+### Database changes
+None. No new collection, no new field, no index.
+
+### API changes
+None. The module performs **no read and no write of its own**: role changes and suspension
+delegate to `setUserRole` / `suspendUser`, which each portal already owned. There is still
+exactly one writer behind both surfaces.
+
+### The defect AdminOS was shipping
+`adminSearchUsers` returns `displayName`. The legacy table rendered `u.name`, `u.lastLogin`
+and `u.photoURL` — **none of which the callable sends**. Every row's name, the primary
+identifier in a user directory, rendered as an em dash, and every avatar fell back. The page
+looked correct and identified nobody. This reads the field the API actually returns and
+derives initials rather than requesting a photograph that is never sent.
+
+### Data integrity
+Four figures a user directory is expected to show have **no source**, and are declared with
+reasons rather than invented — certification fails if one reappears:
+
+1. **No platform total.** Neither source returns one. Every count says "of those loaded",
+   and the first card is labelled `Loaded`, never `Total`.
+2. **No month-on-month change.** No prior-period count exists anywhere.
+3. **No access percentage.** A role is a single value with no entitlement breakdown behind it.
+4. **No teams column.** This platform has shops and `shopEmployees`, not teams.
+
+`verified` is a boolean `adminSearchUsers` always sends but a raw `users/{uid}` document may
+not carry at all. Absent is unknown, not false: where no loaded account has the field, the
+card reads `—` / "not recorded in this source" rather than reporting a confident zero. A
+name derived from an email local-part is rendered in italic so it is never mistaken for one
+the account supplied, and an absent join date says "not recorded".
+
+### What differs between the two portals is passed in, never branched on
+- **`source`** — each portal names what it actually fetched. AdminOS: a capped page with no
+  total or facets. Super Admin: the 50 most recently created accounts.
+- **`actions`** — capability is derived from the actions supplied. The Super Admin portal has
+  no per-user detail view, so it renders **no View button** rather than one wired to nothing.
+- **Shape** — Super Admin stores suspension as a boolean; it is mapped to the status
+  vocabulary at the call site, so the module never learns either portal's storage shape.
+- **Palette** — every colour resolves through the host's own token, so the directory is green
+  in AdminOS and magenta in the Super Admin portal without a branch.
+
+### Security changes
+None. No new privilege path: bulk actions are a **loop over the same per-account confirmed
+action**, not a faster unconfirmed one. All directory content is escaped, including the id
+spliced into action attributes.
+
+### Breaking changes
+None. Additive at both hosts: the module returns `false` if it cannot render, and each
+portal's original table runs untouched. Listeners are unbound before a remount rebinds them,
+so a reload or a keystroke in the server-side search cannot stack duplicate handlers.
+
 ## 2026-09-19 (78) — REVENUE INTELLIGENCE: the status spelling that would have read zero
 
 **110/0 certification · 15/15 sabotage mutations caught, 0 inert · nav validator green.**
