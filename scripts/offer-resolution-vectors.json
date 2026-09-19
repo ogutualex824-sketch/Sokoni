@@ -1,0 +1,202 @@
+{
+  "_comment": [
+    "SHARED CONTRACT between sokoni-promotion-model.js (client) and functions/shop-offers.js",
+    "(server). The semantics are implemented twice because `firebase deploy --only functions`",
+    "uploads functions/ and nothing else, so a require('../sokoni-promotion-model.js') throws",
+    "MODULE_NOT_FOUND in production. functions/auth-policy.js settled this pattern already.",
+    "",
+    "scripts/test-offer-engine-parity.js replays every vector against BOTH implementations and",
+    "compares subtotal, discount, deliveryFee, total and the applied lines. A shared constant",
+    "would only prove the two agree about a string; these prove they agree about MONEY.",
+    "",
+    "`at` is a fixed instant so schedule cases are deterministic. 2026-10-02T18:00 is a Friday",
+    "evening; 2026-09-29T11:00 is a Tuesday morning."
+  ],
+  "vectors": [
+    {
+      "name": "bundle: the pizza package",
+      "at": "2026-10-02T18:00:00",
+      "basket": {
+        "subtotal": 3650, "deliveryFee": 150, "fulfilment": "delivery",
+        "lines": [
+          { "listingId": "pizza_a", "price": 1200, "qty": 2 },
+          { "listingId": "bread", "price": 250, "qty": 1 },
+          { "listingId": "soda", "price": 250, "qty": 4 }
+        ]
+      },
+      "offers": [{
+        "id": "v1", "type": "bundle", "name": "Family Pizza Night", "status": "live",
+        "bundlePrice": 2999,
+        "items": [{ "listingId": "pizza_a", "qty": 2, "price": 1200 },
+                  { "listingId": "bread", "qty": 1, "price": 250 },
+                  { "listingId": "soda", "qty": 4, "price": 250 }],
+        "schedule": { "days": ["fri"], "from": "17:00", "to": "22:00" }
+      }]
+    },
+    {
+      "name": "percentage scoped to one listing",
+      "at": "2026-10-02T18:00:00",
+      "basket": { "subtotal": 3650, "deliveryFee": 150,
+        "lines": [{ "listingId": "soda", "price": 250, "qty": 4 },
+                  { "listingId": "pizza_a", "price": 1200, "qty": 2 }] },
+      "offers": [{ "id": "v2", "type": "percentage", "percent": 20, "status": "live",
+                   "qualifyingListingIds": ["soda"] }]
+    },
+    {
+      "name": "fixed with a minimum spend that is met",
+      "at": "2026-10-02T18:00:00",
+      "basket": { "subtotal": 3650, "deliveryFee": 150, "lines": [{ "listingId": "a", "price": 3650, "qty": 1 }] },
+      "offers": [{ "id": "v3", "type": "fixed", "amount": 500, "minSpend": 3000, "status": "live" }]
+    },
+    {
+      "name": "fixed with a minimum spend that is NOT met",
+      "at": "2026-10-02T18:00:00",
+      "basket": { "subtotal": 900, "deliveryFee": 150, "lines": [{ "listingId": "a", "price": 900, "qty": 1 }] },
+      "offers": [{ "id": "v4", "type": "fixed", "amount": 500, "minSpend": 3000, "status": "live" }]
+    },
+    {
+      "name": "fixed capped by maxDiscount",
+      "at": "2026-10-02T18:00:00",
+      "basket": { "subtotal": 3650, "deliveryFee": 150, "lines": [{ "listingId": "a", "price": 3650, "qty": 1 }] },
+      "offers": [{ "id": "v5", "type": "fixed", "amount": 900, "maxDiscount": 500, "status": "live" }]
+    },
+    {
+      "name": "buy X get Y, cheapest qualifying item is the free one",
+      "at": "2026-10-02T18:00:00",
+      "basket": { "subtotal": 1500, "deliveryFee": 0,
+        "lines": [{ "listingId": "soda", "price": 250, "qty": 4 },
+                  { "listingId": "juice", "price": 400, "qty": 2 }] },
+      "offers": [{ "id": "v6", "type": "buyXgetY", "buyQty": 2, "getQty": 1, "status": "live",
+                   "qualifyingListingIds": ["soda", "juice"] }]
+    },
+    {
+      "name": "buy X get Y capped by maxFreeItems",
+      "at": "2026-10-02T18:00:00",
+      "basket": { "subtotal": 3000, "deliveryFee": 0,
+        "lines": [{ "listingId": "soda", "price": 250, "qty": 12 }] },
+      "offers": [{ "id": "v7", "type": "buyXgetY", "buyQty": 2, "getQty": 1, "maxFreeItems": 2,
+                   "status": "live", "qualifyingListingIds": ["soda"] }]
+    },
+    {
+      "name": "spend and save",
+      "at": "2026-10-02T18:00:00",
+      "basket": { "subtotal": 5000, "deliveryFee": 150, "lines": [{ "listingId": "a", "price": 5000, "qty": 1 }] },
+      "offers": [{ "id": "v8", "type": "spendAndSave", "minSpend": 3000, "amount": 300, "status": "live" }]
+    },
+    {
+      "name": "free delivery",
+      "at": "2026-10-02T18:00:00",
+      "basket": { "subtotal": 1000, "deliveryFee": 150, "fulfilment": "delivery",
+        "lines": [{ "listingId": "a", "price": 1000, "qty": 1 }] },
+      "offers": [{ "id": "v9", "type": "freeDelivery", "status": "live", "fulfilment": "delivery" }]
+    },
+    {
+      "name": "free delivery does not apply to a pickup basket",
+      "at": "2026-10-02T18:00:00",
+      "basket": { "subtotal": 1000, "deliveryFee": 0, "fulfilment": "pickup",
+        "lines": [{ "listingId": "a", "price": 1000, "qty": 1 }] },
+      "offers": [{ "id": "v10", "type": "freeDelivery", "status": "live", "fulfilment": "delivery" }]
+    },
+    {
+      "name": "free item",
+      "at": "2026-10-02T18:00:00",
+      "basket": { "subtotal": 1450, "deliveryFee": 0,
+        "lines": [{ "listingId": "bread", "price": 250, "qty": 1 },
+                  { "listingId": "pizza_a", "price": 1200, "qty": 1 }] },
+      "offers": [{ "id": "v11", "type": "freeItem", "freeItemId": "bread", "status": "live" }]
+    },
+    {
+      "name": "three stackable offers together",
+      "at": "2026-10-02T18:00:00",
+      "basket": { "subtotal": 3650, "deliveryFee": 150,
+        "lines": [{ "listingId": "pizza_a", "price": 1200, "qty": 2 },
+                  { "listingId": "bread", "price": 250, "qty": 1 },
+                  { "listingId": "soda", "price": 250, "qty": 4 }] },
+      "offers": [
+        { "id": "s1", "type": "bundle", "bundlePrice": 2999, "status": "live", "stacking": "stackable",
+          "items": [{ "listingId": "pizza_a", "qty": 2, "price": 1200 }] },
+        { "id": "s2", "type": "percentage", "percent": 5, "status": "live", "stacking": "stackable" },
+        { "id": "s3", "type": "freeDelivery", "status": "live", "stacking": "stackable" }
+      ]
+    },
+    {
+      "name": "an exclusive offer silences the rest, and the BEST one wins",
+      "at": "2026-10-02T18:00:00",
+      "basket": { "subtotal": 3650, "deliveryFee": 150, "lines": [{ "listingId": "a", "price": 3650, "qty": 1 }] },
+      "offers": [
+        { "id": "x1", "type": "fixed", "amount": 200, "status": "live", "stacking": "exclusive" },
+        { "id": "x2", "type": "fixed", "amount": 700, "status": "live", "stacking": "exclusive" }
+      ]
+    },
+    {
+      "name": "priority orders the applied lines",
+      "at": "2026-10-02T18:00:00",
+      "basket": { "subtotal": 1000, "deliveryFee": 0, "lines": [{ "listingId": "a", "price": 1000, "qty": 1 }] },
+      "offers": [
+        { "id": "p1", "type": "fixed", "amount": 100, "status": "live", "priority": 1 },
+        { "id": "p2", "type": "percentage", "percent": 10, "status": "live", "priority": 9 }
+      ]
+    },
+    {
+      "name": "a Friday offer is not live on a Tuesday",
+      "at": "2026-09-29T11:00:00",
+      "basket": { "subtotal": 3650, "deliveryFee": 150, "lines": [{ "listingId": "a", "price": 3650, "qty": 1 }] },
+      "offers": [{ "id": "t1", "type": "fixed", "amount": 500, "status": "live",
+                   "schedule": { "days": ["fri"], "from": "17:00", "to": "22:00" } }]
+    },
+    {
+      "name": "a window that crosses midnight is live at 23:00",
+      "at": "2026-10-02T23:00:00",
+      "basket": { "subtotal": 1000, "deliveryFee": 0, "lines": [{ "listingId": "a", "price": 1000, "qty": 1 }] },
+      "offers": [{ "id": "t2", "type": "fixed", "amount": 100, "status": "live",
+                   "schedule": { "from": "22:00", "to": "02:00" } }]
+    },
+    {
+      "name": "a malformed window fails closed",
+      "at": "2026-10-02T18:00:00",
+      "basket": { "subtotal": 1000, "deliveryFee": 0, "lines": [{ "listingId": "a", "price": 1000, "qty": 1 }] },
+      "offers": [{ "id": "t3", "type": "fixed", "amount": 100, "status": "live",
+                   "schedule": { "from": "nonsense", "to": "9" } }]
+    },
+    {
+      "name": "an expired offer applies nothing",
+      "at": "2026-10-02T18:00:00",
+      "basket": { "subtotal": 1000, "deliveryFee": 0, "lines": [{ "listingId": "a", "price": 1000, "qty": 1 }] },
+      "offers": [{ "id": "t4", "type": "fixed", "amount": 100, "status": "live",
+                   "endsAt": "2026-09-01T00:00:00" }]
+    },
+    {
+      "name": "a draft offer prices nothing",
+      "at": "2026-10-02T18:00:00",
+      "basket": { "subtotal": 1000, "deliveryFee": 0, "lines": [{ "listingId": "a", "price": 1000, "qty": 1 }] },
+      "offers": [{ "id": "t5", "type": "fixed", "amount": 500, "status": "draft" }]
+    },
+    {
+      "name": "an unknown type is rejected, not guessed at",
+      "at": "2026-10-02T18:00:00",
+      "basket": { "subtotal": 1000, "deliveryFee": 0, "lines": [{ "listingId": "a", "price": 1000, "qty": 1 }] },
+      "offers": [{ "id": "t6", "type": "nonsense", "amount": 500, "status": "live" }]
+    },
+    {
+      "name": "a discount can never exceed the goods value",
+      "at": "2026-10-02T18:00:00",
+      "basket": { "subtotal": 300, "deliveryFee": 150, "lines": [{ "listingId": "a", "price": 300, "qty": 1 }] },
+      "offers": [{ "id": "t7", "type": "fixed", "amount": 5000, "status": "live" }]
+    },
+    {
+      "name": "redemption limits reached: absent counters are unmetered, present ones bind",
+      "at": "2026-10-02T18:00:00",
+      "usage": { "t8": { "totalRedemptions": 500 } },
+      "basket": { "subtotal": 1000, "deliveryFee": 0, "lines": [{ "listingId": "a", "price": 1000, "qty": 1 }] },
+      "offers": [{ "id": "t8", "type": "fixed", "amount": 100, "status": "live",
+                   "totalRedemptionLimit": 500 }]
+    },
+    {
+      "name": "inventory limit not yet reached",
+      "at": "2026-10-02T18:00:00",
+      "usage": { "t9": { "inventorySold": 77 } },
+      "basket": { "subtotal": 1000, "deliveryFee": 0, "lines": [{ "listingId": "a", "price": 1000, "qty": 1 }] },
+      "offers": [{ "id": "t9", "type": "fixed", "amount": 100, "status": "live", "inventoryLimit": 100 }]
+    }
+  ]
+}

@@ -12454,6 +12454,16 @@ exports.promotionPublish = _promos.promotionPublish;
 exports.promotionList    = _promos.promotionList;
 exports.promotionArchive = _promos.promotionArchive;
 
+/* ── MERCHANT OFFERS (Gate P) ────────────────────────────────────────────────
+   A THIRD authority, deliberately distinct from both of the above. `offers` is the admin
+   product price-drop mechanism and `promotions` is admin content plus admin promo codes;
+   neither is merchant-writable, and merchant offers must not be aliased onto either.
+   Authorised by assertShopAccess against the shop, not by rules.
+   See docs/OFFER_PERSISTENCE_ARCHITECTURE.md. */
+const _shopOffers = require("./shop-offers");
+exports.shopOfferUpsert = _shopOffers.shopOfferUpsert;
+exports.shopOfferList   = _shopOffers.shopOfferList;
+
 /* ══════════════════════════════════════════════════════════════
    SMS PLATFORM — templates, idempotent queue, DLQ, preferences,
    delivery reports. Provider stays behind sokoni-at.js.
