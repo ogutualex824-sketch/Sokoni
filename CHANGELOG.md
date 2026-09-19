@@ -1,3 +1,80 @@
+## 2026-09-19 (72) — The price tag that never printed, batch printing, Media Studio, lifecycle
+
+**Regression: 313 assertions across 8 suites, 0 failed.** New: price tag 31/0, media +
+lifecycle 43/0. **Nothing deployed.**
+
+### The price-tag button had never produced a tag
+
+`printPriceTag()` called `PosPrintService.printPriceTag()` — a method that does not exist and
+never has. That service prints **receipts** and the other POS documents (sale, refund, quote,
+invoice, kitchen ticket, delivery note, shift report) and has no label surface at all. The guard
+beneath the call fired on every single press and reported *"the printer service is not loaded on
+this page"*, which was also untrue: the service **was** loaded, it simply cannot print labels.
+
+A control that fails silently and then misreports why is worse than a missing one.
+
+The label authority is `sokoni-label-engine.js` — TSPL, ZPL, ESC/POS and a browser fallback,
+already used by POS. `PosPrintService` is still preferred if it ever grows the method, and the
+suite asserts that premise so it fails loudly rather than drifting.
+
+### Batch printing — because a shelf is not priced one product at a time
+
+`printLabel()` takes an **array**; `printPriceTag()` is merely its one-item wrapper. So a run of
+tags is **one job with N items**, not N jobs — verified in the browser: two products ticked
+produced exactly one `printLabel` call carrying two items.
+
+| | |
+|---|---|
+| tick on each card | its own control, handled **before** the card-body branch, so selecting never also opens |
+| sticky batch bar | appears only once something is ticked, and **names the count** — "Print 2 price tags" |
+| Select all shown | only the **painted** rows. "All" meaning the whole catalogue behind a filter is how someone prints four hundred tags intending to print four |
+| row menu | one product straight from its ⋮ |
+
+Selection lives in view state, never on the record, and is cleared whenever the catalogue
+reloads — a selection that outlived its rows would print a tag for something no longer on screen.
+
+### Media Studio (§10) — measured, not reassuring
+
+The spec sketches "✓ Optimized ✓ Correct aspect ratio ✓ Ready for publishing". The tempting
+build is four ticks that are always green, which a merchant reads as a check that ran. Every line
+is instead a fact this surface can establish: main image present, how many published, how many
+pending with their **real** size read from the `File`.
+
+**Aspect ratio is deliberately not claimed** — measuring it means loading each image and reading
+`naturalWidth`, which a synchronous renderer cannot do, and a ratio guessed from a URL is exactly
+the invented reassurance being avoided. The suite asserts its absence.
+
+Pending photos can be reordered, and only those: the first uploaded becomes the main image.
+Stored photos cannot be — that needs the product writer, and a control that could not save would
+be worse than none.
+
+### Lifecycle (§14) — only the legal moves
+
+Transitions are built from the model's own table, so a button that appears is one
+`canTransition()` accepts: a draft may go to review, live or archived but **not** to paused; an
+archived listing may only return to draft. Asserted across all five states. Publishing is gated
+by `validate()` and refuses with the missing fields **named**. The control performs no write — it
+changes what will be saved, and the certified writer still does the writing.
+
+**Defect caught in the browser:** visibility is active-or-draft, but the lifecycle has five
+states. Writing `paused` into `status` set a value with no matching `<option>`, so the select
+silently showed "active" while the chain read "Paused" — two states disagreeing on screen, the
+exact failure this was meant to avoid. Each state now maps to the visibility it implies, with the
+precise state kept in its own field.
+
+### Three of my own assertions were wrong while the code was right
+
+A quoted-literal match that included the ternary's *condition* rather than its assigned value —
+twice — and a string match that missed a literal carrying its own closing tag. Each fixed in the
+control. The matcher has to read the half it is actually asking about.
+
+### Files
+
+`scripts/test-price-tag-batch.js`, `scripts/test-media-lifecycle.js` (new);
+`sokoni-merchant-products.js`, `sokoni-listing-studio.js`, `sokoni-listing-studio.css`,
+`merchant-v2.html` (modified). No database changes, no API changes, no security changes, no
+breaking changes.
+
 ## 2026-09-19 (71) — Availability as one framework, and variants that speak every trade
 
 **42 assertions, 0 failed** (`scripts/test-availability-view.js`). Regression: **239
