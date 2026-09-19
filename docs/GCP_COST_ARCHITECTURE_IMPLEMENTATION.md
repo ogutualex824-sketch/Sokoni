@@ -13,10 +13,11 @@ no function deployments (the release line is independently blocked).
 | P0-2 Unpin 8 unjustified services | **FAILED — rollback BLOCKED on problem B; 8 services remain Ready=False** |
 | P0-2-INV Registry provenance investigation | **DONE (read-only) — cause UNKNOWABLE, audit logging off** |
 | P0-3 Right-size max instances | **BLOCKED — same root cause** |
-| P0-4 Retire `intasendWebhook` | **BLOCKED on a decision — traffic is 22, not 0** |
+| P0-4 Retire `intasendWebhook` | **BLOCKED x2 — traffic is 22 not 0, AND deletion may be the purge trigger** |
 | P0-5 Least-privilege IAM | separate gate — not started |
 | P0-6 App Check audit | separate gate — not started |
 | P0-7 AR Data Access audit logging | **DONE — ADMIN_READ proven live; DATA_WRITE enabled, unproven** |
+| P0-7-OBS Forensic harness + baseline | **READY — waiting; registry is empty so silence is ambiguous** |
 | P1 Product triggers / 5xx / consolidation | separate gates — not started |
 
 ---
@@ -679,3 +680,121 @@ wrong.
 **P0-7: DONE.** Stopped here as instructed. Not started and not to be started without a separate
 decision: deployment repair, revision creation, revision deletion, min-instance changes,
 max-instance changes, `intasendWebhook` retirement.
+
+---
+
+## P0-7-OBS — observation harness, and a gap in the wait-and-see plan
+
+Read-only. No mutation. Tooling: `scripts/infra/ar-forensics.js` — captures every field required
+for the forensic correlation (timestamp, methodName, serviceName, principalEmail, principalSubject,
+callerIp, user agent, resourceName, status, authorizationInfo) and correlates against Cloud Build,
+Cloud Functions and Cloud Run activity in the same window.
+
+### Baseline — 2026-09-19T05:55Z
+
+```
+us-central1/gcf-artifacts   sizeBytes=0   updateTime=2026-09-15T05:55:28.000377Z   0 images
+us-east1/gcf-artifacts      sizeBytes=0   updateTime=2026-08-23T08:39:24.823079Z   0 images
+last Cloud Build            72739a70  SUCCESS  2026-09-14T00:45:59Z
+newest source object        initiateSTKPush/function-source.zip  2026-09-14T00:45:58Z
+```
+
+### THE GAP — passive waiting can produce silence that proves nothing
+
+**The registry holds zero images. A deletion cannot occur where there is nothing to delete.**
+
+No deploy has run since 2026-09-14. Unless something pushes an image, `DATA_WRITE` will stay empty
+forever, and that emptiness cannot distinguish:
+
+* the removal mechanism has stopped, from
+* there was nothing left for it to remove.
+
+This is the standing "empty result needs a positive control" rule applied to the observation plan
+itself. **A deletion event can only follow a push.** The script says so in its own output rather
+than reporting a clean empty result, so the ambiguity cannot be misread later.
+
+Three ways the window opens, in increasing order of deliberateness:
+
+1. **Another agent deploys.** `CLAUDE.md` records that several AI agents work this repo in parallel
+   worktrees. Any function deploy plants an image and starts the clock. Uncontrolled, but free.
+2. **A canary image pushed directly to `gcf-artifacts`** — no function deployed, no revision
+   created, no application code touched. Plants an artifact and observes whether it is removed.
+   This is the cheapest *controlled* experiment and does not touch the serving path at all.
+3. **A controlled single-function deploy.** Highest fidelity, highest risk — it deploys current
+   repo source, and the release line is independently blocked, so the deployed bytes could diverge
+   from production. Not recommended without choosing the function very carefully.
+
+**None of these were performed.** Option 2 is offered for a decision; it is not authorised and not
+started.
+
+### A LEAD — function deletion as a candidate trigger
+
+The correlation pass surfaced something the earlier investigation missed:
+
+```
+2026-09-14T08:37:46Z / 08:37:49Z   DeleteFunction  validateDarajaCredentials   alexochieng3030@gmail.com
+2026-09-14T08:38:30Z / 08:38:33Z   DeleteFunction  sendTestSTKPush             alexochieng3030@gmail.com
+2026-09-14T08:39:14Z / 08:39:17Z   DeleteFunction  darajaSTKPush               alexochieng3030@gmail.com
+                    ...
+2026-09-15T05:55:28Z               us-central1/gcf-artifacts updateTime
+```
+
+This is the Daraja outbound retirement already on record (1712 → 1709 functions). It is the only
+mutating activity in the window before the registry's `updateTime` moved.
+
+**Why it is plausible:** GCF gen2 packs *several functions into one shared container image* — proven
+independently by the cross-wiring, where `minishoppage` revisions reference `minishop_page`, then
+`on_subscription_changed_sync_limit`, then `rider_profile`. If deleting a function triggers cleanup
+of *its* image, and that image is shared, the cleanup removes an artifact that **other, live
+functions still reference in their specs**. That would produce exactly what we see: serving
+unaffected (Cloud Run holds internal copies), specs unresolvable.
+
+**Why it is not proof:**
+
+* The gap is **~21 hours**, not immediate — consistent with an asynchronous sweeper, but equally
+  consistent with an unrelated scheduled job.
+* A larger deletion batch on **2026-07-11** (30+ functions in ~40 seconds) has no corresponding
+  registry `updateTime`, which the hypothesis does not explain.
+* `us-east1`'s `updateTime` of 2026-08-23 correlates with no deletion at all.
+* The decisive `DeletePackage`/`DeleteVersion` records were never written, because Data Access
+  logging was off until P0-7.
+
+**Status: HYPOTHESIS. Not established.** Recorded so the next event either confirms or kills it.
+
+### CONSEQUENCE FOR P0-4 — the retirement plan may be the trigger
+
+P0-4 retires `intasendWebhook`, and the natural way to retire a function is to **delete** it. If the
+hypothesis holds, deleting a function purges a *shared* image and damages unrelated live functions.
+
+That inverts P0-4 from "harmless cleanup of something serving no successful traffic" into
+"potentially the exact operation that caused this incident". It cannot proceed until the hypothesis
+is settled, independently of the unresolved "22 requests, not 0" question.
+
+**P0-4 now has two blockers, not one.**
+
+### Tooling defect found and fixed
+
+`gcloud`'s `value(updateTime)` renders in **local** time while `.date()` transforms render again —
+the same field printed `05:55:28` and `08:55:28` in two invocations during this session. Forensics
+correlates against UTC log timestamps, so a silent 3-hour skew would have wrecked the timeline. The
+script now parses raw RFC3339 JSON and labels it `(UTC, raw)`.
+
+The harness also **fails closed**: a `gcloud` invocation error prints `QUERY FAILED — this is not
+the same as "no events"`. This was not theoretical — the first two runs failed on Windows
+`.cmd` spawn semantics and reported the failure instead of an empty, green-looking result.
+
+### Usage
+
+```
+node scripts/infra/ar-forensics.js        # last 7 days
+node scripts/infra/ar-forensics.js 30d    # explicit window
+```
+
+Run it when a disappearance is suspected, or after any deploy, to catch the push and the subsequent
+removal in one window. Our own audit reads are tagged in the output so this session's 138
+`ListRepositories` calls are not mistaken for the mechanism.
+
+### Status
+
+**P0-7-OBS: harness ready, baseline recorded, waiting.** No production mutation. The 12 pinned
+services stay untouched by decision, not by oversight.
