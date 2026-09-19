@@ -1,3 +1,73 @@
+## 2026-09-20 (83) — BUYER PROFILE: every image path through Storage, and Back that works
+
+**171/0 across four certifications · sabotage cycles red on each · profile regressions green.**
+
+Four independently certified repairs to the buyer Profile, each proven behaviourally by
+extracting the shipped function and executing it against stubs rather than matching source.
+
+### Files affected
+- `profile.html` — cover upload, Edit Profile photo staging, tab history, completion routing
+- `sokoni-avatar.js` — `uploadCover()` added; `_downscale` gains an optional edge
+- `scripts/test-profile-cover-upload.js` · `test-profile-inline-edit-photos.js` ·
+  `test-profile-tab-history.js` · `test-profile-completion-routing.js` (new)
+
+### Database changes
+None. ### API changes None, and **no function deploy**. ### Storage rules unchanged —
+`profile-avatars/{uid}/{filename}` already matches a wildcard filename.
+
+### 1. Cover upload was the unrepaired twin of the avatar bug (72/0)
+`handleCoverUpload` read the file with `FileReader.readAsDataURL` and wrote the base64 into
+`users/{uid}.coverUrl`. A Firestore document caps at 1 MiB and base64 inflates ~1.37x, so any
+real photo failed the write — and `saveToFirestore` only console.warns, so the toast claimed
+success and the cover was gone on reload. It now uploads through Storage, commits only on
+resolve, rolls back the previous cover on failure, revokes the object URL and resets the input.
+
+`SokoniAvatar.upload()` could not be reused: it writes `avatar_*.jpg`, sets `avatarUrl` **and**
+`photoURL`, updates the Auth profile and broadcasts — pointing it at a cover would replace the
+user's avatar with their banner. `uploadCover()` shares the validation, downscale and Storage
+plumbing, writes `cover_*.jpg`, and persists **only** `coverUrl`.
+
+### 2. The Edit Profile form was a third base64 write path (41/0)
+`_ieBindPhoto` staged data URLs into `_ieAvatarData`/`_ieCoverData`, and Save wrote them into
+the user document for **both** images. It now stages the FILE, uploads before anything
+persists, and aborts the whole save on upload failure — previous images intact, no false
+success, and the edit rate-limit quota is not consumed by a write that never landed.
+`_ieReadImage` was removed: leaving a base64 image reader in the file is how this defect
+spread from the avatar path to the cover path in the first place.
+
+### 3. Defaults are visual, never data
+No avatar → `/assets/logosokoni.png` (the basket mark, legible on any surface). No cover →
+the SOKONI wordmark `/assets/Sokoni Logo.jpeg` on black, `contain`. The backdrop is not a free
+choice: that JPEG has no transparency, so its black field is part of the image and any other
+colour shows as a rectangle around the logo. Neither default is ever written to
+`avatarUrl`/`coverUrl` or sent to Firestore. The suite now also asserts the referenced asset
+**exists** and is committed with **exactly** that case — Hosting is case-sensitive while the
+development filesystem is not.
+
+### 4. Mobile Back left the Profile entirely (35/0)
+`switchTab()` toggled CSS classes and nothing else. The hash→tab direction existed; tab→hash
+did not, so no history entry was created, Back exited the page instead of stepping through
+tabs, and a tab could not be linked or reloaded into. `switchTab` now writes the hash (guarded
+so the hash listener cannot re-enter it, and so re-selecting the active tab adds no duplicate
+entry), and an **empty** hash restores the default tab — without which Back from the first tab
+cleared the URL while the page still showed that tab.
+
+### 5. The address completion step pointed nowhere useful (23/0)
+"Add physical address" routed to `account-centre.html`, which has no address field. The server
+marks the step done when `user.address || user.location || verif.addressVerified` is set, and
+`location` is edited in this page's own inline editor — so the step now routes to `'#edit'`,
+the sentinel the renderer special-cases into `toggleInlineEdit()`. All 16 other destinations
+are unchanged.
+
+### Known and deliberately not addressed
+There is **no buyer address book** anywhere: no addresses collection in `firestore.rules`, no
+saved-address UI, and checkout collects a free-text address per order. `user.address` is read
+by `profile-engine.js` and written by nothing. Both are product/architecture questions, not
+repairs.
+
+### Breaking changes
+None.
+
 ## 2026-09-19 (75) — GATE P IMPLEMENTATION: the merchant offer authority
 
 **58/0 against real Firestore · 35/0 engine parity.** Design gate preserved (64/0 + 35/0),
