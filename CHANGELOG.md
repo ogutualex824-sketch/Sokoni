@@ -1,3 +1,79 @@
+## 2026-09-19 (73) — Price vocabulary, business context, and a schema drift that made the Studio invisible
+
+**Regression: 354 assertions across 9 suites, 0 failed.** New: price vocabulary 41/0.
+**Nothing deployed.**
+
+### The Studio's fields were invisible to the marketplace
+
+The Listing Studio writes type-specific values into `attributes` — where the universal listing
+model puts them — but the card and the listing page read them at **top level**. A merchant could
+describe a room in full, fill in guests, beds, check-in and amenities, and have the marketplace
+show none of it. Nothing errored. The fields simply were not there to read.
+
+Both surfaces now read wherever the value lives, top level winning when both exist. 42 field reads
+on the listing page and every type field on the card go through one helper each, and the suite
+asserts that **no type field is read bare** — so the two schemas cannot drift apart silently again.
+
+```
+studio room   2 guests · 1 bed · Only 3 left · Nairobi     (attributes)
+legacy room   4 guests · 2 beds · Nairobi                  (top level)
+```
+
+### Price vocabulary (§5)
+
+KES 12,500 is a different promise for a room than for a kettle. The unit belongs to the type
+authority, so the card and the listing page cannot disagree:
+
+```
+Kettle             KES 2,500
+Deluxe King        KES 12,500 / night
+Rooms (a range)    From KES 12,500 / night
+Full Car Service   KES 6,500
+Tent               KES 3,000 / day
+```
+
+**"From" is earned.** The spec writes "From KES 12,500 / night" and the tempting build prints
+"From" on every listing of that type. On a single fixed price that implies a cheaper option that
+does not exist, so it appears only when variants genuinely differ — and the figure quoted is the
+lowest that actually exists. Variants with no price are ignored rather than dragging the quote to
+zero. **A service gets no invented unit**: it is priced per job unless the merchant says
+otherwise, and "/ hour" would be a claim about billing nobody made.
+
+### Business context (§4)
+
+The spec's point is that business context and listing type are *separate*. The type picker answers
+"what is this"; this answers "whose is it" — a merchant with several workspaces who has just
+switched must see which one they are in before typing forty fields into the wrong shop.
+
+**It shows, it does not switch.** The shell already owns workspace switching and reloads
+deliberately, because a dozen modules assume one shop for their lifetime. A second switcher would
+duplicate that or, worse, appear to switch without doing it.
+
+```
+Listing goes to  KASS Restaurant
+                 Switch business from the shop menu at the top
+
+Listing goes to  No shop resolved — this cannot be saved yet
+```
+
+### A timezone defect the browser caught
+
+`"2026-10-24"` parses as UTC midnight, which in Nairobi (+3) renders as **03:00** — so a
+local-midnight test printed "24 OCT · 3:00" for an event whose start time nobody had entered. The
+*string* says whether a time was given; the parsed `Date` cannot.
+
+```
+2026-10-24T10:00:00  →  24 OCT · 10:00
+2026-10-24           →  24 OCT
+next friday          →  next friday
+```
+
+### Files
+
+`scripts/test-price-vocabulary.js` (new); `sokoni-listing-types.js`, `script.js`, `product.js`,
+`sokoni-merchant-products.js` (modified). No database changes, no API changes, no security
+changes, no breaking changes.
+
 ## 2026-09-19 (72) — The price tag that never printed, batch printing, Media Studio, lifecycle
 
 **Regression: 313 assertions across 8 suites, 0 failed.** New: price tag 31/0, media +
