@@ -1,0 +1,107 @@
+[
+  {
+    "amount": {
+      "specifiedAmount": {
+        "currencyCode": "USD",
+        "units": "10"
+      }
+    },
+    "budgetFilter": {
+      "calendarPeriod": "MONTH",
+      "creditTypesTreatment": "INCLUDE_ALL_CREDITS",
+      "projects": [
+        "projects/24799054989"
+      ]
+    },
+    "displayName": "Firebase Project sokoni-aeb26",
+    "etag": "1781996768346703",
+    "name": "billingAccounts/016742-7E2122-8406F7/budgets/32c19d43-e2ee-418f-afbb-7dc44b4aabd4",
+    "notificationsRule": {},
+    "ownershipScope": "BILLING_ACCOUNT",
+    "thresholdRules": [
+      {
+        "spendBasis": "CURRENT_SPEND",
+        "thresholdPercent": 0.5
+      },
+      {
+        "spendBasis": "CURRENT_SPEND",
+        "thresholdPercent": 0.9
+      },
+      {
+        "spendBasis": "CURRENT_SPEND",
+        "thresholdPercent": 1.0
+      }
+    ]
+  },
+  {
+    "amount": {
+      "specifiedAmount": {
+        "currencyCode": "USD",
+        "units": "75"
+      }
+    },
+    "budgetFilter": {
+      "calendarPeriod": "MONTH",
+      "creditTypesTreatment": "INCLUDE_ALL_CREDITS",
+      "services": [
+        "services/F17B-412E-CB64"
+      ]
+    },
+    "displayName": "App engine alert",
+    "etag": "1789133405255967",
+    "name": "billingAccounts/016742-7E2122-8406F7/budgets/441c3f30-97cc-456a-9e4f-362850cdd278",
+    "notificationsRule": {},
+    "thresholdRules": [
+      {
+        "spendBasis": "CURRENT_SPEND",
+        "thresholdPercent": 0.5
+      },
+      {
+        "spendBasis": "CURRENT_SPEND",
+        "thresholdPercent": 0.9
+      },
+      {
+        "spendBasis": "CURRENT_SPEND",
+        "thresholdPercent": 1.0
+      }
+    ]
+  },
+  {
+    "amount": {
+      "specifiedAmount": {
+        "currencyCode": "USD",
+        "units": "200"
+      }
+    },
+    "budgetFilter": {
+      "calendarPeriod": "MONTH",
+      "creditTypesTreatment": "INCLUDE_ALL_CREDITS"
+    },
+    "displayName": "Overall alert",
+    "etag": "1789794180004335",
+    "name": "billingAccounts/016742-7E2122-8406F7/budgets/b1451494-8123-4d9b-a57b-17b8193eec77",
+    "notificationsRule": {
+      "monitoringNotificationChannels": [
+        "projects/sokoni-aeb26/notificationChannels/3052073155470197456"
+      ]
+    },
+    "thresholdRules": [
+      {
+        "spendBasis": "CURRENT_SPEND",
+        "thresholdPercent": 0.5
+      },
+      {
+        "spendBasis": "CURRENT_SPEND",
+        "thresholdPercent": 0.9
+      },
+      {
+        "spendBasis": "CURRENT_SPEND",
+        "thresholdPercent": 1.0
+      },
+      {
+        "spendBasis": "CURRENT_SPEND",
+        "thresholdPercent": 0.75
+      }
+    ]
+  }
+]

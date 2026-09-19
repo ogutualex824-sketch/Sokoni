@@ -10,6 +10,7 @@ no function deployments (the release line is independently blocked).
 | Slice | Status |
 |---|---|
 | P0-1 Billing export + budget alerting | **BLOCKED — export has NO API; one Console action by the owner remains** |
+| P0-1A Budget notification wiring | **PASS — all 3 budgets now reach the ops channel** |
 | P0-2 Unpin 8 unjustified services | **FROZEN** — failed; rollback blocked on problem B; 8 services Ready=False |
 | P0-2-INV Registry provenance investigation | **DONE (read-only) — cause UNKNOWABLE, audit logging off** |
 | P0-3 Right-size max instances | **FROZEN** — same root cause |
@@ -1086,3 +1087,118 @@ Both are outside "perform only the remaining Console step", so no mutation was m
 
 **P0-1: BLOCKED — awaiting one Console action by the owner.** Everything programmatically possible
 in this slice is done. No further automated work on P0-1 is available.
+
+---
+
+## P0-1A — Budget notification wiring. **PASS.**
+
+Two mutations, both on notification configuration only. The BigQuery export remains untouched and
+still blocked on the Console.
+
+### Was it a patch or a replace?
+
+Checked before mutating, because the instruction was to stop if the API replaces whole objects.
+
+* `gcloud billing budgets update` derives an update mask from the flags supplied; only
+  `notificationsRule` was supplied.
+* The flag's own documentation: *"Targets to send notifications to when a threshold is exceeded.
+  **This is in addition to default recipients** who have billing account roles."*
+* Empirically, the earlier `$200` update via this same flag preserved its amount and all four
+  thresholds.
+
+Confirmed by outcome: after each mutation the amount, thresholds, filter and default IAM recipients
+were byte-identical. **It patches. No budget object was replaced.**
+
+### BEFORE
+
+| Budget | ID | Amount | Thresholds | `notificationsRule` | Filter |
+|---|---|---|---|---|---|
+| Firebase Project sokoni-aeb26 | `32c19d43…` | USD 10 | 0.5 / 0.9 / 1.0 | **`{}` — no channel** | project `24799054989` |
+| App engine alert | `441c3f30…` | USD 75 | 0.5 / 0.9 / 1.0 | **`{}` — no channel** | service `F17B-412E-CB64` |
+| Overall alert | `b1451494…` | USD 200 | 0.5 / 0.9 / 1.0 / 0.75 | ops channel present | all |
+
+Confirmed that **only** the $10 and $75 budgets were missing the channel.
+
+### MUTATIONS — two, one at a time, verified between
+
+```
+1. gcloud billing budgets update 32c19d43-e2ee-418f-afbb-7dc44b4aabd4 \
+     --billing-account=016742-7E2122-8406F7 \
+     --notifications-rule-monitoring-notification-channels=\
+       projects/sokoni-aeb26/notificationChannels/3052073155470197456     exit=0
+
+   [verified before proceeding: USD 10, [0.5,0.9,1], filter intact, defaultIam on]
+
+2. gcloud billing budgets update 441c3f30-97cc-456a-9e4f-362850cdd278 \
+     --billing-account=016742-7E2122-8406F7 \
+     --notifications-rule-monitoring-notification-channels=\
+       projects/sokoni-aeb26/notificationChannels/3052073155470197456     exit=0
+```
+
+No new notification channel was created; the existing ops channel was reused.
+
+### AFTER
+
+```
+- Firebase Project sokoni-aeb26  USD   10  thresholds=[0.5,0.9,1]       ops-channel=YES  defaultIam=on
+- App engine alert               USD   75  thresholds=[0.5,0.9,1]       ops-channel=YES  defaultIam=on
+- Overall alert                  USD  200  thresholds=[0.5,0.9,1,0.75]  ops-channel=YES  defaultIam=on
+```
+
+### Verification
+
+| Check | Result |
+|---|---|
+| $10 amount / thresholds unchanged | **PASS** — USD 10, [0.5, 0.9, 1.0] |
+| $10 ops channel present | **PASS** |
+| $75 amount / thresholds unchanged | **PASS** — USD 75, [0.5, 0.9, 1.0] |
+| $75 ops channel present | **PASS** |
+| $200 unchanged | **PASS** — USD 200, four thresholds, channel intact |
+| Default IAM recipients still enabled | **PASS** on all three — the channel is additive, not a replacement |
+| Budget filters unchanged | **PASS** — project and service scopes intact |
+| Billing export | **unchanged and still unconfigured** — `billing_export` holds zero tables |
+| Cloud Run revisions created | **none** |
+| Function deployed | **none** |
+| Traffic changed | **none** |
+| Cloud Build | unchanged — `72739a70…` |
+| Artifact Registry | unchanged |
+| Canary | **intact** — `sha256:88f338d3…`, tag `20260919T060552Z` |
+| Forensic baseline | **CLEAN** — 1,709 functions, no drift |
+| IAM / App Check / rules / application code | untouched |
+| Payment, POS, order, booking | untouched |
+
+### What this actually fixes
+
+All three budgets previously notified only *default IAM recipients* — billing-account
+administrators. That is exactly the failure mode the audit already ran into: budgets were firing
+and nobody saw them, which is why they read as absent. Now every threshold on every budget reaches
+the ops channel.
+
+**Expect alerts, possibly immediately.** The $10 project budget trips at $5. Against the audit's
+$100–765 estimate it is certainly already over every threshold. That noise is the intended
+consequence of making the alerts visible, not a regression.
+
+### Deliberately NOT changed
+
+**The $10 budget amount stays at $10.** It is noisy today, but it is a useful early-warning floor
+once a real baseline exists, and recalibrating it now would mean guessing. Thresholds get re-based
+from actual billing data after the export lands — not before.
+
+### Rollback
+
+```
+gcloud billing budgets update 32c19d43-e2ee-418f-afbb-7dc44b4aabd4 \
+  --billing-account=016742-7E2122-8406F7 --clear-notifications-rule
+gcloud billing budgets update 441c3f30-97cc-456a-9e4f-362850cdd278 \
+  --billing-account=016742-7E2122-8406F7 --clear-notifications-rule
+```
+
+Note this clears the whole `notificationsRule`, returning each to `{}` — which is exactly the
+recorded before-state for these two. Do **not** run it against `b1451494…`, whose rule predates
+this slice.
+
+Complete pre-change budget objects, including etags, are preserved in the slice working notes.
+
+### Status
+
+**P0-1A: PASS.** P0-1's export step remains BLOCKED on the Console. No frozen work started.
