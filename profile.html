@@ -3370,8 +3370,13 @@ function renderHeaderCard(){
     if(coverImg){ coverImg.src=_user.coverUrl; coverImg.style.display='block'; coverImg.style.objectFit='cover'; }
     if(coverArea){ coverArea.style.background=''; }
   } else {
+    /* NO CUSTOM COVER — the canonical SOKONI mark on white. Same asset the avatar falls
+       back to (/assets/logosokoni.png), so a buyer account shows one logo, not two
+       different ones. It is purely a VISUAL fallback: it is never written to
+       _user.coverUrl and never persisted, so "no cover" stays distinguishable from
+       "cover set to the logo". */
     if(coverImg){ coverImg.style.display='none'; }
-    if(coverArea){ coverArea.style.background = "#050505 url('/assets/Sokoni%20Logo.png') center/auto 62% no-repeat"; }
+    if(coverArea){ coverArea.style.background = COVER_DEFAULT_BG; }
   }
 
   /* Verified */
@@ -3537,22 +3542,76 @@ function handleAvatarUpload(e){
   });
 }
 
-/* Cover upload */
+/* The buyer cover's default visual: the SOKONI wordmark on the brand's deep-green
+   gradient — the same gradient .up-cover already uses, so the default reads as a designed
+   cover rather than a placeholder panel.
+
+   THE BACKGROUND IS NOT A FREE CHOICE. `Sokoni Logo.jpeg` is a JPEG, so it has no
+   transparency — its BLACK field is baked into the image. The backdrop is therefore black
+   to match: any other colour would show as a visible rectangle around the logo. `contain`
+   keeps the whole wordmark visible in a short, wide cover strip instead of cropping it.
+
+   (The .png of the same wordmark renders "SOKO" in white and needs a dark backdrop too;
+   the basket-only mark, /assets/logosokoni.png, is the one that works on a light surface,
+   which is why the AVATAR falls back to that file instead.)
+
+   Declared once so the render path and the upload rollback cannot drift to different
+   fallbacks. The space in the filename is URL-encoded; the file is committed as
+   `assets/Sokoni Logo.jpeg` with exactly that case, which matters because Hosting is
+   case-sensitive even though this filesystem is not. */
+var COVER_DEFAULT_BG = "#000000 url('/assets/Sokoni%20Logo.jpeg') center/contain no-repeat";
+
+/* Cover upload — the same contract as the avatar above, and for the same reason.
+
+   This read the file with FileReader.readAsDataURL and wrote the base64 into
+   users/{uid}.coverUrl. Firestore caps a document at 1 MiB and base64 inflates by ~1.37x,
+   so any cover over ~730 KB — a phone photo — failed the write. saveToFirestore only
+   console.warns, so the toast claimed success and the cover was gone on reload.
+
+   The preview shows immediately but is NOT committed to _user until the upload resolves,
+   so a failure cannot leave a dead URL in local state. */
 function handleCoverUpload(e){
   var file = e.target.files && e.target.files[0];
   if(!file) return;
-  var reader = new FileReader();
-  reader.onload = function(ev){
-    var url = ev.target.result;
-    var img = document.getElementById('upCoverImg');
-    img.src = url;
-    img.style.display = 'block';
+  var img      = document.getElementById('upCoverImg');
+  var area     = document.getElementById('upCoverArea');
+  /* The AREA's background carries the default-logo state, so restoring the <img> alone
+     would leave a buyer who had no cover looking at a blank panel after a failure. Both
+     are captured, and both are restored. */
+  var previous = img ? { src: img.src, display: img.style.display } : null;
+  var prevBg   = area ? area.style.background : null;
+  var preview  = null;
+  try {
+    preview = URL.createObjectURL(file);
+    if(img){ img.src = preview; img.style.display = 'block'; }
+    /* Clear the default while the candidate is previewed, so the chosen image is not
+       composited over the SOKONI mark. The catch below puts it back exactly. */
+    if(area){ area.style.background = ''; }
+  }catch(_){}
+
+  upToast('Uploading cover…', true);
+  window.SokoniAvatar.uploadCover(file).then(function(url){
+    if(img){ img.src = url; img.style.display = 'block'; }
+    /* The custom cover replaces the default, exactly as the render path does. */
+    if(area){ area.style.background = ''; }
     _user.coverUrl = url;
     setUser(_user);
-    saveToFirestore({coverUrl: url});
     upToast('Cover photo updated!', true);
-  };
-  reader.readAsDataURL(file);
+  }).catch(function(err){
+    /* Roll back to whatever was there before — including "no cover at all", which is why
+       the display state and the area background are restored, not just the src. A buyer
+       with no previous cover lands back on white + the SOKONI mark, never a blank panel
+       and never a dead blob URL. */
+    if(img && previous){ img.src = previous.src; img.style.display = previous.display; }
+    /* Restored EXACTLY, not with `prevBg || COVER_DEFAULT_BG`: a buyer who already has a
+       custom cover has an empty background string, and `||` would read that legitimate
+       empty value as "absent" and paint the default logo over their cover. */
+    if(area){ area.style.background = prevBg; }
+    upToast(err && err.message ? err.message : 'Could not update cover photo.', false);
+  }).then(function(){
+    try { if(preview) URL.revokeObjectURL(preview); }catch(_){}
+    if(e.target) e.target.value = '';           /* re-selecting the same file must re-fire */
+  });
 }
 
 /* Inline edit form */
@@ -3570,7 +3629,8 @@ function toggleInlineEdit(){
     var bio = document.getElementById('ieBioInput');
     if(bio){ bio.value = _user.bio || ''; var bc=document.getElementById('ieBioCount'); if(bc) bc.textContent = bio.value.length; }
     /* Staged photos live here until Save, so Cancel discards them. */
-    _ieAvatarData = null; _ieCoverData = null;
+    _ieAvatarFile = null; _ieCoverFile = null;
+    _ieAvatarUrl  = null; _ieCoverUrl  = null;
     ['ieAvatarInput','ieCoverInput'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
     var ap=document.getElementById('ieAvatarPreview'), cp=document.getElementById('ieCoverPreview');
     if(ap){ if(_user.avatarUrl){ ap.src=_user.avatarUrl; ap.style.display='block'; } else ap.style.display='none'; }
@@ -3585,50 +3645,57 @@ function toggleInlineEdit(){
 }
 
 /* Staged (unsaved) photo data URLs. */
-var _ieAvatarData = null, _ieCoverData = null;
+/* The STAGED FILES (awaiting upload) and the URLs Storage returned for them. Image
+   bytes never live in either: that was the defect. */
+var _ieAvatarFile = null, _ieCoverFile = null;
+var _ieAvatarUrl  = null, _ieCoverUrl  = null;
 
 /* Downscale before storing. These are written into the users doc, and Firestore caps a
    document at 1 MiB — a raw phone photo is several MB and the write would simply fail.
    Canvas re-encode keeps avatars/covers a few tens of KB. */
-function _ieReadImage(file, maxW, cb){
-  if(!file){ cb(null); return; }
-  if(!/^image\//.test(file.type)){ upToast('That file is not an image', false); cb(null); return; }
-  var fr = new FileReader();
-  fr.onload = function(){
-    var img = new Image();
-    img.onload = function(){
-      var scale = Math.min(1, maxW / (img.width || maxW));
-      var w = Math.max(1, Math.round(img.width * scale));
-      var h = Math.max(1, Math.round(img.height * scale));
-      var c = document.createElement('canvas'); c.width = w; c.height = h;
-      c.getContext('2d').drawImage(img, 0, 0, w, h);
-      try { cb(c.toDataURL('image/jpeg', 0.82)); }
-      catch(e){ upToast('Could not process that image', false); cb(null); }
-    };
-    img.onerror = function(){ upToast('Could not read that image', false); cb(null); };
-    img.src = fr.result;
-  };
-  fr.onerror = function(){ upToast('Could not read that file', false); cb(null); };
-  fr.readAsDataURL(file);
-}
+/* `_ieReadImage` was removed with this repair. It existed only to turn a chosen file into
+   a base64 data URL for the Edit Profile form to stage and Save to write into the user
+   document — the defect itself. Its last caller is gone, and leaving a base64 image reader
+   in the file is how this defect spread from the avatar path to the cover path in the
+   first place. Downscaling now happens inside the Storage pipeline (`_downscale` in
+   sokoni-avatar.js), which is the one place that should own it. */
 
+/* Stages the FILE, not its bytes.
+
+   This used to hand `_ieReadImage` a data URL and stage that, so Save wrote base64 into
+   users/{uid}.avatarUrl / .coverUrl — the same 1 MiB-document defect the avatar and cover
+   upload handlers were repaired for, still live on the Edit Profile form. The preview is
+   still local and immediate; what changes is that the FILE is kept for Save to upload
+   through Cloud Storage, and nothing image-shaped ever reaches the user document. */
 function _ieBindPhoto(inputId, previewId, maxW, assign){
   var input = document.getElementById(inputId);
   if(!input || input._ieBound) return;
   input._ieBound = true;
   input.addEventListener('change', function(){
-    _ieReadImage(input.files && input.files[0], maxW, function(dataUrl){
-      if(!dataUrl){ input.value=''; return; }
-      assign(dataUrl);
-      var pv = document.getElementById(previewId);
-      if(pv){ pv.src = dataUrl; pv.style.display = 'block'; }
-    });
+    var file = input.files && input.files[0];
+    if(!file){ assign(null); return; }
+    if(!/^image\//.test(file.type)){
+      upToast('That file is not an image', false);
+      input.value = ''; assign(null); return;
+    }
+    assign(file);
+    /* Preview only — an object URL, never persisted, revoked when the previous one is
+       replaced so a long editing session does not leak them. */
+    var pv = document.getElementById(previewId);
+    if(pv){
+      try {
+        if(pv._ieObjUrl){ URL.revokeObjectURL(pv._ieObjUrl); }
+        pv._ieObjUrl = URL.createObjectURL(file);
+        pv.src = pv._ieObjUrl;
+        pv.style.display = 'block';
+      }catch(_){}
+    }
   });
 }
 
 document.addEventListener('DOMContentLoaded', function(){
-  _ieBindPhoto('ieAvatarInput','ieAvatarPreview', 256, function(d){ _ieAvatarData = d; });
-  _ieBindPhoto('ieCoverInput','ieCoverPreview', 900, function(d){ _ieCoverData = d; });
+  _ieBindPhoto('ieAvatarInput','ieAvatarPreview', 256, function(f){ _ieAvatarFile = f; });
+  _ieBindPhoto('ieCoverInput','ieCoverPreview', 900, function(f){ _ieCoverFile = f; });
   var bio = document.getElementById('ieBioInput');
   if(bio) bio.addEventListener('input', function(){
     var bc = document.getElementById('ieBioCount'); if(bc) bc.textContent = bio.value.length;
@@ -3693,6 +3760,29 @@ function saveInlineEdit(){
     return;
   }
 
+  /* ── STAGED IMAGES GO TO STORAGE FIRST ────────────────────────────────────────────
+     Nothing is persisted until every staged image has a URL. An upload failure aborts
+     the save entirely: the previous avatar/cover stay exactly as they were, the editor
+     keeps the typed values, and the rate-limit gate is NOT consumed — the edit is only
+     spent by a write that actually lands. */
+  if(_ieAvatarFile || _ieCoverFile){
+    var jobs = [];
+    if(_ieAvatarFile) jobs.push(window.SokoniAvatar.upload(_ieAvatarFile)
+      .then(function(u){ _ieAvatarUrl = u; }));
+    if(_ieCoverFile)  jobs.push(window.SokoniAvatar.uploadCover(_ieCoverFile)
+      .then(function(u){ _ieCoverUrl = u; }));
+    upToast('Uploading photo…', true);
+    Promise.all(jobs).then(function(){
+      _ieAvatarFile = null; _ieCoverFile = null;
+      saveInlineEdit();                       /* re-enter with URLs, nothing left to upload */
+    }).catch(function(err){
+      _ieAvatarUrl = null; _ieCoverUrl = null;
+      _ieAvatarFile = null; _ieCoverFile = null;
+      upToast(err && err.message ? err.message : 'Could not upload the photo.', false);
+    });
+    return;
+  }
+
   _user.name = name;
   _user.username = username || slugify(name);
   /* phone deliberately NOT written — the field is read-only, and persisting it here only
@@ -3700,8 +3790,9 @@ function saveInlineEdit(){
   if(location) _user.location = location;
   if(till) _user.tillNumber = till; else delete _user.tillNumber;
   _user.bio = bio;
-  if(_ieAvatarData) _user.avatarUrl = _ieAvatarData;
-  if(_ieCoverData)  _user.coverUrl  = _ieCoverData;
+  /* URLs from Storage — never image bytes. */
+  if(_ieAvatarUrl) _user.avatarUrl = _ieAvatarUrl;
+  if(_ieCoverUrl)  _user.coverUrl  = _ieCoverUrl;
   _user.updatedAt = new Date().toISOString();
   setUser(_user);
 
@@ -3716,14 +3807,15 @@ function saveInlineEdit(){
                  profileEditCount: gate.nextCount,
                  profileEditWindowStart: gate.nextStart,
                  profileEditWindowStartMs: gate.nextStartMs};
-  if(_ieAvatarData) payload.avatarUrl = _ieAvatarData;
-  if(_ieCoverData)  payload.coverUrl  = _ieCoverData;
+  /* URLs returned by Storage — never image bytes. */
+  if(_ieAvatarUrl) payload.avatarUrl = _ieAvatarUrl;
+  if(_ieCoverUrl)  payload.coverUrl  = _ieCoverUrl;
   /* Optimistic local update already happened (setUser above), so the UI reflects
      the edit immediately and the editor can close. But the toast now waits for the
      ACTUAL server result — a false "Saved!" over a write that App Check denied is
      what made the edit silently vanish on refresh. On failure we say so and keep
      the editor's values in localStorage so nothing is lost before a retry. */
-  _ieAvatarData = null; _ieCoverData = null;
+  _ieAvatarUrl = null; _ieCoverUrl = null;
   renderHeaderCard();
   toggleInlineEdit();
   upToast('Saving…', true);
@@ -3787,19 +3879,37 @@ function switchRole(roleKey){
 /* ══════════════════════════════════════════════════════════════
    TABS
 ══════════════════════════════════════════════════════════════ */
-function switchTab(tabKey){
+/* `_fromHash` is set only when the hash listener drove this call. A user-initiated switch
+   writes the hash, which is what creates the browser-history entry; the write is skipped
+   when we are already responding to a hash change, so switchTab -> hashchange -> switchTab
+   cannot loop. Assigning location.hash (rather than pushState) keeps the existing
+   hash-as-authority contract: _openTabFromHash stays the one thing that renders from a URL. */
+function switchTab(tabKey, _fromHash){
   document.querySelectorAll('.up-tab').forEach(function(b){
     b.classList.toggle('active', b.dataset.tab === tabKey);
   });
   document.querySelectorAll('.up-panel').forEach(function(p){
     p.classList.toggle('active', p.id === 'panel-'+tabKey);
   });
+
+  /* HISTORY. Without this, switching tabs changed nothing in the URL, so mobile Back left
+     the profile entirely instead of stepping back through the tabs, and a tab could not be
+     linked or reloaded into. Re-selecting the active tab writes nothing, so it cannot stack
+     duplicate entries. */
+  if(!_fromHash){
+    var target = '#' + tabKey;
+    if(location.hash !== target) location.hash = target;
+  }
 }
 
-/* Open a tab from the URL hash (e.g. profile.html#orders) and keep it in sync */
+/* Open a tab from the URL hash (e.g. profile.html#orders) and keep it in sync.
+   An EMPTY hash means the bare profile URL — the state before any tab was chosen — so it
+   restores the default tab. Without that, pressing Back from the first tab cleared the
+   hash while the page went on showing that tab. */
+var _DEFAULT_TAB = 'overview';
 function _openTabFromHash(){
-  var key = (location.hash || '').replace(/^#/, '');
-  if(key && document.getElementById('panel-'+key)) switchTab(key);
+  var key = (location.hash || '').replace(/^#/, '') || _DEFAULT_TAB;
+  if(document.getElementById('panel-'+key)) switchTab(key, true);
 }
 window.addEventListener('hashchange', _openTabFromHash);
 
@@ -4935,7 +5045,15 @@ window.logoutUser = logoutUser;
         identity:'account-centre.html#verification', bank:'account-centre.html#verification',
         kra:'account-centre.html#verification', business:'account-centre.html#verification',
         merchant:'account-centre.html#verification', legal:'account-centre.html#legal',
-        address:'account-centre.html', role:'#edit',
+        /* The server marks this step done when `user.address || user.location ||
+           verif.addressVerified` is set (functions/profile-engine.js), and `location` is
+           edited in THIS page's inline editor — the same field `location:'#edit'` above
+           points at. It used to send the buyer to account-centre.html, which has no
+           address field at all, so the one actionable link for this step led somewhere
+           that could not satisfy it. '#edit' is the sentinel the renderer special-cases
+           into toggleInlineEdit(); a literal 'profile.html#edit' would render a plain
+           anchor and navigate without opening the editor. */
+        address:'#edit', role:'#edit',
         skills:'professional-profile.html', cert:'professional-profile.html',
       };
 

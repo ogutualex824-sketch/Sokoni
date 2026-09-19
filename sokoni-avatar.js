@@ -97,7 +97,11 @@
      Keeps the upload small and fast. If the browser cannot decode the
      format (iOS HEIC is the usual one), fall back to the original file
      rather than failing the upload — the rules cap already bounds it. */
-  function _downscale(file) {
+  /* `maxEdge` is optional and DEFAULTS to MAX_EDGE, so every existing caller — the avatar
+     upload — keeps the 512 px behaviour it had. A cover is a full-bleed banner and passes
+     a larger edge; without this parameter it would be silently squashed to avatar size. */
+  function _downscale(file, maxEdge) {
+    var EDGE = maxEdge || MAX_EDGE;
     return new Promise(function (done) {
       if (!root.document || !root.URL || !root.URL.createObjectURL) return done(file);
       var url = root.URL.createObjectURL(file);
@@ -116,7 +120,7 @@
         try {
           var w = img.naturalWidth, h = img.naturalHeight;
           if (!w || !h) return finish(file);
-          var scale = Math.min(1, MAX_EDGE / Math.max(w, h));
+          var scale = Math.min(1, EDGE / Math.max(w, h));
           var cw = Math.max(1, Math.round(w * scale));
           var ch = Math.max(1, Math.round(h * scale));
           var canvas = root.document.createElement('canvas');
@@ -191,6 +195,70 @@
     return url;
   }
 
+  /* ── Cover photo ─────────────────────────────────────────────────────
+     The profile COVER had the defect this module was written to fix, still
+     unrepaired: profile.html read it with FileReader.readAsDataURL and wrote the
+     base64 straight into users/{uid}.coverUrl. Same 1 MiB document cap, same ~1.37x
+     inflation, same fire-and-forget write behind an unconditional success toast.
+
+     It cannot go through upload(): that writes avatar_*.jpg, sets BOTH avatarUrl and
+     photoURL, updates the Auth profile and broadcasts — pointing it at a cover would
+     replace the user's avatar with their banner. So the cover gets its own write and
+     shares everything else: the same validation, the same _downscale, the same Storage
+     plumbing. One media pipeline, two destinations.
+
+     storage.rules needs no change. `profile-avatars/{uid}/{filename}` already matches a
+     WILDCARD filename under an owner-only, safeImageOnly(), <5 MB rule — `cover_*.jpg`
+     is permitted there today.
+
+     Wider than an avatar, so a larger edge: 1600 px covers a full-bleed banner on a
+     retina phone without shipping the original. */
+  var COVER_EDGE = 1600;
+
+  async function uploadCover(file, opts) {
+    opts = opts || {};
+    if (!file) throw new Error('No file selected.');
+
+    var type = (file.type || '').toLowerCase();
+    if (type && OK_TYPES.indexOf(type) === -1) {
+      throw new Error('That file type is not supported. Use JPG, PNG or WebP.');
+    }
+    if (file.size > MAX_BYTES) {
+      throw new Error('That image is larger than 5 MB. Please choose a smaller one.');
+    }
+
+    var auth = root.firebaseAuth;
+    var uid  = opts.uid || (auth && auth.currentUser && auth.currentUser.uid);
+    if (!uid) throw new Error('Please sign in to change your cover photo.');
+    if (!root.firebaseStorage) throw new Error('Storage is unavailable. Check your connection and try again.');
+
+    var blob = await _downscale(file, COVER_EDGE);
+
+    var storageMod = await import(SDK + 'firebase-storage.js');
+    /* Timestamped, for the same reason avatars are: the URL changes on every upload so
+       no CDN, service worker or <img> can serve the previous cover. */
+    var path = 'profile-avatars/' + uid + '/cover_' + Date.now() + '.jpg';
+    var ref  = storageMod.ref(root.firebaseStorage, path);
+
+    await storageMod.uploadBytes(ref, blob, {
+      contentType:  blob.type || 'image/jpeg',
+      cacheControl: 'public,max-age=31536000,immutable',
+    });
+    var url = await storageMod.getDownloadURL(ref);
+
+    /* ONLY coverUrl. Not avatarUrl, not photoURL, and no _broadcast — a cover is not an
+       identity photo, and every avatar subscriber would otherwise repaint with a banner.
+       Storage has already succeeded, so a failure here is reported, not swallowed. */
+    if (root.firebaseDB) {
+      var fs = await import(SDK + 'firebase-firestore.js');
+      await fs.setDoc(fs.doc(root.firebaseDB, 'users', uid), {
+        coverUrl: url, updatedAt: new Date().toISOString(),
+      }, { merge: true });
+    }
+
+    return url;
+  }
+
   /* ── Propagation ─────────────────────────────────────────────────────
      Every open tab updates without a reload: same-tab subscribers get
      called directly, other tabs via BroadcastChannel, with the storage
@@ -239,6 +307,7 @@
     resolve: resolve,
     bind:    bind,
     upload:  upload,
+    uploadCover: uploadCover,
     onChange: onChange,
     MAX_BYTES: MAX_BYTES,
   };
