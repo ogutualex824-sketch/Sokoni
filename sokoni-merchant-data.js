@@ -143,6 +143,294 @@
     });
   }
 
+  /* ══════════════════════════════════════════════════════════════════════════
+     PRODUCT WRITER — the ONE place a product record is mutated
+     ══════════════════════════════════════════════════════════════════════════
+     Added because Products was about to gain a second write path. seller.js
+     writes products by importing the Firestore SDK inline and writing the
+     document itself; a native module doing the same would leave TWO writers for
+     one collection, which is the pattern this whole conversion is removing.
+
+     Both shells now call these. When seller.js is eventually retired, the write
+     path does not have to be reinvented — it is already here.
+
+     ── SCOPE ─────────────────────────────────────────────────────────────────
+     Every mutation is bound to a resolved shop scope. A product carrying
+     another shop's id is refused, not silently rewritten to this one.
+
+     ── WHAT IT DELIBERATELY DOES NOT DO ──────────────────────────────────────
+     · NO media. The old implementation bundled image upload into creation, so
+       a product could not exist without pictures having already uploaded. That
+       entanglement is why creating and uploading are separate slices; the
+       writer creates the RECORD and returns, and media attaches afterwards.
+     · NO productCounters write. That counter is known to drift (one shop reads
+       -23 against 103 real products) and repairing it here would hide the
+       defect inside an unrelated change.
+     · NO subscription rules. Publication capacity is decided by the server's
+       canPublishProduct, which is CONSULTED, never reimplemented.
+     · NO cache authority. Firestore is the truth. A caller may cache what a
+       write returned; the writer never reads a cache to decide anything.
+
+     `db` is the injected adapter and must supply writeProduct / deleteProduct.
+     Passing a read-only adapter fails loudly rather than appearing to succeed. */
+
+  /* Deterministic per (shop, attempt). A double tap, or a retry after a dropped
+     response, computes the SAME id and therefore claims the same document — so
+     a repeat cannot create a second product. Mirrors idempotencyKey()'s shape
+     for sales, which exists for exactly this reason. */
+  function productDraftId(o) {
+    var scope = o.scope, token = o.draftToken;
+    if (!scope || !scope.ok) throw new Error('merchant data: a resolved shop scope is required');
+    if (!token) throw new Error('merchant data: draftToken is required (one per create attempt)');
+    var basis = scope.shopId + '::' + token;
+    var h = 5381;
+    for (var i = 0; i < basis.length; i++) h = ((h << 5) + h + basis.charCodeAt(i)) >>> 0;
+    return 'prd_' + scope.shopId + '_' + h.toString(36);
+  }
+
+  function _requireWriter(db) {
+    if (!db || typeof db.writeProduct !== 'function') {
+      throw new Error('merchant data: this db adapter cannot write products');
+    }
+    return db;
+  }
+
+  /* The fields a product record owns. Anything else a caller passes is dropped:
+     a writer that forwards arbitrary keys lets a UI invent schema. */
+  function _productFields(input) {
+    var p = input || {};
+    var out = {};
+    if (p.name !== undefined)  out.name = String(p.name || '').trim().slice(0, 200);
+    if (p.price !== undefined) out.price = Number(p.price);
+    /* Carried because the Inventory projection maps it to buyingPrice; without it
+       every mirrored product would report a 0 cost and therefore a 100% margin. */
+    if (p.costPrice !== undefined) out.costPrice = Number(p.costPrice);
+    if (p.stock !== undefined) out.stock = Number(p.stock);
+    if (p.sku !== undefined)   out.sku = p.sku ? String(p.sku).trim().slice(0, 64) : null;
+    if (p.category !== undefined) out.category = p.category ? String(p.category).slice(0, 64) : null;
+    if (p.description !== undefined) out.description = String(p.description || '').slice(0, 4000);
+    if (p.status !== undefined) out.status = String(p.status || 'active');
+    if (p.lowStockThreshold !== undefined) out.lowStockThreshold = Number(p.lowStockThreshold);
+    return out;
+  }
+
+  function _validate(fields, opts) {
+    var errs = [];
+    var creating = !!(opts && opts.creating);
+    if (creating || fields.name !== undefined) {
+      if (!fields.name) errs.push('A product name is required.');
+    }
+    if (creating || fields.price !== undefined) {
+      /* STRICTLY positive, because the live rule is strictly positive:
+           validPrice(field) -> request.resource.data[field] is number && > 0
+         Accepting 0 here would let the form say "saved" and then have Firestore
+         refuse the write — the exact false-success shape this writer exists to
+         prevent. A giveaway is modelled as a discount, not as a zero price. */
+      if (!isFinite(fields.price) || fields.price <= 0) {
+        errs.push('A price above zero is required.');
+      }
+    }
+    if (fields.stock !== undefined && (!isFinite(fields.stock) || fields.stock < 0)) {
+      errs.push('Stock cannot be negative.');
+    }
+    /* Cost may be 0 (unknown), but never negative. */
+    if (fields.costPrice !== undefined && (!isFinite(fields.costPrice) || fields.costPrice < 0)) {
+      errs.push('Cost price cannot be negative.');
+    }
+    return errs;
+  }
+
+  /* ══ PROJECTIONS ═══════════════════════════════════════════════════════════
+     Creating a product is NOT one write. seller.js:1008-1071 writes the canonical
+     `products/{id}` and then mirrors it into two further places:
+
+       tenants/{uid}/inventory_products/{id}   the back-office Inventory Manager
+       posProducts/{id}                        the POS checkout catalogue
+
+     Those mirrors are why an uploaded product is sellable at the till at all. A
+     native writer that wrote only the canonical record would create products that
+     are invisible at POS and absent from Inventory — a silent regression against
+     seller.html that no test of the canonical write would ever catch.
+
+     Two deliberate departures from the code being replaced:
+
+       · The projections are PURE functions, so the field mapping is certifiable
+         on its own. The mapping is where mirror divergence defects live — the
+         same class of defect as posRetailSales, where writer and reader disagreed
+         about field names and POS sales silently vanished from reporting.
+       · The old mirrors are fire-and-forget with `.catch(function(){})`. That
+         turns a failed mirror into a reported success. Here each mirror's outcome
+         is RETURNED, so the caller can say "created, but not yet at the till"
+         instead of an unqualified success. A mirror failure still never fails the
+         create — the canonical record is the merchant's revenue path and is
+         already committed — but it is never hidden either. */
+  var PRODUCT_MIRRORS = ['inventory', 'pos'];
+
+  function productProjections(doc, scope) {
+    var img = '';                             /* 2c attaches media; see below */
+    var sku = doc.sku || ('SKU-' + String(doc.id).slice(-8).toUpperCase());
+    var wh  = doc.warehouseId || scope.shopId || 'main';
+    var price = Number(doc.price) || 0;
+    var cost  = Number(doc.costPrice) || 0;
+    var stock = Number(doc.stock) || 0;
+    return {
+      inventory: {
+        path: ['tenants', scope.sellerUid, 'inventory_products', doc.id],
+        data: {
+          id: doc.id, name: doc.name || '', sellingPrice: price, buyingPrice: cost,
+          category: doc.category || '', stockLevel: stock,
+          reorderPoint: (doc.lowStockThreshold != null ? Number(doc.lowStockThreshold) : 10),
+          unit: 'pcs', imageUrl: img, description: doc.description || '',
+          sku: sku, warehouseId: wh, active: true, tenantId: scope.sellerUid,
+          sourceProductId: doc.id,          /* the link back to the storefront */
+        },
+      },
+      pos: {
+        path: ['posProducts', doc.id],
+        data: {
+          name: doc.name || '', price: price, cost: cost,
+          category: doc.category || '', sku: sku, unit: 'pcs', stockLevel: stock,
+          reorderPoint: (doc.lowStockThreshold != null ? Number(doc.lowStockThreshold) : 10),
+          imageUrl: img, description: doc.description || '',
+          sellerId: scope.sellerUid, status: 'active', tenantId: scope.sellerUid,
+        },
+      },
+    };
+  }
+
+  /* Never throws. A mirror is a projection of a record that already exists; its
+     failure is reported, not raised, and never rolls back the canonical write. */
+  async function _writeMirrors(db, doc, scope) {
+    var out = {};
+    var proj = productProjections(doc, scope);
+    for (var i = 0; i < PRODUCT_MIRRORS.length; i++) {
+      var key = PRODUCT_MIRRORS[i];
+      if (!db || typeof db.writeMirror !== 'function') { out[key] = { state: 'unavailable' }; continue; }
+      try {
+        await db.writeMirror({ path: proj[key].path, data: proj[key].data, merge: true });
+        out[key] = { state: 'written' };
+      } catch (e) {
+        out[key] = { state: 'failed', reason: (e && e.message) || 'unknown' };
+      }
+    }
+    return out;
+  }
+
+  /* True only when every mirror landed. The UI uses this to choose between an
+     unqualified success and a qualified one — never to claim success on a guess. */
+  function mirrorsComplete(mirrors) {
+    if (!mirrors) return false;
+    return PRODUCT_MIRRORS.every(function (k) {
+      return mirrors[k] && mirrors[k].state === 'written';
+    });
+  }
+
+  /**
+   * createProduct({ scope, db, draftToken, product, canPublish })
+   *
+   * `canPublish` is the caller's invoker for the server's canPublishProduct.
+   * It is CONSULTED — and a refusal means NOTHING is written. The check happens
+   * strictly before the write, so a denied publish cannot leave a half-created
+   * record behind.
+   */
+  async function createProduct(o) {
+    var scope = o.scope;
+    if (!scope || !scope.ok) throw new Error('merchant data: a resolved shop scope is required');
+    _requireWriter(o.db);
+
+    var fields = _productFields(o.product);
+    var errs = _validate(fields, { creating: true });
+    if (errs.length) { var e = new Error(errs[0]); e.validation = errs; throw e; }
+
+    /* ── THE GATE, BEFORE ANY WRITE ────────────────────────────────────────
+       Asked first, so a refusal is a refusal rather than a rollback. */
+    if (typeof o.canPublish === 'function') {
+      var verdict = await o.canPublish();
+      var d = (verdict && verdict.data) || verdict || {};
+      if (d.allowed === false) {
+        var err = new Error((d.upgrade && d.upgrade.message) || 'Your plan does not allow another product.');
+        err.code = 'publish-refused';
+        err.upgrade = d.upgrade || null;
+        err.wrote = false;                 /* asserted by the certification */
+        throw err;
+      }
+    }
+
+    var id = productDraftId({ scope: scope, draftToken: o.draftToken });
+    var doc = Object.assign({}, fields, {
+      id: id,
+      shopId: scope.shopId,                /* ownership, from the scope only */
+      sellerUid: scope.sellerUid,
+      /* Media is NOT set here. A product exists without pictures; 2c attaches
+         them afterwards and the record is valid in the meantime. */
+      createdAt: (o.now || null),
+    });
+    if (doc.status === undefined) doc.status = 'active';
+
+    /* create semantics: the same draftToken twice claims the same id, so a
+       replay returns the existing record rather than adding a second one. */
+    var res = await o.db.writeProduct({ id: id, data: doc, mode: 'create' });
+
+    /* Mirrors run on a replay too. They are merge-writes keyed by the same id, so
+       repeating one changes nothing — and a replay is exactly how a mirror that
+       failed the first time gets repaired. */
+    var mirrors = await _writeMirrors(o.db, doc, scope);
+
+    return {
+      id: id, product: doc, replayed: !!(res && res.replayed),
+      mirrors: mirrors, complete: mirrorsComplete(mirrors),
+    };
+  }
+
+  /**
+   * updateProduct({ scope, db, id, patch })
+   *
+   * No publication gate: editing a product the merchant already holds does not
+   * consume capacity. Asking canPublishProduct here would block a merchant AT
+   * their limit from fixing a typo.
+   */
+  async function updateProduct(o) {
+    var scope = o.scope;
+    if (!scope || !scope.ok) throw new Error('merchant data: a resolved shop scope is required');
+    _requireWriter(o.db);
+    if (!o.id) throw new Error('merchant data: product id required');
+
+    /* Ownership is verified against the STORED record, not the caller's claim. */
+    var existing = o.existing || (o.db.getProduct ? await o.db.getProduct(o.id) : null);
+    if (existing) assertInScope(scope, Object.assign({ id: o.id }, existing));
+
+    var fields = _productFields(o.patch);
+    if (!Object.keys(fields).length) throw new Error('merchant data: nothing to update');
+    var errs = _validate(fields, { creating: false });
+    if (errs.length) { var e = new Error(errs[0]); e.validation = errs; throw e; }
+
+    /* shopId and sellerUid are never patchable — a product cannot be moved to
+       another shop by an edit. */
+    delete fields.shopId; delete fields.sellerUid;
+
+    await o.db.writeProduct({ id: o.id, data: fields, mode: 'update' });
+    return { id: o.id, patch: fields };
+  }
+
+  /**
+   * deleteProduct({ scope, db, id })
+   * Ownership verified against the stored record before anything is removed.
+   */
+  async function deleteProduct(o) {
+    var scope = o.scope;
+    if (!scope || !scope.ok) throw new Error('merchant data: a resolved shop scope is required');
+    if (!o.db || typeof o.db.deleteProduct !== 'function') {
+      throw new Error('merchant data: this db adapter cannot delete products');
+    }
+    if (!o.id) throw new Error('merchant data: product id required');
+
+    var existing = o.existing || (o.db.getProduct ? await o.db.getProduct(o.id) : null);
+    if (existing) assertInScope(scope, Object.assign({ id: o.id }, existing));
+
+    await o.db.deleteProduct({ id: o.id });
+    return { id: o.id, deleted: true };
+  }
+
   /* Only products belonging to this shop may enter a cart. A cart line from
      another shop would be sold against this shop's till. */
   function assertInScope(scope, product) {
@@ -410,7 +698,15 @@
     isPlaceholderShopId: isPlaceholderShopId,
     productQuery: productQuery,
     listProducts: listProducts,
+    /* The ONE product write path — see the block above createProduct. */
+    productDraftId: productDraftId,
+    createProduct: createProduct,
+    updateProduct: updateProduct,
+    deleteProduct: deleteProduct,
     assertInScope: assertInScope,
+    productProjections: productProjections,
+    mirrorsComplete: mirrorsComplete,
+    PRODUCT_MIRRORS: PRODUCT_MIRRORS,
     idempotencyKey: idempotencyKey,
     cartTotals: cartTotals,
     buildSale: buildSale,

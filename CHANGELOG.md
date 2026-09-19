@@ -1,3 +1,91 @@
+## 2026-09-19 (74) — GATE W: the certified product writer, ported and re-certified
+
+**Writer logic 37/0 · Firestore + live ruleset 46/0 · Listing Studio saves 30/0 · baseline
+358/0.** **Nothing deployed. No rules touched. No push.**
+
+### The port was byte-exact, and that is a measured claim
+
+`sokoni-merchant-data.js` at HEAD was **identical** to the certified writer's parent
+(`1e2aade^`), so this was a clean apply rather than a merge. All four artifacts hash-match the
+certified commit:
+
+```
+identical  sokoni-merchant-data.js
+identical  scripts/test-merchant-product-writer.js
+identical  scripts/test-merchant-product-writer-emulator.mjs
+identical  docs/MERCHANT_PRODUCT_WRITER_2B0.md
+```
+
+The suites were **not** edited to fit their new home, so what passes here is the same artifact
+that was certified, not a version adapted until it agreed.
+
+### The shell was already built for it
+
+`merchant-v2.html` already carries the full adapter the writer requires — `writeProduct`
+(transactional create), `getProduct`, `deleteProduct`, `writeMirror`, `queryProducts` — plus
+`_refuseAuthorityFields`, which **throws** rather than strips if `stock`, `sold`,
+`inventoryVersion` or `stockQty` are ever present. Only the writer functions were missing.
+
+### Re-certified, not assumed
+
+| suite | what it proves |
+|---|---|
+| `test-merchant-product-writer.js` — **37/0** | the writer's decisions, against an adapter that records every write it is asked to perform |
+| `test-merchant-product-writer-emulator.mjs` — **46/0** | those decisions survive **real Firestore and a real rules engine**, run through `firebase emulators:exec`; every refusal verified by querying the server, not by reading a log |
+| `test-listing-studio-saves.js` — **30/0**, NEW | the chain the other two deliberately do not touch |
+
+### What the new suite closes
+
+Both writer suites ended with the same honest line: `UNPROVEN the 2b UI [not built]`. It is
+built now, so that admission was stale. The new suite proves, in a real browser against the
+real module:
+
+```
+Listing Studio form → createProduct → canonical document
+                    → POS + Inventory projections → id back → merchant list shows it
+```
+
+Specifically: one create write (not two), price carried as a **number**, **costPrice
+preserved** (one of the two contract defects the live ruleset originally exposed — without it
+every mirrored product reports a 100% margin), ownership taken from the **scope** not the form,
+no invented image field, **no stock field riding along**, both projections written with
+`costPrice → buyingPrice` and `price → sellingPrice`, and an edit that updates in place
+carrying neither `shopId` nor `sellerUid`.
+
+**And a refusal is a refusal.** With `canPublishProduct` refusing: 0 product writes, 0
+projections, 0 stored, no success toast, the editor left open so the merchant's work is not
+lost, and the plan message shown verbatim. The writer was already certified to mutate nothing
+on a refusal; what was untested was what the *merchant is told*.
+
+### Deliberately not done
+
+* **No rules work.** `firestore.rules`, `.build` and `.live` are untouched, verified.
+* **No `product-limit.js` patch.** It is not patched merely because the writer was ported —
+  that only happens if a replay/delete/order defect is actually proven.
+* **No media or Storage expansion**, no second writer, no counter repair.
+
+### Two limits carried forward, not silently closed
+
+**The `isActive()` finding reproduced exactly.** `isActive()` refuses a token carrying none of
+`deactivated` / `admin` / `superAdmin`, because a missing key errors rather than yielding
+false. Measured denied for `create` on **products and conversations**; the same gate guards
+orders, bookings and providers. This still needs a read-only production observation before it
+can be called a live outage, and if it is confirmed it becomes a **separately scoped rules
+gate** — not a side effect of this port.
+
+**Ruleset provenance.** The emulator suite loads `firestore.rules.live`, which is an **11 Aug**
+snapshot — the same one the original certification used, so this port is held to exactly that
+standard. But memory records `.live` as stale and the rules lineage as **reopened 2026-09-13**,
+so it should not be read as "certified against what production serves today". Re-establishing
+that belongs to a rules gate.
+
+### Files
+
+`scripts/test-listing-studio-saves.js` (new); `sokoni-merchant-data.js`,
+`scripts/test-merchant-product-writer.js`, `scripts/test-merchant-product-writer-emulator.mjs`,
+`docs/MERCHANT_PRODUCT_WRITER_2B0.md` (ported byte-exact). No database changes, no API
+changes, no security changes, no breaking changes.
+
 ## 2026-09-19 (73) — Price vocabulary, business context, and a schema drift that made the Studio invisible
 
 **Regression: 354 assertions across 9 suites, 0 failed.** New: price vocabulary 41/0.
