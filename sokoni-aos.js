@@ -449,8 +449,36 @@ window.SokoniAOS = (() => {
     body.innerHTML = _spinner();
 
     if (tab === "products") {
-      const data = await _call("adminGetProducts", { limit: 30 }).catch(() => ({ products: [] }));
+      // 30 was a table's worth, not a contract limit; the read is capped at 200 server-side.
+      // The workspace counts what it LOADS and says so, so a larger page makes its figures
+      // more useful without making any of them a catalogue total.
+      const data = await _call("adminGetProducts", { limit: 200 }).catch(() => ({ products: [] }));
       const prods = data.products || [];
+
+      // Rich catalogue workspace. Additive: if the module is absent or declines, the original
+      // table below renders exactly as before.
+      if (window.SokoniAOSProducts && typeof window.SokoniAOSProducts.mount === "function") {
+        try {
+          const rich = document.createElement("div");
+          rich.id = "productsRich";
+          body.innerHTML = "";
+          body.appendChild(rich);
+          const shown = window.SokoniAOSProducts.mount({
+            host: rich,
+            products: prods,
+            // The one write AdminOS already owns. No price, stock or delete control is
+            // passed: stock is inventory authority's, and a product is tombstoned, never
+            // deleted.
+            actions: { updateStatus: (id) => _promptProductStatus(id) },
+          });
+          if (shown) return;
+          body.innerHTML = "";
+        } catch (e) {
+          console.warn("[AOS] products workspace unavailable, using table:", e && e.message);
+          body.innerHTML = "";
+        }
+      }
+
       body.innerHTML = prods.length ? `<table class="aos-table"><thead><tr>
           <th>Product</th><th>Seller</th><th>Price</th><th>Status</th><th>Actions</th>
         </tr></thead><tbody>${prods.map(p => `<tr>
@@ -545,6 +573,23 @@ window.SokoniAOS = (() => {
     }
     _toast("Product status updated", "success");
     _marketplaceTab("products");
+  }
+
+  /* Status picker for the products workspace.
+     Deliberately restricted to the two values AdminOS ALREADY writes from its own
+     buttons. `adminUpdateProductStatus` accepts any string, so an free-text prompt
+     could write a status no reader recognises — which hides a product from every
+     filtered view without deleting it, and looks like data loss. If a third status
+     is ever wanted here, prove a reader honours it first. */
+  function _promptProductStatus(id) {
+    const choice = prompt('New product status — type "active" or "removed":');
+    if (!choice) return;
+    const status = String(choice).trim().toLowerCase();
+    if (status !== "active" && status !== "removed") {
+      _toast('Not changed: only "active" or "removed" are written from here.', "error");
+      return;
+    }
+    return updateProduct(id, status);
   }
 
   async function updateOrder(id) {
