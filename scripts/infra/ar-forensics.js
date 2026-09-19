@@ -28,7 +28,12 @@ const OURS = ['alexochieng3030@gmail.com'];
 
 /* Writes AND deletes. A deletion can only follow a push, so both matter:
    the push tells us an image existed, the delete tells us who removed it. */
-const WRITE_METHODS = 'Delete|Upload|Import|Push|Create.*Version|Create.*Tag|Update.*Tag';
+/* Method vocabulary confirmed empirically by the P0-7-OBS canary push, not
+   guessed: Artifact Registry logs Docker pushes as `Docker-StartUpload` and
+   `Docker-PutManifest`. `Manifest` must be in this list or a push is missed
+   entirely — the first draft of this regex did miss it. Deletions are expected
+   as Docker-Delete* / DeletePackage / DeleteVersion / DeleteTag. */
+const WRITE_METHODS = 'Delete|Upload|Import|Push|Manifest|Create.*Version|Create.*Tag|Update.*Tag';
 
 /* On Windows `gcloud` is a .cmd shim, and current Node refuses to spawn .cmd
    without a shell (EINVAL). Using shell:true would mangle the log filters,

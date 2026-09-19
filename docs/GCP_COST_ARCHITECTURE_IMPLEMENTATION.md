@@ -16,8 +16,9 @@ no function deployments (the release line is independently blocked).
 | P0-4 Retire `intasendWebhook` | **BLOCKED x2 — traffic is 22 not 0, AND deletion may be the purge trigger** |
 | P0-5 Least-privilege IAM | separate gate — not started |
 | P0-6 App Check audit | separate gate — not started |
-| P0-7 AR Data Access audit logging | **DONE — ADMIN_READ proven live; DATA_WRITE enabled, unproven** |
-| P0-7-OBS Forensic harness + baseline | **READY — waiting; registry is empty so silence is ambiguous** |
+| P0-7 AR Data Access audit logging | **DONE — ADMIN_READ and DATA_WRITE both PROVEN live** |
+| P0-7-OBS Forensic harness + baseline | **READY — harness live, method vocabulary confirmed** |
+| P0-7-OBS-CANARY Controlled canary push | **Q-A CLOSED (DATA_WRITE proven) · Q-B OPEN (re-read ~24h)** |
 | P1 Product triggers / 5xx / consolidation | separate gates — not started |
 
 ---
@@ -798,3 +799,122 @@ removal in one window. Our own audit reads are tagged in the output so this sess
 
 **P0-7-OBS: harness ready, baseline recorded, waiting.** No production mutation. The 12 pinned
 services stay untouched by decision, not by oversight.
+
+---
+
+## P0-7-OBS-CANARY — controlled Artifact Registry canary. Question A ANSWERED.
+
+Authorised: push exactly one inert, uniquely-named artifact; verify; stop. **One push performed.
+No deploy, no revision, no service change, no deletion, no IAM or config change.**
+
+### How it was pushed — and why that matters
+
+No container tooling exists on this machine (`docker`, `crane`, `oras`, `podman`, `buildah`,
+`skopeo` — all absent). Rather than install any, the push used the **Docker Registry v2 HTTP API
+directly** from Node. This is the minimum possible machinery: GCF, Cloud Run and Cloud Build are
+never contacted. Tool: `scripts/infra/ar-canary-push.js`.
+
+The artifact is inert by construction — an empty tar (two 512-byte zero blocks), gzipped to 29
+bytes, plus a 328-byte config whose history string reads *"SOKONI Artifact Registry forensics
+canary (P0-7-OBS). Inert. Not a function image. Safe to delete."* It is not runnable and is
+attached to nothing.
+
+**Safety enforced in code, not promised.** The pusher refuses any path outside the canary
+namespace, never issues `DELETE` (the verb is unreachable), and aborts rather than overwrite an
+existing tag. The interlock **fired in practice**: the first run was refused because Artifact
+Registry returns an opaque upload-session URL carrying no image name. It was then widened
+*precisely* — to that repository's upload-session prefix only — rather than removed. A blob
+uploaded but never referenced by a manifest is unreferenced garbage; it cannot alter an existing
+image, and every manifest write remains canary-scoped.
+
+### BEFORE — 2026-09-19T06:05:53Z
+
+```
+repository        : gcf-artifacts          region: us-central1
+image inventory   : []                     (zero images)
+sizeBytes         : 0
+updateTime        : 2026-09-15T05:55:28.000377Z
+AR write/delete events, 30d : none
+onnewordercreated latestCreated : onnewordercreated-00022-5r9
+last Cloud Build  : 72739a70-d108-4812-b1e2-0e64243855f6
+canary identifier : us-central1-docker.pkg.dev/sokoni-aeb26/gcf-artifacts/
+                    sokoni-ar-forensics-canary:20260919T060552Z
+```
+
+### AFTER
+
+| Check | Result |
+|---|---|
+| Artifact exists | **YES** — `sokoni-ar-forensics-canary`, tag `20260919T060552Z`, created `2026-09-19 06:08:12Z` |
+| Manifest digest | `sha256:88f338d30f7c40853b2750f3a5c13dc0a57f167552e70dcdbb5d0fce6ce9cf81` |
+| Layer / config digests | `sha256:b48e9c60…` (29 B) · `sha256:1a6efe0c…` (328 B) |
+| Repository size | **0 → 779 bytes** |
+| Repository updateTime | `2026-09-15T05:55:28Z` → **`2026-09-19T06:08:12.330016Z`** |
+| Cloud Run revisions | **unchanged** — all four spot-checked services identical |
+| Cloud Function deployment | **none** |
+| Cloud Build | **unchanged** — still `72739a70…` |
+| Existing images/tags modified | **none existed to modify** (repo was empty) |
+
+### QUESTION A — does DATA_WRITE capture a registry write? **YES. PROVEN.**
+
+```
+timestamp      : 2026-09-19T06:08:11.449413497Z
+methodName     : Docker-StartUpload
+serviceName    : artifactregistry.googleapis.com
+principalEmail : alexochieng3030@gmail.com
+callerIp       : 197.237.85.87
+callerUA       : gzip(gfe)
+resourceName   : projects/sokoni-aeb26/locations/us-central1/repositories/gcf-artifacts
+status         : code=OK
+permissions    : ["artifactregistry.repositories.uploadArtifacts"]
+```
+
+P0-7 recorded `DATA_WRITE` as *enabled but UNPROVEN*. **It is now proven**, with the full field set
+the forensic plan requires: timestamp, method, service, principal, caller IP, user agent, resource,
+status and authorization. When the images disappear again, an event of this shape will name the
+actor.
+
+**Method vocabulary captured empirically** — `Docker-StartUpload` (×3) and `Docker-PutManifest`
+(×1). This mattered: the forensic harness's regex did **not** include `Manifest`, so it would have
+missed a push. Fixed, with the empirical basis recorded in the code comment. Deletions are expected
+as `Docker-Delete*` / `DeletePackage` / `DeleteVersion` / `DeleteTag`.
+
+*(Three `StartUpload` for two blobs: the first, refused run had already opened one session.)*
+
+### QUESTION B — does the canary disappear? **OPEN. Do not conclude anything yet.**
+
+The canary is 11 minutes old. The reference interval is the 2026-09-14 → 2026-09-15 window, roughly
+21 hours. Nothing can be inferred before then, and a surviving canary is a **valid result**: it
+would answer A and leave B unreproduced, narrowing the cause to something the canary does not model
+— a function-lifecycle event rather than a blanket repository sweep.
+
+**The canary is deliberately NOT deleted.** It is the instrument.
+
+### INCIDENTAL FINDING — and it changes P0-4 again
+
+The canary push, made from **this machine**, logged `callerIp: 197.237.85.87`.
+
+That is the **same IP as all 22 requests to `intasendWebhook`** — the traffic that blocked P0-4 on
+the "current traffic = 0" precondition. The live IntaSend receiver `webhookIntasend` is called from
+a different address entirely, `157.245.201.212`.
+
+So the 22 requests did not come from an unknown third party probing a retired endpoint. **They came
+from this operator's own network** — consistent with local testing, and consistent with every one
+being rejected 401/405 with zero 2xx.
+
+Confidence: **high, not certain.** A Kenyan ISP address may be shared or carrier-graded, so "same
+IP" is not "same person". But combined with the rejection pattern and the single-day burst, the
+natural reading is operator testing, not external traffic.
+
+**Effect on P0-4's first blocker:** the "22 ≠ 0" objection is substantially weakened — external
+traffic to `intasendWebhook` appears to be genuinely zero. **The second blocker is untouched and
+still decisive:** retiring the function means *deleting* it, and function deletion is the leading
+hypothesis for the purge. P0-4 stays frozen on that ground alone.
+
+### Status
+
+**Question A: CLOSED — DATA_WRITE proven live with full field capture.**
+**Question B: OPEN — re-read after ~24h with `node scripts/infra/ar-forensics.js 1d`.**
+
+Stopped. No wait-and-act. The canary was not deleted, the purge was not reproduced, nothing was
+deployed, and the 12 pinned services remain untouched.
