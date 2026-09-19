@@ -10,7 +10,8 @@ no function deployments (the release line is independently blocked).
 | Slice | Status |
 |---|---|
 | P0-1 Billing export + budget alerting | **DONE (partial — one Console step remains)** |
-| P0-2 Unpin 8 unjustified services | **FAILED — rollback pending authorisation** |
+| P0-2 Unpin 8 unjustified services | **FAILED — rollback authorised, 8 revisions verified deletable** |
+| P0-2-INV Registry provenance investigation | **DONE (read-only) — cause UNKNOWABLE, audit logging off** |
 | P0-3 Right-size max instances | **BLOCKED — same root cause** |
 | P0-4 Retire `intasendWebhook` | **BLOCKED on a decision — traffic is 22, not 0** |
 | P0-5 Least-privilege IAM | separate gate — not started |
@@ -277,3 +278,168 @@ this slice.
 **P0-4: BLOCKED on a decision — its stated precondition ("current traffic = 0") is not met (22).**
 
 Per the standing rule, I have not attempted to repair the registry defect inside this slice.
+
+---
+
+## P0-2-INV — Read-only deployment & Artifact Registry provenance investigation
+
+Authorised as read-only. **Zero mutations performed.** Ten questions, answered by execution.
+
+### CORRECTION TO THE PREVIOUS SECTION — I overstated the severity
+
+The P0-2 record above says *"No function can be redeployed. Not for a feature, not for a security
+fix, not for a payment defect."* **That is wrong, and this investigation disproves it.**
+
+`initiateSTKPush` was **deployed successfully on 2026-09-14 00:45** — Cloud Build `72739a70`,
+status SUCCESS, 41s, producing source zip `initiateSTKPush/function-source.zip` at 00:45:58 and
+revision `initiatestkpush-00043-niq` at 00:46, which is `Ready: True` and serving today.
+
+The deploy path works. What does **not** work is creating a revision from a service's *existing
+spec* without a rebuild. Those are different operations and I conflated them. The corrected claim
+is in Q3/Q5 below.
+
+### Q1 — Why are the artifacts absent? **NOT ESTABLISHED. The evidence to establish it was never collected.**
+
+| Candidate cause | Verdict | Evidence |
+|---|---|---|
+| Cleanup / lifecycle policy | **Ruled out at repo level** | Neither repo has a `cleanupPolicies` field |
+| Repository recreation | **Ruled out** | `createTime` 2026-06-08 (us-central1), 2026-06-21 (us-east1) — both predate the loss |
+| Wrong project / region / repo | **Ruled out** | Only two AR repos exist in the project; both empty; both are the GCF-managed ones |
+| Manual deletion | **Cannot confirm or exclude** | See below |
+| Server-side GCF cleanup | **Cannot confirm or exclude** | See below |
+
+**Why the cause cannot be established:** `gcloud projects get-iam-policy` returns
+`auditConfigs: null`. **Data Access audit logging is entirely disabled on this project.** Artifact
+Registry package and version deletions are Data Access events, not Admin Activity events, so no
+deletion was ever recorded. The Admin Activity log for `artifactregistry.googleapis.com` contains
+exactly **three** entries in 90 days — two `CreateRepository` (June, by
+`service-...@gcf-admin-robot`) and one `UpdateRepository` (2026-06-23). No deletion.
+
+This was verified against two positive controls rather than accepted as an empty result: an
+unfiltered audit-log read returns rows, and my own `Services.ReplaceService` calls from earlier
+today appear correctly. The query mechanism works; the records do not exist.
+
+**The one hard timing fact:** repo `us-central1/gcf-artifacts` has
+`updateTime: 2026-09-15T05:55:28Z`. A build succeeded on 2026-09-14 00:45 and its image is **also**
+gone. So whatever removes images ran at or after 2026-09-15 05:55 and removed even a day-old image.
+It is recurring, not a one-off.
+
+> **Recommendation, not part of this slice:** enable Data Access audit logging for
+> `artifactregistry.googleapis.com`. Without it this question stays unanswerable, and it will recur.
+
+### Q2 — Where do serving revisions get their image? **From Cloud Run's internal copy. Not from AR.**
+
+| | |
+|---|---|
+| Service **spec** image | `..._on_order_status_change:version_1` — a **tag** |
+| Serving **revision** image | `..._on_order_status_change@sha256:92ea14cd…` — a **digest** |
+| Does that digest resolve in AR? | **No** — `images describe` returns `Image not found` |
+| Is the service serving? | **Yes**, 100% traffic, revision `Ready: True` |
+
+GCF pins each revision by digest at deploy time. Cloud Run retains its own copy of a revision's
+image. Both the tag and the digest are absent from AR, yet the revision runs — which is the direct
+proof that AR is not in the serving path.
+
+### Q3 — Can we roll back to a healthy revision without creating a new one? **Yes.**
+
+Every affected service retains **at least three prior `Ready: True` revisions**:
+
+```
+onnewordercreated       00021-waw(serving) 00020-sam 00019-qax    all Ready=True
+onorderstatuschange     00062-yoz(serving) 00061-bix 00060-mux    all Ready=True
+bookingdispatch         00017-nel(serving) 00016-xev 00015-des    all Ready=True
+providerdispatch        00048-qiz(serving) 00047-cub 00046-yis    all Ready=True
+minishoppage            00006-beq(serving) 00005-guv 00004-qir    all Ready=True
+profilegetpublicprofile 00005-lap(serving) 00004-ros 00003-juy    all Ready=True
+kass                    00056-soq(serving) 00055-hov 00054-duh    all Ready=True
+intasendwebhook         00064-nin(serving) 00063-zas 00062-lej    all Ready=True
+```
+
+`gcloud run services update-traffic --to-revisions=<rev>=100` modifies `spec.traffic` only, never
+`spec.template`, so it creates no revision and cannot hit the missing-image failure. **Revision
+rollback is available and safe.**
+
+### Q4 — Can the pipeline reproduce the exact image? **No — but it can reproduce the function.**
+
+`gs://gcf-v2-sources-24799054989-us-central1/` holds **1,711 `function-source.zip` objects**, one
+per function, dated 2026-07-07 → 2026-09-14. Source is intact.
+
+A rebuild produces a **new digest**, not the original image — base images and dependency
+resolution move. So byte-identical reproduction is **not** available; functional reproduction from
+preserved source **is**. For a rollback that must be exact, use Q3 (revision rollback), not a rebuild.
+
+### Q5 — What restores the ability to create revisions? **A rebuild — per function, and it does not last.**
+
+All four required APIs are enabled (`cloudbuild`, `artifactregistry`, `cloudfunctions`, `run`), and
+Cloud Build has a working regional history in `us-central1` — five SUCCESS builds, most recent
+2026-09-14. Deploying a function rebuilds its image, repopulates its tag, and restores that
+function's ability to create revisions.
+
+**But the restoration is temporary.** The image built on 2026-09-14 is already gone. Whatever
+removes artifacts removed a one-day-old image. So a redeploy buys a window, not a fix. Until Q1 is
+answered, treat deploy-then-reconfigure as a race.
+
+### Q6 — Latent risk to currently-serving revisions? **None demonstrated. This is the key finding.**
+
+`recordmetric` — `minScale` unset (**0**), `Ready: True`, ~60,000 requests/30d — started **new
+instances today, after the registry was emptied**:
+
+```
+2026-09-19T03:15:58Z  Starting new instance. Reason: AUTOSCALING
+2026-09-19T03:16:01Z  Default STARTUP TCP probe succeeded after 1 attempt for container "worker"
+2026-09-19T04:05:57Z  Starting new instance. Reason: AUTOSCALING
+2026-09-19T04:05:59Z  Default STARTUP TCP probe succeeded after 1 attempt for container "worker"
+```
+
+A min=0 service cannot serve without cold-starting, and these cold starts succeeded. **Scale-out
+and scale-from-zero do not depend on Artifact Registry.** The blast radius is confined to revision
+*creation*. Production is not living on borrowed time.
+
+### Q7 — Cleanup policies configured? **No.** Neither repo carries a `cleanupPolicies` field, and `firebase.json` contains no artifact-cleanup configuration.
+
+### Q8 — Artifacts in another repo or region? **No.** The project has exactly two AR repositories — `us-central1/gcf-artifacts` and `us-east1/gcf-artifacts`. Both report `sizeBytes: 0` and list 0 images. `sizeBytes` is server-computed and independent of the listing path, so two independent signals agree.
+
+### Q9 — Is there enough provenance to reconstruct a deployment? **Yes, from source; no, from artifacts.**
+
+1,711 source zips + intact Cloud Build + enabled APIs + `gcloud functions describe` metadata is
+sufficient to redeploy. Artifact-level provenance is gone and is not recoverable.
+
+### Q10 — Can the eight failed revisions be deleted safely? **Yes — all six conditions met on all eight.**
+
+| Service | Failed revision | traffic | latestReady? | serving? | tagged traffic | healthy revision remains | rollback path |
+|---|---|---|---|---|---|---|---|
+| onnewordercreated | `onnewordercreated-00022-5r9` | 0% | no | no | 0 | yes (3) | confirmed |
+| onorderstatuschange | `onorderstatuschange-00063-8sk` | 0% | no | no | 0 | yes (3) | confirmed |
+| bookingdispatch | `bookingdispatch-00018-rwl` | 0% | no | no | 0 | yes (3) | confirmed |
+| providerdispatch | `providerdispatch-00049-2rp` | 0% | no | no | 0 | yes (3) | confirmed |
+| minishoppage | `minishoppage-00007-jnj` | 0% | no | no | 0 | yes (3) | confirmed |
+| profilegetpublicprofile | `profilegetpublicprofile-00006-9nq` | 0% | no | no | 0 | yes (3) | confirmed |
+| kass | `kass-00057-lkq` | 0% | no | no | 0 | yes (3) | confirmed |
+| intasendwebhook | `intasendwebhook-00065-5ck` | 0% | no | no | 0 | yes (3) | confirmed |
+
+Exact names were taken from the `Services.ReplaceService` audit-log entries for my own calls, not
+guessed. "Not referenced by another service" holds structurally: in Cloud Run a revision belongs to
+exactly one service. The tagged-traffic column was checked explicitly because a traffic tag pins a
+revision even at 0%; none of the eight carries one.
+
+### Incidental finding — the image cross-wiring is not a defect
+
+One function's revisions point at unrelated image names over time — `minishoppage` used
+`minishop_page` (00004), `on_subscription_changed_sync_limit` (00005), then `rider_profile`
+(00006). GCF gen2 packs multiple functions into one shared container image and names it after one
+of them. Cosmetic. Do not chase it.
+
+### Reframing
+
+The registry state is a **deployment-resilience** finding, not a cost finding and not an imminent
+outage risk:
+
+* Serving: **healthy**, including cold starts (Q6)
+* Revision rollback: **available** (Q3)
+* Source: **intact**, 1,711 zips (Q4)
+* Rebuild: **works**, proven 2026-09-14 (Q5) — but does not persist
+* Reconfiguration without rebuild: **broken** — this is the whole of the damage
+* Cause: **unknowable as configured** (Q1) — Data Access audit logging is off
+
+**Still blocked:** P0-3 and every per-plane resource profile in `GCP_SERVICE_COST_CONTRACT.md`, all
+of which assumed `gcloud run services update`.
