@@ -234,3 +234,92 @@ project and requires its own diff gate.
 
 **Proposed next mutation: none.** The index-file diff gate is the cheapest next read-only step, and
 the billing-export cost attribution is now the highest-value one.
+
+---
+
+## P0-8A — Index-file diff gate. READ-ONLY.
+
+**Question:** if we add the one `syncQueue` index P0-8 needs, what else would an index deployment
+carry with it?
+
+**Answer: four unrelated `reviews` indexes, and six deployed indexes become deletion candidates.**
+
+### Current state
+
+| | |
+|---|---|
+| Repo `firestore.indexes.json` composite indexes | **408** |
+| Deployed composite indexes | **410** — all `READY` |
+| Repo `fieldOverrides` | 1 |
+| **`syncQueue` indexes deployed** | **0** |
+| `syncQueue(status, updatedAt)` in repo | **NO** — it has never been declared |
+
+Comparison normalises both sides and strips `__name__`, which Firestore appends implicitly and the
+repo file omits; without that every index compares as different.
+
+### WOULD BE CREATED by a deploy today — 4, none of them ours
+
+```
++ reviews [targetId:ASC, status:ASC, createdAt:DESC]
++ reviews [targetId:ASC, status:ASC, rating:DESC,  createdAt:DESC]
++ reviews [targetId:ASC, status:ASC, rating:ASC,   createdAt:DESC]
++ reviews [targetId:ASC, status:ASC, helpful:DESC, createdAt:DESC]
+```
+
+**This is the finding.** Four `reviews` indexes are committed to the repo but were never deployed.
+Adding the `syncQueue` index and deploying would ship **five** indexes, not one — four of them
+unrelated to P0-8, for a collection this gate never examined.
+
+They are additive and unlikely to break a live query, but they are **unreviewed by this programme**,
+they consume write capacity while building, and shipping them under a P0-8 commit message would
+misrepresent what was deployed.
+
+### DEPLOYED BUT NOT IN REPO — 6, and this is the dangerous column
+
+```
+- inventory_batches    [available, expiryDate]
+- messages             [mediaType, storageRef, timestamp]
+- posPrintJobs         [kind, shopId, status, createdAt]      <-- POS PRINTING
+- crmCustomerProfiles  [merchantId, clv]
+- entitlements         [purpose, status, expiresAt]
+- posCheckoutMetrics   [branchId, merchantId, saleDate]
+```
+
+These exist in production and are absent from the repo file — they were created directly (Console,
+or by following an error-message link) and never written back.
+
+**If an index deploy removes them, the queries behind them break at runtime with
+`FAILED_PRECONDITION`** — and `posPrintJobs(kind, shopId, status, createdAt)` is POS print-job
+dispatch, on the hardware path this programme already protected once.
+
+**Unconfirmed and MUST be established before any index deploy:** whether this `firebase-tools`
+version deletes indexes absent from the file, prompts, or ignores them. The CLI has historically
+*not* deleted automatically, but that is a recollection, not a measurement, and the consequence of
+being wrong is broken POS printing. **Verify against this exact CLI version before deploying.**
+
+### What this changes about the P0-8 index fix
+
+The fix is still "index configuration only, no code" — but it is **not** a one-line change with a
+one-index blast radius. Deploying it means:
+
+1. shipping 4 unreviewed `reviews` indexes, **and**
+2. taking a risk on 6 production indexes that the repo does not know about.
+
+### Recommended sequence — NOT executed
+
+1. **Reconcile the 6 orphans into `firestore.indexes.json` first**, so the repo describes
+   production. That is an additive, reversible, deploy-free change that removes the deletion risk
+   entirely.
+2. Confirm the CLI's deletion behaviour on this exact version.
+3. Decide separately whether the 4 `reviews` indexes should ship.
+4. Only then add `syncQueue(status, updatedAt)` and deploy.
+
+Step 1 is the highest-value next action and needs no deployment. Doing step 4 first would be
+shipping five indexes and a live-query risk to fix a cron.
+
+### Reproduce
+
+```
+gcloud firestore indexes composite list --format=json > /tmp/idx-deployed.json
+node <diff script> /tmp/idx-deployed.json
+```
