@@ -10,7 +10,7 @@ no function deployments (the release line is independently blocked).
 | Slice | Status |
 |---|---|
 | P0-1 Billing export + budget alerting | **DONE (partial — one Console step remains)** |
-| P0-2 Unpin 8 unjustified services | **FAILED — rollback authorised, 8 revisions verified deletable** |
+| P0-2 Unpin 8 unjustified services | **FAILED — rollback BLOCKED on problem B; 8 services remain Ready=False** |
 | P0-2-INV Registry provenance investigation | **DONE (read-only) — cause UNKNOWABLE, audit logging off** |
 | P0-3 Right-size max instances | **BLOCKED — same root cause** |
 | P0-4 Retire `intasendWebhook` | **BLOCKED on a decision — traffic is 22, not 0** |
@@ -443,3 +443,106 @@ outage risk:
 
 **Still blocked:** P0-3 and every per-plane resource profile in `GCP_SERVICE_COST_CONTRACT.md`, all
 of which assumed `gcloud run services update`.
+
+---
+
+## P0-2-ROLLBACK — attempted, HALTED on the first deletion
+
+Authorised: delete exactly the eight verified failed revisions, stop immediately if any deletion
+behaves differently from the read-only evidence. **It did. One attempt was made; it failed; I
+stopped. Seven were not attempted.**
+
+### The attempt
+
+```
+BEFORE  onnewordercreated | Ready=False | RevisionFailed
+        latestCreated = onnewordercreated-00022-5r9
+        latestReady   = onnewordercreated-00021-waw
+        traffic       = onnewordercreated-00021-waw @ 100%
+        target revision ready-state = False, traffic 0%
+
+COMMAND gcloud run revisions delete onnewordercreated-00022-5r9 --region=us-central1 --quiet
+
+RESULT  Deleting [onnewordercreated-00022-5r9]... failed.
+        ERROR: FAILED_PRECONDITION: The latest created Revision
+        "onnewordercreated-00022-5r9" cannot be directly deleted.
+        exit=1
+
+AFTER   onnewordercreated | Ready=False | RevisionFailed
+        latestCreated = onnewordercreated-00022-5r9
+        latestReady   = onnewordercreated-00021-waw
+        traffic       = onnewordercreated-00021-waw @ 100%
+```
+
+**AFTER is byte-identical to BEFORE.** The call was rejected, not partially applied. All eight
+services were re-read afterwards; none drifted, all still serve 100% on their healthy revision.
+
+### The condition I missed
+
+My six safety conditions — 0% traffic, not `latestReady`, not serving, no traffic tag, healthy
+predecessor present, rollback path confirmed — were **necessary but not sufficient**. There is a
+seventh, structural to the Cloud Run delete API and independent of traffic:
+
+> **A revision cannot be deleted while it is `latestCreatedRevisionName`.**
+
+This is not a traffic-safety property, which is why checking traffic, tags and readiness did not
+surface it. I verified what Cloud Run guards about *serving* and assumed that was the whole of the
+delete contract. It was not. The evidence to predict this was available without mutating and I did
+not go looking for it.
+
+**It applies to all eight.** In every one of the eight services, `latestCreated` *is* the failed
+revision:
+
+```
+onnewordercreated        latestCreated = onnewordercreated-00022-5r9         <- the failed one
+onorderstatuschange      latestCreated = onorderstatuschange-00063-8sk       <- the failed one
+bookingdispatch          latestCreated = bookingdispatch-00018-rwl           <- the failed one
+providerdispatch         latestCreated = providerdispatch-00049-2rp          <- the failed one
+minishoppage             latestCreated = minishoppage-00007-jnj              <- the failed one
+profilegetpublicprofile  latestCreated = profilegetpublicprofile-00006-9nq   <- the failed one
+kass                     latestCreated = kass-00057-lkq                      <- the failed one
+intasendwebhook          latestCreated = intasendwebhook-00065-5ck           <- the failed one
+```
+
+Attempting the remaining seven would produce seven more identical rejections. Not attempted.
+
+### What this means — a dependency inversion
+
+The only way for a revision to stop being `latestCreated` is for a **newer revision to be
+created**. Creating a revision requires an image in Artifact Registry. There is none.
+
+```
+clear Ready=False
+      |
+      +-- requires a NEWER revision to exist
+                |
+                +-- requires revision creation
+                          |
+                          +-- requires an image in Artifact Registry
+                                    |
+                                    +-- BLOCKED (problem B)
+```
+
+**Problem B is not merely the next gate — it is a hard prerequisite for undoing the P0-2 damage.**
+I had assumed the rollback was independent of the artifact problem. It is not. The eight services
+remain `Ready=False` until B is resolved.
+
+### Severity of leaving it
+
+Non-fatal, and unchanged from the P0-2 record: serving is unaffected, traffic is 100% on healthy
+revisions, cold starts work, money-path services were never touched. What is degraded is the
+**health signal** — eight services report `Ready=False`/`RevisionFailed` on dashboards and to any
+alerting that reads service conditions. That is a monitoring-fidelity cost, not an availability one.
+
+### One candidate, deliberately NOT attempted
+
+`gcloud run services replace` with the image pinned to the **serving digest** rather than the
+`:version_1` tag would, if Cloud Run accepted it, create a successful newer revision and free the
+failed one for deletion. I did **not** try it, for two reasons: it creates a revision, which is
+outside this authorisation; and the evidence predicts it fails anyway — `artifacts docker images
+describe` on that exact digest returns `Image not found`, so revision creation should reject it
+identically. It belongs in the B gate as a hypothesis to test, not as a workaround to reach for.
+
+### Status
+
+**P0-2 rollback: BLOCKED on problem B.** No further mutation attempted. Nothing changed.
