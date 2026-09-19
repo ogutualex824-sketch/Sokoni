@@ -96,23 +96,132 @@ const universe = new Set([...liveTree.keys(), ...candTree.keys()].filter(isServe
 const isDocLike = (p) => /^docs\//i.test(p) || /\.(md|json)$/i.test(p) ||
                          /^scripts\//i.test(p) || /CHANGELOG|ROADMAP|README/i.test(p);
 
-function consumerIndex(ref, tree) {
-  const consumers = new Map();   /* served files that would fetch it */
-  const mentions  = new Map();   /* prose / tests that merely name it */
-  const textFiles = [...tree.keys()].filter((p) => /\.(html|js|css|json|md|mjs)$/i.test(p));
-  const names = [...universe];
+/* Scans each file ONCE and extracts filename-shaped tokens, rather than testing
+   every asset name against every file.
 
-  for (const f of textFiles) {
+   The original form was O(files x assets) — about half a million substring scans
+   per side over large bodies. Filtered to one domain it finished; run across the
+   whole served surface it did not, which meant the gate could only ever make a
+   SCOPED claim. That scope limit is what let `sokoni-premium-scanner.js` — a
+   live-served capability outside the POS lexical filter — never enter the census
+   at all. A gate that cannot run unfiltered cannot state completeness. */
+function consumerIndex(ref, tree) {
+  const consumers = new Map();
+  const mentions  = new Map();
+  const textFiles = [...tree.keys()].filter((p) => /\.(html|js|css|json|md|mjs)$/i.test(p));
+
+  /* basename -> full path, for the assets we care about. */
+  const byBase = new Map();
+  for (const a of universe) byBase.set(a.split('/').pop(), a);
+
+  /* ONE `git grep` per side instead of one `git show` per file. Reading ~700
+     blobs meant ~700 process spawns, which on Windows cost more than all the
+     scanning combined and made the unfiltered run impossible. git grep walks
+     the tree in-process and emits `ref:path:match`, so the whole side costs a
+     single spawn. */
+  void textFiles;   /* the tree listing is no longer needed to drive the scan */
+
+  /* ── PASS 1: which files mention an asset at all ─────────────────────
+     `-l` gives paths only. Reading every blob in the tree is what made this
+     gate unusable; reading only the few dozen that actually match is cheap. */
+  const hits = git(['grep', '-lIE', '--full-name', '-e', '[A-Za-z0-9_.-]+\\.(js|css|html)',
+                    ref, '--', '*.html', '*.js', '*.css', '*.json', '*.md', '*.mjs'])
+    .split('\n')
+    .map((l) => l.replace(new RegExp('^' + ref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ':'), ''))
+    .filter(Boolean);
+
+  /* ── PASS 2: classify each occurrence by SYNTAX, not by line shape ────
+     A line-start test cannot see this codebase's block comments, whose
+     continuation lines carry no leading `*`:
+
+         THE MODULE IS LAZY. window.PosPremiumScanner is a shim ...
+         touching .open() is what fetches sokoni-premium-scanner.js.
+
+     That line looks like code to any per-line test, and it is what made
+     `pos.js` a "consumer" of a module it only describes. Comment state is a
+     property of the FILE, so it has to be tracked across lines.
+
+     Strings are tracked too, and not for tidiness: without it the `//` in
+     `'https://cdn…'` opens a line comment and silently swallows every
+     reference after it. A recognizer that under-counts consumers turns a real
+     LIVE-ONLY-WIRED regression into an UNREFERENCED shrug, which is the more
+     dangerous direction of error. */
+  function scanRegions(body) {
+    const code = [];          /* [start, end) offsets that are live code */
+    let i = 0, n = body.length, mark = 0;
+    let state = 'code', quote = '';
+
+    const flush = (end) => { if (end > mark) code.push([mark, end]); };
+
+    while (i < n) {
+      const c = body[i], c2 = body[i + 1];
+      if (state === 'code') {
+        if (c === '/' && c2 === '*')      { flush(i); state = 'block'; i += 2; continue; }
+        if (c === '/' && c2 === '/')      { flush(i); state = 'line';  i += 2; continue; }
+        if (c === '<' && body.startsWith('<!--', i)) { flush(i); state = 'html'; i += 4; continue; }
+        if (c === '"' || c === "'" || c === '`') { quote = c; state = 'str'; i++; continue; }
+        i++; continue;
+      }
+      if (state === 'str') {
+        if (c === '\\') { i += 2; continue; }
+        if (c === quote) { state = 'code'; }
+        else if (c === '\n' && quote !== '`') { state = 'code'; }  /* unterminated */
+        i++; continue;
+      }
+      if (state === 'block') {
+        if (c === '*' && c2 === '/') { state = 'code'; i += 2; mark = i; continue; }
+        i++; continue;
+      }
+      if (state === 'line') {
+        if (c === '\n') { state = 'code'; mark = i; }
+        i++; continue;
+      }
+      if (state === 'html') {
+        if (body.startsWith('-->', i)) { state = 'code'; i += 3; mark = i; continue; }
+        i++; continue;
+      }
+    }
+    if (state === 'code') flush(n);
+    return code;
+  }
+
+  const TOKEN = /[A-Za-z0-9_.-]+\.(?:js|css|html)\b/g;
+
+  for (const f of hits) {
     let body;
     try { body = git(['show', `${ref}:${f}`]); } catch (e) { continue; }
-    const docLike = isDocLike(f);
-    for (const asset of names) {
-      const base = asset.split('/').pop();
-      if (f === asset) continue;                    /* a file is not its own consumer */
-      if (body.indexOf(base) === -1) continue;
-      const bucket = docLike ? mentions : consumers;
+
+    /* A doc is prose whatever its syntax says. */
+    if (isDocLike(f)) {
+      TOKEN.lastIndex = 0;
+      let t;
+      while ((t = TOKEN.exec(body)) !== null) {
+        const asset = byBase.get(t[0]);
+        if (!asset || asset === f) continue;
+        if (!mentions.has(asset)) mentions.set(asset, []);
+        const list = mentions.get(asset);
+        if (list.indexOf(f) === -1) list.push(f);
+      }
+      continue;
+    }
+
+    const regions = scanRegions(body);
+    const inCode = (pos) => {
+      for (let k = 0; k < regions.length; k++) {
+        if (pos >= regions[k][0] && pos < regions[k][1]) return true;
+      }
+      return false;
+    };
+
+    TOKEN.lastIndex = 0;
+    let t;
+    while ((t = TOKEN.exec(body)) !== null) {
+      const asset = byBase.get(t[0]);
+      if (!asset || asset === f) continue;          /* a file is not its own consumer */
+      const bucket = inCode(t.index) ? consumers : mentions;
       if (!bucket.has(asset)) bucket.set(asset, []);
-      bucket.get(asset).push(f);
+      const list = bucket.get(asset);
+      if (list.indexOf(f) === -1) list.push(f);     /* one entry per file */
     }
   }
   return { consumers, mentions };
