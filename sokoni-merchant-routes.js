@@ -60,6 +60,19 @@
       mobile:true, desktop:true, activeKey:'products',
       note:'Canonical products list + Add Product + bulk upload. Writes products/{id}.' },
 
+    /* OFFERS & PROMOTIONS — the commercial layer over listings. Declared here because the
+       sidebar is a PROJECTION OF THIS CONTRACT: a module registered without a route would
+       mount but be unreachable, which is the "button with no destination" this file exists
+       to prevent, inverted. The rules live in sokoni-promotion-model.js; this route only
+       opens the surface that edits them. */
+    { id:'offers', name:'Offers', icon:'🎁', tier:'primary',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'offers',
+      note:'Bundles, buy-X-get-Y, happy hours, spend-and-save. Composes and previews through ' +
+           'SokoniPromotionModel; no offer store is wired yet, and the surface says so rather ' +
+           'than appearing to save into nothing.' },
+
     { id:'sell', name:'Sell', icon:'💳', tier:'primary',
       kind:'native',
       role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
@@ -374,7 +387,11 @@
      by accident when a route definition moves. Every id here must be tier:'primary', and every
      tier:'primary' route must appear here — validate() enforces both directions. */
   var PRIMARY_ORDER = [
-    'dashboard', 'plan', 'sell', 'products', 'inventory', 'pos', 'orders', 'analytics', 'revenue',
+    /* `offers` sits beside `products` because it is the commercial layer OVER listings —
+       a merchant thinks "what I sell" and "what deal I run on it" in the same breath.
+       PRIMARY_ORDER is an explicit list, not a tier filter, so a route declared with
+       tier:'primary' and omitted here mounts but never appears — present and unreachable. */
+    'dashboard', 'plan', 'sell', 'products', 'offers', 'inventory', 'pos', 'orders', 'analytics', 'revenue',
     'payments', 'till', 'deliveries', 'returns', 'receipts', 'staff', 'messages', 'disputes', 'settings'
   ];
 

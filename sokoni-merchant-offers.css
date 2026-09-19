@@ -1,0 +1,277 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   SOKONI — OFFERS & PROMOTIONS STUDIO styling
+   sokoni-merchant-offers.css
+
+   Scoped entirely to .mo-* so it cannot leak into the shell or any sibling module. It uses
+   the shell's OWN tokens (--acc, --card, --line, --txt, --danger) rather than fresh colours,
+   so the studio inherits the merchant theme instead of becoming a second design language —
+   the same reason it is a panel in Merchant V2 and not a second application.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.mo-wrap { padding: 18px 20px 40px; color: var(--txt, #f4f4f4); max-width: 1080px; }
+
+/* ── HEADER ─────────────────────────────────────────────────────────────── */
+.mo-head {
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  padding-bottom: 16px; margin-bottom: 20px;
+  border-bottom: 1px solid var(--line, rgba(255,255,255,.09));
+}
+.mo-title { font-size: 20px; font-weight: 900; letter-spacing: -0.2px; }
+.mo-stats { display: flex; gap: 16px; font-size: 12px; color: rgba(255,255,255,.55); }
+.mo-stats b { color: var(--txt, #f4f4f4); font-size: 15px; font-weight: 900; margin-right: 4px; }
+.mo-head .mo-btn--primary { margin-left: auto; }
+
+/* ── BUTTONS ────────────────────────────────────────────────────────────── */
+.mo-btn {
+  background: rgba(255,255,255,.05); border: 1px solid var(--line, rgba(255,255,255,.12));
+  color: var(--txt, #f4f4f4); font: inherit; font-size: 13px; font-weight: 800;
+  padding: 10px 16px; border-radius: 10px; cursor: pointer; transition: background .15s, border-color .15s;
+}
+.mo-btn:hover { background: rgba(255,255,255,.09); }
+.mo-btn--primary {
+  background: var(--acc-dim, rgba(113,255,0,.12)); border-color: var(--acc-line, rgba(113,255,0,.32));
+  color: var(--acc, #71ff00);
+}
+.mo-btn--primary:hover { background: rgba(113,255,0,.2); }
+.mo-back {
+  background: none; border: none; color: rgba(255,255,255,.5); font: inherit; font-size: 13px;
+  font-weight: 700; cursor: pointer; padding: 0 0 12px;
+}
+.mo-back:hover { color: var(--txt, #f4f4f4); }
+
+/* ── TEMPLATE GRID — the entry point for an ordinary merchant ───────────── */
+.mo-tpl {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 10px;
+}
+.mo-tpl-btn {
+  display: flex; align-items: center; gap: 9px; text-align: left;
+  background: var(--card, rgba(255,255,255,.04)); border: 1px solid var(--line, rgba(255,255,255,.09));
+  color: var(--txt, #f4f4f4); font: inherit; font-size: 13px; font-weight: 700;
+  padding: 14px 14px; border-radius: 13px; cursor: pointer;
+  transition: border-color .15s, transform .12s, background .15s;
+}
+.mo-tpl-btn:hover {
+  border-color: var(--acc-line, rgba(113,255,0,.32));
+  background: rgba(113,255,0,.05); transform: translateY(-1px);
+}
+.mo-tpl-ico { font-size: 19px; line-height: 1; }
+
+/* ── SECTIONS ───────────────────────────────────────────────────────────── */
+.mo-section { margin-bottom: 26px; }
+.mo-h1 { font-size: 22px; font-weight: 900; margin: 6px 0 20px; letter-spacing: -0.3px; }
+.mo-h2 {
+  font-size: 11px; font-weight: 900; letter-spacing: 1.1px; text-transform: uppercase;
+  color: rgba(255,255,255,.42); margin-bottom: 12px;
+}
+.mo-h3 { font-size: 12px; font-weight: 800; color: rgba(255,255,255,.6); margin: 16px 0 8px; }
+.mo-hint { font-size: 11px; color: rgba(255,255,255,.38); margin-top: 8px; line-height: 1.5; }
+
+/* ── FIELDS ─────────────────────────────────────────────────────────────── */
+.mo-f { display: block; margin-bottom: 12px; }
+.mo-f > span {
+  display: block; font-size: 11px; font-weight: 800; letter-spacing: .4px;
+  color: rgba(255,255,255,.5); margin-bottom: 6px;
+}
+.mo-in {
+  width: 100%; background: rgba(0,0,0,.34); border: 1px solid var(--line, rgba(255,255,255,.12));
+  border-radius: 10px; color: var(--txt, #f4f4f4); font: inherit; font-size: 14px;
+  padding: 11px 13px; transition: border-color .15s;
+}
+.mo-in:focus { outline: none; border-color: var(--acc-line, rgba(113,255,0,.32)); }
+.mo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.mo-times { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+
+/* ── DAY / TOGGLE CHIPS ─────────────────────────────────────────────────── */
+.mo-days { display: flex; flex-wrap: wrap; gap: 7px; }
+.mo-day {
+  background: rgba(255,255,255,.04); border: 1px solid var(--line, rgba(255,255,255,.12));
+  color: rgba(255,255,255,.62); font: inherit; font-size: 12px; font-weight: 800;
+  padding: 8px 14px; border-radius: 9px; cursor: pointer; transition: all .14s;
+}
+.mo-day:hover { border-color: rgba(255,255,255,.26); color: var(--txt, #f4f4f4); }
+.mo-day.on {
+  background: var(--acc-dim, rgba(113,255,0,.12)); border-color: var(--acc-line, rgba(113,255,0,.32));
+  color: var(--acc, #71ff00);
+}
+
+/* ── OFFER CARDS ────────────────────────────────────────────────────────── */
+.mo-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 13px; }
+.mo-card {
+  background: var(--card, rgba(255,255,255,.04)); border: 1px solid var(--line, rgba(255,255,255,.09));
+  border-radius: 15px; padding: 15px 16px; transition: border-color .15s;
+}
+.mo-card:hover { border-color: rgba(255,255,255,.2); }
+.mo-card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.mo-card-name { font-size: 14px; font-weight: 800; flex: 1; }
+.mo-card-price { font-size: 19px; font-weight: 900; color: var(--acc, #71ff00); margin-bottom: 4px; }
+.mo-card-meta { font-size: 11px; color: rgba(255,255,255,.45); margin-bottom: 10px; }
+.mo-card-stats {
+  display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; font-weight: 700;
+  color: rgba(255,255,255,.55); padding-top: 10px;
+  border-top: 1px solid var(--line, rgba(255,255,255,.07));
+}
+.mo-pill {
+  font-size: 9px; font-weight: 900; letter-spacing: .7px; padding: 4px 9px; border-radius: 6px;
+  background: rgba(255,255,255,.07); color: rgba(255,255,255,.55);
+}
+.mo-pill--live { background: var(--acc-dim, rgba(113,255,0,.12)); color: var(--acc, #71ff00); }
+.mo-pill--scheduled { background: rgba(0,170,255,.12); color: #00aaff; }
+.mo-pill--paused { background: rgba(255,152,0,.12); color: #ff9800; }
+
+/* NO DATA IS NOT ZERO. Styled as absent information, never as a measured result — a
+   dimmed "0" would read as a failed offer rather than an unmeasured one. */
+.mo-nodata { color: rgba(255,255,255,.3); font-style: italic; font-weight: 600; }
+
+/* ── BUNDLE BUILDER ─────────────────────────────────────────────────────── */
+.mo-items {
+  border: 1px dashed var(--line, rgba(255,255,255,.14)); border-radius: 12px;
+  padding: 12px; margin-bottom: 12px; min-height: 56px;
+}
+.mo-item {
+  display: flex; align-items: center; gap: 10px; padding: 9px 4px; font-size: 13px;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+}
+.mo-item:last-child { border-bottom: none; }
+.mo-item > span:first-child { flex: 1; font-weight: 700; }
+.mo-item-q { color: rgba(255,255,255,.45); font-size: 12px; font-weight: 700; }
+.mo-item-p { font-weight: 800; min-width: 84px; text-align: right; }
+.mo-x {
+  background: none; border: none; color: rgba(255,82,82,.7); font-size: 17px;
+  cursor: pointer; padding: 0 3px; line-height: 1;
+}
+.mo-x:hover { color: var(--danger, #ff5252); }
+
+/* THE ECONOMICS ARE DERIVED, and the saving is the emphasised figure because it is the
+   one the merchant is actually deciding on. */
+.mo-econ {
+  background: rgba(0,0,0,.26); border-radius: 12px; padding: 14px 16px; margin-top: 14px;
+}
+.mo-econ > div {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 5px 0; font-size: 13px;
+}
+.mo-econ > div > span { color: rgba(255,255,255,.5); }
+.mo-econ > div > b { font-weight: 800; }
+.mo-econ-save {
+  border-top: 1px solid var(--line, rgba(255,255,255,.1)); margin-top: 6px; padding-top: 10px !important;
+}
+.mo-econ-save > b { color: var(--acc, #71ff00); font-size: 16px; }
+
+/* ── CUSTOMER PREVIEW — the same resolver the basket runs ───────────────── */
+.mo-prev {
+  background: rgba(0,0,0,.3); border: 1px solid var(--line, rgba(255,255,255,.1));
+  border-radius: 12px; padding: 14px 16px;
+}
+.mo-prev-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 7px 0; font-size: 13px;
+}
+.mo-prev-row:last-child {
+  border-top: 1px solid var(--line, rgba(255,255,255,.1));
+  margin-top: 6px; padding-top: 11px; font-size: 15px; font-weight: 900;
+}
+.mo-prev-row > span { color: rgba(255,255,255,.62); }
+.mo-prev-row > b { font-weight: 800; }
+
+/* ── STATES ─────────────────────────────────────────────────────────────── */
+.mo-state {
+  text-align: center; padding: 38px 20px; color: rgba(255,255,255,.55);
+  border: 1px dashed var(--line, rgba(255,255,255,.12)); border-radius: 14px; margin-top: 18px;
+}
+.mo-state b { display: block; color: var(--txt, #f4f4f4); font-size: 15px; margin-bottom: 7px; }
+.mo-state small { display: block; font-size: 12px; line-height: 1.6; max-width: 440px; margin: 0 auto; }
+.mo-state--err { border-color: rgba(255,82,82,.3); }
+.mo-state--err b { color: var(--danger, #ff5252); }
+
+/* A warning is information, not decoration — it is the surface admitting a limit. */
+.mo-warn {
+  background: rgba(255,152,0,.08); border: 1px solid rgba(255,152,0,.25); color: #ffb74d;
+  border-radius: 11px; padding: 12px 14px; font-size: 12.5px; line-height: 1.55;
+  font-weight: 600; margin-top: 14px;
+}
+
+.mo-actions {
+  display: flex; gap: 11px; padding-top: 20px; margin-top: 6px;
+  border-top: 1px solid var(--line, rgba(255,255,255,.09));
+}
+.mo-actions .mo-btn { flex: 1; padding: 13px; }
+
+@media (max-width: 620px) {
+  .mo-wrap { padding: 14px 15px 90px; }
+  .mo-head .mo-btn--primary { margin-left: 0; width: 100%; }
+  .mo-tpl { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); }
+  .mo-list { grid-template-columns: 1fr; }
+  .mo-actions { flex-direction: column; }
+}
+
+/* ── SCHEDULING CALENDAR ─────────────────────────────────────────────────────
+   A reading of the schedule, not a second editor — nothing in here is an input. Every
+   marked day was asked of the promotion model, so what is highlighted is exactly what the
+   basket will accept. */
+.mo-cal {
+  background: rgba(0,0,0,.26); border: 1px solid var(--line, rgba(255,255,255,.1));
+  border-radius: 14px; padding: 14px 15px;
+}
+.mo-cal-head {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
+}
+.mo-cal-head b { font-size: 14px; font-weight: 900; letter-spacing: -.01em; }
+.mo-cal-nav {
+  background: rgba(255,255,255,.05); border: 1px solid var(--line, rgba(255,255,255,.12));
+  color: var(--txt, #f4f4f4); font: inherit; font-size: 16px; line-height: 1;
+  width: 30px; height: 30px; border-radius: 9px; cursor: pointer;
+}
+.mo-cal-nav:hover { background: rgba(255,255,255,.1); }
+
+.mo-cal-dow, .mo-cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+}
+.mo-cal-dow {
+  margin-bottom: 5px; font-size: 10px; font-weight: 900; letter-spacing: .06em;
+  color: rgba(255,255,255,.34); text-align: center;
+}
+.mo-cal-x { aspect-ratio: 1; }
+.mo-cal-d {
+  position: relative; aspect-ratio: 1;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; border-radius: 9px;
+  color: rgba(255,255,255,.42); background: rgba(255,255,255,.02);
+}
+/* A day the offer runs. The dot repeats what the colour says, so the calendar still reads
+   for anyone who cannot separate the green from the grey. */
+.mo-cal-d.on {
+  color: var(--acc, #71ff00); font-weight: 900;
+  background: var(--acc-dim, rgba(113,255,0,.12));
+  border: 1px solid var(--acc-line, rgba(113,255,0,.3));
+}
+.mo-cal-d.on > i {
+  position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%);
+  font-size: 5px; font-style: normal; line-height: 1;
+}
+.mo-cal-d.today { outline: 1px solid rgba(255,255,255,.3); outline-offset: -1px; }
+
+/* ── PERFORMANCE ─────────────────────────────────────────────────────────────
+   Figures only ever rendered from measured stats. The empty state above this uses .mo-state,
+   which is the same "nothing was read" treatment the offer list uses — deliberately, so an
+   unmeasured offer never looks like a failed one. */
+.mo-stats-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 10px;
+}
+.mo-stat {
+  background: var(--card, rgba(255,255,255,.04));
+  border: 1px solid var(--line, rgba(255,255,255,.09));
+  border-radius: 13px; padding: 13px 14px;
+}
+.mo-stat > b {
+  display: block; font-size: 19px; font-weight: 900; letter-spacing: -.02em; line-height: 1.15;
+}
+.mo-stat > span {
+  display: block; margin-top: 4px; font-size: 10.5px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; color: rgba(255,255,255,.42);
+}
+
+@media (max-width: 620px) {
+  .mo-cal { padding: 11px 11px; }
+  .mo-cal-d { font-size: 11px; border-radius: 8px; }
+  .mo-stats-grid { grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); }
+}

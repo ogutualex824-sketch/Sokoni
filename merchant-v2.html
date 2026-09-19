@@ -742,6 +742,10 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script src="sokoni-fulfilment.js"></script>
 <script src="sokoni-shift.js"></script>
 <link rel="stylesheet" href="sokoni-merchant-dashboard.css">
+<!-- Offers studio. Scoped to .mo-* and built on the shell tokens, so it inherits the
+     merchant theme rather than introducing a second design language. -->
+<link rel="stylesheet" href="sokoni-merchant-offers.css">
+<link rel="stylesheet" href="sokoni-listing-studio.css">
 <script src="sokoni-merchant-dashboard.js"></script>
 <script src="sokoni-merchant-sell.js"></script>
 <script src="sokoni-merchant-inventory-ui.js"></script>
@@ -816,6 +820,21 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script src="sokoni-ai-subscriptions.js"></script>
 <script src="sokoni-creative.js"></script>
 <script src="sokoni-merchant-products.js"></script>
+<!-- THE COMMERCE MODELS. Listing types decide what a listing IS; the listing model owns
+     which fields each type collects, how complete it is and what state it is in; the
+     promotion model owns the commercial rules and the ONLY discount arithmetic in the
+     system. All three are pure data and pure functions — they render nothing and write
+     nothing, so the certified product writer remains the single write authority.
+     Loaded BEFORE the Offers studio, which composes and previews through them. -->
+<script src="sokoni-listing-types.js"></script>
+<script src="sokoni-listing-model.js"></script>
+<script src="sokoni-promotion-model.js"></script>
+<!-- The Listing Studio renders the two models above INTO the existing product editor —
+     the type picker, the type's own fields, the shot list, the quality report and the
+     customer preview. It is a renderer, not a second uploader: it mounts nothing, owns no
+     route and writes nothing, so Products remains the one place a listing is created. -->
+<script src="sokoni-listing-studio.js"></script>
+<script src="sokoni-merchant-offers.js"></script>
 <script src="sokoni-merchant-wallet.js"></script>
 <!-- Receipts. Renders through the LOCKED receipt contract (SokoniReceiptDoc in
      sokoni-receipt.js, already loaded above) over the shell's one order reader — so the
@@ -2531,6 +2550,18 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      rather than refreshing a surface that would query the previous shop's data. */
   var MODULES = {
     sell:       { global: 'SokoniMerchantSell',        ctx: _ctx },
+    /* OFFERS & PROMOTIONS — the commercial layer over listings: bundles, buy-X-get-Y,
+       happy hours, spend-and-save. The RULES live in sokoni-promotion-model.js and the
+       arithmetic happens only there, so this panel and the customer's basket can never
+       disagree about a price.
+       ITS ctx DELIBERATELY OMITS A WRITER FOR NOW. No offer store is wired, and the module
+       says so on screen rather than appearing to save into nothing — a merchant who builds
+       a campaign that evaporates on reload is worse served than one told plainly it is not
+       persisted yet. pickListing is handed through so the bundle builder reads the
+       merchant's real catalogue instead of keeping a second list of products. */
+    offers:     { global: 'SokoniMerchantOffers',      ctx: function () { return {
+                    scope: _scope(), shopName: _shopName(), onToast: toast,
+                  }; } },
     /* SUPPLY — the merchant-to-merchant procurement workspace (J1, sokoni-merchant-supply.js).
        Its ctx is deliberately NOT _ctx: Supply is keyed on a BUSINESS, resolved through
        merchantContext(), which is a different identifier space from the shop scope every
