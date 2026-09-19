@@ -15,7 +15,7 @@ no function deployments (the release line is independently blocked).
 | P0-2-INV Registry provenance investigation | **DONE (read-only) — cause UNKNOWABLE, audit logging off** |
 | P0-3 Right-size max instances | **FROZEN** — same root cause |
 | P0-4 Retire `intasendWebhook` | **DEFERRED / HIGH-RISK RETIREMENT** — deletion may be the purge trigger |
-| P0-5 Least-privilege IAM | separate gate — not started |
+| P0-5 Least-privilege IAM | **AUDIT DONE (read-only)** — see `GCP_IAM_LEAST_PRIVILEGE_AUDIT.md`; no mutation |
 | P0-6 App Check audit | separate gate — not started |
 | P0-7 AR Data Access audit logging | **DONE — ADMIN_READ and DATA_WRITE both PROVEN live** |
 | P0-7-OBS Forensic harness + baseline | **READY — harness live, method vocabulary confirmed** |
