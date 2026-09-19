@@ -70,42 +70,91 @@ const ATTR = /\b(?:src|href)\s*=\s*"([^"]*)"|\b(?:src|href)\s*=\s*'([^']*)'/gi;
 const findings = [];
 let refsChecked = 0;
 
+/* ── Runtime loader edges ────────────────────────────────────────────
+   `src=`/`href=` is not the whole reference universe. This project fetches
+   modules at runtime through two named helpers:
+
+     loadScript('sokoni-print-host-listener.js')
+     lazyGlobal('PosPremiumScanner', 'sokoni-premium-scanner.js')
+
+   Both fetch exactly as a <script src> would and 404 identically when the file
+   is absent. Before this pass the gate reported 6 assets while three further
+   dangling references sat in plain sight — proven, not inferred, by
+   `prove-artifact-blindspot.js`.
+
+   This is an ALLOW-LIST of loader names, not a hunt for filename-shaped
+   strings. `const note = "foo.js"` fetches nothing, and reporting it would
+   train people to ignore the gate. Adding a loader here means adding its
+   controls to `test-artifact-gate.js` in the same commit. */
+const LOADER = /\b(?:loadScript|lazyGlobal)\s*\(([^)]*)\)/g;
+const ARGSTR = /(['"])([^'"]+)\1/g;
+
+/* Comments cannot fetch anything, so a commented-out loader is not a defect.
+   Only WHOLE-LINE `//` comments are removed: stripping mid-line `//` would eat
+   the `//` in any `https://` URL and silently blank real references. A trailing
+   comment on a line that also contains code is therefore still scanned — a
+   known, deliberate limit, not an oversight. */
+function stripComments(body) {
+  return body
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .filter((l) => !/^\s*(\/\/|\*)/.test(l))
+    .join('\n');
+}
+
+/** Shared resolution for both passes. Returns true when the ref was in scope. */
+function record(file, raw) {
+  if (!raw || SKIP.test(raw) || RESERVED.test(raw)) return false;
+
+  let clean = raw.split('#')[0].split('?')[0];
+  if (!clean) return false;
+
+  /* A browser percent-decodes before requesting, and Hosting serves the
+     decoded name. `assets/Sokoni%20Logo.png` IS `assets/Sokoni Logo.png`, so
+     comparing the encoded form against the file list invents a missing file
+     for every asset whose name contains a space. */
+  try { clean = decodeURIComponent(clean); } catch (e) { /* keep raw on bad escapes */ }
+
+  /* Only local file references are in scope; a bare route with no extension
+     is a cleanUrls path, resolved by Hosting rather than by a file name. */
+  if (!/\.[a-z0-9]{2,5}$/i.test(clean)) return false;
+
+  refsChecked++;
+
+  const resolved = clean.startsWith('/')
+    ? clean.replace(/^\/+/, '')
+    : path.posix.normalize(path.posix.join(path.posix.dirname(file), clean));
+
+  if (!tracked.has(resolved)) {
+    findings.push({ file, ref: raw, resolved, why: 'not present in ' + REF });
+  }
+  return true;
+}
+
 for (const file of htmlFiles) {
   let body;
   try { body = git(['show', `${REF}:${file}`]); }
   catch (e) { findings.push({ file, ref: '(unreadable)', why: 'could not read from ' + REF }); continue; }
 
-  /* Comments cannot reference an asset the browser will fetch, and a commented
-     -out tag is not a defect. Strip them before scanning. */
-  const scan = body.replace(/<!--[\s\S]*?-->/g, '');
+  const scan = stripComments(body);
 
   let m;
   ATTR.lastIndex = 0;
   while ((m = ATTR.exec(scan)) !== null) {
-    const raw = (m[1] != null ? m[1] : m[2] || '').trim();
-    if (!raw || SKIP.test(raw) || RESERVED.test(raw)) continue;
+    record(file, (m[1] != null ? m[1] : m[2] || '').trim());
+  }
 
-    let clean = raw.split('#')[0].split('?')[0];
-    if (!clean) continue;
-
-    /* A browser percent-decodes before requesting, and Hosting serves the
-       decoded name. `assets/Sokoni%20Logo.png` IS `assets/Sokoni Logo.png`, so
-       comparing the encoded form against the file list invents a missing file
-       for every asset whose name contains a space. */
-    try { clean = decodeURIComponent(clean); } catch (e) { /* keep raw on bad escapes */ }
-
-    /* Only local file references are in scope; a bare route with no extension
-       is a cleanUrls path, resolved by Hosting rather than by a file name. */
-    if (!/\.[a-z0-9]{2,5}$/i.test(clean)) continue;
-
-    refsChecked++;
-
-    const resolved = clean.startsWith('/')
-      ? clean.replace(/^\/+/, '')
-      : path.posix.normalize(path.posix.join(path.posix.dirname(file), clean));
-
-    if (!tracked.has(resolved)) {
-      findings.push({ file, ref: raw, resolved, why: 'not present in ' + REF });
+  LOADER.lastIndex = 0;
+  while ((m = LOADER.exec(scan)) !== null) {
+    /* The asset is whichever argument looks like a file — first for
+       loadScript, second for lazyGlobal — so scan the argument list rather
+       than assuming a position. */
+    const args = m[1];
+    let a;
+    ARGSTR.lastIndex = 0;
+    while ((a = ARGSTR.exec(args)) !== null) {
+      if (/\.[a-z0-9]{2,5}$/i.test(a[2])) record(file, a[2].trim());
     }
   }
 }
