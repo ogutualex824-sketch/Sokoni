@@ -338,9 +338,20 @@
 
   <div class="nav-group">
     <div class="nav-group-label">Operations</div>
+    <button class="nav-item" data-section="integrations" onclick="SA.nav('integrations');_closeSidebar()">
+      <span class="nav-icon">&#x1F50C;</span>Integrations
+    </button>
     <button class="nav-item" data-section="audit" onclick="SA.nav('audit');_closeSidebar()">
       <span class="nav-icon">&#x1F4CB;</span>Audit Log
     </button>
+    <!-- SECURITY CENTRE. A LINK, not a second implementation: AdminOS is the canonical
+         admin workspace, so this routes to the one Security page rather than rebuilding it
+         here. Building a second would give the platform two security consoles free to
+         disagree about what is happening. -->
+    <a class="nav-item" href="admin-os.html#security" target="_blank" rel="noopener"
+       data-section="security" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F510;</span>Security Centre
+    </a>
     <button class="nav-item" data-section="broadcast" onclick="SA.nav('broadcast');_closeSidebar()">
       <span class="nav-icon">&#x1F4E2;</span>Platform Broadcast
     </button>
@@ -656,6 +667,18 @@
     </section>
 
     <!-- ══ SECTION 6: Audit Log ══ -->
+    <!-- ══ SECTION: Integrations ══
+         Rendered by sokoni-integrations.js, the same module admin-os.html mounts.
+         It adopts this console's colour tokens on its own; nothing here is restyled. -->
+    <section class="sa-panel" id="panel-integrations" hidden>
+      <div class="panel-header">
+        <h2>&#x1F50C; Integrations</h2>
+        <p>Every system SOKONI integrates with, the platform service registry behind it, and
+           the credentials each rail depends on. Read-only.</p>
+      </div>
+      <div id="integrationsRoot"></div>
+    </section>
+
     <section class="sa-panel" id="panel-audit" hidden>
       <div class="panel-header">
         <h2>&#x1F4CB; Audit Log</h2>
@@ -967,6 +990,7 @@ const SA={
     else if(section==='financial')this.loadFinancial();
     else if(section==='config')this.loadConfig();
     else if(section==='emergency')this.loadEmergency();
+    else if(section==='integrations')this.loadIntegrations();
     else if(section==='audit')this.loadAudit();
     else if(section==='broadcast')this.loadBroadcastHistory();
   },
@@ -979,6 +1003,21 @@ const SA={
   // Modal close ─────────────────────────────────────────────
   closeModal(){document.getElementById('saModal').classList.remove('open');_modalCb=null},
   confirmModal(){if(_modalCb){_modalCb();_modalCb=null;}this.closeModal()},
+
+  // ══ SECTION: Integrations ═══════════════════════════════
+  // The module reads its own canonical Firestore collections; this console
+  // passes it a mount point and nothing else. A missing script is reported as
+  // a missing script, never as an empty integration list.
+  loadIntegrations(){
+    const root=document.getElementById('integrationsRoot');
+    if(!root)return;
+    if(!window.SokoniIntegrations){
+      root.innerHTML='<p style="color:var(--muted);font-size:13px">The integrations module did not ' +
+        'load. Check that sokoni-integrations.js is served on this page.</p>';
+      return;
+    }
+    window.SokoniIntegrations.mount(root);
+  },
 
   // ══ SECTION 1: Platform Overview ════════════════════════
   async loadOverview(){
@@ -1951,5 +1990,11 @@ const SA={
   })();
 })();
 </script>
+<!-- Integrations Control Center. Shared verbatim with admin-os.html; the catalogue
+     must load first because the console reads it on mount. Both are classic scripts
+     with no dependency on the firebase compat shim at parse time — the module only
+     touches Firestore once a console mounts it, which happens after the auth gate. -->
+<script src="sokoni-integration-catalogue.js"></script>
+<script src="sokoni-integrations.js"></script>
 </body>
 </html>

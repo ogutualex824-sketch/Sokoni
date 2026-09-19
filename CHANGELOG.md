@@ -1,3 +1,131 @@
+## 2026-09-19 (76) — AdminOS Security Centre
+
+**45/0** (`scripts/test-aos-security.js`). Existing AdminOS suites unchanged and green:
+render 43/0, wiring 289/0. **Nothing deployed.**
+
+### What it shows, and what it refuses to
+
+Every figure is counted from a live read, and the collection each panel is counted from is
+printed on the panel. Verified in a browser: 3 open alerts · 2 incidents · 3 sessions ·
+1 approval · 4 threat events · risk 82 / 47 / —.
+
+**The mockup's headline numbers are deliberately absent.** `securityMFA` and
+`securityDevices` are readable **only by the person they describe** — measured against the
+deployed ruleset, not assumed. So there is no MFA-adoption percentage and no device-trust
+donut. The panel names the boundary instead, and warns in as many words that widening those
+rules to produce a figure would trade every user's privacy for a number on a chart.
+
+No posture score is invented either. Nobody computes one.
+
+### Unreadable is not zero
+
+A count that could not be read renders as **—** in a colourless "unknown" state — never `0`,
+which on a security console reads as *no threats*. A denied panel says
+*"this is not an empty result. Nothing was read"*; a genuinely empty one says
+*"No security events recorded"*. Both states captured in the browser. A real zero still
+renders as `0`, in calm green.
+
+An unscored user shows **—**, not `0` — a risk console printing zero for *never assessed*
+tells an administrator the account is fine.
+
+### A defect this page does not inherit
+
+The existing panel queries `securityEvents` ordered by `createdAt`. **All four writers stamp
+`ts`** — asserted. Firestore excludes documents missing the ordered field, so that query
+returns nothing on a platform that is recording events. The Centre orders by `ts`, and falls
+back to an *unordered* read rather than showing a false empty.
+
+### Additive, and no redesign
+
+It renders into the Security section that was **already** in the AdminOS sidebar. The
+original panel remains as a fallback and runs if the module is absent or throws. No other
+section loader was touched. It performs no write and no delete — revoke and approve delegate
+to the actions AdminOS already owns, so there is no second way to act.
+
+Super Admin gets a sidebar **link** to the canonical page rather than a second console; two
+security consoles would be free to disagree about what is happening.
+
+### Files
+
+`sokoni-aos-security.js`, `sokoni-aos-security.css`, `scripts/test-aos-security.js`,
+`scripts/harness-aos-security.html` (new).
+
+**Wiring not landed in this commit.** The three edits that mount it — `admin-os.html`
+(script tag), `sokoni-aos.js` (delegate + hash deep-link) and `super-admin.html` (sidebar
+link) — sit in files that currently also carry another agent's in-flight Integrations work.
+Committing them would sweep that work into this commit, so they are left in the working tree
+for coordination. Until they land, the Security section renders its original panel, which is
+the intended fallback.
+
+## 2026-09-19 (76) — INTEGRATIONS CONTROL CENTER: one surface, two consoles
+
+**560/0 certification · 8/8 sabotage mutations caught, 0 inert · admin-nav validator green.**
+
+A new Integrations surface introduced into the **existing** sidebar of both platform-admin
+consoles. Neither console was redesigned: each gained one sidebar button inside a group it
+already had, and one panel. `admin.html` is deliberately not a consumer (owner ruling).
+
+Six tabs — Catalogue, Registered, Capabilities, Dependencies, Webhooks, Credentials — over
+the declared inventory of every system SOKONI integrates with, plus the live platform
+service registry behind it. One module, mounted verbatim by both pages, so the two consoles
+cannot drift apart.
+
+### Files affected
+- `sokoni-integrations.js` (new) — the console
+- `sokoni-integration-catalogue.js` (new) — declared inventory of every integration
+- `admin-os.html` — sidebar entry, panel, two script tags
+- `super-admin.html` — sidebar entry, panel, `loadIntegrations()`, two script tags
+- `sokoni-aos.js` — `integrations` panel loader
+- `tests/certify-integrations-console.js` (new)
+- `tests/sabotage-integrations-console.js` (new)
+- `docs/INTEGRATIONS_CONTROL_CENTER.md` (new)
+
+### Database changes
+None. Reads only: `platformServices`, `platformHealth`, `platformDependencies`,
+`posWebhooks` — all already `allow read: if isAdmin()`.
+
+### API changes
+None. The console routes through no callable and no dispatch op, so it needs **no function
+deploy** — which is required while the Artifact Registry forensics freeze stands.
+
+### Security changes
+- **Read-only by construction.** No `set`/`update`/`delete`/`add`/`httpsCallable` in the
+  module; asserted on stripped source against a positive control proving the stripper left
+  real code behind.
+- **Webhook signing secrets are never rendered.** Field rendering is an allow-list, so a
+  field added to `posWebhooks` later cannot leak by default.
+- The Credentials tab lists secret **names** only; no value is read by a browser.
+- Every rendered field is escaped; certification plants a hostile registry document and
+  checks the output.
+
+### Data integrity
+Unknown is never rendered as zero. A failed read shows an em dash and names the unavailable
+source; a successful empty read shows a canonical `0`. A service with no heartbeat reads
+"No heartbeat", never "Healthy". Enforced on **both** the KPI tiles and the tab pill counts
+— pre-flight sabotage found the pills uncovered on the first pass, and the gap was closed
+before certification rather than after.
+
+`STALE_MS` mirrors the 5-minute threshold in `platformGetHealth`. If the server's threshold
+moves, move this one in the same commit.
+
+### Payment rails
+The catalogue covers **IntaSend only**. Direct Daraja and direct M-Pesa rails are not
+catalogued, and certification fails if one reappears — paired with a positive control
+asserting the IntaSend rails *are* present, so "no Daraja" is a finding and not an empty
+catalogue.
+
+Daraja and C2B receiver **code** in `functions/` is untouched. Removing it is a separate,
+money-critical change: `darajaSTKCallback` and `mpesaC2B*` still receive live POSTs, and the
+deploy freeze blocks shipping their removal. That needs an explicit owner decision.
+
+### Breaking changes
+None. Additive only.
+
+### Deployment
+Hosting only. No function deploy, no rules deploy, no index change.
+
+---
+
 ## 2026-09-19 (75) — GATE P IMPLEMENTATION: the merchant offer authority
 
 **58/0 against real Firestore · 35/0 engine parity.** Design gate preserved (64/0 + 35/0),

@@ -1,0 +1,15 @@
+<!doctype html>
+<!-- SOKONI — Security Centre harness. scripts/harness-aos-security.html
+     admin-os.html requires an authenticated admin and redirects to login, so the module is
+     mounted here against stubbed reads to verify RENDERING only. Authorisation is the
+     ruleset's job and is not simulated. Never linked from the site. -->
+<meta charset="utf-8"><title>Security Centre harness</title>
+<link rel="stylesheet" href="/sokoni-aos-security.css">
+<style>
+ :root{--aos-bg:#060a06;--aos-surface:rgba(255,255,255,0.03);--aos-border:rgba(255,255,255,.08);
+ --aos-accent:#71ff00;--aos-warn:#ff9800;--aos-danger:#f44336;--aos-text:rgba(255,255,255,0.9);
+ --aos-muted:rgba(255,255,255,0.4)}
+ body{background:var(--aos-bg);color:var(--aos-text);font:14px/1.5 system-ui,sans-serif;margin:0;padding:22px}
+</style>
+<div id="securityBody"></div>
+<script src="/sokoni-aos-security.js"></script>

@@ -42,7 +42,15 @@ window.SokoniAOS = (() => {
     const el = document.getElementById("aosUserName");
     if (el) el.textContent = _currentUser.name || _currentUser.email;
     if (_currentUser.isSuper) document.body.classList.add("is-super");
-    _navigate("dashboard");
+    /* DEEP LINK. A section named in the hash opens it, so admin-os.html#security lands on
+       Security rather than on the dashboard — which is what makes the Super Admin sidebar's
+       link truthful rather than decorative. Validated against a nav item that actually
+       exists, so an unknown or hostile hash falls back to the dashboard and can never be
+       spliced into a selector. */
+    const _h = String(location.hash || "").replace(/^#/, "").toLowerCase();
+    const _valid = /^[a-z]+$/.test(_h) &&
+      document.querySelector('.nav-item[data-section="' + _h + '"]');
+    _navigate(_valid ? _h : "dashboard");
     _startLiveKPIs();
   }
 
@@ -84,6 +92,12 @@ window.SokoniAOS = (() => {
       security:      () => _loadSecurity(),
       hubs:          () => _loadHubs(),
       workflows:     () => _loadWorkflows(),
+      /* Integrations Control Center. Self-contained in sokoni-integrations.js:
+         it reads its own canonical Firestore collections and does not route
+         through _call/adminOsDispatch, so it needs no new dispatch op and no
+         function deploy. If the script is missing the panel says so rather
+         than rendering an empty console. */
+      integrations:  () => _loadIntegrations(),
     };
     loaders[s]?.();
   }
@@ -1924,6 +1938,28 @@ window.SokoniAOS = (() => {
   async function _loadSecurity() {
     const body = document.getElementById("securityBody");
     if (!body) return;
+
+    /* SECURITY CENTRE. Renders the dedicated surface when sokoni-aos-security.js is loaded,
+       and otherwise falls through to the original panel below — so this is additive and no
+       other AdminOS section is affected either way.
+
+       It reads the same collections this panel does, plus securityAlerts / securityIncidents
+       / securityAuditLog / securityRisk, and orders events by `ts` (every writer stamps
+       `ts`; the query below orders by `createdAt`, which Firestore treats as "exclude
+       documents lacking the field" — so it reports no events on a platform recording them). */
+    if (window.SokoniAOSSecurity && typeof window.SokoniAOSSecurity.mount === "function") {
+      try {
+        const done = await window.SokoniAOSSecurity.mount({
+          host: body, db: _db,
+          actions: { revokeSession, approveRequest, rejectRequest },
+        });
+        if (done) return;
+      } catch (e) {
+        /* Fall through to the original panel rather than leaving the section blank. */
+        console.warn("[AOS] security centre unavailable, using base panel:", e && e.message);
+      }
+    }
+
     body.innerHTML = _spinner();
     try {
       const snap = await _db.collection("activeSessions")
@@ -2234,6 +2270,18 @@ window.SokoniAOS = (() => {
     container.appendChild(t);
     setTimeout(() => t.classList.add("visible"), 10);
     setTimeout(() => { t.classList.remove("visible"); setTimeout(() => t.remove(), 300); }, 3000);
+  }
+
+  // ── Integrations Control Center ──────────────────────────────────────────────
+  function _loadIntegrations() {
+    const root = document.getElementById("integrationsRoot");
+    if (!root) return;
+    if (!window.SokoniIntegrations) {
+      root.innerHTML = _emptyMsg("The integrations module did not load. Check that " +
+        "sokoni-integrations.js is served on this page.");
+      return;
+    }
+    window.SokoniIntegrations.mount(root);
   }
 
   // ── Hub Registry ─────────────────────────────────────────────────────────────
@@ -2883,6 +2931,7 @@ window.SokoniAOS = (() => {
     activateCampaign,
     deleteCampaign,
     // Hubs
+    loadIntegrations:    _loadIntegrations,
     refreshHubs:         () => { _panelCache.hubs = false; _loadHubs(); },
     loadHubHealth:       _loadHubHealth,
     viewHubDetails,

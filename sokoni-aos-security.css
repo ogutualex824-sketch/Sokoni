@@ -1,0 +1,236 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   SOKONI — SECURITY CENTRE styling (AdminOS)
+   sokoni-aos-security.css
+
+   Scoped entirely to .secx-* so it cannot reach any other AdminOS section, and built on the
+   shell's OWN tokens (--aos-accent, --aos-surface, --aos-border, --aos-danger …) rather than
+   fresh colours — the console should gain a page, not a second design language.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.secx { display: flex; flex-direction: column; gap: 14px; }
+
+/* ── POSTURE STRIP ────────────────────────────────────────────────────────── */
+.secx-strip {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px;
+}
+.secx-stat {
+  position: relative; overflow: hidden;
+  background: var(--aos-surface, rgba(255,255,255,.03));
+  border: 1px solid var(--aos-border, rgba(255,255,255,.08));
+  border-radius: 14px; padding: 16px 16px 14px;
+}
+/* A hairline of colour rather than a filled card — a security console that glows red at rest
+   trains people to ignore red. */
+.secx-stat::before {
+  content: ''; position: absolute; inset: 0 auto auto 0; width: 100%; height: 2px;
+  background: currentColor; opacity: .55;
+}
+.secx-stat--calm { color: var(--aos-accent, #71ff00); }
+.secx-stat--info { color: #4aa3ff; }
+.secx-stat--warn { color: var(--aos-warn, #ff9800); }
+.secx-stat--crit { color: var(--aos-danger, #f44336); }
+/* UNKNOWN IS ITS OWN STATE, and deliberately colourless: a count that could not be read must
+   not borrow the calm of zero or the alarm of many. */
+.secx-stat--unknown { color: rgba(255,255,255,.28); }
+
+.secx-stat-ico { font-size: 15px; line-height: 1; margin-bottom: 8px; }
+.secx-stat-n {
+  font-size: 30px; font-weight: 800; line-height: 1; letter-spacing: -.02em;
+  color: currentColor;
+}
+.secx-stat-l {
+  margin-top: 6px; font-size: 12.5px; font-weight: 600;
+  color: var(--aos-text, rgba(255,255,255,.9));
+}
+.secx-stat-s {
+  margin-top: 2px; font-size: 10.5px; font-weight: 500;
+  color: var(--aos-muted, rgba(255,255,255,.4));
+}
+
+/* ── LAYOUT ───────────────────────────────────────────────────────────────── */
+.secx-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.secx-card {
+  background: var(--aos-surface, rgba(255,255,255,.03));
+  border: 1px solid var(--aos-border, rgba(255,255,255,.08));
+  border-radius: 14px; padding: 16px; min-width: 0;
+}
+.secx-card--wide, .secx-card--full { grid-column: 1 / -1; }
+.secx-card--full { margin-top: 0; }
+
+.secx-h {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-bottom: 12px;
+}
+.secx-h h3 {
+  margin: 0; font-size: 14px; font-weight: 700;
+  color: var(--aos-text, rgba(255,255,255,.9));
+}
+/* The collection each panel is counted from, named on the panel. An administrator asking
+   "where does this number come from" should not have to open the code. */
+.secx-src {
+  font-size: 10px; font-weight: 600; letter-spacing: .04em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--aos-muted, rgba(255,255,255,.4));
+  border: 1px solid var(--aos-border, rgba(255,255,255,.08));
+  border-radius: 6px; padding: 3px 7px; white-space: nowrap;
+}
+
+/* ── EMPTY AND UNREADABLE ─────────────────────────────────────────────────── */
+.secx-none {
+  padding: 22px 16px; text-align: center; border-radius: 11px;
+  border: 1px dashed var(--aos-border, rgba(255,255,255,.1));
+}
+.secx-none b { display: block; font-size: 13px; color: var(--aos-muted, rgba(255,255,255,.55)); font-weight: 600; }
+.secx-none span { display: block; margin-top: 5px; font-size: 11.5px; color: rgba(255,255,255,.35); line-height: 1.5; }
+/* A FAILED READ IS NOT AN EMPTY ONE, and must not look like one. */
+.secx-none--err { border-color: rgba(244,67,54,.35); background: rgba(244,67,54,.05); }
+.secx-none--err b { color: var(--aos-danger, #f44336); }
+
+/* ── THREAT FEED ──────────────────────────────────────────────────────────── */
+.secx-feed { list-style: none; margin: 0; padding: 0; max-height: 330px; overflow-y: auto; }
+.secx-ev {
+  display: flex; align-items: flex-start; gap: 11px; padding: 10px 2px;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+}
+.secx-ev:last-child { border-bottom: none; }
+.secx-ev-dot {
+  flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; margin-top: 5px;
+  background: currentColor; box-shadow: 0 0 0 3px rgba(255,255,255,.04);
+}
+.secx-ev--crit { color: var(--aos-danger, #f44336); }
+.secx-ev--warn { color: var(--aos-warn, #ff9800); }
+.secx-ev--info { color: #4aa3ff; }
+.secx-ev-b { flex: 1; min-width: 0; }
+.secx-ev-t {
+  font-size: 12.5px; font-weight: 600; color: var(--aos-text, rgba(255,255,255,.9));
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.secx-ev-m { margin-top: 2px; font-size: 11px; color: var(--aos-muted, rgba(255,255,255,.42)); }
+.secx-ev-w { flex: 0 0 auto; font-size: 10.5px; color: rgba(255,255,255,.3); white-space: nowrap; }
+
+/* ── RISK ─────────────────────────────────────────────────────────────────── */
+.secx-risk, .secx-aud, .secx-appr, .secx-inc { list-style: none; margin: 0; padding: 0; }
+.secx-risk li {
+  display: flex; align-items: center; gap: 10px; padding: 9px 2px;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+}
+.secx-risk li:last-child { border-bottom: none; }
+.secx-risk-u { flex: 1; min-width: 0; }
+.secx-risk-n {
+  font-size: 12.5px; font-weight: 600; color: var(--aos-text, rgba(255,255,255,.9));
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.secx-risk-m { margin-top: 2px; font-size: 11px; color: var(--aos-muted, rgba(255,255,255,.4)); }
+.secx-band {
+  flex: 0 0 auto; min-width: 38px; text-align: center;
+  font-size: 12px; font-weight: 800; padding: 4px 9px; border-radius: 8px;
+}
+.secx-band--ok   { color: var(--aos-accent, #71ff00); background: rgba(113,255,0,.1); }
+.secx-band--warn { color: var(--aos-warn, #ff9800); background: rgba(255,152,0,.1); }
+.secx-band--crit { color: var(--aos-danger, #f44336); background: rgba(244,67,54,.1); }
+.secx-band--info { color: rgba(255,255,255,.35); background: rgba(255,255,255,.05); }
+
+/* ── OWNER-SCOPED PANEL ───────────────────────────────────────────────────── */
+.secx-card--locked { background: rgba(255,255,255,.015); }
+.secx-lock { text-align: center; padding: 6px 4px 2px; }
+.secx-lock-ico { font-size: 22px; opacity: .5; margin-bottom: 8px; }
+.secx-lock b { display: block; font-size: 13px; color: var(--aos-text, rgba(255,255,255,.85)); }
+.secx-lock p {
+  margin: 8px 0 0; font-size: 11.5px; line-height: 1.6;
+  color: var(--aos-muted, rgba(255,255,255,.45));
+}
+.secx-lock code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
+  background: rgba(255,255,255,.06); padding: 1px 5px; border-radius: 4px; color: rgba(255,255,255,.7);
+}
+/* The sentence that stops someone "fixing" the empty panel by widening a privacy rule. */
+.secx-lock-warn {
+  margin-top: 10px !important; padding: 9px 11px; border-radius: 9px; text-align: left;
+  background: rgba(255,152,0,.06); border: 1px solid rgba(255,152,0,.22);
+  color: #ffb74d !important;
+}
+
+/* ── TABLE ────────────────────────────────────────────────────────────────── */
+.secx-tw { overflow-x: auto; }
+.secx-t { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.secx-t th {
+  text-align: left; padding: 8px 10px 8px 2px; font-size: 10.5px; font-weight: 700;
+  letter-spacing: .05em; text-transform: uppercase;
+  color: var(--aos-muted, rgba(255,255,255,.4));
+  border-bottom: 1px solid var(--aos-border, rgba(255,255,255,.08));
+}
+.secx-t td {
+  padding: 10px 10px 10px 2px; border-bottom: 1px solid rgba(255,255,255,.04);
+  color: var(--aos-text, rgba(255,255,255,.88));
+}
+.secx-t tr:last-child td { border-bottom: none; }
+.secx-dim { color: var(--aos-muted, rgba(255,255,255,.42)) !important; }
+.secx-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+.secx-r { text-align: right; }
+
+/* ── AUDIT / APPROVALS / INCIDENTS ────────────────────────────────────────── */
+.secx-aud li, .secx-appr li {
+  display: flex; align-items: center; gap: 10px; padding: 9px 2px;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+}
+.secx-aud li:last-child, .secx-appr li:last-child { border-bottom: none; }
+.secx-aud-a, .secx-appr-t {
+  flex: 1; font-size: 12.5px; font-weight: 600; color: var(--aos-text, rgba(255,255,255,.9));
+}
+.secx-aud-m, .secx-appr-m { font-size: 11px; color: var(--aos-muted, rgba(255,255,255,.4)); }
+.secx-aud time, .secx-inc time {
+  flex: 0 0 auto; font-size: 10.5px; color: rgba(255,255,255,.3); white-space: nowrap;
+}
+.secx-appr li > div:first-child { flex: 1; min-width: 0; }
+.secx-appr-b { display: flex; gap: 6px; flex: 0 0 auto; }
+
+.secx-inc li {
+  display: flex; align-items: flex-start; gap: 11px; padding: 11px 2px;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+}
+.secx-inc li:last-child { border-bottom: none; }
+.secx-inc-b { flex: 1; min-width: 0; }
+.secx-inc-t { font-size: 13px; font-weight: 600; color: var(--aos-text, rgba(255,255,255,.9)); }
+.secx-inc-m { margin-top: 3px; font-size: 11.5px; line-height: 1.5; color: var(--aos-muted, rgba(255,255,255,.42)); }
+.secx-tag {
+  flex: 0 0 auto; font-size: 9.5px; font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; padding: 4px 8px; border-radius: 6px; margin-top: 1px;
+}
+.secx-tag--crit { color: var(--aos-danger, #f44336); background: rgba(244,67,54,.12); }
+.secx-tag--warn { color: var(--aos-warn, #ff9800); background: rgba(255,152,0,.12); }
+.secx-tag--info { color: rgba(255,255,255,.5); background: rgba(255,255,255,.06); }
+
+/* ── BUTTONS ──────────────────────────────────────────────────────────────── */
+.secx-btn {
+  font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  padding: 6px 11px; border-radius: 8px;
+  background: rgba(255,255,255,.05); color: var(--aos-text, rgba(255,255,255,.85));
+  border: 1px solid var(--aos-border, rgba(255,255,255,.12));
+  transition: background .15s, border-color .15s;
+}
+.secx-btn:hover { background: rgba(255,255,255,.1); }
+.secx-btn--danger { color: #ff8a80; border-color: rgba(244,67,54,.3); }
+.secx-btn--danger:hover { background: rgba(244,67,54,.12); }
+.secx-btn--ok { color: var(--aos-accent, #71ff00); border-color: rgba(113,255,0,.3); }
+.secx-btn--ok:hover { background: rgba(113,255,0,.1); }
+
+.secx-foot {
+  font-size: 11px; line-height: 1.6; text-align: center; padding: 4px 0 2px;
+  color: rgba(255,255,255,.28);
+}
+
+/* ── LOADING ──────────────────────────────────────────────────────────────── */
+.secx-skel {
+  min-height: 92px; border-radius: 14px;
+  background: linear-gradient(90deg, rgba(255,255,255,.03) 25%, rgba(255,255,255,.06) 37%, rgba(255,255,255,.03) 63%);
+  background-size: 400% 100%; animation: secxShimmer 1.3s ease infinite;
+  border: 1px solid var(--aos-border, rgba(255,255,255,.08));
+}
+.secx-skel--card { min-height: 190px; }
+@keyframes secxShimmer { 0% { background-position: 100% 50% } 100% { background-position: 0 50% } }
+
+@media (max-width: 900px) {
+  .secx-grid { grid-template-columns: 1fr; }
+  .secx-card--wide, .secx-card--full { grid-column: auto; }
+}
