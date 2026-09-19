@@ -4,6 +4,32 @@ Multiple AI agents (Claude Code, Cursor, Copilot) work this repo in **parallel g
 worktrees**. These rules prevent failures that have actually happened in production.
 (Claude Code also loads the same rules from `CLAUDE.md`.)
 
+---
+
+## ⚠️ EXPERIMENT IN PROGRESS — Artifact Registry forensics (since 2026-09-19)
+
+`gcf-artifacts` lost every function image. Existing revisions still serve from Cloud Run's
+internal copies, but **no service can create a new revision from its existing spec**. The
+cause is not established. A controlled canary artifact is instrumenting it right now.
+
+**While this notice stands, do NOT:**
+
+* deploy any Cloud Function (`firebase deploy --only functions`, `gcloud functions deploy`)
+* delete any Cloud Function — **function deletion is the leading suspect**
+* run `gcloud run services update` — it fails, and it leaves behind a failed revision that
+  **cannot be deleted** (a revision cannot be removed while it is `latestCreatedRevisionName`)
+* push, delete or tidy anything in Artifact Registry
+* delete `sokoni-ar-forensics-canary:20260919T060552Z` — it is the instrument, not litter
+
+Any of these contaminates the experiment and makes the next artifact event unattributable.
+
+Check state with `node scripts/infra/ar-forensics.js 1d` (read-only; self-classifying, and it
+flags contamination). Background: `docs/GCP_COST_ARCHITECTURE_IMPLEMENTATION.md`, P0-2 onward.
+
+**Remove this notice only when the artifact lifecycle is understood and the owner says so.**
+
+---
+
 ## Deploying — read this first
 
 > ### ⛔ NOTICE (2026-09-05) — Functions deploys are intentionally blocked on this branch
