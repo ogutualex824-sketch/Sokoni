@@ -362,3 +362,163 @@ It is a single reversible API enablement, it creates no revision, and it replace
 inference with 90 days of observed-usage evidence — closing three of the five unknowns in §7 before
 any binding is touched. Given that Stage 3 has whole-platform blast radius and no staged rollout,
 buying better evidence first is cheap.
+
+---
+
+## P0-5B — IAM Recommender evidence gate
+
+One API enablement. No IAM binding changed. **The gate produced a result, but not the one intended:
+the recommender cannot currently supply the evidence it was enabled to supply.**
+
+### PHASE 1 — before state
+
+```
+IAM bindings        : 39
+roles/editor members: 3
+auditConfigs        : artifactregistry.googleapis.com (ADMIN_READ, DATA_WRITE)
+service accounts    : 6
+functions           : 1,709
+enabled APIs        : 79
+recommender.googleapis.com : DISABLED
+cloudasset.googleapis.com  : DISABLED
+```
+
+### PHASE 2 — the single mutation
+
+```
+gcloud services enable recommender.googleapis.com --project=sokoni-aeb26
+Operation "operations/acat.p2-24799054989-0223040f-233e-4c64-a673-cf41539bcc42" finished successfully.
+exit=0
+```
+
+**Exact API diff, taken against a captured before-list rather than trusted:**
+
+```
+before: 79   after: 80
+ADDED   : + recommender.googleapis.com
+REMOVED : (none)
+```
+
+Nothing was pulled in as a transitive dependency. `cloudasset.googleapis.com` remains **disabled**,
+as instructed.
+
+Verification: IAM bindings **39 → 39**, editor members **3 → 3**, service accounts **6**, functions
+**1,709**, build `72739a70…`, canary present, `onnewordercreated-00022-5r9` unchanged.
+
+### PHASE 3 — the read
+
+```
+google.iam.policy.Recommender                   rows=0
+google.iam.serviceAccount.ChangeRiskRecommender rows=0
+google.cloudsql.instance.OutOfDiskRecommender   rows=0
+google.run.service.IdentityRecommender          rows=0
+```
+
+Insight-type queries returned `INVALID_ARGUMENT` for both spellings tried; not pursued, since
+recommendations were the target.
+
+**Recommendation count: 0. Recommendation IDs: none. State: no data.**
+
+This is recorded as **PENDING COMPUTATION, not "no recommendations exist."** The calls succeeded
+and returned empty lists rather than permission errors, and every recommender — including ones
+unrelated to IAM — returned zero, which is the signature of a freshly enabled API that has not yet
+computed anything. Google's recommender analyses a trailing 90-day window and typically needs
+24–48h after enablement.
+
+### PHASE 4 — cross-check. The finding that matters.
+
+> **The IAM Recommender derives least-privilege from observed permission usage in audit logs. For
+> this project, the permissions that matter are not logged — and never have been.**
+
+| Evidence the recommender needs | Available? |
+|---|---|
+| Firestore document reads/writes (288 files) | **NO** — `DATA_READ`/`DATA_WRITE` on Firestore is not enabled |
+| Cloud Storage object access (8 files) | **NO** — not enabled |
+| Firebase Auth operations (51 files) | **NO** — not enabled |
+| Artifact Registry writes | **YES** — but only since P0-7, hours ago |
+| Admin-plane activity (e.g. `ExportDocuments`) | **YES** — Admin Activity is always on |
+
+`auditConfigs` covers exactly one service, `artifactregistry.googleapis.com`. Zero Data Access
+logging exists for Firestore, Storage or Datastore. The only Firestore rows in the logs are the
+nightly admin-plane `ExportDocuments` from the backup job.
+
+**So the recommender is blind to essentially all of the runtime SA's real work.**
+
+### This inverts my own earlier recommendation
+
+P0-5 §10 argued that recommender evidence *"replaces source-derived inference with 90 days of
+observed-usage evidence"* and should therefore precede Stage 1. **That was wrong for this project.**
+It is true in general and false here, because the observed-usage evidence does not exist.
+
+The correction has a sharp edge:
+
+> **An under-evidenced recommender is worse than no recommender.** With no Data Access logs, "this
+> permission was never used" and "this permission's use was never recorded" are indistinguishable.
+> A recommendation to strip Firestore or Storage access would look authoritative and would break
+> production.
+
+**Therefore: any future recommender output must be treated as a LOWER-confidence input than the
+source-derived matrix in P0-5 §4 — not a higher one. A recommendation to REMOVE a permission that
+the source matrix shows in use must be rejected, not applied.**
+
+That is the opposite of how such recommendations are normally read, and it is worth stating plainly
+before anyone acts on a future non-empty result.
+
+### The option, and its cost
+
+To make the recommender genuinely useful, Data Access logging would have to be enabled for
+Firestore and Storage, then left to accumulate.
+
+**This is a real trade-off, not a formality.** The audit measured **1,174,952 Firestore reads per
+month**. `DATA_READ` logging at that volume is high-ingestion, and log ingestion is billed beyond
+50 GiB/month against a platform currently at 1.75 GB/month. A cost-reduction programme should not
+casually add a large recurring logging cost to inform a one-off IAM decision.
+
+Options, for a decision — **none taken:**
+
+| Option | Cost | Evidence gained |
+|---|---|---|
+| **A.** Wait 24–48h, read whatever appears, treat as low confidence | none | Admin-plane only. Will not cover Firestore/Storage/Auth |
+| **B.** Enable `DATA_WRITE` only for Firestore (not `DATA_READ`) | moderate | Write paths observed; reads still invisible |
+| **C.** Enable full Data Access logging, soak 30–90 days | **high, recurring** | Complete — but delays P0-5 by months |
+| **D.** Proceed on the source-derived matrix with the staged plan | none | What P0-5 §8 already designed |
+
+**Recommendation: A then D.** Read the recommender once it computes, use it only to *corroborate*
+or to reveal a capability the source scan missed — never to justify a removal — and otherwise
+proceed with the P0-5 staged plan, whose safety comes from grant-before-revoke and a full nightly
+soak rather than from usage telemetry.
+
+Option C is not justified by a single IAM decision on a project whose stated goal is lower cost.
+
+### Unresolved permissions — carried forward unchanged from P0-5 §7
+
+| Unknown | Status after P0-5B |
+|---|---|
+| Exact FCM role for `admin.messaging()` | **still open** — recommender cannot help, FCM use is unlogged |
+| Redis / Memorystore requirement | **still open** — determine whether an instance exists at all |
+| Capability missed by source scanning | **still open** — and the recommender cannot close it without Data Access logs |
+| `iam.serviceAccounts.signBlob` for `createCustomToken` | **CLOSED by P0-5** — source-proven at `device-engine.js:260`; mitigation is mandatory before any Editor removal |
+| Secret Manager access | **CLOSED by P0-5** — explicit per-secret grants exist; survives Editor removal |
+
+### Verification
+
+| Check | Result |
+|---|---|
+| IAM bindings changed | **none — 39 before, 39 after** |
+| Any IAM binding modified | **NO** |
+| `roles/editor` members | **3, unchanged** |
+| APIs enabled | **exactly one: `recommender.googleapis.com`** |
+| `cloudasset.googleapis.com` | **still disabled, as instructed** |
+| Cloud Run services / revisions | unchanged |
+| Functions | 1,709, none deployed or deleted |
+| Cloud Build | unchanged — `72739a70…` |
+| Artifact Registry | unchanged |
+| Canary | **intact** |
+| Contamination baseline | **CLEAN** |
+| Recommendations applied | **none — zero existed, and none would have been applied** |
+
+### Status
+
+**P0-5B: COMPLETE.** The API is enabled and is the correct long-term instrument. Its evidence is
+not yet computed and will be structurally incomplete when it arrives. Editor removal remains behind
+its own mutation gate and is **not** unblocked by this slice.
