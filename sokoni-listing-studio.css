@@ -142,3 +142,11 @@
   .ls-prev--desktop { display: block; }
   .ls-prev--desktop .ls-prev-img { width: 100%; }
 }
+
+/* The availability line in the Studio's customer preview — the same reading the listing
+   page renders, so the two can never disagree about whether something is available. */
+.ls-prev-avl { margin-top: 5px; font-size: 11.5px; font-weight: 700; }
+.ls-avl { color: rgba(255,255,255,.55); }
+.ls-avl--open { color: var(--acc, #71ff00); }
+.ls-avl--closed { color: #ffb020; }
+.ls-avl--out { color: #ff6b6b; }

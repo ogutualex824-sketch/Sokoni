@@ -1,0 +1,33 @@
+<!doctype html>
+<!-- SOKONI — Availability view harness. scripts/harness-availability.html
+     Renders the panel against fixtures, because a real listing carries no opening hours
+     yet and therefore shows only its one-line state. Never linked from the site. -->
+<meta charset="utf-8">
+<title>Availability harness</title>
+<link rel="stylesheet" href="/product.css">
+<style>
+ body{background:#050505;color:#fff;font:14px/1.5 system-ui,sans-serif;margin:0;padding:24px}
+ .row{display:flex;gap:28px;flex-wrap:wrap}
+ .col{max-width:330px;flex:1 1 300px}
+ h2{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8b8b8b}
+</style>
+<div class="row">
+ <div class="col"><h2>Restaurant</h2><div id="a"></div></div>
+ <div class="col"><h2>Hotel</h2><div id="b"></div></div>
+ <div class="col"><h2>Product, no stock field</h2><div id="c"></div></div>
+</div>
+<script src="/sokoni-listing-types.js"></script>
+<script src="/sokoni-availability-model.js"></script>
+<script src="/sokoni-availability-view.js"></script>
+<script>
+ var HOURS={mon:{periods:[{open:'11:00',close:'22:00'}]},tue:{periods:[{open:'11:00',close:'22:00'}]},
+   wed:{periods:[{open:'11:00',close:'22:00'}]},thu:{periods:[{open:'11:00',close:'22:00'}]},
+   fri:{periods:[{open:'11:00',close:'23:00'}]},sat:{periods:[{open:'12:00',close:'23:00'}]},
+   sun:{closed:true}};
+ var V=window.SokoniAvailabilityView;
+ document.getElementById('a').innerHTML=V.panelHtml(
+   {listingType:'food',name:'Chicken Alfredo',hours:HOURS,stock:6},new Date(2026,8,21,12,0));
+ document.getElementById('b').innerHTML=V.panelHtml(
+   {listingType:'room',name:'Deluxe King',stock:3});
+ document.getElementById('c').innerHTML=V.panelHtml({listingType:'product',name:'Kettle'});
+</script>

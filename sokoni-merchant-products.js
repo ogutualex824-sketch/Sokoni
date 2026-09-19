@@ -2120,15 +2120,53 @@
       var extra = (S.editor && S.editor.variantRows) || 0;
       var n = rows.length + extra;
 
+      /* ── UNIVERSAL VARIANTS ──────────────────────────────────────────────────────
+         The mechanism was ALREADY universal: the option names are the merchant's own free
+         text and every row carries its own price, stock, SKU and barcode. What was not
+         universal was the WORDING — "colour, size, capacity" is a shop's vocabulary, and a
+         restaurant reading it does not realise the same grid gives them Regular / Large,
+         or a salon 30 / 60 / 90 minutes.
+
+         So the guidance and the placeholder follow the listing type. The datalist offers
+         those names without imposing them: a merchant may still type anything, which is
+         what keeps one variant system serving every vertical. */
+      var VAR_HINT = {
+        food:     { eg: 'Portion',  list: ['Portion', 'Size', 'Spice level', 'Add-on'],
+                    note: 'Same dish, different options — portion, size, extras.' },
+        drink:    { eg: 'Size',     list: ['Size', 'Serving', 'Flavour'],
+                    note: 'Same drink, different options — serving size, flavour.' },
+        room:     { eg: 'Room type', list: ['Room type', 'Occupancy', 'View', 'Board'],
+                    note: 'Same property, different rooms — type, occupancy, board.' },
+        service:  { eg: 'Duration', list: ['Duration', 'Tier', 'Provider'],
+                    note: 'Same service, different options — duration, tier, provider.' },
+        event:    { eg: 'Ticket',   list: ['Ticket', 'Tier', 'Seating'],
+                    note: 'Same event, different tickets — tier, seating.' },
+        rental:   { eg: 'Period',   list: ['Period', 'Size', 'Condition'],
+                    note: 'Same item, different terms — period, size.' },
+        vehicle:  { eg: 'Trim',     list: ['Trim', 'Colour', 'Transmission'],
+                    note: 'Same model, different options — trim, colour.' },
+        property: { eg: 'Unit',     list: ['Unit', 'Floor', 'Bedrooms'],
+                    note: 'Same development, different units — floor, bedrooms.' },
+      };
+      var _lsv = studio();
+      var _vt = _lsv ? _lsv.typeIdOf(liveListing(p)) : 'product';
+      var vh = VAR_HINT[_vt] || { eg: 'Colour', list: ['Colour', 'Size', 'Capacity', 'Material'],
+                    note: 'Same product, different options — colour, size, capacity.' };
+
       var head = '<div class="pr-sec">🔀 Variants</div>' +
         '<div class="pr-note" style="margin:-4px 0 10px">' +
-          'Same product, different options — colour, size, capacity. Each keeps its own stock, ' +
+          esc(vh.note) + ' Each keeps its own stock, price and SKU, ' +
           'and the product total becomes their sum.' +
         '</div>' +
+        '<datalist id="pf-varopts">' +
+          vh.list.map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') +
+        '</datalist>' +
         '<div class="pr-vopts">' +
           names.map(function (nm, i) {
             return '<input class="pr-i" data-pf="vopt.' + i + '" type="text" maxlength="30" ' +
-              'placeholder="Option ' + (i + 1) + ' (e.g. Colour)" aria-label="Option name ' + (i + 1) + '" ' +
+              'list="pf-varopts" ' +
+              'placeholder="Option ' + (i + 1) + ' (e.g. ' + esc(vh.eg) + ')" ' +
+              'aria-label="Option name ' + (i + 1) + '" ' +
               'value="' + esc(nm || '') + '">';
           }).join('') +
           (names.length < 3

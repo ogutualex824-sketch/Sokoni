@@ -809,6 +809,12 @@ else{
              the listing genuinely carries a live offer. -->
         ${_prdOfferHtml(product)}
 
+        <!-- AVAILABILITY — one framework, read in the vocabulary of this listing's type.
+             A dish is available until the kitchen closes, a room is available on dates, a
+             service has appointments. Absent quantity says nothing at all: a listing with
+             no stock field is unmetered, not sold out. -->
+        ${_prdAvailabilityHtml(product)}
+
         ${_prdTypeModuleHtml(product)}
 
         <!-- SPECS -->
@@ -1280,6 +1286,13 @@ function _prdPrimaryLabel(p){
         if (lab) return lab;
     } catch (_) {}
     return _lt().primary.label;
+}
+
+/* Guarded like the offer panel: availability is an addition to a listing, never a
+   precondition for showing one. */
+function _prdAvailabilityHtml(p){
+    try { return (window.SokoniAvailabilityView && SokoniAvailabilityView.panelHtml(p)) || ''; }
+    catch (_) { return ''; }
 }
 
 function _prdOfferHtml(p){

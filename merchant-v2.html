@@ -834,6 +834,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      customer preview. It is a renderer, not a second uploader: it mounts nothing, owns no
      route and writes nothing, so Products remains the one place a listing is created. -->
 <script src="sokoni-listing-studio.js"></script>
+<!-- The availability reading the Studio's customer preview shows. It is the SAME renderer
+     the listing page uses, which is what stops the preview and the live page disagreeing. -->
+<script src="sokoni-availability-view.js"></script>
 <script src="sokoni-merchant-offers.js"></script>
 <script src="sokoni-merchant-wallet.js"></script>
 <!-- Receipts. Renders through the LOCKED receipt contract (SokoniReceiptDoc in

@@ -848,3 +848,39 @@ body.light-mode .prd-urgency-fresh   strong { color: #0077cc; }
   .prd-offer-name { font-size: 18px; }
   .prd-offer-now { font-size: 23px; }
 }
+
+/* ═══════════════════════════════════════════════════
+   AVAILABILITY SECTION
+   One framework, read in the vocabulary of the listing's type. It reuses the page's own
+   section rhythm and table, so it reads as another module of the listing page.
+═══════════════════════════════════════════════════ */
+.prd-avl-section { margin: 24px 0; }
+.prd-avl-head { display: flex; align-items: center; gap: 9px; margin-bottom: 14px; }
+.prd-avl-label { font-size: 15px; font-weight: 900; color: white; }
+.prd-avl-dot {
+  width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto;
+  background: rgba(255,255,255,0.3);
+}
+.prd-avl-dot--open {
+  background: #71ff00; box-shadow: 0 0 0 4px rgba(113,255,0,0.14);
+}
+.prd-avl-dot--closed { background: #ff9800; box-shadow: 0 0 0 4px rgba(255,152,0,0.13); }
+.prd-avl-dot--out { background: #ff5252; box-shadow: 0 0 0 4px rgba(255,82,82,0.13); }
+/* Unmetered is not a state to alarm anyone about — it is simply available with no count. */
+.prd-avl-dot--unmetered { background: rgba(255,255,255,0.45); }
+
+.prd-avl-block { margin-top: 16px; }
+.prd-avl-block h4 {
+  margin: 0 0 8px; font-size: 11px; font-weight: 900;
+  letter-spacing: 0.8px; text-transform: uppercase; color: rgba(255,255,255,0.45);
+}
+.prd-avl-block p { margin: 0; font-size: 13.5px; font-weight: 600; color: rgba(255,255,255,0.85); }
+.prd-avl-table { width: 100%; border-collapse: collapse; max-width: 340px; }
+.prd-avl-table tr { border-bottom: 1px solid rgba(255,255,255,0.05); }
+.prd-avl-table tr:last-child { border-bottom: none; }
+.prd-avl-table td { padding: 8px 0; font-size: 13px; }
+.prd-avl-table td:first-child {
+  color: rgba(255,255,255,0.45); font-weight: 700; width: 78px;
+}
+.prd-avl-table td:last-child { color: rgba(255,255,255,0.85); font-weight: 600; }
+.prd-avl-table tr.is-closed td:last-child { color: rgba(255,255,255,0.35); font-weight: 500; }

@@ -270,6 +270,11 @@
             (hasPrice ? 'KES ' + priceNum.toLocaleString('en-KE')
                       : '<span class="ls-prev-none">No price yet</span>') + '</div>' +
           (facts.length ? '<div class="ls-prev-facts">' + facts.join(' · ') + '</div>' : '') +
+          /* The SAME availability reading the customer page renders, so the merchant's
+             preview and the listing page can never disagree about whether this is
+             available. Absent when the module has not loaded. */
+          (root.SokoniAvailabilityView
+            ? '<div class="ls-prev-avl">' + root.SokoniAvailabilityView.lineHtml(l) + '</div>' : '') +
           '<div class="ls-prev-acts">' +
             '<span class="ls-prev-cta">' + t.primary.icon + ' ' + esc(t.primary.label) + '</span>' +
             (t.secondary
