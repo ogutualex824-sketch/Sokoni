@@ -323,3 +323,85 @@ shipping five indexes and a live-query risk to fix a cron.
 gcloud firestore indexes composite list --format=json > /tmp/idx-deployed.json
 node <diff script> /tmp/idx-deployed.json
 ```
+
+---
+
+## P0-8B — Why the billing export stops at 2026-08-12. **Partially answered; NOT resolved.**
+
+Read-only. Free metadata probes only — **no additional analytical BigQuery query was run.**
+
+### The correction that prompted this
+
+Earlier today I reported the export as *"landing actively"* on the strength of `lastModifiedTime`
+being recent. That was wrong in the way that matters: **the table was being written recently, with
+old usage data.** `lastModifiedTime` proves the table was touched, not that recent usage arrived.
+Checking `usage_start_time` instead showed the data ends **2026-08-12**, 38 days stale.
+
+### What the metadata shows
+
+Partition probes (free — `bq show 'table$YYYYMMDD'`, not a query):
+
+```
+20260701 : 0
+20260801 : 10,609
+20260812 : 9,951      <-- frontier
+20260813 : 0
+20260814 : 0
+20260815 : 0
+20260816 : 0
+20260901 : 0
+20260919 : 0
+```
+
+Table totals, same free metadata, sampled three times:
+
+```
+17:49:02Z   detailed numRows = 125,863
+18:38:54Z   detailed numRows = 135,814      (+9,951 in ~49 min)
+~19:20Z     detailed numRows = 135,814      (no change in ~40 min)
+```
+
+**The +9,951 exactly equals the row count of the `20260812` partition.** So the export wrote the
+Aug 12 day-partition during the observation window — it is backfilling **chronologically, one day
+at a time** — and then stopped.
+
+### What is established, and what is not
+
+**Established:** this is a **chronological backfill**, not a misconfiguration and not a permanent
+truncation. The frontier advanced by exactly one day while under observation. Aug 13 onward are
+empty, so nothing after Aug 12 has been written yet.
+
+**NOT established:** whether the backfill is *paused* or *stalled*. It made no progress for ~40
+minutes after completing Aug 12. Two observations cannot distinguish bursty writing from a halt.
+
+**Deliberately not claimed:** an earlier draft of this analysis estimated "~31 hours to catch up"
+from the one observed interval. That estimate assumed steady progress and the third sample
+contradicted it. **One interval is not a rate.** No completion estimate is offered.
+
+### Why this matters more than the numbers it blocks
+
+The measured window (2026-07-01 → 2026-08-12) predates every change this programme made. The
+pinning census, P0-7C, and the current service configuration are all **after** it. So:
+
+> **The $92.26 measured total and the $23.55 for the eight pins describe a configuration that no
+> longer exists.** They must not be used to justify unpinning, and the ~$65/month extrapolation
+> must not drive any current infrastructure decision.
+
+### The cheap next check — free, one command
+
+```
+bq --project_id=sokoni-aeb26 show --format=prettyjson \
+  'billing_export.gcp_billing_export_resource_v1_016742_7E2122_8406F7$20260813'
+```
+
+* **rows > 0** → the backfill resumed; it is bursty, and it will catch up on its own. Re-probe the
+  frontier periodically until it reaches the current date, then re-run the cost attribution.
+* **still 0 after several hours** → it is stalled at Aug 12 and needs investigation at the Console
+  billing-export configuration, not in BigQuery.
+
+Either way the answer arrives by probing partition metadata, which costs nothing.
+
+### Status
+
+**The cost programme's data source is 38 days stale and its recovery is unconfirmed.** Fresh billing
+data — not another extrapolation — remains the gating milestone for cost attribution.
