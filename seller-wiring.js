@@ -60,6 +60,41 @@
     return p;
   }
 
+  /* Canonical form for change detection. Both sides go through this so a stored
+     Firestore value and a freshly trimmed local value compare like with like:
+     Timestamps collapse to millis, arrays/objects to stable JSON, null and
+     undefined to ''. Without it a number stored as 5 and trimmed to 5 would
+     still differ by type on some paths. */
+  function _canon(v) {
+    if (v === null || v === undefined) return '';
+    if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+    if (typeof v === 'string') return v;
+    /* Firestore Timestamp */
+    if (typeof v.toMillis === 'function') { try { return String(v.toMillis()); } catch (_) { return ''; } }
+    if (typeof v.seconds === 'number') return String(v.seconds * 1000);
+    if (Array.isArray(v)) return JSON.stringify(v.map(_canon));
+    if (typeof v === 'object') {
+      try { return JSON.stringify(Object.keys(v).sort().map(k => [k, _canon(v[k])])); }
+      catch (_) { return ''; }
+    }
+    return String(v);
+  }
+
+  /* True when every field this sync would write already holds the same value.
+     Only the payload's own keys are compared — `merge: true` never removes a
+     field, so extra stored fields are irrelevant. `_syncedAt` is deliberately
+     NOT compared: it is a serverTimestamp() sentinel that differs on every
+     attempt, so including it would make every product look changed and defeat
+     the whole check. */
+  function _payloadMatches(payload, stored) {
+    if (!stored || typeof stored !== 'object') return false;
+    for (const k of Object.keys(payload)) {
+      if (k === '_syncedAt') continue;
+      if (_canon(payload[k]) !== _canon(stored[k])) return false;
+    }
+    return true;
+  }
+
   /* ── Write one product to Firestore public products collection ── */
   async function _writeProduct(product) {
     const db = _getDb();
@@ -68,7 +103,6 @@
       const { doc, setDoc, getDoc, serverTimestamp } = await import(FS_URL);
       const ref = doc(db, 'products', String(product.id));
       const payload = _trimPayload(product);
-      payload._syncedAt = serverTimestamp();
       /* Firestore is AUTHORITATIVE for money / inventory / ownership. A stale local
          cache must NOT overwrite those on an EXISTING product — this sync was
          reverting server-set values (observed: price 100 -> cached 2000; sellerUid).
@@ -80,8 +114,21 @@
           delete payload.price; delete payload.costPrice; delete payload.deliveryCost;
           delete payload.stock; delete payload.outOfStock; delete payload.sold;
           delete payload.sellerUid;
+          /* Skip the write when nothing this sync owns has actually changed.
+             _syncLocalProducts() runs the WHOLE local catalogue on every login,
+             so without this each pass rewrote every product and each rewrite fired
+             four products/{productId} UPDATE triggers — measured at ~46,000 events
+             and ~184,000 trigger invocations a month against 108 products and 5
+             genuine creates. Uses the snapshot already fetched above, so change
+             detection costs no extra read. */
+          if (_payloadMatches(payload, _snap.data())) return;
         }
-      } catch(_) {}
+      } catch(_) {
+        /* Could not read the existing doc — fall through and WRITE. Failing open
+           keeps sync correct when the comparison is unavailable; failing closed
+           would silently drop a real catalogue change. */
+      }
+      payload._syncedAt = serverTimestamp();
       await setDoc(ref, payload, { merge: true });
       /* Drop the warm search cache for products, or the seller searches for the
          item they just listed and is served the pre-write scan (up to 10 min
