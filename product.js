@@ -1303,6 +1303,17 @@ function _prdOfferHtml(p){
 function _prdTypeModuleHtml(p){
     if (!p) return '';
     var t = _lt(), rows = [], title = '';
+    /* WHEREVER THE FIELD ACTUALLY LIVES. The Listing Studio writes type-specific values into
+       `attributes`, which is where the universal listing model puts them; older records
+       carry them at top level. Reading only the top level meant a room described in full
+       through the Studio rendered an empty module here — the merchant filled it in and the
+       page showed nothing. Top level wins when both exist. */
+    var A = function (k) {
+        var a = (p && p.attributes) || {};
+        var top = p[k];
+        if (top !== undefined && top !== null && String(top).trim() !== '') return top;
+        return a[k];
+    };
     var add = function (label, val, fmt) {
         if (val === undefined || val === null || String(val).trim() === '') return;
         var list = Array.isArray(val) ? val.filter(Boolean).join(' · ') : val;
@@ -1312,41 +1323,41 @@ function _prdTypeModuleHtml(p){
     switch (t.id) {
         case 'food': case 'drink':
             title = '🍽️ About this ' + (t.id === 'drink' ? 'drink' : 'dish');
-            add('Cuisine', p.cuisine); add('Portion', p.portion);
-            add('Ingredients', p.ingredients); add('Allergens', p.allergens);
-            add('Preparation', p.prepTime, function (v) { return v + ' min'; });
-            add('Dietary', p.dietary); add('Serving size', p.servingSize);
+            add('Cuisine', A('cuisine')); add('Portion', A('portion'));
+            add('Ingredients', A('ingredients')); add('Allergens', A('allergens'));
+            add('Preparation', A('prepTime'), function (v) { return v + ' min'; });
+            add('Dietary', A('dietary')); add('Serving size', A('servingSize'));
             break;
         case 'room':
             title = '🛏️ Room details';
-            add('Guests', p.guests); add('Beds', p.beds); add('Bathrooms', p.bathrooms);
-            add('Room size', p.roomSize); add('Amenities', p.amenities);
-            add('Check-in', p.checkIn); add('Check-out', p.checkOut);
-            add('Cancellation', p.cancellationPolicy);
+            add('Guests', A('guests')); add('Beds', A('beds')); add('Bathrooms', A('bathrooms'));
+            add('Room size', A('roomSize')); add('Amenities', A('amenities'));
+            add('Check-in', A('checkIn')); add('Check-out', A('checkOut'));
+            add('Cancellation', A('cancellationPolicy'));
             break;
         case 'service':
             title = '🔧 Service details';
-            add('Duration', p.duration); add('Service area', p.serviceArea);
-            add('Provider', p.provider); add('What’s included', p.includes);
-            add('Requirements', p.requirements); add('Cancellation', p.cancellationPolicy);
+            add('Duration', A('duration')); add('Service area', A('serviceArea'));
+            add('Provider', A('provider')); add('What’s included', A('includes'));
+            add('Requirements', A('requirements')); add('Cancellation', A('cancellationPolicy'));
             break;
         case 'event':
             title = '🎫 Event details';
-            add('Starts', p.startsAt); add('Ends', p.endsAt);
-            add('Venue', p.venue); add('Organiser', p.organiser); add('Age limit', p.ageLimit);
+            add('Starts', A('startsAt')); add('Ends', A('endsAt'));
+            add('Venue', A('venue')); add('Organiser', A('organiser')); add('Age limit', A('ageLimit'));
             break;
         case 'property':
             title = '🏠 Property details';
-            add('Property type', p.propertyType); add('Bedrooms', p.bedrooms);
-            add('Bathrooms', p.bathrooms); add('Floor area', p.floorArea);
-            add('Parking', p.parking); add('Furnished', p.furnished);
-            add('Amenities', p.amenities); add('Viewing', p.viewingAvailability);
+            add('Property type', A('propertyType')); add('Bedrooms', A('bedrooms'));
+            add('Bathrooms', A('bathrooms')); add('Floor area', A('floorArea'));
+            add('Parking', A('parking')); add('Furnished', A('furnished'));
+            add('Amenities', A('amenities')); add('Viewing', A('viewingAvailability'));
             break;
         case 'vehicle':
             title = '🚗 Vehicle details';
-            add('Make', p.make); add('Model', p.model); add('Year', p.year);
-            add('Mileage', p.mileage); add('Transmission', p.transmission);
-            add('Fuel', p.fuel); add('Engine', p.engine); add('Condition', p.condition);
+            add('Make', A('make')); add('Model', A('model')); add('Year', A('year'));
+            add('Mileage', A('mileage')); add('Transmission', A('transmission'));
+            add('Fuel', A('fuel')); add('Engine', A('engine')); add('Condition', A('condition'));
             break;
         default: return '';           /* a plain product already has Specifications */
     }

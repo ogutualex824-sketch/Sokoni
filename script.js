@@ -927,29 +927,60 @@ function _cardFactsHtml(product){
        fields are optional everywhere: a merchant who has not filled them in gets a shorter
        line, never an invented one. */
     const detail = [];
+    /* WHEREVER THE FIELD ACTUALLY LIVES. The Listing Studio writes type-specific values into
+       `attributes` — that is where the universal listing model puts them — while older
+       records carry them at top level. Reading only the top level meant a room created in
+       the Studio showed no guest count on its card: the merchant filled the field in and the
+       marketplace ignored it. Top level wins when both exist, because that is the older and
+       more specific record. */
+    const attr = k => {
+        const a = product.attributes || {};
+        const top = product[k];
+        if (top !== undefined && top !== null && String(top).trim() !== '') return top;
+        return a[k];
+    };
     const push = (v, fmt) => { if (v !== undefined && v !== null && String(v).trim() !== '') detail.push(fmt(v)); };
+
+    /* An event's date is the fact people decide on, so it is worth reading properly — but
+       ONLY when it genuinely parses. A stored string that is not a date is shown as the
+       merchant wrote it rather than turned into "Invalid Date". */
+    const eventWhen = v => {
+        const raw = String(v).trim();
+        const d = new Date(raw);
+        if (isNaN(d.getTime())) return _escHtml(v);
+        /* A DATE-ONLY STRING HAS NO TIME, and must not be given one. "2026-10-24" parses as
+           UTC midnight, which in Nairobi (+3) renders as 03:00 — so a local-midnight test
+           printed "24 OCT · 3:00" for an event whose start time nobody had entered. The
+           string itself says whether a time was given; the parsed Date cannot. */
+        const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw);
+        const day = d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' }).toUpperCase();
+        if (dateOnly) return _escHtml(day);
+        const time = d.toLocaleTimeString('en-KE', { hour: 'numeric', minute: '2-digit' });
+        return _escHtml(`${day} · ${time}`);
+    };
+
     switch (type && type.id) {
         case 'food': case 'drink':
-            push(product.prepTime, v => `${_escHtml(v)} min`);
-            push(product.portion,  v => _escHtml(v));
+            push(attr('prepTime'), v => `${_escHtml(v)} min`);
+            push(attr('portion'),  v => _escHtml(v));
             break;
         case 'room':
-            push(product.guests, v => `${_escHtml(v)} guest${Number(v) === 1 ? '' : 's'}`);
-            push(product.beds,   v => `${_escHtml(v)} bed${Number(v) === 1 ? '' : 's'}`);
+            push(attr('guests'), v => `${_escHtml(v)} guest${Number(v) === 1 ? '' : 's'}`);
+            push(attr('beds'),   v => `${_escHtml(v)} bed${Number(v) === 1 ? '' : 's'}`);
             break;
         case 'service':
-            push(product.duration, v => _escHtml(v));
+            push(attr('duration'), v => _escHtml(v));
             break;
         case 'event':
-            push(product.startsAt, v => _escHtml(v));
+            push(attr('startsAt'), eventWhen);
             break;
         case 'property':
-            push(product.bedrooms,  v => `${_escHtml(v)} bed`);
-            push(product.bathrooms, v => `${_escHtml(v)} bath`);
+            push(attr('bedrooms'),  v => `${_escHtml(v)} bed`);
+            push(attr('bathrooms'), v => `${_escHtml(v)} bath`);
             break;
         case 'vehicle':
-            push(product.year,         v => _escHtml(v));
-            push(product.transmission, v => _escHtml(v));
+            push(attr('year'),         v => _escHtml(v));
+            push(attr('transmission'), v => _escHtml(v));
             break;
         default: break;
     }

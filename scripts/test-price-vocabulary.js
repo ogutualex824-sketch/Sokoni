@@ -100,6 +100,42 @@ section('Card wiring');
   ok('and the fallback is inside a catch', /catch \(_\) \{\}\s*\n\s*return 'KES ' \+ plain;/.test(s));
 }
 
+/* ── 4b. STUDIO-WRITTEN FIELDS REACH THE MARKETPLACE ────────────────────────── */
+section('Attributes are read where they are written');
+{
+  /* THE DRIFT THIS CATCHES. The Listing Studio writes type-specific values into
+     `attributes` — where the universal listing model puts them — but the card and the
+     listing page read them at top level. A merchant could describe a room in full and have
+     the marketplace show none of it: filled in, and silently ignored. */
+  const s = fs.readFileSync(path.join(ROOT, 'script.js'), 'utf8');
+  const pj = fs.readFileSync(path.join(ROOT, 'product.js'), 'utf8');
+
+  const facts = s.slice(s.indexOf('function _cardFactsHtml'), s.indexOf('function buildProductCard'));
+  ok('the card reads attributes as well as top level', /product\.attributes/.test(facts));
+  ok('and every type field goes through that helper',
+     !/push\(product\.(prepTime|guests|beds|duration|startsAt|bedrooms|year)/.test(facts));
+  ok('control — it did read them, via the helper', /attr\('guests'\)/.test(facts));
+  ok('top level still wins when both exist',
+     /if \(top !== undefined && top !== null && String\(top\)\.trim\(\) !== ''\) return top;/.test(facts));
+
+  const mod = pj.slice(pj.indexOf('function _prdTypeModuleHtml'), pj.indexOf('LISTING-TYPE ACTIONS'));
+  ok('the listing page reads attributes too', /p\.attributes/.test(mod));
+  ok('and no type field is read bare',
+     !/add\('[^']+', p\.[a-z]/i.test(mod));
+  ok('control — the fields are read through the helper', /A\('guests'\)/.test(mod));
+
+  /* An event's date is worth formatting, but only when it parses. */
+  ok('an unparseable event date is shown as written', /if \(isNaN\(d\.getTime\(\)\)\) return _escHtml\(v\);/.test(facts));
+  /* THE DEFECT THE BROWSER CAUGHT. "2026-10-24" parses as UTC midnight, which in Nairobi
+     (+3) renders as 03:00 — so a local-midnight test printed "24 OCT · 3:00" for an event
+     whose start time nobody had entered. The STRING says whether a time was given; the
+     parsed Date cannot. */
+  ok('a date-only string is detected from the string, not the Date',
+     /\/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\//.test(facts));
+  ok('and no time is invented for it', /if \(dateOnly\) return _escHtml\(day\);/.test(facts));
+  ok('the local-midnight test is gone', !/getHours\(\) === 0/.test(facts));
+}
+
 /* ── 5. BUSINESS CONTEXT ────────────────────────────────────────────────────── */
 section('Business context');
 {
