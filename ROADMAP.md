@@ -435,16 +435,50 @@ component. **Nothing deployed.**
 
 ### The four gates — deliberately not crossed
 
-Each of these is blocked on an authority that does not exist yet, **not** on remaining UI
-work. The surfaces already refuse to pretend otherwise, and that behaviour must stay until
-the gate is deliberately opened.
+**All four were run as gates, in order. Three are closed; the fourth is blocked on data that
+does not exist and must not be closed by inventing it.**
 
-| Gate | Blocked on | Severity |
+| Gate | State | Evidence |
 |---|---|---|
-| **P — Offer persistence** | No merchant-writable offer store exists. Ownership model, lifecycle, redemption accounting, inventory interaction and the rule boundary all need deciding **before** rules are designed. See [[Offer Persistence Decision]] | **HIGH — do not shortcut** |
-| **W — Product write authority** | `createProduct` / `updateProduct` absent on this branch; `sokoni-merchant-data.js` here is a POS reader. The Studio fails closed on save, which is correct until the certified writer is deliberately ported and tested | HIGH |
-| **M — Media capability** | The media pipeline is image-only. Video / 360° / Documents controls must not be added before the media authority is extended | MEDIUM |
-| **A — Offer trends** | A current-period figure with no comparable prior-period observation is not a trend. No arrows until the data exists | LOW |
+| **W — Product write authority** | ✅ **GREEN** | certified writer ported byte-exact; 37/0 logic · 46/0 real Firestore + live ruleset · 30/0 Listing Studio saves |
+| **P — Offer persistence (design)** | ✅ **GREEN** | schema certified before any write: 64/0 · authority boundary pinned 35/0 |
+| **P — Offer persistence (implementation)** | ✅ **GREEN** | `shopOffers` + one callable: 58/0 against real Firestore · 35/0 client↔server engine parity |
+| **M — Media capability** | ✅ **GREEN** | contract measured against the real Storage rules engine, 25/0. **Decision: video / 360° / document lanes stay absent** |
+| **A — Offer trends** | 🟡 **BLOCKED** | 32/0. No defensible prior-period source exists. **Not a failure, and not to be reopened for arrows** |
+
+### Still parked, deliberately
+
+| | waiting on |
+|---|---|
+| P checkout integration | a separate deployment / charge-path gate. `resolveOfferForCharge` is certified; wiring it edits the live charge path |
+| Production App Check | deployment evidence — the emulator cannot enforce it |
+| Functions deployment | the AR-forensics freeze |
+| `isActive()` semantics | rules investigation — a missing claim errors rather than yielding false |
+| Storage `admin`-claim semantics | same pattern, `storage.rules:139`. Assess the two together |
+
+### Why A must not be reopened for arrows
+
+The missing historical source is now an explicit **product/data requirement**, not an
+oversight. Views *are* measured per product — but the rollover zeroes the window without
+archiving it, so yesterday is destroyed; and nothing is keyed by offer in any case.
+
+When the charge path becomes authoritative, `shopOfferRedemptions` will supply genuine
+offer-level purchase and discount observations — it is timestamped and never zeroed — without
+inventing instrumentation retrospectively. A separate trend gate can then define the periods
+and the calculation **from retained observations**. Until then the panel shows no figures and
+says nothing is estimated, which is the correct behaviour and is asserted by suite.
+
+### Two defects found while gating, neither repaired here
+
+* **Every BnB and property video upload is denied.** The shipped paths
+  (`bnb-manage.html:414`, `landlord.html:1463`) omit the uid segment their rule requires, so
+  both fall to the deny-all. Proven with an inverting control. Both uploaders catch the
+  failure and carry on — *"listing saved without video"* — so it fails politely and nobody
+  investigates.
+* **`promotions` carries two incompatible shapes** — a banner (`promotionUpsert`) and a promo
+  code (`createPromotion`) — with no discriminator. Contained: the public read filters
+  `status == 'published'` and promo codes have no `status`. That containment is pinned by
+  suite.
 
 ### Gate P — the specific danger
 
