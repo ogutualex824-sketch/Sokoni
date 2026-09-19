@@ -201,7 +201,9 @@ section('3bis. CONTAMINATION CHECK — did anything else touch the environment?'
    than hope. */
 let contaminated = null;
 try {
-  const base = require('./ar-experiment-baseline.json');
+  /* Override exists so the CONTAMINATED branch can be exercised against a
+     deliberately-wrong baseline. A branch that has never run is a guess. */
+  const base = require(process.env.SOKONI_AR_BASELINE || './ar-experiment-baseline.json');
   const checks = [];
 
   const nowBuild = gcloud(['builds', 'list', '--region=us-central1', '--limit=1',
@@ -252,13 +254,29 @@ if (ageH < 21 && canaryPresent) {
   console.log('  The outcome below is provisional and must not be quoted as a finding.\n');
 }
 
-if (canaryPresent === null || delRows === null) {
+/* Contamination outranks the outcome. A DRIFT result means the experiment no
+   longer isolates the canary, so the outcome below is not attributable and must
+   not be quoted as evidence for H1 or H2. Enforced here rather than left to
+   whoever reads two sections and remembers to combine them. */
+if (contaminated === null) {
+  console.log('  INDETERMINATE — the contamination check itself failed.');
+  console.log('  The experiment cannot be shown to be clean, so no outcome is readable.');
+} else if (contaminated) {
+  console.log('  CONTAMINATED — DO NOT INTERPRET THE CANARY RESULT.');
+  console.log('  The environment changed during the experiment (see DRIFT above), so the');
+  console.log('  canary no longer isolates the mechanism. This is NOT evidence for H1 or');
+  console.log('  H2 either way. Establish what changed and why, then decide whether the');
+  console.log('  experiment can continue or must be restarted with a fresh baseline.');
+} else if (canaryPresent === null || delRows === null) {
   console.log('  INDETERMINATE — a query failed. Do not read this as any outcome.');
 } else if (canaryPresent && !delRows.length) {
   console.log('  OUTCOME 1 — canary SURVIVES, no deletion events.');
-  console.log('  The purge is NOT reproduced. This is a valid result, not a failure: it');
-  console.log('  argues against a blanket repository sweep and points at a');
-  console.log('  function-lifecycle event (e.g. DeleteFunction) as the trigger.');
+  console.log('  The purge is NOT reproduced. This is a valid result, not a failure.');
+  console.log('  It does NOT prove H2, and it does not prove H1. What it establishes is');
+  console.log('  narrower and still useful: the mechanism is not a blanket Artifact');
+  console.log('  Registry sweep that removes arbitrary artifacts. Attention should then');
+  console.log('  move to function-OWNED and function-SHARED artifacts and to the function');
+  console.log('  lifecycle itself, rather than to the repository.');
 } else if (!canaryPresent && delRows.length) {
   console.log('  OUTCOME 2 — canary GONE and deletion events captured. BREAKTHROUGH.');
   console.log('  Inspect the principal/method/resource above; that names the actor.');
@@ -270,8 +288,10 @@ if (canaryPresent === null || delRows === null) {
   console.log('    H2  GCF cleans up artifacts per its own ownership/reference model,');
   console.log('        not treating Cloud Run revision references as durable artifact');
   console.log('        dependencies. No function deletion needed.');
-  console.log('  The canary discriminates: it belongs to NO function. If it was removed,');
-  console.log('  that favours H2, because H1 has no reason to touch it.');
+  console.log('  The canary discriminates: it belongs to NO function, so H1 has no reason');
+  console.log('  to touch it. Its removal by the same mechanism substantially WEAKENS the');
+  console.log('  simple H1 explanation. That is not the same as proving H2 — establish the');
+  console.log('  items below before naming a mechanism.');
   console.log('  Also establish, from section 3 above:');
   console.log('    - which lifecycle operation PRECEDED the deletion, and how long before');
   console.log('    - which artifact/version was considered ELIGIBLE, and on what basis');
