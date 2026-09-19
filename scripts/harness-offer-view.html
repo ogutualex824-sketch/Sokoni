@@ -1,0 +1,65 @@
+<!doctype html>
+<!-- ═════════════════════════════════════════════════════════════════════════════
+     SOKONI — Offer view browser harness. scripts/harness-offer-view.html
+
+     Renders the card ribbon and the offer panel against a fixture, because the marketplace
+     has no offer store wired and a real listing therefore shows neither. That is the
+     correct production behaviour, and it is also why it cannot be looked at — so the
+     fixture lives here, in a file the site never links, rather than in any data path.
+
+     The FIXTURE IS LOCAL TO THIS FILE. Nothing here is imported by script.js or product.js.
+     ═════════════════════════════════════════════════════════════════════════════ -->
+<meta charset="utf-8">
+<title>Offer view harness</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/product.css">
+<style>
+  body { background:#050505; color:#fff; font:14px/1.5 system-ui,sans-serif; margin:0; padding:24px; }
+  .wrap { display:flex; gap:32px; align-items:flex-start; flex-wrap:wrap; }
+  .col { max-width:420px; }
+  h2 { font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:#8b8b8b; }
+  .product-card { width:220px; background:#0e0e0e; border:1px solid rgba(255,255,255,.1);
+                  border-radius:14px; overflow:hidden; }
+  .product-img-wrap { position:relative; aspect-ratio:1/1; background:rgba(255,255,255,.05);
+                      display:flex; align-items:center; justify-content:center; color:#666; }
+  .product-body { padding:11px; }
+  .product-name { font-size:13px; font-weight:700; margin:0 0 5px; }
+  .price { font-size:14px; font-weight:800; margin:0; }
+</style>
+<div class="wrap">
+  <div class="col"><h2>Card</h2><div id="card"></div></div>
+  <div class="col"><h2>Listing page</h2><div id="detail"></div></div>
+</div>
+
+<script src="/sokoni-listing-types.js"></script>
+<script src="/sokoni-promotion-model.js"></script>
+<script src="/sokoni-offer-view.js"></script>
+<script>
+  var OFFER = {
+    id:'off1', name:'Family Pizza Night', template:'mealDeal', type:'bundle',
+    summary:'2 Pizzas + 2 Drinks + Side', bundlePrice:2999, regularValue:3650,
+    items:[{name:'Large Chicken BBQ Pizza',qty:1},{name:'Large Beef Pepperoni Pizza',qty:1},
+           {name:'Garlic Bread',qty:1},{name:'Soft Drink',qty:4}],
+    schedule:{ days:['fri'], from:'17:00', to:'22:00' },
+    stacking:'exclusive', minSpend:1000, perCustomerLimit:1, inventoryLimit:100,
+    locations:['Westlands','Kilimani','CBD'], fulfilments:['Delivery','Pickup','Dine-in'],
+  };
+  var LISTING = { id:'L1', name:'Family Pizza Night', price:3650,
+                  listingType:'food', offers:[OFFER] };
+  /* A Friday at 18:00 — the offer's own window, so it renders as a customer would see it. */
+  var AT = new Date('2026-10-02T18:00:00');
+
+  document.getElementById('card').innerHTML =
+    '<div class="product-card">' +
+      '<div class="product-img-wrap">PACKAGE IMAGE' +
+        window.SokoniOfferView.cardBadgeHtml(LISTING, AT) + '</div>' +
+      '<div class="product-body">' +
+        '<h3 class="product-name">Family Pizza Night</h3>' +
+        '<p class="price">KES 3,650</p>' +
+        window.SokoniOfferView.cardOfferHtml(LISTING, AT) +
+      '</div></div>';
+
+  document.getElementById('detail').innerHTML =
+    window.SokoniOfferView.detailHtml(LISTING, { at: AT, usage: { inventorySold: 77 } });
+  window.__action = window.SokoniOfferView.actionLabel(LISTING, AT);
+</script>

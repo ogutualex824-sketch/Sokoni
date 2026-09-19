@@ -602,11 +602,21 @@ else{
                 </div>`;
                 })()}
 
-                <!-- ACTIONS — Premium CTA v2 -->
+                <!-- ACTIONS — Premium CTA v2, now LISTING-TYPE AWARE.
+                     The buttons were hard-coded "Buy Now / Add to Cart", which quietly made
+                     every listing a physical product: a restaurant dish, a hotel room and a
+                     mechanic's service were all offered a shopping basket. The verbs now come
+                     from SokoniListingTypes, so the same page serves Order / Reserve / Book /
+                     Request without a second detail page per vertical.
+                     THE PLUMBING IS UNCHANGED. buyNowProduct() and addToCart() still run; only
+                     what the customer is PROMISED changes. Wiring a real booking flow to
+                     "Reserve" is a separate piece of work, and labelling it now would promise
+                     something the backend does not yet do — so types whose commerce is not
+                     built route to the existing enquiry path rather than pretending. -->
                 <div id="prdActions" style="margin-top:16px;">
-                    <button class="prd-cta-primary" onclick="buyNowProduct()">&#x26A1; Buy Now</button>
+                    <button class="prd-cta-primary" onclick="_prdPrimaryAction()">${_lt().primary.icon} ${_prdPrimaryLabel(product)}</button>
                     <div class="prd-cta-row">
-                        <button class="prd-cta-secondary" onclick="addToCart()">&#x1F6D2; Add to Cart</button>
+                        ${_lt().secondary ? `<button class="prd-cta-secondary" onclick="_prdSecondaryAction()">${_lt().secondary.icon} ${_lt().secondary.label}</button>` : ''}
                         <button onclick="openMakeOffer()" class="prd-cta-secondary" style="flex:0 0 auto;padding:14px 16px;">&#x1F3F7;&#xFE0F; Offer</button>
                     </div>
                     <div class="prd-cta-row" style="margin-top:8px;">
@@ -614,6 +624,15 @@ else{
                             &#x1F4AC; Chat Seller
                         </button>
                         <button class="prd-cta-icon-btn wishlist" onclick="addToWishlistProduct()">&#x2764;&#xFE0F; Save</button>
+                        <!-- REPORT, REACHABLE AT THE SAME SPEED AS BUY.
+                             It already existed, but only as a 12px underlined link at 30%
+                             opacity at the very foot of the page — present, and effectively
+                             unfindable. A trust control nobody can reach is not a trust
+                             control. It sits in the TERTIARY row rather than beside Buy Now
+                             so it is one glance away without ever being mistaken for a
+                             purchase action, and it calls the same openReportListing() that
+                             already routes into the reports queue AdminOS reads. -->
+                        <button class="prd-cta-icon-btn report" onclick="openReportListing()" title="Report this listing">&#x2691; Report</button>
                         <button class="prd-cta-icon-btn share" onclick="(function(){var url=window.SokoniReferral?SokoniReferral.getShareURL(window.location.href):window.location.href;if(window.SokoniSocial&&product)SokoniSocial.openShareModal({id:product.id||'p',name:product.name||'Product',category:product.category||'',tagline:product.description||'',rating:product.rating||5,type:'product',shareURL:url});else if(navigator.share)navigator.share({title:product&&product.name||'SOKONI',url:url}).catch(function(){});else window.open('https://wa.me/?text='+encodeURIComponent((product&&product.name||'Check this out')+' on SOKONI: '+url),'_blank');})()">&#x1F4E4; Share</button>
                     </div>
                 </div>
@@ -776,6 +795,21 @@ else{
             </div>
 
         </div>
+
+        <!-- TYPE MODULE — the section that changes with what this listing IS.
+             Same page architecture, different modules: a dish shows ingredients and
+             allergens, a room shows guests and check-in, a service shows duration and
+             area. It renders ONLY the fields the listing actually carries, so a merchant
+             who has not filled them in gets nothing here rather than empty headings or
+             invented values. -->
+        <!-- OFFER — the commercial rule about this listing, explained BEFORE the customer
+             commits to anything. It sits here, on the listing page, rather than on a URL of
+             its own: an offer is a rule ABOUT a listing, and giving it a separate page would
+             give the customer two places to read one price. Renders nothing at all unless
+             the listing genuinely carries a live offer. -->
+        ${_prdOfferHtml(product)}
+
+        ${_prdTypeModuleHtml(product)}
 
         <!-- SPECS -->
         ${product.specs && product.specs.length ? `
@@ -1218,6 +1252,130 @@ function _cartItem(){
            material or a pack size, and neither has a legacy field to land in. */
         selectedVariants: Object.assign({}, window._selectedVariants || {}),
     });
+}
+
+/* ── THE TYPE MODULE ─────────────────────────────────────────────────────────
+   One page, many presentation modules. The heading and the rows are chosen by listing
+   type; the CONTENT is whatever the listing genuinely carries.
+
+   EVERY ROW IS OPTIONAL AND NOTHING IS SYNTHESISED. If a restaurant has not entered
+   allergens, the allergens row does not appear — it does not appear empty, and it
+   certainly does not appear guessed. An allergen list invented for a dish is a safety
+   claim nobody made. Where a type has no populated fields at all the whole module is
+   omitted rather than rendering a bare heading. */
+function _prdEsc(v){ return String(v == null ? '' : v).replace(/[&<>"]/g, function(c){
+    return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[c]; }); }
+
+/* The offer panel, drawn by the same renderer the marketplace card uses. Guarded because a
+   listing page must still open when the module has not loaded — an offer is an addition to
+   a listing, never a precondition for showing one. */
+/* A BUNDLE IS NOT AN ITEM, so it does not say "Buy Now". The verb still comes from the
+   listing type — a restaurant orders, a hotel reserves — but it is said of the package.
+   Only a bundle renames the action: a percentage off does not change what is being bought,
+   and relabelling it would be decoration rather than information. The ROUTE is unchanged;
+   only the word is. */
+function _prdPrimaryLabel(p){
+    try {
+        var lab = window.SokoniOfferView && SokoniOfferView.actionLabel(p);
+        if (lab) return lab;
+    } catch (_) {}
+    return _lt().primary.label;
+}
+
+function _prdOfferHtml(p){
+    try { return (window.SokoniOfferView && SokoniOfferView.detailHtml(p)) || ''; }
+    catch (_) { return ''; }
+}
+
+function _prdTypeModuleHtml(p){
+    if (!p) return '';
+    var t = _lt(), rows = [], title = '';
+    var add = function (label, val, fmt) {
+        if (val === undefined || val === null || String(val).trim() === '') return;
+        var list = Array.isArray(val) ? val.filter(Boolean).join(' · ') : val;
+        if (String(list).trim() === '') return;
+        rows.push('<tr><td>' + _prdEsc(label) + '</td><td>' + _prdEsc(fmt ? fmt(list) : list) + '</td></tr>');
+    };
+    switch (t.id) {
+        case 'food': case 'drink':
+            title = '🍽️ About this ' + (t.id === 'drink' ? 'drink' : 'dish');
+            add('Cuisine', p.cuisine); add('Portion', p.portion);
+            add('Ingredients', p.ingredients); add('Allergens', p.allergens);
+            add('Preparation', p.prepTime, function (v) { return v + ' min'; });
+            add('Dietary', p.dietary); add('Serving size', p.servingSize);
+            break;
+        case 'room':
+            title = '🛏️ Room details';
+            add('Guests', p.guests); add('Beds', p.beds); add('Bathrooms', p.bathrooms);
+            add('Room size', p.roomSize); add('Amenities', p.amenities);
+            add('Check-in', p.checkIn); add('Check-out', p.checkOut);
+            add('Cancellation', p.cancellationPolicy);
+            break;
+        case 'service':
+            title = '🔧 Service details';
+            add('Duration', p.duration); add('Service area', p.serviceArea);
+            add('Provider', p.provider); add('What’s included', p.includes);
+            add('Requirements', p.requirements); add('Cancellation', p.cancellationPolicy);
+            break;
+        case 'event':
+            title = '🎫 Event details';
+            add('Starts', p.startsAt); add('Ends', p.endsAt);
+            add('Venue', p.venue); add('Organiser', p.organiser); add('Age limit', p.ageLimit);
+            break;
+        case 'property':
+            title = '🏠 Property details';
+            add('Property type', p.propertyType); add('Bedrooms', p.bedrooms);
+            add('Bathrooms', p.bathrooms); add('Floor area', p.floorArea);
+            add('Parking', p.parking); add('Furnished', p.furnished);
+            add('Amenities', p.amenities); add('Viewing', p.viewingAvailability);
+            break;
+        case 'vehicle':
+            title = '🚗 Vehicle details';
+            add('Make', p.make); add('Model', p.model); add('Year', p.year);
+            add('Mileage', p.mileage); add('Transmission', p.transmission);
+            add('Fuel', p.fuel); add('Engine', p.engine); add('Condition', p.condition);
+            break;
+        default: return '';           /* a plain product already has Specifications */
+    }
+    if (!rows.length) return '';      /* nothing populated — show nothing, not a shell */
+    return '<div class="prd-specs-section" id="prdTypeModule">' +
+             '<div class="prd-specs-title">' + title + '</div>' +
+             '<table class="prd-specs-table">' + rows.join('') + '</table>' +
+           '</div>';
+}
+
+/* ── LISTING-TYPE ACTIONS ────────────────────────────────────────────────────
+   _lt() answers "what kind of listing is this", and the two dispatchers route the
+   customer's choice to the path that actually exists today.
+
+   NOTHING IS PROMISED THAT IS NOT BUILT. Order and Add-to-Order are genuinely the
+   cart and checkout this page already runs, so food routes straight through.
+   Reserve, Book, Get Tickets and Request Viewing have NO booking backend yet — so
+   they open the existing seller-contact path rather than a dead button or, worse, a
+   checkout that would take money for a reservation nothing records. The label tells
+   the customer what they are asking for; the route tells the truth about how it is
+   handled. When a booking engine lands, only these two dispatchers change. */
+function _lt(){
+    try {
+        if (window.SokoniListingTypes && typeof product !== 'undefined' && product) {
+            return window.SokoniListingTypes.typeOf(product);
+        }
+    } catch (_) {}
+    /* FAIL SAFE, NOT FAIL SILENT: with no authority we offer the plain product verbs,
+       because a missing module must never turn Buy into something unrecognised. */
+    return { id:'product', primary:{ key:'buy', label:'Buy Now', icon:'⚡' },
+             secondary:{ key:'cart', label:'Add to Cart', icon:'🛒' } };
+}
+function _prdPrimaryAction(){
+    var k = _lt().primary.key;
+    if (k === 'buy' || k === 'order') return buyNowProduct();
+    return contactSellerGated();
+}
+function _prdSecondaryAction(){
+    var s = _lt().secondary;
+    if (!s) return;
+    if (s.key === 'cart') return addToCart();
+    return contactSellerGated();
 }
 
 function addToCart(){

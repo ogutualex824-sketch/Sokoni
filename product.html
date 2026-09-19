@@ -230,6 +230,15 @@ content="width=device-width, initial-scale=1.0, viewport-fit=cover">
      localStorage['cart']; without this tag Add to Cart and Buy Now fail closed and say
      so. Must load before product.js. -->
 <script src="sokoni-cart.js"></script>
+<!-- LISTING TYPES. What a listing IS decides what the customer is offered — Buy, Order,
+     Reserve, Book, Request. Must load BEFORE product.js, which reads it when building the
+     CTAs; without it product.js falls back to the plain product verbs rather than failing. -->
+<script src="sokoni-listing-types.js"></script>
+<!-- OFFERS. Same two modules the marketplace card uses, so an offer reads identically
+     wherever a customer meets it. Both load before product.js, which guards every call and
+     simply renders no offer panel if either is missing. -->
+<script src="sokoni-promotion-model.js"></script>
+<script src="sokoni-offer-view.js"></script>
 <script src="product.js"></script>
 
 <script src="sokoni-audit.js" defer></script>
@@ -317,7 +326,12 @@ document.addEventListener('DOMContentLoaded', () => {
   <script defer src="kass-widget.js"></script>
 <!-- ── Report Listing ── -->
 <div id="reportListingBar" style="text-align:center;padding:8px 16px 4px;display:none;">
-  <button onclick="openReportListing()" style="background:none;border:none;color:rgba(255,255,255,0.3);font-size:12px;cursor:pointer;text-decoration:underline;font-family:inherit;">⚑ Report this listing</button>
+  <!-- The FALLBACK path. The primary Report now sits in the product action row, one
+       glance from Buy. This stays because it is the only entry point if the CTA block
+       fails to render, but it is no longer a 30%-opacity 12px underline — a control at
+       that contrast is present without being findable, which is the same as absent for
+       anyone who needs it. -->
+  <button onclick="openReportListing()" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.14);color:rgba(255,255,255,0.62);font-size:13px;font-weight:700;padding:10px 18px;border-radius:10px;cursor:pointer;font-family:inherit;">⚑ Report this listing</button>
 </div>
 <div id="reportModal" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.85);align-items:center;justify-content:center;padding:16px;">
   <div style="background:#111;border:1px solid rgba(113,255,0,0.2);border-radius:20px;padding:24px;width:100%;max-width:400px;">

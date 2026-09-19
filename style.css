@@ -10164,6 +10164,33 @@ select optgroup {
 }
 body.light-mode .pcard-variants{ color:rgba(0,0,0,0.5); }
 
+/* ── CARD FACTS: availability and place ─────────────────────────────────────
+   The card carries no action buttons, so the space they used to take goes to the
+   two facts a buyer decides on. Sized below the price and variants so it reads as
+   supporting detail, never as a control — a chip that looked tappable would
+   reintroduce the clutter the browse-only card exists to remove. */
+.pcard-facts{
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:4px;
+    margin-top:4px;
+    font-size:10px;
+    font-weight:700;
+    letter-spacing:0.2px;
+    color:rgba(255,255,255,0.45);
+    line-height:1.3;
+}
+.pcard-fact-sep{ color:rgba(255,255,255,0.22); }
+.pcard-fact--ok{ color:rgba(113,255,0,0.75); }
+.pcard-fact--low{ color:rgba(255,152,0,0.9); }
+.pcard-fact--out{ color:rgba(255,82,82,0.85); }
+body.light-mode .pcard-facts{ color:rgba(0,0,0,0.5); }
+body.light-mode .pcard-fact-sep{ color:rgba(0,0,0,0.25); }
+body.light-mode .pcard-fact--ok{ color:#2e7d00; }
+body.light-mode .pcard-fact--low{ color:#b35c00; }
+body.light-mode .pcard-fact--out{ color:#c62828; }
+
 .product-location-tag{
     background:rgba(0,153,255,0.1);
     border:1px solid rgba(0,153,255,0.2);
@@ -16123,3 +16150,48 @@ select.p10-valid {
   display: block;
   border-radius: inherit;
 }
+
+/* ── OFFER TREATMENT ON THE CARD ────────────────────────────────────────────
+   The card rule is unchanged: browse-only, no Buy, no Cart, no Wishlist. An offer adds
+   INFORMATION — a ribbon over the image and a price line under the name — and nothing that
+   looks tappable, because the whole card is the tap target and it opens the listing.
+
+   Sized to sit above the card's own facts and below its price, so the discount reads as a
+   claim about this listing rather than a second competing headline. */
+.pcard-offer-ribbon{
+    position:absolute; top:8px; left:8px; z-index:3;
+    display:inline-flex; align-items:center; gap:4px;
+    padding:4px 9px; border-radius:8px;
+    font-size:9.5px; font-weight:900; letter-spacing:0.4px;
+    background:rgba(113,255,0,0.92); color:#050505;
+    box-shadow:0 2px 10px rgba(0,0,0,0.35);
+    max-width:calc(100% - 16px);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.pcard-offer{ margin-top:6px; }
+.pcard-offer-price{
+    display:flex; align-items:baseline; gap:6px;
+    font-size:13px; font-weight:900; color:#71ff00; line-height:1.2;
+}
+/* The struck price is the ORIGINAL, and it must read as superseded rather than as a second
+   price on offer — dimmer and smaller, never the same weight as the one being charged. */
+.pcard-offer-price s{
+    font-size:10px; font-weight:700; color:rgba(255,255,255,0.35); text-decoration:line-through;
+}
+.pcard-offer-name{
+    margin-top:3px; font-size:10.5px; font-weight:800; color:rgba(255,255,255,0.8);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.pcard-offer-sum{
+    margin-top:2px; font-size:10px; font-weight:600; color:rgba(255,255,255,0.5);
+    line-height:1.35; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+    overflow:hidden;
+}
+.pcard-offer-when{
+    margin-top:3px; font-size:9.5px; font-weight:700; letter-spacing:0.2px;
+    color:rgba(255,193,7,0.85);
+}
+body.light-mode .pcard-offer-price s{ color:rgba(0,0,0,0.35); }
+body.light-mode .pcard-offer-name{ color:rgba(0,0,0,0.75); }
+body.light-mode .pcard-offer-sum{ color:rgba(0,0,0,0.5); }
+body.light-mode .pcard-offer-when{ color:#a06800; }

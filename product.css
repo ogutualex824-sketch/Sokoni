@@ -528,6 +528,22 @@ body.light-mode .yml-price { color: #1a8a00; }
   background: rgba(113,255,0,0.06); border-color: rgba(113,255,0,0.2); color: #71ff00;
 }
 .prd-cta-icon-btn.share:hover { background: rgba(113,255,0,0.12); }
+/* REPORT — findable, deliberately not alarming. Muted rather than red: this row
+   sits beside Save and Share, and a red control next to them reads as danger or
+   as an error state on the listing itself. It needs to be reachable, not loud.
+   It also does NOT grow to fill the row — flex:0 0 auto keeps Chat Seller and
+   Save at full width, so adding a trust control costs the primary actions
+   nothing. */
+.prd-cta-icon-btn.report {
+  background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.6); flex: 0 0 auto; padding: 13px 14px;
+}
+.prd-cta-icon-btn.report:hover {
+  background: rgba(255,82,82,0.10); border-color: rgba(255,82,82,0.28); color: #ff8a8a;
+}
+body.light-mode .prd-cta-icon-btn.report {
+  background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.14); color: rgba(0,0,0,0.55);
+}
 
 /* ═══════════════════════════════════════════════════
    DELIVERY ESTIMATE + STOCK
@@ -745,4 +761,90 @@ body.light-mode .prd-urgency-fresh   strong { color: #0077cc; }
   .prd-cta-primary { padding: 14px; font-size: 14px; }
   .prd-cta-row { flex-wrap: wrap; }
   .prd-seller-card { padding: 12px 14px; }
+}
+
+/* ═══════════════════════════════════════════════════
+   OFFER SECTION
+   The commercial rule about this listing, explained before the customer commits. It reuses
+   the page's own section rhythm — same margins, same title weight, same table — so it reads
+   as another module of the listing page rather than as a banner bolted onto it.
+═══════════════════════════════════════════════════ */
+.prd-offer-section {
+  margin: 24px 0; padding: 20px;
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(113,255,0,0.07), rgba(255,255,255,0.02));
+  border: 1px solid rgba(113,255,0,0.22);
+}
+.prd-offer-flag {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 10px; font-weight: 900; letter-spacing: 0.7px; text-transform: uppercase;
+  padding: 5px 11px; border-radius: 8px;
+  background: rgba(113,255,0,0.14); color: #71ff00;
+}
+.prd-offer-name {
+  margin-top: 11px; font-size: 20px; font-weight: 900; color: white;
+  letter-spacing: -0.3px; line-height: 1.25;
+}
+.prd-offer-sum { margin-top: 6px; font-size: 13px; color: rgba(255,255,255,0.6); line-height: 1.5; }
+
+.prd-offer-money {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; margin: 16px 0 4px;
+}
+.prd-offer-now { font-size: 26px; font-weight: 900; color: #71ff00; letter-spacing: -0.5px; }
+/* Superseded, never a second price on offer. */
+.prd-offer-was { font-size: 15px; font-weight: 700; color: rgba(255,255,255,0.35); }
+.prd-offer-save {
+  font-size: 11px; font-weight: 900; letter-spacing: 0.4px;
+  padding: 5px 10px; border-radius: 8px;
+  background: rgba(113,255,0,0.14); color: #71ff00;
+}
+
+.prd-offer-block { margin-top: 20px; }
+.prd-offer-block h4 {
+  margin: 0 0 10px; font-size: 11px; font-weight: 900;
+  letter-spacing: 0.8px; text-transform: uppercase; color: rgba(255,255,255,0.45);
+}
+.prd-offer-list { margin: 0; padding: 0; list-style: none; }
+.prd-offer-list li {
+  position: relative; padding: 7px 0 7px 24px;
+  font-size: 13.5px; font-weight: 600; color: rgba(255,255,255,0.85);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.prd-offer-list li:last-child { border-bottom: none; }
+.prd-offer-list li::before {
+  content: '\2713'; position: absolute; left: 0; top: 7px;
+  color: #71ff00; font-weight: 900; font-size: 13px;
+}
+.prd-offer-table { width: 100%; border-collapse: collapse; }
+.prd-offer-table tr { border-bottom: 1px solid rgba(255,255,255,0.05); }
+.prd-offer-table tr:last-child { border-bottom: none; }
+.prd-offer-table td { padding: 10px 0; font-size: 13px; vertical-align: top; }
+.prd-offer-table td:first-child {
+  color: rgba(255,255,255,0.45); font-weight: 700; width: 40%; padding-right: 12px;
+}
+.prd-offer-table td:last-child { color: rgba(255,255,255,0.85); font-weight: 600; }
+
+/* Shown ONLY when the offer declares a limit AND a real sold figure exists to subtract.
+   An absent counter is unmetered, not exhausted, so no scarcity is ever implied by silence. */
+.prd-offer-left {
+  margin-top: 16px; display: inline-block;
+  padding: 7px 13px; border-radius: 9px;
+  font-size: 12px; font-weight: 900; letter-spacing: 0.3px;
+  background: rgba(255,152,0,0.12); border: 1px solid rgba(255,152,0,0.3); color: #ffb74d;
+}
+.prd-offer-left--out {
+  background: rgba(255,82,82,0.1); border-color: rgba(255,82,82,0.3); color: #ff8a80;
+}
+
+/* The advisory that makes the figure above safe to show: what is displayed is what the
+   offer is worth, and the server is what decides what is charged. */
+.prd-offer-note {
+  margin-top: 16px; font-size: 11.5px; font-weight: 600; line-height: 1.5;
+  color: rgba(255,255,255,0.4);
+}
+
+@media (max-width: 480px) {
+  .prd-offer-section { padding: 16px; }
+  .prd-offer-name { font-size: 18px; }
+  .prd-offer-now { font-size: 23px; }
 }

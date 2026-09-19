@@ -857,6 +857,100 @@ function _variantSummaryHtml(product){
     return s ? `<div class="pcard-variants">${_escHtml(s)}</div>` : "";
 }
 
+/* ── THE CARD FACTS LINE ────────────────────────────────────────────────────
+   The card sells the product; the product page handles the transaction. With no
+   action buttons competing for the space, it goes to the facts a buyer actually
+   decides on: can I get it, and where is it.
+
+   ONLY FIELDS THE PRODUCT REALLY CARRIES. The category-aware examples that shaped
+   this (a vehicle's "Automatic · 1.5L · Petrol · 142,000 km", a property's
+   "2 Bed · 2 Bath") have NO SCHEMA BEHIND THEM — condition, mileage, transmission
+   and bedrooms are not product fields in this codebase. Rendering them would mean
+   inventing them, and an invented figure on a card is exactly what the UI data
+   rule forbids. Category attributes that DO exist — colours, sizes, storage,
+   weight, volume, material — are already rendered by _variantSummaryHtml() from
+   the canonical schema, so this adds the two facts that were genuinely missing
+   and nothing that has to be guessed.
+
+   ABSENT STOCK IS NOT ZERO. A product with no stock field is UNMETERED, not out
+   of it, so it gets no availability chip rather than a false "Out of stock". */
+/* ── THE OFFER TREATMENT ON THE CARD ────────────────────────────────────────
+   Rendered by sokoni-offer-view.js, which the listing page uses too — so an offer reads
+   identically wherever a customer meets it, and there is still ONE card component.
+
+   SILENT BY DEFAULT, AND THAT IS CORRECT. offerOf() returns null unless the listing really
+   carries a live offer, so today these add nothing to any card. No marketplace offer store
+   is wired yet, and a card that invented "SAVE KES 651" to show the feature working would
+   be fabricating a commercial claim a customer would act on.
+
+   The card stays BROWSE-ONLY. An offer adds no Buy control — tapping the card opens the
+   listing, where the offer is explained in full before anything is committed. */
+function _cardOfferBadge(product){
+    try { return (window.SokoniOfferView && SokoniOfferView.cardBadgeHtml(product)) || ''; }
+    catch (_) { return ''; }
+}
+function _cardOfferBody(product){
+    try { return (window.SokoniOfferView && SokoniOfferView.cardOfferHtml(product)) || ''; }
+    catch (_) { return ''; }
+}
+
+function _cardFactsHtml(product){
+    const bits = [];
+    /* LISTING-TYPE AWARE, because "In stock" is wrong for most of what SOKONI lists. A dish
+       is not stock, a hotel room is not stock, and an appointment certainly is not. The type
+       decides the WORD; the data decides whether there is anything to say at all. */
+    const LT = window.SokoniListingTypes;
+    const type = LT ? LT.typeOf(product) : null;
+    const availWord = (type && type.availabilityNoun) || 'in stock';
+
+    /* Category-shaped detail, rendered ONLY where the listing genuinely carries it. These
+       fields are optional everywhere: a merchant who has not filled them in gets a shorter
+       line, never an invented one. */
+    const detail = [];
+    const push = (v, fmt) => { if (v !== undefined && v !== null && String(v).trim() !== '') detail.push(fmt(v)); };
+    switch (type && type.id) {
+        case 'food': case 'drink':
+            push(product.prepTime, v => `${_escHtml(v)} min`);
+            push(product.portion,  v => _escHtml(v));
+            break;
+        case 'room':
+            push(product.guests, v => `${_escHtml(v)} guest${Number(v) === 1 ? '' : 's'}`);
+            push(product.beds,   v => `${_escHtml(v)} bed${Number(v) === 1 ? '' : 's'}`);
+            break;
+        case 'service':
+            push(product.duration, v => _escHtml(v));
+            break;
+        case 'event':
+            push(product.startsAt, v => _escHtml(v));
+            break;
+        case 'property':
+            push(product.bedrooms,  v => `${_escHtml(v)} bed`);
+            push(product.bathrooms, v => `${_escHtml(v)} bath`);
+            break;
+        case 'vehicle':
+            push(product.year,         v => _escHtml(v));
+            push(product.transmission, v => _escHtml(v));
+            break;
+        default: break;
+    }
+    detail.slice(0, 2).forEach(d => bits.push(`<span class="pcard-fact">${d}</span>`));
+
+    /* AVAILABILITY. Absent stock is UNMETERED, never zero — a listing with no stock field
+       gets no chip rather than a false "Out of stock". */
+    const hasStock = product.stock !== undefined && product.stock !== null && product.stock !== '';
+    const n = hasStock ? Number(product.stock) : null;
+    if (product.outOfStock || (hasStock && n === 0)) {
+        bits.push('<span class="pcard-fact pcard-fact--out">Unavailable</span>');
+    } else if (hasStock && Number.isFinite(n) && n > 0 && n <= 5) {
+        bits.push(`<span class="pcard-fact pcard-fact--low">Only ${n} left</span>`);
+    } else if (hasStock && Number.isFinite(n) && n > 5) {
+        bits.push(`<span class="pcard-fact pcard-fact--ok">${_escHtml(availWord.charAt(0).toUpperCase() + availWord.slice(1))}</span>`);
+    }
+    const loc = product.location ? (locationLabels[product.location] || product.location) : "";
+    if (loc) bits.push(`<span class="pcard-fact">${_escHtml(loc)}</span>`);
+    return bits.length ? `<div class="pcard-facts">${bits.join('<span class="pcard-fact-sep">·</span>')}</div>` : "";
+}
+
 function buildProductCard(product){
     const safeId   = String(product.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
     const badge    = productBadge(product);
@@ -930,6 +1024,7 @@ function buildProductCard(product){
                   ? renderProductImage({ src: img, alt: product.name, wrap: false, fallbackMode: 'css-hide', failClass: 'img-failed' })
                   : `<img src="${img}" alt="${_escHtml(product.name)}" loading="lazy" decoding="async" onerror="this.style.display='none';this.parentNode.classList.add('img-failed')">`}
                 ${locTag}
+                ${_cardOfferBadge(product)}
                 ${nameOverlay}
                 ${shopRing}
             </div>
@@ -943,6 +1038,8 @@ function buildProductCard(product){
                     ${priceBadge}
                 </div>
                 ${rating ? `<div class="rating-stars" style="font-size:9px;color:rgba(255,193,7,0.8);font-weight:700;margin-top:2px;">${ratingStarsHtml(rating.avg)} <span style="color:rgba(255,255,255,0.35);font-size:8px;">(${rating.count})</span></div>` : ""}
+                ${_cardFactsHtml(product)}
+                ${_cardOfferBody(product)}
             </div>
         </div>
     `;

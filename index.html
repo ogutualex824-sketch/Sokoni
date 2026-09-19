@@ -2887,6 +2887,16 @@
        Without this the homepage "Your Story" flow has no uploader and the post
        fails with an explicit message instead of silently saving device-local. -->
   <script type="module" src="sokoni-upload.js"></script>
+  <!-- LISTING TYPES. The card reads it to label availability correctly — a dish is not
+       "in stock" and a hotel room is not either. defer keeps it before script.js, which
+       falls back to plain product wording if it is ever absent rather than failing. -->
+  <script src="sokoni-listing-types.js" defer></script>
+  <!-- OFFERS. The promotion model owns whether an offer is live and what it takes off; the
+       offer view turns that into the card's ribbon and price line. Both are silent unless a
+       listing genuinely carries a live offer, and script.js guards every call, so a card
+       still renders in full if either is absent. -->
+  <script src="sokoni-promotion-model.js" defer></script>
+  <script src="sokoni-offer-view.js" defer></script>
   <script src="script.js" defer></script>
 <!-- The tag above was missing its </script>. A <script> element with a src still
      requires a closing tag, so the HTML parser treated everything up to the NEXT
