@@ -431,17 +431,46 @@ async function notify({ uid, type, title, body, vars = {}, phone, email, image, 
   /* SMS — forced for critical; for commerce ONLY as a fallback when push could not
      land. Sending both by default would spam the user and burn credit for nothing. */
   const wantSms = ch.sms || (ch.smsFallback && !pushOk);
-  if (wantSms && t.smsTemplate && phone) {
-    const r = await sms.enqueue({
-      to: phone,
-      template: t.smsTemplate,
-      vars: { ...vars, title, body },
-      uid,
-      dedupeKey: `sms:${key}`,          /* the SMS inherits the same idempotency */
-    });
-    result.channels.sms = r.suppressed ? 'suppressed_by_preference'
-                        : r.deduped   ? 'deduped'
-                        : 'queued';
+  if (wantSms && t.smsTemplate) {
+    /* RESOLVE THE RECIPIENT, exactly as push and email already do.
+       `phone` is a caller OVERRIDE, not the only source. Push reads
+       users/{uid} for its tokens; email falls back to the Auth address when the
+       caller supplies none. SMS had the override and no fallback — so the
+       condition `wantSms && t.smsTemplate && phone` was false at its last term
+       for every caller in the codebase, sms.enqueue() was never reached, and
+       smsQueueWorker drained an empty queue every minute without one error.
+
+       Canonical source is users/{uid}.phoneNumber ("+254…"), the field
+       profile.html persists on phone verification. The legacy `phone` field is
+       deliberately NOT read: reviving it to raise apparent reach would undo a
+       canonicalisation the write path already completed. */
+    let to = phone;
+    if (!to) {
+      try {
+        const snap = await db().collection('users').doc(uid).get();
+        const pn = snap.exists ? (snap.data() || {}).phoneNumber : null;
+        if (typeof pn === 'string' && pn.trim()) to = pn.trim();
+      } catch (_) { /* a lookup failure must not break the other channels */ }
+    }
+
+    if (!to) {
+      /* VISIBLE, not silent. The old code simply skipped, leaving
+         result.channels.sms unset — which is why a healthy SMS platform looked
+         fine while delivering nothing. A caller can now see the reason, and it
+         can be counted. */
+      result.channels.sms = 'no_phone_on_record';
+    } else {
+      const r = await sms.enqueue({
+        to,
+        template: t.smsTemplate,
+        vars: { ...vars, title, body },
+        uid,
+        dedupeKey: `sms:${key}`,          /* the SMS inherits the same idempotency */
+      });
+      result.channels.sms = r.suppressed ? 'suppressed_by_preference'
+                          : r.deduped   ? 'deduped'
+                          : 'queued';
+    }
   } else if (ch.smsFallback && pushOk) {
     result.channels.sms = 'not_needed_push_delivered';
   }
