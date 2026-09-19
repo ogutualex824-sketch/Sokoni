@@ -9,7 +9,7 @@ no function deployments (the release line is independently blocked).
 
 | Slice | Status |
 |---|---|
-| P0-1 Billing export + budget alerting | **DONE (partial — one Console step remains)** |
+| P0-1 Billing export + budget alerting | **BLOCKED — export has NO API; one Console action by the owner remains** |
 | P0-2 Unpin 8 unjustified services | **FROZEN** — failed; rollback blocked on problem B; 8 services Ready=False |
 | P0-2-INV Registry provenance investigation | **DONE (read-only) — cause UNKNOWABLE, audit logging off** |
 | P0-3 Right-size max instances | **FROZEN** — same root cause |
@@ -995,3 +995,94 @@ replacement.
 
 The next meaningful event is not a mutation. It is the first artifact lifecycle event after
 2026-09-19T06:08:12Z.
+
+---
+
+## P0-1 (continued) — completion attempt. **BLOCKED: the remaining step has no API.**
+
+Read-only verification performed as instructed. **No mutation was made**, because the verification
+established that the remaining step cannot be performed by any programmatic means available here.
+
+### Current state — verified, not assumed
+
+| Item | State |
+|---|---|
+| Project → billing account | `sokoni-aeb26` → `billingAccounts/016742-7E2122-8406F7`, `billingEnabled: true` |
+| Billing account | "Firebase Payment", **open: True** (two other accounts exist and are **closed**) |
+| Export dataset | `sokoni-aeb26:billing_export` exists, location **US**, created 2026-09-19 |
+| Export **active?** | **NO — the dataset contains zero tables** |
+| Last successful export | **none — never ran** |
+| Dataset access | `projectOwners`/`projectWriters`/`projectReaders` + owner. **No billing-export service account**, which is granted automatically when the export is configured |
+
+**Budgets — 3, all on the correct account:**
+
+| Budget | Amount | Thresholds | Monitoring channel | Scope |
+|---|---|---|---|---|
+| Firebase Project sokoni-aeb26 | USD 10 | 50/90/100% | **none** (default IAM recipients only) | project `24799054989` |
+| App engine alert | USD 75 | 50/90/100% | **none** (default IAM recipients only) | 1 service |
+| Overall alert | USD 200 | 50/75/90/100% | `…/notificationChannels/3052073155470197456` | all projects, all services |
+
+The `Overall alert` channel is the P0-1 mutation from the earlier slice, confirmed still in place.
+
+### The missing step, and why it is BLOCKED
+
+**BigQuery billing export cannot be configured programmatically.** This was previously asserted;
+it is now established by execution:
+
+| Probe | Result |
+|---|---|
+| `gcloud billing --help` | Groups are exactly `accounts`, `budgets`, `projects`. No export. |
+| `gcloud alpha billing` / `gcloud beta billing` | No export command in either surface |
+| Cloud Billing v1 discovery — resources | `organizations, billingAccounts, services, projects, …` — **no export resource** |
+| `billingAccounts` sub-resources | `subAccounts, projects` only |
+| `billingAccounts` methods | `get, patch, list, create, testIamPermissions, getIamPolicy, move, setIamPolicy` — no export method |
+| `BillingAccount` schema writable fields | `masterBillingAccount`, `currencyCode`, `displayName` only. **No export field**, so `patch` cannot set it either |
+
+An earlier grep for "export" in the discovery document matched **prose, not an identifier** — a
+textbook case of a detector reading a description as evidence. Re-checked structurally against
+resources, methods and schema properties, and the answer is a clean negative.
+
+**BLOCKED on an action only a human with Console access can take:**
+
+> **Console → Billing → `Firebase Payment` → Billing export → BigQuery export → Edit settings**
+> Project `sokoni-aeb26`, dataset `billing_export`.
+> Enable **Standard usage cost**, and **Detailed usage cost** if per-SKU resource-level attribution
+> is wanted — that is the one that makes per-service cost visible, which is what the audit needs.
+
+After enabling: data begins landing within ~24h and is **not backfilled**. The first complete month
+is October. Until then every cost figure in the audit remains a range, and §5 of
+`GCP_SERVICE_COST_CONTRACT.md` cannot be enforced.
+
+The prerequisite — the dataset — already exists, so the Console step is the only remaining work.
+
+### Verification — nothing changed
+
+| Check | Result |
+|---|---|
+| Cloud Run revision created | **none** |
+| Cloud Function deployed | **none** |
+| Production traffic changed | **none** |
+| Cloud Build | unchanged — `72739a70-d108-4812-b1e2-0e64243855f6` |
+| Artifact Registry | unchanged |
+| Canary | **untouched** — `sokoni-ar-forensics-canary:20260919T060552Z`, digest `sha256:88f338d3…` |
+| Forensic baseline | **CLEAN** — 1,709 functions, build matches, no revision drift |
+| IAM / App Check / Firestore rules / application code | untouched |
+| Payment, POS, order, booking logic | untouched |
+
+### Two observations — recorded, deliberately NOT acted on
+
+Both are outside "perform only the remaining Console step", so no mutation was made.
+
+1. **Two budgets have no monitoring notification channel.** The $10 and $75 budgets notify only
+   default IAM recipients on the billing account — the same failure mode that hid the earlier
+   alerts. Only the $200 budget was wired to the ops channel. Wiring the other two is a one-command
+   change and belongs in its own slice.
+2. **The $10 project budget trips at $5.** Against the audit's $100–765 estimate it is certainly
+   firing continuously, which makes it noise rather than signal. It should be re-based to something
+   near real spend once the export gives a real number — which is another reason the Console step
+   is the gate for everything else here.
+
+### Status
+
+**P0-1: BLOCKED — awaiting one Console action by the owner.** Everything programmatically possible
+in this slice is done. No further automated work on P0-1 is available.
