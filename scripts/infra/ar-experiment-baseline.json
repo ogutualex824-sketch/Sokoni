@@ -1,0 +1,24 @@
+{
+  "_comment": "P0-7-OBS canary experiment baseline. A later ar-forensics.js run diffs against this to detect CONTAMINATION - another agent deploying, deleting or pushing during the experiment would make the next artifact event ambiguous. Do not regenerate while the experiment is running.",
+  "canaryPushedAt": "2026-09-19T06:08:12Z",
+  "canaryDigest": "sha256:88f338d30f7c40853b2750f3a5c13dc0a57f167552e70dcdbb5d0fce6ce9cf81",
+  "canaryTag": "20260919T060552Z",
+  "deployedFunctionCount": 1709,
+  "lastCloudBuildId": "72739a70-d108-4812-b1e2-0e64243855f6",
+  "newestFunctionSourceObject": "2026-09-14T00:45:58Z",
+  "repoUpdateTimeAtPush": "2026-09-19T06:08:12.330016Z",
+  "pinnedServiceRevisions": {
+    "onnewordercreated": "onnewordercreated-00022-5r9",
+    "onorderstatuschange": "onorderstatuschange-00063-8sk",
+    "bookingdispatch": "bookingdispatch-00018-rwl",
+    "providerdispatch": "providerdispatch-00049-2rp",
+    "minishoppage": "minishoppage-00007-jnj",
+    "profilegetpublicprofile": "profilegetpublicprofile-00006-9nq",
+    "kass": "kass-00057-lkq",
+    "intasendwebhook": "intasendwebhook-00065-5ck",
+    "createcheckoutsession": "createcheckoutsession-00023-zuf",
+    "verifyintasendpayment": "verifyintasendpayment-00058-roj",
+    "initiatestkpush": "initiatestkpush-00043-niq",
+    "webhookintasend": "webhookintasend-00064-lag"
+  }
+}

@@ -192,6 +192,52 @@ if (delRows && delRows.length) {
   }
 }
 
+/* ---- 3bis. contamination check ------------------------------------------ */
+section('3bis. CONTAMINATION CHECK — did anything else touch the environment?');
+
+/* Several AI agents work this repo in parallel worktrees (CLAUDE.md). A deploy,
+   a function deletion or an artifact push by another agent during the
+   experiment would make the next artifact event ambiguous. Detect it rather
+   than hope. */
+let contaminated = null;
+try {
+  const base = require('./ar-experiment-baseline.json');
+  const checks = [];
+
+  const nowBuild = gcloud(['builds', 'list', '--region=us-central1', '--limit=1',
+    `--project=${PROJECT}`, '--format=value(id)']).trim();
+  checks.push(['last Cloud Build', base.lastCloudBuildId, nowBuild]);
+
+  const fnRaw = gcloud(['functions', 'list', `--project=${PROJECT}`, '--format=value(name)']);
+  const nowFns = fnRaw.startsWith('__ERROR__') ? null
+    : fnRaw.split('\n').filter((l) => l.trim()).length;
+  checks.push(['deployed functions', String(base.deployedFunctionCount),
+    nowFns === null ? 'LOOKUP FAILED' : String(nowFns)]);
+
+  for (const [svc, rev] of Object.entries(base.pinnedServiceRevisions)) {
+    const now = gcloud(['run', 'services', 'describe', svc, '--region=us-central1',
+      `--project=${PROJECT}`, '--format=value(status.latestCreatedRevisionName)']).trim();
+    if (now !== rev) checks.push([`revision ${svc}`, rev, now]);
+  }
+
+  const drift = checks.filter(([, a, b]) => a !== b);
+  contaminated = drift.length > 0;
+  for (const [what, was, now] of checks) {
+    const flag = was === now ? 'ok  ' : 'DRIFT';
+    console.log(`  [${flag}] ${what.padEnd(28)} baseline=${was}  now=${now}`);
+  }
+  if (contaminated) {
+    console.log('\n  *** CONTAMINATED — the environment changed during the experiment. ***');
+    console.log('  Another deploy, deletion or push has occurred. The next artifact');
+    console.log('  event may not be attributable to the canary alone. Record what');
+    console.log('  changed before interpreting any outcome below.');
+  } else {
+    console.log('\n  Clean — no deploy, deletion or revision change since the canary push.');
+  }
+} catch (e) {
+  console.log('  CHECK FAILED (not "clean"): ' + e.message);
+}
+
 section('3c. VERDICT');
 
 /* The reference interval is the 2026-09-14 -> 2026-09-15 window, ~21h. A
@@ -215,7 +261,25 @@ if (canaryPresent === null || delRows === null) {
   console.log('  function-lifecycle event (e.g. DeleteFunction) as the trigger.');
 } else if (!canaryPresent && delRows.length) {
   console.log('  OUTCOME 2 — canary GONE and deletion events captured. BREAKTHROUGH.');
-  console.log('  Inspect the principal/method/resource above; that names the mechanism.');
+  console.log('  Inspect the principal/method/resource above; that names the actor.');
+  console.log('');
+  console.log('  But "who deleted it" is NOT the whole question. Two mechanisms look');
+  console.log('  almost identical from outside:');
+  console.log('    H1  a function deletion purges a SHARED artifact that other live');
+  console.log('        functions still reference.');
+  console.log('    H2  GCF cleans up artifacts per its own ownership/reference model,');
+  console.log('        not treating Cloud Run revision references as durable artifact');
+  console.log('        dependencies. No function deletion needed.');
+  console.log('  The canary discriminates: it belongs to NO function. If it was removed,');
+  console.log('  that favours H2, because H1 has no reason to touch it.');
+  console.log('  Also establish, from section 3 above:');
+  console.log('    - which lifecycle operation PRECEDED the deletion, and how long before');
+  console.log('    - which artifact/version was considered ELIGIBLE, and on what basis');
+  console.log('    - whether the principal is a user, a gcf robot, or absent (Google-internal)');
+  console.log('  And reconcile against the counter-evidence: the 2026-07-11 deletion batch');
+  console.log('  (30+ functions) moved NO repository updateTime. A bare');
+  console.log('  "DeleteFunction -> purge" model does not explain that, so the real model');
+  console.log('  likely needs a further condition (shared-reference state, or timing).');
 } else if (!canaryPresent && !delRows.length) {
   console.log('  OUTCOME 3 — canary GONE but NO deletion event captured.');
   console.log('  Do NOT assume. Either the removal is not in the DATA_WRITE category,');

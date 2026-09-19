@@ -418,6 +418,28 @@ Continuously evolve SOKONI into a scalable, secure, maintainable, enterprise-gra
 
 Multiple AI agents (Claude Code, Cursor, Copilot) work this repo in **parallel git worktrees**. The rules below prevent the failures that have actually happened. See also `AGENTS.md`.
 
+## ⚠️ EXPERIMENT IN PROGRESS — Artifact Registry forensics (since 2026-09-19)
+
+`gcf-artifacts` lost every function image. Existing revisions still serve from Cloud Run's internal
+copies, but **no service can create a new revision from its existing spec**. The cause is not
+established. A controlled canary artifact is currently instrumenting it.
+
+**While this notice stands, do NOT:**
+
+* deploy any Cloud Function (`firebase deploy --only functions`, `gcloud functions deploy`)
+* delete any Cloud Function — **function deletion is the leading suspect**
+* run `gcloud run services update` — it will fail, and it leaves a failed revision behind that
+  **cannot be deleted** (a revision cannot be removed while it is `latestCreatedRevisionName`)
+* push, delete or tidy anything in Artifact Registry
+* delete `sokoni-ar-forensics-canary:20260919T060552Z` — it is the instrument, not litter
+
+Any of these contaminates the experiment and makes the next artifact event unattributable.
+
+Check state with `node scripts/infra/ar-forensics.js 1d` (read-only; it self-classifies and flags
+contamination). Background: `docs/GCP_COST_ARCHITECTURE_IMPLEMENTATION.md`, sections P0-2 onward.
+
+**Remove this notice only when the artifact lifecycle is understood and the owner says so.**
+
 ## Deploying
 * Live production is **`mysokoni.co.ke`** (Firebase Hosting). `sokoni.co.ke` is an unrelated site — never use it to judge state.
 * **Only deploy hosting from the latest commit.** Deploying from an older worktree **rolls back production** (this repeatedly reverted the earn page). The predeploy guard `scripts/deploy/guard-no-rollback.js` will **abort** a deploy whose tree is behind live — if it stops you, update to latest; never force past it.
