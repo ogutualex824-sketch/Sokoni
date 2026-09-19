@@ -268,3 +268,141 @@ it should not proceed until §4.4 is answered, because it would mask the anomaly
 The next useful read-only step is to identify the writer — most cheaply by inspecting
 `updatedAt`/`updatedBy`/`inventoryVersion` on live product documents to see which actor stamps them,
 which needs no new logging.
+
+---
+
+## P0-7B — Who writes products ~46,000 times a month? **Classification B — likely writer, strong evidence.**
+
+READ-ONLY. Only Firestore `runQuery`/`runAggregationQuery` were issued; the probe refuses any
+non-read path in code. No document was modified, no index created, no Data Access logging enabled.
+
+### The answer
+
+> **Client-side Firestore writes from the browser sync layer — `seller-wiring.js`, and the same
+> `_syncedAt` pattern in `pos-sync.js` and `provider-wiring.js` — rewriting the entire product
+> catalogue with no change detection.**
+
+`seller-wiring.js:_writeProduct`:
+
+```js
+const ref = doc(db, 'products', String(product.id));
+const payload = _trimPayload(product);
+payload._syncedAt = serverTimestamp();
+...
+await setDoc(ref, payload, { merge: true });
+```
+
+**There is no "has anything changed?" guard.** Every sync pass writes every product it holds. Each
+of those writes fires all four UPDATE triggers.
+
+### The evidence chain
+
+| # | Observation | Method |
+|---|---|---|
+| 1 | **108 products**, confirming the prior estimate | `runAggregationQuery` count |
+| 2 | **All 108 belong to ONE seller** — `D5Ql2EYr95bt79Ip`, "KASS SHOP" | full read |
+| 3 | `_syncedAt` present on **108/108** | field census |
+| 4 | `_syncedAt` is written **only** by browser code — `seller-wiring.js:71`, `provider-wiring.js:40`, `pos-sync.js:234`. Deployed `functions/` only ever **deletes** it (`index.js:6904`) | repo-wide search |
+| 5 | `updatedAt` **stale by >1 day on 102**, absent on 6, fresh on **0** | timestamp comparison |
+| 6 | `updatedBy` absent on **60/60** sampled | field probe |
+| 7 | Writes arrive in **bursts** — 8 docs in 4.8s, 40 in 31.9s, 60 in 3.7s | server `updateTime` clustering |
+
+Points 5 and 6 are the discriminator. The server-side edit path stamps `updatedAt`/`updatedBy` —
+`indexProductUpdate` reads `after.updatedBy` for its price-change audit. **Not one product carries a
+fresh `updatedAt`.** So the dominant writer is not the server edit path, not POS checkout, and not a
+Cloud Function. Point 4 names it: the only code that writes `_syncedAt` is the browser.
+
+Point 7 matches a client syncing a catalogue in pages rather than a human editing products.
+
+### Hypotheses tested and REJECTED
+
+| Hypothesis | Verdict | Disproof |
+|---|---|---|
+| `indexProduct*` write-back loop | **Rejected** | Guard compares generated output; `buildSearchTerms` is order-deterministic (`Set` preserves insertion order over a literal field list), so the loop terminates in one hop — P0-7 §3.1 |
+| `task-queue.js` every-minute job | **Rejected** | All three of its `products` access sites are `.get()` reads |
+| `shop-name-sync.js` bulk fan-out | **Rejected** | It stamps `sellerNameSyncedAt`; **0 of 108** products carry that field, so it has never run against them |
+| Scheduled backend sweeper | **Not supported** | No scheduled writer matches the cadence, and all would run as a function that sets `updatedAt` |
+
+Each was a plausible, specific prediction with a falsifiable test. Recording the rejections matters
+as much as the answer: `shop-name-sync` in particular *looked* exactly right — a batch rewrite of
+one seller's products — and the field signature killed it outright.
+
+### Classification: **B — likely writer, not conclusively proven**
+
+Strong and consistent, but circumstantial. It rests on a signature field and on the absence of
+server-path metadata, **not** on an observed write attributed to a client session. Proving it to **A**
+requires either Data Access audit logging on Firestore (explicitly out of scope, and costly — P0-5B
+§"The option, and its cost") or instrumenting the client. **Neither is proposed.**
+
+Not excluded: `pos-sync.js` and `provider-wiring.js` use the same `_syncedAt` signature and could
+contribute. The evidence identifies the **mechanism** — unconditional client-side catalogue sync —
+more firmly than it identifies which of the three paths dominates.
+
+### Why this matters more than consolidating the triggers
+
+```
+one client sync pass
+        │
+        └── 108 unconditional product writes
+                    │
+                    └── × 4 UPDATE triggers = 432 invocations per pass
+```
+
+≈46,000 update events ÷ 108 products ≈ **426 full-catalogue sweeps in 30 days** — roughly 14 a day,
+consistent with a dashboard or POS device syncing on load and on interval.
+
+**Fixing the writer removes the events. Consolidating the triggers only makes the same events
+cheaper to absorb** — and would have hidden this entirely, which is precisely why P0-7 recommended
+against it.
+
+Indicative reduction if the client wrote only genuine changes: with 5 creates and a handful of real
+edits in 30 days, the product-trigger workload would fall from ≈46,000 events to the low hundreds —
+a **>99% reduction**, versus the ~75% invocation reduction consolidation offers. And unlike
+consolidation it costs no failure isolation, adds no shared failure domain, and needs no dispatcher.
+
+### An independent correctness note — NOT a defect claim
+
+`_writeProduct` already strips `price`, `costPrice`, `deliveryCost`, `stock`, `outOfStock`, `sold`
+and `sellerUid` when the document exists. The comment records why: *"this sync was reverting
+server-set values (observed: price 100 → cached 2000; sellerUid)"*. So a **real** money/inventory
+regression was already found and fixed here. The remaining issue is volume, not correctness — the
+guard prevents damage but does not prevent the write.
+
+### What a fix would look like — NOT IMPLEMENTED, NOT DEPLOYED
+
+The change is **client-side** (`seller-wiring.js` and siblings), so it is **not** a Cloud Function
+deploy and would **not** create a Cloud Run revision. It is a hosting deploy, which has its own
+guardrails (`guard-no-rollback.js`, deploy-from-latest-commit).
+
+Sketch only: compare the trimmed payload against the existing snapshot — already fetched by the
+`getDoc` above — and skip `setDoc` when no descriptive field differs. That is the same
+compare-the-output shape that makes `indexProductUpdate`'s guard self-limiting.
+
+**Not written, not tested, not deployed.** It needs its own gate, and hosting deploys are outside
+this audit's authorisation.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| Product documents modified | **none** — read-only probe, non-read paths refused in code |
+| Indexes created | **none** |
+| Data Access logging | **not enabled** |
+| Functions deployed / deleted | **none** — 1,709 |
+| Revisions created | **none** |
+| Cloud Run / Artifact Registry / IAM / App Check | **unchanged** |
+| Canary | **intact** |
+| Contamination baseline | **CLEAN** |
+
+### Unresolved
+
+1. Which of the three client paths dominates — `seller-wiring`, `pos-sync`, `provider-wiring`.
+2. What triggers a sync pass (page load, interval, reconnect) and its true frequency.
+3. Why the catalogue holds exactly one seller — expected for current scale, but worth confirming.
+4. Whether `_syncedAt` on 100% of products means every product has *only ever* been client-written.
+
+### Next
+
+The fix is client-side and belongs in its own gate. It does **not** depend on the Artifact Registry
+freeze, since no function deploy is involved — but it does need the hosting deploy guardrails and
+an explicit decision.
