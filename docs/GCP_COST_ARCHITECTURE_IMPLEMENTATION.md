@@ -23,6 +23,7 @@ no function deployments (the release line is independently blocked).
 | P0-7-OBS-CANARY Controlled canary push | **Q-A CLOSED (DATA_WRITE proven) · Q-B OPEN (re-read ~24h)** |
 | P0-7 Product trigger fan-out audit | **AUDIT DONE (read-only)** — 7 confirmed, max 4 fire at once, 184,127/mo MEASURED |
 | P0-7B Product writer investigation | **DONE (read-only)** — client-side unconditional catalogue sync; class B evidence |
+| P0-7C/D Catalogue-sync fix | **SHIPPED** — hosting `1b62d15` on live lineage; 6/6 production smoke |
 | P1 Product triggers / 5xx / consolidation | **consolidation FROZEN** (deletion at scale); others not started |
 
 ---

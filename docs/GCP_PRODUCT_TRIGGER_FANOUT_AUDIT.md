@@ -406,3 +406,92 @@ this audit's authorisation.
 The fix is client-side and belongs in its own gate. It does **not** depend on the Artifact Registry
 freeze, since no function deploy is involved — but it does need the hosting deploy guardrails and
 an explicit decision.
+
+---
+
+## P0-7D — SHIPPED. Hosting deploy of the P0-7C fix onto the live lineage.
+
+**Deployed commit:** `1b62d15ae7845a071a11698c21b73610e89f5a73` · parent `d592d8f` · branch
+`ship/p07c-catalogue-sync` · `buildTime 2026-09-19T11:55:02.957Z`
+
+### Why a cherry-pick and not a deploy from HEAD
+
+`release/multishop-checkout-certified` HEAD was **not** an ancestor of the live hosting commit.
+Deploying it would have moved **1,225 files across 265 commits** and dropped `bluetooth`, `usb`,
+`serial` and `hid` from the live `Permissions-Policy` — breaking every POS printer, scanner and card
+reader to ship a sync optimisation. `guard-no-rollback` did not catch this: it only asks "is local
+behind live?", which cannot see a lineage swap.
+
+The fix therefore shipped as a cherry-pick onto `d592d8f` in an isolated worktree. Final diff:
+
+```
+A  scripts/test-seller-wiring-change-detection.js
+M  seller-wiring.js
+```
+
+`firebase.json`: **0 changed lines.** `functions/`: **0 changed files.**
+
+### Two blocked attempts before success — both correct refusals
+
+| Attempt | Result | Cause |
+|---|---|---|
+| 1 | **BLOCKED** | `RELEASE BLOCKED — 3 required suite(s) did not execute cleanly` |
+| 2 | **BLOCKED** | same, via a `NODE_PATH` shim that firebase's `cross-spawn` did not propagate to hooks |
+| 3 | **DEPLOYED** | after `npm ci` placed dependencies physically in the worktree |
+
+**Root cause: the fresh worktree had no `node_modules`.** Suites that `require('firebase-admin')`
+could not load and were classed `NO-TALLY`. Not a code defect — the required modules exist at
+`d592d8f` and the failing suite was untouched by this change.
+
+**Both failed attempts reported "exit code 0" in the task notification.** That was the shell's exit
+after piping to `tail`, not the deploy's. Reading the actual output was the only thing that
+prevented reporting a false success — twice. *Exit code is not evidence.*
+
+`npm ci` was used rather than `npm install` deliberately: it installs from the lockfile and never
+writes to it, so the shipping diff stayed byte-identical. Verified — `package-lock.json`,
+`functions/package-lock.json` and `firebase.json` all hash-identical before and after, with zero
+tracked changes.
+
+### The measurement that closed the last assumption
+
+The third deploy ran **without** any `NODE_PATH` shim, so firebase's real predeploy path was
+exercised. `gate-inventory` and `gate-inventory-writers` (hooks 10–11) appear in the output and
+firebase reported *"Finished running predeploy script"*. Since firebase aborts on the first failing
+hook, `predeploy-browser-suites` (hook 6) — the one that blocked twice — **passed inside firebase**.
+
+### Post-deploy verification
+
+| Check | Result |
+|---|---|
+| Live provenance | `1b62d15…`, exactly the shipping commit |
+| Live `seller-wiring.js` carries the fix | `_canon` ×4, `_payloadMatches` ×2, `_syncedAt` skip, call site |
+| `bluetooth` / `usb` / `serial` / `hid` on live | **all present** |
+| **Production smoke test, against the SERVED file** | **6/6 pass** |
+| Deployed commit contains previous live `d592d8f` | **YES** |
+| Deployed functions | 1,709 — unchanged |
+| Cloud Run revision created | none — `onnewordercreated-00022-5r9` |
+| Cloud Build | unchanged, `72739a70…` |
+| IAM | 39 bindings |
+| Artifact Registry / canary | `sokoni-ar-forensics-canary:20260919T060552Z` intact |
+| Contamination | **CLEAN** |
+| App Check, Firestore rules/indexes, Storage rules | untouched |
+
+The smoke test lifted `_canon` and `_payloadMatches` **out of the live production asset** over HTTP
+and exercised them, rather than testing a local copy: unchanged product → no `setDoc`, changed
+product → `setDoc`, `_syncedAt` alone → no write, stripped server price → no write, new product →
+write, numeric coercion → no write.
+
+### What is NOT yet proven
+
+The ~46,000 monthly UPDATE events should now collapse, but that is **not measured**. It needs a
+30-day window, or at minimum several days of `run.googleapis.com/request_count` on the four UPDATE
+triggers compared against the 45,543–46,300 baseline. **Do not claim the reduction until measured.**
+
+That measurement is also the clean before/after causal test for P0-7B's classification-B finding: if
+the event stream collapses, the client sync is confirmed as the writer.
+
+### Consolidation remains deliberately NOT done
+
+The four UPDATE triggers are untouched. Removing the amplification at its source was the larger win
+(>99% versus ~75%) and costs no failure isolation. Consolidation should only be reconsidered after
+the post-fix event volume is measured.
