@@ -10,16 +10,16 @@ no function deployments (the release line is independently blocked).
 | Slice | Status |
 |---|---|
 | P0-1 Billing export + budget alerting | **DONE (partial — one Console step remains)** |
-| P0-2 Unpin 8 unjustified services | **FAILED — rollback BLOCKED on problem B; 8 services remain Ready=False** |
+| P0-2 Unpin 8 unjustified services | **FROZEN** — failed; rollback blocked on problem B; 8 services Ready=False |
 | P0-2-INV Registry provenance investigation | **DONE (read-only) — cause UNKNOWABLE, audit logging off** |
-| P0-3 Right-size max instances | **BLOCKED — same root cause** |
-| P0-4 Retire `intasendWebhook` | **BLOCKED x2 — traffic is 22 not 0, AND deletion may be the purge trigger** |
+| P0-3 Right-size max instances | **FROZEN** — same root cause |
+| P0-4 Retire `intasendWebhook` | **DEFERRED / HIGH-RISK RETIREMENT** — deletion may be the purge trigger |
 | P0-5 Least-privilege IAM | separate gate — not started |
 | P0-6 App Check audit | separate gate — not started |
 | P0-7 AR Data Access audit logging | **DONE — ADMIN_READ and DATA_WRITE both PROVEN live** |
 | P0-7-OBS Forensic harness + baseline | **READY — harness live, method vocabulary confirmed** |
 | P0-7-OBS-CANARY Controlled canary push | **Q-A CLOSED (DATA_WRITE proven) · Q-B OPEN (re-read ~24h)** |
-| P1 Product triggers / 5xx / consolidation | separate gates — not started |
+| P1 Product triggers / 5xx / consolidation | **consolidation FROZEN** (deletion at scale); others not started |
 
 ---
 
@@ -918,3 +918,80 @@ hypothesis for the purge. P0-4 stays frozen on that ground alone.
 
 Stopped. No wait-and-act. The canary was not deleted, the purge was not reproduced, nothing was
 deployed, and the 12 pinned services remain untouched.
+
+---
+
+## FREEZE REGISTER — pending artifact provenance
+
+Frozen by decision, not by oversight. Each is frozen because it depends on, or could destroy the
+evidence for, the unresolved Artifact Registry behaviour.
+
+| Slice | State | Why frozen |
+|---|---|---|
+| P0-2 min-instance optimisation | **FROZEN** | Needs revision creation; also awaiting cleanup of its own 8 failed revisions |
+| P0-3 max-instance optimisation | **FROZEN** | Same mechanism; would fail identically on 1,462 services |
+| P0-4 `intasendWebhook` retirement | **DEFERRED / HIGH-RISK RETIREMENT** | Retiring means *deleting a function* — the leading purge hypothesis |
+| P1 mass function consolidation | **FROZEN** | Consolidation is deletion at scale; the worst possible time to attempt it |
+
+Healthy and untouched meanwhile: production traffic, payment paths, the 12 pinned services, the
+four money-path services, all serving revisions.
+
+### P0-4 reclassified
+
+Previously "BLOCKED on a decision". Now **DEFERRED / HIGH-RISK RETIREMENT**, which is a different
+thing. The traffic objection has weakened — the 22 requests trace to this operator's own egress IP
+— but the retirement *method* is itself the suspected trigger. Deleting `intasendWebhook` could
+reproduce the purge, or destroy the evidence we are waiting on, or both. It is not a cleanup task
+any more; it is an experiment, and not the one we want to run first.
+
+### The architectural lesson, if the hypothesis confirms
+
+> Deleting a Gen2 function may remove a **shared** artifact that other deployed functions still
+> reference.
+
+That single sentence would explain every observation: existing revisions keep serving from Cloud
+Run's internal copies, while new revisions from old specs cannot resolve their images. If
+confirmed, it changes how SOKONI must handle **every** future function retirement and every
+consolidation — which is precisely why P1 consolidation is frozen alongside P0-4 rather than
+treated as unrelated.
+
+**Still a hypothesis.** The 09-14 → 09-15 correlation is suggestive, not causal, and the 07-11
+deletion batch does not fit it.
+
+### The 24-hour check — mechanical, not interpretive
+
+```
+node scripts/infra/ar-forensics.js 1d
+```
+
+The tool now classifies the result itself, so the outcome cannot be argued into:
+
+| Verdict | Meaning | Next step |
+|---|---|---|
+| **OUTCOME 1** — canary survives, no deletions | Purge not reproduced. **A valid result.** Argues against a blanket repository sweep and towards a function-lifecycle trigger | Investigate the lifecycle path, not the repository |
+| **OUTCOME 2** — canary gone, deletion events captured | **Breakthrough.** Principal, method, resource and timestamp identify the mechanism | Inspect the captured principal; then design the repair |
+| **OUTCOME 3** — canary gone, no deletion event | Either the removal is outside `DATA_WRITE`, another mechanism is involved, or the repository reading is wrong | **Investigate. Do not conclude** |
+| **MIXED** | Canary survives but something else was deleted | Inspect before concluding |
+| **INDETERMINATE** | A query failed | Not an outcome. Fix and re-run |
+
+Two guards were added because both failure modes actually occurred during construction:
+
+* **Age guard.** The verdict prints the canary's age and, below the reference interval (~21h),
+  states that a surviving canary *proves nothing yet* and must not be quoted. Read at 0.3h it
+  already showed "OUTCOME 1", which is meaningless.
+* **Fail-closed lookup.** `canaryPresent` is `null` on any query failure and is never conflated
+  with `false`. This caught a real defect: `CANARY_MARK` was declared in the pusher but not in the
+  forensics script, and the resulting `ReferenceError` surfaced as **INDETERMINATE** rather than as
+  a false "canary absent". An absence assertion that cannot distinguish "gone" from "I failed to
+  look" is worthless, and this one was tested both ways.
+
+### Do not delete the canary
+
+`sokoni-ar-forensics-canary:20260919T060552Z`, digest `sha256:88f338d3…`. It is the reference
+specimen. The script checks the digest so a surviving original is distinguishable from a re-pushed
+replacement.
+
+### Status
+
+The next meaningful event is not a mutation. It is the first artifact lifecycle event after
+2026-09-19T06:08:12Z.

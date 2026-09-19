@@ -147,6 +147,85 @@ for (const [label, filter] of [
   }
 }
 
+/* ---- 3b. canary status and VERDICT -------------------------------------- */
+section('3b. CANARY STATUS — the reference specimen');
+
+/* Pushed 2026-09-19T06:08:12Z by P0-7-OBS-CANARY. Recorded so a SURVIVING
+   original is distinguishable from a re-pushed replacement. */
+const CANARY_MARK = 'sokoni-ar-forensics-canary';
+const CANARY_TAG = '20260919T060552Z';
+const CANARY_DIGEST = 'sha256:88f338d30f7c40853b2750f3a5c13dc0a57f167552e70dcdbb5d0fce6ce9cf81';
+
+const canaryRaw = gcloud(['artifacts', 'docker', 'images', 'list',
+  `us-central1-docker.pkg.dev/${PROJECT}/gcf-artifacts`, '--include-tags', '--format=json']);
+let canaryPresent = null; /* null = UNKNOWN, never conflate with false */
+let canaryNote = '';
+try {
+  const imgs = JSON.parse(canaryRaw.replace(/^[^[]*/, ''));
+  const hit = imgs.find((i) => (i.package || '').includes(CANARY_MARK));
+  canaryPresent = !!hit;
+  if (hit) {
+    const sameDigest = (hit.version || '') === CANARY_DIGEST;
+    canaryNote = `  package=${hit.package.split('/').pop()} tags=${JSON.stringify(hit.tags)}\n` +
+      `  digest=${hit.version}\n` +
+      `  ORIGINAL SPECIMEN: ${sameDigest ? 'yes' : 'NO — digest differs from the one pushed'}\n` +
+      `  expected tag: ${CANARY_TAG}`;
+  } else {
+    canaryNote = '  Canary NOT found in the repository.';
+  }
+} catch (e) {
+  canaryNote = '  LOOKUP FAILED — this is not "absent":\n  ' + canaryRaw.trim().slice(0, 300);
+}
+console.log(canaryNote);
+
+const del = readLog(
+  `protoPayload.serviceName="artifactregistry.googleapis.com" AND ` +
+  `protoPayload.methodName=~"Delete"`, 25);
+const delRows = del.error ? null : del.rows;
+console.log(`\n  deletion events in window: ${delRows === null ? 'QUERY FAILED — ' + del.error : delRows.length}`);
+if (delRows && delRows.length) {
+  for (const r of delRows) {
+    const p = r.protoPayload || {};
+    console.log(`   ${r.timestamp}  ${p.methodName}  ` +
+      `${(p.authenticationInfo || {}).principalEmail || '(no principal — Google-internal)'}  ` +
+      `${p.resourceName || ''}`);
+  }
+}
+
+section('3c. VERDICT');
+
+/* The reference interval is the 2026-09-14 -> 2026-09-15 window, ~21h. A
+   surviving canary means nothing before then, and "OUTCOME 1" read at ten
+   minutes old is not a result. Say so loudly rather than let it be quoted. */
+const CANARY_PUSHED_AT = Date.parse('2026-09-19T06:08:12Z');
+const ageH = (Date.now() - CANARY_PUSHED_AT) / 3600000;
+console.log(`  canary age: ${ageH.toFixed(1)}h (reference interval ~21h)\n`);
+if (ageH < 21 && canaryPresent) {
+  console.log('  *** PREMATURE — the canary is younger than the reference interval. ***');
+  console.log('  A surviving canary proves NOTHING yet. Re-run after ~24h.');
+  console.log('  The outcome below is provisional and must not be quoted as a finding.\n');
+}
+
+if (canaryPresent === null || delRows === null) {
+  console.log('  INDETERMINATE — a query failed. Do not read this as any outcome.');
+} else if (canaryPresent && !delRows.length) {
+  console.log('  OUTCOME 1 — canary SURVIVES, no deletion events.');
+  console.log('  The purge is NOT reproduced. This is a valid result, not a failure: it');
+  console.log('  argues against a blanket repository sweep and points at a');
+  console.log('  function-lifecycle event (e.g. DeleteFunction) as the trigger.');
+} else if (!canaryPresent && delRows.length) {
+  console.log('  OUTCOME 2 — canary GONE and deletion events captured. BREAKTHROUGH.');
+  console.log('  Inspect the principal/method/resource above; that names the mechanism.');
+} else if (!canaryPresent && !delRows.length) {
+  console.log('  OUTCOME 3 — canary GONE but NO deletion event captured.');
+  console.log('  Do NOT assume. Either the removal is not in the DATA_WRITE category,');
+  console.log('  another mechanism is involved, or the repository-state reading is wrong.');
+  console.log('  Investigate; do not conclude.');
+} else {
+  console.log('  MIXED — canary survives BUT deletion events exist (something else was');
+  console.log('  removed). Inspect the events above before drawing any conclusion.');
+}
+
 /* ---- 4. the standing positive control ----------------------------------- */
 section('4. POSITIVE CONTROL — the deploy path is known to work');
 console.log('  initiateSTKPush deployed 2026-09-14 00:45 (Cloud Build 72739a70, SUCCESS),');
