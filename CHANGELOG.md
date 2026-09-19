@@ -1,3 +1,80 @@
+## 2026-09-19 (75) — GATE P IMPLEMENTATION: the merchant offer authority
+
+**58/0 against real Firestore · 35/0 engine parity.** Design gate preserved (64/0 + 35/0),
+Gate W preserved, baseline 358/0. Require-closure gate passes with the new module reachable
+(361 → 362). **Nothing deployed. Nothing pushed. No rules changed.**
+
+### One callable, one persistence contract
+
+```
+client names an offer
+  → shopOfferUpsert (enforceAppCheck)
+  → authenticate
+  → resolveShopAccess(uid, shopId)     the SHOP decides, never a claim
+  → capability gate                     an offer IS a discount
+  → normalise + validate                server-authoritative schema
+  → runTransaction, caller-supplied id  idempotent by construction
+  → shopOffers/{offerId}
+```
+
+| | |
+|---|---|
+| **P1** | `shopOffers` — a third collection. `offers` and `promotions` untouched, asserted **at rest**: zero documents written to either, or to `promotionUsage` |
+| **P2** | Writing requires the platform's existing **`discount`** capability — owner, admin, manager hold it; cashier, inventory, support do not. The explicit `via:'admin'` branch preserved and tested by name |
+| **P3** | `shopOfferRedemptions` + a `redemptionCount`, written transactionally. **Not** `promotionUsage` |
+| **P4** | The persisted document decides. A basket carrying `subtotal 999999, discount 99999, total 1` still produces the stored offer's **300** |
+
+**Draft and publish share the capability gate deliberately.** Gating only publish would be a
+locked door beside an open window: whoever may edit a live offer's price has already set the
+price, whatever the status field says at the moment they save.
+
+**Why not `promotionUsage`:** it records who *funded* a platform discount (`fundedBy`,
+`platformFundingPct`, `sellerFundingPct`). A merchant's bundle is merchant-funded by
+definition, so filing it there would attribute merchant money to a platform split — a
+settlement error, not a naming inconvenience.
+
+### The semantics are implemented twice, on purpose
+
+`firebase deploy --only functions` uploads `functions/` and nothing else, so
+`require('../sokoni-promotion-model.js')` resolves on a developer's machine and throws
+`MODULE_NOT_FOUND` in production. `functions/auth-policy.js` already settled this pattern:
+duplicate deliberately, then hold the two together with a **contract**.
+
+`scripts/offer-resolution-vectors.json` carries **23 baskets** replayed against both
+resolvers pairwise — subtotal, discount, deliveryFee, total and every applied line. A shared
+constant would prove they agree about a *string*; these prove they agree about **money**.
+
+### A vector of mine was inert and hid itself
+
+The pizza bundle originally priced the package **above its own contents** — 2,999 for 2,650
+of items — so it produced no discount, and parity passed with both engines calculating zero.
+Perfect agreement about arithmetic that was never performed. Fixed to the spec's figures, and
+the suite now proves **every offer type actually applies somewhere**, and that the package
+saves exactly **KES 651**.
+
+### Every refusal verified by querying the server
+
+Not by reading a return value — a writer that threw *after* writing would pass an error check
+and fail this one. Cross-shop isolation proven at rest: a payload naming another shop is
+discarded and the stored `shopId` is the caller's own; shop B cannot update shop A's offer by
+id, cannot list it, and gets no discount from it at charge time. Eight **concurrent** creates
+produce one document with exactly one claiming creation.
+
+### Not done, stated rather than implied
+
+`createCheckoutSession` is **not yet wired** to `resolveOfferForCharge`. The resolver is
+certified, but integrating it edits the live charge path — which cannot be end-to-end
+certified locally and cannot be deployed under the current Functions freeze. That integration
+belongs to the deployment gate, alongside App Check enforcement, which the emulator also
+cannot prove.
+
+### Files
+
+`functions/shop-offers.js`, `scripts/offer-resolution-vectors.json`,
+`scripts/test-offer-engine-parity.js`, `scripts/test-shop-offers-emulator.mjs` (new);
+`functions/index.js` (re-export only, additive). No rules changes. No existing collection
+touched.
+
 ## 2026-09-19 (74) — GATE W: the certified product writer, ported and re-certified
 
 **Writer logic 37/0 · Firestore + live ruleset 46/0 · Listing Studio saves 30/0 · baseline
