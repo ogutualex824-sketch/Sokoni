@@ -1,3 +1,57 @@
+## 2026-09-20 (84) — TWO STALE CALLERS: a dead finance page and an email-keyed exemption
+
+**53/0 across two certifications · sabotage cycles red on each · claim-auth gate 1 → 0.**
+
+Two small, independent client repairs. Neither changes a backend, a rule or a claim.
+
+### Files affected
+- `finance-invoices.html` — the callable wrapper only
+- `driver.html` — one expression
+- `scripts/test-finance-invoices-dispatch.js` · `scripts/test-driver-photo-exempt.js` (new)
+
+### Database changes
+None. ### API changes None, and **no function deploy** — both repairs target clients of
+contracts that already exist.
+
+### 1. finance-invoices.html called five functions that are not deployed (34/0)
+The 37 Finance OS Sprint 4.3 callables were consolidated into ONE Cloud Run service;
+clients call `financeSprintDispatch({op, ...data})`. `functions/index.js` exports
+`financeSprintDispatch` and **none** of `invoiceCreate`, `invoiceList`, `invoiceSend`,
+`invoiceMarkPaid`, `invoiceVoid`. This page called all five **by name**, so every button on
+a live, header-linked page targeted a function that does not exist. Its sibling clients
+(`finance-budget`, `finance-expenses`, `finance-reconcile`) were migrated; this one was
+missed.
+
+The repair is the four-line wrapper the siblings already use — byte-identical after
+whitespace normalisation. The five call sites are unchanged: the op name they already pass
+is what the dispatcher routes on. The suite executes the extracted wrapper against a stub
+`firebase` and asserts the payload it actually produces:
+`_cf('invoiceList')({shopId:'s1'})` → `{op:'invoiceList', shopId:'s1'}`.
+
+### 2. driver.html keyed a photo exemption on an email address (19/0)
+`_photoExempt` admitted one owner test account by `uid` **or** by
+`alexochieng3030@gmail.com`. That account is being renamed
+(→ `superadmin@mysokoni.co.ke`), and an email-keyed gate breaks in both directions on a
+rename: the owner loses the exemption, and whoever is later given the freed address gains
+it. `scripts/verify-claim-based-auth.js` flags exactly this and states why a UID allowlist
+is acceptable where an email is not — a UID is stable across an address change. The email
+disjunct is removed; the gate goes **1 → 0 findings**.
+
+**Scope, stated precisely:** this is identity hygiene, not a privilege fix. The exemption
+gates client-side form validation whose artefact never reaches the server — `idPhoto` and
+`dlPhoto` are read to base64, written to `localStorage`, and the Firestore application
+carries no photo field. **No Cloud Function reads them.** Those fields exist only in
+`driver.html` and one QA dry-run.
+
+### Recorded separately, not repaired
+Driver ID/DL documents are collected client-side and are **not part of the server-side
+application or approval contract**. Whether driver documents should be transmitted and
+verified at all is a driver-verification architecture question with its own design and
+authorization — adjacent to the standing OFFICIAL VERIFICATION and DL-01 items.
+
+### Breaking changes
+None.
+
 ## 2026-09-20 (83) — BUYER PROFILE: every image path through Storage, and Back that works
 
 **171/0 across four certifications · sabotage cycles red on each · profile regressions green.**
