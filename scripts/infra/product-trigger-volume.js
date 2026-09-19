@@ -75,12 +75,11 @@ async function count(svc, startMs, endMs) {
   console.log(`  window end     : ${new Date(now).toISOString()}`);
   console.log(`  window length  : ${hours.toFixed(1)}h`);
 
-  if (hours < 48) {
-    console.log('\n  *** TOO EARLY TO CONCLUDE ***');
-    console.log('  The pre-fix baseline is a 30-day total. A window under ~48h is noise:');
-    console.log('  the sync fires on LOGIN, so volume follows seller sessions, not a clock.');
-    console.log('  Numbers below are provisional and must not be quoted as the reduction.');
-  }
+  console.log(`  elapsed since deploy : ${((now - DEPLOY_MS) / 3600000).toFixed(1)}h`);
+
+  console.log('\n' + '='.repeat(78));
+  console.log('MEASUREMENT — what request_count shows. No interpretation in this section.');
+  console.log('='.repeat(78));
 
   console.log('\n-- UPDATE triggers (the amplified four)');
   console.log('   trigger                        observed   baseline/30d   implied/30d   change');
@@ -119,12 +118,23 @@ async function count(svc, startMs, endMs) {
     && r[0].result.aggregateFields.n && r[0].result.aggregateFields.n.integerValue;
   console.log(`\n-- products in collection: ${n ?? 'UNKNOWN'}   (was 108 at P0-7B)`);
 
-  console.log('\nHOW TO READ THIS');
+  console.log('\n' + '='.repeat(78));
+  console.log('INTERPRETATION — for the reviewer. This tool does not decide.');
   console.log('='.repeat(78));
   console.log('  Confirms P0-7B : implied/30d collapses far below baseline on ALL FOUR.');
   console.log('                   The client catalogue sync WAS the writer.');
   console.log('  Refutes P0-7B  : volume holds near baseline. Another writer exists and');
   console.log('                   the P0-7B classification-B finding is wrong — reopen it.');
-  console.log('  Inconclusive   : window too short, NO SERIES, or the four disagree.');
-  if (anyNull) console.log('\n  NOTE: a NO SERIES row is NOT zero invocations. Do not read it as success.');
+  console.log('  Inconclusive   : NO SERIES rows, or the four triggers disagree.');
+  console.log('');
+  console.log('  This tool reports measurement only. It does NOT declare the fix');
+  console.log('  confirmed or failed, and it applies no elapsed-time threshold — the');
+  console.log('  sync fires on LOGIN, so volume tracks seller sessions, not the clock.');
+  console.log('  Evidence accumulates across repeated observations; a single reading is');
+  console.log('  not causal proof in either direction.');
+  if (anyNull) {
+    console.log('\n  NOT SUFFICIENT FOR A CAUSAL CONCLUSION: one or more triggers returned');
+    console.log('  NO SERIES. That is absence of data, NOT zero invocations, and must');
+    console.log('  never be read as a reduction.');
+  }
 })().catch((e) => { console.error('FAILED: ' + e.message); process.exit(1); });
