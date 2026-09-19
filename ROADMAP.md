@@ -3,7 +3,7 @@
 # SOKONI Platform Roadmap
 
 **Version:** 5.1.0  
-**Updated:** 2026-06-25  
+**Updated:** 2026-09-19  
 **Status:** Phase 0 — Merchant Acquisition & Market Activation
 
 **Current focus:** Build the supply side before driving buyer traffic. No new features. Every week is measured by sellers onboarded, listings added, and quality scores — not by code committed.
@@ -416,6 +416,63 @@ Evidence from real users determines what gets built next, not assumptions.
 | First Firestore backup not yet run | INFO | Scheduled daily; will self-resolve |
 | Search index backfill pending | INFO | Run `searchBackfillAll` once |
 | ~~`onBookingStatusChanged` HTTPS→Firestore migration blocked~~ | RESOLVED | GCP stale HTTPS version deleted 2026-07-11; re-exported as `onDocumentUpdated` trigger |
+
+---
+
+## Universal Listing System — built, and the four gates it stops at
+
+**Built and committed 2026-09-19** (`7dedec7`…`91e4d9c`, 11 commits, **358 assertions / 0
+failed**). Merchant V2 is now a Listing Studio over one listing engine, one promotion engine
+and one certified write authority — no second uploader, no duplicate card or detail
+component. **Nothing deployed.**
+
+| Delivered | |
+|---|---|
+| Listing engine · Studio · universal card · listing page | ✓ |
+| Contextual actions · availability · variants · lifecycle | ✓ |
+| Media image studio · price tags (single + batch) | ✓ |
+| Promotion engine · Offers Studio · scheduling · preview · analytics surface | ✓ |
+
+### The four gates — deliberately not crossed
+
+Each of these is blocked on an authority that does not exist yet, **not** on remaining UI
+work. The surfaces already refuse to pretend otherwise, and that behaviour must stay until
+the gate is deliberately opened.
+
+| Gate | Blocked on | Severity |
+|---|---|---|
+| **P — Offer persistence** | No merchant-writable offer store exists. Ownership model, lifecycle, redemption accounting, inventory interaction and the rule boundary all need deciding **before** rules are designed. See [[Offer Persistence Decision]] | **HIGH — do not shortcut** |
+| **W — Product write authority** | `createProduct` / `updateProduct` absent on this branch; `sokoni-merchant-data.js` here is a POS reader. The Studio fails closed on save, which is correct until the certified writer is deliberately ported and tested | HIGH |
+| **M — Media capability** | The media pipeline is image-only. Video / 360° / Documents controls must not be added before the media authority is extended | MEDIUM |
+| **A — Offer trends** | A current-period figure with no comparable prior-period observation is not a trend. No arrows until the data exists | LOW |
+
+### Gate P — the specific danger
+
+`docs/OFFER_PERSISTENCE_DECISION.md` exists to stop one path, which is worth restating here
+because it *looks like* progress:
+
+```
+Merchant clicks Publish
+      ↓  permission denied
+Developer finds the `offers` collection
+      ↓  relaxes isAdmin() to "fix" it
+Merchant gains write access to a platform-admin price surface
+the storefront already reads
+      ↓
+Security boundary silently expands
+```
+
+`offers` is an **administrative price-drop mechanism**, not a merchant promotion store, and
+`promotions` is a platform voucher concept. Neither is the destination. Nor should a
+collection name be invented and rules deployed merely to finish the feature — Firestore
+deploy scope is a known-dangerous boundary here (`--only firestore:rules` is discarded and
+fails **open** to both databases; see [[reference_firebase_deploy_scope_fails_open]]).
+
+`ctx.listOffers()` / `ctx.saveOffer()` are the agreed seam between the built promotion system
+and whatever persistence authority is approved. Unblocking is one function each on the
+client; nothing in the composer, calendar, preview, card or offer panel changes.
+
+**Nothing needs to be deployed merely because the UI is complete.**
 
 ---
 
