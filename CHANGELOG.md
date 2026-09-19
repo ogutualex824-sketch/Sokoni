@@ -1,3 +1,215 @@
+## 2026-09-19 (70) — The offer calendar and the performance panel, and an unknown that read as zero
+
+**25 assertions, 0 failed** (`scripts/test-offer-studio.js`). Regression across the listing and
+offer suites: **170 assertions, 0 failed**. `merchant-v2.html` renders the studio with 0 local
+404s and 0 page errors. **Nothing deployed.**
+
+### The scheduling calendar
+
+A month grid, with every day the offer runs marked. It is **not a second schedule editor** —
+the day chips and the time window remain the only way to change anything, and the calendar
+renders no input at all. It is a *reading*, which is the thing a merchant cannot do in their
+head: "every Friday, 17:00–22:00, until 31 December" is easy to type and hard to picture.
+
+**Every mark is asked of the promotion engine.** The grid calls `isLive()` once per day, so what
+is highlighted is exactly what the basket will accept. A calendar that computed its own idea of
+"Fridays" would be a second schedule implementation, and the two would disagree the first time a
+rule changed. Verified in the browser: September 2026, Friday selected → **4, 11, 18, 25 marked,
+"This schedule covers 4 days this month."**
+
+### Three defects, all found by checking rather than by assuming
+
+**An unknown count rendered as zero.** With no offer store connected — which is the shell's
+actual state today — the header printed `0 live · 0 scheduled · 0 drafts`. That tells a merchant
+their offers have *vanished*; the truth was that nothing had been read. It now reads `—` with
+`title="Not counted — no offer store is connected"`. A real zero from a real read is still shown
+as `0`, because that is the answer. This is the platform's own UI Data Integrity rule, broken in
+a panel I had written myself.
+
+**The calendar was blank exactly when it was needed.** `isLive()` refuses any offer whose status
+is not live — correctly, since a draft must never price a basket — so probing the draft as-is
+marked no day at all, while the merchant was designing the schedule. The probe now sets the
+status aside on a copy, and the draft state is said in words underneath: *"It is a draft —
+nothing runs until you publish it."* The draft object itself is never touched.
+
+**The probe time is load-bearing.** A 17:00–22:00 offer asked about at midnight is live on no
+day, so a calendar probing at 00:00 would render a blank month for a perfectly valid offer. The
+probe sits inside the offer's own window, and the suite asserts both directions.
+
+### Two assertions of mine were wrong, and the code was right
+
+A character-window regex after `calnext` ran into the unrelated day-chip handler below it and
+reported that paging the calendar touched the schedule. It does not. The matcher now extracts
+the paging branch and asserts on that. Separately, a file-wide ban on `d.status =` caught
+`save()`, where setting the status **is** the feature. Both were fixed in the control, not in the
+code — the matcher has to follow the code, not a byte count.
+
+### The performance panel refuses to guess
+
+Views, orders and revenue are the numbers a merchant makes decisions with, so this is the panel
+most tempting to fake. Every figure is read from stats the shell supplies; **none** is computed
+from a price, a listing or a local counter. With no stats source it says so in words and shows no
+figures. An absent stat is skipped rather than coerced to 0, and conversion is omitted entirely
+when views are absent or zero — a rate with no denominator is not a small number, it is not a
+number.
+
+### Files
+
+`scripts/test-offer-studio.js` (new); `sokoni-merchant-offers.js`, `sokoni-merchant-offers.css`
+(modified). No database changes, no API changes, no security changes, no breaking changes.
+
+## 2026-09-19 (69) — The offer card and the offer detail, on the surfaces that already exist
+
+**62 assertions, 0 failed** (`scripts/test-offer-view.js`). `index.html`, `product.html` and
+`merchant-v2.html` all load clean: **0 local 404s, 0 page errors, and 0 offer nodes rendered.**
+**Nothing deployed.**
+
+### One renderer, two surfaces, no third component
+
+`sokoni-offer-view.js` draws the offer ribbon and price line on the marketplace card, and the
+offer panel on the listing page. Both surfaces call the same file, so an offer reads identically
+wherever a customer meets it — and there is still one card component and one detail component,
+which is what the engineering rule demanded.
+
+The offer panel lives **on the listing page**, not on a URL of its own. An offer is a commercial
+rule *about* a listing; giving it a separate page would give the customer two places to read one
+price.
+
+### Zero offer nodes is the headline, not a caveat
+
+No marketplace offer store is wired, so `offerOf()` returns null on every real listing and every
+builder returns `''`. Verified in the browser on all three pages: **0 elements rendered.** A card
+that invented "SAVE KES 651" to demonstrate the feature would be fabricating a commercial claim,
+and a customer would act on it.
+
+### What it refuses to say
+
+| Situation | What it does |
+|---|---|
+| Percentage offer, listing has no price | No saving — a percentage of an unknown price is not a number |
+| Bundle whose items carry no prices | Shows the package price, no "was", no saving |
+| One unpriced item among priced ones | Invalidates the whole regular value |
+| Friday offer, viewed on Tuesday | Not shown at all |
+| Malformed schedule | Not shown at all — fails closed, as the promotion model does |
+| Inventory limit declared, no sold figure | Says nothing. **Absent is unmetered, never exhausted** |
+| Bundle price above the regular value | No "saving" is claimed |
+
+The remaining-count rule is the platform's standing stock invariant applied to promotions:
+rendering "Sold out" from a missing counter stops a customer buying something that is available.
+
+### The card stays browse-only
+
+An offer adds a ribbon and a price line. It adds **no button**, no cart control and no
+`data-action` — asserted directly, because the browse-only card exists to remove exactly that
+clutter and an offer is not a licence to put it back. The whole card is still the tap target.
+
+### Two defects found by looking at it
+
+**The card printed KES 3,650 twice**, two lines apart — once as the listing price and again
+struck through inside the offer block, reading as two competing prices rather than one price and
+one offer. The original is now struck only when it is genuinely a different number from the one
+the card is already showing.
+
+**`product.css` had been flipped to CRLF wholesale**, turning a 102-line addition into a
+`838 insertions / 736 deletions` diff that no reviewer could read. Normalised back to LF;
+`git diff --numstat` now reports **102 / 0**. The other six touched files were checked and are
+clean.
+
+### Stacking is stated, not discovered at checkout
+
+Whether an offer can be combined with another is exactly the rule people find out about when
+they are already paying. It is now a row in the offer panel, alongside minimum spend, per-customer
+limit, locations and fulfilment. The panel closes with *"The price you pay is confirmed at
+checkout"* — the customer-facing form of the studio's own advisory, because the promotion model
+produces a display quote and **the server decides what is charged**.
+
+### A bundle is not an item
+
+`actionLabel()` renames the action for a bundle only — "Order Package" for a restaurant,
+"Reserve Package" for a hotel, "Add Package" for a shop. The verb still comes from the listing
+type, and the **route is unchanged**. A percentage off does not rename anything, because it does
+not change what is being bought.
+
+### Files
+
+`sokoni-offer-view.js`, `scripts/test-offer-view.js`, `scripts/harness-offer-view.html` (new);
+`script.js`, `product.js`, `product.html`, `index.html`, `style.css`, `product.css` (modified).
+No database changes, no API changes, no security changes, no breaking changes.
+
+## 2026-09-19 (68) — The Listing Studio: one editor for everything a merchant sells
+
+**63 assertions, 0 failed** (`scripts/test-listing-studio.js`), alongside listing model 25/0 and
+promotion model 22/0. `merchant-v2.html` loads all six modules with **0 local 404s**.
+**Nothing deployed.**
+
+### What changed
+
+Merchant V2's product editor now asks *what are you listing?* before it asks anything else, and
+reshapes itself around the answer. A restaurant describes a dish, a hotel describes a room, a
+garage describes a service — in the same form, saved by the same writer.
+
+| | Before | After |
+|---|---|---|
+| Listing types | product only | 10, chosen or inferred |
+| Type-specific fields | none | drawn from `sokoni-listing-model.js` |
+| Completeness | none | scored, with every missing field named |
+| Customer view | not shown | live preview, mobile and desktop |
+| Commerce action | Buy / Add to Cart, hard-coded | contextual — Reserve, Order, Book, Request Viewing |
+
+### It is not a second uploader, and that is the point
+
+The engineering rule was explicit: no `restaurant-uploader.html`, no second merchant app, no
+second product writer, no duplicate card or detail component. So `sokoni-listing-studio.js` is a
+**renderer**. It mounts nothing, owns no route, holds no state and writes nothing — it emits the
+editor's own `pr-*` markup into the editor that already exists. A merchant sees a longer form,
+not a different application.
+
+The fields it draws come from one table. Adding a business type is a table entry, not another
+form. It is also handed the set of keys the native editor already draws and skips every one of
+them, so the two can never present two boxes for one value with the writer unable to tell which
+the merchant meant. That skip list is **derived**, not maintained: it includes whatever the
+specifications section is currently offering for the chosen category, which is why `model`
+appears under Vehicle but not under a phone.
+
+### Three defects found while proving it, two of them by the tests themselves
+
+**A filled field went on reporting itself missing.** `quality()` looks every field up by its bare
+key — it asks a room for `guests`, not `attributes.guests` — so type-specific values, which live
+in `attributes` where the universal model puts them, were invisible to the scorer. A merchant
+could complete a room in full and watch it sit at a blocked score for ever. `applyFormValues()`
+now projects attributes flat **for reading only**; the writer still assembles its patch from
+`fieldsFromForm()`, so nothing about what is saved changed.
+
+**An unsaved listing announced itself as Live.** The visibility select defaults to active, so the
+moment anything captured the form, the lifecycle chain jumped to Live — a claim about a record
+that did not exist. Caught in the browser, not in Node: nothing had captured the form until a
+real click did. A listing is a draft until it has an id, whatever the select says.
+
+**The customer preview rendered in capitals.** `.pr-sec` is the editor's section-header style and
+its children inherit it. Cosmetic anywhere else; here it defeated the block's only purpose, which
+is showing the merchant what a buyer actually sees.
+
+### What it refuses to invent
+
+No price becomes `No price yet`, never `KES 0` — a preview showing zero teaches a merchant their
+listing is free. A listing with no reviews shows no star rating. A type nobody chose is stored as
+**absent**, not as `'product'`, because writing the inference would turn SOKONI's guess into the
+merchant's decision, and the type authority reads an explicit value ahead of its own inference.
+
+### The gap this work exposed
+
+`sokoni-merchant-data.js` on `main` has **no product write authority** — no `createProduct`, no
+`updateProduct`. It is a POS reader: `listProducts`, `completeSale`, cart. The writer exists only
+on `release/merchant-launch-rc`. The ported Products module therefore fails closed on save, which
+is correct behaviour and not a regression, but it means the Studio can compose a listing on `main`
+and cannot yet save one. **Porting the certified writer is a separate, authorised piece of work.**
+
+### Files
+
+`sokoni-listing-studio.js`, `sokoni-listing-studio.css`, `scripts/test-listing-studio.js`,
+`scripts/harness-listing-studio.html` (new); `sokoni-merchant-products.js`, `merchant-v2.html`
+(modified). No database changes, no API changes, no security changes, no breaking changes.
+
 ## 2026-09-14 (67) — `intasendWebhook` retired: the handler IntaSend never called
 
 **70 assertions, 0 failed, 0 blocked.** Suite: `scripts/certify-intasend-webhook-retirement.js`
