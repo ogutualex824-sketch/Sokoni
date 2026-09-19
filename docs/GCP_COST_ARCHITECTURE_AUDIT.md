@@ -338,6 +338,15 @@ rather than left running).
 **Logging — MEASURED: 1,752,967,663 bytes (1.75 GB) billable ingestion / 30 days.** Against a
 50 GiB free allowance this is **free**. It is still 1.75 GB of logs for one order.
 
+**Monitoring — MEASURED (added during P0-1): 22 alert policies, all enabled, every one wired to a
+notification channel**, across two enabled email channels. This is a mature setup and the audit
+initially failed to credit it, because the alpha/beta CLI components were unavailable and the REST
+API was not queried until P0-1.
+
+**But note the gap it leaves.** The relevant policy is `HTTP 5xx Error Rate > 1%`, and the measured
+rate is **0.374%** — so the scheduled jobs that fail on *every single run* have never alerted. A
+threshold set above the standing failure rate only reports novelty, never a chronic condition.
+
 **Error visibility — MEASURED: 3,664 5xx across 161 services, ~110–120 each.** That even
 distribution is the signature of a systemic cause, not noise, and sampling the logs identified two:
 
@@ -375,6 +384,14 @@ vector and therefore a *spend* vector as well as a security one.
 **Billing observability — MEASURED: there is no BigQuery billing export.** No datasets exist.
 **Actual spend cannot be read from this project**, which is why §11 is a range rather than a figure,
 and is itself a P0 finding: you cannot manage what you cannot see.
+
+> **CORRECTED 2026-09-19 during P0-1.** This section originally also reported that no budget alert
+> could be verified. That was wrong, and the reason matters: `billingbudgets.googleapis.com` was
+> **disabled**, so the list command returned a permission-shaped error which I read as absence.
+> Enabling the API revealed **three existing budgets** — USD 10 project-scoped, USD 75 on one
+> service, USD 200 overall, all with 50/90/100% thresholds. All three had an **empty
+> `notificationsRule`**. An API-disabled error is not an empty result; the control was to enable
+> the API and ask again.
 
 ---
 
@@ -470,7 +487,7 @@ latent image-egress problem.
 | # | Risk | Severity | Evidence |
 |---|---|---|---|
 | R1 | **157,678-instance configured headroom** — no project-level ceiling | **P0** | Sum of `maxInstanceCount`; 1,462 services at 99 |
-| R2 | **No billing export** — spend unobservable, no budget alert verified | **P0** | Zero BigQuery datasets |
+| R2 | **No billing export** — spend unobservable. Budgets DO exist (see §9 correction) but had no notification rule | **P0** | Zero BigQuery datasets |
 | R3 | **`roles/editor` on all 1,709 functions** | **P0 (security)** | IAM policy |
 | R4 | 12 always-on containers = 95.7% of compute, one of them retired | **P1** | 8,500 of 8,886 instance-hours |
 | R5 | 37.1% of callables without App Check → abuse = spend | **P1** | 659 of 1,776 sites |
