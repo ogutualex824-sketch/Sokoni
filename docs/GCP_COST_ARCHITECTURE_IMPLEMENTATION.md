@@ -9,7 +9,7 @@ no function deployments (the release line is independently blocked).
 
 | Slice | Status |
 |---|---|
-| P0-1 Billing export + budget alerting | **BLOCKED — export has NO API; one Console action by the owner remains** |
+| P0-1 Billing export + budget alerting | **CLOSED — owner enabled the export; awaiting async first delivery** |
 | P0-1A Budget notification wiring | **PASS — all 3 budgets now reach the ops channel** |
 | P0-2 Unpin 8 unjustified services | **FROZEN** — failed; rollback blocked on problem B; 8 services Ready=False |
 | P0-2-INV Registry provenance investigation | **DONE (read-only) — cause UNKNOWABLE, audit logging off** |
@@ -1202,3 +1202,63 @@ Complete pre-change budget objects, including etags, are preserved in the slice 
 ### Status
 
 **P0-1A: PASS.** P0-1's export step remains BLOCKED on the Console. No frozen work started.
+
+---
+
+## P0-1 — CLOSED. Owner completed the Console step 2026-09-19.
+
+Billing export to BigQuery was enabled by the owner in the Console — the one action with no
+programmatic surface. P0-1 is no longer blocked.
+
+```
+Billing account : Firebase Payment (016742-7E2122-8406F7)
+Project         : sokoni-aeb26
+Dataset         : billing_export (US)
+Standard usage cost : ON
+Detailed usage cost : ON   <- per-SKU, per-resource attribution
+```
+
+`Detailed` is the one that matters for this programme. It is what eventually turns
+*"GCP costs roughly X"* into *"this service consumed X while this business activity produced Y
+transactions"* — the per-service cost attribution that §5 of `GCP_SERVICE_COST_CONTRACT.md` needs
+and that the cost-per-order metric depends on.
+
+**Deliberately NOT enabled:** FOCUS, Pricing and CUD exports. Not needed for this programme.
+
+### Verification state at hand-off
+
+`billing_export` holds **zero tables** at 2026-09-19T06:3xZ. That is expected, not a fault —
+delivery is asynchronous and on Google's side. Data typically begins landing within ~24h and is
+**not backfilled**, so the first complete month is October.
+
+Until a table exists, every cost figure in the audit stays a range and the cost-per-order metric
+cannot be computed.
+
+**Verify with:**
+
+```
+bq --project_id=sokoni-aeb26 ls billing_export
+```
+
+Expect, once populated:
+
+| Table | Source |
+|---|---|
+| `gcp_billing_export_v1_016742_7E2122_8406F7` | Standard usage cost |
+| `gcp_billing_export_resource_v1_016742_7E2122_8406F7` | Detailed usage cost |
+
+An empty listing before ~24h means nothing. An empty listing well after that is a real finding and
+should be investigated rather than assumed to be latency.
+
+### P0-1 group — final state
+
+| Item | State |
+|---|---|
+| Budget API enabled | DONE |
+| Export dataset created | DONE |
+| Export configured (Console) | **DONE — owner, 2026-09-19** |
+| $200 budget → ops channel | DONE |
+| $10 and $75 budgets → ops channel | DONE (P0-1A) |
+| Export data landed | **PENDING — asynchronous** |
+
+Cost visibility is now instrumented end to end. The remaining wait is Google's, not ours.
