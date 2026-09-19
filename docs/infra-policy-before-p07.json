@@ -1,0 +1,246 @@
+{
+  "bindings": [
+    {
+      "members": [
+        "serviceAccount:service-24799054989@gcp-sa-artifactregistry.iam.gserviceaccount.com"
+      ],
+      "role": "roles/artifactregistry.serviceAgent"
+    },
+    {
+      "members": [
+        "serviceAccount:24799054989@cloudbuild.gserviceaccount.com"
+      ],
+      "role": "roles/cloudbuild.builds.builder"
+    },
+    {
+      "members": [
+        "serviceAccount:24799054989@cloudbuild.gserviceaccount.com",
+        "serviceAccount:service-24799054989@gcp-sa-cloudbuild.iam.gserviceaccount.com"
+      ],
+      "role": "roles/cloudbuild.serviceAgent"
+    },
+    {
+      "members": [
+        "user:donna@adg.io"
+      ],
+      "role": "roles/cloudfunctions.developer"
+    },
+    {
+      "members": [
+        "serviceAccount:service-24799054989@gcf-admin-robot.iam.gserviceaccount.com"
+      ],
+      "role": "roles/cloudfunctions.serviceAgent"
+    },
+    {
+      "members": [
+        "serviceAccount:service-24799054989@gcp-sa-cloudscheduler.iam.gserviceaccount.com"
+      ],
+      "role": "roles/cloudscheduler.serviceAgent"
+    },
+    {
+      "members": [
+        "serviceAccount:24799054989@cloudservices.gserviceaccount.com"
+      ],
+      "role": "roles/compute.instanceGroupManagerServiceAgent"
+    },
+    {
+      "members": [
+        "serviceAccount:service-24799054989@compute-system.iam.gserviceaccount.com"
+      ],
+      "role": "roles/compute.serviceAgent"
+    },
+    {
+      "members": [
+        "serviceAccount:service-24799054989@container-engine-robot.iam.gserviceaccount.com"
+      ],
+      "role": "roles/container.serviceAgent"
+    },
+    {
+      "members": [
+        "serviceAccount:service-24799054989@containerregistry.iam.gserviceaccount.com"
+      ],
+      "role": "roles/containerregistry.ServiceAgent"
+    },
+    {
+      "members": [
+        "serviceAccount:24799054989-compute@developer.gserviceaccount.com"
+      ],
+      "role": "roles/datastore.importExportAdmin"
+    },
+    {
+      "members": [
+        "serviceAccount:sokoni-tenant-census-reader@sokoni-aeb26.iam.gserviceaccount.com"
+      ],
+      "role": "roles/datastore.viewer"
+    },
+    {
+      "members": [
+        "serviceAccount:24799054989-compute@developer.gserviceaccount.com",
+        "serviceAccount:24799054989@cloudservices.gserviceaccount.com",
+        "serviceAccount:sokoni-aeb26@appspot.gserviceaccount.com"
+      ],
+      "role": "roles/editor"
+    },
+    {
+      "members": [
+        "user:donna@adg.io"
+      ],
+      "role": "roles/errorreporting.viewer"
+    },
+    {
+      "members": [
+        "serviceAccount:24799054989-compute@developer.gserviceaccount.com"
+      ],
+      "role": "roles/eventarc.eventReceiver"
+    },
+    {
+      "members": [
+        "serviceAccount:service-24799054989@gcp-sa-eventarc.iam.gserviceaccount.com"
+      ],
+      "role": "roles/eventarc.serviceAgent"
+    },
+    {
+      "members": [
+        "user:donna@adg.io"
+      ],
+      "role": "roles/firebase.developAdmin"
+    },
+    {
+      "members": [
+        "serviceAccount:service-24799054989@gcp-sa-firebase.iam.gserviceaccount.com"
+      ],
+      "role": "roles/firebase.managementServiceAgent"
+    },
+    {
+      "members": [
+        "serviceAccount:firebase-adminsdk-fbsvc@sokoni-aeb26.iam.gserviceaccount.com"
+      ],
+      "role": "roles/firebase.sdkAdminServiceAgent"
+    },
+    {
+      "members": [
+        "serviceAccount:firebase-adminsdk-fbsvc@sokoni-aeb26.iam.gserviceaccount.com"
+      ],
+      "role": "roles/firebaseappcheck.admin"
+    },
+    {
+      "members": [
+        "serviceAccount:firebase-adminsdk-fbsvc@sokoni-aeb26.iam.gserviceaccount.com"
+      ],
+      "role": "roles/firebaseauth.admin"
+    },
+    {
+      "members": [
+        "serviceAccount:release-b-hosting-deployer@sokoni-aeb26.iam.gserviceaccount.com",
+        "serviceAccount:sokoni-hosting-deployer@sokoni-aeb26.iam.gserviceaccount.com",
+        "user:donna@adg.io"
+      ],
+      "role": "roles/firebasehosting.admin"
+    },
+    {
+      "members": [
+        "serviceAccount:service-24799054989@gcp-sa-firebasevertexai.iam.gserviceaccount.com"
+      ],
+      "role": "roles/firebaseml.serviceAgent"
+    },
+    {
+      "members": [
+        "serviceAccount:service-24799054989@gcp-sa-firebasemods.iam.gserviceaccount.com"
+      ],
+      "role": "roles/firebasemods.serviceAgent"
+    },
+    {
+      "members": [
+        "serviceAccount:service-24799054989@firebase-rules.iam.gserviceaccount.com"
+      ],
+      "role": "roles/firebaserules.system"
+    },
+    {
+      "members": [
+        "serviceAccount:service-24799054989@gcp-sa-firebasestorage.iam.gserviceaccount.com"
+      ],
+      "role": "roles/firebasestorage.serviceAgent"
+    },
+    {
+      "members": [
+        "serviceAccount:service-24799054989@gcp-sa-firestore.iam.gserviceaccount.com"
+      ],
+      "role": "roles/firestore.serviceAgent"
+    },
+    {
+      "members": [
+        "serviceAccount:firebase-adminsdk-fbsvc@sokoni-aeb26.iam.gserviceaccount.com",
+        "serviceAccount:service-24799054989@gcp-sa-pubsub.iam.gserviceaccount.com"
+      ],
+      "role": "roles/iam.serviceAccountTokenCreator"
+    },
+    {
+      "members": [
+        "user:donna@adg.io"
+      ],
+      "role": "roles/logging.viewer"
+    },
+    {
+      "members": [
+        "user:donna@adg.io"
+      ],
+      "role": "roles/monitoring.viewer"
+    },
+    {
+      "members": [
+        "user:alexochieng3030@gmail.com"
+      ],
+      "role": "roles/owner"
+    },
+    {
+      "members": [
+        "serviceAccount:service-24799054989@gs-project-accounts.iam.gserviceaccount.com"
+      ],
+      "role": "roles/pubsub.publisher"
+    },
+    {
+      "members": [
+        "serviceAccount:service-24799054989@gcp-sa-pubsub.iam.gserviceaccount.com"
+      ],
+      "role": "roles/pubsub.serviceAgent"
+    },
+    {
+      "members": [
+        "serviceAccount:service-24799054989@cloud-redis.iam.gserviceaccount.com"
+      ],
+      "role": "roles/redis.serviceAgent"
+    },
+    {
+      "members": [
+        "serviceAccount:24799054989-compute@developer.gserviceaccount.com"
+      ],
+      "role": "roles/run.invoker"
+    },
+    {
+      "members": [
+        "serviceAccount:service-24799054989@serverless-robot-prod.iam.gserviceaccount.com"
+      ],
+      "role": "roles/run.serviceAgent"
+    },
+    {
+      "members": [
+        "serviceAccount:service-24799054989@service-networking.iam.gserviceaccount.com"
+      ],
+      "role": "roles/servicenetworking.serviceAgent"
+    },
+    {
+      "members": [
+        "serviceAccount:firebase-adminsdk-fbsvc@sokoni-aeb26.iam.gserviceaccount.com"
+      ],
+      "role": "roles/storage.admin"
+    },
+    {
+      "members": [
+        "serviceAccount:service-24799054989@gcp-sa-vpcaccess.iam.gserviceaccount.com"
+      ],
+      "role": "roles/vpcaccess.serviceAgent"
+    }
+  ],
+  "etag": "BwZa9qfC2ZE=",
+  "version": 1
+}

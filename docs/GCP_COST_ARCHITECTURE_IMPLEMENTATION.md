@@ -16,6 +16,7 @@ no function deployments (the release line is independently blocked).
 | P0-4 Retire `intasendWebhook` | **BLOCKED on a decision — traffic is 22, not 0** |
 | P0-5 Least-privilege IAM | separate gate — not started |
 | P0-6 App Check audit | separate gate — not started |
+| P0-7 AR Data Access audit logging | **DONE — ADMIN_READ proven live; DATA_WRITE enabled, unproven** |
 | P1 Product triggers / 5xx / consolidation | separate gates — not started |
 
 ---
@@ -546,3 +547,135 @@ identically. It belongs in the B gate as a hypothesis to test, not as a workarou
 ### Status
 
 **P0-2 rollback: BLOCKED on problem B.** No further mutation attempted. Nothing changed.
+
+---
+
+## P0-7 — Artifact Registry Data Access audit logging — **DONE**
+
+Authorised as a standalone slice: enable Data Access audit logging for
+`artifactregistry.googleapis.com` and nothing else. One mutation. All prohibitions honoured.
+
+**Purpose is forward visibility, not repair.** This recovers nothing. The 2026-09-15 disappearance
+stays unexplained. What it buys is that the *next* one produces an identifiable deletion event with
+a principal, instead of another inference.
+
+### BEFORE
+
+```
+project                    : sokoni-aeb26 (24799054989)
+IAM policy bytes           : 7046
+policy version             : 1
+etag                       : BwZa9qfC2ZE=
+role bindings              : 39
+auditConfigs               : null  (absent — top-level keys were only bindings/etag/version)
+AR audit records in 90 days: 3  (2 CreateRepository June, 1 UpdateRepository 2026-06-23)
+```
+
+### The change
+
+| | |
+|---|---|
+| Project | `sokoni-aeb26` |
+| Service | `artifactregistry.googleapis.com` — **only** this service |
+| Before | `auditConfigs` absent |
+| After | `ADMIN_READ` + `DATA_WRITE` |
+| Deliberately **excluded** | `DATA_READ` — every image pull; highest-volume log type on the platform and irrelevant to the question |
+| Deliberately **excluded** | The "All services" default — not touched |
+
+**Event types now captured.** `DATA_WRITE` covers image/package/version/tag **pushes and
+deletions** — `DeletePackage`, `DeleteVersion`, `DeleteTag`. That is the disappearance event.
+`ADMIN_READ` covers repository metadata reads, kept because it is low-volume and shows who is
+inspecting the registry.
+
+Verified before applying, mechanically rather than by eye:
+
+```
+bindings before/after      : 39 / 39
+etag preserved             : true (BwZa9qfC2ZE=)
+version preserved          : true
+ONLY auditConfigs differs  : true   <- deep-equal of both policies with auditConfigs removed
+```
+
+### MUTATION
+
+```
+gcloud projects set-iam-policy sokoni-aeb26 policy-after.json
+```
+
+Etag-guarded: the submitted policy carried the etag read at capture time, so a concurrent change by
+another process would have rejected the write rather than silently clobbering it. `exit=0`,
+new etag `BwZbz4_7Q1M=`.
+
+**No role binding was added, removed or altered.** The only IAM change is the audit configuration
+required by this slice.
+
+### AFTER — verification against every required condition
+
+| # | Condition | Result |
+|---|---|---|
+| V1 | Audit configuration present | **PASS** — `auditConfigs` returns the expected block |
+| V2 | AR Data Access logging enabled | **PASS** — `ADMIN_READ` + `DATA_WRITE` on `artifactregistry.googleapis.com` |
+| V3 | Cloud Run services unchanged | **PASS** — all 12 pinned services identical to recorded state |
+| V4 | No revisions created | **PASS** — `latestCreatedRevisionName` identical on all 12 |
+| V5 | No traffic changed | **PASS** — all 12 still 100% on the same revision |
+| V6 | No functions deployed | **PASS** — latest Cloud Build still `2026-09-14 00:45` |
+| V7 | No repository/image state changed | **PASS** — both repos `sizeBytes: 0`; `updateTime` still `2026-09-15 05:55:28` (us-central1) and `2026-08-23 08:39:24` (us-east1); image listing still empty |
+| — | Role bindings unchanged | **PASS** — 39 before, 39 after |
+
+### Positive control — logging is live, not merely configured
+
+A configuration that is present but inert would read as success. So the slice was closed by
+generating an event and confirming capture:
+
+```
+issued : gcloud artifacts repositories list
+logged : 2026-09-19T05:51:18Z  ArtifactRegistry.ListRepositories  alexochieng3030@gmail.com
+```
+
+Before this change the equivalent 90-day query returned **3 June records and nothing else**. It now
+records reads in real time. **`ADMIN_READ` is proven working end-to-end.**
+
+**`DATA_WRITE` is enabled but UNPROVEN.** Proving it requires a push or a delete against Artifact
+Registry, which this authorisation forbids. It sits in the same `auditConfigs` entry as the proven
+`ADMIN_READ`, so confidence is high — but it is not evidence, and it is recorded here as unproven
+rather than claimed. It will be proven by the first real write, which is also the event we want.
+
+### Cost
+
+`DATA_WRITE` on one service. Measured platform log ingestion is 1.75 GB/month against a 50 GiB
+monthly free allowance, so the added volume is immaterial. Registry writes are rare — three admin
+events in 90 days. The expensive option, `DATA_READ`, was not enabled.
+
+### Rollback
+
+```
+gcloud projects set-iam-policy sokoni-aeb26 policy-before.json
+```
+
+`policy-before.json` is the verbatim pre-change policy. Restoring it removes `auditConfigs` and
+returns the project to `null`. No business behaviour depends on this setting either way.
+
+### Preserved as a standing positive control
+
+**`initiateSTKPush` deployed successfully on 2026-09-14** — Cloud Build `72739a70`, SUCCESS, 41s,
+revision `initiatestkpush-00043-niq`, `Ready: True`, serving 100% today. The full chain
+
+```
+source -> build -> image -> revision -> serving
+```
+
+demonstrably works. The failure under investigation is therefore **not** "SOKONI cannot deploy". It
+is the narrower:
+
+```
+existing service spec -> create revision WITHOUT rebuilding -> references a missing image -> fail
+```
+
+Any future diagnosis that implies the whole deploy path is broken contradicts this control and is
+wrong.
+
+### Status
+
+**P0-7: DONE.** Stopped here as instructed. Not started and not to be started without a separate
+decision: deployment repair, revision creation, revision deletion, min-instance changes,
+max-instance changes, `intasendWebhook` retirement.
