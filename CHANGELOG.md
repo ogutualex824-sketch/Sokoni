@@ -1,3 +1,65 @@
+## 2026-09-19 (78) — REVENUE INTELLIGENCE: the status spelling that would have read zero
+
+**110/0 certification · 15/15 sabotage mutations caught, 0 inert · nav validator green.**
+
+Payment-rail analytics added to the **existing** sidebar of both platform-admin consoles —
+one button each inside a group they already had, plus one panel. Neither console redesigned.
+`admin.html` is not a consumer.
+
+### Files affected
+- `sokoni-revenue-intelligence.js` (new) — the surface; one module, both consoles
+- `admin-os.html` · `super-admin.html` — sidebar entry, panel, script tag, loader
+- `sokoni-aos.js` — `revenue` panel loader
+- `tests/certify-revenue-intelligence.js` (new), `tests/sabotage-revenue-intelligence.js` (new)
+- `docs/REVENUE_INTELLIGENCE.md` (new)
+
+### Database changes
+None. Reads `payments` (admin-readable) and `ops_reports`. No index needed.
+
+### API changes
+None. No callable, no dispatch op, **no function deploy**.
+
+### The two defects this surface was built to avoid
+1. **`succeeded` does not exist.** Production `payments` carry PENDING / COMPLETE /
+   FAILED / CANCELLED. A filter spelled `'succeeded'`, or one missing `.toUpperCase()`,
+   matches nothing and renders a confident **zero revenue**. Completion is judged
+   `String(status).toUpperCase() === 'COMPLETE'`, mirroring `adminGetFinance`.
+2. **This is not marketplace revenue.** Every production payment is a wallet top-up /
+   STK push. Nothing is labelled "Total Revenue"; figures are named for what they
+   measure, and the surface discloses it.
+
+### Data integrity
+Four states render differently and are never conflated: read denied · range empty ·
+value unmeasured · measured zero. A quiet range additionally discloses the date of the
+newest payment anywhere, so dormancy cannot be misread as zero revenue. A capped read
+declares itself PARTIAL and calls its totals a floor.
+
+### Deliberately not built
+Revenue by geography, cohort retention, AI insights and by-project breakdown have no
+source in this platform. They are declared with reasons rather than invented;
+certification fails if one appears without a source. Orders and payments are shown side
+by side and never divided into one another.
+
+### Security changes
+No Firestore write of any kind; asserted on syntax-stripped source with a control
+proving the stripper left real code behind.
+
+### Certification notes
+Sabotage found three coverage gaps before closure: a measured zero was covered only at
+aggregate level and not at render level; the capped-read warning had no assertion at all;
+and one mutation scored as "caught" purely by **crashing** the harness — which proves
+nothing. The runner now rejects crashes rather than counting them. A fourth issue was in
+the harness: its Firestore stub ignored the `where` clause, modelling a database that
+does not exist and hiding the dormancy case.
+
+### Breaking changes
+None. Additive only.
+
+### Deployment
+Hosting only.
+
+---
+
 ## 2026-09-19 (77) — REPORTS BUILDER: one spine, and null is never zero
 
 **114/0 certification · 12/12 sabotage mutations caught, 0 inert · nav validator green.**

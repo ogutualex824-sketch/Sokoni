@@ -101,6 +101,7 @@ window.SokoniAOS = (() => {
       /* Reports Builder. Like the integrations console it reads its own
          canonical collection directly and routes through no dispatch op. */
       reports:       () => _loadReports(),
+      revenue:       () => _loadRevenue(),
     };
     loaders[s]?.();
   }
@@ -2298,6 +2299,18 @@ window.SokoniAOS = (() => {
     setTimeout(() => { t.classList.remove("visible"); setTimeout(() => t.remove(), 300); }, 3000);
   }
 
+  // ── Revenue Intelligence ─────────────────────────────────────────────────────
+  function _loadRevenue() {
+    const root = document.getElementById("revenueRoot");
+    if (!root) return;
+    if (!window.SokoniRevenue) {
+      root.innerHTML = _emptyMsg("The revenue module did not load. Check that " +
+        "sokoni-revenue-intelligence.js is served on this page.");
+      return;
+    }
+    window.SokoniRevenue.mount(root);
+  }
+
   // ── Reports Builder ──────────────────────────────────────────────────────────
   function _loadReports() {
     const root = document.getElementById("reportsRoot");
@@ -2971,6 +2984,7 @@ window.SokoniAOS = (() => {
     // Hubs
     loadIntegrations:    _loadIntegrations,
     loadReports:         _loadReports,
+    loadRevenue:         _loadRevenue,
     refreshHubs:         () => { _panelCache.hubs = false; _loadHubs(); },
     loadHubHealth:       _loadHubHealth,
     viewHubDetails,
