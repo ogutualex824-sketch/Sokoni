@@ -81,14 +81,25 @@ try {
   }
 } catch (e) { console.log('  ' + reposRaw.trim().slice(0, 300)); }
 
+/* Count by parsing JSON, NOT `--format=value(<field>)`. Two traps, both hit:
+   (1) the human-readable listing prints a "Listing items under..." banner that
+   gets miscounted as a row; (2) the image-list resource has NO top-level
+   `name` field — it exposes package/version/tags/createTime — so
+   `value(name)` silently returns blanks and reported 0 images while the canary
+   was demonstrably present. A count that reads 0 for a live artifact is worse
+   than no count, so this now shares one source of truth with section 3b. */
+function imageCount(loc) {
+  const raw = gcloud(['artifacts', 'docker', 'images', 'list',
+    `${loc}-docker.pkg.dev/${PROJECT}/gcf-artifacts`, '--format=json']);
+  if (raw.startsWith('__ERROR__')) return { n: null, err: raw.slice(10) };
+  try { return { n: JSON.parse(raw.replace(/^[^[]*/, '')).length }; }
+  catch (e) { return { n: null, err: 'unparseable' }; }
+}
+const imageCounts = {};
 for (const loc of ['us-central1', 'us-east1']) {
-  const imgs = gcloud(['artifacts', 'docker', 'images', 'list',
-    `${loc}-docker.pkg.dev/${PROJECT}/gcf-artifacts`, '--format=value(name)']);
-  /* Count from a value-only listing, filtering blanks. The human-readable
-     listing prints a "Listing items under..." banner on stdout which WILL be
-     miscounted as an image if piped naively — that mistake was made once. */
-  const n = imgs.startsWith('__ERROR__') ? imgs : imgs.split('\n').filter((l) => l.trim()).length;
-  console.log(`  ${loc}: ${n} image(s)`);
+  const c = imageCount(loc);
+  imageCounts[loc] = c.n;
+  console.log(`  ${loc}: ${c.n === null ? 'COUNT FAILED (not zero): ' + c.err : c.n + ' image(s)'}`);
 }
 
 /* ---- 2. the write/delete events we are waiting for ---------------------- */
@@ -142,8 +153,18 @@ for (const [label, filter] of [
   if (!r.rows.length) { console.log('   (no events)'); continue; }
   for (const e of r.rows) {
     const p = e.protoPayload || {};
-    console.log(`   ${e.timestamp}  ${(p.methodName || '').split('.').pop().padEnd(22)}` +
-      ` ${(p.authenticationInfo || {}).principalEmail || '(service)'}  ${(p.resourceName || '').split('/').pop()}`);
+    /* Print the STATUS. A failed operation is logged identically to a
+       successful one, and "DeleteRevision" in a log does not mean a revision
+       was deleted — ours failed with code 9, FAILED_PRECONDITION. Reading a
+       method name as an accomplished fact would invent contamination that
+       never happened, or hide contamination that did. */
+    const st = p.status || {};
+    const verdict = st.code === undefined || st.code === 0
+      ? 'OK   '
+      : `FAILED(${st.code})`;
+    console.log(`   ${e.timestamp}  ${verdict.padEnd(10)} ${(p.methodName || '').split('.').pop().padEnd(20)}` +
+      ` ${(p.authenticationInfo || {}).principalEmail || '(service)'}  ${(p.resourceName || '').split('/').pop()}` +
+      (st.message ? `\n       -> ${st.message.slice(0, 110)}` : ''));
   }
 }
 
