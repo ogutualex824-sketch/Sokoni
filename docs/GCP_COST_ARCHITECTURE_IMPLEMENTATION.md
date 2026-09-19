@@ -17,7 +17,7 @@ no function deployments (the release line is independently blocked).
 | P0-4 Retire `intasendWebhook` | **DEFERRED / HIGH-RISK RETIREMENT** — deletion may be the purge trigger |
 | P0-5 Least-privilege IAM | **AUDIT DONE (read-only)** — see `GCP_IAM_LEAST_PRIVILEGE_AUDIT.md`; no mutation |
 | P0-5B IAM Recommender evidence gate | **COMPLETE — API enabled; recommender is BLIND without Data Access logs** |
-| P0-6 App Check audit | separate gate — not started |
+| P0-6 App Check audit | **AUDIT DONE (read-only)** — 547/1022 enforced; 0 unauthorized found; remediation needs deploys |
 | P0-7 AR Data Access audit logging | **DONE — ADMIN_READ and DATA_WRITE both PROVEN live** |
 | P0-7-OBS Forensic harness + baseline | **READY — harness live, method vocabulary confirmed** |
 | P0-7-OBS-CANARY Controlled canary push | **Q-A CLOSED (DATA_WRITE proven) · Q-B OPEN (re-read ~24h)** |
