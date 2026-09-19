@@ -499,21 +499,65 @@ function renderStars(r) {
   return '★'.repeat(n) + '☆'.repeat(5 - n);
 }
 
-/* ── Load from Firestore ── */
+/* ── THE PUBLIC DIRECTORY READS shops/, NOT businesses/ ─────────────────────────────
+
+   `businesses/{businessId}` is the TENANT record: its document id keys businessWallets,
+   and its fields decide commission, settlement and first-party status. It is server-owned
+   (client creation is denied) and it is not a storefront.
+
+   `shops/{storeId}` is the STOREFRONT the merchant owns and edits — publicly readable,
+   created only by the server/admin, and updatable by its owner through an explicit
+   affectedKeys().hasOnly([...]) allowlist. A public business directory is a listing of
+   storefronts, so this is the collection it belongs to.
+
+   This also retires a redundant write: seller.html used to mirror the shop profile into
+   businesses/{uid} purely so this page could read it. That mirror is what gave a merchant
+   TWO business documents, which makes resolveMerchantIdForOwner return AMBIGUOUS and
+   settlement refuse. The directory no longer depends on any newly-created
+   businesses/{uid} record.
+   ── */
 async function loadBusinesses() {
   try {
     const q = query(
-      collection(_db, 'businesses'),
+      collection(_db, 'shops'),
       orderBy('createdAt', 'desc'),
       limit(100)
     );
     const snap = await getDocs(q);
-    _allBiz = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    _allBiz = snap.docs.map(d => bdProjectShop(d.id, d.data() || {}));
   } catch (e) {
     console.warn('[bizDir] Firestore error:', e);
     _allBiz = [];
   }
   bdApplyFilters();
+}
+
+/* Project a shop document into the shape this page already renders and filters on.
+
+   MAPS WHAT EXISTS; INVENTS NOTHING. Fields the shop does not carry are left UNDEFINED
+   rather than defaulted, because a default here would be a fabricated claim: `verified`
+   in particular is an ADMIN-SET field whose authoritative home is an open decision, and
+   writing `verified: false` would assert a verification status no one recorded. Absent
+   stays absent, the badge simply does not render, and the day the field arrives on a shop
+   this passes it straight through with no further change.
+
+   `location` falls back to `city` because shop documents carry a city and not a county,
+   while this page filters on either — that is a field-name mapping, not a new contract. */
+function bdProjectShop(id, s) {
+  return {
+    id,
+    name:      s.shopName || s.name || '',
+    category:  s.category || '',
+    location:  s.city || s.county || '',
+    county:    s.county || s.city || '',
+    tagline:   s.tagline || s.about || '',
+    handle:    s.handle || null,
+    createdAt: s.createdAt || null,
+    /* passed through, never defaulted — see above */
+    verified:      s.verified,
+    avgRating:     s.avgRating,
+    followerCount: s.followerCount,
+  };
 }
 
 /* ── Category filter ── */
