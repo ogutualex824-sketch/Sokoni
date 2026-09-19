@@ -116,6 +116,27 @@
     '.pr-chip.warn.on{border-color:#ffb020;background:rgba(255,176,32,.12)}',
     '.pr-chip.bad.on{border-color:#ff6b6b;background:rgba(255,107,107,.12)}',
     '.pr-quick{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}',
+    /* BATCH BAR. Sticky, because a merchant ticking their way down a long shelf must not
+       have to scroll back up to press print. It appears only once something is selected. */
+    '.pr-batch{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:8px;flex-wrap:wrap;',
+      'margin:0 0 12px;padding:10px 12px;border-radius:13px;',
+      'background:rgba(113,255,0,.10);border:1px solid rgba(113,255,0,.30);',
+      '-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}',
+    '.pr-batch-n{font-size:13px;font-weight:900;color:var(--acc,#71ff00);margin-right:auto}',
+    '.pr-batch-b{min-height:38px;padding:9px 14px;border-radius:11px;border:0;cursor:pointer;',
+      'font-family:inherit;font-size:12.5px;font-weight:800;background:var(--acc,#71ff00);color:#050505}',
+    '.pr-batch-b.ghost{background:transparent;color:inherit;',
+      'border:1px solid var(--line,rgba(255,255,255,.18))}',
+    '.pr-batch-b[disabled]{opacity:.55;cursor:default}',
+    /* THE TICK. Its own control, sized for a thumb, and raised above the image so a card
+       whose photo fills the corner is still selectable. */
+    '.pr-pick{position:absolute;top:7px;left:7px;z-index:10;width:26px;height:26px;border-radius:8px;',
+      'cursor:pointer;font-family:inherit;font-size:14px;font-weight:900;line-height:1;',
+      'display:flex;align-items:center;justify-content:center;',
+      'background:rgba(0,0,0,.55);color:transparent;',
+      'border:1.5px solid rgba(255,255,255,.45);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}',
+    '.pr-pick[aria-checked="true"]{background:var(--acc,#71ff00);border-color:var(--acc,#71ff00);color:#050505}',
+    '.pr-card.is-picked{border-color:var(--acc,#71ff00)}',
     '.pr-q{flex:1 1 auto;min-height:44px;padding:11px 15px;border-radius:13px;border:0;cursor:pointer;',
       'font-family:inherit;font-size:13.5px;font-weight:800;background:var(--acc,#71ff00);color:#050505}',
     '.pr-q.ghost{background:transparent;color:inherit;border:1px solid var(--line,rgba(255,255,255,.14))}',
@@ -525,8 +546,17 @@
       var img = p.image || (Array.isArray(p.images) && p.images[0]) || null;
       var price = money(p.price);
       var draft = p.status && p.status !== 'active';
-      return '<div class="pr-card' + (S.menu === i ? ' menu-open' : '') + '" data-pr="open" data-i="' + i + '" role="button" tabindex="0" ' +
+      var picked = !!(S.selected && S.selected[p.id]);
+      return '<div class="pr-card' + (S.menu === i ? ' menu-open' : '') +
+        (picked ? ' is-picked' : '') + '" data-pr="open" data-i="' + i + '" role="button" tabindex="0" ' +
         'aria-label="' + esc(p.name || 'Product') + ' — open details">' +
+        /* THE TICK IS ITS OWN CONTROL, not the card. data-pr="pick" is checked before the
+           card-body branch in onClick, so ticking a product never opens it — the mistake
+           that makes a bulk selector infuriating on a phone. */
+        '<button class="pr-pick" data-pr="pick" data-i="' + i + '" role="checkbox" ' +
+          'aria-checked="' + (picked ? 'true' : 'false') + '" ' +
+          'aria-label="Select ' + esc(p.name || 'product') + ' for printing">' +
+          (picked ? '✓' : '') + '</button>' +
         (img ? '<img class="pr-img" loading="lazy" alt="" src="' + esc(img) + '">'
              : '<div class="pr-ph" aria-hidden="true">📦</div>') +
         '<div class="pr-b">' +
@@ -562,6 +592,7 @@
             '<button role="menuitem" data-pr="edit" data-i="' + i + '">✏️ Edit</button>' +
             '<button role="menuitem" data-pr="go" data-route="inventory">📦 Adjust stock</button>' +
             '<button role="menuitem" data-pr="open" data-i="' + i + '">👁️ View details</button>' +
+            '<button role="menuitem" data-pr="tag1" data-i="' + i + '">🖨 Print price tag</button>' +
             '<button role="menuitem" class="danger" data-pr="del" data-i="' + i + '">🗑️ Remove</button>' +
           '</div>' +
       '</div>';
@@ -627,8 +658,27 @@
             opt('price-asc', 'Price ↑', S.sort) + opt('price-desc', 'Price ↓', S.sort) +
             opt('stock', 'Stock', S.sort) +
           '</select>' +
-        '</div>' + body +
+        '</div>' + batchBarHTML() + body +
         (S.editor ? editorHTML() : '');
+    }
+
+    /* ── BATCH BAR ───────────────────────────────────────────────────────────
+       Present only once something is ticked. A permanent bar offering to print 0 tags is
+       a control that spends most of its life disabled, and a merchant learns to ignore it.
+
+       It names the COUNT, so nobody presses print without knowing how much paper is about
+       to come out — the difference between a 3-tag correction and a 40-tag shelf run. */
+    function batchBarHTML () {
+      var n = selectedCount();
+      if (!n) return '';
+      return '<div class="pr-batch" role="region" aria-label="Selected products">' +
+        '<span class="pr-batch-n">' + n + ' selected</span>' +
+        '<button class="pr-batch-b" data-pr="tagsel"' + (S.printing ? ' disabled' : '') + '>' +
+          (S.printing ? 'Printing…' : '🖨 Print ' + n + ' price tag' + (n === 1 ? '' : 's')) +
+        '</button>' +
+        '<button class="pr-batch-b ghost" data-pr="pickall">Select all shown</button>' +
+        '<button class="pr-batch-b ghost" data-pr="pickno">Clear</button>' +
+      '</div>';
     }
 
     function opt (v, label, cur) {
@@ -638,6 +688,10 @@
     /* ── LOAD: the canonical reader, and the ceiling for display ──────────── */
     function load () {
       skeleton();
+      /* A SELECTION MUST NOT OUTLIVE ITS ROWS. Reloading the catalogue can remove, rename
+         or re-price anything that was ticked, and printing a tag for a record that is no
+         longer on screen is how a shelf ends up with a price nobody set. */
+      S.selected = {};
       var md = (typeof window !== 'undefined') && window.SokoniMerchantData;
       if (!md || typeof md.listProducts !== 'function') {
         S.err = 'SokoniMerchantData unavailable';
@@ -1101,50 +1155,120 @@
 
     function reportCreate (res) { say(createText(res)); }
 
-    /* ══ PRICE TAG ═══════════════════════════════════════════════════════
-       A shelf label for a product that already exists. It goes through
-       window.PosPrintService — the same service every POS document uses — so
-       printer selection, the P58E reconnect path, retry and the offline queue
-       all apply unchanged and none of them is reimplemented here.
+    /* ══ PRICE TAGS ══════════════════════════════════════════════════════
+       Shelf labels for products that already exist.
 
-       This deliberately does NOT call window.SokoniPrinter. A second caller into
-       the engine is exactly how a platform ends up with two printing systems
-       that disagree about which printer is connected. */
+       WHICH ENGINE, AND WHY IT CHANGED. This used to call PosPrintService.printPriceTag().
+       That method does not exist and never has: PosPrintService prints RECEIPTS and the
+       other POS documents — sale, refund, quote, invoice, kitchen ticket, shift report —
+       and has no label surface at all. So the guard below it fired on every single press
+       and the button said "the printer service is not loaded on this page", which was also
+       untrue: the service was loaded, it simply cannot print labels. The control had never
+       once produced a tag.
+
+       The label authority is sokoni-label-engine.js, which owns TSPL, ZPL, ESC/POS and the
+       browser-print fallback, and which POS already uses. Routing here is not a second
+       printing system — it is the only one that prints labels. PosPrintService is still
+       preferred if it ever grows the method, so the day it does, this switches back without
+       a code change.
+
+       BATCH IS THE ENGINE'S NATIVE SHAPE. printLabel() takes an ARRAY; printPriceTag() is
+       merely its one-item wrapper. So printing a shelf of tags is one job with N items, not
+       N jobs — which is what a label printer expects and what stops a 40-tag run becoming
+       40 separate connection attempts. */
+    function labelService () {
+      var svc = window.PosPrintService;
+      if (svc && typeof svc.printPriceTag === 'function') {
+        return { print: function (items, o) {
+          return items.length === 1 ? svc.printPriceTag(items[0], o)
+                                    : Promise.all(items.map(function (i) { return svc.printPriceTag(i, o); }));
+        }, name: 'pos' };
+      }
+      var eng = window.SokoniLabelEngine;
+      if (eng && typeof eng.printLabel === 'function') {
+        return { print: function (items, o) {
+          return eng.printLabel(items, Object.assign({ showPrice: true, showBarcode: true }, o));
+        }, name: 'label' };
+      }
+      return null;
+    }
+
+    /* The fields the label engine reads, taken from the STORED record. */
+    function tagItem (p) {
+      return {
+        name: p.name || p.title || '',
+        price: p.price,
+        sku: p.sku || '',
+        barcode: (p.specs && p.specs.barcode) || p.barcode || p.sku || '',
+        shopName: ctx.shopName || '',
+      };
+    }
+
+    function printTags (products, opts) {
+      var list = (products || []).filter(function (p) { return p && p.id; });
+      if (!list.length) return say('Nothing selected to print.');
+
+      var svc = labelService();
+      if (!svc) {
+        /* Named honestly. "Not loaded" was the old lie; this says which piece is missing. */
+        return say('No label printer is available on this page — sokoni-label-engine.js is not loaded.');
+      }
+
+      S.printing = true; paint();
+      var settle = function (msg) {
+        if (S.destroyed) return;
+        S.printing = false;
+        if (S.editor) S.editor.printing = false;
+        paint();
+        if (msg) say(msg);
+      };
+
+      var n = list.length;
+      var noun = n === 1 ? 'Price tag' : n + ' price tags';
+      Promise.resolve(svc.print(list.map(tagItem), opts || { copies: 1 }))
+        .then(function (r) {
+          /* Never announce paper that does not exist: a queued job is reported distinctly
+             from a printed one. */
+          if (r && r.queued) return settle('No printer connected — ' +
+            (n === 1 ? 'the tag is queued.' : 'the ' + n + ' tags are queued.'));
+          settle(noun + ' sent to the printer.');
+        })
+        .catch(function (e) {
+          if (e && e.code === 'BARCODE_UNAVAILABLE') {
+            return settle(n === 1
+              ? 'This product has no SKU or barcode yet, so there is nothing scannable to print.'
+              : 'Some of these have no SKU or barcode, so there is nothing scannable to print.');
+          }
+          settle('Could not print: ' + ((e && e.message) || 'please try again.'));
+        });
+    }
+
     function printPriceTag () {
       var E = S.editor;
       if (!E || E.busy || E.printing) return;
-
       /* The STORED record, never the form. A merchant may have typed a new price
          and not saved it; printing that would put a figure on a shelf that the
          till would refuse to honour. */
       var p = E.product;
       if (!p || !p.id) return say('Add the product first, then reopen it to print its tag.');
-
-      var svc = window.PosPrintService;
-      if (!svc || typeof svc.printPriceTag !== 'function') {
-        return say('The printer service is not loaded on this page.');
-      }
-
       E.printing = true; E.err = null; paint();
-      var settle = function (msg) {
-        if (S.destroyed) return;
-        if (S.editor) { S.editor.printing = false; paint(); }
-        if (msg) say(msg);
-      };
+      printTags([p]);
+    }
 
-      Promise.resolve(svc.printPriceTag(p, { copies: 1 }))
-        .then(function (r) {
-          /* Never announce paper that does not exist: the service reports a
-             queued job distinctly from a printed one, and so do we. */
-          if (r && r.queued) return settle('No printer connected — the tag is queued.');
-          settle('Price tag sent to the printer.');
-        })
-        .catch(function (e) {
-          if (e && e.code === 'BARCODE_UNAVAILABLE') {
-            return settle('This product has no SKU or barcode yet, so there is nothing scannable to print.');
-          }
-          settle('Could not print the tag: ' + ((e && e.message) || 'please try again.'));
-        });
+    /* ── BATCH ───────────────────────────────────────────────────────────────
+       A merchant pricing a shelf does not open forty products one at a time. Selection is
+       held here rather than on the records, so nothing about a product changes by being
+       ticked, and it is cleared whenever the list is reloaded — a selection that outlived
+       its rows would print a tag for something no longer on screen. */
+    function selectedProducts () {
+      var ids = S.selected || {};
+      return (S.rows || []).filter(function (p) { return p && ids[p.id]; });
+    }
+    function selectedCount () { return Object.keys(S.selected || {}).length; }
+    function printSelectedTags () {
+      var list = selectedProducts();
+      if (!list.length) return say('Select the products you want tags for first.');
+      printTags(list);
     }
 
     /* The product is WRITTEN by the time this runs, so its existence is never in doubt —
@@ -2589,6 +2713,21 @@
          captureForm() runs first so that repainting the sheet keeps whatever the merchant
          has already typed. A picker that emptied the form it is attached to would be worse
          than no picker. */
+      /* ── BATCH SELECTION ────────────────────────────────────────────────────────────
+         Checked BEFORE the card-body branch, which is the whole point: a tick must never
+         also open the product. The tick's own control carries data-pr="pick", and the
+         getAttribute re-check is this file's established idiom because closest() is stubbed
+         in the suites and a stub answering every selector would swallow other clicks. */
+      var pickBtn = ev.target.closest && ev.target.closest('[data-pr="pick"]');
+      if (pickBtn && pickBtn.getAttribute && pickBtn.getAttribute('data-pr') === 'pick') {
+        ev.preventDefault(); ev.stopPropagation();
+        var pp = (S.painted || [])[Number(pickBtn.getAttribute('data-i'))];
+        if (!pp || !pp.id) return;
+        S.selected = S.selected || {};
+        if (S.selected[pp.id]) delete S.selected[pp.id]; else S.selected[pp.id] = true;
+        return paint();
+      }
+
       var lsBtn = ev.target.closest && ev.target.closest('[data-ls]');
       if (lsBtn && lsBtn.getAttribute && lsBtn.getAttribute('data-ls') && S.editor) {
         var lsKind = lsBtn.getAttribute('data-ls');
@@ -2734,6 +2873,22 @@
       if (k === 'close') { if (S.editor && S.editor.busy) return; return closeEditor(); }
       if (k === 'submit') return submit();
       if (k === 'printtag') return printPriceTag();
+      /* Batch: the selection, or one product straight from its row menu. */
+      if (k === 'tagsel')  return printSelectedTags();
+      if (k === 'tag1') {
+        var t1 = (S.painted || [])[Number(el.getAttribute('data-i'))];
+        S.menu = null;
+        return t1 && t1.id ? printTags([t1])
+                           : say('Add the product first, then print its tag.');
+      }
+      if (k === 'pickall') {
+        S.selected = S.selected || {};
+        /* Only what is ON SCREEN. "All" meaning the whole catalogue behind a filter is how
+           someone prints four hundred tags intending to print four. */
+        (S.painted || []).forEach(function (p) { if (p && p.id) S.selected[p.id] = true; });
+        return paint();
+      }
+      if (k === 'pickno') { S.selected = {}; return paint(); }
       if (k === 'submit-photos') return submitPhotos();
 
       if (k === 'edit' || k === 'del' || k === 'photos') {

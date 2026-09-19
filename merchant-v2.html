@@ -837,6 +837,12 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <!-- The availability reading the Studio's customer preview shows. It is the SAME renderer
      the listing page uses, which is what stops the preview and the live page disagreeing. -->
 <script src="sokoni-availability-view.js"></script>
+<!-- LABEL ENGINE — the price-tag authority, and the ONLY thing on the platform that prints
+     labels. PosPrintService prints receipts and the other POS documents and has no label
+     surface at all, which is why the Products price-tag button silently never worked: it
+     called a method that does not exist. printLabel() takes an array, so a shelf of tags is
+     one job with N items rather than N jobs. -->
+<script src="sokoni-label-engine.js" defer></script>
 <script src="sokoni-merchant-offers.js"></script>
 <script src="sokoni-merchant-wallet.js"></script>
 <!-- Receipts. Renders through the LOCKED receipt contract (SokoniReceiptDoc in
