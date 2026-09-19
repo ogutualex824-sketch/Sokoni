@@ -1,3 +1,77 @@
+## 2026-09-19 (71) — Availability as one framework, and variants that speak every trade
+
+**42 assertions, 0 failed** (`scripts/test-availability-view.js`). Regression: **239
+assertions across 6 suites, 0 failed.** `product.html` and `merchant-v2.html` load with 0 local
+404s and 0 page errors. **Nothing deployed.**
+
+### Availability (spec §8)
+
+"In stock" is the wrong sentence for most of what SOKONI lists. `sokoni-availability-view.js`
+adds one reading used by **both** the listing page and the Studio's customer preview, so the two
+can never disagree about whether something is available.
+
+| | reads |
+|---|---|
+| Restaurant | `Available now` · Mon–Sat windows, Sun closed · `6 portions left` |
+| Hotel | `Available` · `3 rooms available` |
+| Service | `Appointments available` |
+| Property | `Viewings available` |
+| Rental | `Available from 24 Sep` |
+| Product, no stock field | `Available` — **and nothing about quantity** |
+
+It computes no opening-hours maths of its own: `sokoni-availability-model.js` owns that and is
+consulted. There is one availability framework, not six.
+
+### The invariant it exists to hold
+
+**Absent is unmetered, never exhausted.** A listing with no stock field is not a listing with
+none left, so no quantity sentence is produced at all — no "0", no "limited", no "check with the
+seller". Rendering scarcity from a missing number turns a customer away from something that is on
+the shelf.
+
+The mirror matters as much: a **real** zero is a real answer, said in the type's own words —
+`Out of stock` for a product, `Fully booked` for a hotel, `Sold out` for an event. Every absence
+assertion in the suite is paired with a control that must produce the thing.
+
+### A contract I assumed, and the suite that caught it
+
+`formatWeek()` returns a display **string** (`"Mon 08:00–18:00 · Tue …"`), not an array of day
+rows — so the first version of the panel called `.map()` on a string and would have thrown on
+every listing carrying opening hours. Splitting that string back apart would have been parsing a
+display format, so the per-day rows are assembled from the same `hours` object the model reads.
+No maths is duplicated; there is none there, only formatting. The suite now asserts the model's
+return type directly, so the assumption cannot be made again silently.
+
+Also: a week that is closed on all seven days is almost always an empty object, and seven
+"Closed" rows would read as a deliberate decision rather than as missing data. It is not printed.
+
+### Variants (spec §9)
+
+The mechanism was **already universal** — option names are the merchant's own free text and every
+row carries its own price, stock, SKU and barcode. What was not universal was the *wording*:
+"colour, size, capacity" is a shop's vocabulary, and a restaurant reading it does not realise the
+same grid gives them Regular / Large, or a salon 30 / 60 / 90 minutes.
+
+The guidance, the placeholder and a suggestion list now follow the listing type — verified live:
+
+```
+Product  →  e.g. Colour     Colour · Size · Capacity · Material
+Room     →  e.g. Room type  Room type · Occupancy · View · Board
+Service  →  e.g. Duration   Duration · Tier · Provider
+```
+
+A `datalist` **offers** those names without imposing them: a merchant may still type anything,
+which is exactly what keeps one variant system serving every vertical. No second variant model,
+no new fields, no schema change.
+
+### Files
+
+`sokoni-availability-view.js`, `scripts/test-availability-view.js`,
+`scripts/harness-availability.html` (new); `product.js`, `product.html`, `product.css`,
+`merchant-v2.html`, `sokoni-merchant-products.js`, `sokoni-listing-studio.js`,
+`sokoni-listing-studio.css` (modified). No database changes, no API changes, no security
+changes, no breaking changes.
+
 ## 2026-09-19 (70) — The offer calendar and the performance panel, and an unknown that read as zero
 
 **25 assertions, 0 failed** (`scripts/test-offer-studio.js`). Regression across the listing and
