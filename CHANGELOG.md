@@ -1,3 +1,68 @@
+## 2026-09-19 (77) — REPORTS BUILDER: one spine, and null is never zero
+
+**114/0 certification · 12/12 sabotage mutations caught, 0 inert · nav validator green.**
+
+A Reports Builder added to the **existing** sidebar of both platform-admin consoles —
+one button inside a group each console already had, plus one panel. Neither console was
+redesigned. `admin.html` is not a consumer.
+
+Templates, a draggable module palette, a live canvas and Settings/Filters/Style, all
+driven by one canonical store.
+
+### Files affected
+- `sokoni-reports-builder.js` (new) — the builder; one module, mounted by both pages
+- `admin-os.html` — sidebar entry, panel, script tag
+- `super-admin.html` — sidebar entry, panel, `loadReports()`, script tag
+- `sokoni-aos.js` — `reports` panel loader
+- `tests/certify-reports-builder.js` (new), `tests/sabotage-reports-builder.js` (new)
+- `docs/REPORTS_BUILDER.md` (new)
+
+### Database changes
+None. Reads `ops_reports/{YYYY-MM-DD}` by document id only — already
+`allow read: if isAdmin()`, no index required.
+
+### API changes
+None. No callable, no dispatch op, **no function deploy** — required while the
+Artifact Registry freeze stands.
+
+### Data integrity — the reason this suite exists
+`scheduledDailyOpsReport` writes **null** when a sub-query fails, so null means "not
+measured", never "none". Plotting it as zero would invent a collapse in payment success
+that never happened. The builder therefore:
+- breaks the chart line at a null instead of dipping to the axis
+- omits absent days entirely rather than materialising zero rows
+- excludes nulls from every sum, average and delta
+- shows "no baseline" when a comparison period has no measured data
+- **still renders a genuine measured `0` as `0`**
+
+Certified in BOTH directions — a suite checking only the gap rule would pass a module
+that hid every zero, which is the same defect reversed.
+
+### Security changes
+- No Firestore write of any kind; asserted on syntax-stripped source with a control
+  proving the stripper left real code behind.
+- `/reports` (user abuse reports) is explicitly NOT used as a layout store; doing so
+  would corrupt trust & safety data.
+- Publish and scheduled delivery are disabled with the reason shown in the UI, not
+  hidden — no control writes nowhere.
+- Draft save reports its real outcome; a refused localStorage write says "Draft NOT
+  saved" rather than showing a success message.
+
+### Certification notes
+Two assertions matched the certification machinery itself and were rewritten: `.add(`
+matched the module's own `SokoniReports.add(` onclick string, and a "frequency" search
+matched the notice explaining that no frequency picker exists. Both now discriminate by
+syntax. One sabotage mutation was also found inert — it inserted a labelled block, which
+is valid JS that changes nothing — and was replaced with a real defect.
+
+### Breaking changes
+None. Additive only.
+
+### Deployment
+Hosting only. No function deploy, no rules deploy, no index change.
+
+---
+
 ## 2026-09-19 (76) — AdminOS Security Centre
 
 **45/0** (`scripts/test-aos-security.js`). Existing AdminOS suites unchanged and green:

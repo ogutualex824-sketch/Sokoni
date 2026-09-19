@@ -98,6 +98,9 @@ window.SokoniAOS = (() => {
          function deploy. If the script is missing the panel says so rather
          than rendering an empty console. */
       integrations:  () => _loadIntegrations(),
+      /* Reports Builder. Like the integrations console it reads its own
+         canonical collection directly and routes through no dispatch op. */
+      reports:       () => _loadReports(),
     };
     loaders[s]?.();
   }
@@ -1896,6 +1899,29 @@ window.SokoniAOS = (() => {
       else if (type === "platform") data = await _call("platformGetEventLog", { limit: 50 });
 
       const logs = data?.logs || data?.events || data?.entries || [];
+
+      /* ACTIVITY FEED. Renders the same logs as a day-grouped timeline with category
+         filters, contributors and an activity shape — all counted from THIS page of logs,
+         which is why every panel names its scope. The source returns a capped page with no
+         total and no read state, so the feed shows no platform total, no unread filter and
+         no day-over-day change; it marks the truncated oldest day instead.
+
+         Additive: if the module is absent or declines, the original table below still
+         renders, and the export button is wired either way. */
+      let _feedShown = false;
+      if (window.SokoniAOSActivity && typeof window.SokoniAOSActivity.mount === "function") {
+        try {
+          _feedShown = window.SokoniAOSActivity.mount({ host: body, logs, limit: 50 });
+        } catch (e) {
+          console.warn("[AOS] activity feed unavailable, using table:", e && e.message);
+        }
+      }
+      if (_feedShown) {
+        const xb = document.getElementById("auditExportBtn");
+        if (xb) xb.onclick = () => _exportAuditLogs(logs, type);
+        return;
+      }
+
       body.innerHTML = logs.length ? `<table class="aos-table"><thead><tr>
           <th>Time</th><th>Admin</th><th>Action</th><th>Target</th><th>Details</th>
         </tr></thead><tbody>${logs.map(l => `<tr>
@@ -2270,6 +2296,18 @@ window.SokoniAOS = (() => {
     container.appendChild(t);
     setTimeout(() => t.classList.add("visible"), 10);
     setTimeout(() => { t.classList.remove("visible"); setTimeout(() => t.remove(), 300); }, 3000);
+  }
+
+  // ── Reports Builder ──────────────────────────────────────────────────────────
+  function _loadReports() {
+    const root = document.getElementById("reportsRoot");
+    if (!root) return;
+    if (!window.SokoniReports) {
+      root.innerHTML = _emptyMsg("The reports module did not load. Check that " +
+        "sokoni-reports-builder.js is served on this page.");
+      return;
+    }
+    window.SokoniReports.mount(root);
   }
 
   // ── Integrations Control Center ──────────────────────────────────────────────
@@ -2932,6 +2970,7 @@ window.SokoniAOS = (() => {
     deleteCampaign,
     // Hubs
     loadIntegrations:    _loadIntegrations,
+    loadReports:         _loadReports,
     refreshHubs:         () => { _panelCache.hubs = false; _loadHubs(); },
     loadHubHealth:       _loadHubHealth,
     viewHubDetails,

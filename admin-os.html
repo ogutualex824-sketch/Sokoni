@@ -348,6 +348,7 @@
       <button class="nav-item" data-section="smartpos" data-label="SmartPOS" onclick="SokoniAOS.navigate('smartpos');_closeSidebar()"><span class="nav-icon">&#x1F5A8;&#xFE0F;</span>SmartPOS</button>
       <button class="nav-item" data-section="fraud" data-label="Fraud &amp; Trust" onclick="SokoniAOS.navigate('fraud');_closeSidebar()"><span class="nav-icon">&#x1F6E1;&#xFE0F;</span>Fraud &amp; Trust</button>
       <button class="nav-item" data-section="config" data-label="Platform Config" onclick="SokoniAOS.navigate('config');_closeSidebar()"><span class="nav-icon">&#x2699;&#xFE0F;</span>Config</button>
+      <button class="nav-item" data-section="reports" data-label="Reports Builder" onclick="SokoniAOS.navigate('reports');_closeSidebar()"><span class="nav-icon">&#x1F4C8;</span>Reports</button>
       <button class="nav-item" data-section="integrations" data-label="Integrations" onclick="SokoniAOS.navigate('integrations');_closeSidebar()"><span class="nav-icon">&#x1F50C;</span>Integrations</button>
       <button class="nav-item" data-section="hubs" data-label="Hub Registry" onclick="SokoniAOS.navigate('hubs');_closeSidebar()"><span class="nav-icon">&#x1F3D7;&#xFE0F;</span>Hubs</button>
       <button class="nav-item" data-section="workflows" data-label="Workflow Center" onclick="SokoniAOS.navigate('workflows');_closeSidebar()"><span class="nav-icon">&#x267B;&#xFE0F;</span>Workflows</button>
@@ -704,6 +705,13 @@
         </div>
       </div>
 
+      <!-- Reports Builder. Rendered by sokoni-reports-builder.js, shared with
+           super-admin.html. Reads ops_reports (one document per day) and nothing
+           else; an unmeasured value breaks the line rather than plotting zero. -->
+      <div class="aos-panel" id="panel-reports" hidden>
+        <div id="reportsRoot"></div>
+      </div>
+
       <!-- Integrations Control Center.
            Rendered by sokoni-integrations.js, which super-admin.html mounts from the
            same file. Every figure comes from a canonical Firestore collection; where a
@@ -732,11 +740,13 @@
 
     </div>
   </main>
+  <script src="sokoni-reports-builder.js"></script>
   <script src="sokoni-integration-catalogue.js"></script>
   <script src="sokoni-integrations.js"></script>
   <!-- SECURITY CENTRE. Additive: it renders into the Security section that already exists
        in the sidebar, and sokoni-aos.js falls back to its original panel if this is absent.
        No other section is affected. -->
+  <script src="sokoni-aos-activity.js"></script>
   <script src="sokoni-aos-security.js"></script>
   <script src="sokoni-aos.js"></script>
   <script>

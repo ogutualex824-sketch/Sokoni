@@ -338,6 +338,9 @@
 
   <div class="nav-group">
     <div class="nav-group-label">Operations</div>
+    <button class="nav-item" data-section="reports" onclick="SA.nav('reports');_closeSidebar()">
+      <span class="nav-icon">&#x1F4C8;</span>Reports
+    </button>
     <button class="nav-item" data-section="integrations" onclick="SA.nav('integrations');_closeSidebar()">
       <span class="nav-icon">&#x1F50C;</span>Integrations
     </button>
@@ -667,6 +670,19 @@
     </section>
 
     <!-- ══ SECTION 6: Audit Log ══ -->
+    <!-- ══ SECTION: Reports Builder ══
+         Same module admin-os.html mounts. It adopts this console's colour tokens
+         on its own; nothing here is restyled. -->
+    <section class="sa-panel" id="panel-reports" hidden>
+      <div class="panel-header">
+        <h2>&#x1F4C8; Reports Builder</h2>
+        <p>Compose a report from the daily operations record, preview it, and export it.
+           Every figure is read from <code>ops_reports</code>; unmeasured days are shown as
+           gaps, never as zero.</p>
+      </div>
+      <div id="reportsRoot"></div>
+    </section>
+
     <!-- ══ SECTION: Integrations ══
          Rendered by sokoni-integrations.js, the same module admin-os.html mounts.
          It adopts this console's colour tokens on its own; nothing here is restyled. -->
@@ -990,6 +1006,7 @@ const SA={
     else if(section==='financial')this.loadFinancial();
     else if(section==='config')this.loadConfig();
     else if(section==='emergency')this.loadEmergency();
+    else if(section==='reports')this.loadReports();
     else if(section==='integrations')this.loadIntegrations();
     else if(section==='audit')this.loadAudit();
     else if(section==='broadcast')this.loadBroadcastHistory();
@@ -1003,6 +1020,18 @@ const SA={
   // Modal close ─────────────────────────────────────────────
   closeModal(){document.getElementById('saModal').classList.remove('open');_modalCb=null},
   confirmModal(){if(_modalCb){_modalCb();_modalCb=null;}this.closeModal()},
+
+  // ══ SECTION: Reports Builder ════════════════════════════
+  loadReports(){
+    const root=document.getElementById('reportsRoot');
+    if(!root)return;
+    if(!window.SokoniReports){
+      root.innerHTML='<p style="color:var(--muted);font-size:13px">The reports module did not ' +
+        'load. Check that sokoni-reports-builder.js is served on this page.</p>';
+      return;
+    }
+    window.SokoniReports.mount(root);
+  },
 
   // ══ SECTION: Integrations ═══════════════════════════════
   // The module reads its own canonical Firestore collections; this console
@@ -1994,6 +2023,7 @@ const SA={
      must load first because the console reads it on mount. Both are classic scripts
      with no dependency on the firebase compat shim at parse time — the module only
      touches Firestore once a console mounts it, which happens after the auth gate. -->
+<script src="sokoni-reports-builder.js"></script>
 <script src="sokoni-integration-catalogue.js"></script>
 <script src="sokoni-integrations.js"></script>
 </body>
