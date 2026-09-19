@@ -15,6 +15,25 @@
 - [ ] Check AsyncJobs queue depth — Firestore → `asyncJobs` → filter `status == 'pending'`
 - [ ] Verify payment settlement ran — Firestore → `settlements` → filter `date == today`
 - [ ] Check failed delivery count — Admin OS → Logistics panel
+- [ ] **Product-trigger volume** — run `node scripts/infra/product-trigger-volume.js`
+      (needs `GTOK=$(gcloud auth print-access-token)`). Record: current `request_count`
+      for the four `products/{productId}` UPDATE triggers; the pre-P0-7C baselines the
+      tool prints alongside them; whether data was returned for **all four**; and whether
+      the observed change is large enough to justify further investigation of the
+      P0-7B client-sync hypothesis.
+
+      **This is a manual operational check, not an automated gate.** Nothing enforces it
+      and nothing runs it for you. The tool reports measurements only — it does not decide
+      whether P0-7C succeeded or failed, and there is no elapsed-time threshold. **You**
+      interpret the numbers.
+
+      A `NO SERIES` row means *no data was returned*, **not** zero invocations. Never
+      record it as a reduction. A single morning's reading is not causal proof in either
+      direction; evidence accumulates across repeated observations.
+
+      If volume stays near baseline, the P0-7B finding (that the client catalogue sync was
+      the writer) is **wrong** and should be reopened — see
+      `docs/GCP_PRODUCT_TRIGGER_FANOUT_AUDIT.md`.
 
 ### Accessing the Admin OS
 URL: https://mysokoni.co.ke/admin-os.html  
