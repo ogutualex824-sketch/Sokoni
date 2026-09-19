@@ -156,10 +156,20 @@
       if (state.loading) return '<div class="mo-state">Loading offers…</div>';
       if (state.error) return '<div class="mo-state mo-state--err"><b>Offers unavailable</b>' +
         '<small>' + esc(state.error) + ' — this is not an empty list, nothing was read.</small></div>';
+      /* NAMING THE BLOCKER, not just the absence. "No store connected" invites the obvious
+         and wrong fix — pointing this at the existing `offers` collection, which is a
+         platform-ADMIN price-drop tool that merchants cannot write to. Relaxing its rules to
+         make Publish work would hand every merchant write access to something the storefront
+         already reads, and reopen a closed admin boundary. Saying which decision is
+         outstanding is what stops that being "fixed" by someone in a hurry.
+         Full record: docs/OFFER_PERSISTENCE_DECISION.md */
       if (state.noSource) return templateGrid() +
         '<div class="mo-state"><b>No offer store connected</b>' +
-        '<small>Offers can be composed and previewed here, but this shell provided no ' +
-        'listOffers/saveOffer, so nothing will persist yet.</small></div>';
+        '<small>Offers can be composed, scheduled and previewed here, and the pricing is ' +
+        'resolved by the real promotion engine — but nothing persists yet. SOKONI has no ' +
+        'merchant-writable offer store: the existing <b>offers</b> and <b>promotions</b> ' +
+        'collections are both platform-admin only. Where merchant offers live, and who may ' +
+        'write them, is an owner decision — see docs/OFFER_PERSISTENCE_DECISION.md.</small></div>';
       if (!state.offers.length) return templateGrid() +
         '<div class="mo-state"><b>No offers yet</b><small>Pick a template above to build your first one.</small></div>';
       return templateGrid() + '<div class="mo-list">' + state.offers.map(offerRow).join('') + '</div>';
@@ -475,8 +485,9 @@
         /* HELD, AND SAID SO. Silence here would let a merchant build a campaign that
            evaporates on reload. */
         state.unsaved++;
-        state.saveNote = 'Not saved — this shell has no offer store connected yet. ' +
-                         'The offer is held in this session only and will be lost on reload.';
+        state.saveNote = 'Not saved — SOKONI has no merchant-writable offer store yet, so ' +
+                         'there is nowhere for this to go. It is held in this session only ' +
+                         'and will be lost on reload. Copy anything you need to keep.';
         return render();
       }
       state.saveNote = 'Saving…'; render();

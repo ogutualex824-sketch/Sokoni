@@ -115,6 +115,20 @@ section('Studio mount');
   ok('it mounts without a store', typeof noStore.innerHTML === 'string' && noStore.innerHTML !== '');
   ok('and says no offer store is connected', noStore.innerHTML.indexOf('offer store') > -1);
 
+  /* IT NAMES THE BLOCKER. "No store connected" invites the obvious and WRONG fix — pointing
+     the Studio at the existing `offers` collection, which is a platform-admin price-drop
+     tool. Relaxing its rules to make Publish work would give every merchant write access to
+     something the storefront already reads. The surface has to say which decision is
+     outstanding, or that gets "fixed" by someone in a hurry. */
+  ok('it names the collections that already exist',
+     noStore.innerHTML.indexOf('offers') > -1 && noStore.innerHTML.indexOf('promotions') > -1);
+  ok('and says they are admin-only', noStore.innerHTML.indexOf('platform-admin only') > -1);
+  ok('and points at the decision record',
+     noStore.innerHTML.indexOf('OFFER_PERSISTENCE_DECISION.md') > -1);
+  /* It must not claim the composer is broken — the pricing really is resolved for real. */
+  ok('while stating what DOES work',
+     noStore.innerHTML.indexOf('resolved by the real promotion engine') > -1);
+
   /* THE DEFECT THIS SUITE CAUGHT. With nothing read, the header printed "0 live / 0
      scheduled / 0 drafts" — telling a merchant their offers had vanished, when in truth
      nothing had been looked at. An unknown count is a dash. */
