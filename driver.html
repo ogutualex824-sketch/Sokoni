@@ -891,7 +891,13 @@ function registerDriver(){
      onboard without ID/DL photos to prove the rider dispatch path before the live gate.
      Every other rider still must upload both — the standard flow is unchanged. */
   var _cu = (typeof firebase!=='undefined' && firebase.auth) ? firebase.auth().currentUser : null;
-  var _photoExempt = !!_cu && (_cu.uid==='D5Ql2EYr95bt79IpcGTmOMTK0P83' || (_cu.email||'').toLowerCase()==='alexochieng3030@gmail.com');
+  /* KEYED ON UID, NEVER ON THE EMAIL. A UID is stable across an address change; an email
+     is not. This account is being renamed (alexochieng3030@gmail.com -> superadmin@…),
+     and an address gate would either lose the exemption on the rename or — worse — leave
+     the OLD address exempt once it is handed to somebody else. That is the standard
+     scripts/verify-claim-based-auth.js enforces, and the reason its bootstrap allowlist
+     was moved from an email to a UID. */
+  var _photoExempt = !!_cu && _cu.uid==='D5Ql2EYr95bt79IpcGTmOMTK0P83';
   if(!idPhotoFile && !_photoExempt){ _regMsg("Please upload a photo of your National ID."); return; }
   if(!dlPhotoFile && !_photoExempt){ _regMsg("Please upload a photo of your Driving Licence."); return; }
 

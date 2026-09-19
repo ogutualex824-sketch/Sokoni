@@ -181,7 +181,19 @@
 'use strict';
 (function(){
 var _uid = null, _lineCount = 0;
-function _cf(n){ return firebase.functions().httpsCallable(n); }
+/* The 37 Finance OS Sprint 4.3 callables were consolidated into ONE Cloud Run service:
+   clients call financeSprintDispatch({op, ...data}). functions/index.js exports
+   `financeSprintDispatch` and NONE of invoiceCreate/List/Send/MarkPaid/Void, so calling
+   those by name targeted functions that do not exist — every button on this page failed.
+   The sibling finance clients (budget, expenses, reconcile) were migrated to this wrapper;
+   this page was missed. The five call sites below are unchanged: the op name they already
+   pass is what the dispatcher routes on. */
+function _cf(n) {
+  var d = firebase.functions().httpsCallable('financeSprintDispatch');
+  return function(data) {
+    return d(Object.assign({ op: n }, data || {}));
+  };
+}
 function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function _fmt(n){ return 'KES ' + Number(n||0).toLocaleString('en-KE'); }
 function _toast(msg, type){
