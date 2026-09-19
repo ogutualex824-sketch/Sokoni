@@ -885,6 +885,26 @@ function _variantSummaryHtml(product){
 
    The card stays BROWSE-ONLY. An offer adds no Buy control — tapping the card opens the
    listing, where the offer is explained in full before anything is committed. */
+/* ── WHAT THE PRICE MEANS ───────────────────────────────────────────────────
+   KES 12,500 is a different promise for a room than for a kettle. The unit comes from the
+   type authority, so the card and the listing page cannot disagree about it.
+
+   "From" appears only when the listing genuinely starts at that figure — when its variants
+   have prices that actually differ. On a single fixed price it would imply a cheaper option
+   that does not exist.
+
+   Falls back to the plain figure the card has always shown if the module is absent, so a
+   card never loses its price. */
+function _cardPriceText(product, plain){
+    try {
+        if (window.SokoniListingTypes && SokoniListingTypes.priceText) {
+            const t = SokoniListingTypes.priceText(product);
+            if (t) return t;
+        }
+    } catch (_) {}
+    return 'KES ' + plain;
+}
+
 function _cardOfferBadge(product){
     try { return (window.SokoniOfferView && SokoniOfferView.cardBadgeHtml(product)) || ''; }
     catch (_) { return ''; }
@@ -1008,7 +1028,7 @@ function buildProductCard(product){
         <span class="pcard-ov-cat">${catEmoji[product.category]||'🛍️'} ${_escHtml(catLabel)}</span>
         <span class="pcard-ov-name">${_escHtml(product.name)}</span>
         <div class="pcard-ov-bottom">
-            <span class="pcard-ov-price">KES ${price}</span>
+            <span class="pcard-ov-price">${_escHtml(_cardPriceText(product, price))}</span>
             ${rating ? `<span class="pcard-ov-stars">${ratingStarsHtml(rating.avg)} <span class="pcard-ov-rcount">${rating.count}</span></span>` : ''}
         </div>
         ${product.sellerName ? `<span class="pcard-ov-seller">🏪 ${_escHtml(String(product.sellerName).slice(0, 24))}</span>` : ''}
@@ -1034,7 +1054,7 @@ function buildProductCard(product){
                 ${_variantSummaryHtml(product)}
                 ${getSellerBadgesHtml(product.sellerName,'sm')}
                 <div class="price-row">
-                    <p class="price">KES ${price}</p>
+                    <p class="price">${_escHtml(_cardPriceText(product, price))}</p>
                     ${priceBadge}
                 </div>
                 ${rating ? `<div class="rating-stars" style="font-size:9px;color:rgba(255,193,7,0.8);font-weight:700;margin-top:2px;">${ratingStarsHtml(rating.avg)} <span style="color:rgba(255,255,255,0.35);font-size:8px;">(${rating.count})</span></div>` : ""}

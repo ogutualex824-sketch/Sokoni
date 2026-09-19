@@ -138,6 +138,48 @@
     return { type: t.id, primary: t.primary, secondary: t.secondary };
   }
 
+  /* ── WHAT A PRICE MEANS ────────────────────────────────────────────────────────────────
+     KES 12,500 is a different promise for a room than for a kettle: one is per night, the
+     other is the whole thing. The unit belongs to the TYPE, so the card and the listing
+     page read it from here rather than each deciding.
+
+     Only types whose price is genuinely periodic get a unit. A service is priced per job
+     unless the merchant says otherwise, so it gets none — inventing "/ hour" would be a
+     claim about billing nobody made. */
+  var PRICE_UNIT = { room: 'night', rental: 'day' };
+
+  /**
+   * The price as a customer should read it: { amount, unit, from }.
+   *
+   * `from` is TRUE only when the listing really does start at this figure — that is, when
+   * it has variants whose prices actually differ. "From KES 6,500" on a single fixed price
+   * is a lie of the most ordinary kind: it implies a cheaper option that does not exist.
+   * Returns null when there is no usable price, so no surface has to invent one.
+   */
+  function priceLabel(listing) {
+    var l = listing || {};
+    var base = Number(l.price);
+    var variants = Array.isArray(l.variants) ? l.variants : [];
+    var prices = variants
+      .map(function (v) { return Number(v && v.price); })
+      .filter(function (n) { return isFinite(n) && n > 0; });
+
+    if (isFinite(base) && base > 0) prices.push(base);
+    if (!prices.length) return null;
+
+    var min = Math.min.apply(null, prices);
+    var max = Math.max.apply(null, prices);
+    return { amount: min, unit: PRICE_UNIT[typeOf(l).id] || null, from: max > min };
+  }
+
+  /** The same thing as a string: "From KES 12,500 / night", or "KES 850". */
+  function priceText(listing, currency) {
+    var p = priceLabel(listing);
+    if (!p) return null;
+    return (p.from ? 'From ' : '') + (currency || 'KES') + ' ' +
+           p.amount.toLocaleString('en-KE') + (p.unit ? ' / ' + p.unit : '');
+  }
+
   /** True when this type transacts through a basket. Hotels and property do not. */
   function usesCart(listing) {
     var s = typeOf(listing).secondary;
@@ -147,9 +189,12 @@
   var api = {
     TYPES: TYPES,
     CATEGORY_TYPE: CATEGORY_TYPE,
+    PRICE_UNIT: PRICE_UNIT,
     typeOf: typeOf,
     actionsFor: actionsFor,
     usesCart: usesCart,
+    priceLabel: priceLabel,
+    priceText: priceText,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

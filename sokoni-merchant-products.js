@@ -163,6 +163,16 @@
       'color:inherit;border:1px solid var(--line,rgba(255,255,255,.14));text-transform:none;letter-spacing:normal}',
     '.ls-life-btn.go{background:var(--acc,#71ff00);color:#050505;border-color:var(--acc,#71ff00)}',
     '.ls-life-btn.warn{color:#ffb74d;border-color:rgba(255,152,0,.3)}',
+    /* BUSINESS CONTEXT. Where this listing is going, said before the merchant describes it —
+       a merchant with several workspaces must not type forty fields into the wrong shop. */
+    '.pr-bizctx{display:flex;align-items:center;flex-wrap:wrap;gap:6px 9px;margin:0 0 14px;',
+      'padding:10px 13px;border-radius:12px;background:rgba(255,255,255,.04);',
+      'border:1px solid var(--line,rgba(255,255,255,.1))}',
+    '.pr-bizctx-l{font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;',
+      'color:var(--txt3,#8b8b8b)}',
+    '.pr-bizctx b{font-size:13.5px;font-weight:900}',
+    '.pr-bizctx-h{width:100%;font-size:11px;font-weight:600;color:var(--txt3,#8b8b8b)}',
+    '.pr-bizctx-none{font-size:12.5px;font-weight:700;color:#ffb74d}',
     '.pr-q{flex:1 1 auto;min-height:44px;padding:11px 15px;border-radius:13px;border:0;cursor:pointer;',
       'font-family:inherit;font-size:13.5px;font-weight:800;background:var(--acc,#71ff00);color:#050505}',
     '.pr-q.ghost{background:transparent;color:inherit;border:1px solid var(--line,rgba(255,255,255,.14))}',
@@ -2630,6 +2640,40 @@
       box.innerHTML = studioReportHTML(S.editor.values || {}, S.editor.device);
     }
 
+    /* ── BUSINESS CONTEXT ────────────────────────────────────────────────────
+       WHERE this listing is going, stated before the merchant starts describing it.
+
+       The spec's point is that business context and listing type are SEPARATE: one account
+       runs a shop, a restaurant and an apartment block, and the same form serves all three.
+       The type picker below answers "what is this"; this answers "whose is it". A merchant
+       with several workspaces who has just switched needs to see which one they are in
+       before they type forty fields into the wrong shop.
+
+       IT SHOWS, IT DOES NOT SWITCH. The shell already owns workspace switching — it reloads
+       deliberately, because a dozen modules assume one shop for their lifetime, and
+       re-resolving in place would leave half of them holding the previous shop's data. A
+       second switcher here would either duplicate that or, worse, appear to switch without
+       doing it. So this points at the control that works.
+
+       ABSENT NAME IS SAID, NOT GUESSED. Without a resolved shop the destination is unknown,
+       and a listing about to be written somewhere unnamed is exactly what a merchant should
+       be told rather than reassured about. */
+    function businessContextHTML () {
+      var name = (ctx.shopName && String(ctx.shopName).trim()) || '';
+      var scope = ctx.scope || {};
+      var id = scope.shopId || '';
+      return '<div class="pr-bizctx">' +
+        '<span class="pr-bizctx-l">Listing goes to</span>' +
+        (name
+          ? '<b>' + esc(name) + '</b>'
+          : (id ? '<b>' + esc(String(id).slice(0, 12)) + '</b>'
+                : '<span class="pr-bizctx-none">No shop resolved — this cannot be saved yet</span>')) +
+        (name || id
+          ? '<span class="pr-bizctx-h">Switch business from the shop menu at the top</span>'
+          : '') +
+      '</div>';
+    }
+
     function editorHTML () {
       var E = S.editor;
       if (E.mode === 'photos') return photosHTML();
@@ -2657,6 +2701,7 @@
           ? 'It goes to your shop, your Inventory and the till.'
           : esc(p.name || 'Untitled')) + '</div>' +
         (E.blocked ? '<div class="pr-block">' + esc(E.blocked) + '</div>' : '') +
+        businessContextHTML() +
         (studio() ? studio().typePickerHTML(liveListing(p)) : '') +
         fld('name', 'Product name', 'type="text" autocomplete="off" maxlength="200" required', p.name) +
         '<div class="pr-row">' +
