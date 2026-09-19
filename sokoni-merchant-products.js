@@ -137,6 +137,32 @@
       'border:1.5px solid rgba(255,255,255,.45);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}',
     '.pr-pick[aria-checked="true"]{background:var(--acc,#71ff00);border-color:var(--acc,#71ff00);color:#050505}',
     '.pr-card.is-picked{border-color:var(--acc,#71ff00)}',
+    /* ── MEDIA STUDIO. Each line is a measured fact, so the states are distinguishable:
+       a warning must not look like a tick, or the panel becomes reassurance. */
+    '.pr-mchks{list-style:none;margin:14px 0 0;padding:0}',
+    '.pr-mchk{display:flex;align-items:flex-start;gap:8px;padding:6px 0;font-size:12.5px;',
+      'font-weight:600;line-height:1.45;color:var(--txt2,rgba(255,255,255,.62))}',
+    '.pr-mchk>span{flex:0 0 auto;font-weight:900;width:13px}',
+    '.pr-mchk--ok>span{color:var(--acc,#71ff00)}',
+    '.pr-mchk--warn{color:#ffb74d}.pr-mchk--warn>span{color:#ffb020}',
+    '.pr-shots{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}',
+    '.pr-shot{font-size:11px;font-weight:700;padding:5px 10px;border-radius:8px;',
+      'color:var(--txt2,rgba(255,255,255,.6));border:1px dashed var(--line,rgba(255,255,255,.16))}',
+    /* Reorder. Buttons, not drag: a thumb on a phone is where these photos are chosen. */
+    '.pr-porder{display:flex;align-items:center;justify-content:center;gap:7px;margin:7px 0 4px}',
+    '.pr-pmove{width:28px;height:28px;border-radius:8px;cursor:pointer;font-family:inherit;',
+      'font-size:13px;font-weight:900;line-height:1;background:rgba(255,255,255,.06);',
+      'color:inherit;border:1px solid var(--line,rgba(255,255,255,.14))}',
+    '.pr-pmove[disabled]{opacity:.3;cursor:default}',
+    '.pr-pnum{font-size:10.5px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;',
+      'color:var(--txt3,#8b8b8b);min-width:34px;text-align:center}',
+    /* Lifecycle moves. Only the legal ones are ever rendered. */
+    '.ls-life-acts{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0 4px}',
+    '.ls-life-btn{min-height:36px;padding:8px 14px;border-radius:10px;cursor:pointer;',
+      'font-family:inherit;font-size:12.5px;font-weight:800;background:rgba(255,255,255,.05);',
+      'color:inherit;border:1px solid var(--line,rgba(255,255,255,.14));text-transform:none;letter-spacing:normal}',
+    '.ls-life-btn.go{background:var(--acc,#71ff00);color:#050505;border-color:var(--acc,#71ff00)}',
+    '.ls-life-btn.warn{color:#ffb74d;border-color:rgba(255,152,0,.3)}',
     '.pr-q{flex:1 1 auto;min-height:44px;padding:11px 15px;border-radius:13px;border:0;cursor:pointer;',
       'font-family:inherit;font-size:13.5px;font-weight:800;background:var(--acc,#71ff00);color:#050505}',
     '.pr-q.ghost{background:transparent;color:inherit;border:1px solid var(--line,rgba(255,255,255,.14))}',
@@ -1603,6 +1629,69 @@
     /* Per-photo preview + tools. Previously the sheet showed only a COUNT of chosen
        photos, so a merchant could not see what they were about to upload, let alone edit
        it. objectURLs are revoked on the next paint to avoid leaking one per repaint. */
+    /* ══ MEDIA STUDIO ════════════════════════════════════════════════════════
+       The readiness of this listing's photographs, MEASURED rather than asserted.
+
+       WHY NOT A TICKLIST OF REASSURANCES. The spec sketches "✓ Optimized ✓ Correct aspect
+       ratio ✓ Ready for publishing", and the tempting build is four green ticks that are
+       always green. Those would be decoration: a merchant reads them as a check that ran.
+       So each line below is a fact this surface can actually establish — a count it can see,
+       a file size it holds, a main image that either exists or does not — and anything it
+       cannot measure is not claimed.
+
+       Aspect ratio is deliberately ABSENT for stored photos. Measuring it means loading
+       every image and reading naturalWidth, which this synchronous renderer cannot do, and
+       a ratio guessed from a URL would be exactly the invented reassurance being avoided. */
+    function mediaChecksHTML (p) {
+      var have = (p.images && p.images.length) ? p.images : (p.image ? [p.image] : []);
+      var rows = [];
+      function line (state, text) {
+        var mark = state === 'ok' ? '✓' : (state === 'warn' ? '⚠' : '·');
+        rows.push('<li class="pr-mchk pr-mchk--' + state + '"><span>' + mark + '</span>' +
+                  esc(text) + '</li>');
+      }
+
+      if (have.length) line('ok', 'Main image set — the first photo is what buyers see');
+      else if (_picked.length) line('warn', 'No main image yet — the first one you upload becomes it');
+      else line('warn', 'No photos. A listing without one is rarely opened');
+
+      if (have.length) {
+        line(have.length >= 3 ? 'ok' : 'warn',
+             have.length + (have.length === 1 ? ' photo published' : ' photos published') +
+             (have.length >= 3 ? '' : ' — three or more sell better'));
+      }
+
+      /* PENDING FILES ARE MEASURABLE, because this surface is holding them. Size is read
+         from the File itself, not estimated. */
+      if (_picked.length) {
+        var bytes = 0, known = true;
+        _picked.forEach(function (f) {
+          if (f && typeof f.size === 'number') bytes += f.size; else known = false;
+        });
+        line('ok', _picked.length + (_picked.length === 1 ? ' photo ready' : ' photos ready') +
+             (known ? ' · ' + (bytes / 1048576).toFixed(1) + ' MB before compression' : ''));
+        line('ok', 'Compressed on upload — the media pipeline resizes and re-encodes');
+      }
+      return '<ul class="pr-mchks">' + rows.join('') + '</ul>';
+    }
+
+    /* The shot list for this listing's type — Room / Bathroom / View for a hotel, Dish /
+       Presentation / Menu for a restaurant. Metadata over ONE pipeline, which is why it
+       renders names and no second uploader. Drawn by the Listing Studio so the Photos sheet
+       and the editor show the merchant the same list. */
+    function shotListHTML (p) {
+      var LS = studio();
+      if (!LS) return '';
+      var M = (typeof window !== 'undefined') && window.SokoniListingModel;
+      if (!M) return '';
+      var groups = M.mediaGroupsFor(liveListing(p));
+      if (!groups || !groups.length) return '';
+      return '<div class="pr-note" style="margin:14px 0 6px">Shots buyers of this type expect</div>' +
+        '<div class="pr-shots">' + groups.map(function (g) {
+          return '<span class="pr-shot">' + esc(g) + '</span>';
+        }).join('') + '</div>';
+    }
+
     function pickedHTML () {
       if (!_picked.length) return '';
       var C = creative();
@@ -1614,6 +1703,21 @@
         var busy = E.aiBusy === i;
         return '<div class="pr-pick">' +
           (url ? '<img class="pr-pimg" alt="" src="' + esc(url) + '">' : '<div class="pr-pimg"></div>') +
+          /* ORDER MATTERS, AND HERE IT IS CHANGEABLE. The first photo uploaded becomes the
+             main image, so a merchant who picked their best shot second needs to move it.
+
+             Buttons rather than HTML5 drag: drag-and-drop is unreliable under a thumb on a
+             phone, which is where most of these photos are chosen, and it cannot be driven
+             by a test. Only PENDING photos move — reordering ones already stored would need
+             the product writer, and offering a control that could not save would be worse
+             than not offering it. The sheet says which is which. */
+          '<div class="pr-porder">' +
+            '<button class="pr-pmove" data-pr="pmove" data-i="' + i + '" data-dir="-1"' +
+              (i === 0 ? ' disabled' : '') + ' aria-label="Move earlier">←</button>' +
+            '<span class="pr-pnum">' + (i === 0 ? 'Main' : String(i + 1)) + '</span>' +
+            '<button class="pr-pmove" data-pr="pmove" data-i="' + i + '" data-dir="1"' +
+              (i === _picked.length - 1 ? ' disabled' : '') + ' aria-label="Move later">→</button>' +
+          '</div>' +
           '<div class="pr-ptools">' +
             (C ? AI_TOOLS.map(function (t) {
                    return '<button class="pr-ptool" data-pr="ai" data-i="' + i + '" data-tool="' + t.id + '"' +
@@ -1664,7 +1768,7 @@
         '<div class="pr-panel" role="dialog" aria-modal="true" aria-label="Product photos">' +
         '<div class="pr-ph2">Photos</div>' +
         '<div class="pr-psub">' + esc(p.name || 'Untitled') + '</div>' +
-        thumbs + rejected +
+        thumbs + rejected + mediaChecksHTML(p) + shotListHTML(p) +
         '<div class="pr-f"><label class="pr-l" for="pf-photos">Add photos</label>' +
           /* `accept` mirrors the deployed Storage rule's safeImageOnly list, and
              no `capture` attribute — on iOS `capture` forces the camera and takes
@@ -2738,6 +2842,43 @@
           paint();
           return;
         }
+        /* A LIFECYCLE MOVE IS A VISIBILITY CHANGE, not a second status field. It sets the
+           form's own `status`, so the merchant still presses Save and the certified writer
+           still performs the write — this button changes what will be saved, never the
+           record. Publishing is refused while anything required is missing, which is the
+           one gate validate() exists for. */
+        if (lsKind === 'life') {
+          ev.preventDefault();
+          captureForm();
+          var to = lsBtn.getAttribute('data-to');
+          var LM = (typeof window !== 'undefined') && window.SokoniListingModel;
+          var LS2 = studio();
+          if (to === 'live' && LM && LS2) {
+            var v = LM.validate(LS2.applyFormValues(S.editor.values || {}, S.editor.values || {}));
+            if (!v.ok) {
+              S.editor.err = 'Not published — still needed: ' +
+                v.blocking.map(function (b) { return b.label; }).join(', ') + '.';
+              return paint();
+            }
+          }
+          /* THE SELECT CAN ONLY EXPRESS WHAT IT HAS OPTIONS FOR. Visibility is active or
+             draft — the taxonomy's vocabulary — while the lifecycle has five states. Writing
+             'paused' into `status` set a value with no matching <option>, so the select
+             silently fell back to showing "active" while the chain read "Paused": two
+             states disagreeing on screen, the exact failure this was meant to avoid.
+
+             So each state is mapped to the VISIBILITY it implies, and the precise state is
+             kept in its own field. They are then two facts about one listing rather than
+             two answers to one question. */
+          S.editor.values.status = (to === 'live') ? 'active' : 'draft';
+          S.editor.values.lifecycle = to;
+          S.editor.err = null;
+          paint();
+          say(to === 'live'
+            ? 'Set to live. Press Save to apply it.'
+            : 'Set to ' + to + ' — hidden from buyers. Press Save to apply it.');
+          return;
+        }
         if (lsKind === 'device') {
           ev.preventDefault();
           S.editor.device = lsBtn.getAttribute('data-device') === 'desktop' ? 'desktop' : 'mobile';
@@ -2872,6 +3013,16 @@
       }
       if (k === 'close') { if (S.editor && S.editor.busy) return; return closeEditor(); }
       if (k === 'submit') return submit();
+      /* Reorder a PENDING photo. _originals is moved with it, or an undo would restore the
+         wrong picture to the wrong slot. */
+      if (k === 'pmove') {
+        var mi = Number(el.getAttribute('data-i'));
+        var mj = mi + Number(el.getAttribute('data-dir'));
+        if (mi < 0 || mj < 0 || mi >= _picked.length || mj >= _picked.length) return;
+        var swap = function (arr) { var t = arr[mi]; arr[mi] = arr[mj]; arr[mj] = t; };
+        swap(_picked); swap(_originals);
+        return paint();
+      }
       if (k === 'printtag') return printPriceTag();
       /* Batch: the selection, or one product straight from its row menu. */
       if (k === 'tagsel')  return printSelectedTags();

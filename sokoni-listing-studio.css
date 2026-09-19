@@ -23,6 +23,14 @@
 .ls-chips, .ls-groups, .ls-need, .ls-opt, .ls-ok, .ls-prev, .ls-dev, .ls-life, .ls-score {
   text-transform: none; letter-spacing: normal; font-size: 13px; font-weight: 500;
 }
+/* The Studio's sections reuse `.pr-sec`, so their sub-lines and notes inherited the header
+   case too — and rendered in capitals while the native form's identical `.pr-note` did not.
+   Two halves of one form disagreeing about their own typography reads as a bolted-on
+   feature, which is the opposite of the intent. */
+.ls-sec .pr-sec-s, .ls-sec .pr-note, .ls-sec .pr-l, .ls-sec label {
+  text-transform: none; letter-spacing: normal; font-weight: 600;
+}
+.ls-sec .pr-sec-s, .ls-sec .pr-note { font-size: 12px; line-height: 1.5; }
 
 /* ── TYPE PICKER ──────────────────────────────────────────────────────────── */
 .ls-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }

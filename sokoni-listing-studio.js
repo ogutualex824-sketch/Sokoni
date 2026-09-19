@@ -295,6 +295,8 @@
     var l = listing || {};
     /* `status` is the editor's existing visibility field, and 'active' is what it calls
        live. Reading it rather than inventing a parallel field keeps one state, not two. */
+    /* The explicit lifecycle wins, because it is the precise state; `status` is only the
+       visibility it implies, and two listings can be hidden for different reasons. */
     var cur = l.lifecycle || (l.status === 'active' ? 'live' : (l.status || 'draft'));
     if (!M.LIFECYCLE[cur]) cur = 'draft';
     /* A LISTING THAT HAS NEVER BEEN SAVED IS A DRAFT, whatever the visibility select says.
@@ -314,6 +316,24 @@
         var cls = i === atIdx ? ' on' : (i < atIdx ? ' done' : '');
         return '<span class="ls-life-s' + cls + '">' + esc(s.label) + '</span>';
       }).join('<span class="ls-life-x">›</span>') + '</div>' +
+      /* ── THE MOVES THAT ARE ACTUALLY LEGAL ────────────────────────────────────────
+         Offered from the model's own LIFECYCLE table, so a button shown here is one
+         canTransition() will accept. Building the list by hand is how a UI comes to offer
+         "Publish" on an archived listing.
+
+         THEY ARE ONLY OFFERED ON A SAVED LISTING. Nothing can move between states until it
+         exists, and a "Publish" button on an unsaved form would promise a write that has
+         nowhere to go. They set the editor's own visibility field rather than a second
+         status, so there is one state, not two that can disagree. */
+      (saved
+        ? '<div class="ls-life-acts">' + (M.LIFECYCLE[cur].next || []).map(function (to) {
+            var s = M.LIFECYCLE[to];
+            if (!s) return '';
+            return '<button type="button" class="ls-life-btn' +
+              (to === 'live' ? ' go' : (to === 'archived' ? ' warn' : '')) +
+              '" data-ls="life" data-to="' + esc(to) + '">' + esc(s.label) + '</button>';
+          }).join('') + '</div>'
+        : '') +
       '<div class="pr-note">' +
         (saved ? '' : 'Nothing is saved yet — this listing does not exist until you add it. ') +
         'Saving keeps it a draft until you set visibility to active. ' +
