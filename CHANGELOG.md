@@ -1,3 +1,107 @@
+## 2026-09-20 (117) — The reason said "contract", the code said "is this file dirty"
+
+**Test integrity · COMMITTED `8f2261a` · test-only · no production behaviour changed · NOT DEPLOYED.**
+
+The ownership adjudication census case 1 could not resolve. Entry (116) restored Gate 1's own claim
+and deliberately left two paths alone, because they were never Gate 1's. This settles them — and
+they turned out to need **opposite** treatments.
+
+### `crm.js` — a cleanliness check standing in for a contract
+
+```
+ok('crm.js is untouched — its fail-open is ADR-035 §8, a separate repair',
+   !changed.includes('functions/crm.js'))
+        ↑ the REASON is a current contract
+                          ↑ the CODE is a scope check
+```
+
+**The two do not meet.** A clean file says nothing about whether the defect it names still exists.
+Grepping the whole of `scripts/`: **nothing anywhere asserted that fail-open by content or
+behaviour.** So a repair of `crm.js`, once committed, would have left every related assertion green
+while the invariant had silently become false.
+
+The invariant is **standing and boundary-independent** — nobody may repair the §8 fail-open as a side
+effect of other work — so unlike entries (115) and (116) it must **not** be anchored to a landing.
+It is now asserted behaviourally.
+
+```
+crm.js:94   if (data.ownerId !== uid && data.adminUids && !data.adminUids.includes(uid))
+                                        ^^^^^^^^^^^^^^
+            adminUids ABSENT → the middle term is falsy → a NON-OWNER is admitted
+```
+
+Exercised through **`createLead`, a shipped callable**, because `assertMerchantOwner` is not
+exported. That matters: it proves the fail-open is **reachable**, not merely present in a private
+function. Inspecting source text would have proved neither.
+
+**Paired with an inverting fixture control.** With `adminUids` **present** the same call must be
+refused, so the fixture is proven to arm the fail-open. Without it, a future repair could be masked
+by a fixture that never exercised the defect, and the headline assertion would pass for the wrong
+reason — green because the trap was never set.
+
+### `merchant-authority.js` — retired, because it was never functional
+
+```
+17:17:33   f4de0c1   Gate 1 lands
+19:04:41   0eee8e4   mechanism #2 MODIFIES merchant-authority.js
+19:53:22   2197b48   the assertion is ADDED — 49 minutes later
+```
+
+**The only change it could ever have observed had already been committed when it was written.** It
+passed trivially from its first run and has never been capable of catching anything.
+
+It was also never Gate 1's claim: `f4de0c1` references `merchant-authority.js` **solely as the module
+under test** — loaded, asserted real, asserted imported by `hr-payroll` — never as a protected path.
+Re-anchoring it to `f4de0c1` or `2197b48` would have asserted a scope fact nobody set out to claim.
+
+> **Retired, not repaired.** The dead assertion is gone; the timeline above is preserved verbatim in
+> a `RETIRED` comment at the site. "Retire" means delete the assertion, not erase why it existed.
+
+### The two treatments, side by side
+
+```
+crm.js                  a REAL invariant, wrongly implemented   → repair the implementation
+merchant-authority.js   NO invariant, correctly implemented     → remove it
+```
+
+Both looked like the same defect — a `git status --porcelain` check in a scope block. Neither the
+symptom nor the census could tell them apart; only asking *what is this assertion for* could.
+
+### Proof grid — 5/5, byte-identical restore of `crm.js` **and** the suite, baseline 111/0
+
+```
+RED    crm.js REPAIRED — the fail-open closes
+RED    assertMerchantOwner throws unconditionally
+RED    the fixture given adminUids — the fail-open can no longer fire
+GREEN  crm.js made DIRTY, behaviour unchanged
+GREEN  the contract comment reworded
+```
+
+**The fourth line is the whole argument for the repair's shape.** The file is dirty, the old
+cleanliness check would have gone red, and the contract is indifferent — because it measures
+behaviour, not tree state. That is the property the old assertion never had.
+
+The grid mutated **production code** (`crm.js`), so its restoration was confirmed from `git status`
+rather than from the runner's own report.
+
+### Files affected
+- `scripts/test-payroll-merchant-authority.js` — +103 / −5; the five deletions are the two old
+  assertions and their marker comment, nothing else
+
+### Database / API / Security changes
+**None.** Test-only. **Security note:** the ADR-035 §8 fail-open remains **deliberately unrepaired**,
+and is now *provably* still present rather than merely asserted to be.
+
+### Deployment
+**NOT DEPLOYED.** Nothing deployable was changed.
+
+### Breaking changes
+None.
+
+### Follow-up, deliberately not in this commit
+Removing both live-tree assertions left `pathsOf(porcelain())` with no consumer — addressed
+separately in entry (118).
+
 ## 2026-09-20 (116) — Narrowed is not substituted, and the difference decides what "restore" means
 
 **Test integrity · COMMITTED `d37c7e3` · test-only · no production behaviour changed · NOT DEPLOYED.**
