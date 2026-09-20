@@ -1,3 +1,28 @@
+## 2026-09-20 (87) — C2 follow-up: the regression baseline was HEAD, and HEAD moved
+
+**21/0 restored. Test-only; no source, rate or generated file changed.**
+
+The C2 suite's regression control loaded its "before" config from `git show HEAD:` — and went RED
+the instant C2 was committed, because HEAD was then the C2 commit and its config already carried
+the alias. The positive control (*"PRE-C2 config did NOT resolve subscription"*) caught it and
+refused to certify against a baseline with no defect in it.
+
+Baseline pinned to `659a350`, C2's parent — the last commit in which `"subscription"` was unmapped.
+An unreachable ref exits 2 rather than reporting an unsupported pass.
+
+A baseline read from a moving ref is not a baseline. Related: the same failure family as
+`feedback_sabotage_anchors_rot_after_landing`, arriving one commit after landing rather than two
+slices later.
+
+### Files affected
+- `scripts/test-subscription-commission-classification.js` — the baseline ref, and its error text
+
+### Database / API / Security changes
+None.
+
+### Breaking changes
+None.
+
 ## 2026-09-20 (86) — C2: SOKONI was booking 5% of its own subscription revenue
 
 **21/0 · sabotage RED · exactly 1 of 46 rate resolutions changed · one alias, one regenerated file.**

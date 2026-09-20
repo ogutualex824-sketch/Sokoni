@@ -112,9 +112,19 @@ function ok(label, cond, detail) {
 
   /* ---- 3  REGRESSION vs the PRE-C2 config, derived from git ------------- */
   {
+    /* PINNED, not HEAD. The first version of this read `HEAD:` and went RED the
+       instant C2 was committed — HEAD then WAS the C2 commit, so the "before"
+       config already carried the alias and the positive control below correctly
+       refused to certify against it. A moving baseline is not a baseline.
+
+       659a350 is C2's parent (the C1 landing): the last commit in which
+       "subscription" was unmapped. If it ever becomes unreachable — a shallow
+       clone, a rewritten history — this exits 2 rather than reporting a pass it
+       cannot support. */
+    const BASELINE = '659a350';
     let before = null, loadErr = null;
     try {
-      const prev = execFileSync('git', ['show', 'HEAD:functions/commission-config.js'],
+      const prev = execFileSync('git', ['show', BASELINE + ':functions/commission-config.js'],
         { cwd: ROOT, encoding: 'utf8', maxBuffer: 32e6 });
       const tmp = path.join(os.tmpdir(), 'cc-pre-c2-' + process.pid + '.js');
       fs.writeFileSync(tmp, prev, 'utf8');
@@ -123,7 +133,7 @@ function ok(label, cond, detail) {
     } catch (e) { loadErr = e.message; }
 
     if (!before) {
-      console.error('  REGRESSION CONTROL UNAVAILABLE — could not load HEAD config: ' + loadErr);
+      console.error('  REGRESSION CONTROL UNAVAILABLE — could not load baseline config: ' + loadErr);
       console.error('  Refusing to report a pass without it.');
       process.exit(2);
     }
