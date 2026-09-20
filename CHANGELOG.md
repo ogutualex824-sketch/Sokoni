@@ -1,3 +1,89 @@
+## 2026-09-20 (93) — The console renders the backend's answer, and E4 is refined rather than excepted
+
+**46/0 console · sabotage 8/8 RED · legacy certification 577/0 CERTIFIED · COMMITTED `e0def72`, NOT DEPLOYED.**
+
+The Integration Control Center had no configuration or health signal at all — which is why 35
+integrations whose credentials were all present read as missing or unmanaged. It now consumes
+`adminGetIntegrationStatus`: one backend call, stored verbatim, rendered.
+
+### The boundary is the point
+The browser renders truth; it does not calculate it. The tempting way to fix a surface with no
+signal is to let the page work things out — infer health from a configured credential, treat an
+accepted request as a delivery, hide the rails it has no answer for. Each would restore the
+*appearance* of health while recreating the divergence, so each is asserted against.
+
+The two backend answers stay apart on screen: **Configuration** (RC-1, Secret Manager) and
+**Provider health** (RC-3, probe evidence). With credentials present and no probe run, the page
+reads *Configured* and *Not yet tested* — never *Connected*.
+
+The five stages are shown individually, because Accepted and Delivered are different claims. A rail
+that cannot evidence a stage shows `n/a`, not a failure. An unreadable status read says so
+explicitly rather than drawing every secret as missing — that inversion is exactly what sent an
+operator looking for keys that were already provisioned.
+
+### E4 refined, not excepted
+`tests/certify-integrations-console.js` E4 forbade `.set(`, `.update(`, `.delete(`, `.add(` **and**
+`httpsCallable` together, under the title *"the console performs no writes"*. The status lives in
+Secret Manager and cannot come from Firestore, so reading it requires a callable — and a read is
+not a write.
+
+But that proxy was **not merely stale**. `adminOsDispatch` reaches **64 operations, 12 of them
+mutating**, so "the console calls no callable" really was a stronger guarantee than "the console
+calls adminOsDispatch". It is therefore not relaxed. The dispatcher is treated as *transport* and
+the **operation identity** is what is certified:
+
+| | |
+|---|---|
+| four Firestore write verbs | unconditionally forbidden, unchanged |
+| `httpsCallable` | only `adminOsDispatch` |
+| `op` | only `READ_ONLY_INTEGRATION_OPS` — currently `adminGetIntegrationStatus` alone |
+| dynamic op | forbidden — a computed op would reach any of the 64 without tripping the allowlist |
+| mutating op names | absent from the console entirely |
+
+Every absence check is paired with an inverting control, and one assertion requires the legitimate
+read to be **present**, so the case cannot pass against a console stripped of it.
+
+Proven with the console restored between runs: sending `adminUpdateUserRole` through the
+dispatcher, invoking a second callable, replacing the op with a variable, adding a direct `.set(`,
+merely naming a mutating op, and removing the status read — **all six turn the suite NOT
+CERTIFIED**. 577 passed / 0 failed, up from 559 passed with 1 failed.
+
+### Three of my own assertions were too weak
+Recorded because each looked like a defect and was not:
+* a `.value` scan matched six filter-input handlers, nothing to do with credentials;
+* a money-word scan (`charge|payout|transfer`) matched **this module's own UI copy** promising that
+  a test never initiates a payment — prose is not capability;
+* a fixture invented a `test` capability that RC-1 never emits for a missing credential.
+
+Replaced with the real properties: exactly which credential fields are read — `cr.name` and
+`cr.present`, nothing else — and exactly which callable and op the console can invoke.
+
+### Scope
+Backend untouched: no file under `functions/` is in this commit. IntaSend keeps its boundary — shown
+as configured, never claimed connected, offered no provider test, because no probe exists that
+could run without moving money. No Daraja surface exists in the console.
+
+### Files affected
+- `sokoni-integrations.js` — status read through the dispatcher; live-state block; credentials tab
+  shows provisioning
+- `tests/certify-integrations-console.js` — E4 refined to the invariant
+- `scripts/test-integrations-console.js` — new, 46/0
+
+### Database / API / Security changes
+None — the console writes nothing and calls one existing read-only op. No secret value can reach the
+page; only credential names and booleans are rendered.
+
+### Deployment
+**NOT DEPLOYED.** State: COMMITTED → NOT DEPLOYED.
+
+### Breaking changes
+None. `mount()` gained an optional second argument; both consoles still mount with a target alone.
+
+### Next
+**RC-2** — `platformServices` and three sibling collections hold 0 documents with no backend
+producer · **orphan-secret consumer audit** — 14 unclaimed, several looking like duplicate pairs
+whose consumers must be traced before anything is declared or retired.
+
 ## 2026-09-20 (92) — RC-3: provider health, measured rather than inferred
 
 **68/0 · sabotage 14/14 RED · COMMITTED `be05dcc`, NOT DEPLOYED.**
