@@ -1,3 +1,125 @@
+## 2026-09-20 (92) — RC-3: provider health, measured rather than inferred
+
+**68/0 · sabotage 14/14 RED · COMMITTED `be05dcc`, NOT DEPLOYED.**
+
+Entry 91 established which credentials are configured. This establishes whether the provider
+actually works — and, more importantly, refuses to claim more than the evidence supports.
+
+### Five stages, kept apart because collapsing them is the defect
+    configured -> connected -> accepted -> delivered -> received
+
+An HTTP 200 proves `accepted`. It never proves `delivered` and it cannot prove `received`. A
+console that treats a 200 as delivery shows a green tick for a channel nobody is receiving on,
+which is worse than showing nothing.
+
+Not every rail can evidence every stage, so each **declares** what it can. Algolia has no notion of
+delivery. FCM accepts a message but cannot report per-device receipt. IntaSend has no "delivered"
+at all — its evidence is an inbound webhook, which is `received`. A stage a rail cannot evidence
+resolves to **not-supported**, never to false and never quietly to true.
+
+### `true | false | null`, deliberately
+`null` is unknown, and it is **falsy**. A string like `'unknown'` is truthy, so a consumer writing
+`if (stages.delivered)` would read unknown **as delivered** — precisely the bug this module exists
+to prevent. The suite asserts that property directly, and a sabotage swapping `null` for
+`'unknown'` turns it red.
+
+### Five things that are not failures
+| state | meaning |
+|---|---|
+| `disabled` | frozen/quarantined lifecycle — 4 rails, including `cloud-functions` and `artifact-registry` |
+| `missing` | required credential absent; provider never contacted |
+| `unknown` (not run) | probe needs a secret this function does not bind |
+| `unknown` (no probe) | 19 of 35 have none — an honest gap |
+| `failed` | provider reached and refused — **the only real failure** |
+
+Each is asserted separately, because the entire value of this surface is that they are
+distinguishable. Reporting an unrun probe as failed would put a red light on a rail nobody tested
+and invite a pointless key rotation.
+
+### A credential boundary, stated rather than bypassed
+`adminGetIntegrationStatus` binds no secret and holds nothing; that property is worth keeping. The
+consequence is that a probe which must authenticate needs that provider's credential bound to the
+probe function — a deployment change, and deployment is frozen. SendGrid, Africa's Talking,
+Typesense, Algolia, Anthropic, eTIMS and SMTP therefore report `requires_secret_binding` and stay
+`unknown`.
+
+Both IntaSend probes **refuse outright**: probing a collection or a payout would move money, and a
+probe must not transact. That refusal is asserted, and a sabotage making the IntaSend probe
+transact turns the suite red.
+
+Only three executors can run unbound today — Firestore, Cloud Storage and Redis — because they
+authenticate as the service account. The Redis probe treats `isFallback()` as failure: the layer
+degrades to an in-process cache when Redis is unreachable, and a probe ignoring that would report
+the fallback as a healthy instance.
+
+### Correlation — a callback must be the probe's own
+For asynchronous rails the probe mints a correlation id, returns `delivered`/`received` as null,
+and only the provider's own callback can set them. An **unknown**, **malformed**,
+**cross-integration** or **unsupported-stage** callback is refused — otherwise anyone able to reach
+a public webhook could mark a dead channel healthy. A failed delivery report records `false`, not
+`true`. The receivers that will carry these already exist: `emailWebhook`, `smsDeliveryWebhook`,
+`webhookIntasend`.
+
+### Built on RC-1, not beside it
+Health flows into the **existing** status response through `latestProbes`. RC-1 remains the
+configuration authority; RC-3 adds runtime evidence. With no probe ever run, every record stays
+`unknown` exactly as RC-1 left it. Health is never derived from `credentialState` — a sabotage
+doing so turns the status suite red. `adminRunIntegrationProbe` asks `resolveIntegrationStatus`
+for configuration rather than re-deciding it, so there is one answer to "is this configured".
+
+### Three sabotages came back green, and each found a real weakness
+Worth recording, because all three were faults in the suite rather than the code:
+
+* `deriveHealth`'s lifecycle branch was **never reached** — `runProbe` vetoes a non-probeable
+  lifecycle and returns early, so flipping that branch to `failed` changed nothing observable. Two
+  code paths, one tested; `deriveHealth` is now exercised directly.
+* removing a guard **crashed** the harness instead of failing it, and a crash reads as an
+  infrastructure problem rather than as "this proved nothing".
+* a malformed correlation id was asserted to be *refused* without asserting **why**, so a sabotage
+  removing the format guard passed — the id still failed, for a different reason.
+
+One assertion of mine was wrong and the code right: the disabled set is **four** rails, not two.
+`cloud-functions` and `artifact-registry` are also `frozen`, which is accurate — they are frozen by
+the Artifact Registry investigation. It is now derived from the registry rather than pinned.
+
+### Known pre-existing failure, NOT caused by RC-3
+`test-subscription-entitlement` reports **71 passed, 6 failed**. All six are the same assertion —
+*"AdminOS path still dirty (not reverted)"* — which reads `git status` and was true when A4 was
+certified. It stopped being true when the release batch `c1c923c` **intentionally committed** those
+files. Proven rather than assumed: all six paths are clean and present in `c1c923c`, and RC-3
+touches none of them. Repaired separately so the historical A4 certification is not rewritten here.
+
+**Attribution note for future release reports:** there are two different 71s. `admin-user-deletion`
+is 71 passed / 0 failed — a genuine green AdminOS suite. `test-subscription-entitlement` is 71
+passed / 6 failed. The coincidence has already caused one misreading; spell both out rather than
+using the "84/71/101" shorthand.
+
+### Files affected
+- `functions/integration-probes.js` — new; stage semantics, support matrix, correlation
+- `functions/integration-probe-executors.js` — new; per-provider mechanics
+- `functions/integration-status.js` — health carried from `latestProbes`, never from credentials
+- `functions/admin-os.js` — `adminRunIntegrationProbe`, admin-gated, App Check
+- `scripts/test-integration-probes.js` — new, 68/0
+- `scripts/test-integration-status.js` — one assertion restated for RC-3
+
+### Database / API / Security changes
+Writes `integrationProbes/{correlationId}` and `integrationProbeLatest/{id}`; neither carries a
+credential. One new admin-gated callable, App Check enforced. No secret value is read, returned or
+logged; probe detail is length-capped and no executor interpolates configuration into its message.
+
+### Deployment
+**NOT DEPLOYED.** Cloud Function change, held by the active Functions / Artifact Registry freeze.
+State: COMMITTED → NOT DEPLOYED.
+
+### Breaking changes
+None. Nothing previously working changes behaviour.
+
+### Next, in order
+Repair the stale A4 assertion · **console consumption** of the status + probe response ·
+**RC-2** registry reconciliation (`platformServices` and three sibling collections hold 0 documents
+with no backend producer) · **orphan-secret consumer audit** (14 unclaimed, several looking like
+duplicate pairs).
+
 ## 2026-09-20 (91) — RC-1: the integrations were configured all along
 
 **Parity 19/0 · status 41/0 executing the real resolver · sabotage 10/10 RED · COMMITTED `5649d44`, NOT DEPLOYED.**
