@@ -332,11 +332,72 @@ async function call (fn, auth, requested) {
        `crm.js` remains, and it is the one that matters: its fail-open is
        ADR-035 §8, recorded and DELIBERATELY not repaired here. If it ever
        becomes dirty during a mechanism #2 change, that is this gate leaking. */
-    const g = require('child_process').execFileSync('git',
-      ['-C', ROOT, 'status', '--porcelain', '--', 'functions/crm.js'],
-      { encoding: 'utf8' }).trim();
-    ok('crm.js is untouched — its fail-open is ADR-035 §8, a separate repair',
-       g === '', g || 'clean');
+
+    /* ── RE-ANCHORED TO THE LANDING 2026-09-20 ──────────────────────────────
+       The two comments above are kept: their reasoning was correct at the time
+       and they are the evidence for this repair. What they record is a claim
+       SHRINKING under pressure — three protected paths reduced to one, twice,
+       each time because ANOTHER gate's authorized work made a live-tree check
+       misfire. That is the tell. The anchor was the defect, not the scope.
+
+           git status --porcelain      asks: is this file dirty RIGHT NOW?
+           the invariant asks:         did the MECHANISM #2 LANDING touch it?
+
+       The phrase above — "during a mechanism #2 change" — names a temporal
+       window, and that window CLOSED at 0eee8e4. After it closed there are no
+       mechanism #2 changes to observe, so the check observed whatever any
+       other workstream happened to have in flight, and on a clean tree passed
+       without testing anything at all.
+
+       Against the FROZEN boundary all three original paths are untouched
+       permanently, immune to mechanisms #3 and #4. So this does not widen the
+       gate: it RESTORES THE CLAIM AS LANDED, which the narrowings only gave up
+       to stop the anchor misfiring. Verified: `git diff 0eee8e4~1 0eee8e4` over
+       the three is empty.
+
+       Same class of defect as scripts/test-employment-invites.js:536 (b2ad4a5). */
+    const git = (...a) => require('child_process')
+      .execFileSync('git', ['-C', ROOT, ...a], { encoding: 'utf8' }).trim();
+
+    /* THE ANCHOR IS SELF-VERIFYING. A bare SHA would silently compare the wrong
+       commit if history were rewritten, and the resulting empty diff would read
+       exactly like a landing that respected its boundary. The landing is named
+       by WHAT IT DID — it is the commit that ADDED this very suite. */
+    const M2 = '0eee8e4';
+    const PROTECTED = ['functions/hr-payroll.js', 'functions/crm.js', 'firestore.rules'];
+    const SELF = 'scripts/test-merchant-authority-provenance.js';
+
+    let anchorOk = false, added = '';
+    try {
+      added = git('show', '--name-status', '--format=', M2, '--', SELF);
+      anchorOk = new RegExp('^A\\s+' + SELF.replace(/[.\/]/g, '\\$&') + '$', 'm').test(added);
+    } catch (e) { added = 'ref unresolved: ' + ((e && e.message) || '').slice(0, 60); }
+    ok('the mechanism #2 landing resolves, and is the commit that ADDED this suite',
+       anchorOk, added || 'no output');
+
+    if (!anchorOk) {
+      ok('SCOPE ANCHOR UNVERIFIABLE — refusing to report a scope verdict', false,
+         'the boundary could not be established, so "untouched" would be unproven');
+    } else {
+      const touched = git('diff', '--name-only', M2 + '~1', M2, '--', ...PROTECTED);
+      ok('hr-payroll.js, crm.js and firestore.rules are untouched BY THE #2 LANDING',
+         touched === '', touched || 'none of the three is in the landing');
+
+      /* POSITIVE CONTROL. An empty diff is equally consistent with a landing
+         that respected its boundary and with a comparison that can never match
+         anything. This names the file the landing certainly DID change. */
+      const control = git('diff', '--name-only', M2 + '~1', M2,
+                          '--', 'functions/merchant-authority.js');
+      ok('CONTROL: the same comparison DOES report the file the landing changed',
+         control === 'functions/merchant-authority.js', control || 'EMPTY — the detector is blind');
+
+      /* SCOPE CONTROL. The landing changed other files too, and the assertion
+         must NOT redden on those — otherwise it is a global cleanliness check
+         wearing a scope check's name. */
+      const unprotected = git('diff', '--name-only', M2 + '~1', M2, '--', SELF);
+      ok('  …and the landing DID change files outside the protected set',
+         unprotected === SELF && PROTECTED.indexOf(SELF) === -1, unprotected);
+    }
   }
 
   console.log('\n  what this suite does NOT prove');
