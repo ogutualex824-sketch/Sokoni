@@ -16,11 +16,12 @@ inherited pointer, disproved by a search-validity gate; #5 and #7 have no author
 and remain UNRESOLVED. ·
 **Mechanism numbering reconstructed and #8 ASSIGNED 2026-09-21** — the numbering is ADR-LOCAL, no
 registry exists or is created, and accepted-employment termination is mechanism **#8**. The frozen
-termination contract is unchanged and #8 is not implemented. ·
+termination contract is unchanged. ·
 **`terminationId` RESOLVED 2026-09-21** — server-generated once **before** `db.runTransaction` and
 immutable across callback retries; an event discriminator, never a caller key. #8 is **state-gated
-idempotent**: request replay is refused by the active-state precondition, not by an id. Still not
-implemented.
+idempotent**: request replay is refused by the active-state precondition, not by an id. ·
+**#8 IMPLEMENTED and CERTIFIED 2026-09-21** (`5ed6e91`) — 53/0 emulator-backed, sabotage 14/14. The
+occupancy claim is releasable at last. NOT exported from `functions/index.js` and NOT deployed.
 **Supersedes nothing. Constrains:** `functions/hr-payroll.js`, `hrStaff`, and any future AdminOS
 employee surface.
 **Depends on:** [[ADR-001]] (authorization comes from claims, never from a Firestore field),
@@ -260,7 +261,7 @@ the §4 frozen termination transition        UNCHANGED
 the three preconditions                     UNCHANGED
 employment-events.js and its schema         UNCHANGED — the requirement was already there
 #8's scope and non-scope                    UNCHANGED
-implementation                              STILL ABSENT
+implementation                              LANDED 5ed6e91, UNEXPORTED
 ```
 
 ### What #8 does NOT own
@@ -281,9 +282,10 @@ the bridge.
 Any later mechanism governing shop assignment, work-status transitions or another employment axis
 **must receive its own explicit assignment and contract**, and must not inherit authority from #8.
 
-### Implementation is NOT authorized by this assignment
+### The staged sequence, and where it ended
 
-This section records a **contract and an owner**. Nothing is implemented. The staged sequence is:
+This section recorded a **contract and an owner** before any code existed. All five stages are now
+complete:
 
 ```
 1  DOCUMENTATION     DONE     #8 assigned; numbering reconstructed        b74bca2
@@ -295,19 +297,22 @@ This section records a **contract and an owner**. Nothing is implemented. The st
                               conclusion was drawn
 3  CONTRACT          DONE     terminationId resolved — server-generated,
                               once, before runTransaction              ← above
-4  IMPLEMENTATION    ABSENT   #8 only — no #5, no #7, no shop assignment,
-                              no work-status redesign, no unrelated cleanup
-5  CERTIFICATION     ABSENT   must refuse: already-terminated · missing uid ·
-                              mismatched claim.staffId · MISSING CLAIM ·
-                              a claim belonging to another employment
+4  IMPLEMENTATION    DONE     functions/employment-termination.js     5ed6e91
+                              a SEPARATE module; NOT exported from index.js,
+                              as no #1/#3/#4 callable is either
+5  CERTIFICATION     DONE     53/0 emulator-backed · sabotage 14/14 ·
+                              12 suites green · all five refusals proven
+                              from Firestore state, each naming ITS gate
 ```
 
 **Stage 2 found the `terminationId` gap rather than inventing an answer to it**, which is why stage 3
 exists: `employment-events.js` required a discriminator that this ADR did not supply, and the two
 contracts had never been joined.
 
-Until stages 4–5 complete, an accepted employment's occupancy claim remains **unreleasable**, exactly
-as §4 states — now because its owner is unbuilt, not because its owner or its inputs are undefined.
+**The claim is now releasable.** `5ed6e91` closes the dependency mechanism #1 deliberately left open
+on 2026-09-20: an accepted employment can be terminated, and the uid it occupied can be employed
+again. #8 remains **unexported from `functions/index.js`**, so it is unreachable in production by
+convention rather than by omission — wiring the employment workstream up is a separate decision.
 
 ---
 
@@ -595,8 +600,9 @@ OUT   active-employment termination      no path exists to attach a delete to
 > accepted employment's occupancy claim is **not releasable by any existing code path**. That is a
 > deliberate dependency boundary on **mechanism #8**, not an omission in #1. This sentence
 > previously named "mechanisms #5/#7"; that attribution was disproved by the search-validity gate
-> below, and #8 was assigned deliberately rather than inherited. **#8 is not implemented**, so the
-> claim remains unreleasable until it is built and certified.
+> below, and #8 was assigned deliberately rather than inherited. **#8 landed at `5ed6e91`**, so the
+> claim is releasable — by that mechanism alone, and only where #8 is reachable. It is not exported
+> from `functions/index.js`.
 
 **FORBIDDEN:** adding a `delete` to `revokeEmploymentInvite` to make the lifecycle table look
 complete. That path only ever sees a **pending** employment, which never acquired a claim — deleting
