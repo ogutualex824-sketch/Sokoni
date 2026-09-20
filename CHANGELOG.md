@@ -1,3 +1,94 @@
+## 2026-09-20 (86) — C2: SOKONI was booking 5% of its own subscription revenue
+
+**21/0 · sabotage RED · exactly 1 of 46 rate resolutions changed · one alias, one regenerated file.**
+
+`RATES` has specified the treatment all along:
+
+```js
+subscriptions: { pct: 100, fixedKES: 0, _was: 'category only — full amount is platform revenue' }
+```
+
+Plural. `subscriptions.html:362` — the **only** sender — writes the **singular** `"subscription"`,
+which matched neither `RATES` nor `ALIASES`, so `resolveRate` fell through to `RATES.default`:
+
+```
+KES 999 plan  ->  sokoniCut   KES  50        (should be 999)
+                  providerNet KES 949        owed to NOBODY
+```
+
+This is the identical accident `commission-config.js` already documents about `product` — *"5% by
+accident… mapping it deliberately is what makes the 5% intentional"* — landing on the one category
+where it **inverts the commercial meaning**: on a subscription SOKONI is the payee, not a
+commission-taker.
+
+### What this is NOT
+**Not a payment loss.** `commissionLedger` is not a settlement authority: `providerNet` is written
+once and never read (asserted, after comment-stripping — see below), and the collection/invoice
+modules key on `billingModel`/`collectionStatus`/`sellerUid`, none of which the webhook row
+carries. The wallet credit is separately refused by C1 (`659a350`). The established consequence is
+**under-reported platform revenue** in AdminOS, which sums `commissionLedger.sokoniCut`.
+
+### Files affected
+- `functions/commission-config.js` — one `ALIASES` entry: `subscription: 'subscriptions'`
+- `sokoni-commission-rates.js` — **regenerated** via `scripts/build-commission-snapshot.js`
+  (24 → 25 aliases). It is a generated file and `scripts/verify-commission-single-source.js`
+  fails the deploy if it and the config disagree; that gate PASSES.
+- `scripts/test-subscription-commission-classification.js` (new)
+
+### Database changes
+None.
+
+### API changes
+None. `resolveRate` is unchanged; only its table gained a key.
+
+### Security changes
+None. No authorization, no payout, no wallet path touched.
+
+### Certification
+`scripts/test-subscription-commission-classification.js` — 21/0.
+
+- `resolveRate('subscription')` → `subscriptions`, at **the rate read from the table, never typed
+  in the test** (a rate literal in a suite certifies the number someone typed, not the table)
+- arithmetic at 5 prices: `sokoniCut === amount`, `providerNet === 0`
+- **regression**: the PRE-C2 config is loaded **from `git show HEAD:`** and compared across all 46
+  keys either version knows — **exactly one resolution changed, and it is `subscription`**. A
+  positive control asserts the pre-C2 config did *not* resolve it, or the comparison proves nothing.
+- `providerNet` has no reader anywhere in `functions/`
+- C1's guard still precedes the zero-net branch (see ordering below)
+- the generated mirror carries the alias
+- a harness negative control proves the suite can fail at all
+
+Sabotage: removing the alias → **RED**, reporting `a KES 999 plan now books KES 999, not KES 50 —
+got KES 49.95`. Bytes restored exactly.
+
+**A first draft of the `providerNet` check FAILED on `index.js:7685` and `:7708` — both prose,
+inside the block comments that explain that very field.** The certification machinery was reading
+its own documentation as evidence. Comments are now stripped by syntax, with the stripper tracking
+string and template states so a quote containing `/*` cannot blank real code, and two controls
+guard it: the write site must survive stripping, and the known prose must not.
+
+### Ordering — why C1 came first
+After C2, `sokoniCut === amount`, so the webhook's `_netCents === 0` and the `_netCents <= 0`
+branch refuses the wallet credit **even if C1's guard were broken**. C1's S1 sabotage can no longer
+discriminate, and its authoritative evidence remains its own certification at `659a350`, run while
+the net was still ~95%. Case 5 here asserts only that the C1 guard is still evaluated **before**
+the zero-net branch, so C1 — not this accounting change — remains the reason a subscriber is not
+credited.
+
+### Not done, deliberately
+Historical mis-booked rows are **not** backfilled; that is a data-migration decision, separate from
+this code repair. The plan-tier commission discount (`applyPlanAdjustment`) is gated by a **runtime
+Firestore flag** (`planRolloutEnabled`, Phase 1 = false), not a code constant — if enabled, a
+payer's own plan tier could discount their own subscription. Flagged, not fixed, not in scope.
+
+### Breaking changes
+None.
+
+### Deployment
+**Blocked.** Cloud Functions change, and function deploys are frozen by the Artifact Registry
+investigation. `sokoni-commission-rates.js` is a hosting asset and must not ship ahead of the
+config it mirrors — the single-source verifier would then fail against deployed Functions.
+
 ## 2026-09-20 (85) — C1: a subscriber's own browser could authorise crediting their own subscription fee
 
 **16/0 · sabotage RED on both mutations · 39 insertions, 0 deletions · no rate, payout or activation change.**

@@ -107,6 +107,7 @@
     "shopping": "marketplace",
     "pos": "marketplace",
     "b2b": "marketplace",
+    "subscription": "subscriptions",
     "restaurant": "food_delivery",
     "food": "food_delivery",
     "home_services": "services",

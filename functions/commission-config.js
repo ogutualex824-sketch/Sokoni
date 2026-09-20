@@ -99,6 +99,16 @@ const ALIASES = {
      Mapping it deliberately is what makes the 5% intentional rather than incidental. */
   product: 'marketplace', products: 'marketplace',
   shopping: 'marketplace', pos: 'marketplace', b2b: 'marketplace',
+  /* C2 — the same accident as `product`, on the one category where it inverts the
+     commercial meaning. RATES has `subscriptions` (plural, pct 100: the full amount
+     IS platform revenue, because SOKONI is the payee). subscriptions.html — the only
+     sender — writes the SINGULAR, which matched neither RATES nor this table, so every
+     subscription booked through RATES.default: 5% to SOKONI and 95% recorded as
+     `providerNet` owed to nobody. A KES 999 plan reported ~KES 50 of revenue.
+     Nothing paid that 95% out (commissionLedger is not a settlement authority, and
+     C1 `659a350` stops the wallet credit), so this is under-reported revenue, not a
+     leak. Mapping it deliberately, exactly as `product` was. */
+  subscription: 'subscriptions',
   restaurant: 'food_delivery', food: 'food_delivery',
   home_services: 'services', insurance: 'services', fitness: 'services',
   pharmacy: 'healthcare',
