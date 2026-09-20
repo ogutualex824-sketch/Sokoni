@@ -62,7 +62,10 @@ const SETTLED_STATUSES = new Set(['completed', 'confirmed']);
    run — they are historical, not an active-incident concern). */
 const SUB_RECON_GRACE_MS    = 2  * 60 * 1000;        // 2 minutes
 const SUB_RECON_LOOKBACK_MS = 24 * 60 * 60 * 1000;   // 24 hours
-const SUB_PLAN_DAYS         = 30;                     // canonical entitlement length
+/* SUB_PLAN_DAYS = 30 was removed here. It was labelled "canonical entitlement length"
+   and it was neither: entitlement length is the purchased billing cycle, read from the
+   payment intent by _periodEnd below. Leaving a dead constant making that claim is how
+   the flat-thirty-days defect would find its way back in. */
 
 /* ── M-Pesa payment method identifiers ─────────────────────── */
 const MPESA_METHODS = new Set(['mpesa']);
@@ -632,6 +635,25 @@ async function subscriptionEntitlementExists(uid) {
  * recovery. Idempotent: a concurrent real-time path that wins the
  * race leaves subscriptions/{uid} present, and create() no-ops here.
  */
+/* Calendar-month period end, matching sub-billing.js exactly:
+
+       _addMonths(d, n) { const r = new Date(d); r.setMonth(r.getMonth() + n); return r; }
+       _periodEnd(start, cycle) { return cycle === 'annual' ? _addMonths(start, 12)
+                                                            : _addMonths(start, 1); }
+
+   The primary activator (index.js activateSubscription) computes the same period the
+   same way, so the recovery path cannot grant a different entitlement from the one a
+   normal activation would have granted. Consolidating the repo's several _periodEnd
+   variants is a separate decision; this repair stays narrow.
+
+   JavaScript rolls impossible dates forward — 31 Jan + 1 month is 3 March, not
+   28 February. Pre-existing sub-billing behaviour, adopted unchanged. */
+function _periodEnd(start, cycle) {
+  const r = new Date(start);
+  r.setMonth(r.getMonth() + (cycle === 'annual' ? 12 : 1));
+  return r;
+}
+
 async function healSubscriptionEntitlement(intent, ref, log) {
   const uid = intent.uid;
   /* Canonical pre-write validation — mirror of activateSubscription. */
@@ -642,7 +664,23 @@ async function healSubscriptionEntitlement(intent, ref, log) {
   if (pay.uid && pay.uid !== uid)          return { healed: false, reason: 'ownership_mismatch' };
 
   const subRef    = db.collection('subscriptions').doc(uid);
-  const expiresAt = new Date(Date.now() + SUB_PLAN_DAYS * 86400000);
+
+  /* ── ENTITLEMENT FOLLOWS THE PURCHASED CYCLE ──────────────────────────────
+     This used to be `SUB_PLAN_DAYS * 86400000` for every heal, so the recovery
+     path silently converted an annual purchase into thirty days — and because it
+     is the backstop, it would have re-imposed that even after the primary
+     activator was corrected.
+
+     The cycle comes from the intent this function already holds. It is never
+     defaulted: an intent with no recorded cycle is SKIPPED and reported, because
+     guessing "monthly" here would recreate the defect for exactly the historical
+     records most likely to lack the field. Back-filling those is a separate
+     decision, deliberately not taken here. */
+  const cycle = intent.billingCycle;
+  if (cycle !== 'monthly' && cycle !== 'annual') {
+    return { healed: false, reason: 'missing_billing_cycle' };
+  }
+  const expiresAt = _periodEnd(new Date(), cycle);
 
   /* Transaction: re-check absence and create atomically so a
      real-time path that lands mid-run cannot be clobbered. */
@@ -694,6 +732,9 @@ async function runSubscriptionReconciliation(log) {
   });
 
   let scanned = 0, gaps = 0, healed = 0, alerted = 0, skipped = 0;
+  /* Counted separately so an intent with no recorded billing cycle is a VISIBLE
+     outcome rather than an invisible no-op repeated on every daily run. */
+  let skippedNoCycle = 0;
   const gapList = [];
 
   /* Subscription intents in the window. Two range bounds on one
@@ -760,7 +801,10 @@ async function runSubscriptionReconciliation(log) {
       if (purpose === 'subscription') {
         const r = await healSubscriptionEntitlement(intent, ref, log);
         if (r.healed) { healed++; entry.action = 'auto_healed'; }
-        else          { entry.action = 'heal_skipped'; entry.reason = r.reason; }
+        else {
+          entry.action = 'heal_skipped'; entry.reason = r.reason;
+          if (r.reason === 'missing_billing_cycle') skippedNoCycle++;
+        }
       } else {
         /* Every other purpose heals through the engine, which re-validates the
            payment and dispatches to the registered adapter. The reconciler
@@ -795,11 +839,12 @@ async function runSubscriptionReconciliation(log) {
   /* eslint-enable no-await-in-loop */
 
   const summary = {
-    scanned, gaps, healed, alerted, skipped, autoHeal,
+    scanned, gaps, healed, alerted, skipped, skippedNoCycle, autoHeal,
     gapList, generatedAt: new Date().toISOString(),
   };
   log[gaps > 0 ? 'warn' : 'info']('Subscription reconciliation complete', {
-    scanned, gaps, healed, alerted, mode: autoHeal ? 'auto_heal' : 'alert_only',
+    scanned, gaps, healed, alerted, skippedNoCycle,
+    mode: autoHeal ? 'auto_heal' : 'alert_only',
   });
   return summary;
 }

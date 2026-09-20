@@ -6567,6 +6567,26 @@ exports.cancelPayment = onCall({ timeoutSeconds: 15 }, async (request) => {
 /* ══════════════════════════════════════════════════════════════════
    SUBSCRIPTION MANAGEMENT
 ══════════════════════════════════════════════════════════════════ */
+/* Calendar-month period end, matching sub-billing.js's semantics exactly:
+
+       _addMonths(d, n) { const r = new Date(d); r.setMonth(r.getMonth() + n); return r; }
+       _periodEnd(start, cycle) { return cycle === 'annual' ? _addMonths(start, 12)
+                                                            : _addMonths(start, 1); }
+
+   Reimplemented here rather than exported from sub-billing, because consolidating the
+   three _periodEnd variants in this repo is a separate decision and this repair is
+   deliberately narrow. The two implementations were measured to agree on every boundary
+   vector pinned in scripts/test-subscription-entitlement.js.
+
+   NOTE, deliberately preserved: JavaScript rolls impossible dates forward, so
+   31 Jan + 1 month is 3 March, not 28 February. That is pre-existing sub-billing
+   behaviour adopted unchanged here; changing it is a product decision, not this repair. */
+function _subPeriodEnd(start, cycle) {
+  const r = new Date(start);
+  r.setMonth(r.getMonth() + (cycle === "annual" ? 12 : 1));
+  return r;
+}
+
 exports.activateSubscription = onCall({ timeoutSeconds: 30 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
@@ -6583,7 +6603,38 @@ exports.activateSubscription = onCall({ timeoutSeconds: 30 }, async (request) =>
 
   const uid       = request.auth.uid;
   const subDocRef = db.collection("subscriptions").doc(uid);
-  const expiresAt = new Date(Date.now() + 30 * 86400000);
+
+  /* ── ENTITLEMENT FOLLOWS THE PURCHASED CYCLE ──────────────────────────────
+     This used to be `Date.now() + 30 * 86400000` for every activation, so an
+     annual purchase — priced and advertised as a year ("Annual — Save 17%",
+     "KES X /yr", "≈ KES Y/mo billed annually") — recorded thirty days.
+
+     The cycle is NOT taken from the request. It is read from the payment intent
+     that authorised the charge, which is where createPaymentIntent normalised it
+     and priced against it. The join is server-authoritative end to end:
+
+         paymentRef (crypto-minted server-side)
+           -> payments/{paymentRef}   — already validated above:
+                                        uid === caller, status === COMPLETE
+           -> .intentRef              — written server-side by createPayment
+           -> paymentIntents/{ref}.billingCycle
+
+     So the browser cannot choose how long it is entitled to, and no new client
+     field was added to let it try.
+
+     FAILS CLOSED. A missing or unrecognised cycle throws rather than quietly
+     falling back to thirty days — that fallback is the defect being removed,
+     and leaving it as a default would preserve it under a new name. */
+  const intentRef = payData.intentRef || paymentRef;
+  const intentSnap = await db.collection("paymentIntents").doc(intentRef).get();
+  const intentCycle = intentSnap.exists ? intentSnap.data().billingCycle : null;
+  if (intentCycle !== "monthly" && intentCycle !== "annual") {
+    throw new HttpsError(
+      "failed-precondition",
+      "This payment has no recorded billing cycle, so the subscription length cannot be determined."
+    );
+  }
+  const expiresAt = _subPeriodEnd(new Date(), intentCycle);
 
   /* Atomic dedup-check + write — prevents TOCTOU race where two concurrent
      calls for the same paymentRef both pass the dedup query and both write. */
