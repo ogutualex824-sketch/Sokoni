@@ -1,3 +1,141 @@
+## 2026-09-20 (88) — A4: entitlement now lasts as long as the cycle that was purchased — in two of three writers
+
+**77/0 · sabotage 9/9 RED independently · COMMITTED `b4c9495`, NOT DEPLOYED.**
+**Read `A4-F3` below before treating this as closed: a third writer is unrepaired, and it can
+overwrite — or pre-empt — the corrected one.**
+
+An annual plan is advertised as a year, priced as a year, and built from the monthly rate x 12 —
+and then recorded thirty days of entitlement, because the writers hardcoded a flat month:
+
+    index.js activateSubscription         Date.now() + 30 * 86400000        FIXED
+    payment-reconciliation.js (backstop)  Date.now() + SUB_PLAN_DAYS * 86400000   FIXED
+    index.js webhookIntasend  :8219       Date.now() + 30 * 86400000        NOT FIXED — see A4-F3
+
+The cycle was never missing, only dropped. `createPaymentIntent` normalises it to `monthly|annual`,
+prices against it, and persists it on the intent; the client wrapper then called
+`activateSubscription` with `{ plan, paymentRef }` and it went no further.
+
+The repair restores the provenance rather than hardcoding a bigger number:
+
+    paymentRef (crypto-minted server-side)
+      -> payments/{ref}   uid === caller, status === COMPLETE  (already enforced)
+      -> .intentRef       written server-side
+      -> paymentIntents/{ref}.billingCycle
+
+`monthly` grants one calendar month; `annual` grants twelve. No client cycle field was added, so
+**the browser cannot select its own entitlement cycle** — a request that names a cycle is ignored,
+proven inert in both directions. The primary activator and the reconciliation backstop compute the
+same period, so the recovery path cannot grant a different entitlement from a normal activation.
+
+Fails closed. An unknown or missing cycle **throws** in primary activation. In reconciliation it is
+**skipped, counted in `skippedNoCycle`, and reported** in the run summary and completion log, so the
+gap is visible rather than an invisible no-op repeated on every daily run.
+
+`SUB_PLAN_DAYS = 30` is removed. It was labelled *"canonical entitlement length"* and was neither;
+a dead constant making that claim is how the defect finds its way back.
+
+### What this is NOT
+This does **not** add expiry enforcement. `subscription-catalog.entitlementFor` gates on `status`
+and never compares `expiresAt` to now — a subscription with a past `expiresAt` and `status: active`
+still entitles, exactly as before. A4 corrects **the date recorded**, nothing else. Access gating is
+unchanged and pinned as a regression.
+
+`subscriptions/{uid}.expiresAt` remains the expiry field. No competing `currentPeriodEnd` was
+introduced — `subscription-authority` resolves `sub.expiresAt || sub.currentPeriodEnd`, so a second
+field would shadow the first with a different value.
+
+`31 Jan + 1 month = 3 March` is pre-existing `sub-billing.js` behaviour, adopted unchanged and
+pinned as a test vector. Changing date semantics is a product decision, not this repair.
+
+### Recorded separately, not repaired — a third writer, found after landing
+`webhookIntasend` **does** write subscription expiry, at `functions/index.js:8219`. It reads the
+payment intent, writes `billingCycle: intent.billingCycle || "monthly"` onto the subscription
+document — and then sets `expiresAt` to a flat thirty days, ignoring the cycle it is holding in the
+same object literal.
+
+The two writers do not merely disagree; under the guards as written they can **cancel the repair**:
+
+- the webhook writes when `!subData || subData.paymentRef !== apiRef`;
+- `activateSubscription` returns early, writing nothing, when
+  `existing.data().paymentRef === paymentRef`.
+
+So if the webhook lands first, it records thirty days, and the corrected activator then treats the
+subscription as already activated and does not overwrite it. That is code-path reasoning from the
+committed source, **not field-proven ordering** — no live sequence has been observed. It is stated
+as a risk to be resolved by A4-F3, not as a measured production outcome.
+
+This was missed during A4 certification because the suite's assertion
+*"webhookIntasend writes no subscription expiry"* searched only the first 40,000 characters of the
+handler, and the write sits 41,072 characters in. The assertion had no positive control, so it
+passed because the detector could not reach the code rather than because the code was absent —
+`feedback_empty_result_needs_a_positive_control`, committed unnoticed in `b4c9495`. **That
+assertion should not be trusted until it is repaired under A4-F3.** It is left in place here rather
+than quietly amended, because the landed certification is evidence and is not edited after the fact.
+
+`sellerSubscriptions` at `functions/index.js:4809` uses `Number(months) * 30 * 86400000`. That is a
+different collection and it does scale with a duration, so it is not the same defect; whether
+30-day months are acceptable there is untouched and unexamined by A4.
+
+### Not done, deliberately
+- **Historical intents with no `billingCycle` are NOT back-filled.** They are skipped and counted,
+  never guessed. Defaulting them to `monthly` would recreate the defect for exactly the records
+  most likely to lack the field. See A4-F1.
+- **`email-triggers.js` is unmodified.** It keys expiry reminders off `expiresAt`, so annual
+  reminders now become eligible near the genuine annual expiry instead of at thirty days. That is
+  the correct consequence of recording a true expiry, but whether the reminder *cadence* still
+  suits a twelve-month term is a separate question. See A4-F2.
+- **`webhookIntasend` is unmodified.** See A4-F3.
+
+### Follow-ups (not part of A4, none implemented)
+- **A4-F1 — historical intents missing `billingCycle`.** Decide whether and how existing
+  `paymentIntents` with no recorded cycle should be back-filled, and what evidence a back-fill
+  would need. Currently surfaced through `skippedNoCycle` and the `entitlement_gap` alert.
+- **A4-F2 — annual expiry reminder cadence.** Review whether `email-triggers.js` reminder timing
+  remains appropriate now that annual subscriptions carry real ~12-month expiry dates.
+- **A4-F3 — the third writer, and the certification that missed it.** Bring
+  `webhookIntasend:8219` onto the same intent-derived period as the other two writers, settle which
+  writer is authoritative when both fire for one payment, and repair the unsound
+  `webhookIntasend` assertion in `scripts/test-subscription-entitlement.js` by scoping it to the
+  whole handler and pairing it with a positive control. Until then, **A4 should not be described as
+  having fixed subscription expiry platform-wide.**
+
+### Certification
+`scripts/test-subscription-entitlement.js` — 77/0. Both repaired handlers are extracted from the
+shipped files and **executed** against stubs, so what is asserted is the expiry each writer actually
+computes, not a restatement of it. Nine sabotage dimensions each turn the suite red on their own:
+the 30-day hardcode restored, cycle read from the request, missing cycle defaulted, annual as 365
+days, expiry moved to a new field, intent looked up by the wrong ref, backstop reverted, skip
+uncounted, cycle leaking into the stored plan id.
+
+Scope of that certification: the two repaired writers. It does **not** cover `webhookIntasend`, and
+its one assertion about that handler is unsound as described above.
+
+Verified self-contained: the delta applies to a pristine `HEAD` and certifies 77/0 with no other
+working-tree change present. Regressions green — `test-entitlement-subscription` (45),
+`test-entitlement-engine` (24), `test-free-entitlement` (100), `test-entitlement-digital` (15),
+`test-subscription-commission-classification` (21), `test-subscription-consistency`,
+`test-webhook-subscription-credit-guard`.
+
+### Files affected
+- `functions/index.js` — `_subPeriodEnd()`; `activateSubscription` derives expiry from the intent
+- `functions/payment-reconciliation.js` — `_periodEnd()`; heal path derives the cycle, skips and
+  counts unknowns; `SUB_PLAN_DAYS` removed
+- `scripts/test-subscription-entitlement.js` — new
+
+### Database / API / Security changes
+No schema change: `expiresAt` is corrected in place, and the subscription document shape is
+otherwise identical. No API change — `activateSubscription`'s request and response shapes are
+unchanged. Security: entitlement duration is no longer influenceable by the caller **on the two
+repaired paths**.
+
+### Deployment
+**NOT DEPLOYED.** Both changed files are Cloud Functions and deployment is held by the active
+Functions / Artifact Registry freeze. No deploy was attempted. State: COMMITTED → NOT DEPLOYED.
+
+### Breaking changes
+None for callers. One deliberate behaviour change in the recovery path: intents with no recorded
+`billingCycle`, previously healed to thirty days, are now skipped and reported instead.
+
 ## 2026-09-20 (87) — C2 follow-up: the regression baseline was HEAD, and HEAD moved
 
 **21/0 restored. Test-only; no source, rate or generated file changed.**
