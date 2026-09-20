@@ -23,6 +23,17 @@
  * stay compatible with) these fields simply do not exist unless a verified
  * pos_till_sale intent produced them.
  *
+ * `purpose` is carried from the intent's TOP LEVEL, not from metadata, and in
+ * BOTH branches. createPaymentIntent's subscription branch writes no `metadata`
+ * at all, so that payment takes the legacy_meta branch below — carrying purpose
+ * only on the intent branch would miss precisely the case it exists to answer.
+ * It is null whenever no intent was found, so a reader must treat "no purpose"
+ * as "unknown", never as "not a subscription".
+ *
+ * This reports the purpose; it does NOT re-source `category`. The two are
+ * different questions — "what IS this payment" vs "which commission RATE
+ * applies" — and §2's rate-vocabulary finding still forbids the second.
+ *
  * Deliberately OUT OF SCOPE (docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md §2-3):
  * commission `category` (a real, evidenced regression risk — see the doc),
  * and the cosmetic/logistics fields (hub, sellerName, buyerName, address,
@@ -37,6 +48,7 @@ function mergeAttribution({ intent, legacyMeta }) {
     const m = intent.metadata;
     return {
       source:       'intent',
+      purpose:      intent.purpose || null,
       sellerUid:    m.sellerUid || null,
       providerId:   m.providerId || null,
       orderId:      m.orderId || null,
@@ -54,6 +66,10 @@ function mergeAttribution({ intent, legacyMeta }) {
      ALWAYS null here, never sourced from legacyMeta (see header). */
   return {
     source:       'legacy_meta',
+    /* From the intent when one exists but carries no metadata — the
+       subscription case. Never from legacyMeta: a purpose the client named
+       would be exactly the authority this field exists to replace. */
+    purpose:      (intent && intent.purpose) || null,
     sellerUid:    legacyMeta.sellerUid || null,
     providerId:   legacyMeta.providerId || null,
     orderId:      legacyMeta.orderId || null,

@@ -7709,7 +7709,30 @@ exports.webhookIntasend = onRequest(
          the two agree. Inventing a fee here would create a number no other
          system knows about. Recorded as a gap for Finance to define. */
       try {
+        /* C1 — the exclusion above is a MONEY-SAFETY guard, and until now its
+           only input was `category`, which initiateSTKPush copies verbatim out
+           of the browser's request (index.js ~6451). A subscriber whose client
+           sent category "default" was therefore credited most of the fee they
+           had just paid us: nothing else in this chain could stop it, because
+           _sellerId falls back to payData.uid (the payer) and the net is ~95%
+           of the amount.
+
+           `attribution.purpose` is server-authored — createPaymentIntent is the
+           only writer of paymentIntents and it is the sole place 'subscription'
+           is set. No PURPOSES registry key collides with it, so this term can
+           never fire for a non-subscription payment.
+
+           ADDITIVE ON PURPOSE. The category terms stay, so behaviour is
+           unchanged for every non-subscription payment and for a subscription
+           whose intent could not be read (resolveFinancialAttribution fails
+           open, returning purpose null). This can only ever suppress MORE
+           credits, never fewer — and whether that fail-open posture is right is
+           a separate question that must not be settled inside this repair.
+
+           This does NOT re-source the commission RATE: `category` still feeds
+           RATES/ALIASES untouched, per WEBHOOK_ATTRIBUTION_AUTHORITY.md §2. */
         const _isSubscription =
+          attribution.purpose === "subscription" ||
           category === "subscription" || payData.meta?.category === "subscription";
         /* For a service booking the earner is the PROVIDER (meta.providerId), not the
            paying customer (payData.uid). Scoped to bookings so marketplace/POS flows,

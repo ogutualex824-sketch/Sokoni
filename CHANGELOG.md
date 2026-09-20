@@ -1,3 +1,83 @@
+## 2026-09-20 (85) — C1: a subscriber's own browser could authorise crediting their own subscription fee
+
+**16/0 · sabotage RED on both mutations · 39 insertions, 0 deletions · no rate, payout or activation change.**
+
+`webhookIntasend` excludes subscription payments from the FinOS merchant wallet credit, and the
+reasoning in the code is right: a subscription flows merchant → platform, so `payData.uid` is the
+merchant *paying us*, and crediting them the "net" hands back most of the fee. But the guard's only
+input was `category`, which `initiateSTKPush` copies **verbatim out of the browser's request**
+(`index.js` ~6451).
+
+Nothing else in the chain could stop it. `_sellerId` falls back to `payData.uid` — the payer — and
+`_netCents` is ~95% of the amount, because `"subscription"` is unmapped in `RATES` (tracked
+separately as C2). A merchant paying KES 9,990 for an annual plan, on a client that sent
+`category: "default"`, would have been credited ~KES 9,490.
+
+The authoritative signal was already in hand: `resolveFinancialAttribution` reads
+`paymentIntents/{intentRef}` at `index.js:7587`, 124 lines **before** the guard, and
+`mergeAttribution` discarded `purpose`. No new read was required.
+
+### Why `purpose` is carried on BOTH branches
+`createPaymentIntent`'s subscription branch writes no `metadata`, so a subscription intent takes
+`mergeAttribution`'s `legacy_meta` branch. Carrying `purpose` only on the intent branch would have
+missed precisely the case this exists for — and would have read green. That is SAB-2 below.
+
+### Deliberately NOT changed
+The commission **rate** lookup. `category` still feeds `RATES`/`ALIASES` untouched, per
+`docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md` §2, whose live-evidence finding is that purpose keys
+resolve to `RATES.default` and would silently drop `digital_download` from 10% to 5%. That decision
+concerns `category` as a *rate* source; this repair touches only the *boolean guard*. Same
+identifier, two mechanisms.
+
+Also unchanged: the fail-open posture of `resolveFinancialAttribution`. The repair is **additive**
+(an OR term), so an unreadable intent degrades to today's behaviour rather than to "credit it".
+Whether fail-open is right for a money guard is a separate question and was not settled here.
+`healthcare_subscription` is a registered purpose that does **not** match; whether it flows the
+same way is unadjudicated and deliberately out of scope.
+
+### Files affected
+- `functions/payment-attribution.js` — `purpose` carried from the intent's top level, both branches
+- `functions/index.js` — one OR term on `_isSubscription`
+- `scripts/test-webhook-subscription-credit-guard.js` (new)
+
+### Database changes
+None. No schema, no collection, no index.
+
+### API changes
+`mergeAttribution()` gains a `purpose` field (`null` when no intent). Additive; existing readers
+are unaffected — `scripts/test-webhook-attribution.js` still 34/0.
+
+### Security changes
+A money-safety guard stops depending on client-supplied metadata. Strictly additive: it can only
+ever suppress *more* credits, never fewer, so no non-subscription payment changes behaviour.
+
+### Certification
+`scripts/test-webhook-subscription-credit-guard.js` — 16/0, extracts the guard expression from the
+shipped `index.js` and evaluates the real `mergeAttribution`.
+
+- **S1 sabotage** subscription intent, browser sends `category:"default"`, net > 0 → **REFUSED**
+- **N1 negative** `product_order`, `category:"product"`, net > 0 → **still CREDITED**
+- **N2** honest client → refused before *and* after; retained as a non-discriminating regression only
+- Inverting control: the intent branch is proven separately from the `legacy_meta` branch
+- A harness negative control proves the suite can detect failure at all
+
+Sabotage cycle: removing the OR term → **exit 2** (extraction control refuses to certify a tree
+without C1). Removing `purpose` from the `legacy_meta` branch alone → **RED**, with S1 reporting
+`got CREDITED` while the intent-branch case still passes. Bytes restored exactly.
+
+### Ordering constraint — this suite expires
+S1 discriminates **only while `"subscription"` is unmapped in `RATES`.** Once C2 lands,
+`sokoniCut === amount`, so `_netCents === 0` and the `_netCents <= 0` branch suppresses the credit
+regardless of this guard — S1 would then pass for the wrong reason. **C1 had to be certified before
+C2, and was.**
+
+### Breaking changes
+None.
+
+### Deployment
+**Blocked.** Cloud Functions change; function deploys are frozen by the Artifact Registry
+investigation. Production keeps the defect until that lifts.
+
 ## 2026-09-20 (84) — TWO STALE CALLERS: a dead finance page and an email-keyed exemption
 
 **53/0 across two certifications · sabotage cycles red on each · claim-auth gate 1 → 0.**
