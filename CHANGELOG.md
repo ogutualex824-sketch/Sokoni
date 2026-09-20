@@ -1,3 +1,142 @@
+## 2026-09-21 (124) — An accepted employment can finally be ended
+
+**Implementation · COMMITTED `5ed6e91` + `70d14e8` · certified and sabotaged · UNEXPORTED · NOT DEPLOYED.**
+
+Stages 4 and 5 of five. The occupancy claim mechanism #1 created at acceptance has been
+**unreleasable since `0a8b8ae`**, by design: no code path terminated an ACTIVE employment, so the uid
+it held could never be given back. `#8` is that path.
+
+```
+active / working  ──terminate──▶  terminated / null
+
+ONE TRANSACTION   hrStaff      employmentStatus=terminated · workStatus=null · uid RETAINED
+                  claim        DELETE  {businessId}_{uid}
+                  events       employment_terminated
+
+PRECONDITIONS     1  the employment is ACTIVE
+                  2  a uid EXISTS
+                  3  the claim EXISTS and its staffId IS THIS EMPLOYMENT
+```
+
+### READ-THEN-VERIFY, never a bare delete
+
+> `create()` refuses a document that already exists. **`delete()` on an absent document — or on one
+> belonging to another employment — SUCCEEDS SILENTLY.** A handler that blind-deleted
+> `{businessId}_{uid}` would release someone else's occupancy **and report success**.
+
+A successful `delete()` is not proof that the correct claim existed. Only the `staffId`
+correspondence is, which is why precondition 3 reads the claim inside the transaction and compares it
+before touching anything.
+
+### `terminationId`, minted before the transaction
+
+Per entry (123). The callback may execute many times; minting it inside would make event identity
+depend on Firestore's retry behaviour — **and the defect would be invisible in testing, because a
+transaction that never contends never retries.** The certification asserts its *position* in stripped
+source, with a positive control proving the detector fires on the forbidden placement.
+
+### A separate module, and deliberately unexported
+
+`employment-invites.js` is named for invitations, and termination is not one — §4 forbids extending
+`revokeEmploymentInvite`, which sees only a **pending** employment.
+
+> **`#8` is NOT re-exported from `functions/index.js`** — and neither is any callable of #1, #3 or
+> #4. The entire employment workstream is built and certified but **unwired**. `#8` is therefore
+> unreachable in production **by convention, not by omission**; wiring it up is a separate decision.
+
+### Certified — 53/0, emulator-backed
+
+The legitimate path first, then the five refusals the contract names — each asserted from **Firestore
+state**, and each proving **which gate refused**:
+
+```
+already terminated · missing uid · missing claim ·
+mismatched claim.staffId · a claim owned by another employment
+```
+
+Plus: the released uid is re-acquirable by mechanism #1's `create()`; a business admin is refused
+while a platform admin may act (§2a); a **forged `businessId` in the request is ignored**, because
+authority is record-anchored; and `#8` is shown not to touch `on_leave`, `suspended`, `shopEmployees`,
+`shopId` or payroll.
+
+### Sabotage — 14/14, restore byte-identical
+
+RED on: `terminationId` inside the callback · the claim blind-deleted · the ownership comparison
+dropped · the existence check dropped · the ACTIVE gate dropped · the uid gate dropped · uid cleared ·
+`workStatus` left set · the claim not deleted · the event not written · an admin allowed to
+terminate · `businessId` taken from the request.
+
+### THE FIRST SABOTAGE RUN FOUND FOUR DEFECTS — IN THE PROOF SURFACE, NOT THE CODE
+
+**M5, M6, M12 went green.** After a successful termination **the claim is also gone**, so a replay hit
+the *missing-claim* guard and threw the **same `failed-precondition`** the suite asserted. The suite
+could not tell which gate fired. Same for `uid: null` → `claimId(biz, '')` → absent. And no fixture
+supplied a forged `businessId`, so M12 was inert.
+
+Every refusal now asserts its **message**, and a stranger who owns another organization and names it
+is refused.
+
+**Then M4 was reclassified as inert — and that was wrong.**
+
+> It is inert only against a suite checking the **code** alone. Once each refusal names its gate,
+> dropping the existence check changes the message from *"holds no occupancy claim"* to *"belongs to
+> a different employment"*, and the contract's five **named** refusals stop being distinguishable.
+> **Defence in depth that yields a different OBSERVABLE is not inert.**
+
+That is the third time in this workstream that hardening a suite converted an "inert vector" into a
+caught one — T4 and T7 in entry (113), now M4. The rule worth carrying: **an inert-vector verdict is
+only as good as the observable the suite happens to check.** Reclassifying on the first result risks
+freezing a suite's blind spot into the record as a property of the code.
+
+### Regression — twelve suites
+
+```
+employment-invites 98 · events 95 · events-rules 26 · invites-rules 40 ·
+uid-claim-race 46 · payroll-merchant-authority 111 · payroll-record-authority 69 ·
+payroll-staff-contract 29 · shop-employee-authority 53 · subscription-entitlement 76 ·
+merchant-authority-provenance 67 · employment-termination 53
+```
+
+### Files affected
+```
+functions/employment-termination.js        NEW  +219
+scripts/test-employment-termination.js     NEW  +328
+docs/adr/ADR-035-...                       +21 / −15   (70d14e8, stage table + 4 stale passages)
+```
+
+**Pure addition on the code side: no tracked file was modified.** `index.js`,
+`employment-invites.js` and `firestore.rules` are untouched — `#8` imports `CLAIMS` and `claimId`
+rather than editing their module.
+
+### Database / API / Security changes
+**Database:** deletes `employmentUidClaims/{businessId}_{uid}` on termination — which is what makes
+the uid re-employable. **API:** one new callable, **unexported**. **Rules:** none; the claim is
+already CF-only. **Indexes:** none.
+
+### Migration
+**None.** Production `hrStaff` is empty.
+
+### Deployment
+**NOT DEPLOYED**, and not deployable without an export decision. Functions and Cloud Run remain
+frozen under the Artifact Registry forensics notice.
+
+### Breaking changes
+None.
+
+### The five stages, closed
+
+```
+1  DOCUMENTATION   b74bca2   #8 assigned; numbering reconstructed
+2  READ-ONLY GATE  evidence  3 hrStaff writers / 0 deletes · 1 claim creator / 0 deleters
+3  CONTRACT        d8eef5e   terminationId resolved
+4  IMPLEMENTATION  5ed6e91
+5  CERTIFICATION   5ed6e91   53/0 · sabotage 14/14 · 12 suites green
+```
+
+**Still absent, and still nobody's:** `#5` and `#6` (work status, payability), `#7` (shop
+assignment), reinstatement and `uid_rebound`. `#5` and `#7` remain **UNRESOLVED** identifiers and are
+not available for new work.
+
 ## 2026-09-21 (123) — The schema required an input the contract never supplied
 
 **Contract · COMMITTED `d8eef5e` · documentation only · `#8` STILL ABSENT · NOT DEPLOYED.**
