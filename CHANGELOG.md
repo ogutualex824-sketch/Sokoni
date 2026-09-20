@@ -1,3 +1,133 @@
+## 2026-09-20 (103) — A lifecycle transition must not hide inside an edit
+
+**Documentation only · COMMITTED `41bce65` · NO implementation authorized · NOT DEPLOYED.**
+
+The Mechanism #4 contract, closed. A read-only design pass against the repo's existing append-only
+prior art found three gaps in ADR-035 §6 as first written.
+
+### 1 — Suspend and leave had no event
+
+Both are owner actions in §5; neither appeared in §6's seven events. The vocabulary is now **twelve**,
+one per lifecycle transition:
+
+```
+employment_established   invite_sent          invite_accepted     invite_revoked
+uid_rebound
+leave_granted            leave_ended
+employment_suspended     suspension_lifted
+employment_terminated    employment_reinstated
+record_edited
+```
+
+`record_edited` is **reserved for ordinary employment data** — position, department, grossSalary,
+startDate, phone, email. **FORBIDDEN:** absorbing a lifecycle transition into it.
+
+> An auditor asking *"who suspended this employee?"* or *"when did the leave start and end?"* must
+> not have to infer the answer from which fields happened to change inside a generic edit.
+
+### 2 — Scheduled leave ends with no human performing it
+
+The two-axis model makes leave restore itself when its window closes, so `leave_ended` has no actor
+in the ordinary sense. **FORBIDDEN:** writing a sentinel such as `"system"` into `changedBy`, which
+is a Firebase uid field. The actor is structured instead:
+
+| transition | `actorType` | `changedBy` | `changedVia` |
+|---|---|---|---|
+| owner suspends | `human` | owner uid | `owner` |
+| platform admin terminates | `human` | platform uid | `platform` |
+| scheduled leave completes | `system` | **`null`** | `system` |
+
+`changedVia` is **not re-derived from the token** — it is the `via` that `resolveMerchantAccess`
+already returned. Mechanism #2 decides it once; the history records what was decided. Without that
+mechanism this field would have had to be guessed, which is exactly the accident the 2a ratification
+made unacceptable.
+
+### 3 — An auto-id cannot make a retry idempotent
+
+The transition's identity **is** the document key, discriminated by the id of the thing acted on
+rather than by a counter:
+
+```
+{staffId}_employment_established
+{staffId}_uid_rebound_{transitionId}
+{staffId}_leave_{leaveId}_granted          {staffId}_leave_{leaveId}_ended
+{staffId}_suspension_{suspensionId}_started   {staffId}_suspension_{suspensionId}_lifted
+```
+
+Written with `create()`, or `set()` **inside the same transaction as the state change**, so the
+record and its event land together or not at all. `bookingEvents` already returns `{ ref, payload }`
+rather than writing, for exactly this reason.
+
+**FORBIDDEN:** `get()` + `set()` to establish uniqueness. Eight concurrent calls against that shape
+once produced eight ledger rows.
+
+### Both axes, so a transition is unambiguous
+
+```
+salary edit    { active, working }   → { active, working }      identical, and correct
+leave granted  { active, working }   → { active, on_leave }
+suspended      { active, working }   → { active, suspended }
+terminated     { active, suspended } → { terminated, null }
+```
+
+A single status field could not distinguish a suspension from a termination.
+
+### Reads: a callable for the organization, a rule for the employee
+
+**FORBIDDEN:** an owner read arm in Firestore rules. `resource.data.businessId == request.auth.uid`
+is the `merchantId == auth.uid` mistake again — true for exactly one production business.
+Organization history goes through a callable that calls `assertMerchantAccess` first.
+
+```
+create, update, delete : false                          server-only, Admin SDK
+read                   : isAdmin() || newUid == uid
+```
+
+**Never `previousUid`.** A person whose binding was replaced would otherwise keep reading the
+employment's *future* history. Pre-acceptance events carry no `newUid` and are admin-only by
+construction — correct, because there is no employee yet.
+
+### Retention
+
+**Indefinite. Deletion forbidden, including for administrators.** `adminLog` permits
+`allow delete: if isSuperAdmin()`; that precedent is deliberately **not** followed, for the same
+reason 2a's platform authority is backed by an audit record rather than by a refusal. A history that
+can be pruned is weaker than the records it witnesses.
+
+### Known constraint, carried not solved
+
+**§Open 4a** — the two composite indexes this needs (`businessId` + `at desc`, `staffId` + `at desc`)
+land in a file already holding **408**, and index deploys are independently contested.
+
+**4a blocks exercise, not implementation.** Mechanism #4 can be built and certified without those
+indexes; it simply cannot be run against production until the index question is resolved on its own
+terms.
+
+### Prior art this follows rather than reinvents
+
+`bookingEvents` — top-level, `allow create, update, delete: if false`, scoped reads, and a builder
+returning `{ ref, payload }` so the event can join the state change's transaction. ADR-010 already
+forbids *"an audit entry without a **reason** — what changed without why answers the easy question"*
+and already notes that *rules cannot enforce "and also write an event"*, which is why writes are
+CF-only.
+
+Counter-example deliberately **not** followed: `auditLogs` is client-creatable
+(`allow create: if isAuthed() && request.resource.data.uid == request.auth.uid`). A subject who can
+write their own audit trail has no audit trail.
+
+### Files affected
+- `docs/adr/ADR-035-employment-and-identity-binding.md` — §6 rewritten, open item 4 settled, status
+  line updated
+
+### Database / API / Security changes
+None. No code, no schema, no Firestore rules, no indexes. A contract only.
+
+### Deployment
+**NOT DEPLOYED.** Live remains `2fa2074` / `v635`.
+
+### Breaking changes
+None.
+
 ## 2026-09-20 (102) — The resolver stopped throwing away how it decided
 
 **Provenance 64/0 · sabotage 18/18 · procurement 53/57 → 59/59 · COMMITTED `0eee8e4`, NOT DEPLOYED.**
