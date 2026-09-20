@@ -1,3 +1,123 @@
+## 2026-09-20 (111) — Removing a shop employee revokes nothing at the till, and the census that says not yet
+
+**Finding · read-only · NO repair authorized · NOT DEPLOYED.**
+
+Found while mapping mechanism #7's surface for the employment-termination design. It is **not** part
+of that design and must not be folded into it: `hrStaff` employment, `shopEmployees` assignment and
+POS till authorization are three different things, and one function currently crosses from the
+second into the third.
+
+### OBSERVED — two vocabularies, and the gate reads the one nobody writes
+
+```
+index.js:5663          sole writer    active: true      ← no status field
+shop-employees.js:488  removal        active: false     ← no status field
+
+shop-employees.js:138  resolveShopAccess      e.active === false   ✓ honours removal
+shop-employees.js:272  getMyShopWorkspaces    e.active === false   ✓ honours removal
+merchant-identity.js:212  resolveActor        _employmentActive(emp)
+merchant-identity.js:64       → reads rec.status ONLY, and `if (!st) return true`
+```
+
+The shipped predicate's own comment reads *"Absent status is treated as active only for records that
+predate the field."* **No writer has ever written the field**, so every record predates it. The
+comment describes a migration that never happened and reads as a safeguard.
+
+`removeShopEmployee` is a **soft** removal — owner-gated, refuses self-removal, sets
+`active: false`, `removedAt`, `removedBy`.
+
+### PROVEN
+
+**A record with `active: false` and no `status` satisfies `_employmentActive`.** Established by
+**executing the shipped predicate**, extracted from source rather than paraphrased:
+
+| input | shipped result |
+|---|---|
+| `{}` | **active** |
+| `{status:'active'}` | active |
+| `{status:'removed'}` | inactive |
+| `{active:false}` | **active — the flag is ignored** |
+
+**The path from that predicate to money is real.** `pos-zero-friction.js:444` calls
+`resolveActor(cashierId, merchantId)` and refuses a sale only when `!ok`; `resolveActor` gates on
+`_employmentActive` at `merchant-identity.js:212`.
+
+**It is LATENT.** Production census, 2026-09-20:
+
+```
+shopEmployees   0
+shopInvites     0
+hrStaff         0
+users         100     shops 3     ← positive control: the reader works
+```
+
+Zero records, so no removed employee can reach POS authorization today. The September 6 census cited
+in the code reached the same conclusion, but it is two weeks old and predates this branch — this is
+**re-measured, not inherited**.
+
+### UNPROVEN
+
+Anything requiring runtime execution against deployed functions. This measured **data against the
+shipped predicate**; it did not invoke `removeShopEmployee` or the POS checkout. Reachability is
+established by reading the call path, not by exercising it.
+
+**Also unproven: whether the two readers are *meant* to disagree.** One authority for workspace
+listing and another for till authority is a coherent design. The divergence may be two independently
+correct decisions meeting badly rather than one broken one — and that is precisely why this is a
+finding awaiting adjudication and not a bug with an obvious patch.
+
+### Methodology boundary — so a future reader does not over-read this
+
+```
+read-only            the only operations were .get()
+production           sokoni-aeb26, ADC
+refused emulator     the census exits 1 if FIRESTORE_EMULATOR_HOST is set
+shipped predicate    _s / ACTIVE_EMPLOYMENT / _employmentActive / EMPLOYEE_ROLES
+                     EXTRACTED from merchant-identity.js and executed
+                     controls on the extraction; a failed match ABORTS the run
+empty-result control users/shops/shopInvites/hrStaff counted, so "zero" means
+                     zero and not an unreadable collection
+no invocation        no deployed function was called
+no mutation          nothing written, nothing deployed
+```
+
+The extraction aborted once, on a regex that missed `function _employmentActive(rec)` for want of a
+space. It **failed closed** rather than proceeding on a paraphrase — which is the only reason the
+verdict above is worth anything.
+
+> **"The code path is proven reachable in principle" is not "a current production shop employee is
+> affected."** Nobody is affected today. The defect arms on the first add-then-remove.
+
+### NOT YET DECIDED
+
+`_employmentActive` is **unchanged**. No `status` field has been added to any record. The finding is
+**not** folded into mechanism #7.
+
+The open question is not *how do we make the two readers agree* — it is **which representation is
+authoritative for till employment**. Teaching `_employmentActive` to read `active` would leave two
+vocabularies standing and make the next reader's choice a coin flip. That is the same class of
+question as `employmentStatus` naming two unrelated models (entry 108) and `payouts` carrying two
+status vocabularies.
+
+A separate adjudication slice will answer it, producing: OBSERVED · PROVEN · UNPROVEN · INTENDED
+AUTHORITY · REQUIRED REPAIR · MIGRATION AND COMPATIBILITY CONSEQUENCES. **This census is its baseline
+evidence.** Its outcome does not automatically become #7, and #5/#7 stay formally unfrozen until it
+completes — the shop finding may turn out to have no bearing on the employment mechanism, and
+establishing that from evidence is what the slice is for.
+
+### Files affected
+None. Read-only investigation; the census script is a scratchpad artifact, not repo code.
+
+### Database / API / Security changes
+None written. **Security finding recorded, not repaired:** a soft-removed shop employee still
+satisfies the till-authorization gate. Latent at zero records.
+
+### Deployment
+**NOT DEPLOYED.** Nothing was changed to deploy.
+
+### Breaking changes
+None.
+
 ## 2026-09-20 (110) — Termination frozen before a handler exists, and a uid that outlives the job
 
 **Documentation only · COMMITTED `f6ea70e` · NO implementation authorized · NOT DEPLOYED.**
