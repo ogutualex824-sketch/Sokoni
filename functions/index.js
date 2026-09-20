@@ -8215,13 +8215,51 @@ exports.webhookIntasend = onRequest(
             const subRef  = db.collection("subscriptions").doc(intent.uid);
             const subSnap = await subRef.get();
             const subData = subSnap.exists ? subSnap.data() : null;
-            if (!subData || subData.paymentRef !== apiRef) {
-              const expiresAt = new Date(Date.now() + 30 * 86400000);
+
+            /* ── ENTITLEMENT FOLLOWS THE PURCHASED CYCLE (A4-F3D) ─────────────
+               This path used to write `Date.now() + 30 * 86400000` while holding
+               intent.billingCycle in the very same object literal — so an annual
+               purchase recorded a month and stamped `billingCycle: "annual"` on
+               top of it.
+
+               Correcting activateSubscription alone could not fix that. This
+               writer runs FIRST on the normal path: it is the handler that sets
+               payments/{ref} to COMPLETE, which is the precondition
+               activateSubscription requires, and it continues to here in the same
+               invocation. The browser only calls activateSubscription after the
+               confirmation it is waiting for, behind a human click — by which
+               time this document exists, so activateSubscription matches its own
+               paymentRef and returns without writing, and reconciliation declines
+               because a document exists at all. Whatever this writer records is
+               what the merchant gets.
+
+               Same period function as activateSubscription, in this same file, so
+               the two cannot drift apart.
+
+               FAILS CLOSED, and skips rather than throwing: a refusal is not an
+               error, and routing it through the catch below would log it as
+               "activation failed" and hide it among real faults. Writing nothing
+               leaves the payment COMPLETE with no entitlement, which the
+               reconciliation sweep already reports as an entitlement_gap. That is
+               a visible gap; a silently defaulted month is an invisible wrong
+               answer. */
+            const cycle      = intent.billingCycle;
+            const cycleKnown = cycle === "monthly" || cycle === "annual";
+            if (!cycleKnown) {
+              console.error("[webhookIntasend] subscription activation SKIPPED — intent records no billing cycle",
+                { ref: apiRef, uid: intent.uid, plan: intent.planId,
+                  billingCycle: intent.billingCycle === undefined ? null : intent.billingCycle });
+            }
+            if (cycleKnown && (!subData || subData.paymentRef !== apiRef)) {
+              const expiresAt = _subPeriodEnd(new Date(), cycle);
               await subRef.set({
                 uid:          intent.uid,
                 plan:         intent.planId,
                 planName:     intent.planName || intent.planId,
-                billingCycle: intent.billingCycle || "monthly",
+                /* The guard above has already established this is monthly or
+                   annual. The old `|| "monthly"` default is gone: it made an
+                   unknown cycle indistinguishable from a purchased monthly one. */
+                billingCycle: cycle,
                 status:       "active",
                 paymentRef:   apiRef,
                 amountPaid:   amount,
