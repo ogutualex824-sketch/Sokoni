@@ -1,7 +1,8 @@
 # ADR-035 — Employment and identity binding
 
 **Status:** Accepted · **not implemented** · 2026-09-20 · **amended 2026-09-20** (§2 resolver
-shape + `via` taxonomy, after a read-only authority trace; §8 records a finding this ADR does not repair)
+shape + `via` taxonomy, after a read-only authority trace; §8 records a finding this ADR does not
+repair) · **2a decided 2026-09-20** — platform admin eligible, taxonomy frozen at four values
 **Supersedes nothing. Constrains:** `functions/hr-payroll.js`, `hrStaff`, and any future AdminOS
 employee surface.
 **Depends on:** [[ADR-001]] (authorization comes from claims, never from a Firestore field),
@@ -130,7 +131,7 @@ This is contractual, not an implementation detail.
 | `owner` | `businesses/{merchantId}.ownerId == uid`, **document read** | ✅ eligible |
 | `admin` | `adminUids[]` contains uid | ❌ not eligible |
 | `self` | `merchantId === auth.uid`, **no document read at all** | ❌ **never eligible** |
-| `platform` | `token.admin` or `token.superAdmin` | ⚠️ must be explicitly defined — see below |
+| `platform` | `token.admin` **or** `token.superAdmin` — the two are **not** distinguished | ✅ eligible · **ratified 2026-09-20** |
 
 **The `self` arm is the one that matters.** The shipped primitive returns on `merchantId === uid`
 *before reading any document*, so it cannot confirm the organization exists. That is correct and
@@ -143,12 +144,37 @@ it.
 before establishing, rebinding, suspending, terminating or reinstating. Ownership of an
 organization that was never created is not ownership.
 
-> **Open — platform-admin employment semantics (§Open 2a).** The capability table above records
-> platform admin as ✅ for the five owner-only acts. That is the *provisional* reading and it is
-> now explicitly under question: a platform admin establishing employment decides who a merchant
-> pays. Note also that `merchant-authority` does not currently distinguish `admin` from
-> `superAdmin` — both take the same bypass — so if the answer differs between them, the taxonomy
-> needs a fifth value. **Until this is decided, the ✅ in that table is not ratified.**
+#### 2a — platform-admin employment authority · **DECIDED 2026-09-20**
+
+**A platform administrator MAY perform all five owner-only employment acts**, and **`admin` and
+`superAdmin` carry the same authority** — one bypass, no fifth taxonomy value. The ✅ in the
+capability table is **ratified**, and the `via` taxonomy is **frozen at four values**.
+
+Decided on house precedent. Two existing owner-only gates already admit platform admins, and the
+closest analogue governs staff management — nearly the same act:
+
+```js
+// shop-employees.js — "Owner (or platform admin) only — for staff management."
+if (r.via !== 'owner' && r.via !== 'admin') throw permission-denied;
+
+// shared/errors.js assertOwner — "Admins bypass ownership check."
+const isAdmin = req.auth.token?.admin || req.auth.token?.superAdmin;
+```
+
+Both also treat `admin` and `superAdmin` identically, so the non-distinction is a codebase-wide
+convention rather than an oversight in `merchant-authority`. Diverging here would have made payroll
+the single exception, which is how parallel authority models start.
+
+**The asymmetry was weighed and did not change the answer.** Shop staff management grants *access*;
+employment establishment creates a *salary obligation*. That is a real difference, and it is
+answered by §6 rather than by refusing the act: **every employment event records `changedBy` and a
+`reason`**, so a platform-actor act is distinguishable from an owner's act after the fact. The
+control is the audit record, not the refusal.
+
+> **Consequence, stated plainly:** a SOKONI platform administrator can create a salary obligation
+> inside a merchant's organization. Production holds three such principals, two of whom also hold
+> `superAdmin`. This is accepted deliberately, and it is the reason mechanism #4 — employment
+> history — is not optional.
 
 ### 3. `hrStaff.uid` means an accepted binding, never an assertion
 
@@ -366,9 +392,9 @@ rediscovered as a new finding. See [[project_merchant_authority_adoption_gap]].
 Deliberately left open, because each is a mechanism choice that deserves its own evidence:
 
 1. **The uniqueness mechanism** — claim document vs transactional query (§4).
-2. **The owner-authority primitive's naming**, and **(2a)** whether a platform admin may perform
-   the five owner-only employment acts — and whether `admin` and `superAdmin` differ (§2). The
-   *shape* is now decided: one resolver returning `via`, inside `merchant-authority.js`.
+2. **The owner-authority primitive's naming** only. Shape decided (one resolver returning `via`,
+   inside `merchant-authority.js`); semantics decided (**2a**, above). **Ready for implementation
+   design.**
 3. **The invite/acceptance transport** — whether `shopInvites` (0 documents, one writer,
    `acceptShopInvite`) is reused or a payroll-specific path is built (§3).
 4. **The history collection's identity** — name, key shape, rules, retention (§6).

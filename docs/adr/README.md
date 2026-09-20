@@ -26,7 +26,7 @@ Each ADR states the decision, the evidence that produced it, and — most useful
 | [014](ADR-014-healthcare-provider-identity-convergence.md) | A healthcare provider is a `providers/{uid}`; `healthProviders` is retired as identity and authority | **Accepted** · implementation NOT authorized | prod census 2026-09-12: 1 synthetic fixture, 0 real providers, 0 clinical records |
 | [015](ADR-015-healthcare-payment-convergence.md) | A healthcare consultation is a service booking; IntaSend is the only rail, card separately gated | **Accepted** · implementation NOT authorized | conforms to `BOOKING_PAYMENT_CONTRACT.md` v1.0; `providerBookings` = 4 in production |
 | [018](ADR-018-legacy-retirement-graph.md) | An endpoint retires only on zero code-callers AND zero production traffic — never traffic alone | **Accepted** · 18b executed, 18c blocked | `docs/cf-invocation-census.json`; `test-retire-18b.js` 20/20 |
-| [035](ADR-035-employment-and-identity-binding.md) | The business employs; the owner establishes employment; `hrStaff.uid` is an ACCEPTED binding, never an assertion | **Accepted** · implementation NOT authorized · 7 mechanisms deliberately left open | prod census 2026-09-20: every `hr*` collection = 0, `hrStaff.uid` written `null` and updated by nothing, 0 `manager` claims |
+| [035](ADR-035-employment-and-identity-binding.md) | The business employs; the owner establishes employment; `hrStaff.uid` is an ACCEPTED binding, never an assertion | **Accepted** · implementation NOT authorized · 7 mechanisms open, **#2 ratified and ready for design** | prod census 2026-09-20: every `hr*` collection = 0, `hrStaff.uid` written `null` and updated by nothing, 0 `manager` claims |
 
 ## The rule that governs all of them
 
