@@ -387,6 +387,69 @@ const reach = (tier, uid) => (tier === 'claim' ? asManager(uid) : asUser(uid));
        claim: mechanism #4 (employment history) legitimately adds an
        employmentEvents block, so the ruleset is no longer Gate 1's to protect.
        The files this gate genuinely must not touch are asserted below. */
+
+    /* ── THE GATE 1 CLAIM, RESTORED AGAINST ITS LANDING 2026-09-20 ──────────
+       The comment above is kept: its reasoning was right, and it is the
+       evidence for this repair. `firestore.rules` was dropped because a
+       LIVE-TREE check cannot distinguish "Gate 1 touched the ruleset" from
+       "some other gate has the ruleset open right now" — and mechanism #4
+       legitimately had it open. The path did not leave Gate 1's scope; the
+       anchor could not express the claim.
+
+       Gate 1 landed at f4de0c1, which ADDED this suite. Against that frozen
+       boundary the ruleset is untouched permanently, and no later mechanism can
+       make it look otherwise. So the claim is restored, not re-litigated.
+
+       SCOPE OF THIS REPAIR. Only the Gate 1 claim is re-anchored. The two
+       assertions below still read the LIVE TREE and are DELIBERATELY LEFT
+       ALONE: `crm.js` and `merchant-authority.js` were never part of Gate 1's
+       landing claim — they were installed here by mechanism #4 (2197b48),
+       replacing the ruleset rather than narrowing it. Whether they are
+       historical scope assertions that belong to another gate's boundary, or
+       independent current contracts that merely live in this file, is an
+       OWNERSHIP question this repair does not answer. Re-anchoring them to
+       f4de0c1 would silently attribute to Gate 1 two claims Gate 1 never made.
+       Pending separate adjudication; `crm.js` is also protected in
+       test-merchant-authority-provenance.js, whose mechanism does own it. */
+    const gitAt = (...a) => require('child_process')
+      .execFileSync('git', ['-C', ROOT, ...a], { encoding: 'utf8' }).trim();
+
+    /* Self-verifying: a bare SHA would silently compare the wrong commit if
+       history were rewritten, and that empty diff reads exactly like a landing
+       that respected its boundary. The landing is named by what it DID. */
+    const G1 = 'f4de0c1';
+    const SELF = 'scripts/test-payroll-merchant-authority.js';
+    let anchorOk = false, added = '';
+    try {
+      added = gitAt('show', '--name-status', '--format=', G1, '--', SELF);
+      anchorOk = new RegExp('^A\\s+' + SELF.replace(/[.\/]/g, '\\$&') + '$', 'm').test(added);
+    } catch (e) { added = 'ref unresolved: ' + ((e && e.message) || '').slice(0, 60); }
+    ok('the Gate 1 landing resolves, and is the commit that ADDED this suite',
+       anchorOk, added || 'no output');
+
+    if (!anchorOk) {
+      ok('GATE 1 SCOPE ANCHOR UNVERIFIABLE — refusing to report a scope verdict', false,
+         'the boundary could not be established, so "untouched" would be unproven');
+    } else {
+      const touched = gitAt('diff', '--name-only', G1 + '~1', G1, '--', 'firestore.rules');
+      ok('firestore.rules is untouched BY THE GATE 1 LANDING',
+         touched === '', touched || 'the ruleset is not in the landing');
+
+      /* POSITIVE CONTROL — an empty diff is equally consistent with a landing
+         that respected its boundary and a comparison that can never match. */
+      const control = gitAt('diff', '--name-only', G1 + '~1', G1, '--', 'functions/hr-payroll.js');
+      ok('CONTROL: the same comparison DOES report the file the landing changed',
+         control === 'functions/hr-payroll.js', control || 'EMPTY — the detector is blind');
+
+      /* SCOPE CONTROL — the landing changed files outside the protected set,
+         and the assertion must not redden on those, or it is a global
+         cleanliness check wearing a scope check's name. */
+      const outside = gitAt('diff', '--name-only', G1 + '~1', G1, '--', SELF);
+      ok('  …and the landing DID change files outside the protected set',
+         outside === SELF, outside);
+    }
+
+    /* LIVE-TREE, PENDING OWNERSHIP ADJUDICATION — see the note above. */
     ok('crm.js is untouched — its fail-open is ADR-035 §8, a separate repair',
        !changed.includes('functions/crm.js'), changed.join(' '));
     ok('merchant-authority.js is untouched by THIS gate',
