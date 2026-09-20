@@ -532,10 +532,56 @@ async function call (fn, auth, data) {
        !/shopInvites|shopEmployees|acceptShopInvite|inviteShopEmployee/.test(CODE));
     ok('it writes no users document — no platform re-roling',
        !/collection\('users'\)|employeeRole|employeeShopId/.test(CODE));
-    const g = require('child_process').execFileSync('git',
-      ['-C', ROOT, 'status', '--porcelain', '--', 'functions/index.js', 'functions/shop-employees.js'],
-      { encoding: 'utf8' }).trim();
-    ok('functions/index.js and shop-employees.js are untouched', g === '', g || 'clean');
+    /* ── THE SCOPE ANCHOR, RE-ANCHORED 2026-09-20 ───────────────────────────
+       This asserted `git status --porcelain` on the LIVE WORKING TREE. That
+       answered the wrong question. The invariant is historical —
+
+           did the MECHANISM #3 LANDING touch the shop-invitation system?
+
+       — but a live-tree check answers
+
+           is the shop-invitation system dirty RIGHT NOW?
+
+       which any later authorized work makes false. It did: the shop/POS till
+       authority repair (1ce3fcd) legitimately modified shop-employees.js, and
+       this suite went 95/1 on a file mechanism #3 never touched. The finding
+       was real about the ANCHOR and said nothing about mechanism #3.
+
+       The assertion is NOT weakened — it is pointed at the frozen boundary. It
+       still fails if the landing had touched either file. */
+    const git = (...a) => require('child_process')
+      .execFileSync('git', ['-C', ROOT, ...a], { encoding: 'utf8' }).trim();
+
+    /* THE ANCHOR IS SELF-VERIFYING. A bare SHA would silently check the wrong
+       commit if history were ever rewritten, and an empty diff would then read
+       as a pass. The landing is identified by WHAT IT DID — it is the commit
+       that ADDED functions/employment-invites.js — so a moved ref fails closed
+       instead of quietly proving nothing. */
+    const M3 = '33c0f59';
+    let anchorOk = false, added = '';
+    try {
+      added = git('show', '--name-status', '--format=', M3, '--', 'functions/employment-invites.js');
+      anchorOk = /^A\s+functions\/employment-invites\.js$/m.test(added);
+    } catch (e) { added = 'ref unresolved: ' + (e && e.message || '').slice(0, 60); }
+    ok('the mechanism #3 landing resolves, and is the commit that ADDED this module',
+       anchorOk, added || 'no output');
+
+    if (!anchorOk) {
+      ok('SCOPE ANCHOR UNVERIFIABLE — refusing to report a scope verdict', false,
+         'the boundary could not be established, so "untouched" would be unproven');
+    } else {
+      const touched = git('diff', '--name-only', M3 + '~1', M3,
+                          '--', 'functions/index.js', 'functions/shop-employees.js');
+      ok('functions/index.js and shop-employees.js are untouched BY THE #3 LANDING',
+         touched === '', touched || 'neither file is in the landing');
+
+      /* POSITIVE CONTROL. An empty diff is equally consistent with a working
+         comparison and with one that can never match anything. This names a
+         file the landing certainly DID change, and must come back non-empty. */
+      const control = git('diff', '--name-only', M3 + '~1', M3, '--', 'functions/hr-payroll.js');
+      ok('CONTROL: the same comparison DOES report a file the landing changed',
+         control === 'functions/hr-payroll.js', control || 'EMPTY — the detector is blind');
+    }
   }
 
   /* ── 8. STRICT SCOPE ───────────────────────────────────────────────────── */
