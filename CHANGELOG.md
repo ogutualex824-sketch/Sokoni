@@ -1,3 +1,104 @@
+## 2026-09-20 (114) — A scope assertion that healed itself, and why that is worse than one that stays broken
+
+**Test integrity · COMMITTED `b2ad4a5` · test-only · no production behaviour changed · NOT DEPLOYED.**
+
+Not a feature change and not a repair of shipped code. A certification assertion was measuring
+something other than what it claimed, and the discrepancy only became visible because unrelated
+authorized work happened to be in flight when it ran.
+
+### THE FINDING — working-tree-state dependence, not staleness
+
+Mechanism #3's suite asserted that its landing had not touched the shop-invitation system. The
+invariant is **historical**. The implementation was not:
+
+```
+THE QUESTION IT CLAIMED TO ASK
+    did the MECHANISM #3 LANDING touch functions/index.js or shop-employees.js?
+
+THE QUESTION IT ACTUALLY ASKED
+    are those two files dirty in the working tree RIGHT NOW?
+        git status --porcelain -- functions/index.js functions/shop-employees.js
+```
+
+> **The same repository state could produce different historical scope verdicts** depending on
+> whether unrelated authorized changes happened to be committed or uncommitted at the moment the
+> suite ran. A clean tree made the assertion pass **without testing whether mechanism #3 had
+> respected its landing boundary at all.**
+
+Observed end to end on 2026-09-20. The shop/POS till authority repair legitimately modified
+`shop-employees.js` — a file mechanism #3 never touched — and the suite reported **95/1**. The
+moment that work was committed as `1ce3fcd`, the same check **passed again**. Same code, same
+landing, opposite verdicts, decided by commit timing.
+
+**That silent healing is the dangerous half.** A scope invariant that repairs itself teaches the next
+reader that its failures are noise. Had the ordering been slightly different, the 95/1 would never
+have been seen at all — and the assertion would have gone on reporting green for a boundary it was
+not checking.
+
+The initial characterisation of this as a *stale anchor* understated it and was corrected.
+
+### THE CORRECTION
+
+```
+BOUNDARY          mechanism #3 landed as 33c0f59 (2026-09-20, 13 files)
+                  neither functions/index.js nor functions/shop-employees.js is
+                  among them — the invariant genuinely HELD at the landing
+COMPARISON        git diff --name-only 33c0f59~1 33c0f59 -- <the two paths>
+SELF-VERIFYING    the landing is identified by WHAT IT DID — the commit that
+                  ADDED functions/employment-invites.js — so a rewritten or
+                  moved ref REFUSES to report a scope verdict rather than
+                  reporting a clean one off an empty diff
+POSITIVE CONTROL  the same comparison must report functions/hr-payroll.js,
+                  which the landing DID change
+HISTORY           the 95/1 is preserved in the comment at the assertion, as
+                  evidence of how the old anchor failed — not erased
+RESULT            98/0  (was 96/0; two new assertions plus the control)
+```
+
+**The assertion was not weakened.** It was pointed at the frozen boundary, and it still fails if the
+landing had touched either file.
+
+**A bare SHA would have been the wrong fix.** An empty diff from a ref that no longer means anything
+reads exactly like an empty diff from a landing that respected its boundary. Identifying the commit
+by its effect is what gives the check a durable meaning rather than merely making 95/1 disappear.
+
+### Sabotage — 6/6, restore byte-identical
+
+```
+RED    the scope list pointed at a file the landing DID change
+RED    the anchor pointed at a different commit           fails closed
+RED    the anchor ref unresolvable                        fails closed
+RED    the positive control pointed at an unchanged file
+GREEN  the OLD live-tree anchor, restored on a clean tree ← THE DEFECT, EXECUTABLE
+GREEN  the re-anchor comment reworded
+```
+
+The fifth case is the evidence rather than a control that merely holds: the old anchor put back on a
+clean tree passes **98/0**, so it **cannot fail there whatever the landing did**. Both fail-closed
+cases produce two failures each — the anchor check, plus an explicit refusal to report a scope
+verdict when the boundary cannot be established.
+
+### Files affected
+- `scripts/test-employment-invites.js` — section 7 only
+
+### Database / API / Security changes
+**None.** Test-only. No production code, no rules, no indexes, no behaviour change.
+
+### Deployment
+**NOT DEPLOYED.** Nothing deployable was changed.
+
+### Breaking changes
+None.
+
+### Follow-up — a census, not a sweep
+
+This may be a broader pattern: other suites may anchor historical scope claims to the live working
+tree. The next step is a **read-only census** of `git status --porcelain` inside scope assertions.
+
+> **Each occurrence must be classified individually.** A shared anti-pattern does not imply a shared
+> intended boundary, and rewriting them as a batch would replace one unexamined assumption with
+> another. Nothing is to be repaired on the strength of the pattern alone.
+
 ## 2026-09-20 (113) — A removed shop employee could still sell, and the till now consumes the contract
 
 **Implementation · COMMITTED `1ce3fcd` · certified and sabotaged · NOT DEPLOYED.**
