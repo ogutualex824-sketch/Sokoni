@@ -1,3 +1,114 @@
+## 2026-09-20 (104) — Employment history, and three harness faults that would have proved nothing
+
+**Builder 90/0 · rules 26/0 · sabotage 19/19 · COMMITTED `2197b48`, NOT DEPLOYED.**
+
+Gate 3 mechanism #4. **Builder + rules definition only** — `employmentEvent()` has **no caller**, by
+design, exactly as `assertMerchantOwner` landed in #2.
+
+### What landed
+
+```
+functions/employment-events.js            employmentEvent(o) → { ref, payload }   NEVER writes
+firestore.rules                           match /employmentEvents/{eventId}       committed, NOT deployed
+scripts/test-employment-events.js         builder certification
+scripts/test-employment-events-rules.js   rules certification, real engine
+```
+
+**No callable, no consumer, no index, no deployment.** The twelve events are performed by mechanisms
+that do not exist yet — binding (#3), uid uniqueness (#1), work status (#5), shop assignment (#7).
+
+`employmentEvent` returns `{ ref, payload }` rather than writing, so the caller can pass it to
+`t.set(ref, payload)` **inside the transaction that performs the state change** — the record and its
+event land together or not at all. That is the `bookingEvents` pattern, adopted rather than
+reinvented.
+
+It validates where `bookingEvent` does not, because rules cannot express *"and the actor combination
+is coherent"* or *"and this status transition matches the event named"*, and writes are CF-only. This
+function is the only enforcement point between a caller and the audit record.
+
+### The rules, and what they refuse
+
+```
+create, update, delete : false            for EVERYONE, including superAdmin
+read                   : isAdmin() || resource.data.newUid == request.auth.uid
+```
+
+`adminLog` permits a superAdmin delete; that precedent is deliberately not followed. **A privileged
+actor must not be able to erase the record of what they did.** The read arm names `newUid` and never
+`previousUid` — a person whose binding was replaced would otherwise keep reading the employment's
+*future* history. There is no owner arm at all; organization history goes through a callable, which
+is a later gate.
+
+### Three harness faults, each of which would have produced a green suite proving nothing
+
+**B7 and B12 — green for the WRONG REASON.** Both mutations genuinely changed behaviour, but a
+*different* guard rejected the fixture first: an unknown event fell back to the `record_edited` spec,
+which refused the `leave_granted`-shaped payload on its status transition; and disabling the
+status-shape check still left the transition table to refuse. Replaced with fixtures where the
+disabled guard is the **only** thing that can reject.
+
+**R4 — the fixture was INERT.** It used a `SOK-` businessId, against which an added
+`resource.data.businessId == request.auth.uid` arm cannot match. The sabotage adding that forbidden
+arm therefore scored **green**. Added a **legacy-shape fixture** where `businessId` *is* the caller's
+uid — the one production shape in which that arm would actually grant — plus an inverting control
+proving the same document stays readable by its bound employee.
+
+**The Gate 1 parser — a real bug, not rot.** `test-payroll-merchant-authority` called `.trim()` on
+the whole `git status --porcelain` output before splitting, which strips the leading space of the
+**first line only**. An unstaged change prints `" M firestore.rules"`; after a global trim that became
+`"M firestore.rules"`, whose `slice(3)` is `"restore.rules"`.
+
+**Measured: the assertion passed while `firestore.rules` was modified**, and only failed once staging
+changed the prefix to `"M  "`. It was green for the wrong reason for as long as it existed.
+
+> **The former Gate 1 `96/0` must not be cited as evidence for that scope assertion.** Every other
+> assertion in that run stands; that one proved nothing either way.
+
+Now parsed line by line with the two-character prefix preserved, with three synthetic controls —
+both prefixes, and one that executes the **old** parse and asserts it misses. `firestore.rules` was
+also removed from Gate 1's claim, since mechanism #4 legitimately owns it now.
+
+**96 → 100 is accounting, not weakening:** one assertion removed, five added.
+
+### Certification
+
+```
+employment builder            90 passed, 0 failed
+employment rules              26 passed, 0 failed     real rules engine, emulator-backed
+employment sabotage           19/19 as specified — 17 red, 2 controls green, byte-identical
+
+Gate 1 (corrected)           100 passed, 0 failed     sabotage 12/12 red, byte-identical
+provenance (#2)               64 passed, 0 failed
+payroll record authority      66 passed, 0 failed
+payroll staff contract        27 passed, 0 failed
+procurement                   59/59 checks · 7/7 sabotage catches
+```
+
+Staged content was proven byte-identical to the working tree before certifying, so those runs cover
+what was committed rather than what happened to be on disk.
+
+### Files affected
+- `functions/employment-events.js` — new, 250 lines
+- `firestore.rules` — `+25`, one `employmentEvents` block
+- `scripts/test-employment-events.js` — new
+- `scripts/test-employment-events-rules.js` — new
+- `scripts/test-merchant-authority-provenance.js` — scope narrowed
+- `scripts/test-payroll-merchant-authority.js` — parser repaired, scope narrowed
+
+### Database / API / Security changes
+No database change — `employmentEvents` holds zero documents and has no writer wired. New rules
+**block committed, not deployed**. No API surface: the builder is not exported to any callable. No
+index changes.
+
+### Deployment
+**NOT DEPLOYED — and the rules are not deployed either.** No `firebase deploy` of any kind was run.
+`functions/` deploys remain frozen by the Artifact Registry forensics notice; the two composite
+indexes this collection will need remain blocked by ADR-035 §Open 4a, which blocks **exercise**, not
+implementation. Live remains `2fa2074` / `v635`.
+
+### Breaking changes
+None. Nothing calls the builder and nothing reads the collection.
+
 ## 2026-09-20 (103) — A lifecycle transition must not hide inside an edit
 
 **Documentation only · COMMITTED `41bce65` · NO implementation authorized · NOT DEPLOYED.**
