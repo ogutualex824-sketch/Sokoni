@@ -10,7 +10,10 @@ repair) · **2a decided 2026-09-20** — platform admin eligible, taxonomy froze
 rebind is two-claim atomic; reinstatement re-acquires and may fail ·
 **§4 boundary frozen 2026-09-20** — mechanism #1 is the claim + acceptance ONLY; no active-
 termination path exists to release it, so claim release, rebind and reinstatement are future
-consumer contracts. Immutable provenance permitted. workspaceMemberships is a different model.
+consumer contracts. Immutable provenance permitted. workspaceMemberships is a different model. ·
+**§4 ownership CORRECTED 2026-09-21** — the attribution of termination to "mechanisms #5/#7" was an
+inherited pointer, disproved by a search-validity gate; ownership is **UNASSIGNED** and no number
+was invented. The frozen termination contract is unchanged.
 **Supersedes nothing. Constrains:** `functions/hr-payroll.js`, `hrStaff`, and any future AdminOS
 employee surface.
 **Depends on:** [[ADR-001]] (authorization comes from claims, never from a Firestore field),
@@ -304,7 +307,9 @@ their uid.
 #### Deliberately outside mechanism #1
 
 **Who may terminate, rebind or reinstate.** Those authority rules belong to the mechanism ordering
-already established (§2, and mechanisms #5/#7), and must not be invented inside the uniqueness gate.
+already established (§2) and to whichever mechanism is ASSIGNED the employment lifecycle —
+see "Ownership of termination is UNRESOLVED" below — and must not be invented inside the uniqueness
+gate.
 Mechanism #1 supplies the invariant; it does not decide who may trigger the transitions that move it.
 
 #### The EXECUTABLE boundary — frozen 2026-09-20 after a read-only design pass
@@ -333,7 +338,9 @@ OUT   active-employment termination      no path exists to attach a delete to
 
 > **STATED CONSEQUENCE, not a defect.** Until an authorized active-termination mechanism exists, an
 > accepted employment's occupancy claim is **not releasable by any existing code path**. That is a
-> deliberate dependency boundary on mechanisms #5/#7, not an omission in #1.
+> deliberate dependency boundary on a mechanism that has NOT YET BEEN ASSIGNED, not an omission in
+> #1. This sentence previously named "mechanisms #5/#7"; that attribution was disproved by the
+> search-validity gate below.
 
 **FORBIDDEN:** adding a `delete` to `revokeEmploymentInvite` to make the lifecycle table look
 complete. That path only ever sees a **pending** employment, which never acquired a claim — deleting
@@ -457,6 +464,103 @@ here has been written, certified or deployed; the transition is frozen so that i
 
 **Authority** is unchanged and not re-decided here: the owner/platform employment-authority boundary
 of §2 governs who may terminate, as it governs establishment and revocation.
+
+#### Ownership of termination is UNRESOLVED — corrected 2026-09-21
+
+An earlier draft of this section attributed the release, rebind and reinstatement contracts to
+**"mechanisms #5/#7"**. A read-only search-validity gate run on 2026-09-21 established that this was
+an **inherited pointer, never supported by implementation evidence**. It is corrected here rather
+than left standing, because a written attribution reads as a settled decision.
+
+##### The gate validated the instrument before trusting its silence
+
+An empty search has two meanings — *no implementation exists*, or *the search could not see it* —
+so the predicate was proved capable of finding a known target first.
+
+```
+POSITIVE CONTROL   revokeEmploymentInvite, employment-invites.js:410
+                   t.update(staffRef, { employmentStatus: 'terminated', workStatus: null })
+                   exactly ONE hit, and it is the WRONG lifecycle
+
+REACHABILITY       _requirePendingEmployment (:109) throws unless employmentStatus === 'pending'
+                   so that writer CANNOT reach an accepted employment
+```
+
+##### The predicate needed three observables, not one
+
+```
+1  inline literal      employmentStatus: 'terminated'     1 write site
+2  constant-mediated   ENDED                              ZERO write sites
+3  bare field          status: 'terminated'               2 write sites   ← would have been MISSED
+```
+
+Observable 3 — `workforce-identity.js:534`, `org-engine.js:860` — writes the field `status`, not
+`employmentStatus`. A predicate covering only 1 and 2 would have reported *"no termination
+implementation exists"* while two live handlers sat in the tree. **Both write
+`workspaceMemberships`**; `workforce-identity.js` contains **zero** `hrStaff` references. So
+termination *is* implemented in this repository — for the different model recorded below, not for
+`hrStaff`.
+
+> **Observable 2 has no positive control, and none was manufactured.** `ENDED` has exactly one
+> reference — `newStatus: ENDED` at `employment-invites.js:402`, which is **event metadata, not a
+> Firestore write**. The constant-mediated write form is therefore exercised by nothing. That is
+> weaker evidence than a passing control and is labelled as such. It also corroborates the finding:
+> `PENDING` and `WORKING` are written as payloads, `ENDED` never is.
+
+##### The negative search
+
+Exactly **two** modules touch `hrStaff`. Their complete write inventory:
+
+```
+employment-invites.js:322   →  active / working     acceptEmploymentInvite
+employment-invites.js:410   →  terminated / null    revokeEmploymentInvite — PENDING-ONLY
+hr-payroll.js:430           →  pending / null       addStaffMember
+```
+
+`hr-payroll.js` writes `employmentStatus` twice, both `'pending'`. **No writer transitions an active
+employment to terminated.**
+
+##### Why #5 and #7 do not own it
+
+```
+#5  work-status axis      on_leave / suspended
+    vocabulary EXISTS in two places — §5 of this ADR, and employment-events.js:93-94
+    (LEAVE_ENDED, SUSPENDED) — and is written by NOTHING. Vocabulary in two
+    places, behaviour in none.
+
+#7  shop assignment       shopEmployees, keyed {shopId}_{uid}
+    against hrStaff's {merchantId}_{employeeNumber}. NO module reads both, and
+    ADR-016 forbids inventing the bridge. Termination cannot atomically revoke a
+    shop assignment because no path derives a shopId from a staffId.
+```
+
+Termination of an `hrStaff` employment is therefore **its own lifecycle operation**, and neither
+numbered mechanism has a claim on it that evidence supports.
+
+##### What this correction does and does not do
+
+```
+CORRECTED   the ownership ATTRIBUTION — "#5/#7" becomes UNASSIGNED
+UNCHANGED   the frozen termination contract, in full
+NOT DONE    no mechanism number invented · no implementation · no rules change
+            · no deployment
+```
+
+**FORBIDDEN:** assigning termination to #5, to #7, or to a newly minted number without the mechanism
+registry deliberately making that decision. *"No implementation found"* does not mean *"therefore
+#5/#7 owns it"*, and it does not authorize creating an owner by fiat. Repeating the inherited-pointer
+failure in the opposite direction would be the same defect with a different value.
+
+The frozen contract above stands in full and is unaffected by this correction:
+`active/working → terminated/null` · **uid retained** · `employmentUidClaims` deleted **atomically
+with** the termination · `employment_terminated` written in the same transaction · guarded by
+*active* + *uid exists* + **the claim's `staffId` is this employment** · **no shop-assignment
+revocation**, because the bridge does not exist · `revokeEmploymentInvite` remains **pending-only**
+and must not be extended.
+
+> **Until an owner is deliberately assigned, an accepted employment's occupancy claim remains
+> unreleasable.** That is now an *unresolved ownership question* rather than a *dependency on #5/#7*
+> — a weaker and more accurate statement of the same boundary.
 
 #### `workspaceMemberships` is NOT this model
 
@@ -760,7 +864,9 @@ system actor.
 | `invite_accepted` | `pending` / `null` | `active` / `working` + bound uid | **invitee** |
 | `invite_revoked` | `pending` / `null` | `terminated` / `null` | owner \| platform |
 
-The other eight remain unconsumed; they belong to mechanisms #1, #5 and #7.
+The other eight remain unconsumed. #1 has since consumed none of them beyond `invite_accepted`, and
+the rest are **NOT established** as belonging to #5 or #7 — see *"Ownership of termination is
+UNRESOLVED"* in §4.
 
 **`invite_revoked` was RECONSIDERED on 2026-09-20 and AFFIRMED.** The objection was fair — the
 evidence proves an *invitation* can be revoked, not that a *pending employment relationship* should
