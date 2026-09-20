@@ -1,3 +1,135 @@
+## 2026-09-20 (91) — RC-1: the integrations were configured all along
+
+**Parity 19/0 · status 41/0 executing the real resolver · sabotage 10/10 RED · COMMITTED `5649d44`, NOT DEPLOYED.**
+
+Against real production inventory: **35 integrations — 15 configured, 16 not-applicable, 4 disabled,
+ZERO missing.** Every credential the catalogue declares exists. The Integration Control Center
+simply had no way to say so.
+
+### The defect was an absent signal, not a wrong one
+The obvious suspects were all innocent. Both consoles load `sokoni-integration-catalogue.js` before
+`sokoni-integrations.js` and consume it through `window.SokoniIntegrationCatalogue`. There is no
+stale hardcoded key list, no wrong secret name, no mismatched integration id, no permission
+filtering, no schema mismatch.
+
+What was missing: **no deployed function read Secret Manager inventory at all.** The catalogue's
+`evidence.secrets` is documentation, not a check. So the browser had no configuration signal, and an
+integration with no signal reads to an operator as missing or unmanaged.
+
+A second, separate finding: the console's other source — `platformServices` — is **empty in
+production (0 documents)**, as are `platformHealth`, `platformDependencies` and `posWebhooks`.
+`platformRegisterService` is exported and wired, but its only caller is a client-side helper; no
+Cloud Function registers itself on boot. The catalogue file already says so: *"An empty registry
+means nothing registered — not that nothing is running."* That is RC-2 and is deliberately untouched
+here — the catalogue, not the runtime registry, is authoritative for what integrations exist.
+
+### Presence established without touching a value
+`secrets.list` returns names and metadata; a payload lives behind `secrets.versions.access`, which
+this module never calls. The obvious implementation instead binds every secret via `secrets: [...]`
+and reads `process.env` — giving a *status* endpoint the blast radius of the whole estate. This one
+binds nothing and holds no credential at any moment.
+
+* credential records are exactly `{name, present}` — never a value, length, prefix or hash
+* unclaimed secrets are reported as a **count**; naming them would turn an admin response into a
+  map of the estate's credentials
+* the handler logs counts, never an inventory
+
+### Vocabulary, and two distinctions that matter
+`configured` · `partial` · `missing` · `not-applicable` · `disabled` · `unknown`
+
+**`unknown` is not `missing`.** An unreadable inventory and an absent credential are different
+facts; reporting the second as the first invites someone to re-create a key that is already there.
+Per-credential presence is `null`, not `false`, in that state.
+
+**`not-applicable` is not a gap.** 16 of 35 integrations need no named secret — Firestore, FCM,
+Cloud Storage authenticate as the service account. Calling those "missing" would manufacture 16
+false alarms.
+
+### Configured is not working
+Every record returns `health: 'unknown'`, deliberately. **32 of 35 catalogue entries have no health
+source**, so a surface inferring health from configuration would paint green lights nobody measured.
+A sabotage deriving health from credential state turns the suite red. RC-3 replaces this with
+something measured, and must distinguish Configured → Accepted → Delivered rather than treating an
+API 200 as proof a notification arrived.
+
+### Two inventories, held by a contract
+`firebase deploy --only functions` uploads `functions/` and nothing else, so the backend cannot
+require the browser catalogue — the trap already documented in `auth-policy.js` and
+`shop-offers.js`. `functions/integration-registry.js` is therefore a deliberate second copy,
+**generated** from the catalogue rather than transcribed, and
+`scripts/test-integration-registry-parity.js` asserts both sides declare the same ids, categories,
+lifecycles and required secrets, failing in either direction.
+
+Generation matters here. A first extractor draft silently dropped `africastalking` because its name
+uses double quotes, which would have reported a live, fully-configured SMS rail as absent from the
+catalogue and orphaned its three keys. Both the generator and the parity suite now carry a control
+asserting every declared id is parsed — the same failure class as the 40,000-character boundary in
+entry 88.
+
+### Payments: IntaSend only
+Daraja is absent from the registry and from every response. Its credentials still exist in Secret
+Manager, but **a key existing is not evidence of an integration** — IntaSend is the sole active
+payment provider. Two sabotage cases cover it: adding a Daraja entry fails parity, and no Daraja
+credential can be reported missing. Payments resolves as three IntaSend rails `configured`, with
+`pos-card-terminal` and `sokoni-wallet` `disabled` by their quarantined/frozen lifecycle.
+
+### 14 unclaimed secrets — counted, not classified
+Configured but claimed by no entry, including `AT_API_KEY`/`AT_USERNAME`, `DARAJA_*`,
+`FB_APP_SECRET`, `GMAIL_*`, `LOYALTY_HMAC`, `QR_SECRET`, `SIGNING_SECRET`. Several look like
+duplicate pairs of declared names. **Which name each consumer actually reads is untraced**, so
+nothing was declared or retired. Separate work.
+
+### Certification
+`scripts/test-integration-status.js` 41/0, executing the real resolver against a controlled
+inventory. Sabotage 10/10 red independently: health derived from credentials, `not-applicable`
+collapsed, `unknown` collapsed, a value added to the response, orphans named, admin gate removed,
+response filtered to a subset, payload API used, registry drift, Daraja re-added. The no-leak
+assertion is paired with a control proving the same check **does** find a planted value.
+
+The planted controls are credential-**shaped** on purpose and annotated as adjudicated:
+`AKIAIOSFODNN7EXAMPLE` is AWS's published documentation example, the other is invented. A secret
+scan flags that line; making the values harmless would silently void the assertion.
+
+Live path verified read-only against production Secret Manager — `inventoryReadable: true`, 35
+records, and the response provably carries no value-like literal.
+
+### Gates
+Predeploy syntax gate: **1915 JavaScript files and 440 inline `<script>` blocks parse cleanly**
+(9 markup-building blocks skipped — a documented extraction limit). Require-closure gate passes with
+the newly declared dependency. `admin-os-wiring` 308/0, `aos-users` 84/0, `admin-user-deletion`
+71/0, `admin-user-messaging` 101/0.
+
+One evidence note: the gate's first run reported exit 0 but its captured output held only the
+banner, with the success line lost to truncation. Exit code is not evidence, so it was re-run with
+explicit capture to obtain the counts above rather than inferred from the exit status.
+
+### Files affected
+- `functions/integration-registry.js` — new; 35 entries, generated from the catalogue
+- `functions/integration-status.js` — new; the resolver
+- `functions/admin-os.js` — `adminGetIntegrationStatus`, admin-gated, App Check, `_h`-dispatched
+- `functions/package.json` — declares `google-auth-library` (installed, previously transitive only)
+- `scripts/test-integration-registry-parity.js`, `scripts/test-integration-status.js` — new
+
+No `index.js` change: `adminOsDispatch` enumerates `_h` dynamically, verified rather than assumed.
+**No UI change** — the console does not consume this yet, deliberately, so the backend could be
+certified on its own.
+
+### Database / API / Security changes
+No schema change. One new admin-gated callable with App Check enforced. Security: no secret value is
+read, returned or logged, and the endpoint binds no secret.
+
+### Deployment
+**NOT DEPLOYED.** Cloud Function change, held by the active Functions / Artifact Registry freeze.
+State: COMMITTED → NOT DEPLOYED.
+
+### Breaking changes
+None. Nothing previously working changes behaviour; this adds a signal that did not exist.
+
+### Next, in order
+**RC-3** provider health and delivery proof, built on `adminGetIntegrationStatus` rather than a
+second parallel mechanism · **console consumption** of this response · **RC-2** registry
+reconciliation · **orphan-secret consumer audit**.
+
 ## 2026-09-20 (90) — A4-F3E: the fourth writer runs in production, and never writes
 
 **36/0 calling the real adapter · sabotage 8/8 RED · census 24/0 · COMMITTED `55705dd`, NOT DEPLOYED.**
