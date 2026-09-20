@@ -1,3 +1,137 @@
+## 2026-09-20 (115) — A gate that gave up two thirds of its claim to keep a broken anchor quiet
+
+**Test integrity · COMMITTED `43b4b85` · test-only · no production behaviour changed · NOT DEPLOYED.**
+
+Census case 2 from entry (114), adjudicated and repaired. Classified as **restoration of mechanism
+#2's original landing-boundary claim, not a scope expansion** — the distinction is the substance of
+this entry and is argued from history below.
+
+### The claim as it landed
+
+Mechanism #2 landed at **`0eee8e4`** (2026-09-20 19:04:41) — *"one resolver returning provenance,
+two narrow assertions"*. Three files: `functions/merchant-authority.js` (M),
+`scripts/test-merchant-authority-provenance.js` (**A**), `scripts/test-procurement-merchant-authority.js` (M).
+
+Its scope assertion protected **three** paths:
+
+```
+functions/hr-payroll.js      the payroll handlers the resolver authorizes
+functions/crm.js             the fail-open it DELIBERATELY leaves alone (ADR-035 §8)
+firestore.rules              mechanism #2 is pure JavaScript and touches no ruleset
+```
+
+### The erosion — three paths to one, twice, in a single day
+
+```
+AS LANDED    hr-payroll.js · crm.js · firestore.rules
+   ↓ narrowed — mechanism #4 legitimately adds an employmentEvents rules block
+   ↓ narrowed — mechanism #3 legitimately modifies hr-payroll.js
+BEFORE THIS  crm.js
+```
+
+**Neither narrowing was justified by a path leaving mechanism #2's scope.** Both comments say so in
+their own words — each cites *another gate's authorized work* making the check misfire, and each
+concludes that "a scope assertion that fails on ANOTHER gate's authorized work has stopped describing
+this one's scope." That reasoning was correct. The response was to shrink the claim.
+
+> **The claim was surrendered to the anchor, not to the evidence.** A live-tree anchor under pressure
+> sheds coverage rather than gaining accuracy, and it had already cost two thirds of this gate.
+
+### The quiet expiry
+
+The assertion's own comment named a temporal window — *"if it ever becomes dirty **during a mechanism
+#2 change**, that is this gate leaking"* — while the implementation ran
+`git status --porcelain` on the **live working tree**.
+
+That window **closed at `0eee8e4`**. After it closed there were no mechanism #2 changes left to
+observe, so the check observed whatever any other workstream happened to have in flight — and on a
+clean tree passed **without testing whether mechanism #2 had respected its boundary at all**.
+
+This is the quiet half of the asymmetry recorded in entry (114): an assert-DIRTY guard expires
+loudly and announces itself; an assert-NOT-DIRTY guard expires silently and keeps reporting green.
+
+### Restoration, proven — not assumed
+
+Against the **frozen** boundary all three original paths are untouched permanently, immune to
+mechanisms #3 and #4:
+
+```
+git diff --name-only 0eee8e4~1 0eee8e4 -- hr-payroll.js crm.js firestore.rules   →  EMPTY
+git diff --name-only 0eee8e4~1 0eee8e4 -- functions/merchant-authority.js        →  reported
+```
+
+So the repair returns the assertion to **exactly what `0eee8e4` established, and no further**. It
+does not widen the historical boundary; it recovers the claim the narrowings gave up. The suite had
+run with a one-path claim for some hours, but elapsed time is a fact about the calendar, not about
+the landing.
+
+### The anchor is self-verifying
+
+A bare SHA would silently compare the wrong commit if history were rewritten, and **that empty diff
+would read exactly like a landing that respected its boundary**. So the landing is named by *what it
+did* — it is the commit that **ADDED this suite** — and an unresolvable or moved ref **refuses to
+report a scope verdict** rather than reporting a clean one.
+
+### Proof grid — and a corrected specification
+
+```
+GREEN  the frozen-boundary comparison                              67/0
+RED    a protected path swapped for merchant-authority.js
+RED    the suite file ADDED to the protected set
+RED    the anchor pointed at another commit            refuses, 2 failures
+RED    the anchor ref unresolvable                     refuses, 2 failures
+RED    the positive control pointed at an unchanged path
+GREEN  the OLD live-tree form on a clean tree          ← GREEN here IS the defect
+```
+
+**One specified control was unsound and was corrected — the specification, not the implementation.**
+The grid called for *"suite file added to protected set → GREEN"*. The suite **was changed by
+`0eee8e4`**; it is the file the landing added. Claiming it untouched is therefore a **false claim**,
+and the assertion must go **RED**. A control that goes green on a false claim is a control that is
+not looking.
+
+The property that row was reaching for is real, and is held two other ways:
+
+> **changed-but-unprotected landing paths must not contaminate the protected comparison** —
+> established by the baseline itself (the landing changed three files, none of them protected) and by
+> an inline **SCOPE CONTROL** asserting the landing *did* change a file outside the protected set.
+
+Without that control the assertion could be a global cleanliness check wearing a scope check's name.
+
+### History preserved, not rewritten
+
+Both narrowing comments stand **verbatim**, and the original *"during a mechanism #2 change"* premise
+is left in place — the new comment **quotes** it rather than replacing it, because that phrase is the
+evidence the premise expired. The narrowings were right when written and became unnecessary only once
+the boundary was frozen; the record says that, rather than recasting them as mistakes.
+
+### Result
+
+**67 passed, 0 failed.** Deletions: five lines, exactly the old `execFileSync` porcelain call and its
+`ok(...)`. Nothing else was removed.
+
+### Files affected
+- `scripts/test-merchant-authority-provenance.js` — the scope assertion only (+66 / −5)
+
+### Database / API / Security changes
+**None.** Test-only. No production code, no rules, no indexes.
+
+### Deployment
+**NOT DEPLOYED.** Nothing deployable was changed.
+
+### Breaking changes
+None.
+
+### Census — still open, still one at a time
+
+Cases 1, 3 and 4 from entry (114) are **untouched**. Each has a different intended boundary, so a
+batch rewrite would replace one unexamined assumption with another.
+
+> **Case 3 (`test-functions-require-closure-gate.js`) must not acquire an invented boundary.** It is
+> the only one whose intended landing is stated nowhere. If it cannot be established from source or
+> history, the honest outcome is to record it as **unresolved** rather than anchor it to whichever
+> commit looks plausible.
+
 ## 2026-09-20 (114) — A scope assertion that healed itself, and why that is worse than one that stays broken
 
 **Test integrity · COMMITTED `b2ad4a5` · test-only · no production behaviour changed · NOT DEPLOYED.**
