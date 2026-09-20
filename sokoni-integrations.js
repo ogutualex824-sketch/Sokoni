@@ -22,7 +22,7 @@
    nothing else. There is no client-side arithmetic over prices, no localStorage
    fallback, no seed data, no "looks about right" multiplier.
 
-     platformServices/{serviceId}      the registry — what is registered
+     platformServices/{serviceId}      a SELF-REGISTRATION LOG, not an inventory (RC-2)
      platformHealth/{serviceId}        the latest heartbeat — how it is doing
      platformDependencies/{from→to}    declared edges between services
      posWebhooks/{webhookId}           merchant-registered webhook endpoints
@@ -582,7 +582,7 @@
 
     var defs = [
       ['catalogue',    'Catalogue',    catN],
-      ['registered',   'Registered',   svcN],
+      ['registered',   'Self-registration log', svcN],
       ['capabilities', 'Capabilities', capN],
       ['dependencies', 'Dependencies', depN],
       ['webhooks',     'Webhooks',     whN],
@@ -901,22 +901,49 @@
       '</div>';
   }
 
+  /* ── What this tab is, and is NOT (RC-2 decision, 2026-09-20) ────────
+     The registry was designed as "the authoritative source of truth that spans
+     all runtimes". It cannot be, and the reason is structural rather than a
+     missing producer: platformRegisterService requires an authenticated browser
+     session, so no Cloud Function, trigger, scheduled job or deploy step can
+     register itself. In practice ONE page calls init() — platform.html, as
+     platform-ops-center — and everything else would have to be typed into its
+     form by hand. platformHealthSweep then marks any heartbeat older than five
+     minutes stale, and heartbeats only come from an open tab, so an entry goes
+     stale within minutes of the tab closing and stays that way.
+
+     So this tab is a LOG OF SELF-REGISTRATIONS, not an inventory. The
+     authoritative model is the catalogue plus the backend's configuration and
+     probe status. The registry is deliberately NOT populated from the
+     catalogue: a mirrored copy that nothing maintains is exactly the staleable
+     second source this console exists to stop relying on. */
+  function _regNote() {
+    return 'This lists services that explicitly registered themselves through the ' +
+           'Platform Operations Center. An empty or stale entry does <strong>not</strong> mean ' +
+           'an integration or service is unavailable — the Catalogue, Credentials and probe ' +
+           'status are the authoritative model.';
+  }
+
   function _registeredTable() {
     if (_data.services.ok === false) {
       return '<div class="sic-card"><div class="sic-empty">The service registry could not be read, ' +
              'so nothing can be listed. This is not an empty registry.</div></div>';
     }
     if (!_data.services.rows.length) {
-      return '<div class="sic-card"><div class="sic-empty">No services are registered. ' +
-             'platformServices is empty — this is a real, canonical zero, not a failed read.</div></div>';
+      return '<div class="sic-card"><div class="sic-empty">' + _regNote() +
+             '<br><br>Nothing has registered. platformServices is empty — a real, canonical zero, ' +
+             'not a failed read, and <strong>not</strong> an indication that any integration or ' +
+             'service is unavailable.</div></div>';
     }
     var rows = _rows();
     if (!rows.length) {
       return '<div class="sic-card"><div class="sic-empty">No integration matches these filters.</div></div>';
     }
 
-    return '<div class="sic-card"><div class="sic-scroll"><table class="sic-table">' +
-      '<thead><tr><th>Integration</th><th>Type</th><th>Version</th><th>Status</th>' +
+    return '<div class="sic-card">' +
+      '<p class="sic-note">' + _regNote() + '</p>' +
+      '<div class="sic-scroll"><table class="sic-table">' +
+      '<thead><tr><th>Service</th><th>Type</th><th>Version</th><th>Status</th>' +
       '<th>Last heartbeat</th><th>Latency</th><th>Error rate</th><th>Capabilities</th></tr></thead><tbody>' +
       rows.map(function (s) {
         var id = s.serviceId || s.id;

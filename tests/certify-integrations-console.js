@@ -198,8 +198,14 @@ const ALL_EMPTY = {
 /* Pull the count out of a tab's pill. These counts go through a different code
    path from the stat tiles, so they need their own coverage — pre-flight
    sabotage found the tiles guarded and the pills not. */
-function pillValue(html, tabLabel) {
-  const m = new RegExp(tabLabel + '<span class="sic-pill">(.*?)<\\/span>').exec(html);
+/* Keyed on the tab's stable ID, not its display label. Keying on the label made
+   this return null the moment the Registered tab was re-worded to
+   "Self-registration log" (RC-2), which broke three assertions while the
+   invariant they protect — a pill shows an em dash, never 0, when the read
+   failed — was still perfectly true. A test should follow identity, not copy. */
+function pillValue(html, tabId) {
+  const m = new RegExp("tab\\('" + tabId + "'\\)\"[^>]*>.*?" +
+                       '<span class="sic-pill">(.*?)<\\/span>').exec(html);
   return m ? m[1] : null;
 }
 
@@ -321,7 +327,12 @@ function statValue(html, label) {
   runCase('A5 tab counts obey the same rule as the stat tiles', () => {
     /* A separate code path from _stats(), and one a sabotage run proved was
        uncovered. Counts shown on a tab are as much a claim as a KPI tile. */
-    ['Registered', 'Dependencies', 'Webhooks'].forEach((tab) => {
+    ['registered', 'dependencies', 'webhooks'].forEach((tab) => {
+      /* A LOOKUP CONTROL FIRST. "is not 0" passes when the helper returns null,
+         so a broken locator would satisfy it silently. Asserting the pill was
+         found at all makes the two checks below mean something. */
+      ok('A5 ' + tab + ' pill was located at all',
+         pillValue(denied, tab) !== null, 'got ' + JSON.stringify(pillValue(denied, tab)));
       ok('A5 ' + tab + ' pill is em dash when unreadable',
          pillValue(denied, tab) === '—', 'got ' + JSON.stringify(pillValue(denied, tab)));
       ok('A5 ' + tab + ' pill is not 0 when unreadable',
@@ -330,11 +341,11 @@ function statValue(html, label) {
     /* POSITIVE CONTROL — the same pills carry real numbers when the reads
        succeed, so "em dash" is a rule and not a rendering failure. */
     ok('A5 control: Registered pill counts the real registry',
-       pillValue(full, 'Registered') === '3', 'got ' + pillValue(full, 'Registered'));
+       pillValue(full, 'registered') === '3', 'got ' + pillValue(full, 'registered'));
     ok('A5 control: Dependencies pill counts the real edges',
-       pillValue(full, 'Dependencies') === '2', 'got ' + pillValue(full, 'Dependencies'));
+       pillValue(full, 'dependencies') === '2', 'got ' + pillValue(full, 'dependencies'));
     ok('A5 control: an empty read still yields a canonical 0',
-       pillValue(empty, 'Registered') === '0', 'got ' + pillValue(empty, 'Registered'));
+       pillValue(empty, 'registered') === '0', 'got ' + pillValue(empty, 'registered'));
   });
 
   /* ── B. A secret never reaches the DOM ───────────────────────────── */

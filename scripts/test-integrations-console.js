@@ -49,6 +49,29 @@ function makeEl (id) {
   };
   return el;
 }
+/* A Firestore stub that SUCCEEDS and returns nothing. Without it the registry
+   read fails, the console correctly renders "could not be read", and the
+   empty-registry branch — the one RC-2 is about — is never exercised. An empty
+   collection and an unreadable one are different states, and this suite has to
+   be able to produce both. */
+function makeFirebase (docsByCollection) {
+  const by = docsByCollection || {};
+  return {
+    firestore: function () {
+      return { collection: function (name) {
+        return { limit: function () { return { get: function () {
+          const rows = by[name] || [];
+          return Promise.resolve({
+            forEach: function (fn) { rows.forEach(function (r, i) {
+              fn({ data: function () { return r; }, id: r.id || ('d' + i) });
+            }); },
+          });
+        } }; } };
+      } };
+    },
+  };
+}
+
 function makeWindow () {
   const head_ = makeEl('head');
   const doc = {
@@ -81,6 +104,7 @@ function mountWith (statusResponse, opts) {
   const win = makeWindow();
   const ctx = vm.createContext(win);
   ctx.window = win;
+  if (opts && opts.firestore) ctx.firebase = win.firebase = opts.firestore;
   vm.runInContext(CAT, ctx);                     /* real catalogue */
   vm.runInContext(SRC, ctx);                     /* the shipped module */
   const host = makeEl('host');
@@ -297,6 +321,42 @@ const settle = () => new Promise(r => setImmediate(() => setImmediate(r)));
        ops.join(',') === "op: 'adminGetIntegrationStatus'", ops.join(','));
     ok('no Daraja surface exists in the console',
        !/daraja/i.test(code));
+  }
+
+  /* ── 9. RC-2 — THE REGISTRY IS A LOG, NOT AN INVENTORY ──────────────────── */
+  head('9 - an empty registry never implies an unavailable service');
+  {
+    const reg = mountWith({ integrations: [record()], counts: {}, inventoryReadable: true },
+      { firestore: makeFirebase({}) });   /* reads SUCCEED and return zero rows */
+    await settle();
+    reg.api.tab('registered');
+    const html = reg.host.innerHTML;
+
+    /* The registry cannot be an inventory: platformRegisterService needs an
+       authenticated browser session, one page calls init(), and the sweep marks
+       anything not heartbeating for five minutes stale. So the tab must not be
+       presented as a list of what exists. */
+    ok('the tab is named as a self-registration log',
+       /Self-registration log/.test(html));
+    ok('it is no longer labelled simply "Registered"',
+       !/>Registered<span class="sic-pill"/.test(html));
+    ok('an empty registry states it is NOT unavailability',
+       /not<\/strong> an indication that any integration or service is unavailable/.test(html));
+    ok('and points at the authoritative model instead',
+       /authoritative model/.test(html));
+    ok('the canonical-zero distinction is preserved',
+       /canonical zero/.test(html) && /not a failed read/.test(html));
+
+    /* THE THING THAT MUST NOT HAPPEN. Populating the registry from the
+       catalogue would manufacture evidence and create exactly the staleable
+       second source this workstream exists to remove. */
+    const code = strip(SRC);
+    ok('the console never writes to the registry',
+       !/platformServices[^)]*\.(set|add|update)\(/.test(code));
+    ok('and never seeds it from the catalogue',
+       !/platformRegisterService/.test(code));
+    ok('posWebhooks is kept separate from the service registry',
+       /posWebhooks/.test(code) && !/posWebhooks[\s\S]{0,80}platformServices/.test(code));
   }
 
   console.log('\n  what this suite does NOT prove');
