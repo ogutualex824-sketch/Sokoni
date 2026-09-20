@@ -3,7 +3,9 @@
 **Status:** Accepted · **not implemented** · 2026-09-20 · **amended 2026-09-20** (§2 resolver
 shape + `via` taxonomy, after a read-only authority trace; §8 records a finding this ADR does not
 repair) · **2a decided 2026-09-20** — platform admin eligible, taxonomy frozen at four values ·
-**§6 amended 2026-09-20** — twelve events, explicit system actor, deterministic event keys
+**§6 amended 2026-09-20** — twelve events, explicit system actor, deterministic event keys ·
+**§5/§6 amended 2026-09-20** — `changedVia` gains `invitee`; hrStaff.status renamed
+`employmentStatus`; establishment produces pending+null; invite_revoked reconsidered and affirmed
 **Supersedes nothing. Constrains:** `functions/hr-payroll.js`, `hrStaff`, and any future AdminOS
 employee surface.
 **Depends on:** [[ADR-001]] (authorization comes from claims, never from a Firestore field),
@@ -236,6 +238,38 @@ EMPLOYMENT
 `workStatus` is meaningful **only** while `employmentStatus == 'active'`. A terminated record's
 `workStatus` is not consulted.
 
+#### The field is named `employmentStatus` in the CODE too — AMENDED 2026-09-20
+
+`hrStaff` currently carries a field called `status`, and `addStaffMember` writes
+**`status: 'active', uid: null`** — a state this model says cannot exist, since `active` is the
+payable state and nothing is bound to pay. `runPayroll` selects `where('status','==','active')` and
+**never consults `uid`**, so an employment record with no identity is payable today. `hrStaff` is
+empty in production, so nothing has exercised it.
+
+The contract and the code will use **one name**. Keeping `status` while the ADR says
+`employmentStatus` is the `employeeNo` / `employeeNumber` defect again — a field the writer and the
+reader spell differently — which is where this whole sequence began.
+
+**Establishment produces `employmentStatus: 'pending'`, `workStatus: null`, `uid: null`.** The
+`active + uid: null` birth path is eliminated, not merely deprecated.
+
+Traced blast radius — **four consumers, no rules, no indexes, no other writer**:
+
+```
+functions/hr-payroll.js:592    runPayroll          where('status','==','active')   payability
+functions/hr-payroll.js:1261   getStaffDashboard   where('status','==','active')   active count
+hr-payroll.html:1067           s.status === 'active'                               a badge
+hr-payroll.html:1528           s.status !== 'inactive'                             the active filter
+```
+
+That last line tests `'inactive'`, **a value no writer has ever written** — so the field's
+vocabulary is already incoherent between writer and reader. The rename surfaces that; leaving the
+name alone would preserve it.
+
+**FORBIDDEN:** repairing payroll's payability rule while making this change. Mechanism #3 changes
+the state establishment CREATES; whether `on_leave` or `suspended` are payable, and whether
+`runPayroll` should consult `uid` at all, is §Open 6 and belongs to mechanism #6.
+
 #### Owner actions
 
 | action | employment | work | active roster | record kept |
@@ -391,11 +425,62 @@ is structured instead:
 |---|---|---|---|
 | owner suspends | `human` | owner uid | `owner` |
 | platform admin terminates | `human` | platform uid | `platform` |
+| **invitee accepts their own invitation** | `human` | **invitee uid** | **`invitee`** |
 | scheduled leave completes | `system` | `null` | `system` |
 
-`changedVia` is **not re-derived from the token** — it is the `via` that
-`resolveMerchantAccess` already returned (§2). The authority layer decides it once; the history
-records what was decided. A scheduled suspension end, if ever added, reuses the same system actor.
+```
+actorType 'human'  → changedVia ∈ { owner, platform, invitee }   changedBy REQUIRED
+actorType 'system' → changedVia === 'system'                     changedBy MUST be null
+```
+
+#### `invitee` — AMENDED 2026-09-20, and why it is not `system`
+
+Acceptance is performed by the **employee**, who is none of owner, platform or system. Recording it
+as `system` would be false twice over: a human caused it, and their uid is right there in
+`request.auth.uid`. The value separates **who acted** from **how that actor was authorized for that
+particular transition** — an invitee is authorized for exactly one transition, on exactly one
+employment, by holding the invited identity.
+
+> **TWO VOCABULARIES, DELIBERATELY DIFFERENT. Do not merge them.**
+> `resolveMerchantAccess` returns `via ∈ { owner, admin, self, platform }` — **frozen at four**
+> (§2) — and it never returns `invitee`: there is no organization-authority arm for an invitee,
+> because accepting an invitation is not organization authority.
+> The history's `changedVia ∈ { owner, platform, invitee, system }` is a different set that merely
+> overlaps. `admin` and `self` are absent from it because neither may cause an employment
+> transition at all; `invitee` and `system` are absent from the resolver because neither is a way
+> of being authorized for an organization.
+
+For the transitions the resolver does decide, `changedVia` is **not re-derived from the token** —
+it is the `via` that `resolveMerchantAccess` already returned. The authority layer decides it once;
+the history records what was decided. A scheduled suspension end, if ever added, reuses the same
+system actor.
+
+#### Mechanism #3 consumes exactly four of the twelve — AMENDED 2026-09-20
+
+| event | before | after | actor |
+|---|---|---|---|
+| `employment_established` | — | `pending` / `null` | owner \| platform |
+| `invite_sent` | `pending` / `null` | `pending` / `null` | owner \| platform |
+| `invite_accepted` | `pending` / `null` | `active` / `working` + bound uid | **invitee** |
+| `invite_revoked` | `pending` / `null` | `terminated` / `null` | owner \| platform |
+
+The other eight remain unconsumed; they belong to mechanisms #1, #5 and #7.
+
+**`invite_revoked` was RECONSIDERED on 2026-09-20 and AFFIRMED.** The objection was fair — the
+evidence proves an *invitation* can be revoked, not that a *pending employment relationship* should
+end — and two alternatives were weighed: leaving the record `pending` (which re-creates the
+never-closing record this decision exists to prevent, unless something else closes it), and adding
+a fourth `employmentStatus: 'revoked'` (which widens a three-value axis and every consumer of it).
+**Neither was adopted.** If product later needs a distinct revoked state, or direct resurrection of
+a pending employment, that is a deliberate future amendment — not something introduced
+opportunistically while implementing #3.
+
+> **KNOWN PRE-#1 GAP, recorded deliberately.** Mechanism #3 does **not** enforce the
+> `(businessId, uid)` uniqueness invariant of §4. `invite_accepted` binds a uid without checking
+> whether that uid already holds an active employment in the same organization, so two active
+> records for one person in one business are reachable until mechanism #1 lands. This is a stated
+> gap, not an oversight: enforcing it inside #3 would pull #1's uniqueness mechanism — claim
+> document versus transactional query, still undecided — into the binding gate.
 
 #### Idempotency lives in the document id
 
