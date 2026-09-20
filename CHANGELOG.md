@@ -1,3 +1,135 @@
+## 2026-09-20 (119) — NOT-DIRTY is not dead, it is the wrong measurement
+
+**Test integrity · COMMITTED `4f487a9` · test-only · no production behaviour changed · NOT DEPLOYED.**
+
+Census case 4 from entry (114) — and the repair `fc0f758` named in advance and deliberately left for
+a separate decision. This is that decision.
+
+### The defect, and its original mechanism
+
+A4 landed at **`b4c9495`** (2026-09-20 11:47:49), which **added** this suite. Its scope section
+carried **two** groups over one live-tree mechanism, pointing in opposite directions:
+
+```
+const dirty = execFileSync('git', ['-C', ROOT, 'status', '--porcelain'], …)
+                .split('\n').filter(Boolean).map(l => l.slice(3));
+
+GROUP A   "files that must not have been touched by A4"    dirty.indexOf(f) === -1    5 paths
+GROUP B   "AdminOS path still dirty (not reverted)"        dirty.indexOf(f) >  -1     7 paths
+```
+
+Group B expired **loudly** when the AdminOS work was legitimately committed in release batch
+`c1c923c`: seven assertions failed while nothing was wrong, presenting as a subscription-entitlement
+failure immediately after an unrelated integrations change. `fc0f758` replaced it with **content
+markers** that hold whether the work is dirty, staged or committed — and then recorded, in terms,
+that Group A *"will rot the same way the moment anyone legitimately edits"* the five files.
+
+### The adjudication
+
+Group A is a **historical landing-scope claim**: *did the A4 landing touch these five files?* The
+mechanism answered a different question — *are these five files dirty right now?*
+
+> **NOT-DIRTY is not inherently dead.** That was the framing to be tested, and it did not survive
+> measurement. The assertion can still fail, readily — and **for the wrong reason**. It has *both*
+> failure modes: a **false positive** while unrelated authorized work is in flight, and a **vacuous
+> pass** once that work is committed. It is not an expired guard like the `merchant-authority.js`
+> assertion retired in entry (117), which could never fail at all. It is the wrong **measurement**
+> for the claim, which makes it a re-anchor and not a retirement.
+
+### The false positive, measured both ways
+
+Appending a single comment to `functions/sub-engine.js` — a file A4 never touched:
+
+```
+BEFORE the repair    78 passed, 1 failed   FAIL  functions/sub-engine.js untouched
+AFTER  the repair    76 passed, 0 failed
+```
+
+The same mutation, before and after. **The failure mode changed, rather than the code being
+rearranged** — which is the only evidence that distinguishes a repair from a reshuffle.
+
+### The repair
+
+```
+git diff --name-only b4c9495~1 b4c9495 -- <the five>      →  EMPTY
+git diff --name-only b4c9495~1 b4c9495 -- functions/index.js  →  reported
+```
+
+The claim held at the landing and now holds **permanently**, immune to any later edit. The anchor is
+**self-verifying** — named by what the commit *did*, it being the one that **added this suite** — so
+a rewritten or moved ref **refuses to report a scope verdict** rather than returning an empty diff
+that reads exactly like a landing which respected its boundary. Paired with a positive control, so a
+comparison that can never match is caught.
+
+### GROUP B WAS NOT CHANGED
+
+> **Zero Group B lines appear in the diff.** Its seven AdminOS content markers and their inverting
+> control remain a **present-state contract**, and present-state is exactly the right measurement
+> there: a revert removes the marker.
+
+The two halves of one mechanism needed **opposite** treatments and keep them. That is the case-4
+lesson, and it mirrors entry (117)'s: the symptom does not determine the repair, the *claim* does.
+
+### Proof grid — 9/9, byte-identical restore of the suite, `sokoni-aos-users.js` **and** `functions/sub-engine.js`
+
+```
+RED    a protected path swapped for functions/index.js
+RED    the suite itself placed in the protected set
+RED    the anchor pointed at another commit            refuses, 2 failures
+RED    the anchor ref unresolvable                     refuses, 2 failures
+RED    the positive control pointed at an untouched path
+GREEN  a Group A file made DIRTY today                 ← THE decisive row
+RED    an AdminOS content marker removed               ← Group B still live
+RED    the inverting control fed a matching source     ← Group B still live
+GREEN  the comment reworded
+```
+
+Two grid vectors of mine were wrong before they were right, and **both failed closed**: an inert
+`true &&` mutation that was a no-op, and an anchor whose `\.` lost its backslash inside a
+double-quoted string. An inert vector is a **vector** defect, not a suite defect — the same
+correction made twice in entry (113).
+
+### No stranded helper
+
+Unlike census case 1 (entry 118), the live-tree reader was **wholly contained** in Group A's
+mechanism and went with it. `execFileSync` now has exactly one consumer, the new `a4git`. No
+follow-up deletion is warranted.
+
+### Files affected
+- `scripts/test-subscription-entitlement.js` — +60 / −7. The seven deletions are exactly Group A's
+  comment, the `execFileSync` destructure, the `dirty` reader and the five-path `forEach`.
+
+### Result
+**76 passed, 0 failed** (was 78/0 — five per-file assertions replaced by three).
+
+### History preserved
+`c1c923c` and `fc0f758` remain recorded in the surviving comment. The loud Group B failure is *why*
+Group B is already a current contract and must stay separate; erasing it would remove the reason the
+two halves are treated differently.
+
+### Database / API / Security changes
+**None.** Test-only. No production code, no rules, no indexes.
+
+### Deployment
+**NOT DEPLOYED.**
+
+### Breaking changes
+None.
+
+### Census status
+
+```
+CASE 1  COMPLETE   d37c7e3 · 8f2261a · 816fea1
+CASE 2  COMPLETE   43b4b85
+CASE 4  COMPLETE   4f487a9
+CASE 3  OPEN       test-functions-require-closure-gate.js
+```
+
+> **Case 3 remains untouched and must not acquire an invented boundary.** Its porcelain check is
+> paired with a *content* assertion (`reason: 'manual_payment_unavailable'`) that is
+> boundary-independent and may well be the real guard — the Group B shape. But its intended landing
+> is stated nowhere, and if history cannot establish it, **unresolved** is the honest outcome.
+
 ## 2026-09-20 (118) — The reader was dead; the parser was under contract
 
 **Test integrity · COMMITTED `816fea1` · test-only · no production behaviour changed · NOT DEPLOYED.**
