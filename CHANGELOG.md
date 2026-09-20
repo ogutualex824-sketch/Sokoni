@@ -1,3 +1,157 @@
+## 2026-09-21 (121) — The search that would have found nothing, twice
+
+**Documentation · COMMITTED `9ec57dd` · ADR correction only · no implementation · NOT DEPLOYED.**
+
+ADR-035 §4 named **"mechanisms #5/#7"** as the owner of the claim-release, rebind and reinstatement
+contracts. A read-only search-validity gate established that this was an **inherited pointer, never
+supported by implementation evidence**. The attribution is corrected; the frozen termination contract
+is untouched.
+
+### Why the attribution had to be tested rather than inherited
+
+It was written as prose in a frozen document, which is the form in which an assumption is least
+visible. Entry (116) recorded the same shape in code — Gate 1's protected set, substituted by a later
+mechanism and read as settled because it was written down. The remedy is the same: trace the claim to
+evidence, or mark it unresolved.
+
+### The instrument was validated before its silence was trusted
+
+An empty search has two meanings — *no implementation exists*, or *the search could not see it*. So
+the predicate had to find a known target first:
+
+```
+POSITIVE CONTROL   revokeEmploymentInvite      employment-invites.js:410
+                   t.update(staffRef, { employmentStatus: 'terminated', workStatus: null })
+                   exactly ONE hit — and explicitly the WRONG lifecycle
+
+REACHABILITY       _requirePendingEmployment (:109) throws unless
+                   employmentStatus === 'pending'
+                   → it CANNOT reach an accepted employment
+                   its own comment: "a terminated record stays terminated"
+```
+
+### THE FINDING — the predicate needed a third observable
+
+Two were specified in advance. The census found a third **before** the negative conclusion was
+accepted:
+
+```
+1  inline literal      employmentStatus: 'terminated'      1 write site
+2  constant-mediated   ENDED                               ZERO write sites
+3  bare field          status: 'terminated'                2 write sites   ← NOT SPECIFIED
+```
+
+Observable 3 — `workforce-identity.js:534` and `org-engine.js:860` — writes the field **`status`**,
+not `employmentStatus`.
+
+> **A predicate covering only observables 1 and 2 would have reported "no termination implementation
+> exists" while two live termination handlers sat in the tree.** The conclusion survives; the
+> instrument that reached it nearly did not.
+
+### Two terminations, one word
+
+```
+workspaceMemberships   status: 'terminated' + terminatedAt/By/Reason      IMPLEMENTED
+                       workforce-identity.js — ZERO hrStaff references
+                       org-engine.js — the nine-state model of entry (108)
+
+hrStaff                employmentStatus: 'terminated' from ACTIVE          ABSENT
+```
+
+Termination **is** implemented in this repository — for a different model, on a different collection,
+under a different field name. Separating the two is what the third observable made possible, and
+conflating them would have produced the opposite error: *"termination exists, so it must own this."*
+
+### The negative search
+
+Exactly **two** modules touch `hrStaff`. The complete write inventory:
+
+```
+employment-invites.js:322   →  active / working     acceptEmploymentInvite
+employment-invites.js:410   →  terminated / null    revokeEmploymentInvite — PENDING-ONLY
+hr-payroll.js:430           →  pending / null       addStaffMember
+```
+
+`hr-payroll.js` writes `employmentStatus` twice, both `'pending'`. **No writer transitions an active
+employment to terminated.**
+
+### ENDED has no write-site control, and none was manufactured
+
+`ENDED`'s only reference is `newStatus: ENDED` at `employment-invites.js:402` — **event metadata, not
+a Firestore write**. The constant-mediated write form is exercised by nothing, so observable 2's
+control could not be run. **Recorded as weaker evidence and labelled as such**, per the rule that a
+control must be found rather than invented.
+
+It corroborates rather than weakens the finding: `PENDING` and `WORKING` are written as payloads,
+`ENDED` never is. A terminal constant no write path reaches is what an unimplemented terminal
+transition looks like.
+
+### Why #5 and #7 do not own it
+
+```
+#5  work-status axis    on_leave / suspended
+    vocabulary now in TWO places — ADR-035 §5 and employment-events.js:93-94
+    (LEAVE_ENDED, SUSPENDED) — and written by NOTHING.
+    Vocabulary in two places, behaviour in none.
+
+#7  shop assignment     shopEmployees {shopId}_{uid}
+    vs hrStaff {merchantId}_{employeeNumber}. NO module reads both, and ADR-016
+    forbids inventing the bridge. Termination cannot atomically revoke a shop
+    assignment because no path derives a shopId from a staffId.
+```
+
+### Verdict — UNASSIGNED
+
+Three attributions corrected (§4 twice, §6 once) plus the status header, and a new §4 subsection
+recording the gate.
+
+> **FORBIDDEN:** assigning termination to #5, to #7, or to a newly minted number without the
+> mechanism registry deliberately making that decision. *"No implementation found"* does not mean
+> *"therefore #5/#7 owns it"* — **and it does not authorize creating an owner by fiat.** Repeating
+> the inherited-pointer failure in the opposite direction would be the same defect with a different
+> value.
+
+### The frozen contract is UNCHANGED — verified clause by clause in the committed blob
+
+```
+active/working → terminated/null    ·  uid RETAINED
+employmentUidClaims deleted ATOMICALLY with the termination
+employment_terminated written in the same transaction
+guarded by: active + uid exists + THE CLAIM'S staffId IS THIS EMPLOYMENT
+no shop-assignment revocation — the bridge does not exist
+revokeEmploymentInvite remains PENDING-ONLY and must not be extended
+"Mechanism #1 does not implement termination"
+```
+
+Until an owner is deliberately assigned, an accepted employment's occupancy claim remains
+**unreleasable** — now an *unresolved ownership question* rather than a *dependency on #5/#7*. A
+weaker and more accurate statement of the same boundary.
+
+### Files affected
+- `docs/adr/ADR-035-employment-and-identity-binding.md` — +110 / −4. The four deletions are exactly
+  the three `#5/#7` attributions and the status-header line that was extended.
+
+### Database / API / Security changes
+**None.** Documentation only. No implementation, no rules, no indexes, no mechanism number invented.
+
+### Deployment
+**NOT DEPLOYED.**
+
+### Breaking changes
+None. An attribution corrected; a contract preserved.
+
+### What remains, and what it is not
+
+```
+IMPLEMENTATION   absent for accepted hrStaff employment
+CONTRACT         frozen
+OWNERSHIP        UNVERIFIED / UNASSIGNED
+```
+
+The next step is a **governance decision, not an investigation** — whether termination receives a new
+mechanism identity or is deliberately claimed by an existing one. The evidence needed to make it is
+now on the record. **No implementation may begin until that ownership decision is explicitly made.**
+
 ## 2026-09-20 (120) — A guard that only looks redundant, and the census that did not sweep it
 
 **Adjudication · NO CHANGE · read-only plus one restored proof mutation · NOT DEPLOYED.**
