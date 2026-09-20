@@ -29,8 +29,30 @@ const engine = require('./entitlement-engine');
 const _db = () => getFirestore();
 
 const FLAG_DOC   = '_systemConfig/entitlementEngine';
-const PLAN_DAYS  = 30;                       /* matches activateSubscription */
+/* PLAN_DAYS is a FIXED SPAN for the purpose registry and the healthcare adapter —
+   it is NOT the subscription entitlement contract, and the comment that used to
+   claim it "matches activateSubscription" has been false since A4 made that path
+   derive its period from the purchased billing cycle.
+
+   It is deliberately NOT removed: registerPurpose's `expiresDays` and the
+   healthcare adapter's currentPeriodEnd/renewalAt still depend on it, and those
+   are separate contracts that have not been adjudicated. Only the subscription
+   adapter's dependency on it is gone (A4-F3E). */
+const PLAN_DAYS  = 30;
 const VALID_PLANS = new Set(['free', 'starter', 'pro', 'business']);
+
+/* Calendar period, matching activateSubscription, the reconciliation backstop and
+   sub-billing.js. Defined locally like the other three rather than imported: no
+   module exports one, sub-billing.js is a Cloud Functions surface, and requiring
+   index.js from here would be circular. scripts/test-entitlement-adapter-period.js
+   asserts this agrees with all three on every boundary vector, so a divergence
+   fails a suite instead of silently producing a different answer. Collapsing the
+   four copies onto one shared module is a separate, still-unmade decision. */
+function _periodEnd(start, cycle) {
+  const r = new Date(start);
+  r.setMonth(r.getMonth() + (cycle === 'annual' ? 12 : 1));
+  return r;
+}
 
 /* ── Feature flags ────────────────────────────────────────────────────────
    One document, one boolean per domain, default OFF, and the read FAILS
@@ -71,7 +93,38 @@ const subscription = {
     const plan      = String(ctx.intent.planId || ctx.intent.plan || ctx.resourceId);
     const uid       = ctx.ownerUid;
     const subRef    = _db().collection('subscriptions').doc(uid);
-    const expiresAt = Timestamp.fromDate(new Date(Date.now() + PLAN_DAYS * 86400000));
+
+    /* ── ENTITLEMENT FOLLOWS THE PURCHASED CYCLE (A4-F3E) ───────────────────
+       This wrote PLAN_DAYS — a flat thirty days — while ctx.intent, which
+       carries billingCycle, was already in hand.
+
+       This path is SHADOW-ONLY and stays that way. It is reached through
+       webhookIntasend -> shadowCompareSubscription -> engine.simulate(), which
+       passes a capture object whose set/create/update/delete are recorded and
+       never applied; the engine's own ledger has no rows, so no real
+       activation has ever run through here. Nothing below makes this
+       authoritative.
+
+       The repair is drift prevention, not damage repair. A shadow comparison
+       that reports a spurious expiry mismatch trains readers to ignore it — one
+       of the two comparisons in production is exactly that — and if a future
+       caller ever routes a `subscription` intent into engine.activate(), this
+       would become a live writer still carrying the defect A4 and F3-D removed
+       from the other three.
+
+       FAILS CLOSED. An unknown cycle throws, which engine.simulate() records as
+       an engine_error on the comparison document rather than silently
+       simulating a month. Consistent with activateSubscription, which also
+       throws; webhookIntasend skips instead only because it must not fail a
+       live payment. */
+    const cycle = ctx.intent.billingCycle;
+    if (cycle !== 'monthly' && cycle !== 'annual') {
+      const e = new Error(`Subscription intent records no billing cycle ("${cycle}"), ` +
+                          'so the entitlement period cannot be determined.');
+      e.code = 'billing_cycle_missing';
+      throw e;
+    }
+    const expiresAt = Timestamp.fromDate(_periodEnd(new Date(), cycle));
 
     /* set() rather than create(): a renewal is a NEW paymentRef, so the engine
        ledger already guarantees this runs once per payment. Overwriting the

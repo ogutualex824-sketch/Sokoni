@@ -66,6 +66,12 @@ const seed = (ref, over = {}) => {
   store.paymentIntents[ref] = Object.assign({
     purpose: 'subscription', planId: 'starter', ownerUid: 'u1',
     amountCents: 49900, currency: 'KES', status: 'created',
+    /* createPaymentIntent has always normalised and persisted this; the fixture
+       predates it being read. Since A4-F3E the adapter derives its period from
+       it and refuses without it, exactly as activateSubscription does, so an
+       intent without one is no longer a realistic subscription intent. The
+       scenarios below are about exactly-once convergence and are unchanged. */
+    billingCycle: 'monthly',
   }, over.intent || {});
   store.payments[ref] = Object.assign({
     status: 'COMPLETE', uid: 'u1', amountCents: 49900, currency: 'KES',
@@ -148,7 +154,7 @@ const ents = () => Object.keys(store.entitlements).length;
   t('unpaid intent rejected', () => blocked2);
   t('no entitlement from unpaid', () => ents() === 0);
 
-  reset(); seed('R6', { intent: { purpose: 'subscription', planId: 'enterprise', ownerUid: 'u1', amountCents: 1, currency: 'KES' },
+  reset(); seed('R6', { intent: { purpose: 'subscription', planId: 'enterprise', ownerUid: 'u1', amountCents: 1, currency: 'KES', billingCycle: 'monthly' },
                         payment: { status: 'COMPLETE', uid: 'u1', amountCents: 1, currency: 'KES' } });
   let blocked3 = false;
   try { await engine.activate('R6', { source: 'webhook' }); } catch (e) { blocked3 = e.code === 'plan_invalid'; }

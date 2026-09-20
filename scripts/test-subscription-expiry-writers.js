@@ -189,11 +189,25 @@ const KNOWN = [
   { id: 'W3', file: 'functions/payment-reconciliation.js', fn: 'healSubscriptionEntitlement',
     reachable: true, authoritative: false, derived: true, superseded: true, latent: false,
     note: 'Declines whenever a document already exists, whatever its expiry.' },
+  /* A4-F3E corrected two things here. "LATENT" was wrong — this code EXECUTES on
+     every subscription payment, through webhookIntasend -> shadowCompareSubscription
+     -> engine.simulate(), which passes a capture transaction that records mutations
+     and applies none. And the earlier note credited _systemConfig/entitlementEngine
+     as the gate: isEngineEnabled() has NO call sites, so that flag gates nothing.
+     What makes W4 non-authoritative is purpose routing in the two callers of the
+     real engine.activate() — the reconciler sends 'subscription' to W3, and the
+     healthcare trigger returns on any other purpose — corroborated by an empty
+     engine ledger in production. */
   { id: 'W4', file: 'functions/entitlement-adapters.js', fn: 'activate()',
-    reachable: true, authoritative: true, derived: false, superseded: false, latent: true,
-    note: 'PLAN_DAYS=30. Gated by _systemConfig/entitlementEngine; the webhook invokes only ' +
-          'shadowCompareSubscription, not activate(). Latent until a reachable caller is proven.' },
+    reachable: true, authoritative: false, derived: true, superseded: false, shadow: true,
+    note: 'SHADOW-EXECUTED, NON-AUTHORITATIVE. Writes are captured by engine.simulate() ' +
+          'and never applied; the engine ledger has zero rows. Period derived from ' +
+          'ctx.intent.billingCycle since A4-F3E; no longer PLAN_DAYS-based.' },
 ];
+/* `latent` is retained as a category with no current member: a writer that exists
+   but neither executes nor writes is a real third state, and collapsing it into
+   `shadow` would lose the distinction the moment one appears. */
+KNOWN.forEach(k => { if (k.latent === undefined) k.latent = false; });
 
 /* ══════════════════════════════════════════════════════════════════════════ */
 console.log('══════════════════════════════════════════════════════════════════');
@@ -311,8 +325,9 @@ head('3 - the classified writers are all present');
 /* ── 4. THE INVARIANT, STATED AS SUCH ─────────────────────────────────────── */
 head('4 - the invariant this gate exists to protect');
 {
-  console.log('        No reachable subscription writer may produce an entitlement');
-  console.log('        duration inconsistent with the authoritative billingCycle.\n');
+  console.log('        Every subscription-expiry writer — including shadow writers —');
+  console.log('        derives its period from the authoritative billingCycle, unless it');
+  console.log('        is explicitly proven to represent a different contract.\n');
 
   /* DERIVED is DETECTED, not trusted. A table saying "W2 is fixed" would go on
      saying it after someone reintroduced day arithmetic; reading the enclosing
@@ -327,40 +342,69 @@ head('4 - the invariant this gate exists to protect');
       daySpan: /\d+\s*\*\s*86400000/.test(c) || /PLAN_DAYS\s*\*/.test(c),
     };
   };
+  /* Three states, not two: a writer that decides entitlement, one that runs but
+     whose writes are captured and discarded, and one that neither runs nor
+     writes. Collapsing them loses the distinction that made W2 dangerous and
+     W4 merely misleading. */
+  const stateOf = (k) => k.latent ? 'LATENT' : (k.shadow ? 'SHADOW' : 'LIVE');
   found.forEach(w => {
-    const k = KNOWN.find(x => x.file === w.file && x.fn === w.fn) || { id: '??', latent: false };
+    const k = KNOWN.find(x => x.file === w.file && x.fn === w.fn) || { id: '??' };
     const c = classify(w);
     const verdict = c.daySpan ? 'FLAT SPAN' : (c.callsPeriodFn ? 'derived' : 'unknown');
-    console.log('        ' + (k.id + '   ').slice(0, 4) + (k.latent ? 'LATENT  ' : 'live    ') +
-      (verdict + '        ').slice(0, 10) + w.fn);
+    console.log('        ' + (k.id + '   ').slice(0, 4) + (stateOf(k) + '        ').slice(0, 8) +
+      (verdict + '        ').slice(0, 10) + w.fn +
+      (k.authoritative ? '   [authoritative]' : ''));
   });
   console.log();
 
   const live = found.filter(w => {
     const k = KNOWN.find(x => x.file === w.file && x.fn === w.fn);
-    return k && k.reachable && !k.latent;
+    return k && k.reachable && !k.latent && !k.shadow;
   });
   ok('control — there are live writers to judge', live.length === 3, live.length + ' live');
 
-  const violating = live.filter(w => { const c = classify(w); return c.daySpan || !c.callsPeriodFn; });
-  ok('THE INVARIANT — every live writer derives its period from the cycle',
+  /* The invariant now covers shadow writers too: a shadow comparison that reports
+     a spurious mismatch trains readers to ignore it, and a shadow writer is one
+     routing change away from being a live one. */
+  const judged = found.filter(w => {
+    const k = KNOWN.find(x => x.file === w.file && x.fn === w.fn);
+    return k && !k.latent;
+  });
+  const violating = judged.filter(w => { const c = classify(w); return c.daySpan || !c.callsPeriodFn; });
+  ok('THE INVARIANT — every executing writer derives its period from the cycle',
      violating.length === 0,
-     violating.map(w => w.fn).join(' · ') || 'W1, W2, W3 all derived');
+     violating.map(w => w.fn).join(' · ') || 'W1, W2, W3, W4 all derived');
+  ok('control — that judged all four, not a filtered-down subset',
+     judged.length === 4, judged.length + ' judged');
 
-  /* INVERTING CONTROL. "No violators" is worthless unless the check can find
-     one — and W4, deliberately untouched, is exactly that specimen. */
-  const w4 = found.find(w => w.file === 'functions/entitlement-adapters.js');
-  ok('INVERTING CONTROL — the check still flags the untouched W4',
-     !!w4 && classify(w4).daySpan === true, 'PLAN_DAYS span detected');
-  ok('W4 remains classified LATENT, not reachable-and-live',
-     KNOWN.filter(k => k.latent).map(k => k.id).join(',') === 'W4');
+  /* INVERTING CONTROL. W4 used to be the live specimen proving this check could
+     find a violator; F3-E derived it, so that specimen is gone. A synthetic one
+     replaces it — without this, "no violators" cannot be distinguished from a
+     classifier that has stopped working. */
+  const flatFixture = census(
+    'async function fakeRenewal (uid) {\n' +
+    '  const ref = db.collection("subscriptions").doc(uid);\n' +
+    '  await ref.set({ uid, expiresAt: new Date(Date.now() + 30 * 86400000), updatedAt: n });\n' +
+    '}\n', 'functions/_synthetic-flat.js').rows;
+  ok('INVERTING CONTROL — a synthetic flat-span writer IS flagged',
+     flatFixture.length === 1 && classify(flatFixture[0]).daySpan === true,
+     flatFixture.length ? 'flagged' : 'MISSED — the invariant above is vacuous');
+
+  ok('W4 is SHADOW-EXECUTED, not latent and not live-authoritative',
+     KNOWN.filter(k => k.shadow).map(k => k.id).join(',') === 'W4' &&
+     KNOWN.find(k => k.id === 'W4').authoritative === false);
+  ok('and no writer is classified LATENT any more',
+     KNOWN.filter(k => k.latent).length === 0, 'category retained, currently empty');
 
   /* Superseded writers are why the defect was not self-correcting: the two
      corrected writers both yield to whatever W2 wrote first. */
   const yielding = KNOWN.filter(k => k.superseded).map(k => k.id).sort().join(',');
   ok('W1 and W3 still yield to an existing document', yielding === 'W1,W3', yielding);
-  ok('W2 is still the one that establishes it',
-     KNOWN.filter(k => !k.superseded && !k.latent).map(k => k.id).join(',') === 'W2');
+  /* Shadow and latent writers are excluded here: neither establishes anything,
+     because neither's write is ever applied. */
+  ok('W2 is still the only writer that establishes the document',
+     KNOWN.filter(k => !k.superseded && !k.latent && !k.shadow).map(k => k.id).join(',') === 'W2',
+     KNOWN.filter(k => !k.superseded && !k.latent && !k.shadow).map(k => k.id).join(','));
 }
 
 console.log('\n  what this gate does NOT prove');
@@ -369,8 +413,8 @@ console.log('            outside functions/, would not be seen.');
 console.log('  HISTORY   A4\'s own suite still contains the unsound 40,000-char assertion.');
 console.log('            It is left as recorded evidence and superseded by this file,');
 console.log('            not edited to look as though it had been right.');
-console.log('  OPEN      W4 is knowingly non-derived. It is LATENT, not live, and stays');
-console.log('            outside the repair until its callers are established (A4-F3E).');
+console.log('  STATE     W4 is SHADOW-EXECUTED: it runs on every subscription payment via');
+console.log('            engine.simulate(), but its writes are captured and never applied.');
 
 console.log('\n══════════════════════════════════════════════════════════════════');
 console.log('  ' + pass + ' passed, ' + fail + ' failed');
