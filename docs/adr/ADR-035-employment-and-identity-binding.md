@@ -7,7 +7,10 @@ repair) · **2a decided 2026-09-20** — platform admin eligible, taxonomy froze
 **§5/§6 amended 2026-09-20** — `changedVia` gains `invitee`; hrStaff.status renamed
 `employmentStatus`; establishment produces pending+null; invite_revoked reconsidered and affirmed ·
 **§4 decided 2026-09-20** — uniqueness is a `create()`d occupancy claim, deleted on termination;
-rebind is two-claim atomic; reinstatement re-acquires and may fail
+rebind is two-claim atomic; reinstatement re-acquires and may fail ·
+**§4 boundary frozen 2026-09-20** — mechanism #1 is the claim + acceptance ONLY; no active-
+termination path exists to release it, so claim release, rebind and reinstatement are future
+consumer contracts. Immutable provenance permitted. workspaceMemberships is a different model.
 **Supersedes nothing. Constrains:** `functions/hr-payroll.js`, `hrStaff`, and any future AdminOS
 employee surface.
 **Depends on:** [[ADR-001]] (authorization comes from claims, never from a Firestore field),
@@ -239,6 +242,20 @@ that **existence is the answer**.
 **The claim records OCCUPANCY, never HISTORY.** It is not an audit record and must never be read as
 one; `employmentEvents` remains the sole historical authority (§6).
 
+#### Immutable provenance IS permitted — AMENDED 2026-09-20
+
+```
+employmentUidClaims/{businessId}_{uid} = { businessId, uid, staffId, createdAt }
+```
+
+> **The claim document has no mutable lifecycle or status field. Its EXISTENCE is the sole
+> occupancy signal. Immutable identifying / provenance fields may be stored for forensic
+> attribution and must never be consulted as an alternative employment authority.**
+
+`staffId` is what makes a collision diagnosable — it names *which* employment already holds the uid —
+and none of these four fields is ever read to decide anything. **`createdAt` is provenance, not a
+condition:** no invariant may depend on it, and nothing may compare or expire against it.
+
 #### Lifecycle — create and delete inside the state transition
 
 | operation | claim operation |
@@ -290,6 +307,52 @@ their uid.
 already established (§2, and mechanisms #5/#7), and must not be invented inside the uniqueness gate.
 Mechanism #1 supplies the invariant; it does not decide who may trigger the transitions that move it.
 
+#### The EXECUTABLE boundary — frozen 2026-09-20 after a read-only design pass
+
+A trace against the shipped code found that **no path terminates an ACTIVE employment.**
+`revokeEmploymentInvite` — the only writer of `employmentStatus: 'terminated'` on `hrStaff` — calls
+`_requirePendingEmployment` first, so it cannot reach an accepted employment. `uid_rebound` and
+`employment_reinstated` are declared in §6's vocabulary and performed by **no code**:
+`acceptEmploymentInvite` is the only writer of `hrStaff.uid` in the repository.
+
+```
+IN    employmentUidClaims/{businessId}_{uid}, existence-only
+      immutable provenance: businessId, uid, staffId, createdAt
+      CF-only rules
+      t.create() inside acceptEmploymentInvite's existing transaction
+      ALREADY_EXISTS loser handling; anything else re-raised
+      emulator-backed concurrent race proof, asserting FIRESTORE STATE
+
+OUT   active-employment termination      no path exists to attach a delete to
+      claim release / deletion
+      reinstatement                      no handler exists
+      uid_rebound                        no handler exists
+      workspaceMemberships               a different model — see below
+      employment lifecycle redesign · authority changes · indexes
+```
+
+> **STATED CONSEQUENCE, not a defect.** Until an authorized active-termination mechanism exists, an
+> accepted employment's occupancy claim is **not releasable by any existing code path**. That is a
+> deliberate dependency boundary on mechanisms #5/#7, not an omission in #1.
+
+**FORBIDDEN:** adding a `delete` to `revokeEmploymentInvite` to make the lifecycle table look
+complete. That path only ever sees a **pending** employment, which never acquired a claim — deleting
+a claim there would be deleting one that belongs to somebody else, or to nothing.
+
+**FORBIDDEN:** inventing a termination handler so the ADR reads as fully implemented. §4's `delete`,
+two-claim rebind and re-acquiring reinstatement rows stand as **required consumer contracts** for the
+mechanisms that will own those transitions — they are not unwritten parts of #1.
+
+#### `workspaceMemberships` is NOT this model
+
+Same-looking terminology, different contract. `org-engine.js` exports
+`orgUpdateEmploymentStatus` (live, re-exported in `index.js`) over
+`workspaceMemberships/{uid}_{businessId}` with a **nine-state** lifecycle —
+`probation · confirmed · suspended · on_leave · transferred · resigned · terminated · archived ·
+active` — against §5's three. It touches `hrStaff`, `employmentEvents` and `employmentUidClaims`
+**zero** times, and is deliberately unconverged (ADR-017/020). It is out of scope for #1 and must not
+be unified with it on the strength of a shared field name.
+
 #### Proof plan — emulator-backed, because the question IS contention
 
 The in-process harness in `test-employment-invites.js` **serialises transactions** and says so. It
@@ -301,17 +364,27 @@ concurrent transactions, following `scripts/test-order-claim-race.js`:
 
 At minimum:
 
+**EXECUTABLE NOW** — these have code paths and must be proven by #1:
+
 1. 10 concurrent accepts, different pending employments, same business + uid → **exactly one** active
 2. same uid across **different** businesses → both succeed
-3. termination releases the claim
-4. a new employment can then acquire the released claim
-5. concurrent rehire/acceptance, same business + uid → exactly one active
-6. reinstatement colliding with another active employment → fails
-7. rebind to an unused uid → succeeds
-8. concurrent rebind/acceptance targeting the same new uid → exactly one succeeds
+5a. concurrent acceptance collision on one business + uid → exactly one active *(the claim-collision
+    half of the original scenario 5)*
 9. a failed claim `create` produces **zero** employment mutation and **zero** employment event
 10. same-invite replay remains safe
 11. claim state after every scenario matches active-employment occupancy exactly
+
+**FUTURE CONSUMERS** — no code path exists, so #1 cannot prove them and must not pretend to:
+
+3. termination releases the claim
+4. a new employment can then acquire the released claim
+5b. rehire after a release → exactly one active *(the reinstatement half of scenario 5)*
+6. reinstatement colliding with another active employment → fails
+7. rebind to an unused uid → succeeds
+8. concurrent rebind/acceptance targeting the same new uid → exactly one succeeds
+
+The split is deliberate: calling 5 "half executable" in a certification summary would blur exactly
+the distinction between *proven* and *contracted* that the rest of this document maintains.
 
 **Final assertions must inspect FIRESTORE STATE**, never a returned `{ duplicate: true }` or an
 error value. The money-path harness's own finding is the reason: eight callers each reported success
