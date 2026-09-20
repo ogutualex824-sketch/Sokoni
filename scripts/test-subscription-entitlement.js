@@ -370,13 +370,66 @@ async function heal (over) {
     ok('SUB_PLAN_DAYS is no longer the subscription expiry rule',
        !/expiresAt = new Date\(Date\.now\(\) \+ SUB_PLAN_DAYS/.test(recon));
 
-    /* Files that must not have been touched by A4. */
-    const { execFileSync } = require('child_process');
-    const dirty = execFileSync('git', ['-C', ROOT, 'status', '--porcelain'], { encoding: 'utf8' })
-      .split('\n').filter(Boolean).map(l => l.slice(3));
-    ['functions/sub-engine.js', 'functions/sasos-core.js', 'functions/email-triggers.js',
-     'functions/subscription-authority.js', 'functions/sub-billing.js']
-      .forEach(f2 => ok(f2 + ' untouched', dirty.indexOf(f2) === -1));
+    /* ── FILES A4 MUST NOT HAVE TOUCHED — ANCHORED TO ITS LANDING ───────────
+       RE-ANCHORED 2026-09-20. This read `git status --porcelain` on the LIVE
+       WORKING TREE, which answers a different question than the one asked:
+
+           the claim      did the A4 LANDING touch these five files?
+           the mechanism  are these five files dirty RIGHT NOW?
+
+       `fc0f758` predicted this in terms when it repaired the AdminOS half and
+       deliberately left these alone: "they will rot the same way the moment
+       anyone legitimately edits sub-engine.js, sasos-core.js, email-triggers.js,
+       subscription-authority.js or sub-billing.js — at which point this suite
+       will fail for a reason that has nothing to do with subscription
+       entitlement." MEASURED 2026-09-20: appending one comment to sub-engine.js
+       took the suite from 78/0 to 77/1 on `functions/sub-engine.js untouched`.
+
+       NOT-DIRTY IS NOT INHERENTLY DEAD — it is the wrong MEASUREMENT for a
+       historical claim. It has both failure modes: a false positive while
+       unrelated authorized work is in flight, and a vacuous pass once that work
+       is committed. Against the frozen boundary the claim is true permanently
+       and no later edit can disturb it.
+
+       GROUP B BELOW IS DELIBERATELY UNTOUCHED. Those seven AdminOS markers are
+       a CURRENT content contract, not a scope claim — a revert removes the
+       marker, so present-state is exactly the right measurement there. The two
+       halves needed opposite treatments and keep them. */
+    const a4git = (...a) => require('child_process')
+      .execFileSync('git', ['-C', ROOT, ...a], { encoding: 'utf8' }).trim();
+
+    /* Self-verifying: a bare SHA would silently compare the wrong commit if
+       history were rewritten, and that empty diff reads exactly like a landing
+       which respected its boundary. A4 is named by what it DID — it is the
+       commit that ADDED this suite. */
+    const A4 = 'b4c9495';
+    const A4_SELF = 'scripts/test-subscription-entitlement.js';
+    const A4_PROTECTED = ['functions/sub-engine.js', 'functions/sasos-core.js',
+      'functions/email-triggers.js', 'functions/subscription-authority.js',
+      'functions/sub-billing.js'];
+
+    let a4Ok = false, a4Added = '';
+    try {
+      a4Added = a4git('show', '--name-status', '--format=', A4, '--', A4_SELF);
+      a4Ok = new RegExp('^A\\s+' + A4_SELF.replace(/[.\/]/g, '\\$&') + '$', 'm').test(a4Added);
+    } catch (e) { a4Added = 'ref unresolved: ' + ((e && e.message) || '').slice(0, 60); }
+    ok('the A4 landing resolves, and is the commit that ADDED this suite',
+       a4Ok, a4Added || 'no output');
+
+    if (!a4Ok) {
+      ok('A4 SCOPE ANCHOR UNVERIFIABLE — refusing to report a scope verdict', false,
+         'the boundary could not be established, so "untouched" would be unproven');
+    } else {
+      const a4Touched = a4git('diff', '--name-only', A4 + '~1', A4, '--', ...A4_PROTECTED);
+      ok('the five subscription modules are untouched BY THE A4 LANDING',
+         a4Touched === '', a4Touched || 'none of the five is in the landing');
+
+      /* POSITIVE CONTROL — an empty diff is equally consistent with a landing
+         that respected its boundary and a comparison that can never match. */
+      const a4Control = a4git('diff', '--name-only', A4 + '~1', A4, '--', 'functions/index.js');
+      ok('CONTROL: the same comparison DOES report a file the landing changed',
+         a4Control === 'functions/index.js', a4Control || 'EMPTY — the detector is blind');
+    }
     /* THE CERTIFIED AdminOS WORK MUST SURVIVE.
        This used to assert each path was still DIRTY. That was only ever a proxy
        for "A4 did not revert it", and the proxy died the moment the work was
