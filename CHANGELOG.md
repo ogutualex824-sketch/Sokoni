@@ -1,3 +1,122 @@
+## 2026-09-20 (105) — Three decisions taken before the code could settle them
+
+**Documentation only · COMMITTED `3df6dc8` · NO implementation authorized · NOT DEPLOYED.**
+
+A read-only trace for Gate 3 mechanism #3 surfaced two contract blockers and reopened a third
+question. All three are decided here, ahead of any code, because each would otherwise have been
+answered by whatever the implementation happened to do.
+
+### 1 — `changedVia` gains `invitee`, and the two vocabularies are separated
+
+The acceptor of an invitation is the **employee** — none of owner, platform or system. Recording
+acceptance as `system` would be false twice over: a human caused it, and their uid is sitting in
+`request.auth.uid`.
+
+```
+actorType 'human'  → changedVia ∈ { owner, platform, invitee }   changedBy REQUIRED
+actorType 'system' → changedVia === 'system'                     changedBy MUST be null
+```
+
+The value separates **who acted** from **how that actor was authorized for that particular
+transition**. An invitee is authorized for exactly one transition, on exactly one employment, by
+holding the invited identity.
+
+> **The trap this creates, and the paragraph that closes it.** `resolveMerchantAccess` returns
+> `via ∈ { owner, admin, self, platform }` — **frozen at four by 2a** — and never returns
+> `invitee`, because accepting an invitation is not organization authority. The history's
+> `changedVia` is a *different* set that merely overlaps: `admin` and `self` are absent from it
+> because neither may cause an employment transition, and `invitee` and `system` are absent from
+> the resolver because neither is a way of being authorized for an organization.
+>
+> Without that stated explicitly, the next reader sees "add `invitee` to `changedVia`", widens the
+> resolver's taxonomy to five, and undoes 2a.
+
+### 2 — `hrStaff.status` is renamed `employmentStatus`, in the code as well as the contract
+
+Keeping `status` while the ADR says `employmentStatus` is the **`employeeNo` / `employeeNumber`
+defect again** — a field the writer and the reader spell differently — which is where this entire
+payroll sequence began.
+
+**Establishment produces `employmentStatus: 'pending'`, `workStatus: null`, `uid: null`.** The
+`active + uid: null` birth path is **eliminated**, not deprecated. Today:
+
+```js
+addStaffMember   writes  status: 'active', uid: null
+runPayroll       selects where('status','==','active')   and never consults uid
+```
+
+So an employment record with no bound identity is payable — it would produce a payslip for a human
+the platform cannot name. `hrStaff` is empty in production, so nothing has exercised it.
+
+Traced blast radius — **four consumers, no rules, no indexes, no other writer**:
+
+```
+functions/hr-payroll.js:592    runPayroll          where('status','==','active')
+functions/hr-payroll.js:1261   getStaffDashboard   where('status','==','active')
+hr-payroll.html:1067           s.status === 'active'
+hr-payroll.html:1528           s.status !== 'inactive'      ← a value NO writer has ever written
+```
+
+That last line means the field's vocabulary is **already** incoherent between writer and reader. The
+rename surfaces it; leaving the name alone would preserve it.
+
+**FORBIDDEN: repairing payability in the same change.** Mechanism #3 changes the state establishment
+*creates*. Whether `on_leave` or `suspended` remain payable, and whether `runPayroll` should consult
+`uid` at all, is §Open 6 and belongs to mechanism #6.
+
+### 3 — `invite_revoked` reconsidered, and affirmed as `pending → terminated`
+
+The objection was fair: the evidence proves an *invitation* can be revoked, not that a *pending
+employment relationship* should end. Two alternatives were weighed and **both rejected**:
+
+| | why not |
+|---|---|
+| leave the record `pending` | re-creates the never-closing record this decision exists to prevent, unless something else closes it |
+| add `employmentStatus: 'revoked'` | widens a three-value axis, and every consumer of that vocabulary with it |
+
+Recorded as *reconsidered and affirmed* rather than silently retained, so a future reader can see the
+decision survived a challenge rather than never having been questioned. If product later needs a
+distinct revoked state, that is a deliberate amendment — not something introduced opportunistically
+while implementing #3.
+
+### Mechanism #3's four transitions
+
+```
+employment_established   —                  → pending / null            owner | platform
+invite_sent              pending / null     → pending / null            owner | platform
+invite_accepted          pending / null     → active / working + uid    INVITEE
+invite_revoked           pending / null     → terminated / null         owner | platform
+```
+
+The other eight events remain unconsumed; they belong to mechanisms #1, #5 and #7.
+
+### Two boundaries preserved
+
+**Uniqueness stays outside #3.** `invite_accepted` binds a uid **without** checking whether that uid
+already holds an active employment in the same organization, so two active records for one person in
+one business remain reachable until mechanism #1 lands. A stated gap, not an oversight: enforcing it
+inside #3 would pull #1's still-undecided mechanism — claim document versus transactional query —
+into the binding gate.
+
+**Payability stays outside #3**, per the FORBIDDEN above.
+
+### Files affected
+- `docs/adr/ADR-035-employment-and-identity-binding.md` — §5 gains the field-rename decision, §6
+  gains `invitee`, the four #3 transitions, the revocation affirmation and the pre-#1 gap
+
+### Database / API / Security changes
+None. No code, no rules, no indexes, no schema written. A contract only — and note that the
+committed builder already enforces `employment_established → pending`, so `employment-events.js` and
+the ADR agree. What does **not** yet agree is `addStaffMember`, and closing that is mechanism #3's
+work.
+
+### Deployment
+**NOT DEPLOYED.** Live remains `2fa2074` / `v635`.
+
+### Breaking changes
+None today. When #3 lands, the `status` → `employmentStatus` rename touches the four consumers listed
+above; `hrStaff` holds zero documents, so there is nothing to migrate.
+
 ## 2026-09-20 (104) — Employment history, and three harness faults that would have proved nothing
 
 **Builder 90/0 · rules 26/0 · sabotage 19/19 · COMMITTED `2197b48`, NOT DEPLOYED.**
