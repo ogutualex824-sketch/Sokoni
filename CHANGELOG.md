@@ -1,3 +1,147 @@
+## 2026-09-20 (97) — merchantId is a request until the authority says otherwise
+
+**Authority 96/0 · staff contract 27/0 · sabotage 12/12 RED · COMMITTED `f4de0c1`, NOT DEPLOYED.**
+
+Eight `hr-payroll.js` handlers took `merchantId` from `req.data` and used it to select or mutate HR
+data. Any caller who cleared the handler's own guard could name any organization. They now resolve
+it through `merchant-authority.assertMerchantAccess`, whose declared authority is
+`businesses/{merchantId}.ownerId | adminUids[]`.
+
+### Two tiers, and they are not equally urgent
+
+| handlers | prior guard | what this changes |
+|---|---|---|
+| `recordAttendance`, `requestLeave` | `req.auth` alone | **any of 124 authenticated users could write attendance or leave into any organization.** The live hole. |
+| `addStaffMember`, `getAttendanceReport`, `runPayroll`, `getPayrollSummary`, `assignTraining`, `getStaffDashboard` | `assertAdminOrManager` | future correctness only — see below |
+
+`assertAdminOrManager` requires `token.admin || token.manager`. Production holds **zero** `manager`
+claims and three `admin`s, and `token.admin` is precisely what the primitive bypasses. So for those
+six the only caller whose behaviour changes is a `manager`-claim holder, of which there are none.
+Recorded plainly because a changelog that reads "closed six vulnerabilities" here would be false.
+
+Closing the two open handlers makes them owner/admin-only, which forecloses employee self-service
+until an identity binding exists. Nothing breaks today — `hrAttendance` and `hrLeaves` are both
+empty — and it is one line to reopen deliberately.
+
+### No fourth interpretation of merchant authority
+`merchant-authority.js` was written in August after an audit found three divergent correct
+implementations (`shops.ownerUid`, `merchants.ownerId`, `businesses.ownerId`) plus handlers with no
+binding at all. **Only `procurement.js` had adopted it.** A second guard of the same name in
+`business-bootstrap.js` also authorizes through `posStaff` and `merchants` — the two representations
+the first explicitly forbids as independent authorities — and calls itself canonical. This change
+adopts the declared primitive rather than adding a third reading; promoting `merchants/{SOK-}` to an
+authority was considered and rejected for exactly that reason.
+
+Calls are placed after each existing presence check, so `invalid-argument` still precedes
+`permission-denied` and the primitive's default-to-caller arm is unreachable from here. The legacy
+`merchantId === uid` form is preserved — one production business is still keyed by its owner's uid.
+
+### Deliberately NOT in scope
+`approvePayrollRun`, `getPayslip`, `approveLeave` and `markTrainingComplete` are anchored on a
+**record id**, never on a requested `merchantId`. They carry a different defect — no organization
+binding at all — and the organization must be derived from the record they act on. Separate gate;
+the suite asserts they were not touched.
+
+Also asserted unchanged: `hrStaff.uid` is still `null` (no identity binding), the six `hr*` Firestore
+rules are untouched, and no payment rail exists. **Three of those rules guard fields no writer
+writes** — `hrAttendance.uid`, `hrPayslips.staffUid`, `hrLeaves.uid` — so the employee-facing half of
+payroll is unreadable by employees. Investigated, recorded, not repaired here.
+
+### Certification
+`scripts/test-payroll-merchant-authority.js` (new, 96/0) **requires and executes** the shipped
+handlers via the exported `_h`, with the real `merchant-authority` running inside them;
+`firebase-admin` is replaced at the **require boundary** rather than by assigning to the prototype
+getter, which fails silently and would hit production while reporting "stubbed". The observable is
+**which collections were touched**, not the throw — every refusal asserts the authority document was
+actually read, so a pre-existing gate refusing first cannot read as a pass.
+
+Two self-inflicted vacuities the suite caught before it was trusted:
+
+* **Six handlers' cross-org refusals came from the claim gate, not the new boundary** — `businesses`
+  was never read. Each case is now driven by the weakest caller that reaches the boundary.
+* **The owner fixture was also in `adminUids`**, so "admits the business owner" passed through the
+  wrong arm. Sabotage **S8** — delete the `ownerId` arm entirely — went **GREEN** until a second
+  organization with an owner and no `adminUids` existed.
+
+Sabotage 12/12 red independently, restore byte-identical. **S2 reported ANCHOR FAIL, not a catch**,
+because the file's comment bytes are mojibake; re-anchored. Neither S8's first run nor S2's counted.
+`S11` (identity binding) and `S12` (payment rail) are permanent scope tripwires.
+
+`scripts/test-payroll-staff-contract.js` went 22/1 → **27/0**. One assertion pinned *worktree
+cleanliness* of `functions/hr-payroll.js` as a proxy for "the employeeNo repair was page-only"; this
+gate legitimately falsifies it. Re-anchored onto the invariant it always meant — `addStaffMember`
+still consumes `employeeNumber` and the staff document identity is still built from it — asserted on
+**stripped** handler source, with a positive control and an inverting control. Handler-side sabotage
+3/3 red, negative control green.
+
+`test-employee-authority-map` (25/5) and `verify-architecture` fail **identically at `0cf035f`
+without this change** — reproduced against the baseline, pre-existing, not regressions.
+
+### Files affected
+- `functions/hr-payroll.js` — one import, eight call sites, **+57 −0** (nothing rewritten)
+- `scripts/test-payroll-merchant-authority.js` — new
+- `scripts/test-payroll-staff-contract.js` — one assertion re-anchored
+
+### Database / API / Security changes
+No database change, no schema change, no Firestore rules change. No API shape change; the handlers
+take the same arguments. **Security:** two handlers change from any-authenticated to
+owner/admin-of-the-organization; six gain an organization boundary behind an existing claim gate.
+
+### Deployment
+**NOT DEPLOYED**, and not deployable — `functions/` deploys are frozen by the Artifact Registry
+forensics notice. Live production remains `2fa2074` / `v635` / `ship/p07c-directory-repoint`.
+
+### Breaking changes
+A caller acting on an organization it does not own, administer, or hold a platform-admin claim for
+now receives `permission-denied`. No production data is affected: `hrStaff`, `hrAttendance`,
+`hrLeaves`, `hrPayrollRuns` and `hrPayslips` are all empty.
+
+## 2026-09-20 (96) — The field name addStaffMember actually reads
+
+**Staff contract 23/0 · sabotage 5/5 RED · COMMITTED `0cf035f`, NOT DEPLOYED.** Recorded late: this
+commit landed without a changelog entry, and the protocol owes one per change.
+
+`hr-payroll.html` sent `employeeNo`. `addStaffMember` destructures `employeeNumber`, its JSDoc names
+`employeeNumber`, its validation message names `employeeNumber`, and the staff document id is built
+from `employeeNumber`. `callCF` does no key remapping — it is `Object.assign({}, data, { op })` — and
+`servicesDispatch` forwards `req` untouched.
+
+So **every add-staff call failed validation, from the only caller that exists**, and had validation
+somehow passed the document id would have been `{merchantId}_undefined`.
+
+```diff
+-      name, employeeNo: empNo, department: dept, position,
++      name, employeeNumber: empNo, department: dept, position,
+```
+
+One line. The form input keeps its own element id (`staffEmpNo`); only the payload key changed.
+
+### Proven, not restated
+`scripts/test-payroll-staff-contract.js` **extracts the payload literal and `callCF` from the shipped
+page and executes them**, and lifts the required-field predicate from the shipped handler. Nothing is
+restated by hand — a restatement would agree with itself and prove nothing about the boundary. The
+payload is evaluated with the page's locals **in scope** rather than textually substituted; an
+earlier substitution rewrote the shorthand properties (`name,` → `'Jane',`), which is both a syntax
+error and a silent change to the very key names under test.
+
+### Still open — the READ side of the same mismatch
+`hr-payroll.html` line ~1072 renders `s.employeeNo` from the **staff document**, which the backend
+writes as `employeeNumber`. Deliberately not repaired here. Nothing displays today because `hrStaff`
+is empty in production.
+
+### Files affected
+- `hr-payroll.html` — one line
+- `scripts/test-payroll-staff-contract.js` — new
+
+### Database / API / Security changes
+None. No schema, rules, or API shape change; the handler was always reading `employeeNumber`.
+
+### Deployment
+**NOT DEPLOYED.** Live production remains `2fa2074` / `v635`.
+
+### Breaking changes
+None. The call path was non-functional before this change.
+
 ## 2026-09-20 (95) — Three ways of having no health observation, not one
 
 **Parity 26/0 · probes 85/0 · console 67/0 · sabotage 11/11 RED · COMMITTED `852f91e`, NOT DEPLOYED.**
