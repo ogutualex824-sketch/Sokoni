@@ -1,3 +1,117 @@
+## 2026-09-20 (110) — Termination frozen before a handler exists, and a uid that outlives the job
+
+**Documentation only · COMMITTED `f6ea70e` · NO implementation authorized · NOT DEPLOYED.**
+
+ADR-035 §4 gains the one lifecycle operation its own table has always named and nothing has ever
+implemented. Frozen **before** any handler is written, so the implementation is built against an
+explicit transition instead of inventing semantics while coding.
+
+```
+active / working
+       ↓  terminate
+terminated / null      employmentStatus = terminated
+                       workStatus       = null
+                       uid              = UNCHANGED   ← retained
+                       claim            = DELETED
+```
+
+### Three preconditions, and why the third carries the weight
+
+```
+1  the employment is ACTIVE
+2  uid EXISTS on the record
+3  the claim EXISTS and its staffId IS THIS EMPLOYMENT      ← load-bearing
+```
+
+**`delete()` is not self-guarding, and `create()` is.** That asymmetry is the whole reason for
+precondition 3. `create()` fails when the document is already there. `delete()` on a document that
+is **absent, or that belongs to someone else, succeeds silently** — so a handler that blind-deletes
+`{businessId}_{uid}` would release another employment's occupancy and return success.
+
+The claim's `staffId` — provenance, stored at acceptance for exactly this kind of attribution — is
+what makes the check possible. This is the **one sanctioned read of a claim's contents**, and it
+establishes *which claim this transaction may delete*, never whether the employment is valid.
+
+### The atomic set, and the ordering constraint
+
+```
+ONE TRANSACTION
+    delete  employmentUidClaims/{businessId}_{uid}
+    update  hrStaff/{staffId}   terminated, workStatus=null, uid unchanged
+    set     employmentEvents    employment_terminated
+```
+
+**The claim must not be released before the termination commits.** Releasing first frees the uid
+while the employment is still active, and another acceptance can take it in the window — the mirror
+image of the defect mechanism #1's certification calls **M3**, where the claim was moved *after* the
+commit. Entry (109) recorded why those are two properties: uniqueness is enforced by contention on
+the claim, atomicity by the claim sharing the transaction. A termination that got the deletion right
+and the transaction boundary wrong would look correct in every count.
+
+### DECIDED — `uid` is retained
+
+Clearing it to match the `ENDED` shape was considered and rejected. It conflates two facts:
+
+```
+this employment is no longer active        ← employmentStatus says this
+we no longer know which human it was for   ← clearing uid would say this
+```
+
+Only the first is true at termination. Retention keeps historical attribution joinable — a
+terminated employment still has to answer *whom did we pay* — and gives reinstatement a **concrete
+uid to re-acquire**, which §4 already requires it to do and to fail at when another active
+employment has taken the claim meanwhile. With `uid` cleared, reinstatement would have to rediscover
+the person through a fresh invitation, and that is a **rehire**, which §6 already distinguishes.
+
+**It is the consistent reading, not a new choice.** §5 already carries *"FORBIDDEN: setting
+`uid = null` to make someone unavailable … clearing the binding would destroy the link between a
+human and the payslips already issued to them."* Clearing `uid` at termination would be that same
+prohibited act by another operation, against the record whose payslip history most needs the link.
+
+**Payroll is unaffected, because eligibility is a conjunction.** §5 requires
+`employmentStatus == 'active'` **and** `uid != null`, and forbids treating *"has a uid"* as
+eligibility. A terminated record retaining its uid fails the first conjunct. Retention creates
+exposure only for an implementation that commits the error §5 already names.
+
+### What this refines, and what it newly forbids
+
+§3 holds that `uid` means an accepted binding, never an assertion — set only by an act the employee
+participated in. **Still exactly true:** termination writes no `uid`, it leaves the acceptance
+already established. What the amendment adds is the distinction between the two roles:
+
+```
+hrStaff.uid            the identity binding — historical, set once by acceptance
+employmentUidClaims    current occupancy — created and deleted by transitions
+```
+
+**Newly FORBIDDEN:** reading `hrStaff.uid` to decide whether a uid is available. After this
+amendment a terminated record still carries one, so a uid-presence check would **refuse a legitimate
+rehire**. The claim's absence is the only correct answer to *is this uid free in this organization*.
+
+### STILL NOT IMPLEMENTED
+
+> Mechanism #1 creates the claim at acceptance and **nothing else**. Termination is a **future
+> consumer** of the occupancy claim. Until it is built and certified, an accepted employment's claim
+> remains **not releasable by any existing code path**.
+
+The amendment's precision is deliberately not evidence of a shipped handler, and it says so in the
+document, because the failure mode is a future reader mistaking a frozen contract for working code.
+
+Authority is **not** re-decided: §2's owner/platform employment-authority boundary governs
+termination as it governs establishment and revocation.
+
+### Files affected
+- `docs/adr/ADR-035-employment-and-identity-binding.md` — §4, the TERMINATION block (115 lines)
+
+### Database / API / Security changes
+None. No code, no rules, no indexes, no schema written.
+
+### Deployment
+**NOT DEPLOYED.** Functions and Cloud Run remain frozen. Live is unchanged.
+
+### Breaking changes
+None. A contract.
+
 ## 2026-09-20 (109) — One uid, one employment, and the two proofs that are not the same proof
 
 **Implementation · COMMITTED `0a8b8ae` · certified against real contention · NOT DEPLOYED.**
