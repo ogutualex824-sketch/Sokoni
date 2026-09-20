@@ -5,7 +5,9 @@ shape + `via` taxonomy, after a read-only authority trace; §8 records a finding
 repair) · **2a decided 2026-09-20** — platform admin eligible, taxonomy frozen at four values ·
 **§6 amended 2026-09-20** — twelve events, explicit system actor, deterministic event keys ·
 **§5/§6 amended 2026-09-20** — `changedVia` gains `invitee`; hrStaff.status renamed
-`employmentStatus`; establishment produces pending+null; invite_revoked reconsidered and affirmed
+`employmentStatus`; establishment produces pending+null; invite_revoked reconsidered and affirmed ·
+**§4 decided 2026-09-20** — uniqueness is a `create()`d occupancy claim, deleted on termination;
+rebind is two-claim atomic; reinstatement re-acquires and may fail
 **Supersedes nothing. Constrains:** `functions/hr-payroll.js`, `hrStaff`, and any future AdminOS
 employee surface.
 **Depends on:** [[ADR-001]] (authorization comes from claims, never from a Firestore field),
@@ -202,12 +204,118 @@ Today `hrStaff` is keyed `${merchantId}_${employeeNumber}`, so uniqueness is per
 number**, not per person: the same human may hold two active records in one organization under two
 numbers, and with `uid` unset nothing can detect it.
 
-**Open — to be decided before implementation:** whether the invariant is enforced by a **uniqueness
-claim document** keyed `${businessId}_${uid}`, created with `create()` so contention fails rather
-than overwrites, or by a **query inside a transaction**. Per
-[[project_idempotency_claim_must_be_create]] a claim must be `create()`, never `get()` + `set()`;
-eight concurrent calls against a get/set claim produced eight rows. The transaction form must read
-before it writes.
+#### DECIDED 2026-09-20 — a uniqueness claim, created and deleted transactionally
+
+```
+employmentUidClaims/{businessId}_{uid}
+```
+
+**Why a claim is NECESSARY, not stylistic.** `acceptEmploymentInvite` reads exactly two documents —
+`employmentInvites/{token}` and `hrStaff/{staffId}`. That read set already makes **same-invite
+replay** safe by contention. It does **nothing** for this invariant: two employments in the same
+business (`E001`, `E002`) invited to the same address and accepted concurrently read **disjoint**
+documents, so nothing contends and **both commit**. The claim is the only document those two
+transactions would share.
+
+**`create()`, never `get()` + `set()`.** `a621ba7` left the diagnosis in `finos-utils.js`: a
+pre-check outside the transaction, a transaction that reads nothing, and therefore no contention —
+*"eight concurrent callers, eight rows, zero reported duplicates. A returned `duplicate: true` is
+not evidence; the ledger state is."* The same shape is in production in at least eight modules. A
+loser catches `already-exists` (gRPC code 6); **anything else is re-raised** — a failed write must
+never read as success.
+
+#### The claim is an EXISTENCE ASSERTION, and nothing else
+
+```
+claim exists  →  this (businessId, uid) currently has an ACTIVE employment binding
+claim absent  →  that uid is available in that business
+```
+
+**FORBIDDEN:** a `status`, `released`, `active` or any other mutable field on the claim. The
+moment it carries state it stops being a claim and becomes a second, smaller authority on employment
+— and a wrongly-written `released` would silently permit a duplicate. `create()`'s entire value is
+that **existence is the answer**.
+
+**The claim records OCCUPANCY, never HISTORY.** It is not an audit record and must never be read as
+one; `employmentEvents` remains the sole historical authority (§6).
+
+#### Lifecycle — create and delete inside the state transition
+
+| operation | claim operation |
+|---|---|
+| accept invitation | `create` |
+| terminate an active employment | `delete` |
+| rehire through a new invitation | `create` |
+| revoke a **pending** invitation | none — nothing was ever bound |
+| uid rebind | `delete` old **+** `create` new, atomically |
+| reinstate a terminated employment | `create` |
+| a failed claim `create` | the **entire** transaction fails |
+| a failed new-uid claim during rebind | the old binding and old claim are **retained** |
+
+A failed `create()` means no uid binding, no event, no accepted invitation — nothing partial.
+
+#### uid_rebound is a TWO-CLAIM transition, in one transaction
+
+```
+old claim exists  ─┐
+staff.uid = old   ─┼─ ONE transaction ─→  delete old claim
+new claim ABSENT  ─┘                      create new claim
+                                          update staff.uid
+                                          emit uid_rebound
+```
+
+**FORBIDDEN:** deleting the old claim unless the new one can be established in the same transaction.
+A rebind that released the employee's existing identity and then failed would leave them bound to
+nothing while their old uid became claimable by someone else. The transaction **fails closed** if
+`{businessId}_{newUid}` already exists.
+
+#### Reinstatement RE-ACQUIRES, and may legitimately fail
+
+Termination releases the claim, so a terminated employment holds no reservation. Reinstatement must
+`create` the claim again, and fails if another active employment has taken it meanwhile.
+
+```
+E001 / UID-A  →  terminated        claim released
+E002 / UID-A  →  accepted, active  claim taken by E002
+E001 / UID-A  →  reinstate         FAILS — E002 holds it
+```
+
+**That is not an edge case to be smoothed over.** It follows directly from *one organization, at most
+one active employment per uid*. A terminated employee does **not** hold an eternal reservation on
+their uid.
+
+#### Deliberately outside mechanism #1
+
+**Who may terminate, rebind or reinstate.** Those authority rules belong to the mechanism ordering
+already established (§2, and mechanisms #5/#7), and must not be invented inside the uniqueness gate.
+Mechanism #1 supplies the invariant; it does not decide who may trigger the transitions that move it.
+
+#### Proof plan — emulator-backed, because the question IS contention
+
+The in-process harness in `test-employment-invites.js` **serialises transactions** and says so. It
+cannot reproduce a race. The core proof must run against the Firestore emulator with genuinely
+concurrent transactions, following `scripts/test-order-claim-race.js`:
+
+> *"A test that calls the claim twice in sequence proves nothing about a race … Every claim below is
+> fired with `Promise.all` against a live emulator — no mocks, no stubs, no simulated ordering."*
+
+At minimum:
+
+1. 10 concurrent accepts, different pending employments, same business + uid → **exactly one** active
+2. same uid across **different** businesses → both succeed
+3. termination releases the claim
+4. a new employment can then acquire the released claim
+5. concurrent rehire/acceptance, same business + uid → exactly one active
+6. reinstatement colliding with another active employment → fails
+7. rebind to an unused uid → succeeds
+8. concurrent rebind/acceptance targeting the same new uid → exactly one succeeds
+9. a failed claim `create` produces **zero** employment mutation and **zero** employment event
+10. same-invite replay remains safe
+11. claim state after every scenario matches active-employment occupancy exactly
+
+**Final assertions must inspect FIRESTORE STATE**, never a returned `{ duplicate: true }` or an
+error value. The money-path harness's own finding is the reason: eight callers each reported success
+while the ledger held eight rows.
 
 ### 5. Two axes, never one status
 
@@ -593,7 +701,11 @@ rediscovered as a new finding. See [[project_merchant_authority_adoption_gap]].
 
 Deliberately left open, because each is a mechanism choice that deserves its own evidence:
 
-1. **The uniqueness mechanism** — claim document vs transactional query (§4).
+1. **The uniqueness mechanism** — **DECIDED** (§4): an existence-only claim at
+   `employmentUidClaims/{businessId}_{uid}`, `create()`d on binding and deleted on
+   termination, with two-claim atomic rebind and re-acquiring reinstatement. **Ready for
+   implementation design**; the proof must be emulator-backed, because the question is
+   contention.
 2. **The owner-authority primitive's naming** only. Shape decided (one resolver returning `via`,
    inside `merchant-authority.js`); semantics decided (**2a**, above). **Ready for implementation
    design.**
