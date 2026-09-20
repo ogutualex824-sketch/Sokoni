@@ -1,3 +1,130 @@
+## 2026-09-20 (102) — The resolver stopped throwing away how it decided
+
+**Provenance 64/0 · sabotage 18/18 · procurement 53/57 → 59/59 · COMMITTED `0eee8e4`, NOT DEPLOYED.**
+
+Gate 3 mechanism #2. The mechanism only — `assertMerchantOwner` has no caller yet.
+
+### The diagnosis
+
+`assertMerchantAccess` **already computed** the owner / admin / self / platform distinction across
+four separable arms, and discarded it:
+
+```js
+if (t.admin === true || t.superAdmin === true) return merchantId;   // platform
+if (merchantId === uid)                        return merchantId;   // self
+if (d.ownerId === uid)                         return merchantId;   // owner
+if (Array.isArray(d.adminUids) && …)           return merchantId;   // admin
+```
+
+Every arm, the same bare string. **That, not a missing check, is why a narrower owner-only question
+could not be asked of it.** The repair is to stop throwing the fact away:
+
+```
+resolveMerchantAccess(auth, requested) → { merchantId, via }
+      ├── assertMerchantAccess()   unchanged signature and return
+      └── assertMerchantOwner()    filters on `via`
+```
+
+The four arms are unchanged in **condition, order, reads and throws** — every deleted line has its
+replacement directly beneath it, and only the returned value differs. `assertMerchantAccess` is one
+property access over the resolver, so `procurement.js` and the twelve payroll call sites are
+compatible **by construction** rather than by care.
+
+The shape is not new. `shop-employees.js` already solved this: `resolveShopAccess` returns
+`{ role, via }` and `assertShopOwner` filters on it. Adopting it avoids a **seventh**
+organization-authority implementation — the repo already carries six.
+
+### `platform` authorization is not business existence
+
+| `via` | granted because | employment |
+|---|---|---|
+| `owner` | `businesses/{id}.ownerId == uid`, **document read** | eligible |
+| `admin` | `adminUids[]` contains uid | not eligible |
+| `self` | `merchantId === auth.uid`, **no document read** | never eligible |
+| `platform` | `token.admin` \| `token.superAdmin`, not distinguished | eligible |
+
+The `platform` arm returns having read nothing, so **`assertMerchantOwner` performs the existence
+read itself on that arm alone** — one extra read, and only there.
+
+The read is deliberately **not** moved into the resolver. Doing so would make
+`assertMerchantAccess` more expensive *and* make the `self` arm fail for a merchant whose business
+document does not exist — silently tightening an established Gate 1 compatibility path. Sabotage
+**M10** pins that alternative as *wrong* rather than merely untested.
+
+### Certification
+
+`scripts/test-merchant-authority-provenance.js` (new, **64/0**). Every fixture asserts on `via`,
+because all four arms still produce an ALLOW and a suite that only checked "allowed" would pass
+against the unrepaired module. The arms are proven mutually exclusive and **ordered**: a caller who
+is *both* platform admin and owner must resolve `platform`, because that arm runs first — otherwise
+reordering the resolver changes provenance invisibly. Read counts are an observable, not a footnote.
+
+**Sabotage 18/18 as specified** — 15 red, 3 negative controls green, restore byte-identical. Three
+cases misbehaved on the first run, and each was a **harness fault, not a code defect**:
+
+* **M12 was INERT.** Removing the `!snap.exists` guard lets execution fall through to
+  `d = snap.data() || {}`, both remaining arms miss, and it reaches the **same** final throw with the
+  **same** message. GREEN was correct and proved nothing. Re-anchored onto a mutation that *grants*.
+* **M13 CRASHED instead of failing.** Removing the `canAccessMerchant` export threw a `TypeError`
+  before the summary, printing no `FAIL` line — so the runner scored it **GREEN**. The suite now
+  fails closed on a missing export.
+* **M15 had no fixture.** Every business carried `adminUids`, one as an empty array. The fail-open
+  shape grants only when the field is **absent**, so the mutation never fired. Added a business with
+  the field genuinely missing, plus an inverting control proving its owner is still admitted.
+  **That is the exact fail-open this module was written to replace, and the suite could not see it.**
+
+### Two harness repairs in the procurement suite
+
+`test-procurement-merchant-authority` went **53/57 · 5/7 catches → 59/59 · 7/7**. Both test-only:
+
+* **§6** patched a literal this change rewrote, so `.replace` was a silent no-op and the differential
+  measured the source against itself. Re-anchored, with the anchor **counted before use** so a future
+  rewrite reports a miss rather than a pass.
+* **§7** compared this module byte-for-byte against
+  `C:/temp/sok-tenant-authz/functions/merchant-authority.js` — **another worktree, outside this
+  repository**, a stale 28 Aug snapshot. It also **passed vacuously whenever that path was absent**,
+  proving one thing on one machine and nothing on another. Retired and replaced with an owned
+  contract assertion. **That file was not touched and the implementation was not made to conform to
+  it.**
+
+### Instrument rot, and a quoting mistake worth recording
+
+Eight sabotage anchors in the Gate 1 and Gate 2 instruments rotted — they mutate the same four arms
+this change rewrote. **Every one reported `ANCHOR FAIL`; not one went green.** No earlier verdict was
+wrong, only unreproducible until re-anchored.
+
+The re-anchoring script then **broke both instruments**: it inserted `via: 'self'` — which contains
+single quotes — into single-quoted JavaScript string literals, terminating them early and crashing
+the scripts with `SyntaxError: missing ) after argument list`. Repaired by converting those literals
+to double-quoted strings. Recorded because it is the same quoting hazard that has now bitten twice in
+one day, and because it affected the instrumentation rather than any shipped code.
+
+### Green at this commit
+
+```
+provenance 64/0 · payroll 96/0, 66/0, 27/0 · procurement 59/59 · 3 slice suites exit 0
+Gate 1 sabotage 12/12 · Gate 2 sabotage 18/18 · mechanism #2 sabotage 18/18
+```
+
+### Files affected
+- `functions/merchant-authority.js` — **+100 −9**; every deletion replaced in place
+- `scripts/test-merchant-authority-provenance.js` — new
+- `scripts/test-procurement-merchant-authority.js` — §6 re-anchor, §7 retirement
+
+### Database / API / Security changes
+No database change, no schema, **no Firestore rules**. API: two additive exports; no existing export
+removed, renamed or reordered. **No authorization behaviour changed** — the same callers are granted
+and refused for the same reasons, with the same error codes. What changed is that the module can now
+say *how* it decided.
+
+### Deployment
+**NOT DEPLOYED**, and not deployable — `functions/` deploys are frozen by the Artifact Registry
+forensics notice. Live remains `2fa2074` / `v635`.
+
+### Breaking changes
+None. `assertMerchantOwner` has no caller; employment handlers, uid binding, employment history and
+the `crm.js` fail-open (ADR-035 §8) are all later, separate work.
+
 ## 2026-09-20 (101) — 2a decided: platform admins may establish employment, and #4 stops being optional
 
 **Documentation only · COMMITTED `b1d5ca2` · NO implementation authorized · NOT DEPLOYED.**
