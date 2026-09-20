@@ -101,6 +101,26 @@ async function count(svc, startMs, endMs) {
     console.log(`   ${t.padEnd(30)} ${r.err ? 'QUERY FAILED' : (r.n === null ? 'NO SERIES' : String(r.n).padStart(8))}`);
   }
 
+  /* ---- daily baseline ---------------------------------------------------
+     The 30-day total is a POOR comparator for this workload: the sync fires on
+     LOGIN, so volume arrives in bursts. The pre-fix record contains full 24h
+     periods with ZERO invocations weeks before any fix existed. Comparing a
+     short post-deploy window against the 30-day aggregate therefore reads a
+     normal quiet period as a reduction. Print the day-by-day structure so that
+     mistake is visible rather than available. Measurement only — no threshold
+     is applied and no number of days is prescribed. */
+  console.log('\n-- DAILY BASELINE (24h buckets working back from the deploy)');
+  console.log('   window (UTC)                                  invocations');
+  const DAILY_SVC = UPDATE_TRIGGERS[0];
+  for (let d = 1; d <= 8; d++) {
+    const b = DEPLOY_MS - (d - 1) * 86400000;
+    const a = DEPLOY_MS - d * 86400000;
+    const r = await count(DAILY_SVC, a, b);
+    const lbl = `${new Date(a).toISOString().slice(0, 16)} -> ${new Date(b).toISOString().slice(5, 16)}`;
+    console.log(`   ${lbl.padEnd(42)} ${r.err ? 'QUERY FAILED' : (r.n === null ? 'NO SERIES' : String(r.n).padStart(8))}`);
+  }
+  console.log(`   (service: ${DAILY_SVC} — representative of the four)`);
+
   /* product count, for reads-per-product context */
   const body = JSON.stringify({ structuredAggregationQuery: {
     structuredQuery: { from: [{ collectionId: 'products' }] },
@@ -125,7 +145,9 @@ async function count(svc, startMs, endMs) {
   console.log('                   The client catalogue sync WAS the writer.');
   console.log('  Refutes P0-7B  : volume holds near baseline. Another writer exists and');
   console.log('                   the P0-7B classification-B finding is wrong — reopen it.');
-  console.log('  Inconclusive   : NO SERIES rows, or the four triggers disagree.');
+  console.log('  Inconclusive   : NO SERIES rows, the four triggers disagree, or the');
+  console.log('                   post-deploy window is indistinguishable from a quiet');
+  console.log('                   day in the DAILY BASELINE above.');
   console.log('');
   console.log('  This tool reports measurement only. It does NOT declare the fix');
   console.log('  confirmed or failed, and it applies no elapsed-time threshold — the');
