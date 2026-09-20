@@ -349,24 +349,34 @@ const reach = (tier, uid) => (tier === 'claim' ? asManager(uid) : asUser(uid));
   /* ── 6. STRICT SCOPE ───────────────────────────────────────────────────── */
   head('6 - nothing outside the authorization boundary moved');
   {
-    const g = (args) => require('child_process')
-      .execFileSync('git', ['-C', ROOT].concat(args), { encoding: 'utf8' });
+    /* PARSER FIX 2026-09-20. `pathsOf` called `.trim()` on the WHOLE porcelain
+       output before splitting, which strips the leading space of the FIRST line
+       only. `git status --porcelain` emits a two-character index/worktree
+       prefix, so an unstaged change prints " M path" — and after a global trim
+       that became "M path", whose slice(3) is "ath"… in practice
+       "restore.rules" for "firestore.rules". The path silently never appeared
+       in the list.
 
-    /* PARSER FIX 2026-09-20. This called `.trim()` on the WHOLE porcelain output
-       before splitting, which strips the leading space of the FIRST line only.
-       `git status --porcelain` emits a two-character index/worktree prefix, so
-       an unstaged change prints " M path" — and after a global trim that became
-       "M path", whose slice(3) is "ath"… in practice "restore.rules" for
-       "firestore.rules". The path silently never appeared in the list.
+       MEASURED: the live-tree scope assertion passed while firestore.rules WAS
+       modified, and only failed once staging changed the prefix to "M  ". It
+       was green for the wrong reason for as long as it existed. Each line is
+       now parsed independently, with the two-character prefix preserved.
 
-       MEASURED: this assertion passed while firestore.rules WAS modified, and
-       only failed once staging changed the prefix to "M  ". It was green for the
-       wrong reason for as long as it existed. Each line is now parsed
-       independently, with the two-character prefix preserved. */
-    const porcelain = () => g(['status', '--porcelain'])
-      .split('\n').filter(l => l.length > 0);
+       THE GIT READER IS RETIRED 2026-09-20; THE PARSER CONTRACT IS NOT.
+       `porcelain()` (the reader), the `g` helper it used, and the `changed`
+       binding are gone with the live-tree assertions they existed to feed —
+       keeping them merely to give `pathsOf` a production-like caller would
+       recreate exactly the live-tree coupling this workstream removed.
+
+       `pathsOf` STAYS, with its three controls below. They are SYNTHETIC — no
+       git, fixed input — so they never depended on the retired assertions, and
+       the third one EXECUTES the old global-trim parse and asserts it misses.
+       CHANGELOG.md carries the narrative record of this defect; these controls
+       carry the executable one, and a run is not the same evidence as a claim
+       about a run. The bug is live nowhere else: gate-inventory.js:86,
+       rc-manifest.js:125 and test-subscription-entitlement.js:376 each parse
+       porcelain independently and each splits before slicing. */
     const pathsOf = lines => lines.map(l => l.slice(3)).sort();
-    const changed = pathsOf(porcelain());
 
     /* REGRESSION CONTROL for the parser itself. Both prefixes must resolve to
        the same path, and the FIRST-LINE case is the one that broke. Synthetic
