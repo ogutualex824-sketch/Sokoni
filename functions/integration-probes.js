@@ -141,6 +141,7 @@ function emptyResult (id, extra) {
     support: { connected: 'not-supported', accepted: 'not-supported',
                delivered: 'not-supported', received: 'not-supported' },
     health:  'unknown',
+    healthKind: null,
     evidence: EVIDENCE.NONE,
     correlationId: null,
     detail:  null,
@@ -172,6 +173,31 @@ function deriveHealth (r, opts) {
   if (r.support.delivered === 'supported' && r.stages.delivered === false) return 'degraded';
   if (r.support.received === 'supported' && r.stages.received === false) return 'degraded';
   if (r.stages.accepted === true || r.stages.connected === true) return 'connected';
+
+  /* ── NOTHING WAS ESTABLISHED. WHICH "NOTHING"? ──────────────────────────
+     Until now every unestablished integration collapsed into `unknown`, which
+     conflated three materially different facts. The catalogue already drew the
+     distinction in prose — "A legal obligation, not a polled service",
+     "Edge state is read at Cloudflare, not here" — and healthKind makes it
+     machine-readable.
+
+     The two axes stay separate, and the order below is what keeps them so:
+     everything ABOVE this point is what a probe ACTUALLY ESTABLISHED and wins
+     outright. `healthKind` only decides how to describe the ABSENCE of an
+     observation. An `elsewhere` rail that a probe genuinely reached still
+     reports `connected`; it never becomes a success merely by being classified.
+
+       not-applicable    health is not a meaningful concept for this capability
+       observed-elsewhere a real signal exists, but authoritatively OUTSIDE this
+                         console. NOT a success state — it says where to look.
+       unknown           measurable here, simply not established yet
+
+     `unknown` remains the default, deliberately. A kind that is absent,
+     unrecognised, or 'measurable' all resolve to `unknown`, so a classification
+     mistake understates certainty rather than silently claiming a capability
+     cannot be measured. */
+  if (o.healthKind === 'not-applicable') return 'not-applicable';
+  if (o.healthKind === 'elsewhere')      return 'observed-elsewhere';
   return 'unknown';
 }
 
@@ -198,6 +224,7 @@ async function runProbe (integrationId, deps) {
 
   const sup = supportFor(integrationId);
   const result = emptyResult(integrationId, {
+    healthKind: entry.healthKind || null,
     support: {
       connected: sup.connected ? 'supported' : 'not-supported',
       accepted:  sup.accepted  ? 'supported' : 'not-supported',
@@ -229,7 +256,11 @@ async function runProbe (integrationId, deps) {
   }
   if (!sup.hasProbe) {
     result.detail = 'No probe is defined for this integration yet.';
-    return result;               /* health stays `unknown`, every stage null */
+    /* Still classified, not blanket-unknown: a capability with no health concept
+       says so even when no probe was ever written for it. */
+    result.health = deriveHealth(result, { lifecycle: entry.status,
+      credentialState: d.credentialState, healthKind: entry.healthKind });
+    return result;
   }
   if (typeof d.execute !== 'function') {
     result.detail = 'No probe executor supplied.';
@@ -261,7 +292,8 @@ async function runProbe (integrationId, deps) {
     if (NOT_RUN_CODES.indexOf(code) > -1) {
       result.notRunReason = code;
       result.detail = e.message ? String(e.message).slice(0, 300) : code;
-      result.health = 'unknown';
+      result.health = deriveHealth(result, { lifecycle: entry.status,
+        credentialState: d.credentialState, healthKind: entry.healthKind });
       return result;
     }
     result.stages.connected = sup.connected ? false : null;
@@ -272,7 +304,8 @@ async function runProbe (integrationId, deps) {
     result.detail = e && e.message ? String(e.message).slice(0, 300) : 'probe failed';
   }
 
-  result.health = deriveHealth(result, { lifecycle: entry.status, credentialState: d.credentialState });
+  result.health = deriveHealth(result, { lifecycle: entry.status,
+    credentialState: d.credentialState, healthKind: entry.healthKind });
   return result;
 }
 

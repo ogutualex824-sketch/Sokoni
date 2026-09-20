@@ -179,9 +179,20 @@ function store (seed) {
        notRun.notRunReason);
     ok('and claims nothing about the provider', notRun.stages.connected === null);
 
-    const noProbe = await run('cloudflare');
-    ok('a rail with NO probe reports unknown, not failed', noProbe.health === 'unknown');
+    /* `cloudflare` was used here until the health-kind taxonomy landed; it is
+       classified `elsewhere`, so it now correctly reports observed-elsewhere
+       rather than unknown. A MEASURABLE rail with no probe is what demonstrates
+       the unknown case. The invariant both share — never `failed` — is asserted
+       for both. */
+    const noProbe = await run('google-signin');
+    ok('a MEASURABLE rail with no probe reports unknown, not failed',
+       noProbe.health === 'unknown', noProbe.health);
     ok('and says so', /No probe is defined/i.test(noProbe.detail || ''), noProbe.detail);
+    const elsewhereNoProbe = await run('cloudflare');
+    ok('an ELSEWHERE rail with no probe reports observed-elsewhere, not failed',
+       elsewhereNoProbe.health === 'observed-elsewhere', elsewhereNoProbe.health);
+    ok('neither is ever reported as failed',
+       noProbe.health !== 'failed' && elsewhereNoProbe.health !== 'failed');
 
     /* THE ONE THAT IS ACTUALLY A FAILURE. Without this the four above could be
        passing because nothing is ever reported failed. */
@@ -331,6 +342,64 @@ function store (seed) {
        /resolveIntegrationStatus/.test(seg.slice(0, 2200)));
     ok('it logs health and evidence, never a credential',
        /health: result\.health/.test(seg) && !/secret/i.test(seg.slice(0, 2600)));
+  }
+
+  /* ── 9. HEALTH KIND — THREE WAYS OF HAVING NO OBSERVATION ───────────────── */
+  head('9 - unknown, observed-elsewhere and not-applicable are different facts');
+  {
+    const dh = (kind, stages) => probes.deriveHealth(
+      { stages: Object.assign({ configured: true, connected: null, accepted: null,
+                                delivered: null, received: null }, stages || {}),
+        support: { connected: 'supported', accepted: 'supported',
+                   delivered: 'not-supported', received: 'not-supported' } },
+      { lifecycle: 'live', credentialState: 'configured', healthKind: kind });
+
+    ok('measurable + nothing established -> unknown', dh('measurable') === 'unknown', dh('measurable'));
+    ok('elsewhere -> observed-elsewhere', dh('elsewhere') === 'observed-elsewhere', dh('elsewhere'));
+    ok('not-applicable -> not-applicable', dh('not-applicable') === 'not-applicable', dh('not-applicable'));
+
+    /* THE TWO AXES STAY SEPARATE. A classification says where health CAN be
+       established; it must never become the observation itself. */
+    ok('an elsewhere rail a probe REACHED still reports connected',
+       dh('elsewhere', { connected: true, accepted: true }) === 'connected',
+       dh('elsewhere', { connected: true, accepted: true }));
+    ok('and one that FAILED still reports failed',
+       dh('elsewhere', { connected: false }) === 'failed');
+    ok('observed-elsewhere is never a success state — it is not connected',
+       dh('elsewhere') !== 'connected');
+
+    /* An unrecognised or absent kind must understate, not overclaim. */
+    ok('an absent kind falls back to unknown', dh(undefined) === 'unknown');
+    ok('an unrecognised kind falls back to unknown', dh('bogus') === 'unknown');
+
+    /* Lifecycle and credentials still outrank classification. */
+    ok('a frozen rail is disabled regardless of kind',
+       probes.deriveHealth({ stages: {}, support: {} },
+         { lifecycle: 'frozen', credentialState: 'configured', healthKind: 'not-applicable' }) === 'disabled');
+    ok('missing credentials outrank kind',
+       probes.deriveHealth({ stages: {}, support: {} },
+         { lifecycle: 'live', credentialState: 'missing', healthKind: 'elsewhere' }) === 'missing');
+
+    /* THE GUARDRAIL: classification comes from the CATALOGUE, never from whether
+       an executor exists. Deleting a probe must not silently reclassify an
+       integration as unmeasurable — it must still be able to report `unknown`. */
+    /* Live rails only: a quarantined or frozen lifecycle correctly outranks
+       classification and reports `disabled`, which would make the assertion
+       below test the wrong thing. */
+    const measurableNoExec = registry.INTEGRATIONS
+      .filter(e => e.healthKind === 'measurable' && !execs.executorFor(e.id) &&
+                   probes.NON_PROBEABLE_LIFECYCLES.indexOf(e.status) === -1);
+    ok('control — measurable integrations exist that have NO executor',
+       measurableNoExec.length >= 5, measurableNoExec.length + ' of 35');
+    for (const e of measurableNoExec.slice(0, 3)) {
+      const r = await probes.runProbe(e.id, { credentialState: 'not-applicable',
+        execute: execs.executorFor(e.id) });
+      ok('no executor does NOT make ' + e.id + ' not-applicable',
+         r.health === 'unknown', r.health);
+    }
+    ok('and every declared kind is carried onto the probe result',
+       (await run('cloudflare')).healthKind === 'elsewhere',
+       (await run('cloudflare')).healthKind);
   }
 
   console.log('\n  what this suite does NOT prove');

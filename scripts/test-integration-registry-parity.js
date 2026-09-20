@@ -61,6 +61,8 @@ function parseCatalogue () {
     e.status   = str(seg, 'status');
     e.vendor   = str(seg, 'vendor');
     e.secrets  = arr(seg, 'secrets');
+    e.kind     = str(seg, 'kind');
+    e.source   = (seg.match(/health:\s*\{\s*source:\s*([^,]+),/) || [])[1];
     delete e.at;
   });
   return rows;
@@ -169,6 +171,45 @@ head('5 - the registry is names-only');
      .test(raw.replace(/\/\*[\s\S]*?\*\//g, '')));
   ok('control — it DOES carry secret NAMES, which are not sensitive',
      /INTASEND_API_KEY/.test(raw));
+}
+
+/* ── 6. HEALTH KIND — THE CATALOGUE IS THE SOLE AUTHORITY ─────────────────── */
+head('6 - every entry declares how its health can be established');
+{
+  const KINDS = ['measurable', 'elsewhere', 'not-applicable'];
+  const missing = cat.filter(e => !e.kind);
+  ok('all ' + cat.length + ' entries declare a health kind', missing.length === 0,
+     missing.map(e => e.id).join(' ') || 'none');
+  const bad = cat.filter(e => e.kind && KINDS.indexOf(e.kind) === -1);
+  ok('every kind is one of the three', bad.length === 0,
+     bad.map(e => e.id + '=' + e.kind).join(' ') || 'measurable/elsewhere/not-applicable');
+
+  /* THE PARITY ASSERTION THE CONTRACT REQUIRES. A null health source used to be
+     the end of the story; it now has to say WHY there is no source. */
+  const nullSource = cat.filter(e => e.source === 'null');
+  ok('control — most entries have no live health source', nullSource.length >= 30,
+     nullSource.length + ' of ' + cat.length);
+  const unexplained = nullSource.filter(e => !e.kind);
+  ok('every source:null entry carries an explicit kind', unexplained.length === 0,
+     unexplained.map(e => e.id).join(' ') || 'none');
+
+  /* The registry mirrors it, entry for entry. */
+  const drift = cat.filter(e => {
+    const r = registry.byId(e.id);
+    return !r || r.healthKind !== e.kind;
+  });
+  ok('the server registry carries the same kind for every entry',
+     drift.length === 0, drift.map(e => e.id).join(' ') || 'all ' + cat.length + ' agree');
+
+  const dist = cat.reduce((m, e) => { m[e.kind] = (m[e.kind] || 0) + 1; return m; }, {});
+  console.log('        distribution: ' + JSON.stringify(dist));
+  ok('the classification is not degenerate — all three are used',
+     Object.keys(dist).length === 3, Object.keys(dist).join(','));
+
+  /* INVERTING CONTROL — the drift check must be able to see a disagreement. */
+  ok('INVERTING CONTROL — a mismatched kind IS detected',
+     [{ id: 'sendgrid', kind: 'not-applicable' }]
+       .filter(e => registry.byId(e.id).healthKind !== e.kind).length === 1);
 }
 
 console.log('\n  what this suite does NOT prove');

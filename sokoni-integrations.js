@@ -166,13 +166,27 @@
     'disabled':       { cls: 'unknown',  label: 'Disabled' },
     'unknown':        { cls: 'unknown',  label: 'Unknown' },
   };
+  /* Three of these describe an ABSENCE of observation and are deliberately all
+     NEUTRAL — none carries a success colour:
+
+       Not yet tested      measurable here, simply not established yet
+       Observed elsewhere  a real signal exists, authoritatively OUTSIDE this
+                           console. It says WHERE to look, not that the answer
+                           was good, so it must never read as success.
+       Not applicable      health is not a meaningful concept for this capability
+
+     Collapsing them would lose the most actionable one: an operator seeing "Not
+     applicable" on Cloudflare would stop investigating an edge problem that IS
+     observable, just not here. */
   var HEALTH_META = {
-    'connected': { cls: 'healthy',  label: 'Connected' },
-    'degraded':  { cls: 'degraded', label: 'Degraded' },
-    'failed':    { cls: 'error',    label: 'Failed' },
-    'missing':   { cls: 'error',    label: 'Credentials missing' },
-    'disabled':  { cls: 'unknown',  label: 'Disabled' },
-    'unknown':   { cls: 'unknown',  label: 'Not yet tested' },
+    'connected':          { cls: 'healthy',  label: 'Connected' },
+    'degraded':           { cls: 'degraded', label: 'Degraded' },
+    'failed':             { cls: 'error',    label: 'Failed' },
+    'missing':            { cls: 'error',    label: 'Credentials missing' },
+    'disabled':           { cls: 'unknown',  label: 'Disabled' },
+    'observed-elsewhere': { cls: 'unknown',  label: 'Observed elsewhere' },
+    'not-applicable':     { cls: 'unknown',  label: 'Not applicable' },
+    'unknown':            { cls: 'unknown',  label: 'Not yet tested' },
   };
   function _credMeta(v)   { return CRED_META[v]   || { cls: 'unknown', label: String(v || 'Unknown') }; }
   function _healthMeta(v) { return HEALTH_META[v] || { cls: 'unknown', label: String(v || 'Unknown') }; }
@@ -745,6 +759,23 @@
      The five stages are shown individually on purpose. "Accepted" and
      "Delivered" are different claims, and a surface that collapsed them would
      show a green tick for a channel nobody is receiving on. */
+  /* The operator-facing pointer for a health kind. Rendered as a plain note,
+     never as a status badge: a signal existing somewhere else is not evidence
+     that the answer is good. */
+  function _kindPointer(id) {
+    var c = _cat();
+    var e = c && c.lookup ? c.lookup(id) : null;
+    var h = e && e.health;
+    if (!h || !h.kindNote) return '';
+    if (h.kind === 'elsewhere') {
+      return '<p class="sic-note"><strong>Observed elsewhere:</strong> ' + _esc(h.kindNote) + '</p>';
+    }
+    if (h.kind === 'not-applicable') {
+      return '<p class="sic-note"><strong>Not applicable:</strong> ' + _esc(h.kindNote) + '</p>';
+    }
+    return '';
+  }
+
   function _liveState(id) {
     if (_data.status.ok === false) {
       return '<div class="sic-kv"><span>Configuration</span><strong>' +
@@ -778,6 +809,11 @@
       '<div class="sic-sect-l">What was actually proven</div>' +
       '<div>' + stageRow + '</div>' +
       (r.healthNote ? '<p class="sic-note">' + _esc(r.healthNote) + '</p>' : '') +
+      /* For a rail classified 'elsewhere' the useful thing is WHERE the
+         authoritative signal is read. The catalogue already carries that and is
+         loaded on this page, so the pointer is taken from there rather than
+         pushed through the backend — it is documentation, not runtime state. */
+      _kindPointer(id) +
       '<div class="sic-kv"><span>Evidence</span><strong>' + _esc(r.evidence || 'none') + '</strong></div>' +
       '<div class="sic-kv"><span>Last probed</span><strong>' +
         (r.probedAt ? _esc(r.probedAt) : EM) + '</strong></div>' +

@@ -359,6 +359,57 @@ const settle = () => new Promise(r => setImmediate(() => setImmediate(r)));
        /posWebhooks/.test(code) && !/posWebhooks[\s\S]{0,80}platformServices/.test(code));
   }
 
+  /* ── 10. THE THREE KINDS RENDER DISTINCTLY ──────────────────────────────── */
+  head('10 - unknown, observed-elsewhere and not-applicable look different');
+  {
+    async function healthOf (id, health, over) {
+      const v = mountWith({ integrations: [record(Object.assign({ id, health,
+        healthNote: 'note for ' + id }, over || {}))], counts: {}, inventoryReadable: true });
+      await settle();
+      v.api.tab('catalogue'); v.api.selectCatalogue(id);
+      return v.host.innerHTML;
+    }
+    const unk = await healthOf('fcm', 'unknown');
+    const els = await healthOf('cloudflare', 'observed-elsewhere');
+    const nap = await healthOf('odpc', 'not-applicable');
+
+    ok('unknown renders as Not yet tested', /Not yet tested/.test(unk));
+    ok('elsewhere renders as Observed elsewhere', /Observed elsewhere/.test(els));
+    ok('not-applicable renders as Not applicable', /Not applicable/.test(nap));
+
+    /* THEY MUST BE DISTINGUISHABLE FROM EACH OTHER. */
+    ok('observed-elsewhere is not shown as Not yet tested', !/Not yet tested/.test(els));
+    ok('not-applicable is not shown as Not yet tested', !/Not yet tested/.test(nap));
+    ok('not-applicable is not shown as Observed elsewhere',
+       !/Observed elsewhere<\/span>/.test(nap));
+
+    /* AND NONE OF THEM MAY READ AS SUCCESS. A signal existing elsewhere is not
+       evidence that the answer is good. */
+    function badgeCls (html, label) {
+      const m = new RegExp('class="sic-badge ([a-z]+)"><span class="sic-dot"></span>' + label)
+        .exec(html);
+      return m ? m[1] : null;
+    }
+    ok('Observed elsewhere is styled neutral, never success',
+       badgeCls(els, 'Observed elsewhere') === 'unknown', badgeCls(els, 'Observed elsewhere'));
+    ok('Not applicable is styled neutral, never success',
+       badgeCls(nap, 'Not applicable') === 'unknown', badgeCls(nap, 'Not applicable'));
+    ok('neither is rendered green', !/sic-badge healthy"><span class="sic-dot"><\/span>(Observed|Not applicable)/
+       .test(els + nap));
+    /* CONTROL — the badge locator can see a success badge when there is one. */
+    const conn = await healthOf('sendgrid', 'connected');
+    ok('CONTROL — a genuinely connected rail IS styled as success',
+       badgeCls(conn, 'Connected') === 'healthy', badgeCls(conn, 'Connected'));
+
+    /* The pointer that makes `elsewhere` actionable comes from the catalogue. */
+    ok('an elsewhere rail tells the operator where to look',
+       /Observed elsewhere:<\/strong> Edge state is read at Cloudflare/.test(els));
+    ok('a not-applicable rail says why there is nothing to measure',
+       /Not applicable:<\/strong> A legal obligation/.test(nap));
+    ok('a measurable rail gets no such pointer',
+       !/Observed elsewhere:<\/strong>|Not applicable:<\/strong>/.test(unk));
+  }
+
   console.log('\n  what this suite does NOT prove');
   console.log('  UNPROVEN  a real browser render. The module runs in a minimal DOM, so');
   console.log('            layout and CSS are not exercised here.');
