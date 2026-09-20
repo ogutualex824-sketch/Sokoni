@@ -377,10 +377,37 @@ async function heal (over) {
     ['functions/sub-engine.js', 'functions/sasos-core.js', 'functions/email-triggers.js',
      'functions/subscription-authority.js', 'functions/sub-billing.js']
       .forEach(f2 => ok(f2 + ' untouched', dirty.indexOf(f2) === -1));
-    /* The certified AdminOS work must survive untouched. */
-    ['functions/admin-os.js', 'sokoni-aos.js', 'sokoni-aos-users.js', 'sokoni-aos-users.css',
-     'super-admin.html', 'scripts/test-aos-users.js', 'scripts/harness-aos-users.html']
-      .forEach(f2 => ok('AdminOS path still dirty (not reverted): ' + f2, dirty.indexOf(f2) > -1));
+    /* THE CERTIFIED AdminOS WORK MUST SURVIVE.
+       This used to assert each path was still DIRTY. That was only ever a proxy
+       for "A4 did not revert it", and the proxy died the moment the work was
+       legitimately committed in the release batch c1c923c — at which point seven
+       assertions failed while nothing was wrong. A guard whose premise expires
+       reports rot as a regression, which is worse than not guarding at all.
+
+       What the guard is actually for is unchanged: a later edit here must not
+       revert or clobber the AdminOS surfaces. So the test is now for the CONTENT
+       that A4 must not have destroyed — which holds whether that content is
+       dirty, staged or committed, and which a revert would remove. */
+    const survives = [
+      ['functions/admin-os.js',            /adminScheduleUserDeletion|adminMessageUser/],
+      ['sokoni-aos.js',                    /scheduleUserDeletion|messageUser/],
+      ['sokoni-aos-users.js',              /del: !!A0\.deleteUser/],
+      ['sokoni-aos-users.css',             /usx-msg/],
+      ['super-admin.html',                 /SokoniAOSUsers/],
+      ['scripts/test-aos-users.js',        /deleteUser/],
+      ['scripts/harness-aos-users.html',   /sokoni-aos-users-css/],
+    ];
+    survives.forEach(([f2, marker]) => {
+      let src = null;
+      try { src = fs.readFileSync(path.join(ROOT, f2), 'utf8'); } catch (_) { src = null; }
+      ok('AdminOS work intact: ' + f2,
+         src !== null && marker.test(src),
+         src === null ? 'FILE MISSING' : (marker.test(src) ? '' : 'MARKER GONE'));
+    });
+    /* INVERTING CONTROL — a marker check that cannot fail proves nothing. The
+       same matcher is run against a source that must NOT contain it. */
+    ok('INVERTING CONTROL — the marker check can fail',
+       !/del: !!A0\.deleteUser/.test('const x = 1;'));
   }
 
   /* ── 9. ACCESS GATING ────────────────────────────────────────────────────── */
