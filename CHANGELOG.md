@@ -1,3 +1,98 @@
+## 2026-09-20 (95) — Three ways of having no health observation, not one
+
+**Parity 26/0 · probes 85/0 · console 67/0 · sabotage 11/11 RED · COMMITTED `852f91e`, NOT DEPLOYED.**
+
+Every integration without an established observation collapsed into `unknown`. That conflated three
+materially different facts, and the catalogue had already drawn the distinction in prose with
+nothing machine-readable to carry it:
+
+    "A legal obligation, not a polled service."           odpc
+    "Enforcement is a code fact, not a runtime signal."   app-check
+    "Edge state is read at Cloudflare, not here."         cloudflare
+    "Gateway rejections surface in logs, not here."       api-gateway
+
+### The taxonomy
+`health.kind` is declared per catalogue entry and resolves to three runtime states:
+
+| kind | runtime | meaning |
+|---|---|---|
+| `measurable` | `unknown` | health can be established here; it simply has not been yet |
+| `elsewhere` | `observed-elsewhere` | a real signal exists, authoritatively **outside** this console |
+| `not-applicable` | `not-applicable` | no meaningful health concept exists for this capability |
+
+**Distribution as implemented: measurable 23 · elsewhere 7 · not-applicable 5.**
+
+`observed-elsewhere` is the state that earns its keep: it tells an operator **where to look**.
+Collapsing it into `not-applicable` would tell them not to look at all — someone seeing
+"Not applicable" against Cloudflare would stop investigating an edge problem that *is* observable,
+just not here.
+
+### elsewhere is not evidence of health
+`firebase-auth`, `firebase-hosting` and `artifact-registry` are classified `elsewhere` **only**
+because the catalogue establishes an operational signal outside this console. That is **not** a
+claim that the integration is healthy. The console test proving `elsewhere` never receives success
+styling is therefore an invariant, not a UI detail — it is rendered neutral, and its operator
+pointer is a plain note, never a status badge.
+
+### Classification and observation are independent
+Everything a probe actually established is evaluated **before** `healthKind` is consulted. A
+classification only describes the **absence** of an observation:
+
+* an `elsewhere` rail a probe genuinely reached still reports `connected`;
+* one that failed still reports `failed`;
+* lifecycle and credentials still outrank both.
+
+A classification can never become the observation, and never becomes a success by itself.
+
+### The catalogue is the sole authority
+All 35 kinds are declared by hand, never derived. The specific hazard guarded against is that
+*"has no executor"* quietly becomes *"not-applicable"* — **nine live `measurable` integrations have
+no executor**, and deleting a probe must not reclassify a capability as unmeasurable. Sabotage **S1**
+makes exactly that substitution and turns the suite red.
+
+An absent, unrecognised or `measurable` kind all fall back to `unknown`, so a classification mistake
+understates certainty rather than claiming something cannot be measured.
+
+### Sabotage — 11/11 red, after two misfires that are NOT catches
+Recorded as misfires because each went green for the wrong reason and proves nothing:
+
+* **S8 was INERT.** It prepended a duplicate `healthKind` key before the real one. A JavaScript
+  object literal takes the **last** key, so the original value still won and nothing was mutated.
+  Re-anchored onto the actual value.
+* **The `cloudflare` fixture became invalid.** A section-4 assertion used it to represent a rail with
+  no probe reporting `unknown`; this change legitimately reclassifies it to `elsewhere`, so the
+  fixture stopped testing the branch it named. A rail with **no stage support at all** was required,
+  since `fcm` has support and the harness's default executor ran. Switched to `google-signin`.
+
+Both were harness faults, not code defects. The 11/11 result was obtained only after correcting
+them, and the corrected definitions are what is preserved.
+
+### Certification, from the staged and committed state
+parity 26/0 — every entry declares a kind, every `source: null` entry is explained, the server
+registry mirrors the catalogue entry for entry, and all three kinds are in use ·
+probes 85/0 · status 45/0 · console 67/0 · admin-os-wiring 308/0 ·
+legacy certification 580/0 CERTIFIED · served-page visual 53/0.
+
+### Files affected
+- `sokoni-integration-catalogue.js` — `health.kind` and `kindNote` on all 35 entries
+- `functions/integration-registry.js` — regenerated, carries `healthKind`
+- `functions/integration-probes.js` — `deriveHealth` resolves the three kinds
+- `sokoni-integrations.js` — two new health states, rendered neutral; operator pointer
+- `scripts/test-integration-registry-parity.js`, `scripts/test-integration-probes.js`,
+  `scripts/test-integrations-console.js`
+
+### Database / API / Security changes
+No database change. Two new health values in an existing field; the response shape is unchanged.
+Security unchanged.
+
+### Deployment
+**NOT DEPLOYED.** Live production remains `2fa2074` / `v635` / `ship/p07c-directory-repoint`,
+unchanged. State: COMMITTED → NOT DEPLOYED.
+
+### Breaking changes
+None. A consumer that does not recognise the two new values renders them as it renders any other
+non-success state.
+
 ## 2026-09-20 (94) — Two defects a browser found that a minimal DOM could not
 
 **Served-page visual 53/0 · integration-status 45/0 · console 54/0 · legacy 580/0 CERTIFIED · COMMITTED `279748c`, NOT DEPLOYED.**
