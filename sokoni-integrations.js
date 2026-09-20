@@ -137,10 +137,56 @@
     health:    { ok: null, byId: {}, error: '' },
     deps:      { ok: null, rows: [], error: '' },
     webhooks:  { ok: null, rows: [], error: '' },
+    /* RC-1 configuration + RC-3 probe evidence, exactly as the backend returned
+       it. Nothing in this module recomputes any of it. */
+    status:    { ok: null, byId: {}, counts: {}, error: '', checkedAt: '', inventoryReadable: null },
     loadedAt:  0,
   };
 
   var _filter = { q: '', type: '', status: '' };
+  /* Optional injection point. Both consoles mount with a target only, so this
+     stays empty in production and the dispatcher path above is used. */
+  var _opts = {};
+
+  /* ── Backend state vocabulary — PRESENTATION ONLY ────────────────────
+     These maps turn a backend value into a label and a CSS class. They decide
+     NOTHING. If a state arrives that is not listed, it is shown verbatim as
+     unknown rather than guessed at — inventing a display state is how a console
+     starts disagreeing with the backend that owns the truth.
+
+     The backend owns two separate answers and this module keeps them separate:
+       credentialState  RC-1 / Secret Manager — is the credential provisioned
+       health           RC-3 / probe evidence  — did the provider actually answer
+     A configured credential is NEVER rendered as a working provider. */
+  var CRED_META = {
+    'configured':     { cls: 'healthy',  label: 'Configured' },
+    'partial':        { cls: 'degraded', label: 'Partially configured' },
+    'missing':        { cls: 'error',    label: 'Missing' },
+    'not-applicable': { cls: 'unknown',  label: 'Not applicable' },
+    'disabled':       { cls: 'unknown',  label: 'Disabled' },
+    'unknown':        { cls: 'unknown',  label: 'Unknown' },
+  };
+  var HEALTH_META = {
+    'connected': { cls: 'healthy',  label: 'Connected' },
+    'degraded':  { cls: 'degraded', label: 'Degraded' },
+    'failed':    { cls: 'error',    label: 'Failed' },
+    'missing':   { cls: 'error',    label: 'Credentials missing' },
+    'disabled':  { cls: 'unknown',  label: 'Disabled' },
+    'unknown':   { cls: 'unknown',  label: 'Not yet tested' },
+  };
+  function _credMeta(v)   { return CRED_META[v]   || { cls: 'unknown', label: String(v || 'Unknown') }; }
+  function _healthMeta(v) { return HEALTH_META[v] || { cls: 'unknown', label: String(v || 'Unknown') }; }
+
+  /* A stage is true | false | null. null is UNKNOWN and is deliberately falsy,
+     so this renders three outcomes and never treats unknown as proven. */
+  function _stageWord(v, supported) {
+    if (supported === 'not-supported') return 'n/a';
+    if (v === true)  return 'yes';
+    if (v === false) return 'no';
+    return 'unknown';
+  }
+
+  function _statusFor(id) { return _data.status.byId[id] || null; }
 
   /* ── Helpers ─────────────────────────────────────────────────────────── */
 
@@ -396,6 +442,35 @@
       });
   }
 
+  /* ── The authoritative status read ───────────────────────────────────
+     ONE backend call, returning RC-1's configuration answer and RC-3's probe
+     evidence for all 35 integrations. This module stores it and renders it; it
+     does not merge, re-derive or second-guess any of it.
+
+     `getStatus` may be injected at mount for tests and for a console that
+     already owns a dispatcher. Otherwise the op goes through adminOsDispatch,
+     the same hub every other admin read uses, rather than standing up a second
+     path to the same handler. */
+  function _readStatus() {
+    var injected = _opts.getIntegrationStatus;
+    var call;
+    if (typeof injected === 'function') {
+      call = injected();
+    } else if (typeof firebase !== 'undefined' && firebase.functions) {
+      try {
+        call = firebase.functions()
+          .httpsCallable('adminOsDispatch')({ op: 'adminGetIntegrationStatus' })
+          .then(function (r) { return r.data; });
+      } catch (e) {
+        return Promise.resolve({ ok: false, error: (e && e.message) || 'Call failed.' });
+      }
+    } else {
+      return Promise.resolve({ ok: false, error: 'Firebase Functions is not available on this page.' });
+    }
+    return call.then(function (d) { return { ok: true, data: d }; })
+               .catch(function (e) { return { ok: false, error: (e && e.message) || 'Call failed.' }; });
+  }
+
   function load() {
     if (_loading) return Promise.resolve();
     _loading = true;
@@ -406,6 +481,7 @@
       _read('platformHealth',       LIMITS.health),
       _read('platformDependencies', LIMITS.deps),
       _read('posWebhooks',          LIMITS.webhooks),
+      _readStatus(),
     ]).then(function (r) {
       _data.services = { ok: r[0].ok, rows: r[0].docs, error: r[0].error };
 
@@ -415,6 +491,22 @@
 
       _data.deps     = { ok: r[2].ok, rows: r[2].docs, error: r[2].error };
       _data.webhooks = { ok: r[3].ok, rows: r[3].docs, error: r[3].error };
+
+      /* Stored verbatim. A failed read is recorded as a FAILED READ — it must
+         never be rendered as "nothing is configured", which is the mistake this
+         whole surface exists to stop making. */
+      var st = r[4];
+      if (st.ok && st.data && st.data.integrations) {
+        var map = {};
+        st.data.integrations.forEach(function (i) { map[i.id] = i; });
+        _data.status = { ok: true, byId: map, counts: st.data.counts || {}, error: '',
+                         checkedAt: st.data.checkedAt || '',
+                         inventoryReadable: st.data.inventoryReadable };
+      } else {
+        _data.status = { ok: false, byId: {}, counts: {},
+                         error: st.error || 'Status unavailable.',
+                         checkedAt: '', inventoryReadable: null };
+      }
       _data.loadedAt = Date.now();
       _loading = false;
       _render();
@@ -640,6 +732,66 @@
     }).join('');
   }
 
+  /* ── The measured state of one integration ───────────────────────────
+     Everything here comes from the backend record. The console decides nothing:
+     it does not infer health from a configured credential, it does not promote
+     an accepted request to a delivery, and it shows a stage the rail cannot
+     evidence as "n/a" rather than as a failure.
+
+     The five stages are shown individually on purpose. "Accepted" and
+     "Delivered" are different claims, and a surface that collapsed them would
+     show a green tick for a channel nobody is receiving on. */
+  function _liveState(id) {
+    if (_data.status.ok === false) {
+      return '<div class="sic-kv"><span>Configuration</span><strong>' +
+        '<span class="sic-badge unknown"><span class="sic-dot"></span>Unreadable</span></strong></div>' +
+        '<p class="sic-note">Status could not be read: ' + _esc(_data.status.error) +
+        '. This is a failed read, not an unconfigured integration.</p>';
+    }
+    var r = _statusFor(id);
+    if (!r) return '';
+
+    var cm = _credMeta(r.credentialState);
+    var hm = _healthMeta(r.health);
+    var st = r.stages || {};
+    var sup = r.stageSupport || {};
+
+    var stageRow = ['connected', 'accepted', 'delivered', 'received'].map(function (k) {
+      var w = _stageWord(st[k], sup[k]);
+      var cls = w === 'yes' ? 'healthy' : w === 'no' ? 'error' : 'unknown';
+      var label = k.charAt(0).toUpperCase() + k.slice(1);
+      var shown = w === 'yes' ? 'proven' : w === 'no' ? 'failed' : w === 'n/a' ? 'n/a' : 'unknown';
+      return '<span class="sic-chip"><span class="sic-badge ' + cls + '">' +
+             '<span class="sic-dot"></span>' + _esc(label) + ': ' + shown + '</span></span>';
+    }).join('');
+
+    var canProbe = (r.capabilities || []).indexOf('test') > -1;
+
+    return '<div class="sic-kv"><span>Configuration</span><strong><span class="sic-badge ' + cm.cls +
+      '"><span class="sic-dot"></span>' + _esc(cm.label) + '</span></strong></div>' +
+      '<div class="sic-kv"><span>Provider health</span><strong><span class="sic-badge ' + hm.cls +
+      '"><span class="sic-dot"></span>' + _esc(hm.label) + '</span></strong></div>' +
+      '<div class="sic-sect-l">What was actually proven</div>' +
+      '<div>' + stageRow + '</div>' +
+      (r.healthNote ? '<p class="sic-note">' + _esc(r.healthNote) + '</p>' : '') +
+      '<div class="sic-kv"><span>Evidence</span><strong>' + _esc(r.evidence || 'none') + '</strong></div>' +
+      '<div class="sic-kv"><span>Last probed</span><strong>' +
+        (r.probedAt ? _esc(r.probedAt) : EM) + '</strong></div>' +
+      '<div class="sic-kv"><span>Checked</span><strong>' +
+        (r.checkedAt ? _esc(r.checkedAt) : EM) + '</strong></div>' +
+      '<div class="sic-sect-l">Management</div>' +
+      '<div>' + (r.capabilities || []).map(function (c2) {
+        return '<span class="sic-chip sic-mono">' + _esc(c2) + '</span>';
+      }).join('') + '</div>' +
+      (canProbe
+        ? '<p class="sic-note">A provider test is available for this integration. It never ' +
+          'initiates a payment, a payout or any other movement of money, and it never sends to ' +
+          'a real customer.</p>'
+        : '<p class="sic-note">No provider test is offered for this integration — either its ' +
+          'lifecycle is disabled, its credentials are not provisioned, or no probe exists that ' +
+          'could run safely.</p>');
+  }
+
   function _catalogueDetail() {
     var c = _cat();
     if (!c) return '';
@@ -666,6 +818,7 @@
       '<div class="sic-kv"><span>Direction</span><strong>' + _esc(i.direction) + '</strong></div>' +
       '<div class="sic-kv"><span>Category</span><strong>' + _esc(i.category) + '</strong></div>' +
       '<div class="sic-kv"><span>Live signal</span><strong>' + _liveSignal(i) + '</strong></div>' +
+      _liveState(i.id) +
 
       '<div class="sic-sect-l">What it does</div>' +
       '<p style="font-size:12.5px;color:var(--sic-muted);line-height:1.6">' + _esc(i.summary) + '</p>' +
@@ -700,11 +853,41 @@
              'so credential dependencies cannot be listed.</div></div>';
     }
     var rows = c.secrets();
-    return '<div class="sic-card"><div class="sic-scroll"><table class="sic-table">' +
-      '<thead><tr><th>Secret name</th><th>Rails that depend on it</th><th>Category</th></tr></thead><tbody>' +
+
+    /* Per-secret provisioning, taken from the backend's per-credential booleans.
+       The console never asks Secret Manager anything — it cannot, and should
+       not be able to. A secret whose state the backend did not report shows as
+       unknown rather than as missing. */
+    var provisioned = {};
+    Object.keys(_data.status.byId).forEach(function (id) {
+      (_data.status.byId[id].credentials || []).forEach(function (cr) {
+        if (cr.present === true)  provisioned[cr.name] = true;
+        else if (cr.present === false && provisioned[cr.name] !== true) provisioned[cr.name] = false;
+      });
+    });
+    function provCell(name) {
+      if (_data.status.ok !== true) {
+        return '<span class="sic-badge unknown"><span class="sic-dot"></span>Unknown</span>';
+      }
+      var v = provisioned[name];
+      if (v === true)  return '<span class="sic-badge healthy"><span class="sic-dot"></span>Provisioned</span>';
+      if (v === false) return '<span class="sic-badge error"><span class="sic-dot"></span>Not provisioned</span>';
+      return '<span class="sic-badge unknown"><span class="sic-dot"></span>Unknown</span>';
+    }
+
+    var banner = _data.status.ok === false
+      ? '<div class="sic-empty">Credential status could not be read (' + _esc(_data.status.error) +
+        '). The names below are the declared dependencies; their provisioning state is NOT known ' +
+        'and must not be read as missing.</div>'
+      : '';
+
+    return '<div class="sic-card">' + banner + '<div class="sic-scroll"><table class="sic-table">' +
+      '<thead><tr><th>Secret name</th><th>Provisioned</th><th>Rails that depend on it</th>' +
+      '<th>Category</th></tr></thead><tbody>' +
       rows.map(function (s) {
         return '<tr style="cursor:default">' +
           '<td class="sic-mono sic-name">' + _esc(s.name) + '</td>' +
+          '<td>' + provCell(s.name) + '</td>' +
           '<td>' + s.usedBy.map(function (i) {
             return '<span class="sic-chip">' + _esc(i.name) + '</span>';
           }).join('') + '</td>' +
@@ -1015,9 +1198,10 @@
 
   /* ── Public API ──────────────────────────────────────────────────────── */
 
-  function mount(target) {
+  function mount(target, opts) {
     var el = typeof target === 'string' ? document.getElementById(target) : target;
     if (!el) return;
+    _opts = opts || _opts || {};
     _styles();
     _root = el;
     if (_mounted) { _render(); return; }

@@ -490,6 +490,32 @@ function statValue(html, label) {
        !/integrationsRoot/.test(adminHtml) && !/sokoni-integrations\.js/.test(adminHtml));
   });
 
+  /* ── E4 — THE CONSOLE PERFORMS NO WRITES ───────────────────────────────
+     The invariant is unchanged and absolute. What changed is how it is
+     measured.
+
+     This case used to forbid `httpsCallable` outright, as a proxy for "no
+     writes". That proxy became wrong when the console began reading the
+     authoritative integration status, which lives in Secret Manager and
+     therefore cannot come from Firestore. A read is not a write, and the
+     console had no way to obtain one.
+
+     But the proxy was not merely stale, and it is NOT simply relaxed here.
+     `adminOsDispatch` reaches 64 operations, 12 of them mutating
+     (adminUpdateUserRole, adminUpdateFeatureFlag, adminUpdateOrderStatus and
+     the rest). "The console calls no callable" really was a stronger guarantee
+     than "the console calls adminOsDispatch". So the dispatcher is treated as
+     TRANSPORT and the OPERATION IDENTITY is what is certified: the console may
+     send exactly the read-only ops on the allowlist below, and nothing else.
+
+     Two independent protections remain:
+       direct    the four Firestore write verbs stay unconditionally forbidden
+       callable  only adminOsDispatch, and only with an allowlisted read op
+
+     Do not widen READ_ONLY_INTEGRATION_OPS to accommodate whatever the console
+     happens to call. The console conforms to this list. */
+  const READ_ONLY_INTEGRATION_OPS = ['adminGetIntegrationStatus'];
+
   runCase('E4 the console performs no writes', () => {
     const src = fs.readFileSync(path.join(ROOT, 'sokoni-integrations.js'), 'utf8')
                   .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
@@ -497,9 +523,67 @@ function statValue(html, label) {
        blanked the file would make every absence check below pass vacuously. */
     ok('E4 control: stripped source still contains the reads',
        /\.collection\(/.test(src) && /\.get\(\)/.test(src));
-    ['.set(', '.update(', '.delete(', '.add(', 'httpsCallable'].forEach((w) => {
+
+    /* 1. DIRECT MUTATION — unconditionally forbidden, exactly as before. */
+    ['.set(', '.update(', '.delete(', '.add('].forEach((w) => {
       ok('E4 no ' + w + ' in the console', src.indexOf(w) === -1);
     });
+
+    /* 2. CALLABLE TRANSPORT — only the dispatcher, and only as a transport. */
+    const callables = [...new Set((src.match(/httpsCallable\(\s*'([^']+)'/g) || [])
+      .map((x) => x.replace(/.*'([^']+)'.*/, '$1')))];
+    callables.forEach((c) => {
+      ok('E4 callable is the dispatcher, not a direct function: ' + c,
+         c === 'adminOsDispatch');
+    });
+    ok('E4 at most one callable transport is used', callables.length <= 1,
+       callables.join(',') || 'none');
+
+    /* 3. OPERATION IDENTITY — the part that actually bounds the capability.
+       A dispatcher call is only as safe as the op it carries. */
+    const opLiterals = [...new Set((src.match(/\bop:\s*'([^']+)'/g) || [])
+      .map((x) => x.replace(/.*'([^']+)'.*/, '$1')))];
+    opLiterals.forEach((o) => {
+      ok('E4 op is on the read-only allowlist: ' + o,
+         READ_ONLY_INTEGRATION_OPS.indexOf(o) !== -1);
+    });
+
+    /* 4. NO DYNAMIC OP. A computed op would let a caller choose any of the 64,
+       which would defeat the allowlist above without tripping it. */
+    ok('E4 every op sent is a string literal, never a variable',
+       !/\bop:\s*(?!')[A-Za-z_$]/.test(src));
+
+    /* 5. NO MUTATING OP NAME ANYWHERE in the console, allowlist or not. */
+    ['adminUpdateUserRole', 'adminUpdatePlatformSettings', 'adminUpdateFeatureFlag',
+     'adminCreateSupportTicket', 'adminUpdateOrderStatus', 'adminBanUser',
+     'adminScheduleUserDeletion', 'adminMessageUser', 'adminRunIntegrationProbe']
+      .forEach((o) => {
+        ok('E4 mutating op absent from the console: ' + o, src.indexOf(o) === -1);
+      });
+
+    /* 6. INVERTING CONTROLS — every absence check above is worthless unless the
+       same matchers can find what they are looking for. Each runs against a
+       fixture that MUST trip it. */
+    const mutFixture = "firebase.functions().httpsCallable('adminOsDispatch')" +
+                       "({ op: 'adminUpdateUserRole' })";
+    ok('E4 control: the op matcher catches a mutating op',
+       (mutFixture.match(/\bop:\s*'([^']+)'/g) || [])
+         .map((x) => x.replace(/.*'([^']+)'.*/, '$1'))
+         .some((o) => READ_ONLY_INTEGRATION_OPS.indexOf(o) === -1));
+    ok('E4 control: the callable matcher catches a second callable',
+       (("httpsCallable('someOtherFunction')").match(/httpsCallable\(\s*'([^']+)'/g) || [])
+         .map((x) => x.replace(/.*'([^']+)'.*/, '$1'))
+         .some((c) => c !== 'adminOsDispatch'));
+    ok('E4 control: the dynamic-op matcher catches a computed op',
+       /\bop:\s*(?!')[A-Za-z_$]/.test("({ op: chosenOp })"));
+    ok('E4 control: the write-verb matcher catches a write',
+       "db.collection('x').doc('y').set({})".indexOf('.set(') !== -1);
+
+    /* 7. THE LEGITIMATE PATH IS PRESENT — this is not a suite that would also
+       pass against a console that had been stripped of its status read. */
+    ok('E4 the console does read the authoritative status',
+       /httpsCallable\(\s*'adminOsDispatch'\s*\)/.test(src) &&
+       /op:\s*'adminGetIntegrationStatus'/.test(src));
   });
 
   /* ── Summary ─────────────────────────────────────────────────────── */
