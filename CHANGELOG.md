@@ -1,3 +1,156 @@
+## 2026-09-21 (122) — The numbers were never a registry, and #8 is assigned rather than found
+
+**Governance · COMMITTED `b74bca2` · Stage 1 of 4 · documentation only · NOT IMPLEMENTED · NOT DEPLOYED.**
+
+Entry (121) retired the `#5/#7` termination attribution and left ownership unassigned. Establishing
+an owner required answering a question the correction exposed: **where does mechanism numbering live
+at all?**
+
+### It lives in one document, and there is no registry
+
+```
+docs/            DISPATCHER_REGISTRY.md · PROVIDER_REGISTRY.md · index-registry.json
+                 NO mechanism registry
+
+mechanism #1..#7 referenced in EXACTLY ONE file — ADR-035 — plus commit messages
+```
+
+And within ADR-035 the numbers are only ever **used**, never **defined**. There is no list saying
+what they mean. Every reference assumes the reader already knows.
+
+> **A numbered reference reads as though a registry assigns it.** That appearance is precisely what
+> let an unsupported attribution survive in a frozen document as though it were a decision. The
+> numbering is now declared **ADR-LOCAL**, and **no platform-wide registry was created** —
+> manufacturing one to hold a single decision would rebuild the authority-by-assertion this
+> workstream just dismantled.
+
+### Three namespaces, and they collide
+
+```
+mechanism #N    the lifecycle work items
+§Open N         this ADR's open questions          §Open 4a · §Open 5 · §Open 6
+Gate N          the payroll authorization gates    Gate 1 · Gate 3
+```
+
+§5 of the ADR contains: *"…is **§Open 6** and belongs to **mechanism #6**"* — two different things
+sharing a number in one sentence.
+
+**`§Open 5` is *"whether `workStatus` is stored and swept"*** — adjacent in subject to what any
+reader would guess `#5` means. That adjacency is a plausible origin for the retired attribution, and
+is now recorded as a standing hazard: *a number in this document does not identify a mechanism
+unless the word "mechanism" is attached to it.*
+
+### The reconstruction — by category, not by guess
+
+| # | status | meaning | evidence |
+|---|---|---|---|
+| **#1** | EXPLICIT / BUILT | claim + acceptance | §4 defines it; `0a8b8ae` |
+| **#2** | **RECONSTRUCTED** / BUILT | merchant-authority resolution | 7 commits + shipped code; **the ADR never names #2** |
+| **#3** | EXPLICIT / BUILT | invitation / state establishment | §5, §6; `33c0f59` |
+| **#4** | EXPLICIT / BUILT | employment history | §2a; `2197b48` |
+| **#5** | **UNRESOLVED** | — | no authoritative definition anywhere |
+| **#6** | EXPLICIT / **UNBUILT** | payability of `on_leave` / `suspended` | §5; zero commits |
+| **#7** | **UNRESOLVED** | — | no authoritative definition anywhere |
+| **#8** | **ASSIGNED** | accepted-employment termination | this decision |
+
+**`#2` is the inverse of `#5` and `#7`** — seven commits and shipped code, and never named in the
+ADR. Marked RECONSTRUCTED for that reason, not because it is doubtful. The category exists so that
+"well-evidenced but undocumented" is not silently upgraded to "defined".
+
+### THE ATTRIBUTION HAD NO REFERENT
+
+Stronger than *the pointer was wrong*:
+
+> **`#5` and `#7` have no authoritative definition anywhere.** The attribution did not name the wrong
+> mechanisms — **it named two numbers that were never defined.** It had no referent at all.
+
+**FORBIDDEN:** promoting either into a definition from that attribution, or from the fact that the
+ADR discusses work status and shop assignment nearby. A reader may reasonably *guess* `#5` is the
+work-status axis and `#7` is shop assignment; **those guesses are recorded as guesses and not
+adopted.** They stay UNRESOLVED and are **not available** as identifiers for new work — *absence of
+a definition is not vacancy.*
+
+One correction worth preserving: during the reconstruction I noted `#7` had one commit citing it.
+That commit is `0ccde22` — **written in this session, by me, using my own inferred meaning of `#7`.**
+It cannot corroborate the inference that produced it, and is recorded as circular rather than
+counted as evidence.
+
+### Mechanism #8 — ASSIGNED, not found
+
+> **`#8` is explicitly assigned by this decision. It is not "the next free number."** Calling it free
+> would convert the *absence of evidence* about `#5` and `#7` into a *claim* about them.
+
+Collision-checked at **zero** across all three namespaces — no `#8`, no `§Open 8`, no `Gate 8`, in
+the ADR or in any commit — and then assigned deliberately.
+
+It owns **exactly one transition**, for an **accepted** employment:
+
+```
+active / working  →  terminated / null
+
+hrStaff              employmentStatus = terminated · workStatus = null · uid RETAINED
+employmentUidClaims  {businessId}_{uid}  DELETE
+employmentEvents     employment_terminated
+          all in ONE transaction
+
+preconditions   1 the employment is ACTIVE
+                2 a uid EXISTS
+                3 the claim EXISTS and its staffId IS THIS EMPLOYMENT
+```
+
+**Precondition 3 carries the `delete()` proof requirement in its strong form.** `create()` refuses a
+document that already exists; **`delete()` on an absent document — or on one belonging to another
+employment — succeeds silently.**
+
+> **A successful `delete()` is not proof that the correct claim existed and was revoked.** Only the
+> `staffId` correspondence establishes that.
+
+**#8 does NOT own:** `on_leave` · `suspended` · work-status policy · shop assignment · shop employee
+removal · `#5` · `#7`. Any later mechanism governing those must receive its **own** explicit
+assignment and must not inherit authority from #8. Termination could not revoke a shop assignment in
+any case: `shopEmployees` is keyed `{shopId}_{uid}` against `hrStaff`'s
+`{merchantId}_{employeeNumber}`, no module reads both, and ADR-016 forbids the bridge.
+
+### Assigning an owner made five passages self-contradictory
+
+The status header, two §4 passages, a section heading and a summary line all still said ownership was
+unassigned. Left alone the ADR would have asserted both.
+
+**The twelve deletions in this diff are exactly those five passages**, which is why it is `+164 / −12`
+rather than a clean insertion. Verified after: **0** stale ownership claims, **5** `#5/#7` UNRESOLVED
+markers intact, every frozen-contract clause present, and *"#8 is not implemented"* stated in four
+places.
+
+### Files affected
+- `docs/adr/ADR-035-employment-and-identity-binding.md` — +164 / −12
+
+### Database / API / Security changes
+**None.** Documentation only.
+
+### Deployment
+**NOT DEPLOYED.**
+
+### Breaking changes
+None. A numbering namespace made explicit, and an owner assigned.
+
+### STAGE 1 OF FOUR
+
+```
+1  DOCUMENTATION       this entry + b74bca2                    ← COMPLETE
+2  READ-ONLY GATE      enumerate every hrStaff writer and every employmentUidClaims
+                       writer/deleter; establish the transaction boundary; verify no
+                       existing writer already satisfies part of #8; establish
+                       positive AND negative controls BEFORE any code
+3  IMPLEMENTATION      #8 only — no #5, no #7, no shop assignment, no work-status
+                       redesign, no unrelated cleanup
+4  CERTIFICATION       must refuse: already-terminated · missing uid · mismatched
+                       claim.staffId · MISSING CLAIM · a claim owned by another employment
+```
+
+Each stage is a **separate authorization**. Until they complete, an accepted employment's occupancy
+claim remains **unreleasable** — now because its owner is unbuilt, rather than because its owner was
+undefined.
+
 ## 2026-09-21 (121) — The search that would have found nothing, twice
 
 **Documentation · COMMITTED `9ec57dd` · ADR correction only · no implementation · NOT DEPLOYED.**
