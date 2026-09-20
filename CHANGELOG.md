@@ -1,3 +1,118 @@
+## 2026-09-20 (90) — A4-F3E: the fourth writer runs in production, and never writes
+
+**36/0 calling the real adapter · sabotage 8/8 RED · census 24/0 · COMMITTED `55705dd`, NOT DEPLOYED.**
+
+Entry 89 closed W2 and left W4 classified LATENT pending a reachability investigation. That
+investigation found the classification was wrong in a specific and instructive way.
+
+### W4 is not dormant — it executes on every subscription payment
+    webhookIntasend -> shadowCompareSubscription -> engine.simulate()
+                    -> subscription.activate(capture, ctx)
+
+`engine.simulate()` passes a **capture** transaction: `get()` is a real read, but
+`set/create/update/delete` are pushed to an array and never applied. So W4 runs, and W4 has never
+written. "Latent" implied dormant code; the accurate state is **SHADOW-EXECUTED**.
+
+### Why it is non-authoritative — and what it is NOT
+Neither caller of the real `engine.activate()` can reach it:
+
+* `payment-reconciliation.js` routes `purpose === 'subscription'` to the heal path (W3) explicitly;
+* `healthcare-subscription-activation.js` returns unless `purpose === 'healthcare_subscription'`.
+
+Corroborated in production: the engine's ledger — collection `entitlements`, keyed by paymentRef,
+written by `txn.create()` exactly once per activation — holds **zero** such rows. There is no
+Cloud Function export of an engine entry point and no operator tooling path.
+
+**Correction to entry 89 and to the census gate**: W4 was previously credited as gated by
+`_systemConfig/entitlementEngine`. It is not. `isEngineEnabled()` is defined, exported and has **no
+call sites**, so that flag gates nothing anywhere. What makes W4 non-authoritative is purpose
+routing in two callers. A flag nobody reads is not a control, and recording it as one would have
+left the real mechanism unexamined.
+
+### Why repair something that cannot write
+Drift prevention, not damage repair. Production holds two shadow comparisons: one reports an expiry
+mismatch against the real subscription document caused entirely by W4's flat span, the other an
+`engine_error: plan_invalid` for `seller_basic`. A comparison that cries wolf teaches readers to
+ignore it. And if any future caller routes a subscription intent into `engine.activate()`, W4
+becomes a live writer still carrying the defect A4 and A4-F3D removed from the other three.
+
+`ctx.intent` was already in hand and already carries `billingCycle`. W4 now derives its period from
+it and throws on an unknown one, which `simulate()` records as an `engine_error` rather than
+silently simulating a month. **W1, W2, W3 and W4 now share the same period semantics** — proven by
+executing all four against the same boundary vectors, not by asserting it.
+
+### PLAN_DAYS was NOT globally removed
+Only the subscription adapter's dependency on it is gone. `registerPurpose`'s `expiresDays` (twice)
+and the healthcare adapter's `currentPeriodEnd`/`renewalAt` still use it, and those are separate
+contracts that have not been adjudicated. Removing a constant to make a file look clean would have
+silently changed two other entitlement contracts. The comment claiming it "matches
+activateSubscription" was false from A4 onward and is corrected to state what it actually is.
+
+Also deliberately untouched: engine routing, the shadow lifecycle, healthcare and digital-download
+entitlement behaviour, and the shared `entitlements` collection namespace — where the engine's
+ledger (keyed by paymentRef) and `subscription-authority`'s materialised entitlements (keyed by
+uid) coexist with different shapes. Recorded as a hazard, not redesigned.
+
+### The writer census, now three states
+| | writer | state | derived |
+|---|---|---|---|
+| W1 | `index.js` `activateSubscription` | LIVE | yes |
+| W2 | `index.js` `webhookIntasend` | LIVE, authoritative | yes |
+| W3 | `payment-reconciliation.js` heal | LIVE | yes |
+| W4 | `entitlement-adapters.js` `activate()` | **SHADOW** | **yes (this entry)** |
+
+The invariant widened from "every live writer" to **every executing writer, including shadow
+writers, derives its period from the authoritative billing cycle unless proven to represent a
+different contract**. `LATENT` is retained as a category with no current member, because a writer
+that neither executes nor writes is a real third state worth being able to name.
+
+W4 had been the gate's inverting control — the live specimen proving the flat-span check could find
+a violator. Deriving it destroyed that control, so a **synthetic** flat-span writer replaces it;
+without one, "no violators" cannot be told apart from a classifier that has stopped working.
+
+### Two scope exceptions, authorised in advance
+* **A fourth local `_periodEnd`.** No module exports one, `sub-billing.js` is a Cloud Functions
+  surface, and requiring `index.js` from an adapter would be circular. The suite asserts the four
+  agree across ten vectors, so a divergence fails a suite instead of quietly answering differently.
+  Collapsing them onto one shared module remains an open, separate decision.
+* **Two fixtures in `test-entitlement-subscription.js` gained `billingCycle: 'monthly'`.**
+  `createPaymentIntent` has always persisted it; the fixtures predate it being read. No assertion
+  was weakened — that suite is about exactly-once convergence and is unchanged at 45/45.
+
+### A sabotage that came back GREEN
+Sourcing the cycle from `ctx.payment` instead of `ctx.intent` was not caught, because the harness
+never populated `ctx.payment`. The provenance claim was untested until the sabotage said so. An
+adversarial case now supplies both, disagreeing, and asserts the intent wins — the payment document
+is shaped by a provider callback, so if W4 ever preferred it, a provider could choose the term.
+
+### Production impact
+**None found.** F3-C established 7 subscription documents with zero annual records; W4 has written
+nothing at all. No back-fill, no remediation.
+
+### Files affected
+- `functions/entitlement-adapters.js` — W4 derives from `ctx.intent.billingCycle`; `PLAN_DAYS`
+  retained for its other contracts and its stale comment corrected
+- `scripts/test-entitlement-adapter-period.js` — new; requires the real module, calls the real adapter
+- `scripts/test-subscription-expiry-writers.js` — three-state classification, widened invariant,
+  synthetic inverting control
+- `scripts/test-entitlement-subscription.js` — two fixtures only
+
+### Database / API / Security changes
+None. This path cannot write, and nothing here makes it able to.
+
+### Deployment
+**NOT DEPLOYED.** Cloud Function change, held by the active Functions / Artifact Registry freeze.
+No deploy attempted. State: COMMITTED → NOT DEPLOYED.
+
+### Breaking changes
+None. A subscription intent with no recorded `billingCycle` now produces an `engine_error` on the
+shadow comparison instead of a simulated thirty days.
+
+### Still open, none implemented
+**A4-F1** back-fill of historical intents with no `billingCycle` — no production evidence supports
+action. **A4-F2** annual reminder cadence in `email-triggers.js`. **Period-function
+consolidation** — four equivalent copies, proven equivalent, not yet collapsed.
+
 ## 2026-09-20 (89) — A4-F3D: the writer that actually decided the entitlement
 
 **36/0 executing the shipped block · sabotage 7/7 RED · census gate 22/0 · COMMITTED `d28e719`, NOT DEPLOYED.**
