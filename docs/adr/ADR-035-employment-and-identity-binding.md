@@ -16,7 +16,11 @@ inherited pointer, disproved by a search-validity gate; #5 and #7 have no author
 and remain UNRESOLVED. ·
 **Mechanism numbering reconstructed and #8 ASSIGNED 2026-09-21** — the numbering is ADR-LOCAL, no
 registry exists or is created, and accepted-employment termination is mechanism **#8**. The frozen
-termination contract is unchanged and #8 is not implemented.
+termination contract is unchanged and #8 is not implemented. ·
+**`terminationId` RESOLVED 2026-09-21** — server-generated once **before** `db.runTransaction` and
+immutable across callback retries; an event discriminator, never a caller key. #8 is **state-gated
+idempotent**: request replay is refused by the active-state precondition, not by an id. Still not
+implemented.
 **Supersedes nothing. Constrains:** `functions/hr-payroll.js`, `hrStaff`, and any future AdminOS
 employee surface.
 **Depends on:** [[ADR-001]] (authorization comes from claims, never from a Firestore field),
@@ -164,6 +168,101 @@ The full frozen contract, including the ordering constraint that the claim must 
 before the termination commits, is recorded in **§4 — TERMINATION** and is unchanged by this
 assignment.
 
+### `terminationId` — RESOLVED 2026-09-21
+
+`EVENTS.TERMINATED` declares `disc: 'terminationId'`, and the event builder **throws** when a
+declared discriminator is absent. The Stage 2 gate found that the frozen §4 contract named no source
+for it: `employment-events.js` required an input that ADR-035 did not supply. The two contracts had
+never been joined. This resolves that, and changes neither of them.
+
+```
+source              SERVER
+generation          crypto.randomUUID()
+timing              ONCE, BEFORE db.runTransaction
+stability           immutable across every transaction-callback retry
+caller-controlled   NO
+persisted separately NO — it is not a document key
+purpose             the discriminator for EVENTS.TERMINATED, and nothing else
+```
+
+> **`terminationId` is an operation/event discriminator. It is NOT an employment identity, and NOT a
+> caller-supplied idempotency key.**
+
+This differs from `inviteId`, the only discriminator currently implemented, which is
+`crypto.randomUUID()` but exists independently as the **invitation's primary key** — the event merely
+reuses it. `terminationId` has no document behind it; it exists *because the event schema requires a
+discriminator*.
+
+#### THE CONCURRENCY INVARIANT — generated before the transaction, never inside it
+
+```
+terminationId = crypto.randomUUID()        ← ONCE, here
+       │
+       ▼
+db.runTransaction(async (t) => {           ← may run MANY times
+       read employment · assert active · assert uid
+       read claim      · assert claim.staffId === this employment
+       update hrStaff  → terminated / null, uid retained
+       delete claim
+       emit TERMINATED(terminationId)
+})
+```
+
+**FORBIDDEN:** generating it inside the transaction callback. The callback may execute repeatedly,
+so a UUID minted there would make **event identity depend on Firestore's retry behaviour** — a
+different discriminator per attempt, and a different event document. The defect would be invisible in
+ordinary testing, because a transaction that never contends never retries.
+
+The event doc id is `` `${staffId}_terminated_${terminationId}` ``, so a stable id means every retry
+of one logical termination writes **the same row**.
+
+#### STATE-GATED IDEMPOTENT, NOT CALLER-KEY IDEMPOTENT
+
+The distinction is contractual, because getting it wrong leads directly to the two forbidden designs
+above:
+
+| | discriminator | outcome |
+|---|---|---|
+| **transaction retry** | **same** `terminationId` | one logical operation, one event row |
+| **request replay** after a successful termination | **new** `terminationId` | **rejected by the ACTIVE-state precondition** — no second event |
+| two concurrent terminations | independent ids | both read `hrStaff/{staffId}`, so they **contend**; one commits, the loser re-reads `terminated` and fails precondition 1 |
+
+> **Replay protection comes from the employment state, not from the id.** #8 does not ask a caller to
+> remember and resend a key, and must not be changed to.
+
+The employment document is already the serialization point — unlike mechanism #1, no additional
+shared document is needed to make concurrent attempts contend.
+
+#### Why per-operation, and not per-employment
+
+The event vocabulary corroborates this independently. Across the twelve events:
+
+```
+NO DISCRIMINATOR   ESTABLISHED · INVITE_ACCEPTED · INVITE_REVOKED
+                   — each guarded so it can occur at most ONCE per employment
+
+DISCRIMINATOR      INVITE_SENT · UID_REBOUND · LEAVE_GRANTED · LEAVE_ENDED ·
+                   SUSPENDED · SUSPENSION_LIFTED · TERMINATED · REINSTATED ·
+                   RECORD_EDITED
+                   — each able to RECUR for one employment
+```
+
+`TERMINATED` carries one, and `REINSTATED` carries its own, so the schema already anticipated that a
+single employment may be **terminated, reinstated and terminated again**. A per-employment key would
+collapse the second termination onto the first event; a caller-supplied key would let a caller do
+that deliberately. **Server-generated-per-operation is the only option that keeps two genuine
+terminations distinct.**
+
+#### What this resolution does NOT change
+
+```
+the §4 frozen termination transition        UNCHANGED
+the three preconditions                     UNCHANGED
+employment-events.js and its schema         UNCHANGED — the requirement was already there
+#8's scope and non-scope                    UNCHANGED
+implementation                              STILL ABSENT
+```
+
 ### What #8 does NOT own
 
 ```
@@ -187,21 +286,28 @@ Any later mechanism governing shop assignment, work-status transitions or anothe
 This section records a **contract and an owner**. Nothing is implemented. The staged sequence is:
 
 ```
-1  DOCUMENTATION          this section                                    ← you are here
-2  READ-ONLY GATE         enumerate every hrStaff writer and every
-                          employmentUidClaims writer/deleter; establish the
-                          available transaction boundary; verify no existing
-                          writer already satisfies part of #8; establish
-                          positive AND negative controls before any code
-3  IMPLEMENTATION         #8 only — no #5, no #7, no shop assignment, no
-                          work-status redesign, no unrelated cleanup
-4  CERTIFICATION          must refuse: already-terminated · missing uid ·
-                          mismatched claim.staffId · MISSING CLAIM ·
-                          a claim belonging to another employment
+1  DOCUMENTATION     DONE     #8 assigned; numbering reconstructed        b74bca2
+2  READ-ONLY GATE    DONE     3 hrStaff writers, 0 deletes · 1 claim
+                              creator, 0 deleters · runTransaction and
+                              t.delete both already shipped · NO existing
+                              #8 writer, two PARTIALs not promoted ·
+                              positive controls passed BEFORE the negative
+                              conclusion was drawn
+3  CONTRACT          DONE     terminationId resolved — server-generated,
+                              once, before runTransaction              ← above
+4  IMPLEMENTATION    ABSENT   #8 only — no #5, no #7, no shop assignment,
+                              no work-status redesign, no unrelated cleanup
+5  CERTIFICATION     ABSENT   must refuse: already-terminated · missing uid ·
+                              mismatched claim.staffId · MISSING CLAIM ·
+                              a claim belonging to another employment
 ```
 
-Until stages 2–4 complete, an accepted employment's occupancy claim remains **unreleasable**, exactly
-as §4 states.
+**Stage 2 found the `terminationId` gap rather than inventing an answer to it**, which is why stage 3
+exists: `employment-events.js` required a discriminator that this ADR did not supply, and the two
+contracts had never been joined.
+
+Until stages 4–5 complete, an accepted employment's occupancy claim remains **unreleasable**, exactly
+as §4 states — now because its owner is unbuilt, not because its owner or its inputs are undefined.
 
 ---
 
