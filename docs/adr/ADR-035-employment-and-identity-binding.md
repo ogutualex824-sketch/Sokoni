@@ -1,6 +1,7 @@
 # ADR-035 — Employment and identity binding
 
-**Status:** Accepted · **not implemented** · 2026-09-20
+**Status:** Accepted · **not implemented** · 2026-09-20 · **amended 2026-09-20** (§2 resolver
+shape + `via` taxonomy, after a read-only authority trace; §8 records a finding this ADR does not repair)
 **Supersedes nothing. Constrains:** `functions/hr-payroll.js`, `hrStaff`, and any future AdminOS
 employee surface.
 **Depends on:** [[ADR-001]] (authorization comes from claims, never from a Firestore field),
@@ -84,14 +85,70 @@ employment relationship — those five acts change whether a person is employed 
 paid.
 
 **FORBIDDEN:** overloading `assertMerchantAccess` with a mode flag, or reading `ownerId` inline in a
-payroll handler. Establishing employment needs its own primitive that answers *"is this caller the
-OWNER of this organization"* — a strictly narrower question. It must live beside
-`merchant-authority.js`, not inside it: `procurement.js` consumes that module too, and widening a
-shared primitive to serve one caller is how the three divergent implementations of 2026-08-28
-happened.
+payroll handler.
 
 > **Why the distinction matters:** editing an employee is not the same act as establishing that
 > someone is employed. The second decides who receives money.
+
+#### One resolver, several narrow assertions
+
+**AMENDED 2026-09-20.** An earlier draft of this ADR required the owner primitive to live *beside*
+`merchant-authority.js`. A read-only trace showed that would produce a **seventh** organization-
+authority implementation — the repo already carries six — and that the correct shape is already in
+the codebase. `shop-employees.js` solved the identical problem:
+
+```
+resolveShopAccess(uid, shopId) → { role, via, shopOwnerId }
+assertShopAccess(uid, shopId)  → wrapper over role
+assertShopOwner(uid, shopId)   → filters on `via`, NOT a second lookup
+```
+
+`merchant-authority.assertMerchantAccess` already computes the same distinction across four
+separable arms — platform claim, self, `ownerId`, `adminUids` — and **discards it**: every arm
+returns the same bare string. That, not a missing check, is why it cannot express owner-vs-admin.
+
+The decision is therefore **one authority resolver, several narrow assertions, all inside
+`merchant-authority.js`**:
+
+```
+resolveMerchantAccess(auth, requested) → { merchantId, via }
+        │
+        ├── assertMerchantAccess()   unchanged signature, unchanged return
+        └── assertMerchantOwner()    filters on `via`
+```
+
+`assertMerchantAccess` keeps its exact contract so `procurement.js` and the twelve payroll call
+sites are untouched. **FORBIDDEN:** a seventh implementation, and changing
+`assertMerchantAccess`'s return type.
+
+#### The `via` taxonomy, and the `self` boundary
+
+This is contractual, not an implementation detail.
+
+| `via` | granted because | employment authority |
+|---|---|---|
+| `owner` | `businesses/{merchantId}.ownerId == uid`, **document read** | ✅ eligible |
+| `admin` | `adminUids[]` contains uid | ❌ not eligible |
+| `self` | `merchantId === auth.uid`, **no document read at all** | ❌ **never eligible** |
+| `platform` | `token.admin` or `token.superAdmin` | ⚠️ must be explicitly defined — see below |
+
+**The `self` arm is the one that matters.** The shipped primitive returns on `merchantId === uid`
+*before reading any document*, so it cannot confirm the organization exists. That is correct and
+deliberate for access — it preserves the one production business still keyed by its owner's uid —
+and **wrong for employment**: inherited blindly it would let any authenticated user establish
+employment in an "organization" that is nothing but their own uid, minting `hrStaff` records under
+it.
+
+**Therefore:** the employment owner resolver must require `businesses/{merchantId}` to **exist**
+before establishing, rebinding, suspending, terminating or reinstating. Ownership of an
+organization that was never created is not ownership.
+
+> **Open — platform-admin employment semantics (§Open 2a).** The capability table above records
+> platform admin as ✅ for the five owner-only acts. That is the *provisional* reading and it is
+> now explicitly under question: a platform admin establishing employment decides who a merchant
+> pays. Note also that `merchant-authority` does not currently distinguish `admin` from
+> `superAdmin` — both take the same bypass — so if the answer differs between them, the taxonomy
+> needs a fifth value. **Until this is decided, the ✅ in that table is not ratified.**
 
 ### 3. `hrStaff.uid` means an accepted binding, never an assertion
 
@@ -272,13 +329,46 @@ identities.
 
 ---
 
+### 8. A finding this ADR deliberately does NOT repair
+
+The same trace found that `crm.assertMerchantOwner` — **misnamed: it accepts `adminUids` too, so
+no merchant-level owner-only authority exists anywhere today** — carries the exact fail-open that
+`merchant-authority.js` was written in August to replace:
+
+```js
+if (data.ownerId !== uid && data.adminUids && !data.adminUids.includes(uid)) throw …
+```
+
+Executed against both shapes:
+
+```
+adminUids present, stranger  → throws  true
+adminUids ABSENT,  stranger  → throws  undefined   ← NON-OWNER GRANTED
+control: owner                → throws  false
+```
+
+With `adminUids` absent the middle conjunct is `undefined`, the condition is falsy, and a stranger
+is admitted. Twelve call sites. It reads `merchants`, the collection this ADR's authority module
+explicitly forbids as an independent authority. **Currently latent** — all 8 production `merchants`
+documents carry `adminUids` and `business-bootstrap` always writes it — exactly as
+`merchant-authority.js`'s own header predicted on 2026-08-28: *"latent only because every existing
+merchant happens to carry the field."* The consolidation it describes never happened.
+
+**FORBIDDEN:** repairing this inside the Gate 3 owner primitive. It is a separate security and
+adoption-gap repair with its own evidence and its own certification; bundling it would make the
+change compound and the resulting proof ambiguous. Recorded here so the naming discrepancy is not
+rediscovered as a new finding. See [[project_merchant_authority_adoption_gap]].
+
+---
+
 ## What this ADR does **not** decide
 
 Deliberately left open, because each is a mechanism choice that deserves its own evidence:
 
 1. **The uniqueness mechanism** — claim document vs transactional query (§4).
-2. **The owner-authority primitive's shape** — a new export beside `merchant-authority`, its name,
-   and whether platform admins bypass it (§2).
+2. **The owner-authority primitive's naming**, and **(2a)** whether a platform admin may perform
+   the five owner-only employment acts — and whether `admin` and `superAdmin` differ (§2). The
+   *shape* is now decided: one resolver returning `via`, inside `merchant-authority.js`.
 3. **The invite/acceptance transport** — whether `shopInvites` (0 documents, one writer,
    `acceptShopInvite`) is reused or a payroll-specific path is built (§3).
 4. **The history collection's identity** — name, key shape, rules, retention (§6).
