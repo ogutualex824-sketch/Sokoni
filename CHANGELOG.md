@@ -1,3 +1,109 @@
+## 2026-09-20 (108) — Two things called employmentStatus, and the boundary that keeps them apart
+
+**Documentation only · COMMITTED `0f1c088` · NO implementation authorized · NOT DEPLOYED.**
+
+A read-only design pass for mechanism #1 traced the shipped code against the frozen ADR-035 §4
+contract. It settled the executable scope and turned up a second employment model.
+
+### Mechanism #1's executable scope — the claim and acceptance, nothing else
+
+**No path terminates an active employment.** `revokeEmploymentInvite` is the only writer of
+`employmentStatus: 'terminated'` on `hrStaff`, and it calls `_requirePendingEmployment` first — so it
+cannot reach an accepted employment. `uid_rebound` and `employment_reinstated` are declared in §6's
+twelve-event vocabulary and performed by **no code**: `acceptEmploymentInvite` is the **only** writer
+of `hrStaff.uid` in the repository.
+
+```
+IN    employmentUidClaims/{businessId}_{uid}, existence-only
+      immutable provenance · CF-only rules
+      t.create() inside acceptEmploymentInvite's existing transaction
+      ALREADY_EXISTS loser handling; anything else re-raised
+      emulator-backed race proof, asserting FIRESTORE STATE
+
+OUT   active termination · claim release · reinstatement · uid_rebound
+      workspaceMemberships · lifecycle redesign · authority changes · indexes
+```
+
+> **Stated consequence, not a defect.** Until an authorized active-termination mechanism exists, an
+> accepted employment's occupancy claim is **not releasable by any existing code path**. That is a
+> deliberate dependency boundary on mechanisms #5/#7.
+
+Two **FORBIDDEN**s name the specific temptations: no `delete` bolted onto `revokeEmploymentInvite` to
+complete the lifecycle table — that path only ever sees a **pending** employment, which never
+acquired a claim, so the delete would remove someone else's or nothing's — and no invented
+termination handler so the ADR reads as fully implemented. §4's release, rebind and reinstatement
+rows stand as **required consumer contracts**.
+
+### Immutable provenance is permitted; mutable state is not
+
+> The claim document has **no mutable lifecycle or status field**. Its **existence** is the sole
+> occupancy signal. Immutable identifying / provenance fields may be stored for forensic attribution
+> and **must never be consulted as an alternative employment authority**.
+
+`{ businessId, uid, staffId, createdAt }`. `staffId` earns its place because it names *which*
+employment holds the uid, which is what makes a collision diagnosable. **`createdAt` is provenance,
+not a condition** — no invariant may depend on it, and nothing may compare or expire against it.
+
+### THE FINDING — `employmentStatus` names two unrelated models
+
+```
+hrStaff.employmentStatus               pending | active | terminated            (ADR-035 §5)
+
+workspaceMemberships.employmentStatus  probation | confirmed | suspended |
+                                       on_leave | transferred | resigned |
+                                       terminated | archived | active
+```
+
+The second belongs to `org-engine.js`'s **`orgUpdateEmploymentStatus`**, **live-exported** from
+`functions/index.js:12670`, operating on `workspaceMemberships/{uid}_{businessId}` with its own
+`TERMINAL_STATES` and its own `orgAuditLog`.
+
+Measured in production 2026-09-20:
+
+```
+workspaceMemberships   2 docs, both role=owner, both employmentStatus: undefined
+orgAuditLog            0     orgDepartments  0
+org-engine.js → hrStaff / employmentEvents / employmentUidClaims :  0 references
+```
+
+So the handler has **never run**, and the two models have **no current interaction**. Note also that
+`workspaceMemberships` is keyed `{uid}_{businessId}` — the same uniqueness shape §4 specifies,
+reversed — and uses `superseded` as a status, the exact word §4 forbids on the claim. Superficial
+resemblance, different contract.
+
+**Shared terminology does not establish semantic equivalence.** Recorded in `AGENTS.md` so the next
+agent does not unify them on the strength of a field name, or "fix" one by copying the other's
+vocabulary. `workspaceMemberships` is deliberately unconverged per ADR-017/ADR-020 and stays outside
+mechanism #1 entirely — different collection, different lifecycle, different authority, live export.
+
+It is the same discipline as the `hrStaff` / `hrTraining` `status` collision recorded in entry (106):
+**a rename must name the owning collection**.
+
+### Proof taxonomy corrected
+
+Scenario 5 is **split** rather than described as "half executable":
+
+```
+EXECUTABLE NOW      1, 2, 5a (claim collision), 9, 10, 11
+FUTURE CONSUMERS    3, 4, 5b (rehire after release), 6, 7, 8
+```
+
+Calling it half-executable in a certification summary would blur exactly the distinction between
+**proven** and **contracted** that this workstream has maintained throughout.
+
+### Files affected
+- `docs/adr/ADR-035-employment-and-identity-binding.md` — §4 boundary, provenance rule, proof split
+- `AGENTS.md` — the `employmentStatus` collision, under Repo discipline
+
+### Database / API / Security changes
+None. No code, no rules, no indexes, no schema written.
+
+### Deployment
+**NOT DEPLOYED.** Live remains `2fa2074` / `v635`.
+
+### Breaking changes
+None. A contract and a finding.
+
 ## 2026-09-20 (107) — Uniqueness is an occupancy claim, and a terminated employee reserves nothing
 
 **Documentation only · COMMITTED `15d60de` · NO implementation authorized · NOT DEPLOYED.**

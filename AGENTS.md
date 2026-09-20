@@ -101,6 +101,27 @@ flags contamination). Background: `docs/GCP_COST_ARCHITECTURE_IMPLEMENTATION.md`
   appeared on `hrStaff` *and* on `hrTraining`; renaming the employment axis by pattern hit
   both and would have made every training invisible. Match on the owning collection, or
   edit the traced list of sites one at a time.
+- **`employmentStatus` names TWO UNRELATED models. Same word, different contract.**
+
+  ```
+  hrStaff.employmentStatus              pending | active | terminated          (ADR-035 §5)
+  workspaceMemberships.employmentStatus probation | confirmed | suspended |
+                                        on_leave | transferred | resigned  |
+                                        terminated | archived | active
+  ```
+
+  The second is `org-engine.js`'s `orgUpdateEmploymentStatus`, **live-exported** from
+  `functions/index.js`, over `workspaceMemberships/{uid}_{businessId}`, with its own
+  terminal states and its own `orgAuditLog`. Measured 2026-09-20: it touches `hrStaff`,
+  `employmentEvents` and `employmentUidClaims` **zero** times, and the two production
+  membership documents carry `employmentStatus: undefined` — the handler has never run.
+
+  It is **deliberately unconverged** (ADR-017/ADR-020, and the workforce-authority ADRs).
+  **Shared terminology does not establish semantic equivalence: do not unify these two on
+  the strength of a field name**, and do not "fix" one by copying the other's vocabulary.
+  A rename or a lifecycle change on either must name the owning collection explicitly —
+  the same discipline as the `hrStaff` / `hrTraining` `status` collision above.
+
 - **A patch-generation script must fail closed BEFORE its single write.** Assert every anchor
   matches exactly once, then `writeFileSync` once at the end — so a missed anchor leaves the
   target untouched instead of half-patched. Demonstrated repeatedly on 2026-09-20: the shell
