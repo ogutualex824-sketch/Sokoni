@@ -21,6 +21,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { defineSecret } = require('firebase-functions/params');
 const crypto = require('crypto');
+const { assertMerchantAccess } = require('./merchant-authority');
 
 const db = admin.firestore();
 const F = admin.firestore.FieldValue;
@@ -336,6 +337,13 @@ const addStaffMember = onCall(
         'merchantId, name, employeeNumber, department and position are required.'
       );
     }
+
+    /* ORGANIZATION BOUNDARY. merchantId arrives from the caller; until this
+       returns it is a request, not a fact. Canonical authority is
+       businesses/{merchantId} — see merchant-authority.js. Presence is
+       validated above, so the primitive's default-to-caller arm is never
+       reached from here. */
+    await assertMerchantAccess(req.auth, merchantId);
     if (typeof grossSalary !== 'number' || grossSalary <= 0) {
       throw new HttpsError(
         'invalid-argument',
@@ -404,6 +412,13 @@ const recordAttendance = onCall(OPT, _h.recordAttendance = async (req) => {
       'merchantId and staffId are required.'
     );
   }
+
+  /* ORGANIZATION BOUNDARY. merchantId arrives from the caller; until this
+     returns it is a request, not a fact. Canonical authority is
+     businesses/{merchantId} — see merchant-authority.js. Presence is
+     validated above, so the primitive's default-to-caller arm is never
+     reached from here. */
+  await assertMerchantAccess(req.auth, merchantId);
   if (action !== 'clock_in' && action !== 'clock_out') {
     throw new HttpsError(
       'invalid-argument',
@@ -483,6 +498,13 @@ const getAttendanceReport = onCall(OPT, _h.getAttendanceReport = async (req) => 
     );
   }
 
+  /* ORGANIZATION BOUNDARY. merchantId arrives from the caller; until this
+     returns it is a request, not a fact. Canonical authority is
+     businesses/{merchantId} — see merchant-authority.js. Presence is
+     validated above, so the primitive's default-to-caller arm is never
+     reached from here. */
+  await assertMerchantAccess(req.auth, merchantId);
+
   const monthStart = `${month}-01`;
   const monthEnd = `${month}-31`; // safe upper bound for string comparison
 
@@ -545,6 +567,13 @@ const runPayroll = onCall(
         "merchantId and period ('YYYY-MM') are required."
       );
     }
+
+    /* ORGANIZATION BOUNDARY. merchantId arrives from the caller; until this
+       returns it is a request, not a fact. Canonical authority is
+       businesses/{merchantId} — see merchant-authority.js. Presence is
+       validated above, so the primitive's default-to-caller arm is never
+       reached from here. */
+    await assertMerchantAccess(req.auth, merchantId);
 
     // â”€â”€ Guard: prevent duplicate runs â”€â”€
     // Deterministic runId + transaction gate prevents concurrent duplicate runs
@@ -773,6 +802,13 @@ const getPayrollSummary = onCall(OPT, _h.getPayrollSummary = async (req) => {
     );
   }
 
+  /* ORGANIZATION BOUNDARY. merchantId arrives from the caller; until this
+     returns it is a request, not a fact. Canonical authority is
+     businesses/{merchantId} — see merchant-authority.js. Presence is
+     validated above, so the primitive's default-to-caller arm is never
+     reached from here. */
+  await assertMerchantAccess(req.auth, merchantId);
+
   const runSnap = await db
     .collection('hrPayrollRuns')
     .where('merchantId', '==', merchantId)
@@ -829,6 +865,13 @@ const requestLeave = onCall(OPT, _h.requestLeave = async (req) => {
       'staffId, merchantId, type, startDate and endDate are required.'
     );
   }
+
+  /* ORGANIZATION BOUNDARY. merchantId arrives from the caller; until this
+     returns it is a request, not a fact. Canonical authority is
+     businesses/{merchantId} — see merchant-authority.js. Presence is
+     validated above, so the primitive's default-to-caller arm is never
+     reached from here. */
+  await assertMerchantAccess(req.auth, merchantId);
   if (!ALLOWED_TYPES.includes(type)) {
     throw new HttpsError(
       'invalid-argument',
@@ -985,6 +1028,13 @@ const assignTraining = onCall(OPT, _h.assignTraining = async (req) => {
       'merchantId, title and dueDate are required.'
     );
   }
+
+  /* ORGANIZATION BOUNDARY. merchantId arrives from the caller; until this
+     returns it is a request, not a fact. Canonical authority is
+     businesses/{merchantId} — see merchant-authority.js. Presence is
+     validated above, so the primitive's default-to-caller arm is never
+     reached from here. */
+  await assertMerchantAccess(req.auth, merchantId);
   if (!Array.isArray(assignedTo) || assignedTo.length === 0) {
     throw new HttpsError(
       'invalid-argument',
@@ -1137,6 +1187,13 @@ const getStaffDashboard = onCall(OPT, _h.getStaffDashboard = async (req) => {
   if (!merchantId) {
     throw new HttpsError('invalid-argument', 'merchantId is required.');
   }
+
+  /* ORGANIZATION BOUNDARY. merchantId arrives from the caller; until this
+     returns it is a request, not a fact. Canonical authority is
+     businesses/{merchantId} — see merchant-authority.js. Presence is
+     validated above, so the primitive's default-to-caller arm is never
+     reached from here. */
+  await assertMerchantAccess(req.auth, merchantId);
 
   const today = getNairobiDateString();
 

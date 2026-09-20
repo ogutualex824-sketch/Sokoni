@@ -167,10 +167,31 @@ head('4 - reverting the field is detected');
 /* ── 5. NOTHING ELSE MOVED ──────────────────────────────────────────────── */
 head('5 - strict scope');
 {
-  ok('the handler module is untouched by this repair',
-     require('child_process').execFileSync('git',
-       ['-C', ROOT, 'status', '--porcelain', '--', 'functions/hr-payroll.js'],
-       { encoding: 'utf8' }).trim() === '', 'functions/hr-payroll.js clean');
+  /* RE-ANCHORED 2026-09-20. This asserted that functions/hr-payroll.js was
+     CLEAN in the worktree — a proxy for "the employeeNo repair was page-only".
+     A later authorized gate (canonical merchant authorization) legitimately
+     modifies that module, so worktree state stopped describing THIS repair's
+     scope and started describing someone else's work. Asserted on the SHIPPED
+     handler instead, which is what the check always meant: addStaffMember
+     still consumes `employeeNumber`, and the staff document identity is still
+     built from it. Stripped first — a comment naming the field would otherwise
+     satisfy the check on its own. */
+  {
+    const h = strip(HANDLER);
+    ok('addStaffMember still consumes ' + REQUIRED,
+       new RegExp('\\n\\s*' + REQUIRED + ',').test(h), String(REQUIRED));
+    ok('the staff document identity is still built from it',
+       new RegExp('staffId\\s*=\\s*`\\$\\{merchantId\\}_\\$\\{' + REQUIRED + '\\}`').test(h));
+    ok('the staff document is written carrying it',
+       new RegExp('t\\.set\\(staffRef,[\\s\\S]{0,400}' + REQUIRED).test(h));
+    /* POSITIVE CONTROL. Without this, a matcher that can match NOTHING would
+       report the invariant as broken — or, inverted, a broken matcher would
+       report it as held. */
+    ok('CONTROL — the same matcher finds a field known to be consumed',
+       /\n\s*department,/.test(h));
+    ok('CONTROL — and does NOT find the retired spelling',
+       !/\n\s*employeeNo,/.test(h));
+  }
   const code = strip(PAGE);
   ok('the form input keeps its own id', /getElementById\('staffEmpNo'\)|empNo\s*=/.test(code),
      'form field not renamed');
