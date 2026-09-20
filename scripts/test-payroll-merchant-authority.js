@@ -449,11 +449,109 @@ const reach = (tier, uid) => (tier === 'claim' ? asManager(uid) : asUser(uid));
          outside === SELF, outside);
     }
 
-    /* LIVE-TREE, PENDING OWNERSHIP ADJUDICATION — see the note above. */
-    ok('crm.js is untouched — its fail-open is ADR-035 §8, a separate repair',
-       !changed.includes('functions/crm.js'), changed.join(' '));
-    ok('merchant-authority.js is untouched by THIS gate',
-       !changed.includes('functions/merchant-authority.js'), changed.join(' '));
+    /* ── ADR-035 §8 — THE crm.js FAIL-OPEN IS STILL THERE ───────────────────
+       ADJUDICATED 2026-09-20. This was `!changed.includes('functions/crm.js')`
+       — a git-cleanliness check. Its stated reason was a CURRENT CONTRACT
+       ("its fail-open is ADR-035 §8, a separate repair") but its implementation
+       was a scope check, and the two do not meet: a clean file tells you
+       nothing about whether the defect it names still exists. A repair of
+       crm.js, once committed, would have left this green while the invariant it
+       claims had become false.
+
+       The invariant is STANDING and boundary-independent — nobody may repair
+       the §8 fail-open as a side effect of other work — so it must NOT be
+       anchored to a landing. It is asserted BEHAVIOURALLY instead.
+
+       THE FAIL-OPEN, crm.js:94:
+           if (data.ownerId !== uid && data.adminUids && !data.adminUids.includes(uid))
+       With `adminUids` ABSENT the middle term is falsy, the condition is false,
+       and a NON-OWNER is granted. Exercised through `createLead`, a shipped
+       callable, so this proves the fail-open is REACHABLE and not merely
+       present in a private function — `assertMerchantOwner` is not exported. */
+    {
+      const HttpsErr = HttpsError;
+      const MERCHANT = 'M-FAILOPEN';
+      /* The merchant document shape that arms it: an owner who is NOT the
+         caller, and NO adminUids field at all. */
+      let FIXTURE = { ownerId: 'someone-else' };
+      const crmDb = {
+        collection: (n) => ({
+          doc: (id) => ({ id, get: async () => ({
+            exists: n === 'merchants' && id === MERCHANT,
+            data: () => FIXTURE,
+          }) }),
+          add: async () => ({ id: 'lead-1' }),
+          where () { return this; }, orderBy () { return this; }, limit () { return this; },
+          get: async () => ({ empty: true, docs: [], size: 0, forEach () {} }),
+        }),
+        batch: () => ({ set () {}, update () {}, commit: async () => {} }),
+      };
+      const crmStubs = {
+        'firebase-admin': (() => {
+          const f = () => crmDb;
+          f.FieldValue = { serverTimestamp: () => 'TS', increment: n => n };
+          f.Timestamp = { now: () => 'TS', fromDate: d => d };
+          return { firestore: f, apps: [{}], initializeApp () {} };
+        })(),
+        'firebase-functions/v2/https': { onCall: (_o, fn) => (typeof _o === 'function' ? _o : fn), HttpsError: HttpsErr },
+        'firebase-functions/v2/scheduler': { onSchedule: (_o, fn) => (typeof _o === 'function' ? _o : fn) },
+        'firebase-functions/params': { defineSecret: () => ({ value: () => '0'.repeat(64) }) },
+      };
+      let CRM = null, crmErr = null;
+      const prevLoad = Module._load;
+      Module._load = function (req, parent, isMain) {
+        if (Object.prototype.hasOwnProperty.call(crmStubs, req)) return crmStubs[req];
+        return prevLoad.call(this, req, parent, isMain);
+      };
+      try { CRM = require(path.join(ROOT, 'functions/crm.js')); }
+      catch (e) { crmErr = (e && e.message) ? e.message.slice(0, 120) : 'load failed'; }
+      Module._load = prevLoad;
+
+      ok('CONTROL — the shipped crm.js loads and exposes createLead',
+         !!(CRM && typeof CRM.createLead === 'function'), crmErr || 'loaded');
+
+      const callCreate = async () => {
+        try {
+          await CRM.createLead({ auth: { uid: 'not-the-owner' },
+            data: { merchantId: MERCHANT, name: 'Lead', phone: '0700000000', source: 'online' } });
+          return null;
+        } catch (e) { return e.code || 'throw'; }
+      };
+
+      if (CRM && typeof CRM.createLead === 'function') {
+        const granted = await callCreate();
+        ok('ADR-035 §8: the crm.js fail-open is STILL PRESENT — a non-owner is admitted '
+           + 'when adminUids is absent (deliberately unrepaired)',
+           granted === null, 'refused with ' + granted);
+
+        /* INVERTING FIXTURE CONTROL. Without this, a future repair of crm.js
+           could be masked by a fixture that never arms the fail-open in the
+           first place — the assertion above would pass for the wrong reason.
+           With adminUids PRESENT the middle term is truthy and the guard works,
+           so this MUST be refused. */
+        FIXTURE = { ownerId: 'someone-else', adminUids: ['yet-another'] };
+        const refused = await callCreate();
+        ok('INVERTING CONTROL: with adminUids PRESENT the same call is REFUSED — '
+           + 'so the fixture really does arm the fail-open',
+           refused === 'permission-denied', String(refused));
+        FIXTURE = { ownerId: 'someone-else' };
+      }
+    }
+
+    /* RETIRED 2026-09-20 — `merchant-authority.js is untouched by THIS gate`.
+       It was a live-tree cleanliness check, and it was NEVER FUNCTIONAL:
+
+           17:17:33  f4de0c1  Gate 1 lands
+           19:04:41  0eee8e4  mechanism #2 MODIFIES merchant-authority.js
+           19:53:22  2197b48  this assertion is ADDED — 49 minutes later
+
+       The only change it could ever have observed had already been committed
+       when it was written, so it passed trivially from its first run. It was
+       also never Gate 1's claim: f4de0c1 references merchant-authority.js only
+       as the MODULE UNDER TEST, never as a protected path. Re-anchoring it to
+       f4de0c1 or 2197b48 would have asserted a scope fact nobody set out to
+       claim, so it is removed rather than repaired. The history is kept here
+       and in the changelog; only the dead assertion is gone. */
     /* RE-ANCHORED 2026-09-20. The old regex pinned `status: 'active', uid: null`
        — the neighbouring FIELD NAME, not the property under test. Mechanism #3
        renamed the axis and changed the birth state; `uid` is still null, which
