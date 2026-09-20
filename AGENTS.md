@@ -90,6 +90,17 @@ flags contamination). Background: `docs/GCP_COST_ARCHITECTURE_IMPLEMENTATION.md`
 - Commit in small, focused chunks with clear messages.
 - New Cloud Functions must be re-exported by name in `functions/index.js`.
 - Update `CHANGELOG.md` with every change.
+- **`hr-payroll.html` is entirely CRLF; the rest of the repo is LF.** Every line you add
+  to it therefore shows up in `git diff --check` as *"trailing whitespace"* — that is the
+  CR being counted, **not an actual trailing space**. Verified 2026-09-20: 1663 CRLF /
+  1663 LF, and the already-committed `0cf035f` added 8 lines to it, all CR-terminated.
+  **Do not normalize it opportunistically** — converting the file produces a 1,663-line
+  diff that has nothing to do with whatever HR change you were making, and buries it.
+  Preserve the file's existing endings and treat that `--check` output as expected.
+- **Never rename a field with a blanket string replace.** `.where('status','==','active')`
+  appeared on `hrStaff` *and* on `hrTraining`; renaming the employment axis by pattern hit
+  both and would have made every training invisible. Match on the owning collection, or
+  edit the traced list of sites one at a time.
 
 ## Evidence discipline
 - Verify the actual execution path and check the live site before claiming something works.

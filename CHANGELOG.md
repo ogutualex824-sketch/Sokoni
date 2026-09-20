@@ -1,3 +1,147 @@
+## 2026-09-20 (106) — Binding a human to an employment, and the end of payable ghosts
+
+**Flow 86/0 · builder 95/0 · two rules suites 23/0 and 26/0 · sabotage 27/27 · COMMITTED
+`33c0f59`, NOT DEPLOYED.**
+
+Gate 3 mechanism #3 — the first consumer of `employmentEvent()`.
+
+### The defect this closes
+
+```js
+addStaffMember   wrote   status: 'active', uid: null
+runPayroll       selects where('status','==','active')   and never consults uid
+```
+
+So an employment record with **no bound identity was payable** — it would have produced a payslip
+for a human the platform cannot name. `hrStaff` is empty in production, so nothing exercised it.
+
+Establishment now produces `employmentStatus: 'pending'`, `workStatus: null`, `uid: null`, and
+writes `employment_established` via `t.set` **inside the existing transaction**. The
+`active + uid null` birth path is **eliminated**, not deprecated.
+
+### `hrStaff.status` → `employmentStatus`
+
+Four consumers, each updated: `runPayroll`, `getStaffDashboard`, and two in `hr-payroll.html` — where
+the badge became **three-state** (`Pending invite` / `Active` / `Ended`) because rendering everything
+that is not `active` as "Inactive" hid a material difference, and the training filter stopped
+admitting everything by testing `!== 'inactive'`, a value no writer has ever written.
+
+### The four operations
+
+```
+ESTABLISH  owner | platform  →  pending / null                employment_established
+SEND       owner | platform  →  pending / null                invite_sent_{token}
+ACCEPT     THE INVITEE       →  active / working + bound uid   invite_accepted
+REVOKE     owner | platform  →  terminated / null             invite_revoked
+```
+
+**Binding is two-sided.** An owner naming a uid is an assertion about who gets paid, made by the
+party paying. The organization invites; the holder of the account accepts, anchored on
+`invite.email === request.auth.token.email`.
+
+**Resend supersedes, transactionally.** A replacement marks every live invitation `superseded` and
+creates the new one in one transaction, so an employment has **at most one acceptable invitation**
+while every issuance stays in the history. Supersession lives on the invitation, not as a thirteenth
+employment event — replacing an invitation changes no employment state.
+
+**Acceptance cannot resurrect.** It re-reads the *employment*, not merely the invite: a terminated
+record stays terminated even when the token and the email are both valid.
+
+### Modelled on `shopInvites`, deliberately not reusing it
+
+Copied: a server-minted token, a 7-day expiry, `pending → accepted | revoked`, email-bound
+acceptance. **Not** copied:
+
+| | why not |
+|---|---|
+| `allow get: if true` | `employmentInvites` is **fully CF-only, reads included**. The token is a callable capability, not a read key. |
+| non-transactional acceptance | four sequential writes, where two concurrent accepts could both see `pending`. |
+| unguarded `expiresAt.toDate()` | throws `TypeError` instead of refusing when the field is absent. |
+| `users/{uid}.role = 'employee'` | employment binding must not silently re-role a person on the platform. |
+
+`shopInvites`, `acceptShopInvite`, `inviteShopEmployee`, `revokeShopInvite` and `shopEmployees` are
+untouched.
+
+### The authorization change — deliberate, ratified, and proven both ways
+
+```
+owner            PERMITTED
+platform admin   PERMITTED          ratified 2a
+adminUids member DENIED             access is not employment authority
+self arm         DENIED             merchantId === uid reads NO document and cannot
+                                    confirm the organization exists
+```
+
+`assertAdminOrManager` was removed from `addStaffMember` **and only there**. It tests a *platform
+claim*; requiring it alongside the owner gate made establishment unreachable for the actor ADR-035
+names — production holds **3 admin claims, zero manager claims**, and six of the eight merchant
+owners hold neither. Verified on comment-stripped source: **7 calls before, 6 after; 1 inside
+`addStaffMember` before, 0 after.**
+
+### Four harness faults, found and fixed
+
+* **A blanket rename hit a fifth site.** `.where('status','==','active')` exists on `hrStaff` *and*
+  on `hrTraining`; renaming by pattern would have made **every training invisible**. Reverted,
+  commented on the line, and pinned by sabotage S16.
+* **S2 crashed instead of failing.** A `TypeError` on a null `out` printed no `FAIL` line, so the
+  runner scored the mutation **green**. Both the suite and the runner now fail closed — the runner
+  counts the summary rather than `FAIL` lines.
+* **S14 was unobservable twice.** Moving the event *after* the transaction changes nothing; moving it
+  *before* creates an orphan, but the deterministic event key makes a retry overwrite its own orphan.
+  Only a *different* employment exposes it.
+* **S15 is inert, and is labelled so.** `employmentEvent` independently requires a `reason`, so
+  removing the handler's own check changes nothing. Defence in depth, not a missed catch.
+
+### Downstream re-anchors — two kinds, kept distinct
+
+**Contract changes, restated not deleted:** `adminUids` and `self` denied establishment, asserted in
+both directions in a new section 2b, with a `CONTRAST` assertion proving establishment refuses the
+legacy form the other seven handlers still accept.
+
+**Syntax/scope anchors:** counts now discriminate by *form* (7 requested + 1 establishment;
+11 Gate 1/2 + 1), the `uid` assertions moved off a neighbouring field name onto the explicit
+pending/null/unbound state, and the staff-contract fixture supplies `reason` as a **scope variable**.
+
+```
+provenance 64/0 · merchant-auth 106/0 · record-auth 69/0 · staff-contract 29/0
+procurement 59/59 · Gate 1 sabotage 12/12 · Gate 2 sabotage 18/18
+```
+
+Three sabotage instruments reported `ANCHOR FAIL` during this work and were re-anchored. They failed
+**closed** — no verdict was wrong, only unreproducible. Preserved as evidence about the harness.
+
+### Still outside #3, by decision
+
+**Uniqueness (#1)** — acceptance binds a uid **without** enforcing `(businessId, uid)`, so two active
+employments for one person in one business remain reachable. Section 6 of the flow suite asserts this
+is the current state rather than leaving it unstated.
+**Payability (#6)** — `runPayroll`'s selection is *renamed*, not re-scoped, and still does not consult
+`uid`. Also absent: work status (#5), shop assignment (#7), history reads.
+
+### Files affected
+`firestore.rules` · `functions/employment-events.js` · `functions/employment-invites.js` (new) ·
+`functions/hr-payroll.js` · `functions/services-dispatch.js` · `hr-payroll.html` · five test suites,
+three of them new. **13 paths, 1343 insertions, 32 deletions.**
+
+### Database / API / Security changes
+New `employmentInvites` collection, **fully CF-only** — `allow read, create, update, delete: if
+false`. `employmentEvents` rules byte-identical to `2197b48`. No index changes. Three new callables
+reachable only through `servicesDispatch`. Security: establishment authority narrowed from a platform
+claim to organization ownership, as above.
+
+### Deployment
+**NOT DEPLOYED.** `functions/` deploys are frozen by the Artifact Registry forensics notice; the rules
+block is committed and **not released**. Live remains `2fa2074` / `v635`.
+
+### Breaking changes
+A merchant admin who is in `adminUids` but is not the owner can no longer establish employment. No
+production data is affected — every `hr*` collection is empty.
+
+### Repository note, recorded in `AGENTS.md`
+`hr-payroll.html` is entirely CRLF while the rest of the repo is LF, so `git diff --check` reports
+every added line as trailing whitespace. That is the CR, not a space. **Do not normalize it
+opportunistically** — the conversion is a 1,663-line diff that buries whatever change it rides with.
+
 ## 2026-09-20 (105) — Three decisions taken before the code could settle them
 
 **Documentation only · COMMITTED `3df6dc8` · NO implementation authorized · NOT DEPLOYED.**
