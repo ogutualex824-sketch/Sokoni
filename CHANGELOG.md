@@ -1,3 +1,111 @@
+## 2026-09-20 (94) — Two defects a browser found that a minimal DOM could not
+
+**Served-page visual 53/0 · integration-status 45/0 · console 54/0 · legacy 580/0 CERTIFIED · COMMITTED `279748c`, NOT DEPLOYED.**
+
+`scripts/test-integrations-console.js` mounts the module in a stub DOM, so it proves the HTML
+emitted and nothing about how that HTML behaves on a page. Serving the real module over HTTP and
+driving it in a real browser found two genuine defects and one wording inconsistency.
+
+### A test control wired to nothing
+`_capabilities()` offered `test` whenever credentials were configured, with no knowledge of whether
+a probe could run. **IntaSend was given a test button** — and the detail pane promised *"A provider
+test is available for this integration"* — while its executor refuses by design, because probing a
+collection or a payout would move money. Seven more offered a test that cannot run until their
+provider secret is bound to the probe function.
+
+A control an operator can press that can never succeed reads as a capability the platform does not
+have — the same class of defect as a green tick for a channel nobody receives on.
+
+The capability is now keyed on probe **runnability**: executors expose `probeAvailability()`, and
+status offers `test` only for `runnable`. Exactly three qualify today — `firestore`,
+`cloud-storage`, `memorystore-redis` — the three that authenticate as the service account and
+genuinely reach their provider.
+
+A first attempt required `credentialState === 'configured'`, which **withheld the control from
+Firestore and Cloud Storage precisely because they need no named secret** — the two rails where the
+probe actually works. `not-applicable` is therefore included; only `missing`/`partial` are excluded.
+
+This does not weaken the payment boundary, it enforces it earlier: IntaSend was already refused by
+the executor, and is now not offered at all.
+
+### A tap target below a usable size
+The detail-pane close button rendered **25×18px**. Now a 32×32 minimum. Invisible to a DOM-only
+test, which has no layout.
+
+### One wording inconsistency
+The page subtitle still led with *"Every registered platform service"* — exactly the framing entry
+93 demoted. It now leads with the catalogue and measured health. Found by reading the rendered page
+rather than the markup.
+
+### RC-1's assertion corrected, not deleted
+`test-integration-status.js` asserted *"configured therefore a test is offered"*, which encoded the
+defect. It now asserts the repaired rule from both directions: a configured rail whose probe cannot
+run offers none, a runnable one does, a service-account rail is not withheld one, and IntaSend is
+offered none.
+
+### What was verified, and what was not
+**Verified** — the served integration module at desktop 1600×1100 and mobile 390×844:
+
+| | |
+|---|---|
+| catalogue | 35 of 35 rendered · 0 unexpected · **Daraja absent** |
+| configuration | configured 16 · not-applicable 15 · disabled 4 · missing 1 (induced) |
+| health | not-tested 30 · connected 3 · failed 1 (induced) · disabled 4 |
+| stages | unsupported render `n/a`; unknown render grey, never green |
+| layout | no horizontal overflow at either size; 0 clipped badges of 42; 0 elements escape the viewport |
+| sensitive data | names only; no AWS/Stripe/JWT-shaped string anywhere in the DOM |
+| console | no errors |
+
+The central distinction is visible on screen: SendGrid shows **Connected: proven / Accepted:
+proven** in green beside **Delivered: unknown / Received: unknown** in grey — a 200 visibly not
+becoming a delivery. Stat tiles show `—` with *"registry unreadable"*, never `0`.
+
+**NOT verified — and this must not be recorded as a pass:** the authenticated AdminOS / Super Admin
+shell. Both redirect to login and Firebase App Check returns 403 headlessly, so the console chrome,
+navigation and auth gating were not exercised. The evidence is *"served integration harness:
+visually verified"*, **not** *"authenticated production admin shell: visually verified"*. That
+remains an open human step.
+
+### Three of my own checks were too weak
+A bare `/Connected/` match hit the **stage label** "Connected: unknown" rather than the health
+badge. A bare `/test/` matched the word in explanatory prose, so it passed regardless of capability.
+And the harness granted capabilities RC-1 never emits for a frozen lifecycle. All three replaced
+with assertions on the actual badge and capability set.
+
+### The harness
+`scripts/harness-integrations.html` serves the real catalogue and real module over HTTP so the
+module injects its own stylesheet and lays out in a real browser. It renders all 35 entries and
+deliberately induces states production does not currently exhibit — a failed provider, an absent
+credential — because the point is to see what they look like. It injects the backend response
+rather than fetching one: the page has no admin session, and nothing in it reaches Firestore,
+Secret Manager or a provider.
+
+### Files affected
+- `sokoni-integrations.js` — close button sizing, subtitle
+- `functions/integration-status.js` — capability keyed on runnability
+- `functions/integration-probe-executors.js` — `probeAvailability()`
+- `scripts/test-integration-status.js` — corrected assertion
+- `scripts/harness-integrations.html` — new
+
+### Database / API / Security changes
+None. Capability values change; the response shape does not. The payment probe boundary is enforced
+one layer earlier.
+
+### Deployment
+**NOT DEPLOYED.** State: COMMITTED → NOT DEPLOYED.
+
+### Breaking changes
+None.
+
+### Deliberately not in this work
+The `PAYROLL_ENCRYPTION_KEY` catalogue gap, any orphan-secret deletion or rename, and any
+registry-producer change.
+
+### Remaining
+`PAYROLL_ENCRYPTION_KEY` catalogue entry and its lifecycle/health semantics · deferred orphan
+cleanup, which needs deployed-lineage verification and is blocked by the freeze · authenticated-shell
+visual verification.
+
 ## 2026-09-20 (93) — The console renders the backend's answer, and E4 is refined rather than excepted
 
 **46/0 console · sabotage 8/8 RED · legacy certification 577/0 CERTIFIED · COMMITTED `e0def72`, NOT DEPLOYED.**
