@@ -1,3 +1,125 @@
+## 2026-09-20 (116) — Narrowed is not substituted, and the difference decides what "restore" means
+
+**Test integrity · COMMITTED `d37c7e3` · test-only · no production behaviour changed · NOT DEPLOYED.**
+
+Census case 1 from entry (114). Same defect class as entries (114) and (115) — a historical scope
+claim anchored to the live working tree — but **a different repair, because the claim had been
+altered in a different way.** That distinction is the substance of this entry.
+
+### THE DISTINCTION
+
+```
+MECHANISM #2   entry (115)     NARROWED      3 paths → 1
+                               paths REMOVED from the landing's own claim
+                               → restoring them RECOVERS the landing claim
+
+GATE 1         this entry      SUBSTITUTED   1 path → 2 DIFFERENT paths
+                               the landing's path REPLACED by later mechanisms'
+                               → restoring it must LEAVE THE SUBSTITUTES ALONE
+```
+
+Both look identical from the symptom — a `git status --porcelain` check that passes on a clean tree
+without testing anything. Treating them the same would have been wrong in opposite directions.
+
+### What Gate 1 actually claimed
+
+Gate 1 landed at **`f4de0c1`** — *"merchantId is a request until the authority says otherwise"*,
+2026-09-20 17:17:33, three files: `functions/hr-payroll.js` (M), this suite (**A**),
+`scripts/test-payroll-staff-contract.js` (M).
+
+Its scope assertion protected exactly **one** path:
+
+```
+f4de0c1  Gate 1 landing   firestore.rules
+ef2ce4c  Gate 2           firestore.rules                       unchanged
+2197b48  mechanism #4     crm.js · merchant-authority.js        ← SUBSTITUTED
+33c0f59  mechanism #3     crm.js · merchant-authority.js        unchanged
+```
+
+`firestore.rules` was dropped because mechanism #4 legitimately opens the ruleset to add an
+`employmentEvents` block — and **a live-tree check cannot distinguish *"Gate 1 touched the ruleset"*
+from *"another gate has the ruleset open right now"***. The path never left Gate 1's scope. The
+anchor could not express the claim.
+
+### The repair — `firestore.rules` only
+
+Against the frozen boundary the ruleset is untouched **permanently**, immune to mechanism #4:
+
+```
+git diff --name-only f4de0c1~1 f4de0c1 -- firestore.rules          →  EMPTY
+git diff --name-only f4de0c1~1 f4de0c1 -- functions/hr-payroll.js  →  reported
+```
+
+The anchor is **self-verifying** — named by what the commit *did*, it being the commit that **added**
+this suite — so a rewritten or moved ref **refuses to report a scope verdict** rather than returning
+an empty diff that reads exactly like a landing which respected its boundary.
+
+### What was deliberately NOT done
+
+> **`crm.js` and `merchant-authority.js` were not re-attributed to Gate 1.** They were never part of
+> its landing claim; `2197b48` installed them here. Anchoring them to `f4de0c1` would have silently
+> asserted that Gate 1 made two claims it never made — the **inversion** of entry (115)'s reasoning,
+> reached by copying its mechanics without its argument.
+
+Both assertions remain **byte-identical**, still reading the live tree. Their **ownership is an open
+question**, recorded in the code and reserved for its own adjudication: are they historical scope
+assertions belonging to another gate's boundary, or independent current contracts that merely live in
+this file? Note that `crm.js` is **also** protected in `test-merchant-authority-provenance.js`, whose
+mechanism does own it — so at least one of the two protections is in the wrong suite.
+
+### Why `+63 / −0` matters
+
+**Pure insertion. Not one line was deleted.** So the `SCOPE NARROWED` comment, the `.trim()` parser
+repair, its three synthetic controls, and both later assertions all mean exactly what they meant
+before. A repair that *restores* a historical claim has no business silently altering the historical
+record it is restoring from.
+
+The parser is also still **live**: `pathsOf(porcelain())` feeds the two untouched assertions, so its
+controls guard a helper with a real consumer rather than dead code. Had the substitutes been
+re-anchored too, the parser would have been orphaned and that question forced prematurely.
+
+### Proof grid — 7/7, byte-identical restore, baseline 110/0
+
+```
+RED    protected path swapped for hr-payroll.js — the landing DID change it
+RED    the suite file placed in the protected set — the landing ADDED it
+RED    anchor pointed at another commit             refuses, 2 failures
+RED    anchor ref unresolvable                      refuses, 2 failures
+RED    positive control pointed at an unchanged path
+GREEN  the OLD live-tree form for the ruleset, on a clean tree
+GREEN  the restoration comment reworded
+```
+
+**The sixth line is evidence, not a passing control.** The old form restored on a clean tree passes
+**110/0** — it could never have failed there, whatever the landing did.
+
+### Result
+**110 passed, 0 failed** (was 106/0 — four new assertions).
+
+### Files affected
+- `scripts/test-payroll-merchant-authority.js` — the Gate 1 scope assertion only (+63 / −0)
+
+### Database / API / Security changes
+**None.** Test-only. No production code, no rules, no indexes.
+
+### Deployment
+**NOT DEPLOYED.** Nothing deployable was changed.
+
+### Breaking changes
+None.
+
+### Census — remaining, still one at a time
+
+```
+OPEN   crm.js / merchant-authority.js ownership — before either assertion moves
+CASE 4 test-subscription-entitlement.js — the repo already paid for this lesson
+       there in the LOUD direction, and the fix installed the QUIET one
+CASE 3 test-functions-require-closure-gate.js — LAST. Its intended landing is
+       stated nowhere. If it cannot be established from source or history, the
+       honest outcome is to record it UNRESOLVED rather than anchor it to
+       whichever commit looks plausible.
+```
+
 ## 2026-09-20 (115) — A gate that gave up two thirds of its claim to keep a broken anchor quiet
 
 **Test integrity · COMMITTED `43b4b85` · test-only · no production behaviour changed · NOT DEPLOYED.**
