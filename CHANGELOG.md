@@ -1,3 +1,104 @@
+## 2026-09-20 (101) — 2a decided: platform admins may establish employment, and #4 stops being optional
+
+**Documentation only · COMMITTED `b1d5ca2` · NO implementation authorized · NOT DEPLOYED.**
+
+The last open question blocking Gate 3 mechanism #2. Decided, with the cost stated rather than
+buried.
+
+### The decision
+
+A platform administrator **may** perform all five owner-only employment acts — employ, rebind uid,
+suspend, terminate, reinstate — and **`admin` and `superAdmin` carry the same authority**.
+
+The `via` taxonomy is **frozen at four values**. `platform` is a fourth, not a fifth, and
+`merchant-authority`'s existing bypass line stays exactly as it is:
+
+| `via` | granted because | employment authority |
+|---|---|---|
+| `owner` | `businesses/{merchantId}.ownerId == uid`, **document read** | ✅ eligible |
+| `admin` | `adminUids[]` contains uid | ❌ not eligible |
+| `self` | `merchantId === auth.uid`, **no document read at all** | ❌ never eligible |
+| `platform` | `token.admin` **or** `token.superAdmin`, not distinguished | ✅ eligible · ratified |
+
+### Decided on house precedent, not on convenience
+
+Two existing owner-only gates already admit platform admins, and the closest analogue governs
+**staff management** — nearly the same act:
+
+```js
+// shop-employees.js — "Owner (or platform admin) only — for staff management."
+if (r.via !== 'owner' && r.via !== 'admin') throw permission-denied;
+
+// shared/errors.js assertOwner — "Admins bypass ownership check."
+const isAdmin = req.auth.token?.admin || req.auth.token?.superAdmin;
+```
+
+Both also treat `admin` and `superAdmin` identically. So the non-distinction is a **codebase-wide
+convention**, not an oversight in this one module — and diverging here would have made payroll the
+single exception, which is how parallel authority models start.
+
+The decision is now **explicitly documented rather than inherited accidentally from the existing
+bypass**. That distinction is the point: the behaviour is unchanged, the reasoning is no longer
+silent.
+
+### The asymmetry was weighed and did not change the answer
+
+Shop staff management grants **access**; employment establishment creates a **salary obligation**.
+That is a real difference, and it is answered by §6 rather than by refusing the act:
+
+> every employment event records `changedBy` and a `reason`, so a platform-actor act is
+> distinguishable from an owner's act after the fact. **The control is the audit record, not the
+> refusal.**
+
+Stated plainly in the ADR, because it is what this decision costs:
+
+> A SOKONI platform administrator can create a salary obligation inside a merchant's organization.
+> Production holds three such principals, two of whom also hold `superAdmin`.
+
+### Consequence: mechanism #4 is no longer optional
+
+If platform actors may establish employment and nothing records that they did, the decision has no
+audit backstop at all. **Employment history moves immediately after the owner primitive**, ahead of
+binding and uniqueness:
+
+```
+#2 owner authority
+      ↓
+#4 employment history      ← moved up; an audit record cannot be deferred
+      ↓                       behind the mechanism it exists to witness
+#3 binding / invitation
+      ↓
+#1 uid uniqueness
+      ↓
+#5 + #7 work-status & shop assignment
+#6 payability policy — independent, decidable whenever the business answer is ready
+```
+
+### Mechanism #2 status
+
+```
+shape       DECIDED   one resolver returning `via`, inside merchant-authority.js
+semantics   DECIDED   2a ratified, taxonomy frozen at four values
+naming      open      the only remainder
+            → ready for read-only implementation design
+```
+
+### Files affected
+- `docs/adr/ADR-035-employment-and-identity-binding.md` — §2 `via` table ratified, 2a replaced with
+  the decision, open item 2 reduced to naming, status line updated
+- `docs/adr/README.md` — index row now reads "#2 ratified and ready for design"
+
+### Database / API / Security changes
+None. No code, no schema, no Firestore rules, no API. **No behaviour changes** — `merchant-authority`
+already treats `admin` and `superAdmin` identically and already bypasses on both. What changed is
+that this is now a recorded decision instead of an accident of implementation.
+
+### Deployment
+**NOT DEPLOYED.** Live remains `2fa2074` / `v635`.
+
+### Breaking changes
+None.
+
 ## 2026-09-20 (100) — One resolver, and `self` is not ownership
 
 **Documentation only · COMMITTED `a1a62aa` · NO implementation authorized · NOT DEPLOYED.**
