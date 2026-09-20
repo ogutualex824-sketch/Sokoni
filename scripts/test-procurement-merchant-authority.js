@@ -256,9 +256,18 @@ async function verdict(fn) {
   ══════════════════════════════════════════════════════════ */
   console.log('\n§6 SABOTAGE (executed, differential)');
   const AUTH_SRC = fs.readFileSync(path.join(ROOT, 'functions/merchant-authority.js'), 'utf8');
+  /* RE-ANCHORED 2026-09-20. The owner arm used to read
+       if (d.ownerId === uid) return merchantId;
+     and now returns the provenance object instead (ADR-035 §2, mechanism #2).
+     The old literal matched NOTHING, so `.replace` silently returned the source
+     unchanged and the differential measured a no-op against itself. The anchor
+     is counted before use so a future rewrite reports a MISS rather than a pass. */
+  const SAB_ANCHOR = "  if (d.ownerId === uid) return { merchantId, via: 'owner' };";
+  const ANCHOR_HITS = AUTH_SRC.split(SAB_ANCHOR).length - 1;
+  check('the sabotage anchor matches the primitive exactly once', ANCHOR_HITS === 1);
   const SAB_SRC = AUTH_SRC.replace(
-    "  if (d.ownerId === uid) return merchantId;",
-    "  return merchantId; /* SABOTAGE: relationship check removed */"
+    SAB_ANCHOR,
+    "  return { merchantId, via: 'owner' }; /* SABOTAGE: relationship check removed */"
   );
   check('the sabotage actually changed the primitive', SAB_SRC !== AUTH_SRC);
 
@@ -281,10 +290,21 @@ async function verdict(fn) {
     /po\.status !== 'approved'/.test(PROC_SRC));
   check('UNTOUCHED: sendPurchaseOrder still routes through notify + emailSvc',
     /notify\.notify\(/.test(PROC_SRC) && /emailSvc\.queue\(/.test(PROC_SRC));
-  check('the shared primitive is byte-identical to the canonical implementation',
-    fs.existsSync('C:/temp/sok-tenant-authz/functions/merchant-authority.js')
-      ? fs.readFileSync('C:/temp/sok-tenant-authz/functions/merchant-authority.js', 'utf8') === AUTH_SRC
-      : true);
+  /* RETIRED 2026-09-20. This compared the module byte-for-byte against a copy in
+     ANOTHER WORKTREE — C:/temp/sok-tenant-authz — outside this repository, not
+     owned here, and a stale snapshot dated 28 Aug, the day the module was
+     created. A test that fails when a file this tree does not control drifts is
+     not an invariant of this mechanism; it also quietly PASSED whenever that
+     path happened to be absent, so it proved one thing on one machine and
+     nothing on another. Replaced with an owned, deterministic contract
+     assertion over the module this suite actually loads. */
+  check('the shared primitive exports the API this suite depends on',
+    typeof A.assertMerchantAccess === 'function'
+    && typeof A.canAccessMerchant === 'function'
+    && typeof A.isValidMerchantId === 'function'
+    && A.AUTHORITY === 'businesses');
+  check('and assertMerchantAccess still returns a merchantId STRING',
+    typeof (await A.assertMerchantAccess(auth(UID_A), MERCH_A)) === 'string');
   check('updateSupplier is exported from procurement', typeof proc.updateSupplier === 'function');
   const IDX = fs.readFileSync(path.join(ROOT, 'functions/index.js'), 'utf8');
   check('updateSupplier is re-exported by name in index.js',
