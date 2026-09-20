@@ -12,8 +12,11 @@ rebind is two-claim atomic; reinstatement re-acquires and may fail ·
 termination path exists to release it, so claim release, rebind and reinstatement are future
 consumer contracts. Immutable provenance permitted. workspaceMemberships is a different model. ·
 **§4 ownership CORRECTED 2026-09-21** — the attribution of termination to "mechanisms #5/#7" was an
-inherited pointer, disproved by a search-validity gate; ownership is **UNASSIGNED** and no number
-was invented. The frozen termination contract is unchanged.
+inherited pointer, disproved by a search-validity gate; #5 and #7 have no authoritative definition
+and remain UNRESOLVED. ·
+**Mechanism numbering reconstructed and #8 ASSIGNED 2026-09-21** — the numbering is ADR-LOCAL, no
+registry exists or is created, and accepted-employment termination is mechanism **#8**. The frozen
+termination contract is unchanged and #8 is not implemented.
 **Supersedes nothing. Constrains:** `functions/hr-payroll.js`, `hrStaff`, and any future AdminOS
 employee surface.
 **Depends on:** [[ADR-001]] (authorization comes from claims, never from a Firestore field),
@@ -53,6 +56,152 @@ Three existing structures were considered and rejected as the employment authori
 | auth claims | a claim is a *role*, not employment. It records no start date, salary, or employer. |
 | `posStaff` | branch access. ADR-017/ADR-020 removed it from the set that authorizes workforce actions; population is not authority. |
 | `workspaceMemberships` | workspace membership, deliberately isolated to commission and cash-count handlers. |
+
+---
+
+## Mechanism numbering, and the termination assignment
+
+**Decided 2026-09-21**, after a read-only reconstruction of this document's own numbering. Placed
+before the Decision because the numbered references below cannot be read safely without it.
+
+### The numbering is ADR-LOCAL
+
+> Mechanism numbers in this ADR are an **ADR-local convention**. They are **not** a platform-wide
+> mechanism namespace, and there is **no registry** that assigns them. `docs/` holds
+> `DISPATCHER_REGISTRY.md` and `PROVIDER_REGISTRY.md`; it holds no mechanism registry, and none is
+> being created. Outside this ADR and its commit messages, the numbers mean nothing.
+
+This is stated because a numbered reference *reads* as though a registry assigns it. That appearance
+is exactly what let an unsupported attribution survive in this document as though it were a decision.
+
+**THREE numbering namespaces coexist here, and they are not the same:**
+
+```
+mechanism #N    the lifecycle work items          this section
+§Open N         this ADR's open questions         §Open 4a · §Open 5 · §Open 6
+Gate N          the payroll authorization gates   Gate 1 · Gate 3   (commits; one ADR mention)
+```
+
+They collide. §5 of this ADR contains: *"…is **§Open 6** and belongs to **mechanism #6**"* — two
+different things sharing a number in one sentence. **`§Open 5` is "whether `workStatus` is stored and
+swept"**, which is adjacent in subject to what a reader would naturally guess `#5` means. That
+adjacency is a plausible origin for the attribution retired below, and a standing hazard: *a number
+in this document does not identify a mechanism unless the word "mechanism" is attached to it.*
+
+### The reconstruction
+
+| # | status | meaning | evidence |
+|---|---|---|---|
+| **#1** | **EXPLICIT / BUILT** | employment claim + acceptance | §4 defines it repeatedly; `0a8b8ae` |
+| **#2** | **RECONSTRUCTED / BUILT** | merchant-authority resolution | **this ADR never names #2**; 7 commits + shipped `resolveMerchantAccess` |
+| **#3** | **EXPLICIT / BUILT** | employment invitation / state establishment | §5 and §6 define it; `33c0f59` |
+| **#4** | **EXPLICIT / BUILT** | employment history | §2a: *"mechanism #4 — employment history"*; `2197b48` |
+| **#5** | **UNRESOLVED** | — | **no authoritative definition in this ADR or in commit history** |
+| **#6** | **EXPLICIT / UNBUILT** | payability of `on_leave` / `suspended` | §5: *"belongs to mechanism #6"*; zero commits |
+| **#7** | **UNRESOLVED** | — | **no authoritative definition in this ADR or in commit history** |
+| **#8** | **EXPLICITLY ASSIGNED** | accepted-employment termination | this section |
+
+**#2 is the inverse of #5 and #7** — strongly evidenced in code and commits, and absent from this
+document. It is marked RECONSTRUCTED rather than EXPLICIT for that reason, not because it is doubtful.
+
+### The retired attribution had no referent
+
+An earlier §4 named **"mechanisms #5/#7"** as the owner of claim release, rebind and reinstatement.
+The correction recorded in §4 is stronger than *the pointer was wrong*:
+
+> **#5 and #7 have no authoritative definition anywhere.** The attribution did not point at the wrong
+> mechanisms — **it pointed at two numbers that were never defined.** It had no referent at all.
+
+**FORBIDDEN:** promoting `#5` or `#7` into a definition from that attribution, or from the fact that
+this ADR discusses work status and shop assignment nearby. A reader may reasonably *guess* that #5
+concerns the work-status axis and #7 concerns shop assignment; **those guesses are recorded here as
+guesses and are not adopted.** They remain UNRESOLVED, and they are **not available** as identifiers
+for new work — absence of a definition is not vacancy.
+
+### Mechanism #8 — accepted-employment termination · ASSIGNED 2026-09-21
+
+`#8` is **explicitly assigned by this decision.** It is not "the next free number": calling it free
+would convert the absence of evidence about #5 and #7 into a claim about them. It was checked for
+collision across all three namespaces — zero references to `#8`, `§Open 8` or `Gate 8` in this
+document or in any commit — and then assigned deliberately.
+
+**#8 owns exactly one transition**, for an **accepted** employment record:
+
+```
+active / working
+      │  terminate
+      ▼
+terminated / null
+```
+
+Atomically, in one transaction:
+
+```
+hrStaff/{staffId}          employmentStatus = terminated
+                           workStatus       = null
+                           uid              = RETAINED
+
+employmentUidClaims/{businessId}_{uid}      DELETE
+
+employmentEvents                            employment_terminated
+```
+
+Guarded by all three preconditions, asserted inside the transaction:
+
+```
+1  the employment is ACTIVE
+2  a uid EXISTS on the record
+3  the claim EXISTS and its staffId IS THIS EMPLOYMENT
+```
+
+**Precondition 3 is load-bearing and is not optional.** `create()` refuses a document that already
+exists; **`delete()` on an absent document, or on one belonging to another employment, succeeds
+silently.** A handler that blind-deletes `{businessId}_{uid}` would release someone else's occupancy
+and report success. **A successful `delete()` is therefore not proof that the correct claim existed
+and was revoked** — only the `staffId` correspondence check establishes that.
+
+The full frozen contract, including the ordering constraint that the claim must **not** be released
+before the termination commits, is recorded in **§4 — TERMINATION** and is unchanged by this
+assignment.
+
+### What #8 does NOT own
+
+```
+on_leave · suspended · work-status policy          → NOT #8
+shop assignment · shop employee removal            → NOT #8
+payability of on_leave / suspended                 → #6, explicitly, and unbuilt
+the unresolved #5                                  → NOT #8
+the unresolved #7                                  → NOT #8
+```
+
+**#8 does not absorb the unresolved numbers, and assigning it does not define them.** Termination
+cannot revoke a shop assignment in any case: `shopEmployees` is keyed `{shopId}_{uid}` against
+`hrStaff`'s `{merchantId}_{employeeNumber}`, **no module reads both**, and ADR-016 forbids inventing
+the bridge.
+
+Any later mechanism governing shop assignment, work-status transitions or another employment axis
+**must receive its own explicit assignment and contract**, and must not inherit authority from #8.
+
+### Implementation is NOT authorized by this assignment
+
+This section records a **contract and an owner**. Nothing is implemented. The staged sequence is:
+
+```
+1  DOCUMENTATION          this section                                    ← you are here
+2  READ-ONLY GATE         enumerate every hrStaff writer and every
+                          employmentUidClaims writer/deleter; establish the
+                          available transaction boundary; verify no existing
+                          writer already satisfies part of #8; establish
+                          positive AND negative controls before any code
+3  IMPLEMENTATION         #8 only — no #5, no #7, no shop assignment, no
+                          work-status redesign, no unrelated cleanup
+4  CERTIFICATION          must refuse: already-terminated · missing uid ·
+                          mismatched claim.staffId · MISSING CLAIM ·
+                          a claim belonging to another employment
+```
+
+Until stages 2–4 complete, an accepted employment's occupancy claim remains **unreleasable**, exactly
+as §4 states.
 
 ---
 
@@ -307,8 +456,8 @@ their uid.
 #### Deliberately outside mechanism #1
 
 **Who may terminate, rebind or reinstate.** Those authority rules belong to the mechanism ordering
-already established (§2) and to whichever mechanism is ASSIGNED the employment lifecycle —
-see "Ownership of termination is UNRESOLVED" below — and must not be invented inside the uniqueness
+already established (§2) and, for termination, to **mechanism #8** — assigned in "Mechanism
+numbering, and the termination assignment" above — and must not be invented inside the uniqueness
 gate.
 Mechanism #1 supplies the invariant; it does not decide who may trigger the transitions that move it.
 
@@ -338,9 +487,10 @@ OUT   active-employment termination      no path exists to attach a delete to
 
 > **STATED CONSEQUENCE, not a defect.** Until an authorized active-termination mechanism exists, an
 > accepted employment's occupancy claim is **not releasable by any existing code path**. That is a
-> deliberate dependency boundary on a mechanism that has NOT YET BEEN ASSIGNED, not an omission in
-> #1. This sentence previously named "mechanisms #5/#7"; that attribution was disproved by the
-> search-validity gate below.
+> deliberate dependency boundary on **mechanism #8**, not an omission in #1. This sentence
+> previously named "mechanisms #5/#7"; that attribution was disproved by the search-validity gate
+> below, and #8 was assigned deliberately rather than inherited. **#8 is not implemented**, so the
+> claim remains unreleasable until it is built and certified.
 
 **FORBIDDEN:** adding a `delete` to `revokeEmploymentInvite` to make the lifecycle table look
 complete. That path only ever sees a **pending** employment, which never acquired a claim — deleting
@@ -465,7 +615,7 @@ here has been written, certified or deployed; the transition is frozen so that i
 **Authority** is unchanged and not re-decided here: the owner/platform employment-authority boundary
 of §2 governs who may terminate, as it governs establishment and revocation.
 
-#### Ownership of termination is UNRESOLVED — corrected 2026-09-21
+#### Ownership of termination — the gate that disproved "#5/#7" · corrected 2026-09-21
 
 An earlier draft of this section attributed the release, rebind and reinstatement contracts to
 **"mechanisms #5/#7"**. A read-only search-validity gate run on 2026-09-21 established that this was
@@ -540,7 +690,7 @@ numbered mechanism has a claim on it that evidence supports.
 ##### What this correction does and does not do
 
 ```
-CORRECTED   the ownership ATTRIBUTION — "#5/#7" becomes UNASSIGNED
+CORRECTED   the ownership ATTRIBUTION — "#5/#7" disproved; termination is #8
 UNCHANGED   the frozen termination contract, in full
 NOT DONE    no mechanism number invented · no implementation · no rules change
             · no deployment
@@ -558,9 +708,11 @@ with** the termination · `employment_terminated` written in the same transactio
 revocation**, because the bridge does not exist · `revokeEmploymentInvite` remains **pending-only**
 and must not be extended.
 
-> **Until an owner is deliberately assigned, an accepted employment's occupancy claim remains
-> unreleasable.** That is now an *unresolved ownership question* rather than a *dependency on #5/#7*
-> — a weaker and more accurate statement of the same boundary.
+> **An accepted employment's occupancy claim remains unreleasable until mechanism #8 is built and
+> certified.** Ownership was resolved on 2026-09-21 by deliberate assignment — see "Mechanism
+> numbering, and the termination assignment" — and is no longer a *dependency on #5/#7*, which had
+> no referent. The boundary is unchanged in substance: what changed is that it now names an owner
+> that exists, and that owner has no implementation yet.
 
 #### `workspaceMemberships` is NOT this model
 
