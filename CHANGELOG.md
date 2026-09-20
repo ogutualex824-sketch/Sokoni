@@ -1,3 +1,124 @@
+## 2026-09-20 (112) — The contract named the field, and the reader that cited it four times used another
+
+**Decision record · COMMITTED `5c8a309` · repair AUTHORIZED, not yet written · NOT DEPLOYED.**
+
+Entry (111) recorded a finding and deliberately left it unresolved: `removeShopEmployee` writes
+`active: false`, `resolveActor` reads `status`, and it was **not** established which one the design
+intended. This adjudicates it. `docs/SHOP_EMPLOYMENT_TILL_AUTHORITY_DECISION.md`.
+
+### The question, and why "whichever field gets written" was not an acceptable answer
+
+> What is the authoritative employment signal for POS till authorization, and does the shipped
+> implementation conform to it?
+
+Concluding "`active`, because that's what the writer writes" would have been circular — **a writer
+can be as wrong as a reader**. The adjudication required evidence of the *intended contract*, which
+turned out to exist in four independent places.
+
+### INTENDED AUTHORITY — resolved
+
+```
+shopEmployees.active !== false
+  as ONE CONDITION of the five-part corroborated predicate owned by shop-employees.js
+```
+
+| evidence | what it establishes |
+|---|---|
+| the module header | declares itself *"the ONE contract for 'who works at this shop'"* **and states the predicate verbatim, `active !== false`** |
+| `test-shop-employee-authority.js:282` | **`C4  a removed employee is refused`** — seeds `active:false`, asserts `permission-denied` |
+| commit `0d1acdf`, **2026-08-16** | created the module, requiring a record *"be active"* |
+| `merchant-identity.js` | cites that module **four times in comments**, imports it **zero times** |
+
+### CONFORMANCE — diverges, and not through ignorance
+
+`_employmentActive` entered `merchant-identity.js` in `2f4fc20` on **2026-09-15** — **a month after**
+the contract was established. It adopted the module's canonical key, quoted its header, named its
+`legacyEmployeeDocId` and deferred to its `SHOP_ROLES` — then **reimplemented the predicate**,
+substituting an unwritten `status` vocabulary for `active !== false`.
+
+```
+four of the five conditions implemented
+the fifth — the one that REVOKES ACCESS — replaced
+    _employmentActive → rec.status only → `if (!st) return true`
+    and no writer has ever written `status`
+```
+
+That reaches `pos-zero-friction.js:444`, which refuses a sale only on `!ok`. So
+`removeShopEmployee` returns `{ok: true, active: false}` to an owner **while the till still admits
+the person** — silent, on the surface where silence costs money.
+
+> The predicate's own comment says *"Absent status is treated as active only for records that
+> predate the field."* Every record predates it. **The comment describes a migration that never
+> happened and reads as a safeguard.**
+
+### REQUIRED REPAIR — a boundary, not a patch
+
+> **The till employment arm must CONSUME the `shop-employees.js` authority instead of maintaining a
+> private employment predicate.**
+
+**Explicitly not** *"teach `_employmentActive` to read `active`."* Swapping `rec.status` for
+`rec.active` fixes the symptom and leaves the cause — two predicates over one collection, and the
+next reader free to write a third. The adjudication established **the duplication itself** as the
+defect.
+
+**Delegation versus import is deliberately left open**, because it belongs to the repair design, and
+it is constrained by what must survive unchanged: `servedBy` (receipt attribution), `capabilities`
+(the role ceiling), `restrictions`, and **the owner arm**.
+
+**The owner arms must not be unified.** `resolveActor` requires `uid === shopId`;
+`resolveShopAccess` uses the `ownerId | sellerUid | ownerUid` union. Repairing the *employee* arm
+must not silently converge the *owner* arm — separate work, separate evidence.
+
+### What the repair must certify
+
+```
+1 an ACTIVE employee remains authorized on the till path
+2 an active:false employee is REFUSED by the till path
+3 the canonical five-part predicate remains authoritative
+4 owner authorization unchanged
+5 capabilities / restrictions / servedBy unchanged
+6 no private `status` employment vocabulary remains in the repaired arm
+7 legacy shopEmployees/{uid} stays within the existing contract boundary
+8 the zero-record production state requires no migration
+9 test-shop-employee-authority.js remains green
+```
+
+**The repaired POS path must be proven, not merely `resolveShopAccess`.** The defect exists because
+two consumers disagree; certifying the one that was already correct proves nothing about the one
+that was not. **Sabotage must show that restoring the private `status` predicate reopens the
+defect** — a certification that stays green when the defect is reintroduced has certified nothing.
+
+### Migration — none, and that is the argument for doing it now
+
+Production `shopEmployees` = **0**. No backfill, no dual-read, no compatibility window. `_employmentActive`
+and `ACTIVE_EMPLOYMENT` are exported but have **no consumer outside their own file** — verified — so
+removing them regresses nothing.
+
+The absence of records is what makes the repair cheap; the shipped authorization path is what makes
+it urgent. The defect **arms on the first add-then-remove**.
+
+### Files affected
+- `docs/SHOP_EMPLOYMENT_TILL_AUTHORITY_DECISION.md` — **new**
+
+### Scope held
+
+```
+IN    this decision record · this entry · the repair · its direct tests
+OUT   hrStaff · employment termination · ADR-035 #5/#7 · owner-arm convergence
+      the client-create rules cleanup · legacy shopEmployees migration
+      the shopEmployees-vs-workspaceMemberships store question, which this record
+      does NOT reopen — the store is not in dispute, the PREDICATE over it is
+```
+
+### Database / API / Security changes
+None written. A **security finding adjudicated**, with the repair authorized and unwritten.
+
+### Deployment
+**NOT DEPLOYED.** No deployment authorization. Functions and Cloud Run remain frozen.
+
+### Breaking changes
+None.
+
 ## 2026-09-20 (111) — Removing a shop employee revokes nothing at the till, and the census that says not yet
 
 **Finding · read-only · NO repair authorized · NOT DEPLOYED.**
