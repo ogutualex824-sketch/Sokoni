@@ -1,3 +1,126 @@
+## 2026-09-20 (100) — One resolver, and `self` is not ownership
+
+**Documentation only · COMMITTED `a1a62aa` · NO implementation authorized · NOT DEPLOYED.**
+
+A read-only trace of every organization-authority surface, run to design Gate 3 mechanism #2,
+contradicted two things ADR-035 asserted one commit earlier. Both are corrected in the ADR rather
+than left to be discovered mid-implementation.
+
+### The ADR was wrong about where the primitive goes
+
+It required the owner primitive to live **beside** `merchant-authority.js`. That would have produced
+a **seventh** organization-authority implementation — the repo already carries six — and the correct
+shape was already in the codebase. `shop-employees.js` solved the identical problem:
+
+```
+resolveShopAccess(uid, shopId) → { role, via, shopOwnerId }
+assertShopAccess(uid, shopId)  → wrapper over role
+assertShopOwner(uid, shopId)   → FILTERS ON `via`, not a second lookup
+```
+
+The diagnosis that makes visible: `assertMerchantAccess` **already computes** the
+owner / admin / self / platform distinction across four separable arms —
+
+```js
+if (t.admin === true || t.superAdmin === true) return merchantId;   // platform
+if (merchantId === uid)                        return merchantId;   // self
+if (d.ownerId === uid)                         return merchantId;   // owner
+if (Array.isArray(d.adminUids) && d.adminUids.includes(uid)) return merchantId;   // admin
+```
+
+— and **discards it**. Every arm returns the same bare string. That, not a missing check, is why it
+cannot express owner-vs-admin. The repair is to stop throwing the fact away:
+
+```
+resolveMerchantAccess(auth, requested) → { merchantId, via }
+      ├── assertMerchantAccess()   unchanged signature and return
+      └── assertMerchantOwner()    filters on `via`
+```
+
+`procurement.js` and the twelve payroll call sites are untouched **by construction**.
+
+### The `self` arm is not ownership
+
+Now contractual rather than implied:
+
+| `via` | granted because | employment authority |
+|---|---|---|
+| `owner` | `businesses/{merchantId}.ownerId == uid`, **document read** | eligible |
+| `admin` | `adminUids[]` contains uid | not eligible |
+| `self` | `merchantId === auth.uid`, **no document read at all** | **never** eligible |
+| `platform` | `token.admin` \| `token.superAdmin` | **unresolved** — see 2a |
+
+The shipped primitive returns on `merchantId === uid` **before reading anything**, so it cannot
+confirm the organization exists. That is correct and deliberate for *access* — it preserves the one
+production business still keyed by its owner's uid — and wrong for *employment*: inherited blindly,
+any authenticated user could establish employment in an "organization" that is nothing but their own
+uid, minting `hrStaff` records under it.
+
+So the five employment acts now **require `businesses/{merchantId}` to exist**.
+**Ownership of an organization that was never created is not ownership.**
+
+### Platform-admin authority is left unresolved, deliberately
+
+The capability table marks platform admin ✅ for the five owner-only acts. That ✅ is now explicitly
+**NOT RATIFIED**: a platform admin establishing employment decides who a merchant pays. The ADR also
+records that `merchant-authority` does not distinguish `admin` from `superAdmin` — both take the same
+bypass — so if the answer differs between them the taxonomy needs a fifth value. Tracked as open
+item **2a**; the *shape* of mechanism #2 is decided, only its platform semantics and naming remain.
+
+### A finding recorded, deliberately not repaired
+
+`crm.assertMerchantOwner` is **misnamed** — it accepts `adminUids` too, so **no merchant-level
+owner-only authority exists anywhere today** — and carries the exact fail-open that
+`merchant-authority.js` was written in August to replace:
+
+```js
+if (data.ownerId !== uid && data.adminUids && !data.adminUids.includes(uid)) throw …
+```
+
+Executed against both shapes:
+
+```
+adminUids present, stranger  → throws  true
+adminUids ABSENT,  stranger  → throws  undefined   ← NON-OWNER GRANTED
+control: owner                → throws  false
+```
+
+With `adminUids` absent the middle conjunct is `undefined`, the condition is falsy, and a stranger is
+admitted. **Twelve call sites**, reading `merchants` — the collection that same module forbids as an
+independent authority. **Latent**, because all 8 production `merchants` documents carry `adminUids`
+and `business-bootstrap` always writes it — precisely as `merchant-authority.js`'s own header
+predicted on 2026-08-28: *"latent only because every existing merchant happens to carry the field."*
+The consolidation it describes never happened.
+
+**FORBIDDEN in the ADR:** repairing this inside the Gate 3 owner primitive. Its own repair, its own
+evidence, its own certification — bundling would make the change compound and the proof ambiguous.
+
+### The authority census behind all of this
+
+| primitive | authority | provenance |
+|---|---|---|
+| `merchant-authority.assertMerchantAccess` | `businesses.ownerId` \| `adminUids` | discarded |
+| `business-bootstrap._assertMerchantAccess` | `businesses.ownerId` \| `posStaff` \| `merchants.ownerId` | discarded |
+| `crm.assertMerchantOwner` | `merchants.ownerId` \| `adminUids` | discarded · fail-open |
+| `shop-employees.resolveShopAccess` | `shops` + `shopEmployees` | **returned** |
+| `merchant-identity.resolveActor` | `shops/{uid}` + `shopEmployees` | **returned** |
+| `shared/errors.assertOwner` | generic uid comparison | n/a |
+
+The ~20 `requireAdmin` / `assertAdmin` copies across the codebase are platform-claim checks — a
+different question, not organization authority.
+
+### Files affected
+- `docs/adr/ADR-035-employment-and-identity-binding.md` — §2 rewritten, §8 added, status amended
+
+### Database / API / Security changes
+None. No code, no schema, no Firestore rules, no API.
+
+### Deployment
+**NOT DEPLOYED.** Live remains `2fa2074` / `v635`.
+
+### Breaking changes
+None. A contract amendment ahead of any implementation.
+
 ## 2026-09-20 (99) — ADR-035: employment is two axes, and a uid is an accepted binding
 
 **Documentation only · COMMITTED `59a5b8c` · NO implementation authorized · NOT DEPLOYED.**
