@@ -40,6 +40,9 @@
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+/* THE employee predicate, from the module that owns the contract — never a
+   local copy. See the employee arm of resolveActor. */
+const { employeeRecordReasons } = require('./shop-employees');
 
 const REGION = 'us-central1';
 const OPTS = { region: REGION, enforceAppCheck: true };
@@ -54,18 +57,6 @@ function _uid(auth) {
   return auth.uid;
 }
 
-/* An employment record only counts when the shop has actually approved it. A
-   pending or revoked relationship is NOT a relationship — and `shopEmployees` is
-   self-declarable (any user may create a record naming themselves the owner), so a
-   record alone proves nothing without the shopOwnerId match below. */
-const ACTIVE_EMPLOYMENT = ['active', 'approved', 'enabled'];
-/* Absent status is treated as active only for records that predate the field; a
-   record explicitly marked otherwise is refused. */
-function _employmentActive(rec) {
-  const st = _s(rec.status, 24).toLowerCase();
-  if (!st) return true;
-  return ACTIVE_EMPLOYMENT.indexOf(st) > -1;
-}
 
 /* Employment roles, mapped to the receipt's vocabulary. An unknown role is NOT
    silently promoted to 'staff' — it is refused, because a receipt should not name
@@ -204,12 +195,35 @@ async function resolveActor(uid, requestedShopId) {
      corroboration check stops corroborating anything. */
   const shopOwner = _s(shop.ownerId || shop.sellerUid || shop.ownerUid, 64);
   if (shopOwner && shopOwner !== shopId) return { ok: false, reason: 'shop-ownership-inconsistent' };
-  if (_s(emp.shopOwnerId, 64) !== shopId) return { ok: false, reason: 'not-employed-here' };
-  /* The record must also name the shop it is filed under and the person it is for,
-     or a document copied between shops would still read as valid. */
-  if (emp.shopId !== undefined && _s(emp.shopId, 64) !== shopId) return { ok: false, reason: 'not-employed-here' };
-  if (emp.uid !== undefined && _s(emp.uid, 64) !== uid) return { ok: false, reason: 'not-employed-here' };
-  if (!_employmentActive(emp)) return { ok: false, reason: 'employment-inactive' };
+
+  /* ── THE EMPLOYEE PREDICATE IS NOT OURS TO OWN ───────────────────────────
+     shop-employees.js is "the ONE contract for who works at this shop" and
+     states the predicate in its own header: believed iff shopId matches, uid
+     matches, ACTIVE !== FALSE, role is a known shop role, and shopOwnerId
+     matches the shop's real owner. This function previously reimplemented four
+     of those five and replaced the fifth with a private `status` vocabulary
+     that NO WRITER HAS EVER WRITTEN — `_employmentActive` returned true for an
+     absent field, so `removeShopEmployee` revoked nothing here while returning
+     success to the owner, and a removed cashier kept selling.
+
+     Adjudicated in docs/SHOP_EMPLOYMENT_TILL_AUTHORITY_DECISION.md. The repair
+     is to CONSUME the authority, not to teach the private copy a second field
+     name — the duplication itself was the defect.
+
+     WE STILL DECIDE OWNERSHIP. `shopId` is passed as the owner uid because in
+     THIS function ownership is the shops/{uid} document id, which cannot be
+     forged by writing a field. shop-employees.js resolves owners from the
+     ownerId|sellerUid|ownerUid union instead. Converging those two owner models
+     is separate work and is deliberately NOT done here. */
+  const reasons = employeeRecordReasons(emp, shopId, uid, shopId);
+  if (reasons.length) {
+    /* The caller's existing refusal vocabulary is preserved exactly; changing
+       what a refusal discloses is a behaviour change this repair does not make. */
+    return { ok: false,
+             reason: reasons.indexOf('inactive') > -1 ? 'employment-inactive'
+                   : reasons.indexOf('unknown role') > -1 ? 'employment-role-unknown'
+                   : 'not-employed-here' };
+  }
 
   const mapped = EMPLOYEE_ROLES[_s(emp.role, 24).toLowerCase()];
   if (!mapped) return { ok: false, reason: 'employment-role-unknown' };
@@ -470,6 +484,10 @@ exports.adminLinkMerchantAccounts = onCall(OPTS, async ({ data, auth }) => {
 exports._internal = {
   resolveActor, shopIdentity, ROLE_CAPABILITIES, OWNER_CAPABILITIES, EMPLOYEE_ROLES,
   CAPABILITIES, effectiveCapabilities,
-  ACTIVE_EMPLOYMENT, _employmentActive,
+  /* ACTIVE_EMPLOYMENT and _employmentActive were here. They were this file's
+     private employment predicate over a `status` field no writer writes, and
+     they had no consumer outside this file. Removed with the repair — the
+     employee arm now consumes shop-employees.employeeRecordReasons. */
+  employeeRecordReasons,
   LINKS, linkedUids, merchantLink,
 };

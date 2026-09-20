@@ -108,6 +108,56 @@ function shopOwnerOf(shopData) {
 }
 
 /**
+ * THE EMPLOYEE PREDICATE — the "believed iff" clause of this module's contract,
+ * in ONE place.
+ *
+ * It was inline in `resolveShopAccess` and a second, divergent copy grew in
+ * `merchant-identity.resolveActor`, which cites this module four times in
+ * comments, adopted its canonical key and role vocabulary, and then
+ * reimplemented the predicate over a `status` field NO WRITER HAS EVER WRITTEN
+ * — so a removed employee (`active: false`) still passed the till gate while
+ * `removeShopEmployee` reported success. Adjudicated in
+ * `docs/SHOP_EMPLOYMENT_TILL_AUTHORITY_DECISION.md`: `active !== false` is the
+ * authoritative signal, and the duplication ITSELF was the defect. Teaching the
+ * second copy a new field name would have left two predicates standing and the
+ * next reader free to write a third.
+ *
+ * `ownerUid` is supplied BY THE CALLER, deliberately. The two consumers
+ * establish shop ownership differently — this module reads the
+ * `ownerId|sellerUid|ownerUid` union, `resolveActor` keys ownership off the
+ * `shops/{uid}` document id — and converging THOSE is separate work with its
+ * own evidence requirement. Parameterising the owner keeps the employee
+ * predicate shared without merging the owner arms.
+ *
+ * Returns the list of reasons the record is NOT believed; empty means believed.
+ * The caller decides what, if anything, to disclose — this module's own callers
+ * disclose nothing, because naming the failed check tells a prober how to shape
+ * a better forgery.
+ *
+ * @param {object} e         the shopEmployees record
+ * @param {string} shopId    the shop being acted on
+ * @param {string} uid       the person acting
+ * @param {string} ownerUid  the shop's real owner, as the CALLER establishes it
+ * @returns {string[]}
+ */
+function employeeRecordReasons(e, shopId, uid, ownerUid) {
+  const reasons = [];
+  /* The record must name the shop it is filed under and the person it is for.
+     Without this a document copied between shops would still read as valid. */
+  if (String(e.shopId || '') !== String(shopId)) reasons.push('shopId mismatch');
+  if (e.uid && String(e.uid) !== String(uid)) reasons.push('uid mismatch');
+  /* THE REVOCATION SIGNAL. `removeShopEmployee` is a SOFT removal — it writes
+     `active: false` and nothing else — so this is the only thing that makes a
+     removal mean anything. */
+  if (e.active === false) reasons.push('inactive');
+  if (!SHOP_ROLES.includes(e.role)) reasons.push('unknown role');
+  /* THE corroboration. A client-forged record names the forger as owner; the
+     shop document names the real owner; they will not agree. */
+  if (!ownerUid || String(e.shopOwnerId || '') !== String(ownerUid)) reasons.push('shopOwnerId does not match the shop document');
+  return reasons;
+}
+
+/**
  * Resolve what `uid` may do at `shopId`, from DATA — never from a claim, and
  * never from the caller's own assertion.
  *
@@ -130,16 +180,7 @@ async function resolveShopAccess(uid, shopId) {
   const empSnap = await db.collection(EMPLOYEES).doc(employeeDocId(shopId, uid)).get();
   if (empSnap.exists) {
     const e = empSnap.data() || {};
-    const reasons = [];
-    /* The record must name the shop it is filed under and the person it is for.
-       Without this a document copied between shops would still read as valid. */
-    if (String(e.shopId || '') !== String(shopId)) reasons.push('shopId mismatch');
-    if (e.uid && String(e.uid) !== String(uid)) reasons.push('uid mismatch');
-    if (e.active === false) reasons.push('inactive');
-    if (!SHOP_ROLES.includes(e.role)) reasons.push('unknown role');
-    /* THE corroboration. A client-forged record names the forger as owner; the
-       shop document names the real owner; they will not agree. */
-    if (!ownerUid || String(e.shopOwnerId || '') !== String(ownerUid)) reasons.push('shopOwnerId does not match the shop document');
+    const reasons = employeeRecordReasons(e, shopId, uid, ownerUid);
 
     if (!reasons.length) return { role: e.role, via: 'employee', shopOwnerId: ownerUid };
     /* A record that fails corroboration is NOT access, and is NOT an error the
@@ -524,6 +565,7 @@ exports.removeShopEmployee = onCall(
 exports.EMPLOYEES = EMPLOYEES;
 exports.SHOP_ROLES = SHOP_ROLES;
 exports.employeeDocId = employeeDocId;
+exports.employeeRecordReasons = employeeRecordReasons;
 exports.legacyEmployeeDocId = legacyEmployeeDocId;
 exports.shopOwnerOf = shopOwnerOf;
 exports.resolveShopAccess = resolveShopAccess;
