@@ -1,3 +1,122 @@
+## 2026-09-20 (98) — The record names the organization, not the caller and not the key
+
+**Record authority 66/0 · Gate 1 suite 96/0 · sabotage 18/18 as specified · COMMITTED `ef2ce4c`,
+NOT DEPLOYED.**
+
+Entry (97) bound the eight handlers that take a `merchantId` from the caller. Four others take a
+**record id** and never a `merchantId`, so they had no organization boundary at all — they operated
+on whatever record the caller named. Each now reads the organization off the **stored record**:
+
+| handler | anchor |
+|---|---|
+| `approvePayrollRun` | `hrPayrollRuns/{runId}.merchantId` |
+| `getPayslip` | `hrPayslips/{runId}_{staffId}.merchantId` |
+| `approveLeave` | `hrLeaves/{leaveId}.merchantId` |
+| `markTrainingComplete` | `hrTraining/{trainingId}.merchantId` |
+
+### All four are DIRECT — established before any code was written
+A read-only trace classified each anchor `DIRECT` / `DERIVED` / `UNPROVEN`. All four came out
+**DIRECT**, on three pieces of evidence: every record is written with `merchantId` by its sole
+producer; `hr-payroll.js` is the **only module in the repository** touching any `hr*` collection
+(18 call sites, one file); and all six carry `allow write: if false`. All six are also **empty in
+production**, so no record predates the field and no migration is owed. Nothing was derived and
+nothing was invented.
+
+### The document id is a trap, and it is not authoritative
+`runId` is `${merchantId}_${period}` and the payslip id is `${runId}_${staffId}`, so the
+organization *looks* recoverable from the key. It must not be: the legacy form uses a Firebase uid
+as `merchantId`, and splitting on `_` would make authorization depend on a string convention rather
+than on stored data. **Every certification fixture therefore stores a record whose id DISAGREES with
+its own `merchantId`** — `hrPayrollRuns/SOK-THEIRS_2026-01` holds `merchantId: SOK-MINE`. Read the
+field and the owner of MINE is admitted; parse the id and they are refused. Without that
+disagreement the two implementations are indistinguishable.
+
+### Two placement decisions
+**`approvePayrollRun` authorizes BEFORE the transaction.** `assertMerchantAccess` performs its own
+non-transactional read, which inside `runTransaction` would re-execute on every retry while
+contributing nothing to the transaction's guarantee. Costs one extra read of the run.
+
+**`getPayslip` anchors on the PAYSLIP, not on `hrStaff`.** Both carry an authoritative `merchantId`,
+but authorizing against a different document from the one returned is the weaker choice. Nothing is
+returned before the check. **`staffUid` is not consulted** — no writer populates it, so it
+authorizes nobody — and the rule referencing it is left exactly as it was.
+
+### KNOWN LIMIT — approvePayrollRun cannot refuse on ownership
+`assertAdmin` requires `token.admin`; `assertMerchantAccess` bypasses `t.admin === true`. **Every
+correctly-minted caller that clears the gate is then bypassed**, so that handler's boundary can
+refuse a run naming *no* organization but never one belonging to another. Recorded as a fact about
+the handler rather than dressed up as a protection it does not provide; the certification
+deliberately excludes it from the cross-organization assertions, with the reason written into the
+code. Making it genuinely organization-scoped means changing **who may approve payroll** — a policy
+decision, not this repair.
+
+### A fail-open closed on the way past
+`markTrainingComplete`'s entire permission check lived inside `if (staffSnap.exists)` **with no
+else**. `hrStaff` is empty in production, so that branch never ran: any authenticated caller could
+complete anyone's training. The new boundary sits **before** it and does not depend on an employee
+record existing. Proven both ways — an unauthorized caller with the staff record absent is denied
+and the training is unmodified, **and** an authorized caller with the staff record absent still
+succeeds. The second assertion is the one that matters: a "fix" that simply refused whenever
+`hrStaff` was missing would pass the first and break every legitimate call.
+
+### Three harness faults, caught before the suite was trusted
+None was a code defect; each would have produced a green suite that proved nothing.
+
+* **Payslip fixtures were stored under keys the handler never addresses** (`X_PAY`, while it reads
+  `${runId}_${staffId}`). Every payslip verdict came back `not-found` — unattributable.
+* **`markTrainingComplete` was driven by a caller its DOWNSTREAM staff-identity check refuses.**
+  That check admits only the employee or an admin/manager, so a plain user's denial could not be
+  attributed to the organization boundary. It now runs as a `manager`, which clears that gate
+  without bypassing the primitive; section 6 keeps its plain user deliberately.
+* **The suite read its own prose.** The comment explaining why `staffUid` is *not* consulted
+  satisfied the assertion that `staffUid` is not consulted. Assertions now run on **stripped**
+  source, with a control proving the stripper did not blank the file.
+
+Sabotage: **15 red** (boundary removed per handler, id parsing, caller fallback, forged
+`merchantId`, wrong record anchor, re-nesting inside the staff branch, wrong authority collection,
+dropped admin/legacy/owner arms, two scope tripwires) and **3 negative controls GREEN** — an
+unrelated local rename, an unrelated error-message rewording, and a comment containing the words
+`req.data.merchantId`. Restore byte-identical. One control first reported ANCHOR FAIL rather than a
+result, because this change added a second copy of `'Payroll run not found.'`; re-anchored.
+
+### Gate 1's suite: two assertions re-anchored, one retired
+`eight call sites exist` and `the four record-anchored handlers were NOT changed` were **scope
+proxies that this change legitimately falsifies**. The count now **discriminates by argument** —
+8 calls passing `merchantId`, with a control asserting the other 4 exist and are excluded, printing
+all twelve arguments. A negative-lookahead regex was tried first and was wrong: the `\s*` before the
+lookahead can match empty, so the engine backtracks around it and matched all 12. The ownership
+assertion is **retired with nothing in its place** — a suite must not assert that another gate's
+legitimate work does not exist. `test-payroll-record-authority.js` owns those four now.
+
+Gate 1's 12/12 sabotage still passes, and the re-anchored assertion is now the **first catch** for
+three of those mutations rather than a passenger.
+
+### Files affected
+- `functions/hr-payroll.js` — four record-anchored gates, **+50 −1** (the one deletion is
+  `return payslipSnap.data()` → `return payslip`, so the record is authorized before disclosure)
+- `scripts/test-payroll-record-authority.js` — new
+- `scripts/test-payroll-merchant-authority.js` — two assertions re-anchored / retired
+
+### Database / API / Security changes
+No database change, no schema change, **no Firestore rules change**. No API shape change. Security:
+three handlers gain an organization boundary that can genuinely refuse; one gains a
+missing-organization refusal only; one fail-open is closed.
+
+### Deployment
+**NOT DEPLOYED**, and not deployable — `functions/` deploys are frozen by the Artifact Registry
+forensics notice. Live remains `2fa2074` / `v635`.
+
+### Breaking changes
+A caller acting on a record belonging to an organization they do not own, administer, or hold a
+platform-admin claim for now receives `permission-denied`. No production data is affected — all six
+`hr*` collections are empty.
+
+### Still open
+`hrStaff.uid` is still `null`, so employee self-service remains impossible and three `hr*` rules
+still guard fields no writer writes. Identity binding is its own gate, and it is a product and
+security decision — what establishes that an authenticated human *is* the employee a payroll record
+represents — not a schema change.
+
 ## 2026-09-20 (97) — merchantId is a request until the authority says otherwise
 
 **Authority 96/0 · staff contract 27/0 · sabotage 12/12 RED · COMMITTED `f4de0c1`, NOT DEPLOYED.**
