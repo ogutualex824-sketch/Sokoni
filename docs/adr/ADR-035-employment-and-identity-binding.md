@@ -2,7 +2,8 @@
 
 **Status:** Accepted · **not implemented** · 2026-09-20 · **amended 2026-09-20** (§2 resolver
 shape + `via` taxonomy, after a read-only authority trace; §8 records a finding this ADR does not
-repair) · **2a decided 2026-09-20** — platform admin eligible, taxonomy frozen at four values
+repair) · **2a decided 2026-09-20** — platform admin eligible, taxonomy frozen at four values ·
+**§6 amended 2026-09-20** — twelve events, explicit system actor, deterministic event keys
 **Supersedes nothing. Constrains:** `functions/hr-payroll.js`, `hrStaff`, and any future AdminOS
 employee surface.
 **Depends on:** [[ADR-001]] (authorization comes from claims, never from a Firestore field),
@@ -319,23 +320,139 @@ depends on is exactly the kind of silent breakage this ADR exists to prevent.
 
 ### 6. Employment history is its own record
 
-Current employment state cannot answer "who rebound this uid, when, and why" — a document holds the
-present, not the sequence. A dedicated append-only history is required, capturing at minimum:
+**AMENDED 2026-09-20.** A first draft listed seven events and no system actor. A read-only design
+pass found three gaps: `suspend` and `give leave` were owner actions in §5 with no event in §6;
+scheduled leave ends with no human performing it; and an auto-id cannot make a retry idempotent.
+
+Current employment state cannot answer "who suspended this employee, when, and why" — a document
+holds the present, not the sequence.
+
+#### The record
 
 ```
-businessId · employeeId · event · previousUid · newUid · changedBy · timestamp · reason
+employmentEvents/{staffId}_{eventKey}
+
+  businessId       SOK-XXXXXX      never parsed out of the key
+  staffId          {merchantId}_{employeeNumber}
+
+  event            one of the TWELVE below
+
+  previousUid      string | null   populated on uid_rebound
+  newUid           string | null
+
+  previousStatus   { employmentStatus, workStatus } | null
+  newStatus        { employmentStatus, workStatus } | null
+
+  actorType        'human' | 'system'
+  changedBy        uid | null      null ONLY when actorType is 'system'
+  changedVia       'owner' | 'platform' | 'system'
+
+  reason           REQUIRED, non-empty
+
+  at               serverTimestamp()
+  ts               Date.now()
 ```
 
-Events: `employment_established`, `invite_sent`, `invite_accepted`, `invite_revoked`,
-`uid_rebound`, `record_edited`, `employment_terminated`.
+#### Twelve events — every lifecycle transition is its own event
 
-**FORBIDDEN:** inferring history from the current `hrStaff` document, and writing history from the
-client. Rebinding a uid is a sensitive identity operation and must be observable after the fact.
+```
+employment_established     invite_sent       invite_accepted     invite_revoked
+uid_rebound
+leave_granted              leave_ended
+employment_suspended       suspension_lifted
+employment_terminated      employment_reinstated
+record_edited
+```
 
-Two rules on rebinding:
+**`record_edited` is reserved for ordinary employment DATA** — position, department, grossSalary,
+startDate, phone, email. **FORBIDDEN:** absorbing a lifecycle transition into it. An auditor asking
+*"who suspended this employee?"* or *"when did the leave start and end?"* must not have to infer the
+answer from which fields happened to change inside a generic edit.
+
+#### previousStatus / newStatus carry BOTH axes
+
+```
+salary edit    { active, working }   → { active, working }      identical, and that is correct
+leave granted  { active, working }   → { active, on_leave }
+suspended      { active, working }   → { active, suspended }
+terminated     { active, suspended } → { terminated, null }
+```
+
+Recording both axes is what makes the transition unambiguous; a single status field could not
+distinguish a suspension from a termination.
+
+#### The system actor is explicit, never a fake uid
+
+Scheduled leave restores itself (§5), so `leave_ended` has no human performer. **FORBIDDEN:**
+writing a sentinel such as `"system"` into `changedBy`, which is a Firebase uid field. The actor
+is structured instead:
+
+| transition | actorType | changedBy | changedVia |
+|---|---|---|---|
+| owner suspends | `human` | owner uid | `owner` |
+| platform admin terminates | `human` | platform uid | `platform` |
+| scheduled leave completes | `system` | `null` | `system` |
+
+`changedVia` is **not re-derived from the token** — it is the `via` that
+`resolveMerchantAccess` already returned (§2). The authority layer decides it once; the history
+records what was decided. A scheduled suspension end, if ever added, reuses the same system actor.
+
+#### Idempotency lives in the document id
+
+**FORBIDDEN:** an auto-id, and `get()` + `set()` to establish uniqueness. An auto-id makes every
+retry a new row; a get/set claim loses races — eight concurrent calls once produced eight ledger rows
+([[project_idempotency_claim_must_be_create]]). The transition's identity IS the key:
+
+```
+{staffId}_employment_established
+{staffId}_invite_accepted
+{staffId}_uid_rebound_{transitionId}
+{staffId}_leave_{leaveId}_granted        {staffId}_leave_{leaveId}_ended
+{staffId}_suspension_{suspensionId}_started   {staffId}_suspension_{suspensionId}_lifted
+```
+
+Events that can legitimately recur are discriminated by the id of the thing they act on, never by a
+counter. Written with `create()`, or `set()` **inside the same transaction as the state change**
+so the record and its event land together or not at all — the `bookingEvents` pattern, which
+returns `{ ref, payload }` rather than writing, exists for exactly this.
+
+#### Reads: a callable for the organization, a rule for the employee
+
+**FORBIDDEN:** an owner read arm in Firestore rules. `resource.data.businessId == request.auth.uid`
+is the `merchantId == auth.uid` mistake again — it holds for exactly one production business.
+Organization history is read through a **callable** that calls `assertMerchantAccess` first.
+
+The rule grants writes to nobody and a narrow self-read:
+
+```
+create, update, delete : false            server-only, Admin SDK
+read                   : isAdmin()
+                         || resource.data.newUid == request.auth.uid
+```
+
+**Never `previousUid`.** A person whose binding was replaced would otherwise keep reading the
+employment's future history. Events before `invite_accepted` carry no `newUid` and are therefore
+admin-only by construction — correct, because there is no employee yet.
+
+#### Retention
+
+**Indefinite. Deletion forbidden, including for administrators.** A history that can be pruned is
+weaker than the records it witnesses. `adminLog` permits `allow delete: if isSuperAdmin()`; that
+precedent is **not** followed here, for the same reason 2a's platform authority is backed by an audit
+record rather than a refusal.
+
+#### Two rules on rebinding
 
 * a detached uid **does not** become a second employee merely by being detached;
 * a new uid **must not** already hold an active employment in the same organization (§4).
+
+**FORBIDDEN:** inferring history from the current `hrStaff` document, and writing history from the
+client.
+
+> **Known constraint (§Open 4a).** Useful history queries — `businessId` + `at desc`, `staffId`
+> + `at desc` — need **two new composite indexes** in a file that already holds 408, and index
+> deploys are independently contested. Mechanism #4 can be built and certified without them; it
+> cannot be *exercised against production* until that is settled separately.
 
 ### 7. AdminOS is where employees are managed
 
@@ -397,7 +514,10 @@ Deliberately left open, because each is a mechanism choice that deserves its own
    design.**
 3. **The invite/acceptance transport** — whether `shopInvites` (0 documents, one writer,
    `acceptShopInvite`) is reused or a payroll-specific path is built (§3).
-4. **The history collection's identity** — name, key shape, rules, retention (§6).
+4. **The history collection's identity** — settled in §6 as amended: `employmentEvents`, keyed
+   `{staffId}_{eventKey}`, twelve events, explicit system actor, server-only writes, indefinite
+   retention. **(4a)** the two composite indexes it needs remain blocked on the separate index
+   question. **Ready for implementation design.**
 5. **`workStatus` stored-and-swept vs derived-from-window** (§5). The failure modes differ and
    both are real; neither is obviously right.
 6. **Whether `on_leave` and `suspended` remain payable** (§5) — employment policy, with legal
