@@ -117,10 +117,160 @@
     { id: 'pending',   label: 'Pending',   tone: 'warn' },
     { id: 'suspended', label: 'Suspended', tone: 'bad' },
     { id: 'banned',    label: 'Banned',    tone: 'bad' },
+    /* Written by the deletion pipeline — by an administrator through
+       adminScheduleUserDeletion, or by the user's own scheduleAccountDeletion. Listed so
+       it reads as serious rather than falling through to the neutral "unknown status"
+       tone, and so the filter can isolate accounts awaiting deletion. */
+    { id: 'pending_deletion', label: 'Pending deletion', tone: 'bad' },
   ];
   function statusTone (s) {
     for (var i = 0; i < STATUSES.length; i++) if (STATUSES[i].id === s) return STATUSES[i].tone;
     return 'muted';
+  }
+
+  /* ── MESSAGING ────────────────────────────────────────────────────────────
+     Three channels, one composer. The vocabulary mirrors adminMessageUser's on the
+     server; a category the server does not know would be silently downgraded to
+     'general', so they are declared once here and asserted equal by the suite. */
+  var CATEGORIES = [
+    { id: 'general',         label: 'General' },
+    { id: 'account_warning', label: 'Account warning' },
+    { id: 'security_alert',  label: 'Security alert' },
+    { id: 'payment_notice',  label: 'Payment notice' },
+    { id: 'policy_notice',   label: 'Policy notice' },
+    { id: 'verification',    label: 'Verification required' },
+    { id: 'suspension',      label: 'Suspension notice' },
+    { id: 'deletion',        label: 'Deletion notice' },
+    { id: 'announcement',    label: 'Announcement' },
+  ];
+  var CHANNELS = [
+    { id: 'inapp', label: 'In-App', icon: '💬' },
+    { id: 'email', label: 'Email',  icon: '✉️' },
+    { id: 'sms',   label: 'SMS',    icon: '📱' },
+  ];
+  var SMS_MAX = 480;
+
+  /* A channel is only offered when the address for it EXISTS. An admin should not be
+     able to attempt a send that is certain to fail — the reason is shown in place of
+     the control, which is the difference between a disabled button and a mystery. */
+  function channelState (u, id) {
+    if (id === 'email') {
+      return u.email ? { ok: true }
+                     : { ok: false, why: 'No email address on record' };
+    }
+    if (id === 'sms') {
+      var ph = u.phone || u.phoneNumber;
+      return ph ? { ok: true, to: ph }
+                : { ok: false, why: 'No phone number on record' };
+    }
+    return { ok: true };   /* in-app needs only the account itself */
+  }
+
+  function messagePanel (u, state) {
+    var id = u.id || u.uid || '';
+    var n = nameOf(u);
+    var ch = state.msgChannel || 'inapp';
+    var st = channelState(u, ch);
+    var cat = state.msgCategory || 'general';
+    var body = state.msgBody || '';
+    var subject = state.msgSubject || '';
+    var hist = state.msgHistory;
+
+    return '<div class="usx-msg">' +
+      '<div class="usx-msg-h">' +
+        '<div><b>Message ' + esc(n.text) + '</b>' +
+          '<span>' + esc(u.email || 'no email') + ' · ' +
+          esc(u.phone || u.phoneNumber || 'no phone') + '</span></div>' +
+        '<button class="usx-btn ghost" data-usx="msgclose">Close</button>' +
+      '</div>' +
+
+      /* ── CHANNEL ─────────────────────────────────────────────────────── */
+      '<div class="usx-msg-ch">' +
+        CHANNELS.map(function (c) {
+          var cs = channelState(u, c.id);
+          return '<button class="usx-chan' + (ch === c.id ? ' is-on' : '') +
+            (cs.ok ? '' : ' is-off') + '" data-usx="msgchan" data-v="' + c.id + '"' +
+            (cs.ok ? '' : ' title="' + esc(cs.why) + '"') + '>' +
+            c.icon + ' ' + esc(c.label) +
+            (cs.ok ? '' : '<small>unavailable</small>') + '</button>';
+        }).join('') +
+      '</div>' +
+
+      (st.ok ? '' :
+        '<div class="usx-msg-no">' + esc(st.why) + ' — this channel cannot be used for ' +
+        'this account.</div>') +
+
+      /* ── COMPOSER ────────────────────────────────────────────────────── */
+      (st.ok ?
+        '<div class="usx-msg-b">' +
+          '<label>Type' +
+            '<select class="usx-sel" data-usx="msgcat">' +
+              CATEGORIES.map(function (c) {
+                return '<option value="' + c.id + '"' + (cat === c.id ? ' selected' : '') +
+                  '>' + esc(c.label) + '</option>';
+              }).join('') +
+            '</select>' +
+          '</label>' +
+          /* SMS carries no subject line — showing one would imply a field the
+             message cannot have. */
+          (ch === 'sms' ? '' :
+            '<label>Subject' +
+              '<input class="usx-in" data-usx="msgsub" value="' + esc(subject) +
+              '" placeholder="' + (ch === 'email' ? 'Email subject' : 'Notification heading') + '">' +
+            '</label>') +
+          '<label>Message' +
+            '<textarea class="usx-ta" data-usx="msgbody" rows="4" placeholder="What should they be told?">' +
+            esc(body) + '</textarea>' +
+          '</label>' +
+          '<div class="usx-msg-f">' +
+            (ch === 'sms'
+              ? '<span class="' + (body.length > SMS_MAX ? 'usx-over' : '') + '">' +
+                body.length + ' / ' + SMS_MAX + ' characters · to ' +
+                esc(st.to || '') + '</span>'
+              : '<span>' + (ch === 'email'
+                  ? 'Queued for delivery — SOKONI sends it from the mail queue.'
+                  : 'Appears in their SOKONI account; they can mark it read.') + '</span>') +
+            '<button class="usx-btn ok" data-usx="msgsend" data-id="' + esc(id) + '"' +
+              (body.trim().length < 2 || (ch === 'sms' && body.length > SMS_MAX) ? ' disabled' : '') +
+              '>Send ' + esc(ch === 'inapp' ? 'in-app' : ch) + '</button>' +
+          '</div>' +
+        '</div>' : '') +
+
+      /* ── HISTORY ─────────────────────────────────────────────────────── */
+      '<div class="usx-hist">' +
+        '<h4>Communication history</h4>' +
+        (hist === undefined
+          ? '<div class="usx-hist-e">Loading…</div>'
+          : (hist === null
+            ? '<div class="usx-hist-e">Could not load the history for this account.</div>'
+            : (hist.length
+              ? hist.map(function (m) {
+                  var c = m.channel === 'email' ? '✉️' : (m.channel === 'sms' ? '📱' : '💬');
+                  return '<div class="usx-hist-i">' +
+                    '<span class="usx-hist-c">' + c + '</span>' +
+                    '<div><div class="usx-hist-s">' + esc(m.subject || '(no subject)') + '</div>' +
+                      '<div class="usx-hist-m">' +
+                        esc(catLabel(m.category)) + ' · ' +
+                        (when(m.createdAt) ? esc(when(m.createdAt)) : 'no date recorded') +
+                        (m.status ? ' · ' + esc(m.status) : '') +
+                        /* read is only known for in-app, and only as a boolean — the
+                           notification carries no readAt, so no time is invented. */
+                        (m.read === true ? ' · read' : (m.read === false ? ' · unread' : '')) +
+                      '</div>' +
+                      (m.failureReason
+                        ? '<div class="usx-hist-x">' + esc(m.failureReason) + '</div>' : '') +
+                    '</div></div>';
+                }).join('')
+              : '<div class="usx-hist-e">No messages have been sent to this account.</div>'))) +
+        '<div class="usx-hist-n">History is the administrative audit trail, which records ' +
+          'what was sent and by whom. Delivery beyond that — whether a person opened an ' +
+          'email or read an SMS — is not recorded here, so it is not shown.</div>' +
+      '</div>' +
+    '</div>';
+  }
+  function catLabel (id) {
+    for (var i = 0; i < CATEGORIES.length; i++) if (CATEGORIES[i].id === id) return CATEGORIES[i].label;
+    return id || 'General';
   }
 
   function render (host, state) {
@@ -147,6 +297,12 @@
     /* Only the actions the host actually owns get a button. A control wired to nothing is
        worse than an absent one: it reads as broken permissions. */
     var can = state.can || { view: true, role: true, ban: true };
+    var msgFor = null;
+    if (state.msgOpen) {
+      for (var mi = 0; mi < users.length; mi++) {
+        if (String(users[mi].id || users[mi].uid || '') === state.msgOpen) { msgFor = users[mi]; break; }
+      }
+    }
 
     var visible = users.filter(function (u) {
       if (state.status !== 'all' && (u.status || 'active') !== state.status) return false;
@@ -256,6 +412,18 @@
                   '" data-status="' + esc(u.status || 'active') + '">' +
                   ((u.status === 'banned' || u.status === 'suspended') ? 'Restore' : 'Suspend') +
                   '</button>' : '') +
+                /* DELETE. Absent unless the host supplies the action, and absent for an
+                   account already scheduled — there is nothing to schedule twice. The
+                   server refuses self-deletion and administrators; this only avoids
+                   offering a button whose answer is already known. */
+                (can.msg ? '<button class="usx-btn sm" data-usx="msg" data-id="' + esc(id) +
+                  '">Message…</button>' : '') +
+                (can.del && (u.status || '') !== 'pending_deletion'
+                  ? '<button class="usx-btn sm usx-btn--danger" data-usx="del" data-id="' + esc(id) +
+                    '" data-name="' + esc(nameOf(u).text) + '">Delete…</button>'
+                  : '') +
+                ((u.status || '') === 'pending_deletion'
+                  ? '<span class="usx-pend" title="Deletion scheduled">scheduled</span>' : '') +
               '</td>' +
             '</tr>';
           }).join('') +
@@ -264,6 +432,10 @@
             (users.length ? 'No loaded user matches this filter' : 'No users returned') +
           '</b><span>' + (users.length ? 'Clear the filter or widen the search.'
             : 'The directory search returned an empty result.') + '</span></div>') +
+
+      /* The composer for one account, when the host owns a send action and a row is
+         open. One panel, not one per row. */
+      (msgFor ? messagePanel(msgFor, state) : '') +
 
       /* ── WHAT THIS VIEW IS NOT ─────────────────────────────────────────── */
       '<div class="usx-note">' +
@@ -289,7 +461,10 @@
     var A0 = o.actions || {};
     var state = {
       users: o.users, q: '', qRaw: '', role: 'all', status: 'all', selected: {},
-      can: { view: !!A0.viewUser, role: !!A0.changeRole, ban: !!A0.banUser },
+      msgOpen: null, msgChannel: 'inapp', msgCategory: 'general',
+      msgSubject: '', msgBody: '', msgHistory: undefined,
+      can: { view: !!A0.viewUser, role: !!A0.changeRole, ban: !!A0.banUser,
+             del: !!A0.deleteUser, msg: !!A0.sendMessage },
       source: o.source || '',
     };
     var draw = function () { render(host, state); };
@@ -317,6 +492,46 @@
       if (k === 'view' && A.viewUser) return A.viewUser(id);
       if (k === 'role' && A.changeRole) return A.changeRole(id);
       if (k === 'ban' && A.banUser) return A.banUser(id, b.getAttribute('data-status'));
+      /* The NAME travels with the request so the confirmation can say who is being
+         deleted. A uid in a dialog is not informed consent. */
+      if (k === 'del' && A.deleteUser) return A.deleteUser(id, b.getAttribute('data-name'));
+      if (k === 'msg') {
+        state.msgOpen = id; state.msgChannel = 'inapp'; state.msgCategory = 'general';
+        state.msgSubject = ''; state.msgBody = ''; state.msgHistory = undefined;
+        draw();
+        /* History is fetched by the HOST — this module performs no read of its own. */
+        if (A.loadMessages) {
+          Promise.resolve(A.loadMessages(id)).then(function (rows) {
+            state.msgHistory = Array.isArray(rows) ? rows : [];
+            if (state.msgOpen === id) draw();
+          }, function () { state.msgHistory = null; if (state.msgOpen === id) draw(); });
+        } else { state.msgHistory = []; draw(); }
+        return;
+      }
+      if (k === 'msgclose') { state.msgOpen = null; return draw(); }
+      if (k === 'msgchan') {
+        state.msgChannel = b.getAttribute('data-v');
+        return draw();
+      }
+      if (k === 'msgsend' && A.sendMessage) {
+        var payload = {
+          targetUid: id, channel: state.msgChannel, category: state.msgCategory,
+          subject: state.msgSubject, body: state.msgBody,
+        };
+        return Promise.resolve(A.sendMessage(payload)).then(function (okSent) {
+          if (okSent === false) return;
+          /* Clear the composer but keep the panel open, then refresh the history so the
+             operator sees the row they just created rather than being told it worked. */
+          state.msgSubject = ''; state.msgBody = '';
+          state.msgHistory = undefined; draw();
+          if (A.loadMessages) {
+            Promise.resolve(A.loadMessages(id)).then(function (rows) {
+              state.msgHistory = Array.isArray(rows) ? rows : [];
+              if (state.msgOpen === id) draw();
+            }, function () { state.msgHistory = null; if (state.msgOpen === id) draw(); });
+          }
+        });
+      }
       if (k === 'clearsel') { state.selected = {}; return draw(); }
       if (k === 'bulkrole' || k === 'bulkban') {
         var ids = Object.keys(state.selected);
@@ -351,6 +566,7 @@
         }
         return draw();
       }
+      if (k === 'msgcat') { state.msgCategory = el.value; return; }
       if (k === 'status') { state.status = el.value; return draw(); }
       if (k === 'role') { state.role = el.value; return draw(); }
     });
@@ -358,6 +574,24 @@
     var t = null;
     on('input', function (ev) {
       var el = ev.target;
+      var ik = el.getAttribute && el.getAttribute('data-usx');
+      /* Held WITHOUT redrawing: a redraw on every keystroke would destroy the caret.
+         The Send button's disabled state is refreshed directly instead. */
+      if (ik === 'msgsub') { state.msgSubject = el.value; return; }
+      if (ik === 'msgbody') {
+        state.msgBody = el.value;
+        var sendBtn = host.querySelector('[data-usx="msgsend"]');
+        if (sendBtn) {
+          var over = state.msgChannel === 'sms' && el.value.length > SMS_MAX;
+          sendBtn.disabled = el.value.trim().length < 2 || over;
+        }
+        var counter = host.querySelector('.usx-msg-f span');
+        if (counter && state.msgChannel === 'sms') {
+          counter.textContent = el.value.length + ' / ' + SMS_MAX + ' characters';
+          counter.className = el.value.length > SMS_MAX ? 'usx-over' : '';
+        }
+        return;
+      }
       if (!el.getAttribute || el.getAttribute('data-usx') !== 'q') return;
       var v = el.value;
       clearTimeout(t);

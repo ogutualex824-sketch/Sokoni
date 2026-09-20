@@ -198,8 +198,11 @@ head('7 - capability, sourcing and absence are passed in, not branched on');
 
   /* Capability is DERIVED from the actions supplied — a caller cannot forget to declare it. */
   const src = strip(read('sokoni-aos-users.js'));
+  /* The map gained `del` when admin-initiated deletion landed. Matched per key rather than
+     as one literal, so adding a capability later cannot silently void this assertion. */
   ok('capability is derived from the actions passed to mount',
-     /can: \{ view: !!A0\.viewUser, role: !!A0\.changeRole, ban: !!A0\.banUser \}/.test(src));
+     /view: !!A0\.viewUser/.test(src) && /role: !!A0\.changeRole/.test(src) &&
+     /ban: !!A0\.banUser/.test(src) && /del: !!A0\.deleteUser/.test(src));
 
   /* ABSENCE. `verified` is absent on a raw users document. Unknown is not false. */
   const noV = draw([user({ verified: undefined }), user({ id: 'u2', verified: undefined })]);

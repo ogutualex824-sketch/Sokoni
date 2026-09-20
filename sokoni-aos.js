@@ -121,7 +121,7 @@ window.SokoniAOS = (() => {
     'adminGetPayments','adminGetPosDevices','adminGetProducts','adminGetProviders','adminGetRecentNotifications','adminGetReviews','adminGetServices',
     'adminGetSearchStats','adminGetSupportTickets','adminGetSystemHealth','adminGetUser',
     'aosResolveDispute','adminResolveSupportTicket','adminSaveAnnouncement','adminSaveBanner',
-    'adminSearchUsers','adminSendPushNotification','adminUpdateFeatureFlag','adminUpdateOrderStatus',
+    'adminSearchUsers','adminScheduleUserDeletion','adminMessageUser','adminGetUserMessages','adminSendPushNotification','adminUpdateFeatureFlag','adminUpdateOrderStatus',
     'adminUpdatePlatformSettings','adminUpdateProductStatus','adminUpdateUserRole',
     'adminUpsertCategory','adminUpsertFaq',
     /* Merchant estate. _h-only handlers: no new Cloud Run service, but
@@ -353,7 +353,8 @@ window.SokoniAOS = (() => {
             }
             const shown = window.SokoniAOSUsers.mount({
               host: rich, users,
-              actions: { viewUser, banUser, changeRole },
+              actions: { viewUser, banUser, changeRole, deleteUser: scheduleUserDeletion,
+                         sendMessage: messageUser, loadMessages: loadUserMessages },
             });
             if (shown) {
               wrap.hidden = true;
@@ -407,6 +408,77 @@ window.SokoniAOS = (() => {
         <div><strong>Verified</strong><span>${u.emailVerified?"✅":"❌"}</span></div>
       </div>
     `);
+  }
+
+  /* SEND one message on one channel. The server owns the send AND the audit row; this
+     only collects what the operator typed. It returns false on refusal so the composer
+     keeps the text rather than clearing a message that never went anywhere. */
+  async function messageUser(payload) {
+    try {
+      const r = await _call("adminMessageUser", payload);
+      const what = payload.channel === 'inapp' ? 'In-app message delivered'
+                 : payload.channel === 'email' ? 'Email queued for delivery'
+                 : 'SMS sent';
+      _toast(what + (r && r.status && r.status !== 'delivered' ? ' (' + r.status + ')' : ''), "success");
+      return true;
+    } catch (e) {
+      const m = (e && e.message) || 'Could not send.';
+      _toast(/not-found|not found|unknown op/i.test(m)
+        ? 'Messaging is not available yet: the admin dispatcher has not been redeployed.'
+        : m, "error");
+      return false;
+    }
+  }
+
+  /* The history is the ADMIN AUDIT TRAIL, read server-side. Returning [] on failure would
+     claim "no messages ever sent"; the module distinguishes that from a failed read. */
+  async function loadUserMessages(uid) {
+    const data = await _call("adminGetUserMessages", { targetUid: uid, limit: 50 });
+    return (data && data.messages) || [];
+  }
+
+  /* SCHEDULE a deletion — it does not delete. The server sets the date (30 days) and the
+     already-deployed finaliseExpiredDeletions worker performs the irreversible work in the
+     right order: redact, anonymise, retain what the law requires, purge Storage, and only
+     then remove the Auth account.
+
+     The confirmation is TYPED, not a yes/no: this acts on somebody else's account and
+     cannot be undone once the grace period expires. It names the account, states the grace
+     period, and says that the user cancels simply by signing in — which is true, because
+     cancelAccountDeletion runs on sign-in. */
+  async function scheduleUserDeletion(uid, name) {
+    const who = name || uid;
+    const reason = prompt(
+      'Schedule deletion of "' + who + '"?\n\n' +
+      'The account is marked for deletion in 30 days. On the day, SOKONI redacts and\n' +
+      'anonymises their data, purges their files, and removes the sign-in account.\n' +
+      'The user cancels it simply by signing in during those 30 days.\n\n' +
+      'Reason (required, recorded in the audit log):');
+    if (reason === null) return;
+    if (String(reason).trim().length < 3) {
+      _toast('A reason is required — nothing was scheduled.', 'error');
+      return;
+    }
+    const typed = prompt('Type DELETE to confirm scheduling deletion of "' + who + '".');
+    if (String(typed || '').trim().toUpperCase() !== 'DELETE') {
+      _toast('Not confirmed — nothing was scheduled.', 'error');
+      return;
+    }
+    try {
+      const r = await _call("adminScheduleUserDeletion", { targetUid: uid, reason });
+      const on = r && r.scheduledAt ? new Date(r.scheduledAt).toLocaleDateString('en-KE',
+        { day: 'numeric', month: 'short', year: 'numeric' }) : 'in 30 days';
+      _toast('Deletion scheduled for ' + on + ' — the user can cancel by signing in.', 'success');
+    } catch (e) {
+      /* Until adminOsDispatch is redeployed this op does not resolve. Say that plainly
+         rather than reporting a generic failure for a button that cannot yet work. */
+      const m = (e && e.message) || 'Could not schedule deletion.';
+      _toast(/not-found|not found|unknown op/i.test(m)
+        ? 'Deletion is not available yet: the admin dispatcher has not been redeployed.'
+        : m, 'error');
+      return;
+    }
+    _panelCache.users = false; _loadUsers();
   }
 
   async function banUser(uid, currentStatus) {

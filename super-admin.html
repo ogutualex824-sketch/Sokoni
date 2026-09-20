@@ -1259,6 +1259,12 @@ const SA={
               changeRole:uid=>this.changeRole(uid,nameFor(uid)),
               banUser:(uid,status)=>this.toggleSuspend(
                 uid,!(status==='suspended'||status==='banned'),nameFor(uid)),
+              // The SAME server authority AdminOS calls. Deletion must not have two
+              // mechanisms: one schedules, one worker finishes, both consoles agree.
+              deleteUser:(uid,name)=>this.scheduleUserDeletion(uid,name||nameFor(uid)),
+              // The SAME two ops AdminOS calls. One send authority, one audit trail.
+              sendMessage:payload=>this.messageUser(payload),
+              loadMessages:uid=>this.loadUserMessages(uid),
             },
           });
           if(shown){wrap.hidden=true;return;}
@@ -1330,6 +1336,77 @@ const SA={
       const b=document.getElementById('saModalBody');
       if(b){b.textContent='New role: ';b.appendChild(sel);}
     },10);
+  },
+
+  /* Send one message on one channel, through the same server authority AdminOS uses.
+     Returns false on refusal so the composer keeps what was typed. */
+  messageUser(payload){
+    const fn=this._fns.httpsCallable('adminOsDispatch');
+    return fn({op:'adminMessageUser', ...payload})
+      .then(r=>{
+        const what = payload.channel==='inapp' ? 'In-app message delivered'
+                   : payload.channel==='email' ? 'Email queued for delivery'
+                   : 'SMS sent';
+        const st = r&&r.data&&r.data.status;
+        _toast(what + (st && st!=='delivered' ? ' ('+st+')' : ''), 'success');
+        return true;
+      })
+      .catch(e=>{
+        const m=(e&&e.message)||'Could not send.';
+        _toast(/not-found|not found|unknown op/i.test(m)
+          ? 'Messaging is not available yet: the admin dispatcher has not been redeployed.'
+          : m,'error');
+        return false;
+      });
+  },
+
+  /* History from the admin audit trail. A read failure must not return [] — that would
+     claim nothing was ever sent. */
+  loadUserMessages(uid){
+    const fn=this._fns.httpsCallable('adminOsDispatch');
+    return fn({op:'adminGetUserMessages', targetUid:uid, limit:50})
+      .then(r=>(r&&r.data&&r.data.messages)||[]);
+  },
+
+  /* SCHEDULE a deletion. Routes to adminScheduleUserDeletion — the same callable AdminOS
+     uses — so there is one deletion mechanism, not a Super Admin variant free to disagree
+     about what "deleted" means. It schedules; the deployed finaliseExpiredDeletions worker
+     does the irreversible work in order: redact, anonymise, retain, purge Storage, and only
+     then remove the Auth account.
+
+     Never a direct write: deleting users/{uid} would leave the Firebase Auth account alive
+     and the person able to sign in, and writing the deletion fields from a client would let
+     an arbitrary date bypass the grace period entirely. */
+  scheduleUserDeletion(uid,name){
+    const who = name || uid;
+    const reason = prompt(
+      'Schedule deletion of "'+who+'"?\n\n'+
+      'The account is marked for deletion in 30 days. On the day, SOKONI redacts and\n'+
+      'anonymises their data, purges their files, and removes the sign-in account.\n'+
+      'The user cancels it simply by signing in during those 30 days.\n\n'+
+      'Reason (required, recorded in the audit log):');
+    if(reason===null) return;
+    if(String(reason).trim().length<3){ _toast('A reason is required — nothing was scheduled.','error'); return; }
+    const typed = prompt('Type DELETE to confirm scheduling deletion of "'+who+'".');
+    if(String(typed||'').trim().toUpperCase()!=='DELETE'){
+      _toast('Not confirmed — nothing was scheduled.','error'); return;
+    }
+    const fn=this._fns.httpsCallable('adminOsDispatch');
+    fn({op:'adminScheduleUserDeletion', targetUid:uid, reason})
+      .then(r=>{
+        const at=r&&r.data&&r.data.scheduledAt;
+        const on=at?new Date(at).toLocaleDateString('en-KE',{day:'numeric',month:'short',year:'numeric'}):'in 30 days';
+        _toast('Deletion scheduled for '+on+' — the user can cancel by signing in.','success');
+        this.loadUsers();
+      })
+      .catch(e=>{
+        /* Until adminOsDispatch is redeployed this op does not resolve — say so rather
+           than reporting a generic failure for a button that cannot yet work. */
+        const m=(e&&e.message)||'Could not schedule deletion.';
+        _toast(/not-found|not found|unknown op/i.test(m)
+          ? 'Deletion is not available yet: the admin dispatcher has not been redeployed.'
+          : m,'error');
+      });
   },
 
   toggleSuspend(uid,suspend,name){

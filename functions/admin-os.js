@@ -1307,6 +1307,297 @@ exports.adminGetFraudAlerts = onCall({ region: 'us-central1', maxInstances: 10, 
 /* ─────────────────────────────────────────────────────────────────────────
    Audit Logs
 ──────────────────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────
+   Administrator → one user: email, SMS, in-app
+   ─────────────────────────────────────────────────────────────────────────
+   NOTHING HERE IS A NEW RAIL. Each channel reuses the transport this platform
+   already runs:
+
+     email  -> ./email-service   (send / sendOrQueue, SendGrid + queue fallback)
+     sms    -> ./sokoni-at       (atSendSMSWithRetry, Africa's Talking)
+     in-app -> notifications/{id} (targetUid/heading/sub/type; the user's own
+                                   client already renders these and owns `read`)
+
+   `adminSendPushNotification` could not be reused: it is BROADCAST — targetRole /
+   targetAll, no targetUid — and writes platformNotifications. Sending one person a
+   warning through it would notify everybody.
+
+   WHY THE SERVER AND NOT THE BROWSER. firestore.rules lets an admin create a
+   notification directly (`allow create: if isAdmin()`), so a console COULD write one.
+   It must not: the send has to record who sent it, to whom, on which channel, and
+   whether the provider accepted it — and a browser cannot be the witness to its own
+   delivery. The audit row is written here, next to the send, or not at all.
+
+   HISTORY LIVES IN adminAudit. It is admin-readable and `allow write: if false`, so
+   no client can forge a message history. That also means no new collection and no
+   rules change for this feature.
+
+   THE TYPE FIELD IS NOT THE CATEGORY. `notifications.type` has a vocabulary the
+   user's client switches on; inventing 'account_warning' there would render as an
+   unknown type. Admin messages are written as type 'general' and carry the
+   operational category in its own field.
+──────────────────────────────────────────────────────────────────────────── */
+const MESSAGE_CATEGORIES = Object.freeze({
+  general:        'Message from SOKONI',
+  account_warning:'Account warning',
+  security_alert: 'Security alert',
+  payment_notice: 'Payment notice',
+  policy_notice:  'Policy notice',
+  verification:   'Verification required',
+  suspension:     'Account suspension notice',
+  deletion:       'Account deletion notice',
+  announcement:   'Announcement',
+});
+const MESSAGE_CHANNELS = Object.freeze(['email', 'sms', 'inapp']);
+const SMS_MAX = 480;   /* three concatenated segments; the UI counts down to this */
+
+exports.adminMessageUser = onCall(
+  { region: 'us-central1', maxInstances: 10, enforceAppCheck: true,
+    secrets: [...require('./email-service').EMAIL_SECRETS, ...require('./sokoni-at').secrets] },
+  exports._h.adminMessageUser = async (req) => {
+    _requireAdmin(req);
+    const actor = req.auth && req.auth.uid;
+    const { targetUid, channel, category, subject, body } = req.data || {};
+
+    if (!targetUid) throw new HttpsError('invalid-argument', 'targetUid required');
+    if (MESSAGE_CHANNELS.indexOf(channel) === -1) {
+      throw new HttpsError('invalid-argument', 'channel must be email, sms or inapp');
+    }
+    const cat = MESSAGE_CATEGORIES[category] ? category : 'general';
+    const text = String(body || '').trim();
+    if (text.length < 2) throw new HttpsError('invalid-argument', 'A message is required.');
+    if (channel === 'sms' && text.length > SMS_MAX) {
+      throw new HttpsError('invalid-argument', 'That SMS is longer than ' + SMS_MAX + ' characters.');
+    }
+
+    const db = getFirestore();
+    const snap = await db.collection('users').doc(targetUid).get();
+    if (!snap.exists) throw new HttpsError('not-found', 'No such account.');
+    const u = snap.data() || {};
+
+    /* THE ADDRESS MUST EXIST. A send that is certain to fail should be refused here,
+       not attempted and reported as a provider error. */
+    const email = u.email || null;
+    const phone = u.phone || u.phoneNumber || null;
+    if (channel === 'email' && !email) {
+      throw new HttpsError('failed-precondition', 'This account has no email address on record.');
+    }
+    if (channel === 'sms' && !phone) {
+      throw new HttpsError('failed-precondition', 'This account has no phone number on record.');
+    }
+
+    const heading = String(subject || '').trim() || MESSAGE_CATEGORIES[cat];
+    const audit = {
+      action:      'admin_message_sent',
+      targetUid,
+      channel,
+      category:    cat,
+      subject:     heading.slice(0, 140),
+      bodyPreview: text.slice(0, 200),
+      performedBy: actor,
+      createdAt:   FieldValue.serverTimestamp(),
+    };
+
+    try {
+      if (channel === 'inapp') {
+        /* type stays inside the vocabulary the user's client understands. */
+        const ref = await db.collection('notifications').add({
+          targetUid,
+          heading:  heading.slice(0, 140),
+          sub:      text.slice(0, 1000),
+          type:     'general',
+          category: cat,
+          fromAdmin: true,
+          read:     false,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+        audit.notificationId = ref.id;
+        audit.status = 'delivered';       /* an in-app write IS the delivery */
+      } else if (channel === 'email') {
+        const emailSvc = require('./email-service');
+        /* sendOrQueue() defaults to QUEUEING and returns the queue document's id — a
+           string, not a result object. The deployed processQueue worker performs the
+           actual send, so the honest status here is `queued`, never `sent`. Claiming
+           `sent` at this point is precisely the false-success this codebase keeps
+           finding elsewhere. */
+        const queueId = await emailSvc.sendOrQueue({
+          to: email,
+          subject: heading.slice(0, 140),
+          text,
+          html: '<p>' + text.replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))
+                            .replace(/\n/g, '<br>') + '</p>',
+        });
+        audit.status = 'queued';
+        if (queueId) audit.providerRef = String(queueId);
+      } else {
+        const at = require('./sokoni-at');
+        const r = await at.atSendSMSWithRetry(phone, text);
+        audit.status = (r && r.ok === false) ? 'failed' : 'sent';
+        if (r && r.messageId) audit.providerRef = String(r.messageId);
+        if (r && r.error) audit.failureReason = String(r.error).slice(0, 200);
+        audit.recipient = String(phone).slice(-4);   /* last four only — this row is PII-light */
+      }
+    } catch (e) {
+      /* A provider failure is RECORDED, not swallowed: an operator needs to see that the
+         attempt happened and why it did not land. */
+      audit.status = 'failed';
+      audit.failureReason = ((e && e.message) || String(e)).slice(0, 200);
+      await db.collection('adminAudit').add(audit).catch(() => {});
+      throw new HttpsError('unavailable', audit.failureReason);
+    }
+
+    await db.collection('adminAudit').add(audit);
+    return { success: true, status: audit.status, channel, category: cat };
+  });
+
+/* History for ONE user. adminGetAuditLogs filters by action only, and combining a
+   targetUid equality with orderBy('createdAt') would need a composite index — index
+   deploys are their own risk here — so this queries on targetUid alone and sorts in
+   memory. It is therefore a PAGE, then sorted, and the UI says so.
+
+   In-app rows are joined to their notification so read state is real rather than
+   assumed. There is no readAt field on that document, so the UI reports read/unread
+   and never invents a time. */
+exports.adminGetUserMessages = onCall(
+  { region: 'us-central1', maxInstances: 10, enforceAppCheck: true },
+  exports._h.adminGetUserMessages = async (req) => {
+    _requireAdmin(req);
+    const { targetUid, limit: lim } = req.data || {};
+    if (!targetUid) throw new HttpsError('invalid-argument', 'targetUid required');
+    const db = getFirestore();
+    const snap = await db.collection('adminAudit')
+      .where('targetUid', '==', targetUid)
+      .limit(Math.min(lim || 50, 200)).get().catch(() => ({ docs: [] }));
+
+    let rows = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(r => r.action === 'admin_message_sent')
+      .map(r => ({
+        id: r.id, channel: r.channel, category: r.category, subject: r.subject,
+        bodyPreview: r.bodyPreview, status: r.status || null,
+        providerRef: r.providerRef || null, failureReason: r.failureReason || null,
+        performedBy: r.performedBy || null, notificationId: r.notificationId || null,
+        createdAt: r.createdAt?.toDate?.()?.toISOString() || null,
+      }))
+      .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+
+    const inapp = rows.filter(r => r.notificationId).slice(0, 30);
+    await Promise.all(inapp.map(async (r) => {
+      const n = await db.collection('notifications').doc(r.notificationId).get().catch(() => null);
+      r.read = n && n.exists ? (n.data().read === true) : null;   /* null = the notification is gone */
+    }));
+
+    return { messages: rows, capped: snap.docs.length >= Math.min(lim || 50, 200) };
+  });
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Account deletion, requested by an administrator
+   ─────────────────────────────────────────────────────────────────────────
+   THIS SCHEDULES; IT DOES NOT DELETE. The irreversible work belongs to the
+   pipeline that already exists in account-manager.js:
+
+     status:'pending_deletion' + deletionScheduledAt
+         -> finaliseExpiredDeletions (scheduled, 23:00 UTC)
+         -> redact -> anonymise -> retain statutory -> purge Storage
+         -> auth.deleteUser(uid)          <- irreversible step, LAST
+
+   That ordering is not incidental. An earlier version deleted the Auth account
+   first; when the redaction write then failed, the retry hit user-not-found,
+   skipped redaction, and left the account stuck in pending_deletion with full
+   PII intact. So this handler writes exactly the two fields the self-service
+   path writes and lets the same worker finish the job — one deletion mechanism,
+   not a second one that would be free to disagree about what "deleted" means.
+
+   WHY THE DATE IS COMPUTED HERE. firestore.rules allows an admin to update any
+   users/{uid}, so a client could set `deletionScheduledAt` to a past date and
+   have the next scheduled run hard-delete with no grace at all. The 30 days are
+   therefore server-side and not a parameter.
+
+   WHY NOT DELETE users/{uid} DIRECTLY. The rules permit it, but deleting that
+   document is not account deletion: the Firebase Auth account survives, the
+   person can still sign in, and the client re-creates a baseline document on
+   next sign-in. It destroys the record while leaving the account live.
+
+   The grace period is real: cancelAccountDeletion runs on sign-in, so the user
+   cancels simply by signing in. That is a property of the existing pipeline and
+   is surfaced in the admin UI rather than hidden.
+──────────────────────────────────────────────────────────────────────────── */
+const DELETION_GRACE_DAYS = 30;
+
+exports.adminScheduleUserDeletion = onCall(
+  { region: 'us-central1', maxInstances: 10, enforceAppCheck: true },
+  exports._h.adminScheduleUserDeletion = async (req) => {
+    _requireAdmin(req);
+    const actor = req.auth && req.auth.uid;
+    const { targetUid, reason } = req.data || {};
+
+    if (!targetUid || typeof targetUid !== 'string') {
+      throw new HttpsError('invalid-argument', 'targetUid required');
+    }
+    /* A reason is mandatory: this is an irreversible action taken on somebody
+       else's account, and the audit row is worthless without one. */
+    const why = String(reason || '').trim();
+    if (why.length < 3) {
+      throw new HttpsError('invalid-argument', 'A reason is required.');
+    }
+    if (targetUid === actor) {
+      throw new HttpsError('failed-precondition',
+        'You cannot schedule deletion of your own account from here.');
+    }
+
+    /* AN ADMIN MAY NOT DELETE ANOTHER ADMIN. Checked against CLAIMS, which are
+       the authority, and against the profile role, because either one being
+       admin is reason enough to refuse. A rename cannot get round it. */
+    const auth = getAuth();
+    let targetRecord = null;
+    try { targetRecord = await auth.getUser(targetUid); }
+    catch (e) {
+      if (e && e.code === 'auth/user-not-found') {
+        throw new HttpsError('not-found', 'No such account.');
+      }
+      throw e;
+    }
+    const claims = targetRecord.customClaims || {};
+    const db = getFirestore();
+    const snap = await db.collection('users').doc(targetUid).get();
+    const profile = snap.exists ? snap.data() : {};
+    if (claims.admin === true || claims.superAdmin === true ||
+        profile.role === 'admin' || profile.role === 'superAdmin') {
+      throw new HttpsError('failed-precondition',
+        'This account is an administrator. Remove that role first.');
+    }
+    if (profile.status === 'pending_deletion') {
+      throw new HttpsError('failed-precondition', 'Deletion is already scheduled.');
+    }
+
+    const scheduledAt = new Date();
+    scheduledAt.setDate(scheduledAt.getDate() + DELETION_GRACE_DAYS);
+
+    /* The SAME fields scheduleAccountDeletion writes, so one worker finishes both. */
+    await db.collection('users').doc(targetUid).set({
+      deletionScheduledAt: scheduledAt,
+      deletionReason:      why.slice(0, 100),
+      deletionRequestedAt: FieldValue.serverTimestamp(),
+      deletionRequestedBy: actor,          /* self-service leaves this absent */
+      status:              'pending_deletion',
+    }, { merge: true });
+
+    await db.collection('adminAudit').add({
+      action:      'user_deletion_scheduled',
+      targetUid,
+      reason:      why.slice(0, 100),
+      scheduledAt,
+      performedBy: actor,
+      createdAt:   FieldValue.serverTimestamp(),
+    });
+
+    return {
+      success: true,
+      scheduledAt: scheduledAt.toISOString(),
+      graceDays: DELETION_GRACE_DAYS,
+    };
+  });
+
 exports.adminGetAuditLogs = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetAuditLogs = async (req) => {
   _requireAdmin(req);
   const { action, limit: lim } = req.data;
