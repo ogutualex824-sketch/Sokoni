@@ -2111,3 +2111,36 @@ exports.adminDecideProviderVerification = onCall(
     return { success: true, uid, status: next, previousStatus: cur.status || null };
   }
 );
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   INTEGRATION STATUS — authoritative credential configuration           (RC-1)
+   ══════════════════════════════════════════════════════════════════════════════
+   Reports, for all 35 registry entries, whether the credentials each integration
+   requires are CONFIGURED. It reports nothing about whether a provider works.
+
+   Why this exists: no deployed function read Secret Manager inventory, so the
+   Integration Control Center had no signal and every integration read as
+   unmanaged — while in fact every catalogue-declared secret is present.
+
+   This handler holds no credential. It binds no secret (no `secrets: []`), and
+   the module it calls lists secret NAMES only; the payload API is never touched.
+   Admin-gated like every other operation here, and added as an `_h` handler so
+   it dispatches through adminOsDispatch rather than standing up a new service.
+   ══════════════════════════════════════════════════════════════════════════════ */
+exports.adminGetIntegrationStatus = onCall(
+  { region: 'us-central1', maxInstances: 10, enforceAppCheck: true },
+  exports._h.adminGetIntegrationStatus = async (req) => {
+    _requireAdmin(req);
+    const { resolveIntegrationStatus } = require('./integration-status');
+    const result = await resolveIntegrationStatus({});
+    /* Logged as counts, never as an inventory: a log line naming which
+       integrations lack credentials is a shopping list. */
+    console.log('[adminGetIntegrationStatus] resolved', {
+      actor: req.auth && req.auth.uid,
+      integrations: result.integrations.length,
+      counts: result.counts,
+      inventoryReadable: result.inventoryReadable,
+    });
+    return result;
+  }
+);
