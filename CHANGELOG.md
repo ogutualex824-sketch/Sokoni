@@ -1,3 +1,139 @@
+## 2026-09-20 (120) — A guard that only looks redundant, and the census that did not sweep it
+
+**Adjudication · NO CHANGE · read-only plus one restored proof mutation · NOT DEPLOYED.**
+
+Census case 3 from entry (114), and the last of the four. **The verdict is that the code is
+correct**, which is recorded here rather than left implicit — because the next maintainer to grep
+`git status --porcelain` inside a `check(...)` will find this one, recognise the pattern from
+entries (115), (116) and (119), and "fix" a working release gate.
+
+### The §8 structure
+
+```js
+const cm = fs.readFileSync(path.join(ROOT, 'functions/checkout-mode.js'), 'utf8');   // reads DISK
+check('manual_payment is still returned UNAVAILABLE',
+  /reason: 'manual_payment_unavailable'/.test(cm));                                  // 1 CONTENT
+check('  ...and checkout-mode.js was not modified to enable it',
+  execFileSync('git', ['status','--porcelain','--','functions/checkout-mode.js'],
+    { cwd: ROOT, encoding: 'utf8' }).trim() === '');                                 // 2 TREE
+sab('the gate-off detector would catch the mode being enabled',
+  !/reason: 'manual_payment_unavailable'/.test("return { mode: MODE.MANUAL };"));    // 3 CONTROL
+```
+
+### Provenance — no later mechanism moved the scope
+
+```
+99b0270  enforce require-closure against the git tree      suite created
+25402b6  make require-closure a PREDEPLOY requirement
+aaf290c  docs
+ba14c3c  make the closure gate exhaustive
+068aa0d  re-certify against a CLOSED tree                   §8 ADDED — BOTH assertions
+```
+
+Both assertions entered **together** at `068aa0d`, and nothing has touched them since. The Gate 1
+pattern from entry (116) — a protected set **substituted** by a later mechanism — is **absent** here.
+
+### The boundary is stated, and it is present-state by design
+
+`068aa0d`'s own message:
+
+> *"ADMITTED IS NOT ENABLED — a new section 8: manual_payment still returns UNAVAILABLE, **and
+> checkout-mode.js is verified unmodified in the working tree**"*
+
+There is **no landing boundary to recover, because none was ever intended.** And the suite is a
+**predeploy gate** (`firebase.json:5`) whose entire thesis is that the disk is not to be trusted:
+*"what a fresh clone plus npm install would load — **not what happens to be sitting on this
+contaminated disk**."*
+
+> A gate deciding whether a deploy may proceed **from this tree** is entitled to ask what is in this
+> tree. That is the **inverse** of cases 1, 2 and 4, where a *historical* claim was measured by
+> present state.
+
+### THE FINDING — assertion 2 is an input-validity guard, not a duplicate contract
+
+```
+ASSERTION 1   does the file contain the unavailable contract?   ← reads DISK
+ASSERTION 2   are those the DEPLOY-TREE bytes assertion 1 just judged?
+```
+
+Assertion 1 reads `checkout-mode.js` with `readFileSync`. If that file is modified, assertion 1 has
+described the **dirty disk**, not HEAD. **Assertion 2 is the precondition that makes assertion 1
+valid** — remove it and the content check still passes while measuring an artifact that will never
+be deployed.
+
+That is a relationship none of the other three cases had: not *the real contract*, not a
+*complementary observation*, not a *restatement of the same historical requirement*, but a **validity
+guard on its sibling's input**.
+
+### Demonstrated, not inferred
+
+The recommendation initially rested on reasoning about the read path, so it was measured. One
+comment appended to `functions/checkout-mode.js` — the contract string left present and unchanged:
+
+```
+BASELINE   exit 0   69/69 checks · 12/12 sabotage catches
+           PASS  manual_payment is still returned UNAVAILABLE
+           PASS    ...and checkout-mode.js was not modified to enable it
+
+MUTATED    exit 1   contract string still present (1 occurrence); git: [ M functions/checkout-mode.js]
+           PASS  manual_payment is still returned UNAVAILABLE          ← content GREEN
+           FAIL    ...and checkout-mode.js was not modified to enable it   ← tree RED
+
+RESTORED   blob 21526e771e1a == HEAD:functions/checkout-mode.js   EQUAL: true
+           exit 0   69/69 · 12/12, §8 all PASS
+```
+
+**Assertion 2 caught what assertion 1 could not see.** Without it the gate would certify a
+contaminated disk — precisely what `068aa0d` exists to prevent.
+
+### Verdict — CORRECTLY IMPLEMENTED, no repair
+
+The census pattern that flagged it was a **syntactic** match, not a defect. Nothing in
+`scripts/test-functions-require-closure-gate.js` was changed, and nothing should be.
+
+### THE FOUR-CASE TABLE
+
+```
+CASE 1  GENUINE DEFECTS, MULTIPLE REMEDIES     d37c7e3 · 8f2261a · 816fea1
+        substituted scope · misimplemented contract · never-viable assertion · dead reader
+
+CASE 2  GENUINE DEFECT, RE-ANCHOR              43b4b85
+        a claim narrowed twice to keep a live-tree anchor quiet
+
+CASE 4  GENUINE DEFECT, RE-ANCHOR              4f487a9
+        the wrong MEASUREMENT for a historical claim — not an expired guard
+
+CASE 3  CORRECT IMPLEMENTATION, NO CHANGE      —
+        present-state assertion in a predeploy gate whose subject IS present state
+```
+
+> **Four occurrences of one syntactic pattern; four different verdicts.** Three genuine defects
+> needing three different remedies, and one correct implementation that a batch rewrite would have
+> broken. This is why entry (114) required each occurrence to be classified individually, and it is
+> the census's most transferable result.
+
+### Files affected
+**None.** `scripts/test-functions-require-closure-gate.js` is unchanged. The proof mutation was
+restored byte-for-byte and verified against `HEAD`.
+
+### Database / API / Security changes
+**None.**
+
+### Deployment
+**NOT DEPLOYED.** Nothing deployable was changed.
+
+### Breaking changes
+None.
+
+### CENSUS CLOSED
+
+```
+CASE 1  COMPLETE                d37c7e3 · 8f2261a · 816fea1   + 7107127 · 0a55777 · fe4f951
+CASE 2  COMPLETE                43b4b85                       + 716e359
+CASE 4  COMPLETE                4f487a9                       + 5719bcf
+CASE 3  CORRECTLY IMPLEMENTED   no change                     + this entry
+```
+
 ## 2026-09-20 (119) — NOT-DIRTY is not dead, it is the wrong measurement
 
 **Test integrity · COMMITTED `4f487a9` · test-only · no production behaviour changed · NOT DEPLOYED.**
