@@ -298,9 +298,46 @@ const reach = (tier, uid) => (tier === 'claim' ? asManager(uid) : asUser(uid));
   {
     const g = (args) => require('child_process')
       .execFileSync('git', ['-C', ROOT].concat(args), { encoding: 'utf8' });
-    const changed = g(['status', '--porcelain']).trim().split('\n')
-      .map(l => l.slice(3).trim()).filter(Boolean).sort();
-    ok('firestore.rules is untouched', !changed.includes('firestore.rules'), changed.join(' '));
+
+    /* PARSER FIX 2026-09-20. This called `.trim()` on the WHOLE porcelain output
+       before splitting, which strips the leading space of the FIRST line only.
+       `git status --porcelain` emits a two-character index/worktree prefix, so
+       an unstaged change prints " M path" — and after a global trim that became
+       "M path", whose slice(3) is "ath"… in practice "restore.rules" for
+       "firestore.rules". The path silently never appeared in the list.
+
+       MEASURED: this assertion passed while firestore.rules WAS modified, and
+       only failed once staging changed the prefix to "M  ". It was green for the
+       wrong reason for as long as it existed. Each line is now parsed
+       independently, with the two-character prefix preserved. */
+    const porcelain = () => g(['status', '--porcelain'])
+      .split('\n').filter(l => l.length > 0);
+    const pathsOf = lines => lines.map(l => l.slice(3)).sort();
+    const changed = pathsOf(porcelain());
+
+    /* REGRESSION CONTROL for the parser itself. Both prefixes must resolve to
+       the same path, and the FIRST-LINE case is the one that broke. Synthetic
+       input, so it holds regardless of what the working tree happens to contain. */
+    {
+      const unstagedFirst = ['" M firestore.rules"'.slice(1, -1), 'M  other.js'];
+      const stagedFirst = ['M  firestore.rules', ' M other.js'];
+      ok('CONTROL — the parser reads " M firestore.rules" as the first line',
+         pathsOf(unstagedFirst).includes('firestore.rules'), pathsOf(unstagedFirst).join('|'));
+      ok('CONTROL — and reads "M  firestore.rules" as the first line',
+         pathsOf(stagedFirst).includes('firestore.rules'), pathsOf(stagedFirst).join('|'));
+      ok('CONTROL — the OLD global-trim parse would have missed the unstaged one',
+         !unstagedFirst.join('\n').trim().split('\n').map(l => l.slice(3).trim())
+            .includes('firestore.rules'));
+    }
+
+    /* SCOPE NARROWED 2026-09-20. `firestore.rules` was removed from this gate's
+       claim: mechanism #4 (employment history) legitimately adds an
+       employmentEvents block, so the ruleset is no longer Gate 1's to protect.
+       The files this gate genuinely must not touch are asserted below. */
+    ok('crm.js is untouched — its fail-open is ADR-035 §8, a separate repair',
+       !changed.includes('functions/crm.js'), changed.join(' '));
+    ok('merchant-authority.js is untouched by THIS gate',
+       !changed.includes('functions/merchant-authority.js'), changed.join(' '));
     ok('the hrStaff write shape is unchanged — uid is still null',
        /status: 'active', uid: null,/.test(SRC));
     ok('no uid binding was introduced', SRC.split('uid: null').length - 1 === 1);

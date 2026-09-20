@@ -315,10 +315,18 @@ async function call (fn, auth, requested) {
     const missing = MUST.filter(m => !CODE.includes(m));
     ok('CONTROL — stripping left every load-bearing statement intact',
        missing.length === 0, missing.join(' | ') || CODE.length + ' chars of code');
+    /* RE-ANCHORED 2026-09-20. This also named `firestore.rules`, which was
+       correct when written: mechanism #2 is pure JavaScript and touches no
+       ruleset. Mechanism #4 (employment history) legitimately adds an
+       `employmentEvents` block, so the file is no longer this gate's to claim —
+       and a scope assertion that fails on ANOTHER gate's authorized work stops
+       describing this one's scope. Narrowed to the two modules mechanism #2
+       genuinely must not touch: the payroll handlers it authorizes, and the
+       crm.js fail-open it deliberately leaves alone (ADR-035 §8). */
     const g = require('child_process').execFileSync('git',
-      ['-C', ROOT, 'status', '--porcelain', '--', 'functions/hr-payroll.js', 'functions/crm.js',
-       'firestore.rules'], { encoding: 'utf8' }).trim();
-    ok('hr-payroll.js, crm.js and firestore.rules are untouched', g === '', g || 'clean');
+      ['-C', ROOT, 'status', '--porcelain', '--', 'functions/hr-payroll.js', 'functions/crm.js'],
+      { encoding: 'utf8' }).trim();
+    ok('hr-payroll.js and crm.js are untouched', g === '', g || 'clean');
   }
 
   console.log('\n  what this suite does NOT prove');

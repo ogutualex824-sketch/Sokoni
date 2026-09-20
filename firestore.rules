@@ -5012,6 +5012,31 @@ service cloud.firestore {
       allow write: if false; // CF-only — assignTraining, markTrainingComplete
     }
 
+    /* ── employmentEvents — the append-only employment history (ADR-035 §6) ──
+       The evidence of who established, changed, suspended or ended a
+       salary-bearing relationship. Written ONLY by employment-events.js via the
+       Admin SDK, inside the transaction that performs the state change.
+
+       DELETE IS FALSE FOR EVERYONE, INCLUDING superAdmin. adminLog permits a
+       superAdmin delete; that precedent is deliberately NOT followed here. A
+       privileged actor must not be able to erase the record of what they did.
+
+       The read arm names newUid and NEVER previousUid: a person whose
+       binding was replaced would otherwise keep reading the employment's
+       FUTURE history. Events before invite_accepted carry no newUid and are
+       admin-only by construction — correct, because there is no employee yet.
+
+       There is deliberately NO owner arm. A rule saying
+       resource.data.businessId == request.auth.uid is the merchantId ==
+       auth.uid mistake, true for exactly one production business;
+       organization history is read through a callable that calls
+       assertMerchantAccess first. That callable is a later gate. */
+    match /employmentEvents/{eventId} {
+      allow read:                   if isAdmin()
+                                    || (isAuthed() && resource.data.newUid == request.auth.uid);
+      allow create, update, delete: if false; // CF-only — employment-events.js
+    }
+
     // ── Procurement ───────────────────────────────────────────────────────
     match /procSuppliers/{supplierId} {
       allow read:  if isAdmin()
