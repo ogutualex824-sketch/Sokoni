@@ -1115,7 +1115,14 @@
     setLoadingBtn('addStaffSubmitBtn', true);
     callCF('addStaffMember', {
       merchantId: state.merchantId,
-      name, employeeNo: empNo, department: dept, position,
+      /* employeeNumber, not employeeNo. callCF forwards this object verbatim —
+         Object.assign({}, data, { op }) with no key remapping — so the name used
+         here is the name addStaffMember destructures. It reads `employeeNumber`,
+         its JSDoc and its validation message both say `employeeNumber`, and the
+         staff document id is built from it. Sending `employeeNo` failed
+         validation on every call. The form input keeps its own id; only the
+         boundary payload is translated. */
+      name, employeeNumber: empNo, department: dept, position,
       grossSalary: salary, startDate,
       phone: phone || null, email: email || null,
     }).then(function () {
