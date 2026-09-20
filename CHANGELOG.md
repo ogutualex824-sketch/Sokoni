@@ -1,3 +1,119 @@
+## 2026-09-21 (123) — The schema required an input the contract never supplied
+
+**Contract · COMMITTED `d8eef5e` · documentation only · `#8` STILL ABSENT · NOT DEPLOYED.**
+
+Stage 3 of five. The Stage 2 gate found a gap between two contracts that had never been joined, and
+**stopped rather than inventing an answer** — this resolves it, and changes neither.
+
+### The gap
+
+```
+employment-events.js    [EVENTS.TERMINATED]: { …, disc: 'terminationId' }
+                        the builder THROWS when a declared discriminator is absent
+
+ADR-035 §4              the frozen termination transition
+                        named NO source for terminationId
+```
+
+The event schema required an input the lifecycle contract did not supply. Neither document was wrong;
+they had simply never been read against each other. Stage 2 surfaced it because the gate enumerated
+what `#8` would actually need, rather than assuming the frozen contract was complete.
+
+### The resolution
+
+```
+source               SERVER
+generation           crypto.randomUUID()
+timing               ONCE, BEFORE db.runTransaction
+stability            immutable across every transaction-callback retry
+caller-controlled    NO
+persisted separately NO — it is not a document key
+purpose              the discriminator for EVENTS.TERMINATED, and nothing else
+```
+
+> **`terminationId` is an operation/event discriminator — not an employment identity, and not a
+> caller-supplied idempotency key.**
+
+### The concurrency invariant, recorded as a prohibition
+
+**FORBIDDEN:** generating it inside the transaction callback.
+
+The callback may execute repeatedly, so a UUID minted there would make **event identity depend on
+Firestore's retry behaviour** — a different discriminator per attempt, and a different event
+document. The event doc id is `` `${staffId}_terminated_${terminationId}` ``, so a stable id means
+every retry of one logical termination writes **the same row**.
+
+> **The defect would be invisible in ordinary testing, because a transaction that never contends
+> never retries.** That is why it is recorded as a contract invariant rather than left as an
+> implementation preference.
+
+### State-gated, not caller-key idempotent
+
+| | discriminator | outcome |
+|---|---|---|
+| transaction retry | **same** | one logical operation, one event row |
+| request replay after success | **new** | **refused by the ACTIVE-state precondition** |
+| two concurrent attempts | distinct | both read `hrStaff/{staffId}` → they **contend**; the loser re-reads `terminated` and fails precondition 1 |
+
+**Replay protection comes from the employment state, not from the id.** `#8` does not ask a caller to
+remember and resend a key, and must not be changed to. Unlike mechanism #1, no additional shared
+document is needed — the employment record is already the serialization point.
+
+### Why per-operation — corroborated by the schema itself
+
+```
+NO DISCRIMINATOR   ESTABLISHED · INVITE_ACCEPTED · INVITE_REVOKED
+                   exactly the three a guard makes UNREPEATABLE
+
+DISCRIMINATOR      INVITE_SENT · UID_REBOUND · LEAVE_GRANTED · LEAVE_ENDED ·
+                   SUSPENDED · SUSPENSION_LIFTED · TERMINATED · REINSTATED ·
+                   RECORD_EDITED
+                   every event that can RECUR for one employment
+```
+
+`TERMINATED` carries one and `REINSTATED` carries its own, so the vocabulary already anticipated that
+a single employment may be **terminated, reinstated and terminated again**. A per-employment key
+would collapse the second termination onto the first event; a caller-supplied key would let a caller
+do that deliberately.
+
+**`inviteId` is not a precedent.** It is `crypto.randomUUID()`, but it exists independently as the
+**invitation's primary key** — the event merely reuses it. `terminationId` has no document behind it;
+it exists *because the schema requires a discriminator*.
+
+### The staged sequence, corrected
+
+```
+1  DOCUMENTATION   DONE     b74bca2 — #8 assigned, numbering reconstructed
+2  READ-ONLY GATE  DONE     3 hrStaff writers / 0 deletes · 1 claim creator /
+                            0 deleters · runTransaction + t.delete both shipped ·
+                            NO existing #8 writer · positive controls passed
+                            BEFORE the negative conclusion was drawn
+3  CONTRACT        DONE     d8eef5e — this entry
+4  IMPLEMENTATION  ABSENT
+5  CERTIFICATION   ABSENT
+```
+
+It was a four-stage list; Stage 2's discovery is why there are five.
+
+### Files affected
+- `docs/adr/ADR-035-employment-and-identity-binding.md` — +122 / −16. The deletions are the
+  status-header line and one contiguous stale block; no `§4` clause is among them.
+
+### Database / API / Security changes
+**None.** Documentation only. `employment-events.js` and its schema are unchanged — the requirement
+was already there.
+
+### Deployment
+**NOT DEPLOYED.**
+
+### Breaking changes
+None. An input resolved; a lifecycle untouched.
+
+### Still absent
+
+`#8` has no implementation. Stated in nine places in the ADR, and repeated here because a complete
+contract reads a great deal like completed work.
+
 ## 2026-09-21 (122) — The numbers were never a registry, and #8 is assigned rather than found
 
 **Governance · COMMITTED `b74bca2` · Stage 1 of 4 · documentation only · NOT IMPLEMENTED · NOT DEPLOYED.**
