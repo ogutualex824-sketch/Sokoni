@@ -1,3 +1,113 @@
+## 2026-09-20 (99) — ADR-035: employment is two axes, and a uid is an accepted binding
+
+**Documentation only · COMMITTED `59a5b8c` · NO implementation authorized · NOT DEPLOYED.**
+
+Gates 1 and 2 made payroll organization-scoped in both directions. What neither could answer is the
+question that decides who receives money:
+
+> **What establishes that a particular authenticated human is the employee a payroll record
+> represents?**
+
+Today nothing does. `hrStaff.uid` is written `null` at creation and updated by nothing — one
+occurrence in the module. A production census on 2026-09-20 found the rest:
+
+```
+hrStaff 0 · hrAttendance 0 · hrPayrollRuns 0 · hrPayslips 0 · hrLeaves 0 · hrTraining 0
+shopEmployees 0 · shopInvites 0
+posStaff 9 (all role=owner, de-authorized by ADR-017/020) · workspaceMemberships 2 (both owner)
+auth claims: 3 hold admin, ZERO hold manager
+```
+
+**Not one non-owner employee record exists anywhere on the platform.** So ADR-035 decides a
+contract, not a migration — there is no legacy shape to accommodate, which is exactly why it was
+worth deciding now rather than after data arrived.
+
+### The correction that mattered: two axes, not one status
+
+A first draft carried a single `status`, which silently made leave and suspension look like
+termination. They are different facts:
+
+```
+employmentStatus :  pending  →  active  →  terminated     does the relationship exist?
+workStatus       :  working  |  on_leave  |  suspended    is the person available right now?
+```
+
+`workStatus` is consulted **only** while `employmentStatus == 'active'`. Leave is time-aware and
+restores itself when its window closes; suspension has no automatic restoration and ends by a
+deliberate act.
+
+### Shop access is a backend predicate, not a hidden dropdown
+
+```
+CanAccessShop(caller, employee) =
+      employee.employmentStatus == 'active'
+    ∧ employee.workStatus       == 'working'
+    ∧ employee.uid              == caller.uid
+    ∧ the shop assignment is valid for this employment
+```
+
+The UI hiding a control is a convenience for the honest; the server refuses regardless of what the
+browser renders.
+
+### Two prohibitions worth their own lines
+
+**Never delete.** No lifecycle action may physically remove an employment, payslip, attendance,
+leave or training record. The active roster *excludes*; it never *destroys*. A January, February and
+March payslip must not outlive the record that explains them.
+
+**Never blank the uid to make someone unavailable.** The uid is the identity binding; availability
+is `workStatus`. Clearing it would sever a human from payslips already issued to them.
+
+### Owner and admin are different authorities
+
+Five acts are **owner-only** — employ, rebind uid, suspend, terminate, reinstate — because each
+changes whether a person is employed and whether they are paid. An admin's capabilities are
+**granted**, never inherited from `adminUids[]`.
+
+`merchant-authority.assertMerchantAccess` cannot express this: it grants on `ownerId` **or**
+`adminUids[]` **or** a platform-admin claim and returns one verdict. **FORBIDDEN:** overloading it
+with a mode flag. `procurement.js` consumes that module too, and widening a shared primitive to
+serve one caller is precisely how the three divergent implementations of 2026-08-28 arose.
+
+### A known dependency, recorded rather than smoothed over
+
+`runPayroll` selects `.where('status','==','active')`. The two-axis model renames that field to
+`employmentStatus`, so **that query must change** — one line, zero migration cost at 0 documents.
+Renaming a field a live query depends on is the silent breakage this ADR exists to prevent, so it is
+stated in the document rather than discovered during implementation.
+
+### Seven mechanisms deliberately left open
+
+The contract is frozen; the mechanisms are not. To be design-traced in order, before any code:
+
+1. uid uniqueness enforcement — claim document vs transactional query. A claim must be `create()`,
+   never `get()` + `set()`; eight concurrent calls against a get/set claim once produced eight rows.
+2. the owner-authority primitive — its shape, name, and whether platform admins bypass it
+3. binding / invitation transport — reuse `shopInvites` (0 docs, one writer) or build a payroll path
+4. employment-history storage — name, key shape, rules, retention
+5. `workStatus` stored-and-swept vs derived-from-window — the failure modes differ and both are
+   real; attendance is already swept hourly to `AUTO_CLOCKED_OUT`, so the hazard is known
+6. payability of `on_leave` and `suspended` — employment policy with legal weight in Kenya, not a
+   decision an authorization repair may make by accident
+7. where the shop assignment lives — and **not** by rehabilitating `posStaff`
+
+### Files affected
+- `docs/adr/ADR-035-employment-and-identity-binding.md` — new, 327 lines
+- `docs/adr/README.md` — index row
+
+Numbered 035 because `ADR-034` is the highest across **all branches** — verified with
+`git log --all`, not assumed from this worktree, where the highest file is `ADR-018`.
+
+### Database / API / Security changes
+None. No code, no schema, no Firestore rules, no API. A contract only.
+
+### Deployment
+**NOT DEPLOYED.** Live remains `2fa2074` / `v635`.
+
+### Breaking changes
+None today. When implemented, the `status` → `employmentStatus` rename changes `runPayroll`'s query;
+at 0 documents there is nothing to migrate.
+
 ## 2026-09-20 (98) — The record names the organization, not the caller and not the key
 
 **Record authority 66/0 · Gate 1 suite 96/0 · sabotage 18/18 as specified · COMMITTED `ef2ce4c`,
