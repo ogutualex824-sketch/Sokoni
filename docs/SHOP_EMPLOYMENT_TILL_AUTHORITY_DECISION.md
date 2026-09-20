@@ -159,6 +159,63 @@ the one that was not.
 **Sabotage must demonstrate that restoring the private `status` predicate reopens the defect.** A
 repair whose certification stays green when the defect is reintroduced has certified nothing.
 
+## CONTRACT-CONFORMANCE BEHAVIOUR CHANGE — `shopId` must match
+
+**Recorded 2026-09-20, before the repair was committed.** This is a **behaviour change**, not an
+incidental implementation detail, and it is written down here rather than left to be discovered in a
+diff.
+
+Adopting the canonical predicate means adopting **all five** of its conditions as the contract states
+them. The private copy in `resolveActor` did not merely differ on `active` — it was also **more
+permissive about `shopId`**:
+
+```
+REMOVED (the private copy)
+  if (emp.shopId !== undefined && _s(emp.shopId, 64) !== shopId) → refuse
+      an ABSENT shopId was TOLERATED and the record still believed
+      comparison ran on _s(): <>"'& stripped, truncated to 64, trimmed
+
+ADOPTED (the contract, shop-employees.js)
+  if (String(e.shopId || '') !== String(shopId)) → 'shopId mismatch'
+      an ABSENT shopId is a MISMATCH and the record is refused
+      comparison is a plain String() equality
+```
+
+### What changes
+
+A `shopEmployees` record carrying **no `shopId` field** was previously believed by the till arm and
+is now refused. The same applies to a record whose `shopId` only matched *after* `_s()` stripped
+`<>"'&` from it.
+
+### Why this is conformance, not scope creep
+
+The contract's own wording is *"believed iff **shopId matches**, uid matches, active !== false, role
+is a known shop role, and shopOwnerId === the shop's actual owner"*. A record that names no shop does
+not match one. Keeping the tolerance would have meant consuming the authority on four conditions and
+retaining a private exception on the fifth — the same defect this repair exists to remove, one clause
+smaller.
+
+`resolveShopAccess` and `getMyShopWorkspaces` have enforced the strict form since `0d1acdf`. The
+repair makes the till agree with them; it does not invent a new rule.
+
+### Blast radius
+
+```
+sole writer  index.js:5663 (acceptShopInvite)  ALWAYS writes shopId
+production   shopEmployees = 0  (2026-09-20, positive-controlled)
+```
+
+So no record is affected, and none can be: the only path that creates one writes the field. As with
+the `active` repair itself, the zero-record state is what makes this safe to adopt now rather than
+something to stage behind a compatibility window.
+
+### What it does NOT change
+
+Owner authorization on either arm, capabilities, restrictions, `servedBy`, the refusal vocabulary
+surfaced to callers, or the legacy `shopEmployees/{uid}` boundary. Certified in
+`scripts/test-till-employment-authority.js` §2b (attribution pinned field by field) and §4 (owner
+arm), with the owner-arm code delta verified at **zero lines**.
+
 ## OUT OF SCOPE
 
 ```
