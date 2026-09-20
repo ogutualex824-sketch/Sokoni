@@ -1,3 +1,117 @@
+## 2026-09-20 (118) — The reader was dead; the parser was under contract
+
+**Test integrity · COMMITTED `816fea1` · test-only · no production behaviour changed · NOT DEPLOYED.**
+
+Closes census case 1. Entry (117) retired the last two live-tree assertions in the Gate 1 suite,
+which left their shared helper with no consumer. **I first reported that as "the parser is
+orphaned". That was imprecise in a way that would have thrown away real evidence.**
+
+### What was actually dead
+
+Repository-wide census — ripgrep over `**/*.js`, plus an independent full-tree `grep` that also
+scanned `node_modules` — found four occurrences, all in one file, and they do not have the same
+status:
+
+```
+porcelain()   reads git    → fed only `changed`             DEAD
+g             its helper   → used only by porcelain()       DEAD
+changed       binding      → no consumer                    DEAD
+pathsOf       the parser   → called by TWO live controls     ALIVE
+```
+
+The dead thing is the **git reader**, whose entire purpose was the live-tree anchoring this
+workstream has spent four slices removing. **Keeping it merely to give `pathsOf` a production-like
+caller would have recreated exactly the coupling being removed** — a helper does not need a
+real-world caller to be under test.
+
+### Why the parser stays
+
+Its three controls are **synthetic** — fixed input, no git — so they never depended on the retired
+assertions. The third one **executes the old global-trim parse** and asserts it misses
+`firestore.rules`.
+
+> `CHANGELOG.md` (line ~1547) carries the **narrative** record of that defect. These controls carry
+> the **executable** one. A run is not the same evidence as a claim about a run.
+
+The defect is live nowhere else — `gate-inventory.js:86`, `rc-manifest.js:125` and
+`test-subscription-entitlement.js:376` each parse porcelain independently, and each splits before
+slicing. **Checked, not assumed.**
+
+### Proof grid — 7/7, byte-identical restore, baseline 111/0
+
+```
+GREEN  porcelain() / g / changed RESTORED artificially   ← INERT either way
+RED    pathsOf broken by the historical global-trim defect
+RED    pathsOf broken by an off-by-one slice
+RED    pathsOf deleted entirely
+GREEN  the retirement comment reworded
+RED    the Gate 1 anchor broken           ← d37c7e3 still live
+RED    the crm.js fixture disarmed        ← 8f2261a still live
+```
+
+**The first and second lines are the entire adjudication, made executable.** Putting the reader back
+changes nothing — that is what *dead* means, demonstrated rather than argued. Reintroducing the
+historical defect reddens the controls — that is what *still under contract* means. Neither could
+have been settled by reading the code.
+
+The last two rows were added beyond the specification: *"this slice disturbed nothing else"* is only
+worth asserting if breaking the other repairs reddens. Both do.
+
+**Deleting `pathsOf` crashes the suite** — no `FAIL` line, scored RED off the summary count. That is
+the fail-closed harness behaviour repaired earlier in this workstream doing its job: a crash is not
+a pass.
+
+### History rewritten in place, not erased
+
+The `PARSER FIX` account is preserved verbatim — the mechanism, the worked example
+(`" M firestore.rules"` → `"M firestore.rules"` → `slice(3)` → `"restore.rules"`), and the measured
+consequence that the assertion passed *while* `firestore.rules` was modified — with the retirement
+rationale appended beneath. **The reason the controls exist travels with them.**
+
+### Files affected
+- `scripts/test-payroll-merchant-authority.js` — +27 / −17
+
+### Database / API / Security changes
+**None.** Test-only.
+
+### Deployment
+**NOT DEPLOYED.**
+
+### Breaking changes
+None.
+
+### CENSUS CASE 1 — COMPLETE
+
+```
+d37c7e3  Gate 1 historical scope restored          firestore.rules → f4de0c1
+7107127  documentation (116)
+8f2261a  current-contract semantics repaired + expired assertion retired
+0a55777  documentation (117)
+816fea1  dead git reader retired, live parser preserved
+```
+
+What began as *"one suite anchors a historical claim to the live working tree"* resolved into **four
+distinct failure modes**, only one of which was the original symptom:
+
+```
+SUBSTITUTED     a scope claim replaced, not narrowed        → restore the landing's own claim
+MISIMPLEMENTED  a current contract written as a scope check → rebuild it behaviourally
+NEVER VIABLE    an assertion born after its only observable → retire it
+MIS-SCOPED      a dead reader around a live parser          → split, do not retire wholesale
+```
+
+**Collapsing these into "scope-anchor bug" would have produced one wrong repair three times.**
+
+### Still open — one at a time
+```
+CASE 4  test-subscription-entitlement.js — the repo already met the LOUD failure
+        mode there (assert DIRTY, which expired noisily) and the fix installed
+        the QUIET inverse (assert NOT DIRTY, which expires silently)
+CASE 3  test-functions-require-closure-gate.js — LAST. Its intended landing is
+        stated nowhere and must NOT be invented; unresolved is the honest
+        outcome if history cannot establish it.
+```
+
 ## 2026-09-20 (117) — The reason said "contract", the code said "is this file dirty"
 
 **Test integrity · COMMITTED `8f2261a` · test-only · no production behaviour changed · NOT DEPLOYED.**
