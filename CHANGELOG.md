@@ -1,3 +1,156 @@
+## 2026-09-20 (109) — One uid, one employment, and the two proofs that are not the same proof
+
+**Implementation · COMMITTED `0a8b8ae` · certified against real contention · NOT DEPLOYED.**
+
+Gate 3 mechanism #1, against the frozen ADR-035 §4 contract. `acceptEmploymentInvite` could bind a
+single uid to two employments in the same organization. Its transaction reads the invitation and the
+employment record — and two **different** employments, E001 and E002, invited to the same address,
+read **disjoint** documents. Nothing contended, so both committed.
+
+### The repair
+
+`employmentUidClaims/{businessId}_{uid}` is the document those transactions now share, created with
+`t.create()` inside the existing acceptance transaction.
+
+```
+EXISTENCE IS THE ONLY SIGNAL
+  { businessId, uid, staffId, createdAt }   immutable provenance, nothing else
+  no status field · no lifecycle field · never an alternative employment authority
+```
+
+**`create()`, not a pre-check plus a set.** A read-then-write lets both callers pass the check and
+both commit — `a621ba7` measured exactly that on the money path: eight concurrent callers, eight
+ledger rows, zero reported duplicates.
+
+### TWO PROOF OBLIGATIONS, WITH TWO DIFFERENT ENFORCERS
+
+This is the distinction most likely to be lost, so it is recorded first.
+
+```
+UNIQUENESS          enforced by CONTENTION ON THE CLAIM.
+                    The claim is the shared serialization point; create()
+                    refuses the second writer. One surviving claim per
+                    (businessId, uid).
+
+ATOMICITY           enforced by the claim living INSIDE THE SAME TRANSACTION
+                    as the employment mutation. The abort takes the staff
+                    update, the invite update and the event with it.
+```
+
+They are **not** the same property, and one can hold while the other fails. Move the claim to after
+the commit and uniqueness still looks correct: one claim exists, the second `create()` still fails,
+every count reads right — **while the losing employment has already been mutated**. Only the loser's
+Firestore state exposes it. Sabotage M3 does exactly this and goes RED on that and nothing else.
+
+> **"Exactly one claim exists" is evidence of the first property only.** A maintainer who stops there
+> has read obligation 1 and skipped obligation 2.
+
+### Certified against real contention, not a stub
+
+`scripts/test-employment-uid-claim-race.js` — **46/0**, Firestore emulator, `Promise.all`, and it
+**refuses to run** without `FIRESTORE_EMULATOR_HOST`. A suite that calls acceptance twice in sequence
+proves nothing about a race.
+
+**§0 is the attribution control, and it is the load-bearing section.** It runs the acceptance
+transaction *without* the claim — same reads, same writes — concurrently. **Both commit**, and both
+employments end up bound to one uid. Without it, §1's single survivor could equally be read as
+evidence that the existing transaction somehow serialized the employments on its own. It does not.
+
+```
+§1   10 concurrent acceptances, distinct employments, one (businessId, uid)
+     WINNER  uid=invitee · active · working · invite accepted · 1 invite_accepted event
+     LOSERS  uid=null · pending · workStatus=null · invite pending · 0 events   (x9)
+     read back from FIRESTORE, never from a return value
+§2   the same uid in a DIFFERENT business succeeds — the invariant is per organization
+§2b  a SECOND, DIFFERENT person in the SAME business succeeds — per uid, not per business
+§5   a non-collision failure does not wear the uniqueness message, with an INVERTING
+     CONTROL proving the matcher can fire at all
+```
+
+§2b exists because a key that refuses everybody would otherwise certify green — the legitimate path
+has to be tested too.
+
+**The claim's shape is asserted as an EXACT field set**, deliberately stricter than the ADR's
+permission for immutable provenance. It is a **change-detection gate**, not a reinterpretation: the
+ADR permits provenance, it does not grant an open schema, and today's approved schema is exactly
+those four fields. Merely enumerating forbidden names would catch an accidental new *mutable* field
+and miss an accidental new *immutable* one. Any further provenance field must be reviewed through
+the ADR rather than arrive silently. The rationale is written at the assertion.
+
+### Sabotage — 15/15 as specified, restore byte-identical
+
+```
+RED    create() -> set()                          pre-check + set (TOCTOU)
+       claim created AFTER the commit             key drops businessId
+       key drops uid                              errors laundered into the refusal
+       collision swallowed as success             mutable status field on the claim
+       provenance naming the ACCEPTOR             claims readable · claims writable
+GREEN  comment reworded    refusal reworded
+       claim moved WITHIN the transaction — write order inside a transaction is
+       correctly irrelevant, and a suite that reddens on everything proves nothing
+```
+
+### Rules — the claim is CF-only
+
+`employmentUidClaims`: `read`, `create`, `update`, `delete` all denied, certified against the rules
+engine at **40/0**, including the claim's own **subject**, the business owner and a superAdmin, with
+a positive control that the document exists — otherwise every denial is equally consistent with an
+empty collection. A **readable** claim enumerates who is employed where. A **writable** one forges an
+occupancy that blocks a legitimate hire, or deletes one and lets a uid be bound twice.
+
+### THE BOUNDARY — mechanism #1 deliberately releases nothing
+
+**No path terminates an ACTIVE employment.** `revokeEmploymentInvite` handles `pending` only, so an
+accepted employment's occupancy claim is **not releasable by any existing code path**.
+
+That is a stated dependency, not an omission. Termination, claim release, reinstatement and
+`uid_rebound` remain **required consumer contracts** of the frozen ADR-035 §4 — future work for
+mechanisms #5/#7, not unwritten parts of #1. Two temptations stay **FORBIDDEN**: no `delete` bolted
+onto `revokeEmploymentInvite` (that path only ever sees a **pending** employment, which never
+acquired a claim, so the delete would remove someone else's or nothing's), and no invented
+termination handler so the ADR reads as fully implemented.
+
+### Files affected
+
+```
+functions/employment-invites.js             CLAIMS, claimId(), the in-transaction create,
+                                            ALREADY_EXISTS loser handling, everything else re-raised
+firestore.rules                             employmentUidClaims — CF-only
+scripts/test-employment-uid-claim-race.js   NEW — emulator-backed race proof
+scripts/test-employment-invites.js          §6 inverted: the gap is now the invariant
+scripts/test-employment-invites-rules.js    §4b — the claim's CF-only boundary
+```
+
+`firestore.rules.build` is **deliberately absent**. It is tracked but generated, and the repo does
+not carry it per mechanism: of the last eight commits touching `firestore.rules`, only two touched
+the build, both build-specific. Mechanisms #3 (`33c0f59`) and #4 (`2197b48`) each changed the rules
+source and left it alone. Rebuilt only to verify — 166,553 B (63.5%), braces 1528/1528 — then
+restored, so no drift entered the commit.
+
+### Regression
+
+race 46/0 · flow 96/0 · invites rules 40/0 · events 95/0 · events rules 26/0 · payroll authority
+106/0 · record authority 69/0 · staff contract 29/0. Staged blobs verified byte-identical to the
+certified content before the commit; `--cached --check` clean.
+
+### Database / API / Security changes
+
+New collection `employmentUidClaims`, CF-only, no indexes. **No API change** — no new callable, no
+signature change. **Security:** uniqueness is now enforced server-side inside the binding
+transaction, where it previously was not enforced at all.
+
+### Deployment
+
+**NOT DEPLOYED.** Functions and Cloud Run remain frozen under the Artifact Registry forensics notice;
+the rules change carries its own separate deployment authorization. Live is unchanged.
+
+### Breaking changes
+
+None. The claim is acquired at acceptance, so nothing existing is re-evaluated: a uid that already
+held two active employments in one organization would keep both. None can, on the evidence — `hrStaff`
+was measured **empty** in production during the mechanism #2 investigation, which is also why
+`markTrainingComplete`'s fail-open had always executed.
+
 ## 2026-09-20 (108) — Two things called employmentStatus, and the boundary that keeps them apart
 
 **Documentation only · COMMITTED `0f1c088` · NO implementation authorized · NOT DEPLOYED.**
