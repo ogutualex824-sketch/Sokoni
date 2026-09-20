@@ -198,8 +198,26 @@ const byId = (r, id) => r.integrations.find(i => i.id === id) || MISSING;
   {
     const i = byId(full, 'sendgrid');
     ok('a configured integration is manageable', i.capabilities.indexOf('view') > -1);
-    ok('and offers a provider test once credentials exist',
-       i.capabilities.indexOf('test') > -1, i.capabilities.join(','));
+    /* CORRECTED. This asserted "configured therefore a test is offered", which
+       was the defect: it handed a test control to every configured rail,
+       including IntaSend, whose probe refuses by design because probing would
+       move money, and the seven whose probe cannot run until their provider
+       secret is bound. A control an operator can press that can never succeed
+       reads as a capability the platform does not have. Surfaced by rendering
+       the page in a browser; the rule is now probe RUNNABILITY. */
+    ok('a configured rail whose probe cannot run offers NO test',
+       i.capabilities.indexOf('test') === -1, i.capabilities.join(','));
+    ok('a rail whose probe CAN run does offer one',
+       byId(full, 'memorystore-redis').capabilities.indexOf('test') > -1,
+       byId(full, 'memorystore-redis').capabilities.join(','));
+    /* not-applicable must not withhold it: Firestore needs no named secret and
+       its probe is one of the three that actually runs. */
+    ok('and a service-account rail is not withheld one',
+       byId(full, 'firestore').capabilities.indexOf('test') > -1,
+       byId(full, 'firestore').capabilities.join(','));
+    ok('IntaSend is offered no test — probing it would move money',
+       byId(full, 'intasend-collections').capabilities.indexOf('test') === -1,
+       byId(full, 'intasend-collections').capabilities.join(','));
     ok('an unconfigured one offers no test',
        byId(none, 'sendgrid').capabilities.indexOf('test') === -1,
        byId(none, 'sendgrid').capabilities.join(','));

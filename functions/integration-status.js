@@ -100,9 +100,29 @@ function _projectId () {
 function _capabilities (entry, credentialState) {
   const caps = ['view'];
   if (entry.status === 'quarantined' || entry.status === 'frozen') return caps;
-  if (credentialState === 'configured') caps.push('test');       /* RC-3 wires the probe */
+  /* A test is offered only when a probe would ACTUALLY RUN. Keying this on
+     "credentials are configured" offered a test control for every configured
+     rail — including IntaSend, whose probe refuses by design because probing
+     would move money, and the seven whose probe cannot run until their provider
+     secret is bound to the probe function. A control an operator can press that
+     can never succeed is worse than no control: it reads as a capability the
+     platform does not have. Found by rendering the page in a browser. */
+  /* `not-applicable` is included deliberately: Firestore and Cloud Storage need
+     no named secret and their probes are the ones that actually run. Requiring
+     'configured' would have withheld the test control from precisely the three
+     rails where it works. What must be excluded is `missing`/`partial`, where a
+     probe cannot be meaningful. */
+  const credOk = credentialState === 'configured' || credentialState === 'not-applicable';
+  if (credOk && _probeRunnable(entry.id)) caps.push('test');
   if (entry.requiredSecrets.length) caps.push('view-credential-names');
   return caps;
+}
+
+/* Resolved lazily and defensively: the status surface must keep working even if
+   the probe layer is unavailable, and in that case it simply offers no test. */
+function _probeRunnable (id) {
+  try { return require('./integration-probe-executors').probeAvailability(id) === 'runnable'; }
+  catch (_) { return false; }
 }
 
 /**

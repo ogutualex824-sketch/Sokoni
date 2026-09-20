@@ -368,7 +368,11 @@
       '@media(max-width:1100px){.sic-detail{position:static;max-height:none}}',
       '.sic-detail-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px}',
       '.sic-detail-head h3{font-size:15px;font-weight:700;margin:0}',
-      '.sic-x{margin-left:auto;background:none;border:none;color:var(--sic-muted);cursor:pointer;font-size:16px;line-height:1}',
+      /* 32x32 minimum. This was 25x18 — below a comfortable touch target on a
+         phone, and only visible once the page was rendered in a real browser. */
+      '.sic-x{margin-left:auto;background:none;border:none;color:var(--sic-muted);cursor:pointer;' +
+        'font-size:16px;line-height:1;min-width:32px;min-height:32px;display:inline-flex;' +
+        'align-items:center;justify-content:center;border-radius:6px}',
       '.sic-x:hover{color:var(--sic-bad)}',
       '.sic-subtabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px}',
       '.sic-subtab{background:none;border:1px solid var(--sic-border);border-radius:99px;color:var(--sic-muted);',
@@ -1197,8 +1201,14 @@
 
     _root.innerHTML = '<div class="sic">' +
       '<div class="sic-head"><div><h2>Integrations</h2>' +
-      '<p>Every registered platform service, its declared capabilities and dependencies, and the ' +
-      'merchant webhook endpoints SmartPOS delivers to. Read-only.</p></div>' +
+      /* Led with "Every registered platform service" until RC-2, which is the
+         framing that was demoted: the registry is a self-registration log, not
+         an inventory. The catalogue and the backend's configuration and probe
+         status are what this page is actually about. Spotted by reading the
+         rendered page rather than the markup. */
+      '<p>The declared integration catalogue, each rail’s credential configuration and measured ' +
+      'provider health, plus the self-registration log, capability matrix, dependency graph and ' +
+      'the merchant webhook endpoints SmartPOS delivers to. Read-only.</p></div>' +
       '<div class="sic-head-actions">' +
       '<span style="font-size:11px;color:var(--sic-muted);align-self:center">' +
       (_data.loadedAt ? 'Loaded ' + _esc(_ago(_data.loadedAt)) : '') + '</span>' +

@@ -117,6 +117,33 @@ const EXECUTORS = {
      is a correlated inbound POST, which arrives through recordProbeEvent(). */
 };
 
+/* Which integrations have a probe that can actually RUN today, as opposed to one
+   that exists but refuses. This is what a management surface must key a "test"
+   control on: offering a test for a probe that cannot run gives an operator a
+   button wired to nothing, and for IntaSend it would promise a provider test
+   that deliberately does not exist because probing would move money. */
+const REFUSES_BY_DESIGN = {
+  'intasend-collections': 'no_safe_probe',
+  'intasend-payouts':     'no_safe_probe',
+  'sendgrid':             'requires_secret_binding',
+  'africastalking':       'requires_secret_binding',
+  'typesense':            'requires_secret_binding',
+  'algolia':              'requires_secret_binding',
+  'anthropic':            'requires_secret_binding',
+  'etims':                'requires_secret_binding',
+  'smtp-fallback':        'requires_secret_binding',
+};
+
+/**
+ * probeAvailability(id) -> 'runnable' | 'no_safe_probe' | 'requires_secret_binding' | 'none'
+ *
+ * 'runnable' means the probe would actually contact the provider if invoked now.
+ */
+function probeAvailability (integrationId) {
+  if (!EXECUTORS[integrationId]) return 'none';
+  return REFUSES_BY_DESIGN[integrationId] || 'runnable';
+}
+
 /**
  * executorFor(integrationId) -> function | undefined
  *
@@ -131,4 +158,5 @@ function executorFor (integrationId) {
    broken". The caller uses this to avoid reporting an unrun probe as failed. */
 const NOT_RUN_CODES = ['requires_secret_binding', 'no_safe_probe'];
 
-module.exports = { EXECUTORS, executorFor, NOT_RUN_CODES, _internal: { needsBinding } };
+module.exports = { EXECUTORS, executorFor, probeAvailability, REFUSES_BY_DESIGN,
+  NOT_RUN_CODES, _internal: { needsBinding } };

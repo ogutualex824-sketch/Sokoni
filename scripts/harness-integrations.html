@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Integration Control Center — visual harness</title>
+<!--
+  WHY THIS EXISTS
+  scripts/test-integrations-console.js mounts the module in a minimal DOM, so it
+  proves the HTML the module emits and nothing about how that HTML LOOKS. This
+  harness closes that gap: it serves the REAL catalogue and the REAL module over
+  HTTP, so the module injects its own real stylesheet and lays out in a real
+  browser at real viewport sizes.
+
+  It is NOT the authenticated console. admin-os.html and super-admin.html sit
+  behind Firebase Auth and App Check, which cannot be satisfied headlessly, so
+  the console SHELL (nav, panel chrome, auth gating) is out of scope here and is
+  covered by tests/certify-integrations-console.js instead.
+
+  The backend response is injected rather than fetched: this page has no admin
+  session, and the point is to exercise rendering of every state the backend can
+  return — including ones production does not currently exhibit, such as a
+  failed provider. Nothing here reaches Firestore, Secret Manager or a provider.
+-->
+<style>
+  body { margin: 0; background: #0b0f14; color: #e6edf3;
+         font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  #integrationsRoot { padding: 16px; }
+</style>
+</head>
+<body>
+<div id="integrationsRoot"></div>
+
+<script src="/sokoni-integration-catalogue.js"></script>
+<script src="/sokoni-integrations.js"></script>
+<script>
+/* Build a status response covering EVERY registry entry, so the page renders all
+   35 rather than a convenient subset. A handful carry deliberate non-default
+   states so the visual check can see them side by side. */
+(function () {
+  var cat = window.SokoniIntegrationCatalogue;
+  var SECRETS = {
+    'intasend-collections': ['INTASEND_API_KEY', 'INTASEND_PRIVATE_KEY'],
+    'intasend-webhook':     ['INTASEND_WEBHOOK_CHALLENGE'],
+    'intasend-payouts':     ['INTASEND_PRIVATE_KEY', 'SETTLEMENT_ACCOUNT_NUMBER'],
+    'sokoni-wallet':        ['PAYMENT_HMAC_SECRET', 'WALLET_QR_SECRET'],
+    'sendgrid':             ['SENDGRID_API_KEY', 'SENDGRID_WEBHOOK_KEY'],
+    'smtp-fallback':        ['MAIL_HOST', 'MAIL_USER', 'MAIL_PASS'],
+    'africastalking':       ['AFRICASTALKING_API_KEY', 'AFRICASTALKING_USERNAME', 'SMS_WEBHOOK_TOKEN'],
+    'algolia':              ['ALGOLIA_ADMIN_KEY', 'ALGOLIA_SEARCH_KEY'],
+    'typesense':            ['TYPESENSE_ADMIN_KEY', 'TYPESENSE_SEARCH_KEY'],
+    'etims':                ['ETIMS_MASTER_KEY', 'ETIMS_PLATFORM_PIN', 'ETIMS_PLATFORM_SECRET'],
+    'facebook-login':       ['FACEBOOK_APP_SECRET'],
+    'age-verification':     ['AGE_ID_SALT'],
+    'anthropic':            ['ANTHROPIC_API_KEY'],
+    'memorystore-redis':    ['REDIS_URL'],
+    'pos-webhooks':         ['POS_WEBHOOK_SECRET'],
+    'api-gateway':          ['SOKONI_HMAC_KEY'],
+  };
+  /* Deliberate variety, so the visual check can compare states side by side.
+     `failed` does not occur in production today; it is rendered here precisely
+     because the minimal-DOM suite cannot show what it LOOKS like. */
+  var OVERRIDE = {
+    'typesense':         { health: 'failed', detail: 'connect ECONNREFUSED',
+                           stages: { connected: false, accepted: false, delivered: null, received: null },
+                           support: { connected: 'supported', accepted: 'supported',
+                                      delivered: 'not-supported', received: 'not-supported' } },
+    'sendgrid':          { health: 'connected', detail: 'provider answered 200',
+                           stages: { connected: true, accepted: true, delivered: null, received: null },
+                           support: { connected: 'supported', accepted: 'supported',
+                                      delivered: 'supported', received: 'supported' } },
+    'africastalking':    { health: 'connected', detail: 'delivery report correlated',
+                           stages: { connected: true, accepted: true, delivered: true, received: true },
+                           support: { connected: 'supported', accepted: 'supported',
+                                      delivered: 'supported', received: 'supported' } },
+    'memorystore-redis': { health: 'connected', detail: 'PING -> PONG',
+                           stages: { connected: true, accepted: true, delivered: null, received: null },
+                           support: { connected: 'supported', accepted: 'supported',
+                                      delivered: 'not-supported', received: 'not-supported' } },
+    'algolia':           { missingCreds: true },
+  };
+
+  var integrations = cat.integrations.map(function (i) {
+    var req = SECRETS[i.id] || [];
+    var o = OVERRIDE[i.id] || {};
+    var disabled = i.status === 'quarantined' || i.status === 'frozen';
+    var credState = disabled ? 'disabled'
+      : o.missingCreds ? 'missing'
+      : req.length ? 'configured' : 'not-applicable';
+    /* Mirrors RC-1 _capabilities() exactly: a disabled lifecycle returns ['view']
+       and nothing else, and 'test' is offered only where a probe can actually
+       run — firestore, cloud-storage and memorystore-redis today. */
+    var RUNNABLE = { firestore: 1, 'cloud-storage': 1, 'memorystore-redis': 1 };
+    var caps = ['view'];
+    if (!disabled) {
+      if ((credState === 'configured' || credState === 'not-applicable') && RUNNABLE[i.id]) caps.push('test');
+      if (req.length) caps.push('view-credential-names');
+    }
+
+    return {
+      id: i.id, name: i.name, vendor: i.vendor, category: i.category,
+      lifecycle: i.status, direction: i.direction,
+      credentials: req.map(function (n) { return { name: n, present: !o.missingCreds }; }),
+      credentialState: credState,
+      health: disabled ? 'disabled'
+        : o.missingCreds ? 'missing'
+        : (o.health || 'unknown'),
+      healthNote: o.detail ||
+        (disabled ? 'Lifecycle is ' + i.status + '; no probe is run.'
+                  : 'No probe has run for this integration; provider health is not measured.'),
+      stages: o.stages
+        ? { configured: true, connected: o.stages.connected, accepted: o.stages.accepted,
+            delivered: o.stages.delivered, received: o.stages.received }
+        : null,
+      stageSupport: o.support || null,
+      evidence: o.stages ? 'provider_api' : 'none',
+      probedAt: o.stages ? '2026-09-20T12:00:00.000Z' : null,
+      capabilities: caps,
+      checkedAt: '2026-09-20T12:00:00.000Z',
+    };
+  });
+
+  var counts = integrations.reduce(function (m, i) {
+    m[i.credentialState] = (m[i.credentialState] || 0) + 1; return m;
+  }, {});
+
+  window.__status = { version: '1.0.0', checkedAt: '2026-09-20T12:00:00.000Z',
+                      categories: cat.categories, integrations: integrations, counts: counts,
+                      inventoryReadable: true, unclaimedSecretCount: 14 };
+
+  window.SokoniIntegrations.mount('integrationsRoot', {
+    getIntegrationStatus: function () { return Promise.resolve(window.__status); },
+  });
+})();
+</script>
+</body>
+</html>
