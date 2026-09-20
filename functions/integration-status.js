@@ -47,11 +47,18 @@
    reporting the second as the first is how an operator ends up re-creating a key
    that was already there.
 
-   HEALTH IS ALWAYS `unknown` HERE
-   -------------------------------
-   RC-1 reports configuration only. `health: 'unknown'` is returned for every
-   entry, on purpose, so the console cannot paint a green light this module never
-   established. RC-3 replaces it with a measured value.
+   HEALTH COMES FROM A PROBE, OR IT IS `unknown`   (RC-3)
+   -------------------------------------------------------
+   Health is never derived from `credentialState`. A configured key says nothing
+   about whether the provider answers, and conflating the two is the very defect
+   this surface already suffers from.
+
+   RC-3 supplies `latestProbes` — the most recent probe result per integration —
+   and this module carries its health and its five-stage evidence through
+   verbatim. With no probe supplied, which is the state until one has ever run,
+   every record stays `unknown`. An absent probe is not a failure, and this
+   module still measures nothing itself: it reports what
+   functions/integration-probes.js established, or it says it does not know.
    ============================================================================ */
 'use strict';
 
@@ -126,7 +133,12 @@ async function resolveIntegrationStatus (opts) {
     inventoryError = e && e.message ? String(e.message).slice(0, 200) : 'inventory unavailable';
   }
 
+  /* Latest probe result per integration id (RC-3). Absent until a probe has run;
+     an absent probe leaves health 'unknown', never a failure. */
+  const probes = o.latestProbes || {};
+
   const integrations = registry.INTEGRATIONS.map((entry) => {
+    const probe = probes[entry.id] || null;
     const required = entry.requiredSecrets || [];
 
     /* Per-credential presence. The NAME is returned — it is already in the
@@ -155,9 +167,27 @@ async function resolveIntegrationStatus (opts) {
       direction:  entry.direction,
       credentials,
       credentialState: disabled ? 'disabled' : credentialState,
-      /* RC-1 measures nothing about the provider. Stated, not implied. */
-      health:     'unknown',
-      healthNote: 'Provider health is not measured by this operation.',
+
+      /* ── HEALTH COMES FROM A PROBE, OR IT IS UNKNOWN (RC-3) ─────────────
+         Never from credentialState. A configured key says nothing about
+         whether the provider answers, and conflating the two is the RC-1
+         defect wearing a different hat.
+
+         `probes` is a map of the latest probe result per integration. With
+         none supplied — which is the state until a probe has ever run — every
+         record stays `unknown`, exactly as RC-1 left it. An absent probe is
+         not a failure. */
+      health:     probe ? probe.health : 'unknown',
+      healthNote: probe
+        ? (probe.detail || null)
+        : 'No probe has run for this integration; provider health is not measured.',
+      /* The five-stage evidence, carried verbatim from the probe. Stage values
+         are true | false | null, where null is UNKNOWN and is deliberately
+         falsy so `if (r.stages.delivered)` cannot read unknown as delivered. */
+      stages:      probe ? probe.stages : null,
+      stageSupport: probe ? probe.support : null,
+      evidence:    probe ? probe.evidence : 'none',
+      probedAt:    probe ? probe.checkedAt : null,
       capabilities: _capabilities(entry, credentialState),
       checkedAt,
     };

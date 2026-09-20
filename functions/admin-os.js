@@ -2144,3 +2144,69 @@ exports.adminGetIntegrationStatus = onCall(
     return result;
   }
 );
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   INTEGRATION PROBE — measure a provider, one integration at a time     (RC-3)
+   ══════════════════════════════════════════════════════════════════════════════
+   Runs the declared probe for ONE integration and records the result under
+   integrationProbes/{correlationId}, so the status surface has a measured health
+   instead of `unknown`.
+
+   It builds on adminGetIntegrationStatus rather than re-deciding configuration:
+   credentialState and lifecycle come from there, so there is exactly one answer
+   to "is this configured" in the platform.
+
+   A probe never charges money, never messages a real customer and never writes
+   to a business collection. For rails that report delivery asynchronously it
+   returns delivered/received as null and mints a correlation id; only the
+   provider's own callback can turn those true.
+   ══════════════════════════════════════════════════════════════════════════════ */
+exports.adminRunIntegrationProbe = onCall(
+  { region: 'us-central1', maxInstances: 10, enforceAppCheck: true },
+  exports._h.adminRunIntegrationProbe = async (req) => {
+    _requireAdmin(req);
+    const { integrationId } = req.data || {};
+    if (!integrationId) throw new HttpsError('invalid-argument', 'integrationId is required.');
+
+    const registry = require('./integration-registry');
+    const entry = registry.byId(integrationId);
+    if (!entry) throw new HttpsError('not-found', 'Unknown integration: ' + integrationId);
+
+    /* Configuration is RC-1's answer. Asking it here keeps one authority. */
+    const { resolveIntegrationStatus } = require('./integration-status');
+    const status = await resolveIntegrationStatus({});
+    const record = status.integrations.find((i) => i.id === integrationId);
+
+    const probes = require('./integration-probes');
+    const executors = require('./integration-probe-executors');
+    const result = await probes.runProbe(integrationId, {
+      credentialState: record ? record.credentialState : 'unknown',
+      lifecycle:       entry.status,
+      execute:         executors.executorFor(integrationId),
+    });
+
+    /* Persisted so the status surface can report it, and so an async callback
+       has something to correlate against. The document carries no credential. */
+    if (result.correlationId) {
+      await db().collection('integrationProbes').doc(result.correlationId).set({
+        correlationId: result.correlationId,
+        integrationId,
+        stages:    result.stages,
+        support:   result.support,
+        health:    result.health,
+        evidence:  result.evidence,
+        startedBy: req.auth && req.auth.uid,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+    await db().collection('integrationProbeLatest').doc(integrationId).set({
+      integrationId, ...result, updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    console.log('[adminRunIntegrationProbe] probed', {
+      actor: req.auth && req.auth.uid, integrationId,
+      health: result.health, evidence: result.evidence,
+    });
+    return result;
+  }
+);

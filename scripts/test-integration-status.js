@@ -139,10 +139,16 @@ const byId = (r, id) => r.integrations.find(i => i.id === id) || MISSING;
        'configured != connected');
     ok('and says why, rather than leaving it to be guessed',
        /not measured/i.test(byId(full, 'sendgrid').healthNote));
-    /* If this ever derives health from credentials, this assertion is the tripwire. */
+    /* THE TRIPWIRE, restated for RC-3. RC-1 could assert health was a literal
+       constant. Since RC-3 this module carries a PROBE's health through, so the
+       literal is gone — but the invariant it protected is unchanged and is what
+       is actually asserted here: health comes from a probe or it is 'unknown',
+       and it is never computed from credentialState. */
     const code = strip(STATUS_SRC);
-    ok('health is a constant here, not computed from credential state',
-       /health:\s*'unknown'/.test(code) && !/health:\s*credentialState/.test(code));
+    ok('health comes from a probe, or is unknown',
+       /health:\s*probe \? probe\.health : 'unknown'/.test(code));
+    ok('health is never derived from credential state',
+       !/health:[^\n]*credentialState/.test(code));
   }
 
   /* ── 4. NO SECRET VALUE CAN REACH THE BROWSER ───────────────────────────── */
