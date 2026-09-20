@@ -1,3 +1,126 @@
+## 2026-09-20 (113) — A removed shop employee could still sell, and the till now consumes the contract
+
+**Implementation · COMMITTED `1ce3fcd` · certified and sabotaged · NOT DEPLOYED.**
+
+The repair authorized by entry (112) and `docs/SHOP_EMPLOYMENT_TILL_AUTHORITY_DECISION.md`.
+`removeShopEmployee` returned `{ok: true, active: false}` to a shop owner and the person kept
+selling.
+
+### What shipped
+
+```
+shop-employees.js   employeeRecordReasons(e, shopId, uid, ownerUid)   ← the predicate, ONCE
+                        ↑                              ↑
+                        resolveShopAccess              resolveActor employee arm
+merchant-identity.js    _employmentActive / ACTIVE_EMPLOYMENT          ← DELETED
+```
+
+The contract's five-condition **believed-iff** clause — `shopId` matches, `uid` matches,
+**`active !== false`**, role is a known shop role, `shopOwnerId` matches the shop's real owner —
+was inline in `resolveShopAccess` and reimplemented divergently in `resolveActor`. It is now
+declared once and called by both.
+
+**The repair was to CONSUME the authority, not rename a field.** Swapping `rec.status` for
+`rec.active` would have fixed the symptom and left the cause: two predicates over one collection,
+and the next reader free to write a third. Entry (112) established the duplication itself as the
+defect.
+
+### The owner arms stayed separate — verified at ZERO lines
+
+`ownerUid` is a **parameter**, and that is the whole design of the extraction. The two consumers
+establish ownership differently and must keep doing so:
+
+```
+resolveActor        passes shopId      ownership IS the shops/{uid} document id,
+                                       so it cannot be forged by writing a field
+resolveShopAccess   passes the union   ownerId | sellerUid | ownerUid
+```
+
+Sharing the **employee** predicate without merging the **owner** predicates is what kept this repair
+from becoming a different, unauthorized change. The code delta was matched against every
+owner-arm token — `uid === shopId`, `OWNER_CAPABILITIES`, `shopOwnerOf`, `via:'owner'`,
+`role:'owner'`, `source:'shop-owner'` — and touched **0 lines**.
+
+### The intentional tightening, documented BEFORE it landed
+
+`25ea52c` recorded it as a **contract-conformance behaviour change**, not an implementation detail.
+The private copy also tolerated an **absent `shopId`** (`emp.shopId !== undefined && …`) and compared
+through `_s()`, which strips `<>"'&`. The contract requires `String(e.shopId || '') === String(shopId)`,
+so a record naming no shop is now refused. Conformance rather than scope creep: keeping the tolerance
+would have meant consuming the authority on four conditions while holding a private exception on the
+fifth — the same defect, one clause smaller. The sole writer always writes the field; production
+carries zero records.
+
+### Certified — `scripts/test-till-employment-authority.js`, 68/0, emulator-backed
+
+```
+§1   an ACTIVE employee is still authorized — the legitimate path FIRST, because a
+     guard that refuses everybody satisfies every refusal assertion below
+     an UNRESOLVABLE NAME refuses rather than crediting the owner
+§2   active:false REFUSED, and each of the three things pos-zero-friction derives —
+     merchant proven, discount authority, servedBy — asserted ABSENT;
+     also driven through removeShopEmployee's exact write, not a hand-set flag
+§2b  the financial attribution payload pinned FIELD BY FIELD
+§3   resolveActor and resolveShopAccess AGREE across seven records
+§4   owner authorization unchanged, including an OWNER-LESS shop
+§6   no private `status` vocabulary remains — on STRIPPED source, with controls
+§7   pos-zero-friction proven to consume this exact authority
+```
+
+**§2b exists because the subtle regression here is fixing authorization while changing who gets
+credited for a sale.** `servedBy` is a financial record — the module's own header calls a receipt
+crediting the owner for an employee's sale *"exactly the record a shift dispute turns on"*. So the
+payload is pinned field by field with key-set equality, not checked for truthiness: a swapped name or
+a widened capability set would satisfy `ok === true` perfectly.
+
+**§3 is the shape of the proof.** The defect was a *disagreement* between two consumers, so
+agreement across a matrix is the evidence — certifying the consumer that was already correct would
+have proven nothing about the one that was not.
+
+`scripts/test-shop-employee-authority.js` remains **53/0**, including its own
+`C4  a removed employee is refused`.
+
+### Sabotage — 13/13 as specified, restore byte-identical
+
+Headline: **restoring the private `status` predicate REOPENS the defect** (45/14). Also red on
+dropping the ACTIVE clause, comparing `active` as a string, swapping the owner uid, letting an
+employment record revoke an owner, restrictions granting instead of narrowing, a `servedBy` fallback
+to the owner, dropping corroboration, and accepting the legacy key. Three controls held green,
+including moving the claim's clause order.
+
+> **Two mutations were initially INERT** — the owner-uid swap and the owner-name fallback — because
+> every fixture seeded a shop *with* an owner field and an employee *with* a name. Fixtures were
+> added until both were observable, and both then went RED. That is a **vector defect, not a caught
+> repair mutation**, and the two fixtures pinned invariants that had never been asserted: an
+> owner-less shop still authorizes its employees, and an unresolvable name refuses instead of
+> crediting the owner.
+
+### Files affected
+```
+functions/shop-employees.js                   employeeRecordReasons, extracted and exported
+functions/merchant-identity.js                consumes it; private predicate deleted
+scripts/test-till-employment-authority.js     NEW — emulator-backed
+```
+
+### Database / API / Security changes
+None to the database. **No API change** — no callable added or changed. **Security: a soft-removed
+shop employee is now refused at the till.** Latent before and after — production `shopEmployees` = 0,
+so it arms on the first add-then-remove rather than revoking anyone today.
+
+### Migration
+**None.** The authority path performs **no writes at all** — a read-only predicate cannot require a
+backfill — and production carries zero records.
+
+### Known, not repaired here
+`scripts/test-merchant-v2-certification.js` is **BLOCKED** on a missing `SOKONI_APPCHECK_DEBUG_TOKEN`:
+environmental, pre-existing, and recorded as neither pass nor fail.
+
+### Deployment
+**NOT DEPLOYED.** Functions and Cloud Run remain frozen under the Artifact Registry forensics notice.
+
+### Breaking changes
+None in production. The `shopId` tightening is a behaviour change with an empty affected population.
+
 ## 2026-09-20 (112) — The contract named the field, and the reader that cited it four times used another
 
 **Decision record · COMMITTED `5c8a309` · repair AUTHORIZED, not yet written · NOT DEPLOYED.**
