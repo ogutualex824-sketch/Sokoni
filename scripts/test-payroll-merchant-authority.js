@@ -112,6 +112,30 @@ try {
 Module._load = realLoad;
 
 const SRC = fs.readFileSync(path.join(ROOT, 'functions/hr-payroll.js'), 'utf8');
+/* Assertions about CODE run on stripped source — this suite's own prose names
+   the very call it counts. */
+const CODE = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+/* THIS gate owns the handlers that take a merchantId from the caller, and they
+   are identified by the ARGUMENT, not by a bare occurrence of the function
+   name. The record-anchored gate passes an organization read off a stored
+   document (runOrg, payslip.merchantId, leaveOrg, training.merchantId), so a
+   substring count of `assertMerchantAccess(req.auth` conflates the two and
+   rots the moment either gate changes. Whitespace-tolerant, argument-exact. */
+/* Extract each call's ARGUMENT and classify it. A negative-lookahead regex was
+   tried first and was WRONG: the `\s*` before the lookahead can match empty,
+   which moves the test off the identifier and lets the engine backtrack around
+   it — so it matched all 12 calls, including the 8 it was written to exclude.
+   Reading the argument out leaves nothing to backtrack around. */
+const CALL_RE = /await\s+assertMerchantAccess\s*\(\s*req\.auth\s*,\s*([^)]+?)\s*\)\s*;/g;
+function callArgs () {
+  const out = []; let m; CALL_RE.lastIndex = 0;
+  while ((m = CALL_RE.exec(CODE)) !== null) out.push(m[1].trim());
+  return out;
+}
+const ARGS      = callArgs();
+const REQUESTED = ARGS.filter(a => a === 'merchantId').length;
+const RECORD    = ARGS.filter(a => a !== 'merchantId').length;
 
 /* ── The eight handlers, with the minimum data that reaches the boundary ──── */
 /* Six handlers sit behind a PRE-EXISTING claim gate (assertAdminOrManager:
@@ -187,9 +211,16 @@ const reach = (tier, uid) => (tier === 'claim' ? asManager(uid) : asUser(uid));
      !!AUTH_MOD && AUTH_MOD.AUTHORITY === 'businesses' && typeof AUTH_MOD.assertMerchantAccess === 'function',
      AUTH_MOD ? 'AUTHORITY=' + AUTH_MOD.AUTHORITY : 'missing');
   ok('hr-payroll imports it', /require\('\.\/merchant-authority'\)/.test(SRC));
-  ok('eight call sites exist in the shipped source',
-     SRC.split('assertMerchantAccess(req.auth').length - 1 === 8,
-     (SRC.split('assertMerchantAccess(req.auth').length - 1) + ' sites');
+  ok('eight requested-merchantId boundaries exist in the shipped source',
+     REQUESTED === 8, REQUESTED + ' of the requested form');
+  /* POSITIVE CONTROL. The matcher must be able to match, and must DISCRIMINATE:
+     it has to find the record-anchored calls with the other pattern while
+     excluding them from the count above. A matcher that can find nothing would
+     report 0 and read as a broken repair; one that matches everything would
+     report 12 and read the same way. */
+  ok('CONTROL — the matcher discriminates the two call forms',
+     RECORD === 4 && REQUESTED + RECORD === CODE.split('assertMerchantAccess(req.auth').length - 1,
+     'requested=' + REQUESTED + ' record=' + RECORD + ' args=[' + ARGS.join(' | ') + ']');
   /* POSITIVE CONTROL for the stub itself. If `businesses` could never be read,
      every refusal below would be unattributable. */
   {
@@ -278,19 +309,23 @@ const reach = (tier, uid) => (tier === 'claim' ? asManager(uid) : asUser(uid));
     ok('no payment, payout or disbursement code was added',
        !/sendMoneyB2C|disburse|payout|initiatePayment/i.test(SRC));
     ok('no new payslip state was introduced', !/'paid'/.test(SRC));
-    ok('the four record-anchored handlers were NOT changed in this gate',
-       ['approvePayrollRun', 'getPayslip', 'approveLeave', 'markTrainingComplete']
-         .every(n => typeof HR._h[n] === 'function') &&
-       SRC.split('assertMerchantAccess(req.auth').length - 1 === 8);
+    /* RETIRED 2026-09-20. This asserted that approvePayrollRun, getPayslip,
+       approveLeave and markTrainingComplete carried no authority call. That was
+       this gate's scope statement, and it was true when written; the
+       record-anchored gate has since given all four an organization boundary of
+       their own, deliberately. Their scope now belongs to
+       scripts/test-payroll-record-authority.js, and no assertion replaces it
+       here — a suite must not assert that another gate's legitimate work does
+       not exist. */
   }
 
   console.log('\n  what this suite does NOT prove');
   console.log('  UNPROVEN  a live call. firebase-admin is stubbed at the require boundary,');
   console.log('            so no Cloud Function runs and no document is written.');
   console.log('  SEPARATE  approvePayrollRun, getPayslip, approveLeave and markTrainingComplete');
-  console.log('            are anchored on a RECORD, not a requested merchantId. They carry a');
-  console.log('            DIFFERENT defect — no organization binding at all — and are out of');
-  console.log('            scope for this gate by decision, not by oversight.');
+  console.log('            are anchored on a RECORD, not a requested merchantId. They are now');
+  console.log('            bound too, by the record-anchored gate, and certified in');
+  console.log('            scripts/test-payroll-record-authority.js — not here.');
   console.log('  SEPARATE  the six hr* Firestore rules are untouched; three still guard fields');
   console.log('            no writer writes. Rules are a later gate.');
 

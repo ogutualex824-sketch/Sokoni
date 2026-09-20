@@ -721,6 +721,24 @@ const approvePayrollRun = onCall(OPT, _h.approvePayrollRun = async (req) => {
 
   const runRef = db.collection('hrPayrollRuns').doc(runId);
 
+  /* RECORD-ANCHORED ORGANIZATION BOUNDARY. The caller names a run, never an
+     organization — the organization is whatever the STORED run says it is.
+     Read BEFORE the transaction: assertMerchantAccess does its own
+     non-transactional read, which inside runTransaction would re-run on every
+     retry without joining the transaction's guarantee. */
+  const runPre = await runRef.get();
+  if (!runPre.exists) {
+    throw new HttpsError('not-found', 'Payroll run not found.');
+  }
+  const runOrg = runPre.data().merchantId;
+  if (!runOrg) {
+    /* A run with no organization cannot be authorized against one. Refuse
+       rather than fall back to the caller — a fallback would make an
+       unattributable record approvable by anyone who can reach it. */
+    throw new HttpsError('permission-denied', 'Payroll run records no organization.');
+  }
+  await assertMerchantAccess(req.auth, runOrg);
+
   await db.runTransaction(async t => {
     const runSnap = await t.get(runRef);
     if (!runSnap.exists) throw new HttpsError('not-found', 'Payroll run not found.');
@@ -778,7 +796,18 @@ const getPayslip = onCall(OPT, _h.getPayslip = async (req) => {
     throw new HttpsError('not-found', 'Payslip not found.');
   }
 
-  return payslipSnap.data();
+  /* RECORD-ANCHORED ORGANIZATION BOUNDARY. Anchored on the PAYSLIP because
+     that is the document being disclosed; hrStaff.merchantId is authoritative
+     too, but authorizing against a different document from the one returned is
+     the weaker choice. `staffUid` is deliberately NOT consulted — no writer
+     populates it, so it authorizes nobody. Nothing is returned before this. */
+  const payslip = payslipSnap.data();
+  if (!payslip.merchantId) {
+    throw new HttpsError('permission-denied', 'Payslip records no organization.');
+  }
+  await assertMerchantAccess(req.auth, payslip.merchantId);
+
+  return payslip;
 });
 
 // â”€â”€â”€ Cloud Function 7: getPayrollSummary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -967,6 +996,15 @@ const approveLeave = onCall(OPT, _h.approveLeave = async (req) => {
   if (!leaveSnap.exists) {
     throw new HttpsError('not-found', 'Leave request not found.');
   }
+
+  /* RECORD-ANCHORED ORGANIZATION BOUNDARY. The leave record names its own
+     organization; the caller never supplies one. */
+  const leaveOrg = leaveSnap.data().merchantId;
+  if (!leaveOrg) {
+    throw new HttpsError('permission-denied', 'Leave request records no organization.');
+  }
+  await assertMerchantAccess(req.auth, leaveOrg);
+
   if (leaveSnap.data().status !== 'pending') {
     throw new HttpsError(
       'failed-precondition',
@@ -1115,6 +1153,17 @@ const markTrainingComplete = onCall(OPT, _h.markTrainingComplete = async (req) =
   }
 
   const training = trainingSnap.data();
+
+  /* RECORD-ANCHORED ORGANIZATION BOUNDARY. Placed BEFORE the staff-existence
+     branch below, which is a fail-open: its permission check lives inside
+     `if (staffSnap.exists)` with no else, so an absent employee record skipped
+     authorization entirely. The organization comes from the TRAINING record,
+     which always exists here, so the boundary no longer depends on employee
+     identity being bound. */
+  if (!training.merchantId) {
+    throw new HttpsError('permission-denied', 'Training record records no organization.');
+  }
+  await assertMerchantAccess(req.auth, training.merchantId);
 
   if (!training.assignedTo.includes(staffId)) {
     throw new HttpsError(
