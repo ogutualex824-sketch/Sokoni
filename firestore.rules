@@ -5055,6 +5055,30 @@ service cloud.firestore {
       allow read, create, update, delete: if false; // CF-only — employment-invites.js
     }
 
+    /* ── employmentUidClaims — UID occupancy, one per (business, uid) ──────
+       ADR-035 §4. EXISTENCE IS THE ONLY SIGNAL:
+
+         claim exists -> this (businessId, uid) currently has an ACTIVE binding
+         claim absent -> that uid is available in that business
+
+       Written only by employment-invites.js, with create() inside the
+       acceptance transaction — it is the single document two concurrent
+       acceptances share, and therefore the only thing that can serialise them.
+
+       FULLY CF-ONLY, reads included. A client that could read this could
+       enumerate which accounts are employed by which business; a client that
+       could write it could either forge an occupancy that blocks a legitimate
+       hire, or delete one and let a uid be bound twice.
+
+       The document carries IMMUTABLE PROVENANCE ONLY — businessId, uid,
+       staffId, createdAt — for forensic attribution. It has no status or
+       lifecycle field by design, and nothing may consult it as an alternative
+       employment authority: hrStaff holds employment state, employmentEvents
+       holds its history. */
+    match /employmentUidClaims/{claimId} {
+      allow read, create, update, delete: if false; // CF-only — employment-invites.js (claims)
+    }
+
     // ── Procurement ───────────────────────────────────────────────────────
     match /procSuppliers/{supplierId} {
       allow read:  if isAdmin()

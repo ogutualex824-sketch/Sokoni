@@ -79,6 +79,23 @@ const fakeDb = {
         : snapOf(refOrQuery._c, refOrQuery.id),
       set: (ref, v) => buffered.push(['set', ref._c, ref.id, v]),
       update: (ref, v) => buffered.push(['update', ref._c, ref.id, v]),
+      /* create() FAILS IF THE DOCUMENT EXISTS — that is the whole point of the
+         occupancy claim, and the stub must reproduce it or the uniqueness
+         assertions below would pass against a set(). The throw is raised at
+         call time, aborting the transaction function before it returns, so the
+         buffer is discarded exactly as a real abort would discard it.
+
+         NOTE: this stub SERIALISES transactions, so it proves the claim is
+         ENFORCED, never that it serialises real contention. That is the
+         emulator suite's job (test-employment-uid-claim-race.js). */
+      create: (ref, v) => {
+        if (DOCS[key(ref._c, ref.id)] !== undefined) {
+          const e = new Error('ALREADY_EXISTS: entity already exists');
+          e.code = 6;
+          throw e;
+        }
+        buffered.push(['set', ref._c, ref.id, v]);
+      },
     };
     try {
       const out = await fn(t);
@@ -447,7 +464,10 @@ async function call (fn, auth, data) {
   }
 
   /* ── 6. THE KNOWN PRE-#1 GAP, asserted rather than omitted ─────────────── */
-  head('6 - KNOWN PRE-#1 GAP: uid uniqueness is NOT enforced');
+  /* WAS "KNOWN PRE-#1 GAP: uid uniqueness is NOT enforced". Mechanism #1 closed
+     it, so the assertion that DOCUMENTED the gap becomes the assertion that
+     PROVES the invariant — the same fixtures, the opposite expectation. */
+  head('6 - uid occupancy uniqueness IS enforced');
   {
     seed();
     const s1 = await call(INV._h.sendEmploymentInvite, asOwner, { staffId: STAFF, reason: 'x' });
@@ -462,11 +482,47 @@ async function call (fn, auth, data) {
     const s2 = await call(INV._h.sendEmploymentInvite, asOwner, { staffId: STAFF2, reason: 'x' });
     const a2 = await call(INV._h.acceptEmploymentInvite, asInvitee, { token: s2.out.token, reason: 'x' });
 
-    ok('the same uid CAN hold two active employments in one business',
-       a2.code === null && DOCS['hrStaff/' + STAFF2].uid === EMP && staff().uid === EMP,
-       'documented pre-#1 state, not a passing behaviour');
-    ok('  …which mechanism #1 owns, and #3 deliberately does not enforce',
-       !/uniquenessClaim|assertUniqueUid|\(businessId, uid\)/.test(CODE));
+    ok('a SECOND active employment for the same uid in one business is REFUSED',
+       a2.code === 'failed-precondition', a2.code);
+    ok('  …the second employment is untouched — still pending, still unbound',
+       DOCS['hrStaff/' + STAFF2].uid === null
+       && DOCS['hrStaff/' + STAFF2].employmentStatus === 'pending'
+       && DOCS['hrStaff/' + STAFF2].workStatus === null);
+    ok('  …its invitation is still pending, not accepted',
+       DOCS['employmentInvites/' + s2.out.token].status === 'pending');
+    ok('  …and NO invite_accepted event was written for it',
+       events().filter(e => e.staffId === STAFF2 && e.event === 'invite_accepted').length === 0);
+    ok('  …while the FIRST employment keeps its binding', staff().uid === EMP
+       && staff().employmentStatus === 'active');
+
+    /* THE CLAIM ITSELF. */
+    const claims = Object.keys(DOCS).filter(k => k.startsWith('employmentUidClaims/'));
+    ok('exactly ONE occupancy claim exists', claims.length === 1, claims.join(','));
+    ok('  …keyed {businessId}_{uid}',
+       claims[0] === 'employmentUidClaims/' + BIZ + '_' + EMP, claims[0]);
+    const claim = DOCS[claims[0]];
+    ok('  …its provenance names the WINNING staffId', claim.staffId === STAFF,
+       claim.staffId + ' vs winner ' + STAFF);
+    ok('  …provenance fields only — businessId, uid, staffId, createdAt',
+       Object.keys(claim).sort().join(',') === 'businessId,createdAt,staffId,uid',
+       Object.keys(claim).sort().join(','));
+    ok('  …NO status or lifecycle field on the claim',
+       claim.status === undefined && claim.employmentStatus === undefined
+       && claim.workStatus === undefined && claim.released === undefined);
+
+    /* ACROSS BUSINESSES the same uid is unaffected — the invariant is scoped
+       per organization, and a global lock would be a different, wrong rule. */
+    const BIZ2 = 'SOK-OTHER', STAFF3 = BIZ2 + '_E001';
+    DOCS['businesses/' + BIZ2] = { ownerId: OWNER, adminUids: [] };
+    DOCS['hrStaff/' + STAFF3] = {
+      merchantId: BIZ2, employeeNumber: 'E001', name: 'Jane elsewhere', email: EMAIL,
+      employmentStatus: 'pending', workStatus: null, uid: null,
+    };
+    const s3 = await call(INV._h.sendEmploymentInvite, asOwner, { staffId: STAFF3, reason: 'x' });
+    const a3 = await call(INV._h.acceptEmploymentInvite, asInvitee, { token: s3.out.token, reason: 'x' });
+    ok('the SAME uid may be active in a DIFFERENT business', a3.code === null, a3.code);
+    ok('  …and that business gets its own claim',
+       DOCS['employmentUidClaims/' + BIZ2 + '_' + EMP] !== undefined);
   }
 
   /* ── 7. SHOP INVITATIONS ARE UNTOUCHED ─────────────────────────────────── */

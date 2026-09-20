@@ -43,6 +43,9 @@ const ADMIN_U = 'u_admin', SUPER_U = 'u_super', OWNER_U = 'u_owner';
 const INVITEE_U = 'u_invitee', STRANGER_U = 'u_stranger';
 const BIZ = 'SOK-MINE', STAFF = 'SOK-MINE_E001';
 const TOKEN = 'tok-1234-5678';
+/* {businessId}_{uid} — the INVITEE's OWN claim, so a rule that ever leaked on
+   subject-identity or on ownership would match this fixture, not miss it. */
+const CLAIM = BIZ + '_u_invitee';
 const EMAIL = 'jane@example.com';
 
 (async () => {
@@ -66,6 +69,11 @@ const EMAIL = 'jane@example.com';
       acceptedByUid: null, revokedByUid: null,
     });
     await db.doc('businesses/' + BIZ).set({ ownerId: OWNER_U, adminUids: [OWNER_U] });
+    /* An occupancy claim, exactly as acceptEmploymentInvite writes one —
+       immutable provenance, no status field. */
+    await db.doc('employmentUidClaims/' + CLAIM).set({
+      businessId: BIZ, uid: INVITEE_U, staffId: STAFF, createdAt: new Date(),
+    });
   });
 
   /* The invitee's context carries the INVITED EMAIL, so if any rule arm ever
@@ -115,6 +123,57 @@ const EMAIL = 'jane@example.com';
   await check('a platform admin cannot delete',         assertFails(doc(asAdmin).delete()));
   await check('a superAdmin cannot delete',             assertFails(doc(asSuper).delete()));
   await check('the invitee cannot delete',              assertFails(doc(asInvitee).delete()));
+
+  console.log('\n4b - employmentUidClaims is CLOSED to every client (ADR-035 §4)');
+  {
+    /* The claim IS the uniqueness authority, so its rules are not boilerplate.
+       A READABLE claim enumerates who is employed where. A WRITABLE one either
+       forges an occupancy that blocks a legitimate hire, or deletes one and
+       lets a single uid be bound twice — the exact invariant mechanism #1
+       exists to hold. The invitee below is the SUBJECT of this claim: the most
+       sympathetic caller there is, and still denied. */
+    const cl = (ctx, id) => ctx.firestore().doc('employmentUidClaims/' + (id || CLAIM));
+    const FORGED = { businessId: BIZ, uid: INVITEE_U, staffId: STAFF, createdAt: new Date() };
+
+    await check('the SUBJECT of the claim cannot read it',  assertFails(cl(asInvitee).get()));
+    await check('the business owner cannot read it',        assertFails(cl(asOwner).get()));
+    await check('a platform admin cannot read it',          assertFails(cl(asAdmin).get()));
+    await check('a superAdmin cannot read it',              assertFails(cl(asSuper).get()));
+    await check('a stranger cannot read it',                assertFails(cl(asStranger).get()));
+    await check('an anonymous client cannot read it',       assertFails(cl(asAnon).get()));
+    await check('and it cannot be reached by LISTING the collection',
+                assertFails(asOwner.firestore().collection('employmentUidClaims').get()));
+
+    await check('the owner cannot FORGE a claim (blocking a hire)',
+                assertFails(cl(asOwner, BIZ + '_u_victim').set(FORGED)));
+    await check('a superAdmin cannot forge one',
+                assertFails(cl(asSuper, BIZ + '_u_victim2').set(FORGED)));
+    await check('the invitee cannot mint their own occupancy',
+                assertFails(cl(asInvitee, BIZ + '_u_victim3').set(FORGED)));
+
+    await check('nobody can REPOINT a claim at another employment',
+                assertFails(cl(asOwner).update({ staffId: BIZ + '_E999' })));
+    await check('nor bolt a status field onto it',
+                assertFails(cl(asAdmin).update({ status: 'released' })));
+
+    /* DELETE matters most here. No code path releases a claim today, so a
+       client delete would be the ONLY release that exists — an unauthorised
+       one, performed by the party with the most to gain. */
+    await check('the owner cannot DELETE a claim',          assertFails(cl(asOwner).delete()));
+    await check('a platform admin cannot delete it',        assertFails(cl(asAdmin).delete()));
+    await check('a superAdmin cannot delete it',            assertFails(cl(asSuper).delete()));
+    await check('the SUBJECT cannot delete their own',      assertFails(cl(asInvitee).delete()));
+
+    /* POSITIVE CONTROL. Without it every denial above is equally consistent
+       with an empty collection — "denied" and "absent" are indistinguishable
+       to assertFails. */
+    let seeded = false;
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const d = await ctx.firestore().doc('employmentUidClaims/' + CLAIM).get();
+      seeded = d.exists && d.data().staffId === STAFF;
+    });
+    ck('CONTROL: the claim really exists, naming the employment that holds the uid', seeded);
+  }
 
   console.log('\n5 - CONTROL — the fixture is real and the engine is reachable');
   {

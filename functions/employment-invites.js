@@ -59,7 +59,11 @@ const _h = {};
 
 const INVITES = 'employmentInvites';
 const STAFF = 'hrStaff';
+const CLAIMS = 'employmentUidClaims';
 const INVITE_TTL_MS = 7 * 86400000;
+
+/** `employmentUidClaims/{businessId}_{uid}` — see `_claimRef` for the contract. */
+function claimId (businessId, uid) { return `${businessId}_${uid}`; }
 
 /** Invitation lifecycle. `superseded` is owned by THIS collection, not by the
     employment history: replacing an invitation changes no employment state
@@ -280,6 +284,40 @@ const acceptEmploymentInvite = onCall(OPT, _h.acceptEmploymentInvite = async (re
       reason,
     });
 
+    /* ── THE OCCUPANCY CLAIM (ADR-035 §4) ──────────────────────────────────
+       One organization may hold AT MOST ONE active employment per uid. The two
+       documents read above cannot enforce that: two DIFFERENT employments in
+       one business — E001 and E002 — invited to the same address and accepted
+       concurrently read DISJOINT documents, so nothing contends and both
+       commit. This claim is the only document those transactions share, and
+       therefore the only thing that can serialise them.
+
+       `create()`, never get()+set(). A pre-check plus a set would let both
+       callers pass the check and both commit; a621ba7 measured exactly that on
+       the money path — eight concurrent callers, eight ledger rows, zero
+       reported duplicates. create() fails when the document exists, so the
+       loser's WHOLE transaction aborts and takes its staff update, its invite
+       update and its event with it.
+
+       EXISTENCE IS THE ANSWER. The fields below are immutable provenance for
+       forensic attribution and are never read to decide anything: `staffId`
+       names WHICH employment holds the uid, which is what makes a collision
+       diagnosable. There is deliberately NO status/lifecycle field — the
+       moment the claim carries mutable state it becomes a second, smaller
+       authority on employment.
+
+       NOT RELEASED HERE, OR ANYWHERE YET. No code path terminates an ACTIVE
+       employment (revoke handles `pending` only), so nothing can delete this
+       claim. That is a stated dependency boundary on mechanisms #5/#7, not an
+       omission — see ADR-035 §4. */
+    const claimRef = db.collection(CLAIMS).doc(claimId(inv.businessId, auth.uid));
+    t.create(claimRef, {
+      businessId: inv.businessId,
+      uid: auth.uid,
+      staffId: inv.staffId,
+      createdAt: F.serverTimestamp(),
+    });
+
     /* WRITES. */
     t.update(staffRef, {
       uid: auth.uid,
@@ -293,6 +331,22 @@ const acceptEmploymentInvite = onCall(OPT, _h.acceptEmploymentInvite = async (re
     t.set(ev.ref, ev.payload);
 
     return { staffId: inv.staffId, businessId: inv.businessId };
+  }).catch((e) => {
+    /* THE EXPECTED UNIQUENESS LOSER. `create()` on an existing claim raises
+       ALREADY_EXISTS — gRPC code 6 in the Admin SDK — and the whole transaction
+       has already been discarded with it. Translated into a refusal the caller
+       can act on, rather than an error they would be tempted to retry.
+
+       ANYTHING ELSE IS RE-RAISED. A failed binding must never read as success,
+       and an unexpected error must not be laundered into a tidy
+       failed-precondition — the same discipline as finos-utils.js. */
+    const alreadyExists = e && (e.code === 6 || e.code === 'already-exists'
+      || /ALREADY_EXISTS/i.test(String(e.message || '')));
+    if (alreadyExists) {
+      throw new HttpsError('failed-precondition',
+        'This account already holds an active employment in this organization.');
+    }
+    throw e;
   });
 
   return { success: true, staffId: out.staffId, businessId: out.businessId };
@@ -367,4 +421,6 @@ module.exports = {
   revokeEmploymentInvite,
   INVITES,
   INVITE_STATUS,
+  CLAIMS,
+  claimId,
 };
