@@ -101,6 +101,15 @@ flags contamination). Background: `docs/GCP_COST_ARCHITECTURE_IMPLEMENTATION.md`
   appeared on `hrStaff` *and* on `hrTraining`; renaming the employment axis by pattern hit
   both and would have made every training invisible. Match on the owning collection, or
   edit the traced list of sites one at a time.
+- **A patch-generation script must fail closed BEFORE its single write.** Assert every anchor
+  matches exactly once, then `writeFileSync` once at the end — so a missed anchor leaves the
+  target untouched instead of half-patched. Demonstrated repeatedly on 2026-09-20: the shell
+  ate backslash escapes in a `node -e` heredoc three times (`\n` became a literal newline,
+  `\d` became `d`, backticks were command-substituted), and each time the guard meant nothing
+  was written. **When escaping makes the generated patch ambiguous, stop generating it and use
+  the Edit tool directly** — that is faster than debugging the quoting and cannot corrupt the
+  target. Applies equally to `firestore.rules`, where a mangled backtick silently emptied
+  three comment fragments while leaving the rule expressions intact.
 
 ## Evidence discipline
 - Verify the actual execution path and check the live site before claiming something works.

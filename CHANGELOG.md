@@ -1,3 +1,137 @@
+## 2026-09-20 (107) — Uniqueness is an occupancy claim, and a terminated employee reserves nothing
+
+**Documentation only · COMMITTED `15d60de` · NO implementation authorized · NOT DEPLOYED.**
+
+ADR-035 §4, frozen before any mechanism #1 code exists. A read-only investigation of the shipped
+`acceptEmploymentInvite` transaction and the repo's existing claim precedents settled it.
+
+### Why a claim is necessary, not stylistic
+
+`acceptEmploymentInvite` reads exactly two documents:
+
+```
+t.get(inviteRef)   employmentInvites/{token}
+t.get(staffRef)    hrStaff/{staffId}
+```
+
+That read set already makes **same-invite replay** safe by contention — two accepts of one token both
+read it, one commits, the loser retries and sees `accepted`.
+
+**It does nothing for this invariant.** Two employments in the same business — `E001` and `E002` —
+invited to the same address and accepted concurrently read **disjoint** documents. Nothing contends.
+**Both commit.** A claim at `employmentUidClaims/{businessId}_{uid}` is the only document those two
+transactions would share.
+
+### `create()`, never `get()` + `set()`
+
+`a621ba7` left the diagnosis in `finos-utils.js`, and it is the reason this decision was not left to
+implementation taste:
+
+> *"…this transaction performs no read of its own — so in Firestore it does not contend. Two
+> concurrent callers with the same idempotencyKey therefore both passed the pre-check and both
+> committed, writing TWO ledger rows for one payment. The money-path harness proved it: eight
+> concurrent callers, eight rows, zero reported duplicates. **A returned `duplicate: true` is not
+> evidence; the ledger state is.**"*
+
+The same shape is in production in at least eight modules. A loser catches `already-exists` (gRPC
+code 6); **anything else is re-raised** — a failed write must never read as success.
+
+### The claim is an existence assertion, and nothing else
+
+```
+claim exists  →  this (businessId, uid) currently has an ACTIVE employment binding
+claim absent  →  that uid is available in that business
+```
+
+**FORBIDDEN:** a `status`, `released`, `active` or any other mutable field. The moment it carries
+state it stops being a claim and becomes a second, smaller authority on employment — and a wrongly
+written `released` would silently permit a duplicate. `create()`'s entire value is that **existence
+is the answer**.
+
+**Occupancy, never history.** The claim is not an audit record; `employmentEvents` remains the sole
+historical authority.
+
+### Lifecycle — created and deleted inside the state transition
+
+| operation | claim operation |
+|---|---|
+| accept invitation | `create` |
+| terminate an active employment | `delete` |
+| rehire through a new invitation | `create` |
+| revoke a **pending** invitation | none — nothing was ever bound |
+| uid rebind | `delete` old **+** `create` new, atomically |
+| reinstate a terminated employment | `create` |
+| a failed claim `create` | the **entire** transaction fails |
+| a failed new-uid claim during rebind | the old binding and old claim are **retained** |
+
+### `uid_rebound` is a two-claim transition, in one transaction
+
+**FORBIDDEN:** deleting the old claim unless the new one can be established in the same transaction.
+A rebind that released the employee's existing identity and then failed would leave them **bound to
+nothing** while their old uid became claimable by someone else.
+
+### Reinstatement re-acquires, and may legitimately fail
+
+Termination releases the claim, so a terminated employment holds **no reservation**:
+
+```
+E001 / UID-A  →  terminated        claim released
+E002 / UID-A  →  accepted, active  claim taken by E002
+E001 / UID-A  →  reinstate         FAILS — E002 holds it
+```
+
+Written out in the ADR precisely so a future reader does not "fix" it. It follows directly from *one
+organization, at most one active employment per uid*. **A terminated employee does not hold an
+eternal reservation on their uid.**
+
+### Deliberately outside mechanism #1
+
+**Who may terminate, rebind or reinstate.** Mechanism #1 supplies the invariant; it does not decide
+who may trigger the transitions that move it. Those rules belong to §2 and mechanisms #5/#7.
+
+### Proof plan — emulator-backed, because the question *is* contention
+
+The in-process harness in `test-employment-invites.js` **serialises transactions** and says so. It
+cannot reproduce a race. Eleven scenarios, following `scripts/test-order-claim-race.js`:
+
+> *"A test that calls the claim twice in sequence proves nothing about a race … fired with
+> `Promise.all` against a live emulator — no mocks, no stubs, no simulated ordering."*
+
+Including: 10 concurrent accepts for the same business + uid → exactly one active; the same uid
+active in **different** businesses; termination releasing the claim and a later employment acquiring
+it; reinstatement colliding with an active employment; concurrent rebind/acceptance on the same new
+uid; and a failed claim producing **zero** employment mutation and **zero** event.
+
+**Final assertions must inspect Firestore state**, never a returned `{ duplicate: true }` or an error
+value — the money-path harness's own finding was eight callers each reporting success over a ledger
+holding eight rows.
+
+### Files affected
+- `docs/adr/ADR-035-employment-and-identity-binding.md` — §4 decided, open item 1 closed, status line
+- `AGENTS.md` — a process note, below
+
+### A process failure worth recording
+
+Building the patch script for this amendment, **the shell ate backslash escapes three times** —
+`\n` became a literal newline, `\d` became `d`, and backticks were command-substituted inside a
+`firestore.rules` comment. Each time the guard held: the scripts assert every anchor matches exactly
+once and perform a **single** `writeFileSync` at the end, so a mangled patch left the target
+untouched rather than half-written.
+
+Recorded in `AGENTS.md` as a demonstrated pattern, with the useful half stated plainly: a
+patch-generation script must fail closed **before** its sole write, and **when escaping makes the
+generated patch ambiguous, stop generating it and use the Edit tool** — faster than debugging the
+quoting, and it cannot corrupt the target.
+
+### Database / API / Security changes
+None. No code, no rules, no indexes, no schema written.
+
+### Deployment
+**NOT DEPLOYED.** Live remains `2fa2074` / `v635`.
+
+### Breaking changes
+None. A contract only.
+
 ## 2026-09-20 (106) — Binding a human to an employment, and the end of payable ghosts
 
 **Flow 86/0 · builder 95/0 · two rules suites 23/0 and 26/0 · sabotage 27/27 · COMMITTED
