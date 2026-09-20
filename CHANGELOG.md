@@ -1,3 +1,119 @@
+## 2026-09-20 (89) — A4-F3D: the writer that actually decided the entitlement
+
+**36/0 executing the shipped block · sabotage 7/7 RED · census gate 22/0 · COMMITTED `d28e719`, NOT DEPLOYED.**
+
+Entry 88 landed A4 and recorded that a third writer had been found afterwards. This closes it,
+and the investigation that preceded it changed what the defect was understood to be.
+
+### W2 was not a third opinion — it was the deciding one
+`webhookIntasend` is the handler that sets `payments/{ref}.status = COMPLETE`. COMPLETE is the
+precondition `activateSubscription` refuses to act without, and the webhook continues to the
+subscription write **in the same invocation**. The browser calls `activateSubscription` only after
+the confirmation it awaits (`IS.waitForConfirmation`), behind a human click on Continue — by which
+time the document exists, so `activateSubscription` matches its own `paymentRef` and returns
+without writing, and reconciliation declines because a document exists at all.
+
+Both writers A4 corrected yield to the one it did not. Whatever W2 recorded was what the merchant
+got — and W2 recorded thirty days while stamping `billingCycle: "annual"` on the same document,
+holding the cycle in the very object literal that ignored it.
+
+So this was never a race. It was an ordering-plus-idempotency defect: the uncorrected writer
+establishes the document first, and the corrected writers treat "a document exists for this
+paymentRef" as proof the entitlement is right.
+
+### The repair
+Four executable lines. The period now comes from `intent.billingCycle` via `_subPeriodEnd` — the
+same function `activateSubscription` uses, in the same file, so the two cannot drift. The
+`|| "monthly"` default is gone: it made an unknown cycle indistinguishable from a purchased
+monthly one. The recorded cycle and the recorded expiry now agree.
+
+Unchanged: document shape, `source` provenance, entitlement materialisation, and idempotency — a
+repeat delivery for the same `paymentRef` still writes nothing, a new `paymentRef` still activates
+as a renewal, now with its purchased term. Non-subscription intents are untouched.
+
+### Why this one SKIPS rather than throws — and why that is not a general rule
+An unknown cycle writes nothing and logs a named SKIP. The distinction being preserved:
+
+* COMPLETE payment + **no** entitlement → a gap the reconciliation sweep already reports as
+  `entitlement_gap`. Observable.
+* COMPLETE payment + **wrong** entitlement → a silent correctness failure nothing reports.
+
+Routing the refusal through the handler's `catch` would have logged it as "activation failed" and
+buried it among real faults. **This is specific to this handler's semantics and must not be
+generalised to other subscription paths** — `activateSubscription` still throws, which is correct
+for a caller that can be told.
+
+### The proof surface, replaced
+A4's suite asserted this handler wrote no expiry by searching the first 40,000 characters of it.
+The write is at **41,072**. The detector could not reach the code, and a negative-only assertion
+cannot distinguish that from absence. `scripts/test-subscription-expiry-writers.js` replaces it and
+asserts the **census** instead — every writer of `subscriptions/{uid}.expiresAt` is known and
+classified — because "function X does not write expiry" is a claim about one name and rots the
+moment code moves.
+
+It carries a positive control (a writer planted beyond the old boundary, proven found), an
+inverting control (the old slice detector proven to miss the same fixture), a negative control, a
+transaction-form control, and a synthetic fifth writer proving the count would break. Derivation is
+**read out of each writer's enclosing function**, not trusted from a table.
+
+Two detector faults surfaced while building it and are worth recording, because both produced
+confident wrong answers: handling only `collection(...).set()` and not `txn.set(ref, {...})` saw
+**one** of three known writers; and scoping to the innermost function caught transaction callbacks,
+so W1 and W3 read as "unknown" when both derive correctly. The known writers were used as a
+positive control on the census itself before it was trusted — which is how W4 was found.
+
+### The four writers
+| | Location | Live | Derived |
+|---|---|---|---|
+| W1 | `index.js` `activateSubscription` | yes | yes (A4) |
+| W2 | `index.js` `webhookIntasend` | yes | **yes (this entry)** |
+| W3 | `payment-reconciliation.js` heal path | yes | yes (A4) |
+| W4 | `entitlement-adapters.js` `activate()` | **latent** | no — `PLAN_DAYS = 30` |
+
+### Evidence gathered before the repair
+* **Live receiver — PROVEN.** Cloud Run logs, 30 days: IntaSend (157.245.201.212) has POSTed only
+  to `webhookintasend` (14× 200, 18× 400 — the 400s are payout batches and chargebacks carrying no
+  `api_ref`). `fossecurewebhook` received **zero** requests, authenticates by a header signature
+  IntaSend does not send, and writes no `subscriptions` document at all.
+* **Production impact — DISPROVEN as an occurrence.** Read-only scan: 7 subscription documents,
+  **0 annual**, 1 webhook-attributed monthly at a correct 30 days. The inverting control is what
+  makes that meaningful — there are no annual documents at all, not merely no suspicious ones. The
+  defect was live and loaded but had never fired. **Nothing to back-fill.**
+
+### Not done, deliberately
+- **W4 is untouched.** The webhook only `shadowCompareSubscription`s that adapter, never calls
+  `activate()`. Its `PLAN_DAYS = 30` may encode a different entitlement-engine contract, and its
+  comment claiming it "matches activateSubscription" is now stale — but a stale comment is not a
+  reason to change a writer whose callers are unestablished. See A4-F3E.
+- **`email-triggers.js` unmodified.** See A4-F2.
+- **No back-fill.** See A4-F1 — and note F3-C found nothing for it to act on.
+
+### Follow-ups (none implemented)
+- **A4-F1 — historical intents missing `billingCycle`.** Skipped and counted as `skippedNoCycle`.
+  No production remediation is supported by current evidence.
+- **A4-F2 — annual reminder cadence** in `email-triggers.js`, now that annual expiries are real.
+- **A4-F3E — W4 reachability.** Establish whether any live path invokes
+  `entitlement-adapters.activate()` for real subscriptions, and what contract `PLAN_DAYS` encodes.
+  **This, not deployment, is the next investigation** — the freeze blocks shipping anyway.
+
+### Files affected
+- `functions/index.js` — `webhookIntasend` derives the period from the intent; fail-closed skip
+- `scripts/test-webhook-subscription-entitlement.js` — new; extracts and EXECUTES the shipped block
+- `scripts/test-subscription-expiry-writers.js` — new; the census gate
+
+### Database / API / Security changes
+No schema change. No API change. Security: entitlement duration is no longer influenceable by a
+provider callback body. A4's suite is unchanged at 77/0 — its unsound assertion stands as recorded
+evidence and is superseded, not edited.
+
+### Deployment
+**NOT DEPLOYED.** Cloud Function change, held by the active Functions / Artifact Registry freeze.
+No deploy attempted. State: COMMITTED → NOT DEPLOYED.
+
+### Breaking changes
+None. One deliberate behaviour change: a subscription intent with no recorded `billingCycle` is now
+skipped by this writer instead of activated at thirty days.
+
 ## 2026-09-20 (88) — A4: entitlement now lasts as long as the cycle that was purchased — in two of three writers
 
 **77/0 · sabotage 9/9 RED independently · COMMITTED `b4c9495`, NOT DEPLOYED.**
