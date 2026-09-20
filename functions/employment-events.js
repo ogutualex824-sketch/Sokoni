@@ -55,6 +55,20 @@ const EVENTS = Object.freeze({
 const EMPLOYMENT_STATUS = Object.freeze(['pending', 'active', 'terminated']);
 const WORK_STATUS = Object.freeze(['working', 'on_leave', 'suspended']);
 
+/* ── The HISTORY's actor vocabulary (ADR-035 §6, amended 2026-09-20) ───────
+   TWO VOCABULARIES, DELIBERATELY DIFFERENT. Do not merge them.
+
+   `resolveMerchantAccess` returns via ∈ { owner, admin, self, platform } —
+   FROZEN AT FOUR by 2a — and never returns `invitee`, because accepting an
+   invitation is not organization authority.
+
+   This set merely overlaps it. `admin` and `self` are absent because neither
+   may cause an employment transition at all; `invitee` and `system` are absent
+   from the resolver because neither is a way of being authorized for an
+   ORGANIZATION. An invitee is authorized for exactly one transition, on exactly
+   one employment, by holding the invited identity. */
+const HUMAN_VIA = Object.freeze(['owner', 'platform', 'invitee']);
+
 /* ── The transition table ──────────────────────────────────────────────────
    `from` / `to` describe the REQUIRED status shape. `null` means the status
    itself must be null; `'*'` matches any value of that axis. `same: true`
@@ -65,7 +79,11 @@ const WORK_STATUS = Object.freeze(['working', 'on_leave', 'suspended']);
    their key is fixed and a retry is idempotent by construction. */
 const SPEC = Object.freeze({
   [EVENTS.ESTABLISHED]: { from: null, to: { e: 'pending', w: null }, key: () => 'employment_established' },
-  [EVENTS.INVITE_SENT]: { from: { e: 'pending', w: null }, to: { e: 'pending', w: null }, key: () => 'invite_sent' },
+  /* DISCRIMINATED BY THE INVITATION TOKEN. A resend is a distinct historical
+     act and must remain observable; a fixed key would make the second issuance
+     collide with the first. The token also makes the event idempotent — the
+     same invitation cannot produce two records. */
+  [EVENTS.INVITE_SENT]: { from: { e: 'pending', w: null }, to: { e: 'pending', w: null }, disc: 'inviteId', key: d => `invite_sent_${d}` },
   [EVENTS.INVITE_ACCEPTED]: { from: { e: 'pending', w: null }, to: { e: 'active', w: 'working' }, requiresNewUid: true, key: () => 'invite_accepted' },
   /* A revoked invitation ENDS the relationship. Leaving it `pending` would
      create a record nothing can ever close (ADR-035 §6, decided 2026-09-20). */
@@ -180,8 +198,8 @@ function employmentEvent (o) {
   }
   if (actorType === 'human') {
     if (!isIdFragment(changedBy)) bad("actorType 'human' requires changedBy to be a uid.");
-    if (changedVia !== 'owner' && changedVia !== 'platform') {
-      bad("actorType 'human' requires changedVia to be 'owner' or 'platform'.");
+    if (!HUMAN_VIA.includes(changedVia)) {
+      bad("actorType 'human' requires changedVia to be one of " + HUMAN_VIA.join(', ') + '.');
     }
   } else {
     if (changedBy !== null) bad("actorType 'system' requires changedBy to be null.");
@@ -247,4 +265,4 @@ function employmentEvent (o) {
   return { ref, payload };
 }
 
-module.exports = { employmentEvent, EVENTS, COLLECTION, EMPLOYMENT_STATUS, WORK_STATUS };
+module.exports = { employmentEvent, EVENTS, COLLECTION, EMPLOYMENT_STATUS, WORK_STATUS, HUMAN_VIA };

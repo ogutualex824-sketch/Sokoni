@@ -250,9 +250,21 @@ const MUTATING = ['approvePayrollRun', 'approveLeave', 'markTrainingComplete'];
   ok('the REAL merchant-authority is loaded, not a stub',
      !!AUTH_MOD && AUTH_MOD.AUTHORITY === 'businesses',
      AUTH_MOD ? 'AUTHORITY=' + AUTH_MOD.AUTHORITY : 'missing');
-  ok('twelve authority call sites now exist (8 requested + 4 record-anchored)',
-     SRC.split('assertMerchantAccess(req.auth').length - 1 === 12,
+  /* RE-ANCHORED 2026-09-20. This counted TWELVE assertMerchantAccess sites.
+     Gate 3 mechanism #3 moved establishment onto the provenance resolver — it
+     needs the `via` that assertMerchantAccess discards — so the Gate 1/Gate 2
+     contract now accounts for ELEVEN, plus one separately certified
+     establishment boundary. Counted by FORM, not by total: a total would be
+     satisfied by eleven of any kind. */
+  ok('eleven authority call sites keep the Gate 1 / Gate 2 contract (7 requested + 4 record-anchored)',
+     SRC.split('assertMerchantAccess(req.auth').length - 1 === 11,
      (SRC.split('assertMerchantAccess(req.auth').length - 1) + ' sites');
+  ok('  …and establishment resolves provenance separately, gated on owner | platform',
+     /const \{ via \} = await resolveMerchantAccess\(req\.auth, merchantId\);/.test(SRC)
+     && /if \(via !== 'owner' && via !== 'platform'\)/.test(SRC));
+  ok('  …so the four RECORD-anchored boundaries are still present',
+     ['runOrg', 'payslip.merchantId', 'leaveOrg', 'training.merchantId']
+       .every(a => SRC.includes('assertMerchantAccess(req.auth, ' + a + ')')));
   /* POSITIVE CONTROL for the stub: it must be able to serve a record AND record
      a write, or every "denied / did not write" verdict below is unattributable. */
   {
@@ -411,8 +423,17 @@ const MUTATING = ['approvePayrollRun', 'approveLeave', 'markTrainingComplete'];
   /* ── 8. STRICT SCOPE ───────────────────────────────────────────────────── */
   head('8 - nothing outside the authorization boundary moved');
   {
-    ok('hrStaff.uid is still unbound', /status: 'active', uid: null,/.test(SRC));
-    ok('no identity binding was introduced', SRC.split('uid: null').length - 1 === 1);
+    /* RE-ANCHORED 2026-09-20. The old regex pinned the neighbouring field name
+       (`status: 'active'`) rather than the property under test. What this
+       assertion has always been about is that ESTABLISHMENT leaves the identity
+       unbound — still true, and now stated on all three parts of the state. */
+    ok('establishment still leaves the identity unbound — pending / null / uid null',
+       /employmentStatus: 'pending', workStatus: null, uid: null,/.test(SRC));
+    ok('no identity binding is introduced AT ESTABLISHMENT',
+       SRC.split('uid: null').length - 1 === 1);
+    /* Binding belongs to the invitation gate, in its own module. */
+    ok('  …and this module never binds a uid itself',
+       !/uid: (req|request)\.auth\.uid/.test(SRC));
     ok('staffUid is consulted by NOTHING in the handler module', !/staffUid/.test(CODE));
     /* POSITIVE CONTROL: the stripper must not have blanked the file, or every
        absence assertion above it passes for free. */

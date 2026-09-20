@@ -5037,6 +5037,24 @@ service cloud.firestore {
       allow create, update, delete: if false; // CF-only — employment-events.js
     }
 
+    /* ── employmentInvites — binding a human to an employment (ADR-035 §3) ──
+       FULLY CF-ONLY, reads included. shopInvites carries `allow get: if true`,
+       which is tolerable for a document holding an email and a shop role; an
+       employment invitation names a salary-bearing relationship.
+
+       The token is a CALLABLE CAPABILITY, not a read key. The invitee never
+       reads this document — they present the token to acceptEmploymentInvite,
+       which reads it with the Admin SDK and checks their authenticated email
+       against it. Exposing the document would let anyone holding a link read
+       the businessId, the staffId and the invited address.
+
+       `superseded` lives in THIS collection's status, not in the employment
+       history: replacing an invitation changes no employment state
+       (pending -> pending), so it is not an employment event. */
+    match /employmentInvites/{token} {
+      allow read, create, update, delete: if false; // CF-only — employment-invites.js
+    }
+
     // ── Procurement ───────────────────────────────────────────────────────
     match /procSuppliers/{supplierId} {
       allow read:  if isAdmin()

@@ -69,11 +69,17 @@ const callCF = (() => {
    properties — `name,` became `'Jane',` — which is a syntax error and, worse,
    would have silently changed the very key names under test. */
 function buildPayload () {
+  /* `reason` added 2026-09-20. Gate 3 mechanism #3 made it a REQUIRED parameter
+     of addStaffMember — employment history records WHY a transition happened
+     (ADR-010), and establishment is a transition like any other. The page now
+     collects it, so the payload literal references it and the harness must
+     supply it or the literal cannot be evaluated at all. It is supplied as a
+     SCOPE VARIABLE, like every other field, never substituted into the source. */
   const fn = new Function('state', 'name', 'empNo', 'dept', 'position',
-                          'salary', 'startDate', 'phone', 'email',
+                          'salary', 'startDate', 'phone', 'email', 'reason',
                           'return (' + strip(PAYLOAD_SRC) + ');');
   return fn({ merchantId: 'm1' }, 'Jane', 'E001', 'Ops', 'Clerk',
-            50000, '2026-01-01', '0700000000', 'j@x.com');
+            50000, '2026-01-01', '0700000000', 'j@x.com', 'replacing Mary');
 }
 
 /* The shipped handler's own required-field predicate, lifted verbatim. */
@@ -109,6 +115,14 @@ const sent = payload ? callCF('addStaffMember', payload) : {};
   ok('and no longer carries employeeNo at this boundary', !('employeeNo' in sent));
   ok('the value is the form input, unchanged', sent.employeeNumber === 'E001',
      String(sent.employeeNumber));
+  /* The same UI-to-handler contract, for the field mechanism #3 made REQUIRED.
+     addStaffMember rejects a blank reason, so a page that collected it and
+     failed to send it would fail every call — the employeeNo defect again, in a
+     new field. Asserted here rather than assumed. */
+  ok('the payload carries the REQUIRED reason', 'reason' in sent,
+     Object.keys(sent).sort().join(','));
+  ok('  …with the value the form supplied, unchanged',
+     sent.reason === 'replacing Mary', String(sent.reason));
 }
 
 /* ── 2. callCF STILL FORWARDS VERBATIM ──────────────────────────────────── */

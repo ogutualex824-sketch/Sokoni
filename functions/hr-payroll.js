@@ -21,7 +21,8 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { defineSecret } = require('firebase-functions/params');
 const crypto = require('crypto');
-const { assertMerchantAccess } = require('./merchant-authority');
+const { assertMerchantAccess, resolveMerchantAccess } = require('./merchant-authority');
+const { employmentEvent, EVENTS: EMPLOYMENT_EVENTS } = require('./employment-events');
 
 const db = admin.firestore();
 const F = admin.firestore.FieldValue;
@@ -314,8 +315,18 @@ function assertAdmin(auth) {
 const addStaffMember = onCall(
   { ...OPT, secrets: [PAYROLL_ENCRYPTION_KEY] },
   _h.addStaffMember = async (req) => {
-    assertAdminOrManager(req.auth);
+    /* `assertAdminOrManager` REMOVED HERE, and only here. It tests a PLATFORM
+       claim (token.admin || token.manager); the owner gate below tests
+       ORGANIZATION authority. Requiring both makes establishment unreachable for
+       the actor ADR-035 §2 names: production holds 3 admin claims and ZERO
+       manager claims, and six of the eight merchant owners hold neither — so a
+       plain business owner could never establish employment in their own
+       business, which is the opposite of the ratified contract.
 
+       The owner gate is strictly narrower than the claim gate it replaces for
+       this handler: a platform admin still passes (via 'platform'), and an
+       organization owner now passes too. Every other handler in this module
+       keeps assertAdminOrManager unchanged. */
     const {
       merchantId,
       name,
@@ -328,6 +339,7 @@ const addStaffMember = onCall(
       kraPin,
       phone,
       email,
+      reason,
     } = req.data;
 
     // â”€â”€ Input validation â”€â”€
@@ -342,8 +354,32 @@ const addStaffMember = onCall(
        returns it is a request, not a fact. Canonical authority is
        businesses/{merchantId} — see merchant-authority.js. Presence is
        validated above, so the primitive's default-to-caller arm is never
-       reached from here. */
-    await assertMerchantAccess(req.auth, merchantId);
+       reached from here.
+
+       ESTABLISHMENT IS OWNER AUTHORITY, NOT MERCHANT ACCESS (ADR-035 §2).
+       Creating an employment relationship is not the same act as acting for a
+       merchant, so `assertMerchantAccess` is not enough here: `admin` (present
+       in adminUids) and `self` (merchantId === uid, which reads NO document and
+       cannot confirm the organization exists) are both refused.
+
+       DELIBERATE AUTHORIZATION CHANGE: a merchant admin who is in adminUids but
+       is not the owner can no longer establish employment.
+
+       The resolver decides the provenance ONCE and the event records what it
+       decided — `via` is never reconstructed from the token. */
+    const { via } = await resolveMerchantAccess(req.auth, merchantId);
+    if (via !== 'owner' && via !== 'platform') {
+      throw new HttpsError('permission-denied',
+        'Only the business owner may establish an employment relationship.');
+    }
+
+    /* ADR-010 forbids an audit entry without a reason, and establishment is an
+       employment transition like any other. A fixed string would satisfy the
+       validator and defeat the field. */
+    if (typeof reason !== 'string' || reason.trim() === '') {
+      throw new HttpsError('invalid-argument', 'reason is required and must be non-empty.');
+    }
+
     if (typeof grossSalary !== 'number' || grossSalary <= 0) {
       throw new HttpsError(
         'invalid-argument',
@@ -371,6 +407,23 @@ const addStaffMember = onCall(
     const staffId  = `${merchantId}_${employeeNumber}`;
     const staffRef = db.collection('hrStaff').doc(staffId);
 
+    /* THE EVENT IS BUILT BEFORE THE TRANSACTION, WRITTEN INSIDE IT.
+       employmentEvent performs no I/O — it only constructs a DocumentReference —
+       so building it here is safe, and `t.set` below makes the employment record
+       and its history entry land together or not at all (ADR-035 §6). */
+    const ev = employmentEvent({
+      businessId: merchantId,
+      staffId,
+      event: EMPLOYMENT_EVENTS.ESTABLISHED,
+      previousStatus: null,
+      newStatus: { employmentStatus: 'pending', workStatus: null },
+      actorType: 'human',
+      changedBy: req.auth.uid,
+      /* The provenance the AUTHORITY LAYER decided, never re-derived here. */
+      changedVia: via,
+      reason,
+    });
+
     await db.runTransaction(async t => {
       const snap = await t.get(staffRef);
       if (snap.exists) throw new HttpsError('already-exists', `Employee number ${employeeNumber} already exists for this merchant.`);
@@ -378,9 +431,14 @@ const addStaffMember = onCall(
         merchantId, name, employeeNumber, department, position, grossSalary,
         startDate, bankAccount: encryptedBankAccount,
         kraPin: kraPin || null, phone: phone || null, email: email || null,
-        status: 'active', uid: null,
+        /* PENDING, NOT ACTIVE. `active` is the payable state and nothing is bound
+           to pay: runPayroll selects on employmentStatus and does not consult
+           uid, so an `active` record with uid null would produce a payslip for a
+           human the platform cannot name. Binding happens at acceptance. */
+        employmentStatus: 'pending', workStatus: null, uid: null,
         createdAt: F.serverTimestamp(), createdBy: req.auth.uid,
       });
+      t.set(ev.ref, ev.payload);
     });
 
     return { staffId, message: 'Staff member added successfully.' };
@@ -589,7 +647,7 @@ const runPayroll = onCall(
     const staffSnap = await db
       .collection('hrStaff')
       .where('merchantId', '==', merchantId)
-      .where('status', '==', 'active')
+      .where('employmentStatus', '==', 'active')
       .get();
 
     if (staffSnap.empty) {
@@ -1258,7 +1316,7 @@ const getStaffDashboard = onCall(OPT, _h.getStaffDashboard = async (req) => {
     db
       .collection('hrStaff')
       .where('merchantId', '==', merchantId)
-      .where('status', '==', 'active')
+      .where('employmentStatus', '==', 'active')
       .get(),
 
     // b. Today's attendance
@@ -1279,7 +1337,10 @@ const getStaffDashboard = onCall(OPT, _h.getStaffDashboard = async (req) => {
     // d. Active trainings
     db
       .collection('hrTraining')
-      .where('merchantId', '==', merchantId)
+      /* hrTraining has its OWN `status` field, written 'active' by
+         assignTraining. It is NOT the employment axis and must not be renamed
+         with it — a blanket rename of `.where('status','==','active')` hit this
+         line too, which would have made every training invisible. */
       .where('status', '==', 'active')
       .get(),
 

@@ -323,10 +323,20 @@ async function call (fn, auth, requested) {
        describing this one's scope. Narrowed to the two modules mechanism #2
        genuinely must not touch: the payroll handlers it authorizes, and the
        crm.js fail-open it deliberately leaves alone (ADR-035 §8). */
+    /* NARROWED AGAIN 2026-09-20. `functions/hr-payroll.js` was dropped: Gate 3
+       mechanism #3 legitimately modifies it — establishment now resolves through
+       resolveMerchantAccess and writes `employmentStatus: 'pending'`. A scope
+       assertion that fails on another gate's authorized work has stopped
+       describing this one's scope.
+
+       `crm.js` remains, and it is the one that matters: its fail-open is
+       ADR-035 §8, recorded and DELIBERATELY not repaired here. If it ever
+       becomes dirty during a mechanism #2 change, that is this gate leaking. */
     const g = require('child_process').execFileSync('git',
-      ['-C', ROOT, 'status', '--porcelain', '--', 'functions/hr-payroll.js', 'functions/crm.js'],
+      ['-C', ROOT, 'status', '--porcelain', '--', 'functions/crm.js'],
       { encoding: 'utf8' }).trim();
-    ok('hr-payroll.js and crm.js are untouched', g === '', g || 'clean');
+    ok('crm.js is untouched — its fail-open is ADR-035 §8, a separate repair',
+       g === '', g || 'clean');
   }
 
   console.log('\n  what this suite does NOT prove');

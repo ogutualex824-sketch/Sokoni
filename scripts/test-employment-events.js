@@ -103,8 +103,15 @@ const base = extra => Object.assign(
 /** All twelve, each with a payload that MUST be accepted. */
 const VALID = {
   employment_established: base({ event: 'employment_established', previousStatus: null, newStatus: PENDING }),
-  invite_sent: base({ event: 'invite_sent', previousStatus: PENDING, newStatus: PENDING }),
-  invite_accepted: base({ event: 'invite_accepted', previousStatus: PENDING, newStatus: WORKING, newUid: EMP }),
+  /* invite_sent is DISCRIMINATED BY THE INVITATION TOKEN: a resend is a distinct
+     historical act, so a fixed key would make the second issuance collide with
+     the first (ADR-035 §6, decided 2026-09-20). */
+  invite_sent: base({ event: 'invite_sent', previousStatus: PENDING, newStatus: PENDING, inviteId: 'INV1' }),
+  /* Acceptance is performed by the INVITEE — not the owner, not the platform,
+     not a system actor. `changedVia: 'invitee'` is the fourth human value. */
+  invite_accepted: Object.assign(
+    base({ event: 'invite_accepted', previousStatus: PENDING, newStatus: WORKING, newUid: EMP }),
+    { actorType: 'human', changedBy: EMP, changedVia: 'invitee' }),
   invite_revoked: base({ event: 'invite_revoked', previousStatus: PENDING, newStatus: TERMINATED }),
   uid_rebound: base({ event: 'uid_rebound', previousStatus: WORKING, newStatus: WORKING, previousUid: OLD_EMP, newUid: EMP, transitionId: 'T1' }),
   leave_granted: base({ event: 'leave_granted', previousStatus: WORKING, newStatus: ON_LEAVE, leaveId: 'L1' }),
@@ -178,6 +185,15 @@ const mut = (evt, patch) => Object.assign({}, VALID[evt], patch);
     const g = build(VALID.leave_granted).out.ref.path;
     const e = build(VALID.leave_ended).out.ref.path;
     ok('granted and ended for the SAME leave are distinct documents', g !== e, g + ' vs ' + e);
+    /* THE RESEND CASE. A replacement invitation is a distinct historical act, so
+       issuing a second one must produce a second event rather than colliding
+       with — or silently overwriting — the first. */
+    const s1 = build(VALID.invite_sent).out.ref.path;
+    const s2 = build(mut('invite_sent', { inviteId: 'INV2' })).out.ref.path;
+    ok('a RESENT invitation produces a distinct invite_sent event',
+       s1 !== s2 && /_invite_sent_INV1$/.test(s1) && /_invite_sent_INV2$/.test(s2), s1 + ' vs ' + s2);
+    ok('  …and the same token twice yields the SAME reference — idempotent',
+       build(VALID.invite_sent).out.ref.path === s1);
     const paths = Object.values(VALID).map(p => build(p).out.ref.path);
     ok('all twelve produce distinct references', new Set(paths).size === 12, new Set(paths).size + '/12');
   }
@@ -246,6 +262,22 @@ const mut = (evt, patch) => Object.assign({}, VALID[evt], patch);
   {
     const r = build(mut('leave_granted', { actorType: 'human', changedBy: OWNER, changedVia: 'platform' }));
     ok("ACCEPTS changedVia 'platform' — ratified 2a", r.code === null, r.code || 'accepted');
+    /* THE FOURTH HUMAN VALUE. The acceptor of an invitation is the employee —
+       none of owner, platform or system — and their uid is known, so recording
+       them as `system` with changedBy null would be false twice over. */
+    const inv = build(VALID.invite_accepted);
+    ok("ACCEPTS changedVia 'invitee' on invite_accepted", inv.code === null, inv.code || 'accepted');
+    ok('  …and records the INVITEE as changedBy, not the owner',
+       inv.out && inv.out.payload.changedBy === EMP && inv.out.payload.changedVia === 'invitee',
+       inv.out ? inv.out.payload.changedBy + '/' + inv.out.payload.changedVia : '');
+    /* TWO VOCABULARIES, DELIBERATELY DIFFERENT. `invitee` belongs to the HISTORY
+       and must never leak into the resolver's frozen four; conversely `admin`
+       and `self` are resolver values that may not cause an employment
+       transition. Both directions are asserted — above for admin/self, here for
+       the taxonomy's exact membership. */
+    ok('CONTROL — the human tier is exactly owner, platform, invitee',
+       !!EV && EV.HUMAN_VIA && EV.HUMAN_VIA.slice().sort().join(',') === 'invitee,owner,platform',
+       EV && EV.HUMAN_VIA ? EV.HUMAN_VIA.join(',') : 'not exported');
   }
 
   /* ── 8. THE MASQUERADE GUARD ───────────────────────────────────────────── */

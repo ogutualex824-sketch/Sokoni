@@ -680,6 +680,15 @@
           <label for="sfEmail">Email Address</label>
           <input type="email" id="sfEmail" placeholder="jane@example.com" autocomplete="email">
         </div>
+        <!-- Employment history records WHY every transition happened, not only
+             what changed (ADR-010). Establishing employment is a transition like
+             any other, so the reason is required rather than defaulted — a fixed
+             string would satisfy the validator and defeat the field. -->
+        <div class="hr-field hr-field-full">
+          <label for="sfReason">Reason for hiring *</label>
+          <input type="text" id="sfReason" maxlength="300"
+                 placeholder="e.g. Replacing Mary in the Nairobi branch">
+        </div>
       </div>
     </div>
     <div class="hr-modal-footer">
@@ -1064,9 +1073,16 @@
       return;
     }
     tbody.innerHTML = state.staff.map(function (s) {
-      const badge = s.status === 'active'
+      /* THREE STATES, not two. `pending`, `active` and `terminated` are
+         materially different: a pending employment has no bound identity and
+         nobody to pay, which is not the same thing as a finished one. Rendering
+         everything that is not `active` as "Inactive" hid that distinction. */
+      const es = s.employmentStatus;
+      const badge = es === 'active'
         ? '<span class="hr-badge hr-badge-green">Active</span>'
-        : '<span class="hr-badge hr-badge-gray">Inactive</span>';
+        : es === 'pending'
+          ? '<span class="hr-badge hr-badge-orange">Pending invite</span>'
+          : '<span class="hr-badge hr-badge-gray">Ended</span>';
       return '<tr>' +
         '<td><strong>' + esc(s.name) + '</strong></td>' +
         '<td>' + esc(s.employeeNo || '—') + '</td>' +
@@ -1088,7 +1104,7 @@
 
   function openAddStaff() {
     if (!state.merchantId) { showToast('Load a merchant first.', 'warning'); return; }
-    ['sfName','sfEmpNo','sfPosition','sfPhone','sfEmail'].forEach(function (id) {
+    ['sfName','sfEmpNo','sfPosition','sfPhone','sfEmail','sfReason'].forEach(function (id) {
       document.getElementById(id).value = '';
     });
     document.getElementById('sfDept').value    = '';
@@ -1106,9 +1122,16 @@
     const startDate = document.getElementById('sfStartDate').value;
     const phone     = document.getElementById('sfPhone').value.trim();
     const email     = document.getElementById('sfEmail').value.trim().toLowerCase();
+    const reason    = document.getElementById('sfReason').value.trim();
 
     if (!name || !empNo || !dept || !position || salary <= 0 || !startDate) {
       showToast('Please fill in all required fields.', 'warning');
+      return;
+    }
+    /* The backend rejects an empty reason; catching it here gives a useful
+       message instead of a generic invalid-argument. */
+    if (!reason) {
+      showToast('Please give a reason for this hire — it is recorded in the employment history.', 'warning');
       return;
     }
 
@@ -1125,6 +1148,7 @@
       name, employeeNumber: empNo, department: dept, position,
       grossSalary: salary, startDate,
       phone: phone || null, email: email || null,
+      reason,
     }).then(function () {
       showToast('Staff member added successfully.', 'success');
       closeModal('addStaffModal');
@@ -1525,7 +1549,10 @@
 
   function populateTrainingStaffList() {
     const container = document.getElementById('trainingStaffList');
-    const active = state.staff.filter(function (s) { return s.status !== 'inactive'; });
+    /* Was `s.status !== 'inactive'` — a value NO writer has ever written, so it
+       admitted everything. Only an ACTIVE employment can be assigned training:
+       a pending one has nobody bound to it yet. */
+    const active = state.staff.filter(function (s) { return s.employmentStatus === 'active'; });
     if (!active.length) {
       container.innerHTML = '<div class="hr-empty" style="padding:12px;">No active staff loaded yet.</div>';
       return;

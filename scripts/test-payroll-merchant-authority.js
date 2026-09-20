@@ -211,8 +211,21 @@ const reach = (tier, uid) => (tier === 'claim' ? asManager(uid) : asUser(uid));
      !!AUTH_MOD && AUTH_MOD.AUTHORITY === 'businesses' && typeof AUTH_MOD.assertMerchantAccess === 'function',
      AUTH_MOD ? 'AUTHORITY=' + AUTH_MOD.AUTHORITY : 'missing');
   ok('hr-payroll imports it', /require\('\.\/merchant-authority'\)/.test(SRC));
-  ok('eight requested-merchantId boundaries exist in the shipped source',
-     REQUESTED === 8, REQUESTED + ' of the requested form');
+  /* RE-ANCHORED 2026-09-20. This counted EIGHT requested-merchantId boundaries.
+     Gate 3 mechanism #3 moved ONE of them — addStaffMember — onto the
+     provenance resolver, because establishing employment is owner authority and
+     assertMerchantAccess discards the `via` that decision needs. So the shape is
+     now SEVEN request-bound boundaries plus ONE establishment boundary, and the
+     assertion DISCRIMINATES them syntactically rather than counting a total: a
+     total would be satisfied by eight of either kind. */
+  const ESTABLISH_FORM = /const \{ via \} = await resolveMerchantAccess\(req\.auth, merchantId\);/g;
+  const ESTABLISH = (CODE.match(ESTABLISH_FORM) || []).length;
+  ok('seven request-bound assertMerchantAccess boundaries remain',
+     REQUESTED === 7, REQUESTED + ' of the requested form');
+  ok('and ONE establishment boundary resolves provenance instead',
+     ESTABLISH === 1, ESTABLISH + ' resolveMerchantAccess establishment site(s)');
+  ok('  …gated on owner | platform, never admin or self',
+     /if \(via !== 'owner' && via !== 'platform'\)/.test(CODE));
   /* POSITIVE CONTROL. The matcher must be able to match, and must DISCRIMINATE:
      it has to find the record-anchored calls with the other pattern while
      excluding them from the count above. A matcher that can find nothing would
@@ -251,7 +264,14 @@ const reach = (tier, uid) => (tier === 'claim' ? asManager(uid) : asUser(uid));
 
   /* ── 2. THE LEGITIMATE PATHS ───────────────────────────────────────────── */
   head('2 - the authorized paths still work');
+  /* CONTRACT CHANGE, NOT ANCHOR ROT. addStaffMember is no longer a
+     merchant-ACCESS handler: mechanism #3 made establishment owner authority
+     (ADR-035 §2), so `admin` and `self` are now DENIED there by design. That is
+     a different expectation, asserted below in BOTH directions, not a stale
+     string. Every other handler keeps the Gate 1 contract unchanged. */
+  const ESTABLISHMENT = 'addStaffMember';
   for (const [name, tier, mk] of CASES) {
+    if (name === ESTABLISHMENT) continue;
     const owner  = await invoke(name, reach(tier, OWNER),  mk(MINE));
     const member = await invoke(name, reach(tier, MEMBER), mk(MINE));
     const sole   = await invoke(name, reach(tier, OWNER),  mk(SOLE));
@@ -259,6 +279,28 @@ const reach = (tier, uid) => (tier === 'claim' ? asManager(uid) : asUser(uid));
     ok(name + ' admits an adminUids member',       !member.denied, 'code=' + member.code);
     /* ISOLATES ownerId: this organization has no adminUids at all. */
     ok(name + ' admits an owner who is NOT an adminUid', !sole.denied, 'code=' + sole.code);
+  }
+
+  head('2b - addStaffMember is ESTABLISHMENT authority, proven both ways');
+  {
+    const mk = CASES.find(c => c[0] === ESTABLISHMENT)[2];
+    const owner = await invoke(ESTABLISHMENT, reach('claim', OWNER), mk(MINE));
+    ok('PERMITS the business owner', !owner.denied, 'code=' + owner.code);
+    const sole = await invoke(ESTABLISHMENT, reach('claim', OWNER), mk(SOLE));
+    ok('PERMITS an owner who is NOT an adminUid', !sole.denied, 'code=' + sole.code);
+    const plat = await invoke(ESTABLISHMENT, asAdmin('U_PLATFORM'), mk(MINE));
+    ok('PERMITS a platform admin — ratified 2a', !plat.denied, 'code=' + plat.code);
+
+    const member = await invoke(ESTABLISHMENT, reach('claim', MEMBER), mk(MINE));
+    ok('DENIES an adminUids member — access is not employment authority',
+       member.denied, 'code=' + member.code);
+    /* ADR-035 §2 froze `self` as NEVER employment authority: the arm returns
+       before reading anything and cannot confirm the organization exists. */
+    const self = await invoke(ESTABLISHMENT, reach('claim', 'U_SELFORG'), mk('U_SELFORG'));
+    ok('DENIES the self arm — merchantId === uid proves nothing was created',
+       self.denied, 'code=' + self.code);
+    const stranger = await invoke(ESTABLISHMENT, reach('claim', STRANGER), mk(MINE));
+    ok('DENIES a stranger', stranger.denied, 'code=' + stranger.code);
   }
 
   /* ── 3. PLATFORM ADMIN + FAIL CLOSED ───────────────────────────────────── */
@@ -275,9 +317,20 @@ const reach = (tier, uid) => (tier === 'claim' ? asManager(uid) : asUser(uid));
   /* One production business is still keyed by its owner's uid
      (businesses/D5Ql…). The primitive returns early on merchantId === uid, so
      that merchant must pass with NO businesses document at all. */
+  /* addStaffMember is EXCLUDED, and its opposite expectation is asserted in 2b.
+     The legacy form IS the `self` arm, which ADR-035 §2 froze as never
+     employment authority — so the very compatibility this section protects for
+     the other seven handlers is deliberately absent from establishment. */
   for (const [name, tier, mk] of CASES) {
+    if (name === ESTABLISHMENT) continue;
     const r = await invoke(name, reach(tier, 'U_LEGACY'), mk('U_LEGACY'));
     ok(name + ' admits a merchant whose merchantId IS their uid', !r.denied, 'code=' + r.code);
+  }
+  {
+    const est = await invoke(ESTABLISHMENT, reach('claim', 'U_LEGACY'),
+                            CASES.find(c => c[0] === ESTABLISHMENT)[2]('U_LEGACY'));
+    ok('CONTRAST — establishment REFUSES the same legacy form, by design',
+       est.denied, 'code=' + est.code);
   }
   {
     const r  = await invoke('getStaffDashboard', asManager('U_LEGACY'), { merchantId: 'U_LEGACY' });
@@ -338,9 +391,17 @@ const reach = (tier, uid) => (tier === 'claim' ? asManager(uid) : asUser(uid));
        !changed.includes('functions/crm.js'), changed.join(' '));
     ok('merchant-authority.js is untouched by THIS gate',
        !changed.includes('functions/merchant-authority.js'), changed.join(' '));
-    ok('the hrStaff write shape is unchanged — uid is still null',
-       /status: 'active', uid: null,/.test(SRC));
-    ok('no uid binding was introduced', SRC.split('uid: null').length - 1 === 1);
+    /* RE-ANCHORED 2026-09-20. The old regex pinned `status: 'active', uid: null`
+       — the neighbouring FIELD NAME, not the property under test. Mechanism #3
+       renamed the axis and changed the birth state; `uid` is still null, which
+       is what this assertion was always about. The new anchor names all three
+       parts of the established state explicitly. */
+    ok('establishment writes pending / null / unbound',
+       /employmentStatus: 'pending', workStatus: null, uid: null,/.test(SRC));
+    ok('  …and the payable `active + uid null` birth state is GONE',
+       !/employmentStatus: 'active'[^\n]*uid: null/.test(SRC) && !/status: 'active', uid: null/.test(SRC));
+    ok('no uid binding is introduced AT ESTABLISHMENT',
+       SRC.split('uid: null').length - 1 === 1);
     ok('decryptData is still called from nowhere',
        SRC.split('decryptData').length - 1 === 1, 'definition only');
     ok('no payment, payout or disbursement code was added',

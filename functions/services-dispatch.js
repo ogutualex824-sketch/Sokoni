@@ -30,6 +30,7 @@ const healthcareHub    = require('./healthcare-hub');
 const securityIdentity = require('./security-identity');
 const jobs             = require('./jobs');
 const hrPayroll        = require('./hr-payroll');
+const employmentInvites = require('./employment-invites');
 const b2bWholesale     = require('./b2b-wholesale');
 const propertyHub      = require('./property-hub');
 
@@ -48,6 +49,7 @@ const _H = _merge(
   securityIdentity._h,
   jobs._h,
   hrPayroll._h,
+  employmentInvites._h,
   b2bWholesale._h,
   propertyHub._h
 );
