@@ -365,8 +365,16 @@ function _syncTabs(){
 }
 
 function render(){
-  if(st.loading) return;
+  /* BEFORE the loading guard, deliberately. The tab highlight is state, not
+     data: it is known from the URL at first paint and must not wait for
+     Firestore. With this below the guard, ?tab=services selected the right
+     rows but left "All" highlighted for the whole load — and FOREVER in any
+     error state, because render() returns early there and never reaches the
+     sync. Caught by the browser pass, which is the only thing that could
+     have: the deep-link tests assert that render() calls _syncTabs(), and it
+     does — just not on the path that matters. */
   _syncTabs();
+  if(st.loading) return;
   const sc=st.scope;
   $('scopebar').innerHTML =
     `<span class="sc ${sc.sellsProducts?'on':''}">${sc.sellsProducts?'✓':'○'} PRODUCTS</span>`+
@@ -535,6 +543,13 @@ window.Cat = {
 };
 
 (async()=>{
+  /* Sync the tab highlight ONCE, unconditionally, before anything can return.
+     Three boot paths below — no config, signed out, load error — replace the
+     body and return WITHOUT calling render(), so a fix inside render() alone
+     still left ?tab=services showing a highlighted "All". The highlight comes
+     from the URL and owes nothing to Firebase. */
+  _syncTabs();
+
   if(!cfg){ st.loading=false; $('body').innerHTML='<div class="empty"><h3>Unavailable</h3><p>Could not reach SOKONI. Please reload.</p></div>'; return; }
   const app=getApps().length?getApps()[0]:initializeApp(cfg);
   auth=getAuth(app); db=getFirestore(app);

@@ -53,8 +53,23 @@ ck('…and a VALID tab is still honoured', initialTabFor('?tab=services') === 's
 console.log('\n── The highlight is synced from state, not assumed ──');
 {
   ck('a _syncTabs helper exists', /function _syncTabs\(\)/.test(html));
-  ck('…and render() calls it, so first paint is correct',
-     /function render\(\)\{[\s\S]{0,80}_syncTabs\(\)/.test(html));
+  /* The property, not the proximity. A character-window check broke the
+     moment a comment was added between the two, while the behaviour it was
+     guarding had just been made STRONGER. What matters is that the highlight
+     never waits for data:
+       · inside render(), _syncTabs() runs BEFORE the `st.loading` early return
+       · and boot calls it once regardless, because three boot paths (no
+         config, signed out, load error) replace the body and return WITHOUT
+         ever calling render(). */
+  {
+    const r = html.slice(html.indexOf('function render(){'));
+    const syncAt = r.indexOf('_syncTabs();');
+    const guardAt = r.indexOf('if(st.loading) return;');
+    ck('…render() syncs BEFORE the loading guard',
+       syncAt > -1 && guardAt > -1 && syncAt < guardAt, syncAt + ' < ' + guardAt);
+    ck('…and boot syncs once regardless of which path it takes',
+       /\(async\(\)=>\{[\s\S]{0,600}_syncTabs\(\);[\s\S]{0,200}if\(!cfg\)/.test(html));
+  }
   ck('…driven by VALID_TABS rather than a second hard-coded list',
      /VALID_TABS\[i\]===st\.tab/.test(html));
   ck('st.tab is seeded from the URL', /tab:_initialTab\(\)/.test(html));
