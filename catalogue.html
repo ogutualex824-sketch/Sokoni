@@ -6,6 +6,29 @@
 <title>My Catalogue · SOKONI</title>
 <meta name="description" content="Manage everything you sell and every service you provide, in one catalogue.">
 <link rel="icon" href="assets/sokoni-logo-dark.png">
+<script>
+/* ── SHELL EMBEDDING ────────────────────────────────────────────────────────
+   Merchant V2 mounts kind:'page' routes in an iframe (merchant-v2.html:1417),
+   so this page renders inside a shell that already provides a header, a title
+   and navigation. Drawing our own on top of it gives the merchant two.
+
+   Detected two ways, deliberately:
+     window.parent !== window   the structural fact — true however we were
+                                opened, including a route that forgets the flag
+     ?shell=merchant            the declared intent, matching the convention
+                                plans.html:377 already uses
+
+   Either is sufficient. Set on <html> BEFORE first paint so CSS hides the
+   chrome rather than JavaScript removing it after the merchant has seen it —
+   the same reason pos.html:117 does it inline. */
+(function () {
+  try {
+    var declared = new URLSearchParams(location.search).get('shell') === 'merchant';
+    var framed   = !!(window.parent && window.parent !== window);
+    if (declared || framed) document.documentElement.classList.add('in-merchant-shell');
+  } catch (_) { /* never block the page over chrome */ }
+})();
+</script>
 <style>
 :root{
   --bg:#050505;--sur:#0d0d0d;--sur2:#141414;--sur3:#1c1c1c;
@@ -82,6 +105,14 @@ h1{font-size:clamp(23px,5.4vw,31px);font-weight:900;letter-spacing:-.025em;margi
 .skel{height:108px;border-radius:15px;background:linear-gradient(90deg,var(--sur2),var(--sur3),var(--sur2));
   background-size:200% 100%;animation:sh 1.3s infinite}
 @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* Inside Merchant V2 the shell already shows the business name, the title and
+   the scope. Hide only the DUPLICATED chrome — the toolbar, tabs, search and
+   the catalogue itself all stay, because they are the reason the route exists.
+   The sticky offset goes too: the shell owns the scroll container. */
+html.in-merchant-shell header{display:none}
+html.in-merchant-shell body{padding-top:4px}
+html.in-merchant-shell .bar{position:static;background:none;padding-top:8px}
 
 /* modal */
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(7px);z-index:100;
@@ -248,7 +279,24 @@ let db=null, auth=null, uid=null;
 
 const $ = (id)=>document.getElementById(id);
 const esc = (s)=>String(s==null?'':s).replace(/[<>"'&]/g,c=>({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c]));
-const st = { rows:[], scope:null, tab:'all', kind:'product', editing:null, variable:false, loading:true, busy:false };
+/* ── DEEP LINK ──────────────────────────────────────────────────────────────
+   Merchant V2's `services` route opens catalogue.html?tab=services, so the
+   Services tab must already be selected when the page paints. Without this the
+   merchant clicks "Services" in the sidebar and lands on All — the route
+   appears broken even though it resolved correctly.
+
+   An unrecognised tab falls back to 'all' rather than rendering an empty list
+   for a filter nothing matches: a typo in a link should show the catalogue,
+   not an empty one. */
+const VALID_TABS = ['all', 'products', 'services'];
+function _initialTab(){
+  try{
+    const t = new URLSearchParams(location.search).get('tab');
+    return VALID_TABS.indexOf(t) !== -1 ? t : 'all';
+  }catch(_){ return 'all'; }
+}
+
+const st = { rows:[], scope:null, tab:_initialTab(), kind:'product', editing:null, variable:false, loading:true, busy:false };
 
 /* Mirrors functions/shared/business-scope.js. Presentation only — the server
    re-decides. Kept identically strict: unknown status is NOT active. */
@@ -307,8 +355,18 @@ function createBlockReason(kind){
   return side.reason || M.unavailableReason(st.scope, kind);
 }
 
+/* The markup hard-codes All as selected. A deep link changes st.tab before
+   first paint, so the highlight has to be synced from state rather than
+   assumed — otherwise ?tab=services shows service rows under a highlighted
+   "All", which reads as a bug in the filter. */
+function _syncTabs(){
+  document.querySelectorAll('.tab').forEach((b,i)=>
+    b.setAttribute('aria-selected', String(VALID_TABS[i]===st.tab)));
+}
+
 function render(){
   if(st.loading) return;
+  _syncTabs();
   const sc=st.scope;
   $('scopebar').innerHTML =
     `<span class="sc ${sc.sellsProducts?'on':''}">${sc.sellsProducts?'✓':'○'} PRODUCTS</span>`+
@@ -365,8 +423,15 @@ function cardHTML(r){
 window.Cat = {
   tab(t){
     st.tab=t;
-    document.querySelectorAll('.tab').forEach((b,i)=>
-      b.setAttribute('aria-selected', String(['all','products','services'][i]===t)));
+    _syncTabs();
+    /* Keep the URL honest so a reload, a back button or a copied link lands on
+       the same tab the merchant is looking at. replaceState, not pushState —
+       switching a filter is not a navigation step to go "back" through. */
+    try{
+      const u=new URL(location.href);
+      if(t==='all') u.searchParams.delete('tab'); else u.searchParams.set('tab',t);
+      history.replaceState(null,'',u);
+    }catch(_){}
     render();
   },
   render,

@@ -201,25 +201,25 @@ console.log('\n── 13/14/15. Nothing outside the shell and the contract was t
   const both = shellSrc + navSrc;
   ck('13. no payment-purposes reference', !/payment-purposes/.test(both));
 
-  /* 14. Asserted over THIS SLICE'S DIFF, not the whole file.
+  /* 14. A COUNT, not a diff.
+     The first draft scanned `git diff HEAD`, which passed vacuously the moment
+     these files were committed — the diff went empty and "adds no payment
+     reference" became true of nothing. Its positive control caught that, which
+     is the only reason it is not still there passing for the wrong reason.
+
      merchant-v2.html already referenced createPaymentIntent at line 2763
-     before this change — a whole-file scan would report a pre-existing line
-     as a violation of a boundary this slice actually honoured, which is the
-     wrong reading in both directions. What matters is that the diff adds
-     none. */
-  const { execSync } = require('child_process');
-  let added = '';
-  try {
-    added = execSync('git diff HEAD -- merchant-v2.html sokoni-merchant-nav.js sokoni-merchant-routes.js',
-      { cwd: root, encoding: 'utf8' })
-      .split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++')).join('\n');
-  } catch (_) { added = ''; }
-  ck('14. this slice ADDS no payment-receiver reference',
-     !/webhookIntasend|completeMultiTender|createPaymentIntent/.test(added),
-     added.length + ' added chars scanned');
-  /* Positive control: the diff scan actually saw this slice's additions. */
-  ck('…and the diff scan is not empty (positive control)',
-     /decideRoute|SokoniMerchantNav/.test(added), added.length + ' chars');
+     before this work, so the durable property is not "zero" but "still exactly
+     the one that was always there". A second occurrence — added by anyone,
+     whenever — fails this. */
+  const payRefs = (s) => (s.match(/webhookIntasend|completeMultiTender|createPaymentIntent/g) || []).length;
+  ck('14. the shell still has exactly ONE payment reference, the pre-existing one',
+     payRefs(shellSrc) === 1, payRefs(shellSrc) + ' occurrence(s)');
+  ck('…and it is createPaymentIntent, not a receiver',
+     !/webhookIntasend|completeMultiTender/.test(shellSrc));
+  ck('…the nav module has NONE at all', payRefs(navSrc) === 0, payRefs(navSrc) + '');
+  /* Positive control: the counter can count. */
+  ck('…and the counter is not stuck at zero (positive control)',
+     payRefs('createPaymentIntent webhookIntasend') === 2);
   ck('15. no tax calculation', !/calculateVAT|taxRate\s*=/.test(navSrc));
   ck('…and the nav module is still pure', !/firestore|firebase/i.test(navSrc.replace(/\/\*[\s\S]*?\*\//g, '')));
 }
