@@ -114,17 +114,20 @@ console.log('\n── THIS SLICE STOPS BEFORE THE MONEY ──');
   ck('…and the scan saw real code', /function add\(\)/.test(mine), mine.length + ' chars');
 }
 
-console.log('\n── pos.js: the live sale path is otherwise untouched ──');
+console.log('\n── pos.js: quick charge did not rewrite the sale path ──');
 {
-  const { execSync } = require('child_process');
-  const stat = execSync('git diff HEAD --numstat -- pos.js', { cwd: root, encoding: 'utf8' }).trim();
-  const [add, del] = stat ? stat.split(/\s+/).map(Number) : [0, 0];
-  ck('pos.js gained lines and deleted NONE', del === 0, stat || '(no diff)');
-  ck('…a small addition', add > 0 && add < 40, add + ' added');
-  const changedPay = /payment\.complete|mpesa\.sendSTK|saveAndRedirect/.test(
-    execSync('git diff HEAD -- pos.js', { cwd: root, encoding: 'utf8' })
-      .split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++')).join('\n'));
-  ck('…and it touches no payment function', !changedPay);
+  /* This measured `git diff HEAD` and therefore changed meaning every time a
+     later slice touched pos.js — the third time that pattern failed here. The
+     durable properties are structural, so assert those instead. */
+  ck('the catalogue add path is intact and still merges',
+     /async addItem\(productId\)/.test(posJs) &&
+     /const existing = state\.cartItems\.find\(i => i\.id === productId\);[\s\S]{0,60}existing\.qty\+\+/.test(posJs));
+  ck('payment.complete still exists and is not wrapped by quick charge',
+     /async complete\(payInfo\)/.test(posJs) && !/SPosQuickCharge/.test(posJs));
+  ck('quick charge reaches pos.js ONLY through addCustomLine',
+     (posJs.match(/addCustomLine/g) || []).length === 1);
+  ck('…and the controller calls exactly that', /SPos\.cart\.addCustomLine\(line\)/.test(qcJs));
+  ck('the retired STK sender was not revived', /M-PESA by phone number has been retired/.test(posJs));
 }
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');

@@ -1634,7 +1634,38 @@ const SPos = (function () {
       /* Print receipt — route through the single public print API (PosPrintService),
          which owns transport selection, queue, telemetry and the legacy fallback.
          Fire-and-forget: a print failure must never interrupt order completion. */
-      if (state.settings.autoPrint || payInfo.method === 'card') {
+      /* ── RECEIPT AUTHORIZATION ─────────────────────────────────────────────
+         Was: `state.settings.autoPrint || payInfo.method === 'card'`.
+
+         Two changes. The card shortcut is REMOVED — card is genuinely approved
+         before complete() runs (line ~1386 only calls it on `approved`), but
+         overriding the merchant's own autoPrint setting for one method was
+         undocumented, and the owner asked for it gone.
+
+         The larger one: autoPrint alone printed for ANY method reaching this
+         point, including ones nothing confirmed. `qr` has no branch in
+         process(), so it falls through to the cash tail and completes a sale
+         the QR rail never verified — and a receipt printed for money that had
+         not arrived.
+
+         autoPrint is now a PREFERENCE about an ELIGIBLE receipt: it can
+         suppress one, and it can never authorise one. The eligibility rules
+         live in sokoni-pos-receipt-gate.js, per tender, with their evidence.
+
+         Fails OPEN to the old behaviour if the module did not load — a till
+         that cannot decide must not silently stop printing cash receipts. */
+      const _rg = window.SPosReceiptGate;
+      const _verdict = _rg
+        ? _rg.shouldPrintFinal(payInfo, { autoPrint: state.settings.autoPrint, total })
+        : { print: !!state.settings.autoPrint, eligibility: { final: true, slip: false, reason: 'gate unavailable' } };
+
+      /* An INELIGIBLE sale never prints a final receipt, and the cashier is
+         told why rather than being left to wonder where the paper went. */
+      if (!_verdict.eligibility.final) {
+        toast('No sale receipt: ' + _verdict.eligibility.reason, 'warn');
+      }
+
+      if (_verdict.print) {
         if (window.PosPrintService && typeof PosPrintService.printReceipt === 'function') {
           PosPrintService.printReceipt(receiptData, { method: payInfo.method, payments: txn.payments })
             .then((r) => {

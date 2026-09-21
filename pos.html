@@ -2120,6 +2120,10 @@ html[data-pos-chrome="checkout"] .pos-tabs { display: none !important; }
 <script src="pos-scanner.js" defer></script>
 <script src="pos-mobile.js" defer></script>
 <script src="pos-lifecycle.js" defer></script>
+<!-- Receipt authorization. Loaded BEFORE pos.js, unlike the other POS modules:
+     this one is consulted on the core sale path, and a load-order accident there
+     would fail open to printing a receipt for money that has not arrived. -->
+<script src="sokoni-pos-receipt-gate.js" defer></script>
 <script src="pos.js" defer></script>
 <!-- POS boot decision. Loaded LAST and deferred: it must never delay the module
      graph or first paint, and it runs only after `load`. It changes which STATE
@@ -2914,6 +2918,7 @@ html.in-merchant-shell .pos-quick-nav { display: none !important; }
 <!-- ════ SmartPOS 2.0 — Universal Plug & Play Ecosystem ════ -->
 <script defer src="sokoni-redis.js"></script>
 <script defer src="sokoni-device-hub.js"></script>
+
 <script defer src="sokoni-pos-tender.js"></script>
 <script defer src="sokoni-pos-basket.js"></script>
 <script defer src="sokoni-pos-quick-charge.js"></script>
