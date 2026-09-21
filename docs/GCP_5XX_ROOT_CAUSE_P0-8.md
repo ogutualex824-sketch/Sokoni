@@ -317,12 +317,88 @@ one-index blast radius. Deploying it means:
 Step 1 is the highest-value next action and needs no deployment. Doing step 4 first would be
 shipping five indexes and a live-query risk to fix a cron.
 
+**2026-09-21:** the four `reviews` indexes are no longer "unrelated" — see **P0-8-REVIEWS** below.
+They are required by the deployed `getReviews` callable, which has been failing since 2026-08-22.
+A deploy from the current manifest ships the four `reviews` indexes; `syncQueue` is still
+undeclared.
+
 ### Reproduce
 
 ```
 gcloud firestore indexes composite list --format=json > /tmp/idx-deployed.json
 node <diff script> /tmp/idx-deployed.json
 ```
+
+---
+
+## P0-8-REVIEWS — `getReviews` is missing four production indexes. **Diagnosed, reproducible.**
+
+Found while adjudicating whether P0-8A's four undeployed `reviews` declarations should ship. They
+should — they are not collateral, they are a month-old production defect.
+
+**The shape of the defect:**
+
+```
+CODE                requires 4 composite indexes
+REPOSITORY          declares  4 composite indexes   <- correct, nothing to fix here
+DEPLOYED FIRESTORE  has       0 of those 4
+```
+
+**This is a deployment-state defect, not an index-definition defect.** No manifest change is
+warranted; `firestore.indexes.json` is already right.
+
+### The four branches, one-to-one with the four declarations
+
+`functions/reviews.js:288-295`, in the deployed callable `getReviews`:
+
+```js
+let q = db.collection("reviews")
+  .where("targetId", "==", queryId)
+  .where("status",   "==", "approved");
+if      (sort === "highest") q = q.orderBy("rating",  "desc").orderBy("createdAt","desc");
+else if (sort === "lowest")  q = q.orderBy("rating",  "asc" ).orderBy("createdAt","desc");
+else if (sort === "helpful") q = q.orderBy("helpful", "desc").orderBy("createdAt","desc");
+else                         q = q.orderBy("createdAt","desc");
+```
+
+| sort | required composite | declared | deployed |
+|---|---|---|---|
+| default | targetId ASC, status ASC, createdAt DESC | yes | **no** |
+| highest | targetId ASC, status ASC, rating DESC, createdAt DESC | yes | **no** |
+| lowest | targetId ASC, status ASC, rating ASC, createdAt DESC | yes | **no** |
+| helpful | targetId ASC, status ASC, helpful DESC, createdAt DESC | yes | **no** |
+
+The same four branches recur at `:311-314` in the legacy-id fallback, so both read paths fail.
+
+### Production evidence
+
+```
+service   getreviews — deployed, present in the 1,709-function list
+error     9 FAILED_PRECONDITION: The query requires an index
+demanded  reviews(status, targetId, createdAt, __name__)   [decoded from the error's create URL]
+          satisfied exactly by declaration 1 — equality fields are order-insensitive
+
+203 index errors in 30 days · 844 total service log entries
+first 2026-08-22T12:25:19Z · latest 2026-09-21T01:44:09Z — continuous, still current
+```
+
+The only **deployed** `reviews` index is `productId ASC, rating DESC` — unrelated fields. Nothing
+serves these queries.
+
+### Why neither the audit nor P0-8 caught it
+
+Both were looking at **scheduled** functions. This is a **callable**, and it fails per-request
+rather than on a cron cadence, so it never appeared in the 5-minute error pattern that surfaced
+`runScheduledSelfHeal`.
+
+### Repair
+
+Deploy the already-declared indexes. **No code change, no manifest change.** That deploy is not
+authorized here and carries the open questions in P0-8A — with the deletion risk now removed by
+`df0c004`.
+
+**This is independent of the `syncQueue` index**, which is still not declared. A deploy from the
+current manifest ships the four `reviews` indexes; `syncQueue` is still undeclared.
 
 ---
 
