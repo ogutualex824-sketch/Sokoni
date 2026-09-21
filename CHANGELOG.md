@@ -1,3 +1,60 @@
+## 2026-09-21 (129) — The function-rebuild freeze is overridden, narrowly and on the record
+
+**Authorization change · documentation only · NO deploy in this commit · KEEP still UNPROVEN.**
+
+Commit `1a8401b` froze further Cloud Function rebuilds until the KEEP specimen proved survival. The
+owner has authorized proceeding before that checkpoint. This entry records the override **before**
+any function is deployed, so the repository never says one thing while production does another.
+
+### What is authorized
+
+```
+Typesense DLQ repair            032e88e
+AdminOS database reader         to be written
+six recovery candidates         minishopPage · kass · providerDispatch
+                                bookingDispatch · onOrderStatusChange · onNewOrderCreated
+```
+
+### What is NOT
+
+```
+intasendWebhook   the SEVENTH damaged service. Excluded by name in
+                  scripts/infra/recovery-manifest-20260921.json and governed by its own P0-4
+                  gate, where repair-versus-retirement has to be adjudicated first. Rebuilding
+                  it now would bypass that decision.
+```
+
+The manifest's procedure is **not** overridden: one service at a time, nine assertions, the
+`profilegetpublicprofile` control re-verified after each.
+
+### The risk this accepts, stated rather than dissolved
+
+`KEEP survival remains UNPROVEN.` The checkpoint is the first applicable cleanup sweep after
+**~2026-09-22T04:21:47Z**, roughly 18 hours after this entry. Every image built under this exception
+inherits that unproven protection: if `sokoni-recovery-protection` does not hold, each is deleted
+~24h after it is built, and those functions cannot create a new revision until rebuilt again.
+
+That is a decision taken with the risk on the record. It is **not** evidence that the risk is gone,
+and this entry must not be read later as though KEEP had been proven.
+
+### How the notices changed
+
+`CLAUDE.md` and `AGENTS.md` carry the same bullet. The original rule is **struck through, not
+deleted**, so a reader sees what the constraint was, that it was overridden, by whom, when, and what
+it still covers. Both files keep their own line-ending conventions — CLAUDE.md CRLF, AGENTS.md LF.
+
+### Changes
+
+```
+Database    none
+API         none
+Breaking    none
+Security    none
+GCP         nothing mutated by this commit
+Deployment  NONE. This commit authorizes; it does not deploy. The Typesense function deploy and
+            the six recovery rebuilds are separate gates with their own verification.
+```
+
 ## 2026-09-21 (128) — Four getReviews indexes created
 
 **Production change · Firestore `(default)` · NO CLI · NO function deploy · behaviour NOT yet proven.**

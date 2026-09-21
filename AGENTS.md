@@ -61,9 +61,19 @@ this notice's commit and this correction — a notice you read an hour ago may a
 
 **Still do NOT:**
 
-* **rebuild any further Cloud Function.** The remaining **seven** damaged services stay FROZEN
-  until the specimen proves survival. Do not rebuild in order to test the KEEP rule — the
-  specimen already exists, and a second rebuild adds risk without adding evidence.
+* **rebuild any further Cloud Function, except where the owner has explicitly authorized it.**
+  ~~The remaining seven damaged services stay FROZEN until the specimen proves survival.~~
+  **OVERRIDDEN 2026-09-21 by the owner.** Authorized before the KEEP checkpoint: the Typesense
+  DLQ repair (`032e88e`), the AdminOS database reader, and the **six** recovery candidates in
+  `scripts/infra/recovery-manifest-20260921.json` — minishopPage, kass, providerDispatch,
+  bookingDispatch, onOrderStatusChange, onNewOrderCreated. **`intasendWebhook` is NOT included**;
+  it is the seventh damaged service and is governed by its own P0-4 lifecycle gate.
+  **KEEP survival is still UNPROVEN** (checkpoint ~2026-09-22T04:21:47Z). Every image built under
+  this exception carries that unproven protection: if KEEP does not hold, each is deleted ~24h
+  after it is built and those functions cannot create a new revision until rebuilt again. The
+  exception is a decision taken with the risk stated, not evidence that the risk is gone. The
+  manifest still governs HOW: one service at a time, nine assertions, control re-verified after
+  each — that part is not overridden.
 * run `gcloud run services update` — it still fails, and leaves behind a failed revision
   that **cannot be deleted** (a revision cannot be removed while it is
   `latestCreatedRevisionName`)
