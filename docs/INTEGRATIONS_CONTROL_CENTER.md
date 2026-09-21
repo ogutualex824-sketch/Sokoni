@@ -392,6 +392,36 @@ A **degraded** vector (`~`) is one whose named guard did not fire. It proves
 nothing about that guard and now fails the run; until 2026-09-21 it was counted
 as a clean catch and never reported.
 
+## Ownership and authority
+
+Every entry resolves to a named **owner** and **authority**, decided at
+counterparty granularity and inherited: 22 decisions cover 47 entries.
+
+They live in `sokoni-integration-governance.js`, **deliberately apart from the
+catalogue**. The catalogue is repository evidence; this is an organizational
+decision, and no commit or module path can establish who holds a responsibility.
+The `provenance` field is exported so anything rendering these values carries
+the caveat.
+
+| Field | Means |
+| --- | --- |
+| `owner` | accountable for it **operating**, and for follow-up when it fails |
+| `authority` | authorised to **approve material change** — credentials, lifecycle, configuration |
+
+`NONE — RAIL CLOSED` is valid for **owner only**, and only on a genuinely
+closed rail. It is **never** valid for authority: a closed rail still needs
+someone who may decide to reopen it. Closed is a lifecycle state, not an
+ownership exemption.
+
+**No override is forced.** `DNS + mail providers` covers two real signing
+identities and the ERP row names seven companies; both carry a surface owner and
+a note. An override is a further governance decision, never a consequence of a
+vendor string naming several parties.
+
+`node tests/sabotage-integration-governance.js` — 8 vectors, including **C1**,
+a control proving a *valid* governance edit keeps the gate green. Without it a
+gate that rejected everything would score full marks and certify nothing.
+
 ## Relationship census — the Step 1 gate
 
 ```
@@ -641,7 +671,8 @@ node scripts/test-integration-status.js           # 45 passed
 node scripts/test-integration-probes.js           # 85 passed
 node scripts/test-integrations-console.js         # 67 passed
 node scripts/validate-admin-nav.js                # all checks passed
-node scripts/integration-relationship-census.js   # 47 rows, gate passes
+node scripts/integration-relationship-census.js   # 47 rows, owner+authority, gate passes
+node tests/sabotage-integration-governance.js     # 8 vectors, 8 caught, incl. control
 node scripts/test-gcp-iam-grant.js                # 71 passed
 node tests/sabotage-gcp-iam-grant.js              # 10 mutations, 10 caught, 0 inert
 node tests/certify-gcp-admin-console.js           # 49 passed

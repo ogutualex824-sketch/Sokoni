@@ -1,3 +1,109 @@
+## 2026-09-21 (142) — Integration governance: owner and authority, decided rather than inferred
+
+**Governance source + census gate + sabotage. No product change. NO deploy.**
+
+Every catalogue entry now resolves to a named **owner** and a named **authority**. Neither was
+inferred; both were decided by the platform owner and are recorded as decisions.
+
+### The provenance boundary is structural, not a comment
+
+Ownership lives in **`sokoni-integration-governance.js`**, deliberately apart from the catalogue.
+The catalogue is repository evidence — modules exist, secrets are named, endpoints are called. This
+file is an organizational decision, and **no commit, module path or vendor string can establish who
+holds a responsibility.** One file would invite a reader to apply the same standard of proof to
+both.
+
+The caveat travels in the DATA, not only the header: `provenance` is an exported field, so anything
+rendering these values carries it. The census prints it every run.
+
+### The two fields are not synonyms
+
+```
+owner      accountable for the integration OPERATING, and for follow-up when it fails
+authority  authorised to APPROVE material change — credentials, lifecycle, configuration
+```
+
+The person who responds to a failed payment rail is not necessarily the person who may rotate its
+production credential or reopen a frozen one.
+
+### 22 decisions, 47 entries, zero drift
+
+```
+counterparty decisions : 22
+entry overrides        :  0
+entries inheriting     : 47 of 47
+
+ 36  CTO — Donna Obongo
+  6  COO/DPO — Alex Ogutu Ochieng
+  4  CFO — Violet Ashitsa Kadiagu
+  1  NONE — RAIL CLOSED
+```
+
+Authority is the CEO throughout. One relationship, one decision — 47 independent records would be
+47 chances to drift.
+
+### `NONE — RAIL CLOSED` is constrained in both directions
+
+Valid for **owner only**, and only where the lifecycle really is closed: nobody is operationally
+accountable because nothing is operating. **Never valid for authority** — a closed rail still needs
+someone who may decide to reopen it. Closed is a lifecycle state, not an ownership exemption.
+
+`pos-card-terminal` is the live case: no acquirer has signed, so there is no relationship to
+operate, and the authority is named so reopening remains a decision someone can take.
+
+### No forced overrides
+
+`DNS + mail providers` is a placeholder covering two real signing identities
+(HostPinnacle/MailBaby on `default`, SendGrid on `s1`/`s2`). The ERP row names seven companies.
+Both carry a surface owner and a note; **neither is required to produce an override**, and the
+census does not demand one. An override is a further governance decision, not a consequence of a
+vendor string naming several parties.
+
+### The gate
+
+The census now fails on: a missing owner, a missing authority, `NONE — RAIL CLOSED` on an operating
+rail, that sentinel used as an authority, a counterparty with no decision, a decision matching no
+counterparty, and an override with no stated reason. Both directions, so neither list can drift
+silently past the other.
+
+### Eight vectors, and the one that matters most
+
+```
+G1 owner removed              G5 NONE — RAIL CLOSED on a LIVE rail
+G2 authority removed          G6 RAIL_CLOSED used as an authority
+G3 counterparty key renamed   G7 override with no stated reason
+G4 counterparty row deleted
+C1 CONTROL — a VALID governance edit keeps the gate GREEN
+```
+
+`C1` is the one that matters. Without it a gate that rejected everything would score eight out of
+eight and certify nothing. `G3` proves the inheritance is real: rename one key and every dependent
+entry loses its decision at once.
+
+### Verification, run serially
+
+```
+pre-scan   check-stranded-mutations.js   5 suites, 72 vectors, 0 problems
+certify    10 suites PASS
+sabotage    5 suites PASS, run one at a time
+post-scan  5 suites, 72 vectors, 0 problems
+census     47/47 owner + authority, 22 decisions, 0 overrides
+```
+
+### Files
+
+```
+sokoni-integration-governance.js             NEW  the decisions
+tests/sabotage-integration-governance.js     NEW  8 vectors incl. the control
+scripts/integration-ownership-worksheet.js   NEW  the decision input, now a live
+                                                  view of the decision rather than
+                                                  a stale blank form
+docs/INTEGRATION_OWNERSHIP_WORKSHEET.md      NEW  generated; do not hand-edit
+scripts/integration-relationship-census.js   the governance gate
+scripts/check-stranded-mutations.js          covers the new suite
+```
+
+**Database:** none. **API:** none. **Security:** none. **Breaking:** none. **Deploy:** none.
 ## 2026-09-21 (141) — Four mutations were stranded in the working tree, and the harness could not say so
 
 **Incident + harness repair + a new scanner. No product feature. NO deploy.**

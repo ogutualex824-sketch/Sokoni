@@ -34,6 +34,7 @@ const MANIFESTS = [
   'tests/sabotage-gcp-evidence.js',
   'tests/sabotage-gcp-iam-grant.js',
   'tests/sabotage-gcp-admin-console.js',
+  'tests/sabotage-integration-governance.js',
 ];
 
 let problems = 0, checked = 0, suites = 0;
