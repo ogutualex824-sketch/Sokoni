@@ -1,3 +1,97 @@
+## 2026-09-21 (143) — Function estate inventory, and the parser gap that nearly produced a deletion list
+
+**Phase 1 of the Functions restructuring. READ-ONLY: no deployment, no deletion, no
+classification. NO production mutation.**
+
+The estate is roughly 1,709 deployed functions and `index.js` was the only map. This establishes a
+real one, and does nothing with it.
+
+### The first number was wrong, and the way it was wrong is the point
+
+The initial run reported **213 orphan candidates** — deployed names absent from `index.js`.
+
+`index.js` bulk-exports eight modules through `Object.assign(exports, mod)`, and `algolia-sync.js`
+builds its names as COMPUTED KEYS: `` algoliaSync_${col}_{create,update,delete} ``. Those names
+never appear literally anywhere in `index.js`, so a regex over `exports.X =` cannot see them.
+
+**Ninety live Firestore triggers were presented as candidates for retirement.**
+
+Caught only because `algoliaSync_bnbListings_create` looked machine-generated rather than
+hand-written. Fixed by resolving every bulk export through `require` before matching.
+
+```
+213  →  28
+```
+
+A parser gap that manufactures a retirement list is worse than no inventory. Phase 1 exists to find
+exactly this, and it found it on the first attempt — before any adjudication, and before anything
+was deleted.
+
+### The baseline
+
+```
+source registry (index.js, incl. bulk exports)   1723
+recorded deployed snapshot (2026-09-19)          1709
+exported AND deployed                            1681
+exported, NOT in the snapshot                      42
+deployed, NOT exported — ORPHAN CANDIDATES         28
+```
+
+The snapshot is **RECORDED, not live**. It was captured 2026-09-19 and the estate may have moved
+since; every figure derived from it inherits that caveat, and the script says so in its output.
+
+### 28 is not a deletion list
+
+`UNKNOWN DOES NOT MEAN OBSOLETE.` An orphan candidate is a question: it may be reachable, deployed
+from another branch, or left by a refactor nobody finished. Nothing here authorises removing any of
+them, and the script classifies nothing — classification is Phase 6 and needs evidence this phase
+cannot see.
+
+Notable among the 28: `intasendWebhook` (retired receiver under its own P0-4 gate), a print-job
+cluster, a verification cluster, and `commissionDispatch` — a dispatcher deployed but not exported,
+which is its own provenance question.
+
+### A positive control fell out of the method
+
+`intasendWebhook` is independently documented as deployed-but-retired. A known case landing exactly
+where the join predicts is evidence the corrected join works — rather than an assertion that it
+does.
+
+### Deployment identity is reported separately
+
+A handler registered on a dispatcher has **no independent deployment identity**. 526 handler names
+exist in source across four dispatch units (`adminOsDispatch`, `analyticsDispatch`,
+`logisticsPlusDispatch`, `messagesDispatch`), and none appears in the deployed snapshot — because
+they ship inside their dispatcher. That is the model the `adminGetGcpEvidence` deployment block
+established, now visible in the inventory.
+
+### Structural findings, recorded and NOT acted on
+
+**The multiplex candidate is countable.** `algoliaSync_*` is 90 functions across 30 collections in
+a strict create/update/delete shape; `searchSync_*` and `tsSync` follow the same generator. Structural
+identification is **not** behavioural authorisation, and no consolidation is attempted here.
+
+**`COLLECTION_REGISTRY` is exported from `index.js` and is not a function.** Registry hygiene, to be
+repaired structurally rather than quietly during an inventory.
+
+### What this phase cannot establish
+
+Traffic, errors, invocations, instance counts, revisions, image digests, last deployment, scaling as
+served. All of it needs the GCP evidence reader, which is implemented, certified and
+**deployment-blocked**. Phases 4–6 are gated behind that decision; Phases 2–3 are not.
+
+### Read-only, verified rather than asserted
+
+```
+write verbs in the script   0  (writeFileSync/append/unlink/rm/mkdir/exec/spawn)
+network or deploy calls     0  (the word "deploy" appears only in prose)
+tree change from running it none — git status identical before and after
+payment-agent delta         untouched, not staged
+deployments · deletions     none
+```
+
+**Files:** `scripts/function-estate-inventory.js`.
+**Database:** none. **API:** none. **Security:** none. **Breaking:** none. **Deploy:** none.
 ## 2026-09-21 (142) — Integration governance: owner and authority, decided rather than inferred
 
 **Governance source + census gate + sabotage. No product change. NO deploy.**
