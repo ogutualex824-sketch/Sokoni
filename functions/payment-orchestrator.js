@@ -289,9 +289,15 @@ exports.initiatePayment = onCall(
         updatedAt: now(),
       });
     } else if (payment.provider === PROVIDER.CARD) {
-      providerResult = {
-        checkoutUrl: `https://payment.intasend.com/pay/checkout/?ref=${encodeURIComponent(paymentId)}`,
-      };
+      /* THIS USED TO RETURN A FABRICATED CHECKOUT URL built from our own
+         paymentId. No IntaSend checkout session was created, so the link
+         pointed at no invoice and could collect nothing — while the payment
+         had already been transitioned to PENDING and its attempt counter
+         incremented above. A real session needs shared/intasend-checkout.js
+         and a capability probe proving card is enabled. Fail closed until
+         then; never hand back a link that cannot take money. */
+      throw new HttpsError('unimplemented',
+        'Card payment is not available yet. Please use M-PESA.');
     } else if (payment.provider === PROVIDER.WALLET) {
       /* Wallet deduction — handled by wallet engine */
       providerResult = { walletDeduction: true };

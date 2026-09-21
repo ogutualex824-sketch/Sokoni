@@ -2203,8 +2203,34 @@ checkInstallment();
    provider integration confirms the payment from the SERVER side.
 
    Keep this list honest. Deleting an entry without integrating the provider silently
-   re-opens a hole through which sellers ship goods nobody paid for. */
-const UNINTEGRATED_PAYMENTS = ["airtel","tkash","equity","mtn","ecocash","chipper"];
+   re-opens a hole through which sellers ship goods nobody paid for.
+
+   `card` JOINED THIS LIST 2026-09-21, and it is the most important entry here
+   because unlike the others it LOOKED like it worked:
+
+     IPayInstance.charge({ amount: orderTotal, currency: "KES", … })
+
+   That call named the amount from the BROWSER and carried NO api_ref. So:
+
+     - there was no server price authority at all — the opposite of the M-Pesa
+       path beside it, which mints a paymentIntent and lets the server derive
+       the figure (B1);
+     - with no api_ref, webhookIntasend had nothing to key on, so a card charge
+       could never be reconciled to an order even in principle;
+     - and the COMPLETE handler called saveAndRedirect(…, paymentVerified=true),
+       marking the order PAID on an event raised in the customer's own browser.
+       Forgeable from a console. The M-Pesa path four hundred lines above
+       refuses to do exactly this and explains why.
+
+   Re-enabling it needs THREE things, none of which is a UI change:
+     1. scripts/probe-intasend-capability.js run against production, proving
+        card is actually enabled on the SOKONI IntaSend account;
+     2. a server-created session via functions/shared/intasend-checkout.js, so
+        the amount comes from createPaymentIntent and the session carries our
+        api_ref;
+     3. confirmation through webhookIntasend — never the browser.
+   Until all three hold, M-Pesa is the honest answer. */
+const UNINTEGRATED_PAYMENTS = ["airtel","tkash","equity","mtn","ecocash","chipper","card"];
 
 function selectPayment(method){
   if (UNINTEGRATED_PAYMENTS.includes(method)) {
@@ -3087,8 +3113,21 @@ function processCardPayment(){
       });
       IPayInstance.on("COMPLETE", (res)=>{
         closeModal("card");
-        /* verified: IntaSend's own COMPLETE event for a hosted card charge. */
-        saveAndRedirect(res.tracking_id || ("CRD-"+Date.now()), "card", null, null, true);
+        /* NOT VERIFIED. This used to pass paymentVerified=true on the strength of
+           an event raised by the SDK in the CUSTOMER'S OWN BROWSER — trivially
+           forgeable from a console, and the platform shipped goods on it.
+
+           `card` is in UNINTEGRATED_PAYMENTS so this handler is unreachable
+           today; the false below is the second lock. If someone re-enables the
+           tile before the server-side session exists, the worst case is an
+           order stuck awaiting confirmation — recoverable — rather than a free
+           order, which is not. Same reasoning as the M-Pesa COMPLETE handler. */
+        saveAndRedirect(res.tracking_id || ("CRD-"+Date.now()), "card", null, null, false);
+        showPushToast(
+          "Confirming your payment",
+          "We’ve received your card payment and are confirming it. Your order will be released the moment payment is verified.",
+          "green"
+        );
       });
       IPayInstance.on("FAILED", ()=>{
         showPushToast("❌ Card Declined","Payment failed. Check card details and try again.","orange");
