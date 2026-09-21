@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Start Your SOKONI Business</title>
+<meta name="description" content="Apply to sell products, provide services, or both — one SOKONI business account.">
+<link rel="icon" href="assets/sokoni-logo-dark.png">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Tokens borrowed from the POS shell so a merchant moving between the two
+   never crosses a visual seam.
+═══════════════════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#050505; --sur:#0d0d0d; --sur2:#141414; --sur3:#1b1b1b;
+  --g:#71ff00; --ga:rgba(113,255,0,.12); --ga2:rgba(113,255,0,.05);
+  --bor:#1a1a1a; --bor2:#242424;
+  --txt:#e8e8e8; --sub:#8a8a8a; --dim:#5f5f5f;
+  --amber:#ffb020; --red:#ff5c5c; --blue:#4da3ff;
+  --r:16px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--txt); min-height:100vh;
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  padding:0 16px 64px;
+}
+.wrap{max-width:720px;margin:0 auto}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+header{padding:34px 0 8px;text-align:center}
+.logo{height:30px;margin-bottom:22px;opacity:.95}
+h1{font-size:clamp(25px,6vw,36px);font-weight:900;letter-spacing:-.025em;margin:0 0 10px;line-height:1.14}
+.lede{font-size:14px;line-height:1.65;color:var(--sub);margin:0 auto;max-width:460px}
+
+/* ── Current capabilities ───────────────────────────────────────────────── */
+.status{
+  margin:28px 0 0;padding:18px 18px 16px;border-radius:var(--r);
+  background:var(--sur);border:1px solid var(--bor2);
+}
+.status-h{
+  font-size:10px;font-weight:800;letter-spacing:.16em;color:var(--dim);margin-bottom:14px;
+}
+.cap{display:flex;align-items:flex-start;gap:12px;padding:11px 0}
+.cap + .cap{border-top:1px solid var(--bor)}
+.cap-mark{
+  flex:none;width:24px;height:24px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;
+}
+.cap-mark.on{background:var(--ga);color:var(--g);border:1px solid rgba(113,255,0,.3)}
+.cap-mark.off{background:var(--sur3);color:var(--dim);border:1px solid var(--bor2)}
+.cap-mark.wait{background:rgba(255,176,32,.1);color:var(--amber);border:1px solid rgba(255,176,32,.3)}
+.cap-body{min-width:0;flex:1}
+.cap-t{font-size:13.5px;font-weight:800;margin-bottom:2px}
+.cap-s{font-size:11.5px;line-height:1.55;color:var(--sub)}
+.badge{
+  display:inline-block;margin-top:7px;padding:3px 9px;border-radius:20px;
+  font-size:9.5px;font-weight:800;letter-spacing:.08em;
+}
+.badge.dual{background:var(--ga);color:var(--g);border:1px solid rgba(113,255,0,.3)}
+
+/* ── Choice cards ───────────────────────────────────────────────────────── */
+.sec-h{
+  margin:34px 0 13px;font-size:10px;font-weight:800;letter-spacing:.16em;color:var(--dim);
+}
+.choices{display:grid;gap:11px}
+.choice{
+  display:grid;grid-template-columns:46px 1fr 26px;align-items:center;gap:14px;
+  width:100%;padding:17px 17px;border-radius:var(--r);cursor:pointer;text-align:left;
+  background:var(--sur);border:1.5px solid var(--bor2);color:var(--txt);
+  font:inherit;transition:border-color .16s,background .16s,transform .16s;
+}
+.choice:hover:not(:disabled){border-color:#333;transform:translateY(-1px)}
+.choice:focus-visible{outline:2px solid var(--g);outline-offset:3px}
+.choice[aria-pressed="true"]{border-color:var(--g);background:var(--ga2)}
+.choice:disabled{opacity:.42;cursor:not-allowed}
+.choice-i{
+  width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;
+  font-size:21px;background:var(--sur2);border:1px solid var(--bor2);
+}
+.choice[aria-pressed="true"] .choice-i{background:var(--ga);border-color:rgba(113,255,0,.3)}
+.choice-t{font-size:14.5px;font-weight:800;margin-bottom:3px;display:flex;align-items:center;gap:8px}
+.choice-d{font-size:11.5px;line-height:1.55;color:var(--sub)}
+.choice-tick{
+  width:22px;height:22px;border-radius:50%;border:1.5px solid var(--bor2);
+  display:flex;align-items:center;justify-content:center;font-size:11px;color:transparent;
+}
+.choice[aria-pressed="true"] .choice-tick{border-color:var(--g);background:var(--g);color:#000}
+.pill{
+  font-size:9px;font-weight:800;letter-spacing:.07em;padding:2.5px 7px;border-radius:20px;
+  background:var(--sur3);color:var(--sub);border:1px solid var(--bor2);
+}
+.pill.have{background:var(--ga);color:var(--g);border-color:rgba(113,255,0,.3)}
+.pill.wait{background:rgba(255,176,32,.1);color:var(--amber);border-color:rgba(255,176,32,.3)}
+
+/* ── What you get ───────────────────────────────────────────────────────── */
+.gets{
+  margin-top:13px;padding:15px 17px;border-radius:13px;
+  background:var(--ga2);border:1px solid var(--ga);
+}
+.gets-h{font-size:10px;font-weight:800;letter-spacing:.13em;color:var(--g);margin-bottom:10px}
+.gets ul{margin:0;padding-left:17px}
+.gets li{font-size:12px;line-height:1.85;color:#b9d9a0}
+
+/* ── Agreement + submit ─────────────────────────────────────────────────── */
+.agree{
+  display:flex;gap:12px;align-items:flex-start;margin-top:26px;padding:15px 17px;
+  border-radius:13px;background:var(--sur);border:1px solid var(--bor2);
+}
+.agree input{margin-top:2px;width:19px;height:19px;accent-color:var(--g);flex:none}
+.agree label{font-size:12px;line-height:1.65;color:var(--sub)}
+.agree a{color:var(--g);text-decoration:none}
+.agree a:hover{text-decoration:underline}
+.go{
+  width:100%;margin-top:18px;padding:17px;border-radius:14px;border:none;cursor:pointer;
+  font:inherit;font-size:15px;font-weight:900;letter-spacing:.01em;
+  background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;
+  transition:opacity .15s,transform .12s;
+}
+.go:disabled{opacity:.3;cursor:not-allowed}
+.go:not(:disabled):active{transform:scale(.988)}
+.note{margin-top:13px;font-size:11px;line-height:1.65;color:var(--dim);text-align:center}
+
+/* ── Result ─────────────────────────────────────────────────────────────── */
+.result{margin-top:20px;padding:15px 17px;border-radius:13px;font-size:12.5px;line-height:1.65;display:none}
+.result.ok{display:block;background:var(--ga2);border:1px solid var(--ga);color:#b9d9a0}
+.result.err{display:block;background:rgba(255,92,92,.07);border:1px solid rgba(255,92,92,.28);color:#ff9a9a}
+.result.info{display:block;background:rgba(77,163,255,.07);border:1px solid rgba(77,163,255,.25);color:#a8d0ff}
+.skel{height:13px;border-radius:5px;background:linear-gradient(90deg,var(--sur2),var(--sur3),var(--sur2));
+  background-size:200% 100%;animation:sh 1.3s infinite}
+@keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@media(max-width:420px){
+  .choice{grid-template-columns:40px 1fr 22px;gap:11px;padding:15px 14px}
+  .choice-i{width:40px;height:40px;font-size:18px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <img class="logo" src="assets/sokoni-logo-dark.png" alt="SOKONI" onerror="this.style.display='none'">
+    <h1>Start your SOKONI business</h1>
+    <p class="lede">Sell products, provide services, or do both from one account — one till, one set of books, one tax record.</p>
+  </header>
+
+  <!-- CURRENT CAPABILITIES — read from the registries an ADMIN APPROVAL wrote.
+       Never from a self-declared businessType: that field is a label anyone can
+       set on their own record, so a page that trusted it would let an account
+       grant itself a capability. -->
+  <section class="status" id="statusCard" aria-live="polite">
+    <div class="status-h">YOUR BUSINESS TODAY</div>
+    <div id="statusBody">
+      <div class="skel" style="width:70%;margin-bottom:9px"></div>
+      <div class="skel" style="width:45%"></div>
+    </div>
+  </section>
+
+  <div class="sec-h" id="choiceHeading">WHAT DO YOU OFFER?</div>
+  <div class="choices" role="group" aria-labelledby="choiceHeading">
+
+    <button class="choice" id="c-products" aria-pressed="false" onclick="App.pick('products')">
+      <span class="choice-i" aria-hidden="true">🛍</span>
+      <span>
+        <span class="choice-t">Products <span class="pill" id="pill-products">—</span></span>
+        <span class="choice-d">Sell physical or digital goods — stock, orders, delivery.</span>
+      </span>
+      <span class="choice-tick" aria-hidden="true">✓</span>
+    </button>
+
+    <button class="choice" id="c-services" aria-pressed="false" onclick="App.pick('services')">
+      <span class="choice-i" aria-hidden="true">🛠</span>
+      <span>
+        <span class="choice-t">Services <span class="pill" id="pill-services">—</span></span>
+        <span class="choice-d">Charge for work and take bookings — printing, repairs, salon, consulting.</span>
+      </span>
+      <span class="choice-tick" aria-hidden="true">✓</span>
+    </button>
+
+    <button class="choice" id="c-both" aria-pressed="false" onclick="App.pick('both')">
+      <span class="choice-i" aria-hidden="true">✨</span>
+      <span>
+        <span class="choice-t">Both <span class="pill" id="pill-both">—</span></span>
+        <span class="choice-d">A cyber café sells flash disks and prints documents. A salon sells product and cuts hair.</span>
+      </span>
+      <span class="choice-tick" aria-hidden="true">✓</span>
+    </button>
+  </div>
+
+  <div class="gets" id="gets" style="display:none">
+    <div class="gets-h" id="getsH">WHAT YOU GET</div>
+    <ul id="getsList"></ul>
+  </div>
+
+  <div class="agree">
+    <input type="checkbox" id="agree" onchange="App.render()">
+    <label for="agree">
+      I accept the <a href="terms.html" target="_blank" rel="noopener">SOKONI Business Agreement</a>,
+      including the commission terms, and confirm the details I provide are accurate.
+    </label>
+  </div>
+
+  <button class="go" id="go" disabled onclick="App.submit()">Choose an option</button>
+
+  <p class="note" id="note">
+    Applying is a request, not an approval. A person at SOKONI reviews every application.
+  </p>
+
+  <div class="result" id="result" role="status" aria-live="polite"></div>
+</div>
+
+<script src="sokoni-merchant-application.js"></script>
+<script src="sokoni-provider-application.js"></script>
+<script src="sw-register.js" defer></script>
+<script type="module">
+/* ═══════════════════════════════════════════════════════════════════════════
+   The page files APPLICATIONS. It grants nothing.
+
+   Both primitives write one `applications/{uid}--*` document with
+   status:'pending_review' and are physically unable to write a role, a claim,
+   a registry record or an approval — the shared FORBIDDEN filter strips those
+   before the write, and firestore.rules refuses them independently.
+
+   A DUAL business is TWO applications, decided separately. That is not a
+   workaround: a cyber café whose seller approval is withdrawn must keep
+   providing services, and one document with a scopes[] array cannot express a
+   half-suspension without inventing a per-scope status inside it.
+═══════════════════════════════════════════════════════════════════════════ */
+import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js';
+import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js';
+
+const cfg = window.SOKONI_FIREBASE_CONFIG || window.firebaseConfig || null;
+let db = null, auth = null, uid = null;
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[<>"'&]/g,
+  (c) => ({ '<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;' }[c]));
+
+const state = { choice: null, scope: null, apps: {}, loading: true, busy: false };
+
+/* Mirrors functions/shared/business-scope.js. The SERVER is authoritative —
+   this is presentation only, and every write it leads to is re-decided there.
+   Kept deliberately identical in its strictness: unknown status is NOT active. */
+const LIVE = ['active', 'approved'];
+function isLive(d) {
+  if (!d || typeof d !== 'object') return false;
+  if (d.active === false || d.suspended === true) return false;
+  const s = String(d.status == null ? '' : d.status).trim().toLowerCase();
+  return s ? LIVE.includes(s) : true;
+}
+
+async function load() {
+  const [seller, provider, appM, appP] = await Promise.all([
+    getDoc(doc(db, 'sellers', uid)).catch(() => null),
+    getDoc(doc(db, 'providers', uid)).catch(() => null),
+    getDoc(doc(db, 'applications', uid + '--merchant')).catch(() => null),
+    getDoc(doc(db, 'applications', uid + '--provider')).catch(() => null),
+  ]);
+  state.scope = {
+    products: seller   && seller.exists()   ? isLive(seller.data())   : false,
+    services: provider && provider.exists() ? isLive(provider.data()) : false,
+  };
+  state.apps = {
+    products: appM && appM.exists() ? String(appM.data().status || '') : null,
+    services: appP && appP.exists() ? String(appP.data().status || '') : null,
+  };
+  state.loading = false;
+  render();
+}
+
+function sideState(side) {
+  if (state.scope && state.scope[side]) return 'approved';
+  const a = state.apps[side];
+  if (!a) return 'none';
+  if (/pending|review|submitted/i.test(a)) return 'pending';
+  if (/reject|declin/i.test(a))            return 'rejected';
+  if (/suspend/i.test(a))                  return 'suspended';
+  return 'none';
+}
+
+const LABEL = {
+  approved: ['on', '✓', 'Approved'],
+  pending:  ['wait', '⏳', 'In review'],
+  rejected: ['off', '✕', 'Not approved'],
+  suspended:['off', '!', 'Suspended'],
+  none:     ['off', '+', 'Not applied'],
+};
+
+function render() {
+  if (state.loading) return;
+  const p = sideState('products'), s = sideState('services');
+
+  /* ── Status card ── */
+  const row = (t, d, st) => {
+    const [cls, mark, word] = LABEL[st];
+    return `<div class="cap">
+      <span class="cap-mark ${cls}" aria-hidden="true">${mark}</span>
+      <span class="cap-body"><span class="cap-t">${esc(t)}</span>
+      <span class="cap-s">${esc(word)} · ${esc(d)}</span></span></div>`;
+  };
+  let html = row('Sell products', 'Stock, orders, delivery.', p)
+           + row('Provide services', 'Bookings, service charges.', s);
+  if (p === 'approved' && s === 'approved') {
+    html += '<div style="margin-top:12px"><span class="badge dual">DUAL BUSINESS</span></div>';
+  }
+  $('statusBody').innerHTML = html;
+
+  /* ── Choice availability ── */
+  const setSide = (side, st) => {
+    const el = $('pill-' + side);
+    const [, , word] = LABEL[st];
+    el.textContent = word;
+    el.className = 'pill' + (st === 'approved' ? ' have' : st === 'pending' ? ' wait' : '');
+    /* An approved or in-review side cannot be applied for again — the primitive
+       refuses it server-side too, and offering a button that will be refused is
+       a worse experience than not offering it. */
+    $('c-' + side).disabled = (st === 'approved' || st === 'pending');
+  };
+  setSide('products', p);
+  setSide('services', s);
+
+  const bothState = (p === 'approved' && s === 'approved') ? 'approved'
+    : (p === 'pending' || s === 'pending') ? 'pending' : 'none';
+  $('pill-both').textContent = LABEL[bothState][2];
+  $('pill-both').className = 'pill' + (bothState === 'approved' ? ' have' : bothState === 'pending' ? ' wait' : '');
+  $('c-both').disabled = !($('c-products').disabled === false && $('c-services').disabled === false);
+
+  /* If one side is already live, this page is an UPGRADE, and should say so. */
+  const upgrading = (p === 'approved') !== (s === 'approved');
+  $('choiceHeading').textContent = upgrading ? 'ADD TO YOUR BUSINESS' : 'WHAT DO YOU OFFER?';
+
+  for (const k of ['products', 'services', 'both']) {
+    $('c-' + k).setAttribute('aria-pressed', String(state.choice === k));
+    if ($('c-' + k).disabled && state.choice === k) state.choice = null;
+  }
+
+  /* ── What you get ── */
+  const gets = $('gets');
+  if (state.choice) {
+    const L = {
+      products: ['A shop and product catalogue', 'Stock and inventory control',
+                 'Orders, delivery and customers', 'The SOKONI till for product sales'],
+      services: ['A service catalogue with units and variable pricing',
+                 'Bookings and appointments', 'Quick Charge for one-off work',
+                 'The SOKONI till for service sales'],
+      both:     ['Everything in Products and Services, in ONE workspace',
+                 'Mixed baskets — a flash disk and ten printed pages on one sale',
+                 'One set of books and one tax record for the whole business',
+                 'Product and service revenue reported separately'],
+    }[state.choice];
+    $('getsH').textContent = state.choice === 'both' ? 'WHAT A DUAL BUSINESS GETS' : 'WHAT YOU GET';
+    $('getsList').innerHTML = L.map((x) => `<li>${esc(x)}</li>`).join('');
+    gets.style.display = 'block';
+  } else {
+    gets.style.display = 'none';
+  }
+
+  /* ── Submit ── */
+  const ready = !!state.choice && $('agree').checked && !state.busy;
+  $('go').disabled = !ready;
+  $('go').textContent = state.busy ? 'Submitting…'
+    : !state.choice ? 'Choose an option'
+    : !$('agree').checked ? 'Accept the agreement to continue'
+    : state.choice === 'both' ? 'Apply for both'
+    : 'Apply to ' + (state.choice === 'products' ? 'sell products' : 'provide services');
+}
+
+function say(kind, msg) {
+  const el = $('result');
+  el.className = 'result ' + kind;
+  el.innerHTML = msg;
+}
+
+/* Firestore adapter — the shape both primitives expect. Injected so they stay
+   testable without a browser. */
+const fs = {
+  async get(coll, id) { const s = await getDoc(doc(db, coll, id)); return s.exists() ? s.data() : null; },
+  async set(coll, id, data) { await setDoc(doc(db, coll, id), data, { merge: true }); },
+};
+
+window.App = {
+  pick(c) { state.choice = c; render(); },
+  render,
+  async submit() {
+    if (state.busy || !state.choice) return;
+    state.busy = true; render();
+    say('info', 'Submitting…');
+
+    const wants = state.choice === 'both' ? ['products', 'services'] : [state.choice];
+    const done = [], failed = [];
+
+    for (const side of wants) {
+      const prim = side === 'products'
+        ? window.SokoniMerchantApplication
+        : window.SokoniProviderApplication;
+      if (!prim) { failed.push([side, 'The application module did not load. Refresh and try again.']); continue; }
+      try {
+        const r = await prim.submit({
+          uid, fs, agreementAccepted: true, source: 'business-apply',
+          profile: {},
+        });
+        if (r.ok) done.push(side);
+        else failed.push([side, r.message || r.reason || 'Refused.']);
+      } catch (e) {
+        failed.push([side, (e && e.message) || 'Could not submit.']);
+      }
+    }
+
+    await load();
+    state.busy = false;
+
+    const name = (s) => s === 'products' ? 'Products' : 'Services';
+    if (done.length && !failed.length) {
+      say('ok', '<b>Application received.</b><br>' +
+        done.map(name).join(' and ') + ' — now in review. ' +
+        'You will be notified when a decision is made. Nothing is approved yet.');
+    } else if (done.length && failed.length) {
+      /* PARTIAL. Never reported as success: a dual applicant who got one half
+         filed must know which half did not, or they will wait for a review
+         that was never requested. */
+      say('err', '<b>Partly submitted.</b><br>' +
+        done.map(name).join(', ') + ' filed. ' +
+        failed.map(([s, m]) => name(s) + ': ' + esc(m)).join(' '));
+    } else {
+      say('err', failed.map(([s, m]) => '<b>' + name(s) + '</b> — ' + esc(m)).join('<br>'));
+    }
+    render();
+  },
+};
+
+/* ── Boot ────────────────────────────────────────────────────────────────── */
+(async () => {
+  if (!cfg) {
+    state.loading = false;
+    $('statusBody').innerHTML = '<span class="cap-s">Configuration unavailable — reload the page.</span>';
+    say('err', 'Could not reach SOKONI. Please reload.');
+    return;
+  }
+  const app = getApps().length ? getApps()[0] : initializeApp(cfg);
+  auth = getAuth(app); db = getFirestore(app);
+
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      state.loading = false;
+      $('statusBody').innerHTML =
+        '<span class="cap-s">Sign in to see your business status and apply.</span>';
+      say('info', 'Please <a href="login.html?next=business-apply.html" style="color:var(--g)">sign in</a> to continue.');
+      $('go').disabled = true;
+      return;
+    }
+    uid = user.uid;
+    try { await load(); }
+    catch (e) {
+      state.loading = false;
+      $('statusBody').innerHTML = '<span class="cap-s">Could not read your business status.</span>';
+      /* Fail visible, not silent: a merchant must not be shown "Not applied"
+         when the truth is "we could not check". */
+      say('err', 'We could not check your current status, so applying is disabled. Please reload.');
+      $('go').disabled = true;
+    }
+  });
+})();
+</script>
+</body>
+</html>
