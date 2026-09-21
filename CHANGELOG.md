@@ -1,3 +1,81 @@
+## 2026-09-21 (128) — Four getReviews indexes created
+
+**Production change · Firestore `(default)` · NO CLI · NO function deploy · behaviour NOT yet proven.**
+
+The four indexes documented in (127) as *declared but not deployed* now exist. This is the first
+production mutation of the day by this workstream.
+
+```
+#1  targetId, status, createdAt DESC                READY  CICAgIS8sY0K   sort = default
+#2  targetId, status, rating DESC,  createdAt DESC  READY  CICAgLiY84UK   sort = highest
+#3  targetId, status, rating ASC,   createdAt DESC  READY  CICAgPi_i4wK   sort = lowest
+#4  targetId, status, helpful DESC, createdAt DESC  READY  CICAgPj9kZIK   sort = helpful
+```
+
+### Why the REST API and not the CLI
+
+`firebase deploy --only firestore:indexes` depends on `--only` actually scoping, and `firebase.json`
+also declares `hosting` and `functions`. That filter's behaviour was reconciled from source earlier
+today but has **never been exercised against a real deploy** — and if it fails open, the command
+deploys functions and hosting, violating the Artifact Registry freeze and rolling production.
+
+`POST …/collectionGroups/reviews/indexes` has no function, hosting or deletion surface at all. It is
+structurally incapable of that overreach, there is no `--force` to misuse, and each call is
+independently verifiable. Same reasoning the repository already applies to the Rules REST API.
+
+### Serial creation, one gate per index
+
+Each index was created alone, then verified before the next was attempted: resource name under
+`/collectionGroups/reviews/`, `queryScope` COLLECTION, full field-and-order string exact, `state`
+READY, and the expected reviews/total counts. A swapped sort direction would have failed the field
+assertion rather than matching on field names.
+
+**Path semantics were proven before the first POST.** `GET …/collectionGroups/reviews/indexes`
+returns *all 410* indexes across 207 collection groups — it does not filter. Rather than assume
+`POST` honoured a path that `GET` appeared to ignore, the existing `productId/rating` index was read
+first and its resource name shown to encode `/collectionGroups/reviews/`.
+
+**A token expiry was handled fail-closed.** The first attempt at #3 returned 401 UNAUTHENTICATED.
+Before retrying, the deployed state was re-read to prove nothing had partially landed — reviews
+still 3, total still 412, no `rating:ASCENDING` present. Only then was it reissued.
+
+### Independent reconciliation
+
+Verified through `gcloud`, not the REST client that made the changes, so a fault in the tooling
+could not validate itself:
+
+```
+repository declarations  414        deployed indexes  414
+deployed-only              0        repo-only           0
+reviews deployed           5        deletions           0
+all 414 deployed indexes READY
+```
+
+The repository needed no change — its four declarations were already correct. (127) recorded that
+distinction; this entry closes the deployment half of it.
+
+### What is NOT established
+
+**Runtime behaviour is unproven.** `getReviews` index errors: 203 over 30 days, most recent
+2026-09-21T01:44:09Z, and **zero in the hour after the indexes landed — against zero traffic in the
+same hour.** An absent error in a window with no requests is an absent request, not a success.
+
+The condition that caused the failures is gone. Confirmation requires a real invocation. Do not
+record this outage as behaviourally closed until one succeeds.
+
+### Changes
+
+```
+Database    4 composite indexes CREATED on (default)/reviews · 0 deleted
+API         none
+Breaking    none
+Security    none
+GCP         Firestore index creation only. Functions, Hosting, Cloud Run, Artifact Registry,
+            rules and sokoni-ops untouched. The KEEP specimen was not disturbed.
+Deployment  no CLI deploy · no --force · no function rebuild — that remains frozen until
+            the specimen proves KEEP survival
+```
+
 ## 2026-09-21 (127) — Four landings that went unrecorded
 
 **Documentation · commits `84e69a5` `df0c004` `78d1496` `032e88e` · NO GCP MUTATION · NOT DEPLOYED.**
