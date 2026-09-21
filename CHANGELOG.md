@@ -1,3 +1,116 @@
+## 2026-09-21 (144) — Function dependency graph: evidence-typed edges, and the absence that proves nothing
+
+**Phase 2 of the Functions restructuring. READ-ONLY: no deployment, no deletion, no
+classification. NO production mutation.**
+
+Phase 1 mapped what exists. This maps what refers to what — and, more usefully, records exactly
+how much each arrow is entitled to claim.
+
+### Every edge carries its evidence type
+
+A graph whose arrows all look alike invites a reader to treat a guess as a measurement. So each
+edge states what it proves:
+
+| Edge | Evidence | May claim |
+|---|---|---|
+| module → module | `OBSERVED_SOURCE` | a direct `require` |
+| module → secret | `OBSERVED_SOURCE` | the module references the secret |
+| collection → trigger | `OBSERVED_SOURCE` | a registration watching that path |
+| module → callable | `OBSERVED_SOURCE` | a direct `httpsCallable` site |
+| module → collection | `SOURCE_REFERENCE` | **the literal is in the source. Nothing more** |
+| write → trigger | `DERIVED` | two observations joined; the trigger *may* fire |
+| runtime invocation | `NOT_ESTABLISHED` | — |
+
+`module A → references collection X → SOURCE_REFERENCE` is the strongest honest claim available.
+Not "uses Firestore collection X", and never "collection X exists" — the reader that would
+establish that is implemented and **not deployed**.
+
+### Three parser gaps, found by probing rather than by trusting the first regex
+
+The first draft ran clean and was wrong three times over. None of the gaps announced itself; each
+produced a plausible-looking report.
+
+**Triggers — 14 of 22 visible, and the missing 8 were the important ones.** A regex for
+`onDocumentCreated('path'` missed the options-object form `{ ...OPTS, document: 'orders/{orderId}' }`.
+All eight live in `redis-integrations.js`: `orders`, `payments`, `products`, `users`, `riders`,
+`deliveries` — the busiest collections on the platform, including `onOrderCreated` and
+`onOrderStatusChange` from the AR recovery manifest. The derived write→trigger edges for those
+collections were not wrong, they were **absent**, and an absent edge looks exactly like a
+collection nothing listens to.
+
+That is the Phase 1 lesson recurring. There, `Object.assign(exports, mod)` hid 90 live functions
+and presented them as retirement candidates.
+
+**Collections are a floor, not a total.** Of 5,326 `.collection(` sites, **546** take a variable,
+constant or template literal. They are counted as an unresolved population and never guessed at,
+so the distinct-name figure is a lower bound.
+
+**Requires — five "dangling" edges that were not defects.** All five resolve to `.json` files
+(index manifests, `package.json`), present on disk. Filing a data dependency under "unresolved"
+invents a defect. Genuinely unresolved requires: **0**.
+
+### The graph cannot support a negative claim
+
+15 of 108 trigger sites register a template-literal path built at module load, in the fan-out
+factories `algolia-sync`, `typesense-sync`, `search-sync`, `async-jobs`, `shop-name-sync`,
+`typesense-analytics` and `wap`. What each watches is decided from a loop variable and cannot be
+resolved from source — and these are the highest-fan-out triggers in the estate.
+
+So a collection may have listeners this graph cannot see. **An absent edge means NOT OBSERVED,
+never NOT PRESENT.** "Nothing watches this collection" and "nothing depends on this module" are
+not conclusions this graph licenses. Every population is a floor, and nothing may be retired on
+the strength of an absence.
+
+### Zones, because archived code is not deployment surface
+
+| Zone | Modules | Reachable from `index.js` |
+|---|---|---|
+| entry | 1 | 1 |
+| core | 378 | 361 |
+| shared | 11 | 10 |
+| tooling (`functions/scripts/`) | 20 | 0 |
+| archive | 1 | 0 |
+
+`functions/test/` is excluded outright: a fixture naming a collection is not a reference to it.
+17 core modules are unreachable through `require` — a **question**, not a finding. A module may be
+a dispatcher handler, operator tooling, or deployed from another branch. **Unknown does not mean
+obsolete.**
+
+### Populations, deliberately not equated
+
+| Population | Count | Evidence |
+|---|---|---|
+| source definitions | 2,115 | `OBSERVED_SOURCE` |
+| literal `exports.X =` in `index.js` | 1,537 | `OBSERVED_SOURCE` — a **floor** |
+| deployed snapshot (2026-09-19) | 1,709 | recorded, not live truth |
+| observed at runtime | — | `NOT_ESTABLISHED` |
+
+These are different numbers on purpose. `literalExportsInIndex` cannot see bulk `Object.assign`
+exports by construction; Phase 1 resolves those and reports the larger registry. Reconciling the
+populations is Phases 3–5, and collapsing them here would destroy the gap those phases exist to
+explain.
+
+### The collection discrepancy is a finding, not a reconciliation task
+
+**822** distinct collection literals in source (821 in deployable zones); a figure of **217** root
+collections has been cited elsewhere. Both are retained as **independent populations with the
+relation marked UNRESOLVED**. No reconciliation is attempted: the difference has at least five
+causes this script cannot distinguish — subcollections counted as roots, the 546 dynamic paths,
+stale references, collections outside the measured population, and archived code. Guessing which
+is which would make the graph a second source of fabricated inventory.
+
+### Verification
+
+Read-only was verified, not asserted: no `fs` write verb, no `child_process`, no network call, no
+deploy invocation; the only `.set(` sites are in-memory `Map`s. `git status` byte-identical before
+and after. The trigger count was confirmed against an independent multiline scan (93 resolved + 15
+dynamic = 108 sites). The comment stripper is proved non-trivial (411 modules changed) and
+non-destructive (0 blanked).
+
+**Files:** `scripts/function-dependency-graph.js` (new).
+Database changes: none. API changes: none. Security changes: none. Breaking changes: none.
+Deploy: none.
+
 ## 2026-09-21 (143) — Function estate inventory, and the parser gap that nearly produced a deletion list
 
 **Phase 1 of the Functions restructuring. READ-ONLY: no deployment, no deletion, no
