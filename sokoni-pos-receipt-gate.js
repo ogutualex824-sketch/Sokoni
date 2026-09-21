@@ -127,10 +127,30 @@
       return { final: true, slip: false, reason: 'Settled at the till.' };
     }
 
+    /* ── QR — settled only on a SERVER-VERIFIED completion ────────────────
+       When this gate was written, `qr` could only arrive here by falling
+       through process() with nothing confirmed, so it was denied outright.
+       It now has a real completion path: payment.completeQR() re-asks
+       `getPOSPaymentDetails`, and `status:'paid'` is written only by
+       completePOSQRPayment after shared/intasend-verify confirmed the
+       reference with IntaSend.
+
+       `qrVerified` is set ONLY after that round-trip, alongside the
+       transaction id it was verified against. Both are required: a bare
+       boolean would be assertable by anything that could build a payInfo,
+       and the id is what ties the receipt to the verified payment. This is
+       the same trust shape as card's terminal approval — a fact the server
+       supplied, recorded on the payment. A QR payInfo WITHOUT them is still
+       the old fallthrough and is still refused. */
+    if (method === 'qr') {
+      const verified = p.qrVerified === true && !!p.qrTxnId;
+      return verified
+        ? { final: true, slip: false, reason: 'QR payment verified by SOKONI.' }
+        : { final: false, slip: true, reason: 'This QR payment is not verified.' };
+    }
+
     /* ── EVERYTHING ELSE ──────────────────────────────────────────────────
-       Default DENY, and say which method it was. `qr` lands here: its real
-       confirmation happens server-side and never reaches this function, so a
-       till-side receipt for it would assert a payment nobody verified. */
+       Default DENY, and say which method it was. */
     return { final: false, slip: true,
       reason: 'Payment by "' + method + '" is not confirmed at the till.' };
   }

@@ -2771,10 +2771,17 @@ window.SPosQR = (function() {
     var modal = document.getElementById('posQrModal');
     if (modal) modal.style.display = 'none';
     document.body.style.overflow = '';
-    /* Reset POS payment method back to cash if payment wasn't completed */
-    if (window.SPos && window.SPos.payment && window.SPos.payment.setMethod) {
-      SPos.payment.setMethod('cash');
-    }
+    /* THE METHOD IS DELIBERATELY LEFT AS 'qr'.
+       This used to call setMethod('cash'). Closing a QR window is not a
+       decision to pay cash, and the reset made it one: the cart stayed
+       loaded, the cashier pressed Charge, and the sale completed as CASH —
+       the one method the receipt gate trusts — for money that had never
+       arrived. It then printed.
+
+       Leaving it as 'qr' routes a subsequent Charge into the qr branch in
+       payment.process(), which refuses and points back here. The cashier
+       changes the method themselves if the customer decides to pay another
+       way; the till never decides that for them. */
   }
 
   function cancel() {
@@ -2844,13 +2851,24 @@ window.SPosQR = (function() {
   }
 
   function complete() {
-    /* Trigger POS completion flow */
+    /* CAPTURE THE ID BEFORE CLOSING. close() nulls _txnId, so the previous
+       order — close() then completeQR(_txnId) — handed it null. With the old
+       process() fallback that went unnoticed, because the fallback completed
+       the sale anyway, through the cash tail. Without the fallback it would
+       simply never complete. */
+    var txn = _txnId;
     close();
-    if (window.SPos && window.SPos.payment && window.SPos.payment.completeQR) {
-      SPos.payment.completeQR(_txnId);
-    } else if (window.SPos && window.SPos.payment && window.SPos.payment.process) {
-      /* Fallback: mark as complete in POS state then process */
-      SPos.payment.process();
+
+    /* NO FALLBACK. This used to call SPos.payment.process() when completeQR
+       was absent — and completeQR did not exist anywhere, so the fallback was
+       the ONLY path this button ever took. It reached the cash tail and
+       completed a sale on a browser state rather than a verified payment.
+
+       A till that cannot reach completeQR must complete NOTHING and say so. */
+    if (window.SPos && window.SPos.payment && typeof SPos.payment.completeQR === 'function') {
+      SPos.payment.completeQR(txn);
+    } else if (window.SPos && typeof SPos.toast === 'function') {
+      SPos.toast('Cannot complete this sale — reload the till. The payment is safe and recorded by SOKONI.', 'error');
     }
   }
 

@@ -1401,6 +1401,27 @@ const SPos = (function () {
         return;
       }
 
+      /* ── QR MUST NOT FALL THROUGH ──────────────────────────────────────────
+         `qr` had no branch here, so it reached the cash tail below and
+         completed a sale nothing had confirmed. Two ways in, both live:
+
+           1. The cashier taps QR, closes the modal before payment, and presses
+              Charge. SPosQR.close() used to reset the method to 'cash', so the
+              sale completed as CASH — the one method the receipt gate trusts —
+              and printed. A QR attempt with no money became a receipted cash
+              sale. close() no longer reclassifies; this branch catches it.
+           2. The success state's "Complete Sale" called
+              SPos.payment.completeQR(), which did not exist, and fell back to
+              process(). That path is now completeQR() below.
+
+         A QR sale completes ONLY through completeQR(), which re-asks the
+         server. Reaching here means no confirmation was established. */
+      if (method === 'qr') {
+        toast('Finish the QR payment in the QR window — a QR sale is completed there, once M-PESA confirms it.', 'error');
+        if (window.SPosQR && typeof SPosQR.open === 'function' && !state._qrModalOpen) SPosQR.open();
+        return;
+      }
+
       const tendered = parseFloat(state.numpadStr) || total;
       if (method === 'cash' && tendered < total) {
         toast(`Tendered KES ${tendered.toFixed(2)} is less than total KES ${total.toFixed(2)}`, 'error');
@@ -1409,6 +1430,74 @@ const SPos = (function () {
 
       const change = method === 'cash' ? Math.max(0, tendered - total) : 0;
       await payment.complete({ method, amountPaid: tendered, change, mpesaRef: null, mpesaPhone: null });
+    },
+
+    /* ── QR COMPLETION — the only way a QR sale may be recorded ────────────
+       SPosQR's "Complete Sale" button called this; it did not exist, so the
+       call fell back to process() and completed through the cash tail.
+
+       THE POLL'S SUCCESS STATE IS NOT THE EVIDENCE. It is a UI state driven
+       by the same endpoint, and by the time the cashier presses the button it
+       may be seconds old — or have been reached by a poll that has since been
+       superseded. So this RE-ASKS the server and completes only on what that
+       answer says, now.
+
+       `getPOSPaymentDetails` returns status:'paid' only for a posPayments row
+       that completePOSQRPayment marked paid AFTER shared/intasend-verify
+       confirmed the reference with IntaSend. That is the authoritative signal
+       the till already had and never consumed — no new authority is created
+       here, and no browser event is trusted.
+
+       Anything other than a confirmed 'paid' — pending, expired, cancelled,
+       a thrown error, an unreachable network — completes NOTHING. */
+    async completeQR(qrTxnId) {
+      if (!qrTxnId) { toast('No QR payment to complete', 'error'); return; }
+      const total = cart.getTotal();
+
+      let details = null;
+      try {
+        const call = (window.SPos && window.SPos._cf)
+          ? window.SPos._cf('getPOSPaymentDetails')
+          : (window.firebase && window.firebase.functions
+              ? window.firebase.functions().httpsCallable('getPOSPaymentDetails')
+              : null);
+        if (!call) { toast('Cannot reach SOKONI to confirm the payment. The sale was NOT completed.', 'error'); return; }
+        const res = await call({ transactionId: qrTxnId });
+        details = res && res.data;
+      } catch (err) {
+        /* A non-answer is NOT a confirmation. It is also not a failure — the
+           money may well have arrived. Say so and leave the sale open. */
+        toast('Could not confirm the payment with SOKONI. The sale was NOT completed — check the QR window.', 'error');
+        return;
+      }
+
+      if (!details || details.status !== 'paid') {
+        toast('That QR payment is not confirmed yet. The sale was NOT completed.', 'error');
+        return;
+      }
+
+      /* The server's figure, not the cart's, is what was actually paid. A
+         mismatch is reported and refused rather than reconciled here. */
+      const paid = Number(details.total);
+      if (Number.isFinite(paid) && Math.abs(paid - total) > 0.5) {
+        toast(`Paid amount (KES ${paid.toFixed(2)}) does not match this sale (KES ${total.toFixed(2)}). Not completed.`, 'error');
+        return;
+      }
+
+      await payment.complete({
+        method:     'qr',
+        amountPaid: Number.isFinite(paid) ? paid : total,
+        change:     0,
+        mpesaRef:   null,
+        mpesaPhone: null,
+        /* Set ONLY after the server round-trip above. The receipt gate keys
+           a final QR receipt on these two, so they are the record that a
+           verification happened — never assertable by a browser event. */
+        qrTxnId:    String(qrTxnId),
+        qrVerified: true,
+        qrReceiptId: details.receiptId || null,
+        qrPaidAt:   details.paidAt || null,
+      });
     },
 
     async complete(payInfo) {

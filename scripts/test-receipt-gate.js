@@ -53,14 +53,26 @@ ck('no code does NOT print', !e({ method: 'mpesa_till_manual' }).final);
 ck('…and says the code is missing',
    /confirmation code/.test(e({ method: 'mpesa_till_manual' }).reason));
 
-console.log('\n── THE LIVE DEFECT: qr must not print ──');
+console.log('\n── QR prints only on a SERVER-VERIFIED completion ──');
 {
-  /* pos.js process() has no `qr` branch, so QR falls through to the cash tail
-     and completes a sale the QR rail never confirmed. */
+  /* An UNVERIFIED qr payInfo is the old fallthrough shape — completed through
+     the cash tail with nothing confirmed. Still refused. */
   const r = e({ method: 'qr', amountPaid: 1600 }, { total: 1600 });
-  ck('qr does NOT print a final receipt', !r.final);
+  ck('unverified qr does NOT print a final receipt', !r.final);
   ck('…it offers a slip', r.slip);
-  ck('…and names the method in the reason', /"qr"/.test(r.reason), r.reason);
+  ck('…and says it is unverified', /not verified/.test(r.reason), r.reason);
+
+  /* Verified only via payment.completeQR(), which re-asks the server. */
+  ck('qr WITH a verified server round-trip prints',
+     e({ method: 'qr', amountPaid: 1600, qrVerified: true, qrTxnId: 'abc123' }).final);
+  /* Both are required — a bare boolean is assertable by anything that can
+     build a payInfo, and the id is what ties the receipt to the payment. */
+  ck('qrVerified WITHOUT a txn id does not print',
+     !e({ method: 'qr', qrVerified: true }).final);
+  ck('a txn id WITHOUT verification does not print',
+     !e({ method: 'qr', qrTxnId: 'abc123' }).final);
+  ck('a truthy non-true qrVerified does not print',
+     !e({ method: 'qr', qrVerified: 'yes', qrTxnId: 'abc123' }).final);
 }
 
 console.log('\n── Unknown methods DENY by default ──');
@@ -86,7 +98,7 @@ console.log('\n── autoPrint can SUPPRESS, never AUTHORISE ──');
   ck('INELIGIBLE + autoPrint on → still NO print',
      !G.shouldPrintFinal(ineligible, { autoPrint: true }).print);
   ck('…and the eligibility reason survives for the cashier',
-     /not confirmed/.test(G.shouldPrintFinal(ineligible, { autoPrint: true }).eligibility.reason));
+     /not verified/.test(G.shouldPrintFinal(ineligible, { autoPrint: true }).eligibility.reason));
 }
 
 console.log('\n── Garbage in ──');
@@ -130,14 +142,16 @@ console.log('\n── Scope: nothing else was touched ──');
   ck('…and the stripped source still has real code',
      /function receiptEligibility/.test(gate), gate.length + ' chars');
 
-  const { execSync } = require('child_process');
-  const files = execSync('git diff HEAD --name-only', { cwd: root, encoding: 'utf8' })
-    .split('\n').filter(Boolean);
-  ck('recordPOSSale untouched', !files.includes('functions/pos-retail-engine.js'), files.join(' '));
-  ck('webhookIntasend untouched', !files.includes('functions/index.js'));
-  ck('payment-purposes untouched', !files.includes('functions/payment-purposes.js'));
-  ck('pos-qr untouched', !files.includes('functions/pos-qr.js'));
-  ck('the design doc untouched', !files.includes('docs/POS_SETTLEMENT_CONVERGENCE_DESIGN.md'));
+  /* This was a `git diff HEAD --name-only` check and would have gone vacuous
+     the moment the slice committed — the fourth time that pattern appeared in
+     this workstream. The durable property is that the RECEIPT GATE does not
+     reach into the settlement or payment machinery at all, which stays true
+     regardless of what is committed. */
+  ck('the gate names no server sale writer', !/recordPOSSale|posSales/.test(gate));
+  ck('…no webhook', !/webhookIntasend|webhook/i.test(gate));
+  ck('…no payment purpose', !/payment-purposes|pos_service_sale/.test(gate));
+  ck('…and it reads ONLY the payInfo it is handed',
+     !/require\(|import |window\./.test(gate.replace(/^\(function[\s\S]*?\{/, '')));
 }
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
