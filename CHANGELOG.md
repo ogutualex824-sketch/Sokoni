@@ -1,3 +1,77 @@
+## 2026-09-21 (125) — The registry purge had a name all along
+
+**Forensics · durable boundary corrected · NO GCP MUTATION · NOT DEPLOYED.**
+
+The canary planted on 09-19 was deleted at **28.1 h**, with the contamination check clean: no
+deploy, no function deletion, no build in the window. It was inert and owned by no function, so
+nothing in a function's lifecycle can account for its removal.
+
+```
+firebase-functions-cleanup      action DELETE · olderThan 86400s · tagState ANY
+        │  executed by
+        ▼
+service-…@gcp-sa-artifactregistry     BatchDeleteVersions
+        │
+        ▼
+every version older than 24 h — tagged or not, with no Cloud Run-reference awareness
+```
+
+Installed by the Firebase CLI's own cleanup prompt: `UpdateRepository` 2026-06-10 (us-central1)
+and 2026-06-23 (us-east1), userAgent `FirebaseCLI/15.19.0`. Self-inflicted, on both repositories,
+and in force since June.
+
+### What it refutes
+
+Function deletion was the leading suspect for four days. It is not the mechanism. The 09-19 finding
+of "no cleanup policy" was a **false negative** — `repositories list` does not render
+`cleanupPolicies`; only a JSON `describe` does.
+
+> An absence seen through a default formatter was never an absence.
+
+### The basis is removed. The freeze is not.
+
+The notice no longer claims function deletion as the cause, and therefore no longer supplies the
+stated basis for the P0-2 / P0-3 / P0-4 freeze. **It does not unfreeze them.** Each keeps its own
+authorization and its own safety conditions.
+
+The rebuild prohibition is **retained on new grounds** — sequencing, not contamination. While the
+policy stands, a fresh image is deleted ~24–29 h after it is built, so rebuilding before repairing
+the policy simply re-enters the race. A dead rationale must not be allowed to become a dead control.
+
+### The repair is designed, not applied
+
+A KEEP rule, `keepCount: 10`, under an id **other than** `firebase-functions-cleanup` — because
+`checkCleanupPolicy` re-asserts the 24 h DELETE on the next `firebase deploy --force`, silently,
+unless a policy, an opt-out label, or a foreign policy id is present. Deleting the policy is the
+one repair that regresses by itself.
+
+`keepCount: 10` is derived, not chosen: across 20,836 revisions / 1,707 services / 889 packages,
+preserving the newest 3 revisions of every service requires a worst package recency rank of 10,
+because 1,684 services have revisions spanning more than one package. **Bytes per version remains
+unmeasured** — the registry is empty — so the count is sized, the bill is not.
+
+### Files affected
+
+```
+CLAUDE.md   421-441  replaced   CRLF preserved (494 CRLF / 0 bare LF)
+AGENTS.md     9-29   replaced   LF   preserved (0 CRLF / 150 bare LF)
+```
+
+The notice existed **twice**. Correcting only `CLAUDE.md` would have left a stale copy at
+`AGENTS.md` line 9 — the first thing the next agent reads. Both were validated before either was
+written; neither could land alone.
+
+### Changes
+
+```
+Database    none
+API         none
+Breaking    none
+Security    narrowing only — Artifact Registry stays closed except one inert canary,
+            which is DEFINED but NOT AUTHORIZED
+GCP         nothing mutated; the cleanup policy is unchanged on both repositories
+```
+
 ## 2026-09-21 (124) — An accepted employment can finally be ended
 
 **Implementation · COMMITTED `5ed6e91` + `70d14e8` · certified and sabotaged · UNEXPORTED · NOT DEPLOYED.**

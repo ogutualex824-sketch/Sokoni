@@ -6,27 +6,66 @@ worktrees**. These rules prevent failures that have actually happened in product
 
 ---
 
-## ⚠️ EXPERIMENT IN PROGRESS — Artifact Registry forensics (since 2026-09-19)
+## ⚠️ ARTIFACT REGISTRY — cause PROVEN, repair NOT APPLIED (updated 2026-09-21)
 
-`gcf-artifacts` lost every function image. Existing revisions still serve from Cloud Run's
-internal copies, but **no service can create a new revision from its existing spec**. The
-cause is not established. A controlled canary artifact is instrumenting it right now.
+`gcf-artifacts` holds no function images. Existing revisions still serve from Cloud Run's
+internal copies, but **no service can create a new revision from its existing spec**.
 
-**While this notice stands, do NOT:**
+**CAUSE — PROVEN 2026-09-21.** Both repositories carry the cleanup policy
+`firebase-functions-cleanup`: `action: DELETE`, `condition.olderThan: 86400s`,
+`tagState: ANY`. The Artifact Registry service agent executes it as `BatchDeleteVersions`.
+It is age-based and **reference-blind** — the policy has no knowledge of Cloud Run revision
+references and is therefore capable of deleting an image that a live Cloud Run revision
+still depends on. Installed by the Firebase CLI's cleanup prompt: `UpdateRepository`
+2026-06-10 (us-central1) and 2026-06-23 (us-east1), userAgent `FirebaseCLI/15.19.0`.
+Self-inflicted, not a Google-side defect.
 
-* deploy any Cloud Function (`firebase deploy --only functions`, `gcloud functions deploy`)
-* delete any Cloud Function — **function deletion is the leading suspect**
-* run `gcloud run services update` — it fails, and it leaves behind a failed revision that
-  **cannot be deleted** (a revision cannot be removed while it is `latestCreatedRevisionName`)
-* push, delete or tidy anything in Artifact Registry
-* delete `sokoni-ar-forensics-canary:20260919T060552Z` — it is the instrument, not litter
+**How it was proven.** The canary — inert, owned by no function, referenced by nothing —
+was pushed 2026-09-19T06:08:12Z and deleted 2026-09-20T10:16:05Z at age 28.1h, with the
+contamination check clean: no deploy, no function deletion, no build in the window.
 
-Any of these contaminates the experiment and makes the next artifact event unattributable.
+**Function deletion is REFUTED as the cause.** It was the leading suspect; it is not the
+mechanism. "Cause is unknowable as configured" is superseded. The 2026-09-19 finding of
+"no cleanup policy" was a **false negative** — `repositories list` does not render
+`cleanupPolicies`; only a JSON `describe` does. An absence seen through a default formatter
+was never an absence.
 
-Check state with `node scripts/infra/ar-forensics.js 1d` (read-only; self-classifying, and it
-flags contamination). Background: `docs/GCP_COST_ARCHITECTURE_IMPLEMENTATION.md`, P0-2 onward.
+**This removes the STATED BASIS for the P0-2 / P0-3 / P0-4 freeze. It does not unfreeze
+them.** Each keeps its own authorization and its own safety conditions. Function deletion is
+likewise no longer prohibited *by this notice* — but `intasendWebhook` retirement and P1
+consolidation retain their own separate gates, which this notice does not touch.
 
-**Remove this notice only when the artifact lifecycle is understood and the owner says so.**
+**Still do NOT:**
+
+* **deploy or rebuild any Cloud Function.** The reason is no longer contamination, it is
+  **sequencing**: while this policy stands, a fresh image is deleted ~24–29h after it is
+  built, so rebuilding first merely re-enters the race. **Policy repair precedes
+  reconstruction.**
+* run `gcloud run services update` — it still fails, and leaves behind a failed revision
+  that **cannot be deleted** (a revision cannot be removed while it is
+  `latestCreatedRevisionName`)
+* change the cleanup policy without authorization. The repair is designed — a KEEP rule,
+  `keepCount: 10`, under an id **other than** `firebase-functions-cleanup` — but not
+  applied. Note that merely DELETING the policy is re-asserted at 1 day by the next
+  `firebase deploy --only functions --force`, silently and without a prompt.
+* push, delete or tidy anything in Artifact Registry, **except** the one case below.
+
+> **Canary #2 — narrow exception.** A single inert replacement canary
+> `sokoni-ar-forensics-canary:<UTC timestamp>`, pushed via
+> `scripts/infra/ar-canary-push.js`, solely to certify that a repaired policy lets an
+> artifact outlive the 24h threshold. It is attached to no service. **This defines what MAY
+> be authorized — it is not standing permission**, and it covers that one artifact only: no
+> function images, no deletions, no tidying.
+
+The original canary is **gone**, consumed by the mechanism it was built to detect. It no
+longer needs protecting.
+
+Check state with `node scripts/infra/ar-forensics.js 3d` (read-only; self-classifying, and
+it flags contamination). Background: `docs/GCP_COST_ARCHITECTURE_IMPLEMENTATION.md`, P0-2
+onward.
+
+**Remove this notice only when the cleanup policy is repaired, certified by canary #2, and
+the owner says so.**
 
 ---
 
