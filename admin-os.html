@@ -765,6 +765,11 @@
   <script src="sokoni-reports-builder.js"></script>
   <script src="sokoni-integration-catalogue.js"></script>
   <script src="sokoni-integrations.js"></script>
+  <!-- The one WRITE surface in the Integrations console, deliberately a
+       separate file: sokoni-integrations.js is certified to contain no write
+       path, and that guarantee is worth more than one fewer script tag.
+       Both callables it reaches are superAdmin-gated on the server. -->
+  <script src="sokoni-gcp-admin.js"></script>
   <!-- SECURITY CENTRE. Additive: it renders into the Security section that already exists
        in the sidebar, and sokoni-aos.js falls back to its original panel if this is absent.
        No other section is affected. -->

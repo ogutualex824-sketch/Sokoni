@@ -2195,5 +2195,10 @@ const SA={
 <script src="sokoni-reports-builder.js"></script>
 <script src="sokoni-integration-catalogue.js"></script>
 <script src="sokoni-integrations.js"></script>
+<!-- The one WRITE surface, kept in its own file so sokoni-integrations.js
+     keeps its certified guarantee of containing no write path. Both callables
+     are superAdmin-gated on the server; this page's audience already holds
+     that claim, but the server check is what actually enforces it. -->
+<script src="sokoni-gcp-admin.js"></script>
 </body>
 </html>

@@ -361,3 +361,95 @@ exports.sendPlatformBroadcast = onCall({ cors: true, region: 'us-central1', maxI
 
   return { success: true, broadcastId };
 });
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   CF 4 — superAdminGrantGcpRole / superAdminRevokeGcpRole
+   Grant or revoke a Google Cloud IAM role on the SOKONI project, so an operator
+   does not have to open the Google Cloud console to give someone access.
+
+   THIS IS A PRIVILEGE-ESCALATION SURFACE, and it is built as one.
+
+   Guard   : superAdmin ONLY. An `admin` must not be able to mint access — a
+             role that can widen itself has no ceiling.
+   Limit   : rate-limited on the same 'admin' bucket as the other privilege ops.
+   Audit   : every attempt is recorded, including the REFUSALS. A refused
+             escalation attempt is more interesting than a successful grant.
+   Refusals: live in functions/gcp-iam-grant.js, which is the only module in the
+             repository that writes IAM. It denies by default, forbids every
+             role that can grant further IAM, refuses a self-grant, requires the
+             policy etag, and carries auditConfigs through untouched.
+
+   NOT DEPLOYED. It also needs a service account holding
+   `resourcemanager.projects.setIamPolicy`, which the read-only evidence reader
+   identity deliberately does not have.
+═══════════════════════════════════════════════════════════════════════════════ */
+
+/** Shared by grant and revoke: audit the attempt whatever the outcome. */
+async function _auditGcpIam(request, action, data, outcome, detail) {
+  await _auditLog({
+    actor:    request.auth && request.auth.uid,
+    action,
+    resource: `gcp/iam/${(data && data.role) || 'unknown'}`,
+    details:  {
+      member: (data && data.member) || null,
+      role:   (data && data.role) || null,
+      outcome,
+      detail: detail || null,
+      actorEmail: (request.auth && request.auth.token && request.auth.token.email) || null,
+    },
+    /* A refused escalation attempt is a security event, not a warning. */
+    severity: outcome === 'refused' ? 'high' : 'high',
+  });
+}
+
+exports.superAdminGrantGcpRole = onCall(
+  { cors: true, region: 'us-central1', maxInstances: 4, enforceAppCheck: true, timeoutSeconds: 60 },
+  async (request) => {
+    _requireSuperAdmin(request);
+    await checkRateLimit(request, 'admin');
+
+    const data = request.data || {};
+    const { grantProjectRole } = require('./gcp-iam-grant');
+
+    try {
+      const result = await grantProjectRole({
+        member: data.member,
+        role:   data.role,
+        /* The caller's OWN email, taken from the verified token and never from
+           the request body — otherwise the self-grant refusal could be bypassed
+           by simply claiming to be someone else. */
+        actorEmail: (request.auth.token && request.auth.token.email) || null,
+        dryRun: data.dryRun === true,
+      });
+      await _auditGcpIam(request, 'gcp.iam.grant', data,
+        result.changed ? 'granted' : (result.dryRun ? 'dry-run' : 'no-change'), result.reason);
+      return result;
+    } catch (err) {
+      await _auditGcpIam(request, 'gcp.iam.grant', data, 'refused', err.code || err.message);
+      /* The refusal text is written for the operator reading it, and names why.
+         It carries no policy content. */
+      throw new Error((err.code ? err.code.toUpperCase() + ': ' : '') + err.message);
+    }
+  }
+);
+
+exports.superAdminRevokeGcpRole = onCall(
+  { cors: true, region: 'us-central1', maxInstances: 4, enforceAppCheck: true, timeoutSeconds: 60 },
+  async (request) => {
+    _requireSuperAdmin(request);
+    await checkRateLimit(request, 'admin');
+
+    const data = request.data || {};
+    const { revokeProjectRole } = require('./gcp-iam-grant');
+
+    try {
+      const result = await revokeProjectRole({ member: data.member, role: data.role });
+      await _auditGcpIam(request, 'gcp.iam.revoke', data,
+        result.changed ? 'revoked' : 'no-change', result.reason);
+      return result;
+    } catch (err) {
+      await _auditGcpIam(request, 'gcp.iam.revoke', data, 'refused', err.code || err.message);
+      throw new Error((err.code ? err.code.toUpperCase() + ': ' : '') + err.message);
+    }
+  }
+);

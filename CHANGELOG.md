@@ -1,3 +1,939 @@
+## 2026-09-21 (140) — A real checkout client, a capability probe, and the card tile turned off
+
+**Payment-unification Phase 3 foundation · NO deploy, NO commission change, NO wallet work, probe NOT run.**
+
+> **Numbering note.** A parallel workstream prepended its own (138) and (139) while this payment
+> work was in progress, so `(138)` now appears twice — this branch's "Two vertical payment purposes"
+> entry and AdminOS's "Per-entity cards". Both are correct as written: each was "next after (137)"
+> at the time. Neither has been renumbered, because editing another agent's landed entry to tidy a
+> counter is a worse trade than a duplicated integer. The counter is not strictly positional; the
+> dates and titles are the index.
+
+Multi-method collection — card, Google Pay, Apple Pay, PesaLink — is not an extension of the STK
+rail; `shared/stk-gateway.js` hard-codes `method: 'M-PESA'`. It needs hosted checkout, which is also
+the only way a customer enters card details somewhere a cashier cannot see them. This entry builds
+that client, the probe that must precede trusting it, and closes the card path that was pretending.
+
+### `functions/shared/intasend-checkout.js` (new)
+
+One implementation, same shape as `stk-gateway.js`: no reservation, no document, a non-answer
+THROWS, keys never logged. `classifyOutcome` is asserted to agree with the STK rail on every status
+code — two rails disagreeing about "accepted" is the defect the shared module prevents.
+
+**Omitting `method` is the feature.** No method named ⇒ IntaSend presents what the ACCOUNT has
+enabled. `CANDIDATE_METHODS` exists only so the probe has something to enumerate and so a typo is
+refused before the wire; nothing in the module reports any method as available, and a test asserts
+that no such function exists.
+
+### A correction to the Phase 1 audit
+
+The audit reported no `POST /api/v1/checkout/` anywhere. Wrong: `intasend-node` targets it
+(`dist/collection.js:22`) and `payment-orchestrator.js:262` calls it. That call **cannot ever have
+worked** — `charge()` blanks the secret key because checkout is the public-key flow, and the
+orchestrator passes `''` as the publishable key, so the request carries no credentials at all.
+`charge()` also mutates `secret_key` on the instance, de-authenticating later calls. The conclusion
+stands: SOKONI has no working server-side checkout.
+
+### The auth contract is ASSERTED, not proven
+
+Public-key header + `public_key` body, no `Authorization`. That is what the vendored client does and
+it is the only in-repo evidence. No SOKONI code has ever created a checkout session. The module
+takes `privateKey` solely to withhold it visibly.
+
+### `scripts/probe-intasend-capability.js` (new) — written, NOT run
+
+There is no "list my enabled methods" endpoint, so capability can only be learned by asking for a
+session per method — which creates real invoices. The probe therefore runs sandbox unless `--live`,
+requires `--live --i-understand-this-creates-invoices` together, refuses a live key without `--live`
+AND `--live` without a live key, never self-runs, and writes nothing to Firestore. All three refusal
+gates verified without touching the network.
+
+`UNKNOWN` is a third verdict and is **not** `unavailable` — no answer, a 5xx or a malformed body.
+Only `ENABLED` may light a tile. Running it against production is outward-facing and is the owner's
+call.
+
+### Card at marketplace checkout — DISABLED
+
+`card` joined the existing `UNINTEGRATED_PAYMENTS` list. It was the worst of the ten tiles because
+it looked like it worked:
+
+- `IPayInstance.charge({ amount: orderTotal })` named the amount **from the browser** — no intent,
+  the exact opposite of the M-Pesa path beside it;
+- **no `api_ref`**, so `webhookIntasend` could never key a card charge to an order even in
+  principle — unreconcilable by construction;
+- `COMPLETE` called `saveAndRedirect(…, paymentVerified = true)`, marking the order **PAID** on an
+  event raised in the customer's own browser.
+
+Reusing the existing list rather than inventing a gate keeps one source of truth. The handler now
+passes `false` as a second lock: premature re-enablement yields an order awaiting confirmation,
+which is recoverable, rather than a free order, which is not.
+
+### Fabricated checkout URLs
+
+`payment-orchestrator.js:291` returned `…/pay/checkout/?ref=<our own id>` — a link to no invoice,
+handed back *after* the payment had been moved to PENDING and its attempt counter incremented. Now
+throws `unimplemented`.
+
+The identical fix for `pos-qr.js:481` is **written and withheld** — see below.
+
+**Files:** `functions/shared/intasend-checkout.js` (new) · `scripts/probe-intasend-capability.js`
+(new) · `scripts/test-intasend-checkout.js` (new) · `functions/payment-orchestrator.js` ·
+`checkout.html` · `docs/PAYMENT_ARCHITECTURE_UNIFICATION.md` §5c/§5d
+
+**Database changes:** none.
+**API changes:** `initiatePayment` CARD branch now throws `unimplemented` instead of returning a
+dead `checkoutUrl`. No other signature changed.
+**Security:** a browser can no longer mark a card order paid. The private key is never sent to the
+checkout endpoint, asserted by test in both headers and body with a positive control proving the
+request was not simply empty.
+**Breaking changes:** the card tile no longer selects at checkout. This is intended — it could not
+take a reconcilable payment.
+**Deployment:** NOT deployed. Artifact Registry KEEP protection remains unproven until the
+`profile_get_public_profile` specimen survives its first sweep (~2026-09-22T04:21Z).
+
+### NOT DONE — `pos-qr.js` card branch, blocked on governance
+
+The same fix breaks two assertions in two CLOSED certifications — `G7-posqr`
+(`certify-p3a-pos-qr-association.js`) and `F6-pos-qr.js`
+(`certify-intasend-webhook-retirement.js`) — both byte-identity gates over that file. Any
+legitimate change trips them; re-baselining a closed certification is a governance act, not a code
+change. Reverted to HEAD pending the owner's decision. Exposure: an authenticated till caller can
+request `card` and get a link that collects nothing. It cannot create a false payment —
+`completePOSQRPayment` remains the only writer of `paid` — so it is a dead end, not a leak.
+
+**Verification:** `test-intasend-checkout` 50/0 (new) · `test-payment-purposes-verticals` 42/0 ·
+`test-payment-intents` 12/0 · `test-product-payment-authority` 25/25 · `test-single-shop-checkout`
+29/0 · `test-multishop-checkout-integration` 26/0 · `test-healthcare-subscription-foundation` 120/0.
+
+Two pre-existing failures were confirmed NOT mine by re-running against pristine files:
+`certify-daraja-ui-retirement` C1-2, and the `certify-p3a` / `certify-intasend-webhook-retirement`
+`webhookIntasend` byte gates, which fail at HEAD because `functions/index.js` is dirty from another
+workstream. `certify-payment` exits 2 as its **usage message** — it is an operational CLI needing a
+paymentRef, not a suite.
+
+---
+
+## 2026-09-21 (139) — Declared vs provisioned secrets: the question the Credentials tab could only ask
+
+**Reader derivation · one panel · certification · NO deploy, NO GCP mutation.**
+
+The Credentials tab knows which secret NAMES each rail **declares**. Secret Manager knows which
+**exist**. Neither alone answers the question that matters: *is a rail depending on a secret that
+is not there?*
+
+The join answers it, in both directions.
+
+```
+DECLARED but MISSING     a rail that will FAIL when it runs. Named, not just counted
+PRESENT but UNDECLARED   NOT a fault, and not something to delete — it may belong to a
+                         system outside this registry. Listed so the two sides can be
+                         reconciled deliberately
+```
+
+Declared names are de-duplicated: a secret required by two rails is still **one** secret, and
+double-counting it would inflate the gap.
+
+The declared side comes from `functions/integration-registry.js`, which — unlike the index
+declarations — **deploys with `functions/`** and is therefore readable in production. Names only;
+that registry has never held a value.
+
+**Without a declared list, coverage is `not-attempted`, never "0 missing"** — a zero there would
+read as "everything is provisioned", which is the opposite of what an unread list means.
+
+Also added: the telemetry **read time**, so a figure cannot be confused with one left on screen
+since yesterday.
+
+### Certification
+
+```
+declared names are de-duplicated
+a declared secret that does not exist is found, and NAMED
+a provisioned secret nobody declares is reported SEPARATELY, not as an orphan
+control: a satisfied declaration is not reported missing
+no secret value appears anywhere in the envelope
+with no declared list, coverage is not-attempted and NOT zero
+```
+
+`S33` (counted but not named) and `S34` (an unmatched secret presented as a fault) both caught.
+
+### A self-inflicted ordering bug
+
+The fixture was inserted *after* the render that needed it, so four assertions failed against a
+panel built before the data existed. Moved ahead of the renders. A fixture that arrives after the
+render it describes is not a fixture.
+
+### Suites — all fourteen
+
+```
+certify-integrations-console.js       1002 assertions, 0 failures   (was 796)
+sabotage-integrations-console.js        34 caught, 0 inert, 0 degraded   (was 8)
+test-gcp-evidence.js                   202 · test-gcp-iam-grant.js 71
+certify-gcp-admin-console.js            49 · status 45 · probes 85 · parity 26
+console 67 · nav all · census PASSED
+```
+
+**Database changes:** none. **API changes:** none. **Security changes:** none — names only, and the
+suite asserts no value reaches the envelope. **Breaking changes:** none.
+## 2026-09-21 (138) — Per-entity cards: one function, one identity, and "not checked" is not "passed"
+
+**Reader derivation · two entity cards · certification · NO deploy, NO GCP mutation.**
+
+The last drill-in from the spec: a card for ONE function and a card for ONE service account, opened
+from inside the tables.
+
+### The function card
+
+```
+Source contract   minInstances · maxInstances, from the recorded adjudication
+Serving state     minScale · maxScale · revision · Cloud Run service · traffic ·
+                  ready · image digest
+Contract          the checks BETWEEN them
+Observed          —  and the reason it is an em dash
+```
+
+**An unset limit renders as `— unset`, never as `0`.** Those are different contracts.
+
+**"Not checked" is not "passed."** A function with no supplied contract shows that nothing was
+compared — it does **not** get a tick. `S30` proves that guard fires; it was INERT until a fixture
+with no contract row existed, because the branch had never rendered.
+
+**The 30-day peak is an em dash on purpose.** A per-function figure needs a per-function metric
+query this reader does not make, and borrowing the estate-wide peak would put a different
+function's number under this one's name.
+
+### The service-account card
+
+Roles held, and what actually runs as the identity, split into Cloud Run services and functions.
+
+Three states, deliberately distinct:
+
+```
+runs these workloads      the join found them
+runs NOTHING              known, and stated — access with no workload behind it
+usage UNKNOWN             a workload inventory failed; NOT the same as nothing
+```
+
+No risk indicator is derived. Which secrets it can reach and when it was last used are em dashes —
+both need queries this reader does not make.
+
+### Derived, not invented
+
+**Recent deployments** and **recent failures** come from filtering the Admin Activity log already
+read, not from a second API. One source of truth; a second reader could disagree with the first.
+**Evidence age** is carried so a cockpit refreshed a second ago is distinguishable from one left
+open since yesterday — the figures look identical otherwise, and one of them is a lie by staleness.
+
+### A narrow raw-HTML escape hatch, shaped so it cannot be reached by accident
+
+Table cells are escaped without exception. The entity links needed markup, so a column may return
+`{ html }` — an **object shape**, not a flag. A value from an API is a string or a number, never an
+object carrying an `html` property this code put there, so a hostile field cannot satisfy it. `C1`
+still proves a hostile registry field is escaped.
+
+### Two more inert vectors, and a self-inflicted failure
+
+`S30` was inert because no fixture exercised the unchecked branch. `S32` was inert because its
+assertion matched a line the mutation did not touch — the sentence spans two concatenated strings.
+Both fixed; the assertion now requires the clause the mutation actually removes.
+
+Adding the uncontracted fixture then broke `D14b`, which pinned `Showing 1 of 1709`. That literal
+was wrong to write: a check about *whether truncation is disclosed* must not break because a fixture
+gained a row. Now `/Showing \d+ of 1709/` — the shape asserted, the total still exact.
+
+### Suites — all fourteen
+
+```
+certify-integrations-console.js        995 assertions, 0 failures   (was 796)
+sabotage-integrations-console.js       32 caught, 0 inert, 0 degraded   (was 8)
+test-gcp-evidence.js                   192 · test-gcp-iam-grant.js 71
+certify-gcp-admin-console.js            49 · status 45 · probes 85 · parity 26
+console 67 · nav all · census PASSED
+```
+
+**Database changes:** none. **API changes:** none. **Security changes:** none. **Breaking changes:**
+none.
+## 2026-09-21 (138) — Two vertical payment purposes, and two that were refused
+
+**Payment-unification Phase 2 · registry only · NO deploy, NO commission change, NO wallet work.**
+
+Phase 1's audit found that SOKONI does not need a new payment core: `createPaymentIntent` →
+`payment-purposes.js` → `initiateSTKPush` → `shared/stk-gateway` → `webhookIntasend` already is one,
+and the work is bringing verticals onto it. The blocker on the highest-value safety change —
+flipping `STK_NO_AUTHORITY` from log to throw (`index.js:6103`) — is that verticals mint no intent.
+This entry closes two of them.
+
+### Registered
+
+| Purpose | Resource | Price authority |
+|---|---|---|
+| `car_hub` | `rentalBookings/{id}` | `.totalAmount`, the snapshot `rentalBook` computed server-side from the `rentalProducts` rate card |
+| `accommodation` | `venueBookings/{id}` | `.pricing.total`, stamped inside the same transaction that takes the slot lock |
+
+Both **re-read the stored snapshot** rather than recomputing from the rate card. The card may have
+moved since the customer booked; the figure they agreed to is the one on the booking. Same
+precedent, and same reason, as `service_booking`.
+
+### The two deposits mean opposite things
+
+`rentalBookings.depositAmount` is a refundable **security deposit, additive** to the rental.
+`venueBookings.pricing.deposit` is a **portion of the total** (`total × depositPercent`).
+
+The rental deposit is **deliberately not charged**. `rentalBook` writes the field and *nothing* in
+`functions/` ever reads it — no collection, no release, no refund. Taking a refundable deposit
+through a rail that cannot refund it strands the customer's money. Under-charging is recoverable;
+that is not. It rides as `metadata.securityDepositUncollected`, and a test asserts the charge is
+`totalAmount` and specifically **not** `total + deposit` — the absence has an inverting control, so
+it cannot pass by the pricer simply returning zero.
+
+### Refused, with reasons
+
+- **`talent_booking` was NOT registered.** `DJ` and `MC` are already provider subcategories
+  (`provider-onboarding.js:131`), so a performer booking is a `providerBookings` document that
+  `service_booking` already prices. A second purpose over one resource type forks the authority.
+  The entertainment work is a client re-route, not a registry entry.
+- **`property` was NOT registered.** No payable server resource exists. `propertyListings.price` is
+  the value of the property, not a platform-collected amount; `scheduleViewing` charges nothing; and
+  landlord rent runs on a browser IntaSend key over `localStorage` with no Firestore price authority.
+  A pricer would have had to invent its source.
+
+Registering either would have produced a purpose that throws on every call while reading as
+coverage. Two of four delivered, and the other two named rather than papered over.
+
+### A bug the suite caught in its own change
+
+The first draft computed deposit metadata as `Math.round(x) * 100` — rounding to whole shillings
+*before* the ×100, silently discarding the cents. Caught by the 2dp venue fixture (2500.1 → 250000
+instead of 250010), fixed to `Math.round(x * 100)` in both pricers.
+
+**Files:** `functions/payment-purposes.js` · `scripts/test-payment-purposes-verticals.js` (new) ·
+`docs/PAYMENT_ARCHITECTURE_UNIFICATION.md` §5a/§5b
+
+**Database changes:** none. Both pricers are read-only over existing collections.
+**API changes:** `createPaymentIntent` accepts two new `purpose` values. No signature change; no
+existing purpose altered.
+**Security:** both pricers enforce owner match (`buyerId` / `customerId`), refuse non-payable and
+terminal statuses, refuse already-paid, and ignore any client-supplied amount. `rentalBookings` has
+no `paymentStatus` field today — absent is treated as unpaid, and any other value is refused, so the
+guard starts working the moment the field appears rather than being silently ignored.
+**Breaking changes:** none.
+**Deployment:** NOT deployed. Artifact Registry KEEP protection remains unproven until the
+`profile_get_public_profile` specimen survives its first sweep (~2026-09-22T04:21Z), and these
+functions are not among the six authorized recovery candidates.
+
+**Verification:** `scripts/test-payment-purposes-verticals.js` 42/0. No regression in the four
+dependent suites: healthcare-subscription-foundation 120/0, product-payment-authority 25/25,
+single-shop-checkout 29/0, multishop-checkout-integration 26/0, payment-intents 12/0.
+`scripts/deploy/undeclared-identifiers.js` is **not present in this worktree** and was not run;
+`node --check` passes and both pricers execute under test.
+
+---
+
+## 2026-09-21 (137) — Source contract vs serving state, and three vectors that were inert
+
+**Reader extension · three new panels · certification · NO deploy, NO GCP mutation.**
+
+The last unbuilt piece of the cockpit spec: what a function **declares** against what is **actually
+serving**. The gap between those two is the defect that removed a production ceiling during a
+rebuild, and it now has a panel.
+
+### The scaling contract
+
+The source side cannot be read from a deployed function — `firebase deploy --only functions` uploads
+`functions/` and nothing else — so the handler supplies it from the existing adjudication in
+`scripts/infra/recovery-manifest-20260921.json`, with the same `try/catch` as the declared index
+counts. Absent in production means **not-attempted**.
+
+```
+src min/max      what the repository declares
+serving min/max  what the revision is actually running
+GCF min/max      what the Cloud Functions layer reports
+verdict          the owner adjudication already recorded
+```
+
+**Parity is computed against the SERVING revision, deliberately.** The GCF layer reports
+`minInstanceCount=undefined` for functions whose source *and* serving revision both say 1 — it is
+the representation that agrees with neither. That is an observability discrepancy, not evidence, so
+the GCF value is carried **alongside** rather than quietly resolved, and the disagreement is counted.
+
+### Silence is not parity
+
+A function with no supplied contract is **not** "in parity" — nothing was compared for it. Those are
+counted separately rather than folded into the agreeing ones, and the panel says so. `S26` fails if
+that sentence goes.
+
+A blank minimum or maximum is **unset** — no limit — not zero. Different contracts, rendered
+differently.
+
+### Two more panels
+
+**Secret Manager.** Names, rotation policies, expiries. The panel states *which API* is used and that
+it cannot return a payload — `secrets.list` returns metadata only, and the access API that could is
+never called. Version counts, last rotation, per-secret consumers and access failures are em dashes
+with a reason: each needs a per-secret call or an access-log query this reader does not make.
+
+**Database explorer.** Both databases with region, indexes, READY, root collections and drift, plus
+the live quota. Document counts, the deployed ruleset and recent query/index failures are named as
+**not read** — they need an aggregation, the Rules API and a log query respectively.
+
+### THREE SABOTAGE VECTORS CAME BACK INERT
+
+Pre-flight found three mutations the suite did not catch. Each had a different cause, and only one
+was a real coverage gap.
+
+**S25 was a BAD VECTOR, not a missing guard.** The "no source contract" figure renders in two places
+— the drill panel and the Compute summary — so no single edit can hide it. That is a robustness
+property of the design. Retargeted at something single-sourced and genuinely dangerous: a parity
+column that always reads `ok` would hide a real disagreement.
+
+It was then inert *again*, for a second reason: the word `DISAGREE` also appears in the metric
+**label** above the table, so an unscoped match was satisfied by prose about the check rather than
+the result of it. Now scoped to the table cell, with an inverting control proving the agreeing row
+renders `ok` in the same table.
+
+**S26 and S27 were weak ASSERTIONS.** Both checks carried an `||` fallback, so a mutation could
+replace the sentence while a neighbouring clause kept the check green. `D21` now asserts the claim
+and its reason separately. `D22` now requires the whole sentence *including which API* — "cannot
+return a payload" alone survives a mutation that removes the basis, and a claim without its basis is
+an assertion rather than evidence.
+
+> Three inert vectors, three different lessons: a figure rendered twice cannot be hidden by one
+> edit; a matcher must read the result and not the label describing it; and an `||` in an assertion
+> is a hole.
+
+### Suites — all fourteen
+
+```
+certify-integrations-console.js        973 assertions, 0 failures   (was 796)
+sabotage-integrations-console.js       28 caught, 0 inert, 0 degraded   (was 8)
+test-gcp-evidence.js                   192 passed, 0 failed
+test-gcp-iam-grant.js                   71 passed · sabotage 10 caught
+certify-gcp-admin-console.js            49 passed · sabotage  9 caught
+status 45 · probes 85 · parity 26 · console 67 · nav all · census PASSED
+```
+
+### Files affected
+
+```
+functions/gcp-evidence.js              the source-vs-serving contract join
+functions/admin-os.js                  supplies the adjudication, try/catch as in prod
+sokoni-integrations.js                 contract · secrets · databases drill-downs
+scripts/test-gcp-evidence.js           case 16, with an inverting control
+tests/certify-integrations-console.js  D21–D23; D21/D22 hardened
+tests/sabotage-integrations-console.js S25 retargeted; S26–S28 added
+```
+
+**Database changes:** none. **API changes:** none. **Security changes:** none. **Breaking changes:**
+none.
+
+### Still not built
+
+Cost breakdown by service, per-service telemetry, open incidents, Data Access log entries and secret
+version detail — all named in `notCovered` and shown in the panel.
+
+## 2026-09-21 (136) — Telemetry, cost conditions, service-account ownership, and a graph drawn from readings
+
+**Reader extension · new panels · certification · NO deploy, NO GCP mutation.**
+
+The remaining sections of the cockpit spec. Every figure is a real API read or a derivation over
+two readings, and every gap is named rather than filled.
+
+### 1. Real telemetry, with the window attached
+
+```
+Cloud Run      requests · 5xx (a SEPARATE series) · peak concurrent instances
+Functions      executions · non-ok executions
+Firestore      document reads · writes · deletes
+```
+
+Each is a `monitoring.timeSeries` query over a stated 24-hour window, reduced to a total or a peak.
+**A number with no window attached is not a measurement**, so the window travels with the reading
+and appears in its `source`.
+
+A series with no points is a **measured zero over that window** — genuinely quiet — which is a
+different fact from a failed read and is badged differently. **Open incidents is `not-attempted`,
+not zero**: the incidents API is not exposed under the REST surface this reader uses, and saying
+"0 open incidents" when nothing looked would be the exact defect this console exists to prevent.
+
+### 2. Cost conditions, derived — and stated as conditions
+
+```
+services with a pinned minimum     bills while idle
+services with NO maximum           no ceiling at all
+services with a very high maximum  ≥ 100
+```
+
+Derived from the Cloud Run inventory already read, not from a cost API, and each names the services
+it applies to. **These are conditions, not verdicts.** Whether a pinned minimum is correct depends
+on the service and this reader does not know which, so it shows the condition and stops.
+
+Per-service traffic and a cost breakdown are **`not-attempted`** — they need a per-service metric
+query and the billing export dataset respectively, and this reader makes neither.
+
+Budgets are read once the billing account is known, and skipped honestly when it is not.
+
+### 3. Service accounts — a join that answers a different question
+
+The IAM policy says which identities **hold roles**. The Cloud Run and Functions inventories say
+which workloads **run as** them. Those are different questions, and only the join answers the
+second.
+
+An identity holding roles that nothing runs as is **access with no owner** — shown as a condition,
+not scored, and with the reader's own blind spot admitted: it may be used by something outside Cloud
+Run and Functions.
+
+**Where a workload inventory could not be read, the column is an em dash rather than "no"**, because
+"nothing runs as this" would then be a claim about a failed read. `S22` proves that guard fires.
+
+### 4. App Check, per service
+
+Enforced and unenforced counted separately, with the mode per service. A service that is not
+enforcing is **not automatically a fault** — some endpoints are public or webhook receivers by
+design. Audit the endpoint, not the count.
+
+### 5. The relationship graph — drawn from readings
+
+```
+SOKONI ── Firestore databases ── Cloud Storage
+       └─ Service accounts · Administrators
+       └─ Cloud Functions ── Cloud Run ── Image digests ── Repositories
+                                                        └─ MISSING from registry
+```
+
+An inline SVG whose every node carries the figure that was actually read. **A node whose reading
+failed is dimmed and shows an em dash rather than being removed** — an absent box would say "no such
+thing" when the truth is "not measured". Selecting a node opens its evidence panel.
+
+### 6. The activity timeline, as its own panel
+
+Admin Activity events with service, method, resource and outcome, and a count of those that
+**failed** — an operation attempted and refused is usually the more interesting half. Data Access
+entries are not read, deliberately: they can carry request payloads, and a timeline is not worth
+leaking a request body for.
+
+### Three fixture defects the work surfaced
+
+All three were the harness, not the reader, and each is the same family of bug:
+
+```
+timeSeries inherited the project rejection   its path CONTAINS the project prefix
+'/services' swallowed the Cloud Run list     it matched LATER in the path
+serviceusage vs firebaseappcheck             genuinely the SAME path on different HOSTS
+```
+
+The router now supports **host-qualified keys** (`host|fragment`), because two Google APIs really do
+answer at `/v1/projects/{p}/services` and path alone cannot tell them apart.
+
+### And one in the certification itself
+
+`S22` was **INERT** on first run. The fixture had no service-account row with unknown usage, so
+removing the guard changed nothing. Adding the row exposed a second defect: the row scoping split on
+`<tr` only, so the LAST row ran to the end of the document and swallowed the closing note — which
+contains an em dash. The check was passing on **prose**, not on the cell.
+
+Scoped to `</tr>` now. A row must be scoped to the row.
+
+### Suites — all fourteen
+
+```
+certify-integrations-console.js        973 assertions, 0 failures   (was 796)
+sabotage-integrations-console.js       28 caught, 0 inert, 0 degraded   (was 8)
+test-gcp-evidence.js                   174 passed, 0 failed
+test-gcp-iam-grant.js                   71 passed · sabotage 10 caught, 0 inert
+certify-gcp-admin-console.js            49 passed · sabotage  9 caught, 0 inert
+status 45 · probes 85 · parity 26 · console 67 · nav all · census PASSED
+```
+
+### Files affected
+
+```
+functions/gcp-evidence.js              telemetry · incidents · budgets · App Check ·
+                                       cost conditions · service-account join
+sokoni-integrations.js                 4 new drill-downs · relationship graph ·
+                                       activity panel · graph styles
+scripts/test-gcp-evidence.js           host-qualified fixture router; cases 14–15
+tests/certify-integrations-console.js  D15–D20
+tests/sabotage-integrations-console.js S19–S24
+```
+
+**Database changes:** none. **API changes:** none — the same single read op. **Security changes:**
+none; the reader stays read-only scoped and the write path is untouched. **Breaking changes:** none.
+
+### Still not built
+
+A cost breakdown by service, per-service telemetry, open incidents, Data Access log entries and
+secret version detail — all named in `notCovered` and shown in the panel, so their absence is
+visible rather than mistaken for health.
+
+## 2026-09-21 (135) — Grant access from the page, without making the page able to grant anything
+
+**New write path (NOT deployed) · new client module · certification · NO deploy, NO IAM mutation.**
+
+You can now add a SOKONI admin and a Google Cloud role from the Integrations page, instead of
+opening the Google Cloud console. That is a real operational win and it is also a
+**privilege-escalation surface**, so almost all of this entry is about the refusals.
+
+### The architectural decision: a THIRD file, not a third way
+
+```
+sokoni-integrations.js   READ-ONLY. Certified to contain no write path at all.
+                         UNCHANGED as a guarantee — it only emits a mount point.
+sokoni-gcp-admin.js      NEW. The one write surface. Writes nothing itself.
+functions/gcp-iam-grant.js  NEW. The only module in the repo that writes IAM.
+functions/gcp-evidence.js   UNCHANGED. Still read-only-scoped, still proven so.
+```
+
+Case `E4` forbids the four Firestore write verbs in the console outright and sabotage `S8` proves it
+fires. Putting a grant button in that file would have ended a guarantee that has already caught real
+defects — so the write surface is a separate script, and the console keeps its proof.
+
+**The SOKONI half reuses the existing canonical path.** `setUserRole` in `functions/super-admin.js`
+is already superAdmin-gated, rate-limited, App Check enforced and audited. There is deliberately **no
+second way to mint an admin**; `A9` fails if this module stops using it.
+
+### The refusals, and why each exists
+
+```
+DENY BY DEFAULT        a role must be on GRANTABLE_ROLES. Unknown is refused,
+                       never passed through
+FORBIDDEN TWICE        owner, editor and every IAM-admin role are checked
+                       against a SEPARATE list. Their holder could grant
+                       themselves anything else, which would make every other
+                       control here decorative. A careless edit to the
+                       grantable list still cannot escalate
+NO SELF-GRANT          the actor may not add a binding for themselves. An
+                       operator who can widen their own access has no ceiling.
+                       The actor's email comes from the VERIFIED TOKEN, never
+                       from the request body
+ETAG MANDATORY         setIamPolicy without the etag you read can overwrite a
+                       concurrent change — in the worst case removing every
+                       other binding on the project. No etag, no write
+AUDIT CONFIGS CARRIED  setIamPolicy replaces the WHOLE policy. A grant that
+                       dropped auditConfigs would disable audit logging as a
+                       side effect of adding a viewer
+IDEMPOTENT             an existing grant writes nothing
+REVOCATION EXISTS      a grant path with no revoke path is a trap; access that
+                       can only be added accumulates. Revoking an admin role is
+                       still refused — it can lock everyone out
+```
+
+`allUsers` and `allAuthenticatedUsers` fail the member pattern and can never be written. Granting
+either would make the project public.
+
+### In the browser: no privilege change on one click
+
+A typed confirmation naming the member, **re-checked at commit** rather than only disabling a button
+— `A1` proves a disabled button alone is not a control. Editing the member discards a staged
+confirmation, so one can never be carried onto a different person (`A3`).
+
+The two systems are labelled apart everywhere. Granting SOKONI says *"does not change Google Cloud
+access"*; granting GCP says the reverse. **Removing someone as a SOKONI admin does not remove their
+project IAM binding** — they still have the infrastructure.
+
+A non-superAdmin gets no form, and is told plainly that the server would refuse regardless, because
+hiding a button has never stopped anybody. A server refusal is shown **verbatim**, so an operator
+learns which rule stopped them.
+
+### Certification
+
+```
+scripts/test-gcp-iam-grant.js       71 assertions, 0 failures   NEW
+tests/sabotage-gcp-iam-grant.js     10 mutations, 10 caught, 0 inert   NEW
+tests/certify-gcp-admin-console.js  49 assertions, 0 failures   NEW
+tests/sabotage-gcp-admin-console.js  9 mutations,  9 caught, 0 inert   NEW
+```
+
+Every refusal is asserted with an **inverting control**: the same call shape must SUCCEED when the
+unsafe element is removed. A refusal that fires on everything is not a control, it is a broken
+function.
+
+The IAM suite captures every `setIamPolicy` body rather than sending it, so what is asserted is the
+request this module actually produced — including that the owner binding, the pre-existing viewer
+and the audit configs all survive a grant.
+
+### One more instance of the machinery reading itself
+
+Two assertions failed on first run: *"the evidence reader contains no setIamPolicy"* and *"this
+module carries the write-capable scope"*. Both were true in code and false in **prose** — the
+reader's header explains that the write twin appears nowhere in it, and this module's header
+explains why the reader is read-only scoped. A scan over raw source counts that prose as the thing
+it describes.
+
+Now stripped before scanning, with a control proving the stripper is not a no-op: the prose really
+was there, and really was removed. Only code may be evidence about code.
+
+### Files affected
+
+```
+functions/gcp-iam-grant.js            NEW  the only IAM writer
+functions/super-admin.js              superAdminGrantGcpRole / …RevokeGcpRole,
+                                      superAdmin-gated, rate-limited, audited
+                                      including the REFUSALS
+functions/index.js                    both callables exported
+sokoni-gcp-admin.js                   NEW  the write surface
+sokoni-integrations.js                emits a mount point; still write-free
+admin-os.html · super-admin.html      the new script, with a note on why it is separate
+```
+
+**Database changes:** none. **API changes:** two new callables, both superAdmin-only.
+**Security changes:** a new privilege-escalation surface exists in source, built with the controls
+above. **Breaking changes:** none.
+
+### NOT DEPLOYED, and what it would need
+
+Neither callable is deployed. Beyond the deploy itself, the grant path needs a service account
+holding `resourcemanager.projects.setIamPolicy` — which the evidence reader's read-only identity
+deliberately does **not** have, and which is itself a privilege decision.
+
+A refused escalation attempt is audited at `severity: high`, because an attempt is more interesting
+than a success.
+
+## 2026-09-21 (134) — The AdminOS GCP evidence reader, and a control plane that cannot invent a number
+
+**New server-side reader (NOT deployed) · new console tab · certification · NO deploy, NO GCP mutation.**
+
+Firestore database regions, index state, READY counts and ROOT COLLECTION counts are Admin-API
+facts. A client SDK cannot enumerate collections, cannot read index state and cannot see a
+database's region, so the console renders an em dash for all of them.
+
+That is the honest answer **from a browser**. It is the wrong answer from a server, which can simply
+ask — and "not measured" where a measurement was available is its own kind of defect.
+
+### 1. `functions/gcp-evidence.js` — read-only, binds no secret
+
+```
+firestore.databases.list          region · type · deletion protection
+firestore.indexes.list            deployed count · READY count · state breakdown
+documents:listCollectionIds       ROOT COLLECTION COUNT
+serviceusage.quota                the LIVE composite-index limit
+```
+
+Authentication is Application Default Credentials — the function's own service account via the
+metadata server — scoped `cloud-platform.read-only`, so **the credential itself cannot mutate
+anything** even if a future code path tried. No key is read, held, logged or returned.
+
+The live quota is never hardcoded. A hardcoded `200` was wrong here for months and drove index
+deletions and a migration that were never needed; if the quota cannot be read it is `unreadable`,
+not a guess.
+
+### 2. Every field is an OBSERVATION, never a bare value
+
+```
+{ value, state, source, observedAt, reason }
+```
+
+Six states, none collapsible into another:
+
+```
+observed        a read succeeded and the value is real
+empty           a read succeeded and found nothing. value 0 — a MEASURED zero
+unreadable      a read failed. reason names it. There is NO value
+not-attempted   nothing looked
+not-applicable  the question does not apply
+stale           observed, but older than the freshness window
+```
+
+`STALE_MS` mirrors the console's threshold so the two never disagree about the same reading.
+
+### 3. The measured zero — the tension this resolves
+
+Entry (130) recorded that `sokoni-ops: 0 collections` **could not** be shown, because a client
+cannot enumerate collections and rendering `0` would be fabrication. That was correct for a browser
+and is now superseded for a server: `documents:listCollectionIds` enumerates root collections, so an
+empty result is a **measured zero** — a real finding, badged as such, with the panel stating in
+rendered output that the server enumerated and found none, and that a client could not have produced
+it.
+
+A measured zero and an unmeasured one are now visibly different things, which is the entire point.
+
+### 4. The console gains a Google Cloud control plane
+
+A new tab composes the GCP entries the catalogue already addresses individually, so the estate reads
+as one substrate without the individual rows losing their identity. Each figure links **into** the
+catalogue entry that owns it — a number is a way into the evidence, not a dead end.
+
+It reads **on demand**, when an operator opens the tab. Opening a console is not a reason to query
+the Admin API for the whole estate.
+
+The reader states its own boundary in the rendered panel: `cloud-run · artifact-registry · iam ·
+monitoring · billing · secret-manager · audit-logging` are **not covered**, are not shown as healthy,
+and are not shown as zero.
+
+### 5. Until it is deployed, the panel shows nothing — deliberately
+
+Writing this reader is authorized. **Deploying it is a separate decision that this commit does not
+take.** Until then the panel renders:
+
+> No infrastructure figure is shown, because none was obtained.
+
+No index count, no collection count, no `Observed` badge, no `Measured zero` badge — and `D12`
+fails if any of those appear. Every Google Cloud service stays individually addressable.
+
+### 6. Two op-identity allowlists were widened DELIBERATELY
+
+`adminGetGcpEvidence` was refused by both guards on first run, which is the contract working. It
+joined each allowlist only after the read-only property was proven: no mutation verb on stripped
+source against a positive control that catches a planted `PATCH` and `.delete(`, a read-only token
+scope, no `defineSecret`, and nothing persisted. Both suites still assert exact-set equality and
+reject a computed op.
+
+### 7. Certification
+
+```
+scripts/test-gcp-evidence.js       192 assertions, 0 failures   NEW
+  empty vs unreadable vs not-attempted are three different answers
+  a failed read never becomes a number; drift is never inferred
+  credentials failure degrades to unreadable, not to an empty estate
+  freshness applies to observations and NOT to failures
+  read-only on stripped source, with an inverting control
+
+tests/sabotage-gcp-evidence.js      5 mutations, 5 caught, 0 inert   NEW
+  unreadable reports 0 · empty collapses to observed · drift defaults to 0
+  failed index read becomes an empty set · quota falls back to a hardcode
+
+D11  the GCP panel separates a measured zero from an unmeasured one
+D12  when the reader is absent, nothing is invented
+```
+
+Both new console cases proven non-inert by three new sabotage mutations (S9, S10, S11), each caught.
+
+### Two test defects the work surfaced, both in the harness
+
+**A first-match fixture router.** Every index and collection path also *contains* `/databases`, so
+the scripted API answered every index read with the database list — 18 assertions failed on a
+fixture defect rather than on the reader. Now longest-match. Order-dependent substring routing is a
+trap.
+
+**An unscoped metric lookup.** Both databases render rows with identical labels, so reading "Root
+collections" answered with whichever came first — an assertion about `sokoni-ops` could pass or fail
+on `(default)`'s value. Now scoped per database section, with an inverting control proving the other
+database reports a different number.
+
+### Suites — all ten
+
+```
+certify-integrations-console.js        945 assertions, 0 failures   (was 796)
+sabotage-integrations-console.js       24 caught, 0 inert, 0 degraded   (was 8)
+test-gcp-evidence.js                  192 passed, 0 failed          NEW
+sabotage-gcp-evidence.js               5 caught, 0 inert            NEW
+test-integration-status.js             45 · probes 85 · parity 26
+test-integrations-console.js           67 · nav all · census PASSED
+```
+
+### Files affected
+
+```
+functions/gcp-evidence.js                 NEW  the reader
+scripts/test-gcp-evidence.js              NEW  192 assertions
+tests/sabotage-gcp-evidence.js            NEW  5 mutations
+functions/admin-os.js                     adminGetGcpEvidence registered on _h
+sokoni-integrations.js                    GCP tab, observation rendering, on-demand read
+tests/certify-integrations-console.js     D11, D12, allowlist, metric extractor
+scripts/test-integrations-console.js      op allowlist widened with justification
+```
+
+**Database changes:** none — no collection is written and no health record is persisted, by design.
+**API changes:** one new READ op on the existing dispatcher; no new callable, no new service.
+**Security changes:** none adverse. The reader binds no secret, holds no key, and its token is
+read-only scoped. **Breaking changes:** none.
+
+### NOT DONE, and not implied
+
+### The cockpit — nine control planes, composed
+
+The reader was extended past Firestore into the full estate. Each domain observes **independently**:
+a dead API degrades its own fields and leaves every neighbour intact, because a cockpit where one
+failed instrument blanks the screen is worse than one that says precisely which instrument is out.
+
+```
+COMPUTE         Cloud Functions   deployed · active · failed · deploying · runtimes
+                Cloud Run         services · ready · CREATED-not-READY · unbounded
+                                  scaling · pinned minimums
+                Artifact Registry repositories · cleanup policies by name ·
+                                  repositories ENFORCING a policy
+DATA            Firestore         both databases · regions · indexes · READY ·
+                                  root collections · live quota · declared-vs-deployed
+OBSERVABILITY   Monitoring        alert policies · enabled · with a notification channel
+                Billing           enabled · account
+SECURITY        IAM               bindings · principals · service accounts · owners ·
+                                  editors · audit services · audit LOG TYPES
+                Secret Manager    secrets · rotation · expiry — NAMES only
+```
+
+**Region coverage is derived from what was observed running**, never from a configured list. A
+region nothing runs in is not coverage.
+
+Three panels earn their place by surfacing failures this platform has actually hit. A Cloud Run
+service whose latest **created** revision is not its latest **ready** one has a revision that failed
+to come up while the old one keeps serving — silent unless something looks. A cleanup policy is
+**enforcing** unless its dry-run flag is set, and that flag disables deletion rather than previewing
+it. An **absent** audit config means Admin Activity only — not "everything".
+
+No risk score is computed anywhere. A score is an opinion wearing the authority of a measurement.
+
+### Drill-downs — the management system, not a dashboard
+
+Six evidence tables, opened in-panel (AdminOS has no router). A table of real-looking rows reads as
+authority, so each one is certified on the same terms as the summary above.
+
+```
+Functions inventory    function -> Cloud Run service -> revision, runtime, memory,
+                       timeout, min/max, service account. The estate's scaling
+                       breakdown, and an explicit statement that the SOURCE
+                       contract is not an API fact and is therefore not shown
+Cloud Run services     revision parity, min/max scale, concurrency, CPU, memory,
+                       timeout, IMAGE DIGEST, service account, traffic split
+Artifacts & provenance every cleanup policy with its ACTION and condition, the
+                       repositories with DELETE and no KEEP, and the join:
+                       revision -> digest -> registry, naming each service whose
+                       serving image is MISSING from the registry
+Administrators         who can change this project, as the real IAM bindings.
+                       Humans separated from service accounts
+Audit logging          per-service coverage, plus a recent Admin Activity timeline
+Storage / Enabled APIs bucket posture; which APIs are on
+```
+
+**The provenance join is the one that matters.** A serving image whose digest is not in the registry
+is exactly the condition that leaves a service unable to create a new revision from its existing
+spec — the old revision keeps serving, so nothing looks wrong until a deploy is attempted. The panel
+names the affected services rather than counting them.
+
+**No risk score anywhere.** A score is an opinion wearing the authority of a measurement. The
+bindings, the policies and the conditions are shown; the operator draws the conclusion.
+
+An inventory is capped at 250 rows and **says so**, with the real total beside it, so a truncated
+list is never mistaken for a complete one.
+
+### Two INERT sabotage vectors, found and closed
+
+Pre-flight sabotage reported two mutations the suite did not catch — which is the point of running
+it before a commit rather than after:
+
+```
+S15  an empty inventory rendered as a failed read     no fixture had an EMPTY table
+S17  the admins panel computes a risk score           the mutation ADDED a score beside
+                                                      the refusal; asserting the refusal's
+                                                      own wording could never catch that
+```
+
+`D14f` now renders an empty inventory and an unreadable one **in the same output**, so the two are
+told apart in one render rather than across two. And the risk-score refusal is asserted **both
+ways** — the position must be stated, and no score may appear anywhere on the panel — with an
+inverting control proving the matcher fires on a planted score.
+
+A refusal asserted only by its own wording is not a guard; anything can be added beside it.
+
+### NOT DONE, and not implied
+
+A cost breakdown, budget alerts, per-function telemetry, open incidents, Data Access log entries and
+Cloudflare are **not implemented** — named in `notCovered` so their absence is visible rather than
+mistaken for health. There is no infrastructure relationship graph.
+
+Data Access log entries are excluded **deliberately**, not merely unbuilt: those entries can carry
+request payloads, and a timeline is not worth leaking a request body for.
+
+`adminGetGcpEvidence` exists only on this branch. The deployed dispatcher answers `not-found`, which
+is the state the panel renders and explains.
+
 ## 2026-09-21 (133) — S1 was pointing at a guard that cannot see its own mutation
 
 **Test expectation only · no product code · no catalogue · NO deploy.**

@@ -34,17 +34,18 @@ through a local token layer with fallbacks, so no page restyles it.
 
 ## What it shows
 
-Six tabs:
+Seven tabs:
 
 1. **Catalogue** — every integration SOKONI has, grouped by category, with a live
    signal overlaid where one exists.
-2. **Registered** — `platformServices`, with health derived from `platformHealth`.
-3. **Capabilities** — which services declare which platform capability, and which
+2. **Google Cloud** — the composed infrastructure control plane. See below.
+3. **Registered** — `platformServices`, with health derived from `platformHealth`.
+4. **Capabilities** — which services declare which platform capability, and which
    declared capabilities are not in the well-known list.
-4. **Dependencies** — `platformDependencies` edges, flagging targets that are not
+5. **Dependencies** — `platformDependencies` edges, flagging targets that are not
    in the registry.
-5. **Webhooks** — `posWebhooks`: merchant endpoints, failure counts, last delivery.
-6. **Credentials** — every secret **name** the catalogue declares and which rails
+6. **Webhooks** — `posWebhooks`: merchant endpoints, failure counts, last delivery.
+7. **Credentials** — every secret **name** the catalogue declares and which rails
    depend on it.
 
 ## Data authority
@@ -71,6 +72,262 @@ document is `No heartbeat` — never `Healthy`.
 Certification enforces this on both code paths: the KPI tiles **and** the tab
 pill counts. Pre-flight sabotage found the pills uncovered on the first pass; the
 gap is now closed and proven.
+
+## The Google Cloud control plane
+
+A tab that composes the GCP entries the catalogue already addresses
+individually, so the infrastructure reads as one estate without the individual
+rows losing their identity. Each figure links **into** the entry that owns it.
+
+Fed by `functions/gcp-evidence.js` through the read-only op
+`adminGetGcpEvidence` on the existing dispatcher. **No new collection** — this
+is a read, and nothing persists a health record.
+
+### Every field is an observation
+
+```
+{ value, state, source, observedAt, reason }
+```
+
+| State | Means | Renders |
+| --- | --- | --- |
+| `observed` | read succeeded, value is real | the value |
+| `empty` | read succeeded, found nothing | a **measured** `0` |
+| `unreadable` | read failed | `—` + the error |
+| `not-attempted` | nothing looked | `—` + why |
+| `not-applicable` | question does not apply | `—` |
+| `stale` | observed, past the freshness window | the value, badged stale |
+
+`STALE_MS` mirrors the console threshold. If one moves, move both.
+
+### The measured zero
+
+`sokoni-ops` genuinely has no root collections. A **server** can establish that
+via `documents:listCollectionIds`; a client cannot enumerate collections at all.
+So the panel renders a real `0`, badges it *Measured zero*, and says in the
+output that the server enumerated and found none.
+
+This supersedes the earlier position that the figure could not be shown — that
+was correct for a browser and is wrong for a server. A measured zero and an
+unmeasured one must remain visibly different; `D11` fails if they stop being.
+
+### Read-only, and it binds no secret
+
+Application Default Credentials, scoped `cloud-platform.read-only`, so the
+credential cannot mutate anything even if a code path tried. The live
+composite-index quota is read from the quota API and **never hardcoded** — a
+hardcoded `200` was wrong here for months and drove index deletions that were
+never needed.
+
+### Four sections, thirteen control planes
+
+```
+COMPUTE        Cloud Functions · Cloud Run · Artifact Registry · image provenance
+DATA           Firestore, both databases · indexes · quota · Cloud Storage
+OBSERVABILITY  Monitoring · telemetry · Billing · budgets
+SECURITY       IAM · admins · service accounts · App Check · Audit · Secrets
+```
+
+Each domain observes **independently** — a dead API degrades its own fields and
+leaves its neighbours intact. When one is out the header says *"Part of this
+cockpit is dark"*, because a dark instrument must never read as a healthy one.
+
+**Region coverage is derived from what was observed running**, not from a
+configured list. A region nothing runs in is not coverage.
+
+Three panels exist to surface failures this platform has actually hit:
+
+| Signal | Why it matters |
+| --- | --- |
+| Created revision ≠ ready revision | A revision failed to come up; the old one keeps serving, so it is silent. |
+| Repositories enforcing a cleanup policy | A policy is enforcing unless its dry-run flag is set — and that flag **disables deletion**, it does not preview it. |
+| Audit log types enabled | An **absent** audit config means Admin Activity only, not "everything". |
+
+No risk score is computed anywhere. A score is an opinion wearing the authority
+of a measurement.
+
+### Drill-downs
+
+Six evidence tables, opened in-panel (there is no router — see Navigation
+reality). Each figure in the summary links to the catalogue entry that owns it;
+each **Open** chip opens the table.
+
+| Table | Shows |
+| --- | --- |
+| Functions inventory | function → Cloud Run service → revision, runtime, memory, timeout, min/max, service account |
+| Cloud Run services | revision parity, scaling, concurrency, CPU, memory, **image digest**, service account, traffic |
+| Artifacts & provenance | every cleanup policy with its **action and condition**; repositories with DELETE and no KEEP; the revision → digest → registry join |
+| Administrators | who can change the project, as real IAM bindings; humans separated from service accounts |
+| Audit logging | per-service coverage + a recent Admin Activity timeline |
+| Storage · Enabled APIs | bucket posture; which APIs are on |
+| Monitoring & telemetry | real metric series over a **stated 24h window** — Run requests/5xx/peak instances, function executions/errors, Firestore reads/writes/deletes |
+| Billing & cost control | budgets, and the **conditions** that drive spend: pinned minimums, unbounded maximums, very high ceilings |
+| Service accounts | a JOIN — who **holds roles** vs what **runs as** them |
+| App Check | enforcement mode per service |
+| Scaling contract | source vs **serving** min/max, the GCF layer's disagreement carried alongside, and the owner verdict |
+| Secret Manager | names, rotation, expiry — and which API is used, and why it cannot return a value |
+| Databases | both databases, indexes, READY, root collections, drift, live quota |
+
+### Entity cards
+
+A row in the Functions or Service-accounts table opens that entity's own card.
+
+**Function card** — source contract, serving state, and the checks between them.
+An unset limit renders as `— unset`, never `0`. A function with no supplied
+contract shows that **nothing was checked** — it does not get a tick, because
+"not checked" and "passed" are different claims. The 30-day peak is an em dash:
+borrowing the estate-wide figure would put another function's number under this
+one's name.
+
+**Service-account card** — roles held, and what actually runs as the identity.
+Three distinct states: runs these workloads · runs **nothing** (known) · usage
+**unknown** (a workload inventory failed — not the same as nothing).
+
+Table cells are escaped without exception. The entity links use a narrow opt-in:
+a column may return `{ html }`, an object **shape** rather than a flag, so a
+hostile string from a read can never satisfy it.
+
+Plus two panels on the cockpit itself:
+
+**The relationship graph.** An inline SVG whose every node carries the figure
+actually read. A node whose reading failed is **dimmed with an em dash, not
+removed** — an absent box would say "no such thing" when the truth is "not
+measured". Selecting a node opens its evidence.
+
+**Recent activity.** Admin Activity events with outcome, and a count of those
+that *failed*. Data Access entries are not read: they can carry request
+payloads, and a timeline is not worth leaking a request body for.
+
+### Telemetry carries its window
+
+A number with no window attached is not a measurement, so the 24h window travels
+with the reading and appears in its `source`. A series with no points is a
+**measured zero over that window** — genuinely quiet — which is badged
+differently from a failed read. **Open incidents is `not-attempted`**, because
+the incidents API is not on the REST surface this reader uses.
+
+### Cost shows conditions, never verdicts
+
+A pinned minimum bills while idle; an unbounded maximum has no ceiling. Whether
+either is *correct* depends on the service, and this reader does not know which.
+It names the services and stops. No score is computed.
+
+### Source contract vs serving state
+
+What a function **declares** against what is **actually serving**. The source
+side cannot be read from a deployed function — `firebase deploy --only
+functions` uploads `functions/` and nothing else — so the handler supplies it
+from the recorded adjudication, with the same `try/catch` as the declared index
+counts. Absent in production means **not-attempted**.
+
+**Parity is computed against the SERVING revision, deliberately.** The GCF layer
+reports `minInstanceCount=undefined` for functions whose source *and* serving
+revision both say 1 — it is the representation that agrees with neither. That is
+an observability discrepancy, not evidence, so the GCF value is carried
+**alongside** rather than quietly resolved, and the disagreement is counted.
+
+> **Silence is not parity.** A function with no supplied contract is not "in
+> parity" — nothing was compared for it. Those are counted separately, never
+> folded into the agreeing ones. A blank min or max is **unset**, not zero.
+
+### Declared vs provisioned secrets
+
+The Credentials tab knows what each rail **declares**. Secret Manager knows what
+**exists**. The join answers what neither can alone: a declared secret that does
+not exist is a rail that will **fail when it runs**, and it is named rather than
+counted.
+
+The other direction is reported separately and is **not a fault** — a
+provisioned secret nobody declares may belong to a system outside this registry,
+so it is listed for deliberate reconciliation, never flagged for deletion.
+
+Declared names are de-duplicated. Without a declared list the figure is
+`not-attempted`, never "0 missing" — a zero there would read as "everything is
+provisioned".
+
+### Service-account ownership
+
+An identity holding roles that nothing runs as is **access with no owner** — a
+condition, not a score, and the reader admits it may be used by something outside
+Cloud Run and Functions. Where a workload inventory could not be read the column
+is an em dash, **never "no"**: "nothing runs as this" would then be a claim about
+a failed read.
+
+**The provenance join.** A serving image whose digest is not in the registry is
+the condition that leaves a service unable to create a new revision from its
+existing spec — the old revision keeps serving, so nothing looks wrong until a
+deploy is attempted. Affected services are **named**, not counted.
+
+**The source contract is not shown, on purpose.** What a function declares in
+the repository and what it is serving are different things, and only the serving
+side is an API fact. The column is null rather than absent so the gap is visible.
+
+**No risk score anywhere.** A score is an opinion wearing the authority of a
+measurement. Bindings, policies and conditions are shown; the operator draws the
+conclusion. `D14d` asserts this **both ways** — the position must be stated, and
+no score may appear anywhere — because a sabotage that *adds* a score beside the
+refusal passes a check that only looks for the refusal's wording.
+
+**Inventories are capped at 250 and say so**, with the real total beside them. A
+truncated list must never read as a complete one.
+
+### Access management — the one write surface
+
+Grant a SOKONI role and a Google Cloud role from the page, instead of opening
+the Google Cloud console.
+
+It lives in **`sokoni-gcp-admin.js`, a separate file**. `sokoni-integrations.js`
+is certified to contain no write path (`E4`, proven by `S8`), and that guarantee
+is worth more than one fewer script tag. The console only emits a mount point.
+
+**The SOKONI half reuses `setUserRole`**, the existing canonical role authority —
+already superAdmin-gated, rate-limited and audited. There is deliberately **no
+second way to mint an admin**; `A9` fails if this module stops using it.
+
+**The GCP half** goes through `functions/gcp-iam-grant.js`, the only module in
+the repository that writes IAM.
+
+| Refusal | Why |
+| --- | --- |
+| Deny by default | A role must be on the allowlist. Unknown is refused, not passed through. |
+| Owner / Editor / IAM-admin forbidden **twice** | Their holder could grant themselves anything else. Checked against a separate list, so a careless edit to the allowlist still cannot escalate. |
+| No self-grant | An operator who can widen their own access has no ceiling. The actor's email comes from the **verified token**, never the request body. |
+| Etag mandatory | `setIamPolicy` without it can overwrite a concurrent change — in the worst case removing every other binding. |
+| Audit configs carried through | `setIamPolicy` replaces the **whole** policy; dropping them would disable audit logging as a side effect of adding a viewer. |
+| Revocation exists | A grant path with no revoke path is a trap. Revoking an admin role is still refused — it can lock everyone out. |
+
+`allUsers` fails the member pattern and can never be written.
+
+**In the browser:** a typed confirmation naming the member, re-checked at commit
+rather than only disabling a button. Editing the member discards a staged
+confirmation, so one cannot be carried onto a different person. A non-superAdmin
+gets no form — and is told the server would refuse regardless, because hiding a
+button has never stopped anybody.
+
+> **The two systems are separate.** Removing someone as a SOKONI admin does
+> **not** remove their Google Cloud IAM binding. They still have the
+> infrastructure. Every confirmation says which one it is changing.
+
+Neither callable is deployed. The grant path also needs a service account with
+`resourcemanager.projects.setIamPolicy`, which the read-only evidence identity
+deliberately does not have.
+
+### What it does NOT cover
+
+`cost-breakdown · budget-alerts · per-function-telemetry · open-incidents ·
+data-access-log-entries · cloudflare`. Named in `notCovered` and shown in the
+panel, so their absence is visible rather than mistaken for health. There is no
+infrastructure relationship graph.
+
+Data Access log entries are excluded **deliberately**: those entries can carry
+request payloads, and a timeline is not worth leaking a request body for.
+
+### Until it is deployed
+
+Writing the reader is authorized; deploying it is a separate decision. Until
+then the panel renders *"No infrastructure figure is shown, because none was
+obtained"* — no counts, no `Observed` badge, no `Measured zero` badge. `D12`
+fails if any appear. Every GCP service stays individually addressable.
 
 ## Relationship census — the Step 1 gate
 
@@ -311,14 +568,20 @@ real finding rather than an empty catalogue.
 ## Certification
 
 ```
-node tests/certify-integrations-console.js        # 796 assertions, 0 failures
-node tests/sabotage-integrations-console.js       # 8 mutations, 8 caught, 0 inert
+node tests/certify-integrations-console.js        # 1002 assertions, 0 failures
+node tests/sabotage-integrations-console.js       # 34 mutations, 34 caught, 0 inert
+node scripts/test-gcp-evidence.js                 # 202 passed
+node tests/sabotage-gcp-evidence.js               # 5 mutations, 5 caught, 0 inert
 node scripts/test-integration-registry-parity.js  # 26 passed
 node scripts/test-integration-status.js           # 45 passed
 node scripts/test-integration-probes.js           # 85 passed
 node scripts/test-integrations-console.js         # 67 passed
 node scripts/validate-admin-nav.js                # all checks passed
 node scripts/integration-relationship-census.js   # 47 rows, gate passes
+node scripts/test-gcp-iam-grant.js                # 71 passed
+node tests/sabotage-gcp-iam-grant.js              # 10 mutations, 10 caught, 0 inert
+node tests/certify-gcp-admin-console.js           # 49 passed
+node tests/sabotage-gcp-admin-console.js          # 9 mutations, 9 caught, 0 inert
 ```
 
 The suite runs the real module against a minimal DOM and a scripted Firestore,

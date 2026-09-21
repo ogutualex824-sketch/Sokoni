@@ -11699,6 +11699,11 @@ const superAdmin = require('./super-admin');
 exports.setUserRole            = superAdmin.setUserRole;
 exports.suspendUser            = superAdmin.suspendUser;
 exports.sendPlatformBroadcast  = superAdmin.sendPlatformBroadcast;
+/* GCP IAM from the AdminOS control plane. superAdmin ONLY — an `admin` must not
+   be able to mint project access. See functions/gcp-iam-grant.js for the
+   refusals; it is the only module in this repository that writes IAM. */
+exports.superAdminGrantGcpRole  = superAdmin.superAdminGrantGcpRole;
+exports.superAdminRevokeGcpRole = superAdmin.superAdminRevokeGcpRole;
 
 /* ── SOKONI Impact Enterprise Platform v1.0 ────────────────────── */
 const impact = require('./impact');
