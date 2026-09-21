@@ -137,6 +137,10 @@ contracts.
 of traffic: `intasendWebhook` served **zero** requests and billed the same as
 `createCheckoutSession`.
 
+**2026-09-21:** one of the twelve, `profileGetPublicProfile`, has since been reconstructed and is no
+longer pinned. The 30-day figures above are unchanged and remain the measurement for their window;
+the current pinned set is **11**.
+
 ### Function-explosion status
 
 The historical ~1,971-function surface is now **1,709** — a reduction, and the `smartPosDispatch`
@@ -398,14 +402,26 @@ and is itself a P0 finding: you cannot manage what you cannot see.
 ## 10. Build and artifact analysis
 
 - **Cloud Build:** `gcloud builds list` returned no rows — either outside retention or not
-  permitted to this account. **UNMEASURED.**
+  permitted to this account. ~~**UNMEASURED.**~~ **MEASURED 2026-09-21 — the query needed
+  `--region`.** The global listing is empty; `--region=us-central1` returns rows (`ceb903bb`
+  2026-09-21 SUCCESS, `72739a70` 2026-09-14, `63737c10` 2026-09-13). Neither retention nor
+  permission was the cause — the scope was. Gen2 builds are regional.
 - **Artifact Registry:** two `gcf-artifacts` repositories exist; the API reports `sizeBytes: 0`
-  and image listing returned empty. **UNMEASURED — verify in Console.** With 1,709 Gen2 functions
+  and image listing returned empty. ~~**UNMEASURED — verify in Console.**~~ With 1,709 Gen2 functions
   this is the most likely place for hidden storage cost and should not be assumed to be zero.
+  **MEASURED 2026-09-21 — the zero is real, and it is a defect rather than thrift.** Both repos
+  carry `firebase-functions-cleanup` (`DELETE`, `olderThan: 86400s`, `tagState: ANY`), installed by
+  the Firebase CLI in June. Every function image is removed ~24h after it is built, so no service
+  can create a revision from its existing spec. Artifact **storage** cost is genuinely ~$0; the
+  price is paid in reconstruction. See `GCP_COST_ARCHITECTURE_IMPLEMENTATION.md` §P0-2-INV →
+  **CAUSE ESTABLISHED**.
 - **Source archives: 4.28 GB** (ESTIMATE, extrapolated from a 200-object sample averaging
   2,685,447 bytes across 1,711 objects).
 - Deployment cadence: **1,705 of 1,709 functions were deployed on a single day (2026-09-09)** —
   i.e. the whole surface redeploys together. That is 1,709 container builds per release.
+  **2026-09-21: one exception now exists** — `profileGetPublicProfile` was rebuilt individually
+  (build `ceb903bb`), demonstrating that single-function reconstruction works and does not require
+  the whole surface.
 
 ---
 

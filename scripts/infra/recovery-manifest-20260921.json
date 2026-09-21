@@ -1,0 +1,133 @@
+{
+  "_comment": "POST-CHECKPOINT EXECUTION CONTRACT. Frozen 2026-09-21. The executing agent makes NO decisions during recovery: every value it needs is stated here or in the baseline. Any deviation is a STOP, not a judgement call.",
+  "frozen_at": "2026-09-21T05:51:36.017Z",
+  "baseline_file": "scripts/infra/recovery-baseline-20260921.json",
+  "baseline_sha256": "6d204acdd4c3fd4669727e667ec31a53a1508e882b47569c2d13ddeedc34c519",
+  "blocked_until": {
+    "condition": "KEEP survival PROVEN",
+    "specimen": "profilegetpublicprofile-00007-xaz",
+    "image_built_at": "2026-09-21T04:21:47Z",
+    "earliest_eligibility": "2026-09-22T04:21:47Z",
+    "checkpoint_rule": "the FIRST APPLICABLE CLEANUP SWEEP AFTER that moment — not the moment itself",
+    "note": "No rebuild may start before this resolves. A pre-checkpoint rebuild multiplies exposure if KEEP does not hold."
+  },
+  "control": {
+    "function": "profileGetPublicProfile",
+    "service": "profilegetpublicprofile",
+    "revision": "profilegetpublicprofile-00007-xaz",
+    "image_digest": "sha256:133a75e92020ee983d89a003b33c3cb6469ccc769d6075ae4b459c2f907af397",
+    "must_hold": [
+      "Ready=True",
+      "traffic=100%",
+      "minScale blank/0",
+      "image present in Artifact Registry"
+    ],
+    "when": "BEFORE the first rebuild and AFTER every single recovery"
+  },
+  "recovery_order": [
+    {
+      "order": 1,
+      "function": "minishopPage",
+      "service": "minishoppage",
+      "trigger": "HTTPS",
+      "source_generation": "1787386674000066",
+      "rationale": "configuration twin of the proven control"
+    },
+    {
+      "order": 2,
+      "function": "kass",
+      "service": "kass",
+      "trigger": "HTTPS",
+      "source_generation": "1787383897310985"
+    },
+    {
+      "order": 3,
+      "function": "providerDispatch",
+      "service": "providerdispatch",
+      "trigger": "HTTPS",
+      "source_generation": "1787386174474483",
+      "rationale": "delivery-critical"
+    },
+    {
+      "order": 4,
+      "function": "bookingDispatch",
+      "service": "bookingdispatch",
+      "trigger": "HTTPS",
+      "source_generation": "1787386103968834",
+      "rationale": "delivery-critical"
+    },
+    {
+      "order": 5,
+      "function": "onOrderStatusChange",
+      "service": "onorderstatuschange",
+      "trigger": "EVENT",
+      "source_generation": "1788077453779580",
+      "rationale": "order path; Eventarc reconstruction risk"
+    },
+    {
+      "order": 6,
+      "function": "onNewOrderCreated",
+      "service": "onnewordercreated",
+      "trigger": "EVENT",
+      "source_generation": "1787532418838194",
+      "rationale": "order path; Eventarc reconstruction risk"
+    }
+  ],
+  "excluded": [
+    {
+      "function": "intasendWebhook",
+      "disposition": "P0-4 retirement gate",
+      "instruction": "DO NOT REBUILD. Deletion is not authorized either; P0-4 has its own gate."
+    }
+  ],
+  "execution_rule": "ONE service at a time. rebuild -> run all 9 assertions -> re-verify control -> STOP on any failure. Do not batch. Do not proceed to order N+1 until order N is completely green.",
+  "assertions": [
+    {
+      "id": 1,
+      "text": "new revision exists and Ready=True"
+    },
+    {
+      "id": 2,
+      "text": "the new revision carries 100% of traffic"
+    },
+    {
+      "id": 3,
+      "text": "serving revision minScale is blank/0",
+      "note": "the P0-3 result; already minInstanceCount=0 at the function layer, so the rebuild MATERIALISES it rather than setting it"
+    },
+    {
+      "id": 4,
+      "text": "the new image digest is present in Artifact Registry"
+    },
+    {
+      "id": 5,
+      "text": "the previously stuck failed revision is no longer latestCreatedRevisionName and is therefore deletable"
+    },
+    {
+      "id": 6,
+      "text": "FULL STRUCTURAL EQUALITY of the trigger specification, pre vs post",
+      "method": "compare baseline entry `raw` against a fresh describe, after deterministic key ordering only. NO field may be selected away, added, removed, changed or silently normalised. A rebuild must reproduce the trigger CONTRACT, not something resembling it.",
+      "applies": "all six; DECISIVE for onOrderStatusChange and onNewOrderCreated"
+    },
+    {
+      "id": 7,
+      "text": "memory, cpu, timeout, concurrency, ingress and service account match the baseline exactly"
+    },
+    {
+      "id": 8,
+      "text": "function count is EXACTLY 1709",
+      "note": "exact equality, not approximate. A creation, deletion or name collision FAILS the gate."
+    },
+    {
+      "id": 9,
+      "text": "the control (profilegetpublicprofile) still satisfies every condition in `control.must_hold`"
+    }
+  ],
+  "required_function_count": 1709,
+  "authorization": {
+    "first_rebuild": "NOT AUTHORIZED",
+    "batch_rebuild": "NOT AUTHORIZED",
+    "p0_4_deletion": "NOT AUTHORIZED",
+    "note": "This manifest is a contract, not a permission. Each execution step needs its own authorization."
+  }
+}

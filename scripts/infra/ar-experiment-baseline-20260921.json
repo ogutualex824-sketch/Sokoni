@@ -1,0 +1,170 @@
+{
+  "_comment": "SUCCESSOR BASELINE, 2026-09-21. Supersedes ar-experiment-baseline.json, which is PRESERVED UNCHANGED as historical evidence and must not be regenerated in place: a baseline regenerated after the state it measures has changed destroys the very comparison it exists to provide. Select this file with SOKONI_AR_BASELINE=scripts/infra/ar-experiment-baseline-20260921.json when running ar-forensics.js (it reads $SOKONI_AR_BASELINE, defaulting to the predecessor).",
+  "supersedes": {
+    "file": "scripts/infra/ar-experiment-baseline.json",
+    "preserved": "UNCHANGED — historical evidence, do not edit or delete",
+    "sha256": "9791ad51f38671ff4014c76949eafd5b703e0d73f9836ae9ad80c40313380869",
+    "capturedAt": "2026-09-19T06:08:12Z",
+    "role": "pre-reconstruction specimen (the P0-7-OBS canary)",
+    "supersededBecause": "profilegetpublicprofile was reconstructed 2026-09-21T04:22:04Z, which changed measurements the predecessor pinned. The predecessor is not wrong; it is dated.",
+    "staleFields": {
+      "canaryPushedAt_canaryDigest_canaryTag": "HISTORICAL — the canary was DELETED 2026-09-20T10:16:05Z at age 28.1h (OUTCOME 2). It no longer exists.",
+      "lastCloudBuildId": "STALE — was 72739a70 (2026-09-14); now ceb903bb (2026-09-21).",
+      "newestFunctionSourceObject": "STALE — was 2026-09-14T00:45:58Z; now 2026-09-21T04:21:09Z.",
+      "repoUpdateTimeAtPush": "STALE — was 2026-09-19T06:08:12Z; now 2026-09-21T04:35:43.926731Z (the policy repair).",
+      "pinnedServiceRevisions.profilegetpublicprofile": "STALE — was profilegetpublicprofile-00006-9nq (Ready=False); now 00007-xaz (Ready=True, 100% traffic).",
+      "deployedFunctionCount": "STILL TRUE — 1709, unchanged.",
+      "pinnedServiceRevisions (other 11)": "STILL TRUE — unchanged."
+    }
+  },
+  "role": "post-reconstruction proven control",
+  "capturedAt": "2026-09-21T05:56:15.108Z",
+  "project": "sokoni-aeb26",
+  "region": "us-central1",
+  "provenControl": {
+    "function": "profileGetPublicProfile",
+    "service": "profilegetpublicprofile",
+    "sourceGeneration": "1789964469538784",
+    "sourceObject": "gs://gcf-v2-sources-24799054989-us-central1/profileGetPublicProfile/function-source.zip",
+    "sourceUploadedAt": "2026-09-21T04:21:09Z",
+    "sourceBytes": 2686610,
+    "cloudBuildId": "ceb903bb-d331-4636-a083-45407bd9213d",
+    "cloudBuildStatus": "SUCCESS",
+    "cloudBuildAt": "2026-09-21T04:21:09Z",
+    "cloudBuildRegion": "us-central1",
+    "imageDigest": "sha256:133a75e92020ee983d89a003b33c3cb6469ccc769d6075ae4b459c2f907af397",
+    "imageBuiltAt": "2026-09-21T04:21:47Z",
+    "revision": "profilegetpublicprofile-00007-xaz",
+    "servingRevision": "profilegetpublicprofile-00007-xaz",
+    "ready": true,
+    "trafficPercent": 100,
+    "minScale": null,
+    "minScaleMeaning": "blank/0 — UNPINNED. The rebuild MATERIALISED the minInstanceCount=0 already stored at the function layer; nothing set it during recovery.",
+    "pinnedBefore": "profilegetpublicprofile-00005-lap carried minScale=1",
+    "_note": "This is the proven P0-2 + P0-3 recovery primitive, and the control re-verified after every recovery."
+  },
+  "keepPolicyStateAtCapture": {
+    "repos": [
+      "us-central1/gcf-artifacts",
+      "us-east1/gcf-artifacts"
+    ],
+    "policies": {
+      "firebase-functions-cleanup": {
+        "action": "DELETE",
+        "olderThan": "86400s",
+        "tagState": "ANY"
+      },
+      "sokoni-recovery-protection": {
+        "action": "KEEP",
+        "mostRecentVersions": {
+          "keepCount": 10
+        }
+      }
+    },
+    "cleanupPolicyDryRun": "unset (ENFORCING)",
+    "appliedAt": {
+      "us-central1": "2026-09-21T04:35:43Z",
+      "us-east1": "2026-09-21T04:36:22Z"
+    },
+    "appliedBy": "another agent, outside this workstream and outside Git",
+    "keepSurvival": "UNPROVEN",
+    "keepSurvivalNote": "Existence and enforcement are OBSERVED. Survival through a sweep is NOT. Earliest eligibility ~2026-09-22T04:21:47Z; the checkpoint is the FIRST APPLICABLE SWEEP AFTER that moment, not the moment itself. Do not infer survival from this capture."
+  },
+  "deployedFunctionCount": 1709,
+  "lastCloudBuildId": "ceb903bb-d331-4636-a083-45407bd9213d",
+  "newestFunctionSourceObject": "2026-09-21T04:21:09Z",
+  "repoUpdateTime": {
+    "us-central1": "2026-09-21T04:35:43.926731Z",
+    "us-east1": "2026-08-23T08:39:24.823079Z"
+  },
+  "artifactRegistryImageCount": 2,
+  "artifactRegistryNote": "one function image (profile_get_public_profile) + its build cache. 1,706 of 1,707 services still have NO image and cannot create a revision from spec.",
+  "services": {
+    "onnewordercreated": {
+      "latestCreatedRevision": "onnewordercreated-00022-5r9",
+      "servingRevision": "onnewordercreated-00021-waw",
+      "trafficPercent": 100,
+      "latestIsServing": false
+    },
+    "onorderstatuschange": {
+      "latestCreatedRevision": "onorderstatuschange-00063-8sk",
+      "servingRevision": "onorderstatuschange-00062-yoz",
+      "trafficPercent": 100,
+      "latestIsServing": false
+    },
+    "bookingdispatch": {
+      "latestCreatedRevision": "bookingdispatch-00018-rwl",
+      "servingRevision": "bookingdispatch-00017-nel",
+      "trafficPercent": 100,
+      "latestIsServing": false
+    },
+    "providerdispatch": {
+      "latestCreatedRevision": "providerdispatch-00049-2rp",
+      "servingRevision": "providerdispatch-00048-qiz",
+      "trafficPercent": 100,
+      "latestIsServing": false
+    },
+    "minishoppage": {
+      "latestCreatedRevision": "minishoppage-00007-jnj",
+      "servingRevision": "minishoppage-00006-beq",
+      "trafficPercent": 100,
+      "latestIsServing": false
+    },
+    "profilegetpublicprofile": {
+      "latestCreatedRevision": "profilegetpublicprofile-00007-xaz",
+      "servingRevision": "profilegetpublicprofile-00007-xaz",
+      "trafficPercent": 100,
+      "latestIsServing": true
+    },
+    "kass": {
+      "latestCreatedRevision": "kass-00057-lkq",
+      "servingRevision": "kass-00056-soq",
+      "trafficPercent": 100,
+      "latestIsServing": false
+    },
+    "intasendwebhook": {
+      "latestCreatedRevision": "intasendwebhook-00065-5ck",
+      "servingRevision": "intasendwebhook-00064-nin",
+      "trafficPercent": 100,
+      "latestIsServing": false
+    },
+    "createcheckoutsession": {
+      "latestCreatedRevision": "createcheckoutsession-00023-zuf",
+      "servingRevision": "createcheckoutsession-00023-zuf",
+      "trafficPercent": 100,
+      "latestIsServing": true
+    },
+    "verifyintasendpayment": {
+      "latestCreatedRevision": "verifyintasendpayment-00058-roj",
+      "servingRevision": "verifyintasendpayment-00058-roj",
+      "trafficPercent": 100,
+      "latestIsServing": true
+    },
+    "initiatestkpush": {
+      "latestCreatedRevision": "initiatestkpush-00043-niq",
+      "servingRevision": "initiatestkpush-00043-niq",
+      "trafficPercent": 100,
+      "latestIsServing": true
+    },
+    "webhookintasend": {
+      "latestCreatedRevision": "webhookintasend-00064-lag",
+      "servingRevision": "webhookintasend-00064-lag",
+      "trafficPercent": 100,
+      "latestIsServing": true
+    }
+  },
+  "brokenForward": [
+    "intasendwebhook",
+    "kass",
+    "minishoppage",
+    "providerdispatch",
+    "bookingdispatch",
+    "onorderstatuschange",
+    "onnewordercreated"
+  ],
+  "brokenForwardNote": "latest revision Ready=False; traffic still 100% on an older healthy revision. Was 8 before the profilegetpublicprofile reconstruction.",
+  "relatedFiles": [
+    "scripts/infra/recovery-baseline-20260921.json",
+    "scripts/infra/recovery-manifest-20260921.json"
+  ]
+}

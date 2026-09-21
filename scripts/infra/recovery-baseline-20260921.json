@@ -1,0 +1,1358 @@
+{
+  "_comment": "PRE-REBUILD EVIDENCE CAPTURE. `raw` is the AUTHORITATIVE comparison object; `canonical` is a deterministic key-sorted copy for diffing and discards nothing. Assertion 6 of the recovery gate compares the FULL trigger specification pre/post. Do not regenerate this file after any rebuild — it would destroy the baseline it exists to preserve.",
+  "captured_at": "2026-09-21T05:50:49.723Z",
+  "project": "sokoni-aeb26",
+  "region": "us-central1",
+  "captured_before": "any reconstruction of the six recovery candidates",
+  "keep_policy_state_at_capture": {
+    "repos": [
+      "us-central1/gcf-artifacts",
+      "us-east1/gcf-artifacts"
+    ],
+    "policies": [
+      "firebase-functions-cleanup DELETE olderThan=86400s tagState=ANY",
+      "sokoni-recovery-protection KEEP mostRecentVersions.keepCount=10"
+    ],
+    "dry_run": "unset (ENFORCING)",
+    "keep_survival": "UNPROVEN — earliest eligibility ~2026-09-22T04:21:47Z"
+  },
+  "required_function_count": 1709,
+  "entries": [
+    {
+      "function": "minishopPage",
+      "role": "recovery",
+      "order": 1,
+      "state": "ACTIVE",
+      "trigger_kind": "HTTPS",
+      "source_generation": "1787386674000066",
+      "source_uri": "gs://gcf-v2-sources-24799054989-us-central1/minishopPage/function-source.zip",
+      "min_instance_count": 0,
+      "raw_sha256": "fda769841194658de20b0d006cf262bcb916e4255ab0284704877422d50b20fc",
+      "raw_bytes": 2647,
+      "raw": {
+        "buildConfig": {
+          "automaticUpdatePolicy": {},
+          "build": "projects/24799054989/locations/us-central1/builds/31b451e9-1851-41b0-8801-894cd7a134f3",
+          "dockerRegistry": "ARTIFACT_REGISTRY",
+          "dockerRepository": "projects/sokoni-aeb26/locations/us-central1/repositories/gcf-artifacts",
+          "entryPoint": "minishopPage",
+          "environmentVariables": {
+            "GOOGLE_NODE_RUN_SCRIPTS": ""
+          },
+          "runtime": "nodejs22",
+          "serviceAccount": "projects/sokoni-aeb26/serviceAccounts/24799054989-compute@developer.gserviceaccount.com",
+          "source": {
+            "storageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1787386674000066",
+              "object": "minishopPage/function-source.zip"
+            }
+          },
+          "sourceProvenance": {
+            "resolvedStorageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1787386674000066",
+              "object": "minishopPage/function-source.zip"
+            }
+          }
+        },
+        "createTime": "2026-07-25T21:43:00.486599483Z",
+        "environment": "GEN_2",
+        "labels": {
+          "deployment-tool": "cli-firebase",
+          "firebase-functions-hash": "bdc55173cc9e78da73e19a482afe649ae1e5476e"
+        },
+        "name": "projects/sokoni-aeb26/locations/us-central1/functions/minishopPage",
+        "satisfiesPzi": true,
+        "serviceConfig": {
+          "allTrafficOnLatestRevision": true,
+          "availableCpu": "1",
+          "availableMemory": "256Mi",
+          "environmentVariables": {
+            "ALGOLIA_APP_ID": "F2XND3V1FW",
+            "AT_ENV": "production",
+            "AT_SENDER_ID": "",
+            "ETIMS_ENV": "production",
+            "EVENTARC_CLOUD_EVENT_SOURCE": "projects/sokoni-aeb26/locations/us-central1/services/minishopPage",
+            "FIREBASE_CONFIG": "{\"projectId\":\"sokoni-aeb26\",\"storageBucket\":\"sokoni-aeb26.firebasestorage.app\"}",
+            "FUNCTION_REGION": "us-central1",
+            "FUNCTION_SIGNATURE_TYPE": "http",
+            "FUNCTION_TARGET": "minishopPage",
+            "GCLOUD_PROJECT": "sokoni-aeb26",
+            "LOG_EXECUTION_ID": "true",
+            "TYPESENSE_NODES": "4kn6y5bfcxv8o702p-1.a2.typesense.net:443:https"
+          },
+          "ingressSettings": "ALLOW_ALL",
+          "maxInstanceCount": 99,
+          "maxInstanceRequestConcurrency": 80,
+          "service": "projects/sokoni-aeb26/locations/us-central1/services/minishoppage",
+          "serviceAccountEmail": "24799054989-compute@developer.gserviceaccount.com",
+          "timeoutSeconds": 60,
+          "uri": "https://minishoppage-o3jpu5wacq-uc.a.run.app"
+        },
+        "state": "ACTIVE",
+        "updateTime": "2026-09-09T06:01:51.508358969Z",
+        "url": "https://us-central1-sokoni-aeb26.cloudfunctions.net/minishopPage"
+      },
+      "canonical": {
+        "buildConfig": {
+          "automaticUpdatePolicy": {},
+          "build": "projects/24799054989/locations/us-central1/builds/31b451e9-1851-41b0-8801-894cd7a134f3",
+          "dockerRegistry": "ARTIFACT_REGISTRY",
+          "dockerRepository": "projects/sokoni-aeb26/locations/us-central1/repositories/gcf-artifacts",
+          "entryPoint": "minishopPage",
+          "environmentVariables": {
+            "GOOGLE_NODE_RUN_SCRIPTS": ""
+          },
+          "runtime": "nodejs22",
+          "serviceAccount": "projects/sokoni-aeb26/serviceAccounts/24799054989-compute@developer.gserviceaccount.com",
+          "source": {
+            "storageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1787386674000066",
+              "object": "minishopPage/function-source.zip"
+            }
+          },
+          "sourceProvenance": {
+            "resolvedStorageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1787386674000066",
+              "object": "minishopPage/function-source.zip"
+            }
+          }
+        },
+        "createTime": "2026-07-25T21:43:00.486599483Z",
+        "environment": "GEN_2",
+        "labels": {
+          "deployment-tool": "cli-firebase",
+          "firebase-functions-hash": "bdc55173cc9e78da73e19a482afe649ae1e5476e"
+        },
+        "name": "projects/sokoni-aeb26/locations/us-central1/functions/minishopPage",
+        "satisfiesPzi": true,
+        "serviceConfig": {
+          "allTrafficOnLatestRevision": true,
+          "availableCpu": "1",
+          "availableMemory": "256Mi",
+          "environmentVariables": {
+            "ALGOLIA_APP_ID": "F2XND3V1FW",
+            "AT_ENV": "production",
+            "AT_SENDER_ID": "",
+            "ETIMS_ENV": "production",
+            "EVENTARC_CLOUD_EVENT_SOURCE": "projects/sokoni-aeb26/locations/us-central1/services/minishopPage",
+            "FIREBASE_CONFIG": "{\"projectId\":\"sokoni-aeb26\",\"storageBucket\":\"sokoni-aeb26.firebasestorage.app\"}",
+            "FUNCTION_REGION": "us-central1",
+            "FUNCTION_SIGNATURE_TYPE": "http",
+            "FUNCTION_TARGET": "minishopPage",
+            "GCLOUD_PROJECT": "sokoni-aeb26",
+            "LOG_EXECUTION_ID": "true",
+            "TYPESENSE_NODES": "4kn6y5bfcxv8o702p-1.a2.typesense.net:443:https"
+          },
+          "ingressSettings": "ALLOW_ALL",
+          "maxInstanceCount": 99,
+          "maxInstanceRequestConcurrency": 80,
+          "service": "projects/sokoni-aeb26/locations/us-central1/services/minishoppage",
+          "serviceAccountEmail": "24799054989-compute@developer.gserviceaccount.com",
+          "timeoutSeconds": 60,
+          "uri": "https://minishoppage-o3jpu5wacq-uc.a.run.app"
+        },
+        "state": "ACTIVE",
+        "updateTime": "2026-09-09T06:01:51.508358969Z",
+        "url": "https://us-central1-sokoni-aeb26.cloudfunctions.net/minishopPage"
+      }
+    },
+    {
+      "function": "kass",
+      "role": "recovery",
+      "order": 2,
+      "state": "ACTIVE",
+      "trigger_kind": "HTTPS",
+      "source_generation": "1787383897310985",
+      "source_uri": "gs://gcf-v2-sources-24799054989-us-central1/kass/function-source.zip",
+      "min_instance_count": 0,
+      "raw_sha256": "4f30f9605b994e457e408a93045dd95745b286e3a07cd46beaa9dcc8671a8191",
+      "raw_bytes": 2777,
+      "raw": {
+        "buildConfig": {
+          "automaticUpdatePolicy": {},
+          "build": "projects/24799054989/locations/us-central1/builds/119ea7e9-a949-4fd2-b5ca-35d34e39d17f",
+          "dockerRegistry": "ARTIFACT_REGISTRY",
+          "dockerRepository": "projects/sokoni-aeb26/locations/us-central1/repositories/gcf-artifacts",
+          "entryPoint": "kass",
+          "environmentVariables": {
+            "GOOGLE_NODE_RUN_SCRIPTS": ""
+          },
+          "runtime": "nodejs22",
+          "serviceAccount": "projects/sokoni-aeb26/serviceAccounts/24799054989-compute@developer.gserviceaccount.com",
+          "source": {
+            "storageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1787383897310985",
+              "object": "kass/function-source.zip"
+            }
+          },
+          "sourceProvenance": {
+            "resolvedStorageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1787383897310985",
+              "object": "kass/function-source.zip"
+            }
+          }
+        },
+        "createTime": "2026-06-08T09:51:53.514345743Z",
+        "environment": "GEN_2",
+        "labels": {
+          "deployment-tool": "cli-firebase",
+          "firebase-functions-hash": "b510d22d4f03ddeb60241e181a0bb5fec382c08d"
+        },
+        "name": "projects/sokoni-aeb26/locations/us-central1/functions/kass",
+        "satisfiesPzi": true,
+        "serviceConfig": {
+          "allTrafficOnLatestRevision": true,
+          "availableCpu": "1",
+          "availableMemory": "256Mi",
+          "environmentVariables": {
+            "ALGOLIA_APP_ID": "F2XND3V1FW",
+            "AT_ENV": "production",
+            "AT_SENDER_ID": "",
+            "ETIMS_ENV": "production",
+            "EVENTARC_CLOUD_EVENT_SOURCE": "projects/sokoni-aeb26/locations/us-central1/services/kass",
+            "FIREBASE_CONFIG": "{\"projectId\":\"sokoni-aeb26\",\"storageBucket\":\"sokoni-aeb26.firebasestorage.app\"}",
+            "FUNCTION_REGION": "us-central1",
+            "FUNCTION_SIGNATURE_TYPE": "http",
+            "FUNCTION_TARGET": "kass",
+            "GCLOUD_PROJECT": "sokoni-aeb26",
+            "LOG_EXECUTION_ID": "true",
+            "TYPESENSE_NODES": "4kn6y5bfcxv8o702p-1.a2.typesense.net:443:https"
+          },
+          "ingressSettings": "ALLOW_ALL",
+          "maxInstanceCount": 99,
+          "maxInstanceRequestConcurrency": 80,
+          "secretEnvironmentVariables": [
+            {
+              "key": "ANTHROPIC_API_KEY",
+              "projectId": "sokoni-aeb26",
+              "secret": "ANTHROPIC_API_KEY",
+              "version": "8"
+            }
+          ],
+          "service": "projects/sokoni-aeb26/locations/us-central1/services/kass",
+          "serviceAccountEmail": "24799054989-compute@developer.gserviceaccount.com",
+          "timeoutSeconds": 60,
+          "uri": "https://kass-o3jpu5wacq-uc.a.run.app"
+        },
+        "state": "ACTIVE",
+        "updateTime": "2026-09-09T06:02:27.459113179Z",
+        "url": "https://us-central1-sokoni-aeb26.cloudfunctions.net/kass"
+      },
+      "canonical": {
+        "buildConfig": {
+          "automaticUpdatePolicy": {},
+          "build": "projects/24799054989/locations/us-central1/builds/119ea7e9-a949-4fd2-b5ca-35d34e39d17f",
+          "dockerRegistry": "ARTIFACT_REGISTRY",
+          "dockerRepository": "projects/sokoni-aeb26/locations/us-central1/repositories/gcf-artifacts",
+          "entryPoint": "kass",
+          "environmentVariables": {
+            "GOOGLE_NODE_RUN_SCRIPTS": ""
+          },
+          "runtime": "nodejs22",
+          "serviceAccount": "projects/sokoni-aeb26/serviceAccounts/24799054989-compute@developer.gserviceaccount.com",
+          "source": {
+            "storageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1787383897310985",
+              "object": "kass/function-source.zip"
+            }
+          },
+          "sourceProvenance": {
+            "resolvedStorageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1787383897310985",
+              "object": "kass/function-source.zip"
+            }
+          }
+        },
+        "createTime": "2026-06-08T09:51:53.514345743Z",
+        "environment": "GEN_2",
+        "labels": {
+          "deployment-tool": "cli-firebase",
+          "firebase-functions-hash": "b510d22d4f03ddeb60241e181a0bb5fec382c08d"
+        },
+        "name": "projects/sokoni-aeb26/locations/us-central1/functions/kass",
+        "satisfiesPzi": true,
+        "serviceConfig": {
+          "allTrafficOnLatestRevision": true,
+          "availableCpu": "1",
+          "availableMemory": "256Mi",
+          "environmentVariables": {
+            "ALGOLIA_APP_ID": "F2XND3V1FW",
+            "AT_ENV": "production",
+            "AT_SENDER_ID": "",
+            "ETIMS_ENV": "production",
+            "EVENTARC_CLOUD_EVENT_SOURCE": "projects/sokoni-aeb26/locations/us-central1/services/kass",
+            "FIREBASE_CONFIG": "{\"projectId\":\"sokoni-aeb26\",\"storageBucket\":\"sokoni-aeb26.firebasestorage.app\"}",
+            "FUNCTION_REGION": "us-central1",
+            "FUNCTION_SIGNATURE_TYPE": "http",
+            "FUNCTION_TARGET": "kass",
+            "GCLOUD_PROJECT": "sokoni-aeb26",
+            "LOG_EXECUTION_ID": "true",
+            "TYPESENSE_NODES": "4kn6y5bfcxv8o702p-1.a2.typesense.net:443:https"
+          },
+          "ingressSettings": "ALLOW_ALL",
+          "maxInstanceCount": 99,
+          "maxInstanceRequestConcurrency": 80,
+          "secretEnvironmentVariables": [
+            {
+              "key": "ANTHROPIC_API_KEY",
+              "projectId": "sokoni-aeb26",
+              "secret": "ANTHROPIC_API_KEY",
+              "version": "8"
+            }
+          ],
+          "service": "projects/sokoni-aeb26/locations/us-central1/services/kass",
+          "serviceAccountEmail": "24799054989-compute@developer.gserviceaccount.com",
+          "timeoutSeconds": 60,
+          "uri": "https://kass-o3jpu5wacq-uc.a.run.app"
+        },
+        "state": "ACTIVE",
+        "updateTime": "2026-09-09T06:02:27.459113179Z",
+        "url": "https://us-central1-sokoni-aeb26.cloudfunctions.net/kass"
+      }
+    },
+    {
+      "function": "providerDispatch",
+      "role": "recovery",
+      "order": 3,
+      "state": "ACTIVE",
+      "trigger_kind": "HTTPS",
+      "source_generation": "1787386174474483",
+      "source_uri": "gs://gcf-v2-sources-24799054989-us-central1/providerDispatch/function-source.zip",
+      "min_instance_count": 0,
+      "raw_sha256": "57762a81fef430ca651ebed8e21f623d4ad231555237120dbd5e62cfe376beff",
+      "raw_bytes": 2720,
+      "raw": {
+        "buildConfig": {
+          "automaticUpdatePolicy": {},
+          "build": "projects/24799054989/locations/us-central1/builds/74131f04-f521-44ae-8414-5a8e3df3da85",
+          "dockerRegistry": "ARTIFACT_REGISTRY",
+          "dockerRepository": "projects/sokoni-aeb26/locations/us-central1/repositories/gcf-artifacts",
+          "entryPoint": "providerDispatch",
+          "environmentVariables": {
+            "GOOGLE_NODE_RUN_SCRIPTS": ""
+          },
+          "runtime": "nodejs22",
+          "serviceAccount": "projects/sokoni-aeb26/serviceAccounts/24799054989-compute@developer.gserviceaccount.com",
+          "source": {
+            "storageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1787386174474483",
+              "object": "providerDispatch/function-source.zip"
+            }
+          },
+          "sourceProvenance": {
+            "resolvedStorageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1787386174474483",
+              "object": "providerDispatch/function-source.zip"
+            }
+          }
+        },
+        "createTime": "2026-07-11T22:05:54.126568591Z",
+        "environment": "GEN_2",
+        "labels": {
+          "deployment-callable": "true",
+          "deployment-tool": "cli-firebase",
+          "firebase-functions-hash": "bdc55173cc9e78da73e19a482afe649ae1e5476e"
+        },
+        "name": "projects/sokoni-aeb26/locations/us-central1/functions/providerDispatch",
+        "satisfiesPzi": true,
+        "serviceConfig": {
+          "allTrafficOnLatestRevision": true,
+          "availableCpu": "1",
+          "availableMemory": "512Mi",
+          "environmentVariables": {
+            "ALGOLIA_APP_ID": "F2XND3V1FW",
+            "AT_ENV": "production",
+            "AT_SENDER_ID": "",
+            "ETIMS_ENV": "production",
+            "EVENTARC_CLOUD_EVENT_SOURCE": "projects/sokoni-aeb26/locations/us-central1/services/providerDispatch",
+            "FIREBASE_CONFIG": "{\"projectId\":\"sokoni-aeb26\",\"storageBucket\":\"sokoni-aeb26.firebasestorage.app\"}",
+            "FUNCTION_REGION": "us-central1",
+            "FUNCTION_SIGNATURE_TYPE": "http",
+            "FUNCTION_TARGET": "providerDispatch",
+            "GCLOUD_PROJECT": "sokoni-aeb26",
+            "LOG_EXECUTION_ID": "true",
+            "TYPESENSE_NODES": "4kn6y5bfcxv8o702p-1.a2.typesense.net:443:https"
+          },
+          "ingressSettings": "ALLOW_ALL",
+          "maxInstanceCount": 80,
+          "maxInstanceRequestConcurrency": 80,
+          "service": "projects/sokoni-aeb26/locations/us-central1/services/providerdispatch",
+          "serviceAccountEmail": "24799054989-compute@developer.gserviceaccount.com",
+          "timeoutSeconds": 120,
+          "uri": "https://providerdispatch-o3jpu5wacq-uc.a.run.app"
+        },
+        "state": "ACTIVE",
+        "updateTime": "2026-09-09T06:02:15.580996954Z",
+        "url": "https://us-central1-sokoni-aeb26.cloudfunctions.net/providerDispatch"
+      },
+      "canonical": {
+        "buildConfig": {
+          "automaticUpdatePolicy": {},
+          "build": "projects/24799054989/locations/us-central1/builds/74131f04-f521-44ae-8414-5a8e3df3da85",
+          "dockerRegistry": "ARTIFACT_REGISTRY",
+          "dockerRepository": "projects/sokoni-aeb26/locations/us-central1/repositories/gcf-artifacts",
+          "entryPoint": "providerDispatch",
+          "environmentVariables": {
+            "GOOGLE_NODE_RUN_SCRIPTS": ""
+          },
+          "runtime": "nodejs22",
+          "serviceAccount": "projects/sokoni-aeb26/serviceAccounts/24799054989-compute@developer.gserviceaccount.com",
+          "source": {
+            "storageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1787386174474483",
+              "object": "providerDispatch/function-source.zip"
+            }
+          },
+          "sourceProvenance": {
+            "resolvedStorageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1787386174474483",
+              "object": "providerDispatch/function-source.zip"
+            }
+          }
+        },
+        "createTime": "2026-07-11T22:05:54.126568591Z",
+        "environment": "GEN_2",
+        "labels": {
+          "deployment-callable": "true",
+          "deployment-tool": "cli-firebase",
+          "firebase-functions-hash": "bdc55173cc9e78da73e19a482afe649ae1e5476e"
+        },
+        "name": "projects/sokoni-aeb26/locations/us-central1/functions/providerDispatch",
+        "satisfiesPzi": true,
+        "serviceConfig": {
+          "allTrafficOnLatestRevision": true,
+          "availableCpu": "1",
+          "availableMemory": "512Mi",
+          "environmentVariables": {
+            "ALGOLIA_APP_ID": "F2XND3V1FW",
+            "AT_ENV": "production",
+            "AT_SENDER_ID": "",
+            "ETIMS_ENV": "production",
+            "EVENTARC_CLOUD_EVENT_SOURCE": "projects/sokoni-aeb26/locations/us-central1/services/providerDispatch",
+            "FIREBASE_CONFIG": "{\"projectId\":\"sokoni-aeb26\",\"storageBucket\":\"sokoni-aeb26.firebasestorage.app\"}",
+            "FUNCTION_REGION": "us-central1",
+            "FUNCTION_SIGNATURE_TYPE": "http",
+            "FUNCTION_TARGET": "providerDispatch",
+            "GCLOUD_PROJECT": "sokoni-aeb26",
+            "LOG_EXECUTION_ID": "true",
+            "TYPESENSE_NODES": "4kn6y5bfcxv8o702p-1.a2.typesense.net:443:https"
+          },
+          "ingressSettings": "ALLOW_ALL",
+          "maxInstanceCount": 80,
+          "maxInstanceRequestConcurrency": 80,
+          "service": "projects/sokoni-aeb26/locations/us-central1/services/providerdispatch",
+          "serviceAccountEmail": "24799054989-compute@developer.gserviceaccount.com",
+          "timeoutSeconds": 120,
+          "uri": "https://providerdispatch-o3jpu5wacq-uc.a.run.app"
+        },
+        "state": "ACTIVE",
+        "updateTime": "2026-09-09T06:02:15.580996954Z",
+        "url": "https://us-central1-sokoni-aeb26.cloudfunctions.net/providerDispatch"
+      }
+    },
+    {
+      "function": "bookingDispatch",
+      "role": "recovery",
+      "order": 4,
+      "state": "ACTIVE",
+      "trigger_kind": "HTTPS",
+      "source_generation": "1787386103968834",
+      "source_uri": "gs://gcf-v2-sources-24799054989-us-central1/bookingDispatch/function-source.zip",
+      "min_instance_count": 0,
+      "raw_sha256": "e973cbe22c2069c0e90828315aae6f91c0542958629331da3f018d07764de149",
+      "raw_bytes": 2711,
+      "raw": {
+        "buildConfig": {
+          "automaticUpdatePolicy": {},
+          "build": "projects/24799054989/locations/us-central1/builds/74131f04-f521-44ae-8414-5a8e3df3da85",
+          "dockerRegistry": "ARTIFACT_REGISTRY",
+          "dockerRepository": "projects/sokoni-aeb26/locations/us-central1/repositories/gcf-artifacts",
+          "entryPoint": "bookingDispatch",
+          "environmentVariables": {
+            "GOOGLE_NODE_RUN_SCRIPTS": ""
+          },
+          "runtime": "nodejs22",
+          "serviceAccount": "projects/sokoni-aeb26/serviceAccounts/24799054989-compute@developer.gserviceaccount.com",
+          "source": {
+            "storageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1787386103968834",
+              "object": "bookingDispatch/function-source.zip"
+            }
+          },
+          "sourceProvenance": {
+            "resolvedStorageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1787386103968834",
+              "object": "bookingDispatch/function-source.zip"
+            }
+          }
+        },
+        "createTime": "2026-07-11T14:02:09.854500952Z",
+        "environment": "GEN_2",
+        "labels": {
+          "deployment-callable": "true",
+          "deployment-tool": "cli-firebase",
+          "firebase-functions-hash": "bdc55173cc9e78da73e19a482afe649ae1e5476e"
+        },
+        "name": "projects/sokoni-aeb26/locations/us-central1/functions/bookingDispatch",
+        "satisfiesPzi": true,
+        "serviceConfig": {
+          "allTrafficOnLatestRevision": true,
+          "availableCpu": "1",
+          "availableMemory": "512Mi",
+          "environmentVariables": {
+            "ALGOLIA_APP_ID": "F2XND3V1FW",
+            "AT_ENV": "production",
+            "AT_SENDER_ID": "",
+            "ETIMS_ENV": "production",
+            "EVENTARC_CLOUD_EVENT_SOURCE": "projects/sokoni-aeb26/locations/us-central1/services/bookingDispatch",
+            "FIREBASE_CONFIG": "{\"projectId\":\"sokoni-aeb26\",\"storageBucket\":\"sokoni-aeb26.firebasestorage.app\"}",
+            "FUNCTION_REGION": "us-central1",
+            "FUNCTION_SIGNATURE_TYPE": "http",
+            "FUNCTION_TARGET": "bookingDispatch",
+            "GCLOUD_PROJECT": "sokoni-aeb26",
+            "LOG_EXECUTION_ID": "true",
+            "TYPESENSE_NODES": "4kn6y5bfcxv8o702p-1.a2.typesense.net:443:https"
+          },
+          "ingressSettings": "ALLOW_ALL",
+          "maxInstanceCount": 80,
+          "maxInstanceRequestConcurrency": 80,
+          "service": "projects/sokoni-aeb26/locations/us-central1/services/bookingdispatch",
+          "serviceAccountEmail": "24799054989-compute@developer.gserviceaccount.com",
+          "timeoutSeconds": 120,
+          "uri": "https://bookingdispatch-o3jpu5wacq-uc.a.run.app"
+        },
+        "state": "ACTIVE",
+        "updateTime": "2026-09-09T06:01:19.428974166Z",
+        "url": "https://us-central1-sokoni-aeb26.cloudfunctions.net/bookingDispatch"
+      },
+      "canonical": {
+        "buildConfig": {
+          "automaticUpdatePolicy": {},
+          "build": "projects/24799054989/locations/us-central1/builds/74131f04-f521-44ae-8414-5a8e3df3da85",
+          "dockerRegistry": "ARTIFACT_REGISTRY",
+          "dockerRepository": "projects/sokoni-aeb26/locations/us-central1/repositories/gcf-artifacts",
+          "entryPoint": "bookingDispatch",
+          "environmentVariables": {
+            "GOOGLE_NODE_RUN_SCRIPTS": ""
+          },
+          "runtime": "nodejs22",
+          "serviceAccount": "projects/sokoni-aeb26/serviceAccounts/24799054989-compute@developer.gserviceaccount.com",
+          "source": {
+            "storageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1787386103968834",
+              "object": "bookingDispatch/function-source.zip"
+            }
+          },
+          "sourceProvenance": {
+            "resolvedStorageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1787386103968834",
+              "object": "bookingDispatch/function-source.zip"
+            }
+          }
+        },
+        "createTime": "2026-07-11T14:02:09.854500952Z",
+        "environment": "GEN_2",
+        "labels": {
+          "deployment-callable": "true",
+          "deployment-tool": "cli-firebase",
+          "firebase-functions-hash": "bdc55173cc9e78da73e19a482afe649ae1e5476e"
+        },
+        "name": "projects/sokoni-aeb26/locations/us-central1/functions/bookingDispatch",
+        "satisfiesPzi": true,
+        "serviceConfig": {
+          "allTrafficOnLatestRevision": true,
+          "availableCpu": "1",
+          "availableMemory": "512Mi",
+          "environmentVariables": {
+            "ALGOLIA_APP_ID": "F2XND3V1FW",
+            "AT_ENV": "production",
+            "AT_SENDER_ID": "",
+            "ETIMS_ENV": "production",
+            "EVENTARC_CLOUD_EVENT_SOURCE": "projects/sokoni-aeb26/locations/us-central1/services/bookingDispatch",
+            "FIREBASE_CONFIG": "{\"projectId\":\"sokoni-aeb26\",\"storageBucket\":\"sokoni-aeb26.firebasestorage.app\"}",
+            "FUNCTION_REGION": "us-central1",
+            "FUNCTION_SIGNATURE_TYPE": "http",
+            "FUNCTION_TARGET": "bookingDispatch",
+            "GCLOUD_PROJECT": "sokoni-aeb26",
+            "LOG_EXECUTION_ID": "true",
+            "TYPESENSE_NODES": "4kn6y5bfcxv8o702p-1.a2.typesense.net:443:https"
+          },
+          "ingressSettings": "ALLOW_ALL",
+          "maxInstanceCount": 80,
+          "maxInstanceRequestConcurrency": 80,
+          "service": "projects/sokoni-aeb26/locations/us-central1/services/bookingdispatch",
+          "serviceAccountEmail": "24799054989-compute@developer.gserviceaccount.com",
+          "timeoutSeconds": 120,
+          "uri": "https://bookingdispatch-o3jpu5wacq-uc.a.run.app"
+        },
+        "state": "ACTIVE",
+        "updateTime": "2026-09-09T06:01:19.428974166Z",
+        "url": "https://us-central1-sokoni-aeb26.cloudfunctions.net/bookingDispatch"
+      }
+    },
+    {
+      "function": "onOrderStatusChange",
+      "role": "recovery",
+      "order": 5,
+      "state": "ACTIVE",
+      "trigger_kind": "EVENT",
+      "source_generation": "1788077453779580",
+      "source_uri": "gs://gcf-v2-sources-24799054989-us-central1/onOrderStatusChange/function-source.zip",
+      "min_instance_count": 0,
+      "raw_sha256": "a7ac35ccc8f0dba26d037a190e5492d37c7e98ef872d9cc1eac46982a02c3177",
+      "raw_bytes": 3867,
+      "raw": {
+        "buildConfig": {
+          "automaticUpdatePolicy": {},
+          "build": "projects/24799054989/locations/us-central1/builds/a29effa1-3d1d-4c84-a269-25c9005fdee8",
+          "dockerRegistry": "ARTIFACT_REGISTRY",
+          "dockerRepository": "projects/sokoni-aeb26/locations/us-central1/repositories/gcf-artifacts",
+          "entryPoint": "onOrderStatusChange",
+          "environmentVariables": {
+            "GOOGLE_NODE_RUN_SCRIPTS": ""
+          },
+          "runtime": "nodejs22",
+          "serviceAccount": "projects/sokoni-aeb26/serviceAccounts/24799054989-compute@developer.gserviceaccount.com",
+          "source": {
+            "storageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1788077453779580",
+              "object": "onOrderStatusChange/function-source.zip"
+            }
+          },
+          "sourceProvenance": {
+            "resolvedStorageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1788077453779580",
+              "object": "onOrderStatusChange/function-source.zip"
+            }
+          }
+        },
+        "createTime": "2026-06-15T17:19:14.747653546Z",
+        "environment": "GEN_2",
+        "eventTrigger": {
+          "eventFilters": [
+            {
+              "attribute": "database",
+              "value": "(default)"
+            },
+            {
+              "attribute": "namespace",
+              "value": "(default)"
+            },
+            {
+              "attribute": "document",
+              "operator": "match-path-pattern",
+              "value": "orders/{orderId}"
+            }
+          ],
+          "eventType": "google.cloud.firestore.document.v1.updated",
+          "pubsubTopic": "projects/sokoni-aeb26/topics/eventarc-nam5-onorderstatuschange-334647-227",
+          "retryPolicy": "RETRY_POLICY_DO_NOT_RETRY",
+          "serviceAccountEmail": "24799054989-compute@developer.gserviceaccount.com",
+          "trigger": "projects/sokoni-aeb26/locations/nam5/triggers/onorderstatuschange-334647",
+          "triggerRegion": "nam5"
+        },
+        "labels": {
+          "deployment-tool": "cli-firebase",
+          "firebase-functions-hash": "1891c0cf9c41d94aac7be6be96cd4a125f82cd06"
+        },
+        "name": "projects/sokoni-aeb26/locations/us-central1/functions/onOrderStatusChange",
+        "satisfiesPzi": true,
+        "serviceConfig": {
+          "allTrafficOnLatestRevision": true,
+          "availableCpu": "1",
+          "availableMemory": "256Mi",
+          "environmentVariables": {
+            "ALGOLIA_APP_ID": "F2XND3V1FW",
+            "AT_ENV": "production",
+            "AT_SENDER_ID": "",
+            "ETIMS_ENV": "production",
+            "EVENTARC_CLOUD_EVENT_SOURCE": "projects/sokoni-aeb26/locations/us-central1/services/onOrderStatusChange",
+            "FIREBASE_CONFIG": "{\"projectId\":\"sokoni-aeb26\",\"storageBucket\":\"sokoni-aeb26.firebasestorage.app\"}",
+            "FUNCTION_REGION": "us-central1",
+            "FUNCTION_SIGNATURE_TYPE": "cloudevent",
+            "FUNCTION_TARGET": "onOrderStatusChange",
+            "GCLOUD_PROJECT": "sokoni-aeb26",
+            "LOG_EXECUTION_ID": "true",
+            "TYPESENSE_NODES": "4kn6y5bfcxv8o702p-1.a2.typesense.net:443:https"
+          },
+          "ingressSettings": "ALLOW_ALL",
+          "maxInstanceCount": 99,
+          "maxInstanceRequestConcurrency": 80,
+          "secretEnvironmentVariables": [
+            {
+              "key": "AFRICASTALKING_API_KEY",
+              "projectId": "sokoni-aeb26",
+              "secret": "AFRICASTALKING_API_KEY",
+              "version": "4"
+            },
+            {
+              "key": "AFRICASTALKING_USERNAME",
+              "projectId": "sokoni-aeb26",
+              "secret": "AFRICASTALKING_USERNAME",
+              "version": "2"
+            }
+          ],
+          "service": "projects/sokoni-aeb26/locations/us-central1/services/onorderstatuschange",
+          "serviceAccountEmail": "24799054989-compute@developer.gserviceaccount.com",
+          "timeoutSeconds": 60,
+          "uri": "https://onorderstatuschange-o3jpu5wacq-uc.a.run.app"
+        },
+        "state": "ACTIVE",
+        "updateTime": "2026-09-09T06:02:27.289467335Z",
+        "url": "https://us-central1-sokoni-aeb26.cloudfunctions.net/onOrderStatusChange"
+      },
+      "canonical": {
+        "buildConfig": {
+          "automaticUpdatePolicy": {},
+          "build": "projects/24799054989/locations/us-central1/builds/a29effa1-3d1d-4c84-a269-25c9005fdee8",
+          "dockerRegistry": "ARTIFACT_REGISTRY",
+          "dockerRepository": "projects/sokoni-aeb26/locations/us-central1/repositories/gcf-artifacts",
+          "entryPoint": "onOrderStatusChange",
+          "environmentVariables": {
+            "GOOGLE_NODE_RUN_SCRIPTS": ""
+          },
+          "runtime": "nodejs22",
+          "serviceAccount": "projects/sokoni-aeb26/serviceAccounts/24799054989-compute@developer.gserviceaccount.com",
+          "source": {
+            "storageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1788077453779580",
+              "object": "onOrderStatusChange/function-source.zip"
+            }
+          },
+          "sourceProvenance": {
+            "resolvedStorageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1788077453779580",
+              "object": "onOrderStatusChange/function-source.zip"
+            }
+          }
+        },
+        "createTime": "2026-06-15T17:19:14.747653546Z",
+        "environment": "GEN_2",
+        "eventTrigger": {
+          "eventFilters": [
+            {
+              "attribute": "database",
+              "value": "(default)"
+            },
+            {
+              "attribute": "namespace",
+              "value": "(default)"
+            },
+            {
+              "attribute": "document",
+              "operator": "match-path-pattern",
+              "value": "orders/{orderId}"
+            }
+          ],
+          "eventType": "google.cloud.firestore.document.v1.updated",
+          "pubsubTopic": "projects/sokoni-aeb26/topics/eventarc-nam5-onorderstatuschange-334647-227",
+          "retryPolicy": "RETRY_POLICY_DO_NOT_RETRY",
+          "serviceAccountEmail": "24799054989-compute@developer.gserviceaccount.com",
+          "trigger": "projects/sokoni-aeb26/locations/nam5/triggers/onorderstatuschange-334647",
+          "triggerRegion": "nam5"
+        },
+        "labels": {
+          "deployment-tool": "cli-firebase",
+          "firebase-functions-hash": "1891c0cf9c41d94aac7be6be96cd4a125f82cd06"
+        },
+        "name": "projects/sokoni-aeb26/locations/us-central1/functions/onOrderStatusChange",
+        "satisfiesPzi": true,
+        "serviceConfig": {
+          "allTrafficOnLatestRevision": true,
+          "availableCpu": "1",
+          "availableMemory": "256Mi",
+          "environmentVariables": {
+            "ALGOLIA_APP_ID": "F2XND3V1FW",
+            "AT_ENV": "production",
+            "AT_SENDER_ID": "",
+            "ETIMS_ENV": "production",
+            "EVENTARC_CLOUD_EVENT_SOURCE": "projects/sokoni-aeb26/locations/us-central1/services/onOrderStatusChange",
+            "FIREBASE_CONFIG": "{\"projectId\":\"sokoni-aeb26\",\"storageBucket\":\"sokoni-aeb26.firebasestorage.app\"}",
+            "FUNCTION_REGION": "us-central1",
+            "FUNCTION_SIGNATURE_TYPE": "cloudevent",
+            "FUNCTION_TARGET": "onOrderStatusChange",
+            "GCLOUD_PROJECT": "sokoni-aeb26",
+            "LOG_EXECUTION_ID": "true",
+            "TYPESENSE_NODES": "4kn6y5bfcxv8o702p-1.a2.typesense.net:443:https"
+          },
+          "ingressSettings": "ALLOW_ALL",
+          "maxInstanceCount": 99,
+          "maxInstanceRequestConcurrency": 80,
+          "secretEnvironmentVariables": [
+            {
+              "key": "AFRICASTALKING_API_KEY",
+              "projectId": "sokoni-aeb26",
+              "secret": "AFRICASTALKING_API_KEY",
+              "version": "4"
+            },
+            {
+              "key": "AFRICASTALKING_USERNAME",
+              "projectId": "sokoni-aeb26",
+              "secret": "AFRICASTALKING_USERNAME",
+              "version": "2"
+            }
+          ],
+          "service": "projects/sokoni-aeb26/locations/us-central1/services/onorderstatuschange",
+          "serviceAccountEmail": "24799054989-compute@developer.gserviceaccount.com",
+          "timeoutSeconds": 60,
+          "uri": "https://onorderstatuschange-o3jpu5wacq-uc.a.run.app"
+        },
+        "state": "ACTIVE",
+        "updateTime": "2026-09-09T06:02:27.289467335Z",
+        "url": "https://us-central1-sokoni-aeb26.cloudfunctions.net/onOrderStatusChange"
+      }
+    },
+    {
+      "function": "onNewOrderCreated",
+      "role": "recovery",
+      "order": 6,
+      "state": "ACTIVE",
+      "trigger_kind": "EVENT",
+      "source_generation": "1787532418838194",
+      "source_uri": "gs://gcf-v2-sources-24799054989-us-central1/onNewOrderCreated/function-source.zip",
+      "min_instance_count": 0,
+      "raw_sha256": "0753c4ef1bd2d2d344a6136b753012222a9aac2f45c0a58c3312f157844a6f0f",
+      "raw_bytes": 3999,
+      "raw": {
+        "buildConfig": {
+          "automaticUpdatePolicy": {},
+          "build": "projects/24799054989/locations/us-central1/builds/5afa8ece-1d2a-46b8-b116-1ed60f5f97cd",
+          "dockerRegistry": "ARTIFACT_REGISTRY",
+          "dockerRepository": "projects/sokoni-aeb26/locations/us-central1/repositories/gcf-artifacts",
+          "entryPoint": "onNewOrderCreated",
+          "environmentVariables": {
+            "GOOGLE_NODE_RUN_SCRIPTS": ""
+          },
+          "runtime": "nodejs22",
+          "serviceAccount": "projects/sokoni-aeb26/serviceAccounts/24799054989-compute@developer.gserviceaccount.com",
+          "source": {
+            "storageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1787532418838194",
+              "object": "onNewOrderCreated/function-source.zip"
+            }
+          },
+          "sourceProvenance": {
+            "resolvedStorageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1787532418838194",
+              "object": "onNewOrderCreated/function-source.zip"
+            }
+          }
+        },
+        "createTime": "2026-06-24T11:49:45.541993273Z",
+        "environment": "GEN_2",
+        "eventTrigger": {
+          "eventFilters": [
+            {
+              "attribute": "document",
+              "operator": "match-path-pattern",
+              "value": "orders/{orderId}"
+            },
+            {
+              "attribute": "database",
+              "value": "(default)"
+            },
+            {
+              "attribute": "namespace",
+              "value": "(default)"
+            }
+          ],
+          "eventType": "google.cloud.firestore.document.v1.created",
+          "pubsubTopic": "projects/sokoni-aeb26/topics/eventarc-nam5-onnewordercreated-995600-544",
+          "retryPolicy": "RETRY_POLICY_DO_NOT_RETRY",
+          "serviceAccountEmail": "24799054989-compute@developer.gserviceaccount.com",
+          "trigger": "projects/sokoni-aeb26/locations/nam5/triggers/onnewordercreated-995600",
+          "triggerRegion": "nam5"
+        },
+        "labels": {
+          "deployment-tool": "cli-firebase",
+          "firebase-functions-hash": "240182fbda91e5aa45820d365ebc23dfa0f648c7"
+        },
+        "name": "projects/sokoni-aeb26/locations/us-central1/functions/onNewOrderCreated",
+        "satisfiesPzi": true,
+        "serviceConfig": {
+          "allTrafficOnLatestRevision": true,
+          "availableCpu": "1",
+          "availableMemory": "256Mi",
+          "environmentVariables": {
+            "ALGOLIA_APP_ID": "F2XND3V1FW",
+            "AT_ENV": "production",
+            "AT_SENDER_ID": "",
+            "ETIMS_ENV": "production",
+            "EVENTARC_CLOUD_EVENT_SOURCE": "projects/sokoni-aeb26/locations/us-central1/services/onNewOrderCreated",
+            "FIREBASE_CONFIG": "{\"projectId\":\"sokoni-aeb26\",\"storageBucket\":\"sokoni-aeb26.firebasestorage.app\"}",
+            "FUNCTION_REGION": "us-central1",
+            "FUNCTION_SIGNATURE_TYPE": "cloudevent",
+            "FUNCTION_TARGET": "onNewOrderCreated",
+            "GCLOUD_PROJECT": "sokoni-aeb26",
+            "LOG_EXECUTION_ID": "true",
+            "TYPESENSE_NODES": "4kn6y5bfcxv8o702p-1.a2.typesense.net:443:https"
+          },
+          "ingressSettings": "ALLOW_ALL",
+          "maxInstanceCount": 99,
+          "maxInstanceRequestConcurrency": 80,
+          "secretEnvironmentVariables": [
+            {
+              "key": "AFRICASTALKING_API_KEY",
+              "projectId": "sokoni-aeb26",
+              "secret": "AFRICASTALKING_API_KEY",
+              "version": "4"
+            },
+            {
+              "key": "AFRICASTALKING_USERNAME",
+              "projectId": "sokoni-aeb26",
+              "secret": "AFRICASTALKING_USERNAME",
+              "version": "2"
+            },
+            {
+              "key": "SOKONI_HMAC_KEY",
+              "projectId": "sokoni-aeb26",
+              "secret": "SOKONI_HMAC_KEY",
+              "version": "1"
+            }
+          ],
+          "service": "projects/sokoni-aeb26/locations/us-central1/services/onnewordercreated",
+          "serviceAccountEmail": "24799054989-compute@developer.gserviceaccount.com",
+          "timeoutSeconds": 60,
+          "uri": "https://onnewordercreated-o3jpu5wacq-uc.a.run.app"
+        },
+        "state": "ACTIVE",
+        "updateTime": "2026-09-09T06:01:29.022368323Z",
+        "url": "https://us-central1-sokoni-aeb26.cloudfunctions.net/onNewOrderCreated"
+      },
+      "canonical": {
+        "buildConfig": {
+          "automaticUpdatePolicy": {},
+          "build": "projects/24799054989/locations/us-central1/builds/5afa8ece-1d2a-46b8-b116-1ed60f5f97cd",
+          "dockerRegistry": "ARTIFACT_REGISTRY",
+          "dockerRepository": "projects/sokoni-aeb26/locations/us-central1/repositories/gcf-artifacts",
+          "entryPoint": "onNewOrderCreated",
+          "environmentVariables": {
+            "GOOGLE_NODE_RUN_SCRIPTS": ""
+          },
+          "runtime": "nodejs22",
+          "serviceAccount": "projects/sokoni-aeb26/serviceAccounts/24799054989-compute@developer.gserviceaccount.com",
+          "source": {
+            "storageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1787532418838194",
+              "object": "onNewOrderCreated/function-source.zip"
+            }
+          },
+          "sourceProvenance": {
+            "resolvedStorageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1787532418838194",
+              "object": "onNewOrderCreated/function-source.zip"
+            }
+          }
+        },
+        "createTime": "2026-06-24T11:49:45.541993273Z",
+        "environment": "GEN_2",
+        "eventTrigger": {
+          "eventFilters": [
+            {
+              "attribute": "document",
+              "operator": "match-path-pattern",
+              "value": "orders/{orderId}"
+            },
+            {
+              "attribute": "database",
+              "value": "(default)"
+            },
+            {
+              "attribute": "namespace",
+              "value": "(default)"
+            }
+          ],
+          "eventType": "google.cloud.firestore.document.v1.created",
+          "pubsubTopic": "projects/sokoni-aeb26/topics/eventarc-nam5-onnewordercreated-995600-544",
+          "retryPolicy": "RETRY_POLICY_DO_NOT_RETRY",
+          "serviceAccountEmail": "24799054989-compute@developer.gserviceaccount.com",
+          "trigger": "projects/sokoni-aeb26/locations/nam5/triggers/onnewordercreated-995600",
+          "triggerRegion": "nam5"
+        },
+        "labels": {
+          "deployment-tool": "cli-firebase",
+          "firebase-functions-hash": "240182fbda91e5aa45820d365ebc23dfa0f648c7"
+        },
+        "name": "projects/sokoni-aeb26/locations/us-central1/functions/onNewOrderCreated",
+        "satisfiesPzi": true,
+        "serviceConfig": {
+          "allTrafficOnLatestRevision": true,
+          "availableCpu": "1",
+          "availableMemory": "256Mi",
+          "environmentVariables": {
+            "ALGOLIA_APP_ID": "F2XND3V1FW",
+            "AT_ENV": "production",
+            "AT_SENDER_ID": "",
+            "ETIMS_ENV": "production",
+            "EVENTARC_CLOUD_EVENT_SOURCE": "projects/sokoni-aeb26/locations/us-central1/services/onNewOrderCreated",
+            "FIREBASE_CONFIG": "{\"projectId\":\"sokoni-aeb26\",\"storageBucket\":\"sokoni-aeb26.firebasestorage.app\"}",
+            "FUNCTION_REGION": "us-central1",
+            "FUNCTION_SIGNATURE_TYPE": "cloudevent",
+            "FUNCTION_TARGET": "onNewOrderCreated",
+            "GCLOUD_PROJECT": "sokoni-aeb26",
+            "LOG_EXECUTION_ID": "true",
+            "TYPESENSE_NODES": "4kn6y5bfcxv8o702p-1.a2.typesense.net:443:https"
+          },
+          "ingressSettings": "ALLOW_ALL",
+          "maxInstanceCount": 99,
+          "maxInstanceRequestConcurrency": 80,
+          "secretEnvironmentVariables": [
+            {
+              "key": "AFRICASTALKING_API_KEY",
+              "projectId": "sokoni-aeb26",
+              "secret": "AFRICASTALKING_API_KEY",
+              "version": "4"
+            },
+            {
+              "key": "AFRICASTALKING_USERNAME",
+              "projectId": "sokoni-aeb26",
+              "secret": "AFRICASTALKING_USERNAME",
+              "version": "2"
+            },
+            {
+              "key": "SOKONI_HMAC_KEY",
+              "projectId": "sokoni-aeb26",
+              "secret": "SOKONI_HMAC_KEY",
+              "version": "1"
+            }
+          ],
+          "service": "projects/sokoni-aeb26/locations/us-central1/services/onnewordercreated",
+          "serviceAccountEmail": "24799054989-compute@developer.gserviceaccount.com",
+          "timeoutSeconds": 60,
+          "uri": "https://onnewordercreated-o3jpu5wacq-uc.a.run.app"
+        },
+        "state": "ACTIVE",
+        "updateTime": "2026-09-09T06:01:29.022368323Z",
+        "url": "https://us-central1-sokoni-aeb26.cloudfunctions.net/onNewOrderCreated"
+      }
+    },
+    {
+      "function": "intasendWebhook",
+      "role": "excluded",
+      "order": null,
+      "reason": "P0-4 retirement gate — DO NOT REBUILD",
+      "state": "ACTIVE",
+      "trigger_kind": "HTTPS",
+      "source_generation": "1788689146419599",
+      "source_uri": "gs://gcf-v2-sources-24799054989-us-central1/intasendWebhook/function-source.zip",
+      "min_instance_count": 0,
+      "raw_sha256": "15301a8c059a62778759611ada775853f53d5e7f303a1ecf45f4a49286e466f3",
+      "raw_bytes": 2893,
+      "raw": {
+        "buildConfig": {
+          "automaticUpdatePolicy": {},
+          "build": "projects/24799054989/locations/us-central1/builds/72fedffc-c1aa-4d99-9bb4-a0537dcf7bd4",
+          "dockerRegistry": "ARTIFACT_REGISTRY",
+          "dockerRepository": "projects/sokoni-aeb26/locations/us-central1/repositories/gcf-artifacts",
+          "entryPoint": "intasendWebhook",
+          "environmentVariables": {
+            "GOOGLE_NODE_RUN_SCRIPTS": ""
+          },
+          "runtime": "nodejs22",
+          "serviceAccount": "projects/sokoni-aeb26/serviceAccounts/24799054989-compute@developer.gserviceaccount.com",
+          "source": {
+            "storageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1788689146419599",
+              "object": "intasendWebhook/function-source.zip"
+            }
+          },
+          "sourceProvenance": {
+            "resolvedStorageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1788689146419599",
+              "object": "intasendWebhook/function-source.zip"
+            }
+          }
+        },
+        "createTime": "2026-06-18T10:13:06.092629013Z",
+        "environment": "GEN_2",
+        "labels": {
+          "deployment-tool": "cli-firebase",
+          "firebase-functions-hash": "cc80b4193367a455fe6c05b3603efde60bd65fdd"
+        },
+        "name": "projects/sokoni-aeb26/locations/us-central1/functions/intasendWebhook",
+        "satisfiesPzi": true,
+        "serviceConfig": {
+          "allTrafficOnLatestRevision": true,
+          "availableCpu": "1",
+          "availableMemory": "256Mi",
+          "environmentVariables": {
+            "ALGOLIA_APP_ID": "F2XND3V1FW",
+            "AT_ENV": "production",
+            "AT_SENDER_ID": "",
+            "DARAJA_SANDBOX_SELLER_UIDS": "",
+            "ETIMS_ENV": "production",
+            "EVENTARC_CLOUD_EVENT_SOURCE": "projects/sokoni-aeb26/locations/us-central1/services/intasendWebhook",
+            "FIREBASE_CONFIG": "{\"projectId\":\"sokoni-aeb26\",\"storageBucket\":\"sokoni-aeb26.firebasestorage.app\"}",
+            "FUNCTION_REGION": "us-central1",
+            "FUNCTION_TARGET": "intasendWebhook",
+            "GCLOUD_PROJECT": "sokoni-aeb26",
+            "LOG_EXECUTION_ID": "true",
+            "TYPESENSE_NODES": "4kn6y5bfcxv8o702p-1.a2.typesense.net:443:https"
+          },
+          "ingressSettings": "ALLOW_ALL",
+          "maxInstanceCount": 99,
+          "maxInstanceRequestConcurrency": 80,
+          "secretEnvironmentVariables": [
+            {
+              "key": "INTASEND_WEBHOOK_CHALLENGE",
+              "projectId": "sokoni-aeb26",
+              "secret": "INTASEND_WEBHOOK_CHALLENGE",
+              "version": "6"
+            }
+          ],
+          "service": "projects/sokoni-aeb26/locations/us-central1/services/intasendwebhook",
+          "serviceAccountEmail": "24799054989-compute@developer.gserviceaccount.com",
+          "timeoutSeconds": 30,
+          "uri": "https://intasendwebhook-o3jpu5wacq-uc.a.run.app"
+        },
+        "state": "ACTIVE",
+        "updateTime": "2026-09-09T06:01:34.402441420Z",
+        "url": "https://us-central1-sokoni-aeb26.cloudfunctions.net/intasendWebhook"
+      },
+      "canonical": {
+        "buildConfig": {
+          "automaticUpdatePolicy": {},
+          "build": "projects/24799054989/locations/us-central1/builds/72fedffc-c1aa-4d99-9bb4-a0537dcf7bd4",
+          "dockerRegistry": "ARTIFACT_REGISTRY",
+          "dockerRepository": "projects/sokoni-aeb26/locations/us-central1/repositories/gcf-artifacts",
+          "entryPoint": "intasendWebhook",
+          "environmentVariables": {
+            "GOOGLE_NODE_RUN_SCRIPTS": ""
+          },
+          "runtime": "nodejs22",
+          "serviceAccount": "projects/sokoni-aeb26/serviceAccounts/24799054989-compute@developer.gserviceaccount.com",
+          "source": {
+            "storageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1788689146419599",
+              "object": "intasendWebhook/function-source.zip"
+            }
+          },
+          "sourceProvenance": {
+            "resolvedStorageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1788689146419599",
+              "object": "intasendWebhook/function-source.zip"
+            }
+          }
+        },
+        "createTime": "2026-06-18T10:13:06.092629013Z",
+        "environment": "GEN_2",
+        "labels": {
+          "deployment-tool": "cli-firebase",
+          "firebase-functions-hash": "cc80b4193367a455fe6c05b3603efde60bd65fdd"
+        },
+        "name": "projects/sokoni-aeb26/locations/us-central1/functions/intasendWebhook",
+        "satisfiesPzi": true,
+        "serviceConfig": {
+          "allTrafficOnLatestRevision": true,
+          "availableCpu": "1",
+          "availableMemory": "256Mi",
+          "environmentVariables": {
+            "ALGOLIA_APP_ID": "F2XND3V1FW",
+            "AT_ENV": "production",
+            "AT_SENDER_ID": "",
+            "DARAJA_SANDBOX_SELLER_UIDS": "",
+            "ETIMS_ENV": "production",
+            "EVENTARC_CLOUD_EVENT_SOURCE": "projects/sokoni-aeb26/locations/us-central1/services/intasendWebhook",
+            "FIREBASE_CONFIG": "{\"projectId\":\"sokoni-aeb26\",\"storageBucket\":\"sokoni-aeb26.firebasestorage.app\"}",
+            "FUNCTION_REGION": "us-central1",
+            "FUNCTION_TARGET": "intasendWebhook",
+            "GCLOUD_PROJECT": "sokoni-aeb26",
+            "LOG_EXECUTION_ID": "true",
+            "TYPESENSE_NODES": "4kn6y5bfcxv8o702p-1.a2.typesense.net:443:https"
+          },
+          "ingressSettings": "ALLOW_ALL",
+          "maxInstanceCount": 99,
+          "maxInstanceRequestConcurrency": 80,
+          "secretEnvironmentVariables": [
+            {
+              "key": "INTASEND_WEBHOOK_CHALLENGE",
+              "projectId": "sokoni-aeb26",
+              "secret": "INTASEND_WEBHOOK_CHALLENGE",
+              "version": "6"
+            }
+          ],
+          "service": "projects/sokoni-aeb26/locations/us-central1/services/intasendwebhook",
+          "serviceAccountEmail": "24799054989-compute@developer.gserviceaccount.com",
+          "timeoutSeconds": 30,
+          "uri": "https://intasendwebhook-o3jpu5wacq-uc.a.run.app"
+        },
+        "state": "ACTIVE",
+        "updateTime": "2026-09-09T06:01:34.402441420Z",
+        "url": "https://us-central1-sokoni-aeb26.cloudfunctions.net/intasendWebhook"
+      }
+    },
+    {
+      "function": "profileGetPublicProfile",
+      "role": "control",
+      "order": 0,
+      "note": "already reconstructed 2026-09-21; the proven primitive",
+      "state": "ACTIVE",
+      "trigger_kind": "HTTPS",
+      "source_generation": "1789964469538784",
+      "source_uri": "gs://gcf-v2-sources-24799054989-us-central1/profileGetPublicProfile/function-source.zip",
+      "min_instance_count": 0,
+      "raw_sha256": "68a9d1235b34b3c549b7409d56dd0e2f97b40277df8bc43f07fb839d5d9c27d4",
+      "raw_bytes": 2800,
+      "raw": {
+        "buildConfig": {
+          "automaticUpdatePolicy": {},
+          "build": "projects/24799054989/locations/us-central1/builds/ceb903bb-d331-4636-a083-45407bd9213d",
+          "dockerRegistry": "ARTIFACT_REGISTRY",
+          "dockerRepository": "projects/sokoni-aeb26/locations/us-central1/repositories/gcf-artifacts",
+          "entryPoint": "profileGetPublicProfile",
+          "environmentVariables": {
+            "GOOGLE_NODE_RUN_SCRIPTS": ""
+          },
+          "runtime": "nodejs22",
+          "serviceAccount": "projects/sokoni-aeb26/serviceAccounts/24799054989-compute@developer.gserviceaccount.com",
+          "source": {
+            "storageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1789964469538784",
+              "object": "profileGetPublicProfile/function-source.zip"
+            }
+          },
+          "sourceProvenance": {
+            "resolvedStorageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1789964469538784",
+              "object": "profileGetPublicProfile/function-source.zip"
+            }
+          }
+        },
+        "createTime": "2026-07-25T21:43:55.414361494Z",
+        "environment": "GEN_2",
+        "labels": {
+          "deployment-tool": "cli-firebase",
+          "firebase-functions-hash": "bdc55173cc9e78da73e19a482afe649ae1e5476e"
+        },
+        "name": "projects/sokoni-aeb26/locations/us-central1/functions/profileGetPublicProfile",
+        "satisfiesPzi": true,
+        "serviceConfig": {
+          "allTrafficOnLatestRevision": true,
+          "availableCpu": "1",
+          "availableMemory": "256Mi",
+          "environmentVariables": {
+            "ALGOLIA_APP_ID": "F2XND3V1FW",
+            "AT_ENV": "production",
+            "AT_SENDER_ID": "",
+            "ETIMS_ENV": "production",
+            "EVENTARC_CLOUD_EVENT_SOURCE": "projects/sokoni-aeb26/locations/us-central1/services/profileGetPublicProfile",
+            "FIREBASE_CONFIG": "{\"projectId\":\"sokoni-aeb26\",\"storageBucket\":\"sokoni-aeb26.firebasestorage.app\"}",
+            "FUNCTION_REGION": "us-central1",
+            "FUNCTION_SIGNATURE_TYPE": "http",
+            "FUNCTION_TARGET": "profileGetPublicProfile",
+            "GCLOUD_PROJECT": "sokoni-aeb26",
+            "LOG_EXECUTION_ID": "true",
+            "TYPESENSE_NODES": "4kn6y5bfcxv8o702p-1.a2.typesense.net:443:https"
+          },
+          "ingressSettings": "ALLOW_ALL",
+          "maxInstanceCount": 99,
+          "maxInstanceRequestConcurrency": 80,
+          "revision": "profilegetpublicprofile-00007-xaz",
+          "service": "projects/sokoni-aeb26/locations/us-central1/services/profilegetpublicprofile",
+          "serviceAccountEmail": "24799054989-compute@developer.gserviceaccount.com",
+          "timeoutSeconds": 60,
+          "uri": "https://profilegetpublicprofile-o3jpu5wacq-uc.a.run.app"
+        },
+        "state": "ACTIVE",
+        "updateTime": "2026-09-21T04:22:14.128785259Z",
+        "url": "https://us-central1-sokoni-aeb26.cloudfunctions.net/profileGetPublicProfile"
+      },
+      "canonical": {
+        "buildConfig": {
+          "automaticUpdatePolicy": {},
+          "build": "projects/24799054989/locations/us-central1/builds/ceb903bb-d331-4636-a083-45407bd9213d",
+          "dockerRegistry": "ARTIFACT_REGISTRY",
+          "dockerRepository": "projects/sokoni-aeb26/locations/us-central1/repositories/gcf-artifacts",
+          "entryPoint": "profileGetPublicProfile",
+          "environmentVariables": {
+            "GOOGLE_NODE_RUN_SCRIPTS": ""
+          },
+          "runtime": "nodejs22",
+          "serviceAccount": "projects/sokoni-aeb26/serviceAccounts/24799054989-compute@developer.gserviceaccount.com",
+          "source": {
+            "storageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1789964469538784",
+              "object": "profileGetPublicProfile/function-source.zip"
+            }
+          },
+          "sourceProvenance": {
+            "resolvedStorageSource": {
+              "bucket": "gcf-v2-sources-24799054989-us-central1",
+              "generation": "1789964469538784",
+              "object": "profileGetPublicProfile/function-source.zip"
+            }
+          }
+        },
+        "createTime": "2026-07-25T21:43:55.414361494Z",
+        "environment": "GEN_2",
+        "labels": {
+          "deployment-tool": "cli-firebase",
+          "firebase-functions-hash": "bdc55173cc9e78da73e19a482afe649ae1e5476e"
+        },
+        "name": "projects/sokoni-aeb26/locations/us-central1/functions/profileGetPublicProfile",
+        "satisfiesPzi": true,
+        "serviceConfig": {
+          "allTrafficOnLatestRevision": true,
+          "availableCpu": "1",
+          "availableMemory": "256Mi",
+          "environmentVariables": {
+            "ALGOLIA_APP_ID": "F2XND3V1FW",
+            "AT_ENV": "production",
+            "AT_SENDER_ID": "",
+            "ETIMS_ENV": "production",
+            "EVENTARC_CLOUD_EVENT_SOURCE": "projects/sokoni-aeb26/locations/us-central1/services/profileGetPublicProfile",
+            "FIREBASE_CONFIG": "{\"projectId\":\"sokoni-aeb26\",\"storageBucket\":\"sokoni-aeb26.firebasestorage.app\"}",
+            "FUNCTION_REGION": "us-central1",
+            "FUNCTION_SIGNATURE_TYPE": "http",
+            "FUNCTION_TARGET": "profileGetPublicProfile",
+            "GCLOUD_PROJECT": "sokoni-aeb26",
+            "LOG_EXECUTION_ID": "true",
+            "TYPESENSE_NODES": "4kn6y5bfcxv8o702p-1.a2.typesense.net:443:https"
+          },
+          "ingressSettings": "ALLOW_ALL",
+          "maxInstanceCount": 99,
+          "maxInstanceRequestConcurrency": 80,
+          "revision": "profilegetpublicprofile-00007-xaz",
+          "service": "projects/sokoni-aeb26/locations/us-central1/services/profilegetpublicprofile",
+          "serviceAccountEmail": "24799054989-compute@developer.gserviceaccount.com",
+          "timeoutSeconds": 60,
+          "uri": "https://profilegetpublicprofile-o3jpu5wacq-uc.a.run.app"
+        },
+        "state": "ACTIVE",
+        "updateTime": "2026-09-21T04:22:14.128785259Z",
+        "url": "https://us-central1-sokoni-aeb26.cloudfunctions.net/profileGetPublicProfile"
+      }
+    }
+  ]
+}

@@ -12,16 +12,16 @@ no function deployments (the release line is independently blocked).
 | P0-1 Billing export + budget alerting | **CLOSED — owner enabled the export; awaiting async first delivery** |
 | P0-1A Budget notification wiring | **PASS — all 3 budgets now reach the ops channel** |
 | P0-2 Unpin 8 unjustified services | **FROZEN** — failed; rollback blocked on problem B; 8 services Ready=False |
-| P0-2-INV Registry provenance investigation | **DONE (read-only) — cause UNKNOWABLE, audit logging off** |
+| P0-2-INV Registry provenance investigation | **DONE — cause PROVEN 2026-09-21: `firebase-functions-cleanup` DELETE/86400s/ANY** |
 | P0-3 Right-size max instances | **FROZEN** — same root cause |
-| P0-4 Retire `intasendWebhook` | **DEFERRED / HIGH-RISK RETIREMENT** — deletion may be the purge trigger |
+| P0-4 Retire `intasendWebhook` | **DEFERRED** — purge-trigger basis **REFUTED** 2026-09-21; its own gate remains |
 | P0-5 Least-privilege IAM | **AUDIT DONE (read-only)** — see `GCP_IAM_LEAST_PRIVILEGE_AUDIT.md`; no mutation |
 | P0-5B IAM Recommender evidence gate | **COMPLETE — API enabled; recommender is BLIND without Data Access logs** |
 | P0-8 Recurring 5xx root cause | **DIAGNOSED (read-only)** — index config + code fix identified; neither applied |
 | P0-6 App Check audit | **AUDIT DONE (read-only)** — 547/1022 enforced; 0 unauthorized found; remediation needs deploys |
 | P0-7 AR Data Access audit logging | **DONE — ADMIN_READ and DATA_WRITE both PROVEN live** |
 | P0-7-OBS Forensic harness + baseline | **READY — harness live, method vocabulary confirmed** |
-| P0-7-OBS-CANARY Controlled canary push | **Q-A CLOSED (DATA_WRITE proven) · Q-B OPEN (re-read ~24h)** |
+| P0-7-OBS-CANARY Controlled canary push | **Q-A CLOSED · Q-B CLOSED 2026-09-21 — OUTCOME 2, canary deleted at 28.1h** |
 | P0-7 Product trigger fan-out audit | **AUDIT DONE (read-only)** — 7 confirmed, max 4 fire at once, 184,127/mo MEASURED |
 | P0-7B Product writer investigation | **DONE (read-only)** — client-side unconditional catalogue sync; class B evidence |
 | P0-7C/D Catalogue-sync fix | **SHIPPED** — hosting `1b62d15` on live lineage; 6/6 production smoke |
@@ -307,11 +307,11 @@ The deploy path works. What does **not** work is creating a revision from a serv
 spec* without a rebuild. Those are different operations and I conflated them. The corrected claim
 is in Q3/Q5 below.
 
-### Q1 — Why are the artifacts absent? **NOT ESTABLISHED. The evidence to establish it was never collected.**
+### Q1 — Why are the artifacts absent? **NOT ESTABLISHED at 2026-09-19 — ESTABLISHED 2026-09-21, see below.**
 
 | Candidate cause | Verdict | Evidence |
 |---|---|---|
-| Cleanup / lifecycle policy | **Ruled out at repo level** | Neither repo has a `cleanupPolicies` field |
+| Cleanup / lifecycle policy | ~~**Ruled out at repo level**~~ — **THIS WAS THE CAUSE** | **FALSE NEGATIVE**: `repositories list` does not render `cleanupPolicies`; only `describe --format=json` does. Both repos carried `firebase-functions-cleanup` throughout |
 | Repository recreation | **Ruled out** | `createTime` 2026-06-08 (us-central1), 2026-06-21 (us-east1) — both predate the loss |
 | Wrong project / region / repo | **Ruled out** | Only two AR repos exist in the project; both empty; both are the GCF-managed ones |
 | Manual deletion | **Cannot confirm or exclude** | See below |
@@ -327,6 +327,54 @@ exactly **three** entries in 90 days — two `CreateRepository` (June, by
 This was verified against two positive controls rather than accepted as an empty result: an
 unfiltered audit-log read returns rows, and my own `Services.ReplaceService` calls from earlier
 today appear correctly. The query mechanism works; the records do not exist.
+
+### CAUSE ESTABLISHED — 2026-09-21. The block above is the 09-19 state, kept as written.
+
+Both repositories carry `firebase-functions-cleanup`: `action: DELETE`,
+`condition.olderThan: 86400s`, `tagState: ANY`, executed by the AR service agent as
+`BatchDeleteVersions`. Age-based and **reference-blind** — no knowledge of Cloud Run revision
+references, therefore capable of deleting an image a live revision still depends on. Provenance:
+`UpdateRepository` 2026-06-10 (us-central1), 2026-06-23 (us-east1), `FirebaseCLI/15.19.0`,
+`cleanupPolicyDryRun: false`. In force since June.
+
+**How it was proven.** The P0-7-OBS canary — inert, owned by no function, referenced by nothing —
+pushed 2026-09-19T06:08:12Z, deleted 2026-09-20T10:16:05Z at 28.1h, contamination clean: no deploy,
+no function deletion, no build in the window. **OUTCOME 2.**
+
+**Q1's and Q7's "no cleanupPolicies" finding was a FALSE NEGATIVE and it cost two days.** The Q1
+positive controls were real, but they controlled the *log query*, not the *policy read*. An absence
+seen through a default formatter was never an absence.
+
+**Function deletion is REFUTED as the demonstrated purge mechanism; the repository cleanup policy is
+the established cause.**
+
+### REPAIR — applied 2026-09-21, externally, outside this workstream and outside Git
+
+No commit records it. Verified live, read-only:
+
+```
+both repos  firebase-functions-cleanup  DELETE olderThan 86400s tagState ANY  (unchanged)
+            sokoni-recovery-protection  KEEP   keepCount 10                   (new)
+            cleanupPolicyDryRun unset = ENFORCING; 04:35:43Z / 04:36:22Z
+specimen    profilegetpublicprofile-00007-xaz Ready=True 04:22:04Z,
+            image sha256:133a75e9... built 04:21:47Z, pinned BY DIGEST
+functions   1,709 unchanged — a revision was replaced, none added or deleted
+```
+
+The rebuild **preceded** the repair by 14 minutes; the image was well inside the 24h window, so the
+DELETE policy had not yet made it eligible.
+
+```
+KEEP policy exists        PROVEN    observed live, both repositories
+KEEP policy is enforcing  PROVEN    cleanupPolicyDryRun unset
+KEEP survives a sweep     UNPROVEN  no sweep has yet been applicable to it
+```
+
+Earliest eligibility **~2026-09-22T04:21:47Z**; the checkpoint is the first applicable sweep *after*
+that, not the moment itself.
+
+**Two command traps:** `--policy` is *set or update* and may REPLACE the whole rule set, so a policy
+file must carry **both** rules; `--dry-run` is **not a preview** — it disables enforcement.
 
 **The one hard timing fact:** repo `us-central1/gcf-artifacts` has
 `updateTime: 2026-09-15T05:55:28Z`. A build succeeded on 2026-09-14 00:45 and its image is **also**
@@ -404,7 +452,7 @@ A min=0 service cannot serve without cold-starting, and these cold starts succee
 and scale-from-zero do not depend on Artifact Registry.** The blast radius is confined to revision
 *creation*. Production is not living on borrowed time.
 
-### Q7 — Cleanup policies configured? **No.** Neither repo carries a `cleanupPolicies` field, and `firebase.json` contains no artifact-cleanup configuration.
+### Q7 — Cleanup policies configured? ~~**No.**~~ **YES — THIS ANSWER WAS WRONG.** Both repos carried `firebase-functions-cleanup` (DELETE, 86400s, ANY) since June; see **CAUSE ESTABLISHED** above. `firebase.json` indeed has no artifact-cleanup configuration — the policy lives on the *repository*, not in repo config, which is why looking there found nothing.
 
 ### Q8 — Artifacts in another repo or region? **No.** The project has exactly two AR repositories — `us-central1/gcf-artifacts` and `us-east1/gcf-artifacts`. Both report `sizeBytes: 0` and list 0 images. `sizeBytes` is server-computed and independent of the listing path, so two independent signals agree.
 
@@ -768,7 +816,7 @@ unaffected (Cloud Run holds internal copies), specs unresolvable.
 
 **Status: HYPOTHESIS. Not established.** Recorded so the next event either confirms or kills it.
 
-### CONSEQUENCE FOR P0-4 — the retirement plan may be the trigger
+### CONSEQUENCE FOR P0-4 — ~~the retirement plan may be the trigger~~ **REFUTED 2026-09-21**
 
 P0-4 retires `intasendWebhook`, and the natural way to retire a function is to **delete** it. If the
 hypothesis holds, deleting a function purges a *shared* image and damages unrelated live functions.
@@ -778,6 +826,10 @@ That inverts P0-4 from "harmless cleanup of something serving no successful traf
 is settled, independently of the unresolved "22 requests, not 0" question.
 
 **P0-4 now has two blockers, not one.**
+
+**Superseded 2026-09-21.** The mechanism is a repository cleanup policy, not function deletion. The
+second blocker dissolves — and **P0-4 is not thereby unfrozen.** It keeps its own gate and its own
+authorization. The reasoning above was correct on the evidence then available and is retained.
 
 ### Tooling defect found and fixed
 
@@ -913,17 +965,20 @@ IP" is not "same person". But combined with the rejection pattern and the single
 natural reading is operator testing, not external traffic.
 
 **Effect on P0-4's first blocker:** the "22 ≠ 0" objection is substantially weakened — external
-traffic to `intasendWebhook` appears to be genuinely zero. **The second blocker is untouched and
-still decisive:** retiring the function means *deleting* it, and function deletion is the leading
-hypothesis for the purge. P0-4 stays frozen on that ground alone.
+traffic to `intasendWebhook` appears to be genuinely zero. **The second blocker was REFUTED
+2026-09-21** — the purge is a cleanup policy, not function deletion. P0-4 no longer stays frozen on
+that ground; it stays frozen on its own gate.
 
 ### Status
 
 **Question A: CLOSED — DATA_WRITE proven live with full field capture.**
-**Question B: OPEN — re-read after ~24h with `node scripts/infra/ar-forensics.js 1d`.**
+**Question B: CLOSED 2026-09-21 — OUTCOME 2.** The canary WAS deleted, at 28.1h. Use
+`ar-forensics.js 3d`, not `1d`: a 28.1h event falls outside a 24h window.
 
-Stopped. No wait-and-act. The canary was not deleted, the purge was not reproduced, nothing was
-deployed, and the 12 pinned services remain untouched.
+Stopped at the time; no wait-and-act. **The "12 pinned services remain untouched" statement is no
+longer true** — `profilegetpublicprofile` is one of the twelve in
+`scripts/infra/ar-experiment-baseline.json` and was rebuilt 2026-09-21T04:22:04Z. That baseline file
+is correspondingly stale and is a **separate** evidence-surface repair.
 
 ---
 
@@ -936,8 +991,8 @@ evidence for, the unresolved Artifact Registry behaviour.
 |---|---|---|
 | P0-2 min-instance optimisation | **FROZEN** | Needs revision creation; also awaiting cleanup of its own 8 failed revisions |
 | P0-3 max-instance optimisation | **FROZEN** | Same mechanism; would fail identically on 1,462 services |
-| P0-4 `intasendWebhook` retirement | **DEFERRED / HIGH-RISK RETIREMENT** | Retiring means *deleting a function* — the leading purge hypothesis |
-| P1 mass function consolidation | **FROZEN** | Consolidation is deletion at scale; the worst possible time to attempt it |
+| P0-4 `intasendWebhook` retirement | **DEFERRED** | Purge-trigger basis **REFUTED** 2026-09-21; still gated on its own authorization |
+| P1 mass function consolidation | **FROZEN** | Deletion-at-scale basis **REFUTED**; still frozen — consolidation needs revision creation, which remains blocked |
 
 Healthy and untouched meanwhile: production traffic, payment paths, the 12 pinned services, the
 four money-path services, all serving revisions.
@@ -946,11 +1001,12 @@ four money-path services, all serving revisions.
 
 Previously "BLOCKED on a decision". Now **DEFERRED / HIGH-RISK RETIREMENT**, which is a different
 thing. The traffic objection has weakened — the 22 requests trace to this operator's own egress IP
-— but the retirement *method* is itself the suspected trigger. Deleting `intasendWebhook` could
-reproduce the purge, or destroy the evidence we are waiting on, or both. It is not a cleanup task
-any more; it is an experiment, and not the one we want to run first.
+— but the retirement *method* was then the suspected trigger. **That suspicion is REFUTED
+(2026-09-21)** — deleting a function does not demonstrably purge artifacts; the cleanup policy does.
+P0-4 is an ordinary retirement again, still requiring its own authorization, and no longer an
+experiment.
 
-### The architectural lesson, if the hypothesis confirms
+### The architectural lesson, if the hypothesis confirms — **IT DID NOT. REFUTED 2026-09-21.**
 
 > Deleting a Gen2 function may remove a **shared** artifact that other deployed functions still
 > reference.
@@ -963,6 +1019,11 @@ treated as unrelated.
 
 **Still a hypothesis.** The 09-14 → 09-15 correlation is suggestive, not causal, and the 07-11
 deletion batch does not fit it.
+
+**Resolved: the hypothesis is REFUTED 2026-09-21.** The 07-11 non-fit was the real signal and it was
+under-weighted. `firebase-functions-cleanup` deletes by age with no reference awareness. Retained
+above as a refuted hypothesis rather than deleted — the reasoning was sound on the evidence then
+available.
 
 ### The 24-hour check — mechanical, not interpretive
 
