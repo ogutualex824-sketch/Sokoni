@@ -97,6 +97,37 @@ const EV = {
   NONE:    'NOT_ESTABLISHED',
 };
 
+/* ── RESOLUTION STATES ───────────────────────────────────────────────────
+   Six states, none collapsible into another. The distinction that matters
+   most is the last pair:
+
+     RESOLVED                  a literal registration was observed
+     RESOLVED_VIA_BULK_EXPORT  reached exports through Object.assign
+     LOAD_ERROR                the module threw when required
+     PARSE_ERROR               the source could not be read or scanned
+     UNRESOLVED                a registration site exists but its target
+                               could not be determined
+     NOT_PRESENT               the name does not appear at all
+
+   A LOAD_ERROR is a statement about THE ANALYZER'S ability to resolve a
+   module. It is not evidence that the production function does not exist.
+   Phase 1 collapsed LOAD_ERROR into NOT_PRESENT — pos-retail-mirror threw,
+   its exports vanished from the registry, and its live, deployed
+   mirrorPosTransactionToRetail was reported as an orphan candidate. A
+   deletion question produced by the analyzer's own failure to load a file.
+
+   PARSE_ERROR is kept apart from LOAD_ERROR for the same reason: "I could not
+   read it" and "it threw while executing" are different observations with
+   different remedies, and neither is "it is not there". */
+const RS = {
+  RESOLVED:    'RESOLVED',
+  BULK:        'RESOLVED_VIA_BULK_EXPORT',
+  LOAD_ERROR:  'LOAD_ERROR',
+  PARSE_ERROR: 'PARSE_ERROR',
+  UNRESOLVED:  'UNRESOLVED',
+  NOT_PRESENT: 'NOT_PRESENT',
+};
+
 const INDEX_SRC = fs.readFileSync(path.join(FDIR, 'index.js'), 'utf8');
 const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 const INDEX = strip(INDEX_SRC);
@@ -109,6 +140,7 @@ if (INDEX.length >= INDEX_SRC.length) {
 const reg = new Map();
 function record (name, patch) {
   const cur = reg.get(name) || { name: name, definedIn: null, registration: null,
+    resolution: RS.NOT_PRESENT,
     deployable: null, deployableEvidence: EV.NONE, resolvedBy: [], notes: [] };
   Object.keys(patch).forEach((k) => {
     if (k === 'resolvedBy' || k === 'notes') { cur[k] = cur[k].concat(patch[k]); return; }
@@ -135,6 +167,7 @@ const bindings = {};
     record(m[1], {
       definedIn: inline ? 'functions/index.js' : (bindings[sym] || (sym ? '(symbol ' + sym + ')' : null)),
       registration: inline ? 'LITERAL_INLINE' : 'LITERAL_REEXPORT',
+      resolution: RS.RESOLVED,
       resolvedBy: ['literal-source'],
       deployableEvidence: EV.LITERAL,
     });
@@ -163,10 +196,19 @@ const bulkSites = [];
 
 /* METHOD A — STATIC. Predict computed names from the factory call sites and
    the computed-key template, without executing anything. */
+const parseErrors = [];
 function staticKeys (relPath) {
   const abs = path.join(FDIR, relPath.replace(/^\.\//, '') +
     (/\.js$/.test(relPath) ? '' : '.js'));
-  let src; try { src = strip(fs.readFileSync(abs, 'utf8')); } catch (e) { return null; }
+  let src;
+  try { src = strip(fs.readFileSync(abs, 'utf8')); }
+  catch (e) {
+    /* PARSE_ERROR, kept distinct from LOAD_ERROR. "I could not read it" and
+       "it threw while executing" are different observations with different
+       remedies, and neither one is "it is not there". */
+    parseErrors.push({ module: relPath, error: String(e && e.message).split('\n')[0] });
+    return null;
+  }
   const keys = new Set();
 
   /* Plain static keys on the exported object literal, and `exports.X =`. */
@@ -232,6 +274,7 @@ bulkSites.forEach((site) => {
       definedIn: 'functions/' + site.module.replace(/^\.\//, '') +
         (/\.js$/.test(site.module) ? '' : '.js'),
       registration: sKeys.has(k) ? 'BULK_COMPUTED_OR_STATIC' : 'BULK_RUNTIME_ONLY',
+      resolution: RS.BULK,
       deployable: isDep,
       deployableEvidence: sKeys.has(k) ? EV.BOTH : EV.RUNTIME,
       resolvedBy: sKeys.has(k) ? ['static', 'runtime-load'] : ['runtime-load'],
@@ -256,6 +299,7 @@ bulkSites.forEach((site) => {
       definedIn: 'functions/' + site.module.replace(/^\.\//, '') +
         (/\.js$/.test(site.module) ? '' : '.js'),
       registration: 'BULK_STATIC_ONLY',
+      resolution: rt === null ? RS.LOAD_ERROR : RS.UNRESOLVED,
       deployable: null,
       deployableEvidence: EV.STATIC,
       resolvedBy: ['static'],
@@ -410,9 +454,44 @@ const control = {
        'if it does not, an empty unregistered list would prove nothing.',
 };
 
+const resolutionTally = {};
+reg.forEach((v) => {
+  const k = v.resolution || RS.NOT_PRESENT;
+  resolutionTally[k] = (resolutionTally[k] || 0) + 1;
+});
+if (parseErrors.length) resolutionTally[RS.PARSE_ERROR] = parseErrors.length;
+
+/* ── NAMED FINDING ───────────────────────────────────────────────────────
+   Carried as data so nothing downstream has to re-derive it from prose. */
+const PROVENANCE_GAP_MERCHANT_IDENTITY = {
+  id: 'PROVENANCE GAP — merchant-identity',
+  severity: 'DEPLOYMENT SAFETY',
+  module: 'functions/merchant-identity.js',
+  callables: ['employeeSaleAuthorize', 'adminLinkMerchantAccounts'],
+  liveInProduction: true,
+  registeredByThisBranch: false,
+  moduleReachable: 'YES — pos-zero-friction.js requires it for ._internal.resolveActor, ' +
+                   'so the file ships. Only the two callables lack a registration path.',
+  basenameCollision: 'index.js requires ./shared/merchant-identity, a DIFFERENT module with ' +
+                     'the same basename. The collision makes the gap easy to miss.',
+  notARegression: 'The registering commit f194c02 is NOT an ancestor of HEAD, and no commit ' +
+                  'on this branch ever touched the registration. 98 branches carry it; this ' +
+                  'one never did. This is lineage divergence, not a lost edit.',
+  whyNoCasualFix: 'The production estate is a UNION of deploys from several lineages: ' +
+                  'release/multishop-checkout-certified does NOT register it either, while ' +
+                  'release/multishop-on-e52fdc5 does. No single branch index.js explains the ' +
+                  'deployed set, so composing one here would invent a registration no lineage ' +
+                  'has. This needs a lineage decision, not an edit.',
+  consequence: 'A functions deploy from this worktree omits both callables, and Firebase ' +
+               'deletes what a deploy does not contain.',
+  resolveBefore: 'ANY functions deployment from this branch, including the GCP reader.',
+};
+
 const report = {
   generatedAt: new Date().toISOString(),
   readOnly: true,
+  resolutionStates: resolutionTally,
+  namedFindings: [PROVENANCE_GAP_MERCHANT_IDENTITY],
   method: {
     static: 'source parse of factory call sites and computed-key templates',
     runtimeLoad: 'require() in this process; executes module top-level code. ' +
@@ -573,6 +652,40 @@ else {
   console.log('  substantially lineage drift. Without that split, a routine branch');
   console.log('  divergence reads as a retirement list.');
 }
+console.log('');
+console.log('  ── RESOLUTION STATES (none collapsible into another) ───────────');
+Object.keys(resolutionTally).sort().forEach((k) =>
+  console.log('  ' + P(resolutionTally[k]) + '  ' + k));
+console.log('');
+console.log('  LOAD_ERROR is a statement about THE ANALYZER, not about production.');
+console.log('  Phase 1 collapsed it into NOT_PRESENT and produced a false orphan.');
+console.log('');
+console.log('  ── NAMED FINDING: PROVENANCE GAP — merchant-identity ───────────');
+console.log('  functions/merchant-identity.js defines employeeSaleAuthorize and');
+console.log('  adminLinkMerchantAccounts. Both are LIVE in production. Neither is');
+console.log('  registered by this branch\'s index.js.');
+console.log('');
+console.log('  The module is NOT unreachable: pos-zero-friction.js requires it for');
+console.log('  ._internal.resolveActor, so the file ships. Only the two callables');
+console.log('  have no registration path.');
+console.log('');
+console.log('  index.js requires ./shared/merchant-identity — a DIFFERENT module');
+console.log('  with the same basename. The collision makes the gap easy to miss.');
+console.log('');
+console.log('  NOT a regression on this line: the registering commit f194c02 is');
+console.log('  NOT an ancestor of HEAD, and no commit on this branch ever touched');
+console.log('  the registration. 98 branches carry it; this one never did.');
+console.log('');
+console.log('  DO NOT "FIX" THIS BY ADDING THE EXPORT HERE. The production estate');
+console.log('  is a UNION of deploys from several lineages — release/multishop-');
+console.log('  checkout-certified does not register it either, while release/');
+console.log('  multishop-on-e52fdc5 does. No single branch index.js explains the');
+console.log('  deployed set, so composing one here would invent a registration no');
+console.log('  lineage has. This needs a lineage decision, not an edit.');
+console.log('');
+console.log('  CONSEQUENCE, STATED PLAINLY: a functions deploy from this worktree');
+console.log('  omits both callables, and Firebase deletes what a deploy does not');
+console.log('  contain. That is a deployment-safety gate, not an estate question.');
 console.log('');
 console.log('  ── PROHIBITION ─────────────────────────────────────────────────');
 console.log('  No figure here is a reduction target. A name deployed but not');

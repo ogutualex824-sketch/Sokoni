@@ -1,3 +1,61 @@
+## 2026-09-21 (146) — PROVENANCE GAP — merchant-identity, and a six-state resolution vocabulary
+
+**Phase 3 follow-up. READ-ONLY: no deployment, no deletion, no repair. NO production mutation.**
+
+Two things the Phase 3 result demanded: a named gate for the one deployment-dangerous finding,
+and a vocabulary that cannot collapse "I could not load it" into "it is not there".
+
+### PROVENANCE GAP — merchant-identity  (OPEN, blocks Functions deploy from this branch)
+
+Full write-up: `docs/PROVENANCE_GAP_MERCHANT_IDENTITY.md`.
+
+`functions/merchant-identity.js` defines `employeeSaleAuthorize` and `adminLinkMerchantAccounts`,
+both **live in production**, neither registered by this branch's `index.js`.
+
+The module is **not** unreachable — `pos-zero-friction.js` requires it for
+`._internal.resolveActor`, so the file ships. Only the two callables lack a registration path.
+`index.js` requires `./shared/merchant-identity`, a *different* module with the same basename,
+which is what makes the gap easy to miss.
+
+**It is not a regression on this line.** The registering commit `f194c02` is not an ancestor of
+HEAD, and no commit on this branch ever touched the registration. 98 branches carry it; this one
+never did.
+
+**And there is no casual fix.** The deployed estate is a union of deploys from several lineages:
+`release/multishop-checkout-certified` — the lineage recorded as production's functions source —
+does **not** register it either, while `release/multishop-on-e52fdc5` does. No single branch's
+`index.js` explains the deployed set, so composing one here would invent a registration no lineage
+has, in the one file that decides what a deploy ships. **This needs a lineage decision, not an
+edit.**
+
+Consequence: a functions deploy from this worktree omits both callables, and Firebase deletes what
+a deploy does not contain. An independent reason the GCP reader cannot deploy from here, on top of
+the foreign-file ownership blocker.
+
+### Six resolution states, none collapsible into another
+
+```
+RESOLVED · RESOLVED_VIA_BULK_EXPORT · LOAD_ERROR · PARSE_ERROR · UNRESOLVED · NOT_PRESENT
+```
+
+A `LOAD_ERROR` is a statement about **the analyzer's** ability to resolve a module. It is not
+evidence that the production function does not exist. Phase 1 collapsed `LOAD_ERROR` into
+`NOT_PRESENT`: `pos-retail-mirror` threw, its exports vanished, and its live deployed
+`mirrorPosTransactionToRetail` was reported as an orphan candidate.
+
+`PARSE_ERROR` is kept apart from `LOAD_ERROR` for the same reason — "I could not read it" and "it
+threw while executing" are different observations with different remedies, and neither is "it is
+not there".
+
+Current tally: **1,502 RESOLVED · 225 RESOLVED_VIA_BULK_EXPORT · 1 LOAD_ERROR** = 1,728 registered.
+
+The named finding is also carried as structured data in `--json` under `namedFindings`, so nothing
+downstream has to re-derive it from prose.
+
+**Files:** `scripts/function-registration-provenance.js`, `docs/PROVENANCE_GAP_MERCHANT_IDENTITY.md` (new).
+Database changes: none. API changes: none. Security changes: none. Breaking changes: none.
+Deploy: none.
+
 ## 2026-09-21 (145) — Source → registration provenance: the orphan list was mostly an artifact
 
 **Phase 3 of the Functions restructuring. READ-ONLY: no deployment, no deletion, no
