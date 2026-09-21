@@ -92,8 +92,12 @@
     },
     {
       "id": 3,
-      "text": "serving revision minScale is blank/0",
-      "note": "the P0-3 result; already minInstanceCount=0 at the function layer, so the rebuild MATERIALISES it rather than setting it"
+      "text": "BLOCKED: scaling configuration must be owner-adjudicated before this candidate is rebuilt. This assertion no longer states an expected value, because the correct value is an unresolved product decision, not a fact the repository can supply.",
+      "note": "Do not replace this with `minInstances: 1` merely because that is what the source now says. Encoding the newly discovered source state would prematurely decide cold-start latency versus ~708 billable instance-hours per service per month.",
+      "status": "RETRACTED 2026-09-21 — BLOCKING",
+      "retracted_text": "serving revision minScale is blank/0",
+      "retracted_note": "the P0-3 result; already minInstanceCount=0 at the function layer, so the rebuild MATERIALISES it rather than setting it",
+      "retraction": "The previous assertion — that the recovery candidates carried minInstanceCount=0 and that a rebuild would MATERIALISE that rather than set it — was based SOLELY on the GCF layer. It did not inspect source configuration or the serving revision. Source inspection establishes `minInstances: 1` for all six candidates, with explicit latency rationale written into the code, while the serving revisions are pinned at minScale=1. A rebuild would therefore RESTORE the pin, not remove it — reinstating the cost configuration P0-3 set out to eliminate."
     },
     {
       "id": 4,
@@ -125,9 +129,99 @@
   ],
   "required_function_count": 1709,
   "authorization": {
-    "first_rebuild": "NOT AUTHORIZED",
+    "first_rebuild": "NOT AUTHORIZED — additionally BLOCKED by scaling_contract_adjudication until the owner decisions are made and this manifest is re-certified.",
     "batch_rebuild": "NOT AUTHORIZED",
     "p0_4_deletion": "NOT AUTHORIZED",
     "note": "This manifest is a contract, not a permission. Each execution step needs its own authorization."
+  },
+  "scaling_contract_invariant": "A rebuild may NOT proceed when source and serving scaling configuration differ, unless the difference carries an explicit owner adjudication. This catches both directions: source absent with production set (processTypesenseQueue: repo declared no maxInstances, production had 80, the rebuild REMOVED it), and source set with production matching (the six: source min=1, serving min=1 — which is NOT automatically safe, because the value itself is disputed by P0-3).",
+  "scaling_contract_adjudication": {
+    "captured_at": "2026-09-21T10:42:59.357Z",
+    "method": "read-only: source grep at each declaration site, gcloud functions describe, gcloud run revisions describe on the SERVING revision",
+    "observability_note": "The GCF layer reports minInstanceCount=undefined for all seven while BOTH the source and the serving revision say 1. The GCF layer is the representation that agrees with neither — it is an observability discrepancy, NOT evidence that the functions are unpinned. The serving revision is the authoritative statement of what is actually running.",
+    "rows": [
+      {
+        "fn": "processTypesenseQueue",
+        "src_min": null,
+        "src_max": null,
+        "gcf_min": null,
+        "gcf_max": null,
+        "run_min": null,
+        "run_max": null,
+        "verdict": "OWNER DECISION REQUIRED",
+        "detail": "maxInstances=80 existed in production outside repository authority. The 2026-09-21 rebuild removed it; the ceiling is now unset. Decide whether 80 becomes source-authoritative or unbounded scaling is intended."
+      },
+      {
+        "fn": "bookingDispatch",
+        "src_min": 1,
+        "src_max": 80,
+        "gcf_min": null,
+        "gcf_max": 80,
+        "run_min": 1,
+        "run_max": 80,
+        "verdict": "SOURCE-AUTHORITATIVE — scaling-neutral rebuild",
+        "detail": "The only candidate whose source declares BOTH values and matches its serving revision. Still HELD: the manifest itself must be re-certified first."
+      },
+      {
+        "fn": "minishopPage",
+        "src_min": 1,
+        "src_max": null,
+        "gcf_min": null,
+        "gcf_max": 99,
+        "run_min": 1,
+        "run_max": 99,
+        "verdict": "OWNER DECISION REQUIRED",
+        "detail": "pin disputed by P0-3; ceiling 99 undeclared in source"
+      },
+      {
+        "fn": "kass",
+        "src_min": 1,
+        "src_max": null,
+        "gcf_min": null,
+        "gcf_max": 99,
+        "run_min": 1,
+        "run_max": 99,
+        "verdict": "OWNER DECISION REQUIRED",
+        "detail": "pin disputed by P0-3; ceiling 99 undeclared in source"
+      },
+      {
+        "fn": "providerDispatch",
+        "src_min": 1,
+        "src_max": null,
+        "gcf_min": null,
+        "gcf_max": 80,
+        "run_min": 1,
+        "run_max": 80,
+        "verdict": "OWNER DECISION REQUIRED",
+        "detail": "pin disputed by P0-3; ceiling 80 undeclared in source"
+      },
+      {
+        "fn": "onOrderStatusChange",
+        "src_min": 1,
+        "src_max": null,
+        "gcf_min": null,
+        "gcf_max": 99,
+        "run_min": 1,
+        "run_max": 99,
+        "verdict": "OWNER DECISION REQUIRED",
+        "detail": "pin disputed by P0-3; ceiling 99 undeclared in source"
+      },
+      {
+        "fn": "onNewOrderCreated",
+        "src_min": 1,
+        "src_max": null,
+        "gcf_min": null,
+        "gcf_max": 99,
+        "run_min": 1,
+        "run_max": 99,
+        "verdict": "OWNER DECISION REQUIRED",
+        "detail": "pin disputed by P0-3; ceiling 99 undeclared in source"
+      }
+    ],
+    "decisions_required": [
+      "MINIMUM — is the explicit `minInstances: 1` latency requirement still intended despite P0-3's cost finding? The source argues it is; P0-3 argues the opposite. The repository cannot settle this by having been edited more recently.",
+      "MAXIMUM — what ceiling should replace the externally maintained 80/99 values, and should it become source-authoritative? Six of seven never declare one, so every rebuild removes one.",
+      "TYPESENSE — should processTypesenseQueue's former external maxInstances=80 become source-authoritative, or is unbounded scaling intended?"
+    ]
   }
 }
