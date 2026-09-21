@@ -1,3 +1,76 @@
+## 2026-09-21 (127) — Four landings that went unrecorded
+
+**Documentation · commits `84e69a5` `df0c004` `78d1496` `032e88e` · NO GCP MUTATION · NOT DEPLOYED.**
+
+CLAUDE.md requires a CHANGELOG entry with every change. Four commits landed after entry (126)
+without one. This is that record, written after the fact and saying so.
+
+### `84e69a5` — GCP cost architecture evidence reconciled
+
+`GCP_COST_ARCHITECTURE_IMPLEMENTATION.md` (13 grouped locations) and `GCP_COST_ARCHITECTURE_AUDIT.md`
+(4 edits) brought in line with what 2026-09-21 established. Superseded claims struck through and
+annotated rather than deleted; §3's dated 30-day measurements left intact with a dated note beneath
+the table. Two `UNMEASURED` findings became `MEASURED`: Artifact Registry (the zero is real, and it
+is the cleanup policy) and Cloud Build (the global query was empty because Gen2 builds are regional).
+
+Also landed three evidence artifacts: `recovery-baseline-20260921.json` (pre-rebuild describe
+payloads, `raw` authoritative), `recovery-manifest-20260921.json` (the post-checkpoint execution
+contract, which grants no authorization), and `ar-experiment-baseline-20260921.json` (successor
+baseline; the predecessor is preserved unchanged and bound by sha256).
+
+### `df0c004` — Firestore `(default)` index manifest reconciled
+
+**408 -> 414.** Six indexes existed in production and were absent from the manifest, created
+directly and never written back. While undeclared they were deletion candidates, and
+`posPrintJobs(kind, shopId, status, createdAt)` is POS print-job dispatch — the hardware path.
+
+Definitions were copied from the deployed payload, not retyped from prose. That caught one error in
+the P0-8 write-up: `inventory_batches` is deployed as `COLLECTION_GROUP`, not `COLLECTION`.
+
+**No deletion was performed and no deploy was run.** The reconciliation is what removes the deletion
+risk; `firebase deploy --only firestore:indexes --force` would otherwise have destroyed all six.
+
+### `78d1496` — `getReviews` index outage recorded
+
+```
+CODE                requires 4 composite indexes
+REPOSITORY          declares  4 composite indexes   <- already correct
+DEPLOYED FIRESTORE  has       0 of those 4
+```
+
+A deployment-state defect, not an index-definition defect. The four map one-to-one onto the four
+sort branches of the deployed callable (`functions/reviews.js:288-295`). 203 `FAILED_PRECONDITION`
+errors in 30 days, first 2026-08-22, latest 2026-09-21 — continuous and current. Neither the audit
+nor P0-8 caught it because both were looking at scheduled functions; this is a callable.
+
+**Still unrepaired in production.** The repair is a deploy of already-declared indexes.
+
+### `032e88e` — Typesense DLQ `ref: undefined` repaired in source
+
+Assigning `undefined` does not remove a key, and Firestore rejects undefined values. Destructuring
+removes it. `ignoreUndefinedProperties` was deliberately not enabled — a global change that would
+swallow undefined values across every Firestore write in the codebase.
+
+Worse than its 0.7% error rate: `await ref.delete()` was never reached, so exhausted items were
+neither dead-lettered nor removed. **The DLQ has never received an item.**
+
+Regression `scripts/test-typesense-dlq-undefined-ref.js`, byte-identical throughout: **6/1 -> 7/0**,
+positive control green in both runs.
+
+**Source only. The deployed function still carries the defect.**
+
+### Changes
+
+```
+Database    none
+API         none
+Breaking    none
+Security    none
+GCP         nothing mutated by this workstream
+Deployment  NONE — getReviews indexes and the Typesense fix both await a deploy that
+            the Artifact Registry freeze forbids. This entry records repairs, not fixes.
+```
+
 ## 2026-09-21 (126) — The repair arrived from outside the workstream
 
 **Documentation · commit `1a8401b` · NO GCP MUTATION BY THIS WORKSTREAM · NOT DEPLOYED.**
