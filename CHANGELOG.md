@@ -1,3 +1,101 @@
+## 2026-09-21 (126) — The repair arrived from outside the workstream
+
+**Documentation · commit `1a8401b` · NO GCP MUTATION BY THIS WORKSTREAM · NOT DEPLOYED.**
+
+Entry (125) and commit `2040204` said the Artifact Registry repair was **designed and not applied**,
+and that no Cloud Function should be rebuilt. Both statements were true when they were written.
+
+Between `2040204` and `1a8401b`, another agent applied the repair and rebuilt one function. **No
+commit records that action** — it exists only in infrastructure and in memory — so the notice
+corrected here is the repository's only account of it.
+
+```
+2040204   cause proven · repair designed, NOT applied · do not rebuild
+   │
+   │      04:21:47Z  image built          ─┐  externally executed,
+   │      04:22:04Z  revision Ready=True   │  outside this workstream
+   │      04:35:43Z  us-central1 policy    │  and outside Git
+   │      04:36:22Z  us-east1   policy    ─┘
+   │
+1a8401b   the repair landed from outside this workstream
+```
+
+**The chronology is deliberate.** `2040204` is not amended. A commit that was accurate at its
+timestamp stays as it was written, and the gap between the two commits is the provenance of an
+action this workstream did not take.
+
+### What is live now — verified read-only, twice, before writing
+
+```
+both repos    firebase-functions-cleanup   DELETE  olderThan 86400s  tagState ANY   (unchanged)
+              sokoni-recovery-protection   KEEP    mostRecentVersions.keepCount 10  (new)
+              cleanupPolicyDryRun unset  =  ENFORCING
+
+specimen      profilegetpublicprofile-00007-xaz   Ready=True   04:22:04Z
+              image sha256:133a75e9…  built 04:21:47Z  pinned BY DIGEST, not by tag
+functions     1,709 — unchanged. A revision was replaced; none added, none deleted.
+```
+
+**The rebuild preceded the policy repair by 14 minutes.** It was rebuilt while the image was well
+inside the 24h window, so the DELETE policy had not yet made it eligible. That is the sequencing
+defect the notice warns about — recorded, not endorsed.
+
+### PROTECTION IS CONFIGURED, NOT PROVEN
+
+This distinction is the whole state of the gate and must not be collapsed:
+
+```
+KEEP policy exists          PROVEN   — observed live, both repositories
+KEEP policy is enforcing    PROVEN   — cleanupPolicyDryRun unset
+KEEP survives a sweep       UNPROVEN — no sweep has yet been applicable to it
+```
+
+Earliest eligibility is **~2026-09-22T04:21:47Z**, and the sweep may run later than that. The
+checkpoint is **the first applicable sweep after** that moment, not the moment itself. Nothing here
+certifies the repair.
+
+### Two command semantics that are traps
+
+```
+--policy     is "set or update" and may REPLACE the whole rule set
+             -> any policy file must carry BOTH the DELETE and the KEEP rule
+--dry-run    is NOT a preview. It is "disable deleting images according to cleanup
+             policies" — it stops enforcement
+```
+
+The `--dry-run` misreading was mine: I proposed it as the first step of a verification gate, on the
+strength of the flag's name rather than its description. Had that gate been authorized as written,
+step one would have silently disabled the DELETE rule instead of previewing it.
+
+### The live specimen replaces canary #2
+
+The original canary answered *"does the old configuration eventually delete an unowned artifact?"* —
+yes, at 28.1h. The specimen can answer *"does the repaired policy preserve an eligible image?"* —
+pending. Manufacturing a second inert artifact now would add a moving part without answering a
+question the specimen cannot. Canary #2 stays **defined, unnecessary, and NOT authorized**, and the
+specimen **must not be deleted, re-tagged, rebuilt or otherwise disturbed**.
+
+### Files affected
+
+```
+CLAUDE.md   seven sentence-scoped edits, lines 421-474   CRLF preserved
+AGENTS.md   the same seven, at its narrower wrap, 9-68   LF   preserved
+```
+
+Both files validated before either was written; containment asserted so no line outside the notice
+block was touched.
+
+### Changes
+
+```
+Database    none
+API         none
+Breaking    none
+Security    none — the notice narrows: further rebuilds frozen, specimen protected,
+            canary #2 and policy changes still unauthorized
+GCP         nothing mutated by this workstream; the live state is recorded, not changed
+```
+
 ## 2026-09-21 (125) — The registry purge had a name all along
 
 **Forensics · durable boundary corrected · NO GCP MUTATION · NOT DEPLOYED.**
