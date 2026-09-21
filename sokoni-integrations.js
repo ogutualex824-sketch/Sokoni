@@ -202,6 +202,160 @@
 
   function _statusFor(id) { return _data.status.byId[id] || null; }
 
+  /* ══ THE OPERATOR CHIP ════════════════════════════════════════════════
+     One word an operator can scan, DERIVED at render time from evidence that
+     already exists. It introduces no persisted field and no second
+     evidence-state system: `ok: null | true | false`, the credential
+     vocabulary, the probe stages and the freshness window remain the only
+     authorities. This is a projection of them, nothing more.
+
+     WHY IT EXISTS
+     Until now a rail that was merely catalogued looked the same as one a probe
+     had actually reached. The catalogue's lifecycle word says what we BELIEVE;
+     it does not say what was OBSERVED. An operator scanning the grid could not
+     tell those apart, which is the whole reason for adding this.
+
+     PRECEDENCE IS EXPLICIT AND FIRST-MATCH.
+     Ordering is the control. Measured outcomes win over explanations for the
+     absence of one, so a stale or refused rail can never fall through into
+     LIVE. Read this list top-down; the first that matches is the answer.
+
+       1  EVIDENCE UNREADABLE  the status read FAILED. We know nothing, and
+                               that is different from knowing there is nothing
+       2  FAILED               a probe ran and the rail refused or broke
+       3  DEGRADED             reachable, but a supported stage came back false
+       4  STALE                it WAS connected, and the observation has aged
+                               past the freshness window
+       5  LIVE                 connected, and the observation is fresh
+       6  GATED                deliberately closed: quarantined, frozen, retired
+       7  NOT CONFIGURED       a required credential is demonstrably absent
+       8  REFUSED BY DESIGN    a probe exists and deliberately will not run
+       9  ACTIVE               operational evidence exists, but no live probe
+      10  NOT PROBED           no live evidence path at all
+
+     STALE BEFORE LIVE (4 before 5) is deliberate: a connected reading that has
+     aged out is not a current success, and ordering it after LIVE would let an
+     old observation keep a green chip indefinitely.
+
+     GATED AFTER the measured states (6 after 2-5) is also deliberate: if a
+     frozen rail somehow produced a failed probe, the FAILURE is the more urgent
+     fact. Freezing describes our intent, not the rail's condition.
+
+     REFUSED BY DESIGN NEEDS A FIELD THE BACKEND DOES NOT YET SEND.
+     `notRunReason` (`no_safe_probe`, `requires_secret_binding`) is set on a
+     PROBE result but is not carried on the status record. Verified 2026-09-21:
+     intasend-collections (refuses because probing would move money), algolia
+     (needs a secret bound to the probe function) and cloudflare (no executor
+     at all) are INDISTINGUISHABLE here — identical health, identical
+     capabilities, identical note.
+
+     So the branch is implemented and certified against a record that supplies
+     the field, and in production it simply never matches; those rails render
+     NOT PROBED, which is true but less precise than it could be. Inventing the
+     distinction from `capabilities` would be a guess wearing the authority of a
+     measurement — the absence of `test` conflates four separate reasons. The
+     fix is one field on the status resolver, and it is out of this scope. */
+
+  var CHIP_META = {
+    live:        { label: 'LIVE',              cls: 'healthy'  },
+    active:      { label: 'ACTIVE',            cls: 'healthy'  },
+    stale:       { label: 'STALE',             cls: 'warn'     },
+    degraded:    { label: 'DEGRADED',          cls: 'degraded' },
+    failed:      { label: 'FAILED',            cls: 'error'    },
+    gated:       { label: 'GATED',             cls: 'unknown'  },
+    unconfigured:{ label: 'NOT CONFIGURED',    cls: 'error'    },
+    refused:     { label: 'REFUSED BY DESIGN', cls: 'unknown'  },
+    unprobed:    { label: 'NOT PROBED',        cls: 'unknown'  },
+    unreadable:  { label: 'EVIDENCE UNREADABLE', cls: 'unknown' },
+  };
+
+  /* Lifecycles that describe a DELIBERATELY closed rail. Mirrors the server's
+     NON_PROBEABLE_LIFECYCLES plus `retired`; if that list moves, move this. */
+  var GATED_LIFECYCLES = ['quarantined', 'frozen', 'retired'];
+
+  /** The chip for one catalogue entry. Returns { key, label, cls, why }.
+      `why` is rendered as the title so the derivation is inspectable rather
+      than something an operator has to take on trust. */
+  function _chip(entry) {
+    if (!entry) return null;
+    var r = _statusFor(entry.id);
+
+    /* 1. The read itself failed. Nothing below can be trusted. */
+    if (_data.status.ok === false) {
+      return _chipOf('unreadable',
+        'The integration status could not be read, so no state can be derived. ' +
+        'This is a failed read, not a finding about the rail.');
+    }
+
+    if (r) {
+      /* 2-3. A probe ran and produced an outcome. */
+      if (r.health === 'failed') {
+        return _chipOf('failed', 'A probe ran and the rail failed or refused the call.');
+      }
+      if (r.health === 'degraded') {
+        return _chipOf('degraded',
+          'Reachable, but a stage the rail SUPPORTS came back false. Working in part.');
+      }
+
+      /* 4-5. Connected — but is the observation still current? */
+      if (r.health === 'connected') {
+        var at = _ms(r.probedAt) || _ms(r.checkedAt);
+        if (at && (Date.now() - at) > STALE_MS) {
+          return _chipOf('stale',
+            'It WAS connected, but the observation has aged past the freshness window. ' +
+            'An old success is not a current one.');
+        }
+        return _chipOf('live', 'A current probe reached this rail successfully.');
+      }
+    }
+
+    /* 6. Deliberately closed. */
+    if (GATED_LIFECYCLES.indexOf(entry.status) !== -1) {
+      return _chipOf('gated',
+        'Deliberately closed (' + entry.status + '). No probe is expected, and ' +
+        'reopening it is a decision rather than a fix.');
+    }
+
+    /* 7. A credential the rail requires is demonstrably absent. */
+    if (r && (r.credentialState === 'missing' || r.credentialState === 'partial')) {
+      return _chipOf('unconfigured',
+        'A required credential is absent (' + r.credentialState + '). This is a ' +
+        'CONFIGURATION fact, not a failed call — nothing was attempted.');
+    }
+
+    /* 8. A probe exists and deliberately will not run. Requires a field the
+          status record does not yet carry; see the note above. */
+    if (r && r.notRunReason) {
+      return _chipOf('refused',
+        'A probe exists and deliberately will not run (' + r.notRunReason + '). ' +
+        'Refusing is the correct behaviour, not a gap.');
+    }
+
+    /* 9. Operational evidence exists, but nothing probes it live. */
+    if (entry.health && entry.health.source) {
+      return _chipOf('active',
+        'Operational evidence exists at ' + entry.health.source + ', but no live ' +
+        'probe runs against this rail. Catalogued and evidenced, not measured.');
+    }
+
+    /* 10. Nothing. */
+    return _chipOf('unprobed',
+      'No live evidence path exists for this rail. Nothing has been measured, ' +
+      'which is NOT the same as something having been measured and found absent.');
+  }
+
+  function _chipOf(key, why) {
+    var m = CHIP_META[key];
+    return { key: key, label: m.label, cls: m.cls, why: why };
+  }
+
+  function _chipHtml(entry) {
+    var c = _chip(entry);
+    if (!c) return '';
+    return '<span class="sic-chipstate ' + c.cls + '" title="' + _esc(c.why) + '">' +
+           _esc(c.label) + '</span>';
+  }
+
   /* ── Helpers ─────────────────────────────────────────────────────────── */
 
   function _esc(v) {
@@ -219,6 +373,16 @@
     if (typeof v === 'number') return v;
     if (typeof v.toMillis === 'function') { try { return v.toMillis(); } catch (e) { return 0; } }
     if (typeof v.seconds === 'number') return v.seconds * 1000;
+    /* ISO STRINGS. The backend status record carries probedAt/checkedAt as ISO
+       strings, not Firestore timestamps — the other callers of this helper pass
+       timestamps, which is why the string case was never needed before.
+
+       Returning 0 for a string is not harmless here: the staleness check reads
+       `if (at && aged)`, so a zero made the age test unreachable and a CONNECTED
+       rail could never go stale. An old success would have kept a green chip
+       indefinitely, which is the exact failure the chip was added to prevent.
+       Caught by certification on the first run of F1. */
+    if (typeof v === 'string') { var t = Date.parse(v); return isNaN(t) ? 0 : t; }
     return 0;
   }
 
@@ -375,6 +539,18 @@
       '.sic-chip{display:inline-block;background:var(--sic-surface2);border:1px solid var(--sic-border);',
       'border-radius:6px;padding:2px 8px;font-size:11px;margin:0 4px 4px 0}',
       '.sic-chip.adhoc{border-color:rgba(255,152,0,.4);color:var(--sic-warn)}',
+      /* The observed-state chip. Deliberately typographically distinct from the
+         lifecycle badge beside it — they are different claims and must not read
+         as one control. Uppercase, tighter, no status dot. */
+      '.sic-chipstate{display:inline-block;padding:1px 7px;border-radius:4px;',
+      'font-size:10px;font-weight:700;letter-spacing:.04em;border:1px solid;',
+      'text-transform:uppercase;white-space:nowrap}',
+      '.sic-chipstate.healthy{color:var(--sic-ok);border-color:var(--sic-ok)}',
+      '.sic-chipstate.warn{color:var(--sic-warn);border-color:var(--sic-warn)}',
+      '.sic-chipstate.degraded{color:var(--sic-warn);border-color:var(--sic-warn)}',
+      '.sic-chipstate.error{color:var(--sic-bad);border-color:var(--sic-bad)}',
+      '.sic-chipstate.unknown{color:var(--sic-muted);border-color:var(--sic-border)}',
+      '.sic-ic-state{margin:2px 0 6px}',
       /* A figure that is a way INTO its evidence, not a dead end. Styled as a
          number first and a control second — it must not read as a button that
          does something to the infrastructure. */
@@ -989,6 +1165,10 @@
             '<div class="sic-sub">' + _esc(i.vendor) + '</div></div>' +
             '<span class="sic-badge ' + m.cls + '"><span class="sic-dot"></span>' + _esc(m.label) + '</span>' +
             '</div>' +
+            /* The OBSERVED state, beside the DECLARED lifecycle. The two are
+               different claims: the badge says what the catalogue believes,
+               the chip says what the evidence shows. */
+            '<div class="sic-ic-state">' + _chipHtml(i) + '</div>' +
             '<p class="sic-ic-sum">' + _esc(i.summary) + '</p>' +
             '<div class="sic-ic-foot">' +
             '<span class="sic-sig muted">' + _esc(i.direction) + '</span>' +
@@ -2189,8 +2369,14 @@
       '<div><h3>' + _esc(i.name) + '</h3><div class="sic-sub">' + _esc(i.vendor) + '</div></div>' +
       '<button class="sic-x" aria-label="Close detail" onclick="SokoniIntegrations.select(null)">✕</button></div>' +
 
-      '<div class="sic-kv"><span>Status</span><strong><span class="sic-badge ' + m.cls +
+      '<div class="sic-kv"><span>Declared lifecycle</span><strong><span class="sic-badge ' + m.cls +
       '"><span class="sic-dot"></span>' + _esc(m.label) + '</span></strong></div>' +
+      '<div class="sic-kv"><span>Observed state</span><strong>' + _chipHtml(i) + '</strong></div>' +
+      ((function () {
+        var c = _chip(i);
+        return c ? '<p class="sic-note"><strong>Why ' + _esc(c.label) + ':</strong> ' +
+                   _esc(c.why) + '</p>' : '';
+      })()) +
       '<div class="sic-kv"><span>Direction</span><strong>' + _esc(i.direction) + '</strong></div>' +
       '<div class="sic-kv"><span>Category</span><strong>' + _esc(i.category) + '</strong></div>' +
       '<div class="sic-kv"><span>Live signal</span><strong>' + _liveSignal(i) + '</strong></div>' +

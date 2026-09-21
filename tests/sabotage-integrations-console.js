@@ -250,6 +250,52 @@ const MUTATIONS = [
     to:   "        '<p class=\"sic-note\">An unmatched secret is an ORPHAN and should be removed, not something ' +",
     expect: /D22 and explicitly called not a fault/ },
 
+  /* ── The observed-state chip ──────────────────────────────────────────
+     PRECEDENCE is the control. Each mutation below removes one ordering
+     guarantee, and each would let a rail render better than its evidence. */
+
+  { name: 'S35 a stale observation keeps a LIVE chip',
+    file: 'sokoni-integrations.js',
+    from: "        if (at && (Date.now() - at) > STALE_MS) {",
+    to:   "        if (false) {",
+    expect: /F1 cloud-storage renders STALE|F2 STALE is not LIVE/ },
+
+  { name: 'S36 the staleness clock cannot read the timestamp it is given',
+    file: 'sokoni-integrations.js',
+    from: "    if (typeof v === 'string') { var t = Date.parse(v); return isNaN(t) ? 0 : t; }",
+    to:   "",
+    expect: /F1 cloud-storage renders STALE|F2 STALE is not LIVE/ },
+
+  { name: 'S37 a failed status read is reported as NOT PROBED',
+    file: 'sokoni-integrations.js',
+    from: "    if (_data.status.ok === false) {\n      return _chipOf('unreadable',",
+    to:   "    if (false) {\n      return _chipOf('unreadable',",
+    expect: /F4 a rail reads EVIDENCE UNREADABLE, not NOT PROBED/ },
+
+  { name: 'S38 an absent credential is reported as a failed call',
+    file: 'sokoni-integrations.js',
+    from: "    if (r && (r.credentialState === 'missing' || r.credentialState === 'partial')) {",
+    to:   "    if (false) {",
+    expect: /F1 algolia renders NOT CONFIGURED|F2 NOT CONFIGURED is not FAILED/ },
+
+  { name: 'S39 a rail with no evidence path is reported as ACTIVE',
+    file: 'sokoni-integrations.js',
+    from: "    if (entry.health && entry.health.source) {",
+    to:   "    if (true) {",
+    expect: /F1 cloudflare renders NOT PROBED|F2 NOT PROBED is not ACTIVE/ },
+
+  { name: 'S40 a deliberately closed rail loses its GATED chip',
+    file: 'sokoni-integrations.js',
+    from: "    if (GATED_LIFECYCLES.indexOf(entry.status) !== -1) {",
+    to:   "    if (false) {",
+    expect: /F1 pos-card-terminal renders GATED/ },
+
+  { name: 'S41 the chip stops explaining how it was derived',
+    file: 'sokoni-integrations.js',
+    from: "    return '<span class=\"sic-chipstate ' + c.cls + '\" title=\"' + _esc(c.why) + '\">' +",
+    to:   "    return '<span class=\"sic-chipstate ' + c.cls + '\" title=\"\">' +",
+    expect: /F1 the chip carries WHY it was derived/ },
+
   { name: 'S11 an absent GCP reader is rendered as an empty estate',
     file: 'sokoni-integrations.js',
     from: "        '<p class=\"sic-note\"><strong>No infrastructure figure is shown, because none was ' +",
@@ -266,7 +312,7 @@ function runSuite() {
   }
 }
 
-let inert = 0, caught = 0;
+let inert = 0, caught = 0, degraded = 0;
 console.log('\nPRE-FLIGHT SABOTAGE \u2014 each mutation must be CAUGHT\n' + '='.repeat(60));
 
 for (const m of MUTATIONS) {
@@ -290,15 +336,23 @@ for (const m of MUTATIONS) {
   } else {
     console.log('  ~ ' + m.name + '  \u2014 suite failed, but NOT on the expected case');
     console.log('      ' + (r.out.split('\u2717')[1] || '').trim().slice(0, 120));
-    caught++;
+    /* COUNTED SEPARATELY, not as a catch. Until 2026-09-21 this incremented
+       `caught` and was never reported, so the summary read `caught: 41 inert: 0`
+       while fourteen vectors were degraded \u2014 the guard they name had not fired
+       and something else had. A summary that cannot express the weaker outcome
+       reports it as the stronger one, which is how a reader (me) came to state
+       "0 degraded" from a line that never measured it. */
+    degraded++;
   }
 }
 
 console.log('='.repeat(60));
-console.log('  caught: ' + caught + '   inert: ' + inert);
+console.log('  caught: ' + caught + '   inert: ' + inert + '   degraded: ' + degraded);
 
 /* Restoration proof: the suite must be green again after every mutation is
    reverted. Otherwise a mutation was stranded. */
 const after = runSuite();
 console.log('  post-restore suite: ' + (after.code === 0 ? 'GREEN (nothing stranded)' : 'RED \u2014 A MUTATION WAS STRANDED'));
-process.exit(inert === 0 && after.code === 0 ? 0 : 1);
+/* A degraded vector FAILS the run. It is a weaker result than a clean catch:
+   the guard it names did not fire, so it proves nothing about that guard. */
+process.exit(inert === 0 && degraded === 0 && after.code === 0 ? 0 : 1);

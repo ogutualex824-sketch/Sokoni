@@ -62,6 +62,43 @@ Every figure comes from a canonical Firestore collection and nothing else.
 No Cloud Function and no rules change is required, which matters while the
 Artifact Registry forensics freeze stands.
 
+### The observed-state chip
+
+Beside each catalogue entry's DECLARED lifecycle sits what the evidence actually
+shows. Derived at render time — **no persisted field, no second evidence-state
+system**. Precedence is first-match and the order is the control:
+
+```
+ 1 EVIDENCE UNREADABLE   2 FAILED    3 DEGRADED   4 STALE      5 LIVE
+ 6 GATED                 7 NOT CONFIGURED         8 REFUSED BY DESIGN
+ 9 ACTIVE               10 NOT PROBED
+```
+
+**STALE ranks above LIVE** so an aged observation cannot keep a green chip.
+**GATED ranks below the measured states** because a failure on a frozen rail is
+still the more urgent fact. Each chip carries *why* it was derived as its title.
+
+The four distinctions that justify the chip — and that `F2` proves on real
+cards, not in a lookup table:
+
+| Not the same as | Because |
+| --- | --- |
+| NOT PROBED ≠ ACTIVE | one has an evidence source, the other has none |
+| REFUSED BY DESIGN ≠ NOT PROBED | refusing is correct behaviour, not a gap |
+| NOT CONFIGURED ≠ FAILED | nothing was attempted; it is a config fact |
+| STALE ≠ LIVE | an old success is not a current one |
+
+> **REFUSED BY DESIGN cannot fire in production yet.** `notRunReason` is set on
+> a probe result and is not carried on the status record, so a rail that refuses
+> by design is indistinguishable from one with no executor. The branch is
+> implemented and certified; those rails render NOT PROBED until the status
+> resolver carries that field. Deriving it from `capabilities` would be a guess —
+> the absence of `test` conflates four separate reasons.
+
+**No owner field, and no entry-level "last known good".** Ownership is a
+governance decision the census cannot infer; freshness stays per-observation
+rather than being manufactured at entry level.
+
 ### Unknown is not zero
 
 A read that **fails** renders an em dash and names the unavailable source. A read
@@ -329,6 +366,32 @@ then the panel renders *"No infrastructure figure is shown, because none was
 obtained"* — no counts, no `Observed` badge, no `Measured zero` badge. `D12`
 fails if any appear. Every GCP service stays individually addressable.
 
+## Running the sabotage suites safely
+
+A sabotage suite **edits real source in place** and restores it. That makes it
+destructive if mishandled, and on 2026-09-21 it was: two runs started
+concurrently, their restores interleaved, and **four defects were left live** in
+`sokoni-integrations.js` — including `_count()` returning a fabricated `0`.
+
+```
+NEVER run two sabotage suites at once
+NEVER run one in a polling loop
+NEVER kill one mid-flight — the mutation is stranded and the next run adopts it
+ALWAYS run scripts/check-stranded-mutations.js before trusting a result
+```
+
+`check-stranded-mutations.js` reads every manifest and asserts each original
+anchor is present. An absent original means a stranded defect **or** a drifted
+anchor whose vector has silently gone inert.
+
+**It is not sufficient on its own.** It checks the anchor exists *somewhere* in
+the file, not in the right place — a restoration applied to the wrong panel
+passed the scan and was caught only by certification. Run both.
+
+A **degraded** vector (`~`) is one whose named guard did not fire. It proves
+nothing about that guard and now fails the run; until 2026-09-21 it was counted
+as a clean catch and never reported.
+
 ## Relationship census — the Step 1 gate
 
 ```
@@ -568,8 +631,9 @@ real finding rather than an empty catalogue.
 ## Certification
 
 ```
-node tests/certify-integrations-console.js        # 1002 assertions, 0 failures
-node tests/sabotage-integrations-console.js       # 34 mutations, 34 caught, 0 inert
+node tests/certify-integrations-console.js        # 1031 assertions, 0 failures
+node scripts/check-stranded-mutations.js          # 65 vectors, 0 problems — RUN FIRST
+node tests/sabotage-integrations-console.js       # 41 caught, 0 inert, 0 degraded
 node scripts/test-gcp-evidence.js                 # 202 passed
 node tests/sabotage-gcp-evidence.js               # 5 mutations, 5 caught, 0 inert
 node scripts/test-integration-registry-parity.js  # 26 passed

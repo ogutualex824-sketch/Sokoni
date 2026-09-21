@@ -244,6 +244,30 @@ function pillValue(html, tabId) {
   return m ? m[1] : null;
 }
 
+/* ── The observed-state chip, scoped to ONE card ──────────────────────
+   Scoped by the card's own selectCatalogue() handle and cut at the next card,
+   so a neighbouring card's chip — or any prose elsewhere on the page — cannot
+   satisfy an assertion about this one. Returns null when the card is absent,
+   so a missing card cannot masquerade as a chip-less card. */
+function cardChip (html, id) {
+  const open = html.indexOf("selectCatalogue('" + id + "')");
+  if (open === -1) return null;
+  const next = html.indexOf('<button class="sic-ic"', open);
+  const card = html.slice(open, next === -1 ? undefined : next);
+  const m = /<span class="sic-chipstate [^"]*"[^>]*>([^<]*)<\/span>/.exec(card);
+  return m ? m[1].trim() : null;
+}
+
+/** The title text carrying the derivation, for the same card. */
+function cardChipWhy (html, id) {
+  const open = html.indexOf("selectCatalogue('" + id + "')");
+  if (open === -1) return null;
+  const next = html.indexOf('<button class="sic-ic"', open);
+  const card = html.slice(open, next === -1 ? undefined : next);
+  const m = /<span class="sic-chipstate [^"]*" title="([^"]*)"/.exec(card);
+  return m ? m[1] : null;
+}
+
 /* Pull the rendered VALUE of a GCP metric row, with markup stripped.
    A figure may be wrapped in a link button — that is a certified behaviour, not
    an accident — so matching on a bare `<strong>0` would fail on correct output.
@@ -313,6 +337,64 @@ function statValue(html, label) {
   const webhookHtml = await render(FULL, (api) => api.tab('webhooks'));
   const credsHtml   = await render(FULL, (api) => api.tab('credentials'));
   const catHtml     = await render(FULL, (api) => api.tab('catalogue'));
+
+  /* ── Observed-state chip fixtures ────────────────────────────────────
+     ONE render carrying every state at once, on real catalogue entries, so the
+     states can be told apart side by side rather than across separate runs.
+     Each record is the shape resolveIntegrationStatus returns. */
+  const rec = (id, o) => Object.assign({
+    id, credentialState: 'configured', health: 'unknown', healthNote: '',
+    stages: {}, stageSupport: {}, capabilities: ['view'], probedAt: '', checkedAt: '',
+  }, o);
+
+  const CHIP_STATUS = { integrations: [
+    /* a probe ran and succeeded, recently */
+    rec('firestore',  { health: 'connected', credentialState: 'not-applicable',
+                        probedAt: new Date(FRESH).toISOString() }),
+    /* connected, but the observation has aged out */
+    rec('cloud-storage', { health: 'connected', credentialState: 'not-applicable',
+                        probedAt: new Date(STALE).toISOString() }),
+    /* reachable, a supported stage came back false */
+    rec('typesense',  { health: 'degraded' }),
+    /* a probe ran and the rail refused */
+    rec('sendgrid',   { health: 'failed' }),
+    /* a required credential is absent — NOT a failed call */
+    rec('algolia',    { credentialState: 'missing' }),
+    /* a probe exists and deliberately will not run. Needs notRunReason, which
+       the status resolver does not yet send — see the note in the module. */
+    rec('intasend-collections', { notRunReason: 'no_safe_probe' }),
+    /* operational evidence exists (health.source), but nothing probes it */
+    rec('platform-registry', {}),
+    /* nothing at all */
+    rec('cloudflare', { credentialState: 'not-applicable' }),
+    /* deliberately closed */
+    rec('pos-card-terminal', { credentialState: 'disabled' }),
+  ], counts: {}, checkedAt: new Date(NOW).toISOString() };
+
+  const chipHtml = await renderWith(FULL,
+    { getIntegrationStatus: () => Promise.resolve(CHIP_STATUS) },
+    (api) => api.tab('catalogue'));
+
+  /* THE MUTATION: the same rails, evidence changed. The chip must follow the
+     evidence rather than the catalogue, which is unchanged between the two. */
+  const CHIP_MUTATED = { integrations: [
+    /* was LIVE -> now failed */
+    rec('firestore',  { health: 'failed', credentialState: 'not-applicable' }),
+    /* was STALE -> now a fresh connection */
+    rec('cloud-storage', { health: 'connected', credentialState: 'not-applicable',
+                        probedAt: new Date(FRESH).toISOString() }),
+    /* was NOT CONFIGURED -> credentials now present, still unprobed */
+    rec('algolia',    { credentialState: 'configured' }),
+  ], counts: {}, checkedAt: new Date(NOW).toISOString() };
+
+  const chipMutatedHtml = await renderWith(FULL,
+    { getIntegrationStatus: () => Promise.resolve(CHIP_MUTATED) },
+    (api) => api.tab('catalogue'));
+
+  /* The status read itself failing is a tenth state: we know NOTHING. */
+  const chipUnreadableHtml = await renderWith(FULL,
+    { getIntegrationStatus: () => Promise.reject(new Error('PERMISSION_DENIED')) },
+    (api) => api.tab('catalogue'));
 
   /* ── Observed-activity fixtures ──────────────────────────────────────
      intasend-collections declares payments / orders / posPayments. Each is
@@ -1593,6 +1675,114 @@ function statValue(html, label) {
     ok('D12 control: the healthy render DID contain a real index figure',
        metricValue(dbSection(gcpHtml, 'sokoni-ops'), 'Indexes READY') === '54',
        JSON.stringify(metricValue(dbSection(gcpHtml, 'sokoni-ops'), 'Indexes READY')));
+  });
+
+  /* ── F1–F4 — THE OBSERVED-STATE CHIP ───────────────────────────────
+     The chip exists because a rail that was merely CATALOGUED looked identical
+     to one a probe had actually reached. Every assertion below reads the chip
+     out of the REAL card in the REAL rendered console, scoped by that card's
+     own handle — never from the projection function and never from prose. */
+  runCase('F1 every state renders its own chip, on the right card', () => {
+    ok('F1 control: the catalogue grid rendered', /sic-ic/.test(chipHtml));
+    /* CONTROL ON THE EXTRACTOR — a card that does not exist returns null, so a
+       missing card can never be mistaken for a chip-less one. */
+    ok('F1 control: the extractor returns null for an absent card',
+       cardChip(chipHtml, 'no-such-integration') === null);
+
+    const expect = {
+      'firestore':            'LIVE',
+      'cloud-storage':        'STALE',
+      'typesense':            'DEGRADED',
+      'sendgrid':             'FAILED',
+      'algolia':              'NOT CONFIGURED',
+      'intasend-collections': 'REFUSED BY DESIGN',
+      'platform-registry':    'ACTIVE',
+      'cloudflare':           'NOT PROBED',
+      'pos-card-terminal':    'GATED',
+    };
+    Object.keys(expect).forEach((id) => {
+      ok('F1 ' + id + ' renders ' + expect[id],
+         cardChip(chipHtml, id) === expect[id],
+         JSON.stringify(cardChip(chipHtml, id)));
+    });
+
+    /* The derivation is inspectable, not something to take on trust. */
+    ok('F1 the chip carries WHY it was derived',
+       /aged past the freshness window/.test(cardChipWhy(chipHtml, 'cloud-storage') || ''),
+       cardChipWhy(chipHtml, 'cloud-storage'));
+  });
+
+  runCase('F2 the four confusable pairs are genuinely different', () => {
+    /* These four are the reason the chip exists. Each pair must differ on a
+       card, not merely in a lookup table. */
+    ok('F2 NOT PROBED is not ACTIVE',
+       cardChip(chipHtml, 'cloudflare') !== cardChip(chipHtml, 'platform-registry'));
+    ok('F2 REFUSED BY DESIGN is not NOT PROBED',
+       cardChip(chipHtml, 'intasend-collections') !== cardChip(chipHtml, 'cloudflare'));
+    ok('F2 NOT CONFIGURED is not FAILED',
+       cardChip(chipHtml, 'algolia') !== cardChip(chipHtml, 'sendgrid'));
+    ok('F2 STALE is not LIVE',
+       cardChip(chipHtml, 'cloud-storage') !== cardChip(chipHtml, 'firestore'));
+
+    /* And none of the four collapses into the same WORD by accident. */
+    const four = ['cloudflare', 'platform-registry', 'intasend-collections',
+                  'algolia', 'sendgrid', 'cloud-storage', 'firestore']
+      .map((id) => cardChip(chipHtml, id));
+    ok('F2 control: all seven cards produced a chip', four.every((x) => !!x), four.join(','));
+    ok('F2 the distinct states are distinct words',
+       new Set(four).size === 7, four.join(','));
+
+    /* NOT CONFIGURED must say it is a configuration fact, not a failed call —
+       the distinction that makes it different from FAILED. */
+    ok('F2 NOT CONFIGURED says nothing was attempted',
+       /nothing was attempted/i.test(cardChipWhy(chipHtml, 'algolia') || ''),
+       cardChipWhy(chipHtml, 'algolia'));
+    /* NOT PROBED must say the absence is unmeasured, not measured-absent. */
+    ok('F2 NOT PROBED says nothing was measured',
+       /NOT the same as something having been measured/.test(
+         cardChipWhy(chipHtml, 'cloudflare') || ''),
+       cardChipWhy(chipHtml, 'cloudflare'));
+  });
+
+  runCase('F3 the chip follows the EVIDENCE, not the catalogue', () => {
+    /* The catalogue is byte-identical between the two renders. Only the status
+       record changed, so any chip that moved did so because of evidence. */
+    ok('F3 LIVE becomes FAILED when the probe fails',
+       cardChip(chipHtml, 'firestore') === 'LIVE' &&
+       cardChip(chipMutatedHtml, 'firestore') === 'FAILED',
+       cardChip(chipHtml, 'firestore') + ' -> ' + cardChip(chipMutatedHtml, 'firestore'));
+    ok('F3 STALE becomes LIVE when the observation is fresh',
+       cardChip(chipHtml, 'cloud-storage') === 'STALE' &&
+       cardChip(chipMutatedHtml, 'cloud-storage') === 'LIVE',
+       cardChip(chipHtml, 'cloud-storage') + ' -> ' + cardChip(chipMutatedHtml, 'cloud-storage'));
+    ok('F3 NOT CONFIGURED becomes NOT PROBED once credentials exist',
+       cardChip(chipHtml, 'algolia') === 'NOT CONFIGURED' &&
+       cardChip(chipMutatedHtml, 'algolia') === 'NOT PROBED',
+       cardChip(chipHtml, 'algolia') + ' -> ' + cardChip(chipMutatedHtml, 'algolia'));
+
+    /* NEGATIVE CONTROL — a card whose evidence did NOT change must not move.
+       Without this, a chip that simply re-rendered differently would pass. */
+    ok('F3 control: a card with unchanged evidence keeps its chip',
+       cardChip(chipMutatedHtml, 'pos-card-terminal') === 'GATED',
+       cardChip(chipMutatedHtml, 'pos-card-terminal'));
+  });
+
+  runCase('F4 a failed status read is not a finding about any rail', () => {
+    ok('F4 control: the grid still rendered', /sic-ic/.test(chipUnreadableHtml));
+    /* Every card must say the EVIDENCE is unreadable — not that the rail is
+       unprobed, which would be a claim we have no basis for. */
+    ok('F4 a rail reads EVIDENCE UNREADABLE, not NOT PROBED',
+       cardChip(chipUnreadableHtml, 'firestore') === 'EVIDENCE UNREADABLE',
+       cardChip(chipUnreadableHtml, 'firestore'));
+    ok('F4 and no card claims LIVE',
+       !/>LIVE</.test(chipUnreadableHtml));
+    ok('F4 and the reason says it is a failed read',
+       /failed read, not a finding/.test(cardChipWhy(chipUnreadableHtml, 'firestore') || ''),
+       cardChipWhy(chipUnreadableHtml, 'firestore'));
+    /* INVERTING CONTROL — the readable render DID produce LIVE, so "no LIVE"
+       above is a real finding rather than a chip that never renders. */
+    ok('F4 control: the readable render did produce a LIVE chip',
+       cardChip(chipHtml, 'firestore') === 'LIVE');
   });
 
   runCase('D5 the catalogue renders, and shows an honest live signal', () => {

@@ -1,3 +1,703 @@
+## 2026-09-21 (141) — Four mutations were stranded in the working tree, and the harness could not say so
+
+**Incident + harness repair + a new scanner. No product feature. NO deploy.**
+
+While verifying the observed-state chip I ran **two sabotage processes concurrently**, and later a
+third in a polling loop. A sabotage suite edits real source in place and restores it; two of them
+interleaved, and the restore of one overwrote the state the other was holding.
+
+**Four defects were left live in `sokoni-integrations.js`:**
+
+```
+S1   _count() returning '0' instead of an em dash
+     -> an UNREADABLE tab count rendered as a fabricated zero. The exact
+        defect this console exists to prevent, sitting in the tree
+S24  the activity panel reading "Full coverage." instead of
+     "Admin Activity only." -> the inverse of the truth about what is logged
+S33  the DECLARED-but-MISSING secret table deleted entirely
+     -> missing secrets counted but no longer named
+S41  the chip's title emptied -> the derivation reasoning silently gone
+```
+
+Nothing caught them. The certification had passed **before** the stranding happened, and I then
+read a stale summary rather than re-running.
+
+### The reporting defect that hid it
+
+`caught: 41   inert: 0` was true and meaningless. The degraded branch did `caught++`, the summary
+printed no degraded field, and `process.exit` ignored it:
+
+```js
+} else {                       // degraded: the named guard did NOT fire
+  console.log('  ~ ' + m.name + ' — suite failed, but NOT on the expected case');
+  caught++;                    // counted as a clean catch
+}
+console.log('  caught: ' + caught + '   inert: ' + inert);     // no degraded
+process.exit(inert === 0 && after.code === 0 ? 0 : 1);         // degraded passes
+```
+
+**A summary that cannot express the weaker outcome reports it as the stronger one.** I stated
+"0 degraded" from a line that never measured it — the same trap as *exit code is not evidence*,
+one level up: I read a count instead of the markers it was derived from.
+
+Now `degraded` is counted, printed, and **fatal**. A vector whose named guard did not fire proves
+nothing about that guard and must not pass.
+
+### `scripts/check-stranded-mutations.js`
+
+Reads every mutation manifest and asserts the ORIGINAL text is present in each target. An absent
+original means either a stranded defect or a drifted anchor — a vector that has silently gone inert.
+
+```
+suites: 4   vectors checked: 65   problems: 0
+```
+
+Run it before trusting any sabotage result and before committing. It found three of the four
+stranded defects immediately; its own first version had a bug — bracket-counting to find the
+manifest closed early on a `]` inside a mutation's source text — so it now locates the terminator
+instead.
+
+### The scanner alone was not sufficient, and that matters
+
+After my first repair the scanner reported CLEAN while the tree was still wrong: I had restored
+S24's text at the **audit** panel instead of the **activity** panel, and the scanner only checks
+that the anchor exists *somewhere* in the file, not that it exists in the right place.
+
+Certification caught it — `D20` failed on the panel that actually renders. **The layered checks
+worked; neither layer alone would have.**
+
+### The rule, now durable
+
+Never run the sabotage suite concurrently, in a loop, or alongside another run. Never kill one
+mid-flight — a kill strands the mutation and the next suite adopts it as though it were the code.
+Recorded in memory alongside the repo-wide-git hazard, which is the same family: an operation whose
+blast radius is wider than the thing you think you are touching.
+
+### State after repair
+
+```
+check-stranded-mutations.js           65 vectors, 0 problems
+certify-integrations-console.js     1031 assertions, 0 failures
+```
+
+**Files:** `sokoni-integrations.js` (four restorations),
+`tests/sabotage-integrations-console.js` (degraded counted and fatal),
+`scripts/check-stranded-mutations.js` (new).
+
+**Database:** none. **API:** none. **Security:** none. **Breaking:** none. **Deploy:** none.
+## 2026-09-21 (146) — Identity decides what exists; the subscription decides what works
+
+**Capability + subscription aware navigation · UI slice · NO deploy · no payment file touched.**
+
+### The two-subscription model already existed
+
+`merchantSubscriptions/{uid}` and `providerSubscriptions/{uid}` are separate documents under ONE
+account, resolved by `resolveSubscription(uid, {role})` — `role:'provider'` reads the provider
+store, `role:'merchant'|'seller'` the merchant one (`subscription-core.js:107,130,207`). A dual
+business therefore needs no "dual plan": it has two subscriptions it manages independently. Like
+the dual SCOPE finding in (143), the schema was there and nothing combined it.
+
+### `sokoni-merchant-nav.js` (new, pure)
+
+Holds one boundary, which `capability-authority.js` states in its own header — a capability says
+what a PLAN permits, never who someone is:
+
+| | decided by | can it create a workspace? |
+|---|---|---|
+| **Identity** — may this account trade products / services? | `business-scope.js`, from registries an ADMIN APPROVAL wrote | yes |
+| **Entitlement** — which features may it use today? | the subscription for THAT side | **never** |
+
+**A subscription never creates a workspace.** Paying for a seller plan while holding no seller
+approval shows nothing at all — no Products, no Till, no subscription card, and the reason invites
+APPLYING, not paying. Tested with an inverting control: the identical live subscription DOES work
+once the approval exists, so the absence is about approval and not about a resolver that grants
+nothing.
+
+**An approval without a subscription still shows its workspace, restricted.** The merchant is
+approved and the data is theirs; a lapsed card is not a reason to make their catalogue vanish.
+They get a reason that says so — `past_due`, `cancelled` and `expired` each get their own wording
+and all three state the data is safe.
+
+**Account-level sections never lock.** Billing, Business status, Profile, Reports, Tax, Payouts,
+Customers, Payments and Overview stay usable when both subscriptions are dead. Locking the page
+where a merchant would fix a lapse is a trap, and Billing is the one section that MUST work when
+nothing else does.
+
+### The two sides are independent
+
+Cancelling the seller subscription leaves the services side **byte-identical** (asserted by JSON
+comparison, both directions). The business stays DUAL — approval is untouched — it is simply no
+longer dual-ACTIVE. The Till stays open while EITHER side is usable, so a cyber café whose
+provider plan lapsed can still sell a flash disk.
+
+### Catalogue now checks scope AND entitlement
+
+Per the revised contract, `catalogue.html` no longer gates creation on scope alone. It resolves
+both subscriptions and asks `SokoniMerchantNav.creatableKinds(nav)`. Reading stays open either
+way — an unsubscribed side can still SEE its catalogue, just not add to it.
+
+Unknown subscription status is **not live** (whitelist, not blacklist) — the same rule
+`business-scope` applies to approval status.
+
+**Files:** `sokoni-merchant-nav.js` (new) · `scripts/test-merchant-nav.js` (new) ·
+`catalogue.html` (entitlement wiring)
+
+**Database changes:** none — reads the two existing subscription stores.
+**API changes:** none. **Security:** no subscription can grant identity; every nav decision is
+presentation and the server re-decides each write.
+**Breaking changes:** none.
+**Deployment:** NOT deployed.
+
+### Why not merchant-v2.html
+
+`merchant-v2.html` is currently owned by five other worktrees (`sok-mv2`, `sok-v2fix`, `sok-v2int`,
+`sok-v2preserve`, `sok-premium`). The nav is therefore a standalone embeddable module those
+worktrees can include in one line; editing their file from here would collide with live work.
+
+**Verification:** `test-merchant-nav` 71/0 (new) · `test-catalogue-model` 81/0 ·
+`test-business-scope` 47/0 · `test-provider-application` 46/0 · `test-pos-service-pricing` 67/0 ·
+`test-pos-tender` 76/0 · `test-intasend-checkout` 50/0 · `test-payment-purposes-verticals` 42/0 ·
+`test-payment-intents` 12/0. `node --check` passes on the new module.
+
+---
+
+## 2026-09-21 (145) — One catalogue, two commerce types: the unified product + service editor
+
+**UI/catalogue slice · additive · NO deploy · NO payment file touched · 3 files added, 0 modified.**
+
+### A field that had no writer
+
+`trackStock` is the discriminator the whole service model rests on — read by `pos.js:3104`
+(excluded from low-stock alerts) and by `functions/shared/pos-service-pricing.js` (product vs
+service). **Nothing in the repository has ever written it.** Every existing row has it ABSENT.
+
+Absent therefore had to keep meaning PRODUCT, which is exactly what both readers already assume
+(`trackStock !== false`), so no existing row changes meaning. The editor now writes it EXPLICITLY
+on both kinds, which is what makes the service catalogue real.
+
+A separate field, plain `track`, is written by `pos-inventory-sync.js:109` and `pos.js:750` and
+read by nothing in a product context. **Not touched** — reconciling the two is an
+inventory-semantics change this slice is forbidden from making. Noted, not "fixed".
+
+### One collection
+
+A service is a `posProducts` row with `trackStock:false`, a `unit` and optionally
+`variablePrice:true`. No `posServices` collection — asserted by test over the source of both new
+files, with a positive control proving `posProducts` IS what the page reads.
+
+### Edits MERGE
+
+`applyEdit` starts from the existing row and overlays only the fields the editor owns, so `cost`,
+`batch`, `barcode`, `expiryDate`, `merchantId`, `taxRate` and sync bookkeeping survive a save.
+Tested field-by-field **with a positive control proving the edit actually applied** — otherwise
+"nothing lost" passes against a no-op.
+
+Two deliberate deletions rather than zeroes: a service drops `stock`/`lowStockThreshold`
+(0 reads as OUT OF STOCK and would hide it from an availability filter), and a product drops
+`variablePrice` (a product is never counter-priced).
+
+### Absent stock is UNMETERED, not zero
+
+`Stock: 0` is a real zero; a row that never tracked stock reads **"Not tracked"** and gets no
+OUT OF STOCK badge. Rendering 0 for an untracked row would stop a sale that should happen.
+
+### Scope gates creation, and explains itself
+
+Add offers only what `business-scope` permits. A restricted merchant gets the REASON — "still in
+review", "suspended", "apply to provide services" — never a dead button. Re-checked when the
+editor opens, and the server re-decides on every write regardless.
+
+### Fixed vs variable
+
+A fixed item shows its catalogue price and is never presented as cashier-editable. A variable
+service shows "Variable price / Priced at the counter" and states that the limit is enforced by
+the server. **The KES 20,000 ceiling is NOT duplicated in the frontend** — the page does not name
+a number it has no authority over.
+
+### Where it lives
+
+A standalone `catalogue.html`, NOT merchant-v2. `merchant-v2.html` is currently owned by five
+other worktrees (`sok-mv2`, `sok-v2fix`, `sok-v2int`, `sok-v2preserve`, `sok-premium`); editing it
+from here would collide with live work.
+
+**Files:** `catalogue.html` (new) · `sokoni-catalogue-model.js` (new) ·
+`scripts/test-catalogue-model.js` (new). **Nothing modified.**
+
+**Database changes:** none. Writes `posProducts` with the existing field set via merge.
+**API changes:** none. **Breaking changes:** none. No hard delete — archive is
+`active:false` + `deletedAt`/`deletedBy`, matching `pos-inventory-pro.js:1709`.
+**Deployment:** NOT deployed.
+
+**Verification:** `test-catalogue-model` 81/0 (new) · `test-business-scope` 47/0 ·
+`test-provider-application` 46/0 · `test-pos-service-pricing` 67/0 · `test-pos-tender` 76/0 ·
+`test-intasend-checkout` 50/0 · `test-payment-purposes-verticals` 42/0 · `test-payment-intents`
+12/0. `node --check` passes on the new module.
+
+Two existing gates did NOT pass, neither caused by this slice:
+- `gate-live-catalogue` **FAIL** — "96 of 108 products (89%) use third-party stock imagery". Live
+  production content; this slice wrote nothing to Firestore.
+- `gate-inventory` **BLOCKED, not failed** — "Could not start Authentication Emulator, port
+  taken". Another agent is running emulators; their process was left alone.
+
+---
+
+## 2026-09-21 (140) — The observed-state chip: what the evidence shows, beside what the catalogue believes
+
+**Console only · derived, not persisted · NO backend, catalogue, registry, probe or GCP change · NO deploy.**
+
+Until now a rail that was merely CATALOGUED looked identical to one a probe had actually reached.
+The catalogue's lifecycle word says what we BELIEVE; it does not say what was OBSERVED. An operator
+scanning the grid could not tell those apart — which is the whole reason for the chip.
+
+It introduces **no persisted field and no second evidence-state system**. `ok: null | true | false`,
+the credential vocabulary, the probe stages and the freshness window remain the only authorities.
+This is a projection of them, computed at render time.
+
+### Precedence is the control
+
+First match wins, and the order is what stops a stale or refused rail falling through into LIVE:
+
+```
+ 1  EVIDENCE UNREADABLE  the status read FAILED. We know nothing — different
+                         from knowing there is nothing
+ 2  FAILED               a probe ran and the rail refused or broke
+ 3  DEGRADED             reachable, but a SUPPORTED stage came back false
+ 4  STALE                it WAS connected, and the observation has aged out
+ 5  LIVE                 connected, and the observation is fresh
+ 6  GATED                deliberately closed: quarantined, frozen, retired
+ 7  NOT CONFIGURED       a required credential is demonstrably absent
+ 8  REFUSED BY DESIGN    a probe exists and deliberately will not run
+ 9  ACTIVE               operational evidence exists, but no live probe
+10  NOT PROBED           no live evidence path at all
+```
+
+**STALE before LIVE** is deliberate: ordering it after would let an aged observation keep a green
+chip indefinitely. **GATED after the measured states** is too: if a frozen rail somehow produced a
+failed probe, the failure is the more urgent fact — freezing describes our intent, not the rail's
+condition.
+
+Every chip carries **why** it was derived, as its title, so the derivation is inspectable rather
+than something an operator takes on trust.
+
+### A DEFECT THE CERTIFICATION CAUGHT, in code written minutes earlier
+
+`_ms()` returned `0` for a string. The status record carries `probedAt` as an **ISO string**, not a
+Firestore timestamp — every other caller passes timestamps, which is why the string case had never
+been needed.
+
+That zero was not harmless. The staleness check reads `if (at && aged)`, so a zero made the age test
+**unreachable**, and a CONNECTED rail could never go stale. An old success would have kept a green
+chip forever — the exact failure the chip was added to prevent. `F1` failed on its first run and
+named it.
+
+Two sabotage vectors now hold it shut: one removes the staleness comparison, one removes the string
+parse.
+
+### REFUSED BY DESIGN is implemented but cannot fire in production yet
+
+Verified 2026-09-21: `intasend-collections` (refuses because probing would move money), `algolia`
+(needs a secret bound to the probe function) and `cloudflare` (no executor at all) are
+**indistinguishable** in what the console receives — identical health, identical capabilities,
+identical note.
+
+The distinguishing field, `notRunReason`, is set on a PROBE result and is not carried on the status
+record. So the branch is implemented and certified against a record that supplies it, and in
+production it simply never matches; those rails render NOT PROBED — true, but less precise than it
+could be.
+
+Deriving it from `capabilities` instead would be a guess wearing the authority of a measurement: the
+absence of `test` conflates four separate reasons. **The fix is one field on the status resolver,
+and it is deliberately out of this scope.**
+
+### The regression contract reads the CARD, never the function
+
+Every assertion pulls the chip out of the real rendered console, scoped by that card's own
+`selectCatalogue` handle and cut at the next card, so a neighbouring card's chip — or any prose
+elsewhere on the page — cannot satisfy it. A missing card returns null rather than passing as a
+chip-less one.
+
+```
+F1   all nine states render, each on the right card
+F2   the four confusable pairs differ ON A CARD, and all seven produce
+     distinct words:  NOT PROBED != ACTIVE · REFUSED != NOT PROBED
+                      NOT CONFIGURED != FAILED · STALE != LIVE
+F3   the chip follows the EVIDENCE: with the catalogue byte-identical between
+     two renders, LIVE->FAILED, STALE->LIVE, NOT CONFIGURED->NOT PROBED
+     + control: a card whose evidence did NOT change keeps its chip
+F4   a failed status read renders EVIDENCE UNREADABLE on every card, no card
+     claims LIVE  + inverting control: the readable render DID produce LIVE
+```
+
+### Deliberately not done
+
+**No owner.** Not one placeholder. Ownership is a governance decision and the census cannot infer
+it; the schema can be added when the mapping is decided.
+
+**No entry-level "last known good".** Freshness exists per observation and stays there — manufacturing
+an entry-level timestamp from an unrelated observation is the same class of defect as a fabricated
+zero.
+
+### Suites
+
+```
+certify-integrations-console.js       1031 assertions, 0 failures   (was 1002)
+sabotage-integrations-console.js        41 caught, 0 inert, 0 degraded   (was 34)
+all fourteen suites PASS
+```
+
+### Files
+
+```
+sokoni-integrations.js                 chip derivation, card + detail render, styles,
+                                       and the _ms ISO-string fix
+tests/certify-integrations-console.js  F1-F4, card-scoped extractors
+tests/sabotage-integrations-console.js S35-S41
+```
+
+**Unchanged, as scoped:** catalogue · registry · gcp-evidence · gcp-iam-grant · admin-os · probes.
+**Database:** none. **API:** none. **Security:** none. **Breaking:** none. **Deploy:** none.
+
+## 2026-09-21 (144) — One application, three choices: the dual-business intake
+
+**UI slice · products / services / both · upgrade path · NO deploy, NO back-end change to approval.**
+
+The scope resolver (143) could describe a dual business but nothing could create one: the merchant
+intake existed, the provider intake did not. This is the front door.
+
+### `business-apply.html` (new)
+
+Products · Services · **Both**, with the status of each side read live and the page relabelling
+itself **ADD TO YOUR BUSINESS** when one side is already approved — the upgrade path is the same
+page, not a second flow. An approved or in-review side is disabled rather than offered, because the
+primitive would refuse it server-side anyway and a button that will be refused is worse than no
+button.
+
+Status comes from `sellers/{uid}` and `providers/{uid}` — the registries an ADMIN APPROVAL wrote.
+Never from `businessType`, which is a self-claimable label. A read failure disables applying and
+says so: a merchant must not be shown "Not applied" when the truth is "we could not check".
+
+### `sokoni-provider-application.js` (new)
+
+`applications/{uid}--provider`, `type:'provider'`, `status:'pending_review'`. It **reuses** the
+merchant module's `FORBIDDEN` list, `decideAction` and `canonStatus` rather than copying them —
+two copies of a security filter is one that gets updated and one that does not. A test asserts the
+list is not re-declared and that both are taken from the sibling.
+
+### Why dual is TWO documents, not one with a scopes[] array
+
+They are decided separately and **suspended separately**. A cyber café whose seller approval is
+withdrawn must keep providing services. One document with `scopes:['products','services']` cannot
+express a half-suspension without inventing a per-scope status inside it — which is two documents
+wearing a trench coat. Tested: a suspended products side refuses while the services side still
+submits.
+
+### Partial submission is never reported as success
+
+"Both" files two applications. If one lands and one is refused, the page says **Partly submitted**
+and names which — a dual applicant who is told "success" would wait for a review that was never
+requested.
+
+**Files:** `business-apply.html` (new) · `sokoni-provider-application.js` (new) ·
+`scripts/test-provider-application.js` (new)
+
+**Database changes:** none — `applications/` with a second deterministic id.
+**API changes:** none. **Security:** submitting grants nothing; the shared FORBIDDEN filter is
+asserted with a positive control proving legitimate profile fields still survive, so "nothing
+smuggled" cannot pass against a primitive that writes an empty document.
+**Breaking changes:** none. The merchant intake is untouched.
+**Deployment:** NOT deployed. AR KEEP protection unproven until ~2026-09-22T04:21Z.
+
+### Verified rather than assumed
+
+`providerPublish` was checked before relying on `providers/{uid}.status`: it writes CONTENT only —
+`status`, `searchable`, `isPublic`, `acceptsBookings` come from `projectProvider()` on admin
+approval and nothing else (provider-onboarding.js:395). The scope model in (143) holds.
+
+### Not done
+
+Merchant-V2 capability-aware navigation, the unified catalogue editor, and the tax/reporting split
+are NOT built. Still open from earlier slices: `SPos.payment.completeMultiTender`, and the
+Quick-Charge screen.
+
+**Verification:** `test-provider-application` 46/0 (new) · `test-business-scope` 47/0 ·
+`test-pos-service-pricing` 67/0 · `test-pos-tender` 76/0 · `test-intasend-checkout` 50/0 ·
+`test-payment-purposes-verticals` 42/0.
+
+---
+
+## 2026-09-21 (143) — A cyber café is one business: products AND services on one set of books
+
+**Dual business scope · pure resolver + till enforcement · NO deploy, NO change to the blocked approval path.**
+
+A cyber café sells airtime and prints documents. A salon sells product and cuts hair. A garage
+sells parts and fits them. Treating *seller* and *provider* as mutually exclusive forces those
+businesses into two accounts, two catalogues and two sets of books — and SOKONI then cannot report
+what ONE business earned, which is precisely what a tax return asks.
+
+### It was always storable. Nothing ever read it.
+
+Approval writes `sellers/{uid}` for a seller and `providers/{uid}` for a provider — two
+collections, both keyed by the SAME uid. An account holding both has always been a dual business
+in storage. The gap was never the schema; no code asked the combined question.
+
+### `functions/shared/business-scope.js` (new, pure)
+
+Returns `{ sellsProducts, providesServices, isDual, isTrading, scopes[], reasons{} }` from the two
+registry documents.
+
+- **Scope comes only from what APPROVAL wrote.** `businessType`, `category`, `hub`, `isProvider`
+  and `role` are self-claimable labels — a scope derived from them is a scope anyone can grant
+  themselves. Tested: a record claiming `businessType:'provider'` gets no service scope, with a
+  positive control proving the resolver can grant services from a real registry doc.
+- **Subscriptions are not consulted.** capability-authority.js states the rule: a capability says
+  what a plan permits, never who someone is. Scope is identity; identity is not purchasable.
+- **Unknown status is not active**, and is reported AS ITSELF (`unknown_status:quantum`) rather
+  than bucketed as "suspended" — bucketing would hide a drifted intake vocabulary.
+- **Suspension revokes per scope**: a suspended shop with a live provider record stops selling
+  products and keeps selling services.
+- **`reasons` explains why** — `not_applied` vs `pending_review` vs `suspended` vs `rejected` is
+  the whole content of a support conversation and a boolean cannot carry it.
+
+### Why resolveRole was NOT changed
+
+`application-lifecycle.js:194` returns ONE role and every downstream reader expects a scalar.
+Widening it would ripple through the entire approval path — and that file is under a standing
+deployment blocker for its release-only `setCustomUserClaims` call. **Changing blocked code to add
+a feature is how a blocker becomes permanent.** Nothing here touches role resolution.
+
+### Not a third merchant guard
+
+Two guards already claim canonical status (`merchant-authority.js` and
+`business-bootstrap._assertMerchantAccess`). `canUseMerchantWorkspace()` answers "what may this
+business trade" and explicitly NOT "is this request allowed" — callers still pass through the
+existing guard.
+
+### Enforced at the till
+
+`pos_service_sale` resolves scope before pricing and passes it down. Every catalogue line is
+checked: `trackStock !== false` ⇒ product, `trackStock === false` ⇒ service. A services-only
+provider cannot start selling stock by posting a product row; a products-only shop cannot bill for
+labour it was never approved to provide. The two have different tax and consumer treatment.
+
+Registry read failures **fail closed** to "not trading" — an unreadable registry is exactly when
+not to assume approval.
+
+A **quick charge is neither kind** (delivery fee, callout, government application) so it requires
+only that the business be trading at all. A products-only shop can still bill delivery; a suspended
+account cannot bill through the free-text field.
+
+`metadata.businessScope` stamps the scope in force onto the intent, because a later suspension must
+not rewrite the history of a sale that was legitimate when it happened.
+
+**Files:** `functions/shared/business-scope.js` (new) · `scripts/test-business-scope.js` (new) ·
+`functions/shared/pos-service-pricing.js` · `scripts/test-pos-service-pricing.js` ·
+`functions/payment-purposes.js` · `docs/PAYMENT_ARCHITECTURE_UNIFICATION.md` §5g
+
+**Database changes:** none. Reads `sellers/{uid}` and `providers/{uid}` as approval already writes
+them. **API changes:** none — `scope` is an optional pricer parameter, so callers that predate it
+are unaffected (asserted by test).
+**Security:** scope is not self-claimable and not purchasable; per-line trade enforcement; fail
+closed on read error.
+**Breaking changes:** none.
+**Deployment:** NOT deployed. AR KEEP protection unproven until ~2026-09-22T04:21Z.
+
+### Not done
+
+No UI. The dual-business application form, the merchant-v2 scope switcher and the Service Catalogue
+editor are not built. The resolver they would read is, and is certified. Two seams remain open from
+(141) and (142): `SPos.payment.completeMultiTender`, and the catalogue/Quick-Charge screens.
+
+**Verification:** `test-business-scope` 47/0 (new) · `test-pos-service-pricing` 67/0 (55 → 67) ·
+`test-pos-tender` 76/0 · `test-intasend-checkout` 50/0 · `test-payment-purposes-verticals` 42/0 ·
+`test-payment-intents` 12/0 · `test-single-shop-checkout` 29/0 ·
+`test-multishop-checkout-integration` 26/0 · `test-healthcare-subscription-foundation` 120/0 ·
+`test-product-payment-authority` 25/25.
+
+---
+
+## 2026-09-21 (142) — The universal till line: a cyber café, a salon and a shop are the same sale
+
+**Payment-unification · one new purpose · additive · NO deploy, NO commission change.**
+
+A till should not care whether it is selling a phone charger, ten printed pages, a haircut, a car
+wash or a government application. To the payment rail they are identical: a merchant's authorized
+operator charging their own customer for a basket of priced lines. `pos_service_sale` covers all of
+it and reaches `createPaymentIntent → IntaSend → webhookIntasend` exactly like every other purpose.
+
+### No new collection
+
+**A service is a `posProducts` row with `trackStock: false`**, a `unit` ("page", "document",
+"session"), optionally `variablePrice: true`. pos.js already reads that shape — it excludes such
+rows from low-stock alerts (`pos.js:3104`). A `posServices` collection would fork the catalogue and
+force search, reports, receipts and marketplace sync to learn about a second one.
+
+### Three price sources, never conflated
+
+| Source | Price set by | Bounded | Attributed |
+|---|---|---|---|
+| `catalogue` | server, from `posProducts.price` | catalogue | no — the cashier chose an item, not an amount |
+| `variable` | cashier, on a merchant-marked counter-priced item | ceiling | yes, cashier uid |
+| `quick_charge` | cashier, no catalogue item | ceiling | yes, cashier uid |
+
+A reconciliation that cannot tell a catalogue price from a keyed-in one cannot answer "did the
+cashier overcharge?" — the question a till exists to make answerable. The counts ride on the intent
+metadata too, so a reconciler can find baskets containing keyed-in figures without walking lines.
+
+### Why a cashier may name a price here and nowhere else
+
+Everywhere else the server derives the amount and the client is refused, because there the client
+is the BUYER — a buyer naming their own price is the B1 defect. Here the client is the MERCHANT'S
+OWN AUTHORIZED OPERATOR. Same trust boundary `priceTillSale` already enforces
+(`sokoni-qr-authority.js:240`), not a new one.
+
+Still bounded, attributed and labelled:
+
+- ceiling from `posSettings/{merchantId}.quickChargeMaxCents`, read from the MERCHANT's config so a
+  cashier cannot raise their own limit;
+- absent ⇒ hard default KES 20,000, never "unlimited" — the safe reading of a missing limit is the
+  strict one;
+- the ceiling applies to the LINE, so quantity cannot walk past it;
+- quick charge is disableable per merchant without affecting catalogue lines;
+- a quick charge with no description is REFUSED rather than defaulted to "Service" — a charge
+  nobody can identify later is a hole in the books;
+- **a fixed catalogue price is IGNORED when the request tries to override it.** Not validated
+  against — ignored. A fixed price a request can override is not a fixed price.
+
+### Pure arithmetic
+
+`functions/shared/pos-service-pricing.js`: no Firestore, no clock, no network, asserted by test
+with a positive control proving the comment-stripper did not blank the file. The purpose entry does
+the catalogue lookup and error translation and computes nothing — the same split as
+`pos_till_sale → sokoni-qr-authority`.
+
+### A defect the suite caught in its own change
+
+The first draft used `Number(line.qty) || 1`, collapsing **absent** and **explicit zero**: a line
+the cashier had zeroed out charged for one of it. Absent now defaults to 1; an explicit 0 is
+refused. The `||` idiom cannot tell "not stated" from "stated as none".
+
+**Files:** `functions/shared/pos-service-pricing.js` (new) ·
+`scripts/test-pos-service-pricing.js` (new) · `functions/payment-purposes.js` (+245, −0) ·
+`docs/PAYMENT_ARCHITECTURE_UNIFICATION.md` §5f
+
+**Database changes:** none required. Reads `posProducts` and, optionally,
+`posSettings/{merchantId}` for the quick-charge ceiling — absent is handled strictly.
+**API changes:** `createPaymentIntent` accepts `purpose: 'pos_service_sale'`. No signature change;
+no existing purpose altered.
+**Security:** operator-only trust boundary; cashier-named figures bounded, attributed and labelled;
+fixed catalogue prices not overridable.
+**Breaking changes:** none.
+**Deployment:** NOT deployed. AR KEEP protection unproven until ~2026-09-22T04:21Z.
+
+### Not done
+
+No UI. The Service Catalogue editor and the Quick Charge sheet are not built — the pricer they
+would post to is, and is certified. Wiring them means touching the live sale path alongside
+`SPos.payment.completeMultiTender`, still the open seam from (141).
+
+**Verification:** `test-pos-service-pricing` 55/0 (new) · `test-pos-tender` 76/0 ·
+`test-intasend-checkout` 50/0 · `test-payment-purposes-verticals` 42/0 · `test-payment-intents`
+12/0 · `test-single-shop-checkout` 29/0 · `test-multishop-checkout-integration` 26/0 ·
+`test-healthcare-subscription-foundation` 120/0 · `test-product-payment-authority` 25/25.
+
+---
+
+## 2026-09-21 (141) — One sale, many tenders: the POS payment console, and the advanced setup that was unreachable
+
+**POS payment surface · additive · NO deploy, NO commission change, NO removal of any existing method.**
+
+### The engine, not another monkey-patch
+
+pos.js already split a sale two ways, by **rewriting `payment.complete` and `mpesa.sendSTK` at
+runtime** (pos.js:4176-4200): swap the function, call the original, restore it and hope nothing
+throws in between. Two tenders only, cash+M-PESA only, and a mid-flight failure leaves the till
+with a patched `payment.complete` that the *next unrelated sale* inherits.
+
+`sokoni-pos-tender.js` (new) models the allocation instead. Pure — no DOM, no network, no clock, no
+Firestore — so it is exercised exhaustively before anything renders. A test strips comments and
+asserts the purity, with a positive control proving the stripper did not simply blank the file.
+
+**Integer cents throughout**, for the reason money-authority.js documents: the platform already
+shipped two callables 100× apart under the same parameter name, and floats cannot split a bill
+three ways without leaving a residue the cashier cannot clear. Conversion happens once, in
+`fromShillings`, as `Math.round(x * 100)` — never `Math.round(x) * 100`, the bug shipped earlier
+today in this very workstream.
+
+### The two rules that carry the money
+
+**Only cash gives change.** An external rail cannot hand notes back, so no external or recorded
+tender may exceed the balance — a KES 5,000 card swipe on a KES 4,850 bill is a KES 150 refund
+obligation on a rail with no till-side refund. Cash is unbounded and produces `changeDue`. Both
+directions are tested, so a "refuses everything" regression cannot pass.
+
+**The till never decides a sale is PAID.** Every EXTERNAL tender lands in `awaitingConfirmation`
+and is settled by `webhookIntasend`, never by a tile turning green. Tested with an inverting
+control: a cash-only sale must leave that array EMPTY, so a field that was always populated fails.
+
+### Auto-fill
+
+Tapping a method drops the whole remaining balance onto it. Tap Cash on a KES 4,850 sale and 4,850
+is already there; type 1,000 over it and the next method auto-fills 3,850. Tapping a method that
+already holds a figure only focuses it — re-filling would silently overwrite what the cashier
+typed. Allocation is SET, not ADD, so a numpad firing per keystroke cannot stack five tenders on
+one tile.
+
+### Cash is not merely kept
+
+It is the default tender, the only one that completes with no network, and one of two methods
+(with M-PESA Till) that need no IntaSend capability at all. **When capability is unknown the till
+still sells** — for cash and Till code — and says why the grid is short rather than leaving a
+cashier wondering whether card is broken or simply not switched on. UNKNOWN is not AVAILABLE.
+
+### The cashier never sees a card number
+
+There is no PAN, expiry or CVV field in the console and there will not be one. Card is collected on
+the customer's own device through IntaSend's hosted page, reached three ways — link to their phone,
+QR to scan, or handing over a customer-facing screen. Verified by a check whose first draft was
+itself wrong (`pan\b` matches inside `span`); re-run with a correct pattern and a positive control
+against checkout.html's legacy card modal, which it finds 16 times.
+
+### Additive, and proven additive
+
+Every existing button — Cash, M-PESA, M-PESA Till, Card, Split, QR — is still present and still
+wired; the old split modal and `SPos.split` are untouched. Multi-Pay is one new tile beside them.
+A cashier who knows the old flow loses nothing, and a busy till keeps its fallback.
+
+### Advanced setup was built and unreachable
+
+`pos-setup.html` linked to **no other POS page at all**. Eighteen consoles that already existed —
+Till Manager, Cash Manager, Daily Close, Hardware, Printer, Customer Display, Staff Ops, Inventory,
+Suppliers, Customers, Reports, BI, Accounting, Multi-Branch HQ, Live Floor, Observability — had no
+route from the page a merchant lands on after provisioning. Added as a collapsed **Advanced setup**
+section so the "You're Ready to Sell" moment stays clean for a first-timer and is one tap away for
+everyone else. No setting was moved out of the page that owns it; every link verified to resolve.
+
+**Files:** `sokoni-pos-tender.js` (new) · `sokoni-pos-pay-console.js` (new) ·
+`scripts/test-pos-tender.js` (new) · `pos.html` · `pos-setup.html`
+
+**Database changes:** none. **API changes:** none — the console hands a payload to pos.js and stops.
+**Security:** no card data on the cashier's device; no client-decided paid state; external tenders
+explicitly marked awaiting server confirmation.
+**Breaking changes:** none. Nothing removed.
+**Deployment:** NOT deployed. AR KEEP protection unproven until ~2026-09-22T04:21Z.
+
+### Not done
+
+`SPos.payment.completeMultiTender` — the pos.js receiver — is **not written**. The console detects
+its absence and refuses with "Payment handler not wired — nothing was charged" rather than
+pretending. Wiring it means touching the live sale path and creating the server-side multi-tender
+sale record, which is the next slice and wants its own certification. The console is complete and
+tested up to that seam.
+
+**Verification:** `test-pos-tender` 76/0 (new) · `test-intasend-checkout` 50/0 ·
+`test-payment-purposes-verticals` 42/0 · `test-payment-intents` 12/0 · `test-single-shop-checkout`
+29/0 · `test-multishop-checkout-integration` 26/0 · `certify-p1-pos-payment-confirmation` and
+`certify-p2-pos-stk-sender` both exit 0. `certify-p3a-pos-qr-association` still exits 1 with a
+failure set **byte-identical** to the pre-change baseline (`functions/index.js` is dirty from
+another workstream), confirmed by diff rather than by assumption.
+
+---
+
 ## 2026-09-21 (140) — A real checkout client, a capability probe, and the card tile turned off
 
 **Payment-unification Phase 3 foundation · NO deploy, NO commission change, NO wallet work, probe NOT run.**
