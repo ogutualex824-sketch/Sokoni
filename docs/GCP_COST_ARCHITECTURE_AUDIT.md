@@ -180,6 +180,20 @@ scale-to-zero is working. The problem is not the busy services; it is the pinned
 entry module plus dependencies). The over-provisioning is in **max instances**: 99 for services
 that have never exceeded one concurrent instance.
 
+**2026-09-21 — the concurrency premise is corrected.** Measured from
+`run.googleapis.com/container/instance_count`, hourly `ALIGN_MAX`, **summed across the
+`active`/`idle` state labels**, over 30 days:
+
+| service | peak concurrent | ceiling | factor |
+|---|---|---|---|
+| `processTypesenseQueue` | 6 | unset | unbounded |
+| `onOrderStatusChange` | 5 | 99 | 20× |
+| `minishopPage` · `kass` · `providerDispatch` · `bookingDispatch` · `onNewOrderCreated` | 3 | 99 / 80 | 27–33× |
+
+So "never exceeded one concurrent instance" is **not current**. The over-provisioning conclusion
+stands — every ceiling remains 20–33× above anything observed — but the premise was understated,
+and a cross-series **max** rather than a **sum** across state labels will reproduce the old figure.
+
 **Cold starts and the OOM history.** The brief flags a prior Gen2 cold-start/OOM problem from large
 bundles. The mechanism is still present and measurable in a different form: memory records
 **function discovery taking 8.2 s against a 10 s deploy limit** on a cold worktree. That is the
@@ -579,10 +593,21 @@ justifies it:
 | Workforce / admin | 512 Mi | 1 | 40 | 0 | 10 | 120 s |
 | Event dispatcher | 512 Mi | 1 | 40 | 0 | 20 | 120 s |
 | Scheduled tick | 512 Mi | 1 | 1 | 0 | 3 | 540 s |
+
+> **2026-09-21 — the Scheduled tick row is CONTRADICTED BY OBSERVATION, for one service.**
+> `processTypesenseQueue` is a scheduled tick and its measured 30-day peak is **6**, against this
+> row's proposed max of **3**. The proposal is **preserved as the historical proposal** and has
+> **not** been raised to 6: the observation establishes that 3 is insufficient to contain the
+> observed peak, but it does not establish what the ceiling should be.
+> `max=6` accommodates the peak with no measured surge headroom; `10`, `20` and `30` are
+> progressively larger burst allowances. **OWNER ADJUDICATION REQUIRED.**
+> Every ceiling in this table remains a **proposal**, not an established contract.
 | Integration worker | 256 Mi | 1 | 40 | 0 | 10 | 300 s |
 
-Rationale: max instances drop from 99 to a plausible ceiling because **no service has been observed
-above one concurrent instance**; scheduled ticks take concurrency 1 because a cron that overlaps
+Rationale: max instances drop from 99 to a plausible ceiling because ~~no service has been observed
+above one concurrent instance~~ **— corrected 2026-09-21: observed peaks are 3–6, still 20–33× below
+the deployed ceilings (see §3). The conclusion holds; the premise was understated.** Scheduled ticks
+take concurrency 1 because a cron that overlaps
 itself is a bug; payment entry points keep `min=1` because that is the one place a cold start is
 paid for in abandoned checkouts.
 
