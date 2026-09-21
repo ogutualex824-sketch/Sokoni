@@ -1,3 +1,57 @@
+## [2026-09-21] — Port the catalogue / business-application / POS-tender surface onto the served hosting lineage
+
+**Files:** new — `catalogue.html`, `business-apply.html`, `sokoni-catalogue-model.js`,
+`sokoni-merchant-nav.js`, `sokoni-pos-tender.js`, `sokoni-pos-pay-console.js`,
+`sokoni-provider-application.js`, `sokoni-merchant-application.js`; changed —
+`checkout.html`, `pos.html`, `pos-setup.html`.
+**Database changes:** none. **API changes:** none — no callable created, changed or required.
+**Security changes:** none; no rules change, no authorization weakened.
+**Breaking changes:** none. **Deployment:** HOSTING only — Functions deliberately NOT deployed.
+
+### Why a port and not a deploy
+
+The work was built on `feat/integrations-control-center`, which **forked from the served hosting
+lineage on 2026-08-13** (merge base `3dcf572`). At the time of this port live was `2fa2074`
+(`ship/p07c-directory-repoint`, v635); live held **578** commits the feature branch lacked while
+the feature branch held **411** live lacked. Deploying hosting from the feature worktree would
+therefore have **overwritten five weeks of live pages** — the same rollback that has repeatedly
+reverted the earn page.
+
+`scripts/deploy/guard-no-rollback.js` **does not stop this.** It aborts only when HEAD is a
+strict *ancestor* of live; its own header lists `diverged` under "allowed". Run from the feature
+worktree it printed `local 0da332d is not behind live 2fa2074 — allowing deploy`, exit 0. A guard
+PASS is not evidence the deploy is safe.
+
+The port was first staged on `4c6b945`, the served branch tip — and its release gate **failed**
+(`test-shop-details-convergence`, 30/2). The cause was not the port. `4c6b945` carries **8 commits
+not yet in production**, one of which, `1e9c012` *feat(merchant-v2): add canonical social-link
+controls* (2026-09-20), adds seven social fields to the merchant UI with **no server schema behind
+them** — the suite reports they *"would silently discard: whatsapp, instagram, facebook, tiktok,
+twitter, youtube"*. That is a UI data-integrity defect in another agent’s in-flight work, and it is
+**not live**. Control: the same gate run at `2fa2074`, untouched, is **32/32 suites, 0 FAIL**.
+
+So the base is the commit that is actually **live** (`2fa2074`), not the branch tip — this ships the
+port and nothing else, leaving the unreleased merchant-v2 and AdminOS work to its own authors: `pos.html` was byte
+identical across both lineages, and `checkout.html` / `pos-setup.html` — which differ by hundreds
+of lines across the fork — were carried by `git apply --3way`, which applied cleanly with no
+conflict markers.
+
+### The dependency that a file-list port would have dropped
+
+`business-apply.html` loads `sokoni-merchant-application.js`. That file is **tracked** on the
+feature branch (`2f4fc20`) and absent from the served lineage, so it never appeared in
+`git status --short` as untracked and was not in the copy list. A reference sweep over every
+local `src`/`href` on the ported pages caught it. **An untracked-file list is not a port
+manifest** — cross-lineage a tracked file can be just as missing.
+
+### Why this is safe to ship while Functions stay frozen
+
+Measured, not assumed: the new pages invoke **zero** callables, and comparing `httpsCallable`
+names in the ported `checkout.html` / `pos.html` / `pos-setup.html` against their `4c6b945`
+versions yields **no new callable** on any of the three. The port adds no backend dependency, so
+it does not strand pages against the Functions estate, which remains held until the
+`sokoni-recovery-protection` KEEP specimen survives its first sweep (~2026-09-22T04:21Z).
+
 ## [2026-09-02] — AdminOS TIER 2: success claimed before the callable resolved
 
 **Files:** `sokoni-aos.js`; `scripts/test-adminos-tier2-action-honesty.js` (new, 147/0),

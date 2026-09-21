@@ -34,6 +34,71 @@
   <link rel="stylesheet" href="sokoni-form-engine.css">
   <style>
     :root{--bg:#050505;--sur:#0d0d0d;--sur2:#141414;--g:#71ff00;--ga:rgba(113,255,0,.12);--ga2:rgba(113,255,0,.06);--bor:#1a1a1a;--bor2:#222;--txt:#e8e8e8;--sub:#888;--radius:12px;}
+
+    /* ── MULTI-TENDER PAYMENT CONSOLE ────────────────────────────────────
+       Built on the POS tokens above so it inherits the till's identity
+       rather than introducing a second visual language. Touch targets are
+       44px+ throughout: this is operated with a thumb, at speed, by someone
+       who is also talking to a customer. */
+    .paycon .modal-body{max-height:min(78vh,760px);overflow-y:auto;-webkit-overflow-scrolling:touch}
+    .paycon-hero{text-align:center;padding:18px 12px 16px;margin-bottom:14px;border-radius:16px;
+      background:linear-gradient(160deg,var(--ga) 0%,transparent 70%);border:1px solid var(--ga);}
+    .paycon-hero-label{font-size:10px;letter-spacing:.16em;font-weight:800;color:var(--sub)}
+    .paycon-hero-val{font-size:34px;font-weight:900;color:var(--g);letter-spacing:-.02em;line-height:1.15;margin-top:4px;
+      font-variant-numeric:tabular-nums}
+    .paycon-sec-label{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+      font-size:10px;letter-spacing:.14em;font-weight:800;color:var(--sub);margin:16px 0 8px}
+    .paycon-sec-label span{letter-spacing:0;font-weight:600;text-transform:none;font-size:10px;color:#666}
+    .paycon-methods{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
+    .paycon-m{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+      min-height:70px;padding:10px 6px;border-radius:14px;cursor:pointer;
+      background:var(--sur2);border:1.5px solid var(--bor2);color:var(--txt);
+      font:inherit;font-size:11px;font-weight:700;transition:transform .12s,border-color .12s,background .12s}
+    .paycon-m:hover{border-color:#333;transform:translateY(-1px)}
+    .paycon-m:active{transform:scale(.97)}
+    .paycon-m.on{border-color:var(--g);background:var(--ga2);color:var(--g)}
+    .paycon-m.editing{box-shadow:0 0 0 2px var(--ga)}
+    .paycon-m-i{font-size:20px;line-height:1}
+    .paycon-note{margin-top:10px;padding:9px 11px;border-radius:10px;font-size:11px;line-height:1.5;
+      background:rgba(255,168,0,.07);border:1px solid rgba(255,168,0,.25);color:#ffc65c}
+    .paycon-empty{padding:18px 12px;text-align:center;font-size:12px;color:#666;line-height:1.6;
+      border:1px dashed var(--bor2);border-radius:12px}
+    .paycon-t{display:grid;grid-template-columns:24px 1fr auto 30px;align-items:center;gap:8px;
+      padding:11px 12px;margin-bottom:7px;border-radius:12px;background:var(--sur2);border:1.5px solid var(--bor2)}
+    .paycon-t.live{border-color:var(--g);background:var(--ga2)}
+    .paycon-t-i{font-size:17px}
+    .paycon-t-l{font-size:12px;font-weight:700;display:flex;flex-direction:column;gap:2px;min-width:0}
+    .paycon-await{font-size:9px;font-weight:700;letter-spacing:.06em;color:#ffc65c;text-transform:uppercase}
+    .paycon-t-v{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums;cursor:pointer;
+      padding:3px 7px;border-radius:7px;white-space:nowrap}
+    .paycon-t-v:hover{background:rgba(255,255,255,.05)}
+    .paycon-t-x{width:30px;height:30px;border-radius:8px;cursor:pointer;
+      background:transparent;border:1px solid var(--bor2);color:#888;font-size:12px}
+    .paycon-t-x:hover{border-color:#ff5c5c;color:#ff5c5c}
+    .paycon-ref{grid-column:1/-1;margin-top:6px;width:100%;padding:9px 11px;border-radius:9px;
+      background:var(--bg);border:1px solid var(--bor2);color:var(--txt);
+      font:inherit;font-size:13px;letter-spacing:.09em;text-transform:uppercase}
+    .paycon-numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:14px}
+    .paycon-numpad .numpad-key{min-height:46px;border-radius:11px;font-size:17px;font-weight:700;
+      background:var(--sur2);border:1px solid var(--bor2);color:var(--txt);cursor:pointer}
+    .paycon-numpad .numpad-key:active{background:var(--ga2);border-color:var(--g)}
+    .paycon-deliv-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .paycon-d{display:flex;flex-direction:column;align-items:center;gap:5px;min-height:62px;
+      padding:10px 4px;border-radius:12px;cursor:pointer;font-size:19px;
+      background:var(--sur2);border:1.5px solid var(--bor2);color:var(--txt)}
+    .paycon-d span{font-size:10px;font-weight:700;color:var(--sub)}
+    .paycon-d.on{border-color:var(--g);background:var(--ga2)}
+    .paycon-d.on span{color:var(--g)}
+    .paycon-secure{margin-top:9px;padding:9px 11px;border-radius:10px;font-size:10.5px;line-height:1.55;
+      background:rgba(113,255,0,.05);border:1px solid var(--ga);color:#9fe86a}
+    .paycon-sums{margin-top:16px;padding-top:12px;border-top:1px solid var(--bor2)}
+    .paycon-sum{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;font-size:12px;color:var(--sub)}
+    .paycon-sum b{font-size:15px;font-weight:800;color:var(--txt);font-variant-numeric:tabular-nums}
+    .paycon-sum.change b{color:var(--g)}
+    @media(max-width:420px){
+      .paycon-hero-val{font-size:28px}
+      .paycon-methods{grid-template-columns:repeat(auto-fit,minmax(84px,1fr))}
+    }
     body{background:var(--bg);color:var(--txt);font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
   </style>
   <script src="sokoni-branch.js" defer></script>
@@ -540,6 +605,13 @@
             <button class="pay-method-btn" data-method="card" onclick="SPos.payment.setMethod('card')"><span class="method-icon">💳</span>Card</button>
             <button class="pay-method-btn" data-method="split" onclick="SPos.payment.setMethod('split')"><span class="method-icon">✂️</span>Split</button>
             <button class="pay-method-btn" id="qr-pay-method-btn" data-method="qr" onclick="SPos.payment.setMethod('qr'); SPosQR.open()" aria-label="QR Code payment"><span class="method-icon" aria-hidden="true">⬛</span>QR Pay</button>
+            <!-- MULTI-TENDER CONSOLE. Additive: every button above keeps working
+                 exactly as before, including Cash, which remains the default and
+                 the only tender that completes with no network. This opens the
+                 richer surface where one sale can be split across cash + M-PESA +
+                 card + any other method the IntaSend account has enabled, with the
+                 balance auto-filling as each is tapped. -->
+            <button class="pay-method-btn paycon-open" data-method="multi" onclick="SPosPayConsole.open(SPos.cart.getTotal())" aria-label="Split across multiple payment methods"><span class="method-icon" aria-hidden="true">⊞</span>Multi-Pay</button>
           </div>
           <!-- Terminal status indicator — populated by PosTerminals -->
           <div id="terminal-status-bar" style="display:none;gap:6px;flex-wrap:wrap;margin-top:8px;padding:2px 0"></div>
@@ -1343,6 +1415,79 @@
 </div>
 
 <!-- ════ SPLIT PAYMENT MODAL ════ -->
+<!-- ══════════════════════════════════════════════════════════════════════════
+     MULTI-TENDER PAYMENT CONSOLE
+     One sale, any number of tenders. Rendered entirely by
+     sokoni-pos-pay-console.js from SPosTender's pure arithmetic — no money is
+     computed in this markup.
+
+     There is NO card number field here and there never will be. Card is
+     collected on the customer's own device through IntaSend's hosted page.
+     The cashier never sees a PAN or a CVV.
+══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="paycon-modal">
+  <div class="modal paycon" style="max-width:520px">
+    <div class="modal-header">
+      <span class="modal-title">Payment</span>
+      <button class="modal-close" onclick="SPosPayConsole.close()">✕</button>
+    </div>
+    <div class="modal-body" style="padding-top:8px">
+
+      <div class="paycon-hero">
+        <div class="paycon-hero-label">TOTAL DUE</div>
+        <div class="paycon-hero-val" id="paycon-total">KES 0.00</div>
+      </div>
+
+      <div class="paycon-sec-label">PAYMENT METHOD <span>tap to add — amount fills in automatically</span></div>
+      <div class="paycon-methods" id="paycon-methods"></div>
+      <div class="paycon-note" id="paycon-cap-note" style="display:none"></div>
+
+      <div class="paycon-sec-label">THIS SALE</div>
+      <div class="paycon-tenders" id="paycon-tenders"></div>
+
+      <div class="paycon-numpad">
+        <button class="numpad-key" onclick="SPosPayConsole.key('7')">7</button>
+        <button class="numpad-key" onclick="SPosPayConsole.key('8')">8</button>
+        <button class="numpad-key" onclick="SPosPayConsole.key('9')">9</button>
+        <button class="numpad-key" onclick="SPosPayConsole.key('4')">4</button>
+        <button class="numpad-key" onclick="SPosPayConsole.key('5')">5</button>
+        <button class="numpad-key" onclick="SPosPayConsole.key('6')">6</button>
+        <button class="numpad-key" onclick="SPosPayConsole.key('1')">1</button>
+        <button class="numpad-key" onclick="SPosPayConsole.key('2')">2</button>
+        <button class="numpad-key" onclick="SPosPayConsole.key('3')">3</button>
+        <button class="numpad-key dot" onclick="SPosPayConsole.key('.')">.</button>
+        <button class="numpad-key" onclick="SPosPayConsole.key('0')">0</button>
+        <button class="numpad-key back" onclick="SPosPayConsole.key('back')">⌫</button>
+        <button class="numpad-key clear-num" onclick="SPosPayConsole.key('clear')">Clear</button>
+        <button class="numpad-key" onclick="SPosPayConsole.key('exact')" style="font-size:11px;font-weight:800;color:var(--green)">Rest</button>
+      </div>
+
+      <!-- Only shown when a tender needs the CUSTOMER to act. Three ways to get
+           them to IntaSend's hosted page; in none of them does card data touch
+           this device. -->
+      <div class="paycon-delivery" id="paycon-delivery" style="display:none">
+        <div class="paycon-sec-label">HOW THE CUSTOMER PAYS</div>
+        <div class="paycon-deliv-grid">
+          <button class="paycon-d on" onclick="SPosPayConsole.setDelivery('phone')">📲<span>Their phone</span></button>
+          <button class="paycon-d" onclick="SPosPayConsole.setDelivery('qr')">⬛<span>Scan QR</span></button>
+          <button class="paycon-d" onclick="SPosPayConsole.setDelivery('handover')">🤝<span>Hand over</span></button>
+        </div>
+        <div class="paycon-secure">🔒 Card details are entered by the customer on the payment provider's secure page. The cashier never sees them.</div>
+      </div>
+
+      <div class="paycon-sums">
+        <div class="paycon-sum"><span>Allocated</span><b id="paycon-allocated">KES 0.00</b></div>
+        <div class="paycon-sum"><span>Balance</span><b id="paycon-balance">KES 0.00</b></div>
+        <div class="paycon-sum change" id="paycon-change-row" style="display:none"><span>Change due</span><b id="paycon-change">KES 0.00</b></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-ghost" onclick="SPosPayConsole.close()">Cancel</button>
+      <button class="modal-btn modal-btn-primary" id="paycon-go" onclick="SPosPayConsole.submit()" disabled>Incomplete</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="split-modal">
   <div class="modal" style="max-width:380px">
     <div class="modal-header"><span class="modal-title">Split Payment</span><button class="modal-close" onclick="SPos.modal.close('split-modal')">✕</button></div>
@@ -2691,6 +2836,8 @@ html.in-merchant-shell .pos-quick-nav { display: none !important; }
 <!-- ════ SmartPOS 2.0 — Universal Plug & Play Ecosystem ════ -->
 <script defer src="sokoni-redis.js"></script>
 <script defer src="sokoni-device-hub.js"></script>
+<script defer src="sokoni-pos-tender.js"></script>
+<script defer src="sokoni-pos-pay-console.js"></script>
 <script defer src="sokoni-payment-terminal.js"></script>
 <script defer src="sokoni-customer-display.js"></script>
 <script>
