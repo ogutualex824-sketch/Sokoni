@@ -244,6 +244,31 @@ function pillValue(html, tabId) {
   return m ? m[1] : null;
 }
 
+/* Pull the rendered VALUE of a GCP metric row, with markup stripped.
+   A figure may be wrapped in a link button — that is a certified behaviour, not
+   an accident — so matching on a bare `<strong>0` would fail on correct output.
+   This extracts what the operator actually reads, which is what should be
+   asserted on. Returns null when the row is absent, so a missing row cannot
+   masquerade as an em dash. */
+/* Slice the markup belonging to ONE database section. Both databases render
+   rows with identical labels, so an unscoped lookup silently answers with
+   whichever came first — which would have let an assertion about sokoni-ops
+   pass or fail on (default)'s value. Scope first, then read. */
+function dbSection (html, dbId) {
+  const start = html.indexOf('<div class="sic-sect-l">' + dbId + '</div>');
+  if (start === -1) return '';
+  const next = html.indexOf('<div class="sic-sect-l">', start + 1);
+  return html.slice(start, next === -1 ? undefined : next);
+}
+
+function metricValue (html, label) {
+  const re = new RegExp('<span>' + label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') +
+                        '<\\/span><strong>([\\s\\S]*?)<span class="sic-badge');
+  const m = re.exec(html);
+  if (!m) return null;
+  return m[1].replace(/<[^>]*>/g, '').trim();
+}
+
 /* Pull the numeric value out of a named stat tile in the rendered markup. */
 function statValue(html, label) {
   const i = html.indexOf('>' + label + '</div>');
@@ -322,6 +347,275 @@ function statValue(html, label) {
     api.tab('catalogue');
     api.selectCatalogue('intasend-collections');
   });
+
+  /* ── GCP control-plane fixtures ──────────────────────────────────────
+     Shaped exactly as functions/gcp-evidence.js returns, and deliberately
+     mixing outcomes in ONE render so the three confusable states appear side by
+     side: an observed value, a MEASURED zero, an unreadable field, and a field
+     nothing looked at. */
+  const obs = (v, src) => ({ value: v, state: (v === 0 ? 'empty' : 'observed'),
+    source: src || 'firestore', observedAt: new Date(NOW).toISOString(), reason: '' });
+  const unread = (why) => ({ value: null, state: 'unreadable', source: 'firestore',
+    observedAt: new Date(NOW).toISOString(), reason: why });
+  const notAtt = (why) => ({ value: null, state: 'not-attempted', source: null,
+    observedAt: null, reason: why });
+
+  const GCP_EVIDENCE = {
+    project: 'sokoni-aeb26',
+    generatedAt: new Date(NOW).toISOString(),
+    covers: ['firestore.databases', 'firestore.indexes', 'firestore.collections'],
+    notCovered: ['cloud-run', 'artifact-registry', 'iam', 'monitoring', 'billing'],
+    quota: obs(1000, 'serviceusage.quota'),
+    ok: true, error: '',
+    databases: {
+      '(default)': {
+        id: '(default)',
+        region: obs('nam5'), type: obs('FIRESTORE_NATIVE'),
+        deleteProtection: obs('DELETE_PROTECTION_ENABLED'),
+        /* UNREADABLE — must show no number and name the error. */
+        indexesDeployed: unread('PERMISSION_DENIED on firestore.indexes.list'),
+        indexesReady:    unread('PERMISSION_DENIED on firestore.indexes.list'),
+        indexStates:     unread('PERMISSION_DENIED on firestore.indexes.list'),
+        indexesDeclared: obs(414), indexDrift: unread('deployed count unreadable'),
+        rootCollections: obs(217),
+      },
+      'sokoni-ops': {
+        id: 'sokoni-ops',
+        region: obs('europe-west1'), type: obs('FIRESTORE_NATIVE'),
+        deleteProtection: obs('DELETE_PROTECTION_DISABLED'),
+        indexesDeployed: obs(54), indexesReady: obs(54), indexStates: obs({ READY: 54 }),
+        /* NOT ATTEMPTED — must never become 0. */
+        indexesDeclared: notAtt('The caller supplied no repository declaration count.'),
+        indexDrift:      notAtt('Cannot reconcile without a declared count.'),
+        /* THE MEASURED ZERO. */
+        rootCollections: obs(0),
+      },
+    },
+  };
+
+  const gcpHtml = await renderWith(FULL, { getGcpEvidence: () => Promise.resolve(GCP_EVIDENCE) },
+    (api) => api.tab('gcp'));
+
+  /* ── The full cockpit envelope, as readGcpEvidence() returns it ──────
+     Deliberately mixes a live domain, a DEAD domain and a measured zero in one
+     render, because the cockpit's whole claim is that those stay distinguishable
+     when shown side by side. */
+  const GCP_FULL = {
+    project: 'sokoni-aeb26',
+    generatedAt: new Date(NOW).toISOString(),
+    notCovered: ['cloud-logging-entries', 'cost-breakdown'],
+    ok: true, error: '',
+    domainsRead: obs(7), domainsFailed: obs(1),
+    regions: obs(['europe-west1', 'us-central1', 'us-east1'], 'derived from observed resources'),
+    projectInfo: { projectNumber: obs('24799054989'), state: obs('ACTIVE') },
+    compute: {
+      functions: { total: obs(1709), active: obs(1700), failed: obs(9),
+                   deploying: obs(0), runtimes: obs({ nodejs22: 1709 }) },
+      /* DEAD DOMAIN — must show em dashes and never zeros. */
+      cloudRun: { services: unread('run API disabled'), ready: unread('run API disabled'),
+                  revisionMismatch: unread('run API disabled'),
+                  unboundedScaling: unread('run API disabled'),
+                  pinnedMinimum: unread('run API disabled') },
+      artifactRegistry: { repositories: obs(2),
+        cleanupPolicies: obs({ 'firebase-functions-cleanup': 2, 'sokoni-recovery-protection': 2 }),
+        enforcingRepos: obs(2) },
+    },
+    data: { firestore: { quota: obs(1000), databases: GCP_EVIDENCE.databases } },
+    observability: {
+      monitoring: { alertPolicies: obs(12), enabled: obs(12), withNotification: obs(9) },
+      billing: { billingEnabled: obs(true), billingAccount: obs('billingAccounts/XXXX') },
+    },
+    security: {
+      iam: { bindings: obs(31), principals: obs(18), serviceAccounts: obs(6),
+             owners: obs(1), editors: obs(3), auditServices: obs(1),
+             auditLogTypes: obs({ ADMIN_READ: 1, DATA_WRITE: 1 }) },
+      secrets: { secrets: obs(24), withRotation: obs(0), withExpiry: notAtt('not read') },
+    },
+  };
+
+  /* Inventories for the drill-downs, shaped as inventory() returns them. */
+  const inv = (rows, total) => ({ value: rows, state: rows.length ? 'observed' : 'empty',
+    source: 'gcp', observedAt: new Date(NOW).toISOString(), reason: '',
+    total: total === undefined ? rows.length : total, cap: 250,
+    truncated: (total === undefined ? rows.length : total) > 250 });
+
+  GCP_FULL.apis = { enabled: obs(48), names: obs(['run.googleapis.com']) };
+  GCP_FULL.activity = {
+    events: obs(2), failures: obs(1), lastEventAt: obs('2026-09-21T09:21:00Z'),
+    timeline: inv([
+      { at: '2026-09-21T09:21:00Z', service: 'run.googleapis.com',
+        method: 'Services.ReplaceService', resource: 'svc/processtypesensequeue', failed: false },
+      { at: '2026-09-21T09:19:00Z', service: 'artifactregistry.googleapis.com',
+        method: 'BatchDeleteVersions', resource: 'repo/x', failed: true },
+    ]),
+  };
+  GCP_FULL.data.storage = { buckets: obs(3), locations: obs(['US']),
+    publicAccessPrevention: obs(3), uniformAccess: obs(3), names: obs(['sokoni-media']) };
+  GCP_FULL.compute.functions.scaling = obs({ 'max=80': 1700, unset: 9 });
+  GCP_FULL.compute.functions.pinnedMinimum = obs(1);
+  GCP_FULL.compute.functions.inventory = inv([
+    { name: 'processTypesenseQueue', region: 'us-central1', state: 'ACTIVE', runtime: 'nodejs22',
+      service: 'processtypesensequeue', revision: '00022-fon', memory: '512Mi', timeout: 540,
+      minInstances: null, maxInstances: 80, serviceAccount: 'sa@x.iam.gserviceaccount.com',
+      sourceContract: null },
+    /* No contract row exists for this one. Its card must say nothing was
+       CHECKED — not show a tick. Without this row the unchecked branch never
+       renders and its guard is untested. */
+    { name: 'uncontracted', region: 'us-east1', state: 'ACTIVE', runtime: 'nodejs22',
+      service: null, revision: null, memory: '256Mi', timeout: 60,
+      minInstances: null, maxInstances: null, serviceAccount: null, sourceContract: null },
+  ], 1709);
+  GCP_FULL.compute.cloudRun.inventory = inv([
+    { name: 'profilegetpublicprofile', region: 'us-central1', ready: true,
+      latestReadyRevision: '00007-xaz', latestCreatedRevision: '00007-xaz', revisionParity: true,
+      minScale: 1, maxScale: 80, concurrency: 80, cpu: '1', memory: '512Mi', timeout: '540s',
+      image: 'pkg.dev/x@sha256:133a75e9', serviceAccount: 'sa@x.iam.gserviceaccount.com' },
+    /* An UNBOUNDED service: max is null, which must never render as 0. */
+    { name: 'orphaned', region: 'us-east1', ready: true, latestReadyRevision: 'r8',
+      latestCreatedRevision: 'r9', revisionParity: false, minScale: null, maxScale: null,
+      concurrency: null, cpu: null, memory: null, timeout: null,
+      image: 'pkg.dev/y@sha256:deadbeef', serviceAccount: null },
+  ]);
+  GCP_FULL.compute.artifactRegistry.inventory = inv([
+    { name: 'gcf-artifacts', location: 'us-central1', format: 'DOCKER', enforcing: true,
+      policies: [{ id: 'firebase-functions-cleanup', action: 'DELETE', olderThan: '86400s', tagState: 'ANY' },
+                 { id: 'sokoni-recovery-protection', action: 'KEEP', keepCount: 10 }] },
+  ]);
+  GCP_FULL.compute.artifactRegistry.reposWithDeleteOnly = obs(1);
+  GCP_FULL.compute.images = { images: obs(412),
+    inventory: inv([{ name: 'x', repo: 'gcf-artifacts', digest: 'sha256:133a75e9',
+      tags: ['latest'], uploadTime: '2026-09-21T04:21:47Z' }], 412) };
+  GCP_FULL.compute.provenance = {
+    servicesPinnedByDigest: obs(2), servicesPinnedByTag: obs(0),
+    imageMissingFromRegistry: obs(1),
+    missingInventory: inv([{ service: 'orphaned', region: 'us-east1', digest: 'sha256:deadbeef' }]),
+  };
+  GCP_FULL.security.iam.adminBindings = inv([
+    { role: 'roles/owner',  memberCount: 1, members: ['user:founder@sokoni.co.ke'], conditional: false },
+    { role: 'roles/editor', memberCount: 2,
+      members: ['user:dev@sokoni.co.ke', 'serviceAccount:ci@x.iam.gserviceaccount.com'], conditional: false },
+  ]);
+  GCP_FULL.security.iam.bindingInventory = inv([
+    { role: 'roles/viewer', memberCount: 1, members: ['user:audit@sokoni.co.ke'] },
+  ]);
+  GCP_FULL.security.iam.humanPrincipals = obs(['user:founder@sokoni.co.ke', 'user:dev@sokoni.co.ke']);
+  GCP_FULL.security.iam.groupPrincipals = obs(['group:ops@sokoni.co.ke']);
+  GCP_FULL.security.iam.auditCoverage = inv([
+    { service: 'artifactregistry.googleapis.com', logTypes: ['ADMIN_READ', 'DATA_WRITE'], exemptedMembers: 0 },
+  ]);
+
+  const cockpitHtml = await renderWith(FULL,
+    { getGcpEvidence: () => Promise.resolve(GCP_FULL) }, (api) => api.tab('gcp'));
+
+  const drill = async (which) => renderWith(FULL,
+    { getGcpEvidence: () => Promise.resolve(GCP_FULL) },
+    (api) => { api.tab('gcp'); api.gcpDrill(which); });
+
+  const runHtml    = await drill('run');
+  const fnHtml     = await drill('functions');
+  const artHtml    = await drill('artifacts');
+  const adminsHtml = await drill('admins');
+  const auditHtml  = await drill('audit');
+
+  /* Telemetry, cost conditions, service-account usage and App Check. One
+     fixture mixes a measured value, a MEASURED ZERO and a not-attempted, so the
+     three appear side by side in one render. */
+  GCP_FULL.observability.telemetry = {
+    windowHours: 24,
+    runRequests: obs(18422), run5xx: obs(0), runInstancePeak: obs(6),
+    fnExecutions: obs(90411), fnErrors: obs(37),
+    firestoreReads: obs(1204331), firestoreWrites: obs(88210), firestoreDeletes: obs(12),
+  };
+  GCP_FULL.observability.incidents = {
+    openIncidents: notAtt('The incidents API is not exposed under the REST surface this reader uses.') };
+  GCP_FULL.observability.budgets = { budgets: obs(3), withThresholds: obs(3),
+    budgetNames: obs(['monthly']) };
+  GCP_FULL.security.appCheck = { services: obs(9), enforced: obs(7), unenforced: obs(2),
+    inventory: inv([{ service: 'firestore.googleapis.com', mode: 'ENFORCED' },
+                    { service: 'identitytoolkit.googleapis.com', mode: 'UNENFORCED' }]) };
+  GCP_FULL.security.serviceAccounts = {
+    total: obs(6), withoutWorkload: obs(1),
+    inventory: inv([
+      { email: 'sa-a@x.iam.gserviceaccount.com', roles: ['roles/run.invoker'], roleCount: 1,
+        runServices: 4, functions: 12, unusedByWorkloads: false, usageKnown: true },
+      { email: 'orphan@x.iam.gserviceaccount.com', roles: ['roles/storage.admin'], roleCount: 1,
+        runServices: 0, functions: 0, unusedByWorkloads: true, usageKnown: true },
+      /* Usage UNKNOWN — a workload inventory could not be read. This row must
+         render an em dash, not "no". Without it, removing the usageKnown guard
+         changes nothing and the guard is untested. */
+      { email: 'unknown@x.iam.gserviceaccount.com', roles: ['roles/viewer'], roleCount: 1,
+        runServices: 0, functions: 0, unusedByWorkloads: true, usageKnown: false },
+    ]),
+  };
+  GCP_FULL.cost = {
+    pinnedInstances: obs(1),
+    pinnedInventory: inv([{ service: 'adminosdispatch', region: 'us-central1', minScale: 1, maxScale: 10 }]),
+    unboundedServices: obs(2),
+    unboundedInventory: inv([{ service: 'unbounded', region: 'us-east1', maxScale: null }]),
+    highMaxScale: obs(0), highMaxInventory: inv([]),
+    servicesWithNoObservedTraffic: notAtt('Per-service traffic requires a per-service metric query.'),
+    costBreakdown: notAtt('A cost breakdown requires the billing export dataset.'),
+  };
+
+  GCP_FULL.compute.contracts = {
+    capturedAt: obs('2026-09-21T10:42:59.357Z'),
+    adjudicated: obs(7), withoutContract: obs(1702),
+    maxMismatch: obs(1), minUnpinned: obs(1), gcfDiscrepancy: obs(6),
+    note: obs('The GCF layer reports minInstanceCount=undefined while BOTH the source and the ' +
+              'serving revision say 1. The serving revision is authoritative.'),
+    inventory: inv([
+      { fn: 'processTypesenseQueue', region: 'us-central1', srcMin: null, srcMax: null,
+        runMin: null, runMax: null, gcfMin: null, gcfMax: null,
+        maxParity: true, minPinned: false, gcfDisagrees: false,
+        verdict: 'OWNER DECISION REQUIRED' },
+      { fn: 'kass', region: 'us-central1', srcMin: 1, srcMax: null,
+        runMin: 1, runMax: 80, gcfMin: null, gcfMax: null,
+        maxParity: false, minPinned: true, gcfDisagrees: true,
+        verdict: 'OWNER DECISION REQUIRED' },
+    ]),
+  };
+
+  GCP_FULL.security.secretCoverage = {
+    declared: obs(31), provisioned: obs(24), missing: obs(2),
+    missingNames: inv([{ secret: 'ALGOLIA_ADMIN_KEY' }, { secret: 'TYPESENSE_ADMIN_KEY' }]),
+    unmatched: obs(1), unmatchedNames: inv([{ secret: 'LEGACY_THING' }]),
+  };
+  const contractHtml = await drill('contracts');
+  const secretsHtml  = await drill('secrets');
+  const dbHtml       = await drill('databases');
+  /* Entity cards: one function, one service account. */
+  const pick = async (kindDrill, kind, id) => renderWith(FULL,
+    { getGcpEvidence: () => Promise.resolve(GCP_FULL) },
+    (api) => { api.tab('gcp'); api.gcpDrill(kindDrill); api.gcpPick(kind, id); });
+  const fnCardHtml = await pick('functions', 'function', 'processTypesenseQueue');
+  const fnNoContractHtml = await pick('functions', 'function', 'uncontracted');
+  const saCardHtml = await pick('serviceaccounts', 'sa', 'orphan@x.iam.gserviceaccount.com');
+  const saUnknownHtml = await pick('serviceaccounts', 'sa', 'unknown@x.iam.gserviceaccount.com');
+
+  const teleHtml = await drill('telemetry');
+  const costHtml = await drill('cost');
+  const saHtml   = await drill('serviceaccounts');
+  const acHtml   = await drill('appcheck');
+  /* The graph and the activity panel render on the base cockpit, not a drill. */
+  const cockpit2 = await renderWith(FULL,
+    { getGcpEvidence: () => Promise.resolve(GCP_FULL) }, (api) => api.tab('gcp'));
+
+  /* One render carrying BOTH an empty inventory and an unreadable one, so the
+     two can be told apart in the same output rather than across two runs. */
+  const GCP_EMPTY_INV = JSON.parse(JSON.stringify(GCP_FULL));
+  GCP_EMPTY_INV.compute.artifactRegistry.inventory = inv([]);
+  GCP_EMPTY_INV.compute.provenance.missingInventory = inv([]);
+  GCP_EMPTY_INV.compute.images.inventory = {
+    value: null, state: 'unreadable', source: 'gcp',
+    observedAt: new Date(NOW).toISOString(), reason: 'The images API refused the read.' };
+  const emptyInvHtml = await renderWith(FULL,
+    { getGcpEvidence: () => Promise.resolve(GCP_EMPTY_INV) },
+    (api) => { api.tab('gcp'); api.gcpDrill('artifacts'); });
+
+  /* The reader is not deployed — the state production is in today. */
+  const gcpDownHtml = await renderWith(FULL, {
+    getGcpEvidence: () => Promise.reject(new Error('Unknown admin-os operation: the reader is not deployed')),
+  }, (api) => api.tab('gcp'));
 
   /* ── Database probe fixtures ─────────────────────────────────────────
      The named database is injected, so this exercises the real probe logic
@@ -732,6 +1026,575 @@ function statValue(html, label) {
        /no SLA|no contract/i.test(tiles.notes || ''), tiles.notes || '');
   });
 
+  /* ── D11 — THE GCP CONTROL PLANE ───────────────────────────────────
+     This panel exists to show infrastructure figures a browser cannot obtain,
+     which means it is the single most dangerous surface on this console for
+     inventing one. Three states must never be confused:
+
+       measured zero   the server enumerated and found none. A FINDING
+       unreadable      a read failed. No value
+       not measured    nothing looked, or the reader is not deployed
+
+     The first is valuable. The second and third rendered as "0" would be a lie
+     that looks authoritative. */
+  runCase('D11 the GCP panel separates a measured zero from an unmeasured one', () => {
+    ok('D11 control: the GCP panel rendered', /Google Cloud Platform/.test(gcpHtml));
+    ok('D11 the project is named', /sokoni-aeb26/.test(gcpHtml));
+
+    /* A real observation renders its value AND its state. */
+    ok('D11 an observed region is shown', /europe-west1/.test(gcpHtml));
+    ok('D11 an observed figure is badged Observed', /Observed<\/span>/.test(gcpHtml));
+
+    /* THE CENTRAL CASE. sokoni-ops genuinely has no root collections, and the
+       server measured that. It must render 0, badged as measured, and say so. */
+    const opsSec = dbSection(gcpHtml, 'sokoni-ops');
+    const defSec = dbSection(gcpHtml, '(default)');
+    ok('D11 control: both database sections rendered', !!opsSec && !!defSec);
+    ok('D11 a measured zero renders as 0, not as an em dash',
+       metricValue(opsSec, 'Root collections') === '0',
+       JSON.stringify(metricValue(opsSec, 'Root collections')));
+    /* INVERTING CONTROL — the OTHER database reports a real non-zero for the
+       same field, so "it rendered 0" is a reading and not a constant. */
+    ok('D11 control: the other database reports its real count',
+       metricValue(defSec, 'Root collections') === '217',
+       JSON.stringify(metricValue(defSec, 'Root collections')));
+    ok('D11 a measured zero is badged as measured', /Measured zero/.test(gcpHtml));
+    ok('D11 and the panel says the zero was measured',
+       /This zero was measured/.test(gcpHtml));
+    ok('D11 and explains a client could not have produced it',
+       /client cannot enumerate collections/.test(gcpHtml));
+
+    /* A failed read must NOT look like the measured zero above. */
+    ok('D11 an unreadable figure is badged Unreadable', /Unreadable<\/span>/.test(gcpHtml));
+    ok('D11 an unreadable figure names its error', /PERMISSION_DENIED/.test(gcpHtml));
+    /* The (default) row's index read was refused. Its value must be the em
+       dash — never a number, and in particular never a zero. */
+    ok('D11 an unreadable figure shows an em dash, not a number',
+       metricValue(defSec, 'Indexes deployed') === '—',
+       JSON.stringify(metricValue(defSec, 'Indexes deployed')));
+    ok('D11 control: the readable database DOES show its index count',
+       metricValue(opsSec, 'Indexes deployed') === '54',
+       JSON.stringify(metricValue(opsSec, 'Indexes deployed')));
+
+    /* An unsupplied declaration is not-attempted, never zero drift. */
+    ok('D11 an unmeasured field is badged Not measured', /Not measured<\/span>/.test(gcpHtml));
+
+    /* The reader's own boundary must be visible. */
+    ok('D11 the panel states what the reader does NOT cover',
+       /Not covered by this reader/.test(gcpHtml));
+    ok('D11 and names an uncovered domain', /iam/.test(gcpHtml));
+
+    /* Figures are a way INTO the evidence. */
+    ok('D11 a figure links to the entry that owns it',
+       /sic-linkfig[\s\S]{0,200}selectCatalogue/.test(gcpHtml));
+  });
+
+  /* ── D13 — THE COCKPIT ─────────────────────────────────────────────
+     Four control planes on one screen. The risk of a cockpit is that a dark
+     instrument reads as a healthy one, so what is certified here is that a DEAD
+     domain stays visibly dead while its neighbours report real figures. */
+  runCase('D13 the cockpit shows four control planes and keeps a dead one dark', () => {
+    ok('D13 control: the cockpit rendered', /Google Cloud Platform/.test(cockpitHtml));
+
+    ['Compute', 'Data', 'Observability', 'Security'].forEach((s) => {
+      ok('D13 the ' + s + ' section rendered', new RegExp('>' + s + '<').test(cockpitHtml));
+    });
+
+    /* Identity and derived coverage. */
+    ok('D13 the project number is shown', metricValue(cockpitHtml, 'Project number') === '24799054989',
+       JSON.stringify(metricValue(cockpitHtml, 'Project number')));
+    ok('D13 region coverage is derived from observed resources',
+       /europe-west1/.test(cockpitHtml) && /us-east1/.test(cockpitHtml));
+
+    /* A LIVE domain reports real figures. */
+    ok('D13 the function count is shown', metricValue(cockpitHtml, 'Deployed') === '1709',
+       JSON.stringify(metricValue(cockpitHtml, 'Deployed')));
+    ok('D13 IAM owners are shown', metricValue(cockpitHtml, 'Owners') === '1');
+    ok('D13 alert policies are shown', metricValue(cockpitHtml, 'Alert policies') === '12');
+    ok('D13 secrets are counted', metricValue(cockpitHtml, 'Secrets') === '24');
+    ok('D13 the cleanup policies are visible',
+       /firebase-functions-cleanup/.test(cockpitHtml) && /sokoni-recovery-protection/.test(cockpitHtml));
+
+    /* THE CENTRAL CLAIM — a dead control plane stays dark. */
+    ok('D13 a dead domain shows an em dash, not a zero',
+       metricValue(cockpitHtml, 'Services') === '—',
+       JSON.stringify(metricValue(cockpitHtml, 'Services')));
+    ok('D13 and names its error', /run API disabled/.test(cockpitHtml));
+    ok('D13 and the header warns part of the cockpit is dark',
+       /Part of this cockpit is dark/.test(cockpitHtml));
+    ok('D13 a dark instrument is not a finding about the resource',
+       /NOT a finding that the resource is absent or healthy/.test(cockpitHtml));
+
+    /* A measured zero survives inside the cockpit too. */
+    ok('D13 a measured zero is still badged as measured',
+       metricValue(cockpitHtml, 'With a rotation policy') === '0' &&
+       /Measured zero/.test(cockpitHtml),
+       JSON.stringify(metricValue(cockpitHtml, 'With a rotation policy')));
+    /* And a not-attempted field is still NOT a zero. */
+    ok('D13 an unread field is an em dash, not 0',
+       metricValue(cockpitHtml, 'With an expiry') === '—',
+       JSON.stringify(metricValue(cockpitHtml, 'With an expiry')));
+
+    /* No manufactured judgement. */
+    ok('D13 the panel refuses to compute a risk score',
+       /No risk score is computed here/.test(cockpitHtml));
+    ok('D13 audit coverage states what an absent config means',
+       /absent audit config means/.test(cockpitHtml));
+    ok('D13 secrets are named as names only',
+       /cannot return a value/.test(cockpitHtml));
+  });
+
+  /* ── D14 — THE DRILL-DOWNS ─────────────────────────────────────────
+     An evidence table is where an invented number would be least noticeable,
+     because a table of real-looking rows reads as authority. What is certified
+     is that a truncated list says so, an absent value stays absent, and the
+     provenance join names the actual resource rather than summarising it. */
+  runCase('D14 the Cloud Run drill-down shows the serving contract', () => {
+    ok('D14 control: the drill-down opened', /Cloud Run<\/div>|Cloud Run.*✕/s.test(runHtml));
+    ok('D14 the service is listed', /profilegetpublicprofile/.test(runHtml));
+    ok('D14 the serving revision is shown', /00007-xaz/.test(runHtml));
+    ok('D14 the image digest is shown', /sha256:133a75e9/.test(runHtml));
+    ok('D14 the service account is shown', /sa@x\.iam\.gserviceaccount\.com/.test(runHtml));
+    ok('D14 a revision mismatch is labelled', /MISMATCH/.test(runHtml));
+
+    /* An UNBOUNDED maximum must render as an em dash, never as 0. */
+    ok('D14 an absent max-instance limit is an em dash, not 0',
+       !/<td class="sic-mono">0<\/td>/.test(runHtml));
+    ok('D14 and the panel explains that a blank max means unbounded',
+       /no explicit limit/.test(runHtml) && /unbounded, not zero/.test(runHtml));
+    ok('D14 the function-to-image chain is named',
+       /function → service → revision → image digest → registry/.test(runHtml));
+  });
+
+  runCase('D14b the Functions drill-down separates serving from source', () => {
+    ok('D14b control: the inventory rendered', /processTypesenseQueue/.test(fnHtml));
+    ok('D14b it names the Cloud Run service the function runs on',
+       /processtypesensequeue/.test(fnHtml));
+    ok('D14b the estate scaling breakdown is shown', /max=80/.test(fnHtml));
+
+    /* THE HONESTY THAT MATTERS: the repository-side contract is not an API
+       fact, and the panel says so rather than implying parity. */
+    ok('D14b it states the source contract is not in this table',
+       /Source contract is not in this table/.test(fnHtml));
+    ok('D14b and distinguishes declared from serving',
+       /only the\s*\n?\s*serving side is an API fact|only the serving side is an API fact/.test(fnHtml));
+
+    /* A capped list must say so. */
+    /* The SHAPE of the disclosure, not a pinned row count — adding a fixture
+       row must not break a check about whether truncation is disclosed at all.
+       The total is what matters and it is asserted exactly. */
+    ok('D14b the cap is disclosed', /Showing \d+ of 1709/.test(fnHtml),
+       (fnHtml.match(/Showing \d+ of \d+/) || ['no cap note'])[0]);
+    ok('D14b and says the table is not the total',
+       /this table is not/.test(fnHtml));
+  });
+
+  runCase('D14c Artifact Registry shows policies and the provenance join', () => {
+    ok('D14c control: repositories rendered', /gcf-artifacts/.test(artHtml));
+    /* The policy ACTION and its condition, not merely that a policy exists. */
+    ok('D14c the DELETE policy shows its action and age condition',
+       /firebase-functions-cleanup=DELETE\/86400s\/ANY/.test(artHtml));
+    ok('D14c the KEEP policy shows its keep count',
+       /sokoni-recovery-protection=KEEP\/keep10/.test(artHtml));
+    ok('D14c a DELETE-without-KEEP repository is counted',
+       metricValue(artHtml, 'Repositories with DELETE and no KEEP') === '1',
+       JSON.stringify(metricValue(artHtml, 'Repositories with DELETE and no KEEP')));
+    ok('D14c it explains that dry-run disables deletion rather than previewing it',
+       /disables deletion rather than previewing it/.test(artHtml));
+
+    /* The join. */
+    ok('D14c a serving image missing from the registry is counted',
+       metricValue(artHtml, 'Serving image MISSING from the registry') === '1');
+    ok('D14c and the affected service is NAMED, not just counted',
+       /orphaned/.test(artHtml) && /sha256:deadbeef/.test(artHtml));
+    ok('D14c and it explains the consequence',
+       /unable to create a new revision from its existing spec/.test(artHtml));
+  });
+
+  runCase('D14d the administrators panel shows real bindings, not a score', () => {
+    ok('D14d control: the panel rendered', /Administrators/.test(adminsHtml));
+    ok('D14d the owner is named', /founder@sokoni\.co\.ke/.test(adminsHtml));
+    ok('D14d editors are shown', /roles\/editor/.test(adminsHtml));
+    ok('D14d a machine principal is visible as such',
+       /serviceAccount:ci@x\.iam\.gserviceaccount\.com/.test(adminsHtml));
+    ok('D14d humans and groups are separated',
+       /Human principals/.test(adminsHtml) && /Groups/.test(adminsHtml));
+    ok('D14d and it says why that separation matters',
+       /different revocation paths/.test(adminsHtml));
+
+    /* THE REFUSAL — asserted BOTH ways. The stated position must be present,
+       AND no score may appear anywhere. Checking only the sentence let a
+       sabotage ADD "Risk score: LOW" beside it and still pass. */
+    ok('D14d no risk score is computed', /No risk score is computed/.test(adminsHtml));
+    ok('D14d and no score is rendered anywhere on the panel',
+       !/risk score:/i.test(adminsHtml) && !/\bscore\s*[:=]/i.test(adminsHtml),
+       (adminsHtml.match(/.{0,40}score.{0,40}/gi) || []).join(' | ').slice(0, 160));
+    /* INVERTING CONTROL — the matcher DOES fire on a score-shaped string. */
+    ok('D14d control: the score matcher catches a planted score',
+       /risk score:/i.test('<p>Risk score: LOW</p>'));
+    /* INVERTING CONTROL — the panel DOES render evidence, so the refusal is a
+       real position and not an empty panel. */
+    ok('D14d control: the panel is not empty of evidence',
+       /roles\/owner/.test(adminsHtml) && /Principals/.test(adminsHtml));
+  });
+
+  runCase('D14e audit logging states what is NOT logged', () => {
+    ok('D14e control: the panel rendered', /Audit logging/.test(auditHtml));
+    ok('D14e per-service coverage is listed',
+       /artifactregistry\.googleapis\.com/.test(auditHtml) && /ADMIN_READ/.test(auditHtml));
+    /* The sentence that stops the dangerous misreading. */
+    ok('D14e an absent service is stated to be Admin Activity only',
+       /absent from this table has Admin Activity logging/.test(auditHtml));
+    ok('D14e and that this does NOT mean Data Access is recorded',
+       /does NOT mean Data Access is being recorded/.test(auditHtml));
+
+    /* The timeline. */
+    ok('D14e the activity timeline renders', /Services\.ReplaceService/.test(auditHtml));
+    ok('D14e a failed audit event is labelled FAILED', /FAILED/.test(auditHtml));
+    ok('D14e and the reader states it does not read Data Access entries',
+       /does not read them/.test(auditHtml));
+  });
+
+  runCase('D14f an empty inventory is a measured zero, not a failed read', () => {
+    /* A table with no rows and a table that could not be read look identical
+       unless something insists they do not. This is the same distinction the
+       whole console rests on, applied one level down, inside a table. */
+    ok('D14f control: the empty-inventory drill-down rendered',
+       /Artifact Registry/.test(emptyInvHtml));
+    ok('D14f an empty table says it is a measured zero',
+       /Measured zero.*The read returned no rows/s.test(emptyInvHtml));
+    ok('D14f and calls it a finding, not a failed read',
+       /a finding, not a failed read/.test(emptyInvHtml));
+    ok('D14f an empty table is NOT labelled unreadable',
+       !/Unreadable.*The read returned no rows/s.test(emptyInvHtml));
+
+    /* INVERTING CONTROL — an actually unreadable inventory DOES say so, in the
+       same render, so "not unreadable" above is a real finding. */
+    ok('D14f control: a genuinely unreadable inventory is labelled unreadable',
+       /<strong>Unreadable\.<\/strong>/.test(emptyInvHtml));
+    ok('D14f and names why it could not be read',
+       /images API refused/.test(emptyInvHtml));
+  });
+
+  runCase('D15 telemetry carries its window, and a quiet series is a measured zero', () => {
+    ok('D15 control: the telemetry panel rendered', /Cloud Monitoring/.test(teleHtml));
+    ok('D15 the window is stated in the panel', /last 24 hours/.test(teleHtml));
+    ok('D15 and the panel says a window is part of the reading',
+       /window is part of the reading/.test(teleHtml));
+
+    ok('D15 requests are shown', metricValue(teleHtml, 'Requests') === '18422',
+       JSON.stringify(metricValue(teleHtml, 'Requests')));
+    ok('D15 5xx is a separate figure from requests',
+       metricValue(teleHtml, '5xx responses') === '0');
+    /* A quiet series is a MEASURED zero, badged as such. */
+    ok('D15 a quiet series is badged as a measured zero', /Measured zero/.test(teleHtml));
+    ok('D15 and the panel explains that is different from a failed read',
+       /different fact from a failed read/.test(teleHtml));
+
+    ok('D15 Firestore reads and writes are separate figures',
+       metricValue(teleHtml, 'Document reads') === '1204331' &&
+       metricValue(teleHtml, 'Document writes') === '88210');
+
+    /* OPEN INCIDENTS is honestly not measured. */
+    ok('D15 open incidents is an em dash, not zero',
+       metricValue(teleHtml, 'Open incidents') === '—',
+       JSON.stringify(metricValue(teleHtml, 'Open incidents')));
+    ok('D15 and it says why', /not exposed under the REST surface/.test(teleHtml));
+  });
+
+  runCase('D16 cost shows conditions, never verdicts', () => {
+    ok('D16 control: the cost panel rendered', /Billing &amp; cost|Billing & cost/.test(costHtml));
+    ok('D16 budgets are shown', metricValue(costHtml, 'Budgets') === '3');
+    ok('D16 a pinned minimum is surfaced with the service named',
+       /adminosdispatch/.test(costHtml));
+    ok('D16 an unbounded service is surfaced', /unbounded/.test(costHtml));
+
+    /* THE POSITION. */
+    ok('D16 the panel says these are conditions, not verdicts',
+       /conditions, not verdicts/.test(costHtml));
+    ok('D16 and that it does not know whether either is correct',
+       /this reader does not know which/.test(costHtml));
+    ok('D16 no risk score appears', !/risk score:/i.test(costHtml));
+
+    /* The honest gaps stay em dashes. */
+    ok('D16 per-service traffic is an em dash',
+       metricValue(costHtml, 'Services with no observed traffic') === '—');
+    ok('D16 the cost breakdown is an em dash',
+       metricValue(costHtml, 'Cost breakdown by service') === '—');
+    ok('D16 and the panel says they are not measured, not zero',
+       /not measured<\/strong>, not zero/.test(costHtml));
+    /* A measured zero in the SAME panel, so the two are distinguishable. */
+    ok('D16 control: a measured zero also appears, badged differently',
+       metricValue(costHtml, 'Services with a very high maximum') === '0');
+  });
+
+  runCase('D17 service-account usage is a join, and says when it cannot be known', () => {
+    ok('D17 control: the panel rendered', /Service accounts/.test(saHtml));
+    ok('D17 it explains the join', /which identities/.test(saHtml) && /run as/.test(saHtml));
+    ok('D17 an in-use identity shows its workloads',
+       /sa-a@x\.iam\.gserviceaccount\.com/.test(saHtml));
+    ok('D17 an identity running nothing is flagged',
+       /orphan@x\.iam\.gserviceaccount\.com/.test(saHtml));
+    ok('D17 and it is described as access with no owner',
+       /access and no owner/.test(saHtml));
+    /* NOT scored, and honest about its own blind spot. */
+    ok('D17 it is shown as a condition, not scored', /not scored/.test(saHtml));
+    ok('D17 and it admits the reader may not see every consumer',
+       /outside Cloud Run and Functions/.test(saHtml));
+    ok('D17 the panel states an unreadable inventory renders an em dash, not "no"',
+       /rather than "no"/.test(saHtml));
+    /* AND IT ACTUALLY DOES. The sentence above is a claim; this is the row.
+       The unknown-usage row must show an em dash in the "Runs nothing" column
+       while the known rows show yes/no — three states, visibly distinct. */
+    /* Cut each chunk at </tr>. Splitting on '<tr' alone leaves the LAST row
+       running to the end of the document, so it swallows the closing note —
+       which itself contains an em dash, and made this check pass on prose
+       instead of on the cell. A row must be scoped to the row. */
+    const saRows = saHtml.split('<tr')
+      .filter((x) => /gserviceaccount/.test(x))
+      .map((x) => x.split('</tr>')[0]);
+    const unknownRow = saRows.find((x) => /unknown@x.iam/.test(x));
+    const orphanRow  = saRows.find((x) => /orphan@x.iam/.test(x));
+    ok('D17 control: both rows rendered', !!unknownRow && !!orphanRow);
+    ok('D17 an unknown-usage row renders an em dash, never "no"',
+       !!unknownRow && /—/.test(unknownRow) && !/>no</.test(unknownRow),
+       unknownRow ? unknownRow.replace(/<[^>]*>/g, '|').slice(0, 90) : 'missing');
+    ok('D17 control: a KNOWN unused row still says YES',
+       !!orphanRow && />YES</.test(orphanRow));
+  });
+
+  runCase('D18 App Check distinguishes unenforced from broken', () => {
+    ok('D18 control: the panel rendered', /App Check/.test(acHtml));
+    ok('D18 enforced and unenforced are counted separately',
+       metricValue(acHtml, 'Enforced') === '7' && metricValue(acHtml, 'Not enforced') === '2');
+    ok('D18 the inventory names the mode per service', /UNENFORCED/.test(acHtml));
+    ok('D18 and it says an unenforced service is not automatically a fault',
+       /not automatically a fault/.test(acHtml));
+    ok('D18 and to audit the endpoint rather than the count',
+       /Audit the endpoint, not the count/.test(acHtml));
+  });
+
+  runCase('D19 the relationship graph is drawn from readings, not from a picture', () => {
+    ok('D19 control: the graph rendered', /Infrastructure relationships/.test(cockpit2));
+    ok('D19 it is an accessible svg',
+       /role="img" aria-label="Infrastructure relationship graph"/.test(cockpit2));
+
+    /* Nodes carry the figure that was READ. */
+    ok('D19 the functions node carries its real count', /class="sg-v">1709</.test(cockpit2));
+    ok('D19 the provenance node is present', /Missing from registry/.test(cockpit2));
+
+    /* A node whose reading failed is DIMMED, not removed. */
+    ok('D19 a dead node is marked dead rather than omitted',
+       /class="sg-n dead"/.test(cockpit2));
+    ok('D19 and the Cloud Run node is still present despite being unreadable',
+       /Cloud Run services/.test(cockpit2));
+    ok('D19 the panel explains why a dead node is not removed',
+       /absent box would say/.test(cockpit2));
+    ok('D19 and names the distinction it preserves',
+       /the truth is &quot;not measured&quot;|the truth is "not measured"/.test(cockpit2));
+
+    /* Nodes are navigable. */
+    ok('D19 a node opens its evidence panel',
+       /class="sg-n[^"]*"[\s\S]{0,200}gcpDrill/.test(cockpit2));
+  });
+
+  runCase('D20 the activity timeline is Admin Activity only', () => {
+    ok('D20 control: the activity panel rendered', /Recent activity/.test(cockpit2));
+    ok('D20 events read is shown',
+       metricValue(cockpit2, 'Admin Activity events read') === '2',
+       JSON.stringify(metricValue(cockpit2, 'Admin Activity events read')));
+    ok('D20 failures are counted separately',
+       metricValue(cockpit2, 'Of which failed') === '1');
+    ok('D20 a failed operation is labelled', /FAILED/.test(cockpit2));
+    ok('D20 the panel states Data Access entries are NOT read',
+       /Data Access entries can carry/.test(cockpit2));
+    ok('D20 and why', /not worth leaking a\s*\n?\s*request body|not worth leaking a request body/
+       .test(cockpit2));
+  });
+
+  runCase('D21 the scaling contract separates source, serving and the GCF layer', () => {
+    ok('D21 control: the panel rendered', /Scaling contract/.test(contractHtml));
+    ok('D21 it states the two things being compared',
+       /declares in the repository/.test(contractHtml) && /actually serving/.test(contractHtml));
+
+    /* SILENCE IS NOT PARITY — the headline claim of this panel. */
+    ok('D21 functions with no contract are counted separately',
+       metricValue(contractHtml, 'No source contract supplied') === '1702',
+       JSON.stringify(metricValue(contractHtml, 'No source contract supplied')));
+    /* Asserted on the CLAIM itself, and separately on its reason. An `||`
+       here let the sentence be replaced while a neighbouring clause kept the
+       check green — which is exactly how a sabotage vector comes back INERT. */
+    ok('D21 and the panel says they are NOT in parity',
+       /no supplied contract is not/.test(contractHtml));
+    ok('D21 and says nothing was compared for them',
+       /Nothing was compared for it/.test(contractHtml));
+
+    ok('D21 a source-vs-serving mismatch is surfaced',
+       metricValue(contractHtml, 'Source and serving maximum DISAGREE') === '1');
+    /* Scoped to the table CELL. The word DISAGREE also appears in the metric
+       LABEL above the table, so an unscoped match is satisfied by the label
+       even when every row has been made to read "ok" — the label is prose
+       about the check, not the result of it. */
+    ok('D21 and the row cell itself says DISAGREE',
+       /<td class="sic-mono">DISAGREE<\/td>/.test(contractHtml));
+    /* INVERTING CONTROL — the agreeing row renders "ok" in the same table, so
+       the cell matcher is reading real per-row output. */
+    ok('D21 control: an agreeing row renders ok in the same table',
+       /<td class="sic-mono">ok<\/td>/.test(contractHtml));
+    ok('D21 an unpinned minimum is labelled NOT PINNED', /NOT PINNED/.test(contractHtml));
+
+    /* The GCF layer is carried, not resolved away. */
+    ok('D21 the GCF column is shown alongside serving', /GCF min/.test(contractHtml));
+    ok('D21 and the panel explains why parity is measured against serving',
+       /serving revision is authoritative/.test(contractHtml));
+    ok('D21 the verdict travels with the row', /OWNER DECISION REQUIRED/.test(contractHtml));
+
+    /* unset ≠ zero. */
+    ok('D21 the panel says a blank limit is unset, not zero',
+       /is <strong>unset<\/strong>/.test(contractHtml) && /not zero/.test(contractHtml));
+  });
+
+  runCase('D22 Secret Manager shows names only, and says why', () => {
+    ok('D22 control: the panel rendered', /Secret Manager/.test(secretsHtml));
+    ok('D22 the secret count is shown', metricValue(secretsHtml, 'Secrets') === '24');
+    /* The whole sentence, including WHICH API. "cannot return a payload" alone
+       survives a mutation that removes the API name, and a claim without its
+       basis is an assertion rather than evidence. */
+    ok('D22 it states the API used cannot return a payload',
+       /secrets\.list<\/span>, which returns metadata and/.test(secretsHtml) &&
+       /cannot<\/em> return a payload/.test(secretsHtml));
+    ok('D22 and that the access API is never called',
+       /never called/.test(secretsHtml));
+    ok('D22 and names the consequence of adding it',
+       /what a compromise of this console is worth/.test(secretsHtml));
+
+    /* The unread fields are em dashes with a reason, not zeros. */
+    ok('D22 version counts and rotation are listed as NOT read', /Not read/.test(secretsHtml));
+    ok('D22 and explicitly not zero', /They are not\s*\n?\s*zero|are not zero/.test(secretsHtml));
+    /* No secret VALUE may appear. */
+    ok('D22 no secret value is rendered', !/BEGIN (RSA )?PRIVATE KEY|sk_live|whsec_/.test(secretsHtml));
+
+    /* DECLARED vs PROVISIONED — the question the Credentials tab cannot answer. */
+    ok('D22 declared and provisioned are both shown',
+       metricValue(secretsHtml, 'Secret names the rails declare') === '31' &&
+       metricValue(secretsHtml, 'Secrets that exist') === '24');
+    ok('D22 a declared-but-missing secret is counted',
+       metricValue(secretsHtml, 'DECLARED but MISSING') === '2');
+    ok('D22 and NAMED, not just counted',
+       /ALGOLIA_ADMIN_KEY/.test(secretsHtml) && /TYPESENSE_ADMIN_KEY/.test(secretsHtml));
+    ok('D22 and the consequence is stated', /fail when it runs/.test(secretsHtml));
+    /* The other direction is NOT a fault. */
+    ok('D22 an unmatched secret is listed', /LEGACY_THING/.test(secretsHtml));
+    ok('D22 and explicitly called not a fault', /not a fault/.test(secretsHtml));
+    ok('D22 and not something to delete', /not something ([\s\S]{0,20})to delete/.test(secretsHtml));
+  });
+
+  runCase('D23 the database explorer states what it did not read', () => {
+    ok('D23 control: the panel rendered', /Firestore databases/.test(dbHtml));
+    ok('D23 both databases appear', /\(default\)/.test(dbHtml) && /sokoni-ops/.test(dbHtml));
+    ok('D23 the live quota is shown',
+       metricValue(dbHtml, 'Composite-index quota (live)') === '1000');
+    ok('D23 it warns that a deploy naming one does not carry the other',
+       /does not carry the other/.test(dbHtml));
+
+    /* The measured zero survives here too. */
+    ok('D23 the measured zero is still badged as measured', /Measured zero/.test(dbHtml));
+
+    /* And the honest gaps. */
+    ok('D23 document counts, ruleset and query failures are listed as not read',
+       /Document counts, the deployed ruleset and recent query or index/.test(dbHtml));
+    ok('D23 and stated as not measured rather than zero',
+       /not measured<\/strong>, not zero/.test(dbHtml));
+  });
+
+  runCase('D24 a function card shows source, serving and the checks between them', () => {
+    ok('D24 control: the card rendered', /processTypesenseQueue/.test(fnCardHtml));
+    ok('D24 the three sections are present',
+       /Source contract/.test(fnCardHtml) && /Serving state/.test(fnCardHtml) &&
+       />Contract</.test(fnCardHtml));
+
+    /* unset is rendered as unset, NEVER as 0. */
+    ok('D24 an unset limit says unset, not 0', /<em>unset<\/em>/.test(fnCardHtml));
+    ok('D24 and no limit is rendered as a bare 0',
+       !/minScale<\/span><strong>0</.test(fnCardHtml));
+
+    /* The checks. A tick and a warning, and NEITHER for an unchecked item. */
+    ok('D24 an agreeing maximum is ticked',
+       /✓<\/span><strong>source and serving maximum agree/.test(fnCardHtml));
+    ok('D24 an unpinned minimum is warned',
+       /⚠<\/span><strong>minimum is NOT pinned/.test(fnCardHtml));
+    ok('D24 the recorded verdict is shown', /OWNER DECISION REQUIRED/.test(fnCardHtml));
+
+    /* A function with NO contract must show nothing CHECKED — not a tick.
+       "Not checked" and "passed" are different claims. */
+    ok('D24 control: the uncontracted card rendered', /uncontracted/.test(fnNoContractHtml));
+    ok('D24 an unchecked contract shows no tick',
+       !/✓/.test(fnNoContractHtml) && /No contract supplied/.test(fnNoContractHtml));
+    ok('D24 and it says nothing was compared, not that it passed',
+       /nothing was checked|nothing to compare/i.test(fnNoContractHtml));
+
+    /* The observed peak is honestly absent rather than borrowed. */
+    ok('D24 a per-function peak is not borrowed from the estate figure',
+       /peak for THIS function needs a per-function metric/.test(fnCardHtml) &&
+       /would be a different function/.test(fnCardHtml));
+
+    /* The function names its Cloud Run service, and that is navigable. */
+    ok('D24 it names the Cloud Run service', /processtypesensequeue/.test(fnCardHtml));
+  });
+
+  runCase('D25 a service-account card separates "runs nothing" from "not known"', () => {
+    ok('D25 control: the card rendered', /orphan@x\.iam\.gserviceaccount\.com/.test(saCardHtml));
+    ok('D25 its roles are listed', /roles\/storage\.admin/.test(saCardHtml));
+    /* KNOWN to run nothing. */
+    ok('D25 an identity known to run nothing says so',
+       /Nothing in the inventory runs as this identity/.test(saCardHtml));
+    ok('D25 and admits the reader may not see every consumer',
+       /outside Cloud Run and Functions/.test(saCardHtml));
+
+    /* UNKNOWN is a different sentence entirely. */
+    ok('D25 control: the unknown-usage card rendered',
+       /unknown@x\.iam\.gserviceaccount\.com/.test(saUnknownHtml));
+    ok('D25 an identity whose usage is unknown says UNKNOWN, not nothing',
+       /is <strong>unknown<\/strong>/.test(saUnknownHtml));
+    ok('D25 and says that is not the same as nothing',
+       /not the same as nothing/.test(saUnknownHtml));
+    ok('D25 the two cards do not say the same thing',
+       !/Nothing in the inventory runs as this identity/.test(saUnknownHtml));
+
+    /* No score. */
+    ok('D25 no risk indicator is derived', /No risk indicator is derived/.test(saCardHtml));
+    ok('D25 and the unread fields are named', /Not read/.test(saCardHtml));
+  });
+
+  runCase('D12 when the reader is absent, nothing is invented', () => {
+    ok('D12 control: the panel rendered', /Google Cloud/.test(gcpDownHtml));
+    ok('D12 it states that no figure was obtained',
+       /No infrastructure figure is shown, because none was obtained/.test(gcpDownHtml));
+    ok('D12 it names the failure', /reader is not deployed|did not answer|not available/.test(gcpDownHtml));
+    ok('D12 it explains why a browser cannot substitute',
+       /no browser can obtain them/.test(gcpDownHtml));
+
+    /* THE WHOLE POINT — an absent reader produces no numbers at all. */
+    ok('D12 no index row is rendered at all',
+       metricValue(gcpDownHtml, 'Indexes deployed') === null,
+       JSON.stringify(metricValue(gcpDownHtml, 'Indexes deployed')));
+    ok('D12 no collection row is rendered at all',
+       metricValue(gcpDownHtml, 'Root collections') === null,
+       JSON.stringify(metricValue(gcpDownHtml, 'Root collections')));
+    ok('D12 no "Observed" badge is rendered', !/Observed<\/span>/.test(gcpDownHtml));
+    ok('D12 no "Measured zero" badge is rendered', !/Measured zero/.test(gcpDownHtml));
+
+    /* But the estate stays addressable. A missing reader must not hide GCP. */
+    ok('D12 GCP services remain individually addressable',
+       /Addressable now/.test(gcpDownHtml) && /selectCatalogue\('cloud-run'\)/.test(gcpDownHtml));
+
+    /* INVERTING CONTROL — the same matchers DO find figures when the reader
+       answered, so "no number rendered" is a real finding. */
+    ok('D12 control: the healthy render DID contain a real index figure',
+       metricValue(dbSection(gcpHtml, 'sokoni-ops'), 'Indexes READY') === '54',
+       JSON.stringify(metricValue(dbSection(gcpHtml, 'sokoni-ops'), 'Indexes READY')));
+  });
+
   runCase('D5 the catalogue renders, and shows an honest live signal', () => {
     ok('D5 control: a catalogue card rendered', /IntaSend/.test(catHtml));
     ok('D5 an uninstrumented rail says so', /Not instrumented/.test(catHtml));
@@ -809,7 +1672,21 @@ function statValue(html, label) {
 
      Do not widen READ_ONLY_INTEGRATION_OPS to accommodate whatever the console
      happens to call. The console conforms to this list. */
-  const READ_ONLY_INTEGRATION_OPS = ['adminGetIntegrationStatus'];
+  /* `adminGetGcpEvidence` was added DELIBERATELY, not to accommodate a call the
+     console happened to make. It qualifies on the same terms as its neighbour:
+
+       - it is a READ. functions/gcp-evidence.js contains no mutation verb, and
+         scripts/test-gcp-evidence.js asserts that on stripped source against a
+         positive control that catches a planted PATCH and .delete(
+       - its access token is scoped cloud-platform.READ-ONLY, so the credential
+         itself cannot mutate anything even if a future code path tried
+       - it binds no secret and persists nothing. No collection is written, and
+         no health record is stored
+
+     This list still bounds the capability. It is not a place to record what the
+     console calls — it is the set of operations the console is PERMITTED to
+     call, and an op joins it only after the read-only property is proven. */
+  const READ_ONLY_INTEGRATION_OPS = ['adminGetIntegrationStatus', 'adminGetGcpEvidence'];
 
   runCase('E4 the console performs no writes', () => {
     const src = fs.readFileSync(path.join(ROOT, 'sokoni-integrations.js'), 'utf8')

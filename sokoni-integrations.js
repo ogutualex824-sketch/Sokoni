@@ -375,6 +375,47 @@
       '.sic-chip{display:inline-block;background:var(--sic-surface2);border:1px solid var(--sic-border);',
       'border-radius:6px;padding:2px 8px;font-size:11px;margin:0 4px 4px 0}',
       '.sic-chip.adhoc{border-color:rgba(255,152,0,.4);color:var(--sic-warn)}',
+      /* A figure that is a way INTO its evidence, not a dead end. Styled as a
+         number first and a control second — it must not read as a button that
+         does something to the infrastructure. */
+      '.sic-linkfig{background:none;border:none;padding:0;font:inherit;font-weight:600;',
+      'color:var(--sic-accent);cursor:pointer;text-decoration:underline;',
+      'text-underline-offset:2px;text-decoration-style:dotted}',
+      '.sic-linkfig:hover{text-decoration-style:solid}',
+      '.sic-linkfig:focus-visible{outline:2px solid var(--sic-accent);outline-offset:2px}',
+      '.sic-chip.sic-link{cursor:pointer;color:var(--sic-accent);',
+      'border-color:var(--sic-accent);background:none}',
+      '.sic-chip.sic-link[aria-pressed="true"]{background:var(--sic-accent);color:#fff}',
+      /* Evidence tables can be wide — an inventory row carries a digest and a
+         service-account email. Scroll the table, never the page. */
+      '.sic-scroll{overflow-x:auto;margin:6px 0 2px}',
+      '.sic-t{width:100%;border-collapse:collapse;font-size:11.5px}',
+      '.sic-t th{text-align:left;padding:5px 8px;border-bottom:1px solid var(--sic-border);',
+      'color:var(--sic-muted);font-weight:600;white-space:nowrap}',
+      '.sic-t td{padding:5px 8px;border-bottom:1px solid var(--sic-border);white-space:nowrap}',
+      '.sic-t tr:hover td{background:var(--sic-surface2)}',
+      /* The one write surface gets a visibly different treatment. A control
+         that CHANGES access must not look like a control that reads it. */
+      '.sic-card.sic-danger{border-color:rgba(244,67,54,.5)}',
+      '.sga-in{width:100%;box-sizing:border-box;padding:7px 9px;margin:4px 0;',
+      'background:var(--sic-surface2);border:1px solid var(--sic-border);',
+      'border-radius:6px;color:var(--sic-text);font-size:12.5px;font-family:inherit}',
+      '.sga-btn{padding:6px 12px;border-radius:6px;border:1px solid var(--sic-border);',
+      'background:var(--sic-surface2);color:var(--sic-text);font-size:12px;cursor:pointer}',
+      '.sga-btn:hover{border-color:var(--sic-accent)}',
+      '.sga-btn[disabled]{opacity:.45;cursor:not-allowed}',
+      '.sga-btn.danger{border-color:rgba(244,67,54,.6);color:#f44336}',
+      /* The relationship graph. A node whose reading failed is DIMMED rather
+         than removed — an absent box would read as "no such thing". */
+      '.sg{max-width:100%;height:auto}',
+      '.sg .sg-n rect{fill:var(--sic-surface2);stroke:var(--sic-border);stroke-width:1}',
+      '.sg .sg-n text{fill:var(--sic-text);font-size:11px;font-family:inherit}',
+      '.sg .sg-n .sg-v{fill:var(--sic-accent);font-size:12px;font-weight:600}',
+      '.sg .sg-n:hover rect{stroke:var(--sic-accent)}',
+      '.sg .sg-n:focus-visible rect{stroke:var(--sic-accent);stroke-width:2}',
+      '.sg .sg-n.dead rect{opacity:.45;stroke-dasharray:3 3}',
+      '.sg .sg-n.dead .sg-v{fill:var(--sic-muted)}',
+      '.sg .sg-e{fill:none;stroke:var(--sic-border);stroke-width:1.5}',
 
       '.sic-card{background:var(--sic-surface);border:1px solid var(--sic-border);',
       'border-radius:var(--sic-radius);padding:16px}',
@@ -800,8 +841,15 @@
     var depN  = _count(_data.deps.ok, _data.deps.rows.length);
     var whN   = _count(_data.webhooks.ok, _data.webhooks.rows.length);
 
+    /* The GCP pill counts DATABASES OBSERVED, not databases declared. It is EM
+       until the reader answers, because a count of what we believe exists is
+       not a count of what was seen. */
+    var gcpN  = (_gcp.state === 'done' && _gcp.data)
+      ? String(Object.keys(_gcp.data.databases || {}).length) : EM;
+
     var defs = [
       ['catalogue',    'Catalogue',    catN],
+      ['gcp',          'Google Cloud', gcpN],
       ['registered',   'Self-registration log', svcN],
       ['capabilities', 'Capabilities', capN],
       ['dependencies', 'Dependencies', depN],
@@ -1032,6 +1080,987 @@
         : '<p class="sic-note">No provider test is offered for this integration — either its ' +
           'lifecycle is disabled, its credentials are not provisioned, or no probe exists that ' +
           'could run safely.</p>');
+  }
+
+  /* ══ GOOGLE CLOUD CONTROL PLANE ══════════════════════════════════════
+     GCP is not one provider among forty-seven — it is the substrate the
+     platform runs on. This tab COMPOSES the GCP entries the catalogue already
+     addresses individually, so an operator can see the infrastructure as one
+     estate without the individual rows losing their identity.
+
+     EVERY FIGURE IS AN OBSERVATION, NOT A NUMBER.
+     The reader returns { value, state, source, observedAt, reason } per field
+     and this renders the STATE as prominently as the value. Six states, none
+     collapsible into another:
+
+       observed        read succeeded, the value is real
+       empty           read succeeded, found nothing. A MEASURED zero
+       unreadable      read failed. Shows an em dash and names the error
+       not-attempted   nothing looked. Em dash, and says so
+       not-applicable  the question does not apply
+       stale           observed, but older than the freshness window
+
+     The distinction this surface exists to preserve is the one between a
+     MEASURED zero and an UNMEASURED one. "sokoni-ops has 0 root collections" is
+     a real, valuable finding when a server enumerated them and found none. The
+     identical glyph produced by a failed read would be a lie. They are rendered
+     differently, and certification fails if they stop being. */
+
+  var _gcp = { state: 'idle', data: null, error: '' };
+
+  var OBS_META = {
+    observed:         { cls: 'healthy', label: 'Observed' },
+    empty:            { cls: 'healthy', label: 'Measured zero' },
+    stale:            { cls: 'warn',    label: 'Stale' },
+    unreadable:       { cls: 'error',   label: 'Unreadable' },
+    'not-attempted':  { cls: 'unknown', label: 'Not measured' },
+    'not-applicable': { cls: 'unknown', label: 'Not applicable' },
+  };
+
+  /** The rendered value of one observation. Never returns a bare number for a
+      state that did not measure one. */
+  function _obsValue(o) {
+    if (!o || !o.state) return EM;
+    if (o.state === 'observed' || o.state === 'empty' || o.state === 'stale') {
+      if (o.value === null || o.value === undefined) return EM;
+      if (typeof o.value === 'object') return _esc(JSON.stringify(o.value));
+      return _esc(String(o.value));
+    }
+    return EM;
+  }
+
+  function _obsBadge(o) {
+    var m = OBS_META[(o && o.state) || 'not-attempted'] || OBS_META['not-attempted'];
+    return '<span class="sic-badge ' + m.cls + '"><span class="sic-dot"></span>' +
+           _esc(m.label) + '</span>';
+  }
+
+  /** One metric row. `to` optionally makes the figure open the catalogue entry
+      that owns it, so a number is a way INTO the evidence rather than a dead
+      end. */
+  function _metric(label, o, to) {
+    var v = _obsValue(o);
+    var shown = to && v !== EM
+      ? '<button class="sic-linkfig" onclick="SokoniIntegrations.selectCatalogue(\'' +
+        _esc(to) + '\')">' + v + '</button>'
+      : v;
+    var why = (o && (o.state === 'unreadable' || o.state === 'not-attempted') && o.reason)
+      ? '<p class="sic-note">' + _esc(o.reason) + '</p>' : '';
+    return '<div class="sic-kv"><span>' + _esc(label) + '</span><strong>' + shown +
+           ' ' + _obsBadge(o) + '</strong></div>' + why;
+  }
+
+  /* Which GCP drill-down is open. In-panel selection, because AdminOS has no
+     router — see the navigation note in the docs. */
+  var _gcpDrill = null;
+
+  /** A table over an inventory observation. Renders the cap honestly: a
+      truncated list must never read as a complete one. */
+  function _invTable(obs, cols, rowKey) {
+    if (!obs) return '<p class="sic-note">' + EM + ' Not measured.</p>';
+    if (obs.state === 'unreadable') {
+      return '<p class="sic-note"><strong>Unreadable.</strong> ' + _esc(obs.reason) +
+             ' No rows are shown, because none were obtained.</p>';
+    }
+    if (obs.state === 'not-attempted') {
+      return '<p class="sic-note">' + EM + ' ' + _esc(obs.reason) + '</p>';
+    }
+    var rows = obs.value || [];
+    if (!rows.length) {
+      return '<p class="sic-note"><strong>Measured zero.</strong> The read returned no rows. ' +
+             'That is a finding, not a failed read.</p>';
+    }
+    var head = '<tr>' + cols.map(function (c) {
+      return '<th>' + _esc(c[0]) + '</th>'; }).join('') + '</tr>';
+    var body = rows.map(function (r) {
+      return '<tr' + (rowKey ? ' class="' + _esc(rowKey(r)) + '"' : '') + '>' +
+        cols.map(function (c) {
+          var v = c[1](r);
+          /* A column may return { html } to emit markup the console itself
+             built — currently only the button that opens an entity's card.
+             EVERY other value is escaped. The opt-in is deliberately a
+             different SHAPE rather than a flag, so a hostile string from a
+             read can never satisfy it: a value from an API is a string or a
+             number, never an object with an `html` property this code put
+             there. C1 still proves a hostile field is escaped. */
+          if (v && typeof v === 'object' && typeof v.html === 'string') return '<td>' + v.html + '</td>';
+          return '<td class="sic-mono">' + (v === null || v === undefined || v === ''
+            ? EM : _esc(String(v))) + '</td>';
+        }).join('') + '</tr>';
+    }).join('');
+    var cap = obs.truncated
+      ? '<p class="sic-note"><strong>Showing ' + rows.length + ' of ' + obs.total +
+        '.</strong> The list is capped at ' + obs.cap + ' so a console request stays bounded. ' +
+        'The total above is the real total; this table is not.</p>'
+      : '';
+    return '<div class="sic-scroll"><table class="sic-t">' + head + body + '</table></div>' + cap;
+  }
+
+  function _gcpSection(title, body) {
+    return '<div class="sic-card"><div class="sic-group-h">' + _esc(title) + '</div>' + body + '</div>';
+  }
+
+  function _gcpDatabase(id, db) {
+    if (!db) return '';
+    return '<div class="sic-sect-l">' + _esc(id) + '</div>' +
+      _metric('Region', db.region) +
+      _metric('Type', db.type) +
+      _metric('Deletion protection', db.deleteProtection) +
+      _metric('Indexes deployed', db.indexesDeployed, 'firestore-indexes') +
+      _metric('Indexes READY', db.indexesReady, 'firestore-indexes') +
+      _metric('Indexes declared in the repo', db.indexesDeclared) +
+      _metric('Declared minus deployed', db.indexDrift) +
+      _metric('Root collections', db.rootCollections,
+              id === 'sokoni-ops' ? 'firestore-sokoni-ops' : 'firestore') +
+      /* The sentence that stops the most likely misreading of this panel. */
+      (db.rootCollections && db.rootCollections.state === 'empty'
+        ? '<p class="sic-note"><strong>This zero was measured.</strong> The server enumerated ' +
+          'root collections and found none. That is a finding, and it is not the same as the ' +
+          'em dash a browser shows — a client cannot enumerate collections at all.</p>'
+        : '');
+  }
+
+  /* One entity opened from inside a drill-down table: { kind, id }. */
+  var _gcpPick = null;
+
+  /** A row whose first cell opens that entity's own card. */
+  function _pickCell(kind, id, label) {
+    return '<button class="sic-linkfig" onclick="SokoniIntegrations.gcpPick(\'' +
+           _esc(kind) + '\',\'' + _esc(String(id)) + '\')">' + _esc(label) + '</button>';
+  }
+
+  /** A small verdict line. `ok` true renders a tick, false a warning, and
+      null an em dash — because "not checked" is not "passed". */
+  function _check(passed, yes, no, unknown) {
+    if (passed === null || passed === undefined) {
+      return '<div class="sic-kv"><span>' + EM + '</span><strong>' +
+             _esc(unknown || 'Not checked') + '</strong></div>';
+    }
+    return '<div class="sic-kv"><span>' + (passed ? '✓' : '⚠') + '</span><strong>' +
+           _esc(passed ? yes : no) + '</strong></div>';
+  }
+
+  /** The card for ONE function: source contract, serving state, and the
+      parity checks between them. */
+  function _gcpFunctionCard(d) {
+    var cmp = d.compute || {};
+    var inv = ((cmp.functions || {}).inventory || {}).value || [];
+    var f = inv.filter(function (x) { return x.name === _gcpPick.id; })[0];
+    var ct = (((cmp.contracts || {}).inventory || {}).value || [])
+      .filter(function (x) { return x.fn === _gcpPick.id; })[0];
+    var close = '<button class="sic-x" aria-label="Close" ' +
+                'onclick="SokoniIntegrations.gcpPick(null)">✕</button>';
+    if (!f) return '';
+
+    var runInv = ((cmp.cloudRun || {}).inventory || {}).value || [];
+    var svc = f.service ? runInv.filter(function (x) { return x.name === f.service; })[0] : null;
+
+    return '<div class="sic-card"><div class="sic-group-h">' + _esc(f.name) + close + '</div>' +
+      '<div class="sic-kv"><span>State</span><strong>' + _esc(f.state || EM) + '</strong></div>' +
+      '<div class="sic-kv"><span>Region</span><strong class="sic-mono">' + _esc(f.region || EM) + '</strong></div>' +
+      '<div class="sic-kv"><span>Runtime</span><strong>' + _esc(f.runtime || EM) + '</strong></div>' +
+      '<div class="sic-kv"><span>Trigger</span><strong>' + _esc(f.trigger || EM) + '</strong></div>' +
+      '<div class="sic-kv"><span>Memory</span><strong>' + _esc(f.memory || EM) + '</strong></div>' +
+      '<div class="sic-kv"><span>Timeout</span><strong>' +
+        (f.timeout === null || f.timeout === undefined ? EM : _esc(String(f.timeout) + ' s')) + '</strong></div>' +
+      '<div class="sic-kv"><span>Service account</span><strong class="sic-mono">' +
+        _esc(f.serviceAccount || EM) + '</strong></div>' +
+
+      '<div class="sic-sect-l">Source contract</div>' +
+      (ct
+        ? '<div class="sic-kv"><span>minInstances</span><strong>' +
+            (ct.srcMin === null ? EM + ' <em>unset</em>' : _esc(String(ct.srcMin))) + '</strong></div>' +
+          '<div class="sic-kv"><span>maxInstances</span><strong>' +
+            (ct.srcMax === null ? EM + ' <em>unset</em>' : _esc(String(ct.srcMax))) + '</strong></div>'
+        : '<p class="sic-note">No source contract was supplied for this function, so there is ' +
+          'nothing to compare. That is <strong>not</strong> the same as being in parity.</p>') +
+
+      '<div class="sic-sect-l">Serving state</div>' +
+      '<div class="sic-kv"><span>minScale</span><strong>' +
+        (f.minInstances === null || f.minInstances === undefined
+          ? EM + ' <em>unset</em>' : _esc(String(f.minInstances))) + '</strong></div>' +
+      '<div class="sic-kv"><span>maxScale</span><strong>' +
+        (f.maxInstances === null || f.maxInstances === undefined
+          ? EM + ' <em>unset</em>' : _esc(String(f.maxInstances))) + '</strong></div>' +
+      '<div class="sic-kv"><span>Revision</span><strong class="sic-mono">' +
+        _esc(f.revision || EM) + '</strong></div>' +
+      '<div class="sic-kv"><span>Cloud Run service</span><strong class="sic-mono">' +
+        (f.service ? _pickCell('service', f.service, f.service) : EM) + '</strong></div>' +
+      (svc
+        ? '<div class="sic-kv"><span>Traffic</span><strong>' +
+            ((svc.traffic || []).map(function (t) {
+              return _esc(String(t.revision)) + ' ' + _esc(String(t.percent)) + '%'; }).join(', ') || EM) +
+          '</strong></div>' +
+          '<div class="sic-kv"><span>Ready</span><strong>' + (svc.ready ? 'TRUE' : 'FALSE') + '</strong></div>' +
+          '<div class="sic-kv"><span>Image</span><strong class="sic-mono">' + _esc(svc.image || EM) + '</strong></div>'
+        : '<p class="sic-note">The Cloud Run service behind this function was not in the ' +
+          'inventory, so traffic, readiness and the image digest are ' + EM + '.</p>') +
+
+      '<div class="sic-sect-l">Contract</div>' +
+      (ct
+        ? _check(ct.maxParity, 'source and serving maximum agree',
+                 'source and serving maximum DISAGREE') +
+          _check(ct.minPinned, 'minimum is pinned', 'minimum is NOT pinned') +
+          _check(!ct.gcfDisagrees, 'the GCF layer agrees with serving',
+                 'the GCF layer DISAGREES with serving — an observability discrepancy, not evidence') +
+          (ct.verdict ? '<p class="sic-note"><strong>' + _esc(ct.verdict) + '</strong> ' +
+                        _esc(ct.detail || '') + '</p>' : '')
+        : _check(null, '', '', 'No contract supplied — nothing was checked')) +
+
+      '<div class="sic-sect-l">Observed</div>' +
+      '<p class="sic-note">A 30-day instance peak for THIS function needs a per-function metric ' +
+      'query, which this reader does not make. It is ' + EM + ' rather than a number borrowed from ' +
+      'the estate-wide peak, which would be a different function’s figure wearing this ' +
+      'one’s name.</p></div>';
+  }
+
+  /** The card for ONE service account. */
+  function _gcpServiceAccountCard(d) {
+    var sec = d.security || {};
+    var rows = ((sec.serviceAccounts || {}).inventory || {}).value || [];
+    var a = rows.filter(function (x) { return x.email === _gcpPick.id; })[0];
+    var close = '<button class="sic-x" aria-label="Close" ' +
+                'onclick="SokoniIntegrations.gcpPick(null)">✕</button>';
+    if (!a) return '';
+
+    var cmp = d.compute || {};
+    var runInv = ((cmp.cloudRun || {}).inventory || {}).value || [];
+    var fnInv  = ((cmp.functions || {}).inventory || {}).value || [];
+    var usedByRun = runInv.filter(function (s) { return s.serviceAccount === a.email; });
+    var usedByFn  = fnInv.filter(function (f) { return f.serviceAccount === a.email; });
+
+    return '<div class="sic-card"><div class="sic-group-h sic-mono">' + _esc(a.email) + close + '</div>' +
+      '<div class="sic-sect-l">Roles held</div>' +
+      ((a.roles || []).length
+        ? (a.roles || []).map(function (r) {
+            return '<span class="sic-chip sic-mono">' + _esc(r) + '</span>'; }).join('')
+        : '<p class="sic-note">No project-level role binding. That does not mean no access — it ' +
+          'may hold a resource-level binding this reader does not enumerate.</p>') +
+
+      '<div class="sic-sect-l">Used by</div>' +
+      (a.usageKnown
+        ? ((usedByRun.length || usedByFn.length)
+            ? usedByRun.map(function (s) {
+                return '<span class="sic-chip sic-mono">run: ' + _esc(s.name) + '</span>'; }).join('') +
+              usedByFn.map(function (f) {
+                return '<span class="sic-chip sic-mono">fn: ' + _esc(f.name) + '</span>'; }).join('')
+            : '<p class="sic-note"><strong>Nothing in the inventory runs as this identity.</strong> ' +
+              'It holds access with no workload behind it. It may still be used by something ' +
+              'outside Cloud Run and Functions, which this reader does not see.</p>')
+        : '<p class="sic-note">' + EM + ' A workload inventory could not be read, so what runs as ' +
+          'this identity is <strong>unknown</strong>. That is not the same as nothing.</p>') +
+
+      '<div class="sic-sect-l">Not read</div>' +
+      '<p class="sic-note">Which secrets this identity can access, and when it was last used, are ' +
+      EM + '. Both need queries this reader does not make — a per-secret IAM read and an access-log ' +
+      'query. No risk indicator is derived: the bindings above are the evidence.</p></div>';
+  }
+
+  function _gcpPickCard(d) {
+    if (!_gcpPick) return '';
+    if (_gcpPick.kind === 'function') return _gcpFunctionCard(d);
+    if (_gcpPick.kind === 'sa')       return _gcpServiceAccountCard(d);
+    return '';
+  }
+
+  /** A button that opens a drill-down. Distinct from _metric's figure link,
+      which opens a CATALOGUE entry. */
+  function _drillBtn(id, label) {
+    return '<button class="sic-chip sic-link" onclick="SokoniIntegrations.gcpDrill(\'' +
+           _esc(id) + '\')" aria-pressed="' + (_gcpDrill === id) + '">' + _esc(label) + '</button>';
+  }
+
+  /* ── THE DRILL-DOWNS ─────────────────────────────────────────────────
+     Each is an evidence table over a real inventory. None computes a score: a
+     score is an opinion wearing the authority of a measurement. Where a
+     judgement would be useful, the CONDITION is shown instead and the operator
+     draws the conclusion. */
+  function _gcpDrillPanel(d) {
+    if (!_gcpDrill) return '';
+    var cmp = d.compute || {}, sec = d.security || {}, data = d.data || {};
+    var close = '<button class="sic-x" aria-label="Close" ' +
+                'onclick="SokoniIntegrations.gcpDrill(null)">✕</button>';
+
+    if (_gcpDrill === 'functions') {
+      var f = cmp.functions || {};
+      return '<div class="sic-card"><div class="sic-group-h">Cloud Functions' + close + '</div>' +
+        _metric('Scaling contract across the estate', f.scaling) +
+        _metric('Minimum instances pinned', f.pinnedMinimum) +
+        '<p class="sic-note">A function with no explicit maximum is <strong>unbounded</strong>. A ' +
+        'pinned minimum costs money while idle. Both are facts; neither is scored here.</p>' +
+        '<p class="sic-note"><strong>Source contract is not in this table.</strong> What a function ' +
+        'DECLARES in the repository and what it is SERVING are different things, and only the ' +
+        'serving side is an API fact. The column is null rather than absent so the gap is visible.</p>' +
+        _invTable(f.inventory, [
+          ['Function', function (r) { return { html: _pickCell('function', r.name, r.name) }; }],
+          ['Region', function (r) { return r.region; }],
+          ['State', function (r) { return r.state; }],
+          ['Runtime', function (r) { return r.runtime; }],
+          ['Cloud Run service', function (r) { return r.service; }],
+          ['Revision', function (r) { return r.revision; }],
+          ['Memory', function (r) { return r.memory; }],
+          ['Timeout', function (r) { return r.timeout; }],
+          ['min', function (r) { return r.minInstances; }],
+          ['max', function (r) { return r.maxInstances; }],
+          ['Service account', function (r) { return r.serviceAccount; }],
+        ]) + '</div>';
+    }
+
+    if (_gcpDrill === 'run') {
+      var s = cmp.cloudRun || {};
+      return '<div class="sic-card"><div class="sic-group-h">Cloud Run' + close + '</div>' +
+        '<p class="sic-note">A Gen2 Cloud Function <em>is</em> a Cloud Run service. The chain is ' +
+        '<span class="sic-mono">function → service → revision → image digest → registry</span>, ' +
+        'and every link in it is a column below.</p>' +
+        _invTable(s.inventory, [
+          ['Service', function (r) { return r.name; }],
+          ['Region', function (r) { return r.region; }],
+          ['Ready', function (r) { return r.ready ? 'TRUE' : 'FALSE'; }],
+          ['Latest ready', function (r) { return r.latestReadyRevision; }],
+          ['Latest created', function (r) { return r.latestCreatedRevision; }],
+          ['Parity', function (r) { return r.revisionParity ? 'ok' : 'MISMATCH'; }],
+          ['min', function (r) { return r.minScale; }],
+          ['max', function (r) { return r.maxScale; }],
+          ['Conc.', function (r) { return r.concurrency; }],
+          ['CPU', function (r) { return r.cpu; }],
+          ['Memory', function (r) { return r.memory; }],
+          ['Timeout', function (r) { return r.timeout; }],
+          ['Image', function (r) { return r.image; }],
+          ['Service account', function (r) { return r.serviceAccount; }],
+        ]) +
+        '<p class="sic-note"><strong>max shown as ' + EM + ' means no explicit limit</strong> — ' +
+        'unbounded, not zero. A blank maximum and a maximum of zero are different contracts.</p>' +
+        '</div>';
+    }
+
+    if (_gcpDrill === 'artifacts') {
+      var ar = cmp.artifactRegistry || {}, im = cmp.images || {}, pv = cmp.provenance || {};
+      return '<div class="sic-card"><div class="sic-group-h">Artifact Registry' + close + '</div>' +
+        '<div class="sic-sect-l">Repositories and their cleanup policies</div>' +
+        _invTable(ar.inventory, [
+          ['Repository', function (r) { return r.name; }],
+          ['Location', function (r) { return r.location; }],
+          ['Format', function (r) { return r.format; }],
+          ['Enforcing', function (r) { return r.enforcing ? 'YES' : 'dry-run'; }],
+          ['Policies', function (r) {
+            return (r.policies || []).map(function (p) {
+              return p.id + '=' + (p.action || '?') +
+                (p.olderThan ? '/' + p.olderThan : '') +
+                (p.tagState ? '/' + p.tagState : '') +
+                (p.keepCount ? '/keep' + p.keepCount : '');
+            }).join('  ');
+          }],
+        ]) +
+        _metric('Repositories with DELETE and no KEEP', ar.reposWithDeleteOnly) +
+        '<p class="sic-note">A policy is <strong>enforcing unless its dry-run flag is set</strong>, ' +
+        'and that flag disables deletion rather than previewing it. A DELETE policy with no KEEP ' +
+        'beside it is reference-blind: it is capable of removing an image a live revision still ' +
+        'depends on.</p>' +
+
+        '<div class="sic-sect-l">Provenance — revision → digest → registry</div>' +
+        _metric('Services pinned by digest', pv.servicesPinnedByDigest) +
+        _metric('Services pinned by tag', pv.servicesPinnedByTag) +
+        _metric('Serving image MISSING from the registry', pv.imageMissingFromRegistry) +
+        _invTable(pv.missingInventory, [
+          ['Service', function (r) { return r.service; }],
+          ['Region', function (r) { return r.region; }],
+          ['Digest', function (r) { return r.digest; }],
+        ]) +
+        '<p class="sic-note">A serving image whose digest is not in the registry is exactly the ' +
+        'condition that leaves a service unable to create a new revision from its existing spec. ' +
+        'The old revision keeps serving, so nothing looks wrong until a deploy is attempted.</p>' +
+
+        '<div class="sic-sect-l">Images</div>' +
+        _metric('Images', im.images) +
+        _invTable(im.inventory, [
+          ['Image', function (r) { return r.name; }],
+          ['Repository', function (r) { return r.repo; }],
+          ['Digest', function (r) { return r.digest; }],
+          ['Tags', function (r) { return (r.tags || []).join(' '); }],
+          ['Uploaded', function (r) { return r.uploadTime; }],
+        ]) + '</div>';
+    }
+
+    if (_gcpDrill === 'admins') {
+      var iam = sec.iam || {};
+      return '<div class="sic-card"><div class="sic-group-h">Administrators' + close + '</div>' +
+        '<p class="sic-note">Who can actually change this project, as the <strong>real IAM ' +
+        'bindings</strong>. No risk score is computed — a score is an opinion wearing the ' +
+        'authority of a measurement. The bindings are the evidence.</p>' +
+        '<div class="sic-sect-l">Privileged roles</div>' +
+        _invTable(iam.adminBindings, [
+          ['Role', function (r) { return r.role; }],
+          ['Principals', function (r) { return r.memberCount; }],
+          ['Members', function (r) { return (r.members || []).join('  '); }],
+          ['Conditional', function (r) { return r.conditional ? 'yes' : 'no'; }],
+        ]) +
+        '<div class="sic-sect-l">Human principals</div>' +
+        _metric('People with a binding', iam.humanPrincipals) +
+        '<div class="sic-sect-l">Groups</div>' +
+        _metric('Groups with a binding', iam.groupPrincipals) +
+        '<p class="sic-note">Human and machine principals are separated because they have ' +
+        'different revocation paths. A person who leaves is an offboarding task; a service ' +
+        'account is not.</p>' +
+        '<div class="sic-sect-l">Every binding</div>' +
+        _invTable(iam.bindingInventory, [
+          ['Role', function (r) { return r.role; }],
+          ['Principals', function (r) { return r.memberCount; }],
+          ['Members', function (r) { return (r.members || []).join('  '); }],
+        ]) + '</div>';
+    }
+
+    if (_gcpDrill === 'audit') {
+      var iam2 = sec.iam || {}, act = d.activity || {};
+      return '<div class="sic-card"><div class="sic-group-h">Audit logging' + close + '</div>' +
+        _metric('Services with an audit config', iam2.auditServices) +
+        _metric('Log types enabled', iam2.auditLogTypes) +
+        _invTable(iam2.auditCoverage, [
+          ['Service', function (r) { return r.service; }],
+          ['Log types', function (r) { return (r.logTypes || []).join(' '); }],
+          ['Exempted members', function (r) { return r.exemptedMembers; }],
+        ]) +
+        '<p class="sic-note">A service <strong>absent from this table has Admin Activity logging ' +
+        'only</strong>. That is the default, it cannot be switched off, and it does NOT mean Data ' +
+        'Access is being recorded. An exempted member is excluded from logging for that service.</p>' +
+
+        '<div class="sic-sect-l">Recent admin activity</div>' +
+        _metric('Events read', act.events) +
+        _metric('Of which failed', act.failures) +
+        _metric('Most recent event', act.lastEventAt) +
+        _invTable(act.timeline, [
+          ['When', function (r) { return r.at; }],
+          ['Service', function (r) { return r.service; }],
+          ['Method', function (r) { return r.method; }],
+          ['Resource', function (r) { return r.resource; }],
+          ['Outcome', function (r) { return r.failed ? 'FAILED' : 'ok'; }],
+        ]) +
+        '<p class="sic-note">Admin Activity only. Data Access entries can carry request payloads, ' +
+        'so this console does not read them — a timeline is not worth leaking a request body for.</p>' +
+        '</div>';
+    }
+
+    if (_gcpDrill === 'contracts') {
+      var ct = cmp.contracts || {};
+      return '<div class="sic-card"><div class="sic-group-h">Scaling contract' + close + '</div>' +
+        '<p class="sic-note">What a function <strong>declares in the repository</strong> against ' +
+        'what is <strong>actually serving</strong>. The gap between those two is the defect that ' +
+        'removed a production ceiling during a rebuild.</p>' +
+        _metric('Adjudicated', ct.adjudicated) +
+        _metric('No source contract supplied', ct.withoutContract) +
+        _metric('Source and serving maximum DISAGREE', ct.maxMismatch) +
+        _metric('Serving minimum not pinned', ct.minUnpinned) +
+        _metric('GCF layer disagrees with serving', ct.gcfDiscrepancy) +
+        _metric('Contract captured', ct.capturedAt) +
+
+        '<p class="sic-note"><strong>A function with no supplied contract is not "in parity."</strong> ' +
+        'Nothing was compared for it, which is why it is counted separately above rather than ' +
+        'folded into the agreeing ones.</p>' +
+
+        _invTable(ct.inventory, [
+          ['Function', function (r) { return r.fn; }],
+          ['Region', function (r) { return r.region; }],
+          ['src min', function (r) { return r.srcMin; }],
+          ['src max', function (r) { return r.srcMax; }],
+          ['serving min', function (r) { return r.runMin; }],
+          ['serving max', function (r) { return r.runMax; }],
+          ['GCF min', function (r) { return r.gcfMin; }],
+          ['max parity', function (r) { return r.maxParity ? 'ok' : 'DISAGREE'; }],
+          ['min pinned', function (r) { return r.minPinned ? 'yes' : 'NOT PINNED'; }],
+          ['Verdict', function (r) { return r.verdict; }],
+        ]) +
+
+        ((ct.note && ct.note.state === 'observed')
+          ? '<div class="sic-sect-l">Why parity is measured against the SERVING revision</div>' +
+            '<p class="sic-note">' + _esc(ct.note.value) + '</p>'
+          : '') +
+        '<p class="sic-note">A blank minimum or maximum is <strong>unset</strong> — no limit — ' +
+        'not zero. The two are different contracts and are rendered differently.</p></div>';
+    }
+
+    if (_gcpDrill === 'secrets') {
+      var sm = sec.secrets || {};
+      return '<div class="sic-card"><div class="sic-group-h">Secret Manager' + close + '</div>' +
+        _metric('Secrets', sm.secrets, 'secret-manager') +
+        _metric('With a rotation policy', sm.withRotation) +
+        _metric('With an expiry', sm.withExpiry) +
+        '<div class="sic-sect-l">Secret names</div>' +
+        _metric('Names', sm.names) +
+        '<p class="sic-note"><strong>Names only, and that is a property of the API used.</strong> ' +
+        'This reader calls <span class="sic-mono">secrets.list</span>, which returns metadata and ' +
+        '<em>cannot</em> return a payload. The access API that can is never called, and adding it ' +
+        'would change what a compromise of this console is worth.</p>' +
+        '<div class="sic-sect-l">Declared vs provisioned</div>' +
+        _metric('Secret names the rails declare', (sec.secretCoverage || {}).declared) +
+        _metric('Secrets that exist', (sec.secretCoverage || {}).provisioned) +
+        _metric('DECLARED but MISSING', (sec.secretCoverage || {}).missing) +
+        _invTable((sec.secretCoverage || {}).missingNames, [
+          ['Missing secret', function (r) { return r.secret; }],
+        ]) +
+        '<p class="sic-note">A declared secret that does not exist is a rail that will <strong>fail ' +
+        'when it runs</strong>. This is the one question the Credentials tab can only ask — it ' +
+        'knows what is declared, not what is provisioned.</p>' +
+        _metric('Present but not declared', (sec.secretCoverage || {}).unmatched) +
+        _invTable((sec.secretCoverage || {}).unmatchedNames, [
+          ['Unmatched secret', function (r) { return r.secret; }],
+        ]) +
+        '<p class="sic-note">An unmatched secret is <strong>not a fault</strong> and not something ' +
+        'to delete. It may belong to a system outside this registry. It is listed so the two sides ' +
+        'can be reconciled deliberately.</p>' +
+        '<div class="sic-sect-l">Not read</div>' +
+        '<p class="sic-note">Version counts, expired versions, last rotation time, per-secret ' +
+        'consumers and access failures are ' + EM + ' — each needs a per-secret call this reader ' +
+        'does not make, and an access-log query it deliberately does not make. They are not ' +
+        'zero.</p></div>';
+    }
+
+    if (_gcpDrill === 'databases') {
+      var fsd = (data.firestore || {});
+      var dbs2 = fsd.databases || {};
+      return '<div class="sic-card"><div class="sic-group-h">Firestore databases' + close + '</div>' +
+        _metric('Composite-index quota (live)', fsd.quota) +
+        '<p class="sic-note">Two databases with <strong>separate rules and separate indexes</strong>. ' +
+        'A deploy naming one does not carry the other.</p>' +
+        Object.keys(dbs2).map(function (id) { return _gcpDatabase(id, dbs2[id]); }).join('') +
+        '<div class="sic-sect-l">Not read</div>' +
+        '<p class="sic-note">Document counts, the deployed ruleset and recent query or index ' +
+        'failures are ' + EM + '. Document counts need an aggregation per collection, the ruleset ' +
+        'needs the Rules API, and query failures need a log query — none of which this reader ' +
+        'makes. Each is <strong>not measured</strong>, not zero.</p></div>';
+    }
+
+    if (_gcpDrill === 'telemetry') {
+      var ob = d.observability || {};
+      var t = ob.telemetry || {}, incs = ob.incidents || {};
+      return '<div class="sic-card"><div class="sic-group-h">Cloud Monitoring' + close + '</div>' +
+        '<p class="sic-note">Every figure below is a real metric series over the last ' +
+        _esc(String(t.windowHours || '?')) + ' hours. A number with no window attached to it is ' +
+        'not a measurement, so the window is part of the reading.</p>' +
+        '<div class="sic-sect-l">Cloud Run</div>' +
+        _metric('Requests', t.runRequests) +
+        _metric('5xx responses', t.run5xx) +
+        _metric('Peak concurrent instances', t.runInstancePeak) +
+        '<div class="sic-sect-l">Cloud Functions</div>' +
+        _metric('Executions', t.fnExecutions) +
+        _metric('Non-ok executions', t.fnErrors) +
+        '<div class="sic-sect-l">Firestore</div>' +
+        _metric('Document reads', t.firestoreReads) +
+        _metric('Document writes', t.firestoreWrites) +
+        _metric('Document deletes', t.firestoreDeletes) +
+        '<div class="sic-sect-l">Alerting</div>' +
+        _metric('Alert policies', (ob.monitoring || {}).alertPolicies) +
+        _metric('Enabled', (ob.monitoring || {}).enabled) +
+        _metric('With a notification channel', (ob.monitoring || {}).withNotification) +
+        _metric('Open incidents', incs.openIncidents) +
+        '<p class="sic-note">A metric series with no points is a <strong>measured zero over that ' +
+        'window</strong> — genuinely quiet. That is a different fact from a failed read, and the ' +
+        'two are badged differently above.</p></div>';
+    }
+
+    if (_gcpDrill === 'cost') {
+      var c2 = d.cost || {}, bill2 = (d.observability || {}).billing || {};
+      var bud = (d.observability || {}).budgets || {};
+      return '<div class="sic-card"><div class="sic-group-h">Billing &amp; cost' + close + '</div>' +
+        _metric('Billing enabled', bill2.billingEnabled) +
+        _metric('Billing account', bill2.billingAccount) +
+        _metric('Budgets', bud.budgets) +
+        _metric('Budgets with a threshold rule', bud.withThresholds) +
+        _metric('Budget names', bud.budgetNames) +
+
+        '<div class="sic-sect-l">Cost conditions</div>' +
+        '<p class="sic-note">These are <strong>conditions, not verdicts</strong>. A pinned minimum ' +
+        'bills while idle; an unbounded maximum has no ceiling. Whether either is correct depends ' +
+        'on the service, and this reader does not know which — so it shows the condition and the ' +
+        'services it applies to, and stops there.</p>' +
+        _metric('Services with a pinned minimum', c2.pinnedInstances) +
+        _invTable(c2.pinnedInventory, [
+          ['Service', function (r) { return r.service; }],
+          ['Region', function (r) { return r.region; }],
+          ['min', function (r) { return r.minScale; }],
+          ['max', function (r) { return r.maxScale; }],
+        ]) +
+        _metric('Services with NO maximum', c2.unboundedServices) +
+        _invTable(c2.unboundedInventory, [
+          ['Service', function (r) { return r.service; }],
+          ['Region', function (r) { return r.region; }],
+        ]) +
+        _metric('Services with a very high maximum', c2.highMaxScale) +
+        _invTable(c2.highMaxInventory, [
+          ['Service', function (r) { return r.service; }],
+          ['Region', function (r) { return r.region; }],
+          ['max', function (r) { return r.maxScale; }],
+        ]) +
+        _metric('Services with no observed traffic', c2.servicesWithNoObservedTraffic) +
+        _metric('Cost breakdown by service', c2.costBreakdown) +
+        '<p class="sic-note">The last two are <strong>not measured</strong>, not zero. A cost ' +
+        'breakdown needs the billing export dataset and per-service traffic needs a per-service ' +
+        'metric query; this reader makes neither.</p></div>';
+    }
+
+    if (_gcpDrill === 'serviceaccounts') {
+      var sa = sec.serviceAccounts || {};
+      return '<div class="sic-card"><div class="sic-group-h">Service accounts' + close + '</div>' +
+        '<p class="sic-note">A join across three readings: the IAM policy says which identities ' +
+        '<em>hold roles</em>, and the Cloud Run and Functions inventories say which workloads ' +
+        '<em>run as</em> them. Those are different questions, and only the join answers the ' +
+        'second.</p>' +
+        _metric('Service accounts seen', sa.total) +
+        _metric('Holding roles but running nothing', sa.withoutWorkload) +
+        _invTable(sa.inventory, [
+          ['Service account', function (r) { return { html: _pickCell('sa', r.email, r.email) }; }],
+          ['Roles', function (r) { return r.roleCount; }],
+          ['Cloud Run services', function (r) { return r.runServices; }],
+          ['Functions', function (r) { return r.functions; }],
+          ['Runs nothing', function (r) {
+            return r.usageKnown ? (r.unusedByWorkloads ? 'YES' : 'no') : '—'; }],
+          ['Granted roles', function (r) { return (r.roles || []).join('  '); }],
+        ]) +
+        '<p class="sic-note">An identity holding roles that nothing runs as is an account with ' +
+        'access and no owner. It is shown as a <strong>condition</strong>, not scored — it may be ' +
+        'used by something outside Cloud Run and Functions, which this reader does not see. Where ' +
+        'a workload inventory could not be read, the column is ' + EM + ' rather than "no", ' +
+        'because "nothing runs as this" would then be a claim about a failed read.</p></div>';
+    }
+
+    if (_gcpDrill === 'appcheck') {
+      var ac = sec.appCheck || {};
+      return '<div class="sic-card"><div class="sic-group-h">App Check' + close + '</div>' +
+        _metric('Services configured', ac.services) +
+        _metric('Enforced', ac.enforced) +
+        _metric('Not enforced', ac.unenforced) +
+        _invTable(ac.inventory, [
+          ['Service', function (r) { return r.service; }],
+          ['Enforcement', function (r) { return r.mode; }],
+        ]) +
+        '<p class="sic-note">A service that is not enforcing accepts requests without attestation. ' +
+        'That is not automatically a fault — some endpoints are public or webhook receivers by ' +
+        'design. Audit the endpoint, not the count.</p></div>';
+    }
+
+    if (_gcpDrill === 'storage') {
+      var st = data.storage || {};
+      return '<div class="sic-card"><div class="sic-group-h">Cloud Storage' + close + '</div>' +
+        _metric('Buckets', st.buckets, 'cloud-storage') +
+        _metric('Locations', st.locations) +
+        _metric('With public access prevention enforced', st.publicAccessPrevention) +
+        _metric('With uniform bucket-level access', st.uniformAccess) +
+        _metric('Bucket names', st.names) +
+        '<p class="sic-note">Bucket-level configuration only. Object counts and stored bytes are ' +
+        'not read — that is a usage query this reader does not make, so it is ' + EM +
+        ' rather than a guess.</p></div>';
+    }
+
+    if (_gcpDrill === 'apis') {
+      var ap = d.apis || {};
+      return '<div class="sic-card"><div class="sic-group-h">Enabled APIs' + close + '</div>' +
+        _metric('Enabled services', ap.enabled) +
+        _metric('Names', ap.names) +
+        '<p class="sic-note">Diagnostic, not decorative: an API that is <strong>off</strong> ' +
+        'explains a whole control plane reading as unreadable above.</p></div>';
+    }
+
+    return '';
+  }
+
+  /* ── THE INFRASTRUCTURE RELATIONSHIP GRAPH ───────────────────────────
+     Drawn from OBSERVATIONS, not from a hand-written picture. Each node
+     carries the figure that was actually read, and a node whose reading failed
+     is drawn muted with an em dash rather than omitted — an absent box would
+     read as "no such thing", which is a different claim from "not measured".
+
+     Clicking a node opens the evidence panel behind it. */
+  function _gcpGraph(d) {
+    var cmp = d.compute || {}, data = d.data || {}, sec = d.security || {};
+    var fsdb = (data.firestore || {}).databases || {};
+
+    function node(x, y, w, label, obs, drill) {
+      var v = _obsValue(obs);
+      var dead = (v === EM);
+      return '<g class="sg-n' + (dead ? ' dead' : '') + '"' +
+        (drill ? ' role="button" tabindex="0" style="cursor:pointer" ' +
+                 'onclick="SokoniIntegrations.gcpDrill(\'' + _esc(drill) + '\')"' : '') + '>' +
+        '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="34" rx="6"></rect>' +
+        '<text x="' + (x + 10) + '" y="' + (y + 14) + '">' + _esc(label) + '</text>' +
+        '<text x="' + (x + 10) + '" y="' + (y + 27) + '" class="sg-v">' + v + '</text>' +
+        '</g>';
+    }
+    function edge(x1, y1, x2, y2) {
+      return '<path class="sg-e" d="M' + x1 + ' ' + y1 + ' C' + x1 + ' ' + ((y1 + y2) / 2) +
+             ',' + x2 + ' ' + ((y1 + y2) / 2) + ',' + x2 + ' ' + y2 + '"/>';
+    }
+
+    var dbCount = { value: Object.keys(fsdb).length, state: Object.keys(fsdb).length ? 'observed' : 'not-attempted' };
+
+    return '<div class="sic-card"><div class="sic-group-h">Infrastructure relationships</div>' +
+      '<p class="sic-note">Drawn from what was <strong>read</strong>. A node whose reading failed ' +
+      'is dimmed and shows ' + EM + ' — it is not removed, because an absent box would say "no ' +
+      'such thing" when the truth is "not measured". Select a node to open its evidence.</p>' +
+      '<div class="sic-scroll"><svg class="sg" viewBox="0 0 760 330" width="760" height="330" ' +
+      'role="img" aria-label="Infrastructure relationship graph">' +
+      edge(120, 54, 120, 92) + edge(120, 54, 400, 92) +
+      edge(120, 126, 120, 164) +
+      edge(400, 126, 400, 164) + edge(400, 126, 620, 164) +
+      edge(400, 198, 400, 236) +
+      edge(400, 270, 620, 236) +
+      node(40, 20, 160, 'SOKONI', { value: d.project, state: d.project ? 'observed' : 'not-attempted' }) +
+      node(40, 92, 160, 'Firestore databases', dbCount, 'storage') +
+      node(40, 164, 160, 'Cloud Storage buckets', (data.storage || {}).buckets, 'storage') +
+      node(320, 92, 160, 'Cloud Functions', (cmp.functions || {}).total, 'functions') +
+      node(320, 164, 160, 'Cloud Run services', (cmp.cloudRun || {}).services, 'run') +
+      node(320, 236, 160, 'Image digests', (cmp.images || {}).images, 'artifacts') +
+      node(560, 164, 160, 'Artifact repositories', (cmp.artifactRegistry || {}).repositories, 'artifacts') +
+      node(560, 236, 160, 'Missing from registry',
+           (cmp.provenance || {}).imageMissingFromRegistry, 'artifacts') +
+      node(560, 20, 160, 'Administrators', (sec.iam || {}).principals, 'admins') +
+      node(320, 20, 160, 'Service accounts', (sec.serviceAccounts || {}).total, 'serviceaccounts') +
+      '</svg></div>' +
+      '<p class="sic-note">The chain that matters runs left to right along the bottom: a function ' +
+      'runs as a Cloud Run service, a service pins an image by digest, and that digest either is ' +
+      'or is not still in the registry. The last box is the one to watch.</p></div>';
+  }
+
+  /** The evidence timeline, as its own panel. */
+  function _gcpActivity(d) {
+    var act = d.activity || {};
+    return '<div class="sic-card"><div class="sic-group-h">Recent activity</div>' +
+      _metric('Admin Activity events read', act.events) +
+      _metric('Of which failed', act.failures) +
+      _metric('Most recent event', act.lastEventAt) +
+      _invTable(act.timeline, [
+        ['When', function (r) { return r.at; }],
+        ['Service', function (r) { return r.service; }],
+        ['Method', function (r) { return r.method; }],
+        ['Resource', function (r) { return r.resource; }],
+        ['Outcome', function (r) { return r.failed ? 'FAILED' : 'ok'; }],
+      ]) +
+      '<p class="sic-note"><strong>Admin Activity only.</strong> Data Access entries can carry ' +
+      'request payloads, so this console does not read them — a timeline is not worth leaking a ' +
+      'request body for. A failed entry is an operation that was ATTEMPTED and refused, which is ' +
+      'usually the more interesting half.</p></div>';
+  }
+
+  function _gcpPanel() {
+    if (_gcp.state === 'idle' || _gcp.state === 'running') {
+      return '<div class="sic-card"><div class="sic-group-h">Google Cloud</div>' +
+        '<p class="sic-note">' + (_gcp.state === 'running'
+          ? 'Reading the infrastructure control plane…'
+          : 'Not measured yet.') + '</p></div>';
+    }
+
+    if (_gcp.state === 'failed') {
+      return '<div class="sic-card"><div class="sic-group-h">Google Cloud</div>' +
+        '<div class="sic-kv"><span>Control plane</span><strong>' +
+        '<span class="sic-badge unknown"><span class="sic-dot"></span>Not measured</span>' +
+        '</strong></div>' +
+        '<p class="sic-note"><strong>No infrastructure figure is shown, because none was ' +
+        'obtained.</strong> ' + _esc(_gcp.error) + '</p>' +
+        '<p class="sic-note">This is the expected state until the GCP evidence reader is ' +
+        'deployed. Database regions, index state, READY counts and collection counts are ' +
+        'Admin-API facts: no browser can obtain them, so they are shown as ' + EM +
+        ' rather than guessed. Every Google Cloud service remains individually addressable ' +
+        'in the Catalogue tab.</p>' +
+        '<div class="sic-sect-l">Addressable now</div>' +
+        ['firestore', 'firestore-sokoni-ops', 'firestore-indexes', 'cloud-run',
+         'cloud-functions', 'artifact-registry', 'cloud-storage', 'secret-manager',
+         'cloud-monitoring', 'cloud-scheduler', 'app-check'].map(function (id) {
+          var e = _cat() && _cat().lookup ? _cat().lookup(id) : null;
+          if (!e) return '';
+          return '<button class="sic-chip sic-link" onclick="SokoniIntegrations.selectCatalogue(\'' +
+                 _esc(id) + '\')">' + _esc(e.name) + '</button>';
+        }).join('') +
+        '</div>';
+    }
+
+    var d   = _gcp.data || {};
+    var fs_ = (d.data && d.data.firestore) || {};
+    var dbs = fs_.databases || d.databases || {};
+    var cmp = d.compute || {};
+    var obs = d.observability || {};
+    var sec = d.security || {};
+    var run = cmp.cloudRun || {}, fns = cmp.functions || {}, ar = cmp.artifactRegistry || {};
+    var iam = sec.iam || {}, secrets = sec.secrets || {};
+    var mon = obs.monitoring || {}, bill = obs.billing || {};
+    var pi  = d.projectInfo || {};
+
+    /* ── Header. The estate's identity and how much of it was readable. ── */
+    var head = '<div class="sic-card"><div class="sic-group-h">Google Cloud Platform</div>' +
+      '<div class="sic-kv"><span>Project</span><strong class="sic-mono">' +
+      _esc(d.project || EM) + '</strong></div>' +
+      _metric('Project number', pi.projectNumber) +
+      _metric('Project state', pi.state) +
+      _metric('Region coverage', d.regions) +
+      '<div class="sic-kv"><span>Read at</span><strong>' +
+      (d.generatedAt ? _esc(_stamp(Date.parse(d.generatedAt))) : EM) + '</strong></div>' +
+      _metric('Control planes read', d.domainsRead) +
+      _metric('Control planes unreadable', d.domainsFailed) +
+      _metric('Enabled APIs', (d.apis || {}).enabled) +
+      _metric('Last event observed', (d.activity || {}).lastEventAt) +
+      _metric('Recent deployments', (d.activity || {}).deployments) +
+      _metric('Recent failed operations', (d.activity || {}).failures) +
+      '<div class="sic-sect-l">Open</div>' + _drillBtn('apis', 'Enabled APIs') +
+      ((d.domainsFailed && d.domainsFailed.value > 0)
+        ? '<p class="sic-note"><strong>Part of this cockpit is dark.</strong> A control plane that ' +
+          'could not be read shows an em dash and names its error. That is an instrument being ' +
+          'out — it is NOT a finding that the resource is absent or healthy.</p>' : '') +
+      '</div>';
+
+    /* ── COMPUTE ───────────────────────────────────────────────────── */
+    var compute = _gcpSection('Compute',
+      '<div class="sic-sect-l">Cloud Functions</div>' +
+      _metric('Deployed', fns.total, 'cloud-functions') +
+      _metric('Active', fns.active) +
+      _metric('Failed', fns.failed) +
+      _metric('Deploying', fns.deploying) +
+      _metric('Runtimes', fns.runtimes) +
+
+      '<div class="sic-sect-l">Cloud Run</div>' +
+      _metric('Services', run.services, 'cloud-run') +
+      _metric('Ready', run.ready) +
+      /* The failure shape this platform has actually hit. */
+      _metric('Created revision not yet ready', run.revisionMismatch) +
+      _metric('No explicit max-instance limit', run.unboundedScaling) +
+      _metric('Minimum instances pinned', run.pinnedMinimum) +
+      ((run.revisionMismatch && run.revisionMismatch.value > 0)
+        ? '<p class="sic-note">A service whose latest CREATED revision is not its latest READY ' +
+          'one has a revision that failed to come up. The old revision keeps serving, so this is ' +
+          'silent unless something looks.</p>' : '') +
+
+      '<div class="sic-sect-l">Artifact Registry</div>' +
+      _metric('Repositories', ar.repositories, 'artifact-registry') +
+      _metric('Cleanup policies', ar.cleanupPolicies) +
+      _metric('Repositories enforcing a policy', ar.enforcingRepos) +
+      '<p class="sic-note">A cleanup policy is <strong>enforcing</strong> unless its dry-run flag ' +
+      'is set — and that flag disables deletion, it does not preview it. A reference-blind DELETE ' +
+      'policy is capable of removing an image a live revision still depends on.</p>' +
+      '<div class="sic-sect-l">Scaling contract</div>' +
+      _metric('Source and serving maximum disagree', (cmp.contracts || {}).maxMismatch) +
+      _metric('Serving minimum not pinned', (cmp.contracts || {}).minUnpinned) +
+      _metric('No source contract supplied', (cmp.contracts || {}).withoutContract) +
+      '<div class="sic-sect-l">Open</div>' +
+      _drillBtn('functions', 'Functions inventory') +
+      _drillBtn('contracts', 'Scaling contract') +
+      _drillBtn('run', 'Cloud Run services') +
+      _drillBtn('artifacts', 'Artifacts & provenance'));
+
+    /* ── DATA ──────────────────────────────────────────────────────── */
+    var data = _gcpSection('Data',
+      _metric('Composite-index quota (live)', fs_.quota || d.quota) +
+      Object.keys(dbs).map(function (id) { return _gcpDatabase(id, dbs[id]); }).join('') +
+      _metric('Storage buckets', (d.data && d.data.storage || {}).buckets, 'cloud-storage') +
+      '<div class="sic-sect-l">Open</div>' +
+      _drillBtn('databases', 'Databases') +
+      _drillBtn('storage', 'Storage'));
+
+    /* ── OBSERVABILITY ─────────────────────────────────────────────── */
+    var observ = _gcpSection('Observability',
+      _metric('Alert policies', mon.alertPolicies, 'cloud-monitoring') +
+      _metric('Enabled', mon.enabled) +
+      _metric('With a notification channel', mon.withNotification) +
+      ((mon.withNotification && mon.alertPolicies &&
+        mon.withNotification.state === 'observed' && mon.alertPolicies.state === 'observed' &&
+        mon.withNotification.value < mon.alertPolicies.value)
+        ? '<p class="sic-note">An alert policy with no notification channel fires into nothing.</p>' : '') +
+      '<div class="sic-sect-l">Telemetry (last 24h)</div>' +
+      _metric('Cloud Run requests', (obs.telemetry || {}).runRequests) +
+      _metric('Cloud Run 5xx', (obs.telemetry || {}).run5xx) +
+      _metric('Function executions', (obs.telemetry || {}).fnExecutions) +
+      _metric('Firestore reads', (obs.telemetry || {}).firestoreReads) +
+      _metric('Firestore writes', (obs.telemetry || {}).firestoreWrites) +
+      _metric('Open incidents', (obs.incidents || {}).openIncidents) +
+      '<div class="sic-sect-l">Billing</div>' +
+      _metric('Billing enabled', bill.billingEnabled) +
+      _metric('Billing account', bill.billingAccount) +
+      _metric('Budgets', (obs.budgets || {}).budgets) +
+      '<div class="sic-sect-l">Open</div>' +
+      _drillBtn('telemetry', 'Monitoring & telemetry') +
+      _drillBtn('cost', 'Billing & cost control'));
+
+    /* ── SECURITY ──────────────────────────────────────────────────── */
+    var security = _gcpSection('Security',
+      '<div class="sic-sect-l">IAM</div>' +
+      _metric('Role bindings', iam.bindings) +
+      _metric('Distinct principals', iam.principals) +
+      _metric('Service accounts', iam.serviceAccounts) +
+      _metric('Owners', iam.owners) +
+      _metric('Editors', iam.editors) +
+      '<p class="sic-note">Counts of actual bindings. No risk score is computed here — a score ' +
+      'would be an opinion presented with the authority of a measurement.</p>' +
+
+      '<div class="sic-sect-l">Audit logging</div>' +
+      _metric('Services with an audit config', iam.auditServices) +
+      _metric('Log types enabled', iam.auditLogTypes) +
+      '<p class="sic-note">An absent audit config means <strong>Admin Activity only</strong>. It ' +
+      'does not mean everything is logged, and Data Access logging is off unless it appears above.</p>' +
+
+      '<div class="sic-sect-l">Secret Manager</div>' +
+      _metric('Secrets', secrets.secrets, 'secret-manager') +
+      _metric('With a rotation policy', secrets.withRotation) +
+      _metric('With an expiry', secrets.withExpiry) +
+      '<p class="sic-note">Secret <strong>names</strong> only. This reader calls the list API, ' +
+      'which cannot return a value; the access API that can is never called.</p>' +
+      '<div class="sic-sect-l">Open</div>' +
+      '<div class="sic-sect-l">Service accounts</div>' +
+      _metric('Service accounts seen', (sec.serviceAccounts || {}).total, 'secret-manager') +
+      _metric('Holding roles but running nothing', (sec.serviceAccounts || {}).withoutWorkload) +
+      '<div class="sic-sect-l">App Check</div>' +
+      _metric('Services configured', (sec.appCheck || {}).services, 'app-check') +
+      _metric('Enforced', (sec.appCheck || {}).enforced) +
+      _metric('Not enforced', (sec.appCheck || {}).unenforced) +
+      '<div class="sic-sect-l">Open</div>' +
+      _drillBtn('admins', 'Administrators') +
+      _drillBtn('serviceaccounts', 'Service accounts') +
+      _drillBtn('appcheck', 'App Check') +
+      _drillBtn('secrets', 'Secret Manager') +
+      _drillBtn('audit', 'Audit logging') +
+      /* A MOUNT POINT ONLY. The access-management surface is the one WRITE path
+         in this console, and it deliberately lives in a separate module
+         (sokoni-gcp-admin.js) so THIS module keeps its certified guarantee of
+         containing no write path at all. All that is emitted here is an empty
+         element for it to render into. */
+      '<div id="sgaRoot"></div>');
+
+    /* The reader states its own boundary last, so an absent panel is never read
+       as an absent problem. */
+    var boundary = '<div class="sic-card">' +
+      '<div class="sic-sect-l">Not covered by this reader</div>' +
+      '<p class="sic-note">' + _esc((d.notCovered || []).join(' · ')) +
+      '. These are not shown as healthy and are not shown as zero — they are simply not measured. ' +
+      'Each remains individually addressable in the Catalogue.</p></div>';
+
+    return head + _gcpPickCard(d) + _gcpDrillPanel(d) + compute + data + observ + security +
+           _gcpGraph(d) + _gcpActivity(d) + boundary;
+  }
+
+  /** Read the GCP control plane. On demand, exactly like the activity
+      analytics: the infrastructure is not polled because a console was opened. */
+  function _loadGcp() {
+    if (_gcp.state === 'running' || _gcp.state === 'done') return Promise.resolve();
+    _gcp.state = 'running';
+    _render();
+
+    var call;
+    var injected = _opts.getGcpEvidence;
+    if (typeof injected === 'function') {
+      call = Promise.resolve(injected());
+    } else if (typeof firebase !== 'undefined' && firebase.functions) {
+      try {
+        call = firebase.functions()
+          .httpsCallable('adminOsDispatch')({ op: 'adminGetGcpEvidence' })
+          .then(function (r) { return r.data; });
+      } catch (e) {
+        call = Promise.reject(e);
+      }
+    } else {
+      call = Promise.reject(new Error('Firebase Functions is not available on this page.'));
+    }
+
+    return call.then(function (data) {
+      _gcp = { state: 'done', data: data, error: '' };
+      _render();
+    }).catch(function (e) {
+      _gcp = { state: 'failed', data: null,
+               error: (e && e.message) || 'The GCP evidence reader did not answer.' };
+      _render();
+    });
   }
 
   /* ── Rendering the observed-activity section ─────────────────────────
@@ -1534,6 +2563,7 @@
 
     var panel =
       _tab === 'catalogue'    ? _catalogueGrid()     :
+      _tab === 'gcp'          ? _gcpPanel()          :
       _tab === 'registered'   ? _registeredTable()   :
       _tab === 'capabilities' ? _capabilitiesTable() :
       _tab === 'dependencies' ? _dependenciesTable() :
@@ -1576,6 +2606,22 @@
       ' minutes is stale, matching the threshold in <span class="sic-mono">platformGetHealth</span>. ' +
       'Where a source cannot be read this console shows ' + EM + ' — never 0.</p>' +
       '</div>';
+
+    /* AFTER the markup is in place, the access-management module is asked to
+       paint itself into the element the GCP panel emitted for it. It must run
+       here, not earlier: the assignment above replaces everything.
+
+       This is a call INTO a separate module, not a write. Nothing in THIS file
+       mutates any store, which is the guarantee case E4 certifies and sabotage
+       S8 proves. The one write surface in this console lives in
+       sokoni-gcp-admin.js precisely so that stays true. */
+    if (_tab === 'gcp' && typeof window !== 'undefined' && window.SokoniGcpAdmin) {
+      try { window.SokoniGcpAdmin.mount('sgaRoot', _opts.gcpAdminOpts || {}); }
+      catch (e) {
+        /* A failure to paint the write surface must never take the read-only
+           cockpit down with it. The evidence is the more important half. */
+      }
+    }
   }
 
   /* ── Public API ──────────────────────────────────────────────────────── */
@@ -1597,6 +2643,10 @@
     refresh: function () { _selected = null; return load(); },
     tab: function (t) {
       _tab = t;
+      /* The infrastructure control plane is read ON DEMAND, when an operator
+         opens it — never at load. Opening a console is not a reason to query
+         the Admin API for the whole estate. */
+      if (t === 'gcp') _loadGcp();
       /* Filters mean different things per tab (category vs service type), so a
          tab change clears them rather than silently applying a stale one. */
       _filter = { q: '', type: '', status: '' };
@@ -1604,6 +2654,21 @@
       _render();
     },
     detailTab: function (t) { _detailTab = t; _render(); },
+    /* Open or close a GCP drill-down. In-panel selection, because AdminOS has
+       no router — clicking the open one again closes it. */
+    gcpDrill: function (id) {
+      _gcpDrill = (id && _gcpDrill !== id) ? id : null;
+      /* Changing the table closes any entity card opened from the old one, so
+         a card can never be left showing an entity the table no longer lists. */
+      _gcpPick = null;
+      _render();
+    },
+    /* Open ONE entity's card from inside a drill-down table. */
+    gcpPick: function (kind, id) {
+      _gcpPick = (kind && id && !(_gcpPick && _gcpPick.kind === kind && _gcpPick.id === id))
+        ? { kind: kind, id: id } : null;
+      _render();
+    },
     select: function (id) {
       _selKind  = 'service';
       _selected = (id && _selected !== id) ? id : null;

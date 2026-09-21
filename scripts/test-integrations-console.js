@@ -316,9 +316,29 @@ const settle = () => new Promise(r => setImmediate(() => setImmediate(r)));
     ok('it invokes exactly one callable', called.length === 1, called.join(','));
     ok('and that callable is the read-only status dispatcher',
        called[0] === 'adminOsDispatch', String(called[0]));
-    const ops = [...new Set((code.match(/op: '([^']+)'/g) || []))];
-    ok('the only op it sends is adminGetIntegrationStatus',
-       ops.join(',') === "op: 'adminGetIntegrationStatus'", ops.join(','));
+    /* An ALLOWLIST, not a record of what the console happens to call. Both ops
+       are reads, and both had to prove it before joining this list:
+
+         adminGetIntegrationStatus  lists secret NAMES; never touches the
+                                    payload API, binds no secret
+         adminGetGcpEvidence        GCP Admin API reads only. Its own suite
+                                    (scripts/test-gcp-evidence.js) asserts no
+                                    mutation verb on stripped source against a
+                                    positive control, and its access token is
+                                    scoped cloud-platform.read-only, so the
+                                    credential cannot mutate even if code tried
+
+       An op that cannot demonstrate that does not go here. The assertion below
+       is still exact-set equality, so an unlisted op fails the suite. */
+    const READ_ONLY_OPS = ['adminGetIntegrationStatus', 'adminGetGcpEvidence'];
+    const ops = [...new Set((code.match(/op: '([^']+)'/g) || []))]
+      .map(x => x.replace(/.*'([^']+)'.*/, '$1')).sort();
+    ok('every op it sends is on the read-only allowlist',
+       ops.join(',') === READ_ONLY_OPS.slice().sort().join(','), ops.join(','));
+    /* A dynamic op would let a caller choose any of the 65, defeating the list
+       above without tripping it. */
+    ok('and every op is a string literal, never a variable',
+       !/\bop:\s*(?!')[A-Za-z_$]/.test(code));
     ok('no Daraja surface exists in the console',
        !/daraja/i.test(code));
   }
