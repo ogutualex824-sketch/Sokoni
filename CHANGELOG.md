@@ -1,3 +1,102 @@
+## 2026-09-21 (130) — Scaling provenance corrected, and a production rebuild that left a ceiling behind
+
+**Three separate events, deliberately not merged: two repository commits and one GCP mutation.**
+CLAUDE.md requires a CHANGELOG entry with every change. `de9b4d0` and `cfe4eda` landed unrecorded,
+and the `processTypesenseQueue` deploy mutated production without any commit describing it. This
+entry closes that gap. It decides nothing.
+
+### `de9b4d0` — the recovery manifest's scaling assertion retracted
+
+Assertion 3 claimed the six recovery candidates carried `minInstanceCount = 0`, so a rebuild would
+merely materialise that value. It was drawn from the GCF layer alone, and source-versus-serving
+evidence refutes it.
+
+```
+source            minInstances: 1     all six, with explicit latency rationale
+GCF layer         minInstanceCount    undefined
+serving revision  minScale            1
+```
+
+The GCF layer agrees with neither of the other two. That is recorded as an **observability
+discrepancy**, not as evidence the functions are unpinned. A rebuild would therefore *restore* the
+pin, reinstating the cost configuration P0-3 exists to eliminate.
+
+Assertion 3 is now a **BLOCKING** condition rather than a value, with the original preserved
+verbatim in `retracted_text` / `retracted_note`, and an explicit warning against "fixing" it by
+encoding `minInstances: 1` — that would silently decide cold-start latency against ~708 billable
+instance-hours per service per month, which is an owner decision.
+
+A gate-wide invariant was added: **a rebuild may not proceed while source and serving scaling
+configuration differ, absent an explicit owner adjudication.** It catches both directions.
+
+Unchanged: `recovery_order`, the `intasendWebhook` exclusion, `baseline_sha256`,
+`required_function_count` 1709, all nine assertion ids, the other eight assertions byte-for-byte.
+
+### `cfe4eda` — the concurrency premise behind the ceiling recommendations corrected
+
+The audit twice asserted no service had been observed above one concurrent instance, and §17 used
+that as the rationale for dropping max instances from 99. The reproducible 30-day measurement —
+`run.googleapis.com/container/instance_count`, hourly `ALIGN_MAX`, **summed across the `active` and
+`idle` state series** — says otherwise, with observed peaks of 3–6.
+
+A cross-series `MAX` undercounts and reproduces the old figure; a `SUM` does not. The method is
+recorded so the correction is reproducible rather than merely asserted. Both original statements are
+preserved — site 1 appended to, site 2 struck through — not deleted.
+
+**The conclusion survives; only its magnitude was wrong.** Every ceiling remains 20–33× above
+anything observed, so the over-provisioning finding stands.
+
+§17 now carries a gate. Its Scheduled tick row proposes `max = 3`, and `processTypesenseQueue` is a
+scheduled tick with a measured peak of **6**. The row is left at 3 and explicitly **not** raised: the
+measurement establishes that 3 is insufficient to contain the peak, not what the ceiling should be.
+Every ceiling in §17 is now labelled a **proposal**, awaiting owner adjudication.
+
+> Observed peak is not desired maximum. Desired maximum is observed workload plus an intentional
+> surge policy, and no such policy has been set for these services.
+
+### The `processTypesenseQueue` rebuild — a GCP mutation, not a commit
+
+Authorized by (129). Performed 2026-09-21. Verified live, read-only, after the fact:
+
+```
+revision   processtypesensequeue-00022-fon   Ready=True   traffic 100%
+created    2026-09-21T10:29:18Z
+replaces   processtypesensequeue-00021-xat   (created 2026-08-22T08:06:46Z)
+```
+
+The rebuilt source declares no `maxInstances`. The superseded revision `00021-xat` carried
+`autoscaling.knative.dev/maxScale: 80`; `00022-fon` carries **no maxScale annotation at all**.
+
+**The serving ceiling of 80 was not preserved. The function is currently uncapped.**
+
+No ceiling was inferred, and none was silently restored. Restoring 80 would assert that the prior
+value was intentional; choosing any other number would decide §17 by deployment instead of by
+adjudication. Both are owner decisions, and both remain open.
+
+### What this entry does NOT say
+
+This deploy is **not** recorded as having "fixed Typesense". The DLQ `ref: undefined` defect was
+repaired **in source** by `032e88e`, recorded in (127). The deployment carried that repair into
+production **and** introduced an unresolved scaling consequence. Recording the mutation and the
+state it left behind is the point; a success claim over a function whose ceiling is now undefined
+would be exactly the kind of premature closure the manifest's new invariant exists to prevent.
+
+Scaling certification for all seven services remains **OPEN**.
+
+### Changes
+
+```
+Database    none
+API         none
+Breaking    none
+Security    none
+Source      none in this entry. de9b4d0 touches the manifest, cfe4eda the audit document.
+GCP         processTypesenseQueue rebuilt to 00022-fon (recorded here, performed earlier).
+            Nothing mutated by this entry.
+Deployment  NONE. Three owner decisions stay open: the minimum, the maximum, and whether the
+            Typesense ceiling becomes source-authoritative.
+```
+
 ## 2026-09-21 (129) — The function-rebuild freeze is overridden, narrowly and on the record
 
 **Authorization change · documentation only · NO deploy in this commit · KEEP still UNPROVEN.**
