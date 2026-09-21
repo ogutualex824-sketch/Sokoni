@@ -418,10 +418,11 @@ Continuously evolve SOKONI into a scalable, secure, maintainable, enterprise-gra
 
 Multiple AI agents (Claude Code, Cursor, Copilot) work this repo in **parallel git worktrees**. The rules below prevent the failures that have actually happened. See also `AGENTS.md`.
 
-## ⚠️ ARTIFACT REGISTRY — cause PROVEN, repair NOT APPLIED (updated 2026-09-21)
+## ⚠️ ARTIFACT REGISTRY — cause PROVEN, repair APPLIED, protection UNPROVEN (updated 2026-09-21)
 
-`gcf-artifacts` holds no function images. Existing revisions still serve from Cloud Run's internal
-copies, but **no service can create a new revision from its existing spec**.
+`gcf-artifacts` held no function images until 2026-09-21; it now contains the rebuilt
+`profile_get_public_profile` function image and its build cache. The other **1,708** services still
+serve from Cloud Run's internal copies and **cannot create a new revision from their existing spec**.
 
 **CAUSE — PROVEN 2026-09-21.** Both repositories carry the cleanup policy
 `firebase-functions-cleanup`: `action: DELETE`, `condition.olderThan: 86400s`, `tagState: ANY`. The
@@ -445,33 +446,54 @@ keeps its own authorization and its own safety conditions. Function deletion is 
 prohibited *by this notice* — but `intasendWebhook` retirement and P1 consolidation retain their own
 separate gates, which this notice does not touch.
 
+**EXTERNALLY EXECUTED 2026-09-21, outside this workstream and outside Git.** Another agent applied
+the policy repair and rebuilt one function. No commit records it. Verified live, read-only:
+
+* both repos now carry **two** policies — `firebase-functions-cleanup` (DELETE, 86400s, ANY,
+  unchanged) **and** `sokoni-recovery-protection` (KEEP, `mostRecentVersions.keepCount: 10`).
+  `cleanupPolicyDryRun` unset = **ENFORCING**. Applied 04:35:43Z (us-central1), 04:36:22Z (us-east1).
+* `profilegetpublicprofile` rebuilt: image `sha256:133a75e9…` built 04:21:47Z, revision
+  `00007-xaz` **Ready=True** at 04:22:04Z, pinned **by digest**, not by tag. Function count
+  unchanged at **1,709** — a revision was replaced; nothing was added or deleted.
+* **the rebuild PRECEDED the policy repair by 14 minutes.** It was rebuilt while the image was well
+  inside the 24h window, so the DELETE policy had not yet made it eligible. That is the sequencing
+  defect this notice warns about, not a licence to repeat it.
+
+**PROTECTION IS CONFIGURED, NOT PROVEN.** The KEEP rule's existence and enforcement state are
+observed; its behaviour *through a sweep* is not. Earliest eligibility is **~2026-09-22T04:21:47Z**
+and the sweep may run later. Until the specimen survives, KEEP is an assertion.
+
+**Re-read this notice immediately before any production mutation.** Another agent acted between
+this notice's commit and this correction — a notice you read an hour ago may already be stale.
+
 **Still do NOT:**
 
-* **deploy or rebuild any Cloud Function.** The reason is no longer contamination, it is
-  **sequencing**: while this policy stands, a fresh image is deleted ~24–29h after it is built, so
-  rebuilding first merely re-enters the race. **Policy repair precedes reconstruction.**
+* **rebuild any further Cloud Function.** The remaining **seven** damaged services stay FROZEN
+  until the specimen proves survival. Do not rebuild in order to test the KEEP rule — the specimen
+  already exists, and a second rebuild adds risk without adding evidence.
 * run `gcloud run services update` — it still fails, and leaves a failed revision behind that
   **cannot be deleted** (a revision cannot be removed while it is `latestCreatedRevisionName`)
-* change the cleanup policy without authorization. The repair is designed — a KEEP rule,
-  `keepCount: 10`, under an id **other than** `firebase-functions-cleanup` — but not applied. Note
-  that merely DELETING the policy is re-asserted at 1 day by the next
-  `firebase deploy --only functions --force`, silently and without a prompt.
+* change the cleanup policy. It is **already repaired**. `--policy` is *set or update* and may
+  REPLACE the whole rule set, so any policy file must carry **both** the DELETE and the KEEP rule.
+  **`--dry-run` is not a preview** — it is "disable deleting images according to cleanup policies",
+  i.e. it stops enforcement. And never "fix" anything by DELETING the policy: firebase-tools 15.26
+  computes `hasOtherPolicies` and now **skips** cleanup setup while `sokoni-recovery-protection`
+  exists — which protects the repair from `deploy --force`, but also means the CLI will no longer
+  restore the DELETE rule if someone removes it by hand. Policy changes are deliberate-only.
 * push, delete or tidy anything in Artifact Registry, **except** the one case below.
 
-> **Canary #2 — narrow exception.** A single inert replacement canary
-> `sokoni-ar-forensics-canary:<UTC timestamp>`, pushed via `scripts/infra/ar-canary-push.js`, solely
-> to certify that a repaired policy lets an artifact outlive the 24h threshold. It is attached to no
-> service. **This defines what MAY be authorized — it is not standing permission**, and it covers
-> that one artifact only: no function images, no deletions, no tidying.
+> **The live specimen replaces canary #2.** `profile_get_public_profile` is a naturally occurring
+> protection test under the repaired policy, so no inert canary need be manufactured. **Do not
+> delete, re-tag, rebuild or otherwise disturb it** — that destroys the only evidence that will
+> answer whether KEEP works. Canary #2 stays defined, unnecessary, and NOT authorized.
 
-The original canary is **gone**, consumed by the mechanism it was built to detect. It no longer
-needs protecting.
+The original 09-19 canary is **gone**, consumed by the mechanism it was built to detect.
 
 Check state with `node scripts/infra/ar-forensics.js 3d` (read-only; self-classifying, flags
 contamination). Background: `docs/GCP_COST_ARCHITECTURE_IMPLEMENTATION.md`, P0-2 onward.
 
-**Remove this notice only when the cleanup policy is repaired, certified by canary #2, and the owner
-says so.**
+**Remove this notice only when the specimen has survived its first sweep after ~2026-09-22T04:21Z,
+the remaining seven services are rebuilt, and the owner says so.**
 
 ## Deploying
 * Live production is **`mysokoni.co.ke`** (Firebase Hosting). `sokoni.co.ke` is an unrelated site — never use it to judge state.
