@@ -304,15 +304,15 @@ async function _handleFailure(db, item, errorMsg) {
   const attempts = (item.attempts || 0) + 1;
   if (attempts >= MAX_ATTEMPTS) {
     /* Move to DLQ */
-    await db.collection(DLQ_COL).doc(item.ref.id).set({
-      ...item,
+    const { ref, ...rest } = item;
+    await db.collection(DLQ_COL).doc(ref.id).set({
+      ...rest,
       status:    'failed',
       failedAt:  Date.now(),
       lastError: errorMsg,
       attempts,
-      ref:       undefined,
     });
-    await item.ref.delete();
+    await ref.delete();
     return;
   }
   const delayMs  = (RETRY_DELAYS[attempts] || 600) * 1000;
