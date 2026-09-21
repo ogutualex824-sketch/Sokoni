@@ -176,8 +176,25 @@
       vendor: 'DNS + mail providers', category: 'messaging', icon: '🛡️',
       status: 'configured', direction: 'outbound',
       summary: 'Domain authentication policy that decides whether SOKONI mail is trusted.',
-      evidence: { modules: ['functions/email-dmarc.js'] },
+      evidence: { modules: ['functions/email-dmarc.js', 'monitoring/dmarc-verify.js', 'docs/DMARC.md'] },
       health: { source: null, kind: 'elsewhere', kindNote: 'DNS records, outside this console.', note: 'Verified against DNS, outside this console.' },
+      notes:  'Two signing identities exist: HostPinnacle/MailBaby on selector "default", and ' +
+              'SendGrid on s1/s2. A change to either one is a DNS change at HostPinnacle.',
+    },
+    {
+      id: 'hostpinnacle-mail', name: 'HostPinnacle / MailBaby — Mailboxes',
+      vendor: 'HostPinnacle', category: 'messaging', icon: '📬',
+      status: 'live', direction: 'bidirectional',
+      summary: 'The mail host for @mysokoni.co.ke. It holds the real mailboxes — including the ' +
+               'addresses DMARC aggregate and forensic reports are delivered to — and signs ' +
+               'outbound mail with its own DKIM key.',
+      evidence: {
+        modules: ['docs/DMARC.md', 'docs/DNS-RECORDS.md', 'monitoring/dmarc-verify.js'],
+      },
+      health: { source: null, kind: 'elsewhere', kindNote: 'Mailbox state is seen over IMAP at the provider, not from this console.', note: 'Nothing in SOKONI polls these mailboxes, so no signal reaches this console. Judge it by whether reports are arriving.' },
+      notes:  'Distinct from SendGrid. SendGrid SENDS transactional mail; this host RECEIVES, and ' +
+              'holds the inboxes. DMARC reports arriving nowhere is a silent failure — the reports ' +
+              'land in an IMAP mailbox here, not in the platform.',
     },
     {
       id: 'fcm', name: 'Firebase Cloud Messaging — Push',
@@ -259,8 +276,46 @@
       vendor: 'Google', category: 'identity', icon: '🅶',
       status: 'live', direction: 'inbound',
       summary: 'Federated sign-in accepted through Firebase Auth.',
-      evidence: { modules: ['functions/auth-dispatch.js'] },
+      evidence: { modules: ['functions/auth-dispatch.js', 'firebase.js'] },
       health: { source: null, kind: 'measurable', note: 'No health signal.' },
+    },
+    {
+      id: 'phone-auth', name: 'Firebase Phone Auth — SMS OTP',
+      vendor: 'Google Firebase', category: 'identity', icon: '📱',
+      status: 'live', direction: 'bidirectional',
+      summary: 'Sign-in by phone number. Firebase sends a one-time code by SMS and verifies it; ' +
+               'the flow is gated by a reCAPTCHA verifier before a message is sent.',
+      evidence: { modules: ['firebase.js', 'auth.js'] },
+      health: { source: null, kind: 'measurable', note: 'Delivery is per-attempt and is not aggregated anywhere this console can read.' },
+      notes:  'The OTP is sent by GOOGLE, not by Africa’s Talking. SOKONI’s Africa’s Talking ' +
+              'rail carries platform SMS; it does not carry sign-in codes, and the two bill and ' +
+              'fail independently. Do not diagnose a login-OTP failure by looking at the ' +
+              'Africa’s Talking rail.',
+    },
+    {
+      id: 'email-password-auth', name: 'Email & Password Sign-In',
+      vendor: 'Google Firebase', category: 'identity', icon: '✉️',
+      status: 'live', direction: 'inbound',
+      summary: 'First-party account creation and sign-in with an email address and password, ' +
+               'accepted through Firebase Auth.',
+      evidence: { modules: ['firebase.js', 'auth.js'] },
+      health: { source: null, kind: 'measurable', note: 'No aggregate signal. Individual outcomes are visible in the authentication logs, not here.' },
+      notes:  'A federated provider asserts the address; this one does not. That distinction is ' +
+              'what the email-verification gate exists to close, so the gate is not optional for ' +
+              'accounts created this way.',
+    },
+    {
+      id: 'recaptcha', name: 'Google reCAPTCHA',
+      vendor: 'Google', category: 'identity', icon: '🤖',
+      status: 'live', direction: 'outbound',
+      summary: 'Bot attestation used in two distinct places: as the App Check provider for ' +
+               'callable requests, and as the verifier that must pass before a phone OTP is sent.',
+      evidence: { modules: ['firebase.js'] },
+      health: { source: null, kind: 'measurable', note: 'A browser-to-Google exchange. No server-side signal reaches this console.' },
+      notes:  'The site key is public by design — it is delivered to every browser and is NOT a ' +
+              'secret. The paired SECRET key never appears in client code and must never be added ' +
+              'to it. A reCAPTCHA outage degrades both App Check and phone sign-in at once, which ' +
+              'is why the two are catalogued as depending on the same provider.',
     },
     {
       id: 'facebook-login', name: 'Facebook Login & Data Deletion',
@@ -307,32 +362,73 @@
 
     /* ══ INFRASTRUCTURE ═════════════════════════════════════════════════ */
     {
-      id: 'firestore', name: 'Cloud Firestore',
+      id: 'firestore', name: 'Cloud Firestore — (default)',
       vendor: 'Google Firebase', category: 'infra', icon: '🗄️',
       status: 'live', direction: 'internal',
-      summary: 'The system of record. Every canonical figure on every SOKONI console originates here.',
+      summary: 'The system of record. Every canonical figure on every SOKONI console originates ' +
+               'in this database. SOKONI runs two Firestore databases; this is the one the ' +
+               'application actually reads and writes.',
       evidence: { modules: ['firestore.rules', 'firestore.indexes.json'] },
-      health: { source: null, kind: 'measurable', note: 'If this were down, this console could not have rendered.' },
+      /* A database this console can actually address. `probe` names a collection
+         the console attempts a bounded, read-only query against so reachability is
+         OBSERVED rather than assumed. An empty result is a successful read. */
+      database: { id: '(default)', rules: 'firestore.rules', probe: 'platformServices' },
+      health: { source: null, kind: 'measurable', note: 'If this were down, this console could not have rendered. That is a liveness inference about this database only — it says nothing about the sokoni-ops database.' },
+      notes:  'Rules and indexes for this database are deployed separately from sokoni-ops. A deploy filter that names one does not carry the other.',
     },
     {
-      id: 'cloud-functions', name: 'Cloud Functions & Cloud Run',
+      id: 'firestore-sokoni-ops', name: 'Cloud Firestore — sokoni-ops',
+      vendor: 'Google Firebase', category: 'infra', icon: '🗄️',
+      status: 'configured', direction: 'internal',
+      summary: 'A second, separately-ruled Firestore database declared for admin and operations ' +
+               'data. Its rules and indexes are declared and deployable, but no runtime module ' +
+               'opens a connection to it, so nothing is known to read or write it in production.',
+      evidence: {
+        modules: ['firestore.rules.sokoni-ops', 'firestore.indexes.sokoni-ops.json'],
+        env: ['firebase.json'],
+      },
+      database: { id: 'sokoni-ops', rules: 'firestore.rules.sokoni-ops', probe: 'healthSnapshots' },
+      health: { source: null, kind: 'measurable', note: 'Nothing in the application reads this database. The console can probe it for reachability, but a reachable database is not a used one — and an empty probe is not proof it is empty.' },
+      notes:  'Status is "configured", not "live", on purpose: a grep for a Firestore client bound to this database id finds nothing. Its rules are admin-read, Cloud-Functions-write-only. Do not promote this entry to "live" on the strength of the declaration alone — promote it when a runtime reader exists and has been observed.',
+    },
+    {
+      id: 'cloud-run', name: 'Google Cloud Run',
+      vendor: 'Google Cloud', category: 'infra', icon: '🏃',
+      status: 'live', direction: 'internal',
+      summary: 'The serving layer every Cloud Function actually runs on. Revisions, traffic and ' +
+               'scaling limits are Cloud Run concepts, and the services that survived the ' +
+               'Artifact Registry purge are serving from Cloud Run’s internal image copies.',
+      evidence: {
+        modules:   ['scripts/infra/ar-forensics.js', 'scripts/audit-callable-invokers.js',
+                    'scripts/infra/product-trigger-volume.js'],
+        endpoints: ['https://run.googleapis.com'],
+      },
+      health: { source: null, kind: 'elsewhere', kindNote: 'Revision and traffic state is read through the Cloud Run Admin API by script.', note: 'Existing revisions serve normally. Revision counts, traffic split and scaling state require the Admin API, which no deployed function exposes — so this console shows an em dash rather than a number it did not obtain.' },
+      notes:  'Do NOT run "gcloud run services update". It fails for the services whose images were ' +
+              'purged, and it leaves behind a failed revision that cannot be deleted while it is ' +
+              'latestCreatedRevisionName.',
+    },
+    {
+      id: 'cloud-functions', name: 'Cloud Functions',
       vendor: 'Google Cloud', category: 'infra', icon: '⚙️',
       status: 'frozen', direction: 'internal',
-      summary: 'Every server-side rail SOKONI runs. Currently under an artifact investigation ' +
-               'that prohibits deploying, deleting or reconfiguring a function.',
-      evidence: { modules: ['functions/index.js'] },
-      health: { source: null, kind: 'measurable', note: 'Revisions still serve. Creating a NEW revision from an existing spec does not work.' },
-      notes:  'Function deletion is the leading suspect in the Artifact Registry purge. Do not deploy or delete anything here while the freeze stands.',
+      summary: 'Every server-side rail SOKONI runs. Existing revisions serve normally; the ' +
+               'services whose images were purged cannot create a NEW revision from their ' +
+               'existing spec until they are rebuilt.',
+      evidence: { modules: ['functions/index.js'], env: ['scripts/infra/recovery-manifest-20260921.json'] },
+      health: { source: null, kind: 'measurable', note: 'Revisions still serve, and redeploy, cold start and rollback all work — the source zips are intact. Creating a NEW revision from an existing spec does not.' },
+      notes:  'Function deletion was the leading suspect in the Artifact Registry purge and is now REFUTED — the cause was a cleanup policy (see the Artifact Registry entry). The revision blocker is a separate consequence of the purge and is independent of the cause. Rebuilds are permitted only where the owner has authorized them individually; there is no blanket deploy.',
     },
     {
       id: 'artifact-registry', name: 'Google Artifact Registry',
       vendor: 'Google Cloud', category: 'infra', icon: '📦',
       status: 'frozen', direction: 'internal',
       summary: 'The container registry backing Cloud Functions. Both gcf-artifacts repositories ' +
-               'lost every function image; a controlled canary is instrumenting the cause.',
+               'lost every function image. The cause is PROVEN: a reference-blind, age-based ' +
+               'cleanup policy that deleted images live Cloud Run revisions still depended on.',
       evidence: { modules: ['scripts/infra/ar-forensics.js'] },
-      health: { source: null, kind: 'elsewhere', kindNote: 'scripts/infra/ar-forensics.js is the read-only instrument.', note: 'Read state with scripts/infra/ar-forensics.js — it is read-only and self-classifying.' },
-      notes:  'Do not push, delete or tidy anything in Artifact Registry, and do not delete the forensics canary.',
+      health: { source: null, kind: 'elsewhere', kindNote: 'scripts/infra/ar-forensics.js is the read-only instrument.', note: 'Read state with scripts/infra/ar-forensics.js — it is read-only and self-classifying. Use a window wide enough to span a deletion age of over a day.' },
+      notes:  'Cause proven: the firebase-functions-cleanup policy (DELETE, olderThan 86400s, tagState ANY), installed by the Firebase CLI and executed by the Artifact Registry service agent. Self-inflicted, not a Google-side defect. A KEEP policy has been added alongside it and is enforcing, but its behaviour through a sweep is NOT yet proven — protection is configured, not demonstrated. The original canary was consumed by the mechanism it was built to detect; a live specimen now serves as the test and must not be disturbed. Do not push, delete or tidy anything here, and change the cleanup policy only deliberately — any policy file must carry BOTH rules.',
     },
     {
       id: 'memorystore-redis', name: 'Memorystore Redis',
@@ -385,13 +481,116 @@
       health: { source: null, kind: 'measurable', note: 'A job that stops firing is silent by nature. Judge each job by what it last wrote.' },
     },
     {
-      id: 'cloudflare', name: 'Cloudflare — DNS & Edge',
+      id: 'cloudflare', name: 'Cloudflare cdnjs — Third-party Asset CDN',
       vendor: 'Cloudflare', category: 'infra', icon: '☁️',
+      status: 'live', direction: 'outbound',
+      summary: 'A public CDN that serves third-party front-end assets (Font Awesome) to the ' +
+               'browser. This is the ONLY role Cloudflare plays for SOKONI.',
+      evidence: {
+        modules:   ['index.html', 'service-worker.js'],
+        endpoints: ['https://cdnjs.cloudflare.com'],
+      },
+      health: { source: null, kind: 'measurable', note: 'A browser-to-CDN fetch. SOKONI has no account, no zone and no control plane here — an outage is visible as unstyled icons, not through any signal this console can read.' },
+      notes:  'CORRECTED 2026-09-21. This entry previously claimed Cloudflare provided DNS and the ' +
+              'edge for the production domain. It does not. The authoritative DNS reference names ' +
+              'HostPinnacle, and Cloudflare appears nowhere in it — every Cloudflare reference in ' +
+              'this repository is cdnjs.cloudflare.com, a public asset CDN. See the HostPinnacle ' +
+              'entry for the vendor that actually answers for this domain. Do not re-credit ' +
+              'Cloudflare with DNS without evidence from the DNS panel itself.',
+    },
+
+    {
+      id: 'osm-tiles', name: 'OpenStreetMap — Map Tiles',
+      vendor: 'OpenStreetMap Foundation', category: 'infra', icon: '🗺️',
+      status: 'live', direction: 'outbound',
+      summary: 'Every map SOKONI renders. The tile images behind delivery tracking, dispatch, ' +
+               'rider navigation, fleet monitoring and the vehicle hub are fetched by the ' +
+               'browser from OpenStreetMap’s public tile servers.',
+      evidence: {
+        modules:   ['leaflet.min.js', 'leaflet.min.css', 'delivery-tracking.html', 'dispatch.html',
+                    'rider-nav.html', 'fleet-monitor.html', 'car-hub.html'],
+        endpoints: ['https://{s}.tile.openstreetmap.org'],
+      },
+      health: { source: null, kind: 'measurable', note: 'Tiles are fetched browser-to-provider, so no server-side signal exists. A tile outage shows as a blank map on the delivery surfaces, not as a failed request anything here records.' },
+      notes:  'This is a FREE public service used on a delivery-critical path, with no contract, ' +
+              'no SLA and a published tile usage policy. The mapping library itself is ' +
+              'self-hosted, so only the tiles are third-party. Allow-listed in the Content ' +
+              'Security Policy; a CSP change that drops it blanks every map on the platform.',
+    },
+    {
+      id: 'osm-nominatim', name: 'OpenStreetMap Nominatim — Geocoding',
+      vendor: 'OpenStreetMap Foundation', category: 'infra', icon: '📍',
+      status: 'live', direction: 'outbound',
+      summary: 'Address lookup and reverse geocoding, reached directly from the browser and ' +
+               'allow-listed in the Content Security Policy.',
+      evidence: { endpoints: ['https://nominatim.openstreetmap.org'] },
+      health: { source: null, kind: 'measurable', note: 'A browser-to-provider call. Nothing server-side observes it, so there is no signal to report here.' },
+      notes:  'Separate from the tile service and separately rate-limited. Its usage policy caps ' +
+              'request rates and requires identification; bulk or automated geocoding against the ' +
+              'public endpoint is not permitted.',
+    },
+    {
+      id: 'hostpinnacle-dns', name: 'HostPinnacle — DNS & Domain',
+      vendor: 'HostPinnacle', category: 'infra', icon: '🌍',
       status: 'live', direction: 'internal',
-      summary: 'DNS for the production domain and the edge in front of it.',
-      evidence: { modules: ['firebase.json'] },
-      health: { source: null, kind: 'elsewhere', kindNote: 'Edge state is read at Cloudflare.', note: 'Edge state is read at Cloudflare, not here.' },
-      notes:  'The Cloudflare analytics beacon is blocked by the Content Security Policy. That is the CSP working, not a fault to route around.',
+      summary: 'The authoritative DNS provider for mysokoni.co.ke. Every record that resolves ' +
+               'the production domain — the Firebase Hosting A records, MX, SPF, DKIM and DMARC — ' +
+               'is served from the HostPinnacle DNS panel.',
+      evidence: {
+        modules: ['docs/DNS-RECORDS.md', 'docs/DMARC.md', 'monitoring/dmarc-verify.js'],
+      },
+      health: { source: null, kind: 'elsewhere', kindNote: 'Records are changed in the HostPinnacle DNS panel, and resolution is verified against public DNS.', note: 'No API is wired to this provider, so the console cannot observe it. DNS is judged by resolving the records, not by a row here.' },
+      notes:  'This vendor is a single point of failure for the domain and it was previously ' +
+              'UNCATALOGUED, while Cloudflare was wrongly credited with DNS. The Firebase Hosting ' +
+              'records here must never be modified. Mail records are a separate concern — see the ' +
+              'HostPinnacle mail entry.',
+    },
+    {
+      id: 'secret-manager', name: 'Google Secret Manager',
+      vendor: 'Google Cloud', category: 'infra', icon: '🔑',
+      status: 'live', direction: 'internal',
+      summary: 'Holds every production credential the backend binds. It is also the authority ' +
+               'behind this console’s own credential column: the status resolver lists secret ' +
+               'NAMES to answer whether a rail is provisioned.',
+      evidence: {
+        modules:   ['functions/integration-status.js', 'functions/index.js'],
+        endpoints: ['https://secretmanager.googleapis.com'],
+      },
+      health: { source: null, kind: 'measurable', note: 'Readability of the secret inventory is reported per-integration as the credential state. An inventory that cannot be read renders as UNKNOWN, never as missing.' },
+      notes:  'The status resolver calls secrets.LIST, which returns names and metadata and cannot ' +
+              'return a payload. It never calls secrets.versions.access, binds no secret, and must ' +
+              'not be changed to do either.',
+    },
+    {
+      id: 'cloud-monitoring', name: 'Google Cloud Monitoring',
+      vendor: 'Google Cloud', category: 'infra', icon: '📈',
+      status: 'live', direction: 'internal',
+      summary: 'Time-series metrics for Cloud Run and Cloud Functions. The instrument behind the ' +
+               'trigger-volume and scaling measurements this platform relies on when deciding ' +
+               'whether a change actually reduced load.',
+      evidence: {
+        modules:   ['scripts/infra/product-trigger-volume.js', 'scripts/gate-live-catalogue.js'],
+        endpoints: ['https://monitoring.googleapis.com'],
+      },
+      health: { source: null, kind: 'elsewhere', kindNote: 'Queried by script, not by any deployed function.', note: 'Nothing deployed queries this API — it is reached from operator scripts, so there is no runtime signal to show.' },
+      notes:  'Measure before claiming a reduction. A change that should lower write volume is not ' +
+              'proven to have lowered it until this API says so.',
+    },
+    {
+      id: 'firestore-indexes', name: 'Cloud Firestore — Index Management',
+      vendor: 'Google Firebase', category: 'infra', icon: '🧭',
+      status: 'live', direction: 'internal',
+      summary: 'The composite indexes both Firestore databases depend on, and the tooling that ' +
+               'reconciles what is declared against what is actually built.',
+      evidence: {
+        modules:   ['firestore.indexes.json', 'firestore.indexes.sokoni-ops.json',
+                    'scripts/index-capacity-report.js', 'scripts/reconcile-indexes.js',
+                    'scripts/firestore-index-diff.js'],
+        endpoints: ['https://firestore.googleapis.com'],
+      },
+      health: { source: null, kind: 'elsewhere', kindNote: 'Built-index state is read through the Firestore Admin API by script; no deployed function reports it.', note: 'A DECLARED index is not a BUILT index. Nothing in the browser can tell you which are READY — that requires the Admin API, so this console shows an em dash rather than a count it did not obtain.' },
+      notes:  'An index that is declared but not built makes a query fail at runtime while the ' +
+              'repository looks correct. Reconcile before trusting either side.',
     },
 
     /* ══ APIS SOKONI EXPOSES ════════════════════════════════════════════ */

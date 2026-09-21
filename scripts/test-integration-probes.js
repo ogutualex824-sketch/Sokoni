@@ -188,7 +188,12 @@ function store (seed) {
     ok('a MEASURABLE rail with no probe reports unknown, not failed',
        noProbe.health === 'unknown', noProbe.health);
     ok('and says so', /No probe is defined/i.test(noProbe.detail || ''), noProbe.detail);
-    const elsewhereNoProbe = await run('cloudflare');
+    /* HostPinnacle DNS is the ELSEWHERE exemplar. It was 'cloudflare' until that
+       entry was corrected: Cloudflare provides an asset CDN here, not DNS, so its
+       kind is now 'measurable' and it can no longer demonstrate this case. The
+       exemplar must be a rail whose authoritative signal genuinely lives at the
+       provider — DNS is read from the HostPinnacle panel and public DNS. */
+    const elsewhereNoProbe = await run('hostpinnacle-dns');
     ok('an ELSEWHERE rail with no probe reports observed-elsewhere, not failed',
        elsewhereNoProbe.health === 'observed-elsewhere', elsewhereNoProbe.health);
     ok('neither is ever reported as failed',
@@ -398,8 +403,8 @@ function store (seed) {
          r.health === 'unknown', r.health);
     }
     ok('and every declared kind is carried onto the probe result',
-       (await run('cloudflare')).healthKind === 'elsewhere',
-       (await run('cloudflare')).healthKind);
+       (await run('hostpinnacle-dns')).healthKind === 'elsewhere',
+       (await run('hostpinnacle-dns')).healthKind);
   }
 
   console.log('\n  what this suite does NOT prove');

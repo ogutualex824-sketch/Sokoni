@@ -94,24 +94,44 @@ function makeDom() {
   };
 }
 
-/** A scripted Firestore: each collection either resolves docs or rejects. */
+/** A scripted Firestore: each collection either resolves docs or rejects.
+    The snapshot carries `size` and `docs` as well as `forEach`, because the
+    activity analytics read those. `orderBy` is honoured so the "most recent
+    write" path is exercised for real rather than stubbed, and a collection
+    marked `noOrder` rejects an ordered query — which is how a missing index or
+    a missing field behaves in production. */
 function makeFirestore(plan) {
-  return {
-    firestore: () => ({
-      collection(name) {
-        return {
-          limit() { return this; },
-          get() {
-            const p = plan[name];
-            if (!p) return Promise.resolve({ forEach() {} });
-            if (p.deny) return Promise.reject(new Error(p.deny));
-            const docs = (p.docs || []).map((d) => ({ id: d.id, data: () => d }));
-            return Promise.resolve({ forEach: (cb) => docs.forEach(cb) });
-          },
-        };
+  function snap(rows) {
+    const wrapped = rows.map((d) => ({ id: d.id, data: () => d }));
+    return {
+      size: wrapped.length, empty: wrapped.length === 0, docs: wrapped,
+      forEach: (cb) => wrapped.forEach(cb),
+    };
+  }
+  function ref(name, order, lim) {
+    return {
+      orderBy: (field, dir) => ref(name, { field, dir: dir || 'asc' }, lim),
+      limit:   (n) => ref(name, order, n),
+      get() {
+        const p = plan[name];
+        if (!p) return Promise.resolve(snap([]));
+        if (p.deny) return Promise.reject(new Error(p.deny));
+        let rows = (p.docs || []).slice();
+        if (order) {
+          if (p.noOrder) return Promise.reject(new Error('The query requires an index.'));
+          rows = rows.filter((d) => d[order.field] !== undefined)
+                     .sort((a, b) => {
+                       const x = a[order.field], y = b[order.field];
+                       return order.dir === 'desc' ? (x < y ? 1 : x > y ? -1 : 0)
+                                                   : (x > y ? 1 : x < y ? -1 : 0);
+                     });
+        }
+        if (lim) rows = rows.slice(0, lim);
+        return Promise.resolve(snap(rows));
       },
-    }),
-  };
+    };
+  }
+  return { firestore: () => ({ collection: (n) => ref(n, null, null) }) };
 }
 
 /* ── Load the two modules into one sandbox ───────────────────────────── */
@@ -147,6 +167,21 @@ function render(plan, steps) {
   return Promise.resolve().then(() => new Promise((r) => setTimeout(r, 0))).then(() => {
     if (steps) steps(api);
     return el.innerHTML;
+  });
+}
+
+/** Mount with injected options, then run `steps` and let the on-demand
+    analytics settle before reading the DOM. Selecting a card starts reads that
+    resolve over several microtasks; draining them here is what makes the
+    assertions run against the MEASURED render rather than the "running" one. */
+function renderWith(plan, opts, steps) {
+  const { api, dom } = loadConsole(plan);
+  const el = dom.mountPoint('root');
+  api.mount(el, opts);
+  const drain = () => new Promise((r) => setTimeout(r, 0));
+  return drain().then(drain).then(() => {
+    if (steps) steps(api);
+    return drain().then(drain).then(drain).then(() => el.innerHTML);
   });
 }
 
@@ -253,6 +288,70 @@ function statValue(html, label) {
   const webhookHtml = await render(FULL, (api) => api.tab('webhooks'));
   const credsHtml   = await render(FULL, (api) => api.tab('credentials'));
   const catHtml     = await render(FULL, (api) => api.tab('catalogue'));
+
+  /* ── Observed-activity fixtures ──────────────────────────────────────
+     intasend-collections declares payments / orders / posPayments. Each is
+     scripted to a DIFFERENT outcome so one render exercises every branch:
+       payments     readable, under the cap, with a usable timestamp
+       orders       readable, AT the cap, so "at least N" must appear
+       posPayments  denied, so it must render as unreadable and never as 0 */
+  const CAP = 50;
+  const manyOrders = [];
+  for (let i = 0; i < CAP; i++) manyOrders.push({ id: 'o' + i, createdAt: FRESH - i * 1000 });
+
+  const ACTIVITY = Object.assign({}, FULL, {
+    payments:    { docs: [{ id: 'p1', createdAt: FRESH }, { id: 'p2', createdAt: STALE }] },
+    orders:      { docs: manyOrders },
+    posPayments: { deny: 'PERMISSION_DENIED' },
+  });
+
+  const activityHtml = await renderWith(ACTIVITY, {}, (api) => {
+    api.tab('catalogue');
+    api.selectCatalogue('intasend-collections');
+  });
+
+  /* A collection that is readable but answers to NO timestamp field, and whose
+     ordered query fails the way a missing index does. The "most recent write"
+     must degrade to a stated reason, never to a fabricated time. */
+  const NO_TIME = Object.assign({}, FULL, {
+    payments:    { docs: [{ id: 'p1' }], noOrder: true },
+    orders:      { docs: [] },
+    posPayments: { docs: [] },
+  });
+  const noTimeHtml = await renderWith(NO_TIME, {}, (api) => {
+    api.tab('catalogue');
+    api.selectCatalogue('intasend-collections');
+  });
+
+  /* ── Database probe fixtures ─────────────────────────────────────────
+     The named database is injected, so this exercises the real probe logic
+     without a network and without the modular SDK. */
+  function namedDb(result) {
+    return () => ({
+      collection: () => ({
+        limit: () => ({
+          get: () => result.deny
+            ? Promise.reject(new Error(result.deny))
+            : Promise.resolve({ size: result.size || 0, empty: !result.size,
+                                docs: [], forEach() {} }),
+        }),
+        orderBy: () => ({ limit: () => ({ get: () => Promise.resolve({ size: 0, docs: [], forEach() {} }) }) }),
+      }),
+    });
+  }
+
+  const dbReachableHtml = await renderWith(FULL, { getNamedDb: namedDb({ size: 0 }) }, (api) => {
+    api.tab('catalogue');
+    api.selectCatalogue('firestore-sokoni-ops');
+  });
+  const dbDeniedHtml = await renderWith(FULL, { getNamedDb: namedDb({ deny: 'PERMISSION_DENIED' }) }, (api) => {
+    api.tab('catalogue');
+    api.selectCatalogue('firestore-sokoni-ops');
+  });
+  const dbDownHtml = await renderWith(FULL, { getNamedDb: namedDb({ deny: 'UNAVAILABLE: backend unreachable' }) }, (api) => {
+    api.tab('catalogue');
+    api.selectCatalogue('firestore-sokoni-ops');
+  });
 
   /* A registry document carrying hostile content in a rendered field. */
   const xssHtml = await render({
@@ -439,13 +538,198 @@ function statValue(html, label) {
     const want = ['intasend-collections', 'intasend-webhook', 'intasend-payouts',
                   'africastalking', 'sendgrid', 'smtp-fallback', 'fcm',
                   'algolia', 'typesense', 'etims', 'anthropic', 'vertex-gemini',
-                  'memorystore-redis', 'firestore', 'cloud-functions', 'artifact-registry',
+                  'memorystore-redis', 'firestore', 'firestore-sokoni-ops', 'firestore-indexes',
+                  'cloud-functions', 'cloud-run', 'artifact-registry',
+                  /* Infrastructure vendors that were missing entirely. Each is a real
+                     external dependency with evidence in the repository, and the first
+                     two sit on the delivery-critical path. */
+                  'osm-tiles', 'osm-nominatim',
+                  'hostpinnacle-dns', 'hostpinnacle-mail',
+                  'secret-manager', 'cloud-monitoring',
                   'firebase-hosting', 'cloud-storage', 'cloudflare', 'app-check', 'cloud-scheduler',
                   'firebase-auth', 'google-signin', 'facebook-login',
+                  /* Sign-in routes that were uncatalogued. Phone OTP and
+                     email/password are first-class identity providers, and
+                     reCAPTCHA gates both App Check and the OTP send. */
+                  'phone-auth', 'email-password-auth', 'recaptcha',
                   'pos-external-api', 'pos-webhooks', 'erp-connectors',
                   'inventory-webhooks', 'api-gateway', 'platform-registry'];
     const have = CAT.integrations.map((i) => i.id);
     want.forEach((id) => ok('D4 ' + id + ' is catalogued', have.indexOf(id) !== -1));
+  });
+
+  /* SOKONI runs TWO Firestore databases with separate rules and separate
+     indexes. A catalogue that carries one entry called "Cloud Firestore" tells
+     an operator the platform has one database, which is false, and hides the
+     fact that a deploy naming one does not carry the other. These two entries
+     must stay distinct, and the second must not be promoted to "live" on the
+     strength of its declaration alone — no runtime module opens a connection
+     to it. Promote it when a reader exists and has been OBSERVED. */
+  runCase('D6 both Firestore databases are catalogued, and kept distinct', () => {
+    const def = CAT.lookup('firestore');
+    const ops = CAT.lookup('firestore-sokoni-ops');
+    ok('D6 the default database is catalogued', !!def);
+    ok('D6 the sokoni-ops database is catalogued', !!ops);
+    if (!def || !ops) return;
+
+    ok('D6 they are two entries, not one', def.id !== ops.id);
+    ok('D6 the default entry names which database it is', /\(default\)/.test(def.name), def.name);
+    ok('D6 the sokoni-ops entry names which database it is', /sokoni-ops/.test(ops.name), ops.name);
+
+    /* Each must point at its OWN rules file. Sharing one would misrepresent
+       two separately-deployed rulesets as a single one. */
+    const defMods = (def.evidence || {}).modules || [];
+    const opsMods = (ops.evidence || {}).modules || [];
+    ok('D6 the default entry cites the default ruleset',
+       defMods.indexOf('firestore.rules') !== -1, defMods.join(', '));
+    ok('D6 the sokoni-ops entry cites its own ruleset',
+       opsMods.indexOf('firestore.rules.sokoni-ops') !== -1, opsMods.join(', '));
+    ok('D6 the two entries do not share a ruleset',
+       defMods.filter((m) => opsMods.indexOf(m) !== -1).length === 0);
+
+    /* An unread database is "configured", never "live". */
+    ok('D6 sokoni-ops is not claimed live while nothing reads it',
+       ops.status === 'configured', ops.status);
+    /* POSITIVE CONTROL — the status field is readable and a live rail does
+       report "live", so the assertion above is a real finding rather than a
+       check that can never fail. */
+    ok('D6 control: a genuinely live rail reports live', def.status === 'live', def.status);
+  });
+
+  /* ── D7 / D8 — OBSERVED ACTIVITY ───────────────────────────────────
+     The analytics exist to answer "is anything happening on this rail?" from
+     canonical data. The danger they introduce is the one this whole console
+     was built against: a number on screen that no read produced, or a measured
+     number read as a health verdict. Both are certified against here. */
+  runCase('D7 observed activity is measured, bounded and never fabricated', () => {
+    /* POSITIVE CONTROL — the detail panel rendered and the section exists. */
+    ok('D7 control: the activity section rendered', /Observed activity/.test(activityHtml));
+
+    ok('D7 a readable collection reports its real count',
+       /payments<\/span><strong>2 docs/.test(activityHtml));
+
+    /* At the cap the true total is UNKNOWN. Rendering a bare "50" would assert
+       a completeness the read never established. */
+    ok('D7 a capped collection says "at least", not a bare total',
+       /orders<\/span><strong>at least 50 docs/.test(activityHtml));
+    ok('D7 the cap is disclosed to the reader',
+       /capped at 50 documents per collection/.test(activityHtml));
+
+    /* A denied read must be visibly different from a zero. */
+    ok('D7 a denied collection renders as unreadable', /posPayments<\/span><strong>.*?Unreadable/s.test(activityHtml));
+    ok('D7 a denied collection never renders as 0 docs',
+       !/posPayments<\/span><strong>0 docs/.test(activityHtml));
+
+    /* The timestamp came from the data, not from now(). */
+    ok('D7 the most recent write is reported with the field it came from',
+       /by createdAt/.test(activityHtml));
+
+    /* THE INTERPRETATION GUARD. Activity is evidence about a collection, and a
+       collection has many writers. If this wording is ever dropped, the panel
+       starts reading as a health verdict for the rail. */
+    ok('D7 the panel refuses to attribute activity to the rail',
+       /not<\/em> proof that this rail produced it/.test(activityHtml));
+    ok('D7 the panel says it is not a health verdict',
+       /not<\/em> a health verdict for the rail/.test(activityHtml));
+  });
+
+  runCase('D7b an unmeasurable timestamp degrades, it does not invent one', () => {
+    ok('D7b control: the activity section rendered', /Observed activity/.test(noTimeHtml));
+    ok('D7b the collection count is still reported', /payments<\/span><strong>1 doc/.test(noTimeHtml));
+    ok('D7b no readable timestamp is stated as such',
+       /no readable timestamp field/.test(noTimeHtml));
+    /* INVERTING CONTROL — the fixture that DOES have timestamps produced one,
+       so "no timestamp" is a real finding rather than a path that never works. */
+    ok('D7b control: the timestamped fixture did produce a time',
+       /by createdAt/.test(activityHtml));
+  });
+
+  runCase('D8 the database probe distinguishes reachable, denied and unreachable', () => {
+    ok('D8 control: the probe section rendered', /Database probe/.test(dbReachableHtml));
+    ok('D8 the probed database is named', /sokoni-ops/.test(dbReachableHtml));
+
+    ok('D8 a returning read is Reachable', /Observed<\/span><strong>.*?Reachable/s.test(dbReachableHtml));
+    /* The single most important sentence on this panel. */
+    ok('D8 an empty result is called a successful read',
+       /empty result is a SUCCESSFUL read/.test(dbReachableHtml));
+    ok('D8 reachable is not claimed to mean in use',
+       /Reachable is not the same as in use/.test(dbReachableHtml));
+    ok('D8 an empty probe is not claimed to prove the database is empty',
+       /not evidence that the database is empty/.test(dbReachableHtml));
+
+    ok('D8 a refused read is Permission denied, not an outage',
+       /Observed<\/span><strong>.*?Permission denied/s.test(dbDeniedHtml));
+    ok('D8 a refusal is explained as a rules outcome',
+       /rules outcome, not an outage/.test(dbDeniedHtml));
+
+    ok('D8 a failed read is Unreachable', /Observed<\/span><strong>.*?Unreachable/s.test(dbDownHtml));
+    ok('D8 a failed read leaves the state UNKNOWN rather than bad',
+       /state is UNKNOWN/.test(dbDownHtml));
+
+    /* The three outcomes must be genuinely different renders — a probe that
+       reported the same thing for all three would pass every check above. */
+    ok('D8 the three outcomes render differently',
+       dbReachableHtml !== dbDeniedHtml && dbDeniedHtml !== dbDownHtml);
+  });
+
+  /* ── D9 — DNS AUTHORITY ────────────────────────────────────────────
+     The catalogue credited Cloudflare with "DNS for the production domain and
+     the edge in front of it". No evidence supports that: docs/DNS-RECORDS.md
+     names HostPinnacle, and every Cloudflare reference in the repository is
+     cdnjs.cloudflare.com, a public asset CDN for Font Awesome.
+
+     Crediting the wrong vendor for DNS is not cosmetic. An operator chasing a
+     resolution or mail-delivery fault would go to a control panel SOKONI does
+     not own, while the vendor that actually answers for the domain — and holds
+     the mailboxes DMARC reports land in — was catalogued nowhere at all. */
+  runCase('D9 the DNS provider is the one the evidence names', () => {
+    const cf = CAT.lookup('cloudflare');
+    const hp = CAT.lookup('hostpinnacle-dns');
+    ok('D9 the real DNS provider is catalogued', !!hp);
+    ok('D9 control: the Cloudflare entry still exists', !!cf);
+    if (!cf || !hp) return;
+
+    /* Cloudflare must not claim the domain's DNS or edge. */
+    const cfText = [cf.name, cf.summary, cf.notes || ''].join(' ');
+    ok('D9 Cloudflare is described as a CDN, not as DNS',
+       /CDN/i.test(cf.name) && !/DNS & Edge/i.test(cf.name), cf.name);
+    ok('D9 Cloudflare cites the cdnjs endpoint it actually uses',
+       ((cf.evidence || {}).endpoints || []).some((e) => /cdnjs\.cloudflare\.com/.test(e)));
+
+    /* POSITIVE CONTROL — the text was read and does mention DNS, in the
+       correction. Without this, "Cloudflare does not claim DNS" could pass on
+       an empty string. */
+    ok('D9 control: the Cloudflare entry text was actually read',
+       cfText.length > 200 && /DNS/.test(cfText));
+
+    /* HostPinnacle must carry the domain, and cite the authoritative doc. */
+    ok('D9 HostPinnacle is named as DNS', /DNS/i.test(hp.name), hp.name);
+    ok('D9 HostPinnacle cites the authoritative DNS reference',
+       ((hp.evidence || {}).modules || []).indexOf('docs/DNS-RECORDS.md') !== -1);
+    ok('D9 the mail host is catalogued separately from the DNS entry',
+       !!CAT.lookup('hostpinnacle-mail'));
+  });
+
+  /* ── D10 — DELIVERY-PATH THIRD PARTIES ─────────────────────────────
+     Every map on the platform is drawn from a free public tile service with no
+     contract and no SLA, on a delivery-critical path, and it was catalogued
+     nowhere. A dependency nobody has written down cannot be reasoned about
+     when it fails. */
+  runCase('D10 the map dependencies are catalogued with their real provider', () => {
+    const tiles = CAT.lookup('osm-tiles');
+    const geo   = CAT.lookup('osm-nominatim');
+    ok('D10 the tile provider is catalogued', !!tiles);
+    ok('D10 the geocoder is catalogued as a separate service', !!geo);
+    if (!tiles || !geo) return;
+
+    ok('D10 tiles cite the OpenStreetMap endpoint',
+       ((tiles.evidence || {}).endpoints || []).some((e) => /tile\.openstreetmap\.org/.test(e)));
+    ok('D10 geocoding cites the Nominatim endpoint',
+       ((geo.evidence || {}).endpoints || []).some((e) => /nominatim\.openstreetmap\.org/.test(e)));
+    ok('D10 they are two entries, not one', tiles.id !== geo.id);
+    /* The absence of a contract is the operationally important fact. */
+    ok('D10 the tile entry records that it has no SLA',
+       /no SLA|no contract/i.test(tiles.notes || ''), tiles.notes || '');
   });
 
   runCase('D5 the catalogue renders, and shows an honest live signal', () => {

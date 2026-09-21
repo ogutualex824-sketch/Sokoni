@@ -68,7 +68,7 @@ const byId = (r, id) => r.integrations.find(i => i.id === id) || MISSING;
     listSecretNames: lister(ALL.filter(n => n !== 'INTASEND_PRIVATE_KEY')) });
 
   /* ── 1. EVERY INTEGRATION GETS A RECORD ─────────────────────────────────── */
-  head('1 - all 35 integrations are reported, always');
+  head('1 - every registry integration is reported, always');
   {
     ok('one record per registry entry',
        full.integrations.length === registry.INTEGRATIONS.length,
@@ -125,8 +125,14 @@ const byId = (r, id) => r.integrations.find(i => i.id === id) || MISSING;
     ok('and says so explicitly', err.inventoryReadable === false && !!err.inventoryError);
     ok('per-credential presence is null, not false, when unknown',
        byId(err, 'intasend-collections').credentials.every(c => c.present === null));
-    ok('control — it still reports all 35 when the inventory fails',
-       err.integrations.length === 35);
+    /* DERIVED, never a literal. A hard-coded count turns every legitimate
+       catalogue addition into a spurious failure, and — worse — a literal that
+       someone "fixes" by bumping the number stops testing anything at all. The
+       invariant is "one record per registry entry, even when the inventory
+       read failed", so it is stated against the registry itself. */
+    ok('control — it still reports one record per registry entry when the inventory fails',
+       err.integrations.length === registry.INTEGRATIONS.length,
+       err.integrations.length + ' of ' + registry.INTEGRATIONS.length);
   }
 
   /* ── 3. CONFIGURED IS NOT WORKING ───────────────────────────────────────── */

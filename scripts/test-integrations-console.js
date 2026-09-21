@@ -370,7 +370,7 @@ const settle = () => new Promise(r => setImmediate(() => setImmediate(r)));
       return v.host.innerHTML;
     }
     const unk = await healthOf('fcm', 'unknown');
-    const els = await healthOf('cloudflare', 'observed-elsewhere');
+    const els = await healthOf('hostpinnacle-dns', 'observed-elsewhere');
     const nap = await healthOf('odpc', 'not-applicable');
 
     ok('unknown renders as Not yet tested', /Not yet tested/.test(unk));
@@ -403,7 +403,7 @@ const settle = () => new Promise(r => setImmediate(() => setImmediate(r)));
 
     /* The pointer that makes `elsewhere` actionable comes from the catalogue. */
     ok('an elsewhere rail tells the operator where to look',
-       /Observed elsewhere:<\/strong> Edge state is read at Cloudflare/.test(els));
+       /Observed elsewhere:<\/strong> Records are changed in the HostPinnacle DNS panel/.test(els));
     ok('a not-applicable rail says why there is nothing to measure',
        /Not applicable:<\/strong> A legal obligation/.test(nap));
     ok('a measurable rail gets no such pointer',

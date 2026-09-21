@@ -11,11 +11,25 @@ const ROOT = path.resolve(__dirname, '..');
 const SUITE = path.join(ROOT, 'tests/certify-integrations-console.js');
 
 const MUTATIONS = [
+  /* `_count()` feeds the TAB PILLS and nothing else — see its four call sites in
+     _tabs(). The stat tiles do not go through it; each carries its own inline
+     ternary, which is what A1 covers and what S2 mutates.
+
+     So A1 CANNOT detect this mutation, and the old expectation `/A1|Registered/`
+     was pointing at a case that does not own this code path. The run was still
+     reported as caught, but only as "something failed" — the weaker signal the
+     `~` marker exists to flag. A5 is the case that actually owns the pills, and
+     it fires with exactly the right message: `pill is em dash when unreadable —
+     got "0"`.
+
+     Pinned to A5 deliberately rather than widened to /A1|A5/. A loose pattern
+     would let an unrelated A1 failure stand in for this guard and report a
+     green catch while the pill coverage had silently gone. */
   { name: 'S1 unknown rendered as 0 instead of em dash',
     file: 'sokoni-integrations.js',
     from: "function _count(ok, n) { return ok ? String(n) : EM; }",
     to:   "function _count(ok, n) { return ok ? String(n) : '0'; }",
-    expect: /A1|Registered/ },
+    expect: /A5 .*pill is em dash when unreadable/ },
 
   { name: 'S2 stat tiles fabricate 0 when the source is unreadable',
     file: 'sokoni-integrations.js',

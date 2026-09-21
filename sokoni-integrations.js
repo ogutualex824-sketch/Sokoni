@@ -460,6 +460,208 @@
       });
   }
 
+  /* ══ OBSERVED ACTIVITY ANALYTICS ══════════════════════════════════════
+     Most rails on this platform expose no health endpoint, so the catalogue
+     correctly refuses to guess at their health. That leaves a real question
+     unanswered: is anything actually HAPPENING on this rail?
+
+     There is a canonical way to ask without inventing anything. Each entry
+     declares the collections it writes. Those collections live in Firestore,
+     an admin can read them, and what they contain is a fact rather than an
+     inference. So for a selected integration this measures, per declared
+     collection: how many documents a bounded read returned, and when the most
+     recent one was written.
+
+     WHAT THIS IS NOT
+     ----------------
+     It is NOT a health verdict, and it is NOT attributed to the rail. A
+     collection is shared — `orders` is written by checkout, by POS and by
+     admin tooling. Recent documents in a rail's declared collection prove
+     activity IN THAT COLLECTION, not that the rail produced it. Every label
+     rendered from this data says so. Reading it as "the rail is healthy" is
+     the exact mistake this console exists to prevent.
+
+     IT IS ALSO NOT A BUSINESS METRIC. These are operational document counts
+     over an explicitly stated bound, never revenue, never order volume, and
+     never a figure to put on a dashboard tile.
+
+     COST
+     ----
+     This runs ON DEMAND, only for the integration an operator opened, never
+     for all 35 at load. Reads are capped per collection and the number of
+     collections examined is capped too, so opening a card has a known ceiling
+     rather than an open-ended one.
+
+     UNKNOWN STAYS UNKNOWN
+     ---------------------
+     A read that fails records the failure and names it. A collection with no
+     timestamped document reports that it has none. Neither ever becomes a
+     zero, and neither ever becomes a dash that pretends nothing was tried. */
+
+  var ANALYTIC_CAP       = 50;   /* documents sampled per collection */
+  var ANALYTIC_MAX_COLLS = 6;    /* collections examined per integration */
+  var SDK_BASE = 'https://www.gstatic.com/firebasejs/10.12.2/';
+
+  /* Fields tried, in order, when asking "when was the most recent write?".
+     The first one that yields a document wins. A collection that answers to
+     none of them is reported as having no readable timestamp — which is a
+     finding about the collection, not a failure of the probe. */
+  var TIME_FIELDS = ['createdAt', 'updatedAt', 'timestamp', 'created_at'];
+
+  /* id -> { state, colls, db, error }.  state: idle | running | done */
+  var _analytics = {};
+
+  /** A handle for a named Firestore database.
+      The compat layer this console runs on is bound to the default database and
+      cannot address a second one, so a named database is reached through the
+      modular SDK directly. Both handles are then used through the same tiny
+      surface — collection(p).limit(n).get() and .orderBy(f,d).limit(n).get() —
+      whose snapshots agree on `size` and on `docs[i].data()`.
+
+      Injectable at mount so certification can drive this without a network. */
+  function _namedDb(dbId) {
+    if (typeof _opts.getNamedDb === 'function') {
+      try { return Promise.resolve(_opts.getNamedDb(dbId)); }
+      catch (e) { return Promise.reject(e); }
+    }
+    if (!dbId || dbId === '(default)') {
+      var d = _db();
+      return d ? Promise.resolve(d)
+               : Promise.reject(new Error('Firestore is not initialised on this page.'));
+    }
+    if (typeof window === 'undefined') {
+      return Promise.reject(new Error('No browser context for a named-database read.'));
+    }
+    return Promise.all([
+      import(SDK_BASE + 'firebase-app.js'),
+      import(SDK_BASE + 'firebase-firestore.js'),
+    ]).then(function (m) {
+      var f  = m[1];
+      var db = f.getFirestore(m[0].getApp(), dbId);
+      function q(path, constraints) {
+        return f.getDocs(f.query.apply(null, [f.collection(db, path)].concat(constraints)));
+      }
+      return {
+        collection: function (path) {
+          return {
+            limit: function (n) {
+              return { get: function () { return q(path, [f.limit(n)]); } };
+            },
+            orderBy: function (fl, dir) {
+              return { limit: function (n) {
+                return { get: function () { return q(path, [f.orderBy(fl, dir), f.limit(n)]); } };
+              } };
+            },
+          };
+        },
+      };
+    });
+  }
+
+  /** Most recent write in a collection, or an honest account of why not.
+      Resolves { at, field } on success, { at: null, reason } otherwise. */
+  function _latest(db, path, fields) {
+    var list = fields || TIME_FIELDS;
+    if (!list.length) return Promise.resolve({ at: null, reason: 'no readable timestamp field' });
+    var field = list[0];
+    return db.collection(path).orderBy(field, 'desc').limit(1).get()
+      .then(function (snap) {
+        if (snap && snap.size) {
+          var row = snap.docs[0].data() || {};
+          var at  = _ms(row[field]);
+          if (at) return { at: at, field: field };
+        }
+        return _latest(db, path, list.slice(1));
+      })
+      .catch(function () { return _latest(db, path, list.slice(1)); });
+  }
+
+  /** One collection's observed state. Never throws; a failure is a value. */
+  function _analyseCollection(db, path) {
+    return db.collection(path).limit(ANALYTIC_CAP).get()
+      .then(function (snap) {
+        var n = (snap && typeof snap.size === 'number') ? snap.size : 0;
+        return _latest(db, path).then(function (l) {
+          return {
+            name:    path,
+            ok:      true,
+            /* At the cap the true total is unknown — say "at least", never a
+               bare number that reads as a complete count. */
+            atLeast: n >= ANALYTIC_CAP,
+            docs:    n,
+            latest:  l.at,
+            field:   l.field || '',
+            reason:  l.reason || '',
+            error:   '',
+          };
+        });
+      })
+      .catch(function (e) {
+        return { name: path, ok: false, docs: null, latest: null,
+                 error: (e && e.message) || 'Read failed.' };
+      });
+  }
+
+  /** Reachability of a declared database. A database is reachable when a
+      bounded read RETURNS — an empty result is a successful read, and proves
+      the database answers and the rules permit it. It does NOT prove the
+      database is in use, and it does NOT prove it is empty. */
+  function _probeDatabase(spec) {
+    return _namedDb(spec.id)
+      .then(function (db) {
+        return db.collection(spec.probe).limit(1).get().then(function (snap) {
+          return { state: 'reachable', id: spec.id, probe: spec.probe,
+                   empty: !(snap && snap.size), error: '' };
+        });
+      })
+      .catch(function (e) {
+        var msg = (e && e.message) || String(e);
+        var denied = /permission|insufficient|PERMISSION_DENIED/i.test(msg);
+        return { state: denied ? 'denied' : 'unreachable', id: spec.id,
+                 probe: spec.probe, empty: null, error: msg };
+      });
+  }
+
+  /** Measure one integration, on demand. Idempotent per id. */
+  function _analyse(id) {
+    var c = _cat();
+    var e = c && c.lookup ? c.lookup(id) : null;
+    if (!e) return Promise.resolve();
+    if (_analytics[id] && _analytics[id].state !== 'idle') return Promise.resolve();
+
+    var colls = ((e.evidence || {}).collections || []).slice(0, ANALYTIC_MAX_COLLS);
+    var spec  = e.database || null;
+    if (!colls.length && !spec) {
+      _analytics[id] = { state: 'done', colls: [], db: null, capped: 0, error: '' };
+      return Promise.resolve();
+    }
+
+    _analytics[id] = { state: 'running', colls: [], db: null, capped: 0, error: '' };
+    _render();
+
+    /* A rail's own collections are read from the database it belongs to; every
+       rail other than the two database entries writes the default database. */
+    return _namedDb(spec ? spec.id : '(default)')
+      .then(function (db) {
+        return Promise.all(colls.map(function (p) { return _analyseCollection(db, p); }));
+      })
+      .catch(function (err) {
+        _analytics[id].error = (err && err.message) || 'Database unavailable.';
+        return [];
+      })
+      .then(function (rows) {
+        return (spec ? _probeDatabase(spec) : Promise.resolve(null))
+          .then(function (dbState) {
+            var total = ((e.evidence || {}).collections || []).length;
+            _analytics[id].colls  = rows;
+            _analytics[id].db     = dbState;
+            _analytics[id].capped = Math.max(0, total - colls.length);
+            _analytics[id].state  = 'done';
+            _render();
+          });
+      });
+  }
+
   /* ── The authoritative status read ───────────────────────────────────
      ONE backend call, returning RC-1's configuration answer and RC-3's probe
      evidence for all 35 integrations. This module stores it and renders it; it
@@ -832,6 +1034,111 @@
           'could run safely.</p>');
   }
 
+  /* ── Rendering the observed-activity section ─────────────────────────
+     Four states, each visually distinct, none collapsible into another:
+       running      a read is in flight
+       measured     a read returned; the figure is real and its bound is stated
+       unreadable   a read failed; the error is named
+       none         the entry declares nothing this can measure
+
+     There is no fifth state in which a number is produced without a read. */
+  function _dbVerdict(d) {
+    if (!d) return '';
+    var meta = {
+      reachable:   { cls: 'healthy', label: 'Reachable' },
+      denied:      { cls: 'error',   label: 'Permission denied' },
+      unreachable: { cls: 'error',   label: 'Unreachable' },
+    }[d.state] || { cls: 'unknown', label: 'Not attempted' };
+
+    var note;
+    if (d.state === 'reachable') {
+      note = 'A bounded read against <span class="sic-mono">' + _esc(d.probe) + '</span> returned' +
+             (d.empty ? ' with no documents. An empty result is a SUCCESSFUL read: this database ' +
+                        'answers and the rules permit it. It is not evidence that the database is empty — ' +
+                        'only that this one collection returned nothing.'
+                      : ' with at least one document.') +
+             ' Reachable is not the same as in use.';
+    } else if (d.state === 'denied') {
+      note = 'The database answered and REFUSED the read. That is a rules outcome, not an outage — ' +
+             'the database is there. Reported error: ' + _esc(d.error);
+    } else if (d.state === 'unreachable') {
+      note = 'The read did not complete, so this database’s state is UNKNOWN. This is a failed ' +
+             'observation, not a finding that anything is wrong with it. Reported error: ' + _esc(d.error);
+    } else {
+      note = 'No read was attempted, so nothing is known about this database from this console.';
+    }
+
+    return '<div class="sic-sect-l">Database probe</div>' +
+      '<div class="sic-kv"><span>Database</span><strong class="sic-mono">' + _esc(d.id) + '</strong></div>' +
+      '<div class="sic-kv"><span>Observed</span><strong><span class="sic-badge ' + meta.cls +
+      '"><span class="sic-dot"></span>' + _esc(meta.label) + '</span></strong></div>' +
+      '<p class="sic-note">' + note + '</p>';
+  }
+
+  function _analyticsPanel(id) {
+    var c = _cat();
+    var e = c && c.lookup ? c.lookup(id) : null;
+    if (!e) return '';
+    var declared = (e.evidence || {}).collections || [];
+    var spec = e.database || null;
+    if (!declared.length && !spec) {
+      return '<div class="sic-sect-l">Observed activity</div>' +
+        '<p class="sic-note">This entry declares no collection and no database, so there is ' +
+        'nothing here this console can measure. That is a property of the entry, not a failed read.</p>';
+    }
+
+    var a = _analytics[id];
+    if (!a || a.state === 'idle') {
+      return '<div class="sic-sect-l">Observed activity</div>' +
+        '<p class="sic-note">Not measured yet.</p>';
+    }
+    if (a.state === 'running') {
+      return '<div class="sic-sect-l">Observed activity</div>' +
+        '<p class="sic-note">Reading the declared collections…</p>';
+    }
+
+    var head = '<div class="sic-sect-l">Observed activity</div>' +
+      '<p class="sic-note"><strong>Read this carefully.</strong> These are documents in the ' +
+      'collections this integration DECLARES IT WRITES. A collection can have several writers, so ' +
+      'activity here is evidence about the collection, <em>not</em> proof that this rail produced it ' +
+      'and <em>not</em> a health verdict for the rail.</p>';
+
+    if (a.error) {
+      head += '<p class="sic-note"><strong>Unreadable:</strong> ' + _esc(a.error) +
+              ' No figure is shown below, because none was obtained.</p>';
+    }
+
+    var rows = (a.colls || []).map(function (r) {
+      if (!r.ok) {
+        return '<div class="sic-kv"><span class="sic-mono">' + _esc(r.name) + '</span><strong>' +
+          '<span class="sic-badge error"><span class="sic-dot"></span>Unreadable</span></strong></div>' +
+          '<p class="sic-note">' + _esc(r.error) + '</p>';
+      }
+      var count = r.atLeast ? ('at least ' + r.docs) : String(r.docs);
+      var when  = r.latest
+        ? _ago(r.latest) + ' (' + _stamp(r.latest) + ', by ' + _esc(r.field) + ')'
+        : (r.reason ? EM + ' — ' + _esc(r.reason) : EM);
+      return '<div class="sic-kv"><span class="sic-mono">' + _esc(r.name) + '</span><strong>' +
+        _esc(count) + ' doc' + (r.docs === 1 ? '' : 's') + '</strong></div>' +
+        '<div class="sic-kv"><span>&nbsp;&nbsp;most recent</span><strong>' + when + '</strong></div>';
+    }).join('');
+
+    var foot = '';
+    if ((a.colls || []).length) {
+      foot += '<p class="sic-note">Counts come from a read capped at ' + ANALYTIC_CAP +
+        ' documents per collection. A collection shown as "at least ' + ANALYTIC_CAP +
+        '" has more than this console asked for — the true total is NOT known here and must not ' +
+        'be read as ' + ANALYTIC_CAP + '.</p>';
+    }
+    if (a.capped) {
+      foot += '<p class="sic-note">' + a.capped + ' further declared collection' +
+        (a.capped === 1 ? ' was' : 's were') + ' not examined, to bound the cost of opening ' +
+        'this card. They are listed under "Collections written" above.</p>';
+    }
+
+    return head + rows + foot + _dbVerdict(a.db);
+  }
+
   function _catalogueDetail() {
     var c = _cat();
     if (!c) return '';
@@ -866,6 +1173,8 @@
       '<div class="sic-sect-l">Health</div>' +
       '<p style="font-size:12.5px;color:var(--sic-muted);line-height:1.6">' +
       _esc((i.health || {}).note || 'No health signal.') + '</p>' +
+
+      _analyticsPanel(i.id) +
 
       (i.notes ? '<div class="sic-sect-l">Operating note</div>' +
         '<p style="font-size:12.5px;color:var(--sic-warn);line-height:1.6">' + _esc(i.notes) + '</p>' : '') +
@@ -1306,6 +1615,10 @@
       _selKind  = 'catalogue';
       _selected = same ? null : id;
       _render();
+      /* Measurement is ON DEMAND and only for what the operator opened, so the
+         cost of this console stays proportional to what is being looked at
+         rather than to the size of the catalogue. */
+      if (_selected) _analyse(_selected);
     },
     filter: function (patch) {
       Object.keys(patch || {}).forEach(function (k) { _filter[k] = patch[k]; });

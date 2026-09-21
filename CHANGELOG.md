@@ -1,3 +1,557 @@
+## 2026-09-21 (133) — S1 was pointing at a guard that cannot see its own mutation
+
+**Test expectation only · no product code · no catalogue · NO deploy.**
+
+The eight-suite run was green, but the sabotage report carried one degraded marker:
+
+```
+~ S1 unknown rendered as 0 instead of em dash  — suite failed, but NOT on the expected case
+    A5 registered pill is em dash when unreadable  — got "0"
+```
+
+A `~` is not a pass and is not a failure. It means the planted defect caused *something* to fail,
+but not the case the mutation names — the weaker of the two signals, and the one worth chasing
+before a commit.
+
+### Classification: STALE TEST EXPECTATION
+
+Not a product defect, not a weakened gate.
+
+`_count()` feeds the **tab pills** and nothing else — four call sites, all inside `_tabs()`. The stat
+tiles never go through it; each carries its own inline ternary, which is what `A1` covers and what
+`S2` mutates.
+
+```
+_count()      -> tab pills            covered by A5
+cell(... : EM)-> stat tiles           covered by A1, mutated by S2
+```
+
+So `A1` **cannot** detect an S1 mutation. The expectation `/A1|Registered/` named a case that does
+not own this code path, and never could. `A5` is the case that owns the pills, and it fired with
+precisely the right message.
+
+### The repair, and why it is stricter rather than looser
+
+```
+- expect: /A1|Registered/
++ expect: /A5 .*pill is em dash when unreadable/
+```
+
+Pinned to A5 **deliberately, rather than widened to `/A1|A5/`**. A loose pattern would let an
+unrelated A1 failure stand in for this guard and report a green catch while pill coverage had
+silently gone — which is the same class of defect as the original `~`, just harder to notice.
+
+The gate was not changed to make the finding disappear. The mutation still runs, still fires, and
+now names the guard that actually caught it.
+
+### Proven that the pin is real, not cosmetic
+
+Neutering A5's pill assertion in the certification suite immediately degrades S1 back to `~`:
+
+```
+A5 pill guard neutered
+~ S1 unknown rendered as 0 instead of em dash  — suite failed, but NOT on the expected case
+```
+
+So the expectation is genuinely bound to that specific guard, and cannot be satisfied by an
+unrelated failure. Restored and re-verified byte-identical afterwards.
+
+### Suites — all eight, zero degraded markers
+
+```
+certify-integrations-console.js        exit=0   796 assertions, 0 failures   [~ markers: 0]
+sabotage-integrations-console.js       exit=0   8 caught, 0 inert            [~ markers: 0]
+test-integration-status.js             exit=0   45 passed, 0 failed
+test-integration-probes.js             exit=0   85 passed, 0 failed
+test-integration-registry-parity.js    exit=0   26 passed, 0 failed
+test-integrations-console.js           exit=0   67 passed, 0 failed
+validate-admin-nav.js                  exit=0   all checks passed
+integration-relationship-census.js     exit=0   CENSUS PASSED, 47 rows
+```
+
+### Correction to the record
+
+Earlier entries reported the certification suite at **754** assertions. The final figure is **796** —
+the count grew when `phone-auth`, `email-password-auth` and `recaptcha` were added after that number
+was taken. Entry (131) has been corrected in place.
+
+### Files affected
+
+```
+tests/sabotage-integrations-console.js   S1 expectation pinned to A5, with the reasoning
+CHANGELOG.md                             754 -> 796 in entry (131)
+docs/INTEGRATIONS_CONTROL_CENTER.md      754 -> 796
+```
+
+**Database changes:** none. **API changes:** none. **Security changes:** none. **Breaking changes:**
+none.
+
+## 2026-09-21 (132) — Step 1 relationship census: the gate passes, and the probe gap is 31, not 23
+
+**New tooling and a generated artifact · no runtime code · no rules · no index · NO deploy.**
+
+Before the Integrations Control Center is committed as a chunk, every catalogue entry must have an
+established relationship to each layer beneath it — or an explicit statement that it has none. This
+adds that check as a **gate**, not a report: any entry it cannot fully answer exits non-zero.
+
+```
+scripts/integration-relationship-census.js
+docs/integration-census-20260921.json     generated artifact, 47 rows
+```
+
+### Derived, never transcribed
+
+Every column is computed from the modules themselves — catalogue, server registry, probe support
+map, executor table and the real status resolver. A hand-maintained census is a transcription
+surface that rots the moment an entry is added, which is precisely how the **"23 of 35"** probe
+figure survived past the catalogue reaching 47.
+
+### Reachability is PROVEN by rendering, not asserted
+
+AdminOS has no router, so an integration's "route" is `admin-os.html#integrations` plus an in-panel
+detail target. The census does not assume each entry is reachable: it **mounts the real console,
+renders the catalogue tab, and collects the detail targets the rendered markup actually emits.** An
+entry the grid does not offer is unreachable, and that is a finding.
+
+It renders with **no Firestore and no Functions in the sandbox**, deliberately. Every read fails, and
+a card must still render. If a failed read hid the grid, that would itself be the finding.
+
+### Result — the gate passes
+
+```
+catalogue entries : 47
+registry entries  : 47
+reachable in UI   : 47      proven by render
+backend authority : 47      one resolver record each
+```
+
+Checked in **both** directions: nothing may exist in the registry, in the executor table, or as a
+rendered detail target without a catalogue entry behind it.
+
+### The probe gap, derived — this supersedes "23 of 35"
+
+```
+probeable lifecycles        43 of 47   (4 are quarantined or frozen)
+with an executor            12
+  refuse by design           9         no safe probe, or needs a secret binding
+  ACTUALLY RUNNABLE NOW      3         firestore · memorystore-redis · cloud-storage
+NO executor at all          31
+```
+
+Missing-capability tally across the 47:
+
+```
+28  no live evidence path
+27  no probe definition
+ 7  fully established, nothing missing
+ 7  executor refuses: requires_secret_binding
+ 4  probe defined, NO executor
+ 2  executor refuses: no_safe_probe
+```
+
+**Only three probes can run today.** Nine more exist but refuse by design — seven need a secret
+binding, which is a deployment change, and two have no safe probe (initiating a payment or a payout
+to test a rail is not a probe). The remaining thirty-one have no executor at all.
+
+The four entries that are non-probeable by lifecycle are `pos-card-terminal` (quarantined),
+`sokoni-wallet`, `cloud-functions` and `artifact-registry` (frozen).
+
+### Positive controls
+
+Every cross-check is an absence check, and an absence check over an empty collection passes
+vacuously. Five controls prove each source loaded and is non-trivial before any "nothing is missing"
+is believed: catalogue size, registry size, rendered-target count, executor count, and that the
+rendered markup contains an integration card at all.
+
+### Proven non-inert
+
+```
+drop an entry from the server registry   2 failures  (parity + backend authority)
+drop an entry from the catalogue         1 failure   (reverse direction)
+break the grid's detail targets          47 failures + the render control fired
+```
+
+A crash is a failure, never a silent pass.
+
+### Files affected
+
+```
+scripts/integration-relationship-census.js   new gate
+docs/integration-census-20260921.json        generated artifact
+docs/INTEGRATIONS_CONTROL_CENTER.md          census section
+```
+
+**Database changes:** none. **API changes:** none. **Security changes:** none — the census reads
+source and renders into a sandboxed DOM; it contacts nothing. **Breaking changes:** none.
+
+### What this does NOT establish
+
+The census proves the relationships that exist **in this repository**. It says nothing about what is
+deployed. `adminGetIntegrationStatus` still exists only on `feat/integrations-control-center`, so
+"backend authority: 47" means the resolver answers for all 47 **in source** — in production the
+deployed dispatcher would still return `not-found`.
+
+## 2026-09-21 (131) — The catalogue was crediting the wrong DNS vendor, and missing the map, mail and sign-in dependencies
+
+**Catalogue, server registry and certification · no runtime code · no rules · no index · NO deploy.**
+
+An exhaustive re-census of what SOKONI actually depends on took the catalogue from **35 entries to
+47**. One existing entry was factually wrong, and eleven real external dependencies were absent —
+including every map on the platform and two of the four ways a user can sign in.
+
+### 1. Cloudflare was credited with DNS. It does not provide DNS.
+
+The entry read *"DNS for the production domain and the edge in front of it."* No evidence supports
+that:
+
+```
+docs/DNS-RECORDS.md    authoritative, audited 2026-06-20
+                       "DNS Provider: HostPinnacle"
+                       Cloudflare appears NOWHERE in it
+
+every Cloudflare reference in the repository:
+  index.html         cdnjs.cloudflare.com  Font Awesome stylesheet
+  service-worker.js  cdnjs.cloudflare.com  in the CDN allow-list
+```
+
+Cloudflare's only role here is a **public asset CDN**. SOKONI has no account, no zone and no control
+plane with them. The entry now says so, and carries an explicit correction note.
+
+This is not cosmetic. An operator chasing a resolution or mail-delivery fault would have gone to a
+control panel SOKONI does not own, while the vendor that actually answers for the domain was
+catalogued nowhere at all.
+
+### 2. HostPinnacle was missing entirely — twice over
+
+```
+hostpinnacle-dns    authoritative DNS for mysokoni.co.ke: the Firebase Hosting A
+                    records, MX, SPF, DKIM and DMARC. A single point of failure
+                    for the domain.
+hostpinnacle-mail   the mail host. Holds the real @mysokoni.co.ke mailboxes,
+                    including the IMAP inboxes DMARC aggregate and forensic
+                    reports are delivered to, and signs outbound mail on DKIM
+                    selector "default".
+```
+
+Distinct from SendGrid, which **sends** transactional mail. This host **receives**. DMARC reports
+arriving nowhere is a silent failure, and the reports land here rather than in the platform.
+
+### 3. Every map on the platform was an uncatalogued third party
+
+```
+osm-tiles       tile.openstreetmap.org       8 pages fetch tiles
+osm-nominatim   nominatim.openstreetmap.org  address + reverse geocoding
+```
+
+Used across delivery tracking, dispatch, rider navigation, fleet monitoring, food delivery and the
+vehicle hub — **11 pages load the mapping library, 8 hit the public tile service**. Both are
+allow-listed in the Content Security Policy.
+
+The mapping library itself (`leaflet.min.js`) is **self-hosted**, so only the tiles and the geocoder
+are third-party. These are **free public services with no contract and no SLA, on a
+delivery-critical path**, each with a published usage policy that caps request rates. A dependency
+nobody has written down cannot be reasoned about when it fails.
+
+It is **not** Google Maps. Nothing in the repository calls `maps.googleapis.com`.
+
+### 4. Three sign-in routes were uncatalogued
+
+Only Google and Facebook were listed. The catalogue now carries every route:
+
+```
+phone-auth            Firebase Phone Auth, SMS OTP, gated by a reCAPTCHA verifier
+email-password-auth   first-party account creation and sign-in
+recaptcha             bot attestation, used in TWO places at once
+```
+
+**The OTP is sent by Google, not by Africa's Talking.** SOKONI's Africa's Talking rail carries
+platform SMS; it does not carry sign-in codes. The two bill and fail independently, so diagnosing a
+login-OTP failure by looking at the Africa's Talking rail would be looking at the wrong vendor.
+
+reCAPTCHA is the App Check provider **and** the phone-OTP verifier, so an outage degrades callable
+attestation and phone sign-in simultaneously. Its site key is public by design; the paired secret
+key is not in client code and must never be added to it.
+
+### 5. Infrastructure that was in use but not catalogued
+
+```
+cloud-run           split out of "Cloud Functions & Cloud Run". Revisions, traffic and
+                    scaling limits are Cloud Run concepts, and they are a separate
+                    control plane from the functions that run on them
+secret-manager      the authority behind this console's own credential column
+cloud-monitoring    the instrument behind trigger-volume and scaling measurement
+firestore-indexes   a DECLARED index is not a BUILT index
+```
+
+### 6. Deliberately NOT catalogued, and why
+
+```
+Stripe   a commented-out registerAdapter('stripe', StripeAdapter) line. Not an integration.
+PayPal   a checkout method card, a modal, and the string 'paypal' in a payout
+         ALLOWED_METHODS list. No adapter, no rail, no webhook.
+Daraja   certification FAILS if a Daraja rail reappears, paired with a positive control.
+         Changing that is a deliberate decision, not a side effect of a census.
+```
+
+> **OPEN DEFECT, raised not fixed.** `checkout.html` presents PayPal as a payment method and has no
+> backend behind it. Either the option is removed from checkout or a rail is built; a payment method
+> a customer can select and that cannot complete is a real defect. Not addressed here because it is
+> a checkout change, not a catalogue one.
+
+### 7. Certification
+
+```
+D9   the DNS provider is the one the evidence names
+     Cloudflare described as a CDN, citing cdnjs; HostPinnacle named as DNS and citing
+     docs/DNS-RECORDS.md; mail catalogued separately
+     + control: the Cloudflare entry text was actually read and does mention DNS
+D10  the map dependencies are catalogued with their real provider
+     tiles and geocoder as two entries, each citing its real endpoint, and the tile
+     entry recording that it has no SLA
+```
+
+Proven non-inert:
+
+```
+re-credit Cloudflare with DNS   1 failure
+drop the tile SLA note          1 failure
+```
+
+### 8. Three suites used Cloudflare as their "observed elsewhere" exemplar
+
+Correcting Cloudflare to `measurable` broke them — correctly, because the fixture no longer
+demonstrated the case it was named for. Repointed at `hostpinnacle-dns`, which is genuinely
+`elsewhere`: DNS state is read from the provider's panel and from public DNS, never from this
+console.
+
+```
+scripts/test-integration-probes.js     2 assertions repointed
+scripts/test-integrations-console.js   1 assertion repointed
+```
+
+### Suites
+
+```
+node tests/certify-integrations-console.js        796 assertions, 0 failures   (was 628)
+node tests/sabotage-integrations-console.js       8 mutations, 8 caught, 0 inert
+node scripts/test-integration-registry-parity.js  26 passed, 0 failed
+node scripts/test-integration-status.js           45 passed, 0 failed
+node scripts/test-integration-probes.js           85 passed, 0 failed
+node scripts/test-integrations-console.js         67 passed, 0 failed
+node scripts/validate-admin-nav.js                all checks passed
+```
+
+### Catalogue census
+
+```
+payments 5 · messaging 6 · search 2 · compliance 2
+identity 7 · ai 2 · infra 17 · outbound 6          TOTAL 47   (was 35)
+```
+
+### Files affected
+
+```
+sokoni-integration-catalogue.js          cloudflare corrected; 12 entries added
+functions/integration-registry.js        all 12 mirrored; cloudflare corrected
+tests/certify-integrations-console.js    D4 extended by 12 ids; D9 and D10 added
+scripts/test-integration-probes.js       elsewhere exemplar repointed
+scripts/test-integrations-console.js     elsewhere exemplar repointed
+docs/INTEGRATIONS_CONTROL_CENTER.md      census, DNS authority, map dependencies
+```
+
+**Database changes:** none. **API changes:** none. **Security changes:** none — no secret value is
+named anywhere; the reCAPTCHA note records that the public site key is not a secret and that the
+secret key must stay out of client code. **Breaking changes:** none; no id removed or repurposed.
+
+### What is measured, and what is still only declared
+
+```
+MEASURED   414 indexes declared in firestore.indexes.json
+           54  indexes declared in firestore.indexes.sokoni-ops.json
+           11 pages load Leaflet · 8 hit the OSM tile service
+
+NOT MEASURED — requires the Firestore Admin API, which nothing deployed exposes
+           deployed index count · READY index count · collection counts
+           database region · rules deployment state
+```
+
+Any figure in that second block that appears in a report did **not** come from this workstream and
+must not be treated as observed until an authorized reader produces it.
+
+## 2026-09-21 (130) — Integrations becomes analytical: observed activity, a database probe, and a catalogue that no longer lags
+
+**Catalogue, console, server registry and certification · no rules · no index · NO deploy.**
+
+The Integrations surface listed what SOKONI integrates with and, for 32 of 35 rails, correctly
+refused to claim anything about their health. Correct, but not useful: an operator could not tell
+whether anything was *happening* on a rail. This makes the surface analytical without inventing a
+single figure, and fixes three entries that had drifted from reality.
+
+### 1. Observed activity — measured, bounded, and not a health verdict
+
+Each entry declares the collections it writes. Those are canonical Firestore collections an admin
+can read, so for the integration an operator **opens**, the console now measures per collection:
+how many documents a bounded read returned, and when the most recent one was written.
+
+The danger this introduces is the one this console exists to prevent, so it is guarded explicitly:
+
+```
+a collection has MANY writers      activity is evidence about the COLLECTION, not proof the
+                                   rail produced it, and never a health verdict for the rail
+a capped read is not a total       at the cap it renders "at least 50", never a bare 50
+a failed read is not a zero        it renders Unreadable and names the error
+no timestamp is not "never"        it states that no readable timestamp field was found
+```
+
+Reads are capped at **50 documents per collection** and **6 collections per integration**, and
+measurement runs **on demand** — nothing is read at load, so cost is proportional to what is being
+looked at rather than to the size of the catalogue.
+
+### 2. SOKONI has two Firestore databases and the catalogue claimed one
+
+`firebase.json` declares `(default)` and `sokoni-ops` with **separate rules and separate indexes**.
+
+```
+firestore              Cloud Firestore — (default)      live         414 indexes
+firestore-sokoni-ops   Cloud Firestore — sokoni-ops     configured    54 indexes
+```
+
+`sokoni-ops` is catalogued as **`configured`, not `live`**: no runtime module opens a Firestore
+client bound to that database id. Its rules and indexes are declared and deployable; nothing is
+known to read or write it in production.
+
+Both are now **probed for reachability**. The compat layer this console runs on is bound to the
+default database, so a named database is reached through the modular SDK, with the handle injectable
+at mount for certification. Four outcomes, none collapsible into another:
+
+```
+Reachable           a bounded read RETURNED. An empty result is a SUCCESSFUL read — it proves the
+                    database answers and the rules permit it. NOT the same as in use, and NOT
+                    proof the database is empty
+Permission denied   the database answered and refused. A rules outcome, not an outage
+Unreachable         the read did not complete. State UNKNOWN — not a finding that anything is wrong
+Not attempted       no read was made
+```
+
+The existing `firestore` id was kept for the default database rather than renamed, so the `D4`
+contract and any external reference to it stay intact.
+
+### 3. The Artifact Registry entries named a refuted cause
+
+`cloud-functions` still read *"Function deletion is the leading suspect in the Artifact Registry
+purge"*. **REFUTED** — the cause is the reference-blind `firebase-functions-cleanup` policy, and the
+purge is self-inflicted rather than a Google-side defect.
+
+`artifact-registry` still read *"a controlled canary is instrumenting the cause"* and *"do not delete
+the forensics canary"*. That canary was **consumed by the mechanism it was built to detect**. The row
+instructed the reader to protect an object that no longer exists, while saying nothing about the live
+specimen that now carries the evidence.
+
+Both entries now state the proven cause, record that the KEEP repair is **configured but not proven
+through a sweep**, and say the revision blocker is a *consequence* of the purge, independent of its
+cause. Neither `status` changed: both stay `frozen`, because the freeze's stated basis being removed
+did not remove each item's own gate.
+
+### 4. Certification
+
+```
+D6  both databases catalogued, distinct, each citing its OWN ruleset, sokoni-ops not
+    claimed live while nothing reads it  + control: a live rail does report live
+D7  activity measured, cap disclosed, denial never a zero, timestamp attributed to its
+    field, and the "not a health verdict" wording enforced in rendered output
+D7b no readable timestamp degrades to a stated reason  + inverting control
+D8  reachable / denied / unreachable render DIFFERENTLY, and the three sentences that
+    stop a reader over-reading the probe are asserted verbatim
+```
+
+Proven non-inert by seven mutations, every one caught:
+
+```
+promote sokoni-ops to live            1 failure
+point ops at the default ruleset      2 failures
+delete the sokoni-ops entry           2 failures  (D4 + D6)
+capped sample as a complete count     1 failure
+a failed read becomes zero            2 failures
+every probe outcome reports reachable 5 failures
+drop the interpretation guard         2 failures
+```
+
+The suite's scripted Firestore gained `size`, `docs` and a real `orderBy`, so the "most recent write"
+path is exercised rather than stubbed, and a collection marked `noOrder` rejects an ordered query the
+way a missing index does in production.
+
+### 5. Two contract repairs the change surfaced
+
+**Registry parity.** Adding a catalogue entry failed `test-integration-registry-parity.js` — the
+server registry must mirror the catalogue. `functions/integration-registry.js` now carries
+`firestore-sokoni-ops`, and the extension protocol in the docs says to mirror it in the same commit.
+
+**A literal count.** `test-integration-status.js` asserted `err.integrations.length === 35`. Fixed by
+**deriving** from `registry.INTEGRATIONS.length`, not by bumping it to 36 — a literal someone "fixes"
+by changing the number has stopped testing anything.
+
+### Suites
+
+```
+node tests/certify-integrations-console.js        628 assertions, 0 failures   (was 580)
+node tests/sabotage-integrations-console.js       8 mutations, 8 caught, 0 inert
+node scripts/test-integration-registry-parity.js  26 passed, 0 failed
+node scripts/test-integration-status.js           45 passed, 0 failed
+node scripts/test-integration-probes.js           85 passed, 0 failed
+node scripts/test-integrations-console.js         67 passed, 0 failed
+node scripts/validate-admin-nav.js                all checks passed
+```
+
+### Files affected
+
+```
+sokoni-integration-catalogue.js          cloud-functions + artifact-registry rewritten;
+                                         firestore renamed and given a database block;
+                                         firestore-sokoni-ops added
+sokoni-integrations.js                   observed-activity engine; database probe;
+                                         analytics panel; on-demand trigger on select
+functions/integration-registry.js        firestore-sokoni-ops mirrored; default renamed
+tests/certify-integrations-console.js    D4 extended; D6/D7/D7b/D8 added; scripted
+                                         Firestore gained size/docs/orderBy
+scripts/test-integration-status.js       literal entry count replaced with a derived one
+docs/INTEGRATIONS_CONTROL_CENTER.md      two databases; observed activity; database probe;
+                                         navigation reality; deployment state
+```
+
+**Database changes:** none. **API changes:** none — no new op, no new callable. **Security changes:**
+none; the console remains read-only, `E4` still forbids the four write verbs and allowlists the single
+read op, and the new code adds only bounded reads. **Breaking changes:** none — no id was removed or
+repurposed.
+
+### Performance
+
+Activity reads are on-demand and bounded: at most `6 × 50 = 300` document reads when a card is opened,
+plus one ordered read per collection for recency and one bounded read per database probe. Nothing runs
+at load, and nothing runs for integrations nobody opened.
+
+### Navigation — recorded, not changed
+
+AdminOS has **no router**. `SokoniAOS.navigate()` shows and hides panels; the only URL handling is a
+**boot-only, one-way** hash deep link validated by `/^[a-z]+$/`, letters only. The hash is never
+written on navigation and there is no `hashchange` or `popstate` listener.
+
+`admin-os.html#integrations` therefore works, and **sub-routes such as
+`#integrations/database/default` do not** — they fail the validator and fall back to the dashboard
+silently. Drill-down is in-panel through the detail aside for that reason. Nested URLs would mean
+building a router for all 26 sections, with its own certification; that is not done here and is now
+written down so it is not rediscovered.
+
+### Not done, and why
+
+**This console is not in production.** Live hosting `d592d8f` carries no integrations panel and no
+catalogue script, and `adminGetIntegrationStatus` exists only on `feat/integrations-control-center`,
+so the deployed `adminOsDispatch` would answer `not-found` and every card would render **Unreadable**.
+
+The Firestore-backed parts — registry, health, dependencies, webhooks, and everything added here —
+need no Cloud Function and would work as soon as the page ships. The *status* row (credential state,
+provider health, stage proof) needs a functions deploy against the `multishop-checkout-certified`
+lineage, which is a separate, gated decision and is not taken here.
+
 ## 2026-09-21 (130) — Scaling provenance corrected, and a production rebuild that left a ceiling behind
 
 **Three separate events, deliberately not merged: two repository commits and one GCP mutation.**
