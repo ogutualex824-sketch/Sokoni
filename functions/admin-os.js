@@ -2146,6 +2146,88 @@ exports.adminGetIntegrationStatus = onCall(
 );
 
 /* ══════════════════════════════════════════════════════════════════════════════
+   GCP EVIDENCE — the infrastructure facts a browser cannot obtain
+   ══════════════════════════════════════════════════════════════════════════════
+   Firestore database regions, index state, READY counts and ROOT COLLECTION
+   counts are Admin-API facts. A client SDK cannot enumerate collections, cannot
+   read index state and cannot see a database's region, so the console renders an
+   em dash for all of them. That is the honest answer from a browser — and the
+   wrong answer from a server, which can simply ask.
+
+   READ-ONLY, AND IT BINDS NO SECRET. Authentication is the function's own
+   service account through Application Default Credentials, scoped to
+   cloud-platform.read-only, so the token itself cannot mutate anything.
+
+   The declared index counts are passed IN by this handler rather than read by
+   the reader: `firebase deploy --only functions` uploads functions/ and nothing
+   else, so a require() of a repository-root file resolves locally and throws
+   MODULE_NOT_FOUND in production — the trap already documented in
+   integration-registry.js. A declaration this handler cannot supply is reported
+   as not-attempted, never as zero.
+
+   Admin-gated and registered as an `_h` handler so it dispatches through
+   adminOsDispatch rather than standing up a second service. No new collection
+   is introduced: this is a READ, and nothing here persists a health record.
+   ══════════════════════════════════════════════════════════════════════════════ */
+exports.adminGetGcpEvidence = onCall(
+  { region: 'us-central1', maxInstances: 4, enforceAppCheck: true, timeoutSeconds: 60 },
+  exports._h.adminGetGcpEvidence = async (req) => {
+    _requireAdmin(req);
+    const { readGcpEvidence } = require('./gcp-evidence');
+
+    /* Repository declarations, supplied by the caller-side handler. These are
+       DECLARATIONS, not deployed state — the reader labels them as such and the
+       console must never present one as the other. */
+    let declared = null;
+    try {
+      declared = {
+        '(default)':  (require('../firestore.indexes.json').indexes || []).length,
+        'sokoni-ops': (require('../firestore.indexes.sokoni-ops.json').indexes || []).length,
+      };
+    } catch (e) {
+      /* Expected in the deployed bundle. Drift then reports not-attempted. */
+      declared = null;
+    }
+
+    /* The SOURCE side of the scaling contract. Same deployment trap as the
+       index declarations: functions/ is all a deploy uploads, so this resolves
+       locally and is absent in production. Absent means the contract panel
+       reports not-attempted — never "in parity", which would be a claim that
+       nothing was compared. */
+    let contracts = null;
+    try {
+      const m = require('../scripts/infra/recovery-manifest-20260921.json');
+      const a = m.scaling_contract_adjudication || {};
+      contracts = { rows: a.rows || [], capturedAt: a.captured_at || null,
+                    note: a.observability_note || null };
+    } catch (e) { contracts = null; }
+
+    /* Which secret NAMES the platform's rails declare they require. From the
+       server registry, which deploys with functions/ and is therefore readable
+       in production — unlike the index declarations above. Names only; the
+       registry has never held a value. */
+    let expectedSecrets = null;
+    try {
+      const reg = require('./integration-registry');
+      expectedSecrets = [].concat.apply([],
+        (reg.INTEGRATIONS || []).map((e) => e.requiredSecrets || []));
+    } catch (e) { expectedSecrets = null; }
+
+    const result = await readGcpEvidence({ declared, contracts, expectedSecrets });
+    /* Logged as shape, never as an inventory. A log line listing every
+       collection id, every secret name or every IAM principal is a map of the
+       platform, and this endpoint reads all three. */
+    console.log('[adminGetGcpEvidence] read', {
+      actor: req.auth && req.auth.uid,
+      ok: result.ok,
+      domainsRead: result.domainsRead && result.domainsRead.value,
+      domainsFailed: result.domainsFailed && result.domainsFailed.value,
+    });
+    return result;
+  }
+);
+
+/* ══════════════════════════════════════════════════════════════════════════════
    INTEGRATION PROBE — measure a provider, one integration at a time     (RC-3)
    ══════════════════════════════════════════════════════════════════════════════
    Runs the declared probe for ONE integration and records the result under
