@@ -1,3 +1,127 @@
+## 2026-09-21 (145) — Source → registration provenance: the orphan list was mostly an artifact
+
+**Phase 3 of the Functions restructuring. READ-ONLY: no deployment, no deletion, no
+classification, no production contact. NO production mutation.**
+
+Phase 1 mapped the estate and reported **28 orphan candidates**. Phase 3 resolves the chain
+properly and finds that **26 of the 28 were artifacts** — of two parser defects and of a
+cross-lineage comparison nobody had labelled. Two are real, and one of those two matters.
+
+### The chain, with each link named separately
+
+```
+definition  →  registration  →  deployable identity  →  deployed snapshot
+```
+
+`EXPORTED` is not `REGISTERED-AS-DEPLOYABLE`, and neither is `DEPLOYED`. Collapsing any two
+produces a number that looks authoritative and answers no real question.
+
+### Two real findings
+
+**1. `functions/merchant-identity.js` is not wired into `index.js` on this branch.** It exports
+`employeeSaleAuthorize` and `adminLinkMerchantAccounts` — both **live in production**. `index.js`
+requires `./shared/merchant-identity`, a *different* module with the same basename, for STK
+narrative. A functions deploy from this worktree would therefore have **removed two live
+callables**, because Firebase deletes what a deploy does not contain. These are the only two
+genuine open questions in the whole join.
+
+**2. `pos-retail-mirror` throws on load**, and Phase 1 swallowed it with `catch (e) { continue; }`.
+Its registered, deployed `mirrorPosTransactionToRetail` vanished from the registry and surfaced as
+an orphan candidate. **A deletion question manufactured by an unreported error** — the same failure
+shape as the Phase 1 bulk-export gap and the Phase 2 trigger gap. A module that will not load is
+now a finding, never a skip.
+
+### The join is cross-lineage, and that changes what the residue means
+
+Production functions were deployed from a **different lineage** than
+`feat/integrations-control-center`. Of the 26 deployed-but-unregistered names, **24 are not defined
+anywhere in this worktree** — they are registered on other branches. That is drift between
+lineages, not orphanhood.
+
+Without that split a routine branch divergence reads as a retirement list. The classification is
+now explicit:
+
+| Bucket | Count | Meaning |
+|---|---|---|
+| dispatcher handlers | 0 | identity is their dispatcher, not themselves |
+| not defined in this worktree | 24 | **other lineage — not orphans** |
+| defined here, unregistered | 2 | genuine open questions |
+
+### Two resolution methods, so neither has to detect its own blind spot
+
+Bulk `Object.assign(exports, mod)` sites are resolved **statically** (parse the factory call sites
+`..._makeTriggers('stores')` and the computed-key template) **and** by **runtime load**
+(`require()`, reading `Object.keys`). Agreement is evidence; one method's confidence is not.
+
+| Site | static | runtime | deployable | |
+|---|---|---|---|---|
+| email-triggers | 31 | 31 | 31 | agree |
+| pos-retail-mirror | 1 | 0 | — | **load failed** |
+| email-dmarc | 3 | 3 | 3 | agree |
+| algolia-sync | 87 | 87 | 87 | agree |
+| typesense-sync | 75 | 75 | 75 | agree |
+| search-sync | 18 | 22 | 18 | 4 non-deployable |
+| product-limit | 6 | 6 | 5 | 1 non-deployable |
+| catalogue-repair | 1 | 1 | 1 | agree |
+
+What `require()` costs is stated rather than hidden: it executes module top-level code in this
+process. It does not authenticate, reach Firestore, or touch production — but it is execution, not
+inspection, which is why the static method stands beside it rather than being replaced by it.
+
+### Exported is not deployable
+
+**5 registered names carry no `__endpoint`/`__trigger`**: `COLLECTION_REGISTRY`, `syncDocument`,
+`_shouldSkip`, `_updateDecision`, `_internal`. `Object.assign` spreads a module's *entire* export
+surface, so helpers and registries land on `exports` beside the triggers. Firebase has no
+deployment unit for them. Phase 1 counted two of them as functions.
+
+### Two parser defects of my own, fixed
+
+- The bulk-site regex captured `require('./catalogue-repair'` — the outer `[^)]+` stops at the
+  first `)`, so demanding a closing paren **lost an entire module's exports** and reported the site
+  as unresolved.
+- The handler detector matched only `exports._h.X =` (529 sites) and missed the 198 sites in
+  modules that bind `const _h = {}` first. **699 distinct handlers now, up from 526** — and every
+  one missed would have presented as an orphan.
+
+### Controls, because an empty bucket and a broken detector look identical
+
+- **Positive control `intasendWebhook`** — known deployed, known absent from `index.js`. The join
+  must surface it. **PASS.** Without it, an empty unregistered list would prove nothing.
+- **Handler-detector control** — 699 distinct names found, so `0 dispatcher handlers` in the
+  residue is a measured zero rather than an artifact. **PASS.**
+
+### Numbers, still not equated
+
+| | |
+|---|---|
+| literal `exports.X =` on index.js | 1,537 |
+| `Object.assign` bulk sites | 8 |
+| registered names, total | 1,728 |
+| carry `__endpoint`/`__trigger` | 1,722 |
+| registered but not a deployment unit | 5 |
+| deployability unknown (load failure) | 1 |
+| snapshot (2026-09-19, recorded) | 1,709 |
+| registered **and** deployed | 1,682 |
+| registered, not in snapshot | 40 |
+| deployed, not registered | 26 |
+
+### Prohibition, carried forward unchanged
+
+Phase 2 established that static absence cannot establish absence of a dependency. That holds here.
+No figure above is a reduction target, and the 24 lineage-drift names are emphatically not a
+deletion list. **Unknown does not mean obsolete.**
+
+### Verification
+
+Read-only verified, not asserted: no `fs` write verb, no `child_process`, no network call, no
+`initializeApp`, no deploy invocation. `git status` byte-identical apart from the new file. The
+comment stripper is proved non-trivial on `index.js` and the script exits 2 if it is ever a no-op.
+
+**Files:** `scripts/function-registration-provenance.js` (new).
+Database changes: none. API changes: none. Security changes: none. Breaking changes: none.
+Deploy: none.
+
 ## 2026-09-21 (144) — Function dependency graph: evidence-typed edges, and the absence that proves nothing
 
 **Phase 2 of the Functions restructuring. READ-ONLY: no deployment, no deletion, no
