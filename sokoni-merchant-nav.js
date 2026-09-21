@@ -246,9 +246,88 @@
     return cards;
   }
 
+  /* ── Merchant V2 route contract integration ────────────────────────────
+     `sokoni-merchant-routes.js` is the sidebar's single source of truth — the
+     shell renders a PROJECTION of it and lists nothing by hand. Integration is
+     therefore a FILTER over that projection, not new markup: a route the
+     contract does not declare can never appear, and a route it does declare is
+     shown or restricted according to the rules above.
+
+     The mapping lives here, in the decision layer, so merchant-v2.html holds
+     no entitlement logic of its own. */
+
+  /* Routes that belong to the SELLER side. Derived from the contract's own
+     `role` where it is unambiguous, and named explicitly where it is not —
+     `role:['seller','merchant']` is carried by account-level routes too
+     (Settings, Messages), so role alone would hide a merchant's settings when
+     their seller plan lapsed. Explicit beats inferred for anything that could
+     lock someone out. */
+  const PRODUCT_ROUTE_IDS = Object.freeze([
+    'products', 'inventory', 'orders', 'offers', 'sell', 'flash-sale',
+    'minishop', 'availability', 'fulfilment', 'returns', 'deliveries', 'stories',
+  ]);
+  const SERVICE_ROUTE_IDS = Object.freeze([
+    'services', 'bookings', 'appointments', 'provider-profile',
+  ]);
+  /* Serves BOTH sides: visible while EITHER is usable. */
+  const SHARED_ROUTE_IDS = Object.freeze(['pos', 'till']);
+
+  /**
+   * Which side a contract route belongs to.
+   * Returns 'products' | 'services' | 'both' | null (account-level).
+   */
+  function sideOfRoute(route) {
+    const id = String((route && route.id) || '');
+    if (SHARED_ROUTE_IDS.indexOf(id) !== -1)  return 'both';
+    if (PRODUCT_ROUTE_IDS.indexOf(id) !== -1) return SIDE.PRODUCTS;
+    if (SERVICE_ROUTE_IDS.indexOf(id) !== -1) return SIDE.SERVICES;
+    /* A route the contract declares but this map does not know is
+       ACCOUNT-LEVEL — it stays visible. Defaulting an unknown route to a
+       commercial side would make a new route disappear for merchants the day
+       it was added, which is the opposite of what the projection is for. */
+    return null;
+  }
+
+  /**
+   * Decide one contract route against a resolved nav.
+   * @returns {{ visible:boolean, usable:boolean, reason:string|null, side:string|null }}
+   */
+  function decideRoute(route, nav) {
+    const side = sideOfRoute(route);
+    if (!side) return { visible: true, usable: true, reason: null, side: null };
+
+    const owners = side === 'both'
+      ? [nav && nav.products, nav && nav.services]
+      : [nav && nav[side]];
+    const known = owners.filter(Boolean);
+    if (!known.length) return { visible: false, usable: false, reason: null, side };
+
+    const visible = known.some((o) => o.approved);
+    const usable  = known.some((o) => o.usable);
+    let reason = null;
+    if (!usable) {
+      const rel = known.find((o) => o.approved) || known[0];
+      reason = rel ? rel.reason : null;
+    }
+    return { visible, usable, reason, side };
+  }
+
+  /**
+   * Filter a list of contract routes. Returns the routes to render, each
+   * annotated — the shell decides how to PAINT a restricted route, never
+   * whether it is restricted.
+   */
+  function filterContractRoutes(routes, nav) {
+    return (routes || [])
+      .map((r) => Object.assign({ route: r }, decideRoute(r, nav)))
+      .filter((x) => x.visible);
+  }
+
   return {
     SIDE, SECTIONS, LIVE_SUB,
+    PRODUCT_ROUTE_IDS, SERVICE_ROUTE_IDS, SHARED_ROUTE_IDS,
     subLive, sideState, resolveNav, canOpen, whyBlocked,
     creatableKinds, subscriptionCards,
+    sideOfRoute, decideRoute, filterContractRoutes,
   };
 }));

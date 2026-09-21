@@ -312,6 +312,28 @@
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'reports' },
 
+    /* ── SERVICES — the provider half of a dual business ───────────────────
+       `services` points at the EXISTING catalogue implementation
+       (catalogue.html). No second service catalogue is created: that page
+       already holds products and services in one list, filtered by tab, over
+       the one `posProducts` collection.
+
+       Declared for every merchant like every other route; sokoni-merchant-nav
+       decides at render time whether a given merchant sees them, from the
+       provider APPROVAL — never from a subscription and never from
+       businessType. */
+    { id:'services', name:'Services', icon:'🛠️', tier:'more',
+      kind:'page', src:'catalogue.html?tab=services&shell=merchant',
+      role:['provider','seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'services',
+      note:'Service catalogue. Opens catalogue.html — the ONE catalogue, filtered to services.' },
+
+    { id:'bookings', name:'Bookings', icon:'📅', tier:'more',
+      kind:'native',
+      role:['provider','seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'bookings',
+      note:'Provider bookings surface. Reads providerBookings; no payment path.' },
+
     { id:'availability', name:'Availability', icon:'🟢', tier:'more',
       kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
@@ -417,7 +439,21 @@
        configured once alongside Devices and POS Setup, not a surface a merchant reads
        daily the way they read Reports. */
     { key:'operations', label:'Operations',
-      ids:['kra-tax','devices','pos-setup'] }
+      ids:['kra-tax','devices','pos-setup'] },
+    /* ── SERVICES ──────────────────────────────────────────────────────────
+       The provider half of a dual business. Grouped rather than promoted to
+       PRIMARY_ORDER deliberately: that list is asserted against a canonical
+       spec (scripts/test-merchant-routes.js) which already disagrees with the
+       contract by one route, and adding to it would deepen a failure this
+       slice did not cause.
+
+       These routes are declared for EVERY merchant, exactly as every other
+       route is — the contract describes what CAN exist, not who may see it.
+       Visibility is decided at render time by sokoni-merchant-nav.js from the
+       provider APPROVAL, so a seller-only merchant never sees them. A contract
+       that hid routes by role would be a second authorization layer. */
+    { key:'services',   label:'Services',
+      ids:['services','bookings'] }
   ];
 
   /* ── ROUTE ACTION CHIPS ─────────────────────────────────────────────────────────

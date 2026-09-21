@@ -690,6 +690,11 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script defer src="sokoni-universal-printer.js"></script>
 <script defer src="sokoni-pos-print-service.js"></script>
 <script src="sokoni-merchant-routes.js"></script>
+<!-- Capability + subscription decision layer. Loaded BEFORE the shell script so
+     buildSidebar can consult it on first paint. It decides nothing about
+     identity: approval creates a workspace, a subscription only gates what may
+     be done inside one. -->
+<script src="sokoni-merchant-nav.js"></script>
 
 <!-- The NINE native surfaces v1 already implements, as modules. Nothing here is
      rewritten: each exposes the same mount(host, ctx) / destroy() contract that
@@ -875,18 +880,52 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      Nothing here lists a route by hand. Add a route to the contract and it appears;
      remove one and its button disappears with it. That is what makes "every button
      has a destination" structural rather than a thing to remember. */
+  /* ── CAPABILITY FILTER ────────────────────────────────────────────────────
+     The sidebar stays a projection of the contract; this only decides WHICH of
+     the projected routes this particular business may see.
+
+     All of the deciding lives in sokoni-merchant-nav.js. The shell holds no
+     entitlement logic — it asks, paints, and nothing else. That matters
+     because the rule it enforces is easy to get subtly wrong:
+
+         APPROVAL decides whether a workspace EXISTS
+         SUBSCRIPTION decides what may be DONE inside it
+
+     so a paid seller plan without a seller approval must render nothing, while
+     an approved seller whose plan lapsed keeps the workspace and their data.
+
+     `_navState` is set by the shell's boot once sellers/{uid}, providers/{uid}
+     and the two subscription documents have been read. Until then it is null
+     and NOTHING is filtered — a slow read must never blank a merchant's
+     sidebar, and the server refuses anything they should not reach anyway. */
+  function _visible (r) {
+    var NAV = window.SokoniMerchantNav;
+    if (!NAV || !window._navState) return true;          /* fail OPEN, see above */
+    return NAV.decideRoute(r, window._navState).visible;
+  }
+  function _restricted (r) {
+    var NAV = window.SokoniMerchantNav;
+    if (!NAV || !window._navState) return null;
+    var d = NAV.decideRoute(r, window._navState);
+    return d.usable ? null : (d.reason || 'Not available on your current plan.');
+  }
+
   function buildSidebar () {
     var nav = document.getElementById('side-nav');
     var frag = document.createDocumentFragment();
 
-    CONTRACT.primary().forEach(function (r) { frag.appendChild(navItem(r)); });
+    CONTRACT.primary().filter(_visible).forEach(function (r) { frag.appendChild(navItem(r)); });
 
     (typeof CONTRACT.moreGroups === 'function' ? CONTRACT.moreGroups() : []).forEach(function (g) {
+      var routes = (g.routes || g.items || []).filter(_visible);
+      /* A group whose every route was filtered out renders no heading — an
+         empty "Services" label is worse than no label. */
+      if (!routes.length) return;
       var h = document.createElement('div');
       h.className = 'side-group';
       h.textContent = g.label || g.key || 'More';
       frag.appendChild(h);
-      (g.routes || g.items || []).forEach(function (r) { frag.appendChild(navItem(r)); });
+      routes.forEach(function (r) { frag.appendChild(navItem(r)); });
     });
     nav.appendChild(frag);
 
@@ -911,6 +950,16 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     b.dataset.route = r.id;
     b.innerHTML = '<span class="ico">' + (r.icon || '•') + '</span>' +
                   '<span class="lbl">' + (prefix || '') + (r.name || r.id) + '</span>';
+    /* An approved side whose subscription has lapsed keeps its destination —
+       the merchant's data does not vanish with their card. The row is marked
+       and carries the reason, and is NOT disabled: reading what they already
+       own is exactly what must keep working. */
+    var why = _restricted(r);
+    if (why) {
+      b.dataset.restricted = '1';
+      b.title = why;
+      b.style.opacity = '.62';
+    }
     return b;
   }
 
