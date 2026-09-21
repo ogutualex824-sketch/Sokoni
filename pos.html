@@ -35,6 +35,25 @@
   <style>
     :root{--bg:#050505;--sur:#0d0d0d;--sur2:#141414;--g:#71ff00;--ga:rgba(113,255,0,.12);--ga2:rgba(113,255,0,.06);--bor:#1a1a1a;--bor2:#222;--txt:#e8e8e8;--sub:#888;--radius:12px;}
 
+    /* ── QUICK CHARGE + MIXED BASKET ─────────────────────────────────────── */
+    .qc-kicker{font-size:9.5px;font-weight:800;letter-spacing:.14em;color:var(--amber,#ffb020);
+      margin-bottom:13px;text-align:center}
+    .qc-warn{display:none;padding:10px 12px;border-radius:10px;font-size:11.5px;line-height:1.55;
+      background:rgba(255,92,92,.08);border:1px solid rgba(255,92,92,.26);color:#ff9a9a}
+    .qc-warn.on{display:block}
+    .qc-note{margin:12px 0 0;font-size:10.5px;line-height:1.6;color:#6a6a6a}
+    /* A custom charge is visually distinct in the basket — a cashier must be
+       able to see at a glance which lines they keyed in themselves. */
+    .cart-item.is-quick{border-left:3px solid var(--amber,#ffb020)}
+    .cart-line-tag{display:inline-block;margin-top:2px;padding:2px 6px;border-radius:5px;
+      font-size:8.5px;font-weight:800;letter-spacing:.06em;
+      background:rgba(255,176,32,.1);border:1px solid rgba(255,176,32,.3);color:var(--amber,#ffb020)}
+    .cart-line-tag.svc{background:rgba(77,163,255,.1);border-color:rgba(77,163,255,.3);color:#4da3ff}
+    .basket-groups{margin:10px 0 4px}
+    .basket-grp{display:flex;justify-content:space-between;align-items:baseline;
+      padding:7px 0;font-size:11px;color:var(--sub,#888);border-top:1px solid var(--bor,#1a1a1a)}
+    .basket-grp b{font-size:12.5px;font-weight:800;color:var(--txt,#e8e8e8);font-variant-numeric:tabular-nums}
+
     /* ── MULTI-TENDER PAYMENT CONSOLE ────────────────────────────────────
        Built on the POS tokens above so it inherits the till's identity
        rather than introducing a second visual language. Touch targets are
@@ -612,6 +631,12 @@
                  card + any other method the IntaSend account has enabled, with the
                  balance auto-filling as each is tapped. -->
             <button class="pay-method-btn paycon-open" data-method="multi" onclick="SPosPayConsole.open(SPos.cart.getTotal())" aria-label="Split across multiple payment methods"><span class="method-icon" aria-hidden="true">⊞</span>Multi-Pay</button>
+            <!-- QUICK CHARGE. A described, cashier-attributed one-off charge for
+                 work not worth a catalogue entry — a government application, a
+                 callout. It ADDS A LINE to the current sale; it does not start a
+                 payment. The server re-prices the whole basket and enforces the
+                 merchant's ceiling; this tile names no limit of its own. -->
+            <button class="pay-method-btn qc-open" data-method="quickcharge" onclick="SPosQuickCharge.open()" aria-label="Add a custom service charge to this sale"><span class="method-icon" aria-hidden="true">✎</span>Quick Charge</button>
           </div>
           <!-- Terminal status indicator — populated by PosTerminals -->
           <div id="terminal-status-bar" style="display:none;gap:6px;flex-wrap:wrap;margin-top:8px;padding:2px 0"></div>
@@ -1416,6 +1441,52 @@
 
 <!-- ════ SPLIT PAYMENT MODAL ════ -->
 <!-- ══════════════════════════════════════════════════════════════════════════
+     QUICK CHARGE
+     A described, cashier-attributed custom service charge. It adds a LINE to
+     the current sale and nothing else — no intent, no tender, no payment.
+
+     There is no limit named on this form. The merchant's ceiling lives in
+     posSettings and is enforced by shared/pos-service-pricing.js; a number
+     printed here would become a second authority for it and would be wrong
+     the first time a merchant changed theirs.
+══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="qc-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <span class="modal-title">Quick charge</span>
+      <button class="modal-close" onclick="SPos.modal.close('qc-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="qc-kicker">CUSTOM SERVICE CHARGE</div>
+      <div class="form-field">
+        <label class="form-label" for="qc-desc">WHAT ARE YOU CHARGING FOR?</label>
+        <input class="form-input" id="qc-desc" maxlength="140" placeholder="Passport application assistance">
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="qc-amount">AMOUNT (KES)</label>
+        <input class="form-input" id="qc-amount" type="number" min="0" step="0.01" inputmode="decimal"
+               placeholder="750.00" style="font-size:19px;text-align:right">
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="qc-qty">QUANTITY</label>
+        <input class="form-input" id="qc-qty" type="number" min="1" step="1" inputmode="numeric" value="1">
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="qc-phone">CUSTOMER PHONE (OPTIONAL)</label>
+        <input class="form-input" id="qc-phone" type="tel" inputmode="tel" placeholder="07XX XXX XXX">
+      </div>
+      <div id="qc-warn" class="qc-warn"></div>
+      <p class="qc-note">Added to the current sale as a custom service charge, recorded against
+        you. The amount is confirmed by SOKONI before any payment is taken.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-ghost" onclick="SPos.modal.close('qc-modal')">Cancel</button>
+      <button class="modal-btn modal-btn-primary" id="qc-add" onclick="SPosQuickCharge.add()">Add to sale</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
      MULTI-TENDER PAYMENT CONSOLE
      One sale, any number of tenders. Rendered entirely by
      sokoni-pos-pay-console.js from SPosTender's pure arithmetic — no money is
@@ -1437,6 +1508,13 @@
         <div class="paycon-hero-label">TOTAL DUE</div>
         <div class="paycon-hero-val" id="paycon-total">KES 0.00</div>
       </div>
+
+      <!-- WHAT IS IN THIS SALE. Products, services and custom charges shown
+           separately, because a cyber cafe's sale is all three and the cashier
+           should see that before taking money. Rendered from SPosBasket;
+           hidden entirely when the sale is a single kind, so an ordinary shop
+           sees nothing new. -->
+      <div class="basket-groups" id="paycon-basket" style="display:none"></div>
 
       <div class="paycon-sec-label">PAYMENT METHOD <span>tap to add — amount fills in automatically</span></div>
       <div class="paycon-methods" id="paycon-methods"></div>
@@ -2837,6 +2915,8 @@ html.in-merchant-shell .pos-quick-nav { display: none !important; }
 <script defer src="sokoni-redis.js"></script>
 <script defer src="sokoni-device-hub.js"></script>
 <script defer src="sokoni-pos-tender.js"></script>
+<script defer src="sokoni-pos-basket.js"></script>
+<script defer src="sokoni-pos-quick-charge.js"></script>
 <script defer src="sokoni-pos-pay-console.js"></script>
 <script defer src="sokoni-payment-terminal.js"></script>
 <script defer src="sokoni-customer-display.js"></script>

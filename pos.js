@@ -1037,6 +1037,30 @@ const SPos = (function () {
     /* Used by Phase 7 long-press quick-add */
     _addById(productId) { cart.addItem(productId); },
 
+    /* ── A PRE-BUILT LINE ──────────────────────────────────────────────────
+       For lines that do not come from the catalogue — today, a Quick Charge
+       custom service charge built by sokoni-pos-basket.js.
+
+       Deliberately NOT a second addItem: it takes a line that has already
+       been validated and attributed, and does no pricing of its own. The
+       server re-prices the whole basket through pos_service_sale regardless,
+       so nothing here is authoritative.
+
+       It never merges. Two scans of one product merge because they are the
+       same thing twice; two custom charges are two different charges that
+       happen to share a price, and merging them would erase one of the
+       cashier's decisions. The caller supplies a unique id and it is trusted
+       only as a key — the `qc_` prefix keeps it clear of any posProducts id. */
+    addCustomLine(line) {
+      if (!line || !line.id || !line.name) throw new Error('A custom line needs an id and a name');
+      if (!(Number(line.price) > 0))       throw new Error('A custom line needs a price');
+      if (!line.authorizedBy)              throw new Error('A custom line must be attributed to a cashier');
+      if (state.cartItems.some(i => i.id === line.id)) throw new Error('That line is already on this sale');
+      state.cartItems.push(Object.assign({ qty: 1 }, line));
+      cart.render();
+      return line.id;
+    },
+
     updateQty(id, delta) {
       const item = state.cartItems.find(i => i.id === id);
       if (!item) return;

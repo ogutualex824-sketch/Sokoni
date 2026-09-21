@@ -110,19 +110,28 @@ console.log('\n── The route and the page agree ──');
      initialTabFor('?' + qs) === 'services', qs);
 }
 
-console.log('\n── This slice did not touch the catalogue model ──');
+console.log('\n── Deep-linking stayed OUT of the catalogue model ──');
 {
-  const diff = require('child_process')
-    .execSync('git diff HEAD --name-only', { cwd: root, encoding: 'utf8' })
-    .split('\n').filter(Boolean);
-  ck('sokoni-catalogue-model.js is unchanged',
-     diff.indexOf('sokoni-catalogue-model.js') === -1, diff.join(' ') || '(clean)');
-  ck('sokoni-merchant-nav.js is unchanged', diff.indexOf('sokoni-merchant-nav.js') === -1);
-  ck('no functions/ file changed', !diff.some((f) => f.startsWith('functions/')));
-  ck('merchant-v2.html is unchanged', diff.indexOf('merchant-v2.html') === -1);
-  /* Positive control: the diff scan can see something. */
-  ck('…and catalogue.html IS in the diff (positive control)',
-     diff.indexOf('catalogue.html') !== -1, diff.join(' '));
+  /* This was a `git diff HEAD` check, and it died the moment its own slice
+     was committed — the diff went empty and the positive control caught it,
+     for the second time in this workstream. A boundary assertion that only
+     holds while the work is uncommitted is not a boundary assertion.
+
+     The durable property is a SEPARATION OF CONCERNS: routing and shell
+     embedding are page concerns, and the model must know nothing about
+     either. That stays true forever, not just until the next commit. */
+  const model = fs.readFileSync(path.join(root, 'sokoni-catalogue-model.js'), 'utf8');
+  const nav   = fs.readFileSync(path.join(root, 'sokoni-merchant-nav.js'), 'utf8');
+  ck('the model knows nothing about query strings',
+     !/URLSearchParams|location\.search|history\.|\?tab=/.test(model));
+  ck('the model knows nothing about the shell', !/in-merchant-shell|shell=merchant/.test(model));
+  ck('the nav module knows nothing about either',
+     !/URLSearchParams|in-merchant-shell/.test(nav));
+  ck('…and the PAGE owns both', /URLSearchParams/.test(html) && /in-merchant-shell/.test(html));
+  /* Positive control: the scan reads real files, so "knows nothing" cannot
+     pass against an empty read. */
+  ck('…the model file was actually read',
+     /function applyEdit/.test(model), model.length + ' chars');
 }
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
