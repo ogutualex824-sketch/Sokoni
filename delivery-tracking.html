@@ -155,6 +155,12 @@
     <div class="dt-pin-hint">Show this code to the rider when they arrive at your door</div>
   </div>
 
+  <!-- Contextual Connect actions. The SERVER decides what goes in here; an
+       empty slot collapses rather than showing a placeholder. Deliberately NOT
+       #dtActions — that id already belongs to the role-dependent buttons
+       _renderActions draws, and getElementById returns the first match. -->
+  <div class="dt-actions" id="dtConnectActions"></div>
+
   <!-- Delivery details -->
   <div class="dt-card" id="dtDetailsCard" style="display:none;">
     <div class="dt-card-title">DELIVERY DETAILS</div>
@@ -963,6 +969,46 @@ window.dtRetryTracking = function(){
 let _deliveryUnsub = null;
 let _currentData   = null;
 
+/* The client asks the SERVER what this delivery offers. It never maps a
+   delivery status onto a relationship state itself — shared/connect-call-surface.js
+   forbids a second lifecycle vocabulary, and two tables of what "delivered"
+   means is how one screen offers a call the server refuses. */
+let _actionsMountedFor = null;
+function _mountDeliveryActions(d) {
+  const slot = document.getElementById('dtConnectActions');
+  if (!slot) return;
+
+  /* Hub deliveries are out of the claimed surface. Clear, do not offer. */
+  if (_delivSource !== 'pkg' || (d && d._src === 'hub')) {
+    slot.innerHTML = '';
+    _actionsMountedFor = null;
+    return;
+  }
+
+  /* The anchor is the packageRequests DOCUMENT ID, which for a marketplace
+     delivery is also its business ref. Never the hub's deliveryRef field. */
+  /* delivRef IS the packageRequests document id on this page:
+     SokoniDelivery.listenDelivery(delivRef) reads collection('packageRequests').doc(delivRef). */
+  const anchorId = delivRef;
+  if (!anchorId) { slot.innerHTML = ''; return; }
+  if (_actionsMountedFor === anchorId) return;   /* the listener re-fires often */
+  if (!window.SokoniConnectCall || !window.sokoniCallable) return;
+  _actionsMountedFor = anchorId;
+
+  window.SokoniConnectCall.mountForAnchor(slot, {
+    anchorType: 'delivery',
+    anchorId: anchorId,
+    call: function (op, payload) {
+      const data = Object.assign({}, payload || {}, { op: op });
+      return window.sokoniCallable('connectDispatch')(data)
+        .then(function (envelope) { return (envelope && envelope.data) || {}; });
+    },
+    onSession: function (r) {
+      if (r && r.sessionId) location.href = '/connect.html?session=' + encodeURIComponent(r.sessionId);
+    },
+  });
+}
+
 function _onDelivery(d) {
   if (!d) return;
   _currentData = d;
@@ -991,6 +1037,16 @@ function _onDelivery(d) {
   } else {
     if (pinBox) pinBox.style.display = 'none';
   }
+
+  /* Contextual Message/Call, filled by the server.
+     MARKETPLACE ONLY. A Delivery Hub record is a different product — a sender
+     and a courier, with no seller and no order — and the frozen Connect
+     authority has no `sender` role to express it (see
+     docs/DELIVERY_ANCHOR_AUTHORITY.md). Offering actions there would mean
+     aliasing a hub ref into the `delivery` anchor, which resolves
+     packageRequests: either a dead button or, worse, a live one pointed at an
+     unrelated document. So the hub case renders nothing at all. */
+  _mountDeliveryActions(d);
 
   /* Details */
   _renderDetails(d);
@@ -1643,6 +1699,8 @@ window.addEventListener('beforeunload', () => {
 <script src="analytics.js" defer></script>
 <script src="sw-register.js" defer></script>
 <script src="nav-active.js" defer></script>
+<!-- Connect: renders the contextual Message/Call actions the SERVER authorizes. -->
+<script src="sokoni-connect-call.js"></script>
   <script defer src="kass-widget.js"></script>
   <!-- Enterprise v2.0: core stack -->
   <script defer src="sokoni-event-bus.js"></script>

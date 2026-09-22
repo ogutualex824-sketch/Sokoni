@@ -1051,8 +1051,14 @@ console.log('\n── Delivery RESOLVED by evidence; supplier still BLOCKED ─�
   /* The anchor is correct now; MOUNTING is a separate step, and claiming a
      mounted surface that does not exist would be the fabrication this suite
      exists to prevent. */
-  ck('the surfaces are still NOT mounted — a correct anchor is not a shipped button',
-    !/sokoni-connect-call\.js/.test(dt) && !/sokoni-connect-call\.js/.test(sd));
+  /* RETARGETED again: delivery-tracking.html IS now mounted, and
+     scripts/test-delivery-mount.js owns that surface's assertions.
+     seller-delivery.html is NOT, and saying so keeps the claimed surface
+     honest rather than letting one mount imply two. */
+  ck('delivery-tracking.html is mounted on the resolved anchor',
+    /sokoni-connect-call\.js/.test(dt));
+  ck('seller-delivery.html is NOT mounted yet, and is not claimed',
+    !/sokoni-connect-call\.js/.test(sd));
 
   /* SUPPLIER. `collection('suppliers')` has no writer anywhere in functions/ except the
      resolver that reads it, and no client surface reads it at all. */
