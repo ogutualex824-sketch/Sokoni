@@ -103,6 +103,11 @@ const TYPES = {
   booking_paid:         { priority: 'commerce',  category: 'orders',   smsTemplate: null },
   booking_refund:       { priority: 'commerce',  category: 'payments', smsTemplate: null },
   booking_released:     { priority: 'commerce',  category: 'orders',   smsTemplate: null },
+  /* Connect — an INCOMING CALL. Registered as an intent here because
+     connect-notify names an intent and never a channel: notify.js owns tokens,
+     channels and quiet hours, and a call that cannot reach a push token must
+     not silently become an SMS. smsTemplate is deliberately null. */
+  connect_incoming_call:{ priority: 'commerce',  category: 'support',  smsTemplate: null },
   wallet_credit:        { priority: 'commerce',  category: 'wallet',   smsTemplate: 'wallet_credit' },
   order_placed:         { priority: 'commerce',  category: 'orders',   smsTemplate: 'order_placed' },
   order_accepted:       { priority: 'commerce',  category: 'orders',   smsTemplate: 'order_accepted' },
