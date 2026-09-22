@@ -1,3 +1,81 @@
+## 2026-09-22 (147) — Real-time multi-device: the seam, not a sixth system
+
+**CORE ECOSYSTEM REQUIREMENT.** Audit → Hosting-safe implementation. Functions- and
+rules-dependent work is isolated, not faked. NO production mutation, NO deploy.
+
+Full audit and classification: `docs/REALTIME_MULTIDEVICE.md`.
+
+### The estate was not missing realtime — it was missing the seam
+
+287 `onSnapshot` sites across 105 files, `realtime.js` already upgrading fetches to
+snapshots, `functions/notify.js` already the ONE backend sender, and a canonical
+engine + centre pair on the client. What was absent: device identity outside POS, a place
+to register and tear down listeners, and one shared answer to "have we already shown this?"
+
+### A near-miss worth recording
+
+`security.js` guards `realtime.js` with `script[src*="realtime"]` — a **substring** test.
+The new module was first written as `sokoni-realtime.js`, which would have satisfied that
+guard and **silently suppressed `realtime.js`**, taking the live product grid, hub and
+order-status listeners down with no error anywhere. Renamed to `sokoni-device-bus.js`;
+`test-realtime-multidevice.js` now fails if any injected module name contains `realtime`
+again, with a positive control proving that detector can actually match.
+
+### Bell coverage was a per-page accident
+
+`shared-header.js` excludes 13 pages from nav injection, and only `seller.html` and
+`profile.html` hand-wrote their own `#sk-notif-btn`. **POS, Merchant V2, merchant and every
+enterprise dashboard had no notification surface at all, on any device** — on a phone, the
+entire affordance.
+
+Fixed once for the platform rather than 13 times: `sokoni-notif-center.js` self-mounts a
+safe-area-anchored bell when a page provides none, after waiting for `shared-header` so no
+page grows two. A hand-written bell still wins. Customer-facing and unattended surfaces —
+kiosk, customer display, KDS, print station, print tests, `pay-q`, auth — are denied a
+merchant bell **by name**: an unread count must never appear on a screen the customer is
+looking at. `security.js` now also injects engine + centre on idle using the **same element
+ids**, so whichever injector runs first wins and neither can double-load.
+
+### `sokoni-device-bus.js` (new)
+
+- **Device + session identity**, memoised in memory so a storage-blocked browser reports a
+  *stable* id for the load instead of a fresh one per call.
+- **Scoped subscription registry** — refcounts duplicates onto one listener, releases on
+  `pagehide`, and **refuses** an unscoped subscription to a tenant-scoped collection rather
+  than widening it. A client-side filter still transfers the data.
+- **Cross-channel dedupe** — `claim(id)` true once, false thereafter, delegating to the
+  engine's existing `sk_notif_seen` store, with an in-memory mirror so dedupe survives
+  blocked storage. That is precisely when one sale arriving as snapshot + SW message + push
+  would otherwise deliver three copies.
+
+### Two product defects the harness found
+
+Both were real, and both were fixed in the product rather than in the gate: with
+`localStorage` blocked, `deviceId()` regenerated on **every call**, and dedupe failed
+**entirely**.
+
+### Certification
+
+`scripts/test-realtime-multidevice.js` — **34 assertions, 0 failures**, including a
+comment-stripper control, a collision-detector positive control, an inverting control
+proving a properly scoped subscription IS allowed, and behavioural checks that actually
+evaluate the module and run the refusals.
+
+The suite states its own limit: these are **wiring** claims from source. The live
+two-device matrix in the doc is listed **NOT YET RUN** rather than implied by a green run.
+
+### Isolated, not faked
+
+Cross-device **push** fan-out needs a Functions deploy, still blocked by the
+merchant-identity provenance gap and foreign files in `functions/`. No new collection was
+introduced, so no rules change is required — the bus is deliberately client-only.
+
+**Files:** `sokoni-device-bus.js` (new) · `scripts/test-realtime-multidevice.js` (new) ·
+`docs/REALTIME_MULTIDEVICE.md` (new) · `security.js` · `sokoni-notif-center.js` ·
+`pos-v2.html`.
+Database changes: none. API changes: none. Security changes: subscriptions to tenant-scoped
+collections are now refused unless scoped. Breaking changes: none. Deploy: none.
+
 ## 2026-09-21 (146) — PROVENANCE GAP — merchant-identity, and a six-state resolution vocabulary
 
 **Phase 3 follow-up. READ-ONLY: no deployment, no deletion, no repair. NO production mutation.**

@@ -1230,10 +1230,91 @@
      (excluded pages: seller.html, profile.html, admin.html etc.)
      On non-excluded pages, shared-header.js calls attachBell() explicitly after nav injection.
      We only auto-attach if the bell is not already wired (_bellEl is null). */
+  /* ── UNATTENDED / CUSTOMER-FACING SURFACES ────────────────────────────
+     A merchant's unread count must never appear on a screen the CUSTOMER is
+     looking at, and an unattended terminal has nobody to action a
+     notification. These get no bell — that is a correctness rule, not a
+     styling preference. */
+  var _NO_BELL = [
+    'pos-kiosk', 'customer-display', 'pos-display', 'kitchen-display',
+    'print-station', 'pos-ios-print-test', 'pos-printer-hardware-test',
+    'login', 'signup', 'register', 'offline', 'success', 'pay-q',
+  ];
+  function _bellForbiddenHere() {
+    var p = (location.pathname || '').toLowerCase()
+      .replace(/\/+$/, '').split('/').pop().replace(/\.html$/, '');
+    if (!p) return false;                       /* "/" is the home page */
+    return _NO_BELL.indexOf(p) !== -1 ||
+           document.documentElement.dataset.noNotifBell === 'true';
+  }
+
+  /* ── SELF-MOUNT: the bell belongs to the PLATFORM, not to each page ─────
+     Previously a page only had a bell if it either received the injected nav
+     or hand-wrote `#sk-notif-btn`. Measured 2026-09-22: of the 13 pages
+     shared-header.js excludes from nav injection, only seller.html and
+     profile.html hand-wrote one — so POS, Merchant V2, merchant and every
+     enterprise dashboard had NO notification surface at all, on any device.
+     On a phone that is the whole notification affordance, missing.
+
+     Per-page markup makes coverage a thing each new page must REMEMBER, and
+     the count above is what remembering achieves. So the centre now mounts
+     its own bell when a page has none, which makes coverage a property of
+     loading this module. A page that wants the bell placed somewhere specific
+     still wins: a hand-written `#sk-notif-btn` is always preferred, and the
+     fallback only appears once we know none is coming. */
+  function _mountFallbackBell() {
+    if (_bellEl || document.getElementById('sk-notif-btn')) return;
+    if (_bellForbiddenHere()) return;
+
+    var btn = document.createElement('button');
+    btn.id = 'sk-notif-btn';
+    btn.type = 'button';
+    btn.className = 'sk-notif-float';
+    btn.setAttribute('aria-label', 'Notifications');
+    btn.title = 'Notifications';
+    btn.innerHTML = '📬<span class="sk-badge" id="sk-notif-badge" ' +
+                    'role="status" aria-label="Unread notifications"></span>';
+
+    if (!document.getElementById('sk-notif-float-css')) {
+      var st = document.createElement('style');
+      st.id = 'sk-notif-float-css';
+      /* Anchored to the SAFE AREA so it clears the notch and the home bar on a
+         phone, and sits above the bottom nav where one exists. */
+      st.textContent =
+        '.sk-notif-float{position:fixed;z-index:2147483000;' +
+        'top:calc(env(safe-area-inset-top,0px) + 10px);' +
+        'right:calc(env(safe-area-inset-right,0px) + 10px);' +
+        'width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.14);' +
+        'background:rgba(18,18,20,.82);backdrop-filter:blur(10px);color:#fff;' +
+        'font-size:17px;line-height:1;cursor:pointer;display:flex;' +
+        'align-items:center;justify-content:center;padding:0;' +
+        'box-shadow:0 4px 14px rgba(0,0,0,.34)}' +
+        '.sk-notif-float .sk-badge{position:absolute;top:1px;right:1px;' +
+        'background:#ff4d6d;color:#fff;border-radius:50%;font-size:9px;' +
+        'font-weight:900;min-width:15px;height:15px;padding:0 3px;' +
+        'display:none;align-items:center;justify-content:center;line-height:1}' +
+        '.sk-notif-float .sk-badge.show,.sk-notif-float .sk-badge.visible' +
+        '{display:flex}' +
+        '@media print{.sk-notif-float{display:none}}';
+      document.head.appendChild(st);
+    }
+    document.body.appendChild(btn);
+    attachBell(btn);
+  }
+
   function _tryAutoAttach() {
     if (_bellEl) return;
     var btn = document.getElementById('sk-notif-btn');
-    if (btn) attachBell(btn);
+    if (btn) { attachBell(btn); return; }
+    /* shared-header.js injects its nav (which carries the bell) on its own
+       schedule. Re-check before falling back, so a page that IS getting the
+       nav does not briefly grow a second, floating bell. */
+    setTimeout(function () {
+      if (_bellEl) return;
+      var late = document.getElementById('sk-notif-btn');
+      if (late) { attachBell(late); return; }
+      _mountFallbackBell();
+    }, 1500);
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', _tryAutoAttach, { once: true });

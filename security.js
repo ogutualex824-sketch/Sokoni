@@ -39,6 +39,52 @@
     rt.src = base + 'realtime.js';
     document.head.appendChild(rt);
   }
+  /* Device bus: device/session identity, the scoped-subscription registry and
+     cross-channel notification de-duplication.
+
+     NOTE THE GUARD. The block above tests `script[src*="realtime"]`, a
+     SUBSTRING match — so any file whose name contains "realtime" satisfies it
+     and suppresses realtime.js. That is why this module is called
+     sokoni-device-bus.js and is matched on its own exact-ish name. Do not
+     rename it into the "realtime" namespace. */
+  if (!window.SokoniDeviceBus && !document.querySelector('script[src*="sokoni-device-bus"]')) {
+    var dbus = document.createElement('script');
+    dbus.src = base + 'sokoni-device-bus.js';
+    document.head.appendChild(dbus);
+  }
+
+  /* ── NOTIFICATION CENTRE, FOR PAGES shared-header.js DOES NOT REACH ─────
+     shared-header.js injects the engine + centre on idle, but 15 pages do not
+     load shared-header.js at all — merchant-v2.html most importantly, which
+     opts out deliberately because it owns its own shell. Those pages had no
+     notification surface on any device.
+
+     The SAME element ids are reused, so whichever injector runs first wins and
+     the other becomes a no-op: there is exactly one engine and one centre per
+     page, never two.
+
+     Deferred to idle for the same reason shared-header defers it — together
+     these are ~160 KB of parse/execute, and a notification bell must not
+     compete with first paint. */
+  function _skIdleNotif() {
+    [['sokoni-sheet.js',        'sk-sheet-script'],
+     ['sokoni-notif-engine.js', 'sk-notif-engine-script'],
+     ['sokoni-notif-center.js', 'sk-notif-center-script']].forEach(function (m) {
+      if (document.getElementById(m[1])) return;
+      if (document.querySelector('script[src*="' + m[0] + '"]')) return;
+      var s = document.createElement('script');
+      s.src = base + m[0];
+      s.async = false;                 /* ordered exec: sheet before centre */
+      s.id = m[1];
+      document.head.appendChild(s);
+    });
+  }
+  function _skScheduleNotif() {
+    if (window.requestIdleCallback) window.requestIdleCallback(_skIdleNotif, { timeout: 4000 });
+    else setTimeout(_skIdleNotif, 1800);
+  }
+  if (document.readyState === 'complete') _skScheduleNotif();
+  else window.addEventListener('load', _skScheduleNotif, { once: true });
   /* Company identity single-source-of-truth (window.SOKONI_COMPANY) — used by
      client-rendered receipts/invoices/footers so literals aren't duplicated. */
   if (!window.SOKONI_COMPANY && !document.querySelector('script[src*="sokoni-company"]')) {

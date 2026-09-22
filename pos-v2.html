@@ -4,6 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>SOKONI POS</title>
+  <!-- security.js is the platform injector: sanitisation/CSP, and the modules
+       that make this page part of the live system (device bus, notification
+       engine + centre, deferred to idle). This page carries
+       data-no-header="true", so shared-header.js returns before injecting
+       anything — without security.js the pickup screen had no notification
+       surface at all, on any device. -->
+  <script src="security.js"></script>
   <script type="module" src="firebase.js"></script>
   <style>
     :root{
