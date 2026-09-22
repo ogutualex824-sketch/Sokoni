@@ -118,20 +118,75 @@ now every page except named diagnostics.
 
 ---
 
+## CORRECTION — cross-device push was never Functions-blocked
+
+The first pass classified push fan-out as Functions-dependent. **That was wrong**, and the
+dependency trace (step 8) found the real cause one layer up.
+
+```
+device registers → users/{uid}.fcmToken  ← A SINGLE FIELD
+                   ↓
+            every new device OVERWRITES the previous one
+                   ↓
+            notify.js collectTokens() finds exactly ONE token
+                   ↓
+            only the most recently signed-in device is reachable
+```
+
+The **backend was always correct**. `functions/notify.js` already unions
+`fcmToken` + `fcmTokens` + `pushToken`, already sends via `sendEachForMulticast`, and already
+prunes dead tokens with `arrayRemove`. It was waiting for a writer that accumulates.
+
+**The fix is client-side.** `firebase.js` now writes `fcmTokens: arrayUnion(token)` alongside
+the legacy scalar. Same document, same owner, one extra field — **no Functions deploy, no
+rules change.** Push fan-out moves from *blocked* to *implemented, awaiting live proof*.
+
+A second defect fell out of the same trace: with an accumulating array, a signed-out device's
+token would persist and keep delivering that user's order, payment and message notifications
+to a handset with no session. Sign-out now `arrayRemove`s this device's token **before**
+`signOut()`, while the write is still authorized.
+
+### Device registration already exists
+
+Step 9 asked whether a registry was needed. It is not. `users/{uid}.fcmTokens` **is** the
+authoritative device registry: written by the owner, read by `notify.js`, pruned by FCM's own
+verdict on each send. Inventing `users/{uid}/devices/{deviceId}` would have been a second
+registry and a rules change for no gain.
+
 ## NOT done — isolated, not faked
 
 | Item | Blocked by |
 |---|---|
-| Cross-device **push** fan-out | `notify.js` needs a Functions deploy — **blocked** by [[PROVENANCE_GAP_MERCHANT_IDENTITY]] and foreign uncommitted files in `functions/` |
-| Any new collection for device/session registry | rules deploys are gated; the bus is deliberately **client-only** so it needs no rules change |
-| Retiring the `sokoni-notifications.js` orphan | needs a service-worker precache edit; `service-worker.js` is another agent's dirty file |
-| Merchant V2 revenue convergence after a POS sale | needs the live matrix below |
+| Retiring the `sokoni-notifications.js` orphan | needs a service-worker precache edit; `service-worker.js` is another agent's dirty file — **a separate owned change**, per step 12 |
+| Merchant V2 revenue convergence after a POS sale | needs the live matrix; `merchant-v2.html` is also currently foreign-dirty |
+| Auditing the **287 pre-existing** listeners for scope | the new registry refuses unscoped tenant subscriptions, but the existing listeners predate it and were **not** rewritten — untouched by design |
 
 ---
 
+## Acceptance status — WIRED vs LIVE-PROVEN
+
+| Criterion | Status |
+|---|---|
+| Client realtime wiring | **PASS** (64 assertions) |
+| Device identity | **PASS** — stable across calls, tabs, navigation, logout; survives corrupt and unavailable storage |
+| Notification dedupe | **PASS** — 4 channels → 1; 2 transitions → 2 |
+| Notification UI | **PASS** — platform-wide, safe-area, exclusions enforced |
+| Security scoping | **PASS** for new listeners; pre-existing 287 **NOT AUDITED** |
+| Listener lifecycle | **PASS** — refcounted, ledgered, released on `pagehide` |
+| State synchronization | **NOT PROVEN** — needs two devices |
+| Push fan-out | **NOT PROVEN** — implemented client-side, no live send observed |
+| Offline reconciliation | **NOT PROVEN** — hook exists, untested |
+| Two-device matrix | **NOT RUN** |
+
+No row is promoted because the code looks right.
+
 ## Live test matrix — **NOT YET RUN**
 
-Static certification (`scripts/test-realtime-multidevice.js`, 34 assertions) proves the
+Harness: **`realtime-harness.html`** — open on two signed-in devices. Every row starts
+`NOT RUN`; only an observed callback moves it. The page has no code path that marks a row
+PASS from wiring alone.
+
+Static certification (`scripts/test-realtime-multidevice.js`, **64 assertions**) proves the
 **wiring**. It does not prove two devices converge. That needs two signed-in devices:
 
 | Event | Device A | Device B | Device C |

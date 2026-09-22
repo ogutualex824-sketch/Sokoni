@@ -101,7 +101,7 @@ const EXEMPT = new Set([
   'pos-ios-print-test', 'pos-printer-hardware-test', 'pos-hardware-setup',
   'customer-display', 'pos-display', 'kitchen-display', 'print-station',
   'pos-kiosk', 'pay-q', 'login', 'signup', 'register', 'offline', 'success',
-  'checkout-2-preview',
+  'checkout-2-preview', 'realtime-harness',
 ]);
 const pages = fs.readdirSync(ROOT).filter((f) => /\.html$/.test(f));
 /* FOREIGN, not exempt. These are another agent's UNTRACKED work-in-progress in
@@ -209,6 +209,151 @@ ok('F2', /refs\+\+|refs--/.test(busS.replace(/\s/g, '')),
    'duplicate subscriptions share one listener via refcounting');
 ok('F3', /requestIdleCallback/.test(securityS),
    'notification modules are deferred to idle, not loaded on the critical path');
+
+/* ── G. DEVICE IDENTITY, HARDENED ────────────────────────────────────────
+   A fresh module instance per case, each with its own mock storage, so one
+   case cannot contaminate the next. */
+function loadBus (storage) {
+  const sandbox = {
+    navigator: { onLine: true }, localStorage: storage,
+    addEventListener: () => {}, BroadcastChannel: null,
+    console: { warn: () => {} },
+  };
+  sandbox.window = sandbox;
+  // eslint-disable-next-line no-new-func
+  new Function('window', bus)(sandbox);
+  return sandbox.SokoniDeviceBus;
+}
+function mockStore (initial) {
+  const m = Object.assign(Object.create(null), initial || {});
+  return { getItem: (k) => (k in m ? m[k] : null),
+           setItem: (k, v) => { m[k] = String(v); },
+           removeItem: (k) => { delete m[k]; }, _raw: m };
+}
+
+(function deviceIdentity () {
+  const s1 = mockStore();
+  const b1 = loadBus(s1);
+  const id1 = b1.deviceId();
+  ok('G1', id1 === b1.deviceId() && id1 === b1.deviceId(),
+     'repeated deviceId() calls return the SAME id');
+  ok('G2', /^dev_/.test(id1) && s1._raw.sk_device_id === id1,
+     'device id is persisted under sk_device_id');
+
+  /* Same storage = same browser profile = same device, across navigations
+     and across tabs (localStorage is shared by both). */
+  const b2 = loadBus(s1);
+  ok('G3', b2.deviceId() === id1,
+     'a NEW page load on the same storage reuses the device id (navigation + tabs)');
+
+  /* A different browser/device has different storage. */
+  const b3 = loadBus(mockStore());
+  ok('G4', b3.deviceId() !== id1, 'a different device gets a DIFFERENT identity');
+
+  /* Corruption must not become a permanent identity. */
+  ['', 'undefined', '[object Object]', '{"a":1}', 'dev_', 'xx'].forEach((bad, i) => {
+    const sb = mockStore({ sk_device_id: bad });
+    const bb = loadBus(sb);
+    const got = bb.deviceId();
+    ok('G5.' + (i + 1), /^dev_[a-z0-9]{4,}_[a-z0-9]{4,}$/.test(got) && got !== bad,
+       'malformed stored id ' + JSON.stringify(bad) + ' is replaced, not adopted');
+  });
+
+  /* Storage unavailable: still stable for the load (the defect fixed earlier). */
+  const thrower = { getItem: () => { throw new Error('blocked'); },
+                    setItem: () => { throw new Error('blocked'); },
+                    removeItem: () => {} };
+  const b4 = loadBus(thrower);
+  ok('G6', b4.deviceId() === b4.deviceId() && /^dev_/.test(b4.deviceId()),
+     'storage unavailable: deviceId is still STABLE within the load');
+
+  /* Session is per-load even when the device is not. */
+  ok('G7', loadBus(s1).sessionId() !== loadBus(s1).sessionId(),
+     'two loads on one device get DIFFERENT session ids');
+
+  /* Survives logout: firebase.js must keep sk_device_id off the wipe. */
+  const fb = R('firebase.js');
+  ok('G8', /_SOKONI_LS_KEEP\s*=\s*\/[^/]*sk_device_id/.test(fb),
+     'sk_device_id is on the sign-out KEEP list (identity survives logout/login)');
+  ok('G9', !/_SOKONI_LS_KEEP\s*=\s*\/[^/]*sk_notif_seen/.test(fb),
+     'CONTROL: user-specific notification state is NOT kept across sign-out');
+})();
+
+/* ── H. EVENT IDENTITY AND ONE-NOTIFICATION-PER-EVENT ────────────────────── */
+(function eventIdentity () {
+  const b = loadBus(mockStore());
+
+  const evt = { type: 'order.status', entity: 'ORD-1', status: 'paid' };
+  let shown = 0;
+  ['snapshot', 'push', 'sw', 'app'].forEach(() => {
+    b.notifyOnce(evt, () => { shown++; });
+  });
+  ok('H1', shown === 1,
+     'ONE notification when the same event arrives via snapshot + push + sw + app');
+
+  /* Different transition, same entity: must NOT be swallowed. */
+  let shown2 = 0;
+  b.notifyOnce({ type: 'order.status', entity: 'ORD-1', status: 'delivered' },
+               () => { shown2++; });
+  ok('H2', shown2 === 1,
+     'a DIFFERENT transition on the SAME order still notifies (not over-deduped)');
+
+  /* Different entity, same transition. */
+  let shown3 = 0;
+  b.notifyOnce({ type: 'order.status', entity: 'ORD-2', status: 'paid' },
+               () => { shown3++; });
+  ok('H3', shown3 === 1, 'a different order notifies independently');
+
+  /* Refuse a key that can only fire once per entity. */
+  let threw = false;
+  try { b.eventKey({ type: 'order.status', entity: 'ORD-9' }); }
+  catch (e) { threw = /discriminator/.test(String(e.message)); }
+  ok('H4', threw, 'eventKey REFUSES an entity-only key that would suppress later events');
+
+  ok('H5', b.eventKey({ type: 't', entity: 'e', at: 1 }) ===
+           b.eventKey({ type: 't', entity: 'e', at: 1 }),
+     'eventKey is deterministic for the same transition');
+})();
+
+/* ── I. PUSH FAN-OUT CHAIN (client half — hosting-safe) ──────────────────── */
+(function pushChain () {
+  const fb = R('firebase.js');
+  const notify = R('functions/notify.js');
+  ok('I1', /fcmTokens:\s*arrayUnion\(token\)/.test(fb),
+     'client ACCUMULATES tokens (fcmTokens arrayUnion) — every device reachable');
+  ok('I2', /fcmToken:\s*token/.test(fb),
+     'the legacy scalar is still written so old readers keep working');
+  ok('I3', /Array\.isArray\(u\.fcmTokens\)/.test(notify),
+     'notify.js already reads the array — no Functions change needed');
+  ok('I4', /sendEachForMulticast/.test(notify),
+     'notify.js already multicasts to every token');
+  ok('I5', /arrayRemove\(\.\.\.dead\)/.test(notify),
+     'notify.js already prunes dead tokens (bounds array growth)');
+  ok('I6', /arrayRemove\(_tok\)/.test(fb) && fb.indexOf('arrayRemove(_tok)') < fb.indexOf('await signOut(auth)'),
+     'sign-out deregisters THIS device BEFORE signOut (while the write is still permitted)');
+})();
+
+/* ── J. NO DOUBLE BOOT ───────────────────────────────────────────────────── */
+ok('J1', /if \(w\.SokoniDeviceBus\) return;/.test(busS),
+   'device bus init is idempotent — a second load is a no-op');
+ok('J2', !/location\.reload|location\.href\s*=|location\.replace/.test(busS),
+   'device bus never navigates or reloads (cannot cause a boot cycle)');
+ok('J3', !/location\.reload|location\.replace/.test(strip(R('sokoni-notif-center.js'))),
+   'notif-center never reloads the page');
+
+/* ── K. LISTENER LEDGER ──────────────────────────────────────────────────── */
+(function ledger () {
+  const b = loadBus(mockStore());
+  b.subscribe({ key: 'o1', collection: 'orders', scopedBy: 'sellerUid',
+                owner: 'test', scope: 'page', cardinality: '<=50',
+                attach: () => () => {} });
+  const inv = b.inventory();
+  ok('K1', inv.length === 1 && inv[0].collection === 'orders' &&
+           inv[0].scopedBy === 'sellerUid' && inv[0].cardinality === '<=50',
+     'every listener records collection, scope, owner, cardinality and lifecycle');
+  b.release('page');
+  ok('K2', b.inventory().length === 0, 'release(scope) tears the listener down');
+})();
 
 console.log('══════════════════════════════════════════════════════════════════');
 console.log('  REALTIME / MULTI-DEVICE — static certification');

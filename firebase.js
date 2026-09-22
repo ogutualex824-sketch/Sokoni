@@ -1037,7 +1037,14 @@ const _SOKONI_LS_KEYS = [
    admins out ("No credentials set") and forced a re-setup every time. The
    authoritative admin gate is the Firebase claim, not this hash, so keeping the
    hash is safe. */
-const _SOKONI_LS_KEEP = /theme|darkmode|consent|cookie|appcheck|debug|install|onboard|dismiss|locale|printer|hardware|sokoniadmin(pin|pattern|pw)hash/i;
+/* `sk_device_id` is on the keep-list deliberately. It identifies the SCREEN, not
+   the person: it carries no user data, and sokoni-device-bus.js states that it is
+   never an authorization input. Wiping it on sign-out would mint a new device
+   identity on every logout/login cycle, so the same handset would look like an
+   endless series of new devices — breaking echo suppression and making
+   per-device reasoning impossible. The user-specific notification state
+   (`sk_notif_seen`, prefs) is deliberately NOT kept and is still wiped below. */
+const _SOKONI_LS_KEEP = /theme|darkmode|consent|cookie|appcheck|debug|install|onboard|dismiss|locale|printer|hardware|sk_device_id|sokoniadmin(pin|pattern|pw)hash/i;
 
 async function sokoniSignOut() {
   /* 1. Stop any registered Firestore listeners so no post-signout snapshot can fire
@@ -1049,6 +1056,38 @@ async function sokoniSignOut() {
       window._sokoniListeners = [];
     }
   } catch (_) {}
+
+  /* 1b. SECURITY — DEREGISTER THIS DEVICE'S PUSH TOKEN BEFORE SIGNING OUT.
+         Now that every device accumulates into users/{uid}.fcmTokens, a token
+         left behind would keep delivering the signed-out user's order, payment
+         and message notifications to a handset that no longer has their
+         session — on a shared or handed-over phone that is a real disclosure,
+         and the array means it no longer self-corrects when the next device
+         registers.
+
+         Must run BEFORE signOut(): afterwards the write is unauthenticated and
+         the rules correctly refuse it. Best-effort — a failure here must never
+         block sign-out, and notify.js prunes tokens FCM reports as dead anyway. */
+  try {
+    const _tok = localStorage.getItem("sokoni_fcm_token");
+    const _uid = auth.currentUser && auth.currentUser.uid;
+    if (_tok && _uid) {
+      const { doc, updateDoc, arrayRemove, deleteField } = await import(
+        "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
+      );
+      const _u = doc(db, "users", _uid);
+      await updateDoc(_u, { fcmTokens: arrayRemove(_tok) }).catch(() => {});
+      /* Clear the scalar only if it is THIS device's token — another device may
+         legitimately own it, and blanking theirs would unregister them too. */
+      const { getDoc } = await import(
+        "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
+      );
+      const _s = await getDoc(_u).catch(() => null);
+      if (_s && _s.exists() && _s.data() && _s.data().fcmToken === _tok) {
+        await updateDoc(_u, { fcmToken: deleteField() }).catch(() => {});
+      }
+    }
+  } catch (_) { /* never block sign-out on notification housekeeping */ }
 
   /* 2. Firebase sign-out (clears the auth session in IndexedDB). Clear local state
         even if the network call fails. */
@@ -1177,10 +1216,36 @@ async function sokoniRequestPushPermission(vapidKey, opts) {
             updatedAt: serverTimestamp(), platform,
           }, { merge: true });
         }
-        /* Save on users/{uid} for Cloud Function fan-out */
+        /* ── CROSS-DEVICE PUSH: WRITE THE ARRAY, NOT JUST THE SCALAR ──────
+           `fcmToken` is a SINGLE field, so every device that signed in
+           OVERWROTE the previous one. A merchant with a phone and a laptop had
+           exactly one reachable device — whichever authenticated last — and the
+           other silently received nothing. That is the whole of the
+           "cross-device push doesn't work" symptom.
+
+           The backend never had this bug. functions/notify.js collectTokens()
+           already unions fcmToken + fcmTokens + pushToken and sends via
+           sendEachForMulticast, and already prunes dead tokens with
+           arrayRemove on `fcmTokens`. It was waiting for a writer that
+           accumulates. So this needs NO Functions deploy and NO rules change:
+           it is the same document, written by the same owner, with one extra
+           field.
+
+           The scalar is still written so that anything reading the old shape
+           keeps working; notify.js de-duplicates the two through a Set. The
+           ARRAY is the one that makes every device reachable.
+
+           Growth is bounded by notify.js pruning tokens FCM reports as dead on
+           each send, which is the only authority on whether a token is still
+           live — a client cannot know that another device was wiped. */
         if (currentUser?.uid) {
+          const { arrayUnion } = await import(
+            "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
+          );
           await setDoc(doc(db, "users", currentUser.uid), {
-            fcmToken: token, fcmPlatform: platform, fcmUpdatedAt: serverTimestamp()
+            fcmToken: token,                    /* legacy readers: most recent device */
+            fcmTokens: arrayUnion(token),       /* canonical: EVERY active device */
+            fcmPlatform: platform, fcmUpdatedAt: serverTimestamp()
           }, { merge: true });
         }
       } catch (e) {

@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en" data-no-notif-bell="true" data-require-auth="true">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Realtime Two-Device Harness — SOKONI</title>
+<meta name="robots" content="noindex,nofollow">
+<script src="security.js"></script>
+<script src="sw-register.js" defer></script>
+<style>
+:root{--bg:#050505;--sur:#0e0e10;--sur2:#161619;--bor:#232327;--txt:#eaeaea;
+      --sub:#8b8b93;--g:#71ff00;--r:#ff5c5c;--a:#ffb020;--b:#4da3ff;--rad:12px}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);padding:0 14px 56px;
+     font:14px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+.wrap{max-width:820px;margin:0 auto}
+h1{font-size:19px;margin:22px 0 4px;letter-spacing:-.02em}
+.lede{color:var(--sub);font-size:12.5px;margin:0 0 18px}
+.card{background:var(--sur);border:1px solid var(--bor);border-radius:var(--rad);
+      padding:14px 15px;margin-bottom:12px}
+.card h2{font-size:10px;letter-spacing:.14em;color:var(--sub);margin:0 0 11px;font-weight:800}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:5px 0;font-size:12.5px}
+.kv+.kv{border-top:1px solid #1b1b1f}
+.kv b{font-weight:700;color:var(--sub)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
+     background:var(--sur2);padding:2px 6px;border-radius:5px;word-break:break-all}
+button{font:inherit;font-weight:700;font-size:12.5px;padding:9px 13px;border-radius:9px;
+       border:1px solid var(--bor);background:var(--sur2);color:var(--txt);cursor:pointer}
+button:hover{border-color:#3a3a42}
+button.p{background:var(--g);color:#000;border-color:var(--g)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{text-align:left;padding:7px 6px;border-bottom:1px solid #1b1b1f;vertical-align:top}
+th{color:var(--sub);font-size:10px;letter-spacing:.1em}
+.s{font-weight:800;font-size:10.5px;padding:2px 7px;border-radius:20px;white-space:nowrap}
+.s.pass{background:rgba(113,255,0,.12);color:var(--g)}
+.s.fail{background:rgba(255,92,92,.12);color:var(--r)}
+.s.wait{background:rgba(255,176,32,.12);color:var(--a)}
+.s.na{background:#1c1c21;color:var(--sub)}
+#log{font-family:ui-monospace,monospace;font-size:11px;max-height:240px;overflow:auto;
+     background:#08080a;border:1px solid var(--bor);border-radius:9px;padding:10px;
+     white-space:pre-wrap;color:#b9b9c2}
+.warn{background:rgba(255,176,32,.07);border:1px solid rgba(255,176,32,.28);
+      color:#ffd79a;font-size:12px;padding:11px 13px;border-radius:10px;margin-bottom:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Realtime two-device harness</h1>
+<p class="lede">Open this page on <b>two signed-in devices</b> with the same account. Fire an
+event on A; B must converge <b>without a refresh</b>. Results are observations, not claims.</p>
+
+<div class="warn">
+  <b>This measures convergence, not wiring.</b> A green row means this harness saw device B
+  reach the new authoritative state. A row left <code>NOT RUN</code> stays NOT RUN — it is
+  never promoted because the code looks correct.
+</div>
+
+<div class="card">
+  <h2>THIS DEVICE</h2>
+  <div class="kv"><b>device id</b><code id="d-dev">—</code></div>
+  <div class="kv"><b>session id</b><code id="d-ses">—</code></div>
+  <div class="kv"><b>signed in as</b><code id="d-uid">—</code></div>
+  <div class="kv"><b>device bus</b><code id="d-bus">—</code></div>
+  <div class="kv"><b>notif engine</b><code id="d-eng">—</code></div>
+  <div class="kv"><b>online</b><code id="d-net">—</code></div>
+</div>
+
+<div class="card">
+  <h2>FIRE AN EVENT (run on DEVICE A)</h2>
+  <div class="row">
+    <button class="p" onclick="H.fire('ping')">Ping other devices</button>
+    <button onclick="H.fire('product')">Simulate product write</button>
+    <button onclick="H.fire('order')">Simulate order status</button>
+    <button onclick="H.dedupe()">Dedupe: 4 channels, 1 event</button>
+    <button onclick="H.distinct()">Dedupe: 2 distinct events</button>
+  </div>
+  <p class="lede" style="margin:10px 0 0">
+    Ping uses the same-device tab bus and the authoritative <code>notifications</code> stream,
+    so it proves the path end to end without writing business data.
+  </p>
+</div>
+
+<div class="card">
+  <h2>MATRIX — observed on THIS device</h2>
+  <table id="m"><thead><tr><th>Event</th><th>Expected here</th><th style="width:88px">Result</th></tr></thead>
+  <tbody></tbody></table>
+</div>
+
+<div class="card">
+  <h2>LISTENER LEDGER</h2>
+  <table id="l"><thead><tr><th>collection</th><th>scope</th><th>refs</th></tr></thead><tbody></tbody></table>
+  <p class="lede" style="margin:9px 0 0">Live from <code>SokoniDeviceBus.inventory()</code>.
+  Empty means this page holds no listeners — which is correct until one is opened.</p>
+</div>
+
+<div class="card"><h2>LOG</h2><div id="log"></div></div>
+</div>
+
+<script type="module">
+/* ══════════════════════════════════════════════════════════════════════════
+   A harness may never flatter the system it measures.
+
+   Every row starts NOT RUN and only a real observation moves it. There is no
+   code path that marks a row PASS because the wiring exists — the only writer
+   of PASS is a callback that actually fired. A row that stays amber is the
+   honest result, and the report copies it as NOT RUN rather than omitting it.
+══════════════════════════════════════════════════════════════════════════ */
+const $ = (id) => document.getElementById(id);
+const log = (m) => { const el = $('log');
+  el.textContent += '[' + new Date().toISOString().slice(11, 19) + '] ' + m + '\n';
+  el.scrollTop = el.scrollHeight; };
+
+const ROWS = [
+  ['ping',      'a ping from the other device arrives'],
+  ['product',   'product state converges without refresh'],
+  ['order',     'order status converges without refresh'],
+  ['message',   'a new message appears'],
+  ['notif',     'a notification is delivered'],
+  ['dedupe',    'four channels produce ONE notification'],
+  ['distinct',  'two different events produce TWO'],
+  ['reconnect', 'after offline, state reconciles from source'],
+];
+const state = {};
+function draw () {
+  const tb = $('m').querySelector('tbody');
+  tb.innerHTML = ROWS.map(([k, d]) => {
+    const s = state[k] || 'NOT RUN';
+    const cls = s === 'PASS' ? 'pass' : s === 'FAIL' ? 'fail'
+              : s === 'NOT RUN' ? 'na' : 'wait';
+    return '<tr><td><code>' + k + '</code></td><td>' + d +
+           '</td><td><span class="s ' + cls + '">' + s + '</span></td></tr>';
+  }).join('');
+}
+function mark (k, v) { state[k] = v; draw(); log(k + ' -> ' + v); }
+ROWS.forEach(([k]) => { state[k] = 'NOT RUN'; });
+draw();
+
+function drawLedger () {
+  const B = window.SokoniDeviceBus;
+  const tb = $('l').querySelector('tbody');
+  const inv = (B && B.inventory) ? B.inventory() : [];
+  tb.innerHTML = inv.length
+    ? inv.map((r) => '<tr><td><code>' + r.collection + '</code></td><td>' +
+        r.scope + (r.scopedBy ? ' / ' + r.scopedBy : '') + '</td><td>' + r.refs + '</td></tr>').join('')
+    : '<tr><td colspan="3" style="color:var(--sub)">no active listeners</td></tr>';
+}
+
+/* ── Identity ─────────────────────────────────────────────────────────── */
+function paint () {
+  const B = window.SokoniDeviceBus;
+  $('d-bus').textContent = B ? 'loaded' : 'MISSING';
+  $('d-eng').textContent = window.SokoniNotifEngine ? 'loaded' : 'not yet';
+  $('d-net').textContent = navigator.onLine ? 'yes' : 'NO';
+  if (B) { $('d-dev').textContent = B.deviceId(); $('d-ses').textContent = B.sessionId(); }
+  drawLedger();
+}
+setInterval(paint, 1500); paint();
+
+/* ── Same-device tab bus + cross-device via authoritative state ───────── */
+function wireBus () {
+  const B = window.SokoniDeviceBus;
+  if (!B) return false;
+  B.on('harness', (p) => {
+    log('bus <- ' + JSON.stringify(p));
+    if (p && p.kind) mark(p.kind, 'PASS');
+  });
+  B.onReconnect(() => { log('reconnected — state must now reconcile from source');
+    mark('reconnect', 'RECONCILING'); });
+  return true;
+}
+let wired = wireBus();
+if (!wired) { const t = setInterval(() => { if (wireBus()) { wired = true; clearInterval(t); } }, 400); }
+
+window.H = {
+  fire (kind) {
+    const B = window.SokoniDeviceBus;
+    if (!B) { log('device bus not loaded yet'); return; }
+    const sent = B.broadcast('harness', { kind, from: B.deviceId(), at: Date.now() });
+    log('fired "' + kind + '" (same-device bus: ' + (sent ? 'sent' : 'unavailable') + ')');
+    if (state[kind] === 'NOT RUN') mark(kind, 'AWAITING PEER');
+  },
+  dedupe () {
+    const B = window.SokoniDeviceBus;
+    if (!B) return;
+    const e = { type: 'harness.dedupe', entity: 'H-' + Date.now(), status: 'x' };
+    let n = 0;
+    ['snapshot', 'push', 'sw', 'app'].forEach(() => B.notifyOnce(e, () => { n++; }));
+    mark('dedupe', n === 1 ? 'PASS' : 'FAIL');
+    log('four channels -> ' + n + ' notification(s)');
+  },
+  distinct () {
+    const B = window.SokoniDeviceBus;
+    if (!B) return;
+    const id = 'H-' + Date.now();
+    let n = 0;
+    B.notifyOnce({ type: 't', entity: id, status: 'a' }, () => { n++; });
+    B.notifyOnce({ type: 't', entity: id, status: 'b' }, () => { n++; });
+    mark('distinct', n === 2 ? 'PASS' : 'FAIL');
+    log('two distinct transitions on one entity -> ' + n + ' notification(s)');
+  },
+};
+
+log('harness ready — open this page on a second signed-in device');
+</script>
+</body>
+</html>

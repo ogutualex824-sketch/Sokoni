@@ -1,3 +1,86 @@
+## 2026-09-22 (148) — Cross-device push was never Functions-blocked
+
+**Continuation of 37204e7. Hosting-safe. NO Functions deploy, NO rules change, NO production
+mutation.** Acceptance status separates WIRED from LIVE-PROVEN; nothing was promoted because
+the code looks right.
+
+### The correction that matters
+
+Push fan-out was classified Functions-dependent. **That was wrong.** Tracing the chain found
+the cause one layer up, in the client:
+
+```
+firebase.js → users/{uid}.fcmToken   ← a SINGLE FIELD
+              every new device OVERWRITES the previous one
+              notify.js finds exactly ONE token
+              only the most recently signed-in device is reachable
+```
+
+The backend was always correct: `functions/notify.js` already unions `fcmToken` +
+`fcmTokens` + `pushToken`, already sends via `sendEachForMulticast`, and already prunes dead
+tokens with `arrayRemove`. It was waiting for a writer that accumulates.
+
+`firebase.js` now writes `fcmTokens: arrayUnion(token)` beside the legacy scalar. Same
+document, same owner, one extra field — **no Functions deploy, no rules change.** Push moves
+from *blocked* to *implemented, awaiting live proof*.
+
+### A disclosure the array would have introduced
+
+With tokens accumulating, a signed-out device's token would persist and keep delivering that
+user's order, payment and message notifications to a handset with no session — on a shared or
+handed-over phone, a real disclosure, and one that no longer self-corrects when the next
+device registers. Sign-out now `arrayRemove`s this device's token **before** `signOut()`,
+while the write is still authorized, and clears the scalar only if it is this device's.
+
+### Device identity survives logout — it did not before
+
+`sokoni-sign-out` wipes all localStorage except an allow-list, and `sk_device_id` was not on
+it. Every logout minted a new device identity, so one handset looked like an endless series of
+new devices. Added to the keep-list: it identifies the SCREEN, carries no user data, and is
+never an authorization input. User-specific notification state is still wiped.
+
+Identity also now **validates** what it reads. localStorage can return `""`,
+`"[object Object]"` or arbitrary text; an unvalidated non-empty value would be adopted as an
+identity *and never regenerate*, making the corruption permanent for that browser.
+
+### Event identity, so dedupe cannot over-collapse
+
+Keying on an order id would fold "placed", "paid" and "delivered" into one notification.
+`eventKey()` composes type + entity + discriminator, and **refuses** an entity-only key that
+could only ever fire once. Four channels → one notification; two transitions on the same
+order → two.
+
+### Device registration already existed
+
+`users/{uid}.fcmTokens` **is** the registry — written by the owner, read by `notify.js`,
+pruned by FCM's verdict. Inventing `users/{uid}/devices/{deviceId}` would have been a second
+registry and a rules change for no gain.
+
+### Two-device harness
+
+`realtime-harness.html` — open on two signed-in devices. Every row starts `NOT RUN` and only
+an observed callback moves it; there is no path that marks a row PASS from wiring alone.
+
+### Certification — 34 → **64 assertions, 0 failures**
+
+Device identity across repeated calls, tabs, navigation, logout, corrupt storage (6 shapes)
+and unavailable storage; event-identity dedupe both ways; the full push chain; idempotent
+init with no reload path; and the listener ledger.
+
+### Acceptance
+
+PASS — wiring, device identity, dedupe, notification UI, scoping (new listeners), lifecycle.
+**NOT PROVEN** — state synchronization, push fan-out, offline reconciliation.
+**NOT RUN** — the two-device matrix.
+
+The 287 pre-existing listeners were **not** rewritten and are **not** audited for scope.
+
+**Files:** `firebase.js` · `sokoni-device-bus.js` · `scripts/test-realtime-multidevice.js` ·
+`docs/REALTIME_MULTIDEVICE.md` · `realtime-harness.html` (new).
+Database changes: none — `fcmTokens` already read by notify.js. API changes: none.
+Security changes: sign-out deregisters this device's push token. Breaking changes: none.
+Deploy: none.
+
 ## 2026-09-22 (147) — Real-time multi-device: the seam, not a sixth system
 
 **CORE ECOSYSTEM REQUIREMENT.** Audit → Hosting-safe implementation. Functions- and

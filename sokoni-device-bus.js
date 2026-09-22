@@ -78,13 +78,32 @@
      for the load even when nothing can be persisted; persistence is an
      upgrade, not a precondition. */
   var _deviceId = null;
+  var DEVICE_RE = /^dev_[a-z0-9]{4,}_[a-z0-9]{4,}$/;
+
+  function _mintDeviceId () {
+    return 'dev_' + Date.now().toString(36) + '_' +
+           Math.random().toString(36).slice(2, 10);
+  }
+
   function deviceId () {
     if (_deviceId) return _deviceId;
     var v = null;
     try { v = w.localStorage && w.localStorage.getItem(LS_DEVICE); } catch (e) { /* blocked */ }
-    if (!v) {
-      v = 'dev_' + Date.now().toString(36) + '_' +
-          Math.random().toString(36).slice(2, 10);
+
+    /* VALIDATE, do not trust. localStorage is writable by anything running on
+       the origin and survives partial writes, so the stored value can come back
+       as "", "undefined", "[object Object]" or arbitrary text. An unvalidated
+       read would propagate that as a device identity — and because it is
+       non-empty, the regenerate branch would never fire, so the corruption
+       would be permanent for that browser. */
+    if (typeof v !== 'string' || !DEVICE_RE.test(v)) {
+      if (v) {
+        /* Corrupt rather than absent: replace it, and say so. Silently
+           overwriting would hide a storage problem worth knowing about. */
+        try { w.console && w.console.warn &&
+              w.console.warn('[device-bus] discarding malformed device id'); } catch (e) {}
+      }
+      v = _mintDeviceId();
       try { w.localStorage && w.localStorage.setItem(LS_DEVICE, v); } catch (e) {
         /* Storage blocked: the id lives for this load only. Echo suppression
            degrades across reloads; authorisation never depended on this. */
@@ -145,7 +164,10 @@
                       'unsubscribe function (got ' + typeof off + ')');
     }
 
-    var rec = { key: key, scope: scope, refs: 1, off: off };
+    var rec = { key: key, scope: scope, refs: 1, off: off,
+                collection: opts.collection || null, owner: opts.owner || null,
+                scopedBy: opts.scopedBy || null,
+                cardinality: opts.cardinality || null };
     rec.detach = function () {
       if (--rec.refs > 0) return;
       try { rec.off(); } catch (e) { /* already gone */ }
@@ -218,6 +240,44 @@
     return true;
   }
 
+  /* ── EVENT IDENTITY ─────────────────────────────────────────────────────
+     The dedupe key must identify the EVENT, never the entity.
+
+     Keying on an order id would collapse "order placed", "order paid" and
+     "order delivered" into a single notification, because all three concern
+     the same order — the user would be told once and then never again. Keying
+     on nothing at all delivers the same transition four times, once per
+     channel.
+
+     eventKey() composes type + entity + a discriminator (a status, a version,
+     a timestamp) so that the SAME transition arriving by four routes produces
+     one key, and two DIFFERENT transitions on the same entity produce two. */
+  function eventKey (e) {
+    if (!e) return null;
+    if (typeof e === 'string') return e;
+    var type = e.type || e.kind || '';
+    var ent  = e.entity || e.id || e.docId || '';
+    var disc = e.at || e.version || e.status || e.updatedAt || '';
+    if (!type && !ent) return null;
+    /* A key with no discriminator can only ever fire once per entity. That is
+       almost always a bug, so it is refused rather than silently swallowing
+       every later transition. */
+    if (!disc) {
+      throw new Error('SokoniDeviceBus.eventKey: a discriminator (at/version/' +
+        'status) is required — keying on "' + type + ':' + ent + '" alone would ' +
+        'suppress every later event for the same entity.');
+    }
+    return String(type) + ':' + String(ent) + ':' + String(disc);
+  }
+
+  /** Present an event at most once, whichever channel delivers it first. */
+  function notifyOnce (event, present) {
+    var k = eventKey(event);
+    if (!claim(k)) return false;
+    if (typeof present === 'function') present();
+    return true;
+  }
+
   /* ── SAME-DEVICE TAB FAN-OUT ────────────────────────────────────────────
      Two tabs on one machine should not each run a full listener set for the
      same cheap signal. BroadcastChannel is same-origin and same-device only —
@@ -268,12 +328,38 @@
      swaps panels accumulates listeners for the life of the tab. */
   w.addEventListener('pagehide', function () { release(); });
 
+  /* ── LISTENER LEDGER ────────────────────────────────────────────────────
+     Every subscription records what it watches, who owns it, what scopes it
+     and when it is torn down. Without this, "does this page already listen to
+     orders?" is unanswerable except by reading 105 files, and the honest
+     answer to a performance question becomes a guess. `inventory()` is the
+     read-out. */
+  function inventory () {
+    return Object.keys(_subs).map(function (k) {
+      var r = _subs[k];
+      return {
+        key: k,
+        collection: r.collection || '(unrecorded)',
+        owner: r.owner || '(unrecorded)',
+        scope: r.scope,
+        scopedBy: r.scopedBy || null,
+        refs: r.refs,
+        cardinality: r.cardinality || 'unbounded?',
+        lifecycle: 'released on pagehide or release("' + r.scope + '")',
+        coveredByExisting: r.refs > 1,
+      };
+    });
+  }
+
   w.SokoniDeviceBus = {
     deviceId: deviceId,
     sessionId: function () { return _sessionId; },
     subscribe: subscribe,
     release: release,
     active: active,
+    inventory: inventory,
+    eventKey: eventKey,
+    notifyOnce: notifyOnce,
     seen: seen,
     markSeen: markSeen,
     claim: claim,
