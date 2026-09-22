@@ -1,3 +1,99 @@
+## 2026-09-22 (178) — the canonical `products` writer, built but not yet wired
+
+**NO DEPLOY. NO RULES CHANGE.** Live remains 111dbd7 / v636.
+`scripts/test-canonical-product-writer.js` **66/0** · `test-poslistproducts-contract.js` **31/0** ·
+`test-posupsert-catalogue-contract.js` **42/0** · `test-catalogue-write-migration.js` **30/0** ·
+`test-posproducts-mirror-retirement.js` **14/14** · `test-pos-inventory-denial-visibility.js` **26/0** ·
+`test-flash-sale-authority.js` **56/0** · `test-catalogue-model.js` 81/0 (foreign, uncommitted edit) ·
+`functions/index.js` require closure intact.
+
+### The architecture this settles
+
+`products` is the canonical saleable merchant product — ~15 writers, ~41 readers, the marketplace,
+search, analytics, the till's cache and `posCompleteCheckout`. `posProducts` is retained for POS
+operational/branch inventory state, the `{branchId}_{productId}` stock-ledger shape
+`procurement.js:1909` writes, and must not become a second product identity authority.
+
+`upsertCanonicalProduct` is registered on `_h` only, so it is served through the existing
+`smartPosDispatch` and adds **zero new Cloud Functions** — the fourth op alongside
+`posUpsertProduct`, `posListProducts` and `posDeleteProduct`.
+
+### A server writer here is a LOOSENING unless it re-implements the rules
+
+This is the census finding that shaped the whole mutation. Unlike `posProducts`, the served ruleset
+**already** lets a seller client write `products`, and it enforces seven things on every browser
+write. **The Admin SDK bypasses all of them.** Each is re-implemented and asserted:
+
+    isActive()            deactivated caller REFUSED (platform admin exempt, as the rule is)
+    isSeller()            token.seller !== true REFUSED — and seller:'true' (a STRING) too
+    sellerUid == uid      stamped from the token; a payload naming anyone else REFUSED
+    sellerUid immutable   another seller's product cannot be updated
+    validPrice('price')   0, negative, missing and non-numeric all REFUSED
+    noAdminFields()       all 13 privileged keys REFUSED, list kept VERBATIM so it can be diffed
+    noBase64Image()       image / imageUrl / thumbnailUrl / images[] data: URIs REFUSED
+    withinProductLimit()  count >= maxProducts REFUSED; -1 and a missing counter honoured
+
+The entitlement guard is the one that fails quietly — the counter keeps counting correctly while the
+cap stops being enforced — so "the counter is right" is explicitly not treated as evidence.
+
+### The limit is checked with CONTENTION, and its cost is stated
+
+Reading the counter and then creating would let two concurrent creates both pass at `max-1`. The
+transaction therefore **reads and writes** the counter (`serverReserved: increment(1)`), so
+Firestore's own conflict detection serialises them: the loser retries, re-reads, and sees the
+reservation.
+
+**KNOWN COST, NOT HIDDEN.** `product-limit.js`'s trigger increments `count` and knows nothing about
+`serverReserved`, so the reservation is never cleared and the effective allowance drifts DOWNWARD.
+That fails **closed** — it refuses a create the merchant is entitled to, never the reverse — and this
+writer has no caller yet, so nothing is affected today. **Reconciling the two is REQUIRED before this
+writer is wired to any surface**, and is deliberately not done here.
+
+The suite also states what it cannot prove: true contention is not reproducible in a fake, the
+emulator takes locks and production aborts on `updateTime`. What is asserted is the mechanism plus
+the sequential boundary.
+
+### Variable pricing is REFUSED, deliberately
+
+`validPrice` requires `price > 0`, so `price: 0` cannot mean "the cashier names it" here. Weakening
+that rule, or storing a nominal price the checkout would read as real, could charge a customer the
+wrong amount. Creation is refused until the sale path understands a variable-price mode — a separate
+feature gate with its own checkout certification, not something enabled in passing.
+
+### The products vocabulary, not the posProducts one
+
+    products:      stock · trackInventory · isService · outOfStock
+    NOT carried:   trackStock · stockQty · priceMode · variablePrice
+
+`trackStock`, `stockQty` and `priceMode` — added to `posUpsertProduct` in `aa2535b` — have **no reader
+on `products`**, so carrying them across would have created a third vocabulary rather than converging
+on one. A service is `isService: true` + `trackInventory: false` with **no stock key at all**; the
+contradiction `isService` + `trackInventory: true` is refused rather than resolved by precedence, and
+a non-boolean flag is refused rather than coerced.
+
+`shopId` is **derived from the proven owner**, never accepted from the caller: 103 of 108 live
+products key this way (`business-bootstrap.js:1309-1322`) and an arbitrary `shopId` would place a
+product in another shop's scope.
+
+### What this mutation deliberately does NOT do
+
+* **The catalogue is NOT redirected** — it still calls `posUpsertProduct`. Asserted by the suite.
+* **`seller.js`'s browser write is UNTOUCHED** — removing it now would create a second simultaneous
+  outage. Asserted by the suite.
+* No rules change, no `pos-zero-friction` change, no 9999 fallback change, no `pos-service-pricing`
+  change, no migration of existing `posProducts` data. All verified untouched before committing.
+
+Order from here: reconcile the counter → wire the catalogue → migrate `seller.js` → reconcile
+catalogue-shaped `posProducts` rows → re-point `pos-service-pricing` → prove a catalogue-created
+product reaches a sale → only then audit stock semantics → only then retire legacy fallbacks.
+
+**Files affected:** `functions/pos-inventory-pro.js`, `scripts/test-canonical-product-writer.js`
+(new), `CHANGELOG.md`. **Database changes:** none yet — the writer has no caller. When wired it will
+write `products` documents and a `productCounters.serverReserved` reservation field. **API changes:**
+new dispatcher op `upsertCanonicalProduct` (no new Cloud Function). **Security changes:** none to
+existing paths; the new writer re-implements seven rule-enforced guards the Admin SDK would bypass.
+**Breaking changes:** none — nothing calls it.
+
 ## 2026-09-22 (177) — 3B: the catalogue reads through the server, and posProducts stays closed
 
 **NO DEPLOY. NO RULES CHANGE.** Live remains 111dbd7 / v636.

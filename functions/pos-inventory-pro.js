@@ -1978,3 +1978,248 @@ exports._h.posDeleteProduct = async (req) => {
   });
   return { ok: true, productId: productId, deactivated: true };
 };
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   upsertCanonicalProduct — THE CANONICAL `products` WRITER
+   Architecture settled by the owner 2026-09-22 after the product authority census.
+
+   `products` is the canonical saleable merchant product: ~15 writers, ~41
+   readers, the marketplace, search, analytics, the till's cache and
+   `posCompleteCheckout` all consume it. `posProducts` is retained for POS
+   operational/branch inventory state — the `{branchId}_{productId}` stock-ledger
+   shape `procurement.js:1909` writes — and must NOT become a second product
+   identity authority. This writer exists so the catalogue can eventually produce
+   canonical products instead of a parallel catalogue.
+
+   ── WHY A SERVER WRITER MUST RE-IMPLEMENT WHAT RULES ALREADY DO ─────────────
+   Unlike `posProducts`, the SERVED ruleset (`ad2033ad`) already lets a seller
+   client write `products`, and it enforces SIX things on every browser write:
+
+       isActive()            caller is not deactivated
+       isSeller()            token.seller == true
+       sellerUid == uid      ownership, and immutable on update
+       validPrice('price')   a number strictly greater than zero
+       noAdminFields()       a fixed list of privileged keys is rejected
+       noBase64Image()       image/imageUrl/thumbnailUrl may not be a data: URI
+       withinProductLimit()  productCounters/{uid}.count < .maxProducts
+
+   The Admin SDK BYPASSES ALL OF THEM. So a server writer that simply writes the
+   document is not a tightening — it is a silent loosening, and the entitlement
+   one fails quietly: the counter keeps counting correctly while the cap stops
+   being enforced. Every guard above is therefore re-implemented here, and the
+   suite asserts each one.
+
+   ── THE PRODUCT LIMIT IS CHECKED WITH CONTENTION, NOT JUST READ ─────────────
+   Reading the counter and then creating would let two concurrent creates both
+   pass at count = max-1. The transaction therefore READS AND WRITES the counter
+   document, so Firestore's own conflict detection serialises them: the loser
+   retries, re-reads, and sees the reservation.
+
+   KNOWN COST, STATED: `product-limit.js`'s trigger increments `count` on create
+   and knows nothing about `serverReserved`, so the reservation is never cleared
+   and the effective allowance drifts DOWNWARD over time. That fails CLOSED — it
+   refuses a create the merchant is entitled to, never the reverse — and this
+   writer has no caller yet, so nothing is affected today. Reconciling the two
+   (the trigger clearing the reservation it supersedes) is REQUIRED before this
+   writer is wired to any surface, and is deliberately not done in this mutation.
+
+   ── VARIABLE PRICING IS REFUSED, ON PURPOSE ────────────────────────────────
+   `validPrice` requires price > 0, so `price: 0` cannot represent "the cashier
+   names it" here. Weakening that rule, or storing a nominal price the checkout
+   would read as a real one, could charge a customer the wrong amount. Until the
+   sale path understands a variable-price mode, creation is REFUSED rather than
+   represented ambiguously.
+
+   WRITES ONLY `products` (and the counter reservation). It does not touch
+   posProducts — asserted by the suite.
+   ═════════════════════════════════════════════════════════════════════════════ */
+
+/* The privileged keys the served ruleset rejects from any client. Kept verbatim
+   so the two lists can be diffed rather than compared from memory. */
+const CANON_FORBIDDEN_FIELDS = [
+  'isAdmin', 'suspended', 'banned', 'adminApproved', 'featured', 'verified',
+  'flagged', 'adminNote', 'role', 'approved', 'approvedAt', 'approvedBy',
+  'commissionRate',
+];
+const CANON_IMAGE_FIELDS = ['image', 'imageUrl', 'thumbnailUrl'];
+const _isDataUri = (v) => typeof v === 'string' && /^data:/i.test(v.trim());
+
+exports._h.upsertCanonicalProduct = async (req) => {
+  const auth = _requireAuth(req);
+  const d    = req.data || {};
+  const tok  = (req.auth && req.auth.token) || {};
+
+  /* ── isActive() ── */
+  const isPlatformAdmin = tok.admin === true || tok.superAdmin === true;
+  if (tok.deactivated === true && !isPlatformAdmin) {
+    throw new HttpsError('permission-denied', 'This account is deactivated.');
+  }
+  /* ── isSeller() — a business-ownership check is NOT a substitute. The
+     marketplace domain gates on this claim, and accepting merchant ownership
+     instead would let an owner without it publish products they cannot publish
+     from the browser today. */
+  if (tok.seller !== true && !isPlatformAdmin) {
+    throw new HttpsError('permission-denied', 'A seller account is required.');
+  }
+
+  /* ── sellerUid == auth.uid, stamped by the SERVER ── */
+  if (d.sellerUid !== undefined && String(d.sellerUid) !== auth.uid) {
+    throw new HttpsError('permission-denied', 'sellerUid must be the caller.');
+  }
+  const sellerUid = auth.uid;
+
+  /* ── Forbidden keys ── */
+  for (const k of CANON_FORBIDDEN_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(d, k)) {
+      throw new HttpsError('permission-denied', 'Field not permitted: ' + k);
+    }
+  }
+
+  /* ── No base64 image, in any of the three fields or the images array ── */
+  for (const f of CANON_IMAGE_FIELDS) {
+    if (_isDataUri(d[f])) {
+      throw new HttpsError('invalid-argument', f + ' must be a URL, not embedded image data.');
+    }
+  }
+  if (Array.isArray(d.images) && d.images.some(_isDataUri)) {
+    throw new HttpsError('invalid-argument', 'images must be URLs, not embedded image data.');
+  }
+
+  /* ── Variable pricing: refused until the sale path supports it ── */
+  if (d.variablePrice === true || d.priceMode === 'variable') {
+    throw new HttpsError('failed-precondition',
+      'Variable pricing is not supported on a canonical product yet: the sale path ' +
+      'would read the stored price as the amount charged. Create a fixed price.');
+  }
+
+  const name = _pcStr(d.name, 140);
+  if (!name) throw new HttpsError('invalid-argument', 'name is required');
+
+  /* ── validPrice('price'): strictly greater than zero ── */
+  const price = _pcNum(d.price === undefined ? d.sellingPrice : d.price, 'price', { required: true });
+  if (!(price > 0)) throw new HttpsError('invalid-argument', 'price must be greater than zero');
+
+  /* ── products vocabulary. NOT posProducts'. `stock` is the money-path field the
+     till reads and deducts; `trackInventory` is the exemption it honours;
+     `isService` already exists on this collection. trackStock / stockQty /
+     priceMode are NOT carried over — they have no reader here. */
+  const isService      = d.isService === true;
+  const trackInventory = isService ? false
+    : (d.trackInventory === undefined ? true : d.trackInventory !== false);
+  if (typeof d.trackInventory !== 'undefined' && typeof d.trackInventory !== 'boolean') {
+    throw new HttpsError('invalid-argument', 'trackInventory must be a boolean');
+  }
+  if (isService && d.trackInventory === true) {
+    throw new HttpsError('invalid-argument', 'a service cannot track inventory');
+  }
+  const stock = trackInventory
+    ? _pcNum(d.stock === undefined ? d.stockQty : d.stock, 'stock', { max: 1e7 })
+    : undefined;
+  if (trackInventory && stock !== undefined && !Number.isFinite(stock)) {
+    throw new HttpsError('invalid-argument', 'stock must be a number');
+  }
+
+  const isUpdate  = !!d.productId;
+  const idemKey   = _pcId(d.idempotencyKey, 100);
+  const productId = isUpdate ? _pcId(d.productId, 140)
+    : (idemKey ? 'cp_' + idemKey : db.collection('products').doc().id);
+
+  const prodRef    = db.collection('products').doc(productId);
+  const counterRef = db.collection('productCounters').doc(sellerUid);
+
+  const result = await db.runTransaction(async (tx) => {
+    /* ALL READS FIRST. */
+    const [prodSnap, ctrSnap] = await Promise.all([tx.get(prodRef), tx.get(counterRef)]);
+
+    if (isUpdate && !prodSnap.exists) throw new HttpsError('not-found', 'Product not found');
+
+    /* sellerUid is IMMUTABLE — the served rule blocks any diff touching it, so an
+       update by a different seller is refused here for the same reason. */
+    if (prodSnap.exists) {
+      const owner = prodSnap.data().sellerUid;
+      if (owner && owner !== sellerUid) {
+        throw new HttpsError('permission-denied', 'Product belongs to another seller.');
+      }
+    }
+    /* Idempotent create: the same key replayed returns the existing product. */
+    if (!isUpdate && prodSnap.exists) {
+      return { productId: productId, created: false, idempotent: true };
+    }
+
+    /* ── withinProductLimit(), with contention ── */
+    let limit = null;
+    if (!isUpdate) {
+      const c = ctrSnap.exists ? (ctrSnap.data() || {}) : {};
+      const max = typeof c.maxProducts === 'number' ? c.maxProducts : null;
+      if (max !== null && max !== -1) {
+        const count    = typeof c.count === 'number' ? c.count : 0;
+        const reserved = typeof c.serverReserved === 'number' ? c.serverReserved : 0;
+        if (count + reserved >= max) {
+          throw new HttpsError('resource-exhausted',
+            'Product limit reached (' + max + '). Upgrade your plan or remove a product.');
+        }
+        limit = { max: max, count: count, reserved: reserved };
+      }
+    }
+
+    /* ── WRITES ── */
+    const doc = {
+      sellerUid:  sellerUid,
+      /* 103 of 108 live products carry shopId == the owner's uid
+         (business-bootstrap.js:1309-1322), and business-bootstrap queries
+         `products where shopId == businesses.ownerId`. It is DERIVED from the
+         proven owner, never accepted from the caller: an arbitrary shopId would
+         place a product in another shop's scope. */
+      shopId:     sellerUid,
+      uid:        sellerUid,
+      name:       name,
+      price:      price,
+      status:     _pcStr(d.status, 24) || 'active',
+      category:   _pcStr(d.category, 80) || 'General',
+      isService:  isService,
+      trackInventory: trackInventory,
+      updatedAt:  _TS(),
+      updatedBy:  auth.uid,
+    };
+    const description = _pcStr(d.description, 2000);
+    const sku         = _pcStr(d.sku, 64);
+    const unit        = _pcStr(d.unit, 24);
+    const image       = _pcStr(d.image === undefined ? d.imageUrl : d.image, 1200);
+    if (description) doc.description = description;
+    if (sku)         doc.sku         = sku;
+    if (unit)        doc.unit        = unit;
+    if (image)       doc.image       = image;
+    if (Array.isArray(d.images)) doc.images = d.images.filter((v) => typeof v === 'string' && v).slice(0, 8);
+    if (stock !== undefined) {
+      doc.stock      = stock;
+      doc.outOfStock = stock === 0;
+    }
+
+    if (!prodSnap.exists) {
+      doc.createdAt = _TS();
+      doc.createdBy = auth.uid;
+      tx.set(prodRef, doc);
+    } else {
+      tx.set(prodRef, doc, { merge: true });
+    }
+
+    /* The reservation is what makes the limit concurrency-safe: this transaction
+       both READ and WROTE the counter, so a second concurrent create conflicts,
+       retries, and sees the reservation it would otherwise have raced past. */
+    if (limit) {
+      tx.set(counterRef, {
+        uid: sellerUid,
+        serverReserved: _INC(1),
+        serverReservedAt: _TS(),
+      }, { merge: true });
+    }
+
+    return { productId: productId, created: !prodSnap.exists, idempotent: false, limit: limit };
+  });
+
+  console.log('[upsertCanonicalProduct] seller=' + sellerUid + ' product=' + result.productId +
+              ' created=' + result.created + ' idempotent=' + result.idempotent +
+              (result.limit ? ' limit=' + result.limit.count + '+' + result.limit.reserved + '/' + result.limit.max : ''));
+
+  return { ok: true, productId: result.productId, created: result.created, idempotent: result.idempotent };
+};
