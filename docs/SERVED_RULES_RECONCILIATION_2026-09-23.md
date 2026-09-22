@@ -31,6 +31,17 @@ Three releases exist, so the default DB is not the whole picture:
 
 **This reconciliation covers `cloud.firestore` (the default DB) only.**
 
+## 1b · Which side of the comparison is the reference
+
+**Added 2026-09-23 after confirmation from the deploying session.** `6c67a34d` was deployed
+at 2026-09-22T20:19:30.344Z via the Rules REST API, superseding `ad2033ad`, and was assembled
+by reconstructing from the **deployed** `ad2033ad` baseline plus Connect blocks and deny
+guards — not from this branch.
+
+So every "served-only" figure below is **the distance between this branch and production**, not
+evidence that the served ruleset holds unexplained blocks. The reference side is this branch.
+See [[RULES_ADOPTION_QUEUE_2026-09-23]] §2b.
+
 ## 2 · The three artifacts disagree
 
 | artifact | bytes | % of 256 KiB | top-level blocks |
@@ -113,6 +124,13 @@ never been served, so whatever they protect is currently governed by default-den
 
 Source cannot be deployed at all — 276,984 B is **105.7%** of the 256 KiB limit. The build
 (63.8%) is the only deployable artifact, and it is the one missing the 13.
+
+> **CORRECTION, added 2026-09-23.** "The build is the only deployable artifact" was too kind to
+> the current wiring. `firebase.json` points the default DB at **`firestore.rules`** — the
+> oversized source — and never references `firestore.rules.build`, which
+> `build-firestore-rules.js` writes. A CLI deploy would therefore send the artifact that gets
+> rejected, while the one that would fit is not wired in at all. See
+> [[RULES_ADOPTION_QUEUE_2026-09-23]] §4.1.
 
 So reconciliation cannot be completed by "deploy the source". It requires either porting the 13
 into source and rebuilding, or an explicit decision to retire them.
