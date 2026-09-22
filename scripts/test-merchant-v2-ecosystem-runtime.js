@@ -64,7 +64,15 @@ const server = http.createServer((req, res) => {
 /* Third-party / localhost-only noise. App Check cannot attest 127.0.0.1, so every
    attested call fails here; that says nothing about routing and must never be allowed to
    mask a real error, so it is bucketed rather than ignored silently. */
-const ENV_NOISE = /App Check|appCheck|status of 40[0-9]|firebaseappcheck|favicon|net::ERR|Failed to load resource|frame-ancestors|report-only|installations|Firebase|auth\//i;
+/* The cross-origin entry is SCOPED to this harness on purpose. A blanket
+   /Access-Control-Allow-Origin/ would also hide a genuine CORS misconfiguration in a page's
+   own fetch, so it is paired with `127.0.0.1` — the loopback origin only this harness ever
+   uses. On mysokoni.co.ke the origin matches and the message cannot occur.
+   It appeared once the premium product editor began mounting, which reaches the PRODUCTION
+   Firebase host for storage/functions; the browser blocks the response even though the
+   server returned 200. It was also viewport-intermittent (clean on iPhone SE, present on
+   desktop), which is a timing artefact, not a defect that appears at one width. */
+const ENV_NOISE = /App Check|appCheck|status of 40[0-9]|firebaseappcheck|favicon|net::ERR|Failed to load resource|frame-ancestors|report-only|installations|Firebase|auth\/|Access-Control-Allow-Origin[\s\S]*127\.0\.0\.1|127\.0\.0\.1[\s\S]*Access-Control-Allow-Origin/i;
 
 const wd = setTimeout(() => { console.log('\nSKIP — webkit watchdog timeout'); process.exit(0); }, 300000);
 wd.unref && wd.unref();
@@ -216,6 +224,34 @@ server.listen(0, async () => {
     check('CONTROL — the placeholder detector fires on the shell\'s own placeholder text',
           /not rebuilt in shell v2 yet/i.test('This surface is not rebuilt in shell v2 yet.'));
 
+    /* ── THE PRODUCT EDITOR ────────────────────────────────────────────────── */
+    console.log('\n  ── PRODUCTS -> the premium editor ──');
+    const pe = await page.evaluate(async () => {
+      window.SokoniShell.go('products');
+      await new Promise(r => setTimeout(r, 900));
+      const panels = [...document.querySelectorAll('[id^="p-"], .panel, [data-panel]')]
+        .filter(p => p.offsetParent !== null);
+      const panel = panels[panels.length - 1] || null;
+      return {
+        hash: location.hash.replace('#', ''),
+        /* A SELLER route would put seller.html in an iframe. A native route must not. */
+        iframe: panel ? (panel.querySelector('iframe') || {}).src || null : null,
+        nodes: panel ? panel.querySelectorAll('*').length : 0,
+        text: panel ? (panel.innerText || '').slice(0, 300) : '',
+        moduleLoaded: typeof window.SokoniMerchantProducts === 'object' &&
+                      typeof window.SokoniMerchantProducts.mount === 'function',
+        studioLoaded: !!window.SokoniListingStudio,
+      };
+    });
+    check('the premium editor module is loaded', pe.moduleLoaded);
+    check('the listing studio is loaded', pe.studioLoaded);
+    check('Products opens at #products', pe.hash === 'products', pe.hash);
+    check('...and does NOT iframe seller.html', !/seller\.html/.test(pe.iframe || ''),
+          pe.iframe || 'no iframe — native mount');
+    check('...and rendered its own content', pe.nodes > 3 &&
+          !/not rebuilt in shell v2 yet|Not yet ported/i.test(pe.text),
+          'nodes=' + pe.nodes);
+
     /* ── NO TAB NAVIGATION, AND NO DOUBLE BOOT ─────────────────────────────── */
     console.log('\n  ── THE SHELL SURVIVED ──');
     check('the top-level document never navigated', /merchant-v2/.test(page.url()), page.url().replace(BASE, ''));
@@ -274,6 +310,13 @@ server.listen(0, async () => {
        'carries a real shopId end-to-end needs an authenticated device or emulator run.');
   note('posCompleteCheckout accepts the resolved merchantId',
        'Requires a signed-in merchant with an approved shop. Unreachable from this harness.');
+  note('an uploaded product reaches POS / Till / Quick Pay / marketplace',
+       'The brief is explicit that "universal upload" must not be declared because the UI ' +
+       'renders. What IS proven here: the canonical editor mounts natively, every control it ' +
+       'consumes is bound, and the certified writer targets products/{id} with posProducts and ' +
+       'inventory_products as reported projections. What is NOT proven: that a real create ' +
+       'lands in all three and is then selectable downstream — that needs an authenticated ' +
+       'merchant and the emulators, and no create was performed.');
 
   await browser.close();
   server.close();

@@ -55,10 +55,30 @@
       note:'Native KPI surface. Reads AnalyticsEngine.compute() — same source as Revenue/Analytics.' },
 
     { id:'products', name:'Products', icon:'🏷️', tier:'primary',
-      kind:'seller', sec:'products',
+      kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'products',
-      note:'Canonical products list + Add Product + bulk upload. Writes products/{id}.' },
+      note:'THE CANONICAL PRODUCT EDITOR, now actually reachable.\n' +
+           'This route was kind:\'seller\' sec:\'products\' — an iframe of seller.html#products — ' +
+           'while the shell ALREADY registered a native MODULES entry for ' +
+           'SokoniMerchantProducts and already loaded its script. renderModule() is only ' +
+           'called for kind:\'native\', so the 3,132-line premium editor was mounted by ' +
+           'nothing. The same shape as the roster CFs: built, registered, unreachable.\n' +
+           'IT IS THE RICHER SURFACE, measured rather than assumed: the form families the ' +
+           'brief names — categoryHTML, bulkHTML, ownershipHTML, foodHTML, digitalHTML, ' +
+           'kebsHTML, aiWriteHTML — exist as functions ONLY in sokoni-merchant-products.js. ' +
+           'seller.html defines ZERO *HTML form families (26 vs 0), and adds specs, variants, ' +
+           'warranty, barcode and scanner on top. So this is not a port FROM seller.html; the ' +
+           'destination already contains more than the origin.\n' +
+           'ONE WRITE PATH, NOT A SECOND. Every mutation goes through SokoniMerchantData\'s ' +
+           'certified writer, which owns ownership checks, validation, the publication gate, ' +
+           'idempotency and the projections. The canonical record is products/{id}; ' +
+           'posProducts/{id} and tenants/{uid}/inventory_products/{id} are its PROJECTIONS, ' +
+           'and each mirror\'s outcome is returned rather than swallowed, so "created, but not ' +
+           'yet at the till" is sayable.\n' +
+           'AI authoring is bound to generateProductMetadata (media-engine), whose contract — ' +
+           '{ imageUrl, category, language } — matches what the module sends exactly. It was ' +
+           'previously absent from the ctx, so the AI writer reported itself unavailable.' },
 
     /* OFFERS & PROMOTIONS — the commercial layer over listings. Declared here because the
        sidebar is a PROJECTION OF THIS CONTRACT: a module registered without a route would
@@ -834,7 +854,12 @@
        capability anywhere in merchant.html today, so Export is declared and NOT drawn.
        Rendering it as a live chip would be exactly the "hard-coded fake button" this
        registry exists to make impossible. */
-    products: { owner:'seller', bars:[
+    /* owner follows the route. Products moved from an iframe of seller.html to the native
+       premium editor, and the owner must move with it or the chip gate would grep
+       seller.html for handlers that now live in sokoni-merchant-products.js. These bars are
+       `planned`, so no handler is named or searched for yet — but the owner is corrected
+       now, while the reason is visible, rather than the day a chip goes live. */
+    products: { owner:'native', bars:[
       { key:'actions', status:'planned', chips:[
         { id:'add',   label:'Add Product' }, { id:'stock', label:'Stock' },
         { id:'flash', label:'Flash Sale'  }, { id:'scan',  label:'Scan'  } ] } ] },

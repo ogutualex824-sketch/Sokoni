@@ -2639,6 +2639,18 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                         : Promise.resolve(null);
                     },
                     canPublish: _callable('canPublishProduct'),
+                    /* AI AUTHORING — the control existed and had no authority behind it.
+                       The module calls ctx.callAiMetadata({ imageUrl, category }); this ctx
+                       never provided it, so the writer reported itself "not available in this
+                       workspace" — an honest degradation, and a dead feature.
+                       generateProductMetadata (functions/media-engine.js, exported at
+                       index.js:10351) takes { imageUrl, category, language } — the same shape,
+                       not an adapted one. It is auth-gated and rate-limited to 30 calls per uid
+                       per day, and it ASSISTS: the module fills only fields the merchant has
+                       left blank, never overwriting something just typed. AI does not decide
+                       ownership, price, tax, stock or authorization — the submission is still
+                       the merchant's, through the same certified writer. */
+                    callAiMetadata: _callable('generateProductMetadata'),
                     storage: _mdb,
                     /* Navigation is the SHELL's. The module asks to route rather than setting
                        location, so Back, reload and #products keep working and it needs no

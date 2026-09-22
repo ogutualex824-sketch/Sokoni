@@ -149,8 +149,21 @@ rejects('a planned bar that names a handler is rejected',
   (A) => { A.products.bars[0].handler = '__fakeProductChip'; A.products.bars[0].status = 'planned'; });
 rejects('chips on an unregistered route are rejected',
   (A) => { A.notARoute = { owner:'native', bars:[{ key:'x', status:'live', handler:'__x', chips:[{ id:'a', label:'A' }] }] }; });
+/* THE CONTRADICTION IS DERIVED, NOT NAMED.
+   This planted `A.products.owner = 'native'` — a contradiction only while `products` was a
+   kind:'seller' route. The moment products became native (the premium editor is mounted by
+   renderModule, not iframed from seller.html) the plant was CORRECT, validate() rightly
+   accepted it, and this assertion failed for a change that was not a defect.
+
+   A fixture that names the wrong value goes stale every time the right value moves. So the
+   wrong owner is now computed FROM the route's actual kind: pick any owner that is not the
+   one the kind implies, and the plant stays a contradiction whatever `products` becomes. */
 rejects('an owner that contradicts the route kind is rejected',
-  (A) => { A.products.owner = 'native'; });
+  (A) => {
+    const kind = R.get('products').kind;                 /* 'native' | 'seller' | 'pos' | … */
+    const wrong = R.ACTION_OWNERS.filter((o) => o !== kind && ['native', 'seller', 'pos'].includes(o))[0];
+    A.products.owner = wrong;
+  });
 rejects('two bars sharing one handler are rejected',
   (A) => { A.orders.bars[1].handler = '__ordTab'; });
 rejects('a bar with no chips is rejected',

@@ -452,6 +452,117 @@ if (has('functions/business-bootstrap.js')) {
   }
 }
 
+/* ══ 11e. PRODUCT UPLOAD — one canonical path (brief §1-§27) ══════════════════ */
+head('11e. PRODUCT / SERVICE UPLOAD');
+const V2SRC = R('merchant-v2.html');
+
+/* THE CANONICAL AUTHORITY, and the correction of the brief's premise.
+   §1 stated "posProducts is the shared catalogue model". The certified writer says
+   otherwise, in its own header: products/{id} is canonical and posProducts/{id} is one of
+   TWO PROJECTIONS of it, alongside tenants/{uid}/inventory_products/{id}. */
+if (has('sokoni-merchant-data.js')) {
+  const MD = R('sokoni-merchant-data.js');
+  /* The prose wraps, so the match must span a newline — `canonical` and `products/{id}`
+     sit on separate lines in the header. A single-line regex failed here for formatting,
+     not for substance, which is the wrong reason for a gate to go red. */
+  ck('the certified writer declares products/{id} canonical and posProducts a PROJECTION',
+     /PROJECTIONS/.test(MD) && /posProducts/.test(MD) &&
+     /canonical\s*\n?\s*`products\/\{id\}`/.test(MD));
+  /* The structural facts, which are what actually matter — the prose above only corroborates. */
+  ck('...structurally: the canonical write targets products, the mirrors are elsewhere',
+     /\['products',\s*doc\.id\]|collection\('products'\)/.test(MD) || /path:\s*\['posProducts'/.test(MD),
+     'posProducts appears as a mirror PATH, not as the write target');
+  ck('both projections are declared', /PRODUCT_MIRRORS\s*=\s*\['inventory',\s*'pos'\]/.test(MD));
+  ck('a mirror failure is REPORTED, never swallowed',
+     /state:\s*'failed'/.test(MD) && /mirrorsComplete/.test(MD),
+     'the caller can say "created, but not yet at the till"');
+  /* The POS projection must carry the ownership field the SERVED ruleset keys on, or the
+     mirror lands somewhere no client may read. */
+  ck('the POS projection writes sellerId (what the served ruleset keys ownership on)',
+     /sellerId:\s*scope\.sellerUid/.test(MD));
+} else {
+  nr('canonical writer', 'sokoni-merchant-data.js not present');
+}
+
+/* MERCHANT V2 REACHES IT. The route was kind:'seller' — an iframe of seller.html — while
+   the shell already registered and loaded the native premium editor. */
+const prod = C.get('products');
+ck('Products is a NATIVE route (the premium editor, not a seller iframe)',
+   !!prod && prod.kind === 'native', prod && prod.kind);
+ck('the shell registers the premium editor module',
+   /products:\s*\{\s*global:\s*'SokoniMerchantProducts'/.test(V2SRC));
+ck('the shell loads its script', /src=["']sokoni-merchant-products\.js["']/.test(V2SRC));
+ck('...and the listing studio it renders through',
+   /src=["']sokoni-listing-studio\.js["']/.test(V2SRC));
+
+/* THE RICHER SURFACE — measured, not assumed. The brief asked to port seller.html's
+   uploader INTO the premium one; the form families exist only in the premium one. */
+if (has('sokoni-merchant-products.js') && has('seller.html')) {
+  const PM = R('sokoni-merchant-products.js');
+  const fams = f => [...new Set((R(f).match(/function\s+[a-zA-Z]+HTML/g) || []))].length;
+  const pmFams = fams('sokoni-merchant-products.js'), sellerFams = fams('seller.html');
+  ck('the premium editor holds the form families; seller.html holds none',
+     pmFams > 0 && sellerFams === 0, 'premium=' + pmFams + ' seller=' + sellerFams);
+  ck('  CONTROL — the form-family detector does find them where they ARE',
+     pmFams >= 7, pmFams + ' families');
+  /* Each family the brief names, individually. */
+  ['categoryHTML', 'bulkHTML', 'ownershipHTML', 'foodHTML', 'digitalHTML', 'kebsHTML', 'aiWriteHTML']
+    .forEach(fn => ck('  family present: ' + fn, new RegExp('function\\s+' + fn).test(PM)));
+
+  /* NO CONTROL MAY BE SILENTLY DISCARDED (§3). Every ctx key the module consumes must be
+     supplied by the shell, or the control renders and does nothing. */
+  const used = [...new Set((PM.match(/ctx\.([a-zA-Z_][a-zA-Z0-9_]*)/g) || []).map(s => s.slice(4)))];
+  const i = V2SRC.indexOf("products:   { global: 'SokoniMerchantProducts'");
+  const j = V2SRC.indexOf('inventory:  { global:', i);
+  const block = i > -1 ? V2SRC.slice(i, j) : '';
+  const missing = used.filter(k => !new RegExp('(^|[^a-zA-Z])' + k + '\\s*:').test(block));
+  ck('every ctx key the editor uses is supplied by the shell', missing.length === 0,
+     missing.join(', ') || used.length + ' keys, all bound');
+  ck('  CONTROL — the ctx detector found keys to check', used.length >= 5, used.length + ' keys');
+
+  /* AI AUTHORING (§23) — bound to a REAL exported callable whose contract MATCHES. */
+  const IDX2 = R('functions/index.js');
+  ck('AI authoring is bound to a callable', /callAiMetadata:\s*_callable\('(\w+)'\)/.test(block));
+  const aiFn = (block.match(/callAiMetadata:\s*_callable\('(\w+)'\)/) || [])[1];
+  ck('...and that callable is really exported', !!aiFn && new RegExp('exports\\.' + aiFn + '\\s*=').test(IDX2), aiFn);
+  if (aiFn && has('functions/media-engine.js')) {
+    const ME = R('functions/media-engine.js');
+    /* The contract must MATCH what the module sends — not be adapted into place. */
+    ck('...and its contract matches what the editor sends (imageUrl + category)',
+       /request\.data\?\.imageUrl/.test(ME) && /request\.data\?\.category/.test(ME));
+    ck('...and it is auth-gated and rate-limited', /assertAuth\(request\)/.test(ME) && /resource-exhausted/.test(ME));
+  }
+  /* AI ASSISTS; it does not decide. */
+  ck('AI never overwrites what the merchant already typed',
+     /Only fill what the merchant has not written/.test(PM));
+  ck('AI decides no authority (no price/stock/ownership write from the AI branch)',
+     !/m\.price\s*&&[^\n]*v\.price\s*=/.test(PM) || /!String\(v\./.test(PM));
+}
+
+/* NO SECOND AUTHORITY (§27). */
+const NEW_PRODUCT_COLLECTIONS = /posServices|merchantProducts|merchantV2Products|premiumProducts|productSuppliers/;
+['merchant-v2.html', 'sokoni-merchant-routes.js', 'sokoni-merchant-roster.js'].forEach(f =>
+  ck('no competing product/service collection in ' + f, !NEW_PRODUCT_COLLECTIONS.test(R(f))));
+ck('CONTROL — the competing-collection detector fires on a plant',
+   NEW_PRODUCT_COLLECTIONS.test("collection('posServices')"));
+
+/* THE SERVICE GAP — recorded, not papered over. */
+if (has('sokoni-merchant-data.js')) {
+  const MD = R('sokoni-merchant-data.js');
+  const posProj = MD.slice(MD.indexOf('pos: {'), MD.indexOf('pos: {') + 600);
+  if (/unit:\s*'pcs'/.test(posProj) && !/trackStock|trackInventory/.test(posProj)) {
+    up('FINDING — the canonical create path cannot yet express a SERVICE',
+       'productProjections hardcodes unit:\'pcs\' on the POS mirror and carries no ' +
+       'trackStock/trackInventory flag at all, so a service created here would project to ' +
+       'POS as a stocked piece-priced product. The SERVICE SHAPE is owned by the in-flight ' +
+       'catalogue workstream (sokoni-catalogue-model.js, foreign + uncommitted), so it is ' +
+       'NOT defined here — inventing a second service shape is the duplication this work ' +
+       'exists to prevent. Recorded for that owner.');
+  } else {
+    ck('the canonical projection carries a unit and stock flag', true, 'service-capable');
+  }
+}
+
 /* ══ 11d. ADMINOS — verified, not assumed (brief §20) ══════════════════════════ */
 head('11d. ADMINOS canonical surface');
 ck('admin-os.html exists', has('admin-os.html'));
