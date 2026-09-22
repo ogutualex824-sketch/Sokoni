@@ -1864,6 +1864,96 @@ exports._h.posUpsertProduct = async (req) => {
   return Object.assign({ ok: true }, result);
 };
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   posListProducts — 3B, Option A (owner decision 2026-09-22)
+
+   THE COLLECTION STAYS CLOSED. The served ruleset (`ad2033ad`) guards
+   `posProducts` on `sellerId == request.auth.uid`, a field no writer produces,
+   so a browser can neither read nor write it — proven, not assumed, in
+   `scripts/test-served-posproducts-authorization.js` (12/0 against the fetched
+   artifact). Rather than opening the collection to clients, the catalogue asks
+   the server, which reads with Admin SDK authority behind the SAME ownership
+   chain as the canonical writer.
+
+   `_assertMerchantAccess` is reused, never re-implemented: read authority and
+   write authority resolve through one function, so they cannot drift into
+   disagreeing about who owns a product.
+
+   ── ORDERING IS BY DOCUMENT ID, AND THAT IS DELIBERATE ─────────────────────
+   Firestore OMITS documents that lack the field being ordered on. `nameLower` is
+   written by `posUpsertProduct` and by nothing else, so ordering by it would
+   silently hide every row created by another writer — a partial catalogue that
+   looks complete, which is the defect class this workstream exists to remove.
+   `__name__` is present on every document by definition, is unique, and gives a
+   total order, so it is both safe and a sound cursor.
+
+   ── BOUNDED BY CONSTRUCTION ────────────────────────────────────────────────
+   There is no unbounded read: `pageSize` is clamped to PAGE_MAX and a cursor is
+   the only way to see more. An EMPTY page is a SUCCESSFUL result and says so
+   (`empty: true`); a failure throws. Those two must never be collapsed — an
+   empty catalogue reported as an error tells a merchant their products are gone,
+   and an error reported as empty tells them the same thing more quietly.
+
+   NO CACHE. `bootstrapCache` exists for the till's bundle, but a cache here
+   would need invalidating on every upsert, and a merchant who edits a product
+   and sees the old one would have no way to tell staleness from a failed save.
+   Not added without evidence that it is needed.
+   ───────────────────────────────────────────────────────────────────────────── */
+const POS_LIST_PAGE_MAX     = 200;
+const POS_LIST_PAGE_DEFAULT = 100;
+
+exports._h.posListProducts = async (req) => {
+  const auth = _requireAuth(req);
+  const d    = req.data || {};
+
+  const merchantId = _pcId(d.merchantId, 64);
+  if (!merchantId) throw new HttpsError('invalid-argument', 'merchantId is required');
+  const branchId = _pcId(d.branchId, 80) || (merchantId + '-main');
+
+  /* The same guard the writer uses — owner, active branch staff, or merchant admin. */
+  await _assertMerchantAccess(req, merchantId, branchId);
+
+  let pageSize = _pcNum(d.pageSize, 'pageSize', { min: 1, max: POS_LIST_PAGE_MAX });
+  if (pageSize === undefined) pageSize = POS_LIST_PAGE_DEFAULT;
+  pageSize = Math.min(Math.floor(pageSize), POS_LIST_PAGE_MAX);
+
+  const cursor = _pcId(d.cursor, 200);
+
+  /* NO `active` FILTER. The catalogue surface shows archived items in their own
+     tab and offers Restore, so filtering here would make archived products
+     unreachable — the read must answer the same question the page asks. */
+  let q = db.collection('posProducts')
+    .where('merchantId', '==', merchantId)
+    .orderBy(admin.firestore.FieldPath.documentId())
+    .limit(pageSize);
+  if (cursor) q = q.startAfter(cursor);
+
+  const snap = await q.get();
+  const products = snap.docs.map((doc) => Object.assign({ id: doc.id }, doc.data()));
+
+  /* A full page means there MAY be more; a short page is definitively the end.
+     The cursor is the last id seen, so it stays valid even if rows are inserted. */
+  const nextCursor = products.length === pageSize && products.length > 0
+    ? products[products.length - 1].id
+    : null;
+
+  /* `console.log` is this module's logging idiom — `_log` belongs to
+     business-bootstrap and is not in scope here. No product names, no prices:
+     an operational log records the SHAPE of the read, not the catalogue. */
+  console.log('[posListProducts] merchant=' + merchantId + ' branch=' + branchId +
+              ' uid=' + auth.uid + ' returned=' + products.length +
+              ' pageSize=' + pageSize + ' paged=' + !!cursor + ' more=' + !!nextCursor);
+
+  return {
+    ok: true,
+    products: products,
+    count: products.length,
+    empty: products.length === 0,
+    nextCursor: nextCursor,
+    pageSize: pageSize,
+  };
+};
+
 /** Soft-delete: deactivate rather than destroy, so sales history keeps resolving the product. */
 exports._h.posDeleteProduct = async (req) => {
   const auth = _requireAuth(req);

@@ -121,10 +121,20 @@ ck('an edit sends productId instead', /payload\.productId\s*=\s*st\.editing\.id/
 ck('the page no longer mints its own document id for a create',
    !/doc\s*\(\s*db\s*,\s*'posProducts'\s*,\s*id\s*\)/.test(CODE), 'the server issues the id');
 
-head('6. The read path is UNCHANGED — 3A must not look like a working catalogue');
-ck('the merchantId-scoped read query is still there, still denied in production',
-   /where\('merchantId',\s*'==',\s*uid\)/.test(CODE),
-   'rules gate (3B) is a separate change');
+head('6. The read path — 3A left it denied, 3B moved it to the server');
+/* THIS GATE ROTTED WHEN THE THING IT GUARDED WAS FIXED. In 3A it asserted the
+   direct `where('merchantId','==',uid)` read was STILL PRESENT, which was the
+   honest statement then: 3A must not look like a working catalogue. 3B (Option A)
+   replaced that read with a dispatcher call, so the old assertion now fails for
+   the right reason. It is re-pointed at the post-3B truth rather than deleted —
+   what must never regress is the page touching posProducts directly. */
+ck('the direct merchantId-scoped Firestore read is GONE (3B)',
+   !/where\('merchantId',\s*'==',\s*uid\)/.test(CODE), 'replaced by posListProducts');
+ck('reads go through the canonical server op',
+   /dispatch\('posListProducts'/.test(CODE));
+ck('the page still has NO direct posProducts access of any kind',
+   !/(getDocs|setDoc|addDoc|updateDoc|onSnapshot)\s*\(\s*(query\s*\(\s*)?(collection|doc)\s*\(\s*db\s*,\s*['"]posProducts/.test(CODE),
+   'collection stays closed to the browser');
 ck('no rules file was touched by this unit',
    (() => {
      try {

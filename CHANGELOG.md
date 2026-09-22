@@ -1,3 +1,108 @@
+## 2026-09-22 (177) — 3B: the catalogue reads through the server, and posProducts stays closed
+
+**NO DEPLOY. NO RULES CHANGE.** Live remains 111dbd7 / v636.
+`scripts/test-poslistproducts-contract.js` **31/0** · `test-catalogue-write-migration.js` **30/0** ·
+`test-catalogue-model.js` **81/0** · `test-posupsert-catalogue-contract.js` **42/0** ·
+`test-posproducts-mirror-retirement.js` **14/14** · `test-pos-inventory-denial-visibility.js` **26/0** ·
+`test-flash-sale-authority.js` **56/0** · `functions/index.js` require closure intact.
+
+### Option A, chosen by the owner: the collection stays shut
+
+    catalogue -> smartPosDispatch -> posListProducts -> posProducts
+
+`posProducts` is now closed to browsers for **reads and writes both**. No Firestore rules grant was
+added and no rules file was touched — asserted by the suite, not merely intended. That also means the
+13-served-only-block reconciliation gate stays independent: 3B needs no rules release.
+
+`posListProducts` is registered on `_h` only, so it is served through the existing `smartPosDispatch`
+and adds **zero new Cloud Functions**. It reuses `_assertMerchantAccess(req, merchantId, branchId)` —
+the writer's guard, not a second one — so read authority and write authority cannot drift into
+disagreeing about who owns a product.
+
+### Ordering by document id, and why it is not a detail
+
+Firestore **omits documents that lack the field being ordered on**. `nameLower` is written by
+`posUpsertProduct` and by nothing else, so ordering on it would have silently hidden every row created
+by another writer — a partial catalogue that looks complete. `__name__` is present on every document
+by definition, unique, and totally ordered, so it is both safe and a sound cursor.
+
+The suite proves this with an inverting control: the fake query engine reproduces Firestore's
+exclusion behaviour, and a control asserts that ordering on the absent field **does** drop all five
+rows there. Without that control, "rows without nameLower are returned" would pass against a fake
+that simply never excluded anything.
+
+### Bounded by construction
+
+    pageSize default 100 · hard cap 200 · 201 is REFUSED · 5000 is REFUSED
+    cursor = last document id · a short page ends the walk
+
+An out-of-range `pageSize` is **refused, not clamped**. Clamping hands back less than was asked for,
+and a caller that believed it had 5,000 rows would conclude the catalogue ended at 200. The exact
+boundary is asserted from both sides: 200 is honoured, 201 is refused.
+
+**An EMPTY page is a SUCCESS** and says so (`empty: true`, `nextCursor: null`); a failure throws. Those
+two must never collapse — an empty catalogue reported as an error tells a merchant their products are
+gone, and an error reported as empty tells them the same thing more quietly.
+
+**No `active` filter.** The page shows archived items in their own tab and offers Restore, so
+filtering server-side would make them unreachable. The read answers the question the page asks.
+
+**No cache.** `bootstrapCache` exists for the till's bundle, but a cache here would need invalidating
+on every upsert, and a merchant who edited a product and saw the old one would have no way to tell
+staleness from a failed save. Not added without evidence it is needed.
+
+### The client pages until done rather than truncating
+
+The page walks the cursor to the end (25 pages x 200 = 5,000 items) and **records** `truncated` if it
+ever hits its own bound. A merchant with more than 200 products would otherwise silently see part of
+their catalogue — and a partial catalogue that looks complete is worse than one that says it is
+partial.
+
+`getDocs`, `query`, `where`, `limit` and `collection` are no longer imported: the transport is gone,
+not merely unused. The four subscription-document reads still use `getDoc` directly and are unchanged.
+
+### One defect in the work, and two gates that rotted correctly
+
+The new op logged through `_log`, which belongs to `business-bootstrap` and is **not in scope** in
+this module — a `ReferenceError` on every successful call. Caught by a syntax/scope check before the
+suite ran, and replaced with this module's own `console.log` idiom, recording the SHAPE of the read
+(counts, paging) and never product names or prices.
+
+Two assertions failed for the *right* reason and were re-pointed rather than deleted:
+
+* `test-catalogue-write-migration.js` §6 asserted in 3A that the direct read was STILL PRESENT — the
+  honest statement then, since 3A must not look like a working catalogue. 3B fixed the thing it
+  guarded, so it now asserts the direct read is GONE, that reads go through the op, and that the page
+  has **no** direct `posProducts` access of any kind.
+* `test-catalogue-model.js` (another workstream's suite) had a positive control requiring the page to
+  name `posProducts`. The page no longer names the collection because it no longer touches it, so the
+  control now accepts the canonical server ops. Its meaning is unchanged — it still fails if the page
+  binds to nothing, or to `posServices`.
+
+### Stock semantics — DECIDED, and deliberately NOT implemented here
+
+The owner's canonical model is recorded for the next mutation:
+
+    trackStock: false   inventory does not gate the sale; no stock quantity required
+    trackStock: true    stockQty is authoritative; 0 is a real quantity;
+                        a missing stockQty is UNKNOWN, never silently unlimited
+    trackStock absent   existing product semantics preserved until explicitly migrated
+
+**The 9999 fallback is NOT removed in this commit, and must not be removed first.** The oversell gate
+at `pos-zero-friction.js:754-756` exempts a row via `prod.trackInventory !== false` — the
+**marketplace** spelling, which `posUpsertProduct` accepts as an input alias and deliberately never
+stores. So a service created through the canonical writer has `trackStock: false`, no
+`trackInventory`, and sells **only because** its missing stock figure defaults to 9999. Removing the
+sentinel before the exemption reads canonical `trackStock` would make every such service unsellable.
+Order: fix the exemption, certify it as a money-path change, then retire the sentinel.
+
+**Files affected:** `functions/pos-inventory-pro.js`, `catalogue.html`,
+`scripts/test-poslistproducts-contract.js` (new), `scripts/test-catalogue-write-migration.js`,
+`scripts/test-catalogue-model.js`, `CHANGELOG.md`.
+**Database changes:** none. **API changes:** new dispatcher op `posListProducts` (no new Cloud
+Function). **Security changes:** the catalogue lost its last direct `posProducts` access; no grant was
+added anywhere. **Breaking changes:** none — the direct read it replaced was denied in production.
+
 ## 2026-09-22 (176) — 3A: the catalogue stops writing posProducts and asks the canonical writer
 
 **NO DEPLOY. Live remains 111dbd7 / v636.** `scripts/test-catalogue-write-migration.js` **28/0** ·

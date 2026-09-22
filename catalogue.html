@@ -245,7 +245,7 @@ textarea.inp{min-height:70px;resize:vertical}
 ═══════════════════════════════════════════════════════════════════════════ */
 import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js';
-import { getFirestore, collection, query, where, limit, getDocs, doc, getDoc }
+import { getFirestore, doc, getDoc }
   from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js';
 
@@ -351,8 +351,28 @@ async function load(){
     scope: st.scope, sellerSub: st.sellerSub, providerSub: st.providerSub,
   });
 
-  const snap = await getDocs(query(collection(db,'posProducts'), where('merchantId','==',uid), limit(500)));
-  st.rows = snap.docs.map(d=>Object.assign({id:d.id}, d.data()));
+  /* 3B: the catalogue no longer reads posProducts directly. The served ruleset
+     denies it (proven 12/0), and rather than opening the collection to browsers
+     the read goes through the same dispatcher and the same ownership chain as
+     the writes. See the WRITE AUTHORITY note above.
+
+     PAGED UNTIL DONE, not truncated. The server caps a page at 200, so a
+     merchant with more products than that would otherwise silently see part of
+     their catalogue. The loop follows the cursor to the end and STATES it if it
+     ever hits its own safety bound, because a partial catalogue that looks
+     complete is worse than one that says it is partial. */
+  const MAX_PAGES = 25;                       /* 25 x 200 = 5,000 items */
+  let rows = [], cursor = null, pages = 0, truncated = false;
+  while(true){
+    const out = await dispatch('posListProducts', cursor ? { pageSize:200, cursor:cursor } : { pageSize:200 });
+    rows = rows.concat(out.products || []);
+    cursor = out.nextCursor || null;
+    pages++;
+    if(!cursor) break;
+    if(pages >= MAX_PAGES){ truncated = true; break; }
+  }
+  st.rows = rows;
+  st.truncated = truncated;
   st.loading=false;
   render();
 }
