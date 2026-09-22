@@ -131,10 +131,10 @@
 
   /* MARKETPLACE lane — commission by the seller's PLAN, on orders SOKONI brought them. */
   var MARKETPLACE_PLAN_PCT = {
-    "free": 16,
-    "professional": 12,
-    "business": 8,
-    "enterprise": 4
+    "free": 15,
+    "professional": 15,
+    "business": 15,
+    "enterprise": 15
   };
 
   /* POS / TILL lane — shop sales the merchant made themselves. FLAT, every plan. A

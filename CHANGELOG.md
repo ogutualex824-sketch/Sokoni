@@ -1,3 +1,93 @@
+## 2026-09-22 (151) — Marketplace commission: flat 15%, ladder retired (owner decision)
+
+**Money change in the single source. COMMITTED, NOT DEPLOYED — the rate is computed
+server-side, so it takes effect only on a functions deploy, which stays blocked. Live remains
+111dbd7 / v636.**
+
+### The decision
+
+`MARKETPLACE_PLAN_RATES` becomes flat **15% on every plan**, superseding the 2026-09-13 ladder
+(free 16 / professional 12 / business 8 / enterprise 4), which had itself superseded
+seller_free 15 / basic 10 / pro 5 / enterprise 0.
+
+```
+  free          16%  ->  15%     -1 point
+  professional  12%  ->  15%     +3 points
+  business       8%  ->  15%     +7 points
+  enterprise     4%  ->  15%    +11 points
+```
+
+Recorded as a price change in both directions, not as a simplification. A historical settlement
+reconciled against these numbers will disagree with the ledger; the ledger is right for its date.
+
+**A subscription now buys nothing on this lane.** That is a commercial fact the subscription
+surfaces should state, not something this file should hide behind a table that still looks like
+a ladder. The four-key shape is kept deliberately: if the lane is ever made plan-keyed again,
+the structure and the "unknown plan resolves to the HIGHEST rate" fallback are already here, and
+re-introducing them under time pressure is how a free pass gets written by accident.
+
+### The till is untouched, and that was checked BEFORE editing
+
+`ALIASES.pos = 'marketplace'`, so a POS sale RESOLVES to the marketplace category. Moving
+`RATES.marketplace.pct` would therefore have **tripled every till commission through the alias**
+— the trap the config file warns about in its own comments. It was NOT moved.
+
+Verified by execution, not by reading: the till resolves through
+`pos-sale-commission.js` → `CC.resolvePosRate()` → `POS_PLAN_RATES` → `POS_FLAT_RATE_FRACTION`,
+which does not read the marketplace table. Till = **5% on every plan**, before and after.
+
+### The UI would have lied, and was fixed
+
+Merchant V2 Settings read `SokoniCommission.pct('marketplace')` — the CATEGORY fallback (5) —
+while the rate actually charged is resolved by the marketplace LANE, which outranks the category
+in `finos-utils`. After this change that screen would have shown a seller **5% while the server
+charged 15%**. It now reads `marketplacePct()`, which mirrors `resolveMarketplaceRate` and
+resolves an unknown plan to the highest rate, so it can never under-quote. The copy claiming a
+subscription buys a better marketplace rate was removed — true of the retired ladder, now
+contradicted by the config.
+
+### Two rate literals in tests, defused
+
+`test-pos-sale-commission.js` asserted Enterprise marketplace `=== 0.04`. It was written beside
+the number, so an intended repricing arrived as a red suite. It now asserts the INVARIANT that
+survives any repricing — non-zero, and only a genuine 0% may escape the floor — with the rate
+DERIVED from the config.
+
+`test-pos-commission-lane.js` asserted Enterprise marketplace is 0% and floor-exempt. That has
+been **failing since 2026-09-13** — nine days — over a repricing that was entirely intended. The
+guarantee it protects is about the arithmetic, not about who holds the rate, so it is now
+certified against a CONSTRUCTED 0%/floorExempt rate and keeps its inverting control (0% WITHOUT
+floorExempt charges KES 10). A table-wide invariant was added in both directions.
+
+### Files
+
+| File | Change |
+|---|---|
+| `functions/commission-config.js` | `MARKETPLACE_FLAT_RATE_FRACTION = 0.15`; ladder flattened |
+| `sokoni-commission-rates.js` | REGENERATED from the config |
+| `merchant-v2.html` | Settings reads the lane, not the category; copy corrected |
+| `scripts/test-pos-sale-commission.js` | literal → derived invariant |
+| `scripts/test-pos-commission-lane.js` | plan-pinned → constructed rate; 9-day red cleared |
+| `scripts/test-merchant-ecosystem.js` | asserts the lane-not-category rule, with a control |
+
+**Database: none. API: none. Rules: none. Indexes: none. Breaking: the marketplace rate itself.**
+
+### Gates
+
+`verify-commission-single-source` **PASS** (1,910 files, one table) · `test-pos-sale-commission`
+**78/0** (was 77/0, +1 invariant) · `test-pos-commission-lane` **92/0** (was 90/2 — pre-existing
+red cleared) · `test-merchant-ecosystem` **118/0** · runtime acceptance **115/0** · convergence
+**64/0** · `check-money-toast-safety` PASS.
+`test-commission-balance-ui` 37/2 — **pre-existing, identical at baseline**, unrelated to rates.
+
+### Not deployed
+
+The rate is server-computed. Until a functions deploy ships `commission-config.js`, production
+continues to charge the previous lane. The client snapshot and the server config agree **in the
+repo**, which is what `verify-commission-single-source` enforces; they will disagree with
+**production** until that deploy happens, and that is stated here rather than discovered later.
+
+
 ## 2026-09-22 (149) — P17: the floating bell could never have been fixed-positioned
 
 **Authorized repair of the defect recorded in `5daf32c` §9. CSS specificity only — no

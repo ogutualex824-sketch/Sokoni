@@ -152,21 +152,47 @@ ok('the floor/rate crossover is derived from the live rate',
    POS lane after the ruling would assert 5% === 0 and fail, or worse, be deleted and take
    the floorExempt guarantee with it. */
 {
-  const r = CC.resolveMarketplaceRate('seller_enterprise');
-  ok('Enterprise MARKETPLACE rate is zero and floor-exempt',
-     r.rateFraction === 0 && r.floorExempt === true, r.rateFraction + '/' + r.floorExempt);
-  ok('Enterprise POS rate is NOT zero — the till is never free',
-     CC.resolvePosRate('seller_enterprise').rateFraction === POS_RATE);
+  /* THIS BLOCK WAS PINNED TO A PLAN, AND THE PLAN MOVED.
+     It read `resolveMarketplaceRate('seller_enterprise')` and asserted 0% + floorExempt. That
+     was true when Enterprise was free; it stopped being true on 2026-09-13 (ladder 16/12/8/4)
+     and is further from true after 2026-09-22 (flat 15%). The suite has therefore been RED for
+     nine days over a repricing that was entirely intended — the assertion was measuring the
+     price, not the guarantee.
+
+     THE GUARANTEE IS ABOUT THE ARITHMETIC, NOT ABOUT WHO HOLDS THE RATE: a genuine 0% rate
+     carrying floorExempt must charge nothing at EVERY amount, including below the floor. That
+     is certified here against a CONSTRUCTED rate, so it holds whether or not any plan is
+     currently zero — which is the whole point, because the trap it guards (a "0%" plan
+     silently charging the KES 10 minimum) reappears the moment a zero-rated plan is
+     reintroduced, and a deleted assertion would not be there to catch it.
+
+     The contrast case immediately below — 0% WITHOUT floorExempt charges KES 10 — is the
+     inverting control that makes this one mean something. */
+  const ZERO = { rateFraction: 0, floorExempt: true };
   let bad = 0;
   for (const kes of [0.01, 1, 5, 9.99, 10, 10.01, 66, 67, 100, 1000, 100000]) {
     const c = MA.computeCommission({
-      gross: KES(kes), rateFraction: r.rateFraction,
-      minimumMinor: MIN_MINOR, floorExempt: r.floorExempt
+      gross: KES(kes), rateFraction: ZERO.rateFraction,
+      minimumMinor: MIN_MINOR, floorExempt: ZERO.floorExempt
     });
     if (c.commission.minorUnits !== 0) bad++;
     if (c.net.minorUnits !== Math.round(kes * 100)) bad++;
   }
-  ok('Enterprise pays ZERO on MARKETPLACE at every amount incl. below the floor', bad === 0, bad + ' non-zero');
+  ok('a genuine 0% floor-exempt rate pays ZERO at every amount incl. below the floor',
+     bad === 0, bad + ' non-zero');
+
+  /* And the TABLE invariant, in both directions, derived — never a literal. If a plan is
+     zero-rated it MUST be floor-exempt (or "0%" quietly bills KES 10); if it is non-zero it
+     must NOT be (or one tier escapes the minimum for no stated reason). */
+  const PLANS = CC.MARKETPLACE_PLAN_RATES || {};
+  ok('every marketplace plan agrees with the floor-exemption invariant',
+     Object.keys(PLANS).every(k =>
+       PLANS[k].rateFraction === 0 ? PLANS[k].floorExempt === true : PLANS[k].floorExempt === false),
+     Object.keys(PLANS).map(k => k + '=' + PLANS[k].rateFraction + '/' + PLANS[k].floorExempt).join(' '));
+
+  /* The till is never free, at any plan — the one price fact this lane really owns. */
+  ok('Enterprise POS rate is NOT zero — the till is never free',
+     CC.resolvePosRate('seller_enterprise').rateFraction === POS_RATE);
 }
 {
   /* the trap this exists to prevent: without floorExempt, "0%" would charge KES 10 */

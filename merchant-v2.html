@@ -4347,13 +4347,29 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     }
     var till = C.posPct();
     var min  = C.MIN_COMMISSION_KES;
+    /* MARKETPLACE MUST COME FROM THE LANE, NOT THE CATEGORY.
+       `pct('marketplace')` returns the CATEGORY fallback (5). The rate actually charged on a
+       marketplace seller sale is resolved by the marketplace LANE — finos-utils reads
+       resolveMarketplaceRate and it OUTRANKS the category base. Reading the category here
+       showed a merchant 5% while the server charged the lane rate: a screen that understates
+       what a seller pays, which is worse than showing nothing.
+       `marketplacePct()` mirrors resolveMarketplaceRate and resolves an unknown plan to the
+       HIGHEST rate, so this can never under-quote. */
+    var mkt  = C.marketplacePct(S.planId || null);
     return '<dl class="kv">' +
       row('POS / till sales', till + '% of the sale') +
       row('Minimum per transaction', 'KES ' + min) +
-      row('Marketplace orders', C.pct('marketplace') + '% (orders SOKONI brought you)') +
+      row('Marketplace / online orders', mkt + '% (orders SOKONI brought you)') +
       '</dl>' +
-      '<div class="note" style="margin:10px 0 0">A till sale is a <b>flat ' + till + '%</b> on every ' +
-      'plan — a subscription buys a better marketplace rate and changes nothing at the till. ' +
+      '<div class="note" style="margin:10px 0 0">Two separate rates, because they are two ' +
+      'different things. A <b>till sale</b> is one you made yourself in your own shop — ' +
+      '<b>flat ' + till + '%</b> on every plan. A <b>marketplace order</b> is one SOKONI brought ' +
+      'you — <b>' + mkt + '%</b>. ' +
+      /* Stated plainly rather than left to be discovered on an invoice: as of 2026-09-22 the
+         marketplace lane is flat, so a subscription no longer buys a better rate on it. The
+         previous copy here said it did, which was true of the retired ladder and is now a
+         claim the config contradicts. */
+      'A subscription does <b>not</b> reduce either rate. ' +
       'The <b>KES ' + min + ' minimum</b> dominates small sales: on a KES ' + min * 4 + ' sale the ' +
       'minimum applies, not ' + till + '%. ' +
       'These are the platform rates. <b>SOKONI calculates the commission on every real order ' +

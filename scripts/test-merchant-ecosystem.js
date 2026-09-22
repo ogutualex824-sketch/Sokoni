@@ -226,6 +226,22 @@ check('commission section exists', setRenderer.length > 0);
 check('...and names no rate literal', !new RegExp('[^\\w.]' + POS_PCT + '\\s*%').test(setRenderer),
       'derives every figure from SokoniCommission');
 check('...and renders an honest gap when the table is absent', /Commission unavailable/.test(setRenderer));
+/* THE MARKETPLACE RATE MUST COME FROM THE LANE, NOT THE CATEGORY. pct('marketplace')
+   returns the category FALLBACK; the rate a seller is actually charged is resolved by the
+   marketplace lane. Reading the category understated it, which is a screen that lies about
+   money in the merchant's favour-looking direction and against the merchant's interest. */
+check('marketplace figure reads the LANE (marketplacePct), not the category',
+      /marketplacePct\s*\(/.test(setRenderer) && !/\bpct\s*\(\s*['"]marketplace/.test(setRenderer),
+      'category fallback would under-quote the seller');
+/* CONTROL: the detector must be able to see the category call it forbids, or "not present"
+   would pass against a regex that can never match. */
+check('CONTROL — the category-call detector fires on a plant',
+      /\bpct\s*\(\s*['"]marketplace/.test("var x = C.pct('marketplace');"));
+const MKT_PCT = Number((snap.match(/MARKETPLACE_PLAN_PCT\s*=\s*\{[^}]*?"free"\s*:\s*(\d+(?:\.\d+)?)/) || [])[1]);
+check('snapshot declares a marketplace lane rate', Number.isFinite(MKT_PCT), MKT_PCT + '%');
+check('...and the settings renderer names no marketplace literal either',
+      !new RegExp('[^\\w.]' + MKT_PCT + '\\s*%').test(setRenderer),
+      'derived from SokoniCommission');
 /* CONTROL: the literal detector must fire on a planted literal. */
 check('CONTROL — the rate-literal detector fires on a plant',
       new RegExp('[^\\w.]' + POS_PCT + '\\s*%').test('charges ' + POS_PCT + '% per sale'));

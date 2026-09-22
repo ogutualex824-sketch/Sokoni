@@ -117,14 +117,32 @@ console.log('');
   ok('Enterprise Till DOES create a liability — the till is never free',
      s.createsLiability === true && s.commission.minorUnits > 0);
   ok('and it is NOT floor-exempt (only a genuine 0% rate is)', s.floorExempt === false);
-  /* Enterprise MARKETPLACE was 0% and floor-exempt. The owner repricing of 2026-09-13 moved
-     the ladder to 16/12/8/4, so Enterprise is no longer free — and the exemption went with the
-     zero, because the invariant asserted one line above is "only a genuine 0% rate is
-     floor-exempt". The retired id must still resolve, or a stored tier silently falls to Free. */
+  /* Enterprise MARKETPLACE was 0% and floor-exempt. It has now been repriced TWICE — to 4% on
+     2026-09-13 (ladder 16/12/8/4) and to a flat 15% on 2026-09-22 — and this assertion broke
+     on the second one because it named `0.04` literally.
+
+     A RATE LITERAL IN A TEST IS A TIME BOMB. It does not protect the rate; it protects the
+     number the test was written beside, so every legitimate repricing arrives as a red suite
+     and the fix is to edit the expectation — which is not a test at all.
+
+     What this SHOULD assert, and now does, is the INVARIANT that survives any repricing:
+     Enterprise marketplace is not free, and only a genuine 0% rate may escape the floor. The
+     rate itself is DERIVED from the config, so the next owner decision moves it here without
+     touching this file. */
   const mktEnt = CC.resolveMarketplaceRate('seller_enterprise');
-  ok('...while Enterprise MARKETPLACE is 4% and NOT floor-exempt (repriced 2026-09-13)',
-     mktEnt.rateFraction === 0.04 && mktEnt.floorExempt === false,
+  ok('...while Enterprise MARKETPLACE is non-zero and NOT floor-exempt (only a genuine 0% is)',
+     mktEnt.rateFraction > 0 && mktEnt.floorExempt === false,
      mktEnt.rateFraction * 100 + '% floorExempt=' + mktEnt.floorExempt);
+  /* The floor-exemption invariant, stated in both directions over the whole table, so a future
+     table cannot quietly exempt a paying tier. */
+  ok('...and NO non-zero marketplace plan is floor-exempt',
+     Object.keys(CC.MARKETPLACE_PLAN_RATES || {}).every(function (k) {
+       var r = CC.MARKETPLACE_PLAN_RATES[k];
+       return r.rateFraction === 0 || r.floorExempt === false;
+     }),
+     Object.keys(CC.MARKETPLACE_PLAN_RATES || {}).map(function (k) {
+       return k + '=' + CC.MARKETPLACE_PLAN_RATES[k].rateFraction;
+     }).join(' '));
   ok('...and the retired seller_enterprise id still maps to a real package',
      mktEnt.plan === 'enterprise' && mktEnt.matched === true, mktEnt.plan);
 }

@@ -479,25 +479,47 @@ function resolvePosRate(planId) {
  * resolving — a merchant must never fall to the Free rate because their stored tier used
  * yesterday's spelling.
  */
+/* ── FLAT 15% ON EVERY PLAN  (owner decision 2026-09-22) ───────────────────────────────────
+ * SUPERSEDES the 2026-09-13 ladder (free 16 / professional 12 / business 8 / enterprise 4),
+ * which itself superseded seller_free 15 / basic 10 / pro 5 / enterprise 0.
+ *
+ * THIS IS A PRICE CHANGE IN BOTH DIRECTIONS, and it is recorded as such rather than presented
+ * as a simplification:
+ *
+ *     free          16%  ->  15%     -1 point
+ *     professional  12%  ->  15%     +3 points
+ *     business       8%  ->  15%     +7 points
+ *     enterprise     4%  ->  15%    +11 points
+ *
+ * Anyone reconciling a historical settlement against these numbers will get a different
+ * answer than the ledger holds. The ledger is right for its date; this table is right from
+ * its date. Neither is a bug.
+ *
+ * WHAT A SUBSCRIPTION NOW BUYS ON THIS LANE: nothing. The marketplace rate is no longer
+ * plan-keyed. The shape is KEPT rather than collapsed to a scalar for the same reason the POS
+ * lane keeps it — if the lane is ever made plan-keyed again, the structure and the
+ * "unknown plan resolves to the HIGHEST rate" fallback are already here, and re-introducing
+ * them under time pressure is how a free pass gets written by accident. That absence of a
+ * plan discount is a COMMERCIAL fact the subscription surfaces should state; it is not this
+ * file's job to hide it behind a table that still looks like a ladder.
+ *
+ * POS AND TILL ARE UNAFFECTED. The till resolves through resolvePosRate -> POS_PLAN_RATES ->
+ * POS_FLAT_RATE_FRACTION (5%), which does not read this table. Verified: pos-sale-commission.js
+ * calls CC.resolvePosRate(planId) and nothing else. `RATES.marketplace.pct` is likewise NOT
+ * changed — `ALIASES.pos = 'marketplace'` means a POS sale RESOLVES to that category, so
+ * moving it would have tripled every till commission through the alias. The two lanes stay
+ * separate commercial products, which is the invariant this file has defended throughout.
+ *
+ * floorExempt stays FALSE everywhere: the invariant asserted elsewhere is "only a genuine 0%
+ * rate is floor-exempt", and 15% is not zero. MIN_COMMISSION_KES still dominates small orders.
+ */
+const MARKETPLACE_FLAT_RATE_FRACTION = 0.15;
+
 const MARKETPLACE_PLAN_RATES = {
-  free:         { rateFraction: 0.16, floorExempt: false },
-  professional: { rateFraction: 0.12, floorExempt: false },
-  business:     { rateFraction: 0.08, floorExempt: false },
-  /* floorExempt becomes FALSE, and this is a consequence of the repricing rather than a
-     separate decision.
-
-     The exemption existed for exactly one reason, stated where it was written: "advertising
-     0% while charging a minimum is a dispute merchants would win." At 4% there is nothing to
-     dispute — the platform charges a rate like every other package. The invariant the rest of
-     the codebase asserts is "only a genuine 0% rate is floor-exempt"
-     (scripts/test-pos-sale-commission.js), and leaving Enterprise exempt at 4% would make it
-     the single non-zero rate escaping MIN_COMMISSION_KES, for no stated reason.
-
-     FLAGGED, because it is a real effect on small orders: a KES 50 Enterprise sale now pays
-     the KES 10 floor rather than KES 2. If the pricing owner wants Enterprise to keep the
-     exemption, this line is the one to change — but the invariant above should then be
-     restated, not silently contradicted. */
-  enterprise:   { rateFraction: 0.04, floorExempt: false },
+  free:         { rateFraction: MARKETPLACE_FLAT_RATE_FRACTION, floorExempt: false },
+  professional: { rateFraction: MARKETPLACE_FLAT_RATE_FRACTION, floorExempt: false },
+  business:     { rateFraction: MARKETPLACE_FLAT_RATE_FRACTION, floorExempt: false },
+  enterprise:   { rateFraction: MARKETPLACE_FLAT_RATE_FRACTION, floorExempt: false },
 };
 
 /* A seller on no recognised plan is treated as Free — the HIGHEST rate, never the lowest.
