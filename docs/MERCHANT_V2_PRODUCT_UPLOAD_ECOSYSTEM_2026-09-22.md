@@ -204,3 +204,60 @@ The wrong owner is now **derived from the route's actual kind**, so it cannot go
 | **P-3** | Channel availability (POS / Till / Quick Pay / Marketplace per-product flags) not traced |
 | **P-4** | Bulk upload, scanner and media integrity present in the editor but their end-to-end persistence not exercised |
 | **P-5** | No realtime proof for catalogue changes |
+
+---
+
+## 9. §3 field trace — eighteen controls rendered, then discarded
+
+§3 forbids assuming a field is merely visual. Traced UI → normalisation → validation →
+persistence: the editor collected **26 fields**; the certified writer persisted **9**.
+
+The eighteen dropped:
+
+`brand` · `condition` · `location` · `kebsCert` · `digitalUrl` · `digitalLicense` ·
+`listingType` · `tags` · `deliveryCost` · `wholesalePrice` · `minWholesaleQty` · `specs` ·
+`attributes` · `stockUnit` · `ownership` · `foodLicence` · `warranty` · `variants`
+
+So `kebsHTML`, `foodHTML`, `digitalHTML`, `ownershipHTML`, the variants grid and the
+specifications editor all rendered, captured and normalised — and evaporated at the whitelist.
+`fieldsFromForm` assembled them correctly; `_productFields` never looked at them.
+
+**Two of them are exactly what a service needs:** `listingType` (the Listing Studio's
+product/service type picker) and `stockUnit` (the unit — "per page"). So the canonical path
+could not express a service for a reason *upstream* of the catalogue-model question in §4.
+
+### It was a regression, and this workstream introduced it
+
+`seller.js:813-815` writes `kebsCert`, `location` and `deliveryCost` straight into the product
+document. Moving Products from the seller iframe onto this writer therefore **lost live
+compliance data** for anyone using Merchant V2. Not cosmetic, and not pre-existing.
+
+### The repair
+
+`_productFields` now carries all 26, normalised by the rules the file had already set for
+itself rather than new ones:
+
+- **empty is ABSENT for money, never 0** — a blank delivery cost must not become free
+  delivery, the same reason a blank `costPrice` must not become a 100% margin;
+- strings trimmed and bounded, as `name` / `sku` / `description` already were;
+- structured records passed whole, because the parts of a policy travel together — sending a
+  warranty's duration without its remedies is the defect the editor had already fixed on its
+  own side;
+- an explicitly emptied object passed through rather than skipped, so a merchant can REMOVE a
+  record entered by mistake. The editor's comment states that contract; honouring it is this
+  writer's half.
+
+`_validate` gained `deliveryCost`, `wholesalePrice` and `minWholesaleQty`, because carrying a
+field without validating it is only half of not discarding it.
+
+Asserted in `test-merchant-ecosystem-convergence.js` §11e with three controls: the drop
+detector must find a genuinely absent field, both sides must have actually parsed (26 vs 28),
+and the three seller.js fields are named individually as regression parity.
+
+### Still not proven
+
+That these fields reach the POS and inventory **projections**. `productProjections` maps a
+fixed subset and was deliberately not extended — widening a mirror without knowing each
+consumer is the field-mapping divergence the writer's own header warns about, naming
+`posRetailSales` as the precedent where writer and reader disagreed and POS sales silently
+vanished from reporting.

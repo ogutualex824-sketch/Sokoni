@@ -532,6 +532,46 @@ if (has('sokoni-merchant-products.js') && has('seller.html')) {
        /request\.data\?\.imageUrl/.test(ME) && /request\.data\?\.category/.test(ME));
     ck('...and it is auth-gated and rate-limited', /assertAuth\(request\)/.test(ME) && /resource-exhausted/.test(ME));
   }
+  /* ── §3: A FIELD THAT RENDERS AND IS DISCARDED IS NOT COMPLETE ────────────
+     The editor's FORM_KEYS plus the nested groups it assembles must ALL survive the
+     certified writer's whitelist. Measured 2026-09-22 this was 9 persisted of 27
+     collected — eighteen controls rendered, normalised and then dropped without a word,
+     including kebsCert, foodLicence, ownership, specs, variants, warranty, and the two
+     that would express a service at all: listingType and stockUnit.
+
+     It was also a REGRESSION: seller.js:813-815 writes kebsCert, location and
+     deliveryCost into the product document, so moving Products onto this writer lost
+     live compliance data. Both halves are asserted here. */
+  if (has('sokoni-merchant-data.js')) {
+    const MD2 = R('sokoni-merchant-data.js');
+    const fk = (PM.match(/var FORM_KEYS = \[([\s\S]*?)\];/) || [])[1] || '';
+    const flat = [...new Set((fk.match(/'([a-zA-Z]+)'/g) || []).map(s => s.slice(1, -1)))];
+    const emitted = [...new Set((PM.match(/out\.([a-zA-Z]+)\s*=/g) || []).map(s => s.slice(4, -1).trim()))];
+    const collected = [...new Set(flat.concat(emitted))];
+    const pf = MD2.slice(MD2.indexOf('function _productFields'), MD2.indexOf('function _validate'));
+    const carried = [...new Set(
+      (pf.match(/out\.([a-zA-Z]+)\s*=/g) || []).map(s => s.slice(4, -1).trim())
+        .concat((pf.match(/'([a-zA-Z]+)'/g) || []).map(s => s.slice(1, -1)))
+    )];
+    const dropped = collected.filter(k => carried.indexOf(k) < 0);
+    ck('every field the editor collects survives the certified writer',
+       dropped.length === 0, dropped.join(', ') || collected.length + ' fields, none dropped');
+    /* CONTROL: the diff must be capable of finding a drop, or "none dropped" passes
+       against a comparison of two empty lists. */
+    ck('  CONTROL — the drop detector finds a field that is genuinely absent',
+       ['__neverCollected__'].filter(k => carried.indexOf(k) < 0).length === 1);
+    ck('  CONTROL — both sides were actually parsed',
+       collected.length >= 20 && carried.length >= 20,
+       'collected=' + collected.length + ' carried=' + carried.length);
+    /* PARITY WITH WHAT seller.js ALREADY PERSISTED — the regression half. */
+    ['kebsCert', 'location', 'deliveryCost'].forEach(k =>
+      ck('  no regression vs seller.js: ' + k, carried.indexOf(k) > -1));
+    /* Carrying money without validating it is only half of not discarding it. */
+    ['deliveryCost', 'wholesalePrice', 'minWholesaleQty'].forEach(k =>
+      ck('  newly carried money field is validated: ' + k,
+         new RegExp('fields\\.' + k + '\\s*!==\\s*undefined').test(MD2)));
+  }
+
   /* AI ASSISTS; it does not decide. */
   ck('AI never overwrites what the merchant already typed',
      /Only fill what the merchant has not written/.test(PM));

@@ -211,6 +211,54 @@
     if (p.description !== undefined) out.description = String(p.description || '').slice(0, 4000);
     if (p.status !== undefined) out.status = String(p.status || 'active');
     if (p.lowStockThreshold !== undefined) out.lowStockThreshold = Number(p.lowStockThreshold);
+
+    /* ── THE EIGHTEEN FIELDS THE FORM COLLECTED AND THIS WRITER DISCARDED ─────
+       Measured 2026-09-22: the editor's FORM_KEYS plus its nested groups produce
+       twenty-seven fields; this whitelist carried nine. The other eighteen were
+       captured, normalised, assembled into `out` by fieldsFromForm — and dropped here
+       without a word. A control that renders, validates and then evaporates is worse
+       than an absent one: the merchant believes the KEBS number is on the product.
+
+       IT WAS ALSO A REGRESSION. seller.js:813-815 writes `kebsCert`, `location` and
+       `deliveryCost` straight into the product document. Merchant V2's Products route
+       moved onto this writer, so those three stopped persisting for anyone using it —
+       a live loss of compliance data, not a cosmetic gap.
+
+       NORMALISATION FOLLOWS THE RULES ALREADY SET ABOVE, not new ones:
+         · empty string is ABSENT for money, never 0 — a blank delivery cost must not
+           become free delivery, the same reason a blank costPrice must not become a
+           100% margin;
+         · strings are trimmed and bounded, like name/sku/description;
+         · objects are passed whole, because the parts of a policy travel together —
+           sending a warranty's duration without its remedies is the defect the editor
+           already fixed on its side;
+         · an explicitly emptied object is passed through as-is rather than skipped, so
+           a merchant can REMOVE a record they entered by mistake. The editor's comment
+           states that contract; honouring it is this writer's half. */
+
+    /* Bounded free text. */
+    ['brand', 'condition', 'location', 'kebsCert', 'digitalUrl', 'digitalLicense', 'listingType']
+      .forEach(function (k) {
+        if (p[k] !== undefined) out[k] = p[k] ? String(p[k]).trim().slice(0, 300) : null;
+      });
+    /* Tags: an array or a comma string, normalised to a bounded array of non-empty tags. */
+    if (p.tags !== undefined) {
+      var t = Array.isArray(p.tags) ? p.tags : String(p.tags || '').split(',');
+      out.tags = t.map(function (x) { return String(x || '').trim().slice(0, 40); })
+                  .filter(Boolean).slice(0, 30);
+    }
+    /* Money and counts. Empty is ABSENT — never zero. */
+    ['deliveryCost', 'wholesalePrice', 'minWholesaleQty'].forEach(function (k) {
+      if (p[k] === undefined) return;
+      if (p[k] === '' || p[k] === null) return;
+      out[k] = Number(p[k]);
+    });
+    /* Structured records, passed whole. */
+    ['specs', 'attributes', 'stockUnit', 'ownership', 'foodLicence', 'warranty', 'variants']
+      .forEach(function (k) {
+        if (p[k] !== undefined) out[k] = p[k];
+      });
+
     return out;
   }
 
@@ -236,6 +284,20 @@
     /* Cost may be 0 (unknown), but never negative. */
     if (fields.costPrice !== undefined && (!isFinite(fields.costPrice) || fields.costPrice < 0)) {
       errs.push('Cost price cannot be negative.');
+    }
+    /* THE NEWLY CARRIED MONEY FIELDS GET THE SAME TREATMENT AS costPrice, because
+       carrying a field without validating it is only half of not discarding it. A
+       negative delivery cost or wholesale price would otherwise reach the document and
+       be discovered by whatever arithmetic consumes it. */
+    if (fields.deliveryCost !== undefined && (!isFinite(fields.deliveryCost) || fields.deliveryCost < 0)) {
+      errs.push('Delivery cost cannot be negative.');
+    }
+    if (fields.wholesalePrice !== undefined && (!isFinite(fields.wholesalePrice) || fields.wholesalePrice < 0)) {
+      errs.push('Wholesale price cannot be negative.');
+    }
+    if (fields.minWholesaleQty !== undefined &&
+        (!isFinite(fields.minWholesaleQty) || fields.minWholesaleQty < 0)) {
+      errs.push('Minimum wholesale quantity cannot be negative.');
     }
     return errs;
   }
