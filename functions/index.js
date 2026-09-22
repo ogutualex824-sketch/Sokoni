@@ -13065,3 +13065,50 @@ exports.applicationList       = _appLife.applicationList;        // onCall (admi
 const _posComm = require("./pos-commission-collection");
 exports.posCommissionDailyCollection = _posComm.posCommissionDailyCollection; // onSchedule 06:00 EAT
 exports.posCommissionReconcile       = _posComm.posCommissionReconcile;       // onCall (admin) — read-only
+
+/* ══════════════════════════════════════════════════════════════════
+   SOKONI Connect + Communication Engine — ported onto the live lineage
+   2026-09-22. Registrations only; every module they name arrived with the
+   port and its require closure was proven against THIS tree, not the source
+   branch. See docs/COMMUNICATIONS_PORT_MANIFEST.md.
+══════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════
+   SOKONI Connect — business calling layer
+   6 onCall CFs → 1 connectDispatch service. No event triggers.
+
+   NOT A REPLACEMENT FOR messagesDispatch. Connect owns SESSIONS (voice,
+   video, signalling, the permission to open one); messages owns the
+   conversation and its history. They share no authority: Connect derives
+   its parties from the anchor document and never asks the conversation
+   layer who is on a call.
+══════════════════════════════════════════════════════════════════ */
+const connectDispatcher = require('./connect-dispatch');
+exports.connectDispatch = connectDispatcher.connectDispatch;
+/* Event-triggered — cannot be dispatched. It is the ONLY writer of the `expired` session
+   state, and without it a call nobody answered sits in `ringing` for ever. */
+const _connectMod = require('./connect-calls');
+exports.connectExpireStaleSessions = _connectMod.connectExpireStaleSessions;
+/* Gate C1 — the notification dispatcher. It DELIVERS and does not decide: the parties were
+   already derived from the anchor and the move is asked of the same transition table every
+   client obeys. It is the only producer of `authorized -> ringing` on the server side. */
+const _connectNotify = require('./connect-notify');
+exports.connectOnSessionCreated = _connectNotify.connectOnSessionCreated;
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SOKONI Communication Engine — the unified timeline.
+   READ-ONLY. It projects the canonical records (conversations, connectSessions)
+   into one envelope shape at read time; there is no second message store.
+   It is INCOMPLETE by construction and says so: notifyLog records no business
+   anchor, so push/SMS/email cannot be joined yet.
+══════════════════════════════════════════════════════════════════════════ */
+const _commsTimeline = require('./communication-timeline');
+exports.communicationTimeline = _commsTimeline.communicationTimeline;
+
+/* The admin send path — and the router's FIRST production caller, so the channel policy is
+   now load-bearing rather than a table nothing reads. It resolves who/what/which-channel and
+   hands the result to notify.js, which remains the one sender. `communicationHealth` reports
+   PROVISIONING only; nothing here has observed a provider working. */
+const _commsSend = require('./communication-send');
+exports.communicationPlan   = _commsSend.communicationPlan;
+exports.communicationSend   = _commsSend.communicationSend;
+exports.communicationHealth = _commsSend.communicationHealth;

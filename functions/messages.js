@@ -10,7 +10,8 @@ const { onDocumentCreated,
         onDocumentUpdated }    = require('firebase-functions/v2/firestore');
 const { onSchedule }           = require('firebase-functions/v2/scheduler');
 const logger                   = require('firebase-functions/logger');
-const admin                    = require('firebase-admin');
+const admin                    = require('firebase-admin');
+const MSGID                    = require('./shared/message-identity');
 
 const REGION = 'us-central1';
 
@@ -817,6 +818,7 @@ exports.sendMessage = onCall(
       text, storageRef, thumbnailRef, fileName, fileSize, mimeType, duration,
       lat, lng, address,
       replyToId, replyToText, replyToSenderId,
+      clientMessageId,
     } = req.data || {};
 
     if (!conversationId || typeof conversationId !== 'string') {
@@ -863,7 +865,25 @@ exports.sendMessage = onCall(
     const ud         = userSnap.exists ? userSnap.data() : {};
     const senderName = String(ud.displayName || ud.name || ud.email || 'User').slice(0, 100);
 
-    const msgRef = convRef.collection('messages').doc();
+    /* IDEMPOTENCY. A client that retries an unacknowledged send — after a
+       timeout, a reconnect or a reload — supplies the SAME clientMessageId it
+       minted the first time. That key is derived into a deterministic document
+       id (namespaced by sender, so nobody can squat another user's key) and the
+       write below is a create(), which fails if the message already landed.
+       Without this the retry writes a SECOND message AND increments the
+       conversation's unread count a second time.
+
+       The key is optional: callers that do not send one keep the previous
+       random-id behaviour, so nothing that exists today changes. */
+    const idempotent = clientMessageId !== undefined && clientMessageId !== null;
+    if (idempotent && !MSGID.isValidClientMessageId(clientMessageId)) {
+      throw new HttpsError('invalid-argument',
+        'clientMessageId must be 8-128 chars of A-Z a-z 0-9 . _ : -');
+    }
+    const msgRef = idempotent
+      ? convRef.collection('messages').doc(
+          MSGID.messageDocIdFor(req.auth.uid, String(conversationId), clientMessageId))
+      : convRef.collection('messages').doc();
     const now    = _now();
 
     const msgData = {
@@ -897,18 +917,41 @@ exports.sendMessage = onCall(
       if (type === 'voice') msgData.duration = duration ? Number(duration) : 0;
     }
 
-    const batch = db.batch();
-    batch.set(msgRef, msgData);
-    batch.update(convRef, {
-      lastMessage:   type === 'text' ? (msgData.text || '') : `📎 ${type}`,
-      lastMessageAt: now,
-      lastSenderId:  req.auth.uid,
-      unread:        _inc(1),
-      updatedAt:     now,
-    });
-    await batch.commit();
-
-    return { messageId: msgRef.id };
+    if (idempotent) msgData.clientMessageId = String(clientMessageId);
+
+    const batch = db.batch();
+    /* create() for an idempotent send: if the document exists, the WHOLE batch
+       is rejected, so the unread increment below does not apply either. That
+       atomicity is the point — a duplicate that only skipped the message would
+       still leave the badge wrong. */
+    if (idempotent) batch.create(msgRef, msgData); else batch.set(msgRef, msgData);
+    batch.update(convRef, {
+      lastMessage:   type === 'text' ? (msgData.text || '') : `📎 ${type}`,
+      lastMessageAt: now,
+      lastSenderId:  req.auth.uid,
+      unread:        _inc(1),
+      updatedAt:     now,
+    });
+
+    try {
+      await batch.commit();
+    } catch (e) {
+      /* ALREADY_EXISTS on an idempotent send is the SUCCESS case, not a fault:
+         the message the caller is retrying is already here. Returning an error
+         would push a correctly-delivered message into the client's failed pile
+         and invite the user to send it again by hand. */
+      const already = e && (e.code === 6 || e.code === 'already-exists' ||
+        /ALREADY_EXISTS/i.test(String(e.message || '')));
+      if (idempotent && already) {
+        logger.info('[messages] duplicate suppressed', {
+          conversationId: String(conversationId), messageId: msgRef.id,
+        });
+        return { messageId: msgRef.id, accepted: true, duplicate: true };
+      }
+      throw e;
+    }
+
+    return { messageId: msgRef.id, accepted: true, duplicate: false };
   }
 );
 
