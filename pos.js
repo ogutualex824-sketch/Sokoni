@@ -3038,6 +3038,10 @@ const SPos = (function () {
       ]],
       ['Business', [
         ['🏪', 'Shop Dashboard', 'nav', 'seller.html'],
+        /* Sales Control Centre. An in-POS OVERLAY, so kind 'action' — the same pattern the
+           printer menu and device hub use. It was unreachable before this line: pos.html
+           registered the lazy global and nothing ever called open(). */
+        ['🛡️', 'Sales Control', 'action', 'salescontrol'],
         ['💰', 'Finance', 'tab', 'finance'],
         ['📊', 'Reports', 'tab', 'reports'],
         ['📈', 'Analytics', 'nav', 'analytics.html'],
@@ -3089,6 +3093,14 @@ const SPos = (function () {
       if (kind === 'action') {
         if (target === 'printer') { if (window.openPrinterMenu) window.openPrinterMenu(); return; }
         if (target === 'devices') { try { SPos.deviceHub && SPos.deviceHub.showPanel && SPos.deviceHub.showPanel(); } catch (_) {} return; }
+        if (target === 'salescontrol') {
+          /* PosSalesView is behind pos.html's lazyGlobal proxy: the call loads
+             sokoni-pos-sales.js on first use and forwards. The module owns the overlay,
+             its own close button and its own data sources — this is an ENTRY POINT, not a
+             second Sales Control. */
+          try { window.PosSalesView && window.PosSalesView.open(); } catch (_) {}
+          return;
+        }
         if (target === 'fullscreen') { try { window.posToggleFullscreen && window.posToggleFullscreen(); } catch (_) {} return; }
       }
     },

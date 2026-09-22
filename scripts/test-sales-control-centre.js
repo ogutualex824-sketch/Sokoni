@@ -224,6 +224,80 @@ ck('CONTROL the control centre grew, and none of it is in the boot payload',
    POS.indexOf('src="sokoni-pos-sales.js"') === -1,
    SRC.length + ' bytes, loaded on open');
 
+/* ── 8b · the entry point ─────────────────────────────────────────────────────
+   THE GAP THIS SUITE COULD NOT SEE. Every assertion above drives the module directly
+   through `new Function(...)`, so all of them passed while `PosSalesView.open()` was
+   called by NOTHING — not by pos.html, not by merchant-v2, not by anything. 40 KB of
+   built control centre, two green suites, and no way for a merchant to open it.
+
+   A harness that instantiates the thing it is testing can never notice that the product
+   does not. So this section asserts REACHABILITY, from the shipped launcher, and drives
+   the real dispatcher rather than reading it. */
+head('8b · it is reachable from the POS launcher');
+{
+  const POSJS = fs.readFileSync(path.join(ROOT, 'pos.js'), 'utf8');
+
+  ck('the More launcher declares a Sales Control entry',
+     /\['[^']*', *'Sales Control', *'action', *'salescontrol'\]/.test(POSJS));
+  ck('…as kind ACTION — an in-POS overlay, like the printer menu',
+     /'Sales Control', *'action'/.test(POSJS));
+  ck('…and the dispatcher handles that target',
+     /target === 'salescontrol'/.test(POSJS));
+  ck('…by opening the EXISTING module, not a second one',
+     /window\.PosSalesView && window\.PosSalesView\.open\(\)/.test(POSJS));
+  ck('…guarded, so a module that fails to load cannot throw out of a tap',
+     /try \{ window\.PosSalesView && window\.PosSalesView\.open\(\); \} catch \(_\) \{\}/.test(POSJS));
+
+  /* DRIVEN. The real `go` branch, extracted and executed against a spy — a regex proves
+     the line exists, not that tapping the card reaches the module. */
+  /* BRACE-MATCHED, not sliced on a string search. The first draft cut on the next
+     occurrence of '  };' and produced unbalanced source that would not compile — a
+     harness that cannot build the thing it drives proves nothing about it. */
+  function _body(hay, sig) {
+    const at = hay.indexOf(sig);
+    if (at < 0) return '';
+    let i = hay.indexOf('{', at), depth = 0;
+    for (let j = i; j < hay.length; j++) {
+      if (hay[j] === '{') depth++;
+      else if (hay[j] === '}') { depth--; if (depth === 0) return hay.slice(i + 1, j); }
+    }
+    return '';
+  }
+  const goBody = _body(POSJS, '    go(kind, target) {');
+  ck('the dispatcher body was located and is balanced',
+     goBody.length > 200 && goBody.split('{').length === goBody.split('}').length,
+     goBody.length + ' chars');
+
+  let opened = 0, navigated = null, switched = null;
+  const win = {
+    PosSalesView: { open: () => { opened++; } },
+    posToggleFullscreen: () => {},
+    openPrinterMenu: () => {},
+    location: { set href (v) { navigated = v; }, get href () { return navigated; } },
+  };
+  const ui = { switchTab: (t) => { switched = t; } };
+  const SPos = { deviceHub: { showPanel: () => {} } };
+  const go = new Function('window', 'ui', 'SPos',
+    'return function (kind, target) {' + goBody + '};')(win, ui, SPos);
+
+  go('action', 'salescontrol');
+  ck('tapping the card OPENS the control centre', opened === 1, opened + ' open() calls');
+  ck('…and navigates nowhere — it is an overlay, not a page', navigated === null);
+  ck('…and switches no tab', switched === null);
+
+  /* COUNTERPROOF: the dispatcher is not simply opening it for everything. */
+  go('action', 'printer');
+  ck('a DIFFERENT action does not open it', opened === 1, opened + ' after printer');
+  go('tab', 'orders');
+  ck('…nor does a tab', opened === 1 && switched === 'orders');
+
+  /* The POS surface is otherwise untouched: no twelfth top-level tab was added. */
+  ck('no new top-level POS tab was introduced',
+     !/data-tab="salescontrol"/.test(POS) &&
+     /KNOWN: \['pos', 'orders', 'more', 'inventory', 'reports', 'customers', 'bos', 'finance', 'repair', 'audit', 'settings'\]/.test(POSJS),
+     'POS sub-surfaces stay inside the POS app, as the route note requires');
+}
+
 /* ── 9 · boundary ─────────────────────────────────────────────────────────── */
 head('9 · what this screen does not prove');
 un('a manager actually sees a real pending approval', 'needs the deployed callables and a real request');
@@ -231,6 +305,7 @@ un('approval gates a refund/void/discount', 'zero mutation call sites — the no
 un('the cashier request path', 'createApprovalRequest is hardened; the till-side UI is a separate slice');
 un('shop-wide active shifts', 'no server operation exposes them; rendered Not available');
 un('rendering on a real handset', 'browser suite territory, not this static harness');
+un('a merchant has actually opened it in production', 'nothing is deployed; 8b proves the WIRING, not a visit');
 
 console.log(NL + '  ' + pass + ' passed, ' + fail + ' failed, ' + unproven + ' unproven');
 console.log('  NOTE: view logic only. No live read, and no claim of enforcement.');
