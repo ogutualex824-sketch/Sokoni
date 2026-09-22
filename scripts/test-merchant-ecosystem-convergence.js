@@ -266,6 +266,92 @@ ck('CONTROL — the new-collection detector fires on a plant', FORBIDDEN_NEW.tes
 ck('every exclusion still states a reason', C.EXCLUDED.every(x => x.reason && x.reason.length >= 40));
 ck('the routes contract still validates', C.validate().length === 0, C.validate().join(' | ') || 'clean');
 
+/* ══ 11b. PREMIUM ROSTER — a backend with no front end ════════════════════════ */
+head('11b. ROSTER (brief §16)');
+const SCHED = 'functions/pos-shift-scheduler.js';
+if (!has(SCHED)) {
+  nr('roster authority', SCHED + ' not present');
+} else {
+  const IDX = R('functions/index.js');
+  const ROSTER_CFS = ['createShiftTemplate','publishWeeklyRoster','assignShift','swapShiftRequest',
+    'approveShiftSwap','setStaffAvailability','getRoster','getRosterGaps','getStaffRoster',
+    'acknowledgeShift'];
+  ck('the roster authority exists and is exported by name',
+     ROSTER_CFS.every(fn => new RegExp('exports\\.' + fn + '\\s*=').test(IDX)),
+     ROSTER_CFS.filter(fn => !new RegExp('exports\\.' + fn + '\\s*=').test(IDX)).join(',') ||
+       ROSTER_CFS.length + ' CFs exported');
+
+  /* The claim is an ABSENCE — no client calls any of them — so the scanner is first shown
+     finding a shift CF that IS called, over the same file set. Without that control, "zero
+     roster callers" could equally mean the scanner reads nothing. */
+  const htmlFiles = fs.readdirSync(ROOT).filter(f => f.endsWith('.html'));
+  const callers = fn => htmlFiles.filter(f => {
+    try { return R(f).indexOf(fn) > -1; } catch (_) { return false; }
+  });
+  const control = callers('openShift');
+  ck('CONTROL — the scanner finds a shift CF that IS called (openShift)', control.length > 0,
+     control.join(', '));
+  const rosterCallers = ROSTER_CFS.reduce((a, fn) => a.concat(callers(fn).map(f => fn + '@' + f)), []);
+  /* FINDING SC-3, asserted so it cannot rot: "connecting Premium Roster" is not wiring, it is
+     BUILDING a surface. This flips the day a client calls one, and must then be re-read. */
+  ck('FINDING SC-3 — no client surface calls ANY roster CF', rosterCallers.length === 0,
+     rosterCallers.join(', ') || 'roster backend is unreached — connecting it means building a UI');
+
+  /* And what the Merchant V2 "Shifts & rosters" card actually reaches. */
+  if (has('pos-staff-ops.html')) {
+    const SO = R('pos-staff-ops.html');
+    ck('...while pos-staff-ops DOES reach shifts + attendance',
+       /openShift/.test(SO) && /clockIn/.test(SO) && /getAttendance/.test(SO));
+    ck('...and reaches no roster CF', ROSTER_CFS.every(fn => SO.indexOf(fn) === -1));
+  }
+}
+
+/* ══ 11c. SERVICE STOCK FLAGS — a D-a defect in the making ═════════════════════ */
+head('11c. SERVICE vs PRODUCT stock flag (brief §7, §9)');
+/* The till already knows how not to decrement stock for a non-stocked line: it skips the write
+   when `trackInventory === false`. The in-flight catalogue model spells the same idea
+   `trackStock: false`. Two spellings of one flag is exactly how `sold` vs `soldCount` happened,
+   so it is recorded BEFORE it ships rather than found afterwards. */
+ck('the till honours a no-stock line via trackInventory',
+   /trackInventory\s*!==\s*false/.test(ZF),
+   'posCompleteCheckout skips the stock write for a non-stocked item');
+if (has('sokoni-catalogue-model.js')) {
+  const CAT = R('sokoni-catalogue-model.js');
+  const usesTrackStock = /trackStock/.test(CAT);
+  const usesTrackInv   = /trackInventory/.test(CAT);
+  if (usesTrackStock && !usesTrackInv) {
+    up('FINDING — the in-flight catalogue model spells it trackStock, the till reads trackInventory',
+       'two spellings of one flag. If it ships unreconciled, a SERVICE line would be treated as ' +
+       'stocked by posCompleteCheckout and would decrement physical stock. This is the sold/' +
+       'soldCount divergence repeating, caught before it lands. The file is FOREIGN and ' +
+       'UNCOMMITTED — not edited here, only recorded.');
+  } else {
+    ck('catalogue model and till agree on the stock flag', usesTrackInv || !usesTrackStock,
+       usesTrackStock ? 'trackStock + trackInventory both present' : 'no trackStock');
+  }
+} else {
+  nr('service stock-flag reconciliation', 'sokoni-catalogue-model.js not present in this tree');
+}
+
+/* ══ 11d. ADMINOS — verified, not assumed (brief §20) ══════════════════════════ */
+head('11d. ADMINOS canonical surface');
+ck('admin-os.html exists', has('admin-os.html'));
+ck('adminos.html does NOT exist — wiring it would be a dead route', !has('adminos.html'));
+if (has('admin-os.html')) {
+  const AO = R('admin-os.html').slice(0, 4000);
+  ck('...and admin-os.html IS AdminOS (title + guard)',
+     /Admin\s*OS/i.test(AO) && /sokoni-admin-guard\.js/.test(AO));
+}
+if (has('service-worker.js')) {
+  const SW = R('service-worker.js');
+  ck('service-worker precaches /admin-os, not /adminos',
+     /"\/admin-os"/.test(SW) && !/"\/adminos"/.test(SW));
+}
+up('that /admin-os is the LIVE AdminOS route',
+   'measured once by curl during this audit — /admin-os returned HTTP 200 (61,160 B) and ' +
+   '/adminos returned HTTP 404 — but a live fetch is not re-run by this suite, so it is a ' +
+   'dated observation rather than a standing assertion.');
+
 /* ══ 12. Realtime — nothing claimed without two devices ════════════════════════ */
 head('12. REALTIME');
 nr('two-device propagation for any domain',
