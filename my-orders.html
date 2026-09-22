@@ -24,8 +24,11 @@
     .mo-wrap{padding:16px;max-width:640px;margin:0 auto;}
     .mo-card{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:12px;cursor:pointer;transition:border-color .15s;text-decoration:none;color:inherit;}
     .mo-card:active{border-color:var(--acc);}
-    .mo-wrap{margin-bottom:12px;}
-    .mo-wrap .mo-card{margin-bottom:0;}
+    /* Per-card wrapper. Deliberately NOT .mo-wrap — that class is already the
+       page container, and reusing it gave every card the container padding
+       and 640px width. */
+    .mo-item{margin-bottom:12px;}
+    .mo-item .mo-card{margin-bottom:0;}
     .mo-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
     .mo-actions:empty{display:none;}
     .cc-call{padding:9px 14px;border-radius:11px;border:1px solid var(--line);background:transparent;color:inherit;font:inherit;font-size:12px;font-weight:800;cursor:pointer;}
@@ -115,7 +118,7 @@
         var items = (o.items && o.items.length) ? ' &middot; ' + o.items.length + ' item(s)' : '';
         var total = Number(o.total != null ? o.total : (o.orderTotal || 0)).toLocaleString();
         var oid = o.id || o._fsId || '';
-        return '<div class="mo-wrap">' +
+        return '<div class="mo-item">' +
           '<a class="mo-card" href="' + esc(orderHref(o)) + '">' +
             '<div><div class="mo-id">' + esc(o.id || o._fsId || 'Order') + '</div>' +
             '<div class="mo-sub">' + dateStr + items + '</div></div>' +

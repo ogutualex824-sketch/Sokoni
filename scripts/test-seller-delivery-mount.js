@@ -67,12 +67,30 @@ ok('the page never calls shouldShow itself', code.indexOf('shouldShow') === -1);
 ok('the page never calls callSurfaceFor itself', code.indexOf('callSurfaceFor') === -1);
 ok('the page names no calleeUid', code.indexOf('calleeUid') === -1);
 {
-  /* The request must carry the anchor and nothing identifying a person. */
-  const fn = code.slice(code.indexOf('function _mountDeliveryConnect'),
-    code.indexOf('function _mountDeliveryConnect') + 1800);
-  ok('CONTROL: the mount function was located', fn.indexOf('mountForAnchor') !== -1);
+  /* The request must carry the anchor and nothing identifying a person.
+
+     Bounded by BRACE MATCHING, not by a fixed character window. A fixed window
+     is wrong in both directions: a longer function escapes the check, and a
+     shorter one drags in its neighbours — which is exactly what happened on the
+     live-lineage tree, where the window reached _renderActive's mini-map check
+     and reported a leak that did not exist. */
+  const fnStart = code.indexOf('function _mountDeliveryConnect');
+  let fn = '';
+  if (fnStart !== -1) {
+    let depth = 0;
+    const open = code.indexOf('{', fnStart);
+    let k = open;
+    for (; k < code.length; k++) {
+      if (code[k] === '{') depth++;
+      else if (code[k] === '}') { depth--; if (depth === 0) break; }
+    }
+    fn = code.slice(open, k + 1);
+  }
+  ok('CONTROL: the mount function body was located by brace matching',
+    fn.indexOf('mountForAnchor') !== -1 && fn.length > 200, String(fn.length));
   ok('the mount passes no rider/buyer identity',
-    !/assignedRiderId|riderId|buyerUid|sellerUid|assignedDriverUid/.test(fn), 'leaked an identity');
+    !/assignedRiderId|riderId|buyerUid|sellerUid|assignedDriverUid|driverId/.test(fn),
+    'leaked an identity');
 }
 
 /* ── 4. ACTIVE ONLY, AND NO STALE ACTION ────────────────────────────────── */
