@@ -485,6 +485,10 @@ document.addEventListener('click', function (ev) {
     <div class="st-store-name" id="stStoreName">Loading...</div>
     <div class="st-tagline" id="stTagline"></div>
     <div class="st-badges" id="stBadges"></div>
+    <!-- "Message Shop" — presentation only. The business relationship
+         underneath is an INQUIRY: buyer <-> seller ABOUT A LISTING. The server
+         fills this; an empty slot collapses. -->
+    <div class="st-connect" id="stConnectActions"></div>
     <div style="display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap;">
       <button type="button" id="stFollowBtn" onclick="stToggleFollow()" class="st-follow-btn not-following">
         <i class="fas fa-user-plus" id="stFollowIcon"></i>
@@ -1159,6 +1163,26 @@ async function _stLoadFirestore(uid) {
         }
       }
 
+      /* "MESSAGE SHOP" IS AN INQUIRY ABOUT A LISTING.
+
+         shops/{uid} is deliberately NOT a Connect anchor: its document id is
+         the owner's UID, it is world-readable, and it travels in this page's
+         own URL — so anchoring on it would mean the CLIENT naming the person to
+         contact. Connect has no parameter for that, by design.
+
+         So the anchor is a PRODUCT. The server reads products/{id}.sellerUid
+         and derives the recipient itself. The buyer sees "Message shop"; the
+         relationship recorded is buyer <-> seller about that listing, which is
+         what inquiry already means — and why it carries a chat-only ceiling.
+
+         WHICH listing does not matter, and that is not an accident: fsProds
+         comes from where("sellerUid","==",uid), so EVERY listing on this page
+         derives the SAME seller. The choice cannot change the recipient. A shop
+         with no live listing gets no button — a generic "message this shop" is
+         not a supported Connect relationship, and inventing one here would be
+         the UID-addressed anchor this whole design refuses. */
+      _mountShopInquiry(fsProds);
+
       /* Re-render products grid */
       var grid  = document.getElementById("stProductsGrid");
       var empty = document.getElementById("stProductsEmpty");
@@ -1209,6 +1233,44 @@ async function _stLoadFirestore(uid) {
     if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
   }catch(e){}
 })();
+</script>
+<script src="sokoni-connect-call.js"></script>
+<script>
+/* Mounts the shop-level Connect action. See the comment at the call site for
+   why the anchor is a listing and never shops/{uid}. */
+var _shopInquiryMountedFor = null;
+function _mountShopInquiry(products) {
+  var slot = document.getElementById("stConnectActions");
+  if (!slot) return;
+  if (!window.SokoniConnectCall || !window.sokoniCallable) return;
+
+  /* A published listing only. A cancelled or draft listing is not a live
+     business relationship, and the server would refuse it anyway — drawing the
+     button first would just produce a dead control. */
+  var CLOSED = ["cancelled", "canceled", "deleted", "removed", "draft", "archived"];
+  var live = (products || []).filter(function (p) {
+    return p && p.id && (!p.status || CLOSED.indexOf(String(p.status).toLowerCase()) === -1);
+  });
+  if (!live.length) { slot.innerHTML = ""; _shopInquiryMountedFor = null; return; }
+
+  var anchorId = String(live[0].id);
+  if (_shopInquiryMountedFor === anchorId) return;
+  _shopInquiryMountedFor = anchorId;
+
+  window.SokoniConnectCall.mountForAnchor(slot, {
+    anchorType: "inquiry",
+    anchorId: anchorId,
+    roleLabel: "Shop",
+    call: function (op, payload) {
+      var data = Object.assign({}, payload || {}, { op: op });
+      return window.sokoniCallable("connectDispatch")(data)
+        .then(function (envelope) { return (envelope && envelope.data) || {}; });
+    },
+    onSession: function (r) {
+      if (r && r.sessionId) location.href = "/connect.html?session=" + encodeURIComponent(r.sessionId);
+    },
+  });
+}
 </script>
 <script type="module" src="sokoni-init.js"></script>
 <script src="sokoni-audit.js" defer></script>

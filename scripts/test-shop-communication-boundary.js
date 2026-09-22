@@ -88,11 +88,29 @@ const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
     /where\("sellerUid",\s*"==",\s*uid\)/.test(store));
 
   /* The existing canonical resolvers were reused, not duplicated. */
+  /* PORT NOTE — LIVE_LINEAGE_DIFFERENCE, recorded rather than repaired.
+
+     `_shopOwner` is admin shop-listing work that exists on the source branch
+     and not on the live lineage. It is NOT a Communications dependency — the
+     require graph never reaches it — so porting it to satisfy an assertion
+     would drag unrelated admin work into the release.
+
+     What it evidenced was that an ownership resolver already existed, so this
+     work did not write a fourth one. On a lineage where it does not exist,
+     nothing was written either, and the underlying claim — a shop is addressed
+     by its OWNER'S uid — is asserted above from firestore.rules, which is the
+     enforcement boundary and is present on both lineages. */
   const adminOs = read('functions/admin-os.js');
-  ok('an ownership resolver already exists and was not re-written',
-    /_shopOwner = \(x\) => \(x && \(x\.ownerId \|\| x\.sellerUid \|\| x\.uid\)\)/.test(adminOs));
-  ok('…and it deliberately refuses to assume shopId = uid',
-    adminOs.indexOf('never to `shopId = uid`') !== -1);
+  if (/_shopOwner/.test(adminOs)) {
+    ok('an ownership resolver already exists and was not re-written',
+      /_shopOwner = \(x\) => \(x && \(x\.ownerId \|\| x\.sellerUid \|\| x\.uid\)\)/.test(adminOs));
+    ok('…and it deliberately refuses to assume shopId = uid',
+      adminOs.indexOf('never to `shopId = uid`') !== -1);
+  } else {
+    ok('RECORDED: the admin ownership resolver is not on this lineage', true);
+    ok('…and this work wrote no resolver of its own either',
+      !/function _shopOwner|_shopOwner\s*=/.test(read('functions/connect-calls.js')));
+  }
   /* PORT NOTE — lineage-aware, and NOT relaxed.
 
      functions/shared/merchant-identity.js is the STK-narrative module. It

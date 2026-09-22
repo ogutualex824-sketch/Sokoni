@@ -61,6 +61,9 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:#fff;m
 .sp-status{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;}
 .sp-status-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
 .sp-status-dot.green{background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,0.5);}
+/* UNOBSERVED. Not green, not red — this page has measured nothing, and a
+   colour would be a claim. Grey is the absence of a claim. */
+.sp-status-dot.unknown{background:rgba(255,255,255,0.28);}
 .sp-status-dot.amber{background:#f59e0b;}
 .sp-status-dot.red{background:#ff4444;}
 .sp-faq-item{border-bottom:1px solid rgba(255,255,255,0.06);}
@@ -95,9 +98,14 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:#fff;m
   <!-- PLATFORM STATUS -->
   <div style="margin-bottom:16px;">
     <div class="sp-status">
-      <div class="sp-status-dot green"></div>
+      <!-- STATUS IS NOT CLAIMED HERE. This block read "All Systems
+           read "All Systems Operational" beside a green dot, permanently, on
+           performs no health check whatsoever. It was not a status; it was a
+           decoration that happened to be reassuring, and it would have said
+           the same thing during an outage. Unknown renders as a dash. -->
+      <div class="sp-status-dot unknown" id="spStatusDot"></div>
       <div>
-        <div style="font-size:13px;font-weight:800;">All Systems Operational</div>
+        <div style="font-size:13px;font-weight:800;" id="spStatusLabel">Service status &mdash; not checked here</div>
         <div style="font-size:11px;color:rgba(255,255,255,0.3);">Marketplace · Payments · Delivery · Rides</div>
       </div>
       <a href="monitor.html" style="margin-left:auto;font-size:11px;color:rgba(255,255,255,0.3);text-decoration:none;">Live Status ↗</a>
@@ -190,7 +198,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:#fff;m
     <div class="sp-card">
       <div style="font-size:14px;font-weight:800;margin-bottom:14px;">Enter your Ticket ID</div>
       <div class="sp-track-input">
-        <input class="sp-input" id="spTrackId" type="text" placeholder="e.g. TKT1ABC2DEF" style="margin-bottom:0;" oninput="this.value=this.value.toUpperCase()">
+        <input class="sp-input" id="spTrackId" type="text" placeholder="Your ticket ID" style="margin-bottom:0;" oninput="this.value=this.value.toUpperCase()">
         <button class="sp-track-btn" onclick="trackTicket()">Track</button>
       </div>
       <div class="sp-track-result" id="spTrackResult"></div>
@@ -255,15 +263,41 @@ function submitTicket() {
   var priority  = document.getElementById('spPriority').value;
   var ref       = (document.getElementById('spRef').value||'').trim();
 
-  var id = window.SokoniLaunch ? SokoniLaunch.submitTicket({
-    name: name, phone: phone, category: category, priority: priority,
-    description: desc, ref: ref,
-  }) : ('TKT' + Date.now().toString(36).toUpperCase());
+  /* THE TICKET GOES TO SOKONI, and this page does not say "submitted" until it
+     has. Until now `SokoniLaunch.submitTicket` wrote localStorage, invented a
+     `TKT…` id and the page showed "We've received your issue" unconditionally —
+     nobody had received anything. The escape hatch offered was WhatsApp. */
+  if (!window.SokoniSupportContact) {
+    btn.disabled = false;
+    btn.textContent = 'Submit Support Ticket';
+    (window._skToast || alert)('The support form did not load. Please use one of the contact options above.');
+    return;
+  }
 
-  document.getElementById('spTicketForm').style.display = 'none';
-  var suc = document.getElementById('spTicketSuccess');
-  suc.style.display = 'block';
-  document.getElementById('spTicketIdDisplay').textContent = 'Ticket ID: ' + id;
+  /* The reference the user typed is part of the message, not a business anchor:
+     an anchor must be a canonical id this client cannot verify. The TICKET's own
+     id is the anchor, and the server mints it. */
+  var body = desc
+    + (ref ? '\n\nOrder / transaction reference given by the user: ' + ref : '')
+    + '\n\nContact name: ' + name
+    + '\nContact phone: ' + phone;
+
+  window.SokoniSupportContact.submit({
+    category: category,
+    priority: priority,
+    subject: category.charAt(0).toUpperCase() + category.slice(1) + ' issue',
+    message: body,
+  }).then(function (res) {
+    /* Only now. The id shown is the one Firestore generated. */
+    document.getElementById('spTicketForm').style.display = 'none';
+    var suc = document.getElementById('spTicketSuccess');
+    suc.style.display = 'block';
+    document.getElementById('spTicketIdDisplay').textContent = 'Ticket ID: ' + res.ticketId;
+  }).catch(function (e) {
+    btn.disabled = false;
+    btn.textContent = 'Submit Support Ticket';
+    (window._skToast || alert)(window.SokoniSupportContact.describeFailure(e));
+  });
 }
 
 function trackTicket() {
@@ -272,26 +306,68 @@ function trackTicket() {
   var result = document.getElementById('spTrackResult');
   result.style.display = 'block';
 
-  /* Check localStorage for this ticket */
-  try {
-    var last = JSON.parse(localStorage.getItem('_sokoniLastTicket')||'{}');
-    if (last.id && last.id.toUpperCase() === id) {
-      var age = Math.round((Date.now()-last.ts)/3600000);
-      result.innerHTML = '<div style="display:flex;align-items:center;gap:10px;"><div style="font-size:22px;">🎫</div><div><div style="font-size:13px;font-weight:800;color:#f59e0b;">Under Review</div><div style="font-size:11px;color:rgba(255,255,255,0.3);">Submitted '+age+'h ago · Response within 24h</div></div></div>';
+  /* READ THE REAL TICKET. This used to read localStorage and, failing that, send
+     the user to WhatsApp — so a ticket was "not found" the moment browser data was
+     cleared, and the status shown ("Under Review") was a constant, not a fact.
+     `supportTickets` is readable by its owner (firestore.rules), so the status
+     below is the one an admin actually set. */
+  result.innerHTML = '<div style="font-size:13px;color:rgba(255,255,255,0.4);">Checking…</div>';
+
+  var db = null;
+  try { db = (window.firebase && firebase.firestore) ? firebase.firestore() : null; } catch (e) { db = null; }
+  var signedIn = false;
+  try { signedIn = !!(window.firebase && firebase.auth && firebase.auth().currentUser); } catch (e) {}
+
+  if (!db || !signedIn) {
+    result.innerHTML = '<div style="font-size:13px;color:rgba(255,255,255,0.4);">'
+      + 'Please sign in to look up your ticket — we can only show tickets to the account that raised them.</div>';
+    return;
+  }
+
+  db.collection('supportTickets').doc(id).get().then(function (snap) {
+    if (!snap.exists) {
+      /* Absent is stated as absent. It is NOT reported as "still under review". */
+      result.innerHTML = '<div style="font-size:13px;color:rgba(255,255,255,0.4);">'
+        + 'No ticket with that ID on this account. Check the ID, or '
+        + '<a href="https://wa.me/254705726803?text=Ticket+' + encodeURIComponent(id)
+        + '" target="_blank" style="color:#25d366;">follow up on WhatsApp</a>.</div>';
       return;
     }
-  } catch {}
-  result.innerHTML = '<div style="font-size:13px;color:rgba(255,255,255,0.4);">Ticket not found locally. Please <a href="https://wa.me/254705726803?text=Ticket+' + encodeURIComponent(id) + '" target="_blank" style="color:#25d366;">follow up on WhatsApp</a> with your ticket ID.</div>';
+    var t = snap.data() || {};
+    var status = String(t.status || 'open');
+    var colour = status === 'resolved' ? '#71ff00' : (status === 'closed' ? 'rgba(255,255,255,0.4)' : '#f59e0b');
+    result.innerHTML = '<div style="display:flex;align-items:center;gap:10px;">'
+      + '<div style="font-size:22px;">🎫</div><div>'
+      + '<div style="font-size:13px;font-weight:800;color:' + colour + ';">' + _esc(status) + '</div>'
+      + '<div style="font-size:11px;color:rgba(255,255,255,0.3);">' + _esc(t.subject || '') + '</div>'
+      + (t.resolution ? '<div style="font-size:12px;color:rgba(255,255,255,0.55);margin-top:6px;">' + _esc(t.resolution) + '</div>' : '')
+      + '</div></div>';
+  }).catch(function (e) {
+    /* A failed read is a failed read — never rendered as "not found". */
+    result.innerHTML = '<div style="font-size:13px;color:#f59e0b;">Could not check that ticket just now ('
+      + _esc((e && e.code) || 'error') + '). It has not been lost — please try again.</div>';
+  });
 }
 
 /* Show last ticket if any */
 window.addEventListener('DOMContentLoaded', function() {
   try {
     var last = JSON.parse(localStorage.getItem('_sokoniLastTicket')||'{}');
-    if (last.id) {
+    /* ONLY a server-issued id. Entries written by the old localStorage path carry
+       no `server` flag and are ignored: they were never received by SOKONI, and
+       showing one here would repeat the claim that they were.
+       The STATUS is not asserted either — this panel used to print "Under Review"
+       as a constant, whatever the ticket actually said. It offers the lookup
+       instead, which reads the real record. */
+    if (last.id && last.server === true) {
       var el = document.getElementById('spLastTicket');
       var age = Math.round((Date.now()-last.ts)/3600000);
-      document.getElementById('spLastTicketContent').innerHTML = '<div style="font-size:12px;font-family:monospace;color:#71ff00;font-weight:800;">'+_esc(last.id)+'</div><div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:4px;">Submitted '+age+'h ago · Status: <span style="color:#f59e0b;font-weight:800;">Under Review</span></div>';
+      document.getElementById('spLastTicketContent').innerHTML =
+        '<div style="font-size:12px;font-family:monospace;color:#71ff00;font-weight:800;">'+_esc(last.id)+'</div>'
+        + '<div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:4px;">Submitted '+age+'h ago</div>'
+        + '<button class="sp-track-btn" style="margin-top:10px" onclick="document.getElementById(\'spTrackId\').value='
+        + JSON.stringify(last.id) + ';showTab(\'track\',document.querySelectorAll(\'.sp-tab\')[2]);trackTicket();">'
+        + 'Check status</button>';
       el.style.display = 'block';
     }
   } catch {}
@@ -336,6 +412,7 @@ function toggleFaq(i, btn) {
   <script defer src="sokoni-gateway.js"></script>
 
 <nav class="bnav" role="navigation" aria-label="Main navigation" data-sokoni-nav></nav>
+<script src="/sokoni-support-contact.js"></script>
 </body>
 </html>
 
