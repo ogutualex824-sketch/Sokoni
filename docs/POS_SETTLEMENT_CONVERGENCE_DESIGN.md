@@ -617,3 +617,197 @@ Deployment remains separately constrained by the Artifact Registry observation i
 - It does not correct the receipt gate (A.9) — deliberately left as its own slice.
 - It does not re-ratify §0–§16; those stand except where a clause above names them.
 - It does not schedule the cutover, which remains a release-owner plan (§16).
+
+---
+
+# Amendment A.1 — reconciliation against `posCompleteCheckout` (2026-09-22)
+
+**Status:** DESIGN ONLY, pending owner ratification. **Amendment A must NOT be ratified as
+written**, and `retailSettlements` must NOT be created on its strength.
+**Occasioned by:** the discovery that a POS settlement authority already exists and was missed by
+Amendment A's own preflight.
+**Owner direction, 2026-09-22:** *no Daraja — IntaSend everywhere.* §A.1.5 is the design for that.
+
+## A.1.0 What the preflight missed, and why it matters
+
+Amendment A's preflight named `recordPOSSale` (`pos-retail-engine.js:215`) as the POS sale writer
+and reported: auto-generated id, no idempotency, one payment object, inventory before payment.
+**All true of `recordPOSSale`.** It was not the whole estate.
+
+`posCompleteCheckout` (`pos-zero-friction.js:273`) is a second, **materially better** sale
+authority. The preflight even saw `posIdempotency` and recorded it as "the one working pattern" —
+without following it to the callable that uses it. An inventory that stops at the first plausible
+writer is not an inventory.
+
+Amendment A was therefore designed against an incomplete picture of what already exists. That is
+the single reason it must not be ratified unchanged.
+
+## A.1.1 The existing POS authority
+
+```
+pos-checkout.html  _finalize(method, payments, totals)
+      ↓
+posCompleteCheckout            ← THE seam. One place a cashier says "take payment".
+      ↓
+posIdempotency/{key}  atomic create(), cached-result replay
+posPaymentClaims/{ref} atomic create(), single-spend
+      ↓
+posRetailSales/{saleId} + posReceipts
+```
+
+Routing, confirmed in the contract: the primary `pos` route declares
+`entry:'pos-checkout.html?shell=merchant'`; `smartpos` still mounts `pos.html`. **Both are live
+(HTTP 200).** `/pos` was preserved deliberately.
+
+## A.1.2 Amendment A requirement → what already exists
+
+| Amendment A requirement | `posCompleteCheckout` | Verdict |
+|---|---|---|
+| A.1 canonical txn identity | `idempotencyKey` (client-supplied, required); `saleId` | **partial** — id is not merchant-embedded, not offline-mintable |
+| A.2 tender-level record | `payments[]` array, per-tender method/amount/ref | **met in substance** |
+| A.3 tender states | implicit: confirmed-or-refused. No `pending`/`processing`/`expired` | **gap** |
+| A.3 settlement states | none — a sale exists only once complete | **gap**, and see A.1.4 |
+| A.4 one fails / others succeed | whole call refuses; `_consumed` released | **different, and arguably better** — no partial sale exists to strand |
+| A.5 retry without duplicating | same `idempotencyKey` reclaims its own payment | **met** |
+| A.7 cash vs external | `CONFIRMABLE = {mpesa, card, mpesa_daraja}`; cash exempt with a stated reason | **met** |
+| A.8 idempotency | `posIdempotency` atomic create, cached result | **met** |
+| A.8 webhook redelivery | confirmation is READ, not pushed; `posPaymentClaims` makes replay inert | **met by a different mechanism** |
+| A.6 inventory binding | stock asserted + deducted inside `runTransaction`; sale written **after** | **partial** — see A.1.3 |
+| A.9 receipt eligibility | server-issued, only on success | **met, and stronger than the client gate** |
+| A.10 audit trail | `merchantProvenBy`, `financialPosting`, `collectionRoute`, claims | **met** |
+| A.11 no fourth authority | — | **this amendment is how it stays true** |
+
+Additionally present and not in Amendment A: server-computed totals (*"the total is COMPUTED
+here, never accepted"*), price-tolerance checks against canonical `products`, coupon validation,
+`resolveActor` discount authority with unavailable ≠ refusal, and ownership proof recorded per sale.
+
+## A.1.3 Genuine gaps
+
+1. **Inventory and the sale are not one commit.** Stock deducts inside `runTransaction`; the sale
+   writes after, via `db.collection('posRetailSales').doc(saleId).set(sale)`. The ordering is
+   *reasoned* — the commission comment argues the recoverable failure direction — but A.6's
+   "one economic transaction" is not literally satisfied, and there is no
+   `inventoryMovements/{txnId}` journal.
+2. **No tender-level state.** A tender is confirmed at the moment of sale or the sale refuses.
+   Workable for a synchronous till; insufficient for A.3's `processing`/`expired`, and it means a
+   non-answer from a provider cannot be represented at all.
+3. **`txnId` is not the A.1 identity.** `idempotencyKey` is
+   `merchantId_cashierId_Date.now()` — client-supplied, not merchant-verified, not offline-stable.
+4. **`posSales` vs `posRetailSales` remain disjoint** (`b12bd68`, POS_SALES_LIFECYCLE_AUDIT §2).
+   `voidPOSSale` voids from `posSales` while Merchant V2 Orders reads `posRetailSales`, which is
+   why void is blocked. Amendment A assumed one lineage; there are two.
+5. **QR is not a tender here.** `pos-checkout.html` has no QR payment path — its only `qr` is
+   `customer_qr` identification.
+
+## A.1.4 Why `retailSettlements` should NOT be created
+
+Amendment A §1 proposed it as "the sole financial authority". An authority with confirmation,
+single-spend, idempotency, server-computed totals and server-issued receipts **already exists and
+is wired to the primary till**. Introducing `retailSettlements` now would create precisely the
+fourth authority A.11 forbids.
+
+**Disposition: A.1 supersedes Amendment A §1–§3.** `posCompleteCheckout` → `posRetailSales` +
+`posReceipts` is the POS settlement authority. The gaps in A.1.3 are to be closed **inside it**,
+not by replacing it. A new collection requires evidence of a responsibility it cannot safely
+carry; none has been produced.
+
+## A.1.5 NO DARAJA — and the confirmation gate is already broken
+
+**Owner direction: replace Daraja with IntaSend.** The evidence says this is not merely a
+preference; the Daraja dependency is already severed and the gate it fed is unsatisfiable.
+
+The chain `posCompleteCheckout` relies on:
+
+```
+darajaSTKPush  →  posPayments/{checkoutId} status:'pending'
+darajaSTKCallback (Safaricom webhook)  →  status:'completed'   [atomic claim]
+posCompleteCheckout  →  requires status === 'completed'        [pos-zero-friction.js:650]
+```
+
+Measured, 2026-09-22:
+
+* **`exports.darajaSTKPush` no longer exists in `functions/index.js`.** Nothing creates the
+  `pending` rows the callback would promote.
+* `darajaSTKCallback` still exists and still writes `completed` under an atomic claim — a
+  receiver with no producer.
+* The **only** writer of `posPayments` documents is `pos-qr.js:176`, and the QR rail's vocabulary
+  is `pending | paid | expired | cancelled | refunded` — it writes **`paid`**, never `completed`.
+* The IntaSend receiver does **not** close the gap: `webhookIntasend` → `_associatePosQrCallback`
+  **associates only and never marks paid** (P3-A, deliberate — only `completePOSQRPayment` may
+  mark paid, after `shared/intasend-verify`).
+
+Production, same day: `posPayments` = 13 → **failed 6, pending 5, completed 2**;
+**`posPaymentClaims` = 0**; `posIdempotency` = 0; `posRetailSales` = 5.
+
+**Zero payment claims means `posCompleteCheckout` has never confirmed a non-cash tender in
+production.** The two `completed` rows are historical Daraja. The primary till is cash-only in
+practice, and every M-PESA tender attempted through it is refused with *"The customer has not
+completed this payment yet"* or *"No M-PESA payment was found for this sale"*.
+
+### The designed replacement
+
+The IntaSend-confirmed equivalent of Daraja's `completed` already exists and is **stronger**:
+`completePOSQRPayment` writes `posPayments.status = 'paid'` only after `shared/intasend-verify`
+has confirmed the reference with IntaSend. It is certified (P1) and the client cannot write it.
+
+```
+CONFIRMABLE gate, today      pay.status !== 'completed'   → Daraja vocabulary, no producer
+CONFIRMABLE gate, designed   pay.status !== 'paid'        → IntaSend-verified, live producer
+```
+
+Conditions this design carries, none of which may be dropped:
+
+1. **`paid` must remain writable only by `completePOSQRPayment`** after provider verification.
+   If any client path can write it, the gate is worse than Daraja's, not better.
+2. **`posPaymentClaims` single-spend is unchanged** and does the same work regardless of
+   vocabulary — it keys on the reference, not the status.
+3. **Accept one vocabulary, not both.** Keeping `completed` as an alternative preserves a Daraja
+   surface with no producer, and two accepted spellings on one collection is the D2 two-shape
+   defect this would otherwise be repeating.
+4. **`mpesa_daraja` leaves `CONFIRMABLE`.** A method name that can never be confirmed should not
+   be listed as confirmable.
+5. The change is **one predicate and one method list** in `pos-zero-friction.js`. It is small,
+   and it is on the live money path — it wants its own slice, its own test, and the same
+   browser/production verification discipline as the receipt gate.
+
+**Not implemented here.** This section is the design; the mutation is a separate, gated slice.
+
+## A.1.6 The boundary this preserves
+
+```
+                    SOKONI PAYMENT
+          ┌──────────────────┴──────────────────┐
+     ONLINE / MARKETPLACE                   POS / TILL
+     createPaymentIntent                posCompleteCheckout
+     payment-purposes pricing           server-computed totals
+     webhookIntasend confirms           posPayments 'paid' read at sale
+     payments/{apiRef}                  posPaymentClaims single-spend
+     orders                             posRetailSales + posReceipts
+```
+
+Two authorities, one provider, and **one confirmation source** once A.1.5 lands. They are not
+merged: an online intent is priced before payment and confirmed by push; a till sale is priced at
+the counter and confirms by reading. Amendment A's error was treating the second as absent.
+
+## A.1.7 Disposition of the dual-business branch
+
+| Artefact | Direction |
+|---|---|
+| `posCompleteCheckout` | **The POS authority.** Close A.1.3 gaps inside it. |
+| `retailSettlements` | **Do not create.** A.1.4. |
+| `d138279` QR + receipt port | **Still valid** — `pos.html` is live via `smartpos` and retains both defects. Secondary surface; lower urgency than believed. |
+| `sokoni-pos-tender.js` | Adapt the allocation **mathematics** only; authority role superseded. |
+| Quick Charge / mixed basket | Adapt onto `payments[]` + `posCompleteCheckout`. |
+| `payment-purposes.js` / `pos_service_sale` | **Reconcile:** it prices from `posProducts`; `posCompleteCheckout` validates against canonical `products` and records that *"posProducts was empty for most merchants"*. Resolve before wiring. |
+| `sokoni-pos-receipt-gate.js` | `pos.html` only. `pos-checkout.html` is server-gated. |
+| IntaSend hosted-checkout client | Candidate external adapter; unchanged by this amendment. |
+| `business-scope.js`, catalogue, merchant nav | Reuse; orthogonal. |
+
+## A.1.8 What A.1 deliberately does NOT do
+
+* No runtime code, no collection, no deploy, no merge of `d138279`.
+* Does not implement A.1.5 — that is a separate gated slice on the live money path.
+* Does not close the A.1.3 gaps; it names them.
+* Does not re-ratify Amendment A §4–§16, which stand except where A.1 names them.
+* Does not resolve `posSales` vs `posRetailSales`; that remains
+  POS_SALES_LIFECYCLE_AUDIT §5's open authority decision.
