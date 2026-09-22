@@ -1,3 +1,81 @@
+## 2026-09-22 (150) — Ecosystem convergence audit: the sales lineage question, answered
+
+**READ-ONLY AUDIT + one contract annotation. NO DEPLOY. f937e5a NOT ported. No foreign file
+touched. No git stash. Live remains 111dbd7 / v636.**
+
+### §22 answered: posSales and posRetailSales are TWO COMPLETE LINEAGES
+
+Not a projection. Not an accidentally duplicated document. Two internally consistent lineages
+of one concept, each with its own creator, its own reversal and its own readers — and **no
+writer touches both** (measured: `pos-zero-friction.js` has 0 `posSales` refs;
+`pos-retail-engine.js` has 0 `posRetailSales` refs, each paired with a control proving the
+detector finds that file's own collection).
+
+```
+TILL      posCompleteCheckout -> posRetailSales   reversed by posProcessRefund  <- HAS a caller
+DISPATCH  recordPOSSale       -> posSales         reversed by voidPOSSale       <- NO caller
+```
+
+Three facts decide the Void question:
+
+1. **voidPOSSale has ZERO client callers** — scanned every .html/.js outside functions/ and
+   scripts/, with a control proving the scanner finds posProcessRefund (pos-checkout.html).
+2. **recordPOSSale has one real caller: pos-onboard.html** — so posSales is fed by onboarding.
+3. **The till already has a wired reversal**: posProcessRefund, on posRetailSales.
+
+So the repair was never to wire Void around the split. **No Void button is exposed**, and the
+product decision — which record IS the completed sale — stays with the owner.
+
+### Inventory is ALREADY converged — and that is the ecosystem spine
+
+The sale records are split; the stock consequence is not. All four money paths write the same
+canonical `products/{id}.stock`. Two divergences inside it, both new findings:
+
+- **D-a** TILL writes `sold`; DISPATCH writes `soldCount`. One counter, two spellings.
+- **D-b** DISPATCH moves stock **without bumping `inventoryVersion`** — the cache-invalidation
+  counter — so a device can keep serving a stale figure after a real deduction.
+
+### B-2: five routes I added in f937e5a read the wrong lineage
+
+pos-bi, pos-ai, pos-books, pos-hq and pos-crm read `posSales` **only** (0 posRetailSales refs
+each). A merchant selling through the real till writes posRetailSales, so those five show that
+merchant nothing. Finding against my own previous commit.
+
+**Repair in this pass is an ANNOTATION, not a rewiring**: each now declares
+`lineage:'dispatch'`, Orders and POS declare `lineage:'till'`, and the suite FAILS if a
+routed DISPATCH-only surface leaves it undeclared. Withholding or re-pointing them is an owner
+call gated on B-1.
+
+### Other blockers recorded, not papered over
+
+- **B-3** Merchant V2 `pos-setup` opens **pos-printer-setup.html**, not the canonical advanced
+  **pos-setup.html**. The per-control comparison is **NOT RUN** — pos-setup.html is foreign
+  dirty work and auditing a file mid-edit measures a moving target.
+- **C-1 COMMISSION CONFLICT.** Instruction: till 5%, online 15%. Config: till 5% OK,
+  marketplace **16/12/8/4 by plan** (owner decision 2026-09-13). 15% is the **retired**
+  seller_free rate. **Not changed** — editing only the client snapshot would make Merchant V2
+  display 15% while the server charges the ladder.
+- **C-2 ADMINOS FILENAME.** The instruction named `adminos.html`; that file does not exist.
+  The surface is `admin-os.html`. Boundary implemented as intended; the filename not
+  propagated, because it would create a dead route.
+
+### Files
+
+| File | Change |
+|---|---|
+| `docs/MERCHANT_V2_POS_ECOSYSTEM_MAP_2026-09-22.md` | **new** — the 19-domain authority map |
+| `scripts/test-merchant-ecosystem-convergence.js` | **new** — 64/0, 6 UNPROVEN, 2 NOT RUN |
+| `sokoni-merchant-routes.js` | `lineage` on 7 routes + its validation |
+| `CHANGELOG.md` | this entry |
+
+**No database change. No API change. No rules change. No index change. No rate changed.**
+
+### Gates
+
+convergence **64/0** (6 UNPROVEN, 2 NOT RUN) · ecosystem **114/0** · inshell **29/0** ·
+merchant-actions **31/0** · commission single-source **pass** · merchant-routes 77/2
+(pre-existing). UNPROVEN and NOT RUN are reported, never counted as passes.
+
 ## 2026-09-22 (149) — Merchant V2 becomes the control surface for the POS ecosystem
 
 **Hosting-only. NO Functions deploy, NO rules change, NO index change, NO production mutation.

@@ -86,7 +86,7 @@
            'abandoned cart reserves nothing and decrements nothing, and success is only ever ' +
            'rendered from a server result. POS is preserved unchanged as its own destination.' },
 
-    { id:'pos', name:'POS', icon:'🧮', tier:'primary',
+    { id:'pos', name:'POS', icon:'🧮', tier:'primary', lineage:'till',
       kind:'pos', tab:'pos', entry:'pos-checkout.html?shell=merchant',
       role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID, CTX.BRANCH_ID],
       mobile:true, desktop:true, activeKey:'pos',
@@ -126,7 +126,7 @@
            'mandatory reason, and leaves `sold`, revenue and every sales aggregate untouched. ' +
            'Selling remains Sell/POS -> posCompleteCheckout.' },
 
-    { id:'orders', name:'Orders', icon:'🧾', tier:'primary',
+    { id:'orders', name:'Orders', icon:'🧾', tier:'primary', lineage:'till',
       kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'orders',
@@ -471,7 +471,7 @@
       note:'Float, drops, pickups and shift reconciliation on cmRecordCashEvent via ' +
            'smartPosDispatch. The shift id it reconciles against is the one the till sends.' },
 
-    { id:'pos-books', name:'Accounting', icon:'📒', tier:'more',
+    { id:'pos-books', name:'Accounting', icon:'📒', tier:'more', lineage:'dispatch',
       kind:'page', src:'pos-accounting.html?shell=merchant',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'pos-books',
@@ -530,7 +530,7 @@
            'Requested here, granted by the server; this surface mints no permission.' },
 
     /* ── Intelligence ───────────────────────────────────────────────────────── */
-    { id:'pos-bi', name:'Business Intelligence', icon:'📊', tier:'more',
+    { id:'pos-bi', name:'Business Intelligence', icon:'📊', tier:'more', lineage:'dispatch',
       kind:'page', src:'pos-bi.html?shell=merchant',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'pos-bi',
@@ -540,20 +540,20 @@
            'back empty. Registering the route does not change that; it is recorded so the ' +
            'next reader does not chase it as a new regression.' },
 
-    { id:'pos-ai', name:'POS Assistant', icon:'🤖', tier:'more',
+    { id:'pos-ai', name:'POS Assistant', icon:'🤖', tier:'more', lineage:'dispatch',
       kind:'page', src:'pos-ai.html?shell=merchant',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'pos-ai',
       note:'askPOSAssistant / getAIQueryHistory / clearAIQueryHistory, all exported.' },
 
-    { id:'pos-hq', name:'Multi-branch HQ', icon:'🏢', tier:'more',
+    { id:'pos-hq', name:'Multi-branch HQ', icon:'🏢', tier:'more', lineage:'dispatch',
       kind:'page', src:'pos-hq.html?shell=merchant',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'pos-hq',
       note:'smartPosDispatch -> pos-hq handlers. Branch roll-up for a merchant running more ' +
            'than one shop.' },
 
-    { id:'pos-crm', name:'Loyalty & Gift Cards', icon:'🎟️', tier:'more',
+    { id:'pos-crm', name:'Loyalty & Gift Cards', icon:'🎟️', tier:'more', lineage:'dispatch',
       kind:'page', src:'pos-crm-pro.html?shell=merchant',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID],
       mobile:true, desktop:true, activeKey:'pos-crm',
@@ -887,6 +887,9 @@
      boot the entire customer application inside the merchant shell, which is the
      double-shell defect e0dbdca fixed. */
   var KINDS = ['native','pos','seller','page','exit'];
+  /* The two POS sale lineages. 'both' is reserved for a surface proven to read each —
+     today only functions/pos-intelligence.js does, and it is not a route. */
+  var LINEAGES = ['till','dispatch','both','none'];
   /* 'hidden' = a real, routable destination that is NOT a sidebar row. My MiniShop lives here:
      it is reached from the header button, and having it in BOTH the header and the sidebar gave
      the seller two controls that looked like they might do different things. Still resolvable,
@@ -937,6 +940,25 @@
       }
       if (r.entry && r.kind !== 'pos')
         errs.push(at + ': only a pos route may declare an entry — on kind "' + r.kind + '" it is never read');
+
+      /* ── WHICH SALES LINEAGE DOES THIS SURFACE READ? ────────────────────────────
+         SOKONI has TWO complete POS sale lineages that never cross (measured: no writer
+         touches both collections):
+
+           till      posCompleteCheckout -> posRetailSales, reversed by posProcessRefund
+           dispatch  recordPOSSale       -> posSales,       reversed by voidPOSSale
+
+         A merchant selling through pos-checkout writes the TILL lineage. Five routed
+         intelligence surfaces (pos-bi, pos-ai, pos-books, pos-hq, pos-crm) read
+         `posSales` ONLY — so for that merchant they have no data to show. That is not a
+         broken route; it is a route pointed at the other half of a split estate, and it
+         stays declared here until the owner settles which record IS the completed sale
+         (docs/MERCHANT_V2_POS_ECOSYSTEM_MAP_2026-09-22.md, blocker B-1).
+
+         Declaring it is what stops the gap being invisible: a surface that reads sales
+         and says nothing about which lineage is a surface nobody can reason about. */
+      if (r.lineage && LINEAGES.indexOf(r.lineage) < 0)
+        errs.push(at + ': invalid lineage "' + r.lineage + '" — must be one of ' + LINEAGES.join('/'));
       if (r.kind === 'page') {
         if (!r.src)                              errs.push(at + ': page route has no src');
         else if (FORBIDDEN_SRC.test(r.src))      errs.push(at + ': src "' + r.src + '" is external or a legacy dashboard target');
