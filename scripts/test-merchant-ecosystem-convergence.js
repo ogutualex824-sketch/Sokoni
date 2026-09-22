@@ -299,11 +299,23 @@ if (!has(SCHED)) {
   const control = callers('openShift');
   ck('CONTROL — the scanner finds a shift CF that IS called (openShift)', control.length > 0,
      control.join(', '));
-  const rosterCallers = ROSTER_CFS.reduce((a, fn) => a.concat(callers(fn).map(f => fn + '@' + f)), []);
-  /* FINDING SC-3, asserted so it cannot rot: "connecting Premium Roster" is not wiring, it is
-     BUILDING a surface. This flips the day a client calls one, and must then be re-read. */
-  ck('FINDING SC-3 — no client surface calls ANY roster CF', rosterCallers.length === 0,
-     rosterCallers.join(', ') || 'roster backend is unreached — connecting it means building a UI');
+  /* SC-3 IS NOW RESOLVED, AND THIS ASSERTION WAS INVERTED RATHER THAN DELETED.
+     It previously read "no client surface calls ANY roster CF" and passed — recording the
+     finding that the roster backend was unreachable. Building the surface made it fail, which
+     is exactly what a finding-assertion should do when the finding is fixed: it demands to be
+     re-read rather than quietly going green.
+
+     What is asserted now is the RESOLVED state, and it is stricter than the old one. The
+     roster must be reached, and reached ONLY from the module built for it — if a second
+     surface starts calling these CFs, that is a second roster client and this fails again. */
+  const rosterCallers = ROSTER_CFS.reduce((a, fn) => a.concat(callers(fn)), []);
+  const rosterClients = [...new Set(rosterCallers)];
+  ck('SC-3 RESOLVED — the roster backend now HAS a client', rosterClients.length > 0,
+     rosterClients.join(', ') || 'still unreached');
+  ck('...and exactly ONE surface reaches it', rosterClients.length === 1, rosterClients.join(', '));
+  ck('...and that surface is sokoni-merchant-roster.js',
+     rosterClients.length === 1 && rosterClients[0] === 'sokoni-merchant-roster.js',
+     rosterClients[0] || '—');
 
   /* And what the Merchant V2 "Shifts & rosters" card actually reaches. */
   if (has('pos-staff-ops.html')) {
@@ -312,33 +324,132 @@ if (!has(SCHED)) {
        /openShift/.test(SO) && /clockIn/.test(SO) && /getAttendance/.test(SO));
     ck('...and reaches no roster CF', ROSTER_CFS.every(fn => SO.indexOf(fn) === -1));
   }
+
+  /* ── THE SURFACE BUILT FOR IT ──────────────────────────────────────────────
+     SC-3 said "connecting the roster means BUILDING a surface". This asserts the
+     surface exists, invokes ONLY real callables, and adds no authority of its own. */
+  if (!has('sokoni-merchant-roster.js')) {
+    nr('roster surface', 'sokoni-merchant-roster.js not present');
+  } else {
+    const RS = R('sokoni-merchant-roster.js');
+    const RM = require(path.join(ROOT, 'sokoni-merchant-roster.js'));
+    ck('a roster SURFACE now exists', typeof RM.mount === 'function');
+    ck('...and it is a registered route', !!C.get('roster'),
+       C.get('roster') ? C.get('roster').kind : 'MISSING');
+    ck('...declared native (no second page, no iframe)',
+       !!C.get('roster') && C.get('roster').kind === 'native');
+
+    /* EVERY NAME IT USES MUST BE A REAL EXPORTED CALLABLE. This is the assertion that
+       stops an invented callable name — the brief's "do not invent callable names". */
+    const declared = RM.CALLABLES || [];
+    ck('the surface declares the callables it uses', declared.length > 0, declared.join(','));
+    ck('every declared callable is a REAL export of the roster service',
+       declared.every(fn => new RegExp('exports\\.' + fn + '\\s*=').test(IDX)),
+       declared.filter(fn => !new RegExp('exports\\.' + fn + '\\s*=').test(IDX)).join(',') || 'all real');
+    /* CONTROL: the detector must reject a name that is NOT exported, or "all real" is
+       passing for the wrong reason. */
+    ck('  CONTROL — the export detector rejects an invented name',
+       !new RegExp('exports\\.getRosterUnicorn\\s*=').test(IDX));
+
+    /* The unwired ones are DECLARED with a reason, so a gap is visible rather than
+       looking like an oversight. */
+    const notWired = RM.NOT_WIRED || {};
+    ck('unwired roster capabilities are declared with reasons',
+       Object.keys(notWired).length > 0 &&
+       Object.keys(notWired).every(k => String(notWired[k]).length > 20),
+       Object.keys(notWired).join(','));
+    ck('...and every one of them is also a real callable',
+       Object.keys(notWired).every(fn => new RegExp('exports\\.' + fn + '\\s*=').test(IDX)));
+
+    /* NO SECOND AUTHORITY. The surface must not decide permissions or keep a store. */
+    ck('the surface makes no client-side role decision',
+       !/claims\.|posRole|isManager\s*=|role\s*===\s*['"]manager/.test(RS),
+       'authorization stays server-side');
+    ck('the surface writes no collection of its own',
+       !/collection\(/.test(RS), 'no Firestore write path in the surface');
+    ck('the surface resolves no identity of its own',
+       !/onAuthStateChanged|currentUser/.test(RS), 'sellerId comes from the shell scope');
+    /* An unknown must render as an em dash, never 0 — the UI Data Integrity rule. */
+    ck('an unresolved count renders as an em dash, not 0', /—/.test(RS) && /function num/.test(RS));
+
+    /* The shell must actually mount it. */
+    const V2 = R('merchant-v2.html');
+    ck('the shell loads the roster module', /src=["']sokoni-merchant-roster\.js["']/.test(V2));
+    ck('the shell registers it as a native module', /roster:\s*\{\s*global:\s*'SokoniMerchantRoster'/.test(V2));
+    /* The ctx handle must be a whitelist, not an open door onto any callable. */
+    ck('the shell\'s roster handle refuses an undeclared callable',
+       /allowed\.indexOf\(name\)\s*<\s*0/.test(V2),
+       'ctx.call is bounded by CALLABLES');
+  }
 }
 
-/* ══ 11c. SERVICE STOCK FLAGS — a D-a defect in the making ═════════════════════ */
-head('11c. SERVICE vs PRODUCT stock flag (brief §7, §9)');
-/* The till already knows how not to decrement stock for a non-stocked line: it skips the write
-   when `trackInventory === false`. The in-flight catalogue model spells the same idea
-   `trackStock: false`. Two spellings of one flag is exactly how `sold` vs `soldCount` happened,
-   so it is recorded BEFORE it ships rather than found afterwards. */
+/* ══ 11c. SERVICE CATALOGUE — TWO COLLECTIONS, not two spellings ═══════════════ */
+head('11c. SERVICE vs PRODUCT catalogue (brief §7, §19)');
+/* CORRECTION OF AN EARLIER FINDING IN THIS FILE.
+   A previous pass recorded `trackInventory` vs `trackStock` as "two spellings of one flag,"
+   the sold/soldCount divergence repeating. That framing was WRONG and is withdrawn. They are
+   fields on TWO DIFFERENT COLLECTIONS, and the real finding is larger:
+
+     products/{id}      canonical. Carries `trackInventory`. The ONLY collection
+                        posCompleteCheckout prices and stocks from — four call sites
+                        (pos-zero-friction.js:305, 373, 727, 1393), and an item missing
+                        from it throws "Product <id> disappeared".
+     posProducts/{id}   the POS catalogue. Carries `trackStock`. docs/POSPRODUCTS_MIGRATION_
+                        GRAPH.md states plainly: "posProducts is no longer the collection a
+                        sale is priced or stocked from", the SERVED ruleset keys its
+                        ownership on `sellerId` which the canonical writer never sets — so
+                        every client query on it is rejected wholesale — and its second
+                        writer is decided for retirement (Option C).
+
+   So the question is not which spelling wins. It is that the in-flight catalogue model
+   defines a SERVICE as a `posProducts` row, and `posProducts` is a collection the till does
+   not settle against and the rules reject client reads on. */
 ck('the till honours a no-stock line via trackInventory',
    /trackInventory\s*!==\s*false/.test(ZF),
    'posCompleteCheckout skips the stock write for a non-stocked item');
+ck('the till settles against `products`, never `posProducts`',
+   collRefs(ZF, 'products') > 0 && collRefs(ZF, 'posProducts') === 0,
+   'products=' + collRefs(ZF, 'products') + ' posProducts=' + collRefs(ZF, 'posProducts'));
+ck('  CONTROL — the collection detector can see posProducts where it IS used',
+   has('functions/business-bootstrap.js') &&
+   collRefs(R('functions/business-bootstrap.js'), 'posProducts') > 0,
+   'business-bootstrap reads posProducts');
+if (has('docs/POSPRODUCTS_MIGRATION_GRAPH.md')) {
+  const MG = R('docs/POSPRODUCTS_MIGRATION_GRAPH.md');
+  ck('the migration graph records posProducts is not the sale-pricing collection',
+     /no longer the collection a sale is priced or stocked from/i.test(MG));
+} else {
+  nr('posProducts migration graph', 'doc not present');
+}
 if (has('sokoni-catalogue-model.js')) {
   const CAT = R('sokoni-catalogue-model.js');
-  const usesTrackStock = /trackStock/.test(CAT);
-  const usesTrackInv   = /trackInventory/.test(CAT);
-  if (usesTrackStock && !usesTrackInv) {
-    up('FINDING — the in-flight catalogue model spells it trackStock, the till reads trackInventory',
-       'two spellings of one flag. If it ships unreconciled, a SERVICE line would be treated as ' +
-       'stocked by posCompleteCheckout and would decrement physical stock. This is the sold/' +
-       'soldCount divergence repeating, caught before it lands. The file is FOREIGN and ' +
-       'UNCOMMITTED — not edited here, only recorded.');
+  if (/posProducts/.test(CAT) && /trackStock/.test(CAT)) {
+    up('FINDING — the in-flight service model puts SERVICES in posProducts',
+       'posCompleteCheckout prices and stocks ONLY from `products`, so a service that exists ' +
+       'only as a posProducts row cannot be settled by the till — the lookup misses and the ' +
+       'sale throws. The served ruleset also rejects client queries on posProducts (ownership ' +
+       'keyed on sellerId, which the canonical writer never sets). This is a STRUCTURAL gap in ' +
+       'the Quick Pay service path, not a naming mismatch. The file is FOREIGN and UNCOMMITTED ' +
+       '— recorded for its owner, NOT edited here.');
   } else {
-    ck('catalogue model and till agree on the stock flag', usesTrackInv || !usesTrackStock,
-       usesTrackStock ? 'trackStock + trackInventory both present' : 'no trackStock');
+    ck('catalogue model targets the settling collection', /\bproducts\b/.test(CAT));
   }
 } else {
-  nr('service stock-flag reconciliation', 'sokoni-catalogue-model.js not present in this tree');
+  nr('service catalogue reconciliation', 'sokoni-catalogue-model.js not present in this tree');
+}
+/* A third layer, and the one that WOULD have produced the "service treated as stocked"
+   symptom the withdrawn finding guessed at — by a different route. */
+if (has('functions/business-bootstrap.js')) {
+  const BB = R('functions/business-bootstrap.js');
+  const readsPosProducts = collRefs(BB, 'posProducts') > 0;
+  const emitsTrackInv    = /trackInventory:\s*p\.trackInventory\s*!==\s*false/.test(BB);
+  if (readsPosProducts && emitsTrackInv) {
+    up('FINDING — business-bootstrap reads posProducts rows and emits trackInventory',
+       'a posProducts row carrying trackStock:false and NO trackInventory yields ' +
+       '`trackInventory: true` (undefined !== false), so a SERVICE would be presented to the ' +
+       'POS as a stocked product. Same symptom the withdrawn finding predicted, different ' +
+       'mechanism — a projection default, not a spelling clash.');
+  }
 }
 
 /* ══ 11d. ADMINOS — verified, not assumed (brief §20) ══════════════════════════ */

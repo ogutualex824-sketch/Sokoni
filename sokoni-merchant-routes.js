@@ -563,6 +563,29 @@
            'of `customers` — that route owns crmCustomerProfiles (who the customer is); this ' +
            'owns the POS value instruments held against them.' },
 
+    { id:'roster', name:'Roster', icon:'🗓️', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'roster',
+      note:'THE MISSING SURFACE FOR AN AUTHORITY THAT ALREADY EXISTED. ' +
+           'functions/pos-shift-scheduler.js exports TWELVE roster callables, every one ' +
+           're-exported by name in functions/index.js — and not one had a client caller ' +
+           'anywhere in the repo (measured across .html AND .js, with a positive control: ' +
+           '`openShift` was found in five files, so the silence was the codebase\'s and not ' +
+           'the detector\'s). A complete, deployed, hardened backend nobody could reach.\n' +
+           'sokoni-merchant-roster.js invents NOTHING: no roster store, no employee record, ' +
+           'no schedule of its own and no permission decision. Every action is one of those ' +
+           'existing callables, invoked with the exact payload it destructures — the ' +
+           'contracts were read out of the scheduler, not guessed.\n' +
+           'AUTHORIZATION STAYS THE SERVER\'S. Publish/assign/approve are manager-gated ' +
+           'server-side; this surface renders the control and shows the refusal. A ' +
+           'client-side role check here would be a SECOND authorization authority, which is ' +
+           'the defect this convergence work exists to prevent. A cashier gains nothing ' +
+           'because a button rendered.\n' +
+           'DISTINCT FROM pos-staff-ops, which owns shifts and ATTENDANCE (openShift, ' +
+           'clockIn, getAttendance, cash reconciliation) and calls no roster CF at all. Two ' +
+           'surfaces over one workforce authority, not two rosters.' },
+
     { id:'pos-staff-ops', name:'Shifts & Rosters', icon:'🗓️', tier:'more',
       kind:'page', src:'pos-staff-ops.html?shell=merchant',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
@@ -734,7 +757,7 @@
     { key:'eco-hw',    label:'Hardware & Approvals', ecosystem:true,
       ids:['print-station','pos-hardware','manager-auth'] },
     { key:'eco-intel', label:'Intelligence',         ecosystem:true,
-      ids:['pos-bi','pos-ai','pos-hq','pos-crm','pos-staff-ops'] }
+      ids:['pos-bi','pos-ai','pos-hq','pos-crm','pos-staff-ops','roster'] }
   ];
 
   /* ── ROUTE ACTION CHIPS ─────────────────────────────────────────────────────────

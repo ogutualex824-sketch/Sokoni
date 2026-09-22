@@ -450,6 +450,18 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 .ta:focus{outline:none;border-color:var(--acc-line)}
 
 .setgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+/* ROSTER. Scrolls horizontally on a phone rather than crushing five columns into 375px —
+   a squeezed table is unreadable and its action buttons stop being tappable. */
+.rst-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px}
+.rst-sp{flex:1 1 auto}
+.rst-kpi{font-size:13px;opacity:.85}
+.rst-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.rst-tbl{width:100%;border-collapse:collapse;font-size:14px;display:block;overflow-x:auto;white-space:nowrap}
+.rst-tbl th,.rst-tbl td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--bor,#1a1a1a)}
+.rst-tbl th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;opacity:.7}
+.rst-tbl em{opacity:.6;font-style:normal}
+.rst-act{display:flex;gap:6px}
+.act.sm{padding:5px 9px;font-size:12px;min-height:32px}
 .setcard{
   display:flex;align-items:center;gap:12px;text-align:left;
   background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:13px 14px;
@@ -754,6 +766,10 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script src="sokoni-merchant-supply.js"></script>
 <script src="sokoni-merchant-staff.js"></script>
 <script src="sokoni-merchant-team.js"></script>
+<!-- ROSTER. The front end for functions/pos-shift-scheduler.js, whose twelve callables
+     were exported, deployed and reachable by nothing. This file adds a SURFACE only — no
+     roster store, no employee record, no permission decision. -->
+<script src="sokoni-merchant-roster.js"></script>
 <script src="sokoni-merchant-campaigns.js"></script>
 <script src="sokoni-merchant-marketing.js"></script>
 <script src="sokoni-merchant-disputes.js"></script>
@@ -2687,6 +2703,24 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                     callList: _callable('listShopEmployees'), callInvites: _callable('listShopInvites'),
                     callInvite: _callable('inviteShopEmployee'), callRevoke: _callable('revokeShopInvite'),
                     callRemove: _callable('removeShopEmployee'), onToast: toast }; } },
+    /* ROSTER — the surface for an authority that already existed and had no caller.
+       ONE ctx entry, `call`, rather than a callable per operation: the roster service is
+       twelve named CFs and listing each here would put their names in a second place, so a
+       rename would silently unbind one. The module holds the names it uses and exports
+       them (SokoniMerchantRoster.CALLABLES) so the gate can assert they match
+       pos-shift-scheduler.js exactly instead of being checked by eye.
+       `call` refuses anything not in that declared set — a module cannot reach an
+       arbitrary callable through this handle. */
+    roster:     { global: 'SokoniMerchantRoster',      ctx: function () { return {
+                    scope: _scope(), shopName: _shopName(), onToast: toast,
+                    call: function (name, payload) {
+                      var R = window.SokoniMerchantRoster;
+                      var allowed = (R && R.CALLABLES) || [];
+                      if (allowed.indexOf(name) < 0) {
+                        return Promise.reject(new Error('roster: "' + name + '" is not a declared roster callable'));
+                      }
+                      return _callable(name)(payload);
+                    } }; } },
     marketing:  { global: 'SokoniMerchantMarketing',   ctx: function () { return {
                     scope: _scope(), shopName: _shopName(), origin: location.origin,
                     callList: _callable('getMinishopCampaigns'), callCreate: _callable('createMinishopCampaign'),

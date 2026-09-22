@@ -1,3 +1,126 @@
+## 2026-09-22 (152) — KRA traced end to end; the roster gets the surface it never had
+
+**Audit + one new surface. NO DEPLOY. No live port. No foreign file touched. No KRA code
+changed, no tax rule invented, no rate changed. Live remains 111dbd7 / v636.**
+
+### KRA: the layers, kept apart
+
+The instruction was not to equate "the PIN is on the receipt" with "KRA is integrated". Traced
+layer by layer, the answer is sharper than the warning:
+
+| Layer | State |
+|---|---|
+| KRA PIN / business identity | **BUILT** — `etimsProfiles/{auth.uid}`, ACCOUNT-scoped |
+| Tax determination | **BUILT, canonical** — `etims-tax-engine.js`, pure, three divergent VAT implementations converged onto it |
+| Internal invoice lifecycle | **BUILT** — six document types, idempotent, audited, queued |
+| **KRA wire transmission** | **NOT IMPLEMENTED** — `SPEC_LOADED = false`; every builder returns `KRA_SPEC_PENDING`; `docs/kra-etims-spec-v2.0.pdf` is **absent from the repo** |
+| Receipt | **BUILT** — carries PIN + branch, labelled `basis: 'sokoni_estimate'`, never `'official'` |
+
+**SOKONI computes tax correctly, forms every KRA document correctly, and transmits nothing.**
+The architecture is honest about it: `etims-lifecycle.js:122` checks `isTransmittable()` and
+stores `transmittable: false` before queueing.
+
+### The connectivity finding — KRA covers ONLINE ORDERS only
+
+`etimsOnOrderCompleted` is `onDocumentWritten({ document: "orders/{orderId}" })`. Measured
+across `functions/`: **zero** trigger declarations on `posRetailSales` or `posSales`.
+
+```
+ONLINE ORDER   orders/{id} completed  --trigger-->  eTIMS lifecycle   YES
+TILL SALE      posRetailSales/{id}                  (no trigger)       NO
+DISPATCH SALE  posSales/{id}                        (no trigger)       NO
+```
+
+A till sale *does* carry a tax figure from the same engine, and writes `vatStatus:'undeclared'`
+/ `vatCents:null` with a stated reason when the shop has no VAT status — an honest unknown, not
+a zero. **But it never becomes an eTIMS invoice.** Neither POS reversal path raises a credit
+note or cancellation either; that gap is latent only because no POS invoice exists to reverse.
+
+### §19 — my earlier finding was wrong, and is withdrawn
+
+A previous pass called `trackInventory` vs `trackStock` "two spellings of one flag". **They are
+fields on two different collections**, and the real situation is structural:
+
+- `products/{id}` — carries `trackInventory`, and is the **only** collection
+  `posCompleteCheckout` prices and stocks from (four call sites; a missing item throws
+  `Product <id> disappeared`).
+- `posProducts/{id}` — carries `trackStock`. `POSPRODUCTS_MIGRATION_GRAPH.md`: *"no longer the
+  collection a sale is priced or stocked from"*; the served ruleset keys its ownership on
+  `sellerId`, which the canonical writer never sets, so **every client query is rejected
+  wholesale**; its second writer is decided for retirement.
+
+The in-flight service model puts services in `posProducts`. On this evidence a service cannot be
+settled by the till at all. A third layer produces the symptom the withdrawn finding guessed at
+by a different route: `business-bootstrap.js` reads `posProducts` rows and projects
+`trackInventory: p.trackInventory !== false`, so a `trackStock:false` row yields
+`trackInventory: **true**` — a service handed to the POS as stocked. **Recorded for the owning
+workstream; those files were read, never edited.**
+
+### Commission — the trap, made executable
+
+There are **two** till commission paths, both 5% today by different mechanisms:
+
+```
+TILL      calculateCommission({category:'pos'}) -> ALIASES.pos -> RATES.marketplace.pct = 5
+DISPATCH  planSaleCommission() -> resolvePosRate() -> POS_PLAN_RATES                     = 5
+```
+
+`isMarketplaceSellerSale('pos')` is `false`, so the 15% ladder correctly never reaches the till
+— but the **live** till path lands on the marketplace CATEGORY row. Raising
+`RATES.marketplace.pct` to "align" it with the online lane would silently charge **15% at every
+till**. `scripts/test-commission-lane-separation.js` (22/0) makes that prohibition executable.
+Every rate is derived; no literal is asserted.
+
+### SC-3 resolved — the roster surface
+
+`sokoni-merchant-roster.js` is the front end for `pos-shift-scheduler.js`, whose twelve
+callables were exported, deployed and reached by **nothing**. It invents nothing: no roster
+store, no employee record, no schedule, no permission decision. Six callables wired, four
+declared unwired **with reasons** — `publishWeeklyRoster` is deliberately not offered because
+sending an empty `slots[]` would publish an empty week over the current one.
+
+Authorization stays server-side: manager-gated actions render for everyone and the server
+refuses. A client-side role check would be a second authorization authority.
+
+### Three gates were passing for the wrong reason, and were fixed
+
+1. **Roster absence scan** read `.html` only while claiming "no client surface". The control
+   itself proved it: `openShift` lives in `pos-sales.js`, which that pass never opened — it
+   reported 3 files when the truth was 5.
+2. **SC-3's assertion** recorded an absence and so **failed the moment I fixed it**. Inverted
+   rather than deleted, and made stricter: the roster must now be reached by exactly ONE
+   surface.
+3. **Runtime mount check** asserted "some visible iframe exists" — so `roster`, a native route
+   with no iframe, "mounted" by matching the incidental Firebase auth frame. Now measured per
+   kind: page routes by their own panel iframe, native routes by rendered content that is not
+   the shell's placeholder, with a control proving the placeholder detector fires.
+
+### Files
+
+| File | Change |
+|---|---|
+| `docs/KRA_MERCHANT_V2_POS_QUICKPAY_MAP_2026-09-22.md` | **new** — the §22 map, 16 paths |
+| `sokoni-merchant-roster.js` | **new** — the roster surface |
+| `scripts/test-commission-lane-separation.js` | **new** — 22/0, both lanes + the trap |
+| `sokoni-merchant-routes.js` | `roster` route |
+| `merchant-v2.html` | roster module + bounded `ctx.call` + styles |
+| `scripts/test-merchant-ecosystem*.js`, `…-runtime.js` | the three gate repairs |
+
+**Database: none. API: none — no callable added, changed or re-exported. Rules: none. Indexes: none.**
+
+### Gates
+
+ecosystem **119/0** · convergence **94/0**, 9 UNPROVEN, 2 NOT RUN · runtime **121/0**, 2 UNPROVEN ·
+commission-lane-separation **22/0**, 2 UNPROVEN · inshell **29/0** · merchant-actions **31/0** ·
+pos-sale-commission **78/0** · pos-commission-lane **92/0** · commission single-source **PASS**.
+
+### Blockers
+
+K-1 KRA transmits nothing (spec absent) · K-2 POS/till never enter the lifecycle · K-3 no POS
+reversal raises a tax document · K-4 services modelled in a collection the till does not read ·
+K-5 `SPEC_LOADED` is a dead export · K-6 eTIMS Secret Manager wiring not traced.
+
+
 ## 2026-09-22 (151) — Marketplace commission: flat 15%, ladder retired (owner decision)
 
 **Money change in the single source. COMMITTED, NOT DEPLOYED — the rate is computed

@@ -169,22 +169,52 @@ server.listen(0, async () => {
     /* ── THE ECOSYSTEM MOUNTS ──────────────────────────────────────────────── */
     console.log('\n  ── ECOSYSTEM DESTINATIONS ──');
     const ecoIds = C.ecosystem().reduce((a, g) => a.concat(g.routes.map(r => r.id)), []);
-    const mountResults = await page.evaluate(async (ids) => {
+    /* A NATIVE ROUTE HAS NO IFRAME, and reading "some visible iframe exists" for one is how
+       an assertion passes for the wrong reason: the Firebase auth iframe is always present,
+       so `roster` "mounted" by matching a frame that has nothing to do with it. Each kind is
+       now measured by what it actually produces —
+         page/pos/seller : the PANEL's own iframe, looked up by the panel that is visible
+         native          : rendered content inside the visible panel, and NOT the
+                           "not rebuilt in shell v2 yet" placeholder. */
+    const ecoKinds = {};
+    C.ecosystem().forEach(g => g.routes.forEach(r => { ecoKinds[r.id] = r.kind; }));
+    const mountResults = await page.evaluate(async (args) => {
+      const { ids, kinds } = args;
       const out = [];
       for (const id of ids) {
         window.SokoniShell.go(id);
         await new Promise(r => setTimeout(r, 420));
-        const vis = [...document.querySelectorAll('iframe')].filter(f => f.offsetParent !== null);
-        out.push({ id, hash: location.hash.replace('#', ''), src: vis.map(f => f.getAttribute('src'))[0] || null,
-                   top: location.pathname });
+        /* The visible PANEL, not any visible element in the document. */
+        const panels = [...document.querySelectorAll('[id^="p-"], .panel, [data-panel]')]
+          .filter(p => p.offsetParent !== null);
+        const panel = panels[panels.length - 1] || null;
+        const own = panel ? panel.querySelector('iframe') : null;
+        out.push({
+          id, kind: kinds[id],
+          hash: location.hash.replace('#', ''),
+          src: own ? own.getAttribute('src') : null,
+          text: panel ? (panel.innerText || '').slice(0, 400) : '',
+          nodes: panel ? panel.querySelectorAll('*').length : 0,
+          top: location.pathname,
+        });
       }
       return out;
-    }, ecoIds);
+    }, { ids: ecoIds, kinds: ecoKinds });
     mountResults.forEach(m => {
-      const r = C.get(m.id);
-      check('mounts: ' + m.id, m.hash === m.id && !!m.src, m.src || ('hash=' + m.hash));
+      if (m.kind === 'native') {
+        /* Rendered SOMETHING of its own, and not the shell's not-ported placeholder. */
+        const ported = !/not rebuilt in shell v2 yet|Not yet ported/i.test(m.text);
+        check('mounts: ' + m.id + ' (native)', m.hash === m.id && m.nodes > 3 && ported,
+              'nodes=' + m.nodes + (ported ? '' : ' PLACEHOLDER') + ' hash=' + m.hash);
+      } else {
+        check('mounts: ' + m.id, m.hash === m.id && !!m.src, m.src || ('hash=' + m.hash + ' NO PANEL IFRAME'));
+      }
       check('  ...without leaving the shell', /merchant-v2/.test(m.top), m.top);
     });
+    /* CONTROL for the native check: the placeholder detector must be able to FIRE, or
+       "not a placeholder" passes against a regex that never matches anything. */
+    check('CONTROL — the placeholder detector fires on the shell\'s own placeholder text',
+          /not rebuilt in shell v2 yet/i.test('This surface is not rebuilt in shell v2 yet.'));
 
     /* ── NO TAB NAVIGATION, AND NO DOUBLE BOOT ─────────────────────────────── */
     console.log('\n  ── THE SHELL SURVIVED ──');

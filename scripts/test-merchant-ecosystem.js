@@ -91,7 +91,19 @@ check('shell declares no private ecosystem array', !SECOND_LIST.test(stripped));
 
 /* ── 3. Every admitted route is REAL and IN-SHELL ────────────────────────────── */
 console.log('\n3. Admitted routes are real, in-shell and non-escaping');
+/* A route's TARGET depends on how it mounts, and the two kinds are checked differently:
+     page/pos/seller  mount a FILE — assert the file is on disk
+     native           mount a JS MODULE rendered by the shell — there is no file to check,
+                      so assert the shell actually registers a module for it. The first
+                      version of this loop demanded a file from every route and failed
+                      `roster` for being native, which is not a defect in the route. */
 ecoRoutes.forEach(r => {
+  if (r.kind === 'native') {
+    const reg = new RegExp('\\b' + r.id.replace(/[-]/g, '\\-') + ':\\s*\\{\\s*global:');
+    check('native module registered: ' + r.id, reg.test(shellCode) || reg.test(shellSrc),
+          reg.test(shellSrc) ? 'in MODULES' : 'NO MODULES entry — the panel would render the not-ported placeholder');
+    return;
+  }
   const target = r.src || r.entry || (r.kind === 'pos' ? 'pos.html' : null);
   if (!target) { check('target declared: ' + r.id, false, r.kind); return; }
   const file = String(target).split(/[?#]/)[0];
