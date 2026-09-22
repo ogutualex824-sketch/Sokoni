@@ -1023,6 +1023,113 @@ console.log('\n── The C2/C3 boundary is explicit ──');
 /* ══════════════════════════════════════════════════════════════════════════════════════════
    PHASE 1 — contextual communication actions
 ══════════════════════════════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+   PHASE 1 — the two surfaces that CANNOT be mounted, and why
+══════════════════════════════════════════════════════════════════════════════════════════ */
+console.log('\n── Delivery and supplier surfaces are BLOCKED, not forgotten ──');
+{
+  const calls = fs.readFileSync(path.join(ROOT, 'functions', 'connect-calls.js'), 'utf8');
+
+  /* DELIVERY. The Connect anchor resolves `deliveries`; both user-facing delivery surfaces
+     read `packageRequests`. Passing a packageRequests id as a `delivery` anchor would either
+     never resolve (a silently dead button) or resolve to an UNRELATED deliveries document
+     that happens to share an id — authorising a call against the wrong relationship. */
+  ck('the delivery anchor reads `deliveries`',
+    /collection\('deliveries'\)\.doc\(anchorId\)/.test(calls));
+  const dt = fs.readFileSync(path.join(ROOT, 'delivery-tracking.html'), 'utf8');
+  const sd = fs.readFileSync(path.join(ROOT, 'seller-delivery.html'), 'utf8');
+  ck('…while delivery-tracking.html reads `packageRequests`',
+    /collection\('packageRequests'\)/.test(dt));
+  ck('…and seller-delivery.html reads `packageRequests` too',
+    /collection\('packageRequests'\)/.test(sd));
+  ck('SO NEITHER IS MOUNTED — an id from the wrong collection is not an anchor',
+    !/sokoni-connect-call\.js/.test(dt) && !/sokoni-connect-call\.js/.test(sd));
+
+  /* SUPPLIER. `collection('suppliers')` has no writer anywhere in functions/ except the
+     resolver that reads it, and no client surface reads it at all. */
+  const supplierWriters = fs.readdirSync(path.join(ROOT, 'functions'))
+    .filter((f) => f.endsWith('.js'))
+    .filter((f) => f !== 'connect-calls.js')
+    .filter((f) => /collection\('suppliers'\)/.test(
+      fs.readFileSync(path.join(ROOT, 'functions', f), 'utf8')));
+  ck('the `suppliers` collection has no writer besides the resolver that reads it',
+    supplierWriters.length === 0, supplierWriters.join(',') || 'none');
+  ck('…and the supply anchor refuses when the record names no SOKONI account',
+    /not a SOKONI account, so no in-platform call/.test(calls));
+  /* Positive control: the two surfaces that COULD be mounted, were. */
+  ck('…positive control: order IS mounted',
+    /sokoni-connect-call\.js/.test(fs.readFileSync(path.join(ROOT, 'my-orders.html'), 'utf8')));
+  ck('…and support IS wired',
+    /SokoniSupportContact/.test(fs.readFileSync(path.join(ROOT, 'support.html'), 'utf8')));
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+   PHASES 3 & 4 — the operational workspace
+══════════════════════════════════════════════════════════════════════════════════════════ */
+console.log('\n── One workspace, one engine, one fetch ──');
+{
+  const src = fs.readFileSync(path.join(ROOT, 'sokoni-comms-console.js'), 'utf8');
+  const sb = { SokoniCommsConsole: null, firebase: null, document: null, SokoniCommsSend: null };
+  new Function('window', src)(sb);
+  const C = sb.SokoniCommsConsole;
+
+  ck('the console declares its views', Array.isArray(C.VIEWS) && C.VIEWS.length >= 6,
+    C.VIEWS.map((v) => v.id).join(','));
+  ['inbox', 'conversations', 'support', 'calls', 'send', 'providers'].forEach((v) => {
+    ck('…' + v, C.VIEWS.some((x) => x.id === v));
+  });
+
+  console.log('\n   every view declares an authority band');
+  ck('each view has one', C.VIEWS.every((v) => ['READ', 'SEND'].includes(v.authority)));
+  ck('…and exactly one is above READ',
+    C.VIEWS.filter((v) => v.authority !== 'READ').length === 1,
+    C.VIEWS.filter((v) => v.authority !== 'READ').map((v) => v.id).join(','));
+  /* THE PROPERTY: a read-only component must not gain a hidden write capability because a
+     tab was added next to it. The write view is DELEGATED to the separate module. */
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  ck('this file still contains NO write path',
+    !/\.(set|add|update|delete)\(/.test(code));
+  ck('…and still reaches exactly one callable — the read-only timeline',
+    (code.match(/httpsCallable\('([a-zA-Z]+)'\)/g) || []).join(',') ===
+      "httpsCallable('communicationTimeline')");
+  ck('…the SEND view is delegated to the separate module',
+    /SokoniCommsSend\.mount\(/.test(code));
+  ck('…and a missing write module is reported, not silently read-only',
+    /sokoni-comms-send\.js is served/.test(code));
+
+  console.log('\n   a view is a FILTER on the one fetch, never a second query');
+  const rows = [{ kind: 'chat' }, { kind: 'voice' }, { kind: 'support' }, { kind: 'video' }];
+  ck('inbox shows everything', C.rowsForView('inbox', rows).length === 4);
+  ck('conversations shows chat only',
+    C.rowsForView('conversations', rows).map((r) => r.kind).join(',') === 'chat');
+  ck('support shows support only',
+    C.rowsForView('support', rows).map((r) => r.kind).join(',') === 'support');
+  ck('calls shows voice AND video',
+    C.rowsForView('calls', rows).map((r) => r.kind).join(',') === 'voice,video');
+  ck('an unknown view falls back to everything rather than to silence',
+    C.rowsForView('nope', rows).length === 4);
+  ck('no argument does not throw', C.rowsForView().length === 0);
+  /* The single-fetch rule: only ONE place queries, and switching a view re-paints. */
+  ck('only one fetch exists — switching a view re-filters, it does not re-query',
+    (code.match(/\.limit\(PAGE\)/g) || []).length === 2 && /_paint\(root\)/.test(code),
+    'two collections, one fetch each');
+
+  console.log('\n   both consoles mount the SAME module');
+  const aos = fs.readFileSync(path.join(ROOT, 'admin-os.html'), 'utf8');
+  const sa = fs.readFileSync(path.join(ROOT, 'super-admin.html'), 'utf8');
+  ck('AdminOS loads it', /sokoni-comms-console\.js/.test(aos));
+  ck('Super Admin loads it', /sokoni-comms-console\.js/.test(sa));
+  ck('…and neither re-implements the views',
+    !/rowsForView/.test(aos) && !/rowsForView/.test(sa));
+  /* AdminOS mounts from sokoni-aos.js (its panel renderer), Super Admin from its own inline
+     loader. Different mount POINTS, one module — which is the property that matters. */
+  const aosJs = fs.readFileSync(path.join(ROOT, 'sokoni-aos.js'), 'utf8');
+  ck('…so both produce equivalent views over the same records',
+    /SokoniCommsConsole\.mount/.test(aosJs) && /SokoniCommsConsole\.mount/.test(sa));
+  ck('…and neither mount point re-implements the filter',
+    !/rowsForView/.test(aosJs) && !/rowsForView/.test(sa));
+}
+
 console.log('\n── The server decides which actions a surface may draw ──');
 {
   const calls = fs.readFileSync(path.join(ROOT, 'functions', 'connect-calls.js'), 'utf8');

@@ -283,6 +283,54 @@
 
   /* ── Mount ─────────────────────────────────────────────────────────────── */
 
+  /* ── THE OPERATIONAL VIEWS ─────────────────────────────────────────────
+     One workspace over ONE engine. Each view is a FILTER on the same canonical
+     records — there is no per-view datastore, and adding a view must never add
+     a second source of truth.
+
+     AUTHORITY BAND. Every view declares what it may do, and the console honours
+     it: a READ view is rendered by this file, which contains no write path at
+     all, and anything above READ is delegated to sokoni-comms-send.js. A
+     read-only component must not acquire a hidden write capability because a
+     tab was added next to it. */
+  var VIEWS = [
+    { id: 'inbox',     label: 'Unified Inbox',  authority: 'READ',  kinds: null },
+    { id: 'conversations', label: 'Conversations', authority: 'READ', kinds: ['chat'] },
+    { id: 'support',   label: 'Support',        authority: 'READ',  kinds: ['support'] },
+    { id: 'calls',     label: 'Calls',          authority: 'READ',  kinds: ['voice', 'video'] },
+    { id: 'send',      label: 'Message a user', authority: 'SEND',  kinds: null },
+    { id: 'providers', label: 'Provider Health', authority: 'READ', kinds: null },
+  ];
+
+  var _view = 'inbox';
+  var _rows = null;   /* the one fetch, shared by every READ view */
+  var _note = null;
+
+  function _authorityOf(id) {
+    for (var i = 0; i < VIEWS.length; i++) if (VIEWS[i].id === id) return VIEWS[i].authority;
+    return 'READ';
+  }
+
+  /** A view's rows are a FILTER on the single fetch — never a second query. */
+  function rowsForView(id, rows) {
+    var all = rows || [];
+    for (var i = 0; i < VIEWS.length; i++) {
+      if (VIEWS[i].id !== id) continue;
+      var kinds = VIEWS[i].kinds;
+      if (!kinds) return all;
+      return all.filter(function (r) { return kinds.indexOf(r.kind) !== -1; });
+    }
+    return all;
+  }
+
+  function _tabsHtml() {
+    return '<div class="tab-bar" id="commsViews">' + VIEWS.map(function (v) {
+      return '<button class="tab-btn' + (v.id === _view ? ' active' : '') + '"' +
+        ' data-view="' + _esc(v.id) + '" data-authority="' + _esc(v.authority) + '">' +
+        _esc(v.label) + '</button>';
+    }).join('') + '</div>';
+  }
+
   function mount(root) {
     if (!root) return;
     root.innerHTML = '<div class="aos-spinner"><div></div></div>';
@@ -317,22 +365,51 @@
          When it IS present it supplies provider health too, because provisioning is a
          server-side fact only an authenticated call can learn; this read-only console
          renders the em-dash table until then. */
-      var hasSend = !!(global.SokoniCommsSend && typeof global.SokoniCommsSend.mount === 'function');
+      _rows = rows;
+      _note = note;
+      _paint(root);
+    });
+  }
 
-      root.innerHTML =
-        _inboxBlock(rows, note) +
-        '<div id="commsTimelineRoot"></div>' +
-        (hasSend
-          ? '<div class="dash-section" id="commsSendRoot"></div><div id="commsHealthRoot"></div>'
-          : '<div class="dash-section"><h3>Message a user</h3>' +
-            '<p class="aos-muted">The send surface did not load. Check that ' +
-            'sokoni-comms-send.js is served on this page.</p></div>' + _providerBlock());
+  /* Renders the CURRENT view from the single fetch. Switching a view re-filters;
+     it never re-queries, so two views can never disagree about the same record. */
+  function _paint(root) {
+    var hasSend = !!(global.SokoniCommsSend && typeof global.SokoniCommsSend.mount === 'function');
+    var authority = _authorityOf(_view);
+    var body;
 
-      if (hasSend) {
-        global.SokoniCommsSend.mount(root.querySelector('#commsSendRoot'));
-        global.SokoniCommsSend.health(root.querySelector('#commsHealthRoot'));
-      }
+    if (authority === 'SEND') {
+      /* Above READ: delegated entirely. This file renders no control that writes. */
+      body = hasSend
+        ? '<div class="dash-section" id="commsSendRoot"></div>'
+        : '<div class="dash-section"><h3>Message a user</h3>' +
+          '<p class="aos-muted">The send surface did not load. Check that ' +
+          'sokoni-comms-send.js is served on this page.</p></div>';
+    } else if (_view === 'providers') {
+      body = hasSend ? '<div id="commsHealthRoot"></div>' : _providerBlock();
+    } else {
+      body = _inboxBlock(rowsForView(_view, _rows), _note) +
+        '<div id="commsTimelineRoot"></div>';
+    }
 
+    root.innerHTML = _tabsHtml() + body;
+
+    var tabs = root.querySelectorAll('#commsViews .tab-btn');
+    for (var t = 0; t < tabs.length; t++) {
+      tabs[t].addEventListener('click', function (ev) {
+        _view = ev.currentTarget.getAttribute('data-view');
+        _paint(root);
+      });
+    }
+
+    if (authority === 'SEND' && hasSend) {
+      global.SokoniCommsSend.mount(root.querySelector('#commsSendRoot'));
+    }
+    if (_view === 'providers' && hasSend) {
+      global.SokoniCommsSend.health(root.querySelector('#commsHealthRoot'));
+    }
+
+    {
       var btns = root.querySelectorAll('[data-anchor-id]');
       for (var i = 0; i < btns.length; i++) {
         btns[i].addEventListener('click', function (ev) {
@@ -342,7 +419,7 @@
             root.querySelector('#commsTimelineRoot'));
         });
       }
-    });
+    }
   }
 
   function openTimeline(anchorType, anchorId, target) {
@@ -374,5 +451,9 @@
     mount: mount,
     openTimeline: openTimeline,
     PROVIDER_ROWS: PROVIDER_ROWS,
+    /* Exported so the suite can prove the authority band and the single-fetch rule
+       behaviourally, rather than by reading the source. */
+    VIEWS: VIEWS,
+    rowsForView: rowsForView,
   };
 })(window);
