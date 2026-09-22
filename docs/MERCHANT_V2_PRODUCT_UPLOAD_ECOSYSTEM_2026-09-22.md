@@ -289,6 +289,136 @@ collected, none dropped), the three seller.js regression fields, that `productPr
 **not** been widened ahead of the owner's consumer contracts, and that Products still opens the
 canonical editor with no second uploader route.
 
+**State at `000c75d`: HANDED OFF.** The four files are tracked; `catalogue.html` landed with them.
+`node scripts/audit-catalogue-handoff.js` reports **9 passed, 0 failed, 18 UNPROVEN, 0 NOT RUN**.
+A–E are adjudicated below; F–R remain UNPROVEN and are NOT answerable until B, C and E are settled.
+
+### A–E adjudicated 2026-09-22 (handoff `000c75d`) — the canonical model, measured
+
+Method: every row below was read out of the named file at the named line, or executed. Where the
+answer needs the emulator or live data it is marked **UNPROVEN** and says what would settle it. No
+row is PASS because the code looked plausible.
+
+**Do not read F-1's `posProducts.price` finding as the answer to these.** F-1 established the
+*pricing authority for a flash sale*. It says nothing about whether a service is a `posProducts`
+row, and the two questions have different answers.
+
+#### The four collections that all hold "a thing a merchant sells"
+
+| Collection | Role | Ownership field | Created by |
+|---|---|---|---|
+| `posProducts` | what the POS sells from | `merchantId` (SOK- business id) | `posUpsertProduct` — `functions/pos-inventory-pro.js:1565`, on `_h` only, served through `smartPosDispatch` (zero new CFs) |
+| `products` | the marketplace listing | `shopId` / `sellerUid` | `pos-marketplace-sync.js:209`, `admin-os.js:1040`, `pos-completeness.js:607` |
+| `tenants/{t}/inventory_products` | CSV-import search index | tenant path | the CSV importer — **no bridge to `posProducts`** (`pos-inventory-pro.js:1521-1523`) |
+| `productProjections` | mirror | — | deliberately **not widened** by this workstream |
+
+**A. What is the canonical catalogue collection? — ANSWERED, and it is not one collection.**
+`posProducts` is canonical **for the till**: the POS sells exclusively from it and
+`getSetupStatus.inventoryReady` checks it. `products` is canonical **for the marketplace**, and
+`business-bootstrap.js:1309-1322` records the live census — of 108 products, **103 carry
+`products.shopId == the owner's uid` and ZERO carry a SOK- merchantId**. Both vocabularies are
+real and the platform deliberately accepts both rather than swapping one for the other. A trace
+that names a single canonical catalogue is wrong about the platform.
+
+**B. How is PRODUCT distinguished from SERVICE? — FAIL: the discriminator has no server writer.**
+`sokoni-catalogue-model.js:237,248` writes `trackStock: false` for a service and `true` for a
+product, and `functions/shared/pos-service-pricing.js:12` reads exactly that. But
+`posUpsertProduct` — the only server writer of `posProducts` — **never reads or writes
+`trackStock`**, measured by fixed-string sweep of `functions/pos-inventory-pro.js` (`trackStock`,
+`variablePrice`, `listingType`, `trackInventory` all absent). Its document is an explicit
+whitelist, so the discriminator is not merely unset: passed through that writer it is
+**discarded**. This is the `d0443b8` class of defect — a field rendered and then dropped — one
+layer lower.
+
+Consequence: a service can only exist on a path that bypasses `posUpsertProduct`, which is what
+`catalogue.html:457` does (`setDoc(doc(db,'posProducts',id), next, {merge:true})`, straight from
+the browser).
+
+**C. What is the canonical non-stock/service flag? — FAIL, three fields, none reconciled.**
+`trackStock` (the model, and `pos.js:3104` excluding low-stock alerts) · `trackInventory` (on
+`products`) · `active` (what `posUpsertProduct` actually writes, a soft-delete boolean, not a
+service flag). These are different fields on different collections, not spellings of one.
+`trackStock !== false` means PRODUCT, so **absent keeps meaning product** — that default is correct
+and every existing row relies on it.
+
+**D. What is the canonical unit? — ANSWERED, with a vocabulary split.**
+`unit` on `posProducts` has a real server writer: `posUpsertProduct` writes it, capped at 24
+chars, **defaulting to `'pcs'`**. The model defaults a product to **`'piece'`**
+(`sokoni-catalogue-model.js:249`) and requires a non-empty unit for a service
+(`:210`). The `seller.js:1063` inventory mirror hardcodes `unit: 'pcs'`, as does
+`sokoni-merchant-data.js:345,354`. (§10 also records `productProjections` hardcoding it; that one is
+carried forward UNVERIFIED here.) So the field is canonical; its defaults are not agreed, and the
+writers produce two spellings for one concept.
+
+**E. How does variable pricing work? — FAIL at the boundary, correct inside it.**
+`pos-service-pricing.js` models three never-conflated price sources — `catalogue`, `variable`,
+`quick_charge` — and every line records which one it came from. That design is right. But
+`posUpsertProduct` requires `price` (`_pcNum(..., { required: true })`) and never writes
+`variablePrice`, so a variable-priced service **cannot be expressed through the canonical server
+writer**. The model sets `price: 0` for a variable service (`:240`), and a `0` price on a row the
+till reads as `prod.salePrice || prod.price` is indistinguishable from free.
+
+#### Two field divergences that will misprice or hide stock
+
+1. **`stock` vs `stockQty` — and the comment that describes it is WRONG.**
+   `posUpsertProduct` writes **`stockQty`**, always present on create, and its own header
+   (`pos-inventory-pro.js:1534`) says the till reads `prod.stockQty ?? prod.quantity`. **It does
+   not.** `functions/pos-zero-friction.js:754` reads
+   `prod.stock ?? prod.stockQty ?? prod.quantity ?? 9999` — `stock` takes PRECEDENCE, and
+   `functions/index.js:9165` uses the same order. So the model writing `stock`
+   (`sokoni-catalogue-model.js:252-256`) is *compatible*, not broken — my first reading of this,
+   taken from that comment rather than from the reader, was wrong.
+
+   The real hazard is the fallback: the model **deletes** `stock` when the field is left blank, on
+   purpose (blank = UNMETERED, not zero — the correct invariant), and an absent stock figure reads
+   at the till as **9999**. Unmetered therefore presents as effectively unlimited. That is the
+   documented sentinel rather than a defect, but it is the behaviour a service row will take, and
+   it must be stated in any oversell trace rather than discovered there.
+
+2. **`merchantId` holds two different kinds of value.** `posUpsertProduct` writes a SOK- business
+   id. `catalogue.html:453` writes **`merchantId: uid`** — a uid. `catalogue.html:299` then reads
+   back with `where('merchantId','==',uid)`, so the surface is self-consistent and **cannot see
+   anything the canonical writer created**. This is the third instance of this exact confusion
+   (F-1 found it in `createFlashSale`; `sokoni-merchant-flash.js:604` sends
+   `merchantId: ctx.scope.sellerUid`).
+
+#### The blocker A–E exposes, which is not a model question
+
+The **served ruleset** guards `posProducts` on `sellerId`, not `merchantId`:
+
+    firestore.rules:2536-2541,2553-2562
+      claimsPosOwner() -> request.resource.data.sellerId == request.auth.uid   (create)
+      isPosOwner()     -> resource.data.sellerId == request.auth.uid           (read/update/delete)
+
+Neither writer produces `sellerId`. `posUpsertProduct` writes `merchantId`/`branchId` (it runs with
+admin privileges, so rules do not apply to it); `catalogue.html` writes `merchantId: uid` and no
+`sellerId` at all. Read from the repo's rule text, **every browser create, read and update from
+`catalogue.html` against `posProducts` is denied**, and no document created by `posUpsertProduct` is
+readable by that surface either.
+
+**Verdict UNPROVEN, not FAIL, and the distinction matters.** This is read from `firestore.rules` in
+the repo. The deployed ruleset is `ad2033ad` and came from a *different* lineage
+(`merchant-launch-rc`), and repo rule text has diverged from served rules before. Settling it needs
+the served ruleset re-fetched through the Rules REST API and the four operations exercised against
+the emulator with that text loaded via `initializeTestEnvironment` — `emulators:exec` does not load
+rules here (firebase.json's `firestore` is an array, so the emulator defaults to ALLOW-ALL and a
+corrupted ruleset passes).
+
+#### Verdicts
+
+| | Question | Verdict |
+|---|---|---|
+| A | canonical catalogue collection | **PASS** — `posProducts` for the till, `products` for the marketplace; a single-collection answer is wrong |
+| B | PRODUCT vs SERVICE | **FAIL** — `trackStock` has no server writer and is discarded by `posUpsertProduct` |
+| C | canonical non-stock flag | **FAIL** — `trackStock` / `trackInventory` / `active` unreconciled |
+| D | canonical unit | **PASS with a defect** — real writer, two default spellings (`pcs` / `piece`) |
+| E | variable pricing | **FAIL** — not expressible through the canonical writer; `price: 0` is ambiguous |
+| — | `posProducts` client access | **UNPROVEN** — needs the served ruleset re-fetched and exercised |
+
+**F–R are NOT answerable from this.** B, C and E fail at the model layer, so a channel, projection
+or downstream trace written now would be describing a model the platform does not yet agree on.
+The next unit is reconciling the discriminator and the stock field — not writing F–J.
+
 ### Unresolved questions for the owner
 
 1. **Is a service a canonical `products/{id}` row, or a `posProducts/{id}` row?** The model
