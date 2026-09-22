@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>My Catalogue · SOKONI</title>
+<meta name="description" content="Manage everything you sell and every service you provide, in one catalogue.">
+<link rel="icon" href="assets/sokoni-logo-dark.png">
+<style>
+:root{
+  --bg:#050505;--sur:#0d0d0d;--sur2:#141414;--sur3:#1c1c1c;
+  --g:#71ff00;--ga:rgba(113,255,0,.12);--ga2:rgba(113,255,0,.05);
+  --bl:#4da3ff;--bla:rgba(77,163,255,.12);
+  --bor:#1a1a1a;--bor2:#242424;
+  --txt:#e8e8e8;--sub:#8a8a8a;--dim:#5f5f5f;--amber:#ffb020;--red:#ff5c5c;--r:16px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);min-height:100vh;padding:0 16px 96px;
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:900px;margin:0 auto}
+header{padding:30px 0 6px}
+h1{font-size:clamp(23px,5.4vw,31px);font-weight:900;letter-spacing:-.025em;margin:0 0 7px}
+.lede{font-size:13px;line-height:1.6;color:var(--sub);margin:0}
+.scopebar{display:flex;gap:7px;flex-wrap:wrap;margin-top:14px}
+.sc{font-size:9.5px;font-weight:800;letter-spacing:.08em;padding:4px 10px;border-radius:20px;
+  background:var(--sur2);border:1px solid var(--bor2);color:var(--dim)}
+.sc.on{background:var(--ga);border-color:rgba(113,255,0,.3);color:var(--g)}
+
+/* toolbar */
+.bar{position:sticky;top:0;z-index:20;background:linear-gradient(var(--bg) 72%,transparent);
+  padding:18px 0 12px;margin-top:8px}
+.tabs{display:flex;gap:6px;margin-bottom:11px}
+.tab{flex:1;padding:11px 8px;border-radius:11px;cursor:pointer;font:inherit;font-size:12px;font-weight:800;
+  background:var(--sur2);border:1.5px solid var(--bor2);color:var(--sub);transition:.14s}
+.tab[aria-selected="true"]{background:var(--ga2);border-color:var(--g);color:var(--g)}
+.row2{display:flex;gap:8px}
+.search{flex:1;padding:12px 14px;border-radius:11px;font:inherit;font-size:13px;
+  background:var(--sur2);border:1.5px solid var(--bor2);color:var(--txt)}
+.search:focus{outline:none;border-color:var(--g)}
+.sel{padding:12px 11px;border-radius:11px;font:inherit;font-size:12px;font-weight:700;
+  background:var(--sur2);border:1.5px solid var(--bor2);color:var(--txt)}
+.addbtn{padding:12px 17px;border-radius:11px;cursor:pointer;font:inherit;font-size:13px;font-weight:900;
+  background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;border:none;white-space:nowrap}
+.addbtn:disabled{opacity:.35;cursor:not-allowed;background:var(--sur3);color:var(--dim)}
+
+/* grid */
+.grid{display:grid;gap:11px;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));margin-top:6px}
+.card{padding:15px;border-radius:15px;background:var(--sur);border:1.5px solid var(--bor2);
+  display:flex;flex-direction:column;gap:9px;transition:border-color .15s}
+.card:hover{border-color:#303030}
+.card.svc{border-left:3px solid var(--bl)}
+.card.prd{border-left:3px solid var(--g)}
+.card.arch{opacity:.55}
+.ctop{display:flex;gap:11px;align-items:flex-start}
+.thumb{width:48px;height:48px;border-radius:12px;flex:none;display:flex;align-items:center;justify-content:center;
+  font-size:21px;background:var(--sur2);border:1px solid var(--bor2);overflow:hidden}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.cname{font-size:14px;font-weight:800;line-height:1.3;margin-bottom:3px;word-break:break-word}
+.cprice{font-size:15px;font-weight:900;color:var(--g);font-variant-numeric:tabular-nums}
+.card.svc .cprice{color:var(--bl)}
+.cmeta{font-size:11px;color:var(--sub)}
+.badges{display:flex;gap:5px;flex-wrap:wrap}
+.bdg{font-size:8.5px;font-weight:800;letter-spacing:.07em;padding:3px 7px;border-radius:5px;
+  background:var(--sur3);color:var(--sub);border:1px solid var(--bor2)}
+.bdg.PRODUCT{background:var(--ga);color:var(--g);border-color:rgba(113,255,0,.3)}
+.bdg.SERVICE{background:var(--bla);color:var(--bl);border-color:rgba(77,163,255,.3)}
+.bdg.VARIABLE{background:rgba(255,176,32,.11);color:var(--amber);border-color:rgba(255,176,32,.3)}
+.bdg.ARCHIVED{background:rgba(255,92,92,.09);color:var(--red);border-color:rgba(255,92,92,.25)}
+.acts{display:flex;gap:7px;margin-top:2px}
+.act{flex:1;padding:8px;border-radius:9px;cursor:pointer;font:inherit;font-size:11px;font-weight:800;
+  background:var(--sur2);border:1px solid var(--bor2);color:var(--txt)}
+.act:hover{border-color:#3a3a3a}
+.act.danger:hover{border-color:var(--red);color:var(--red)}
+
+/* empty / notice */
+.empty{padding:52px 20px;text-align:center;border:1px dashed var(--bor2);border-radius:var(--r);margin-top:6px}
+.empty h3{font-size:16px;font-weight:800;margin:0 0 7px}
+.empty p{font-size:12.5px;color:var(--sub);margin:0;line-height:1.6}
+.notice{margin-top:11px;padding:12px 15px;border-radius:12px;font-size:11.5px;line-height:1.6;
+  background:rgba(255,176,32,.07);border:1px solid rgba(255,176,32,.25);color:#ffc65c}
+.skel{height:108px;border-radius:15px;background:linear-gradient(90deg,var(--sur2),var(--sur3),var(--sur2));
+  background-size:200% 100%;animation:sh 1.3s infinite}
+@keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* modal */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(7px);z-index:100;
+  display:none;align-items:flex-end;justify-content:center;padding:0}
+.ov.open{display:flex}
+@media(min-width:620px){.ov{align-items:center;padding:20px}}
+.sheet{width:100%;max-width:520px;max-height:92vh;overflow-y:auto;background:var(--sur);
+  border:1px solid var(--bor2);border-radius:20px 20px 0 0;padding:20px 20px 26px}
+@media(min-width:620px){.sheet{border-radius:20px}}
+.sh-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:17px}
+.sh-t{font-size:17px;font-weight:900}
+.x{width:32px;height:32px;border-radius:9px;cursor:pointer;background:var(--sur2);
+  border:1px solid var(--bor2);color:var(--sub);font-size:14px}
+.fld{margin-bottom:14px}
+.lbl{display:block;font-size:10px;font-weight:800;letter-spacing:.11em;color:var(--dim);margin-bottom:6px}
+.inp{width:100%;padding:12px 14px;border-radius:11px;font:inherit;font-size:14px;
+  background:var(--sur2);border:1.5px solid var(--bor2);color:var(--txt)}
+.inp:focus{outline:none;border-color:var(--g)}
+textarea.inp{min-height:70px;resize:vertical}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.seg{display:flex;gap:7px}
+.sgb{flex:1;padding:12px 8px;border-radius:11px;cursor:pointer;font:inherit;font-size:12px;font-weight:800;
+  background:var(--sur2);border:1.5px solid var(--bor2);color:var(--sub)}
+.sgb[aria-pressed="true"]{background:var(--ga2);border-color:var(--g);color:var(--g)}
+.hint{font-size:10.5px;line-height:1.55;color:var(--dim);margin-top:6px}
+.prob{padding:11px 13px;border-radius:10px;font-size:11.5px;line-height:1.55;margin-bottom:13px;display:none;
+  background:rgba(255,92,92,.08);border:1px solid rgba(255,92,92,.26);color:#ff9a9a}
+.prob.on{display:block}
+.save{width:100%;padding:15px;border-radius:13px;border:none;cursor:pointer;font:inherit;font-size:14.5px;font-weight:900;
+  background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;margin-top:4px}
+.save:disabled{opacity:.35;cursor:not-allowed}
+.pickrow{display:grid;gap:9px}
+.pick{display:grid;grid-template-columns:42px 1fr;gap:13px;align-items:center;padding:15px;
+  border-radius:13px;cursor:pointer;text-align:left;font:inherit;
+  background:var(--sur2);border:1.5px solid var(--bor2);color:var(--txt)}
+.pick:disabled{opacity:.45;cursor:not-allowed}
+.pick-i{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+  font-size:19px;background:var(--sur3);border:1px solid var(--bor2)}
+.pick-t{font-size:14px;font-weight:800;margin-bottom:2px}
+.pick-d{font-size:11px;color:var(--sub);line-height:1.5}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>My catalogue</h1>
+    <p class="lede">Manage everything you sell and every service you provide — in one place.</p>
+    <div class="scopebar" id="scopebar"></div>
+  </header>
+
+  <div class="bar">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true"  onclick="Cat.tab('all')">All</button>
+      <button class="tab" role="tab" aria-selected="false" onclick="Cat.tab('products')">Products</button>
+      <button class="tab" role="tab" aria-selected="false" onclick="Cat.tab('services')">Services</button>
+    </div>
+    <div class="row2">
+      <input class="search" id="q" type="search" placeholder="Search catalogue…" oninput="Cat.render()" aria-label="Search catalogue">
+      <select class="sel" id="status" onchange="Cat.render()" aria-label="Filter by status">
+        <option value="active">Active</option>
+        <option value="archived">Archived</option>
+        <option value="any">All</option>
+      </select>
+      <button class="addbtn" id="add" onclick="Cat.openPicker()" disabled>+ Add</button>
+    </div>
+    <div class="notice" id="notice" style="display:none"></div>
+  </div>
+
+  <div id="body"><div class="grid"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div></div>
+</div>
+
+<!-- Add picker -->
+<div class="ov" id="ov-pick"><div class="sheet">
+  <div class="sh-h"><span class="sh-t">Add to catalogue</span><button class="x" onclick="Cat.close('ov-pick')">✕</button></div>
+  <div class="pickrow">
+    <button class="pick" id="pick-product" onclick="Cat.openEditor('product',null)">
+      <span class="pick-i">📦</span>
+      <span><span class="pick-t">Product</span><span class="pick-d">Something you stock and sell — a charger, a flash disk.</span></span>
+    </button>
+    <button class="pick" id="pick-service" onclick="Cat.openEditor('service',null)">
+      <span class="pick-i">🛠</span>
+      <span><span class="pick-t">Service</span><span class="pick-d">Work you charge for — printing, repairs, a haircut.</span></span>
+    </button>
+  </div>
+  <div class="notice" id="pick-note" style="display:none"></div>
+</div></div>
+
+<!-- Editor -->
+<div class="ov" id="ov-edit"><div class="sheet">
+  <div class="sh-h"><span class="sh-t" id="ed-title">Add</span><button class="x" onclick="Cat.close('ov-edit')">✕</button></div>
+  <div class="prob" id="ed-prob"></div>
+
+  <div class="fld"><label class="lbl" for="f-name">NAME</label>
+    <input class="inp" id="f-name" placeholder="Printing"></div>
+  <div class="fld"><label class="lbl" for="f-desc">DESCRIPTION</label>
+    <textarea class="inp" id="f-desc" placeholder="Print documents in black and white."></textarea></div>
+
+  <!-- SERVICE ONLY: pricing mode -->
+  <div class="fld" id="f-mode-wrap" style="display:none">
+    <span class="lbl">PRICING</span>
+    <div class="seg">
+      <button class="sgb" id="m-fixed" aria-pressed="true"  onclick="Cat.mode(false)">Fixed price</button>
+      <button class="sgb" id="m-var"   aria-pressed="false" onclick="Cat.mode(true)">Variable price</button>
+    </div>
+    <p class="hint" id="mode-hint"></p>
+  </div>
+
+  <div class="two">
+    <div class="fld"><label class="lbl" for="f-price"><span id="price-lbl">PRICE (KES)</span></label>
+      <input class="inp" id="f-price" type="number" min="0" step="0.01" inputmode="decimal" placeholder="20"></div>
+    <div class="fld"><label class="lbl" for="f-unit">UNIT</label>
+      <input class="inp" id="f-unit" placeholder="page" list="unit-list">
+      <datalist id="unit-list">
+        <option value="page"></option><option value="document"></option><option value="session"></option>
+        <option value="hour"></option><option value="service"></option><option value="piece"></option>
+        <option value="kg"></option><option value="litre"></option>
+      </datalist></div>
+  </div>
+
+  <!-- PRODUCT ONLY -->
+  <div id="prod-only" style="display:none">
+    <div class="two">
+      <div class="fld"><label class="lbl" for="f-stock">STOCK</label>
+        <input class="inp" id="f-stock" type="number" min="0" step="1" inputmode="numeric" placeholder="Leave blank if not tracked"></div>
+      <div class="fld"><label class="lbl" for="f-low">LOW-STOCK ALERT</label>
+        <input class="inp" id="f-low" type="number" min="0" step="1" inputmode="numeric" placeholder="optional"></div>
+    </div>
+    <div class="two">
+      <div class="fld"><label class="lbl" for="f-sku">SKU</label><input class="inp" id="f-sku" placeholder="optional"></div>
+      <div class="fld"><label class="lbl" for="f-cat">CATEGORY</label><input class="inp" id="f-cat" placeholder="optional"></div>
+    </div>
+    <div class="fld"><label class="lbl" for="f-img">IMAGE URL</label><input class="inp" id="f-img" placeholder="optional"></div>
+  </div>
+  <div class="fld" id="svc-cat-wrap" style="display:none">
+    <label class="lbl" for="f-cat2">CATEGORY</label><input class="inp" id="f-cat2" placeholder="optional">
+  </div>
+
+  <button class="save" id="ed-save" onclick="Cat.save()">Save</button>
+</div></div>
+
+<!-- Platform injector: sanitisation/CSP, plus the modules that make this page part
+     of the live system (device bus, notification engine + centre, idle-deferred).
+     Added 2026-09-22 for realtime multi-device coverage. ADDITIVE ONLY — this file is
+     another agent's untracked work in progress, so the change that added this tag does
+     NOT commit the file. -->
+<script src="security.js"></script>
+<script src="sokoni-catalogue-model.js"></script>
+<script src="sokoni-merchant-nav.js"></script>
+<script src="sw-register.js" defer></script>
+<script type="module">
+/* ═══════════════════════════════════════════════════════════════════════════
+   ONE CATALOGUE — posProducts. There is no posServices collection.
+
+   A service is a posProducts row with trackStock:false, a unit, and optionally
+   variablePrice. Every number shown here is presentation; the SERVER prices
+   every sale (functions/shared/pos-service-pricing.js) and re-decides scope on
+   every write. Nothing on this page is an authority.
+
+   This page deliberately does NOT touch the payment path. No intent is
+   created, no tender is taken, no sale is recorded.
+═══════════════════════════════════════════════════════════════════════════ */
+import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js';
+import { getFirestore, collection, query, where, limit, getDocs, doc, getDoc, setDoc }
+  from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js';
+
+const M = window.SokoniCatalogueModel;
+const cfg = window.SOKONI_FIREBASE_CONFIG || window.firebaseConfig || null;
+let db=null, auth=null, uid=null;
+
+const $ = (id)=>document.getElementById(id);
+const esc = (s)=>String(s==null?'':s).replace(/[<>"'&]/g,c=>({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c]));
+const st = { rows:[], scope:null, tab:'all', kind:'product', editing:null, variable:false, loading:true, busy:false };
+
+/* Mirrors functions/shared/business-scope.js. Presentation only — the server
+   re-decides. Kept identically strict: unknown status is NOT active. */
+const LIVE=['active','approved'];
+function isLive(d){
+  if(!d||typeof d!=='object') return false;
+  if(d.active===false||d.suspended===true) return false;
+  const s=String(d.status==null?'':d.status).trim().toLowerCase();
+  return s?LIVE.includes(s):true;
+}
+
+async function load(){
+  /* Identity AND entitlement, in that order — the hierarchy is
+     approval → scope → subscription → features. A subscription can never
+     create a capability here; it can only gate one approval already granted.
+     Both are presentation: the server re-decides on every write. */
+  const [sellerS, providerS, sellerSub, providerSub] = await Promise.all([
+    getDoc(doc(db,'sellers',uid)).catch(()=>null),
+    getDoc(doc(db,'providers',uid)).catch(()=>null),
+    getDoc(doc(db,'merchantSubscriptions',uid)).catch(()=>null),
+    getDoc(doc(db,'providerSubscriptions',uid)).catch(()=>null),
+  ]);
+  const asSub = (s)=> (s&&s.exists())
+    ? { found:true, status:String(s.data().status||''), tier:s.data().plan||s.data().tier||null }
+    : { found:false, status:'none', tier:null };
+  st.sellerSub   = asSub(sellerSub);
+  st.providerSub = asSub(providerSub);
+  const sells = sellerS   && sellerS.exists()   ? isLive(sellerS.data())   : false;
+  const provs = providerS && providerS.exists() ? isLive(providerS.data()) : false;
+  st.scope = {
+    sellsProducts: sells, providesServices: provs,
+    isDual: sells&&provs, isTrading: sells||provs,
+    reasons:{
+      products: sells?'approved':(sellerS&&sellerS.exists()?'suspended':'not_applied'),
+      services: provs?'approved':(providerS&&providerS.exists()?'suspended':'not_applied'),
+    },
+  };
+  st.nav = window.SokoniMerchantNav.resolveNav({
+    scope: st.scope, sellerSub: st.sellerSub, providerSub: st.providerSub,
+  });
+
+  const snap = await getDocs(query(collection(db,'posProducts'), where('merchantId','==',uid), limit(500)));
+  st.rows = snap.docs.map(d=>Object.assign({id:d.id}, d.data()));
+  st.loading=false;
+  render();
+}
+
+/* The combined answer. Scope alone is not enough to CREATE — an approved but
+   unsubscribed side keeps its catalogue visible (the data is theirs) but
+   cannot add to it. Reading stays open either way. */
+function mayCreate(kind){
+  return window.SokoniMerchantNav.creatableKinds(st.nav).indexOf(kind)!==-1;
+}
+function createBlockReason(kind){
+  const side = kind==='service' ? st.nav.services : st.nav.products;
+  return side.reason || M.unavailableReason(st.scope, kind);
+}
+
+function render(){
+  if(st.loading) return;
+  const sc=st.scope;
+  $('scopebar').innerHTML =
+    `<span class="sc ${sc.sellsProducts?'on':''}">${sc.sellsProducts?'✓':'○'} PRODUCTS</span>`+
+    `<span class="sc ${sc.providesServices?'on':''}">${sc.providesServices?'✓':'○'} SERVICES</span>`+
+    (sc.isDual?'<span class="sc on">✦ DUAL BUSINESS</span>':'');
+
+  $('add').disabled = window.SokoniMerchantNav.creatableKinds(st.nav).length===0;
+
+  /* Explain a restriction rather than leaving a dead button. */
+  const notice=$('notice');
+  if(!sc.isTrading){
+    notice.textContent='Your business is not approved to trade yet, so the catalogue is read-only.';
+    notice.style.display='block';
+  } else if(window.SokoniMerchantNav.creatableKinds(st.nav).length<2){
+    const missing = mayCreate('product')?'service':'product';
+    notice.textContent = createBlockReason(missing);
+    notice.style.display='block';
+  } else notice.style.display='none';
+
+  const rows = M.filterRows(st.rows,{query:$('q').value,tab:st.tab,status:$('status').value});
+  const body=$('body');
+  if(!rows.length){
+    const e=M.emptyMessage(sc,st.tab);
+    body.innerHTML=`<div class="empty"><h3>${esc(e.t)}</h3><p>${esc(e.s)}</p></div>`;
+    return;
+  }
+  body.innerHTML='<div class="grid">'+rows.map(cardHTML).join('')+'</div>';
+}
+
+function cardHTML(r){
+  const svc=M.isService(r);
+  const badges=M.badgesFor(r).map(b=>`<span class="bdg ${esc(b.replace(/ /g,''))}">${esc(b)}</span>`).join('');
+  const stock=M.stockLabel(r);
+  const thumb = (!svc && r.image)
+    ? `<span class="thumb"><img src="${esc(r.image)}" alt="" onerror="this.parentNode.textContent='📦'"></span>`
+    : `<span class="thumb">${svc?'🛠':'📦'}</span>`;
+  return `<div class="card ${svc?'svc':'prd'} ${M.isArchived(r)?'arch':''}">
+    <div class="ctop">${thumb}
+      <span style="min-width:0">
+        <div class="cname">${esc(r.name||'Untitled')}</div>
+        <div class="cprice">${esc(M.priceLabel(r))}</div>
+        ${stock?`<div class="cmeta">${esc(stock)}</div>`:''}
+        ${svc&&M.isVariable(r)?'<div class="cmeta">Priced at the counter</div>':''}
+      </span></div>
+    <div class="badges">${badges}</div>
+    <div class="acts">
+      <button class="act" onclick="Cat.openEditor('${svc?'service':'product'}','${esc(r.id)}')">Edit</button>
+      ${M.isArchived(r)
+        ? `<button class="act" onclick="Cat.restore('${esc(r.id)}')">Restore</button>`
+        : `<button class="act danger" onclick="Cat.archive('${esc(r.id)}')">Archive</button>`}
+    </div></div>`;
+}
+
+window.Cat = {
+  tab(t){
+    st.tab=t;
+    document.querySelectorAll('.tab').forEach((b,i)=>
+      b.setAttribute('aria-selected', String(['all','products','services'][i]===t)));
+    render();
+  },
+  render,
+  close(id){ $(id).classList.remove('open'); },
+
+  openPicker(){
+    const sc=st.scope;
+    for(const k of ['product','service']){
+      const btn=$('pick-'+k);
+      btn.disabled=!mayCreate(k);
+    }
+    const blocked=['product','service'].filter(k=>!mayCreate(k));
+    const note=$('pick-note');
+    if(blocked.length){ note.textContent=createBlockReason(blocked[0]); note.style.display='block'; }
+    else note.style.display='none';
+    $('ov-pick').classList.add('open');
+  },
+
+  mode(v){
+    st.variable=!!v;
+    $('m-fixed').setAttribute('aria-pressed',String(!v));
+    $('m-var').setAttribute('aria-pressed',String(v));
+    $('price-lbl').textContent = v ? 'STARTING PRICE (KES, optional)' : 'PRICE (KES)';
+    $('mode-hint').textContent = v
+      ? 'The cashier enters the amount at the counter, within the limit your business settings allow. The server enforces that limit — this page does not set it.'
+      : 'Everyone is charged this price. A cashier cannot change it at the till.';
+  },
+
+  openEditor(kind,id){
+    /* Scope is re-checked here as well as on the picker: an editor can be
+       opened from a card, and the server refuses regardless. */
+    if(!id && !mayCreate(kind)){ alert(createBlockReason(kind)); return; }
+    st.kind=kind; st.editing=id?st.rows.find(r=>r.id===id)||null:null;
+    const r=st.editing||{};
+    const svc=kind==='service';
+
+    $('ed-title').textContent=(id?'Edit ':'Add ')+(svc?'service':'product');
+    $('f-name').value=r.name||''; $('f-desc').value=r.description||'';
+    $('f-price').value=(r.price!==undefined&&r.price!==null)?r.price:'';
+    $('f-unit').value=r.unit||(svc?'':'piece');
+    $('f-mode-wrap').style.display=svc?'block':'none';
+    $('prod-only').style.display=svc?'none':'block';
+    $('svc-cat-wrap').style.display=svc?'block':'none';
+    if(svc){ $('f-cat2').value=r.category||''; }
+    else{
+      $('f-stock').value=(r.stock!==undefined&&r.stock!==null)?r.stock:'';
+      $('f-low').value=(r.lowStockThreshold!==undefined&&r.lowStockThreshold!==null)?r.lowStockThreshold:'';
+      $('f-sku').value=r.sku||''; $('f-cat').value=r.category||''; $('f-img').value=r.image||'';
+    }
+    this.mode(svc && r.variablePrice===true);
+    $('ed-prob').classList.remove('on');
+    $('ov-edit').classList.add('open');
+  },
+
+  async save(){
+    if(st.busy) return;
+    const svc=st.kind==='service';
+    const draft={
+      name:$('f-name').value, description:$('f-desc').value,
+      price:$('f-price').value, unit:$('f-unit').value,
+      category: svc?$('f-cat2').value:$('f-cat').value,
+      variablePrice: svc?st.variable:false,
+      active: st.editing?st.editing.active!==false:true,
+    };
+    if(!svc){
+      draft.stock=$('f-stock').value; draft.lowStockThreshold=$('f-low').value;
+      draft.sku=$('f-sku').value; draft.image=$('f-img').value;
+    }
+    const v=M.validateDraft(st.kind,draft);
+    if(!v.ok){ const p=$('ed-prob'); p.textContent=v.problems.join(' '); p.classList.add('on'); return; }
+
+    st.busy=true; $('ed-save').disabled=true; $('ed-save').textContent='Saving…';
+    try{
+      /* Merge onto the EXISTING row so fields this editor never shows — cost,
+         batch, barcode, expiryDate, sync bookkeeping — survive. */
+      const id = st.editing ? st.editing.id
+        : (svc?'svc_':'prd_')+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+      const base = st.editing ? Object.assign({},st.editing) : { merchantId:uid, createdAt:new Date().toISOString() };
+      const next = M.applyEdit(base,st.kind,draft);
+      delete next.id;                         /* the id is the doc key, not a field */
+      next.updatedAt=new Date().toISOString();
+      await setDoc(doc(db,'posProducts',id), next, { merge:true });
+      this.close('ov-edit'); this.close('ov-pick');
+      await load();
+    }catch(e){
+      const p=$('ed-prob'); p.textContent=(e&&e.message)||'Could not save.'; p.classList.add('on');
+    }finally{
+      st.busy=false; $('ed-save').disabled=false; $('ed-save').textContent='Save';
+    }
+  },
+
+  async archive(id){
+    if(!confirm('Archive this item? It stays in your records and can be restored.')) return;
+    await setDoc(doc(db,'posProducts',id), M.archivePatch(uid), { merge:true });
+    await load();
+  },
+  async restore(id){
+    await setDoc(doc(db,'posProducts',id), M.restorePatch(), { merge:true });
+    await load();
+  },
+};
+
+(async()=>{
+  if(!cfg){ st.loading=false; $('body').innerHTML='<div class="empty"><h3>Unavailable</h3><p>Could not reach SOKONI. Please reload.</p></div>'; return; }
+  const app=getApps().length?getApps()[0]:initializeApp(cfg);
+  auth=getAuth(app); db=getFirestore(app);
+  onAuthStateChanged(auth, async(u)=>{
+    if(!u){ st.loading=false;
+      $('body').innerHTML='<div class="empty"><h3>Sign in</h3><p>Sign in to manage your catalogue.</p></div>'; return; }
+    uid=u.uid;
+    try{ await load(); }
+    catch(e){
+      st.loading=false;
+      /* Fail visible. An empty grid must never be shown when the truth is
+         "we could not read it" — a merchant would think their catalogue was
+         wiped. */
+      $('body').innerHTML='<div class="empty"><h3>Could not load your catalogue</h3><p>'+esc((e&&e.message)||'Please reload.')+'</p></div>';
+    }
+  });
+})();
+</script>
+</body>
+</html>
