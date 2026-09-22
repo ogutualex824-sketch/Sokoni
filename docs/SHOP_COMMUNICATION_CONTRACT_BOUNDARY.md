@@ -27,7 +27,8 @@ CA.RELATIONSHIPS.inquiry        anchored on products/{id}, pairs buyer:seller, c
 | Question | Answer | Evidence |
 |---|---|---|
 | Canonical shop document | `shops/{uid}` | `match /shops/{uid}` with `request.auth.uid == uid` |
-| Canonical shop id | **the owner's uid** | same rule; `store.html` calls it *"Firebase seller UID"* |
+| Canonical shop id | **the shop document id (`storeId`)** — *not necessarily a uid* | deployed `match /shops/{storeId}` |
+| Ownership | **`ownerId` is primary**; `uid == storeId` is a fallback for documents lacking it | deployed rule body, verified against `ad2033ad` |
 | Owner/merchant relationship | `ownerId \|\| sellerUid \|\| uid` | `_shopOwner` in `admin-os.js:1750` |
 | Seller identity for commerce | `products/{id}.sellerUid` | `merchant-identity.js`, and the existing `inquiry` anchor |
 | Existing resolver to reuse | `merchant-identity.js` / `_shopOwner` | no new lookup was written |
@@ -127,3 +128,36 @@ mount function names no uid, and a shop with no live listing draws nothing. Thos
 positive control, so they cannot pass by being blind.
 
 No browser has loaded this page — this is source-level evidence, not a real-device result.
+
+## Correction — 2026-09-22
+
+An earlier version of this document stated that the canonical shop id **is the owner's uid**,
+citing `match /shops/{uid}` with `request.auth.uid == uid`. **That was the Git lineage, not
+production.** Fetching the deployed ruleset (`ad2033ad`) showed the live rule is:
+
+```
+match /shops/{storeId} {
+  allow read:   if true;
+  allow update: if isAdmin()
+    || (isAuthed()
+        && (resource.data.ownerId == request.auth.uid
+            || (!("ownerId" in resource.data) && request.auth.uid == storeId))
+        && ... field allowlist including timezone, with format validation);
+}
+```
+
+So **`ownerId` is the primary ownership authority**, and `uid == storeId` survives only as a
+compatibility fallback for shop documents that do not carry one. Do not read that as "every
+shop has migrated" — the fallback exists precisely because some have not, and this document
+claims nothing about the proportion.
+
+**None of this changes the Communications contract.** Connect does not authorize through
+`shops` at all. Product inquiry begins at the listing:
+
+```
+MiniShop -> published product -> products/{productId}.sellerUid -> inquiry relationship
+```
+
+The conclusion of this document therefore stands — a shop identifier is client-enumerable and
+must not become a Connect anchor — but one fact supporting it was stale, and a stale supporting
+fact in a security document is worth correcting even when the conclusion survives.

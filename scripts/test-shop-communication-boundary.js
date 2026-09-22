@@ -71,14 +71,27 @@ const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 /* ── 3. The traced chain: a shop id IS a person ─────────────────────────── */
 {
   const rules = read('firestore.rules');
-  /* The rules are the enforcement boundary, and they name the wildcard `uid`. */
-  ok('the rules key a shop document by uid', /match \/shops\/\{uid\}/.test(rules));
-  const shopBlock = rules.slice(rules.indexOf('match /shops/{uid}'),
-    rules.indexOf('match /shops/{uid}') + 700);
-  ok('…and enforce ownership as request.auth.uid == uid',
-    /request\.auth\.uid == uid/.test(shopBlock));
+  /* RETARGETED to the PRODUCTION model. These assertions described
+     `match /shops/{uid}` with `request.auth.uid == uid` — which was the Git
+     lineage, not the deployed one. The reconciliation established that
+     production keys the block `{storeId}` and authorises by `ownerId`, with
+     uid == storeId only as a fallback for documents that lack it. The claim
+     these assertions SUPPORTED is unchanged and still true: a shop is
+     addressed by an identifier a client can enumerate, so it must not become a
+     Connect anchor. */
+  const shopBlock = (() => {
+    const { scan } = require(path.join(ROOT, 'scripts', 'rules-blocks.js'));
+    const b = scan(rules).find((x) => x.path.indexOf('/shops/') === 0);
+    return b ? b.body : '';
+  })();
+  ok('the rules key a shop document by storeId', /match \/shops\/\{storeId\}/.test(rules));
+  ok('…and authorise primarily by ownerId',
+    /resource\.data\.ownerId == request\.auth\.uid/.test(shopBlock));
+  ok('…with uid == storeId retained only as a legacy fallback',
+    /!\("ownerId" in resource\.data\) && request\.auth\.uid == storeId/.test(shopBlock));
   ok('…while shop documents are WORLD-READABLE, so shop ids are enumerable',
     /allow read:\s*if true/.test(shopBlock));
+  ok('the stale shops/{uid} block is gone', !/match \/shops\/\{uid\}/.test(rules));
 
   /* The storefront says so in as many words. */
   const store = read('store.html');
@@ -129,8 +142,8 @@ const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
   } else {
     ok('RECORDED: the STK-narrative merchant-identity module is not on this lineage',
       true);
-    ok('…and the shop-is-a-uid claim still stands on the rules alone',
-      /match \/shops\/\{uid\}/.test(read('firestore.rules')));
+    ok('…and the shop-is-addressable claim still stands on the rules alone',
+      /match \/shops\/\{storeId\}/.test(read('firestore.rules')));
   }
 }
 
