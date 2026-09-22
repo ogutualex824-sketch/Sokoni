@@ -1017,6 +1017,106 @@ console.log('\n── The C2/C3 boundary is explicit ──');
   ck('the only media route is the report op', /connectReportMediaEvent/.test(c2));
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+   PHASE 2 — support reaches SOKONI
+══════════════════════════════════════════════════════════════════════════════════════════ */
+console.log('\n── Support tickets now reach SOKONI ──');
+{
+  const p = path.join(ROOT, 'sokoni-support-contact.js');
+  ck('the support contact module exists', fs.existsSync(p));
+  const src = fs.readFileSync(p, 'utf8');
+  const sb = { SokoniSupportContact: null, localStorage: { setItem() {}, getItem() { return null; } },
+    firebase: null };
+  new Function('window', src)(sb);
+  const S = sb.SokoniSupportContact;
+  ck('…and loads', !!S && typeof S.submit === 'function');
+
+  console.log('\n   the defect it replaces');
+  /* support.html called SokoniLaunch.submitTicket, which wrote localStorage, invented a
+     `TKT…` id, and the page then said "We've received your issue" unconditionally. Nobody
+     had received anything. */
+  const page = fs.readFileSync(path.join(ROOT, 'support.html'), 'utf8');
+  /* Strip BOTH comment syntaxes. The page's own JS comment names
+     `SokoniLaunch.submitTicket` to record what was replaced, and an HTML-only strip left it
+     in — the assertion then failed on the documentation of the fix. */
+  const pageCode = page
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  ck('support.html no longer calls the localStorage submitter',
+    !/SokoniLaunch\.submitTicket/.test(pageCode));
+  ck('…and no longer invents a client-side ticket id',
+    !/'TKT' \+ Date\.now\(\)/.test(pageCode));
+  ck('…it submits through the canonical module', /SokoniSupportContact\.submit/.test(pageCode));
+  ck('…and shows success ONLY inside the resolve handler',
+    /\.then\(function \(res\) \{[\s\S]{0,400}spTicketSuccess/.test(pageCode));
+  ck('…rendering the id the SERVER returned', /res\.ticketId/.test(pageCode));
+  ck('…and a failure re-enables the form and says it was NOT sent',
+    /describeFailure/.test(pageCode) && /btn\.disabled = false/.test(pageCode));
+
+  console.log('\n   the payload carries no recipient');
+  const payload = S.payloadFor({
+    category: 'order', subject: 's', message: 'm', priority: 'high',
+    /* smuggling attempts */
+    recipientUid: 'someone', calleeUid: 'x', phone: '+254712345678', email: 'a@b.c',
+  });
+  ck('exactly the five permitted keys',
+    Object.keys(payload).sort().join(',') === 'category,message,op,priority,subject',
+    Object.keys(payload).join(','));
+  ['recipientUid', 'calleeUid', 'phone', 'email'].forEach((k) => {
+    ck('…no ' + k, !Object.prototype.hasOwnProperty.call(payload, k));
+  });
+  ck('…and it routes to the canonical op', payload.op === 'adminCreateSupportTicket');
+
+  console.log('\n   validation refuses rather than guessing');
+  ck('no subject is refused', S.validate({ message: 'm' }).reason === 'subject_required');
+  ck('no message is refused', S.validate({ subject: 's' }).reason === 'message_required');
+  ck('an unknown category is refused',
+    S.validate({ subject: 's', message: 'm', category: 'nope' }).reason === 'unknown_category');
+  ck('an unknown priority is refused',
+    S.validate({ subject: 's', message: 'm', priority: 'urgent' }).reason === 'unknown_priority');
+  ck('an over-long message is refused rather than silently truncated',
+    S.validate({ subject: 's', message: 'x'.repeat(2001) }).reason === 'message_too_long');
+  ck('…positive control: a complete form validates',
+    S.validate({ subject: 's', message: 'm', category: 'order', priority: 'high' }).ok);
+  ck('no argument does not throw', S.validate().ok === false);
+
+  console.log('\n   the ticket id IS the support anchor');
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  ck('the resolved value carries the anchor',
+    /anchorType: 'support', anchorId: data\.ticketId/.test(code));
+  ck('…which is an approved anchor type', ENV.ANCHOR_TYPES.includes('support'));
+  ck('…so the case joins the timeline with no second store',
+    !/collection\(/.test(code));
+  ck('a missing server id is a FAILURE, never a success',
+    /if \(!data\.ticketId\) throw/.test(code));
+
+  console.log('\n   localStorage is a cache of a real id, never the record');
+  ck('the cached entry is flagged as server-issued', /server: true/.test(code));
+  ck('…and a blocked localStorage cannot fail a submitted ticket',
+    /catch \(e\) \{ \/\* a blocked localStorage/.test(src));
+  ck('the last-ticket panel ignores legacy client-minted ids',
+    /last\.server === true/.test(pageCode));
+  ck('…and no longer asserts a constant status',
+    !/Status: <span style="color:#f59e0b;font-weight:800;">Under Review/.test(pageCode));
+
+  console.log('\n   tracking reads the real ticket');
+  ck('it queries supportTickets', /collection\('supportTickets'\)\.doc\(id\)/.test(pageCode));
+  ck('…absent is stated as absent, not as "under review"',
+    /No ticket with that ID on this account/.test(pageCode));
+  ck('…and a failed read is not rendered as not-found',
+    /It has not been lost/.test(pageCode));
+
+  console.log('\n   all three surfaces offer the in-platform path — and there is no fourth page');
+  ['contact.html', 'help.html'].forEach((f) => {
+    const h = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    ck('…' + f + ' links to the support case flow', /support\.html#ticket/.test(h));
+  });
+  ck('no new support page was created',
+    !fs.existsSync(path.join(ROOT, 'contact-support.html')) &&
+    !fs.existsSync(path.join(ROOT, 'message-support.html')));
+}
+
 console.log('\n── The frozen Connect contracts are untouched ──');
 {
   const CA = require(path.join(ROOT, 'functions', 'shared', 'connect-authority'));
