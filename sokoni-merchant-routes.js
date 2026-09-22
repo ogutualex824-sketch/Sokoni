@@ -83,6 +83,24 @@
       mobile:true, desktop:true, activeKey:'products',
       note:'Canonical products list + Add Product + bulk upload. Writes products/{id}.' },
 
+    /* OFFERS & PROMOTIONS — the commercial layer over listings. Declared here because the
+       sidebar is a PROJECTION OF THIS CONTRACT: a module registered without a route would
+       mount but be unreachable, which is the "button with no destination" this file exists
+       to prevent, inverted. The rules live in sokoni-promotion-model.js; this route only
+       opens the surface that edits them. */
+    /* tier:'more', NOT 'primary'. The source lineage declared this primary and never
+       updated the canonical sidebar spec, so its route suite has been failing
+       "no extra primary destinations [19 vs 18]" ever since. PRIMARY_ORDER is the
+       founder's canonical 17 and promoting a row into it is a product decision, not an
+       integration detail — so Offers lands in the more tier, fully reachable, and promotion
+       stays available as a one-line change later. */
+    { id:'offers', name:'Offers', icon:'🎁', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'offers',
+      note:'Bundles, buy-X-get-Y, happy hours, spend-and-save. Composes and previews through ' +
+           'SokoniPromotionModel; no offer store is wired yet, and the surface says so rather ' +
+           'than appearing to save into nothing.' },
     { id:'sell', name:'Sell', icon:'💳', tier:'primary',
       kind:'native',
       /* ── CROSS-SHELL DESTINATION ─────────────────────────────────────────
@@ -455,7 +473,7 @@
     { key:'main',       label:'Main',
       ids:['reports','availability','shop','fulfilment','verification'] },
     { key:'growth',     label:'Growth',
-      ids:['marketing','flash-sale','stories','customers'] },
+      ids:['marketing','offers','flash-sale','stories','customers'] },
     /* KRA Tax groups with Operations rather than Main: it is back-office compliance
        configured once alongside Devices and POS Setup, not a surface a merchant reads
        daily the way they read Reports. */
