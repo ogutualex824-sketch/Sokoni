@@ -455,6 +455,78 @@ the functions deploy remains blocked by the merchant-identity provenance gap.
 
 ---
 
+## Provider health — two axes, never merged
+
+A dashboard that answers "is SendGrid OK?" with one colour is a dashboard that lies, because two
+different facts are being collapsed:
+
+| Axis | Question | Source | Values |
+|---|---|---|---|
+| `provisioning` | have we been given credentials? | the environment | `configured` · `not_configured` |
+| `liveness` | did the last real attempt work? | recorded observations | `reachable` · `unreachable` · `stale` · `unobserved` |
+
+They are separate fields on every row. A provider can be fully configured and completely down.
+
+### `unobserved` is the important state
+
+It is **not** `unreachable` — we have not tried, which is not the same as having tried and failed —
+and it is **not** `reachable`. It renders as a dash. Until something actually sends, every provider
+reads `configured / unobserved`, and that is the truthful reading of the situation rather than a
+gap to be filled with an optimistic default.
+
+Two related refusals to guess:
+
+- **A success from last week is not evidence about now.** Past `DEFAULT_STALE_AFTER_MS` (15 min) an
+  observation becomes `stale`, not `reachable`.
+- **Without a clock we cannot know whether an observation is current**, so `livenessFor` returns
+  `unobserved` with reason `no_clock_supplied` rather than assuming freshness.
+
+### Attribution only where it is unambiguous
+
+`notify.js` chooses its own transport. If a channel has **two** configured providers, the send
+could have used either, and recording a guess would put a green light next to a provider that was
+never attempted — the precise failure this axis exists to prevent. So
+`_attributableProviders` returns a provider only when the channel's chain holds exactly one.
+Everything else stays `unobserved`.
+
+Failures are recorded **before** the throw: a failure that goes unrecorded leaves the board showing
+the last success, which is worse than showing nothing. Telemetry that cannot be written is logged
+and swallowed — it must never turn a delivered message into a failed one. An unreadable observation
+store yields **no** observations, never healthy ones.
+
+### Credentials cannot reach an operator screen
+
+The row is assembled from `SAFE_ROW_FIELDS` — a **whitelist**, not a blocklist. A blocklist only
+removes the credential shapes someone thought of, and the next adapter will invent a new one.
+Nothing reaches a screen unless it is named in that list, so a token cannot ride along inside an
+observation.
+
+There is no field that can carry a key, a header, a response body or a fragment of one — **not
+redacted, not truncated, not length-hinted. A prefix or a length is still a disclosure.** What is
+exposed is timestamps and the failure *class*, which is a closed vocabulary from
+`FAILURE_CLASSES`; the provider's own error text is not, because it is free-form and regularly
+contains the request that caused it.
+
+### Liveness is observational, never authority
+
+The routing chain is decided by **provisioning**. The suite asserts that `chainFor` returns an
+identical chain with and without observations — otherwise a transient blip silently becomes a
+routing decision nobody authorized.
+
+### Evidence
+
+Inside `scripts/test-communication-engine.js` — **565 pass, 0 fail**. The leak detector is
+**inverted**: the same needle sweep is run over a row that *does* carry a planted credential, and
+the suite fails if it cannot see one. The "not reachable" assertions are paired with controls that
+the projection *can* produce `reachable` and `unreachable`, so they cannot pass vacuously.
+
+Status: **TESTED**. `communicationHealth` reads a real `providerObservations` collection and
+`communicationSend` writes to it, but neither is deployed, so **no observation has ever been
+recorded against a real provider.** Every provider in production would read `unobserved` — which
+is exactly what this design intends it to say.
+
+---
+
 ## Running the suite
 
 ```bash

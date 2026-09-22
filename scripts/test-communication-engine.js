@@ -675,9 +675,10 @@ console.log('\n── The router has a PRODUCTION CALLER at last ──');
   ck('an admin cannot message themselves', /recipientUid === adminUid/.test(code));
 
   console.log('\n   provider health reports PROVISIONING, and leaks nothing');
-  ck('it says what it measures', /measures: 'provisioning'/.test(code));
+  ck('it says what it measures', /measures: 'provisioning and observed liveness'/.test(code));
   ck('…and what it does not', /doesNotMeasure/.test(code));
-  ck('…naming liveness explicitly', /liveness, delivery rate, or latency/.test(src));
+  ck('…naming liveness explicitly', /a provider with no recorded attempt reads unobserved/.test(src) &&
+      /which is not healthy and not down/.test(src));
   const conf = SEND._internals._configuredFromEnv();
   ck('every provider is reported', Object.keys(conf).length === Object.keys(PROV.PROVIDERS).length,
     Object.keys(conf).join(','));
@@ -1303,5 +1304,200 @@ console.log('\n── The frozen Connect contracts are untouched ──');
   ck('C2 CONTRACT unchanged at 7 names', sandbox.SokoniConnectClient.CONTRACT.length === 7);
 }
 
+
+console.log('\n── Phase 5: provider liveness is a SECOND axis, never merged with provisioning ──');
+{
+  const T0 = 1758500000000;
+
+  /* Provisioning and liveness are separate FIELDS because they are separate
+     facts. Every combination below is legitimate and must be representable. */
+  const rows = PROV.healthRowsFor({
+    configured: { sendgrid: true, africas_talking: true, fcm: true },
+    observations: {
+      sendgrid: PROV.recordObservation(null, { outcome: 'success', at: T0 }),
+      africas_talking: PROV.recordObservation(null, { outcome: 'failure', at: T0, failureClass: 'quota' }),
+    },
+    now: T0 + 1000,
+  });
+  const by = {};
+  rows.forEach((r) => { by[r.provider] = r; });
+
+  ck('configured + last attempt OK  -> configured / reachable',
+    by.sendgrid.provisioning === 'configured' && by.sendgrid.liveness === 'reachable');
+  ck('configured + last attempt bad -> configured / unreachable',
+    by.africas_talking.provisioning === 'configured' && by.africas_talking.liveness === 'unreachable');
+
+  /* THE ONE THAT MATTERS. A configured provider nobody has tried is not green
+     and not red. Rendering it green is the dashboard lying. */
+  ck('configured + NEVER ATTEMPTED -> configured / UNOBSERVED (not reachable)',
+    by.fcm.provisioning === 'configured' && by.fcm.liveness === 'unobserved',
+    by.fcm.provisioning + ' / ' + by.fcm.liveness);
+  ck('…and it says why', by.fcm.livenessReason === 'never_attempted');
+  ck('unconfigured is also unobserved, not unreachable',
+    by.turn.provisioning === 'not_configured' && by.turn.liveness === 'unobserved');
+
+  /* A success from last week is not evidence about now. */
+  const old = PROV.healthRowsFor({
+    configured: { sendgrid: true },
+    observations: { sendgrid: PROV.recordObservation(null, { outcome: 'success', at: T0 }) },
+    now: T0 + PROV.DEFAULT_STALE_AFTER_MS + 1,
+  }).find((r) => r.provider === 'sendgrid');
+  ck('an old success goes STALE, it does not stay reachable', old.liveness === 'stale', old.liveness);
+
+  /* Without a clock we cannot know whether an observation is current, and the
+     safe answer is to admit it rather than assume freshness. */
+  const noClock = PROV.healthRowsFor({
+    configured: { sendgrid: true },
+    observations: { sendgrid: PROV.recordObservation(null, { outcome: 'success', at: T0 }) },
+  }).find((r) => r.provider === 'sendgrid');
+  ck('no clock supplied -> unobserved, never assumed fresh',
+    noClock.liveness === 'unobserved' && noClock.livenessReason === 'no_clock_supplied');
+
+  /* CONTROL for every "is not reachable" assertion above: the projection CAN
+     produce reachable. Otherwise they all pass vacuously. */
+  ck('CONTROL: the projection can produce reachable at all',
+    rows.filter((r) => r.liveness === 'reachable').length === 1);
+  ck('CONTROL: …and unreachable', rows.filter((r) => r.liveness === 'unreachable').length === 1);
+  ck('every liveness value is in the declared vocabulary',
+    rows.every((r) => PROV.LIVENESS_STATES.indexOf(r.liveness) !== -1));
+
+  /* The reducer keeps outcomes and times; a run of failures is countable. */
+  let obs = null;
+  obs = PROV.recordObservation(obs, { outcome: 'success', at: T0 });
+  obs = PROV.recordObservation(obs, { outcome: 'failure', at: T0 + 10, failureClass: 'transport' });
+  obs = PROV.recordObservation(obs, { outcome: 'failure', at: T0 + 20, failureClass: 'transport' });
+  ck('consecutive failures are counted', obs.consecutiveFailures === 2);
+  ck('the last SUCCESS is still remembered through a failure run', obs.lastSuccessAt === T0);
+  ck('the last FAILURE is remembered', obs.lastFailureAt === T0 + 20);
+  obs = PROV.recordObservation(obs, { outcome: 'success', at: T0 + 30 });
+  ck('a success resets the failure run', obs.consecutiveFailures === 0);
+  ck('…and the last failure time is still kept', obs.lastFailureAt === T0 + 20);
+  ck('an unknown failure class falls back to transport, not to the raw string',
+    PROV.recordObservation(null, { outcome: 'failure', at: T0, failureClass: 'DROP TABLE' })
+      .lastFailureClass === 'transport');
+  let threw = false;
+  try { PROV.recordObservation(null, { outcome: 'maybe', at: T0 }); } catch (e) { threw = true; }
+  ck('an outcome outside the vocabulary is refused', threw);
+  threw = false;
+  try { PROV.recordObservation(null, { outcome: 'success' }); } catch (e) { threw = true; }
+  ck('an observation without a timestamp is refused', threw);
+}
+
+console.log('\n── Phase 5: no credential can reach an operator screen ──');
+{
+  const T0 = 1758500000000;
+  /* An observation carrying every credential shape an adapter might leak. The
+     row is built by WHITELIST, so none of it can survive. */
+  const poisoned = Object.assign(
+    PROV.recordObservation(null, { outcome: 'failure', at: T0, failureClass: 'auth' }),
+    {
+      apiKey: 'SG.xxxxxxxxxxxxxxxxxxxxxx',
+      authorization: 'Bearer eyJhbGciOiJIUzI1NiJ9.super.secret',
+      secret: 'AT_live_9f3c2b',
+      keyPrefix: 'SG.',
+      keyLength: 69,
+      responseBody: 'password=hunter2',
+    });
+  const row = PROV.healthRowsFor({
+    configured: { sendgrid: true },
+    observations: { sendgrid: poisoned },
+    now: T0 + 1,
+  }).find((r) => r.provider === 'sendgrid');
+
+  const blob = JSON.stringify(row);
+  const NEEDLES = ['SG.', 'Bearer', 'eyJ', 'AT_live', 'hunter2', 'password', 'secret',
+    'apiKey', 'authorization', 'keyPrefix', 'keyLength', 'responseBody'];
+  NEEDLES.forEach((n) => {
+    ck('no credential reaches the row: ' + n, blob.indexOf(n) === -1, blob.slice(0, 120));
+  });
+  /* A LENGTH or a PREFIX is still a disclosure, so the two fields that only
+     hint at a secret are asserted separately and by name above. */
+
+  /* INVERTING CONTROL. The same detector is run over a row that DOES carry the
+     secret. If it cannot see one, every assertion above proves nothing. */
+  const leaky = Object.assign({}, row, { apiKey: 'SG.xxxxxxxxxxxxxxxxxxxxxx' });
+  const leakyBlob = JSON.stringify(leaky);
+  ck('CONTROL: the leak detector CATCHES a planted credential',
+    leakyBlob.indexOf('SG.') !== -1 && NEEDLES.some((n) => leakyBlob.indexOf(n) !== -1));
+
+  ck('the row still reports the failure CLASS (a closed vocabulary, not free text)',
+    row.lastFailureClass === 'auth');
+  ck('the row carries timestamps, which are not secrets', row.lastFailureAt === T0);
+  ck('every field on the row is on the whitelist',
+    Object.keys(row).every((k) => PROV.SAFE_ROW_FIELDS.indexOf(k) !== -1 || k === 'state'),
+    Object.keys(row).join(','));
+}
+
+console.log('\n── Phase 5: liveness is OBSERVATIONAL, never authority ──');
+{
+  const T0 = 1758500000000;
+  /* The brief is explicit that provider health is observational. So an
+     observation must not silently change what the router will do — otherwise a
+     transient blip becomes a routing decision nobody authorized. */
+  const configured = { sendgrid: true, smtp: true };
+  const clean = PROV.chainFor({ channel: 'email', configured: configured });
+  const down = PROV.recordObservation(null, { outcome: 'failure', at: T0, failureClass: 'transport' });
+  const withObs = PROV.chainFor({
+    channel: 'email', configured: configured, observations: { sendgrid: down }, now: T0 + 1,
+  });
+  ck('the chain is IDENTICAL with and without observations',
+    JSON.stringify(clean.chain) === JSON.stringify(withObs.chain),
+    JSON.stringify(clean.chain) + ' vs ' + JSON.stringify(withObs.chain));
+  ck('CONTROL: the chain is non-empty, so the comparison is not two empty lists',
+    clean.chain.length === 2);
+
+  /* Provisioning IS authority, and an unprovisioned channel is honestly
+     unavailable rather than quietly successful. */
+  const none = PROV.chainFor({ channel: 'sms', configured: {} });
+  ck('an unconfigured channel returns an empty chain', none.chain.length === 0);
+  ck('…and says why, so a caller cannot read it as sent',
+    none.reason === 'no_provider_configured');
+}
+
+
+console.log('\n── Phase 5: an outcome is attributed only when attribution is unambiguous ──');
+{
+  const SEND = require(path.join(ROOT, 'functions', 'communication-send.js'));
+  const A = SEND._internals._attributableProviders;
+
+  ck('one configured provider on the channel -> attributed',
+    JSON.stringify(A(['sms'], { africas_talking: true })) === JSON.stringify(['africas_talking']));
+
+  /* THE POINT. Two configured providers means notify.js could have used either,
+     and a guess would put a green light next to a provider never attempted. */
+  ck('TWO configured providers -> attributed to NEITHER',
+    JSON.stringify(A(['email'], { sendgrid: true, smtp: true })) === '[]');
+  ck('…but one of the two alone IS attributable',
+    JSON.stringify(A(['email'], { sendgrid: true })) === JSON.stringify(['sendgrid']));
+  ck('no configured provider -> nothing to attribute',
+    JSON.stringify(A(['email'], {})) === '[]');
+  ck('two channels are attributed independently',
+    JSON.stringify(A(['push', 'sms'], { fcm: true, africas_talking: true }))
+      === JSON.stringify(['fcm', 'africas_talking']));
+  ck('a provider serving two planned channels is observed ONCE',
+    A(['sms', 'sms'], { africas_talking: true }).length === 1);
+  ck('an in_app channel has no provider chain and attributes nothing',
+    JSON.stringify(A(['in_app'], { fcm: true })) === '[]');
+
+  /* The record must be written on BOTH outcomes. A failure that is not recorded
+     leaves the board showing the last success, which is worse than nothing. */
+  const src = fs.readFileSync(path.join(ROOT, 'functions', 'communication-send.js'), 'utf8')
+    .split('/*').map(function (part, idx) {
+      return idx === 0 ? part : part.slice(part.indexOf('*/') + 2);
+    }).join('');
+  ck('CONTROL: the stripped source is readable', src.indexOf('communicationHealth') !== -1);
+  ck('a SUCCESS is recorded', src.indexOf("_recordObservation(_db(), prov, 'success')") !== -1);
+  ck('a FAILURE is recorded too', src.indexOf("_recordObservation(_db(), prov, 'failure'") !== -1);
+  ck('the failure is recorded BEFORE the throw',
+    src.indexOf("'failure'") < src.indexOf('Nothing was sent'));
+  ck('health reads recorded observations rather than assuming',
+    src.indexOf('_loadObservations(_db())') !== -1);
+  ck('an unreadable observation store yields NO observations, not healthy ones',
+    src.indexOf('if (!snap) return out;') !== -1);
+  ck('telemetry failure cannot fail a delivered send',
+    src.indexOf('observation not recorded') !== -1);
+  ck('the response still refuses to be read as uptime',
+    src.indexOf('doesNotMeasure') !== -1);
+}
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
 process.exit(fail ? 1 : 0);

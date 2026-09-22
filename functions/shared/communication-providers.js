@@ -174,23 +174,145 @@ function nextProvider(input) {
   return { provider: next, reason: 'failover' };
 }
 
+/* ==========================================================================
+   LIVENESS — a SECOND, ORTHOGONAL axis
+   ==========================================================================
+   Provisioning answers "have we been given credentials for this?". Liveness
+   answers "did the last real attempt work?". They are different questions and a
+   dashboard that merges them is a dashboard that lies: a provider can be fully
+   configured and completely down.
+
+   The three states below are exhaustive, and the third one is the important
+   one. `unobserved` is NOT `unreachable` — we have not tried, which is not the
+   same as having tried and failed — and it is NOT `reachable` either. It
+   renders as a dash, never as a colour.
+   ========================================================================== */
+const LIVENESS_STATES = Object.freeze(['reachable', 'unreachable', 'stale', 'unobserved']);
+
+const OBSERVATION_OUTCOMES = Object.freeze(['success', 'failure']);
+
+/* A success from last week is not evidence about now. Past this window an
+   observation stops being liveness and becomes history. */
+const DEFAULT_STALE_AFTER_MS = 15 * 60 * 1000;
+
 /**
- * healthRowsFor(configured) -> [{ provider, channel, role, state, describe }]
+ * recordObservation(previous, { outcome, at, failureClass }) -> observation
  *
- * The operator-facing projection. `state` is `operational` or `not_configured` and NOTHING
- * ELSE — this module observes provisioning, not liveness. A provider that is configured may
- * still be failing, and rendering that as green would be the dashboard lying. Live health is a
- * measured thing and belongs to whatever records real attempts.
+ * PURE reducer. Keeps only what an operator needs: outcomes and timestamps.
+ * It deliberately has nowhere to put a response body, a header or a token —
+ * see the whitelist note on healthRowsFor.
  */
-function healthRowsFor(configured) {
-  const c = configured || {};
-  return Object.keys(PROVIDERS).map((p) => ({
-    provider: p,
-    channel: PROVIDERS[p].channel,
-    role: PROVIDERS[p].role,
-    state: c[p] === true ? 'configured' : 'not_configured',
-    describe: PROVIDERS[p].describe,
-  }));
+function recordObservation(previous, event) {
+  const e = event || {};
+  if (OBSERVATION_OUTCOMES.indexOf(e.outcome) === -1) {
+    throw new Error('providers: outcome must be success or failure');
+  }
+  if (typeof e.at !== 'number' || !isFinite(e.at)) {
+    throw new Error('providers: an observation needs a numeric timestamp');
+  }
+  const prev = previous || {};
+  const success = e.outcome === 'success';
+  return {
+    lastOutcome: e.outcome,
+    lastAt: e.at,
+    lastSuccessAt: success ? e.at : (prev.lastSuccessAt || null),
+    lastFailureAt: success ? (prev.lastFailureAt || null) : e.at,
+    /* The failure CLASS is retained because it is a closed vocabulary from
+       FAILURE_CLASSES; the provider's own error text is not, because it is
+       free-form and regularly contains the request that caused it. */
+    lastFailureClass: success
+      ? (prev.lastFailureClass || null)
+      : (FAILURE_CLASSES[e.failureClass] ? e.failureClass : 'transport'),
+    consecutiveFailures: success ? 0 : ((prev.consecutiveFailures || 0) + 1),
+    observations: (prev.observations || 0) + 1,
+  };
+}
+
+/**
+ * livenessFor(observation, { now, staleAfterMs }) -> { state, reason }
+ *
+ * No observation gives `unobserved`, never a guess in either direction.
+ */
+function livenessFor(observation, opts) {
+  const o = opts || {};
+  const obs = observation || null;
+  if (!obs || !obs.observations) {
+    return { state: 'unobserved', reason: 'never_attempted' };
+  }
+  if (typeof o.now !== 'number') {
+    /* Without a clock we cannot say whether an observation is still current,
+       and the safe answer is to admit it rather than assume it is fresh. */
+    return { state: 'unobserved', reason: 'no_clock_supplied' };
+  }
+  const staleAfter = typeof o.staleAfterMs === 'number' ? o.staleAfterMs : DEFAULT_STALE_AFTER_MS;
+  if (o.now - obs.lastAt > staleAfter) {
+    return { state: 'stale', reason: 'last_attempt_too_old' };
+  }
+  return obs.lastOutcome === 'success'
+    ? { state: 'reachable', reason: 'last_attempt_succeeded' }
+    : { state: 'unreachable', reason: 'last_attempt_failed' };
+}
+
+/* The operator-facing row is built from THIS LIST and nothing else. It is a
+   whitelist rather than a blocklist on purpose: a blocklist only removes the
+   credential shapes someone thought of, and the next provider adapter will
+   invent a new one. Nothing reaches an operator's screen unless it is named
+   here, so a token cannot ride along inside an observation. */
+const SAFE_ROW_FIELDS = Object.freeze([
+  'provider', 'channel', 'role', 'describe',
+  'provisioning', 'liveness', 'livenessReason',
+  'lastSuccessAt', 'lastFailureAt', 'lastFailureClass', 'consecutiveFailures',
+]);
+
+/**
+ * healthRowsFor({ configured, observations, now, staleAfterMs }) -> rows
+ *
+ * The operator-facing projection, across BOTH axes.
+ *
+ *   provisioning  configured | not_configured   — have we been given credentials
+ *   liveness      reachable | unreachable | stale | unobserved — did it last work
+ *
+ * They are separate fields because they are separate facts. A configured
+ * provider that has never been attempted shows `configured` + `unobserved`,
+ * which is the truthful reading of the situation and is NOT green.
+ *
+ * Timestamps are exposed; payloads never are. There is no field here that can
+ * carry a key, a token, a header or a fragment of one — not redacted, not
+ * truncated, not length-hinted. A prefix or a length is still a disclosure.
+ *
+ * The legacy single-argument form (a bare `configured` map) is still accepted,
+ * so existing callers keep working and keep getting `unobserved`.
+ */
+function healthRowsFor(input) {
+  const i = input || {};
+  const legacy = !(i && (i.configured || i.observations || typeof i.now === 'number'));
+  const c = (legacy ? i : i.configured) || {};
+  const obsMap = (legacy ? {} : i.observations) || {};
+
+  return Object.keys(PROVIDERS).map((p) => {
+    const live = livenessFor(obsMap[p], { now: i.now, staleAfterMs: i.staleAfterMs });
+    const obs = obsMap[p] || {};
+    const row = {
+      provider: p,
+      channel: PROVIDERS[p].channel,
+      role: PROVIDERS[p].role,
+      describe: PROVIDERS[p].describe,
+      provisioning: c[p] === true ? 'configured' : 'not_configured',
+      liveness: live.state,
+      livenessReason: live.reason,
+      /* null, not 0 — an unknown time is not the epoch. */
+      lastSuccessAt: obs.lastSuccessAt || null,
+      lastFailureAt: obs.lastFailureAt || null,
+      lastFailureClass: obs.lastFailureClass || null,
+      consecutiveFailures: obs.consecutiveFailures || 0,
+      /* `state` is retained for the existing console, which reads it. */
+      state: c[p] === true ? 'configured' : 'not_configured',
+    };
+    /* Built by whitelist: assemble, then keep only what is named. */
+    const safe = { state: row.state };
+    SAFE_ROW_FIELDS.forEach((f) => { safe[f] = row[f]; });
+    return safe;
+  });
 }
 
 module.exports = {
@@ -198,8 +320,14 @@ module.exports = {
   PROVIDERS,
   CHAINS,
   FAILURE_CLASSES,
+  LIVENESS_STATES,
+  OBSERVATION_OUTCOMES,
+  DEFAULT_STALE_AFTER_MS,
+  SAFE_ROW_FIELDS,
   mayFailOver,
   chainFor,
   nextProvider,
+  recordObservation,
+  livenessFor,
   healthRowsFor,
 };

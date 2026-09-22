@@ -1,3 +1,71 @@
+## 2026-09-22 (170) — provider health gains its second axis, and refuses to guess on it
+
+**NO DEPLOY. Live remains 111dbd7 / v636.** Phase 5.
+
+`scripts/test-communication-engine.js` **565 pass, 0 fail** (was 512) ·
+`scripts/test-outbox.js` **165/0** · `scripts/test-connect-authority.js` **856/0** ·
+`scripts/test-contract-shapes.js` **32/0** · `functions/index.js` require closure intact.
+
+### Configured is not reachable, and unobserved is neither
+
+Health reported one fact — provisioning — and said so honestly. It now reports two, as **separate
+fields**, because collapsing them is how a dashboard shows green over a dead provider:
+
+    provisioning   configured | not_configured        from the environment
+    liveness       reachable | unreachable | stale | unobserved   from recorded attempts
+
+`unobserved` is the state that matters: not tried is not the same as tried and failed, and it is
+certainly not success. It renders as a dash. A success older than 15 minutes becomes `stale`
+rather than staying `reachable`, and without a clock `livenessFor` returns `unobserved` rather
+than assuming an observation is fresh.
+
+### Attribution only where it is unambiguous
+
+`notify.js` picks its own transport. A channel with TWO configured providers could have used
+either, so `_attributableProviders` records nothing — a guess would put a green light next to a
+provider that was never attempted, which is the exact failure the axis exists to prevent. Failures
+are recorded **before** the throw, because an unrecorded failure leaves the board showing the last
+success. Telemetry that cannot be written is logged and swallowed; it must never turn a delivered
+message into a failed one. An unreadable observation store yields no observations, not healthy ones.
+
+### The row is a whitelist
+
+`SAFE_ROW_FIELDS` assembles every operator-facing row. A blocklist only removes the credential
+shapes someone thought of; the next adapter invents a new one. The suite feeds an observation
+poisoned with six credential shapes — key, bearer token, JWT, secret, key **prefix**, key
+**length**, response body — and asserts none survives. **A prefix or a length is still a
+disclosure.** The detector is inverted against a row that does carry the secret, so it cannot pass
+blind.
+
+### Liveness is observational, never authority
+
+`chainFor` returns an identical chain with and without observations, asserted, with a control that
+the chain is non-empty so it is not comparing two empty lists. A transient blip must not silently
+become a routing decision nobody authorized.
+
+### Two assertions retargeted, not deleted
+
+Two existing checks pinned the old wording ("measures: provisioning", "liveness, delivery rate, or
+latency"). They now assert the stronger claim — that both axes are named and that an unattempted
+provider is called **neither healthy nor down**.
+
+### Files
+
+`functions/shared/communication-providers.js` · `functions/communication-send.js` ·
+`scripts/test-communication-engine.js` · `docs/SOKONI_COMMUNICATION_ENGINE.md`.
+
+**Database:** new `providerObservations` collection, one document per provider holding outcomes
+and timestamps only. **API:** `communicationHealth` rows gain `provisioning`, `liveness`,
+`livenessReason`, `lastSuccessAt`, `lastFailureAt`, `lastFailureClass`,
+`consecutiveFailures`; `state` is retained so the existing console is unaffected. The legacy
+single-argument `healthRowsFor(configured)` still works. **Security:** the row is now built by
+whitelist, a structural guarantee rather than a filter. **Breaking:** none.
+
+**Status: TESTED, not INTEGRATION-VERIFIED.** Nothing is deployed, so **no observation has ever
+been recorded against a real provider** — every provider in production would read `unobserved`,
+which is what this design intends it to say. SendGrid, Workspace, Africa's Talking, FCM/APNs and
+TURN/STUN remain **BLOCKED** on real credentials and real infrastructure.
+
 ## 2026-09-22 (169) — the offline outbox, and the server change that makes it mean anything
 
 **NO DEPLOY. Live remains 111dbd7 / v636.** Phase 7 of the build programme.

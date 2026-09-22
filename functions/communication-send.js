@@ -210,6 +210,18 @@ exports.communicationSend = onCall({ region: REGION, timeoutSeconds: 30 }, async
      and notify.js honours by type, is that a non-critical message never becomes an SMS. */
   const type = content.priority === 'critical' ? 'admin_alert' : 'case_updated';
 
+  /* Which provider does an outcome belong to? notify.js chooses its own
+     transport, so the honest answer is often "we cannot tell". A channel whose
+     chain holds TWO configured providers could have used either, and recording
+     a guess would put a real green light next to a provider that was never
+     attempted — the precise failure this axis exists to prevent.
+
+     So attribution happens only where it is unambiguous: exactly one configured
+     provider on the channel. Everything else stays `unobserved`, which is a
+     truthful answer rather than a missing one. */
+  const configuredNow = _configuredFromEnv();
+  const attributable = _attributableProviders(route.plan, configuredNow);
+
   let result;
   try {
     const notify = require('./notify');
@@ -227,8 +239,18 @@ exports.communicationSend = onCall({ region: REGION, timeoutSeconds: 30 }, async
     /* A send failure is a RESULT. Reporting success here would tell an operator a customer
        was told something they were never told. */
     logger.warn('[communication-send] notify failed', { recipientUid, err: e && e.message });
+    /* Observed BEFORE the throw: a failure that is not recorded leaves the
+       health board showing the last success, which is worse than showing
+       nothing. The class is `transport` because that is what an unclassified
+       delivery failure is; a credential fault would have to be identified by
+       the adapter, and inventing that distinction here would be a guess. */
+    await Promise.all(attributable.map(
+      (prov) => _recordObservation(_db(), prov, 'failure', 'transport')));
     throw new HttpsError('internal', 'Nothing was sent: ' + (e && e.message || 'the send failed'));
   }
+
+  await Promise.all(attributable.map(
+    (prov) => _recordObservation(_db(), prov, 'success')));
 
   logger.info('[communication-send] sent', {
     adminUid, recipientUid, templateId: content.templateId, anchored: !!anchorType,
@@ -249,6 +271,22 @@ exports.communicationSend = onCall({ region: REGION, timeoutSeconds: 30 }, async
     sent: true,
   };
 });
+
+/**
+ * _attributableProviders(plan, configured) -> provider names
+ *
+ * PURE. Returns a provider only when the planned channel has EXACTLY ONE
+ * configured provider, so the outcome can be attributed without guessing.
+ */
+function _attributableProviders(plan, configured) {
+  const out = [];
+  (plan || []).forEach((channel) => {
+    const chain = PROVIDERS.chainFor({ channel, configured: configured || {} }).chain;
+    if (chain.length === 1) out.push(chain[0]);
+  });
+  /* Distinct: two channels resolving to one provider is one observation. */
+  return out.filter((v, i) => out.indexOf(v) === i);
+}
 
 /* Templates whose names match a registered notify type keep it; everything else is a support
    update. Mapping by name rather than by a second table means a new template that matches an
@@ -294,10 +332,60 @@ function _configuredFromEnv() {
   };
 }
 
+/* ---------------------------------------------------------------------------
+   OBSERVATIONS — the second axis of provider health.
+
+   Provisioning comes from the environment. Liveness cannot: it has to be
+   MEASURED, by something that actually attempted a send. These two helpers are
+   that record, and they are deliberately tiny — one document per provider,
+   holding outcomes and timestamps and nothing else.
+
+   Until a send has actually happened every provider reads `unobserved`, which
+   is the truthful state and is NOT green. That is the intended reading, not a
+   gap to be filled with an optimistic default.
+--------------------------------------------------------------------------- */
+const OBSERVATION_COLLECTION = 'providerObservations';
+
+async function _loadObservations(db) {
+  const snap = await db.collection(OBSERVATION_COLLECTION).get().catch(() => null);
+  const out = {};
+  if (!snap) return out;   /* unreadable is not "all healthy" — it stays empty */
+  snap.docs.forEach((d) => { out[d.id] = d.data() || {}; });
+  return out;
+}
+
+/**
+ * Records one real attempt. Never throws into the caller: a failure to write
+ * telemetry must not turn a delivered message into a failed one.
+ */
+async function _recordObservation(db, provider, outcome, failureClass) {
+  try {
+    const ref = db.collection(OBSERVATION_COLLECTION).doc(String(provider));
+    const prev = (await ref.get()).data() || null;
+    /* The pure reducer decides the shape; this function only persists it, so
+       there is exactly one definition of what an observation is. */
+    const next = PROVIDERS.recordObservation(prev, {
+      outcome,
+      at: Date.now(),
+      failureClass: failureClass || undefined,
+    });
+    await ref.set(next, { merge: false });
+  } catch (e) {
+    logger.warn('[communication-send] observation not recorded', {
+      provider: String(provider), error: e && e.message,
+    });
+  }
+}
+
 exports.communicationHealth = onCall({ region: REGION, timeoutSeconds: 20 }, async (req) => {
   _requireAdmin(req);
   const configured = _configuredFromEnv();
-  const rows = PROVIDERS.healthRowsFor(configured);
+  const observations = await _loadObservations(_db());
+  const rows = PROVIDERS.healthRowsFor({
+    configured,
+    observations,
+    now: Date.now(),
+  });
 
   /* Chains are reported with what is SKIPPED, so an operator can see that email would fall
      back to SMTP — or that it has nowhere to fall back to. */
@@ -309,9 +397,16 @@ exports.communicationHealth = onCall({ region: REGION, timeoutSeconds: 20 }, asy
   return {
     rows,
     chains,
-    /* Said in the response so a console cannot render this as uptime. */
-    measures: 'provisioning',
-    doesNotMeasure: 'liveness, delivery rate, or latency — nothing here has sent anything',
+    /* Said in the response so a console cannot render this as uptime. Both
+       axes are now reported, and they are reported SEPARATELY: `provisioning`
+       is what the environment says, `liveness` is what the last real attempt
+       did, and a provider nobody has attempted is `unobserved` rather than
+       either. */
+    measures: 'provisioning and observed liveness',
+    doesNotMeasure: 'delivery rate, latency, or anything not yet attempted — ' +
+      'a provider with no recorded attempt reads unobserved, which is not healthy and not down',
+    observedProviders: Object.keys(observations).length,
+    livenessWindowMs: PROVIDERS.DEFAULT_STALE_AFTER_MS,
     failoverPolicy: Object.keys(PROVIDERS.FAILURE_CLASSES).map((k) => ({
       failureClass: k,
       failsOver: PROVIDERS.FAILURE_CLASSES[k].failover,
@@ -320,4 +415,7 @@ exports.communicationHealth = onCall({ region: REGION, timeoutSeconds: 20 }, asy
   };
 });
 
-exports._internals = { _configuredFromEnv, _notifyTypeFor, _resolveContent };
+exports._internals = {
+  _configuredFromEnv, _notifyTypeFor, _resolveContent,
+  _loadObservations, _recordObservation, _attributableProviders, OBSERVATION_COLLECTION,
+};
