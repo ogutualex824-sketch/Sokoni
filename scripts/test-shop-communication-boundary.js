@@ -100,11 +100,19 @@ const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 /* ── 4. THE ABSENCE, WITH A POSITIVE CONTROL ────────────────────────────── */
 {
   const store = read('store.html');
-  ok('store.html is NOT mounted for Connect actions',
-    store.indexOf('sokoni-connect-call.js') === -1);
-  ok('…and asks the server for no available actions',
-    store.indexOf('connectAvailableActions') === -1 &&
-    store.indexOf('mountForAnchor') === -1);
+  /* RETARGETED, not deleted. These asserted that store.html was unmounted,
+     which recorded the BLOCKER. The blocker was resolved by changing the
+     PRODUCT decision rather than the authority: shop communication is now an
+     inquiry about a listing. So the assertions move to the boundary that
+     actually still holds — the storefront may be mounted, but it must never
+     anchor on a shop identity. scripts/test-shop-inquiry-mount.js owns the
+     mount's own assertions. */
+  ok('store.html IS mounted, via the inquiry relationship',
+    store.indexOf('sokoni-connect-call.js') !== -1 &&
+    /anchorType:\s*"inquiry"/.test(store));
+  ok('…and it anchors on a LISTING, never on a shop identity',
+    /anchorId\s*=\s*String\(live\[0\]\.id\)/.test(store) &&
+    !/anchorType:\s*"shop"/.test(store));
 
   /* CONTROL. If this detector could not see a mount, every absence above would
      pass vacuously — including on a page that WAS mounted. */
@@ -121,10 +129,15 @@ const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
   ['shops/{uid}', 'products/{id}.sellerUid', 'inquiry', 'calleeUid', 'store.html'].forEach((n) => {
     ok('the boundary documents ' + n, doc.indexOf(n) !== -1);
   });
-  ok('…and states that shop communication is NOT claimed',
-    /not claimed|NOT MOUNTED/.test(doc));
-  ok('…and names the decision required rather than making it',
-    /authority-contract change|is not taken here/.test(doc));
+  /* RETARGETED: the document now records a RESOLUTION rather than a blocker.
+     What must still be true is that the resolution kept the invariant, and kept
+     the unsupported case honest instead of quietly widening the claim. */
+  ok('…and states that shops/{uid} never enters Connect authorization',
+    /never enters Connect authorization/.test(doc));
+  ok('…and keeps the generic no-listing case explicitly unsupported',
+    /remains unsupported by design/.test(doc));
+  ok('…and records WHY a new shop relationship was refused, rather than hiding it',
+    /Option 2 was not taken/.test(doc) && /to which employee/.test(doc));
 }
 
 console.log('');

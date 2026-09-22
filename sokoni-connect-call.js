@@ -248,10 +248,16 @@
            for voice. A channel the authority refused simply is not drawn. */
         return (a.channels || []).map(function (ch) {
           var verb = ch === 'voice' ? 'Call' : 'Message';
+          /* PRESENTATION ONLY. A surface may rename the NOUN a buyer reads —
+             a storefront says "shop" where the relationship says "seller" —
+             but it cannot change WHO is contacted or WHICH channels appear.
+             Both of those come from the server response above and are never
+             influenced by this string. */
+          var noun = o.roleLabel ? String(o.roleLabel) : String(a.label || a.targetRole);
           return '<button class="cc-call cc-' + _esc(ch) + '" type="button"' +
             ' data-target-role="' + _esc(a.targetRole) + '"' +
             ' data-channel="' + _esc(ch) + '">' +
-            _esc(verb + ' ' + String(a.label || a.targetRole).toLowerCase()) + '</button>';
+            _esc(verb + ' ' + noun.toLowerCase()) + '</button>';
         }).join('');
       }).join('') + '<div class="cc-result" role="status"></div>';
 

@@ -4,8 +4,9 @@
 > `functions/shared/merchant-identity.js`, `admin-os.js`, `business-bootstrap.js` and `store.html`
 > · **Gate:** `scripts/test-shop-communication-boundary.js`
 >
-> **Outcome: NOT MOUNTED, and deliberately not claimed.** Shop-level communication cannot be
-> expressed in the frozen Connect authority. Adding it is an authority-contract decision.
+> **Outcome: RESOLVED without a new relationship.** Shop-level communication is delivered as an
+> **inquiry about a listing**. `shops/{uid}` never enters Connect authorization. A *generic*
+> "message this shop" with no listing remains unsupported by design.
 >
 > Related: [[DELIVERY_ANCHOR_AUTHORITY]] · [[SOKONI_CONNECT]]
 
@@ -68,9 +69,40 @@ channel to whoever it names.
 
 That is not a mount. It is a change to the invariant the authority exists to enforce.
 
-## The decision required
+## The decision taken
 
-Shop-level communication needs one of:
+Option 1. **"Message Shop" is presentation over `inquiry`.**
+
+```
+Shop surface -> a published listing of that shop -> productId
+             -> products/{productId}.sellerUid  (SERVER derives)
+             -> inquiry (buyer:seller, chat ceiling)
+```
+
+The buyer reads *"Message shop"*; the relationship recorded is buyer ↔ seller about that listing.
+`store.html` is mounted on that basis, and `shops/{uid}` is not an anchor anywhere.
+
+**Why the choice of listing does not matter.** The storefront loads its products with
+`where("sellerUid", "==", uid)`, so *every* listing on the page derives the **same** seller.
+Picking the first cannot change the recipient.
+
+**Why a lying client gains nothing.** A client that substitutes another product simply reaches
+*that* product's seller about *that* product — which `inquiry` already permits. It cannot reach a
+person of its choosing, because it never names one.
+
+**`roleLabel` is presentation only.** It replaces the displayed noun. The verb comes from the
+server-allowed channel, the channels come from the server response, and the request payload is
+built from `targetRole` + `channel` — both server-supplied. A label cannot change who is
+contacted.
+
+**Still unsupported, deliberately:** a shop with no live listing gets no button. A generic
+"message this shop" would need the UID-addressed relationship this document refuses.
+
+---
+
+## The options that were weighed
+
+Shop-level communication needed one of:
 
 1. **Route it through `inquiry`.** "Message this shop" becomes "message about this listing",
    anchored on a real `products/{id}`. Already supported, already chat-ceilinged, nothing new to
@@ -79,15 +111,19 @@ Shop-level communication needs one of:
    makes the relationship real — because "this uid is a shop" is true of every seller on the
    platform, which is a directory, not a relationship.
 
-**Option 2 is an authority-contract change and is not taken here.** The frozen contract is frozen
-for the reason this document illustrates: the pressure to add one more relationship always arrives
+**Option 2 was not taken.** It would require deciding what a shop relationship *means* — buyer to
+owner? to employees? to which employee? what happens when ownership changes? Those are real
+authority questions, and a new anchor would hide them rather than answer them. The frozen contract
+is frozen for exactly this reason: the pressure to add one more relationship always arrives
 attached to a surface somebody wants to ship.
 
 ## Status
 
-**BLOCKED at the contract boundary — not partial, not claimed.**
+**Shop communication: BUILT and TESTED**, via `inquiry`. `store.html` is mounted.
+Gate: `scripts/test-shop-inquiry-mount.js`.
 
-`store.html` is **not mounted** and shop communication is **removed from the claimed surface**
-until the relationship question above is answered deliberately. The gate asserts the absence,
-with a positive control that the detector *can* see a mounted surface
-(`delivery-tracking.html`), so "not mounted" cannot pass by being blind.
+**The boundary still stands** and is still gated: no Connect anchor resolves `shops/{uid}`, the
+mount function names no uid, and a shop with no live listing draws nothing. Those absences carry a
+positive control, so they cannot pass by being blind.
+
+No browser has loaded this page — this is source-level evidence, not a real-device result.
