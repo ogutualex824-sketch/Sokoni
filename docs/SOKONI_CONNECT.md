@@ -1,6 +1,6 @@
 # SOKONI Connect
 
-**Status:** C1, C2, **C3-A and C3-B COMPLETE**. C3-C not started.
+**Status:** C1, C2, **C3-A, C3-B and C3-C COMPLETE**. No call has been demonstrated end to end, and no relay infrastructure exists.
 **No media transport is provisioned. No call has ever been placed.** Nothing here is deployed.
 See [[#The evidence ladder]] before quoting a test count.
 **Date:** 2026-09-22
@@ -756,6 +756,137 @@ session *reachable without a push*. It does not make a phone ring.
 
 ---
 
+## Gate C3-C — the WebRTC adapter
+
+Three things existed and had never met:
+
+| | |
+|---|---|
+| `connectSignal` | relayed offers, answers and candidates into `connectSessions/{id}/signals` — and **nothing ever read them**. A relay with no reader is half a path. |
+| `reportableEvents` | was projected to a client that had **no media stack** to produce a single one of them. |
+| `transportPlan: ['webrtc']` | was authorized on every session and **never attempted**. |
+
+`sokoni-connect-media.js` closes all three. It is an observer and a transport. It is not an
+authority, and the distinction is enforced by what it **cannot say**.
+
+### It cannot name a state
+
+There is no path from the adapter to `connecting`, `connected` or `failed`. It emits only the
+authority's **media event** names, through C2's `reportObservation`, and the server decides
+what an observation means — through two layers, the event table and the state table.
+
+The suite proves the boundary at the level of the whole mapping rather than case by case: it
+enumerates **every event the adapter is capable of emitting** and asserts the range is exactly
+the authority's six, and that none of them is a session state name. A typo becomes a failure
+instead of an event the server silently refuses.
+
+### An ICE pair is a route, not a conversation
+
+```
+iceConnectionState: connected   →  ice_connected     (the authority maps this to NOTHING)
+connectionState:    connected   →  nothing at all
+inbound track unmuted           →  media_flowing     (the ONLY route to `connected`)
+```
+
+This is the mistake the whole layer was built to avoid, so it is asserted four ways: ICE
+connected reports `ice_connected`, **not** `media_flowing`, **not** `connected`, and the
+aggregate connection state going connected reports nothing whatsoever. The suite also
+confirms from the authority's side that `media_flowing` is the *only* media event that argues
+for `connected`.
+
+A drop is likewise not a failure: `ice_disconnected` may recover, and the authority records it
+without moving the session. Hanging up on somebody crossing a cell boundary would be a defect.
+
+Unknown inputs produce **silence**, never a guess — `new`, `checking`, `closed`, empty, null
+and an unrecognised string all map to nothing.
+
+### No transport is invented
+
+**SOKONI operates no TURN and no STUN server.** There is no `stun:` or `turn:` URL in the
+adapter or in the page, and there is **no default**. `describeIce([])` returns
+`configured: false` with a reason and a sentence the UI can show:
+
+> Host candidates only. Two devices on the same network may connect; anything across a router
+> or a mobile network will not.
+
+Quietly falling back to a public STUN would manufacture a transport the platform does not
+operate — and it would make "the call connected" evidence of somebody else's infrastructure.
+Even when servers *are* supplied, `describeIce` still refuses to promise connectivity.
+
+### The signalling reader was already authorized
+
+C3-C adds **no server op**. The peer reads the signals addressed to it straight from
+Firestore, because `firestore.rules` has allowed exactly that since C2:
+
+```
+match /signals/{signalId} {
+  allow read: if isAuthed() && request.auth.uid == resource.data.to;
+  allow write: if false;
+}
+```
+
+A callable would have been a second read path for something already authorized and already
+certified (C14–C17, unchanged at 37/0). The page acts on **added** changes only, so a
+re-delivered snapshot cannot replay an offer, and a refused or unindexed listener is **shown**
+— a silently dead signalling channel presents as a call that simply never connects, which is
+the hardest possible thing to diagnose.
+
+### The page attaches on the server's say-so
+
+Media attaches once, and only when the projection says the session is `accepted` **and** its
+authorized `transportPlan` carries `webrtc`. The page holds no signalling logic: it constructs
+the peer connection as the adapter's injected factory and supplies `getUserMedia`, and every
+offer, answer and candidate is the adapter's. A terminal session takes its media down.
+
+A refused microphone is reported as `connection_failed` — the observation it is — not
+swallowed, and not turned into a state.
+
+### A defect this gate found: the C2 / server field seam
+
+C2's `renderHtml` asked for `p.state`. The server has always sent `status` — the document
+field, and the authority's own word. **The session state on `connect.html` rendered as a dash
+from the day C2 shipped.**
+
+The C2 suite never caught it because it drives `renderHtml` with synthetic projections it
+writes itself. A fixture agrees with whatever you wrote in it; it is not a contract. The C3-B
+banner masked it further by reading `state` first and falling back to `status`, so the banner
+looked right while the session page did not.
+
+Fixed by making C2 read what the server sends, and by removing the banner's tolerant fallback.
+The durable guard is a **seam assertion**: every field C2 reads is compared against the real
+`_project` output, with a positive control proving the check catches an orphan.
+
+This was a one-field change to a frozen file, and it is recorded here rather than folded in
+quietly.
+
+### Certification boundary
+
+**Proven by C3-C:** the emittable range equals the authority's media vocabulary and contains
+no state name · an ICE pair is never read as arrival · unknown inputs are silent · no `stun:`
+or `turn:` URL and no default anywhere in the client · `describeIce` fails closed and promises
+nothing even when configured · the adapter has no route to the backend except C2's handle ·
+the signalling kinds it sends are exactly the kinds the server accepts · offer/answer/candidate
+handling, glare avoidance, duplicate-media suppression and close, all driven against a fake
+peer connection · the page attaches only on the server's say-so and runs no signalling of its
+own · the C2/server field seam.
+
+**NOT proven by C3-C, and not claimed:**
+
+| | |
+|---|---|
+| WebRTC actually connecting | no two browsers have ever paired |
+| TURN / STUN | none exists to test |
+| NAT traversal, cross-network | impossible without a relay |
+| Physical push, handset incoming call | no device |
+| Mobile resilience | not tested |
+| Any of this deployed | nothing is deployed |
+
+The suite drives a **fake** `RTCPeerConnection`. That is a claim about this code's decisions,
+not about a network. A green C3-C means the adapter cannot lie to the authority; it does not
+mean a call works.
+
+---
+
 ## The evidence ladder
 
 What each layer's evidence actually establishes. Read this before quoting a test count.
@@ -768,14 +899,15 @@ What each layer's evidence actually establishes. Read this before quoting a test
 | C2 client projection | **certified** | the client follows the server projection |
 | C3-A session creation + consent | **certified** | surface eligibility, anchor-based creation, the consent contract |
 | C3-B incoming discovery + UX | **certified** | the derived state list, one projection, one ring vocabulary, no second action map, no second consent |
+| C3-C WebRTC adapter | **certified** | the emittable range, that no state can be named, that no transport is invented — driven against a FAKE peer connection |
 | Real push delivery | *not tested* | — no physical device |
-| C3 WebRTC | *not started* | — |
-| TURN / STUN | *not started* | — |
+| WebRTC actually connecting | *not tested* | — no two browsers have paired |
+| TURN / STUN | *not provisioned* | — none exists to test |
 | Cross-network calling | *not tested* | — |
 | Mobile resilience | *not tested* | — |
 | End-to-end call | *not yet possible* | — |
 
-**758/0 is a certification result, not a calling result.** It proves the contract, the decision
+**856/0 is a certification result, not a calling result.** It proves the contract, the decision
 machinery and the projection. It is not evidence that a phone rang or that media flowed — those
 are a different class of evidence and need a device. That distinction stays in the release
 evidence.
@@ -822,7 +954,7 @@ That is the larger functional gap, and it is why C3 does **not** begin by puttin
 |---|---|
 | ~~C3-A~~ | **DONE** — call initiation, surface policy, consent contract |
 | ~~C3-B~~ | **DONE** — incoming-call discovery and UX, accept / decline through C2 |
-| **C3-C** | WebRTC — `accepted → connecting → connected` from media observations |
+| ~~C3-C~~ | **DONE** — the WebRTC adapter. Observations only; no relay, nothing demonstrated |
 
 ### The anchor principle survives into initiation
 
@@ -1091,6 +1223,8 @@ to route around.**
 | `admin-os.html`, `super-admin.html`, `sokoni-connect-console.js`, `sokoni-connect-verify.js` | in the tree, **not deployed** |
 | `connect.html` + `sokoni-connect-client.js` (C2) | in the tree, **not deployed** |
 | `sokoni-connect-incoming.js` (C3-B) | in the tree, **not deployed** |
+| `sokoni-connect-media.js` (C3-C) | in the tree, **not deployed** |
+| `signals` composite index (`to`, `createdAt`) | declared in `firestore.indexes.json`, **not deployed** |
 
 A functions deploy from this branch is **blocked** by the merchant-identity provenance gap
 (`docs/PROVENANCE_GAP_MERCHANT_IDENTITY.md`) — two live callables are unregistered here, and a
@@ -1108,15 +1242,21 @@ firebase-tools 15.26 and fails open to both databases — use the Rules REST API
 Stated so nothing here reads as more complete than it is.
 
 
-- **No TURN/STUN.** Calls behind symmetric NAT will not connect.
+- **No TURN/STUN. Unchanged by C3-C, and deliberately so.** The client supplies an EMPTY
+  `iceServers` list and says so; there is no `stun:` or `turn:` URL anywhere in it and no
+  default. Host candidates only: two devices on one network may pair, anything across a
+  router or a mobile network will not. Borrowing a public STUN would manufacture a transport
+  SOKONI does not operate.
 - **No telephony provider**, so no cellular fallback.
 - **The ring is dispatched but UNPROVEN end to end.** Gate C1 exists and is certified at the
   decision level — `shouldDispatchRing` is pure and exhaustively tested — but no session has
   ever been dispatched against a real device, because nothing is deployed. C3-B removes the
   *dependence* on that push for discovery; it does not make the push proven. A push that `notify.js` reports as delivered is a push FCM
   accepted, which is not the same as a phone that rang. Treat C1 as built, not as proven.
-- **No media anywhere.** `connect.html` renders and acts on a session but carries no
-  RTCPeerConnection: C3 supplies the WebRTC adapter. Nothing is transmitted today.
+- **Media is wired but has never flowed.** `connect.html` attaches the C3-C adapter once the
+  server says a session is accepted on a webrtc transport plan. No two browsers have ever
+  paired, and the suite drives a FAKE peer connection — that is a claim about the adapter's
+  decisions, not about a network.
 - **No OUTBOUND calling entry point.** `sokoni-connect-call.js` exists and is certified, but no
   order, delivery or merchant surface mounts it yet, so nothing in the product creates a call.
   The INCOMING side is no longer in this position: C3-B's surface is mounted on

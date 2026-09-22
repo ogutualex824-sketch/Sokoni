@@ -11,20 +11,30 @@
   (/connect.html?session=…). It RENDERS what connectGetSessionState says and
   offers only the actions that projection contains. It holds no state machine.
 
-  IT CARRIES NO MEDIA. There is no RTCPeerConnection on this page and no
-  getUserMedia call. The media adapter arrives in C3; until then a session can
-  be answered and ended, and no audio or video ever flows. Nothing here should
-  be read as evidence that a call connects.
+  MEDIA ARRIVES IN C3-C, and only once the SERVER says the session is accepted
+  and its transport plan carries webrtc. The adapter observes the peer
+  connection and REPORTS observations; it cannot name a session state, and
+  there is no path on this page that writes connecting, connected or failed.
 
-  Real-device push delivery is likewise UNPROVEN. This page can be opened by
-  hand with a session id; that a notification ever reached a handset and
-  produced a visible incoming call has not been demonstrated.
+  SOKONI OPERATES NO TURN OR STUN. iceServers is empty, deliberately: a
+  borrowed public STUN would manufacture a transport the platform does not
+  run. Host candidates only — two devices on one network may pair, anything
+  across NAT will not, and the page says so rather than failing silently.
+
+  Nothing here is evidence that a call connects. Real-device push delivery,
+  real WebRTC connectivity, NAT traversal and cross-network establishment are
+  all UNPROVEN. This page can be opened by hand with a session id; that a
+  notification ever reached a handset has not been demonstrated.
 -->
 <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
 <link rel="shortcut icon" href="/favicon.ico">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<!-- C3-C. The signalling relay is READ straight from Firestore by the peer a signal is
+     addressed to — firestore.rules has allowed exactly that since C2, and a callable
+     would be a second read path for something already authorized. -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 <script src="/sokoni-config.js"></script>
 <script src="/sokoni-appcheck.js"></script>
@@ -80,14 +90,25 @@
 
   <div id="cxRoot"><p class="cx-muted">Loading session…</p></div>
 
+  <!-- Hidden until media is actually attached. An empty player on a call that never
+       negotiated would read as a call that failed. -->
+  <div id="cxMedia" hidden>
+    <video id="cxRemote" autoplay playsinline style="width:100%;border-radius:14px;
+      margin-top:14px;background:#000;"></video>
+    <p class="cx-warn" id="cxIce"></p>
+  </div>
+
   <p class="note">
-    <b>No media on this page.</b> Audio and video are not carried yet — the WebRTC adapter is
-    a separate piece of work. A session can be answered and ended; nothing is transmitted.
+    <b>No relay infrastructure.</b> SOKONI operates no TURN or STUN server, so a call can only
+    pair devices on the same network. Nothing here has been shown to connect across a router
+    or a mobile network, and no call has been demonstrated end to end.
   </p>
 
 <script src="/sokoni-connect-client.js"></script>
 <!-- C3-B. Loaded AFTER the C2 client because it routes every action through it. -->
 <script src="/sokoni-connect-incoming.js"></script>
+<!-- C3-C. Loaded after C2: every observation it makes is reported through C2's handle. -->
+<script src="/sokoni-connect-media.js"></script>
 <!-- Every page must self-update after a deploy, or it serves stale. -->
 <script src="/sw-register.js" defer></script>
 <script>
@@ -136,7 +157,72 @@
         'Check that sokoni-connect-client.js is served on this page.</p>';
       return;
     }
-    window.SokoniConnectClient.mount(root, {
+    var media = null;
+
+    /* The peer reads only the signals ADDRESSED TO IT. That is the rule, not a filter this
+       page chose: firestore.rules allows a read where request.auth.uid == resource.data.to
+       and refuses everything else, including the sender's own. */
+    function subscribeSignals(onSignal) {
+      return firebase.firestore()
+        .collection('connectSessions').doc(sessionId).collection('signals')
+        .where('to', '==', u.uid)
+        .orderBy('createdAt')
+        .onSnapshot(function (snap) {
+          snap.docChanges().forEach(function (ch) {
+            /* Only new signals. A re-delivered snapshot must not replay an offer. */
+            if (ch.type === 'added') onSignal(ch.doc.data());
+          });
+        }, function (err) {
+          /* A rules refusal or a missing index lands here. SHOWN, never swallowed: a
+             silently dead signalling channel presents as a call that simply never
+             connects, which is the hardest possible thing to diagnose. */
+          var ice = document.getElementById('cxIce');
+          if (ice) ice.textContent = 'Signalling unavailable — ' +
+            ((err && err.message) || 'the signal listener was refused') +
+            '. This call cannot negotiate.';
+          document.getElementById('cxMedia').hidden = false;
+        });
+    }
+
+    /* ONE ATTACH, and only on the server's say-so. The gate is the projection: the session
+       is accepted and its transport plan carries webrtc. This page never decides that a
+       call should start negotiating. */
+    function maybeAttachMedia(p, handle) {
+      if (media || !p || !handle) return;
+      if (String(p.status) !== 'accepted') return;
+      if (!Array.isArray(p.transportPlan) || p.transportPlan.indexOf('webrtc') === -1) return;
+      if (!window.SokoniConnectMedia) return;
+      if (typeof window.RTCPeerConnection !== 'function') return;
+
+      media = window.SokoniConnectMedia.attach(handle, {
+        createPeerConnection: function (cfg) { return new window.RTCPeerConnection(cfg); },
+        signal: function (kind, payload) {
+          return call('connectSignal', { sessionId: sessionId, kind: kind, payload: payload });
+        },
+        subscribe: subscribeSignals,
+        getMedia: function () {
+          return navigator.mediaDevices.getUserMedia({
+            audio: true, video: String(p.channel) === 'video',
+          });
+        },
+        /* Derived from the SERVER's projection. The page does not decide who calls whom. */
+        isCaller: p.actor === 'caller',
+        /* EMPTY, DELIBERATELY. SOKONI operates no TURN or STUN — see the module header.
+           There is no default here and there must not be one. */
+        iceServers: [],
+        onRemoteStream: function (stream) {
+          var v = document.getElementById('cxRemote');
+          if (v && stream) v.srcObject = stream;
+        },
+      });
+
+      document.getElementById('cxMedia').hidden = false;
+      var ice = document.getElementById('cxIce');
+      if (ice && media && media.ice && !media.ice.configured) ice.textContent = media.ice.traversal;
+      if (media && media.negotiate) media.negotiate();
+    }
+
+    var handle = window.SokoniConnectClient.mount(root, {
       sessionId: sessionId,
       call: call,
       onProjection: function (p) {
@@ -146,6 +232,9 @@
           el.textContent = (p.channel ? p.channel : 'business') + ' session' +
             (p.mode ? ' · ' + p.mode : '');
         }
+        maybeAttachMedia(p, handle);
+        /* A session the server calls terminal takes its media down with it. */
+        if (p && p.terminal === true && media) { media.close(); media = null; }
       },
     });
   });

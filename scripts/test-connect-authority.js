@@ -1312,10 +1312,16 @@ console.log('\n── C2: the client projects, it does not decide ──');
   ck('…it loads the projection layer', /sokoni-connect-client\.js/.test(page));
   ck('…it self-updates after a deploy', /sw-register\.js|shared-header\.js/.test(page));
   ck('…it routes through the one dispatcher', /httpsCallable\('connectDispatch'\)/.test(page));
-  ck('…it carries NO media — that is C3',
-    !/RTCPeerConnection|getUserMedia|createOffer/.test(page));
-  ck('…and says so in the VISIBLE page, not only in a comment',
-    /No media on this page/.test(page));
+  /* SUPERSEDED BY C3-C, which is being built in parallel. These two asserted that
+     connect.html carried no media — true and important while C2 was the boundary, and no
+     longer the boundary. They are NOT deleted, because the invariant underneath them still
+     holds and is the one that matters permanently: whatever media the page gains, the CLIENT
+     must hold no route to a media-driven state. Deleting the pair to go green would have
+     removed the guard at the exact moment the code it guards started existing. */
+  ck('…the page holds NO route to a media-driven state, media or not',
+    !CA.MEDIA_DRIVEN_STATES.some((st) =>
+      new RegExp('connect(Mark|Begin|Fail)[A-Za-z]*' + st, 'i').test(page)));
+  ck('…and it still names no participant', !/calleeUid|participantUids/.test(page));
   ck('…a missing module is reported as missing', /did not load/.test(page));
   ck('…and it holds no state machine of its own',
     !/canTransition|offerable\s*=\s*\[/.test(page));
@@ -1354,10 +1360,15 @@ console.log('\n── C2: the client projects, it does not decide ──');
 
   console.log('\n   what C2 does NOT prove');
   /* Recorded as an assertion so the claim cannot quietly drift into "calls work". */
-  ck('the page carries no media stack (real connectivity UNPROVEN)',
-    !/RTCPeerConnection/.test(page));
-  ck('no TURN/STUN is configured anywhere in the client',
-    !/turn:|stun:|iceServers/.test(src) && !/turn:|stun:|iceServers/.test(page));
+  /* C3-C is landing. What must stay true is not 'there is no media' but 'media cannot
+     declare state': the C2 projection layer itself must remain free of a media stack, because
+     it is the piece that renders what the server decided. */
+  /* Stripped. This file's own C3 entry-gate note names RTCPeerConnection to say it does not
+     belong here — asserting unstripped would fail on the documentation that promises it. */
+  const srcCode = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  ck('the C2 PROJECTION layer still carries no media stack',
+    !/RTCPeerConnection|getUserMedia|createOffer/.test(srcCode));
+  ck('…and configures no TURN/STUN of its own', !/turn:|stun:|iceServers/.test(srcCode));
   ck('the client cannot claim a phone rang — it only reads what the server recorded',
     !/ringingBy/.test(code));
 }
@@ -2035,6 +2046,412 @@ console.log('\n── C3-B: the page reaches it ──');
   ck('the page still self-updates after a deploy', /sw-register\.js/.test(page));
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+   GATE C3-C — the WebRTC adapter
+
+   Three things existed and did not meet: `connectSignal` relayed offers, answers and
+   candidates into a subcollection NOTHING read; `reportableEvents` was projected to a client
+   with no media stack to produce one; and `transportPlan: ['webrtc']` was authorized on every
+   session and never attempted.
+
+   What is certified here is what the adapter REPORTS and what it REFUSES TO SAY. That is a
+   claim about this code. It is NOT a claim that media flowed, that two browsers paired, or
+   that anything traversed a NAT — those need a network and two devices, and the ladder says
+   so.
+══════════════════════════════════════════════════════════════════════════════════════════ */
+console.log('\n── C3-C: the adapter speaks only the authority\'s media vocabulary ──');
+{
+  const mediaPath = path.join(ROOT, 'sokoni-connect-media.js');
+  ck('the media adapter exists', fs.existsSync(mediaPath));
+  const mediaSrc = fs.readFileSync(mediaPath, 'utf8');
+  const mediaCode = mediaSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+  const sb = { SokoniConnectMedia: null, document: null, setInterval: () => 0,
+    clearInterval: () => {}, location: {} };
+  new Function('window', mediaSrc)(sb);
+  const M = sb.SokoniConnectMedia;
+  ck('…and loads', !!M && typeof M.attach === 'function');
+  ck('C3-C declares its own surface both ways',
+    M.CONTRACT.filter((k) => M[k] === undefined).length === 0 &&
+    Object.keys(M).filter((k) => k !== 'CONTRACT' && !M.CONTRACT.includes(k)).length === 0);
+
+  /* THE RANGE OF THE MAPPING. Not "does it contain a typo" — what CAN it emit, at all. */
+  const emittable = M.emittableEvents();
+  ck('every event it can emit is in the authority\'s vocabulary',
+    emittable.every((e) => CA.MEDIA_EVENT_NAMES.includes(e)),
+    emittable.filter((e) => !CA.MEDIA_EVENT_NAMES.includes(e)).join(',') || emittable.join(','));
+  ck('…and it can emit the WHOLE vocabulary, so nothing is unreachable',
+    emittable.join(',') === CA.MEDIA_EVENT_NAMES.slice().sort().join(','),
+    emittable.join(','));
+
+  /* THE CENTRAL REFUSAL. A session state is not something this module may say. */
+  const states = Object.keys(CA.SESSION_STATES);
+  ck('it can emit NO session state name',
+    emittable.every((e) => !states.includes(e)),
+    emittable.filter((e) => states.includes(e)).join(',') || 'none');
+
+  console.log('\n   an ICE pair is a route, not a conversation');
+  ck('ICE `connected` reports ice_connected', M.eventForIceState('connected') === 'ice_connected');
+  ck('…and `completed` likewise', M.eventForIceState('completed') === 'ice_connected');
+  ck('…NOT media_flowing', M.eventForIceState('connected') !== 'media_flowing');
+  ck('…and NOT the state `connected`', M.eventForIceState('connected') !== 'connected');
+  ck('the AGGREGATE connection state `connected` reports NOTHING at all',
+    M.eventForConnectionState('connected') === null,
+    'transport up is not media arriving');
+  ck('media_flowing comes only from a track that unmuted',
+    M.eventForTrack('unmuted') === 'media_flowing');
+
+  console.log('\n   a drop is not a failure, and a failure is not a guess');
+  ck('ICE `disconnected` is ice_disconnected, not connection_failed',
+    M.eventForIceState('disconnected') === 'ice_disconnected');
+  ck('…because it may recover — the authority maps it to no state',
+    CA.interpretMediaEvent({ from: 'connected', event: 'ice_disconnected', actor: 'caller' })
+      .effect === 'recorded_only');
+  ck('ICE `failed` is connection_failed', M.eventForIceState('failed') === 'connection_failed');
+  ck('a muted track reports media_stopped', M.eventForTrack('muted') === 'media_stopped');
+  ck('…and an ended one likewise', M.eventForTrack('ended') === 'media_stopped');
+
+  console.log('\n   unknown inputs produce silence, never a guess');
+  ['new', 'checking', 'closed', '', null, undefined, 'quantum'].forEach((s) => {
+    ck('…ICE `' + String(s) + '` reports nothing', M.eventForIceState(s) === null);
+  });
+  ck('an unknown track phase reports nothing', M.eventForTrack('sideways') === null);
+  ck('an unknown connection state reports nothing', M.eventForConnectionState('quantum') === null);
+}
+
+console.log('\n── C3-C: no transport is invented ──');
+{
+  const mediaSrc = fs.readFileSync(path.join(ROOT, 'sokoni-connect-media.js'), 'utf8');
+  const sb = { SokoniConnectMedia: null, document: null };
+  new Function('window', mediaSrc)(sb);
+  const M = sb.SokoniConnectMedia;
+
+  /* SOKONI runs no relay. A borrowed public STUN would manufacture a transport the platform
+     does not operate, and would make "it connected" evidence of somebody else's server. */
+  /* COMMENT-STRIPPED. The first draft tested the raw source and failed — on the module's
+     OWN header, which says in prose that there is no stun: or turn: URL in it. The
+     certification machinery had read itself and called the documentation a defect. */
+  const mediaExec = mediaSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const pageExec = fs.readFileSync(path.join(ROOT, 'connect.html'), 'utf8')
+    .replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  ck('there is no stun: URL in the adapter', !/stun:/i.test(mediaExec));
+  ck('…and no turn: URL either', !/turn:/i.test(mediaExec));
+  ck('…nor in the page', !/stun:|turn:/i.test(pageExec));
+  /* INVERTING CONTROL: the detector still matches a URL in code rather than prose. */
+  ck('…inverting control: it WOULD catch one in code',
+    /stun:/i.test(mediaExec + "var x = 'stun:example.org';"));
+  /* POSITIVE CONTROL: the detector matches where a relay really is named. */
+  ck('…positive control: the detector DOES match where turn is named',
+    /turn/i.test(fs.readFileSync(path.join(ROOT, 'functions', 'shared', 'communication-providers.js'), 'utf8')));
+
+  const none = M.describeIce([]);
+  ck('with nothing provisioned, configured is FALSE', none.configured === false);
+  ck('…the server list is empty, not a default', none.iceServers.length === 0);
+  ck('…and the limitation is stated in words a UI can show',
+    /same network/i.test(none.traversal) && none.reason === 'no_ice_servers_configured');
+  ck('…undefined fails the same closed way', M.describeIce(undefined).configured === false);
+  ck('…and so does null', M.describeIce(null).configured === false);
+  ck('…and a list of nothing-but-holes', M.describeIce([null, undefined]).configured === false);
+
+  const some = M.describeIce([{ urls: 'x' }]);
+  ck('supplied servers flip configured to true', some.configured === true);
+  ck('…but STILL promise nothing — supplying a server is not connecting',
+    /not guaranteed|not been demonstrated/i.test(some.traversal));
+}
+
+console.log('\n── C3-C: it cannot reach the backend except through C2 ──');
+{
+  const mediaSrc = fs.readFileSync(path.join(ROOT, 'sokoni-connect-media.js'), 'utf8');
+  const mediaCode = mediaSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+  ck('the adapter never names connectReportMediaEvent',
+    !/connectReportMediaEvent/.test(mediaCode));
+  ck('…nor any session-advancing op',
+    !/connectAnswerSession|connectEndSession|connectDeclineSession|connectCancelSession/
+      .test(mediaCode));
+  ck('…nor connectGetSessionState', !/connectGetSessionState/.test(mediaCode));
+  /* POSITIVE CONTROL: C2 is where those names legitimately live. */
+  ck('…positive control: C2 does name them',
+    /connectReportMediaEvent/.test(fs.readFileSync(path.join(ROOT, 'sokoni-connect-client.js'), 'utf8')));
+  ck('reporting goes through the handle C2 returned',
+    /handle\.reportObservation\(event\)/.test(mediaCode));
+
+  /* The kinds it sends must be exactly the kinds the server accepts. A fourth kind would be
+     a silent dead end: sent, refused, never diagnosed. */
+  const callsCode = fs.readFileSync(path.join(ROOT, 'functions', 'connect-calls.js'), 'utf8');
+  const served = (callsCode.match(/\['offer', 'answer', 'candidate'\]\.includes\(kind\)/) || [])[0];
+  ck('the server accepts exactly offer, answer, candidate', !!served);
+  const sb = { SokoniConnectMedia: null, document: null };
+  new Function('window', mediaSrc)(sb);
+  ck('…and the adapter sends exactly those',
+    sb.SokoniConnectMedia.SIGNAL_KINDS.slice().sort().join(',') === 'answer,candidate,offer',
+    sb.SokoniConnectMedia.SIGNAL_KINDS.join(','));
+}
+
+console.log('\n── C3-C: the adapter, driven against a fake peer connection ──');
+{
+  const mediaSrc = fs.readFileSync(path.join(ROOT, 'sokoni-connect-media.js'), 'utf8');
+
+  /* A peer connection that does exactly what the spec says and nothing more. It never
+     connects anything — it lets the suite fire the callbacks a real one would fire. */
+  function FakePC() {
+    this.iceConnectionState = 'new';
+    this.connectionState = 'new';
+    this.localDescription = null;
+    this.remoteDescription = null;
+    this.added = [];
+    this.candidates = [];
+    this.closed = false;
+  }
+  FakePC.prototype.createOffer = function () { return Promise.resolve({ type: 'offer', sdp: 'OFFER' }); };
+  FakePC.prototype.createAnswer = function () { return Promise.resolve({ type: 'answer', sdp: 'ANSWER' }); };
+  FakePC.prototype.setLocalDescription = function (d) { this.localDescription = d; return Promise.resolve(); };
+  FakePC.prototype.setRemoteDescription = function (d) { this.remoteDescription = d; return Promise.resolve(); };
+  FakePC.prototype.addIceCandidate = function (c) { this.candidates.push(c); return Promise.resolve(); };
+  FakePC.prototype.addTrack = function (t, s) { this.added.push(t); };
+  FakePC.prototype.close = function () { this.closed = true; };
+
+  function harness(opts) {
+    const o = opts || {};
+    const reported = [];
+    const sent = [];
+    let subscriber = null;
+    const sb = { SokoniConnectMedia: null, document: null };
+    new Function('window', mediaSrc)(sb);
+    const pc = new FakePC();
+    const handle = {
+      reportObservation: (e) => { reported.push(e); return Promise.resolve({ reported: true }); },
+    };
+    const adapter = sb.SokoniConnectMedia.attach(o.noHandle ? null : handle, {
+      createPeerConnection: o.noFactory ? undefined : () => pc,
+      signal: (kind, payload) => { sent.push(kind); return Promise.resolve({ ok: true }); },
+      subscribe: (cb) => { subscriber = cb; return () => { subscriber = null; }; },
+      getMedia: o.mediaFails
+        ? () => Promise.reject(new Error('Permission denied'))
+        : () => Promise.resolve({ getTracks: () => [{ id: 't1' }] }),
+      isCaller: o.isCaller === true,
+      iceServers: [],
+    });
+    return { adapter, pc, reported, sent, signal: (s) => subscriber && subscriber(s) };
+  }
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  /* ── refusals, before anything else ── */
+  ck('without C2\'s handle it refuses to attach at all',
+    harness({ noHandle: true }).adapter.error === 'no_report_route');
+  ck('…rather than inventing its own route to the backend', true,
+    'the refusal IS the proof — there is no second path to fall back on');
+  ck('without a peer-connection factory it refuses',
+    harness({ noFactory: true }).adapter.error === 'no_peer_connection_factory');
+
+  /* ── observation ── */
+  {
+    const h = harness({ isCaller: true });
+    h.pc.iceConnectionState = 'connected';
+    h.pc.oniceconnectionstatechange();
+    settle().then(() => {
+      ck('ICE connecting reports ice_connected', h.reported.join(',') === 'ice_connected',
+        h.reported.join(','));
+      ck('…and reports NOTHING that could be read as arrival',
+        !h.reported.includes('media_flowing') && !h.reported.includes('connected'));
+
+      h.pc.connectionState = 'connected';
+      h.pc.onconnectionstatechange();
+      return settle();
+    }).then(() => {
+      ck('…and the aggregate going connected adds nothing',
+        h.reported.join(',') === 'ice_connected', h.reported.join(','));
+
+      /* Media arrives. */
+      const track = { muted: true };
+      h.pc.ontrack({ track, streams: [{}] });
+      track.onunmute();
+      return settle();
+    }).then(() => {
+      ck('an unmuted inbound track reports media_flowing',
+        h.reported.includes('media_flowing'));
+      /* `intends` is the destination the observation argues for. `transition` is the
+         table's verdict object — which is what this first asked for, and why it failed. */
+      ck('…which is the ONLY route to the connected state, and it is the server\'s to take',
+        CA.interpretMediaEvent({ from: 'connecting', event: 'media_flowing', actor: 'caller' })
+          .intends === 'connected');
+      ck('…and NO other media event argues for it',
+        CA.MEDIA_EVENT_NAMES.filter((e) =>
+          CA.interpretMediaEvent({ from: 'connecting', event: e, actor: 'caller' })
+            .intends === 'connected').join(',') === 'media_flowing');
+      return null;
+    }).then(() => {
+      /* Duplicate unmute must not spray the backend. */
+      const before = h.reported.filter((e) => e === 'media_flowing').length;
+      const track2 = { muted: true };
+      h.pc.ontrack({ track: track2, streams: [{}] });
+      track2.onunmute();
+      return settle().then(() => {
+        ck('a second unmute while already flowing reports nothing new',
+          h.reported.filter((e) => e === 'media_flowing').length === before,
+          h.reported.join(','));
+      });
+    }).then(() => _c3cStep2());
+  }
+
+  /* ── signalling ── */
+  function _c3cStep2() {
+    const caller = harness({ isCaller: true });
+    caller.adapter.negotiate().then(settle).then(() => {
+      ck('the caller reports that negotiation began',
+        caller.reported[0] === 'negotiation_started', caller.reported.join(','));
+      ck('…creates an offer and sets it locally',
+        caller.pc.localDescription && caller.pc.localDescription.type === 'offer');
+      ck('…and relays it as an offer', caller.sent.includes('offer'), caller.sent.join(','));
+      ck('…and attaches its local media to the connection', caller.pc.added.length === 1);
+
+      const callee = harness({ isCaller: false });
+      return callee.adapter.negotiate().then(settle).then(() => {
+        ck('the callee does NOT offer — that would be glare',
+          !callee.sent.includes('offer'), callee.sent.join(',') || 'nothing sent');
+        /* The offer arrives through the subscription the RULES authorize. */
+        return callee.signal({ kind: 'offer', payload: JSON.stringify({ type: 'offer', sdp: 'X' }) })
+          .then(settle).then(() => {
+            ck('…it answers an offer it receives', callee.sent.includes('answer'));
+            ck('…having set the remote description first',
+              callee.pc.remoteDescription && callee.pc.remoteDescription.sdp === 'X');
+            return callee.signal({ kind: 'candidate', payload: JSON.stringify({ candidate: 'c1' }) });
+          }).then(settle).then(() => {
+            ck('…and adds a relayed ICE candidate', callee.pc.candidates.length === 1);
+            return callee.signal({ kind: 'teleport', payload: '{}' });
+          }).then(settle).then(() => {
+            ck('an unrecognised signal kind is ignored, not thrown',
+              callee.pc.candidates.length === 1);
+            return callee.signal({ kind: 'offer', payload: 'not json at all' });
+          }).then(settle).then(() => {
+            ck('…and a malformed payload does not throw either', true, 'survived');
+          });
+      });
+    }).then(() => {
+      /* A local media failure is a real failure of this attempt. */
+      const broken = harness({ isCaller: true, mediaFails: true });
+      return broken.adapter.negotiate().then(settle).then(() => {
+        ck('a refused microphone reports connection_failed',
+          broken.reported.includes('connection_failed'), broken.reported.join(','));
+        ck('…and never names a state', !broken.reported.some((e) => Object.keys(CA.SESSION_STATES).includes(e)));
+        ck('…and sends no offer it could not honour', !broken.sent.includes('offer'));
+      });
+    }).then(() => {
+      const h = harness({ isCaller: true });
+      h.adapter.close();
+      ck('close tears the peer connection down', h.pc.closed === true);
+      const after = h.reported.length;
+      h.pc.iceConnectionState = 'failed';
+      h.pc.oniceconnectionstatechange();
+      return settle().then(() => {
+        ck('…and a closed adapter reports nothing further',
+          h.reported.length === after, h.reported.join(','));
+        _c3cDone();
+      });
+    }).catch((e) => {
+      ck('the driven adapter ran without throwing', false, e && e.message);
+      _c3cDone();
+    });
+  }
+}
+
+console.log('\n── C3-C: the page attaches on the SERVER\'s say-so, and only then ──');
+{
+  const page = fs.readFileSync(path.join(ROOT, 'connect.html'), 'utf8');
+  const pageCode = page.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+
+  ck('the page serves the media adapter', /src="\/sokoni-connect-media\.js"/.test(pageCode));
+  ck('…after the C2 client whose handle it reports through',
+    pageCode.indexOf('sokoni-connect-media.js') >
+      pageCode.indexOf('sokoni-connect-client.js'));
+  ck('…and loads firestore, for the signals the rules already let the peer read',
+    /firebase-firestore-compat\.js/.test(pageCode));
+
+  ck('media attaches only when the SERVER says accepted',
+    /String\(p\.status\) !== 'accepted'\) return;/.test(pageCode));
+  ck('…and only when the authorized transport plan carries webrtc',
+    /p\.transportPlan\.indexOf\('webrtc'\) === -1\) return;/.test(pageCode));
+  ck('…and only once', /if \(media \|\| !p \|\| !handle\) return;/.test(pageCode));
+  ck('a terminal session takes its media down', /p\.terminal === true && media/.test(pageCode));
+
+  ck('the page supplies NO ice servers', /iceServers: \[\]/.test(pageCode));
+  ck('the signal listener reads only what is addressed to this user',
+    /\.where\('to', '==', u\.uid\)/.test(pageCode));
+  ck('…and acts on ADDED signals only, so a resnapshot cannot replay an offer',
+    /ch\.type === 'added'/.test(pageCode));
+  ck('a refused or unindexed listener is SHOWN, not swallowed',
+    /Signalling unavailable/.test(pageCode));
+
+  const idx = require(path.join(ROOT, 'firestore.indexes.json'));
+  ck('the signals index the listener needs is DECLARED',
+    (idx.indexes || []).some((i) => i.collectionGroup === 'signals' &&
+      i.fields.map((f) => f.fieldPath).join(',') === 'to,createdAt'));
+
+  /* The page must not have grown a media path that bypasses the adapter. */
+  ck('the page constructs no RTCPeerConnection of its own outside the adapter call',
+    (pageCode.match(/new window\.RTCPeerConnection/g) || []).length === 1);
+  ck('…and never reports a media event directly',
+    !/connectReportMediaEvent/.test(pageCode));
+}
+
+console.log('\n── C3-C: the C2 / server field seam, closed ──');
+{
+  /* A DEFECT FOUND BY THIS GATE. C2's renderHtml asked for `p.state`; the server has always
+     sent `status` — the document field and the authority's own word. So the session state on
+     connect.html rendered as a dash from the day C2 shipped. The C2 suite never caught it
+     because it drives renderHtml with synthetic projections it writes itself: a fixture
+     agrees with whatever you wrote in it, which is exactly what a seam assertion must not do.
+
+     So this compares the CONSUMER's reads against the PRODUCER's real output. */
+  const mod = require(path.join(ROOT, 'functions', 'connect-calls.js'));
+  const projection = mod._internals._project('s1', {
+    status: 'ringing', channel: 'voice', callerUid: 'b', calleeUid: 's',
+    participants: ['b', 's'], transportPlan: ['webrtc'],
+    context: { relationship: 'order', anchorType: 'orders', anchorId: 'X1', purpose: '' },
+  }, 's');
+
+  const c2Src = fs.readFileSync(path.join(ROOT, 'sokoni-connect-client.js'), 'utf8');
+  const c2Code = c2Src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const reads = [...new Set((c2Code.match(/\bp\.[a-zA-Z]+/g) || []).map((s) => s.slice(2)))];
+  const orphans = reads.filter((r) => !Object.hasOwn(projection, r));
+
+  ck('every field C2 reads is a field the server actually sends',
+    orphans.length === 0, orphans.join(',') || reads.length + ' fields, all present');
+  ck('…including the session state itself', reads.includes('status'));
+  ck('…and `p.state` is gone from C2', !/\bp\.state\b/.test(c2Code));
+  ck('…and from the C3-B banner too',
+    !/\.state\b/.test(fs.readFileSync(path.join(ROOT, 'sokoni-connect-incoming.js'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')));
+  /* POSITIVE CONTROL: the detector can find an orphan when there is one. */
+  ck('…positive control: the check DOES catch a field the server never sends',
+    ['status', 'invented'].filter((r) => !Object.hasOwn(projection, r)).join(',') === 'invented');
+
+  /* And the projection really does carry a state worth rendering. */
+  ck('the projection\'s status is the authority\'s own vocabulary',
+    Object.keys(CA.SESSION_STATES).includes(projection.status), projection.status);
+}
+
+console.log('\n── C3-C changed no frozen contract ──');
+{
+  ck('no new media event', CA.MEDIA_EVENT_NAMES.length === 6);
+  ck('no new session state', Object.keys(CA.SESSION_STATES).length === 10);
+  ck('no new actor', CA.ACTOR_NAMES.length === 3);
+  const modOps = Object.keys(require(path.join(ROOT, 'functions', 'connect-calls.js'))._h);
+  ck('C3-C added NO server op — the relay and the reporter already existed',
+    modOps.length === 13, modOps.length + ' ops');
+  ck('…and the read path it uses is the one the rules already authorize',
+    /request\.auth\.uid == resource\.data\.to/
+      .test(fs.readFileSync(path.join(ROOT, 'firestore.rules'), 'utf8')));
+  const incSrc = fs.readFileSync(path.join(ROOT, 'sokoni-connect-incoming.js'), 'utf8');
+  const sbI = { SokoniConnectClient: null, SokoniConnectIncoming: null, document: null,
+    setInterval: () => 0, clearInterval: () => {}, location: {} };
+  new Function('window', fs.readFileSync(path.join(ROOT, 'sokoni-connect-client.js'), 'utf8'))(sbI);
+  new Function('window', incSrc)(sbI);
+  ck('C2 is still 7 names', sbI.SokoniConnectClient.CONTRACT.length === 7);
+  ck('C3-B is still 8 names', sbI.SokoniConnectIncoming.CONTRACT.length === 8,
+    sbI.SokoniConnectIncoming.CONTRACT.length + '');
+}
+
 console.log('\n── C3-B changed no frozen contract ──');
 {
   const c2Src = fs.readFileSync(path.join(ROOT, 'sokoni-connect-client.js'), 'utf8');
@@ -2093,15 +2510,23 @@ console.log('\n── C3-A changed no frozen contract ──');
 /* The C3-B mount section drives promises, so the summary waits for it rather than reporting
    a run that has not finished. A suite that prints its total before its last assertion has
    landed is worse than a failing one. */
-function _c3bDone() {
+/* Two driven sections run concurrently — C3-B's mounted banner and C3-C's peer connection.
+   The summary is a BARRIER over both. Printing when the first one finishes would report a
+   run whose other half had not landed, which is the failure this guard exists to prevent. */
+let _asyncPending = 2;
+function _sectionDone() {
+  if (--_asyncPending > 0) return;
   clearTimeout(_c3bGuard);
   console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
   process.exit(fail ? 1 : 0);
 }
+function _c3bDone() { _sectionDone(); }
+function _c3cDone() { _sectionDone(); }
 /* FAIL CLOSED. Deliberately NOT unref'd: an unref'd guard lets a dead async chain exit 0,
    which is the failure mode this exists to prevent. */
 const _c3bGuard = setTimeout(() => {
-  ck('the C3-B mount section completed', false, 'timed out waiting for the driven surface');
+  ck('both driven sections completed', false,
+    _asyncPending + ' of 2 still pending — a driven section hung');
   console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
   process.exit(1);
 }, 20000);

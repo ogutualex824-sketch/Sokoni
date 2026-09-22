@@ -164,7 +164,10 @@
         '<div class="ci-about">' + _esc(d.about) + '</div>' +
         '<div class="ci-meta"><span>' + _esc(d.channel) + '</span>' +
           (d.mode ? '<span>' + _esc(d.mode) + '</span>' : '') +
-          '<span>' + _esc(item && item.state ? item.state : (item && item.status) || DASH) +
+          /* `status` only. Reading `state` first and falling back was tolerant, and the
+             tolerance is what hid the seam: the banner rendered correctly while
+             connect.html rendered a dash, so nothing looked broken. */
+          '<span>' + _esc((item && item.status) || DASH) +
           '</span></div>' +
         '<div class="ci-actions">' + (buttons ||
           '<span class="ci-muted">No actions available.</span>') + '</div>' +
