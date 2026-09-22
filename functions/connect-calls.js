@@ -252,8 +252,35 @@ async function _anchorBooking(db, anchorId) {
   };
 }
 
+/* ---------------------------------------------------------------------------
+   THE DELIVERY ANCHOR IS `packageRequests`, AND THAT WAS DETERMINED BY EVIDENCE.
+
+   Two collections in this repository are called something like "deliveries",
+   and they are DIFFERENT PRODUCTS rather than two names for one thing. The
+   full trace is in docs/DELIVERY_ANCHOR_AUTHORITY.md; the short version:
+
+     packageRequests   marketplace order fulfilment. Buyer, seller, rider, an
+                       orderId, a handover PIN, and the FinOS rider payout.
+                       Written by dispatch.js, delivery-pin.js,
+                       delivery-complete.js, seller-handover.js, finos.js and
+                       index.js — the entire server-side lifecycle.
+
+     deliveries        the SOKONI Delivery Hub: a sender books a courier to
+                       carry a parcel. Participants are senderUid and
+                       assignedRiderId. There is NO seller and NO order. Its
+                       only production writer is the browser (delivery-hub.js),
+                       and it is keyed by an auto-id carrying a deliveryRef
+                       FIELD — so doc(anchorId) never addressed it correctly.
+
+   The frozen C1 authority settles it. RELATIONSHIPS.delivery is
+   "An assigned delivery binds the rider to BOTH ENDS of the job", with pairs
+   rider:buyer and rider:seller. That is packageRequests exactly. The hub has
+   one end and a rider, and there is no `sender` role in ROLES at all — so hub
+   courier communication needs a DELIBERATE authority amendment, not an alias.
+   It is documented as a gap and deliberately not mounted.
+--------------------------------------------------------------------------- */
 async function _anchorDelivery(db, anchorId, callerUid) {
-  const snap = await db.collection('deliveries').doc(anchorId).get();
+  const snap = await db.collection('packageRequests').doc(anchorId).get();
   if (!snap.exists) throw new HttpsError('not-found', 'Delivery not found');
   const d = snap.data() || {};
   let order = null;
@@ -262,8 +289,13 @@ async function _anchorDelivery(db, anchorId, callerUid) {
     if (os && os.exists) order = os.data();
   }
   /* Reuses the canonical delivery actor resolver rather than becoming a third one. It returns
-     null when there is NO relationship, which callers must treat as a refusal. */
-  const actor = deliveryAuthority.resolveActor(callerUid, d, order);
+     null when there is NO relationship, which callers must treat as a refusal.
+
+     NAMED ARGUMENTS. This was previously called positionally, so `uid` arrived
+     undefined, resolveActor returned null on its first line, and EVERY delivery
+     anchor refused EVERY caller. The surface was never mounted, so the refusal
+     was never seen — a mount would have shipped a dead button. */
+  const actor = deliveryAuthority.resolveActor({ uid: callerUid, delivery: d, order });
   if (!actor) throw new HttpsError('permission-denied', 'You are not party to this delivery');
 
   const rider = CA.ROLES.includes('rider')
@@ -286,7 +318,7 @@ async function _anchorDelivery(db, anchorId, callerUid) {
     kind: 'delivery',
     state: _stateOf(d.status),
     parties,
-    anchorType: 'deliveries',
+    anchorType: 'packageRequests',
     anchorId,
     advisory: null,
   };

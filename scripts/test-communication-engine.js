@@ -1027,23 +1027,31 @@ console.log('\n── The C2/C3 boundary is explicit ──');
 /* ══════════════════════════════════════════════════════════════════════════════════════════
    PHASE 1 — the two surfaces that CANNOT be mounted, and why
 ══════════════════════════════════════════════════════════════════════════════════════════ */
-console.log('\n── Delivery and supplier surfaces are BLOCKED, not forgotten ──');
+console.log('\n── Delivery RESOLVED by evidence; supplier still BLOCKED ──');
 {
   const calls = fs.readFileSync(path.join(ROOT, 'functions', 'connect-calls.js'), 'utf8');
 
-  /* DELIVERY. The Connect anchor resolves `deliveries`; both user-facing delivery surfaces
-     read `packageRequests`. Passing a packageRequests id as a `delivery` anchor would either
-     never resolve (a silently dead button) or resolve to an UNRELATED deliveries document
-     that happens to share an id — authorising a call against the wrong relationship. */
-  ck('the delivery anchor reads `deliveries`',
-    /collection\('deliveries'\)\.doc\(anchorId\)/.test(calls));
+  /* DELIVERY — RETARGETED, not deleted. These assertions recorded the BLOCKER:
+     the anchor read `deliveries` while both surfaces read `packageRequests`.
+     The trace in docs/DELIVERY_ANCHOR_AUTHORITY.md resolved it — they are two
+     different products, and `packageRequests` is the marketplace relationship
+     the frozen authority describes. So each assertion now states the RESOLUTION
+     rather than the defect, and the full regression lives in
+     scripts/test-delivery-anchor-authority.js. */
+  ck('the delivery anchor now reads `packageRequests`',
+    /collection\('packageRequests'\)\.doc\(anchorId\)/.test(calls));
+  ck('…and no longer reads the hub collection by document id',
+    !/collection\('deliveries'\)\.doc\(anchorId\)/.test(calls));
   const dt = fs.readFileSync(path.join(ROOT, 'delivery-tracking.html'), 'utf8');
   const sd = fs.readFileSync(path.join(ROOT, 'seller-delivery.html'), 'utf8');
-  ck('…while delivery-tracking.html reads `packageRequests`',
+  ck('…which is what delivery-tracking.html reads',
     /collection\('packageRequests'\)/.test(dt));
-  ck('…and seller-delivery.html reads `packageRequests` too',
+  ck('…and what seller-delivery.html reads too',
     /collection\('packageRequests'\)/.test(sd));
-  ck('SO NEITHER IS MOUNTED — an id from the wrong collection is not an anchor',
+  /* The anchor is correct now; MOUNTING is a separate step, and claiming a
+     mounted surface that does not exist would be the fabrication this suite
+     exists to prevent. */
+  ck('the surfaces are still NOT mounted — a correct anchor is not a shipped button',
     !/sokoni-connect-call\.js/.test(dt) && !/sokoni-connect-call\.js/.test(sd));
 
   /* SUPPLIER. `collection('suppliers')` has no writer anywhere in functions/ except the
