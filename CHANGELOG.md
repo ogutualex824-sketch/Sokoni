@@ -1,3 +1,88 @@
+## 2026-09-22 (181) — 4a: the canonical writer gets an EXPLICIT field contract
+
+**NO DEPLOY. Server-only. No seller.js change. No stock/inventoryVersion change.**
+Live remains 111dbd7 / v636. `scripts/test-canonical-product-writer.js` **119/0** (was 66/0) ·
+`test-catalogue-canonical-migration.js` **47/0 + 3 findings** · `test-product-counter-reconciliation.js`
+**34/0** · `test-poslistproducts-contract.js` **32/0** · `test-catalogue-write-migration.js` **34/0** ·
+`test-posupsert-catalogue-contract.js` **42/0** · `test-flash-sale-authority.js` **56/0** ·
+`test-catalogue-model.js` 81/0 (foreign, uncommitted edit) · require closure intact.
+
+### Why this had to come before the seller.js migration
+
+`seller.js:1008` sends the richest payload in the platform — 38 fields. `upsertCanonicalProduct`
+accepted **eleven** of them. Re-pointing that path first would have reproduced the exact defect this
+workstream exists to remove, at marketplace scale: a form that collects a field, a writer that never
+mentions it, and a merchant who cannot tell.
+
+### The contract: four buckets, and "silently dropped" is not one of them
+
+    ACCEPTED      validated and persisted
+    SERVER_OWNED  ignored on input, decided here (identity, bookkeeping, counters)
+    REFUSED       rejected with its own REASON and CODE
+    anything else rejected BY NAME
+
+A writer that quietly ignores what it does not understand has the same defect in a politer form, so
+an unknown field now produces `Unsupported field: favouriteColour. A canonical product cannot
+represent it, and it is refused rather than dropped.`
+
+**Newly accepted, built from the payload `seller.js` actually sends** (`:799-880`) and the variant keys
+`sokoni-product-schema.js:67-73` emits — not from fields that merely exist somewhere:
+`costPrice` · `deliveryCost` · `wholesalePrice` · `minWholesaleQty` · `salePrice` · `location` ·
+`kebsCert` · `video` · `sellerName` · `sellerEmail` · `branchId` · `imageStorageUrls` · `isDigital` ·
+`digitalUrl` · `digitalLicense` · `ownership` · `verificationStatus` · and the six variant lists
+`colors` / `sizes` / `storage` / `weights` / `volumes` / `materials`.
+
+**The suite asserts all 38 seller.js fields are accounted for** — accepted or server-owned — so the
+later migration can be a pure re-point rather than a discovery exercise.
+
+### Refusals keep their meaning
+
+    trackStock · listingType · merchantId · sellerId   invalid-argument  (foreign vocabulary)
+    variablePrice · priceMode                          failed-precondition (FEATURE GATE)
+
+The codes differ on purpose: a temporary platform limitation must not read as a caller bug. The
+first draft of the contract sweep swallowed that distinction — it preempted the dedicated
+variable-pricing refusal and returned a generic `invalid-argument`, losing the sentence explaining
+that the sale path would charge the stored price. Caught by the existing suite going red.
+
+### Three tightenings the new fields required
+
+* **`salePrice` must be BELOW `price`.** The till prefers `prod.salePrice || prod.price`, so a
+  salePrice at or above price would quietly charge MORE than the advertised amount. Refused.
+* **`verificationStatus` may only be declared `pending` or `none`.** It is not in the rules'
+  `noAdminFields` list, so a client can currently write it freely on this collection — and a seller
+  marking their own item verified is the self-approval class of defect. Verification stays earned.
+* **`ownership.status` may only be `pending`**, and the server stamps `declared`/`submittedAt` itself.
+
+### Server-owned means decided here, and it is asserted
+
+`id` · `uid` · `sellerUid` · `shopId` · `createdAt`/`createdBy`/`updatedAt`/`updatedBy` ·
+`uploadedAt` · `views` · `sold` · `outOfStock` · **`inventoryVersion`** · **`lastStockSource`**.
+
+Supplied values are ignored, not obeyed: a payload carrying `shopId: 'other-shop'`, `views: 9999` and
+`inventoryVersion: 77` yields a document whose `shopId` is the derived owner, whose counters are
+absent, and which carries **no `inventoryVersion` at all**. That last one is deliberate and asserted:
+`inventoryVersion` is the stock ORDERING AUTHORITY, `seller.js:4331` increments it to trigger the
+canonical `inventoryMovements` audit, and it is not this writer's business. Keeping it out of 4a is
+what stops an inventory-audit migration from being smuggled into a catalogue-writer change.
+
+### Scope
+
+Only `functions/pos-inventory-pro.js` and its suite changed. `seller.js` is untouched and asserted so.
+No rules, no `pos-zero-friction`, no `pos-service-pricing`, no `posProducts` data, no deployment.
+
+**The deploy-order blocker is NOT resolved by this commit** and 4a does not touch it: production's
+`smartPosDispatch` was last deployed 2026-09-09 and defines none of the three new ops, so hosting must
+not ship before functions — which the merchant-identity provenance gap still blocks.
+
+**Files affected:** `functions/pos-inventory-pro.js`, `scripts/test-canonical-product-writer.js`,
+`CHANGELOG.md`. **Database changes:** a canonical product may now carry the marketplace fields listed
+above. **API changes:** `upsertCanonicalProduct` accepts 20 further fields and now REFUSES unknown
+ones (previously ignored). **Security changes:** two tightenings — self-declared verification state and
+salePrice above price are both refused. **Breaking changes:** a caller sending a field outside the
+contract is now refused rather than silently partially written. No such caller exists:
+`catalogue.html` sends only accepted fields, and its suite proves it.
+
 ## 2026-09-22 (180) — the catalogue produces canonical products
 
 **NO DEPLOY. NO RULES CHANGE.** Live remains 111dbd7 / v636.

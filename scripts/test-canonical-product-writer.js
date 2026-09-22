@@ -333,6 +333,139 @@ async function main() {
   ck('seller.js browser write is UNTOUCHED', /setDoc\(m\.doc\(db,'products',newProduct\.id\), fsProduct\)/.test(R('seller.js')),
      'no second outage introduced');
 
+  head('13. 4a — THE EXPLICIT FIELD CONTRACT (built from the seller.js payload)');
+  /* The whole point: a field the form collects is either persisted or REFUSED BY
+     NAME. Silent dropping is the defect this writer exists to end, and a writer
+     that quietly ignores what it does not understand has the same defect in a
+     politer form. */
+  reset();
+  {
+    const FULL = {
+      name: 'Bluetooth Speaker', price: 4500, category: 'Electronics',
+      description: 'Portable, 12h battery', sku: 'SPK-12', unit: 'pcs',
+      stock: 9, lowStockThreshold: 3,
+      costPrice: 3000, deliveryCost: 250, wholesalePrice: 3800, minWholesaleQty: 6,
+      salePrice: 4200,
+      location: 'Nairobi CBD', kebsCert: 'KEBS-114', video: 'https://cdn/x.mp4',
+      sellerName: 'KASS SHOP', sellerEmail: 'shop@example.com', branchId: 'br-1',
+      image: 'https://cdn/a.png', images: ['https://cdn/a.png', 'https://cdn/b.png'],
+      imageStorageUrls: ['https://cdn/a.png'],
+      isDigital: false,
+      colors: ['Black', 'Blue'], sizes: ['M'], storage: ['64GB'],
+      weights: ['500g'], volumes: ['1L'], materials: ['Plastic'],
+      verificationStatus: 'pending',
+      ownership: { serial: 'SN-1', source: 'receipt', status: 'pending' },
+      idempotencyKey: 'full-1',
+    };
+    const r = await res(() => call(SELLER, SELLER_TOKEN, FULL));
+    ck('the FULL seller-shaped payload is accepted', r.ok, r.ok ? 'ok' : r.code + ' ' + r.message);
+    const p = lastProduct() || {};
+    for (const f of ['costPrice', 'deliveryCost', 'wholesalePrice', 'minWholesaleQty', 'salePrice',
+                     'location', 'kebsCert', 'video', 'sellerName', 'sellerEmail', 'branchId',
+                     'images', 'imageStorageUrls', 'colors', 'sizes', 'storage', 'weights',
+                     'volumes', 'materials', 'verificationStatus', 'ownership']) {
+      ck('persists ' + f, Object.prototype.hasOwnProperty.call(p, f),
+         Object.prototype.hasOwnProperty.call(p, f) ? '' : 'DROPPED');
+    }
+    ck('numbers survive as numbers', p.costPrice === 3000 && p.minWholesaleQty === 6);
+    ck('variant lists survive as lists', Array.isArray(p.colors) && p.colors.length === 2);
+    ck('isDigital false is persisted, not treated as absent', p.isDigital === false);
+  }
+
+  head('14. 4a — an UNKNOWN field is refused BY NAME, never dropped');
+  reset();
+  {
+    const r = await res(() => call(SELLER, SELLER_TOKEN, Object.assign({}, GOOD, { favouriteColour: 'green' })));
+    ck('an unknown field is REFUSED', !r.ok && r.code === 'invalid-argument', r.code);
+    ck('...and the message NAMES it, so a caller can act',
+       !r.ok && /favouriteColour/.test(r.message || ''), r.message && r.message.slice(0, 70));
+    ck('...and nothing was written', !lastProduct());
+  }
+
+  head('15. 4a — foreign vocabulary is refused with its own REASON and CODE');
+  for (const [f, code] of [['trackStock', 'invalid-argument'], ['listingType', 'invalid-argument'],
+                           ['merchantId', 'invalid-argument'], ['sellerId', 'invalid-argument'],
+                           ['variablePrice', 'failed-precondition'], ['priceMode', 'failed-precondition']]) {
+    reset();
+    const r = await res(() => call(SELLER, SELLER_TOKEN, Object.assign({}, GOOD, { [f]: f === 'variablePrice' ? true : 'x' })));
+    ck('REFUSED  ' + f + ' as ' + code, !r.ok && r.code === code, r.ok ? 'ACCEPTED' : r.code);
+  }
+  /* The distinction matters: a feature gate must not read as a caller bug. */
+  reset();
+  {
+    const r = await res(() => call(SELLER, SELLER_TOKEN, Object.assign({}, GOOD, { variablePrice: true })));
+    ck('the variable-pricing refusal still explains WHY (the sale path would charge it)',
+       !r.ok && /amount charged/.test(r.message || ''), (r.message || '').slice(0, 60));
+  }
+
+  head('16. 4a — server-owned fields are IGNORED by contract, not obeyed');
+  reset();
+  {
+    const r = await res(() => call(SELLER, SELLER_TOKEN, Object.assign({}, GOOD, {
+      id: 'forged', uid: 'someone', shopId: 'other-shop', views: 9999, sold: 500,
+      createdAt: 'yesterday', uploadedAt: 1, outOfStock: false,
+      inventoryVersion: 77, lastStockSource: 'forged',
+      idempotencyKey: 'so-1',
+    })));
+    const p = lastProduct() || {};
+    ck('the write is accepted (they are ignored, not refused)', r.ok, r.ok ? 'ok' : r.code + ' ' + r.message);
+    ck('shopId is the DERIVED owner, not the supplied one', p.shopId === SELLER, String(p.shopId));
+    ck('uid is the caller, not the supplied one', p.uid === SELLER, String(p.uid));
+    ck('views / sold are NOT taken from the caller', p.views === undefined && p.sold === undefined);
+    ck('inventoryVersion is NOT written by this writer (ordering authority)',
+       p.inventoryVersion === undefined, 'untouched');
+    ck('lastStockSource is NOT written either', p.lastStockSource === undefined);
+    ck('createdAt is the server timestamp, not the supplied string', p.createdAt === '<ts>', String(p.createdAt));
+  }
+
+  head('17. 4a — the new fields do not weaken any existing invariant');
+  reset();
+  ck('salePrice at or above price is REFUSED (the till prefers salePrice)',
+     await (async () => { const r = await res(() => call(SELLER, SELLER_TOKEN, Object.assign({}, GOOD, { salePrice: 1000 }))); return !r.ok && r.code === 'invalid-argument'; })());
+  reset();
+  ck('a data: URI in imageStorageUrls is REFUSED',
+     await (async () => { const r = await res(() => call(SELLER, SELLER_TOKEN, Object.assign({}, GOOD, { imageStorageUrls: ['data:image/png;base64,AA'] }))); return !r.ok && r.code === 'invalid-argument'; })());
+  reset();
+  ck("verificationStatus 'verified' is REFUSED — verification is EARNED, not claimed",
+     await (async () => { const r = await res(() => call(SELLER, SELLER_TOKEN, Object.assign({}, GOOD, { verificationStatus: 'verified' }))); return !r.ok && r.code === 'permission-denied'; })());
+  reset();
+  ck("ownership.status 'approved' is REFUSED",
+     await (async () => { const r = await res(() => call(SELLER, SELLER_TOKEN, Object.assign({}, GOOD, { ownership: { serial: 'x', status: 'approved' } }))); return !r.ok && r.code === 'permission-denied'; })());
+  reset();
+  {
+    const r = await res(() => call(SELLER, SELLER_TOKEN, Object.assign({}, GOOD, { ownership: { serial: 'SN', source: 'receipt' } })));
+    ck('a declaration without a status is stamped pending by the server',
+       r.ok && lastProduct().ownership.status === 'pending');
+  }
+  reset();
+  ck('a non-array variant field is REFUSED',
+     await (async () => { const r = await res(() => call(SELLER, SELLER_TOKEN, Object.assign({}, GOOD, { colors: 'Black' }))); return !r.ok && r.code === 'invalid-argument'; })());
+  reset();
+  ck('a non-boolean isDigital is REFUSED, never coerced',
+     await (async () => { const r = await res(() => call(SELLER, SELLER_TOKEN, Object.assign({}, GOOD, { isDigital: 'yes' }))); return !r.ok && r.code === 'invalid-argument'; })());
+
+  head('18. 4a — the contract is derived from seller.js, and STILL only the writer changed');
+  {
+    const SRC = R('functions/pos-inventory-pro.js');
+    const accepted = SRC.slice(SRC.indexOf('const CANON_ACCEPTED'), SRC.indexOf('const CANON_SERVER_OWNED'));
+    ck('CONTROL — the accepted set was extracted', accepted.length > 400, accepted.length + 'B');
+    /* Every field seller.js:799-880 sends must be accounted for — accepted or
+       server-owned — or the later migration cannot be a pure re-point. */
+    const SELLER_JS_SENDS = ['name', 'price', 'costPrice', 'deliveryCost', 'stock', 'sold',
+      'outOfStock', 'isService', 'image', 'images', 'video', 'category', 'location',
+      'description', 'kebsCert', 'sellerName', 'sellerEmail', 'views', 'uploadedAt',
+      'wholesalePrice', 'minWholesaleQty', 'isDigital', 'digitalUrl', 'digitalLicense',
+      'ownership', 'verificationStatus', 'status', 'uid', 'sellerUid', 'createdAt',
+      'imageStorageUrls', 'branchId', 'colors', 'sizes', 'storage', 'weights', 'volumes', 'materials'];
+    const owned = SRC.slice(SRC.indexOf('const CANON_SERVER_OWNED'), SRC.indexOf('const CANON_REFUSED'));
+    const missing = SELLER_JS_SENDS.filter((f) => !new RegExp("'" + f + "'").test(accepted + owned));
+    ck('every field seller.js sends is accounted for in the contract',
+       missing.length === 0, missing.length ? 'UNACCOUNTED: ' + missing.join(',') : 'all ' + SELLER_JS_SENDS.length);
+    ck('seller.js itself is UNCHANGED by 4a',
+       /setDoc\(m\.doc\(db,'products',newProduct\.id\), fsProduct\)/.test(R('seller.js')));
+    ck('no stock/inventoryVersion handling was added',
+       !/inventoryVersion:\s*_INC/.test(SRC) && !/lastStockSource:/.test(SRC.slice(SRC.indexOf('upsertCanonicalProduct'))));
+  }
   head('12. Shape parity with the existing seller.js create');
   reset();
   {

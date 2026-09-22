@@ -2105,6 +2105,79 @@ const CANON_FORBIDDEN_FIELDS = [
 const CANON_IMAGE_FIELDS = ['image', 'imageUrl', 'thumbnailUrl'];
 const _isDataUri = (v) => typeof v === 'string' && /^data:/i.test(v.trim());
 
+/* ══ THE EXPLICIT FIELD CONTRACT (4a, 2026-09-22) ═══════════════════════════
+   The defect this writer exists to remove is SILENT SCHEMA LOSS — a form that
+   collects a field, a writer that never mentions it, and a merchant who cannot
+   tell. A writer that quietly ignores what it does not understand has the same
+   defect in a politer form. So every input key falls into exactly one bucket and
+   none of them is "silently dropped":
+
+       ACCEPTED      validated and persisted
+       SERVER_OWNED  ignored on input, decided here (identity, bookkeeping)
+       REFUSED       rejected with a REASON naming why, not just "unknown"
+       anything else rejected by name
+
+   The accepted set is built from the payload `seller.js` actually sends
+   (`:799-880` create, `:1805` edit) and the variant keys
+   `sokoni-product-schema.js:67-73` emits — not from fields that merely exist
+   somewhere. That is what will make the later seller.js migration provable: its
+   payload is either representable here or it is refused loudly. */
+const CANON_ACCEPTED = new Set([
+  /* identity of the write itself */
+  'productId', 'idempotencyKey',
+  /* core */
+  'name', 'price', 'sellingPrice', 'status', 'category', 'description',
+  'sku', 'unit', 'isService', 'trackInventory',
+  /* inventory (quantity only — inventoryVersion is NOT this writer's business) */
+  'stock', 'stockQty', 'qty', 'reorderPoint', 'lowStockThreshold',
+  /* marketplace commerce — seller.js:799-830 */
+  'costPrice', 'deliveryCost', 'wholesalePrice', 'minWholesaleQty', 'salePrice',
+  'location', 'kebsCert', 'video',
+  /* media */
+  'image', 'imageUrl', 'thumbnailUrl', 'images', 'imageStorageUrls',
+  /* digital goods — seller.js:832-834 */
+  'isDigital', 'digitalUrl', 'digitalLicense',
+  /* anti-theft ownership declaration — seller.js:836-848 */
+  'ownership', 'verificationStatus',
+  /* denormalised seller display — seller.js:819-820 */
+  'sellerName', 'sellerEmail',
+  /* branch scoping — seller.js:878 */
+  'branchId',
+  /* variant attributes — sokoni-product-schema.js:67-73 */
+  'colors', 'sizes', 'storage', 'weights', 'volumes', 'materials',
+]);
+
+/* Supplied by callers today and DECIDED here. Ignored rather than refused, so the
+   seller.js migration can hand over its existing object without first stripping
+   bookkeeping the server owns anyway. Each is listed so "ignored" is a contract,
+   not an accident. */
+const CANON_SERVER_OWNED = new Set([
+  'id',          /* the document key, never a field */
+  'uid',         /* mirrored from sellerUid */
+  'sellerUid',   /* validated against the caller, then stamped */
+  'shopId',      /* DERIVED from the proven owner */
+  'createdAt', 'createdBy', 'updatedAt', 'updatedBy',
+  'uploadedAt',  /* createdAt is the authority */
+  'views', 'sold', 'outOfStock',  /* counters and derived state */
+  'inventoryVersion', 'lastStockSource',  /* the inventory ordering authority — NOT here */
+]);
+
+/* Refused with a stated reason, because "unknown field" would be misleading:
+   these are real fields of ANOTHER collection's vocabulary or of a feature that
+   is deliberately not supported yet. */
+/* Each carries its own CODE as well as its reason. Variable pricing is a FEATURE
+   GATE ('failed-precondition' — the platform cannot do this yet), while a
+   foreign-vocabulary field is a malformed request ('invalid-argument'). Losing
+   that distinction would make a temporary limitation look like a caller bug. */
+const CANON_REFUSED = {
+  trackStock:    { code: 'invalid-argument', msg: 'trackStock is the posProducts vocabulary; a canonical product uses trackInventory' },
+  priceMode:     { code: 'failed-precondition', msg: 'Variable pricing is not supported on a canonical product yet: the sale path would read the stored price as the amount charged.' },
+  variablePrice: { code: 'failed-precondition', msg: 'Variable pricing is not supported on a canonical product yet: the sale path would read the stored price as the amount charged. Create a fixed price.' },
+  listingType:   { code: 'invalid-argument', msg: 'listingType is the posProducts vocabulary; a canonical product uses isService' },
+  merchantId:    { code: 'invalid-argument', msg: 'a canonical product is owned by sellerUid, not by a business merchantId' },
+  sellerId:      { code: 'invalid-argument', msg: 'sellerId is not written by this writer; ownership is sellerUid' },
+};
+
 exports._h.upsertCanonicalProduct = async (req) => {
   const auth = _requireAuth(req);
   const d    = req.data || {};
@@ -2134,6 +2207,19 @@ exports._h.upsertCanonicalProduct = async (req) => {
     if (Object.prototype.hasOwnProperty.call(d, k)) {
       throw new HttpsError('permission-denied', 'Field not permitted: ' + k);
     }
+  }
+
+  /* ── THE CONTRACT: every remaining key is accounted for, or refused ──────── */
+  for (const k of Object.keys(d)) {
+    if (CANON_ACCEPTED.has(k) || CANON_SERVER_OWNED.has(k)) continue;
+    if (Object.prototype.hasOwnProperty.call(CANON_REFUSED, k)) {
+      throw new HttpsError(CANON_REFUSED[k].code, CANON_REFUSED[k].msg);
+    }
+    /* Named, so a caller learns WHICH field it sent that this writer cannot
+       represent — the alternative is the silent loss this writer exists to end. */
+    throw new HttpsError('invalid-argument',
+      'Unsupported field: ' + k + '. A canonical product cannot represent it, and it is ' +
+      'refused rather than dropped.');
   }
 
   /* ── No base64 image, in any of the three fields or the images array ── */
@@ -2260,6 +2346,81 @@ exports._h.upsertCanonicalProduct = async (req) => {
     if (unit)        doc.unit        = unit;
     if (image)       doc.image       = image;
     if (reorderPoint !== undefined) doc.reorderPoint = reorderPoint;
+
+    /* ── The marketplace fields seller.js actually sends (4a) ──────────────── */
+    for (const [key, max] of [['costPrice', 1e9], ['deliveryCost', 1e9],
+                              ['wholesalePrice', 1e9], ['minWholesaleQty', 1e7],
+                              ['salePrice', 1e9]]) {
+      const v = _pcNum(d[key], key, { max: max });
+      if (v !== undefined) doc[key] = v;
+    }
+    /* salePrice is what the till prefers (`prod.salePrice || prod.price`), so a
+       salePrice at or above price would quietly RAISE the charged amount above the
+       advertised one. Refused rather than stored. */
+    if (doc.salePrice !== undefined && !(doc.salePrice < price)) {
+      throw new HttpsError('invalid-argument',
+        'salePrice must be below price — the sale path prefers salePrice, so a higher one ' +
+        'would charge more than the price shown.');
+    }
+    for (const [key, max] of [['location', 160], ['kebsCert', 80], ['video', 1200],
+                              ['sellerName', 120], ['sellerEmail', 160], ['branchId', 80],
+                              ['digitalUrl', 1200], ['digitalLicense', 200]]) {
+      const v = _pcStr(d[key], max);
+      if (v) doc[key] = v;
+    }
+    if (d.isDigital !== undefined) {
+      if (typeof d.isDigital !== 'boolean') {
+        throw new HttpsError('invalid-argument', 'isDigital must be a boolean');
+      }
+      doc.isDigital = d.isDigital;
+    }
+    if (Array.isArray(d.imageStorageUrls)) {
+      if (d.imageStorageUrls.some(_isDataUri)) {
+        throw new HttpsError('invalid-argument', 'imageStorageUrls must be URLs, not embedded data.');
+      }
+      doc.imageStorageUrls = d.imageStorageUrls.filter((v) => typeof v === 'string' && v).slice(0, 8);
+    }
+    /* Variant attributes are lists of chosen option strings. */
+    for (const key of ['colors', 'sizes', 'storage', 'weights', 'volumes', 'materials']) {
+      if (d[key] === undefined) continue;
+      if (!Array.isArray(d[key])) {
+        throw new HttpsError('invalid-argument', key + ' must be an array of option values');
+      }
+      doc[key] = d[key].filter((v) => typeof v === 'string' && v).map((v) => v.slice(0, 40)).slice(0, 40);
+    }
+
+    /* ── VERIFICATION STATE IS NOT SELF-SERVABLE ───────────────────────────
+       `verificationStatus` and `ownership.status` are not in the rules'
+       noAdminFields list, so a client can currently write them freely on this
+       collection. A seller declaring their own item VERIFIED is exactly the
+       self-approval class of defect, so only the two states a DECLARATION may
+       carry are accepted here; anything else is refused rather than stored.
+       Granting verification stays an earned, reviewed act elsewhere. */
+    if (d.verificationStatus !== undefined) {
+      const vs = _pcStr(d.verificationStatus, 24);
+      if (vs !== 'pending' && vs !== 'none') {
+        throw new HttpsError('permission-denied',
+          "verificationStatus may only be declared as 'pending' or 'none'; verification is earned, not claimed.");
+      }
+      doc.verificationStatus = vs;
+    }
+    if (d.ownership !== undefined && d.ownership !== null) {
+      const o = d.ownership;
+      if (typeof o !== 'object' || Array.isArray(o)) {
+        throw new HttpsError('invalid-argument', 'ownership must be an object');
+      }
+      if (o.status !== undefined && o.status !== 'pending') {
+        throw new HttpsError('permission-denied',
+          "ownership.status may only be declared as 'pending'.");
+      }
+      doc.ownership = {
+        serial:      _pcStr(o.serial, 80),
+        source:      _pcStr(o.source, 80),
+        declared:    true,
+        submittedAt: _TS(),
+        status:      'pending',
+      };
+    }
     if (Array.isArray(d.images)) doc.images = d.images.filter((v) => typeof v === 'string' && v).slice(0, 8);
     if (stock !== undefined) {
       doc.stock      = stock;
