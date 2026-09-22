@@ -367,6 +367,12 @@
 
   <div class="nav-group">
     <div class="nav-group-label">Operations</div>
+    <button class="nav-item" data-section="comms" onclick="SA.nav('comms');_closeSidebar()">
+      <span class="nav-icon">&#x1F4E5;</span>Communications
+    </button>
+    <button class="nav-item" data-section="connect" onclick="SA.nav('connect');_closeSidebar()">
+      <span class="nav-icon">&#x1F4DE;</span>Connect
+    </button>
     <button class="nav-item" data-section="audit" onclick="SA.nav('audit');_closeSidebar()">
       <span class="nav-icon">&#x1F4CB;</span>Audit Log
     </button>
@@ -686,6 +692,35 @@
     </section>
 
     <!-- ══ SECTION 6: Audit Log ══ -->
+    <!-- ══ SECTION: Connect ══
+         Rendered by sokoni-connect-console.js, the same module admin-os.html mounts (there as
+         a tab on the Communications panel). One module, two mount points: a change to how a
+         session is presented lands in both consoles at once, or in neither. -->
+    <!-- ══ SECTION: Communications ══
+         Rendered by sokoni-comms-console.js, the same module admin-os.html mounts as its
+         Inbox tab. One module, two mount points. -->
+    <section class="sa-panel" id="panel-comms" hidden>
+      <div class="panel-header">
+        <h2>&#x1F4E5; Communications</h2>
+        <p>Every chat, call and notification SOKONI carried, joined by the business
+           relationship it was about. Read-only. Timelines are <strong>partial</strong> until
+           every notification call site records an anchor &mdash; the surface says so on each
+           read rather than letting a short list read as a quiet one.</p>
+      </div>
+      <div id="commsRoot"></div>
+    </section>
+
+    <section class="sa-panel" id="panel-connect" hidden>
+      <div class="panel-header">
+        <h2>&#x1F4DE; Connect</h2>
+        <p>Business calls, video sessions and verification procedures. Sessions are
+           server-written and metadata-only &mdash; no audio or video is stored, and no
+           telephone number appears on this surface. A verification session is
+           <strong>evidence, not a verdict</strong>.</p>
+      </div>
+      <div id="connectRoot"></div>
+    </section>
+
     <section class="sa-panel" id="panel-audit" hidden>
       <div class="panel-header">
         <h2>&#x1F4CB; Audit Log</h2>
@@ -1004,6 +1039,8 @@ const SA={
     else if(section==='financial')this.loadFinancial();
     else if(section==='config')this.loadConfig();
     else if(section==='emergency')this.loadEmergency();
+    else if(section==='connect')this.loadConnect();
+    else if(section==='comms')this.loadComms();
     else if(section==='audit')this.loadAudit();
     else if(section==='broadcast')this.loadBroadcastHistory();
   },
@@ -1795,6 +1832,27 @@ const SA={
   },
 
   // ══ SECTION 6: Audit Log ════════════════════════════════
+  loadComms(){
+    const root=document.getElementById('commsRoot');
+    if(!root)return;
+    if(!window.SokoniCommsConsole){
+      root.innerHTML='<p style="color:var(--muted);font-size:13px">The communications module ' +
+        'did not load. Check that sokoni-comms-console.js is served on this page.</p>';
+      return;
+    }
+    window.SokoniCommsConsole.mount(root);
+  },
+  loadConnect(){
+    const root=document.getElementById('connectRoot');
+    if(!root)return;
+    if(!window.SokoniConnectConsole){
+      root.innerHTML='<p style="color:var(--muted);font-size:13px">The Connect module did not ' +
+        'load. Check that sokoni-connect-console.js is served on this page.</p>';
+      return;
+    }
+    window.SokoniConnectConsole.mount(root);
+  },
+
   async loadAudit(){
     document.getElementById('saAuditBody').innerHTML=`<tr><td colspan="5" class="empty-cell"><div class="sa-spinner"><div></div></div></td></tr>`;
     try{
@@ -1995,5 +2053,14 @@ const SA={
   })();
 })();
 </script>
+<!-- Communications + Connect consoles. The SAME modules admin-os.html mounts —
+     one module, two mount points, so a change to how a session or a message is
+     presented lands in both consoles at once, or in neither. The verification
+     write path is kept in its own file so the console keeps its certified
+     guarantee of containing none. -->
+<script src="sokoni-connect-console.js"></script>
+<script src="sokoni-connect-verify.js"></script>
+<script src="sokoni-comms-console.js"></script>
+<script src="sokoni-comms-send.js"></script>
 </body>
 </html>

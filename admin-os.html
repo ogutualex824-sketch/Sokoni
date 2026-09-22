@@ -553,6 +553,11 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
           <button class="tab-btn active" data-tab="push" onclick="SokoniAOS.commsTab('push')">&#x1F514; Push</button>
           <button class="tab-btn" data-tab="email" onclick="SokoniAOS.commsTab('email')">&#x1F4E7; Email Blast</button>
           <button class="tab-btn" data-tab="sms" onclick="SokoniAOS.commsTab('sms')">&#x1F4F1; SMS</button>
+          <!-- SOKONI Connect and the unified inbox. TABS, not two more nav items:
+               calling is communication, and the operator who is looking at push and
+               email is the one who wants them. -->
+          <button class="tab-btn" data-tab="inbox" onclick="SokoniAOS.commsTab('inbox')">&#x1F4E5; Inbox</button>
+          <button class="tab-btn" data-tab="connect" onclick="SokoniAOS.commsTab('connect')">&#x1F4DE; Connect</button>
         </div>
         <div id="commsBody"><div class="aos-spinner"><div></div></div></div>
       </div>
@@ -684,6 +689,17 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
 
     </div>
   </main>
+  <!-- Communication Engine + Connect consoles. Self-contained like the
+       integrations module: each reads its own canonical collections and
+       read-only callable, so neither needs a dispatch op. Loaded BEFORE
+       sokoni-aos.js so the tab handler finds them rather than reporting them
+       missing on a first click. -->
+  <script src="sokoni-comms-console.js"></script>
+  <script src="sokoni-comms-send.js"></script>
+  <script src="sokoni-connect-console.js"></script>
+  <!-- The ONE write path, kept in its own file so sokoni-connect-console.js
+       keeps its certified guarantee of containing none. -->
+  <script src="sokoni-connect-verify.js"></script>
   <script src="sokoni-aos.js"></script>
   <script>
     function _openSidebar()  { document.getElementById("aosSidebar").classList.add("open"); }

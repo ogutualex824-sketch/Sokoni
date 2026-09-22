@@ -357,6 +357,12 @@ function sendMessage(conversationId, payload) {
       callData.lng     = payload.lng;
       callData.address = payload.address || null;
     }
+    /* IDEMPOTENCY KEY — carried, not owned. The engine is the transport; the
+       key is minted by whoever composed the message (sokoni-outbox.js) and is
+       passed through unchanged so a retry is the SAME message server-side.
+       Minting one here would defeat the point: a fresh key on every call is a
+       random id under another name. Absent key = previous behaviour exactly. */
+    if (payload.clientMessageId) callData.clientMessageId = String(payload.clientMessageId);
     return callSendMessage(callData).then(function(r) { return r.data; });
   }
 

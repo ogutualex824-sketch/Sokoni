@@ -139,13 +139,17 @@ async function holdServiceBookingPayment(db, adminSdk, apiRef, intentRef, amount
         if (b.providerId) {
           await notify({ uid: b.providerId, type: 'booking_new', title: 'New paid booking 📅',
             body: `A customer has paid for a booking${b.service ? ' — ' + b.service : ''}. Ref ${apiRef}.`,
-            deepLink: '/provider-dashboard.html', dedupeKey: `booking_new_${apiRef}`, awaitDelivery: false })
+            deepLink: '/provider-dashboard.html', dedupeKey: `booking_new_${apiRef}`, awaitDelivery: false,
+            /* ANCHOR. A booking is an approved business relationship, so this notification
+               joins the same timeline as any chat or call about it. */
+            anchorType: 'booking', anchorId: bookingId || undefined })
             .catch((e) => console.error('[webhook] provider booking_new notify failed:', e.message));
         }
       } else if (res.outcome === 'refunded' && res.customerUid) {
         await notify({ uid: res.customerUid, type: 'booking_refund', title: 'Payment refunded ↩',
           body: `That time slot was no longer available, so your payment has been refunded to your SOKONI wallet. Ref ${apiRef}.`,
-          dedupeKey: `booking_latepay_refund_${apiRef}`, awaitDelivery: false })
+          dedupeKey: `booking_latepay_refund_${apiRef}`, awaitDelivery: false,
+          anchorType: 'booking', anchorId: bookingId || undefined })
           .catch((e) => console.error('[webhook] booking_refund notify failed:', e.message));
       }
     } catch (_) { /* notify optional */ }
@@ -278,7 +282,8 @@ async function releaseServiceBookingOnTerminalPayment(db, adminSdk, apiRef, inte
         const b = (await db.collection('providerBookings').doc(bookingId).get()).data() || {};
         if (b.customerUid) notify({ uid: b.customerUid, type: 'booking_released', title: 'Reservation released',
           body: 'Your payment didn’t go through, so the time slot has been released. You can book again anytime.',
-          dedupeKey: `booking_released_${apiRef}` }).catch(() => {});
+          dedupeKey: `booking_released_${apiRef}`,
+          anchorType: 'booking', anchorId: bookingId || undefined }).catch(() => {});
       } catch (_) { /* notify optional */ }
     }
   } catch (e) {
