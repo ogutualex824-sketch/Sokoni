@@ -603,6 +603,90 @@ if (has('sokoni-merchant-data.js')) {
   }
 }
 
+/* ══ 11f. FLASH SALE — a promotion layer, and why it is NOT wired ═════════════ */
+head('11f. FLASH SALE (brief §7)');
+if (!has('functions/marketing-engine.js')) {
+  nr('flash sale authority', 'functions/marketing-engine.js not present');
+} else {
+  const ME2 = R('functions/marketing-engine.js');
+  /* THE GOOD NEWS FIRST: the canonical engine is shaped exactly as the brief wants —
+     a promotion over an existing canonical item, not a second catalogue. */
+  ck('a canonical flash-sale engine exists', /collection\('mktFlashSales'\)/.test(ME2));
+  ck('...and it REFERENCES a product rather than creating one',
+     /productId:\s*_san\(productId/.test(ME2),
+     'mktFlashSales rows carry productId — a promotion layer, not a second catalogue');
+  ck('...with sell-through and expiry handled server-side',
+     /recordFlashSalePurchase/.test(ME2) && /concludeExpiredFlashSales/.test(ME2));
+
+  /* WHY IT IS NOT WIRED INTO MERCHANT V2. Two independent reasons, both measured. */
+  const gate = ME2.slice(ME2.indexOf('function _requireMerchant'), ME2.indexOf('function _requireMerchant') + 300);
+  const numericGate = /role\s*<\s*2/.test(gate);
+  if (numericGate) {
+    /* Executed, not read: SOKONI mints STRING role claims, and every comparison of a
+       non-numeric string with a number is false — so the guard does not throw. */
+    const admits = (role) => { const r = role ?? 0; return !(r < 2); };
+    ck('FINDING — the merchant gate compares a STRING claim numerically',
+       admits('buyer') === true && admits(undefined) === false,
+       "role:'buyer' is ADMITTED; an absent claim is refused — Number('buyer') is NaN and every NaN comparison is false");
+  }
+  ck('FINDING — createFlashSale never verifies the client-supplied merchantId',
+     /if \(!merchantId\)\s*_err/.test(ME2) &&
+     !/resolveMerchantIdForOwner|_assertMerchantAccess|assertBusinessPermission/.test(
+       ME2.slice(ME2.indexOf('_h.createFlashSale'), ME2.indexOf('_h.createFlashSale') + 2200)),
+     'merchantId, productId and originalPrice are all taken from the payload and validated for ' +
+     'SHAPE only — no ownership, no price corroboration');
+
+  /* AND THE BOUND ON IT, which is what makes this a reporting defect and not a money one.
+     Stated precisely, because the difference decides how urgent it is. */
+  const readers = ['functions/bi-advanced.js'].filter(f => has(f) && /mktFlashSales/.test(R(f)));
+  const checkoutReads = ['functions/pos-zero-friction.js', 'functions/pos-retail-engine.js']
+    .filter(f => has(f) && /mktFlashSales|FlashSale/i.test(R(f)));
+  ck('no checkout path consults flash-sale pricing today', checkoutReads.length === 0,
+     checkoutReads.join(',') || 'till, dispatch and orchestrator have zero references');
+  ck('  CONTROL — the reader detector DOES find the one consumer that exists',
+     readers.length === 1, readers.join(',') || 'none found — detector may be broken');
+  up('FINDING — the forgeable flash sale is a REPORTING defect, not yet a pricing one',
+     'mktFlashSales is read by exactly one consumer, bi-advanced.js (sold counts). No checkout ' +
+     'path reads it, so a forged row cannot change what anything sells for — it pollutes BI. ' +
+     'It BECOMES a money defect the moment flash pricing is wired into checkout, which is ' +
+     'precisely what §7 asks for. So the gate and the ownership check must be repaired BEFORE ' +
+     'Merchant V2 gets a Flash Sale button, not after.');
+
+  /* The route Merchant V2 offers today. */
+  const fs2 = C.get('flash-sale');
+  ck('Merchant V2 flash-sale route exists', !!fs2, fs2 ? fs2.kind + ':' + (fs2.sec || '') : 'MISSING');
+  if (has('seller.js')) {
+    ck('FINDING — that route reaches a DEVICE-LOCAL flash sale, not the server engine',
+       /localStorage\.setItem\("sokoniFlashSales"/.test(R('seller.js')),
+       'seller.js launchFlashSale writes localStorage.sokoniFlashSales — a per-device array');
+  }
+  ck('no merchant route wires createFlashSale (correctly, while the gate is open)',
+     !C.ROUTES.some(r => /createFlashSale/.test(JSON.stringify(r))));
+}
+
+/* ══ 11g. CHANNEL AVAILABILITY — P-3, answered ════════════════════════════════ */
+head('11g. CHANNEL AVAILABILITY (brief §10, P-3)');
+if (has('sokoni-merchant-data.js')) {
+  const MD3 = R('sokoni-merchant-data.js');
+  const CHANNEL_FIELDS = /posEnabled|showInPos|posVisible|marketplaceVisible|showInMarketplace|sellChannels|availableOn|visibleIn/;
+  ck('FINDING — the canonical model carries NO per-product channel field',
+     !CHANNEL_FIELDS.test(MD3),
+     'no POS/Till/QuickPay/Marketplace visibility flag exists on a product');
+  ck('  CONTROL — the field detector finds a field that DOES exist',
+     /lowStockThreshold/.test(MD3));
+  /* The consequence, which is the opposite of what §10 asks for. */
+  const proj2 = MD3.slice(MD3.indexOf('pos: {'), MD3.indexOf('pos: {') + 600);
+  ck('FINDING — the POS projection hardcodes status:active',
+     /status:\s*'active'/.test(proj2),
+     'every canonically-created product becomes POS-visible unconditionally');
+  up('P-3 — a merchant cannot say "POS yes, marketplace no"',
+     'There is no channel representation to configure. §10 asks that an internal POS item not ' +
+     'be auto-published to the marketplace; the actual behaviour is the inverse — every ' +
+     'marketplace product is auto-projected into POS with status:active. Adding a channel ' +
+     'field is a CANONICAL MODEL change and belongs in the catalogue handoff, not here: ' +
+     'inventing one now would be the second model this workstream exists to avoid.');
+}
+
 /* ══ 11d. ADMINOS — verified, not assumed (brief §20) ══════════════════════════ */
 head('11d. ADMINOS canonical surface');
 ck('admin-os.html exists', has('admin-os.html'));

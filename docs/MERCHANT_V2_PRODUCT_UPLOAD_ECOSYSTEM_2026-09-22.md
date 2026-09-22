@@ -261,3 +261,124 @@ fixed subset and was deliberately not extended — widening a mirror without kno
 consumer is the field-mapping divergence the writer's own header warns about, naming
 `posRetailSales` as the precedent where writer and reader disagreed and POS sales silently
 vanished from reporting.
+
+---
+
+## 10. Catalogue/Tender Handoff
+
+**State at `d0443b8`+: NOT HANDED OFF.** All four files are untracked working copies:
+`sokoni-catalogue-model.js`, `sokoni-pos-tender.js`, `sokoni-pos-pay-console.js`,
+`functions/shared/pos-service-pricing.js`.
+
+| | |
+|---|---|
+| Owner | the cart/tender/catalogue workstream (another agent) |
+| Commit | **none yet** |
+| Gate definition | **tracked in the git index**, not present on disk. A file on disk but untracked is a working copy that can change or vanish under us; building against it is building against a moving target |
+| Audit command | `node scripts/audit-catalogue-handoff.js` |
+
+The eighteen contract questions (§2 A–R) are implemented as **NOT RUN with their reason
+printed**, so the audit is a command rather than a memory. When the commit lands they flip to
+**UNPROVEN**, not PASS — landing a commit answers none of them, and a suite that went green on
+arrival would be the "declared ready because it renders" failure the brief names. Each must be
+replaced by a trace through UPLOAD → CANONICAL RECORD → PROJECTION → POS/TILL → QUICK PAY →
+MARKETPLACE → INVENTORY → KRA → RECEIPT → REPORTING → REALTIME.
+
+The audit also asserts what must hold **either side** of the handoff: d0443b8 field parity (26
+collected, none dropped), the three seller.js regression fields, that `productProjections` has
+**not** been widened ahead of the owner's consumer contracts, and that Products still opens the
+canonical editor with no second uploader route.
+
+### Unresolved questions for the owner
+
+1. **Is a service a canonical `products/{id}` row, or a `posProducts/{id}` row?** The model
+   places it in `posProducts`, which `posCompleteCheckout` does not read and whose client
+   queries the served ruleset rejects. A service written only there cannot be settled.
+2. **Which flag, on which collection?** `products` carries `trackInventory`; the model uses
+   `trackStock`. These are different fields on different collections, not two spellings.
+3. **What is `listingType` for?** The editor collects it and — since `d0443b8` — persists it.
+   If it is the canonical product/service discriminator, the model should read it rather than
+   introduce a second one.
+4. **Does `productProjections` need `unit` and a stock flag?** It hardcodes `unit:'pcs'` and
+   carries neither. This workstream did not widen it, on purpose.
+
+---
+
+## 11. Flash Sale (§7) — a correct engine behind a broken gate
+
+**The canonical engine is shaped exactly as §7 asks.** `functions/marketing-engine.js` writes
+`mktFlashSales/{saleId}` carrying a **`productId`** — a promotion layer over an existing
+canonical item, not a second catalogue. It has `createFlashSale`, `getFlashSalePrice`,
+`recordFlashSalePurchase` (atomic sold-count with auto-end on sell-through) and a scheduled
+`concludeExpiredFlashSales`.
+
+**Merchant V2's Flash Sale route does not use it.** `flash-sale` is `kind:'seller' sec:'flash'`
+→ `seller.js launchFlashSale()` → **`localStorage.sokoniFlashSales`**, a per-device array. A
+second, device-local flash-sale store.
+
+### Why it was NOT wired, and this is the finding
+
+Two independent defects, both measured:
+
+**1. The merchant gate admits any string role claim.** `_requireMerchant` reads
+`req.auth.token?.role ?? 0` and refuses when `role < 2`. SOKONI mints **string** role claims.
+Executed rather than read:
+
+```
+role absent    -> refused
+role 0 / 1     -> refused
+role 2         -> ADMITTED
+role 'buyer'   -> ADMITTED        Number('buyer') is NaN; every NaN comparison is false
+role 'seller'  -> ADMITTED
+role 'anything'-> ADMITTED
+```
+
+**2. `createFlashSale` never verifies the merchant.** `merchantId`, `productId` and
+`originalPrice` all arrive in the payload and are validated for **shape only** — positive
+numbers, `salePrice < originalPrice`, valid dates. There is no ownership resolution, no check
+that the product belongs to the merchant, and no corroboration of `originalPrice` against the
+real product price. `createdBy: uid` is recorded, so there is an audit trail — but no gate.
+
+It is reachable: not exported by name, but live through the exported `commerceDispatch`.
+
+### The bound — and it decides the urgency
+
+`mktFlashSales` is read by **exactly one** consumer: `bi-advanced.js` (sold counts). **No
+checkout path reads it** — the till, dispatch and payment orchestrator have zero references,
+and `posCompleteCheckout` prices from canonical `products/{id}`.
+
+So a forged flash sale **cannot currently change what anything sells for**. It pollutes BI
+reporting. That is a reporting-integrity defect, not a money defect.
+
+**It becomes a money defect the moment flash pricing is wired into checkout — which is exactly
+what §7 asks for** ("promotional price", "receipt price", "KRA/tax calculation", "inventory
+consequence"). So the gate and the ownership check must be repaired **before** Merchant V2 gets
+a Flash Sale button, not after. Wiring first would put a merchant-facing control on a forgeable
+authority and convert a contained reporting bug into a live pricing one.
+
+**Not fixed here:** `marketing-engine.js` is a money-adjacent server file and the repair is a
+gate change (numeric comparison → the canonical role authority) plus an ownership resolution.
+That is its own reviewable unit, not a side effect of a navigation workstream.
+
+---
+
+## 12. Channel availability (§10) — P-3 answered
+
+**The canonical model carries no per-product channel field.** Searched with a control (the
+detector finds `lowStockThreshold`): no `posEnabled`, `showInPos`, `posVisible`,
+`marketplaceVisible`, `showInMarketplace`, `sellChannels`, `availableOn` or `visibleIn` on a
+product anywhere in the writer, the editor or the till. The `posEnabled` hits elsewhere are on
+`sellers` documents (absent on every one of them), and `channels` in `analytics-engine.js` is a
+sales-reporting dimension, not product visibility.
+
+**The actual behaviour is the inverse of what §10 asks for.** `productProjections` hardcodes
+`status: 'active'` on the POS mirror, so **every canonically-created product becomes
+POS-visible unconditionally**. §10 asks that an internal POS item not be auto-published to the
+marketplace; what happens is that every marketplace product is auto-projected into POS.
+
+A merchant therefore cannot express "Product A: POS yes, Marketplace no". There is nothing to
+configure.
+
+**Adding a channel field is a canonical-model change and belongs in the catalogue handoff.**
+Inventing one here would be the second model this workstream exists to avoid — and it would
+have to agree with whatever the catalogue owner has already designed for services.
