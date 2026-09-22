@@ -451,6 +451,54 @@
       });
   }
 
+  /* CONTEXTUAL COMMUNICATION, SERVER-DECIDED.
+
+     This page is the Marketplace delivery surface, seller side: every query is
+     collection('packageRequests').where('sellerUid','==',_sellerUid), and d.id
+     IS the packageRequests document id — the same identifier this card already
+     hands to delivery-tracking.html?ref=. That is the canonical `delivery`
+     anchor. The Delivery Hub collection is not read here at all, so there is no
+     hub case to gate.
+
+     ACTIVE ONLY. The delivery anchor refuses a delivery with no assigned rider,
+     and Active is exactly the set that has one. Mounting Pending would fire one
+     callable per card for a guaranteed refusal. A pending delivery that gains a
+     rider moves into Active by the live listener and is mounted there. */
+  var _connectMounted = Object.create(null);
+  function _mountDeliveryConnect() {
+    if (!window.SokoniConnectCall || !window.sokoniCallable) return;
+    var slots = document.querySelectorAll('#activeList .sd-connect[data-connect-anchor]');
+    var seen = Object.create(null);
+    for (var i = 0; i < slots.length; i++) {
+      (function (slot) {
+        var anchorId = slot.getAttribute('data-connect-anchor');
+        if (!anchorId) return;
+        seen[anchorId] = true;
+        if (_connectMounted[anchorId]) return;   /* the snapshot re-fires often */
+        _connectMounted[anchorId] = true;
+        window.SokoniConnectCall.mountForAnchor(slot, {
+          anchorType: 'delivery',
+          anchorId: anchorId,
+          call: function (op, payload) {
+            var data = Object.assign({}, payload || {}, { op: op });
+            return window.sokoniCallable('connectDispatch')(data)
+              .then(function (envelope) { return (envelope && envelope.data) || {}; });
+          },
+          onSession: function (r) {
+            if (r && r.sessionId) location.href = '/connect.html?session=' + encodeURIComponent(r.sessionId);
+          },
+        });
+      })(slots[i]);
+    }
+    /* A delivery that left the Active set is no longer mountable, so its guard
+       is released. Without this a delivery that returned to Active would never
+       redraw its actions. The DOM node is gone with the re-render, so there is
+       no stale button to clear — only a stale guard. */
+    Object.keys(_connectMounted).forEach(function (id) {
+      if (!seen[id]) delete _connectMounted[id];
+    });
+  }
+
   function _renderActive() {
     var el = document.getElementById('activeList');
     if (!_activeDeliveries.length) {
@@ -459,7 +507,17 @@
     }
     el.innerHTML = _activeDeliveries.map(_buildCard).join('');
     _activeDeliveries.forEach(function (d) { if (d.riderId || d.driverId) _initMiniMap(d); });
+    _mountDeliveryConnect();
   }
+
+  /* An empty action row must take no space — a card with a blank strip under
+     it reads as a control that failed to load. */
+  (function () {
+    var st = document.createElement('style');
+    st.textContent = '.sd-connect:empty{display:none}' +
+      '.sd-connect{display:flex;gap:8px;flex-wrap:wrap;padding:0 14px 12px;}';
+    document.head.appendChild(st);
+  })();
 
   function _buildCard(d) {
     var status   = d.status || 'unknown';
@@ -486,6 +544,8 @@
         </div>
         ${riderHtml}
         <div id="map_${d.id}" class="sd-map" style="display:${d.assignedRiderId||d.riderId?'block':'none'}"></div>
+        <!-- Connect actions. The SERVER decides what goes in here; empty collapses. -->
+        <div class="sd-connect" data-connect-anchor="${_esc(d.id)}"></div>
         <div class="sd-card-actions">
           <a class="btn-track" href="delivery-tracking.html?ref=${_esc(d.id)}" target="_blank">Track Live</a>
           <button class="btn-report" onclick="_openReport('${_esc(d.id)}')">Report Issue</button>
@@ -686,6 +746,8 @@
 <!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
      through SokoniCart; without this tag the pip cannot render a count. -->
 <script src="sokoni-cart.js"></script>
+<!-- Connect: renders the contextual actions the SERVER authorizes. -->
+<script src="sokoni-connect-call.js"></script>
 <script src="shared-header.js" defer></script>
 <script src="sw-register.js" defer></script>
 </body>
