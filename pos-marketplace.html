@@ -1,6 +1,14 @@
 ﻿<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
+<!-- IN-SHELL BOUNDARY (flag first, rules deferred).
+     The inline flag above/below stamps .sk-in-shell before first paint with NO network
+     request, so this page never flashes its own header, bottom nav or consent modal inside
+     the merchant panel. sokoni-inshell.js then brings the CSS and the API; it is deferred
+     because a blocking external script here is what the perf guard refuses.
+     Standalone behaviour is unaffected — every rule is scoped under .sk-in-shell. -->
+<script>(function(){try{if(!window.parent||window.parent===window)return;var p=(window.parent.location.pathname||"");if(/\/merchant(-v\d+)?(\.html)?$/.test(p)||window.parent.SokoniShell){document.documentElement.className+=" sk-in-shell";document.documentElement.setAttribute("data-sk-shell","merchant");}}catch(e){}})();</script>
+<script src="sokoni-inshell.js" defer></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">

@@ -816,6 +816,16 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      owner and uncertified to a shopper. The record is admin-written; nothing in
      this shell writes it. -->
 <script src="sokoni-certification-model.js"></script>
+<!-- ONE commission table. GENERATED from functions/commission-config.js, and
+     scripts/verify-commission-single-source.js fails the deploy if the two disagree — so
+     what Settings shows a merchant is the same rate the server charges them, by
+     construction rather than by care. Settings READS SokoniCommission and never computes:
+     the authoritative figure for a real order still comes from the server
+     (previewCommission / calculateCommission), which also applies commissionRules
+     overrides and holidays this table knows nothing about. The platform previously had
+     NINE commission tables that disagreed; a tenth living in a merchant settings panel is
+     exactly how that came back. -->
+<script src="sokoni-commission-rates.js"></script>
 <script src="sokoni-authority.js"></script>
 <script src="sokoni-ai-subscriptions.js"></script>
 <script src="sokoni-creative.js"></script>
@@ -1362,7 +1372,18 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       var _posReady = null;
       try { _posReady = localStorage.getItem('posSetupComplete'); } catch (_) { _posReady = null; }
       if (!_posReady) { showOnly(framePanel('pos:setup', 'pos-hardware-wizard.html', m.name)); return; }
-      showOnly(framePanel('pos', 'pos.html' + (m.tab && m.tab !== 'pos' ? '#' + m.tab : ''), m.name)); return;
+      /* WHAT A POS ROUTE MOUNTS IS DECLARED, NOT HARDCODED. `entry` lets the contract point
+         the POS button at the till (pos-checkout.html) while /pos keeps its own route and
+         its own panel, unchanged — the shell holds no opinion about which is which.
+
+         The panel key is derived from the entry, so the two never share a cached iframe:
+         reusing one key would serve whichever surface mounted first for the rest of the
+         session, the same cache-collision the setup wizard above already had to avoid.
+
+         The setup gate is ABOVE this line and therefore unconditional — re-pointing the
+         entry cannot route a merchant past hardware setup. */
+      var _entry = m.entry || ('pos.html' + (m.tab && m.tab !== 'pos' ? '#' + m.tab : ''));
+      showOnly(framePanel('pos:' + _entry.split(/[?#]/)[0], _entry, m.name)); return;
     }
     if (m.kind === 'seller') { showOnly(framePanel('seller:' + (m.sec || ''), 'seller.html' + (m.sec ? '#' + m.sec : ''), m.name)); return; }
     if (m.kind === 'page')   { showOnly(framePanel('page:' + rid, m.src, m.name)); return; }
@@ -4254,19 +4275,131 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       'business could switch on itself would not mean anything to a customer.</div>';
   }
 
+  /* ── SETTINGS = A ROUTER OVER AUTHORITIES, NOT A STORE ────────────────────────
+     Every card below opens the surface that ALREADY owns that setting. This function
+     reads S and the contract; it writes nothing, holds no configuration object, and
+     defines no schema. That is the whole design: the brief's failure mode is an
+     ecosystem that becomes "another collection of duplicated settings and competing
+     databases", and a settings screen is where that starts.
+
+     The groups come from the contract's settings.links, so a card cannot point at a
+     destination the registry does not declare — an unknown id is refused by go() and
+     the gate proves every link resolves. */
+  var SET_GROUPS = [
+    { label:'Business',   note:'Who the business is. Identity is admin-approved — these surfaces show it, none of them grant it.',
+      cards:[
+        ['🏪','Business profile','Name, contact, address, socials, policies','profile'],
+        ['🏬','Shop details','Storefront, handle and MiniShop','route:shop'],
+        ['🟢','Availability','Opening hours and current order status','route:availability'],
+        ['✅','Verification','Documents and verified status','route:verification'],
+      ] },
+    { label:'Commerce',   note:'Catalogue, stock and procurement. Corrections and sales are different authorities and stay apart.',
+      cards:[
+        ['🏷️','Products','Catalogue, categories, variants, pricing, barcode','route:products'],
+        ['📤','Product upload','Bulk import with AI column mapping','route:pos-import'],
+        ['📦','Inventory','Stock on hand and corrections','route:inventory'],
+        ['🚚','Supply','Suppliers, purchase orders, GRNs, invoices','route:supply'],
+      ] },
+    { label:'POS & Hardware', note:'Device configuration is DEVICE-LOCAL by nature — which printer is on this counter is a fact about this device, not the business.',
+      cards:[
+        ['🖨️','POS setup','Receipt and printer configuration','route:pos-setup'],
+        ['🔌','Devices','Saved hardware and connections','route:devices'],
+        ['🧾','Print station','Paper width and station settings','route:print-station'],
+        ['🪄','Hardware wizard','Pair and certify a new device','route:pos-hardware'],
+      ] },
+    { label:'Money',      note:'Balances and payouts come from the server. Nothing here is computed in the browser.',
+      cards:[
+        ['💳','Payments','Payouts and accepted methods','route:payments'],
+        ['🏧','Till & QR','Your SOKONI Till and dynamic QR','route:till'],
+        ['💵','Till manager','Registers, drawers and sessions','route:pos-till-mgr'],
+        ['🏦','Cash manager','Float, drops, pickups, reconciliation','route:pos-cash'],
+        ['📄','Plan','Subscription and billing','route:plan'],
+      ] },
+    { label:'Delivery',   note:'Scoped to this seller. The platform dispatch console is a different, admin-only surface.',
+      cards:[
+        ['🛵','Delivery hub','Orders out for delivery','route:deliveries'],
+        ['🚚','Fulfilment','Methods, times and zones','route:fulfilment'],
+        ['🏍️','Riders','Your delivery roster','route:riders'],
+      ] },
+    { label:'Compliance', note:'Tax identity is keyed on the ACCOUNT (etimsProfiles/{uid}) — one KRA PIN and one invoice sequence, even for a two-shop merchant.',
+      cards:[
+        ['🧾','KRA / eTIMS','PIN, invoices and tax profile','route:kra-tax'],
+        ['🧾','Receipts','Receipt records and reprints','route:receipts'],
+      ] },
+    { label:'Staff',      note:'shopEmployees is the ONE workforce authority. Rosters are a second surface over it, never a second roster.',
+      cards:[
+        ['👥','Staff','Team, invites and removal','route:staff'],
+        ['🗓️','Shifts & rosters','Scheduling and shift operations','route:pos-staff-ops'],
+        ['🔐','Manager approval','Elevation requests','route:manager-auth'],
+      ] },
+  ];
+
+  /* COMMISSION — DISPLAY ONLY, from the generated single-source snapshot.
+     Renders nothing at all when SokoniCommission is absent, rather than falling back to a
+     literal: a wrong rate shown to a merchant is worse than no rate. Unknown is an honest
+     gap here, never a number. */
+  function commissionSection () {
+    var C = window.SokoniCommission;
+    if (!C || typeof C.posPct !== 'function') {
+      return '<div class="note" style="margin:0"><b>Commission unavailable.</b> The rate table ' +
+             'did not load, so no rate is shown. It is never guessed — the figure a merchant ' +
+             'reads has to be the one the server charges.</div>';
+    }
+    var till = C.posPct();
+    var min  = C.MIN_COMMISSION_KES;
+    return '<dl class="kv">' +
+      row('POS / till sales', till + '% of the sale') +
+      row('Minimum per transaction', 'KES ' + min) +
+      row('Marketplace orders', C.pct('marketplace') + '% (orders SOKONI brought you)') +
+      '</dl>' +
+      '<div class="note" style="margin:10px 0 0">A till sale is a <b>flat ' + till + '%</b> on every ' +
+      'plan — a subscription buys a better marketplace rate and changes nothing at the till. ' +
+      'The <b>KES ' + min + ' minimum</b> dominates small sales: on a KES ' + min * 4 + ' sale the ' +
+      'minimum applies, not ' + till + '%. ' +
+      'These are the platform rates. <b>SOKONI calculates the commission on every real order ' +
+      'server-side</b> — this screen only shows you the table, and cannot change it. Any rule or ' +
+      'holiday applied to your account is reflected in that server figure, not here.</div>';
+  }
+
+  /* THE ECOSYSTEM SECTION — a projection of the contract's ecosystem groups.
+     Rendered from CONTRACT.ecosystem(), so this shell holds no list of its own and the
+     section cannot drift from the sidebar. */
+  function ecosystemSection () {
+    var groups = (CONTRACT.ecosystem && CONTRACT.ecosystem()) || [];
+    if (!groups.length) return '';
+    return groups.map(function (g) {
+      return '<div class="sec-t" style="margin-top:18px">' + esc(g.label) + '</div>' +
+        '<div class="setgrid">' + g.routes.map(function (r) {
+          return setCard(r.icon || '•', r.name, ecoBlurb(r), 'route:' + r.id, true);
+        }).join('') + '</div>';
+    }).join('');
+  }
+  function ecoBlurb (r) {
+    /* The first sentence of the route's own note — one description, kept where the route
+       is declared, so a card cannot describe a destination differently from the registry. */
+    var n = String(r.note || '').split(/\.\s|\n/)[0];
+    return n ? n.slice(0, 96) : 'Open ' + r.name;
+  }
+
   function renderSettings (p) {
     var shop = S.shop || {};
     var signedIn = S.state === 'in';
     p.innerHTML =
-      '<div class="sec-t">Shop</div>' +
-      '<div class="setgrid">' +
-        setCard('🏪', 'Business profile', 'Name, contact, address, socials, policies', 'profile', signedIn) +
-        setCard('🟢', 'Availability', 'Opening hours and current order status', 'route:availability', true) +
-        setCard('🖨️', 'Devices', 'Printer and saved hardware', 'route:devices', true) +
-        setCard('💳', 'Payments', 'Your confirmed payment records', 'route:payments', true) +
-        setCard('🛵', 'Delivery', 'Methods, times and zones', 'profile', signedIn) +
-        setCard('📄', 'Plan', 'Subscription and billing', 'route:plan', true) +
-      '</div>' +
+      SET_GROUPS.map(function (g) {
+        return '<div class="sec-t">' + esc(g.label) + '</div>' +
+          (g.note ? '<div class="note" style="margin:0 0 10px">' + g.note + '</div>' : '') +
+          '<div class="setgrid">' + g.cards.map(function (c) {
+            var enabled = c[3] === 'profile' ? signedIn : true;
+            return setCard(c[0], c[1], c[2], c[3], enabled);
+          }).join('') + '</div>';
+      }).join('') +
+      '<div class="sec-t" style="margin-top:22px">Commission</div>' +
+      commissionSection() +
+      '<div class="sec-t" style="margin-top:22px">Merchant ecosystem</div>' +
+      '<div class="note" style="margin:0 0 10px">Every SOKONI module your business already ' +
+      'has, opened here inside this workspace — not copied into it. Each one keeps its own ' +
+      'data and its own rules; this is the way in.</div>' +
+      ecosystemSection() +
       '<div class="sec-t" style="margin-top:22px">Trust</div>' +
       certSection() +
       '<div class="sec-t" style="margin-top:22px">Account</div>' +

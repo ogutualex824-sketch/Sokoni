@@ -1,3 +1,168 @@
+## 2026-09-22 (149) — Merchant V2 becomes the control surface for the POS ecosystem
+
+**Hosting-only. NO Functions deploy, NO rules change, NO index change, NO production mutation.
+NOT DEPLOYED — see "Why this was not deployed".** Nineteen SmartPOS modules are now reachable
+from the merchant workspace; none of them was rewritten, moved or given a second data store.
+
+### The one finding that shaped everything
+
+`/pos-checkout` resolved its merchant like this:
+
+```js
+_s.merchantId = settings.merchantId || settings.businessName || 'merchant';
+```
+
+— from device IndexedDB, falling back to the *literal string* `'merchant'`. The other half of
+the same idiom, `window._posMerchantId`, is **read by three files and written by none**.
+
+The till's `merchantId` **is** the shopId, and `posCompleteCheckout` proves it server-side:
+`resolveActor(cashierId, merchantId)`, then a merchant-must-be-proven block
+(`businesses` doc → `_resolveMerchantIdForOwner` → `_assertBusinessPermission(…,'sales')`).
+So this was **not** money misattribution — the server refuses a claim it cannot prove. It was
+worse in a quieter way: on any device whose IndexedDB did not already happen to hold the
+canonical shopId, **the sale was refused**, with no stated cause.
+
+That is why "POS button → /pos-checkout" and "do not create a second merchant context" were
+never in tension. Making the till read the shell's already-resolved shopId is what makes the
+first one *work*. It removes an identity; it adds none.
+
+### POS → the till, in-shell, with /pos untouched
+
+The `pos` route gained `entry: 'pos-checkout.html?shell=merchant'`. The shell mounts what the
+contract declares instead of a hardcoded `pos.html`.
+
+- **`/pos` is preserved** as its own route (`smartpos`), mounting `pos.html` unchanged, in its
+  own cached frame. Both were asserted live: two separate frames, never one.
+- **In-shell, not an exit.** `kind:'exit'` to `/pos-checkout` was considered and refused: an
+  exit destroys the shell, and the shell is where the printer GATT connection and the resolved
+  identity live. "Identity survives the transition" is a property of *staying in the shell*.
+- **The hardware-setup gate is unchanged** and still fires first — asserted by clearing
+  `posSetupComplete` and confirming the wizard, not by reading the code.
+
+### Nineteen modules wired; nine classified out, each with its reason
+
+Admission is evidence-based. Every candidate was traced to the authority behind it, and the
+verdict lives in the contract (`EXCLUDED`) where `validate()` enforces it in both directions —
+an exclusion that names a live route is a violation, so it cannot be overruled without its
+reason being answered.
+
+Kept out, and why:
+
+| Route | Class | Because |
+|---|---|---|
+| `/pos-suppliers` | device-local | IndexedDB `sokoni_pos_suppliers_v2`, **0 callables**. `supply` owns this on twelve server ops. |
+| `/pos-customers` | device-local | IndexedDB `sokoni_pos_customers_v2`, **0 callables**. `customers` owns it on `crmCustomerProfiles`. |
+| `/pos-reports` | device-local | Its own header: *"Works fully offline from IndexedDB — no Firestore reads required"*. It would show a merchant a **revenue figure from one device's cache**. |
+| `/pos-v2`, `/checkout-2-preview` | preview | A second front end over a money path that already has one. |
+| `/pos-onboard` | diagnostic | `/pos` deliberately stopped routing anyone into business registration. A sidebar row offering it to an approved merchant reintroduces exactly that. |
+| `/pos-certification`, `/pos-completeness`, `/pos-launch-report`, `/pos-observability` | diagnostic | Facts about the platform, not about this merchant's business. |
+| `/admin-os` | diagnostic | The platform operator console — a merchant row pointing at it is a privilege defect. **The canonical file is `admin-os.html`; `admin.html` is superseded and must never be wired from a merchant surface.** |
+| `/catalogue`, `/business-apply` | untracked | Another workstream's uncommitted files. A row would resolve locally and **404 in a clean checkout**. One line each once they land. |
+
+### Void: traced, live, and deliberately NOT surfaced
+
+`voidPOSSale` is hardened and reachable (manager/supervisor/owner claim **and** proven tenancy,
+one transaction for status + stock restore). It is not wired, for a reason that is not a wiring
+gap: it voids from **`posSales`**, while Merchant V2 Orders reads **`posRetailSales`**, and
+`docs/POS_SALES_LIFECYCLE_AUDIT.md` §2 measures those as **disjoint** — *"a sale is visible to
+one or the other by entry path, never both."* A Void button here would list sales Orders cannot
+show and refuse every sale it can. That audit's §5 names the authority decision — *which record
+IS the completed sale* — as the thing that gates any fix, and it has not been taken.
+
+Refunds are untouched and stay on their own path: a cashier **requests**, the owner **approves**;
+`refundRequests` is never wired to a UI because writing it **is** the refund.
+
+### Settings: a router over authorities, owning none
+
+Seven domain groups (Business / Commerce / POS & Hardware / Money / Delivery / Compliance /
+Staff), twenty-four cards, every one of them routing to the surface that already owns that
+setting. Settings holds no configuration object and writes nothing.
+
+**Commission is display-only**, read from the generated `sokoni-commission-rates.js` snapshot
+whose single source is `functions/commission-config.js` and whose agreement with it is enforced
+on every deploy by `verify-commission-single-source.js`. Till = flat 5% on every plan; minimum
+KES 10. Both figures are *derived* in the gate, never written as literals — a literal in a test
+is a second place the number lives, and it passes while the real table moves.
+
+### The in-shell boundary, and a defect it uncovered on seven shipped pages
+
+Twenty newly-routed pages needed `sokoni-inshell.js` or they would stack a second header and a
+second bottom nav inside the panel. Adding it exposed a live defect on pages already shipped:
+the inline detector matched the parent path against `"merchant"` / `"merchant.html"` only.
+After the cutover the parent is **merchant-v2**, which matches neither — so the class landed
+only via the `window.parent.SokoniShell` fallback, i.e. only if the shell had already executed
+the line defining it. A race. `seller.html`, `returns.html`, `plans.html`, `minishop-admin.html`,
+`seller-fulfilment.html`, `verification.html` and `dispatch.html` all carried it; all now match
+by path.
+
+`scripts/test-inshell-chrome.js` asserted this by looking for the literal `"merchant-v2"` inside
+the detector. That was a proxy, and it stopped fitting a detector that expresses the same rule
+as a pattern. **The check is now the rule:** the detector's own condition is extracted and
+**executed**, against the shell name derived from the routes contract and against a path that
+must *not* match, with `SokoniShell` forced absent. Strictly stronger — a detector that matched
+everything would have passed the substring test and fails this one. Both original controls kept.
+
+### Two gates were measuring the wrong document
+
+`test-merchant-route-gate.js` and `test-merchant-visual-gate.js` both `goto('/merchant.html')` —
+the superseded v1 shell. Production serves `/merchant-v2`. They pass 168/0 and say **nothing**
+about the shell a merchant opens, so their green result is not offered as evidence here.
+`scripts/test-merchant-v2-ecosystem-runtime.js` drives merchant-v2 itself. The v1 gates are left
+alone: re-pointing them is a larger claim than this change earns.
+
+### Files
+
+| File | Change |
+|---|---|
+| `sokoni-merchant-routes.js` | 19 ecosystem routes, `entry` on `pos`, 5 ecosystem groups, `EXCLUDED` + its validation, Settings links 6 → 24 |
+| `merchant-v2.html` | mounts the declared `entry`; Settings rebuilt as domain groups + commission + ecosystem; loads the commission snapshot |
+| `pos-checkout.html` | in-shell boundary; canonical merchant scope, re-read at sale time; no self-navigation in-shell |
+| `sokoni-inshell.js` | `merchantScope()` — the shell's resolved identity, or `null`, never an invented id |
+| 20 module pages | in-shell boundary added |
+| 7 shipped pages | stale detector repaired |
+| `scripts/test-inshell-chrome.js` | proxy replaced by the executing rule |
+| `scripts/test-merchant-ecosystem.js` | **new** — 114 assertions with inverting controls |
+| `scripts/test-merchant-v2-ecosystem-runtime.js` | **new** — 115 runtime assertions against merchant-v2 |
+| `docs/MERCHANT_V2_ECOSYSTEM_MAP.md` | **new** — the read-only map |
+| `navigation-registry.json` | regenerated (generated artefact) |
+
+**Database changes:** none. **API changes:** none — no callable added, changed or re-exported.
+**Security:** one boundary tightened (the till no longer navigates itself out of the shell on a
+transient null user); no permission widened; no new authority. **Breaking changes:** none.
+
+### Gate evidence
+
+| Gate | Result |
+|---|---|
+| `test-merchant-ecosystem` (new) | **114 / 0** |
+| `test-merchant-v2-ecosystem-runtime` (new) | **115 / 0**, 2 stated UNPROVEN |
+| `test-inshell-chrome` | **29 / 0** — was 23 / 4 before |
+| `test-merchant-routes` | 77 / 2 — the 2 are **pre-existing** (`offers` added to the registry, the test's `FOUNDER_SIDEBAR` literal never updated); baseline was 58 / 2 |
+| `test-merchant-actions` | 31 / 0 |
+| `test-pos-entry-setup-first` | 14 / 0 |
+| `test-merchant-route-gate` | 168 / 0 — **against v1; not evidence for this change** |
+| `verify-commission-single-source` | pass |
+| `scan-xss-sinks`, `audit-duplicate-ids`, `verify-consent-gate`, `verify-claim-based-auth`, `verify-admin-markup`, `audit-admin-localstorage`, `verify-appcheck`, `pre-deploy-check` | pass |
+| `test-pos-tab-transitions` | 3 / 1 — **pre-existing and identical at baseline** (App Check cannot attest 127.0.0.1; mobile only) |
+| `verify-receipt-naming` | FAIL 109 → 111 — **pre-existing**; no uncommitted change adds `receiptNo`/`invoiceNo` (measured across every modified and untracked file). The baseline was **not** updated: that would launder someone else's regression. |
+| `verify-index-governance`, `reconcile-indexes --verify` | FAIL — **pre-existing**; no index file is touched by this change |
+
+**UNPROVEN, stated rather than skipped:** that the resolved `activeShopId` reaches
+`posCompleteCheckout` end-to-end. App Check cannot attest 127.0.0.1, so no session resolves in
+the harness. The repair is asserted statically and the fallback is asserted live; the
+end-to-end leg needs an authenticated device or emulator run.
+
+### Why this was not deployed
+
+`firebase deploy --only hosting` ships the **working directory**, not the commit. This tree
+carries another workstream's uncommitted work — modified `checkout.html`, `pos.html`,
+`pos-setup.html`, `service-worker.js`, `version.json`, `functions/payment-orchestrator.js`,
+`functions/.env`, and untracked `catalogue.html`, `business-apply.html`, `sokoni-pos-tender.js`,
+`sokoni-provider-application.js` and twelve more. Deploying from here would publish all of it to
+`mysokoni.co.ke` under cover of this change.
+
+Nothing in this commit is deploy-blocked on its own. The tree is.
+
 ## 2026-09-22 (148) — Cross-device push was never Functions-blocked
 
 **Continuation of 37204e7. Hosting-safe. NO Functions deploy, NO rules change, NO production

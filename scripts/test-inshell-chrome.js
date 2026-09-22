@@ -109,32 +109,75 @@ const SHELL = (function () {
 })();
 ck('the shell name is derived, not hard-coded here', !!SHELL, SHELL);
 
-const blind = [];
+/* THE CHECK IS NOW THE RULE, NOT A PROXY FOR IT.
+   What this asserted was that the literal string "merchant-v2" appears in the detector
+   window. That was a proxy for "the detector recognises the current shell by path", and it
+   stopped fitting the moment a detector expressed the same rule as a PATTERN —
+   /\/merchant(-v\d+)?(\.html)?$/ recognises merchant-v2 correctly, and a v3 shell too, while
+   containing no such literal. A page would have failed for being MORE general than the
+   assertion imagined, which is a gate measuring its own expectations.
+
+   So the detector's own path condition is EXTRACTED AND EXECUTED, against the shell name
+   derived from the routes contract and against a path that must NOT match. That is strictly
+   stronger than the substring test: a literal comparison still passes it (it matches
+   '/merchant-v2'), the shipped defect still fails it (matches neither), and a detector that
+   matched everything — which the substring test would have waved through — now fails on the
+   negative case. Both CONTROLS below are kept and still hold. */
+const PATH_OK  = '/' + SHELL;
+const PATH_BAD = '/not-the-merchant-shell';
+function detectorAccepts (det, p) {
+  /* The condition is everything between the pathname assignment and the class write. It is
+     evaluated with `window.parent.SokoniShell` FORCED ABSENT, so a detector that only ever
+     works through the global fallback cannot pass by leaning on it — that fallback winning
+     a race is the exact defect this section exists for. */
+  const m = det.match(/pathname\s*\|\|\s*""\s*\)?\s*;?\s*(.*?)\{\s*document\.documentElement/);
+  if (!m) return null;                        /* unrecognised shape — reported, not passed */
+  const cond = m[1].replace(/^\s*(var[\s\S]*?;)?\s*if\s*\(/, '').replace(/\)\s*$/, '');
+  try {
+    /* eslint-disable-next-line no-new-func */
+    return !!(new Function('p', 'window', 'var last=(p.lastIndexOf("/")<0?p:p.slice(p.lastIndexOf("/")+1)).toLowerCase();return (' + cond + ');'))(p, { parent: {} });
+  } catch (_) { return null; }
+}
+const blind = [], unreadable = [];
 Object.keys(seen).forEach((f) => {
   let src; try { src = read(f); } catch (_) { return; }
   const i = src.indexOf('window.parent===window');
   if (i === -1) return;                       /* already reported above */
   const det = src.slice(i, i + 900);
-  if (det.indexOf('"' + SHELL + '"') === -1) blind.push(f);
+  const ok  = detectorAccepts(det, PATH_OK);
+  const bad = detectorAccepts(det, PATH_BAD);
+  if (ok === null || bad === null) { unreadable.push(f); return; }
+  if (ok !== true || bad !== false) blind.push(f);
 });
+/* UNREADABLE IS NOT PASSING. A detector this cannot parse is an unknown, and an unknown
+   reported as a pass is how the original defect survived. */
+ck('every detector was readable', unreadable.length === 0,
+   unreadable.join(', ') || Object.keys(seen).length + ' parsed');
 ck('every embedded page recognises "' + SHELL + '" by PATH', blind.length === 0,
    blind.join(', ') || Object.keys(seen).length + ' pages');
 ck('...so the boundary does not depend on the SokoniShell global winning a race',
    blind.length === 0,
    'the global stays as a fallback; it must not be the only way the class lands');
 
+/* CONTROLS. The executing check must REJECT the shipped defect and must REJECT a detector
+   that accepts everything — the second is the failure mode a substring test could not see. */
+const PRE_FIX = 'window.parent===window)return;var p=window.parent.location.pathname||"";' +
+  'var i=p.lastIndexOf("/");var last=(i<0?p:p.slice(i+1)).toLowerCase();' +
+  'if(last==="merchant"||last==="merchant.html"||window.parent.SokoniShell){document.documentElement';
 ck('CONTROL the check would have caught the shipped defect',
-   (function () {
-     const pre = 'if(last==="merchant"||last==="merchant.html"||window.parent.SokoniShell){';
-     return pre.indexOf('"' + SHELL + '"') === -1;
-   })(),
-   'the pre-fix condition must fail this assertion, or it proves nothing');
-ck('CONTROL it is not satisfied by the word appearing anywhere in the file',
-   (function () {
-     const fake = 'window.parent===window' + ' ... nothing here ...';
-     return fake.indexOf('"' + SHELL + '"') === -1;
-   })(),
-   'the assertion reads the detector window, not the whole document');
+   detectorAccepts(PRE_FIX, PATH_OK) === false,
+   'the pre-fix condition matches neither "merchant" nor "merchant.html" at /' + SHELL);
+const TOO_WIDE = 'window.parent===window)return;var p=window.parent.location.pathname||"";' +
+  'if(true){document.documentElement';
+ck('CONTROL a detector that accepts EVERYTHING is rejected',
+   detectorAccepts(TOO_WIDE, PATH_BAD) === true,
+   'accepting ' + PATH_BAD + ' must fail the negative case');
+ck('CONTROL a correct detector passes both cases',
+   detectorAccepts('window.parent===window)return;var p=window.parent.location.pathname||"";' +
+     'if(/\\/merchant(-v\\d+)?(\\.html)?$/.test(p)){document.documentElement', PATH_OK) === true &&
+   detectorAccepts('window.parent===window)return;var p=window.parent.location.pathname||"";' +
+     'if(/\\/merchant(-v\\d+)?(\\.html)?$/.test(p)){document.documentElement', PATH_BAD) === false,
+   'the harness itself is not simply refusing everything');
 
 /* ── 3. the pages that DO paint a bar are the ones that need it ─────────────── */
 head('3 · the pages needing it are the ones that inject a bar');

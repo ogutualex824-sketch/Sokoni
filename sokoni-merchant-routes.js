@@ -87,10 +87,23 @@
            'rendered from a server result. POS is preserved unchanged as its own destination.' },
 
     { id:'pos', name:'POS', icon:'🧮', tier:'primary',
-      kind:'pos', tab:'pos',
+      kind:'pos', tab:'pos', entry:'pos-checkout.html?shell=merchant',
       role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID, CTX.BRANCH_ID],
       mobile:true, desktop:true, activeKey:'pos',
-      note:'ONE in-shop surface. Cashier and Inventory used to be separate top-level routes that ' +
+      note:'THE POS ENTRY POINT. `entry` moves what this route MOUNTS to pos-checkout.html — the ' +
+           'till — while `tab` keeps naming the pos.html tab this route is the equivalent of, so ' +
+           'the existing gate still cross-checks it against the real tab set. /pos is NOT ' +
+           'replaced: it keeps its own route (`smartpos`) and its own panel, unchanged.\n' +
+           'WHY THE TILL AND NOT THE APP: pos-checkout.html is the surface that calls ' +
+           'posCompleteCheckout — the ONE till authority — and it is what a merchant pressing ' +
+           '"POS" is asking for. pos.html is the wider in-shop application around it.\n' +
+           'IN-SHELL, NOT AN EXIT. Expressing this as kind:\'exit\' to /pos-checkout was ' +
+           'considered and refused: an exit destroys the shell, and the shell is where the ' +
+           'printer GATT connection and the resolved merchant identity live (see the `devices` ' +
+           'route). "Identity survives the transition" is a property of staying in the shell.\n' +
+           'THE SETUP GATE IS UNCHANGED — the shell still shows pos-hardware-wizard.html first ' +
+           'when posSetupComplete is unset, whatever `entry` names.\n' +
+           'ONE in-shop surface. Cashier and Inventory used to be separate top-level routes that ' +
            'both opened this same application at different tabs — two sidebar rows, one app, and ' +
            'a shell that had to deep-switch into it. POS now owns the whole in-shop operation ' +
            '(Checkout, Inventory, Audit Log) through the POS app\'s own tabs. It opens on ' +
@@ -227,9 +240,21 @@
       kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'settings',
-      links:['shop','pos-setup','devices','staff','kra-tax','plan'],
-      note:'Native hub — one front door that routes to Shop / POS & Devices / Staff / Tax / Plan. ' +
-           'Replaces the old target (POS settings tab), which was device config masquerading as merchant settings.' },
+      links:['shop','availability','pos-setup','devices','print-station','pos-hardware',
+             'products','pos-import','inventory','supply','payments','till','pos-till-mgr',
+             'pos-cash','deliveries','fulfilment','riders','kra-tax','receipts','staff',
+             'manager-auth','pos-staff-ops','verification','plan'],
+      note:'Native hub — the merchant\'s central configuration surface, grouped by DOMAIN ' +
+           '(Business / Commerce / POS & Hardware / Delivery / Payments & Commission / ' +
+           'Compliance / Staff). Every card ROUTES to the surface that already owns that ' +
+           'setting; Settings itself owns no store and writes nothing.\n' +
+           'COMMISSION is presented here and is DISPLAY-ONLY, read from the generated ' +
+           'sokoni-commission-rates.js snapshot (SokoniCommission) whose single source is ' +
+           'functions/commission-config.js and whose agreement with it is enforced by ' +
+           'scripts/verify-commission-single-source.js on every deploy. Settings must never ' +
+           'compute a rate: the platform already had NINE commission tables that disagreed.\n' +
+           'Replaces the old target (POS settings tab), which was device config masquerading ' +
+           'as merchant settings.' },
 
     /* ── MORE: preserved destinations, one tap deeper. Nothing here is lost. ── */
     /* The way back to the marketplace. Before this, /merchant contained ZERO links to any
@@ -379,7 +404,283 @@
       role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID],
       mobile:true, desktop:true, activeKey:'pos-setup' },
 
+    /* ══ THE POS ECOSYSTEM ═══════════════════════════════════════════════════════
+       Merchant V2 is the CONTROL SURFACE for the SmartPOS estate, not its owner. Every
+       row below opens a module that already exists and already owns its own data; none
+       of them re-implements anything, and none of them introduces a schema.
 
+       ADMISSION IS EVIDENCE-BASED, not "the file exists". Each candidate was traced to
+       the authority behind it (docs/MERCHANT_V2_ECOSYSTEM_MAP.md §3). A page whose data
+       comes from a per-device IndexedDB store is NOT admitted, because putting it beside
+       the canonical route for the same concept gives the merchant two answers that
+       disagree and no way to tell which is real. The excluded set is declared in
+       EXCLUDED below WITH ITS REASON — recorded, not silently dropped, and asserted by
+       scripts/test-merchant-ecosystem.js so an exclusion cannot rot into an oversight.
+
+       Every one is kind:'page' — an in-shell panel. Identity therefore survives the
+       transition by construction: the shell stays mounted, and sokoni-inshell.js gives
+       the module the shell's resolved merchant scope. Nothing here is an exit. */
+
+    /* ── POS & Checkout ─────────────────────────────────────────────────────── */
+    { id:'smartpos', name:'SmartPOS (full app)', icon:'🖥️', tier:'more',
+      kind:'pos', tab:'pos',
+      role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID, CTX.BRANCH_ID],
+      mobile:true, desktop:true, activeKey:'smartpos',
+      note:'/pos IS PRESERVED. The `pos` route now enters at the till (pos-checkout.html); ' +
+           'this row keeps the unified SmartPOS application — its whole tab set, scanner, ' +
+           'inventory, audit log — reachable as its own destination, unchanged. It declares ' +
+           'no `entry`, so the shell mounts pos.html exactly as it always did. Removing /pos ' +
+           'because the POS button moved was explicitly refused.' },
+
+    { id:'pos-import', name:'Product Upload', icon:'📤', tier:'more',
+      kind:'page', src:'pos-inventory.html?shell=merchant',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'pos-import',
+      note:'The BULK UPLOADER — inventoryImportPreview / inventoryImportAiMap / ' +
+           'inventoryImportCommit. Not a third inventory surface: `inventory` is stock ' +
+           'CORRECTIONS (merchantAdjustStock) and `products` is the catalogue; this is the ' +
+           'import pipeline that feeds them, and the brief requires it stay reachable.' },
+
+    { id:'pos-stock-iq', name:'Stock Intelligence', icon:'🧠', tier:'more',
+      kind:'page', src:'pos-inventory-intelligence.html?shell=merchant',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'pos-stock-iq',
+      note:'getPOSInventoryIntelligence. Read-only analysis over stock the canonical ' +
+           'surfaces own; it writes nothing.' },
+
+    { id:'pos-shop', name:'Click & Collect', icon:'🛍️', tier:'more',
+      kind:'page', src:'pos-marketplace.html?shell=merchant',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'pos-shop',
+      note:'Marketplace <-> POS bridge, on sellers/{sellerId}/clickAndCollect and the ' +
+           'pos-marketplace-sync CFs.' },
+
+    /* ── Money, till and cash ────────────────────────────────────────────────── */
+    { id:'pos-till-mgr', name:'Till Manager', icon:'💵', tier:'more',
+      kind:'page', src:'pos-till-manager.html?shell=merchant',
+      role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID, CTX.BRANCH_ID],
+      mobile:true, desktop:true, activeKey:'pos-till-mgr',
+      note:'Register/drawer sessions through smartPosDispatch (posMultiTill). DISTINCT from ' +
+           'the `till` route, which is the SOKONI Till & QR programme (a payment ' +
+           'destination). Same word, two different things — kept apart deliberately.' },
+
+    { id:'pos-cash', name:'Cash Manager', icon:'🏦', tier:'more',
+      kind:'page', src:'pos-cash-manager.html?shell=merchant',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'pos-cash',
+      note:'Float, drops, pickups and shift reconciliation on cmRecordCashEvent via ' +
+           'smartPosDispatch. The shift id it reconciles against is the one the till sends.' },
+
+    { id:'pos-books', name:'Accounting', icon:'📒', tier:'more',
+      kind:'page', src:'pos-accounting.html?shell=merchant',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'pos-books',
+      note:'smartPosDispatch -> pos-accounting handlers. Presentation over the ledger; it ' +
+           'is not a second money authority and computes no commission.' },
+
+    /* ── Floor operations ───────────────────────────────────────────────────── */
+    { id:'pos-floor', name:'Live Floor', icon:'📡', tier:'more',
+      kind:'page', src:'pos-live-floor.html?shell=merchant',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'pos-floor',
+      note:'Live posTillState / posTillEvents. Read-only board.' },
+
+    { id:'pos-kds', name:'Kitchen Display', icon:'🍳', tier:'more',
+      kind:'page', src:'pos-kds.html?shell=merchant',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'pos-kds',
+      note:'kdsOrders. kitchen-display.html is the SECOND SCREEN for this — a customer/' +
+           'kitchen-facing display meant for its own device, so it is deliberately NOT a ' +
+           'sidebar row: embedding a wall screen in the merchant panel is not what it is for.' },
+
+    { id:'pos-display', name:'Customer Display', icon:'📺', tier:'more',
+      kind:'page', src:'pos-display.html?shell=merchant',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'pos-display',
+      note:'posCustomerDisplays — pairs the second screen a customer reads at the counter.' },
+
+    { id:'pos-daily', name:'Daily Run', icon:'📆', tier:'more',
+      kind:'page', src:'pos-daily.html?shell=merchant',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'pos-daily',
+      note:'Open/close-of-day over posAnalytics + canonical products.' },
+
+    /* ── Hardware ───────────────────────────────────────────────────────────── */
+    { id:'print-station', name:'Print Station', icon:'🧾', tier:'more',
+      kind:'page', src:'print-station.html?shell=merchant',
+      role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'print-station',
+      note:'Paper width and station config. DEVICE-LOCAL BY NATURE and therefore not a ' +
+           'duplicate authority: which printer is plugged into THIS counter is a fact about ' +
+           'this device, not about the business. That is the one case where localStorage is ' +
+           'the right store, and it is why this page is admitted while pos-suppliers is not.' },
+
+    { id:'pos-hardware', name:'Hardware Wizard', icon:'🔌', tier:'more',
+      kind:'page', src:'pos-hardware-wizard.html?shell=merchant',
+      role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'pos-hardware',
+      note:'The same wizard the POS setup gate shows on a first run. Registered so it is ' +
+           'reachable ON PURPOSE afterwards, rather than only by being ambushed by it.' },
+
+    { id:'manager-auth', name:'Manager Approval', icon:'🔐', tier:'more',
+      kind:'page', src:'manager-auth.html?shell=merchant',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'manager-auth',
+      note:'managerAuthRequests — the elevation a cashier raises and an owner answers. ' +
+           'Requested here, granted by the server; this surface mints no permission.' },
+
+    /* ── Intelligence ───────────────────────────────────────────────────────── */
+    { id:'pos-bi', name:'Business Intelligence', icon:'📊', tier:'more',
+      kind:'page', src:'pos-bi.html?shell=merchant',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'pos-bi',
+      note:'Ten named CFs (getExecutiveDashboard, getRevenueDrilldown, getRevenueTrend, ...), ' +
+           'all exported. KNOWN AND CARRIED, not introduced here: getCustomerGrowthMetrics is ' +
+           'gated on a `sellerId` claim nothing mints, so that one tile is expected to come ' +
+           'back empty. Registering the route does not change that; it is recorded so the ' +
+           'next reader does not chase it as a new regression.' },
+
+    { id:'pos-ai', name:'POS Assistant', icon:'🤖', tier:'more',
+      kind:'page', src:'pos-ai.html?shell=merchant',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'pos-ai',
+      note:'askPOSAssistant / getAIQueryHistory / clearAIQueryHistory, all exported.' },
+
+    { id:'pos-hq', name:'Multi-branch HQ', icon:'🏢', tier:'more',
+      kind:'page', src:'pos-hq.html?shell=merchant',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'pos-hq',
+      note:'smartPosDispatch -> pos-hq handlers. Branch roll-up for a merchant running more ' +
+           'than one shop.' },
+
+    { id:'pos-crm', name:'Loyalty & Gift Cards', icon:'🎟️', tier:'more',
+      kind:'page', src:'pos-crm-pro.html?shell=merchant',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'pos-crm',
+      note:'Wallet, gift cards, store credit and tiers via smartPosDispatch (pos-crm-pro). ' +
+           'ctx is SELLER_UID alone and deliberately so: _resolveSellerId falls back to ' +
+           'auth.uid, so these records are ACCOUNT-scoped, not shop-scoped. NOT a duplicate ' +
+           'of `customers` — that route owns crmCustomerProfiles (who the customer is); this ' +
+           'owns the POS value instruments held against them.' },
+
+    { id:'pos-staff-ops', name:'Shifts & Rosters', icon:'🗓️', tier:'more',
+      kind:'page', src:'pos-staff-ops.html?shell=merchant',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'pos-staff-ops',
+      note:'smartPosDispatch -> pos-staff-ops, which carries the CONVERGED tenant resolver ' +
+           '(ownerUid -> canonical merchantId, membership verified through the capability ' +
+           'engine). Rostering and shifts only — `staff` remains the sole authority over who ' +
+           'is employed, on the shopEmployees contract. Two surfaces, one workforce authority.' },
+
+  ];
+
+  /* ══ CLASSIFIED OUT — declared, with the reason ═══════════════════════════════
+     The brief asks for these to be CLASSIFIED before placement rather than exposed
+     because they exist. Recording the verdict here is what makes it reviewable: a
+     future reader can disagree with a reason, but cannot mistake an exclusion for an
+     oversight. scripts/test-merchant-ecosystem.js asserts none of these is a route.
+
+     class:
+       device-local  its data lives in this browser's IndexedDB/localStorage, and a
+                     CANONICAL route already owns the same concept. Exposing both gives
+                     the merchant two answers that disagree.
+       diagnostic    a bring-up, certification or telemetry surface. Real and useful;
+                     not a thing a merchant operates their business through.
+       preview       a second front end over a path that already has one.
+       blocked       a genuine capability whose authority question is open. See `reason`.
+       untracked     the file is not committed in this worktree, so a route to it would
+                     resolve here and 404 in a clean checkout. Admit when it lands. */
+  var EXCLUDED = [
+    { route:'/pos-suppliers', class:'device-local', canonical:'supply',
+      reason:'pos-suppliers.js stores suppliers, POs, GRNs and invoices in IndexedDB ' +
+             '(sokoni_pos_suppliers_v2) and calls ZERO server authorities. `supply` already ' +
+             'owns this concept on twelve server ops (listSuppliers, listPurchaseOrders, ' +
+             'listGRNs, listSupplierInvoices, listWarehouseStock, findSuppliers, ...). Two ' +
+             'supplier ledgers, one of them per-device, is the competing-database outcome.' },
+    { route:'/pos-customers', class:'device-local', canonical:'customers',
+      reason:'pos-customers.js stores customers and the loyalty ledger in IndexedDB ' +
+             '(sokoni_pos_customers_v2), zero callables. `customers` owns this on ' +
+             'crmCustomerProfiles, which firestore.rules scope to merchantId == auth.uid.' },
+    { route:'/pos-reports', class:'device-local', canonical:'reports',
+      reason:'pos-reports.js says so in its own header: "Works fully offline from IndexedDB ' +
+             '— no Firestore reads required". It would show a merchant a REVENUE figure ' +
+             'computed from one device\'s cache. `reports` runs AnalyticsEngine.compute(), ' +
+             'the same engine as Analytics and Revenue, so the three cannot disagree.' },
+    { route:'/pos-workspace', class:'device-local', canonical:'dashboard',
+      reason:'_posSession / _posPrinters in localStorage only. A second "workspace" ' +
+             'competing with the merchant workspace itself.' },
+    { route:'/pos-onboard', class:'diagnostic', canonical:null,
+      reason:'Business onboarding. pos.html deliberately STOPPED routing anyone into ' +
+             'registration — an approved merchant on a new device was being pushed back ' +
+             'through shop creation. A sidebar row offering it to an already-approved ' +
+             'merchant reintroduces exactly that.' },
+    { route:'/pos-v2', class:'preview', canonical:'pos',
+      reason:'A second till front end that hands its cart to /pos-checkout ' +
+             '(pos-v2.html:737) — the same money path, entered twice.' },
+    { route:'/checkout-2-preview', class:'preview', canonical:null,
+      reason:'A preview of the buyer checkout, and the buyer checkout is not a merchant ' +
+             'surface at all — putting it in the merchant sidebar would hand a merchant the ' +
+             'customer\'s screen. Its canonical counterpart (/checkout) is deliberately not a ' +
+             'merchant route either.' },
+    { route:'/pos-printer-hardware-test', class:'diagnostic', canonical:'pos-hardware',
+      reason:'A printer bring-up harness: it drives the hardware directly to prove a device ' +
+             'works, outside the receipt contract. Useful to an engineer at a counter, not a ' +
+             'thing a merchant runs their shop through; pos-hardware is the merchant path.' },
+    { route:'/pos-ios-print-test', class:'diagnostic', canonical:'pos-hardware',
+      reason:'iOS print harness, and it opens /pos-checkout.html with target=_blank — a new ' +
+             'tab is forbidden inside the shell.' },
+    { route:'/pos-certification', class:'diagnostic', canonical:null,
+      reason:'Certification evidence, not an operating surface.' },
+    { route:'/pos-completeness', class:'diagnostic', canonical:null,
+      reason:'The completion matrix — it reports how much of SmartPOS is built. That is a ' +
+             'fact about the PLATFORM\'s progress, not about this merchant\'s business, and a ' +
+             'merchant reading it would learn nothing they can act on.' },
+    { route:'/pos-launch-report', class:'diagnostic', canonical:null,
+      reason:'A release artefact recording what shipped in a launch. Platform history, not ' +
+             'an operating surface; it changes only when SOKONI deploys, never when the ' +
+             'merchant trades.' },
+    { route:'/pos-observability', class:'diagnostic', canonical:null,
+      reason:'Operational telemetry for whoever runs the platform — error rates, latencies, ' +
+             'sync health. Its audience is SOKONI engineering; surfacing it to a merchant ' +
+             'presents platform incidents as if they were their own shop\'s numbers.' },
+    { route:'/kitchen-display', class:'diagnostic', canonical:'pos-kds',
+      reason:'The SECOND SCREEN for the KDS, meant for its own device. `pos-kds` is the ' +
+             'operator surface; a wall display does not belong in a merchant panel.' },
+    /* ADMINOS. The brief asks that AdminOS "remain reachable where appropriate", and the
+       appropriate place is not here. AdminOS is the PLATFORM operator's console; a merchant
+       sidebar row pointing at it would be a privilege defect of exactly the kind this
+       contract already refuses for revenue.html / revenue-dashboard.html (Super Admin pages
+       on getAdminRevenueByHub / listCommissionRules). Nothing is taken away: an operator
+       who also holds admin reaches AdminOS through the admin entry point, which is where
+       the admin guard lives. Recorded here so the absence is a decision.
+
+       AND, NAMED DELIBERATELY: the canonical AdminOS surface is admin-os.html.
+       admin.html is NOT it and must never be wired from a merchant surface — writing the
+       wrong one down is how a superseded console comes back. This row exists as much to
+       fix the name as to record the exclusion. */
+    { route:'/admin-os', class:'diagnostic', canonical:null,
+      reason:'AdminOS (admin-os.html — NOT admin.html, which is superseded) is the platform ' +
+             'operator console, not a merchant surface. A merchant row pointing at it would ' +
+             'be the same privilege defect the contract already refuses for the Super Admin ' +
+             'revenue pages. Reachable through the admin entry point, where the guard is.' },
+    { route:'/catalogue', class:'untracked', canonical:null,
+      reason:'catalogue.html is not committed in this worktree — another workstream\'s ' +
+             'in-flight work. A row here would pass fs.existsSync locally and 404 in a ' +
+             'clean checkout. One line to admit once it lands.' },
+    { route:'/business-apply', class:'untracked', canonical:null,
+      reason:'business-apply.html is not committed in this worktree. Same as above.' },
+    { route:'void', class:'blocked', canonical:null,
+      reason:'voidPOSSale is live and hardened (manager/supervisor/owner claim AND proven ' +
+             'tenancy, one transaction for status + stock restore), reachable through ' +
+             'smartPosDispatch. It is NOT surfaced because it voids from `posSales` while ' +
+             'Merchant V2 Orders reads `posRetailSales`, and docs/POS_SALES_LIFECYCLE_AUDIT.md ' +
+             '§2 measures those as DISJOINT: a sale is visible to one or the other by entry ' +
+             'path, never both. A Void button here would list sales Orders cannot show and ' +
+             'refuse every sale it can. That audit\'s §5 names the authority decision — which ' +
+             'record IS the completed sale — as the thing that gates any fix, and it has not ' +
+             'been taken. Refunds are unaffected and stay on their own path (a cashier ' +
+             'REQUESTS, the owner APPROVES); refundRequests is never wired to a UI because ' +
+             'writing it IS the refund.' },
   ];
 
   /* THE canonical sidebar order. Declared explicitly rather than inferred from position in
@@ -417,7 +718,23 @@
        configured once alongside Devices and POS Setup, not a surface a merchant reads
        daily the way they read Reports. */
     { key:'operations', label:'Operations',
-      ids:['kra-tax','devices','pos-setup'] }
+      ids:['kra-tax','devices','pos-setup'] },
+
+    /* ── THE ECOSYSTEM GROUPS ────────────────────────────────────────────────────
+       The same total partition the groups above get. These five are additionally
+       projected as the "Merchant Ecosystem" section in Settings — ONE list rendered
+       twice, never two lists. `ecosystem: true` is what marks them, so the section is
+       a filter over MORE_GROUPS rather than a second array in the HTML. */
+    { key:'eco-pos',   label:'POS & Checkout',       ecosystem:true,
+      ids:['smartpos','pos-import','pos-stock-iq','pos-shop'] },
+    { key:'eco-money', label:'Money, Till & Cash',   ecosystem:true,
+      ids:['pos-till-mgr','pos-cash','pos-books'] },
+    { key:'eco-ops',   label:'Floor Operations',     ecosystem:true,
+      ids:['pos-floor','pos-kds','pos-display','pos-daily'] },
+    { key:'eco-hw',    label:'Hardware & Approvals', ecosystem:true,
+      ids:['print-station','pos-hardware','manager-auth'] },
+    { key:'eco-intel', label:'Intelligence',         ecosystem:true,
+      ids:['pos-bi','pos-ai','pos-hq','pos-crm','pos-staff-ops'] }
   ];
 
   /* ── ROUTE ACTION CHIPS ─────────────────────────────────────────────────────────
@@ -610,7 +927,16 @@
       if (r.kind === 'pos') {
         if (!r.tab)                              errs.push(at + ': pos route has no tab');
         else if (POS_TABS.indexOf(r.tab) < 0)    errs.push(at + ': tab "' + r.tab + '" is not a pos.html tab');
+        /* `entry` re-points what a pos route MOUNTS without weakening anything: it is held
+           to the same shape as a page route's src, so it can never become an external URL
+           or a legacy dashboard, and scripts/test-merchant-routes.js proves the file is
+           real exactly as it does for src. Only a pos route may carry one — on any other
+           kind it would be a second, unread target sitting beside the real one. */
+        if (r.entry && FORBIDDEN_SRC.test(r.entry))
+          errs.push(at + ': entry "' + r.entry + '" is external or a legacy dashboard target');
       }
+      if (r.entry && r.kind !== 'pos')
+        errs.push(at + ': only a pos route may declare an entry — on kind "' + r.kind + '" it is never read');
       if (r.kind === 'page') {
         if (!r.src)                              errs.push(at + ': page route has no src');
         else if (FORBIDDEN_SRC.test(r.src))      errs.push(at + ': src "' + r.src + '" is external or a legacy dashboard target');
@@ -670,6 +996,34 @@
     ROUTES.forEach(function (r) {
       if (r.tier === 'more' && !grouped[r.id])
         errs.push('route "' + r.id + '" is tier:more but in no MORE_GROUPS group — it would have no sidebar position');
+    });
+
+    /* ── THE EXCLUSION LIST IS PART OF THE CONTRACT ──────────────────────────────
+       A classified-out destination must stay classified out. If someone later adds a
+       route for one, the exclusion has been overruled WITHOUT its reason being
+       revisited — which is how a per-device supplier ledger ends up beside the
+       canonical one. Checked in both directions: the exclusion must not name a live
+       route, and it must not name a canonical counterpart that does not exist. */
+    var EX_CLASSES = ['device-local','diagnostic','preview','blocked','untracked'];
+    var exSeen = {};
+    EXCLUDED.forEach(function (x) {
+      var xat = 'exclusion "' + x.route + '"';
+      if (!x.route)                          errs.push('an exclusion has no route');
+      if (exSeen[x.route])                   errs.push(xat + ': duplicate');
+      exSeen[x.route] = true;
+      if (EX_CLASSES.indexOf(x.class) < 0)   errs.push(xat + ': invalid class "' + x.class + '"');
+      if (!x.reason || x.reason.length < 40) errs.push(xat + ': needs a stated reason, not a label');
+      if (x.canonical && !byId[x.canonical]) errs.push(xat + ': canonical "' + x.canonical + '" is not a route');
+      /* '/pos-suppliers' excluded while a route mounted pos-suppliers.html would be the
+         contradiction. Compare on the extensionless basename, the same way the visual
+         gate does, so '?shell=merchant' and '.html' cannot hide it. */
+      var base = String(x.route).replace(/^\//, '');
+      if (!base) return;
+      ROUTES.forEach(function (r) {
+        var t = r.src || r.entry; if (!t) return;
+        if (String(t).split(/[?#]/)[0].replace(/\.html$/, '') === base)
+          errs.push(xat + ': route "' + r.id + '" mounts it anyway — the exclusion was overruled without its reason being answered');
+      });
     });
 
     /* ── ACTION CHIPS ────────────────────────────────────────────────────────────
@@ -761,6 +1115,26 @@
           routes: g.ids.map(function (id) { return byId[id]; }).filter(Boolean)
         };
       });
+    },
+    /* The ecosystem section = the MORE_GROUPS marked `ecosystem`, in declaration order.
+       A PROJECTION, not a second list: a route joins the ecosystem by being placed in an
+       ecosystem group, and it is in exactly one group because validate() enforces a total
+       partition. So the sidebar and the ecosystem section cannot drift, and a destination
+       cannot appear in one and vanish from the other. */
+    ecosystem: function () {
+      return MORE_GROUPS.filter(function (g) { return g.ecosystem === true; })
+        .map(function (g) {
+          return { key:g.key, label:g.label,
+                   routes:g.ids.map(function (id) { return byId[id]; }).filter(Boolean) };
+        });
+    },
+    /* Destinations deliberately kept OUT of merchant navigation, each with its reason.
+       Exposed so the Settings surface can say plainly that a thing was classified rather
+       than forgotten, and so the gate can assert the classification still holds. */
+    EXCLUDED: EXCLUDED,
+    excluded: function (cls) {
+      return EXCLUDED.filter(function (x) { return !cls || x.class === cls; })
+        .map(function (x) { return { route:x.route, class:x.class, canonical:x.canonical, reason:x.reason }; });
     },
     ACTIONS: ACTIONS,
     ACTION_OWNERS: ACTION_OWNERS,

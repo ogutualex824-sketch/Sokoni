@@ -148,6 +148,60 @@
     },
 
     /**
+     * THE SHELL'S RESOLVED MERCHANT SCOPE, for a module hosted inside it.
+     *
+     * WHY THIS EXISTS. The shell resolves the canonical identity chain once —
+     * auth.uid -> users/{uid} -> sellerUid -> activeShopId -> shops/{shopId} — and a
+     * hosted module must not resolve it a second time. A module that answers "which
+     * merchant am I?" for itself is a SECOND merchant context, and the two disagree the
+     * moment the merchant switches shop.
+     *
+     * The measured case: pos-checkout.html read its merchant from device IndexedDB
+     * (`settings.merchantId || settings.businessName || 'merchant'`) and from
+     * `window._posMerchantId`, which three files READ and none WRITES. The till's
+     * `merchantId` IS the shopId — the server proves it in posCompleteCheckout
+     * (resolveActor, then the merchant-must-be-proven block) — so a device-local string
+     * did not misattribute the sale, it got the sale REFUSED.
+     *
+     * NOT AN AUTHORITY, and it must not be read as one. This returns what the shell
+     * already resolved, so the module asks for the same thing the server will demand.
+     * The server re-proves it on every call regardless; a module that got this wrong
+     * would be refused, not trusted.
+     *
+     * Returns null when standalone, or when the shell has not resolved a shop yet —
+     * NEVER a fabricated or defaulted id. A caller with null must say it does not know,
+     * not substitute something that looks plausible.
+     *
+     * @returns {{shopId:string, uid:(string|null), merchantId:(string|null),
+     *            shopName:(string|null)}|null}
+     */
+    merchantScope: function () {
+      if (!inShell) return null;
+      var s, ctx = null;
+      try {
+        var sh = global.parent.SokoniShell;
+        if (!sh) return null;
+        s = sh.session || null;
+        if (typeof sh.merchantContext === 'function') {
+          try { ctx = sh.merchantContext(); } catch (_) { ctx = null; }
+        }
+      } catch (_) { return null; }
+      if (!s) return null;
+      var shopId = s.activeShopId || (ctx && ctx.activeShopId) || null;
+      if (!shopId) return null;
+      var shop = s.shop || {};
+      return {
+        shopId:   String(shopId),
+        uid:      s.uid || null,
+        /* businesses/{merchantId} — a DIFFERENT identifier space from shopId. Carried so a
+           procurement-shaped module can ask for the right one, and deliberately NOT
+           defaulted to shopId: they coincide only in the owner-uid form. */
+        merchantId: (ctx && ctx.merchantId) || null,
+        shopName: shop.name || shop.storeName || null
+      };
+    },
+
+    /**
      * Classify a data-load outcome so EMPTY can never be reported as ERROR.
      * An empty result set is a SUCCESSFUL query — this is the boundary the founder
      * asked for, kept in one place so the bug cannot reappear page by page.
