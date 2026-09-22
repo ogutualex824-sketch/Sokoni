@@ -361,3 +361,85 @@ Per §18, for each domain: authoritative write → event → transport → subsc
 - Any realtime propagation (**no two-device run**).
 - Whether `posRetailSales` reads succeed against the **served** ruleset (the lifecycle audit's
   D-12 flags the `.live` file as possibly skewed; `.live` is stale and must be re-fetched).
+
+---
+
+## 6. Owner decisions taken 2026-09-22
+
+### D-1 — Marketplace commission: FLAT 15%, ladder retired
+
+`MARKETPLACE_PLAN_RATES` is flat 15% on every plan (commit `e1e35e3`). The till lane is
+**unchanged at 5%** and was verified independent by execution before the edit:
+`pos-sale-commission.js` → `resolvePosRate` → `POS_PLAN_RATES` → `POS_FLAT_RATE_FRACTION`,
+which never reads the marketplace table.
+
+`RATES.marketplace.pct` stays **5** and must not be "aligned" to 15. `ALIASES.pos =
+'marketplace'` means a POS sale resolves to that category, so moving it would triple every
+till commission through the alias. The category fallback and the marketplace lane are
+different questions with different answers, and that is correct.
+
+**Not live.** The rate is server-computed. Production charges the previous lane until a
+functions deploy ships `commission-config.js`. Repo-internal agreement is enforced by
+`verify-commission-single-source`; agreement with PRODUCTION is not, and will not exist until
+that deploy.
+
+### D-2 — Sales lineage: KEEP BOTH, ADD A PROJECTION
+
+Neither collection is merged and neither is deleted. One becomes a projection of the other via
+an idempotent trigger — the pattern `mirrorPosTransactionToRetail` already uses and which is
+already deployed.
+
+**Recommended direction: TILL → DISPATCH (`posRetailSales` → `posSales`).**
+
+The reasoning is which way carries value, measured rather than assumed:
+
+| Direction | What it buys | What it costs |
+|---|---|---|
+| **posRetailSales → posSales** | The entire intelligence estate — BI, accounting, AI, HQ, CRM, inventory-pro, integrations — starts seeing the merchant's REAL sales. Resolves **B-2** without re-pointing five routes. | A void hazard, below. |
+| posSales → posRetailSales | Onboarding sales appear in Merchant V2 Orders. | Low value; `recordPOSSale`'s only client caller is `pos-onboard.html`. |
+
+The money path is untouched either way: the projection writes a document and nothing else —
+**no stock write, no payment, no commission liability.** `recordPOSSale` records a liability via
+`recordSaleLiability`; the projection must not, or every till sale is billed twice.
+
+#### The hazard that makes this NOT a trivial mirror
+
+`voidPOSSale` operates on `posSales` and **restores stock** (`stock +qty`, `soldCount -qty`).
+A projected document would be indistinguishable from a natively-recorded one, so voiding the
+projection would restore stock the TILL lineage already owns — and if the sale were also
+refunded through `posProcessRefund`, **stock would be returned twice**. That is a real
+inventory-integrity defect, created by the projection, not present today.
+
+So the projection requires a guard, and the guard is part of the design, not a follow-up:
+
+1. The projected document carries an explicit provenance marker (e.g.
+   `projectedFrom: 'posRetailSales'` plus the source id), written only by the trigger.
+2. `voidPOSSale` **refuses** a document carrying it, with a message naming
+   `posProcessRefund` as the reversal for that sale. Fail closed.
+3. The deterministic doc id is the source `saleId`, so a replay is a no-op and the two
+   lineages cannot collide on an auto-id.
+
+Points 2 is a change to a money path in `pos-retail-engine.js` and must ship in the **same
+deploy** as the trigger. Shipping the projection without the guard creates the double-restore.
+
+**Not implemented in this pass.** It is a Cloud Function plus a money-path guard, it cannot be
+deployed (the merchant-identity provenance gap blocks functions deploys from this branch), and
+an undeployed half — trigger without guard — is worse than nothing. It is specified here so it
+can be approved as one unit.
+
+#### What it does NOT fix
+
+The projection makes the intelligence estate see till sales. It does **not** make Void work for
+a Merchant V2 sale: the reversal for a `posRetailSales` sale remains `posProcessRefund`, and
+the guard above deliberately keeps it that way. A Merchant V2 "Void" control still requires
+either a `posRetailSales` reversal of its own, or an owner decision to route reversals through
+the refund path and label them accordingly.
+
+### Still open after these decisions
+
+- **B-2** mitigated but not closed — the five routes carry `lineage:'dispatch'` so the gap is
+  visible; it closes when the projection ships.
+- **B-3** Merchant V2 `pos-setup` still opens `pos-printer-setup.html`, not the canonical
+  advanced `pos-setup.html`. Per-control audit **NOT RUN** (foreign dirty file).
+- **C-2** `adminos.html` does not exist; the surface is `admin-os.html`. Boundary held.
+- Realtime: **no two-device evidence**. Nothing claimed LIVE-PROVEN.
