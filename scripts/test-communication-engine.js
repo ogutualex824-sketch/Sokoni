@@ -1020,6 +1020,69 @@ console.log('\n── The C2/C3 boundary is explicit ──');
 /* ══════════════════════════════════════════════════════════════════════════════════════════
    PHASE 2 — support reaches SOKONI
 ══════════════════════════════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+   PHASE 1 — contextual communication actions
+══════════════════════════════════════════════════════════════════════════════════════════ */
+console.log('\n── The server decides which actions a surface may draw ──');
+{
+  const calls = fs.readFileSync(path.join(ROOT, 'functions', 'connect-calls.js'), 'utf8');
+  const code = calls.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const mod = require(path.join(ROOT, 'functions', 'connect-calls.js'));
+
+  ck('connectAvailableActions exists', Object.keys(mod._h).includes('connectAvailableActions'));
+  ck('…it resolves the anchor server-side', /const resolver = ANCHORS\[anchorType\]/.test(code));
+  ck('…derives the caller role from the document, never the request',
+    /roles\.find\(\(r\) => String\(parties\[r\]\) === String\(uid\)\)/.test(code));
+  ck('…maps the lifecycle with the SAME resolver every Connect path uses',
+    /relationshipState: anchor\.state/.test(code));
+  ck('…consults the PRODUCT surface policy', /surface\.callSurfaceFor\(\{/.test(code));
+  ck('…and then the AUTHORITY, per channel', /CA\.mayCommunicate\(\{/.test(code));
+  ck('…so the surface can only ever REMOVE channels, never add one',
+    /\['chat', 'voice'\]\.filter/.test(code));
+
+  console.log('\n   it names no person');
+  ck('the response carries roles and labels only',
+    /targetRole,\s*\n\s*channels,/.test(code) && !/calleeUid:/.test(code.split('connectAvailableActions')[1] || ''));
+  ck('…and says it authorizes nothing',
+    /authorizes: false/.test(code));
+  ck('a non-party gets an empty list with a reason, not an error',
+    /reason: 'not_party_to_this'/.test(code));
+  ck('…and an unreadable anchor likewise', /reason: 'anchor_unavailable'/.test(code));
+
+  console.log('\n   the client asks rather than maps');
+  const clientSrc = fs.readFileSync(path.join(ROOT, 'sokoni-connect-call.js'), 'utf8');
+  const clientCode = clientSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const sb = { SokoniConnectCall: null, document: null };
+  new Function('window', clientSrc)(sb);
+  const CC = sb.SokoniConnectCall;
+  ck('mountForAnchor exists', typeof CC.mountForAnchor === 'function');
+  ck('…and is in the declared contract', CC.CONTRACT.includes('mountForAnchor'));
+  ck('…it calls the server op', /connectAvailableActions/.test(clientCode));
+  ck('…renders NOTHING when nothing is offered — no dead button',
+    /if \(!actions\.length\) \{ root\.innerHTML = ''; return null; \}/.test(clientCode));
+  ck('…and nothing when the ask itself fails',
+    /\.catch\(function \(\) \{[\s\S]{0,120}root\.innerHTML = ''/.test(clientCode));
+  ck('…it still sends an anchor and a ROLE, never a person',
+    /requestPayload\(\{[\s\S]{0,200}targetRole: btn\.getAttribute\('data-target-role'\)/.test(clientCode));
+
+  console.log('\n   mounted on a real business surface');
+  const orders = fs.readFileSync(path.join(ROOT, 'my-orders.html'), 'utf8');
+  const ordersCode = orders.replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  ck('my-orders.html loads the Call module', /sokoni-connect-call\.js/.test(orders));
+  ck('…mounts per order', /mountForAnchor\(/.test(ordersCode));
+  ck('…with the order as the anchor', /anchorType: 'order'/.test(ordersCode));
+  /* THE PROPERTY THAT MATTERS: the page must not map a lifecycle word itself. */
+  ck('…and maps NO order status to a relationship state',
+    !/relationshipState/.test(ordersCode),
+    'no client-side lifecycle map');
+  ck('…nor calls the pure shouldShow, which would need one',
+    !/shouldShow\(/.test(ordersCode));
+  ck('…and names no participant', !/calleeUid|recipientUid|participantUids/.test(ordersCode));
+  ck('an empty actions row collapses rather than showing a placeholder',
+    /\.mo-actions:empty\{display:none/.test(orders));
+}
+
 console.log('\n── Support tickets now reach SOKONI ──');
 {
   const p = path.join(ROOT, 'sokoni-support-contact.js');

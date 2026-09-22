@@ -2437,8 +2437,18 @@ console.log('\n── C3-C changed no frozen contract ──');
   ck('no new session state', Object.keys(CA.SESSION_STATES).length === 10);
   ck('no new actor', CA.ACTOR_NAMES.length === 3);
   const modOps = Object.keys(require(path.join(ROOT, 'functions', 'connect-calls.js'))._h);
+  /* RETARGETED, not deleted. This pinned the op count at 13 to say "C3-C added no server op"
+     — true, and the right thing to guard. But a COUNT also fails when a different slice adds
+     an unrelated op (Phase 1 added `connectAvailableActions`), and the fix then looks like
+     deleting a colleague's work. The claim C3-C actually needs is that the MEDIA path reuses
+     the ops that already existed, which is checkable directly and survives the count moving. */
   ck('C3-C added NO server op — the relay and the reporter already existed',
-    modOps.length === 13, modOps.length + ' ops');
+    modOps.includes('connectSignal') && modOps.includes('connectReportMediaEvent') &&
+    /* Media-TRANSPORT names only. `Answer` and `Offer` are deliberately absent from this
+       list: `connectAnswerSession` is a person accepting a call, not an SDP answer, and
+       catching it would fail the guard on the very intention op C3-C was built around. */
+    !modOps.some((o) => /(Ice|Turn|Stun|PeerConnection|Description|Candidate|Sdp|Relay)/i.test(o)),
+    modOps.length + ' ops total');
   ck('…and the read path it uses is the one the rules already authorize',
     /request\.auth\.uid == resource\.data\.to/
       .test(fs.readFileSync(path.join(ROOT, 'firestore.rules'), 'utf8')));

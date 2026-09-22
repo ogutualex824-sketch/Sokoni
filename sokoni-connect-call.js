@@ -214,12 +214,91 @@
     return { refresh: function () { return mount(root, o); } };
   }
 
+  /**
+   * mountForAnchor(root, { anchorType, anchorId, call, onSession })
+   *
+   * THE SERVER-BACKED PATH, and the one a business surface should use.
+   *
+   * `shouldShow` below is a pure mirror of the product policy and still needs a
+   * `relationshipState` the client cannot know — deriving it would mean mapping
+   * an order's lifecycle word in the browser, which connect-call-surface.js
+   * forbids outright ("Do not invent a second set of order/delivery lifecycle
+   * states inside Connect"). So this asks the server instead: it resolves the
+   * anchor, derives the caller's role from the document, and returns only the
+   * actions that BOTH the surface policy and the authority allow.
+   *
+   * Renders NOTHING when the server offers nothing — no dead button, no
+   * "unavailable" placeholder on a page where the action was never meant to be.
+   */
+  function mountForAnchor(root, opts) {
+    var o = opts || {};
+    if (!root) return null;
+    var call = typeof o.call === 'function' ? o.call : null;
+    if (!call || !o.anchorType || !o.anchorId) { root.innerHTML = ''; return null; }
+
+    root.innerHTML = '';
+    return call('connectAvailableActions', {
+      anchorType: String(o.anchorType), anchorId: String(o.anchorId),
+    }).then(function (res) {
+      var actions = (res && res.actions) || [];
+      if (!actions.length) { root.innerHTML = ''; return null; }
+
+      root.innerHTML = actions.map(function (a) {
+        /* One control per CHANNEL the server allowed — Message for chat, Call
+           for voice. A channel the authority refused simply is not drawn. */
+        return (a.channels || []).map(function (ch) {
+          var verb = ch === 'voice' ? 'Call' : 'Message';
+          return '<button class="cc-call cc-' + _esc(ch) + '" type="button"' +
+            ' data-target-role="' + _esc(a.targetRole) + '"' +
+            ' data-channel="' + _esc(ch) + '">' +
+            _esc(verb + ' ' + String(a.label || a.targetRole).toLowerCase()) + '</button>';
+        }).join('');
+      }).join('') + '<div class="cc-result" role="status"></div>';
+
+      var out = root.querySelector('.cc-result');
+      var btns = root.querySelectorAll('.cc-call');
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].addEventListener('click', function (ev) {
+          var btn = ev.currentTarget;
+          btn.disabled = true;
+          var prev = btn.textContent;
+          btn.textContent = 'Starting…';
+          out.textContent = '';
+          /* The SAME payload rule as the static button: an anchor and a ROLE,
+             never a person. */
+          call('connectRequestSession', requestPayload({
+            anchorType: o.anchorType,
+            anchorId: o.anchorId,
+            targetRole: btn.getAttribute('data-target-role'),
+            channel: btn.getAttribute('data-channel'),
+          })).then(function (r) {
+            var dsc = describeResult(r);
+            out.textContent = dsc.message;
+            out.setAttribute('data-tone', dsc.tone);
+            if (r && r.sessionId && typeof o.onSession === 'function') o.onSession(r);
+          }).catch(function (e) {
+            /* The server's refusal is shown, not softened. */
+            out.textContent = (e && e.message) || 'That was refused.';
+            out.setAttribute('data-tone', 'error');
+          }).then(function () {
+            btn.disabled = false; btn.textContent = prev;
+          });
+        });
+      }
+      return res;
+    }).catch(function () {
+      /* A surface that cannot ask shows nothing rather than a broken control. */
+      root.innerHTML = '';
+      return null;
+    });
+  }
+
   /* ── THE FROZEN C3-A SURFACE ──────────────────────────────────────────────
      Declared so the suite can assert it both ways, exactly as C1 and C2 are.
      C3-B consumes this; it does not reopen it. */
   var CONTRACT = [
     'CALL_SURFACES', 'ELIGIBLE_STATES', 'LABELS',
-    'shouldShow', 'requestPayload', 'describeResult', 'mount',
+    'shouldShow', 'requestPayload', 'describeResult', 'mount', 'mountForAnchor',
   ];
 
   global.SokoniConnectCall = {
@@ -231,5 +310,6 @@
     requestPayload: requestPayload,
     describeResult: describeResult,
     mount: mount,
+    mountForAnchor: mountForAnchor,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

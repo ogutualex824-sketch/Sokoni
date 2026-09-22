@@ -24,6 +24,14 @@
     .mo-wrap{padding:16px;max-width:640px;margin:0 auto;}
     .mo-card{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:12px;cursor:pointer;transition:border-color .15s;text-decoration:none;color:inherit;}
     .mo-card:active{border-color:var(--acc);}
+    .mo-wrap{margin-bottom:12px;}
+    .mo-wrap .mo-card{margin-bottom:0;}
+    .mo-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+    .mo-actions:empty{display:none;}
+    .cc-call{padding:9px 14px;border-radius:11px;border:1px solid var(--line);background:transparent;color:inherit;font:inherit;font-size:12px;font-weight:800;cursor:pointer;}
+    .cc-call.cc-voice{color:var(--acc);border-color:var(--acc);}
+    .cc-call:disabled{opacity:.5;cursor:default;}
+    .cc-result{font-size:12px;opacity:.7;width:100%;}
     .mo-id{font-weight:800;font-size:15px;word-break:break-word;}
     .mo-sub{color:var(--dim);font-size:12.5px;margin-top:3px;}
     .mo-right{text-align:right;flex-shrink:0;}
@@ -106,13 +114,49 @@
         var dateStr = orderDate(o);
         var items = (o.items && o.items.length) ? ' &middot; ' + o.items.length + ' item(s)' : '';
         var total = Number(o.total != null ? o.total : (o.orderTotal || 0)).toLocaleString();
-        return '<a class="mo-card" href="' + esc(orderHref(o)) + '">' +
+        var oid = o.id || o._fsId || '';
+        return '<div class="mo-wrap">' +
+          '<a class="mo-card" href="' + esc(orderHref(o)) + '">' +
             '<div><div class="mo-id">' + esc(o.id || o._fsId || 'Order') + '</div>' +
             '<div class="mo-sub">' + dateStr + items + '</div></div>' +
             '<div class="mo-right"><div class="mo-amt">KES ' + total + '</div>' +
             '<span class="mo-badge" style="background:' + st.c + '22;color:' + st.c + ';border:1px solid ' + st.c + '55;">' + esc(st.l) + '</span></div>' +
-          '</a>';
+          '</a>' +
+          /* Contextual communication. The SERVER decides what appears here:
+             connectAvailableActions resolves the anchor, derives this user's role and
+             returns only actions the surface policy AND the authority allow. Nothing is
+             rendered when nothing is offered — no dead button on a delivered order. */
+          '<div class="mo-actions" data-anchor-id="' + esc(oid) + '"></div>' +
+        '</div>';
       }).join('');
+      mountOrderActions();
+    }
+
+    /* Contextual Message/Call per order.
+       The client asks the SERVER what this order offers — it never maps an order status onto
+       a relationship state itself. `shared/connect-call-surface.js` forbids that outright
+       ("Do not invent a second set of order/delivery lifecycle states inside Connect"), and a
+       second mapping is how one screen offers a call the server refuses. */
+    function mountOrderActions() {
+      if (!window.SokoniConnectCall || !window.sokoniCallable) return;
+      var call = function (op, payload) {
+        var data = Object.assign({}, payload || {}, { op: op });
+        return window.sokoniCallable('connectDispatch')(data)
+          .then(function (envelope) { return (envelope && envelope.data) || {}; });
+      };
+      var slots = wrap.querySelectorAll('.mo-actions[data-anchor-id]');
+      for (var i = 0; i < slots.length; i++) {
+        var id = slots[i].getAttribute('data-anchor-id');
+        if (!id) continue;
+        window.SokoniConnectCall.mountForAnchor(slots[i], {
+          anchorType: 'order',
+          anchorId: id,
+          call: call,
+          onSession: function (r) {
+            if (r && r.sessionId) location.href = '/connect.html?session=' + encodeURIComponent(r.sessionId);
+          },
+        });
+      }
     }
 
     /* 1) Instant render from the same cache profile.html writes — so the page is
@@ -165,6 +209,7 @@
   <script src="sokoni-auth-state.js"></script>
   <script src="sokoni-identity-guard.js"></script>
   <script src="sokoni-user-bootstrap.js" defer></script>
+  <script src="sokoni-connect-call.js"></script>
   <script src="sokoni-db.js" type="module"></script>
   <script src="/sw-register.js" defer></script>
 </body>

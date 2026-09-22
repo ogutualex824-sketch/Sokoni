@@ -813,6 +813,105 @@ exports.connectReportMediaEvent = onCall({ region: REGION, timeoutSeconds: 15 },
 exports.connectEndSession = onCall({ region: REGION, timeoutSeconds: 15 },
   exports._h.connectEndSession = (req) => _advance(req, 'ended'));
 
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+   connectAvailableActions — which communication actions does this anchor offer ME?
+
+   THE QUESTION A BUSINESS SURFACE HAS TO ASK BEFORE IT DRAWS A BUTTON.
+
+   Without this op a client can only decide by mapping an order's lifecycle word onto a
+   relationship state itself — and `shared/connect-call-surface.js` forbids exactly that:
+   "Do not invent a second set of order/delivery lifecycle states inside Connect." Two tables
+   of what `delivered` means is how one screen offers a call the server refuses.
+
+   So the mapping stays in ONE place. The client names an anchor; the server resolves it,
+   derives the caller's role from the document, maps the lifecycle word with the same
+   `_stateOf` every other Connect path uses, and returns the actions — each already checked
+   against BOTH the product surface policy and the communication authority.
+
+   A BUTTON IS STILL NOT A PERMISSION. This op is a rendering aid: every returned action is
+   re-authorized when `connectRequestSession` is actually called, and an action absent here
+   blocks nothing — the callable is reachable directly and would refuse on its own.
+
+   IT NAMES NO PERSON. The response carries ROLES and labels, never a uid, a telephone number
+   or an email address. The recipient stays derived from the anchor, which is the rule the
+   whole layer is built on.
+══════════════════════════════════════════════════════════════════════════════════════════ */
+exports.connectAvailableActions = onCall({ region: REGION, timeoutSeconds: 20 },
+  exports._h.connectAvailableActions = async (req) => {
+    const uid = _uid(req);
+    const isAdmin = _isPlatformAdmin(req);
+    const d = req.data || {};
+    const anchorType = _str(d.anchorType, 32);
+    const anchorId = _str(d.anchorId, 200);
+    if (!anchorType || !anchorId) {
+      throw new HttpsError('invalid-argument', 'anchorType and anchorId are required');
+    }
+
+    const surface = require('./shared/connect-call-surface');
+    const db = _db();
+
+    const resolver = ANCHORS[anchorType];
+    if (!resolver) throw new HttpsError('invalid-argument', `Unknown anchor type: ${anchorType}`);
+
+    /* A caller who is not party to the anchor gets NOTHING — and gets it as an empty list
+       with a reason, not as an error. A surface asking "what can I do here" about something
+       it turns out not to be party to is a normal page load, not a fault. */
+    let anchor;
+    try {
+      anchor = await resolver(db, anchorId, uid);
+    } catch (e) {
+      return { anchorType, anchorId, actions: [], reason: 'anchor_unavailable', authorizes: false };
+    }
+
+    const parties = { ...anchor.parties };
+    if (anchor.openBuyerSide && !parties.buyer) parties.buyer = uid;
+    if (anchor.adminSide && isAdmin) parties.admin = uid;
+
+    const roles = Object.keys(parties);
+    const myRole = roles.find((r) => String(parties[r]) === String(uid));
+    if (!myRole) {
+      return { anchorType, anchorId, actions: [], reason: 'not_party_to_this', authorizes: false };
+    }
+
+    const actions = [];
+    roles.filter((r) => r !== myRole).forEach((targetRole) => {
+      /* 1. Does this PRODUCT SURFACE offer the action at all? */
+      const shown = surface.callSurfaceFor({
+        anchorType: anchor.kind,
+        callerRole: myRole,
+        targetRole,
+        relationshipState: anchor.state,
+      });
+      if (!shown.show) return;
+
+      /* 2. Does the AUTHORITY permit it, per channel? The surface is deliberately narrower
+         than the authority, so this can only ever remove channels, never add one. */
+      const channels = ['chat', 'voice'].filter((ch) => CA.mayCommunicate({
+        from: myRole, to: targetRole, relationship: anchor.kind, state: anchor.state, channel: ch,
+      }).allowed);
+      if (!channels.length) return;
+
+      actions.push({
+        targetRole,
+        channels,
+        /* A label, not an identity. */
+        label: targetRole.charAt(0).toUpperCase() + targetRole.slice(1),
+      });
+    });
+
+    return {
+      anchorType,
+      anchorId,
+      relationship: anchor.kind,
+      relationshipState: anchor.state,
+      callerRole: myRole,
+      actions,
+      reason: actions.length ? 'actions_available' : 'no_action_offered',
+      /* Said in the response so a client cannot read a rendered button as permission. */
+      authorizes: false,
+    };
+  });
+
 /**
  * connectGetSessionState — what the client may render, and what it may offer next.
  *
