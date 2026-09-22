@@ -245,12 +245,67 @@ textarea.inp{min-height:70px;resize:vertical}
 ═══════════════════════════════════════════════════════════════════════════ */
 import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js';
-import { getFirestore, collection, query, where, limit, getDocs, doc, getDoc, setDoc }
+import { getFirestore, collection, query, where, limit, getDocs, doc, getDoc }
   from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js';
 
 const M = window.SokoniCatalogueModel;
 const cfg = window.SOKONI_FIREBASE_CONFIG || window.firebaseConfig || null;
-let db=null, auth=null, uid=null;
+let db=null, auth=null, uid=null, fns=null;
+
+/* ═══ WRITE AUTHORITY (3A, owner decision 2026-09-22: Option 1) ═══════════
+   This page no longer writes posProducts. Every mutation goes through
+   smartPosDispatch -> posUpsertProduct, the canonical writer, which resolves
+   the merchant authority server-side with the Admin SDK.
+
+   WHY, precisely: the served ruleset (ad2033ad) guards posProducts on
+   `sellerId == request.auth.uid`, a field NO writer produces, so every direct
+   browser write from this page was DENIED in production. Proven, not assumed —
+   scripts/test-served-posproducts-authorization.js, 12/0 against the fetched
+   artifact. The previous code would surface that rejection in the editor's
+   problem line, so it was at least honest; it was never going to work.
+
+   THE BUSINESS ID IS NOT THE UID. This page used to write `merchantId: uid`.
+   posProducts.merchantId is a businesses/{id} key — a different identifier
+   space — so those rows could never be seen by the canonical writer's own
+   merchantId-scoped queries. The id now comes from the shell, which already
+   resolved it, and when the shell cannot answer this page SAYS SO rather than
+   substituting something plausible. The server re-proves it on every call
+   through _assertMerchantAccess (uid -> businesses/{id}.ownerId, or active
+   posStaff), so a wrong id is refused, never trusted.
+
+   READS ARE NOT MIGRATED AND ARE STILL DENIED IN PRODUCTION. That is the
+   separately-gated rules problem (3B), deliberately not bundled into this
+   change: making reads work by stamping `sellerId` onto documents would also
+   hand clients direct create/update/delete on posProducts, which is the
+   opposite of what Option 1 decided. ══════════════════════════════════════ */
+
+/* The businesses/{id} key, from the shell that already resolved it. NEVER the
+   uid, and never a default — null means "this page does not know". */
+function merchantIdOrNull(){
+  try{
+    const sc = window.SokoniInShell && window.SokoniInShell.merchantScope();
+    return (sc && sc.merchantId) || null;
+  }catch(_){ return null; }
+}
+
+async function dispatch(op, payload){
+  const merchantId = merchantIdOrNull();
+  if(!merchantId){
+    /* Fail closed, and say which thing is missing. A guessed merchantId would
+       be refused by the server anyway — this states the cause instead of
+       reporting a permission error the merchant cannot act on. */
+    throw new Error('Your business is not resolved yet. Open Catalogue from the merchant workspace and try again.');
+  }
+  if(!fns) fns = getFunctions(getApps()[0]);
+  const call = httpsCallable(fns, 'smartPosDispatch');
+  const res  = await call(Object.assign({ op: op, merchantId: merchantId }, payload));
+  const out  = (res && res.data) || null;
+  if(!out || out.ok !== true){
+    throw new Error((out && (out.error || out.message)) || 'The server did not accept the change.');
+  }
+  return out;
+}
 
 const $ = (id)=>document.getElementById(id);
 const esc = (s)=>String(s==null?'':s).replace(/[<>"'&]/g,c=>({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c]));
@@ -448,13 +503,42 @@ window.Cat = {
     try{
       /* Merge onto the EXISTING row so fields this editor never shows — cost,
          batch, barcode, expiryDate, sync bookkeeping — survive. */
-      const id = st.editing ? st.editing.id
-        : (svc?'svc_':'prd_')+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
-      const base = st.editing ? Object.assign({},st.editing) : { merchantId:uid, createdAt:new Date().toISOString() };
+      /* The MODEL still decides the shape — it is the one place that answers
+         "is this a product or a service" on the client, and it matches the
+         server pricer. What changed is who WRITES: the row is handed to the
+         canonical writer, which owns identity, stock keys and price mode.
+
+         No client-side id is minted for a create. posUpsertProduct issues the
+         document id, and an `idempotencyKey` makes a double-tapped Save return
+         the SAME product instead of a second one — the local Date.now()+random
+         id could not do that, because a retry produced a new id. */
+      const base = st.editing ? Object.assign({},st.editing) : {};
       const next = M.applyEdit(base,st.kind,draft);
-      delete next.id;                         /* the id is the doc key, not a field */
-      next.updatedAt=new Date().toISOString();
-      await setDoc(doc(db,'posProducts',id), next, { merge:true });
+      const payload = {
+        name:        next.name,
+        price:       next.price,
+        category:    next.category || undefined,
+        description: next.description || undefined,
+        unit:        next.unit || undefined,
+        active:      next.active !== false,
+        listingType: svc ? 'service' : 'product',
+        trackStock:  !svc,
+      };
+      if(svc){
+        payload.variablePrice = next.variablePrice === true;
+      }else{
+        payload.sku   = next.sku || undefined;
+        payload.image = next.image || undefined;
+        /* Absent means UNMETERED, not zero — so the key is omitted rather than
+           sent as 0, which the till would read as OUT OF STOCK. */
+        if(next.stock !== undefined && next.stock !== null && next.stock !== '') payload.stock = Number(next.stock);
+        if(next.lowStockThreshold !== undefined && next.lowStockThreshold !== null && next.lowStockThreshold !== ''){
+          payload.lowStockThreshold = Number(next.lowStockThreshold);
+        }
+      }
+      if(st.editing){ payload.productId = st.editing.id; }
+      else { payload.idempotencyKey = (svc?'svc_':'prd_')+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+      await dispatch('posUpsertProduct', payload);
       this.close('ov-edit'); this.close('ov-pick');
       await load();
     }catch(e){
@@ -466,11 +550,26 @@ window.Cat = {
 
   async archive(id){
     if(!confirm('Archive this item? It stays in your records and can be restored.')) return;
-    await setDoc(doc(db,'posProducts',id), M.archivePatch(uid), { merge:true });
+    /* posDeleteProduct is the server's soft-delete: it sets active:false and
+       keeps the row, so sales history still resolves the product. The model's
+       archivePatch stays the client-side shape authority for anything that
+       renders an archived row; it is no longer a WRITE payload. */
+    await dispatch('posDeleteProduct', { productId: id });
     await load();
   },
   async restore(id){
-    await setDoc(doc(db,'posProducts',id), M.restorePatch(), { merge:true });
+    /* There is no server 'restore' op, and inventing one is not this change's
+       job. Reactivation goes through the canonical writer as an update, which
+       requires the row's name and price — so a restore is refused rather than
+       half-applied if the row is not loaded. */
+    const row = st.rows.find(r=>r.id===id);
+    if(!row) throw new Error('Reload the catalogue before restoring this item.');
+    await dispatch('posUpsertProduct', {
+      productId: id, name: row.name, price: row.price, active: true,
+      unit: row.unit || undefined,
+      trackStock: M.isService(row) ? false : true,
+      listingType: M.isService(row) ? 'service' : 'product',
+    });
     await load();
   },
 };

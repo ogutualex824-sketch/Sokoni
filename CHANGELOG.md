@@ -1,3 +1,80 @@
+## 2026-09-22 (176) — 3A: the catalogue stops writing posProducts and asks the canonical writer
+
+**NO DEPLOY. Live remains 111dbd7 / v636.** `scripts/test-catalogue-write-migration.js` **28/0** ·
+`test-posupsert-catalogue-contract.js` **42/0** (was 35/0) · `test-catalogue-model.js` **81/0** ·
+`test-posproducts-mirror-retirement.js` **14/14** · `test-pos-inventory-denial-visibility.js` **26/0** ·
+`test-flash-sale-authority.js` **56/0** · `functions/index.js` require closure intact.
+
+### What moved
+
+    BEFORE   catalogue.html --setDoc--> posProducts          (DENIED in production)
+    AFTER    catalogue.html --smartPosDispatch--> posUpsertProduct --> posProducts
+
+`setDoc` is no longer imported, not merely unused. Create/update go through
+`posUpsertProduct`; archive goes through `posDeleteProduct`, the server's soft-delete that keeps the
+row so sales history still resolves it. There is no server restore op, so reactivation is an update
+through the canonical writer and is REFUSED rather than half-applied if the row is not loaded —
+inventing a new op was not this unit's job.
+
+### The business id is not the uid
+
+The page wrote `merchantId: uid`. `posProducts.merchantId` is a `businesses/{id}` key — a different
+identifier space — so those rows could never be matched by the canonical writer's own
+merchantId-scoped queries. It now comes from `SokoniInShell.merchantScope().merchantId`, the value
+the shell already resolved, and **`scope.shopId` is deliberately not used**: the two coincide only in
+the owner-uid form. When the shell cannot answer, the page **fails closed and says which thing is
+missing** rather than substituting something plausible — a guessed id would be refused by
+`_assertMerchantAccess` anyway, and a stated cause is actionable where a bare permission error is not.
+
+A create now sends an `idempotencyKey` instead of a locally minted document id, so a double-tapped
+Save returns the SAME product. The old `Date.now()+random` id could not do that: a retry produced a
+new id, and therefore a second product.
+
+### The writer had to learn four more spellings first
+
+Routing the page at `posUpsertProduct` without this would have **recreated the discard defect one
+level up**: the editor collects `description`, `image`, `stock` and `lowStockThreshold`, and the
+writer accepted none of them. `description` and `image` are now persisted (`image` is the spelling
+the readers use — `pos.js:750` reads `p.image`), and `stock` / `lowStockThreshold` are accepted as
+input aliases stored under the canonical `stockQty` / `reorderPoint`, with neither alias kept as a
+second spelling.
+
+The 3A suite derives the writer's accepted-field set **from the handler itself** and fails if the page
+sends anything outside it, so this cannot silently drift apart again. Its first run reported
+`trackStock` and `variablePrice` as dropped: the extractor only understood `d.<name>` and was blind to
+`_pcCatalogueFlag(d, 'trackStock', 'trackInventory')`, where the names are string arguments. The
+detector was describing the writer's API instead of reading it.
+
+### OPEN — what a blank stock figure means, and it is the owner's call
+
+Two components disagree, and it cannot be resolved by preference:
+
+    sokoni-catalogue-model.js:252   deletes `stock` when blank: "blank means UNMETERED"
+    posUpsertProduct                writes stockQty on every tracked create
+
+`pos-zero-friction.js:754` reads `stock ?? stockQty ?? quantity ?? 9999`, so **absent becomes 9999 —
+effectively unlimited — while 0 means out of stock.** The two readings are therefore "refuse to sell
+what has not been counted" and "sell unlimited quantities of it". The suite asserts the FIRST,
+because an oversell is worse than an unavailable item, and it is asserted rather than decided:
+recorded here as OPEN. A SERVICE is unaffected — it carries no stock keys at all.
+
+### READS ARE STILL DENIED. 3A is not a working catalogue.
+
+Under the served ruleset `ad2033ad` this page cannot read `posProducts` at all, and this unit does not
+change that. The suite asserts the read query is UNCHANGED and that **no rules file was touched**, so
+"3A is done" can never be misread as "the catalogue works". The repair is a rules change that must
+separate READ from WRITE: stamping `sellerId` onto documents to unblock reads would also grant clients
+direct create/update/delete on `posProducts` — the opposite of what Option 1 decided. Separately
+gated, and the 256 KiB build-size problem (local source is 105.7% of the limit) gates it further.
+
+**Files affected:** `catalogue.html`, `functions/pos-inventory-pro.js`,
+`scripts/test-catalogue-write-migration.js` (new), `scripts/test-posupsert-catalogue-contract.js`,
+`CHANGELOG.md`. **Database changes:** `posProducts` may now carry `description` and `image` from this
+surface. **API changes:** `posUpsertProduct` additionally accepts `description`, `image`, and `stock`
+/ `lowStockThreshold` as aliases. **Security changes:** none — the page gained no authority; it lost
+a direct write path that production already denied. **Breaking changes:** the catalogue cannot be used
+standalone (outside the merchant shell) to save, because the business id is no longer guessed.
+
 ## 2026-09-22 (175) — Option 1: posUpsertProduct becomes the canonical POS product writer
 
 **NO DEPLOY. Live remains 111dbd7 / v636.** `scripts/test-posupsert-catalogue-contract.js` **35/0** ·

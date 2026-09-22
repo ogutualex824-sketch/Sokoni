@@ -1687,11 +1687,35 @@ exports._h.posUpsertProduct = async (req) => {
   const costPrice    = _pcNum(d.costPrice, 'costPrice');
   const salePrice    = _pcNum(d.salePrice, 'salePrice');
   const vatRate      = _pcNum(d.vatRate === undefined ? d.taxRate : d.vatRate, 'vatRate', { max: 100 });
-  const reorderPoint = _pcNum(d.reorderPoint, 'reorderPoint');
-  const stockQty     = _pcNum(d.stockQty === undefined ? d.qty : d.stockQty, 'stockQty', { max: 1e7 });
+  /* ── THE SPELLINGS THE CATALOGUE SURFACE ACTUALLY SENDS ───────────────────
+     `sokoni-catalogue-model.js` owns `stock` and `lowStockThreshold`; this
+     writer owns `stockQty` and `reorderPoint`. They are the SAME quantities
+     under two names, so they are accepted as input aliases and stored under the
+     canonical name — exactly the treatment `trackInventory` gets. Without this,
+     migrating the catalogue onto this writer would silently drop the stock
+     figure and the low-stock threshold, which is the discard defect this whole
+     unit exists to remove.
+
+     `stock` is not merely an alias in the reader either: `pos-zero-friction.js`
+     reads `stock ?? stockQty ?? quantity ?? 9999` and `pos.js:750` reads `stock`
+     alone, so a row that carries only `stockQty` is invisible to one of them.
+     Storing the canonical `stockQty` keeps this writer's contract intact; the
+     reader-side divergence is recorded, not silently papered over here. */
+  const reorderPoint = _pcNum(
+    d.reorderPoint === undefined ? d.lowStockThreshold : d.reorderPoint, 'reorderPoint');
+  const stockQty = _pcNum(
+    d.stockQty !== undefined ? d.stockQty
+      : (d.qty !== undefined ? d.qty : d.stock),
+    'stockQty', { max: 1e7 });
 
   const sku      = _pcStr(d.sku, 64);
   const barcode  = _pcStr(d.barcode, 64);
+  /* Collected by the catalogue editor and, until now, not accepted here — so a
+     migrated write would have rendered them and thrown them away. `image` is the
+     spelling the readers use (`pos.js:750` reads `p.image`), so the catalogue's
+     field name is already canonical and no translation is invented. */
+  const description = _pcStr(d.description, 2000);
+  const image       = _pcStr(d.image === undefined ? d.imageUrl : d.image, 1200);
   const category = _pcStr(d.category, 80) || 'General';
   const brand    = _pcStr(d.brand, 80);
   /* ── D: ONE CANONICAL DEFAULT FOR `unit` ──────────────────────────────────
@@ -1762,8 +1786,10 @@ exports._h.posUpsertProduct = async (req) => {
     if (salePrice    !== undefined) doc.salePrice    = salePrice;
     if (vatRate      !== undefined) doc.vatRate      = vatRate;
     if (reorderPoint !== undefined) doc.reorderPoint = reorderPoint;
-    if (sku)      doc.sku      = sku;
-    if (barcode)  doc.barcode  = barcode;
+    if (sku)         doc.sku         = sku;
+    if (barcode)     doc.barcode     = barcode;
+    if (description) doc.description = description;
+    if (image)       doc.image       = image;
     if (brand)    doc.brand    = brand;
     if (supplier) doc.supplier = supplier;
 

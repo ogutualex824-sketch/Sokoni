@@ -331,6 +331,62 @@ async function main() {
     ck('trackStock:false now on the stored row', STORE['posProducts/' + id].trackStock === false);
   }
 
+  head('7b. The spellings the catalogue surface sends (added for 3A)');
+  reset();
+  {
+    const r = await res(() => call(OWNER, {
+      merchantId: BIZ, name: 'Cable', price: 500,
+      description: 'USB-C, 2m', image: 'https://example/x.png',
+      stock: 7, lowStockThreshold: 2,
+    }));
+    const d = lastProduct();
+    ck('description persisted (was dropped before 3A)', r.ok && !!d && d.description === 'USB-C, 2m',
+       d ? String(d.description) : (r.code || '-'));
+    ck('image persisted under the field the readers use (pos.js:750 reads p.image)',
+       !!d && d.image === 'https://example/x.png', d ? String(d.image) : '-');
+    ck('stock maps to the canonical stockQty', !!d && d.stockQty === 7, d ? String(d.stockQty) : '-');
+    ck('lowStockThreshold maps to the canonical reorderPoint',
+       !!d && d.reorderPoint === 2, d ? String(d.reorderPoint) : '-');
+    ck('neither alias is stored under its own name (no second spelling)',
+       !!d && !('stock' in d) && !('lowStockThreshold' in d), 'canonical only');
+  }
+  reset();
+  {
+    /* ── AN UNRESOLVED CONFLICT, ASSERTED AT ITS SAFER SIDE ─────────────────
+       Two components disagree about what a blank stock figure MEANS on a tracked
+       product:
+
+         sokoni-catalogue-model.js:252  deletes `stock` when blank, documenting
+                                       "blank means UNMETERED, which is absent"
+         posUpsertProduct (this writer) writes stockQty on every tracked create,
+                                       "always present so checkout can read it"
+
+       They cannot both hold, because `pos-zero-friction.js:754` reads
+       `stock ?? stockQty ?? quantity ?? 9999`: ABSENT becomes **9999**, i.e.
+       effectively unlimited, while 0 means out of stock.
+
+       So the two readings are "refuse to sell what has not been counted" and
+       "sell unlimited quantities of it". This suite asserts the FIRST, because a
+       tracked product whose quantity nobody stated should not be sellable
+       without limit — an oversell is worse than an unavailable item, and the
+       9999 fallback is already recorded as an inventory-authority defect.
+
+       This is asserted, not decided: which meaning a blank field carries is the
+       owner's call, and it is recorded as OPEN in the changelog. A SERVICE is
+       unaffected — it carries no stock keys at all. */
+    const r = await res(() => call(OWNER, { merchantId: BIZ, name: 'Uncounted', price: 100 }));
+    const d = lastProduct();
+    ck('a tracked product with no stock figure is 0 (unsellable), NOT absent (unlimited)',
+       r.ok && !!d && d.stockQty === 0, d ? JSON.stringify(d.stockQty) : (r.code || '-'));
+    ck('CONTROL — a SERVICE in the same situation carries no stock key at all',
+       await (async () => {
+         reset();
+         await res(() => call(OWNER, SERVICE));
+         const s = lastProduct();
+         return !!s && !('stockQty' in s);
+       })(), 'trackStock:false exempts it entirely');
+  }
+
   head('8. The boundary this change must NOT cross');
   const SRC = require('fs').readFileSync(path.join(ROOT, 'functions', 'pos-inventory-pro.js'), 'utf8');
   const decomment = (x) => x.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
