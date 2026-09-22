@@ -399,13 +399,52 @@ admin privileges, so rules do not apply to it); `catalogue.html` writes `merchan
 `catalogue.html` against `posProducts` is denied**, and no document created by `posUpsertProduct` is
 readable by that surface either.
 
-**Verdict UNPROVEN, not FAIL, and the distinction matters.** This is read from `firestore.rules` in
-the repo. The deployed ruleset is `ad2033ad` and came from a *different* lineage
-(`merchant-launch-rc`), and repo rule text has diverged from served rules before. Settling it needs
-the served ruleset re-fetched through the Rules REST API and the four operations exercised against
-the emulator with that text loaded via `initializeTestEnvironment` — `emulators:exec` does not load
-rules here (firebase.json's `firestore` is an array, so the emulator defaults to ALLOW-ALL and a
-corrupted ruleset passes).
+**RESOLVED 2026-09-22 against the SERVED artifact — `scripts/test-served-posproducts-authorization.js`,
+12 passed / 0 failed.** The verdict was UNPROVEN because repo text is not evidence. It is now proven,
+and it is proven the only way that counts:
+
+* **The served artifact was fetched, not read locally.** `GET /releases/cloud.firestore` ->
+  ruleset **`ad2033ad-0d26-46d5-9646-1fa94554edc1`**, created `2026-09-19T22:59:34Z`, **156,680 B**.
+  Its single file is named **`firestore.rules.build`** — production serves the BUILD, not the source,
+  so `firestore.rules` was never the right thing to compare.
+* **The served text was loaded into the emulator via `initializeTestEnvironment`**, never
+  `emulators:exec`. It says exactly what the repo says: `claimsPosOwner()` /
+  `isPosOwner()` on `sellerId`, ONE `match /posProducts/` block (checked — a second block would OR),
+  and no alternate admit path.
+* **A positive control ran first and still passes**: a create carrying `sellerId == uid` is ALLOWED,
+  and reading it back is ALLOWED. Without that, every denial below would be indistinguishable from a
+  dead harness or a ruleset that failed to compile — a rules expression error denies EVERYTHING and
+  would have produced a perfect score.
+
+Exercised against the served ruleset, with the real document shapes:
+
+| Operation (as the surface actually issues it) | Result |
+|---|---|
+| CREATE `{merchantId: uid, trackStock: false, …}` — the `catalogue.html` shape | **DENIED** |
+| READ a row the browser itself wrote | **DENIED** |
+| UPDATE it · DELETE it | **DENIED** |
+| READ a `posUpsertProduct` row (`merchantId: SOK-…`) | **DENIED** |
+| UPDATE a `posUpsertProduct` row | **DENIED** |
+| `LIST where(merchantId == uid)` — the query at `catalogue.html:299` | **DENIED** |
+| READ / UPDATE a row carrying `sellerId == uid` | ALLOWED |
+| `LIST where(sellerId == uid)` | ALLOWED |
+
+**So `catalogue.html` cannot create, read, update, delete or list `posProducts` in production, and no
+document the canonical server writer produced is client-readable at all.** The surface is not
+misconfigured against one field; it is locked out of the collection.
+
+**One detail that matters for how this is repaired.** The emulator reports
+`Property sellerId is undefined on object` — an **evaluation error**, not a clean `false`. The guard
+is reaching the right outcome by the wrong mechanism: it is not deciding "this caller is not the
+owner", it is failing to evaluate because the field is absent. Any repair that adds `sellerId` must
+be checked against BOTH paths, because a rule that errors and a rule that returns false are the same
+denial today and can diverge tomorrow. See the standing rule: a broken expression reads as a working
+guard.
+
+**This gate is open under BOTH canonical-writer options.** Option 1 (`posUpsertProduct` learns the
+fields) avoids the browser-WRITE question only; reads, updates, deletes and the list query above are
+still denied, because they are governed by the same predicate. Option 2 makes this immediately
+blocking, since it is what would certify the browser writer at all.
 
 #### Verdicts
 
@@ -416,7 +455,7 @@ corrupted ruleset passes).
 | C | canonical non-stock flag | **FAIL** — `trackStock` / `trackInventory` / `active` unreconciled |
 | D | canonical unit | **PASS with a defect** — real writer, two default spellings (`pcs` / `piece`) |
 | E | variable pricing | **FAIL** — not expressible through the canonical writer; `price: 0` is ambiguous |
-| — | `posProducts` client access | **UNPROVEN** — needs the served ruleset re-fetched and exercised |
+| — | `posProducts` client access | **RESOLVED — DENIED** on the served ruleset `ad2033ad`, 12/0, positive-controlled |
 
 **F–R are NOT answerable from this.** B, C and E fail at the model layer, so a channel, projection
 or downstream trace written now would be describing a model the platform does not yet agree on.

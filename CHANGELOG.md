@@ -1,3 +1,56 @@
+## 2026-09-22 (174) — the served ruleset locks catalogue.html out of posProducts entirely
+
+**NO DEPLOY. Read-only fetch + emulator exercise.**
+`scripts/test-served-posproducts-authorization.js` **12 passed / 0 failed**, against served ruleset
+**`ad2033ad-0d26-46d5-9646-1fa94554edc1`** (created 2026-09-19T22:59:34Z, 156,680 B).
+
+### The artifact, not the repo
+
+The A-E trace left `posProducts` client access UNPROVEN on purpose: repo rule text is not evidence
+when the deployed ruleset came from another lineage. It was fetched through the Rules REST API and
+loaded into the emulator with `initializeTestEnvironment` — never `emulators:exec`, which loads no
+rules here and would have passed a corrupted ruleset.
+
+**The served file is named `firestore.rules.build`.** Production serves the BUILD, so
+`firestore.rules` was never the right comparison. Worth recording alongside: the local SOURCE is
+**276,984 B = 105.7% of the 256 KiB limit**, so a rules deploy from this tree would be rejected on
+size regardless of content.
+
+### Every catalogue.html operation is denied
+
+    CREATE {merchantId: uid, …}       DENIED     the catalogue.html shape
+    READ its own row                  DENIED
+    UPDATE / DELETE its own row       DENIED
+    READ a posUpsertProduct row       DENIED     merchantId: SOK-…
+    UPDATE a posUpsertProduct row     DENIED
+    LIST where(merchantId == uid)     DENIED     the query at catalogue.html:299
+    READ / UPDATE where sellerId==uid ALLOWED
+    LIST where(sellerId == uid)       ALLOWED
+
+The surface is not misconfigured against one field — **it is locked out of the collection**, and no
+document the canonical server writer produced is client-readable at all.
+
+A positive control ran first and still passes (a `sellerId == uid` create is ALLOWED, and reads back).
+Without it, every denial would be indistinguishable from a dead harness or a ruleset that failed to
+compile, since a rules expression error denies everything and scores perfectly.
+
+**The denial is an EVALUATION ERROR, not a clean false**: `Property sellerId is undefined on object`.
+The guard reaches the right outcome by the wrong mechanism — it is not deciding "not the owner", it
+is failing to evaluate. Any repair adding `sellerId` must be checked on both paths.
+
+**This gate stays open under BOTH canonical-writer options.** Option 1 avoids only the browser-WRITE
+question; the reads, updates, deletes and the list query are governed by the same predicate.
+
+### AR KEEP checkpoint — still UNPROVEN, by observation
+
+Specimen `sha256:133a75e9…` present and unchanged. `BatchDeleteVersions` over 2d: **none** — and the
+detector is known-good, since the same query returned the 2026-09-20T10:16:05Z sweep earlier today.
+**No post-policy sweep has occurred**, so KEEP has still never been tested. Not declared green.
+
+**Files affected:** `scripts/test-served-posproducts-authorization.js` (new),
+`docs/MERCHANT_V2_PRODUCT_UPLOAD_ECOSYSTEM_2026-09-22.md`, `CHANGELOG.md`.
+**Database / API / security changes:** none — read-only investigation. **Breaking changes:** none.
+
 ## 2026-09-22 (173) — A-E adjudicated: the 9999 stock fallback is reclassified as an inventory-authority defect
 
 **NO DEPLOY.** Doc-only change on top of `cae0d08`.
