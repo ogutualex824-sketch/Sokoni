@@ -54,6 +54,22 @@ const CLASSIFICATION = {
   'scripts/verify-listing-limit-single-source.js': 'TOOLING',
   'scripts/verify-commission-single-source.js':    'TOOLING',
 
+  /* Verified 2026-09-22: test suites, not allowance declarations. Their
+     `maxProducts` values are FIXTURES seeded into a fake `productCounters`
+     document to drive the limit boundary (at max, at max-1, and -1 for
+     unlimited); nothing reads them as a platform entitlement and no client ever
+     sees them.
+
+     `functions/pos-inventory-pro.js` is deliberately NOT listed here, and that
+     absence is the evidence that matters: the canonical products writer
+     re-implements the rules' `withinProductLimit()` check but READS
+     `maxProducts` from `productCounters`, which `product-limit.js` resolves from
+     the canonical catalogue. It declares no allowance of its own, so it is not a
+     twelfth table — which is exactly what this guard exists to catch, and it
+     would have caught it. */
+  'scripts/test-canonical-product-writer.js':        'TOOLING',
+  'scripts/test-product-counter-reconciliation.js':  'TOOLING',
+
   /* Separate commercial product. Traced 2026-07-22: imported only by
      provider-dispatch, and the module contains no reference to a seller,
      merchant or marketplace hub. Service providers only. */

@@ -1,3 +1,89 @@
+## 2026-09-22 (179) — product-counter reconciliation: a server create consumes ONE unit, not two
+
+**NO DEPLOY. NO RULES CHANGE. CATALOGUE STILL NOT WIRED.** Live remains 111dbd7 / v636.
+`scripts/test-product-counter-reconciliation.js` **34/0** · `test-canonical-product-writer.js` **66/0** ·
+`test-poslistproducts-contract.js` **31/0** · `test-posupsert-catalogue-contract.js` **42/0** ·
+`test-catalogue-write-migration.js` **30/0** · `test-flash-sale-authority.js` **56/0** ·
+`functions/index.js` require closure intact.
+
+### The blocker this closes
+
+`upsertCanonicalProduct` (`5d3e4fc`) reserves against `productCounters/{uid}` so two concurrent server
+creates cannot both pass at `count = max-1`. That reservation covers exactly one window — product
+committed until the trigger increments `count`. The trigger knew nothing about it, so after it fired
+the product was counted **twice** and the merchant's allowance shrank permanently.
+
+Measured, before reconciliation: against a limit of ten, **only five server creates would succeed**.
+After: all ten succeed and the eleventh is refused. That assertion is now in the suite.
+
+### The invariant, stated
+
+    count           products/{id} with sellerUid == uid   (a recount is the authority)
+    serverReserved  server creates COMMITTED but not yet counted.
+                    Transient. Floor 0. NEVER entitlement debt.
+    usage           count + serverReserved
+
+Three changes, all in `functions/product-limit.js`:
+
+* **`onMarketplaceProductCreated` consumes one reservation** as it records the count that supersedes
+  it, in the same transaction.
+* **`recountMarketplaceProducts` clears reservations** — it counts from source, so anything
+  outstanding is by definition already represented or gone. It is the reconciliation authority, and
+  the real drift case it repairs is on record: one shop reading **-23 against 103 real products**.
+* **`canPublishProduct` answers from `usage`, not `count`** — an outstanding reservation is a product
+  that exists, so an advisory ignoring it would offer a slot the server writer has already taken.
+  `count` keeps its old meaning for existing callers; `reserved` and `used` are added.
+
+### FLOORED, and written absolutely — not `increment(-1)`
+
+A browser-created product has no reservation to consume, and a decrement would drive the field
+negative, which would then hand out allowance nobody reserved. The value is written as `held - 1`
+after a read, so it is also safe under transaction retry.
+
+A browser create may therefore consume a reservation belonging to a concurrent server create. That is
+harmless and asserted: the server create's own trigger still records its `count`, so two products
+yield two counts and no reservation either way.
+
+### The residual, asserted so it cannot be quietly forgotten
+
+**Firestore rules do not read `serverReserved`** — rules were not changed in this mutation — so a
+BROWSER create is still gated on `count < maxProducts` alone and can pass while a reservation is
+outstanding. A merchant could reach `max + 1` in that narrow mixed-writer window. It fails open by
+exactly one, only while both writers exist, and it disappears when `seller.js` migrates to the
+canonical writer. The suite asserts the documentation of this residual, the absolute-write floor, that
+no rules file was touched, and that the catalogue is still not wired.
+
+**Still NOT proven: true concurrent contention.** A fake transaction cannot reproduce Firestore's
+conflict detection, the emulator takes locks, and production aborts on `updateTime`. What is asserted
+is the mechanism (the writer reads and writes the counter inside its transaction) and the arithmetic
+of the lifecycle. The suite prints that limitation in its own output.
+
+### One neighbouring gate, correctly triggered
+
+`scripts/verify-listing-limit-single-source.js` went from 2 failures to 3: it demands that any new
+file declaring an allowance be **classified in review**, and my new suites carry `maxProducts`
+fixtures. Both are classified `TOOLING` with dated evidence, in the style the file requires.
+
+**`functions/pos-inventory-pro.js` is deliberately NOT classified, and that absence is the evidence
+that matters:** the canonical writer re-implements the rules' `withinProductLimit()` check but READS
+`maxProducts` from `productCounters`, which `product-limit.js` resolves from the canonical catalogue.
+It declares no allowance of its own, so it is not a twelfth table — and this guard would have caught
+it if it were.
+
+The gate still exits 1 on **two pre-existing failures** in files this session never touched —
+`universal-onboarding.js` (ADVERTISED_ONLY: advertises 50 listings while 10 is enforced) and
+`sasos-core.js` (DUPLICATE). Both classifications predate this session. Recorded, not fixed, and not
+counted as a pass.
+
+**Files affected:** `functions/product-limit.js`,
+`scripts/test-product-counter-reconciliation.js` (new),
+`scripts/verify-listing-limit-single-source.js`, `CHANGELOG.md`.
+**Database changes:** `productCounters` gains `serverReserved` / `serverReservedAt` (written only by
+the canonical writer, cleared by the create trigger and by a recount). **API changes:**
+`canPublishProduct` adds `reserved` and `used`; `allowed`/`remaining` now derive from `used`, which is
+stricter, never looser. **Security changes:** none — the entitlement is enforced more accurately, not
+less. **Breaking changes:** none; `count` keeps its meaning for existing callers.
+
 ## 2026-09-22 (178) — the canonical `products` writer, built but not yet wired
 
 **NO DEPLOY. NO RULES CHANGE.** Live remains 111dbd7 / v636.

@@ -162,12 +162,48 @@ async function syncLimit(uid) {
  * ends up with a correct count rather than a hole. maxProducts is only filled in
  * when absent, so a sync that already ran is never clobbered by a product write.
  */
-async function _bump(uid, delta) {
+/* ── serverReserved: WHAT IT IS, AND WHY THIS TRIGGER MUST CLEAR IT ──────────
+   `upsertCanonicalProduct` (the server-side products writer) cannot read the
+   count and then create: two concurrent creates would both pass at count =
+   max-1. So it reserves inside its transaction — it READS AND WRITES this
+   counter document, which is what makes Firestore's conflict detection serialise
+   them.
+
+   That reservation covers exactly one window: from the moment the product
+   document commits to the moment THIS trigger increments `count`. After that the
+   product is counted twice — once as a reservation, once as a count — and the
+   merchant's allowance silently shrinks. So a create consumes one reservation as
+   it records the count that supersedes it.
+
+       serverReserved = server creates COMMITTED but not yet counted.
+                        Transient. Floor 0. NEVER entitlement debt.
+       effective usage = count + serverReserved
+
+   FLOORED, AND WRITTEN ABSOLUTELY, NOT AS increment(-1). A browser-created
+   product has no reservation to consume, and a decrement would drive the field
+   negative — which would then hand out allowance that was never reserved. The
+   floor also makes the operation safe under transaction retry, and it means a
+   browser create may consume a reservation belonging to a concurrent server
+   create: harmless, because the server create's own trigger still records its
+   `count`, so the TOTAL stays right either way.
+
+   This is deliberately the whole reconciliation. `serverReserved` is not read by
+   rules (rules cannot be changed in this mutation), so a BROWSER create is still
+   gated on `count < maxProducts` alone and can pass while a reservation is
+   outstanding — a merchant could reach max+1 in that narrow mixed-writer window.
+   That residual is stated, not closed, and it disappears when the browser writer
+   migrates to the canonical one. */
+async function _bump(uid, delta, opts) {
   if (!uid) return;
+  const consumeReservation = !!(opts && opts.consumeReservation);
   const ref = db.collection(COUNTER).doc(uid);
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const patch = { uid, count: F.increment(delta), updatedAt: F.serverTimestamp() };
+    if (consumeReservation) {
+      const held = snap.exists ? Number(snap.data().serverReserved || 0) : 0;
+      if (held > 0) patch.serverReserved = held - 1;
+    }
     if (!snap.exists || typeof snap.data().maxProducts !== 'number') {
       const { max, status } = await resolveMaxProducts(uid);
       patch.maxProducts = max;
@@ -186,7 +222,8 @@ exports.onMarketplaceProductCreated = onDocumentCreated(
   async (event) => {
     const d = event.data?.data();
     if (!d || !d.sellerUid) return;
-    await _bump(String(d.sellerUid), 1);
+    /* The count recorded here SUPERSEDES the reservation the server writer held. */
+    await _bump(String(d.sellerUid), 1, { consumeReservation: true });
   }
 );
 
@@ -215,21 +252,29 @@ exports.canPublishProduct = onCall({ region: REGION }, async (req) => {
   const snap  = await db.collection(COUNTER).doc(uid).get();
   const data  = snap.exists ? snap.data() : {};
   const count = Number(data.count || 0);
+  /* An outstanding server reservation is a product that EXISTS and has not been
+     counted yet, so an advisory that ignored it would tell a merchant they have a
+     slot the server writer has already taken. `count` keeps its meaning for any
+     existing caller; `used` is what the answer is derived from. */
+  const reserved = Number(data.serverReserved || 0);
+  const used     = count + reserved;
 
   const { max, status } = typeof data.maxProducts === 'number'
     ? { max: data.maxProducts, status: data.status || 'unknown' }
     : await resolveMaxProducts(uid);
 
   const unlimited = max === -1;
-  const allowed   = unlimited || count < max;
+  const allowed   = unlimited || used < max;
 
   return {
     allowed,
     count,
+    reserved,
+    used,
     limit: max,
     unlimited,
     status,
-    remaining: unlimited ? -1 : Math.max(0, max - count),
+    remaining: unlimited ? -1 : Math.max(0, max - used),
     /* Structured so the client renders a real message, never a raw error. */
     upgrade: allowed ? null : {
       code:    'PRODUCT_LIMIT_REACHED',
@@ -255,7 +300,13 @@ exports.recountMarketplaceProducts = onCall({ region: REGION }, async (req) => {
   const { max, status } = await resolveMaxProducts(target);
 
   await db.collection(COUNTER).doc(target).set(
-    { uid: target, count, maxProducts: max, status, recountedAt: F.serverTimestamp(), updatedAt: F.serverTimestamp() },
+    { uid: target, count, maxProducts: max, status,
+      /* The recount is the reconciliation AUTHORITY: it counts products from source,
+         so any outstanding reservation is by definition already represented or gone.
+         Leaving it would keep charging the merchant for an in-flight create that has
+         since been counted. */
+      serverReserved: 0,
+      recountedAt: F.serverTimestamp(), updatedAt: F.serverTimestamp() },
     { merge: true }
   );
   return { uid: target, count, limit: max, status };
