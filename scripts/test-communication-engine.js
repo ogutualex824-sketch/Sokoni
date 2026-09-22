@@ -1057,8 +1057,15 @@ console.log('\n── Delivery RESOLVED by evidence; supplier still BLOCKED ─�
      honest rather than letting one mount imply two. */
   ck('delivery-tracking.html is mounted on the resolved anchor',
     /sokoni-connect-call\.js/.test(dt));
-  ck('seller-delivery.html is NOT mounted yet, and is not claimed',
-    !/sokoni-connect-call\.js/.test(sd));
+  /* RETARGETED a third time, and this is the last move it should need: both
+     Marketplace delivery surfaces are now mounted on the canonical anchor, so
+     the delivery capability has no ambiguous half. scripts/test-delivery-mount.js
+     and scripts/test-seller-delivery-mount.js own their surfaces' assertions;
+     what belongs HERE is only that neither one drifted back to the hub. */
+  ck('seller-delivery.html is mounted on the same canonical anchor',
+    /sokoni-connect-call\.js/.test(sd));
+  ck('…and neither delivery surface reads the Delivery Hub collection',
+    !/collection\(['"]deliveries['"]\)/.test(sd));
 
   /* SUPPLIER. `collection('suppliers')` has no writer anywhere in functions/ except the
      resolver that reads it, and no client surface reads it at all. */

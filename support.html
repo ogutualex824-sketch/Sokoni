@@ -61,6 +61,9 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:#fff;m
 .sp-status{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;}
 .sp-status-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
 .sp-status-dot.green{background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,0.5);}
+/* UNOBSERVED. Not green, not red — this page has measured nothing, and a
+   colour would be a claim. Grey is the absence of a claim. */
+.sp-status-dot.unknown{background:rgba(255,255,255,0.28);}
 .sp-status-dot.amber{background:#f59e0b;}
 .sp-status-dot.red{background:#ff4444;}
 .sp-faq-item{border-bottom:1px solid rgba(255,255,255,0.06);}
@@ -94,10 +97,21 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:#fff;m
 
   <!-- PLATFORM STATUS -->
   <div style="margin-bottom:16px;">
+    <!-- STATUS IS NOT CLAIMED HERE.
+
+         This block used to read "All Systems Operational" beside a green dot,
+         permanently, on a page that performs no health check whatsoever. It was
+         not a status; it was a decoration that happened to be reassuring, and it
+         would have said the same thing during an outage.
+
+         The platform's own health model distinguishes observed-healthy from
+         observed-failed from NOT OBSERVED, and the third is what this page
+         honestly has. It renders as an em dash and a grey dot. The live status
+         page is one tap away and is where a real answer belongs. -->
     <div class="sp-status">
-      <div class="sp-status-dot green"></div>
+      <div class="sp-status-dot unknown" id="spStatusDot"></div>
       <div>
-        <div style="font-size:13px;font-weight:800;">All Systems Operational</div>
+        <div style="font-size:13px;font-weight:800;" id="spStatusLabel">Service status &mdash; not checked here</div>
         <div style="font-size:11px;color:rgba(255,255,255,0.3);">Marketplace · Payments · Delivery · Rides</div>
       </div>
       <a href="monitor.html" style="margin-left:auto;font-size:11px;color:rgba(255,255,255,0.3);text-decoration:none;">Live Status ↗</a>
