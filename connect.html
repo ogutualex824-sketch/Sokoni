@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SOKONI Connect — Session</title>
+<!--
+  GATE C2 — the projection surface.
+
+  This is the page the ring notification deep-links to
+  (/connect.html?session=…). It RENDERS what connectGetSessionState says and
+  offers only the actions that projection contains. It holds no state machine.
+
+  IT CARRIES NO MEDIA. There is no RTCPeerConnection on this page and no
+  getUserMedia call. The media adapter arrives in C3; until then a session can
+  be answered and ended, and no audio or video ever flows. Nothing here should
+  be read as evidence that a call connects.
+
+  Real-device push delivery is likewise UNPROVEN. This page can be opened by
+  hand with a session id; that a notification ever reached a handset and
+  produced a visible incoming call has not been demonstrated.
+-->
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
+<script src="/sokoni-config.js"></script>
+<script src="/sokoni-appcheck.js"></script>
+<style>
+  :root { --bg:#050505; --sur:#0d0d0d; --sur2:#161616; --bor:#1f1f1f; --txt:#fff;
+          --sub:#8a8a8a; --g:#71ff00; --red:#ff4d4d; --amber:#f5a623; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--txt);
+         font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         padding:20px; padding-top:calc(20px + env(safe-area-inset-top));
+         padding-bottom:calc(40px + env(safe-area-inset-bottom));
+         max-width:520px; margin:0 auto; line-height:1.5; }
+  h1 { font-size:19px; font-weight:900; }
+  .sub { color:var(--sub); font-size:13px; margin:4px 0 18px; }
+  #cxRoot { background:var(--sur); border:1px solid var(--bor); border-radius:16px; padding:18px; }
+  .cx-state { display:flex; justify-content:space-between; align-items:baseline; gap:12px; }
+  .cx-k { color:var(--sub); font-size:12px; text-transform:uppercase; letter-spacing:.06em; }
+  .cx-v { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:17px; font-weight:800; color:var(--g); }
+  .cx-meta { display:flex; flex-wrap:wrap; gap:10px; margin-top:10px;
+             color:var(--sub); font-size:12px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .cx-actions { display:flex; flex-direction:column; gap:10px; margin-top:18px; }
+  .cx-act { min-height:48px; border-radius:14px; border:1px solid var(--bor);
+            background:var(--sur2); color:var(--txt); font-size:15px; font-weight:800; cursor:pointer; }
+  .cx-act:disabled { opacity:.5; cursor:default; }
+  .cx-primary { background:var(--g); color:#000; border-color:var(--g); }
+  .cx-danger { color:var(--red); border-color:rgba(255,77,77,.35); }
+  .cx-silent { color:var(--sub); font-weight:600; }
+  .cx-muted { color:var(--sub); font-size:13px; }
+  .cx-warn { color:var(--amber); font-size:13px; margin-top:12px; }
+  .ci-card { border:1px solid var(--bor); border-radius:14px; background:var(--sur2);
+              padding:14px; margin-bottom:12px; }
+  .ci-title { font-size:15px; font-weight:800; }
+  .ci-about { color:var(--sub); font-size:13px; margin-top:2px; }
+  .ci-meta { display:flex; flex-wrap:wrap; gap:10px; margin-top:8px; color:var(--sub);
+             font-size:12px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .ci-actions { display:flex; gap:10px; margin-top:14px; }
+  .ci-act { flex:1; min-height:48px; border-radius:14px; border:1px solid var(--bor);
+            background:var(--sur); color:var(--txt); font-size:15px; font-weight:800;
+            cursor:pointer; display:flex; align-items:center; justify-content:center;
+            text-decoration:none; }
+  .ci-act:disabled { opacity:.5; cursor:default; }
+  .ci-primary { background:var(--g); color:#000; border-color:var(--g); }
+  .ci-danger { color:var(--red); border-color:rgba(255,77,77,.35); }
+  .ci-muted { color:var(--sub); font-size:13px; }
+  .ci-warn { color:var(--amber); font-size:13px; margin-top:12px; }
+  .note { color:var(--sub); font-size:12px; margin-top:18px; border-top:1px solid var(--bor); padding-top:14px; }
+  .note b { color:var(--amber); }
+</style>
+</head>
+<body>
+  <h1>SOKONI Connect</h1>
+  <div class="sub" id="cxAbout">Business call session.</div>
+
+  <div id="cxRoot"><p class="cx-muted">Loading session…</p></div>
+
+  <p class="note">
+    <b>No media on this page.</b> Audio and video are not carried yet — the WebRTC adapter is
+    a separate piece of work. A session can be answered and ended; nothing is transmitted.
+  </p>
+
+<script src="/sokoni-connect-client.js"></script>
+<!-- C3-B. Loaded AFTER the C2 client because it routes every action through it. -->
+<script src="/sokoni-connect-incoming.js"></script>
+<!-- Every page must self-update after a deploy, or it serves stale. -->
+<script src="/sw-register.js" defer></script>
+<script>
+(function () {
+  'use strict';
+
+  if (!firebase.apps.length) firebase.initializeApp(window.SOKONI_CONFIG || {});
+  var auth = firebase.auth();
+  var fns  = firebase.app().functions('us-central1');
+
+  var root = document.getElementById('cxRoot');
+
+  /* One dispatcher, exactly as the rest of the platform routes. The client
+     names an OP; it never names an actor, a from-state, or a participant. */
+  function call(op, payload) {
+    var data = {};
+    for (var k in (payload || {})) if (Object.prototype.hasOwnProperty.call(payload, k)) data[k] = payload[k];
+    data.op = op;
+    return fns.httpsCallable('connectDispatch')(data).then(function (r) { return r.data; });
+  }
+
+  var params = new URLSearchParams(location.search);
+  var sessionId = (params.get('session') || '').trim();
+
+  auth.onAuthStateChanged(function (u) {
+    if (!u) {
+      location.href = '/login.html?next=' + encodeURIComponent(location.pathname + location.search);
+      return;
+    }
+    if (!sessionId) {
+      /* GATE C3-B. No session named means this is not a deep link — it is someone
+         opening Connect to see whether anybody is calling them. That is the whole
+         point of the incoming surface: a person who dismissed the notification, or
+         never received one, still reaches a ringing call. */
+      if (!window.SokoniConnectIncoming) {
+        root.innerHTML = '<p class="cx-warn">The incoming-call surface did not load. ' +
+          'Check that sokoni-connect-incoming.js is served on this page.</p>';
+        return;
+      }
+      document.getElementById('cxAbout').textContent = 'Calls waiting for you.';
+      window.SokoniConnectIncoming.mount(root, { call: call });
+      return;
+    }
+    if (!window.SokoniConnectClient) {
+      root.innerHTML = '<p class="cx-warn">The Connect client did not load. ' +
+        'Check that sokoni-connect-client.js is served on this page.</p>';
+      return;
+    }
+    window.SokoniConnectClient.mount(root, {
+      sessionId: sessionId,
+      call: call,
+      onProjection: function (p) {
+        /* The subtitle is DISPLAY only and reads whatever the server sent. */
+        var el = document.getElementById('cxAbout');
+        if (el && p) {
+          el.textContent = (p.channel ? p.channel : 'business') + ' session' +
+            (p.mode ? ' · ' + p.mode : '');
+        }
+      },
+    });
+  });
+})();
+</script>
+</body>
+</html>

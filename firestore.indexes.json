@@ -6335,6 +6335,20 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "connectSessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "calleeUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [
