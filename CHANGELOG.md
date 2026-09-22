@@ -1,3 +1,1499 @@
+## 2026-09-22 (168) — contract shapes derived from the producer; engine contracts frozen; the bypass backlog assessed
+
+**NO DEPLOY. Live remains 111dbd7 / v636.** A boundary slice: contracts frozen, one new kind
+of test, and a backlog written down rather than migrated.
+`docs/SOKONI_COMMUNICATION_ENGINE.md` · `docs/COMMUNICATION_NOTIFY_BYPASS_BACKLOG.md`.
+
+`scripts/test-contract-shapes.js` **32 pass, 0 fail** (NEW) ·
+`scripts/test-communication-engine.js` **420 pass** (was 400) ·
+`scripts/test-connect-authority.js` **856 pass, 0 fail** ·
+capability consumers, subscription consistency, AdminOS wiring, booking payment auth,
+money-toast safety all pass.
+
+### Fixtures derived from the producer, not invented by the test
+
+`sokoni-connect-client.js` rendered `p.state`; `connectGetSessionState` has always returned
+`status`. The session state on connect.html rendered as an em dash from the day it shipped and
+**522 green tests never saw it**, because every assertion drove the renderer with projections
+the suite wrote itself. The fixture agreed with the renderer because the same author wrote
+both.
+
+`scripts/test-contract-shapes.js` parses each producer's `return { … }` out of its source and
+asserts **every field a consumer reads is one the producer emits**. Four contracts are checked:
+Connect's session projection, the communication timeline, the admin plan/send/health surface,
+and the Call button.
+
+**It carries two controls, because a suite of passes proves nothing about whether the detector
+can fail.** The extractor is exercised on a known sample (named keys, shorthand keys, nested
+keys excluded, arrays excluded), and the original defect is reconstructed synthetically — a
+consumer reading `p.state` — and run through the same comparison against the same real
+producer keys. It flags `state` and not `status`. Without that, the twenty-nine passes above
+would mean only that the parser found nothing.
+
+Two real things fell out: the extractor was reading `sent: false,` as a key named `false`
+(making the contract permissive enough to accept `.false`), and `sokoni-comms-send.js` named
+the callable transport envelope `r` — the same name as the response — so `.data` read as a
+contract field. Both fixed.
+
+### Engine contracts frozen
+
+`communication-envelope.js` now declares `CONTRACT` and the suite asserts it **both ways** —
+every declared name exported, every export declared.
+
+The **anchor resolver** is pinned on behaviour, not shape:
+
+1. canonical ids only, nothing inferred beyond the table
+2. a payment reference is **never** an anchor (`payRef`, `paymentRef`, `apiRef` all refused)
+3. no guessing — unmatched input returns `null`, not a best effort
+4. an empty or whitespace id is not an anchor
+
+The **notification-schema compatibility** is pinned: `notifications` spells the recipient both
+`uid` and `userId`, both are read, and the local writers keep their own spelling untouched.
+Reading one would silently drop the other population, and an empty timeline reads as "nothing
+happened".
+
+The **support projection** is pinned: opening message and resolution as separate
+communications, from the canonical document, with no second store and no write path.
+
+### The C2/C3 boundary, stated as an invariant
+
+C3-C landed in parallel. The guard is no longer "there is no media" — that boundary moved —
+but that the **projection layer never becomes a second media authority**: no peer connection,
+no ICE servers, no media-event interpretation, no invented media-driven transition, and the
+report op as the only media route.
+
+### The bypass backlog: assessed, not migrated
+
+`docs/COMMUNICATION_NOTIFY_BYPASS_BACKLOG.md`. **No code changed.**
+
+The finding that matters more than the count: **four of the five remaining modules have no
+approved business anchor at all.** `sub-billing`, `sub-engine`, `loyalty` and
+`franchise-engine` notify about subscriptions, points and applications — none of which is one
+of the six approved anchors. Anchoring them to "the last order this person placed" would raise
+a number and file a real communication under a relationship it has nothing to do with.
+
+So **the honest ceiling is not 100%**, and the correct end state leaves them outside the
+unified timeline, recorded as unanchored, which is what they are. `installments.js` is the one
+genuine candidate and is not wired, because nobody has confirmed `plan.orderId` is populated
+and this backlog does not guess.
+
+The doc also records what a migration slice would have to establish first — five questions
+about suppression, dedupe and before/after row counts — because converting a local `_notify`
+to the engine is a behaviour change to live revenue paths, not a refactor.
+
+### Files
+
+| File | Change |
+|---|---|
+| `scripts/test-contract-shapes.js` | NEW — producer-derived contract checks, two controls |
+| `functions/shared/communication-envelope.js` | `CONTRACT` declared and frozen |
+| `sokoni-comms-send.js` | callable envelope disambiguated from the response |
+| `scripts/test-communication-engine.js` | 400 → **420** (contract freeze, C2/C3 boundary) |
+| `docs/COMMUNICATION_NOTIFY_BYPASS_BACKLOG.md` | NEW — assessed, no migration |
+
+**Database:** none. **API:** none. **Security:** none changed. **Breaking:** none.
+
+### Position
+
+```
+Communication Engine   420/0   anchor coverage 3/13 (23%), boundaries known
+Contract shapes         32/0   derived from producers, controls hold
+Connect authority      856/0   C1/C2 frozen; C3-B and C3-C landed in parallel
+Bypass backlog          5 modules untouched; 4 have no legitimate anchor
+```
+
+Nothing deployed.
+---
+
+## 2026-09-22 (167) — Gate C3-C: the WebRTC adapter, and a seam that had rendered a dash since C2
+
+**NO DEPLOY. Live remains 111dbd7 / v636.** `docs/SOKONI_CONNECT.md`.
+
+`scripts/test-connect-authority.js` **856 pass, 0 fail** (was 758 at C3-B, +98) ·
+`scripts/test-connect-rules.js` **37 pass, 0 fail** on the emulator, unchanged — C3-C adds
+**no rule and no server op** · capability consumers **18/0** · subscription consistency pass ·
+C3-C negative control **11 held, 0 leaked**.
+
+### Three things that had never met
+
+| | |
+|---|---|
+| `connectSignal` | relayed offers, answers and candidates into a subcollection **nothing read** |
+| `reportableEvents` | was projected to a client with **no media stack** to produce one |
+| `transportPlan: ['webrtc']` | was authorized on every session and **never attempted** |
+
+### Files affected
+
+| File | Change |
+|---|---|
+| `sokoni-connect-media.js` | **new** — the adapter: observation, signalling, ICE honesty |
+| `connect.html` | attaches it on the server's say-so; firestore for the signal listener |
+| `sokoni-connect-client.js` | **one field**: `p.state` → `p.status` (see below) |
+| `sokoni-connect-incoming.js` | drops the tolerant `state`-then-`status` fallback |
+| `firestore.indexes.json` | `signals` (`to`, `createdAt`) composite declared |
+| `scripts/test-connect-authority.js` | +98 assertions; four C2-era assertions retargeted |
+| `docs/SOKONI_CONNECT.md` | Gate C3-C section, ladder, deployment table, Not-built |
+
+### API changes
+
+**None.** No new op — the op count stays at 13. The peer reads the signals addressed to it
+straight from Firestore, because `firestore.rules` has allowed exactly that since C2 and it
+is already certified (C14–C17). A callable would have been a second read path for something
+already authorized.
+
+### Database changes
+
+None. One composite index **declared** (not deployed) for the signal listener.
+
+### Security changes
+
+- The adapter has **no route to the backend** except C2's `reportObservation`. Without that
+  handle it refuses to attach rather than falling back — there is no second path to fall back
+  to, and the refusal is the proof.
+- It can emit **no session state name**. The suite enumerates every event it is capable of
+  emitting and asserts the range is exactly the authority's six.
+- The page runs **no signalling logic**; it supplies a factory and `getUserMedia`, nothing more.
+- The listener reads only `to == uid` and acts on **added** changes, so a re-delivered
+  snapshot cannot replay an offer. A refused or unindexed listener is **shown**, not swallowed.
+
+### Breaking changes
+
+None.
+
+### The defect this gate found
+
+C2's `renderHtml` asked for `p.state`; the server has always sent `status`. **The session
+state on `connect.html` rendered as a dash from the day C2 shipped.** The C2 suite never
+caught it because it drives `renderHtml` with synthetic projections it writes itself — a
+fixture agrees with whatever you wrote in it. The C3-B banner masked it further by reading
+`state` first and falling back.
+
+Fixed by making C2 read what the server sends. **This is a one-field change to a frozen
+file** and is called out rather than folded in quietly. The durable guard is a seam
+assertion comparing C2's reads against the real `_project` output, with a positive control.
+
+### What is still NOT proven, and is not claimed
+
+WebRTC actually connecting · TURN/STUN (none exists to test) · NAT traversal ·
+cross-network calling · physical push · handset incoming-call delivery · mobile resilience ·
+anything deployed. The suite drives a **fake** `RTCPeerConnection`. Green C3-C means the
+adapter cannot lie to the authority. It does not mean a call works.
+
+**SOKONI operates no relay.** The client supplies an empty `iceServers` list and says so in
+the visible page. There is no `stun:` or `turn:` URL in it and no default — borrowing a
+public STUN would manufacture a transport the platform does not operate, and would make "it
+connected" evidence of somebody else's server.
+
+### Notes for the owner
+
+- Four C2-era assertions asserted that C3 *had not happened yet*, using "there is no
+  RTCPeerConnection on the page" as the proxy for "SOKONI cannot claim calls work". C3-C makes
+  the proxy false and leaves the guarantee intact, so each was **retargeted onto the
+  guarantee**, not deleted. A concurrent agent independently retargeted two of them in the
+  same window; theirs stand.
+- The concurrent agent's subset-check on the op inventory (entry 164) is unchanged and still
+  worth a decision once the Communication Engine work reaches a boundary.
+- This entry is written to the working tree but **not staged**, for the same reason as (164):
+  `CHANGELOG.md` carries other agents' uncommitted entries.
+
+
+## 2026-09-22 (166) — the in-app feed and support cases join the timeline; one anchor resolver
+
+**NO DEPLOY. Live remains 111dbd7 / v636.** Extends (165).
+`docs/SOKONI_COMMUNICATION_ENGINE.md`.
+
+`scripts/test-communication-engine.js` **400 pass, 0 fail** (was 365) ·
+`scripts/test-connect-authority.js` 854 pass, **1 fail — not mine** (see below) ·
+capability consumers, subscription consistency, AdminOS wiring, booking payment auth,
+money-toast safety all pass.
+
+### A correction to (165)
+
+I called the seven local `_notify` helpers "a second sender". They are not. They write the
+in-app `notifications` collection **directly** and send no push, SMS or email at all. What they
+bypass is the engine's preferences, quiet hours, dedupe and audit row — real, but a narrower
+claim than the one I made. The audit's finding stands; my characterisation of it was too broad.
+
+### One anchor resolver, and it refuses to guess
+
+`ENV.anchorFrom(metadata)` — one ordered table mapping `orderId → order`, `bookingId →
+booking`, `deliveryId → delivery`, `ticketId → support`, and so on. The alternative was the
+same conditional at every call site, spelled slightly differently at one of them.
+
+**A payment reference is deliberately not an anchor.** It identifies a transaction with a
+provider, not a SOKONI business relationship, and anchoring to it would build a timeline nobody
+can look up. Nor is a dispute or request id: neither is an approved relationship. The resolver
+returns **null rather than guessing** — filing a real communication under the wrong business
+relationship is worse than leaving it unjoinable, because somebody later reads it as evidence.
+
+Order wins over delivery when both are present: the leg belongs to the order.
+
+### The in-app feed joins
+
+`financial-os.js` and `automation-engine.js` now record `anchorType`/`anchorId`/`anchored` on
+the rows they already write. **Purely additive — no send path was added and no routing
+changed**, which the suite asserts both ways. A call site with no anchor in scope passes none
+and the row records itself unanchored, exactly as before.
+
+The timeline reads `notifications` by anchor, and reads **both recipient spellings** (`uid` and
+`userId`) because that collection uses both. Choosing one would have silently dropped half the
+platform, and an empty timeline reads as "nothing happened".
+
+### Support cases join
+
+`supportTickets` projects under `anchorType: 'support'` on its own id, so `support/CASE-2218`
+gathers the case, any chat about it, any call, and any notification anchored to it.
+
+**The resolution is a second communication, not a field on the first.** It happened later and
+by somebody else; collapsing the two would lose both facts.
+
+**No second message store.** The case document already holds the opening message and the
+resolution; the timeline projects them and copies nothing. Five sources now join:
+`conversations`, `connectSessions`, `notifyLog`, `notifications`, `supportTickets`.
+
+### Still partial, and still says so
+
+`anchorCoverage` now names five wired call sites and states plainly that the rest are not, and
+that several events are genuinely context-free and never will be. `complete: false` still
+travels with every response. Engine-caller coverage is **3 of 13 (23%)** — reported, not
+rounded up.
+
+### A suite made resilient rather than brittle
+
+Two assertions were retargeted rather than deleted. They asserted that `connect.html` carries
+no media — true and important while C2 was the boundary. **C3-C is being built in parallel and
+that boundary has moved.** Deleting them to go green would have removed a guard at the exact
+moment the code it guards started existing, so they now assert the invariant that survives:
+the C2 **projection layer** holds no media stack and no route to a media-driven state,
+whatever the page gains.
+
+One assertion also failed on this file's own comment naming `RTCPeerConnection` to say it does
+not belong there. Stripped before asserting — the same lesson, again.
+
+### The one remaining failure is not mine
+
+`…which is the ONLY route to the connected state, and it is the server's to take` is the
+parallel agent's **in-progress C3-C test**. It is their slice, mid-build. **Not touched, not
+"fixed", and reported rather than absorbed.**
+
+### Files
+
+| File | Change |
+|---|---|
+| `functions/shared/communication-envelope.js` | `ANCHOR_ID_FIELDS`, `anchorFrom` |
+| `functions/financial-os.js` | `_notify` records the anchor — additive |
+| `functions/automation-engine.js` | same |
+| `functions/communication-timeline.js` | joins `notifications` and `supportTickets`; coverage updated |
+| `scripts/test-communication-engine.js` | 365 → **400** |
+| `scripts/test-connect-authority.js` | two C2-era assertions retargeted, not deleted |
+
+**Database:** `notifications.anchorType` / `.anchorId` / `.anchored` — server-written,
+optional. **API:** none. **Security:** none changed. **Breaking:** none.
+
+### Not built
+
+The remaining five bypassing modules (`sub-billing`, `sub-engine`, `loyalty`,
+`franchise-engine`, `installments` — 24 calls) are untouched: several have no approved anchor
+in scope, and forcing one is what the brief forbids. Ten engine call sites still pass no
+anchor. No contextual Message/Call buttons on order, delivery or shop pages. No AdminOS
+sub-tabs. No offline outbox. Kass is not wired to a model. Nothing is deployed.
+
+---
+
+## 2026-09-22 (165) — anchor coverage measured (and the measurement found a second sender); Kass AI guardrails
+
+**NO DEPLOY. Live remains 111dbd7 / v636.**
+`docs/SOKONI_COMMUNICATION_ENGINE.md`.
+
+`scripts/test-communication-engine.js` **365 pass** (was 283) ·
+`scripts/test-connect-authority.js` **758 pass** · capability consumers, subscription
+consistency, AdminOS wiring, booking payment auth, money-toast safety all pass.
+
+### The audit found something worse than low coverage
+
+`scripts/audit-communication-anchors.js` — read-only, measured, controlled.
+
+```
+Files reaching the one notification engine : 13
+…passing a business anchor                 :  3
+MODULES WITH THEIR OWN NOTIFIER            :  7   (43 calls)
+```
+
+**Seven modules bypass `notify.js` entirely** with a local `_notify` helper —
+`automation-engine` (14 calls), `sub-billing` (8), `sub-engine` (6), `financial-os` (5),
+`loyalty` (4), `franchise-engine` (3), `installments` (3). An anchor added to the engine does
+**nothing** for any of them. That is the real ceiling on coverage, and `notify.js`'s own header
+already records that this exact fragmentation once produced a silent production failure.
+
+A coverage number computed only over engine callers would have been flattering and wrong. The
+audit prints both and says so: *"Coverage over engine callers is not coverage over SOKONI."*
+
+### The detector needed a control, and the control caught it
+
+The first draft looked for a helper named `notify`. The helpers are named `_notify`. It found
+**nothing** and would have reported five bypassing modules as compliant — a detector that
+cannot match is indistinguishable from an absence, and reads as good news.
+
+The audit now runs a **positive control** over five modules confirmed by hand and **exits
+non-zero** if it cannot find them, rather than printing a clean report it has not earned.
+
+### It refuses to flatter itself
+
+Context-free types are **declared** — `otp`, `welcome`, `password_reset`, `login_alert`,
+subscription and account events — so the exclusion is a decision someone can argue with rather
+than a shrug. The script says explicitly: never anchor these to raise a number. An anchor must
+refer to a real canonical business object.
+
+### Booking notifications now carry their anchor
+
+Three sites in `booking-payment-sweep.js` pass `anchorType: 'booking'` with the canonical
+`bookingId` — **not** the payment ref — and degrade to unanchored rather than to a wrong anchor
+when the id is absent. Verified in scope at each site rather than assumed.
+
+### Kass AI — informative, never authoritative
+
+`functions/shared/kass-knowledge.js`, pure: no firestore, no clock, no env, no require, and it
+calls no model.
+
+**It cannot change anything.** `mayPerform` is a WHITELIST of ten informational actions.
+Thirteen state-changing actions are named explicitly — authorize payment, release funds, issue
+refund, modify order, modify financial record, set verification, declare verified, modify
+permissions, set custom claims, alter Connect state, place call, choose recipient, send
+communication — each with the reason, so the refusal explains rather than saying "unknown
+action". Anything unlisted is refused: a capability nobody considered must not be permitted by
+the absence of a rule against it.
+
+**It cannot choose who to contact.** `recipientFromAnchorOnly` refuses a request naming
+`calleeUid`, `recipientUid`, `participantUids`, `phone` or `email`. The recipient is derived
+from the anchor — an assistant that can name one has reintroduced the exact defect Connect was
+built to prevent.
+
+**A plan is never presented as a capability.** Five knowledge statuses — `current`, `recent`,
+`historical`, `planned`, `forecast` — and only the first two may support "SOKONI does X".
+**Unclassified knowledge defaults to `planned`, not `current`**: this repository's docs describe
+frozen contracts, gates and roadmaps, and reading an unlabelled one as current is exactly how
+"SOKONI places calls" gets said. A document claiming `current` that has expired is reclassified
+historical — the document is not the authority on that.
+
+Every answer carries a label and, where needed, a disclaimer: a forecast says it is analysis
+and not a date; a planned answer says it is not something SOKONI does today; a historical one
+says it is not current. The text is never rewritten — only labelled.
+
+### Files
+
+| File | Change |
+|---|---|
+| `scripts/audit-communication-anchors.js` | NEW — measured coverage, positive-controlled |
+| `functions/shared/kass-knowledge.js` | NEW — knowledge status + guardrails, pure |
+| `functions/booking-payment-sweep.js` | three notifications anchored to `booking` |
+| `scripts/test-communication-engine.js` | 283 → **365** |
+
+**Database:** none. **API:** none. **Security:** Kass gains no authority; the guardrail list is
+a whitelist. **Breaking:** none.
+
+### Not built — and why
+
+The **seven bypassing modules are not converted**. That is 43 call sites across live payment,
+subscription and loyalty paths, and converting them is a behaviour change to money-adjacent
+code that deserves its own slice with its own evidence. Measured and named here; not touched.
+
+No contextual Message/Call buttons on order, delivery or shop pages — the C3-A `Call` module
+exists for those surfaces to mount, and mounting it across pages is a separate slice. No
+AdminOS sub-tabs. No offline outbox. Kass is not wired to a model or a retrieval corpus; this
+is the classification and the refusal, not the assistant. Support cases still do not join the
+timeline. Nothing is deployed.
+
+---
+
+## 2026-09-22 (164) — Gate C3-B: a ringing call is reachable without a push
+
+**NO DEPLOY. Live remains 111dbd7 / v636.** `docs/SOKONI_CONNECT.md`.
+
+`scripts/test-connect-authority.js` **758 pass, 0 fail** (was 674 at C3-A) ·
+`scripts/test-connect-rules.js` **37 pass, 0 fail** on the emulator, unchanged — C3-B adds no
+client Firestore access · capability consumers **18/0** · subscription consistency pass.
+
+### The gap this closes
+
+C1 dispatches a ring, C3-A creates the session, C2 renders one you are already looking at.
+Nothing answered **how the called person finds out**. The only route to a session was the deep
+link inside a push — a transport that is undeployed and, on a handset, unproven — and anyone
+who dismissed the notification had no way back to a call that was still ringing.
+
+### Files affected
+
+| File | Change |
+|---|---|
+| `functions/connect-calls.js` | `_project` extracted; `connectListIncoming` added (13th op) |
+| `sokoni-connect-incoming.js` | **new** — the incoming banner, C3-B |
+| `connect.html` | the no-session branch mounts the banner instead of a dead end |
+| `firestore.indexes.json` | `connectSessions` (`calleeUid`, `status`) composite declared |
+| `scripts/test-connect-authority.js` | +84 assertions |
+| `docs/SOKONI_CONNECT.md` | Gate C3-B section, ladder, deployment table, Not-built |
+
+### API changes
+
+One new dispatchable op, `connectListIncoming`, reached through `connectDispatch` like the
+other twelve. It is a **read**: it creates nothing, authorizes nothing and rings nobody.
+No existing op changed its contract. `connectGetSessionState` gained one additive field,
+`ring`, and now shares its whole shape with the new op.
+
+### Database changes
+
+None. No new collection, no new field written, no new writer. One composite index
+**declared** (not deployed) for the callee query.
+
+### Security changes
+
+- Participation is re-checked against `participants` rather than inferred from `calleeUid`.
+- The projection still returns opaque handles, never uids or telephone numbers, and the ring
+  label is asserted to contain neither.
+- Every value the banner renders is escaped; the suite injects a `<script>` tag to prove it.
+- **No second consent contract.** The banner cannot accept — it navigates to `connect.html`,
+  where C2 renders the server's six-field disclosure. Proven by driving the surface: Answer
+  navigates and `connectAnswerSession` is never called.
+- **No second action map.** Loaded without C2 the banner routes nothing at all, which is only
+  true of a module with no table of its own.
+
+### Breaking changes
+
+None.
+
+### What is still NOT proven, and is not claimed
+
+That a physical device alerted, that a push was delivered, that anything here is deployed, or
+that a call connects. C3-B makes a ringing session **reachable without a push**. It does not
+make a phone ring. The device-alert edge (`authorized → ringing`, callee side) is now taken by
+the banner when it paints — evidence recorded once, swallowed on failure, never a control.
+
+### Notes for the owner
+
+- The CHANGELOG entry above is written to the working tree but was **not staged with the C3-B
+  commit**: `CHANGELOG.md` carries 916 uncommitted lines of other agents' entries (151–162),
+  and staging it would have committed their work. Entries 141–146 are already stranded the
+  same way. One deliberate "commit the changelog backlog" action would clear all of it.
+- A concurrent agent rewrote the suite's op-inventory assertion into a **subset check** at
+  14:23 in response to `connectListIncoming`, and its "additional op is surfaced" line is
+  `ck(..., true, ...)` — an assertion that cannot fail. Left exactly as they wrote it rather
+  than reverted. It is worth a decision: the exact-list check was the tripwire that made an op
+  addition visible.
+
+
+## 2026-09-22 (163) — templates, the admin send path, and the router's first production caller
+
+**NO DEPLOY. Live remains 111dbd7 / v636.** Extends (162).
+`docs/SOKONI_COMMUNICATION_ENGINE.md`.
+
+`scripts/test-communication-engine.js` **283 pass** (was 209) ·
+`scripts/test-connect-authority.js` **758 pass** · capability consumers, subscription
+consistency, AdminOS wiring/render/security, money-toast safety all pass.
+
+### The router is load-bearing at last
+
+Until this slice `communication-router.js` was a policy module nothing consulted — a table with
+no reader, which is the defect this codebase has already paid for twice. `communicationPlan`
+and `communicationSend` both route through it, so the policy now decides real sends: a commerce
+message cannot become an SMS because the router says so, not because a comment says so.
+
+### Approved copy, and the blanks it refuses to send
+
+`functions/shared/communication-templates.js` — 16 templates across order, delivery, payment,
+account and support. Pure: no firestore, no clock, no env, no require, and it sends nothing.
+
+**A missing variable is a REFUSAL.** `render` throws on any unfilled placeholder, including an
+empty string and whitespace. The failure this prevents is the one everybody has received:
+*"Hi , your order  has been"* — a blank where a name should be is worse than no message,
+because it was sent on purpose and reads as contempt.
+
+**A template declares its channels**, and asking for one it does not declare is refused rather
+than silently reformatted. `account_restricted` is email and in-app **only**: a restriction
+needs explaining, and telling someone their account is restricted in forty characters with no
+room for why creates a support case instead of preventing one.
+
+Money templates are `critical`; browsing copy is `commerce`, so it can never route to SMS — the
+suite asserts that end to end. A custom message is allowed and recorded as **custom**, never
+dressed up as approved, because "what did we tell people" must stay answerable.
+
+### The admin send path — `functions/communication-send.js`
+
+Three admin-only callables. **Plan before send:** `communicationPlan` sends nothing and returns
+the channel decision *with every channel that was ruled out and why*. "Why didn't we text
+them?" is a question someone asks about a bill, and the answer belongs on the screen where the
+decision was made.
+
+`communicationSend` resolves who/what/which-channel and hands it to `notify.js`, which remains
+the one sender — no provider SDK is reached. Reachability is **read, never assumed**: presence
+from the same document Connect uses, tokens from the one notification engine (not a second
+field), and every absent signal reads as false. **No address or number is ever returned** —
+only whether a channel exists.
+
+A half anchor is refused rather than silently dropped: a message recorded unanchored when the
+operator thought they anchored it vanishes from the timeline they will go looking in. A send
+failure is reported, never smoothed into success, and a dedupe is reported as a dedupe.
+
+### Provider health reports provisioning, and leaks nothing
+
+`communicationHealth` reports whether each credential **exists**, as a boolean — no value, no
+length, no prefix. It says what it measures and what it does not: *"liveness, delivery rate, or
+latency — nothing here has sent anything."* A dashboard rendering "operational" over an expired
+API key is worse than one rendering nothing, because it is consulted during an incident.
+
+TURN and Google Workspace both report **not configured** — "we have no human mailbox transport"
+must be visible, not omitted.
+
+### The send surface is its own file
+
+`sokoni-comms-send.js`, mounted by both consoles through the console module, so
+`sokoni-comms-console.js` keeps its certified guarantee of containing no write path — exactly
+as `sokoni-gcp-admin.js` is kept apart from `sokoni-integrations.js`. The suite asserts the
+read console still reaches exactly one callable, the read-only timeline.
+
+The client renders **no copy of its own**: the template menu is a menu, and the server refuses
+anything it does not approve, so a stale menu produces a refusal rather than wrong copy.
+
+### Files
+
+| File | Change |
+|---|---|
+| `functions/shared/communication-templates.js` | NEW — 16 approved templates, pure |
+| `functions/communication-send.js` | NEW — plan / send / health, admin-only |
+| `functions/index.js` | three callables registered |
+| `sokoni-comms-send.js` | NEW — the one write surface |
+| `sokoni-comms-console.js` | mounts it; renders real provisioning when present |
+| `admin-os.html`, `super-admin.html` | load the send surface |
+| `scripts/test-communication-engine.js` | 209 → **283** |
+
+**Database:** none. **API:** three new admin-only callables. **Not deployed.**
+**Security:** admin claim checked server-side on all three; no secret value or contact detail
+is ever returned. **Breaking:** none.
+
+### Not built
+
+No offline outbox — the Sending/Sent/Delivered/Read ladder with a local queue is genuinely
+complex and half of it is worse than none. No user-facing "Help → Contact SOKONI" rebuild:
+`contact.html`, `help.html` and `support.html` already exist and `adminCreateSupportTicket`
+already creates cases, so a fourth surface would be the duplication this engine opposes — what
+those pages still need is the two-line anchor. Support cases are not yet joined to the
+timeline. Only one notification call site passes an anchor. Nothing is deployed.
+
+---
+
+## 2026-09-22 (162) — the anchor reaches notifyLog, and both consoles get the unified inbox
+
+**NO DEPLOY. Live remains 111dbd7 / v636.** Extends (161).
+`docs/SOKONI_COMMUNICATION_ENGINE.md`.
+
+`scripts/test-communication-engine.js` **209 pass** (was 145) ·
+`scripts/test-connect-authority.js` **675 pass** · capability consumers, subscription
+consistency, AdminOS wiring/render/security and money-toast safety all pass.
+
+### The one field, added
+
+`notify.js` now accepts and records `anchorType` + `anchorId`, with an explicit `anchored`
+flag. `notifyLog` recorded WHO was told and WHAT KIND of message it was — never WHICH ORDER it
+was about, which is why every push, SMS and email SOKONI had ever sent could not be tied to the
+business event it belonged to.
+
+**OPTIONAL, deliberately.** Every existing caller keeps working and records `anchored: false`,
+which is the honest answer for a notification nobody tied to a relationship. Making it
+mandatory would have meant editing every call site in one change, and a half-finished migration
+that throws is worse than one that reports.
+
+**Validated against the shared vocabulary**, imported from the envelope rather than restated:
+an anchor spelled `orders` instead of `order` would sit in the log *looking* joined and match
+nothing — worse than absent, because it reads as present. The validator is exercised directly,
+not read: misspelled type refused, type-without-id refused, id-without-type refused, and the
+row still records `anchored: false` rather than storing a half-anchor.
+
+**Connect is the first caller wired**, and the chain is proved to close: every Connect
+relationship kind is asserted to be a valid envelope anchor type.
+
+### The timeline joins all three stores — and still says it is partial
+
+`notifyLog` moved out of `unjoinableSources` (now empty, kept for the next unanchored
+transport) and into `JOINABLE_SOURCES`. But joining is not covering, so every response carries
+`anchorCoverage` and `complete: false`:
+
+1. rows written **before** the anchor shipped have none and never will
+2. call sites not yet given the two lines still write none
+
+An operator reading a short timeline is **told** it is partial rather than concluding the
+relationship was quiet.
+
+**A suppressed notification is not a failed one.** `processing` → `queued`, quiet hours and
+preferences → `suppressed`, and **nothing maps to `read`** — a push nobody opened was not read.
+
+### One console, two mount points
+
+`sokoni-comms-console.js` — the unified inbox, the business timeline and the provider table.
+
+| Console | Where |
+|---|---|
+| `admin-os.html` | Communications → **Inbox** tab |
+| `super-admin.html` | **Communications** section |
+
+`admin.html` carries neither. Both report a missing module as a missing module — an empty inbox
+and an absent script must never look the same. The console contains **no write path** and
+reaches exactly one callable, the read-only timeline.
+
+**It never claims a provider is healthy.** The state column is an em dash, and the visible body
+says why: provisioning is a server-side fact this read-only console has not been given, and
+liveness has not been observed at all. A green light would be the dashboard lying. The
+mailbox-is-not-a-fallback rule is restated where an operator reads it.
+
+### A parallel agent, and a suite that stopped being brittle
+
+`connectListIncoming` (Gate C3-B) appeared in `connect-calls.js` mid-slice, from another agent,
+along with a `_project` refactor that correctly gives `connectGetSessionState` and the new op
+one shared projection. **Their work was not reverted.**
+
+The Connect suite asserted op-list EQUALITY, which turned a colleague's legitimate addition
+into a red suite — and the temptation then is to delete their work to go green. It now asserts
+that every op this slice depends on is still registered (an op DISAPPEARING is the real
+regression) and **surfaces any additional op by name** rather than silently accepting it.
+
+### Files
+
+| File | Change |
+|---|---|
+| `functions/notify.js` | optional `anchorType`/`anchorId`, validated + recorded with `anchored` |
+| `functions/connect-notify.js` | passes the anchor — the first wired caller |
+| `functions/communication-timeline.js` | joins `notifyLog`; `anchorCoverage`; suppressed ≠ failed |
+| `sokoni-comms-console.js` | NEW — unified inbox, timeline, provider table |
+| `admin-os.html`, `sokoni-aos.js` | Communications → Inbox tab |
+| `super-admin.html` | Communications section: nav, panel, mount, loader, dispatch |
+| `scripts/test-communication-engine.js` | 145 → **209** |
+| `scripts/test-connect-authority.js` | op assertion made parallel-agent safe |
+
+**Database:** `notifyLog.anchorType` / `.anchorId` / `.anchored` — server-written, optional.
+**API:** none new. **Security:** none changed; the console is read-only.
+**Breaking:** none — the anchor is optional and every existing caller is unaffected.
+
+### Not built
+
+No user→admin contact flow. No templates library. Provider health shows no provisioning state
+(the console has not been given it). No offline outbox. **The router still has no production
+caller.** Only one notification call site passes an anchor. Nothing is deployed.
+
+---
+
+## 2026-09-22 (161) — SOKONI Communication Engine: the backbone, built around the frozen Connect contracts
+
+**NO DEPLOY. Live remains 111dbd7 / v636.** Full design:
+`docs/SOKONI_COMMUNICATION_ENGINE.md`.
+
+`scripts/test-communication-engine.js` **145 pass, 0 fail** (new) ·
+`scripts/test-connect-authority.js` **674 pass** (unchanged) ·
+capability consumers, subscription consistency, AdminOS wiring and money-toast safety all pass.
+
+**The Connect freeze was not touched.** C1 `API_CONTRACT`, C2
+`SokoniConnectClient.CONTRACT`, the actor vocabulary and the session states are re-asserted by
+the new suite. The engine was built AROUND them, as instructed.
+
+### The finding this is built on — measured, not assumed
+
+| Store | Carries | Joinable |
+|---|---|---|
+| `conversations/{id}` | `transactionType` + `transactionId` | **yes** |
+| `connectSessions/{id}` | `context.relationship` + `context.anchorId` | **yes** |
+| `notifyLog/{key}` | uid, type, priority, category | **NO — no business anchor** |
+
+A chat about order SK-99420 and a call about it can be joined today. The push that told the
+seller cannot, because nothing recorded which order it was about. **That single missing field
+is the difference between five systems and one.**
+
+### It sends nothing
+
+`notify.js` stays the one notification engine — tokens, routing, preferences, quiet hours,
+dedupe, audit. `messages.js` owns conversations, Connect owns sessions. The engine gives their
+records a common description. The suite asserts no module pulls in a provider SDK or calls a
+send path: **a second sender is the thing it exists to prevent.**
+
+### The envelope — `functions/shared/communication-envelope.js`
+
+One shape for seven channels, with the anchor that makes them joinable.
+
+`sent` is NOT terminal and NOT `delivered`; `delivered` is not `read`. A provider accepting a
+message is the most over-claimed fact in messaging, and this programme already holds the same
+line for a ringing phone. `suppressed` is its own state — something deliberately not sent is a
+different fact from something that could not arrive.
+
+An unanchored communication is **recorded as unanchored**, not refused; refusing it would just
+mean the timeline never sees it. It carries a PREVIEW, never a body — copying bodies would make
+a second store of everything anyone has said. No telephone number may enter an envelope; the
+builder refuses rather than redacting.
+
+### The router — `functions/shared/communication-router.js`
+
+`in_app → push → email → sms`, cheapest and most immediate first.
+
+**THE RULE WITH A BILL ATTACHED: `commerce` and `marketing` never route to SMS**, whatever the
+reachability. Only `critical` may. A chat layer that quietly falls back to SMS turns a free
+conversation into a metered one, usually discovered on an invoice. The suite proves both
+halves — commerce with a phone number plans no SMS; identical reachability at critical does.
+
+Every omission is explained in `considered`, because "why didn't we text them" is a question
+someone asks about a bill. A `requiresRecord` that cannot be met returns **no plan at all** —
+a receipt nobody received becomes a dispute nobody can settle.
+
+It is not a second notification authority: it returns a PLAN, and a plan is advice.
+
+### The provider policy — `functions/shared/communication-providers.js`
+
+**Not every failure deserves a second attempt.** `transport` and `quota` fail over. `auth`,
+`recipient`, `suppressed`, `content` and anything unclassified do NOT — failing over on a
+suppression actively defeats it, on an invalid recipient it fails again and damages a second
+vendor's reputation, and on auth it hides a misconfiguration that keeps costing.
+
+`google_workspace` is deliberately absent from the email failover chain: `receipts@` and
+`support@` are different jobs, and mixing them means a bounced receipt damages the address
+support replies from.
+
+Health reports `configured` / `not_configured` and **never "operational"** — this module
+observes provisioning, not liveness, and a green dashboard over a failing provider is the
+dashboard lying. Whether a provider is configured is an ARGUMENT, never read from the
+environment: a module that checks its own env cannot be tested for the unconfigured case.
+
+### The timeline — `functions/communication-timeline.js`
+
+Read-only. Projects canonical records into envelopes; no `communications` collection, no second
+store.
+
+**It declares its own incompleteness** — `complete: false` with `unjoinableSources` naming
+`notifyLog`. An operator reading a short timeline must know push/SMS/email are missing rather
+than conclude it was quiet. An unreadable source is reported, never rendered as empty.
+
+**One real vocabulary mismatch, handled rather than stumbled into:** Connect stores the
+COLLECTION in `context.anchorType` (`orders`) and the business kind in `context.relationship`
+(`order`). The timeline joins on `relationship`. Joining on the collection would return nothing
+for every anchor, and an empty timeline reads as "nothing happened".
+
+A call is not reported as read because it was placed: `expired`/`cancelled` map to `failed`,
+`ringing` to `sent`, `declined` to `delivered` (it reached them), `connected` to `read`. Every
+Connect state is mapped and the suite asserts none falls through.
+
+An admin reads the timeline; anyone else must be a participant and sees only their own rows — a
+rider on a delivery is not entitled to the buyer's support case. Participants are an
+authorization input, stripped before the response.
+
+### Files
+
+| File | Change |
+|---|---|
+| `functions/shared/communication-envelope.js` | NEW — the common shape |
+| `functions/shared/communication-router.js` | NEW — channel policy |
+| `functions/shared/communication-providers.js` | NEW — registry + failover policy |
+| `functions/communication-timeline.js` | NEW — the read-only unified timeline |
+| `functions/index.js` | `communicationTimeline` registered |
+| `scripts/test-communication-engine.js` | NEW — 145 pass |
+| `docs/SOKONI_COMMUNICATION_ENGINE.md` | NEW |
+
+**Database:** none — the timeline creates no collection. **API:** one new read-only callable.
+**Security:** admin or participant; participants never returned. **Breaking:** none.
+
+### Not built — stated so nothing reads as more complete than it is
+
+`notifyLog` still records no anchor (the highest-value next change, and a live notification
+path). No unified inbox surface in either console. No user→admin contact flow. No templates
+library. No provider health dashboard — `healthRowsFor` exists and nothing renders it. No
+offline outbox. **The router has no production caller.** Nothing is deployed.
+
+---
+
+## 2026-09-22 (160) — Gate C3-A: a business surface can create a call, and consent became a contract
+
+**NO DEPLOY. Live remains 111dbd7 / v636.** Full design: `docs/SOKONI_CONNECT.md`.
+
+`scripts/test-connect-authority.js` **674 pass** (was 531) ·
+`scripts/test-connect-rules.js` **37 pass**, counter-proof holds (9 fail without the rules).
+Capability consumers, subscription consistency, AdminOS wiring, hosting-ignores and money-toast
+safety all pass.
+
+**No frozen contract was touched.** The suite re-asserts `API_CONTRACT`,
+`SokoniConnectClient.CONTRACT`, the actor vocabulary, the session states, the media events and
+the capability keys *after* the C3-A work in the same run. No conflict was found.
+
+### A button is not a permission
+
+`functions/shared/connect-call-surface.js` answers *does this surface expose Call* and never
+*is this call authorized*. Order buyer↔seller · delivery buyer↔rider and seller→rider · supply
+seller→supplier · support buyer↔admin. `inquiry` and `booking` carry none.
+
+It is **deliberately narrower than the authority**: `rider → seller` is authorized and not
+surfaced, so widening it later is a product change needing no security review. The containment
+is asserted the other way too — **every surfaced pair IS authorized**, because a surfaced pair
+the authority would refuse is a button that is always refused, which teaches people the product
+is broken. `show:true` carries `authorizes:false` in the answer itself.
+
+**No order or delivery status word appears in the policy**, and the suite asserts the absence.
+The chain stays `business lifecycle → relationship state → surface eligibility →
+authorization`. Only `active` shows a button; the authority refuses voice on the rest anyway,
+so the UI is not the control.
+
+### The Call button sends an anchor, never a person
+
+`sokoni-connect-call.js`. `requestPayload` is a named pure function so the suite can inspect
+what leaves the browser: given a call that *also* passes `calleeUid`, `participantUids`,
+`actor` and `fromState`, the payload contains **exactly four keys** — `anchorType`, `anchorId`,
+`targetRole`, `channel`. The client surface map is asserted to match the server policy exactly.
+
+### An unreachable callee is told, and `reachable` is not `ringing`
+
+`evaluateReachability` (pure) answers *can this be made to ring at all*.
+`connectRequestSession` returns `reachable` / `reachableReason`. The success copy is
+**"Reaching them…"** and the suite asserts the word *ring* never appears in it —
+`reachable: true` is a pre-check, not a delivery receipt.
+
+**No new session state.** The session is still created `authorized` and follows the existing
+expiry path; `unreachable` is a result of the request. `connectGetSessionState` now surfaces
+`notifyOutcome` and `ringingBy` so a caller can tell *their phone never rang* from *they did
+not answer*, and null is written as null — not as "delivered". Nothing in the Call button
+manufactures `ringing`.
+
+### Consent became a contract
+
+`functions/shared/connect-consent.js` — six mandatory fields: purpose, camera, microphone,
+recording, retention, access. Today: recording `OFF`, retention
+`not_applicable_no_recording`, access `no_recording_exists`.
+
+Those last two are the fields a no-recording design leaves blank, and blank is what rots.
+`buildConsentDisclosure` **refuses** to build a contract with recording `ON` unless retention
+and access are stated explicitly, **and refuses the no-recording sentinels in that case**
+because they would be false. A placeholder cannot survive recording being switched on, because
+the function will not build it.
+
+`acceptsConsent` is `=== true` and nothing else — `false`, `undefined`, `null`, `'yes'`,
+`'true'`, `'TRUE'`, `1`, `0`, `{}`, `[]` all rejected, and the authority is asserted to give
+the same answers.
+
+**Consent is not verification.** The module has no writer and never names `verified`,
+`official`, `faceVerified`, `documentsVerified`, `providerVerification` or
+`setCustomUserClaims`. The disclosure states `establishesIdentity: false` on its face.
+
+The disclosure is built **server-side** and returned by `connectGetSessionState` for video
+only. The C2 client renders it and holds no second copy of the promise; a video session with
+**no** disclosure is **refused** rather than falling back to a vague sentence. What was
+accepted is snapshotted onto the session, so a later contract change cannot rewrite what this
+person was shown.
+
+### Files
+
+| File | Change |
+|---|---|
+| `functions/shared/connect-call-surface.js` | NEW — the product policy |
+| `functions/shared/connect-consent.js` | NEW — the six-field contract |
+| `sokoni-connect-call.js` | NEW — the Call button, anchors only |
+| `functions/connect-notify.js` | `evaluateReachability`, `hasPushTarget` |
+| `functions/connect-calls.js` | reachability on request; `notifyOutcome`/`ringingBy`/`consentDisclosure` on state; disclosure snapshot on accept |
+| `sokoni-connect-client.js` | renders the server disclosure; refuses a video session without one |
+| `scripts/test-connect-authority.js` | 531 → **674** |
+| `docs/SOKONI_CONNECT.md` | Gate C3-A, evidence ladder row |
+
+**Database:** `connectSessions.consentDisclosure` (server-written). **API:** no new op;
+`connectRequestSession` and `connectGetSessionState` return additional fields. **Not deployed.**
+**Security:** no participant identity leaves the client; the surface policy authorizes nothing.
+**Breaking:** none.
+
+### Evidence boundary
+
+**Proven:** call-surface eligibility · anchor-based session creation · server-side participant
+resolution · authorization · `authorized` creation · failed-dispatch handling · C1 integration
+· the consent contract · C1/C2 contracts frozen.
+
+**Not proven:** physical-device push delivery · real incoming-call notification · WebRTC media
+· TURN/STUN · cross-network connectivity · mobile resilience · end-to-end voice · end-to-end
+video.
+
+A successful automated dispatch test is not a phone ringing.
+
+**STOP.** C3-B and C3-C are not begun.
+
+---
+
+## 2026-09-22 (159) — C2 frozen; the evidence ladder and the C3 entry gates written down
+
+**NO DEPLOY. Live remains 111dbd7 / v636.** Owner ruling: C2 COMPLETE / FROZEN, C3 kept
+entirely separate. No behaviour changed in this entry — the freeze was made structural and the
+prerequisites were recorded.
+
+`scripts/test-connect-authority.js` **531 pass** (was 522) ·
+`scripts/test-connect-rules.js` **37 pass**, counter-proof holds.
+
+### C2 is frozen the same way C1 is
+
+`SokoniConnectClient.CONTRACT` declares the projection surface (7 names) and the suite asserts
+it **both ways** — every declared name exported, every export declared — plus a ceiling on its
+size, because a large projection surface is a projection doing too much. A removal or rename
+now fails a gate instead of being found by the next consumer.
+
+### The evidence ladder
+
+Written into `docs/SOKONI_CONNECT.md` so a test count is never quoted as a calling result:
+
+| Layer | Status |
+|---|---|
+| Connect authority · Firestore rules · C1 decision · C2 projection | **certified** |
+| Real push delivery · cross-network calling · mobile resilience | *not tested* |
+| C3 WebRTC · TURN/STUN | *not started* |
+| End-to-end call | *not yet possible* |
+
+**531/0 proves the contract, the decision machinery and the projection. It is not evidence
+that a phone rang or that media flowed.** Those need a device, and that is a different class of
+evidence.
+
+### The two C3 entry gates, carried forward rather than patched
+
+Both were surfaced by C2 and are recorded **in `sokoni-connect-client.js` itself** — a
+prerequisite that lives only in a changelog is a prerequisite nobody reads.
+
+**1 — the consent contract.** The current dialog is a `confirm()` naming camera, microphone and
+recording status. Before real video it must also state retention, who may access any recording,
+and the purpose of the session. It must not be quietly widened; the contract is defined first.
+This matters more here than in most products because the verification model deliberately keeps
+`sessionOutcome` apart from `verificationStatus` — the consent and evidence model stays equally
+explicit.
+
+**2 — there is no session-creation path.** `connect.html` answers a session that already
+exists; nothing turns a business surface into one. That is the larger functional gap, and it is
+why C3 does not begin by putting an `RTCPeerConnection` into the page.
+
+### C3 order, and the rule that must survive it
+
+`C3-A` call initiation → `C3-B` incoming-call UX → `C3-C` WebRTC.
+
+The Call button must never become `call(calleeUid)`. It takes an **anchor** — Order → Call
+Seller, Delivery → Call Rider, Shop → Call Supplier, Support → Call Admin. The caller
+identifies the business relationship, not the person to ring. A convenience parameter is
+exactly how that rule would quietly end, so the suite asserts the principle is restated where
+C3 will look for it.
+
+### Files
+
+| File | Change |
+|---|---|
+| `sokoni-connect-client.js` | `CONTRACT` declared; C3 entry gates and the anchor principle recorded in-file |
+| `scripts/test-connect-authority.js` | 522 → **531** (surface freeze + gates recorded) |
+| `docs/SOKONI_CONNECT.md` | evidence ladder · C2 COMPLETE/FROZEN · C3 gates and order · status header |
+
+**Database:** none. **API:** none. **Security:** none. **Breaking:** none.
+
+**STOP.** C3-A is not begun.
+
+---
+
+## 2026-09-22 (158) — Gate C2: the client projects, and cannot disagree with the server
+
+**NO DEPLOY. Live remains 111dbd7 / v636.** Extends (157). Full design:
+`docs/SOKONI_CONNECT.md`.
+
+`scripts/test-connect-authority.js` **522 pass** (was 463) ·
+`scripts/test-connect-rules.js` **37 pass**, counter-proof holds (9 fail without the rules).
+
+**The C1 authority was not touched.** `API_CONTRACT` is re-asserted *after* the C2 work in the
+same run: no new export, no new actor, no new session state, no new media event, no new
+capability key. A projection layer that needed the authority widened would have surfaced here
+rather than in review.
+
+### Actions come from `offerable` alone
+
+`actionsFor(projection)` never reads `state`. Two cases prove it, and the second is the one
+that matters:
+
+| Input | Renders |
+|---|---|
+| `{ state:'ringing', offerable:[] }` | **nothing** |
+| `{ state:'ended', offerable:['accepted'] }` | **Accept** |
+
+A client with its own state logic passes the first and fails the second — it would "know" an
+ended call cannot be accepted, helpfully suppress the button, and in doing so become a second
+authority that can disagree with the first. This module renders what the server said. If the
+server is wrong, that is a server bug and it should be visible.
+
+### The action map is routing, not authority
+
+`ACTIONS` is keyed by **destination**, never by state: which callable implements it, and what
+to call the button. The suite asserts every routed destination is an INTENTION state, that
+`connecting`/`connected`/`failed` have **no route at all**, and that every routed op actually
+exists on the server — so a rename breaks a gate rather than a user's hand.
+
+A destination the server offers that this build cannot route is **surfaced** rather than
+silently missing, so version skew is visible.
+
+### Media stays an observation
+
+`eventsFor` passes `reportableEvents` through verbatim. `reportObservation` is the only route
+to the backend. **Not one media event name is hard-coded in the client** — it holds no media
+vocabulary of its own, and the suite asserts the absence.
+
+### What the suite proves about the client
+
+No `canTransition`, `SESSION_STATES` or `TERMINAL_STATES`. No `actor`, from-state or
+participant list is ever sent. No capability or subscription logic. No `state ===` comparison —
+state is displayed, never interpreted. **No session-state literal it does not route.** No op
+that names a media-driven state.
+
+All driven, not grepped: the real file is loaded into a sandbox and its decision functions are
+called, because "the client does not reconstruct the authority" is a behavioural claim and a
+regex cannot make it.
+
+### `connect.html`
+
+The deep link `/connect.html?session=…` now resolves. It loads the projection layer, routes
+through `connectDispatch`, self-updates via `sw-register.js`, and reports a missing module as a
+missing module.
+
+**It carries no media** — no `RTCPeerConnection`, no `getUserMedia` — and says so in the
+visible body, not only in a comment. A session can be answered and ended; nothing is
+transmitted.
+
+Accepting a **video** session asks for consent first and refuses to send without a true
+acknowledgement. Voice and chat are not asked: a dialog shown always is a dialog dismissed
+always.
+
+### Certification boundary
+
+**Proven:** authority projection · state rendering · `offerable` action projection · actor
+projection · reportable-event projection · absence of duplicate client authority · C1 contract
+intact.
+
+**Not proven:** physical-device push delivery · a real incoming-call notification · real WebRTC
+media connectivity · TURN/STUN traversal · cross-network establishment · mobile network
+resilience.
+
+522/0 proves the contract and the projection. It is not evidence that a phone rang or that
+media flowed — that is a different class of evidence and needs a device.
+
+### Files
+
+| File | Change |
+|---|---|
+| `sokoni-connect-client.js` | NEW — the C2 projection layer |
+| `connect.html` | NEW — the page the ring deep-links to; no media |
+| `scripts/test-connect-authority.js` | 463 → **522** |
+| `docs/SOKONI_CONNECT.md` | Gate C2, certification boundary |
+
+**Database:** none. **API:** none — C2 consumes the existing 12 ops.
+**Security:** the client sends no actor, no from-state and no participant list; it has no
+transition table and no path to a media-driven state.
+**Breaking:** none.
+
+**STOP.** C3 (WebRTC) is deliberately not begun in this slice.
+
+---
+
+## 2026-09-22 (157) — the authority is frozen; Gate C1 gives `ringing` a producer
+
+**NO DEPLOY. Live remains 111dbd7 / v636.** Extends (156). Full design:
+`docs/SOKONI_CONNECT.md`.
+
+`scripts/test-connect-authority.js` **463 pass** (was 396) ·
+`scripts/test-connect-rules.js` **37 pass**, counter-proof holds.
+
+### The authority is now a protected contract
+
+`connect-authority.js` declares `API_CONTRACT` — 32 names — and the suite asserts it **both
+ways**: every declared name is exported, and every export is declared. Adding a name is
+expected; removing or renaming one fails a gate rather than being discovered by whichever
+consumer called it first. Downstream work consumes this module; it does not redesign it.
+
+**One defect fixed on the way in, because it belonged inside the freeze rather than after it.**
+`ACTORS` held both the three parties who can ACT and the set-names a table edge may be declared
+with, so `actor: 'either'` passed the unknown-actor check and was refused only by luck of branch
+order. Now `ACTOR_NAMES` (caller/callee/server) and `ACTOR_SPECS` (those plus `either`,
+`callee_or_server`). An edge spec is no longer a valid actor, and the suite proves it.
+
+### `media_stopped` added — and it guesses nothing
+
+Recorded as `mediaStoppedAt`, intends **nothing**. Media stopping is ambiguous by nature — a
+mute, a backgrounded tab, a tunnel — and the two things it might mean already have their own
+routes: an intention (`ended`, somebody hung up) and an explicit observation
+(`connection_failed`). Guessing between them would put a reason on a call nobody gave.
+
+### Gate C1 — `functions/connect-notify.js`
+
+Triggered on `connectSessions/{id}` creation. The only server-side producer of
+`authorized → ringing`.
+
+**It is not an authority.** By the time a session exists, "may these two speak" is answered and
+the parties are derived from the anchor. It reads `calleeUid` off the session the server wrote,
+never resolves a recipient of its own, never calls `mayCommunicate`/`resolveVideoAccess`, and
+never writes a status directly — it asks `canTransition` like everybody else, and asks **again
+inside the transaction**, because the callee may have answered from another device between the
+send and the write.
+
+**It does not send push either.** `notify.js` owns tokens, channels, preferences, quiet hours,
+dedupe and the audit log; three ideas about where a push token lives already cost this codebase
+a silent production failure. Connect names an INTENT — `connect_incoming_call`, registered in
+that engine — never a channel or a token. Idempotent on `connect_ring:{sessionId}`.
+
+`connect_incoming_call` is **commerce, not critical**: critical ignores preferences *and* quiet
+hours, and a buyer must not be able to ring a merchant at 3am about an order. SMS null — an SMS
+arriving after the caller hung up is noise.
+
+**UNDELIVERED IS NOT RINGING.** No token, preferences off, quiet hours ⇒ the session stays
+`authorized` and the sweep expires it. It is never marked `ringing` on the strength of having
+tried, because a caller must be able to tell *their phone never rang* from *they did not
+answer* — and those are the same record the moment a dispatcher claims success on dispatch. The
+attempt is still written (`notifyAttemptedAt`, `notifyOutcome`), so a silent phone is
+diagnosable. A delivery failure is a result, not a throw: throwing would retry the trigger and
+leave the record unwritten.
+
+**Which evidence moved the state is recorded.** `authorized → ringing` is now
+`callee_or_server`. `ringingBy: 'dispatch'` means a push transport accepted the call;
+`ringingBy: 'device'` means the recipient's app is actually alerting, which is stronger.
+Server-only would overclaim; callee-only would strand every session whose app is asleep. The
+record keeps them apart.
+
+### Certified — the specified list
+
+| | |
+|---|---|
+| authorized → ringing | **PASS** (voice and video) |
+| self-call / no callee / no caller | **DENY** |
+| expired | **DENY** — reason is the state, not the channel |
+| already ringing | **DENY**, which is what makes a re-fired trigger idempotent |
+| cancelled + every terminal state | **DENY** |
+| accepted / connecting / connected | **DENY** |
+| chat | **DENY** — nothing to ring |
+| no transport plan | **DENY** |
+
+`shouldDispatchRing` is pure and tested directly, with a positive control proving the decider
+does grant.
+
+### Honest limit
+
+C1 is **built, not proven**. No session has been dispatched against a real device: nothing is
+deployed and no client registers the deep link. A push `notify.js` reports as delivered is a
+push FCM accepted — not a phone that rang. `connect.html` does not exist.
+
+### Files
+
+| File | Change |
+|---|---|
+| `functions/shared/connect-authority.js` | `API_CONTRACT`; `ACTOR_NAMES`/`ACTOR_SPECS` split; `callee_or_server`; `media_stopped` |
+| `functions/connect-notify.js` | NEW — Gate C1 dispatcher |
+| `functions/connect-calls.js` | `ringingBy: 'device'` + `deviceAlertedAt` on the callee path |
+| `functions/notify.js` | `connect_incoming_call` type registered |
+| `functions/index.js` | `connectOnSessionCreated` exported by name |
+| `scripts/test-connect-authority.js` | 396 → **463** |
+| `docs/SOKONI_CONNECT.md` | the freeze, Gate C1 |
+
+**Database:** session fields `notifiedAt`, `notifyAttemptedAt`, `notifyOutcome`, `ringingBy`,
+`deviceAlertedAt`, `mediaStoppedAt` — all server-written.
+**API:** unchanged at 12 dispatchable ops; one new Firestore trigger. **Not deployed.**
+**Security:** the dispatcher holds no authority and no privilege over the transition table.
+**Breaking:** `CA.ACTORS` is removed in favour of `ACTOR_NAMES`/`ACTOR_SPECS`. Only the suite
+consumed it.
+
+---
+
+## 2026-09-22 (156) — the WebRTC client cannot write `connected`, because the op no longer exists
+
+**NO DEPLOY. Live remains 111dbd7 / v636.** Extends (155). Full design:
+`docs/SOKONI_CONNECT.md`.
+
+`scripts/test-connect-authority.js` **396 pass** (was 343) ·
+`scripts/test-connect-rules.js` **37 pass**, counter-proof holds.
+
+The standing principle — *the client observes and requests; the server authorizes and records*
+— was the one thing left that only documentation enforced. A future WebRTC client could have
+called `connectMarkConnected` because it happened to construct an `RTCPeerConnection`. Built
+now, while there is no client to unpick.
+
+### The ops that named those states are gone
+
+`connectBeginConnecting`, `connectMarkConnected` and `connectFailSession` are **removed**. There
+is exactly one route into `connecting`, `connected` or `failed`: report what the media stack
+OBSERVED, through `connectReportMediaEvent`, and let the authority decide what it means.
+
+```
+WebRTC                        Connect authority
+negotiation started   ──►     intends `connecting`
+ICE connected         ──►     intends nothing — recorded only
+media flowing         ──►     intends `connected`
+ICE disconnected      ──►     intends nothing — recorded only
+connection failed     ──►     intends `failed`
+                                     │
+                                     ▼
+                              canTransition() still decides
+```
+
+**Two layers, both fail closed.** The event table maps an observation to an INTENDED
+destination; the state table then rules on whether that move is legal from where the session
+actually is. `accepted + media_flowing` does **not** skip `connecting` — it is refused with
+`transition_not_permitted`, by the state table, exactly like every other shortcut. The suite
+asserts which layer refused it.
+
+### An ICE pair is a route, not a conversation
+
+`ice_connected` intends **nothing**. Treating it as arrival is the same mistake as calling a
+session connected because a peer connection object exists. It is recorded as `iceConnectedAt`,
+which is what you want when diagnosing a call that found a route and still carried nothing.
+
+`ice_disconnected` is likewise not a failure. A transient drop that recovers is normal on mobile
+data, and ending a call on it would hang up on people crossing a cell boundary.
+
+### `ignored` is not an error
+
+Media events race and repeat. A duplicate `media_flowing` on an already-connected session, or a
+`connection_failed` arriving after both parties hung up, returns `effect: 'ignored'` — failing a
+client into a retry loop over a duplicate would be a defect, not a control. A genuine skip is
+refused. The distinction is `from === intends` (idempotent) versus the table saying no.
+
+### Intentions are not observations
+
+`accept`, `decline`, `cancel`, `end` and `ringing` stay destination ops — they are things a
+PERSON did. Pressing Decline is an intention; ICE failing is an observation, and conflating them
+would make "the connection dropped" indistinguishable from "they hung up on me".
+
+**Nothing maps to `ended`**, on purpose. A call ends because somebody hung up; media merely
+stopping is `failed`. The difference between those two records is the whole reason for keeping
+both. The suite asserts every state is an intention state XOR a media-driven state.
+
+### The UI is told what to report, not left to guess
+
+`connectGetSessionState` now filters `offerable` to **intention states only** — offering
+`connected` would tell the UI to draw a button the server cannot honour, and a button that lies
+teaches the operator that the console lies. It returns `reportableEvents` instead, so the media
+layer fires what the server will act on rather than every `RTCPeerConnection` callback.
+
+### Files
+
+| File | Change |
+|---|---|
+| `functions/shared/connect-authority.js` | `MEDIA_EVENTS`, `MEDIA_EVENT_NAMES`, `MEDIA_DRIVEN_STATES`, `INTENTION_STATES`, `isIntentionState`, `reportableEvents`, `interpretMediaEvent` |
+| `functions/connect-calls.js` | 3 destination ops REMOVED; `connectReportMediaEvent` added; `offerable` filtered; `reportableEvents` returned |
+| `functions/connect-dispatch.js` | 14 → **12** ops |
+| `scripts/test-connect-authority.js` | 343 → **396** |
+| `docs/SOKONI_CONNECT.md` | the observe/decide boundary, the event table, intentions vs observations |
+
+**Database:** no change; `lastMediaEvent`, `lastMediaEventAt`, `iceConnectedAt`,
+`iceDisconnectedAt` are added to session documents by the server.
+**API:** `connectDispatch` now **12 ops**. `connectBeginConnecting`, `connectMarkConnected` and
+`connectFailSession` are **removed**. **Not deployed.**
+**Security:** no client path names `connecting`, `connected` or `failed`; the actor is still
+derived server-side.
+**Breaking:** the three removed ops. No caller exists yet.
+
+---
+
+## 2026-09-22 (155) — SOKONI Connect gets its session state machine, before the client that must obey it
+
+**NO DEPLOY. Live remains 111dbd7 / v636.** Extends (153) and (154). Full design:
+`docs/SOKONI_CONNECT.md`.
+
+`scripts/test-connect-authority.js` **343 pass** (was 252) ·
+`scripts/test-connect-rules.js` **37 pass**, counter-proof holds (9 fail without the rules).
+
+Built before the calling client on purpose. A UI that decides its own state becomes a second
+authority, and the first thing it gets wrong is the one that matters: a client that can move a
+session straight to `connected` has invented a call nobody answered.
+
+```
+authorized ──► ringing ──► accepted ──► connecting ──► connected ──► ended
+     │           │            │             │              │
+     │           ├─► declined │             │              │
+     ├───────────┴────────────┴─────────────┴──────────────┴──► cancelled / failed
+     └─► expired ◄── ringing
+```
+
+### One table, not six lists
+
+Every state change goes through `_advance`, which asks the authority's table. The
+per-callsite `allowedFrom` lists are gone — six lists drift, one table does not. A client names
+a **destination**, never a from-state, and cannot invent an edge. `authorized → connected` is
+refused; each of eight shortcuts is asserted refused and paired with a control proving the same
+from-state still has a legal edge.
+
+The **actor is derived from the session document**, never from the request — the same principle
+as the participant list. A participant cannot claim to be the other one.
+
+`connectAnswerSession` now lands on **`accepted`, not `connected`**. A call is not connected
+because somebody pressed Answer; it is connected when media flows, and collapsing the two is how
+a session that never negotiated gets recorded as a conversation.
+
+### Two departures from the proposed state list, both deliberate
+
+**`requested` does not exist.** Authorization happens *before* the document is created, so there
+is no moment at which a session exists and is not authorized. A separate `requested` state would
+be occupied by nothing, and a state no session is ever in is a dead entry that reads as a
+guarantee. `authorized` **is** the initial state.
+
+**`abandoned` and `inconclusive` are not session states.** They are verification *outcomes* and
+answer a different question — not "what happened to the call" but "what did the admin observe".
+One word meaning both is exactly how an evidence record starts being read as a decision, which
+is why the stored field is already `sessionOutcome` and not `verificationStatus`. A verification
+whose call was cancelled has session state `cancelled` **and** outcome `abandoned`. The suite
+asserts the two vocabularies are disjoint.
+
+### Who may take which edge
+
+Only the callee accepts or declines. Only the caller cancels a ringing call. A **connected call
+ends, it is never cancelled** — cancelling something that happened would erase that the two
+parties spoke. The server may expire a pre-media session and may **not** accept, decline, cancel
+or connect on anyone's behalf: a sweep must never answer a call for someone, and that converse
+is asserted four ways.
+
+`authorized → ringing` is taken by the **callee**, not the server. It means "the recipient's
+device is showing this call" — an observation only that device can make truthfully, and a server
+marking it would be asserting a delivery it cannot see. It grants nothing; `accepted` still
+needs consent.
+
+### Consent moved inside the machine
+
+`canTransition` refuses `→ accepted` for video without consent, rather than the answer callsite
+checking it. A future path reaching `accepted` some other way cannot forget it. The server's job
+is now to forward the acknowledgement and record what was accepted, on `accepted` — where the
+person actually agreed.
+
+### `expired` got a real writer
+
+`connectExpireStaleSessions` (scheduled, every 15 min) expires sessions left in `authorized` or
+`ringing` past 30 minutes. `accepted`, `connecting` and `connected` are excluded: a call that
+reached any of them **did happen**, and recording it as expired would erase that. The sweep
+obeys the same table every client does — it is not privileged to skip it. A state with no writer
+is a dead entry that reads as a guarantee.
+
+### The UI renders the machine rather than deciding it
+
+`connectGetSessionState` returns `status`, `terminal` and `offerable` — the next states **this
+actor** may take, filtered through the same `canTransition` the server enforces. A caller is
+never shown Decline, and a button the server would refuse is never drawn.
+
+### Table soundness is asserted, not assumed
+
+Every edge points at a declared state and names a declared actor; every state is reachable from
+`authorized` (no dead entries); every terminal state is actually reached; the table is frozen.
+
+### What this exposes — and that is the point
+
+**Nothing moves a session to `ringing` today**, because no push/FCM layer notifies a callee.
+Sessions sit in `authorized` until the sweep expires them. That is the missing notification
+layer showing through the machine, which is what a machine is for.
+
+### Files
+
+| File | Change |
+|---|---|
+| `functions/shared/connect-authority.js` | `SESSION_STATES`, `TERMINAL_STATES`, `ACTORS`, `INITIAL_STATE`, `isTerminalState`, `nextStates`, `canTransition` |
+| `functions/connect-calls.js` | one `_advance` path; 6 new ops; `connectExpireStaleSessions`; initial state named not spelled |
+| `functions/connect-dispatch.js` | 6 → **14** ops |
+| `functions/index.js` | `connectExpireStaleSessions` exported by name (event-triggered, not dispatchable) |
+| `scripts/test-connect-authority.js` | 252 → **343** |
+| `docs/SOKONI_CONNECT.md` | the machine, the two departures, the actor rules |
+
+**Database:** no new collection; `connectSessions.status` vocabulary replaced (`requested` →
+`authorized`, plus `accepted`/`connecting`/`cancelled`/`expired`/`failed`). No production rows
+exist, so no migration is owed.
+**API:** `connectDispatch` now **14 ops**, plus one scheduled function. **Not deployed.**
+**Security:** actor derived server-side; consent enforced inside the machine; the sweep holds no
+privilege over the table.
+**Breaking:** `connectAnswerSession` returns `accepted`, not `connected`. No caller exists yet.
+
+---
+
+## 2026-09-22 (154) — SOKONI Connect reaches both platform consoles, and video verification gets its procedure
+
+**NO DEPLOY. Live remains 111dbd7 / v636.** Extends (153). Full design and limits:
+`docs/SOKONI_CONNECT.md`.
+
+`scripts/test-connect-authority.js` **252 pass** (was 178) ·
+`scripts/test-connect-rules.js` **37 pass** (was 28), counter-proof holds — **9** checks fail
+against an artifact without the Connect blocks.
+
+### One module, two mount points
+
+| Console | Where | Claim |
+|---|---|---|
+| `admin-os.html` | Communications → **Connect** tab | `claims.admin` |
+| `super-admin.html` | **Connect** section | `claims.superAdmin` |
+
+Two consoles rendering the same sessions from two hand-written copies is how surfaces drift —
+the merchant estate already paid that bill. `admin.html` is a consumer of neither file, and the
+suite asserts it. A missing module is reported as a missing module, never as an empty session
+list: a panel with no loader, or a loader nothing calls, is a nav item that opens a blank box,
+so the suite checks the nav item, the panel, the mount point, the loader **and** that `nav()`
+actually dispatches to it.
+
+### Read and write are separate files, on purpose
+
+`sokoni-connect-console.js` is **certified to contain no write path** — no `set`, `add`,
+`update`, `delete` or `httpsCallable`. The one write surface lives in
+`sokoni-connect-verify.js`, exactly as `sokoni-gcp-admin.js` is kept apart from
+`sokoni-integrations.js`.
+
+The console's two reads are **independent**: an admin whose verification rule is deployed and
+whose session rule is not sees one table and one honest refusal, not a blank page. The write
+surface **reports success only from what the server returned** — a toast on click would tell an
+operator a verification exists when the write may have failed, and here that means believing a
+person was asked to appear on camera when nobody was. While `connectDispatch` is undeployed
+both actions say exactly that rather than appearing broken.
+
+### Consent is a server gate, not a dialog
+
+`connectAnswerSession` refuses a video session without `consentAcknowledged === true`, so hiding
+the dialog cannot skip the consent. The acceptance is recorded on the session —
+`consentAcceptedAt`, `consentAcceptedBy`, `consentRecordingDisclosed: 'OFF'` — because the
+disclosure a person accepted is part of what they accepted. `'yes'`, `1`, `{}`, `'true'` and
+`[]` are all refused; each is exercised.
+
+### The verification procedure — evidence, never a verdict
+
+Two new admin-only callables. `connectRequestVerification` opens the session and its record in
+**one batch** (a verification with no session is a dangling half of a procedure), refuses
+self-verification, and goes through the *same* `resolveVideoAccess` gate as every other video
+session rather than around it. `connectRecordVerificationOutcome` records one of
+`verified` / `not_verified` / `inconclusive` / `abandoned`, **once** — re-deciding in place
+would erase what the first reviewer observed.
+
+`inconclusive` and `abandoned` exist so a session that proved nothing is recorded as having
+proved nothing. Without them the only way to close a session is to claim a result, and "no
+answer" quietly becomes "not verified".
+
+**The boundary this holds:** `providerVerification` is the canonical authority, and an official
+identity requires a passed identity check, a passed face check **and** a completed human review
+— an approval alone is never sufficient, and a third verification schema is not wanted. So the
+outcome call writes `sessionOutcome` and nothing else: it never touches `providerVerification`
+or `driverVerification`, never sets `official`, `verified`, `faceVerified`,
+`documentsVerified`, `identityVerificationPassed`, `faceVerificationPassed` or
+`humanReviewCompleted`, and never calls `setCustomUserClaims`. The suite asserts the absence of
+all eight. The field is `sessionOutcome`, **not** `verificationStatus` — borrowing the
+authority's vocabulary is how an evidence record starts being read as a decision. Every record
+and response carries `isProofOfIdentity: false` and `authority: 'providerVerification'` on its
+face.
+
+A camera that switched on is not proof of identity.
+
+### Rules
+
+New `connectVerifications` block: readable by an admin **or the subject** — a person is entitled
+to see that they were asked to appear on camera and what was recorded about it — and writable by
+nobody, including admins. The once-only rule lives in the callable, where a transaction can
+enforce it.
+
+### Files
+
+| File | Change |
+|---|---|
+| `functions/shared/connect-authority.js` | `consentRequiredFor`, `evaluateConsent`, `VERIFICATION_RESULTS`, `buildVerificationRecord` |
+| `functions/connect-calls.js` | consent gate on answer; `connectRequestVerification`; `connectRecordVerificationOutcome` (8 ops total) |
+| `firestore.rules` + `.build` | `connectVerifications` — admin or subject reads, nobody writes |
+| `sokoni-connect-console.js` | v1.1.0 — verifications table, relationship breakdown, independent reads; still no write path |
+| `sokoni-connect-verify.js` | NEW — the one write surface |
+| `super-admin.html` | NEW **Connect** section: nav item, panel, mount point, loader, `nav()` dispatch, both scripts |
+| `admin-os.html` | loads the write surface alongside the console |
+| `scripts/test-connect-authority.js` | 178 → **252** |
+| `scripts/test-connect-rules.js` | 28 → **37** |
+| `docs/SOKONI_CONNECT.md` | consent, the verification procedure, both consoles |
+
+**Database:** `connectVerifications` added; server-written only.
+**API:** `connectDispatch` now 8 ops, **not deployed**.
+**Security:** consent enforced server-side; recording an outcome grants nothing; the subject can
+read their own verification and write nothing.
+**Breaking:** none.
+
+---
+
 ## 2026-09-22 (150) — PayPal retired; IntaSend is the payment provider
 
 **Owner decision: SOKONI does not offer PayPal.** Hosting-side only. No Functions, no rules,

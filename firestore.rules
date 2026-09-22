@@ -5897,5 +5897,40 @@ service cloud.firestore {
     match /fraudLog/{docId}        { allow read: if isAdmin(); allow write: if false; }
     match /fraudBlocklist/{docId}  { allow read: if isAdmin(); allow write: if false; }
 
+    /* ── SOKONI Connect — call sessions are SERVER-WRITTEN, always ──
+       `participants` is the only list of who is on a call and it is DERIVED by
+       connect-calls.js from the anchor document, never supplied by a caller.
+       A client write here would let a browser add itself to a session, which is
+       the same defect as a client-named conversation participant except that
+       the consequence is a stranger's telephone ringing. */
+    match /connectSessions/{sessionId} {
+      allow read: if isAdmin() || (isAuthed() && request.auth.uid in resource.data.participants);
+      allow write: if false;
+      /* Signalling is relayed by connectSignal and read by the peer it is addressed to —
+         never by the sender, and never by anyone else on the platform. */
+      match /signals/{signalId} {
+        allow read: if isAuthed() && request.auth.uid == resource.data.to;
+        allow write: if false;
+      }
+    }
+    /* A video verification session. EVIDENCE, never an authority: `providerVerification` decides
+       whether an account is verified, and an official identity additionally needs a passed
+       identity check, a passed face check and a completed human review. Readable by the subject
+       — a person is entitled to see that they were asked to appear on camera and what was
+       recorded about it — and written only by connectRecordVerificationOutcome. */
+    match /connectVerifications/{verificationId} {
+      allow read: if isAdmin() || (isAuthed() && resource.data.subjectUid == request.auth.uid);
+      allow write: if false;
+    }
+    /* The organisation's video permission. Readable by the two parties it names so a member
+       can be shown why video is unavailable; written only by connectSetVideoGrant, which
+       first proves the granting account's own package includes video. */
+    match /connectVideoGrants/{grantId} {
+      allow read: if isAdmin() || (isAuthed() &&
+                    (resource.data.ownerUid == request.auth.uid ||
+                     resource.data.memberUid == request.auth.uid));
+      allow write: if false;
+    }
+
   }
 }

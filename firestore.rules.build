@@ -3849,6 +3849,17 @@ service cloud.firestore {
   allow read:  if isAuthed();
   allow write: if false;
   }
+  match /employmentEvents/{eventId} {
+  allow read:                   if isAdmin()
+  || (isAuthed() && resource.data.newUid == request.auth.uid);
+  allow create, update, delete: if false;
+  }
+  match /employmentInvites/{token} {
+  allow read, create, update, delete: if false;
+  }
+  match /employmentUidClaims/{claimId} {
+  allow read, create, update, delete: if false;
+  }
   match /procSuppliers/{supplierId} {
   allow read:  if isAdmin()
   || (isAuthed() && resource.data.merchantId == request.auth.uid);
@@ -4416,5 +4427,23 @@ service cloud.firestore {
   match /webhookLogs/{docId}     { allow read: if isAdmin(); allow write: if false; }
   match /fraudLog/{docId}        { allow read: if isAdmin(); allow write: if false; }
   match /fraudBlocklist/{docId}  { allow read: if isAdmin(); allow write: if false; }
+  match /connectSessions/{sessionId} {
+  allow read: if isAdmin() || (isAuthed() && request.auth.uid in resource.data.participants);
+  allow write: if false;
+  match /signals/{signalId} {
+  allow read: if isAuthed() && request.auth.uid == resource.data.to;
+  allow write: if false;
+  }
+  }
+  match /connectVerifications/{verificationId} {
+  allow read: if isAdmin() || (isAuthed() && resource.data.subjectUid == request.auth.uid);
+  allow write: if false;
+  }
+  match /connectVideoGrants/{grantId} {
+  allow read: if isAdmin() || (isAuthed() &&
+  (resource.data.ownerUid == request.auth.uid ||
+  resource.data.memberUid == request.auth.uid));
+  allow write: if false;
+  }
   }
 }

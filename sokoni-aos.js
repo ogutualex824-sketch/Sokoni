@@ -1229,6 +1229,29 @@ window.SokoniAOS = (() => {
           <p style="color:var(--aos-muted);font-size:11px;margin:8px 0">SMS charges apply. Confirm before sending.</p>
           <button class="aos-btn success" onclick="SokoniAOS.sendSMSBlast()">&#x1F4AC; Send SMS Broadcast</button>
         </div>`;
+    } else if (tab === "inbox") {
+      /* Communication Engine console. Self-contained like the integrations module: it reads
+         its own canonical collections and one read-only callable, so it needs no dispatch op.
+         A missing module is reported as a missing module — an empty inbox and an absent
+         script must never look the same. */
+      if (!window.SokoniCommsConsole) {
+        body.innerHTML = _emptyMsg("The communications console did not load. Check that " +
+          "sokoni-comms-console.js is served on this page.");
+        return;
+      }
+      window.SokoniCommsConsole.mount(body);
+    } else if (tab === "connect") {
+      /* SOKONI Connect. Self-contained like the integrations console: it reads its own
+         canonical collection (connectSessions) and routes through no dispatch op, so it
+         needs no Cloud Function deploy. If the script did not load the tab SAYS SO rather
+         than rendering an empty console — an empty table and a missing module must never
+         look the same. */
+      if (!window.SokoniConnectConsole) {
+        body.innerHTML = _emptyMsg("The Connect console did not load. Check that " +
+          "sokoni-connect-console.js is served on this page.");
+        return;
+      }
+      window.SokoniConnectConsole.mount(body);
     }
   }
 

@@ -347,6 +347,12 @@
     <button class="nav-item" data-section="integrations" onclick="SA.nav('integrations');_closeSidebar()">
       <span class="nav-icon">&#x1F50C;</span>Integrations
     </button>
+    <button class="nav-item" data-section="comms" onclick="SA.nav('comms');_closeSidebar()">
+      <span class="nav-icon">&#x1F4E5;</span>Communications
+    </button>
+    <button class="nav-item" data-section="connect" onclick="SA.nav('connect');_closeSidebar()">
+      <span class="nav-icon">&#x1F4DE;</span>Connect
+    </button>
     <button class="nav-item" data-section="audit" onclick="SA.nav('audit');_closeSidebar()">
       <span class="nav-icon">&#x1F4CB;</span>Audit Log
     </button>
@@ -719,6 +725,35 @@
       <div id="integrationsRoot"></div>
     </section>
 
+    <!-- ══ SECTION: Connect ══
+         Rendered by sokoni-connect-console.js, the same module admin-os.html mounts (there as
+         a tab on the Communications panel). One module, two mount points: a change to how a
+         session is presented lands in both consoles at once, or in neither. -->
+    <!-- ══ SECTION: Communications ══
+         Rendered by sokoni-comms-console.js, the same module admin-os.html mounts as its
+         Inbox tab. One module, two mount points. -->
+    <section class="sa-panel" id="panel-comms" hidden>
+      <div class="panel-header">
+        <h2>&#x1F4E5; Communications</h2>
+        <p>Every chat, call and notification SOKONI carried, joined by the business
+           relationship it was about. Read-only. Timelines are <strong>partial</strong> until
+           every notification call site records an anchor &mdash; the surface says so on each
+           read rather than letting a short list read as a quiet one.</p>
+      </div>
+      <div id="commsRoot"></div>
+    </section>
+
+    <section class="sa-panel" id="panel-connect" hidden>
+      <div class="panel-header">
+        <h2>&#x1F4DE; Connect</h2>
+        <p>Business calls, video sessions and verification procedures. Sessions are
+           server-written and metadata-only &mdash; no audio or video is stored, and no
+           telephone number appears on this surface. A verification session is
+           <strong>evidence, not a verdict</strong>.</p>
+      </div>
+      <div id="connectRoot"></div>
+    </section>
+
     <section class="sa-panel" id="panel-audit" hidden>
       <div class="panel-header">
         <h2>&#x1F4CB; Audit Log</h2>
@@ -1033,6 +1068,8 @@ const SA={
     else if(section==='revenue')this.loadRevenue();
     else if(section==='reports')this.loadReports();
     else if(section==='integrations')this.loadIntegrations();
+    else if(section==='connect')this.loadConnect();
+    else if(section==='comms')this.loadComms();
     else if(section==='audit')this.loadAudit();
     else if(section==='broadcast')this.loadBroadcastHistory();
   },
@@ -1083,6 +1120,36 @@ const SA={
       return;
     }
     window.SokoniIntegrations.mount(root);
+  },
+
+  // ══ SECTION: Communications ═════════════════════════════
+  // The module reads its own canonical collections and one read-only callable; this console
+  // passes it a mount point and nothing else. A missing script is reported as a missing
+  // script, never as an empty inbox.
+  loadComms(){
+    const root=document.getElementById('commsRoot');
+    if(!root)return;
+    if(!window.SokoniCommsConsole){
+      root.innerHTML='<p style="color:var(--muted);font-size:13px">The communications module ' +
+        'did not load. Check that sokoni-comms-console.js is served on this page.</p>';
+      return;
+    }
+    window.SokoniCommsConsole.mount(root);
+  },
+
+  // ══ SECTION: Connect ════════════════════════════════════
+  // The module reads its own canonical Firestore collections; this console passes it a mount
+  // point and nothing else. A missing script is reported as a missing script, never as an
+  // empty session list — an empty table and an absent module must not look the same.
+  loadConnect(){
+    const root=document.getElementById('connectRoot');
+    if(!root)return;
+    if(!window.SokoniConnectConsole){
+      root.innerHTML='<p style="color:var(--muted);font-size:13px">The Connect module did not ' +
+        'load. Check that sokoni-connect-console.js is served on this page.</p>';
+      return;
+    }
+    window.SokoniConnectConsole.mount(root);
   },
 
   // ══ SECTION 1: Platform Overview ════════════════════════
@@ -2200,5 +2267,12 @@ const SA={
      are superAdmin-gated on the server; this page's audience already holds
      that claim, but the server check is what actually enforces it. -->
 <script src="sokoni-gcp-admin.js"></script>
+<!-- SOKONI Connect. The same read module admin-os.html mounts, plus its write surface kept
+     in a separate file so the console keeps its certified guarantee of containing no write
+     path. Both verification callables are platform-admin-gated on the server. -->
+<script src="sokoni-connect-console.js"></script>
+<script src="sokoni-connect-verify.js"></script>
+<script src="sokoni-comms-console.js"></script>
+<script src="sokoni-comms-send.js"></script>
 </body>
 </html>

@@ -73,6 +73,17 @@ const DECLARED = Object.freeze({
     describe: 'Stories publishable per week (-1 unlimited, null = undecided)',
     consumer: 'functions/stories-capability.js',
   },
+  videoCalling: {
+    describe: 'SOKONI Connect video sessions (Enterprise package; org grant still required)',
+    consumer: 'functions/connect-calls.js',
+  },
+  /* `videoVerification` IS NOT DECLARED HERE, and its absence is the point.
+   *
+   * A platform admin conducting an identity or merchant verification holds an authority that
+   * is NOT purchasable and must never become a plan attribute — the moment it is declared as a
+   * capability, some future branch resolves it from a subscription and Enterprise buys the
+   * right to verify people. connect-authority.resolveVideoAccess takes `isPlatformAdmin` as a
+   * decided custom claim on a separate branch that no capability set can reach. */
   /* `doctorLimit` IS NOT DECLARED HERE, and its absence is deliberate.
    *
    * The plans carry `limits.doctors` (Clinic 5, Hospital 20, Enterprise unlimited) and
@@ -104,6 +115,9 @@ const UNSUBSCRIBED = Object.freeze({
   serviceLimit: hcPlans.UNSUBSCRIBED_SERVICE_FLOOR,
   listingLimit: null,
   storyAllowancePerWeek: null,
+  /* FALSE, and false is the only safe floor. Video is the strongest channel the platform has
+     and the one whose misuse is least recoverable — a camera switched on cannot be un-seen. */
+  videoCalling: false,
 });
 
 /* ── MERCHANT PACKAGES (owner decision 2026-09-13) ─────────────────────────────────────────
@@ -168,6 +182,15 @@ async function capabilitiesFor(uid, opts = {}) {
         listingLimit: ent.listingLimit,
         storyAllowancePerWeek: Object.hasOwn(MERCHANT_STORY_ALLOWANCE, ent.plan)
           ? MERCHANT_STORY_ALLOWANCE[ent.plan] : null,
+        /* ENTERPRISE ONLY — an owner decision, and the one capability where the gate is the
+           product rather than an allowance. Resolved from `ent.plan` rather than from a
+           feature flag on the catalogue, because subscription-catalog's five flags were dead
+           on arrival and adding a sixth would repeat that exactly.
+
+           `entitlementFor` has already applied expiry: an expired or cancelled Enterprise
+           subscription resolves to FREE before it reaches this line, so video lapses with the
+           plan without anything here knowing about dates. */
+        videoCalling: ent.plan === 'ENTERPRISE',
       }),
     };
   }
@@ -203,6 +226,10 @@ async function capabilitiesFor(uid, opts = {}) {
       storiesStaffPublishing:   plan.capabilities.storiesStaffPublishing,
       shopRequestable:          plan.capabilities.shopRequestable,
       serviceLimit:             hcPlans.serviceLimitFor(plan.id),
+      /* The healthcare plans have not declared a video entitlement. Stated explicitly rather
+         than left undefined so a reader sees a decision rather than an omission — and so the
+         key is never absent from a capability set some consumer spreads into another. */
+      videoCalling:             false,
     }),
   };
 }

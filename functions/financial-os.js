@@ -50,9 +50,27 @@ async function _audit(action, actorUid, data) {
 }
 
 /* ── Notification ── */
+/* The in-app notification feed. This writes the `notifications` collection DIRECTLY and
+   does NOT go through notify.js — so it gets no preferences, no quiet hours, no dedupe and no
+   audit row, and it sends no push, SMS or email. That is pre-existing behaviour and is NOT
+   changed here.
+
+   What IS added is the business ANCHOR, so these records can join the unified timeline. It is
+   additive: a call site that has no anchor in scope passes none and the row records itself as
+   unanchored, exactly as before. An anchor is read from the payload by the ONE shared
+   resolver, which returns null rather than guessing — putting a real notification under the
+   wrong business relationship is worse than leaving it unjoinable. */
+const _ENV = require('./shared/communication-envelope');
+
 async function _notify(uid, type, payload) {
   try {
-    await db().collection('notifications').add({ uid, type, ...payload, read: false, createdAt: now() });
+    const a = _ENV.anchorFrom(payload || {});
+    await db().collection('notifications').add({
+      uid, type, ...payload, read: false, createdAt: now(),
+      anchorType: a ? a.anchorType : null,
+      anchorId: a ? a.anchorId : null,
+      anchored: !!a,
+    });
   } catch (_) {}
 }
 

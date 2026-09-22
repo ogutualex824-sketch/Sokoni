@@ -156,11 +156,23 @@ async function _queueException(item) {
   }
 }
 
+/* Writes the in-app feed directly, bypassing notify.js — pre-existing, and NOT changed here.
+   The business ANCHOR is added so these rows can join the unified timeline; it is read from
+   `data` by the ONE shared resolver and is null when nothing matches. A dispute or request id
+   is deliberately NOT an anchor: neither is an approved business relationship, and inventing
+   one to raise coverage would file a real notification under a relationship that does not
+   exist. */
+const _ENV = require('./shared/communication-envelope');
+
 async function _notify(uid, title, body, data = {}) {
   try {
+    const a = _ENV.anchorFrom(data || {});
     await _db().collection('notifications').add({
       userId: uid, title, body, data,
       read: false, type: 'automation', priority: 'normal',
+      anchorType: a ? a.anchorType : null,
+      anchorId: a ? a.anchorId : null,
+      anchored: !!a,
       createdAt: _ts(),
     });
   } catch (_) { /* notification failures must not block automation */ }

@@ -69,6 +69,22 @@ const INAPP    = 'notifications';
    category: what a user can tune in preferences
    smsTemplate: the sms-service template to use IF SMS is chosen
 ═════════════════════════════════════════════════════════════════════════ */
+/* The shared anchor vocabulary. Imported rather than restated — two lists of what an anchor
+   may be is how `orders` and `order` end up in the same database meaning the same thing and
+   joining to nothing. The envelope module is pure (no firestore, no clock, no require), so
+   this costs nothing at load. */
+const _envelope = require('./shared/communication-envelope');
+
+/** Accept an anchor only if BOTH halves are present and the type is one the platform knows. */
+function _validAnchor(anchorType, anchorId) {
+  const t = String(anchorType || '').trim();
+  const id = String(anchorId || '').trim().slice(0, 200);
+  if (!t || !id || !_envelope.ANCHOR_TYPES.includes(t)) {
+    return { anchorType: null, anchorId: null, anchored: false };
+  }
+  return { anchorType: t, anchorId: id, anchored: true };
+}
+
 const TYPES = {
   /* ── critical: security & money. Never suppressed, never delayed. ── */
   otp:                  { priority: 'critical',  category: 'security', smsTemplate: 'otp' },
@@ -90,6 +106,15 @@ const TYPES = {
   booking_paid:         { priority: 'commerce',  category: 'orders',   smsTemplate: null },
   booking_refund:       { priority: 'commerce',  category: 'payments', smsTemplate: null },
   booking_released:     { priority: 'commerce',  category: 'orders',   smsTemplate: null },
+  /* SOKONI Connect — an incoming business call.
+     COMMERCE, not critical, and that is a decision: critical ignores preferences AND quiet
+     hours, and a buyer must not be able to ring a merchant at 3am about an order. The cost is
+     real and is handled honestly downstream — if nothing is delivered, the Connect session
+     does NOT move to `ringing`, it stays `authorized` and expires. A call that was suppressed
+     is recorded as never having rung, rather than as unanswered.
+     SMS is deliberately null: an SMS arriving after the caller has hung up is noise, and there
+     is nothing for the recipient to act on by then. */
+  connect_incoming_call:{ priority: 'commerce',  category: 'support',  smsTemplate: null },
   wallet_credit:        { priority: 'commerce',  category: 'wallet',   smsTemplate: 'wallet_credit' },
   order_placed:         { priority: 'commerce',  category: 'orders',   smsTemplate: 'order_placed' },
   order_accepted:       { priority: 'commerce',  category: 'orders',   smsTemplate: 'order_accepted' },
@@ -338,7 +363,7 @@ async function sendPush(uid, payload) {
 /* ══════════════════════════════════════════════════════════════════════════
    notify() — the ONE entry point
 ═════════════════════════════════════════════════════════════════════════ */
-async function notify({ uid, type, title, body, vars = {}, phone, email, image, deepLink, group, dedupeKey, data, awaitDelivery = true }) {
+async function notify({ uid, type, title, body, vars = {}, phone, email, image, deepLink, group, dedupeKey, data, awaitDelivery = true, anchorType, anchorId }) {
   const t = TYPES[type];
   if (!t) throw new HttpsError('invalid-argument', `Unknown notification type "${type}".`);
   if (!uid) throw new HttpsError('invalid-argument', 'uid is required.');
@@ -362,8 +387,29 @@ async function notify({ uid, type, title, body, vars = {}, phone, email, image, 
   const key = dedupeKey || `${type}:${uid}:${_contentHash(title, body)}:${Math.floor(Date.now() / DEDUPE_WINDOW_MS)}`;
   const logRef = db().collection(LOG).doc(key);
   try {
+    /* ── THE BUSINESS ANCHOR ──────────────────────────────────────────────────────────────
+       WHY THIS FIELD EXISTS. SOKONI sends on seven channels and could not connect them,
+       because this log recorded WHO was told and WHAT KIND of message it was — never WHICH
+       ORDER it was about. `conversations` and `connectSessions` both record an anchor and can
+       therefore be read together; every push, SMS and email ever sent could not join them.
+       One missing field was the whole difference between five systems and one.
+
+       OPTIONAL, and deliberately so. Every existing caller keeps working and records
+       `anchored: false`, which is the honest answer for a notification nobody tied to a
+       business relationship. A caller that knows its anchor passes it and its message joins
+       the timeline. Making it mandatory would have meant editing every call site in one
+       change, and a half-finished migration that throws is worse than one that reports.
+
+       VALIDATED against the shared vocabulary rather than accepted as free text: an anchor
+       spelled `orders` instead of `order` would sit in the log looking joined and match
+       nothing, which is worse than absent because it reads as present. An unrecognised value
+       is dropped and the row records itself as unanchored. */
+    const _anchor = _validAnchor(anchorType, anchorId);
     await logRef.create({
       uid, type, priority: t.priority, category: t.category,
+      anchorType: _anchor.anchorType,
+      anchorId: _anchor.anchorId,
+      anchored: _anchor.anchored,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       status: 'processing',
     });
