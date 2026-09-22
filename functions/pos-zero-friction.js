@@ -629,7 +629,11 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
        Cash is exempt: the cashier is physically holding it, and the drawer
        reconciliation is what audits it. Wallet is validated separately below
        and debited inside the transaction. */
-    const CONFIRMABLE = { mpesa: 1, card: 1, mpesa_daraja: 1 };
+    /* `mpesa_daraja` is GONE. Daraja is retired outbound, so a method that can
+       never be confirmed must not be listed as confirmable — assertConfirmable
+       would refuse it as a legacy document anyway, and advertising it here
+       invites a caller to try. */
+    const CONFIRMABLE = { mpesa: 1, card: 1 };
     for (const p of _pay) {
       const method = String((p && p.method) || '').toLowerCase();
       if (!CONFIRMABLE[method]) continue;
@@ -647,17 +651,44 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       }
       const pay = paySnap.data() || {};
 
-      if (pay.status !== 'completed') {
-        _e('The customer has not completed this payment yet (' + (pay.status || 'pending') + '). ' +
-           'Wait for their confirmation, or try the payment again.', 'failed-precondition');
+      /* ── MAY THIS PAYMENT SETTLE THIS SALE? — asked of the certified module
+         `shared/pos-payment-ownership.js` rather than re-decided here.
+
+         This block used to carry its own status and ownership checks, and both
+         were wrong in ways that read as right:
+
+           · it required `completed`, the DARAJA spelling. darajaSTKPush is no
+             longer exported, so nothing can reach that status — the gate
+             refused every till payment forever. Measured 2026-09-22:
+             posPaymentClaims held ZERO rows against five posRetailSales.
+
+           · the shop check was guarded `if (pay.sellerUid && …)`, and a QR
+             document carries `sellerId`, NOT `sellerUid`. The condition was
+             false, so THE WHOLE CHECK WAS SKIPPED and any shop could confirm
+             against another shop's payment. A check that silently does nothing
+             when its field is absent is worse than no check, because it reads
+             as one.
+
+         assertConfirmable answers both, refuses a legacy Daraja document
+         outright whatever status it carries, and treats an owner it cannot
+         establish as a REFUSAL. It never writes and never throws.
+
+         Certified by scripts/certify-pos-payment-ownership.js, whose W7-1..W7-4
+         assert exactly this wiring. See Amendment A.1.5. */
+      const _confirm = require('./shared/pos-payment-ownership')
+        .assertConfirmable(pay, { merchantId, cashierId });
+      if (!_confirm.ok) {
+        _e(_confirm.message,
+           _confirm.reason === 'wrong_shop' ? 'permission-denied'
+             : _confirm.reason === 'no_document' ? 'not-found'
+               : 'failed-precondition');
       }
-      /* The money must have reached THIS shop, not merely exist somewhere. */
-      if (pay.sellerUid && pay.sellerUid !== merchantId && pay.sellerUid !== cashierId) {
-        _e('That payment belongs to a different shop.', 'permission-denied');
-      }
+
       /* And it must be enough. A 3,000 sale cannot be settled with a confirmed
-         10 shilling payment just because a reference was pasted in. */
-      const confirmedAmount = Number(pay.paidAmount != null ? pay.paidAmount : pay.amount);
+         10 shilling payment just because a reference was pasted in. The module
+         returns the GATEWAY's figure; the sufficiency decision stays here,
+         because only this caller knows what the sale is claiming. */
+      const confirmedAmount = Number(_confirm.amount);
       if (isFinite(confirmedAmount) && confirmedAmount + 1 < Number(p.amount || 0)) {
         _e('The confirmed payment is ' + confirmedAmount + ' but this sale is claiming ' +
            p.amount + '.');
