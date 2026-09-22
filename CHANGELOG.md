@@ -1,3 +1,159 @@
+## 2026-09-22 (150) — PayPal retired; IntaSend is the payment provider
+
+**Owner decision: SOKONI does not offer PayPal.** Hosting-side only. No Functions, no rules,
+no deploy. `checkout.html` is **not** included — see the boundary below.
+
+### It was never wired, and the option was still selectable
+
+`sokoni-config.js` shipped `paypalEmail: ""`, so `checkout.html` never built a link. But the
+option was still offered: choosing it showed *"Redirecting to PayPal"*, opened nothing, and
+still called `saveAndRedirect(ref, "paypal", …)` — creating an order **nobody could pay**.
+
+### And the link it would have built was wrong
+
+```js
+"https://www.paypal.me/" + user + "/" + orderTotal + "USD"
+```
+
+`orderTotal` is in **KES**. A KES 5,000 order would have been presented to the customer as
+**USD 5,000** — roughly 130×. That defect was **one config field away from live**, which is why
+`paypalEmail` is now **absent** rather than blank. `checkout.html` reads it with optional
+chaining, so absent behaves exactly as `""` did — but there is no longer a field to fill in.
+
+### Retired from every owned surface
+
+| File | Removed |
+|---|---|
+| `sokoni-config.js` | the `paypalEmail` key, replaced by a note saying why it must not return |
+| `minishop-admin.html` | the merchant PayPal payment-method checkbox |
+| `script.js` | the assistant's "we accept … PayPal" claim |
+| `index.html` | `paymentAccepted` schema entry + the footer badge |
+| `seo.js` | `paymentAccepted` schema + two FAQ answers |
+| `legal.html` | terms wording + the privacy **payment-processor** disclosure |
+| `sokoni-gateway.js` | `api.paypal.com` from the outbound allow-list |
+| `sokoni-webhook-engine.js` | the `PAYPAL` provider enum (no consumer anywhere) |
+
+**Deliberately left:** `sokoni-invoice.js` keeps `'PayPal'` in its method label and icon map.
+Retiring the offer must not corrupt the display of **historical** invoices that recorded it.
+
+### Guard — `scripts/test-payment-provider-policy.js`, 11/11
+
+Asserts the key is absent, that no owned surface mentions PayPal, and — as **allow controls** —
+that IntaSend is still configured and its keys survive. Without those two, the suite would also
+pass if every payment provider had been deleted.
+
+### Boundary: retirement is INCOMPLETE
+
+`checkout.html` still contains **68** PayPal references and **still offers the option**. It is
+another agent's dirty file and was not edited. The guard reports this as `C4` rather than
+exempting it, so a green run cannot be read as "PayPal is fully retired".
+
+Remaining work there, once the file is handed over: remove the `#payPaypal` card, the
+`paypalOverlay` modal, the `type === "paypal"` branch, and the `ppLink` builder.
+
+**Files:** `sokoni-config.js` · `minishop-admin.html` · `script.js` · `index.html` · `seo.js` ·
+`legal.html` · `sokoni-gateway.js` · `sokoni-webhook-engine.js` ·
+`scripts/test-payment-provider-policy.js` (new).
+Database changes: none. API changes: none. Security changes: one fewer outbound host allowed.
+Breaking changes: none — the rail was already inert. Deploy: none.
+
+## 2026-09-22 (153) — SOKONI Connect: the business calling layer, gated where it matters
+
+**New subsystem. NO DEPLOY. Live remains 111dbd7 / v636.** Full design and limits:
+`docs/SOKONI_CONNECT.md`.
+
+A buyer taps **Call seller**. SOKONI knows the buyer, the seller and the order, so it opens a
+session between two *uids* — never between two telephone numbers.
+
+### The client never names the other party
+
+The deployed `createConversation` takes `participantUids` from `req.data` and guards only with
+`participantUids.includes(uid)`. A wrong chat participant misfiles a message; a wrong **call**
+participant rings a stranger's telephone. **There is no `calleeUid` parameter anywhere in
+`connect-calls.js`** — a caller names an ANCHOR (order, enquiry, booking, delivery, supply,
+support case) and the server reads that document to discover the parties. The suite asserts
+the absence.
+
+Seller identity follows the authoritative chain `order → items[].productId →
+products/{id}.sellerUid`, never `order.sellerUid` (browser-written, unconstrained by rules).
+REFUSES on: no items, no product, no seller, or **more than one seller**. The advisory field is
+recorded as agreeing or disagreeing; it decides nothing.
+
+### Video: two authorities that never fall through to each other
+
+`mayCommunicate(..., 'video')` returns `video_requires_separate_authority` for every pair and
+every state, so video cannot be reached by relaxing a voice rule.
+
+| Mode | Requires | Consumes |
+|---|---|---|
+| PLATFORM | `isPlatformAdmin` + a named verification procedure | nothing |
+| ENTERPRISE | `videoCalling` + org grant + business purpose + a live relationship | the Enterprise entitlement |
+
+A platform verification does **not** consume an Enterprise entitlement — a merchant's plan must
+not be billed for SOKONI verifying that merchant. An Enterprise subscriber may **not** open a
+verification session.
+
+**`videoVerification` is deliberately not a capability key.** Declare it and some future branch
+resolves it from a subscription, and Enterprise buys the right to verify people.
+
+Buying Enterprise does not hand a camera to every employee: the organisation's own grant
+(`connectVideoGrants`, written only by `connectSetVideoGrant`, which first proves the granting
+account's own package) is a second, independent condition. The test is `videoCalling !== true`,
+so a missing key, `"true"`, `1` and a truthy object are all denied — each exercised against a
+positive control.
+
+### Honest about what does not work
+
+`PROVIDERS.pstn === false`. No telephony provider is contracted, no TURN/STUN is configured, and
+**no page yet opens a session** — the callables have no caller. A video call **never** falls
+back to the telephone network: PSTN carries no video, and degrading it would leave a
+verification resting on a camera that was never switched on. Presence absent reads as OFFLINE,
+never online.
+
+### Recording
+
+None. Metadata only — no audio, no video, no transcript. Every record asserts
+`recording: 'DISABLED'` as a literal so a record that does *not* say DISABLED is detectable, and
+the console shows the column rather than hiding it.
+
+### `emulators:exec` alone proved nothing — and a control caught it
+
+Run from the repo root the emulator reports *"Did not find a Cloud Firestore rules file
+specified in a firebase.json config file"* — `firebase.json` declares `firestore` as an **array**
+for two databases — and defaults to **allowing all reads and writes**. A deliberately corrupted
+ruleset passed that way. `scripts/test-connect-rules.js` now loads the ruleset itself through
+`initializeTestEnvironment` and treats a compile failure as a first-class result.
+
+A positive control caught a real hole in the matrix: the delivery pair was declared
+`rider:buyer` while the lookup canonicalised to `buyer:rider`, so **a rider could not call the
+buyer and nothing said so**. Pairs are now normalised on comparison, and a sweep asserts every
+declared pair resolves in both directions, with an inverting control proving the sweep is not
+vacuous.
+
+### Files
+
+| File | Change |
+|---|---|
+| `functions/shared/connect-authority.js` | NEW — pure authority: matrix, video, transport, privacy. No `require` at all |
+| `functions/connect-calls.js` | NEW — 6 callables, anchor-derived parties |
+| `functions/connect-dispatch.js` | NEW — 6 onCall → 1 Cloud Run service |
+| `functions/capability-authority.js` | `videoCalling` declared; ENTERPRISE only; unsubscribed floor `false` |
+| `functions/index.js` | `connectDispatch` registered |
+| `firestore.rules` + `firestore.rules.build` | `connectSessions`, its `signals`, `connectVideoGrants` — server-owned |
+| `admin-os.html`, `sokoni-aos.js`, `sokoni-connect-console.js` | Communications → **Connect** tab (AdminOS only; `admin.html` is not a consumer) |
+| `scripts/test-connect-authority.js` | NEW — 178 pass |
+| `scripts/test-connect-rules.js` | NEW — 28 pass; counter-proof holds (7 fail without the rules) |
+| `docs/SOKONI_CONNECT.md` | NEW |
+
+**Database:** `connectSessions` (+ `signals` subcollection), `connectVideoGrants`. Both
+server-written only; `allow write: if false` for everyone including admins.
+**API:** `connectDispatch` — 6 ops, **not deployed**.
+**Security:** no client write path to a participant list; no telephone number in any record,
+payload or log — `buildSessionRecord` and `connectSignal` refuse rather than redact.
+**Breaking:** none.
+
+---
+
 ## 2026-09-22 (152) — KRA traced end to end; the roster gets the surface it never had
 
 **Audit + one new surface. NO DEPLOY. No live port. No foreign file touched. No KRA code

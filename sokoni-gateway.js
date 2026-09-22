@@ -30,7 +30,6 @@ const SokoniGateway = (function () {
     'https://sandbox.intasend.com',
     'https://api.africastalking.com',
     'https://api.stripe.com',
-    'https://api.paypal.com',
     'https://router.project-osrm.org',
   ]);
 

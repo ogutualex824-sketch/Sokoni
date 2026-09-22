@@ -28,7 +28,6 @@ const SokoniWebhookEngine = (function () {
     INTASEND:   'intasend',
     MPESA:      'mpesa',
     STRIPE:     'stripe',
-    PAYPAL:     'paypal',
     FLUTTERWAVE:'flutterwave',
     AIRTEL:     'airtel_money',
     VISA:       'visa',

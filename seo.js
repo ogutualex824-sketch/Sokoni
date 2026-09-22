@@ -188,7 +188,7 @@ const SokoniSEO = (() => {
       "telephone": BRAND.phone,
       "email": BRAND.email,
       "currenciesAccepted": "KES",
-      "paymentAccepted": "M-Pesa, Visa, Mastercard, PayPal",
+      "paymentAccepted": "M-Pesa, Visa, Mastercard",
       "priceRange": "KSh",
       "areaServed": [
         { "@type": "Country", "name": "Kenya" },
@@ -347,8 +347,8 @@ const SokoniSEO = (() => {
         "@context": "https://schema.org",
         "@type": "FAQPage",
         "mainEntity": [
-          { "@type":"Question", "name":"How do I buy on SOKONI?", "acceptedAnswer":{ "@type":"Answer", "text":"Browse products, add to cart, enter delivery details and pay via M-Pesa, Visa, Mastercard or PayPal. Delivery available across Kenya." }},
-          { "@type":"Question", "name":"How do I pay on SOKONI?", "acceptedAnswer":{ "@type":"Answer", "text":"SOKONI accepts M-Pesa (STK Push), Visa, Mastercard and PayPal. M-Pesa is the most popular option — you'll get a push notification on your phone." }},
+          { "@type":"Question", "name":"How do I buy on SOKONI?", "acceptedAnswer":{ "@type":"Answer", "text":"Browse products, add to cart, enter delivery details and pay via M-Pesa, Visa or Mastercard. Delivery available across Kenya." }},
+          { "@type":"Question", "name":"How do I pay on SOKONI?", "acceptedAnswer":{ "@type":"Answer", "text":"SOKONI accepts M-Pesa (STK Push), Visa and Mastercard. M-Pesa is the most popular option — you'll get a push notification on your phone." }},
           { "@type":"Question", "name":"How do I book a service on SOKONI?", "acceptedAnswer":{ "@type":"Answer", "text":"Go to Services, search or browse by category, select a provider and click Book. Fill in your details and job description — the provider will contact you." }},
           { "@type":"Question", "name":"Is SOKONI available as an app?", "acceptedAnswer":{ "@type":"Answer", "text":"SOKONI is a Progressive Web App (PWA). You can install it directly from your browser — tap 'Add to Home Screen' on Android or iPhone for a full app experience." }},
           { "@type":"Question", "name":"Does SOKONI deliver to my area?", "acceptedAnswer":{ "@type":"Answer", "text":"SOKONI delivers nationwide across Kenya — Nairobi, Mombasa, Kisumu, Nakuru, Eldoret and more. Same-day delivery is available in Nairobi CBD and select suburbs." }}

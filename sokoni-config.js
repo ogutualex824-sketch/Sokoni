@@ -49,10 +49,13 @@ window.SOKONI_CONFIG = {
   intasendKey:  "ISPubKey_live_72b29717-0018-4bab-b9e0-eb105980e478",
   intasendLive: true,        // false = sandbox mode for testing
 
-  /* ── 2. PayPal (OPTIONAL — enables PayPal redirect on checkout) ─
-     Your PayPal.me username — e.g. "sokonimarket"
-     checkout.html will open: https://www.paypal.me/sokonimarket/AMOUNT   */
-  paypalEmail: "",           // ← your PayPal.me username (not email)
+  /* ── 2. PayPal — RETIRED 2026-09-22. SOKONI does not offer PayPal.
+     The key is deliberately ABSENT rather than blank: checkout.html reads it
+     with optional chaining, so absent behaves exactly as "" did, but there is
+     no longer a field to fill in. Filling it would have armed a real defect —
+     the link was built as paypal.me/<user>/<orderTotal>USD while orderTotal is
+     in KES, so a KES 5,000 order would have been presented as USD 5,000.
+     IntaSend is the payment provider. Do not reintroduce this key. */
 
   /* ── 4. Algolia search (OPTIONAL — enables typo tolerance + instant search) ─
      a) Sign up at https://algolia.com (free tier: 10k records, 10k ops/month)

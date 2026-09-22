@@ -2089,7 +2089,7 @@ function startLivePopup(){
 const botResponses = [
     /* ── Shopping & Orders ── */
     { keys:["track","order","where","delivery status","my order"], reply:"To track your order tap <a href='track.html' style='color:#71ff00'>📦 Track Order</a> and enter your Order ID (starts with SKN). Live map shows your rider in real-time! 🛵" },
-    { keys:["pay","payment","mpesa","visa","card","how to pay","checkout"], reply:"We accept <strong>M-Pesa, Visa, Mastercard & PayPal</strong>. M-Pesa sends an STK push instantly to your phone. <a href='checkout.html' style='color:#71ff00'>Go to Checkout →</a> 💳" },
+    { keys:["pay","payment","mpesa","visa","card","how to pay","checkout"], reply:"We accept <strong>M-Pesa, Visa and Mastercard</strong>. M-Pesa sends an STK push instantly to your phone. <a href='checkout.html' style='color:#71ff00'>Go to Checkout →</a> 💳" },
     { keys:["return","refund","wrong item","broken","damaged","replace"], reply:"<strong>7-day hassle-free returns.</strong> Got the wrong or damaged item? Message the seller via <a href='messages.html' style='color:#71ff00'>💬 Messages</a> or email info@sokoni.co.ke and we'll sort it within 24hrs. 🔄" },
     { keys:["deliver","shipping","how long","days","arrival","eta"], reply:"🚀 <strong>Nairobi:</strong> Same-day delivery<br>🏙️ <strong>Mombasa/Kisumu:</strong> 1–2 days<br>🌍 <strong>Other towns:</strong> 2–4 days<br>Track live on <a href='track.html' style='color:#71ff00'>Track Order</a> 🛵" },
     { keys:["cancel order","cancel","stop order"], reply:"To cancel an order, go to <a href='profile.html' style='color:#71ff00'>My Orders</a> and tap the order. Cancellations are free within 1 hour of placing. After that, contact support. ❌" },
