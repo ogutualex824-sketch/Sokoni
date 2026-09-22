@@ -189,7 +189,25 @@ console.log('\nRepo-wide — the remaining posProducts writer set is exactly wha
     if (e.status !== 1 && e.status !== 0) bad('git grep for posProducts writers failed to run: ' + e.message.split('\n')[0]);
   }
   const lines = grepOut.split('\n').filter(Boolean);
-  const files = new Set(lines.map(l => l.split(':')[0]));
+  const allFiles = new Set(lines.map(l => l.split(':')[0]));
+
+  /* THE SUBJECT IS PRODUCTION WRITERS, NOT HARNESSES. A suite that seeds
+     posProducts into an emulator matches this pattern and is not a writer the
+     retirement is about — `test-served-posproducts-authorization.js` seeds rows
+     to exercise the SERVED ruleset, and this file matches its own pattern.
+
+     Scoping beats allowlisting two filenames: an exact-set assertion over a
+     shared repo goes red on another agent's valid addition, and the obvious
+     "fix" then looks like deleting their work. The extras are REPORTED rather
+     than silently dropped, so a harness quietly becoming a production writer
+     still surfaces here. */
+  const isHarness = (f) => f.startsWith('scripts/');
+  const harnesses = [...allFiles].filter(isHarness);
+  const files = new Set([...allFiles].filter(f => !isHarness(f)));
+  if (harnesses.length) {
+    console.log('  note  ' + harnesses.length + ' test harness(es) also match this pattern and are ' +
+                'out of scope: ' + harnesses.join(', '));
+  }
 
   !files.has('seller.js')
     ? ok('seller.js has zero remaining posProducts write call sites (repo-wide git grep, not the file-scoped check above)')

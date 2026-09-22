@@ -31,6 +31,7 @@ const db = admin.firestore();
 const _CF = { region: 'us-central1', enforceAppCheck: true };
 const _TS = () => admin.firestore.FieldValue.serverTimestamp();
 const _INC = (n) => admin.firestore.FieldValue.increment(n);
+const _DEL = () => admin.firestore.FieldValue.delete();
 
 /**
  * Assert authenticated caller.
@@ -1548,6 +1549,32 @@ const _pcStr = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
 const _pcId  = (v, max) => String(v == null ? '' : v).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, max);
 
 /** Coerce to a finite number within range. `undefined` passes through unless required. */
+/* A catalogue boolean, with an optional input ALIAS from another collection's
+   spelling. Returns `undefined` when the caller said nothing — which is not the
+   same as `false` and must never be flattened into it. A non-boolean is refused
+   rather than coerced: `'false'`, `0` and `'no'` all coerce to something, and a
+   discriminator decided by coercion is the `Number('buyer')` defect again. */
+function _pcCatalogueFlag(d, field, aliasField) {
+  const raw   = d[field];
+  const alias = aliasField ? d[aliasField] : undefined;
+
+  const read = (v, name) => {
+    if (v === undefined || v === null || v === '') return undefined;
+    if (typeof v !== 'boolean') {
+      throw new HttpsError('invalid-argument', name + ' must be a boolean');
+    }
+    return v;
+  };
+
+  const a = read(raw, field);
+  const b = read(alias, aliasField);
+  if (a !== undefined && b !== undefined && a !== b) {
+    throw new HttpsError('invalid-argument',
+      field + ' and ' + aliasField + ' disagree — send one');
+  }
+  return a !== undefined ? a : b;
+}
+
 function _pcNum(v, field, opts) {
   const o = opts || {};
   const min = o.min === undefined ? 0 : o.min;
@@ -1577,7 +1604,86 @@ exports._h.posUpsertProduct = async (req) => {
   const name = _pcStr(d.name, 140);
   if (!name) throw new HttpsError('invalid-argument', 'name is required');
 
-  const price        = _pcNum(d.price === undefined ? d.sellingPrice : d.price, 'price', { required: true });
+  /* ── THE CATALOGUE CONTRACT (Option 1, owner decision 2026-09-22) ─────────
+     This writer is the CANONICAL POS product writer, so the service/catalogue
+     fields must survive it. Before this, the document below was an explicit
+     whitelist that did not mention `trackStock`, `variablePrice`, `listingType`
+     or `trackInventory`, so a caller could send them and they were silently
+     DISCARDED — the same class of defect as d0443b8, one layer lower, and the
+     reason a service could only exist by bypassing this function entirely.
+
+     NOTHING HERE IS SILENTLY DEFAULTED. A field the caller did not send is not
+     written, and a field whose value contradicts another is REFUSED rather than
+     resolved by precedence — two fields disagreeing about whether a row is a
+     service is not a thing to pick a winner for.
+
+     ── trackStock IS THE DISCRIMINATOR, AND ABSENT MEANS PRODUCT ──────────────
+     `trackStock === false` is a SERVICE. `pos.js:3104` already reads
+     `trackStock !== false`, and every existing row has the field ABSENT, so
+     absent must keep meaning PRODUCT — writing `trackStock: true` onto rows that
+     never had it would be a migration, not a create. The field is therefore
+     written only when the caller states it.
+
+     ── trackInventory IS THE MARKETPLACE SPELLING AND IS NEVER STORED HERE ────
+     `products` carries `trackInventory`; `posProducts` carries `trackStock`.
+     They are different fields on different collections, not two spellings of
+     one, and storing both here would create the second flag this is meant to
+     prevent. It is accepted as an INPUT ALIAS only, and a caller that sends both
+     with conflicting values is refused. */
+  const trackStock = _pcCatalogueFlag(d, 'trackStock', 'trackInventory');
+
+  /* `listingType` is a LABEL, never an authority — see the standing rule that a
+     businessType/label is not a credential. It must not contradict the
+     discriminator: 'service' with trackStock !== false is a contradiction, and
+     silently trusting either one is how two answers for one row appear. */
+  const listingType = _pcStr(d.listingType, 32).toLowerCase();
+  if (listingType && listingType !== 'product' && listingType !== 'service') {
+    throw new HttpsError('invalid-argument',
+      "listingType must be 'product' or 'service'");
+  }
+  if (listingType === 'service' && trackStock !== false) {
+    throw new HttpsError('invalid-argument',
+      "listingType 'service' requires trackStock: false");
+  }
+  if (listingType === 'product' && trackStock === false) {
+    throw new HttpsError('invalid-argument',
+      "listingType 'product' contradicts trackStock: false");
+  }
+
+  /* ── variablePrice, AND WHAT `price` AUTHORITATIVELY MEANS ─────────────────
+     A variable-priced item is one the cashier prices at the till (typing,
+     repairs, consultancy). Only a SERVICE may be variable-priced — a stocked
+     product is never counter-priced.
+
+     THE AMBIGUITY THIS RESOLVES: `price` was mandatory and `variablePrice` was
+     discarded, so a variable-priced service could only be stored as `price: 0`,
+     which is indistinguishable from FREE. From here:
+
+         variablePrice: true   ->  `price` is an INDICATIVE default, not an
+                                   authority. 0 is permitted and means "the
+                                   cashier names it", NEVER "free". The till
+                                   prices the line through
+                                   pos-service-pricing's `variable` source,
+                                   bounded, and records that source on the line.
+         variablePrice absent  ->  `price` IS the authority and must be > 0.
+                                   A fixed-price item priced 0 is a defect, not
+                                   a giveaway.
+
+     `priceMode` is written explicitly so no reader has to infer intent from a
+     zero, and so a row whose price is 0 can never be read as free by accident. */
+  const variablePrice = _pcCatalogueFlag(d, 'variablePrice');
+  if (variablePrice === true && trackStock !== false) {
+    throw new HttpsError('invalid-argument',
+      'variablePrice is only valid for a service (trackStock: false)');
+  }
+
+  const price = variablePrice === true
+    ? (_pcNum(d.price === undefined ? d.sellingPrice : d.price, 'price', { min: 0 }) || 0)
+    : _pcNum(d.price === undefined ? d.sellingPrice : d.price, 'price', { required: true });
+  if (variablePrice !== true && !(price > 0)) {
+    throw new HttpsError('invalid-argument',
+      'price must be greater than zero unless the item is variablePrice');
+  }
   const costPrice    = _pcNum(d.costPrice, 'costPrice');
   const salePrice    = _pcNum(d.salePrice, 'salePrice');
   const vatRate      = _pcNum(d.vatRate === undefined ? d.taxRate : d.vatRate, 'vatRate', { max: 100 });
@@ -1588,7 +1694,17 @@ exports._h.posUpsertProduct = async (req) => {
   const barcode  = _pcStr(d.barcode, 64);
   const category = _pcStr(d.category, 80) || 'General';
   const brand    = _pcStr(d.brand, 80);
-  const unit     = _pcStr(d.unit, 24) || 'pcs';
+  /* ── D: ONE CANONICAL DEFAULT FOR `unit` ──────────────────────────────────
+     'pcs' is canonical because it is already what this writer, `seller.js:1063`
+     and `sokoni-merchant-data.js` write; `sokoni-catalogue-model.js`'s 'piece'
+     is the outlier and converges here. A SERVICE gets no default at all — "KES
+     20" means nothing where "KES 20 / page" is a price, so the unit is required
+     rather than guessed. */
+  const unit = _pcStr(d.unit, 24) || (trackStock === false ? '' : 'pcs');
+  if (trackStock === false && !unit) {
+    throw new HttpsError('invalid-argument',
+      'a service requires a unit — page, document, session, hour…');
+  }
   const supplier = _pcStr(d.supplier, 120);
   const active   = d.active === false ? false : true;
 
@@ -1650,10 +1766,46 @@ exports._h.posUpsertProduct = async (req) => {
     if (barcode)  doc.barcode  = barcode;
     if (brand)    doc.brand    = brand;
     if (supplier) doc.supplier = supplier;
-    if (stockQty !== undefined) doc.stockQty = nextQty;
+
+    /* ── The catalogue contract, persisted ────────────────────────────────── */
+    if (trackStock !== undefined) doc.trackStock = trackStock;
+    if (listingType)              doc.listingType = listingType;
+    /* priceMode is written on EVERY row, not only variable ones: a reader must
+       be able to tell "this price is authoritative" from "this price is a
+       placeholder" without inferring it from the absence of a field. */
+    doc.priceMode = variablePrice === true ? 'variable' : 'fixed';
+    if (variablePrice === true) doc.variablePrice = true;
+
+    /* A SERVICE CARRIES NO STOCK, and the keys are removed rather than zeroed:
+       `stockQty: 0` reads as OUT OF STOCK and would hide the service from a till
+       filtering on availability, which is the inverse of the intended meaning.
+
+       This is also why a service must never fall into the till's
+       `stock ?? stockQty ?? quantity ?? 9999` fallback as a STOCKED row — it is
+       exempt by `trackStock: false`, not by carrying a large number. */
+    if (trackStock === false) {
+      if (stockQty !== undefined) {
+        throw new HttpsError('invalid-argument',
+          'a service (trackStock: false) cannot carry stock');
+      }
+      /* On an UPDATE the keys may already be there from a previous product-shaped
+         write, so they are removed with a sentinel. On a CREATE there is nothing
+         to remove, and a delete() sentinel in a non-merge `set` is invalid — so
+         the create path simply never sets them (handled below). */
+      if (prodSnap.exists) {
+        doc.stockQty     = _DEL();
+        doc.stock        = _DEL();
+        doc.reorderPoint = _DEL();
+      }
+    } else if (stockQty !== undefined) {
+      doc.stockQty = nextQty;
+    }
 
     if (!prodSnap.exists) {
-      doc.stockQty  = nextQty;          // always present on create so checkout can read it
+      /* A STOCKED product always gets stockQty on create so the checkout can read
+         it. A SERVICE never does: trackStock:false exempts it, a 0 here would read
+         as OUT OF STOCK, and a large number would read as unlimited. */
+      if (trackStock !== false) doc.stockQty = nextQty;
       doc.createdAt = _TS();
       doc.createdBy = auth.uid;
       tx.set(prodRef, doc);

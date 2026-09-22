@@ -1,3 +1,84 @@
+## 2026-09-22 (175) — Option 1: posUpsertProduct becomes the canonical POS product writer
+
+**NO DEPLOY. Live remains 111dbd7 / v636.** `scripts/test-posupsert-catalogue-contract.js` **35/0** ·
+`test-posproducts-mirror-retirement.js` **14/14** · `test-pos-inventory-denial-visibility.js` **26/0** ·
+`functions/index.js` require closure intact.
+
+### The owner chose the server writer, so the server writer has to carry the contract
+
+B/C/E failed because `posUpsertProduct` built its document from an explicit whitelist that never
+mentioned `trackStock`, `variablePrice`, `listingType` or `trackInventory`. A caller could send them
+and they were **discarded** — so a service could not exist through the canonical writer at all, and a
+variable-priced service could only be stored as `price: 0`, indistinguishable from FREE.
+
+**B — the discriminator survives.** `trackStock` is written when the caller states it, and only then:
+every existing row has it ABSENT and `pos.js:3104` reads `trackStock !== false`, so absent must keep
+meaning PRODUCT. Writing `true` onto untouched rows would be a migration, not a create.
+
+**C — one flag per collection, by refusal rather than precedence.** `trackInventory` is the
+`products` spelling, accepted as an INPUT ALIAS only and never stored on `posProducts`; a caller
+sending both with conflicting values is REFUSED. `listingType` is a LABEL that may not contradict the
+discriminator — `service` with `trackStock !== false` is refused, not resolved by picking a winner. A
+non-boolean flag is refused rather than coerced: `'false'`, `0` and `'no'` all coerce to something,
+and a discriminator decided by coercion is the `Number('buyer')` defect again.
+
+**D — one canonical default.** `pcs`, because this writer, `seller.js:1063` and
+`sokoni-merchant-data.js` already write it; the model's `piece` converges here. A SERVICE gets no
+default at all and is refused without a unit — "KES 20" means nothing where "KES 20 / page" is a
+price.
+
+**E — `price` now has a stated meaning.**
+
+    variablePrice: true   price is INDICATIVE, 0 permitted, means "the cashier
+                          names it" and NEVER free; priced at the till through
+                          pos-service-pricing's bounded `variable` source
+    otherwise             price IS the authority and must be > 0; a fixed-price
+                          row priced 0 is a defect, not a giveaway
+
+`priceMode` is written on **every** row so no reader infers intent from a zero. Only a service may be
+variable-priced. A service carries no stock: on update the keys are DELETED rather than zeroed (`0`
+reads as OUT OF STOCK and would hide it from a till filtering on availability), and on create they
+are simply never set — a `delete()` sentinel in a non-merge `set` is invalid.
+
+### What this deliberately does NOT do
+
+**The writer still does not write `sellerId`, and the suite asserts it.** The served ruleset keys
+`posProducts` on `sellerId` for read AND write through the same predicate, so stamping it to unblock
+`catalogue.html` reads would simultaneously grant clients direct create/update/delete on the
+collection — the opposite of Option 1. Client access is a deliberate RULES change, separately gated,
+and it remains open: **Option 1 does not retire the rules gate, it defers it to the read path.**
+
+`catalogue.html` is NOT yet migrated off its direct `setDoc` writes. That is the next unit.
+
+### Three defects found by executing rather than reading
+
+A patch script aborted on a non-matching replacement and wrote nothing — correctly — but two of its
+three edits were then assumed applied: `_DEL` was undefined at runtime and the service-unit rule was
+missing entirely. Both surfaced as suite failures, not as a review comment. A third was mine in the
+suite: a file-wide `sellerId` detector matched `_updateAVCO`, which takes a sellerId for AVCO costing
+and has nothing to do with product ownership. It is now scoped to the handler body, with a control
+proving the extraction is non-empty.
+
+### One neighbouring suite repaired, one pre-existing crash recorded
+
+`test-posproducts-mirror-retirement.js` asserted an EXACT set of repo-wide `posProducts` write call
+sites and went red on two legitimate test harnesses. The sweep now scopes to production paths and
+**reports** the harnesses instead of allowlisting filenames — an exact-set assertion over a shared
+repo goes red on another agent's valid addition, and the obvious "fix" then looks like deleting it.
+
+`test-posproducts-field-fixes.js` crashes on `workforce-identity.js:31` — `admin.auth is not a
+function`, its own stub missing `auth()`. **Pre-existing and unrelated**: it never loads
+`pos-inventory-pro.js`. Recorded, not fixed, and not counted as a pass.
+
+**Files affected:** `functions/pos-inventory-pro.js`, `scripts/test-posupsert-catalogue-contract.js`
+(new), `scripts/test-posproducts-mirror-retirement.js`, `CHANGELOG.md`.
+**Database changes:** `posProducts` may now carry `trackStock`, `listingType`, `variablePrice` and
+`priceMode`; a service has no `stockQty`/`stock`/`reorderPoint`. **API changes:** `posUpsertProduct`
+accepts the catalogue fields and refuses contradictions; `price: 0` is valid only with
+`variablePrice: true`. **Security changes:** none — ownership resolution (uid → business → ownerId
+via `_assertMerchantAccess`) is unchanged. **Breaking changes:** a caller that relied on sending
+`price: 0` for a fixed-price row is now refused.
+
 ## 2026-09-22 (174) — the served ruleset locks catalogue.html out of posProducts entirely
 
 **NO DEPLOY. Read-only fetch + emulator exercise.**
