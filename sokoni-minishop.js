@@ -4,7 +4,10 @@ window.SokoniMiniShop = (() => {
   let _state = {
     shopId: null, handle: null, config: {}, shop: {},
     currentUser: null, following: false, followerCount: 0,
-    shopUrl: '', adminMode: false, products: [], services: []
+    shopUrl: '', adminMode: false, products: [], services: [],
+    /* What the SERVER says this shop's listings offer. Null until asked; an
+       empty list means nothing is offered, which is a real answer. */
+    inquiryOffer: null
   };
   const CF = 'https://us-central1-sokoni-aeb26.cloudfunctions.net';
 
@@ -424,8 +427,82 @@ window.SokoniMiniShop = (() => {
             aria-label="Add ${_esc(p.name)} to cart"
             onclick="event.stopPropagation();SokoniMiniShop.addToCart('${_esc(p.id)}')">
       &#128722; Add to cart</button>
+    <!-- Contextual inquiry. Hidden until the SERVER says this shop's listings
+         offer one; the anchor is THIS product, so the conversation carries the
+         business context the customer is actually asking about. -->
+    <button type="button" class="ms-ask-btn" data-ms-ask="${_esc(p.id)}" hidden
+            aria-label="Ask the shop about ${_esc(p.name)}"
+            onclick="event.stopPropagation();SokoniMiniShop.askAboutProduct('${_esc(p.id)}')">
+      &#128172; Ask about this</button>
   </div>
 </div>`;
+  }
+
+  /* ══ CONTEXTUAL BUSINESS COMMUNICATION ═══════════════════════════════════
+     The customer chooses a BUSINESS CONTEXT — this product — and the server
+     resolves who that reaches. The anchor is the productId; connect-calls reads
+     products/{id}.sellerUid and derives the seller itself. The browser never
+     names a merchant: no calleeUid, no recipientUid, no sellerUid in the
+     request. A customer who substitutes another product simply reaches THAT
+     product's seller about THAT product, which the inquiry relationship already
+     permits — they cannot reach a person of their choosing.
+
+     ASKED ONCE, NOT PER CARD. Every listing on a MiniShop belongs to the same
+     shop, so one availability answer applies to all of them and a fifty-product
+     grid does not make fifty calls. The answer only decides whether to DRAW the
+     control; the session request is re-authorized server-side against the
+     specific product, so a drawn button is never a permission.
+
+     SERVICES ARE DELIBERATELY EXCLUDED. A service is not a product: the cards
+     route to venue-booking.html with a serviceId, and serviceIds are not
+     products/{id}. Passing one as an inquiry anchor would either resolve
+     nothing — a dead control — or resolve an UNRELATED product and open a
+     conversation with the wrong business. The booking relationship needs a
+     booking that exists; a service listing is not one. So the storefront offers
+     no service inquiry, and the existing Book flow is untouched. */
+  async function _resolveInquiryOffer() {
+    if (_state.inquiryOffer !== null) return _state.inquiryOffer;
+    const list = _state.allProducts || _state.products || [];
+    const first = list.find(p => p && p.id);
+    if (!first) { _state.inquiryOffer = []; return _state.inquiryOffer; }
+    try {
+      const res = await _callCF('connectDispatch', {
+        op: 'connectAvailableActions', anchorType: 'inquiry', anchorId: String(first.id),
+      });
+      _state.inquiryOffer = (res && res.actions) || [];
+    } catch (e) {
+      /* A storefront that cannot ask shows nothing rather than a broken control. */
+      _state.inquiryOffer = [];
+    }
+    return _state.inquiryOffer;
+  }
+
+  async function _revealInquiryControls() {
+    const actions = await _resolveInquiryOffer();
+    const offered = actions.some(a => (a.channels || []).indexOf('chat') !== -1);
+    if (!offered) return;
+    document.querySelectorAll('[data-ms-ask]').forEach(el => { el.hidden = false; });
+  }
+
+  async function askAboutProduct(productId) {
+    const actions = await _resolveInquiryOffer();
+    const action = actions.find(a => (a.channels || []).indexOf('chat') !== -1);
+    if (!action) return;
+    try {
+      const res = await _callCF('connectDispatch', {
+        op: 'connectRequestSession',
+        anchorType: 'inquiry',
+        anchorId: String(productId),
+        targetRole: action.targetRole,
+        channel: 'chat',
+      });
+      if (res && res.sessionId) {
+        location.href = '/connect.html?session=' + encodeURIComponent(res.sessionId);
+      }
+    } catch (e) {
+      /* The server's refusal is shown, not softened. */
+      (window._skToast || alert)((e && e.message) || 'That could not be started just now.');
+    }
   }
 
   // ─── Tab Switching ───────────────────────────────────────────────────────────
@@ -527,6 +604,11 @@ window.SokoniMiniShop = (() => {
         allSection.hidden = true;
       }
     }
+
+    /* Every section is drawn by now, so ONE reveal covers them all — the
+       bestseller and new-arrival grids included, which the previous placement
+       missed whenever the all-products grid was empty. */
+    _revealInquiryControls();
 
     _initCatalogFilter(products);
   }
@@ -1837,6 +1919,7 @@ body{margin:0;font-family:sans-serif;display:flex;justify-content:center;align-i
     toggleFollow,
     downloadBusinessCard,
     openCart,
+    askAboutProduct,
     claimHandle,
     saveConfig,
     generateContent,
