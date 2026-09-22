@@ -1,3 +1,59 @@
+## 2026-09-22 (149) — P17: the floating bell could never have been fixed-positioned
+
+**Authorized repair of the defect recorded in `5daf32c` §9. CSS specificity only — no
+JavaScript, no `!important`, no architecture change. NO DEPLOY.**
+
+### The defect
+
+`sokoni-notif-center.js` declares `#sk-notif-btn{position:relative}` near the top of its
+stylesheet. The fallback bell added in `37204e7` styled itself with a bare
+`.sk-notif-float` rule. An ID selector scores **1-0-0**, a class **0-1-0** — so the class rule
+could never win, whatever the order. The floating bell computed `position:relative` and
+**scrolled away with the page** instead of staying put. On a phone that is the entire
+notification affordance, absent.
+
+Measured, not reasoned: browser proof **P17** observed `position:"relative"` in real Chromium.
+
+### The repair
+
+Each float rule is now ID-qualified — `#sk-notif-btn.sk-notif-float{…}` — with **every
+declaration unchanged**. The original `#sk-notif-btn{position:relative}` rule is left exactly
+as it was, because hand-written bells still depend on it; only an element that *also* carries
+`.sk-notif-float` is repositioned.
+
+`!important` was deliberately not used: the cascade is being stated correctly rather than
+shouted over, and an `!important` here would fight any page that later positions its own bell.
+
+### Proof — 7/7 in real Chromium, 390×844 phone viewport
+
+| | |
+|---|---|
+| P17 | `position:fixed`, `top:10`, `right:10`, `z-index:2147483000` |
+| P17a | still exactly **one** bell |
+| P17b | correct top-right safe-area offset |
+| P17c | **stays in the viewport after scrolling 1800px** — the actual defect, gone |
+| P17d | **CONTROL** — a bare class rule computes `relative`; the ID-qualified one computes `fixed` |
+| P17e | a hand-written bell is untouched (`relative`, unfloated) — the repair is scoped |
+| P17f | excluded surface (`pos-kiosk`) still mounts **zero** bells |
+
+P17d is the one that matters: it demonstrates the mechanism rather than assuming it, and shows
+the repair is load-bearing rather than incidental.
+
+### Static regression guards — 69/69
+
+`B7` every float rule is ID-qualified · `B8` declared `position:fixed` · `B9` the original ID
+rule survives (the fix was not achieved by deleting the conflict) · `B10` no `!important` ·
+`B10c` **control** proving `B10` is meaningful.
+
+`B10` initially failed against its own explanatory comment — the certification-reads-itself
+defect. It now asserts on stripped source, and `B10c` proves the stripper is what makes it
+meaningful.
+
+**Files:** `sokoni-notif-center.js` · `scripts/test-realtime-multidevice.js`.
+Database changes: none. API changes: none. Security changes: none. Breaking changes: none.
+Deploy: none — a hosting deploy would be required for users to see this, and is **not**
+authorized.
+
 ## 2026-09-22 (150) — Ecosystem convergence audit: the sales lineage question, answered
 
 **READ-ONLY AUDIT + one contract annotation. NO DEPLOY. f937e5a NOT ported. No foreign file

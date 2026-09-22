@@ -92,6 +92,37 @@ ok('B4', /setTimeout\(/.test(centerS.slice(centerS.indexOf('_tryAutoAttach'))),
 ok('B5', /safe-area-inset-top/.test(center),
    'floating bell respects the phone safe area (notch/home bar)');
 
+/* ── P17 REGRESSION GUARD: CSS SPECIFICITY ───────────────────────────────
+   The stylesheet declares `#sk-notif-btn{position:relative}` (ID, 1-0-0). A
+   bare `.sk-notif-float` rule (0-1-0) can never override it, so the floating
+   bell computed `position:relative` and scrolled away — measured in real
+   Chromium as browser-proof P17.
+
+   Every float declaration must therefore be ID-qualified. These are STATIC
+   guards; the runtime confirmation is P17/P17b in the browser proof. */
+const floatRules = (center.match(/'[^']*sk-notif-float[^']*\{/g) || []);
+ok('B7', floatRules.length > 0 && floatRules.every((r) => r.indexOf('#sk-notif-btn') !== -1),
+   'every .sk-notif-float rule is ID-qualified so it can outrank #sk-notif-btn' +
+   (floatRules.length ? '' : ' — NO float rules found, guard would be vacuous'));
+
+ok('B8', /#sk-notif-btn\.sk-notif-float\{position:fixed/.test(center),
+   'the floating bell is declared position:fixed on an ID-qualified selector');
+
+/* The ID rule must SURVIVE — hand-written bells still depend on it. The fix
+   must not have been achieved by deleting the thing it conflicts with. */
+ok('B9', /'#sk-notif-btn\{',\s*'position:relative;'/.test(center),
+   'the original #sk-notif-btn{position:relative} rule is left intact');
+
+/* No !important, per the authorised repair.
+   Asserted on STRIPPED source: the comment above this rule discusses
+   `!important` by name, and matching the raw file made this check fail against
+   its own prose — the certification-reads-itself defect. */
+ok('B10', !/!important/.test(centerS),
+   'the repair states the cascade correctly rather than using !important');
+ok('B10c', /!important/.test(center) && !/!important/.test(centerS),
+   'CONTROL: the stripper is what makes B10 meaningful — the token exists in a ' +
+   'comment and is correctly excluded from the code check');
+
 /* Coverage: every page that should show a bell must load at least one
    injector. Diagnostics and unattended terminals are exempt BY NAME, so the
    exemption is auditable rather than implicit. */

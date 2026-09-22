@@ -1280,8 +1280,30 @@
       st.id = 'sk-notif-float-css';
       /* Anchored to the SAFE AREA so it clears the notch and the home bar on a
          phone, and sits above the bottom nav where one exists. */
+      /* ── SELECTOR SPECIFICITY, NOT DECORATION ────────────────────────
+         These rules are written as `#sk-notif-btn.sk-notif-float`, not
+         `.sk-notif-float`.
+
+         The bell button already has `#sk-notif-btn{position:relative}` at the
+         top of this stylesheet. An ID selector scores 1-0-0 and a class scores
+         0-1-0, so a class rule can NEVER override it however it is ordered or
+         however many classes it carries. The first version of this block used
+         the bare class and therefore silently lost: the floating bell computed
+         `position:relative` and scrolled away with the page instead of staying
+         put — which on a phone is the entire notification affordance, absent.
+
+         Observed, not reasoned: browser proof P17 measured
+         `position:"relative"` in real Chromium. The fix is one selector; every
+         declaration below is unchanged. `!important` is deliberately NOT used —
+         the cascade is being stated correctly, not shouted over, and an
+         `!important` here would be inherited by any page that later wants to
+         reposition its own bell.
+
+         The ID rule is left exactly as it is: hand-written bells still depend
+         on it, and only the element that ALSO carries .sk-notif-float is
+         re-positioned. */
       st.textContent =
-        '.sk-notif-float{position:fixed;z-index:2147483000;' +
+        '#sk-notif-btn.sk-notif-float{position:fixed;z-index:2147483000;' +
         'top:calc(env(safe-area-inset-top,0px) + 10px);' +
         'right:calc(env(safe-area-inset-right,0px) + 10px);' +
         'width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.14);' +
@@ -1289,13 +1311,14 @@
         'font-size:17px;line-height:1;cursor:pointer;display:flex;' +
         'align-items:center;justify-content:center;padding:0;' +
         'box-shadow:0 4px 14px rgba(0,0,0,.34)}' +
-        '.sk-notif-float .sk-badge{position:absolute;top:1px;right:1px;' +
+        '#sk-notif-btn.sk-notif-float .sk-badge{position:absolute;top:1px;right:1px;' +
         'background:#ff4d6d;color:#fff;border-radius:50%;font-size:9px;' +
         'font-weight:900;min-width:15px;height:15px;padding:0 3px;' +
         'display:none;align-items:center;justify-content:center;line-height:1}' +
-        '.sk-notif-float .sk-badge.show,.sk-notif-float .sk-badge.visible' +
+        '#sk-notif-btn.sk-notif-float .sk-badge.show,' +
+        '#sk-notif-btn.sk-notif-float .sk-badge.visible' +
         '{display:flex}' +
-        '@media print{.sk-notif-float{display:none}}';
+        '@media print{#sk-notif-btn.sk-notif-float{display:none}}';
       document.head.appendChild(st);
     }
     document.body.appendChild(btn);
