@@ -125,10 +125,39 @@ function scan(src) {
   }
 }
 
-/** Normalised body: comments removed, whitespace collapsed. */
-function normalise(body) {
-  return String(body).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
-    .replace(/\s+/g, ' ').trim();
+/** Strip comments with the SAME state machine the scanner uses.
+
+    A regex normaliser is how this went wrong a fourth time: /^\s*\/\/.*$/gm
+    removes a comment that OWNS its line, but not a TRAILING one —
+
+        allow write: if false;   // CF-only
+
+    so 137 blocks compared as semantically different from their own build
+    output, when the only difference was a comment the builder had minified
+    away. Text patterns keep losing to syntax; the tokeniser does not. */
+function stripComments(src) {
+  let out = '', i = 0, mode = CODE, quote = '';
+  const n = src.length;
+  while (i < n) {
+    const c = src[i], c2 = src[i + 1];
+    if (mode === CODE) {
+      if (c === '/' && c2 === '/') { mode = LINE; i += 2; continue; }
+      if (c === '/' && c2 === '*') { mode = BLOCK; i += 2; continue; }
+      if (c === '"' || c === "'") { mode = STR; quote = c; out += c; i++; continue; }
+      out += c; i++; continue;
+    }
+    if (mode === LINE) { if (c === '\n') { mode = CODE; out += ' '; } i++; continue; }
+    if (mode === BLOCK) { if (c === '*' && c2 === '/') { mode = CODE; out += ' '; i += 2; } else i++; continue; }
+    if (c === '\\') { out += c + (c2 || ''); i += 2; continue; }
+    if (c === quote) mode = CODE;
+    out += c; i++;
+  }
+  return out;
 }
 
-module.exports = { scan, normalise };
+/** Normalised body: comments removed by tokeniser, whitespace collapsed. */
+function normalise(body) {
+  return stripComments(String(body)).replace(/\s+/g, ' ').trim();
+}
+
+module.exports = { scan, normalise, stripComments };
