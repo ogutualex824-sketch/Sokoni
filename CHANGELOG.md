@@ -1,3 +1,75 @@
+## 2026-09-22 (169) — the offline outbox, and the server change that makes it mean anything
+
+**NO DEPLOY. Live remains 111dbd7 / v636.** Phase 7 of the build programme.
+
+`scripts/test-outbox.js` **165 pass, 0 fail** (NEW) ·
+`scripts/test-communication-engine.js` **512 pass, 0 fail** ·
+`scripts/test-connect-authority.js` **856 pass, 0 fail** ·
+`scripts/test-contract-shapes.js` **32 pass, 0 fail** · `functions/index.js` require closure intact.
+
+### A client cannot make a server idempotent
+
+The outbox was the easy half. The hard case it exists for is not a failed send — it is a send the
+server **accepted** and the client never heard about. Marking that failed and letting the user
+resend delivers the message twice.
+
+`sendMessage` minted its document id with `collection('messages').doc()` — random, every call.
+So a retry wrote a **second message**, and because the write shares a batch with
+`unread: increment(1)`, it also **double-counted the unread badge**. No idempotency key existed
+anywhere in `functions/`; the grep returned nothing, and a positive control confirmed the grep
+could see the real handler.
+
+The fix therefore had to live on the server. `functions/shared/message-identity.js` derives a
+deterministic document id from **(verified uid, conversationId, clientMessageId)** and the batch now
+uses `create()`:
+
+- the sender component comes from the **auth token, never the request body** — if the key alone
+  were the id, any user could occupy another's document and block an honest message;
+- `create()` rejects the **whole batch**, so the unread increment does not apply either;
+- `ALREADY_EXISTS` returns `{ accepted: true, duplicate: true }` — a correctly-delivered message
+  must not land in the client's failed pile;
+- a malformed key is **refused, never sanitised**: rewriting two keys into one merges two messages;
+- the key is **optional**, so every existing caller keeps the previous behaviour exactly.
+
+### Two inverted controls, both of which caught my own mistakes
+
+A duplicate detector that cannot see a duplicate proves nothing, so both duplicate assertions are
+re-run against deliberately broken builds and the suite **fails if they pass**. Both controls fired
+during development, and both times the fault was in my model rather than the implementation: the
+first sabotage mutated an id so the lookup missed and the transport was never reached (a crash, not
+a duplicate), and the first "old server" model still derived an id, so `set()` overwrote instead of
+duplicating. A control that fails for the wrong reason is not a control.
+
+The old-server control also demonstrates why the fix belongs on the server: the client behaved
+**identically** in both runs.
+
+### Deliberate absences, asserted by name
+
+`sending -> queued` is absent from the transition table — re-queuing an in-flight send lets the
+next drain pick it up while the first is outstanding. `failed` entries are never drained
+automatically, or a reconnect resends them for ever. There is no timer in the module: nothing
+retries by itself. `sokoni-chat-engine.js` **carries** the key and mints none, and the suite
+asserts that absence.
+
+### Files
+
+`sokoni-outbox.js` (NEW) · `functions/shared/message-identity.js` (NEW) ·
+`scripts/test-outbox.js` (NEW) · `functions/messages.js` · `sokoni-chat-engine.js` ·
+`docs/SOKONI_COMMUNICATION_ENGINE.md`.
+
+**Database:** messages written with a key now carry `clientMessageId`, and their document id is
+derived rather than random. Existing documents are untouched and existing callers unaffected.
+**API:** `sendMessage` accepts an optional `clientMessageId` and returns `accepted` and
+`duplicate` alongside `messageId` — both additive.
+**Security:** the id derivation is namespaced by the verified uid, closing the key-squatting denial
+of service that a naive `doc(clientMessageId)` would have opened.
+**Performance:** one `create()` in place of one `set()`; no extra read.
+**Breaking:** none.
+
+**Status: TESTED, not INTEGRATION-VERIFIED.** Storage, clock and transport are injected, so no real
+Firestore `create()` has yet rejected a real duplicate, and no chat surface draws a pending bubble
+or a retry control. The functions deploy remains blocked by the merchant-identity provenance gap.
+
 ## 2026-09-22 (168) — contract shapes derived from the producer; engine contracts frozen; the bypass backlog assessed
 
 **NO DEPLOY. Live remains 111dbd7 / v636.** A boundary slice: contracts frozen, one new kind

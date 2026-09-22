@@ -354,10 +354,104 @@ Stated so nothing here reads as more complete than it is.
   exist and `adminCreateSupportTicket` already creates cases — a fourth surface would be the
   duplication this engine opposes. What they still need is the two-line anchor.
 - **Support cases are not joined to the timeline yet.**
-- **No offline outbox.** The Sending/Sent/Delivered/Read ladder with a local queue is genuinely
-  complex, and half of it is worse than none.
+- ~~**No offline outbox.**~~ **Built 2026-09-22** — see [[#The offline outbox]]. Not yet mounted
+  on a chat surface: the queue, the identity and the server dedupe exist and are proven together,
+  but no page draws a pending bubble or a retry control yet.
 - **Nothing is deployed**, and the Connect functions deploy remains blocked by the
   merchant-identity provenance gap.
+
+---
+
+## The offline outbox
+
+A message composed without a connection must not be lost, and must not be sent twice when the
+connection returns. `sokoni-outbox.js` holds the first half; `functions/shared/message-identity.js`
+and `sendMessage` hold the second. Neither half is sufficient alone.
+
+### It is a transport buffer, not a message store
+
+The queue holds only what the server has **not** accepted. The moment a message is acknowledged
+the canonical record is the server's, and `forget()` drops the local entry — which is why it
+refuses to drop anything unacknowledged. Nothing here is ever read back as history; that would be
+the [[#One message store|second message store]] this engine exists to prevent.
+
+### The ladder
+
+```
+queued ──▶ sending ──▶ sent ──▶ delivered ──▶ read
+   │           │         │
+   └──────────▶ failed ◀─┘
+                 │
+                 └──▶ sending   (explicit retry ONLY, same identity)
+```
+
+`sending → queued` is **deliberately absent**. Re-queuing an in-flight send would let the next
+drain pick it up while the first attempt is still outstanding, which is how one message becomes
+two. A stalled send goes to `failed` and waits to be retried by hand. Nothing retries by itself —
+there is no timer in the module at all.
+
+`sent` means the server said so. A resolved promise that does not carry `accepted: true` is
+**not** an acknowledgement, and is recorded as `no_acknowledgement`. This is the same rule the
+platform applies to money: never show success before the canonical operation completes.
+
+### Exactly-once, and why the client could not do it alone
+
+The hard case is not a failed send. It is a send the server **accepted** and the client never heard
+about — a timeout, a dropped connection, a closed tab. Marking that `failed` and letting the user
+resend delivers the message twice.
+
+So every entry carries a `clientMessageId`, minted once when the user pressed send and never
+regenerated: not on retry, not after a reload, not after a timeout. The retry is the same logical
+message.
+
+That is only useful if the server recognises it. Before 2026-09-22 `sendMessage` minted a random
+document id, so a retry wrote a **second message and incremented `unread` a second time**. It now
+derives a deterministic id and writes with `create()`:
+
+```
+messageDocIdFor(senderUid, conversationId, clientMessageId) -> m_<32 hex>
+```
+
+- The **sender component comes from the verified token**, never the request body. If the key alone
+  were the document id, any user could occupy another user's document and block an honest message —
+  a denial of service available to anyone who can guess a string. Namespacing makes that impossible
+  by construction rather than by check.
+- The write is `batch.create`, so a duplicate rejects the **whole batch** and the `unread`
+  increment does not apply either. A duplicate that only skipped the message would still leave the
+  badge wrong.
+- `ALREADY_EXISTS` is the **success** case: it returns `{ accepted: true, duplicate: true }`.
+  Returning an error would push a correctly-delivered message into the client's failed pile and
+  invite the user to send it again by hand.
+- A malformed key is **refused**, never sanitised. Rewriting two different keys into one string
+  would merge two distinct messages.
+- The key is **optional**. Callers that send none keep the previous random-id behaviour exactly,
+  so nothing that exists today changes.
+
+### The seam
+
+`sokoni-chat-engine.js` **carries** the key and does not mint one. Minting it in the transport
+would be a fresh key on every call — a random id under another name. The suite asserts the absence.
+
+### Evidence
+
+`scripts/test-outbox.js` — **165 pass, 0 fail**. All 36 ordered state pairs are exercised, and the
+sweep asserts it found both permitted and refused pairs, so it cannot pass by matching nothing.
+
+Two assertions are **inverted**, because a duplicate detector that cannot see a duplicate proves
+nothing:
+
+- the identity assertion is re-run against a deliberately broken outbox that regenerates the key on
+  retry, and the suite **fails if the detector does not catch it**;
+- the round trip is re-run against a store modelled on the **old** server — random ids, `set()` —
+  and the suite fails unless it observes two messages and a doubled unread count.
+
+The second control also demonstrates why the fix had to be server-side: the client behaved
+**identically** in both runs. A client cannot make a server idempotent.
+
+Status: **TESTED**, not INTEGRATION-VERIFIED. Storage, clock and transport are injected, so nothing
+in the suite touches a browser, a network or a wall clock — which is also its limit. No real
+Firestore `create()` has rejected a real duplicate; that requires the emulator or production, and
+the functions deploy remains blocked by the merchant-identity provenance gap.
 
 ---
 
