@@ -107,15 +107,28 @@ console.log('\n── The certified module behaves as the caller assumes ──'
   })());
 }
 
-console.log('\n── Scope: nothing else changed ──');
+console.log('\n── Scope: the authority is used, not re-implemented ──');
 {
-  const { execSync } = require('child_process');
-  const files = execSync('git diff HEAD --name-only', { cwd: root, encoding: 'utf8' })
-    .split('\n').filter(Boolean).filter((f) => !f.startsWith('scripts/'));
-  ck('exactly one source file changed', files.length === 1, files.join(' ') || '(none)');
-  ck('…and it is pos-zero-friction.js', files[0] === 'functions/pos-zero-friction.js');
-  ck('the certified module itself was NOT edited',
-     !files.includes('functions/shared/pos-payment-ownership.js'));
+  /* This was a `git diff HEAD --name-only` check and it went vacuous the
+     moment the slice committed — the SIXTH time that pattern has failed in
+     this workstream, and the second time in a file that already carried a
+     warning about it. Diff-based assertions are not durable here. Full stop.
+
+     The durable property is structural: this module CONSUMES the authority
+     and contains no copy of its logic. That stays true after any commit. */
+  const mod = fs.readFileSync(path.join(FN, 'shared', 'pos-payment-ownership.js'), 'utf8');
+  const modCode = mod.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  ck('the authority still owns rail classification', /function classifyRail/.test(modCode));
+  ck('…and ownership resolution', /function ownerOf/.test(modCode));
+  ck('…and the paid-state constant', /QR_PAID = 'paid'/.test(modCode));
+  /* The consumer must hold none of it. */
+  ck('the consumer re-implements no rail classification', !/classifyRail|checkoutId.*transactionId/.test(gate));
+  ck('…no ownership resolution', !/sellerId \|\| pay\.sellerUid/.test(gate));
+  ck('…and no paid-state literal of its own', !/'paid'/.test(gate));
+  /* Positive control: the consumer does reference the authority, so the
+     absences above are about delegation and not about an empty scan. */
+  ck('…while it DOES call into the authority', /assertConfirmable\(/.test(gate));
 }
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
