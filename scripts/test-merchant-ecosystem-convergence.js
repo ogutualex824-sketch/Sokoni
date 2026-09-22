@@ -283,9 +283,17 @@ if (!has(SCHED)) {
 
   /* The claim is an ABSENCE — no client calls any of them — so the scanner is first shown
      finding a shift CF that IS called, over the same file set. Without that control, "zero
-     roster callers" could equally mean the scanner reads nothing. */
-  const htmlFiles = fs.readdirSync(ROOT).filter(f => f.endsWith('.html'));
-  const callers = fn => htmlFiles.filter(f => {
+     roster callers" could equally mean the scanner reads nothing.
+
+     HTML **AND JS**. The first version of this scanned `.html` only, which was narrower than
+     the claim it was making: a roster call from a client-side module would have slipped
+     straight through. An independent wider sweep proved the point on the control itself —
+     `openShift` lives in `pos-sales.js`, which the HTML-only pass never looked at. The
+     conclusion did not change (still zero roster callers either way), but the detector was
+     weaker than the sentence it supported, and that is the defect, not the result. */
+  const clientFiles = fs.readdirSync(ROOT)
+    .filter(f => /\.(html|js)$/.test(f));
+  const callers = fn => clientFiles.filter(f => {
     try { return R(f).indexOf(fn) > -1; } catch (_) { return false; }
   });
   const control = callers('openShift');
