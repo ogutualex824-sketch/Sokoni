@@ -323,9 +323,13 @@ async function main() {
   const code = body.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
   ck('CONTROL — the handler body was extracted and stripped', code.includes('shopId') && code.length > 2000, code.length + 'B');
   ck('the handler names no posProducts collection in CODE', !/collection\('posProducts'\)/.test(code));
-  ck('the catalogue was NOT redirected in this mutation (still posUpsertProduct)',
-     /dispatch\('posUpsertProduct'/.test(R('catalogue.html')) && !/upsertCanonicalProduct/.test(R('catalogue.html')),
-     'wiring is a separate mutation');
+  /* RE-POINTED: this asserted the catalogue was NOT yet wired, which was true when
+     written and is the honest statement for that mutation. The catalogue was
+     migrated in the following commit, so the assertion now states where it
+     points — the fact worth protecting either way. */
+  ck('the catalogue is wired to THIS writer, not to posUpsertProduct',
+     /dispatch\('upsertCanonicalProduct'/.test(R('catalogue.html')) && !/dispatch\('posUpsertProduct'/.test(R('catalogue.html')),
+     'catalogue -> upsertCanonicalProduct');
   ck('seller.js browser write is UNTOUCHED', /setDoc\(m\.doc\(db,'products',newProduct\.id\), fsProduct\)/.test(R('seller.js')),
      'no second outage introduced');
 

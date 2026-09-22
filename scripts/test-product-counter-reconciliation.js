@@ -265,8 +265,10 @@ async function main() {
     try { return require('child_process').execSync('git status --porcelain firestore.rules firestore.rules.build', { cwd: ROOT, encoding: 'utf8' }).trim() === ''; }
     catch (_) { return false; }
   })());
-  ck('the catalogue is still NOT wired to the canonical writer',
-     !/upsertCanonicalProduct/.test(R('catalogue.html')), 'wiring remains a separate mutation');
+  /* RE-POINTED after the catalogue migration: the reservation lifecycle now has a
+     real caller, which is the reason this reconciliation had to land first. */
+  ck('the catalogue IS wired to the canonical writer, so this lifecycle is live',
+     /dispatch\('upsertCanonicalProduct'/.test(R('catalogue.html')), 'reservations now come from a real surface');
 
   console.log('\n' + '='.repeat(74));
   console.log('  ' + pass + ' passed, ' + fail + ' failed');

@@ -364,7 +364,7 @@ async function load(){
   const MAX_PAGES = 25;                       /* 25 x 200 = 5,000 items */
   let rows = [], cursor = null, pages = 0, truncated = false;
   while(true){
-    const out = await dispatch('posListProducts', cursor ? { pageSize:200, cursor:cursor } : { pageSize:200 });
+    const out = await dispatch('listCanonicalProducts', cursor ? { pageSize:200, cursor:cursor } : { pageSize:200 });
     rows = rows.concat(out.products || []);
     cursor = out.nextCursor || null;
     pages++;
@@ -519,6 +519,18 @@ window.Cat = {
     const v=M.validateDraft(st.kind,draft);
     if(!v.ok){ const p=$('ed-prob'); p.textContent=v.problems.join(' '); p.classList.add('on'); return; }
 
+    /* VARIABLE PRICING IS REFUSED, and refused HERE so the merchant gets a
+       reason instead of a server error. A canonical product's price is what the
+       sale path charges, and the served rules require it to be greater than
+       zero — so there is no representation for "the cashier names it" that
+       checkout would not read as a real amount. It returns when the sale path
+       understands a variable mode. */
+    if(svc && st.variable){
+      const p=$('ed-prob');
+      p.textContent='Counter-priced services are not available yet. Set a fixed price — the till would otherwise charge whatever price is stored.';
+      p.classList.add('on'); return;
+    }
+
     st.busy=true; $('ed-save').disabled=true; $('ed-save').textContent='Saving…';
     try{
       /* Merge onto the EXISTING row so fields this editor never shows — cost,
@@ -534,31 +546,41 @@ window.Cat = {
          id could not do that, because a retry produced a new id. */
       const base = st.editing ? Object.assign({},st.editing) : {};
       const next = M.applyEdit(base,st.kind,draft);
+      /* ── THE CANONICAL VOCABULARY, NOT posProducts' ─────────────────────
+         `products` is the canonical saleable product: the marketplace, search,
+         analytics, the till's cache and posCompleteCheckout all read it. Its
+         vocabulary is isService / trackInventory / stock.
+
+         trackStock, stockQty, priceMode and variablePrice are NOT sent: they
+         have no reader on `products`, and carrying them across would create a
+         third vocabulary instead of converging on one. */
       const payload = {
         name:        next.name,
         price:       next.price,
         category:    next.category || undefined,
         description: next.description || undefined,
         unit:        next.unit || undefined,
-        active:      next.active !== false,
-        listingType: svc ? 'service' : 'product',
-        trackStock:  !svc,
+        status:      next.active === false ? 'archived' : 'active',
+        isService:   svc,
       };
-      if(svc){
-        payload.variablePrice = next.variablePrice === true;
-      }else{
+      if(!svc){
+        payload.trackInventory = true;
         payload.sku   = next.sku || undefined;
         payload.image = next.image || undefined;
-        /* Absent means UNMETERED, not zero — so the key is omitted rather than
-           sent as 0, which the till would read as OUT OF STOCK. */
+        /* Absent means UNMETERED, not zero — omitted rather than sent as 0,
+           which a reader would take as OUT OF STOCK. */
         if(next.stock !== undefined && next.stock !== null && next.stock !== '') payload.stock = Number(next.stock);
         if(next.lowStockThreshold !== undefined && next.lowStockThreshold !== null && next.lowStockThreshold !== ''){
           payload.lowStockThreshold = Number(next.lowStockThreshold);
         }
       }
+      /* The SAME document id across create, update and archive. A create
+         supplies an idempotency key and the server derives the id from it, so a
+         double-tapped Save returns the same product; an update names the id it
+         already has. No second id scheme is introduced. */
       if(st.editing){ payload.productId = st.editing.id; }
-      else { payload.idempotencyKey = (svc?'svc_':'prd_')+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
-      await dispatch('posUpsertProduct', payload);
+      else { payload.idempotencyKey = Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+      await dispatch('upsertCanonicalProduct', payload);
       this.close('ov-edit'); this.close('ov-pick');
       await load();
     }catch(e){
@@ -570,25 +592,30 @@ window.Cat = {
 
   async archive(id){
     if(!confirm('Archive this item? It stays in your records and can be restored.')) return;
-    /* posDeleteProduct is the server's soft-delete: it sets active:false and
-       keeps the row, so sales history still resolves the product. The model's
-       archivePatch stays the client-side shape authority for anything that
-       renders an archived row; it is no longer a WRITE payload. */
-    await dispatch('posDeleteProduct', { productId: id });
+    /* Archive is a STATUS on the canonical product, not a delete: the row stays
+       so orders, receipts and analytics keep resolving it. `status:'archived'`
+       is the spelling seller-wiring.js already uses on this collection.
+
+       The canonical writer requires name and price on every write, so the row
+       must be loaded — an archive is refused rather than half-applied if it is
+       not. That requirement is a wart of reusing the upsert for a status
+       change; a dedicated archive op would be a separate change. */
+    const row = st.rows.find(r=>r.id===id);
+    if(!row) throw new Error('Reload the catalogue before archiving this item.');
+    await dispatch('upsertCanonicalProduct', {
+      productId: id, name: row.name, price: row.price, status: 'archived',
+      isService: M.isService(row) ? true : false,
+    });
     await load();
   },
   async restore(id){
-    /* There is no server 'restore' op, and inventing one is not this change's
-       job. Reactivation goes through the canonical writer as an update, which
-       requires the row's name and price — so a restore is refused rather than
-       half-applied if the row is not loaded. */
+    /* Restore is the same status field, set back. */
     const row = st.rows.find(r=>r.id===id);
     if(!row) throw new Error('Reload the catalogue before restoring this item.');
-    await dispatch('posUpsertProduct', {
-      productId: id, name: row.name, price: row.price, active: true,
+    await dispatch('upsertCanonicalProduct', {
+      productId: id, name: row.name, price: row.price, status: 'active',
       unit: row.unit || undefined,
-      trackStock: M.isService(row) ? false : true,
-      listingType: M.isService(row) ? 'service' : 'product',
+      isService: M.isService(row) ? true : false,
     });
     await load();
   },

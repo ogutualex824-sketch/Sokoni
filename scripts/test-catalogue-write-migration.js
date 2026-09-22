@@ -51,10 +51,17 @@ ck('setDoc is no longer even imported',
    !/import\s*\{[^}]*\bsetDoc\b[^}]*\}\s*from/.test(CODE), 'transport removed, not just unused');
 ck('writes go through smartPosDispatch',
    /httpsCallable\(\s*fns\s*,\s*'smartPosDispatch'\s*\)/.test(CODE));
-ck('the create/update op is posUpsertProduct',
-   /dispatch\(\s*'posUpsertProduct'/.test(CODE));
-ck('the archive op is the server soft-delete posDeleteProduct',
-   /dispatch\(\s*'posDeleteProduct'/.test(CODE));
+/* RE-POINTED: 3A routed the catalogue at posUpsertProduct (posProducts). The
+   product authority census then established `products` as the canonical saleable
+   product, so the catalogue was migrated to upsertCanonicalProduct. What this
+   suite protects is unchanged — the page must never write Firestore directly and
+   must never name its own identity — so the op names are re-aimed rather than the
+   assertions dropped. The canonical contract itself is certified by
+   test-catalogue-canonical-migration.js. */
+ck('the create/update op is the canonical products writer',
+   /dispatch\(\s*'upsertCanonicalProduct'/.test(CODE));
+ck('archive is a status change on the canonical product, not a posProducts delete',
+   /status: 'archived'/.test(CODE) && !/dispatch\(\s*'posDeleteProduct'/.test(CODE));
 
 head('2. Identity — the business id, never the uid');
 ck('no merchantId: uid anywhere in code', !/merchantId\s*:\s*uid\b/.test(CODE));
@@ -73,8 +80,8 @@ head('3. The payload is one posUpsertProduct actually accepts');
    hardcoding a list here — a list would rot the moment the writer changes, and
    this check exists precisely to catch drift between the two. */
 const FN = R('functions/pos-inventory-pro.js');
-const iU = FN.indexOf('exports._h.posUpsertProduct');
-const jU = FN.indexOf('exports._h.posDeleteProduct');
+const iU = FN.indexOf('exports._h.upsertCanonicalProduct');
+const jU = FN.length;
 const UPSERT = FN.slice(iU, jU > iU ? jU : FN.length);
 /* TWO IDIOMS, NOT ONE. Most fields are read as `d.<name>`, but the catalogue
    flags go through `_pcCatalogueFlag(d, 'trackStock', 'trackInventory')`, where
@@ -105,11 +112,16 @@ const dropped = sent.filter((k) => !accepted.has(k) && k !== 'op');
 ck('EVERY field the page sends is accepted by the writer (nothing silently dropped)',
    dropped.length === 0, dropped.length ? 'DROPPED: ' + dropped.join(',') : 'all ' + sent.length + ' accepted');
 
-head('4. The catalogue contract fields are actually sent');
-for (const f of ['trackStock', 'listingType', 'unit', 'description']) {
+head('4. The catalogue sends the PRODUCTS vocabulary, not the posProducts one');
+for (const f of ['isService', 'unit', 'description', 'status']) {
   ck('sends ' + f, sent.includes(f) || new RegExp('payload\\.' + f).test(payloadBlock));
 }
-ck('sends variablePrice for a service', /payload\.variablePrice/.test(payloadBlock));
+ck('sends trackInventory for a stocked product', /payload\.trackInventory/.test(payloadBlock));
+/* The whole point of the vocabulary decision: these have no reader on `products`,
+   so sending them would have created a third vocabulary instead of converging. */
+for (const f of ['trackStock', 'stockQty', 'priceMode', 'variablePrice']) {
+  ck('does NOT send ' + f, !new RegExp('payload\\.' + f + '\\b').test(payloadBlock) && !sent.includes(f));
+}
 ck('stock is OMITTED when blank, never sent as 0 (absent = UNMETERED)',
    /next\.stock\s*!==\s*''\s*\)\s*payload\.stock/.test(payloadBlock) ||
    /!==\s*''\)\s*payload\.stock\s*=/.test(payloadBlock.replace(/\s+/g, ' ')) ||
@@ -130,8 +142,8 @@ head('6. The read path — 3A left it denied, 3B moved it to the server');
    what must never regress is the page touching posProducts directly. */
 ck('the direct merchantId-scoped Firestore read is GONE (3B)',
    !/where\('merchantId',\s*'==',\s*uid\)/.test(CODE), 'replaced by posListProducts');
-ck('reads go through the canonical server op',
-   /dispatch\('posListProducts'/.test(CODE));
+ck('reads go through the canonical products list op',
+   /dispatch\('listCanonicalProducts'/.test(CODE));
 ck('the page still has NO direct posProducts access of any kind',
    !/(getDocs|setDoc|addDoc|updateDoc|onSnapshot)\s*\(\s*(query\s*\(\s*)?(collection|doc)\s*\(\s*db\s*,\s*['"]posProducts/.test(CODE),
    'collection stays closed to the browser');
@@ -147,8 +159,8 @@ head('7. No success is reported before the server accepts');
 ck('the dispatch helper throws unless the server returned ok:true',
    /out\.ok\s*!==\s*true[\s\S]{0,200}throw new Error/.test(CODE));
 ck('the UI closes/reloads only AFTER the awaited dispatch',
-   /await dispatch\('posUpsertProduct', payload\);\s*\n\s*this\.close/.test(CODE) ||
-   /await dispatch\('posUpsertProduct', payload\);[\s\S]{0,80}close\('ov-edit'\)/.test(CODE));
+   /await dispatch\('upsertCanonicalProduct', payload\);\s*\n\s*this\.close/.test(CODE) ||
+   /await dispatch\('upsertCanonicalProduct', payload\);[\s\S]{0,80}close\('ov-edit'\)/.test(CODE));
 
 console.log('\n' + '='.repeat(74));
 console.log('  ' + pass + ' passed, ' + fail + ' failed');

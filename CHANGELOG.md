@@ -1,3 +1,106 @@
+## 2026-09-22 (180) — the catalogue produces canonical products
+
+**NO DEPLOY. NO RULES CHANGE.** Live remains 111dbd7 / v636.
+`scripts/test-catalogue-canonical-migration.js` **47/0 + 3 recorded findings** ·
+`test-canonical-product-writer.js` **66/0** · `test-product-counter-reconciliation.js` **34/0** ·
+`test-poslistproducts-contract.js` **32/0** · `test-catalogue-write-migration.js` **34/0** ·
+`test-posupsert-catalogue-contract.js` **42/0** · `test-flash-sale-authority.js` **56/0** ·
+`test-catalogue-model.js` 81/0 (foreign, uncommitted edit) · require closure intact.
+
+### What changed
+
+    BEFORE   catalogue -> posUpsertProduct  -> posProducts   (a parallel catalogue)
+    AFTER    catalogue -> upsertCanonicalProduct -> products  (what everything else reads)
+
+The catalogue now produces the same records the marketplace, search, analytics, the till's cache and
+`posCompleteCheckout` already consume. It makes **no `posProducts` call of any kind**.
+
+`posUpsertProduct` / `posListProducts` / `posDeleteProduct` remain for the POS inventory domain they
+were built for, and `procurement.js:1909`'s `{branchId}_{productId}` branch-stock writer is untouched.
+**`posListProducts` now has zero client callers** — asserted, because a retained op with no caller is
+a fact worth stating rather than discovering later.
+
+### The read moved too, and that was a scope judgement
+
+A surface that writes `products` while reading `posProducts` cannot show its own work: a merchant
+would save a product and watch it not appear. So `listCanonicalProducts` landed in the same mutation.
+Its ownership is `sellerUid == caller` — what the served ruleset and every `products` reader key on —
+**not** the merchant/business chain `posListProducts` uses, which is the right question for
+`posProducts` and the wrong one here. Same bounded shape: document-id ordering, explicit cap, cursor,
+EMPTY reported as success, and no `status` filter so archived rows stay reachable.
+
+### The products vocabulary, and what is deliberately not sent
+
+    sent:      isService · trackInventory · stock · status · reorderPoint
+    NOT sent:  trackStock · stockQty · priceMode · variablePrice
+
+`lowStockThreshold` is stored as **`reorderPoint`** — the spelling `bi-advanced.js:334` and
+`business-health-score.js:212` already read — rather than as a second field name. **Stated honestly:
+no `products` reader consumes it yet**, so this records the merchant's input under the established
+name; it does not make low-stock alerting work on marketplace products.
+
+Archive is `status: 'archived'` on the same document, the spelling `seller-wiring.js` already uses.
+The canonical writer requires name and price on every write, so an archive is **refused rather than
+half-applied** when the row is not loaded — a wart of reusing the upsert for a status change, recorded
+rather than smoothed over.
+
+Variable pricing is refused **twice**: by the writer, and by the page before it dispatches, so the
+merchant gets a reason instead of a server error.
+
+### The triggers were EXECUTED, not assumed
+
+A `products` write fans out to five triggers; `posProducts` had none. Checking that a document
+appeared would have proved nothing, so the real trigger bodies were run against the produced document:
+
+    EXECUTED    product-limit onMarketplaceProductCreated   count 0 -> 1, reservation cleared
+    EXECUTED    product-analytics onProductPriceChanged     productPriceHistory row written,
+                                                            seller resolved from sellerUid
+    CAPTURED    product-limit onMarketplaceProductDeleted    the catalogue has no delete path
+    STATIC      email-triggers emailOnProductStatusChange    field assumption analysed
+    NOT COVERED redis-integrations onInventoryUpdated        neither executed nor analysed
+
+**FINDING — a status-change email cannot reach a merchant for a canonical-writer product.**
+`emailOnProductStatusChange` resolves the recipient from `sellerEmail` / `sellerId`; the writer stamps
+`sellerUid` and neither of the others. It fails CLOSED — no email, never a wrong one — and the same
+trigger only acts on `approved`/`rejected`, so an archive sends nothing. Out of scope here, recorded
+so wiring more paths does not bury it.
+
+### Acceptance: the document satisfies what the sale path LOOKS UP
+
+Asserted against `pos-zero-friction.js:373-388` and `:754`: the lookup finds the document,
+`salePrice || price` resolves above zero, `name` and `category` resolve, and the stock gate reads a
+**real number rather than the 9999 fallback** with `trackInventory !== false` so the gate applies.
+
+**This is NOT a claim that a sale works.** These are the fields the lookup reads. The sale-path proof
+is a separate gate with its own evidence, and the suite prints that in its own output.
+
+### Five gates rotted because the thing they guarded was fixed
+
+`test-canonical-product-writer.js`, `test-product-counter-reconciliation.js`,
+`test-poslistproducts-contract.js` and `test-catalogue-write-migration.js` (8 failures) all asserted
+the PRE-migration wiring — "the catalogue is NOT yet wired", "the op is posUpsertProduct", "sends
+trackStock". Each was **re-aimed at the post-migration truth, not deleted**, with a comment recording
+what it used to say and why it changed. `test-catalogue-write-migration.js` also derived its
+accepted-field set from `posUpsertProduct`, which is why it reported `status,isService` as dropped;
+it now derives from `upsertCanonicalProduct`, so it still catches drift.
+
+Two harness defects of my own were caught the same way: the fake `Timestamp` lacked `fromMillis` and
+async trigger rejections were not captured, so `product-analytics` killed the suite instead of being
+recorded.
+
+**Files affected:** `catalogue.html`, `functions/pos-inventory-pro.js`,
+`scripts/test-catalogue-canonical-migration.js` (new), `scripts/test-canonical-product-writer.js`,
+`scripts/test-product-counter-reconciliation.js`, `scripts/test-poslistproducts-contract.js`,
+`scripts/test-catalogue-write-migration.js`, `CHANGELOG.md`.
+**Database changes:** the catalogue now writes `products` documents (and `productCounters` reservations
+via the writer); it no longer creates catalogue-shaped `posProducts` rows. Existing `posProducts` data
+is untouched — no migration or deletion. **API changes:** new dispatcher op `listCanonicalProducts`;
+`upsertCanonicalProduct` additionally accepts `lowStockThreshold`/`reorderPoint`. **Security changes:**
+none loosened — the page sends neither `sellerUid` nor `shopId`, both are server-derived, and the
+entitlement, admin-field and base64 guards all apply to catalogue saves for the first time.
+**Breaking changes:** catalogue-shaped rows already in `posProducts` are no longer read by this
+surface. They are not deleted, and reconciling them is a separate unit.
+
 ## 2026-09-22 (179) — product-counter reconciliation: a server create consumes ONE unit, not two
 
 **NO DEPLOY. NO RULES CHANGE. CATALOGUE STILL NOT WIRED.** Live remains 111dbd7 / v636.

@@ -265,8 +265,15 @@ async function main() {
   head('8. The boundary — no rules grant, no direct client access');
   const HTML = R('catalogue.html');
   const CODE = HTML.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '');
-  ck('CONTROL — catalogue.html read and stripped', CODE.includes('posListProducts') && CODE.length > 8000,
-     CODE.length + 'B');
+  /* RE-POINTED. This suite certifies the OP, and the op is unchanged. What changed
+     is its caller: the catalogue moved to `products` (canonical) and therefore to
+     listCanonicalProducts, so posListProducts now has ZERO client callers and
+     remains available for the POS inventory domain it was built for. A deployed op
+     with no caller is a fact worth asserting, not a failure. */
+  ck('CONTROL — catalogue.html read and stripped', CODE.length > 8000, CODE.length + 'B');
+  ck('posListProducts has no client caller now (the catalogue reads canonical products)',
+     !/dispatch\('posListProducts'/.test(CODE) && /dispatch\('listCanonicalProducts'/.test(CODE),
+     'POS-domain op, retained');
   ck('no direct posProducts read remains in the page',
      !/getDocs\s*\(\s*query\s*\(\s*collection\s*\(\s*db\s*,\s*'posProducts'/.test(CODE));
   ck('no direct posProducts write remains in the page',

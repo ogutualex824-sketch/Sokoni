@@ -1979,6 +1979,67 @@ exports._h.posDeleteProduct = async (req) => {
   return { ok: true, productId: productId, deactivated: true };
 };
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   listCanonicalProducts — the catalogue's read, against `products`
+
+   WHY THIS IS IN THE SAME MUTATION AS THE WRITE MIGRATION. A surface that writes
+   `products` while reading `posProducts` cannot show its own work: a merchant
+   would save a product and watch it not appear. Migrating the write without the
+   read would ship exactly that, so the two move together.
+
+   Ownership is `sellerUid == caller`, matching the collection's own authority —
+   `sellerUid` is what the served ruleset and every `products` reader key on, and
+   what `upsertCanonicalProduct` stamps. It is NOT the merchant/business chain
+   `posListProducts` uses: that is the right question for `posProducts` and the
+   wrong one here.
+
+   Same bounded shape as `posListProducts`: ordering by document id (Firestore
+   omits documents missing the ordered field, and these rows come from many
+   writers), an explicit cap, a cursor, and an EMPTY page reported as a success.
+
+   NO `status` FILTER: the page shows archived items in their own tab and offers
+   restore, so filtering here would make them unreachable.
+   ───────────────────────────────────────────────────────────────────────────── */
+exports._h.listCanonicalProducts = async (req) => {
+  const auth = _requireAuth(req);
+  const d    = req.data || {};
+  const tok  = (req.auth && req.auth.token) || {};
+
+  if (tok.seller !== true && tok.admin !== true && tok.superAdmin !== true) {
+    throw new HttpsError('permission-denied', 'A seller account is required.');
+  }
+
+  let pageSize = _pcNum(d.pageSize, 'pageSize', { min: 1, max: POS_LIST_PAGE_MAX });
+  if (pageSize === undefined) pageSize = POS_LIST_PAGE_DEFAULT;
+  pageSize = Math.min(Math.floor(pageSize), POS_LIST_PAGE_MAX);
+
+  const cursor = _pcId(d.cursor, 200);
+
+  let q = db.collection('products')
+    .where('sellerUid', '==', auth.uid)
+    .orderBy(admin.firestore.FieldPath.documentId())
+    .limit(pageSize);
+  if (cursor) q = q.startAfter(cursor);
+
+  const snap = await q.get();
+  const products = snap.docs.map((doc) => Object.assign({ id: doc.id }, doc.data()));
+  const nextCursor = products.length === pageSize && products.length > 0
+    ? products[products.length - 1].id
+    : null;
+
+  console.log('[listCanonicalProducts] seller=' + auth.uid + ' returned=' + products.length +
+              ' pageSize=' + pageSize + ' paged=' + !!cursor + ' more=' + !!nextCursor);
+
+  return {
+    ok: true,
+    products: products,
+    count: products.length,
+    empty: products.length === 0,
+    nextCursor: nextCursor,
+    pageSize: pageSize,
+  };
+};
+
 /* ═════════════════════════════════════════════════════════════════════════════
    upsertCanonicalProduct — THE CANONICAL `products` WRITER
    Architecture settled by the owner 2026-09-22 after the product authority census.
@@ -2184,11 +2245,21 @@ exports._h.upsertCanonicalProduct = async (req) => {
     const description = _pcStr(d.description, 2000);
     const sku         = _pcStr(d.sku, 64);
     const unit        = _pcStr(d.unit, 24);
+    /* The catalogue collects a low-stock threshold. It is stored as
+       `reorderPoint` — the spelling readers already use (`bi-advanced.js:334`,
+       `business-health-score.js:212`) — rather than as a second field name.
+       HONESTLY STATED: no `products` reader consumes it yet, so this records the
+       merchant's input under the established name; it does not make low-stock
+       alerting work on marketplace products. Storing it is still better than
+       dropping a field the form collects. */
+    const reorderPoint = _pcNum(
+      d.reorderPoint === undefined ? d.lowStockThreshold : d.reorderPoint, 'reorderPoint');
     const image       = _pcStr(d.image === undefined ? d.imageUrl : d.image, 1200);
     if (description) doc.description = description;
     if (sku)         doc.sku         = sku;
     if (unit)        doc.unit        = unit;
     if (image)       doc.image       = image;
+    if (reorderPoint !== undefined) doc.reorderPoint = reorderPoint;
     if (Array.isArray(d.images)) doc.images = d.images.filter((v) => typeof v === 'string' && v).slice(0, 8);
     if (stock !== undefined) {
       doc.stock      = stock;
