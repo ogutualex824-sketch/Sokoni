@@ -1,3 +1,81 @@
+## 2026-09-22 (172) — F-1: a role claim said "a merchant", and the code read it as "this merchant"
+
+**NO DEPLOY. Live remains 111dbd7 / v636.** `scripts/test-flash-sale-authority.js` **56/0** ·
+`test-merchant-marketing.js` **70/0** · `test-merchant-marketing-ui.js` **92/0** ·
+`test-bi-no-fabricated-metrics.js` **40/40 + 6/6 sabotage catches** · `functions/index.js` loads.
+
+### The gate refused only absence
+
+`_requireMerchant` read `req.auth.token?.role ?? 0` and refused when `role < 2`. SOKONI mints
+**string** role claims, `Number('buyer')` is NaN, and every NaN comparison is false — so the guard
+did not throw. `role: 'buyer'`, `'rider'`, `'anything'` all walked through a check whose entire
+purpose was to stop them; only an absent or numerically-low claim was ever caught.
+
+It now matches an explicit allowlist (`seller`, `merchant`, `admin`, `superAdmin`), honours the
+legacy numeric form **only when the value is really a finite number**, and refuses null, booleans,
+objects, `NaN` and `Infinity`. The suite executes the OLD predicate as an **inverting control**: it
+must still admit `'buyer'`, or the defect is not reproducible and every pass beside it is unanchored.
+
+### Ownership had three spellings, and one of them cannot be a uid
+
+`createFlashSale` took `merchantId`, `productId`, `sku` and `originalPrice` from the payload and
+validated their SHAPE only. A caller could publish a 99%-off sale against another shop's product at
+a price of their own invention.
+
+What the catalogue actually carries was measured, not assumed:
+
+    posProducts   firestore.rules:2536-2541 guards on `sellerId == uid`
+    posProducts   posUpsertProduct is the ONLY writer that sets `merchantId`
+                  (business-bootstrap.js:150)
+    businesses    `ownerId` is the owning uid; for a wizard-provisioned
+                  business it differs from merchantId (business-bootstrap.js:1322)
+
+`merchantId` is a **business id (SOK-…), not a uid** — comparing it to the caller's uid would have
+refused every legitimate owner. It resolves through `businesses/{merchantId}.ownerId`, the
+authoritative resolver, never through `activeShopId`. `sellerId`, `sellerUid` and `ownerId` compare
+directly. **A product carrying no ownership field is UNRESOLVED, not unowned, and is refused** —
+treating absence as "mine" is how a census of missing fields becomes a grant.
+
+### The price is the catalogue's
+
+`originalPrice` is read from `posProducts/{id}.price`. A payload `originalPrice` is accepted **only**
+as a stale-client check and cannot move the stored figure in either direction — disagreement by more
+than half a cent refuses the whole request (`aborted`) and writes nothing. `priceSource: 'catalogue'`
+is recorded. An unpriced product is refused rather than priced from the request.
+
+`merchantId` on the sale is now resolved from the product, `null` when the catalogue row carries
+none, stamped `merchantIdSource: 'unresolved'` — never back-filled from the payload or the uid,
+because a sale stamped with an invented business id is a figure attributed to the wrong shop. The
+proven owner is recorded as `sellerUid`, alongside `ownershipProvenBy`.
+
+**Two defects found in the work itself.** The log line still referenced a `merchantId` variable that
+no longer existed — a `ReferenceError` on every successful call, caught by executing the handler
+rather than reading it. And two static assertions failed for the wrong reason: the `activeShopId`
+detector matched a COMMENT forbidding activeShopId, and the merchantId detector matched four other
+functions that legitimately take a merchantId for a read. Both now strip comments and scope to the
+F-1 surface, with a control proving the extraction is non-empty.
+
+### What F-1 deliberately does NOT do
+
+F-2 and F-3 stay shut, and the suite asserts it: the localStorage rail is **still present** (13
+files), the `flash-sale` route is **still `kind:'seller'`**, and **no checkout, till or orchestrator
+file reads `mktFlashSales`** — positive-controlled by requiring the sweep to find `bi-advanced.js`
+and `marketing-engine.js` first.
+
+**Noted for F-2, not fixed here:** the unreachable `sokoni-merchant-flash.js` sends
+`merchantId: ctx.scope.sellerUid` — a **uid** where the catalogue holds a SOK- business id, so
+sales created that way could never have matched a BI merchantId query. It also sends
+`originalPrice: Number(p.price)` from its own product read, which the new stale-price check will
+refuse if that reader is not `posProducts`.
+
+**Files affected:** `functions/marketing-engine.js`, `scripts/test-flash-sale-authority.js`,
+`CHANGELOG.md`. **Database changes:** `mktFlashSales` gains `sellerUid`, `merchantIdSource`,
+`ownershipProvenBy`, `priceSource`; `merchantId` may now be `null`. **API changes:**
+`createFlashSale` ignores payload `merchantId`/`sku`; payload `originalPrice` becomes an optional
+stale-check. **Security changes:** the authority boundary above. **Breaking changes:** a caller
+relying on payload-supplied merchantId/sku/price no longer gets it — no live caller exists, since
+the only client is unmounted.
+
 ## 2026-09-22 (171) — the catalogue/tender handoff becomes auditable, and the AR specimen is observed but untested
 
 **NO DEPLOY. Live remains 111dbd7 / v636.** `scripts/audit-catalogue-handoff.js`

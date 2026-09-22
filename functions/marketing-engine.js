@@ -67,11 +67,110 @@ function _requireAuth(req) {
   return req.auth.uid;
 }
 
+/* ── WHY THIS IS NOT `role < 2` ──────────────────────────────────────────────
+   SOKONI mints STRING role claims ('seller', 'buyer', 'admin', 'superAdmin').
+   The previous form read `req.auth.token?.role ?? 0` and refused when
+   `role < 2`, which admitted EVERY string: `Number('buyer')` is NaN, every NaN
+   comparison is false, so the guard did not throw. Only an absent or
+   numerically-low claim was ever refused — `role: 'buyer'` walked through a
+   check whose whole purpose was to stop it.
+
+   So the claim is matched against an EXPLICIT allowlist and anything not on it
+   is refused, including a string that merely looks privileged. The numeric form
+   is still honoured for legacy tokens, but only when the value really is a
+   finite number — never by coercing something else into one. */
+const MERCHANT_ROLES = new Set(['seller', 'merchant', 'admin', 'superAdmin']);
+
 function _requireMerchant(req) {
-  const uid = _requireAuth(req);
-  const role = req.auth.token?.role ?? 0;
-  if (role < 2) _err('Seller / merchant role required.', 'permission-denied');
-  return uid;
+  const uid  = _requireAuth(req);
+  const role = req.auth.token?.role;
+
+  if (typeof role === 'string') {
+    if (!MERCHANT_ROLES.has(role)) {
+      _err('Seller / merchant role required.', 'permission-denied');
+    }
+    return uid;
+  }
+  if (typeof role === 'number' && Number.isFinite(role)) {
+    if (role < 2) _err('Seller / merchant role required.', 'permission-denied');
+    return uid;
+  }
+  /* Absent, null, boolean, object, NaN, Infinity — none of these is a role. */
+  _err('Seller / merchant role required.', 'permission-denied');
+}
+
+/* ── OWNERSHIP AND PRICE, BOTH READ SERVER-SIDE ──────────────────────────────
+   A role claim says the caller is *a* merchant. It never says the caller is
+   THIS product's merchant, and `createFlashSale` previously took `merchantId`,
+   `productId` and `originalPrice` from the payload and validated only their
+   SHAPE. A buyer-role caller could therefore publish a 99%-off sale against
+   another shop's product at a price of their own invention.
+
+   THE CATALOGUE HAS MORE THAN ONE OWNERSHIP SPELLING, and this is measured,
+   not assumed:
+
+     posProducts        firestore.rules guards it on `sellerId == uid`
+                        (isPosOwner / claimsPosOwner, rules:2536-2541)
+     posProducts        posUpsertProduct is the ONLY writer that sets
+                        `merchantId` (business-bootstrap.js:150)
+     businesses         `ownerId` is the owning uid; for a wizard-provisioned
+                        business it differs from merchantId
+                        (business-bootstrap.js:1322)
+
+   `merchantId` is a BUSINESS id (SOK-…), not a uid, so comparing it to the
+   caller's uid would refuse every legitimate owner. It resolves through
+   `businesses/{merchantId}.ownerId` instead — the authoritative resolver — and
+   never through `activeShopId` or anything else a client can name.
+
+   FAIL CLOSED ON SILENCE. A product carrying NO ownership field is UNRESOLVED,
+   not unowned, and is refused. Treating an absent owner as "mine" is how a
+   census of absent fields becomes a grant. */
+const _UID_OWNER_FIELDS = ['sellerId', 'sellerUid', 'ownerId'];
+
+async function _resolveOwnedPosProduct(uid, productId) {
+  const snap = await db.collection('posProducts').doc(String(productId)).get();
+  if (!snap.exists) _err('Product not found.', 'not-found');
+  const p = snap.data() || {};
+
+  let matched = null;      // how ownership was proven
+  let present = false;     // was there anything to prove it WITH?
+
+  for (const f of _UID_OWNER_FIELDS) {
+    if (typeof p[f] === 'string' && p[f]) {
+      present = true;
+      if (p[f] === uid) { matched = f; break; }
+    }
+  }
+
+  if (!matched && typeof p.merchantId === 'string' && p.merchantId) {
+    present = true;
+    const bizSnap = await db.collection('businesses').doc(p.merchantId).get();
+    const biz     = bizSnap.exists ? (bizSnap.data() || {}) : {};
+    if (biz.ownerId && biz.ownerId === uid) matched = 'merchantId->businesses.ownerId';
+  }
+
+  if (!present) {
+    _err('Product ownership cannot be established.', 'failed-precondition');
+  }
+  if (!matched) {
+    _err('You do not own this product.', 'permission-denied');
+  }
+
+  /* The PRICE comes from the catalogue row, never from the caller. A number is
+     required: a missing or non-numeric price is an unpriced product, and
+     deriving a discount from it would invent both figures. */
+  const price = p.price;
+  if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) {
+    _err('Product has no authoritative price.', 'failed-precondition');
+  }
+
+  return {
+    productId:  snap.id,
+    price,
+    sku:        typeof p.sku === 'string' ? p.sku : null,
+    merchantId: typeof p.merchantId === 'string' && p.merchantId ? p.merchantId : null,
+    ownershipProvenBy: matched,
+  };
 }
 
 /** Strip HTML tags and trim, hard-cap length. */
@@ -219,26 +318,41 @@ const getActiveBundleDeals = onCall(OPT_READ, _h.getActiveBundleDeals = async (r
 const createFlashSale = onCall(OPT, _h.createFlashSale = async (req) => {
   const uid = _requireMerchant(req);
   const {
-    merchantId,
     productId,
-    sku,
-    originalPrice,
+    originalPrice: claimedOriginalPrice,
     salePrice,
     startAt,
     endAt,
     stockLimit,
   } = req.data || {};
 
-  if (!merchantId)  _err('merchantId is required.');
-  if (!productId)   _err('productId is required.');
-  if (!sku)         _err('sku is required.');
-  if (typeof originalPrice !== 'number' || originalPrice <= 0)
-    _err('originalPrice must be a positive number.');
-  if (typeof salePrice !== 'number' || salePrice <= 0)
+  /* `merchantId` and `sku` are deliberately NOT read from the payload. They are
+     resolved from the product document, so a caller cannot name a shop they do
+     not own or label the sale with someone else's SKU. */
+  if (!productId) _err('productId is required.');
+  if (typeof salePrice !== 'number' || !Number.isFinite(salePrice) || salePrice <= 0)
     _err('salePrice must be a positive number.');
-  if (salePrice >= originalPrice)
-    _err('salePrice must be less than originalPrice.');
   if (!startAt || !endAt) _err('startAt and endAt are required.');
+
+  /* Ownership and price, both server-side, before anything else is considered. */
+  const product      = await _resolveOwnedPosProduct(uid, productId);
+  const originalPrice = product.price;
+
+  /* A payload originalPrice is accepted ONLY as a stale-client check, never as
+     the authority. It cannot raise, lower or replace the catalogue price; a
+     disagreement refuses the whole request rather than silently pricing the
+     sale off the other number. */
+  if (claimedOriginalPrice !== undefined && claimedOriginalPrice !== null) {
+    if (typeof claimedOriginalPrice !== 'number' ||
+        !Number.isFinite(claimedOriginalPrice) ||
+        Math.abs(claimedOriginalPrice - originalPrice) > 0.005) {
+      _err('originalPrice does not match the catalogue price for this product. ' +
+           'Reload the product and try again.', 'aborted');
+    }
+  }
+
+  if (salePrice >= originalPrice)
+    _err('salePrice must be less than the catalogue price.');
 
   const sStart = new Date(startAt);
   const sEnd   = new Date(endAt);
@@ -254,10 +368,19 @@ const createFlashSale = onCall(OPT, _h.createFlashSale = async (req) => {
 
   const docRef = db.collection('mktFlashSales').doc();
   await docRef.set({
-    merchantId,
+    /* Resolved from the product document. NULL when the catalogue row carries no
+       merchantId — an unresolved owner is recorded as unresolved, never
+       back-filled from the payload or from the caller's uid, because a sale
+       stamped with an invented business id is a reporting figure attributed to
+       the wrong shop. The proven owner is `sellerUid`. */
+    merchantId:    product.merchantId,
+    merchantIdSource: product.merchantId ? 'product' : 'unresolved',
+    sellerUid:     uid,
+    ownershipProvenBy: product.ownershipProvenBy,
+    priceSource:   'catalogue',
     createdBy:     uid,
-    productId:     _san(productId, 100),
-    sku:           _san(sku, 100),
+    productId:     product.productId,
+    sku:           product.sku,
     originalPrice,
     salePrice,
     discountPct,
@@ -270,7 +393,14 @@ const createFlashSale = onCall(OPT, _h.createFlashSale = async (req) => {
     updatedAt:     F.serverTimestamp(),
   });
 
-  logger.info('mktFlashSale created', { saleId: docRef.id, merchantId, productId, discountPct });
+  logger.info('mktFlashSale created', {
+    saleId:     docRef.id,
+    merchantId: product.merchantId,
+    sellerUid:  uid,
+    productId:  product.productId,
+    discountPct,
+    ownershipProvenBy: product.ownershipProvenBy,
+  });
   return { saleId: docRef.id, discountPct, status };
 });
 
