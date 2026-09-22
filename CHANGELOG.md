@@ -1,3 +1,25 @@
+## 2026-09-22 (173) — A-E adjudicated: the 9999 stock fallback is reclassified as an inventory-authority defect
+
+**NO DEPLOY.** Doc-only change on top of `cae0d08`.
+
+The A-E trace recorded the till's `stock ?? stockQty ?? quantity ?? 9999` fallback as "the
+documented sentinel rather than a defect". **Reclassified by owner decision: it is an
+INVENTORY-AUTHORITY / defaulting defect.** An absent authoritative quantity becomes **9999**, so the
+till behaves as though inventory were unlimited — an unknown defaulted into a large concrete number,
+the same class as rendering an unknown metric as `0`. The honest value is "unmetered", and only the
+inventory authority may decide what that permits. Every service row created through `catalogue.html`
+takes that path.
+
+`stock` itself remains COMPATIBLE with the till, and the comment at `pos-inventory-pro.js:1534`
+claiming the reader is `stockQty ?? quantity` remains WRONG.
+
+**F-R stay UNPROVEN**, blocked on an owner decision that evidence cannot make: whether
+`posUpsertProduct` learns `trackStock`/`variablePrice`/`listingType`, or the browser catalogue
+writer becomes canonical.
+
+**Files affected:** `docs/MERCHANT_V2_PRODUCT_UPLOAD_ECOSYSTEM_2026-09-22.md`, `CHANGELOG.md`.
+**Database / API / security changes:** none. **Breaking changes:** none.
+
 ## 2026-09-22 (172) — F-1: a role claim said "a merchant", and the code read it as "this merchant"
 
 **NO DEPLOY. Live remains 111dbd7 / v636.** `scripts/test-flash-sale-authority.js` **56/0** ·

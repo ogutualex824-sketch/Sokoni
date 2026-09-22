@@ -369,11 +369,14 @@ till reads as `prod.salePrice || prod.price` is indistinguishable from free.
    (`sokoni-catalogue-model.js:252-256`) is *compatible*, not broken — my first reading of this,
    taken from that comment rather than from the reader, was wrong.
 
-   The real hazard is the fallback: the model **deletes** `stock` when the field is left blank, on
-   purpose (blank = UNMETERED, not zero — the correct invariant), and an absent stock figure reads
-   at the till as **9999**. Unmetered therefore presents as effectively unlimited. That is the
-   documented sentinel rather than a defect, but it is the behaviour a service row will take, and
-   it must be stated in any oversell trace rather than discovered there.
+   **The fallback is the defect, and it is an INVENTORY-AUTHORITY defect, not a compatibility one**
+   (owner classification, 2026-09-22). The model **deletes** `stock` when the field is left blank,
+   on purpose — blank = UNMETERED, not zero, which is the correct invariant. But an absent
+   authoritative stock figure reads at the till as **9999**, so the till behaves as though
+   inventory were effectively unlimited. An unknown quantity is being DEFAULTED into a large
+   concrete one, which is the same class as rendering an unknown metric as `0`: the honest
+   value is "unmetered", and only the inventory authority may decide what that permits. Every
+   service row created through this surface takes that path.
 
 2. **`merchantId` holds two different kinds of value.** `posUpsertProduct` writes a SOK- business
    id. `catalogue.html:453` writes **`merchantId: uid`** — a uid. `catalogue.html:299` then reads
