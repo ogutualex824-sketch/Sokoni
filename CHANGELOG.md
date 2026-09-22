@@ -1,3 +1,48 @@
+## 2026-09-22 (171) — the catalogue/tender handoff becomes auditable, and the AR specimen is observed but untested
+
+**NO DEPLOY. Live remains 111dbd7 / v636.** `scripts/audit-catalogue-handoff.js`
+**9 passed, 0 failed, 18 UNPROVEN, 0 NOT RUN** (was 0/0/0/18 NOT RUN).
+
+### The blocker was procedural, and it was in git, not in the architecture
+
+`scripts/audit-catalogue-handoff.js` defines the handoff as **tracked in the git index** — so
+while the catalogue/tender workstream's five files sat as untracked working copies, all eighteen
+contract questions (§2 A-R) could only report `NOT RUN`. Re-running the suite could never have
+changed that; nothing was wrong with the code it wanted to inspect.
+
+`000c75d` lands those five files — `catalogue.html`, `sokoni-catalogue-model.js`,
+`sokoni-pos-tender.js`, `sokoni-pos-pay-console.js`, `functions/shared/pos-service-pricing.js` —
+and the eighteen questions move to **UNPROVEN**. That is the whole gain: they are now *answerable*
+and *unanswered*. The auditor refuses to auto-pass on arrival, which is the point.
+
+**A bare `git add` was rejected as the mechanism.** The index is shared, and ten commits from
+another workstream landed during the session that prepared this. Files left staged would have been
+swept into an unrelated commit under someone else's message, so the add and the commit were one
+operation. Owner decision, taken with that trade named: the commit publishes another workstream's
+in-flight files, authored by neither of us.
+
+Nine invariants held across the landing: `d0443b8` field parity (26 collected, none dropped, with
+a both-sides-parsed control), `productProjections` not widened ahead of the handoff, Products still
+opening the canonical editor (`30208f3`), and no second uploader route.
+
+### The AR specimen survived its eligibility moment — and was never tested
+
+`sokoni--aeb26__us--central1__profile_get_public_profile` is **present** at `sha256:133a75e9…`,
+created `2026-09-21T04:21:47Z`, tags `latest,version_1` — the recorded digest, ~29h old, past the
+~`2026-09-22T04:21:47Z` KEEP checkpoint.
+
+**That is not proof.** `BatchDeleteVersions` over three days returns **exactly two rows, both
+`2026-09-20T10:16:05Z`** — the sweep that consumed the canary. **No sweep has run since the KEEP
+policy was applied at `2026-09-21T04:35Z`.** The query matches when there is something to match,
+so the absence is measured, not blind. Presence without a sweep means the specimen was never put
+to the test: **KEEP stays UNPROVEN and the checkpoint is re-armed, not retired.** The specimen was
+not disturbed.
+
+**Files affected:** `catalogue.html`, `sokoni-catalogue-model.js`, `sokoni-pos-tender.js`,
+`sokoni-pos-pay-console.js`, `functions/shared/pos-service-pricing.js`, `CHANGELOG.md`.
+**Database changes:** none. **API changes:** none. **Security changes:** none.
+**Breaking changes:** none — nothing routes to the landed files yet.
+
 ## 2026-09-22 (170) — provider health gains its second axis, and refuses to guess on it
 
 **NO DEPLOY. Live remains 111dbd7 / v636.** Phase 5.
