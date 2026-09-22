@@ -1199,6 +1199,26 @@ console.log('\n── The server decides which actions a surface may draw ──
   const ordersCode = orders.replace(/<!--[\s\S]*?-->/g, '')
     .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   ck('my-orders.html loads the Call module', /sokoni-connect-call\.js/.test(orders));
+
+  /* ONE CLASS, ONE STRUCTURAL ROLE.
+
+     `.mo-wrap` is the PAGE CONTAINER — padding:16px, max-width:640px,
+     margin:0 auto. The order-actions work reused it for the per-card wrapper,
+     so every card silently inherited the container's padding and width
+     constraint. No gate saw it, because the gates assert DOM shape and this was
+     a CSS defect: the markup was correct, the geometry was not.
+
+     The per-card wrapper is `.mo-item`. Asserted by counting RULES, not
+     occurrences — a second `.mo-wrap{` declaration is the defect itself. */
+  const _moWrapRules = (orders.match(/^\s*\.mo-wrap\{/gm) || []).length;
+  ck('.mo-wrap declares ONE rule — the page container', _moWrapRules === 1, String(_moWrapRules));
+  ck('the per-card wrapper is .mo-item, not a second .mo-wrap',
+    /class="mo-item"/.test(orders) && /\.mo-item\{/.test(orders));
+  ck('…and the card markup uses it', /<div class=\\"mo-item\\">/.test(orders) ||
+    orders.indexOf('\'<div class="mo-item">\'') !== -1);
+  /* CONTROL: the rule counter can see a rule at all. */
+  ck('CONTROL: the rule counter finds the container rule',
+    /^\s*\.mo-wrap\{/m.test(orders));
   ck('…mounts per order', /mountForAnchor\(/.test(ordersCode));
   ck('…with the order as the anchor', /anchorType: 'order'/.test(ordersCode));
   /* THE PROPERTY THAT MATTERS: the page must not map a lifecycle word itself. */
