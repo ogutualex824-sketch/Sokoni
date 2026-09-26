@@ -124,7 +124,12 @@ async function pay(ref, { buyer = 'buyer1', amountCents = 100000, status = 'COMP
     ck('server amount = order total (client amount ignored)', it && it.amountCents === 100000 && it.amount === 1000, it && it.amountCents);
     ck('intent carries organizerUid and NO sellerUid', it && it.metadata.organizerUid === 'org1' && !('sellerUid' in it.metadata));
     ck('replay returns the same intent (idempotent)', !(await code(intents.createPaymentIntent.run({ ...who('buyer1'), data: { purpose: 'event_ticket', orderId: 'ORDA001' } }))));
-    ck("another buyer's order refused", (await code(intents.createPaymentIntent.run({ ...who('buyer2'), data: { purpose: 'event_ticket', orderId: 'ORDA001' } }))) === 'permission-denied');
+    ck("another buyer's intent for an ALREADY-quoted order refused (intent replay guard)", !!(await code(intents.createPaymentIntent.run({ ...who('buyer2'), data: { purpose: 'event_ticket', orderId: 'ORDA001' } }))));
+    await seedOrder('ORDB002');
+    /* A FRESH order no intent exists for: only the pricer's ownership check stands between a
+       stranger and a quote for someone else's seats. */
+    ck("another buyer's order refused by the pricer itself (fresh order)", (await code(intents.createPaymentIntent.run({ ...who('buyer2'), data: { purpose: 'event_ticket', orderId: 'ORDB002' } }))) === 'permission-denied'
+      && !(await get('paymentIntents/ORDB002')));
     await seedOrder('ORDPAID', { status: 'paid' });
     ck('an already-paid order refused', (await code(intents.createPaymentIntent.run({ ...who('buyer1'), data: { purpose: 'event_ticket', orderId: 'ORDPAID' } }))) === 'failed-precondition');
     await seedEvent('evX', { status: 'cancelled' }); await seedOrder('ORDX001', { eventId: 'evX' });
@@ -191,7 +196,8 @@ async function pay(ref, { buyer = 'buyer1', amountCents = 100000, status = 'COMP
   ck('due → organizer wallets.balance credited in whole shillings', rl.released && w.balance === Math.floor(95545 / 100), JSON.stringify(rl));
   ck('rounding remainder recorded, not dropped', (await get('eventSettlements/O1')).roundingRemainderCents === 95545 - Math.floor(95545 / 100) * 100);
   ck('wallet transaction id is deterministic', !!(await get('walletTransactions/org1_O1_event')));
-  ck('replay release → skipped, balance unchanged', (await ES.releaseOne('O1', { nowMs: NOW })).skipped === 'status_RELEASED' && (await get('wallets/org1')).balance === w.balance);
+  const rr = await ES.releaseOne('O1', { nowMs: NOW }).catch((e) => ({ threw: e.message }));
+  ck('replay release → skipped by the status guard, balance unchanged', rr.skipped === 'status_RELEASED' && (await get('wallets/org1')).balance === w.balance, JSON.stringify(rr));
   ck('commission row marked collected', (await get('commissionLedger/evt_O1')).status === 'collected');
   ck('FEE_UNREPORTED never releases', (await ES.releaseOne('O5', { nowMs: NOW })).skipped === 'status_FEE_UNREPORTED');
   await seedEvent('evC', { startMs: NOW - 30 * H, endMs: NOW - 26 * H }); await seedOrder('C1', { eventId: 'evC' }); await pay('C1', { eventId: 'evC' });
@@ -232,7 +238,7 @@ async function pay(ref, { buyer = 'buyer1', amountCents = 100000, status = 'COMP
   ck('partial refund → exception, tickets untouched', pp.partial && (await get('eventExceptions/partial_refund_R1')).status === 'OPEN' && (await get('eventTickets/R1_k0')).status === 'valid');
   const balBefore = (await get('wallets/org1')).balance;
   await ES.onEventRefundProcessed({ payRef: 'O1', refundId: 'ref_O1', amountCents: 100000 });
-  ck('refund AFTER release → exception, NO silent wallet debit', (await get('eventExceptions/refund_after_release_O1')).status === 'OPEN' && (await get('wallets/org1')).balance === balBefore);
+  ck('refund AFTER release → exception, NO silent wallet debit', ((await get('eventExceptions/refund_after_release_O1')) || {}).status === 'OPEN' && (await get('wallets/org1')).balance === balBefore);
   ck('a non-event payment is ignored by the hook', (await ES.onEventRefundProcessed({ payRef: 'NOPE', amountCents: 1 })).skipped === 'not_event_ticket');
 
   /* ═══ 9. AdminOS authority ═══ */

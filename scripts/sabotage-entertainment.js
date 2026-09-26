@@ -70,7 +70,7 @@ const M = [
     from: "if (Number(amountCents) < Number(intent.amountCents)) {", to: "if (false) {", expect: /partial refund → exception, tickets untouched/ },
   /* ── pricing authority ── */
   { group: 'pricing', name: "pricer quotes another buyer's order", file: PP, suite: 'event',
-    from: "if (o.buyerUid !== uid) fail('permission-denied', 'This order belongs to another account.');", to: '', expect: /another buyer's order refused/ },
+    from: "if (o.buyerUid !== uid) fail('permission-denied', 'This order belongs to another account.');", to: '', expect: /another buyer's order refused by the pricer itself/ },
   { group: 'pricing', name: 'pricer trusts a client amount', file: PP, suite: 'event',
     from: "const cents = Math.round(Number(o.totalAmount) * 100);\n      if (!Number.isFinite(cents) || cents <= 0) fail('failed-precondition', 'Order has no payable total.');",
     to: "const cents = Math.round(Number(data.amount || o.totalAmount) * 100);\n      if (!Number.isFinite(cents) || cents <= 0) fail('failed-precondition', 'Order has no payable total.');",
@@ -132,6 +132,7 @@ const M = [
 const noRules = process.argv.includes('--no-rules');
 const noBrowser = process.argv.includes('--no-browser');
 const onlyGroup = (process.argv.find((a) => a.startsWith('--group=')) || '').slice(8) || null;
+const onlyName = (process.argv.find((a) => a.startsWith('--match=')) || '').slice(8) || null;
 function run(suite) {
   const [cmd, args] = SUITES[suite];
   const r = spawnSync(cmd, args, { cwd: ROOT, encoding: 'utf8', timeout: 600000, maxBuffer: 64 * 1024 * 1024 });
@@ -149,7 +150,7 @@ function apply(src, m) {
 
 const tally = { CAUGHT: 0, 'CAUGHT-OTHER': 0, MISSED: 0, CRASHED: 0, 'NO-ANCHOR': 0, SKIPPED: 0 };
 for (const m of M) {
-  if ((m.rules && noRules) || (m.browser && noBrowser) || (onlyGroup && m.group !== onlyGroup)) { tally.SKIPPED++; continue; }
+  if ((m.rules && noRules) || (m.browser && noBrowser) || (onlyGroup && m.group !== onlyGroup) || (onlyName && !m.name.includes(onlyName))) { tally.SKIPPED++; continue; }
   const file = path.join(ROOT, m.file);
   const orig = fs.readFileSync(file);
   const res = apply(orig.toString('utf8'), m);
