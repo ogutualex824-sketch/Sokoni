@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <script src="/security.js"></script>
+  <script src="/shared-header.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#050505">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Creator Studio | SOKONI</title>
+  <!--
+    Creator Studio (docs/CREATOR_HUB.md). The creator's side of the Creator Hub:
+    register, draft films, upload, set the royalty split, submit for review,
+    publish once APPROVED, and read per-film royalties. Every state change is a
+    creatorDispatch op — this page cannot publish, approve, lock a split or move
+    money; it asks the server, which enforces who may do what.
+  -->
+  <script src="/sokoni-creator-rules.js" defer></script>
+  <style>
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+    :root { --g:#71ff00; --bg:#050505; --card:#141414; --line:rgba(255,255,255,.09); --tx:#f4f4f4; --mu:#a8a8a8; --r:16px; --safe-b:env(safe-area-inset-bottom,0px); }
+    body { background:var(--bg); color:var(--tx); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; min-height:100dvh; -webkit-font-smoothing:antialiased; }
+    a { color:var(--g); }
+    .wrap { max-width:960px; margin:0 auto; padding:88px 16px calc(32px + var(--safe-b)); }
+    h1 { font-size:clamp(22px,4vw,30px); font-weight:900; } h2 { font-size:18px; font-weight:800; margin:18px 0 8px; }
+    .muted { color:var(--mu); font-size:13px; }
+    .panel { background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:16px; margin-top:14px; }
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; } @media (max-width:640px){ .grid2 { grid-template-columns:1fr; } }
+    label { display:block; font-size:12px; color:var(--mu); font-weight:700; }
+    input, select, textarea { width:100%; background:#0b0b0b; border:1px solid var(--line); color:var(--tx); border-radius:10px; padding:10px; font-size:15px; margin-top:4px; font-family:inherit; }
+    .btn { background:var(--g); color:#000; border:0; border-radius:12px; padding:10px 16px; font-weight:900; cursor:pointer; font-size:14px; }
+    .btn.ghost { background:transparent; color:var(--tx); border:1px solid var(--line); }
+    .btn[disabled] { opacity:.45; cursor:not-allowed; }
+    .btn:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px solid var(--g); outline-offset:1px; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px; }
+    .chip { font-size:12px; border:1px solid var(--line); border-radius:999px; padding:3px 10px; }
+    .chip[data-s="PUBLISHED"] { color:var(--g); border-color:var(--g); } .chip[data-s="REJECTED"], .chip[data-s="SUSPENDED"] { color:#ff6b6b; border-color:#ff6b6b; }
+    table { width:100%; border-collapse:collapse; font-size:13px; } th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:middle; } th { color:var(--mu); }
+    .scroll { overflow-x:auto; }
+    .msg { font-size:13px; min-height:18px; margin-top:8px; } .msg.bad { color:#ff6b6b; } .msg.ok { color:var(--g); }
+    progress { width:100%; height:8px; accent-color:var(--g); }
+    .banner { border-radius:12px; padding:12px 14px; margin-top:12px; border:1px solid var(--line); }
+    .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; }
+    .kpi { background:#0b0b0b; border:1px solid var(--line); border-radius:12px; padding:12px; } .kpi b { display:block; font-size:17px; margin-top:4px; }
+  </style>
+</head>
+<body>
+  <main class="wrap" id="app"><p class="muted">Loading…</p></main>
+
+  <script type="module">
+  'use strict';
+  import { app, auth, storage } from '/firebase.js';
+  import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+  import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+  import { ref as sref, uploadBytesResumable, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js';
+
+  const fn = getFunctions(app, 'us-central1');
+  const cd = (op, data = {}) => httpsCallable(fn, 'creatorDispatch')({ op, ...data }).then((r) => r.data);
+  const $app = document.getElementById('app');
+  const P = () => window.SokoniCreatorRules;
+  let USER = null, ME = null;
+
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const kes = (c) => (c == null || !Number.isFinite(Number(c))) ? '—' : 'KES ' + (Number(c) / 100).toLocaleString('en-KE', { maximumFractionDigits: 2 });
+  const errText = (e) => String((e && e.message) || 'Something went wrong.').replace(/^[a-z_]+:\s*/, '');
+  const msg = (id, t, ok) => { const m = document.getElementById(id); if (m) { m.className = 'msg ' + (ok === true ? 'ok' : ok === false ? 'bad' : ''); m.textContent = t; } };
+
+  /* Upload to the creator's own storage prefix (storage.rules enforce uid). */
+  function upload(path, file, progressId) {
+    return new Promise((resolve, reject) => {
+      const task = uploadBytesResumable(sref(storage, path), file, { contentType: file.type });
+      task.on('state_changed', (s) => { const p = document.getElementById(progressId); if (p) { p.hidden = false; p.value = s.bytesTransferred / s.totalBytes; } }, reject, () => resolve(task.snapshot.ref));
+    });
+  }
+
+  async function home() {
+    $app.innerHTML = '<p class="muted">Loading…</p>';
+    try { ME = await cd('creator.me'); } catch (e) { $app.innerHTML = `<p class="msg bad">${esc(errText(e))}</p>`; return; }
+    if (!ME.creator) return register();
+    const c = ME.creator;
+    const banner = {
+      PENDING: 'Your creator profile is awaiting review. You can prepare drafts now; you can submit once approved.',
+      ACTIVE: 'Your creator profile is approved.',
+      SUSPENDED: 'Your creator account is suspended. ' + (c.reviewNote || ''),
+      REJECTED: 'Your creator application was not approved: ' + (c.reviewNote || '') + ' Update your profile to re-apply.',
+    }[c.state];
+    $app.innerHTML = `
+      <h1>Creator Studio</h1>
+      <p class="muted">${esc(c.displayName)} · <a href="/creator.html">View Creator</a> · <a href="/creator.html?view=royalties">My royalties</a></p>
+      <div class="banner">${esc(banner)}</div>
+      <div class="row"><button class="btn" id="newFilm" ${['ACTIVE', 'PENDING'].includes(c.state) ? '' : 'disabled'}>+ New film</button>
+        ${c.state !== 'SUSPENDED' ? '<button class="btn ghost" id="editProfile">Edit profile</button>' : ''}</div>
+      <h2>Your films</h2>
+      <div class="panel scroll">${ME.films.length ? `<table><thead><tr><th>Title</th><th>State</th><th>Price</th><th>Master</th><th>Split</th><th></th></tr></thead><tbody>${ME.films.map((f) => `
+        <tr><td>${esc(f.title)}</td><td><span class="chip" data-s="${esc(f.pubState)}">${esc(f.pubState)}</span></td><td>${kes(f.priceCents)}</td>
+        <td>${f.mediaReady ? 'uploaded' : '<span class="muted">missing</span>'}</td><td>${f.agreementVersion ? 'v' + f.agreementVersion + ' locked' : '<span class="muted">draft</span>'}</td>
+        <td><button class="btn ghost" data-open="${esc(f.filmId)}">Open</button></td></tr>`).join('')}</tbody></table>` : '<p class="muted">No films yet.</p>'}</div>`;
+    const nf = document.getElementById('newFilm'); if (nf) nf.onclick = () => editor(null);
+    const ep = document.getElementById('editProfile'); if (ep) ep.onclick = () => register(c);
+    $app.querySelectorAll('[data-open]').forEach((b) => b.onclick = () => editor(ME.films.find((f) => f.filmId === b.dataset.open)));
+  }
+
+  function register(existing) {
+    const c = existing || {};
+    $app.innerHTML = `
+      <h1>${existing ? 'Edit creator profile' : 'Become a SOKONI creator'}</h1>
+      <p class="muted">Your public profile appears on your films once approved. Legal name and phone stay private (admins only).</p>
+      <form class="panel" id="regForm">
+        <div class="grid2">
+          <label>Display name *<input name="displayName" required minlength="2" maxlength="80" value="${esc(c.displayName || '')}"></label>
+          <label>Country (2-letter code)<input name="country" maxlength="2" value="${esc(c.country || '')}" placeholder="KE"></label>
+          <label>Support email (public)<input name="supportEmail" type="email" value="${esc(c.supportEmail || '')}"></label>
+          <label>Profile image<input name="avatar" type="file" accept="image/jpeg,image/png,image/webp"></label>
+          <label>Legal name (private)<input name="legalName" maxlength="120"></label>
+          <label>Phone (private)<input name="phone" type="tel" maxlength="16"></label>
+        </div>
+        <label style="margin-top:10px">Biography<textarea name="bio" rows="4" maxlength="2000">${esc(c.bio || '')}</textarea></label>
+        <progress id="avProg" hidden max="1"></progress>
+        <div class="row"><button class="btn">${existing ? 'Save' : 'Apply'}</button> <button type="button" class="btn ghost" id="cancel">Cancel</button></div>
+        <div class="msg" id="regMsg" role="status"></div>
+      </form>`;
+    document.getElementById('cancel').onclick = () => (existing ? home() : (location.href = '/creator.html'));
+    document.getElementById('regForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      try {
+        let avatarUrl = c.avatarUrl || null;
+        const av = fd.get('avatar');
+        if (av && av.size) {
+          if (av.size > 15 * 1024 * 1024) throw new Error('Image must be under 15 MB.');
+          const r = await upload(`creator-public/${USER.uid}/avatar-${Date.now()}`, av, 'avProg');
+          avatarUrl = await getDownloadURL(r);
+        }
+        await cd('creator.register', { displayName: fd.get('displayName'), country: fd.get('country'), supportEmail: fd.get('supportEmail') || null,
+          bio: fd.get('bio'), legalName: fd.get('legalName') || null, phone: fd.get('phone') || null, avatarUrl });
+        home();
+      } catch (err) { msg('regMsg', errText(err), false); }
+    };
+  }
+
+  async function editor(film) {
+    const f = film || {};
+    const editable = !film || ['DRAFT', 'REJECTED'].includes(f.pubState);
+    const S = P().SUBCATEGORIES;
+    const dis = editable ? '' : 'disabled';
+    $app.innerHTML = `
+      <p><a href="#" id="back">← Studio</a></p>
+      <h1>${film ? esc(f.title) : 'New film'}</h1>
+      ${film ? `<p><span class="chip" data-s="${esc(f.pubState)}">${esc(f.pubState)}</span>${f.reviewNote ? ` <span class="muted">Review note: ${esc(f.reviewNote)}</span>` : ''}</p>` : ''}
+      ${!editable ? '<div class="banner">This film is locked while it is under review or live. Details can change only while it is a draft.</div>' : ''}
+      <form class="panel" id="filmForm">
+        <div class="grid2">
+          <label>Title *<input name="title" required maxlength="140" value="${esc(f.title || '')}" ${dis}></label>
+          <label>Subcategory *<select name="subcategory" ${dis}>${Object.entries(S).map(([k, v]) => `<option value="${k}" ${f.subcategory === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></label>
+          <label>Price (KES, whole shillings) *<input name="price" type="number" min="1" max="150000" step="1" required value="${f.priceCents ? f.priceCents / 100 : ''}" ${dis}></label>
+          <label>Access<select name="accessType" ${dis}><option value="purchase" ${f.accessType !== 'rental' ? 'selected' : ''}>Buy (keep)</option><option value="rental" ${f.accessType === 'rental' ? 'selected' : ''}>Rental</option></select></label>
+          <label>Rental days (1–30)<input name="rentalDays" type="number" min="1" max="30" value="${esc(f.rentalDays || '')}" ${dis}></label>
+          <label>Runtime (minutes)<input name="runtimeMinutes" type="number" min="1" max="1000" value="${esc(f.runtimeMinutes || '')}" ${dis}></label>
+          <label>Genre<input name="genre" maxlength="40" value="${esc(f.genre || '')}" ${dis}></label>
+          <label>Language<input name="language" maxlength="40" value="${esc(f.language || '')}" ${dis}></label>
+          <label>Country of production<input name="country" maxlength="2" value="${esc(f.country || '')}" placeholder="KE" ${dis}></label>
+          <label>Release date<input name="releaseDate" type="date" value="${esc(f.releaseDate || '')}" ${dis}></label>
+          <label>Age rating<select name="ageRating" ${dis}>${P().AGE_RATINGS.map((a) => `<option ${f.ageRating === a ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
+          <label>Classification (e.g. KFCB)<input name="classification" maxlength="80" value="${esc(f.classification || '')}" ${dis}></label>
+          <label>Free preview (seconds, 0–600)<input name="previewSeconds" type="number" min="0" max="600" value="${esc(f.previewSeconds || 0)}" ${dis}></label>
+          <label>Availability<select name="avMode" ${dis}><option value="worldwide">Everywhere SOKONI operates</option><option value="allow" ${f.availability && f.availability.mode === 'allow' ? 'selected' : ''}>Only these countries</option><option value="deny" ${f.availability && f.availability.mode === 'deny' ? 'selected' : ''}>All except these countries</option></select></label>
+        </div>
+        <label style="margin-top:10px">Countries (2-letter codes, comma-separated — for licence restrictions)<input name="avCountries" value="${esc(((f.availability || {}).countries || []).join(', '))}" ${dis}></label>
+        <label style="margin-top:10px">Description<textarea name="description" rows="5" maxlength="5000" ${dis}>${esc(f.description || '')}</textarea></label>
+        <div class="grid2" style="margin-top:10px">
+          <label>Poster (JPG/PNG/WebP, ≤15 MB)${f.posterUrl ? ' — uploaded ✓' : ''}<input name="poster" type="file" accept="image/jpeg,image/png,image/webp" ${dis}></label>
+          <label>Trailer (video, ≤500 MB)${f.trailerUrl ? ' — uploaded ✓' : ''}<input name="trailer" type="file" accept="video/*" ${dis}></label>
+        </div>
+        <progress id="assetProg" hidden max="1"></progress>
+        ${editable ? '<div class="row"><button class="btn">Save draft</button></div>' : ''}
+        <div class="msg" id="filmMsg" role="status"></div>
+      </form>
+      <div id="rest"></div>`;
+    document.getElementById('back').onclick = (e) => { e.preventDefault(); home(); };
+    document.getElementById('filmForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      try {
+        const data = {
+          title: fd.get('title'), subcategory: fd.get('subcategory'), priceCents: Math.round(Number(fd.get('price'))) * 100, currency: 'KES',
+          accessType: fd.get('accessType'), description: fd.get('description'), genre: fd.get('genre'), language: fd.get('language'),
+          country: fd.get('country'), releaseDate: fd.get('releaseDate') || null, ageRating: fd.get('ageRating'), classification: fd.get('classification'),
+          previewSeconds: Math.round(Number(fd.get('previewSeconds') || 0)),
+        };
+        if (fd.get('runtimeMinutes')) data.runtimeMinutes = Math.round(Number(fd.get('runtimeMinutes')));
+        if (data.accessType === 'rental') data.rentalDays = Math.round(Number(fd.get('rentalDays')));
+        const mode = fd.get('avMode');
+        data.availability = mode === 'worldwide' ? { mode } : { mode, countries: String(fd.get('avCountries') || '').split(',').map((s) => s.trim()).filter(Boolean) };
+        const poster = fd.get('poster'), trailer = fd.get('trailer');
+        if (poster && poster.size) { if (poster.size > 15 * 1024 * 1024) throw new Error('Poster must be under 15 MB.'); data.posterUrl = await getDownloadURL(await upload(`creator-public/${USER.uid}/posters/${Date.now()}`, poster, 'assetProg')); }
+        else if (f.posterUrl) data.posterUrl = f.posterUrl;
+        if (trailer && trailer.size) { if (trailer.size > 500 * 1024 * 1024) throw new Error('Trailer must be under 500 MB.'); data.trailerUrl = await getDownloadURL(await upload(`creator-public/${USER.uid}/trailers/${Date.now()}`, trailer, 'assetProg')); }
+        else if (f.trailerUrl) data.trailerUrl = f.trailerUrl;
+        const r = await cd('film.saveDraft', film ? { filmId: f.filmId, ...data } : data);
+        msg('filmMsg', 'Saved.', true);
+        const me = await cd('creator.me'); ME = me;
+        editor(me.films.find((x) => x.filmId === r.filmId));
+      } catch (err) { msg('filmMsg', errText(err), false); }
+    };
+    if (film) renderRest(f, editable);
+  }
+
+  async function renderRest(f, editable) {
+    const rest = document.getElementById('rest');
+    let roy = null;
+    try { roy = await cd('royalty.film', { filmId: f.filmId }); } catch (_) { /* shown as — below */ }
+    const draft = roy && roy.agreements.find((a) => a.status === 'DRAFT');
+    const locked = roy && roy.agreements.find((a) => a.status === 'LOCKED');
+    const base = (draft || locked || { participants: [{ participantId: 'creator', participantType: 'creator', uid: USER.uid, bps: 10000, displayName: ME.creator.displayName }] }).participants;
+    rest.innerHTML = `
+      <h2>Film file</h2>
+      <div class="panel">
+        <p class="muted">The full film is stored privately. Nobody — including you — gets a permanent link to it; viewers receive a short-lived, watermarked stream after purchase.</p>
+        ${editable ? `<label style="margin-top:8px">Master file (video, up to 8 GB)<input type="file" id="master" accept="video/*"></label><progress id="mProg" hidden max="1"></progress><div class="row"><button class="btn" id="mUp">Upload film</button></div>` : ''}
+        <p class="muted" style="margin-top:6px">Status: ${f.mediaReady ? '<b>uploaded and verified ✓</b>' : 'not uploaded'}</p>
+        <div class="msg" id="mMsg" role="status"></div>
+      </div>
+      <h2>Royalty split</h2>
+      <div class="panel">
+        <p class="muted">Who earns from this film, as a share of the royalty pool (sale price minus the payment provider's fee and SOKONI's commission). Shares must total exactly 100% to submit. Each rights holder needs a SOKONI account — that is where their earnings are paid. Once approved, a split is locked; a change creates a new version that applies only to future sales.</p>
+        ${locked ? `<p style="margin-top:8px"><b>Locked: v${locked.version}</b> <span class="muted">since ${new Date(locked.effectiveFrom).toLocaleDateString('en-KE')}</span></p>` : ''}
+        <div class="scroll"><table><thead><tr><th>ID</th><th>Role</th><th>SOKONI user ID</th><th>Name</th><th>Share %</th><th></th></tr></thead><tbody id="parts"></tbody></table></div>
+        <div class="row"><button class="btn ghost" id="addP" type="button">+ Rights holder</button> <b id="total"></b></div>
+        <div class="row"><button class="btn" id="saveAg" type="button">${locked ? 'Propose new version' : 'Save split'}</button></div>
+        ${draft && locked ? `<p class="muted">Draft v${draft.version} awaits admin approval.</p>` : ''}
+        <div class="msg" id="agMsg" role="status"></div>
+      </div>
+      <h2>Publishing</h2>
+      <div class="panel">
+        <div class="row">
+          ${f.pubState === 'DRAFT' ? '<button class="btn" id="submit">Submit for review</button>' : ''}
+          ${f.pubState === 'REJECTED' ? '<button class="btn" id="reopen">Edit and resubmit</button>' : ''}
+          ${f.pubState === 'APPROVED' ? '<button class="btn" id="publish">Publish now</button>' : ''}
+          ${f.pubState === 'PUBLISHED' ? `<a class="btn ghost" href="/creator.html?film=${encodeURIComponent(f.filmId)}">View live page</a>` : ''}
+        </div>
+        <p class="muted" style="margin-top:6px">${{ DRAFT: 'Submit when details, poster, film file and a 100% split are ready.', SUBMITTED: 'Waiting for a reviewer.', UNDER_REVIEW: 'A reviewer is checking your film.', APPROVED: 'Approved — publish when you are ready.', PUBLISHED: 'Live in the Creator catalogue.', SUSPENDED: 'Suspended by SOKONI.', REJECTED: 'Not approved — see the review note.' }[f.pubState] || ''}</p>
+        <div class="msg" id="pubMsg" role="status"></div>
+      </div>
+      <h2>Earnings</h2>
+      <div class="panel" id="earn"></div>`;
+
+    /* Split editor — percent in the UI, INTEGER basis points on the wire. */
+    const rows = base.map((p) => ({ ...p }));
+    const types = ['creator', 'producer', 'actor', 'director', 'publisher', 'rights_holder', 'distributor', 'other'];
+    const draw = () => {
+      document.getElementById('parts').innerHTML = rows.map((p, i) => `<tr>
+        <td><input data-i="${i}" data-k="participantId" value="${esc(p.participantId)}" maxlength="64"></td>
+        <td><select data-i="${i}" data-k="participantType">${types.map((t) => `<option ${p.participantType === t ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
+        <td><input data-i="${i}" data-k="uid" value="${esc(p.uid)}" maxlength="128"></td>
+        <td><input data-i="${i}" data-k="displayName" value="${esc(p.displayName || '')}" maxlength="120"></td>
+        <td><input data-i="${i}" data-k="pct" type="number" min="0.01" max="100" step="0.01" value="${(p.bps / 100)}"></td>
+        <td><button class="btn ghost" data-del="${i}" type="button" aria-label="Remove">✕</button></td></tr>`).join('');
+      const tot = rows.reduce((s, p) => s + (Number.isInteger(p.bps) ? p.bps : 0), 0);
+      const t = document.getElementById('total'); t.textContent = 'Total: ' + (tot / 100).toFixed(2) + '%'; t.style.color = tot === 10000 ? 'var(--g)' : '#ff9800';
+    };
+    rest.addEventListener('input', (e) => {
+      const i = e.target.dataset.i; if (i == null) return;
+      if (e.target.dataset.k === 'pct') rows[i].bps = Math.round(Number(e.target.value) * 100);
+      else rows[i][e.target.dataset.k] = e.target.value;
+      const tot = rows.reduce((s, p) => s + (Number.isInteger(p.bps) ? p.bps : 0), 0);
+      const t = document.getElementById('total'); t.textContent = 'Total: ' + (tot / 100).toFixed(2) + '%'; t.style.color = tot === 10000 ? 'var(--g)' : '#ff9800';
+    });
+    rest.addEventListener('click', (e) => { const d = e.target.dataset.del; if (d != null) { rows.splice(Number(d), 1); draw(); } });
+    draw();
+    document.getElementById('addP').onclick = () => { rows.push({ participantId: 'p' + (rows.length + 1), participantType: 'actor', uid: '', bps: 0 }); draw(); };
+    document.getElementById('saveAg').onclick = async () => {
+      try { const r = await cd('agreement.saveDraft', { filmId: f.filmId, participants: rows }); msg('agMsg', `Saved as draft v${r.version} (${(r.totalBps / 100).toFixed(2)}%).`, true); }
+      catch (err) { msg('agMsg', errText(err), false); }
+    };
+
+    const mUp = document.getElementById('mUp');
+    if (mUp) mUp.onclick = async () => {
+      const file = document.getElementById('master').files[0];
+      if (!file) return msg('mMsg', 'Choose the film file first.', false);
+      if (!/^video\//.test(file.type)) return msg('mMsg', 'That is not a video file.', false);
+      mUp.disabled = true;
+      try {
+        const t = await cd('film.mediaUploadTarget', { filmId: f.filmId });
+        if (file.size > t.maxBytes) throw new Error('The film is larger than 8 GB.');
+        msg('mMsg', 'Uploading… keep this page open.');
+        await upload(t.storagePath, file, 'mProg');
+        msg('mMsg', 'Verifying…');
+        await cd('film.attachMedia', { filmId: f.filmId });
+        msg('mMsg', 'Film uploaded and verified.', true);
+      } catch (err) { msg('mMsg', errText(err), false); mUp.disabled = false; }
+    };
+    const on = (id, op) => { const b = document.getElementById(id); if (b) b.onclick = async () => {
+      b.disabled = true;
+      try { await cd(op, { filmId: f.filmId }); const me = await cd('creator.me'); ME = me; editor(me.films.find((x) => x.filmId === f.filmId)); }
+      catch (err) { msg('pubMsg', errText(err), false); b.disabled = false; }
+    }; };
+    on('submit', 'film.submit'); on('reopen', 'film.reopen'); on('publish', 'film.publish');
+
+    const earn = document.getElementById('earn');
+    if (!roy) { earn.innerHTML = '<p class="muted">—</p>'; return; }
+    const t = roy.totals;
+    earn.innerHTML = `
+      <div class="kpis">
+        <div class="kpi"><span class="muted">Sales</span><b>${t.sales}</b></div>
+        <div class="kpi"><span class="muted">Gross revenue</span><b>${kes(t.grossCents)}</b></div>
+        <div class="kpi"><span class="muted">Payment provider fees</span><b>${kes(t.providerFeeCents)}</b></div>
+        <div class="kpi"><span class="muted">SOKONI commission</span><b>${kes(t.commissionCents)}</b></div>
+        <div class="kpi"><span class="muted">Royalty pool</span><b>${kes(t.poolCents)}</b></div>
+        <div class="kpi"><span class="muted">Refunded</span><b>${kes(t.refundedCents)}</b></div>
+      </div>
+      <p class="muted" style="margin-top:8px">Next settlement: ${esc(roy.nextSettlement.periodId)} closes ${new Date(roy.nextSettlement.periodEndsAtMs).toLocaleDateString('en-KE')}.${roy.truncated ? ' Showing the most recent records only.' : ''}</p>
+      <div class="scroll" style="margin-top:8px"><table><thead><tr><th>Rights holder</th><th>Role</th><th>Share</th><th>Ver.</th><th>Accrued</th><th>Pending settlement</th><th>Settled</th><th>Reversed</th></tr></thead><tbody>
+      ${roy.participants.length ? roy.participants.map((p) => `<tr><td>${esc(p.participantId)}</td><td>${esc(p.participantType)}</td><td>${(p.bps / 100).toFixed(2).replace(/\.00$/, '')}%</td><td>v${esc(p.version)}</td><td>${kes(p.accruedCents)}</td><td>${kes(p.pendingSettlementCents)}</td><td>${kes(p.settledCents)}</td><td>${kes(p.reversedCents)}</td></tr>`).join('') : '<tr><td colspan="8" class="muted">No sales yet.</td></tr>'}
+      </tbody></table></div>`;
+  }
+
+  onAuthStateChanged(auth, (u) => {
+    USER = u;
+    if (!u) { location.href = '/login.html?redirect=' + encodeURIComponent('/creator-studio.html'); return; }
+    home();
+  });
+  </script>
+  <script src="/sw-register.js" defer></script>
+</body>
+</html>

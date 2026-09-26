@@ -1,0 +1,223 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   sokoni-aos-creator.js — AdminOS › Creator Hub controls.
+
+   Mount contract (same as sokoni-aos-products / -security):
+     window.SokoniAOSCreator.mount({ host, call }) → true when rendered
+   `call(op, data)` is AdminOS's own _call(): every op below is whitelisted in
+   sokoni-aos.js and routes through adminOsDispatch, whose handlers
+   (functions/creator-hub.js _adminH) each re-check the admin claim. Nothing
+   here writes Firestore; nothing here decides money — it asks the server.
+
+   Unknown figures render "—", never 0 (CLAUDE.md UI Data Integrity).
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function (root) {
+  'use strict';
+
+  const TABS = [
+    ['creators', 'Creators'], ['films', 'Films & review'], ['settlement', 'Royalty settlement'],
+    ['ledger', 'Ledger'], ['exceptions', 'Exceptions'], ['security', 'Playback security'], ['config', 'Config'],
+  ];
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+  /** cents → "KES 1,234.50"; null/undefined → "—" (never a fabricated 0). */
+  function kes(cents) {
+    if (cents == null || !Number.isFinite(Number(cents))) return '—';
+    const n = Number(cents) / 100;
+    return 'KES ' + n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  const pct = (bps) => (Number.isFinite(Number(bps)) ? (Number(bps) / 100).toFixed(2).replace(/\.00$/, '') + '%' : '—');
+  const when = (ms) => (ms ? new Date(ms).toLocaleString('en-KE') : '—');
+  const chip = (s) => `<span class="aos-badge" data-state="${esc(s)}">${esc(s || '—')}</span>`;
+
+  function mount(opts) {
+    const host = opts && opts.host;
+    const call = opts && opts.call;
+    if (!host || typeof call !== 'function') return false;
+    let tab = 'creators';
+
+    host.innerHTML = `
+      <div class="aoscr-tabs" role="tablist">${TABS.map(([k, l]) => `<button type="button" role="tab" class="aos-btn aos-btn-ghost" data-tab="${k}">${esc(l)}</button>`).join('')}</div>
+      <div class="aoscr-msg" id="aoscrMsg" role="status" aria-live="polite"></div>
+      <div id="aoscrBody"><div class="aos-spinner"><div></div></div></div>`;
+    const body = host.querySelector('#aoscrBody');
+    const msg = (t, bad) => { const m = host.querySelector('#aoscrMsg'); m.textContent = t || ''; m.style.color = bad ? '#ff6b6b' : '#71ff00'; };
+
+    async function act(op, data, okText) {
+      msg('Working…');
+      try { const r = await call(op, data); msg(okText || 'Done.'); await render(); return r; }
+      catch (e) { msg((e && e.message) || 'Failed.', true); return null; }
+    }
+    /* Inline reason form — AdminOS has no window.prompt in its UX, and a reason
+       is REQUIRED server-side for suspend / reject / hold / revoke. */
+    function ask(label, onOk) {
+      const d = document.createElement('div');
+      d.className = 'aoscr-ask';
+      d.innerHTML = `<label>${esc(label)}<textarea rows="2" maxlength="500"></textarea></label>
+        <button type="button" class="aos-btn">Confirm</button> <button type="button" class="aos-btn aos-btn-ghost">Cancel</button>`;
+      body.prepend(d);
+      const [ok, cancel] = d.querySelectorAll('button');
+      cancel.onclick = () => d.remove();
+      ok.onclick = () => { const v = d.querySelector('textarea').value.trim(); if (v.length < 5) { msg('Give at least 5 characters.', true); return; } d.remove(); onOk(v); };
+      d.querySelector('textarea').focus();
+    }
+
+    const R = {
+      async creators() {
+        const r = await call('creatorAdminList', {});
+        const rows = (r.creators || []).map((c) => `<tr>
+          <td>${esc(c.displayName)}<div class="aos-muted aos-mono">${esc(c.creatorId)}</div></td>
+          <td>${chip(c.state)}</td><td>${esc(c.country || '—')}</td><td>${esc(c.verification)}</td>
+          <td class="aos-muted">${esc(c.reviewNote || '')}</td>
+          <td>${c.state === 'PENDING' ? `<button class="aos-btn" data-a="cr-approve" data-id="${esc(c.creatorId)}">Approve</button> <button class="aos-btn aos-btn-ghost" data-a="cr-reject" data-id="${esc(c.creatorId)}">Reject</button>` : ''}
+              ${c.state === 'ACTIVE' ? `<button class="aos-btn aos-btn-ghost" data-a="cr-suspend" data-id="${esc(c.creatorId)}">Suspend</button>` : ''}
+              ${c.state === 'SUSPENDED' ? `<button class="aos-btn" data-a="cr-approve" data-id="${esc(c.creatorId)}">Reinstate</button>` : ''}
+              <button class="aos-btn aos-btn-ghost" data-a="cr-hold" data-id="${esc(c.creatorId)}">Hold payouts…</button> <button class="aos-btn aos-btn-ghost" data-a="cr-release" data-id="${esc(c.creatorId)}">Release hold</button></td></tr>`).join('');
+        return rows ? `<div class="aos-table-wrap"><table class="aos-table"><thead><tr><th>Creator</th><th>State</th><th>Country</th><th>Verification</th><th>Note</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="aos-muted">No creators have registered yet.</p>';
+      },
+      async films() {
+        const r = await call('creatorAdminFilms', {});
+        const order = { SUBMITTED: 0, UNDER_REVIEW: 1, APPROVED: 2, PUBLISHED: 3, SUSPENDED: 4, REJECTED: 5, DRAFT: 6 };
+        const films = (r.films || []).sort((a, b) => (order[a.pubState] ?? 9) - (order[b.pubState] ?? 9));
+        const btn = (f, to, label, ghost) => `<button class="aos-btn${ghost ? ' aos-btn-ghost' : ''}" data-a="film-to" data-id="${esc(f.filmId)}" data-to="${to}">${label}</button>`;
+        const rows = films.map((f) => `<tr>
+          <td><button class="aos-link" data-a="film-detail" data-id="${esc(f.filmId)}">${esc(f.title)}</button><div class="aos-muted">${esc(f.subcategoryLabel || f.subcategory)} · ${esc(f.creatorName || f.creatorUid)}</div></td>
+          <td>${chip(f.pubState)}</td><td>${kes(f.priceCents)} ${esc(f.accessType)}${f.rentalDays ? ' · ' + f.rentalDays + 'd' : ''}</td>
+          <td>${f.mediaReady ? 'verified' : '<span class="aos-muted">missing</span>'}</td>
+          <td>${f.agreementVersion ? 'v' + f.agreementVersion + ' locked' : '<span class="aos-muted">unlocked</span>'}</td>
+          <td>${f.pubState === 'SUBMITTED' ? btn(f, 'UNDER_REVIEW', 'Start review') : ''}
+              ${f.pubState === 'UNDER_REVIEW' ? btn(f, 'APPROVED', 'Approve + lock split') + ' ' + btn(f, 'REJECTED', 'Reject', true) : ''}
+              ${f.pubState === 'SUBMITTED' ? btn(f, 'REJECTED', 'Reject', true) : ''}
+              ${f.pubState === 'APPROVED' ? btn(f, 'PUBLISHED', 'Publish') : ''}
+              ${['PUBLISHED', 'APPROVED'].includes(f.pubState) ? btn(f, 'SUSPENDED', 'Suspend', true) : ''}
+              ${f.pubState === 'SUSPENDED' ? btn(f, 'PUBLISHED', 'Reinstate') : ''}</td></tr>`).join('');
+        return (rows ? `<div class="aos-table-wrap"><table class="aos-table"><thead><tr><th>Film</th><th>State</th><th>Price</th><th>Master</th><th>Royalty split</th><th>Review</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="aos-muted">No films submitted yet.</p>') + '<div id="aoscrDetail"></div>';
+      },
+      async settlement() {
+        const r = await call('creatorAdminPeriods', {});
+        const cur = r.current || {};
+        const rows = (r.periods || []).map((p) => `<tr><td class="aos-mono">${esc(p.periodId)}</td><td>${chip(p.status)}</td>
+          <td>${p.totals ? esc(p.totals.participants) : '—'}</td><td>${p.totals ? 'KES ' + Number(p.totals.releaseKes).toLocaleString('en-KE') : '—'}</td>
+          <td class="aos-muted">${esc(p.calculatedBy || '—')} / ${esc(p.approvedBy || '—')}</td>
+          <td>${['OPEN', 'CALCULATED'].includes(p.status) ? `<button class="aos-btn aos-btn-ghost" data-a="per-calc" data-id="${esc(p.periodId)}">Recalculate</button>` : ''}
+              ${p.status === 'CALCULATED' ? `<button class="aos-btn" data-a="per-approve" data-id="${esc(p.periodId)}">Approve</button>` : ''}
+              ${['APPROVED', 'PAYABLE'].includes(p.status) ? `<button class="aos-btn" data-a="per-dist" data-id="${esc(p.periodId)}">Distribute to wallets</button>` : ''}
+              ${p.status === 'PAYABLE' ? `<button class="aos-btn aos-btn-ghost" data-a="per-close" data-id="${esc(p.periodId)}">Close</button>` : ''}
+              <button class="aos-btn aos-btn-ghost" data-a="per-stmts" data-id="${esc(p.periodId)}">Statements</button></td></tr>`).join('');
+        return `<p class="aos-muted">Current quarter <b class="aos-mono">${esc(cur.periodId || '—')}</b> ends ${when(cur.endMs)} (EAT). A quarter can be calculated only after it ends; approval must be by a different admin; distribution credits the canonical wallet once per participant per quarter.</p>
+          <form class="aoscr-inline" data-f="per-calc-new"><input name="periodId" placeholder="e.g. 2026-Q3" pattern="\\d{4}-Q[1-4]" required> <button class="aos-btn">Calculate quarter</button></form>
+          ${rows ? `<div class="aos-table-wrap"><table class="aos-table"><thead><tr><th>Quarter</th><th>Status</th><th>Participants</th><th>To release</th><th>Calculated / approved by</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="aos-muted">No quarter has been calculated yet.</p>'}
+          <div id="aoscrDetail"></div>`;
+      },
+      async ledger() {
+        return `<form class="aoscr-inline" data-f="ledger"><input name="filmId" placeholder="filmId"> <input name="uid" placeholder="participant uid"> <input name="paymentRef" placeholder="payment ref"> <input name="periodId" placeholder="2026-Q3"> <button class="aos-btn">Search ledger</button></form><div id="aoscrDetail"><p class="aos-muted">The ledger is append-only: earnings are never edited or deleted; refunds add REVERSAL rows.</p></div>`;
+      },
+      async exceptions() {
+        const r = await call('creatorAdminExceptions', {});
+        const rows = (r.exceptions || []).map((x) => `<tr><td>${chip(x.kind)}</td><td class="aos-mono">${esc(x.paymentRef)}</td><td class="aos-muted">${esc(x.detail)}</td>
+          <td><button class="aos-btn" data-a="ex-retry" data-id="${esc(x.paymentRef)}">Retry accrual</button>
+          ${x.kind === 'fee_unreported' ? `<button class="aos-btn aos-btn-ghost" data-a="ex-fee" data-id="${esc(x.paymentRef)}">Attest fee (super admin)</button>` : ''}</td></tr>`).join('');
+        return rows ? `<div class="aos-table-wrap"><table class="aos-table"><thead><tr><th>Kind</th><th>Payment</th><th>Detail</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="aos-muted">No open royalty exceptions.</p>';
+      },
+      async security() {
+        const r = await call('creatorAdminSecurityEvents', {});
+        const rows = (r.events || []).map((e) => `<tr><td>${when(e.atMs)}</td><td>${chip(e.event)}</td><td class="aos-mono">${esc(e.uid)}</td><td class="aos-mono">${esc(e.filmId)}</td>
+          <td>${esc(e.reason || '')}${e.risk && e.risk.suspicious ? ' <b style="color:#ff9800">⚑ ' + esc(e.risk.flags.join(', ')) + '</b>' : ''}</td></tr>`).join('');
+        return `<form class="aoscr-inline" data-f="revoke"><input name="paymentRef" placeholder="payment ref to revoke" required> <button class="aos-btn aos-btn-ghost">Revoke entitlement…</button></form>` +
+          (rows ? `<div class="aos-table-wrap"><table class="aos-table"><thead><tr><th>When</th><th>Event</th><th>Viewer</th><th>Film</th><th>Detail</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="aos-muted">No playback events recorded.</p>');
+      },
+      async config() {
+        const c = await call('creatorAdminConfig', {});
+        return `<p>Film purchases: <b>${c.purchasesEnabled ? 'OPEN' : 'CLOSED'}</b></p>
+          <p class="aos-muted">Keep CLOSED until the webhook's film branch is deployed — the old webhook would credit the payer. Changing this needs super admin.</p>
+          <button class="aos-btn${c.purchasesEnabled ? ' aos-btn-ghost' : ''}" data-a="cfg-purchases" data-to="${c.purchasesEnabled ? '0' : '1'}">${c.purchasesEnabled ? 'Close purchases' : 'Open purchases'}</button>
+          <h4>Verified checkout methods</h4>
+          <p class="aos-muted">Only methods verified against the LIVE IntaSend account (scripts/probe-intasend-capability.js) may be named to buyers.</p>
+          <form class="aoscr-inline" data-f="cfg-methods"><input name="methods" value="${esc((c.checkoutMethods || []).join(', '))}" placeholder="M-PESA, CARD-PAYMENT"> <button class="aos-btn">Save (super admin)</button></form>`;
+      },
+    };
+
+    async function detailFilm(id) {
+      const d = await call('creatorAdminFilmDetail', { filmId: id });
+      const el = host.querySelector('#aoscrDetail');
+      const ags = (d.agreements || []).map((a) => `<div class="aoscr-card"><b>v${a.version}</b> ${chip(a.status)} ${a.effectiveFrom ? 'from ' + when(a.effectiveFrom) : ''}${a.effectiveUntil ? ' until ' + when(a.effectiveUntil) : ''}
+        <table class="aos-table"><tbody>${(a.participants || []).map((p) => `<tr><td>${esc(p.displayName || p.participantId)}</td><td>${esc(p.participantType)}</td><td class="aos-mono">${esc(p.uid)}</td><td>${pct(p.bps)}</td></tr>`).join('')}</tbody></table>
+        ${a.status === 'DRAFT' ? `<button class="aos-btn" data-a="ag-lock" data-id="${esc(id)}" data-v="${a.version}">Lock v${a.version}${a.fullyAllocated ? '' : ' (must total 100%)'}</button>` : ''}</div>`).join('');
+      const accs = (d.accruals || []).slice(0, 50).map((a) => `<tr><td class="aos-mono">${esc(a.paymentRef)}</td><td>${chip(a.status)}</td><td>${kes(a.grossCents)}</td>
+        <td>${kes(a.deductions && a.deductions.providerFeeCents)}</td><td>${kes(a.deductions && a.deductions.commissionCents)}</td><td>${kes(a.poolCents)}</td><td>v${esc(a.agreementVersion)}</td><td>${esc(a.periodId)}</td></tr>`).join('');
+      el.innerHTML = `<div class="aoscr-card"><h3>${esc(d.film.title)}</h3>
+        <p class="aos-muted">Master: ${d.media ? esc(d.media.contentType) + ' · ' + (d.media.sizeBytes / 1048576).toFixed(1) + ' MB · verified ' + when(d.media.verifiedAt) : 'not uploaded'} — the master location is never shown or linked.</p>
+        <h4>Ownership / royalty agreements</h4>${ags || '<p class="aos-muted">No agreement.</p>'}
+        <h4>Accruals</h4>${accs ? `<div class="aos-table-wrap"><table class="aos-table"><thead><tr><th>Payment</th><th>Status</th><th>Gross</th><th>Fee</th><th>Commission</th><th>Pool</th><th>Ver.</th><th>Quarter</th></tr></thead><tbody>${accs}</tbody></table></div>` : '<p class="aos-muted">No sales recognised.</p>'}</div>`;
+    }
+
+    host.addEventListener('click', (ev) => {
+      const t = ev.target.closest('[data-tab],[data-a]');
+      if (!t) return;
+      if (t.dataset.tab) { tab = t.dataset.tab; render(); return; }
+      const id = t.dataset.id;
+      switch (t.dataset.a) {
+        case 'cr-approve': act('creatorAdminSetState', { uid: id, to: 'ACTIVE' }, 'Creator active.'); break;
+        case 'cr-reject': ask('Why is this creator rejected?', (r) => act('creatorAdminSetState', { uid: id, to: 'REJECTED', reason: r })); break;
+        case 'cr-suspend': ask('Why is this creator suspended?', (r) => act('creatorAdminSetState', { uid: id, to: 'SUSPENDED', reason: r })); break;
+        case 'cr-hold': ask('Reason for holding royalty payouts for this participant:', (r) => act('creatorAdminSetPayoutHold', { uid: id, hold: true, reason: r }, 'Payout hold set.')); break;
+        case 'cr-release': act('creatorAdminSetPayoutHold', { uid: id, hold: false }, 'Payout hold released — run Distribute to release held statements.'); break;
+        case 'film-detail': detailFilm(id).catch((e) => msg(e.message, true)); break;
+        case 'film-to': {
+          const to = t.dataset.to;
+          if (to === 'REJECTED' || to === 'SUSPENDED') ask(`Note for the creator (${to.toLowerCase()}):`, (n) => act('creatorAdminFilmTransition', { filmId: id, to, note: n }));
+          else act('creatorAdminFilmTransition', { filmId: id, to }, `Film → ${to}.`);
+          break;
+        }
+        case 'ag-lock': act('creatorAdminLockAgreement', { filmId: id, version: Number(t.dataset.v) }, 'Agreement locked — it now governs new revenue.'); break;
+        case 'per-calc': act('creatorAdminCalculatePeriod', { periodId: id }, 'Quarter calculated.'); break;
+        case 'per-approve': act('creatorAdminApprovePeriod', { periodId: id }, 'Quarter approved.'); break;
+        case 'per-dist': act('creatorAdminDistribute', { periodId: id }, 'Distribution run complete.'); break;
+        case 'per-close': act('creatorAdminClosePeriod', { periodId: id }, 'Quarter closed.'); break;
+        case 'per-stmts': call('creatorAdminStatements', { periodId: id }).then((r) => {
+          host.querySelector('#aoscrDetail').innerHTML = `<div class="aos-table-wrap"><table class="aos-table"><thead><tr><th>Participant</th><th>Earned</th><th>Reversed</th><th>Carry in</th><th>Release</th><th>Carry out</th><th>State</th></tr></thead><tbody>${(r.statements || []).map((s) => `<tr><td class="aos-mono">${esc(s.uid)}</td><td>${kes(s.earnedCents)}</td><td>${kes(s.reversedCents)}</td><td>${kes(s.carryInCents)}</td><td>KES ${esc(s.releaseKes)}</td><td>${kes(s.carryOutCents)}</td><td>${s.released ? 'released' : s.held ? '<b style="color:#ff9800">held</b>' : 'pending'}</td></tr>`).join('')}</tbody></table></div>`;
+        }).catch((e) => msg(e.message, true)); break;
+        case 'ex-retry': act('creatorAdminRetryAccrual', { paymentRef: id }, 'Accrual retried.'); break;
+        case 'ex-fee': {
+          const d = document.createElement('form'); d.className = 'aoscr-ask';
+          d.innerHTML = '<label>IntaSend fee (KES)<input name="fee" type="number" min="0" step="0.01" required></label><label>Evidence (IntaSend dashboard ref)<input name="ev" required minlength="5"></label><button class="aos-btn">Attest</button>';
+          body.prepend(d);
+          d.onsubmit = (e) => { e.preventDefault(); act('creatorAdminAttestFee', { paymentRef: id, feeKes: Number(d.fee.value), evidence: d.ev.value }, 'Fee attested; accrual attempted.'); };
+          break;
+        }
+        case 'cfg-purchases': act('creatorAdminConfig', { set: { purchasesEnabled: t.dataset.to === '1' } }, 'Saved.'); break;
+        default:
+      }
+    });
+    host.addEventListener('submit', (ev) => {
+      const f = ev.target.closest('form[data-f]');
+      if (!f) return;
+      ev.preventDefault();
+      const v = Object.fromEntries(new FormData(f).entries());
+      if (f.dataset.f === 'per-calc-new') act('creatorAdminCalculatePeriod', { periodId: v.periodId.trim() }, 'Quarter calculated.');
+      if (f.dataset.f === 'cfg-methods') act('creatorAdminConfig', { set: { checkoutMethods: v.methods.split(',').map((s) => s.trim()).filter(Boolean) } }, 'Saved.');
+      if (f.dataset.f === 'revoke') ask('Reason for revoking this entitlement:', (r) => act('creatorAdminRevokeEntitlement', { paymentRef: v.paymentRef.trim(), reason: r }, 'Entitlement revoked.'));
+      if (f.dataset.f === 'ledger') {
+        const q = {}; for (const k of ['filmId', 'uid', 'paymentRef', 'periodId']) if (v[k] && v[k].trim()) q[k] = v[k].trim();
+        call('creatorAdminLedger', q).then((r) => {
+          host.querySelector('#aoscrDetail').innerHTML = (r.entries || []).length ? `<div class="aos-table-wrap"><table class="aos-table"><thead><tr><th>Entry</th><th>Kind</th><th>Bucket</th><th>Participant</th><th>Share</th><th>Amount</th><th>Ver.</th><th>Quarter</th></tr></thead><tbody>${r.entries.map((e) => `<tr><td class="aos-mono">${esc(e.entryId)}</td><td>${chip(e.kind)}</td><td>${esc(e.bucket)}</td><td class="aos-mono">${esc(e.uid || '—')}</td><td>${e.bps == null ? '—' : pct(e.bps)}</td><td>${e.kind === 'REVERSAL' ? '−' : ''}${kes(e.amountCents)}</td><td>${esc(e.agreementVersion)}</td><td>${esc(e.periodId)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="aos-muted">No matching entries.</p>';
+        }).catch((e) => msg(e.message, true));
+      }
+    });
+
+    async function render() {
+      host.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+      body.innerHTML = '<div class="aos-spinner"><div></div></div>';
+      try { body.innerHTML = await R[tab](); }
+      catch (e) { body.innerHTML = `<p class="aos-muted">Could not load: ${esc((e && e.message) || 'error')}. Creator Hub ops need adminOsDispatch redeployed.</p>`; }
+    }
+    render();
+    return true;
+  }
+
+  const OPS = ['creatorAdminList', 'creatorAdminSetState', 'creatorAdminFilms', 'creatorAdminFilmDetail', 'creatorAdminFilmTransition',
+    'creatorAdminLockAgreement', 'creatorAdminLedger', 'creatorAdminPeriods', 'creatorAdminCalculatePeriod', 'creatorAdminApprovePeriod',
+    'creatorAdminDistribute', 'creatorAdminClosePeriod', 'creatorAdminSetPayoutHold', 'creatorAdminStatements', 'creatorAdminSecurityEvents',
+    'creatorAdminExceptions', 'creatorAdminRetryAccrual', 'creatorAdminAttestFee', 'creatorAdminRevokeEntitlement', 'creatorAdminConfig'];
+
+  root.SokoniAOSCreator = { mount, OPS, _kes: kes, _pct: pct, _esc: esc };
+}(typeof window !== 'undefined' ? window : globalThis));

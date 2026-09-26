@@ -107,6 +107,9 @@ window.SokoniAOS = (() => {
          canonical collection directly and routes through no dispatch op. */
       reports:       () => _loadReports(),
       revenue:       () => _loadRevenue(),
+      /* Creator Hub (film/media marketplace). sokoni-aos-creator.js renders it;
+         every op is a creatorAdmin* handler behind adminOsDispatch. */
+      creator:       () => _loadCreator(),
     };
     loaders[s]?.();
   }
@@ -127,6 +130,9 @@ window.SokoniAOS = (() => {
     /* Merchant estate. _h-only handlers: no new Cloud Run service, but
        adminOsDispatch must be redeployed before they resolve. */
     'adminGetShops','adminGetSellers','adminGetShopDetail',
+    /* Creator Hub — _h-only handlers merged into adminOsDispatch
+       (functions/creator-hub.js _adminH); each re-checks the admin claim. */
+    ...((window.SokoniAOSCreator && window.SokoniAOSCreator.OPS) || []),
   ]);
 
   // ── CF caller ─────────────────────────────────────────────────────────────────
@@ -2247,6 +2253,17 @@ window.SokoniAOS = (() => {
       _toast(okMsg, "success");
       _loadInvoices();
     } catch (e) { _toast(e.message, "error"); }
+  }
+
+  async function _loadCreator() {
+    const body = document.getElementById("creatorBody");
+    if (!body) return;
+    if (!(window.SokoniAOSCreator && typeof window.SokoniAOSCreator.mount === "function")) {
+      body.innerHTML = "<p class='aos-muted'>Creator Hub console (sokoni-aos-creator.js) is not loaded.</p>";
+      return;
+    }
+    try { window.SokoniAOSCreator.mount({ host: body, call: _call }); }
+    catch (e) { body.innerHTML = "<p class='aos-muted'>Creator Hub console failed to start: " + _esc(e && e.message) + "</p>"; }
   }
 
   async function _loadSecurity() {

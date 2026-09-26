@@ -354,6 +354,7 @@
       <button class="nav-item" data-section="hubs" data-label="Hub Registry" onclick="SokoniAOS.navigate('hubs');_closeSidebar()"><span class="nav-icon">&#x1F3D7;&#xFE0F;</span>Hubs</button>
       <button class="nav-item" data-section="workflows" data-label="Workflow Center" onclick="SokoniAOS.navigate('workflows');_closeSidebar()"><span class="nav-icon">&#x267B;&#xFE0F;</span>Workflows</button>
       <button class="nav-item" data-section="audit" data-label="Audit Center" onclick="SokoniAOS.navigate('audit');_closeSidebar()"><span class="nav-icon">&#x1F4CB;</span>Audit</button>
+      <button class="nav-item" data-section="creator" data-label="Creator Hub" onclick="SokoniAOS.navigate('creator');_closeSidebar()"><span class="nav-icon">&#x1F3AC;</span>Creator Hub</button>
       <button class="nav-item" data-section="security" data-label="Security" onclick="SokoniAOS.navigate('security');_closeSidebar()"><span class="nav-icon">&#x1F510;</span>Security</button>
       <button class="nav-item" data-section="invoices" data-label="Invoices" onclick="SokoniAOS.navigate('invoices');_closeSidebar()"><span class="nav-icon">&#x1F9FE;</span>Invoices</button>
     </div>
@@ -699,6 +700,10 @@
         <div id="invoicesBody"></div>
       </div>
 
+      <div class="aos-panel" id="panel-creator" hidden>
+        <div class="panel-toolbar"><h2>Creator Hub</h2></div>
+        <div id="creatorBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
       <div class="aos-panel" id="panel-security" hidden>
         <div class="panel-toolbar"><h2>Security</h2></div>
         <div id="securityBody"><div class="aos-spinner"><div></div></div></div>
@@ -796,6 +801,7 @@
   <script src="sokoni-invoice-desk.js"></script>
   <script src="sokoni-aos-activity.js"></script>
   <script src="sokoni-aos-security.js"></script>
+  <script src="sokoni-aos-creator.js"></script>
   <script src="sokoni-aos.js"></script>
   <script>
     function _openSidebar()  { document.getElementById("aosSidebar").classList.add("open"); }

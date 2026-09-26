@@ -60,6 +60,12 @@ const categoryMeta = {
     dairy:      { title:"Dairy & Milk Products",   icon:"🥛" },
     bakery:     { title:"Bakery & Bread",          icon:"🍞" },
     adult:      { title:"Adult Lifestyle Products",icon:"🌹" },
+
+    /* Creator — films, series, documentaries, music videos (Creator Hub,
+       docs/CREATOR_HUB.md). Its items are NOT products/{id}: they are
+       server-governed films (review, licence, royalties, private media), so the
+       browse surface for this key is the live Creator catalogue. */
+    creator:    { title:"Creator — Films & Media", icon:"🎬", href:"/creator.html" },
 };
 
 /* The valid categories ARE the keys of categoryMeta. Previously a separate
@@ -92,6 +98,9 @@ if(typeof isAdultCategory === "function" && isAdultCategory(category)){
         if(typeof _unblurCards === 'function') _unblurCards();
     });
 }
+
+/* A category whose items live in their own governed catalogue hands over to it. */
+if (categoryMeta[category] && categoryMeta[category].href) { window.location.replace(categoryMeta[category].href); }
 
 const meta = categoryMeta[category] || categoryMeta.all;
 const _sortLabels = { newest:"New Arrivals", bestselling:"Fastest Selling", discount:"Big Discounts", picks:"Today's Picks" };
