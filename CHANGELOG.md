@@ -1,3 +1,22 @@
+## 2026-09-27 — Commission: the browser's rate table quotes what the server resolves (branch `commission-snapshot/lane-parity`, NOT landed, Hosting NOT deployed)
+
+The generated `sokoni-commission-rates.js` returned `undefined` from `marketplacePct()` for 11 of 15 plan
+spellings. Its table had the renamed plans, but the generator's hand-written lookup still used the retired
+`seller_*` keys. `--check` said "in sync" throughout. The defect was display-only and not live.
+
+The repair:
+- `scripts/build-commission-snapshot.js` now takes the plan-name table and default plan from the server config
+  (read from source and cross-checked against `resolveMarketplaceRate`; it fails closed).
+- `--check` now also compares the browser's ANSWERS with the server.
+- The snapshot is regenerated.
+- New `scripts/test-commission-browser-parity.js` (16/0) keeps the three fallback classes separate: known plan,
+  genuinely unknown plan, empty input.
+- `test-marketplace-plan-ladder.js`: its 12 stale assertions are derived from the authority (44/0, was 26/14).
+
+The old tree reproduces the undefined bug (parity 4/12). A reintroduced ladder is caught (A0). A resolver regression
+is caught (G1), and the generator refuses to build. No server file changed. R1–R5/RES-1 are untouched.
+Record: `docs/repairs/COMMISSION-browser-rates-parity.md`.
+
 ## 2026-09-26 — Commission: the money-chain suite asserted a retired ladder (branch `commission-ladder/test-authority`, NOT landed, test-only)
 
 `test-post-pin-money-chain.js` failed 7 assertions (B1/B2 ×3, F1). They were traced through the real resolver:

@@ -34,6 +34,46 @@ for (const [k, v] of Object.entries(CC.RATES)) rates[k] = { pct: v.pct, fixedKES
    worse, because the gap is 3x rather than 2 points. */
 const marketplacePlanPct = {};
 for (const [k, v] of Object.entries(CC.MARKETPLACE_PLAN_RATES)) marketplacePlanPct[k] = v.rateFraction * 100;
+
+/* THE PLAN-NAME TABLE COMES FROM THE SERVER, NOT FROM THIS TEMPLATE.
+   The browser's plan lookup used to be a hand-written map inside the template below
+   ({ free:'seller_free', basic:'seller_basic', … }, falling back to 'seller_free'). When the
+   2026-09-13 packages renamed the plans, the TABLE regenerated with the new keys and the
+   hand-written map did not — so marketplacePct() returned `undefined` for 11 of 15 spellings,
+   and `--check` still said "in sync", because both sides came from the same stale template.
+
+   `MARKETPLACE_TIER_ALIASES` is not exported by commission-config.js, and this repair does not
+   change server code. So it is read from the REAL config source: compiled in a private module
+   with one line appended that hands the constant out. The file itself is never modified. A
+   rename of the constant makes this THROW (fail closed), and every entry is then cross-checked
+   against the exported resolver, so the table the browser gets is provably the one the server
+   resolves with — not a parse, and not a guess. */
+function loadServerTierAliases() {
+  const Module = require('module');
+  const file = path.join(__dirname, '..', 'functions', 'commission-config.js');
+  const src = fs.readFileSync(file, 'utf8')
+    + '\n;module.exports.__SNAPSHOT_TIER_ALIASES__ = MARKETPLACE_TIER_ALIASES;\n';
+  const m = new Module(file, module);
+  m.filename = file;
+  m.paths = Module._nodeModulePaths(path.dirname(file));
+  m._compile(src, file);
+  const t = m.exports.__SNAPSHOT_TIER_ALIASES__;
+  if (!t || typeof t !== 'object') throw new Error('commission-config.js: MARKETPLACE_TIER_ALIASES not found');
+  const out = {};
+  for (const [spelling, plan] of Object.entries(t)) {
+    const r = CC.resolveMarketplaceRate(spelling);
+    if (!r.matched || r.plan !== plan) {
+      throw new Error(`plan alias ${spelling} -> ${plan} disagrees with resolveMarketplaceRate (${r.plan}, matched=${r.matched})`);
+    }
+    out[spelling] = plan;
+  }
+  return out;
+}
+const marketplaceTierAliases = loadServerTierAliases();
+const marketplaceDefaultPlan = CC.MARKETPLACE_DEFAULT_PLAN;
+if (!Object.prototype.hasOwnProperty.call(marketplacePlanPct, marketplaceDefaultPlan)) {
+  throw new Error('MARKETPLACE_DEFAULT_PLAN ' + marketplaceDefaultPlan + ' is not a plan in MARKETPLACE_PLAN_RATES');
+}
 const posFlatPct = CC.POS_FLAT_RATE_FRACTION * 100;
 const marketplaceCategories = Array.from(CC.MARKETPLACE_SELLER_CATEGORIES);
 
@@ -63,6 +103,22 @@ const body = `/* ===============================================================
 
   /* MARKETPLACE lane — commission by the seller's PLAN, on orders SOKONI brought them. */
   var MARKETPLACE_PLAN_PCT = ${JSON.stringify(marketplacePlanPct, null, 2).replace(/\n/g, '\n  ')};
+
+  /* Other spellings of those plans -> the plan. Copied from the SERVER's table
+     (commission-config MARKETPLACE_TIER_ALIASES) at build time, never written by hand here. */
+  var MARKETPLACE_TIER_ALIASES = ${JSON.stringify(marketplaceTierAliases, null, 2).replace(/\n/g, '\n  ')};
+
+  /* The plan an unrecognised, empty or absent plan resolves to — the server's own
+     MARKETPLACE_DEFAULT_PLAN, which is the HIGHEST rate, so a display can never under-quote. */
+  var MARKETPLACE_DEFAULT_PLAN = ${JSON.stringify(marketplaceDefaultPlan)};
+
+  /* Mirrors commission-config.resolveMarketplaceRate(): the plan and whether it was recognised. */
+  function resolveMarketplacePlan(planId) {
+    var raw = String(planId == null ? '' : planId).trim().toLowerCase();
+    var key = Object.prototype.hasOwnProperty.call(MARKETPLACE_PLAN_PCT, raw) ? raw
+      : (Object.prototype.hasOwnProperty.call(MARKETPLACE_TIER_ALIASES, raw) ? MARKETPLACE_TIER_ALIASES[raw] : null);
+    return key !== null ? { plan: key, matched: true } : { plan: MARKETPLACE_DEFAULT_PLAN, matched: false };
+  }
 
   /* POS / TILL lane — shop sales the merchant made themselves. FLAT, every plan. A
      subscription buys a better marketplace rate and changes NOTHING at the till. */
@@ -95,24 +151,23 @@ const body = `/* ===============================================================
     ALIASES: ALIASES,
     MIN_COMMISSION_KES: MIN_COMMISSION_KES,
 
-    /* The rate a seller on planId pays on a MARKETPLACE order. An unrecognised or absent
-       plan resolves to Free — the HIGHEST rate — so a display can never under-quote. */
+    /* The rate a seller on planId pays on a MARKETPLACE order. An unrecognised, empty or absent
+       plan resolves to the server's default plan — the HIGHEST rate — so a display can never
+       under-quote. Never returns undefined. */
     marketplacePct: function (planId) {
-      var k = String(planId || '').trim().toLowerCase();
-      /* Mirrors commission-config.MARKETPLACE_TIER_ALIASES exactly. 'starter' and
-         'business' are deliberately absent there and must stay absent here — a client
-         that resolved them would quote a rate the server does not charge. */
-      var alias = { free:'seller_free', basic:'seller_basic', pro:'seller_pro',
-                    enterprise:'seller_enterprise' };
-      if (!Object.prototype.hasOwnProperty.call(MARKETPLACE_PLAN_PCT, k)) k = alias[k] || 'seller_free';
-      return MARKETPLACE_PLAN_PCT[k];
+      return MARKETPLACE_PLAN_PCT[resolveMarketplacePlan(planId).plan];
     },
+    /* Which plan planId resolves to, and whether it was recognised — the same answer the
+       server's resolveMarketplaceRate gives (plan, matched). */
+    marketplacePlan: resolveMarketplacePlan,
     /* The rate on a POS / till sale. Takes no plan, because it does not depend on one. */
     posPct: function () { return POS_FLAT_PCT; },
     isMarketplaceSellerSale: function (cat) {
       return MARKETPLACE_CATEGORIES.indexOf(String(cat || '').trim().toLowerCase()) !== -1;
     },
     MARKETPLACE_PLAN_PCT: MARKETPLACE_PLAN_PCT,
+    MARKETPLACE_TIER_ALIASES: MARKETPLACE_TIER_ALIASES,
+    MARKETPLACE_DEFAULT_PLAN: MARKETPLACE_DEFAULT_PLAN,
     POS_FLAT_PCT: POS_FLAT_PCT,
 
     /* Refresh from the server so a rate change reaches clients without a client rebuild.
@@ -138,6 +193,34 @@ const body = `/* ===============================================================
 })(window);
 `;
 
+/* SEMANTIC PARITY — the browser must ANSWER what the server answers, not merely match the text
+   this template produces. Text equality alone passed while marketplacePct() returned undefined
+   for 11 of 15 spellings, because the generator and the committed file shared the same stale
+   template. This evaluates the COMMITTED file as a browser would and asks it, for every plan the
+   server knows, every alias, a genuinely unknown plan and empty input, what the server says. */
+function parityProblems(source) {
+  const vm = require('vm');
+  const sandbox = { window: {} };
+  try { vm.runInNewContext(source, sandbox, { timeout: 2000 }); } catch (e) { return ['snapshot does not evaluate: ' + e.message]; }
+  const S = sandbox.window.SokoniCommission;
+  if (!S || typeof S.marketplacePct !== 'function') return ['snapshot exposes no marketplacePct()'];
+  const probes = [...Object.keys(CC.MARKETPLACE_PLAN_RATES), ...Object.keys(marketplaceTierAliases),
+    'zz-unknown-plan', '', '   ', null, undefined];
+  const out = [];
+  for (const p of probes) {
+    const srv = CC.resolveMarketplaceRate(p);
+    const b = S.marketplacePct(p);
+    const bp = typeof S.marketplacePlan === 'function' ? S.marketplacePlan(p) : null;
+    if (b !== srv.pct) out.push(`marketplacePct(${JSON.stringify(p)}) browser ${b} vs server ${srv.pct}`);
+    if (!bp || bp.plan !== srv.plan || bp.matched !== srv.matched) {
+      out.push(`marketplacePlan(${JSON.stringify(p)}) browser ${JSON.stringify(bp)} vs server ${srv.plan}/${srv.matched}`);
+    }
+  }
+  if (S.posPct() !== CC.resolvePosRate(CC.POS_DEFAULT_PLAN).pct) out.push(`posPct browser ${S.posPct()} vs server ${CC.resolvePosRate(CC.POS_DEFAULT_PLAN).pct}`);
+  if (S.MIN_COMMISSION_KES !== CC.MIN_COMMISSION_KES) out.push(`MIN_COMMISSION_KES browser ${S.MIN_COMMISSION_KES} vs server ${CC.MIN_COMMISSION_KES}`);
+  return out;
+}
+
 if (process.argv.includes('--check')) {
   const current = fs.existsSync(OUT) ? fs.readFileSync(OUT, 'utf8') : '';
   if (current.trim() !== body.trim()) {
@@ -145,7 +228,13 @@ if (process.argv.includes('--check')) {
     console.error('Run: node scripts/build-commission-snapshot.js');
     process.exit(1);
   }
-  console.log('sokoni-commission-rates.js is in sync with commission-config.js');
+  const problems = parityProblems(current);
+  if (problems.length) {
+    console.error('sokoni-commission-rates.js is in sync as TEXT but its answers disagree with the server:');
+    for (const p of problems) console.error('  - ' + p);
+    process.exit(1);
+  }
+  console.log('sokoni-commission-rates.js is in sync with commission-config.js (text and answers)');
   process.exit(0);
 }
 

@@ -99,43 +99,66 @@ const SELLER = 'SELLER_A_uid_7f3';       /* never equal to a shop id — see the
 
 console.log('\nPART A — the marketplace ladder, on the money\n');
 
-const LADDER = [
-  ['seller_free',       15, 150000],
-  ['seller_basic',      10, 100000],
-  ['seller_pro',         5,  50000],
-  ['seller_enterprise',  0,      0],
-];
-for (const [tier, wantPct, wantCents] of LADDER) {
+/* EVERY EXPECTATION IS DERIVED FROM THE AUTHORITY (commission-config), never a rate literal.
+   This part used to hard-code the 2026-09-07 ladder (Free 15 / Basic 10 / Pro 5 / Enterprise 0).
+   It was superseded twice — 2026-09-13 (16/12/8/4, with the plans renamed free / professional /
+   business / enterprise) and 2026-09-22 (one flat 15% on every plan) — and the literals then
+   failed 12 assertions on the CORRECT configuration. The expected rate, the recorded plan name
+   and the floor policy now come from `CC.resolveMarketplaceRate`, the resolver the engine uses. */
+const TIERS = ['seller_free', 'seller_basic', 'seller_pro', 'seller_enterprise'];
+const GROSS = 1000000;                                    /* KES 10,000 */
+const MIN_CENTS = CC.MIN_COMMISSION_KES * 100;
+const want = (tier, gross) => {
+  const r = CC.resolveMarketplaceRate(tier);
+  const raw = Math.round(gross * r.rateFraction);
+  const cents = r.rateFraction === 0 && r.floorExempt ? 0 : Math.max(raw, MIN_CENTS);
+  return { pct: r.pct, plan: r.plan, cents, floorExempt: r.floorExempt, rateFraction: r.rateFraction };
+};
+{
+  const shape = TIERS.map((t) => want(t, GROSS).pct);
+  ck('A0  the authority prices every marketplace plan identically (the flat policy of 2026-09-22)',
+    shape.every((p) => p === shape[0]) && shape[0] > 0, shape.join(' / ') + '%');
+}
+for (const tier of TIERS) {
+  const w = want(tier, GROSS);
   withPlan(tier);
   const r = await FU.calculateCommission(makeDb(), {
-    orderAmountCents: 1000000, category: 'product', sellerId: SELLER,   /* KES 10,000 */
+    orderAmountCents: GROSS, category: 'product', sellerId: SELLER,
   });
-  ck(`A1  ${tier.padEnd(18)} -> ${wantPct}% on KES 10,000 = KES ${KES(wantCents)}`,
-    r.effectiveRate === wantPct && r.commissionCents === wantCents,
+  ck(`A1  ${tier.padEnd(18)} -> ${w.pct}% on KES 10,000 = KES ${KES(w.cents)}`,
+    r.effectiveRate === w.pct && r.commissionCents === w.cents,
     `got ${r.effectiveRate}% / ${r.commissionCents} cents`);
-  ck(`A2  ${tier.padEnd(18)} records WHY it was priced that way`,
-    r.marketplaceLadderApplied === true && r.marketplacePlan === tier
+  /* The engine records the CANONICAL plan it resolved (since 2026-09-13), not the stored spelling. */
+  ck(`A2  ${tier.padEnd(18)} records WHY it was priced that way (canonical plan ${w.plan})`,
+    r.marketplaceLadderApplied === true && r.marketplacePlan === w.plan
     && r.pricingSource === 'marketplace_plan_ladder',
     r.pricingSource + ' / ' + r.marketplacePlan);
 }
 
 {
-  withPlan('seller_enterprise');
-  const r = await FU.calculateCommission(makeDb(), {
-    orderAmountCents: 1000000, category: 'product', sellerId: SELLER,
-  });
-  ck('A3  Enterprise 0% is genuinely zero — the KES 10 floor does NOT resurrect it',
-    r.commissionCents === 0, r.commissionCents + ' cents');
+  /* A3 used to assert "Enterprise 0% is genuinely zero". No plan is 0% under the current
+     authority. The INVARIANT it protected still stands and is asserted in its general form: only
+     a genuine 0% rate may escape the KES 10 floor, and no plan does so unless the authority says
+     its rate is 0 AND floor-exempt. */
+  const exemptWithoutZero = Object.entries(CC.MARKETPLACE_PLAN_RATES)
+    .filter(([, v]) => v.floorExempt && v.rateFraction !== 0).map(([k]) => k);
+  ck('A3  no plan escapes the KES 10 floor unless its authorised rate is genuinely 0%',
+    exemptWithoutZero.length === 0, exemptWithoutZero.join(', ') || 'no plan is floor-exempt at a non-zero rate');
 }
 {
-  /* The floor is KEPT for marketplace sellers. A KES 97 sale at 15% is KES 14.55, above the
-     floor; at Pro 5% it is KES 4.85 and the floor lifts it to KES 10. */
+  /* A4 used a KES 97 sale because at Pro 5% (KES 4.85) the floor lifted it to KES 10. At the
+     authorised 15% a KES 97 sale is KES 14.55 — above the floor — so the old sale no longer
+     exercised the minimum at all. The sale is now DERIVED to sit below the authorised rate's
+     crossover (KES 10 / rate), so the floor is genuinely what sets the commission. */
+  const w0 = want('seller_pro', 0);
+  const smallCents = Math.floor(MIN_CENTS / w0.rateFraction) - 100;
   withPlan('seller_pro');
   const r = await FU.calculateCommission(makeDb(), {
-    orderAmountCents: 9700, category: 'product', sellerId: SELLER,
+    orderAmountCents: smallCents, category: 'product', sellerId: SELLER,
   });
-  ck('A4  the KES 10 platform minimum still applies to a small marketplace sale',
-    r.commissionCents === 1000, 'KES ' + KES(r.commissionCents));
+  ck(`A4  the KES ${CC.MIN_COMMISSION_KES} platform minimum sets the commission on a KES ${KES(smallCents)} sale (below the ${w0.pct}% crossover)`,
+    Math.round(smallCents * w0.rateFraction) < MIN_CENTS && r.commissionCents === MIN_CENTS,
+    'rate alone ' + Math.round(smallCents * w0.rateFraction) + ' cents; charged ' + r.commissionCents);
 }
 
 console.log('\nPART B — no plan is not a discount\n');
@@ -147,9 +170,12 @@ for (const [label, tier, active] of [
   const r = await FU.calculateCommission(makeDb(), {
     orderAmountCents: 1000000, category: 'product', sellerId: SELLER,
   });
-  ck(`B1  ${label} -> Free 15%, the HIGHEST rate`,
-    r.effectiveRate === 15 && r.marketplacePlan === 'seller_free',
-    r.effectiveRate + '% / skipped=' + r.marketplacePlanSkipped);
+  /* Derived: the server's DEFAULT plan, recorded by its canonical name, at the HIGHEST rate. */
+  const def = CC.resolveMarketplaceRate(CC.MARKETPLACE_DEFAULT_PLAN);
+  const highest = Math.max(...Object.values(CC.MARKETPLACE_PLAN_RATES).map((v) => v.rateFraction * 100));
+  ck(`B1  ${label} -> the default plan (${def.plan}) at ${def.pct}%, the HIGHEST rate`,
+    r.effectiveRate === def.pct && def.pct === highest && r.marketplacePlan === def.plan,
+    r.effectiveRate + '% / plan=' + r.marketplacePlan + ' / skipped=' + r.marketplacePlanSkipped);
 }
 {
   withPlan('seller_pro', false);
@@ -276,10 +302,21 @@ console.log('\nPART H — the browser must quote what the server charges\n');
   ck('H4  the browser also excludes POS from the ladder',
     S.isMarketplaceSellerSale('pos') === false && S.isMarketplaceSellerSale('product') === true);
 
-  /* An unmapped tier must fail SAFE on both sides — to the highest rate, not the lowest. */
-  ck('H5  an unmapped tier quotes the HIGHEST rate in the browser too',
-    S.marketplacePct('business') === S.marketplacePct('seller_free'),
-    String(S.marketplacePct('business')));
+  /* H5 used to treat `business` as an UNMAPPED tier. It is a canonical plan since 2026-09-13,
+     and that premise is part of what hid the browser bug. The three cases are now separate:
+     a known canonical plan, a genuinely unknown plan, and empty input. */
+  const highest = Math.max(...Object.values(CC.MARKETPLACE_PLAN_RATES).map((v) => v.rateFraction * 100));
+  ck('H5a business is a KNOWN canonical plan — the browser quotes the server\'s rate for it',
+    CC.resolveMarketplaceRate('business').matched === true
+      && S.marketplacePct('business') === CC.resolveMarketplaceRate('business').pct,
+    S.marketplacePct('business') + ' vs ' + CC.resolveMarketplaceRate('business').pct);
+  ck('H5b a GENUINELY unknown tier quotes the HIGHEST rate in the browser too (the server default)',
+    CC.resolveMarketplaceRate('platinum').matched === false
+      && S.marketplacePct('platinum') === highest && S.marketplacePct('platinum') === CC.resolveMarketplaceRate('platinum').pct,
+    S.marketplacePct('platinum') + ' vs highest ' + highest);
+  ck('H5c empty / absent plan: the browser quotes what the server resolves it to',
+    ['', null, undefined].every((p) => S.marketplacePct(p) === CC.resolveMarketplaceRate(p).pct),
+    ['', null, undefined].map((p) => S.marketplacePct(p)).join(' / '));
 }
 
 console.log('\nPART G — adversarial controls\n');
@@ -289,8 +326,18 @@ console.log('\nPART G — adversarial controls\n');
   const a = await FU.calculateCommission(makeDb(), { orderAmountCents: 1000000, category: 'product', sellerId: SELLER });
   withPlan('seller_pro');
   const b = await FU.calculateCommission(makeDb(), { orderAmountCents: 1000000, category: 'product', sellerId: SELLER });
-  ck('G1  the plan fixture actually moves the rate (not a fixed answer)',
-    a.effectiveRate !== b.effectiveRate, a.effectiveRate + ' vs ' + b.effectiveRate);
+  /* G1 used to require that the plan MOVES THE RATE — true only under the retired ladder; under
+     the flat policy it must not. Its real job is unchanged: prove the fixture reaches the engine
+     (an earlier fixture silently resolved every seller to Free, and G1 is what caught it). A
+     broken fixture resolves BOTH calls to the default plan, so the RESOLVED plan is the signal. */
+  ck('G1  the plan fixture actually reaches the engine (the resolved plan follows it)',
+    a.marketplacePlan === CC.resolveMarketplaceRate('seller_free').plan
+      && b.marketplacePlan === CC.resolveMarketplaceRate('seller_pro').plan
+      && a.marketplacePlan !== b.marketplacePlan,
+    a.marketplacePlan + ' vs ' + b.marketplacePlan);
+  const flat = Object.values(CC.MARKETPLACE_PLAN_RATES).every((v) => v.rateFraction === CC.MARKETPLACE_PLAN_RATES.free.rateFraction);
+  ck('G1b ...and the rate moves with the plan exactly as the authority says it should',
+    (a.effectiveRate === b.effectiveRate) === flat, a.effectiveRate + ' vs ' + b.effectiveRate + (flat ? ' (flat policy)' : ' (plan-keyed policy)'));
 
   ck('G2  an unknown category is NOT silently laddered',
     CC.isMarketplaceSellerSale('zzz_not_a_category') === false);

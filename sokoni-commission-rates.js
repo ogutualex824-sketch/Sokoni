@@ -137,6 +137,31 @@
     "enterprise": 15
   };
 
+  /* Other spellings of those plans -> the plan. Copied from the SERVER's table
+     (commission-config MARKETPLACE_TIER_ALIASES) at build time, never written by hand here. */
+  var MARKETPLACE_TIER_ALIASES = {
+    "seller_free": "free",
+    "seller_basic": "professional",
+    "seller_pro": "business",
+    "seller_enterprise": "enterprise",
+    "starter": "professional",
+    "growth": "business",
+    "basic": "professional",
+    "pro": "business"
+  };
+
+  /* The plan an unrecognised, empty or absent plan resolves to — the server's own
+     MARKETPLACE_DEFAULT_PLAN, which is the HIGHEST rate, so a display can never under-quote. */
+  var MARKETPLACE_DEFAULT_PLAN = "free";
+
+  /* Mirrors commission-config.resolveMarketplaceRate(): the plan and whether it was recognised. */
+  function resolveMarketplacePlan(planId) {
+    var raw = String(planId == null ? '' : planId).trim().toLowerCase();
+    var key = Object.prototype.hasOwnProperty.call(MARKETPLACE_PLAN_PCT, raw) ? raw
+      : (Object.prototype.hasOwnProperty.call(MARKETPLACE_TIER_ALIASES, raw) ? MARKETPLACE_TIER_ALIASES[raw] : null);
+    return key !== null ? { plan: key, matched: true } : { plan: MARKETPLACE_DEFAULT_PLAN, matched: false };
+  }
+
   /* POS / TILL lane — shop sales the merchant made themselves. FLAT, every plan. A
      subscription buys a better marketplace rate and changes NOTHING at the till. */
   var POS_FLAT_PCT = 5;
@@ -168,24 +193,23 @@
     ALIASES: ALIASES,
     MIN_COMMISSION_KES: MIN_COMMISSION_KES,
 
-    /* The rate a seller on planId pays on a MARKETPLACE order. An unrecognised or absent
-       plan resolves to Free — the HIGHEST rate — so a display can never under-quote. */
+    /* The rate a seller on planId pays on a MARKETPLACE order. An unrecognised, empty or absent
+       plan resolves to the server's default plan — the HIGHEST rate — so a display can never
+       under-quote. Never returns undefined. */
     marketplacePct: function (planId) {
-      var k = String(planId || '').trim().toLowerCase();
-      /* Mirrors commission-config.MARKETPLACE_TIER_ALIASES exactly. 'starter' and
-         'business' are deliberately absent there and must stay absent here — a client
-         that resolved them would quote a rate the server does not charge. */
-      var alias = { free:'seller_free', basic:'seller_basic', pro:'seller_pro',
-                    enterprise:'seller_enterprise' };
-      if (!Object.prototype.hasOwnProperty.call(MARKETPLACE_PLAN_PCT, k)) k = alias[k] || 'seller_free';
-      return MARKETPLACE_PLAN_PCT[k];
+      return MARKETPLACE_PLAN_PCT[resolveMarketplacePlan(planId).plan];
     },
+    /* Which plan planId resolves to, and whether it was recognised — the same answer the
+       server's resolveMarketplaceRate gives (plan, matched). */
+    marketplacePlan: resolveMarketplacePlan,
     /* The rate on a POS / till sale. Takes no plan, because it does not depend on one. */
     posPct: function () { return POS_FLAT_PCT; },
     isMarketplaceSellerSale: function (cat) {
       return MARKETPLACE_CATEGORIES.indexOf(String(cat || '').trim().toLowerCase()) !== -1;
     },
     MARKETPLACE_PLAN_PCT: MARKETPLACE_PLAN_PCT,
+    MARKETPLACE_TIER_ALIASES: MARKETPLACE_TIER_ALIASES,
+    MARKETPLACE_DEFAULT_PLAN: MARKETPLACE_DEFAULT_PLAN,
     POS_FLAT_PCT: POS_FLAT_PCT,
 
     /* Refresh from the server so a rate change reaches clients without a client rebuild.
