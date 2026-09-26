@@ -138,6 +138,14 @@ const TYPES = {
   pos_commission_due:   { priority: 'commerce',  category: 'payments',      smsTemplate: 'pos_commission_due' },
   pos_commission_gate:  { priority: 'critical',  category: 'payments',      smsTemplate: 'pos_commission_gate' },
   rider_approved:       { priority: 'commerce',  category: 'marketplace',   smsTemplate: 'rider_approved' },
+  /* Entertainment › Events. Push / in-app only (smsTemplate null, like booking_new): no SMS copy
+     is invented here. A ticket PIN is a bearer credential and is NEVER put in a notification body
+     (notifyLog stores bodies) — the notice points the buyer to My Tickets instead. */
+  organizer_approved:   { priority: 'commerce',  category: 'marketplace',   smsTemplate: null },
+  event_ticket_confirmed:{priority: 'commerce',  category: 'orders',        smsTemplate: null },
+  event_cancelled:      { priority: 'commerce',  category: 'orders',        smsTemplate: null },
+  event_refund_update:  { priority: 'commerce',  category: 'payments',      smsTemplate: null },
+  event_staff_invite:   { priority: 'commerce',  category: 'marketplace',   smsTemplate: null },
   /* Loyalty & rewards. These reach the user through the engine now, so they get an
      IN-APP notification as well as a push. Previously loyalty.js pushed directly and
      wrote no in-app row at all — so when push failed (and it always did: see the

@@ -44,6 +44,7 @@ const { TERMINAL_PAID } = require('./shared/constants');
 const { providerFee } = require('./shared/provider-fee');
 const POLICY = require('./shared/commercial-policy');
 const AC = require('./admin-claim');
+const OPS = require('./event-ops');
 
 const REGION = 'us-central1';
 const PURPOSE = 'event_ticket';
@@ -160,10 +161,16 @@ const eventTicketAdapter = {
           attendeeName: o.attendeeName || null, attendeeEmail: o.attendeeEmail || null,
           status: 'valid', checkedIn: false, checkedInAt: null, checkedInBy: null, seatNumber: null,
           paymentRef: ctx.paymentRef, createdAt: FieldValue.serverTimestamp(),
+          ...OPS.issueCredentials(txn, { eventId: o.eventId, ticketId: tRef.id, buyerUid: o.buyerUid, soldBy: o.soldBy || null }),
         });
       }
     } else {
-      tixSnap.docs.forEach((d) => txn.update(d.ref, { status: 'valid', paymentRef: ctx.paymentRef, validatedAt: FieldValue.serverTimestamp() }));
+      /* A ticket becomes an admission credential only when it is PAID: its PIN is issued here, in
+         the activation transaction (event-ops.issueCredentials), never at reservation time. */
+      tixSnap.docs.forEach((d) => txn.update(d.ref, {
+        status: 'valid', paymentRef: ctx.paymentRef, validatedAt: FieldValue.serverTimestamp(),
+        ...(d.data().pinHash ? {} : OPS.issueCredentials(txn, { eventId: o.eventId, ticketId: d.id, buyerUid: o.buyerUid, soldBy: o.soldBy || null })),
+      }));
     }
     if (wasExpired && tierSnap.exists) {
       const td = tierSnap.data();
@@ -285,7 +292,9 @@ async function activateIfEventTicket(paymentRef, opts = {}) {
   }
 }
 
-const eventOnTicketPayment = onDocumentWritten({ document: 'payments/{paymentId}', region: REGION }, async (event) => {
+/* SOKONI_HMAC_KEY: activation issues ticket PINs (event-ops.issueCredentials), which fail closed
+   without the key. */
+const eventOnTicketPayment = onDocumentWritten({ document: 'payments/{paymentId}', region: REGION, secrets: [OPS.SOKONI_HMAC_KEY] }, async (event) => {
   const before = event.data && event.data.before && event.data.before.exists ? event.data.before.data() : null;
   const after = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
   if (!shouldActivate(before, after)) return;

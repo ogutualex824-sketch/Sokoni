@@ -3542,6 +3542,13 @@ service cloud.firestore {
   allow read:  if isAdmin();
   allow write: if false;
   }
+  match /eventTicketSecrets/{ticketId} { allow read, write: if false; }
+  match /eventTicketPins/{pinId}       { allow read, write: if false; }
+  match /eventStaff/{assignmentId}     { allow read, write: if false; }
+  match /eventStaffInvites/{inviteId}  { allow read, write: if false; }
+  match /eventAdmissions/{ticketId}    { allow read: if isAdmin(); allow write: if false; }
+  match /eventPinAttempts/{key}        { allow read, write: if false; }
+  match /eventOpsAudit/{entryId}       { allow read: if isAdmin(); allow write: if false; }
   match /eventPromoCodes/{codeId} {
   allow read:  if isAuthed();
   allow write: if false;

@@ -4604,6 +4604,18 @@ service cloud.firestore {
       allow read:  if isAdmin();
       allow write: if false;
     }
+    // Event operations (functions/event-ops.js) — Cloud Functions only, stated explicitly.
+    // eventTicketSecrets holds RAW ticket PINs (bearer credentials): no client may read one; the
+    // buyer receives their own through getMyTickets. The PIN index, staff assignments, invites,
+    // admissions, attempt counters and ops audit are server-owned — a client that could write a
+    // staff assignment could give itself the gate.
+    match /eventTicketSecrets/{ticketId} { allow read, write: if false; }
+    match /eventTicketPins/{pinId}       { allow read, write: if false; }
+    match /eventStaff/{assignmentId}     { allow read, write: if false; }
+    match /eventStaffInvites/{inviteId}  { allow read, write: if false; }
+    match /eventAdmissions/{ticketId}    { allow read: if isAdmin(); allow write: if false; }
+    match /eventPinAttempts/{key}        { allow read, write: if false; }
+    match /eventOpsAudit/{entryId}       { allow read: if isAdmin(); allow write: if false; }
     match /eventPromoCodes/{codeId} {
       allow read:  if isAuthed();
       allow write: if false;

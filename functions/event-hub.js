@@ -40,6 +40,13 @@ async function requireOrganizer(uid) {
   return user;
 }
 
+/* Legacy numeric `role` claim (>= 4 = admin) OR the canonical boolean admin claims (admin-claim.js).
+   `role < 4` was the check everywhere, and a STRING role makes `'superAdmin' < 4` false — i.e. the
+   guard FAILED OPEN for any string role. The numeric branch now requires an actual number. */
+function _isAdminCaller(req, role) {
+  return (typeof role === 'number' && role >= 4) || require('./admin-claim').isAdmin(req);
+}
+
 function sanitize(s, max = 200) {
   if (s == null) return '';
   return String(s).trim().slice(0, max);
@@ -195,7 +202,7 @@ exports.cancelEvent = onCall(CF_OPTS, async (req) => {
   const isOwner = ev.organizerUid === uid;
   /* Platform admins hold boolean claims (admin-claim.js); the numeric role >= 4 is legacy and
      is minted by nothing, so it alone locked every real admin out of cancelling an event. */
-  const isAdmin = role >= 4 || require('./admin-claim').isAdmin(req);
+  const isAdmin = _isAdminCaller(req, role);
   if (!isOwner && !isAdmin) throw new HttpsError('permission-denied', 'Not authorised');
   if (ev.status === 'cancelled') throw new HttpsError('failed-precondition', 'Already cancelled');
 
@@ -244,7 +251,7 @@ exports.getEvent = onCall(CF_OPTS, async (req) => {
     if (!uid || uid !== ev.organizerUid) {
       const tok = uid ? await auth().getUser(uid) : null;
       const role = tok ? ((tok.customClaims || {}).role || 0) : 0;
-      if (role < 4) throw new HttpsError('not-found', 'Event not found');
+      if (!_isAdminCaller(req, role)) throw new HttpsError('not-found', 'Event not found');
     }
   }
 
@@ -443,7 +450,8 @@ exports.updateTicketTier = onCall(CF_OPTS, async (req) => {
 /* ──────────────────────────────────────────────────────────────────────
    10. purchaseTickets — Atomic ticket purchase (idempotent)
    ────────────────────────────────────────────────────────────────────── */
-exports.purchaseTickets = onCall(CF_OPTS, async (req) => {
+/* SOKONI_HMAC_KEY: a free / fully-discounted order is issued its ticket PINs right here. */
+exports.purchaseTickets = onCall({ ...CF_OPTS, secrets: [require('./event-ops').SOKONI_HMAC_KEY] }, async (req) => {
   const uid = requireAuth(req);
   const { tierId, quantity, promoCode, idempotencyKey, attendeeName, attendeeEmail } = req.data;
 
@@ -588,11 +596,14 @@ exports.purchaseTickets = onCall(CF_OPTS, async (req) => {
   // Generate individual ticket documents
   const ticketBatch = db().batch();
   const tokens = [];
+  const _free = totalAmount <= 0;
   for (let i = 0; i < qty; i++) {
     const ticketRef = db().collection('eventTickets').doc();
     const token = genTicketToken();
     tokens.push(token);
     ticketBatch.set(ticketRef, {
+      /* Paid tickets get their PIN at payment activation; nothing to pay = issued now. */
+      ...(_free ? require('./event-ops').issueCredentials(ticketBatch, { eventId: tier.eventId, ticketId: ticketRef.id, buyerUid: uid }) : {}),
       ticketId: ticketRef.id,
       orderId,
       eventId: tier.eventId,
@@ -642,6 +653,13 @@ exports.getMyTickets = onCall(CF_OPTS, async (req) => {
   const snap = await q.get();
   const tickets = snap.docs.map(d => d.data());
 
+  /* The admission PIN (event-ops) lives in eventTicketSecrets — no client rule, deny by default.
+     It is returned ONLY here, to the ticket's own buyer, and only while the ticket is valid. */
+  const _valid = tickets.filter((t) => t.status === 'valid' && t.buyerUid === uid);
+  const _secretSnaps = await Promise.all(_valid.map((t) => db().collection('eventTicketSecrets').doc(t.ticketId).get()));
+  const pins = {};
+  _secretSnaps.forEach((s2) => { if (s2.exists && s2.data().buyerUid === uid) pins[s2.id] = s2.data().pin; });
+
   // Enrich with event details
   const eventIds = [...new Set(tickets.map(t => t.eventId))];
   const eventSnaps = await Promise.all(eventIds.map(id => db().collection('events').doc(id).get()));
@@ -656,6 +674,10 @@ exports.getMyTickets = onCall(CF_OPTS, async (req) => {
       tierId: t.tierId,
       tierName: t.tierName,
       qrData: t.status === 'valid' ? t.qrData : null,
+      ticketNumber: t.ticketNumber || null,
+      pin: pins[t.ticketId] || null,
+      admissionStatus: t.admissionStatus || null,
+      refundStatus: t.refundStatus || null,
       status: t.status,
       checkedIn: t.checkedIn,
       checkedInAt: t.checkedInAt,
@@ -688,12 +710,17 @@ exports.getTicket = onCall(CF_OPTS, async (req) => {
   const evSnap = await db().collection('events').doc(ticket.eventId).get();
   const ev = evSnap.exists ? evSnap.data() : null;
   const isOrganizer = ev && ev.organizerUid === uid;
-  if (ticket.buyerUid !== uid && !isOrganizer && role < 4) {
+  if (ticket.buyerUid !== uid && !isOrganizer && !_isAdminCaller(req, role)) {
     throw new HttpsError('permission-denied', 'Access denied');
   }
 
+  /* The QR token and the PIN hash are admission credentials. The organizer and admins see the
+     ticket, never the credential — only the buyer gets the token (for the optional QR). */
+  const { token, qrData, pinHash, ...safe } = ticket;
+  const isBuyer = ticket.buyerUid === uid;
   return {
-    ...ticket,
+    ...safe,
+    ...(isBuyer && ticket.status === 'valid' ? { token, qrData } : {}),
     event: ev ? { title: ev.title, startDate: ev.startDate, venue: ev.venue, city: ev.city } : null,
   };
 });
@@ -702,71 +729,39 @@ exports.getTicket = onCall(CF_OPTS, async (req) => {
    13. checkInTicket — Gate staff: validate QR and mark used
    ────────────────────────────────────────────────────────────────────── */
 exports.checkInTicket = onCall(CF_OPTS, async (req) => {
+  /* OPTIONAL QR path. The canonical credential is the ticket PIN (event-ops eventAdmitTicket);
+     this stays for organizers who scan. It used to compare the token with !==, read-then-batch
+     (two gates could both admit one ticket), and allow only the organizer. It now:
+       · authorizes through the SAME event-scoped actor resolver as PIN admission (ADMIT),
+       · compares in constant time,
+       · admits in a transaction with the SAME create-only eventAdmissions/{ticketId} record. */
   const uid = requireAuth(req);
-  const { ticketId, token } = req.data;
+  const { ticketId, token } = req.data || {};
   if (!ticketId || !token) throw new HttpsError('invalid-argument', 'ticketId and token required');
-
-  const ticketRef = db().collection('eventTickets').doc(ticketId);
-  const snap = await ticketRef.get();
-  if (!snap.exists) throw new HttpsError('not-found', 'Ticket not found');
-  const ticket = snap.data();
-
-  // Verify token matches
-  if (ticket.token !== token) throw new HttpsError('invalid-argument', 'Invalid ticket token');
-
-  // Verify operator is event organizer or admin
-  const tok = await auth().getUser(uid);
-  const role = (tok.customClaims || {}).role || 0;
-  const evSnap = await db().collection('events').doc(ticket.eventId).get();
-  if (!evSnap.exists) throw new HttpsError('not-found', 'Event not found');
-  const ev = evSnap.data();
-  if (ev.organizerUid !== uid && role < 4) throw new HttpsError('permission-denied', 'Not authorized for check-in');
-
-  if (ticket.checkedIn) {
-    return {
-      result: 'already_used',
-      checkedInAt: ticket.checkedInAt,
-      checkedInBy: ticket.checkedInBy,
-      ticketId,
-    };
-  }
-
-  if (ticket.status !== 'valid') {
-    return { result: 'invalid', reason: `Ticket status: ${ticket.status}`, ticketId };
-  }
-
-  const batch = db().batch();
-  batch.update(ticketRef, {
-    checkedIn: true,
-    checkedInAt: FieldValue.serverTimestamp(),
-    checkedInBy: uid,
-    status: 'used',
+  const ticketRef = db().collection('eventTickets').doc(String(ticketId));
+  const pre = await ticketRef.get();
+  if (!pre.exists) throw new HttpsError('not-found', 'Ticket not found');
+  const OPS = require('./event-ops');
+  const actor = await OPS.resolveEventActor(req, pre.data().eventId, OPS.CAPS.ADMIT);
+  const a = Buffer.from(String(pre.data().token || ''));
+  const b = Buffer.from(String(token));
+  if (a.length === 0 || a.length !== b.length || !crypto.timingSafeEqual(a, b)) throw new HttpsError('invalid-argument', 'Invalid ticket token');
+  const admRef = db().collection('eventAdmissions').doc(String(ticketId));
+  const out = await db().runTransaction(async (txn) => {
+    const [ts, as] = await Promise.all([txn.get(ticketRef), txn.get(admRef)]);
+    const t = ts.data();
+    if (as.exists || t.admissionStatus === 'ADMITTED' || t.checkedIn) return { result: 'already_used', checkedInAt: t.checkedInAt || null, checkedInBy: t.checkedInBy || null, ticketId };
+    if (t.status !== 'valid') return { result: 'invalid', reason: `Ticket status: ${t.status}`, ticketId };
+    if (['REQUESTED', 'APPROVED', 'REFUNDED'].includes(t.refundStatus)) return { result: 'invalid', reason: 'A refund is in progress for this ticket', ticketId };
+    txn.create(admRef, { ticketId, eventId: t.eventId, admittedBy: uid, admittedRole: actor.role, method: 'qr', admittedAt: FieldValue.serverTimestamp() });
+    txn.update(ticketRef, { admissionStatus: 'ADMITTED', admittedAt: FieldValue.serverTimestamp(), admittedBy: uid,
+      checkedIn: true, checkedInAt: FieldValue.serverTimestamp(), checkedInBy: uid });
+    txn.set(db().collection('eventCheckins').doc(), { ticketId, eventId: t.eventId, buyerUid: t.buyerUid || null,
+      checkedInBy: uid, checkedInAt: FieldValue.serverTimestamp(), tierName: t.tierName || null, method: 'qr' });
+    txn.update(db().collection('events').doc(t.eventId), { checkinsCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+    return { result: 'success', ticketId, attendeeName: t.attendeeName, tierName: t.tierName };
   });
-
-  const checkinRef = db().collection('eventCheckins').doc();
-  batch.set(checkinRef, {
-    checkinId: checkinRef.id,
-    ticketId,
-    eventId: ticket.eventId,
-    buyerUid: ticket.buyerUid,
-    checkedInBy: uid,
-    checkedInAt: FieldValue.serverTimestamp(),
-    tierName: ticket.tierName,
-  });
-
-  batch.update(db().collection('events').doc(ticket.eventId), {
-    checkinsCount: FieldValue.increment(1),
-    updatedAt: FieldValue.serverTimestamp(),
-  });
-
-  await batch.commit();
-
-  return {
-    result: 'success',
-    ticketId,
-    attendeeName: ticket.attendeeName,
-    tierName: ticket.tierName,
-  };
+  return out;
 });
 
 /* ──────────────────────────────────────────────────────────────────────
@@ -783,7 +778,7 @@ exports.getEventOrders = onCall(CF_OPTS, async (req) => {
 
   const tok = await auth().getUser(uid);
   const role = (tok.customClaims || {}).role || 0;
-  if (ev.organizerUid !== uid && role < 4) throw new HttpsError('permission-denied', 'Not authorized');
+  if (ev.organizerUid !== uid && !_isAdminCaller(req, role)) throw new HttpsError('permission-denied', 'Not authorized');
 
   let q = db().collection('eventOrders')
     .where('eventId', '==', eventId)
@@ -819,7 +814,7 @@ exports.getEventAnalytics = onCall(CF_OPTS, async (req) => {
 
   const tok = await auth().getUser(uid);
   const role = (tok.customClaims || {}).role || 0;
-  if (ev.organizerUid !== uid && role < 4) throw new HttpsError('permission-denied', 'Not authorized');
+  if (ev.organizerUid !== uid && !_isAdminCaller(req, role)) throw new HttpsError('permission-denied', 'Not authorized');
 
   const [tiersSnap, ordersSnap] = await Promise.all([
     db().collection('eventTicketTiers').where('eventId', '==', eventId).get(),

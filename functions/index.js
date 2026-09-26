@@ -13022,3 +13022,5 @@ const _eventSettle = require('./event-settlement');
 exports.eventOnTicketPayment     = _eventSettle.eventOnTicketPayment;     // trigger: payments/{paymentId}
 exports.eventReleaseSettlements  = _eventSettle.eventReleaseSettlements;  // schedule: hourly — pay organizers after the event
 exports.eventExpireUnpaidOrders  = _eventSettle.eventExpireUnpaidOrders;  // schedule: 15 min — release unpaid seats
+/* Event-day operations (ticket PIN admission, event-scoped temporary staff) — one dispatcher. */
+exports.eventOpsDispatch         = require('./event-ops').eventOpsDispatch;

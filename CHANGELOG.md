@@ -1,3 +1,29 @@
+## 2026-09-27 (194) — Events ops P1: ticket PINs, event-scoped temporary staff, PIN admission; two fixes
+
+- **Ticket identity (PIN first, QR optional):** every ticket gets `SK-EVT-XXXXXX` + an 8-char PIN
+  (32-char alphabet, crypto.randomInt) when it is PAID (activation) or free. Stored as
+  HMAC(SOKONI_HMAC_KEY, event|PIN) — bound to one event; unique per event via create() on
+  `eventTicketPins`; raw PIN only in deny-by-default `eventTicketSecrets`, returned only to the buyer
+  (getMyTickets); never logged/notified/audited. Missing key in Cloud Functions FAILS CLOSED.
+- **Admission:** `eventVerifyPin` / `eventAdmitTicket` (eventOpsDispatch) — the staff member selects the
+  event; admission is one transaction with a create-only `eventAdmissions/{ticketId}`; refunded /
+  refund-requested / unpaid tickets refused; per-staff (10 / 10 min) and per-event (200 / 10 min)
+  transactional lockouts. Legacy `checkInTicket` (QR) is now event-scoped, constant-time, transactional
+  and shares the admission record. `getTicket` no longer returns token / QR / pinHash to organizer or admin.
+- **Temporary staff:** `eventStaff/{eventId}_{uid}` — organizer invites by email + role + window
+  (≤ 48 h after the event); accepted only by the signed-in owner of that VERIFIED email; closed role
+  table (cashier / admission / marketing / manager) with no money capability; re-read on every call so
+  expiry and revocation are immediate; audited in `eventOpsAudit`.
+- **Fixes:** `organizer_approved` + four event notify types registered — approved organizers were never
+  notified (notify threw on the unknown type; my slice-191 bug). event-hub's five `role < 4` admin
+  checks failed OPEN for any string role claim — now `_isAdminCaller` (numeric only if a number, else
+  admin-claim).
+- **Files:** `functions/event-ops.js` (new), `functions/{event-hub,event-settlement,notify,index}.js`,
+  `firestore.rules` (+build: explicit deny for the 7 new collections),
+  `scripts/test-event-ops.js` (new, 50/0), `scripts/test-entertainment-rules.js` (34/0).
+- **Regression:** events 84/0 · registry 65/0 · creator callback 78/0 · hub 260/0 · refund exactly-once 103/0.
+  **Not deployed.**
+
 ## 2026-09-26 (193) — Entertainment: docs, sabotage 29/29, copy fix
 
 - **Docs:** `docs/ENTERTAINMENT_CATEGORY_MATRIX.md` (the required matrix + lifecycles),

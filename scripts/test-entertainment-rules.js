@@ -39,6 +39,8 @@ async function suite(env, label, served) {
     await f('eventExceptions/x1', { kind: 'partial_refund', status: 'OPEN' });
     await f('eventOrders/o1', { buyerUid: 'buyer1', status: 'pending_payment' });
     await f('users/admin1', { role: 'admin' });
+    await f('eventTicketSecrets/k1', { pin: 'ABCD-EFGH', buyerUid: 'buyer1' });
+    await f('eventPinAttempts/e1_buyer1', { fails: 10 });
   });
   const owner = env.authenticatedContext('owner1').firestore();
   const buyer = env.authenticatedContext('buyer1').firestore();
@@ -66,6 +68,9 @@ async function suite(env, label, served) {
   await expectDeny('user reads eventExceptions', buyer.doc('eventExceptions/x1').get());
   await expectDeny('buyer marks own order paid', buyer.doc('eventOrders/o1').update({ status: 'paid' }));
   await expectDeny('buyer writes an eventTickets doc', buyer.doc('eventTickets/k1').set({ buyerUid: 'buyer1', status: 'valid' }));
+  await expectDeny('buyer reads a RAW ticket PIN (eventTicketSecrets)', buyer.doc('eventTicketSecrets/k1').get());
+  await expectDeny('a user writes themselves an event staff assignment', buyer.doc('eventStaff/e1_buyer1').set({ uid: 'buyer1', role: 'admission', active: true }));
+  await expectDeny('a user resets the PIN-attempt lockout', buyer.doc('eventPinAttempts/e1_buyer1').set({ fails: 0 }));
 
   if (served) {
     ck(`${label}: venue created PENDING is allowed (the product still works)`,
