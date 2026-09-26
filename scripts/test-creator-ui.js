@@ -150,6 +150,16 @@ const ck = (l, ok, d) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (
   ck('creator.html: guest checkout offered only when the server says so', /co\.guestCheckout \?/.test(viewer));
   ck('creator.html: My films (library) view', viewer.includes("params.get('view') === 'library') library()") && /viewer\.library/.test(viewer));
   ck('creator.html: heartbeat reports progress', /beat\.positionSec = Math\.floor\(v\.currentTime\)/.test(viewer));
+  ck('creator.html: hosted checkout offered only when the server says so', /co\.hostedCheckout \?/.test(viewer));
+  ck('creator.html: hosted redirect only to https *.intasend.com', /u\.protocol !== 'https:' \|\| !\/\(\^\|\\\.\)intasend\\\.com\$\/\.test\(u\.hostname\)/.test(viewer) || (viewer.includes("u.protocol !== 'https:'") && viewer.includes('intasend')));
+  ck('creator.html: return from checkout WAITS for server access (no grant from the URL)', /params\.get\('checkout'\) === 'returned'/.test(viewer) && /viewer\.access\.status === 'ACTIVE'/.test(viewer));
+  ck('creator.html: public creator profile view', /catalog\.creator/.test(viewer) && /function creatorProfile/.test(viewer));
+  ck('creator.html: dashboard shows Available for withdrawal + Withdrawn + history', /Available for withdrawal\*/.test(viewer) && /Withdrawn\*/.test(viewer) && /Withdrawal history/.test(viewer));
+  ck('studio: no UI for an unenforced "free preview" rule', !/previewSeconds/.test(rd('creator-studio.html')));
+  const fsearch = rd('sokoni-firestore-search.js');
+  ck('search: films source guarded like the rules (creatorHub + status active)', /col: 'entertainmentListings'/.test(fsearch) && /w\('creatorHub', '==', true\), w\('status', '==', 'active'\)/.test(fsearch));
+  ck('search: Films tab + links to the film page', /id: "films"/.test(rd('search.html')) && /'creator\.html\?film=' \+ encodeURIComponent\(id\)/.test(fsearch));
+  ck('search: film result carries no media location', !/creator-masters|streamingUrl/.test(fsearch.slice(fsearch.indexOf("col: 'entertainmentListings'"), fsearch.indexOf("col: 'entVenues'"))));
   const pricing = rd('subscriptions.html');
   ck('pricing: Creator section on the canonical Monetisation & Pricing page', /SOKONI Monetisation & Pricing/.test(pricing) && /id="creatorPpv"/.test(pricing) && /sokoni-creator-commercial\.js/.test(pricing));
   ck('pricing: no isolated Creator pricing page', !fs.existsSync(path.join(ROOT, 'creator-pricing.html')));

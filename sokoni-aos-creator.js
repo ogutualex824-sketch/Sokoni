@@ -141,6 +141,10 @@
         return `<p>Film purchases: <b>${c.purchasesEnabled ? 'OPEN' : 'CLOSED'}</b></p>
           <p class="aos-muted">Keep CLOSED until the webhook's film branch is deployed — the old webhook would credit the payer. Changing this needs super admin.</p>
           <button class="aos-btn${c.purchasesEnabled ? ' aos-btn-ghost' : ''}" data-a="cfg-purchases" data-to="${c.purchasesEnabled ? '0' : '1'}">${c.purchasesEnabled ? 'Close purchases' : 'Open purchases'}</button>
+          <h4>Card &amp; other methods (IntaSend hosted checkout)</h4>
+          <p>Status: <b>${c.hostedCheckoutEnabled ? 'ON for films' : 'OFF'}</b></p>
+          <p class="aos-muted">Turn on only after scripts/probe-intasend-capability.js has proven the live account (needs the INTASEND_PUBLIC_KEY secret). Buyers then see whatever methods the account has enabled.</p>
+          <button class="aos-btn aos-btn-ghost" data-a="cfg-hosted" data-to="${c.hostedCheckoutEnabled ? '0' : '1'}">${c.hostedCheckoutEnabled ? 'Turn hosted checkout off' : 'Turn hosted checkout on'}</button>
           <h4>Guest checkout (buy without an account)</h4>
           <p>Status: <b>${c.guestCheckoutEnabled ? 'ON' : 'OFF'}</b></p>
           <p class="aos-muted">Needs Firebase Anonymous Auth, which is a PLATFORM-WIDE change: anonymous users would pass every "signed-in" rule and callable. Keep OFF until that decision is made.</p>
@@ -236,6 +240,7 @@
           break;
         }
         case 'cfg-purchases': act('creatorAdminConfig', { set: { purchasesEnabled: t.dataset.to === '1' } }, 'Saved.'); break;
+        case 'cfg-hosted': act('creatorAdminConfig', { set: { hostedCheckout: t.dataset.to === '1' } }, 'Saved.'); break;
         case 'cfg-guest': act('creatorAdminConfig', { set: { guestCheckoutEnabled: t.dataset.to === '1' } }, 'Saved.'); break;
         default:
       }

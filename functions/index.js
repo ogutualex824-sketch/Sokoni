@@ -6275,6 +6275,11 @@ exports.initiateSTKPush = onCall(
     if (existing.exists) {
       const d = existing.data();
       if (d.status === "COMPLETE") return { success: true, checkoutId: d.checkoutId, alreadyPaid: true };
+      /* One rail per intent: a hosted checkout (initiateHostedCheckout) already
+         owns this reference — an STK push on top could charge the buyer twice. */
+      if (d.rail === "hosted_checkout" && d.status !== "FAILED") {
+        throw new HttpsError("failed-precondition", "A card/other-method checkout is already open for this payment.");
+      }
       if (d.status === "PENDING" && d.createdAt?.toMillis() > Date.now() - 600000) {
         return { success: true, checkoutId: d.checkoutId, reused: true };
       }
@@ -12159,6 +12164,9 @@ exports.getCreatorDashboard         = entertainmentHub.getCreatorDashboard;
 const creatorHub = require('./creator-hub');
 exports.creatorDispatch      = creatorHub.creatorDispatch;
 exports.creatorOnFilmPayment = creatorHub.creatorOnFilmPayment;
+/* Hosted IntaSend checkout (all account-enabled methods) for any intent whose
+   purpose is allowed in config/hostedCheckout — sibling of initiateSTKPush. */
+exports.initiateHostedCheckout = require('./hosted-checkout').initiateHostedCheckout;
 
 /* ── Payment State Machine v1.0 ─────────────────────────────────────────── */
 const paymentFSM = require('./payment-state-machine');

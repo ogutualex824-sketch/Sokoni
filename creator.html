@@ -160,7 +160,7 @@
             ${f.runtimeMinutes ? `<span class="chip">${f.runtimeMinutes} min</span>` : ''}${f.ageRating ? `<span class="chip">Rated ${esc(f.ageRating)}</span>` : ''}
             ${f.releaseDate ? `<span class="chip">${esc(f.releaseDate)}</span>` : ''}
           </div>
-          ${d.creator ? `<p class="muted">By <b>${esc(d.creator.displayName)}</b>${d.creator.verification === 'VERIFIED' ? ' ✓' : ''}</p>` : ''}
+          ${d.creator ? `<p class="muted">By <a href="?creator=${encodeURIComponent(d.creator.creatorId)}"><b>${esc(d.creator.displayName)}</b></a>${d.creator.verification === 'VERIFIED' ? ' ✓ Verified' : ''}</p>` : ''}
           <p style="margin-top:10px;white-space:pre-line">${esc(f.description)}</p>
           <p class="notice">${esc(avText)}</p>
           ${f.trailerUrl ? `<div class="panel"><b>Trailer</b><video controls preload="none" playsinline style="width:100%;margin-top:8px;border-radius:12px" src="${esc(safeUrl(f.trailerUrl))}"></video></div>` : ''}
@@ -218,14 +218,30 @@
       return;
     }
     if (!co.enabled) { bp.innerHTML = priceLine + '<p class="msg">Purchases for this title are not open yet.</p>'; return; }
+    /* Back from hosted checkout: a HINT to wait, never a grant — access appears
+       only when catalog.get reports the server entitlement. */
+    if (params.get('checkout') === 'returned') {
+      bp.innerHTML = priceLine + '<p class="msg" id="retMsg">Checking your payment with the provider…</p>';
+      const until = Date.now() + 180000;
+      while (Date.now() < until) {
+        await new Promise((r) => setTimeout(r, 4000));
+        const g = await cd('catalog.get', { filmId: f.filmId }).catch(() => null);
+        if (g && g.viewer && g.viewer.access && g.viewer.access.status === 'ACTIVE') { history.replaceState(null, '', '?film=' + encodeURIComponent(f.filmId)); return filmPage(f.filmId); }
+      }
+      document.getElementById('retMsg').textContent = 'We have not received confirmation yet. If you paid, access appears here automatically — refresh in a minute. Do not pay again.';
+      return;
+    }
     const methods = (co.verifiedMethods || []).length ? co.verifiedMethods.join(' · ') : '—';
     bp.innerHTML = priceLine + `
       <p class="muted" style="margin-top:8px">${esc(co.notice)}: <b>${esc(methods)}</b></p>
       <label class="muted" for="phone" style="display:block;margin-top:10px">M-PESA number</label>
       <input type="tel" id="phone" inputmode="tel" autocomplete="tel" placeholder="07XX XXX XXX">
-      <button class="btn" id="payBtn">Pay ${kes(f.priceCents)}</button>
+      <button class="btn" id="payBtn">Pay ${kes(f.priceCents)} with M-PESA</button>
+      ${co.hostedCheckout ? `<button class="btn ghost" id="hostedBtn" style="margin-left:6px">Card &amp; other methods</button>` : ''}
       <div class="msg" id="payMsg" role="status" aria-live="polite"></div>`;
     document.getElementById('payBtn').onclick = () => pay(f);
+    const hb = document.getElementById('hostedBtn');
+    if (hb) hb.onclick = () => payHosted(f);
   }
 
   function validPhone(raw) {
@@ -233,6 +249,22 @@
     if (/^254[17]\d{8}$/.test(d)) return d;
     if (/^0[17]\d{8}$/.test(d)) return '254' + d.slice(1);
     return null;
+  }
+
+  /* Hosted checkout: the server opens an IntaSend page showing every method the
+     SOKONI account has enabled. We only ever redirect to an https intasend.com
+     URL, and on return we wait for the SERVER entitlement — the redirect itself
+     grants nothing. */
+  async function payHosted(f) {
+    const m = document.getElementById('payMsg');
+    try {
+      m.className = 'msg'; m.textContent = 'Opening secure checkout…';
+      const intent = (await httpsCallable(fn, 'createPaymentIntent')({ purpose: 'film_access', filmId: f.filmId })).data;
+      const r = (await httpsCallable(fn, 'initiateHostedCheckout')({ ref: intent.ref, returnPath: '/creator.html?film=' + encodeURIComponent(f.filmId) + '&checkout=returned' })).data;
+      const u = new URL(r.url);
+      if (u.protocol !== 'https:' || !/(^|\.)intasend\.com$/.test(u.hostname)) throw new Error('Unexpected checkout address.');
+      location.href = u.href;
+    } catch (e) { m.className = 'msg bad'; m.textContent = errText(e); }
   }
 
   async function pay(f) {
@@ -351,6 +383,23 @@
   }
   addEventListener('pagehide', () => { if (session) cd('playback.end', { sessionId: session.sessionId }).catch(() => {}); });
 
+  /* ═══ PUBLIC CREATOR PROFILE ═══ */
+  async function creatorProfile(id) {
+    $app.innerHTML = '<div class="state">Loading…</div>';
+    let d;
+    try { d = await cd('catalog.creator', { creatorId: id }); } catch (e) { $app.innerHTML = '<div class="state">Creator not found. <a href="/creator.html">Browse Creator</a></div>'; return; }
+    const c = d.creator;
+    $app.innerHTML = `<p><a href="/creator.html">← Creator</a></p>
+      <div style="display:flex;gap:16px;align-items:center;margin-top:10px">
+        ${c.avatarUrl ? `<img src="${esc(safeUrl(c.avatarUrl))}" alt="" style="width:72px;height:72px;border-radius:50%;object-fit:cover">` : ''}
+        <div><h1>${esc(c.displayName)}${c.verification === 'VERIFIED' ? ' <span style="color:var(--g);font-size:.6em">✓ Verified</span>' : ''}</h1>
+        <p class="muted">${esc(c.country || '')}${c.supportEmail ? ' · Support: ' + esc(c.supportEmail) : ''}</p></div></div>
+      <p style="margin-top:12px;white-space:pre-line">${esc(c.bio)}</p>
+      <h2 style="margin-top:16px">Films</h2>
+      <div class="grid">${d.films.map((f) => `<button class="card" data-film="${esc(f.filmId)}"><img class="poster" loading="lazy" alt="" src="${esc(safeUrl(f.posterUrl))}"><div class="meta"><div class="t">${esc(f.title)}</div><div class="p">${kes(f.priceCents)}</div></div></button>`).join('') || '<p class="muted">No published films yet.</p>'}</div>`;
+    $app.querySelectorAll('[data-film]').forEach((b) => b.onclick = () => { location.search = '?film=' + encodeURIComponent(b.dataset.film); });
+  }
+
   /* ═══ MY FILMS (viewer dashboard) — own records only ═══ */
   const mmss = (s) => { s = Math.max(0, Math.floor(s || 0)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return (h ? h + 'h ' : '') + m + 'm'; };
   async function library() {
@@ -390,12 +439,18 @@
       <div class="kpis" style="margin-top:14px">
         <div class="kpi"><span class="muted">Accrued (this quarter)</span><b>${kes(s.accruedCents)}</b></div>
         <div class="kpi"><span class="muted">Pending settlement</span><b>${kes(s.pendingSettlementCents)}</b></div>
-        <div class="kpi"><span class="muted">Released to wallet — available to withdraw</span><b>${kes(s.releasedCents)}</b></div>
+        <div class="kpi"><span class="muted">Released to your wallet (royalties)</span><b>${kes(s.releasedCents)}</b></div>
+        <div class="kpi"><span class="muted">Available for withdrawal*</span><b>${r.wallet.availableForWithdrawalKes == null ? '—' : 'KES ' + Number(r.wallet.availableForWithdrawalKes).toLocaleString('en-KE')}</b></div>
+        <div class="kpi"><span class="muted">Withdrawn*</span><b>KES ${Number(r.wallet.withdrawnKes).toLocaleString('en-KE')}</b></div>
         <div class="kpi"><span class="muted">Reversed (refunds)</span><b>${kes(s.reversedCents)}</b></div>
       </div>
+      <p class="notice">* Wallet figures: released royalties join your one SOKONI wallet, so these include any other SOKONI earnings. Only settled quarters are ever withdrawable — accrued and pending amounts are not.${r.wallet.reservedForPayoutKes ? ' KES ' + Number(r.wallet.reservedForPayoutKes).toLocaleString('en-KE') + ' is reserved for a payout in progress.' : ''}</p>
       <p style="margin-top:12px"><a class="btn ghost" href="${esc(r.withdrawal.page)}">Withdraw from wallet · withdrawal history</a></p>
       <div class="panel"><b>My films</b><div class="scroll"><table><thead><tr><th>Film</th><th>Role</th><th>Share</th><th>Agreement</th><th>Status</th></tr></thead><tbody>
         ${r.participations.length ? r.participations.map((p) => `<tr><td>${esc(p.title)}</td><td>${esc(p.participantType)}</td><td>${(p.bps / 100).toFixed(2).replace(/\.00$/, '')}%</td><td>v${esc(p.version)}</td><td>${esc(p.status)}</td></tr>`).join('') : '<tr><td colspan="5" class="muted">You are not a rights holder on any film yet.</td></tr>'}
+      </tbody></table></div></div>
+      <div class="panel"><b>Withdrawal history</b><div class="scroll"><table><thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Status</th></tr></thead><tbody>
+        ${r.wallet.history.map((p) => `<tr><td>${p.createdAtMs ? new Date(p.createdAtMs).toLocaleDateString('en-KE') : '—'}</td><td>KES ${esc(p.amountKes)}</td><td>${esc(p.method || '')}</td><td>${esc(p.status)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No withdrawals yet.</td></tr>'}
       </tbody></table></div></div>
       <div class="panel"><b>Quarterly statements</b><div class="scroll"><table><thead><tr><th>Quarter</th><th>Earned</th><th>Reversed</th><th>Carried in</th><th>Released</th><th>Carried out</th><th></th></tr></thead><tbody>
         ${r.statements.length ? r.statements.map((st) => `<tr><td>${esc(st.periodId)}</td><td>${kes(st.earnedCents)}</td><td>${kes(st.reversedCents)}</td><td>${kes(st.carryInCents)}</td><td>KES ${esc(st.releaseKes)}</td><td>${kes(st.carryOutCents)}</td><td>${st.released ? 'Released' : st.held ? 'On hold' : 'Pending'}</td></tr>`).join('') : '<tr><td colspan="7" class="muted">No quarter has been settled yet.</td></tr>'}
@@ -409,6 +464,7 @@
     if (film && /^[A-Za-z0-9_-]{1,128}$/.test(film)) filmPage(film);
     else if (params.get('view') === 'royalties') royalties();
     else if (params.get('view') === 'library') library();
+    else if (params.get('creator') && /^[A-Za-z0-9_-]{1,128}$/.test(params.get('creator'))) creatorProfile(params.get('creator'));
     else discover(false);
   });
   </script>

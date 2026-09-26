@@ -98,6 +98,8 @@ const S = {
 
 (async () => {
   S.filmIntentReadFails = S.film;
+  /* hosted checkout writes payments/{ref} with rail:'hosted_checkout' and no phone */
+  S.filmHosted = { ...S.film, payment: { uid: 'buyer1', amount: 500, rail: 'hosted_checkout', meta: { type: 'film_access', uid: 'buyer1' } } };
   const sc = S[SCENARIO];
   if (!sc) throw new Error('unknown scenario ' + SCENARIO);
   const idx = require(path.join(FN, 'index.js'));

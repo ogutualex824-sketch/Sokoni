@@ -203,6 +203,20 @@ const SPECS = [
     link: (d, id) => 'entertainment.html?event=' + encodeURIComponent(id),
   },
   {
+    /* Creator Hub films (docs/CREATOR_HUB.md). The guard mirrors firestore.rules:
+       an entertainmentListings doc is public only while status == 'active', and
+       only creatorHub docs are films. Public fields only — never a media URL. */
+    col: 'entertainmentListings', tab: 'films', icon: '🎬', scan: 200,
+    guard: w => [w('creatorHub', '==', true), w('status', '==', 'active')],
+    fields: ['title', 'description', 'genre', 'language', 'subcategory', 'creatorName'],
+    title: d => d.title || '',
+    subtitle: d => [d.creatorName, d.genre, d.runtimeMinutes ? d.runtimeMinutes + ' min' : null].filter(Boolean).join(' · ') || 'Film',
+    location: () => '',
+    price: d => (Number.isSafeInteger(d.priceCents) ? kes(d.priceCents / 100) : null),
+    thumb: d => d.posterUrl || null,
+    link: (d, id) => 'creator.html?film=' + encodeURIComponent(id),
+  },
+  {
     col: 'entVenues', tab: 'businesses', icon: '🎭', scan: 150,
     fields: ['name', 'type', 'category', 'description', 'location', 'city'],
     title: d => d.name || '',

@@ -276,7 +276,6 @@
           <label>Release date<input name="releaseDate" type="date" value="${esc(f.releaseDate || '')}" ${dis}></label>
           <label>Age rating<select name="ageRating" ${dis}>${P().AGE_RATINGS.map((a) => `<option ${f.ageRating === a ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
           <label>Classification (e.g. KFCB)<input name="classification" maxlength="80" value="${esc(f.classification || '')}" ${dis}></label>
-          <label>Free preview (seconds, 0–600)<input name="previewSeconds" type="number" min="0" max="600" value="${esc(f.previewSeconds || 0)}" ${dis}></label>
           <label>Availability<select name="avMode" ${dis}><option value="worldwide">Everywhere SOKONI operates</option><option value="allow" ${f.availability && f.availability.mode === 'allow' ? 'selected' : ''}>Only these countries</option><option value="deny" ${f.availability && f.availability.mode === 'deny' ? 'selected' : ''}>All except these countries</option></select></label>
         </div>
         <label style="margin-top:10px">Countries (2-letter codes, comma-separated — for licence restrictions)<input name="avCountries" value="${esc(((f.availability || {}).countries || []).join(', '))}" ${dis}></label>
@@ -299,7 +298,6 @@
           title: fd.get('title'), subcategory: fd.get('subcategory'), priceCents: Math.round(Number(fd.get('price'))) * 100, currency: 'KES',
           accessType: fd.get('accessType'), description: fd.get('description'), genre: fd.get('genre'), language: fd.get('language'),
           country: fd.get('country'), releaseDate: fd.get('releaseDate') || null, ageRating: fd.get('ageRating'), classification: fd.get('classification'),
-          previewSeconds: Math.round(Number(fd.get('previewSeconds') || 0)),
         };
         if (fd.get('runtimeMinutes')) data.runtimeMinutes = Math.round(Number(fd.get('runtimeMinutes')));
         if (data.accessType === 'rental') data.rentalDays = Math.round(Number(fd.get('rentalDays')));

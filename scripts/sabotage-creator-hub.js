@@ -26,6 +26,8 @@ const SUITES = {
   hub:        ['node', ['scripts/test-creator-hub.js']],
   rules:      ['node', ['scripts/run-creator-rules.js']],
   callback:   ['node', ['scripts/test-creator-callback.js']],
+  hosted:     ['node', ['scripts/test-hosted-checkout.js']],
+  withdrawal: ['node', ['scripts/test-creator-withdrawal.js']],
   refund:     ['node', ['scripts/test-refund-exactly-once.js']],
 };
 const IDX = 'functions/index.js';
@@ -149,6 +151,25 @@ const M = [
     from: 'sellerUid: _im.sellerUid || _im.merchantUid || _im.providerId || null,', to: 'sellerUid: _im.sellerUid || _im.merchantUid || _im.providerId || pd.uid,',
     expect: /buyer's wallet NEVER debited/ },
 
+  /* ── hosted checkout (§7–8) ── */
+  { group: 'hosted', name: 'hosted: client amount reaches the gateway', file: 'functions/hosted-checkout.js', suite: 'hosted',
+    from: 'const amountKES = Number(intent.amount);', to: 'const amountKES = Number(d.amount || intent.amount);', expect: /amount = INTENT amount/ },
+  { group: 'hosted', name: 'hosted: client-chosen method forwarded (SOKONI restricting the account)', file: 'functions/hosted-checkout.js', suite: 'hosted',
+    from: 'const payload = IC.buildPayload({ amountKES, apiRef: ref, publicKey, currency,', to: 'const payload = IC.buildPayload({ amountKES, apiRef: ref, publicKey, currency, method: d.method,', expect: /NO method sent/ },
+  { group: 'hosted', name: 'hosted: single-flight reservation removed', file: 'functions/hosted-checkout.js', suite: 'hosted',
+    edits: [["    txn.create(attRef, {", "    txn.set(attRef, {"], ["    if (pay.exists) fail('failed-precondition', 'A payment for this order is already in progress.');", ''], ["      fail('failed-precondition', 'A payment for this order is already in progress.');\n    }", '    }'],["    txn.create(payRef, {", "    txn.set(payRef, {"]],
+    expect: /ONE gateway call|one rail per intent|no second session/ },
+  { group: 'hosted', name: 'hosted: an unknown outcome is released for retry (second session)', file: 'functions/hosted-checkout.js', suite: 'hosted',
+    from: "  await attRef.update({ state: 'OUTCOME_UNKNOWN', heldAt: FieldValue.serverTimestamp(), httpStatus: res.status }).catch(() => {});", to: "  await attRef.delete().catch(() => {}); await payRef.delete().catch(() => {});",
+    expect: /503 → OUTCOME_UNKNOWN kept|retry after an UNKNOWN outcome refused/ },
+  { group: 'hosted', name: 'hosted: foreign intent accepted (ownership check removed)', file: 'functions/hosted-checkout.js', suite: 'hosted',
+    from: "  if (intent.uid !== uid) fail('permission-denied', 'This payment does not belong to you.');", to: '', expect: /someone else's intent/ },
+  { group: 'hosted', name: 'hosted: untrusted checkout URL handed to the browser', file: 'functions/hosted-checkout.js', suite: 'hosted',
+    from: "if (u.protocol === 'https:' && /(^|\\.)intasend\\.com$/.test(u.hostname)) safe = u.href;", to: "safe = u.href;", expect: /non-IntaSend URL is NOT returned/ },
+  { group: 'hosted', name: 'withdrawal: payout marked paid on an in-flight provider status', file: 'functions/wallet.js', suite: 'withdrawal',
+    from: "const completedWord = /COMPLETE/.test(S) || ['SUCCESS', 'PAID', 'SETTLED'].includes(S);", to: "const completedWord = /COMPLETE|PROCESSING/.test(S) || ['SUCCESS', 'PAID', 'SETTLED'].includes(S);",
+    expect: /in-flight provider status leaves it PROCESSING/ },
+
   /* ── security: identity, verification, viewer, analytics (§26) ── */
   { group: 'security', name: 'creator impersonation: anonymous tokens reach creator ops', file: HUB, suite: 'hub',
     from: "if (provider === 'anonymous' && !ANON_OPS.has(op)) fail(", to: "if (false) fail(", expect: /anonymous token refused for creator\.register/ },
@@ -235,7 +256,7 @@ for (const m of M) {
 
 console.log('\n  post-restore:');
 let green = true;
-for (const s of ['royalty', 'publishing', 'hub'].concat(noRules ? [] : ['rules']).concat(onlyGroup === 'money' || !onlyGroup ? ['callback', 'refund'] : [])) {
+for (const s of ['royalty', 'publishing', 'hub'].concat(noRules ? [] : ['rules']).concat(onlyGroup === 'money' || !onlyGroup ? ['callback', 'refund'] : []).concat(onlyGroup === 'hosted' || !onlyGroup ? ['hosted', 'withdrawal'] : [])) {
   const r = run(s);
   const t = (r.out.match(/\d+ passed, \d+ failed/) || ['?'])[0];
   console.log(`    ${s.padEnd(11)} ${r.code === 0 ? 'GREEN' : 'RED'}  ${t}`);

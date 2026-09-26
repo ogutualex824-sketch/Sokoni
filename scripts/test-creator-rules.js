@@ -87,6 +87,7 @@ async function suite(env, label, expectDenials) {
   console.log(`\n── ${label}: reads ──`);
   if (D) {
     ck(`${label}: published film readable by anyone`, await allowed(anon.doc('entertainmentListings/filmPub').get()));
+    ck(`${label}: search list query (creatorHub + status active) allowed anonymously`, await allowed(anon.collection('entertainmentListings').where('creatorHub', '==', true).where('status', '==', 'active').get()));
     ck(`${label}: owner reads own draft`, await allowed(cA.doc('entertainmentListings/filmDraft').get()));
     ck(`${label}: buyer reads own entitlement`, await allowed(v1.doc('contentEntitlements/PAY1').get()));
     ck(`${label}: participant reads own ledger row`, await allowed(act.doc('royaltyLedger/earn_PAY1_v1_actorA').get()));
@@ -99,6 +100,9 @@ async function suite(env, label, expectDenials) {
     ck(`${label}: admin reads a verification + its events`, await allowed(adm.doc('creatorVerifications/cA').get()) && await allowed(adm.doc('creatorVerifications/cA/events/e1').get()));
   }
   await expectDeny('anonymous reads a DRAFT film', anon.doc('entertainmentListings/filmDraft').get());
+  await expectDeny('unguarded film list query (would expose drafts)', anon.collection('entertainmentListings').where('creatorHub', '==', true).get());
+  await expectDeny('client writes a payment attempt reservation', v1.doc('paymentAttempts/REF123').set({ state: 'GATEWAY_ACCEPTED' }));
+  await expectDeny('client opens hosted checkout config', adm.doc('config/hostedCheckout').set({ enabled: true, purposes: ['film_access'] }));
   await expectDeny('rival reads another creator\'s draft', cB.doc('entertainmentListings/filmDraft').get());
   await expectDeny('anonymous reads a PENDING creator', anon.doc('creators/cP').get());
   await expectDeny('rival reads private creator contact', cB.doc('creatorPrivate/cA').get());

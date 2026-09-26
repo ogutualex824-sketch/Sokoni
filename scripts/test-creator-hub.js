@@ -155,6 +155,11 @@ async function buy(buyer, filmId) {
   const list = await call('catalog.list', null, {});
   ck('public catalogue lists it (no auth needed)', list.films.some((f) => f.filmId === FILM));
   ck('public projection carries no media location', !JSON.stringify(list).includes('creator-masters'));
+  const prof = await call('catalog.creator', null, { creatorId: 'cA' });
+  ck('public creator profile lists published films (no auth needed)', prof.creator.creatorId === 'cA' && prof.films.some((x) => x.filmId === FILM));
+  const pj = JSON.stringify(prof);
+  ck('public profile exposes no private contact / payout / earnings', !pj.includes('+254700000001') && !pj.includes('Kibera Films Ltd') && !/balance|payout|legalName|phone/i.test(pj));
+  ck('a PENDING creator has no public profile', (await code(call('catalog.creator', null, { creatorId: 'cEvilX' }))) === 'not-found');
 
   const ent = require(Path.join(FN, 'entertainment-hub.js'));
   ck('legacy self-publish of a Creator film refused', /through review/.test(await msg(ent.publishEntertainmentListing.run({ ...who('cA'), data: { listingId: FILM } }))));
@@ -398,6 +403,15 @@ async function buy(buyer, filmId) {
   ck('participant dashboard: released reflects the wallet credit', mine.summary.releasedCents === stA.releaseCents);
   ck('participant dashboard: Q4 late sale shows as accrued', mine.summary.accruedCents > 0);
   ck('participant dashboard: withdrawal is the existing wallet rail', mine.withdrawal.via === 'wallet');
+  ck('participant dashboard: Available for withdrawal = the canonical wallet balance', mine.wallet.availableForWithdrawalKes === (await read('wallets/uActA')).balance);
+  await db.doc('payoutRequests/pout_W1').set({ sellerUid: 'uActA', amount: 100, status: 'paid', method: 'mpesa', createdAt: F.Timestamp.fromMillis(NOW) });
+  await db.doc('payoutRequests/pout_W2').set({ sellerUid: 'uActA', amount: 50, status: 'failed', method: 'mpesa', createdAt: F.Timestamp.fromMillis(NOW) });
+  await db.doc('payoutRequests/pout_W3').set({ sellerUid: 'uActB', amount: 999, status: 'paid', method: 'mpesa', createdAt: F.Timestamp.fromMillis(NOW) });
+  const mine2 = await call('royalty.mine', 'uActA', {});
+  ck('participant dashboard: Withdrawn counts only PAID payouts (failed excluded)', mine2.wallet.withdrawnKes === 100, mine2.wallet.withdrawnKes);
+  ck("participant dashboard: another participant's payouts never appear", !mine2.wallet.history.some((h) => h.id === 'pout_W3') && mine2.wallet.history.length === 2);
+  const none = await call('royalty.mine', 'nobodyP', {});
+  ck('participant with no wallet: available 0, withdrawn 0 (canonical zero, not a guess)', none.wallet.availableForWithdrawalKes === 0 && none.wallet.withdrawnKes === 0);
   ck('participant cannot read another film\'s owner dashboard', (await code(call('royalty.film', 'uActA', { filmId: FILM }))) === 'permission-denied');
   const fd = await call('royalty.film', 'cA', { filmId: FILM });
   ck('owner dashboard: gross / fee / commission / pool totals', fd.totals.grossCents > 0 && fd.totals.commissionCents > 0 && fd.totals.poolCents > 0 && fd.totals.providerFeeCents > 0);

@@ -85,7 +85,7 @@ const bw = bFilm.store && bFilm.store['wallets/buyer1'];
 ck('BASE credits the BUYER\'s wallet on a film payment (the defect)', !!bw && bw.availableBalance > 0, bw && JSON.stringify(bw));
 ck('BASE writes a marketplace commissionLedger row for the film', paths(bFilm.store, /^commissionLedger\//).length === 1);
 
-for (const sc of ['film', 'filmIntentReadFails']) {
+for (const sc of ['film', 'filmIntentReadFails', 'filmHosted']) {
   console.log(`\n── branch: ${sc} ──`);
   const r = run(ROOT, sc, sc === 'filmIntentReadFails' ? { FAIL_INTENT_READ_AT: '2' } : {});
   ck(`${sc}: handler ran (200, replay 200)`, !r.crashed && JSON.stringify(r.calls) === '[200,200]', r.crashed || JSON.stringify(r.calls));
@@ -109,7 +109,7 @@ for (const sc of ['film', 'filmIntentReadFails']) {
   ck(`${sc}: no outbound network`, r.outbound.length === 0);
   const early = r.logs.some((l) => /royalty path, no seller credit/.test(l));
   const second = r.logs.some((l) => /reached the seller path/.test(l));
-  if (sc === 'film') ck('film: routed by the EARLY branch', early && !second, r.logs.join(' || ').slice(0, 200));
+  if (sc === 'film' || sc === 'filmHosted') ck(sc + ': routed by the EARLY branch', early && !second, r.logs.join(' || ').slice(0, 200));
   else ck('filmIntentReadFails: early branch LOST its read and the SECOND exit fired', !early && second && r.logs.some((l) => /purpose check failed/.test(l)), r.logs.join(' || ').slice(0, 200));
 }
 

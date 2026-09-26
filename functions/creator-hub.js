@@ -96,8 +96,9 @@ async function _adminAudit(action, actorUid, details) {
 }
 
 async function _config() {
-  const s = await _db().collection(COL.CONFIG).doc('creatorHub').get();
+  const [s, hc] = await Promise.all([_db().collection(COL.CONFIG).doc('creatorHub').get(), _db().collection(COL.CONFIG).doc('hostedCheckout').get()]);
   const d = s.exists ? s.data() : {};
+  const h = hc.exists ? hc.data() : {};
   return {
     purchasesEnabled: d.purchasesEnabled === true,
     /* Methods VERIFIED against the live IntaSend account (probe-intasend-capability).
@@ -109,6 +110,10 @@ async function _config() {
        every isAuthed() rule and req.auth-only callable platform-wide
        (docs/CREATOR_HUB.md "Guest checkout"). */
     guestCheckoutEnabled: d.guestCheckoutEnabled === true,
+    /* Hosted checkout (card, Google/Apple Pay, PesaLink… whatever the ACCOUNT
+       has enabled) is a platform switch in config/hostedCheckout, opened for
+       film_access only after the capability probe. */
+    hostedCheckoutEnabled: h.enabled === true && Array.isArray(h.purposes) && h.purposes.includes(PURPOSE),
   };
 }
 
@@ -470,10 +475,21 @@ async function catalogGet(req) {
       /* §8: never promise a method the live account has not been verified for. */
       notice: 'Payment methods available at checkout',
       guestCheckout: cfg.guestCheckoutEnabled,
+      hostedCheckout: cfg.hostedCheckoutEnabled,
       verifiedMethods: cfg.checkoutMethods,
       currency: f.currency,
     },
   };
+}
+
+/* Public creator profile: ACTIVE creators only, published films only, public
+   fields only (no private contact, no payout details, no earnings). */
+async function catalogCreator(req) {
+  const creatorId = _id((req.data || {}).creatorId, 'creatorId');
+  const c = await _db().collection(COL.CREATORS).doc(creatorId).get();
+  if (!c.exists || c.data().state !== P.CREATOR_STATE.ACTIVE) fail('not-found', 'Creator not found.');
+  const films = await _db().collection(COL.FILMS).where('creatorUid', '==', creatorId).where('creatorHub', '==', true).where('status', '==', 'active').limit(100).get();
+  return { creator: _publicCreator(creatorId, c.data()), films: films.docs.map((d) => _publicFilm(d.id, d.data())) };
 }
 
 /* ═══ PURCHASE — the `film_access` pricer (registered in payment-purposes) ═══ */
@@ -1003,12 +1019,28 @@ async function _periodStatuses(ids) {
 
 async function royaltyMine(req) {
   const uid = _uid(req);
-  const [parts, entries, stmts] = await Promise.all([
+  const [parts, entries, stmts, wal, pays] = await Promise.all([
     _db().collection(COL.PARTICIPATIONS).where('uid', '==', uid).limit(200).get(),
     _db().collection(COL.LEDGER).where('uid', '==', uid).where('bucket', '==', R.BUCKET.PARTICIPANT_ROYALTY).orderBy('createdAt', 'desc').limit(1000).get(),
     _db().collection(COL.STATEMENTS).where('uid', '==', uid).orderBy('periodId', 'desc').limit(40).get(),
+    _db().collection(COL.WALLETS).doc(uid).get(),
+    _db().collection('payoutRequests').where('sellerUid', '==', uid).limit(100).get(),
   ]);
   const rows = entries.docs.map((d) => d.data());
+  /* Available / Withdrawn come from the ONE canonical wallet and payout rail.
+     Released royalties join wallets.balance (no parallel royalty wallet), so
+     these are WALLET figures — they include any other SOKONI earnings, and the
+     page says so. Unknown → null (rendered "—"). */
+  const w = wal.exists ? wal.data() : null;
+  const PAID = ['paid', 'settled_manually'];
+  const payouts = pays.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const wallet = {
+    availableForWithdrawalKes: w && Number.isFinite(Number(w.balance)) ? Number(w.balance) : (w ? null : 0),
+    reservedForPayoutKes: w && Number.isFinite(Number(w.pendingPayout)) ? Number(w.pendingPayout) : 0,
+    withdrawnKes: payouts.filter((p) => PAID.includes(p.status)).reduce((a, p) => a + Number(p.amount || 0), 0),
+    history: payouts.sort((a, b) => (_ms(b.createdAt) || 0) - (_ms(a.createdAt) || 0)).slice(0, 20)
+      .map((p) => ({ id: p.id, amountKes: p.amount, status: p.status, method: p.method, createdAtMs: _ms(p.createdAt) })),
+  };
   const statuses = await _periodStatuses(rows.map((r) => r.periodId));
   const statements = stmts.docs.map((d) => d.data());
   const summary = R.summarizeParticipant({ entries: rows, periodStatusById: statuses, statements });
@@ -1019,6 +1051,7 @@ async function royaltyMine(req) {
     /* Released royalties sit in the ONE canonical wallet; withdrawal and its
        history are the wallet's (requestSellerPayout), not a second balance. */
     withdrawal: { via: 'wallet', page: '/wallet.html', note: 'Released royalties are in your SOKONI wallet balance.' },
+    wallet,
     nextSettlement: { periodId: cur.periodId, periodEndsAtMs: cur.endMs },
     statements: statements.map((s) => ({ periodId: s.periodId, earnedCents: s.earnedCents, reversedCents: s.reversedCents,
       netCents: s.netCents, carryInCents: s.carryInCents, releaseKes: s.releaseKes, carryOutCents: s.carryOutCents,
@@ -1443,6 +1476,16 @@ _adminH.creatorAdminConfig = async (req) => {
     const patch = {};
     if (typeof d.set.purchasesEnabled === 'boolean') patch.purchasesEnabled = d.set.purchasesEnabled;
     if (typeof d.set.guestCheckoutEnabled === 'boolean') patch.guestCheckoutEnabled = d.set.guestCheckoutEnabled;
+    if (typeof d.set.hostedCheckout === 'boolean') {
+      /* Only the film_access membership is Creator's to change; other purposes
+         in config/hostedCheckout are left exactly as they are. */
+      const hRef = _db().collection(COL.CONFIG).doc('hostedCheckout');
+      await hRef.set(d.set.hostedCheckout
+        ? { enabled: true, purposes: FieldValue.arrayUnion(PURPOSE), updatedAt: FieldValue.serverTimestamp(), updatedBy: actor }
+        : { purposes: FieldValue.arrayRemove(PURPOSE), updatedAt: FieldValue.serverTimestamp(), updatedBy: actor }, { merge: true });
+      await _adminAudit('creator_hosted_checkout', actor, { enabled: d.set.hostedCheckout });
+      if (!Object.keys(patch).length) return _config();
+    }
     if (Array.isArray(d.set.checkoutMethods)) {
       const known = ['M-PESA', 'CARD-PAYMENT', 'GOOGLE-PAY', 'APPLE-PAY', 'PESALINK', 'BITCOIN', 'BANK-ACH', 'COOP_B2B'];
       const m = d.set.checkoutMethods.map((x) => String(x).toUpperCase());
@@ -1734,7 +1777,7 @@ _adminH.creatorAdminVerificationDecision = async (req) => {
 /* ═══ DISPATCHER ═════════════════════════════════════════════════════════ */
 
 const OPS = {
-  'catalog.list': catalogList, 'catalog.get': catalogGet,
+  'catalog.list': catalogList, 'catalog.get': catalogGet, 'catalog.creator': catalogCreator,
   'creator.register': creatorRegister, 'creator.me': creatorMe,
   'film.saveDraft': filmSaveDraft, 'film.mediaUploadTarget': filmMediaUploadTarget, 'film.attachMedia': filmAttachMedia,
   'film.submit': filmSubmit, 'film.reopen': filmReopen, 'film.publish': filmPublish,
@@ -1748,7 +1791,7 @@ const OPS = {
 
 /* What an anonymous (guest) viewer may do: browse, watch what they paid for,
    see their own library. Nothing that creates identity, content or money. */
-const ANON_OPS = new Set(['catalog.list', 'catalog.get', 'playback.authorize', 'playback.heartbeat', 'playback.end', 'playback.report',
+const ANON_OPS = new Set(['catalog.list', 'catalog.get', 'catalog.creator', 'playback.authorize', 'playback.heartbeat', 'playback.end', 'playback.report',
   'viewer.library', 'viewer.endSession']);
 
 exports.creatorDispatch = onCall({ region: REGION, enforceAppCheck: true, maxInstances: 20, timeoutSeconds: 60, memory: '256MiB' }, async (req) => {

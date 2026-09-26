@@ -23,7 +23,7 @@ function makeFakeFirestore(opts = {}) {
   const store = new Map();        // path -> { data, v }
   let seq = 0;
 
-  const SENT = { TS: Symbol('ts'), INC: Symbol('inc'), UNION: Symbol('union'), DEL: Symbol('del') };
+  const SENT = { TS: Symbol('ts'), INC: Symbol('inc'), UNION: Symbol('union'), DEL: Symbol('del'), REMOVE: Symbol('remove') };
   const Timestamp = {
     fromMillis: (m) => ({ _ms: m, toMillis() { return this._ms; }, toDate() { return new Date(this._ms); } }),
     fromDate: (d) => Timestamp.fromMillis(d.getTime()),
@@ -33,6 +33,7 @@ function makeFakeFirestore(opts = {}) {
     serverTimestamp: () => ({ [SENT.TS]: true }),
     increment: (n) => ({ [SENT.INC]: n }),
     arrayUnion: (...v) => ({ [SENT.UNION]: v }),
+    arrayRemove: (...v) => ({ [SENT.REMOVE]: v }),
     delete: () => ({ [SENT.DEL]: true }),
   };
 
@@ -49,7 +50,8 @@ function makeFakeFirestore(opts = {}) {
     if (val && typeof val === 'object' && !Array.isArray(val)) {
       if (val[SENT.TS]) return Timestamp.fromMillis(clock());
       if (val[SENT.INC] !== undefined) return (Number(prev) || 0) + val[SENT.INC];
-      if (val[SENT.UNION]) return [...(Array.isArray(prev) ? prev : []), ...val[SENT.UNION]];
+      if (val[SENT.UNION]) { const base = Array.isArray(prev) ? prev : []; return [...base, ...val[SENT.UNION].filter((x) => !base.includes(x))]; }
+      if (val[SENT.REMOVE]) return (Array.isArray(prev) ? prev : []).filter((x) => !val[SENT.REMOVE].includes(x));
       if (val._ms !== undefined) return val;
       const o = {}; for (const k of Object.keys(val)) o[k] = resolve(prev && prev[k], val[k]); return o;
     }
@@ -60,7 +62,7 @@ function makeFakeFirestore(opts = {}) {
     for (const k of Object.keys(patch)) {
       const pv = patch[k];
       if (pv && typeof pv === 'object' && pv[SENT.DEL]) { delete out[k]; continue; }
-      if (pv && typeof pv === 'object' && !Array.isArray(pv) && !pv[SENT.TS] && pv[SENT.INC] === undefined && !pv[SENT.UNION] && pv._ms === undefined) {
+      if (pv && typeof pv === 'object' && !Array.isArray(pv) && !pv[SENT.TS] && pv[SENT.INC] === undefined && !pv[SENT.UNION] && !pv[SENT.REMOVE] && pv._ms === undefined) {
         out[k] = mergeDeep(out[k], pv);
       } else out[k] = resolve(out[k], pv);
     }
