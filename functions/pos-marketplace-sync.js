@@ -246,7 +246,11 @@ exports.updateClickAndCollectStatus = onCall(CF_OPTIONS, async ({ auth, data }) 
       if (!isPickup) {
         const delId  = `DEL${orderId}`;
         const pin    = String(Math.floor(1000 + Math.random() * 9000));
-        const fee    = Number(order.deliveryFee || order.delivery || 0);
+        /* Repair 5 — the SAME pricing the webhook writer carries: the order's pinned server quote,
+           revalidated, or a stated `pricingBlocked` reason. This used to write
+           `deliveryFee: order.deliveryFee` and `driverNet: Math.round(fee * 0.8)` — a fifth
+           independent rider rule, on the very record that is the rider's entitlement authority. */
+        const _deliveryPricing = await require('./delivery-quote-carry').deliveryPricingForOrder(db, { orderId });
         await db.doc(`packageRequests/${delId}`).set({
           ref: delId, deliveryRef: delId, orderId, orderRef: orderId,
           buyerName:  order.customerName || order.buyerName || '',
@@ -255,8 +259,9 @@ exports.updateClickAndCollectStatus = onCall(CF_OPTIONS, async ({ auth, data }) 
           pickupAddress:   order.sellerName || 'Shop',
           deliveryAddress: order.deliveryAddress || order.address || '',
           items: (order.items || []).map(i => ({ productId: i.productId || i.id, name: i.name, qty: i.qty || 1 })),
-          orderTotal: Number(order.total || 0), deliveryFee: fee,
-          driverNet: Math.round(fee * 0.8), commissionPct: 5,
+          orderTotal: Number(order.total || 0),
+          ..._deliveryPricing,
+          commissionPct: 5,
           vehicleType: 'moto', speed: 'same_day', category: 'general',
           /* proofPin is NOT stored on the packageRequest — the assigned rider can
              read this document under firestore.rules, so a plaintext PIN here is

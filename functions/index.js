@@ -3142,73 +3142,44 @@ exports.onOrderStatusChange = onDocumentUpdated(
        re-emitted update — same status again — a no-op, so the deliveryFees record and the
        rider credit are written once). */
     if (toStatus === "delivered" && before.status !== "delivered" && after.sellerUid) {
-      const deliveryFee = Number(after.deliveryFee || 0);
-      /* Delivery-fee split — priced by the ONE Commission Engine (category: hub).
-         The rate was already correct (it came from the single config), but the calculation
-         bypassed calculateCommission, so this flow ignored commissionRules, revenueConfig,
-         commission holidays and the audit trail. Same rate, same arithmetic.
-         skipMinimum:true because a delivery split never had the KES 10 platform floor, and a
-         floor here would swallow a small delivery fee whole — a repricing, not a refactor. */
-      const { calculateCommission: _calcDel } = require('./finos-utils');
-      const _delComm = deliveryFee > 0 ? await _calcDel(db, {
-        orderAmountCents: Math.round(deliveryFee * 100),
-        category:         'hub',
-        sellerId:         after.riderId || after.sellerUid || null,
-        hubId:            'delivery',
-        skipMinimum:      true,
-      }) : null;
-      const platformFee = _delComm ? _delComm.commissionCents / 100 : 0;
-      const riderFee    = Math.round((deliveryFee - platformFee) * 100) / 100;
-      const riderUid    = after.assignedDriverUid || after.riderId || null;
-
-      /* ── Rider payout — credit the ONE canonical withdrawable wallet (shillings),
-         exactly-once. The delivery fee is NOT escrowed (unlike the seller's product
-         earnings, which settle at `completed`): the rider did the job, so they are paid
-         on proof-of-delivery. Mirrors settleOrder's seller-credit pattern —
-         deterministic walletTransactions id (`{rider}_{order}_delivery`) is the
-         exactly-once guard against a re-fired trigger or a manual re-transition.
-         Was previously MISSING: onOrderStatusChange only wrote a `pending` deliveryFees
-         record, and its sole consumer is a read-only admin report — so riders were never
-         actually credited. Best-effort: a wallet hiccup never blocks the status write. */
-      const riderShillings = Math.max(0, Math.round(riderFee));
-      let riderCredited = false;
-      if (riderUid && riderShillings > 0) {
-        try {
-          riderCredited = await db.runTransaction(async (t) => {
-            const txnRef = db.collection("walletTransactions").doc(`${riderUid}_${orderId}_delivery`);
-            const ex = await t.get(txnRef);
-            if (ex.exists) return false; /* already credited — replay no-op */
-            t.set(db.collection("wallets").doc(riderUid), {
-              balance:   admin.firestore.FieldValue.increment(riderShillings),
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            }, { merge: true });
-            t.set(txnRef, {
-              uid:        riderUid,
-              type:       "delivery_earning",
-              amount:     riderShillings,
-              currency:   "KES",
-              orderId,
-              sourceType: "delivery",
-              sourceId:   orderId,
-              deliveryRef: after.deliveryRef || null,
-              createdAt:  admin.firestore.FieldValue.serverTimestamp(),
-            });
-            return true;
-          });
-        } catch (e) {
-          console.error("[onOrderStatusChange] rider payout failed (recoverable):", e.message);
-        }
+      /* ── RIDER ENTITLEMENT = THE DELIVERY RECORD (Repair 5) ──────────────────────────────
+         This used to price the rider as `order.deliveryFee − hub commission (12%)`: an
+         independent percentage rule over a figure the rider never agreed to, paid to whichever
+         rider id the ORDER named. The rider is owed the `riderEarning` of the quote the server
+         issued and bound to this order, carried on the server-authored delivery record —
+         rider-entitlement.js decides it (and refuses a browser-authored record, a quote that is
+         not this order's, and a rider the server did not assign). Exactly-once on the SAME key as
+         every other credit path. A refusal credits nobody and is recorded with its reason, so an
+         operator sees it rather than a silent zero. The entitlement does not read any refund:
+         what the rider is owed does not change because the buyer is refunded. */
+      const _riderEnt = require('./rider-entitlement');
+      const orderRiderUid = after.assignedDriverUid || after.riderId || null;
+      let _riderResult = null;
+      try {
+        _riderResult = await _riderEnt.creditDeliveryEarning(db, orderId,
+          { orderRiderUid, source: 'order_delivered' });
+      } catch (e) {
+        console.error("[onOrderStatusChange] rider payout failed (recoverable):", e.message);
       }
+      const _ent = _riderResult && _riderResult.entitlement;
+      const riderCredited = !!(_riderResult && _riderResult.credited);
+      const riderUid = (_ent && _ent.ok) ? _ent.riderUid : orderRiderUid;
+      const riderShillings = riderCredited ? _riderResult.shillings : 0;
 
       db.collection("deliveryFees").add({
         orderId,
         sellerUid:      after.sellerUid,
         riderUid:       riderUid,
-        platformFeeKES: platformFee,
-        riderFeeKES:    riderFee,
-        totalFeeKES:    deliveryFee,
+        /* The quote's own figures — never a split recomputed here. Unknown stays null, not 0. */
+        platformFeeKES: (_ent && _ent.ok) ? _ent.sokoniCommissionMinor / 100 : null,
+        riderFeeKES:    (_ent && _ent.ok) ? _ent.minorUnits / 100 : null,
+        totalFeeKES:    (_ent && _ent.ok) ? _ent.customerChargeMinor / 100 : null,
+        quoteId:        (_ent && _ent.ok) ? _ent.quoteId : null,
         grossOrderKES:  Number(after.orderTotal || 0),
-        status:         riderCredited ? "credited" : (riderUid ? "pending" : "no-rider"),
+        status:         riderCredited ? "credited"
+                      : (_riderResult && _riderResult.replay) ? "already_credited"
+                      : (_ent && !_ent.ok) ? "blocked" : "pending",
+        blockedReason:  (_ent && !_ent.ok) ? _ent.reason : null,
         creditedAt:     riderCredited ? admin.firestore.FieldValue.serverTimestamp() : null,
         createdAt:      admin.firestore.FieldValue.serverTimestamp(),
       }).catch(() => {});

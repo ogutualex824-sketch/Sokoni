@@ -31,7 +31,7 @@ const NOT_COMMISSION = {
   'functions/finos-utils.js':         'THE ENGINE (+ TAX_CONFIG: VAT/WHT are taxes ON commission)',
   'functions/shared/constants.js':    'VAT/WHT/DST tax constants',
   'functions/commission-config.js':   'THE single rate table',
-  'functions/settlement-engine.js':   'consumes the engine; rider revenue share (0.88) is a payout split',
+  'functions/settlement-engine.js':   'consumes the engine; the rider line is the rider-entitlement.js entitlement, passed in (Repair 5)',
   'functions/finos-router.js':        'consumes the engine; rider revenue share',
   'functions/finos.js':               'consumes the engine',
   'functions/impact.js':              '1% impact contribution — a donation, not commission',

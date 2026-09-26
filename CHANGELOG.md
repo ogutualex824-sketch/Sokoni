@@ -1,4 +1,30 @@
-## 2026-09-26 — Repair 4: a return is a request the server creates (branch `repair-4/returns-server-authority`, NOT landed)
+## 2026-09-26 — Repair 5: the delivery record decides what a rider is owed (branch `repair-5/rider-entitlement-authority`, NOT landed)
+
+Five independent rider-pay rules existed; four are live. They were:
+- `onOrderStatusChange`: fee − 12%, paid to the order's rider.
+- `processDriverEarning`: the queued amount.
+- `recordPayment` and `finosRecordTransaction`: 0.88 × a caller fee, paid to the caller's riderId.
+- `settlement-engine`: `DEFAULT_RIDER_PCT` 0.88.
+- The merchant "ready" writer: `driverNet` = fee × 0.8.
+
+`functions/rider-entitlement.js` is now the ONE authority. The rider is owed the `riderEarning` of the quote the
+server issued and bound to the order. The quote must be carried on a SERVER-authored delivery record (no `uid`),
+match `deliveryQuotes/{id}` consumed by that order, and be paid to the rider the server assigned. Anything else
+refuses with a recorded reason: nobody is paid, and nothing becomes a silent zero. The entitlement reads no
+refund/dispute/escrow, so the rider's entitlement is independent of the buyer's refund. Every path delegates; the
+queued amount and the caller's riderId are ignored or cross-checked. One writer (`creditDeliveryEarning`) and one
+exactly-once key.
+
+`scripts/test-rider-entitlement-authority.js` **32/0** (real handlers, real quotes); old code **FAILS 23**.
+Record: `docs/repairs/R5-rider-entitlement-authority.md`.
+- **Deploy precondition:** every production delivery record lacks a pinned quote, so Repair 5 must ship with or
+  after RES-1, or riders are recorded `blocked`.
+- API: `computeSettlement` takes `riderEntitlement` (no `riderPct`); `settlementPreviewMethod` takes `orderId`
+  (no `riderId`).
+- Database: the `delivery_earning` credit records `entitlementMinor`, `unpaidRemainderMinor` and `quoteId`;
+  `deliveryFees` records the quote's figures or `blocked` + `blockedReason`.
+
+## 2026-09-26 — Repair 4: a return is a request the server creates (landed `28b70e5`, not deployed)
 
 `returns.html` wrote returns from the browser (the rules deny it), called a nonexistent `processReturn`, and
 announced "refund initiated" when nothing was initiated. `submitReturn` trusted client prices, checked no

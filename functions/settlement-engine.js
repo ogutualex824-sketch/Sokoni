@@ -44,8 +44,9 @@ function _assertAdmin(req) {
 }
 const _int = (v) => Math.max(0, Math.round(Number(v) || 0));
 
-/* Default rider share of the delivery fee — mirrors finos.js (0.88). */
-const DEFAULT_RIDER_PCT = 0.88;
+/* NO RIDER PERCENTAGE (Repair 5). This was `DEFAULT_RIDER_PCT = 0.88` plus a caller-settable
+   `riderPct`. What a rider is owed is decided by rider-entitlement.js from the delivery record;
+   this engine takes that entitlement as an input and never derives one. */
 
 /* ────────────────────────────────────────────────────────────────
    computeSettlement — the ONE canonical deductions waterfall.
@@ -60,7 +61,7 @@ const DEFAULT_RIDER_PCT = 0.88;
      grossCents,               // customer payment (100% collected to Bravilex first)
      category, sellerId, hubId,
      gatewayFeeCents,          // PSP fee (platform-borne expense; default 0)
-     deliveryFeeCents, riderId, riderPct,
+     deliveryFeeCents, riderEntitlement,   // riderEntitlement = rider-entitlement.forOrder(...) result
      discountCents, discountFundedBy ('platform'|'seller'),
      referralBonusCents, affiliateCommissionCents, serviceChargeCents,
    }
@@ -95,9 +96,15 @@ async function computeSettlement(db, input = {}) {
 
   /* 6 ── Delivery / rider allocation */
   const deliveryFeeCents = _int(input.deliveryFeeCents);
-  const riderPct         = typeof input.riderPct === 'number' ? input.riderPct : DEFAULT_RIDER_PCT;
-  const riderNetCents    = _int(deliveryFeeCents * riderPct);
-  const platformDelivCents = _int(deliveryFeeCents - riderNetCents);
+  const _ent = input.riderEntitlement || null;
+  if (deliveryFeeCents > 0) {
+    if (!_ent || _ent.ok !== true) throw new Error('rider_entitlement_required: ' + ((_ent && _ent.reason) || 'none supplied'));
+    if (_ent.customerChargeMinor !== deliveryFeeCents) throw new Error('delivery_fee_not_the_quoted_charge');
+    if (input.riderId && input.riderId !== _ent.riderUid) throw new Error('rider_mismatch');
+  }
+  const riderNetCents      = deliveryFeeCents > 0 ? _int(_ent.minorUnits) : 0;
+  const platformDelivCents = deliveryFeeCents > 0 ? _int(_ent.sokoniCommissionMinor) : 0;
+  const riderUid           = deliveryFeeCents > 0 ? _ent.riderUid : null;
 
   /* 7 ── Discounts / promos, rewards, referral, affiliate, service charge (surfaced) */
   const discountCents          = _int(input.discountCents);
@@ -125,7 +132,7 @@ async function computeSettlement(db, input = {}) {
   add('commission', A.PLATFORM_CLEARING, A.PLATFORM_REVENUE, commissionCents);
   add('tax_vat', A.PLATFORM_REVENUE, A.PLATFORM_TAX, vatCents);
   add('gateway_fee', A.PLATFORM_EXPENSES, A.EXTERNAL_GATEWAY, gatewayFeeCents);
-  if (input.riderId) add('delivery_fee', A.PLATFORM_CLEARING, A.rider(input.riderId), riderNetCents);
+  if (riderUid && riderNetCents > 0) add('delivery_fee', A.PLATFORM_CLEARING, A.rider(riderUid), riderNetCents);
   if (discountCents && discountFundedBy === 'platform')
     add('promotion', A.PLATFORM_PROMOS, A.PLATFORM_CLEARING, discountCents);
 

@@ -36,7 +36,9 @@ const manual = (id, detail) => ({ check: id, status: 'manual', detail });
 async function checkAccountingBalance(db) {
   const b = await SE.computeSettlement(db, {
     grossCents: 250000, category: 'marketplace', sellerId: 'validate-seller',
-    gatewayFeeCents: 7500, deliveryFeeCents: 30000, riderId: 'validate-rider',
+    gatewayFeeCents: 7500, deliveryFeeCents: 30000,
+    /* An entitlement as rider-entitlement.forOrder returns it — the engine derives none (Repair 5). */
+    riderEntitlement: { ok: true, riderUid: 'validate-rider', minorUnits: 24600, customerChargeMinor: 30000, sokoniCommissionMinor: 5400 },
   });
   try { SE.assertBalanced(b.ledgerPlan); } catch (e) { return fail('accounting_balance', e.message); }
   const dr = {}, cr = {};
@@ -49,10 +51,12 @@ async function checkAccountingBalance(db) {
 
 /* 2 ── Payout calculation: net must equal gross − commission; WHT + rider correct. */
 async function checkPayoutCalculation(db) {
-  const gross = 100000, expComm = 10000 /*10%*/, expNet = 90000, expWht = 4500, expRider = 17600;
+  const gross = 100000, expComm = 10000 /*10%*/, expNet = 90000, expWht = 4500, expRider = 16400;
   const b = await SE.computeSettlement(db, {
     grossCents: gross, category: 'marketplace', sellerId: 'validate-seller',
-    deliveryFeeCents: 20000, riderId: 'r',
+    deliveryFeeCents: 20000,
+    /* The rider figure is the ENTITLEMENT, passed through untouched — not a share of the fee. */
+    riderEntitlement: { ok: true, riderUid: 'r', minorUnits: expRider, customerChargeMinor: 20000, sokoniCommissionMinor: 3600 },
   });
   const errs = [];
   if (b.commission.cents !== expComm)      errs.push(`commission ${b.commission.cents}≠${expComm}`);

@@ -181,9 +181,16 @@ exports.settlementPreviewMethod = onCall(
   { region: REGION, secrets: [SA.SETTLEMENT_ACCOUNT_NUMBER], enforceAppCheck: true },
   exports._h.settlementPreviewMethod = async (req) => {
     _assertAdmin(req);
-    const { grossCents, category, sellerId, provider, sellerPayoutAccount, gatewayFeeCents, deliveryFeeCents, riderId } = req.data || {};
+    const { grossCents, category, sellerId, provider, sellerPayoutAccount, gatewayFeeCents, deliveryFeeCents, orderId } = req.data || {};
     if (!provider) throw new HttpsError('invalid-argument', 'provider required');
-    const breakdown = await SE.computeSettlement(_db(), { grossCents, category, sellerId, gatewayFeeCents, deliveryFeeCents, riderId });
+    /* Repair 5 — a delivery line needs the order's rider ENTITLEMENT; the preview no longer takes a rider id. */
+    const riderEntitlement = Number(deliveryFeeCents) > 0
+      ? await require('./rider-entitlement').forOrder(_db(), orderId) : null;
+    if (riderEntitlement && !riderEntitlement.ok) {
+      throw new HttpsError('failed-precondition', 'Rider entitlement unavailable for this order: ' + riderEntitlement.reason);
+    }
+    const riderId = riderEntitlement ? riderEntitlement.riderUid : null;
+    const breakdown = await SE.computeSettlement(_db(), { grossCents, category, sellerId, gatewayFeeCents, deliveryFeeCents, riderEntitlement });
     const decision  = await resolveSettlementMethod(_db(), { provider, breakdown, sellerPayoutAccount });
     const ledgerPlan = buildLedgerPlan(breakdown, decision.method, { sellerId, riderId });
     let splitMasked = null;

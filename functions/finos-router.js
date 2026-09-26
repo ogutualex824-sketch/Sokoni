@@ -127,7 +127,7 @@ exports.finosRecordTransaction = onCall(
     _assertAuth(request);
     const {
       hubType, transactionId, amountCents, sellerId, buyerId,
-      deliveryFeeCents, riderId, tipCents, paymentRef,
+      deliveryFeeCents, riderId: claimedRiderId, tipCents, paymentRef,
       useEscrow, metadata,
     } = request.data;
 
@@ -178,10 +178,28 @@ exports.finosRecordTransaction = onCall(
     const comm = await U.calculateCommission(db, { orderAmountCents: amountCents, category, sellerId });
     const vat  = U.calculateVAT(comm.commissionCents, category);
 
-    const deliveryCents  = Math.round(deliveryFeeCents || 0);
-    const tipCts         = Math.round(tipCents || 0);
-    const riderEarnings  = deliveryCents > 0 ? Math.round(deliveryCents * 0.88) : 0;
-    const platformDeliv  = deliveryCents - riderEarnings;
+    /* ── RIDER MONEY COMES FROM THE DELIVERY RECORD (Repair 5) ───────────────────────────────
+       This was `riderEarnings = deliveryFeeCents × 0.88`, credited to the CALLER's `riderId` —
+       an independent percentage over a caller-stated fee, paid to a caller-named rider. The rider
+       and the amount now come from rider-entitlement.js (the order's server-authored delivery
+       record and its bound quote). A caller's `riderId` is only a claim, cross-checked; a stated
+       delivery fee must equal the quoted charge, or nothing is recorded. SOKONI's delivery cut is
+       the quote's own commission, not a remainder. */
+    const deliveryCents = Math.round(deliveryFeeCents || 0);
+    const tipCts        = Math.round(tipCents || 0);
+    let riderId = null, riderEarnings = 0, platformDeliv = 0;
+    if (deliveryCents > 0 || tipCts > 0) {
+      const _ent = await require('./rider-entitlement').forOrder(db, transactionId,
+        { orderRiderUid: claimedRiderId || null });
+      if (!_ent.ok) {
+        throw new HttpsError('failed-precondition', 'Rider entitlement unavailable for this order: ' + _ent.reason);
+      }
+      if (deliveryCents > 0 && deliveryCents !== _ent.customerChargeMinor) {
+        throw new HttpsError('failed-precondition', 'deliveryFeeCents does not match the quoted delivery charge');
+      }
+      riderId = _ent.riderUid;
+      if (deliveryCents > 0) { riderEarnings = _ent.minorUnits; platformDeliv = _ent.sokoniCommissionMinor; }
+    }
 
     /* Determine escrow policy */
     const rule      = await _getSettlementRule(db, hub);

@@ -763,78 +763,39 @@ exports.processDriverEarning = onDocumentCreated('driverEarningQueue/{docId}', a
   const snap = event.data;
   if (!snap) return;
   const data = snap.data();
-  const { riderId, amount, orderId, tripId, source } = data;
-  if (!riderId || !amount) return;
+  const { riderId, orderId } = data;
+  if (!riderId) return;
 
-  /* P0-5: Firestore triggers are AT-LEAST-ONCE — this handler can fire twice for the
-     same driverEarningQueue doc. The previous code used a batch (atomic, but NOT
-     idempotent):
-       • wallets.balance: FieldValue.increment(amount)   → a redelivery PAID THE DRIVER TWICE
-       • walletTransactions.doc()                        → AUTO-ID: a second credit record
-     It already wrote `processed: true` on the queue doc — but never READ it, so the
-     guard existed in the data and was simply unused.
+  /* ── THE AMOUNT IS NOT THE QUEUE'S TO STATE (Repair 5) ─────────────────────────────────────
+     This credited `data.amount` — whatever figure the queue entry carried — to `data.riderId`.
+     The rider is owed the entitlement of the order's server-authored delivery record
+     (rider-entitlement.js), paid to the rider the SERVER assigned; the queue entry names the
+     order, nothing more. A queue entry for a different rider is refused (rider_mismatch), and an
+     order-less entry has no delivery record, so it pays nobody and says why.
 
-     Fix: the queue doc's `processed` flag is now the idempotency marker, checked and
-     set inside ONE transaction, and the wallet-transaction id is derived
-     deterministically from the queue doc id (one credit record per queue entry, by
-     construction). Exactly-once with respect to money. */
-  const docId     = event.params.docId;
-  const walletRef = db.collection('wallets').doc(riderId);
-  /* Cross-rail exactly-once. When this earning is tied to an order, share the SAME
-     idempotency key the delivered-trigger payout uses: onOrderStatusChange writes
-     walletTransactions/{rider}_{order}_delivery when orders.status flips to `delivered`.
-     A trip completion flips its order to `delivered` (→ that rail) AND could enqueue here
-     (→ this rail); with different keys each rail would credit once = double-pay. Sharing
-     the key makes the two rails mutually exclusive — whichever fires first pays, the other
-     no-ops. Order-less trips (no orderId) fall back to the queue-doc id. */
-  const canonicalId = orderId ? `${riderId}_${orderId}_delivery` : docId;
-  const txRef       = db.collection('walletTransactions').doc(canonicalId);
-
-  const applied = await db.runTransaction(async (txn) => {
-    const q = await txn.get(snap.ref);
-    if (!q.exists || q.data().processed === true) return false;       // redelivery — already paid
-    const paid = await txn.get(txRef);
-    if (paid.exists) {                                                // the delivered-trigger rail already credited
-      txn.update(snap.ref, { processed: true, processedAt: FieldValue.serverTimestamp(), skippedReason: 'already_paid_delivered_trigger' });
-      return false;
-    }
-
-    txn.set(txRef, {
-      userId:      riderId,
-      uid:         riderId,
-      type:        'delivery_earning',
-      amount,
-      currency:    'KES',
-      description: `Delivery earning — Order ${(orderId || '').slice(0, 8).toUpperCase()}`,
-      source:      'delivery_earning',
-      sourceType:  'delivery',
-      orderId:     orderId || null,
-      tripId:      tripId  || null,
-      status:      'completed',
-      createdAt:   FieldValue.serverTimestamp(),
-    });
-
-    /* Safe here: runs at most once, guarded by the `processed` + shared-key checks above. */
-    txn.set(walletRef, {
-      balance:   FieldValue.increment(amount),
-      currency:  'KES',
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-
-    txn.update(snap.ref, {
-      processed:   true,
-      processedAt: FieldValue.serverTimestamp(),
-    });
-
-    return true;
-  });
-
-  if (!applied) {
-    console.log(`Driver earning: duplicate trigger delivery ignored (queue=${docId})`);
+     Exactly-once is unchanged in substance: the queue doc's `processed` flag is read and set in
+     the SAME transaction as the credit, and the credit uses the ONE key every rail shares
+     ({rider}_{order}_delivery), so this rail and the delivered-trigger rail can never both pay. */
+  const docId = event.params.docId;
+  if (!orderId) {
+    await snap.ref.update({ processed: true, processedAt: FieldValue.serverTimestamp(),
+      outcome: 'refused:no_delivery_record' }).catch(() => {});
+    console.warn(`Driver earning refused: queue=${docId} names no order, so no delivery record`);
     return;
   }
+  const RE = require('./rider-entitlement');
+  const r = await RE.creditDeliveryEarning(db, orderId,
+    { claimRef: snap.ref, orderRiderUid: riderId, source: 'driver_earning_queue' });
 
-  console.log(`Driver earning processed: ${riderId} +KES ${amount} for order ${orderId}`);
+  if (r.alreadyProcessed) {
+    console.log(`Driver earning: duplicate trigger delivery ignored (queue=${docId})`);
+  } else if (r.credited) {
+    console.log(`Driver earning processed: ${r.entitlement.riderUid} +KES ${r.shillings} for order ${orderId}`);
+  } else if (r.replay) {
+    console.log(`Driver earning: already paid for order ${orderId} (queue=${docId})`);
+  } else {
+    console.warn(`Driver earning refused: order ${orderId} (queue=${docId}) — ${r.entitlement && r.entitlement.reason}`);
+  }
 });
 
 /* ═══════════════════════════════════════════════════════════════════════

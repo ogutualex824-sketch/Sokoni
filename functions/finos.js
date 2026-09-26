@@ -37,7 +37,7 @@ exports.recordPayment = onCall(
   async (request) => {
     _assertAuth(request);
     const {
-      orderId, orderAmountCents, category, sellerId, riderId, buyerId,
+      orderId, orderAmountCents, category, sellerId, riderId: claimedRiderId, buyerId,
       deliveryFeeCents, tipCents, idempotencyKey,
     } = request.data;
 
@@ -54,10 +54,28 @@ exports.recordPayment = onCall(
     const comm = await U.calculateCommission(_db(), { orderAmountCents, category, sellerId });
     const vat  = U.calculateVAT(comm.commissionCents, category);
 
+    /* ── RIDER MONEY COMES FROM THE DELIVERY RECORD (Repair 5) ───────────────────────────────
+       This was `riderEarnings = deliveryFeeCents × 0.88`, credited to the CALLER's `riderId` —
+       an independent percentage over a caller-stated fee, paid to a caller-named rider. The rider
+       and the amount now come from rider-entitlement.js (the order's server-authored delivery
+       record and its bound quote). A caller's `riderId` is only a claim, cross-checked; a stated
+       delivery fee must equal the quoted charge, or nothing is recorded. SOKONI's delivery cut is
+       the quote's own commission, not a remainder. */
     const deliveryCents = Math.round(deliveryFeeCents || 0);
     const tipCts        = Math.round(tipCents || 0);
-    const riderEarnings = Math.round(deliveryCents * 0.88); /* Rider keeps 88% of delivery fee */
-    const platformDeliv = deliveryCents - riderEarnings;
+    let riderId = null, riderEarnings = 0, platformDeliv = 0;
+    if (deliveryCents > 0 || tipCts > 0) {
+      const _ent = await require('./rider-entitlement').forOrder(_db(), orderId,
+        { orderRiderUid: claimedRiderId || null });
+      if (!_ent.ok) {
+        throw new HttpsError('failed-precondition', 'Rider entitlement unavailable for this order: ' + _ent.reason);
+      }
+      if (deliveryCents > 0 && deliveryCents !== _ent.customerChargeMinor) {
+        throw new HttpsError('failed-precondition', 'deliveryFeeCents does not match the quoted delivery charge');
+      }
+      riderId = _ent.riderUid;
+      if (deliveryCents > 0) { riderEarnings = _ent.minorUnits; platformDeliv = _ent.sokoniCommissionMinor; }
+    }
 
     const db = _db();
 
