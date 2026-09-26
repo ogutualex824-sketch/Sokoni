@@ -52,6 +52,12 @@ exports.createEntertainmentListing = onCall(CF_OPTS, async (req) => {
   if (entType === 'ppv' && !price) throw new HttpsError('invalid-argument', 'Price required for ppv type');
 
   const ref = db().collection('entertainmentListings').doc();
+  /* The stream URL is a SECRET: entertainmentListings is publicly readable when
+     active (firestore.rules), so a URL on the listing doc was readable by anyone
+     regardless of purchase. It lives in a server-only sidecar instead. */
+  await db().collection('entertainmentListingSecrets').doc(ref.id).set({
+    listingId: ref.id, streamingUrl: san(streamingUrl, 500), updatedAt: FieldValue.serverTimestamp(),
+  });
   await ref.set({
     listingId: ref.id, creatorUid: uid,
     title: san(title, 150), description: san(description, 3000),
@@ -60,7 +66,6 @@ exports.createEntertainmentListing = onCall(CF_OPTS, async (req) => {
     currency: currency === 'USD' ? 'USD' : 'KES',
     thumbnailUrl: san(thumbnailUrl, 500),
     trailerUrl: san(trailerUrl, 500),
-    streamingUrl: san(streamingUrl, 500), // only revealed after purchase
     duration: parseInt(duration) || null, // minutes
     releaseYear: parseInt(releaseYear) || null,
     genre: san(genre, 60), language: san(language, 60) || 'English',
@@ -85,6 +90,9 @@ exports.publishEntertainmentListing = onCall(CF_OPTS, async (req) => {
   const ref = db().collection('entertainmentListings').doc(listingId);
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'Listing not found');
+  /* Creator Hub films publish only through review (creator-hub.js). This legacy
+     self-publish would otherwise make an unreviewed draft public. */
+  if (snap.data().creatorHub === true) throw new HttpsError('failed-precondition', 'Creator Hub films are published through review.');
   const role = await getRole(uid);
   if (snap.data().creatorUid !== uid && role < 4) throw new HttpsError('permission-denied', 'Not authorized');
 
@@ -101,6 +109,14 @@ exports.getEntertainmentListing = onCall(CF_OPTS, async (req) => {
   const snap = await db().collection('entertainmentListings').doc(listingId).get();
   if (!snap.exists || snap.data().status !== 'active') throw new HttpsError('not-found', 'Not found');
   const listing = { ...snap.data() };
+  delete listing.streamingUrl;   /* legacy docs may still carry it; the sidecar is the source */
+  if (listing.creatorHub === true) {
+    /* Creator Hub films never carry a URL: playback is a short-lived signed
+       grant from creatorDispatch playback.authorize. */
+    return listing;
+  }
+  const _secret = await db().collection('entertainmentListingSecrets').doc(listingId).get();
+  listing.streamingUrl = _secret.exists ? _secret.data().streamingUrl : (snap.data().streamingUrl || '');
 
   // Only reveal streaming URL for free content or after purchase
   if (listing.entType !== 'free' && uid) {
@@ -195,8 +211,11 @@ exports.purchaseEntertainment = onCall(CF_OPTS, async (req) => {
   const snap = await db().collection('entertainmentListings').doc(listingId).get();
   if (!snap.exists || snap.data().status !== 'active') throw new HttpsError('not-found', 'Content not found');
   const listing = snap.data();
+  if (listing.creatorHub === true) throw new HttpsError('failed-precondition', 'Buy Creator Hub films through checkout (film_access).');
 
   if (listing.entType === 'free') {
+    const _sec = await db().collection('entertainmentListingSecrets').doc(listingId).get();
+    listing.streamingUrl = _sec.exists ? _sec.data().streamingUrl : (listing.streamingUrl || '');
     // Free content — just log access
     const ref = db().collection('entertainmentPurchases').doc();
     await ref.set({

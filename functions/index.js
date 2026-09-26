@@ -7593,6 +7593,17 @@ exports.webhookIntasend = onRequest(
         status:            fsStatus,
         intasendState:     state,
         confirmedAmount:   amount,
+        /* Creator Hub (§9/§18): what IntaSend itself reported, written in the SAME
+           claim so the COMPLETE transition and the fee evidence land atomically.
+           Additive observability — nothing reads these except the royalty accrual,
+           which withholds when neither charges nor value/net_amount was reported
+           rather than assuming a zero fee. */
+        providerReport: {
+          value:     invoice.value     ?? req.body?.value     ?? null,
+          netAmount: invoice.net_amount ?? req.body?.net_amount ?? null,
+          charges:   invoice.charges   ?? req.body?.charges   ?? null,
+          currency:  invoice.currency  ?? req.body?.currency  ?? null,
+        },
         updatedAt:         admin.firestore.FieldValue.serverTimestamp(),
         webhookReceivedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -7622,6 +7633,28 @@ exports.webhookIntasend = onRequest(
          the provider is credited only by Phase C settlement at completion. Handled in
          isolation via the server-minted intent; skips all commission/credit/creation. */
       if (await _holdServiceBookingPayment(db, admin, apiRef, existing.intentRef, amount)) { res.status(200).send("OK"); return; }
+
+      /* Creator Hub film purchase: NOT a seller sale. Stop here — before the
+         commissionLedger write and the seller wallet credit below — because
+         (a) the film intent carries no sellerUid, so the credit would fall back
+         to payData.uid and pay the BUYER, and (b) even with a creator uid it
+         would pay the full net instantly, bypassing the royalty split and the
+         quarterly hold. Access + royalty accrual run from the payments/{ref}
+         trigger (creator-hub.js creatorOnFilmPayment) on this COMPLETE write,
+         which already carries providerReport. Purpose is read from the
+         server-minted INTENT, never from client meta. If the intent read FAILS
+         this falls through (a 500 would lose every other effect: the claim above
+         has already committed COMPLETE) — the wallet-credit guard below then
+         refuses the credit on attribution.purpose/type instead. */
+      try {
+        const _fiSnap = await db.collection("paymentIntents").doc(existing.intentRef || apiRef).get();
+        if (_fiSnap.exists && _fiSnap.data().purpose === "film_access") {
+          logger.info("[webhookIntasend] film_access — royalty path, no seller credit", { ref: apiRef });
+          res.status(200).send("OK"); return;
+        }
+      } catch (filmBranchErr) {
+        logger.error("[webhookIntasend] film_access purpose check failed", { ref: apiRef, err: filmBranchErr.message });
+      }
 
       /* ══ D1 FIX (Q6) — financial attribution, resolved ONCE ═════════════════════════
          Everything below that used to read payData.meta directly for WHO gets
@@ -7806,8 +7839,14 @@ exports.webhookIntasend = onRequest(
                          : (attribution.sellerUid || attribution.merchantUid || payData.uid);
         const _netCents = Math.round(Math.max(0, amount - sokoniCut) * 100);
 
+        /* Creator Hub defence in depth: the early film branch above normally
+           returns first; if its intent read failed, this still refuses to credit
+           a film payment (purpose from the intent, type from intent metadata). */
+        const _isFilmAccess = attribution.purpose === "film_access" || attribution.type === "film_access";
         if (_isSubscription) {
           console.log(`[webhookIntasend] wallet credit skipped (subscription): ${apiRef}`);
+        } else if (_isFilmAccess) {
+          console.log(`[webhookIntasend] wallet credit skipped (film_access → royalty ledger): ${apiRef}`);
         } else if (!_sellerId || _netCents <= 0) {
           console.warn(`[webhookIntasend] wallet credit skipped (no seller or zero net): ${apiRef}`);
         } else if (_isBooking) {
@@ -12100,6 +12139,14 @@ exports.purchaseEntertainment       = entertainmentHub.purchaseEntertainment;
 exports.getMyEntertainmentPurchases = entertainmentHub.getMyEntertainmentPurchases;
 exports.rateEntertainmentContent    = entertainmentHub.rateEntertainmentContent;
 exports.getCreatorDashboard         = entertainmentHub.getCreatorDashboard;
+
+/* ── Creator Hub (film/media marketplace inside Entertainment) ──────────────
+   One dispatcher for creator/viewer/playback/royalty ops, one payments trigger
+   for access + royalty accrual. Admin ops ride adminOsDispatch (merged in
+   admin-os-dispatch.js). docs/CREATOR_HUB.md */
+const creatorHub = require('./creator-hub');
+exports.creatorDispatch      = creatorHub.creatorDispatch;
+exports.creatorOnFilmPayment = creatorHub.creatorOnFilmPayment;
 
 /* ── Payment State Machine v1.0 ─────────────────────────────────────────── */
 const paymentFSM = require('./payment-state-machine');

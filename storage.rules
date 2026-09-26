@@ -179,6 +179,37 @@ service firebase.storage {
       allow delete:        if request.auth != null && request.auth.uid == uid;
     }
 
+    /* ── Creator Hub film masters (docs/CREATOR_HUB.md) ──
+       WRITE-ONLY for the owning creator, CREATE-ONLY (an attached master can
+       never be overwritten after review), and NO client read at all: playback
+       is a short-lived V4 signed URL minted by creatorDispatch after an
+       entitlement check. 8 GiB ceiling mirrors MASTER_MAX_BYTES. ── */
+    match /creator-masters/{uid}/{filmId}/{uploadId} {
+      allow read:   if false;
+      allow create: if request.auth != null
+                    && request.auth.uid == uid
+                    && resource == null
+                    && request.resource.contentType.matches('video/.*')
+                    && request.resource.size < 8 * 1024 * 1024 * 1024;
+      allow update, delete: if false;
+    }
+
+    /* ── Creator Hub public assets: posters, avatars (images) and trailers
+       (video ≤ 500 MB). Public read — they are marketing material; the film
+       itself never lives here. Owner-only writes. ── */
+    match /creator-public/{uid}/{allPaths=**} {
+      allow read:          if true;
+      allow create, update: if request.auth != null
+                           && request.auth.uid == uid
+                           && notExecutable()
+                           && (
+                                (safeImageOnly() && request.resource.size < 15 * 1024 * 1024)
+                             || (request.resource.contentType.matches('video/.*')
+                                  && request.resource.size < 500 * 1024 * 1024)
+                           );
+      allow delete:        if request.auth != null && request.auth.uid == uid;
+    }
+
     /* ── Security audit exports — admin-only, PDF/CSV/XLSX only ──
        STG-2: write now requires admin token claim, not just UID match.        ── */
     match /security-exports/{adminUid}/{filename} {

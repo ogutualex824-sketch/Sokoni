@@ -116,6 +116,17 @@ async function validateOrderLines(uid, items) {
  */
 const PURPOSES = {
 
+  /* ── Creator Hub film access ──────────────────────────────────────────
+     Price, currency and rental window come from the PUBLISHED film document
+     (entertainmentListings, creatorHub:true). The pricer lives with the rest
+     of the Creator rules; this entry is the registry binding. The intent
+     deliberately carries NO sellerUid — film money accrues to the royalty
+     ledger, never to a seller wallet (docs/CREATOR_HUB.md §Payment). */
+  film_access: {
+    resourceType: 'film',
+    price: (uid, data) => require('./creator-hub').priceFilmAccess(uid, data),
+  },
+
   /* ── Digital downloads ────────────────────────────────────────────────
      Price comes from digitalProducts, never from the purchase record and
      never from the client — a purchase row is created before payment and a

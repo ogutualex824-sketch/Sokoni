@@ -392,6 +392,17 @@ function registerAll() {
       refundable:   true,
     });
   }
+  /* Creator Hub: a purchase or rental of one film. The rental window rides on
+     the server-minted intent (metadata.rentalDays) and is applied by the
+     adapter, so the engine-level expiry stays null. */
+  if (!engine.getPurpose('film_access')) {
+    engine.registerPurpose('film_access', {
+      resourceType: 'film',
+      handler:      require('./creator-hub').filmAccessAdapter,
+      expiresDays:  null,
+      refundable:   true,
+    });
+  }
   if (!engine.getPurpose('digital_download')) {
     engine.registerPurpose('digital_download', {
       resourceType: 'digitalPurchase',

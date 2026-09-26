@@ -466,6 +466,16 @@ exports.fosSubmitRefund = onCall(
       const pd = snap.data();
       txId = pd.fosTransactionId || payRef;
       tx   = pd;
+      /* Creator Hub: a film purchase's payments doc has uid = the BUYER and no
+         seller. Without this, sellerUid fell back to tx.uid (the buyer, whose
+         wallet the finalize step would debit) and buyerUid to the caller (an
+         admin). The creators' side is reversed by the royalty ledger in
+         creator-hub.onFilmRefundProcessed — never by a wallet debit here. */
+      const _fi = await db().collection('paymentIntents').doc(payRef).get();
+      if (_fi.exists && _fi.data().purpose === 'film_access') {
+        tx = { ...pd, payRef, buyerUid: pd.uid, sellerUid: null, uid: null, creatorFilm: true,
+               amountKES: Number(pd.amount) || null };
+      }
     }
 
     if (!isAdmin && tx.buyerUid !== auth.uid)
@@ -541,6 +551,10 @@ exports.fosSubmitRefund = onCall(
 
       const fsdb = db();
       await fsdb.runTransaction(async (txn) => {
+        /* Read first: a payRef-only refund has no fosTransactions doc, and an
+           update() on a missing doc threw AFTER the gateway had refunded — leaving
+           the request 'approved' and re-approvable (a second gateway refund). */
+        const _txSnap = txId ? await txn.get(fsdb.collection('fosTransactions').doc(txId)) : null;
         txn.update(refundRef, { status: 'processed', refundId: result.refundId, processedAt: now(), updatedAt: now() });
         if (tx.sellerUid) {
           txn.set(fsdb.collection('wallets').doc(tx.sellerUid), {
@@ -549,7 +563,7 @@ exports.fosSubmitRefund = onCall(
             updatedAt:      now(),
           }, { merge: true });
         }
-        if (txId) {
+        if (_txSnap && _txSnap.exists) {
           txn.update(fsdb.collection('fosTransactions').doc(txId), {
             status:        refundType === 'full' ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
             refundedCents: admin.firestore.FieldValue.increment(amountCents),
@@ -565,6 +579,9 @@ exports.fosSubmitRefund = onCall(
         amountKES,
       });
       await _audit('refund_auto_processed', auth.uid, { refundId: refundRef.id, amountKES, fosTransactionId: txId });
+      if (tx.creatorFilm) {
+        await require('./creator-hub').onFilmRefundProcessed({ payRef: tx.payRef || payRef, refundId: refundRef.id, amountCents, source: 'fosSubmitRefund' });
+      }
       return { refundId: refundRef.id, status: 'processed', providerRefundId: result.refundId };
     } catch (gatewayErr) {
       logger.error('[FOS/refund] Auto-approve exception', { error: gatewayErr.message });
@@ -646,6 +663,7 @@ exports.fosApproveRefund = onCall(
     /* Finalize: atomically update refund record + seller wallet + linked transaction */
     const refundRef = fsdb.collection('fosRefundQueue').doc(refundId);
     await fsdb.runTransaction(async (txn) => {
+      const _txSnap = refund.fosTransactionId ? await txn.get(fsdb.collection('fosTransactions').doc(refund.fosTransactionId)) : null;
       txn.update(refundRef, {
         status:      'processed',
         refundId:    result.refundId,
@@ -663,7 +681,7 @@ exports.fosApproveRefund = onCall(
         }, { merge: true });
       }
 
-      if (refund.fosTransactionId) {
+      if (_txSnap && _txSnap.exists) {
         const txRef = fsdb.collection('fosTransactions').doc(refund.fosTransactionId);
         txn.update(txRef, {
           status:        refund.refundType === 'full' ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
@@ -683,6 +701,10 @@ exports.fosApproveRefund = onCall(
     await _audit('refund_approved', req.auth.uid, {
       refundId, amountKES: refund.amountKES, buyerUid: refund.buyerUid,
     });
+    if (refund.payRef) {
+      /* No-op unless the payment is a Creator Hub film purchase; never throws. */
+      await require('./creator-hub').onFilmRefundProcessed({ payRef: refund.payRef, refundId, amountCents: refund.amountCents, source: 'fosApproveRefund' });
+    }
 
     return { status: 'processed', providerRefundId: result.refundId };
   }

@@ -3696,6 +3696,66 @@ service cloud.firestore {
   allow read:  if true;
   allow write: if false;
   }
+  match /entertainmentListingSecrets/{listingId} {
+  allow read, write: if false;
+  }
+  match /creators/{uid} {
+  allow read:  if resource.data.state == 'ACTIVE'
+  || (isAuthed() && request.auth.uid == uid)
+  || isAdmin();
+  allow write: if false;
+  }
+  match /creatorPrivate/{uid} {
+  allow read:  if isAuthed() && (request.auth.uid == uid || isAdmin());
+  allow write: if false;
+  }
+  match /creatorMedia/{filmId} {
+  allow read, write: if false;
+  }
+  match /royaltyAgreements/{filmId}/versions/{version} {
+  allow read:  if isAdmin()
+  || (isAuthed() && get(/databases/$(database)/documents/entertainmentListings/$(filmId)).data.creatorUid == request.auth.uid);
+  allow write: if false;
+  }
+  match /royaltyParticipations/{id} {
+  allow read:  if isAuthed() && (resource.data.uid == request.auth.uid
+  || resource.data.creatorUid == request.auth.uid
+  || isAdmin());
+  allow write: if false;
+  }
+  match /contentEntitlements/{paymentRef} {
+  allow read:  if isAuthed() && (resource.data.buyerUid == request.auth.uid || isAdmin());
+  allow write: if false;
+  }
+  match /contentAccess/{id} {
+  allow read:  if isAuthed() && (resource.data.buyerUid == request.auth.uid || isAdmin());
+  allow write: if false;
+  }
+  match /royaltyLedger/{entryId} {
+  allow read:  if isAuthed() && (resource.data.uid == request.auth.uid
+  || resource.data.creatorUid == request.auth.uid
+  || isAdmin());
+  allow write: if false;
+  }
+  match /royaltyAccruals/{id} {
+  allow read:  if isAuthed() && (resource.data.creatorUid == request.auth.uid || isAdmin());
+  allow write: if false;
+  }
+  match /royaltyStatements/{id} {
+  allow read:  if isAuthed() && (resource.data.uid == request.auth.uid || isAdmin());
+  allow write: if false;
+  }
+  match /royaltyPeriods/{periodId} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
+  match /royaltyReversals/{id}       { allow read: if isAdmin(); allow write: if false; }
+  match /royaltyDistributions/{id}   { allow read: if isAdmin(); allow write: if false; }
+  match /playbackSessions/{id}       { allow read: if isAdmin(); allow write: if false; }
+  match /playbackAudit/{id}          { allow read: if isAdmin(); allow write: if false; }
+  match /playbackRate/{uid}          { allow read, write: if false; }
+  match /creatorExceptions/{id}      { allow read: if isAdmin(); allow write: if false; }
+  match /creatorPayoutHolds/{uid}    { allow read: if isAdmin(); allow write: if false; }
   match /loyaltyAccounts/{uid} {
   allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
   allow write: if false;
