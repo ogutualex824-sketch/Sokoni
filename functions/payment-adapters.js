@@ -228,6 +228,9 @@ class IntaSendAdapter extends PaymentAdapter {
     return {
       success:     ok,
       refundId:    res.body?.id || null,
+      /* The caller classifies a failure: only a definitive 4xx proves no refund
+         happened; a 5xx / 408 / 429 is an UNKNOWN outcome, never retried blind. */
+      httpStatus:  res.status,
       rawResponse: res.body,
       error:       ok ? null : (res.body?.detail || 'IntaSend refund error'),
     };

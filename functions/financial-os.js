@@ -419,6 +419,172 @@ async function _processFOSTransaction(txId, { payRef, netAmount, provider, check
 }
 
 /* ════════════════════════════════════════════════════════════
+   REFUND EXECUTION — exactly one provider call, exactly one local settlement.
+
+   The defect this replaces (docs/CREATOR_HUB.md §Refund audit): after IntaSend
+   had ACCEPTED a refund, any later exception (a transient Firestore failure in
+   the finalize transaction, a missing fosTransactions doc) landed in a catch that
+   set the request back to 'approved' — and fosApproveRefund would then send a
+   SECOND refund. An unknown outcome (dropped connection, 5xx, timeout) was also
+   treated as retryable, and the admin auto-approve path called the gateway
+   without the 'processing' lock, so a concurrent approval could race it.
+
+   State machine (fosRefundQueue.status):
+     pending | approved | failed   EXECUTABLE — may take the lock
+     processing (+executionId)     one execution in flight; never re-executable
+     processed                     provider refunded AND local settlement done
+     provider_succeeded            provider refunded, local settlement pending
+     outcome_unknown               provider outcome NOT known — never retried
+                                   automatically; fosResolveRefund with evidence
+     rejected                      terminal
+   Provider idempotency: IntaSend's chargeback call carries no idempotency key
+   (none is documented for this account), so exactly-once is enforced HERE: one
+   call per execution, and a retry is allowed ONLY after a definitive 4xx
+   rejection that proves no refund happened.
+════════════════════════════════════════════════════════════ */
+const REFUND_EXECUTABLE = new Set(['pending', 'approved', 'failed']);
+/* A definitive rejection: the provider answered and refused. 408/409/425/429
+   are NOT proof that nothing happened. */
+function _isDefinitiveRejection(httpStatus) {
+  const s = Number(httpStatus);
+  return Number.isInteger(s) && s >= 400 && s < 500 && ![408, 409, 425, 429].includes(s);
+}
+
+/* Patch the refund only if THIS execution still owns it. A failed write leaves
+   'processing', which is not executable — the safe failure. */
+async function _markRefundExecution(refundRef, executionId, patch) {
+  try {
+    await db().runTransaction(async (txn) => {
+      const snap = await txn.get(refundRef);
+      if (!snap.exists) return;
+      const rd = snap.data();
+      if (rd.status !== 'processing' || rd.executionId !== executionId) return;
+      txn.update(refundRef, { ...patch, updatedAt: now() });
+    });
+  } catch (e) {
+    logger.error('[FOS/refund] could not record execution outcome — request stays locked in processing', { refundId: refundRef.id, err: e.message });
+  }
+}
+
+/* Local settlement, exactly once. Allowed from 'processing' owned by this
+   execution, or — only via fosResolveRefund — from provider_succeeded /
+   outcome_unknown. 'processed' is an idempotent no-op. */
+async function _settleRefund(refundRef, { executionId = null, resolving = false, providerRefundId = null, actorUid = null, resolution = null } = {}) {
+  const fsdb = db();
+  try {
+    return await fsdb.runTransaction(async (txn) => {
+      const snap = await txn.get(refundRef);
+      if (!snap.exists) throw new HttpsError('not-found', 'Refund request not found');
+      const refund = snap.data();
+      if (refund.status === 'processed') return { ok: true, already: true, refund };
+      const owned = refund.status === 'processing' && executionId && refund.executionId === executionId;
+      const resolvable = resolving && ['provider_succeeded', 'outcome_unknown', 'processing'].includes(refund.status);
+      if (!owned && !resolvable) return { ok: false, refused: refund.status, refund };
+      /* reads before writes */
+      const txSnap = refund.fosTransactionId ? await txn.get(fsdb.collection('fosTransactions').doc(refund.fosTransactionId)) : null;
+      txn.update(refundRef, {
+        status: 'processed', refundId: providerRefundId || refund.providerRefundId || null,
+        processedAt: now(), updatedAt: now(), approvedBy: actorUid || refund.approvedBy || null,
+        ...(resolution ? { resolution } : {}),
+      });
+      if (refund.sellerUid) {
+        txn.set(fsdb.collection('wallets').doc(refund.sellerUid), {
+          availableCents: admin.firestore.FieldValue.increment(-refund.amountCents),
+          refundedCents:  admin.firestore.FieldValue.increment(refund.amountCents),
+          updatedAt:      now(),
+        }, { merge: true });
+      }
+      if (txSnap && txSnap.exists) {
+        txn.update(txSnap.ref, {
+          status:        refund.refundType === 'full' ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
+          refundedCents: admin.firestore.FieldValue.increment(refund.amountCents),
+          refundedAt:    now(),
+          updatedAt:     now(),
+        });
+      }
+      return { ok: true, refund };
+    });
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    logger.error('[FOS/refund] local settlement failed after provider success', { refundId: refundRef.id, err: e.message });
+    return { ok: false, error: e.message };
+  }
+}
+
+/* Notifications, audit and the Creator hook run AFTER settlement and can never
+   change the refund's status — each is isolated. */
+async function _afterRefundSettled(refundId, refund, actorUid, source) {
+  try {
+    await _notify(refund.buyerUid, 'refund_processed', {
+      title: 'Refund processed ✓',
+      body:  'KES ' + Number(refund.amountKES || 0).toLocaleString() + ' refund has been initiated back to your M-PESA.',
+      amountKES: refund.amountKES,
+    });
+  } catch (e) { logger.warn('[FOS/refund] notify failed (refund stands)', { refundId, err: e.message }); }
+  try { await _audit('refund_processed', actorUid, { refundId, amountKES: refund.amountKES, buyerUid: refund.buyerUid, source }); } catch (_) { /* audit is best-effort */ }
+  if (refund.payRef) {
+    try {
+      /* No-op unless the payment is a Creator Hub film purchase; never throws. */
+      await require('./creator-hub').onFilmRefundProcessed({ payRef: refund.payRef, refundId, amountCents: refund.amountCents, source });
+    } catch (e) { logger.error('[FOS/refund] creator reversal hook failed (refund stands)', { refundId, err: e.message }); }
+  }
+}
+
+async function _executeRefund(refundId, actorUid, source) {
+  const fsdb = db();
+  const refundRef = fsdb.collection('fosRefundQueue').doc(refundId);
+  const executionId = require('crypto').randomBytes(12).toString('hex');
+  let refund;
+  try {
+    await fsdb.runTransaction(async (txn) => {
+      const snap = await txn.get(refundRef);
+      if (!snap.exists) throw new HttpsError('not-found', 'Refund request not found');
+      const rd = snap.data();
+      if (!REFUND_EXECUTABLE.has(rd.status)) {
+        throw new HttpsError('failed-precondition', `Refund already ${rd.status} — it cannot be executed again`);
+      }
+      refund = rd;
+      txn.update(refundRef, {
+        status: 'processing', executionId, executionStartedAt: now(), approvedBy: actorUid,
+        attempts: admin.firestore.FieldValue.increment(1), updatedAt: now(),
+      });
+    });
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    throw new HttpsError('aborted', 'Concurrency conflict — please retry');
+  }
+
+  let result;
+  try {
+    const adapter = getAdapter(refund.provider || 'intasend', { key: INTASEND_PRIVATE_KEY.value() });
+    result = await adapter.initiateRefund({ originalRef: refund.payRef, amountKES: refund.amountKES, reason: refund.reason });
+  } catch (e) {
+    logger.error('[FOS/refund] provider call threw — OUTCOME UNKNOWN', { refundId, executionId, err: e.message });
+    await _markRefundExecution(refundRef, executionId, { status: 'outcome_unknown', outcomeError: String(e.message || e).slice(0, 300) });
+    return { refundId, status: 'outcome_unknown', message: 'The provider did not confirm the outcome. Verify in IntaSend, then resolve — do not re-approve.' };
+  }
+  if (!result || !result.success) {
+    const httpStatus = result ? result.httpStatus : null;
+    if (_isDefinitiveRejection(httpStatus)) {
+      await _markRefundExecution(refundRef, executionId, { status: 'failed', error: (result && result.error) || 'rejected', httpStatus });
+      return { refundId, status: 'failed', error: (result && result.error) || 'rejected' };
+    }
+    logger.error('[FOS/refund] provider outcome not definitive — OUTCOME UNKNOWN', { refundId, executionId, httpStatus });
+    await _markRefundExecution(refundRef, executionId, { status: 'outcome_unknown', outcomeError: String((result && result.error) || 'no response').slice(0, 300), httpStatus: httpStatus || null });
+    return { refundId, status: 'outcome_unknown', message: 'The provider did not confirm the outcome. Verify in IntaSend, then resolve — do not re-approve.' };
+  }
+
+  const settled = await _settleRefund(refundRef, { executionId, providerRefundId: result.refundId, actorUid });
+  if (!settled.ok) {
+    await _markRefundExecution(refundRef, executionId, { status: 'provider_succeeded', providerRefundId: result.refundId || null });
+    return { refundId, status: 'provider_succeeded', providerRefundId: result.refundId || null,
+      message: 'Refunded by the provider; local settlement is pending — settle it with fosResolveRefund.' };
+  }
+  await _afterRefundSettled(refundId, settled.refund, actorUid, source);
+  return { refundId, status: 'processed', providerRefundId: result.refundId };
+}
+
+/* ════════════════════════════════════════════════════════════
    CF 3. fosSubmitRefund
    Any admin or authorized user creates a refund request.
    Refund goes into a queue (fosRefundQueue) pending admin
@@ -472,8 +638,18 @@ exports.fosSubmitRefund = onCall(
          admin). The creators' side is reversed by the royalty ledger in
          creator-hub.onFilmRefundProcessed — never by a wallet debit here. */
       const _fi = await db().collection('paymentIntents').doc(payRef).get();
+      const _im = _fi.exists ? (_fi.data().metadata || {}) : {};
       if (_fi.exists && _fi.data().purpose === 'film_access') {
         tx = { ...pd, payRef, buyerUid: pd.uid, sellerUid: null, uid: null, creatorFilm: true,
+               amountKES: Number(pd.amount) || null };
+      } else {
+        /* Any other payRef-only payment: payments.uid is the PAYER. It is the
+           buyer, never the seller — debiting it would take the refund out of the
+           buyer's own wallet. The seller comes from the server-minted intent
+           (the same attribution the webhook credits); with no intent there is
+           no seller to debit. */
+        tx = { ...pd, payRef, buyerUid: pd.uid, uid: null,
+               sellerUid: _im.sellerUid || _im.merchantUid || _im.providerId || null,
                amountKES: Number(pd.amount) || null };
       }
     }
@@ -533,61 +709,9 @@ exports.fosSubmitRefund = onCall(
       return { refundId: refundRef.id, status: 'pending', message: 'Refund submitted for admin review.' };
     }
 
-    /* Auto-approve: admin submitted — process gateway immediately so refund is not stuck */
-    try {
-      const privateKey = INTASEND_PRIVATE_KEY.value();
-      const adapter    = getAdapter(tx.provider || 'intasend', { key: privateKey });
-      const result     = await adapter.initiateRefund({
-        originalRef: tx.payRef || payRef,
-        amountKES,
-        reason,
-      });
-
-      if (!result.success) {
-        logger.error('[FOS/refund] Auto-approve gateway failed', { refundId: refundRef.id, error: result.error });
-        await refundRef.update({ status: 'approved', gatewayError: result.error, updatedAt: now() });
-        return { refundId: refundRef.id, status: 'approved', message: 'Gateway error — queued for manual processing.', gatewayError: result.error };
-      }
-
-      const fsdb = db();
-      await fsdb.runTransaction(async (txn) => {
-        /* Read first: a payRef-only refund has no fosTransactions doc, and an
-           update() on a missing doc threw AFTER the gateway had refunded — leaving
-           the request 'approved' and re-approvable (a second gateway refund). */
-        const _txSnap = txId ? await txn.get(fsdb.collection('fosTransactions').doc(txId)) : null;
-        txn.update(refundRef, { status: 'processed', refundId: result.refundId, processedAt: now(), updatedAt: now() });
-        if (tx.sellerUid) {
-          txn.set(fsdb.collection('wallets').doc(tx.sellerUid), {
-            availableCents: admin.firestore.FieldValue.increment(-amountCents),
-            refundedCents:  admin.firestore.FieldValue.increment(amountCents),
-            updatedAt:      now(),
-          }, { merge: true });
-        }
-        if (_txSnap && _txSnap.exists) {
-          txn.update(fsdb.collection('fosTransactions').doc(txId), {
-            status:        refundType === 'full' ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
-            refundedCents: admin.firestore.FieldValue.increment(amountCents),
-            refundedAt:    now(),
-            updatedAt:     now(),
-          });
-        }
-      });
-
-      await _notify(tx.buyerUid || auth.uid, 'refund_processed', {
-        title: 'Refund processed ✓',
-        body:  `KES ${amountKES.toLocaleString()} refund has been initiated back to your M-PESA.`,
-        amountKES,
-      });
-      await _audit('refund_auto_processed', auth.uid, { refundId: refundRef.id, amountKES, fosTransactionId: txId });
-      if (tx.creatorFilm) {
-        await require('./creator-hub').onFilmRefundProcessed({ payRef: tx.payRef || payRef, refundId: refundRef.id, amountCents, source: 'fosSubmitRefund' });
-      }
-      return { refundId: refundRef.id, status: 'processed', providerRefundId: result.refundId };
-    } catch (gatewayErr) {
-      logger.error('[FOS/refund] Auto-approve exception', { error: gatewayErr.message });
-      await refundRef.update({ status: 'approved', gatewayError: gatewayErr.message, updatedAt: now() });
-      return { refundId: refundRef.id, status: 'approved', message: 'Queued for manual processing.', error: gatewayErr.message };
-    }
+    /* Auto-approve: an admin submitted it — execute now, through the SAME locked
+       execution as fosApproveRefund (no second, lock-free gateway path). */
+    return _executeRefund(refundRef.id, auth.uid, 'fosSubmitRefund');
   }
 );
 
@@ -628,85 +752,61 @@ exports.fosApproveRefund = onCall(
       return { status: 'rejected' };
     }
 
-    /* Atomically transition pending→processing; only one concurrent call can win */
-    try {
-      await fsdb.runTransaction(async (txn) => {
-        const snap = await txn.get(fsdb.collection('fosRefundQueue').doc(refundId));
-        if (!snap.exists) throw new HttpsError('not-found', 'Refund request not found');
-        const rd = snap.data();
-        if (rd.status === 'processed' || rd.status === 'rejected' || rd.status === 'processing') {
-          throw new HttpsError('failed-precondition', `Refund already ${rd.status}`);
-        }
-        refund = rd;
-        txn.update(snap.ref, { status: 'processing', approvedBy: req.auth.uid, updatedAt: now() });
-      });
-    } catch (e) {
-      if (e instanceof HttpsError) throw e;
-      throw new HttpsError('internal', 'Concurrency conflict — please retry');
-    }
+    /* One locked execution (see _executeRefund): exactly one provider call, exactly
+       one local settlement. A definitive provider rejection keeps the old contract
+       (throws 'internal'); an unknown outcome is NOT an error to retry. */
+    const out = await _executeRefund(refundId, req.auth.uid, 'fosApproveRefund');
+    if (out.status === 'failed') throw new HttpsError('internal', `Refund failed: ${out.error}`);
+    return out;
+  }
+);
 
-    /* Call gateway outside transaction — network I/O cannot run inside Firestore txn */
-    const privateKey = INTASEND_PRIVATE_KEY.value();
-    const adapter    = getAdapter(refund.provider || 'intasend', { key: privateKey });
-    const result     = await adapter.initiateRefund({
-      originalRef: refund.payRef,
-      amountKES:   refund.amountKES,
-      reason:      refund.reason,
-    });
-
-    if (!result.success) {
-      logger.error('[FOS/refund] Adapter refund failed', { refundId, error: result.error });
-      await fsdb.collection('fosRefundQueue').doc(refundId).update({ status: 'failed', error: result.error, updatedAt: now() });
-      throw new HttpsError('internal', `Refund failed: ${result.error}`);
-    }
-
-    /* Finalize: atomically update refund record + seller wallet + linked transaction */
+/* ════════════════════════════════════════════════════════════
+   CF 4b. fosResolveRefund
+   Super admin, with evidence from the IntaSend dashboard, resolves a refund the
+   system could not finish on its own:
+     provider_succeeded → outcome 'refunded'     settle locally (once)
+     outcome_unknown    → 'refunded'             settle locally (once)
+                        → 'not_refunded'         back to 'failed' (executable)
+     processing (stale, > 10 min, crashed run)   same as outcome_unknown
+   Never calls the provider.
+════════════════════════════════════════════════════════════ */
+exports.fosResolveRefund = onCall(
+  { region: REGION, timeoutSeconds: 60, memory: '256MiB', enforceAppCheck: true },
+  async (req) => {
+    _requireAuth(req);
+    if (!req.auth.token?.superAdmin) throw new HttpsError('permission-denied', 'Super admin only');
+    const { refundId, outcome, evidence, providerRefundId } = req.data || {};
+    if (!refundId) throw new HttpsError('invalid-argument', 'refundId required');
+    if (!['refunded', 'not_refunded'].includes(outcome)) throw new HttpsError('invalid-argument', "outcome must be 'refunded' or 'not_refunded'");
+    const ev = String(evidence || '').trim();
+    if (ev.length < 5) throw new HttpsError('invalid-argument', 'evidence (IntaSend reference) required');
+    const fsdb = db();
     const refundRef = fsdb.collection('fosRefundQueue').doc(refundId);
-    await fsdb.runTransaction(async (txn) => {
-      const _txSnap = refund.fosTransactionId ? await txn.get(fsdb.collection('fosTransactions').doc(refund.fosTransactionId)) : null;
-      txn.update(refundRef, {
-        status:      'processed',
-        refundId:    result.refundId,
-        processedAt: now(),
-        updatedAt:   now(),
-        approvedBy:  req.auth.uid,
-      });
-
-      if (refund.sellerUid) {
-        const walletRef = fsdb.collection('wallets').doc(refund.sellerUid);
-        txn.set(walletRef, {
-          availableCents: admin.firestore.FieldValue.increment(-refund.amountCents),
-          refundedCents:  admin.firestore.FieldValue.increment(refund.amountCents),
-          updatedAt:      now(),
-        }, { merge: true });
-      }
-
-      if (_txSnap && _txSnap.exists) {
-        const txRef = fsdb.collection('fosTransactions').doc(refund.fosTransactionId);
-        txn.update(txRef, {
-          status:        refund.refundType === 'full' ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
-          refundedCents: admin.firestore.FieldValue.increment(refund.amountCents),
-          refundedAt:    now(),
-          updatedAt:     now(),
-        });
-      }
-    });
-
-    await _notify(refund.buyerUid, 'refund_processed', {
-      title: 'Refund processed ✓',
-      body:  `KES ${refund.amountKES.toLocaleString()} refund has been initiated back to your M-PESA.`,
-      amountKES: refund.amountKES,
-    });
-
-    await _audit('refund_approved', req.auth.uid, {
-      refundId, amountKES: refund.amountKES, buyerUid: refund.buyerUid,
-    });
-    if (refund.payRef) {
-      /* No-op unless the payment is a Creator Hub film purchase; never throws. */
-      await require('./creator-hub').onFilmRefundProcessed({ payRef: refund.payRef, refundId, amountCents: refund.amountCents, source: 'fosApproveRefund' });
+    const snap = await refundRef.get();
+    if (!snap.exists) throw new HttpsError('not-found', 'Refund request not found');
+    const rd = snap.data();
+    const startedMs = rd.executionStartedAt && rd.executionStartedAt.toMillis ? rd.executionStartedAt.toMillis() : 0;
+    const staleProcessing = rd.status === 'processing' && startedMs && Date.now() - startedMs > 10 * 60 * 1000;
+    if (!(rd.status === 'provider_succeeded' || rd.status === 'outcome_unknown' || staleProcessing)) {
+      throw new HttpsError('failed-precondition', `Refund is ${rd.status} — nothing to resolve`);
     }
-
-    return { status: 'processed', providerRefundId: result.refundId };
+    const resolution = { by: req.auth.uid, outcome, evidence: ev.slice(0, 300), atMs: Date.now() };
+    if (outcome === 'not_refunded') {
+      if (rd.status === 'provider_succeeded') throw new HttpsError('failed-precondition', 'The provider confirmed this refund — it cannot be marked not refunded');
+      await fsdb.runTransaction(async (txn) => {
+        const cur = await txn.get(refundRef);
+        if (cur.data().status !== rd.status) throw new HttpsError('aborted', 'Refund changed — reload');
+        txn.update(refundRef, { status: 'failed', resolution, updatedAt: now() });
+      });
+      await _audit('refund_resolved_not_refunded', req.auth.uid, { refundId, evidence: resolution.evidence });
+      return { refundId, status: 'failed' };
+    }
+    const settled = await _settleRefund(refundRef, { resolving: true, providerRefundId: providerRefundId || rd.providerRefundId || null, actorUid: req.auth.uid, resolution });
+    if (!settled.ok) throw new HttpsError('aborted', 'Settlement did not complete — retry');
+    if (!settled.already) await _afterRefundSettled(refundId, settled.refund, req.auth.uid, 'fosResolveRefund');
+    await _audit('refund_resolved_refunded', req.auth.uid, { refundId, evidence: resolution.evidence });
+    return { refundId, status: 'processed', already: !!settled.already };
   }
 );
 
@@ -1077,3 +1177,6 @@ exports.fosGetAdminConsole = onCall(
     };
   }
 );
+
+/* Test seam (pure, no I/O). */
+exports._refundInternals = { REFUND_EXECUTABLE, _isDefinitiveRejection };

@@ -11276,6 +11276,7 @@ exports.fosInitiatePayment  = financialOS.fosInitiatePayment;
 exports.fosSecureWebhook    = financialOS.fosSecureWebhook;
 exports.fosSubmitRefund     = financialOS.fosSubmitRefund;
 exports.fosApproveRefund    = financialOS.fosApproveRefund;
+exports.fosResolveRefund    = financialOS.fosResolveRefund;
 exports.fosGenerateInvoice  = financialOS.fosGenerateInvoice;
 exports.fosExportReport     = financialOS.fosExportReport;
 exports.fosGetProviderHealth = financialOS.fosGetProviderHealth;
