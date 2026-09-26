@@ -37,14 +37,16 @@
     .btn-primary:hover{opacity:.85;}
     .btn-danger{padding:6px 14px;border:1px solid rgba(248,81,73,.4);border-radius:6px;background:rgba(248,81,73,.1);color:var(--red);cursor:pointer;font-size:12px;}
     .btn-success{padding:6px 14px;border:none;border-radius:6px;background:var(--green);color:#000;cursor:pointer;font-weight:600;font-size:12px;}
-    .layout{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 56px);}
+    /* minmax(0,1fr) + min-width:0: a bare 1fr column grows to its content's min width, so a wide
+       table in a section widened the whole page on a phone instead of scrolling inside its card. */
+    .layout{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:calc(100vh - 56px);}
     .sidebar{background:var(--bg2);border-right:1px solid var(--border);padding:16px 0;}
     .nav-item{display:flex;align-items:center;gap:10px;padding:10px 20px;cursor:pointer;color:var(--text2);font-size:13px;}
     .nav-item:hover{background:var(--bg3);color:var(--text);}
     .nav-item.active{color:var(--blue);background:rgba(88,166,255,.08);font-weight:600;}
     .nav-icon{font-size:16px;width:20px;text-align:center;}
     .nav-divider{border-top:1px solid var(--border);margin:8px 0;}
-    .content{padding:24px;max-width:1100px;}
+    .content{padding:24px;max-width:1100px;min-width:0;}
     .section{display:none;}
     .section.active{display:block;}
     .page-title{font-size:20px;font-weight:800;margin-bottom:20px;}
@@ -53,7 +55,7 @@
     .g2{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
     .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
     .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;}
-    @media(max-width:900px){.g2,.g3,.g4{grid-template-columns:1fr 1fr;}.layout{grid-template-columns:1fr;}.sidebar{display:none;}}
+    @media(max-width:900px){.g2,.g3,.g4{grid-template-columns:1fr 1fr;}.layout{grid-template-columns:minmax(0,1fr);}.sidebar{display:none;}}
     .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px;}
     .stat-val{font-size:26px;font-weight:800;margin-bottom:4px;}
     .stat-label{font-size:11px;color:var(--text2);}
@@ -148,6 +150,11 @@
   <button class="em-mtab" data-sec="checkin"   onclick="showSection('checkin')">✅ Check-In</button>
   <button class="em-mtab" data-sec="analytics" onclick="showSection('analytics')">📈 Analytics</button>
   <button class="em-mtab" data-sec="promo"     onclick="showSection('promo')">🏷 Promo</button>
+  <button class="em-mtab" data-sec="quicksale" onclick="showSection('quicksale')">🧾 Quick Sale</button>
+  <button class="em-mtab" data-sec="admission" onclick="showSection('admission')">🔑 PIN Admission</button>
+  <button class="em-mtab" data-sec="sales"     onclick="showSection('sales')">💵 Sales</button>
+  <button class="em-mtab" data-sec="finance"   onclick="showSection('finance')">🏦 Finance</button>
+  <button class="em-mtab" data-sec="staff"     onclick="showSection('staff')">👥 Staff</button>
 </div>
 
 <div class="layout">
@@ -160,6 +167,12 @@
     <div class="nav-item" data-sec="checkin" onclick="showSection('checkin')"><span class="nav-icon">✅</span>Gate Check-In</div>
     <div class="nav-item" data-sec="analytics" onclick="showSection('analytics')"><span class="nav-icon">📈</span>Analytics</div>
     <div class="nav-item" data-sec="promo" onclick="showSection('promo')"><span class="nav-icon">🏷</span>Promo Codes</div>
+    <div class="nav-divider"></div>
+    <div class="nav-item" data-sec="quicksale" onclick="showSection('quicksale')"><span class="nav-icon">🧾</span>Quick Sale</div>
+    <div class="nav-item" data-sec="admission" onclick="showSection('admission')"><span class="nav-icon">🔑</span>PIN Admission</div>
+    <div class="nav-item" data-sec="sales" onclick="showSection('sales')"><span class="nav-icon">💵</span>Sales</div>
+    <div class="nav-item" data-sec="finance" onclick="showSection('finance')"><span class="nav-icon">🏦</span>Finance</div>
+    <div class="nav-item" data-sec="staff" onclick="showSection('staff')"><span class="nav-icon">👥</span>Staff</div>
   </nav>
 
   <div class="content">
@@ -292,7 +305,13 @@
             <button class="btn-primary" style="padding:8px 16px" onclick="addTier()">Add Tier</button>
           </div>
           <div class="form-group" style="margin-top:8px"><label class="form-label">Perks (comma-separated)</label><input class="form-input" id="new-tier-perks" placeholder="Free parking, VIP lounge, Buffet" /></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px">
+            <div class="form-group" style="margin:0"><label class="form-label">Sales start (optional)</label><input class="form-input" id="new-tier-start" type="datetime-local" /></div>
+            <div class="form-group" style="margin:0"><label class="form-label">Sales end (optional)</label><input class="form-input" id="new-tier-end" type="datetime-local" /></div>
+            <div class="form-group" style="margin:0"><label class="form-label">Max per buyer (optional)</label><input class="form-input" id="new-tier-max" type="number" min="1" max="20" /></div>
+          </div>
         </div>
+        <div id="eo-policy" style="margin:16px 0"></div>
         <button class="btn-success" style="width:100%;padding:12px;font-size:14px" onclick="publishCurrent()">🚀 Publish Event</button>
       </div>
     </section>
@@ -339,6 +358,13 @@
       </div>
       <div id="analytics-body"></div>
     </section>
+
+    <!-- EVENT-DAY WORKSPACE (sokoni-event-ops.js) -->
+    <section id="sec-quicksale" class="section"><div class="page-title">Quick Sale</div><div id="eo-quicksale"></div></section>
+    <section id="sec-admission" class="section"><div class="page-title">PIN Admission</div><div id="eo-admission"></div></section>
+    <section id="sec-sales" class="section"><div class="page-title">Sales</div><div id="eo-sales"></div></section>
+    <section id="sec-finance" class="section"><div class="page-title">Finance</div><div id="eo-finance"></div></section>
+    <section id="sec-staff" class="section"><div class="page-title">Event Staff</div><div id="eo-staff"></div></section>
 
     <!-- PROMO CODES -->
     <section id="sec-promo" class="section">
@@ -409,6 +435,8 @@
 <!-- Canonical legal acceptance (legalDispatch): versioned agreements, signature, declaration. -->
 <script src="/sokoni-legal-sign.js"></script>
 <script src="/sokoni-legal-gate.js"></script>
+<!-- Event-day workspace: Quick Sale, PIN admission, staff, sales, finance, refund policy. -->
+<script src="/sokoni-event-ops.js"></script>
 <script>
   const app  = firebase.initializeApp(window.SOKONI_CONFIG, 'event-manager');
   const auth = firebase.auth(app);
@@ -569,7 +597,30 @@
     if (!user) { location.href='/login.html?redirect=/event-manager.html'; return; }
     _mountIdentity(user);
     const tok = await user.getIdTokenResult();
+    /* A staff invitation link (?staffInvite=<eventId>): accept it as THIS signed-in user. The server
+       binds access only to the verified email the organizer invited. */
+    const _inv = new URLSearchParams(location.search).get('staffInvite');
+    if (_inv && /^[A-Za-z0-9_-]{1,128}$/.test(_inv)) {
+      try { await callCF('eventOpsDispatch', { op: 'eventStaffAccept', eventId: _inv }); toast('Event staff access accepted.'); }
+      catch (e) { toast(e.message || 'Could not accept the invitation.'); }
+      history.replaceState(null, '', location.pathname);
+    }
     if (!isOrganizer(tok.claims)) {
+      /* Temporary event staff get ONLY their role's sections, for their assigned events. */
+      let asg = [];
+      try { asg = (await callCF('eventOpsDispatch', { op: 'eventMyAssignments' })).assignments || []; } catch (_) { asg = []; }
+      if (asg.length) {
+        const role = asg[0].role;
+        staffMode = { role, assignments: asg };
+        const allowed = (window.SokoniEventOps && window.SokoniEventOps.SECTIONS_FOR[role]) || [];
+        document.querySelectorAll('[data-sec]').forEach((n) => { if (!allowed.includes(n.dataset.sec)) n.remove(); });
+        document.querySelectorAll('.nav-divider').forEach((n) => n.remove());
+        document.getElementById('uid-badge').textContent = (user.email || user.uid) + ' · ' + role;
+        if (window.SokoniHubNav) window.SokoniHubNav.init({ hub: { url: '/event-hub.html', label: 'Events Hub' }, sections: allowed, show: applySection, home: allowed[0] });
+        else applySection(allowed[0]);
+        if (allowed.includes('promo')) { myEvents = asg.map((a) => ({ eventId: a.eventId, title: (a.event && a.event.title) || a.eventId })); populateEventSelects(); }
+        return;
+      }
       await renderOrganizerGate(user);
       return;
     }
@@ -581,7 +632,7 @@
     if (window.SokoniHubNav) {
       window.SokoniHubNav.init({
         hub:      { url: '/event-hub.html', label: 'Events Hub' },
-        sections: ['dashboard','events','create','orders','checkin','analytics','promo'],
+        sections: ['dashboard','events','create','orders','checkin','analytics','promo','quicksale','admission','sales','finance','staff'],
         show:     applySection,
         home:     'dashboard',
       });
@@ -612,6 +663,28 @@
     document.querySelectorAll('[data-sec="' + name + '"]').forEach(n => n.classList.add('active'));
     const sec = document.getElementById('sec-' + name);
     if (sec) sec.classList.add('active');
+    mountOps(name);
+  }
+
+  /* ── Event-day workspace ─────────────────────────────────────────────────────── */
+  const OPS_SECTIONS = ['quicksale', 'admission', 'sales', 'finance', 'staff'];
+  let staffMode = null;            /* null = organizer; else { role, assignments } */
+  const opsCtx = () => ({
+    ops: (op, data) => callCF('eventOpsDispatch', { op, ...(data || {}) }),
+    cf: callCF, toast,
+    role: staffMode ? staffMode.role : 'organizer',
+    events: staffMode ? staffMode.assignments.map((a) => ({ eventId: a.eventId, title: (a.event && a.event.title) || a.eventId, startDate: a.event && a.event.startDate, status: 'live' }))
+                      : myEvents.map((e) => ({ eventId: e.eventId, title: e.title, startDate: e.startDate, status: e.status })),
+  });
+  function mountOps(name) {
+    if (!OPS_SECTIONS.includes(name) || !window.SokoniEventOps) return;
+    window.SokoniEventOps.mount(document.getElementById('eo-' + name), name, opsCtx());
+  }
+  async function mountPolicy(eventId) {
+    const host = document.getElementById('eo-policy');
+    if (!host || !window.SokoniEventOps) return;
+    try { const ev = await callCF('getEvent', { eventId }); window.SokoniEventOps.mount(host, 'policy', { ...opsCtx(), event: ev }); }
+    catch (e) { host.textContent = 'Could not load the refund policy: ' + e.message; }
   }
 
   function showSection(name) {
@@ -627,8 +700,9 @@
       myEvents = res.events || [];
       const s = res.summary || {};
       document.getElementById('stat-events').textContent = s.totalEvents || 0;
-      document.getElementById('stat-tickets').textContent = s.totalTicketsSold || 0;
-      document.getElementById('stat-revenue').textContent = 'KES ' + (s.totalRevenue || 0).toLocaleString();
+      /* Paid tickets and revenue come from settlements (server); null = unknown → "—", never 0. */
+      document.getElementById('stat-tickets').textContent = s.totalTicketsSold == null ? '—' : s.totalTicketsSold.toLocaleString();
+      document.getElementById('stat-revenue').textContent = s.totalRevenue == null ? '—' : 'KES ' + s.totalRevenue.toLocaleString();
       document.getElementById('stat-checkins').textContent = s.totalCheckins || 0;
       populateEventSelects();
       renderEventList('dash-upcoming', myEvents.filter(e => e.status === 'live').slice(0, 5));
@@ -693,7 +767,7 @@
     document.getElementById('ev-venue').value = ev.venue || '';
     document.getElementById('ev-city').value = ev.city || '';
     document.getElementById('tiers-section').style.display = ev.status !== 'cancelled' ? 'block' : 'none';
-    if (ev.status !== 'cancelled') loadTiers(eventId);
+    if (ev.status !== 'cancelled') { loadTiers(eventId); mountPolicy(eventId); }
     showSection('create', document.querySelector('.nav-item:nth-child(3)'));
   }
 
@@ -724,8 +798,8 @@
         currentEventId = res.eventId;
         document.getElementById('create-title').textContent = 'Edit Event';
         document.getElementById('tiers-section').style.display = 'block';
-        loadTiers(res.eventId);
-        toast('Event created as draft! Add ticket tiers and publish.');
+        loadTiers(res.eventId); mountPolicy(res.eventId);
+        toast('Event created as draft! Add ticket tiers, set the refund policy, then publish.');
       }
       await loadDashboard();
     } catch(e) { toast('Error: ' + e.message); }
@@ -769,7 +843,9 @@
     if (!name || price === '' || !quantity) { toast('Name, price and quantity required'); return; }
     const perks = perksStr ? perksStr.split(',').map(p => p.trim()).filter(Boolean) : [];
     try {
-      await callCF('createTicketTier', { eventId, name, price: parseFloat(price), quantity: parseInt(quantity, 10), perks });
+      const _st = document.getElementById('new-tier-start').value, _en = document.getElementById('new-tier-end').value, _mx = document.getElementById('new-tier-max').value;
+      await callCF('createTicketTier', { eventId, name, price: parseFloat(price), quantity: parseInt(quantity, 10), perks,
+        saleStartsAt: _st ? new Date(_st).toISOString() : null, saleEndsAt: _en ? new Date(_en).toISOString() : null, maxPerBuyer: _mx ? parseInt(_mx, 10) : null });
       document.getElementById('new-tier-name').value = '';
       document.getElementById('new-tier-price').value = '';
       document.getElementById('new-tier-qty').value = '';

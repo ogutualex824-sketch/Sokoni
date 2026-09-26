@@ -28,7 +28,7 @@ const say = console.log;
 
 const WIDTHS = [360, 390, 768, 1024, 1280, 1440];
 const REAL = new Set(['/event-hub.html', '/event-manager.html', '/venue-manager.html', '/provider-dashboard.html',
-  '/sokoni-dashboard-profile.js', '/sokoni-dashboard-profile-core.js', '/sokoni-aos-entertainment.js', '/sokoni-hub-nav.js', '/sokoni-form-nav.js']);
+  '/sokoni-dashboard-profile.js', '/sokoni-dashboard-profile-core.js', '/sokoni-aos-entertainment.js', '/sokoni-legal-gate.js', '/sokoni-legal-sign.js', '/sokoni-hub-nav.js', '/sokoni-form-nav.js']);
 
 /* ── Firebase compat stub (gstatic compat SDKs AND /firebase.js) ── */
 const COMPAT = `
@@ -65,6 +65,8 @@ const calls = [];
 async function server(name, data) {
   calls.push({ name, data });
   switch (name) {
+    /* the legal authority reports the applicant compliant (acceptance itself is certified in test-entertainment-agreements.js) */
+    case 'legalDispatch': return { ok: data.op === 'legalCheckCompliance' ? { compliant: true, missing: [] } : {} };
     case 'listEvents': case 'searchEvents': return { ok: { events: [], nextCursor: null } };
     case 'getMyTickets': return { ok: { tickets: [] } };
     case 'getCheckoutMethods': return { ok: { purpose: data.purpose, stk: { method: 'M-PESA' }, hosted: HOSTED, hostedMethods: HOSTED ? ['CARD-PAYMENT'] : [] } };
@@ -181,12 +183,13 @@ async function profileMenu(page, hostSel, label, w) {
       if (w === 390) {
         await page.fill('[name=name]', 'Kamau Events'); await page.fill('[name=phone]', '0712345678');
         await page.check('[name=eventTypes]'); await page.fill('[name=payoutPhone]', '0712345678');
-        await page.fill('[name=idLast4]', '1234'); await page.check('[name=agree]');
+        await page.fill('[name=idLast4]', '1234');
+        await page.waitForFunction(() => document.getElementById('org-legal') && document.getElementById('org-legal').dataset.state === 'accepted', null, { timeout: 8000 }).catch(() => null);
         await page.click('#org-form button[type=submit]'); await page.waitForTimeout(200);
         const adds = await page.evaluate(() => window.__adds);
         const a = adds.find((x) => x.name === 'applications');
-        ck('event-manager: submits a canonical application (type event_organizer, agreement accepted, own uid)',
-          a && a.d.type === 'event_organizer' && a.d.role === 'event_organizer' && a.d.agreementAccepted === true && a.d.uid === 'buyer1' && !('status' in a.d && a.d.status !== 'pending'), a && JSON.stringify(a.d).slice(0, 140));
+        ck('event-manager: submits a canonical application (type event_organizer, acceptance on legalAcceptances, own uid)',
+          a && a.d.type === 'event_organizer' && a.d.role === 'event_organizer' && a.d.agreementSource === 'legalAcceptances' && !('agreementAccepted' in a.d) && a.d.uid === 'buyer1' && !('status' in a.d && a.d.status !== 'pending'), a && JSON.stringify(a.d).slice(0, 140));
         ck('event-manager: ID stored as last-4 only (no full document number)', a && a.d.identity && a.d.identity.documentLast4 === '1234' && Object.keys(a.d.identity).length === 2);
       }
       await profileMenu(page, '#sk-identity', 'event-manager (applicant)', w);

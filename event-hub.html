@@ -200,6 +200,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js"></script>
 <script src="/sokoni-appcheck.js"></script>
 <script src="/sokoni-config.js"></script>
+<!-- The refund reason catalogue — the SAME vocabulary the server validates (functions/shared). -->
+<script src="/sokoni-event-refund-reasons.js"></script>
 <script>
   const app  = firebase.initializeApp(window.SOKONI_CONFIG, 'event-hub');
   const auth = firebase.auth(app);
@@ -377,6 +379,7 @@
           <span>👥 ${ev.totalTicketsSold || 0} attending · ${ev.viewCount || 0} views</span>
         </div>
         ${ev.description ? `<div class="modal-desc">${esc(ev.description)}</div>` : ''}
+        <div class="modal-desc" style="margin-bottom:12px"><strong>Refund policy:</strong> ${esc(describePolicy(ev.refundPolicy))}</div>
         <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:10px">Tickets</div>
         <div class="tier-list" id="tier-list">${tiersHtml}</div>
         ${ev.tiers && ev.tiers.length ? `
@@ -581,29 +584,122 @@
     if (myTicketsVisible) loadMyTickets();
   }
 
+  function describePolicy(p) {
+    if (!p || !p.mode) return 'Not set by the organizer';
+    const cut = p.cutoffAt ? new Date(p.cutoffAt).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+    const base = p.mode === 'before_cutoff' ? 'Refunds until ' + cut : 'No refunds for a change of plans';
+    return base + (p.noShowRefund ? '; unused tickets can be refunded after the event' : '') + '. Cancelled events are refunded.';
+  }
+
+  /* ── My Tickets ──────────────────────────────────────────────────────────────
+     Each ticket shows its number and its admission PIN (returned only to its own buyer) — the PIN
+     is what the gate staff enter; showing the QR is optional. Tickets are grouped by order because
+     a refund is requested for an order. */
   async function loadMyTickets() {
     const el = document.getElementById('my-tickets-list');
     el.innerHTML = '<div style="padding:20px;color:var(--text2)"><span class="spinner"></span></div>';
     try {
-      const res = await callCF('getMyTickets', { limit: 30 });
+      const res = await callCF('getMyTickets', { limit: 50 });
       const tickets = res.tickets || [];
       if (!tickets.length) { el.innerHTML = '<div class="empty"><div class="icon">🎟</div><p>No tickets yet.</p></div>'; return; }
-      el.innerHTML = tickets.map(t => {
-        const ev = t.event || {};
+      const orders = {};
+      tickets.forEach((t) => { (orders[t.orderId] = orders[t.orderId] || []).push(t); });
+      el.innerHTML = Object.entries(orders).map(([orderId, list]) => {
+        const ev = list[0].event || {};
         const dateStr = ev.startDate ? new Date(ev.startDate).toLocaleDateString('en-KE', { day:'numeric', month:'short', year:'numeric' }) : '';
-        const statusColor = t.status === 'valid' ? 'var(--green)' : t.status === 'used' ? 'var(--text2)' : 'var(--orange)';
-        return `<div class="ticket-card" style="margin-bottom:10px">
-          <div class="ticket-qr">${t.status === 'used' ? '✅' : t.status === 'valid' ? '🎟' : '⏳'}</div>
-          <div class="ticket-info">
-            <div class="ticket-tier">${esc(t.tierName)}</div>
-            <div class="ticket-event">${esc(ev.title || t.eventId)}</div>
-            <div class="ticket-meta">${dateStr ? '📅 ' + esc(dateStr) + ' · ' : ''}📍 ${esc(ev.venue || ev.city || '')}</div>
-            <div style="font-size:11px;margin-top:4px;color:${statusColor}">${esc(t.status.replace('_',' ').toUpperCase())}</div>
-          </div>
+        const refundable = list.some((t) => t.status === 'valid' && (!t.refundStatus || t.refundStatus === 'NONE'));
+        return `<div class="ticket-card" style="margin-bottom:10px;flex-direction:column;align-items:stretch">
+          <div class="ticket-event">${esc(ev.title || list[0].eventId)}</div>
+          <div class="ticket-meta">${dateStr ? '📅 ' + esc(dateStr) + ' · ' : ''}📍 ${esc(ev.venue || ev.city || '')}</div>
+          ${list.map((t) => `<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--border);padding-top:8px;margin-top:8px">
+            <div><div class="ticket-tier">${esc(t.tierName)} ${t.ticketNumber ? '· ' + esc(t.ticketNumber) : ''}</div>
+              <div style="font-size:11px;color:var(--text2)">${esc(String(t.status || '').replace('_', ' '))}${t.admissionStatus === 'ADMITTED' ? ' · admitted' : ''}${t.refundStatus && t.refundStatus !== 'NONE' ? ' · refund ' + esc(t.refundStatus.toLowerCase()) : ''}</div></div>
+            ${t.pin ? `<div aria-label="Ticket PIN" style="font:800 20px ui-monospace,Menlo,monospace;letter-spacing:2px;padding:6px 10px;border-radius:8px;background:var(--bg3,#21262d)">${esc(t.pin)}</div>` : ''}
+          </div>`).join('')}
+          ${refundable ? `<button type="button" class="btn-secondary" style="margin-top:10px" onclick="openRefundWizard('${esc(orderId)}')">Request refund</button>` : ''}
         </div>`;
-      }).join('');
+      }).join('') + '<p style="font-size:12px;color:var(--text2)">Show your PIN at the gate. Keep it private — anyone with the PIN can use the ticket.</p>';
     } catch(e) { el.innerHTML = '<div class="empty"><p>Could not load tickets.</p></div>'; }
   }
+
+  /* ── Refund Request Wizard ───────────────────────────────────────────────────
+     Step 1 reason (controlled catalogue) → step 2 the reason's questions → step 3 eligibility,
+     computed by the SERVER from the ticket's admission record and the event's policy → submit.
+     Ineligible requests are explained and cannot be sent. Nothing here executes a refund. */
+  const RR = window.SokoniEventRefundReasons;
+  function openRefundWizard(orderId) {
+    if (!RR) { toast('Refunds are unavailable right now.'); return; }
+    const box = document.getElementById('modal-content');
+    document.getElementById('overlay').classList.add('open');
+    const groups = RR.groups();
+    box.innerHTML = `<div class="modal-body"><div class="modal-title">Request a refund</div>
+      <p class="modal-desc">Step 1 of 3 — why are you asking for a refund?</p>
+      <label for="rw-reason" style="font-weight:600">Reason</label>
+      <select id="rw-reason" style="width:100%;min-height:44px;margin:6px 0 12px;font-size:16px">
+        <option value="">Choose a reason…</option>
+        ${Object.entries(groups).map(([g, list]) => `<optgroup label="${esc(g)}">${list.map((r) => `<option value="${esc(r.code)}">${esc(r.label)}</option>`).join('')}</optgroup>`).join('')}
+      </select>
+      <button class="btn-primary" id="rw-next" style="width:100%">Continue</button>
+      <div id="rw-msg" role="status" aria-live="polite" style="margin-top:10px"></div></div>`;
+    document.getElementById('rw-next').onclick = () => {
+      const code = document.getElementById('rw-reason').value;
+      if (!code) { document.getElementById('rw-msg').textContent = 'Choose a reason.'; return; }
+      refundStep2(orderId, code);
+    };
+  }
+  function refundStep2(orderId, code) {
+    const r = RR.get(code);
+    const box = document.getElementById('modal-content');
+    const field = (q) => {
+      if (q.type === 'yes_no') return `<label style="display:block;margin:8px 0">${esc(q.label)}<select data-q="${esc(q.id)}" style="width:100%;min-height:44px;font-size:16px"><option value="">Choose…</option><option value="no">No</option><option value="yes">Yes</option></select></label>`;
+      if (q.type === 'confirm') return `<label style="display:flex;gap:8px;margin:8px 0"><input type="checkbox" data-q="${esc(q.id)}">${esc(q.label)}</label>`;
+      return `<label style="display:block;margin:8px 0">${esc(q.label)}<input data-q="${esc(q.id)}" ${q.type === 'number' ? 'type="number" inputmode="decimal"' : ''} style="width:100%;min-height:44px;font-size:16px;box-sizing:border-box"></label>`;
+    };
+    box.innerHTML = `<div class="modal-body"><div class="modal-title">Request a refund</div>
+      <p class="modal-desc">Step 2 of 3 — ${esc(r.label)}</p>
+      ${r.questions.map(field).join('')}
+      ${r.explain ? `<label style="display:block;margin:8px 0">Please explain what happened<textarea id="rw-explain" rows="3" maxlength="1000" style="width:100%;font-size:16px;box-sizing:border-box"></textarea></label>` : ''}
+      <button class="btn-primary" id="rw-check" style="width:100%">Check eligibility</button>
+      <div id="rw-msg" role="status" aria-live="polite" style="margin-top:10px"></div></div>`;
+    document.getElementById('rw-check').onclick = async () => {
+      const answers = {};
+      box.querySelectorAll('[data-q]').forEach((el) => { answers[el.dataset.q] = el.type === 'checkbox' ? el.checked : el.value; });
+      const explanation = (document.getElementById('rw-explain') || {}).value || '';
+      const problem = RR.answersProblem(code, answers, explanation);
+      if (problem) { document.getElementById('rw-msg').textContent = problem; return; }
+      document.getElementById('rw-msg').textContent = 'Checking…';
+      try {
+        const q = await callCF('eventOpsDispatch', { op: 'eventRefundQuote', orderId, reasonCode: code, answers });
+        refundStep3(orderId, code, answers, explanation, q);
+      } catch (e) { document.getElementById('rw-msg').textContent = e.message; }
+    };
+  }
+  function refundStep3(orderId, code, answers, explanation, q) {
+    const box = document.getElementById('modal-content');
+    const yes = q.eligible === 'YES', review = q.eligible === 'REVIEW';
+    box.innerHTML = `<div class="modal-body"><div class="modal-title">Refund eligibility</div>
+      <p class="modal-desc">Step 3 of 3</p>
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <tr><td>Order total</td><td style="text-align:right">KES ${Number(q.amountKes).toLocaleString()}</td></tr>
+        <tr><td>Refund policy</td><td style="text-align:right">${esc(q.policy)}</td></tr>
+        <tr><td>Event date</td><td style="text-align:right">${q.eventDate ? esc(new Date(q.eventDate).toLocaleString('en-KE')) : '—'}</td></tr>
+        <tr><td>Refund deadline</td><td style="text-align:right">${q.refundDeadline ? esc(new Date(q.refundDeadline).toLocaleString('en-KE')) : '—'}</td></tr>
+        <tr><td>Tickets</td><td style="text-align:right">${q.tickets.map((t) => esc(t.status) + (t.admissionStatus === 'ADMITTED' ? ' (admitted)' : '')).join(', ')}</td></tr>
+        <tr><td><strong>Eligible</strong></td><td style="text-align:right"><strong>${yes ? 'YES' : review ? 'Needs review' : 'NO'}</strong></td></tr>
+      </table>
+      <p class="modal-desc" style="margin-top:10px">${esc(q.why)}</p>
+      ${yes || review ? '<button class="btn-primary" id="rw-send" style="width:100%">Submit refund request</button><p style="font-size:12px;color:var(--text2)">An administrator reviews every refund before it is paid back to your original payment method.</p>' : '<button class="btn-secondary" onclick="closeModal()" style="width:100%">Close</button>'}
+      <div id="rw-msg" role="status" aria-live="polite" style="margin-top:10px"></div></div>`;
+    const send = document.getElementById('rw-send');
+    if (send) send.onclick = async () => {
+      send.disabled = true; document.getElementById('rw-msg').textContent = 'Submitting…';
+      try {
+        await callCF('eventOpsDispatch', { op: 'eventRequestRefund', orderId, reasonCode: code, answers, explanation });
+        closeModal(); toast('Refund request submitted — we will notify you.'); loadMyTickets();
+      } catch (e) { send.disabled = false; document.getElementById('rw-msg').textContent = e.message; }
+    };
+  }
+  window.openRefundWizard = openRefundWizard;
 
   /* Boot */
   loadEvents(false);
@@ -617,7 +713,7 @@
       <div style="font-size:15px;font-weight:900;color:white;margin-bottom:3px;">Organise Events or Run a Venue?</div>
       <div style="font-size:11px;color:rgba(255,255,255,0.4);line-height:1.6;">List your events, sell tickets and manage RSVPs on SOKONI — concerts, conferences, workshops, sports, exhibitions and more.</div>
     </div>
-    <button type="button" onclick="HubRegister.open({hub:'entertainment',category:'event-planner'})" style="flex-shrink:0;padding:11px 20px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;">List Your Event →</button>
+    <button type="button" onclick="location.href='/event-manager.html'" style="flex-shrink:0;padding:11px 20px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;">List Your Event →</button>
   </div>
 </div>
 <script src="hub-register.js" defer></script>

@@ -273,6 +273,8 @@ exports.getEvent = onCall(CF_OPTS, async (req) => {
       available: t.quantity - t.sold,
       perks: t.perks,
       saleEndsAt: t.saleEndsAt,
+      saleStartsAt: t.saleStartsAt || null,
+      maxPerBuyer: t.maxPerBuyer || null,
     };
   });
 
@@ -869,12 +871,19 @@ exports.getEventAnalytics = onCall(CF_OPTS, async (req) => {
   const orders = ordersSnap.docs.map(d => d.data());
   const tiers = tiersSnap.docs.map(d => d.data());
 
-  const totalRevenue = orders.reduce((s, o) => s + (o.totalAmount || 0), 0);
-  const platformFees = orders.reduce((s, o) => s + (o.platformFee || 0), 0);
-  const organizerRevenue = totalRevenue - platformFees;
-  const totalTickets = orders.reduce((s, o) => s + o.quantity, 0);
+  /* Money from eventSettlements (every paid channel, incl. cash/card door sales, and the SETTLED
+     commission net of provider fee) — not the order's purchase-time quote. Capped → unknown. */
+  const _st = await db().collection('eventSettlements').where('eventId', '==', eventId).limit(5000).get();
+  const _paid = _st.docs.map((d) => d.data()).filter((x) => x.status !== 'REFUNDED');
+  const _cap = _st.size >= 5000;
+  const _unknownFee = _paid.some((x) => x.status === 'FEE_UNREPORTED');
+  const totalRevenue = _cap ? null : _paid.reduce((a, x) => a + (Number(x.grossCents) || 0), 0) / 100;
+  const platformFees = (_cap || _unknownFee) ? null : _paid.reduce((a, x) => a + (Number(x.commissionCents) || 0), 0) / 100;
+  const organizerRevenue = (_cap || _unknownFee) ? null : _paid.reduce((a, x) => a + (Number(x.organizerNetCents) || 0), 0) / 100;
+  const totalTickets = _cap ? null : _paid.reduce((a, x) => a + (Number(x.quantity) || 0), 0);
+  void orders;
   const checkins = ev.checkinsCount || 0;
-  const checkInRate = totalTickets > 0 ? Math.round((checkins / totalTickets) * 100) : 0;
+  const checkInRate = totalTickets ? Math.round((checkins / totalTickets) * 100) : (totalTickets === 0 ? 0 : null);
 
   const capacity = tiers.reduce((s, t) => s + t.quantity, 0);
   const sold = tiers.reduce((s, t) => s + t.sold, 0);
@@ -931,8 +940,17 @@ exports.getOrganizerDashboard = onCall(CF_OPTS, async (req) => {
   const drafts = events.filter(e => e.status === 'draft');
   const cancelled = events.filter(e => e.status === 'cancelled');
 
-  const totalRevenue = events.reduce((s, e) => s + (e.totalRevenue || 0), 0);
-  const totalTicketsSold = events.reduce((s, e) => s + (e.totalTicketsSold || 0), 0);
+  /* Revenue and tickets sold come from eventSettlements — the canonical record of PAID tickets across
+     every channel (online, cashier, cash, card). `events.totalRevenue` was initialised to 0 and never
+     written, so the dashboard always showed KES 0; `totalTicketsSold` counts seats HELD by unpaid
+     orders too. A capped read reports null (the UI shows "—"), never a partial sum. */
+  const _setSnap = await db().collection('eventSettlements').where('organizerUid', '==', uid).limit(5000).get();
+  const _paid = _setSnap.docs.map((d) => d.data()).filter((x) => x.status !== 'REFUNDED');
+  const _capped = _setSnap.size >= 5000;
+  const _byEvent = {};
+  _paid.forEach((x) => { const b = (_byEvent[x.eventId] = _byEvent[x.eventId] || { grossCents: 0, tickets: 0 }); b.grossCents += Number(x.grossCents) || 0; b.tickets += Number(x.quantity) || 0; });
+  const totalRevenue = _capped ? null : _paid.reduce((s, x) => s + (Number(x.grossCents) || 0), 0) / 100;
+  const totalTicketsSold = _capped ? null : _paid.reduce((s, x) => s + (Number(x.quantity) || 0), 0);
   const totalCheckins = events.reduce((s, e) => s + (e.checkinsCount || 0), 0);
 
   return {
@@ -953,8 +971,9 @@ exports.getOrganizerDashboard = onCall(CF_OPTS, async (req) => {
       status: e.status,
       startDate: e.startDate,
       venue: e.venue,
-      totalTicketsSold: e.totalTicketsSold || 0,
-      totalRevenue: e.totalRevenue || 0,
+      totalTicketsSold: _capped ? null : ((_byEvent[e.eventId] || {}).tickets || 0),
+      seatsHeld: e.totalTicketsSold || 0,
+      totalRevenue: _capped ? null : (((_byEvent[e.eventId] || {}).grossCents || 0) / 100),
       checkinsCount: e.checkinsCount || 0,
       viewCount: e.viewCount || 0,
       bannerImageUrl: e.bannerImageUrl,
@@ -976,9 +995,10 @@ exports.createEventPromoCode = onCall(CF_OPTS, async (req) => {
     throw new HttpsError('invalid-argument', 'discountType must be percent or fixed');
   }
 
-  const evSnap = await db().collection('events').doc(eventId).get();
-  if (!evSnap.exists) throw new HttpsError('not-found', 'Event not found');
-  if (evSnap.data().organizerUid !== uid) throw new HttpsError('permission-denied', 'Not event owner');
+  /* Organizer, or event-scoped MARKETING staff (event-ops) — never another event's staff. */
+  const _ops = require('./event-ops');
+  await _ops.resolveEventActor(req, eventId, _ops.CAPS.MARKETING);
+  void uid;
 
   const cleanCode = code.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
   if (cleanCode.length < 3) throw new HttpsError('invalid-argument', 'Code must be at least 3 alphanumeric characters');

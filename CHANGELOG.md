@@ -1,3 +1,24 @@
+## 2026-09-27 (198) — Events ops P5: organizer + staff workspace, buyer PINs + Refund Wizard, canonical dashboard money
+
+- **Event Manager (organizer):** new sections Quick Sale, PIN Admission, Sales, Finance, Staff (sokoni-event-ops.js);
+  refund-policy panel before publishing; tiers take sale start/end + max per buyer.
+- **Staff mode:** a signed-in non-organizer with a live assignment sees ONLY their role's sections for their event
+  (cashier: Quick Sale + Sales · admission: PIN Admission · marketing: Promo · manager: all four); invitation links
+  (`?staffInvite=<eventId>`) are accepted as the signed-in user. Marketing staff may create promo codes for their event.
+- **Buyer (event-hub):** My Tickets grouped by order with ticket number + PIN, admission / refund status; the Refund
+  Request Wizard (reason → questions → server eligibility → submit; ineligible cannot be sent); the refund policy is
+  shown before buying; "List Your Event" now goes to the organizer application, not a provider listing.
+- **Canonical money (UI data integrity):** the organizer dashboard showed revenue from `events.totalRevenue`, which
+  was never written (always KES 0), and "tickets sold" counted unpaid seat holds. Dashboard + analytics now read
+  `eventSettlements` (paid tickets across every channel, settled commission); capped → "—". Settlements record `quantity`.
+  New `eventFinance` read.
+- **Fixes found by the browser harness:** re-mounting a section stacked click listeners — one "Admit" tap fired two
+  admissions (the operator saw "Already admitted"); a bare `1fr` grid column let wide tables widen the page on phones.
+- **Files:** `sokoni-event-ops.js` (new), `event-manager.html`, `event-hub.html`,
+  `functions/{event-hub,event-sales,event-settlement}.js`, `scripts/test-event-ops-browser.js` (new, 86/0 — real
+  server logic behind real pages), `scripts/test-entertainment-browser.js` (legal gate; 230/0).
+- **Regression:** event-ops 50 · sales 46 · refunds 52 · events 84 · registry 65 · agreements 25. **Not deployed.**
+
 ## 2026-09-27 (197) — Events ops P4: Entertainment agreements on the canonical legal authority
 
 - **Catalogue** (`functions/legal-agreements.js` ROLE_AGREEMENTS): `event_organizer` — organizer agreement,

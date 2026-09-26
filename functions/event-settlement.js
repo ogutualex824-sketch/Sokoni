@@ -193,6 +193,7 @@ const eventTicketAdapter = {
       const releaseMs = releaseAfterMs(ev);
       txn.create(setRef, {
         paymentRef: ctx.paymentRef, orderId, eventId: o.eventId || null, organizerUid, buyerUid: o.buyerUid,
+        quantity: qty, channel: o.channel === 'cashier' ? 'CASHIER_ONLINE' : 'ONLINE',
         currency: ctx.currency, ...s,
         providerFeeSource: fee.source,
         status: s.feeKnown ? SETTLEMENT.HELD : SETTLEMENT.FEE_UNREPORTED,

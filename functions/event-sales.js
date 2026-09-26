@@ -101,11 +101,11 @@ function _issueTickets(txn, { sale, lines, event, soldBy, attendeeName }) {
 
 /* Post the money side of a COMPLETED door sale: settlement row (organizer-collected) + commission
    receivable + commission ledger row. All inside the sale transaction. */
-function _postDoorSale(txn, { sale, event, grossCents }) {
+function _postDoorSale(txn, { sale, event, grossCents, quantity }) {
   const c = _saleCommission(grossCents);
   txn.create(_db().collection(COL.SETTLEMENTS).doc(sale.id), {
     paymentRef: null, saleId: sale.id, orderId: null, eventId: event.id, organizerUid: event.organizerUid,
-    channel: sale.tender === 'cash' ? 'CASH' : 'CARD_EXTERNAL', grossCents, providerFeeCents: 0, netCents: grossCents,
+    channel: sale.tender === 'cash' ? 'CASH' : 'CARD_EXTERNAL', quantity: quantity || 0, grossCents, providerFeeCents: 0, netCents: grossCents,
     commissionCents: c.commissionCents, organizerNetCents: grossCents - c.commissionCents, commissionBps: c.commissionBps,
     policy: c.policy, rateSource: c.rateSource, basis: c.basis, currency: 'KES',
     status: 'ORGANIZER_COLLECTED', createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
@@ -190,14 +190,14 @@ async function quickSale(req) {
 
     if (tender === 'cash') {
       const received = _cents(d.cashReceivedKes);
-      const c = _postDoorSale(txn, { sale, event, grossCents });
+      const c = _postDoorSale(txn, { sale, event, grossCents, quantity: qtyTotal });
       const tickets = _issueTickets(txn, { sale, lines, event, soldBy: actor.uid, attendeeName });
       txn.create(saleRef, { ...base, status: 'COMPLETED', cashReceivedCents: received, changeCents: received - grossCents,
         commissionCents: c.commissionCents, ticketIds: tickets, completedAt: FieldValue.serverTimestamp() });
       return { saleId: saleRef.id, status: 'COMPLETED', tickets: tickets.length, changeCents: received - grossCents };
     }
     if (tender === 'card_external' && cardRefKey) {
-      const c = _postDoorSale(txn, { sale, event, grossCents });
+      const c = _postDoorSale(txn, { sale, event, grossCents, quantity: qtyTotal });
       const tickets = _issueTickets(txn, { sale, lines, event, soldBy: actor.uid, attendeeName });
       txn.create(cardRefKey, { saleId: saleRef.id, eventId: event.id, organizerUid: event.organizerUid, recordedBy: actor.uid, createdAt: FieldValue.serverTimestamp() });
       txn.create(saleRef, { ...base, status: 'COMPLETED', card: { provider: String(card.provider).toLowerCase(), reference: cardRef },
@@ -259,7 +259,7 @@ async function confirmExternalCard(req) {
     if (used.exists) fail('already-exists', 'That card reference has already been recorded for a sale.');
     const lines = s.lines;
     const sale = { id: saleRef.id, tender: 'card_external' };
-    const c = _postDoorSale(txn, { sale, event, grossCents: s.grossCents });
+    const c = _postDoorSale(txn, { sale, event, grossCents: s.grossCents, quantity: s.quantity });
     const tickets = _issueTickets(txn, { sale, lines, event, soldBy: s.cashierUid, attendeeName: s.attendeeName });
     txn.create(refKey, { saleId: saleRef.id, eventId: event.id, organizerUid: event.organizerUid, recordedBy: actor.uid, createdAt: FieldValue.serverTimestamp() });
     txn.update(saleRef, { status: 'COMPLETED', card: { provider, reference: cardRef }, paymentVerified: false,
@@ -336,7 +336,48 @@ async function listSales(req) {
 
 const _ms = (v) => { if (!v) return null; if (typeof v.toMillis === 'function') return v.toMillis(); const t = new Date(v).getTime(); return Number.isFinite(t) ? t : null; };
 
+/**
+ * Event finance for the organizer (FINANCE capability) — every figure from the canonical settlement
+ * and receivable records. A capped read reports null ("unknown"), never a truncated sum.
+ */
+async function finance(req) {
+  const d = req.data || {};
+  const actor = await OPS.resolveEventActor(req, d.eventId, OPS.CAPS.FINANCE);
+  const CAP = 2000;
+  const [ss, rs, rq] = await Promise.all([
+    _db().collection(COL.SETTLEMENTS).where('eventId', '==', actor.event.id).limit(CAP).get(),
+    _db().collection(COL.RECEIVABLES).where('eventId', '==', actor.event.id).limit(CAP).get(),
+    _db().collection('eventRefundRequests').where('eventId', '==', actor.event.id).limit(CAP).get(),
+  ]);
+  if (ss.size >= CAP || rs.size >= CAP || rq.size >= CAP) return { capped: true };
+  const S = ss.docs.map((x) => x.data());
+  const live = S.filter((x) => x.status !== 'REFUNDED');
+  const sum = (arr, f) => arr.reduce((a, x) => a + (Number(x[f]) || 0), 0);
+  const online = live.filter((x) => x.channel !== 'CASH' && x.channel !== 'CARD_EXTERNAL');
+  const door = live.filter((x) => x.channel === 'CASH' || x.channel === 'CARD_EXTERNAL');
+  const unknownFee = online.some((x) => x.status === 'FEE_UNREPORTED');
+  const R2 = rs.docs.map((x) => x.data());
+  return {
+    capped: false,
+    ticketsSold: sum(live, 'quantity'),
+    grossCents: sum(live, 'grossCents'),
+    online: { grossCents: sum(online, 'grossCents'), providerFeeCents: unknownFee ? null : sum(online, 'providerFeeCents'),
+      commissionCents: unknownFee ? null : sum(online, 'commissionCents'),
+      heldCents: unknownFee ? null : sum(online.filter((x) => x.status === 'HELD'), 'organizerNetCents'),
+      releasedCents: sum(online.filter((x) => x.status === 'RELEASED'), 'organizerNetCents'),
+      awaitingFeeCount: online.filter((x) => x.status === 'FEE_UNREPORTED').length },
+    door: { grossCents: sum(door, 'grossCents'), commissionCents: sum(door, 'commissionCents'),
+      byChannel: door.reduce((a, x) => { a[x.channel] = (a[x.channel] || 0) + (Number(x.grossCents) || 0); return a; }, {}) },
+    commissionReceivable: { outstandingCents: R2.reduce((a, x) => a + Math.max(0, (Number(x.amountCents) || 0) - (Number(x.collectedCents) || 0)), 0),
+      collectedCents: sum(R2, 'collectedCents') },
+    refunds: { requested: rq.size, refunded: S.filter((x) => x.status === 'REFUNDED').length,
+      refundedCents: sum(S.filter((x) => x.status === 'REFUNDED'), 'grossCents') },
+    commissionPolicy: '3% per ticket (net of provider fee for online sales)',
+  };
+}
+
 const _h = {
+  eventFinance: finance,
   eventQuickSale: quickSale, eventConfirmExternalCard: confirmExternalCard, eventCancelPendingSale: cancelPending,
   eventSaleTickets: saleTickets, eventListSales: listSales,
 };
