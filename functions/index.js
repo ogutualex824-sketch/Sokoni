@@ -8692,9 +8692,13 @@ exports.initiateRefund = onCall({ timeoutSeconds: 30 }, async (request) => {
     const snap = await db.collection("escrows").doc(escrowRef).get();
     if (!snap.exists) throw new HttpsError("not-found", "Escrow not found.");
     escrow = snap.data();
-    if (!isAdminCaller && request.auth.uid !== escrow.buyerId) {
-      throw new HttpsError("permission-denied", "Only the buyer or admin can request a refund.");
-    }
+    /* BOTH relationships, before anything is written: the caller owns this escrow AND this
+       escrow belongs to the requested order. Owning SOME escrow previously sufficed to refund
+       ANY order named alongside it — see functions/refund-escrow-binding.js. */
+    const refusal = require("./refund-escrow-binding").checkEscrowRefundAuthority({
+      escrow, orderId, callerUid: request.auth.uid, isAdmin: isAdminCaller,
+    });
+    if (refusal) throw new HttpsError(refusal.code, refusal.message, { reason: refusal.reason });
   } else {
     /* orderId-only path. This previously performed NO ownership check at all, so
        any authenticated user could file a refund request against any order. It

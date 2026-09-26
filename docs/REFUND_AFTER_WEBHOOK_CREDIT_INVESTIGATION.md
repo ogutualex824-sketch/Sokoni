@@ -6,8 +6,14 @@ seller, no deployed refund path ever reverses that credit. Two admin paths pay t
 it. Production has never refunded a real order, so no money has been lost this way yet.
 **Related:** [[MARKETPLACE_DOUBLE_CREDIT_MEASUREMENT]] · [[Payments]] · [[Orders]]
 
-This is a **separate money invariant** from the double credit, which is fixed. It is recorded here and **not
-repaired**: the repair needs its own authorization. Business-wallet work is not involved and stays on HOLD.
+This is a **separate money invariant** from the double credit, which is fixed. Business-wallet work is not involved
+and stays on HOLD.
+
+**Status 2026-09-26:** Track F (refund authority) and Track G (escrow-to-order binding) were owner-adjudicated
+PASS and **landed on the main line, NOT deployed**. Production deployment needs a separate per-lineage
+provenance and rebuild plan, because the four refund functions run from four different source lineages.
+**Commission reversal is an open policy question, excluded from the repair.** The investigation below is kept
+as written.
 
 ---
 
@@ -104,7 +110,7 @@ overwrite it. That is an owner-authorized repair against the current production 
 
 ---
 
-## Track F repair — branch `track-f/refund-authority` (NOT landed, NOT deployed)
+## Track F repair — LANDED on `feat/integrations-control-center` 2026-09-26 (NOT deployed)
 
 **`functions/refund-authority.js`** is the one decision point. Wired into `refundToWallet` (wallet rail),
 `fosSubmitRefund` / `fosApproveRefund` (chargeback rail), and `order-settlement` refund routing (evidence).
@@ -153,3 +159,22 @@ production. `refundToWallet`'s `wallet.js` is byte-identical to main; `initiateR
 Any deploy needs per-lineage trees, as with the double-credit fix.
 
 **Production observation (separate from the tests):** 0 refunds of real orders, so nothing to remediate in data.
+
+## Track G repair — LANDED on `feat/integrations-control-center` 2026-09-26 (NOT deployed)
+
+`initiateRefund` (escrow path) now establishes **both** relationships before any write, via
+`functions/refund-escrow-binding.js`: the caller owns the escrow (buyer or admin), **and** the escrow belongs to
+the requested order. The binding applies to admins too: a mismatched pair is a data error, not a privilege.
+Escrows name their order as `transactionId` (finos-router) or `orderId` (the field releaseEscrow reads). Both
+are accepted; two different values, or no value, is a refusal. A request naming only an escrow mutates no
+order and is unchanged.
+
+**Evidence** (`scripts/test-refund-escrow-binding.js`, real emulator, the REAL `initiateRefund`; each refusal
+snapshots order + escrow + `refunds` + `paymentLedger` before and after):
+
+| target | result |
+|---|---|
+| Track G branch | **13 / 0**: allowed pair accepted; different order, non-owner, missing escrow, escrow with no order, and conflicting escrow all refused with **nothing written** |
+| **counterproof:** pre-repair `b66880b` | **7 / 6 FAIL**. Reproduces the exploit: the owner of the escrow for `ORD_A` names `ORD_B`, and **`ORD_B` is mutated** and a refund filed against it. Admin and malformed-escrow variants mutate too |
+
+**Production observation:** 0 escrows exist, so the defect was latent. There is nothing to remediate in data.

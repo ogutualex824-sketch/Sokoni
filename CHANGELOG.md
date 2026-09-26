@@ -1,3 +1,12 @@
+## 2026-09-26 — Track G: initiateRefund binds the escrow to the requested order (branch `track-g/refund-escrow-binding`, NOT landed, NOT deployed)
+
+`initiateRefund` previously accepted "caller owns SOME escrow" and then refunded ANY order named alongside it.
+It now requires the caller to own the escrow AND the escrow to belong to the requested order, before any write
+(`functions/refund-escrow-binding.js`). `scripts/test-refund-escrow-binding.js` **13/0**; pre-repair code
+**FAILS 6**, reproducing a foreign order being mutated. Database / API: none.
+Security: closes cross-order refund via escrow ownership. Breaking: a mismatched, unbound or conflicting
+escrow/order pair is refused, including for admins.
+
 ## 2026-09-26 — Track F: one refund authority (branch `track-f/refund-authority`, NOT landed, NOT deployed)
 
 New `functions/refund-authority.js`, wired into `refundToWallet`, `fosSubmitRefund`, `fosApproveRefund` and
