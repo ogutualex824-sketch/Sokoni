@@ -1,6 +1,6 @@
 # Creator Hub — Forensic Audit & Ownership Map
 
-**Date:** 2026-09-26 · **Base:** `a38b31a` · **Branch:** `feat/creator-hub` · **Status:** AUDIT ONLY — no code yet
+**Date:** 2026-09-26 · **Base:** `a38b31a` · **Branch:** `feat/creator-hub` · **Status:** AUDIT (pre-implementation) — implementation: [[CREATOR_HUB]]
 
 Related: [[Marketplace]] · [[Payments]] · [[PAYMENT_ARCHITECTURE_UNIFICATION]] · [[WITHDRAWAL_ENGINE_CHANGE_PLAN]] · [[WALLET_FREEZE_ACCEPTANCE]] · [[AdminOS]]
 
@@ -86,3 +86,10 @@ gap, rules source at 105.7% of the size limit). Nothing here can go live in this
 - `digitalProducts`/Digital Esoko: public `fileURL`, client writes into CF-only collections.
 - `purchaseEntertainment`: get-then-set claim outside a transaction; float money.
 - `admin-os.js` `_requireAdmin` throws plain `Error` (client sees `internal`).
+
+## 6. Owner decisions taken on this map (2026-09-26)
+
+- Frozen money paths (B1 webhook, B4 wallet release): **change and commit, do not deploy.**
+- Royalty pool: **gross − IntaSend fee − the existing `ppv` commission** (B5).
+- Catalogue: **adopt `entertainmentListings`**; Creator lives inside the Entertainment hub.
+- Scope: full vertical, staged.

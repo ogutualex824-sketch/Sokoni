@@ -515,6 +515,24 @@ Send a Firebase Cloud Messaging push notification.
 
 # Admin Management
 
+## creatorDispatch (Creator Hub)
+
+`onCall`, App Check enforced. `{ op, ...data }`. Full contract: [[CREATOR_HUB]].
+
+| op | auth | purpose |
+|---|---|---|
+| `catalog.list` / `catalog.get` | public | published films; `catalog.get` adds viewer access, licence verdict, checkout notice |
+| `creator.register` / `creator.me` | user | creator identity (PENDING until admin approval) |
+| `film.saveDraft` · `film.mediaUploadTarget` · `film.attachMedia` | creator | draft + private master (server-verified) |
+| `film.submit` · `film.reopen` · `film.publish` | creator | workflow (publish only from APPROVED) |
+| `agreement.saveDraft` | film owner | royalty split draft, integer bps |
+| `playback.authorize` · `.heartbeat` · `.end` · `.report` | entitled viewer | 10-min signed grant, session, watermark payload |
+| `royalty.mine` · `royalty.film` | participant / film owner | dashboards |
+
+Purchase: `createPaymentIntent({ purpose: 'film_access', filmId, phone })` → `initiateSTKPush`.
+Trigger: `creatorOnFilmPayment` (payments/{ref} → terminal paid). Admin: 20 `creatorAdmin*` ops on
+`adminOsDispatch`.
+
 ## bootstrapAdminClaim
 
 Set the first admin account. Can only be called by `admin@mysokoni.co.ke`.

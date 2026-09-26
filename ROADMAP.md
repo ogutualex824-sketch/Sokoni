@@ -419,6 +419,20 @@ Evidence from real users determines what gets built next, not assumptions.
 
 ---
 
+## Creator Hub — built, tested, BLOCKED before live (2026-09-26)
+
+Film/media marketplace inside the Entertainment hub — publishing + review, purchase/rental on the
+existing IntaSend rail, protected watermarked playback, versioned royalties with quarterly settlement
+into the canonical wallet, AdminOS controls. See [[CREATOR_HUB]].
+
+- **Completed:** pure core, server module, payment/refund wiring, rules, viewer/studio/AdminOS UI,
+  6 suites (444 assertions) + 22/22 sabotage.
+- **Blocked:** deploy authorisation + functions deploy freeze; webhook-before-kill-switch ordering;
+  rules release (size limit); egress economics; no transcoding/CDN; signBlob; IntaSend fee fields.
+- **Planned / debt:** adaptive streaming + CDN, DRM investigation, participant consent to splits,
+  hosted multi-method checkout once verified, non-KES settlement (payment-core change), payouts
+  outside Kenya, feature-proposal evidence (v2.0 policy).
+
 ## Universal Listing System — built, and the four gates it stops at
 
 **Built and committed 2026-09-19** (`7dedec7`…`91e4d9c`, 11 commits, **358 assertions / 0

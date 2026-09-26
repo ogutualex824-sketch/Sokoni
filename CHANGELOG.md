@@ -1,3 +1,56 @@
+## 2026-09-26 (182) — Creator Hub: film/media marketplace, royalties, protected playback
+
+**NO DEPLOY. Readiness BLOCKED** (docs/CREATOR_HUB.md §13). Branch `feat/creator-hub` @ base `a38b31a`.
+Commits `28c7752` · `5523684` · `5a9092f` · `67b68fc` · docs.
+Tests: royalty **82/0** · publishing **85/0** · hub **154/0** · rules (emulator + counterproof) **82/0** ·
+UI (Chromium) **41/0** · sabotage **22/22 CAUGHT**.
+
+**Summary.** The Creator category becomes a live vertical inside the Entertainment hub: creator
+onboarding, film publishing with admin review, server-priced purchase/rental on the existing IntaSend
+rail, a durable per-purchase entitlement, signed short-lived playback with a moving masked watermark,
+versioned integer-basis-point royalty agreements, an append-only royalty ledger, quarterly settlement
+released into the canonical wallet, and AdminOS controls. Adopts `entertainmentListings`; no parallel
+payment system, wallet, payout provider, refund rail, seller identity or admin page.
+
+**Files.** New: `functions/creator-hub.js`, `functions/shared/creator-{royalty,publishing,watermark}.js`,
+`creator.html`, `creator-studio.html`, `sokoni-aos-creator.js`, `sokoni-creator-rules.js`,
+`sokoni-watermark.js`, `docs/CREATOR_HUB.md`, `docs/CREATOR_HUB_OWNERSHIP_MAP.md`, suites
+`scripts/test-creator-*.js`, `scripts/run-creator-rules.js`, `scripts/sabotage-creator-hub.js`,
+`scripts/sync-creator-shared.js`, `scripts/lib/fake-firestore-txn.js`.
+Changed: `functions/index.js`, `functions/payment-purposes.js`, `functions/entitlement-adapters.js`,
+`functions/financial-os.js`, `functions/admin-os-dispatch.js`, `functions/entertainment-hub.js`,
+`firestore.rules` (+ `.build`), `storage.rules`, `firestore.indexes.json`, `sokoni-aos.js`,
+`admin-os.html`, `category.js`, `category.html`, `entertainment.html`.
+
+**Database.** New collections (all CF-write-only): `creators`, `creatorPrivate`, `creatorMedia`,
+`royaltyAgreements/{film}/versions`, `royaltyParticipations`, `contentEntitlements`, `contentAccess`,
+`royaltyAccruals`, `royaltyLedger`, `royaltyReversals`, `royaltyPeriods`, `royaltyStatements`,
+`royaltyDistributions`, `playbackSessions`, `playbackAudit`, `playbackRate`, `creatorExceptions`,
+`creatorPayoutHolds`, `entertainmentListingSecrets`, `config/creatorHub`. `payments/{ref}` gains an
+additive `providerReport` map. 6 composite indexes.
+
+**API.** New callable `creatorDispatch` (17 ops), trigger `creatorOnFilmPayment`, 20 `creatorAdmin*` ops on
+`adminOsDispatch`, payment purpose `film_access`, entitlement purpose `film_access`.
+
+**Money paths (owner-authorised change in the frozen area, NOT deployed).**
+- `webhookIntasend`: `providerReport` written inside the COMPLETE claim; a `film_access` branch returns
+  before `commissionLedger` and the seller credit (else the payer, or the creator's full net, was
+  credited); a second guard in the credit branch.
+- Quarterly distribution credits `wallets.balance` via `create()` on `walletTransactions/{uid}_{period}_royalty`.
+- `financial-os` refunds: a film payment attributes buyer = payer and debits no seller; **both
+  finalizers now read `fosTransactions` before updating it** — a payRef-only refund used to throw
+  *after* the gateway refunded, leaving the request `approved` and re-approvable (a second gateway
+  refund); both finalizers call the royalty reversal hook.
+
+**Security.**
+- `entertainmentListings` is publicly readable when active, so the legacy `streamingUrl` on the listing
+  was readable by anyone: moved to the server-only `entertainmentListingSecrets`. Legacy self-publish
+  and legacy purchase refuse Creator films.
+- Film masters: Storage create-only, **no client read**; playback is a 10-minute V4 signed grant.
+- Watermark carries masked identifiers only. No "copy-proof" claim is made anywhere.
+
+**Breaking changes.** None for existing flows. `purchasesEnabled` defaults to **false**.
+
 ## 2026-09-22 (181) — 4a: the canonical writer gets an EXPLICIT field contract
 
 **NO DEPLOY. Server-only. No seller.js change. No stock/inventoryVersion change.**

@@ -282,6 +282,19 @@ Detection fails the build immediately.
 
 ---
 
+## Creator Hub boundaries (2026-09-26)
+
+- All Creator collections are Cloud-Functions-write-only; reads are owner-scoped (emulator suite with
+  allow-all counterproof). A film document never carries a media URL/path.
+- Film masters: Storage create-only, no client read; playback = 10-min V4 signed URL per session,
+  ≤ 2 concurrent sessions, 30 grants/hour, heartbeat revocation.
+- Money: server-priced `film_access` intent without `sellerUid`; webhook film branch before any credit;
+  exactly-once accrual and distribution via `create()` claims; refund reversals append, never delete.
+- Watermark: masked identifiers only; an overlay, not pixel-burned — deters and traces, does not
+  prevent recording. No copy-proof claim.
+- Legacy fix: `entertainmentListings.streamingUrl` was publicly readable → server-only sidecar.
+See [[CREATOR_HUB]] §9, §13.
+
 ## Related Documents
 
 - [[ARCHITECTURE]] — Full system architecture
