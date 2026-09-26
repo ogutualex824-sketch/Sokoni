@@ -1,3 +1,20 @@
+## 2026-09-26 — Commission: the money-chain suite asserted a retired ladder (branch `commission-ladder/test-authority`, NOT landed, test-only)
+
+`test-post-pin-money-chain.js` failed 7 assertions (B1/B2 ×3, F1). They were traced through the real resolver:
+every plan resolves correctly to the authorised flat 15% (`MARKETPLACE_PLAN_RATES`, owner decision 2026-09-22),
+with the KES 10 minimum; POS is 5%; ledger destinations are correct. **All 7 were a test defect**: the suite
+hard-coded the retired 15/10/5/0 ladder.
+
+The suite now derives every expectation from `commission-config` and asserts the policy's flat shape (B0). F1 is
+rebuilt as an honest control (resolved plan follows the fixture; the amount does not move). New E4 guards the POS
+alias coincidence (engine POS rate == `POS_PLAN_RATES`). Result: **43/0** (was 32/7).
+- The old suite **passes** a reintroduced ladder (39/0); the new one fails it (B0, F1b).
+- The new suite fails a raised `RATES.marketplace` exactly on E2/E3/E4.
+- No production file changes.
+- Found, separate: `test-marketplace-plan-ladder` (14 failures: same pinning, plus a possible browser-snapshot
+  defect H2/H5) and 5 unrelated failures in the 48h-destinations and balance-UI suites.
+- Record: `docs/repairs/COMMISSION-money-chain-ladder-tests.md`.
+
 ## 2026-09-26 — RES-1 option 1: a quote carried from the checkout session is bound to its order (branch `res1-opt1/bind-session-quote`, NOT landed)
 
 On the webhook-first order path the carry found the delivery quote on the checkout SESSION and wrote it to the

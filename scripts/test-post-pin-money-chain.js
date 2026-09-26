@@ -143,13 +143,28 @@ console.log('\nPART A — the PIN is the gate, and the rider cannot open it them
 
 console.log('\nPART B — the marketplace split, at the PLAN rate, all the way to the merchant\n');
 {
-  const LADDER = [
-    ['seller_free',       15, 150000, 850000],
-    ['seller_basic',      10, 100000, 900000],
-    ['seller_pro',         5,  50000, 950000],
-    ['seller_enterprise',  0,      0, 1000000],
-  ];
-  for (const [tier, pct, wantComm, wantNet] of LADDER) {
+  /* EVERY EXPECTATION IS DERIVED FROM THE AUTHORITY — never a rate literal.
+     This table used to hard-code the 15 / 10 / 5 / 0 ladder. That ladder was retired twice
+     (2026-09-13 -> 16/12/8/4, then 2026-09-22 -> one flat 15% on every plan; see
+     commission-config.js MARKETPLACE_PLAN_RATES), and the literals turned this suite red on the
+     CORRECT configuration: 7 failures, none of them a production defect. The expected rate is
+     now read from `CC.resolveMarketplaceRate(tier)` — the same resolver the engine uses — so the
+     suite follows an authorised rate change instead of fighting it, and B0 below states the
+     policy's SHAPE (plan-independent) explicitly. */
+  const TIERS = ['seller_free', 'seller_basic', 'seller_pro', 'seller_enterprise'];
+  const GROSS = KES(10000);
+  const expectFor = (tier) => {
+    const r = CC.resolveMarketplaceRate(tier);
+    const comm = Math.max(Math.round(GROSS * r.rateFraction), r.floorExempt ? 0 : KES(CC.MIN_COMMISSION_KES));
+    return { pct: r.pct, plan: r.plan, matched: r.matched, comm, net: GROSS - comm };
+  };
+  const rates = TIERS.map((t) => expectFor(t).pct);
+  ck('B0  the authority prices every marketplace plan identically (flat, plan-independent)',
+    rates.every((p) => p === rates[0]) && rates[0] > 0, rates.join(' / ') + '%');
+  ck('B0b ...and every legacy seller_* id is a RECOGNISED plan, not the unknown-plan fallback',
+    TIERS.every((t) => expectFor(t).matched), TIERS.map((t) => t + '->' + expectFor(t).plan).join(' '));
+  for (const tier of TIERS) {
+    const { pct, comm: wantComm, net: wantNet } = expectFor(tier);
     withPlan(tier);
     const b = await SE.computeSettlement(makeDb(), {
       grossCents: KES(10000), category: 'marketplace', sellerId: SELLER, hubId: 'marketplace',
@@ -264,17 +279,44 @@ console.log('\nPART E — POS money never enters this rail\n');
     b.commission.cents === 50000, String(b.commission.cents));
   ck('E3  ...so a Free merchant\'s till is not charged three times over',
     b.commission.cents < 150000);
+
+  /* THE ALIAS HAZARD, made visible. In this engine a POS sale is NOT priced by POS_PLAN_RATES: it
+     resolves through `ALIASES.pos = 'marketplace'` to `RATES.marketplace.pct` (source
+     'default_table'). The till path prices it through `resolvePosRate` -> POS_PLAN_RATES. The two
+     authorities agree today only because both numbers are 5 — raise RATES.marketplace.pct and POS
+     through this engine silently follows it. This does not remove the alias (it also decides the
+     48-hour settlement term, a separate decision); it makes the coincidence an ASSERTION, so the
+     day the two diverge this goes red instead of a till bill tripling quietly. */
+  const posMismatch = [];
+  for (const tier of ['seller_free', 'seller_basic', 'seller_pro', 'seller_enterprise']) {
+    withPlan(tier);
+    const pb = await SE.computeSettlement(makeDb(), { grossCents: KES(10000), category: 'pos', sellerId: SELLER, hubId: 'pos' });
+    const tillPct = CC.resolvePosRate(tier).rateFraction * 100;
+    if (pb.commission.rate !== tillPct) posMismatch.push(tier + ': engine ' + pb.commission.rate + '% vs till ' + tillPct + '%');
+  }
+  ck('E4  POS through this engine charges exactly the till authority\'s rate (alias coincidence guarded)',
+    posMismatch.length === 0, posMismatch.join(' | ') || 'engine == POS_PLAN_RATES on every plan');
 }
 
 console.log('\nPART F — adversarial controls\n');
 {
   /* If the plan fixture could not move the rate, PART B proves nothing. */
+  /* F1 used to require that changing the plan MOVES the settled amount — true only under the
+     retired ladder. Under the flat policy it must NOT move. The control's real job is to prove the
+     plan fixture reaches the engine at all (otherwise PART B proves nothing), so it now watches the
+     RESOLVED PLAN, which must follow the fixture, while the amount stays put. */
   withPlan('seller_free');
+  const fc = await U.calculateCommission(makeDb(), { orderAmountCents: KES(10000), category: 'marketplace', sellerId: SELLER });
   const f = await SE.computeSettlement(makeDb(), { grossCents: KES(10000), category: 'marketplace', sellerId: SELLER });
   withPlan('seller_pro');
+  const pc = await U.calculateCommission(makeDb(), { orderAmountCents: KES(10000), category: 'marketplace', sellerId: SELLER });
   const p = await SE.computeSettlement(makeDb(), { grossCents: KES(10000), category: 'marketplace', sellerId: SELLER });
-  ck('F1  the plan fixture genuinely moves the settled amount',
-    f.sellerNetCents !== p.sellerNetCents, f.sellerNetCents + ' vs ' + p.sellerNetCents);
+  ck('F1  the plan fixture genuinely reaches the engine (the RESOLVED plan follows it)',
+    fc.marketplacePlan === CC.resolveMarketplaceRate('seller_free').plan
+      && pc.marketplacePlan === CC.resolveMarketplaceRate('seller_pro').plan && fc.marketplacePlan !== pc.marketplacePlan,
+    fc.marketplacePlan + ' vs ' + pc.marketplacePlan);
+  ck('F1b ...and under the flat policy the plan does NOT move the settled amount',
+    f.sellerNetCents === p.sellerNetCents, f.sellerNetCents + ' vs ' + p.sellerNetCents);
 
   /* A settlement with no seller must not silently credit somebody. */
   const none = await SE.computeSettlement(makeDb(), { grossCents: KES(10000), category: 'marketplace' });
