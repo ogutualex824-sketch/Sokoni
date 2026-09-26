@@ -179,6 +179,7 @@ async function buy(buyer, filmId) {
   await settle(ref1, { status: 'PENDING' });
   const pend = await H._internal.processFilmPayment(ref1);
   ck('PENDING payment grants nothing', !!pend.refused && !(await read('contentEntitlements/' + ref1)));
+  ck('royalty accrual on a PENDING payment refused (no credit without payment)', (await H._internal.accrueRoyalty(ref1)).refused === 'payment_not_terminal' && !docs('royaltyLedger/').some((r) => r.paymentRef === ref1));
   ck('playback denied before payment completes', /no_entitlement/.test(await msg(call('playback.authorize', 'v1', { filmId: FILM, deviceId: 'd1' }))));
   await settle(ref1, { value: 500, net: 485, charges: 15 });
   const done = await H._internal.processFilmPayment(ref1);
