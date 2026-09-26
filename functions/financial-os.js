@@ -20,6 +20,7 @@ const { defineSecret }                  = require('firebase-functions/params');
 const logger                             = require('firebase-functions/logger');
 const admin                              = require('firebase-admin');
 const { getAdapter, listAdapters }       = require('./payment-adapters');
+const RA                                 = require('./refund-authority');
 
 const INTASEND_PRIVATE_KEY = defineSecret('INTASEND_PRIVATE_KEY');
 const REGION               = 'us-central1';
@@ -38,6 +39,55 @@ function _requireAdmin(req) {
   if (!req.auth.token?.admin && !req.auth.token?.superAdmin)
     throw new HttpsError('permission-denied', 'Admin access required');
   return auth;
+}
+
+/* ── REFUND AUTHORITY: chargebacks against a payment SOKONI collected ─────────────────────
+   A `payments/{payRef}` record that is NOT an FOS-native transaction (no fosTransactionId) is a
+   webhook-collected payment: its seller was credited by the webhook, and only
+   functions/refund-authority.js may refund it. The legacy flow below debited `tx.sellerUid` —
+   a field webhook payments never carry — in `availableCents`, a field nothing pays out from, and
+   could fire a second chargeback from an 'approved' queue record. None of that runs for these. */
+function _isAnchoredPayment(paymentDoc) {
+  return !!paymentDoc && !paymentDoc.fosTransactionId;
+}
+
+/**
+ * Gateway call + completion for a chargeback the authority has ALREADY claimed.
+ * Success: record the provider id first, then reverse the seller and finalize the queue record in
+ * ONE transaction. If that completion fails, the queue says so and keeps the provider id, so
+ * fosApproveRefund can finish the completion without a second chargeback. Failure or an unknown
+ * result: the claim is kept as CHARGEBACK_FAILED — never silently reopened.
+ */
+async function _anchoredChargeback({ payRef, amountKES, reason, provider, queueRef }) {
+  const fsdb = db();
+  let result;
+  try {
+    const adapter = getAdapter(provider || 'intasend', { key: INTASEND_PRIVATE_KEY.value() });
+    result = await adapter.initiateRefund({ originalRef: payRef, amountKES, reason });
+  } catch (e) {
+    result = { success: false, error: 'gateway exception (outcome unknown): ' + e.message };
+  }
+  if (!result || !result.success) {
+    const err = String((result && result.error) || 'unknown');
+    await RA.failChargeback(fsdb, { paymentRef: payRef, error: err,
+      alsoUpdate: { ref: queueRef, data: { status: 'failed', gatewayError: err, updatedAt: now() } } });
+    logger.error('[FOS/refund] anchored chargeback failed — claim kept for review', { payRef, error: err });
+    return { status: 'failed', gatewayError: err };
+  }
+  await queueRef.update({ providerRefundId: result.refundId || null, gatewaySucceededAt: now(), updatedAt: now() });
+  return _completeAnchored({ payRef, providerRefundId: result.refundId || null, queueRef });
+}
+
+async function _completeAnchored({ payRef, providerRefundId, queueRef }) {
+  try {
+    const c = await RA.completeChargeback(db(), { paymentRef: payRef, gatewayRefundId: providerRefundId,
+      alsoUpdate: { ref: queueRef, data: { status: 'processed', refundId: providerRefundId, processedAt: now(), updatedAt: now() } } });
+    return { status: 'processed', providerRefundId, sellerReversal: c.reversal, idempotent: c.idempotent };
+  } catch (e) {
+    logger.error('[FOS/refund] chargeback succeeded but completion failed — re-run fosApproveRefund to complete', { payRef, error: e.message });
+    await queueRef.update({ status: 'gateway_succeeded_completion_failed', completionError: e.message, updatedAt: now() });
+    return { status: 'gateway_succeeded_completion_failed', providerRefundId, error: e.message };
+  }
 }
 
 /* ── Audit writer ── */
@@ -455,6 +505,7 @@ exports.fosSubmitRefund = onCall(
     /* Look up transaction */
     let tx = null;
     let txId = fosTransactionId;
+    let anchored = false;
     if (fosTransactionId) {
       const snap = await db().collection('fosTransactions').doc(fosTransactionId).get();
       if (!snap.exists) throw new HttpsError('not-found', 'Transaction not found');
@@ -466,6 +517,7 @@ exports.fosSubmitRefund = onCall(
       const pd = snap.data();
       txId = pd.fosTransactionId || payRef;
       tx   = pd;
+      anchored = _isAnchoredPayment(pd);
     }
 
     if (!isAdmin && tx.buyerUid !== auth.uid)
@@ -479,6 +531,45 @@ exports.fosSubmitRefund = onCall(
 
     const autoApprove = isAdmin;
     const status      = autoApprove ? 'approved' : 'pending';
+
+    /* A webhook-collected payment: the refund authority claims it BEFORE any chargeback, and
+       refuses if any rail already refunded it. The seller and payer come from the authority's
+       credit anchor, not from fields this payment record does not carry. */
+    if (anchored && autoApprove) {
+      let claim;
+      try {
+        claim = await RA.claimChargeback(db(), { paymentRef: payRef, requestedBy: auth.uid,
+          source: 'fosSubmitRefund', reason, expectAmountKES: amountKES });
+      } catch (e) { throw RA.toHttpsError(e, HttpsError); }
+      const queueRef = db().collection('fosRefundQueue').doc('ref_' + txId);
+      let queueExisted = false;
+      await db().runTransaction(async (txn) => {
+        const snap = await txn.get(queueRef);
+        if (snap.exists) { queueExisted = true; return; }
+        txn.set(queueRef, {
+          fosTransactionId: txId, payRef, buyerUid: claim.buyerUid, sellerUid: claim.sellerUid,
+          amountKES, amountCents, reason, refundType, provider: tx.provider || 'intasend',
+          status: 'processing', refundAuthorityId: claim.authorityId, anchored: true,
+          requestedBy: auth.uid, approvedBy: auth.uid, createdAt: now(), updatedAt: now(),
+        });
+      });
+      if (queueExisted) {
+        /* A queue record without an authority claim predates the authority. Refuse the chargeback
+           and keep the fresh claim blocked for review, rather than guess what the old record did. */
+        await RA.failChargeback(db(), { paymentRef: payRef, error: 'pre-existing fosRefundQueue record; review required' });
+        throw new HttpsError('failed-precondition', 'A refund record for this payment already existed; held for review.');
+      }
+      await _audit('refund_submitted', auth.uid, { refundId: queueRef.id, payRef, amountKES, reason, anchored: true });
+      const out = await _anchoredChargeback({ payRef, amountKES, reason, provider: tx.provider, queueRef });
+      if (out.status === 'processed') {
+        await _notify(claim.buyerUid, 'refund_processed', {
+          title: 'Refund processed ✓',
+          body:  `KES ${amountKES.toLocaleString()} refund has been initiated back to your M-PESA.`,
+          amountKES,
+        });
+      }
+      return Object.assign({ refundId: queueRef.id, refundAuthorityId: claim.authorityId }, out);
+    }
 
     /* Idempotency — deterministic doc ID (one per txId) prevents duplicate refunds under race conditions.
        The transaction guarantees the check-and-set is atomic; a collection query outside a tx cannot. */
@@ -626,6 +717,36 @@ exports.fosApproveRefund = onCall(
     } catch (e) {
       if (e instanceof HttpsError) throw e;
       throw new HttpsError('internal', 'Concurrency conflict — please retry');
+    }
+
+    /* A webhook-collected payment goes through the refund authority — never the legacy block below. */
+    const payDoc = refund.payRef ? await fsdb.collection('payments').doc(String(refund.payRef)).get() : null;
+    if (payDoc && payDoc.exists && _isAnchoredPayment(payDoc.data())) {
+      const queueRef = fsdb.collection('fosRefundQueue').doc(refundId);
+      /* The chargeback already succeeded and only the completion is outstanding: finish it.
+         Firing the gateway again here is exactly the duplicate this repair exists to stop. */
+      if (refund.status === 'gateway_succeeded_completion_failed' || refund.gatewaySucceededAt) {
+        return _completeAnchored({ payRef: refund.payRef, providerRefundId: refund.providerRefundId || null, queueRef });
+      }
+      try {
+        await RA.claimChargeback(fsdb, { paymentRef: refund.payRef, requestedBy: req.auth.uid,
+          source: 'fosApproveRefund', reason: refund.reason, expectAmountKES: refund.amountKES });
+      } catch (e) {
+        await queueRef.update({ status: 'refused', refusedReason: (e && e.reason) || e.message, updatedAt: now() });
+        throw RA.toHttpsError(e, HttpsError);
+      }
+      const out = await _anchoredChargeback({ payRef: refund.payRef, amountKES: refund.amountKES,
+        reason: refund.reason, provider: refund.provider, queueRef });
+      if (out.status === 'failed') throw new HttpsError('internal', `Refund failed: ${out.gatewayError}`);
+      if (out.status === 'processed') {
+        await _notify(refund.buyerUid, 'refund_processed', {
+          title: 'Refund processed ✓',
+          body:  `KES ${Number(refund.amountKES).toLocaleString()} refund has been initiated back to your M-PESA.`,
+          amountKES: refund.amountKES,
+        });
+        await _audit('refund_approved', req.auth.uid, { refundId, amountKES: refund.amountKES, anchored: true });
+      }
+      return out;
     }
 
     /* Call gateway outside transaction — network I/O cannot run inside Firestore txn */

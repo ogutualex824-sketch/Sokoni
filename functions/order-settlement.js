@@ -232,7 +232,10 @@ async function markRefundedIfUnsettled(db, adminSdk, orderId) {
   return db.runTransaction(async (t) => {
     const s = await t.get(ref);
     if (!s.exists) return { outcome: 'no-order' };
-    if (s.data().settlementStatus === STATES.SETTLED) return { outcome: 'already-settled' };   /* needs reversal, not this */
+    /* Any settled spelling — including the webhook's lowercase 'settled' — is EVIDENCE that the seller
+       was paid. Overwriting it with REFUNDED erased that evidence while the credit stayed in place
+       (docs/REFUND_AFTER_WEBHOOK_CREDIT_INVESTIGATION.md). It is never overwritten here. */
+    if (isAlreadySettled(s.data().settlementStatus)) return { outcome: 'already-settled' };   /* needs reversal, not this */
     t.update(ref, { settlementStatus: STATES.REFUNDED, updatedAt: FV.serverTimestamp() });
     return { outcome: 'marked-refunded' };
   });
@@ -320,7 +323,13 @@ async function reverseSettledOrder(db, adminSdk, orderId, opts = {}) {
 async function handleOrderRefund(db, adminSdk, orderId, opts = {}) {
   const snap = await db.collection('orders').doc(orderId).get().catch(() => null);
   if (!snap || !snap.exists) return { outcome: 'no-order' };
-  if (snap.data().settlementStatus === STATES.SETTLED) return reverseSettledOrder(db, adminSdk, orderId, opts);
+  const st = snap.data().settlementStatus;
+  if (st === STATES.SETTLED) return reverseSettledOrder(db, adminSdk, orderId, opts);
+  /* A webhook-credited order ('settled', lowercase) has no settlements/{orderId} for
+     reverseSettledOrder to reverse; its seller credit is reversed by the refund authority
+     (functions/refund-authority.js) against the PAYMENT's credit markers. Nothing is written here,
+     so the settlement evidence survives the refund request. */
+  if (isAlreadySettled(st)) return { outcome: 'webhook-credited', reversal: 'refund-authority' };
   return markRefundedIfUnsettled(db, adminSdk, orderId);
 }
 

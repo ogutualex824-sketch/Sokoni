@@ -15,6 +15,7 @@ const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestor
 const { defineSecret } = require('firebase-functions/params');
 const { checkRateLimit } = require('./redis-rate-limiter');   /* HIGH-06 — existing limiter, not a new one */
 const { intasendB2C } = require('./finos-utils');             /* reuse the existing B2C helper — no parallel path */
+const RA = require('./refund-authority');                     /* ONE refund authority per collected payment */
 
 const INTASEND_KEY = defineSecret('INTASEND_PRIVATE_KEY');
 
@@ -1222,7 +1223,33 @@ exports.refundToWallet = onCall({ cors: true, enforceAppCheck: true, invoker: 'p
 
   const db = getFirestore();
   const callerUid = request.auth.uid;
-  const { orderId, amount, reason, targetUid } = request.data || {};
+  const { orderId, paymentRef, amount, reason, targetUid } = request.data || {};
+
+  /* ── REFUND AUTHORITY (functions/refund-authority.js) ─────────────────────────────────
+     If this refund refers to a payment SOKONI collected — by paymentRef, or by an orderId that
+     resolves to one — the authority decides: it pays the PAYER (never whoever the caller names),
+     reverses the seller's webhook credit in the fields that received it, and refuses if that
+     payment was already refunded by ANY rail (wallet or IntaSend chargeback). An order with no
+     payment, or with several, is refused rather than refunded against a guess. Only a reference
+     that matches nothing SOKONI collected keeps the legacy admin credit below. */
+  let anchor;
+  try { anchor = await RA.resolveRefundAnchor(db, { paymentRef, orderId }); }
+  catch (e) { throw RA.toHttpsError(e, HttpsError); }
+  if (anchor.kind === 'payment') {
+    if (amount !== undefined && amount !== null && !Number.isFinite(Number(amount))) {
+      throw new HttpsError('invalid-argument', 'Refund amount must be a number');
+    }
+    try {
+      const r = await RA.refundToBuyerWallet(db, {
+        paymentRef: anchor.paymentRef, requestedBy: callerUid, source: 'refundToWallet',
+        reason: _san(reason, 300) || null,
+        expectAmountKES: amount === undefined || amount === null ? null : Number(amount),
+        expectBuyerUid: targetUid ? _san(targetUid, 128) : null,
+      });
+      return { success: true, newBalance: r.buyerBalance, recipientUid: r.buyerUid,
+        refundAuthorityId: r.authorityId, sellerReversal: r.reversal };
+    } catch (e) { throw RA.toHttpsError(e, HttpsError); }
+  }
 
   // Determine whose wallet to credit
   const recipientUid = (targetUid && _san(targetUid, 128)) || callerUid;

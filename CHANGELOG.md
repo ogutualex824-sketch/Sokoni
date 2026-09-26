@@ -1,3 +1,18 @@
+## 2026-09-26 — Track F: one refund authority (branch `track-f/refund-authority`, NOT landed, NOT deployed)
+
+New `functions/refund-authority.js`, wired into `refundToWallet`, `fosSubmitRefund`, `fosApproveRefund` and
+`order-settlement` refund routing.
+- **One outcome per collected payment:** `refundAuthority/{paymentRef}` is claimed with `create()`, and a later
+  attempt from either rail is refused before any money moves or IntaSend is called.
+- **Seller webhook credit reversed** where the money now sits (FinOS cents, then swept `balance`, then
+  `refundRecoveryDebt`), anchored on the payment markers **and** the credit's ledger row, never guessed.
+- **Settlement evidence preserved:** refunds are new fields.
+`scripts/test-refund-authority.js` **55/0**; the same suite on pre-repair code **FAILS 38**. No regressions.
+Database: new server-only collection `refundAuthority` (no client rule → default deny).
+API: `refundToWallet` accepts `paymentRef`; for a collected payment it pays the payer only, full amount only.
+Security: the wallet rail can no longer credit the calling admin or an arbitrary target for a collected payment.
+Breaking: a refund against an order with no payment record, or with ambiguous evidence, is now refused.
+
 ## 2026-09-26 — Recovery manifest assertion 6 made deterministic (control repair, no deploy)
 
 The API returns `eventTrigger.eventFilters` in varying order for the same unchanged function (observed:

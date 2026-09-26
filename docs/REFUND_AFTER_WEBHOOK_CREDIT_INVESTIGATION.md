@@ -101,3 +101,48 @@ or a caller-supplied label. It must reverse the **net that was credited**, in th
 to, with explicit recovery debt. It needs one refund authority with cross-path idempotency, so that a chargeback
 and a wallet credit cannot both be issued for one order. And it must preserve the `settled` evidence rather than
 overwrite it. That is an owner-authorized repair against the current production money path, not the business wallet.
+
+---
+
+## Track F repair — branch `track-f/refund-authority` (NOT landed, NOT deployed)
+
+**`functions/refund-authority.js`** is the one decision point. Wired into `refundToWallet` (wallet rail),
+`fosSubmitRefund` / `fosApproveRefund` (chargeback rail), and `order-settlement` refund routing (evidence).
+
+| requirement | how |
+|---|---|
+| one authority | `refundAuthority/{paymentRef}` is claimed with `create()` inside a transaction. The first rail wins; every later attempt from either rail is refused **before** money moves or IntaSend is called |
+| idempotency | the claim is the idempotency key. Wallet rail = claim + buyer credit + seller reversal + evidence in **one** transaction. Chargeback completion is replay-safe (`COMPLETED` → no-op) |
+| anchored, never guessed | needs all three payment markers **and** the credit's own ledger row (FinOS `sale` row, or booking `…_booking` row) agreeing on amount and seller. That row picks the field family to reverse |
+| seller reversal | the net comes back from the FinOS cents fields first, then from swept `balance`, cent-exact (sub-shilling change returned). The already-withdrawn remainder goes to `refundRecoveryDebt` (existing policy); balance never goes negative. A mirror debit row goes in the same ledger |
+| evidence | `settlementStatus` and the credit markers are never overwritten; the refund is new fields (`refundStatus`, `refundRail`, `refundAuthorityId`, `refundedAt`, `sellerCreditReversedCents`). `initiateRefund` no longer overwrites any settled spelling |
+| payer only | the wallet rail pays `payments.uid`. A different `targetUid` or a partial amount is refused (previously it credited the calling admin by default) |
+| failed chargeback | kept as `CHARGEBACK_FAILED`, never auto-reopened (the gateway outcome may be unknown) |
+| chargeback OK, completion failed | the provider id is recorded; `fosApproveRefund` completes it **without** a second chargeback |
+
+**Unchanged by design:**
+- A `refundToWallet` reference that matches nothing SOKONI collected keeps the legacy admin credit.
+- FOS-native `fosTransactions` refunds keep the legacy path; that collection has never held a document in
+  production.
+- The exact-uppercase `SETTLED` → `reverseSettledOrder` path.
+- The business wallet and `commissionLedger`: commission is **not** reversed, which is recorded as open.
+
+**Evidence** (`scripts/test-refund-authority.js`, real Firestore emulator, real wired callables, IntaSend stub
+counting every chargeback):
+
+| target | result |
+|---|---|
+| Track F branch | **55 / 0** |
+| **counterproof:** the same suite on pre-repair `b66880b` | **17 / 38 FAIL**. It reproduces the admin-credited-instead-of-payer refund, the unreversed seller credit, a chargeback after a wallet refund, a **second chargeback** via `fosApproveRefund`, a failed chargeback left re-approvable, and `settled` → `REFUNDED` erasure. The unrelated-behaviour checks pass on both, as they should |
+
+**Regressions: none.**
+- `test-settlement-proof-gate` 37/0 and `test-canonical-collections` 2/2 on both trees.
+- `test-post-pin-money-chain` 32/7 and `test-merchant-ecosystem-convergence` 144/1 fail **identical assertion
+  sets** before and after (pre-existing).
+- The full predeploy chain passes, including `guard-settled-case` and `test-settled-guard-gate` 12/0/1-skip.
+
+**Deployment note (not requested):** the four refund functions run from **four different lineages** in
+production. `refundToWallet`'s `wallet.js` is byte-identical to main; `initiateRefund` and the FOS pair are not.
+Any deploy needs per-lineage trees, as with the double-credit fix.
+
+**Production observation (separate from the tests):** 0 refunds of real orders, so nothing to remediate in data.
