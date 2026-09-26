@@ -125,8 +125,15 @@ console.log('\n── The quick-charge limit is PER SALE, not per line ──');
   ck('two lines each under the cap but OVER it together are refused',
      !two.ok && two.code === 'failed-precondition', two.msg);
   ck('…and the refusal states it is per sale', /per sale/.test(two.msg || ''), two.msg);
+  /* The DISCRIMINATING bypass: 7 lines of KES 19,000 = KES 133,000 — every line under the old
+     per-line limit AND the total under the KES 150,000 gateway ceiling, so the old code priced it.
+     (A 100-line version is refused by the old code too, but by that gateway ceiling, so it would
+     not prove the per-sale cap.) */
+  const seven = call(Array.from({ length: 7 }, (_, i) => ({ description: 'Split ' + i, unitPriceKES: 19000, qty: 1 })));
+  ck('7 lines of KES 19,000 (KES 133,000, under the gateway ceiling) are refused by the per-sale cap',
+     !seven.ok && /per sale/.test(seven.msg || ''), seven.msg);
   const many = call(Array.from({ length: 100 }, (_, i) => ({ description: 'Split ' + i, unitPriceKES: 19000, qty: 1 })));
-  ck('100 lines of KES 19,000 (the old bypass) are refused', !many.ok && many.code === 'failed-precondition', many.msg);
+  ck('100 lines of KES 19,000 are refused', !many.ok && many.code === 'failed-precondition', many.msg);
   const qty = call([{ description: 'Many units', unitPriceKES: 5000, qty: 5 }]);
   ck('quantity counts toward the cap (5 x KES 5,000 = 25,000) and is refused', !qty.ok, qty.msg);
   /* Inverting controls: the basket cap is a cap, not a blanket refusal. */
