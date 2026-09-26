@@ -1,3 +1,15 @@
+## 2026-09-26 — Refund after webhook credit: PROVEN in deployed code, NOT PRESENT in data (investigation only)
+
+**NO CODE, NO DEPLOY, NO DATA CHANGE.** Record: `docs/REFUND_AFTER_WEBHOOK_CREDIT_INVESTIGATION.md`. Covers all
+11 deployed refund functions, which come from 4 source lineages.
+- No deployed path reverses a webhook seller credit. `refundToWallet` (admin) and `fosSubmitRefund`/`fosApproveRefund`
+  (admin, chargeback) pay the buyer while the seller keeps the credit.
+- `initiateRefund` overwrites `settled` with `REFUNDED`, erasing the credit trace.
+- There is no idempotency across functions.
+- Production: 0 refunds of real orders, 0 seller reversals. The 2 reversal rows are QA fixtures.
+- Latent: `initiateRefund`'s escrow path never binds `orderId` to the escrow (production has 0 escrows).
+Repair NOT done; it needs its own authorization. Database / API / security / breaking changes: none.
+
 ## 2026-09-26 — Predeploy gate: the double-credit guard must be present AND connected
 
 **NO DEPLOY.** New `scripts/deploy/guard-settled-case.js` is wired **first** in `firebase.json` `functions.predeploy`,
