@@ -1,3 +1,15 @@
+## 2026-09-26 — Predeploy gate: the double-credit guard must be present AND connected
+
+**NO DEPLOY.** New `scripts/deploy/guard-settled-case.js` is wired **first** in `firebase.json` `functions.predeploy`,
+so it runs on every functions deploy. It checks AST structure (definition, export, both call sites, and no second
+raw SETTLED decision), then behaviour (the real module driven against an in-memory db: every settled spelling writes
+no money), plus a positive control (an unsettled order IS credited). It fails closed.
+`scripts/test-settled-guard-gate.js` **14/0**: 9 disconnecting mutants are each refused on the intended check,
+the current production source passes, and the known-vulnerable production source is refused.
+Files: `scripts/deploy/guard-settled-case.js` (new), `scripts/test-settled-guard-gate.js` (new), `firebase.json`,
+`docs/MARKETPLACE_DOUBLE_CREDIT_MEASUREMENT.md`. Database / API / security / breaking changes: none. A functions
+deploy from a tree whose `order-settlement.js` lacks the guard is now **refused** — intended.
+
 ## 2026-09-26 — Recovery manifest: onOrderStatusChange now REQUIRES the patched generation
 
 **NO DEPLOY. Contract amendment only.** `scripts/infra/recovery-manifest-20260921.json`, recovery_order 5:

@@ -193,6 +193,22 @@ production orders, which was not authorized.
 
 ### Regression hazard — read before any future deploy of these functions
 
+**ENFORCED 2026-09-26.** Two guardrails, and neither is a string search:
+
+1. **Predeploy gate** `scripts/deploy/guard-settled-case.js`, first in `firebase.json` `functions.predeploy`, so it runs on
+   **every** functions deploy, scoped or not. It proves three things. STRUCTURE (AST): the predicate is defined
+   and exported, `settleOrder` returns `already-settled` on it, the sweep `continue`s on it, and there is no
+   second raw comparison of `settlementStatus` against SETTLED. BEHAVIOUR: the real module is driven against an
+   in-memory database, and every settled spelling writes no money. CONTROL: an unsettled order IS credited.
+   It fails closed on a missing file, a missing parser or a crash. Certified by `scripts/test-settled-guard-gate.js`:
+   **14/0**, including 9 disconnecting mutants each refused on the check meant to catch it. The current production
+   source PASSES and the known-vulnerable production source is REFUSED.
+2. **Recovery manifest** `recovery_order` 5 now requires generation `1790400441458307` and states the same
+   invariant for `gcloud` rebuilds, which never run predeploy.
+
+The gate protects a deploy made **from a tree that carries it**. A tree that predates this commit has neither
+the gate nor the guard. That is why the manifest states the invariant independently.
+
 The guard now lives in production and on `feat/business-wallet-authority` **only**. Any deploy of
 `onOrderStatusChange` or `expireOldEscrows` from another lineage — including a recovery-manifest rebuild or a
 scoped deploy from `feat/integrations-control-center` — **silently reinstates the double credit**. Carry

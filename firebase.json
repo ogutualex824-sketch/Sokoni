@@ -2,6 +2,7 @@
   "functions": {
     "source": "functions",
     "predeploy": [
+      "node \"$RESOURCE_DIR/../scripts/deploy/guard-settled-case.js\"",
       "node \"$RESOURCE_DIR/../scripts/gate-functions-require-closure.js\"",
       "node \"$RESOURCE_DIR/../scripts/predeploy-syntax-gate.js\"",
       "node \"$RESOURCE_DIR/../scripts/verify-commission-single-source.js\"",
