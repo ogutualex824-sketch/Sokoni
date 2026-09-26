@@ -233,7 +233,7 @@ green.**
 
 | # | Severity | Where | Gap | Smallest next fix |
 |---|---|---|---|---|
-| 1 | **P0 (live)** | `functions/universal-onboarding.js` `onbActivateRole` (production) | any signed-in user self-mints role claims; `finance` passes the ADE admin guard. **No evidence of use** (0 accountProfiles, 0 ade_rules) | deploy hotfix `1171a16` (`hotfix/onboarding-selfmint-live`): `--only functions:onboardingDispatch` — needs the owner's "deploy" |
+| 1 | ~~P0 (live)~~ **CLOSED 2026-09-26** | `functions/universal-onboarding.js` `onbActivateRole` | self-mint of role claims — hotfix `1171a16` **deployed and verified live** (revision `onboardingdispatch-00006-reg`, served blob `1e4444e`, 0 executable claim mints) | — |
 | 2 | High | whole branch | not on the live lineage; production runs 9 `commission-config` versions | owner picks canonical versions ([[CANONICAL_MONEY_VERSION_DECISIONS]]), then a convergence branch |
 | 3 | High (commercial) | `commission-config` `services` 15 % | the brief says "Quick Charge / service provider 5 %"; code applies 5 % to POS Quick Charge lines only, and provider **bookings** stay at the provider hub's rate | owner to state whether 5 % covers all provider bookings; one line in `commission-config`, proven by the policy matrix test |
 | 4 | Medium | Entertainment dashboards | SOKONI Connect (in-app buyer ↔ organizer / creator messaging, calls, video) not wired; menus link `messages.html` only | mount the Connect surface for the `event_organizer` / `creator` roles through `connect-authority` |
@@ -265,6 +265,6 @@ Production reads performed, all read-only:
 
 **Deploy readiness:**
 
-- **Hotfix `1171a16`:** ready on the live lineage, awaiting the owner's "deploy".
+- **Hotfix `1171a16`:** DEPLOYED 2026-09-26 on the owner's instruction (`onboardingDispatch` only) and verified live.
 - **This branch:** NOT deployable yet (see L-2), and the Artifact Registry notice applies to any
   function rebuild.
