@@ -438,6 +438,29 @@ into the canonical wallet, AdminOS controls. See [[CREATOR_HUB]].
   hosted multi-method checkout once verified, non-KES settlement (payment-core change), payouts
   outside Kenya, feature-proposal evidence (v2.0 policy).
 
+## Events, Ticketing & Event Staff Operations — built, tested, NOT deployed (2026-09-27)
+
+This slice runs the event day on SOKONI. See [[EVENTS_OPERATIONS]].
+
+- **Completed:**
+  - PIN tickets (event-bound HMAC, lockouts, exactly-once admission);
+  - temporary staff: cashier, admission, marketing, manager;
+  - Quick Sale: cash, organizer card terminal, IntaSend at the till;
+  - 3 % door-commission receivables, netted at release;
+  - refund policy and Refund Wizard on the canonical fos* authority;
+  - versioned organizer agreements that gate approval;
+  - AdminOS investigation and financial trace;
+  - notices and share links.
+  - Evidence: 11 suites, plus a 33-attack sabotage suite.
+- **Blocked:**
+  - live-lineage convergence;
+  - agreement wording (legal review);
+  - the Artifact Registry notice for function rebuilds.
+- **Owner decisions:**
+  - refund penalty / fee retention (UNDECIDED);
+  - buyer↔organizer / organizer↔staff Connect, which needs an amendment to the frozen Connect/Comms authority;
+  - how door-sale refunds are recorded.
+
 ## Universal Listing System — built, and the four gates it stops at
 
 **Built and committed 2026-09-19** (`7dedec7`…`91e4d9c`, 11 commits, **358 assertions / 0

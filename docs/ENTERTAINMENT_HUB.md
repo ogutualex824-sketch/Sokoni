@@ -5,7 +5,11 @@
 
 Related: [[ENTERTAINMENT_CATEGORY_MATRIX]], [[CREATOR_HUB]], [[CREATOR_PAYMENT_ARCHITECTURE]],
 [[CANONICAL_MONEY_VERSION_DECISIONS]], [[PRODUCTION_COMMISSION_MISMATCH]],
-[[REFUND_AUTHORITY_CONVERGENCE]], [[DECISION_ANONYMOUS_CREATOR_PURCHASE]].
+[[REFUND_AUTHORITY_CONVERGENCE]], [[DECISION_ANONYMOUS_CREATOR_PURCHASE]], [[EVENTS_OPERATIONS]].
+
+> **2026-09-27:** the Events / Ticketing / Event Staff operations slice (PIN tickets, temporary staff, door sales,
+> refund wizard, agreements, AdminOS investigation) is documented in [[EVENTS_OPERATIONS]] — its matrices supersede
+> the Events rows below where they differ.
 
 This slice made the existing work converge. It did not rewrite it:
 
@@ -122,6 +126,7 @@ A method becomes offerable only when a super admin records it LIVE_AND_PROVEN wi
 | Creator film | per Creator policy | fos* → `creator-hub.onFilmRefundProcessed` | royalty REVERSAL rows; entitlement revoked on full | `royaltyReversals` claim |
 | Streaming | as Creator | as Creator | as Creator | as Creator |
 | Event ticket (full) | yes — cancelled events via the AdminOS refund queue; buyer request via fos* | fos* → `event-settlement.onEventRefundProcessed` → `engine.revoke` | tickets refunded, order refunded, HELD settlement → REFUNDED, commission reversed | entitlement ledger revoke is idempotent |
+| Event ticket — buyer Refund Wizard (2026-09-27) | per the event policy (reason catalogue, server eligibility; see [[EVENTS_OPERATIONS]] §6) | wizard → `financial-os` submit (as the buyer) → admin approval in fos* | tickets REQUESTED (refused at the gate) → REFUNDED, or NONE on reject | `eventRefundRequests/{orderId}` create() |
 | Event ticket (partial) | recorded | same hook | `eventExceptions/partial_refund_*` for a human; tickets untouched | — |
 | Event ticket after organizer paid | recorded | same hook | `eventExceptions/refund_after_release_*`; **no silent wallet debit** | — |
 | Venues / legacy PPV | n/a | — | no payment exists | — |
@@ -141,7 +146,8 @@ and never change the refund's own status.
 | Event exceptions | `eventAdminExceptions` | admin |
 | Venue / artist moderation | `entAdminListings`, `entAdminSetListingStatus` | admin; reason required except for approve; audited |
 | Category + commercial-policy matrix | `entAdminMatrix` | admin (read-only) |
-| Organizer applications | `applicationList` / `applicationDecide` (filter "Event organizers") | admin |
+| Event investigation / financial trace / staff & gate / refund requests / receivables (2026-09-27) | `eventAdminInvestigate`, `eventAdminTrace`, `eventAdminStaff`, `eventAdminRevokeStaff`, `eventAdminAdmissions`, `eventAdminRefundRequests`, `eventAdminReceivables` | admin; PIN lookups + revokes audited; credentials never returned |
+| Organizer applications | `applicationList` / `applicationDecide` (filter "Event organizers") | admin (approval now requires the organizer agreements) |
 | Creator Hub (verification, films, royalties, refunds, config, capability) | `creatorAdmin*` (26 ops) | admin; config / capability / fee attest super admin |
 
 Audit: every write lands in `adminAudit` with `performedBy`, `target`, `before`, `after`, `reason` and
@@ -236,7 +242,7 @@ green.**
 | 1 | ~~P0 (live)~~ **CLOSED 2026-09-26** | `functions/universal-onboarding.js` `onbActivateRole` | self-mint of role claims — hotfix `1171a16` **deployed and verified live** (revision `onboardingdispatch-00006-reg`, served blob `1e4444e`, 0 executable claim mints) | — |
 | 2 | High | whole branch | not on the live lineage; production runs 9 `commission-config` versions | owner picks canonical versions ([[CANONICAL_MONEY_VERSION_DECISIONS]]), then a convergence branch |
 | 3 | High (commercial) | `commission-config` `services` 15 % | the brief says "Quick Charge / service provider 5 %"; code applies 5 % to POS Quick Charge lines only, and provider **bookings** stay at the provider hub's rate | owner to state whether 5 % covers all provider bookings; one line in `commission-config`, proven by the policy matrix test |
-| 4 | Medium | Entertainment dashboards | SOKONI Connect (in-app buyer ↔ organizer / creator messaging, calls, video) not wired; menus link `messages.html` only | mount the Connect surface for the `event_organizer` / `creator` roles through `connect-authority` |
+| 4 | Medium | Entertainment dashboards | SOKONI Connect (in-app buyer ↔ organizer / creator messaging, calls, video) not wired; menus link `messages.html` only | **owner decision** — Connect (C1/C2) and Comms are FROZEN; an `eventOrder` anchor is an authority amendment ([[EVENTS_OPERATIONS]] §9) |
 | 5 | Medium | dashboards | PREMIUM / EQUIPPED is declared, not enforced by plan | gate dashboard sections on the server-read subscription (provider pattern) |
 | 6 | Medium | `sokoni-aos.js:2123/2147/2163` vs `admin-os.js:228` | platform-settings saves send `{settings}` but the server needs `{category, updates}`; the commission and payout forms would write values nothing reads | make those two forms read-only views (policy matrix / wallet config); fix general settings to `{category:'general', updates}` |
 | 7 | Medium | Events | partial refunds and refunds after release are manual exceptions | an owner policy for post-release recovery (`refundRecoveryDebt` exists) |

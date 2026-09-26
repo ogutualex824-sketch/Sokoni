@@ -45,6 +45,15 @@ Beyond the ids, three problems stood out:
 **Invariant, checked by the suite:** no category may be offered in an application without a dashboard,
 and none may have a dashboard without an application path.
 
+**Events & Ticketing, 2026-09-27:** the event-day operations layer is documented in [[EVENTS_OPERATIONS]]:
+
+- PIN tickets;
+- temporary staff: cashier, admission, marketing, manager;
+- cash and organizer-terminal card door sales, with 3 % receivables netted at release;
+- the refund policy and Refund Wizard;
+- versioned organizer agreements that gate approval;
+- AdminOS investigation and financial trace.
+
 ## Lifecycle per category
 
 **Creator / Streaming**

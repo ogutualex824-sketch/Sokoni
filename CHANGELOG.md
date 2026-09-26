@@ -1,3 +1,30 @@
+## 2026-09-27 (200) — Events ops P7: Quick Sale add/reduce, proven M-PESA journeys, rules + sabotage, docs
+
+- **Quick Sale add / reduce tickets** (`sokoni-event-ops.js`):
+  - − / typed quantity / + per ticket type, bounded by the tickets left and the 50-per-line limit;
+  - − is disabled at 0 and + at the maximum;
+  - Clear, and a cart summary line;
+  - tickets left is re-read after every sale;
+  - an M-PESA cart with two ticket types is blocked and explained (a till M-PESA sale is one order).
+- **M-PESA proven end to end in a real browser**, with only the provider edge simulated:
+  - buyer online: `purchaseTickets` → `createPaymentIntent` → STK → webhook → activation → PIN;
+  - cashier at the till: prompt to the buyer's number for the SERVER price → sale COMPLETED → PINs → settlement HELD
+    at 3 % of (gross − fee).
+  - Creator films keep the M-PESA-only fail-closed checkout.
+- **Rules:** the emulator suite covers all 12 events-ops collections (75/0; every denial counterproofed under allow-all).
+- **Fail-closed key:** new test that a missing `SOKONI_HMAC_KEY` fails closed in Cloud Functions.
+- **Sabotage:** `scripts/sabotage-event-ops.js`, 33 attacks, **33/33 CAUGHT**; post-restore all green; tree
+  byte-identical.
+- **Docs:** `docs/EVENTS_OPERATIONS.md` (new: architecture + category / ticket-security / staff / money / refund /
+  agreement / AdminOS matrices, tests, gaps, deployment), `ENTERTAINMENT_HUB.md`, `ENTERTAINMENT_CATEGORY_MATRIX.md`,
+  `ROADMAP.md`.
+- **Regression:**
+  - Events: ops 51 · sales 46 · refunds 52 · settlement 84 · admin 62 · notify 17 · rules 75 · browser 154.
+  - Entertainment: agreements 25 · registry 65 · entertainment browser 230.
+  - Creator: hub 260 · completion 66 · ui 64 · callback 78 · adminos 19.
+  - AdminOS wiring 316.
+- **Database / API / Breaking:** none new. **Not deployed.**
+
 ## 2026-09-27 (199) — Events ops P6: AdminOS Event investigation + financial trace, event notices, share links
 
 - **AdminOS › Entertainment** gains Investigate, Staff & gate, Refund requests and Receivables tabs, served by 7 new
