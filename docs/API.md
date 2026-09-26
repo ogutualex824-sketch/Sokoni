@@ -529,9 +529,20 @@ Send a Firebase Cloud Messaging push notification.
 | `playback.authorize` · `.heartbeat` · `.end` · `.report` | entitled viewer | 10-min signed grant, session, watermark payload |
 | `royalty.mine` · `royalty.film` | participant / film owner | dashboards |
 
+| `viewer.library` · `viewer.endSession` | viewer (anonymous allowed) | own films, progress, history, devices |
+| `creator.analytics` | creator | aggregates for own films only |
+| `verification.get` · `.saveDraft` · `.attachDocument` · `.submit` | creator | verification application (one per uid) |
+
+Anonymous (guest) tokens may call only `catalog.*`, `playback.*`, `viewer.*`.
 Purchase: `createPaymentIntent({ purpose: 'film_access', filmId, phone })` → `initiateSTKPush`.
 Trigger: `creatorOnFilmPayment` (payments/{ref} → terminal paid). Admin: 20 `creatorAdmin*` ops on
 `adminOsDispatch`.
+
+## fosResolveRefund
+
+`onCall`, super admin. `{ refundId, outcome: 'refunded' | 'not_refunded', evidence, providerRefundId? }`.
+The only way out of `outcome_unknown`, `provider_succeeded` or a stale (> 10 min) `processing`
+refund. Never calls the provider; `refunded` settles locally exactly once. See [[CREATOR_HUB]] §19.
 
 ## bootstrapAdminClaim
 

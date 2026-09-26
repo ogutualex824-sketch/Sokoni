@@ -3,8 +3,9 @@
 **Status:** BUILT, TESTED, **NOT DEPLOYED** · **Readiness: BLOCKED** (see §13)
 **Branch:** `feat/creator-hub` · **Base:** `a38b31a` · **Date:** 2026-09-26
 **Owner decisions (2026-09-26):** adopt `entertainmentListings` as the film catalogue ·
-royalty pool = gross − IntaSend fee − SOKONI `ppv` commission · frozen money paths may be
-changed and committed (not deployed) · full vertical, staged.
+frozen money paths may be changed and committed (not deployed) · full vertical, staged ·
+**Creator PPV = SOKONI 30 % / creator pool 70 % of NET (gross − IntaSend fee)** — supersedes the
+first slice's "gross − fee − ppv 15 %" (§17).
 
 Related: [[CREATOR_HUB_OWNERSHIP_MAP]] · [[Marketplace]] · [[Payments]] · [[PAYMENT_ARCHITECTURE_UNIFICATION]] ·
 [[WITHDRAWAL_ENGINE_CHANGE_PLAN]] · [[WALLET_FREEZE_ACCEPTANCE]] · [[AdminOS]] · [[docs/API]] · [[docs/SECURITY]]
@@ -143,9 +144,10 @@ later retry cannot recognise the refunded sale.
   `effectiveFrom = max(now, previous.effectiveFrom + 1)`; the previous version becomes
   `SUPERSEDED` with `effectiveUntil`. Revenue uses the version in force when the payment was
   recognised; historical ledger rows keep their version.
-- **Pool:** `pool = gross − providerFee − commission − tax`. Commission is `RATES.ppv` (15%,
-  unchanged, read from `commission-config`), charged on gross, capped so the pool is never
-  negative. Tax/levy = 0 (no policy recorded). The provider fee is IntaSend's reported
+- **Pool (§17):** `net = gross − providerFee − tax`; SOKONI `= floor(net × 3000 / 10000)`;
+  `pool = net − SOKONI` (so SOKONI + pool = net exactly; a sub-cent remainder stays with the
+  creators). The only rate input is `shared/creator-commercial.js` (`creator_ppv_v1`);
+  `commission-config.js` is not read. Tax/levy = 0 (no policy recorded). The provider fee is IntaSend's reported
   `charges`, else `value − net_amount`; **if neither is reported the accrual is WITHHELD** and
   an AdminOS exception opens — the fee is never assumed to be 0. A super admin may attest the
   fee from the IntaSend dashboard (audited, only before recognition).
@@ -245,29 +247,29 @@ methods — super admin). Every handler re-checks `admin-claim`; admin actions a
 
 | Suite | Result | Proves |
 |---|---|---|
-| `test-creator-royalty.js` | **82/0** | agreement invariants, versions, pool, exact allocation, ids, EAT quarters, release/carry, reversal convergence, purity |
-| `test-creator-publishing.js` | **85/0** | state machine (exhaustive), field contract, KES, owned assets, availability, playback decision, watermark PII, hosting copies |
-| `test-creator-hub.js` | **154/0** | end-to-end server on a transactional fake: real `createPaymentIntent`, entitlement, accrual, replay, 8-way concurrency, withheld fee, attestation, playback, rental expiry, suspension, v2 lock, refunds, quarterly calc/approve/distribute/hold/close, AdminOS guard sweep, webhook + refund-rail wiring |
-| `run-creator-rules.js` → `test-creator-rules.js` | **82/0** | served Firestore + Storage rules on a private-port emulator, with an allow-all **counterproof** |
-| `test-creator-ui.js` | **41/0** | Chromium-driven AdminOS module, UI ↔ server op parity, page contracts, category registry |
-| `sabotage-creator-hub.js` | **22/22 CAUGHT** | forged %/participant/ownership/settlement/payout, double royalty, double withdrawal, credit without payment, sellerUid leak, webhook branch removal, cross-creator, playback without entitlement, session limit, PII leak, ledger/entitlement/master rules |
-
-Regression: 18 affected existing suites green; 3 dirty-tree scope checks green once committed;
-`test-chat-history-boundary`, `verify-webhook-authority`, `certify-nav-registry` fail identically
-at base `a38b31a`; `test-outbox-firestore` needs an emulator (not attempted).
+| `test-creator-royalty.js` | **94/0** | agreement invariants, versions, **30/70 of net (examples A 144/336, B 291/679, C withheld)**, rounding at the minimum unit, exact allocation, ids, EAT quarters, release/carry, reversal convergence, purity |
+| `test-creator-publishing.js` | **104/0** | film + **verification** state machines (exhaustive), field contracts (last-4 only), KES, owned assets, availability, playback decision, watermark PII, three byte-identical hosting copies |
+| `test-creator-hub.js` | **234/0** | server end to end on a transactional fake: purchase, entitlement, accrual, 8-way concurrency, refunds, quarterly settlement, **verification**, **rights attestation**, **viewer library / progress / devices**, **analytics (aggregates, owner-scoped)**, **guest checkout**, AdminOS guard sweep, wiring |
+| `test-creator-callback.js` | **64/0** | the REAL `webhookIntasend` executed on BASE and BRANCH: base credits the buyer (positive control); branch film → royalty only, 30 % of net, replay-safe, second exit proven by logs; marketplace / POS / subscription / top-up stores identical to base; commission authority separation |
+| `test-refund-exactly-once.js` | **103/0** | the REAL refund functions executed on BASE and BRANCH: base 2–3 refunds per request (positive control); branch exactly one provider call under success, transient failure, 5xx/429/throw, race, re-approval; seller debited once, buyer never |
+| `run-creator-rules.js` → `test-creator-rules.js` | **105/0** | served Firestore + Storage rules on a private-port emulator, with an allow-all **counterproof** |
+| `test-creator-ui.js` | **55/0** | Chromium: AdminOS module (incl. verification), UI ↔ server op parity, **pricing section rendered = server split**, page contracts |
+| `sabotage-creator-hub.js` | **47/47 CAUGHT** (expected case, 0 missed) | 22 original + 15 money (callback, commission, refund) + 10 security (identity, verification, anonymous, cross-creator/buyer, watch-time, rules) |
 
 ## 13. Readiness — **BLOCKED**
 
 | # | Blocker | Why it blocks "live" |
 |---|---|---|
 | B1 | **No deployment authorised**, and the functions deploy is independently blocked (Artifact Registry notice, merchant-identity provenance gap, foreign uncommitted files in `functions/` on the main tree) | nothing here runs in production |
-| B2 | **Deploy ordering**: `webhookIntasend` must be live **before** `purchasesEnabled` is opened | otherwise the old webhook credits the payer |
-| B3 | **Firestore rules release**: the source monolith is 105.7 % of the size limit; the served `.build` must be released via the Rules REST path per [[RULES_RECONCILIATION]] | Creator collections are default-deny until then — every Creator read fails |
-| B4 | **Egress economics** (§14) — direct GCS delivery of masters with unlimited re-watch | a popular film could cost more in egress than the platform earns |
-| B5 | **No transcoding / adaptive streaming / CDN** | masters are served as uploaded; large files and phones on mobile data will struggle |
-| B6 | **Signed URLs in production** need `iam.serviceAccounts.signBlob` on the runtime SA — UNPROVEN | playback fails closed without it |
-| B7 | **IntaSend fee reporting** — whether STK callbacks carry `charges`/`net_amount` is UNPROVEN | if not, every accrual is withheld until a fee is attested |
-| B8 | Feature-proposal evidence (§15) not supplied | `ROADMAP.md` v2.0 policy |
+| B2 | **Deploy ordering**: `webhookIntasend` + `financial-os` must be live **before** `purchasesEnabled` opens | the old webhook credits the payer; the old refund rail double-refunds |
+| B3 | **Firestore rules release**: the source monolith is over the size limit; the served `.build` must be released via the Rules REST path per [[RULES_RECONCILIATION]] | Creator collections are default-deny until then |
+| B4 | **Egress economics** — direct GCS delivery, unlimited re-watch | a popular film could cost more in egress than SOKONI's 30 % |
+| B5 | **No transcoding / adaptive streaming / CDN** | large masters on mobile data |
+| B6 | **Signed URLs in production** need `iam.serviceAccounts.signBlob` — UNPROVEN | playback and verification review links fail closed |
+| B7 | **IntaSend fee reporting** on STK callbacks — UNPROVEN | every accrual withheld until a fee is attested |
+| B8 | **Refund provider contract**: the adapter posts `/api/v1/payment/chargeback/ {api_ref}`; the field-proven contract is `/api/v1/chargebacks/ {invoice_id}` (ADR-032) | the refund call may not reach IntaSend at all |
+| B9 | **Guest checkout = DECISION_REQUIRED** (§24): Anonymous Auth is platform-wide | flag stays OFF |
+| B10 | Feature-proposal evidence (§15) not supplied | `ROADMAP.md` v2.0 policy |
 
 ## 14. UNPROVEN (stated, not assumed)
 
@@ -276,7 +278,10 @@ at base `a38b31a`; `test-outbox-firestore` needs an emulator (not attempted).
 - Multi-method hosted checkout on the live account; any non-KES settlement.
 - V4 signed-URL signing in production; playback of large masters on real devices.
 - Egress cost per view (estimated USD 0.12–0.20/GB at list prices — measure before opening).
-- Participant consent to a split (the rights owner configures; participants do not sign).
+- Participant consent to a split — **DECISION_REQUIRED** (§20): the rights owner attests; participants do not sign.
+- Refund claw-back: the refund debit writes `wallets.availableCents` while seller earnings live in
+  `availableBalance`/`withdrawableBalance` — refunds do not reduce seller earnings (pre-existing, FinOS decision).
+- Hot-counter sharding (10 shards) under real load; analytics "unique viewers" is per film, not de-duplicated across films.
 - Watermark legibility after re-encoding by a pirate; forensic trace procedure.
 - Declared-country accuracy for licence restrictions.
 - Payout to non-Kenyan destinations (not supported by the existing rail).
@@ -295,8 +300,9 @@ sub-wallet (rejected — parallel wallet). **Dependencies:** B1–B7.
 
 ## 16. Deployment requirements (when authorised — in this order)
 
-1. Resolve B1; deploy **`webhookIntasend`** (film branch + `providerReport`) and **`financial-os`**
-   refund finalizers; verify a non-film payment still credits exactly as before.
+1. Resolve B1; deploy **`webhookIntasend`** (two film exits + `providerReport`), **`financial-os`**
+   (`_executeRefund`, `fosResolveRefund`) and `payment-adapters`; verify a non-film payment
+   still credits exactly as before (re-run `test-creator-callback.js` against the deploy tree).
 2. Release rules via the Rules REST path from a reconciled `.build`; deploy `storage.rules`;
    deploy the 6 indexes and wait for `READY`.
 3. Grant `signBlob` to the functions runtime SA (B6); deploy `creatorDispatch`,
@@ -310,3 +316,97 @@ sub-wallet (rejected — parallel wallet). **Dependencies:** B1–B7.
    opening `purchasesEnabled`.
 7. Verify live: `curl -s "https://mysokoni.co.ke/creator.html?cb=$RANDOM" | grep creatorDispatch`
    and `version.json`.
+
+## 17. Commercial policy — Creator 30 / 70 of net (2026-09-26)
+
+`functions/shared/creator-commercial.js` is the ONE Creator commercial authority
+(`creator_ppv_v1`: `domain=creator`, `productType=pay_per_view`, `basis=NET_OF_PROVIDER_FEE`,
+`sokoniCommissionBps=3000`, `creatorPoolBps=7000`; frozen; a policy not summing to 10000 is refused
+at load). `commission-config.js` is byte-identical to base — marketplace stays **5 %**, the legacy
+`ppv` 15 % is read by no Creator path, and mutating either cannot move the other (proven both ways).
+
+| Example | Gross | Fee | Net | SOKONI 30 % | Creator pool 70 % |
+|---|---|---|---|---|---|
+| A | 500 | 20 | 480 | 144 | 336 |
+| B | 1,000 | 30 | 970 | 291 | 679 |
+| C | 500 | *unreported* | — | NOT FINALIZED | NOT FINALIZED (exception opened) |
+
+Participant shares apply **inside** the pool only.
+
+## 18. Payment-callback audit (executed)
+
+`scripts/lib/webhook-harness.js` runs the real `webhookIntasend` from any tree on the
+transactional fake (no network). On base `a38b31a` a film payment credits the **buyer** KES 412
+and books a marketplace commission row. On this branch: no wallet / walletTransactions /
+commissionLedger / ledger write; the royalty accrual books SOKONI 145.50 = 30 % of 485 and the
+pool 339.50; replay = one allocation. Two exits: the early branch (intent purpose) and a second
+exit on resolved attribution before the commission code — the suite proves from the logs which
+fired, including when the early intent read fails. Marketplace, POS till, subscription and wallet
+top-up produce stores identical to base (only timing/PIN noise measured on base itself is masked;
+money documents are never masked).
+
+## 19. Refund audit — P0 (executed)
+
+Base, real code, fake gateway: an admin refund of a plain STK payment sent **two** IntaSend
+refunds with nothing failing (finalize threw on the missing `fosTransactions` doc → the catch
+reset the request to `approved` → approval re-executed); a dropped connection → 2; submit racing
+approval → 3; a 503 retried blind → 2. The first slice's fix removed one trigger only.
+
+Fix (canonical rail, no Creator rail): `_executeRefund` — one path for both entry points, lock
+`pending|approved|failed → processing + executionId` before the ONLY provider call; outcome
+classified (2xx settle · definitive 4xx → `failed` · throw/5xx/408/429 → `outcome_unknown`,
+never re-executable); `_settleRefund` exactly once, guarded by executionId; a failed settlement
+after provider success → `provider_succeeded`; side effects isolated. `fosResolveRefund` (super
+admin + IntaSend evidence) is the only way out of `outcome_unknown` / `provider_succeeded` and
+never calls the provider. payRef refunds take the seller from the intent, never the payer.
+**Provider idempotency: none available** — exactly-once is enforced locally.
+
+## 20. Rights-owner attestation (participant consent — DECISION_REQUIRED)
+
+No business policy authorises making participant consent a blocking requirement, so it was not
+added. Every split version instead stores a versioned rights-owner attestation
+(`rights-attestation-v1`: text, uid, time) and `participantConsent: NOT_REQUIRED_BY_POLICY`;
+saving without the attestation is refused. Versioning is unchanged (§6).
+
+## 21. Creator verification
+
+`creatorVerifications/{uid}` — one application per creator keyed by the authenticated uid.
+States NOT_APPLIED · DRAFT · SUBMITTED · UNDER_REVIEW · MORE_INFORMATION_REQUIRED · APPROVED ·
+REJECTED · SUSPENDED; creator and admin transitions are disjoint (no creator path into
+APPROVED / UNDER_REVIEW). Identity = document type + **last 2–4 characters only**; documents in
+the existing private `kyc-documents/{uid}/` storage, hashed at attach and at submit so a swap
+after submission is flagged to the reviewer; 5-minute signed review links; events subcollection
+records every transition with actor and reason (creators see reasons, not reviewers).
+**Source of truth:** `creatorVerifications.status`. `creators.verification` is a projection written
+only by `creatorAdminVerificationDecision` (approve → VERIFIED + ACTIVE; suspend → UNVERIFIED +
+SUSPENDED). AdminOS › Creator Hub › Verification; Studio › "Apply for Creator Verification".
+
+## 22. Viewer dashboard & creator analytics
+
+`creator.html?view=library`: My Films, Continue Watching, purchase history (active / expired /
+revoked), devices (8-char hashes) with sign-out, account settings and password reset — own
+records only. Heartbeats carry position/duration; watch time credits only real elapsed time
+(capped), completion counts once, unique viewers use a create-once marker. `creator.analytics`:
+views, unique viewers, completed views, watch time, average watch, page views, purchases,
+conversion (purchases per page view), gross, fees, SOKONI commission, pool, settlement status —
+owner's films only, aggregates only. Hot counters are sharded (10) under `filmStats/{film}/shards`.
+
+## 23. Pricing & Monetisation page
+
+`subscriptions.html` (the canonical "SOKONI Monetisation & Pricing" page) gains a Creator
+Pay-Per-View section rendered only from `sokoni-creator-commercial.js` (byte-identical to the
+server authority): fee first, then 30 % / 70 %, participants from the pool, quarterly settlement,
+not immediately withdrawable, refunds reverse. Its worked example is verified in Chromium to equal
+the server split. (The page's older hand-written rate table disagrees with `commission-config` in
+places — pre-existing, not changed here.)
+
+## 24. Guest (anonymous) checkout — DECISION_REQUIRED
+
+The rail binds an anonymous uid correctly and `linkWithCredential` keeps the same uid, so the
+upgrade copies nothing. But nothing uses Anonymous Auth today, and enabling it lets anonymous
+tokens satisfy **740** `isAuthed()` references in the served rules, **39** storage auth checks and
+**74** function modules with auth-only guards. Built behind `config/creatorHub.guestCheckoutEnabled`
+(default OFF, super admin): the pricer refuses anonymous buyers unless on (read from the auth
+record), `creatorDispatch` limits anonymous tokens to catalogue / playback / library, and the page
+offers "Create your SOKONI account" (link, then email verification) after the entitlement is ACTIVE.
+Recovery if the guest clears the browser before linking: none automated (support only) — UNPROVEN.

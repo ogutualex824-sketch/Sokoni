@@ -1,3 +1,40 @@
+## 2026-09-26 (183) — Creator Hub: 30/70 authority, refund P0, verification, viewer identity
+
+**NO DEPLOY. NO PUSH. Readiness BLOCKED** (docs/CREATOR_HUB.md §13). Branch `feat/creator-hub`,
+`fc75c61` → `7df0b13` + docs. Production writes 0 · provider calls 0.
+
+**Commercial (money-authority change, owner decision).** Creator PPV = SOKONI **30 %** / creator pool
+**70 %** of NET (gross − IntaSend fee). New `functions/shared/creator-commercial.js` (`creator_ppv_v1`,
+3000/7000 bps, frozen); `computePool` takes only a policy. `commission-config.js` untouched —
+marketplace stays 5 %. Examples A 144/336 · B 291/679 · C withheld.
+
+**Payment callback (executed audit).** `scripts/lib/webhook-harness.js` runs the real
+`webhookIntasend` on base and branch: base credits the BUYER KES 412 on a film payment; branch books
+royalty only (SOKONI 145.50 of 485). A second film exit on resolved attribution now precedes the
+commission code. Marketplace / POS / subscription / top-up identical to base.
+
+**Refund P0 (executed audit + fix, canonical rail).** Base sent 2–3 IntaSend refunds per request
+(plain STK refund with nothing failing → 2). New `_executeRefund` / `_settleRefund` /
+`fosResolveRefund`: one locked provider call, outcome classification (`outcome_unknown` never
+retried), exactly-once settlement, payRef seller from the intent. Adapter returns `httpStatus`.
+
+**Product.** Creator verification (`creatorVerifications/{uid}`, 8 states, last-4 identity, KYC
+storage, tamper flag, AdminOS tab, Studio application); rights-owner attestation on every split
+(participant consent = DECISION_REQUIRED); pricing section on `subscriptions.html` rendered from the
+policy; viewer dashboard (library, continue watching, history, devices); creator analytics
+(aggregates, sharded counters); guest checkout behind a default-OFF flag (Anonymous Auth is a
+platform-wide DECISION_REQUIRED: 740 isAuthed() rule references).
+
+**Database.** New: `creatorVerifications` (+ `events`), `watchProgress`, `filmStats` (+ `shards`),
+`filmViewers`. `fosRefundQueue` gains `executionId`, `attempts`, `outcome_unknown` /
+`provider_succeeded` states, `resolution`. **API.** `fosResolveRefund`; creatorDispatch
+`viewer.library`, `viewer.endSession`, `creator.analytics`, `verification.*`; admin
+`creatorAdminVerification*`. **Security.** anonymous tokens limited to catalogue/playback/library;
+verification projection has one writer. **Breaking.** none for existing flows; saving a royalty split
+now requires `rightsAttestation`.
+
+**Tests.** royalty 94 · publishing 104 · hub 234 · callback 64 · refund 103 · rules 105 · UI 55 — all 0 failed.
+
 ## 2026-09-26 (182) — Creator Hub: film/media marketplace, royalties, protected playback
 
 **NO DEPLOY. Readiness BLOCKED** (docs/CREATOR_HUB.md §13). Branch `feat/creator-hub` @ base `a38b31a`.

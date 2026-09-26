@@ -421,6 +421,11 @@ Evidence from real users determines what gets built next, not assumptions.
 
 ## Creator Hub — built, tested, BLOCKED before live (2026-09-26)
 
+**Update (183):** Creator commission is now 30 % / 70 % of net (own authority); the refund rail's
+double-refund P0 is fixed on the branch (executed proof); verification, viewer dashboard, analytics
+and the pricing section are built. Guest checkout and participant consent are DECISION_REQUIRED.
+
+
 Film/media marketplace inside the Entertainment hub — publishing + review, purchase/rental on the
 existing IntaSend rail, protected watermarked playback, versioned royalties with quarterly settlement
 into the canonical wallet, AdminOS controls. See [[CREATOR_HUB]].

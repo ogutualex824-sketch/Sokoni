@@ -293,6 +293,12 @@ Detection fails the build immediately.
 - Watermark: masked identifiers only; an overlay, not pixel-burned — deters and traces, does not
   prevent recording. No copy-proof claim.
 - Legacy fix: `entertainmentListings.streamingUrl` was publicly readable → server-only sidecar.
+- Refund rail: one locked provider call per execution; an unknown provider outcome is never
+  retried automatically (`fosResolveRefund` with evidence) — [[CREATOR_HUB]] §19.
+- Verification: one application per uid; status set only by AdminOS; last-4 identity only;
+  documents in private KYC storage with a post-submission tamper flag — §21.
+- Anonymous tokens: Creator ops limited to catalogue/playback/library; enabling Anonymous Auth
+  platform-wide is DECISION_REQUIRED (740 isAuthed() references) — §24.
 See [[CREATOR_HUB]] §9, §13.
 
 ## Related Documents
