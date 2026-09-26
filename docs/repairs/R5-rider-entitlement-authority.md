@@ -90,6 +90,55 @@ The old tree **passes** only the harness controls and the properties it already 
 queue/trigger key, and refund independence (it also paid the rider regardless of refund). Each of those assertions
 judges only its own property, so a wrong amount cannot make it fail.
 
+## Adjudication record (owner, 2026-09-26) — LAND approved, DEPLOY NOT approved
+
+### HARD DEPLOYMENT GATE — "R5 landed" does NOT mean "R5 deployable"
+
+**Do not deploy Repair 5 until RES-1 has carried and persisted the pinned quote onto production delivery
+records** (or an equivalent migration has established that link). Production today has 13 delivery records and
+none carries a pin, so Repair 5 deployed alone pays **no** rider: each delivery is recorded `blocked` with
+`no_pinned_quote`.
+
+Classification: that is **BLOCKED — missing authoritative input, fail-closed**. It is **not** a missed
+vulnerability. **The next step after landing is RES-1, not deploying R5.**
+
+### Provenance — the rule R5 depends on is observed, not contracted
+
+R5 treats "written by the server" as "the record has no `uid`". The R5 suite proves only that a record **with** a
+`uid` is refused. It does not prove the converse. Evidence gathered at adjudication (a scratch probe, not part of
+the R5 suite; served ruleset `6c67a34d`, with an allow-all counterproof that allowed every case):
+
+| browser create of `packageRequests` | served rules |
+|---|---|
+| without `uid` | **DENIED** |
+| `uid: null` | **DENIED** |
+| `uid` = another user | **DENIED** |
+| `uid` = self | allowed |
+
+On the server side, no server writer sets `uid`: the webhook and merchant "ready" writers create the record,
+`delivery-complete` only merges a status, and every other writer updates. All 8 server records in production lack
+`uid`.
+
+This is an **emergent property of today's rules and writers, not a stated contract**:
+- A rules change that loosens `claimsOwner` would let a browser create a record without `uid`, and a forged record
+  would be accepted. That **fails open**.
+- A server writer that starts setting `uid` would stop riders being paid. That fails closed.
+
+**Follow-up (rules/provenance repair, separate):** give delivery records an explicit server-only provenance marker
+(or a server-only collection), deny client creation of server-id records, and pin the marker with a rules test.
+Update paths were not probed: `uidUnchanged()` appears to block removing `uid`, but that is not yet observed.
+
+### Separate follow-ups — none are folded into R5
+
+1. **FINOS transaction authority (P0, next financial repair after R5).** `recordPayment` and
+   `finosRecordTransaction` are deployed and accept the seller, order, tip and payment figures from the caller.
+   R5 repaired only who receives the rider entitlement and how much.
+2. **Wallet units and rails.** The finos cents fields (`availableBalance`) and `balance` in shillings are two
+   rider-credit rails.
+3. **Delivery-ID squatting.** This is a Firestore rules repair; see the provenance section above.
+4. **The public "88%" promise** against the approved 75–84% rider share. This is a policy/UI consistency repair; R5
+   is not altered to accommodate it.
+
 ## Found, not changed
 
 - **DEPLOY PRECONDITION.** Every production delivery record lacks a pinned quote. Deployed alone, Repair 5 credits

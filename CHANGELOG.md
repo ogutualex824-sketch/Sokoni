@@ -1,4 +1,4 @@
-## 2026-09-26 — Repair 5: the delivery record decides what a rider is owed (branch `repair-5/rider-entitlement-authority`, NOT landed)
+## 2026-09-26 — Repair 5: the delivery record decides what a rider is owed (landed, **NOT deployable yet**)
 
 Five independent rider-pay rules existed; four are live. They were:
 - `onOrderStatusChange`: fee − 12%, paid to the order's rider.
@@ -17,8 +17,11 @@ exactly-once key.
 
 `scripts/test-rider-entitlement-authority.js` **32/0** (real handlers, real quotes); old code **FAILS 23**.
 Record: `docs/repairs/R5-rider-entitlement-authority.md`.
-- **Deploy precondition:** every production delivery record lacks a pinned quote, so Repair 5 must ship with or
-  after RES-1, or riders are recorded `blocked`.
+- **HARD DEPLOY GATE — landed is not deployable.** Every production delivery record lacks a pinned quote, so R5
+  alone pays no rider (blocked, fail-closed, not MISSED). Do not deploy R5 until RES-1 has carried the pin. Next step: RES-1.
+- Provenance ("server-authored = no `uid`") is observed under the served rules, not contracted. A rules/provenance
+  follow-up is recorded, together with the FINOS caller-controlled money fields (P0), wallet rails, delivery-ID
+  squatting and the public 88% promise. None is folded into R5. See the adjudication record in the R5 doc.
 - API: `computeSettlement` takes `riderEntitlement` (no `riderPct`); `settlementPreviewMethod` takes `orderId`
   (no `riderId`).
 - Database: the `delivery_earning` credit records `entitlementMinor`, `unpaidRemainderMinor` and `quoteId`;
