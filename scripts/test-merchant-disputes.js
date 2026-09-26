@@ -239,9 +239,9 @@ console.log('\nPART H — the layer agrees with the server\n');
     /const OPEN_STATUSES = DH\.OPEN_STATUSES;/.test(fn) &&
     DP.OPEN_STATUSES.join(',') === SERVER_OPEN.join(',') &&
     SERVER_OPEN.join(',') === 'open,investigating,seller_responded');
-  ck('H2  sellerRespondToDispute really is seller-only', /data\.sellerId !== uid/.test(fn));
+  ck('H2  sellerRespondToDispute really is seller-only', /data\.sellerUid !== uid/.test(fn));
   ck('H3  createDispute really is buyer-only', /if \(!isBuyer\)/.test(fn));
-  ck('H4  cancelDispute really is buyer-only', /data\.buyerId !== uid/.test(fn));
+  ck('H4  cancelDispute really is buyer-only', /data\.buyerUid !== uid/.test(fn));
   ck('H5  resolution really is admin-gated',
     /exports\.adminResolveDispute[\s\S]{0,240}_ac\.isAdmin/.test(fn));
   ck('H6  a response sets seller_responded, NOT resolved',

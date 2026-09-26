@@ -25,6 +25,8 @@ const VALID_REASONS = [
 /* The dispute SETTLEMENT HOLD lives in functions/dispute-hold.js, and so does the one list of open
    statuses — settlement and this module must never disagree about what "open" means. */
 const DH = require('./dispute-hold');
+/* ONE vocabulary for who a dispute is between: buyerUid · sellerUid · shopId · reason — see dispute-identity.js. */
+const DI = require('./dispute-identity');
 const OPEN_STATUSES = DH.OPEN_STATUSES;
 
 function _requireAuth(auth) {
@@ -52,7 +54,9 @@ exports.createDispute = onCall({ enforceAppCheck: true }, async request => {
   const orderDoc = await db.collection('orders').doc(orderId).get();
   if (!orderDoc.exists) throw new HttpsError('not-found', 'Order not found');
   const order = orderDoc.data();
-  const isBuyer = order.buyerId === uid || order.userId === uid || order.customerId === uid;
+  /* ONE buyer, by precedence (dispute-identity.js). The old check accepted buyerId/userId/customerId
+     only — fields NO production order carries — so every real buyer was refused. */
+  const isBuyer = DI.isOrderBuyer(order, uid);
   if (!isBuyer) throw new HttpsError('permission-denied', 'This is not your order');
 
   // 30-day window from delivery (or creation if undelivered)
@@ -79,8 +83,9 @@ exports.createDispute = onCall({ enforceAppCheck: true }, async request => {
     txn.set(disputeRef, {
       settlementHold: DH.HOLD.HELD,
       orderId,
-      buyerId:  uid,
-      sellerId: order.sellerId || order.vendorId || null,
+      buyerUid:  uid,
+      sellerUid: DI.orderSellerUid(order),
+      shopId:    order.shopId || null,
       reason,
       description: _san(description.trim()),
       amount:   order.total || order.amount || 0,
@@ -119,7 +124,7 @@ exports.createDispute = onCall({ enforceAppCheck: true }, async request => {
 // ─── getMyDisputes — buyer's full dispute history ────────────────────────────
 exports.getMyDisputes = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
-  const snap = await db.collection('disputes').where('buyerId', '==', request.auth.uid).get();
+  const snap = await db.collection('disputes').where('buyerUid', '==', request.auth.uid).get();
   const items = snap.docs
     .map(d => ({ id: d.id, ...d.data() }))
     .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
@@ -139,7 +144,7 @@ exports.getDisputeDetail = onCall({ enforceAppCheck: true }, async request => {
 
   const t     = request.auth.token;
   const admin = _ac.isSupport(t);
-  if (data.buyerId !== uid && data.sellerId !== uid && !admin)
+  if (data.buyerUid !== uid && data.sellerUid !== uid && !admin)
     throw new HttpsError('permission-denied', 'Not authorised');
 
   return { dispute: { id: snap.id, ...data } };
@@ -156,12 +161,12 @@ exports.addDisputeEvidence = onCall({ enforceAppCheck: true }, async request => 
   const snap = await db.collection('disputes').doc(disputeId).get();
   if (!snap.exists) throw new HttpsError('not-found', 'Dispute not found');
   const data = snap.data();
-  if (data.buyerId !== uid && data.sellerId !== uid)
+  if (data.buyerUid !== uid && data.sellerUid !== uid)
     throw new HttpsError('permission-denied', 'Not a party to this dispute');
   if (!OPEN_STATUSES.includes(data.status))
     throw new HttpsError('failed-precondition', 'Dispute is no longer open');
 
-  const role = data.buyerId === uid ? 'buyer' : 'seller';
+  const role = data.buyerUid === uid ? 'buyer' : 'seller';
   const item = {
     type:        _san(evidenceType, 60),
     description: _san(description, 1000),
@@ -190,7 +195,7 @@ exports.sellerRespondToDispute = onCall({ enforceAppCheck: true }, async request
   const snap = await db.collection('disputes').doc(disputeId).get();
   if (!snap.exists) throw new HttpsError('not-found', 'Dispute not found');
   const data = snap.data();
-  if (data.sellerId !== uid) throw new HttpsError('permission-denied', 'Not the seller');
+  if (data.sellerUid !== uid) throw new HttpsError('permission-denied', 'Not the seller');
   if (!OPEN_STATUSES.includes(data.status))
     throw new HttpsError('failed-precondition', 'Dispute is no longer open');
 
@@ -215,7 +220,7 @@ exports.cancelDispute = onCall({ enforceAppCheck: true }, async request => {
   const snap = await db.collection('disputes').doc(disputeId).get();
   if (!snap.exists) throw new HttpsError('not-found', 'Dispute not found');
   const data = snap.data();
-  if (data.buyerId !== uid) throw new HttpsError('permission-denied', 'Not your dispute');
+  if (data.buyerUid !== uid) throw new HttpsError('permission-denied', 'Not your dispute');
   if (!OPEN_STATUSES.includes(data.status))
     throw new HttpsError('failed-precondition', 'Cannot cancel a resolved dispute');
 
@@ -241,7 +246,7 @@ exports.cancelDispute = onCall({ enforceAppCheck: true }, async request => {
 // ─── getSellerDisputes — seller sees disputes raised against them ─────────────
 exports.getSellerDisputes = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
-  const snap = await db.collection('disputes').where('sellerId', '==', request.auth.uid).get();
+  const snap = await db.collection('disputes').where('sellerUid', '==', request.auth.uid).get();
   const items = snap.docs
     .map(d => ({ id: d.id, ...d.data() }))
     .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));

@@ -245,7 +245,7 @@ exports.emailOnDisputeCreate = onDocumentCreated(
   { document: "disputes/{disputeId}", secrets: EMAIL_SECRETS },
   async (event) => {
     const d = event.data?.data() || {};
-    const email = d.customerEmail || await emailForUid(d.customerId || "");
+    const email = d.customerEmail || await emailForUid(d.buyerUid || "");   /* canonical dispute buyer */
     if (!email) return;
     await trigger("dispute-opened", {
       name:       d.customerName || "Customer",
@@ -253,7 +253,7 @@ exports.emailOnDisputeCreate = onDocumentCreated(
       disputeId:  event.params.disputeId,
       reason:     d.reason || "",
       email,
-    }, { uid: d.customerId || "", emailId: `dispute-open-${event.params.disputeId}` });
+    }, { uid: d.buyerUid || "", emailId: `dispute-open-${event.params.disputeId}` });   /* canonical: disputes carry no customerId */
   }
 );
 
@@ -263,7 +263,7 @@ exports.emailOnDisputeResolved = onDocumentUpdated(
     const before = event.data.before.data();
     const after  = event.data.after.data();
     if (before.status === after.status || after.status !== "resolved") return;
-    const email = after.customerEmail || await emailForUid(after.customerId || "");
+    const email = after.customerEmail || await emailForUid(after.buyerUid || "");   /* canonical dispute buyer */
     if (!email) return;
     await trigger("dispute-resolved", {
       name:         after.customerName || "Customer",
@@ -271,7 +271,7 @@ exports.emailOnDisputeResolved = onDocumentUpdated(
       resolution:   after.resolution || "See dispute details",
       refundAmount: after.refundAmount || 0,
       email,
-    }, { uid: after.customerId || "", emailId: `dispute-resolved-${event.params.disputeId}` });
+    }, { uid: after.buyerUid || "", emailId: `dispute-resolved-${event.params.disputeId}` });
   }
 );
 

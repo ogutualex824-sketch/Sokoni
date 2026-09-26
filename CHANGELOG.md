@@ -1,3 +1,16 @@
+## 2026-09-26 — Repair 2: one canonical identity for a dispute (branch `repair-2/canonical-identity-fields`, NOT landed)
+
+A dispute now carries `buyerUid` · `sellerUid` · `shopId` · `reason`: the names the orders already use and the
+served rules already check. `createDispute` resolves ONE buyer by precedence (`functions/dispute-identity.js`).
+The old check accepted only `buyerId`/`userId`/`customerId`, which **no** production order carries, so **no real
+buyer could open a dispute**. Also converged: `wallet.js`, `automation-engine.js` (it read `type`, which never
+existed), `email-triggers.js` (`customerId`, which never existed), and `trust-safety.html`.
+`scripts/test-dispute-identity.js` **26/0** on all 10 production order shapes (pseudonymised): 10/10 legitimate
+buyers, 30/30 cross-identity refusals with nothing written. The old code opens **0/10**. Production has 0 disputes,
+so no migration is needed. Record: `docs/repairs/R2-canonical-dispute-identity.md`.
+Database: dispute docs use canonical names. Security: the served rules now match real disputes.
+Breaking: none for data (0 disputes exist).
+
 ## 2026-09-26 — Repair 1: an open dispute pauses auto-confirm and seller settlement (branch `repair-1/dispute-settlement-pause`, NOT landed)
 
 The `disputeOpen`/`hasDispute` flags the sweep checked were never written, and `settleOrder` checked no dispute.

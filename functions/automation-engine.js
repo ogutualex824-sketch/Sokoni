@@ -466,7 +466,9 @@ exports.autoOnDisputeCreate = onDocumentCreated(
     const deliveryConfirmed = delivery?.status === 'delivered';
 
     if (isSmall && paymentConfirmed) {
-      const resolution = (dispute.type === 'not_received' && deliveryConfirmed) ? 'seller_wins' : 'buyer_wins';
+      /* `reason` is the field disputes carry; `type` never existed on a dispute, so this branch could
+         never resolve for the seller (Repair 2). */
+      const resolution = (dispute.reason === 'not_received' && deliveryConfirmed) ? 'seller_wins' : 'buyer_wins';
 
       await _db().runTransaction(async tx => {
         tx.update(event.data.ref, {
@@ -481,8 +483,8 @@ exports.autoOnDisputeCreate = onDocumentCreated(
           tx.set(refRef, {
             orderId: dispute.orderId || null,
             disputeId,
-            buyerUid: dispute.buyerId,
-            sellerUid: dispute.sellerId,
+            buyerUid: dispute.buyerUid,
+            sellerUid: dispute.sellerUid,
             amount,
             reason: 'dispute_auto_resolved_buyer_wins',
             /* 'pending', NOT 'approved'. autoOnRefundRequest below triggers on
@@ -521,8 +523,8 @@ exports.autoOnDisputeCreate = onDocumentCreated(
 
       const winnerMsg = resolution === 'buyer_wins' ? 'in your favour' : 'in favour of the seller';
       await Promise.all([
-        _notify(dispute.buyerId,  'Dispute Resolved', `Your dispute has been resolved ${winnerMsg}. ${resolution === 'buyer_wins' ? 'A refund has been issued.' : ''}`, { disputeId }),
-        _notify(dispute.sellerId, 'Dispute Resolved', `Dispute resolved. Decision: ${resolution.replace(/_/g, ' ')}.`, { disputeId }),
+        _notify(dispute.buyerUid,  'Dispute Resolved', `Your dispute has been resolved ${winnerMsg}. ${resolution === 'buyer_wins' ? 'A refund has been issued.' : ''}`, { disputeId }),
+        _notify(dispute.sellerUid, 'Dispute Resolved', `Dispute resolved. Decision: ${resolution.replace(/_/g, ' ')}.`, { disputeId }),
       ]);
       return;
     }
@@ -544,7 +546,7 @@ Analyse the evidence and return ONLY valid JSON with keys: action, confidence (0
 Actions: buyer_wins | seller_wins | split | manual_review.
 Default to manual_review if evidence is ambiguous. Be concise and fair.`;
 
-        const userPrompt = `Dispute: type=${dispute.type || 'general'}, amount=KES ${amount}, reason="${dispute.reason || 'Not specified'}"
+        const userPrompt = `Dispute: reason=${dispute.reason || 'general'}, amount=KES ${amount}, reason="${dispute.reason || 'Not specified'}"
 Evidence: ${JSON.stringify(evidence)}
 Payment confirmed: ${paymentConfirmed}. Delivery confirmed: ${deliveryConfirmed}.
 Auto-resolve threshold: KES ${rule.autoResolveBelow}.`;
@@ -585,7 +587,7 @@ Auto-resolve threshold: KES ${rule.autoResolveBelow}.`;
       entityId: disputeId,
       entityType: 'dispute',
       title: `Dispute: ${dispute.reason || 'General'} — KES ${amount}`,
-      description: `${dispute.type || 'Dispute'} between buyer and seller. AI recommends: ${recommendation.action} (${Math.round((recommendation.confidence || 0) * 100)}% confidence).`,
+      description: `${dispute.reason || 'Dispute'} between buyer and seller. AI recommends: ${recommendation.action} (${Math.round((recommendation.confidence || 0) * 100)}% confidence).`,
       recommendation,
       evidence,
     });
@@ -601,8 +603,8 @@ Auto-resolve threshold: KES ${rule.autoResolveBelow}.`;
     });
 
     await Promise.all([
-      _notify(dispute.buyerId,  'Dispute Under Review', 'Your dispute is being reviewed by our team. We\'ll notify you of the decision within 48 hours.', { disputeId }),
-      _notify(dispute.sellerId, 'Dispute Raised', `A dispute has been raised for your order. Our team is reviewing it.`, { disputeId }),
+      _notify(dispute.buyerUid,  'Dispute Under Review', 'Your dispute is being reviewed by our team. We\'ll notify you of the decision within 48 hours.', { disputeId }),
+      _notify(dispute.sellerUid, 'Dispute Raised', `A dispute has been raised for your order. Our team is reviewing it.`, { disputeId }),
     ]);
   }
 );

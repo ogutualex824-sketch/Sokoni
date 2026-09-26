@@ -235,7 +235,7 @@ async function _hasActivePayout(db, uid) {
 /** Any OPEN dispute against this seller? */
 async function _hasOpenDispute(db, uid) {
   try {
-    const snap = await db.collection('disputes').where('sellerId', '==', uid).limit(20).get();
+    const snap = await db.collection('disputes').where('sellerUid', '==', uid).limit(20).get();   /* canonical: dispute-identity.js */
     return snap.docs.some((d) => String(d.data().status || '').toLowerCase() === 'open');
   } catch (_) { return false; }
 }

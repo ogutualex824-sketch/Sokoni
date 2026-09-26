@@ -3,7 +3,7 @@
 
    Four authorities, and the boundaries between them are the whole design:
 
-       getSellerDisputes      list   — disputes where sellerId == the caller
+       getSellerDisputes      list   — disputes where sellerUid == the caller
        getDisputeDetail       read   — buyer, seller or admin only
        sellerRespondToDispute write  — SELLER only; sets status seller_responded
        addDisputeEvidence     write  — either party, while the dispute is open
@@ -14,17 +14,18 @@
      merchant reaching for a "raise a dispute" button would be reaching for a
      call the server refuses. The surface explains the route instead.
    · CANCEL one. `cancelDispute` is the BUYER withdrawing their own claim
-     (`data.buyerId !== uid` → denied). It is not a merchant action, despite
+     (`data.buyerUid !== uid` → denied). It is not a merchant action, despite
      reading like one.
    · RESOLVE one. `adminResolveDispute` is admin-gated, correctly. A merchant
      responds; SOKONI decides. Nothing here may imply otherwise.
 
    ── Scope: this is ACCOUNT-level, and it is not dressed up as shop-level ────
-   A dispute document carries `orderId`, `buyerId` and `sellerId` — and **no
-   `shopId`**. `sellerId` is copied from the ORDER (`order.sellerId ||
-   order.vendorId`), so it is an account uid. `getSellerDisputes` therefore
-   queries `sellerId == auth.uid`: everything this account sells, across every
-   shop it owns.
+   A dispute document carries `orderId`, `buyerUid`, `sellerUid` and `reason`
+   (canonical since Repair 2 — functions/dispute-identity.js). `sellerUid` is the
+   ORDER's seller resolved by precedence, so it is an account uid, and
+   `getSellerDisputes` queries `sellerUid == auth.uid`: everything this account
+   sells, across every shop it owns. A `shopId` is RECORDED when the order carries
+   one, but the server does not scope by it — so this layer does not either.
 
    Filtering by `activeShopId` on the client would be a lie in either direction —
    it would hide real disputes if the field were absent, and invent a shop
@@ -32,10 +33,9 @@
    so the surface can show it, exactly as Marketing does for Ads.
 
    ── No Firestore access ─────────────────────────────────────────────────────
-   None, and it could not help anyway: `firestore.rules` gates a seller's read on
-   `resource.data.sellerUid`, a field disputes never carry (the code writes
-   `sellerId`). The client-SDK read path for a seller is dead; the callables are
-   the only way in. Recorded, not worked around.
+   None. Since Repair 2 disputes carry `sellerUid`, the field `firestore.rules`
+   gates a seller's read on, so a direct read would now be permitted — but the
+   callables remain the one path this layer uses, and nothing here changes that.
    ════════════════════════════════════════════════════════════════════════════ */
 (function (root, factory) {
   var api = factory();
