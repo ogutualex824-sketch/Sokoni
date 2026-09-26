@@ -1,3 +1,28 @@
+## 2026-09-27 (196) — Events ops P3: refund policy, reason catalogue, Refund Request Wizard (server)
+
+- **Policy (organizer, before sales):** `eventSetRefundPolicy` — `none` | `before_cutoff` (deadline before the
+  event) + optional no-show refunds; LOCKED once a ticket sells; `publishEvent` requires it.
+- **Reasons:** `functions/shared/event-refund-reasons.js` (browser copy `sokoni-event-refund-reasons.js`) — 18
+  controlled reasons in 5 groups, reason-specific questions, meaningful-explanation rule (blank / "test" /
+  "refund" / "." refused).
+- **Eligibility (server, from canonical state):** ticket status · admissionStatus · refundStatus ·
+  event.refundPolicy · event status/dates. ADMITTED is never a no-show; no-show only after the event and within
+  14 days; cancelled event → eligible; organizer-side changes and payment issues → admin REVIEW; ineligible
+  requests are refused and cannot be forced.
+- **Wizard server:** `eventRefundQuote` / `eventRequestRefund` / `eventMyRefundRequests` — the request is
+  submitted through financial-os's OWN refund-request handler (now a named function, `_internal.submitRefund`;
+  the callable is unchanged): buyer owns payment, one request per transaction, admin review before any provider
+  call. `eventRefundRequests/{orderId}` records reason, answers, eligibility, policy snapshot, amount,
+  commission and provider fee. Tickets go REQUESTED (the gate refuses them) → REFUNDED on processing, or back
+  to NONE on rejection (new `onEventRefundRejected` hook). If the authority refuses, the wizard compensates.
+- **Not implemented (UNDECIDED):** refund penalty / fee retention — owner + legal decision (published pages
+  promise full refunds). Door (cash / card) sales are refunded offline by the organizer; not via this wizard.
+- **Files:** `functions/event-refunds.js`, `functions/shared/event-refund-reasons.js`, `sokoni-event-refund-reasons.js`
+  (new); `functions/{financial-os,event-settlement,event-ops,event-hub}.js`; `scripts/sync-creator-shared.js`;
+  `firestore.rules` (+build); `scripts/test-event-refunds.js` (new, 52/0).
+- **Regression:** refund matrix 24 · exactly-once 103 · event-ops 50 · sales 46 · events 84 · registry 65 ·
+  creator hub 260 · callback 78 · rules 34 — all 0 failed. **Not deployed.**
+
 ## 2026-09-27 (195) — Events ops P2: cashier Quick Sale (cash / external card / cashier IntaSend), door-sale commission receivables
 
 - **No ticket sale outside SOKONI:** `eventQuickSale` (eventOpsDispatch) — a named, event-scoped cashier

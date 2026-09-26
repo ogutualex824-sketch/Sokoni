@@ -170,6 +170,8 @@ exports.publishEvent = onCall(CF_OPTS, async (req) => {
   const ev = snap.data();
   if (ev.organizerUid !== uid) throw new HttpsError('permission-denied', 'Not event owner');
   if (ev.status === 'live') throw new HttpsError('failed-precondition', 'Already live');
+  /* Buyers must know the refund terms before they can buy (event-refunds.js setPolicy). */
+  if (!ev.refundPolicy || !ev.refundPolicy.mode) throw new HttpsError('failed-precondition', 'Set the event refund policy before publishing');
   if (ev.status === 'cancelled') throw new HttpsError('failed-precondition', 'Event is cancelled');
 
   if (new Date(ev.startDate) < new Date()) {

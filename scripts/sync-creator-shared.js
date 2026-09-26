@@ -14,6 +14,7 @@ const PAIRS = [
   ['functions/shared/creator-publishing.js', 'sokoni-creator-rules.js'],
   ['functions/shared/creator-watermark.js', 'sokoni-watermark.js'],
   ['functions/shared/creator-commercial.js', 'sokoni-creator-commercial.js'],
+  ['functions/shared/event-refund-reasons.js', 'sokoni-event-refund-reasons.js'],
 ];
 const check = process.argv.includes('--check');
 let drift = 0;

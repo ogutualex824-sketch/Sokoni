@@ -596,15 +596,10 @@ async function _executeRefund(refundId, actorUid, source) {
    Refund goes into a queue (fosRefundQueue) pending admin
    approval unless auto_approve conditions are met.
 ════════════════════════════════════════════════════════════ */
-exports.fosSubmitRefund = onCall(
-  {
-    region:          REGION,
-    timeoutSeconds:  60,
-    memory:          '256MiB',
-    enforceAppCheck: true,
-    secrets:         [INTASEND_PRIVATE_KEY],
-  },
-  async (req) => {
+/* The submit handler is a named function so the Entertainment refund wizard (event-refunds.js)
+   submits through EXACTLY this authority — the same buyer-owns-payment check, the same one-request-
+   per-transaction id, the same admin-review queue. There is no second refund-request writer. */
+async function _submitRefundHandler(req) {
     const auth = _requireAuth(req);
     const {
       fosTransactionId,
@@ -718,7 +713,17 @@ exports.fosSubmitRefund = onCall(
     /* Auto-approve: an admin submitted it — execute now, through the SAME locked
        execution as fosApproveRefund (no second, lock-free gateway path). */
     return _executeRefund(refundRef.id, auth.uid, 'fosSubmitRefund');
-  }
+}
+
+exports.fosSubmitRefund = onCall(
+  {
+    region:          REGION,
+    timeoutSeconds:  60,
+    memory:          '256MiB',
+    enforceAppCheck: true,
+    secrets:         [INTASEND_PRIVATE_KEY],
+  },
+  (req) => _submitRefundHandler(req),
 );
 
 /* ════════════════════════════════════════════════════════════
@@ -751,6 +756,9 @@ exports.fosApproveRefund = onCall(
         throw new HttpsError('failed-precondition', `Refund already ${rd.status}`);
       }
       await refSnap.ref.update({ status: 'rejected', rejectReason, updatedAt: now() });
+      /* An event ticket whose refund was declined returns to "no refund" — so it can be admitted again. */
+      try { await require('./event-settlement').onEventRefundRejected({ payRef: rd.payRef, refundId, reason: rejectReason }); }
+      catch (e) { logger.error('[FOS/refund] event reject hook failed (rejection stands)', { refundId, err: e.message }); }
       await _notify(rd.buyerUid, 'refund_rejected', {
         title: 'Refund request declined',
         body:  rejectReason || 'Your refund request was reviewed and declined.',
@@ -1186,3 +1194,7 @@ exports.fosGetAdminConsole = onCall(
 
 /* Test seam (pure, no I/O). */
 exports._refundInternals = { REFUND_EXECUTABLE, _isDefinitiveRejection };
+
+/* Internal (not a Cloud Function): the refund-request authority, for the Entertainment refund
+   wizard. index.js re-exports financial-os callables BY NAME, so this is never deployed. */
+exports._internal = Object.assign(exports._internal || {}, { submitRefund: _submitRefundHandler });

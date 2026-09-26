@@ -211,12 +211,16 @@ const eventTicketAdapter = {
     const orderRef = db.collection(COL.ORDERS).doc(orderId);
     const setRef = db.collection(COL.SETTLEMENTS).doc(led.paymentRef);
     const comRef = db.collection(COL.COMMISSION).doc(`evt_${led.paymentRef}`);
-    const [oSnap, tixSnap, setSnap, comSnap] = await Promise.all([
+    const [oSnap, tixSnap, setSnap, comSnap, reqSnap] = await Promise.all([
       txn.get(orderRef), txn.get(db.collection(COL.TICKETS).where('orderId', '==', orderId)),
-      txn.get(setRef), txn.get(comRef),
+      txn.get(setRef), txn.get(comRef), txn.get(db.collection('eventRefundRequests').doc(orderId)),
     ]);
     if (oSnap.exists) txn.update(orderRef, { status: 'refunded', refundedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-    tixSnap.docs.forEach((d) => txn.update(d.ref, { status: 'refunded', revokedAt: FieldValue.serverTimestamp() }));
+    tixSnap.docs.forEach((d) => txn.update(d.ref, { status: 'refunded', refundStatus: 'REFUNDED', revokedAt: FieldValue.serverTimestamp() }));
+    /* The wizard's request (if any) closes with the refund. set+merge: a cancelled-event refund
+       raised from AdminOS has no wizard request, and creating a stub there would be wrong — so
+       only an existing request is touched (read above, before any write). */
+    if (reqSnap.exists) txn.update(reqSnap.ref, { status: 'REFUNDED', refundedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
     if (setSnap.exists) {
       const st = setSnap.data().status;
       if (st === SETTLEMENT.HELD || st === SETTLEMENT.FEE_UNREPORTED) {
@@ -466,6 +470,25 @@ async function onEventRefundProcessed({ payRef, refundId, amountCents, source })
   return engine.revoke(ref, `refund:${refundId || 'unknown'}`, { source: source || 'fos-refund' });
 }
 
+/** A declined refund: the tickets return to "no refund" (admissible again); the request closes. */
+async function onEventRefundRejected({ payRef, refundId, reason }) {
+  const ref = String(payRef || '');
+  if (!ref) return { skipped: 'no_ref' };
+  const iSnap = await _db().collection(COL.INTENTS).doc(ref).get();
+  if (!iSnap.exists || iSnap.data().purpose !== PURPOSE) return { skipped: 'not_event_ticket' };
+  const orderId = String(iSnap.data().resourceId || '');
+  const db = _db();
+  return db.runTransaction(async (txn) => {
+    const [tix, rq] = await Promise.all([
+      txn.get(db.collection(COL.TICKETS).where('orderId', '==', orderId)),
+      txn.get(db.collection('eventRefundRequests').doc(orderId)),
+    ]);
+    tix.docs.forEach((d) => { if (d.data().refundStatus === 'REQUESTED') txn.update(d.ref, { refundStatus: 'NONE', refundRejectedAt: FieldValue.serverTimestamp() }); });
+    if (rq.exists) txn.update(rq.ref, { status: 'REJECTED', rejectReason: String(reason || '').slice(0, 300) || null, fosRefundId: refundId || null, updatedAt: FieldValue.serverTimestamp() });
+    return { reopened: tix.size };
+  });
+}
+
 /* ═══ ADMINOS OPS (merged into adminOsDispatch) ══════════════════════════════════════════ */
 
 function _uid(req) { if (!req.auth || !req.auth.uid) _fail('unauthenticated', 'Sign in required.'); return req.auth.uid; }
@@ -565,6 +588,6 @@ _adminH.eventAdminAttestFee = async (req) => {
 module.exports = {
   PURPOSE, COL, SETTLEMENT, RELEASE_GRACE_MS, UNPAID_ORDER_TTL_MS,
   eventTicketAdapter, registerPurpose, computeSettlement, releaseAfterMs, shouldActivate,
-  activateIfEventTicket, releaseOne, expireOne, onEventRefundProcessed,
+  activateIfEventTicket, releaseOne, expireOne, onEventRefundProcessed, onEventRefundRejected,
   eventOnTicketPayment, eventReleaseSettlements, eventExpireUnpaidOrders, _adminH,
 };
