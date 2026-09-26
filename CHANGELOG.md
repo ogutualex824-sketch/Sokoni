@@ -1,3 +1,22 @@
+## 2026-09-27 — Dual-business merged onto the main line, its authorization defect repaired (branch `dualbiz/repair`, NOT landed, NOT deployed)
+
+Merges `feat/dual-business-commerce` (13 commits) onto `3745a5b`. Conflicts resolved deliberately:
+- `catalogue.html` keeps the main line's server-routed writes (only the deep-link UI was ported);
+- `sokoni-pos-pay-console.js` takes the branch's strict superset;
+- the routes keep both sides, and the stale `/catalogue` exclusion is admitted.
+
+**Security repair:** `shared/business-scope.js` treated a record with no status, or a live status alone,
+as approved. Both are self-writable, so any user could grant themselves products and services scope.
+- Approval now requires a live status AND protected evidence (`approvedAt` / `approved` / `adminApproved`).
+- `application-lifecycle` `projectSeller` now stamps `approvedAt` / `approvedBy` on approval (it wrote only
+  the self-writable status/active).
+- The quick-charge limit is now per SALE, not per line.
+- No production backfill: the 8 existing sellers stay unapproved for the dormant path.
+
+**Evidence:** old tree fails business-scope 12, authority 6 and the cap 3; repaired 62/0, 14/0 and 75/0.
+`product_order` is byte-identical. The R1–R5/RES-1/commission floor is green; 3 pre-existing failures are
+identical to `3745a5b`. Record: `docs/repairs/DUALBIZ-repair-and-merge.md`.
+
 ## 2026-09-27 — Commission authority: inherited property names are not rate keys (branch `commission-config/own-property-lookups`, NOT landed, NOT deployed)
 
 `functions/commission-config.js` read its rate tables with bare `TABLE[k]`, so `constructor` and `__proto__`
