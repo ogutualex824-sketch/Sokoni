@@ -1,3 +1,14 @@
+## 2026-09-26 — Recovery manifest: onOrderStatusChange now REQUIRES the patched generation
+
+**NO DEPLOY. Contract amendment only.** `scripts/infra/recovery-manifest-20260921.json`, recovery_order 5:
+`source_generation` changes from `1788077453779580` (**vulnerable**: marketplace double credit) to
+`1790400441458307` (patched, serving as `onorderstatuschange-00064-rat`). It adds `required_source_invariant`:
+the rebuild source must pass `scripts/deploy/guard-settled-case.js`, otherwise STOP. That covers the `gcloud`
+rebuild path, which never runs firebase predeploy. It also applies to `expireOldEscrows`.
+`recovery-baseline-20260921.json` is untouched and still matches its `baseline_sha256` pin. It is a historical
+snapshot, not a rebuild source. No other gate, block or authorization in the contract changed.
+Database / API / security / breaking changes: none.
+
 ## 2026-09-26 — DEPLOYED: double-credit guard: case-insensitive "already settled" (settleOrder + auto-confirm sweep)
 
 **DEPLOYED 05:27Z:** `onorderstatuschange-00064-rat` + `expireoldescrows-00033-fug` from the production-lineage tree (guard + scaling-neutral `maxInstances: 99`, owner-authorized `--force`). Verification **43/0**, including build→image→source provenance. **Regression hazard:** any other-lineage deploy of these two functions reinstates the defect.

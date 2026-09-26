@@ -1,6 +1,13 @@
 {
   "_comment": "POST-CHECKPOINT EXECUTION CONTRACT. Frozen 2026-09-21. The executing agent makes NO decisions during recovery: every value it needs is stated here or in the baseline. Any deviation is a STOP, not a judgement call.",
   "frozen_at": "2026-09-21T05:51:36.017Z",
+  "amendments": [
+    {
+      "at": "2026-09-26",
+      "by": "owner-authorized guardrail (double-credit regression hazard)",
+      "change": "recovery_order[order=5] onOrderStatusChange: source_generation 1788077453779580 -> 1790400441458307, plus required_source_invariant. Nothing else in this contract changed; every other gate, block and authorization stands as frozen."
+    }
+  ],
   "baseline_file": "scripts/infra/recovery-baseline-20260921.json",
   "baseline_sha256": "6d204acdd4c3fd4669727e667ec31a53a1508e882b47569c2d13ddeedc34c519",
   "blocked_until": {
@@ -61,7 +68,19 @@
       "function": "onOrderStatusChange",
       "service": "onorderstatuschange",
       "trigger": "EVENT",
-      "source_generation": "1788077453779580",
+      "source_generation": "1790400441458307",
+      "source_generation_status": "REQUIRED recovery generation (amended 2026-09-26). This is the ONLY generation a rebuild of this function may use.",
+      "superseded_source_generation": "1788077453779580",
+      "superseded_reason": "VULNERABLE — carries the marketplace double credit (settleOrder skipped only 'SETTLED' while the webhook writes 'settled'). Rebuilding from it REINSTATES the defect. Never use it, even though recovery-baseline-20260921.json still names it: the baseline is a hash-pinned historical snapshot, not a rebuild source.",
+      "serving_at_amendment": "onorderstatuschange-00064-rat (deployed 2026-09-26 05:27Z, image sha256:97b5be2d896433dd304cabe6636e6e6fe94667111bca28ee44d69e043edf4aab, build 5e747ef2-436d-4954-90de-f90db69397e1)",
+      "required_source_invariant": {
+        "rule": "functions/order-settlement.js MUST contain isAlreadySettled, AND settleOrder and autoConfirmDeliveredOrders MUST gate on it.",
+        "how_to_check": "Extract the rebuild archive, then run `node scripts/deploy/guard-settled-case.js` with SETTLED_GUARD_TARGET=<extracted>/order-settlement.js (its node_modules must be installed). Exit 0 is required. Any other exit is a STOP.",
+        "why_a_gate_and_not_a_grep": "A string search passes a guard that is defined but bypassed. The gate proves definition, call sites, the absence of a second raw decision, and behaviour (every settled spelling writes no money; an unsettled control IS credited).",
+        "applies_to": ["onOrderStatusChange", "expireOldEscrows (not a manifest candidate, but it runs autoConfirmDeliveredOrders from the same source; serving expireoldescrows-00033-fug)"],
+        "firebase_deploy_path": "firebase.json functions.predeploy runs the same gate on EVERY functions deploy. A gcloud-based rebuild does NOT run predeploy, which is why this invariant is stated here as well.",
+        "record": "docs/MARKETPLACE_DOUBLE_CREDIT_MEASUREMENT.md"
+      },
       "rationale": "order path; Eventarc reconstruction risk"
     },
     {
