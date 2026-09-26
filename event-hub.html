@@ -703,6 +703,15 @@
 
   /* Boot */
   loadEvents(false);
+  /* A shared link — /event-hub.html?event=<id>[&promo=CODE] — opens that event. The code is only
+     PREFILLED: the buyer applies it and the server validates it like any typed code. */
+  (() => {
+    const q = new URLSearchParams(location.search);
+    const id = q.get('event');
+    if (!id || !/^[A-Za-z0-9_-]{1,128}$/.test(id)) return;
+    const code = (q.get('promo') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
+    Promise.resolve(openEvent(id)).then(() => { const el = document.getElementById('promo-input'); if (el && code) el.value = code; }).catch(() => {});
+  })();
 </script>
 
 <!-- ── Are You an Event Organiser? ── -->

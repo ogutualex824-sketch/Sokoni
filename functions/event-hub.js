@@ -208,25 +208,45 @@ exports.cancelEvent = onCall(CF_OPTS, async (req) => {
   if (!isOwner && !isAdmin) throw new HttpsError('permission-denied', 'Not authorised');
   if (ev.status === 'cancelled') throw new HttpsError('failed-precondition', 'Already cancelled');
 
-  const batch = db().batch();
-  batch.update(ref, {
-    status: 'cancelled',
-    cancelledAt: FieldValue.serverTimestamp(),
-    cancellationReason: sanitize(reason, 500),
-    updatedAt: FieldValue.serverTimestamp(),
+  /* The event flips FIRST, in a transaction: two concurrent cancels cannot both proceed, and from
+     this moment settlement release refuses (releaseOne checks the event status). */
+  await db().runTransaction(async (txn) => {
+    const cur = await txn.get(ref);
+    if (cur.data().status === 'cancelled') throw new HttpsError('failed-precondition', 'Already cancelled');
+    txn.update(ref, {
+      status: 'cancelled',
+      cancelledAt: FieldValue.serverTimestamp(),
+      cancellationReason: sanitize(reason, 500),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
   });
 
-  // Mark all paid orders for refund processing
+  // Mark all paid orders for refund processing — in chunks: a single batch holds at most 500
+  // writes, so one batch made a large event impossible to cancel at all.
   const ordersSnap = await db().collection('eventOrders')
     .where('eventId', '==', eventId)
     .where('status', '==', 'paid')
     .get();
+  for (let i = 0; i < ordersSnap.docs.length; i += 400) {
+    const batch = db().batch();
+    ordersSnap.docs.slice(i, i + 400).forEach((doc) => {
+      batch.update(doc.ref, { status: 'pending_refund', cancelledAt: FieldValue.serverTimestamp() });
+    });
+    await batch.commit(); // eslint-disable-line no-await-in-loop
+  }
 
-  ordersSnap.docs.forEach(doc => {
-    batch.update(doc.ref, { status: 'pending_refund', cancelledAt: FieldValue.serverTimestamp() });
-  });
-
-  await batch.commit();
+  /* Tell each online buyer. Best effort (a failed notice never undoes a cancellation), one per
+     order via dedupeKey. Cashier-sold orders have no reachable buyer account — the organizer
+     handles those at the door. */
+  const { notify } = require('./notify');
+  const buyers = ordersSnap.docs.map((d) => d.data()).filter((o) => o.buyerUid && o.channel !== 'cashier');
+  for (let i = 0; i < buyers.length; i += 25) {
+    await Promise.all(buyers.slice(i, i + 25).map((o) => notify({ // eslint-disable-line no-await-in-loop
+      uid: o.buyerUid, type: 'event_cancelled', title: 'Event cancelled',
+      body: `${ev.title || 'An event you booked'} has been cancelled. Your order is queued for a refund to your original payment method.`,
+      dedupeKey: `evt_cancel:${o.orderId || eventId}`, data: { eventId, orderId: o.orderId || null },
+    }).catch(() => null)));
+  }
   return { ok: true, ordersMarkedForRefund: ordersSnap.size };
 });
 
@@ -667,6 +687,8 @@ exports.purchaseTickets = onCall({ ...CF_OPTS, secrets: [require('./event-ops').
     });
   }
   await ticketBatch.commit();
+  /* Free / fully-discounted: issued now, so confirm now (no PIN in the notice; best effort). */
+  if (_free) await require('./event-settlement').notifyTicketsConfirmed(orderId);
 
   return {
     orderId,

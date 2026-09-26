@@ -130,9 +130,10 @@ const pagePath = (u) => Path.join(ROOT, String(u).split(/[?#]/)[0].replace(/^\//
   const OPS = globalThis.SokoniAOSEntertainment.OPS;
   const disp = fs.readFileSync(Path.join(FN, 'admin-os-dispatch.js'), 'utf8');
   const ES = require(Path.join(FN, 'event-settlement.js'));
-  const handlers = { ...ES._adminH, ...EA._adminH };
+  const EV = require(Path.join(FN, 'event-admin.js'));
+  const handlers = { ...ES._adminH, ...EA._adminH, ...EV._adminH };
   ck('every panel op is a dispatcher handler', OPS.every((o) => typeof handlers[o] === 'function'), OPS.filter((o) => !handlers[o]));
-  ck('dispatcher merges both Entertainment registries', /events\._adminH/.test(disp) && /ent\._adminH/.test(disp));
+  ck('dispatcher merges all three Entertainment registries', /events\._adminH/.test(disp) && /ent\._adminH/.test(disp) && /eventInv\._adminH/.test(disp));
   const aos = fs.readFileSync(Path.join(ROOT, 'sokoni-aos.js'), 'utf8');
   ck('panel ops are whitelisted in sokoni-aos.js', /SokoniAOSEntertainment\.OPS/.test(aos) && /entertainment:\s*\(\)\s*=>\s*_loadEntertainment\(\)/.test(aos));
   const html = fs.readFileSync(Path.join(ROOT, 'admin-os.html'), 'utf8');

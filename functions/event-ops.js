@@ -182,6 +182,16 @@ async function staffInvite(req) {
     status: 'pending', invitedBy: actor.uid, createdAt: FieldValue.serverTimestamp(),
   });
   await _audit('event_staff_invited', actor, { eventId: actor.event.id, email }, { role, startAt, endAt });
+  /* If the invited email already has a SOKONI account, tell them in-app. Best effort; the response
+     is identical either way, so an organizer cannot use invitations to probe which emails exist. */
+  try {
+    const u = await require('firebase-admin/auth').getAuth().getUserByEmail(email);
+    if (u && u.uid && u.uid !== actor.uid) {
+      await require('./notify').notify({ uid: u.uid, type: 'event_staff_invite', title: 'Event staff invitation',
+        body: `You have been invited to work ${actor.event.title || 'an event'} as ${role}. Open the link from the organizer to accept.`,
+        dedupeKey: `evt_staff_inv:${ref.id}:${role}`, data: { eventId: actor.event.id, role } });
+    }
+  } catch (_) { /* no account / notice failure — the organizer's link still works */ }
   return { ok: true, inviteId: ref.id, role, startAt, endAt };
 }
 
@@ -391,6 +401,6 @@ function OPS_OPTS() { return { ...OPTS, timeoutSeconds: 30, memory: '256MiB' }; 
 module.exports = {
   COL, CAPS, STAFF_ROLES, ORGANIZER_CAPS, ATTEMPTS, PIN_ALPHABET, PIN_LEN, SOKONI_HMAC_KEY,
   generatePin, generateTicketNumber, normalizePin, pinHash, issueCredentials,
-  resolveEventActor, staffActive, eventEndMs, _h, eventOpsDispatch,
+  resolveEventActor, staffActive, eventEndMs, lookupPin: _lookupPin, _h, eventOpsDispatch,
   _setClock: (fn) => { _now = fn || (() => Date.now()); },
 };

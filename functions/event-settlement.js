@@ -273,6 +273,23 @@ function shouldActivate(before, after) {
   return is && !was;
 }
 
+/* "Your tickets are confirmed" — after the FIRST activation only. The PIN is a bearer credential,
+   so it is never in the notice: the buyer opens My Tickets, where it is returned to them alone.
+   Cashier-assisted orders are walk-in (the payer is the cashier), so no notice. Best effort. */
+async function _notifyConfirmed(orderId) {
+  try {
+    const o = (await _db().collection(COL.ORDERS).doc(String(orderId || '_')).get()).data();
+    if (!o || !o.buyerUid || o.channel === 'cashier') return;
+    const ev = (await _db().collection(COL.EVENTS).doc(String(o.eventId || '_')).get()).data() || {};
+    const n = Number(o.quantity) || 1;
+    await require('./notify').notify({
+      uid: o.buyerUid, type: 'event_ticket_confirmed', title: 'Tickets confirmed',
+      body: `Your ${n} ticket${n === 1 ? '' : 's'} for ${ev.title || 'your event'} ${n === 1 ? 'is' : 'are'} confirmed. Open My Tickets for your admission PIN.`,
+      dedupeKey: `evt_confirmed:${orderId}`, data: { orderId: String(orderId), eventId: o.eventId || null },
+    });
+  } catch (e) { logger.warn('[eventSettlement] confirmation notice failed', { orderId, err: e.message }); }
+}
+
 async function activateIfEventTicket(paymentRef, opts = {}) {
   const ref = String(paymentRef || '').trim();
   if (!ref) return { skipped: 'no_ref' };
@@ -289,7 +306,9 @@ async function activateIfEventTicket(paymentRef, opts = {}) {
   const engine = registerPurpose();
   try {
     const r = await engine.activate(ref, { source: opts.source || 'payment-trigger' });
-    return r && r.alreadyActive ? { alreadyActive: true } : { activated: true };
+    if (r && r.alreadyActive) return { alreadyActive: true };
+    await _notifyConfirmed(intent.resourceId);
+    return { activated: true };
   } catch (e) {
     /* A refusal (unpaid, short, reversed, mis-owned) is the engine doing its job. Recorded for
        AdminOS, never rethrown — a rethrow retries a payment that will be refused every time. */
@@ -589,6 +608,6 @@ _adminH.eventAdminAttestFee = async (req) => {
 module.exports = {
   PURPOSE, COL, SETTLEMENT, RELEASE_GRACE_MS, UNPAID_ORDER_TTL_MS,
   eventTicketAdapter, registerPurpose, computeSettlement, releaseAfterMs, shouldActivate,
-  activateIfEventTicket, releaseOne, expireOne, onEventRefundProcessed, onEventRefundRejected,
+  activateIfEventTicket, notifyTicketsConfirmed: _notifyConfirmed, releaseOne, expireOne, onEventRefundProcessed, onEventRefundRejected,
   eventOnTicketPayment, eventReleaseSettlements, eventExpireUnpaidOrders, _adminH,
 };

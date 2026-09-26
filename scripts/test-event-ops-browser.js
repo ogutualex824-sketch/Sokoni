@@ -46,6 +46,7 @@ const SALES = require(Path.join(FN, 'event-sales.js'));
 const RF = require(Path.join(FN, 'event-refunds.js'));
 const ES = require(Path.join(FN, 'event-settlement.js'));
 const EH = require(Path.join(FN, 'event-hub.js'));
+const EA = require(Path.join(FN, 'event-admin.js'));
 ES.registerPurpose();
 
 const USERS = {
@@ -53,6 +54,8 @@ const USERS = {
   till1: { uid: 'till1', email: 'till1@x.co', displayName: 'Till One', claims: {} },
   gate1: { uid: 'gate1', email: 'gate1@x.co', displayName: 'Gate One', claims: {} },
   buyer1: { uid: 'buyer1', email: 'buyer1@x.co', displayName: 'Achieng Otieno', claims: {} },
+  door9: { uid: 'door9', email: 'door9@x.co', displayName: 'Door Nine', claims: {} },
+  admin1: { uid: 'admin1', email: 'ops@sokoni.test', displayName: 'Ops Admin', claims: { isAdmin: true } },
 };
 const reqFor = (uid, data) => ({ auth: { uid, token: { email: USERS[uid].email, email_verified: true, ...USERS[uid].claims } }, rawRequest: { headers: { 'user-agent': 'chromium-harness' } }, data });
 /* Like the real callable protocol, results cross the wire as JSON: Timestamps become ISO strings. */
@@ -65,6 +68,11 @@ async function _server(name, data, uid) {
   try {
     if (name === 'eventOpsDispatch') {
       const h = OPS._h[data.op] || SALES._h[data.op] || RF._h[data.op];
+      if (!h) return { err: { code: 'not-found', message: 'unknown op ' + data.op } };
+      return { ok: await h(reqFor(uid, data)) };
+    }
+    if (name === 'adminOsDispatch') {
+      const h = EA._adminH[data.op] || ES._adminH[data.op];
       if (!h) return { err: { code: 'not-found', message: 'unknown op ' + data.op } };
       return { ok: await h(reqFor(uid, data)) };
     }
@@ -90,9 +98,15 @@ const COMPAT = `
   window.SK = { dialog: { confirm: async () => true } };
 })();`;
 const REAL = new Set(['/event-manager.html', '/event-hub.html', '/sokoni-event-ops.js', '/sokoni-event-refund-reasons.js', '/sokoni-hub-nav.js',
-  '/sokoni-dashboard-profile.js', '/sokoni-dashboard-profile-core.js']);
+  '/sokoni-dashboard-profile.js', '/sokoni-dashboard-profile-core.js', '/sokoni-aos-entertainment.js']);
+/* AdminOS › Entertainment, mounted with the REAL admin-os.html stylesheet and AdminOS's call shape. */
+const AOS_PAGE = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+  (fs.readFileSync(Path.join(ROOT, 'admin-os.html'), 'utf8').match(/<style[^>]*>[\s\S]*?<\/style>/g) || []).join('') +
+  '</head><body style="background:#060a06;color:#eee;margin:0"><div class="aos-main" style="margin-left:0"><div class="aos-content" style="padding:16px"><div id="host"></div></div></div><script src="/sokoni-aos-entertainment.js"></script>' +
+  '<script>window.SokoniAOSEntertainment.mount({ host: document.getElementById("host"), call: async (op, d) => { const r = await window.__srv("adminOsDispatch", Object.assign({ op: op }, d || {}), window.__user.uid); if (r.err) throw new Error(r.err.message); return r.ok; } });</script></body></html>';
 const srv = http.createServer((rq, res) => {
   const p = decodeURIComponent(new URL(rq.url, 'http://x').pathname);
+  if (p === '/aos-events.html') { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end(AOS_PAGE); }
   if (p === '/firebase.js') { res.writeHead(200, { 'Content-Type': 'application/javascript' }); return res.end(COMPAT); }
   if (REAL.has(p)) { res.writeHead(200, { 'Content-Type': (p.endsWith('.html') ? 'text/html' : 'application/javascript') + '; charset=utf-8' }); return res.end(fs.readFileSync(Path.join(ROOT, p.slice(1)))); }
   if (/\.m?js$/.test(p)) { res.writeHead(200, { 'Content-Type': 'application/javascript' }); return res.end(''); }
@@ -110,7 +124,7 @@ async function seed() {
     refundPolicy: { mode: 'before_cutoff', cutoffAt: new Date(NOW + 24 * H).toISOString(), noShowRefund: true } });
   await db.doc('eventTicketTiers/VIP').set({ tierId: 'VIP', eventId: 'evA', name: 'VIP', price: 5000, quantity: 100, sold: 0, isActive: true, currency: 'KES' });
   await db.doc('eventTicketTiers/REG').set({ tierId: 'REG', eventId: 'evA', name: 'Regular', price: 2000, quantity: 500, sold: 0, isActive: true, currency: 'KES' });
-  for (const [uid, role] of [['till1', 'cashier'], ['gate1', 'admission']]) {
+  for (const [uid, role] of [['till1', 'cashier'], ['gate1', 'admission'], ['door9', 'admission']]) {
     await OPS._h.eventStaffInvite(reqFor('org1', { eventId: 'evA', email: USERS[uid].email, role }));
     await OPS._h.eventStaffAccept(reqFor(uid, { eventId: 'evA' }));
   }
@@ -211,6 +225,14 @@ async function seed() {
         await pg.evaluate(() => window.showSection('finance')); await pg.waitForTimeout(400);
         const fin = await pg.textContent('#eo-finance');
         ck(`organizer @${w}: finance shows settled figures (online + door)`, /Gross ticket sales/.test(fin) && /Online salesKES 8,000/.test(fin) && /SOKONI commission on door sales/.test(fin), fin.slice(0, 160));
+        await pg.evaluate(() => window.showSection('promo')); await pg.waitForTimeout(200);
+        ck(`organizer @${w}: share is disabled until an event is chosen`, (await pg.$eval('#share-copy', (b) => b.disabled)) && !(await pg.getAttribute('#share-wa', 'href')));
+        await pg.selectOption('#share-event-select', 'evA'); await pg.fill('#share-promo', 'jazz-20!');
+        const link = await pg.inputValue('#share-link');
+        ck(`organizer @${w}: share link = public event page + sanitised promo`, link === BASE + '/event-hub.html?event=evA&promo=JAZZ20', link);
+        const wa = await pg.getAttribute('#share-wa', 'href');
+        ck(`organizer @${w}: WhatsApp share carries the title and link, opens safely`, /^https:\/\/wa\.me\/\?text=/.test(wa) && decodeURIComponent(wa).includes('Nairobi Jazz Night') && decodeURIComponent(wa).includes(link) && (await pg.getAttribute('#share-wa', 'rel')) === 'noopener noreferrer');
+        ck(`organizer @${w}: promo + share section has no horizontal overflow`, await noOverflow(pg, w));
       }
       await c.close();
 
@@ -222,6 +244,15 @@ async function seed() {
       const mt = await pg.textContent('#my-tickets-list');
       ck(`buyer @${w}: My Tickets shows the ticket PIN + number`, /[A-Z2-9]{4}-[A-Z2-9]{4}/.test(mt) && /SK-EVT-/.test(mt));
       ck(`buyer @${w}: My Tickets has no horizontal overflow`, await noOverflow(pg, w));
+      if (flows) {
+        const p2 = await c.newPage();
+        await p2.goto(BASE + '/event-hub.html?event=evA&promo=jazz20'); await p2.waitForSelector('#promo-input', { timeout: 5000 }).catch(() => null);
+        ck(`buyer @${w}: a shared link opens the event with the code prefilled (not applied)`,
+          /Nairobi Jazz Night/.test(await p2.textContent('#modal-content')) && (await p2.inputValue('#promo-input')) === 'JAZZ20' && !(await p2.isVisible('#promo-result')));
+        await p2.goto(BASE + '/event-hub.html?event=' + encodeURIComponent('../x"><img src=x onerror=alert(1)>')); await p2.waitForTimeout(300);
+        ck(`buyer @${w}: a malformed event id in the link is ignored`, !(await p2.$eval('#overlay', (o) => o.classList.contains('open'))));
+        await p2.close();
+      }
       if (flows && w === 1280) {
         await pg.evaluate((o) => window.openRefundWizard(o), oid); await pg.waitForSelector('#rw-reason');
         await pg.selectOption('#rw-reason', 'cannot_attend'); await pg.click('#rw-next'); await pg.waitForSelector('#rw-check');
@@ -239,6 +270,53 @@ async function seed() {
         await pg.selectOption('#rw-reason', 'event_cancelled'); await pg.click('#rw-next'); await pg.waitForSelector('#rw-check');
         await pg.click('#rw-check'); await pg.waitForTimeout(400);
         ck('buyer: an ineligible reason is explained and CANNOT be submitted', /NO/.test(await pg.textContent('#modal-content')) && !(await pg.$('#rw-send')));
+      }
+      await c.close();
+
+      /* AdminOS › Entertainment › Events investigation */
+      c = await ctxFor('admin1', w); pg = await c.newPage();
+      await pg.goto(BASE + '/aos-events.html'); await pg.waitForTimeout(300);
+      await pg.click('[data-tab="investigate"]'); await pg.waitForSelector('[data-evsearch]');
+      await pg.selectOption('[data-evsearch] select[name="by"]', 'event'); await pg.fill('[data-evsearch] input[name="value"]', 'evA');
+      await pg.click('[data-evsearch] button[type="submit"]'); await pg.waitForSelector('[data-trace-order]', { timeout: 5000 }).catch(() => null);
+      const inv = await pg.textContent('#aosentBody');
+      ck(`admin @${w}: search by event lists tickets, orders and door sales`, /SK-EVT-/.test(inv) && /ORDBUY1/.test(inv) && /Door & cashier sales/.test(inv));
+      ck(`admin @${w}: investigation has no horizontal page overflow`, await noOverflow(pg, w));
+      const html0 = await pg.content();
+      const allPins = db._dump('eventTicketSecrets/').map((x) => x.pin);
+      ck(`admin @${w}: no ticket PIN anywhere in the investigation page`, allPins.length > 0 && allPins.every((p) => !html0.includes(p)));
+      if (flows) {
+        await pg.click('[data-trace-order="ORDBUY1"]'); await pg.waitForSelector('.aos-trace', { timeout: 5000 }).catch(() => null);
+        const tr = await pg.textContent('#aosentBody');
+        ck(`admin @${w}: trace walks event → tickets → payment → commission → proceeds → refund → payout`,
+          ['event', 'tickets', 'sale', 'payment', 'commission', 'receivable', 'organizer proceeds', 'refund', 'payout'].every((x) => tr.includes(x)) && /observed/.test(tr), tr.slice(0, 160));
+        ck(`admin @${w}: trace has no horizontal page overflow`, await noOverflow(pg, w));
+        await pg.click('[data-untrace]');
+        /* PIN identity: a real PIN finds its ticket; the PIN is not kept on the page */
+        const sec = db._dump('eventTicketSecrets/').find((x) => x.ticketId === `${oid}_k1`);
+        await pg.selectOption('[data-evsearch] select[name="by"]', 'pin');
+        await pg.fill('[data-evsearch] input[name="value"]', sec.pin); await pg.fill('[data-evsearch] input[name="eventId"]', 'evA');
+        await pg.click('[data-evsearch] button[type="submit"]'); await pg.waitForTimeout(400);
+        const ph = await pg.content();
+        ck(`admin @${w}: PIN search finds exactly that ticket`, ph.includes(`data-trace-ticket="${oid}_k1"`) && (ph.match(/data-trace-ticket=/g) || []).length === 1);
+        ck(`admin @${w}: the PIN is not left on the page after the search`, !ph.includes(sec.pin) && (await pg.inputValue('[data-evsearch] input[name="value"]')) === '');
+        /* Staff & gate */
+        await pg.click('[data-tab="eventops"]'); await pg.waitForSelector('[data-evops]');
+        await pg.fill('[data-evops] input[name="eventId"]', 'evA'); await pg.click('[data-evops] button[type="submit"]');
+        await pg.waitForSelector('[data-revoke]', { timeout: 5000 }).catch(() => null);
+        const so = await pg.textContent('#aosentBody');
+        ck(`admin @${w}: staff, invitations, admissions and PIN counters render`, /Staff/.test(so) && /Invitations/.test(so) && /Admissions/.test(so) && /Wrong-PIN counters/.test(so));
+        ck(`admin @${w}: staff view has no horizontal page overflow`, await noOverflow(pg, w));
+        if (w === 1280) {
+          await pg.click('[data-revoke="door9"]'); await pg.fill('.aoscr-ask textarea', 'lost device at the east gate');
+          await pg.click('.aoscr-ask button.aos-btn:not(.aos-btn-ghost)'); await pg.waitForTimeout(400);
+          ck('admin: revoke → server staff record revoked with the reason, audited',
+            (await get('eventStaff/evA_door9')).status === 'revoked' && db._dump('adminAudit/').some((a) => a.action === 'event_staff_revoked_by_admin' && a.after.reason === 'lost device at the east gate'));
+          await pg.click('[data-tab="refundreq"]'); await pg.waitForTimeout(400);
+          ck('admin: the buyer\'s wizard request is in the refund-request queue', /ORDBUY1/.test(await pg.textContent('#aosentBody')) && /PENDING_REVIEW/.test(await pg.textContent('#aosentBody')));
+        }
+        await pg.click('[data-tab="receivables"]'); await pg.waitForTimeout(400);
+        ck(`admin @${w}: receivables render without overflow`, /Owed|No receivables/.test(await pg.textContent('#aosentBody')) && await noOverflow(pg, w));
       }
       await c.close();
     }

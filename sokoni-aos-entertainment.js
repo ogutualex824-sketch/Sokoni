@@ -19,7 +19,8 @@
   'use strict';
 
   const TABS = [
-    ['overview', 'Overview'], ['events', 'Events'], ['settlements', 'Settlements'], ['refunds', 'Refund queue'],
+    ['overview', 'Overview'], ['investigate', 'Investigate'], ['events', 'Events'], ['eventops', 'Staff & gate'], ['settlements', 'Settlements'],
+    ['refunds', 'Refund queue'], ['refundreq', 'Refund requests'], ['receivables', 'Receivables'],
     ['exceptions', 'Exceptions'], ['listings', 'Venues & artists'], ['matrix', 'Categories & policy'],
   ];
 
@@ -40,6 +41,8 @@
     if (!host || typeof call !== 'function') return false;
     let tab = 'overview';
     let listingKind = 'venue', listingStatus = 'pending';
+    /* Investigation state survives a re-render (after an action) — the PIN itself is never kept. */
+    let search = null, traced = null, opsEvent = '', rqStatus = '', rvStatus = 'OUTSTANDING';
 
     host.innerHTML = `
       <div class="aoscr-tabs" role="tablist">${TABS.map(([k, l]) => `<button type="button" role="tab" class="aos-btn aos-btn-ghost" data-tab="${k}">${esc(l)}</button>`).join('')}</div>
@@ -67,7 +70,87 @@
       if (inputs[0]) inputs[0].focus();
     }
 
+    /* ── Event investigation helpers ─────────────────────────────────────────────── */
+    const BY = [['event', 'Event id'], ['ticketNumber', 'Ticket number (SK-EVT-…)'], ['ticket', 'Ticket id'], ['order', 'Order id'], ['sale', 'Sale id'],
+      ['buyer', 'Buyer uid'], ['cashier', 'Cashier uid'], ['cardRef', 'Card terminal reference'], ['pin', 'Ticket PIN (with event id)']];
+    const trBtn = (kind, id) => `<button type="button" class="aos-btn aos-btn-ghost" data-trace-${kind}="${esc(id)}">Trace</button>`;
+    /* A record's plain fields; *Cents render as money, nested objects are summarised. */
+    function kv(o) {
+      if (!o) return '<span class="aos-muted">—</span>';
+      const rows = Object.entries(o).filter(([, v]) => v == null || typeof v !== 'object').slice(0, 24)
+        .map(([k, v]) => `<tr><th scope="row">${esc(k)}</th><td class="aos-mono">${/Cents$/.test(k) ? kes(v) : /(At|Date|After)$/.test(k) && typeof v === 'number' ? when(v) : esc(v == null ? '—' : v)}</td></tr>`).join('');
+      return `<div class="aos-table-wrap"><table class="aos-table">${rows}</table></div>`;
+    }
+    function traceView(t) {
+      const body = (s) => {
+        if (s.stage === 'tickets') {
+          return table(['Ticket', 'Tier', 'Status', 'Admission', 'Refund'], (s.record || []).map((x) => `<tr><td class="aos-mono">${esc(x.ticketNumber || x.id)}</td><td>${esc(x.tierName)}</td>
+            <td>${chip(x.status)}</td><td>${x.admission ? 'admitted ' + when(x.admission.admittedAt) + ' by ' + esc(x.admission.admittedBy) : esc(x.admissionStatus || '—')}</td><td>${chip(x.refundStatus)}</td></tr>`).join(''), 'No tickets.');
+        }
+        if (s.stage === 'refund') return s.record && (s.record.request || s.record.refund) ? `<h5>Request</h5>${kv(s.record.request)}<h5>Refund authority</h5>${kv(s.record.refund)}` : '';
+        return s.record ? kv(s.record) : '';
+      };
+      return `<p><button type="button" class="aos-btn aos-btn-ghost" data-untrace="1">← Back to results</button></p>
+        <h4>Financial trace · ${esc(t.orderId || t.saleId)} · ${esc(t.channel)}${t.paymentRef ? ' · payment ' + esc(t.paymentRef) : ''}</h4>
+        <ol class="aos-trace">${t.stages.map((s) => `<li><strong>${esc(s.stage.replace('_', ' '))}</strong> ${chip(s.state)}${s.note ? `<div class="aos-muted">${esc(s.note)}</div>` : ''}${body(s)}</li>`).join('')}</ol>`;
+    }
+
     const R = {
+      async investigate() {
+        const cur = search ? search.q : { by: 'event' };
+        const form = `<form class="aos-filters" data-evsearch>
+          <label>Search by <select name="by">${BY.map(([k, l]) => `<option value="${k}" ${k === cur.by ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
+          <label>Value <input name="value" autocomplete="off" spellcheck="false" maxlength="128" value="${cur.by === 'pin' ? '' : esc(cur.value || '')}"></label>
+          <label>Event id (PIN search) <input name="eventId" autocomplete="off" maxlength="128" value="${esc(cur.eventId || '')}"></label>
+          <button type="submit" class="aos-btn">Search</button></form>
+          <p class="aos-muted">Every PIN search is audited. The PIN is never displayed or stored — only the ticket it belongs to.</p>`;
+        if (traced) return form + traceView(traced);
+        if (!search) return form;
+        const r = search.result;
+        const tix = r.tickets.map((x) => `<tr><td class="aos-mono">${esc(x.ticketNumber || x.id)}</td><td class="aos-mono">${esc(x.eventId)}</td><td>${esc(x.tierName)}</td><td>${chip(x.status)}</td>
+          <td>${esc(x.admissionStatus || '—')}</td><td>${chip(x.refundStatus)}</td><td class="aos-mono">${esc(x.buyerUid || (x.soldBy ? 'walk-in · ' + x.soldBy : '—'))}</td><td>${trBtn('ticket', x.id)}</td></tr>`).join('');
+        const ords = r.orders.map((o) => `<tr><td class="aos-mono">${esc(o.id)}</td><td class="aos-mono">${esc(o.eventId)}</td><td class="aos-mono">${esc(o.buyerUid)}</td><td>${num(o.quantity)}</td>
+          <td>${o.totalAmount == null ? '—' : 'KES ' + num(o.totalAmount)}</td><td>${chip(o.status)}</td><td>${trBtn('order', o.id)}</td></tr>`).join('');
+        const sales = r.sales.map((x) => `<tr><td class="aos-mono">${esc(x.id)}</td><td class="aos-mono">${esc(x.eventId)}</td><td>${esc(x.tender)}</td><td class="aos-mono">${esc(x.cashierUid)}</td>
+          <td>${num(x.quantity)}</td><td>${kes(x.grossCents)}</td><td>${chip(x.status)}</td><td>${trBtn('sale', x.id)}</td></tr>`).join('');
+        return form + (r.truncated ? '<p class="aos-muted">Showing the first 100 of each — narrow the search.</p>' : '') +
+          `<h4>Tickets</h4>${table(['Ticket', 'Event', 'Tier', 'Status', 'Admission', 'Refund', 'Buyer / sold by', ''], tix, 'No tickets.')}
+          <h4>Orders</h4>${table(['Order', 'Event', 'Buyer', 'Tickets', 'Amount', 'Status', ''], ords, 'No orders.')}
+          <h4>Door &amp; cashier sales</h4>${table(['Sale', 'Event', 'Tender', 'Cashier', 'Tickets', 'Gross', 'Status', ''], sales, 'No sales.')}`;
+      },
+      async eventops() {
+        const form = `<form class="aos-filters" data-evops><label>Event id <input name="eventId" autocomplete="off" maxlength="128" value="${esc(opsEvent)}"></label>
+          <button type="submit" class="aos-btn">Load</button></form>`;
+        if (!opsEvent) return form + '<p class="aos-muted">Enter an event id to see its temporary staff, invitations, admissions and PIN lockouts.</p>';
+        const [st, ad] = await Promise.all([call('eventAdminStaff', { eventId: opsEvent }), call('eventAdminAdmissions', { eventId: opsEvent })]);
+        const staff = st.staff.map((s) => `<tr><td class="aos-mono">${esc(s.uid)}</td><td>${esc(s.email)}</td><td>${esc(s.role)}</td><td>${chip(s.status)}</td>
+          <td>${s.activeNow ? 'yes' : 'no'}</td><td>${when(s.startAt)}</td><td>${when(s.endAt)}</td>
+          <td>${s.status !== 'revoked' ? `<button type="button" class="aos-btn aos-btn-ghost" data-revoke="${esc(s.uid)}">Revoke access</button>` : ''}</td></tr>`).join('');
+        const inv = st.invites.map((i) => `<tr><td>${esc(i.email)}</td><td>${esc(i.role)}</td><td>${chip(i.status)}</td><td>${when(i.endAt)}</td></tr>`).join('');
+        const adm = ad.admissions.map((a) => `<tr><td class="aos-mono">${esc(a.ticketId)}</td><td class="aos-mono">${esc(a.admittedBy)}</td><td>${esc(a.admittedRole)}</td><td>${esc(a.method)}</td><td>${when(a.admittedAt)}</td></tr>`).join('');
+        const att = ad.attempts.map((a) => `<tr><td class="aos-mono">${esc(a.id)}</td><td>${num(a.fails)}</td><td>${when(a.windowStart)}</td></tr>`).join('');
+        return form + `<h4>Staff</h4>${table(['Uid', 'Email', 'Role', 'Status', 'Active now', 'From', 'Until', ''], staff, 'No staff.')}
+          <h4>Invitations</h4>${table(['Email', 'Role', 'Status', 'Expires'], inv, 'No invitations.')}
+          <h4>Admissions${ad.truncated ? ' (first 200)' : ''}</h4>${table(['Ticket', 'Admitted by', 'Role', 'Method', 'When'], adm, 'Nobody admitted yet.')}
+          <h4>Wrong-PIN counters</h4>${table(['Counter', 'Fails in window', 'Window start'], att, 'No failed PINs.')}`;
+      },
+      async refundreq() {
+        const r = await call('eventAdminRefundRequests', rqStatus ? { status: rqStatus } : {});
+        const filt = `<div class="aos-filters"><label>Status <select data-rqstatus><option value="">All</option>${['SUBMITTING', 'PENDING_REVIEW', 'DUPLICATE', 'REJECTED', 'REFUNDED'].map((s) => `<option ${s === rqStatus ? 'selected' : ''}>${s}</option>`).join('')}</select></label></div>`;
+        const rows = r.requests.map((q) => `<tr><td class="aos-mono">${esc(q.id)}</td><td class="aos-mono">${esc(q.eventId)}</td><td class="aos-mono">${esc(q.buyerUid)}</td>
+          <td>${esc(q.reasonLabel || q.reasonCode)}</td><td>${chip(q.eligibility)}</td><td>${q.requestedAmountKes == null ? '—' : 'KES ' + num(q.requestedAmountKes)}</td>
+          <td>${chip(q.status)}</td><td>${when(q.createdAt)}</td><td>${trBtn('order', q.id)}</td></tr>`).join('');
+        return filt + '<p class="aos-muted">Buyer requests from the Refund Wizard. Approval and payment happen in the canonical refund queue (Financial OS) — not here.</p>' +
+          table(['Order', 'Event', 'Buyer', 'Reason', 'Eligible', 'Amount', 'Status', 'Requested', ''], rows, 'No refund requests.');
+      },
+      async receivables() {
+        const r = await call('eventAdminReceivables', rvStatus ? { status: rvStatus } : {});
+        const filt = `<div class="aos-filters"><label>Status <select data-rvstatus><option value="">All</option>${['OUTSTANDING', 'COLLECTED'].map((s) => `<option ${s === rvStatus ? 'selected' : ''}>${s}</option>`).join('')}</select></label></div>`;
+        const rows = r.receivables.map((x) => `<tr><td class="aos-mono">${esc(x.saleId || x.id)}</td><td class="aos-mono">${esc(x.eventId)}</td><td class="aos-mono">${esc(x.organizerUid)}</td>
+          <td>${esc(x.source)}</td><td>${kes(x.amountCents)}</td><td>${kes(x.collectedCents)}</td><td>${chip(x.status)}</td><td>${trBtn('sale', x.saleId || x.id)}</td></tr>`).join('');
+        return filt + '<p class="aos-muted">SOKONI commission on cash and organizer-terminal card sales. Netted automatically from the organizer\'s next online ticket release.</p>' +
+          table(['Sale', 'Event', 'Organizer', 'Tender', 'Owed', 'Collected', 'Status', ''], rows, 'No receivables.');
+      },
       async overview() {
         const o = await call('eventAdminOverview', {});
         return `<div class="aos-kpis">
@@ -140,6 +223,20 @@
       const t = ev.target.closest('button');
       if (!t) return;
       if (t.dataset.tab) { tab = t.dataset.tab; return render(); }
+      if (t.dataset.traceOrder || t.dataset.traceSale || t.dataset.traceTicket) {
+        const q = t.dataset.traceOrder ? { orderId: t.dataset.traceOrder } : t.dataset.traceSale ? { saleId: t.dataset.traceSale } : { ticketId: t.dataset.traceTicket };
+        msg('Tracing…');
+        try { traced = await call('eventAdminTrace', q); msg(''); tab = 'investigate'; }
+        catch (e) { msg((e && e.message) || 'Trace failed.', true); return undefined; }
+        return render();
+      }
+      if (t.dataset.untrace) { traced = null; return render(); }
+      if (t.dataset.revoke) {
+        return ask('Revoke access', [{ label: 'Reason (kept in the audit log)', area: true }], ([reason]) => {
+          if (String(reason || '').trim().length < 5) return msg('A reason is required.', true);
+          act('eventAdminRevokeStaff', { eventId: opsEvent, uid: t.dataset.revoke, reason }, 'Access revoked. It ends immediately.');
+        });
+      }
       if (t.dataset.cancel) {
         return ask('Cancel event', [{ label: 'Reason (shown to buyers)', area: true }], ([reason]) => {
           if (String(reason || '').trim().length < 5) return msg('A reason is required.', true);
@@ -164,7 +261,26 @@
       }
       return undefined;
     });
+    host.addEventListener('submit', async (ev) => {
+      const f = ev.target;
+      if (f.matches('[data-evops]')) { ev.preventDefault(); opsEvent = f.eventId.value.trim(); return render(); }
+      if (!f.matches('[data-evsearch]')) return undefined;
+      ev.preventDefault();
+      const q = { by: f.by.value, value: f.value.value.trim() };
+      if (f.eventId.value.trim()) q.eventId = f.eventId.value.trim();
+      if (!q.value) return msg('Enter something to search for.', true);
+      msg('Searching…');
+      try {
+        const result = await call('eventAdminInvestigate', q);
+        if (q.by === 'pin') q.value = '';          /* the PIN is not kept in page state */
+        search = { q, result }; traced = null; msg('');
+      } catch (e) { msg((e && e.message) || 'Search failed.', true); return undefined; }
+      f.value.value = '';
+      return render();
+    });
     host.addEventListener('change', (ev) => {
+      if (ev.target.matches('[data-rqstatus]')) { rqStatus = ev.target.value; render(); }
+      if (ev.target.matches('[data-rvstatus]')) { rvStatus = ev.target.value; render(); }
       if (ev.target.matches('[data-lkind]')) { listingKind = ev.target.value; render(); }
       if (ev.target.matches('[data-lstatus]')) { listingStatus = ev.target.value; render(); }
     });
@@ -180,7 +296,9 @@
   }
 
   const OPS = ['eventAdminOverview', 'eventAdminEvents', 'eventAdminSettlements', 'eventAdminRefundQueue', 'eventAdminExceptions',
-    'eventAdminAttestFee', 'entAdminMatrix', 'entAdminListings', 'entAdminSetListingStatus'];
+    'eventAdminAttestFee', 'entAdminMatrix', 'entAdminListings', 'entAdminSetListingStatus',
+    'eventAdminInvestigate', 'eventAdminTrace', 'eventAdminStaff', 'eventAdminAdmissions', 'eventAdminRefundRequests',
+    'eventAdminReceivables', 'eventAdminRevokeStaff'];
 
   root.SokoniAOSEntertainment = { mount, OPS, _kes: kes, _esc: esc };
 }(typeof window !== 'undefined' ? window : globalThis));

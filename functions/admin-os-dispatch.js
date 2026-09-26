@@ -26,7 +26,9 @@ const adminOs = (() => {
   const events = require('./event-settlement');
   /* Entertainment moderation + category/policy matrix (entAdmin* ops). */
   const ent = require('./entertainment-admin');
-  return Object.assign({}, base, { _h: Object.assign({}, base._h, trace._h, creator._adminH, events._adminH, ent._adminH) });
+  /* Event investigation + financial trace + staff/admission/refund oversight (eventAdmin* ops). */
+  const eventInv = require('./event-admin');
+  return Object.assign({}, base, { _h: Object.assign({}, base._h, trace._h, creator._adminH, events._adminH, ent._adminH, eventInv._adminH) });
 })();
 
 const _OPTS = {
@@ -40,6 +42,10 @@ const _OPTS = {
   minInstances:    1,
   timeoutSeconds:  60,
   memory:          '256MiB',
+  /* The event-bound ticket PIN key (existing secret). eventAdminInvestigate hashes an admin's PIN
+     lookup with it; without the binding event-ops FAILS CLOSED in Cloud Functions. Binding an
+     existing secret — nothing is created or rotated. */
+  secrets:         [require('./event-ops').SOKONI_HMAC_KEY],
 };
 
 exports.adminOsDispatch = onCall(_OPTS, async (req) => {

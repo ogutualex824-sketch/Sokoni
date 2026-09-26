@@ -55,7 +55,9 @@
     .g2{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
     .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
     .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;}
-    @media(max-width:900px){.g2,.g3,.g4{grid-template-columns:1fr 1fr;}.layout{grid-template-columns:minmax(0,1fr);}.sidebar{display:none;}}
+    @media(max-width:900px){.g2,.g3,.g4{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}.layout{grid-template-columns:minmax(0,1fr);}.sidebar{display:none;}}
+    /* Phones: one column — two form columns at 360-600px squeeze inputs below their content width. */
+    @media(max-width:600px){.g2,.g3,.g4{grid-template-columns:minmax(0,1fr);}}
     .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px;}
     .stat-val{font-size:26px;font-weight:800;margin-bottom:4px;}
     .stat-label{font-size:11px;color:var(--text2);}
@@ -416,6 +418,22 @@
           </div>
         </div>
       </div>
+      <!-- Share: a plain link to the public event page, optionally carrying a promo code. No tracking
+           pixel and no invented reach figures — redemptions are counted on the promo code itself. -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-title">Share Your Event</div>
+        <div class="g2">
+          <div class="form-group"><label class="form-label" for="share-event-select">Event</label>
+            <select class="form-select" id="share-event-select" onchange="buildShareLink()"><option value="">Choose event…</option></select></div>
+          <div class="form-group"><label class="form-label" for="share-promo">Promo code (optional)</label>
+            <input class="form-input" id="share-promo" maxlength="20" placeholder="LAUNCH20" style="text-transform:uppercase" oninput="buildShareLink()" /></div>
+        </div>
+        <input class="form-input" id="share-link" readonly aria-label="Share link" style="font-size:13px" />
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          <button type="button" class="btn-primary" id="share-copy" onclick="copyShareLink()" disabled>Copy link</button>
+          <a class="btn-secondary" id="share-wa" target="_blank" rel="noopener noreferrer" aria-disabled="true" style="pointer-events:none;opacity:.5;text-decoration:none">Share on WhatsApp</a>
+        </div>
+      </div>
     </section>
 
   </div>
@@ -711,7 +729,7 @@
   }
 
   function populateEventSelects() {
-    const selects = ['orders-event-select', 'checkin-event-select', 'analytics-event-select', 'promo-event-select'];
+    const selects = ['orders-event-select', 'checkin-event-select', 'analytics-event-select', 'promo-event-select', 'share-event-select'];
     selects.forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
@@ -999,6 +1017,28 @@
   }
 
   /* ── Promo Codes ── */
+  /* ── Share link ───────────────────────────────────────────────────────────── */
+  function buildShareLink() {
+    const id = document.getElementById('share-event-select').value;
+    const code = document.getElementById('share-promo').value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
+    const out = document.getElementById('share-link'), wa = document.getElementById('share-wa'), cp = document.getElementById('share-copy');
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) { out.value = ''; cp.disabled = true; wa.removeAttribute('href'); wa.style.pointerEvents = 'none'; wa.style.opacity = '.5'; wa.setAttribute('aria-disabled', 'true'); return; }
+    const u = new URL('/event-hub.html', location.origin);
+    u.searchParams.set('event', id);
+    if (code) u.searchParams.set('promo', code);
+    out.value = u.toString(); cp.disabled = false;
+    const ev = myEvents.find((e) => e.eventId === id);
+    wa.href = 'https://wa.me/?text=' + encodeURIComponent((ev ? ev.title + ' — tickets on SOKONI: ' : 'Tickets on SOKONI: ') + u.toString());
+    wa.style.pointerEvents = ''; wa.style.opacity = ''; wa.removeAttribute('aria-disabled');
+  }
+  async function copyShareLink() {
+    const v = document.getElementById('share-link').value;
+    if (!v) return;
+    try { await navigator.clipboard.writeText(v); toast('Link copied.'); }
+    catch (_) { document.getElementById('share-link').select(); toast('Select the link and copy it.'); }
+  }
+  window.buildShareLink = buildShareLink; window.copyShareLink = copyShareLink;
+
   async function createPromo() {
     const eventId = document.getElementById('promo-event-select').value;
     const code = document.getElementById('promo-code').value.trim();

@@ -48,7 +48,7 @@
     .aos-user-info-text span{color:var(--aos-muted);font-size:10px}
     .signout-btn{width:100%;margin-top:8px;padding:7px;border-radius:var(--aos-radius);border:1px solid var(--aos-border);background:none;color:var(--aos-muted);cursor:pointer;font-size:12px;transition:background .15s,color .15s}
     .signout-btn:hover{background:rgba(244,67,54,.1);color:var(--aos-danger)}
-    .aos-main{margin-left:var(--aos-sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh}
+    .aos-main{margin-left:var(--aos-sidebar-w);flex:1;min-width:0;display:flex;flex-direction:column;min-height:100vh}
     .aos-header{position:sticky;top:0;z-index:50;background:var(--aos-surface);border-bottom:1px solid var(--aos-border);padding:12px 24px;display:flex;align-items:center;gap:16px}
     .aos-breadcrumb{font-size:18px;font-weight:700;flex:1}
     .aos-header-search input{background:var(--aos-surface2);border:1px solid var(--aos-border);border-radius:20px;padding:7px 16px;color:var(--aos-text);font-size:13px;width:220px;outline:none}
@@ -130,6 +130,18 @@
     .aos-table th{text-align:left;padding:10px 12px;font-size:11px;font-weight:600;color:var(--aos-muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--aos-border);white-space:nowrap}
     .aos-table td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle}
     .aos-table tbody tr:hover{background:rgba(255,255,255,.03)}
+    /* Shared by the module panels (sokoni-aos-creator / -entertainment): wide tables scroll inside
+       their own wrapper instead of pushing the page sideways on a phone. */
+    .aos-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+    .aoscr-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+    .aoscr-tabs .active{border-color:var(--aos-accent);color:var(--aos-accent)}
+    .aos-filters{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin:0 0 12px}
+    .aos-filters label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--aos-muted);min-width:0;max-width:100%}
+    .aos-filters input,.aos-filters select{min-height:40px;max-width:100%;box-sizing:border-box}
+    .aoscr-ask{display:grid;gap:8px;padding:12px;border:1px solid var(--aos-border);border-radius:var(--aos-radius);margin-bottom:12px}
+    .aoscr-ask label{display:grid;gap:4px}.aoscr-ask input,.aoscr-ask textarea{width:100%;box-sizing:border-box}
+    .aos-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+    .aos-trace{padding-left:20px;margin:0}.aos-trace>li{margin:0 0 14px;min-width:0}
     .empty-cell{text-align:center;padding:32px;color:var(--aos-muted)}
     .role-badge,.status-badge,.prio-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
     .role-admin{background:rgba(124,77,255,.2);color:#b39ddb}

@@ -1,3 +1,43 @@
+## 2026-09-27 (199) — Events ops P6: AdminOS Event investigation + financial trace, event notices, share links
+
+- **AdminOS › Entertainment** gains Investigate, Staff & gate, Refund requests and Receivables tabs, served by 7 new
+  `eventAdmin*` ops in `functions/event-admin.js` (merged into adminOsDispatch; every handler re-checks the admin claim):
+  - **Investigate** by event · ticket · ticket number · order · sale · buyer · cashier · card terminal reference ·
+    **PIN identity** (event + PIN → the ticket, via the event-bound HMAC index). The PIN is never returned, never kept in
+    page state, never written to the audit row; every lookup (hit or miss) is audited. Ticket rows are stripped of
+    pin / pinHash / token / qrData; phones and emails are masked. No op reads `eventTicketSecrets`.
+  - **Financial trace** for one order / sale / ticket: Event → Tickets (+ admissions) → Sale → Payment → Commission →
+    Receivable → Organizer proceeds → Refund (wizard request + canonical refund queue) → Payout (wallet transaction).
+    Each stage is `observed` / `empty` / `n/a` and carries the owning record — no amount is computed or inferred.
+  - **Staff & gate:** staff (active-now computed), invitations, admissions, wrong-PIN counters; **admin revoke** (reason
+    required, transactional, audited `event_staff_revoked_by_admin`).
+  - **Refund requests** (wizard, filter by status) and **door-sale commission receivables** (OUTSTANDING / COLLECTED).
+- **adminOsDispatch binds the existing `SOKONI_HMAC_KEY`** — without it the admin PIN lookup fails closed in Cloud
+  Functions. Binding only; no secret created or rotated. Deploying adminOsDispatch now needs that secret's accessor
+  role on its service account (the Firebase CLI grants it at deploy).
+- **Notices:** `event_ticket_confirmed` after the FIRST activation only, and at issue for free orders (no PIN in the
+  body — "open My Tickets"; none for cashier walk-in orders) · `event_cancelled` to each online buyer, one per order ·
+  `event_staff_invite` in-app when the invited email already has an account (response identical either way — no probing).
+- **cancelEvent fixed:** the event and every paid order were one batch — Firestore's 500-write cap made an event with
+  500+ paid orders impossible to cancel. The status now flips in a transaction (concurrent cancels → exactly one wins),
+  then orders are marked in chunks of 400.
+- **Marketing:** organizer / marketing staff build a share link (`/event-hub.html?event=<id>[&promo=CODE]`, code
+  sanitised) with copy + WhatsApp share; event-hub opens the event from the link and PREFILLS the code (the server still
+  validates it). Malformed ids are ignored. No tracking pixel, no invented reach numbers.
+- **Responsive fixes:** `admin-os.html` `.aos-main` had no `min-width:0`, so any wide module table widened the whole
+  AdminOS page on phones (counterproof: removing it fails the 360/390 checks); the module panels' shared classes
+  (`.aos-table-wrap`, `.aoscr-tabs`, `.aos-filters`, `.aoscr-ask`) had no CSS at all. event-manager grids go
+  single-column at ≤600px (the promo form overflowed at 390).
+- **Not built (owner-frozen):** buyer↔organizer Connect. The Connect authority (C1/C2) and Comms are FROZEN by owner
+  ruling; an `eventOrder` anchor needs `ANCHOR_TYPES` + a Connect anchor resolver — an authority amendment. Recorded as a gap.
+- **Files:** `functions/event-admin.js` (new), `functions/{admin-os-dispatch,event-ops,event-hub,event-settlement}.js`,
+  `sokoni-aos-entertainment.js`, `admin-os.html`, `event-manager.html`, `event-hub.html`; tests `test-event-admin.js`
+  (new, 62/0), `test-event-notifications.js` (new, 17/0 — the fake enforces the 500-write cap, counterproofed),
+  `test-event-ops-browser.js` (132/0: AdminOS + share flows added), `test-entertainment-registry.js` (65/0).
+- **Database:** no new collections (reads existing). **API:** 7 new adminOsDispatch ops. **Security:** PIN lookup
+  audited, credentials stripped, PII masked, admin-only. **Breaking:** none. **Regression:** event-ops 50 · sales 46 ·
+  refunds 52 · events 84 · agreements 25 · creator 260 · admin-os wiring 316 · entertainment browser 230. **Not deployed.**
+
 ## 2026-09-27 (198) — Events ops P5: organizer + staff workspace, buyer PINs + Refund Wizard, canonical dashboard money
 
 - **Event Manager (organizer):** new sections Quick Sale, PIN Admission, Sales, Finance, Staff (sokoni-event-ops.js);
