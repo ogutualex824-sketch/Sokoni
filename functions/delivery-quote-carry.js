@@ -55,13 +55,14 @@ async function findCarriedPin(store, { orderId, sessionId } = {}) {
     if (data.deliveryQuote) { pinned = data.deliveryQuote; source = 'order'; }
   }
 
+  let sessionUsed = null;
   if (!pinned) {
     const sid = orderSessionId || sessionId || null;
     if (sid) {
       const snap = await store.collection(SESSIONS).doc(String(sid)).get();
       if (snap.exists) {
         const d = snap.data() || {};
-        if (d.deliveryQuote) { pinned = d.deliveryQuote; source = 'session'; }
+        if (d.deliveryQuote) { pinned = d.deliveryQuote; source = 'session'; sessionUsed = String(sid); }
       }
     }
   }
@@ -70,7 +71,76 @@ async function findCarriedPin(store, { orderId, sessionId } = {}) {
     throw new dqa.QuoteRefused('no_pinned_quote',
       'neither the order nor its checkout session carries a delivery quote');
   }
-  return { pinned, source };
+  return { pinned, source, sessionId: sessionUsed };
+}
+
+/**
+ * BIND A SESSION-CARRIED QUOTE TO ITS ORDER — RES-1 option 1.
+ *
+ * The webhook-first rail (`_finalizeMarketplacePayment`) writes the order without reading the
+ * checkout session and without binding the quote. The carry above then finds the pin on the
+ * SESSION, and used to hand it to the delivery record UNBOUND: `deliveryQuotes/{id}` stayed
+ * `issued` with no `orderId`. Repair 5 correctly refuses to pay on an unbound quote (single use is
+ * what stops one quote backing many orders), so on this rail no rider could ever be paid.
+ *
+ * This performs the binding the verify rail performs, in ONE transaction, before the pin is
+ * written where a rider is paid from it:
+ *   - the session names THIS quote, and its pin is THIS quote;
+ *   - the session's buyer, the quote's buyer and the order's buyer are the same uid;
+ *   - a session already consumed by another order is refused;
+ *   - an order already carrying a different quote is refused — a bound quote is never replaced;
+ *   - the quote itself is bound through the ONE single-use binder (`bindQuoteToOrderTx`): a quote
+ *     consumed by another order is refused, and re-binding to the same order is a no-op.
+ * It then records the pin on the order and marks the session consumed by the order, exactly the
+ * state the verify rail leaves. It reads no amount and decides no price.
+ *
+ * @throws {dqa.QuoteRefused} with a stated reason; nothing is written on refusal.
+ */
+async function bindSessionQuoteToOrder(store, { orderId, sessionId, quoteId }) {
+  const endpoint = require('./delivery-quote-endpoint');
+  const DI = require('./dispute-identity');
+  const refuse = (reason, detail) => { throw new dqa.QuoteRefused(reason, detail || null); };
+  const orderRef = store.collection(ORDERS).doc(String(orderId));
+  const sessionRef = store.collection(SESSIONS).doc(String(sessionId));
+  const quoteRef = store.collection(endpoint.QUOTES).doc(String(quoteId));
+
+  return store.runTransaction(async (tx) => {
+    const [oSnap, sSnap, qSnap] = [await tx.get(orderRef), await tx.get(sessionRef), await tx.get(quoteRef)];
+    if (!oSnap.exists) refuse('order_not_found', String(orderId));
+    if (!sSnap.exists) refuse('session_not_found', String(sessionId));
+    if (!qSnap.exists) refuse('quote_record_missing', String(quoteId));
+    const order = oSnap.data() || {}, session = sSnap.data() || {}, quote = qSnap.data() || {};
+
+    if (session.deliveryQuoteId !== quoteId || !session.deliveryQuote || session.deliveryQuote.quoteId !== quoteId) {
+      refuse('session_quote_mismatch', String(sessionId));
+    }
+    const buyer = DI.orderBuyerUid(order);
+    if (!buyer || session.uid !== buyer || quote.buyerUid !== buyer) refuse('buyer_mismatch', String(orderId));
+    if (session.status === 'consumed' && session.orderId && String(session.orderId) !== String(orderId)) {
+      refuse('session_bound_to_another_order', String(session.orderId));
+    }
+    if (order.deliveryQuoteId && order.deliveryQuoteId !== quoteId) {
+      refuse('order_bound_to_another_quote', String(order.deliveryQuoteId));
+    }
+    const replay = quote.status === 'consumed' && String(quote.orderId || '') === String(orderId)
+      && order.deliveryQuoteId === quoteId;
+
+    /* ── all reads above, all writes below ── */
+    try {
+      endpoint.bindQuoteToOrderTx(tx, store, quoteId, orderId, buyer, qSnap);
+    } catch (e) {
+      const m = String((e && e.message) || '');
+      refuse(/already_bound/.test(m) ? 'quote_bound_to_another_order'
+        : /not_yours/.test(m) ? 'buyer_mismatch' : 'quote_not_bindable', m);
+    }
+    if (!order.deliveryQuoteId) {
+      tx.update(orderRef, { deliveryQuoteId: quoteId, deliveryQuote: session.deliveryQuote, sessionId: String(sessionId) });
+    }
+    if (session.status !== 'consumed') {
+      tx.update(sessionRef, { status: 'consumed', orderId: String(orderId) });
+    }
+    return { bound: true, replay };
+  });
 }
 
 /**
@@ -79,7 +149,7 @@ async function findCarriedPin(store, { orderId, sessionId } = {}) {
  */
 async function deliveryPricingForOrder(store, { orderId, sessionId } = {}) {
   try {
-    const { pinned, source } = await findCarriedPin(store, { orderId, sessionId });
+    const { pinned, source, sessionId: sessionUsed } = await findCarriedPin(store, { orderId, sessionId });
 
     const policy = await dqa.loadPolicy(store);
     if (!policy) {
@@ -93,7 +163,16 @@ async function deliveryPricingForOrder(store, { orderId, sessionId } = {}) {
        so a pin that could never settle is never written as though it could. */
     dqa.assertSettleable(pinned, null, { currentPolicy: policy });
 
+    /* A pin found on the SESSION was never bound to this order (webhook-first rail). Bind it now,
+       transactionally, or refuse — an unbound pin is never written where a rider is paid from it. */
+    let quoteBoundBy = source === 'order' ? 'order' : null;
+    if (source === 'session') {
+      await bindSessionQuoteToOrder(store, { orderId, sessionId: sessionUsed, quoteId: pinned.quoteId });
+      quoteBoundBy = 'carry_session';
+    }
+
     return {
+      quoteBoundBy,
       deliveryQuote: pinned,
       quotePinSource: source,
       quotedVehicleClass: pinned.vehicleClass || null,
@@ -113,4 +192,4 @@ async function deliveryPricingForOrder(store, { orderId, sessionId } = {}) {
   }
 }
 
-module.exports = { findCarriedPin, deliveryPricingForOrder, kesMajor, ORDERS, SESSIONS };
+module.exports = { findCarriedPin, bindSessionQuoteToOrder, deliveryPricingForOrder, kesMajor, ORDERS, SESSIONS };

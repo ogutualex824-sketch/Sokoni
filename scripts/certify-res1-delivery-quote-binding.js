@@ -89,8 +89,11 @@ function makeStore() {
       return self;
     },
   });
-  return {
+  const api = {
     collection,
+    /* RES-1 option 1 binds a session-carried quote in a transaction; the harness transaction applies
+       reads first and writes on commit, like Firestore's (makeTx below). */
+    runTransaction: async (fn) => { const t = makeTx(api); const r = await fn(t.tx); await t.commit(); return r; },
     _put: (c, d, o) => data.set(key(c, d), Object.assign({}, o)),
     _patch: (c, d, o) => data.set(key(c, d), Object.assign({}, data.get(key(c, d)) || {}, o)),
     _get: (c, d) => (data.has(key(c, d)) ? Object.assign({}, data.get(key(c, d))) : null),
@@ -99,6 +102,7 @@ function makeStore() {
     _trace: () => ({ reads: reads.slice(), writes: writes.slice() }),
     _clearTrace: () => { reads = []; writes = []; },
   };
+  return api;
 }
 const STORE = makeStore();
 
@@ -350,10 +354,15 @@ async function main() {
     const q = (await issue()).quoteId;
     const s = (await quiet(() => checkout({ cartItems: CART, deliveryQuoteId: q, fulfillmentType: 'delivery' }))).sessionId;
     /* The webhook-first race: the order exists without the pin, the session still has it. */
-    STORE._put('orders', 'ORD-RACE', { orderId: 'ORD-RACE', sessionId: s, sellerUid: SELLER });
+    /* The buyer is on the order as the webhook writes it (uid/buyerUid from the payment record). */
+    STORE._put('orders', 'ORD-RACE', { orderId: 'ORD-RACE', sessionId: s, sellerUid: SELLER, uid: BUYER, buyerUid: BUYER });
     const r = await dqCarry.deliveryPricingForOrder(STORE, { orderId: 'ORD-RACE' });
-    check('F5-4', !r.pricingBlocked && r.quoteId === q && r.quotePinSource === 'session',
-      'an order written before the pin lands falls back to the SESSION, the single server-authored origin');
+    /* RES-1 option 1: falling back to the session is not enough — the quote must also be BOUND to
+       this order, or it is neither single-use nor payable (Repair 5 refuses an unbound quote). */
+    const bound = STORE._get('deliveryQuotes', q) || {};
+    check('F5-4', !r.pricingBlocked && r.quoteId === q && r.quotePinSource === 'session'
+      && bound.status === 'consumed' && bound.orderId === 'ORD-RACE',
+      'an order written before the pin lands falls back to the SESSION, and the quote is BOUND to that order');
   }
   {
     const q = (await issue()).quoteId;

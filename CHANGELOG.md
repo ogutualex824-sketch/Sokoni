@@ -1,3 +1,29 @@
+## 2026-09-26 — RES-1 option 1: a quote carried from the checkout session is bound to its order (branch `res1-opt1/bind-session-quote`, NOT landed)
+
+On the webhook-first order path the carry found the delivery quote on the checkout SESSION and wrote it to the
+delivery record UNBOUND (`deliveryQuotes/{id}` stayed `issued`). The quote was not single-use, and Repair 5
+correctly refused to pay on it.
+
+`functions/delivery-quote-carry.js` `bindSessionQuoteToOrder` now binds the quote in one transaction, all reads
+before writes:
+- the session names this quote;
+- the session's, the quote's and the order's buyers are the same uid;
+- a quote or session consumed by another order is refused;
+- an order already bound to a different quote is refused;
+- binding goes through the one single-use binder;
+- the quote is recorded on the order and the session is marked consumed.
+
+Refusal writes nothing and blocks the pin. The no-session path is unchanged (`no_pinned_quote`, never inferred).
+Repair 5 is unchanged, byte-identical.
+
+`scripts/test-res1-session-quote-binding.js` **23/0**: it proves the chain link by link, plus
+"bound to A → B cannot claim it". Old code **fails 11**. The RES-1 certification F5-4 is strengthened to require the
+binding (58/0).
+- Database: a session-path carry now writes `deliveryQuotes.status/orderId`, `orders.deliveryQuoteId/deliveryQuote/sessionId`
+  and `checkoutSessions.status/orderId`.
+- Nothing is migrated: the 13 existing production records stay blocked.
+- Not deployable alone: see `docs/repairs/RES1-opt1-session-quote-binding.md`.
+
 ## 2026-09-26 — Repair 5: the delivery record decides what a rider is owed (landed, **NOT deployable yet**)
 
 Five independent rider-pay rules existed; four are live. They were:
