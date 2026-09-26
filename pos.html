@@ -34,6 +34,90 @@
   <link rel="stylesheet" href="sokoni-form-engine.css">
   <style>
     :root{--bg:#050505;--sur:#0d0d0d;--sur2:#141414;--g:#71ff00;--ga:rgba(113,255,0,.12);--ga2:rgba(113,255,0,.06);--bor:#1a1a1a;--bor2:#222;--txt:#e8e8e8;--sub:#888;--radius:12px;}
+
+    /* ── QUICK CHARGE + MIXED BASKET ─────────────────────────────────────── */
+    .qc-kicker{font-size:9.5px;font-weight:800;letter-spacing:.14em;color:var(--amber,#ffb020);
+      margin-bottom:13px;text-align:center}
+    .qc-warn{display:none;padding:10px 12px;border-radius:10px;font-size:11.5px;line-height:1.55;
+      background:rgba(255,92,92,.08);border:1px solid rgba(255,92,92,.26);color:#ff9a9a}
+    .qc-warn.on{display:block}
+    .qc-note{margin:12px 0 0;font-size:10.5px;line-height:1.6;color:#6a6a6a}
+    /* A custom charge is visually distinct in the basket — a cashier must be
+       able to see at a glance which lines they keyed in themselves. */
+    .cart-item.is-quick{border-left:3px solid var(--amber,#ffb020)}
+    .cart-line-tag{display:inline-block;margin-top:2px;padding:2px 6px;border-radius:5px;
+      font-size:8.5px;font-weight:800;letter-spacing:.06em;
+      background:rgba(255,176,32,.1);border:1px solid rgba(255,176,32,.3);color:var(--amber,#ffb020)}
+    .cart-line-tag.svc{background:rgba(77,163,255,.1);border-color:rgba(77,163,255,.3);color:#4da3ff}
+    .basket-groups{margin:10px 0 4px}
+    .basket-grp{display:flex;justify-content:space-between;align-items:baseline;
+      padding:7px 0;font-size:11px;color:var(--sub,#888);border-top:1px solid var(--bor,#1a1a1a)}
+    .basket-grp b{font-size:12.5px;font-weight:800;color:var(--txt,#e8e8e8);font-variant-numeric:tabular-nums}
+
+    /* ── MULTI-TENDER PAYMENT CONSOLE ────────────────────────────────────
+       Built on the POS tokens above so it inherits the till's identity
+       rather than introducing a second visual language. Touch targets are
+       44px+ throughout: this is operated with a thumb, at speed, by someone
+       who is also talking to a customer. */
+    .paycon .modal-body{max-height:min(78vh,760px);overflow-y:auto;-webkit-overflow-scrolling:touch}
+    .paycon-hero{text-align:center;padding:18px 12px 16px;margin-bottom:14px;border-radius:16px;
+      background:linear-gradient(160deg,var(--ga) 0%,transparent 70%);border:1px solid var(--ga);}
+    .paycon-hero-label{font-size:10px;letter-spacing:.16em;font-weight:800;color:var(--sub)}
+    .paycon-hero-val{font-size:34px;font-weight:900;color:var(--g);letter-spacing:-.02em;line-height:1.15;margin-top:4px;
+      font-variant-numeric:tabular-nums}
+    .paycon-sec-label{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+      font-size:10px;letter-spacing:.14em;font-weight:800;color:var(--sub);margin:16px 0 8px}
+    .paycon-sec-label span{letter-spacing:0;font-weight:600;text-transform:none;font-size:10px;color:#666}
+    .paycon-methods{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
+    .paycon-m{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+      min-height:70px;padding:10px 6px;border-radius:14px;cursor:pointer;
+      background:var(--sur2);border:1.5px solid var(--bor2);color:var(--txt);
+      font:inherit;font-size:11px;font-weight:700;transition:transform .12s,border-color .12s,background .12s}
+    .paycon-m:hover{border-color:#333;transform:translateY(-1px)}
+    .paycon-m:active{transform:scale(.97)}
+    .paycon-m.on{border-color:var(--g);background:var(--ga2);color:var(--g)}
+    .paycon-m.editing{box-shadow:0 0 0 2px var(--ga)}
+    .paycon-m-i{font-size:20px;line-height:1}
+    .paycon-note{margin-top:10px;padding:9px 11px;border-radius:10px;font-size:11px;line-height:1.5;
+      background:rgba(255,168,0,.07);border:1px solid rgba(255,168,0,.25);color:#ffc65c}
+    .paycon-empty{padding:18px 12px;text-align:center;font-size:12px;color:#666;line-height:1.6;
+      border:1px dashed var(--bor2);border-radius:12px}
+    .paycon-t{display:grid;grid-template-columns:24px 1fr auto 30px;align-items:center;gap:8px;
+      padding:11px 12px;margin-bottom:7px;border-radius:12px;background:var(--sur2);border:1.5px solid var(--bor2)}
+    .paycon-t.live{border-color:var(--g);background:var(--ga2)}
+    .paycon-t-i{font-size:17px}
+    .paycon-t-l{font-size:12px;font-weight:700;display:flex;flex-direction:column;gap:2px;min-width:0}
+    .paycon-await{font-size:9px;font-weight:700;letter-spacing:.06em;color:#ffc65c;text-transform:uppercase}
+    .paycon-t-v{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums;cursor:pointer;
+      padding:3px 7px;border-radius:7px;white-space:nowrap}
+    .paycon-t-v:hover{background:rgba(255,255,255,.05)}
+    .paycon-t-x{width:30px;height:30px;border-radius:8px;cursor:pointer;
+      background:transparent;border:1px solid var(--bor2);color:#888;font-size:12px}
+    .paycon-t-x:hover{border-color:#ff5c5c;color:#ff5c5c}
+    .paycon-ref{grid-column:1/-1;margin-top:6px;width:100%;padding:9px 11px;border-radius:9px;
+      background:var(--bg);border:1px solid var(--bor2);color:var(--txt);
+      font:inherit;font-size:13px;letter-spacing:.09em;text-transform:uppercase}
+    .paycon-numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:14px}
+    .paycon-numpad .numpad-key{min-height:46px;border-radius:11px;font-size:17px;font-weight:700;
+      background:var(--sur2);border:1px solid var(--bor2);color:var(--txt);cursor:pointer}
+    .paycon-numpad .numpad-key:active{background:var(--ga2);border-color:var(--g)}
+    .paycon-deliv-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .paycon-d{display:flex;flex-direction:column;align-items:center;gap:5px;min-height:62px;
+      padding:10px 4px;border-radius:12px;cursor:pointer;font-size:19px;
+      background:var(--sur2);border:1.5px solid var(--bor2);color:var(--txt)}
+    .paycon-d span{font-size:10px;font-weight:700;color:var(--sub)}
+    .paycon-d.on{border-color:var(--g);background:var(--ga2)}
+    .paycon-d.on span{color:var(--g)}
+    .paycon-secure{margin-top:9px;padding:9px 11px;border-radius:10px;font-size:10.5px;line-height:1.55;
+      background:rgba(113,255,0,.05);border:1px solid var(--ga);color:#9fe86a}
+    .paycon-sums{margin-top:16px;padding-top:12px;border-top:1px solid var(--bor2)}
+    .paycon-sum{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;font-size:12px;color:var(--sub)}
+    .paycon-sum b{font-size:15px;font-weight:800;color:var(--txt);font-variant-numeric:tabular-nums}
+    .paycon-sum.change b{color:var(--g)}
+    @media(max-width:420px){
+      .paycon-hero-val{font-size:28px}
+      .paycon-methods{grid-template-columns:repeat(auto-fit,minmax(84px,1fr))}
+    }
     body{background:var(--bg);color:var(--txt);font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
   </style>
   <script src="sokoni-branch.js" defer></script>
@@ -540,6 +624,19 @@
             <button class="pay-method-btn" data-method="card" onclick="SPos.payment.setMethod('card')"><span class="method-icon">💳</span>Card</button>
             <button class="pay-method-btn" data-method="split" onclick="SPos.payment.setMethod('split')"><span class="method-icon">✂️</span>Split</button>
             <button class="pay-method-btn" id="qr-pay-method-btn" data-method="qr" onclick="SPos.payment.setMethod('qr'); SPosQR.open()" aria-label="QR Code payment"><span class="method-icon" aria-hidden="true">⬛</span>QR Pay</button>
+            <!-- MULTI-TENDER CONSOLE. Additive: every button above keeps working
+                 exactly as before, including Cash, which remains the default and
+                 the only tender that completes with no network. This opens the
+                 richer surface where one sale can be split across cash + M-PESA +
+                 card + any other method the IntaSend account has enabled, with the
+                 balance auto-filling as each is tapped. -->
+            <button class="pay-method-btn paycon-open" data-method="multi" onclick="SPosPayConsole.open(SPos.cart.getTotal())" aria-label="Split across multiple payment methods"><span class="method-icon" aria-hidden="true">⊞</span>Multi-Pay</button>
+            <!-- QUICK CHARGE. A described, cashier-attributed one-off charge for
+                 work not worth a catalogue entry — a government application, a
+                 callout. It ADDS A LINE to the current sale; it does not start a
+                 payment. The server re-prices the whole basket and enforces the
+                 merchant's ceiling; this tile names no limit of its own. -->
+            <button class="pay-method-btn qc-open" data-method="quickcharge" onclick="SPosQuickCharge.open()" aria-label="Add a custom service charge to this sale"><span class="method-icon" aria-hidden="true">✎</span>Quick Charge</button>
           </div>
           <!-- Terminal status indicator — populated by PosTerminals -->
           <div id="terminal-status-bar" style="display:none;gap:6px;flex-wrap:wrap;margin-top:8px;padding:2px 0"></div>
@@ -1343,6 +1440,132 @@
 </div>
 
 <!-- ════ SPLIT PAYMENT MODAL ════ -->
+<!-- ══════════════════════════════════════════════════════════════════════════
+     QUICK CHARGE
+     A described, cashier-attributed custom service charge. It adds a LINE to
+     the current sale and nothing else — no intent, no tender, no payment.
+
+     There is no limit named on this form. The merchant's ceiling lives in
+     posSettings and is enforced by shared/pos-service-pricing.js; a number
+     printed here would become a second authority for it and would be wrong
+     the first time a merchant changed theirs.
+══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="qc-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <span class="modal-title">Quick charge</span>
+      <button class="modal-close" onclick="SPos.modal.close('qc-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="qc-kicker">CUSTOM SERVICE CHARGE</div>
+      <div class="form-field">
+        <label class="form-label" for="qc-desc">WHAT ARE YOU CHARGING FOR?</label>
+        <input class="form-input" id="qc-desc" maxlength="140" placeholder="Passport application assistance">
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="qc-amount">AMOUNT (KES)</label>
+        <input class="form-input" id="qc-amount" type="number" min="0" step="0.01" inputmode="decimal"
+               placeholder="750.00" style="font-size:19px;text-align:right">
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="qc-qty">QUANTITY</label>
+        <input class="form-input" id="qc-qty" type="number" min="1" step="1" inputmode="numeric" value="1">
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="qc-phone">CUSTOMER PHONE (OPTIONAL)</label>
+        <input class="form-input" id="qc-phone" type="tel" inputmode="tel" placeholder="07XX XXX XXX">
+      </div>
+      <div id="qc-warn" class="qc-warn"></div>
+      <p class="qc-note">Added to the current sale as a custom service charge, recorded against
+        you. The amount is confirmed by SOKONI before any payment is taken.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-ghost" onclick="SPos.modal.close('qc-modal')">Cancel</button>
+      <button class="modal-btn modal-btn-primary" id="qc-add" onclick="SPosQuickCharge.add()">Add to sale</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     MULTI-TENDER PAYMENT CONSOLE
+     One sale, any number of tenders. Rendered entirely by
+     sokoni-pos-pay-console.js from SPosTender's pure arithmetic — no money is
+     computed in this markup.
+
+     There is NO card number field here and there never will be. Card is
+     collected on the customer's own device through IntaSend's hosted page.
+     The cashier never sees a PAN or a CVV.
+══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="paycon-modal">
+  <div class="modal paycon" style="max-width:520px">
+    <div class="modal-header">
+      <span class="modal-title">Payment</span>
+      <button class="modal-close" onclick="SPosPayConsole.close()">✕</button>
+    </div>
+    <div class="modal-body" style="padding-top:8px">
+
+      <div class="paycon-hero">
+        <div class="paycon-hero-label">TOTAL DUE</div>
+        <div class="paycon-hero-val" id="paycon-total">KES 0.00</div>
+      </div>
+
+      <!-- WHAT IS IN THIS SALE. Products, services and custom charges shown
+           separately, because a cyber cafe's sale is all three and the cashier
+           should see that before taking money. Rendered from SPosBasket;
+           hidden entirely when the sale is a single kind, so an ordinary shop
+           sees nothing new. -->
+      <div class="basket-groups" id="paycon-basket" style="display:none"></div>
+
+      <div class="paycon-sec-label">PAYMENT METHOD <span>tap to add — amount fills in automatically</span></div>
+      <div class="paycon-methods" id="paycon-methods"></div>
+      <div class="paycon-note" id="paycon-cap-note" style="display:none"></div>
+
+      <div class="paycon-sec-label">THIS SALE</div>
+      <div class="paycon-tenders" id="paycon-tenders"></div>
+
+      <div class="paycon-numpad">
+        <button class="numpad-key" onclick="SPosPayConsole.key('7')">7</button>
+        <button class="numpad-key" onclick="SPosPayConsole.key('8')">8</button>
+        <button class="numpad-key" onclick="SPosPayConsole.key('9')">9</button>
+        <button class="numpad-key" onclick="SPosPayConsole.key('4')">4</button>
+        <button class="numpad-key" onclick="SPosPayConsole.key('5')">5</button>
+        <button class="numpad-key" onclick="SPosPayConsole.key('6')">6</button>
+        <button class="numpad-key" onclick="SPosPayConsole.key('1')">1</button>
+        <button class="numpad-key" onclick="SPosPayConsole.key('2')">2</button>
+        <button class="numpad-key" onclick="SPosPayConsole.key('3')">3</button>
+        <button class="numpad-key dot" onclick="SPosPayConsole.key('.')">.</button>
+        <button class="numpad-key" onclick="SPosPayConsole.key('0')">0</button>
+        <button class="numpad-key back" onclick="SPosPayConsole.key('back')">⌫</button>
+        <button class="numpad-key clear-num" onclick="SPosPayConsole.key('clear')">Clear</button>
+        <button class="numpad-key" onclick="SPosPayConsole.key('exact')" style="font-size:11px;font-weight:800;color:var(--green)">Rest</button>
+      </div>
+
+      <!-- Only shown when a tender needs the CUSTOMER to act. Three ways to get
+           them to IntaSend's hosted page; in none of them does card data touch
+           this device. -->
+      <div class="paycon-delivery" id="paycon-delivery" style="display:none">
+        <div class="paycon-sec-label">HOW THE CUSTOMER PAYS</div>
+        <div class="paycon-deliv-grid">
+          <button class="paycon-d on" onclick="SPosPayConsole.setDelivery('phone')">📲<span>Their phone</span></button>
+          <button class="paycon-d" onclick="SPosPayConsole.setDelivery('qr')">⬛<span>Scan QR</span></button>
+          <button class="paycon-d" onclick="SPosPayConsole.setDelivery('handover')">🤝<span>Hand over</span></button>
+        </div>
+        <div class="paycon-secure">🔒 Card details are entered by the customer on the payment provider's secure page. The cashier never sees them.</div>
+      </div>
+
+      <div class="paycon-sums">
+        <div class="paycon-sum"><span>Allocated</span><b id="paycon-allocated">KES 0.00</b></div>
+        <div class="paycon-sum"><span>Balance</span><b id="paycon-balance">KES 0.00</b></div>
+        <div class="paycon-sum change" id="paycon-change-row" style="display:none"><span>Change due</span><b id="paycon-change">KES 0.00</b></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-ghost" onclick="SPosPayConsole.close()">Cancel</button>
+      <button class="modal-btn modal-btn-primary" id="paycon-go" onclick="SPosPayConsole.submit()" disabled>Incomplete</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="split-modal">
   <div class="modal" style="max-width:380px">
     <div class="modal-header"><span class="modal-title">Split Payment</span><button class="modal-close" onclick="SPos.modal.close('split-modal')">✕</button></div>
@@ -1897,6 +2120,10 @@ html[data-pos-chrome="checkout"] .pos-tabs { display: none !important; }
 <script src="pos-scanner.js" defer></script>
 <script src="pos-mobile.js" defer></script>
 <script src="pos-lifecycle.js" defer></script>
+<!-- Receipt authorization. Loaded BEFORE pos.js, unlike the other POS modules:
+     this one is consulted on the core sale path, and a load-order accident there
+     would fail open to printing a receipt for money that has not arrived. -->
+<script src="sokoni-pos-receipt-gate.js" defer></script>
 <script src="pos.js" defer></script>
 <!-- POS boot decision. Loaded LAST and deferred: it must never delay the module
      graph or first paint, and it runs only after `load`. It changes which STATE
@@ -2544,10 +2771,17 @@ window.SPosQR = (function() {
     var modal = document.getElementById('posQrModal');
     if (modal) modal.style.display = 'none';
     document.body.style.overflow = '';
-    /* Reset POS payment method back to cash if payment wasn't completed */
-    if (window.SPos && window.SPos.payment && window.SPos.payment.setMethod) {
-      SPos.payment.setMethod('cash');
-    }
+    /* THE METHOD IS DELIBERATELY LEFT AS 'qr'.
+       This used to call setMethod('cash'). Closing a QR window is not a
+       decision to pay cash, and the reset made it one: the cart stayed
+       loaded, the cashier pressed Charge, and the sale completed as CASH —
+       the one method the receipt gate trusts — for money that had never
+       arrived. It then printed.
+
+       Leaving it as 'qr' routes a subsequent Charge into the qr branch in
+       payment.process(), which refuses and points back here. The cashier
+       changes the method themselves if the customer decides to pay another
+       way; the till never decides that for them. */
   }
 
   function cancel() {
@@ -2617,13 +2851,24 @@ window.SPosQR = (function() {
   }
 
   function complete() {
-    /* Trigger POS completion flow */
+    /* CAPTURE THE ID BEFORE CLOSING. close() nulls _txnId, so the previous
+       order — close() then completeQR(_txnId) — handed it null. With the old
+       process() fallback that went unnoticed, because the fallback completed
+       the sale anyway, through the cash tail. Without the fallback it would
+       simply never complete. */
+    var txn = _txnId;
     close();
-    if (window.SPos && window.SPos.payment && window.SPos.payment.completeQR) {
-      SPos.payment.completeQR(_txnId);
-    } else if (window.SPos && window.SPos.payment && window.SPos.payment.process) {
-      /* Fallback: mark as complete in POS state then process */
-      SPos.payment.process();
+
+    /* NO FALLBACK. This used to call SPos.payment.process() when completeQR
+       was absent — and completeQR did not exist anywhere, so the fallback was
+       the ONLY path this button ever took. It reached the cash tail and
+       completed a sale on a browser state rather than a verified payment.
+
+       A till that cannot reach completeQR must complete NOTHING and say so. */
+    if (window.SPos && window.SPos.payment && typeof SPos.payment.completeQR === 'function') {
+      SPos.payment.completeQR(txn);
+    } else if (window.SPos && typeof SPos.toast === 'function') {
+      SPos.toast('Cannot complete this sale — reload the till. The payment is safe and recorded by SOKONI.', 'error');
     }
   }
 
@@ -2691,6 +2936,11 @@ html.in-merchant-shell .pos-quick-nav { display: none !important; }
 <!-- ════ SmartPOS 2.0 — Universal Plug & Play Ecosystem ════ -->
 <script defer src="sokoni-redis.js"></script>
 <script defer src="sokoni-device-hub.js"></script>
+
+<script defer src="sokoni-pos-tender.js"></script>
+<script defer src="sokoni-pos-basket.js"></script>
+<script defer src="sokoni-pos-quick-charge.js"></script>
+<script defer src="sokoni-pos-pay-console.js"></script>
 <script defer src="sokoni-payment-terminal.js"></script>
 <script defer src="sokoni-customer-display.js"></script>
 <script>

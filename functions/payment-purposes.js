@@ -236,6 +236,283 @@ const PURPOSES = {
     },
   },
 
+  /* ── Car hub — vehicle / equipment rental ────────────────────────────
+     The amount is the snapshot `rentalBook` computed SERVER-SIDE at booking
+     time (marketplace-extensions.js:396-405) from the rentalProducts rate card
+     and the requested duration. This pricer RE-READS that snapshot rather than
+     recomputing it: the rate card may have changed since the customer booked,
+     and the figure they agreed to is the one on the booking. Same precedent as
+     service_booking, and the same reason.
+
+     Dates, durationUnit and the rate card are NOT re-read for pricing, so a
+     client cannot lengthen a booking at payment time to change what it costs.
+     It would have to change the booking document itself, which its own rules
+     govern.
+
+     THE SECURITY DEPOSIT IS DELIBERATELY NOT CHARGED.
+     `rentalBookings.depositAmount` is written by rentalBook and then read by
+     NOTHING — there is no collection, release or refund path for it anywhere in
+     functions/. Collecting a refundable deposit through a rail that cannot
+     refund it would strand the customer's money, so the intent charges
+     `totalAmount` only and carries the deposit as metadata for whoever builds
+     that lifecycle. Under-charging here is recoverable; taking money we have no
+     mechanism to give back is not. */
+  car_hub: {
+    resourceType: 'rentalBooking',
+    async price(uid, data) {
+      const bookingId = String(data.bookingId || '').trim();
+      if (!bookingId) fail('invalid-argument', 'bookingId is required.');
+
+      const bSnap = await db().collection('rentalBookings').doc(bookingId).get();
+      if (!bSnap.exists) fail('not-found', 'Rental booking not found.');
+      const b = bSnap.data();
+
+      if (b.buyerId !== uid) fail('permission-denied', 'Not your booking.');
+
+      /* `rentalBookings` carries no paymentStatus field today. Absent is treated
+         as UNPAID — the correct default for a document that predates the payment
+         rail — but any other value is REFUSED, so the guard starts working the
+         moment the field is introduced rather than silently ignoring it. */
+      if (b.paymentStatus && b.paymentStatus !== 'pending') {
+        fail('already-exists', 'This rental is already paid or closed.');
+      }
+      /* rentalBook statuses: pending | confirmed | active | completed |
+         cancelled. A rental that has started, finished or died must not take
+         new money. */
+      if (!['pending', 'confirmed'].includes(String(b.status))) {
+        fail('failed-precondition', 'This rental can no longer be paid.');
+      }
+
+      /* rentalProducts rates are whole shillings (rentalProductCreate), so the
+         snapshot is too. Convert once, here, at the boundary. */
+      const cents = Math.round(Number(b.totalAmount) * 100);
+      if (!Number.isFinite(cents) || cents <= 0)
+        fail('failed-precondition', 'Rental booking has no payable amount.');
+
+      return {
+        amountCents: cents,
+        currency: b.currency || 'KES',
+        resourceType: 'rentalBooking',
+        resourceId: bookingId,
+        metadata: {
+          type: 'car-hub-rental',
+          bookingId,
+          rentalProductId: b.rentalProductId || null,
+          shopId: b.shopId || null,
+          durationUnit: b.durationUnit || null,
+          /* cents. NOT part of amountCents — see the note above. Rounded AFTER
+             the ×100, not before: rounding to whole shillings first silently
+             discards the cents, which is the same class of error as the
+             shillings/cents divergence money-authority.js documents. */
+          securityDepositUncollected: Math.max(0, Math.round((Number(b.depositAmount) || 0) * 100)),
+        },
+      };
+    },
+  },
+
+  /* ── Accommodation — venue / stay booking ────────────────────────────
+     `venueCreateBooking` stamps a complete `pricing` breakdown on the booking
+     inside the SAME transaction that takes the slot lock (venue-booking.js:203,
+     584) — base, weekend premium, peak surcharge, member discount, total,
+     deposit. That snapshot is the price the customer was quoted and the slot was
+     held at, so it is what they pay.
+
+     `pricing.deposit` here is a PORTION of `pricing.total` (total ×
+     depositPercent, venue-booking.js:203), not an extra charge — the opposite of
+     the car-hub security deposit above. Two fields with the same name and
+     opposite meanings is exactly how a customer gets double-charged, so neither
+     is inferred: each pricer states which it has. The full total is charged,
+     matching what venueCalculatePrice quotes.
+
+     `sokoni-bnb.js` writes its own client-side `bnbBookings` and is NOT served
+     by this pricer. That path has no server price authority at all and must be
+     rewired onto venueCreateBooking before it can be paid for — a separate task,
+     deliberately not papered over here. */
+  accommodation: {
+    resourceType: 'venueBooking',
+    async price(uid, data) {
+      const bookingId = String(data.bookingId || '').trim();
+      if (!bookingId) fail('invalid-argument', 'bookingId is required.');
+
+      const bSnap = await db().collection('venueBookings').doc(bookingId).get();
+      if (!bSnap.exists) fail('not-found', 'Booking not found.');
+      const b = bSnap.data();
+
+      if (b.customerId !== uid) fail('permission-denied', 'Not your booking.');
+
+      const payStatus = String((b.payment && b.payment.status) || 'pending');
+      if (payStatus !== 'pending') fail('already-exists', 'This booking is already paid or closed.');
+
+      /* venue-booking.js STATUS: pending_payment | confirmed | checked_in |
+         completed | cancelled | no_show. Only the first two are payable. */
+      if (!['pending_payment', 'confirmed'].includes(String(b.status))) {
+        fail('failed-precondition', 'This booking can no longer be paid.');
+      }
+
+      /* _calcPrice returns shillings rounded to 2dp (_round2), so ×100 is exact
+         to the cent rather than truncating a fractional shilling. */
+      const pricing = b.pricing || {};
+      const cents = Math.round(Number(pricing.total) * 100);
+      if (!Number.isFinite(cents) || cents <= 0)
+        fail('failed-precondition', 'Booking has no payable amount.');
+
+      return {
+        amountCents: cents,
+        currency: pricing.currency || 'KES',
+        resourceType: 'venueBooking',
+        resourceId: bookingId,
+        metadata: {
+          type: 'accommodation',
+          bookingId,
+          venueId: b.venueId || null,
+          date: b.date || null,
+          slotKey: b.slotKey || null,
+          bookingModel: b.bookingModel || null,
+          /* cents, a PORTION of the total already being charged. Rounded AFTER
+             the ×100 — _calcPrice emits 2dp shillings, so rounding first would
+             drop the cents. */
+          deposit: Math.max(0, Math.round((Number(pricing.deposit) || 0) * 100)),
+        },
+      };
+    },
+  },
+
+  /* ── POS service sale — the universal till line ───────────────────────
+     A cyber café charging for ten printed pages, a salon for a haircut, a
+     garage for a diagnosis, a shop for a phone charger. One purpose, because
+     to the payment rail they are identical: a merchant's authorized operator
+     charging their own customer for a basket of priced lines.
+
+     The arithmetic and every guard live in shared/pos-service-pricing.js,
+     which is PURE and separately certified. This entry does the Firestore
+     lookup and the error translation, exactly as pos_till_sale delegates to
+     sokoni-qr-authority. Nothing is computed here.
+
+     THE CATALOGUE IS posProducts. A service is a row with trackStock:false
+     and a `unit` — a shape pos.js already reads. No second collection.
+
+     WHY A CASHIER MAY NAME A PRICE HERE and nowhere else on this rail: the
+     client is the MERCHANT, not the buyer. Same trust boundary priceTillSale
+     uses. Every cashier-named figure is bounded by a per-merchant ceiling,
+     attributed to the cashier's uid, and labelled `quick_charge` or `variable`
+     so it can never be mistaken for a catalogue price in reconciliation. */
+  pos_service_sale: {
+    resourceType: 'posSale',
+    async price(uid, data) {
+      const merchantId = String(data.merchantId || data.sellerId || '').trim();
+      if (!merchantId) fail('invalid-argument', 'merchantId is required.');
+
+      const rawLines = Array.isArray(data.lines) ? data.lines : [];
+      if (!rawLines.length) fail('invalid-argument', 'The basket is empty.');
+
+      /* Load ONLY the catalogue items this basket references. Firestore caps
+         documentId() `in` queries at 10, so chunk — same shape as
+         validateOrderLines above. */
+      const ids = [...new Set(rawLines
+        .map((l) => String((l && l.itemId) || '').trim())
+        .filter(Boolean))];
+
+      const catalogue = {};
+      for (let i = 0; i < ids.length; i += 10) {
+        const chunk = ids.slice(i, i + 10);
+        const snap = await db().collection('posProducts')
+          .where(FieldPath.documentId(), 'in', chunk).get();
+        snap.forEach((d) => { catalogue[d.id] = d.data() || {}; });
+      }
+
+      /* Per-merchant quick-charge policy. Absent ⇒ the module's hard default,
+         never "unlimited": the safe reading of a missing limit is the strict
+         one. Read from the merchant's own config, so a cashier cannot raise
+         their own ceiling. */
+      let limits = {};
+      try {
+        const cfg = await db().collection('posSettings').doc(merchantId).get();
+        if (cfg.exists) {
+          const c = cfg.data() || {};
+          limits = {
+            quickChargeEnabled:  c.quickChargeEnabled,
+            quickChargeMaxCents: c.quickChargeMaxCents,
+          };
+        }
+      } catch (_) { /* strict default */ }
+
+      /* BUSINESS SCOPE — may this business bill for products, services, or
+         both? Resolved from the registry documents APPROVAL wrote, never from
+         a self-claimable `businessType` label. A cyber café holding both
+         `sellers/{uid}` and `providers/{uid}` bills airtime and printing on
+         one basket, one set of books.
+
+         Read failures fail CLOSED to "not trading" rather than skipping the
+         check: an unreadable registry is exactly when not to assume approval. */
+      const bscope = require('./shared/business-scope');
+      let scope;
+      try {
+        const [sellerSnap, providerSnap] = await Promise.all([
+          db().collection('sellers').doc(merchantId).get(),
+          db().collection('providers').doc(merchantId).get(),
+        ]);
+        scope = bscope.resolveBusinessScope({
+          seller:   sellerSnap.exists   ? sellerSnap.data()   : null,
+          provider: providerSnap.exists ? providerSnap.data() : null,
+        });
+      } catch (_) {
+        scope = bscope.resolveBusinessScope({});     /* trades nothing */
+      }
+      if (!scope.isTrading) {
+        fail('permission-denied', 'This business is not currently approved to take payments.');
+      }
+
+      const pricing = require('./shared/pos-service-pricing');
+      let priced;
+      try {
+        priced = pricing.priceServiceBasket({
+          lines: rawLines,
+          catalogue,
+          callerUid:   uid,
+          merchantUid: merchantId,
+          limits,
+          scope,
+        });
+      } catch (e) {
+        fail(e.code || 'failed-precondition', e.message || 'This sale could not be priced.');
+      }
+
+      /* Deterministic ref when the till supplies a saleId, so a cashier's
+         double-tap replays one intent instead of minting a second. Reuses
+         createPaymentIntent's existing preferredRef machinery unchanged. */
+      const saleId = String(data.saleId || '').trim();
+      let preferredRef;
+      if (saleId) {
+        if (!/^[A-Za-z0-9_-]{3,80}$/.test(saleId)) fail('invalid-argument', 'Invalid saleId.');
+        preferredRef = `POSSVC-${merchantId}-${saleId}`.slice(0, 128);
+      }
+
+      return {
+        amountCents: priced.amountCents,
+        currency: 'KES',
+        resourceType: 'posSale',
+        resourceId: saleId || merchantId,
+        ...(preferredRef ? { preferredRef } : {}),
+        metadata: {
+          type: 'pos-service-sale',
+          merchantId,
+          cashierUid: uid,
+          saleId: saleId || null,
+          lines: priced.lines,
+          /* Surfaced so a reconciler can find baskets containing keyed-in
+             figures without re-walking every line. */
+          priceSourceCounts: priced.counts,
+          /* What this business was approved to trade AT THE MOMENT OF SALE.
+             A later suspension must not rewrite the history of a sale that was
+             legitimate when it happened, and a tax return covering a dual
+             business needs to show which side of it each line belonged to. */
+          businessScope: scope.scopes,
+          pricingSource: 'server_catalogue_and_bounded_counter_entry',
+        },
+      };
+    },
+  },
+
   /* ── Healthcare subscription (clinic | hospital | enterprise) ─────────
      The price comes from functions/healthcare-plans.js — the one table for the
      Healthcare hub — and NEVER from the request. The client sends a tier; the

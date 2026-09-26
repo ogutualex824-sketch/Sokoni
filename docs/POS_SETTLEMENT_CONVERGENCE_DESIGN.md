@@ -310,3 +310,504 @@ are disposable and rebuildable from the authority; they hold no fact the authori
 - Does not schedule the migration cutover — that is a release-owner plan, sequenced **after** the
   two security candidates land (this design depends on the ownership primitive).
 - Does not fold D6/D12 into "handled by the redesign" — they remain independently gated.
+
+---
+
+# Amendment A — multi-tender settlement (2026-09-21)
+
+**Status:** AMENDMENT, pending owner ratification. Sections 0–16 above remain as ratified; this
+amendment SUPERSEDES the specific clauses it names and adds nothing that contradicts §0.
+**Occasioned by:** the `completeMultiTender` preflight at `64a9a85`, which established that a POS
+sale can be settled by several tenders at once and that the ratified text cannot express it.
+**Still DESIGN ONLY.** No collection, no callable, no code.
+
+## A.0 What the preflight found in the LIVE code
+
+Recorded here because the amendment's shape follows from it, and because each is a defect that
+exists today independently of this design:
+
+| Finding | Evidence |
+|---|---|
+| `recordPOSSale` has **no caller idempotency** — `saleId` is `saleRef.id`, minted per call, so two identical calls create two sales | `pos-retail-engine.js:215`, `:279` |
+| It accepts **one** `payment {method, ref, amount}` — multi-tender is not representable server-side | `pos-retail-engine.js:220` |
+| Inventory is decremented **inside the sale write, before payment is authoritative** | `pos-retail-engine.js:376` |
+| `retailSettlements` appears **once in all of `functions/`, inside a comment** — unimplemented | `index.js:7653` |
+| The paid-state target for Till sales today is `paymentIntents/{ref}`, NOT any sale collection | `index.js:7650` |
+| The P58E prints on `autoPrint || method === 'card'` — a local setting, no paid-state gate | `pos.js:1637` |
+| The one working idempotency pattern is `posIdempotency` atomic `create()` | `pos-zero-friction.js:338` |
+
+## A.0.1 Contradictions and ambiguities found in §0–§16
+
+These are reported before amending, as required. Each is resolved below.
+
+1. **§6 contradicts §11 on inventory timing.** §6 commits the stock decrement "in one Firestore
+   transaction" with the settlement write — which happens at `awaiting_payment`, before payment.
+   §11 then speaks of a "stock reservation" being "released (or never committed)" on payment
+   failure. A decrement already committed with the sale is not a reservation. **Resolved: A.6.**
+2. **§4 has no state for a partly-covered sale.** `paymentState ∈ {unpaid, pending, paid, failed,
+   reversed}`. §11 says "`paid` only when covered", so a sale with KES 1,000 of 1,600 collected
+   sits in `pending` — indistinguishable from one where nothing has been collected. **Resolved: A.3.**
+3. **§3 cannot represent a FAILED tender.** `paymentRefs[]` is "append-only … provider payment
+   ids"; a declined card or a timed-out STK may produce no provider ref at all, and an array of
+   successful refs has nowhere to put a failure. The schema has no tender-level record.
+   **Resolved: A.2.**
+4. **§4's payment authority excludes cash.** `paymentState` is "driven by the payment provider /
+   webhook (authoritative payment event only — never client-asserted)". Cash has no provider and
+   no webhook, so under the ratified text a cash sale can never reach `paid`. **Resolved: A.7.**
+5. **§2 offers two mutually exclusive `txnId` formats.** `rt_<merchantId>_<deviceId>_<mono>` "or a
+   ULID" — but §2's own anti-forgery clause requires that "`txnId` embeds `merchantId`", which a
+   ULID does not. §15 repeats the ambiguity. **Resolved: A.1.**
+6. **§7 leaves the receipt collection unchosen** — "`receipts/{txnId}` (or `posReceipts/{txnId}`)"
+   — while §15 records it as decided ("one canonical `receipts/{txnId}`"). §15 is the later, more
+   specific statement and is taken as controlling. **Resolved: A.9.**
+
+---
+
+## A.1 Canonical transaction identity (amends §2, §15)
+
+`txnId` is the structured form **`rt_<merchantId>_<deviceId>_<clientMonotonic>`**. The ULID
+alternative is withdrawn: §2's anti-forgery rule requires the id to embed `merchantId` so the
+write boundary can reject a mismatch, and a ULID cannot satisfy it. The three required properties
+(globally unique, deterministic per economic sale, mintable offline) are preserved.
+
+One `txnId` threads: the settlement, every tender, every payment intent, every provider reference,
+every inventory movement, the commission entry, and the receipt (A.11).
+
+---
+
+## A.2 Tender-level record (amends §3)
+
+A sale has **many tenders**. `paymentRefs[]` is retained for backward compatibility as a derived
+convenience, but it is **no longer the tender record** — it cannot express a failure.
+
+`retailSettlements/{txnId}.tenders[]`, append-only, each entry immutable except `state`:
+
+| Field | Meaning |
+|---|---|
+| `tenderId` | `<txnId>#t<n>` — stable, unique within the sale, never reused |
+| `kind` | `cash` \| `external` \| `recorded` (A.7) |
+| `method` | `cash`, `mpesa`, `card`, … as offered by the account (never a hard-coded list) |
+| `amountMinor` | integer cents, the amount THIS tender is to cover |
+| `state` | A.3 |
+| `intentRef` | `paymentIntents/{ref}` for an external tender, else null |
+| `providerRef` | `api_ref` / `tracking_id` / M-PESA code once known, else null |
+| `authorizedBy` | cashier uid — required for `cash` and `recorded` |
+| `createdAt`, `settledAt`, `failedAt` | timestamps |
+
+**A failed tender is never removed and never rewritten.** It remains in `tenders[]` as part of the
+audit trail, including when the sale later reaches `paid` by other means. Replacement is A.5.
+
+---
+
+## A.3 Tender state vs settlement state (amends §4)
+
+Two levels, orthogonal, and neither is derivable from the other alone.
+
+**Tender state** — one payment attempt:
+
+```
+pending → processing → confirmed
+                    ↘  failed
+                    ↘  expired
+        ↘ cancelled
+confirmed → refunded
+```
+
+`pending` recorded, not yet initiated · `processing` initiated, provider not yet answered ·
+`confirmed` authoritative event received (A.7) · `failed` provider answered no · `cancelled`
+withdrawn before initiation · `expired` no answer within the window · `refunded` reversed after
+confirmation.
+
+**A non-answer is never `failed`.** A 5xx or a timeout is `processing` until it resolves or
+expires — the rule `shared/stk-gateway.js` already applies (`OUTCOME_UNKNOWN`), lifted to the
+settlement. Recording a non-answer as a failure is how a real charge gets retried.
+
+**Settlement state** — the sale's money position, **derived** from the tenders:
+
+| State | Definition |
+|---|---|
+| `unpaid` | no tender is `confirmed` |
+| `partially_paid` | `Σ confirmed < grandTotal`, and at least one is `confirmed` |
+| `paid` | `Σ confirmed ≥ grandTotal` |
+| `failed` | no tender can still succeed and `Σ confirmed = 0` |
+| `cancelled` | the sale was abandoned before any tender confirmed |
+| `refunded` | previously `paid`, reversed by inverse movements (§4 unchanged) |
+
+`partially_paid` is the state §4 lacked. `paymentState` from ratified §4 is **superseded by this
+table**; `settlementState` from §4 (`draft … abandoned`) is retained unchanged as the *economic*
+lifecycle and remains orthogonal to both.
+
+---
+
+## A.4 One tender fails while others succeed (new; closes the §11 gap)
+
+```
+SALE  KES 1,600          SALE  KES 1,600
+M-PESA  700  confirmed   M-PESA  700  confirmed
+CARD    600  FAILED      CARD    600  FAILED
+CASH    300  confirmed   CASH    900  confirmed
+─────────────────────    ─────────────────────
+collected 1,000          collected 1,600
+outstanding  600         outstanding    0
+= PARTIALLY_PAID         = PAID
+```
+
+The failed card attempt survives in `tenders[]` in **both** cases. The sale being paid does not
+erase the attempt that was not.
+
+- A failing tender **never** fails the sale, and never reverses a confirmed one.
+- `Σ confirmed` is recomputed on every tender transition; the settlement state follows the table
+  in A.3 and is never set directly.
+- An overpayment (`Σ confirmed > grandTotal`) is only reachable via cash, which is the only tender
+  that can give change (carried from the certified till engine). Any other route to it is a defect
+  and must raise, not round.
+
+---
+
+## A.5 Retrying a failed tender without duplicating the sale (new)
+
+A replacement is a **new tender on the same `txnId`**, never a new sale and never a mutation of the
+failed one:
+
+```
+tenders[] : t1 mpesa 700 confirmed
+            t2 card  600 failed
+            t3 card  600 confirmed      ← replaces t2, references it
+```
+
+`t3.replaces = "t2"`. Both remain. The sale's identity, line items, inventory movement and receipt
+are untouched — this is precisely the case that `recordPOSSale`'s auto-generated id cannot express
+today without creating a second sale (A.0).
+
+---
+
+## A.6 Inventory follows settlement (amends §6, resolves the §6/§11 contradiction)
+
+**The stock decrement does NOT commit with the settlement write.** §6's "one Firestore
+transaction with the settlement write" is superseded:
+
+```
+basket → settlement created (unpaid)
+       → tenders recorded
+       → external tenders confirmed
+       → settlement reaches PAID
+       → inventory movement committed        ← here, and only here
+       → receipt becomes eligible (A.9)
+```
+
+- Oversell is still guarded **before** any tender is initiated (existing rule, preserved), and a
+  post-payment race is flagged in `oversoldAlerts`, never rejected (existing rule, preserved).
+- The movement remains journaled to `inventoryMovements/{txnId}` and idempotent on it, so the
+  `paid` transition may be replayed without a second decrement (§6's idempotency retained).
+- `partially_paid` commits **nothing**. A sale half-collected has not moved stock.
+- §11's "stock reservation is released (or never committed)" is resolved to **never committed**.
+  There is no reservation state and none is introduced; a guard before initiation plus commitment
+  at `paid` is the whole mechanism.
+
+---
+
+## A.7 Cash versus external tenders (new; closes the §4 authority hole)
+
+§4's "authoritative payment event only — never client-asserted" is correct for external rails and
+**cannot apply to cash**, which has no provider and no webhook. Without this clause a cash sale
+could never reach `paid`.
+
+| Kind | What confirms it | Client-assertable? |
+|---|---|---|
+| `external` | `webhookIntasend` only — an event from the provider | **no**, ever |
+| `cash` | the authenticated, authorized cashier, recorded with `authorizedBy` | yes, and it is the only authority there is |
+| `recorded` | money that moved outside SOKONI (a merchant Till code the customer paid directly), with a reference | yes, and it is marked `recorded` forever so it is never mistaken for one we initiated |
+
+The distinction is permanent in the record. "We initiated and the provider confirmed" and "a
+cashier told us it happened" are different claims and must remain separable in the audit trail.
+
+---
+
+## A.8 Idempotency and webhook redelivery (amends §5, §10)
+
+§5's atomic `create()` on `txnId` is retained unchanged for the sale. Two additions:
+
+- **Tender transitions are guarded and monotonic.** `confirmed → confirmed` is a no-op;
+  `confirmed → failed` is **refused** and raised, because a confirmed tender that later reports
+  failure is a reconciliation event, not a state change.
+- **Webhook redelivery is idempotent at the TENDER, not the sale.** A redelivered event is matched
+  by `providerRef` **or** `intentRef` to exactly one tender; if that tender is already `confirmed`
+  the handler returns success and writes nothing. This is the existing guard at
+  `index.js` (`payments/{apiRef}.status === "COMPLETE"` → early return, re-checked inside the
+  transaction), lifted to the tender level. `Σ confirmed` must never be incremented by a replay —
+  the defect recorded at `index.js:4366`, where `FieldValue.increment` made a redelivery
+  double-charge.
+
+---
+
+## A.9 Receipt eligibility (amends §7)
+
+The receipt collection is `receipts/{txnId}` (§15 controlling; §7's alternative withdrawn).
+
+**A sale receipt is emitted only at `settlement = paid`.** Not at `recorded`, not on a local
+setting, not on a payment method.
+
+- `partially_paid` → **no sale receipt.** A tender slip may be issued per confirmed tender and
+  must be visibly a payment record, never a completed-sale receipt.
+- The current live gate — `autoPrint || method === 'card'` (`pos.js:1637`) — does not satisfy
+  this. **Correcting it is explicitly OUT OF SCOPE of this amendment and of the convergence
+  programme**, and is to be its own small, separately tested slice. It is a defect today,
+  independent of multi-tender, and bundling it here would hide it inside a large programme.
+
+---
+
+## A.10 Audit trail (new)
+
+Every row below is reachable from `txnId` alone, and each carries `txnId` explicitly:
+
+```
+txnId ─┬─ retailSettlements/{txnId}          the authority
+       ├─ .tenders[].tenderId                every attempt, including failures
+       ├─ .tenders[].intentRef    → paymentIntents/{ref}
+       ├─ .tenders[].providerRef  → api_ref / tracking_id / M-PESA code
+       ├─ inventoryMovements/{txnId}         committed at paid (A.6)
+       ├─ commissionLedger/{txnId}           derived at paid (§8)
+       └─ receipts/{txnId}                   emitted at paid (A.9)
+```
+
+No surface may hold a payment fact that is not reachable this way.
+
+---
+
+## A.11 No fourth POS financial authority (reaffirms §0, §1)
+
+`posSales`, `posRetailSales` and `posTransactions` remain as §9 defines them — projections or
+queues, never authorities again.
+
+**This amendment creates no new collection.** In particular it explicitly prohibits, now and in
+any implementation derived from it:
+
+- a `posMultiTenderSales` collection, or any per-feature sale collection;
+- multi-tender fields grafted onto `recordPOSSale`/`posSales` as a transition shim — considered
+  and **rejected by the owner**, because it would stand up a fourth authority
+  (`posSales` + `paymentIntents` + `payments` + temporary tender fields) and make the convergence
+  harder than it is today;
+- any second writer of `retailSettlements` other than the single settlement callable (§0).
+
+Tenders live **inside** `retailSettlements/{txnId}`. They are not a collection.
+
+---
+
+## A.12 Implementation sequence (not authorized by this amendment)
+
+Ratification of this amendment authorizes nothing. The programme, in order, each gated:
+
+```
+settlement authority → idempotency → tender state machine → payment reconciliation
+→ inventory binding → receipt gate → completeMultiTender adapter → certification → deployment
+```
+
+`completeMultiTender` is the **last** code step and is an *adapter* — the till's basket
+(`sokoni-pos-basket.js`, certified at `64a9a85`) already emits lines and tenders in a shape that
+carries source, kind and attribution. It calls the settlement authority; it does not become one.
+
+Deployment remains separately constrained by the Artifact Registry observation in `AGENTS.md`.
+
+---
+
+## A.13 What this amendment deliberately does NOT do
+
+- It does not implement `retailSettlements`, `completeMultiTender`, or any tender state machine.
+- It does not modify `recordPOSSale`, `webhookIntasend`, `payment-purposes.js` or `pos-qr.js`.
+- It does not correct the receipt gate (A.9) — deliberately left as its own slice.
+- It does not re-ratify §0–§16; those stand except where a clause above names them.
+- It does not schedule the cutover, which remains a release-owner plan (§16).
+
+---
+
+# Amendment A.1 — reconciliation against `posCompleteCheckout` (2026-09-22)
+
+**Status:** DESIGN ONLY, pending owner ratification. **Amendment A must NOT be ratified as
+written**, and `retailSettlements` must NOT be created on its strength.
+**Occasioned by:** the discovery that a POS settlement authority already exists and was missed by
+Amendment A's own preflight.
+**Owner direction, 2026-09-22:** *no Daraja — IntaSend everywhere.* §A.1.5 is the design for that.
+
+## A.1.0 What the preflight missed, and why it matters
+
+Amendment A's preflight named `recordPOSSale` (`pos-retail-engine.js:215`) as the POS sale writer
+and reported: auto-generated id, no idempotency, one payment object, inventory before payment.
+**All true of `recordPOSSale`.** It was not the whole estate.
+
+`posCompleteCheckout` (`pos-zero-friction.js:273`) is a second, **materially better** sale
+authority. The preflight even saw `posIdempotency` and recorded it as "the one working pattern" —
+without following it to the callable that uses it. An inventory that stops at the first plausible
+writer is not an inventory.
+
+Amendment A was therefore designed against an incomplete picture of what already exists. That is
+the single reason it must not be ratified unchanged.
+
+## A.1.1 The existing POS authority
+
+```
+pos-checkout.html  _finalize(method, payments, totals)
+      ↓
+posCompleteCheckout            ← THE seam. One place a cashier says "take payment".
+      ↓
+posIdempotency/{key}  atomic create(), cached-result replay
+posPaymentClaims/{ref} atomic create(), single-spend
+      ↓
+posRetailSales/{saleId} + posReceipts
+```
+
+Routing, confirmed in the contract: the primary `pos` route declares
+`entry:'pos-checkout.html?shell=merchant'`; `smartpos` still mounts `pos.html`. **Both are live
+(HTTP 200).** `/pos` was preserved deliberately.
+
+## A.1.2 Amendment A requirement → what already exists
+
+| Amendment A requirement | `posCompleteCheckout` | Verdict |
+|---|---|---|
+| A.1 canonical txn identity | `idempotencyKey` (client-supplied, required); `saleId` | **partial** — id is not merchant-embedded, not offline-mintable |
+| A.2 tender-level record | `payments[]` array, per-tender method/amount/ref | **met in substance** |
+| A.3 tender states | implicit: confirmed-or-refused. No `pending`/`processing`/`expired` | **gap** |
+| A.3 settlement states | none — a sale exists only once complete | **gap**, and see A.1.4 |
+| A.4 one fails / others succeed | whole call refuses; `_consumed` released | **different, and arguably better** — no partial sale exists to strand |
+| A.5 retry without duplicating | same `idempotencyKey` reclaims its own payment | **met** |
+| A.7 cash vs external | `CONFIRMABLE = {mpesa, card, mpesa_daraja}`; cash exempt with a stated reason | **met** |
+| A.8 idempotency | `posIdempotency` atomic create, cached result | **met** |
+| A.8 webhook redelivery | confirmation is READ, not pushed; `posPaymentClaims` makes replay inert | **met by a different mechanism** |
+| A.6 inventory binding | stock asserted + deducted inside `runTransaction`; sale written **after** | **partial** — see A.1.3 |
+| A.9 receipt eligibility | server-issued, only on success | **met, and stronger than the client gate** |
+| A.10 audit trail | `merchantProvenBy`, `financialPosting`, `collectionRoute`, claims | **met** |
+| A.11 no fourth authority | — | **this amendment is how it stays true** |
+
+Additionally present and not in Amendment A: server-computed totals (*"the total is COMPUTED
+here, never accepted"*), price-tolerance checks against canonical `products`, coupon validation,
+`resolveActor` discount authority with unavailable ≠ refusal, and ownership proof recorded per sale.
+
+## A.1.3 Genuine gaps
+
+1. **Inventory and the sale are not one commit.** Stock deducts inside `runTransaction`; the sale
+   writes after, via `db.collection('posRetailSales').doc(saleId).set(sale)`. The ordering is
+   *reasoned* — the commission comment argues the recoverable failure direction — but A.6's
+   "one economic transaction" is not literally satisfied, and there is no
+   `inventoryMovements/{txnId}` journal.
+2. **No tender-level state.** A tender is confirmed at the moment of sale or the sale refuses.
+   Workable for a synchronous till; insufficient for A.3's `processing`/`expired`, and it means a
+   non-answer from a provider cannot be represented at all.
+3. **`txnId` is not the A.1 identity.** `idempotencyKey` is
+   `merchantId_cashierId_Date.now()` — client-supplied, not merchant-verified, not offline-stable.
+4. **`posSales` vs `posRetailSales` remain disjoint** (`b12bd68`, POS_SALES_LIFECYCLE_AUDIT §2).
+   `voidPOSSale` voids from `posSales` while Merchant V2 Orders reads `posRetailSales`, which is
+   why void is blocked. Amendment A assumed one lineage; there are two.
+5. **QR is not a tender here.** `pos-checkout.html` has no QR payment path — its only `qr` is
+   `customer_qr` identification.
+
+## A.1.4 Why `retailSettlements` should NOT be created
+
+Amendment A §1 proposed it as "the sole financial authority". An authority with confirmation,
+single-spend, idempotency, server-computed totals and server-issued receipts **already exists and
+is wired to the primary till**. Introducing `retailSettlements` now would create precisely the
+fourth authority A.11 forbids.
+
+**Disposition: A.1 supersedes Amendment A §1–§3.** `posCompleteCheckout` → `posRetailSales` +
+`posReceipts` is the POS settlement authority. The gaps in A.1.3 are to be closed **inside it**,
+not by replacing it. A new collection requires evidence of a responsibility it cannot safely
+carry; none has been produced.
+
+## A.1.5 NO DARAJA — and the confirmation gate is already broken
+
+**Owner direction: replace Daraja with IntaSend.** The evidence says this is not merely a
+preference; the Daraja dependency is already severed and the gate it fed is unsatisfiable.
+
+The chain `posCompleteCheckout` relies on:
+
+```
+darajaSTKPush  →  posPayments/{checkoutId} status:'pending'
+darajaSTKCallback (Safaricom webhook)  →  status:'completed'   [atomic claim]
+posCompleteCheckout  →  requires status === 'completed'        [pos-zero-friction.js:650]
+```
+
+Measured, 2026-09-22:
+
+* **`exports.darajaSTKPush` no longer exists in `functions/index.js`.** Nothing creates the
+  `pending` rows the callback would promote.
+* `darajaSTKCallback` still exists and still writes `completed` under an atomic claim — a
+  receiver with no producer.
+* The **only** writer of `posPayments` documents is `pos-qr.js:176`, and the QR rail's vocabulary
+  is `pending | paid | expired | cancelled | refunded` — it writes **`paid`**, never `completed`.
+* The IntaSend receiver does **not** close the gap: `webhookIntasend` → `_associatePosQrCallback`
+  **associates only and never marks paid** (P3-A, deliberate — only `completePOSQRPayment` may
+  mark paid, after `shared/intasend-verify`).
+
+Production, same day: `posPayments` = 13 → **failed 6, pending 5, completed 2**;
+**`posPaymentClaims` = 0**; `posIdempotency` = 0; `posRetailSales` = 5.
+
+**Zero payment claims means `posCompleteCheckout` has never confirmed a non-cash tender in
+production.** The two `completed` rows are historical Daraja. The primary till is cash-only in
+practice, and every M-PESA tender attempted through it is refused with *"The customer has not
+completed this payment yet"* or *"No M-PESA payment was found for this sale"*.
+
+### The designed replacement
+
+The IntaSend-confirmed equivalent of Daraja's `completed` already exists and is **stronger**:
+`completePOSQRPayment` writes `posPayments.status = 'paid'` only after `shared/intasend-verify`
+has confirmed the reference with IntaSend. It is certified (P1) and the client cannot write it.
+
+```
+CONFIRMABLE gate, today      pay.status !== 'completed'   → Daraja vocabulary, no producer
+CONFIRMABLE gate, designed   pay.status !== 'paid'        → IntaSend-verified, live producer
+```
+
+Conditions this design carries, none of which may be dropped:
+
+1. **`paid` must remain writable only by `completePOSQRPayment`** after provider verification.
+   If any client path can write it, the gate is worse than Daraja's, not better.
+2. **`posPaymentClaims` single-spend is unchanged** and does the same work regardless of
+   vocabulary — it keys on the reference, not the status.
+3. **Accept one vocabulary, not both.** Keeping `completed` as an alternative preserves a Daraja
+   surface with no producer, and two accepted spellings on one collection is the D2 two-shape
+   defect this would otherwise be repeating.
+4. **`mpesa_daraja` leaves `CONFIRMABLE`.** A method name that can never be confirmed should not
+   be listed as confirmable.
+5. The change is **one predicate and one method list** in `pos-zero-friction.js`. It is small,
+   and it is on the live money path — it wants its own slice, its own test, and the same
+   browser/production verification discipline as the receipt gate.
+
+**Not implemented here.** This section is the design; the mutation is a separate, gated slice.
+
+## A.1.6 The boundary this preserves
+
+```
+                    SOKONI PAYMENT
+          ┌──────────────────┴──────────────────┐
+     ONLINE / MARKETPLACE                   POS / TILL
+     createPaymentIntent                posCompleteCheckout
+     payment-purposes pricing           server-computed totals
+     webhookIntasend confirms           posPayments 'paid' read at sale
+     payments/{apiRef}                  posPaymentClaims single-spend
+     orders                             posRetailSales + posReceipts
+```
+
+Two authorities, one provider, and **one confirmation source** once A.1.5 lands. They are not
+merged: an online intent is priced before payment and confirmed by push; a till sale is priced at
+the counter and confirms by reading. Amendment A's error was treating the second as absent.
+
+## A.1.7 Disposition of the dual-business branch
+
+| Artefact | Direction |
+|---|---|
+| `posCompleteCheckout` | **The POS authority.** Close A.1.3 gaps inside it. |
+| `retailSettlements` | **Do not create.** A.1.4. |
+| `d138279` QR + receipt port | **Still valid** — `pos.html` is live via `smartpos` and retains both defects. Secondary surface; lower urgency than believed. |
+| `sokoni-pos-tender.js` | Adapt the allocation **mathematics** only; authority role superseded. |
+| Quick Charge / mixed basket | Adapt onto `payments[]` + `posCompleteCheckout`. |
+| `payment-purposes.js` / `pos_service_sale` | **Reconcile:** it prices from `posProducts`; `posCompleteCheckout` validates against canonical `products` and records that *"posProducts was empty for most merchants"*. Resolve before wiring. |
+| `sokoni-pos-receipt-gate.js` | `pos.html` only. `pos-checkout.html` is server-gated. |
+| IntaSend hosted-checkout client | Candidate external adapter; unchanged by this amendment. |
+| `business-scope.js`, catalogue, merchant nav | Reuse; orthogonal. |
+
+## A.1.8 What A.1 deliberately does NOT do
+
+* No runtime code, no collection, no deploy, no merge of `d138279`.
+* Does not implement A.1.5 — that is a separate gated slice on the live money path.
+* Does not close the A.1.3 gaps; it names them.
+* Does not re-ratify Amendment A §4–§16, which stand except where A.1 names them.
+* Does not resolve `posSales` vs `posRetailSales`; that remains
+  POS_SALES_LIFECYCLE_AUDIT §5's open authority decision.

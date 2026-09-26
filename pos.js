@@ -1037,6 +1037,30 @@ const SPos = (function () {
     /* Used by Phase 7 long-press quick-add */
     _addById(productId) { cart.addItem(productId); },
 
+    /* ── A PRE-BUILT LINE ──────────────────────────────────────────────────
+       For lines that do not come from the catalogue — today, a Quick Charge
+       custom service charge built by sokoni-pos-basket.js.
+
+       Deliberately NOT a second addItem: it takes a line that has already
+       been validated and attributed, and does no pricing of its own. The
+       server re-prices the whole basket through pos_service_sale regardless,
+       so nothing here is authoritative.
+
+       It never merges. Two scans of one product merge because they are the
+       same thing twice; two custom charges are two different charges that
+       happen to share a price, and merging them would erase one of the
+       cashier's decisions. The caller supplies a unique id and it is trusted
+       only as a key — the `qc_` prefix keeps it clear of any posProducts id. */
+    addCustomLine(line) {
+      if (!line || !line.id || !line.name) throw new Error('A custom line needs an id and a name');
+      if (!(Number(line.price) > 0))       throw new Error('A custom line needs a price');
+      if (!line.authorizedBy)              throw new Error('A custom line must be attributed to a cashier');
+      if (state.cartItems.some(i => i.id === line.id)) throw new Error('That line is already on this sale');
+      state.cartItems.push(Object.assign({ qty: 1 }, line));
+      cart.render();
+      return line.id;
+    },
+
     updateQty(id, delta) {
       const item = state.cartItems.find(i => i.id === id);
       if (!item) return;
@@ -1377,6 +1401,27 @@ const SPos = (function () {
         return;
       }
 
+      /* ── QR MUST NOT FALL THROUGH ──────────────────────────────────────────
+         `qr` had no branch here, so it reached the cash tail below and
+         completed a sale nothing had confirmed. Two ways in, both live:
+
+           1. The cashier taps QR, closes the modal before payment, and presses
+              Charge. SPosQR.close() used to reset the method to 'cash', so the
+              sale completed as CASH — the one method the receipt gate trusts —
+              and printed. A QR attempt with no money became a receipted cash
+              sale. close() no longer reclassifies; this branch catches it.
+           2. The success state's "Complete Sale" called
+              SPos.payment.completeQR(), which did not exist, and fell back to
+              process(). That path is now completeQR() below.
+
+         A QR sale completes ONLY through completeQR(), which re-asks the
+         server. Reaching here means no confirmation was established. */
+      if (method === 'qr') {
+        toast('Finish the QR payment in the QR window — a QR sale is completed there, once M-PESA confirms it.', 'error');
+        if (window.SPosQR && typeof SPosQR.open === 'function' && !state._qrModalOpen) SPosQR.open();
+        return;
+      }
+
       const tendered = parseFloat(state.numpadStr) || total;
       if (method === 'cash' && tendered < total) {
         toast(`Tendered KES ${tendered.toFixed(2)} is less than total KES ${total.toFixed(2)}`, 'error');
@@ -1385,6 +1430,74 @@ const SPos = (function () {
 
       const change = method === 'cash' ? Math.max(0, tendered - total) : 0;
       await payment.complete({ method, amountPaid: tendered, change, mpesaRef: null, mpesaPhone: null });
+    },
+
+    /* ── QR COMPLETION — the only way a QR sale may be recorded ────────────
+       SPosQR's "Complete Sale" button called this; it did not exist, so the
+       call fell back to process() and completed through the cash tail.
+
+       THE POLL'S SUCCESS STATE IS NOT THE EVIDENCE. It is a UI state driven
+       by the same endpoint, and by the time the cashier presses the button it
+       may be seconds old — or have been reached by a poll that has since been
+       superseded. So this RE-ASKS the server and completes only on what that
+       answer says, now.
+
+       `getPOSPaymentDetails` returns status:'paid' only for a posPayments row
+       that completePOSQRPayment marked paid AFTER shared/intasend-verify
+       confirmed the reference with IntaSend. That is the authoritative signal
+       the till already had and never consumed — no new authority is created
+       here, and no browser event is trusted.
+
+       Anything other than a confirmed 'paid' — pending, expired, cancelled,
+       a thrown error, an unreachable network — completes NOTHING. */
+    async completeQR(qrTxnId) {
+      if (!qrTxnId) { toast('No QR payment to complete', 'error'); return; }
+      const total = cart.getTotal();
+
+      let details = null;
+      try {
+        const call = (window.SPos && window.SPos._cf)
+          ? window.SPos._cf('getPOSPaymentDetails')
+          : (window.firebase && window.firebase.functions
+              ? window.firebase.functions().httpsCallable('getPOSPaymentDetails')
+              : null);
+        if (!call) { toast('Cannot reach SOKONI to confirm the payment. The sale was NOT completed.', 'error'); return; }
+        const res = await call({ transactionId: qrTxnId });
+        details = res && res.data;
+      } catch (err) {
+        /* A non-answer is NOT a confirmation. It is also not a failure — the
+           money may well have arrived. Say so and leave the sale open. */
+        toast('Could not confirm the payment with SOKONI. The sale was NOT completed — check the QR window.', 'error');
+        return;
+      }
+
+      if (!details || details.status !== 'paid') {
+        toast('That QR payment is not confirmed yet. The sale was NOT completed.', 'error');
+        return;
+      }
+
+      /* The server's figure, not the cart's, is what was actually paid. A
+         mismatch is reported and refused rather than reconciled here. */
+      const paid = Number(details.total);
+      if (Number.isFinite(paid) && Math.abs(paid - total) > 0.5) {
+        toast(`Paid amount (KES ${paid.toFixed(2)}) does not match this sale (KES ${total.toFixed(2)}). Not completed.`, 'error');
+        return;
+      }
+
+      await payment.complete({
+        method:     'qr',
+        amountPaid: Number.isFinite(paid) ? paid : total,
+        change:     0,
+        mpesaRef:   null,
+        mpesaPhone: null,
+        /* Set ONLY after the server round-trip above. The receipt gate keys
+           a final QR receipt on these two, so they are the record that a
+           verification happened — never assertable by a browser event. */
+        qrTxnId:    String(qrTxnId),
+        qrVerified: true,
+        qrReceiptId: details.receiptId || null,
+        qrPaidAt:   details.paidAt || null,
+      });
     },
 
     async complete(payInfo) {
@@ -1610,7 +1723,38 @@ const SPos = (function () {
       /* Print receipt — route through the single public print API (PosPrintService),
          which owns transport selection, queue, telemetry and the legacy fallback.
          Fire-and-forget: a print failure must never interrupt order completion. */
-      if (state.settings.autoPrint || payInfo.method === 'card') {
+      /* ── RECEIPT AUTHORIZATION ─────────────────────────────────────────────
+         Was: `state.settings.autoPrint || payInfo.method === 'card'`.
+
+         Two changes. The card shortcut is REMOVED — card is genuinely approved
+         before complete() runs (line ~1386 only calls it on `approved`), but
+         overriding the merchant's own autoPrint setting for one method was
+         undocumented, and the owner asked for it gone.
+
+         The larger one: autoPrint alone printed for ANY method reaching this
+         point, including ones nothing confirmed. `qr` has no branch in
+         process(), so it falls through to the cash tail and completes a sale
+         the QR rail never verified — and a receipt printed for money that had
+         not arrived.
+
+         autoPrint is now a PREFERENCE about an ELIGIBLE receipt: it can
+         suppress one, and it can never authorise one. The eligibility rules
+         live in sokoni-pos-receipt-gate.js, per tender, with their evidence.
+
+         Fails OPEN to the old behaviour if the module did not load — a till
+         that cannot decide must not silently stop printing cash receipts. */
+      const _rg = window.SPosReceiptGate;
+      const _verdict = _rg
+        ? _rg.shouldPrintFinal(payInfo, { autoPrint: state.settings.autoPrint, total })
+        : { print: !!state.settings.autoPrint, eligibility: { final: true, slip: false, reason: 'gate unavailable' } };
+
+      /* An INELIGIBLE sale never prints a final receipt, and the cashier is
+         told why rather than being left to wonder where the paper went. */
+      if (!_verdict.eligibility.final) {
+        toast('No sale receipt: ' + _verdict.eligibility.reason, 'warn');
+      }
+
+      if (_verdict.print) {
         if (window.PosPrintService && typeof PosPrintService.printReceipt === 'function') {
           PosPrintService.printReceipt(receiptData, { method: payInfo.method, payments: txn.payments })
             .then((r) => {

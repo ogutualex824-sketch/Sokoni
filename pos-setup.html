@@ -1240,6 +1240,60 @@
     }
 
     /* ══════════════════════════════════════════════════
+       ADVANCED SETUP
+       Collapsed by default so the "You're Ready to Sell"
+       moment stays uncluttered for a first-time merchant,
+       and one tap away for everyone else. Uses the wizard's
+       own tokens — no second palette.
+    ══════════════════════════════════════════════════ */
+    .adv-setup {
+      margin-top: 22px;
+      text-align: left;
+      border: 1px solid var(--sk-border);
+      border-radius: var(--sk-radius);
+      background: var(--sk-surface-2);
+      overflow: hidden;
+    }
+    .adv-summary {
+      display: flex; flex-direction: column; gap: 2px;
+      padding: 14px 16px; cursor: pointer; list-style: none;
+      font-size: 14px; font-weight: 800; color: var(--sk-text);
+    }
+    .adv-summary::-webkit-details-marker { display: none; }
+    .adv-summary::after {
+      content: '⌄'; position: absolute; right: 20px;
+      font-size: 18px; color: var(--sk-text-muted);
+      transition: transform .2s;
+    }
+    .adv-setup { position: relative; }
+    .adv-setup[open] .adv-summary::after { transform: rotate(180deg); }
+    .adv-summary small { font-weight: 500; font-size: 11.5px; color: var(--sk-text-dim); }
+    .adv-group-label {
+      padding: 14px 16px 6px; font-size: 10px; font-weight: 800;
+      letter-spacing: .14em; color: var(--sk-text-dim);
+    }
+    .adv-grid {
+      display: grid; gap: 8px; padding: 0 12px 4px;
+      grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+    }
+    .adv-card {
+      display: flex; flex-direction: column; gap: 2px;
+      padding: 12px 13px; border-radius: 11px; text-decoration: none;
+      background: var(--sk-card); border: 1px solid var(--sk-border);
+      transition: background .15s, border-color .15s, transform .15s;
+      min-height: 44px;
+    }
+    .adv-card:hover { background: var(--sk-card-hover); border-color: var(--sk-accent); transform: translateY(-1px); }
+    .adv-card:focus-visible { outline: 2px solid var(--sk-accent); outline-offset: 2px; }
+    .adv-i { font-size: 17px; line-height: 1; }
+    .adv-card b { font-size: 12.5px; font-weight: 800; color: var(--sk-text); }
+    .adv-card i { font-style: normal; font-size: 10.5px; line-height: 1.45; color: var(--sk-text-dim); }
+    .adv-setup > *:last-child { margin-bottom: 14px; }
+    @media (max-width: 420px) {
+      .adv-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* ══════════════════════════════════════════════════
        TOAST
     ══════════════════════════════════════════════════ */
     #toast-root {
@@ -1874,6 +1928,59 @@
         <button class="btn-secondary" id="btn-configure-hw" aria-label="Configure POS hardware like printers and scanners">
           Configure Hardware
         </button>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             ADVANCED SETUP
+             The wizard provisions a till; these are the consoles that RUN it.
+             They existed already and were fully built, but pos-setup.html
+             linked to NONE of them — a merchant who finished the wizard had no
+             route to till management, cash control, staff operations, hardware
+             or reporting except by knowing the URLs. This is that route.
+
+             Nothing here is new configuration and nothing has been moved out
+             of the pages it belongs to; each card opens the existing console,
+             which keeps owning its own settings.
+        ═══════════════════════════════════════════════════════════════ -->
+        <details class="adv-setup" id="adv-setup">
+          <summary class="adv-summary">
+            <span>Advanced setup</span>
+            <small>Tills, cash, staff, hardware, reporting &amp; more</small>
+          </summary>
+
+          <div class="adv-group-label">PAYMENTS &amp; TILLS</div>
+          <div class="adv-grid">
+            <a class="adv-card" href="pos-till-manager.html"><span class="adv-i">🧾</span><b>Till Manager</b><i>Open, close and reconcile tills</i></a>
+            <a class="adv-card" href="pos-cash-manager.html"><span class="adv-i">💵</span><b>Cash Manager</b><i>Float, drops, counts and variance</i></a>
+            <a class="adv-card" href="pos-checkout.html"><span class="adv-i">🛒</span><b>Checkout</b><i>Sale screen configuration</i></a>
+            <a class="adv-card" href="pos-daily.html"><span class="adv-i">📆</span><b>Daily Close</b><i>End-of-day totals and Z-report</i></a>
+          </div>
+
+          <div class="adv-group-label">HARDWARE</div>
+          <div class="adv-grid">
+            <a class="adv-card" href="pos-hardware-setup.html"><span class="adv-i">🔌</span><b>Hardware Setup</b><i>Drawers, scanners, scales, displays</i></a>
+            <a class="adv-card" href="pos-printer-setup.html"><span class="adv-i">🖨️</span><b>Printer Setup</b><i>P58E and receipt configuration</i></a>
+            <a class="adv-card" href="pos-hardware-wizard.html"><span class="adv-i">🧙</span><b>Hardware Wizard</b><i>Guided device pairing</i></a>
+            <a class="adv-card" href="pos-display.html"><span class="adv-i">🖥️</span><b>Customer Display</b><i>Second screen and kiosk mode</i></a>
+          </div>
+
+          <div class="adv-group-label">PEOPLE &amp; STOCK</div>
+          <div class="adv-grid">
+            <a class="adv-card" href="pos-staff-ops.html"><span class="adv-i">👥</span><b>Staff Operations</b><i>Cashiers, shifts, roles and PINs</i></a>
+            <a class="adv-card" href="pos-inventory.html"><span class="adv-i">📦</span><b>Inventory</b><i>Stock, counts and adjustments</i></a>
+            <a class="adv-card" href="pos-suppliers.html"><span class="adv-i">🚚</span><b>Suppliers</b><i>Purchase orders and receiving</i></a>
+            <a class="adv-card" href="pos-customers.html"><span class="adv-i">🙋</span><b>Customers</b><i>Accounts, credit and loyalty</i></a>
+          </div>
+
+          <div class="adv-group-label">INSIGHT &amp; OPERATIONS</div>
+          <div class="adv-grid">
+            <a class="adv-card" href="pos-reports.html"><span class="adv-i">📊</span><b>Reports</b><i>Sales, tax and tender breakdowns</i></a>
+            <a class="adv-card" href="pos-bi.html"><span class="adv-i">📈</span><b>Business Intelligence</b><i>Trends and performance</i></a>
+            <a class="adv-card" href="pos-accounting.html"><span class="adv-i">🧮</span><b>Accounting</b><i>Ledgers and exports</i></a>
+            <a class="adv-card" href="pos-hq.html"><span class="adv-i">🏢</span><b>Multi-Branch HQ</b><i>Estate-wide control</i></a>
+            <a class="adv-card" href="pos-live-floor.html"><span class="adv-i">🛰️</span><b>Live Floor</b><i>Real-time till activity</i></a>
+            <a class="adv-card" href="pos-observability.html"><span class="adv-i">🩺</span><b>Observability</b><i>Health, errors and sync state</i></a>
+          </div>
+        </details>
 
       </div>
     </section>

@@ -177,9 +177,37 @@
   /* ── Render ─────────────────────────────────────────────────────────── */
   function render() {
     if (!sheet) return;
+    _renderBasket();
     _renderMethods();
     _renderTenders();
     _renderFooter();
+  }
+
+  /* WHAT IS BEING PAID FOR.
+     A cyber café's sale is a flash disk, ten printed pages and a repair. The
+     cashier should see those as three different things before taking money,
+     because that is what the receipt and the books will say.
+
+     Shown only when the sale actually mixes kinds — an ordinary shop selling
+     three products sees nothing new. The figures here are the till's own
+     display arithmetic; the SERVER prices the sale. */
+  function _renderBasket() {
+    const host = $('paycon-basket');
+    if (!host) return;
+    const B = window.SPosBasket;
+    let lines = [];
+    try { lines = (window.SPos && window.SPos.state && window.SPos.state.cartItems) || []; }
+    catch (_) { lines = []; }
+
+    if (!B || !lines.length) { host.style.display = 'none'; return; }
+    const grouped = B.groups(lines);
+    /* One group is not a breakdown. */
+    if (grouped.length < 2) { host.style.display = 'none'; return; }
+
+    host.innerHTML = grouped.map((g) =>
+      `<div class="basket-grp"><span>${esc(g.label)} · ${g.lines.length}</span>` +
+      `<b>${esc(B.fmtKES(g.subtotalCents))}</b></div>`).join('');
+    host.style.display = 'block';
   }
 
   function _renderMethods() {
