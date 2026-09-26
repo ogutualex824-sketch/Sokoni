@@ -194,6 +194,21 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
+    /* ── Creator Hub PREVIEW renditions — same posture as masters: owner
+       create-only, NO client read. A non-entitled viewer receives only a
+       short-lived V4 signed URL for this object (creatorDispatch
+       playback.preview), never the master's. 1 GiB ceiling mirrors
+       PREVIEW_MAX_BYTES. ── */
+    match /creator-previews/{uid}/{filmId}/{uploadId} {
+      allow read:   if false;
+      allow create: if request.auth != null
+                    && request.auth.uid == uid
+                    && resource == null
+                    && request.resource.contentType.matches('video/.*')
+                    && request.resource.size < 1024 * 1024 * 1024;
+      allow update, delete: if false;
+    }
+
     /* ── Creator Hub public assets: posters, avatars (images) and trailers
        (video ≤ 500 MB). Public read — they are marketing material; the film
        itself never lives here. Owner-only writes. ── */

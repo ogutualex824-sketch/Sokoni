@@ -83,6 +83,8 @@ async function suite(env, label, expectDenials) {
   await expectDeny('creator sets the VERIFIED projection', cA.doc('creators/cA').update({ verification: 'VERIFIED' }));
   await expectDeny('viewer forges watch progress', v1.doc('watchProgress/v1_filmPub').set({ uid: 'v1', positionSec: 1 }));
   await expectDeny('creator inflates film stats', cA.doc('filmStats/filmPub').set({ views: 99999 }));
+  await expectDeny('viewer resets their own preview allowance', v1.doc('creatorPreviewGrants/v1_filmPub').set({ consumedSec: 0, exhausted: false }));
+  await expectDeny('viewer reads the preview ledger', v1.doc('creatorPreviewGrants/v1_filmPub').get());
 
   console.log(`\n── ${label}: reads ──`);
   if (D) {
@@ -138,6 +140,14 @@ async function storageSuite(env, label, D) {
   await expectDeny('rival uploads into another creator\'s masters', put(cB, 'creator-masters/cA/f1/u2', 'video/mp4'));
   await expectDeny('non-video master', put(cA, 'creator-masters/cA/f1/u3', 'application/pdf'));
   await expectDeny('creator deletes a master', cA.ref('creator-masters/cA/f1/u1').delete());
+  /* preview renditions: same posture as masters — no client read, owner create-only */
+  if (D) ck(`${label}: creator uploads own preview (create)`, await allowed(put(cA, 'creator-previews/cA/f1/p1', 'video/mp4')));
+  else await allowed(put(cA, 'creator-previews/cA/f1/p1', 'video/mp4'));
+  await expectDeny('viewer reads a preview file directly (signed URL only)', v1.ref('creator-previews/cA/f1/p1').getDownloadURL());
+  await expectDeny('anonymous reads a preview file directly', anon.ref('creator-previews/cA/f1/p1').getDownloadURL());
+  await expectDeny('creator OVERWRITES an attached preview', put(cA, 'creator-previews/cA/f1/p1', 'video/mp4'));
+  await expectDeny('rival uploads into another creator\'s previews', put(cB, 'creator-previews/cA/f1/p2', 'video/mp4'));
+  await expectDeny('non-video preview', put(cA, 'creator-previews/cA/f1/p3', 'application/pdf'));
   if (D) {
     ck(`${label}: creator uploads own poster`, await allowed(put(cA, 'creator-public/cA/poster.jpg', 'image/jpeg')));
     ck(`${label}: poster publicly readable`, await allowed(anon.ref('creator-public/cA/poster.jpg').getDownloadURL()));

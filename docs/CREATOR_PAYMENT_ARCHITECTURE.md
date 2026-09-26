@@ -89,6 +89,13 @@ Classification today (**nothing has been proven for the hosted checkout**):
 
 Nothing in this table says "all IntaSend methods are supported" or "hosted checkout is live".
 
+**Read-only evidence (2026-09-26, owner-authorized option A — `GET /api/v1/invoices/?state=COMPLETE`):**
+28 COMPLETE invoices, **all `M-PESA`**, latest `08QXNLZ` (2026-09-14). No other method was ever
+observed. This is historical evidence for M-PESA on the existing collection rail only — it does not
+prove hosted-page M-PESA, and absence does not make any other method UNSUPPORTED. Production
+`config/intasendCapability` does not exist (its writer is not deployed). **HOSTED INTASEND METHODS:
+UNPROVEN LIVE.**
+
 ### Contract corrections made from IntaSend's own reference (no provider call)
 
 - **Method identifiers.** The enum is `M-PESA, PESALINK, CARD-PAYMENT, GOOGLE-PAY, APPLE-PAY,
@@ -151,8 +158,8 @@ Every row below is reached through `adminOsDispatch` (or, for payouts, a direct 
 | Outcome-unknown resolution | AdminOS › Financial › Payouts › Outcome unknown | AdminOS / **Super Admin** | `adminResolvePayoutOutcome` — **Super Admin** |
 | Fee attestation (royalty exceptions) | AdminOS › Creator › Exceptions | AdminOS / Super Admin | `creatorAdminAttestFee` — **Super Admin** |
 | Entitlement revocation | AdminOS › Creator › Playback security | AdminOS | `creatorAdminRevokeEntitlement` — admin |
-| Refund review | **no UI anywhere** | AdminOS | `fosResolveRefund` (financial-os.js) — callable only |
-| Creator analytics / oversight | **no admin view** (creators see their own in Studio) | AdminOS | — |
+| Refund review | AdminOS › Creator Hub › Refunds (**built 2026-09-26**) | AdminOS | `creatorAdminRefundCases` (read, admin) · `fosApproveRefund` (admin) · `fosResolveRefund` (**Super Admin** + evidence) |
+| Creator analytics / oversight | AdminOS › Creator Hub › Oversight (**built 2026-09-26**) | AdminOS | `creatorAdminOverview` — admin, aggregates only |
 | Commercial & checkout configuration | AdminOS › Creator › Config | AdminOS / **Super Admin** | `creatorAdminConfig` — read admin, write **Super Admin** |
 | Payment-method capability | AdminOS › Creator › Config | AdminOS / **Super Admin** | `creatorAdminPaymentCapability` — read admin, write **Super Admin** (new) |
 
@@ -162,10 +169,10 @@ admin; a forged `"true"` string claim is not Super Admin; the AdminOS op list eq
 handler set.
 
 **Findings for the owner (not changed here):**
-- Money-moving settlement ops (`ApprovePeriod`, `Distribute`, `SetPayoutHold`,
-  `RevokeEntitlement`) need only **admin**, and one admin can approve and distribute the same
-  quarter — no second reviewer. Decide whether these move to Super Admin or a two-person rule.
-- Refund review and Creator oversight/analytics have **no AdminOS surface** — to build in AdminOS.
+- **Fixed 2026-09-26:** distribute now refuses the admin who approved the quarter (dual control;
+  Super Admin override needs a written reason and is audited). `SetPayoutHold` and
+  `RevokeEntitlement` remain plain-admin (protective, not money-releasing) — owner may still decide.
+- **Fixed 2026-09-26:** Refund review and Creator oversight are AdminOS tabs.
 
 ## 6. Legacy admin pages
 
@@ -181,3 +188,10 @@ Scanned for Creator ops, collections and money controls (`admin.html`, `super-ad
   same server rules. **Mark for migration.**
 - `super-admin.html` / `superadmin.html` exist as separate Super Admin applications, which
   contradicts "Super Admin is an AdminOS persona". **Mark for migration**; not touched here.
+- `finos-admin.html:1007-1022` and `fos-admin.html:484-494` — legacy platform refund approval
+  (`fosApproveRefund`), the same server authority AdminOS now uses; a Creator film refund reaches it too.
+  Generic platform functionality — **mark for migration**, not deleted.
+- Routing scan (all admin-style pages, terms: creator · film · royalty · verification · payout · refund ·
+  settlement · analytics · content moderation): Creator-specific controls exist ONLY in `admin-os.html`
+  (`sokoni-aos-creator.js`). `minishop-admin.html` "Promotion Creator" and `legal.html` "royalty-free
+  licence" are unrelated wording.

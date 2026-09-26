@@ -413,3 +413,63 @@ tokens satisfy **740** `isAuthed()` references in the served rules, **39** stora
 record), `creatorDispatch` limits anonymous tokens to catalogue / playback / library, and the page
 offers "Create your SOKONI account" (link, then email verification) after the entitlement is ACTIVE.
 Recovery if the guest clears the browser before linking: none automated (support only) — UNPROVEN.
+
+## 25. Preview enforcement (2026-09-26)
+
+`previewSeconds = N` now controls playback; storing it is no longer the whole feature.
+
+- **Separate rendition.** The creator uploads a PREVIEW file (`creator-previews/{uid}/{filmId}/{uploadId}`,
+  create-only, no client read — same posture as masters; `film.previewUploadTarget` / `film.attachPreview`
+  verify the stored object). A non-entitled viewer's grant (`playback.preview`) signs ONLY that file; the
+  master is signed only by `playback.authorize`, which requires an ACTIVE entitlement. No preview file → no
+  preview (the master is never cut or used as a preview).
+- **Server ledger.** `creatorPreviewGrants/{uid}_{filmId}` (server-only) holds seconds watched (monotonic,
+  clamped to N), a 30-minute wall-clock window and a 6-grant cap, decided in the same transaction that
+  signs. A reload resumes where the viewer was; it cannot restart the allowance.
+- **Client guard.** `attachPreviewGuard` (shared `creator-publishing.js`, served as
+  `sokoni-creator-rules.js`) stops the player at N, pulls a seek past N back, refuses play after N.
+- `previewSeconds` outside 1–600 (0, negative, fractional, text, huge) → 0 → entitlement required.
+- Entitled viewers get the full film with no preview limit; a revoked entitlement loses full playback and the
+  running session ends on its next heartbeat. **Not DRM; not copy-proof** (screen recording is possible).
+- Proof: `scripts/test-creator-preview.js` — server, simulated guard, and a real `<video>` in Chromium.
+
+## 26. Dashboard figures, defined (`royalty.mine` → `figures`)
+
+| Figure | Definition | Authority |
+|---|---|---|
+| Total earned | every royalty ledger EARN minus REVERSAL, all quarters ("—" if the read was truncated) | `royaltyLedger` |
+| Pending | open quarter + quarters CALCULATED / APPROVED — not withdrawable | ledger × `royaltyPeriods` |
+| Released | what closed quarters released to the wallet | `royaltyStatements` |
+| Available for withdrawal | the wallet balance (may include other SOKONI earnings — labelled) | `wallets.balance` |
+| Withdrawn | payouts `paid` / `settled_manually` only | `payoutRequests` |
+| Pending withdrawal | payouts reserved and in flight | `payoutRequests` |
+| Being confirmed | `outcome_unknown` payouts — neither withdrawn nor available | `payoutRequests` |
+
+Failed, rejected and reversed payouts count as nothing.
+
+## 27. Search
+
+Creator films are not in the Algolia / Typesense indexes; Firestore (`entertainmentListings`, `creatorHub` +
+`status == 'active'`) is their ONE search authority. `search.html` renders Algolia's answer, then folds in
+Firestore's films via `mergeCreatorFilms` (films only, de-duplicated, skipped if the query changed). No second
+index. Unpublished / suspended / deleted films cannot match (`scripts/test-creator-search.js`). Live Algolia
+behaviour UNPROVEN (no deploy).
+
+## 28. Governance, refunds, oversight (AdminOS)
+
+- **Dual control.** Calculate → approve → distribute: approve refuses the calculator (existing); distribute
+  now refuses the APPROVER. A Super Admin approver may override only with a written reason, recorded in
+  `adminAudit` (`royalty_distribute_override`).
+- **Refund review.** AdminOS › Creator Hub › Refunds lists `fosRefundQueue` cases (payment identity, amount,
+  reason, state, provider outcome, OUTCOME_UNKNOWN, audit history, film flag from the server-minted intent).
+  Approve / reject call `fosApproveRefund`; resolve calls `fosResolveRefund` (Super Admin + evidence). No second
+  refund lifecycle. **Lineage note:** `reviewRefundCase` / `refundExecution` live on
+  `slice/realtime-control-plane` (B9.32C), not on this branch — convergence happens at merge, not by porting.
+- **Oversight.** AdminOS › Creator Hub › Oversight: creators by state, verification queue, published films,
+  purchases, gross, provider fees, SOKONI 30 %, creator pool 70 %, refunds, released royalty, participant
+  payouts (withdrawn / pending / outcome_unknown). Aggregates only; a capped read shows "—".
+- **No self-review.** An admin cannot decide their own verification application or change their own creator
+  account state.
+- **Withdrawal forms.** `sokoni-payout-intent.js`: one idempotency key per (user, amount, destination),
+  shared across tabs, reused on reload / retry, released only on a definitive answer. Wired into
+  `provider-dashboard.html` (was `'po_'+Date.now()`) and `wallet.html`.

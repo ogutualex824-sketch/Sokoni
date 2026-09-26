@@ -699,7 +699,7 @@ import { db } from "./firebase.js";
    requires for each collection (a list query without them is denied outright),
    searches sellers so a store is findable by name, and applies the platform
    visibility contract. See sokoni-firestore-search.js for the full rationale. */
-import { firestoreSearch, warm as warmCatalogue } from "./sokoni-firestore-search.js";
+import { firestoreSearch, warm as warmCatalogue, mergeCreatorFilms } from "./sokoni-firestore-search.js";
 
 /* Preload the catalogue the moment the page starts, in parallel with everything
    else. By the time a query is typed the data is usually already in memory, so
@@ -1438,6 +1438,25 @@ async function doSearch(rawQuery) {
         isLoading = false;
         if (!isAppend) renderTabs();
         renderResults(isAppend);
+
+        /* Creator films live only in Firestore (not in Algolia). Render the
+           primary answer now, then fold in Firestore's films when they arrive —
+           unless the buyer has typed a new query meanwhile. Other tabs are not
+           touched (mergeCreatorFilms adds only tab 'films'). */
+        if (!isAppend && fsPromise) {
+          const _qAt = lastQuery;
+          fsPromise.then((fsRowsLate) => {
+            if (lastQuery !== _qAt) return;
+            const merged = mergeCreatorFilms(allResults, fsRowsLate);
+            if (merged === allResults) return;
+            allResults = merged;
+            counts = {};
+            TABS.slice(1).forEach(t => { counts[t.id] = 0; });
+            allResults.forEach(r => { counts[r.tab] = (counts[r.tab] || 0) + 1; });
+            renderTabs();
+            renderResults(false);
+          }).catch(() => {});
+        }
 
         /* Non-blocking analytics (first page only) */
         if (!isAppend && typeof firebase !== "undefined") {

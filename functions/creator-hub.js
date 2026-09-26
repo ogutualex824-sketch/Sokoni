@@ -63,6 +63,7 @@ const COL = Object.freeze({
   VERIFICATIONS: 'creatorVerifications',
   PROGRESS: 'watchProgress', STATS: 'filmStats', VIEWERS: 'filmViewers',
   WALLETS: 'wallets', WALLET_TX: 'walletTransactions', ADMIN_AUDIT: 'adminAudit',
+  PREVIEW_GRANTS: 'creatorPreviewGrants',
 });
 
 const fail = (code, msg) => { throw new HttpsError(code, msg); };
@@ -142,7 +143,9 @@ function _publicFilm(id, f) {
     genre: f.genre || null, language: f.language || null, country: f.country || null,
     releaseDate: f.releaseDate || null, runtimeMinutes: f.runtimeMinutes || null,
     ageRating: f.ageRating || null, classification: f.classification || null,
-    posterUrl: f.posterUrl || null, trailerUrl: f.trailerUrl || null, previewSeconds: f.previewSeconds || 0,
+    posterUrl: f.posterUrl || null, trailerUrl: f.trailerUrl || null, previewSeconds: P.normalizePreviewSeconds(f.previewSeconds),
+    /* A preview is offered only with BOTH a valid length and a verified preview file. */
+    previewAvailable: P.normalizePreviewSeconds(f.previewSeconds) > 0 && f.previewReady === true,
     priceCents: f.priceCents, currency: f.currency, accessType: f.accessType, rentalDays: f.rentalDays || null,
     availability: f.availability || { mode: 'worldwide', countries: [] },
     pubState: f.pubState, publishedAt: _ms(f.publishedAt),
@@ -153,10 +156,12 @@ function _ownerFilm(id, f) {
     ownershipStatus: f.ownershipStatus || 'UNLOCKED', reviewNote: f.reviewNote || null,
     createdAt: _ms(f.createdAt), updatedAt: _ms(f.updatedAt) };
 }
-function _publicCreator(uid, c) {
+/* PUBLIC by default: no contact, no private data. `withContact` only for the
+   creator's own view, AdminOS and verification — never the public catalogue. */
+function _publicCreator(uid, c, { withContact = false } = {}) {
   return { creatorId: uid, displayName: c.displayName, bio: c.bio || '', country: c.country || null,
     avatarUrl: c.avatarUrl || null, verification: c.verification || 'UNVERIFIED', state: c.state,
-    supportEmail: c.supportEmail || null };
+    ...(withContact ? { supportEmail: c.supportEmail || null } : {}) };
 }
 
 /* ═══ CREATOR IDENTITY ═══════════════════════════════════════════════════ */
@@ -203,7 +208,7 @@ async function creatorMe(req) {
   ]);
   const v = await _db().collection(COL.VERIFICATIONS).doc(uid).get();
   return {
-    creator: c.exists ? { ..._publicCreator(uid, c.data()), reviewNote: c.data().reviewNote || null } : null,
+    creator: c.exists ? { ..._publicCreator(uid, c.data(), { withContact: true }), reviewNote: c.data().reviewNote || null } : null,
     verificationStatus: v.exists ? v.data().status : P.VERIFICATION_STATE.NOT_APPLIED,
     rightsAttestation: RIGHTS_ATTESTATION,
     films: films.docs.map((d) => _ownerFilm(d.id, d.data())),
@@ -311,6 +316,50 @@ async function filmAttachMedia(req) {
     txn.update(ref, { mediaReady: true, pendingUploadId: null, updatedAt: FieldValue.serverTimestamp() });
   });
   return { mediaReady: true, sizeBytes: size, contentType: meta.contentType };
+}
+
+/* ═══ PREVIEW RENDITION ══════════════════════════════════════════════════
+   A preview is a SEPARATE file the creator uploads (the first N seconds of the
+   film, or a cut of them). The master is never cut or signed for a
+   non-entitled viewer, so the preview grant cannot leak the full film. Same
+   create-only, no-client-read posture as the master (storage.rules). */
+const PREVIEW_MAX_BYTES = 1024 * 1024 * 1024;   /* 1 GiB — mirrors storage.rules */
+const _previewPath = (uid, filmId, uploadId) => `creator-previews/${uid}/${filmId}/${uploadId}`;
+
+async function filmPreviewUploadTarget(req) {
+  const uid = _uid(req);
+  const filmId = _id((req.data || {}).filmId, 'filmId');
+  const { film } = await _loadOwnFilm(null, uid, filmId);
+  if (![P.FILM_STATE.DRAFT, P.FILM_STATE.REJECTED].includes(film.pubState)) fail('failed-precondition', 'The preview can only change while the film is a draft.');
+  const uploadId = crypto.randomBytes(12).toString('hex');
+  await _db().collection(COL.FILMS).doc(filmId).update({ pendingPreviewUploadId: uploadId, updatedAt: FieldValue.serverTimestamp() });
+  return { storagePath: _previewPath(uid, filmId, uploadId), uploadId, maxBytes: PREVIEW_MAX_BYTES, accept: 'video/*' };
+}
+
+async function filmAttachPreview(req) {
+  const uid = _uid(req);
+  const filmId = _id((req.data || {}).filmId, 'filmId');
+  const { ref, film } = await _loadOwnFilm(null, uid, filmId);
+  if (![P.FILM_STATE.DRAFT, P.FILM_STATE.REJECTED].includes(film.pubState)) fail('failed-precondition', 'The preview can only change while the film is a draft.');
+  if (!film.pendingPreviewUploadId) fail('failed-precondition', 'Request a preview upload target first.');
+  const path = _previewPath(uid, filmId, film.pendingPreviewUploadId);
+  const file = _bucket().file(path);
+  const [exists] = await file.exists();
+  if (!exists) fail('failed-precondition', 'Upload the preview file first.');
+  const [meta] = await file.getMetadata();
+  const size = Number(meta.size);
+  if (!/^video\//.test(String(meta.contentType || ''))) fail('failed-precondition', 'The uploaded preview is not a video.');
+  if (!(size > 0 && size <= PREVIEW_MAX_BYTES)) fail('failed-precondition', 'The uploaded preview size is out of range.');
+  await _db().runTransaction(async (txn) => {
+    const snap = await txn.get(ref);
+    if (![P.FILM_STATE.DRAFT, P.FILM_STATE.REJECTED].includes(snap.data().pubState)) fail('failed-precondition', 'Film changed state; retry.');
+    txn.set(_db().collection(COL.MEDIA).doc(filmId), {
+      previewStoragePath: path, previewContentType: meta.contentType, previewSizeBytes: size,
+      previewGeneration: String(meta.generation || ''), previewVerifiedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    txn.update(ref, { previewReady: true, pendingPreviewUploadId: null, updatedAt: FieldValue.serverTimestamp() });
+  });
+  return { previewReady: true, sizeBytes: size, contentType: meta.contentType };
 }
 
 /* ═══ ROYALTY AGREEMENTS ═════════════════════════════════════════════════ */
@@ -709,7 +758,7 @@ async function accrueRoyalty(paymentRef, opts = {}) {
       const base = { paymentRef: ref, accrualId: accRef.id, filmId, creatorUid: (intent.metadata || {}).creatorUid || null,
         agreementVersion: version.version, currency: intent.currency, periodId: period.periodId, recognisedLate: late,
         grossCents, netCents: pool.netCents, deductions: { providerFeeCents: pool.providerFeeCents, commissionCents: pool.commissionCents, taxCents: pool.taxCents },
-        poolCents: pool.poolCents, status: 'RECOGNISED', createdAt: FieldValue.serverTimestamp() };
+        poolCents: pool.poolCents, status: 'RECOGNISED', recognisedAtMs, createdAt: FieldValue.serverTimestamp() };
       txn.create(accRef, {
         ...base, status: 'ACCRUED', policyId: pool.policyId, commissionBps: pool.commissionBps, poolBps: pool.poolBps, feeSource: fee.source, refundedCents: 0,
         participantCount: shares.length, buyerUid: intent.ownerUid || intent.uid, source: opts.source || 'unknown',
@@ -957,6 +1006,67 @@ async function playbackAuthorize(req) {
   };
 }
 
+/* ═══ PREVIEW PLAYBACK ═══════════════════════════════════════════════════
+   PREVIEW and ENTITLED are different grants. playback.preview never signs the
+   master; playback.authorize never runs without an entitlement. The preview
+   ledger (creatorPreviewGrants/{uid}_{filmId}) is written in the same
+   transaction that decides, so two tabs or a reload cannot restart the
+   allowance. P.decidePreview holds the rules. */
+async function playbackPreview(req) {
+  const uid = _uid(req);
+  const filmId = _id((req.data || {}).filmId, 'filmId');
+  const nowMs = _clock();
+  const filmRef = _db().collection(COL.FILMS).doc(filmId);
+  const accessRef = _db().collection(COL.ACCESS).doc(`${uid}_${filmId}`);
+  const grantRef = _db().collection(COL.PREVIEW_GRANTS).doc(`${uid}_${filmId}`);
+  const mediaRef = _db().collection(COL.MEDIA).doc(filmId);
+  const d = await _db().runTransaction(async (txn) => {
+    const [fSnap, aSnap, gSnap, mSnap] = [await txn.get(filmRef), await txn.get(accessRef), await txn.get(grantRef), await txn.get(mediaRef)];
+    const film = fSnap.exists && fSnap.data().creatorHub === true ? { id: filmId, ...fSnap.data() } : null;
+    let entitled = false;
+    if (aSnap.exists) {
+      const eSnap = await txn.get(_db().collection(COL.ENTITLEMENTS).doc(aSnap.data().paymentRef));
+      const e = eSnap.exists ? eSnap.data() : null;
+      entitled = !!(e && e.buyerUid === uid && e.contentId === filmId && e.status === 'ACTIVE' && (e.expiresAtMs == null || nowMs < e.expiresAtMs));
+    }
+    const grant = gSnap.exists ? gSnap.data() : null;
+    const dec = P.decidePreview({ film, viewerUid: uid, entitled, grant, nowMs });
+    if (!dec.allow) return dec;
+    const media = mSnap.exists ? mSnap.data() : {};
+    if (!media.previewStoragePath) return { allow: false, reason: 'preview_unavailable' };
+    txn.set(grantRef, { uid, filmId, limitSec: dec.limitSec, firstGrantAtMs: dec.firstGrantAtMs, consumedSec: dec.consumedSec,
+      grants: FieldValue.increment(1), exhausted: false, lastGrantAtMs: nowMs }, { merge: true });
+    return { ...dec, path: media.previewStoragePath, first: !grant };
+  });
+  _db().collection(COL.AUDIT).add({ uid, filmId, event: d.allow ? 'preview' : 'preview_deny', reason: d.reason, atMs: nowMs,
+    at: FieldValue.serverTimestamp() }).catch(() => {});
+  if (!d.allow) {
+    if (d.reason === 'entitled') return { mode: 'ENTITLED' };
+    fail('permission-denied', `Preview not available (${d.reason}).`);
+  }
+  if (d.first) _statShard(filmId, uid).set({ previewStarts: FieldValue.increment(1) }, { merge: true }).catch(() => {});
+  const expiresAtMs = Math.min(d.windowEndsAtMs, nowMs + d.remainingSec * 1000 + P.PREVIEW.URL_SLACK_MS);
+  const [url] = await _bucket().file(d.path).getSignedUrl({ version: 'v4', action: 'read', expires: expiresAtMs, responseDisposition: 'inline' });
+  return { mode: 'PREVIEW', url, urlExpiresAtMs: expiresAtMs, limitSec: d.limitSec, resumeAtSec: d.consumedSec,
+    remainingSec: d.remainingSec, windowEndsAtMs: d.windowEndsAtMs };
+}
+
+/* The viewer's position, folded into the ledger (monotonic, clamped). Reaching
+   the limit exhausts the preview: a later playback.preview is refused. */
+async function playbackPreviewProgress(req) {
+  const uid = _uid(req);
+  const filmId = _id((req.data || {}).filmId, 'filmId');
+  const grantRef = _db().collection(COL.PREVIEW_GRANTS).doc(`${uid}_${filmId}`);
+  return _db().runTransaction(async (txn) => {
+    const g = await txn.get(grantRef);
+    if (!g.exists) fail('failed-precondition', 'No preview in progress.');
+    const cur = g.data();
+    const next = P.recordPreviewProgress(cur, cur.limitSec, (req.data || {}).positionSec);
+    txn.update(grantRef, { consumedSec: next.consumedSec, exhausted: cur.exhausted === true || next.exhausted, lastSeenMs: _clock() });
+    return { consumedSec: next.consumedSec, exhausted: cur.exhausted === true || next.exhausted, limitSec: cur.limitSec };
+  });
+}
+
 async function playbackHeartbeat(req) {
   const uid = _uid(req);
   const sessionId = _id((req.data || {}).sessionId, 'sessionId');
@@ -1050,11 +1160,19 @@ async function royaltyMine(req) {
      page says so. Unknown → null (rendered "—"). */
   const w = wal.exists ? wal.data() : null;
   const PAID = ['paid', 'settled_manually'];
+  /* In flight: reserved and not yet confirmed either way. Ambiguous outcomes are
+     counted SEPARATELY — they are neither withdrawn nor available. Failed,
+     rejected and reversed payouts returned their funds and count as nothing. */
+  const IN_FLIGHT = ['pending', 'scheduled', 'approving', 'approved', 'processing', 'approval_failed'];
+  const UNKNOWN = ['outcome_unknown', 'retry_scheduled'];
   const payouts = pays.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const sumOf = (sts) => payouts.filter((p) => sts.includes(p.status)).reduce((a, p) => a + Number(p.amount || 0), 0);
   const wallet = {
     availableForWithdrawalKes: w && Number.isFinite(Number(w.balance)) ? Number(w.balance) : (w ? null : 0),
     reservedForPayoutKes: w && Number.isFinite(Number(w.pendingPayout)) ? Number(w.pendingPayout) : 0,
-    withdrawnKes: payouts.filter((p) => PAID.includes(p.status)).reduce((a, p) => a + Number(p.amount || 0), 0),
+    withdrawnKes: sumOf(PAID),
+    pendingWithdrawalKes: sumOf(IN_FLIGHT),
+    beingConfirmedKes: sumOf(UNKNOWN),
     history: payouts.sort((a, b) => (_ms(b.createdAt) || 0) - (_ms(a.createdAt) || 0)).slice(0, 20)
       .map((p) => ({ id: p.id, amountKes: p.amount, status: p.status, method: p.method, createdAtMs: _ms(p.createdAt) })),
   };
@@ -1062,9 +1180,29 @@ async function royaltyMine(req) {
   const statements = stmts.docs.map((d) => d.data());
   const summary = R.summarizeParticipant({ entries: rows, periodStatusById: statuses, statements });
   const cur = R.periodFor(_clock());
+  /* Dashboard figures — each from ONE authority, defined in words below. */
+  const totalEarnedCents = rows.reduce((a, e) => a + (e.kind === R.ENTRY_KIND.REVERSAL ? -Math.abs(e.amountCents) : e.amountCents), 0);
+  const figures = {
+    totalEarnedCents: rows.length === 1000 ? null : totalEarnedCents,           /* unknown when the ledger read was truncated */
+    pendingCents: summary.accruedCents + summary.pendingSettlementCents,
+    releasedCents: summary.releasedCents,
+    availableForWithdrawalKes: wallet.availableForWithdrawalKes,
+    withdrawnKes: wallet.withdrawnKes,
+    pendingWithdrawalKes: wallet.pendingWithdrawalKes,
+    beingConfirmedKes: wallet.beingConfirmedKes,
+    definitions: {
+      totalEarned: 'All royalties credited to you in the royalty ledger, minus refund reversals — every quarter, settled or not.',
+      pending: 'Earned but not yet released: the open quarter plus quarters being calculated or approved. Not withdrawable.',
+      released: 'Royalties a closed quarter released into your SOKONI wallet.',
+      available: 'Your SOKONI wallet balance — released royalties plus any other SOKONI earnings — that you can withdraw now.',
+      withdrawn: 'Payouts the provider confirmed, or an admin settled with evidence. Failed, rejected and unconfirmed payouts are not counted.',
+      pendingWithdrawal: 'Payouts requested and reserved from your wallet, not yet confirmed.',
+      beingConfirmed: 'Payouts whose provider outcome is unknown. Held — neither withdrawn nor available — until confirmed.',
+    },
+  };
   return {
     participations: parts.docs.map((d) => d.data()),
-    summary, currency: 'KES',
+    summary, figures, currency: 'KES',
     /* Released royalties sit in the ONE canonical wallet; withdrawal and its
        history are the wallet's (requestSellerPayout), not a second balance. */
     withdrawal: { via: 'wallet', page: '/wallet.html', note: 'Released royalties are in your SOKONI wallet balance.' },
@@ -1125,7 +1263,7 @@ _adminH.creatorAdminList = async (req) => {
   let q = _db().collection(COL.CREATORS);
   if (st) { if (!P.CREATOR_STATE[st]) fail('invalid-argument', 'Unknown state.'); q = q.where('state', '==', st); }
   const snap = await q.limit(200).get();
-  return { creators: snap.docs.map((d) => ({ ..._publicCreator(d.id, d.data()), createdAt: _ms(d.data().createdAt), reviewNote: d.data().reviewNote || null })) };
+  return { creators: snap.docs.map((d) => ({ ..._publicCreator(d.id, d.data(), { withContact: true }), createdAt: _ms(d.data().createdAt), reviewNote: d.data().reviewNote || null })) };
 };
 
 _adminH.creatorAdminSetState = async (req) => {
@@ -1133,6 +1271,7 @@ _adminH.creatorAdminSetState = async (req) => {
   const d = req.data || {};
   const uid = _id(d.uid, 'uid');
   const to = String(d.to || '');
+  if (uid === actor) fail('permission-denied', 'You cannot change the state of your own creator account.');
   const reason = String(d.reason || '').slice(0, 500);
   if ([P.CREATOR_STATE.SUSPENDED, P.CREATOR_STATE.REJECTED].includes(to) && reason.trim().length < 5) fail('invalid-argument', 'A reason is required.');
   const ref = _db().collection(COL.CREATORS).doc(uid);
@@ -1340,6 +1479,18 @@ _adminH.creatorAdminDistribute = async (req) => {
   const pRef = _db().collection(COL.PERIODS).doc(periodId);
   const p = await pRef.get();
   if (!p.exists || ![R.PERIOD_STATUS.APPROVED, R.PERIOD_STATUS.PAYABLE].includes(p.data().status)) fail('failed-precondition', 'Only an APPROVED period can be distributed.');
+  /* DUAL CONTROL: calculate → approve → distribute are three people's acts.
+     Approve already refuses the calculator; distribute refuses the APPROVER, so
+     one admin can never both authorise a quarter and release its money. A Super
+     Admin may override only with a written reason, recorded in adminAudit. */
+  const approvedBy = p.data().approvedBy || null;
+  if (approvedBy && approvedBy === actor) {
+    const overrideReason = String((req.data || {}).overrideReason || '').replace(/<[^>]*>/g, '').trim().slice(0, 500);
+    if (!(AC.isSuperAdmin(req) && overrideReason.length >= 10)) {
+      fail('permission-denied', 'The admin who approved this quarter cannot also release it — a second admin must distribute.');
+    }
+    await _adminAudit('royalty_distribute_override', actor, { periodId, approvedBy, overrideReason });
+  }
   const stmts = await _db().collection(COL.STATEMENTS).where('periodId', '==', periodId).where('released', '==', false).limit(500).get();
   const res = { credited: 0, zero: 0, held: 0, already: 0, failed: 0, kes: 0 };
   for (const d of stmts.docs) {
@@ -1569,8 +1720,16 @@ async function viewerEndSession(req) {
 /* ═══ CREATOR ANALYTICS ══════════════════════════════════════════════════
    Aggregates for films the caller owns. No viewer identity ever leaves here:
    counts, sums and ratios only. */
+/* Analytics windows. Money (purchases, revenue, royalty) is filtered by the
+   sale's recognition time; view / preview / watch counters are cumulative
+   counters with no timestamp per event, so they are ALL-TIME and labelled so. */
+const ANALYTICS_PERIODS = Object.freeze({ '7d': 7, '30d': 30, '90d': 90, all: null });
 async function creatorAnalytics(req) {
   const uid = _uid(req);
+  const periodKey = Object.prototype.hasOwnProperty.call(ANALYTICS_PERIODS, (req.data || {}).period) ? req.data.period : 'all';
+  const days = ANALYTICS_PERIODS[periodKey];
+  const sinceMs = days == null ? null : _clock() - days * 86400000;
+  const inWindow = (a) => sinceMs == null || (Number(a.recognisedAtMs) || _ms(a.createdAt) || 0) >= sinceMs;
   const filmsSnap = await _db().collection(COL.FILMS).where('creatorUid', '==', uid).where('creatorHub', '==', true).limit(200).get();
   const nowPeriod = R.periodFor(_clock());
   const perSnap = await _db().collection(COL.PERIODS).doc(nowPeriod.periodId).get();
@@ -1581,10 +1740,10 @@ async function creatorAnalytics(req) {
       _db().collection(COL.ACCRUALS).where('filmId', '==', fd.id).limit(5000).get(),
     ]);
     const x = { ...(st.exists ? st.data() : {}) };
-    for (const sh of shards.docs) for (const k of ['watchSeconds', 'completedViews', 'pageViews']) x[k] = Number(x[k] || 0) + Number(sh.data()[k] || 0);
+    for (const sh of shards.docs) for (const k of ['watchSeconds', 'completedViews', 'pageViews', 'previewStarts']) x[k] = Number(x[k] || 0) + Number(sh.data()[k] || 0);
     const t = { purchases: 0, grossCents: 0, providerFeeCents: 0, commissionCents: 0, poolCents: 0, refundedCents: 0, withheld: 0 };
     for (const a of accs.docs.map((d) => d.data())) {
-      if (a.status === 'VOID_REFUNDED') continue;
+      if (a.status === 'VOID_REFUNDED' || !inWindow(a)) continue;
       t.purchases++; t.grossCents += a.grossCents; t.poolCents += a.poolCents; t.refundedCents += Number(a.refundedCents || 0);
       t.providerFeeCents += a.deductions.providerFeeCents; t.commissionCents += a.deductions.commissionCents;
     }
@@ -1593,17 +1752,28 @@ async function creatorAnalytics(req) {
       filmId: fd.id, title: fd.data().title, pubState: fd.data().pubState,
       views, uniqueViewers: Number(x.uniqueViewers || 0), completedViews: Number(x.completedViews || 0),
       watchSeconds: watch, avgWatchSeconds: views ? Math.round(watch / views) : null,
-      pageViews, purchases: t.purchases,
+      pageViews, previewStarts: Number(x.previewStarts || 0), purchases: t.purchases,
       /* purchases per film-page view; null (shown "—") when there are no page views yet */
       conversionBps: pageViews ? Math.round((t.purchases * 10000) / pageViews) : null,
       grossCents: t.grossCents, providerFeeCents: t.providerFeeCents, commissionCents: t.commissionCents, poolCents: t.poolCents, refundedCents: t.refundedCents,
     };
   }));
   const sum = (k) => rows.reduce((a, r) => a + (Number(r[k]) || 0), 0);
+  /* The creator's OWN royalty (their participant ledger rows), in the window. */
+  const mineSnap = await _db().collection(COL.LEDGER).where('uid', '==', uid).where('bucket', '==', R.BUCKET.PARTICIPANT_ROYALTY).limit(5000).get();
+  const royaltyEarnedCents = mineSnap.size === 5000 ? null : mineSnap.docs.map((d) => d.data())
+    .filter((e) => sinceMs == null || (_ms(e.createdAt) || 0) >= sinceMs)
+    .reduce((a, e) => a + (e.kind === R.ENTRY_KIND.REVERSAL ? -Math.abs(e.amountCents) : e.amountCents), 0);
+  const topContent = rows.filter((r) => r.purchases > 0).sort((a, b) => b.grossCents - a.grossCents || b.purchases - a.purchases).slice(0, 5)
+    .map((r) => ({ filmId: r.filmId, title: r.title, purchases: r.purchases, grossCents: r.grossCents }));
   return {
+    period: periodKey, countersAreAllTime: true, royaltyEarnedCents, topContent,
     films: rows,
     totals: { views: sum('views'), uniqueViewersBySum: sum('uniqueViewers'), completedViews: sum('completedViews'), watchSeconds: sum('watchSeconds'),
-      purchases: sum('purchases'), grossCents: sum('grossCents'), providerFeeCents: sum('providerFeeCents'), commissionCents: sum('commissionCents'), poolCents: sum('poolCents') },
+      previewStarts: sum('previewStarts'), pageViews: sum('pageViews'),
+      purchases: sum('purchases'), grossCents: sum('grossCents'), providerFeeCents: sum('providerFeeCents'), commissionCents: sum('commissionCents'), poolCents: sum('poolCents'),
+      /* purchases per film-page view — null ("—") without page views; page views are all-time */
+      conversionBps: sum('pageViews') ? Math.round((sum('purchases') * 10000) / sum('pageViews')) : null },
     settlement: { periodId: nowPeriod.periodId, status: perSnap.exists ? perSnap.data().status : 'OPEN', periodEndsAtMs: nowPeriod.endMs },
     policy: { sokoniCommissionBps: require('./shared/creator-commercial').CREATOR_PPV.sokoniCommissionBps, creatorPoolBps: require('./shared/creator-commercial').CREATOR_PPV.creatorPoolBps },
   };
@@ -1716,6 +1886,89 @@ async function verificationSubmit(req) {
   });
 }
 
+/* REFUND REVIEW — the AdminOS surface over the EXISTING refund authority on this
+   branch (financial-os.js: fosRefundQueue · fosApproveRefund · fosResolveRefund).
+   Read-only here: approve / reject / resolve are those callables, whose own
+   checks (admin; super admin + evidence to resolve) are the authority. No second
+   refund lifecycle. Film refunds are flagged from the server-minted intent. */
+_adminH.creatorAdminRefundCases = async (req) => {
+  _admin(req);
+  const d = req.data || {};
+  const status = typeof d.status === 'string' && /^[a-z_]{3,30}$/.test(d.status) ? d.status : null;
+  let q = _db().collection('fosRefundQueue');
+  if (status) q = q.where('status', '==', status);
+  const snap = await q.orderBy('createdAt', 'desc').limit(50).get();
+  const cases = await Promise.all(snap.docs.map(async (doc) => {
+    const r = doc.data();
+    const [intent, hist] = await Promise.all([
+      r.payRef ? _db().collection('paymentIntents').doc(String(r.payRef)).get().catch(() => null) : null,
+      _db().collection('finosAudit').where('refundId', '==', doc.id).limit(20).get().catch(() => null),
+    ]);
+    const it = intent && intent.exists ? intent.data() : null;
+    return {
+      refundId: doc.id, payRef: r.payRef || null, fosTransactionId: r.fosTransactionId || null,
+      filmPurchase: !!(it && it.purpose === 'film_access'), filmId: it && it.purpose === 'film_access' ? (it.resourceId || null) : null,
+      amountKES: r.amountKES ?? null, reason: r.reason || null, refundType: r.refundType || null, status: r.status || null,
+      buyerUid: r.buyerUid || null, requestedBy: r.requestedBy || null, approvedBy: r.approvedBy || null,
+      providerRefundId: r.providerRefundId || null, outcomeUnknown: r.status === 'outcome_unknown',
+      error: r.error || r.rejectReason || null, resolution: r.resolution || null,
+      createdAtMs: _ms(r.createdAt), updatedAtMs: _ms(r.updatedAt),
+      history: hist ? hist.docs.map((h) => { const x = h.data(); return { action: x.action, actorUid: x.actorUid || null, atMs: _ms(x.timestamp) }; })
+        .sort((a, b) => (a.atMs || 0) - (b.atMs || 0)) : null,
+    };
+  }));
+  return { cases, statuses: ['pending', 'approved', 'processing', 'provider_succeeded', 'outcome_unknown', 'processed', 'failed', 'rejected'] };
+};
+
+/* CREATOR OVERSIGHT — every figure read from its canonical collection. A bounded
+   read that hit its cap returns null (rendered "—"), never a partial sum passed
+   off as a total. Viewer identities are never returned — aggregates only. */
+_adminH.creatorAdminOverview = async (req) => {
+  _admin(req);
+  const CAP = 5000;
+  const [creators, verifs, films, accs, releases, parts] = await Promise.all([
+    _db().collection(COL.CREATORS).limit(CAP).get(),
+    _db().collection(COL.VERIFICATIONS).where('status', 'in', ['SUBMITTED', 'UNDER_REVIEW', 'MORE_INFORMATION_REQUIRED']).limit(CAP).get(),
+    _db().collection(COL.FILMS).where('creatorHub', '==', true).where('status', '==', 'active').limit(CAP).get(),
+    _db().collection(COL.ACCRUALS).limit(CAP).get(),
+    _db().collection(COL.WALLET_TX).where('type', '==', 'royalty_release').limit(CAP).get(),
+    _db().collection(COL.PARTICIPATIONS).limit(1000).get(),
+  ]);
+  const capped = (snap, v) => (snap.size >= CAP ? null : v);
+  const byState = {};
+  creators.docs.forEach((c) => { const st = c.data().state || 'UNKNOWN'; byState[st] = (byState[st] || 0) + 1; });
+  const m = { purchases: 0, grossCents: 0, providerFeeCents: 0, commissionCents: 0, poolCents: 0, refunds: 0, refundedCents: 0 };
+  for (const d of accs.docs) {
+    const a = d.data();
+    if (a.status === 'VOID_REFUNDED') { m.refunds++; m.refundedCents += Number(a.refundedCents || 0); continue; }
+    m.purchases++; m.grossCents += Number(a.grossCents || 0); m.poolCents += Number(a.poolCents || 0);
+    m.providerFeeCents += Number((a.deductions || {}).providerFeeCents || 0); m.commissionCents += Number((a.deductions || {}).commissionCents || 0);
+    if (Number(a.refundedCents || 0) > 0) { m.refunds++; m.refundedCents += Number(a.refundedCents); }
+  }
+  /* Payouts of royalty participants — WALLET payouts (a participant's wallet may
+     also hold other earnings; labelled so in the UI). */
+  const uids = [...new Set(parts.docs.map((p) => p.data().uid).filter(Boolean))].slice(0, 200);
+  const pay = { withdrawnKes: 0, pendingKes: 0, outcomeUnknownKes: 0, outcomeUnknownCount: 0 };
+  for (let i = 0; i < uids.length; i += 10) {
+    const ps = await _db().collection('payoutRequests').where('sellerUid', 'in', uids.slice(i, i + 10)).limit(500).get();
+    for (const p of ps.docs.map((x) => x.data())) {
+      const amt = Number(p.amount || 0);
+      if (['paid', 'settled_manually'].includes(p.status)) pay.withdrawnKes += amt;
+      else if (['outcome_unknown', 'retry_scheduled'].includes(p.status)) { pay.outcomeUnknownKes += amt; pay.outcomeUnknownCount++; }
+      else if (['pending', 'scheduled', 'approving', 'approved', 'processing', 'approval_failed'].includes(p.status)) pay.pendingKes += amt;
+    }
+  }
+  const payTruncated = parts.size >= 1000 || new Set(parts.docs.map((p) => p.data().uid)).size > 200;
+  return {
+    creators: capped(creators, { total: creators.size, byState }),
+    pendingVerification: capped(verifs, verifs.size),
+    publishedFilms: capped(films, films.size),
+    sales: capped(accs, { ...m, policy: 'creator_ppv_v1 — SOKONI 30% / creator pool 70% of NET' }),
+    releasedRoyaltyKes: capped(releases, releases.docs.reduce((a, d) => a + Number(d.data().amount || 0), 0)),
+    participantPayouts: payTruncated ? null : { ...pay, note: 'Wallet payouts of royalty participants — may include their other SOKONI earnings.' },
+  };
+};
+
 /* IntaSend payment-method capability (platform record config/intasendCapability).
    Read: any admin. Write: Super Admin, one method at a time, with a note, and for
    LIVE_AND_PROVEN / UNSUPPORTED an evidence type + reference. Audited. This is
@@ -1773,7 +2026,7 @@ _adminH.creatorAdminVerificationDetail = async (req) => {
     documents.push({ name: d.name, contentType: d.contentType, sizeBytes: d.sizeBytes, present, changedAfterSubmit, url });
   }
   return {
-    application: _vPublic(uid, app), creator: c.exists ? _publicCreator(uid, c.data()) : null,
+    application: _vPublic(uid, app), creator: c.exists ? _publicCreator(uid, c.data(), { withContact: true }) : null,
     private: priv.exists ? { legalName: priv.data().legalName || null, phone: priv.data().phone || null } : null,
     documents,
     /* full audit: reviewer identity visible to admins */
@@ -1787,6 +2040,8 @@ _adminH.creatorAdminVerificationDecision = async (req) => {
   const uid = _id(d.uid, 'uid');
   const action = P.VERIFICATION_ACTIONS[String(d.action || '')];
   if (!action) fail('invalid-argument', 'Unknown action.');
+  /* An admin who is also a creator never reviews their own application. */
+  if (uid === actor) fail('permission-denied', 'You cannot review your own verification application.');
   const reason = String(d.reason || '').trim().slice(0, 1000);
   if (action.reason && reason.length < 5) fail('invalid-argument', 'A reason is required.');
   const out = await _db().runTransaction(async (txn) => {
@@ -1822,9 +2077,11 @@ const OPS = {
   'catalog.list': catalogList, 'catalog.get': catalogGet, 'catalog.creator': catalogCreator,
   'creator.register': creatorRegister, 'creator.me': creatorMe,
   'film.saveDraft': filmSaveDraft, 'film.mediaUploadTarget': filmMediaUploadTarget, 'film.attachMedia': filmAttachMedia,
+  'film.previewUploadTarget': filmPreviewUploadTarget, 'film.attachPreview': filmAttachPreview,
   'film.submit': filmSubmit, 'film.reopen': filmReopen, 'film.publish': filmPublish,
   'agreement.saveDraft': agreementSaveDraft,
   'playback.authorize': playbackAuthorize, 'playback.heartbeat': playbackHeartbeat, 'playback.end': playbackEnd, 'playback.report': playbackReport,
+  'playback.preview': playbackPreview, 'playback.previewProgress': playbackPreviewProgress,
   'royalty.mine': royaltyMine, 'royalty.film': royaltyFilm,
   'viewer.library': viewerLibrary, 'viewer.endSession': viewerEndSession, 'creator.analytics': creatorAnalytics,
   'verification.get': verificationGet, 'verification.saveDraft': verificationSaveDraft,
@@ -1834,6 +2091,7 @@ const OPS = {
 /* What an anonymous (guest) viewer may do: browse, watch what they paid for,
    see their own library. Nothing that creates identity, content or money. */
 const ANON_OPS = new Set(['catalog.list', 'catalog.get', 'catalog.creator', 'playback.authorize', 'playback.heartbeat', 'playback.end', 'playback.report',
+  'playback.preview', 'playback.previewProgress',
   'viewer.library', 'viewer.endSession']);
 
 exports.creatorDispatch = onCall({ region: REGION, enforceAppCheck: true, maxInstances: 20, timeoutSeconds: 60, memory: '256MiB' }, async (req) => {

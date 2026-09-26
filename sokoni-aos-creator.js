@@ -15,7 +15,7 @@
 
   const TABS = [
     ['creators', 'Creators'], ['verification', 'Verification'], ['films', 'Films & review'], ['settlement', 'Royalty settlement'],
-    ['ledger', 'Ledger'], ['exceptions', 'Exceptions'], ['security', 'Playback security'], ['config', 'Config'],
+    ['ledger', 'Ledger'], ['exceptions', 'Exceptions'], ['refunds', 'Refunds'], ['oversight', 'Oversight'], ['security', 'Playback security'], ['config', 'Config'],
   ];
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -63,6 +63,40 @@
     }
 
     const R = {
+      /* REFUND REVIEW — the existing refund authority (financial-os): approve /
+         reject = fosApproveRefund (admin), resolve an unknown outcome =
+         fosResolveRefund (super admin + IntaSend evidence). No second lifecycle. */
+      async refunds() {
+        const r = await call('creatorAdminRefundCases', {});
+        const act1 = (c) => {
+          if (['pending', 'approved', 'failed'].includes(c.status)) return `<button class="aos-btn" data-a="rf-approve" data-id="${esc(c.refundId)}">Approve &amp; refund</button> <button class="aos-btn aos-btn-ghost" data-a="rf-reject" data-id="${esc(c.refundId)}">Reject…</button>`;
+          if (c.status === 'outcome_unknown' || c.status === 'provider_succeeded') return `<button class="aos-btn aos-btn-ghost" data-a="rf-resolve" data-id="${esc(c.refundId)}" data-st="${esc(c.status)}">Resolve with evidence (super admin)…</button>`;
+          return '';
+        };
+        const rows = (r.cases || []).map((c) => `<tr>
+          <td class="aos-mono">${esc(c.refundId)}<div class="aos-muted">${c.filmPurchase ? '🎬 film ' + esc(c.filmId || '') : 'other payment'}</div></td>
+          <td class="aos-mono">${esc(c.payRef || '—')}</td><td>${c.amountKES == null ? '—' : 'KES ' + esc(c.amountKES)}</td>
+          <td>${esc(c.reason || '—')}</td><td>${chip(c.status)}${c.outcomeUnknown ? ' <b style="color:#ff9800">provider outcome unknown — never retried</b>' : ''}</td>
+          <td class="aos-muted">${esc(c.providerRefundId || c.error || '')}${c.resolution ? '<div>resolved ' + esc(c.resolution.outcome) + ' by ' + esc(c.resolution.by) + '</div>' : ''}</td>
+          <td class="aos-muted">${c.history == null ? '—' : c.history.map((h) => esc(h.action) + ' · ' + esc(h.actorUid || '') + ' · ' + when(h.atMs)).join('<br>')}</td>
+          <td>${act1(c)}</td></tr>`).join('');
+        return rows ? `<div class="aos-table-wrap"><table class="aos-table"><thead><tr><th>Refund</th><th>Payment</th><th>Amount</th><th>Reason</th><th>State</th><th>Provider</th><th>History</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="aos-muted">No refund requests.</p>';
+      },
+      /* CREATOR OVERSIGHT — aggregates only; "—" where a figure could not be read in full. */
+      async oversight() {
+        const o = await call('creatorAdminOverview', {});
+        const n = (v) => (v == null ? '—' : esc(Number(v).toLocaleString('en-KE')));
+        const k = (v) => (v == null ? '—' : 'KES ' + Number(v).toLocaleString('en-KE'));
+        const cell = (l, v) => `<div class="aos-kpi"><span class="aos-muted">${esc(l)}</span><b>${v}</b></div>`;
+        const sa = o.sales; const cr = o.creators; const pp = o.participantPayouts;
+        return `<div class="aoscr-kpis">
+          ${cell('Creators', cr ? n(cr.total) : '—')}${cell('Active', cr ? n((cr.byState || {}).ACTIVE || 0) : '—')}${cell('Pending approval', cr ? n((cr.byState || {}).PENDING || 0) : '—')}${cell('Suspended', cr ? n((cr.byState || {}).SUSPENDED || 0) : '—')}
+          ${cell('Verification awaiting review', n(o.pendingVerification))}${cell('Published films', n(o.publishedFilms))}
+          ${cell('Purchases', sa ? n(sa.purchases) : '—')}${cell('Gross film sales', sa ? kes(sa.grossCents) : '—')}${cell('Provider fees', sa ? kes(sa.providerFeeCents) : '—')}
+          ${cell('SOKONI 30% (of net)', sa ? kes(sa.commissionCents) : '—')}${cell('Creator pool 70% (of net)', sa ? kes(sa.poolCents) : '—')}${cell('Refunds', sa ? n(sa.refunds) + ' · ' + kes(sa.refundedCents) : '—')}
+          ${cell('Royalty released to wallets', k(o.releasedRoyaltyKes))}${cell('Participant payouts withdrawn*', pp ? k(pp.withdrawnKes) : '—')}${cell('Participant payouts pending*', pp ? k(pp.pendingKes) : '—')}${cell('Outcome unknown payouts*', pp ? n(pp.outcomeUnknownCount) + ' · ' + k(pp.outcomeUnknownKes) : '—')}
+        </div><p class="aos-muted">${sa ? esc(sa.policy) : ''}. * ${pp ? esc(pp.note) : 'Participant payouts could not be read in full.'} Viewer identities are never shown here.</p>`;
+      },
       async creators() {
         const r = await call('creatorAdminList', {});
         const rows = (r.creators || []).map((c) => `<tr>
@@ -111,7 +145,7 @@
           <td class="aos-muted">${esc(p.calculatedBy || '—')} / ${esc(p.approvedBy || '—')}</td>
           <td>${['OPEN', 'CALCULATED'].includes(p.status) ? `<button class="aos-btn aos-btn-ghost" data-a="per-calc" data-id="${esc(p.periodId)}">Recalculate</button>` : ''}
               ${p.status === 'CALCULATED' ? `<button class="aos-btn" data-a="per-approve" data-id="${esc(p.periodId)}">Approve</button>` : ''}
-              ${['APPROVED', 'PAYABLE'].includes(p.status) ? `<button class="aos-btn" data-a="per-dist" data-id="${esc(p.periodId)}">Distribute to wallets</button>` : ''}
+              ${['APPROVED', 'PAYABLE'].includes(p.status) ? `<button class="aos-btn" data-a="per-dist" data-id="${esc(p.periodId)}">Distribute to wallets</button><div class="aos-muted">Dual control: ${esc(p.approvedBy || 'the approver')} approved — a different admin must distribute.</div>` : ''}
               ${p.status === 'PAYABLE' ? `<button class="aos-btn aos-btn-ghost" data-a="per-close" data-id="${esc(p.periodId)}">Close</button>` : ''}
               <button class="aos-btn aos-btn-ghost" data-a="per-stmts" data-id="${esc(p.periodId)}">Statements</button></td></tr>`).join('');
         return `<p class="aos-muted">Current quarter <b class="aos-mono">${esc(cur.periodId || '—')}</b> ends ${when(cur.endMs)} (EAT). A quarter can be calculated only after it ends; approval must be by a different admin; distribution credits the canonical wallet once per participant per quarter.</p>
@@ -263,6 +297,15 @@
           d.onsubmit = (e) => { e.preventDefault(); act('creatorAdminAttestFee', { paymentRef: id, feeKes: Number(d.fee.value), evidence: d.ev.value }, 'Fee attested; accrual attempted.'); };
           break;
         }
+        case 'rf-approve': act('fosApproveRefund', { refundId: id }, 'Refund executed through the refund authority.'); break;
+        case 'rf-reject': ask('Reason for rejecting this refund:', (r) => act('fosApproveRefund', { refundId: id, reject: true, rejectReason: r }, 'Refund rejected.')); break;
+        case 'rf-resolve': {
+          const d = document.createElement('form'); d.className = 'aoscr-ask';
+          d.innerHTML = `<label>IntaSend shows<select name="outcome">${t.dataset.st === 'provider_succeeded' ? '' : '<option value="not_refunded">no refund was made</option>'}<option value="refunded">the refund was made</option></select></label><label>Evidence (IntaSend reference)<input name="ev" required minlength="5"></label><button class="aos-btn">Resolve</button>`;
+          body.prepend(d);
+          d.onsubmit = (e) => { e.preventDefault(); act('fosResolveRefund', { refundId: id, outcome: d.outcome.value, evidence: d.ev.value }, 'Refund resolved.'); };
+          break;
+        }
         case 'cfg-purchases': act('creatorAdminConfig', { set: { purchasesEnabled: t.dataset.to === '1' } }, 'Saved.'); break;
         case 'cfg-hosted': act('creatorAdminConfig', { set: { hostedCheckout: t.dataset.to === '1' } }, 'Saved.'); break;
         case 'cfg-guest': act('creatorAdminConfig', { set: { guestCheckoutEnabled: t.dataset.to === '1' } }, 'Saved.'); break;
@@ -300,7 +343,8 @@
     'creatorAdminLockAgreement', 'creatorAdminLedger', 'creatorAdminPeriods', 'creatorAdminCalculatePeriod', 'creatorAdminApprovePeriod',
     'creatorAdminDistribute', 'creatorAdminClosePeriod', 'creatorAdminSetPayoutHold', 'creatorAdminStatements', 'creatorAdminSecurityEvents',
     'creatorAdminExceptions', 'creatorAdminRetryAccrual', 'creatorAdminAttestFee', 'creatorAdminRevokeEntitlement', 'creatorAdminConfig',
-    'creatorAdminVerifications', 'creatorAdminVerificationDetail', 'creatorAdminVerificationDecision', 'creatorAdminPaymentCapability'];
+    'creatorAdminVerifications', 'creatorAdminVerificationDetail', 'creatorAdminVerificationDecision', 'creatorAdminPaymentCapability',
+    'creatorAdminRefundCases', 'creatorAdminOverview'];
 
   root.SokoniAOSCreator = { mount, OPS, _kes: kes, _pct: pct, _esc: esc };
 }(typeof window !== 'undefined' ? window : globalThis));

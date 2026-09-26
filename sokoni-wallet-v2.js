@@ -885,9 +885,9 @@ window.SokoniWalletV2 = (function () {
     const amtI = document.getElementById('wdrAmount'); if (amtI) amtI.value = '';
     const sum  = document.getElementById('wdrSummary'); if (sum) sum.style.display = 'none';
 
-    /* Fresh idempotency key per withdraw session — reused across retries of THIS
-       attempt so a double-tap or timeout-retry can't create two withdrawals. */
-    _wdrIdemKey = (_uid || 'anon') + '_' + Date.now();
+    /* The idempotency key is taken per INTENT at submit (sokoni-payout-intent.js):
+       shared across tabs and reloads, not minted from the clock. */
+    _wdrIdemKey = '';
 
     /* Prefill the user's own M-Pesa number (most payouts go there). */
     const wp = document.getElementById('wdrPhone');
@@ -991,7 +991,7 @@ window.SokoniWalletV2 = (function () {
     if (!amt || amt < 100)         return _wdrShowError('Enter an amount of at least KSh 100.');
     if (bal != null && amt > bal)  return _wdrShowError('Enter an amount between KSh 100 and your available balance (KSh ' + _fmt(bal) + ').');
 
-    const payload = { amount: amt, method, idempotencyKey: _wdrIdemKey || ((_uid || 'anon') + '_' + Date.now()) };
+    const payload = { amount: amt, method };
     if (method === 'mpesa') {
       const phone = document.getElementById('wdrPhone')?.value?.trim();
       if (!PHONE_RE.test(phone || '')) { document.getElementById('wdrPhone')?.focus(); return _wdrShowError('Enter the M-Pesa number to receive the payout.'); }
@@ -1004,6 +1004,13 @@ window.SokoniWalletV2 = (function () {
     console.log('[payout] validation passed', { amount: amt, method });
 
     if (!navigator.onLine) return _wdrShowError('You appear to be offline. Check your connection and try again.');
+
+    /* ONE key per withdrawal intent (user · amount · destination): a double tap,
+       a retry, a reload or a second tab reuses it — the server dedupes on it. */
+    const _intent = { uid: _uid, amount: amt, destination: payload.accountNumber };
+    payload.idempotencyKey = window.SokoniPayoutIntent
+      ? await window.SokoniPayoutIntent.acquire(_intent)
+      : (_wdrIdemKey = _wdrIdemKey || ('po_' + (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : Math.random().toString(36).slice(2))));
 
     /* Instant payouts require a verified PIN — collect it if the user has one set.
        The server decides whether to grant instant; a missing PIN just routes to review. */
@@ -1042,6 +1049,7 @@ window.SokoniWalletV2 = (function () {
         const form = document.getElementById('wdrForm');   if (form) form.style.display = 'none';
         const succ = document.getElementById('wdrSuccess'); if (succ) succ.style.display = 'block';
         _wdrIdemKey = '';   // consumed — next withdrawal gets a fresh key
+        if (window.SokoniPayoutIntent) window.SokoniPayoutIntent.release(_intent);
         loadDashboard();    // authoritative refresh
         console.log('[payout] wallet refreshed');
       } else {
@@ -1049,6 +1057,9 @@ window.SokoniWalletV2 = (function () {
       }
     } catch (e) {
       console.error('[payout] error', e);
+      /* Release only when the refusal proves nothing was created; a timeout keeps
+         the key so a retry is the SAME withdrawal. */
+      if (window.SokoniPayoutIntent && window.SokoniPayoutIntent.isDefinitive(e)) window.SokoniPayoutIntent.release(_intent);
       _wdrShowError(_payoutErr(e));
     } finally {
       _reset();

@@ -155,7 +155,8 @@ const ck = (l, ok, d) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (
   ck('creator.html: return from checkout WAITS for server access (no grant from the URL)', /params\.get\('checkout'\) === 'returned'/.test(viewer) && /viewer\.access\.status === 'ACTIVE'/.test(viewer));
   ck('creator.html: public creator profile view', /catalog\.creator/.test(viewer) && /function creatorProfile/.test(viewer));
   ck('creator.html: dashboard shows Available for withdrawal + Withdrawn + history', /Available for withdrawal\*/.test(viewer) && /Withdrawn\*/.test(viewer) && /Withdrawal history/.test(viewer));
-  ck('studio: no UI for an unenforced "free preview" rule', !/previewSeconds/.test(rd('creator-studio.html')));
+  /* 2026-09-26: preview is now ENFORCED server-side (playback.preview), so the studio offers it. */
+  ck('studio: free-preview length + preview file upload, both server-backed', /name="previewSeconds"/.test(rd('creator-studio.html')) && /film.previewUploadTarget/.test(rd('creator-studio.html')) && /film.attachPreview/.test(rd('creator-studio.html')));
   const fsearch = rd('sokoni-firestore-search.js');
   ck('search: films source guarded like the rules (creatorHub + status active)', /col: 'entertainmentListings'/.test(fsearch) && /w\('creatorHub', '==', true\), w\('status', '==', 'active'\)/.test(fsearch));
   ck('search: Films tab + links to the film page', /id: "films"/.test(rd('search.html')) && /'creator\.html\?film=' \+ encodeURIComponent\(id\)/.test(fsearch));

@@ -1,3 +1,40 @@
+## 2026-09-26 (186) — Creator Hub completion: preview, search, dashboard, withdrawal forms, governance, refunds, oversight
+
+**NO DEPLOY. NO PUSH.** Branch `feat/creator-hub`, base `23e5fa4`. Production writes 0 · provider
+collection calls 0 · real invoices 0 · refunds 0. **HOSTED INTASEND METHODS: UNPROVEN LIVE** (read-only
+evidence: 28 COMPLETE invoices, all M-PESA — historical, STK rail only).
+
+**Preview (enforced).** Separate private preview rendition (`creator-previews/…`, create-only, no client
+read); `playback.preview` signs only it, never the master; server ledger `creatorPreviewGrants`
+(monotonic seconds, 30-min window, 6-grant cap) so reload/two tabs cannot restart the allowance; shared
+`attachPreviewGuard` stops the player at N and refuses seeks past it. Malformed `previewSeconds` → 0 →
+entitlement required. Studio: preview length field + preview upload.
+**Search.** Creator films are Firestore-only; `mergeCreatorFilms` folds them into the Algolia answer in
+`search.html` (films only, no second index). **Dashboard.** `royalty.mine.figures` with written definitions:
+total earned · pending · released · available · withdrawn (paid/settled only) · pending withdrawal · being
+confirmed (outcome_unknown). **Withdrawal forms.** New `sokoni-payout-intent.js`: one key per (user, amount,
+destination) shared across tabs; `provider-dashboard.html` no longer sends `'po_'+Date.now()`; `wallet.html`
+uses it too. **Governance.** Distribute refuses the admin who approved the quarter (Super Admin override
+needs a reason, audited); an admin cannot review their own verification or change their own creator state.
+**AdminOS.** New Refunds tab (over `fosRefundQueue` / `fosApproveRefund` / `fosResolveRefund` — no second
+lifecycle) and Oversight tab (aggregates from canonical collections). **Analytics.** Period filter, preview
+starts, royalty earned, top content, conversion. **Profile.** Public projection drops the support email.
+**Pricing.** States the marketplace commission does not apply to films.
+
+**Files.** `functions/creator-hub.js`, `functions/shared/creator-publishing.js` (+ synced
+`sokoni-creator-rules.js`), `storage.rules`, `creator.html`, `creator-studio.html`, `search.html`,
+`sokoni-firestore-search.js`, `sokoni-payout-intent.js` (new), `provider-dashboard.html`, `wallet.html`,
+`sokoni-wallet-v2.js`, `sokoni-aos-creator.js`, `subscriptions.html`, tests
+`test-creator-{preview,search,completion}.js` (new), `test-creator-{hub,rules,ui}.js`,
+`sabotage-creator-hub.js`, docs `CREATOR_HUB.md` §25–28, `CREATOR_PAYMENT_ARCHITECTURE.md`.
+**Database.** New server-only `creatorPreviewGrants`; `creatorMedia.previewStoragePath`; film
+`previewReady`; accrual `recognisedAtMs`. **Storage rules.** New `creator-previews/` match (deploy needed).
+**API.** Creator ops `film.previewUploadTarget`, `film.attachPreview`, `playback.preview`,
+`playback.previewProgress`; AdminOS ops `creatorAdminRefundCases`, `creatorAdminOverview`.
+**Breaking.** Distribute by the approving admin refused; public creator profile no longer carries
+`supportEmail`. **Tests.** preview 46/0 (incl. real Chromium video) · completion 61/0 · search 18/0 ·
+hub 260/0 · rules 127/0 · UI 64/0 · sabotage new 13/13 CAUGHT.
+
 ## 2026-09-26 (185) — STK single-flight · IntaSend method authority · AdminOS control plane
 
 **NO DEPLOY. NO PUSH.** Branch `feat/creator-hub`, base `61098e9`. Production writes 0 · provider

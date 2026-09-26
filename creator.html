@@ -213,6 +213,11 @@
       return;
     }
     if (v.isCreator) { bp.innerHTML = priceLine + '<p class="muted">This is your film. Manage it in <a href="/creator-studio.html">Creator Studio</a>.</p>'; return; }
+    /* Free preview: server-granted, separate rendition, limited to f.previewSeconds. */
+    if (f.previewAvailable) {
+      bp.insertAdjacentHTML('beforebegin', `<div class="panel" id="pvPanel"><button class="btn ghost" id="pvBtn">▶ Watch the free preview (${Number(f.previewSeconds)} s)</button></div>`);
+      document.getElementById('pvBtn').onclick = () => previewPlay(f);
+    }
     if (avail && !avail.available) {
       bp.innerHTML = priceLine + `<p class="msg bad">${avail.reason === 'country_unknown' ? 'This film is licensed for specific countries. Set your country in your profile to continue.' : 'This film is not licensed in your country.'}</p>`;
       return;
@@ -293,6 +298,37 @@
       m.textContent = 'We have not received confirmation yet. If you paid, access appears on this page automatically — refresh in a minute.';
       btn.disabled = false;
     } catch (e) { m.className = 'msg bad'; m.textContent = errText(e); btn.disabled = false; }
+  }
+
+  /* ═══ PREVIEW PLAYER ═══
+     The URL is for the PREVIEW rendition only (never the film). The server keeps
+     how much of the preview this viewer has watched, so a reload resumes — it
+     does not restart the allowance. The guard below is the player boundary. */
+  async function previewPlay(f) {
+    const box = document.getElementById('watch');
+    box.innerHTML = '<div class="panel">Preparing the preview…</div>';
+    let g;
+    try { g = await cd('playback.preview', { filmId: f.filmId }); }
+    catch (e) { box.innerHTML = `<div class="panel msg bad">${esc(/preview_used/.test(e.message || '') ? 'You have watched this preview. Buy the film to keep watching.' : errText(e))}</div>`; return; }
+    if (g.mode === 'ENTITLED') return watch(f.filmId);
+    box.innerHTML = `<div class="player"><video id="pvid" playsinline controls disablepictureinpicture controlslist="nodownload noremoteplayback" preload="metadata"></video></div>
+      <p class="notice">Free preview — the first ${Number(g.limitSec)} seconds.</p><div id="pvEnd"></div>`;
+    const pv = document.getElementById('pvid');
+    let lastReport = -1;
+    const report = (force) => {
+      const t = pv.currentTime || 0;
+      if (force || t - lastReport >= 5) { lastReport = t; cd('playback.previewProgress', { filmId: f.filmId, positionSec: t }).catch(() => {}); }
+    };
+    rules().attachPreviewGuard(pv, g.limitSec, () => {
+      report(true);
+      document.getElementById('pvEnd').innerHTML = '<div class="panel"><b>The preview has ended.</b> Buy the film to keep watching.</div>';
+      const b = document.getElementById('buyPanel'); if (b) b.scrollIntoView({ behavior: 'smooth' });
+    });
+    pv.addEventListener('timeupdate', () => report(false));
+    pv.addEventListener('pause', () => report(true));
+    pv.addEventListener('contextmenu', (e) => e.preventDefault());
+    pv.addEventListener('loadedmetadata', () => { if (Number(g.resumeAtSec) > 0) pv.currentTime = Number(g.resumeAtSec); }, { once: true });
+    pv.src = g.url;
   }
 
   /* ═══ PLAYER ═══ */
@@ -446,9 +482,13 @@
         <div class="kpi"><span class="muted">Released to your wallet (royalties)</span><b>${kes(s.releasedCents)}</b></div>
         <div class="kpi"><span class="muted">Available for withdrawal*</span><b>${r.wallet.availableForWithdrawalKes == null ? '—' : 'KES ' + Number(r.wallet.availableForWithdrawalKes).toLocaleString('en-KE')}</b></div>
         <div class="kpi"><span class="muted">Withdrawn*</span><b>KES ${Number(r.wallet.withdrawnKes).toLocaleString('en-KE')}</b></div>
+        <div class="kpi"><span class="muted">Pending withdrawal*</span><b>KES ${Number(r.wallet.pendingWithdrawalKes || 0).toLocaleString('en-KE')}</b></div>
+        ${r.wallet.beingConfirmedKes ? `<div class="kpi"><span class="muted">Being confirmed with M-PESA*</span><b>KES ${Number(r.wallet.beingConfirmedKes).toLocaleString('en-KE')}</b></div>` : ''}
+        <div class="kpi"><span class="muted">Total earned (all quarters)</span><b>${r.figures && r.figures.totalEarnedCents != null ? kes(r.figures.totalEarnedCents) : '—'}</b></div>
         <div class="kpi"><span class="muted">Reversed (refunds)</span><b>${kes(s.reversedCents)}</b></div>
       </div>
       <p class="notice">* Wallet figures: released royalties join your one SOKONI wallet, so these include any other SOKONI earnings. Only settled quarters are ever withdrawable — accrued and pending amounts are not.${r.wallet.reservedForPayoutKes ? ' KES ' + Number(r.wallet.reservedForPayoutKes).toLocaleString('en-KE') + ' is reserved for a payout in progress.' : ''}</p>
+      ${r.figures ? `<details class="panel"><summary>What these figures mean</summary><ul>${Object.entries(r.figures.definitions).map(([k, v]) => `<li><b>${esc(k)}</b> — ${esc(v)}</li>`).join('')}</ul></details>` : ''}
       <p style="margin-top:12px"><a class="btn ghost" href="${esc(r.withdrawal.page)}">Withdraw from wallet · withdrawal history</a></p>
       <div class="panel"><b>My films</b><div class="scroll"><table><thead><tr><th>Film</th><th>Role</th><th>Share</th><th>Agreement</th><th>Status</th></tr></thead><tbody>
         ${r.participations.length ? r.participations.map((p) => `<tr><td>${esc(p.title)}</td><td>${esc(p.participantType)}</td><td>${(p.bps / 100).toFixed(2).replace(/\.00$/, '')}%</td><td>v${esc(p.version)}</td><td>${esc(p.status)}</td></tr>`).join('') : '<tr><td colspan="5" class="muted">You are not a rights holder on any film yet.</td></tr>'}

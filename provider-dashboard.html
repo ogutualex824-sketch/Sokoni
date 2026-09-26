@@ -1381,12 +1381,19 @@ const W={
     if(!(amount>=100))return W.wdErr('Minimum withdrawal is KSh 100.');
     if(amount>avail)return W.wdErr(`That exceeds your available ${_sKsh(avail)}.`);
     if(!/^(?:\+?254|0)?7\d{8}$/.test(phone.replace(/\s/g,'')))return W.wdErr('Enter a valid Safaricom number (07XXXXXXXX).');
+    /* ONE key per withdrawal intent (sokoni-payout-intent.js): a double tap, a retry,
+       a reload or a second tab reuses it, so the server's pout_{key} dedupe holds.
+       It was 'po_'+Date.now() — a new financial identity on every tap. */
+    if(W._wdBusy)return;W._wdBusy=true;
+    const _intent={uid:(firebase.auth().currentUser||{}).uid,amount,destination:phone};
     showLoad('Requesting withdrawal…');
     try{
-      const r=await firebase.functions().httpsCallable('requestSellerPayout')({amount,method:'mpesa',accountNumber:phone,idempotencyKey:'po_'+Date.now()});
+      const idempotencyKey=await window.SokoniPayoutIntent.acquire(_intent);
+      const r=await firebase.functions().httpsCallable('requestSellerPayout')({amount,method:'mpesa',accountNumber:phone,idempotencyKey});
+      window.SokoniPayoutIntent.release(_intent);
       W.wdClose();toast('Withdrawal requested — pending approval'+((r.data&&r.data.reference)?(' · '+r.data.reference):''),'ok');
       W.load();
-    }catch(e){W.wdErr(e.message||'Withdrawal failed');}finally{hideLoad();}
+    }catch(e){if(window.SokoniPayoutIntent.isDefinitive(e))window.SokoniPayoutIntent.release(_intent);W.wdErr(e.message||'Withdrawal failed');}finally{W._wdBusy=false;hideLoad();}
   },
 };
 
@@ -2082,5 +2089,6 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 window.addEventListener('hashchange',_applyHash);
 </script>
+<script src="/sokoni-payout-intent.js"></script>
 </body>
 </html>

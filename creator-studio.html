@@ -270,6 +270,7 @@
           <label>Access<select name="accessType" ${dis}><option value="purchase" ${f.accessType !== 'rental' ? 'selected' : ''}>Buy (keep)</option><option value="rental" ${f.accessType === 'rental' ? 'selected' : ''}>Rental</option></select></label>
           <label>Rental days (1–30)<input name="rentalDays" type="number" min="1" max="30" value="${esc(f.rentalDays || '')}" ${dis}></label>
           <label>Runtime (minutes)<input name="runtimeMinutes" type="number" min="1" max="1000" value="${esc(f.runtimeMinutes || '')}" ${dis}></label>
+          <label>Free preview (seconds, 0–600; 0 = none)<input name="previewSeconds" type="number" min="0" max="600" step="1" value="${esc(String(f.previewSeconds || 0))}" ${dis}></label>
           <label>Genre<input name="genre" maxlength="40" value="${esc(f.genre || '')}" ${dis}></label>
           <label>Language<input name="language" maxlength="40" value="${esc(f.language || '')}" ${dis}></label>
           <label>Country of production<input name="country" maxlength="2" value="${esc(f.country || '')}" placeholder="KE" ${dis}></label>
@@ -300,6 +301,8 @@
           country: fd.get('country'), releaseDate: fd.get('releaseDate') || null, ageRating: fd.get('ageRating'), classification: fd.get('classification'),
         };
         if (fd.get('runtimeMinutes')) data.runtimeMinutes = Math.round(Number(fd.get('runtimeMinutes')));
+        /* Enforced by the server (playback.preview) — needs a preview file too, see Free preview below. */
+        if (fd.get('previewSeconds') !== null && fd.get('previewSeconds') !== '') data.previewSeconds = Math.round(Number(fd.get('previewSeconds')));
         if (data.accessType === 'rental') data.rentalDays = Math.round(Number(fd.get('rentalDays')));
         const mode = fd.get('avMode');
         data.availability = mode === 'worldwide' ? { mode } : { mode, countries: String(fd.get('avCountries') || '').split(',').map((s) => s.trim()).filter(Boolean) };
@@ -331,6 +334,13 @@
         ${editable ? `<label style="margin-top:8px">Master file (video, up to 8 GB)<input type="file" id="master" accept="video/*"></label><progress id="mProg" hidden max="1"></progress><div class="row"><button class="btn" id="mUp">Upload film</button></div>` : ''}
         <p class="muted" style="margin-top:6px">Status: ${f.mediaReady ? '<b>uploaded and verified ✓</b>' : 'not uploaded'}</p>
         <div class="msg" id="mMsg" role="status"></div>
+      </div>
+      <h2>Free preview</h2>
+      <div class="panel">
+        <p class="muted">Upload a SEPARATE short file — the first minutes of your film. Viewers who have not bought the film can watch it up to the preview length you set; the full film is never sent to them. Set the length (seconds) in the film details. Without this file there is no preview.</p>
+        ${editable ? `<label style="margin-top:8px">Preview file (video, up to 1 GB)<input type="file" id="previewFile" accept="video/*"></label><progress id="pProg" hidden max="1"></progress><div class="row"><button class="btn" id="pUp">Upload preview</button></div>` : ''}
+        <p class="muted" style="margin-top:6px">Status: ${f.previewReady ? '<b>uploaded and verified ✓</b>' : 'no preview'} · length ${Number(f.previewSeconds) > 0 ? esc(String(f.previewSeconds)) + ' s' : 'not set'}</p>
+        <div class="msg" id="pMsg" role="status"></div>
       </div>
       <h2>Royalty split</h2>
       <div class="panel">
@@ -403,6 +413,22 @@
         await cd('film.attachMedia', { filmId: f.filmId });
         msg('mMsg', 'Film uploaded and verified.', true);
       } catch (err) { msg('mMsg', errText(err), false); mUp.disabled = false; }
+    };
+    const pUp = document.getElementById('pUp');
+    if (pUp) pUp.onclick = async () => {
+      const file = document.getElementById('previewFile').files[0];
+      if (!file) return msg('pMsg', 'Choose the preview file first.', false);
+      if (!/^video\//.test(file.type)) return msg('pMsg', 'That is not a video file.', false);
+      pUp.disabled = true;
+      try {
+        const t = await cd('film.previewUploadTarget', { filmId: f.filmId });
+        if (file.size > t.maxBytes) throw new Error('The preview is larger than 1 GB.');
+        msg('pMsg', 'Uploading… keep this page open.');
+        await upload(t.storagePath, file, 'pProg');
+        msg('pMsg', 'Verifying…');
+        await cd('film.attachPreview', { filmId: f.filmId });
+        msg('pMsg', 'Preview uploaded and verified.', true);
+      } catch (err) { msg('pMsg', errText(err), false); pUp.disabled = false; }
     };
     const on = (id, op) => { const b = document.getElementById(id); if (b) b.onclick = async () => {
       b.disabled = true;

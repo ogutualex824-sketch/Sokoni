@@ -431,7 +431,8 @@ async function buy(buyer, filmId) {
   await db.doc('royaltyStatements/2026-Q3_uActB').update({ released: false });   /* simulate a lost statement write */
   const balB = (await read('wallets/uActB')).balance;
   await db.doc('royaltyPeriods/2026-Q3').update({ status: 'PAYABLE' });
-  await Promise.all([adm('creatorAdminDistribute', 'adm1', { periodId: '2026-Q3' }), adm('creatorAdminDistribute', 'adm2', { periodId: '2026-Q3' })]);
+  /* adm2 approved Q3, so under dual control it may not distribute — the second concurrent runner is adm3 */
+  await Promise.all([adm('creatorAdminDistribute', 'adm1', { periodId: '2026-Q3' }), adm('creatorAdminDistribute', 'adm3', { periodId: '2026-Q3' })]);
   ck('lost statement write + 2 concurrent runs → reconciled, NOT re-credited', (await read('wallets/uActB')).balance === balB && (await read('royaltyStatements/2026-Q3_uActB')).released === true);
 
   const mine = await call('royalty.mine', 'uActA', {});
@@ -523,6 +524,11 @@ async function buy(buyer, filmId) {
     ck('after account upgrade the SAME uid owns the film', libG.myFilms.some((m) => m.entitlementId === refG));
     ck('upgrade created NO second entitlement (nothing copied)', docs('contentEntitlements/').length === entBefore && docs('contentEntitlements/').filter((e) => e.buyerUid === 'g1').length === 1);
     ck('upgraded account can now reach account-level ops', Array.isArray((await call('royalty.mine', 'g1', {})).statements));
+    await H._internal.processFilmPayment(refG);   /* the callback replayed */
+    ck('callback replay after upgrade → still ONE entitlement for the guest purchase', docs('contentEntitlements/').filter((e) => e.buyerUid === 'g1').length === 1);
+    const dev2 = await call('playback.authorize', 'g1', { filmId: FILM, deviceId: 'second-device' });
+    ck('same account on a second device plays the film', !!dev2.url && !!dev2.sessionId);
+    await call('playback.end', 'g1', { sessionId: dev2.sessionId }).catch(() => {});
     await adm('creatorAdminConfig', 'sa1', { set: { guestCheckoutEnabled: false } }, { superAdmin: true });
   }
 

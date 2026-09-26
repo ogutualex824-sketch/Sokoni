@@ -786,6 +786,23 @@ export async function firestoreSearch(db, rawQuery, opts = {}) {
  * user has finished typing is worse than none, so this returns instantly or
  * returns nothing and lets the caller fall back.
  */
+/**
+ * Creator films are not in the Algolia / Typesense indexes — Firestore
+ * (entertainmentListings, published Creator films only: see the films source
+ * above) is their ONE search authority. When the primary engine answers with
+ * hits, those films must still appear: this appends the Firestore rows whose
+ * tab is 'films' and that the primary did not already return. Nothing else is
+ * merged, so every other tab's results stay exactly what the primary engine
+ * said. Pure; deterministic; de-duplicated by id.
+ */
+export function mergeCreatorFilms(primaryRows, firestoreRows) {
+  const base = Array.isArray(primaryRows) ? primaryRows : [];
+  const seen = new Set(base.map((r) => r && r.tab + ':' + r.id));
+  const films = (Array.isArray(firestoreRows) ? firestoreRows : [])
+    .filter((r) => r && r.tab === 'films' && r.id && !seen.has('films:' + r.id));
+  return films.length ? base.concat(films) : base;
+}
+
 export function suggest(prefix, limitN = 6) {
   const p = String(prefix || '').toLowerCase().trim();
   if (p.length < 2) return [];

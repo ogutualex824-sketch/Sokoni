@@ -189,6 +189,8 @@
     'creatorUid', 'creatorId', 'pubState', 'status', 'entType', 'streamingUrl', 'media', 'mediaPath',
     'agreementVersion', 'ownershipStatus', 'createdAt', 'updatedAt', 'publishedAt', 'approvedBy',
     'purchaseCount', 'viewCount', 'rating', 'reviewCount', 'price', 'commissionRate',
+    /* media verification flags: set only after the server checks the stored object */
+    'mediaReady', 'pendingUploadId', 'previewReady', 'pendingPreviewUploadId',
   ]);
 
   const ISO2 = /^[A-Z]{2}$/;
@@ -344,6 +346,94 @@
     return { allow: true, reason: 'entitled' };
   }
 
+  /* ── PREVIEW (non-entitled viewing of the first N seconds) ───────────────────
+     Enforced in three places, none of which is a JavaScript timer alone:
+       1. MEDIA — a preview grant signs ONLY the film's separate preview rendition
+          (creator-previews/…); the master is signed for an entitled viewer only,
+          so a non-entitled viewer never receives the full film's URL.
+       2. SERVER LEDGER — creatorPreviewGrants/{uid}_{filmId} carries the seconds
+          already watched, a wall-clock window and a grant count; a reload resumes
+          where the viewer was and cannot restart the allowance.
+       3. CLIENT GUARD — attachPreviewGuard stops the player at N and refuses a
+          seek past it (a UX boundary; 1 and 2 are the enforcement).
+     This is not DRM and is not copy-proof: a viewer can record their screen. */
+  const PREVIEW = Object.freeze({
+    MAX_SECONDS: 600,                   /* mirrors the field contract (0–600) */
+    WINDOW_MS:   30 * 60 * 1000,        /* one viewer's preview of one film lives this long */
+    MAX_GRANTS:  6,                     /* signed preview URLs per window (reloads, retries) */
+    URL_SLACK_MS: 2 * 60 * 1000,        /* preview URL outlives the allowance by this much only */
+    EPSILON_SEC: 0.25,
+  });
+
+  /** previewSeconds as stored → a safe integer 1..600, else 0 (= entitlement required). */
+  function normalizePreviewSeconds(v) {
+    if (typeof v !== 'number' && typeof v !== 'string') return 0;
+    if (typeof v === 'string' && !/^\d{1,4}$/.test(v.trim())) return 0;
+    const n = Number(v);
+    return Number.isSafeInteger(n) && n > 0 && n <= PREVIEW.MAX_SECONDS ? n : 0;
+  }
+
+  /**
+   * May this viewer receive a PREVIEW grant now?
+   * @param {{film, viewerUid, entitled:boolean, grant:object|null, nowMs:number}} a
+   *   grant = creatorPreviewGrants doc: { firstGrantAtMs, grants, consumedSec, exhausted }
+   */
+  function decidePreview({ film, viewerUid, entitled, grant, nowMs }) {
+    if (!viewerUid) return { allow: false, reason: 'unauthenticated' };
+    if (!film || film.pubState !== FILM_STATE.PUBLISHED) return { allow: false, reason: 'film_unavailable' };
+    if (entitled) return { allow: false, reason: 'entitled' };          /* full playback applies instead */
+    const limitSec = normalizePreviewSeconds(film.previewSeconds);
+    if (!limitSec) return { allow: false, reason: 'preview_unavailable' };
+    const g = grant || {};
+    const first = Number(g.firstGrantAtMs) || null;
+    const windowEndsAtMs = (first || nowMs) + PREVIEW.WINDOW_MS;
+    if (g.exhausted === true) return { allow: false, reason: 'preview_used', limitSec };
+    if (first && nowMs >= windowEndsAtMs) return { allow: false, reason: 'preview_used', limitSec };
+    const consumedSec = Math.max(0, Math.min(limitSec, Number(g.consumedSec) || 0));
+    const remainingSec = limitSec - consumedSec;
+    if (remainingSec <= PREVIEW.EPSILON_SEC) return { allow: false, reason: 'preview_used', limitSec };
+    if ((Number(g.grants) || 0) >= PREVIEW.MAX_GRANTS) return { allow: false, reason: 'preview_used', limitSec };
+    return { allow: true, reason: 'preview', limitSec, consumedSec, remainingSec, windowEndsAtMs, firstGrantAtMs: first || nowMs };
+  }
+
+  /** Fold a reported position into the ledger — monotonic, clamped to the limit. */
+  function recordPreviewProgress(grant, limitSec, positionSec) {
+    const limit = normalizePreviewSeconds(limitSec);
+    const prev = Math.max(0, Math.min(limit, Number(grant && grant.consumedSec) || 0));
+    const pos = Number(positionSec);
+    const at = Number.isFinite(pos) ? Math.max(0, Math.min(limit, pos)) : 0;
+    const consumedSec = Math.max(prev, Math.round(at * 100) / 100);
+    return { consumedSec, exhausted: limit === 0 || consumedSec >= limit - PREVIEW.EPSILON_SEC };
+  }
+
+  /**
+   * Client boundary for a preview player. `media` is an HTMLMediaElement (or any
+   * object with currentTime, paused, pause(), addEventListener/removeEventListener).
+   * Stops at limitSec, refuses a seek past it, refuses play once the limit is
+   * reached, and calls onLimit() once.
+   */
+  function attachPreviewGuard(media, limitSec, onLimit) {
+    const limit = Math.max(0, Number(limitSec) || 0);
+    const EPS = PREVIEW.EPSILON_SEC;
+    let reached = false;
+    let lastGood = 0;
+    const finish = () => {
+      try { if (!media.paused) media.pause(); } catch (_) { /* noop */ }
+      if (media.currentTime > limit) media.currentTime = limit;
+      if (!reached) { reached = true; if (typeof onLimit === 'function') onLimit(); }
+    };
+    const onTime = () => { if (media.currentTime >= limit - EPS) finish(); else lastGood = Math.max(lastGood, media.currentTime); };
+    const onSeek = () => { if (media.currentTime > limit - EPS) { media.currentTime = Math.min(lastGood, limit); finish(); } };
+    const onPlay = () => { if (reached || media.currentTime >= limit - EPS) finish(); };
+    const on = [['timeupdate', onTime], ['seeking', onSeek], ['seeked', onSeek], ['play', onPlay], ['playing', onPlay]];
+    on.forEach(([e, h]) => media.addEventListener(e, h));
+    return {
+      get reached() { return reached; },
+      limitSec: limit,
+      detach() { on.forEach(([e, h]) => media.removeEventListener(e, h)); },
+    };
+  }
+
   /** Flag (not block) patterns that look like credential sharing or scraping. */
   function assessSessionRisk({ devices24h = [], networks1h = [] }) {
     const flags = [];
@@ -359,5 +449,6 @@
     assertVerificationTransition, sanitizeVerificationInput, verificationReadiness,
     isOwnedPublicAsset, sanitizeFilmInput, normalizeAvailability, isAvailableIn,
     assertFilmTransition, assertCreatorTransition, publishReadiness, decidePlayback, assessSessionRisk,
+    PREVIEW, normalizePreviewSeconds, decidePreview, recordPreviewProgress, attachPreviewGuard,
   };
 }));
