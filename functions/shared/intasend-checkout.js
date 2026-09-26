@@ -100,6 +100,7 @@ function buildPayload({
   method,
   cardTariff, mobileTariff,
   walletId,
+  methodProven = false,
 }) {
   if (!publicKey) throw new Error('intasend-checkout: publicKey is required');
   if (!apiRef)    throw new Error('intasend-checkout: apiRef is required');
@@ -108,7 +109,10 @@ function buildPayload({
   if (!Number.isFinite(amt) || amt <= 0) {
     throw new Error('intasend-checkout: amountKES must be a positive number');
   }
-  if (method && !CANDIDATE_METHODS.includes(method)) {
+  /* A method outside the known list is forwarded ONLY when the caller has checked
+     it against the capability record (LIVE_AND_PROVEN, with evidence) — so a new
+     provider method needs a record, not a code change, and a typo still stops here. */
+  if (method && !CANDIDATE_METHODS.includes(method) && !(methodProven === true && require('./payment-capability').isMethodId(method))) {
     /* Refuse an unrecognised method rather than forwarding it. A typo that
        reaches IntaSend comes back as a 400 with a field-keyed body and no
        `detail` — the same unhelpful shape a failed production STK once

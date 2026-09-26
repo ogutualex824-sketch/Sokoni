@@ -405,6 +405,9 @@ places — pre-existing, not changed here.)
 
 ## 24. Guest (anonymous) checkout — DECISION_REQUIRED
 
+> **BLOCKED — PLATFORM AUTHORIZATION REQUIRED.** What enabling it changes and what must be authorized:
+> [[DECISION_ANONYMOUS_CREATOR_PURCHASE]].
+
 The rail binds an anonymous uid correctly and `linkWithCredential` keeps the same uid, so the
 upgrade copies nothing. But nothing uses Anonymous Auth today, and enabling it lets anonymous
 tokens satisfy **740** `isAuthed()` references in the served rules, **39** storage auth checks and
@@ -463,13 +466,19 @@ behaviour UNPROVEN (no deploy).
 - **Refund review.** AdminOS › Creator Hub › Refunds lists `fosRefundQueue` cases (payment identity, amount,
   reason, state, provider outcome, OUTCOME_UNKNOWN, audit history, film flag from the server-minted intent).
   Approve / reject call `fosApproveRefund`; resolve calls `fosResolveRefund` (Super Admin + evidence). No second
-  refund lifecycle. **Lineage note:** `reviewRefundCase` / `refundExecution` live on
-  `slice/realtime-control-plane` (B9.32C), not on this branch — convergence happens at merge, not by porting.
+  refund lifecycle. **Three refund lineages exist and none is on `main`** (B9.31–B9.32D on
+  `slice/realtime-control-plane`; Tracks F/G on `feat/integrations-control-center`; this branch). Owner
+  decision 2026-09-26: Creator Hub keeps this branch's authority; convergence is a release-merge task —
+  [[REFUND_AUTHORITY_CONVERGENCE]]. R1–R8: `scripts/test-refund-authority-matrix.js`.
 - **Oversight.** AdminOS › Creator Hub › Oversight: creators by state, verification queue, published films,
   purchases, gross, provider fees, SOKONI 30 %, creator pool 70 %, refunds, released royalty, participant
   payouts (withdrawn / pending / outcome_unknown). Aggregates only; a capped read shows "—".
 - **No self-review.** An admin cannot decide their own verification application or change their own creator
   account state.
 - **Withdrawal forms.** `sokoni-payout-intent.js`: one idempotency key per (user, amount, destination),
-  shared across tabs, reused on reload / retry, released only on a definitive answer. Wired into
-  `provider-dashboard.html` (was `'po_'+Date.now()`) and `wallet.html`.
+  shared across tabs, reused on reload / retry, released only on a definitive answer — and KEPT on
+  `outcome_unknown` (the intent is not concluded). Wired into `provider-dashboard.html` (was
+  `'po_'+Date.now()`), `wallet.html` and the merchant wallet (was one key per tab). Server: a dedupe
+  hit must be the caller's own payout. Browser-certified W1–W5: `scripts/test-withdrawal-browser.js`.
+  `seller-earnings.html` is legacy and NOT on the Creator route (royalties are withdrawn from
+  `wallet.html`); it sends no key and wrong field names — recorded, not changed.

@@ -89,6 +89,13 @@ Classification today (**nothing has been proven for the hosted checkout**):
 
 Nothing in this table says "all IntaSend methods are supported" or "hosted checkout is live".
 
+**Readiness (executed, no provider call):** each of the 8 known methods, and a brand-new identifier
+(`MPESA-XB`), becomes offerable on the hosted checkout **by the capability record alone** — recorded
+LIVE_AND_PROVEN with evidence → the catalog lists it and `initiateHostedCheckout` forwards it. No code
+change: the known list is not a ceiling; a well-formed IntaSend identifier is accepted by the record, a
+malformed one is refused, and a non-listed method is forwarded only once proven
+(`scripts/test-creator-completion.js`).
+
 **Read-only evidence (2026-09-26, owner-authorized option A — `GET /api/v1/invoices/?state=COMPLETE`):**
 28 COMPLETE invoices, **all `M-PESA`**, latest `08QXNLZ` (2026-09-14). No other method was ever
 observed. This is historical evidence for M-PESA on the existing collection rail only — it does not
@@ -140,39 +147,36 @@ Hosted checkout also needs the `INTASEND_PUBLIC_KEY` secret before it can run at
 | Unsupported method | UNSUPPORTED / unknown name refused before any request | ✓ (new) |
 | **Webhook payload shape for hosted invoices** | **UNPROVEN** — the harness uses the STK callback shape | — |
 
-## 5. AdminOS Creator authority map
+## 5. AdminOS Creator control census (re-run 2026-09-26)
 
-Server authority = the handler's own check (`AC.isAdmin` / `AC.isSuperAdmin`, `token.superAdmin === true`).
-Every row below is reached through `adminOsDispatch` (or, for payouts, a direct callable from
-`sokoni-aos.js`) and re-checked on the server — hiding a button is never the control.
+Every Creator control is in **AdminOS** (`admin-os.html` › Creator Hub, `sokoni-aos-creator.js`; payouts in
+AdminOS › Financial › Payouts, `sokoni-aos.js`). Server authority is the handler's own check
+(`AC.isAdmin` / `AC.isSuperAdmin`, `token.superAdmin === true`) — hiding a button is never the control.
+Audit: `adminAudit` (creator-hub), `payoutResolutions` + `statusHistory` (wallet), `finosAudit` (refunds).
 
-| Function | Current UI | Canonical UI | Server authority |
-|---|---|---|---|
-| Creator verification review / decision | AdminOS › Creator › Verification | AdminOS | `creatorAdminVerifications/Detail/Decision` — **admin** |
-| Creator approval / suspension / reinstate | AdminOS › Creator › Creators | AdminOS | `creatorAdminSetState` — admin |
-| Film moderation, review, publish, suspend | AdminOS › Creator › Films & review | AdminOS | `creatorAdminFilms/FilmDetail/FilmTransition` — admin |
-| Royalty configuration (agreement lock) | AdminOS › Creator › Films | AdminOS | `creatorAdminLockAgreement` — admin |
-| Royalty statements / settlement | AdminOS › Creator › Royalty settlement | AdminOS | `creatorAdminCalculatePeriod/ApprovePeriod/Distribute/ClosePeriod/Statements` — **admin** |
-| Creator payout hold | AdminOS › Creator › Creators | AdminOS | `creatorAdminSetPayoutHold` — admin |
-| Withdrawal review | AdminOS › Financial › Payouts **and** legacy pages (§6) | AdminOS | `adminProcessPayout` (wallet.js) — admin |
-| Outcome-unknown resolution | AdminOS › Financial › Payouts › Outcome unknown | AdminOS / **Super Admin** | `adminResolvePayoutOutcome` — **Super Admin** |
-| Fee attestation (royalty exceptions) | AdminOS › Creator › Exceptions | AdminOS / Super Admin | `creatorAdminAttestFee` — **Super Admin** |
-| Entitlement revocation | AdminOS › Creator › Playback security | AdminOS | `creatorAdminRevokeEntitlement` — admin |
-| Refund review | AdminOS › Creator Hub › Refunds (**built 2026-09-26**) | AdminOS | `creatorAdminRefundCases` (read, admin) · `fosApproveRefund` (admin) · `fosResolveRefund` (**Super Admin** + evidence) |
-| Creator analytics / oversight | AdminOS › Creator Hub › Oversight (**built 2026-09-26**) | AdminOS | `creatorAdminOverview` — admin, aggregates only |
-| Commercial & checkout configuration | AdminOS › Creator › Config | AdminOS / **Super Admin** | `creatorAdminConfig` — read admin, write **Super Admin** |
-| Payment-method capability | AdminOS › Creator › Config | AdminOS / **Super Admin** | `creatorAdminPaymentCapability` — read admin, write **Super Admin** (new) |
+| Function | UI (AdminOS) | Server authority | Admin | Super Admin | Audit |
+|---|---|---|---|---|---|
+| Creator verification | Creator › Verification | `creatorAdminVerifications` · `…VerificationDetail` · `…VerificationDecision` | review + decide (never own application) | — | `adminAudit` + `creatorVerifications/{uid}/events` |
+| Creator approval | Creator › Creators | `creatorAdminSetState` → ACTIVE | yes (never own account) | — | `adminAudit` |
+| Creator suspension | Creator › Creators | `creatorAdminSetState` → SUSPENDED (reason required) | yes | — | `adminAudit` |
+| Film moderation | Creator › Films & review | `creatorAdminFilms` · `…FilmDetail` · `…FilmTransition` | yes | — | `adminAudit` |
+| Publishing approval | Creator › Films & review | `creatorAdminFilmTransition` (approve → publish) | yes | — | `adminAudit` |
+| Royalty configuration | Creator › Films & review | `creatorAdminLockAgreement` | yes | — | `adminAudit` |
+| Royalty settlement | Creator › Royalty settlement | `creatorAdminCalculatePeriod` → `…ApprovePeriod` (≠ calculator) → `…Distribute` (≠ approver) → `…ClosePeriod` · `…Statements` | yes, **three different admins** | override with written reason | `adminAudit` (+ `royalty_distribute_override`) |
+| Payout review | Financial › Payouts | `adminProcessPayout` (wallet.js) | approve / reject / manual settle with attestation | — | `statusHistory` |
+| Outcome-unknown payout | Financial › Payouts › Outcome unknown | `adminResolvePayoutOutcome` | read only | **resolve, with IntaSend evidence** | `payoutResolutions/{rid}` |
+| Refund review | Creator › Refunds | `creatorAdminRefundCases` (read) · `fosApproveRefund` · `fosResolveRefund` | approve / reject | **resolve unknown outcome, with evidence** | `finosAudit` |
+| Entitlement revocation | Creator › Playback security | `creatorAdminRevokeEntitlement` (reason required) | yes | — | `adminAudit` |
+| Creator oversight | Creator › Oversight | `creatorAdminOverview` | read | — | read-only |
+| Creator analytics | Creator › Oversight (aggregates) · creators see their own in Studio | `creatorAdminOverview` · `creator.analytics` | read | — | read-only |
+| Payment-method capability | Creator › Config | `creatorAdminPaymentCapability` | read | **record, with evidence** | `adminAudit` |
+| Commercial policy / config | Creator › Config | `creatorAdminConfig` (purchases, hosted, guest checkout); the 30/70 policy is code (`creator-commercial.js`) | read | **write** | `adminAudit` |
 
-Executed (`scripts/test-creator-adminos-authority.js`): all 24 `creatorAdmin*` ops refuse an
-anonymous caller and an ordinary user when invoked directly; Super-Admin writes refuse a plain
-admin; a forged `"true"` string claim is not Super Admin; the AdminOS op list equals the server
-handler set.
+Executed (`scripts/test-creator-adminos-authority.js`): every `creatorAdmin*` op refuses an anonymous caller
+and an ordinary user when invoked directly; Super-Admin writes refuse a plain admin; a forged `"true"` claim
+is refused; the AdminOS op list equals the server handler set.
 
-**Findings for the owner (not changed here):**
-- **Fixed 2026-09-26:** distribute now refuses the admin who approved the quarter (dual control;
-  Super Admin override needs a written reason and is audited). `SetPayoutHold` and
-  `RevokeEntitlement` remain plain-admin (protective, not money-releasing) — owner may still decide.
-- **Fixed 2026-09-26:** Refund review and Creator oversight are AdminOS tabs.
+**Remaining Creator function outside AdminOS: NONE.**
 
 ## 6. Legacy admin pages
 
@@ -187,7 +191,10 @@ Scanned for Creator ops, collections and money controls (`admin.html`, `super-ad
 - `super-admin.html:1760-1815` — payout ops (`adminPayoutOps`, `adminProcessPayout`). Same rail,
   same server rules. **Mark for migration.**
 - `super-admin.html` / `superadmin.html` exist as separate Super Admin applications, which
-  contradicts "Super Admin is an AdminOS persona". **Mark for migration**; not touched here.
+  contradicts "Super Admin is an AdminOS persona". Re-scanned 2026-09-26: they contain **no Creator
+  functionality** — no verification, settlement, refund, royalty or outcome-unknown resolution; only the
+  generic platform payout ops above. Nothing Creator-specific to migrate; **mark the apps for platform
+  migration**, not touched here.
 - `finos-admin.html:1007-1022` and `fos-admin.html:484-494` — legacy platform refund approval
   (`fosApproveRefund`), the same server authority AdminOS now uses; a Creator film refund reaches it too.
   Generic platform functionality — **mark for migration**, not deleted.

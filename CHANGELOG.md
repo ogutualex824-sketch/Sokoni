@@ -1,3 +1,37 @@
+## 2026-09-26 (187) — Creator Hub: close the gaps before hosted-checkout certification
+
+**NO DEPLOY. NO PUSH.** Branch `feat/creator-hub`, base `7fc0643`. Production writes 0 · provider calls 0 ·
+real invoices 0 · refunds 0. **HOSTED INTASEND METHODS: UNPROVEN LIVE** (unchanged).
+
+**Withdrawal forms, browser-certified.** `scripts/test-withdrawal-browser.js` drives the REAL wallet.html,
+provider-dashboard.html and merchant wallet in Chromium, with the REAL wallet.js behind them: double
+click · two tabs · reload after a lost answer · retry after a definitive refusal · outcome unknown — one
+payout identity per intent, at most one provider call. Fixes found by it: an `outcome_unknown` answer
+released the intent key (a retry became a NEW withdrawal) on both pages; the merchant wallet kept one key
+per tab (two tabs → two payouts) — now on `sokoni-payout-intent.js`; the server's `pout_{key}` dedupe did
+not check the payout was the caller's — another account now gets a refusal, not "already submitted".
+**Refund authority.** Three competing authorities exist and none is on `main` (B9.31–B9.32D on
+`slice/realtime-control-plane`, Tracks F/G on `feat/integrations-control-center`, this branch). Trial
+port of the B9.3x commits conflicted on all 8; neither other lineage handles Creator film refunds. Owner
+decision: keep this branch's authority; convergence is a release-merge task
+(docs/REFUND_AUTHORITY_CONVERGENCE.md). R1–R8 executed on it (`test-refund-authority-matrix.js`).
+**Payment-method readiness.** The capability record accepts any well-formed IntaSend identifier (the known
+8 are no longer a ceiling); a non-listed method is forwarded only once proven. Executed: the 8 known +
+a new identifier become offerable by the record alone.
+**Anonymous purchase.** BLOCKED — PLATFORM AUTHORIZATION REQUIRED (docs/DECISION_ANONYMOUS_CREATOR_PURCHASE.md);
+Firebase Auth untouched. **AdminOS census.** 15 Creator functions, all in AdminOS; super-admin.html /
+superadmin.html hold no Creator functionality.
+
+**Files.** `functions/wallet.js`, `functions/shared/payment-capability.js`,
+`functions/shared/intasend-checkout.js`, `functions/hosted-checkout.js`, `functions/creator-hub.js`,
+`sokoni-wallet-v2.js`, `provider-dashboard.html`, `sokoni-merchant-wallet.js`, `merchant-v2.html`,
+`sokoni-aos-creator.js`, tests `test-withdrawal-browser.js`, `test-refund-authority-matrix.js` (new),
+`test-creator-completion.js`, `test-creator-hub.js`, `sabotage-creator-hub.js`, docs
+`REFUND_AUTHORITY_CONVERGENCE.md`, `DECISION_ANONYMOUS_CREATOR_PURCHASE.md` (new), `CREATOR_HUB.md`,
+`CREATOR_PAYMENT_ARCHITECTURE.md`. **API.** `requestSellerPayout` refuses a key owned by another account
+(`failed-precondition`). **Tests.** browser 23/0 · refund matrix 24/0 · completion 66/0 · hub 260/0 · all
+Creator / payout / payment suites green · sabotage gaps 5/5.
+
 ## 2026-09-26 (186) — Creator Hub completion: preview, search, dashboard, withdrawal forms, governance, refunds, oversight
 
 **NO DEPLOY. NO PUSH.** Branch `feat/creator-hub`, base `23e5fa4`. Production writes 0 · provider

@@ -229,6 +229,51 @@ const ck = (l, ok, d) => { quiet('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d !== 
   const cc = require('child_process').spawnSync('git', ['diff', '--quiet', 'a38b31a', '--', 'functions/commission-config.js'], { cwd: ROOT });
   ck('marketplace commission config byte-identical to the pre-Creator base (a38b31a)', cc.status === 0, cc.status);
 
+  /* ═══ PAYMENT-METHOD READINESS (no provider call) ═══ */
+  quiet('\n── payment-method readiness: the record controls availability ──');
+  {
+    const HC = require(Path.join(FN, 'hosted-checkout.js'))._internal;
+    const gw = [];
+    HC._setHttps({ request: (opts, cb) => { let body = ''; const req = { on: () => req, write: (b) => { body += b; }, end: () => {
+      gw.push(JSON.parse(body)); const data = JSON.stringify({ url: 'https://payment.intasend.com/checkout/r' + gw.length + '/', id: 'RINV' + gw.length });
+      const res = { statusCode: 201, on: (ev, fn) => { if (ev === 'data') fn(data); if (ev === 'end') fn(); return res; } }; cb(res); } }; return req; } });
+    HC._setClock(() => NOW);
+    await db.doc('config/creatorHub').set({ purchasesEnabled: true }, { merge: true });
+    await db.doc('config/hostedCheckout').set({ enabled: true, purposes: ['film_access'] });
+    await db.doc('entertainmentListings/rfilm').set({ creatorHub: true, status: 'active', pubState: 'PUBLISHED', creatorUid: 'pc1', title: 'Ready', priceCents: 50000, currency: 'KES' });
+    const SA = { superAdmin: true };
+    const PCAP = require(Path.join(FN, 'shared', 'payment-capability.js'));
+    const results = [];
+    let k = 0;
+    for (const m of [...PCAP.METHODS, 'MPESA-XB']) {                 /* the 8 known + one IntaSend might add later */
+      await db.doc('config/intasendCapability').delete().catch(() => {});
+      await adm('creatorAdminPaymentCapability', 'saR', { set: { method: m, status: 'LIVE_AND_PROVEN', evidence: { type: 'provider_confirmation', reference: 'TKT-' + m }, note: 'harness: provider confirmed this method for the account' } }, SA);
+      const g = await op('catalog.get', 'vR', { filmId: 'rfilm' });
+      const offered = g.checkout.hostedCheckout && g.checkout.methods.some((x) => x.method === m && x.rail === 'hosted_checkout');
+      const ref = 'RDYREF' + (++k);
+      await db.doc('paymentIntents/' + ref).set({ ref, uid: 'vR', purpose: 'film_access', amount: 500, currency: 'KES', status: 'created', expiresAt: TS.fromMillis(NOW + 900000), metadata: {} });
+      const n0 = gw.length;
+      const r = await out(HC.hostedCheckout({ auth: { uid: 'vR' }, data: { ref, method: m.toLowerCase() } }, 'ISPubKey_live_x'));
+      results.push({ m, offered, forwarded: gw.length - n0 === 1 && gw[gw.length - 1].method === m, err: r.err || null });
+    }
+    ck('every known method (8) + a NEW identifier become offerable by the record alone — no code change',
+      results.every((x) => x.offered && x.forwarded), results.filter((x) => !(x.offered && x.forwarded)));
+    await db.doc('config/intasendCapability').set({ methods: { 'CARD-PAYMENT': { status: 'PROVIDER_CAPABILITY_UNKNOWN', note: 'unknown' } } });
+    const g0 = await op('catalog.get', 'vR', { filmId: 'rfilm' });
+    const n1 = gw.length;
+    await db.doc('paymentIntents/RDYREFX').set({ ref: 'RDYREFX', uid: 'vR', purpose: 'film_access', amount: 500, currency: 'KES', status: 'created', expiresAt: TS.fromMillis(NOW + 900000), metadata: {} });
+    const rx = await out(HC.hostedCheckout({ auth: { uid: 'vR' }, data: { ref: 'RDYREFX', method: 'CARD-PAYMENT' } }, 'ISPubKey_live_x'));
+    ck('with nothing proven: M-PESA (STK) only, hosted refused, no request', g0.checkout.hostedCheckout === false && rx.err === 'failed-precondition' && gw.length === n1);
+    await db.doc('config/hostedCheckout').set({ enabled: false, purposes: [] });
+  }
+
+  /* ═══ ANONYMOUS UPGRADE CONTRACT (static; server proof in test-creator-hub) ═══ */
+  quiet('\n── anonymous purchase: upgrade contract ──');
+  const cpage = fs.readFileSync(Path.join(ROOT, 'creator.html'), 'utf8');
+  ck('guest upgrade LINKS the credential to the SAME uid (linkWithCredential), never creates a new account', /linkWithCredential\(USER, cred\)/.test(cpage) && !/createUserWithEmailAndPassword/.test(cpage));
+  ck('guest checkout is behind a server flag that defaults OFF', /guestCheckoutEnabled: d\.guestCheckoutEnabled === true/.test(fs.readFileSync(Path.join(FN, 'creator-hub.js'), 'utf8')));
+  ck('no client-supplied identity is trusted (the pricer reads only the verified uid)', /The pricer receives only the verified uid/.test(fs.readFileSync(Path.join(FN, 'creator-hub.js'), 'utf8')));
+
   quiet('\n  ' + pass + ' passed, ' + fail + ' failed\n');
   process.exit(fail ? 1 : 0);
 })().catch((e) => { quiet('HARNESS CRASHED', e && e.stack); process.exit(2); });

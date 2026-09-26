@@ -204,7 +204,8 @@
         <p class="aos-muted">IntaSend has no read-only "enabled methods" endpoint. Evidence is a COMPLETE invoice on the live account for that method, a live probe session, or IntaSend's written confirmation. Nothing is offered on the strength of a name in code.</p>
         <div class="aos-table-wrap"><table class="aos-table"><thead><tr><th>Method</th><th></th><th>Status</th><th>Evidence</th><th>Note</th><th>By</th><th>When</th></tr></thead><tbody>${rows}</tbody></table></div>
         <form class="aoscr-inline" data-f="cfg-capability">
-          <select name="method" aria-label="Method" required>${opt((r.methods || []).map((m) => m.method))}</select>
+          <input name="method" list="aoscrMethods" aria-label="IntaSend method identifier" placeholder="e.g. CARD-PAYMENT" required maxlength="32" pattern="[A-Za-z][A-Za-z0-9_-]{1,31}">
+          <datalist id="aoscrMethods">${opt((r.methods || []).map((m) => m.method))}</datalist>
           <select name="status" aria-label="Status" required>${opt(r.statuses || [])}</select>
           <select name="evType" aria-label="Evidence type"><option value="">(no evidence)</option>${opt(Object.keys(r.evidenceTypes || {}))}</select>
           <input name="evRef" aria-label="Evidence reference" placeholder="invoice / probe / ticket ref" maxlength="120">

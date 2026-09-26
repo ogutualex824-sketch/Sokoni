@@ -197,7 +197,8 @@ async function buy(buyer, filmId) {
   ck('capability: LIVE_AND_PROVEN without evidence refused', (await code(adm(CAP, 'sa1', { set: { ...good, evidence: undefined } }, SA))) === 'invalid-argument');
   ck('capability: a refusal cannot prove a method', (await code(adm(CAP, 'sa1', { set: { ...good, evidence: { type: 'provider_refusal', reference: 'PROBE_1' } } }, SA))) === 'invalid-argument');
   ck('capability: a note that says nothing refused', (await code(adm(CAP, 'sa1', { set: { ...good, note: 'ok' } }, SA))) === 'invalid-argument');
-  ck('capability: an unknown method name refused', (await code(adm(CAP, 'sa1', { set: { ...good, method: 'PAYPAL' } }, SA))) === 'invalid-argument');
+  /* 2026-09-26: the record, not a code list, controls availability — a well-formed NEW identifier is accepted (with evidence); a malformed one is refused. */
+  ck('capability: a malformed method identifier refused', (await code(adm(CAP, 'sa1', { set: { ...good, method: 'pay pal!' } }, SA))) === 'invalid-argument');
   ck('capability: the old underscore spelling is not a method', (await code(adm(CAP, 'sa1', { set: { ...good, method: 'GOOGLE_PAY' } }, SA))) === 'invalid-argument');
   const rec = await adm(CAP, 'sa1', { set: good }, SA);
   const cardRow = rec.methods.find((m) => m.method === 'CARD-PAYMENT');

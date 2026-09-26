@@ -100,7 +100,7 @@ async function hostedCheckout(req, publicKey) {
 
   let res;
   try {
-    const payload = IC.buildPayload({ amountKES, apiRef: ref, publicKey, currency, email: d.email || undefined, method: method || undefined,
+    const payload = IC.buildPayload({ amountKES, apiRef: ref, publicKey, currency, email: d.email || undefined, method: method || undefined, methodProven: !!method,
       narrative: String(intent.metadata && intent.metadata.title ? intent.metadata.title : 'SOKONI').slice(0, 60),
       redirectUrl: SITE + returnPath });
     res = await IC.createCheckout({ payload, publicKey, sandbox: false, https: _https });

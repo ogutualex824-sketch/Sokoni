@@ -1390,8 +1390,10 @@ const W={
     try{
       const idempotencyKey=await window.SokoniPayoutIntent.acquire(_intent);
       const r=await firebase.functions().httpsCallable('requestSellerPayout')({amount,method:'mpesa',accountNumber:phone,idempotencyKey});
-      window.SokoniPayoutIntent.release(_intent);
-      W.wdClose();toast('Withdrawal requested — pending approval'+((r.data&&r.data.reference)?(' · '+r.data.reference):''),'ok');
+      const _unknown=r.data&&r.data.status==='outcome_unknown';
+      /* outcome_unknown is not concluded: the key is KEPT so a retry is the same withdrawal. */
+      if(!_unknown)window.SokoniPayoutIntent.release(_intent);
+      W.wdClose();toast(_unknown?'We are confirming this payout with M-PESA — your funds are held. Do not request it again.':('Withdrawal requested — pending approval'+((r.data&&r.data.reference)?(' · '+r.data.reference):'')),'ok');
       W.load();
     }catch(e){if(window.SokoniPayoutIntent.isDefinitive(e))window.SokoniPayoutIntent.release(_intent);W.wdErr(e.message||'Withdrawal failed');}finally{W._wdBusy=false;hideLoad();}
   },

@@ -542,7 +542,7 @@ async function catalogGet(req) {
       hostedCheckout: cfg.hostedCheckoutEnabled,
       verifiedMethods: cfg.checkoutMethods,
       methods: [{ method: 'M-PESA', label: 'M-PESA', rail: 'stk' }]
-        .concat(cfg.hostedMethods.map((m) => ({ method: m, label: PCAP.LABELS[m], rail: 'hosted_checkout' }))),
+        .concat(cfg.hostedMethods.map((m) => ({ method: m, label: PCAP.labelOf(m), rail: 'hosted_checkout' }))),
       currency: f.currency,
     },
   };

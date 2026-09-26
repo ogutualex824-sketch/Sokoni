@@ -1049,7 +1049,9 @@ window.SokoniWalletV2 = (function () {
         const form = document.getElementById('wdrForm');   if (form) form.style.display = 'none';
         const succ = document.getElementById('wdrSuccess'); if (succ) succ.style.display = 'block';
         _wdrIdemKey = '';   // consumed — next withdrawal gets a fresh key
-        if (window.SokoniPayoutIntent) window.SokoniPayoutIntent.release(_intent);
+        /* An outcome_unknown payout is NOT concluded: keep the key, so a retry is
+           the SAME withdrawal (the server dedupes it) until an admin resolves it. */
+        if (window.SokoniPayoutIntent && d.status !== 'outcome_unknown') window.SokoniPayoutIntent.release(_intent);
         loadDashboard();    // authoritative refresh
         console.log('[payout] wallet refreshed');
       } else {

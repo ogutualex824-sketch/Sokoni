@@ -34,6 +34,8 @@ const SUITES = {
   preview:    ['node', ['scripts/test-creator-preview.js']],
   completion: ['node', ['scripts/test-creator-completion.js']],
   search:     ['node', ['scripts/test-creator-search.js']],
+  wbrowser:   ['node', ['scripts/test-withdrawal-browser.js']],
+  refundmatrix: ['node', ['scripts/test-refund-authority-matrix.js']],
   authority:  ['node', ['scripts/test-creator-adminos-authority.js']],
 };
 const IDX = 'functions/index.js';
@@ -178,6 +180,23 @@ const M = [
   { group: 'hosted', name: 'withdrawal: payout marked paid on an in-flight provider status', file: 'functions/wallet.js', suite: 'withdrawal',
     from: "const completedWord = /COMPLETE/.test(S) || ['SUCCESS', 'PAID', 'SETTLED'].includes(S);", to: "const completedWord = /COMPLETE|PROCESSING/.test(S) || ['SUCCESS', 'PAID', 'SETTLED'].includes(S);",
     expect: /in-flight provider status leaves it PROCESSING/ },
+
+  /* ── gap-closure slice: withdrawal forms (browser) · refund authority · method readiness ── */
+  { group: 'gaps', name: 'wallet.html: the key is released on outcome_unknown (a retry = new withdrawal)', file: 'sokoni-wallet-v2.js', suite: 'wbrowser',
+    from: "if (window.SokoniPayoutIntent && d.status !== 'outcome_unknown') window.SokoniPayoutIntent.release(_intent);", to: "if (window.SokoniPayoutIntent) window.SokoniPayoutIntent.release(_intent);",
+    expect: /W5 the key is RETAINED/ },
+  { group: 'gaps', name: 'merchant wallet: back to one key per tab', file: 'sokoni-merchant-wallet.js', suite: 'wbrowser',
+    from: "      var keyP = (PI && wUid) ? PI.acquire(intent) : Promise.resolve(S.idem);", to: "      var keyP = Promise.resolve(S.idem);",
+    expect: /merchant: two tabs/ },
+  { group: 'gaps', name: 'server: a dedupe hit no longer checks the payout is the caller\'s', file: 'functions/wallet.js', suite: 'wbrowser',
+    from: "      if (existingReq.data().sellerUid !== uid) throw new HttpsError(", to: "      if (false) throw new HttpsError(",
+    expect: /another account presenting/ },
+  { group: 'gaps', name: 'checkout: a proven non-listed method is refused (code list is a ceiling again)', file: 'functions/shared/intasend-checkout.js', suite: 'completion',
+    from: "  if (method && !CANDIDATE_METHODS.includes(method) && !(methodProven === true && require('./payment-capability').isMethodId(method))) {", to: "  if (method && !CANDIDATE_METHODS.includes(method)) {",
+    expect: /no code change/ },
+  { group: 'gaps', name: 'refunds: any signed-in user can approve (admin check removed)', file: 'functions/financial-os.js', suite: 'refundmatrix',
+    from: "  async (req) => {\n    _requireAdmin(req);\n    const { refundId, reject: doReject = false, rejectReason } = req.data || {};", to: "  async (req) => {\n    const { refundId, reject: doReject = false, rejectReason } = req.data || {};",
+    expect: /R1 buyer cannot approve|R2 an ordinary user cannot approve/ },
 
   /* ── Creator completion slice (preview · search · dashboard · withdrawal UI · governance · profile) ── */
   { group: 'complete', name: 'preview: the MASTER is signed for a preview grant', file: HUB, suite: 'preview',

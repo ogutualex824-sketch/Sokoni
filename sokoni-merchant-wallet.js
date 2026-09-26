@@ -1130,12 +1130,24 @@
       if (!S.idem) S.idem = newIdem();
       S.busy = true; paint();
 
-      ctx.callWithdraw({
+      /* ONE key per withdrawal INTENT, shared across tabs and reloads
+         (sokoni-payout-intent.js). S.idem lived in this page's memory only: a second
+         tab, or a reload after a lost response, minted a new key — a second
+         withdrawal. Without a verified uid the old per-tab key is kept (a key is
+         never shared across users). */
+      var PI = (typeof window !== 'undefined') ? window.SokoniPayoutIntent : null;
+      var sc = (typeof ctx.scope === 'object' && ctx.scope) || {};
+      var fbUser = (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) || null;
+      var wUid = sc.sellerUid || sc.uid || (fbUser && fbUser.uid) || null;
+      var intent = { uid: wUid, amount: amt, destination: String(S.values.phone).trim() };
+      var keyP = (PI && wUid) ? PI.acquire(intent) : Promise.resolve(S.idem);
+
+      keyP.then(function (key) { S.idem = key; return ctx.callWithdraw({
         amount: amt,
         method: 'mpesa',
         accountNumber: String(S.values.phone).trim(),
-        idempotencyKey: S.idem,
-      }).then(function (r) {
+        idempotencyKey: key,
+      }); }).then(function (r) {
         if (!alive()) return;
         var d = (r && r.data) || r || {};
         S.busy = false;
@@ -1149,6 +1161,8 @@
           S.serverSaid = 'This request was already submitted — it has not been duplicated.';
         }
         S.idem = null;                 /* attempt concluded; a new one gets a new key */
+        /* …unless the provider outcome is unknown: then the intent stays open. */
+        if (PI && wUid && d.status !== 'outcome_unknown') PI.release(intent);
         S.values.amount = '';
         /* The form closes and the merchant lands back on the wallet, where the
            request they just made is now one of the counted states. Leaving the
@@ -1162,7 +1176,9 @@
         S.busy = false;
         /* The key is KEPT on failure: if the request actually landed and only
            the response was lost, retrying with the same key returns the existing
-           withdrawal instead of creating a second one. */
+           withdrawal instead of creating a second one. Released only when the
+           refusal proves nothing was created. */
+        if (PI && wUid && PI.isDefinitive(e)) { PI.release(intent); S.idem = null; }
         S.formErr = serverMessage(e, 'The withdrawal request could not be submitted.');
         paint();
       });

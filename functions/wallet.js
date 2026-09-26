@@ -1022,8 +1022,14 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true, secret
       t.get(walletRef), t.get(velocityRef), t.get(reqRef),
     ]);
 
-    /* Already submitted with this key — return it without reserving again. */
-    if (existingReq.exists) { deduplicated = true; return; }
+    /* Already submitted with this key — return it without reserving again.
+       Only if it is the CALLER's: pout_{key} is not namespaced by uid, so another
+       account presenting the same key must not be told "already submitted" for a
+       withdrawal that is not theirs (nothing would be reserved or created for them). */
+    if (existingReq.exists) {
+      if (existingReq.data().sellerUid !== uid) throw new HttpsError('failed-precondition', 'This request key belongs to another withdrawal. Start the withdrawal again.');
+      deduplicated = true; return;
+    }
 
     /* FRD-1: velocity gate — max N payout requests per seller per EAT day. N is
        config-driven (config/payouts.maxPayoutsPerDay, default 3) so ops can tune the
