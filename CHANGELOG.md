@@ -1,3 +1,16 @@
+## 2026-09-26 (188) — Canonical money-version decision register (docs only)
+
+- **Summary:** full read-only census of the three commercial money modules across all 1,721
+  serving functions (41 archives). `commission-config` has 9 live versions, `finos-utils` 7 and
+  `commission-collection` 4. The 5 % / 3 % mismatch is between **charging** rails: FOS refund
+  handlers do not compute commission, they debit the seller the gross refund and do not reverse
+  commission. Production has no commission override data, so code defaults are what is charged.
+  Owner rates recorded 2026-09-26: marketplace online 15 %, POS / Till 5 %, Quick Charge 5 %,
+  Events 3 %, Creator 30/70. Version choices and other fields remain UNDECIDED.
+- **Files:** `docs/CANONICAL_MONEY_VERSION_DECISIONS.md`, `docs/PRODUCTION_COMMISSION_MISMATCH.md`
+  (new); `scripts/commission-version-extract.js` (new, read-only analyzer).
+- **Database / API / security changes:** none. **Runtime code changed:** none. **Deployed:** nothing.
+
 ## 2026-09-26 (187) — Creator Hub: close the gaps before hosted-checkout certification
 
 **NO DEPLOY. NO PUSH.** Branch `feat/creator-hub`, base `7fc0643`. Production writes 0 · provider calls 0 ·
