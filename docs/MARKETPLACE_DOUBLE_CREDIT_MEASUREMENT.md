@@ -103,3 +103,49 @@ before any wallet can be provisioned for KASS.
 
 `node scripts/probe-marketplace-double-credit.js` is read-only. It needs `gcloud` user auth and,
 on this machine, `CLOUDSDK_PYTHON` set to the bundled interpreter.
+
+---
+
+## Repair — 2026-09-26 (owner-authorized, narrow)
+
+**Scope:** the two credit gates only. Amounts, commission, wallet destination, order lifecycle and the
+business-wallet architecture are untouched. The measurement above is kept as the historical record:
+"no duplicate has happened yet" is not "the bug was harmless".
+
+- `isAlreadySettled(status)` in `functions/order-settlement.js`: only a string counts, compared after
+  `trim().toUpperCase()` against `'SETTLED'`.
+- It gates `settleOrder` (credit) and `autoConfirmDeliveredOrders` (the sweep that fires `completed`).
+- **Deliberately not applied to refund routing.** `handleOrderRefund` still compares case-sensitively. As a
+  result, a refund of a webhook-credited order marks it `REFUNDED` **without clawing back the webhook's
+  seller credit**. That is a separate open defect: routing it to `reverseSettledOrder` would find no
+  `settlements/{orderId}` record to reverse.
+- Consequence to know: a delivered order that the webhook already credited is **no longer auto-completed**
+  by the sweep. It stays `delivered`, which is the same treatment an uppercase `SETTLED` order always had.
+
+### Certification — `scripts/test-settled-case-guard.js` (real Firestore emulator)
+
+| target | result |
+|---|---|
+| branch `functions/order-settlement.js` (patched) | **66 / 0** |
+| deploy tree = production archive + patch | **66 / 0** |
+| **counterproof:** production archive, unpatched | **24 / 21 FAIL**; reproduces the incident on the emulator (webhook-paid order credited again on `completed`) |
+
+It covers `settled`, `SETTLED`, `Settled`, ` settled`, `SETTLED`+`completed`, and non-settled states as
+positive controls (credited, then replay-safe). It also runs 3 concurrent `settleOrder` calls on the
+webhook-paid order, and the sweep across every case.
+
+### Deploy tree — production lineage, not this branch
+
+The branch and production have diverged in both directions. Production has platform-funded discount logic;
+the branch has the delivery-proof gate. Deploying from the branch would therefore change amounts and gating.
+The deploy tree is **the deployed archive plus this patch and nothing else**:
+
+- source: `gs://gcf-v2-sources-24799054989-us-central1/onOrderStatusChange/function-source.zip#1788077453779580`
+  (byte-identical to `expireOldEscrows#1788077527517398`; sha256 prefix `cf287ef573d520ac`). This is the
+  generation named in the recovery manifest.
+- `.env` key names and values match both live functions exactly (compared by equality, never printed).
+- The serving revisions `onorderstatuschange-00062-yoz` and `expireoldescrows-00032-gul` were created
+  2026-08-30 08:11–08:12Z, the same deploy as the archive.
+- Plan under `--only functions:onOrderStatusChange,functions:expireOldEscrows`: **2 updates, 0 creates,
+  0 deletes**. Filter matching is exact per dash-chunk, and no live `onOrderStatusChange-*` or
+  `expireOldEscrows-*` exists. Function count is **1723** (the manifest's 1709 is stale).

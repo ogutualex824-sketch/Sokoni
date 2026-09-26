@@ -1,3 +1,12 @@
+## 2026-09-26 — Double-credit guard: case-insensitive "already settled" (settleOrder + auto-confirm sweep)
+
+**Branch only — NOT DEPLOYED.** The production deploy awaits two owner rulings: the scaling contract and `--force`.
+`functions/order-settlement.js`: new `isAlreadySettled()` gates both credit paths. `scripts/test-settled-case-guard.js`:
+**66/0** on the branch and on the production-lineage deploy tree. The unpatched production code **FAILS 21**,
+reproducing the incident on the emulator.
+Refund routing is deliberately unchanged (open defect: a refund of a webhook-credited order does not claw back).
+Database / API / security / breaking changes: none. Record: `docs/MARKETPLACE_DOUBLE_CREDIT_MEASUREMENT.md` § Repair.
+
 ## 2026-09-26 — Marketplace double credit MEASURED in production: armed, not fired
 
 **NO DEPLOY. NO CODE CHANGE. NO DATA CHANGE.** Read-only investigation authorized by the owner.
