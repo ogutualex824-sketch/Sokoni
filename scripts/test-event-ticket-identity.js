@@ -73,7 +73,16 @@ ES.registerPurpose();
 let pass = 0, fail = 0;
 const ck = (l, ok, d) => { say('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d !== undefined && d !== '' ? '   [' + String(typeof d === 'object' ? JSON.stringify(d) : d).slice(0, 170) + ']' : '')); ok ? pass++ : fail++; };
 const who = (uid, token = {}) => ({ auth: { uid, token: { email: uid + '@x.co', email_verified: true, ...token } }, rawRequest: { headers: {} } });
-const op = (name, uid, data = {}) => (OPS._h[name] || SALES._h[name])({ ...who(uid), data });
+/* Admission needs the confirmed ticket number (event-ops, owner decision 2026-09-27). This helper plays a
+   staff member who checked the attendee's ticket: it confirms the number of the PIN's own ticket. Tests of
+   the confirmation itself pass confirmTicketNumber explicitly. */
+async function _confirmed(data) {
+  if (!data || 'confirmTicketNumber' in data) return data;
+  const hit = await OPS.lookupPin(data.eventId, data.pin).catch(() => null);
+  const t = hit ? (await F.db.doc('eventTickets/' + hit.ticketId).get()).data() : null;
+  return { ...data, confirmTicketNumber: (t && t.ticketNumber) || 'SK-EVT-0000-000000' };
+}
+const op = async (name, uid, data = {}) => (OPS._h[name] || SALES._h[name])({ ...who(uid), data: name === 'eventAdmitTicket' ? await _confirmed(data) : data });
 const adm = (name, data = {}) => EA._adminH[name]({ ...who('admin1', { isAdmin: true }), data });
 async function code(p) { try { await p; return null; } catch (e) { return e.code || e.message; } }
 const get = async (p) => { const s = await db.doc(p).get(); return s.exists ? s.data() : null; };
@@ -219,6 +228,31 @@ async function paidOnline(orderId, eventId, { qty = 1, buyer = 'buyer1', tier = 
   ck('ticket number immutable across a replayed activation', (await get('eventTickets/ID1_k0')).ticketNumber === id1.ticketNumber);
   const vr = await op('eventVerifyPin', 'org1', { eventId: 'evA', pin: await pinOf('ID1_k0') });
   ck('the PIN resolves exactly its ticket number', vr.valid && vr.ticket.ticketNumber === id1.ticketNumber);
+
+  say('\n── ticket-number confirmation (a PIN alone never admits) ──');
+  await OPS._h.eventStaffInvite({ ...who('org1'), data: { eventId: 'evA', email: 'gate2@x.co', role: 'admission' } });
+  await OPS._h.eventStaffAccept({ ...who('gate2'), data: { eventId: 'evA' } });
+  await paidOnline('CONF1', 'evA', { qty: 2, buyer: 'buyer11' });
+  const cPin = await pinOf('CONF1_k0'); const cNum = (await get('eventTickets/CONF1_k0')).ticketNumber;
+  const otherNum = (await get('eventTickets/CONF1_k1')).ticketNumber;
+  const cv0 = await op('eventVerifyPin', 'gate2', { eventId: 'evA', pin: cPin });
+  ck('CHECK TICKET shows the PIN\'s ticket NUMBER, event, type, status for staff to compare', cv0.valid && cv0.ticket.ticketNumber === cNum && cv0.ticket.event === 'Nairobi Jazz Night' && cv0.ticket.tierName && cv0.ticket.admissionStatus === 'NOT_ADMITTED');
+  ck('admit with the PIN ALONE is refused by the server', (await code(op('eventAdmitTicket', 'gate2', { eventId: 'evA', pin: cPin, confirmTicketNumber: null }))) === 'invalid-argument'
+    && (await get('eventTickets/CONF1_k0')).admissionStatus === 'NOT_ADMITTED');
+  const failsBefore = ((await get('eventPinAttempts/evA_gate2')) || {}).fails || 0;
+  const mm = await op('eventAdmitTicket', 'gate2', { eventId: 'evA', pin: cPin, confirmTicketNumber: otherNum });
+  ck('a real PIN presented with a DIFFERENT ticket number → refused (guessed / borrowed PIN)', mm.result === 'refused' && mm.mismatch === true && (await get('eventTickets/CONF1_k0')).admissionStatus === 'NOT_ADMITTED' && !(await get('eventAdmissions/CONF1_k0')));
+  ck('…counted as a wrong attempt and audited as a security event (no PIN in it)', (((await get('eventPinAttempts/evA_gate2')) || {}).fails || 0) === failsBefore + 1
+    && db._dump('eventOpsAudit/').some((a) => a.action === 'event_admission_mismatch' && a.detail.source === 'server_number_mismatch' && !JSON.stringify(a).includes('"' + cPin + '"')));
+  const rep = await op('eventAdmissionMismatch', 'gate2', { eventId: 'evA', pin: cPin });
+  ck('staff "Doesn\'t match" is recorded (security event + attempt), never an admission', rep.recorded && db._dump('eventOpsAudit/').some((a) => a.action === 'event_admission_mismatch' && a.detail.source === 'staff_reported')
+    && (await get('eventTickets/CONF1_k0')).admissionStatus === 'NOT_ADMITTED');
+  const okc = await op('eventAdmitTicket', 'gate2', { eventId: 'evA', pin: cPin, confirmTicketNumber: cNum.toLowerCase() });
+  ck('confirmed with the matching number → admitted; the admission records the confirmation', okc.result === 'admitted' && ((await get('eventAdmissions/CONF1_k0')) || {}).confirmation === 'ticket_number');
+  for (let i = 0; i < 5; i++) await op('eventAdmissionMismatch', 'gate2', { eventId: 'evA', pin: cPin }).catch(() => null);
+  ck('repeated mismatches lock the staff member out (same guessing limits)', (await code(op('eventVerifyPin', 'gate2', { eventId: 'evA', pin: await pinOf('CONF1_k1') }))) === 'resource-exhausted');
+  const qrT = await get('eventTickets/CONF1_k1');
+  ck('the QR path needs no number confirmation (its 128-bit token names ONE ticket)', (await EH.checkInTicket.run({ ...who('org1'), data: { ticketId: 'CONF1_k1', token: qrT.token } })).result === 'success');
 
   say('\n── Quick Sale ──');
   const mixed = await op('eventQuickSale', 'till1', { eventId: 'evA', tender: 'cash', items: [{ tierId: 'evA_VIP', qty: 2 }, { tierId: 'evA_REG', qty: 3 }], cashReceivedKes: 16000, idempotencyKey: key() });

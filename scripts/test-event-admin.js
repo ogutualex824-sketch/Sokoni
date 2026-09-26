@@ -48,7 +48,16 @@ OPS._setClock(() => NOW); SALES._setClock(() => NOW);
 let pass = 0, fail = 0;
 const ck = (l, ok, d) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d !== undefined && d !== '' ? '   [' + String(typeof d === 'object' ? JSON.stringify(d) : d).slice(0, 160) + ']' : '')); ok ? pass++ : fail++; };
 const who = (uid, token = {}) => ({ auth: uid ? { uid, token } : null, rawRequest: { headers: {} } });
-const op = (name, uid, data = {}) => (OPS._h[name] || SALES._h[name])({ ...who(uid, { email: uid + '@x.co', email_verified: true }), data });
+/* Admission needs the confirmed ticket number (event-ops, owner decision 2026-09-27). This helper plays a
+   staff member who checked the attendee's ticket: it confirms the number of the PIN's own ticket. Tests of
+   the confirmation itself pass confirmTicketNumber explicitly. */
+async function _confirmed(data) {
+  if (!data || 'confirmTicketNumber' in data) return data;
+  const hit = await OPS.lookupPin(data.eventId, data.pin).catch(() => null);
+  const t = hit ? (await F.db.doc('eventTickets/' + hit.ticketId).get()).data() : null;
+  return { ...data, confirmTicketNumber: (t && t.ticketNumber) || 'SK-EVT-0000-000000' };
+}
+const op = async (name, uid, data = {}) => (OPS._h[name] || SALES._h[name])({ ...who(uid, { email: uid + '@x.co', email_verified: true }), data: name === 'eventAdmitTicket' ? await _confirmed(data) : data });
 const ADMIN = { isAdmin: true, email: 'ops@sokoni.test', email_verified: true };
 const adm = (name, data = {}, token = ADMIN, uid = 'admin1') => EA._adminH[name]({ ...who(uid, token), data });
 async function code(p) { try { await p; return null; } catch (e) { return e.code || e.message; } }

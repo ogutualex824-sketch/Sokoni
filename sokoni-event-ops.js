@@ -238,6 +238,7 @@
       <div id="adOut" role="status" aria-live="polite"></div></div>`;
     const $ = (id) => host.querySelector('#' + id);
     const session = 'gate-' + Math.random().toString(36).slice(2, 10);
+    let shown = null;
     async function verify() {
       const pin = $('adPin').value;
       $('adOut').textContent = 'Checking…';
@@ -245,19 +246,39 @@
         const r = await ctx.ops('eventVerifyPin', { eventId: $('adEv').value, pin });
         if (!r.valid) { $('adOut').innerHTML = `<div class="eo-card eo-bad">✗ ${esc(r.reason)}</div>`; return; }
         const t = r.ticket;
-        $('adOut').innerHTML = `<div class="eo-card"><div style="font:700 16px ui-monospace,monospace">${esc(t.ticketNumber || '')}</div><b>${esc(t.tierName)}</b><br>${esc(t.event || '')}${t.attendeeInitials ? ' · ' + esc(t.attendeeInitials) : ''}<br>
-          Status: ${esc(t.status)} · Admission: ${esc(t.admissionStatus)}${t.refundStatus && t.refundStatus !== 'NONE' ? ' · Refund: ' + esc(t.refundStatus) : ''}<br>
-          ${r.admissible ? '<button type="button" class="eo-btn primary" id="adAdmit" style="margin-top:10px">Admit</button>' : `<span class="eo-bad">${esc(r.reason)}</span>`}</div>`;
+        shown = t.ticketNumber || null;
+        /* CHECK TICKET → the PIN's ticket is shown by its NUMBER; staff confirm the attendee's ticket carries
+           that number before admitting (the server refuses an admission without it). */
+        $('adOut').innerHTML = `<div class="eo-card">
+          <div style="font-size:12px;opacity:.75">EVENT</div><div><b>${esc(t.event || '')}</b></div>
+          <div style="font-size:12px;opacity:.75;margin-top:8px">TICKET</div><div class="eo-tnum" style="font:800 20px ui-monospace,monospace;overflow-wrap:anywhere">${esc(t.ticketNumber || '—')}</div>
+          <div style="font-size:12px;opacity:.75;margin-top:8px">TYPE</div><div>${esc(t.tierName || '')}${t.attendeeInitials ? ' · ' + esc(t.attendeeInitials) : ''}</div>
+          <div style="font-size:12px;opacity:.75;margin-top:8px">STATUS</div><div>${esc(String(t.admissionStatus || '').replace('_', ' '))}${t.refundStatus && t.refundStatus !== 'NONE' ? ' · Refund: ' + esc(t.refundStatus) : ''}</div>
+          ${r.admissible ? `<label style="display:flex;gap:10px;align-items:flex-start;margin-top:12px;font-weight:600">
+              <input type="checkbox" id="adMatch" style="min-width:22px;min-height:22px;margin-top:2px"> The ticket the attendee shows has the number <span style="font-family:ui-monospace,monospace">${esc(t.ticketNumber || '')}</span></label>
+            <div class="eo-row" style="margin-top:10px"><button type="button" class="eo-btn primary" id="adAdmit" disabled>CONFIRM ADMISSION</button>
+              <button type="button" class="eo-btn" id="adNoMatch">Doesn't match</button></div>`
+          : `<div class="eo-bad" style="margin-top:10px">${esc(r.reason)}</div>`}</div>`;
       } catch (e) { $('adOut').innerHTML = `<div class="eo-card eo-bad">${esc(errText(e))}</div>`; }
     }
+    host.addEventListener('change', (e) => { if (e.target.id === 'adMatch') { const b = $('adAdmit'); if (b) b.disabled = !e.target.checked; } });
     host.addEventListener('click', async (e) => {
       const b = e.target.closest('button'); if (!b) return;
       if (b.id === 'adVerify') return verify();
-      if (b.id === 'adAdmit') {
+      if (b.id === 'adNoMatch') {
         b.disabled = true;
-        try { const r = await ctx.ops('eventAdmitTicket', { eventId: $('adEv').value, pin: $('adPin').value, deviceSession: session });
+        try { await ctx.ops('eventAdmissionMismatch', { eventId: $('adEv').value, pin: $('adPin').value });
+          $('adOut').innerHTML = '<div class="eo-card eo-bad">✗ Not admitted — the ticket number did not match. This has been recorded.</div>'; }
+        catch (err) { $('adOut').innerHTML = `<div class="eo-card eo-bad">${esc(errText(err))}</div>`; }
+        $('adPin').value = ''; $('adPin').focus(); shown = null;
+        return;
+      }
+      if (b.id === 'adAdmit') {
+        if (!$('adMatch') || !$('adMatch').checked) return;
+        b.disabled = true;
+        try { const r = await ctx.ops('eventAdmitTicket', { eventId: $('adEv').value, pin: $('adPin').value, confirmTicketNumber: shown, deviceSession: session });
           $('adOut').innerHTML = r.result === 'admitted' ? '<div class="eo-card eo-ok">✓ Admitted</div>' : `<div class="eo-card eo-bad">✗ ${esc(r.reason || (r.result === 'already_admitted' ? 'Already admitted' : r.result))}</div>`;
-          $('adPin').value = ''; $('adPin').focus(); }
+          $('adPin').value = ''; $('adPin').focus(); shown = null; }
         catch (err) { $('adOut').innerHTML = `<div class="eo-card eo-bad">${esc(errText(err))}</div>`; }
       }
     });

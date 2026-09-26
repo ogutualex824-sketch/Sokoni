@@ -449,10 +449,24 @@ async function verifyPin(req) {
   return { valid: true, admissible: !blocked, reason: blocked, ticket: _summary(t, actor.event) };
 }
 
-/** Admit: re-verifies the PIN and admits in ONE transaction (create-only admission record). */
+/* ── TICKET-NUMBER CONFIRMATION (owner decision 2026-09-27) ───────────────────────────────
+   A 4-digit PIN alone is NOT sufficient evidence to admit: at 2,000 tickets a random guess matches
+   SOME ticket one time in five. So admission is two facts, not one:
+     PIN → the server finds the ticket → staff are shown its ticket NUMBER → staff confirm that the
+     ticket the attendee presents carries that number → the server admits ONLY if the confirmed
+     number equals the PIN's ticket.
+   Enforced HERE, not in the page: an admit call without the confirmed number is refused, and a
+   confirmed number that does not match is refused, counted as a wrong attempt (it is what a guessed
+   or borrowed PIN looks like) and audited. Staff who see a mismatch report it (eventAdmissionMismatch)
+   with the same effect. The QR path needs no confirmation: its 128-bit token already names ONE ticket. */
+const _normNumber = (v) => String(v == null ? '' : v).trim().toUpperCase();
+
+/** Admit: re-verifies the PIN AND the confirmed ticket number, admits in ONE transaction. */
 async function admit(req) {
   const d = req.data || {};
   const actor = await resolveEventActor(req, d.eventId, CAPS.ADMIT);
+  const confirmed = _normNumber(d.confirmTicketNumber);
+  if (!TICKET_NUMBER_RE.test(confirmed)) fail('invalid-argument', 'Check the ticket number on the attendee\'s ticket, then confirm admission.');
   const pre = await _chargeAttempt(actor.event.id, actor.uid, false);
   if (pre.locked) fail('resource-exhausted', 'Too many wrong PINs. Wait a few minutes before trying again.');
   const hit = await _lookupPin(actor.event.id, d.pin);
@@ -470,28 +484,51 @@ async function admit(req) {
     if (!ts.exists) fail('not-found', 'Ticket not found.');
     const t = ts.data();
     if (t.eventId !== actor.event.id || t.pinHash !== hit.hash) fail('not-found', 'No ticket for this event matches that PIN.');
+    if (_normNumber(t.ticketNumber) !== confirmed) return { mismatch: true, t };
     if (as.exists) return { already: true, t };
     const blocked = _admissible(t, evs.exists ? { id: evs.id, ...evs.data() } : actor.event, _now());
     if (blocked) return { blocked, t };
     txn.create(aRef, {
       ticketId: hit.ticketId, eventId: actor.event.id, admittedBy: actor.uid, admittedRole: actor.role,
-      method: 'pin', deviceSession, admittedAt: FieldValue.serverTimestamp(),
+      method: 'pin', confirmation: 'ticket_number', deviceSession, admittedAt: FieldValue.serverTimestamp(),
     });
     txn.update(tRef, { admissionStatus: 'ADMITTED', admittedAt: FieldValue.serverTimestamp(), admittedBy: actor.uid,
       checkedIn: true, checkedInAt: FieldValue.serverTimestamp(), checkedInBy: actor.uid });
     txn.update(evRef, { checkinsCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
     return { admitted: true, t };
   });
-  if (res.admitted) await _audit('event_ticket_admitted', actor, { eventId: actor.event.id, ticketId: hit.ticketId }, { method: 'pin', deviceSession });
+  if (res.mismatch) {
+    /* the PIN is real but the attendee's ticket is not that ticket: a guessed / borrowed PIN */
+    await _mismatch(actor, hit.ticketId, 'server_number_mismatch');
+    return { result: 'refused', reason: 'The ticket number does not match this PIN — do not admit.', mismatch: true };
+  }
+  if (res.admitted) await _audit('event_ticket_admitted', actor, { eventId: actor.event.id, ticketId: hit.ticketId }, { method: 'pin', confirmation: 'ticket_number', deviceSession });
   if (res.already) return { result: 'already_admitted', ticket: _summary(res.t, actor.event) };
   if (res.blocked) return { result: 'refused', reason: res.blocked, ticket: _summary(res.t, actor.event) };
   return { result: 'admitted', ticket: _summary({ ...res.t, admissionStatus: 'ADMITTED' }, actor.event) };
+}
+
+/* A PIN whose ticket number did not match what the attendee showed: counted against the same guessing
+   limits (per staff + per event) and audited as a security event — never an admission. */
+async function _mismatch(actor, ticketId, source) {
+  await _wrongPin(actor);
+  await _audit('event_admission_mismatch', actor, { eventId: actor.event.id, ticketId }, { source });
+}
+
+/** Staff report: "the attendee's ticket does not carry the number shown for this PIN". */
+async function admissionMismatch(req) {
+  const d = req.data || {};
+  const actor = await resolveEventActor(req, d.eventId, CAPS.ADMIT);
+  const hit = await _lookupPin(actor.event.id, d.pin);
+  await _mismatch(actor, hit ? hit.ticketId : null, 'staff_reported');
+  return { recorded: true };
 }
 
 /* ═══ callables ══════════════════════════════════════════════════════════════════════════ */
 const _h = {
   eventStaffInvite: staffInvite, eventStaffAccept: staffAccept, eventStaffRevoke: staffRevoke,
   eventStaffList: staffList, eventMyAssignments: myAssignments, eventVerifyPin: verifyPin, eventAdmitTicket: admit,
+  eventAdmissionMismatch: admissionMismatch,
 };
 /* One Cloud Run service for all event-day operations (ops routed by name), like the other dispatchers. */
 const eventOpsDispatch = onCall(OPS_OPTS(), async (req) => {

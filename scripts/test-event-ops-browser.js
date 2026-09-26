@@ -254,6 +254,7 @@ async function seed() {
         await pg.fill('#qsCheck #adPin', (await get(`eventTicketSecrets/${chk}`)).pin); await pg.click('#qsCheck #adVerify');
         await pg.waitForSelector('#qsCheck #adAdmit', { timeout: 5000 }).catch(() => null);
         ck(`cashier @${w}: Check ticket shows the ONLINE ticket (number, tier) for its PIN`, (await pg.textContent('#qsCheck #adOut')).includes((await get(`eventTickets/${chk}`)).ticketNumber));
+        await pg.check('#qsCheck #adMatch');
         await pg.click('#qsCheck #adAdmit'); await pg.waitForTimeout(400);
         const adm1 = await get(`eventAdmissions/${chk}`);
         ck(`cashier @${w}: Admit → server ADMITTED by the cashier (canonical admission record)`, adm1 && adm1.admittedBy === 'till1' && adm1.method === 'pin' && (await get(`eventTickets/${chk}`)).admissionStatus === 'ADMITTED');
@@ -292,11 +293,25 @@ async function seed() {
         await pg.fill('#adPin', pin.toLowerCase()); await pg.click('#adVerify');
         await pg.waitForSelector('#adAdmit', { timeout: 8000 }).catch(() => null);
         ck(`gate @${w}: the buyer's PIN verifies (tier + initials, no email)`, /Regular/.test(await pg.textContent('#adOut')) && /AO/.test(await pg.textContent('#adOut')) && !/@/.test(await pg.textContent('#adOut')));
+        const num = (await get(`eventTickets/${tk}`)).ticketNumber;
+        ck(`gate @${w}: CHECK TICKET shows the ticket NUMBER to compare; CONFIRM ADMISSION stays disabled until confirmed`,
+          (await pg.textContent('#adOut')).includes(num) && await pg.$eval('#adAdmit', (b) => b.disabled) && /CONFIRM ADMISSION/.test(await pg.textContent('#adOut')));
+        await pg.check('#adMatch');
         await pg.click('#adAdmit'); await pg.waitForFunction(() => /Admitted|Already|✗/.test(document.getElementById('adOut').textContent), null, { timeout: 8000 }).catch(() => null);
         const _ad = await pg.textContent('#adOut');
         ck(`gate @${w}: Admit → server ADMITTED`, /Admitted/.test(_ad) && (await get(`eventTickets/${tk}`)).admissionStatus === 'ADMITTED', _ad + ' | server=' + (await get(`eventTickets/${tk}`)).admissionStatus);
         await pg.fill('#adPin', pin); await pg.click('#adVerify'); await pg.waitForFunction(() => !/Checking/.test(document.getElementById('adOut').textContent), null, { timeout: 8000 }).catch(() => null);
         ck(`gate @${w}: the same PIN again is refused`, /Already admitted/.test(await pg.textContent('#adOut')));
+        if (w === 1280) {
+          /* a REAL PIN, but the attendee cannot show that ticket number: "Doesn't match" → recorded, not admitted */
+          const other = db._dump('eventTicketSecrets/').find((x) => x.ticketId === 'ORDBUY1_k1');
+          await pg.fill('#adPin', other.pin); await pg.click('#adVerify'); await pg.waitForSelector('#adNoMatch', { timeout: 8000 }).catch(() => null);
+          const before = db._dump('eventOpsAudit/').filter((a) => a.action === 'event_admission_mismatch').length;
+          if (await pg.$('#adNoMatch')) { await pg.click('#adNoMatch'); await pg.waitForTimeout(400); }
+          ck("gate: \"Doesn't match\" → not admitted, recorded as a security event", /did not match/.test(await pg.textContent('#adOut'))
+            && db._dump('eventOpsAudit/').filter((a) => a.action === 'event_admission_mismatch').length === before + 1
+            && (await get('eventTickets/ORDBUY1_k1')).admissionStatus !== 'ADMITTED');
+        }
       }
       await c.close();
 

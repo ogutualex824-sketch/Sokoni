@@ -53,7 +53,17 @@ ES.registerPurpose();
 let pass = 0, fail = 0;
 const ck = (l, ok, d) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d !== undefined && d !== '' ? '   [' + String(typeof d === 'object' ? JSON.stringify(d) : d).slice(0, 150) + ']' : '')); ok ? pass++ : fail++; };
 const who = (uid, token = {}) => ({ auth: uid ? { uid, token } : null, rawRequest: { headers: {} } });
+/* Admission needs the confirmed ticket number (event-ops, owner decision 2026-09-27). This helper plays a
+   staff member who checked the attendee's ticket: it confirms the number of the PIN's own ticket. Tests of
+   the confirmation itself pass confirmTicketNumber explicitly. */
+async function _confirmed(data) {
+  if (!data || 'confirmTicketNumber' in data) return data;
+  const hit = await OPS.lookupPin(data.eventId, data.pin).catch(() => null);
+  const t = hit ? (await F.db.doc('eventTickets/' + hit.ticketId).get()).data() : null;
+  return { ...data, confirmTicketNumber: (t && t.ticketNumber) || 'SK-EVT-0000-000000' };
+}
 const op = (name, uid, data = {}) => RF._h[name]({ ...who(uid), data });
+const admitAs = async (uid, data) => OPS._h.eventAdmitTicket({ ...who(uid), data: await _confirmed(data) });
 async function code(p) { try { await p; return null; } catch (e) { return e.code || e.message; } }
 async function msg(p) { try { await p; return null; } catch (e) { return e.message; } }
 const get = async (p) => { const s = await db.doc(p).get(); return s.exists ? s.data() : null; };
@@ -134,14 +144,14 @@ const reason = (c) => RS.get(c);
   ck('tickets marked REQUESTED', (await get('eventTickets/ORD0A1_k0')).refundStatus === 'REQUESTED' && (await get('eventTickets/ORD0A1_k1')).refundStatus === 'REQUESTED');
   ck('the buyer was told (no PIN in the notice)', notices.some((n) => n.type === 'event_refund_update' && n.uid === 'buyer1'));
   const pinA = (await get('eventTicketSecrets/ORD0A1_k0')).pin;
-  ck('the gate refuses a ticket with a refund REQUESTED', (await OPS._h.eventAdmitTicket({ ...who('org1'), data: { eventId: 'evA', pin: pinA } })).result === 'refused');
+  ck('the gate refuses a ticket with a refund REQUESTED', (await admitAs('org1', { eventId: 'evA', pin: pinA })).result === 'refused');
   ck('a second request for the same order refused', (await code(op('eventRequestRefund', 'buyer1', { orderId: 'ORD0A1', reasonCode: 'cannot_attend', answers: {} }))) === 'failed-precondition');
   /* rejected → tickets back to NONE, admissible again */
   await ES.onEventRefundRejected({ payRef: 'ORD0A1', refundId: 'ref_ORD0A1', reason: 'Not eligible after review' });
   ck('rejected → tickets NONE again, request REJECTED', (await get('eventTickets/ORD0A1_k0')).refundStatus === 'NONE' && (await get('eventRefundRequests/ORD0A1')).status === 'REJECTED');
-  ck('…but not before the admission window opens (the PIN is ISSUED, not yet ACTIVE)', /not opened yet/.test((await OPS._h.eventAdmitTicket({ ...who('org1'), data: { eventId: 'evA', pin: pinA } })).reason || ''));
+  ck('…but not before the admission window opens (the PIN is ISSUED, not yet ACTIVE)', /not opened yet/.test((await admitAs('org1', { eventId: 'evA', pin: pinA })).reason || ''));
   { const keep = NOW; NOW = Date.parse((await get('events/evA')).startDate) - H;   /* event day */
-    ck('…and on event day the ticket can be admitted again', (await OPS._h.eventAdmitTicket({ ...who('org1'), data: { eventId: 'evA', pin: pinA } })).result === 'admitted');
+    ck('…and on event day the ticket can be admitted again', (await admitAs('org1', { eventId: 'evA', pin: pinA })).result === 'admitted');
     NOW = keep; }
 
   /* processed → REFUNDED */
@@ -149,7 +159,7 @@ const reason = (c) => RS.get(c);
   await op('eventRequestRefund', 'buyer1', { orderId: 'ORD0B1', reasonCode: 'accidental_purchase', answers: {}, explanation: 'I tapped buy twice by mistake on my phone' });
   await ES.onEventRefundProcessed({ payRef: 'ORD0B1', refundId: 'ref_ORD0B1', amountCents: 200000, source: 'test' });
   ck('refund processed → tickets REFUNDED, request REFUNDED', (await get('eventTickets/ORD0B1_k0')).refundStatus === 'REFUNDED' && (await get('eventTickets/ORD0B1_k0')).status === 'refunded' && (await get('eventRefundRequests/ORD0B1')).status === 'REFUNDED');
-  ck('a refunded ticket cannot be admitted', (await OPS._h.eventAdmitTicket({ ...who('org1'), data: { eventId: 'evA', pin: (await get('eventTicketSecrets/ORD0B1_k0')).pin } })).result === 'refused');
+  ck('a refunded ticket cannot be admitted', (await admitAs('org1', { eventId: 'evA', pin: (await get('eventTicketSecrets/ORD0B1_k0')).pin })).result === 'refused');
   ck('a refunded order cannot be refunded again', (await code(op('eventRefundQuote', 'buyer1', { orderId: 'ORD0B1', reasonCode: 'event_cancelled' }))) === null && (await op('eventRefundQuote', 'buyer1', { orderId: 'ORD0B1', reasonCode: 'cannot_attend' })).eligible === 'NO');
 
   /* ineligible → nothing submitted */

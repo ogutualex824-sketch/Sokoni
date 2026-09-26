@@ -50,7 +50,16 @@ ES.registerPurpose();
 let pass = 0, fail = 0;
 const ck = (l, ok, d) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d !== undefined && d !== '' ? '   [' + String(typeof d === 'object' ? JSON.stringify(d) : d).slice(0, 140) + ']' : '')); ok ? pass++ : fail++; };
 const who = (uid, token = {}) => ({ auth: uid ? { uid, token } : null, rawRequest: { headers: {} } });
-const op = (name, uid, data = {}, token = {}) => OPS._h[name]({ ...who(uid, token), data });
+/* Admission needs the confirmed ticket number (event-ops, owner decision 2026-09-27). This helper plays a
+   staff member who checked the attendee's ticket: it confirms the number of the PIN's own ticket. Tests of
+   the confirmation itself pass confirmTicketNumber explicitly. */
+async function _confirmed(data) {
+  if (!data || 'confirmTicketNumber' in data) return data;
+  const hit = await OPS.lookupPin(data.eventId, data.pin).catch(() => null);
+  const t = hit ? (await F.db.doc('eventTickets/' + hit.ticketId).get()).data() : null;
+  return { ...data, confirmTicketNumber: (t && t.ticketNumber) || 'SK-EVT-0000-000000' };
+}
+const op = async (name, uid, data = {}, token = {}) => OPS._h[name]({ ...who(uid, token), data: name === 'eventAdmitTicket' ? await _confirmed(data) : data });
 async function code(p) { try { await p; return null; } catch (e) { return e.code || e.message; } }
 const get = async (p) => { const s = await db.doc(p).get(); return s.exists ? s.data() : null; };
 const H = 3600 * 1000;
