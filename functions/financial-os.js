@@ -489,6 +489,7 @@ exports.fosSubmitRefund = onCall(
       payRef,
       amountKES,
       reason,
+      reasonCode,
       refundType = 'full',
     } = req.data || {};
 
@@ -539,7 +540,7 @@ exports.fosSubmitRefund = onCall(
       let claim;
       try {
         claim = await RA.claimChargeback(db(), { paymentRef: payRef, requestedBy: auth.uid,
-          source: 'fosSubmitRefund', reason, expectAmountKES: amountKES });
+          source: 'fosSubmitRefund', reason, reasonCode: reasonCode || null, expectAmountKES: amountKES });
       } catch (e) { throw RA.toHttpsError(e, HttpsError); }
       const queueRef = db().collection('fosRefundQueue').doc('ref_' + txId);
       let queueExisted = false;
@@ -730,7 +731,7 @@ exports.fosApproveRefund = onCall(
       }
       try {
         await RA.claimChargeback(fsdb, { paymentRef: refund.payRef, requestedBy: req.auth.uid,
-          source: 'fosApproveRefund', reason: refund.reason, expectAmountKES: refund.amountKES });
+          source: 'fosApproveRefund', reason: refund.reason, reasonCode: refund.reasonCode || null, expectAmountKES: refund.amountKES });
       } catch (e) {
         await queueRef.update({ status: 'refused', refusedReason: (e && e.reason) || e.message, updatedAt: now() });
         throw RA.toHttpsError(e, HttpsError);

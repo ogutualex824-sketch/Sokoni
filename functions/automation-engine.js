@@ -468,7 +468,7 @@ exports.autoOnDisputeCreate = onDocumentCreated(
     if (isSmall && paymentConfirmed) {
       /* `reason` is the field disputes carry; `type` never existed on a dispute, so this branch could
          never resolve for the seller (Repair 2). */
-      const resolution = (dispute.reason === 'not_received' && deliveryConfirmed) ? 'seller_wins' : 'buyer_wins';
+      const resolution = (dispute.reason === require('./refund-reasons').CODE.NOT_RECEIVED && deliveryConfirmed) ? 'seller_wins' : 'buyer_wins';
 
       await _db().runTransaction(async tx => {
         tx.update(event.data.ref, {

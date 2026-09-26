@@ -1223,7 +1223,7 @@ exports.refundToWallet = onCall({ cors: true, enforceAppCheck: true, invoker: 'p
 
   const db = getFirestore();
   const callerUid = request.auth.uid;
-  const { orderId, paymentRef, amount, reason, targetUid } = request.data || {};
+  const { orderId, paymentRef, amount, reason, reasonCode, targetUid } = request.data || {};
 
   /* ── REFUND AUTHORITY (functions/refund-authority.js) ─────────────────────────────────
      If this refund refers to a payment SOKONI collected — by paymentRef, or by an orderId that
@@ -1242,7 +1242,7 @@ exports.refundToWallet = onCall({ cors: true, enforceAppCheck: true, invoker: 'p
     try {
       const r = await RA.refundToBuyerWallet(db, {
         paymentRef: anchor.paymentRef, requestedBy: callerUid, source: 'refundToWallet',
-        reason: _san(reason, 300) || null,
+        reason: _san(reason, 300) || null, reasonCode: reasonCode || null,
         expectAmountKES: amount === undefined || amount === null ? null : Number(amount),
         expectBuyerUid: targetUid ? _san(targetUid, 128) : null,
       });

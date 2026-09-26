@@ -64,13 +64,21 @@
     closed:            { label: 'Closed',                 tone: 'done' },
   };
 
+  /* The canonical reason labels (functions/refund-reasons.js, mirrored in sokoni-refund-reasons.js).
+     `late_delivery` was removed: the server never accepted it, so no dispute could carry it.
+     scripts/test-refund-reasons.js fails if these drift from the authority. */
   var REASON_LABELS = {
-    not_received:     'Item never arrived',
-    wrong_item:       'Wrong item sent',
-    not_as_described: 'Not as described',
-    damaged:          'Arrived damaged',
-    late_delivery:    'Delivered late',
-    other:            'Other',
+    not_received:              'Item never arrived',
+    not_as_described:          'Significantly different from the listing',
+    counterfeit:               'Counterfeit or not authentic',
+    wrong_item:                'Wrong item sent',
+    damaged:                   'Arrived damaged',
+    defective:                 'Defective or not working',
+    billing_error:             'Charged the wrong amount',
+    buyer_request:             'Changed my mind',
+    seller_cancelled:          'Cancelled by the seller',
+    seller_failed_to_dispatch: 'Seller did not dispatch',
+    other:                     'Other',
   };
 
   /* Evidence a merchant can realistically produce. `evidenceType` is a free

@@ -1,3 +1,15 @@
+## 2026-09-26 — Repair 3: one reason authority for disputes, returns and refunds (branch `repair-3/canonical-reason-authority`, NOT landed)
+
+`functions/refund-reasons.js` replaces four vocabularies with 11 canonical codes: the existing reasons plus the two
+policy refund causes. It carries no fault or money classification (that is H2). Old spellings are accepted as aliases
+and stored canonical. What each surface accepts is preserved exactly. Consumers: disputes, returns (enums deleted),
+automation, and the refund authority (optional validated `reasonCode`). Pages: dispute-portal, returns.html,
+merchant labels (phantom `late_delivery` removed). Browser mirror `sokoni-refund-reasons.js` is drift-tested.
+`scripts/test-refund-reasons.js` **21/0**; old code **FAILS 12**. No regressions.
+Record: `docs/repairs/R3-canonical-reason-authority.md`.
+API: `refundToWallet` / `fosSubmitRefund` accept an optional `reasonCode`. Database: reasons stored as canonical codes.
+Breaking: none (aliases accepted).
+
 ## 2026-09-26 — Repair 2: one canonical identity for a dispute (branch `repair-2/canonical-identity-fields`, NOT landed)
 
 A dispute now carries `buyerUid` · `sellerUid` · `shopId` · `reason`: the names the orders already use and the

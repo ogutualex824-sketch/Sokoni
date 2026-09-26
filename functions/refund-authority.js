@@ -91,6 +91,7 @@ const REASON = Object.freeze({
   AMOUNT_MISMATCH:          'requested-amount-is-not-the-payment-amount',
   PARTIAL_NOT_SUPPORTED:    'partial-refunds-are-not-supported',
   BAD_STATE:                'refund-authority-in-unexpected-state',
+  BAD_REASON:               'refund-reason-not-recognised',
 });
 
 class RefundAuthorityError extends Error {
@@ -281,7 +282,14 @@ function _writeEvidence(t, a, rail, authorityId, status) {
   if (a.orderRef) t.update(a.orderRef, ev);
 }
 
-function _checkRequest(a, { expectAmountKES, expectBuyerUid }) {
+function _checkRequest(a, o) {
+  const { expectAmountKES, expectBuyerUid } = o;
+  /* A refund reason, when given, is a code from the ONE reason authority — stored canonical. */
+  if (o.reasonCode !== undefined && o.reasonCode !== null) {
+    const rr = require('./refund-reasons').resolve('refund', o.reasonCode);
+    if (!rr.ok) refuse(REASON.BAD_REASON, rr.message);
+    o.reasonCode = rr.code;
+  }
   if (expectAmountKES !== undefined && expectAmountKES !== null && Number(expectAmountKES) !== a.grossKES) {
     refuse(Number(expectAmountKES) < a.grossKES ? REASON.PARTIAL_NOT_SUPPORTED : REASON.AMOUNT_MISMATCH,
       `Requested KES ${expectAmountKES}; payment ${a.paymentRef} was KES ${a.grossKES}. Only a full refund is supported.`);
@@ -297,6 +305,7 @@ function _authorityDoc(a, rail, status, o) {
     grossKES: a.grossKES, buyerUid: a.buyerUid,
     sellerUid: a.sellerUid, sellerNetCents: a.netCents, creditFamily: a.family,
     requestedBy: o.requestedBy || null, source: o.source || null, reason: o.reason || null,
+    reasonCode: o.reasonCode || null,        /* canonical, validated in _checkRequest (refund-reasons.js) */
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   };
 }

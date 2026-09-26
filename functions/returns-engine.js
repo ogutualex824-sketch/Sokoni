@@ -9,7 +9,9 @@ const db = getFirestore();
 
 const REGION = 'us-central1';
 
-const VALID_REASONS   = new Set(['defective','wrong_item','changed_mind','not_as_described','damaged_in_transit','other']);
+/* Reasons come from the ONE reason authority (functions/refund-reasons.js). Which reasons a return
+   accepts is unchanged; changed_mind / damaged_in_transit are stored as buyer_request / damaged. */
+const RR = require('./refund-reasons');
 const VALID_RESOLUTIONS = new Set(['refund','exchange','store_credit']);
 const VALID_STATUSES  = new Set(['submitted','under_review','approved','rejected','processed']);
 
@@ -35,7 +37,8 @@ exports.submitReturn = onCall({ region: REGION, timeoutSeconds: 30 }, async (req
 
   if (!orderId) throw new Error('INVALID_ARGUMENT: orderId required');
   if (!Array.isArray(items) || !items.length) throw new Error('INVALID_ARGUMENT: items required');
-  if (!VALID_REASONS.has(reason)) throw new Error(`INVALID_ARGUMENT: reason must be one of ${[...VALID_REASONS].join(', ')}`);
+  const _reason = RR.resolve('return', reason);
+  if (!_reason.ok) throw new Error(`INVALID_ARGUMENT: reason must be one of ${RR.allowedFor('return').join(', ')}`);
   if (!VALID_RESOLUTIONS.has(resolution)) throw new Error(`INVALID_ARGUMENT: resolution must be one of ${[...VALID_RESOLUTIONS].join(', ')}`);
 
   const uid = req.auth.uid;
@@ -68,7 +71,7 @@ exports.submitReturn = onCall({ region: REGION, timeoutSeconds: 30 }, async (req
         qty:       Math.max(1, Number(it.qty) || 1),
         price:     Number(it.price) || 0,
       })),
-      reason,
+      reason: _reason.code,                          /* canonical code, never an alias */
       description: String(description).slice(0, 1000),
       resolution,
       status:      'submitted',

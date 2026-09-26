@@ -103,7 +103,9 @@ const open = (uid, orderId) => call(D.createDispute, uid, { orderId, reason: 'no
   /* Anchored on the DISPUTES query: wallet.js has other sellerUid queries (payoutRequests), and an
      unanchored pattern passed on the old code by matching one of those. */
   ok(/collection\('disputes'\)\.where\('sellerUid', '==', uid\)/.test(src('wallet.js')), 'wallet.js _hasOpenDispute queries disputes by sellerUid (static)');
-  ok(/dispute\.reason === 'not_received'/.test(src('automation-engine.js')) && !/dispute\.(type|buyerId|sellerId)\b/.test(src('automation-engine.js')),
+  /* The FIELD is what Repair 2 fixed (reason, never type). Repair 3 moved the compared VALUE onto the
+     canonical reason constant, so both spellings of the right-hand side are accepted — nothing else. */
+  ok(/dispute\.reason === (?:'not_received'|require\('\.\/refund-reasons'\)\.CODE\.NOT_RECEIVED)/.test(src('automation-engine.js')) && !/dispute\.(type|buyerId|sellerId)\b/.test(src('automation-engine.js')),
     'automation-engine reads reason / buyerUid / sellerUid (static)');
   ok(/emailForUid\(d\.buyerUid/.test(src('email-triggers.js')) && /emailForUid\(after\.buyerUid/.test(src('email-triggers.js')), 'dispute emails address the buyerUid (static)');
 

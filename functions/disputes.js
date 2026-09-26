@@ -12,16 +12,10 @@ const admin = require('firebase-admin');
 const db         = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 
-const VALID_REASONS = [
-  'not_received',     // Item never delivered
-  'wrong_item',       // Wrong item sent
-  'not_as_described', // Significantly different from listing
-  'counterfeit',      // Fake/counterfeit product
-  'damaged',          // Arrived damaged
-  'defective',        // Not working/defective
-  'overcharged',      // Charged wrong amount
-  'other',
-];
+/* Reasons come from the ONE reason authority (functions/refund-reasons.js) — this module keeps no list
+   of its own. Which reasons a dispute accepts is unchanged; old spellings (overcharged) are accepted and
+   stored as the canonical code (billing_error). */
+const RR = require('./refund-reasons');
 /* The dispute SETTLEMENT HOLD lives in functions/dispute-hold.js, and so does the one list of open
    statuses — settlement and this module must never disagree about what "open" means. */
 const DH = require('./dispute-hold');
@@ -45,8 +39,8 @@ exports.createDispute = onCall({ enforceAppCheck: true }, async request => {
 
   if (!orderId || !reason || !description)
     throw new HttpsError('invalid-argument', 'orderId, reason, description required');
-  if (!VALID_REASONS.includes(reason))
-    throw new HttpsError('invalid-argument', 'Invalid reason');
+  const _reason = RR.resolve('dispute', reason);
+  if (!_reason.ok) throw new HttpsError('invalid-argument', 'Invalid reason');
   if (String(description).trim().length < 10)
     throw new HttpsError('invalid-argument', 'Please provide a more detailed description');
 
@@ -86,7 +80,7 @@ exports.createDispute = onCall({ enforceAppCheck: true }, async request => {
       buyerUid:  uid,
       sellerUid: DI.orderSellerUid(order),
       shopId:    order.shopId || null,
-      reason,
+      reason: _reason.code,                          /* canonical code, never an alias */
       description: _san(description.trim()),
       amount:   order.total || order.amount || 0,
       status:   'open',
