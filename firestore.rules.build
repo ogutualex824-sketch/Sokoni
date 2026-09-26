@@ -3756,6 +3756,14 @@ service cloud.firestore {
   match /playbackRate/{uid}          { allow read, write: if false; }
   match /creatorExceptions/{id}      { allow read: if isAdmin(); allow write: if false; }
   match /creatorPayoutHolds/{uid}    { allow read: if isAdmin(); allow write: if false; }
+  match /creatorVerifications/{uid} {
+  allow read:  if isAuthed() && (request.auth.uid == uid || isAdmin());
+  allow write: if false;
+  match /events/{eventId} {
+  allow read:  if isAuthed() && (request.auth.uid == uid || isAdmin());
+  allow write: if false;
+  }
+  }
   match /loyaltyAccounts/{uid} {
   allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
   allow write: if false;

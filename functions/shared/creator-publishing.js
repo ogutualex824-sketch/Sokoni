@@ -61,6 +61,108 @@
     REJECTED:  ['PENDING'],
   });
 
+  /* ── Creator VERIFICATION (identity), distinct from the creator account state.
+     Source of truth: creatorVerifications/{uid}.status. creators/{uid}.verification
+     ('VERIFIED' | 'UNVERIFIED') is a server-written PROJECTION of it, and nothing
+     else may write it. NOT_APPLIED = no application document. */
+  const VERIFICATION_STATE = Object.freeze({
+    NOT_APPLIED: 'NOT_APPLIED', DRAFT: 'DRAFT', SUBMITTED: 'SUBMITTED', UNDER_REVIEW: 'UNDER_REVIEW',
+    MORE_INFORMATION_REQUIRED: 'MORE_INFORMATION_REQUIRED', APPROVED: 'APPROVED', REJECTED: 'REJECTED', SUSPENDED: 'SUSPENDED',
+  });
+  const VERIFICATION_TRANSITIONS = Object.freeze({
+    creator: {
+      NOT_APPLIED: ['DRAFT'],
+      DRAFT: ['SUBMITTED'],
+      MORE_INFORMATION_REQUIRED: ['SUBMITTED'],
+      REJECTED: ['DRAFT'],
+    },
+    admin: {
+      SUBMITTED: ['UNDER_REVIEW', 'MORE_INFORMATION_REQUIRED', 'REJECTED'],
+      UNDER_REVIEW: ['APPROVED', 'REJECTED', 'MORE_INFORMATION_REQUIRED'],
+      APPROVED: ['SUSPENDED'],
+      SUSPENDED: ['APPROVED'],
+    },
+  });
+  /* Admin actions → target state. A reason is REQUIRED for the negative ones. */
+  const VERIFICATION_ACTIONS = Object.freeze({
+    start_review: { to: 'UNDER_REVIEW', reason: false },
+    request_info: { to: 'MORE_INFORMATION_REQUIRED', reason: true },
+    approve: { to: 'APPROVED', reason: false },
+    reject: { to: 'REJECTED', reason: true },
+    suspend: { to: 'SUSPENDED', reason: true },
+    reinstate: { to: 'APPROVED', reason: true },
+  });
+  const CREATOR_TYPES = Object.freeze(['individual', 'company', 'production_house', 'collective', 'other']);
+  const ID_DOC_TYPES = Object.freeze(['national_id', 'passport', 'company_registration', 'other']);
+  const MAX_VERIFICATION_DOCS = 6;
+  const VERIFICATION_DOC_NAME = /^cv-[A-Za-z0-9_-]{1,60}\.(pdf|jpg|jpeg|png|webp)$/;
+
+  function assertVerificationTransition(actor, from, to) {
+    const t = VERIFICATION_TRANSITIONS[actor];
+    if (!t) throw _err('actor_invalid', 'unknown actor');
+    if (!(t[from] || []).includes(to)) throw _err('transition_refused', `${actor} cannot move a verification ${from} → ${to}`);
+    return true;
+  }
+
+  function _httpsList(v, max, what) {
+    if (v == null) return [];
+    if (!Array.isArray(v) || v.length > max) throw _err('links_invalid', `${what}: up to ${max} links`);
+    return v.map((u) => {
+      let x; try { x = new URL(String(u)); } catch (_) { throw _err('links_invalid', `${what}: not a URL`); }
+      if (x.protocol !== 'https:') throw _err('links_invalid', `${what}: https links only`);
+      return x.href.slice(0, 300);
+    });
+  }
+
+  /**
+   * Validate a verification application payload. Only the LAST 2–4 characters
+   * of an identity number are accepted — the full number never enters Firestore;
+   * the document image stays in private KYC storage. Status / reviewer fields are
+   * server-owned and REFUSED.
+   */
+  function sanitizeVerificationInput(d) {
+    const x = d && typeof d === 'object' ? d : {};
+    const owned = ['status', 'reviewer', 'reviewedAt', 'decisionReason', 'version', 'creatorId', 'applicationId', 'documents', 'submittedAt', 'verified'];
+    const bad = owned.filter((k) => Object.prototype.hasOwnProperty.call(x, k));
+    if (bad.length) throw _err('field_server_owned', 'server-owned field(s): ' + bad.join(', '));
+    const out = {
+      legalName: _str(x.legalName, 120), displayName: _str(x.displayName, 80), bio: _str(x.bio, 2000),
+      creatorType: x.creatorType, country: _str(x.country, 2).toUpperCase(),
+      contactEmail: _str(x.contactEmail, 120), contactPhone: String(x.contactPhone || '').replace(/[^\d+]/g, '').slice(0, 16),
+      portfolio: _httpsList(x.portfolio, 10, 'portfolio'), links: _httpsList(x.links, 10, 'links'),
+      ownershipStatement: _str(x.ownershipStatement, 2000), ownershipAttested: x.ownershipAttested === true,
+      identity: null,
+    };
+    if (out.creatorType != null && !CREATOR_TYPES.includes(out.creatorType)) throw _err('creator_type_invalid', 'unknown creator type');
+    if (out.country && !ISO2.test(out.country)) throw _err('country_invalid', 'country must be ISO-3166 alpha-2');
+    if (out.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(out.contactEmail)) throw _err('email_invalid', 'contact email invalid');
+    if (x.identity != null) {
+      const id = x.identity;
+      if (Object.prototype.hasOwnProperty.call(id, 'documentNumber')) throw _err('pii_refused', 'send only the last 4 characters of the ID number (documentLast4)');
+      if (!ID_DOC_TYPES.includes(id.documentType)) throw _err('identity_invalid', 'unknown document type');
+      const last4 = String(id.documentLast4 || '');
+      if (!/^[A-Za-z0-9]{2,4}$/.test(last4)) throw _err('identity_invalid', 'documentLast4 must be the last 2–4 characters');
+      out.identity = { documentType: id.documentType, documentLast4: last4.toUpperCase() };
+    }
+    return out;
+  }
+
+  /** What must be present before an application may be SUBMITTED. */
+  function verificationReadiness(app) {
+    const a = app || {};
+    const missing = [];
+    if (!a.legalName || a.legalName.length < 2) missing.push('legalName');
+    if (!a.displayName || a.displayName.length < 2) missing.push('displayName');
+    if (!CREATOR_TYPES.includes(a.creatorType)) missing.push('creatorType');
+    if (!a.country) missing.push('country');
+    if (!a.identity) missing.push('identity');
+    if (!a.contactEmail && !a.contactPhone) missing.push('contact');
+    if (!a.ownershipStatement || a.ownershipStatement.length < 20) missing.push('ownershipStatement');
+    if (a.ownershipAttested !== true) missing.push('ownershipAttested');
+    if (!Array.isArray(a.documents) || a.documents.length === 0) missing.push('documents');
+    return { ready: missing.length === 0, missing };
+  }
+
   const AGE_RATINGS = Object.freeze(['G', 'PG', '7', '13', '16', '18']);
   const ACCESS_TYPES = Object.freeze(['purchase', 'rental']);
 
@@ -253,6 +355,8 @@
   return {
     SUBCATEGORIES, FILM_STATE, FILM_TRANSITIONS, CREATOR_STATE, CREATOR_TRANSITIONS,
     AGE_RATINGS, ACCESS_TYPES, SUPPORTED_CURRENCIES, PRICE_MIN_CENTS, PRICE_MAX_CENTS, PLAYBACK, SERVER_OWNED,
+    VERIFICATION_STATE, VERIFICATION_TRANSITIONS, VERIFICATION_ACTIONS, CREATOR_TYPES, ID_DOC_TYPES, MAX_VERIFICATION_DOCS, VERIFICATION_DOC_NAME,
+    assertVerificationTransition, sanitizeVerificationInput, verificationReadiness,
     isOwnedPublicAsset, sanitizeFilmInput, normalizeAvailability, isAvailableIn,
     assertFilmTransition, assertCreatorTransition, publishReadiness, decidePlayback, assessSessionRisk,
   };

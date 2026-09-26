@@ -47,6 +47,8 @@ async function suite(env, label, expectDenials) {
     await f('playbackSessions/s1', { uid: 'v1' });
     await f('entertainmentListingSecrets/leg1', { streamingUrl: 'https://secret' });
     await f('config/creatorHub', { purchasesEnabled: false });
+    await f('creatorVerifications/cA', { creatorId: 'cA', status: 'SUBMITTED', identity: { documentType: 'passport', documentLast4: '1234' } });
+    await f('creatorVerifications/cA/events/e1', { from: 'DRAFT', to: 'SUBMITTED', actor: 'cA' });
   });
   const anon = env.unauthenticatedContext().firestore();
   const v1 = env.authenticatedContext('v1').firestore();
@@ -72,6 +74,10 @@ async function suite(env, label, expectDenials) {
   await expectDeny('client marks a payment COMPLETE', v1.doc('payments/PAY1').set({ status: 'COMPLETE', uid: 'v1' }));
   await expectDeny('client opens purchases (config)', adm.doc('config/creatorHub').set({ purchasesEnabled: true }));
   await expectDeny('client writes the media location', cA.doc('creatorMedia/filmPub').set({ storagePath: 'x' }));
+  await expectDeny('creator marks own verification APPROVED', cA.doc('creatorVerifications/cA').update({ status: 'APPROVED' }));
+  await expectDeny('creator creates a pre-approved application', cB.doc('creatorVerifications/cB').set({ status: 'APPROVED', creatorId: 'cB' }));
+  await expectDeny('creator forges a verification event', cA.doc('creatorVerifications/cA/events/fake').set({ to: 'APPROVED' }));
+  await expectDeny('creator sets the VERIFIED projection', cA.doc('creators/cA').update({ verification: 'VERIFIED' }));
 
   console.log(`\n── ${label}: reads ──`);
   if (D) {
@@ -83,6 +89,8 @@ async function suite(env, label, expectDenials) {
     ck(`${label}: owner reads own agreement`, await allowed(cA.doc('royaltyAgreements/filmPub/versions/1').get()));
     ck(`${label}: active creator profile public`, await allowed(anon.doc('creators/cA').get()));
     ck(`${label}: admin reads a period`, await allowed(adm.doc('royaltyPeriods/2026-Q3').get()));
+    ck(`${label}: creator reads own verification`, await allowed(cA.doc('creatorVerifications/cA').get()));
+    ck(`${label}: admin reads a verification + its events`, await allowed(adm.doc('creatorVerifications/cA').get()) && await allowed(adm.doc('creatorVerifications/cA/events/e1').get()));
   }
   await expectDeny('anonymous reads a DRAFT film', anon.doc('entertainmentListings/filmDraft').get());
   await expectDeny('rival reads another creator\'s draft', cB.doc('entertainmentListings/filmDraft').get());
@@ -97,6 +105,8 @@ async function suite(env, label, expectDenials) {
   await expectDeny('viewer reads playback sessions', v1.doc('playbackSessions/s1').get());
   await expectDeny('anyone reads a legacy stream URL', v1.doc('entertainmentListingSecrets/leg1').get());
   await expectDeny('anyone reads config', v1.doc('config/creatorHub').get());
+  await expectDeny("cross-creator verification read", cB.doc('creatorVerifications/cA').get());
+  await expectDeny("cross-creator verification events read", cB.doc('creatorVerifications/cA/events/e1').get());
 }
 
 async function storageSuite(env, label, D) {

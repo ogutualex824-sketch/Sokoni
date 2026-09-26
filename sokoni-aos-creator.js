@@ -14,7 +14,7 @@
   'use strict';
 
   const TABS = [
-    ['creators', 'Creators'], ['films', 'Films & review'], ['settlement', 'Royalty settlement'],
+    ['creators', 'Creators'], ['verification', 'Verification'], ['films', 'Films & review'], ['settlement', 'Royalty settlement'],
     ['ledger', 'Ledger'], ['exceptions', 'Exceptions'], ['security', 'Playback security'], ['config', 'Config'],
   ];
 
@@ -27,6 +27,7 @@
   }
   const pct = (bps) => (Number.isFinite(Number(bps)) ? (Number(bps) / 100).toFixed(2).replace(/\.00$/, '') + '%' : '—');
   const when = (ms) => (ms ? new Date(ms).toLocaleString('en-KE') : '—');
+  const safeHref = (u) => { try { const x = new URL(u); return x.protocol === 'https:' ? x.href : null; } catch (_) { return null; } };
   const chip = (s) => `<span class="aos-badge" data-state="${esc(s)}">${esc(s || '—')}</span>`;
 
   function mount(opts) {
@@ -73,6 +74,16 @@
               ${c.state === 'SUSPENDED' ? `<button class="aos-btn" data-a="cr-approve" data-id="${esc(c.creatorId)}">Reinstate</button>` : ''}
               <button class="aos-btn aos-btn-ghost" data-a="cr-hold" data-id="${esc(c.creatorId)}">Hold payouts…</button> <button class="aos-btn aos-btn-ghost" data-a="cr-release" data-id="${esc(c.creatorId)}">Release hold</button></td></tr>`).join('');
         return rows ? `<div class="aos-table-wrap"><table class="aos-table"><thead><tr><th>Creator</th><th>State</th><th>Country</th><th>Verification</th><th>Note</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="aos-muted">No creators have registered yet.</p>';
+      },
+      async verification() {
+        const r = await call('creatorAdminVerifications', {});
+        const order = { SUBMITTED: 0, UNDER_REVIEW: 1, MORE_INFORMATION_REQUIRED: 2, APPROVED: 3, SUSPENDED: 4, REJECTED: 5, DRAFT: 6 };
+        const apps = (r.applications || []).sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
+        const rows = apps.map((a) => `<tr>
+          <td><button class="aos-link" data-a="ver-detail" data-id="${esc(a.creatorId)}">${esc(a.displayName || a.creatorId)}</button><div class="aos-muted">${esc(a.legalName)} · ${esc(a.creatorType || '—')} · ${esc(a.country || '—')}</div></td>
+          <td>${chip(a.status)}</td><td>v${esc(a.version)}</td><td>${esc(a.documents.length)}</td>
+          <td>${a.submittedAtMs ? when(a.submittedAtMs) : '—'}</td></tr>`).join('');
+        return (rows ? `<div class="aos-table-wrap"><table class="aos-table"><thead><tr><th>Creator</th><th>Status</th><th>Ver.</th><th>Docs</th><th>Submitted</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="aos-muted">No verification applications.</p>') + '<div id="aoscrDetail"></div>';
       },
       async films() {
         const r = await call('creatorAdminFilms', {});
@@ -136,6 +147,33 @@
       },
     };
 
+    async function detailVerification(uid) {
+      const d = await call('creatorAdminVerificationDetail', { uid });
+      const a = d.application;
+      const st = a.status;
+      const act = (action, label, ghost) => `<button class="aos-btn${ghost ? ' aos-btn-ghost' : ''}" data-a="ver-act" data-id="${esc(uid)}" data-act="${action}">${label}</button>`;
+      const buttons = {
+        SUBMITTED: act('start_review', 'Start review') + act('request_info', 'Request information', true) + act('reject', 'Reject', true),
+        UNDER_REVIEW: act('approve', 'Approve') + act('request_info', 'Request information', true) + act('reject', 'Reject', true),
+        APPROVED: act('suspend', 'Suspend', true),
+        SUSPENDED: act('reinstate', 'Reinstate'),
+      }[st] || '';
+      const docs = (d.documents || []).map((x) => {
+        const href = x.url && safeHref(x.url);
+        return `<li>${href ? `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(x.name)}</a>` : esc(x.name)} · ${esc(x.contentType)} · ${(Number(x.sizeBytes) / 1024).toFixed(0)} KB${x.present === false ? ' <b style="color:#ff6b6b">MISSING</b>' : ''}${x.changedAfterSubmit ? ' <b style="color:#ff9800">⚠ changed after submission</b>' : ''}</li>`;
+      }).join('');
+      const links = (a.portfolio || []).concat(a.links || []).map((u) => { const h = safeHref(u); return h ? `<li><a href="${esc(h)}" target="_blank" rel="noopener noreferrer nofollow">${esc(h)}</a></li>` : ''; }).join('');
+      host.querySelector('#aoscrDetail').innerHTML = `<div class="aoscr-card"><h3>${esc(a.displayName)} ${chip(st)}</h3>
+        <p><b>Legal name:</b> ${esc(a.legalName)} · <b>Type:</b> ${esc(a.creatorType || '—')} · <b>Country:</b> ${esc(a.country || '—')}</p>
+        <p><b>Identity:</b> ${a.identity ? esc(a.identity.documentType) + ' ending ' + esc(a.identity.documentLast4) : '—'} · <b>Contact:</b> ${esc(a.contactEmail || '—')} ${esc(a.contactPhone || '')}</p>
+        <p><b>Ownership statement</b> (${a.ownershipAttested ? 'attested' : 'NOT attested'}):<br>${esc(a.ownershipStatement)}</p>
+        <p class="aos-muted">${esc(a.bio)}</p>
+        <h4>Documents (links expire in 5 minutes)</h4><ul>${docs || '<li class="aos-muted">none</li>'}</ul>
+        <h4>Portfolio &amp; links</h4><ul>${links || '<li class="aos-muted">none</li>'}</ul>
+        <div class="aoscr-inline">${buttons}</div>
+        <h4>History</h4><ul>${(d.events || []).map((e) => `<li>${when(e.atMs)} — ${esc(e.from)} → <b>${esc(e.to)}</b> by ${esc(e.role)} <span class="aos-mono">${esc(e.actor)}</span>${e.reason ? ': ' + esc(e.reason) : ''}</li>`).join('')}</ul></div>`;
+    }
+
     async function detailFilm(id) {
       const d = await call('creatorAdminFilmDetail', { filmId: id });
       const el = host.querySelector('#aoscrDetail');
@@ -162,6 +200,15 @@
         case 'cr-hold': ask('Reason for holding royalty payouts for this participant:', (r) => act('creatorAdminSetPayoutHold', { uid: id, hold: true, reason: r }, 'Payout hold set.')); break;
         case 'cr-release': act('creatorAdminSetPayoutHold', { uid: id, hold: false }, 'Payout hold released — run Distribute to release held statements.'); break;
         case 'film-detail': detailFilm(id).catch((e) => msg(e.message, true)); break;
+        case 'ver-detail': detailVerification(id).catch((e) => msg(e.message, true)); break;
+        case 'ver-act': {
+          const a = t.dataset.act;
+          const needsReason = ['request_info', 'reject', 'suspend', 'reinstate'].includes(a);
+          const done = () => detailVerification(id).catch(() => {});
+          if (needsReason) ask(`Reason (${a.replace('_', ' ')}) — shown to the creator:`, (r) => act('creatorAdminVerificationDecision', { uid: id, action: a, reason: r }, 'Decision recorded.').then(done));
+          else act('creatorAdminVerificationDecision', { uid: id, action: a }, 'Decision recorded.').then(done);
+          break;
+        }
         case 'film-to': {
           const to = t.dataset.to;
           if (to === 'REJECTED' || to === 'SUSPENDED') ask(`Note for the creator (${to.toLowerCase()}):`, (n) => act('creatorAdminFilmTransition', { filmId: id, to, note: n }));
@@ -217,7 +264,8 @@
   const OPS = ['creatorAdminList', 'creatorAdminSetState', 'creatorAdminFilms', 'creatorAdminFilmDetail', 'creatorAdminFilmTransition',
     'creatorAdminLockAgreement', 'creatorAdminLedger', 'creatorAdminPeriods', 'creatorAdminCalculatePeriod', 'creatorAdminApprovePeriod',
     'creatorAdminDistribute', 'creatorAdminClosePeriod', 'creatorAdminSetPayoutHold', 'creatorAdminStatements', 'creatorAdminSecurityEvents',
-    'creatorAdminExceptions', 'creatorAdminRetryAccrual', 'creatorAdminAttestFee', 'creatorAdminRevokeEntitlement', 'creatorAdminConfig'];
+    'creatorAdminExceptions', 'creatorAdminRetryAccrual', 'creatorAdminAttestFee', 'creatorAdminRevokeEntitlement', 'creatorAdminConfig',
+    'creatorAdminVerifications', 'creatorAdminVerificationDetail', 'creatorAdminVerificationDecision'];
 
   root.SokoniAOSCreator = { mount, OPS, _kes: kes, _pct: pct, _esc: esc };
 }(typeof window !== 'undefined' ? window : globalThis));

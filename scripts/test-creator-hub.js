@@ -131,10 +131,11 @@ async function buy(buyer, filmId) {
   objects.set(tgt.storagePath, { contentType: 'video/mp4', size: 1_500_000_000, generation: 2 });
   ck('verified master attaches', (await call('film.attachMedia', 'cA', { filmId: FILM })).mediaReady === true);
   ck('private media record written server-side', (await read('creatorMedia/' + FILM)).storagePath === tgt.storagePath);
-  ck('split > 100% refused', /exceeds/.test(await msg(call('agreement.saveDraft', 'cA', { filmId: FILM, participants: [...PARTS, { participantId: 'x', participantType: 'other', uid: 'ux', bps: 1 }] }))));
-  ck('negative share refused', /bps must be > 0/.test(await msg(call('agreement.saveDraft', 'cA', { filmId: FILM, participants: [{ participantId: 'a', participantType: 'creator', uid: 'cA', bps: -1 }] }))));
-  ck('non-owner cannot set the split', (await code(call('agreement.saveDraft', 'cEvil', { filmId: FILM, participants: PARTS }))) === 'permission-denied');
-  ck('five-party 100% split saved as draft v1', (await call('agreement.saveDraft', 'cA', { filmId: FILM, participants: PARTS })).version === 1);
+  ck('split > 100% refused', /exceeds/.test(await msg(call('agreement.saveDraft', 'cA', { filmId: FILM, rightsAttestation: 'rights-attestation-v1', participants: [...PARTS, { participantId: 'x', participantType: 'other', uid: 'ux', bps: 1 }] }))));
+  ck('negative share refused', /bps must be > 0/.test(await msg(call('agreement.saveDraft', 'cA', { filmId: FILM, rightsAttestation: 'rights-attestation-v1', participants: [{ participantId: 'a', participantType: 'creator', uid: 'cA', bps: -1 }] }))));
+  ck('non-owner cannot set the split', (await code(call('agreement.saveDraft', 'cEvil', { filmId: FILM, rightsAttestation: 'rights-attestation-v1', participants: PARTS }))) === 'permission-denied');
+  ck('split WITHOUT rights attestation refused', /rights attestation/.test(await msg(call('agreement.saveDraft', 'cA', { filmId: FILM, participants: PARTS }))));
+  ck('five-party 100% split saved as draft v1', (await call('agreement.saveDraft', 'cA', { filmId: FILM, rightsAttestation: 'rights-attestation-v1', participants: PARTS })).version === 1);
   ck('submit refused while creator PENDING', /creator_not_active/.test(await msg(call('film.submit', 'cA', { filmId: FILM }))));
   ck('non-admin cannot approve a creator', (await code(adm('creatorAdminSetState', 'cA', { uid: 'cA', to: 'ACTIVE' }, {}))) === 'permission-denied');
   await adm('creatorAdminSetState', 'adm1', { uid: 'cA', to: 'ACTIVE' });
@@ -269,7 +270,7 @@ async function buy(buyer, filmId) {
     const t2 = await call('film.mediaUploadTarget', 'cA', { filmId: R2 });
     objects.set(t2.storagePath, { contentType: 'video/mp4', size: 1000, generation: 1 });
     await call('film.attachMedia', 'cA', { filmId: R2 });
-    await call('agreement.saveDraft', 'cA', { filmId: R2, participants: [{ participantId: 'cA', participantType: 'creator', uid: 'cA', bps: 10000 }] });
+    await call('agreement.saveDraft', 'cA', { filmId: R2, rightsAttestation: 'rights-attestation-v1', participants: [{ participantId: 'cA', participantType: 'creator', uid: 'cA', bps: 10000 }] });
     await call('film.submit', 'cA', { filmId: R2 });
     await adm('creatorAdminFilmTransition', 'adm1', { filmId: R2, to: 'UNDER_REVIEW' });
     await adm('creatorAdminFilmTransition', 'adm1', { filmId: R2, to: 'APPROVED' });
@@ -300,7 +301,7 @@ async function buy(buyer, filmId) {
 
   /* ═══ agreement v2 ═══ */
   console.log('\n── versioned agreement ──');
-  const v2 = await call('agreement.saveDraft', 'cA', { filmId: FILM, participants: [{ participantId: 'producer', participantType: 'producer', uid: 'cA', bps: 6000 }, { participantId: 'actorA', participantType: 'actor', uid: 'uActA', bps: 4000 }] });
+  const v2 = await call('agreement.saveDraft', 'cA', { filmId: FILM, rightsAttestation: 'rights-attestation-v1', participants: [{ participantId: 'producer', participantType: 'producer', uid: 'cA', bps: 6000 }, { participantId: 'actorA', participantType: 'actor', uid: 'uActA', bps: 4000 }] });
   ck('a new split is a NEW version (v2), v1 untouched', v2.version === 2 && (await read(`royaltyAgreements/${FILM}/versions/1`)).status === 'LOCKED');
   ck('a draft v2 governs nothing until locked', R.selectVersionAt((await db.collection(`royaltyAgreements/${FILM}/versions`).get()).docs.map((d) => d.data()), NOW).version === 1);
   ck('non-admin cannot lock', (await code(adm('creatorAdminLockAgreement', 'cA', { filmId: FILM, version: 2 }, {}))) === 'permission-denied');
@@ -398,6 +399,74 @@ async function buy(buyer, filmId) {
   ck('participant cannot read another film\'s owner dashboard', (await code(call('royalty.film', 'uActA', { filmId: FILM }))) === 'permission-denied');
   const fd = await call('royalty.film', 'cA', { filmId: FILM });
   ck('owner dashboard: gross / fee / commission / pool totals', fd.totals.grossCents > 0 && fd.totals.commissionCents > 0 && fd.totals.poolCents > 0 && fd.totals.providerFeeCents > 0);
+
+  /* ═══ creator verification ═══ */
+  console.log('\n── creator verification ──');
+  {
+    const V = (op, uid, data = {}) => call(op, uid, data);
+    ck('no application → NOT_APPLIED', (await V('verification.get', 'cV')).status === 'NOT_APPLIED');
+    ck('unregistered user cannot apply', (await code(V('verification.saveDraft', 'cV', { legalName: 'X' }))) === 'failed-precondition');
+    await call('creator.register', 'cV', { displayName: 'Verity Films' });
+    ck('forged status refused', /field_server_owned/.test(await msg(V('verification.saveDraft', 'cV', { status: 'APPROVED' }))));
+    ck('forged verified flag refused', /field_server_owned/.test(await msg(V('verification.saveDraft', 'cV', { verified: true }))));
+    ck('applying FOR another creator impossible (creatorId is server-owned)', /field_server_owned/.test(await msg(V('verification.saveDraft', 'cV', { creatorId: 'cA' }))));
+    ck('FULL ID number refused (last 4 only)', /pii_refused/.test(await msg(V('verification.saveDraft', 'cV', { identity: { documentType: 'national_id', documentNumber: '12345678' } }))));
+    ck('http portfolio link refused', /https links only/.test(await msg(V('verification.saveDraft', 'cV', { portfolio: ['http://x.example'] }))));
+    const APP = { legalName: 'Verity Films Ltd', displayName: 'Verity Films', creatorType: 'company', country: 'KE', bio: 'Docs',
+      identity: { documentType: 'company_registration', documentLast4: '7K2Q' }, portfolio: ['https://verity.example/reel'], links: ['https://x.com/verity'],
+      ownershipStatement: 'We own all rights to the films we publish on SOKONI.', ownershipAttested: true, contactEmail: 'rights@verity.example' };
+    ck('valid draft saved', (await V('verification.saveDraft', 'cV', APP)).status === 'DRAFT');
+    const vdoc = await read('creatorVerifications/cV');
+    ck('application keyed by the AUTHENTICATED uid', vdoc.creatorId === 'cV' && vdoc.applicationId === 'cva_cV');
+    ck('only the last 4 of the ID number stored', vdoc.identity.documentLast4 === '7K2Q' && !JSON.stringify(vdoc).includes('12345678'));
+    ck('submit without documents refused', /documents/.test(await msg(V('verification.submit', 'cV'))));
+    ck('path traversal in document name refused', (await code(V('verification.attachDocument', 'cV', { fileName: '../cA/cv-id.pdf' }))) === 'invalid-argument');
+    objects.set('kyc-documents/cOther/cv-id.pdf', { contentType: 'application/pdf', size: 1000, md5Hash: 'm0', generation: '1' });
+    ck("another creator's document cannot be attached (own prefix only)", /not been uploaded/.test(await msg(V('verification.attachDocument', 'cV', { fileName: 'cv-id.pdf' }))));
+    objects.set('kyc-documents/cV/cv-id.pdf', { contentType: 'text/html', size: 1000, md5Hash: 'm1', generation: '1' });
+    ck('non-PDF/image document refused', /PDF or an image/.test(await msg(V('verification.attachDocument', 'cV', { fileName: 'cv-id.pdf' }))));
+    objects.set('kyc-documents/cV/cv-id.pdf', { contentType: 'application/pdf', size: 5000, md5Hash: 'm1', generation: '1' });
+    ck('own document attached', (await V('verification.attachDocument', 'cV', { fileName: 'cv-id.pdf' })).documents === 1);
+    const sub = await V('verification.submit', 'cV');
+    ck('submitted as version 1', sub.status === 'SUBMITTED' && sub.version === 1);
+    ck('duplicate submission refused', /transition_refused/.test(await msg(V('verification.submit', 'cV'))));
+    ck('cannot edit while SUBMITTED', /cannot be edited/.test(await msg(V('verification.saveDraft', 'cV', APP))));
+    ck('non-admin cannot decide', (await code(adm('creatorAdminVerificationDecision', 'cV', { uid: 'cV', action: 'approve' }, {}))) === 'permission-denied');
+    ck('cannot approve straight from SUBMITTED (review first)', /transition_refused/.test(await msg(adm('creatorAdminVerificationDecision', 'adm1', { uid: 'cV', action: 'approve' }))));
+    await adm('creatorAdminVerificationDecision', 'adm1', { uid: 'cV', action: 'start_review' });
+    ck('request-info needs a reason', (await code(adm('creatorAdminVerificationDecision', 'adm1', { uid: 'cV', action: 'request_info' }))) === 'invalid-argument');
+    await adm('creatorAdminVerificationDecision', 'adm1', { uid: 'cV', action: 'request_info', reason: 'Upload a clearer certificate' });
+    const g = await V('verification.get', 'cV');
+    ck('creator sees MORE_INFORMATION_REQUIRED + the reason', g.status === 'MORE_INFORMATION_REQUIRED' && g.events.some((e) => e.reason === 'Upload a clearer certificate'));
+    ck("creator's event view hides reviewer identity", !JSON.stringify(g.events).includes('adm1'));
+    objects.set('kyc-documents/cV/cv-cert.pdf', { contentType: 'application/pdf', size: 7000, md5Hash: 'm2', generation: '1' });
+    await V('verification.attachDocument', 'cV', { fileName: 'cv-cert.pdf' });
+    ck('resubmitted as version 2', (await V('verification.submit', 'cV')).version === 2);
+    await adm('creatorAdminVerificationDecision', 'adm1', { uid: 'cV', action: 'start_review' });
+    objects.set('kyc-documents/cV/cv-id.pdf', { contentType: 'application/pdf', size: 5001, md5Hash: 'SWAPPED', generation: '2' });
+    const det = await adm('creatorAdminVerificationDetail', 'adm1', { uid: 'cV' });
+    ck('reviewer sees a document swapped AFTER submission', det.documents.find((x) => x.name === 'cv-id.pdf').changedAfterSubmit === true);
+    ck('unchanged document not flagged', det.documents.find((x) => x.name === 'cv-cert.pdf').changedAfterSubmit === false);
+    ck('reviewer gets short-lived signed links', det.documents.every((x) => /X-Goog-Expires=300/.test(x.url || '')));
+    ck('admin audit history names actors', det.events.some((e) => e.actor === 'adm1' && e.to === 'MORE_INFORMATION_REQUIRED'));
+    const before = await read('creators/cV');
+    ck('not yet verified before approval', before.verification !== 'VERIFIED' && before.state === 'PENDING');
+    await adm('creatorAdminVerificationDecision', 'adm2', { uid: 'cV', action: 'approve' });
+    const after = await read('creators/cV');
+    ck('approval → application APPROVED, projection VERIFIED, creator ACTIVE', (await read('creatorVerifications/cV')).status === 'APPROVED' && after.verification === 'VERIFIED' && after.state === 'ACTIVE');
+    ck('decision records reviewer + time', (await read('creatorVerifications/cV')).reviewer === 'adm2');
+    ck('suspend needs a reason', (await code(adm('creatorAdminVerificationDecision', 'adm1', { uid: 'cV', action: 'suspend' }))) === 'invalid-argument');
+    await adm('creatorAdminVerificationDecision', 'adm1', { uid: 'cV', action: 'suspend', reason: 'identity dispute' });
+    const sus = await read('creators/cV');
+    ck('suspension → UNVERIFIED projection + creator SUSPENDED', sus.verification === 'UNVERIFIED' && sus.state === 'SUSPENDED');
+    await adm('creatorAdminVerificationDecision', 'adm1', { uid: 'cV', action: 'reinstate', reason: 'dispute resolved' });
+    ck('reinstate → VERIFIED + ACTIVE', (await read('creators/cV')).verification === 'VERIFIED' && (await read('creators/cV')).state === 'ACTIVE');
+    await call('creator.register', 'cW', { displayName: 'Walk-in' });
+    await adm('creatorAdminSetState', 'adm1', { uid: 'cW', to: 'ACTIVE' });
+    ck('account approval alone does NOT mint the VERIFIED projection', (await read('creators/cW')).verification !== 'VERIFIED');
+    ck('creator.me reports verification status', (await call('creator.me', 'cV')).verificationStatus === 'APPROVED');
+    ck('one application per creator (no duplicate doc)', docs('creatorVerifications/').filter((x) => !x.path.includes('/events/') && x.creatorId === 'cV').length === 1);
+  }
 
   /* ═══ AdminOS guard sweep ═══ */
   console.log('\n── AdminOS guards ──');

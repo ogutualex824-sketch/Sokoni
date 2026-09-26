@@ -4881,6 +4881,16 @@ service cloud.firestore {
     match /playbackRate/{uid}          { allow read, write: if false; }
     match /creatorExceptions/{id}      { allow read: if isAdmin(); allow write: if false; }
     match /creatorPayoutHolds/{uid}    { allow read: if isAdmin(); allow write: if false; }
+    /* Creator verification: ONE application per creator, keyed by uid. The status
+       is decided only by AdminOS (creator-hub _adminH); no client ever writes it. */
+    match /creatorVerifications/{uid} {
+      allow read:  if isAuthed() && (request.auth.uid == uid || isAdmin());
+      allow write: if false;
+      match /events/{eventId} {
+        allow read:  if isAuthed() && (request.auth.uid == uid || isAdmin());
+        allow write: if false;
+      }
+    }
 
     // ── Universal Loyalty & Rewards Engine v2.0 ────────────────────────────
 

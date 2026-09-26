@@ -49,6 +49,27 @@ console.log('\n── publication state machine ──');
   ck('creator SUSPENDED → PENDING refused', code(() => P.assertCreatorTransition('SUSPENDED', 'PENDING')) === 'transition_refused');
 }
 
+console.log('\n── verification state machine & contract ──');
+{
+  const VT = P.VERIFICATION_TRANSITIONS;
+  ck('creator NOT_APPLIED → DRAFT → SUBMITTED', P.assertVerificationTransition('creator', 'NOT_APPLIED', 'DRAFT') && P.assertVerificationTransition('creator', 'DRAFT', 'SUBMITTED'));
+  ck('no creator transition INTO APPROVED / UNDER_REVIEW / SUSPENDED (exhaustive)', !Object.values(VT.creator).some((to) => to.some((x) => ['APPROVED', 'UNDER_REVIEW', 'SUSPENDED'].includes(x))));
+  ck('creator cannot leave SUSPENDED', !VT.creator.SUSPENDED);
+  ck('admin cannot approve without review (SUBMITTED ↛ APPROVED)', code(() => P.assertVerificationTransition('admin', 'SUBMITTED', 'APPROVED')) === 'transition_refused');
+  ck('admin UNDER_REVIEW → APPROVED | REJECTED | MORE_INFORMATION_REQUIRED', ['APPROVED', 'REJECTED', 'MORE_INFORMATION_REQUIRED'].every((t) => P.assertVerificationTransition('admin', 'UNDER_REVIEW', t)));
+  ck('all 8 states defined', Object.keys(P.VERIFICATION_STATE).length === 8);
+  ck('negative actions require a reason', ['request_info', 'reject', 'suspend', 'reinstate'].every((a) => P.VERIFICATION_ACTIONS[a].reason) && !P.VERIFICATION_ACTIONS.approve.reason);
+  for (const k of ['status', 'verified', 'reviewer', 'creatorId', 'documents', 'version']) {
+    ck(`verification: server-owned "${k}" refused`, code(() => P.sanitizeVerificationInput({ [k]: 'x' })) === 'field_server_owned');
+  }
+  ck('full ID number refused', code(() => P.sanitizeVerificationInput({ identity: { documentType: 'passport', documentNumber: 'A1234567' } })) === 'pii_refused');
+  ck('last-4 accepted and upper-cased', P.sanitizeVerificationInput({ identity: { documentType: 'passport', documentLast4: 'ab12' } }).identity.documentLast4 === 'AB12');
+  ck('5-char "last4" refused', code(() => P.sanitizeVerificationInput({ identity: { documentType: 'passport', documentLast4: '12345' } })) === 'identity_invalid');
+  ck('document name: cv- prefix + safe extension only', P.VERIFICATION_DOC_NAME.test('cv-id.pdf') && !P.VERIFICATION_DOC_NAME.test('../cv-id.pdf') && !P.VERIFICATION_DOC_NAME.test('cv-id.html') && !P.VERIFICATION_DOC_NAME.test('id.pdf'));
+  const r = P.verificationReadiness({});
+  ck('readiness lists every missing item', ['legalName', 'creatorType', 'identity', 'ownershipAttested', 'documents'].every((m) => r.missing.includes(m)));
+}
+
 console.log('\n── field contract ──');
 {
   const ok = P.sanitizeFilmInput(BASE, { uid: UID });

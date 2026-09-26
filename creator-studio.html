@@ -92,6 +92,11 @@
       <h1>Creator Studio</h1>
       <p class="muted">${esc(c.displayName)} · <a href="/creator.html">View Creator</a> · <a href="/creator.html?view=royalties">My royalties</a></p>
       <div class="banner">${esc(banner)}</div>
+      <div class="panel" id="verPanel">
+        <b>Creator verification</b> <span class="chip" data-s="${esc(ME.verificationStatus)}">${esc(({ NOT_APPLIED: 'Not applied', DRAFT: 'Draft', SUBMITTED: 'Submitted', UNDER_REVIEW: 'Under review', MORE_INFORMATION_REQUIRED: 'More information required', APPROVED: 'Verified ✓', REJECTED: 'Not approved', SUSPENDED: 'Suspended' })[ME.verificationStatus] || ME.verificationStatus)}</span>
+        <p class="muted" style="margin-top:6px">Verified creators show a ✓ on their films. Verification is reviewed by SOKONI; your ID documents stay private.</p>
+        ${['NOT_APPLIED', 'DRAFT', 'MORE_INFORMATION_REQUIRED', 'REJECTED'].includes(ME.verificationStatus) ? '<div class="row"><button class="btn" id="applyVer">Apply for Creator Verification</button></div>' : '<div class="row"><button class="btn ghost" id="applyVer">View application</button></div>'}
+      </div>
       <div class="row"><button class="btn" id="newFilm" ${['ACTIVE', 'PENDING'].includes(c.state) ? '' : 'disabled'}>+ New film</button>
         ${c.state !== 'SUSPENDED' ? '<button class="btn ghost" id="editProfile">Edit profile</button>' : ''}</div>
       <h2>Your films</h2>
@@ -100,8 +105,85 @@
         <td>${f.mediaReady ? 'uploaded' : '<span class="muted">missing</span>'}</td><td>${f.agreementVersion ? 'v' + f.agreementVersion + ' locked' : '<span class="muted">draft</span>'}</td>
         <td><button class="btn ghost" data-open="${esc(f.filmId)}">Open</button></td></tr>`).join('')}</tbody></table>` : '<p class="muted">No films yet.</p>'}</div>`;
     const nf = document.getElementById('newFilm'); if (nf) nf.onclick = () => editor(null);
+    const av = document.getElementById('applyVer'); if (av) av.onclick = () => verification();
     const ep = document.getElementById('editProfile'); if (ep) ep.onclick = () => register(c);
     $app.querySelectorAll('[data-open]').forEach((b) => b.onclick = () => editor(ME.films.find((f) => f.filmId === b.dataset.open)));
+  }
+
+  /* ═══ Creator verification application ═══ */
+  async function verification() {
+    $app.innerHTML = '<p class="muted">Loading…</p>';
+    let V;
+    try { V = await cd('verification.get'); } catch (e) { $app.innerHTML = `<p class="msg bad">${esc(errText(e))}</p>`; return; }
+    const a = V.application || {};
+    const editable = ['NOT_APPLIED', 'DRAFT', 'MORE_INFORMATION_REQUIRED', 'REJECTED'].includes(V.status);
+    const dis = editable ? '' : 'disabled';
+    const T = P();
+    const opt = (list, cur) => list.map((x) => `<option value="${x}" ${cur === x ? 'selected' : ''}>${x.replace(/_/g, ' ')}</option>`).join('');
+    $app.innerHTML = `
+      <p><a href="#" id="back">← Studio</a></p>
+      <h1>Creator verification</h1>
+      <p class="muted">Status: <b>${esc(V.status)}</b>${a.version ? ' · submission v' + esc(a.version) : ''}</p>
+      ${(V.events || []).filter((e) => e.reason).slice(0, 3).map((e) => `<div class="banner">${esc(e.to.replace(/_/g, ' '))}: ${esc(e.reason)}</div>`).join('')}
+      <form class="panel" id="vForm">
+        <div class="grid2">
+          <label>Legal name *<input name="legalName" maxlength="120" value="${esc(a.legalName || '')}" ${dis}></label>
+          <label>Display name *<input name="displayName" maxlength="80" value="${esc(a.displayName || (ME.creator && ME.creator.displayName) || '')}" ${dis}></label>
+          <label>Creator type *<select name="creatorType" ${dis}><option value="">Choose…</option>${opt(T.CREATOR_TYPES, a.creatorType)}</select></label>
+          <label>Country (2-letter) *<input name="country" maxlength="2" value="${esc(a.country || '')}" ${dis}></label>
+          <label>ID document type *<select name="docType" ${dis}><option value="">Choose…</option>${opt(T.ID_DOC_TYPES, a.identity && a.identity.documentType)}</select></label>
+          <label>Last 4 characters of the ID number *<input name="last4" maxlength="4" value="${esc((a.identity && a.identity.documentLast4) || '')}" ${dis}></label>
+          <label>Contact email<input name="contactEmail" type="email" value="${esc(a.contactEmail || '')}" ${dis}></label>
+          <label>Contact phone<input name="contactPhone" type="tel" value="${esc(a.contactPhone || '')}" ${dis}></label>
+        </div>
+        <p class="muted" style="margin-top:6px">We never ask for your full ID number here — only the last 4 characters. Upload a photo or PDF of the document below; it is stored privately and seen only by SOKONI reviewers.</p>
+        <label style="margin-top:10px">Biography<textarea name="bio" rows="3" maxlength="2000" ${dis}>${esc(a.bio || '')}</textarea></label>
+        <label style="margin-top:10px">Portfolio links (https, one per line)<textarea name="portfolio" rows="2" ${dis}>${esc((a.portfolio || []).join('\n'))}</textarea></label>
+        <label style="margin-top:10px">Website / social links (https, one per line)<textarea name="links" rows="2" ${dis}>${esc((a.links || []).join('\n'))}</textarea></label>
+        <label style="margin-top:10px">Content ownership * — what do you own, and how?<textarea name="ownershipStatement" rows="3" maxlength="2000" ${dis}>${esc(a.ownershipStatement || '')}</textarea></label>
+        <label style="margin-top:10px;display:flex;gap:8px;color:var(--tx);font-weight:400"><input type="checkbox" name="ownershipAttested" style="width:auto" ${a.ownershipAttested ? 'checked' : ''} ${dis}> I confirm the statement above is true and that I own or control the rights to the content I publish.</label>
+        ${editable ? '<div class="row"><button class="btn ghost">Save draft</button></div>' : ''}
+        <div class="msg" id="vMsg" role="status"></div>
+      </form>
+      <div class="panel"><b>Supporting documents</b> <span class="muted">(PDF, JPG, PNG or WebP · up to 20 MB · max 6)</span>
+        <ul style="margin:8px 0 0 18px">${(a.documents || []).map((d) => `<li>${esc(d.name)} · ${(d.sizeBytes / 1024).toFixed(0)} KB</li>`).join('') || '<li class="muted">none yet</li>'}</ul>
+        ${editable && V.status !== 'NOT_APPLIED' ? '<label style="margin-top:8px">Add a document<input type="file" id="vDoc" accept="application/pdf,image/jpeg,image/png,image/webp"></label><progress id="vProg" hidden max="1"></progress>' : (editable ? '<p class="muted">Save a draft first, then add documents.</p>' : '')}
+        <div class="msg" id="dMsg" role="status"></div>
+      </div>
+      ${editable && V.status !== 'NOT_APPLIED' ? '<div class="row"><button class="btn" id="vSubmit">Submit for review</button></div><div class="msg" id="sMsg" role="status"></div>' : ''}`;
+    document.getElementById('back').onclick = (e) => { e.preventDefault(); home(); };
+    const lines = (v) => String(v || '').split(/\n+/).map((x) => x.trim()).filter(Boolean);
+    document.getElementById('vForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const data = { legalName: fd.get('legalName'), displayName: fd.get('displayName'), creatorType: fd.get('creatorType') || null,
+        country: fd.get('country'), bio: fd.get('bio'), contactEmail: fd.get('contactEmail'), contactPhone: fd.get('contactPhone'),
+        portfolio: lines(fd.get('portfolio')), links: lines(fd.get('links')), ownershipStatement: fd.get('ownershipStatement'),
+        ownershipAttested: fd.get('ownershipAttested') === 'on' };
+      if (fd.get('docType') && fd.get('last4')) data.identity = { documentType: fd.get('docType'), documentLast4: fd.get('last4') };
+      try { await cd('verification.saveDraft', data); msg('vMsg', 'Draft saved.', true); verification(); }
+      catch (err) { msg('vMsg', errText(err), false); }
+    };
+    const inp = document.getElementById('vDoc');
+    if (inp) inp.onchange = async () => {
+      const file = inp.files[0]; if (!file) return;
+      const ext = ({ 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' })[file.type];
+      if (!ext) return msg('dMsg', 'Use a PDF, JPG, PNG or WebP file.', false);
+      if (file.size > 20 * 1024 * 1024) return msg('dMsg', 'The document must be under 20 MB.', false);
+      const name = 'cv-' + Date.now() + '.' + ext;
+      try {
+        msg('dMsg', 'Uploading…');
+        await upload(`kyc-documents/${USER.uid}/${name}`, file, 'vProg');
+        await cd('verification.attachDocument', { fileName: name });
+        verification();
+      } catch (err) { msg('dMsg', errText(err), false); }
+    };
+    const sb = document.getElementById('vSubmit');
+    if (sb) sb.onclick = async () => {
+      sb.disabled = true;
+      try { await cd('verification.submit'); verification(); }
+      catch (err) { msg('sMsg', errText(err), false); sb.disabled = false; }
+    };
   }
 
   function register(existing) {
@@ -230,6 +312,7 @@
         ${locked ? `<p style="margin-top:8px"><b>Locked: v${locked.version}</b> <span class="muted">since ${new Date(locked.effectiveFrom).toLocaleDateString('en-KE')}</span></p>` : ''}
         <div class="scroll"><table><thead><tr><th>ID</th><th>Role</th><th>SOKONI user ID</th><th>Name</th><th>Share %</th><th></th></tr></thead><tbody id="parts"></tbody></table></div>
         <div class="row"><button class="btn ghost" id="addP" type="button">+ Rights holder</button> <b id="total"></b></div>
+        <label style="margin-top:10px;display:flex;gap:8px;align-items:flex-start;color:var(--tx);font-weight:400"><input type="checkbox" id="attest" style="width:auto;margin-top:3px"> <span id="attestText"></span></label>
         <div class="row"><button class="btn" id="saveAg" type="button">${locked ? 'Propose new version' : 'Save split'}</button></div>
         ${draft && locked ? `<p class="muted">Draft v${draft.version} awaits admin approval.</p>` : ''}
         <div class="msg" id="agMsg" role="status"></div>
@@ -271,9 +354,11 @@
     });
     rest.addEventListener('click', (e) => { const d = e.target.dataset.del; if (d != null) { rows.splice(Number(d), 1); draw(); } });
     draw();
+    document.getElementById('attestText').textContent = ME.rightsAttestation ? ME.rightsAttestation.text : '';
     document.getElementById('addP').onclick = () => { rows.push({ participantId: 'p' + (rows.length + 1), participantType: 'actor', uid: '', bps: 0 }); draw(); };
     document.getElementById('saveAg').onclick = async () => {
-      try { const r = await cd('agreement.saveDraft', { filmId: f.filmId, participants: rows }); msg('agMsg', `Saved as draft v${r.version} (${(r.totalBps / 100).toFixed(2)}%).`, true); }
+      if (!document.getElementById('attest').checked) return msg('agMsg', 'Tick the rights confirmation first.', false);
+      try { const r = await cd('agreement.saveDraft', { filmId: f.filmId, participants: rows, rightsAttestation: ME.rightsAttestation.version }); msg('agMsg', `Saved as draft v${r.version} (${(r.totalBps / 100).toFixed(2)}%).`, true); }
       catch (err) { msg('agMsg', errText(err), false); }
     };
 

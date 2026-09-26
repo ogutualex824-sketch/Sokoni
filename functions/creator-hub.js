@@ -59,6 +59,7 @@ const COL = Object.freeze({
   PERIODS: 'royaltyPeriods', STATEMENTS: 'royaltyStatements', DISTRIBUTIONS: 'royaltyDistributions',
   SESSIONS: 'playbackSessions', AUDIT: 'playbackAudit', RATE: 'playbackRate',
   EXCEPTIONS: 'creatorExceptions', HOLDS: 'creatorPayoutHolds', CONFIG: 'config',
+  VERIFICATIONS: 'creatorVerifications',
   WALLETS: 'wallets', WALLET_TX: 'walletTransactions', ADMIN_AUDIT: 'adminAudit',
 });
 
@@ -169,8 +170,11 @@ async function creatorMe(req) {
     _db().collection(COL.CREATORS).doc(uid).get(),
     _db().collection(COL.FILMS).where('creatorUid', '==', uid).where('creatorHub', '==', true).limit(200).get(),
   ]);
+  const v = await _db().collection(COL.VERIFICATIONS).doc(uid).get();
   return {
     creator: c.exists ? { ..._publicCreator(uid, c.data()), reviewNote: c.data().reviewNote || null } : null,
+    verificationStatus: v.exists ? v.data().status : P.VERIFICATION_STATE.NOT_APPLIED,
+    rightsAttestation: RIGHTS_ATTESTATION,
     films: films.docs.map((d) => _ownerFilm(d.id, d.data())),
   };
 }
@@ -286,9 +290,21 @@ async function _versions(filmId, txn) {
   return snap.docs.map((d) => ({ ...d.data(), _ref: d.ref }));
 }
 
+/* Participant consent is NOT required by current policy (owner decision pending —
+   docs/CREATOR_HUB.md "DECISION_REQUIRED"). What IS required: the rights owner
+   represents, per version, that they hold the authority to make this split.
+   The exact text and its version are stored with the agreement. */
+const RIGHTS_ATTESTATION = Object.freeze({
+  version: 'rights-attestation-v1',
+  text: 'I confirm that I hold the rights to this work and the authority to allocate its royalties as set out in this split, and that each listed participant is entitled to the share shown.',
+});
+
 async function agreementSaveDraft(req) {
   const uid = _uid(req);
   const filmId = _id((req.data || {}).filmId, 'filmId');
+  if ((req.data || {}).rightsAttestation !== RIGHTS_ATTESTATION.version) {
+    fail('failed-precondition', 'Confirm that you have the authority to set this royalty split (rights attestation).');
+  }
   const v = R.validateAgreement((req.data || {}).participants);
   if (!v.ok) fail('invalid-argument', 'Royalty split invalid: ' + v.errors.join('; '));
   return _db().runTransaction(async (txn) => {
@@ -302,6 +318,8 @@ async function agreementSaveDraft(req) {
     txn.set(ref, {
       filmId, version, status: R.AGREEMENT_STATUS.DRAFT, participants: v.participants, totalBps: v.totalBps,
       fullyAllocated: v.totalBps === R.BPS_TOTAL, proposedBy: uid, updatedAt: FieldValue.serverTimestamp(),
+      rightsAttestation: { version: RIGHTS_ATTESTATION.version, text: RIGHTS_ATTESTATION.text, by: uid, atMs: _clock() },
+      participantConsent: 'NOT_REQUIRED_BY_POLICY',
       ...(draft ? {} : { createdAt: FieldValue.serverTimestamp() }),
     }, { merge: true });
     return { filmId, version, status: R.AGREEMENT_STATUS.DRAFT, totalBps: v.totalBps, fullyAllocated: v.totalBps === R.BPS_TOTAL };
@@ -1026,7 +1044,9 @@ _adminH.creatorAdminSetState = async (req) => {
     if (!s.exists) fail('not-found', 'Creator not found.');
     _rule(() => P.assertCreatorTransition(s.data().state, to));
     txn.update(ref, { state: to, reviewNote: reason || null, reviewedBy: actor, reviewedAt: FieldValue.serverTimestamp(),
-      ...(to === P.CREATOR_STATE.ACTIVE ? { verification: 'VERIFIED' } : {}), updatedAt: FieldValue.serverTimestamp() });
+      /* verification ('VERIFIED') is a projection of creatorVerifications — only a
+         verification decision writes it, never an account-state change. */
+      updatedAt: FieldValue.serverTimestamp() });
     return { from: s.data().state, to };
   });
   await _adminAudit('creator_state', actor, { uid, ...out, reason });
@@ -1388,6 +1408,192 @@ _adminH.creatorAdminConfig = async (req) => {
   return _config();
 };
 
+
+/* ═══ CREATOR VERIFICATION ═══════════════════════════════════════════════
+   One application per creator: creatorVerifications/{uid}, keyed by the
+   AUTHENTICATED uid — so nobody can apply for someone else and a second active
+   application cannot exist. Documents live in the existing private KYC storage
+   (kyc-documents/{uid}/…, owner + admin read); the server records each object's
+   hash at attach time so a swap after submission is visible to the reviewer.
+   Every status change appends to creatorVerifications/{uid}/events. */
+
+const _vRef = (uid) => _db().collection(COL.VERIFICATIONS).doc(uid);
+function _vEvent(txn, uid, e) {
+  txn.set(_vRef(uid).collection('events').doc(), { ...e, at: FieldValue.serverTimestamp(), atMs: _clock() });
+}
+function _vPublic(uid, v) {
+  return {
+    applicationId: v.applicationId, creatorId: uid, status: v.status, version: v.version || 0,
+    legalName: v.legalName || '', displayName: v.displayName || '', creatorType: v.creatorType || null, bio: v.bio || '',
+    country: v.country || '', identity: v.identity || null, portfolio: v.portfolio || [], links: v.links || [],
+    ownershipStatement: v.ownershipStatement || '', ownershipAttested: v.ownershipAttested === true,
+    contactEmail: v.contactEmail || '', contactPhone: v.contactPhone || '',
+    documents: (v.documents || []).map((d) => ({ name: d.name, contentType: d.contentType, sizeBytes: d.sizeBytes, attachedAtMs: d.attachedAtMs })),
+    submittedAtMs: _ms(v.submittedAt), reviewedAtMs: _ms(v.reviewedAt), decisionReason: v.decisionReason || null,
+  };
+}
+
+async function verificationGet(req) {
+  const uid = _uid(req);
+  const [v, ev] = await Promise.all([
+    _vRef(uid).get(),
+    _vRef(uid).collection('events').orderBy('atMs', 'desc').limit(30).get(),
+  ]);
+  if (!v.exists) return { status: P.VERIFICATION_STATE.NOT_APPLIED, application: null, events: [] };
+  return { status: v.data().status, application: _vPublic(uid, v.data()),
+    /* the creator sees what happened and why — never which admin did it */
+    events: ev.docs.map((d) => ({ from: d.data().from, to: d.data().to, reason: d.data().reason || null, by: d.data().role, atMs: d.data().atMs })) };
+}
+
+async function verificationSaveDraft(req) {
+  const uid = _uid(req);
+  const input = _rule(() => P.sanitizeVerificationInput(req.data || {}));
+  return _db().runTransaction(async (txn) => {
+    const c = await txn.get(_db().collection(COL.CREATORS).doc(uid));
+    const v = await txn.get(_vRef(uid));
+    if (!c.exists) fail('failed-precondition', 'Register as a creator first.');
+    if (c.data().state === P.CREATOR_STATE.SUSPENDED) fail('permission-denied', 'This creator account is suspended.');
+    const cur = v.exists ? v.data().status : P.VERIFICATION_STATE.NOT_APPLIED;
+    const editable = [P.VERIFICATION_STATE.NOT_APPLIED, P.VERIFICATION_STATE.DRAFT, P.VERIFICATION_STATE.MORE_INFORMATION_REQUIRED, P.VERIFICATION_STATE.REJECTED];
+    if (!editable.includes(cur)) fail('failed-precondition', `An application that is ${cur} cannot be edited.`);
+    const next = cur === P.VERIFICATION_STATE.MORE_INFORMATION_REQUIRED ? cur : P.VERIFICATION_STATE.DRAFT;
+    if (cur !== next) _rule(() => P.assertVerificationTransition('creator', cur, next));
+    if (!v.exists) {
+      txn.create(_vRef(uid), { ...input, applicationId: 'cva_' + uid, creatorId: uid, status: next, version: 0, documents: [],
+        createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+      _vEvent(txn, uid, { from: cur, to: next, role: 'creator', actor: uid });
+    } else {
+      txn.update(_vRef(uid), { ...input, status: next, updatedAt: FieldValue.serverTimestamp() });
+      if (cur !== next) _vEvent(txn, uid, { from: cur, to: next, role: 'creator', actor: uid });
+    }
+    return { status: next };
+  });
+}
+
+async function verificationAttachDocument(req) {
+  const uid = _uid(req);
+  const name = String((req.data || {}).fileName || '');
+  if (!P.VERIFICATION_DOC_NAME.test(name)) fail('invalid-argument', 'Upload the document as kyc-documents/<you>/cv-<name>.pdf|jpg|png|webp first.');
+  const path = `kyc-documents/${uid}/${name}`;              /* ONLY the caller's own prefix */
+  const file = _bucket().file(path);
+  const [exists] = await file.exists();
+  if (!exists) fail('failed-precondition', 'That document has not been uploaded.');
+  const [meta] = await file.getMetadata();
+  const type = String(meta.contentType || '');
+  const size = Number(meta.size);
+  if (!(/^image\/(jpeg|png|webp)$/.test(type) || type === 'application/pdf')) fail('failed-precondition', 'Documents must be PDF or an image.');
+  if (!(size > 0 && size <= 20 * 1024 * 1024)) fail('failed-precondition', 'Documents must be under 20 MB.');
+  return _db().runTransaction(async (txn) => {
+    const v = await txn.get(_vRef(uid));
+    if (!v.exists) fail('failed-precondition', 'Start your application first.');
+    const st = v.data().status;
+    if (![P.VERIFICATION_STATE.DRAFT, P.VERIFICATION_STATE.MORE_INFORMATION_REQUIRED].includes(st)) fail('failed-precondition', `Documents cannot change while the application is ${st}.`);
+    const docs = (v.data().documents || []).filter((d) => d.name !== name);
+    if (docs.length >= P.MAX_VERIFICATION_DOCS) fail('failed-precondition', `At most ${P.MAX_VERIFICATION_DOCS} documents.`);
+    docs.push({ name, path, contentType: type, sizeBytes: size, md5Hash: meta.md5Hash || null, generation: String(meta.generation || ''), attachedAtMs: _clock() });
+    txn.update(_vRef(uid), { documents: docs, updatedAt: FieldValue.serverTimestamp() });
+    return { documents: docs.length };
+  });
+}
+
+async function verificationSubmit(req) {
+  const uid = _uid(req);
+  return _db().runTransaction(async (txn) => {
+    const c = await txn.get(_db().collection(COL.CREATORS).doc(uid));
+    const v = await txn.get(_vRef(uid));
+    if (!v.exists) fail('failed-precondition', 'Start your application first.');
+    if (!c.exists || c.data().state === P.CREATOR_STATE.SUSPENDED) fail('permission-denied', 'Creator account unavailable.');
+    const cur = v.data().status;
+    _rule(() => P.assertVerificationTransition('creator', cur, P.VERIFICATION_STATE.SUBMITTED));
+    const r = P.verificationReadiness(v.data());
+    if (!r.ready) fail('failed-precondition', 'Not ready to submit: ' + r.missing.join(', '));
+    const version = Number(v.data().version || 0) + 1;
+    txn.update(_vRef(uid), { status: P.VERIFICATION_STATE.SUBMITTED, version, submittedAt: FieldValue.serverTimestamp(),
+      submittedDocs: (v.data().documents || []).map((d) => ({ name: d.name, md5Hash: d.md5Hash, generation: d.generation })),
+      updatedAt: FieldValue.serverTimestamp() });
+    _vEvent(txn, uid, { from: cur, to: P.VERIFICATION_STATE.SUBMITTED, role: 'creator', actor: uid, version });
+    return { status: P.VERIFICATION_STATE.SUBMITTED, version };
+  });
+}
+
+_adminH.creatorAdminVerifications = async (req) => {
+  _admin(req);
+  const st = (req.data || {}).status;
+  let q = _db().collection(COL.VERIFICATIONS);
+  if (st) { if (!P.VERIFICATION_STATE[st]) fail('invalid-argument', 'Unknown status.'); q = q.where('status', '==', st); }
+  const snap = await q.limit(200).get();
+  return { applications: snap.docs.map((d) => ({ ..._vPublic(d.id, d.data()), creatorId: d.id })) };
+};
+
+_adminH.creatorAdminVerificationDetail = async (req) => {
+  _admin(req);
+  const uid = _id((req.data || {}).uid, 'uid');
+  const [v, c, priv, ev] = await Promise.all([
+    _vRef(uid).get(), _db().collection(COL.CREATORS).doc(uid).get(), _db().collection(COL.CREATOR_PRIVATE).doc(uid).get(),
+    _vRef(uid).collection('events').orderBy('atMs', 'desc').limit(100).get(),
+  ]);
+  if (!v.exists) fail('not-found', 'No application.');
+  const app = v.data();
+  const submitted = Object.fromEntries((app.submittedDocs || []).map((d) => [d.name, d]));
+  const documents = [];
+  for (const d of app.documents || []) {
+    const file = _bucket().file(d.path);
+    let url = null, changedAfterSubmit = null, present = false;
+    try {
+      const [ok] = await file.exists(); present = ok;
+      if (ok) {
+        const [meta] = await file.getMetadata();
+        const s0 = submitted[d.name];
+        changedAfterSubmit = s0 ? (String(meta.generation || '') !== s0.generation || (meta.md5Hash || null) !== s0.md5Hash) : null;
+        [url] = await file.getSignedUrl({ version: 'v4', action: 'read', expires: _clock() + 5 * 60 * 1000 });
+      }
+    } catch (e) { logger.warn('[creator] verification doc inspect failed', { uid, name: d.name, err: e.message }); }
+    documents.push({ name: d.name, contentType: d.contentType, sizeBytes: d.sizeBytes, present, changedAfterSubmit, url });
+  }
+  return {
+    application: _vPublic(uid, app), creator: c.exists ? _publicCreator(uid, c.data()) : null,
+    private: priv.exists ? { legalName: priv.data().legalName || null, phone: priv.data().phone || null } : null,
+    documents,
+    /* full audit: reviewer identity visible to admins */
+    events: ev.docs.map((d) => ({ from: d.data().from, to: d.data().to, role: d.data().role, actor: d.data().actor, reason: d.data().reason || null, version: d.data().version || null, atMs: d.data().atMs })),
+  };
+};
+
+_adminH.creatorAdminVerificationDecision = async (req) => {
+  const actor = _admin(req);
+  const d = req.data || {};
+  const uid = _id(d.uid, 'uid');
+  const action = P.VERIFICATION_ACTIONS[String(d.action || '')];
+  if (!action) fail('invalid-argument', 'Unknown action.');
+  const reason = String(d.reason || '').trim().slice(0, 1000);
+  if (action.reason && reason.length < 5) fail('invalid-argument', 'A reason is required.');
+  const out = await _db().runTransaction(async (txn) => {
+    const v = await txn.get(_vRef(uid));
+    const c = await txn.get(_db().collection(COL.CREATORS).doc(uid));
+    if (!v.exists) fail('not-found', 'No application.');
+    const from = v.data().status;
+    _rule(() => P.assertVerificationTransition('admin', from, action.to));
+    txn.update(_vRef(uid), { status: action.to, reviewer: actor, reviewedAt: FieldValue.serverTimestamp(), decisionReason: reason || null, updatedAt: FieldValue.serverTimestamp() });
+    _vEvent(txn, uid, { from, to: action.to, role: 'admin', actor, reason: reason || null, version: v.data().version || null });
+    /* The ONE writer of the creators.verification projection. */
+    if (c.exists) {
+      const patch = { updatedAt: FieldValue.serverTimestamp() };
+      if (action.to === P.VERIFICATION_STATE.APPROVED) {
+        patch.verification = 'VERIFIED';
+        if ([P.CREATOR_STATE.PENDING, P.CREATOR_STATE.SUSPENDED].includes(c.data().state)) patch.state = P.CREATOR_STATE.ACTIVE;
+      } else if (action.to === P.VERIFICATION_STATE.SUSPENDED) {
+        patch.verification = 'UNVERIFIED'; patch.state = P.CREATOR_STATE.SUSPENDED; patch.reviewNote = reason;
+      } else if (from === P.VERIFICATION_STATE.APPROVED) {
+        patch.verification = 'UNVERIFIED';
+      }
+      txn.update(c.ref, patch);
+    }
+    return { from, to: action.to };
+  });
+  await _adminAudit('creator_verification', actor, { uid, action: d.action, ...out, reason });
+  return out;
+};
+
 /* ═══ DISPATCHER ═════════════════════════════════════════════════════════ */
 
 const OPS = {
@@ -1398,6 +1604,8 @@ const OPS = {
   'agreement.saveDraft': agreementSaveDraft,
   'playback.authorize': playbackAuthorize, 'playback.heartbeat': playbackHeartbeat, 'playback.end': playbackEnd, 'playback.report': playbackReport,
   'royalty.mine': royaltyMine, 'royalty.film': royaltyFilm,
+  'verification.get': verificationGet, 'verification.saveDraft': verificationSaveDraft,
+  'verification.attachDocument': verificationAttachDocument, 'verification.submit': verificationSubmit,
 };
 
 exports.creatorDispatch = onCall({ region: REGION, enforceAppCheck: true, maxInstances: 20, timeoutSeconds: 60, memory: '256MiB' }, async (req) => {
@@ -1408,6 +1616,7 @@ exports.creatorDispatch = onCall({ region: REGION, enforceAppCheck: true, maxIns
 });
 
 exports._adminH = _adminH;
+exports.RIGHTS_ATTESTATION = RIGHTS_ATTESTATION;
 exports._internal = {
   OPS, COL, PURPOSE, priceFilmAccess, filmAccessAdapter, accrueRoyalty, processFilmPayment, onFilmRefundProcessed,
   shouldProcess, _providerFee, _setClock: (fn) => { _clock = fn || _now; },
