@@ -1,6 +1,6 @@
-## 2026-09-26 — Double-credit guard: case-insensitive "already settled" (settleOrder + auto-confirm sweep)
+## 2026-09-26 — DEPLOYED: double-credit guard: case-insensitive "already settled" (settleOrder + auto-confirm sweep)
 
-**Branch only — NOT DEPLOYED.** The production deploy awaits two owner rulings: the scaling contract and `--force`.
+**DEPLOYED 05:27Z:** `onorderstatuschange-00064-rat` + `expireoldescrows-00033-fug` from the production-lineage tree (guard + scaling-neutral `maxInstances: 99`, owner-authorized `--force`). Verification **43/0**, including build→image→source provenance. **Regression hazard:** any other-lineage deploy of these two functions reinstates the defect.
 `functions/order-settlement.js`: new `isAlreadySettled()` gates both credit paths. `scripts/test-settled-case-guard.js`:
 **66/0** on the branch and on the production-lineage deploy tree. The unpatched production code **FAILS 21**,
 reproducing the incident on the emulator.

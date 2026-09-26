@@ -149,3 +149,58 @@ The deploy tree is **the deployed archive plus this patch and nothing else**:
 - Plan under `--only functions:onOrderStatusChange,functions:expireOldEscrows`: **2 updates, 0 creates,
   0 deletes**. Filter matching is exact per dash-chunk, and no live `onOrderStatusChange-*` or
   `expireOldEscrows-*` exists. Function count is **1723** (the manifest's 1709 is stale).
+
+## DEPLOYED — 2026-09-26 05:27Z (owner-authorized: narrow repair, scaling-neutral, `--force`)
+
+`firebase deploy --only functions:onOrderStatusChange,functions:expireOldEscrows --force`, run from
+`C:/temp/sok-dc-deploy`: the production archive `#1788077453779580` plus exactly two file changes. The
+first is the guard in `order-settlement.js`, applied by `scripts/infra/patch-settled-guard-20260926.js`,
+the same script used on the branch. The second is `maxInstances: 99` on both functions (owner ruling:
+scaling-neutral, equal to the serving revisions). Result: **2 updated, 0 created, 0 deleted**.
+
+`--force` was needed only because the CLI reads min-instances from the GCF layer (undefined) and treats
+`minInstances: 1` as a bill increase, although the serving revision already ran min 1. Under `--only`, the
+planner cannot delete (exact dash-chunk filter match; no `onOrderStatusChange-*`/`expireOldEscrows-*` live),
+and cleanup-policy setup is skipped because the repository already carries policies.
+
+| | before | after |
+|---|---|---|
+| `onOrderStatusChange` serving | `00062-yoz` (image deleted; `00063-8sk` stuck FAILED) | **`00064-rat`**, Ready, 100%, min 1 / max 99 |
+| `expireOldEscrows` serving | `00032-gul` | **`00033-fug`**, Ready, 100%, min 0 / max 99 |
+| image | — | `on_order_status_change@sha256:97b5be2d8964…` (`version_1`, the package's only version) |
+| build | — | `5e747ef2-436d-4954-90de-f90db69397e1` SUCCESS 05:27:21–05:27:56Z |
+| source | `#1788077453779580` / `#1788077527517398` | `#1790400441458307` / `#1790400487403819` (byte-identical) |
+
+**Verification — `scripts/infra/verify-settled-guard-deploy-20260926.js`: 43 / 0.** It covers the recovery
+manifest's nine assertions: Ready, 100% traffic, scaling, image present, stuck revision cleared, trigger
+contract, runtime config, the function count (exactly 1723) and the `profilegetpublicprofile-00007-xaz`
+control. It also checks environment and secret bindings, the unchanged Eventarc trigger and scheduler job,
+and **provenance:** serving revision → digest `97b5be…` → the only `version_1`, uploaded 05:27:46Z inside
+build `5e747ef2` → build `_GOOGLE_LABEL_SOURCE` = the new archive → the deployed `order-settlement.js` and
+`index.js` are **byte-identical** to the patched tree.
+
+The provenance gap from the measurement is therefore **closed for the new revisions**. Unlike `00062-yoz`,
+their image exists and chains to the exact source.
+
+Two detector corrections were made during verification, both recorded in the script. First, GCF builds carry
+no `build.source` or `results.images`, so provenance reads `_GOOGLE_LABEL_SOURCE` and the AR tag. Second,
+`eventFilters` are compared as a set: two reads of the same unchanged resource returned them in different
+orders, and a fourth read was byte-identical to the baseline.
+
+No errors or warnings from either service since the deploy. The probe after the deploy is unchanged:
+**0 double credits**. No behavioural test was run in production, because that would require mutating
+production orders, which was not authorized.
+
+### Regression hazard — read before any future deploy of these functions
+
+The guard now lives in production and on `feat/business-wallet-authority` **only**. Any deploy of
+`onOrderStatusChange` or `expireOldEscrows` from another lineage — including a recovery-manifest rebuild or a
+scoped deploy from `feat/integrations-control-center` — **silently reinstates the double credit**. Carry
+`isAlreadySettled` into that lineage first; `scripts/test-settled-case-guard.js` must pass on it.
+
+### Still open (not part of this repair)
+
+- **Refund routing:** a refund of a webhook-credited order marks it `REFUNDED` without clawing back the
+  seller credit.
+- KASS canonical business identity (HOLD), the KES 1,530 provenance (HOLD), and the `SELLER_A` fixture wallets
+  (HOLD pending the reference check).
