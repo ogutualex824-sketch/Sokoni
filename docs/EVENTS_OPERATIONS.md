@@ -80,14 +80,19 @@ visually, printed together on one ticket.
 | Missing key | fails CLOSED in Cloud Functions; the in-repo test key is local only | ops + sabotage |
 | Admin PIN identity lookup | the server hashes (event + PIN) and reads the index; returns the ticket only; every lookup audited | admin · browser; sabotage |
 
+| **Ticket-number confirmation** (owner decision, `2c365df`) | a PIN alone never admits. CHECK TICKET shows the PIN's ticket **number**, event, type and status. Staff confirm that the attendee's ticket carries that number, then CONFIRM ADMISSION. The server **refuses** an admission without the confirmed number, and refuses one whose number ≠ the PIN's ticket; that mismatch counts against the guessing limits and is audited (`event_admission_mismatch`). "Doesn't match" (`eventAdmissionMismatch`) records the same. The admission record carries `confirmation: 'ticket_number'`. The QR path is unchanged: its 128-bit token names one ticket | identity (8 checks) · browser (button disabled until confirmed; Doesn't match) · sabotage `[confirm]` 4/4 |
+
 **Residual risk (inherent in 4 digits, stated rather than hidden):**
 
 - A random 4-digit guess matches *some* valid ticket with probability *issued ÷ 10,000*: 20 % for 2,000 tickets.
 - The throttle stops enumeration by staff accounts. It cannot stop a person at the gate reciting a random PIN.
-- **Mitigation built in:** "Check ticket" shows the **ticket number** and tier, and staff compare it with the ticket
-  the attendee shows. That comparison is what "PIN aligned with the ticket number" buys.
-- If that is not enough for large events, the owner can require the ticket number's last digits as a second factor,
-  or use a 6-digit PIN for events over a threshold (a gap, below).
+- **Control now built in (enforced):** the attendee must present the ticket whose number the PIN resolves to, and
+  staff confirm it before the server admits. A recited random PIN resolves to *someone else's* ticket number, which
+  the stranger cannot show.
+- **What the server cannot do:** see the physical ticket. The number comparison is the staff member's recorded act. The
+  server enforces that it happened, and that it names exactly the PIN's ticket.
+- **Large events:** events above 8,000 tickets will use a **6-digit mode** (owner decision; not built — §12). The
+  4-digit namespace is not stretched.
 
 ### SOKONI QR vs KRA fiscal QR
 
@@ -122,20 +127,22 @@ visually, printed together on one ticket.
 | PIN uniqueness | GREEN — read-phase allocation; concurrency and forced-collision proofs |
 | PIN one-time use | GREEN — concurrent admissions → exactly one |
 | Event-day expiry | GREEN — ISSUED / ACTIVE / CONSUMED / EXPIRED, on the PIN and QR paths |
-| Brute-force protection | GREEN — 5 per staff / 100 per event per 10 min + security event (residual risk above) |
+| Brute-force protection | GREEN — 5 per staff / 100 per event per 10 min + security event |
+| 4-digit stranger-guess resistance | GREEN — server-enforced ticket-number confirmation; mismatches counted + audited (was: design decision) |
 | Online ticket verification | GREEN — the gate cashier checks and admits an online ticket by PIN (browser) |
 | Quick Sale ticket verification | GREEN — Check ticket mode reuses the canonical admission screen and authority |
 | Cash / card / M-PESA ticket accountability | GREEN — every ticket has its own number and PIN; mixed cart 2 + 3 → 5 distinct |
 | SOKONI QR | GREEN — local, no PIN inside, hidden when unusable |
-| KRA fiscal QR | GREEN (logic) / **UNPROVEN live** — shown only as KRA returned it; no live KRA call made |
+| KRA fiscal QR | GREEN (logic) / 🟡 **UNPROVEN** — shown only as KRA returned it; no KRA call made (sandbox certification is the next slice) |
 | KRA reconciliation | GREEN — pending / failed / not-registered / credit-note queue + audited retry |
+| KRA credit notes | 🟡 INCOMPLETE — refund → CREDIT_NOTE_REQUIRED is recorded; the note itself is not yet issued (§12) |
 | Refunded ticket invalidation | GREEN — PIN and QR refused; no PIN / QR shown |
 | Admission / refund separation | GREEN — refund suspends admission; admitted ≠ no-show (refund suite) |
 | AdminOS ticket investigation | GREEN — number, sale, payment ref, buyer, cashier, admission / refund / fiscal status; PIN `••••` |
 | Browser / mobile UI | GREEN — 360–1440 px, see §10 |
 | Regression | GREEN — §10 |
 | Sabotage | §11 |
-| Production deployment | **0** |
+| Production deployment | 🔴 **NOT YET — 0** |
 
 ---
 
@@ -283,7 +290,7 @@ approve the wording before deploy.
 | Suite | Result | Kind |
 |---|---|---|
 | `test-event-ops.js` | 55 / 0 | 4-digit PIN, staff (cashier checks tickets), admission, 5-per-staff lockout + security event, concurrency, fail-closed key |
-| **`test-event-ticket-identity.js`** (new) | **67 / 0** | ticket number + 4-digit PIN authority, uniqueness under forced collision and real concurrency, 10,000-space exhaustion, 8,000 ceiling, lifetime (PIN + QR), mixed cart, SOKONI QR, fiscal via the REAL eTIMS path, reconciliation, AdminOS `••••` |
+| **`test-event-ticket-identity.js`** (new) | **75 / 0** | ticket number + 4-digit PIN authority, uniqueness under forced collision and real concurrency, 10,000-space exhaustion, 8,000 ceiling, lifetime (PIN + QR), mixed cart, SOKONI QR, fiscal via the REAL eTIMS path, reconciliation, AdminOS `••••` |
 | `test-event-sales.js` | 46 / 0 | cash / card / IntaSend-at-till, inventory race, netting |
 | `test-event-refunds.js` | 53 / 0 | policy, 18 reasons, `decide()`, wizard submit / compensate, reject / revoke |
 | `test-event-settlement.js` | 84 / 0 | activation, HELD / release / refund, fee attestation |
@@ -292,12 +299,12 @@ approve the wording before deploy.
 | `test-entertainment-agreements.js` | 25 / 0 | catalogue, signing, approval gate |
 | `test-entertainment-registry.js` | 65 / 0 | categories, lifecycle, AdminOS wiring |
 | `run-entertainment-rules.js` | 86 / 0 | served rules on a private-port emulator; every denial counterproofed under allow-all |
-| `test-event-ops-browser.js` | 196 / 0 | real pages + real server logic incl. Quick Sale add/reduce, both M-PESA journeys, ticket cards (number, PIN, SOKONI QR, genuine KRA receipt), Show / Print / Send, Quick Sale Check ticket for an online ticket, AdminOS `••••` + Fiscal tab, 360 · 390 · 768 · 1024 · 1280 · 1440 px |
+| `test-event-ops-browser.js` | 199 / 0 | real pages + real server logic incl. Quick Sale add/reduce, both M-PESA journeys, ticket cards (number, PIN, SOKONI QR, genuine KRA receipt), Show / Print / Send, Quick Sale Check ticket for an online ticket, AdminOS `••••` + Fiscal tab, 360 · 390 · 768 · 1024 · 1280 · 1440 px |
 | `test-entertainment-browser.js` | 230 / 0 | Entertainment pages incl. legal gate |
 | `test-creator-hub` · `-completion` · `-ui` · `-callback` · `-adminos-authority` | 260 · 66 · 64 · 78 · 19 / 0 | Creator Hub incl. M-PESA-only fail-closed checkout |
 | `test-admin-os-wiring.js` | 316 / 0 | AdminOS registry |
 | `test-etims-audit` · `-lifecycle` · `-tax-engine` · `test-commission-invoice` · `test-merchant-tax` | 6 · 16 · 22 · 52 · 95 / 0 | eTIMS unchanged by the additive `etims.js` interface correction |
-| **`sabotage-event-ops.js`** | see §11 | 50 planted attacks |
+| **`sabotage-event-ops.js`** | see §11 | 54 planted attacks |
 
 **Browser defects found and fixed:**
 
@@ -316,7 +323,7 @@ approve the wording before deploy.
 refund, admin, notify, rules and browser. For each attack it runs the suite that owns the control, requires the **expected** case to go red,
 restores the file byte-for-byte, and then proves the tree is green again.
 
-**50 / 50 CAUGHT.**
+**54 / 54 CAUGHT.** The confirmation hardening added 4 attacks (`[confirm]`), all caught; the pin, staff, sales, refund and admin groups were re-run after it: all caught.
 
 - **Full run** (`e5970e9`): 45 caught, 2 missed, 2 crashed, 0 no-anchor. All 8 suites were green after restore, and the
   tree was byte-identical.
@@ -349,11 +356,11 @@ restores the file byte-for-byte, and then proves the tree is green again.
 | 6 | Low | `cancelEvent`: an order paid after the pending-refund query stays `paid` (release is still refused because the event is cancelled) | sweep `paid` orders of cancelled events into the refund queue |
 | 7 | Low | Creator agreement enforcement is dark-launched | super admin flips `legalConfig/enforcement.creator` |
 | 8 | Low | Rules `isAdmin()` reads `token.admin` / `superAdmin`, while `admin-claim.js` also accepts `isAdmin` | a platform-wide claim decision (not Events-specific) |
-| 9 | Medium (owner) | **4-digit PIN density:** a random guess matches a valid ticket with probability issued ÷ 10,000 (§3). The throttle stops staff enumeration, not a person reciting a random PIN | the gate compares the ticket number (built in); owner may require the ticket number's last digits as a second factor, or 6 digits above a threshold |
-| 10 | Medium (owner) | Events above **8,000 tickets** cannot be configured (4-digit ceiling) | owner decision: a 6-digit PIN tier for large events (`PIN_DIGITS` per event) |
-| 11 | Medium | **KRA live path UNPROVEN on this branch:** invoices are created and queued through the real `etims.js`; no KRA call was made. The KRA-accepted state is simulated with the fields `submitToKra` writes | run the eTIMS sandbox (`ETIMS_ENV=sandbox`) with a registered organizer before deploy |
-| 12 | Medium | Refund → **credit note** is flagged CREDIT_NOTE_REQUIRED, not issued automatically | issue it through `etims-lifecycle` (`buildCreditNote` / `applyLifecycleOp`) from AdminOS, once owner / tax confirm the flow |
-| 13 | Low | Organizer not registered for eTIMS → tickets say so (NOT_REGISTERED); no invoice under SOKONI instead | owner / tax decision on whether SOKONI invoices as agent for unregistered organizers |
+| 9 | ~~Medium~~ **CLOSED `2c365df`** | 4-digit PIN density (a random guess matches a valid ticket with probability issued ÷ 10,000) | server-enforced ticket-number confirmation (§3) |
+| 10 | Medium | Events above **8,000 tickets** cannot be configured (4-digit ceiling, kept as an invariant) | **decided:** a 6-digit PIN mode for large events — per-event `pinDigits` chosen before the first sale, its own ceiling, same allocator. Not built |
+| 11 | High (release gate) | **KRA live path UNPROVEN on this branch:** invoices are created and queued through the real `etims.js`; no KRA call was made. The KRA-accepted state is simulated with the fields `submitToKra` writes | **next slice:** eTIMS sandbox certification (`ETIMS_ENV=sandbox`, a registered sandbox taxpayer) — needs the owner's go-ahead and sandbox credentials |
+| 12 | Medium | Refund → **credit note** is flagged CREDIT_NOTE_REQUIRED, not issued | **decided flow:** refund → the original fiscal record and receipt remain (never deleted or replaced) → CREDIT_NOTE_REQUIRED → KRA credit note through `etims-lifecycle` → linked to the original receipt number. Not built |
+| 13 | Low | Organizer not registered for eTIMS → tickets say so (NOT_REGISTERED) | **decided:** keep this. SOKONI does **not** substitute itself as the fiscal seller and never manufactures an organizer receipt. "SOKONI invoices on behalf of the organizer" is a separate commercial / legal decision and implementation |
 | 14 | Low | Existing tickets from the 8-character build | none exist outside tests (never deployed); no migration |
 
 ---

@@ -1,3 +1,32 @@
+## 2026-09-27 (202) — Events: a 4-digit PIN alone never admits (server-enforced ticket-number confirmation); owner decisions recorded
+
+- **Hardening (owner decision):**
+  - CHECK TICKET resolves the PIN and shows its ticket **number**, event, type and status. Staff tick "the ticket the
+    attendee shows has this number"; only then is **CONFIRM ADMISSION** enabled.
+  - `eventAdmitTicket` now **requires** `confirmTicketNumber` and admits only when it equals the PIN's ticket, checked
+    inside the admission transaction.
+  - A missing number is refused. A mismatch is refused, counted against the same guessing limits (5 per staff / 100 per
+    event) and audited as `event_admission_mismatch`.
+  - New `eventAdmissionMismatch` ("Doesn't match") records the same without admitting.
+  - Admission records carry `confirmation: 'ticket_number'`.
+  - The QR path is unchanged: its 128-bit token names one ticket.
+- **Owner decisions recorded** (`docs/EVENTS_OPERATIONS.md` §3, §12):
+  - the 8,000-ticket 4-digit ceiling stays as an invariant; larger events will get a 6-digit mode (not built);
+  - SOKONI does **not** invoice as agent for unregistered organizers — NOT_REGISTERED stays visible, and agent
+    invoicing is a separate legal / commercial decision;
+  - credit notes follow refund → original receipt kept → CREDIT_NOTE_REQUIRED → KRA credit note linked to the
+    original (not built);
+  - production deployment NOT YET;
+  - the onboarding hotfix stays separate.
+- **Files:** `functions/event-ops.js`, `sokoni-event-ops.js`; event suites (the admit helper confirms the PIN's own
+  number; the confirmation is tested explicitly); `scripts/sabotage-event-ops.js`; `docs/EVENTS_OPERATIONS.md`.
+- **Tests:** identity 75/0 (8 new confirmation checks) · ops 55 · sales 46 · refunds 53 · admin 64 · browser 199/0
+  (CONFIRM disabled until ticked; Doesn't match recorded).
+- **Sabotage:** 54/54 — `[confirm]` 4/4 new; pin, staff, sales, refund and admin re-run, all caught.
+- **API:** `eventAdmitTicket` requires `confirmTicketNumber` (breaking for any client; the only client is
+  `sokoni-event-ops.js`, updated). New op `eventAdmissionMismatch`.
+- **Not deployed.**
+
 ## 2026-09-27 (201) — Events: permanent ticket number + 4-digit event PIN, SOKONI QR vs KRA fiscal, reconciliation
 
 - **Ticket identity (`functions/event-ops.js`):**
