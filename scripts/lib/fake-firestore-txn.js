@@ -114,12 +114,14 @@ function makeFakeFirestore(opts = {}) {
     const depth = cpath.split('/').length + 1;
     const api = {
       _q: true, path: cpath,
-      doc: (id) => docRef(cpath + '/' + (id || ('auto' + (++seq) + Math.random().toString(36).slice(2, 8)))),
+      doc: (id) => docRef(cpath + '/' + (id || ('auto' + (++seq) + (opts.deterministicIds ? '' : Math.random().toString(36).slice(2, 8))))),
       add: async (d) => { const r = api.doc(); await r.set(d); return r; },
       where: (f, op, v) => collRef(cpath, { ...q, where: [...q.where, [f, op, v]] }),
       orderBy: (f, dir = 'asc') => collRef(cpath, { ...q, order: [...q.order, [f, dir]] }),
       limit: (n) => collRef(cpath, { ...q, limit: n }),
       startAfter: (s) => collRef(cpath, { ...q, after: s }),
+      select: () => collRef(cpath, q),
+      count: () => ({ get: async () => { const r = await runQuery(cpath, depth, q); return { data: () => ({ count: r.size }) }; } }),
       get: async () => runQuery(cpath, depth, q),
     };
     return api;
@@ -127,13 +129,24 @@ function makeFakeFirestore(opts = {}) {
   const val = (d, f) => f.split('.').reduce((o, k) => (o == null ? undefined : o[k]), d);
   const cmpv = (a, b) => { const A = a && a._ms !== undefined ? a._ms : a; const B = b && b._ms !== undefined ? b._ms : b; return A < B ? -1 : A > B ? 1 : 0; };
   function runQuery(cpath, depth, q) {
-    let rows = [...store.keys()].filter((p) => p.startsWith(cpath + '/') && p.split('/').length === depth).map(snap);
+    let rows = q.group
+      ? [...store.keys()].filter((p) => { const parts = p.split('/'); return parts.length % 2 === 0 && parts[parts.length - 2] === q.group; }).map(snap)
+      : [...store.keys()].filter((p) => p.startsWith(cpath + '/') && p.split('/').length === depth).map(snap);
     for (const [f, op, v] of q.where) {
       rows = rows.filter((s) => {
         const x = val(s.data(), f);
         if (op === '==') return JSON.stringify(x) === JSON.stringify(v);
         if (op === 'in') return v.some((y) => JSON.stringify(y) === JSON.stringify(x));
         if (op === 'array-contains') return Array.isArray(x) && x.includes(v);
+        if (op === 'array-contains-any') return Array.isArray(x) && v.some((y) => x.includes(y));
+        if (op === 'not-in') return x !== undefined && !v.some((y) => JSON.stringify(y) === JSON.stringify(x));
+        if (op === '!=') return x !== undefined && JSON.stringify(x) !== JSON.stringify(v);
+        if (x === undefined || x === null) return false;
+        const c = cmpv(x, v);
+        if (op === '<') return c < 0;
+        if (op === '<=') return c <= 0;
+        if (op === '>') return c > 0;
+        if (op === '>=') return c >= 0;
         throw new Error('fake: unsupported op ' + op);
       });
     }
@@ -184,6 +197,8 @@ function makeFakeFirestore(opts = {}) {
   }
 
   const db = { collection: (c) => collRef(c), doc: (p) => docRef(p), runTransaction, batch, _store: store,
+    collectionGroup: (name) => collRef('__group__/' + name, { where: [], order: [], limit: null, after: null, group: name }),
+    getAll: async (...refs) => refs.map((r) => snap(r._path)),
     _dump: (prefix) => [...store.keys()].filter((k) => k.startsWith(prefix)).map((k) => ({ path: k, ...revive(clone(store.get(k).data)) })),
     _setClock: (fn) => { clock = fn; } };
   return { db, FieldValue, Timestamp, FieldPath: { documentId: () => '__name__' } };

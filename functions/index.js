@@ -7726,6 +7726,17 @@ exports.webhookIntasend = onRequest(
         }
       }
 
+      /* Creator Hub, SECOND exit: if the early film branch could not read the
+         intent, attribution (resolved from the same server-minted intent, with its
+         own fallback) still identifies the purchase. Exit BEFORE the commission
+         calculation, the commissionLedger write and the seller credit: Creator
+         commission is 30 % of net under shared/creator-commercial.js and is booked
+         by the royalty accrual — never by this marketplace path. */
+      if (attribution.purpose === "film_access" || attribution.type === "film_access") {
+        logger.warn("[webhookIntasend] film_access reached the seller path — no commission, no credit", { ref: apiRef, source: attribution.source });
+        res.status(200).send("OK"); return;
+      }
+
       const category = payData.meta?.category || "default";
       let sokoniCut = 0, commissionPct = 0;
       try {

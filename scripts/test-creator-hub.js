@@ -189,12 +189,17 @@ async function buy(buyer, filmId) {
   ck('access pointer written', (await read(`contentAccess/v1_${FILM}`)).paymentRef === ref1);
   const rows = docs('royaltyLedger/').filter((r) => r.paymentRef === ref1);
   const part = rows.filter((r) => r.bucket === 'PARTICIPANT_ROYALTY');
-  const pool = 50000 - 1500 - 7500;
-  ck('pool = gross − IntaSend fee − 15% ppv commission', done.royalty.poolCents === pool, done.royalty.poolCents);
+  const net = 50000 - 1500;                      /* 485.00 */
+  const commission = Math.floor(net * 3000 / 10000); /* 145.50 → SOKONI 30% of NET */
+  const pool = net - commission;                  /* 339.50 → creators 70% */
+  ck('pool = 70% of (gross − IntaSend fee): 339.50', done.royalty.poolCents === pool && pool === 33950, done.royalty.poolCents);
   ck('one EARN row per participant', part.length === 5);
   ck('Σ participant rows == pool exactly', part.reduce((s, r) => s + r.amountCents, 0) === pool);
-  ck('producer 40% of pool', part.find((r) => r.participantId === 'producer').amountCents === pool * 0.4);
-  ck('commission booked in its OWN bucket', rows.find((r) => r.bucket === 'PLATFORM_COMMISSION').amountCents === 7500);
+  ck('producer 40% of pool (135.80)', part.find((r) => r.participantId === 'producer').amountCents === 13580);
+  ck('commission booked in its OWN bucket', rows.find((r) => r.bucket === 'PLATFORM_COMMISSION').amountCents === commission && commission === 14550);
+  const acc1 = await read('royaltyAccruals/acc_' + ref1);
+  ck('accrual records the Creator policy, 3000/7000 bps, net basis', acc1.policyId === 'creator_ppv_v1' && acc1.commissionBps === 3000 && acc1.poolBps === 7000 && acc1.netCents === net);
+  ck('commission + pool + fee == gross (no cent lost)', acc1.deductions.commissionCents + acc1.poolCents + acc1.deductions.providerFeeCents === 50000);
   ck('provider fee booked in its OWN bucket', rows.find((r) => r.bucket === 'PROVIDER_FEE').amountCents === 1500);
   ck('ledger rows carry version, period, basis', part.every((r) => r.agreementVersion === 1 && r.periodId === '2026-Q3' && r.grossCents === 50000 && r.poolCents === pool));
   ck('NO wallet was credited at sale time', docs('wallets/').length === 0);

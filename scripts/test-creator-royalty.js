@@ -4,7 +4,7 @@
  *   - agreement invariants: integer bps, > 0, ≤ 10000, Σ ≤ 10000, Σ = 10000 to lock,
  *     no duplicate participant / uid+role, registered uid required
  *   - versioning: a lock is never back-dated; the governing version is selected by time
- *   - pool: gross − fee − commission − tax, integer cents, commission capped at the base
+ *   - pool: Creator policy 30/70 of NET (gross − fee − tax), examples A–C, rounding, no bare rate
  *   - allocation: Σ shares == pool EXACTLY for 2,000 random cases (largest remainder)
  *   - ids: deterministic, one per (payment, version, participant); unsafe refs refused
  *   - periods: EAT quarter boundaries; no calculation before period end; distinct approver
@@ -74,22 +74,45 @@ console.log('\n── versioning & lock ──');
   ck('overlapping versions → no version (refusal, not a guess)', R.selectVersionAt([locked1, { ...locked2, effectiveFrom: T0 }], T0 + 10) === null);
 }
 
-console.log('\n── pool ──');
+console.log('\n── pool: Creator 30 / 70 of NET (owner policy 2026-09-26) ──');
 {
-  const bps = R.pctToBps(15);
-  ck('15% → 1500 bps', bps === 1500);
-  ck('non-bps-precise rate refused', code(() => R.pctToBps(15.005)) === 'rate_invalid');
-  ck('rate > 100% refused', code(() => R.pctToBps(101)) === 'rate_invalid');
-  const p = R.computePool({ grossCents: 50000, providerFeeCents: 1500, commissionBps: 1500 });
-  ck('KES 500, fee 15, 15% → commission 7500c, pool 41000c', p.commissionCents === 7500 && p.poolCents === 41000, JSON.stringify(p));
-  ck('components sum to gross', p.providerFeeCents + p.commissionCents + p.taxCents + p.poolCents === p.grossCents);
-  ck('unknown fee refused (fee_indeterminate), never assumed 0', code(() => R.computePool({ grossCents: 100, providerFeeCents: undefined, commissionBps: 1500 })) === 'fee_indeterminate');
-  ck('fractional cents refused', code(() => R.computePool({ grossCents: 100.5, providerFeeCents: 0, commissionBps: 1500 })) === 'amount_invalid');
-  const tiny = R.computePool({ grossCents: 100, providerFeeCents: 95, commissionBps: 1500 });
-  ck('commission capped so pool never negative', tiny.poolCents === 0 && tiny.commissionCents === 5);
-  ck('fee > gross refused', code(() => R.computePool({ grossCents: 100, providerFeeCents: 101, commissionBps: 0 })) === 'deductions_exceed_gross');
-  ck('half-up rounding: 1c × 5000bps → 1c', R.applyBps(1, 5000) === 1);
-  ck('half-up rounding: 1c × 4999bps → 0c', R.applyBps(1, 4999) === 0);
+  const C = require(path.join(__dirname, '..', 'functions', 'shared', 'creator-commercial'));
+  const POL = C.CREATOR_PPV;
+  ck('policy: SOKONI 3000 + pool 7000 == 10000 bps', POL.sokoniCommissionBps === 3000 && POL.creatorPoolBps === 7000 && POL.sokoniCommissionBps + POL.creatorPoolBps === 10000);
+  ck('policy basis is NET of provider fee (not gross)', POL.basis === 'NET_OF_PROVIDER_FEE');
+  ck('policy object is frozen (no runtime mutation)', Object.isFrozen(POL));
+  ck('a policy not summing to 10000 is refused', code(() => C.assertPolicy({ ...POL, creatorPoolBps: 6999 })) === 'policy_invalid');
+  const A = R.computePool({ grossCents: 50000, providerFeeCents: 2000, policy: POL });
+  ck('Example A: 500 − 20 = 480 → SOKONI 144, pool 336', A.netCents === 48000 && A.commissionCents === 14400 && A.poolCents === 33600, JSON.stringify(A));
+  const B = R.computePool({ grossCents: 100000, providerFeeCents: 3000, policy: POL });
+  ck('Example B: 1000 − 30 = 970 → SOKONI 291, pool 679', B.netCents === 97000 && B.commissionCents === 29100 && B.poolCents === 67900, JSON.stringify(B));
+  ck('Example C: fee missing → NOT finalized (fee_indeterminate), never 0', code(() => R.computePool({ grossCents: 50000, providerFeeCents: undefined, policy: POL })) === 'fee_indeterminate');
+  ck('Example C: fee null → NOT finalized', code(() => R.computePool({ grossCents: 50000, providerFeeCents: null, policy: POL })) === 'fee_indeterminate');
+  ck('NOT 70% of gross: pool on 500 gross / 20 fee is 336, not 350', A.poolCents !== 35000);
+  ck('commission + pool == net exactly', A.commissionCents + A.poolCents === A.netCents && B.commissionCents + B.poolCents === B.netCents);
+  const odd = R.computePool({ grossCents: 101, providerFeeCents: 0, policy: POL });
+  ck('minimum unit: 101c → SOKONI 30c (floored), pool 71c', odd.commissionCents === 30 && odd.poolCents === 71);
+  const one = R.computePool({ grossCents: 1, providerFeeCents: 0, policy: POL });
+  ck('1 cent → SOKONI 0c, pool 1c (sub-cent stays with creators)', one.commissionCents === 0 && one.poolCents === 1);
+  let bad = 0, n = 0;
+  for (let g = 1; g <= 5000; g += 7) for (const fee of [0, 1, 3, Math.floor(g / 3)]) {
+    if (fee > g) continue;
+    n++;
+    const r = R.computePool({ grossCents: g, providerFeeCents: fee, policy: POL });
+    const exact10k = (g - fee) * 3000;             /* compare in integer bps-cents, no floats */
+    if (r.commissionCents + r.poolCents !== g - fee || r.commissionCents * 10000 > exact10k || exact10k - r.commissionCents * 10000 >= 10000 || r.poolCents < 0) bad++;
+  }
+  ck(n + ' sales: split exact, SOKONI never over 30%, never ≥1c under', bad === 0, bad + ' bad');
+  ck('fee = gross → net 0, both shares 0', (() => { const z = R.computePool({ grossCents: 500, providerFeeCents: 500, policy: POL }); return z.netCents === 0 && z.commissionCents === 0 && z.poolCents === 0; })());
+  ck('fee > gross refused', code(() => R.computePool({ grossCents: 100, providerFeeCents: 101, policy: POL })) === 'deductions_exceed_gross');
+  ck('fractional cents refused', code(() => R.computePool({ grossCents: 100.5, providerFeeCents: 0, policy: POL })) === 'amount_invalid');
+  ck('no policy → refused (no caller can pass a bare rate)', code(() => R.computePool({ grossCents: 100, providerFeeCents: 0, commissionBps: 1500 })) === 'policy_invalid');
+  ck('forged policy 1500/8500 on a gross basis refused', code(() => R.computePool({ grossCents: 100, providerFeeCents: 0, policy: { sokoniCommissionBps: 1500, creatorPoolBps: 8500, basis: 'GROSS' } })) === 'policy_invalid');
+  ck('Example A pool 336 across the five-party split sums to 336', R.allocate(A.poolCents, FIVE).reduce((t, r) => t + r.amountCents, 0) === 33600);
+  const pr = R.allocate(70000, FIVE); const by = Object.fromEntries(pr.map((r) => [r.participantId, r.amountCents]));
+  ck('pool 700: producer 280 · A 140 · B 105 · director 70 · publisher 105', by.producer === 28000 && by.actorA === 14000 && by.actorB === 10500 && by.director === 7000 && by.publisher === 10500);
+  ck('zero-share participant refused', !R.validateAgreement([P('a', 'creator', 'u1', 10000), P('z', 'actor', 'u2', 0)]).ok);
+  ck('half-up helper still exact for bps math', R.applyBps(1, 5000) === 1 && R.applyBps(1, 4999) === 0);
 }
 
 console.log('\n── allocation (I3) ──');
@@ -202,6 +225,7 @@ console.log('\n── purity ──');
   ck('no clock read (Date.now / new Date())', !/Date\.now|new Date\(\s*\)/.test(src));
   ck('no Math.random', !/Math\.random/.test(src));
   ck('no parseFloat / toFixed money handling', !/parseFloat|toFixed/.test(src));
+  ck('no bare commission rate in the royalty module (0.15 / RATES.ppv / commission-config)', !/0\.15|RATES\.ppv|commission-config/.test(src));
 }
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');

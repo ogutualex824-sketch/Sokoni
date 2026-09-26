@@ -7,8 +7,7 @@
 
    UNITS. Money is INTEGER CENTS (KES minor units). Shares are INTEGER BASIS
    POINTS: 10000 = 100 %. Nothing here multiplies money by a float; the one
-   rate that arrives as a percentage (commission-config RATES.ppv) is converted
-   to basis points once, with a guard, before it touches a cent.
+   commercial split comes from shared/creator-commercial.js as basis points.
 
    INVARIANTS (enforced here, asserted by the suite):
      I1  0 < share ≤ 10000, integer, per participant
@@ -182,20 +181,36 @@ function applyBps(cents, bps) {
 }
 
 /**
- * The authoritative royalty basis for ONE sale, under the approved policy
- * "pool = gross − provider fee − SOKONI commission − tax/levy".
- * Commission is charged on GROSS (the same base the webhook uses for every
- * other sale) and is capped so it can never drive the pool negative.
+ * The authoritative split of ONE Creator sale under the Creator commercial
+ * policy (shared/creator-commercial.js — the ONLY rate input; no caller can
+ * pass a percentage):
+ *
+ *     net        = gross − provider fee − tax/levy
+ *     commission = floor(net × sokoniCommissionBps / 10000)     → SOKONI
+ *     pool       = net − commission                              → creators
+ *
+ * commission + pool == net EXACTLY. Rounding: SOKONI's share is FLOORED to the
+ * cent; any sub-cent remainder stays in the creators' pool (never the other
+ * way). An unknown fee is REFUSED (fee_indeterminate) — never assumed 0.
  */
-function computePool({ grossCents, providerFeeCents, commissionBps, taxCents = 0 }) {
+function computePool({ grossCents, providerFeeCents, taxCents = 0, policy }) {
+  if (!policy || !Number.isSafeInteger(policy.sokoniCommissionBps) || !Number.isSafeInteger(policy.creatorPoolBps)
+      || policy.sokoniCommissionBps + policy.creatorPoolBps !== BPS_TOTAL || policy.basis !== 'NET_OF_PROVIDER_FEE') {
+    throw _err('policy_invalid', 'a Creator commercial policy (integer bps summing to 10000, net basis) is required');
+  }
   if (!_isCents(grossCents) || grossCents === 0) throw _err('amount_invalid', 'grossCents must be a positive integer');
   if (!_isCents(providerFeeCents)) throw _err('fee_indeterminate', 'providerFeeCents must be a known non-negative integer');
   if (!_isCents(taxCents)) throw _err('amount_invalid', 'taxCents must be a non-negative integer');
   if (providerFeeCents + taxCents > grossCents) throw _err('deductions_exceed_gross', 'fee + tax exceed gross');
-  const nominal = applyBps(grossCents, commissionBps);
-  const commissionCents = Math.min(nominal, grossCents - providerFeeCents - taxCents);
-  const poolCents = grossCents - providerFeeCents - taxCents - commissionCents;
-  return { grossCents, providerFeeCents, taxCents, commissionBps, commissionCents, poolCents };
+  const netCents = grossCents - providerFeeCents - taxCents;
+  const commissionCents = Math.floor((netCents * policy.sokoniCommissionBps) / BPS_TOTAL);
+  const poolCents = netCents - commissionCents;
+  return {
+    grossCents, providerFeeCents, taxCents, netCents,
+    policyId: policy.policyId || null,
+    commissionBps: policy.sokoniCommissionBps, poolBps: policy.creatorPoolBps,
+    commissionCents, poolCents,
+  };
 }
 
 /**

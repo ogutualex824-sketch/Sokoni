@@ -7,7 +7,9 @@
      price/intent  payment-purposes `film_access` → createPaymentIntent
      collection    the existing IntaSend rail + webhookIntasend
      entitlement   entitlement-engine `film_access` adapter → contentEntitlements
-     commission    commission-config RATES.ppv (the rate already charged for PPV)
+     commission    shared/creator-commercial.js — Creator PPV 30 % SOKONI / 70 % pool
+                   of NET (owner, 2026-09-26). NOT commission-config: Creator is its
+                   own commercial vertical and must never move the marketplace rate.
      wallet        wallets/{uid}.balance — released quarterly, withdrawn through
                    the existing requestSellerPayout → payoutRequests → B2C
      refund        fosSubmitRefund / fosApproveRefund → onFilmRefundProcessed
@@ -605,14 +607,13 @@ async function accrueRoyalty(paymentRef, opts = {}) {
     await _exception(ref, 'fee_unreported', 'provider did not report charges or net amount; accrual withheld');
     return { withheld: 'fee_unreported' };
   }
-  const rate = require('./commission-config').RATES.ppv;
-  const commissionBps = _rule(() => R.pctToBps(rate.pct));
+  const policy = require('./shared/creator-commercial').policyFor(intent);
   const grossCents = Number(intent.amountCents);
   const filmId = String(intent.resourceId);
   const recognisedAtMs = _ms(payment.webhookReceivedAt) || _ms(payment.updatedAt) || _clock();
 
   let pool;
-  try { pool = R.computePool({ grossCents, providerFeeCents: fee.cents, commissionBps, taxCents: 0 }); }
+  try { pool = R.computePool({ grossCents, providerFeeCents: fee.cents, taxCents: 0, policy }); }
   catch (e) { await _exception(ref, 'pool_invalid', `${e.code}: ${e.message}`); return { withheld: e.code }; }
 
   try {
@@ -638,10 +639,10 @@ async function accrueRoyalty(paymentRef, opts = {}) {
       /* ── writes ── */
       const base = { paymentRef: ref, accrualId: accRef.id, filmId, creatorUid: (intent.metadata || {}).creatorUid || null,
         agreementVersion: version.version, currency: intent.currency, periodId: period.periodId, recognisedLate: late,
-        grossCents, deductions: { providerFeeCents: pool.providerFeeCents, commissionCents: pool.commissionCents, taxCents: pool.taxCents },
+        grossCents, netCents: pool.netCents, deductions: { providerFeeCents: pool.providerFeeCents, commissionCents: pool.commissionCents, taxCents: pool.taxCents },
         poolCents: pool.poolCents, status: 'RECOGNISED', createdAt: FieldValue.serverTimestamp() };
       txn.create(accRef, {
-        ...base, status: 'ACCRUED', commissionBps, feeSource: fee.source, refundedCents: 0,
+        ...base, status: 'ACCRUED', policyId: pool.policyId, commissionBps: pool.commissionBps, poolBps: pool.poolBps, feeSource: fee.source, refundedCents: 0,
         participantCount: shares.length, buyerUid: intent.ownerUid || intent.uid, source: opts.source || 'unknown',
       });
       const L = _db().collection(COL.LEDGER);
@@ -651,7 +652,7 @@ async function accrueRoyalty(paymentRef, opts = {}) {
           participantId: s.participantId, participantType: s.participantType, uid: s.uid, bps: s.bps, amountCents: s.amountCents });
       }
       txn.create(L.doc(R.bucketEntryId(ref, R.BUCKET.PLATFORM_COMMISSION)), { ...base, entryId: R.bucketEntryId(ref, R.BUCKET.PLATFORM_COMMISSION),
-        kind: R.ENTRY_KIND.EARN, bucket: R.BUCKET.PLATFORM_COMMISSION, uid: null, bps: commissionBps, amountCents: pool.commissionCents });
+        kind: R.ENTRY_KIND.EARN, bucket: R.BUCKET.PLATFORM_COMMISSION, uid: null, bps: pool.commissionBps, policyId: pool.policyId, amountCents: pool.commissionCents });
       txn.create(L.doc(R.bucketEntryId(ref, R.BUCKET.PROVIDER_FEE)), { ...base, entryId: R.bucketEntryId(ref, R.BUCKET.PROVIDER_FEE),
         kind: R.ENTRY_KIND.EARN, bucket: R.BUCKET.PROVIDER_FEE, uid: null, bps: null, amountCents: pool.providerFeeCents, feeSource: fee.source });
       return { accrued: true, periodId: period.periodId, poolCents: pool.poolCents, participants: shares.length, version: version.version };

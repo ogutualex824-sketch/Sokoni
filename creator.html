@@ -211,7 +211,7 @@
          server's, never the page's. */
       const intent = (await httpsCallable(fn, 'createPaymentIntent')({ purpose: 'film_access', filmId: f.filmId, phone })).data;
       m.textContent = 'Sending the M-PESA prompt…';
-      await httpsCallable(fn, 'initiateSTKPush')({ phone, ref: intent.ref, amount: intent.amount, meta: { category: 'ppv', type: 'film_access' } });
+      await httpsCallable(fn, 'initiateSTKPush')({ phone, ref: intent.ref, amount: intent.amount, meta: { type: 'film_access' } });
       m.textContent = '📲 Enter your M-PESA PIN on your phone. Access appears here once the payment is confirmed.';
       /* Wait for SERVER truth (entitlement), not for the prompt or a redirect. */
       const until = Date.now() + 180000;
