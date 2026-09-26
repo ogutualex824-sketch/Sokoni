@@ -374,7 +374,7 @@ exports.searchEvents = onCall(CF_OPTS, async (req) => {
    ────────────────────────────────────────────────────────────────────── */
 exports.createTicketTier = onCall(CF_OPTS, async (req) => {
   const uid = requireAuth(req);
-  const { eventId, name, price, quantity, description, perks, saleEndsAt, sortOrder } = req.data;
+  const { eventId, name, price, quantity, description, perks, saleEndsAt, sortOrder, saleStartsAt, maxPerBuyer } = req.data;
 
   if (!eventId || !name || price == null || !quantity) {
     throw new HttpsError('invalid-argument', 'eventId, name, price, quantity required');
@@ -391,10 +391,27 @@ exports.createTicketTier = onCall(CF_OPTS, async (req) => {
   const parsedQty = parseInt(quantity, 10);
   if (parsedQty < 1) throw new HttpsError('invalid-argument', 'Quantity must be at least 1');
 
-  const ref = db().collection('eventTicketTiers').doc();
-  const batch = db().batch();
+  const _maxPer = maxPerBuyer == null || maxPerBuyer === '' ? null : parseInt(maxPerBuyer, 10);
+  if (_maxPer != null && !(_maxPer >= 1 && _maxPer <= 20)) throw new HttpsError('invalid-argument', 'Maximum per buyer must be 1-20');
+  const _start = saleStartsAt ? new Date(saleStartsAt) : null;
+  const _end = saleEndsAt ? new Date(saleEndsAt) : null;
+  if ((_start && isNaN(_start)) || (_end && isNaN(_end))) throw new HttpsError('invalid-argument', 'Invalid sale window');
+  if (_start && _end && _end <= _start) throw new HttpsError('invalid-argument', 'Sales must end after they start');
 
-  batch.set(ref, {
+  const ref = db().collection('eventTicketTiers').doc();
+  /* Capacity is enforced in a TRANSACTION: two tiers created at once must not each see the old
+     total and together exceed the venue's capacity. */
+  await db().runTransaction(async (txn) => {
+    const [evNow, tiersNow] = await Promise.all([
+      txn.get(db().collection('events').doc(eventId)),
+      txn.get(db().collection('eventTicketTiers').where('eventId', '==', eventId)),
+    ]);
+    const cap = evNow.data().capacity;
+    const allocated = tiersNow.docs.reduce((a, d) => a + (d.data().isActive === false ? 0 : Number(d.data().quantity) || 0), 0);
+    if (cap && allocated + parsedQty > cap) {
+      throw new HttpsError('failed-precondition', `Ticket quantities would exceed the event capacity (${cap}); ${Math.max(0, cap - allocated)} left to allocate.`);
+    }
+    txn.set(ref, {
     tierId: ref.id,
     eventId,
     organizerUid: uid,
@@ -405,19 +422,19 @@ exports.createTicketTier = onCall(CF_OPTS, async (req) => {
     sold: 0,
     description: sanitize(description, 500),
     perks: Array.isArray(perks) ? perks.slice(0, 10).map(p => sanitize(p, 100)) : [],
-    saleEndsAt: saleEndsAt ? new Date(saleEndsAt).toISOString() : null,
+    saleEndsAt: _end ? _end.toISOString() : null,
+    saleStartsAt: _start ? _start.toISOString() : null,
+    maxPerBuyer: _maxPer,
     sortOrder: parseInt(sortOrder, 10) || 0,
     isActive: true,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
+    });
+    txn.update(db().collection('events').doc(eventId), {
+      ticketTiersCount: FieldValue.increment(1),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
   });
-
-  batch.update(db().collection('events').doc(eventId), {
-    ticketTiersCount: FieldValue.increment(1),
-    updatedAt: FieldValue.serverTimestamp(),
-  });
-
-  await batch.commit();
   return { tierId: ref.id };
 });
 
@@ -426,7 +443,7 @@ exports.createTicketTier = onCall(CF_OPTS, async (req) => {
    ────────────────────────────────────────────────────────────────────── */
 exports.updateTicketTier = onCall(CF_OPTS, async (req) => {
   const uid = requireAuth(req);
-  const { tierId, name, description, perks, saleEndsAt, isActive, sortOrder } = req.data;
+  const { tierId, name, description, perks, saleEndsAt, isActive, sortOrder, saleStartsAt, maxPerBuyer } = req.data;
   if (!tierId) throw new HttpsError('invalid-argument', 'tierId required');
 
   const ref = db().collection('eventTicketTiers').doc(tierId);
@@ -442,6 +459,12 @@ exports.updateTicketTier = onCall(CF_OPTS, async (req) => {
   if (saleEndsAt != null) updates.saleEndsAt = saleEndsAt ? new Date(saleEndsAt).toISOString() : null;
   if (isActive != null) updates.isActive = Boolean(isActive);
   if (sortOrder != null) updates.sortOrder = parseInt(sortOrder, 10) || 0;
+  if (saleStartsAt !== undefined) updates.saleStartsAt = saleStartsAt ? new Date(saleStartsAt).toISOString() : null;
+  if (maxPerBuyer !== undefined) {
+    const m = maxPerBuyer == null || maxPerBuyer === '' ? null : parseInt(maxPerBuyer, 10);
+    if (m != null && !(m >= 1 && m <= 20)) throw new HttpsError('invalid-argument', 'Maximum per buyer must be 1-20');
+    updates.maxPerBuyer = m;
+  }
 
   await ref.update(updates);
   return { ok: true };
@@ -473,6 +496,9 @@ exports.purchaseTickets = onCall({ ...CF_OPTS, secrets: [require('./event-ops').
   if (!tier.isActive) throw new HttpsError('failed-precondition', 'This tier is no longer available');
   if (tier.saleEndsAt && new Date(tier.saleEndsAt) < new Date()) {
     throw new HttpsError('failed-precondition', 'Ticket sales for this tier have ended');
+  }
+  if (tier.saleStartsAt && new Date(tier.saleStartsAt) > new Date()) {
+    throw new HttpsError('failed-precondition', 'Ticket sales for this tier have not started');
   }
 
   const evSnap = await db().collection('events').doc(tier.eventId).get();
@@ -541,6 +567,20 @@ exports.purchaseTickets = onCall({ ...CF_OPTS, secrets: [require('./event-ops').
     const td = freshTier.data();
     const available = td.quantity - td.sold;
     if (available < qty) throw new HttpsError('resource-exhausted', `Only ${available} ticket(s) remaining`);
+    /* Event capacity and the per-buyer limit, read INSIDE the transaction so concurrent checkouts
+       cannot each pass a stale count. Unpaid orders count while they hold seats. */
+    const freshEv = await t.get(db().collection('events').doc(tier.eventId));
+    const cap = freshEv.data().capacity;
+    if (cap && (Number(freshEv.data().totalTicketsSold) || 0) + qty > cap) {
+      throw new HttpsError('resource-exhausted', 'This event is at capacity');
+    }
+    if (td.maxPerBuyer) {
+      const mine = await t.get(db().collection('eventOrders').where('buyerUid', '==', uid).where('tierId', '==', tierId));
+      const held = mine.docs.reduce((a, d) => a + (['paid', 'pending_payment'].includes(d.data().status) ? Number(d.data().quantity) || 0 : 0), 0);
+      if (held + qty > td.maxPerBuyer) {
+        throw new HttpsError('resource-exhausted', `At most ${td.maxPerBuyer} ticket(s) of this type per buyer`);
+      }
+    }
 
     const orderRef = db().collection('eventOrders').doc(orderId);
     t.set(orderRef, {
@@ -1024,17 +1064,20 @@ exports.autoEndEvents = onSchedule({
   timeZone: 'Africa/Nairobi',
   region: REGION,
 }, async () => {
+  /* An event ends at its END time (endDate; startDate only when no end is set). This used to end
+     every event the hour it STARTED — which would stop door sales and PIN admission mid-event. */
   const now = new Date().toISOString();
   const snap = await db().collection('events')
     .where('status', '==', 'live')
     .where('startDate', '<', now)
-    .limit(100)
+    .limit(200)
     .get();
 
-  if (snap.empty) return;
+  const due = snap.docs.filter((doc) => { const e = doc.data(); return String(e.endDate || e.startDate) < now; });
+  if (!due.length) return;
 
   const batch = db().batch();
-  snap.docs.forEach(doc => {
+  due.forEach(doc => {
     batch.update(doc.ref, {
       status: 'ended',
       endedAt: FieldValue.serverTimestamp(),
@@ -1042,7 +1085,7 @@ exports.autoEndEvents = onSchedule({
     });
   });
   await batch.commit();
-  console.log(`[autoEndEvents] Ended ${snap.size} events`);
+  console.log(`[autoEndEvents] Ended ${due.length} events`);
 });
 
 module.exports = {

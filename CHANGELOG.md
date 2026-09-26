@@ -1,3 +1,27 @@
+## 2026-09-27 (195) — Events ops P2: cashier Quick Sale (cash / external card / cashier IntaSend), door-sale commission receivables
+
+- **No ticket sale outside SOKONI:** `eventQuickSale` (eventOpsDispatch) — a named, event-scoped cashier
+  sells; the SERVER prices the lines; sale key claimed once (bound to the actor); inventory + event
+  capacity decremented in the same transaction (6 concurrent sales for 3 seats → exactly 3).
+  · **cash**: cash received ≥ total, change computed; tickets + PINs issued at once (walk-in, soldBy).
+  · **card_external**: organizer-held terminal — provider + reference + amount == total, reference claimed
+    once per organizer (duplicate refused); operator-attested (paymentVerified:false). No reference →
+    PENDING_EXTERNAL (seats held, no tickets) until confirmed, cancelled, or expired (30 min).
+  · **intasend**: creates an event ORDER paid through the canonical createPaymentIntent → STK → activation;
+    tickets stay walk-in; the sale completes on activation. No second payment rail.
+- **Money:** door sales carry SOKONI's 3 % as `eventCommissionReceivables` (the organizer holds the cash) +
+  a `receivable` commissionLedger row; `releaseOne` nets outstanding receivables (oldest first, partial
+  allowed) before crediting the organizer. Rate from commercial-policy `event_ticket` — never POS 5 %.
+- **Inventory rules:** tiers gain `saleStartsAt` + `maxPerBuyer`; tier creation enforces event capacity in a
+  transaction; `purchaseTickets` enforces sale start, per-buyer limit and capacity inside its transaction.
+- **Fix:** `autoEndEvents` ended every event the hour it STARTED (would stop door sales / admission mid-event)
+  — now ends at `endDate`.
+- **Visibility:** `eventSaleTickets` gives walk-in PINs only to the selling cashier (or organizer/manager);
+  `eventListSales` — cashier sees own sales, organizer all by tender.
+- **Files:** `functions/event-sales.js` (new), `functions/{event-ops,event-settlement,event-hub}.js`,
+  `firestore.rules` (+build), `firestore.indexes.json`, `scripts/test-event-sales.js` (new, 46/0).
+  Regression: event-ops 50 · events 84 · registry 65 · creator hub 260 · rules 34 — all 0 failed. **Not deployed.**
+
 ## 2026-09-27 (194) — Events ops P1: ticket PINs, event-scoped temporary staff, PIN admission; two fixes
 
 - **Ticket identity (PIN first, QR optional):** every ticket gets `SK-EVT-XXXXXX` + an 8-char PIN

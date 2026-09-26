@@ -382,7 +382,7 @@ const _h = {
 /* One Cloud Run service for all event-day operations (ops routed by name), like the other dispatchers. */
 const eventOpsDispatch = onCall(OPS_OPTS(), async (req) => {
   const op = String((req.data || {}).op || '');
-  const h = _h[op];
+  const h = _h[op] || require('./event-sales')._h[op];
   if (!h) fail('not-found', `Unknown event operation "${op}".`);
   return h(req);
 });

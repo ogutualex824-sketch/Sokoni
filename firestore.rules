@@ -4616,6 +4616,14 @@ service cloud.firestore {
     match /eventAdmissions/{ticketId}    { allow read: if isAdmin(); allow write: if false; }
     match /eventPinAttempts/{key}        { allow read, write: if false; }
     match /eventOpsAudit/{entryId}       { allow read: if isAdmin(); allow write: if false; }
+    // Event-day cashier sales (functions/event-sales.js). Every door sale, card reference and
+    // commission receivable is server-written: a client that could write one could manufacture a
+    // "paid" ticket or erase what an organizer owes. Organizers read their own receivables through
+    // the dashboard callables; admins may read directly.
+    match /eventSales/{saleId}                  { allow read: if isAdmin(); allow write: if false; }
+    match /eventSaleClaims/{claimId}            { allow read, write: if false; }
+    match /eventCardRefClaims/{refId}           { allow read: if isAdmin(); allow write: if false; }
+    match /eventCommissionReceivables/{saleId}  { allow read: if isAdmin(); allow write: if false; }
     match /eventPromoCodes/{codeId} {
       allow read:  if isAuthed();
       allow write: if false;

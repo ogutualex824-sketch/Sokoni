@@ -161,7 +161,7 @@ const eventTicketAdapter = {
           attendeeName: o.attendeeName || null, attendeeEmail: o.attendeeEmail || null,
           status: 'valid', checkedIn: false, checkedInAt: null, checkedInBy: null, seatNumber: null,
           paymentRef: ctx.paymentRef, createdAt: FieldValue.serverTimestamp(),
-          ...OPS.issueCredentials(txn, { eventId: o.eventId, ticketId: tRef.id, buyerUid: o.buyerUid, soldBy: o.soldBy || null }),
+          ...OPS.issueCredentials(txn, { eventId: o.eventId, ticketId: tRef.id, buyerUid: o.channel === 'cashier' ? null : o.buyerUid, soldBy: o.soldBy || null }),
         });
       }
     } else {
@@ -169,8 +169,13 @@ const eventTicketAdapter = {
          the activation transaction (event-ops.issueCredentials), never at reservation time. */
       tixSnap.docs.forEach((d) => txn.update(d.ref, {
         status: 'valid', paymentRef: ctx.paymentRef, validatedAt: FieldValue.serverTimestamp(),
-        ...(d.data().pinHash ? {} : OPS.issueCredentials(txn, { eventId: o.eventId, ticketId: d.id, buyerUid: o.buyerUid, soldBy: o.soldBy || null })),
+        ...(d.data().pinHash ? {} : OPS.issueCredentials(txn, { eventId: o.eventId, ticketId: d.id, buyerUid: o.channel === 'cashier' ? null : o.buyerUid, soldBy: o.soldBy || null })),
       }));
+    }
+    /* A cashier-assisted IntaSend sale (event-sales) completes with its order. */
+    if (o.saleId) {
+      txn.update(db.collection('eventSales').doc(String(o.saleId)), { status: 'COMPLETED', paymentRef: ctx.paymentRef,
+        ticketIds: tixSnap.empty ? [] : tixSnap.docs.map((x) => x.id), completedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
     }
     if (wasExpired && tierSnap.exists) {
       const td = tierSnap.data();
@@ -332,8 +337,24 @@ async function releaseOne(paymentRef, opts = {}) {
     if (!oSnap.exists || oSnap.data().status !== 'paid') return { skipped: `order_${oSnap.exists ? oSnap.data().status : 'missing'}` };
     if (!s.organizerUid) return { skipped: 'no_organizer' };
 
-    const shillings = Math.floor(Math.max(0, Number(s.organizerNetCents) || 0) / 100);
-    const remainder = Math.max(0, Number(s.organizerNetCents) || 0) - shillings * 100;
+    /* Door sales (cash / organizer-held card terminal) left SOKONI's 3 % as a RECEIVABLE with the
+       organizer (event-sales). Before paying the organizer, net it off — oldest first — so cash
+       collected at the door cannot leave SOKONI's commission uncollected. Read before any write. */
+    const recSnap = await txn.get(db.collection('eventCommissionReceivables')
+      .where('organizerUid', '==', s.organizerUid).where('status', '==', 'OUTSTANDING').limit(50));
+    const recs = recSnap.docs.slice().sort((a, b) => (_ms(a.data().createdAt) || 0) - (_ms(b.data().createdAt) || 0));
+    let payableCents = Math.max(0, Number(s.organizerNetCents) || 0);
+    const netted = [];
+    for (const r of recs) {
+      if (payableCents <= 0) break;
+      const owed = (Number(r.data().amountCents) || 0) - (Number(r.data().collectedCents) || 0);
+      if (owed <= 0) continue;
+      const take = Math.min(owed, payableCents);
+      payableCents -= take;
+      netted.push({ ref: r.ref, id: r.id, take, closes: take === owed });
+    }
+    const shillings = Math.floor(payableCents / 100);
+    const remainder = payableCents - shillings * 100;
     const wRef = db.collection(COL.WALLETS).doc(s.organizerUid);
     const txRef = db.collection(COL.WALLET_TX).doc(`${s.organizerUid}_${paymentRef}_event`);
     const wSnap = await txn.get(wRef);
@@ -346,7 +367,13 @@ async function releaseOne(paymentRef, opts = {}) {
         createdAt: FieldValue.serverTimestamp(),
       });
     }
+    for (const n of netted) {
+      txn.update(n.ref, { collectedCents: FieldValue.increment(n.take), status: n.closes ? 'COLLECTED' : 'OUTSTANDING',
+        collectedFrom: FieldValue.arrayUnion(paymentRef), updatedAt: FieldValue.serverTimestamp() });
+      if (n.closes) txn.set(db.collection(COL.COMMISSION).doc(`evt_${n.id}`), { status: 'collected', collectedAt: FieldValue.serverTimestamp() }, { merge: true });
+    }
     txn.update(setRef, {
+      doorCommissionNettedCents: netted.reduce((a, n) => a + n.take, 0), nettedReceivables: netted.map((n) => n.id),
       status: SETTLEMENT.RELEASED, releasedAt: FieldValue.serverTimestamp(), creditedKES: shillings,
       roundingRemainderCents: remainder, walletTxId: shillings > 0 ? txRef.id : null,
       releasedBy: opts.actorUid || 'schedule', updatedAt: FieldValue.serverTimestamp(),
@@ -391,6 +418,7 @@ async function expireOne(orderId, opts = {}) {
     }
     const qty = Math.max(0, Number(o.quantity) || 0);
     txn.update(orderRef, { status: 'expired', expiredAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    if (o.saleId) txn.update(db.collection('eventSales').doc(String(o.saleId)), { status: 'EXPIRED', updatedAt: FieldValue.serverTimestamp() });
     tixSnap.docs.forEach((d) => txn.update(d.ref, { status: 'void', voidReason: 'unpaid_order_expired' }));
     if (qty > 0) {
       txn.update(db.collection(COL.TIERS).doc(String(o.tierId)), { sold: FieldValue.increment(-qty), updatedAt: FieldValue.serverTimestamp() });
@@ -409,7 +437,9 @@ const eventExpireUnpaidOrders = onSchedule({ schedule: 'every 15 minutes', timeZ
     try { const r = await expireOne(d.id); if (r.expired) expired++; } // eslint-disable-line no-await-in-loop
     catch (e) { logger.error('[eventSettlement] expiry failed', { orderId: d.id, err: e.message }); }
   }
-  logger.info('[eventSettlement] expiry sweep', { scanned: snap.size, expired });
+  let pendingCard = 0;
+  try { pendingCard = await require('./event-sales').expirePendingSales(); } catch (e) { logger.error('[eventSettlement] pending card sweep failed', { err: e.message }); }
+  logger.info('[eventSettlement] expiry sweep', { scanned: snap.size, expired, pendingCardExpired: pendingCard });
 });
 
 /* ═══ REFUND HOOK (called by financial-os after a refund settles) ═══════════════════════ */
