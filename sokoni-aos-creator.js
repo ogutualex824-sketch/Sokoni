@@ -143,17 +143,41 @@
           <button class="aos-btn${c.purchasesEnabled ? ' aos-btn-ghost' : ''}" data-a="cfg-purchases" data-to="${c.purchasesEnabled ? '0' : '1'}">${c.purchasesEnabled ? 'Close purchases' : 'Open purchases'}</button>
           <h4>Card &amp; other methods (IntaSend hosted checkout)</h4>
           <p>Status: <b>${c.hostedCheckoutEnabled ? 'ON for films' : 'OFF'}</b></p>
-          <p class="aos-muted">Turn on only after scripts/probe-intasend-capability.js has proven the live account (needs the INTASEND_PUBLIC_KEY secret). Buyers then see whatever methods the account has enabled.</p>
+          <p class="aos-muted">Opens only when at least one method below is LIVE_AND_PROVEN with evidence — the server refuses otherwise. Buyers are offered the PROVEN methods only.</p>
+          ${c.hostedCheckoutSwitch && !c.hostedCheckoutEnabled ? '<p class="aos-muted"><b>Switch is on, but no method is proven — buyers see M-PESA only.</b></p>' : ''}
           <button class="aos-btn aos-btn-ghost" data-a="cfg-hosted" data-to="${c.hostedCheckoutEnabled ? '0' : '1'}">${c.hostedCheckoutEnabled ? 'Turn hosted checkout off' : 'Turn hosted checkout on'}</button>
           <h4>Guest checkout (buy without an account)</h4>
           <p>Status: <b>${c.guestCheckoutEnabled ? 'ON' : 'OFF'}</b></p>
           <p class="aos-muted">Needs Firebase Anonymous Auth, which is a PLATFORM-WIDE change: anonymous users would pass every "signed-in" rule and callable. Keep OFF until that decision is made.</p>
           <button class="aos-btn aos-btn-ghost" data-a="cfg-guest" data-to="${c.guestCheckoutEnabled ? '0' : '1'}">${c.guestCheckoutEnabled ? 'Turn guest checkout off' : 'Turn guest checkout on'}</button>
-          <h4>Verified checkout methods</h4>
-          <p class="aos-muted">Only methods verified against the LIVE IntaSend account (scripts/probe-intasend-capability.js) may be named to buyers.</p>
-          <form class="aoscr-inline" data-f="cfg-methods"><input name="methods" value="${esc((c.checkoutMethods || []).join(', '))}" placeholder="M-PESA, CARD-PAYMENT"> <button class="aos-btn">Save (super admin)</button></form>`;
+          <h4>Payment methods offered to buyers</h4>
+          <p>${(c.checkoutMethods || []).length ? c.checkoutMethods.map(esc).join(' · ') : '—'}</p>
+          ${await capabilitySection()}`;
       },
     };
+
+    /* IntaSend method capability — the evidence record behind every method a
+       buyer is offered. Listed for every admin; the server lets only a Super
+       Admin record, and requires evidence for LIVE_AND_PROVEN / UNSUPPORTED. */
+    async function capabilitySection() {
+      let r;
+      try { r = await call('creatorAdminPaymentCapability', {}); }
+      catch (e) { return '<p class="aos-muted">Capability record unavailable: ' + esc(e.message) + '</p>'; }
+      const rows = (r.methods || []).map((m) => `<tr><td class="aos-mono">${esc(m.method)}</td><td>${esc(m.label)}</td><td>${chip(m.status)}</td>
+        <td>${m.evidence ? esc(m.evidence.type) + ' · <span class="aos-mono">' + esc(m.evidence.reference) + '</span>' : '—'}</td><td>${esc(m.note || '—')}</td><td class="aos-mono">${esc(m.recordedBy || '—')}</td><td>${when(m.recordedAtMs)}</td></tr>`).join('');
+      const opt = (xs) => xs.map((x) => `<option value="${esc(x)}">${esc(x)}</option>`).join('');
+      return `<h4>IntaSend method capability (live account)</h4>
+        <p class="aos-muted">IntaSend has no read-only "enabled methods" endpoint. Evidence is a COMPLETE invoice on the live account for that method, a live probe session, or IntaSend's written confirmation. Nothing is offered on the strength of a name in code.</p>
+        <div class="aos-table-wrap"><table class="aos-table"><thead><tr><th>Method</th><th></th><th>Status</th><th>Evidence</th><th>Note</th><th>By</th><th>When</th></tr></thead><tbody>${rows}</tbody></table></div>
+        <form class="aoscr-inline" data-f="cfg-capability">
+          <select name="method" aria-label="Method" required>${opt((r.methods || []).map((m) => m.method))}</select>
+          <select name="status" aria-label="Status" required>${opt(r.statuses || [])}</select>
+          <select name="evType" aria-label="Evidence type"><option value="">(no evidence)</option>${opt(Object.keys(r.evidenceTypes || {}))}</select>
+          <input name="evRef" aria-label="Evidence reference" placeholder="invoice / probe / ticket ref" maxlength="120">
+          <input name="note" aria-label="What was checked" placeholder="What was checked (min 20 chars)" required minlength="20" maxlength="1000">
+          <button class="aos-btn">Record (super admin)</button>
+        </form>`;
+    }
 
     async function detailVerification(uid) {
       const d = await call('creatorAdminVerificationDetail', { uid });
@@ -251,7 +275,8 @@
       ev.preventDefault();
       const v = Object.fromEntries(new FormData(f).entries());
       if (f.dataset.f === 'per-calc-new') act('creatorAdminCalculatePeriod', { periodId: v.periodId.trim() }, 'Quarter calculated.');
-      if (f.dataset.f === 'cfg-methods') act('creatorAdminConfig', { set: { checkoutMethods: v.methods.split(',').map((s) => s.trim()).filter(Boolean) } }, 'Saved.');
+      if (f.dataset.f === 'cfg-capability') act('creatorAdminPaymentCapability', { set: { method: v.method, status: v.status, note: v.note,
+        ...(v.evType ? { evidence: { type: v.evType, reference: (v.evRef || '').trim() } } : {}) } }, 'Capability recorded.');
       if (f.dataset.f === 'revoke') ask('Reason for revoking this entitlement:', (r) => act('creatorAdminRevokeEntitlement', { paymentRef: v.paymentRef.trim(), reason: r }, 'Entitlement revoked.'));
       if (f.dataset.f === 'ledger') {
         const q = {}; for (const k of ['filmId', 'uid', 'paymentRef', 'periodId']) if (v[k] && v[k].trim()) q[k] = v[k].trim();
@@ -275,7 +300,7 @@
     'creatorAdminLockAgreement', 'creatorAdminLedger', 'creatorAdminPeriods', 'creatorAdminCalculatePeriod', 'creatorAdminApprovePeriod',
     'creatorAdminDistribute', 'creatorAdminClosePeriod', 'creatorAdminSetPayoutHold', 'creatorAdminStatements', 'creatorAdminSecurityEvents',
     'creatorAdminExceptions', 'creatorAdminRetryAccrual', 'creatorAdminAttestFee', 'creatorAdminRevokeEntitlement', 'creatorAdminConfig',
-    'creatorAdminVerifications', 'creatorAdminVerificationDetail', 'creatorAdminVerificationDecision'];
+    'creatorAdminVerifications', 'creatorAdminVerificationDetail', 'creatorAdminVerificationDecision', 'creatorAdminPaymentCapability'];
 
   root.SokoniAOSCreator = { mount, OPS, _kes: kes, _pct: pct, _esc: esc };
 }(typeof window !== 'undefined' ? window : globalThis));

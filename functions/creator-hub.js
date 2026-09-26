@@ -41,6 +41,7 @@ const crypto = require('crypto');
 
 const R  = require('./shared/creator-royalty');
 const P  = require('./shared/creator-publishing');
+const PCAP = require('./shared/payment-capability');
 const W  = require('./shared/creator-watermark');
 const AC = require('./admin-claim');
 
@@ -96,15 +97,28 @@ async function _adminAudit(action, actorUid, details) {
 }
 
 async function _config() {
-  const [s, hc] = await Promise.all([_db().collection(COL.CONFIG).doc('creatorHub').get(), _db().collection(COL.CONFIG).doc('hostedCheckout').get()]);
+  const [s, hc, cap] = await Promise.all([
+    _db().collection(COL.CONFIG).doc('creatorHub').get(),
+    _db().collection(COL.CONFIG).doc('hostedCheckout').get(),
+    _db().collection(COL.CONFIG).doc(PCAP.RECORD).get(),
+  ]);
   const d = s.exists ? s.data() : {};
   const h = hc.exists ? hc.data() : {};
+  const capRecord = cap.exists ? cap.data() : null;
+  const proven = PCAP.provenHostedMethods(capRecord);
+  const hostedSwitch = h.enabled === true && Array.isArray(h.purposes) && h.purposes.includes(PURPOSE);
+  const hostedOn = hostedSwitch && proven.length > 0;
   return {
     purchasesEnabled: d.purchasesEnabled === true,
-    /* Methods VERIFIED against the live IntaSend account (probe-intasend-capability).
-       Only these are named to buyers; an empty list means "not verified yet". */
-    checkoutMethods: Array.isArray(d.checkoutMethods) ? d.checkoutMethods.map(String).slice(0, 12) : [],
-    checkoutMethodsVerifiedAt: d.checkoutMethodsVerifiedAt || null,
+    /* What a buyer may be offered (§8). M-PESA by STK push is the platform's
+       live collection rail. Every hosted-checkout method comes ONLY from
+       config/intasendCapability entries a Super Admin recorded as
+       LIVE_AND_PROVEN with evidence (shared/payment-capability). The old
+       free-text config/creatorHub.checkoutMethods is no longer read: it could
+       name a method with no evidence behind it. */
+    checkoutMethods: [...new Set(['M-PESA', ...(hostedOn ? proven : [])])],
+    hostedMethods: hostedOn ? proven : [],
+    capability: PCAP.classify(capRecord),
     /* Guest (anonymous) checkout. OFF by default and BLOCKED on a platform
        decision: enabling Firebase Anonymous Auth lets anonymous tokens satisfy
        every isAuthed() rule and req.auth-only callable platform-wide
@@ -113,7 +127,8 @@ async function _config() {
     /* Hosted checkout (card, Google/Apple Pay, PesaLink… whatever the ACCOUNT
        has enabled) is a platform switch in config/hostedCheckout, opened for
        film_access only after the capability probe. */
-    hostedCheckoutEnabled: h.enabled === true && Array.isArray(h.purposes) && h.purposes.includes(PURPOSE),
+    hostedCheckoutEnabled: hostedOn,
+    hostedCheckoutSwitch: hostedSwitch,
   };
 }
 
@@ -477,6 +492,8 @@ async function catalogGet(req) {
       guestCheckout: cfg.guestCheckoutEnabled,
       hostedCheckout: cfg.hostedCheckoutEnabled,
       verifiedMethods: cfg.checkoutMethods,
+      methods: [{ method: 'M-PESA', label: 'M-PESA', rail: 'stk' }]
+        .concat(cfg.hostedMethods.map((m) => ({ method: m, label: PCAP.LABELS[m], rail: 'hosted_checkout' }))),
       currency: f.currency,
     },
   };
@@ -1477,6 +1494,12 @@ _adminH.creatorAdminConfig = async (req) => {
     if (typeof d.set.purchasesEnabled === 'boolean') patch.purchasesEnabled = d.set.purchasesEnabled;
     if (typeof d.set.guestCheckoutEnabled === 'boolean') patch.guestCheckoutEnabled = d.set.guestCheckoutEnabled;
     if (typeof d.set.hostedCheckout === 'boolean') {
+      if (d.set.hostedCheckout) {
+        const cap = await _db().collection(COL.CONFIG).doc(PCAP.RECORD).get();
+        if (!PCAP.provenHostedMethods(cap.exists ? cap.data() : null).length) {
+          fail('failed-precondition', 'No IntaSend method is recorded LIVE_AND_PROVEN with evidence — record the capability first.');
+        }
+      }
       /* Only the film_access membership is Creator's to change; other purposes
          in config/hostedCheckout are left exactly as they are. */
       const hRef = _db().collection(COL.CONFIG).doc('hostedCheckout');
@@ -1487,14 +1510,11 @@ _adminH.creatorAdminConfig = async (req) => {
       if (!Object.keys(patch).length) return _config();
     }
     if (Array.isArray(d.set.checkoutMethods)) {
-      const known = ['M-PESA', 'CARD-PAYMENT', 'GOOGLE-PAY', 'APPLE-PAY', 'PESALINK', 'BITCOIN', 'BANK-ACH', 'COOP_B2B'];
-      const m = d.set.checkoutMethods.map((x) => String(x).toUpperCase());
-      if (m.some((x) => !known.includes(x))) fail('invalid-argument', 'Unknown checkout method.');
-      patch.checkoutMethods = m; patch.checkoutMethodsVerifiedAt = FieldValue.serverTimestamp(); patch.checkoutMethodsVerifiedBy = actor;
+      fail('failed-precondition', 'Checkout methods are no longer a list — record each method with evidence (Payment methods).');
     }
     if (!Object.keys(patch).length) fail('invalid-argument', 'Nothing to set.');
     await ref.set({ ...patch, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-    await _adminAudit('creator_config', actor, { patch: { ...patch, checkoutMethodsVerifiedAt: undefined } });
+    await _adminAudit('creator_config', actor, { patch });
   } else _admin(req);
   return _config();
 };
@@ -1695,6 +1715,28 @@ async function verificationSubmit(req) {
     return { status: P.VERIFICATION_STATE.SUBMITTED, version };
   });
 }
+
+/* IntaSend payment-method capability (platform record config/intasendCapability).
+   Read: any admin. Write: Super Admin, one method at a time, with a note, and for
+   LIVE_AND_PROVEN / UNSUPPORTED an evidence type + reference. Audited. This is
+   the only writer of the record; initiateHostedCheckout and the Creator catalog
+   only read it. */
+_adminH.creatorAdminPaymentCapability = async (req) => {
+  const d = req.data || {};
+  const ref = _db().collection(COL.CONFIG).doc(PCAP.RECORD);
+  if (d.set) {
+    const actor = _superAdmin(req);
+    const v = PCAP.validateEntry(d.set);
+    if (!v.ok) fail('invalid-argument', v.error);
+    const { method, ...entry } = v.entry;
+    await ref.set({ methods: { [method]: { ...entry, recordedBy: actor, recordedAtMs: Date.now() } }, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    await _adminAudit('payment_capability', actor, { method, status: entry.status, evidence: entry.evidence || null });
+  } else _admin(req);
+  const snap = await ref.get();
+  const cfg = await _config();
+  return { methods: PCAP.classify(snap.exists ? snap.data() : null), statuses: Object.values(PCAP.STATUS), evidenceTypes: PCAP.EVIDENCE_TYPES,
+    hostedCheckoutEnabled: cfg.hostedCheckoutEnabled, hostedCheckoutSwitch: cfg.hostedCheckoutSwitch };
+};
 
 _adminH.creatorAdminVerifications = async (req) => {
   _admin(req);

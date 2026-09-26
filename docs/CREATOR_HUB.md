@@ -223,18 +223,21 @@ creators (approve / reject / suspend / reinstate, payout hold / release) · film
 (start review, approve + lock v1, reject, publish, suspend, reinstate, detail with agreements and
 accruals — never a media location) · agreement lock · ledger search · quarters (calculate,
 approve, distribute, close, statements) · exceptions (retry accrual, attest fee) · playback
-security events · entitlement revocation · config (purchases kill switch, verified checkout
-methods — super admin). Every handler re-checks `admin-claim`; admin actions are written to
-`adminAudit`.
+security events · entitlement revocation · config (purchases kill switch, hosted checkout switch,
+IntaSend method capability with evidence — super admin). Every handler re-checks `admin-claim`;
+admin actions are written to `adminAudit`. **AdminOS is the only Creator control plane** — full
+authority map and legacy-page findings: [[CREATOR_PAYMENT_ARCHITECTURE]] §5–6.
 
 ## 11. Payment methods & currency — what is and is not claimed
 
-- The page shows **"Payment methods available at checkout"** followed only by methods a super
-  admin has recorded as **verified against the live IntaSend account**
-  (`config/creatorHub.checkoutMethods`). Today the committed collection rail is **M-PESA STK**.
-- A hosted multi-method IntaSend checkout (cards, Google/Apple Pay, PesaLink, …) exists only as
-  another agent's **uncommitted, unverified** helper (`functions/shared/intasend-checkout.js`);
-  Creator Hub does not claim it.
+- The page shows **"Payment methods available at checkout"**: M-PESA (STK) plus every hosted
+  method a Super Admin has recorded **LIVE_AND_PROVEN with evidence** in
+  `config/intasendCapability` — and only while the hosted switch is on. The free-text
+  `config/creatorHub.checkoutMethods` list is retired (it named methods with no evidence).
+- Hosted checkout (`initiateHostedCheckout`) is committed, shares the STK reservation
+  (`paymentAttempts/{ref}`) and webhook, and refuses to open while nothing is proven. **No hosted
+  method is proven today.** Method matrix, provider actions and the STK single-flight repair:
+  [[CREATOR_PAYMENT_ARCHITECTURE]].
 - **KES only.** The payment core (STK payload, `payments`, entitlement engine) settles KES;
   pricing in another currency would price in one currency and settle another (§9 of the brief
   forbids it). The currency is bound on the intent and reconciled against the provider's

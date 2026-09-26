@@ -170,7 +170,8 @@ async function buy(buyer, filmId) {
   ck('createPaymentIntent loadable for an end-to-end quote', !!intents, intents ? '' : 'not loadable');
   ck('purchases closed by default (kill switch)', /not open yet/.test(await msg(purposes.priceFor('film_access', 'v1', { filmId: FILM }))));
   ck('non-superAdmin cannot open purchases', (await code(adm('creatorAdminConfig', 'adm1', { set: { purchasesEnabled: true } }))) === 'permission-denied');
-  await adm('creatorAdminConfig', 'sa1', { set: { purchasesEnabled: true, checkoutMethods: ['M-PESA'] } }, { superAdmin: true });
+  /* 2026-09-26: checkout methods are no longer a free list — see "payment-method authority" below. */
+  await adm('creatorAdminConfig', 'sa1', { set: { purchasesEnabled: true } }, { superAdmin: true });
   const q = await purposes.priceFor('film_access', 'v1', { filmId: FILM, amount: 1, priceCents: 1 });
   ck('server price = film price (client amount ignored)', q.amountCents === 50000 && q.amount === 500);
   ck('currency bound to KES', q.currency === 'KES');
@@ -178,6 +179,40 @@ async function buy(buyer, filmId) {
   ck('creator cannot buy own film', /own film/.test(await msg(purposes.priceFor('film_access', 'cA', { filmId: FILM }))));
   const g = await call('catalog.get', 'v1', { filmId: FILM });
   ck('film page says "Payment methods available at checkout"', g.checkout.notice === 'Payment methods available at checkout' && g.checkout.verifiedMethods.join() === 'M-PESA');
+
+  /* ═══ payment-method authority (§8) ═══ */
+  console.log('\n── payment-method authority (config/intasendCapability, AdminOS) ──');
+  ck('with nothing proven, buyers are offered M-PESA (STK) only', g.checkout.hostedCheckout === false && JSON.stringify(g.checkout.methods) === '[{"method":"M-PESA","label":"M-PESA","rail":"stk"}]');
+  ck('an evidence-free method list is refused (the retired free-text path)', (await code(adm('creatorAdminConfig', 'sa1', { set: { checkoutMethods: ['CARD-PAYMENT'] } }, { superAdmin: true }))) === 'failed-precondition');
+  ck('hosted checkout cannot be switched on with no proven method', (await code(adm('creatorAdminConfig', 'sa1', { set: { hostedCheckout: true } }, { superAdmin: true }))) === 'failed-precondition'
+    && !((await read('config/hostedCheckout')) || {}).enabled);
+  const CAP = 'creatorAdminPaymentCapability';
+  const good = { method: 'CARD-PAYMENT', status: 'LIVE_AND_PROVEN', evidence: { type: 'completed_invoice', reference: 'INV-CARD-0001' }, note: 'COMPLETE card invoice seen on the live account' };
+  ck('capability: unauthenticated refused', (await code(adm(CAP, null, {}, {}))) === 'unauthenticated');
+  ck('capability: an ordinary user cannot read it', (await code(adm(CAP, 'v1', {}, {}))) === 'permission-denied');
+  const rd = await adm(CAP, 'adm1', {});
+  ck('capability: admin reads it — every method starts PROVIDER_CAPABILITY_UNKNOWN', rd.methods.length === 8 && rd.methods.every((m) => m.status === 'PROVIDER_CAPABILITY_UNKNOWN'));
+  ck('capability: admin (not super) cannot record', (await code(adm(CAP, 'adm1', { set: good }))) === 'permission-denied' && !(await read('config/intasendCapability')));
+  const SA = { superAdmin: true };
+  ck('capability: LIVE_AND_PROVEN without evidence refused', (await code(adm(CAP, 'sa1', { set: { ...good, evidence: undefined } }, SA))) === 'invalid-argument');
+  ck('capability: a refusal cannot prove a method', (await code(adm(CAP, 'sa1', { set: { ...good, evidence: { type: 'provider_refusal', reference: 'PROBE_1' } } }, SA))) === 'invalid-argument');
+  ck('capability: a note that says nothing refused', (await code(adm(CAP, 'sa1', { set: { ...good, note: 'ok' } }, SA))) === 'invalid-argument');
+  ck('capability: an unknown method name refused', (await code(adm(CAP, 'sa1', { set: { ...good, method: 'PAYPAL' } }, SA))) === 'invalid-argument');
+  ck('capability: the old underscore spelling is not a method', (await code(adm(CAP, 'sa1', { set: { ...good, method: 'GOOGLE_PAY' } }, SA))) === 'invalid-argument');
+  const rec = await adm(CAP, 'sa1', { set: good }, SA);
+  const cardRow = rec.methods.find((m) => m.method === 'CARD-PAYMENT');
+  ck('capability: super admin records CARD-PAYMENT with evidence, who and when', cardRow.status === 'LIVE_AND_PROVEN' && cardRow.evidence.reference === 'INV-CARD-0001' && cardRow.recordedBy === 'sa1' && cardRow.recordedAtMs > 0);
+  ck('capability: the recording is audited', (await db.collection('adminAudit').where('action', '==', 'payment_capability').get()).size === 1);
+  const g0 = await call('catalog.get', 'v1', { filmId: FILM });
+  ck('proven but hosted switch OFF → still M-PESA only', g0.checkout.hostedCheckout === false && g0.checkout.verifiedMethods.join() === 'M-PESA');
+  await adm('creatorAdminConfig', 'sa1', { set: { hostedCheckout: true } }, SA);
+  const g1 = await call('catalog.get', 'v1', { filmId: FILM });
+  ck('proven + switch ON → buyers offered M-PESA and Card (and nothing unproven)', g1.checkout.hostedCheckout === true && g1.checkout.verifiedMethods.join() === 'M-PESA,CARD-PAYMENT'
+    && g1.checkout.methods.some((m) => m.method === 'CARD-PAYMENT' && m.rail === 'hosted_checkout') && !g1.checkout.methods.some((m) => m.method === 'GOOGLE-PAY'));
+  await adm(CAP, 'sa1', { set: { method: 'CARD-PAYMENT', status: 'BLOCKED', note: 'card disabled on the account pending KYC review' } }, SA);
+  const g2 = await call('catalog.get', 'v1', { filmId: FILM });
+  ck('downgrading the only proven method closes hosted checkout at once (switch still on)', g2.checkout.hostedCheckout === false && g2.checkout.verifiedMethods.join() === 'M-PESA');
+  await adm('creatorAdminConfig', 'sa1', { set: { hostedCheckout: false } }, SA);
   const ref1 = await buy('v1', FILM);
   const intent1 = await read('paymentIntents/' + ref1);
   ck('intent minted server-side with purpose film_access', intent1.purpose === 'film_access' && intent1.resourceId === FILM && intent1.amountCents === 50000);

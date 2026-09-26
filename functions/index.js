@@ -6270,25 +6270,51 @@ exports.initiateSTKPush = onCall(
       logger.warn("[STK] authority lookup failed (open)", { ref, err: e && e.message });
     }
 
-    /* Idempotency — return existing checkoutId if payment is still pending */
-    const existing = await db.collection("payments").doc(ref).get();
-    if (existing.exists) {
-      const d = existing.data();
-      if (d.status === "COMPLETE") return { success: true, checkoutId: d.checkoutId, alreadyPaid: true };
-      /* One rail per intent: a hosted checkout (initiateHostedCheckout) already
-         owns this reference — an STK push on top could charge the buyer twice. */
-      if (d.rail === "hosted_checkout" && d.status !== "FAILED") {
-        throw new HttpsError("failed-precondition", "A card/other-method checkout is already open for this payment.");
-      }
-      if (d.status === "PENDING" && d.createdAt?.toMillis() > Date.now() - 600000) {
-        return { success: true, checkoutId: d.checkoutId, reused: true };
-      }
-    }
-
     const privateKey = INTASEND_PRIVATE_KEY.value();
     if (!privateKey || privateKey === "YOUR_INTASEND_PRIVATE_KEY") {
       throw new HttpsError("failed-precondition", "IntaSend not configured.");
     }
+
+    /* ══ SINGLE-FLIGHT — paymentAttempts/{ref}, BEFORE the gateway ═════════════
+       The old idempotency check read payments/{ref}, which is written only AFTER
+       IntaSend answers — so two concurrent calls both passed it and both pushed
+       (executed: 2 STK requests, same api_ref). The reservation below is the one
+       pos-qr.js (P2) and hosted-checkout.js already take: the SAME reference is
+       claimed in a transaction before any request leaves, and every other caller
+       converges on that attempt's result. The reference stays the one payment
+       identity; nothing new is minted. The rule table (retry matrix) lives in
+       shared/stk-single-flight.js. The config check above runs first so a
+       misconfigured function can never strand a reservation. */
+    const _SF     = require("./shared/stk-single-flight");
+    const _attRef = db.collection("paymentAttempts").doc(String(ref));
+    const _payRef = db.collection("payments").doc(String(ref));
+    let _sf = await db.runTransaction(async (t) => {
+      const a = await t.get(_attRef);
+      const p = await t.get(_payRef);
+      const att = a.exists ? a.data() : null;
+      const prevNo = (att && att.attemptNo) || 0;
+      const d = _SF.decide({ att, pay: p.exists ? p.data() : null, nowMs: Date.now() });
+      if (d.action !== "new") return { ...d, attemptNo: prevNo };
+      const doc = {
+        transactionId: String(ref), rail: "stk", uid: request.auth.uid,
+        amount: amountKES, currency: "KES", state: "RESERVED",
+        attemptNo: prevNo + 1, reservedAtMs: Date.now(),
+        phoneSuffix: String(phone).slice(-4),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      if (a.exists) t.set(_attRef, doc); else t.create(_attRef, doc);
+      return { action: "new", attemptNo: prevNo + 1 };
+    });
+    if (_sf.action === "wait") {
+      _sf = await _SF.awaitWinner(async () => {
+        const [a, p] = await Promise.all([_attRef.get(), _payRef.get()]);
+        return { att: a.exists ? a.data() : null, pay: p.exists ? p.data() : null };
+      }, _sf.attemptNo);
+    }
+    if (_sf.action === "paid")   return { success: true, checkoutId: _sf.checkoutId, alreadyPaid: true };
+    if (_sf.action === "reuse")  return { success: true, checkoutId: _sf.checkoutId, reused: true };
+    if (_sf.action === "refuse") throw new HttpsError(_sf.code, _sf.message);
+    const _attemptNo = _sf.attemptNo;
 
     /* Call IntaSend STK Push API.
 
@@ -6345,61 +6371,63 @@ exports.initiateSTKPush = onCall(
       console.warn("[initiateSTKPush] merchant identity unresolved:", e && e.message);
     }
 
-    const payload = JSON.stringify({
-      method:       "M-PESA",
-      phone_number: phone,
-      amount:       amountKES,
-      currency:     "KES",
+    const _gw = require("./shared/stk-gateway");
+    const payload = _gw.buildPayload({
+      phone,
+      amountKES,
       /* The channel comes from the payment's own category, so a SmartPOS or till sale gets the
          in-shop wording and an online order gets the online wording — from ONE ladder, so the two
          can never drift into saying different things to the same customer. The amount travels
          with it: the buyer is being asked to approve a figure, and naming it is the polite and
          the safe thing to do. */
-      narrative:    _merchantIdentity.narrativeFor(_merchant, {
+      narrative: _merchantIdentity.narrativeFor(_merchant, {
         channel:   _merchantIdentity.channelOf((meta && meta.category) || "online"),
         amountKES: amountKES,
       }),
-      api_ref:      ref,
+      apiRef: ref,
     });
 
-    const intasendHost = process.env.INTASEND_SANDBOX === "true"
-      ? "sandbox.intasend.com"
-      : "payment.intasend.com";
+    const intasendHost = _gw.hostFor(process.env.INTASEND_SANDBOX === "true");
 
-    const intasendResponse = await new Promise((resolve, reject) => {
-      const opts = {
-        hostname: intasendHost,
-        path:     "/api/v1/payment/mpesa-stk-push/",
-        method:   "POST",
-        headers:  {
-          "Content-Type":   "application/json",
-          /* `Bearer`, not `Token`. Two independent authorities in this repository
-             agree and this call matched neither:
-               • the vendored vendor client —
-                 node_modules/intasend-node/dist/requests.js:21
-                 headers['Authorization'] = "Bearer ".concat(secret_key)
-               • this codebase's other IntaSend client —
-                 finos-utils.js:783  'Authorization': `Bearer ${privKey}`
-             Changing this carries no regression risk: the current scheme fails
-             100% of the time, so there is no working behaviour to protect. */
-          "Authorization":  `Bearer ${privateKey}`,
-          "Content-Length": Buffer.byteLength(payload),
-        },
-      };
-      const req = https.request(opts, (res) => {
-        let body = "";
-        res.on("data", (c) => { body += c; });
-        res.on("end", () => {
-          try { resolve({ status: res.statusCode, data: JSON.parse(body) }); }
-          catch (_) { reject(new Error("Invalid IntaSend response")); }
-        });
+    /* From here on the request may reach IntaSend. Recorded first, so a crash
+       mid-call leaves GATEWAY_REQUESTED (held — never re-sent), not RESERVED. */
+    await _attRef.update({ state: "GATEWAY_REQUESTED", requestedAtMs: Date.now() });
+
+    /* Held, never retried: no answer is not "no charge". The payment document is
+       written PENDING so IntaSend's callback (keyed on api_ref = ref) can still
+       settle it — COMPLETE ends it, FAILED releases the reference for a retry. */
+    const _holdUnknown = async (why, httpStatus) => {
+      await _attRef.update({ state: "OUTCOME_UNKNOWN", heldAtMs: Date.now(), httpStatus: httpStatus || null, why: String(why).slice(0, 200) }).catch(() => {});
+      await db.runTransaction(async (t) => {
+        const p = await t.get(_payRef);
+        if (p.exists && p.data().status === "COMPLETE") return;
+        if (p.exists) {
+          t.update(_payRef, { status: "PENDING", outcomeUnknown: true, attemptNo: _attemptNo, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+        } else {
+          t.set(_payRef, {
+            ref, checkoutId: null, phone, amount: amountKES, currency: "KES", status: "PENDING",
+            uid: request.auth.uid, intentRef: ref, meta: meta || {}, outcomeUnknown: true, attemptNo: _attemptNo,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+      }).catch((e) => logger.error("[STK] could not record the held payment", { ref, err: e && e.message }));
+      logger.error("[STK] OUTCOME_UNKNOWN — reservation held, NOT retried", { ref, attemptNo: _attemptNo, httpStatus: httpStatus || null, why: String(why).slice(0, 160) });
+      throw new HttpsError("unavailable", "We could not confirm the M-PESA request. Check your phone for a prompt before trying again.");
+    };
+
+    let intasendResponse;
+    try {
+      intasendResponse = await _gw.pushSTK({
+        payload, privateKey, sandbox: process.env.INTASEND_SANDBOX === "true", https,
       });
-      req.on("error", reject);
-      req.write(payload);
-      req.end();
-    });
+    } catch (e) {
+      await _holdUnknown((e && e.message) || "no answer", null);
+    }
+    const _verdict = _gw.classifyOutcome(intasendResponse.status);
+    if (_verdict === "OUTCOME_UNKNOWN") await _holdUnknown("HTTP " + intasendResponse.status, intasendResponse.status);
 
-    if (intasendResponse.status !== 200 && intasendResponse.status !== 201) {
+    if (_verdict === "GATEWAY_REJECTED") {
+      await _attRef.update({ state: "GATEWAY_REJECTED", httpStatus: intasendResponse.status, rejectedAtMs: Date.now() }).catch(() => {});
       /* ══ STK DIAGNOSTIC (2026-07-19) ══════════════════════════════════════════
          A production payment (KES 499, ref SKNRSVOE3) failed here and left NO
          server-side trace: this branch threw the generic fallback and discarded
@@ -6439,7 +6467,9 @@ exports.initiateSTKPush = onCall(
     }
 
     const checkoutId = intasendResponse.data?.checkout_id || intasendResponse.data?.id;
-    if (!checkoutId) throw new HttpsError("internal", "No checkoutId from IntaSend.");
+    /* 2xx with no id: IntaSend accepted something we cannot name — the prompt may be live. */
+    if (!checkoutId) await _holdUnknown("2xx without a checkout id", intasendResponse.status);
+    await _attRef.update({ state: "GATEWAY_ACCEPTED", checkoutId, acceptedAtMs: Date.now() });
 
     /* Persist payment record.
        intentRef: the paymentIntents document that authorised this STK push.

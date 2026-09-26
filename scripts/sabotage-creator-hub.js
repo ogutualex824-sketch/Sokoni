@@ -30,6 +30,8 @@ const SUITES = {
   withdrawal: ['node', ['scripts/test-creator-withdrawal.js']],
   refund:     ['node', ['scripts/test-refund-exactly-once.js']],
   payout:     ['node', ['scripts/test-payout-outcome-unknown.js']],
+  stk:        ['node', ['scripts/test-stk-single-flight.js']],
+  authority:  ['node', ['scripts/test-creator-adminos-authority.js']],
 };
 const IDX = 'functions/index.js';
 const FOS = 'functions/financial-os.js';
@@ -155,8 +157,11 @@ const M = [
   /* ── hosted checkout (§7–8) ── */
   { group: 'hosted', name: 'hosted: client amount reaches the gateway', file: 'functions/hosted-checkout.js', suite: 'hosted',
     from: 'const amountKES = Number(intent.amount);', to: 'const amountKES = Number(d.amount || intent.amount);', expect: /amount = INTENT amount/ },
-  { group: 'hosted', name: 'hosted: client-chosen method forwarded (SOKONI restricting the account)', file: 'functions/hosted-checkout.js', suite: 'hosted',
-    from: 'const payload = IC.buildPayload({ amountKES, apiRef: ref, publicKey, currency,', to: 'const payload = IC.buildPayload({ amountKES, apiRef: ref, publicKey, currency, method: d.method,', expect: /NO method sent/ },
+  /* 2026-09-26: a named method may be forwarded, but only the value that passed the PROVEN check.
+     (The previous form of this mutation injected an earlier duplicate 'method' key, which the later
+     proven 'method' key overrides — it had become inert, not caught.) */
+  { group: 'hosted', name: 'hosted: the raw client method is forwarded instead of the proven one', file: 'functions/hosted-checkout.js', suite: 'hosted',
+    from: 'method: method || undefined,', to: 'method: d.method || undefined,', expect: /PROVEN method may be pre-selected|NO method sent/ },
   { group: 'hosted', name: 'hosted: single-flight reservation removed', file: 'functions/hosted-checkout.js', suite: 'hosted',
     edits: [["    txn.create(attRef, {", "    txn.set(attRef, {"], ["    if (pay.exists) fail('failed-precondition', 'A payment for this order is already in progress.');", ''], ["      fail('failed-precondition', 'A payment for this order is already in progress.');\n    }", '    }'],["    txn.create(payRef, {", "    txn.set(payRef, {"]],
     expect: /ONE gateway call|one rail per intent|no second session/ },
@@ -170,6 +175,39 @@ const M = [
   { group: 'hosted', name: 'withdrawal: payout marked paid on an in-flight provider status', file: 'functions/wallet.js', suite: 'withdrawal',
     from: "const completedWord = /COMPLETE/.test(S) || ['SUCCESS', 'PAID', 'SETTLED'].includes(S);", to: "const completedWord = /COMPLETE|PROCESSING/.test(S) || ['SUCCESS', 'PAID', 'SETTLED'].includes(S);",
     expect: /in-flight provider status leaves it PROCESSING/ },
+
+  /* ── STK single-flight — test-stk-single-flight.js ── */
+  { group: 'stk', name: 'stk: reservation bypassed — every caller sends', file: IDX, suite: 'stk',
+    from: '      if (d.action !== "new") return { ...d, attemptNo: prevNo };', to: '      if (false) return { ...d, attemptNo: prevNo };',
+    expect: /distinct devices → exactly 1 gateway request/ },
+  { group: 'stk', name: 'stk: a caller that lost the race sends instead of waiting', file: 'functions/shared/stk-single-flight.js', suite: 'stk',
+    from: "  if (IN_FLIGHT.has(st)) return { action: 'wait' };", to: "  if (IN_FLIGHT.has(st)) return { action: 'new' };",
+    expect: /RESERVED \(in flight\)|exactly 1 gateway request/ },
+  { group: 'stk', name: 'stk: an OUTCOME_UNKNOWN attempt is retried blind', file: 'functions/shared/stk-single-flight.js', suite: 'stk',
+    from: "    return refuse('unavailable', 'We could not confirm your earlier M-PESA request.", to: "    return { action: 'new' } || refuse('unavailable', 'We could not confirm your earlier M-PESA request.",
+    expect: /a retry sends NOTHING|OUTCOME_UNKNOWN \(unreconciled\)/ },
+  { group: 'stk', name: 'stk: a 5xx is read as a rejection (released for retry)', file: 'functions/shared/stk-gateway.js', suite: 'stk',
+    from: "  if (status >= 400 && status < 500)    return 'GATEWAY_REJECTED';", to: "  if (status >= 400)    return 'GATEWAY_REJECTED';",
+    expect: /5xx → OUTCOME_UNKNOWN/ },
+  { group: 'stk', name: 'stk: a hosted checkout no longer owns its reference', file: 'functions/shared/stk-single-flight.js', suite: 'stk',
+    from: "  if (hosted && payStatus !== 'FAILED') {", to: "  if (false) {",
+    expect: /hosted checkout owns the ref|hosted first → STK/ },
+
+  /* ── payment-method authority (config/intasendCapability) ── */
+  { group: 'payauth', name: 'hosted: opens with no proven method (switch alone)', file: 'functions/hosted-checkout.js', suite: 'hosted',
+    from: "  if (!proven.length) fail(", to: "  if (false) fail(", expect: /NO proven method/ },
+  { group: 'payauth', name: 'hosted: an unproven method is forwarded to the gateway', file: 'functions/hosted-checkout.js', suite: 'hosted',
+    from: "  if (method && !proven.includes(method)) fail(", to: "  if (false) fail(", expect: /UNSUPPORTED method is refused|unknown method name is refused/ },
+  { group: 'payauth', name: 'capability: LIVE_AND_PROVEN recorded without evidence', file: 'functions/shared/payment-capability.js', suite: 'hub',
+    from: "  if (NEEDS_EVIDENCE.has(status)) {", to: "  if (false) {", expect: /without evidence refused/ },
+  { group: 'payauth', name: 'capability: hosted switch opens with nothing proven', file: HUB, suite: 'hub',
+    from: "        if (!PCAP.provenHostedMethods(cap.exists ? cap.data() : null).length) {", to: "        if (false) {", expect: /cannot be switched on with no proven method/ },
+  { group: 'payauth', name: 'capability: a plain admin can record capability', file: HUB, suite: 'authority',
+    from: "    const actor = _superAdmin(req);\n    const v = PCAP.validateEntry(d.set);", to: "    const actor = _admin(req);\n    const v = PCAP.validateEntry(d.set);",
+    expect: /creatorAdminPaymentCapability \(write\): plain admin refused/ },
+  { group: 'payauth', name: 'catalog: every method a name in code is offered to buyers', file: HUB, suite: 'hub',
+    from: "    checkoutMethods: [...new Set(['M-PESA', ...(hostedOn ? proven : [])])],", to: "    checkoutMethods: [...new Set(['M-PESA', ...PCAP.METHODS])],",
+    expect: /Payment methods available at checkout|M-PESA only/ },
 
   /* ── payout ambiguous outcome (OUTCOME_UNKNOWN) — test-payout-outcome-unknown.js ── */
   { group: 'payout', name: 'payout: an ambiguous B2C answer is treated as a rejection (funds released)', file: 'functions/wallet.js', suite: 'payout',

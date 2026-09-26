@@ -59,15 +59,12 @@
    can be rejected before it reaches the wire. It is NOT a claim that any of
    these are enabled on the SOKONI account — that is precisely what cannot be
    known without probing, and why the normal path omits `method` entirely. */
-const CANDIDATE_METHODS = Object.freeze([
-  'M-PESA',
-  'CARD-PAYMENT',
-  'BITCOIN',
-  'BANK-ACH',
-  'COOP_B2B',
-  'GOOGLE_PAY',
-  'APPLE_PAY',
-]);
+/* 2026-09-26: the identifiers are IntaSend's documented `method` enum (Create
+   Checkout reference: M-PESA, PESALINK, CARD-PAYMENT, GOOGLE-PAY, APPLE-PAY,
+   BITCOIN, BANK-ACH, COOP_B2B). The previous list spelled GOOGLE_PAY / APPLE_PAY
+   with underscores and omitted PESALINK, so a probe of those would have come
+   back 400 and been misread as REFUSED. One list, owned by payment-capability. */
+const CANDIDATE_METHODS = require('./payment-capability').METHODS;
 
 /* Who absorbs the provider's fee. IntaSend spells these `card_tarrif` and
    `mobile_tarrif` (its spelling, not ours) and they are a MERCHANT setting:
@@ -163,7 +160,14 @@ function createCheckout({ payload, publicKey, sandbox, https, privateKey: _unuse
       method:   'POST',
       headers:  {
         'Content-Type':            'application/json',
-        'INTASEND_PUBLIC_API_KEY': publicKey,
+        /* Two spellings, neither field-verified: the vendored SDK
+           (intasend-node 1.1.2, dist/requests.js:24) sends INTASEND_PUBLIC_API_KEY;
+           IntaSend's current Create Checkout reference documents
+           X-IntaSend-Public-API-Key. Both carry the PUBLIC key only, and the
+           body carries public_key too — so whichever the gateway reads, the
+           same public credential is presented and no secret is. */
+        'INTASEND_PUBLIC_API_KEY':   publicKey,
+        'X-IntaSend-Public-API-Key': publicKey,
         'Content-Length':          Buffer.byteLength(payload),
       },
     }, (res) => {

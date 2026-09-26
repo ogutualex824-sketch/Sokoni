@@ -75,7 +75,15 @@ function makeStore() {
       return self;
     },
   });
-  return { collection, _put: (c, d, o) => data.set(key(c, d), Object.assign({}, o)), _del: (c, d) => data.delete(key(c, d)) };
+  /* initiateSTKPush reserves paymentAttempts/{ref} in a transaction before the gateway
+     (single-flight, 2026-09-26). This certification drives one caller at a time and is
+     about the NARRATIVE, so a serial pass-through is enough; concurrency is proven in
+     scripts/test-stk-single-flight.js on the transactional fake. */
+  const runTransaction = async (fn) => fn({
+    get: (ref) => ref.get(), set: (ref, o) => ref.set(o), create: (ref, o) => ref.create(o),
+    update: (ref, o) => ref.update(o), delete: (ref) => ref.delete(),
+  });
+  return { collection, runTransaction, _put: (c, d, o) => data.set(key(c, d), Object.assign({}, o)), _del: (c, d) => data.delete(key(c, d)) };
 }
 const STORE = makeStore();
 let LAST_ERR = null;
@@ -135,10 +143,20 @@ function seed(shopName) {
   else STORE._put('shops', SELLER, { name: shopName });
 }
 
+/* One reference per push. initiateSTKPush is single-flight per reference (2026-09-26): a second
+   push on a live reference converges on the first and sends nothing, so two pushes in the same
+   millisecond must not share 'SKN-' + Date.now(). */
+let SEQ = 0;
+const freshRef = () => 'SKN-' + Date.now() + '-' + (++SEQ);
+
 async function push(overrides) {
   SENT = [];
+  /* The durable rate limiter (5 pushes / buyer / minute) runs on this store now that it has
+     runTransaction. It is not what this certification measures, so each push starts with a
+     fresh window rather than tripping it after the fifth scenario. */
+  STORE._del('rateLimits', 'stk_' + BUYER);
   const payload = Object.assign({
-    phone: '254712345678', amount: 250, ref: 'SKN-' + Date.now(),
+    phone: '254712345678', amount: 250, ref: freshRef(),
     meta: { category: 'product', serviceDesc: 'SOKONI Order', items: [{ productId: PRODUCT, qty: 1 }],
       sellerUid: 'ATTACKER-CLAIMED-UID', sellerName: 'TOTALLY DIFFERENT SHOP' },
   }, overrides || {});
@@ -255,7 +273,7 @@ async function main() {
   check('A6-2', probe.narrative.indexOf('250') > -1, '…and the figure is THIS payment\'s amount');
   check('A6-3', probe.amount === 250, '…while the authoritative amount still travels in the field Safaricom reads');
   {
-    const other = await push({ amount: 4566, ref: 'SKN-' + Date.now() });
+    const other = await push({ amount: 4566, ref: freshRef() });
     check('A6-4', !!other && /Please approve a payment of KES 4,566/.test(other.narrative),
       'change the amount and the sentence follows it — "' + (other && other.narrative || '') + '"');
   }

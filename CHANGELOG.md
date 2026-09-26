@@ -1,3 +1,47 @@
+## 2026-09-26 (185) — STK single-flight · IntaSend method authority · AdminOS control plane
+
+**NO DEPLOY. NO PUSH.** Branch `feat/creator-hub`, base `61098e9`. Production writes 0 · provider
+calls 0 · real invoices 0. Standing acceptance criteria (owner): Creator purchases offer every
+method the IntaSend account actually supports (never a name in code); AdminOS is the only Creator
+control plane, Super Admin an AdminOS authorization level.
+
+**STK single-flight (money defect, platform-wide, executed).** Two concurrent `initiateSTKPush`
+calls sent 2 STK requests for one reference (base: N=2 → 2 requests). `initiateSTKPush` now
+reserves `paymentAttempts/{ref}` in a transaction before the gateway — the reservation model
+`pos-qr.js` and `hosted-checkout.js` already use — and uses the shared `stk-gateway` call and
+classification. Losers converge on the winner's result. 5xx / timeout / unreadable / 2xx-without-id
+→ OUTCOME_UNKNOWN, held (payment written PENDING so the callback can still settle it), never
+retried; the provider's FAILED releases it. Retry matrix in `shared/stk-single-flight.js`. One
+reservation per reference across STK and hosted checkout (racing → 1 request).
+
+**Payment-method authority.** New `shared/payment-capability.js` + `config/intasendCapability`:
+a Super Admin records each IntaSend method with a status and, for LIVE_AND_PROVEN / UNSUPPORTED,
+evidence (completed invoice, live probe session, provider confirmation). `initiateHostedCheckout`
+refuses unless ≥ 1 method is proven and refuses an unproven named method; the Creator catalog and
+the AdminOS hosted switch read the same record. The free-text `config/creatorHub.checkoutMethods`
+list is retired. Method identifiers corrected to IntaSend's enum (`GOOGLE-PAY`, `APPLE-PAY`,
+`PESALINK` — were misspelled/missing); the documented `X-IntaSend-Public-API-Key` header is sent
+alongside the SDK's. New read-only probe `probe-intasend-invoice-methods.js` (NOT run). **No
+hosted method is proven.** Matrix, hosted audit, AdminOS map: docs/CREATOR_PAYMENT_ARCHITECTURE.md.
+
+**Files.** `functions/index.js`, `functions/hosted-checkout.js`, `functions/creator-hub.js`,
+`functions/shared/{stk-single-flight,payment-capability}.js` (new),
+`functions/shared/intasend-checkout.js`, `creator.html`, `sokoni-aos-creator.js`,
+`scripts/test-stk-single-flight.js` (new), `scripts/test-creator-adminos-authority.js` (new),
+`scripts/probe-intasend-invoice-methods.js` (new), `scripts/test-hosted-checkout.js`,
+`scripts/test-creator-hub.js`, `scripts/certify-stk-narrative.js` (fixture: runTransaction, a
+reference per push, limiter reset), `scripts/sabotage-creator-hub.js`,
+`docs/CREATOR_PAYMENT_ARCHITECTURE.md` (new), `docs/CREATOR_HUB.md`.
+**Database.** `paymentAttempts/{ref}` now also written by the STK rail (`rail:'stk'`, `attemptNo`,
+state machine); `payments/{ref}` may be written PENDING with `outcomeUnknown:true`;
+`config/intasendCapability` (server-only). **API.** New AdminOS op `creatorAdminPaymentCapability`;
+`initiateHostedCheckout` accepts an optional proven `method`; `initiateSTKPush` returns
+`unavailable` on an unknown outcome instead of `internal`. **Breaking.** `creatorAdminConfig`
+refuses `checkoutMethods` and refuses to switch hosted checkout on with nothing proven.
+**Tests.** stk 66/0 (base: 2 requests + crash) · authority 19/0 · hosted 41/0 · hub 258/0 ·
+intasend-checkout 50/0 · stk-narrative 70/0 · sabotage 74/74 CAUGHT (stk 5 + payauth 6 new; the old
+"client method forwarded" mutation had become inert under the new contract and was rewritten).
+
 ## 2026-09-26 (184) — P0 payout: ambiguous B2C outcome is never re-sent (`outcome_unknown`)
 
 **NO DEPLOY. NO PUSH.** Branch `feat/creator-hub`, base `fd5066d`. Production writes 0 · provider

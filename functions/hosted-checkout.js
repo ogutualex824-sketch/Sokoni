@@ -10,8 +10,10 @@
 
    Contract, in order:
      1. OFF unless config/hostedCheckout.enabled and the intent's purpose is in
-        config/hostedCheckout.purposes (set only after the capability probe
-        has proven the live account — scripts/probe-intasend-capability.js).
+        config/hostedCheckout.purposes, AND config/intasendCapability records at
+        least one method LIVE_AND_PROVEN with evidence (shared/payment-capability).
+        A switch alone never opens a checkout whose methods nobody has proven.
+        A caller may name ONE method; it must be one of the proven ones.
      2. The intent is the authority: the caller must own it; amount and
         currency are the INTENT's (a client figure is never read); terminal or
         expired intents are refused.
@@ -33,6 +35,7 @@ const { defineSecret } = require('firebase-functions/params');
 const { logger } = require('firebase-functions');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const IC = require('./shared/intasend-checkout');
+const PC = require('./shared/payment-capability');
 
 const INTASEND_PUBLIC_KEY = defineSecret('INTASEND_PUBLIC_KEY');
 const _db = () => getFirestore();
@@ -53,14 +56,22 @@ async function hostedCheckout(req, publicKey) {
   if (!/^\/[A-Za-z0-9/_.?=&%-]{0,300}$/.test(returnPath) || returnPath.startsWith('//')) fail('invalid-argument', 'Invalid return path.');
 
   const db = _db();
-  const cfgSnap = await db.collection('config').doc('hostedCheckout').get();
+  const [cfgSnap, capSnap] = await Promise.all([
+    db.collection('config').doc('hostedCheckout').get(),
+    db.collection('config').doc(PC.RECORD).get(),
+  ]);
   const cfg = cfgSnap.exists ? cfgSnap.data() : {};
+  const proven = PC.provenHostedMethods(capSnap.exists ? capSnap.data() : null);
   const iSnap = await db.collection('paymentIntents').doc(ref).get();
   if (!iSnap.exists) fail('not-found', 'Payment not found.');
   const intent = iSnap.data();
   if (!(cfg.enabled === true && Array.isArray(cfg.purposes) && cfg.purposes.includes(intent.purpose))) {
     fail('failed-precondition', 'Card and other payment methods are not available for this payment yet.');
   }
+  if (!proven.length) fail('failed-precondition', 'Card and other payment methods are not available for this payment yet.');
+  /* Optional pre-selection. Never forwarded unless the account is PROVEN to take it. */
+  const method = d.method == null || d.method === '' ? null : String(d.method).toUpperCase();
+  if (method && !proven.includes(method)) fail('failed-precondition', 'That payment method is not available.');
   if (intent.uid !== uid) fail('permission-denied', 'This payment does not belong to you.');
   if (TERMINAL.has(String(intent.status || ''))) fail('failed-precondition', 'This payment is no longer open.');
   const exp = intent.expiresAt && intent.expiresAt.toMillis ? intent.expiresAt.toMillis() : null;
@@ -89,7 +100,7 @@ async function hostedCheckout(req, publicKey) {
 
   let res;
   try {
-    const payload = IC.buildPayload({ amountKES, apiRef: ref, publicKey, currency, email: d.email || undefined,
+    const payload = IC.buildPayload({ amountKES, apiRef: ref, publicKey, currency, email: d.email || undefined, method: method || undefined,
       narrative: String(intent.metadata && intent.metadata.title ? intent.metadata.title : 'SOKONI').slice(0, 60),
       redirectUrl: SITE + returnPath });
     res = await IC.createCheckout({ payload, publicKey, sandbox: false, https: _https });
@@ -109,9 +120,9 @@ async function hostedCheckout(req, publicKey) {
       await attRef.update({ state: 'OUTCOME_UNKNOWN', heldAt: FieldValue.serverTimestamp(), error: 'accepted without a trusted checkout url' }).catch(() => {});
       fail('unavailable', 'We could not confirm the checkout. Do not pay twice — check back in a few minutes.');
     }
-    await attRef.update({ state: 'GATEWAY_ACCEPTED', checkoutUrl: safe, invoiceId, methods, acceptedAt: FieldValue.serverTimestamp() });
+    await attRef.update({ state: 'GATEWAY_ACCEPTED', checkoutUrl: safe, invoiceId, methods: proven, gatewayMethods: methods, acceptedAt: FieldValue.serverTimestamp() });
     await payRef.update({ checkoutId: invoiceId, updatedAt: FieldValue.serverTimestamp() });
-    return { url: safe, methods };
+    return { url: safe, methods: proven };
   }
   if (verdict === 'GATEWAY_REJECTED') {
     /* The gateway answered no: nothing exists on its side. Release both so the

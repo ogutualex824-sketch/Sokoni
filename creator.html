@@ -232,12 +232,16 @@
       return;
     }
     const methods = (co.verifiedMethods || []).length ? co.verifiedMethods.join(' · ') : '—';
+    /* The hosted button names ONLY methods the server says are proven on the live
+       IntaSend account (config/intasendCapability) — never a list from this page. */
+    const hostedNames = (co.methods || []).filter((x) => x.rail === 'hosted_checkout' && x.method !== 'M-PESA').map((x) => x.label);
+    const hostedLabel = hostedNames.length ? 'Pay with ' + hostedNames.join(' · ') : 'Other payment methods';
     bp.innerHTML = priceLine + `
       <p class="muted" style="margin-top:8px">${esc(co.notice)}: <b>${esc(methods)}</b></p>
       <label class="muted" for="phone" style="display:block;margin-top:10px">M-PESA number</label>
       <input type="tel" id="phone" inputmode="tel" autocomplete="tel" placeholder="07XX XXX XXX">
       <button class="btn" id="payBtn">Pay ${kes(f.priceCents)} with M-PESA</button>
-      ${co.hostedCheckout ? `<button class="btn ghost" id="hostedBtn" style="margin-left:6px">Card &amp; other methods</button>` : ''}
+      ${co.hostedCheckout ? `<button class="btn ghost" id="hostedBtn" style="margin-left:6px">${esc(hostedLabel)}</button>` : ''}
       <div class="msg" id="payMsg" role="status" aria-live="polite"></div>`;
     document.getElementById('payBtn').onclick = () => pay(f);
     const hb = document.getElementById('hostedBtn');
