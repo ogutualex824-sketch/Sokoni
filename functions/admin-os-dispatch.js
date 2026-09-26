@@ -22,7 +22,9 @@ const adminOs = (() => {
   /* Creator Hub controls (creatorAdmin* ops) — every handler guards itself
      with admin-claim, like the rest of this registry. */
   const creator = require('./creator-hub');
-  return Object.assign({}, base, { _h: Object.assign({}, base._h, trace._h, creator._adminH) });
+  /* Event ticket settlement controls (eventAdmin* ops) — same self-guarding convention. */
+  const events = require('./event-settlement');
+  return Object.assign({}, base, { _h: Object.assign({}, base._h, trace._h, creator._adminH, events._adminH) });
 })();
 
 const _OPTS = {

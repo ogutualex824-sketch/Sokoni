@@ -91,6 +91,22 @@ const S = {
     intent: { purpose: 'subscription', uid: 'merchant1', ownerUid: 'merchant1', amount: 999, amountCents: 99900, currency: 'KES', status: 'created', planId: 'pro', metadata: { plan: 'pro' } },
     payment: { uid: 'merchant1', amount: 999, meta: { category: 'subscription', uid: 'merchant1' } },
   },
+  /* Event ticket (event-settlement.js): the intent ref IS the order id (preferredRef). The
+     organizer is on the intent metadata as organizerUid — NOT sellerUid — so a webhook without
+     the self-settling exit would fall back to payData.uid and credit the BUYER. */
+  eventTicket: {
+    ref: 'EO1',
+    intent: { purpose: 'event_ticket', resourceType: 'eventOrder', resourceId: 'EO1', uid: 'buyer1', ownerUid: 'buyer1', amount: 1000, amountCents: 100000, currency: 'KES', status: 'created',
+      metadata: { type: 'event_ticket', eventId: 'ev1', tierId: 't1', quantity: 2, organizerUid: 'org1' } },
+    payment: { uid: 'buyer1', amount: 1000, meta: { category: 'events', uid: 'buyer1' } },
+    seed: {
+      'events/ev1': { organizerUid: 'org1', status: 'live', title: 'Gig', startDate: '2026-09-01T18:00:00.000Z', endDate: '2026-09-01T23:00:00.000Z' },
+      'eventTicketTiers/t1': { eventId: 'ev1', name: 'Regular', price: 500, quantity: 10, sold: 2, isActive: true, currency: 'KES' },
+      'eventOrders/EO1': { orderId: 'EO1', buyerUid: 'buyer1', eventId: 'ev1', tierId: 't1', tierName: 'Regular', quantity: 2, unitPrice: 500, totalAmount: 1000, currency: 'KES', status: 'pending_payment' },
+      'eventTickets/tk1': { ticketId: 'tk1', orderId: 'EO1', eventId: 'ev1', buyerUid: 'buyer1', status: 'awaiting_payment' },
+      'eventTickets/tk2': { ticketId: 'tk2', orderId: 'EO1', eventId: 'ev1', buyerUid: 'buyer1', status: 'awaiting_payment' },
+    },
+  },
   topup: { ref: 'wtop_user1_1', topup: true, payment: { uid: 'user1', amount: 200 },
     /* production shape: a pending walletTransactions/{wtop_…} row, NO payments doc */
     seed: { 'walletTransactions/wtop_user1_1': { uid: 'user1', amount: 200, status: 'pending', type: 'topup', ref: 'wtop_user1_1' }, 'wallets/user1': { balance: 50 } } },
@@ -129,8 +145,15 @@ const S = {
     royalty = await H._internal.processFilmPayment(ref, { source: 'harness' });
     royalty.replay = await H._internal.processFilmPayment(ref, { source: 'harness-replay' });
   }
+  /* Event ticket step (branch trees only): what eventOnTicketPayment does next. */
+  let eventActivation = null;
+  if (SCENARIO.startsWith('event') && require('fs').existsSync(path.join(FN, 'event-settlement.js'))) {
+    const ES = require(path.join(FN, 'event-settlement.js'));
+    eventActivation = await ES.activateIfEventTicket(ref, { source: 'harness' });
+    eventActivation.replay = await ES.activateIfEventTicket(ref, { source: 'harness-replay' });
+  }
   const dump = {};
   for (const [p, e] of db._store) dump[p] = JSON.parse(JSON.stringify(e.data));
-  out(JSON.stringify({ scenario: SCENARIO, ref, calls, outbound, royalty, intentReads, logs: logs.filter((l) => /film_access|webhookIntasend\]/.test(l)).slice(0, 40), store: dump }) + '\n');
+  out(JSON.stringify({ scenario: SCENARIO, ref, calls, outbound, royalty, eventActivation, intentReads, logs: logs.filter((l) => /film_access|self-settling|webhookIntasend\]/.test(l)).slice(0, 40), store: dump }) + '\n');
   process.exit(0);
 })().catch((e) => { out(JSON.stringify({ scenario: SCENARIO, crashed: String(e && e.stack || e).slice(0, 800) }) + '\n'); process.exit(3); });

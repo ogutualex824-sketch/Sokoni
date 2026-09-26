@@ -41,8 +41,8 @@ const SUITES = {
 const IDX = 'functions/index.js';
 const FOS = 'functions/financial-os.js';
 const COM = 'functions/shared/creator-commercial.js';
-const EARLY = '_fiSnap.exists && _fiSnap.data().purpose === "film_access"';
-const SECOND = 'if (attribution.purpose === "film_access" || attribution.type === "film_access") {\n        logger.warn';
+const EARLY = '_fiSnap.exists && require("./shared/self-settling-purposes").isSelfSettling(_fiSnap.data().purpose)';
+const SECOND = 'if (_ss.isSelfSettling(attribution.purpose) || _ss.isSelfSettling(attribution.type)) {\n          logger.warn';
 const HUB = 'functions/creator-hub.js';
 const ROY = 'functions/shared/creator-royalty.js';
 const PUB = 'functions/shared/creator-publishing.js';
@@ -81,7 +81,7 @@ const M = [
   { name: 'sellerUid leaks onto the film intent (webhook would credit a seller)', file: HUB, suite: 'hub',
     from: "type: PURPOSE, filmId, creatorUid: f.creatorUid,", to: "type: PURPOSE, sellerUid: f.creatorUid, filmId, creatorUid: f.creatorUid,", expect: /NO sellerUid/ },
   { name: 'webhook film branch removed (seller/buyer credit path reopens)', file: 'functions/index.js', suite: 'hub',
-    from: '_fiSnap.exists && _fiSnap.data().purpose === "film_access"', to: 'false', expect: /webhook film branch exists/ },
+    from: EARLY, to: 'false', expect: /webhook film branch exists/ },
   /* ── forged creator / ownership / cross-creator ── */
   { name: 'cross-creator: film ownership check removed', file: HUB, suite: 'hub',
     from: "if (f.creatorUid !== uid && !(allowAdmin && isAdmin)) fail('permission-denied', 'Not your film.');", to: '', expect: /cross-creator edit denied/ },
@@ -112,14 +112,14 @@ const M = [
 
   /* ── money: payment callback (executed webhook, base-differential) ── */
   { group: 'money', name: 'callback: film payment credits the BUYER (all three film guards removed)', file: IDX, suite: 'callback',
-    edits: [[EARLY, 'false'], ['if (attribution.purpose === "film_access" || attribution.type === "film_access") {', 'if (false) {'],
-            ['const _isFilmAccess = attribution.purpose === "film_access" || attribution.type === "film_access";', 'const _isFilmAccess = false;']],
+    edits: [[EARLY, 'false'], ['if (_ss.isSelfSettling(attribution.purpose) || _ss.isSelfSettling(attribution.type)) {', 'if (false) {'],
+            ['const _isFilmAccess = _ssp.isSelfSettling(attribution.purpose) || _ssp.isSelfSettling(attribution.type);', 'const _isFilmAccess = false;']],
     expect: /film: NO wallet written/ },
   { group: 'money', name: 'callback: film payment writes a marketplace commissionLedger (exits removed, credit guard kept)', file: IDX, suite: 'callback',
-    edits: [[EARLY, 'false'], ['if (attribution.purpose === "film_access" || attribution.type === "film_access") {', 'if (false) {']],
+    edits: [[EARLY, 'false'], ['if (_ss.isSelfSettling(attribution.purpose) || _ss.isSelfSettling(attribution.type)) {', 'if (false) {']],
     expect: /NO marketplace commissionLedger/ },
   { group: 'money', name: 'callback: second exit removed → early-intent-read failure leaks to the seller path', file: IDX, suite: 'callback',
-    from: 'if (attribution.purpose === "film_access" || attribution.type === "film_access") {', to: 'if (false) {',
+    from: 'if (_ss.isSelfSettling(attribution.purpose) || _ss.isSelfSettling(attribution.type)) {', to: 'if (false) {',
     expect: /filmIntentReadFails: (NO marketplace commissionLedger|early branch LOST its read and the SECOND exit fired)/ },
   { group: 'money', name: 'callback: ordinary marketplace payment stops crediting the seller', file: IDX, suite: 'callback',
     from: '} else if (_isFilmAccess) {', to: '} else if (true) {', expect: /marketplace: (SELLER credited|store identical)/ },

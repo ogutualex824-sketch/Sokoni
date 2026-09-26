@@ -163,41 +163,45 @@ const PURPOSES = {
   },
 
   /* ── Event tickets ────────────────────────────────────────────────────
-     Quantity is client-supplied and therefore bounded; the unit price is
-     read from the event. A client that could send both would be setting its
-     own total. */
+     Priced from the event-hub ORDER, never from the request. purchaseTickets
+     (event-hub.js) reserves inventory and writes eventOrders/{orderId} with the
+     server-computed total inside one transaction; this pricer only proves the
+     order is the caller's, still unpaid, and payable, and quotes its total.
+     The previous pricer read an `ev.ticketTiers` ARRAY and accepted statuses
+     published/active/on_sale — event-hub stores tiers in eventTicketTiers and
+     marks events 'live', so it refused every real event and nothing called it.
+     The order id is the payment reference (preferredRef): one order, one
+     payment identity, so a retried checkout reuses it instead of minting a
+     second intent for the same seats. */
   event_ticket: {
-    resourceType: 'event',
+    resourceType: 'eventOrder',
     async price(uid, data) {
-      const eventId = String(data.eventId || '').trim();
-      const tierId  = String(data.tierId || '').trim();
-      const qty     = Math.floor(Number(data.quantity) || 1);
-      if (!eventId) fail('invalid-argument', 'eventId is required.');
-      if (!(qty >= 1 && qty <= 20)) fail('invalid-argument', 'quantity must be between 1 and 20.');
+      const orderId = String(data.orderId || '').trim();
+      if (!/^[A-Za-z0-9_-]{6,128}$/.test(orderId)) fail('invalid-argument', 'orderId is required.');
+      const oSnap = await db().collection('eventOrders').doc(orderId).get();
+      if (!oSnap.exists) fail('not-found', 'Order not found.');
+      const o = oSnap.data();
+      if (o.buyerUid !== uid) fail('permission-denied', 'This order belongs to another account.');
+      if (o.status !== 'pending_payment') fail('failed-precondition', `Order is ${o.status || 'unknown'}, not awaiting payment.`);
+      const cents = Math.round(Number(o.totalAmount) * 100);
+      if (!Number.isFinite(cents) || cents <= 0) fail('failed-precondition', 'Order has no payable total.');
 
-      const eSnap = await db().collection('events').doc(eventId).get();
+      const eSnap = await db().collection('events').doc(String(o.eventId || '')).get();
       if (!eSnap.exists) fail('not-found', 'Event not found.');
       const ev = eSnap.data();
-      if (ev.status && !['published', 'active', 'on_sale'].includes(String(ev.status))) {
-        fail('failed-precondition', 'Tickets are not on sale for this event.');
-      }
-
-      /* Tier price if tiers exist, otherwise the event price. */
-      let unit = Number(ev.ticketPrice);
-      if (Array.isArray(ev.ticketTiers) && ev.ticketTiers.length) {
-        const tier = ev.ticketTiers.find(t => String(t.id) === tierId) || ev.ticketTiers[0];
-        if (!tier) fail('not-found', 'Ticket tier not found.');
-        unit = Number(tier.price);
-      }
-      const cents = Math.round(unit * 100) * qty;
-      if (!Number.isFinite(cents) || cents <= 0) fail('failed-precondition', 'Ticket has no payable price.');
+      if (ev.status !== 'live') fail('failed-precondition', 'Tickets are not on sale for this event.');
+      if (!ev.organizerUid) fail('failed-precondition', 'Event has no organizer to settle to.');
 
       return {
         amountCents: cents,
-        currency: ev.currency || 'KES',
-        resourceType: 'event',
-        resourceId: eventId,
-        metadata: { tierId: tierId || null, quantity: qty, organizerUid: ev.organizerUid || null },
+        currency: o.currency || ev.currency || 'KES',
+        resourceType: 'eventOrder',
+        resourceId: orderId,
+        preferredRef: orderId,
+        metadata: {
+          type: 'event_ticket', eventId: o.eventId, tierId: o.tierId || null,
+          quantity: Number(o.quantity) || 0, organizerUid: ev.organizerUid,
+        },
       };
     },
   },

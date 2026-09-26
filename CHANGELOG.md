@@ -1,3 +1,30 @@
+## 2026-09-26 (189) — Events: paid tickets finally work — payment → entitlement → held settlement → release
+
+- **Summary:** event-hub reserved seats and priced orders, then redirected to a checkout that
+  never read the order: paid tickets could never become valid, organizers were never settled,
+  `cancelEvent`'s `pending_refund` had no consumer and unpaid orders held seats for ever. Closed
+  on the canonical rails — `event_ticket` intent priced from the ORDER (ref = orderId), the
+  webhook's self-settling exit (the base webhook would have credited the BUYER at 5 % —
+  positive control in the suite), `eventOnTicketPayment` → entitlement-engine exactly once,
+  settlement HELD until event end + 24 h, then `eventReleaseSettlements` credits the organizer
+  once. Refunds ride the existing fos* authority via an additive hook. Also: 100 % promo orders
+  are paid at once; boolean-claim admins can cancel events; approved `event_organizer` passes the
+  organizer gate; Creator audit rows now appear in the AdminOS Audit Center (`createdAt`).
+- **Commercial policy:** new `functions/shared/commercial-policy.js` maps category/transaction →
+  policy WITHOUT holding rates (Creator 30 % net · Events 3 % net · marketplace 15 % · POS 5 % ·
+  Quick Charge 5 % · Streaming → Creator). No global Entertainment rate; unmapped → refused.
+- **Files:** `functions/event-settlement.js`, `functions/shared/{commercial-policy,provider-fee,
+  self-settling-purposes}.js` (new); `functions/{event-hub,payment-purposes,index,financial-os,
+  admin-os-dispatch,creator-hub}.js`; `firestore.rules` (+build); `firestore.indexes.json`;
+  `scripts/test-event-settlement.js` (new, 83/0); harness + Creator suites re-anchored.
+- **Database:** new `eventSettlements`, `eventExceptions`; `commissionLedger/evt_{ref}`;
+  `walletTransactions/{uid}_{ref}_event`; indexes eventSettlements(status,releaseAfter),
+  eventOrders(status,createdAt). **Rules:** organizer reads own settlements; exceptions admin-only.
+- **API:** `purchaseTickets` returns `payment:{purpose,orderId}`; new trigger + 2 schedules;
+  AdminOS ops `eventAdmin{Overview,Settlements,Exceptions,RefundQueue,Events,AttestFee}`.
+- **Evidence:** event 83/0 · refund matrix 24/0 · exactly-once 103/0 · creator callback 78/0 ·
+  creator hub 260/0 · STK 66/0 · payout 62/0. **Not deployed.**
+
 ## 2026-09-26 (188) — Canonical money-version decision register (docs only)
 
 - **Summary:** full read-only census of the three commercial money modules across all 1,721

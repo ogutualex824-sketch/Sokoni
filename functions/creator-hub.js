@@ -92,8 +92,13 @@ const STAT_SHARDS = 10;
 const _statShard = (filmId, key) => _db().collection('filmStats').doc(filmId).collection('shards').doc(String(parseInt(_hash(key).slice(0, 6), 16) % STAT_SHARDS));
 
 async function _adminAudit(action, actorUid, details) {
+  /* `createdAt` + `performedBy` are the fields AdminOS's Audit Center reads
+     (adminGetAuditLogs orders by createdAt — a document without it is silently
+     dropped by that query, which is why Creator actions never appeared there).
+     `at` / `actorUid` are kept for existing readers. */
   await _db().collection(COL.ADMIN_AUDIT).add({
-    action, actorUid, module: 'creator-hub', details, at: FieldValue.serverTimestamp(),
+    action, actorUid, performedBy: actorUid, module: 'creator-hub', details,
+    at: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp(),
   }).catch((e) => logger.error('[creator] admin audit write failed', { action, err: e.message }));
 }
 
@@ -673,16 +678,8 @@ const filmAccessAdapter = {
  * reported; else value − net_amount if both reported; else UNKNOWN — and an
  * unknown fee WITHHOLDS the accrual rather than assuming zero.
  */
-function _providerFee(payment) {
-  const rep = payment.providerReport || {};
-  const toCents = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.round(n * 100) : null; };
-  const charges = rep.charges == null ? null : toCents(rep.charges);
-  if (charges != null && charges >= 0) return { cents: charges, source: 'provider_charges' };
-  const value = rep.value == null ? null : toCents(rep.value);
-  const net = rep.netAmount == null ? null : toCents(rep.netAmount);
-  if (value != null && net != null && value >= net) return { cents: value - net, source: 'provider_value_minus_net' };
-  return { cents: null, source: 'unreported' };
-}
+/* One definition, shared with event ticket settlement (shared/provider-fee.js). */
+const _providerFee = require('./shared/provider-fee').providerFee;
 
 async function _exception(ref, kind, detail) {
   await _db().collection(COL.EXCEPTIONS).doc(`${kind}_${ref}`).set({

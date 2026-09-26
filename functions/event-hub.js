@@ -27,10 +27,16 @@ function requireAuth(context) {
   return context.auth.uid;
 }
 
+/* An organizer is either the legacy numeric role (users.role >= 2) or an account the
+   canonical approval authority granted the `event_organizer` role (application-lifecycle
+   grantAccountRole → users.roles[]). Both are server-written: firestore.rules' noAdminFields
+   blocks clients from writing `role` and `roles`. Nothing in functions/ writes the numeric
+   role, so before the approval path existed NO account could create an event. */
 async function requireOrganizer(uid) {
   const user = await getUser(uid);
   const role = user.role || 0;
-  if (role < 2) throw new HttpsError('permission-denied', 'Organizer role required');
+  const approved = Array.isArray(user.roles) && user.roles.includes('event_organizer');
+  if (role < 2 && !approved) throw new HttpsError('permission-denied', 'Organizer role required');
   return user;
 }
 
@@ -187,7 +193,9 @@ exports.cancelEvent = onCall(CF_OPTS, async (req) => {
   const tok = await auth().getUser(uid);
   const role = (tok.customClaims || {}).role || 0;
   const isOwner = ev.organizerUid === uid;
-  const isAdmin = role >= 4;
+  /* Platform admins hold boolean claims (admin-claim.js); the numeric role >= 4 is legacy and
+     is minted by nothing, so it alone locked every real admin out of cancelling an event. */
+  const isAdmin = role >= 4 || require('./admin-claim').isAdmin(req);
   if (!isOwner && !isAdmin) throw new HttpsError('permission-denied', 'Not authorised');
   if (ev.status === 'cancelled') throw new HttpsError('failed-precondition', 'Already cancelled');
 
@@ -545,7 +553,10 @@ exports.purchaseTickets = onCall(CF_OPTS, async (req) => {
       promoCode: promoCode || null,
       attendeeName: sanitize(attendeeName, 120),
       attendeeEmail: sanitize(attendeeEmail, 200),
-      status: tier.price === 0 ? 'paid' : 'pending_payment',
+      /* Nothing to collect (a free tier, or a promo covering the whole order) = paid now.
+         Previously a 100 % promo left a PAID-tier order at pending_payment for ever: there
+         was no amount to take and no path that could complete it. */
+      status: totalAmount <= 0 ? 'paid' : 'pending_payment',
       idempotencyKey,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
@@ -592,7 +603,7 @@ exports.purchaseTickets = onCall(CF_OPTS, async (req) => {
       qrData: `sokoni-ticket:${ticketRef.id}:${token}`,
       attendeeName: sanitize(attendeeName, 120),
       attendeeEmail: sanitize(attendeeEmail, 200),
-      status: tier.price === 0 ? 'valid' : 'awaiting_payment',
+      status: totalAmount <= 0 ? 'valid' : 'awaiting_payment',
       checkedIn: false,
       checkedInAt: null,
       checkedInBy: null,
@@ -606,8 +617,11 @@ exports.purchaseTickets = onCall(CF_OPTS, async (req) => {
     orderId,
     totalAmount,
     currency: tier.currency,
-    status: tier.price === 0 ? 'paid' : 'pending_payment',
+    status: totalAmount <= 0 ? 'paid' : 'pending_payment',
     ticketCount: qty,
+    /* The next step for a payable order: createPaymentIntent({ purpose: 'event_ticket',
+       orderId }) — the server prices THIS order; the client never sends an amount. */
+    payment: totalAmount <= 0 ? null : { purpose: 'event_ticket', orderId },
   };
 });
 
@@ -1056,4 +1070,5 @@ module.exports = {
   createEventPromoCode:     exports.createEventPromoCode,
   validateEventPromoCode:   exports.validateEventPromoCode,
   autoEndEvents:            exports.autoEndEvents,
+  _internal:                { genTicketToken, requireOrganizer, VALID_CATEGORIES },
 };

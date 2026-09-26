@@ -4584,6 +4584,16 @@ service cloud.firestore {
       allow read:  if isAdmin();
       allow write: if false;
     }
+    // Event ticket settlement (functions/event-settlement.js) — server-written only. An organizer
+    // may read their OWN settlements (what they will be paid, and when); exceptions are admin-only.
+    match /eventSettlements/{paymentRef} {
+      allow read:  if isAuthed() && (resource.data.organizerUid == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /eventExceptions/{exceptionId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
     match /eventPromoCodes/{codeId} {
       allow read:  if isAuthed();
       allow write: if false;

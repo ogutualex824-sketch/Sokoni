@@ -621,7 +621,7 @@ async function buy(buyer, filmId) {
   console.log('\n── wiring ──');
   const idx = fs.readFileSync(Path.join(FN, 'index.js'), 'utf8');
   const wh = idx.slice(idx.indexOf('exports.webhookIntasend'));
-  const iFilm = wh.indexOf('_fiSnap.data().purpose === "film_access"');
+  const iFilm = wh.indexOf('isSelfSettling(_fiSnap.data().purpose)');
   ck('webhook film branch exists', iFilm > 0);
   ck('…and runs BEFORE the commissionLedger write', iFilm > 0 && iFilm < wh.indexOf('collection("commissionLedger").doc(apiRef)'));
   ck('…and BEFORE the seller wallet credit', iFilm > 0 && iFilm < wh.indexOf('_sellerId  ='));

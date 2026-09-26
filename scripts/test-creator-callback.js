@@ -107,8 +107,8 @@ for (const sc of ['film', 'filmIntentReadFails', 'filmHosted']) {
   ck(`${sc}: participants split the pool exactly (7000/3000 → 237.65 / 101.85)`, earn.reduce((a, b) => a + b, 0) === 33950 && earn.includes(23765) && earn.includes(10185), earn.join(','));
   ck(`${sc}: replay → alreadyAccrued, still ONE allocation`, r.royalty.replay.royalty.alreadyAccrued === true && paths(st, /^royaltyLedger\//).length === 4);
   ck(`${sc}: no outbound network`, r.outbound.length === 0);
-  const early = r.logs.some((l) => /royalty path, no seller credit/.test(l));
-  const second = r.logs.some((l) => /reached the seller path/.test(l));
+  const early = r.logs.some((l) => /self-settling purpose — no generic commission, no seller credit/.test(l));
+  const second = r.logs.some((l) => /self-settling purpose reached the seller path/.test(l));
   if (sc === 'film' || sc === 'filmHosted') ck(sc + ': routed by the EARLY branch', early && !second, r.logs.join(' || ').slice(0, 200));
   else ck('filmIntentReadFails: early branch LOST its read and the SECOND exit fired', !early && second && r.logs.some((l) => /purpose check failed/.test(l)), r.logs.join(' || ').slice(0, 200));
 }

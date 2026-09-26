@@ -527,6 +527,12 @@ async function _afterRefundSettled(refundId, refund, actorUid, source) {
       /* No-op unless the payment is a Creator Hub film purchase; never throws. */
       await require('./creator-hub').onFilmRefundProcessed({ payRef: refund.payRef, refundId, amountCents: refund.amountCents, source });
     } catch (e) { logger.error('[FOS/refund] creator reversal hook failed (refund stands)', { refundId, err: e.message }); }
+    try {
+      /* No-op unless the payment is an event ticket (event-settlement.js). A full refund
+         revokes the tickets and reverses the HELD settlement exactly once through the
+         entitlement engine; a partial refund is recorded for AdminOS. Never throws here. */
+      await require('./event-settlement').onEventRefundProcessed({ payRef: refund.payRef, refundId, amountCents: refund.amountCents, source });
+    } catch (e) { logger.error('[FOS/refund] event reversal hook failed (refund stands)', { refundId, err: e.message }); }
   }
 }
 

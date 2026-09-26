@@ -7683,8 +7683,10 @@ exports.webhookIntasend = onRequest(
          refuses the credit on attribution.purpose/type instead. */
       try {
         const _fiSnap = await db.collection("paymentIntents").doc(existing.intentRef || apiRef).get();
-        if (_fiSnap.exists && _fiSnap.data().purpose === "film_access") {
-          logger.info("[webhookIntasend] film_access — royalty path, no seller credit", { ref: apiRef });
+        /* Self-settling purposes (film_access, event_ticket) — see
+           shared/self-settling-purposes.js. Each settles through its own adapter. */
+        if (_fiSnap.exists && require("./shared/self-settling-purposes").isSelfSettling(_fiSnap.data().purpose)) {
+          logger.info("[webhookIntasend] self-settling purpose — no generic commission, no seller credit", { ref: apiRef, purpose: _fiSnap.data().purpose });
           res.status(200).send("OK"); return;
         }
       } catch (filmBranchErr) {
@@ -7767,9 +7769,12 @@ exports.webhookIntasend = onRequest(
          calculation, the commissionLedger write and the seller credit: Creator
          commission is 30 % of net under shared/creator-commercial.js and is booked
          by the royalty accrual — never by this marketplace path. */
-      if (attribution.purpose === "film_access" || attribution.type === "film_access") {
-        logger.warn("[webhookIntasend] film_access reached the seller path — no commission, no credit", { ref: apiRef, source: attribution.source });
-        res.status(200).send("OK"); return;
+      {
+        const _ss = require("./shared/self-settling-purposes");
+        if (_ss.isSelfSettling(attribution.purpose) || _ss.isSelfSettling(attribution.type)) {
+          logger.warn("[webhookIntasend] self-settling purpose reached the seller path — no commission, no credit", { ref: apiRef, purpose: attribution.purpose || attribution.type, source: attribution.source });
+          res.status(200).send("OK"); return;
+        }
       }
 
       const category = payData.meta?.category || "default";
@@ -7888,7 +7893,8 @@ exports.webhookIntasend = onRequest(
         /* Creator Hub defence in depth: the early film branch above normally
            returns first; if its intent read failed, this still refuses to credit
            a film payment (purpose from the intent, type from intent metadata). */
-        const _isFilmAccess = attribution.purpose === "film_access" || attribution.type === "film_access";
+        const _ssp = require("./shared/self-settling-purposes");
+        const _isFilmAccess = _ssp.isSelfSettling(attribution.purpose) || _ssp.isSelfSettling(attribution.type);
         if (_isSubscription) {
           console.log(`[webhookIntasend] wallet credit skipped (subscription): ${apiRef}`);
         } else if (_isFilmAccess) {
@@ -13005,3 +13011,13 @@ exports.posCommissionReminder = _posComm.posCommissionReminder; // schedule 06:0
    failure this module exists to make impossible. */
 const _hcSubAct = require('./healthcare-subscription-activation');
 exports.hcActivateSubscriptionOnPayment = _hcSubAct.hcActivateSubscriptionOnPayment; // trigger: payments/{paymentId}
+
+/* ── EVENT TICKETS: payment → entitlement → held settlement → release ─────────────────────────
+   event-settlement.js closes the event-hub chain on the canonical rails: the event_ticket intent
+   prices the ORDER, the webhook stops before its generic seller credit (self-settling purpose),
+   and this trigger activates through entitlement-engine exactly once. Re-exported BY NAME: a
+   trigger or schedule not exported under its exact name is never deployed. */
+const _eventSettle = require('./event-settlement');
+exports.eventOnTicketPayment     = _eventSettle.eventOnTicketPayment;     // trigger: payments/{paymentId}
+exports.eventReleaseSettlements  = _eventSettle.eventReleaseSettlements;  // schedule: hourly — pay organizers after the event
+exports.eventExpireUnpaidOrders  = _eventSettle.eventExpireUnpaidOrders;  // schedule: 15 min — release unpaid seats
