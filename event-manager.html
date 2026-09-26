@@ -406,11 +406,17 @@
 <script src="/sokoni-config.js"></script>
 <script src="/sokoni-dashboard-profile-core.js"></script>
 <script src="/sokoni-dashboard-profile.js"></script>
+<!-- Canonical legal acceptance (legalDispatch): versioned agreements, signature, declaration. -->
+<script src="/sokoni-legal-sign.js"></script>
+<script src="/sokoni-legal-gate.js"></script>
 <script>
   const app  = firebase.initializeApp(window.SOKONI_CONFIG, 'event-manager');
   const auth = firebase.auth(app);
   const fns  = firebase.functions(app);
   fns.useRegion('us-central1');
+  /* The legal components call legalDispatch through THIS signed-in app (a named app; the default
+     app would be signed out) — sokoni-legal-sign.js / -gate.js honour window.__sokoniFns. */
+  window.__sokoniFns = fns;
 
   let myEvents = [];
   let currentEventId = null;
@@ -504,11 +510,26 @@
         <label>ID document *<select name="idType" required><option value="national_id">National ID</option><option value="passport">Passport</option><option value="company_registration">Company registration</option></select></label>
         <label>Last 4 characters of the document *<input name="idLast4" required maxlength="4" minlength="4" autocomplete="off"></label>
         <label>About your events<textarea name="description" maxlength="800" rows="3"></textarea></label>
-        <label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" name="agree" required>
-          <span>I accept the organizer terms: ticket revenue is paid to my wallet after each event, less the platform ticket commission and payment-provider fees; refunds for cancelled events are returned to buyers.</span></label>
+        <fieldset style="border:1px solid var(--border,#333);border-radius:8px;padding:10px">
+          <legend>Agreements (required)</legend>
+          <p style="margin:0 0 8px;font-size:13px;opacity:.8">Read and accept each agreement. Your acceptance is recorded with the version you accepted; you can review it any time in the <a href="/legal-centre.html" target="_blank" rel="noopener">Legal Centre</a>.</p>
+          <div id="org-legal" data-state="pending"></div>
+        </fieldset>
         <button type="submit" class="btn-primary" style="min-height:44px">Submit application</button>
         <div id="org-msg" role="status" aria-live="polite"></div>
       </form></section>`;
+    const legalHost = document.getElementById('org-legal');
+    let legalDone = false;
+    if (window.SokoniLegalGate) {
+      window.SokoniLegalGate.mount(legalHost, { role: 'event_organizer', onComplete: (ok, res) => {
+        /* "unavailable" is the component's non-blocking fallback — it is NOT an acceptance, so it
+           must not unlock submission (approval re-checks legalAcceptances server-side anyway). */
+        legalDone = ok === true && !(res && res.unavailable);
+        legalHost.dataset.state = legalDone ? 'accepted' : 'pending';
+      } });
+    } else {
+      legalHost.textContent = 'The agreement service did not load. Refresh the page to apply.';
+    }
     document.getElementById('org-form').onsubmit = async (e) => {
       e.preventDefault();
       const f = new FormData(e.target), msg = document.getElementById('org-msg');
@@ -519,7 +540,7 @@
       if (!okPhone(phone) || !okPhone(payout)) { msg.textContent = 'Enter valid Safaricom numbers.'; return; }
       if (!types.length) { msg.textContent = 'Choose at least one event type.'; return; }
       if (!/^[A-Za-z0-9]{4}$/.test(String(f.get('idLast4') || ''))) { msg.textContent = 'Enter the last 4 characters of the document.'; return; }
-      if (!f.get('agree')) { msg.textContent = 'Accept the organizer terms to apply.'; return; }
+      if (!legalDone) { msg.textContent = 'Read and accept every agreement above before submitting.'; return; }
       e.target.querySelector('button[type=submit]').disabled = true;
       msg.textContent = 'Submitting…';
       try {
@@ -530,7 +551,9 @@
           eventTypes: types.slice(0, 17), scale: f.get('scale'), payoutPhone: payout,
           identity: { documentType: f.get('idType'), documentLast4: String(f.get('idLast4')).toUpperCase() },
           description: String(f.get('description') || '').slice(0, 800),
-          agreementAccepted: true, agreementVersion: 'organizer-v1-2026-09-26',
+          /* The acceptance itself is the versioned legalAcceptances record written by legalAccept;
+             approval (applicationDecide) checks THAT, never this pointer. */
+          agreementSource: 'legalAcceptances', agreementRole: 'event_organizer',
           status: 'pending', source: 'event-manager', createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
         msg.textContent = '';

@@ -173,6 +173,14 @@ function _publicCreator(uid, c, { withContact = false } = {}) {
 
 async function creatorRegister(req) {
   const uid = _uid(req);
+  /* Creator agreements (legal-agreements ROLE_AGREEMENTS.creator: content, ownership declaration,
+     royalty settlement, data processing) — accepted in Creator Studio through legalAccept. A NEW
+     registration must hold them once `legalConfig/enforcement.creator` is switched on (the
+     platform's dark-launch pattern, so existing creators are never locked out mid-rollout).
+     Profile edits by an existing creator are not re-gated here. */
+  if (!(await _db().collection(COL.CREATORS).doc(uid).get()).exists) {
+    await require('./legal-agreements').assertLegalCompliance(uid, 'creator');
+  }
   const d = req.data || {};
   const displayName = String(d.displayName || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 80);
   if (displayName.length < 2) fail('invalid-argument', 'Display name is required.');

@@ -1,3 +1,25 @@
+## 2026-09-27 (197) — Events ops P4: Entertainment agreements on the canonical legal authority
+
+- **Catalogue** (`functions/legal-agreements.js` ROLE_AGREEMENTS): `event_organizer` — organizer agreement,
+  ticketing & refund obligations, staff & cash handling, commission (3 %), settlement, data processing (+ the
+  Professional Declaration); `creator` — content, ownership declaration, royalty settlement (30/70 net of fee),
+  data processing; `venue_owner` — listing. Key points state ONLY implemented rules.
+- **Text:** new `entertainment-terms.html` (anchored sections; v1.0 operational terms, explicitly subject to legal
+  review — **owner/legal must approve the wording before deploy**). Legal components link each agreement's own URL.
+- **Acceptance:** signed through the existing legalAccept (typed/drawn/stamp signature, declaration, server-captured
+  UA/IP, one record per version, visible in the Legal Centre). No checkbox is pre-selected.
+- **Approval:** `applicationDecide` gates `event_organizer` like healthcare — on `legalAcceptances` via
+  `complianceFor`, FAIL CLOSED; the client boolean is no longer consulted. A new agreement version makes the
+  organizer non-compliant until re-accepted; the old record is kept.
+- **Intakes:** event-manager organizer application mounts the legal gate (named app via `window.__sokoniFns`;
+  the component's "unavailable" fallback does not unlock submission) and no longer writes a hard-coded version.
+  Creator Studio mounts it for NEW creators; `creator.register` calls `assertLegalCompliance(uid,'creator')` —
+  dark-launched (`legalConfig/enforcement.creator`), the platform's rollout pattern.
+- **Files:** `functions/{legal-agreements,application-lifecycle,creator-hub}.js`, `sokoni-legal-{gate,sign}.js`,
+  `event-manager.html`, `creator-studio.html`, `entertainment-terms.html` (new),
+  `scripts/test-entertainment-agreements.js` (new, 25/0). Regression: legal 45 · application decision 17 ·
+  role 30 · creator hub 260 · completion 66 · ui 64 · registry 65 · event-ops 50 · refunds 52. **Not deployed.**
+
 ## 2026-09-27 (196) — Events ops P3: refund policy, reason catalogue, Refund Request Wizard (server)
 
 - **Policy (organizer, before sales):** `eventSetRefundPolicy` — `none` | `before_cutoff` (deadline before the

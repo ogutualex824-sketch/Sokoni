@@ -71,7 +71,7 @@
     };
   }
 
-  var PROFESSIONAL = ['merchant', 'provider', 'driver', 'rider', 'property',
+  var PROFESSIONAL = ['event_organizer', 'merchant', 'provider', 'driver', 'rider', 'property',
                       'hotel', 'restaurant', 'healthcare', 'employer'];
 
   var DECLARATION = [

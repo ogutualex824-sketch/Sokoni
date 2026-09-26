@@ -85,6 +85,46 @@ const ROLE_AGREEMENTS = {
     { id: 'employer-agreement',    name: 'Employer Agreement' },
     { id: 'recruitment-standards', name: 'Recruitment Standards' },
   ],
+  /* ── Entertainment (docs/ENTERTAINMENT_CATEGORY_MATRIX.md). Key points state ONLY rules the code
+     enforces; the wording is v1.0 operational terms pending owner/legal review before deploy. ── */
+  event_organizer: [
+    { id: 'event-organizer-agreement', name: 'Event Organizer Agreement', url: '/entertainment-terms.html#event-organizer-agreement',
+      summary: 'How you run ticketed events on SOKONI.',
+      keyPoints: ['Every ticket — online, cash or card at the door — is sold through SOKONI.',
+        'Each ticket has a unique PIN; admission is recorded against it.',
+        'You may add temporary event staff; you are responsible for what they do.'] },
+    { id: 'event-ticketing-refund-obligations', name: 'Ticketing & Refund Obligations', url: '/entertainment-terms.html#event-ticketing-refund-obligations',
+      summary: 'The refund policy you set before sales, and when buyers are refunded.',
+      keyPoints: ['You set the refund policy before selling; it is locked once a ticket is sold.',
+        'If you cancel an event, buyers are refunded.',
+        'Refunds are reviewed by SOKONI and paid through the original payment method.'] },
+    { id: 'event-staff-cash-handling', name: 'Event Staff & Cash Handling', url: '/entertainment-terms.html#event-staff-cash-handling',
+      summary: 'Door sales and the people you authorise to make them.',
+      keyPoints: ['Cash and card sales at the door must be recorded in SOKONI by a named staff member.',
+        'Card sales need the terminal transaction reference and must match the ticket total.',
+        "SOKONI's commission on door sales is deducted from your online ticket proceeds."] },
+    { id: 'commission-agreement',     name: 'Commission Agreement', url: '/entertainment-terms.html#event-commission',
+      keyPoints: ['SOKONI charges 3% per ticket, on the ticket value after payment-provider fees.'] },
+    { id: 'payment-settlement-terms', name: 'Payment Settlement Terms', url: '/entertainment-terms.html#event-settlement',
+      keyPoints: ['Online ticket proceeds are held until 24 hours after your event ends, then paid to your SOKONI wallet.'] },
+    { id: 'data-processing-agreement', name: 'Data Processing Agreement' },
+  ],
+  creator: [
+    { id: 'creator-content-agreement', name: 'Creator Content Agreement', url: '/entertainment-terms.html#creator-content-agreement',
+      keyPoints: ['Titles are reviewed and approved by SOKONI before they are published.',
+        'Playback is licensed per purchase or rental; SOKONI applies viewer watermarks.'] },
+    { id: 'content-ownership-declaration', name: 'Content Ownership Declaration', url: '/entertainment-terms.html#content-ownership-declaration',
+      keyPoints: ['You own, or are licensed to distribute, everything you upload.'] },
+    { id: 'royalty-settlement-terms', name: 'Royalty Settlement Terms', url: '/entertainment-terms.html#royalty-settlement-terms',
+      keyPoints: ['From each sale the payment-provider fee is deducted first; SOKONI keeps 30% and the creator pool is 70%.',
+        'Royalties are settled quarterly to your SOKONI wallet.'] },
+    { id: 'data-processing-agreement', name: 'Data Processing Agreement' },
+  ],
+  venue_owner: [
+    { id: 'venue-listing-agreement', name: 'Venue Listing Agreement', url: '/entertainment-terms.html#venue-listing-agreement',
+      keyPoints: ['Venue listings are reviewed by SOKONI before they are public.',
+        'Booking requests are enquiries; no payment is taken through a venue listing today.'] },
+  ],
 };
 ROLE_AGREEMENTS.rider = ROLE_AGREEMENTS.driver; // riders share the driver set
 
@@ -384,7 +424,7 @@ _h.legalAccept = async (req) => {
   const decl = req.data?.declaration || {};
   const declarationAccepted = decl.accepted === true;
   const declarationVersion = _san(decl.version, 20) || DECLARATION_VERSION;
-  const PROFESSIONAL_ROLES = ['merchant', 'provider', 'driver', 'rider', 'property',
+  const PROFESSIONAL_ROLES = ['event_organizer', 'merchant', 'provider', 'driver', 'rider', 'property',
                               'hotel', 'restaurant', 'healthcare', 'employer'];
   if (PROFESSIONAL_ROLES.indexOf(role) !== -1 && !declarationAccepted) {
     throw new HttpsError('failed-precondition',

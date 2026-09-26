@@ -22,6 +22,10 @@
     'merchant-agreement': 'seller-terms.html', 'marketplace-seller-terms': 'seller-terms.html',
     'returns-refund-policy': 'returns-policy.html', 'data-processing-agreement': 'privacy.html',
     'service-provider-agreement': 'provider-terms.html', 'booking-cancellation-policy': 'provider-terms.html',
+    'event-organizer-agreement': 'entertainment-terms.html#event-organizer-agreement', 'event-ticketing-refund-obligations': 'entertainment-terms.html#event-ticketing-refund-obligations',
+    'event-staff-cash-handling': 'entertainment-terms.html#event-staff-cash-handling', 'creator-content-agreement': 'entertainment-terms.html#creator-content-agreement',
+    'content-ownership-declaration': 'entertainment-terms.html#content-ownership-declaration', 'royalty-settlement-terms': 'entertainment-terms.html#royalty-settlement-terms',
+    'venue-listing-agreement': 'entertainment-terms.html#venue-listing-agreement',
   };
   function docFor(id) { return LEGAL_DOC[id] || 'legal-hub.html'; }
 
@@ -33,8 +37,10 @@
 
   /* Resolve a legalDispatch caller — prefers an injected one, else compat SDK. */
   function caller() {
-    if (typeof firebase !== 'undefined' && firebase.functions) {
-      var fns = firebase.functions();
+    /* Same convention as sokoni-legal-sign.js: a page whose signed-in Firebase app is a NAMED app
+       (event-manager.html) injects its functions instance — the default app would be signed out. */
+    if (window.__sokoniFns || (typeof firebase !== 'undefined' && firebase.functions)) {
+      var fns = window.__sokoniFns || firebase.functions();
       return function (op, data) {
         return fns.httpsCallable('legalDispatch', { timeout: 30000 })(
           Object.assign({ op: op }, data || {})
@@ -108,7 +114,7 @@
           '<div class="slg-sub">Required before you continue. Tap a name to read it.</div>' +
           '<div class="slg-list">' + all.map(function (a) {
             return '<label class="slg-item"><input type="checkbox" class="slg-cb">' +
-              '<span>I agree to the <a href="' + docFor(a.id) + '" target="_blank" rel="noopener">' +
+              '<span>I agree to the <a href="' + esc(a.url || docFor(a.id)) + '" target="_blank" rel="noopener">' +
               esc(a.name) + '</a></span></label>';
           }).join('') + '</div>' +
           '<button class="slg-btn" disabled>Accept &amp; Continue</button>';
@@ -163,7 +169,7 @@
           var ok = mine && mine.version === a.version;
           var when = mine && mine.acceptedAt && mine.acceptedAt._seconds
             ? new Date(mine.acceptedAt._seconds * 1000).toLocaleDateString() : '';
-          return '<div class="slg-row"><span><a href="' + docFor(a.id) + '" target="_blank" rel="noopener">' +
+          return '<div class="slg-row"><span><a href="' + esc(a.url || docFor(a.id)) + '" target="_blank" rel="noopener">' +
             esc(a.name) + '</a> <span style="opacity:.6">v' + esc(a.version) + '</span>' +
             (when ? ' <span style="opacity:.5">· ' + esc(when) + '</span>' : '') + '</span>' +
             '<span class="slg-badge ' + (ok ? 'slg-ok">Accepted' : 'slg-pending">' + (mine ? 'Update needed' : 'Pending')) +

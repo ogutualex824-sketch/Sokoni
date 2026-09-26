@@ -51,6 +51,9 @@
 <body>
   <main class="wrap" id="app"><p class="muted">Loading…</p></main>
 
+  <!-- Canonical legal acceptance (legalDispatch) for NEW creators — Creator + Streaming agreements. -->
+  <script src="/sokoni-legal-sign.js"></script>
+  <script src="/sokoni-legal-gate.js"></script>
   <script type="module">
   'use strict';
   import { app, auth, storage } from '/firebase.js';
@@ -59,6 +62,9 @@
   import { ref as sref, uploadBytesResumable, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js';
 
   const fn = getFunctions(app, 'us-central1');
+  /* The legal components speak the compat API (fns.httpsCallable(name, opts)); this page uses the
+     modular SDK, so they are handed an adapter bound to THIS signed-in app. */
+  window.__sokoniFns = { httpsCallable: (name, opts) => httpsCallable(fn, name, opts) };
   const cd = (op, data = {}) => httpsCallable(fn, 'creatorDispatch')({ op, ...data }).then((r) => r.data);
   const $app = document.getElementById('app');
   const P = () => window.SokoniCreatorRules;
@@ -229,13 +235,22 @@
           <label>Phone (private)<input name="phone" type="tel" maxlength="16"></label>
         </div>
         <label style="margin-top:10px">Biography<textarea name="bio" rows="4" maxlength="2000">${esc(c.bio || '')}</textarea></label>
+        ${existing ? '' : '<fieldset class="panel" style="margin-top:10px"><legend>Agreements (required)</legend><p class="muted">Read and accept each agreement. Your acceptance is recorded with its version — see the <a href="/legal-centre.html" target="_blank" rel="noopener">Legal Centre</a>.</p><div id="creatorLegal"></div></fieldset>'}
         <progress id="avProg" hidden max="1"></progress>
         <div class="row"><button class="btn">${existing ? 'Save' : 'Apply'}</button> <button type="button" class="btn ghost" id="cancel">Cancel</button></div>
         <div class="msg" id="regMsg" role="status"></div>
       </form>`;
     document.getElementById('cancel').onclick = () => (existing ? home() : (location.href = '/creator.html'));
+    let legalDone = !!existing;   /* profile edits are not re-gated */
+    const legalHost = document.getElementById('creatorLegal');
+    if (legalHost && window.SokoniLegalGate) {
+      window.SokoniLegalGate.mount(legalHost, { role: 'creator', onComplete: (ok, res) => { legalDone = ok === true && !(res && res.unavailable); } });
+    } else if (legalHost) {
+      legalHost.textContent = 'The agreement service did not load. Refresh the page to apply.';
+    }
     document.getElementById('regForm').onsubmit = async (e) => {
       e.preventDefault();
+      if (!legalDone) { msg('regMsg', 'Read and accept every agreement before applying.', false); return; }
       const fd = new FormData(e.target);
       try {
         let avatarUrl = c.avatarUrl || null;

@@ -1287,7 +1287,11 @@ exports.applicationDecide = onCall(
       const _a = snap.data() || {};
       const _role = _a.role || resolveRole(_a).role;
 
-      if (_role === 'health') {
+      /* Roles whose approval requires the CANONICAL versioned acceptances (legalAcceptances via
+         legalAccept), never the client-written boolean: healthcare, and Entertainment › Events
+         organizers (their instruments: organizer agreement, ticketing & refund obligations, staff &
+         cash handling, commission, settlement — legal-agreements.js ROLE_AGREEMENTS.event_organizer). */
+      if (_role === 'health' || _role === 'event_organizer') {
         /* ── HEALTHCARE ACCEPTS A DIFFERENT INSTRUMENT ─────────────────────────
            The boolean below is the *Seller* Agreement acknowledgement — the
            marketplace listing ladder and the POS commission rate
@@ -1316,7 +1320,7 @@ exports.applicationDecide = onCall(
         }
         let comp;
         try {
-          comp = await require('./legal-agreements').complianceFor(uidForLegal, 'health');
+          comp = await require('./legal-agreements').complianceFor(uidForLegal, _role);
         } catch (e) {
           /* FAIL CLOSED. If the compliance record cannot be read we do not know
              whether the applicant accepted anything, and "unknown" must not
@@ -1329,8 +1333,8 @@ exports.applicationDecide = onCall(
         if (!comp.compliant) {
           const names = comp.missing.map((m) => `${m.name} (${m.reason})`).join(', ');
           throw new HttpsError('failed-precondition',
-            'This healthcare application cannot be approved: the applicant has not accepted the ' +
-            'required healthcare agreements. Outstanding: ' + (names || 'unknown') +
+            `This ${_role === 'health' ? 'healthcare' : 'event organizer'} application cannot be approved: the applicant has not accepted the ` +
+            'required agreements. Outstanding: ' + (names || 'unknown') +
             '. Use "request_info" to ask them to complete the acceptance. Accepting the Seller ' +
             'Agreement does not satisfy this.');
         }
