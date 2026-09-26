@@ -93,7 +93,10 @@ async function partE() {
 
   console.log('\n[E1] disputes store the canonical code');
   await wipe();
-  const order = (id) => db.doc(`orders/${id}`).set({ buyerUid: 'B', buyerId: 'B', uid: 'B', sellerUid: 'S', status: 'delivered', total: 97, createdAt: TS.now() });
+  /* An ELIGIBLE order: paid, delivered 2 days ago, with items — since Repair 4 the server applies the published
+     return policy, and this suite is about the reason authority, not eligibility. */
+  const order = (id) => db.doc(`orders/${id}`).set({ buyerUid: 'B', buyerId: 'B', uid: 'B', sellerUid: 'S', status: 'delivered', total: 97,
+    paymentVerified: true, deliveredAt: TS.fromMillis(Date.now() - 2 * 86400000), items: [{ id: 'P1', name: 'Kettle', price: 97 }], createdAt: TS.now() });
   await order('D1');
   const d1 = await run(D.createDispute, 'B', { orderId: 'D1', reason: 'overcharged', description: 'I was charged twice for this.' });
   ok(d1.ok && ((await db.doc('disputes/dp_D1').get()).data() || {}).reason === 'billing_error', 'old spelling "overcharged" accepted and STORED as billing_error');

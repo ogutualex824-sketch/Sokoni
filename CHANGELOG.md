@@ -1,3 +1,19 @@
+## 2026-09-26 — Repair 4: a return is a request the server creates (branch `repair-4/returns-server-authority`, NOT landed)
+
+`returns.html` wrote returns from the browser (the rules deny it), called a nonexistent `processReturn`, and
+announced "refund initiated" when nothing was initiated. `submitReturn` trusted client prices, checked no
+eligibility, and used the identity no real order carries. The server now decides:
+- the buyer (Repair 2) and the reason (Repair 3);
+- payment, delivery, the published 7-day window and the evidence requirement (`functions/returns-eligibility.js`);
+- the items and prices, taken from the ORDER.
+The page reads and writes only through the returns callables, with truthful messages. `sokoni-trust.js`
+requestRefund no longer writes a client amount. **No money moves** (that is H2).
+`scripts/test-returns-server-authority.js` **33/0** over the 10 production order shapes; old code **FAILS 24**
+(22 still fail with identity bypassed). Record: `docs/repairs/R4-returns-server-authority.md`.
+API: `submitReturn` accepts `productIds`/`itemNote` and ignores client items. Database: returns use canonical
+fields plus `policyId`/`windowEndsAt`/`evidenceRequired`. Breaking: ineligible returns (unpaid, undelivered,
+window closed) are refused.
+
 ## 2026-09-26 — Repair 3: one reason authority for disputes, returns and refunds (branch `repair-3/canonical-reason-authority`, NOT landed)
 
 `functions/refund-reasons.js` replaces four vocabularies with 11 canonical codes: the existing reasons plus the two

@@ -270,41 +270,13 @@
     },
 
     requestRefund: async function (disputeId, amount, reason) {
-      /* Verify caller is party to this dispute before writing */
-      var uid = getUID();
-      if (!uid) {
-        showToast('Sign in to request a refund.', 'error');
-        return;
-      }
-      var parsedAmount = parseFloat(amount);
-      if (!parsedAmount || parsedAmount <= 0) {
-        showToast('Enter a valid refund amount.', 'error');
-        return;
-      }
-      try {
-        var db = getDB();
-        if (!db) throw new Error('No DB');
-        var fs = await firestoreImport();
-        var ref = fs.doc(db, 'disputes', disputeId);
-        /* Read dispute first — confirm caller is the buyer/uid owner */
-        var snap = await fs.getDoc(ref);
-        if (!snap.exists()) { showToast('Dispute not found.', 'error'); return; }
-        var d = snap.data();
-        if (d.uid !== uid && d.buyerUid !== uid) {
-          showToast('You are not authorised to request a refund on this dispute.', 'error');
-          return;
-        }
-        await fs.updateDoc(ref, {
-          refundRequested:   true,
-          refundAmount:      parsedAmount,
-          refundReason:      String(reason || '').slice(0, 500),
-          refundRequestedAt: new Date().toISOString()
-        });
-        showToast('Refund request submitted.');
-      } catch (err) {
-        console.error('[SokoniDispute.requestRefund]', err);
-        showToast('Refund request failed.', 'error');
-      }
+      /* Repair 4: this used to write refundRequested + a CLIENT-CHOSEN refundAmount straight onto the
+         dispute — a write the rules deny, and an amount no client may decide. It has no caller. There is
+         no separate "refund request" to make: the DISPUTE is the request, and SOKONI decides whether a
+         refund is due and how much, from the payment's own records, showing the amount before anything
+         is paid. So this writes nothing and points the buyer at their dispute. */
+      showToast('Refunds are decided by SOKONI through your dispute — follow it there. You will see any refundable amount before it is paid.', 'info');
+      return { requested: false, reason: 'refund-is-decided-through-the-dispute' };
     },
 
     close: async function (disputeId, resolution) {

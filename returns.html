@@ -499,8 +499,8 @@ auth.onAuthStateChanged(async user => {
        PLATFORM_ADMIN  — standalone + admin claim.
        PUBLIC_CUSTOMER — standalone, everyone else.
 
-     This is a UI-scoping decision only. Firestore rules remain authoritative: the returns rule
-     permits a read solely when buyerId or sellerId equals the caller (or admin), so choosing
+     This is a UI-scoping decision only. The SERVER is authoritative: returns are read through the
+     returns callables, which scope by data (buyerUid / sellerUid == the caller, or admin), so choosing
      'seller' here cannot widen what any account is actually able to read. */
   const ROUTE_CONTEXT = (window.SokoniInShell && window.SokoniInShell.inShell)
     ? 'SELLER_OWNER'
@@ -569,19 +569,21 @@ async function loadReturns() {
      while drawing a row was reported to the merchant as "failed to load" — a render
      bug wearing a network error's clothes. An empty result set is a SUCCESSFUL query
      and must reach EMPTY, never ERROR. */
-  let snap;
+  let rows;
   try {
-    let q = db.collection('returns');
-    if (userRole === 'buyer')  q = q.where('buyerId',  '==', uid).orderBy('submittedAt', 'desc').limit(50);
-    if (userRole === 'seller') q = q.where('sellerId', '==', uid).orderBy('submittedAt', 'desc').limit(100);
-    if (userRole === 'admin')  q = q.orderBy('submittedAt', 'desc').limit(200);
+    /* Repair 4: read through the SERVER (getMyReturns / getSellerReturns), never the database directly.
+       The server scopes by data — buyerUid or sellerUid equal to the caller, or admin — and speaks the
+       canonical field names; the served rules still gate direct reads on the old names, so a direct
+       read would now be denied (fail-closed). */
+    const call = userRole === 'buyer' ? fns.httpsCallable('getMyReturns') : fns.httpsCallable('getSellerReturns');
 
-    // Bounded timeout — a never-settling query (missing index / App Check / offline) must still
+    // Bounded timeout — a never-settling call (App Check / offline) must still
     // reach a terminal state instead of an infinite "Loading…".
-    snap = await Promise.race([
-      q.get(),
+    const res = await Promise.race([
+      call({}),
       new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000)),
     ]);
+    rows = Array.isArray(res && res.data) ? res.data : [];
   } catch (e) {
     /* ERROR — a genuine query/permission/network/timeout failure. Only this path. */
     console.error('loadReturns:', e);
@@ -597,7 +599,7 @@ async function loadReturns() {
 
   /* SUCCESS — zero rows is a valid, successful answer. */
   allReturns = [];
-  snap.forEach(doc => allReturns.push({ id: doc.id, ...doc.data() }));
+  rows.forEach(r => allReturns.push({ id: r.returnId, ...r }));
 
   if (userRole === 'buyer')  renderBuyerTable();
   if (userRole === 'seller') renderSellerView();
@@ -640,7 +642,7 @@ function renderSellerView() {
   }
   tbody.innerHTML = allReturns.map(r => `<tr onclick="showDetail('${esc(r.id)}')">
     <td style="font-family:monospace;font-size:11px;">${esc((r.orderId || '').slice(0,16))}</td>
-    <td>${esc(maskName(r.buyerName || r.buyerId || '—'))}</td>
+    <td>${esc(maskName(r.buyerName || r.buyerUid || '—'))}</td>
     <td>${esc((r.items?.[0]?.name || r.itemName || '—').slice(0,24))}</td>
     <td>${esc(r.reason || '—')}</td>
     <td>${statusChip(r.status)}</td>
@@ -663,7 +665,7 @@ function buildReturnCard(r, force) {
       <div class="ret-meta">
         <span class="chip chip-b">${esc(r.reason || '—')}</span>
         <span class="chip chip-m" style="text-transform:capitalize;">${esc((r.resolution || '').replace('_',' ') || '—')}</span>
-        <span style="font-size:11px;color:var(--muted);">${esc(maskName(r.buyerName || r.buyerId || '—'))}</span>
+        <span style="font-size:11px;color:var(--muted);">${esc(maskName(r.buyerName || r.buyerUid || '—'))}</span>
       </div>
       <div class="ret-desc">${esc((r.description || '').slice(0,160))}${r.description && r.description.length > 160 ? '…' : ''}</div>
       ${r.rejectionReason ? `<div class="reject-reason-box"><div class="reject-reason-label">Rejection reason</div><div style="font-size:12px;">${esc(r.rejectionReason)}</div></div>` : ''}
@@ -685,7 +687,7 @@ function renderAdminTable() {
 
   let rows = allReturns;
   if (statusF) rows = rows.filter(r => (r.status || '') === statusF);
-  if (sellerF) rows = rows.filter(r => (r.sellerId || '').toLowerCase().includes(sellerF));
+  if (sellerF) rows = rows.filter(r => (r.sellerUid || '').toLowerCase().includes(sellerF));
   if (dateF)   rows = rows.filter(r => {
     if (!r.submittedAt) return false;
     const d = r.submittedAt.toDate ? r.submittedAt.toDate() : new Date(r.submittedAt);
@@ -699,8 +701,8 @@ function renderAdminTable() {
   }
   tbody.innerHTML = rows.map(r => `<tr>
     <td style="font-family:monospace;font-size:11px;">${esc((r.orderId || '').slice(0,16))}</td>
-    <td>${esc(maskName(r.buyerName || r.buyerId || '—'))}</td>
-    <td style="font-size:11px;color:var(--muted);">${esc((r.sellerId || '—').slice(0,16))}</td>
+    <td>${esc(maskName(r.buyerName || r.buyerUid || '—'))}</td>
+    <td style="font-size:11px;color:var(--muted);">${esc((r.sellerUid || '—').slice(0,16))}</td>
     <td>${esc((r.items?.[0]?.name || r.itemName || '—').slice(0,22))}</td>
     <td>${esc(r.reason || '—')}</td>
     <td>${statusChip(r.status)}</td>
@@ -732,29 +734,20 @@ async function submitReturn() {
   const resolution  = document.getElementById('r-resolution').value;
 
   if (!orderId)     { toast('Enter an Order ID', 'err');    return; }
-  if (!itemName)    { toast('Enter the item name', 'err');  return; }
   if (!reason)      { toast('Select a return reason', 'err'); return; }
   if (!description) { toast('Describe the issue', 'err');   return; }
 
   const btn = document.getElementById('return-submit-btn');
   btn.disabled = true; btn.textContent = 'Submitting…';
   try {
-    await db.collection('returns').add({
-      orderId,
-      buyerId:    currentUser.uid,
-      buyerName:  currentUser.displayName || '',
-      sellerId:   '',
-      items:      [{ name: itemName, qty: 1, price: 0, productId: '' }],
-      reason, description, resolution,
-      status:     'submitted',
-      submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      reviewedAt:  null, reviewedBy: null,
-      rejectionReason: null,
-      refundAmount:    null,
-      timeline: [{ ts: new Date().toISOString(), event: 'Return submitted by buyer', by: currentUser.uid }]
-    });
+    /* Repair 4: the SERVER creates the return request. The page sends what the buyer chose — order,
+       reason, description, requested outcome and an optional note on the item. Identity, ownership,
+       eligibility (paid, delivered, the 7-day window), the items and their prices are all decided by
+       the server from the order: the browser never writes a return record. */
+    const res = await fns.httpsCallable('submitReturn')({ orderId, reason, description, resolution, itemNote: itemName || '' });
+    const r = (res && res.data) || {};
     closeReturnModal();
-    toast('Return request submitted', 'ok');
+    toast(r.evidenceRequired ? 'Return request submitted — photos of the issue will be needed' : 'Return request submitted', 'ok');
     ['r-order-id','r-item-name','r-description'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('r-reason').value = '';
     await loadReturns();
@@ -767,11 +760,13 @@ async function submitReturn() {
 
 // ── Approve return ─────────────────────────────────────────────
 async function approveReturn(returnId, force = false) {
-  if (!(await SK.dialog.confirm('Approve this return and trigger refund?', null, null, { title: 'Approve return', variant: 'danger', confirmLabel: 'Approve & refund' }))) return;
+  if (!(await SK.dialog.confirm('Approve this return request? Any refund is decided and issued separately.', null, null, { title: 'Approve return', variant: 'danger', confirmLabel: 'Approve request' }))) return;
   try {
-    const processReturn = fns.httpsCallable('processReturn');
-    await processReturn({ returnId, action: 'approve', force });
-    toast('Return approved — refund initiated', 'ok');
+    /* processReturn never existed. An admin override is adminForceReturn; a seller's decision is
+       reviewReturn. Neither moves money, so the message must not claim a refund was started. */
+    if (force && userRole === 'admin') await fns.httpsCallable('adminForceReturn')({ returnId, action: 'force_approve' });
+    else await fns.httpsCallable('reviewReturn')({ returnId, action: 'approve' });
+    toast('Return approved. Any refund is decided and issued separately.', 'ok');
     await loadReturns();
   } catch (e) {
     toast(e.message || 'Approval failed', 'err');
@@ -797,17 +792,8 @@ async function confirmReject() {
   const btn = document.getElementById('reject-confirm-btn');
   btn.disabled = true; btn.textContent = 'Rejecting…';
   try {
-    await db.collection('returns').doc(pendingReject.returnId).update({
-      status:          'rejected',
-      rejectionReason: reason,
-      reviewedAt:      firebase.firestore.FieldValue.serverTimestamp(),
-      reviewedBy:      currentUser.uid,
-      'timeline':      firebase.firestore.FieldValue.arrayUnion({
-        ts:    new Date().toISOString(),
-        event: 'Return rejected: ' + reason,
-        by:    currentUser.uid
-      })
-    });
+    if (pendingReject.force && userRole === 'admin') await fns.httpsCallable('adminForceReturn')({ returnId: pendingReject.returnId, action: 'force_reject', note: reason });
+    else await fns.httpsCallable('reviewReturn')({ returnId: pendingReject.returnId, action: 'reject', rejectionReason: reason });
     closeRejectModal();
     toast('Return rejected', 'ok');
     await loadReturns();
@@ -821,15 +807,8 @@ async function confirmReject() {
 // ── Request more info ──────────────────────────────────────────
 async function requestMoreInfo(returnId) {
   try {
-    await db.collection('returns').doc(returnId).update({
-      status:     'under_review',
-      reviewedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      reviewedBy: currentUser.uid,
-      'timeline': firebase.firestore.FieldValue.arrayUnion({
-        ts: new Date().toISOString(), event: 'Seller requested more information', by: currentUser.uid
-      })
-    });
-    toast('Status updated — buyer notified', 'ok');
+    await fns.httpsCallable('reviewReturn')({ returnId, action: 'request_info' });
+    toast('More information requested', 'ok');
     await loadReturns();
   } catch (e) {
     toast(e.message || 'Update failed', 'err');
@@ -866,7 +845,7 @@ function closeDetailModal() { document.getElementById('detail-modal').classList.
 function exportCSV() {
   const headers = ['Return ID','Order ID','Buyer','Seller','Item','Reason','Status','Resolution','Submitted'];
   const rows = allReturns.map(r => [
-    r.id, r.orderId, r.buyerName || r.buyerId, r.sellerId,
+    r.id, r.orderId, r.buyerName || r.buyerUid, r.sellerUid,
     r.items?.[0]?.name || r.itemName, r.reason, r.status, r.resolution,
     r.submittedAt ? (r.submittedAt.toDate ? r.submittedAt.toDate().toISOString() : String(r.submittedAt)) : ''
   ].map(v => '"' + String(v || '').replace(/"/g, '""') + '"').join(','));
