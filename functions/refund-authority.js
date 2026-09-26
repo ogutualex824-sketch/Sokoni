@@ -54,6 +54,11 @@
  *
  * Full refunds only. A partial refund is refused (PARTIAL_NOT_SUPPORTED) rather than approximated.
  * Out of scope and untouched: the business wallet (businessWallets), commissionLedger.
+ *
+ * COMMISSION IS DELIBERATELY NOT REVERSED. Commission treatment on refunds is not yet defined and
+ * is excluded from this repair (owner adjudication, 2026-09-26). On a full refund the seller's net
+ * credit is recovered and the platform's commission stays where it is. That is a recorded policy
+ * gap, not an omission: a commission reversal needs its own authority and ledger tests.
  */
 
 const { FieldValue, Timestamp } = require('firebase-admin/firestore');

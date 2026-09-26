@@ -125,7 +125,14 @@ overwrite it. That is an owner-authorized repair against the current production 
 - FOS-native `fosTransactions` refunds keep the legacy path; that collection has never held a document in
   production.
 - The exact-uppercase `SETTLED` → `reverseSettledOrder` path.
-- The business wallet and `commissionLedger`: commission is **not** reversed, which is recorded as open.
+- The business wallet and `commissionLedger`.
+
+**Commission treatment on refunds is not yet defined and is excluded from this repair.** On a full refund the
+seller's net credit (e.g. KES 87) is recovered, and the platform's commission (e.g. KES 10) is **not** reversed.
+This is an open accounting-policy question, recorded here so its absence is not mistaken for an omission. A
+future commission-reversal change needs its own authority and ledger tests. Owner adjudication, 2026-09-26:
+Track F PASS; partial refunds stay refused; missing or conflicting evidence stays refused; failed chargebacks
+stay blocked for human review.
 
 **Evidence** (`scripts/test-refund-authority.js`, real Firestore emulator, real wired callables, IntaSend stub
 counting every chargeback):
