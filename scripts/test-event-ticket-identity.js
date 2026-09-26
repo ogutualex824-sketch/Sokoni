@@ -121,15 +121,18 @@ async function paidOnline(orderId, eventId, { qty = 1, buyer = 'buyer1', tier = 
   ck('create()-and-hope on a taken value fails ALREADY_EXISTS (not retried) — why PINs are chosen by reading', blind === 6, blind);
 
   say('\n── uniqueness ──');
-  const ids300 = [];
-  for (let i = 0; i < 6; i++) ids300.push(...await db.runTransaction(async (txn) => { const ids = await OPS.allocateIdentities(txn, 'evU', 50); ids.forEach((x, j) => OPS.issueCredentials(txn, { eventId: 'evU', ticketId: `U${i}_${j}`, identity: x })); return ids; }));
-  ck('300 tickets on one event → 300 distinct 4-digit PINs', ids300.length === 300 && new Set(ids300.map((x) => x.pin)).size === 300 && ids300.every((x) => /^\d{4}$/.test(x.pin)));
+  const ids300 = []; let issueErr = null;
+  for (let i = 0; i < 6; i++) {
+    try { ids300.push(...await db.runTransaction(async (txn) => { const ids = await OPS.allocateIdentities(txn, 'evU', 50); ids.forEach((x, j) => OPS.issueCredentials(txn, { eventId: 'evU', ticketId: `U${i}_${j}`, identity: x })); return ids; })); }
+    catch (e) { issueErr = e.code || e.message; }
+  }
+  ck('300 tickets on one event → 300 distinct 4-digit PINs (no issuance failed)', !issueErr && ids300.length === 300 && new Set(ids300.map((x) => x.pin)).size === 300 && ids300.every((x) => /^\d{4}$/.test(x.pin)), issueErr || ids300.length);
   ck('…and 300 distinct ticket numbers SK-EVT-YYYY-NNNNNN', new Set(ids300.map((x) => x.ticketNumber)).size === 300 && ids300.every((x) => OPS.TICKET_NUMBER_RE.test(x.ticketNumber)));
   const taken = ids300[0].pin;
   let forced = [Number(taken), Number(taken)];
   OPS._setRandom((n) => (n === 10000 && forced.length ? forced.shift() : crypto.randomInt(0, n)));
-  const retried = await db.runTransaction(async (txn) => { const ids = await OPS.allocateIdentities(txn, 'evU', 1); OPS.issueCredentials(txn, { eventId: 'evU', ticketId: 'Ux', identity: ids[0] }); return ids[0]; });
-  ck('a forced collision with an issued PIN is skipped (retry) — the new PIN differs', retried.pin !== taken && /^\d{4}$/.test(retried.pin), [taken, retried.pin]);
+  const retried = await db.runTransaction(async (txn) => { const ids = await OPS.allocateIdentities(txn, 'evU', 1); OPS.issueCredentials(txn, { eventId: 'evU', ticketId: 'Ux', identity: ids[0] }); return ids[0]; }).catch((e) => ({ err: e.code || e.message }));
+  ck('a forced collision with an issued PIN is skipped (retry) — the new PIN differs', !retried.err && retried.pin !== taken && /^\d{4}$/.test(retried.pin), [taken, retried.pin || retried.err]);
   /* 12 FREE checkouts, EVERY one forced to try PIN 0042 first: the first takes it, the rest read it
      taken and choose another — no failure, no duplicate. */
   forceFirstPin(42);
@@ -155,12 +158,12 @@ async function paidOnline(orderId, eventId, { qty = 1, buyer = 'buyer1', tier = 
   ck('12 CONCURRENT issuers on an overlapping window → committed PINs all distinct; losers only ABORTED (retryable)',
     bodies > 12 && won.length >= 6 && new Set(won).size === won.length && conc.every((r) => r.pin || r.err === 10), [bodies, conc.map((r) => r.pin || 'err' + r.err).join(',')]);
   const retry = [];
-  for (const [i, r] of conc.entries()) if (r.err) retry.push(await db.runTransaction(async (txn) => { const ids = await OPS.allocateIdentities(txn, 'evK', 1); OPS.issueCredentials(txn, { eventId: 'evK', ticketId: 'K' + i, identity: ids[0] }); return ids[0].pin; }));
+  for (const [i, r] of conc.entries()) if (r.err) retry.push(await db.runTransaction(async (txn) => { const ids = await OPS.allocateIdentities(txn, 'evK', 1); OPS.issueCredentials(txn, { eventId: 'evK', ticketId: 'K' + i, identity: ids[0] }); return ids[0].pin; }).catch((e) => 'err' + (e.code || e.message)));
   const allK = won.concat(retry);
   ck('…the retried losers then succeed: 12 tickets, 12 distinct PINs', allK.length === 12 && new Set(allK).size === 12);
   /* the same 4 digits on two events: two different credentials */
   forceFirstPin(7777);
-  await paidOnline('SAME_A', 'evA'); await paidOnline('SAME_B', 'evB', { buyer: 'buyer2' });
+  await paidOnline('SAME_A', 'evA').catch(() => null); await paidOnline('SAME_B', 'evB', { buyer: 'buyer2' }).catch(() => null);
   OPS._setRandom(null);
   ck('the SAME 4 digits exist on two events for two different tickets', (await pinOf('SAME_A_k0')) === '7777' && (await pinOf('SAME_B_k0')) === '7777');
   const vA = await op('eventVerifyPin', 'gate1', { eventId: 'evA', pin: '7777' });
@@ -259,6 +262,12 @@ async function paidOnline(orderId, eventId, { qty = 1, buyer = 'buyer1', tier = 
   ck('…no immediate KRA attempt, so no failure notice to the organizer', ETIMS_NOTICES.length === 0 && !SENT.some((n) => /etims/i.test(String(n.type || ''))));
   const inv0 = await get(`etimsInvoices/${onlineRec.invoiceId}`);
   ck('eTIMS invoice lines = the sale (KES 2,000, seller = organizer)', inv0.sellerUid === 'org1' && inv0.totals && Math.round(inv0.totals.totAmt) === 2000 && inv0.orderId === 'evt_ONL1', inv0.totals && inv0.totals.totAmt);
+  /* a record committed with its sale but not yet submitted (e.g. the process died after commit) */
+  await db.runTransaction(async (txn) => { FISCAL.recordSale(txn, { saleKey: 'UNSUB1', event: { id: 'evA', title: 'X', organizerUid: 'org1' }, channel: 'online', lines: [{ name: 'X', qty: 1, unitCents: 100000 }], grossCents: 100000 }); });
+  const vu = (await FISCAL.viewsFor(['UNSUB1'])).UNSUB1;
+  ck('recorded but not yet submitted → PENDING, with NO KRA field', vu.status === 'PENDING' && !('receiptNumber' in vu) && !('kraQrImage' in vu) && !('verificationUrl' in vu), vu);
+  const zero = await db.runTransaction(async (txn) => FISCAL.recordSale(txn, { saleKey: 'ZERO1', event: { id: 'evA', organizerUid: 'org1' }, channel: 'online', lines: [], grossCents: 0 }));
+  ck('a zero-value sale is never fiscalised (the recorder refuses it)', zero === false && !(await get('eventFiscal/ZERO1')));
   let v = (await FISCAL.viewsFor(['ONL1'])).ONL1;
   ck('fiscal view PENDING — and no KRA field at all while pending', v.status === 'PENDING' && !('receiptNumber' in v) && !('kraQrImage' in v));
   const tk = (await EH.getMyTickets.run({ ...who('buyer7'), data: {} })).tickets.find((t) => t.ticketId === 'ONL1_k0');
