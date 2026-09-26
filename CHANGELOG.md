@@ -1,3 +1,20 @@
+## 2026-09-26 — Marketplace double credit MEASURED in production: armed, not fired
+
+**NO DEPLOY. NO CODE CHANGE. NO DATA CHANGE.** Read-only investigation authorized by the owner.
+Record: `docs/MARKETPLACE_DOUBLE_CREDIT_MEASUREMENT.md`. Probe: `scripts/probe-marketplace-double-credit.js`.
+
+- **Deployed code carries the defect:** the webhook writes `settlementStatus:"settled"` and `settleOrder`
+  skips only `'SETTLED'`. `order-settlement.js` is byte-identical across the webhook, trigger and sweep archives.
+- **Production has not double-credited anyone:** 10 orders, 0 completed, 0 `order_settlement` credits, 0 `settlements`.
+  Joined in both directions, with controls.
+- **Exposure:** 7 KASS orders at lowercase `"settled"` (KES 87 credited each). A seller can set `completed` under
+  served ruleset `6c67a34d`. The auto-confirm sweep is held shut only by an unrelated escrow early-return.
+- **Evidence correction:** the 2 live `businessWallets` are `SELLER_A` test fixtures. KASS has 2 ACTIVE `businesses` rows
+  (uid-keyed plus `SOK-GL58F7`), so owner resolution is AMBIGUOUS, and it has no business wallet.
+
+Files: `docs/MARKETPLACE_DOUBLE_CREDIT_MEASUREMENT.md` (new), `scripts/probe-marketplace-double-credit.js` (new).
+Database / API / security / breaking changes: none.
+
 ## 2026-09-22 (181) — 4a: the canonical writer gets an EXPLICIT field contract
 
 **NO DEPLOY. Server-only. No seller.js change. No stock/inventoryVersion change.**
