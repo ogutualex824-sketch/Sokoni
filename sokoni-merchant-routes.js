@@ -728,10 +728,10 @@
              'operator console, not a merchant surface. A merchant row pointing at it would ' +
              'be the same privilege defect the contract already refuses for the Super Admin ' +
              'revenue pages. Reachable through the admin entry point, where the guard is.' },
-    { route:'/catalogue', class:'untracked', canonical:null,
-      reason:'catalogue.html is not committed in this worktree — another workstream\'s ' +
-             'in-flight work. A row here would pass fs.existsSync locally and 404 in a ' +
-             'clean checkout. One line to admit once it lands.' },
+    /* `/catalogue` was excluded here as 'untracked' ("catalogue.html is not committed … one line
+       to admit once it lands"). It landed in 000c75d, and the dual-business `services` route now
+       mounts it (catalogue.html?tab=services), so the exclusion's reason no longer holds and it is
+       admitted: removed, not overruled. */
     { route:'/business-apply', class:'untracked', canonical:null,
       reason:'business-apply.html is not committed in this worktree. Same as above.' },
     { route:'void', class:'blocked', canonical:null,

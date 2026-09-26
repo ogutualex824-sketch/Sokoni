@@ -186,8 +186,19 @@ console.log('\n── 12-15. The slice did not cross its boundary ──');
 
   ck('12. no posServices collection is introduced',
      !/posServices/.test(mCode) && !/posServices/.test(pCode));
-  ck('…and posProducts IS the collection used (positive control)',
-     /posProducts/.test(pCode), page ? 'catalogue.html read' : 'page missing');
+  /* MAIN-LINE AUTHORITY (merge of dual-business onto 3745a5b). This control asserted the page
+     reads `posProducts`. On the main line the catalogue page does NOT touch Firestore for the
+     catalogue at all: it reads and writes through smartPosDispatch ops `listCanonicalProducts`
+     / `upsertCanonicalProduct`, which target the canonical `products` collection
+     (functions/pos-inventory-pro.js "THE CANONICAL `products` WRITER"). Asserting posProducts
+     would certify something false. The control's job is unchanged — prove check 12 ran against
+     real catalogue code — so it now names the authority actually used.
+     RECORDED MISMATCH: payment-purposes `pos_service_sale` still prices baskets from
+     `posProducts`, so items created here could never be priced by it. That purpose is dormant;
+     the mismatch must be resolved before it is ever wired. */
+  ck('…and the page uses the canonical catalogue authority (positive control)',
+     /smartPosDispatch/.test(pCode) && /listCanonicalProducts/.test(pCode) && /upsertCanonicalProduct/.test(pCode),
+     page ? 'catalogue.html read' : 'page missing');
   ck('13. no payment rail is touched from the catalogue',
      !/createPaymentIntent|webhookIntasend|initiateSTKPush|payment-purposes/.test(mCode + pCode));
   ck('14. no quick-charge receiver is introduced',
