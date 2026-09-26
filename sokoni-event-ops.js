@@ -28,6 +28,9 @@
     '.eo-tiers{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}',
     '.eo-tier{border:1px solid var(--border,#30363d);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px}',
     '.eo-tier b{font-size:15px}.eo-qty{display:flex;align-items:center;gap:10px}',
+    '.eo .eo-qty input{width:64px;text-align:center;font-weight:800;padding:0 4px}',
+    '.eo-qty button:disabled,.eo-btn:disabled{opacity:.4;cursor:not-allowed}',
+    '.eo-note{font-size:12px;opacity:.75;margin:0}',
     '.eo-qty button,.eo-pay button,.eo-btn{min-height:44px;min-width:44px;border-radius:10px;border:1px solid var(--border,#30363d);background:var(--bg3,#21262d);color:inherit;font-weight:700;font-size:15px;cursor:pointer;padding:0 14px}',
     '.eo-pay{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}',
     '.eo-pay button.on{border-color:var(--blue,#58a6ff);color:var(--blue,#58a6ff)}',
@@ -56,7 +59,9 @@
       <div class="eo-card"><div class="eo-row"><label>Event ${eventSelect(ctx, 'qsEv', (e) => e.status === 'live')}</label></div></div>
       <div class="eo-card"><div id="qsTiers" class="eo-tiers">Loading tickets…</div></div>
       <div class="eo-card"><div class="eo-row" style="justify-content:space-between"><span>Total</span><span class="eo-total" id="qsTotal">KES 0</span></div>
-        <p style="font-size:12px;opacity:.7;margin:6px 0 0">The server prices the sale; this total is a preview.</p></div>
+        <p class="eo-note" id="qsLines" style="margin-top:6px"></p>
+        <p style="font-size:12px;opacity:.7;margin:6px 0 0">The server prices the sale; this total is a preview.</p>
+        <button type="button" class="eo-btn" id="qsClear" style="margin-top:8px" disabled>Clear tickets</button></div>
       <div class="eo-card"><div class="eo-pay" role="group" aria-label="Payment">
         <button type="button" data-tender="cash">Cash</button><button type="button" data-tender="intasend">M-PESA</button><button type="button" data-tender="card_external">Card (terminal)</button></div>
         <div id="qsTender" style="margin-top:10px"></div></div>
@@ -66,9 +71,34 @@
     const cart = {}; let tiers = []; let tender = null; let key = newKey();
     const $ = (id) => host.querySelector('#' + id);
     const total = () => tiers.reduce((a, t) => a + (cart[t.tierId] || 0) * Math.round(Number(t.price) * 100), 0);
+    /* The most a cashier can put in the cart for one ticket type: what is left, and the server's
+       50-per-line limit. The server re-checks both inside the sale transaction — this only keeps
+       the cashier from building a cart that will be refused. */
+    const maxFor = (t) => Math.max(0, Math.min(50, (Number(t.quantity) || 0) - (Number(t.sold) || 0)));
+    const linesIn = () => tiers.filter((t) => (cart[t.tierId] || 0) > 0);
+    /* M-PESA at the till is one ticket type per sale (a single order through the canonical intent). */
+    const mpesaMixed = () => tender === 'intasend' && linesIn().length > 1;
+    const setQty = (id, v) => {
+      const t = tiers.find((x) => x.tierId === id); if (!t) return;
+      const n = Math.max(0, Math.min(maxFor(t), Math.floor(Number(v) || 0)));
+      if ((cart[id] || 0) !== n) key = newKey();          /* a different cart is a different sale */
+      cart[id] = n;
+    };
     const paint = () => {
       $('qsTotal').textContent = kes(total());
-      $('qsDo').disabled = !(total() > 0 && tender);
+      const ls = linesIn();
+      $('qsLines').textContent = ls.length ? ls.map((t) => `${cart[t.tierId]} × ${t.name}`).join(' · ') : 'No tickets selected.';
+      tiers.forEach((t) => {
+        const q = cart[t.tierId] || 0, max = maxFor(t);
+        const inp = host.querySelector(`[data-q="${t.tierId}"]`); if (inp && document.activeElement !== inp) inp.value = String(q);
+        const dec = host.querySelector(`[data-dec="${t.tierId}"]`), inc = host.querySelector(`[data-inc="${t.tierId}"]`);
+        if (dec) dec.disabled = q <= 0;
+        if (inc) inc.disabled = q >= max;
+      });
+      $('qsClear').disabled = !ls.length;
+      $('qsDo').disabled = !(total() > 0 && tender) || mpesaMixed();
+      if (mpesaMixed()) $('qsMsg').innerHTML = '<span class="eo-bad">M-PESA takes one ticket type per sale — remove the other type, or use Cash / Card.</span>';
+      else if (/one ticket type per sale/.test($('qsMsg').textContent)) $('qsMsg').textContent = '';
       host.querySelectorAll('[data-tender]').forEach((b) => b.classList.toggle('on', b.dataset.tender === tender));
     };
     async function loadTiers() {
@@ -78,8 +108,8 @@
       try {
         const ev = await ctx.cf('getEvent', { eventId });
         tiers = (ev.tiers || []).filter((t) => Number(t.price) > 0);
-        $('qsTiers').innerHTML = tiers.length ? tiers.map((t) => `<div class="eo-tier"><b>${esc(t.name)}</b><span>${kes(Math.round(Number(t.price) * 100))} · ${num(Number(t.quantity) - Number(t.sold))} left</span>
-          <div class="eo-qty"><button type="button" data-dec="${esc(t.tierId)}" aria-label="Fewer ${esc(t.name)}">−</button><span data-q="${esc(t.tierId)}">0</span><button type="button" data-inc="${esc(t.tierId)}" aria-label="More ${esc(t.name)}">+</button></div></div>`).join('') : 'No paid ticket types on sale.';
+        $('qsTiers').innerHTML = tiers.length ? tiers.map((t) => `<div class="eo-tier"><b>${esc(t.name)}</b><span>${kes(Math.round(Number(t.price) * 100))} · <span data-left="${esc(t.tierId)}">${num(Number(t.quantity) - Number(t.sold))}</span> left</span>
+          <div class="eo-qty"><button type="button" data-dec="${esc(t.tierId)}" aria-label="Remove one ${esc(t.name)}">−</button><input type="number" inputmode="numeric" min="0" max="${maxFor(t)}" step="1" value="0" data-q="${esc(t.tierId)}" aria-label="${esc(t.name)} quantity"><button type="button" data-inc="${esc(t.tierId)}" aria-label="Add one ${esc(t.name)}">+</button></div></div>`).join('') : 'No paid ticket types on sale.';
       } catch (e) { $('qsTiers').textContent = errText(e); }
       paint();
     }
@@ -99,9 +129,10 @@
     host.addEventListener('click', async (e) => {
       const b = e.target.closest('button'); if (!b) return;
       if (b.dataset.inc || b.dataset.dec) {
-        const id = b.dataset.inc || b.dataset.dec; cart[id] = Math.max(0, (cart[id] || 0) + (b.dataset.inc ? 1 : -1));
-        host.querySelector(`[data-q="${id}"]`).textContent = cart[id]; key = newKey(); paint(); return;
+        const id = b.dataset.inc || b.dataset.dec;
+        setQty(id, (cart[id] || 0) + (b.dataset.inc ? 1 : -1)); paint(); return;
       }
+      if (b.id === 'qsClear') { Object.keys(cart).forEach((k) => setQty(k, 0)); paint(); return; }
       if (b.dataset.tender) { tender = b.dataset.tender; tenderForm(); paint(); return; }
       if (b.id === 'qsDo') {
         const eventId = $('qsEv').value; const items = Object.entries(cart).filter(([, q]) => q > 0).map(([tierId, qty]) => ({ tierId, qty }));
@@ -131,7 +162,8 @@
               if (t && t.status === 'COMPLETED') { $('qsMsg').innerHTML = '<span class="eo-ok">✓ Payment confirmed</span>'; await showTickets(eventId, r.saleId); break; }
             }
           }
-          if (r.status === 'COMPLETED' || r.status === 'AWAITING_PAYMENT') { Object.keys(cart).forEach((k) => delete cart[k]); host.querySelectorAll('[data-q]').forEach((x) => { x.textContent = '0'; }); key = newKey(); }
+          /* Sold (or handed to M-PESA): empty the cart and re-read what is left from the server. */
+          if (r.status === 'COMPLETED' || r.status === 'AWAITING_PAYMENT') await loadTiers();
         } catch (err) { $('qsMsg').innerHTML = `<span class="eo-bad">${esc(errText(err))}</span>`; }
         paint(); return;
       }
@@ -147,6 +179,9 @@
       }
     });
     $('qsEv').addEventListener('change', loadTiers);
+    /* A typed quantity: clamped to 0..what is left (and 50) when the cashier leaves the field. */
+    host.addEventListener('input', (e) => { const i = e.target.closest('[data-q]'); if (i) { setQty(i.dataset.q, i.value); paint(); } });
+    host.addEventListener('change', (e) => { const i = e.target.closest('[data-q]'); if (i) { setQty(i.dataset.q, i.value); i.value = String(cart[i.dataset.q] || 0); paint(); } });
     loadTiers();
   }
 

@@ -77,6 +77,12 @@ const pinOf = async (ticketId) => (await get(`eventTicketSecrets/${ticketId}`) |
   ck('normalisation accepts spacing/case, refuses foreign chars', OPS.normalizePin(p.toLowerCase().replace('-', ' ')) === p.replace('-', '') && OPS.normalizePin('ABCD-EF01') === null && OPS.normalizePin('SHORT') === null);
   ck('hash binds the PIN to ONE event', OPS.pinHash('evA', p) !== OPS.pinHash('evB', p) && OPS.pinHash('evA', p) === OPS.pinHash('evA', p.toLowerCase()));
   ck('1,000 PINs, no repeats (crypto.randomInt)', new Set(Array.from({ length: 1000 }, () => OPS.generatePin())).size === 1000);
+  /* In Cloud Functions a missing key must FAIL CLOSED — never fall back to the test key, which is in
+     this repository and would make every production PIN hash forgeable. */
+  process.env.K_SERVICE = 'eventopsdispatch';
+  let inCf = null; try { OPS.pinHash('evA', p); inCf = 'hashed'; } catch (e) { inCf = e.code; }
+  delete process.env.K_SERVICE;
+  ck('missing key in Cloud Functions fails CLOSED (no test-key fallback)', inCf === 'failed-precondition', inCf);
 
   /* ═══ issuance ═══ */
   console.log('\n── issuance ──');

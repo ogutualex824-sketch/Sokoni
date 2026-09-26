@@ -47,6 +47,10 @@ const RF = require(Path.join(FN, 'event-refunds.js'));
 const ES = require(Path.join(FN, 'event-settlement.js'));
 const EH = require(Path.join(FN, 'event-hub.js'));
 const EA = require(Path.join(FN, 'event-admin.js'));
+/* The REAL payment-intent authority prices a cashier M-PESA order. The provider edge (initiateSTKPush →
+   IntaSend → webhook) is the ONLY simulated part: see STK below. */
+const INTENTS = require(Path.join(FN, 'payment-intents.js'));
+const STK = [];
 ES.registerPurpose();
 
 const USERS = {
@@ -76,7 +80,23 @@ async function _server(name, data, uid) {
       if (!h) return { err: { code: 'not-found', message: 'unknown op ' + data.op } };
       return { ok: await h(reqFor(uid, data)) };
     }
-    const fnMap = { getEvent: EH.getEvent, getMyTickets: EH.getMyTickets, getOrganizerDashboard: EH.getOrganizerDashboard, listEvents: EH.listEvents, searchEvents: EH.searchEvents };
+    if (name === 'createPaymentIntent') return { ok: await INTENTS.createPaymentIntent.run(reqFor(uid, data)) };
+    if (name === 'initiateSTKPush') {
+      /* SIMULATED PROVIDER EDGE. Mirrors the two checks the real initiateSTKPush makes against the
+         server-authored intent (owner + amount), records the push, then plays IntaSend's webhook:
+         payments/{ref} COMPLETE → the real activation trigger body. No network. */
+      const it = await get('paymentIntents/' + data.ref);
+      if (!it) return { err: { code: 'not-found', message: 'no intent' } };
+      if (it.uid && it.uid !== uid) return { err: { code: 'permission-denied', message: 'This payment does not belong to you.' } };
+      if (Math.round(Number(it.amount)) !== Math.round(Number(data.amount))) return { err: { code: 'invalid-argument', message: 'Payment amount does not match this order.' } };
+      STK.push({ uid, phone: data.phone, ref: data.ref, amount: data.amount });
+      setTimeout(async () => {
+        await db.doc('payments/' + data.ref).set({ ref: data.ref, uid, amount: it.amount, amountCents: Math.round(it.amount * 100), currency: 'KES', status: 'COMPLETE', provider: 'intasend', providerReport: { charges: 30 } });
+        await ES.activateIfEventTicket(data.ref);
+      }, 800);
+      return { ok: { ok: true, checkoutId: 'SIM-' + data.ref } };
+    }
+    const fnMap = { purchaseTickets: EH.purchaseTickets, getEvent: EH.getEvent, getMyTickets: EH.getMyTickets, getOrganizerDashboard: EH.getOrganizerDashboard, listEvents: EH.listEvents, searchEvents: EH.searchEvents };
     if (fnMap[name]) return { ok: await fnMap[name].run(reqFor(uid, data)) };
     return { ok: {} };
   } catch (e) { return { err: { code: e.code || 'internal', message: e.message } }; }
@@ -124,6 +144,7 @@ async function seed() {
     refundPolicy: { mode: 'before_cutoff', cutoffAt: new Date(NOW + 24 * H).toISOString(), noShowRefund: true } });
   await db.doc('eventTicketTiers/VIP').set({ tierId: 'VIP', eventId: 'evA', name: 'VIP', price: 5000, quantity: 100, sold: 0, isActive: true, currency: 'KES' });
   await db.doc('eventTicketTiers/REG').set({ tierId: 'REG', eventId: 'evA', name: 'Regular', price: 2000, quantity: 500, sold: 0, isActive: true, currency: 'KES' });
+  await db.doc('eventTicketTiers/FEW').set({ tierId: 'FEW', eventId: 'evA', name: 'Backstage', price: 9000, quantity: 2, sold: 0, isActive: true, currency: 'KES' });
   for (const [uid, role] of [['till1', 'cashier'], ['gate1', 'admission'], ['door9', 'admission']]) {
     await OPS._h.eventStaffInvite(reqFor('org1', { eventId: 'evA', email: USERS[uid].email, role }));
     await OPS._h.eventStaffAccept(reqFor(uid, { eventId: 'evA' }));
@@ -174,6 +195,22 @@ async function seed() {
       await pg.evaluate(() => window.showSection('quicksale')); await pg.waitForSelector('[data-inc="VIP"]', { timeout: 8000 }).catch(() => null);
       ck(`cashier @${w}: Quick Sale has no horizontal overflow`, await noOverflow(pg, w));
       if (flows) {
+        /* add / reduce tickets */
+        const qv = (id) => pg.inputValue('[data-q="' + id + '"]');
+        ck(`cashier @${w}: − is disabled at zero`, await pg.$eval('[data-dec="VIP"]', (b) => b.disabled));
+        for (let i = 0; i < 3; i++) await pg.click('[data-inc="VIP"]');
+        await pg.click('[data-dec="VIP"]');
+        ck(`cashier @${w}: + three times, − once → 2 VIP, total KES 10,000`, (await qv('VIP')) === '2' && /KES 10,000/.test(await pg.textContent('#qsTotal')) && /2 × VIP/.test(await pg.textContent('#qsLines')));
+        await pg.fill('[data-q="VIP"]', '999'); await pg.press('[data-q="VIP"]', 'Tab');
+        ck(`cashier @${w}: a typed 999 is clamped to the 50-per-line limit`, (await qv('VIP')) === '50' && await pg.$eval('[data-inc="VIP"]', (b) => b.disabled));
+        await pg.click('[data-inc="FEW"]'); await pg.click('[data-inc="FEW"]');
+        const fewLeft = Number(await pg.textContent('[data-left="FEW"]'));
+        ck(`cashier @${w}: + stops at the tickets left`, (await qv('FEW')) === String(Math.min(2, fewLeft)) && await pg.$eval('[data-inc="FEW"]', (b) => b.disabled));
+        await pg.click('[data-tender="intasend"]');
+        ck(`cashier @${w}: M-PESA with two ticket types is blocked and explained`, await pg.$eval('#qsDo', (b) => b.disabled) && /one ticket type per sale/.test(await pg.textContent('#qsMsg')));
+        await pg.click('#qsClear');
+        ck(`cashier @${w}: Clear empties the cart; Complete disabled`, (await qv('VIP')) === '0' && (await qv('FEW')) === '0' && /KES 0/.test(await pg.textContent('#qsTotal')) && await pg.$eval('#qsDo', (b) => b.disabled));
+        ck(`cashier @${w}: stepper controls cause no overflow`, await noOverflow(pg, w));
         await pg.click('[data-inc="VIP"]'); await pg.click('[data-tender="cash"]');
         await pg.fill('#qsCash', '6000'); await pg.click('#qsDo');
         await pg.waitForSelector('.eo-pin', { timeout: 8000 }).catch(() => null);
@@ -184,6 +221,21 @@ async function seed() {
         ck(`cashier @${w}: server wrote a COMPLETED 5,000 sale + valid ticket + 3 % receivable`, last.status === 'COMPLETED' && last.grossCents === 500000
           && db._dump('eventTickets/').some((t) => t.saleId === last.saleId && t.status === 'valid') && ((await get(`eventCommissionReceivables/${last.saleId}`)) || {}).amountCents === 15000);
         ck(`cashier @${w}: change shown (1,000)`, /change KES 1,000/.test(await pg.textContent('#qsMsg')));
+        const vip = await get('eventTicketTiers/VIP');
+        ck(`cashier @${w}: after the sale the tickets-left count is re-read from the server`, Number(await pg.textContent('[data-left="VIP"]')) === vip.quantity - vip.sold && (await qv('VIP')) === '0', [await pg.textContent('[data-left="VIP"]'), vip.quantity - vip.sold]);
+        if (w === 1280) {
+          /* M-PESA at the till: REAL intent pricing → STK (simulated provider edge) → webhook → REAL activation */
+          const before = STK.length;
+          await pg.click('[data-inc="REG"]'); await pg.click('[data-tender="intasend"]');
+          await pg.fill('#qsPhone', '0712 345 678'); await pg.click('#qsDo');
+          await pg.waitForSelector('.eo-pin', { timeout: 15000 }).catch(() => null);
+          const push = STK[before] || {};
+          const msale = db._dump('eventSales/').filter((x) => x.tender === 'intasend' && x.cashierUid === 'till1').pop() || {};
+          ck('cashier: M-PESA prompt sent to the buyer number for the SERVER price (KES 2,000)', STK.length === before + 1 && push.phone === '254712345678' && Number(push.amount) === 2000 && push.ref === msale.saleId, push);
+          ck('cashier: after the M-PESA payment the sale is COMPLETED and the PIN is shown', msale.saleId && ((await get('eventSales/' + msale.saleId)) || {}).status === 'COMPLETED' && /[A-Z2-9]{4}-[A-Z2-9]{4}/.test(await pg.textContent('#qsOut')) && /Payment confirmed/.test(await pg.textContent('#qsMsg')));
+          const st = (await get('eventSettlements/' + msale.saleId)) || {};
+          ck('cashier: M-PESA sale settles HELD at 3 % of (gross − fee), never the POS 5 %', st.status === 'HELD' && st.commissionCents === Math.round((200000 - 3000) * 0.03), st);
+        }
       }
       await c.close();
 
@@ -224,7 +276,12 @@ async function seed() {
         ck(`organizer @${w}: invite stored server-side + link shown`, db._dump('eventStaffInvites/').some((i) => i.email === `promo${w}@x.co` && i.role === 'marketing') && /staffInvite=evA/.test(await pg.innerHTML('#stLink')));
         await pg.evaluate(() => window.showSection('finance')); await pg.waitForTimeout(400);
         const fin = await pg.textContent('#eo-finance');
-        ck(`organizer @${w}: finance shows settled figures (online + door)`, /Gross ticket sales/.test(fin) && /Online salesKES 8,000/.test(fin) && /SOKONI commission on door sales/.test(fin), fin.slice(0, 160));
+        /* Expected online gross is DERIVED from the settlements the server wrote (earlier flows add sales,
+           e.g. the M-PESA till sale at 1280) — never a hard-coded figure. */
+        const onlineCents = db._dump('eventSettlements/').filter((x) => x.eventId === 'evA' && x.status !== 'REFUNDED' && x.channel !== 'CASH' && x.channel !== 'CARD_EXTERNAL')
+          .reduce((a, x) => a + (Number(x.grossCents) || 0), 0);
+        const onlineTxt = 'Online salesKES ' + (onlineCents / 100).toLocaleString('en-KE');
+        ck(`organizer @${w}: finance shows settled figures (online + door)`, onlineCents >= 800000 && /Gross ticket sales/.test(fin) && fin.includes(onlineTxt) && /SOKONI commission on door sales/.test(fin), [onlineTxt, fin.slice(0, 160)]);
         await pg.evaluate(() => window.showSection('promo')); await pg.waitForTimeout(200);
         ck(`organizer @${w}: share is disabled until an event is chosen`, (await pg.$eval('#share-copy', (b) => b.disabled)) && !(await pg.getAttribute('#share-wa', 'href')));
         await pg.selectOption('#share-event-select', 'evA'); await pg.fill('#share-promo', 'jazz-20!');
@@ -251,6 +308,22 @@ async function seed() {
           /Nairobi Jazz Night/.test(await p2.textContent('#modal-content')) && (await p2.inputValue('#promo-input')) === 'JAZZ20' && !(await p2.isVisible('#promo-result')));
         await p2.goto(BASE + '/event-hub.html?event=' + encodeURIComponent('../x"><img src=x onerror=alert(1)>')); await p2.waitForTimeout(300);
         ck(`buyer @${w}: a malformed event id in the link is ignored`, !(await p2.$eval('#overlay', (o) => o.classList.contains('open'))));
+        if (w === 1280) {
+          /* The buyer pays online with M-PESA: REAL purchaseTickets (seat hold) → REAL intent → STK
+             (simulated provider edge) → webhook → REAL activation → My Tickets shows the PIN. */
+          await p2.goto(BASE + '/event-hub.html?event=evA'); await p2.waitForSelector('#tier-REG', { timeout: 8000 }).catch(() => null);
+          await p2.click('#tier-REG'); await p2.click('#buy-btn');
+          await p2.waitForSelector('#pay-stk', { timeout: 8000 }).catch(() => null);
+          ck('buyer: checkout offers M-PESA (hosted methods stay hidden until proven)', !!(await p2.$('#pay-stk')) && !(await p2.$('#pay-hosted')));
+          const before = STK.length;
+          await p2.fill('#pay-phone', '0722000111'); await p2.click('#pay-stk');
+          await p2.waitForFunction(() => /Payment confirmed/.test(document.getElementById('pay-msg') ? document.getElementById('pay-msg').textContent : ''), null, { timeout: 20000 }).catch(() => null);
+          const push = STK[before] || {};
+          const ord = (await get('eventOrders/' + push.ref)) || {};
+          ck('buyer: M-PESA prompt for the SERVER price to the buyer\'s number', push.uid === 'buyer1' && push.phone === '254722000111' && Number(push.amount) === 2000 && ord.buyerUid === 'buyer1', push);
+          const tix = db._dump('eventTickets/').filter((t) => t.orderId === push.ref);
+          ck('buyer: payment confirmed → order paid, ticket valid with a PIN', ord.status === 'paid' && tix.length === 1 && tix[0].status === 'valid' && !!tix[0].pinHash && /Payment confirmed/.test(await p2.textContent('#pay-msg')));
+        }
         await p2.close();
       }
       if (flows && w === 1280) {

@@ -11,6 +11,9 @@
  *                  (noAdminFields() never covered `status` — self-approval) — ordinary edits still work
  *   events         eventSettlements: organizer reads OWN, stranger denied, nobody writes
  *                  eventExceptions: admin-only read · eventOrders / eventTickets: no client write
+ *   events ops     PIN secrets + PIN index unreadable by anyone (admins included) · staff assignments,
+ *                  invitations, admissions, audit, sales, sale / card-ref claims, receivables and
+ *                  refund requests: NO client write · reads admin-only, refund requests buyer-own
  *
  * Fails CLOSED without FIRESTORE_EMULATOR_HOST (never falls back to :8080).
  *   node scripts/run-entertainment-rules.js
@@ -41,7 +44,17 @@ async function suite(env, label, served) {
     await f('users/admin1', { role: 'admin' });
     await f('eventTicketSecrets/k1', { pin: 'ABCD-EFGH', buyerUid: 'buyer1' });
     await f('eventPinAttempts/e1_buyer1', { fails: 10 });
+    await f('eventTicketPins/e1_abc', { eventId: 'e1', ticketId: 'k1' });
+    await f('eventStaff/e1_till1', { uid: 'till1', eventId: 'e1', role: 'cashier', active: true, organizerUid: 'org1' });
+    await f('eventStaffInvites/e1_x', { eventId: 'e1', email: 'till1@x.co', role: 'cashier', status: 'pending', organizerUid: 'org1' });
+    await f('eventAdmissions/k1', { ticketId: 'k1', eventId: 'e1', admittedBy: 'gate1' });
+    await f('eventOpsAudit/a1', { action: 'event_staff_invited', eventId: 'e1' });
+    await f('eventSales/s1', { eventId: 'e1', organizerUid: 'org1', cashierUid: 'till1', status: 'COMPLETED', grossCents: 200000 });
+    await f('eventCommissionReceivables/s1', { saleId: 's1', organizerUid: 'org1', amountCents: 6000, collectedCents: 0, status: 'OUTSTANDING' });
+    await f('eventRefundRequests/o1', { orderId: 'o1', buyerUid: 'buyer1', status: 'PENDING_REVIEW' });
   });
+  const till = env.authenticatedContext('till1', { email: 'till1@x.co', email_verified: true }).firestore();
+  const admin = env.authenticatedContext('admin1', { admin: true }).firestore();
   const owner = env.authenticatedContext('owner1').firestore();
   const buyer = env.authenticatedContext('buyer1').firestore();
   const org = env.authenticatedContext('org1').firestore();
@@ -71,6 +84,26 @@ async function suite(env, label, served) {
   await expectDeny('buyer reads a RAW ticket PIN (eventTicketSecrets)', buyer.doc('eventTicketSecrets/k1').get());
   await expectDeny('a user writes themselves an event staff assignment', buyer.doc('eventStaff/e1_buyer1').set({ uid: 'buyer1', role: 'admission', active: true }));
   await expectDeny('a user resets the PIN-attempt lockout', buyer.doc('eventPinAttempts/e1_buyer1').set({ fails: 0 }));
+  /* Events ops P1-P6 collections — every write is server-only; reads are admin-only or owner-scoped. */
+  await expectDeny('buyer reads the PIN hash index (eventTicketPins)', buyer.doc('eventTicketPins/e1_abc').get());
+  await expectDeny('buyer plants a PIN index entry for a ticket', buyer.doc('eventTicketPins/e1_zzz').set({ eventId: 'e1', ticketId: 'k1' }));
+  await expectDeny('staff member reads own assignment doc directly', till.doc('eventStaff/e1_till1').get());
+  await expectDeny('staff member extends own access (endAt)', till.doc('eventStaff/e1_till1').update({ role: 'manager' }));
+  await expectDeny('organizer writes a staff invitation directly (bypassing role/expiry checks)', org.doc('eventStaffInvites/e1_y').set({ eventId: 'e1', email: 'a@b.co', role: 'manager', status: 'pending' }));
+  await expectDeny('invitee reads invitations', till.doc('eventStaffInvites/e1_x').get());
+  await expectDeny('buyer self-admits (writes eventAdmissions)', buyer.doc('eventAdmissions/k2').set({ ticketId: 'k2', eventId: 'e1' }));
+  await expectDeny('organizer reads admissions directly', org.doc('eventAdmissions/k1').get());
+  await expectDeny('organizer reads the event ops audit', org.doc('eventOpsAudit/a1').get());
+  await expectDeny('anyone writes the event ops audit', admin.doc('eventOpsAudit/a2').set({ action: 'x' }));
+  await expectDeny('cashier records a COMPLETED sale directly', till.doc('eventSales/s2').set({ eventId: 'e1', cashierUid: 'till1', status: 'COMPLETED', grossCents: 1 }));
+  await expectDeny('cashier reads a sale directly', till.doc('eventSales/s1').get());
+  await expectDeny('cashier claims a sale idempotency key', till.doc('eventSaleClaims/e1_k').set({ saleId: 's9' }));
+  await expectDeny('organizer reserves a card reference', org.doc('eventCardRefClaims/org1__kcb__REF1').set({ saleId: 's9' }));
+  await expectDeny('organizer marks own commission receivable COLLECTED', org.doc('eventCommissionReceivables/s1').update({ status: 'COLLECTED', collectedCents: 6000 }));
+  await expectDeny('organizer reads receivables directly', org.doc('eventCommissionReceivables/s1').get());
+  await expectDeny('buyer files a refund request directly (bypassing the wizard server)', buyer.doc('eventRefundRequests/o2').set({ orderId: 'o2', buyerUid: 'buyer1', status: 'PENDING_REVIEW' }));
+  await expectDeny('buyer approves own refund request', buyer.doc('eventRefundRequests/o1').update({ status: 'REFUNDED' }));
+  await expectDeny('stranger reads another buyer\'s refund request', stranger.doc('eventRefundRequests/o1').get());
 
   if (served) {
     ck(`${label}: venue created PENDING is allowed (the product still works)`,
@@ -81,6 +114,9 @@ async function suite(env, label, served) {
       await allowed(owner.doc('entArtists/a3').set({ uid: 'owner1', name: 'Band', status: 'pending' })));
     ck(`${label}: organizer reads OWN settlement`, await allowed(org.doc('eventSettlements/PAY1').get()));
     ck(`${label}: buyer reads own order`, await allowed(buyer.doc('eventOrders/o1').get()));
+    ck(`${label}: buyer reads OWN refund request`, await allowed(buyer.doc('eventRefundRequests/o1').get()));
+    ck(`${label}: admin reads sales, admissions, receivables, ops audit`, (await allowed(admin.doc('eventSales/s1').get())) && (await allowed(admin.doc('eventAdmissions/k1').get())) && (await allowed(admin.doc('eventCommissionReceivables/s1').get())) && (await allowed(admin.doc('eventOpsAudit/a1').get())));
+    ck(`${label}: even an admin cannot read a raw PIN or the PIN index`, (await denied(admin.doc('eventTicketSecrets/k1').get())) && (await denied(admin.doc('eventTicketPins/e1_abc').get())));
   }
 }
 
