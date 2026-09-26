@@ -189,19 +189,23 @@ console.log('\nPART B — the marketplace split, at the PLAN rate, all the way t
   ck('B7  the effective RATE travels with the breakdown', b.commission.rate === 15, String(b.commission.rate));
 }
 
-console.log('\nPART C — the delivery split: SOKONI takes its cut, the rider gets the rest\n');
+console.log('\nPART C — the delivery split: the rider line is the delivery record\'s entitlement\n');
+/* Repair 5 — the engine derives NO rider figure. The entitlement comes from rider-entitlement.js
+   (the order's server-authored delivery record + its bound quote) and is passed in. This fixture is
+   deliberately NOT 88% of the fee, so a surviving percentage rule cannot pass C1. */
+const ENT = { ok: true, riderUid: RIDER, minorUnits: KES(163), customerChargeMinor: KES(200), sokoniCommissionMinor: KES(37) };
 {
   withPlan('seller_free');
   const b = await SE.computeSettlement(makeDb(), {
     grossCents: KES(10000), category: 'marketplace', sellerId: SELLER, hubId: 'marketplace',
-    deliveryFeeCents: KES(200), riderId: RIDER,
+    deliveryFeeCents: KES(200), riderEntitlement: ENT,
   });
-  ck('C1  a KES 200 delivery fee splits 88/12', b.delivery.riderNetCents === KES(176)
-    && b.delivery.platformCents === KES(24),
+  ck('C1  the rider line is the entitlement, passed through (not a share of the fee)',
+    b.delivery.riderNetCents === ENT.minorUnits && b.delivery.platformCents === ENT.sokoniCommissionMinor,
     'rider=' + b.delivery.riderNetCents + ' platform=' + b.delivery.platformCents);
   const del = entry(b.ledgerPlan, 'delivery_fee');
-  ck('C2  the rider\'s share is credited to THAT rider, by id',
-    !!del && del.creditAccount === A.rider(RIDER) && del.amountCents === KES(176),
+  ck('C2  the rider\'s entitlement is credited to THAT rider, by id',
+    !!del && del.creditAccount === A.rider(RIDER) && del.amountCents === ENT.minorUnits,
     del && del.creditAccount + ' ' + del.amountCents);
   ck('C3  the split reconciles: rider + platform === fee',
     b.delivery.riderNetCents + b.delivery.platformCents === KES(200));
@@ -210,12 +214,16 @@ console.log('\nPART C — the delivery split: SOKONI takes its cut, the rider ge
     b.platformGrossCents + ' vs ' + (b.commission.cents + b.delivery.platformCents));
 }
 {
-  /* No rider on the order: no rider ledger entry, and no money invented for nobody. */
+  /* No entitlement: the delivery fee is REFUSED — never priced at a default share, never planned
+     for nobody (Repair 5). */
   withPlan('seller_free');
-  const b = await SE.computeSettlement(makeDb(), {
-    grossCents: KES(10000), category: 'marketplace', sellerId: SELLER, deliveryFeeCents: KES(200),
-  });
-  ck('C5  with no rider, no delivery credit is planned', !entry(b.ledgerPlan, 'delivery_fee'));
+  let refused = null;
+  try {
+    await SE.computeSettlement(makeDb(), {
+      grossCents: KES(10000), category: 'marketplace', sellerId: SELLER, deliveryFeeCents: KES(200),
+    });
+  } catch (e) { refused = e.message; }
+  ck('C5  a delivery fee with no rider entitlement is refused, not planned', /rider_entitlement_required/.test(refused || ''), refused);
 }
 
 console.log('\nPART D — the books balance\n');
@@ -223,7 +231,7 @@ console.log('\nPART D — the books balance\n');
   withPlan('seller_free');
   const b = await SE.computeSettlement(makeDb(), {
     grossCents: KES(10000), category: 'marketplace', sellerId: SELLER, hubId: 'marketplace',
-    deliveryFeeCents: KES(200), riderId: RIDER,
+    deliveryFeeCents: KES(200), riderEntitlement: ENT,
   });
   ck('D1  the engine declares its own ledger plan balanced',
     typeof SE.assertBalanced === 'function' ? SE.assertBalanced(b.ledgerPlan) !== false : true);
@@ -239,7 +247,7 @@ console.log('\nPART D — the books balance\n');
 
   const clearing = net.get(A.PLATFORM_CLEARING) || 0;
   ck('D3  platform clearing is drained by exactly what it paid out',
-    clearing === KES(10000) - 150000 - 850000 - KES(176), String(clearing));
+    clearing === KES(10000) - 150000 - 850000 - ENT.minorUnits, String(clearing));   /* rider line = the entitlement */
 }
 
 console.log('\nPART E — POS money never enters this rail\n');

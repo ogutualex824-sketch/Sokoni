@@ -426,7 +426,9 @@ const A7 = 'SELLING';
       subCore.isActive = () => true;
       const b = await se.computeSettlement(mkDb(new Map()), {
         grossCents: 1000000, category: 'marketplace', sellerId: 'S1', hubId: 'marketplace',
-        deliveryFeeCents: 20000, riderId: 'R1',
+        deliveryFeeCents: 20000,
+        /* Repair 5 — the rider line is the delivery record's entitlement, passed in; the engine derives none. */
+        riderEntitlement: { ok: true, riderUid: 'R1', minorUnits: 16400, customerChargeMinor: 20000, sokoniCommissionMinor: 3600 },
       });
       verdict(A7, 'commission is deducted and the remainder credited to the merchant',
         b.commission.cents + b.sellerNetCents === 1000000 && b.sellerNetCents > 0,
