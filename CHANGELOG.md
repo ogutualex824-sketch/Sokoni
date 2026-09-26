@@ -1,3 +1,14 @@
+## 2026-09-26 — Recovery manifest assertion 6 made deterministic (control repair, no deploy)
+
+The API returns `eventTrigger.eventFilters` in varying order for the same unchanged function (observed:
+pass, fail, pass on successive reads), so the order-sensitive assertion 6 failed correct rebuilds at random.
+New `scripts/infra/compare-trigger-spec.js` compares `eventFilters` as a **multiset** (order ignored; every
+filter, field and duplicate still counts) and everything else **exactly**. Assertion 6's method now requires it.
+Certified by `scripts/test-compare-trigger-spec.js` **22/0**. Live: `onOrderStatusChange` ×3,
+`onNewOrderCreated` and `minishopPage` all PASS.
+Assertion text, the other 8 assertions, the baseline and its sha256 pin are unchanged.
+Database / API / security / breaking changes: none.
+
 ## 2026-09-26 — Refund after webhook credit: PROVEN in deployed code, NOT PRESENT in data (investigation only)
 
 **NO CODE, NO DEPLOY, NO DATA CHANGE.** Record: `docs/REFUND_AFTER_WEBHOOK_CREDIT_INVESTIGATION.md`. Covers all

@@ -6,6 +6,11 @@
       "at": "2026-09-26",
       "by": "owner-authorized guardrail (double-credit regression hazard)",
       "change": "recovery_order[order=5] onOrderStatusChange: source_generation 1788077453779580 -> 1790400441458307, plus required_source_invariant. Nothing else in this contract changed; every other gate, block and authorization stands as frozen."
+    },
+    {
+      "at": "2026-09-26",
+      "by": "owner-authorized control repair (assertion 6 determinism)",
+      "change": "assertions[id=6].method: eventTrigger.eventFilters compared as a multiset via scripts/infra/compare-trigger-spec.js; everything else still exact. Assertion text, every other assertion, the baseline and its sha256 pin are unchanged."
     }
   ],
   "baseline_file": "scripts/infra/recovery-baseline-20260921.json",
@@ -129,7 +134,10 @@
     {
       "id": 6,
       "text": "FULL STRUCTURAL EQUALITY of the trigger specification, pre vs post",
-      "method": "compare baseline entry `raw` against a fresh describe, after deterministic key ordering only. NO field may be selected away, added, removed, changed or silently normalised. A rebuild must reproduce the trigger CONTRACT, not something resembling it.",
+      "method": "Run `node scripts/infra/compare-trigger-spec.js <function>`; exit 0 is required, 1 is a FAIL, 2 (could not compare) is a STOP. It compares baseline entry `raw.eventTrigger` against a fresh describe. `eventTrigger.eventFilters` is compared as a MULTISET: order is ignored, but every filter, every field inside a filter, and every duplicate counts. EVERYTHING ELSE is exact: object keys are canonically ordered, no field may be selected away, added, removed or changed, and every other array keeps its order. A rebuild must reproduce the trigger CONTRACT, not something resembling it.",
+      "method_amended": "2026-09-26 — determinism repair. The API returns eventFilters in varying order for the SAME unchanged resource (observed 2026-09-26 on onOrderStatusChange: successive reads passed, failed and passed under the order-sensitive method). An order-sensitive comparison therefore failed correct rebuilds at random. Only the ORDER of that one array is now ignored; its contents are not.",
+      "method_superseded": "compare baseline entry `raw` against a fresh describe, after deterministic key ordering only. NO field may be selected away, added, removed, changed or silently normalised.",
+      "certification": "scripts/test-compare-trigger-spec.js 22/0 (6 same-contract PASS cases incl. the two orders production actually returned; 16 contract changes FAIL incl. a duplicated filter and a reorder of any OTHER array). Live 2026-09-26: onOrderStatusChange x3, onNewOrderCreated and minishopPage all PASS.",
       "applies": "all six; DECISIVE for onOrderStatusChange and onNewOrderCreated"
     },
     {
