@@ -32,7 +32,7 @@ Education (`functions/education.js`) embeds YouTube/Vimeo — not hosted media. 
 | Category (browse) | `categoryMeta` | `category.js:20-62` | **EXTEND** — add `creator`. There is no category collection. |
 | Hub registry | `HUBS` | `functions/platform-core.js:110-131` | `entertainment` hub exists → Creator lives **inside Entertainment** (no new hub — standing strategy) |
 | Film catalogue | `entertainmentListings` | `functions/entertainment-hub.js` | **ADOPT + REPAIR** (fix public read of media URL; add review states; private media) |
-| Payable purpose | `PURPOSES` pricer registry | `functions/payment-purposes.js` | **EXTEND** — one `film_access` pricer (server price, `sellerUid` never omitted) |
+| Payable purpose | `PURPOSES` pricer registry | `functions/payment-purposes.js` | **EXTEND** — one `film_access` pricer (server price, deliberately NO `sellerUid`: royalty money is not seller proceeds) |
 | Payment intent | `createPaymentIntent` → `paymentIntents/{ref}` (`.create()`) | `functions/payment-intents.js:60` | **REUSE unchanged** |
 | Collection rail | `initiateSTKPush` (M-PESA, live) | `functions/index.js:6071` | **REUSE**. Multi-method hosted checkout = `functions/shared/intasend-checkout.js` — **untracked, another agent's, unverified against the live account** |
 | Settlement authority | `webhookIntasend` → `payments/{ref}` COMPLETE | `functions/index.js:7497` | **REUSE — but see §4 B1** |
