@@ -362,11 +362,16 @@ const st = { rows:[], scope:null, tab:_initialTab(), kind:'product', editing:nul
 /* Mirrors functions/shared/business-scope.js. Presentation only — the server
    re-decides. Kept identically strict: unknown status is NOT active. */
 const LIVE=['active','approved'];
+/* Mirrors functions/shared/business-scope.js _isLive — DISPLAY ONLY; the server decides.
+   A missing status is NOT live, and a live status alone is not approval (the account can
+   write it on its own sellers/providers record): approval needs the protected marker the
+   server's approval writes (approvedAt) or an admin-only flag. */
 function isLive(d){
   if(!d||typeof d!=='object') return false;
   if(d.active===false||d.suspended===true) return false;
   const s=String(d.status==null?'':d.status).trim().toLowerCase();
-  return s?LIVE.includes(s):true;
+  if(!s||!LIVE.includes(s)) return false;
+  return d.approved===true||d.adminApproved===true||(d.approvedAt!=null&&d.approvedAt!=='');
 }
 
 async function load(){

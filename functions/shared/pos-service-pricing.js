@@ -62,7 +62,7 @@ const MAX_KES = 150000;
    is capped hard, because the safe default for "how much may a cashier invent"
    is not "as much as the gateway allows". A merchant who needs more raises it
    deliberately. */
-const DEFAULT_QUICK_CHARGE_MAX_CENTS = 2000000;   /* KES 20,000 */
+const DEFAULT_QUICK_CHARGE_MAX_CENTS = 2000000;   /* KES 20,000 — PER BASKET, all quick-charge lines together */
 
 const MAX_LINES = 100;
 const MAX_QTY   = 9999;
@@ -118,6 +118,10 @@ function priceServiceBasket({ lines, catalogue, callerUid, merchantUid, limits, 
   const out = [];
   const counts = { catalogue: 0, variable: 0, quick_charge: 0 };
   let subtotalCents = 0;
+  /* The quick-charge ceiling is a PER-BASKET cap on the SUM of keyed-in figures. It used to be
+     checked per line, so 100 lines of KES 20,000 (KES 2,000,000) passed a KES 20,000 limit:
+     the cap bounded one typo, not the amount a cashier could invent on one sale. */
+  let quickTotalCents = 0;
 
   lines.forEach((raw, i) => {
     const line = raw || {};
@@ -159,9 +163,10 @@ function priceServiceBasket({ lines, catalogue, callerUid, merchantUid, limits, 
         throw _err('invalid-argument', `"${description}" needs a valid amount.`);
       }
       const lineCents = unitCents * qty;
-      if (lineCents > quickMaxCents) {
+      quickTotalCents += lineCents;
+      if (quickTotalCents > quickMaxCents) {
         throw _err('failed-precondition',
-          `"${description}" exceeds this till's quick-charge limit of KES ${(quickMaxCents / 100).toLocaleString()}.`);
+          `Quick charges on this sale total KES ${(quickTotalCents / 100).toLocaleString()}, over this till's quick-charge limit of KES ${(quickMaxCents / 100).toLocaleString()} per sale.`);
       }
 
       subtotalCents += lineCents;

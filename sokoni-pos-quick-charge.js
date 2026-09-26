@@ -96,7 +96,20 @@
       customerPhone: $('qc-phone').value,
     };
 
-    const ceiling = _advisoryCeilingCents();
+    /* The server's quick-charge limit is PER SALE (the sum of every quick charge in the basket),
+       so the advisory warns against what REMAINS after the quick charges already in this cart —
+       otherwise the till would happily build a basket the server then refuses. Still advisory:
+       the server decides. */
+    let ceiling = _advisoryCeilingCents();
+    if (ceiling) {
+      try {
+        const cart = (window.SPos && window.SPos.state && window.SPos.state.cartItems) || [];
+        const usedCents = cart
+          .filter((l) => l && l.source === B.SOURCE.QUICK)
+          .reduce((s, l) => s + Math.round(Number(l.price) * 100) * (Number(l.qty) || 1), 0);
+        ceiling = Math.max(0, ceiling - usedCents);
+      } catch (_) { /* advisory only — fall back to the whole ceiling */ }
+    }
     const v = B.validateQuickCharge(draft, ceiling ? { advisoryCeilingCents: ceiling } : undefined);
     if (!v.ok) { _warn(v.problems.join(' ')); return; }
 

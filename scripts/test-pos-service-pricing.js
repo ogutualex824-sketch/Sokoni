@@ -113,6 +113,34 @@ console.log('\n── Quick charge: described, bounded, attributed ──');
                  { limits: { quickChargeMaxCents: 6000000 } });
   ck('a merchant may raise the ceiling deliberately', r.ok, r.msg);
 }
+
+console.log('\n── The quick-charge limit is PER SALE, not per line ──');
+{
+  /* The limit used to be checked per LINE, so splitting one invented figure across lines
+     passed any cap: 100 lines of KES 19,000 = KES 1,900,000 against a KES 20,000 limit. The
+     cap is now the SUM of every quick-charge line in the basket. */
+  const cap = 20000;                                          /* KES — the default, per sale */
+  const two = call([{ description: 'Part A', unitPriceKES: 15000, qty: 1 },
+                    { description: 'Part B', unitPriceKES: 15000, qty: 1 }]);
+  ck('two lines each under the cap but OVER it together are refused',
+     !two.ok && two.code === 'failed-precondition', two.msg);
+  ck('…and the refusal states it is per sale', /per sale/.test(two.msg || ''), two.msg);
+  const many = call(Array.from({ length: 100 }, (_, i) => ({ description: 'Split ' + i, unitPriceKES: 19000, qty: 1 })));
+  ck('100 lines of KES 19,000 (the old bypass) are refused', !many.ok && many.code === 'failed-precondition', many.msg);
+  const qty = call([{ description: 'Many units', unitPriceKES: 5000, qty: 5 }]);
+  ck('quantity counts toward the cap (5 x KES 5,000 = 25,000) and is refused', !qty.ok, qty.msg);
+  /* Inverting controls: the basket cap is a cap, not a blanket refusal. */
+  const exact = call([{ description: 'Half', unitPriceKES: cap / 2, qty: 1 },
+                      { description: 'Other half', unitPriceKES: cap / 2, qty: 1 }]);
+  ck('quick charges summing to EXACTLY the cap are allowed', exact.ok, exact.msg);
+  const mixed = call([{ description: 'Callout', unitPriceKES: 19000, qty: 1 },
+                      { itemId: 'passport', qty: 10 }, { itemId: 'charger', qty: 5 }]);
+  ck('catalogue lines do NOT count toward the quick-charge cap', mixed.ok, mixed.msg);
+  const raised = call([{ description: 'Part A', unitPriceKES: 15000, qty: 1 },
+                       { description: 'Part B', unitPriceKES: 15000, qty: 1 }],
+                      { limits: { quickChargeMaxCents: 4000000 } });
+  ck('a merchant-raised basket cap is honoured across lines', raised.ok, raised.msg);
+}
 {
   const r = call([{ description: 'Anything', unitPriceKES: 10, qty: 1 }],
                  { limits: { quickChargeEnabled: false } });
@@ -186,7 +214,9 @@ console.log('\n── Bounds ──');
 console.log('\n── Business scope: a business bills only what it was approved to trade ──');
 {
   const B = require(path.join(__dirname, '..', 'functions', 'shared', 'business-scope'));
-  const LIVE = { status: 'active' };
+  /* What the server's APPROVAL writes: a live status AND the protected marker. A bare
+     { status:'active' } is self-writable and no longer grants scope (shared/business-scope.js). */
+  const LIVE = { status: 'active', approvedAt: '2026-09-27T00:00:00Z', approvedBy: 'admin-uid' };
   const productsOnly = B.resolveBusinessScope({ seller: LIVE, provider: null });
   const servicesOnly = B.resolveBusinessScope({ seller: null, provider: LIVE });
   const dual         = B.resolveBusinessScope({ seller: LIVE, provider: LIVE });

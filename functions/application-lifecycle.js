@@ -842,6 +842,15 @@ async function projectSeller(db, app, uid, approved) {
     nameLower: name.toLowerCase(),
     status: 'active',
     active: true,
+    /* THE PROTECTED APPROVAL MARKER. `status` and `active` are writable by the account itself
+       (firestore.rules: sellers/{uid} create/update with noAdminFields(), which does not cover
+       them), so on their own they cannot tell an approved merchant from one that wrote its own
+       record. `approvedAt` / `approvedBy` ARE withheld from every client by noAdminFields(), so
+       only this server path can set them — which is what makes them approval EVIDENCE.
+       shared/business-scope.js recognises a seller only through this marker. `decidedBy` has
+       already been verified above as an account holding the admin claim. */
+    approvedAt: _ts(),
+    approvedBy: (app && typeof app.decidedBy === 'string' && app.decidedBy.trim()) || null,
     /* `updatedAt` is load-bearing: the discovery queries order by it, so a
        registry row without one is invisible to the very listing it just
        joined. */

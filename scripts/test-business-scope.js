@@ -25,7 +25,12 @@ const ck = (l, ok, d) => {
   ok ? pass++ : fail++;
 };
 
-const LIVE = { status: 'active' };
+/* A LIVE registry record is what the server's APPROVAL writes: a live status AND a protected
+   approval marker (approvedAt/approvedBy — withheld from every client by noAdminFields()).
+   A bare { status:'active' } is what an account can write for ITSELF, and is tested below to
+   grant nothing. */
+const LIVE = { status: 'active', approvedAt: '2026-09-27T00:00:00Z', approvedBy: 'admin-uid' };
+const EV = { approvedAt: '2026-09-27T00:00:00Z', approvedBy: 'admin-uid' };
 const S = (seller, provider) => B.resolveBusinessScope({ seller, provider });
 
 console.log('\n── The four shapes a business can be in ──');
@@ -50,7 +55,7 @@ console.log('\n── The four shapes a business can be in ──');
 
 console.log('\n── The cyber café: sells airtime, prints documents ──');
 {
-  const cyber = S({ status: 'active', shopId: 'kass' }, { status: 'active', providerId: 'kass' });
+  const cyber = S({ status: 'active', shopId: 'kass', ...EV }, { status: 'active', providerId: 'kass', ...EV });
   ck('it may use the merchant workspace', B.canUseMerchantWorkspace(cyber));
   ck('it gets BOTH catalogue kinds',
      B.catalogueKindsFor(cyber).join(',') === 'product,service', B.catalogueKindsFor(cyber).join(','));
@@ -85,9 +90,9 @@ console.log('\n── Suspension revokes, per scope, independently ──');
 }
 {
   ck('active:false revokes even with status "active"',
-     !S({ status: 'active', active: false }, null).sellsProducts);
+     !S({ status: 'active', active: false, ...EV }, null).sellsProducts);
   ck('suspended:true revokes even with status "active"',
-     !S({ status: 'active', suspended: true }, null).sellsProducts);
+     !S({ status: 'active', suspended: true, ...EV }, null).sellsProducts);
 }
 
 console.log('\n── Unknown status is NOT active ──');
@@ -100,16 +105,44 @@ console.log('\n── Unknown status is NOT active ──');
      S({ status: 'quantum' }, null).reasons.products === 'unknown_status:quantum',
      S({ status: 'quantum' }, null).reasons.products);
   /* Inverting control: the recognised ones still work. */
-  ck('"approved" trades', S({ status: 'approved' }, null).sellsProducts);
-  ck('"active" trades', S({ status: 'active' }, null).sellsProducts);
-  ck('case and padding do not matter', S({ status: '  ACTIVE ' }, null).sellsProducts);
+  ck('"approved" with approval evidence trades', S({ status: 'approved', ...EV }, null).sellsProducts);
+  ck('"active" with approval evidence trades', S({ status: 'active', ...EV }, null).sellsProducts);
+  ck('case and padding do not matter', S({ status: '  ACTIVE ', ...EV }, null).sellsProducts);
 }
 
-console.log('\n── A pre-status legacy record still trades ──');
+console.log('\n── A MISSING status is NOT approved (reversed: this used to assert it was live) ──');
 {
-  ck('a doc with no status at all is live', S({ shopId: 'old' }, null).sellsProducts);
-  ck('…but not if it is explicitly deactivated',
-     !S({ shopId: 'old', active: false }, null).sellsProducts);
+  ck('a doc with no status at all does NOT trade', !S({ shopId: 'old' }, null).sellsProducts);
+  ck('…reported as not_approved', S({ shopId: 'old' }, null).reasons.products === 'not_approved',
+     S({ shopId: 'old' }, null).reasons.products);
+  ck('…not even with approval evidence: status is still required', !S({ shopId: 'old', ...EV }, null).sellsProducts);
+  ck('a provider created with no status (the rules allow it) grants no services',
+     !S(null, { providerId: 'x', uid: 'x' }).providesServices);
+}
+
+console.log('\n── Self-writable fields can NEVER establish approval ──');
+{
+  /* Exactly what a signed-in account may write to its OWN sellers/{uid} and providers/{uid}. */
+  const selfSeller   = { uid: 'u', status: 'active', active: true, shopName: 'Mine' };
+  const selfProvider = { uid: 'u', status: 'active', active: true };
+  ck("a self-written seller {status:'active', active:true} grants NO products", !S(selfSeller, null).sellsProducts);
+  ck('…reported as not_approved, not suspended', S(selfSeller, null).reasons.products === 'not_approved',
+     S(selfSeller, null).reasons.products);
+  ck("a self-written provider {status:'active', active:true} grants NO services", !S(null, selfProvider).providesServices);
+  ck('…so a self-made "dual business" trades nothing at all', !S(selfSeller, selfProvider).isTrading);
+  ck("status 'approved' written by the account grants nothing", !S({ status: 'approved' }, null).sellsProducts);
+  ck('labels on top still grant nothing', !S({ ...selfSeller, businessType: 'both' }, selfProvider).isTrading);
+  ck('an empty approvedAt is not evidence', !S({ status: 'active', approvedAt: '' }, null).sellsProducts);
+  ck('approved:"true" (a string) is not evidence', !S({ status: 'active', approved: 'true' }, null).sellsProducts);
+
+  /* Positive controls: each PROTECTED field alone establishes approval, so the refusals above
+     are the resolver telling fields apart, not a resolver that never grants. */
+  ck('POSITIVE: approvedAt (server-written) establishes approval', S({ status: 'active', approvedAt: 'T' }, null).sellsProducts);
+  ck('POSITIVE: approved:true (admin-only) establishes approval', S({ status: 'active', approved: true }, null).sellsProducts);
+  ck('POSITIVE: adminApproved:true (admin-only) establishes approval', S({ status: 'active', adminApproved: true }, null).sellsProducts);
+  ck('POSITIVE: a provider with approvedAt keeps services', S(null, { status: 'active', approvedAt: 'T' }).providesServices);
+  ck('…and evidence never overrides a suspension', !S({ status: 'suspended', ...EV }, null).sellsProducts
+     && !S({ status: 'active', suspended: true, ...EV }, null).sellsProducts);
 }
 
 console.log('\n── mayTrade refuses what it does not know ──');

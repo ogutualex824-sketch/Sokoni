@@ -22,7 +22,9 @@ const ck = (l, ok, d) => {
   ok ? pass++ : fail++;
 };
 
-const LIVE = { status: 'active' };
+/* What the server's APPROVAL writes: live status AND the protected marker. A bare
+   { status:'active' } is self-writable and no longer grants scope (shared/business-scope.js). */
+const LIVE = { status: 'active', approvedAt: '2026-09-27T00:00:00Z', approvedBy: 'admin-uid' };
 const scopeProducts = B.resolveBusinessScope({ seller: LIVE, provider: null });
 const scopeServices = B.resolveBusinessScope({ seller: null, provider: LIVE });
 const scopeDual     = B.resolveBusinessScope({ seller: LIVE, provider: LIVE });

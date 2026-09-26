@@ -27,7 +27,9 @@ const NAV = require(path.join(root, 'sokoni-merchant-nav.js'));
 const B   = require(path.join(root, 'functions', 'shared', 'business-scope.js'));
 const CONTRACT = g.SokoniMerchantRoutes;
 
-const LIVE = { status: 'active' };
+/* What the server's APPROVAL writes: live status AND the protected marker. A bare
+   { status:'active' } is self-writable and no longer grants scope (shared/business-scope.js). */
+const LIVE = { status: 'active', approvedAt: '2026-09-27T00:00:00Z', approvedBy: 'admin-uid' };
 const sub  = (s) => ({ found: true, status: s, tier: 'professional' });
 const NOSUB = { found: false, status: 'none', tier: null };
 const mkNav = (p, s, ps, ss) => NAV.resolveNav({

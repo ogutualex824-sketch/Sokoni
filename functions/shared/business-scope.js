@@ -60,6 +60,24 @@ const SCOPE = Object.freeze({
    exactly when to refuse, not when to assume goodwill. */
 const LIVE_STATUSES = Object.freeze(['active', 'approved']);
 
+/* APPROVAL EVIDENCE — fields no client can write.
+   `status` and `active` on `sellers/{uid}` are writable by the account itself (firestore.rules
+   create/update with noAdminFields(), which does not cover them), and `providers/{uid}` may be
+   CREATED by its owner with no status at all. So neither field can prove an admin approved the
+   business: the earlier reading ("no status = live, status 'active' = live") let any signed-in
+   user grant themselves products and services scope by writing their own record.
+   Approval is recognised only through fields noAdminFields() withholds from every client, so
+   only a server path can set them:
+     approvedAt   written by application-lifecycle on approval (providers AND sellers)
+     approved     admin-only
+     adminApproved admin-only
+   `approvedBy` is provenance, recorded alongside approvedAt; it is not needed to qualify. */
+function _hasApprovalEvidence(doc) {
+  return doc.approved === true
+    || doc.adminApproved === true
+    || (doc.approvedAt != null && doc.approvedAt !== '');
+}
+
 function _isLive(doc) {
   if (!doc || typeof doc !== 'object') return false;
   /* An explicit deactivation beats a stale status string. `sellers` carries
@@ -68,12 +86,12 @@ function _isLive(doc) {
   if (doc.active === false) return false;
   if (doc.suspended === true) return false;
   const status = String(doc.status == null ? '' : doc.status).trim().toLowerCase();
-  /* A registry doc with NO status at all predates the status field. Those are
-     live — they were written by approval, which is the authority this module
-     trusts — but only when nothing else contradicts it, which the two checks
-     above have already established. */
-  if (!status) return true;
-  return LIVE_STATUSES.includes(status);
+  /* A MISSING status is NOT approved. Status is still required to be live — so a suspended
+     or pending record refuses even if it once carried approval evidence — but status alone
+     never establishes approval, because the account can write it. */
+  if (!status) return false;
+  if (!LIVE_STATUSES.includes(status)) return false;
+  return _hasApprovalEvidence(doc);
 }
 
 /**
@@ -117,7 +135,11 @@ function _reason(doc, live) {
   if (!doc) return 'not_applied';
   if (doc.active === false || doc.suspended === true) return 'suspended';
   const status = String(doc.status == null ? '' : doc.status).trim().toLowerCase();
-  if (!status) return 'suspended';
+  /* No status, or a live-looking status with no protected approval evidence: the record exists
+     but nothing shows an admin approved it. Reported as exactly that — not "suspended", which
+     would send support looking for a suspension that never happened. */
+  if (!status) return 'not_approved';
+  if (LIVE_STATUSES.includes(status) && !_hasApprovalEvidence(doc)) return 'not_approved';
   if (status === 'pending' || status === 'submitted') return 'pending_review';
   if (status === 'rejected' || status === 'declined') return 'rejected';
   if (status === 'suspended') return 'suspended';
