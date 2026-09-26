@@ -1000,6 +1000,11 @@
       border: 1px solid rgba(113,255,0,0.15); border-radius: 14px;
       box-shadow: 0 16px 40px rgba(0,0,0,.6);
       z-index: 99999; overflow: hidden;
+      /* Capped + scrollable: with several workspaces the menu ran off the bottom of a short
+         phone screen and Sign Out was unreachable (Entertainment slice §10). */
+      max-height: calc(100vh - 90px); max-height: calc(100dvh - 90px); overflow-y: auto;
+      overscroll-behavior: contain;
+      max-width: calc(100vw - 16px);
       animation: skAcctIn .18s cubic-bezier(.19,1.32,.34,1);
     }
     @keyframes skAcctIn {

@@ -1,3 +1,32 @@
+## 2026-09-26 (191) — Entertainment registry, Streaming, organizer approval routing, AdminOS › Entertainment, profile menus
+
+- **Summary:** one canonical Entertainment registry (`functions/shared/entertainment-registry.js`)
+  replaces eleven drifting lists for the top level: Creator, **Streaming** (owner decision: a Creator
+  content type under the 30/70 policy — added as Creator subcategory `streaming`; on-demand only,
+  live broadcast NOT implemented and not claimed), Events, Performers, Venues — each with application,
+  approval, role, dashboard (PREMIUM/EQUIPPED), payment, refund, policy, search and AdminOS surface;
+  a suite enforces "no orphan category". Organizers can finally be approved: event-manager.html shows a
+  category-specific application (ID last-4 only) instead of a dead end; `event_organizer` is a
+  declared application type and delegated role; approval grants `users.roles` + the claim (merged),
+  projects no provider profile, and notifies with the Event Manager link. AdminOS gains an
+  Entertainment panel (events, settlements, refund queue via the canonical fosSubmitRefund, exceptions,
+  venue/artist moderation, category + commercial-policy matrix) and an "Event organizers" application
+  filter; nothing is added to admin.html. Profile menu: the shared dashboard widget gets an avatar,
+  viewport-aware placement (up / left / bottom sheet), scroll cap, aria + Escape; mounted on Event
+  Manager, Venue Manager and the Provider Dashboard's mobile bar (phones had NO sign-out there). Fixed
+  pre-existing 360 px page overflow on Event Manager (section bar ~709 px) and Venue Manager (~442 px).
+- **Files:** `functions/{entertainment-admin,shared/entertainment-registry}.js` (new);
+  `functions/{role-authority,application-lifecycle,admin-os-dispatch,shared/creator-publishing}.js`;
+  `sokoni-aos-entertainment.js` (new); `admin-os.html`, `sokoni-aos.js`, `event-manager.html`,
+  `venue-manager.html`, `provider-dashboard.html`, `sokoni-dashboard-profile.js`, `shared-header.js`,
+  `sokoni-creator-rules.js` (synced); `scripts/test-entertainment-{registry,browser}.js` (new).
+- **Auth/claims:** new claim `event_organizer`, minted ONLY by role-authority after an admin decision
+  (existing minter; minter set unchanged). **API:** AdminOS ops `entAdmin{Matrix,Listings,SetListingStatus}`.
+- **Evidence:** registry/approval 62/0 · browser 230/0 (6 widths × 5 surfaces) · role authority 30/0 ·
+  application decision 17/0 · admin-claim 32/0 · AdminOS wiring 316/0 · render 43/0 · creator suites
+  green. BASELINE FAILURE (not this slice): `test-provider-verification-decision` crashes in its own
+  params stub (`defineString`), files untouched since 545afdc. **Not deployed.**
+
 ## 2026-09-26 (190) — Entertainment: legacy client ticketing converged onto Event Hub; buyers can pay
 
 - **Summary:** event-hub.html's "pay" step now works: an in-modal panel creates the server-priced

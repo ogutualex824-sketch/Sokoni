@@ -222,6 +222,10 @@ function resolveRole(app) {
     driver: 'driver', rider: 'driver',
     provider: 'provider', professional: 'provider',
     legal: 'legal', health: 'health',
+    /* Entertainment › Events: an organizer who sells tickets (event-manager.html intake). Declared
+       only — "event planner" prose still resolves to provider (a bookable service), which is a
+       different product. */
+    event_organizer: 'event_organizer', organizer: 'event_organizer',
   };
   const declared = String(app.type == null ? '' : app.type).trim().toLowerCase();
   if (Object.prototype.hasOwnProperty.call(DECLARED_TYPES, declared)) {
@@ -747,7 +751,10 @@ async function projectDriver(db, app, uid, approved, opts) {
    registries — the opposite of convergence. If legal is ever converged it must
    be re-examined on its own evidence, and with a migration plan health did not
    need. */
-const DELEGATED_ROLES = { legal: 'legalProviders' };
+/* Roles whose capability lives outside the provider registry. event_organizer: no provider profile
+   is projected — the organizer's capability is users.roles (read by event-hub requireOrganizer)
+   and the events they create through the server. */
+const DELEGATED_ROLES = { legal: 'legalProviders', event_organizer: 'events' };
 
 /* Shop ids that are not shop ids — the same placeholders the client rejects
    (SokoniBranch synthesises {id:'main'} on an empty device). An application
@@ -1062,12 +1069,17 @@ async function applyDecision(appId, app, opts = {}) {
         /* Do not promise an account the applicant cannot yet use. Until the
            claim mints their token still reads as a buyer, so a "you are live"
            message would be a success notice over a half-applied decision. */
+        /* Approval routes to ONE deterministic dashboard (shared/entertainment-registry.js
+           role → dashboard); roles the registry does not cover keep their message unchanged. */
+        const _dash = require('./shared/entertainment-registry').dashboardForRole(receipt.roleKey || role);
         const approvedBody = role === 'driver'
           ? 'Your rider application is approved. Open the SOKONI driver app and go online to start receiving deliveries.'
-          : `${app.name || 'Your business'} is now live on SOKONI and customers can find you in search.`;
+          : role === 'event_organizer'
+            ? 'You are approved as an event organizer. Open Event Manager to create your first event and start selling tickets.'
+            : `${app.name || 'Your business'} is now live on SOKONI and customers can find you in search.`;
         await notify({
           uid,
-          type: role === 'driver' ? 'rider_approved' : 'merchant_approved',
+          type: role === 'driver' ? 'rider_approved' : role === 'event_organizer' ? 'organizer_approved' : 'merchant_approved',
           title: claimPending ? 'Approved — finishing setup' : 'You are approved on SOKONI',
           body: claimPending
             ? 'Your application is approved. We are finishing the last step of your account setup — you will be able to sign in to your new dashboard shortly.'
@@ -1076,7 +1088,7 @@ async function applyDecision(appId, app, opts = {}) {
           /* Distinct key per variant: a re-run that finally mints the claim must
              still be able to send the real "you are live" message. */
           dedupeKey: claimPending ? `app_approved_pending:${appId}` : `app_approved:${appId}`,
-          data: { applicationId: appId, role, claimPending },
+          data: { applicationId: appId, role, claimPending, ...(_dash ? { dashboard: _dash, link: _dash } : {}) },
         });
       } catch (e) {
         logger.warn('[appLifecycle] notify failed', { appId, error: e.message });

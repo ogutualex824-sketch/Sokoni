@@ -355,6 +355,7 @@
       <button class="nav-item" data-section="workflows" data-label="Workflow Center" onclick="SokoniAOS.navigate('workflows');_closeSidebar()"><span class="nav-icon">&#x267B;&#xFE0F;</span>Workflows</button>
       <button class="nav-item" data-section="audit" data-label="Audit Center" onclick="SokoniAOS.navigate('audit');_closeSidebar()"><span class="nav-icon">&#x1F4CB;</span>Audit</button>
       <button class="nav-item" data-section="creator" data-label="Creator Hub" onclick="SokoniAOS.navigate('creator');_closeSidebar()"><span class="nav-icon">&#x1F3AC;</span>Creator Hub</button>
+      <button class="nav-item" data-section="entertainment" data-label="Entertainment" onclick="SokoniAOS.navigate('entertainment');_closeSidebar()"><span class="nav-icon">&#x1F3AB;</span>Entertainment</button>
       <button class="nav-item" data-section="security" data-label="Security" onclick="SokoniAOS.navigate('security');_closeSidebar()"><span class="nav-icon">&#x1F510;</span>Security</button>
       <button class="nav-item" data-section="invoices" data-label="Invoices" onclick="SokoniAOS.navigate('invoices');_closeSidebar()"><span class="nav-icon">&#x1F9FE;</span>Invoices</button>
     </div>
@@ -481,6 +482,8 @@
                  `legal` is the same one-line omission and is deliberately NOT added here:
                  out of scope for this gate. -->
             <option value="health">Healthcare providers</option>
+            <!-- Entertainment › Events: organizers apply from event-manager.html (type event_organizer). -->
+            <option value="event_organizer">Event organizers</option>
           </select>
           <input id="appsSearch" type="search" class="aos-input" placeholder="Search name / phone&#x2026;" oninput="SokoniAOS.loadApplications()">
           <span id="appsSummary" style="color:var(--aos-muted);font-size:12px;margin-left:auto"></span>
@@ -704,6 +707,12 @@
         <div class="panel-toolbar"><h2>Creator Hub</h2></div>
         <div id="creatorBody"><div class="aos-spinner"><div></div></div></div>
       </div>
+      <!-- Entertainment: Events, venue/artist moderation, category + commercial-policy matrix.
+           Creator Hub (and Streaming, a Creator content type) keep the panel above. -->
+      <div class="aos-panel" id="panel-entertainment" hidden>
+        <div class="panel-toolbar"><h2>Entertainment</h2></div>
+        <div id="entertainmentBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
       <div class="aos-panel" id="panel-security" hidden>
         <div class="panel-toolbar"><h2>Security</h2></div>
         <div id="securityBody"><div class="aos-spinner"><div></div></div></div>
@@ -802,6 +811,7 @@
   <script src="sokoni-aos-activity.js"></script>
   <script src="sokoni-aos-security.js"></script>
   <script src="sokoni-aos-creator.js"></script>
+  <script src="sokoni-aos-entertainment.js"></script>
   <script src="sokoni-aos.js"></script>
   <script>
     function _openSidebar()  { document.getElementById("aosSidebar").classList.add("open"); }

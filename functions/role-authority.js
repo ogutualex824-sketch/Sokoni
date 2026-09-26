@@ -91,6 +91,9 @@ const ROLE_KEY = Object.freeze({
   seller: 'seller',
   health: 'provider',
   legal: 'provider',
+  /* Entertainment › Events (shared/entertainment-registry.js). Granted ONLY by an admin decision
+     on an application; event-hub's organizer gate reads users.roles for it. */
+  event_organizer: 'event_organizer',
 });
 
 function roleKeyFor(role) {
@@ -114,6 +117,7 @@ function claimsFor(role, approved, existing) {
   if (role === 'provider' || role === 'health' || role === 'legal') claims.provider = !!approved;
   if (role === 'driver') { claims.driver = !!approved; claims.rider = !!approved; }
   if (role === 'seller') claims.seller = !!approved;
+  if (role === 'event_organizer') claims.event_organizer = !!approved;
   return claims;
 }
 

@@ -24,7 +24,9 @@ const adminOs = (() => {
   const creator = require('./creator-hub');
   /* Event ticket settlement controls (eventAdmin* ops) — same self-guarding convention. */
   const events = require('./event-settlement');
-  return Object.assign({}, base, { _h: Object.assign({}, base._h, trace._h, creator._adminH, events._adminH) });
+  /* Entertainment moderation + category/policy matrix (entAdmin* ops). */
+  const ent = require('./entertainment-admin');
+  return Object.assign({}, base, { _h: Object.assign({}, base._h, trace._h, creator._adminH, events._adminH, ent._adminH) });
 })();
 
 const _OPTS = {

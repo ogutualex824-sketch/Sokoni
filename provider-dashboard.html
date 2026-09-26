@@ -38,7 +38,11 @@ a{color:var(--acc);text-decoration:none}
 .btn:disabled{opacity:.4;cursor:not-allowed}
 
 /* Layout */
-.app{display:flex;height:100vh;overflow:hidden}
+.app{display:flex;height:100vh;height:100dvh;overflow:hidden}
+/* Mobile identity: the sidebar (which holds the profile menu) is hidden at <=768px, so without this
+   a phone had NO profile menu and NO sign-out. The same shared widget is mounted a second time here. */
+.mob-identity{display:none;position:fixed;top:max(8px,env(safe-area-inset-top));right:8px;z-index:101;
+  background:rgba(5,5,5,.9);border:1px solid var(--border);border-radius:999px;padding:2px 4px}
 .sidebar{width:240px;flex-shrink:0;background:var(--surf);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
 .sb-logo{padding:20px 18px 14px;display:flex;align-items:center;gap:9px;font-weight:800;color:var(--acc);font-size:1.05rem;letter-spacing:-.3px}
 .sb-logo img{height:24px}
@@ -55,6 +59,7 @@ a{color:var(--acc);text-decoration:none}
 .main{flex:1;overflow-y:auto;padding-bottom:80px}
 @media(max-width:768px){
   .sidebar{display:none}
+  .mob-identity{display:block}
   .bn{display:flex}
   .main{padding-bottom:72px}
 }
@@ -304,6 +309,7 @@ a{color:var(--acc);text-decoration:none}
   </div>
 
   <!-- Main content -->
+  <div class="mob-identity" id="dash-identity-mobile"></div>
   <div class="main" id="main">
 
     <!-- ── Overview ──────────────────────────────────────────────────── -->
@@ -1797,19 +1803,29 @@ let _dashIdentityUI = null;
 function _mountDashIdentity(profile, user){
   const host = document.getElementById('dash-identity');
   if(!host || !window.SokoniDashboardProfile || _dashIdentityUI) return;
-  try {
-    _dashIdentityUI = window.SokoniDashboardProfile.mount(host, {
+  const cfg = {
       displayName: profile.name || user.displayName || 'Provider',
       currentRoleLabel: 'Service Provider',
       profileHref: '/profile.html',
       accountSettingsHref: '/account-centre.html',
       availableRoles: [],
+      /* Only links every signed-in provider may use; no admin surface is ever listed here. */
+      extraLinks: [
+        { label: 'Notifications', href: '/notifications.html' },
+        { label: 'Messages', href: '/messages.html' },
+        { label: 'Wallet', href: '/wallet.html' },
+        { label: 'Help & Support', href: '/help.html' },
+      ],
       signOut: function(){
         const _go = function(){ window.location.href = 'login.html'; };
         return (typeof window.sokoniSignOut === 'function' ? window.sokoniSignOut() : Promise.resolve())
           .then(_go).catch(_go);
       },
-    });
+  };
+  try {
+    _dashIdentityUI = window.SokoniDashboardProfile.mount(host, cfg);
+    const mob = document.getElementById('dash-identity-mobile');
+    if (mob) window.SokoniDashboardProfile.mount(mob, cfg);
   } catch(e){ console.error('[provider-dashboard] dash identity mount failed', e); }
 }
 

@@ -110,6 +110,9 @@ window.SokoniAOS = (() => {
       /* Creator Hub (film/media marketplace). sokoni-aos-creator.js renders it;
          every op is a creatorAdmin* handler behind adminOsDispatch. */
       creator:       () => _loadCreator(),
+      /* Entertainment (Events, moderation, category/policy matrix). sokoni-aos-entertainment.js
+         renders it; every op is an eventAdmin* / entAdmin* handler behind adminOsDispatch. */
+      entertainment: () => _loadEntertainment(),
     };
     loaders[s]?.();
   }
@@ -133,6 +136,9 @@ window.SokoniAOS = (() => {
     /* Creator Hub — _h-only handlers merged into adminOsDispatch
        (functions/creator-hub.js _adminH); each re-checks the admin claim. */
     ...((window.SokoniAOSCreator && window.SokoniAOSCreator.OPS) || []),
+    /* Entertainment — _h-only handlers merged into adminOsDispatch
+       (functions/event-settlement.js, functions/entertainment-admin.js). */
+    ...((window.SokoniAOSEntertainment && window.SokoniAOSEntertainment.OPS) || []),
   ]);
 
   // ── CF caller ─────────────────────────────────────────────────────────────────
@@ -2323,6 +2329,17 @@ window.SokoniAOS = (() => {
     }
     try { window.SokoniAOSCreator.mount({ host: body, call: _call }); }
     catch (e) { body.innerHTML = "<p class='aos-muted'>Creator Hub console failed to start: " + _esc(e && e.message) + "</p>"; }
+  }
+
+  async function _loadEntertainment() {
+    const body = document.getElementById("entertainmentBody");
+    if (!body) return;
+    if (!(window.SokoniAOSEntertainment && typeof window.SokoniAOSEntertainment.mount === "function")) {
+      body.innerHTML = "<p class='aos-muted'>Entertainment console (sokoni-aos-entertainment.js) is not loaded.</p>";
+      return;
+    }
+    try { window.SokoniAOSEntertainment.mount({ host: body, call: _call }); }
+    catch (e) { body.innerHTML = "<p class='aos-muted'>Entertainment console failed to start: " + _esc(e && e.message) + "</p>"; }
   }
 
   async function _loadSecurity() {

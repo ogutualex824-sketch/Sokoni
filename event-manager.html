@@ -102,8 +102,12 @@
        organizer has no section navigation on a phone at all. Desktop keeps the sidebar. */
     #em-mobile-nav{display:none;}
     @media(max-width:900px){
-      #em-mobile-nav{display:flex;background:var(--bg2);border-bottom:1px solid var(--border);}
-      .em-mtab{
+      /* A horizontal scroller: seven pills do not fit a phone, and a plain flex row widened the
+         page to ~709 px at a 360 px screen (every control shrank, the header menu fell off-screen). */
+      #em-mobile-nav{display:flex;background:var(--bg2);border-bottom:1px solid var(--border);
+        gap:8px;padding:8px 12px;overflow-x:auto;max-width:100vw;box-sizing:border-box;scrollbar-width:none;}
+      #em-mobile-nav::-webkit-scrollbar{display:none;}
+      .em-mtab{flex:0 0 auto;
         min-height:44px;padding:0 14px;border-radius:999px;white-space:nowrap;
         background:var(--bg3);border:1px solid var(--border);color:var(--text2);
         font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;
@@ -114,10 +118,11 @@
 </head>
 <body>
 
-<header class="hdr">
+<header class="hdr" style="flex-wrap:wrap;row-gap:6px">
   <div class="hdr-logo">SOKONI <span>Event Manager</span></div>
   <div class="hdr-right">
     <span id="uid-badge" style="font-size:11px;color:var(--text2)"></span>
+    <div id="sk-identity"></div>
     <!-- "Browse Events" read like a link to a listing, not a way out of the tool. This
          link already worked — it is sticky and 44px — so SokoniHubNav leaves it alone
          rather than injecting a second, competing back control beside it. -->
@@ -395,9 +400,12 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js"></script>
 <script src="/sokoni-appcheck.js"></script>
 <script src="/sokoni-config.js"></script>
+<script src="/sokoni-dashboard-profile-core.js"></script>
+<script src="/sokoni-dashboard-profile.js"></script>
 <script>
   const app  = firebase.initializeApp(window.SOKONI_CONFIG, 'event-manager');
   const auth = firebase.auth(app);
@@ -411,12 +419,135 @@
   function toast(m){ const el=document.getElementById('toast'); el.textContent=m; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),3200); }
   async function callCF(name,data={}){ const r=await fns.httpsCallable(name)(data); return r.data; }
 
+  /* ── Organizer access ─────────────────────────────────────────────────────────
+     An organizer is the legacy numeric role (>= 2) or an account APPROVED through AdminOS
+     (application-lifecycle → role-authority mints `event_organizer`). The server gate
+     (event-hub requireOrganizer) re-checks on every call — this only decides what to render.
+     A signed-in non-organizer is shown their application status, or the application form:
+     the page used to end in "Organizer access required" with no way to become one. */
+
+  /* Profile icon + menu (Entertainment slice §10) — the shared widget sokoni-dashboard-profile.js,
+     the same one Merchant V2 and the Provider Dashboard use. Only links an ordinary signed-in user
+     may open; no AdminOS link is ever offered here. Sign-out prefers the canonical
+     window.sokoniSignOut (full teardown) and falls back to this page's own auth instance. */
+  let _skIdentity = null;
+  function _mountIdentity(user) {
+    const host = document.getElementById('sk-identity');
+    if (!host || !window.SokoniDashboardProfile || _skIdentity) return;
+    try {
+      _skIdentity = window.SokoniDashboardProfile.mount(host, {
+        displayName: user.displayName || user.email || 'Account',
+        avatarUrl: user.photoURL || null,
+        currentRoleLabel: 'Event Organizer',
+        profileHref: '/profile.html',
+        accountSettingsHref: '/account-centre.html',
+        availableRoles: [],
+        extraLinks: [
+          { label: 'Notifications', href: '/notifications.html' },
+          { label: 'Messages', href: '/messages.html' },
+          { label: 'Wallet', href: '/wallet.html' },
+          { label: 'Help & Support', href: '/help.html' },
+        ],
+        signOut: function () {
+          const go = function () { location.href = '/login.html'; };
+          const p = typeof window.sokoniSignOut === 'function' ? window.sokoniSignOut() : firebase.auth(app).signOut();
+          return Promise.resolve(p).then(go).catch(go);
+        },
+      });
+    } catch (e) { console.error('[profile] mount failed', e); }
+  }
+
+  function isOrganizer(claims) { return (claims.role || 0) >= 2 || claims.event_organizer === true; }
+
+  let _orgCats = null;   /* event-hub categories, read from the create form BEFORE it is swapped out */
+  async function renderOrganizerGate(user) {
+    if (!_orgCats) _orgCats = [...document.querySelectorAll('#ev-category option')].map((o) => o.value).filter(Boolean);
+    /* Keep the page header (identity + sign-out); replace only the organizer workspace. */
+    let main = document.querySelector('.org-gate-wrap');
+    if (!main) {
+      main = document.createElement('div');
+      main.className = 'org-gate-wrap';
+      const layout = document.querySelector('.layout');
+      if (layout) layout.replaceWith(main); else document.body.appendChild(main);
+      /* The organizer section bar belongs to the workspace, not to the application form. */
+      const mnav = document.getElementById('em-mobile-nav');
+      if (mnav) mnav.remove();
+    }
+    const fs = firebase.firestore(app);
+    let existing = null;
+    try {
+      const q = await fs.collection('applications').where('uid', '==', user.uid).where('type', '==', 'event_organizer').limit(1).get();
+      existing = q.empty ? null : { id: q.docs[0].id, ...q.docs[0].data() };
+    } catch (_) { /* unreadable: fall through to the form; the server de-duplicates on review */ }
+    const st = existing ? String(existing.status || 'pending') : null;
+    if (existing && st !== 'rejected') {
+      const label = st === 'info_requested' ? 'More information requested — check your notifications.'
+        : st === 'approved' ? 'Approved — sign out and back in to open Event Manager.'
+        : st === 'suspended' ? 'Your organizer access is suspended. Contact support.'
+        : 'Your organizer application is under review. We will notify you when it is decided.';
+      main.innerHTML = `<section class="org-gate" style="max-width:560px;margin:48px auto;padding:24px"><h1 style="font-size:22px">Event organizer</h1><p role="status">${esc(label)}</p></section>`;
+      return;
+    }
+    const cats = _orgCats || [];
+    main.innerHTML = `<section class="org-gate" style="max-width:560px;margin:32px auto;padding:16px">
+      <h1 style="font-size:22px;margin:0 0 6px">Sell tickets on SOKONI</h1>
+      <p style="opacity:.8;margin:0 0 16px">Apply to become an event organizer. An administrator reviews every application.${existing ? ' Your previous application was not approved — you may apply again.' : ''}</p>
+      <form id="org-form" novalidate style="display:grid;gap:12px">
+        <label>Organizer or company name *<input name="name" required maxlength="120" autocomplete="organization"></label>
+        <label>Organizer type *<select name="organizerType" required><option value="individual">Individual</option><option value="company">Company</option><option value="group">Group / collective</option></select></label>
+        <label>Contact phone *<input name="phone" type="tel" inputmode="tel" required autocomplete="tel" placeholder="07XX XXX XXX"></label>
+        <label>Email *<input name="email" type="email" required autocomplete="email" value="${esc(user.email || '')}"></label>
+        <fieldset style="border:1px solid var(--border,#333);border-radius:8px;padding:10px"><legend>Event types you organise *</legend>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">${cats.map((c) => `<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" name="eventTypes" value="${esc(c)}">${esc(c.replace(/_/g, ' '))}</label>`).join('')}</div></fieldset>
+        <label>Typical attendance<select name="scale"><option value="under_100">Under 100</option><option value="100_1000">100 – 1,000</option><option value="over_1000">Over 1,000</option></select></label>
+        <label>M-PESA number for payouts *<input name="payoutPhone" type="tel" inputmode="tel" required placeholder="07XX XXX XXX"></label>
+        <label>ID document *<select name="idType" required><option value="national_id">National ID</option><option value="passport">Passport</option><option value="company_registration">Company registration</option></select></label>
+        <label>Last 4 characters of the document *<input name="idLast4" required maxlength="4" minlength="4" autocomplete="off"></label>
+        <label>About your events<textarea name="description" maxlength="800" rows="3"></textarea></label>
+        <label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" name="agree" required>
+          <span>I accept the organizer terms: ticket revenue is paid to my wallet after each event, less the platform ticket commission and payment-provider fees; refunds for cancelled events are returned to buyers.</span></label>
+        <button type="submit" class="btn-primary" style="min-height:44px">Submit application</button>
+        <div id="org-msg" role="status" aria-live="polite"></div>
+      </form></section>`;
+    document.getElementById('org-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target), msg = document.getElementById('org-msg');
+      const phone = String(f.get('phone') || '').replace(/\s/g, ''), payout = String(f.get('payoutPhone') || '').replace(/\s/g, '');
+      const types = f.getAll('eventTypes');
+      const okPhone = (v) => /^(\+?254|0)[17]\d{8}$/.test(v);
+      if (!String(f.get('name') || '').trim()) { msg.textContent = 'Enter the organizer name.'; return; }
+      if (!okPhone(phone) || !okPhone(payout)) { msg.textContent = 'Enter valid Safaricom numbers.'; return; }
+      if (!types.length) { msg.textContent = 'Choose at least one event type.'; return; }
+      if (!/^[A-Za-z0-9]{4}$/.test(String(f.get('idLast4') || ''))) { msg.textContent = 'Enter the last 4 characters of the document.'; return; }
+      if (!f.get('agree')) { msg.textContent = 'Accept the organizer terms to apply.'; return; }
+      e.target.querySelector('button[type=submit]').disabled = true;
+      msg.textContent = 'Submitting…';
+      try {
+        await fs.collection('applications').add({
+          uid: user.uid, type: 'event_organizer', role: 'event_organizer', hub: 'entertainment', category: 'events',
+          name: String(f.get('name')).trim().slice(0, 120), organizerType: f.get('organizerType'),
+          phoneNumber: phone, email: String(f.get('email') || '').trim().slice(0, 200),
+          eventTypes: types.slice(0, 17), scale: f.get('scale'), payoutPhone: payout,
+          identity: { documentType: f.get('idType'), documentLast4: String(f.get('idLast4')).toUpperCase() },
+          description: String(f.get('description') || '').slice(0, 800),
+          agreementAccepted: true, agreementVersion: 'organizer-v1-2026-09-26',
+          status: 'pending', source: 'event-manager', createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        msg.textContent = '';
+        await renderOrganizerGate(user);   /* re-render from the stored record — success is what was saved */
+      } catch (err) {
+        msg.textContent = 'Could not submit: ' + ((err && err.message) || 'please try again');
+        e.target.querySelector('button[type=submit]').disabled = false;
+      }
+    };
+  }
+
   auth.onAuthStateChanged(async user => {
     if (!user) { location.href='/login.html?redirect=/event-manager.html'; return; }
+    _mountIdentity(user);
     const tok = await user.getIdTokenResult();
-    const role = tok.claims.role || 0;
-    if (role < 2) {
-      document.body.innerHTML = '<div style="padding:80px;text-align:center;color:var(--red);font-size:16px">Organizer access required (seller role or above).</div>';
+    if (!isOrganizer(tok.claims)) {
+      await renderOrganizerGate(user);
       return;
     }
     document.getElementById('uid-badge').textContent = user.email || user.uid;

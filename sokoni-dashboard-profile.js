@@ -34,7 +34,20 @@
      availableRoles: [{key, label, emoji}],
      currentRoleKey: string|null,
      onSwitchRole: (key) => void,
+
+     // Extra AUTHORIZED links the host decides to show (notifications,
+     // messages, wallet, help). The host passes only what the signed-in role
+     // may use; this widget renders them verbatim and never adds admin links.
+     extraLinks: [{label, href}],
    }
+
+   LAYOUT (Entertainment slice §10): the popup is positioned against the
+   VIEWPORT when it opens — it opens upward when the trigger sits in the lower
+   half of the screen (the Provider Dashboard mounts it at the bottom of a
+   scrolling sidebar, where a downward popup was clipped), is capped at the
+   available height and scrolls, and on narrow screens (≤ 600 px) becomes a
+   fixed bottom sheet so it is never off-screen or behind an overflow:hidden
+   ancestor. Escape closes it; aria-expanded tracks it.
 ================================================================ */
 (function (root) {
   'use strict';
@@ -75,6 +88,19 @@
       'color:var(--txt2,#a8a8a8);font-size:12px;cursor:pointer;margin:2px}',
     '.sk-dash-role-pill.active{border-color:var(--acc,#71ff00);color:var(--acc,#71ff00)}',
     '.sk-dash-signout{color:#ff5252;font-weight:700}',
+    '.sk-dash-profile-trigger{flex-direction:row;align-items:center;gap:8px;min-height:44px}',
+    '.sk-dash-profile-text{display:flex;flex-direction:column;align-items:flex-end}',
+    '.sk-dash-avatar{width:32px;height:32px;border-radius:50%;flex:0 0 32px;display:inline-flex;',
+      'align-items:center;justify-content:center;font-size:13px;font-weight:800;overflow:hidden;',
+      'background:var(--acc,#71ff00);color:#000}',
+    '.sk-dash-avatar img{width:100%;height:100%;object-fit:cover}',
+    '.sk-dash-popup{max-height:min(70vh,520px);overflow-y:auto;overscroll-behavior:contain}',
+    '.sk-dash-popup.sk-up{top:auto;bottom:100%;margin-top:0;margin-bottom:6px}',
+    '.sk-dash-popup.sk-left{right:auto;left:0}',
+    '.sk-dash-popup.sk-sheet{position:fixed;left:8px;right:8px;bottom:8px;top:auto;margin:0;min-width:0;',
+      'max-height:70vh;z-index:100010}',
+    '.sk-dash-link,.sk-dash-shop-item{min-height:44px}',
+    '@media (max-width:600px){.sk-dash-profile-text{display:none}}',
   ].join('');
 
   function injectCSS(doc) {
@@ -90,6 +116,15 @@
     });
   }
 
+  /* Initials, or the photo when the host supplies an https URL (never a data:/javascript: URL). */
+  function avatarInner(config) {
+    var u = String(config.avatarUrl || '');
+    if (/^https:\/\//i.test(u)) return '<img alt="" src="' + esc(u) + '">';
+    var n = String(config.displayName || '').trim().split(/\s+/).filter(Boolean);
+    var ini = n.length ? (n[0][0] + (n.length > 1 ? n[n.length - 1][0] : '')) : '?';
+    return esc(ini.toUpperCase());
+  }
+
   function mount(host, config) {
     config = config || {};
     var doc = host.ownerDocument;
@@ -102,9 +137,12 @@
           '<button type="button" class="sk-dash-shop-trigger" data-act="open-shop">' +
             '<span data-el="active-shop">' + esc(config.activeWorkspaceName || 'Select shop') + '</span>' +
             '<span class="car">▾</span></button>' : '') +
-        '<button type="button" class="sk-dash-profile-trigger" data-act="open-profile">' +
-          '<span class="sk-dash-name">' + esc(config.displayName || 'Account') + '</span>' +
-          '<span class="sk-dash-role">' + esc(config.currentRoleLabel || '') + '</span>' +
+        '<button type="button" class="sk-dash-profile-trigger" data-act="open-profile" aria-haspopup="menu" aria-expanded="false" aria-label="Account menu">' +
+          '<span class="sk-dash-profile-text">' +
+            '<span class="sk-dash-name">' + esc(config.displayName || 'Account') + '</span>' +
+            '<span class="sk-dash-role">' + esc(config.currentRoleLabel || '') + '</span>' +
+          '</span>' +
+          '<span class="sk-dash-avatar" aria-hidden="true">' + avatarInner(config) + '</span>' +
         '</button>' +
         (config.getWorkspaces ? '<div class="sk-dash-popup" data-popup="shop" hidden></div>' : '') +
         '<div class="sk-dash-popup" data-popup="profile" hidden></div>' +
@@ -117,7 +155,29 @@
     function closeAll() {
       if (shopPopup) shopPopup.hidden = true;
       if (profilePopup) profilePopup.hidden = true;
+      var t = root.querySelector('[data-act="open-profile"]');
+      if (t) t.setAttribute('aria-expanded', 'false');
     }
+
+    /* Viewport-aware placement, decided each time the popup opens. */
+    /* Horizontal correction, measured AFTER the popup is shown: right-aligned under a trigger near
+       the left edge (the Provider Dashboard sidebar) it would start off-screen — flip it left. */
+    function fitX(popup) {
+      if (popup.classList.contains('sk-sheet')) return;
+      var r = popup.getBoundingClientRect();
+      if (r.left < 8) popup.classList.add('sk-left');
+    }
+    function place(popup) {
+      var win = doc.defaultView || window;
+      popup.classList.remove('sk-up', 'sk-sheet', 'sk-left');
+      var vw = win.innerWidth || 1024, vh = win.innerHeight || 768;
+      if (vw <= 600) { popup.classList.add('sk-sheet'); return; }
+      var r = root.getBoundingClientRect();
+      if (r.top > vh / 2) popup.classList.add('sk-up');
+    }
+
+    function onKey(e) { if (e.key === 'Escape') closeAll(); }
+    doc.addEventListener('keydown', onKey);
 
     function onOutsideClick(e) {
       if (!root.contains(e.target)) closeAll();
@@ -138,6 +198,9 @@
                 esc(r.key) + '">' + esc(r.emoji || '') + ' ' + esc(r.label) + '</button>';
             }).join('') +
           '</div>' : '') +
+        (Array.isArray(config.extraLinks) ? config.extraLinks.filter(function (l) { return l && l.href && /^\/(?!\/)/.test(String(l.href)); }).map(function (l) {
+          return '<a class="sk-dash-link" href="' + esc(l.href) + '">' + esc(l.label) + '</a>';
+        }).join('') : '') +
         (config.accountSettingsHref ? '<a class="sk-dash-link" href="' + esc(config.accountSettingsHref) + '">Account Settings</a>' : '') +
         '<button type="button" class="sk-dash-link sk-dash-signout" data-act="sign-out">Sign Out</button>';
 
@@ -186,7 +249,9 @@
       var wasHidden = shopPopup.hidden;
       closeAll();
       if (!wasHidden) return;
+      place(shopPopup);
       shopPopup.hidden = false;
+      fitX(shopPopup);
       if (workspacesLoaded) return;
       shopPopup.innerHTML = '<div class="sk-dash-popup-title">Loading…</div>';
       Promise.resolve(config.getWorkspaces ? config.getWorkspaces() : null)
@@ -206,7 +271,11 @@
       closeAll();
       if (!wasHidden) return;
       renderProfilePopup();
+      place(profilePopup);
       profilePopup.hidden = false;
+      fitX(profilePopup);
+      var t = root.querySelector('[data-act="open-profile"]');
+      if (t) t.setAttribute('aria-expanded', 'true');
     }
 
     var shopTrigger = root.querySelector('[data-act="open-shop"]');
@@ -228,6 +297,7 @@
       destroy: function () {
         destroyed = true;
         doc.removeEventListener('click', onOutsideClick, true);
+        doc.removeEventListener('keydown', onKey);
       },
     };
   }

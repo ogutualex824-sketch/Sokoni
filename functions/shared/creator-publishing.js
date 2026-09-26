@@ -23,6 +23,10 @@
     movies:            'Movies',
     films:             'Films',
     series:            'Series',
+    /* Streaming (owner decision 2026-09-26): a Creator content TYPE — series and episodic
+       releases under the same approval, 30 / 70 royalty policy and signed-URL playback as any
+       Creator title. Playback is on-demand; live broadcast is NOT implemented and is not implied. */
+    streaming:         'Streaming (series & episodic)',
     documentaries:     'Documentaries',
     short_films:       'Short Films',
     music_videos:      'Music Videos',

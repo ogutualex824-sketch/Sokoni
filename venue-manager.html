@@ -43,12 +43,16 @@
       font-size: 20px; padding: 4px 6px; border-radius: 7px; line-height: 1;
     }
     .topbar-back:hover { color: var(--txt); background: var(--sur2); }
-    .topbar-title { font-size: 15px; font-weight: 800; flex: 1; white-space: nowrap; }
+    /* min-width:0 lets the title and the venue picker SHRINK: with flex:1 + nowrap the title's
+       min-content width pushed the bar (and the page) to ~442 px on a 360 px phone. */
+    .topbar-title { font-size: 15px; font-weight: 800; flex: 1; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    #sk-identity { flex-shrink: 0; }
     .venue-sel {
       background: var(--sur2); border: 1px solid var(--bor2); border-radius: 8px;
       color: var(--txt); padding: 7px 10px; font-size: 12px; font-weight: 700;
-      max-width: 150px; outline: none; cursor: pointer;
+      max-width: 150px; outline: none; cursor: pointer; min-width: 0; flex: 0 1 150px;
     }
+    @media (max-width: 420px) { .btn-add { padding: 7px 9px; } .topbar { gap: 6px; padding: 0 8px; } }
     .venue-sel:focus { border-color: rgba(113,255,0,.4); }
     .btn-add {
       background: var(--g); color: #000; font-weight: 800; font-size: 12px;
@@ -291,6 +295,7 @@
     <option value="">Loading…</option>
   </select>
   <button class="btn-add" onclick="openAddModal()">+ Add Venue</button>
+  <div id="sk-identity"></div>
 </div>
 
 <!-- TAB BAR -->
@@ -714,6 +719,7 @@ function showTab(name, btn) {
   const try_ = () => {
     if (typeof firebase === 'undefined') { setTimeout(try_, 300); return; }
     firebase.auth().onAuthStateChanged(user => {
+      if (user) _mountIdentity(user);
       if (user) {
         _weekStart = getMonday(new Date());
         buildScheduleGrid();
@@ -1251,6 +1257,40 @@ document.addEventListener('keydown', e => {
     closeAddModal();
   }
 });
+</script>
+<script src="/sokoni-dashboard-profile-core.js"></script>
+<script src="/sokoni-dashboard-profile.js"></script>
+<script>
+  /* Profile icon + menu (Entertainment slice §10) — the shared widget sokoni-dashboard-profile.js,
+     the same one Merchant V2 and the Provider Dashboard use. Only links an ordinary signed-in user
+     may open; no AdminOS link is ever offered here. Sign-out prefers the canonical
+     window.sokoniSignOut (full teardown) and falls back to this page's own auth instance. */
+  let _skIdentity = null;
+  function _mountIdentity(user) {
+    const host = document.getElementById('sk-identity');
+    if (!host || !window.SokoniDashboardProfile || _skIdentity) return;
+    try {
+      _skIdentity = window.SokoniDashboardProfile.mount(host, {
+        displayName: user.displayName || user.email || 'Account',
+        avatarUrl: user.photoURL || null,
+        currentRoleLabel: 'Venue Owner',
+        profileHref: '/profile.html',
+        accountSettingsHref: '/account-centre.html',
+        availableRoles: [],
+        extraLinks: [
+          { label: 'Notifications', href: '/notifications.html' },
+          { label: 'Messages', href: '/messages.html' },
+          { label: 'Wallet', href: '/wallet.html' },
+          { label: 'Help & Support', href: '/help.html' },
+        ],
+        signOut: function () {
+          const go = function () { location.href = '/login.html'; };
+          const p = typeof window.sokoniSignOut === 'function' ? window.sokoniSignOut() : firebase.auth().signOut();
+          return Promise.resolve(p).then(go).catch(go);
+        },
+      });
+    } catch (e) { console.error('[profile] mount failed', e); }
+  }
 </script>
 </body>
 </html>
