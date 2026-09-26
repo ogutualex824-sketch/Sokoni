@@ -47,8 +47,16 @@ const paths = (st, re) => Object.keys(st || {}).filter((k) => re.test(k));
 /* NOISE = fields that differ between two runs of the SAME base code (wall-clock
    date strings, random delivery PINs, timing ms). Only those are masked; every
    other field must match exactly. */
+/* Timing / wall-clock fields in NON-money documents are noise by nature; money
+   documents are never masked. */
+const TIMING = /(Ms|DurationMs|At|date|timeline|proofPin)$/;
+const MONEY = /^(wallets|walletTransactions|commissionLedger|ledger|orders|products|payments|royalty)/;
 function noiseOf(a, b) {
   const n = {};
+  for (const k of new Set([...Object.keys(a || {}), ...Object.keys(b || {})])) {
+    if (MONEY.test(k)) continue;
+    for (const fld of Object.keys(Object.assign({}, (a || {})[k], (b || {})[k]))) if (TIMING.test(fld)) (n[k] = n[k] || new Set()).add(fld);
+  }
   for (const k of new Set([...Object.keys(a || {}), ...Object.keys(b || {})])) {
     const x = (a || {})[k] || {}, y = (b || {})[k] || {};
     for (const fld of new Set([...Object.keys(x), ...Object.keys(y)])) if (JSON.stringify(x[fld]) !== JSON.stringify(y[fld])) (n[k] = n[k] || new Set()).add(fld);
@@ -79,7 +87,7 @@ ck('BASE writes a marketplace commissionLedger row for the film', paths(bFilm.st
 
 for (const sc of ['film', 'filmIntentReadFails']) {
   console.log(`\n── branch: ${sc} ──`);
-  const r = run(ROOT, sc, sc === 'filmIntentReadFails' ? { FAIL_INTENT_READS: '1' } : {});
+  const r = run(ROOT, sc, sc === 'filmIntentReadFails' ? { FAIL_INTENT_READ_AT: '2' } : {});
   ck(`${sc}: handler ran (200, replay 200)`, !r.crashed && JSON.stringify(r.calls) === '[200,200]', r.crashed || JSON.stringify(r.calls));
   if (r.crashed) continue;
   const st = r.store;
@@ -99,6 +107,10 @@ for (const sc of ['film', 'filmIntentReadFails']) {
   ck(`${sc}: participants split the pool exactly (7000/3000 → 237.65 / 101.85)`, earn.reduce((a, b) => a + b, 0) === 33950 && earn.includes(23765) && earn.includes(10185), earn.join(','));
   ck(`${sc}: replay → alreadyAccrued, still ONE allocation`, r.royalty.replay.royalty.alreadyAccrued === true && paths(st, /^royaltyLedger\//).length === 4);
   ck(`${sc}: no outbound network`, r.outbound.length === 0);
+  const early = r.logs.some((l) => /royalty path, no seller credit/.test(l));
+  const second = r.logs.some((l) => /reached the seller path/.test(l));
+  if (sc === 'film') ck('film: routed by the EARLY branch', early && !second, r.logs.join(' || ').slice(0, 200));
+  else ck('filmIntentReadFails: early branch LOST its read and the SECOND exit fired', !early && second && r.logs.some((l) => /purpose check failed/.test(l)), r.logs.join(' || ').slice(0, 200));
 }
 
 console.log('\n── other domains: byte-identical to BASE (except providerReport) ──');

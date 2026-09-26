@@ -25,20 +25,24 @@ const { makeFakeFirestore } = require('./fake-firestore-txn');
 const T0 = Date.UTC(2026, 7, 15, 9, 0, 0);
 const F = makeFakeFirestore({ clock: () => T0, deterministicIds: true });
 const db = F.db;
-/* FAIL_INTENT_READS=n: the first n paymentIntents reads throw (simulates the
-   early film branch losing its intent read) — later reads succeed. */
-let failIntentReads = Number(process.env.FAIL_INTENT_READS || 0);
+/* FAIL_INTENT_READ_AT=n: the n-th paymentIntents read (1-based) throws — used to
+   make the webhook's EARLY film branch lose its intent read (read #2: #1 is the
+   service-booking hold check). The suite proves which exit fired from the logs. */
+const failAt = Number(process.env.FAIL_INTENT_READ_AT || 0);
+let intentReads = 0;
 const realCollection = db.collection;
 db.collection = (c) => {
   const col = realCollection(c);
   if (c !== 'paymentIntents') return col;
   const realDoc = col.doc;
-  return { ...col, doc: (id) => { const d = realDoc(id); const g = d.get; return { ...d, get: async () => { if (failIntentReads > 0) { failIntentReads--; throw new Error('simulated intent read failure'); } return g(); } }; } };
+  return { ...col, doc: (id) => { const d = realDoc(id); const g = d.get; return { ...d, get: async () => { intentReads++; if (intentReads === failAt) throw new Error('simulated intent read failure'); return g(); } }; } };
 };
 
 /* Silence the handler's own logging; keep our JSON line clean. */
 const out = process.stdout.write.bind(process.stdout);
-console.log = console.info = console.warn = console.error = console.debug = () => {};
+const logs = [];
+const grab = (...a) => { try { logs.push(a.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).join(' ').slice(0, 300)); } catch (_) { /* ignore */ } };
+console.log = console.info = console.warn = console.error = console.debug = grab;
 
 /* Network tripwire: any outbound HTTP from the handler is recorded, never sent. */
 const outbound = [];
@@ -125,6 +129,6 @@ const S = {
   }
   const dump = {};
   for (const [p, e] of db._store) dump[p] = JSON.parse(JSON.stringify(e.data));
-  out(JSON.stringify({ scenario: SCENARIO, ref, calls, outbound, royalty, store: dump }) + '\n');
+  out(JSON.stringify({ scenario: SCENARIO, ref, calls, outbound, royalty, intentReads, logs: logs.filter((l) => /film_access|webhookIntasend\]/.test(l)).slice(0, 40), store: dump }) + '\n');
   process.exit(0);
 })().catch((e) => { out(JSON.stringify({ scenario: SCENARIO, crashed: String(e && e.stack || e).slice(0, 800) }) + '\n'); process.exit(3); });

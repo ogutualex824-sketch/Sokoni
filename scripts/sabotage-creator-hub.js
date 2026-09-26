@@ -25,7 +25,14 @@ const SUITES = {
   publishing: ['node', ['scripts/test-creator-publishing.js']],
   hub:        ['node', ['scripts/test-creator-hub.js']],
   rules:      ['node', ['scripts/run-creator-rules.js']],
+  callback:   ['node', ['scripts/test-creator-callback.js']],
+  refund:     ['node', ['scripts/test-refund-exactly-once.js']],
 };
+const IDX = 'functions/index.js';
+const FOS = 'functions/financial-os.js';
+const COM = 'functions/shared/creator-commercial.js';
+const EARLY = '_fiSnap.exists && _fiSnap.data().purpose === "film_access"';
+const SECOND = 'if (attribution.purpose === "film_access" || attribution.type === "film_access") {\n        logger.warn';
 const HUB = 'functions/creator-hub.js';
 const ROY = 'functions/shared/creator-royalty.js';
 const PUB = 'functions/shared/creator-publishing.js';
@@ -92,9 +99,60 @@ const M = [
     expect: /buyer writes an entitlement DENIED/ },
   { name: 'storage: film masters become readable', file: 'storage.rules', suite: 'rules', rules: true,
     from: "match /creator-masters/{uid}/{filmId}/{uploadId} {\n      allow read:   if false;", to: "match /creator-masters/{uid}/{filmId}/{uploadId} {\n      allow read:   if request.auth != null;", expect: /viewer reads a master DENIED/ },
+
+  /* ── money: payment callback (executed webhook, base-differential) ── */
+  { group: 'money', name: 'callback: film payment credits the BUYER (all three film guards removed)', file: IDX, suite: 'callback',
+    edits: [[EARLY, 'false'], ['if (attribution.purpose === "film_access" || attribution.type === "film_access") {', 'if (false) {'],
+            ['const _isFilmAccess = attribution.purpose === "film_access" || attribution.type === "film_access";', 'const _isFilmAccess = false;']],
+    expect: /film: NO wallet written/ },
+  { group: 'money', name: 'callback: film payment writes a marketplace commissionLedger (exits removed, credit guard kept)', file: IDX, suite: 'callback',
+    edits: [[EARLY, 'false'], ['if (attribution.purpose === "film_access" || attribution.type === "film_access") {', 'if (false) {']],
+    expect: /NO marketplace commissionLedger/ },
+  { group: 'money', name: 'callback: second exit removed → early-intent-read failure leaks to the seller path', file: IDX, suite: 'callback',
+    from: 'if (attribution.purpose === "film_access" || attribution.type === "film_access") {', to: 'if (false) {',
+    expect: /filmIntentReadFails: (NO marketplace commissionLedger|early branch LOST its read and the SECOND exit fired)/ },
+  { group: 'money', name: 'callback: ordinary marketplace payment stops crediting the seller', file: IDX, suite: 'callback',
+    from: '} else if (_isFilmAccess) {', to: '} else if (true) {', expect: /marketplace: (SELLER credited|store identical)/ },
+  { group: 'money', name: 'callback: POS till payment enters the Creator path', file: IDX, suite: 'callback',
+    from: EARLY, to: '_fiSnap.exists', expect: /pos: (store identical|till merchant credited)/ },
+  { group: 'money', name: 'callback: wallet top-up leaves its path', file: IDX, suite: 'callback',
+    from: 'if (!apiRef || !apiRef.startsWith("wtop_")) return false;', to: 'return false;', expect: /topup:/ },
+  { group: 'money', name: 'callback: film payment skips the royalty', file: HUB, suite: 'callback',
+    from: "  const royalty = await accrueRoyalty(ref, { source: opts.source || 'payment-trigger' });", to: "  const royalty = { skipped: 'sabotage' };",
+    expect: /royalty accrued under the Creator policy/ },
+  /* ── money: commission authority ── */
+  { group: 'money', name: 'forged 30% commission: Creator policy set to 15/85', file: COM, suite: 'royalty',
+    edits: [['sokoniCommissionBps: 3000,', 'sokoniCommissionBps: 1500,'], ['creatorPoolBps: 7000,', 'creatorPoolBps: 8500,']],
+    expect: /Example A|policy: SOKONI 3000/ },
+  { group: 'money', name: 'forged creator pool: commission taken on GROSS, not net', file: ROY, suite: 'royalty',
+    from: 'const commissionCents = Math.floor((netCents * policy.sokoniCommissionBps) / BPS_TOTAL);', to: 'const commissionCents = Math.min(netCents, Math.floor((grossCents * policy.sokoniCommissionBps) / BPS_TOTAL));',
+    expect: /Example A/ },
+  { group: 'money', name: 'Creator accrual reads the marketplace rate table (commission-config)', file: HUB, suite: 'callback',
+    from: "const policy = require('./shared/creator-commercial').policyFor(intent);", to: "const policy = { ...require('./shared/creator-commercial').policyFor(intent), sokoniCommissionBps: require('./commission-config').RATES.ppv.pct * 100, creatorPoolBps: 10000 - require('./commission-config').RATES.ppv.pct * 100 };",
+    expect: /SOKONI = 30% of NET|no hard-coded 0\.15/ },
+  /* ── money: refund rail (executed, base-differential) ── */
+  { group: 'money', name: 'refund: execution lock removed (processing is executable)', file: FOS, suite: 'refund',
+    from: "const REFUND_EXECUTABLE = new Set(['pending', 'approved', 'failed']);", to: "const REFUND_EXECUTABLE = new Set(['pending', 'approved', 'failed', 'processing']);",
+    expect: /Race|racing approval|ONE provider call|executable states/ },
+  { group: 'money', name: 'refund: unknown outcome treated as a definitive rejection (retry blind)', file: FOS, suite: 'refund',
+    from: 'return Number.isInteger(s) && s >= 400 && s < 500 && ![408, 409, 425, 429].includes(s);', to: 'return Number.isInteger(s) && s >= 400;',
+    expect: /http503: ONE provider call|HTTP 503/ },
+  { group: 'money', name: 'refund: dropped connection resets to a re-approvable state', file: FOS, suite: 'refund',
+    from: "await _markRefundExecution(refundRef, executionId, { status: 'outcome_unknown', outcomeError: String(e.message || e).slice(0, 300) });",
+    to: "await _markRefundExecution(refundRef, executionId, { status: 'failed', outcomeError: String(e.message || e).slice(0, 300) });",
+    expect: /throw: (ONE provider call|re-approval REFUSED|left in outcome_unknown)/ },
+  { group: 'money', name: 'refund: settlement failure after provider success resets to approved (the original P0)', file: FOS, suite: 'refund',
+    from: "await _markRefundExecution(refundRef, executionId, { status: 'provider_succeeded', providerRefundId: result.refundId || null });",
+    to: "await _markRefundExecution(refundRef, executionId, { status: 'approved' });",
+    expect: /txnfail: (ONE provider call|re-approval REFUSED|left in provider_succeeded)/ },
+  { group: 'money', name: 'refund: payRef refund debits the PAYER again', file: FOS, suite: 'refund',
+    from: 'sellerUid: _im.sellerUid || _im.merchantUid || _im.providerId || null,', to: 'sellerUid: _im.sellerUid || _im.merchantUid || _im.providerId || pd.uid,',
+    expect: /buyer's wallet NEVER debited/ },
 ];
 
 const noRules = process.argv.includes('--no-rules');
+const onlyGroup = (process.argv.find((a) => a.startsWith('--group=')) || '').slice(8) || null;
+const onlyName = (process.argv.find((a) => a.startsWith('--match=')) || '').slice(8) || null;
 function run(suite) {
   const [cmd, args] = SUITES[suite];
   const r = spawnSync(cmd, args, { cwd: ROOT, encoding: 'utf8', timeout: 400000, maxBuffer: 64 * 1024 * 1024 });
@@ -119,7 +177,7 @@ function apply(src, m) {
 
 const tally = { CAUGHT: 0, 'CAUGHT-OTHER': 0, MISSED: 0, CRASHED: 0, 'NO-ANCHOR': 0, SKIPPED: 0 };
 for (const m of M) {
-  if (m.rules && noRules) { tally.SKIPPED++; console.log(`  -  SKIPPED       ${m.name}`); continue; }
+  if ((m.rules && noRules) || (onlyGroup && m.group !== onlyGroup) || (onlyName && !m.name.includes(onlyName))) { tally.SKIPPED++; continue; }
   const file = path.join(ROOT, m.file);
   const orig = fs.readFileSync(file);
   const res = apply(orig.toString('utf8'), m);
@@ -143,7 +201,7 @@ for (const m of M) {
 
 console.log('\n  post-restore:');
 let green = true;
-for (const s of ['royalty', 'publishing', 'hub'].concat(noRules ? [] : ['rules'])) {
+for (const s of ['royalty', 'publishing', 'hub'].concat(noRules ? [] : ['rules']).concat(onlyGroup === 'money' || !onlyGroup ? ['callback', 'refund'] : [])) {
   const r = run(s);
   const t = (r.out.match(/\d+ passed, \d+ failed/) || ['?'])[0];
   console.log(`    ${s.padEnd(11)} ${r.code === 0 ? 'GREEN' : 'RED'}  ${t}`);

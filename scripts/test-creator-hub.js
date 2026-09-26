@@ -428,8 +428,8 @@ async function buy(buyer, filmId) {
   ck('index exports creatorDispatch + creatorOnFilmPayment', /exports\.creatorDispatch\s*=/.test(idx) && /exports\.creatorOnFilmPayment\s*=/.test(idx));
   const fos = fs.readFileSync(Path.join(FN, 'financial-os.js'), 'utf8');
   ck('refund rail: film payment → buyer = payer, no seller debit', /purpose === 'film_access'[\s\S]{0,200}buyerUid: pd\.uid, sellerUid: null/.test(fos));
-  ck('refund rail: fosTransactions read before update (both finalizers)', (fos.match(/_txSnap && _txSnap\.exists/g) || []).length === 2);
-  ck('refund rail: both finalizers call the royalty reversal hook', (fos.match(/onFilmRefundProcessed\(/g) || []).length === 2);
+  ck('refund rail: ONE settlement, fosTransactions read before update', (fos.match(/async function _settleRefund/g) || []).length === 1 && /const txSnap = refund\.fosTransactionId \? await txn\.get/.test(fos) && /if \(txSnap && txSnap\.exists\)/.test(fos));
+  ck('refund rail: ONE royalty-reversal hook, after settlement, reached by both entry points', (fos.match(/onFilmRefundProcessed\(/g) || []).length === 1 && /return _executeRefund\(refundRef\.id/.test(fos) && /await _executeRefund\(refundId/.test(fos));
   ck('purpose registered', purposes.isRegistered('film_access'));
   ck('adapter registered with the engine', !!engine.getPurpose('film_access'));
   const disp = fs.readFileSync(Path.join(FN, 'admin-os-dispatch.js'), 'utf8');
