@@ -287,10 +287,24 @@ function applyPlanAdjustment(tier, cfg, planDiscountPct, baseRate) {
  * @param {string} key hub or category (either vocabulary; case-insensitive)
  * @returns {{pct:number, fixedKES:number, category:string, matched:boolean}}
  */
+/* OWN-PROPERTY LOOKUP ONLY. The rate tables are plain object literals, so a bare `TABLE[k]`
+   also finds INHERITED names: `constructor` resolves to Object's constructor function and
+   `__proto__` to Object.prototype — both truthy. Measured before this guard:
+     resolveRate('constructor')            -> { category:'constructor', matched:true } with NO pct,
+                                              so calculateCommission returned NaN, the webhook
+                                              recorded sokoniCut 0 / providerNet = the whole sale,
+                                              and — because nothing threw — nothing reached
+                                              commissionReviewQueue. The category is the caller's
+                                              own payment `meta.category`.
+     resolveMarketplaceRate('constructor') -> THREW (reading 'rateFraction' of undefined).
+   Every table read in this file goes through `_own`, so an inherited name is simply an
+   unknown key: the category default, or the default plan — the authorised fallbacks. */
+const _own = (table, key) => Object.prototype.hasOwnProperty.call(table, key);
+
 function resolveRate(key) {
   const k = String(key || '').trim().toLowerCase();
-  const category = RATES[k] ? k : (ALIASES[k] || null);
-  if (!category || !RATES[category]) {
+  const category = _own(RATES, k) ? k : (_own(ALIASES, k) ? ALIASES[k] : null);
+  if (!category || !_own(RATES, category)) {
     return { ...RATES.default, category: 'default', matched: false };
   }
   const r = RATES[category];
@@ -563,7 +577,7 @@ function resolveMarketplaceRate(planIdOrTier) {
   const raw = String(planIdOrTier == null ? '' : planIdOrTier).trim().toLowerCase();
   const key = Object.prototype.hasOwnProperty.call(MARKETPLACE_PLAN_RATES, raw)
     ? raw
-    : (MARKETPLACE_TIER_ALIASES[raw] || null);
+    : (_own(MARKETPLACE_TIER_ALIASES, raw) ? MARKETPLACE_TIER_ALIASES[raw] : null);
   const matched = key !== null;
   const plan = matched ? key : MARKETPLACE_DEFAULT_PLAN;
   const r = MARKETPLACE_PLAN_RATES[plan];

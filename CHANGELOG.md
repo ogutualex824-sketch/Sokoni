@@ -1,3 +1,20 @@
+## 2026-09-27 — Commission authority: inherited property names are not rate keys (branch `commission-config/own-property-lookups`, NOT landed, NOT deployed)
+
+`functions/commission-config.js` read its rate tables with bare `TABLE[k]`, so `constructor` and `__proto__`
+matched inherited properties:
+- `resolveRate('constructor')` returned a "matched" category with no rate. The webhook's commission became NaN,
+  it recorded `sokoniCut 0` and the whole sale to the payee, and nothing reached `commissionReviewQueue`. The
+  category is the caller's own payment `meta.category`.
+- `resolveMarketplaceRate('constructor')` threw.
+
+Both now use an own-property check (`_own`), so an inherited name is an unknown key and gets the authorised
+fallback. No table, rate, browser file or snapshot changed.
+
+`scripts/test-commission-own-property.js` **20/0**: all 12 inherited names; the real engine and the webhook's
+`sokoniCut` arithmetic; 71 legitimate inputs identical to the pre-repair resolver; minimum and POS unchanged. Old
+code **fails 11**. Never exercised in production (27 payments, 12 ledger rows checked).
+Record: `docs/repairs/COMMISSION-own-property-lookups.md`.
+
 ## 2026-09-27 — Commission: the browser's rate table quotes what the server resolves (branch `commission-snapshot/lane-parity`, NOT landed, Hosting NOT deployed)
 
 The generated `sokoni-commission-rates.js` returned `undefined` from `marketplacePct()` for 11 of 15 plan
