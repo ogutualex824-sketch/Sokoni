@@ -226,44 +226,16 @@ exports.purchaseEntertainment = onCall(CF_OPTS, async (req) => {
     return { purchaseId: ref.id, streamingUrl: listing.streamingUrl, status: 'completed' };
   }
 
-  const existing = await db().collection('entertainmentPurchases')
-    .where('buyerUid', '==', uid).where('listingId', '==', listingId)
-    .where('status', '==', 'completed').limit(1).get();
-  if (!existing.empty) return { purchaseId: existing.docs[0].id, alreadyOwned: true };
-
-  /* Pay-per-view purchase — priced by the ONE Commission Engine.
-   *
-   * This computed the fee itself. The RATE was already correct (it came from the single config),
-   * but the calculation bypassed calculateCommission, so this flow ignored commissionRules,
-   * revenueConfig overrides, commission holidays and the audit trail.
-   *
-   * PRICING IS UNCHANGED: same category (ppv), same arithmetic. skipMinimum:true because this
-   * flow never applied the KES 10 platform floor, and introducing one here would be a repricing
-   * of small purchases, not a refactor. */
-  const _comm = await require('./finos-utils').calculateCommission(db(), {
-    orderAmountCents: Math.round(listing.price * 100),
-    category:         'ppv',
-    sellerId:         listing.creatorUid || null,   /* the entertainmentListings doc field — verified */
-    hubId:            'entertainment',
-    skipMinimum:      true,
-  });
-  const platformFee = _comm.commissionCents / 100;
-  const ref = db().collection('entertainmentPurchases').doc();
-  await db().runTransaction(async t => {
-    t.set(ref, {
-      purchaseId: ref.id, buyerUid: uid, listingId,
-      creatorUid: listing.creatorUid, title: listing.title,
-      price: listing.price, currency: listing.currency,
-      platformFee, creatorAmount: listing.price - platformFee,
-      status: 'pending_payment', idempotencyKey,
-      createdAt: FieldValue.serverTimestamp(),
-    });
-    t.update(db().collection('entertainmentListings').doc(listingId), {
-      purchaseCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp(),
-    });
-    t.set(idemRef, { purchaseId: ref.id, createdAt: FieldValue.serverTimestamp() });
-  });
-  return { purchaseId: ref.id, status: 'pending_payment', price: listing.price };
+  /* PAID LEGACY LISTINGS ARE CLOSED (Entertainment convergence, 2026-09-26).
+     This wrote an entertainmentPurchases doc at 'pending_payment' and incremented purchaseCount
+     BEFORE any payment — and no payment purpose, webhook branch or entitlement adapter ever
+     completed it, so a buyer could never receive the content and the listing's counters (and the
+     creator dashboard's revenue) counted sales that never happened. Paid entertainment is sold
+     through Creator Hub (purpose film_access: server price, capability-gated checkout, entitlement,
+     30 / 70 royalty ledger). Production held ZERO entertainmentListings / entertainmentPurchases
+     when this was closed (read-only count 2026-09-26), so nothing live depended on it. */
+  throw new HttpsError('failed-precondition',
+    'Paid entertainment is sold through Creator Hub. This listing cannot be purchased here.');
 });
 
 /* ── 7. getMyEntertainmentPurchases ── */
@@ -309,7 +281,15 @@ exports.getCreatorDashboard = onCall(CF_OPTS, async (req) => {
     .where('creatorUid', '==', uid).orderBy('createdAt', 'desc').limit(100).get();
   const listings = snap.docs.map(d => d.data());
   const totalViews = listings.reduce((s, l) => s + (l.viewCount || 0), 0);
-  const totalRevenue = listings.reduce((s, l) => s + ((l.price || 0) * (l.purchaseCount || 0)), 0);
+  /* Revenue from COMPLETED purchases only — the canonical record of money received. It used to be
+     price × purchaseCount, and purchaseCount was incremented for purchases that were never paid:
+     a fabricated figure (CLAUDE.md UI Data Integrity). A capped read reports null ("unknown"),
+     never a truncated sum. */
+  const CAP = 1000;
+  const paidSnap = await db().collection('entertainmentPurchases')
+    .where('creatorUid', '==', uid).where('status', '==', 'completed').limit(CAP).get();
+  const totalRevenue = paidSnap.size >= CAP ? null
+    : paidSnap.docs.reduce((s, d) => s + (Number(d.data().price) || 0), 0);
   return {
     totalListings: listings.length,
     active: listings.filter(l => l.status === 'active').length,

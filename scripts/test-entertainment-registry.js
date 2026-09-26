@@ -145,6 +145,21 @@ const pagePath = (u) => Path.join(ROOT, String(u).split(/[?#]/)[0].replace(/^\//
     ck(`${f}: carries NO Entertainment control (eventAdmin*/entAdmin*/event-settlement)`, !/eventAdmin|entAdmin|event-settlement|sokoni-aos-entertainment/.test(s));
   }
 
+  /* ═══ legacy pay-per-view is closed; its dashboard stops counting unpaid sales ═══ */
+  console.log('\n── legacy pay-per-view ──');
+  const ENT = require(Path.join(FN, 'entertainment-hub.js'));
+  await db.doc('entertainmentListings/L1').set({ listingId: 'L1', creatorUid: 'c9', status: 'active', entType: 'ppv', price: 300, currency: 'KES', purchaseCount: 7, title: 'Old', createdAt: F.Timestamp.fromMillis(Date.now()) });
+  await db.doc('entertainmentListings/L2').set({ listingId: 'L2', creatorUid: 'c9', status: 'active', entType: 'free', price: 0, currency: 'KES', title: 'Free', createdAt: F.Timestamp.fromMillis(Date.now()) });
+  const before = db._dump('entertainmentPurchases/').length;
+  ck('paid legacy PPV refused (no pending_payment record that nothing can complete)',
+    (await code(ENT.purchaseEntertainment.run({ ...who('b9'), data: { listingId: 'L1', idempotencyKey: 'k-ppv-1' } }))) === 'failed-precondition'
+    && db._dump('entertainmentPurchases/').length === before && (await get('entertainmentListings/L1')).purchaseCount === 7);
+  ck('free legacy content still opens', (await ENT.purchaseEntertainment.run({ ...who('b9'), data: { listingId: 'L2', idempotencyKey: 'k-free-1' } })).status === 'completed');
+  await db.doc('entertainmentPurchases/P9').set({ creatorUid: 'c9', status: 'pending_payment', price: 300 });
+  await db.doc('entertainmentPurchases/P10').set({ creatorUid: 'c9', status: 'completed', price: 300 });
+  const dash = await ENT.getCreatorDashboard.run({ ...who('c9'), data: {} });
+  ck('creator dashboard revenue = COMPLETED purchases only (was price × purchaseCount = 2,100)', dash.totalRevenue === 300, dash.totalRevenue);
+
   /* ═══ checkout methods ═══ */
   console.log('\n── checkout methods ──');
   const cm = (purpose) => HC._internal.checkoutMethods({ ...who('buyer1'), data: { purpose } });

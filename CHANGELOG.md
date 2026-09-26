@@ -1,3 +1,14 @@
+## 2026-09-26 (192) — Legacy pay-per-view closed; creator dashboard stops counting unpaid sales
+
+- **Summary:** `purchaseEntertainment` wrote paid purchases at `pending_payment` and bumped
+  `purchaseCount` before any payment, with no path to completion; `getCreatorDashboard` reported
+  revenue as price × purchaseCount (a fabricated figure). Paid legacy listings are now refused (paid
+  entertainment is sold through Creator Hub / film_access); free content still opens; dashboard revenue
+  is summed from COMPLETED purchases (null when the read is capped). Production had 0
+  entertainmentListings / entertainmentPurchases (read-only, 2026-09-26).
+- **Files:** `functions/entertainment-hub.js`, `firestore.indexes.json` (+entertainmentPurchases
+  creatorUid+status), `scripts/test-entertainment-registry.js` (65/0). Creator hub 260/0. **Not deployed.**
+
 ## 2026-09-26 (191) — Entertainment registry, Streaming, organizer approval routing, AdminOS › Entertainment, profile menus
 
 - **Summary:** one canonical Entertainment registry (`functions/shared/entertainment-registry.js`)
