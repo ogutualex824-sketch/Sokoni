@@ -1738,12 +1738,22 @@ window._ckRenderMultiShop = async function () {
     else if (qs.delivery && qs.delivery.available === true) {
       if (qs.delivery.free) { deliveryLabel = 'FREE DELIVERY'; deliveryColour = '#71ff00'; }
       else deliveryLabel = 'KES ' + Number(qs.delivery.fee || 0).toLocaleString();
+    } else if (qs.delivery && qs.delivery.reason === 'res1_quote_required') {
+      /* Marketplace delivery is priced only by a server-issued RES-1 quote, and a multi-shop
+         basket has none — so delivery is not offered here rather than shown at a guessed price. */
+      deliveryLabel = 'Not available for multi-shop baskets'; deliveryColour = '#ff9f9f';
     } else { deliveryLabel = 'Delivery not available'; deliveryColour = '#ff9f9f'; }
     var shopTotalLabel = qs ? ('KES ' + Number(qs.shopTotal || 0).toLocaleString()) : '—';
 
     var body, action;
 
-    if (m.mode === 'daraja_stk') {
+    if (_ft === 'delivery' && qs && qs.delivery && qs.delivery.available !== true) {
+      /* FAIL CLOSED: no authoritative delivery price for this shop, so no delivery payment is
+         taken. Pickup, or checking this shop out on its own (where a quote is issued), still works. */
+      body = '<div style="font-size:12.5px;color:#ff9f9f;line-height:1.5">Delivery cannot be priced for a ' +
+             'multi-shop basket yet. Choose <b>pickup</b>, or check this shop out on its own to get a delivery quote.</div>';
+      action = '';
+    } else if (m.mode === 'daraja_stk') {
       body = '<div style="font-size:12.5px;color:rgba(255,255,255,.7)">Pay by M-PESA prompt on your phone.</div>';
       action = '<button class="ms-pay" onclick="window._ckPayShop(\'' + g.sellerUid + '\')" ' +
                'style="width:100%;margin-top:10px;background:#00a84e;color:#fff;border:none;border-radius:9px;padding:11px;font-weight:800;cursor:pointer">' +
@@ -1817,8 +1827,11 @@ function _ckMultiShopSummary(quote, haveQuote) {
            '<div style="font-weight:800;font-size:13px;margin-bottom:6px">Order summary · ' +
              (quote.shopCount || (quote.shops || []).length) + ' shops</div>' +
            row('Items', 'KES ' + Number(quote.itemsTotal || 0).toLocaleString()) +
-           row('Delivery', Number(quote.deliveryTotal || 0) > 0
-             ? ('KES ' + Number(quote.deliveryTotal).toLocaleString()) : 'FREE') +
+           /* deliveryTotal is null when delivery is unpriced (no RES-1 quote for a multi-shop
+              basket) — shown as such, never as FREE and never as 0. */
+           row('Delivery', quote.deliveryPriced === false || quote.deliveryTotal == null
+             ? 'Not available for multi-shop baskets'
+             : (Number(quote.deliveryTotal) > 0 ? ('KES ' + Number(quote.deliveryTotal).toLocaleString()) : 'FREE')) +
            row('Total', 'KES ' + Number(quote.grandTotal || 0).toLocaleString(), true) +
            '<div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:8px;line-height:1.5">' +
              'One basket — but each shop is paid and delivered separately. Pay each shop above.</div>' +
@@ -2458,6 +2471,14 @@ async function _placeOrderCore(){
         qty:       Math.max(1, parseInt(i.qty, 10) || 1),
       })).filter(i => i.productId);
 
+      /* DELIVERY IS PRICED BY THE SERVER-ISSUED QUOTE (RES-1), shown above before payment. Without
+         one there is no delivery charge anyone may take — the server refuses (fail closed), and
+         stopping here first means a refused checkout leaves no half-written pending order behind. */
+      if (fulfillmentType === 'delivery' && !_deliveryQuoteId) {
+        showPushToast("📍 Delivery price needed", "Choose your delivery area so we can quote delivery before you pay.", "orange");
+        _resetPlaceBtn(); return;
+      }
+
       try {
         if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('preparing', 'Creating your order…');
         /* Best-effort client pre-write. If Firestore rules reject the create (e.g.
@@ -2475,10 +2496,11 @@ async function _placeOrderCore(){
            the server accepted it — so a crafted client could pay under catalogue
            price while the webhook still decremented stock.
 
-           createPaymentIntent now derives the amount from the catalogue, the
-           merchant's deliveryConfig and the shared delivery engine, and mints the
-           intent AT the deterministic order id, so paymentRef === orderId and the
-           existing payments/{ref} ↔ orders/{ref} linkage is unchanged. A retry
+           createPaymentIntent now derives the amount from the catalogue and — for
+           delivery — the server-issued RES-1 delivery quote the buyer was shown
+           (the merchant's deliveryConfig is no longer a marketplace pricing input),
+           and mints the intent AT the deterministic order id, so paymentRef === orderId
+           and the existing payments/{ref} ↔ orders/{ref} linkage is unchanged. A retry
            replays the same intent rather than minting a second identity.
 
            `_authTotal` is what the buyer is charged. `orderTotal` stays only for
@@ -2493,6 +2515,8 @@ async function _placeOrderCore(){
           items:           _items,
           sellerUid:       _sUid,
           fulfillmentType: fulfillmentType,
+          /* The quote id only — never a figure. The server resolves it and charges its price. */
+          ...(fulfillmentType === 'delivery' ? { deliveryQuoteId: _deliveryQuoteId } : {}),
           phone:           phone,
         });
         const _intent = (_intentRes && _intentRes.data) || {};

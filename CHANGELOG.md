@@ -1,3 +1,17 @@
+## 2026-09-27 — Marketplace delivery pricing: the RES-1 server-issued quote is the authority (branch `delivery-authority/res1-quote`, UNCOMMITTED, for review)
+
+Owner decision: for marketplace orders the buyer's delivery charge is the RES-1 quote the buyer was shown; seller
+`deliveryConfig` no longer prices marketplace delivery.
+- `product_order` charges the resolved quote. It fails closed with no quote, or with a forged, foreign, expired,
+  consumed or stale quote, and it refuses a stated `deliveryFee`.
+- The multi-shop quote no longer prices delivery from seller configs (delivery unpriced, never 0).
+- Checkout sends the displayed quote id and blocks a delivery payment that has no quote.
+- Seller configs are preserved; historical orders are never repriced.
+
+New `scripts/test-marketplace-delivery-authority.js` **22/0**; old tree fails 16. Multi-shop quote and
+product-payment suites are rewritten to the new authority (34/0, 27/27). Regression floor green.
+Record: `docs/repairs/DELIVERY-AUTHORITY-res1-quote.md`.
+
 ## 2026-09-27 — Dual-business merged onto the main line, its authorization defect repaired (branch `dualbiz/repair`, NOT landed, NOT deployed)
 
 Merges `feat/dual-business-commerce` (13 commits) onto `3745a5b`. Conflicts resolved deliberately:

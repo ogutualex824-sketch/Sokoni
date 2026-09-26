@@ -45,7 +45,11 @@ const DATA = {
     P_OTHER:  { name: 'Other',   price: 150, sellerUid: 'S2', stock: 5 },
     P_FREE:   { name: 'NoPrice', price: 0,   sellerUid: 'S1', stock: 5 },
   },
+  /* S1 still carries a deliveryConfig (flat 150) ON PURPOSE: the assertions prove it no longer prices
+     marketplace delivery. S2 has none. */
   sellers: { S1: { deliveryConfig: { enabled: true, mode: 'flat', flatFee: 150 } }, S2: {} },
+  /* Server-issued RES-1 quotes, by id (customerCharge in minor units). */
+  deliveryQuotes: { DQ_BUYER1: { buyerUid: 'BUYER1', customerChargeMinor: 28854 } },
   shopState: {},
 };
 
@@ -72,7 +76,22 @@ class HttpsError extends Error {
 Module._load = function (req, parent, isMain) {
   if (req === 'firebase-admin/firestore')
     return { getFirestore: () => fakeFirestore(), FieldPath: { documentId: () => '__name__' } };
-  if (req === 'firebase-functions/v2/https') return { HttpsError };
+  if (req === 'firebase-functions/v2/https') return { HttpsError, onCall: (_o, h) => h };
+  /* The quote module's INTERFACE only. Its real refusal paths (not found / not yours / used / expired /
+     stale / policy changed / revalidation) are certified end-to-end on the emulator by
+     scripts/test-marketplace-delivery-authority.js and certify-res1-delivery-quote-binding.js. */
+  if (req === './delivery-quote-endpoint' || req.endsWith('delivery-quote-endpoint')) {
+    const FORBIDDEN = ['deliveryFee', 'driverNet', 'riderEarning', 'riderFeeKES', 'platformCut',
+      'sokoniCommission', 'sokoniSharePct', 'customerCharge', 'pricingVersion'];
+    return {
+      assertNoCheckoutPricing: (p) => { const bad = FORBIDDEN.filter((k) => p && p[k] !== undefined);
+        if (bad.length) throw new HttpsError('invalid-argument', 'Delivery pricing is server-authoritative; remove: ' + bad.join(', ')); },
+      resolveQuoteForCheckout: async (id, uid) => { const q = (DATA.deliveryQuotes || {})[id];
+        if (!q) throw new HttpsError('failed-precondition', 'delivery_quote_not_found');
+        if (q.buyerUid !== uid) throw new HttpsError('permission-denied', 'delivery_quote_not_yours');
+        return { quoteId: id, pricingVersion: 'dq-1.0.0', policyVersion: 'v1', customerChargeMinor: q.customerChargeMinor }; },
+    };
+  }
   if (req === 'firebase-functions/logger') return { info() {}, warn() {}, error() {} };
   if (req === './availability-enforce' || req.endsWith('availability-enforce'))
     return { itemAvailability: (p) => ({ available: p.status !== 'archived' && p.hidden !== true }) };
@@ -117,25 +136,29 @@ const CART = { orderId: 'SKNORDER1', items: [{ productId: 'P1', qty: 2 }], selle
     eq(q.amount, 500, 'price must come from the catalogue, not the line item');
   });
 
-  await t('delivery fee is server-recomputed and added', async () => {
-    const q = await price({ ...CART, fulfillmentType: 'delivery' });
-    eq(q.amount, 650, '500 + 150 flat');
-    eq(q.metadata.deliveryFee, 150);
-    eq(q.metadata.deliverySource, 'delivery-engine');
+  /* MARKETPLACE DELIVERY AUTHORITY = the RES-1 server-issued quote (owner decision 2026-09-27). */
+  await t('delivery fee is the server-issued RES-1 quote (not the seller flat 150)', async () => {
+    const q = await price({ ...CART, fulfillmentType: 'delivery', deliveryQuoteId: 'DQ_BUYER1' });
+    eq(q.metadata.deliveryFee, Math.round(28854 / 100), 'quote customerCharge, rounded as createCheckoutSession rounds it');
+    eq(q.amount, 500 + Math.round(28854 / 100), 'items + quote');
+    eq(q.metadata.deliverySource, 'res1_quote');
+    eq(q.metadata.deliveryQuote.deliveryQuoteId, 'DQ_BUYER1');
   });
-  await t('a client-supplied deliveryFee is ignored', async () => {
-    const q = await price({ ...CART, fulfillmentType: 'delivery', deliveryFee: 0 });
-    eq(q.amount, 650);
-  });
+  await t('a client-supplied deliveryFee is REFUSED, not ignored', () =>
+    throws(() => price({ ...CART, fulfillmentType: 'delivery', deliveryQuoteId: 'DQ_BUYER1', deliveryFee: 0 }), /server-authoritative/));
+  await t('delivery with NO quote is refused — never priced from the seller config', () =>
+    throws(() => price({ ...CART, fulfillmentType: 'delivery' }), /delivery quote is required/i));
   await t('pickup is not charged delivery', async () => {
     const q = await price({ ...CART, fulfillmentType: 'pickup' });
     eq(q.amount, 500); eq(q.metadata.deliveryFee, 0);
   });
-  await t('an unconfigured merchant charges zero delivery, never a client figure', async () => {
+  await t('an unconfigured merchant is charged the quote, never zero and never a client figure', async () => {
     const q = await price({ orderId: 'O2', items: [{ productId: 'P_OTHER', qty: 1 }],
-      sellerUid: 'S2', fulfillmentType: 'delivery', deliveryFee: 900 });
-    eq(q.amount, 150); eq(q.metadata.deliverySource, 'unconfigured');
+      sellerUid: 'S2', fulfillmentType: 'delivery', deliveryQuoteId: 'DQ_BUYER1' });
+    eq(q.amount, 150 + Math.round(28854 / 100)); eq(q.metadata.deliverySource, 'res1_quote');
   });
+  await t("another buyer's quote cannot price this buyer's delivery", () =>
+    throws(() => price({ ...CART, fulfillmentType: 'delivery', deliveryQuoteId: 'DQ_BUYER1' }, 'BUYER2'), /not_yours/));
 
   await t('out-of-stock is rejected, not silently priced', () =>
     throws(() => price({ ...CART, items: [{ productId: 'P_OOS', qty: 1 }] }), /out of stock/i));

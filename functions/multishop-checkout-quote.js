@@ -45,7 +45,7 @@
    ========================================================================= */
 'use strict';
 
-const DELIVERY = require('./shared/delivery-engine.js');
+/* The delivery engine is no longer used here: marketplace delivery is priced by the RES-1 quote. */
 
 const CURRENCY = 'KES';
 const DEFAULT_TTL_MS = 15 * 60 * 1000; /* a quote is good for 15 minutes */
@@ -110,7 +110,6 @@ function assembleQuote(input) {
     const s = byShop[sid];
     s.itemTotal = _round(s.itemTotal);
     const wrap = sellerConfigs[sid] || {};
-    const cfg = wrap.deliveryConfig || null;
 
     let delivery;
     if (!wantsDelivery) {
@@ -118,25 +117,24 @@ function assembleQuote(input) {
          implying "free delivery" (a different, seller-granted thing). */
       delivery = {
         available: null, fee: 0, free: false, reason: 'pickup',
-        mode: 'pickup', policy: { configured: !!(cfg && cfg.enabled !== undefined) },
+        mode: 'pickup', policy: { sellerConfigAuthoritative: false },
       };
     } else {
-      const calc = DELIVERY.calculateDelivery(cfg || {}, {
-        subtotal: s.itemTotal,
-        distanceKm: order.distanceKm,
-        zone: order.zone,
-      });
+      /* MARKETPLACE DELIVERY PRICING AUTHORITY = the RES-1 server-issued quote (owner decision
+         2026-09-27). This priced each shop's delivery from `sellers/{uid}.deliveryConfig`; that is
+         no longer a marketplace pricing input. A multi-shop basket has no per-shop RES-1 quote, and
+         its payment (createManualTillOrder) charges items only — so delivery here is UNPRICED:
+         not 0 (that would read as free), not a seller-config figure (retired authority). The shop
+         is reported not deliverable with the reason, and the checkout layer must not take a
+         delivery order for it. The seller's config is preserved; it is only not read for price. */
       delivery = {
-        available: calc.deliverable === true,
-        fee: calc.deliverable ? _round(calc.fee) : 0,
-        free: calc.free === true,
-        reason: calc.reason,
-        mode: calc.mode,
-        etaMinutes: calc.etaMinutes == null ? null : Number(calc.etaMinutes),
-        policy: {
-          configured: !!(cfg && cfg.enabled !== undefined),
-          freeAbove: (cfg && cfg.freeAbove != null) ? Number(cfg.freeAbove) : null,
-        },
+        available: false,
+        fee: null,
+        free: false,
+        reason: 'res1_quote_required',
+        mode: 'res1_quote',
+        etaMinutes: null,
+        policy: { sellerConfigAuthoritative: false },
       };
     }
 
@@ -157,10 +155,11 @@ function assembleQuote(input) {
   });
 
   const itemsTotal = _round(shops.reduce(function (n, s) { return n + s.itemTotal; }, 0));
-  const deliveryTotal = _round(shops.reduce(function (n, s) {
-    return n + (s.delivery.available === true ? s.delivery.fee : 0);
-  }, 0));
-  const grandTotal = _round(itemsTotal + deliveryTotal);
+  /* Pickup has a real delivery total of 0. A delivery request has NO authoritative price here
+     (see above), so its total is UNKNOWN — null, never 0 — and the grand total is the items the
+     basket actually charges. */
+  const deliveryTotal = wantsDelivery ? null : 0;
+  const grandTotal = itemsTotal;
 
   return {
     quoteId: genId(),
@@ -173,6 +172,7 @@ function assembleQuote(input) {
     itemsTotal,
     deliveryTotal,
     grandTotal,
+    deliveryPriced: !wantsDelivery,
     /* Every shop with delivery requested is actually deliverable — a convenience
        flag for the checkout layer; per-shop `delivery.available` is the truth. */
     allDeliverable: wantsDelivery
@@ -213,7 +213,7 @@ function revalidateQuote(storedQuote, freshInput, deps) {
      validateLines(uid, items)     -> [{ productId, qty, unitPrice, sellerUid, name }]
          MUST be the canonical product_order authority (server product prices +
          availability + stock). Do NOT fork item-price validation.
-     readSellerConfigs(sellerUids) -> { [uid]: { shopName, deliveryConfig } }
+     readSellerConfigs(sellerUids) -> { [uid]: { shopName } }   (deliveryConfig is not read)
      persistQuote(quote)           -> Promise   (e.g. checkoutQuotes/{quoteId})
    Kept dependency-injected so this module is unit-testable and touches no
    peer-owned file. */
@@ -292,7 +292,9 @@ module.exports.createMultiShopCheckoutQuote = _onCall(QUOTE_CFG, async (request)
       await Promise.all((sellerUids || []).map(async (sid) => {
         const snap = await db.collection('sellers').doc(String(sid)).get().catch(() => null);
         const d = snap && snap.exists ? (snap.data() || {}) : {};
-        out[String(sid)] = { shopName: d.shopName || d.name || null, deliveryConfig: d.deliveryConfig || null };
+        /* Shop name only. deliveryConfig is deliberately NOT read: it is not a marketplace
+           pricing input (RES-1 quote authority, 2026-09-27). The seller's record is untouched. */
+        out[String(sid)] = { shopName: d.shopName || d.name || null };
       }));
       return out;
     },

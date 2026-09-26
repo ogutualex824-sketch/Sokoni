@@ -650,30 +650,44 @@ const PURPOSES = {
         fail('failed-precondition', 'These products have no seller on record and cannot be checked out.');
       const sellerUid = orderSellers[0];
 
-      /* DELIVERY — server-recomputed from the merchant's own config through the
-         same engine the client uses, so the two cannot drift. Where a merchant
-         has no deliveryConfig the server has nothing to recompute from; charge
-         zero rather than trusting a client figure. That is stricter than
-         darajaSTKPush's legacy clamp, and deliberately so: this path is new, so
-         there is no existing behaviour to preserve. */
+      /* DELIVERY — THE RES-1 SERVER-ISSUED POLICY QUOTE IS THE AUTHORITY (owner decision 2026-09-27).
+         For marketplace orders the buyer's delivery charge is the `customerCharge` of the quote the
+         server issued to THIS buyer (requestDeliveryQuote) — the same figure the checkout already
+         displays before payment, and the same quote whose allocation pays the rider (Repair 5) and
+         SOKONI. This previously priced delivery from `sellers/{uid}.deliveryConfig` through the
+         delivery engine, using a distance/zone the browser supplied (and, on the live path, did not
+         send — so a distance-mode seller was refused and an unconfigured one charged KES 0) while
+         the page showed the quote. The buyer was shown one number and charged another.
+
+         deliveryConfig is NOT read here any more. Seller records are preserved untouched; they are
+         simply not a marketplace pricing input. The delivery engine still serves the non-marketplace
+         surfaces that use it (courier booking, food menu).
+
+         FAIL CLOSED. A delivery order needs a quote the server can resolve for this buyer — issued,
+         unexpired, unconsumed, current policy, figures revalidated (resolveQuoteForCheckout). No
+         quote → no charge; there is no fallback to a browser figure or to deliveryConfig. A payload
+         that states a delivery price is refused outright rather than ignored.
+         Rounding: the quote is held in minor units; the charge is whole shillings, rounded exactly
+         as createCheckoutSession rounds the same quote — one rule for one figure. */
       let deliveryFee = 0;
       let deliverySource = 'none';
+      let deliveryQuoteRef = null;
       const wantsDelivery = String(data.fulfillmentType || '').toLowerCase() === 'delivery';
+      require('./delivery-quote-endpoint').assertNoCheckoutPricing(data);
 
-      if (wantsDelivery && sellerUid) {
-        const sSnap = await db().collection('sellers').doc(sellerUid).get().catch(() => null);
-        const cfg = sSnap && sSnap.exists ? sSnap.data().deliveryConfig : null;
-        if (cfg && cfg.enabled !== undefined) {
-          const calc = require('./shared/delivery-engine.js').calculateDelivery(cfg, {
-            subtotal, distanceKm: data.distanceKm, zone: data.deliveryZone,
-          });
-          if (calc.deliverable === false)
-            fail('failed-precondition', calc.reason || 'This address cannot be delivered to.');
-          deliveryFee = Math.round(Number(calc.fee) || 0);
-          deliverySource = 'delivery-engine';
-        } else {
-          deliverySource = 'unconfigured';
+      if (wantsDelivery) {
+        if (!data.deliveryQuoteId) {
+          fail('failed-precondition', 'A delivery quote is required before paying for delivery. Please confirm your delivery address.');
         }
+        const q = await require('./delivery-quote-endpoint').resolveQuoteForCheckout(String(data.deliveryQuoteId), uid);
+        deliveryFee = Math.round(q.customerChargeMinor / 100);
+        deliverySource = 'res1_quote';
+        deliveryQuoteRef = {
+          deliveryQuoteId: q.quoteId,
+          pricingVersion: q.pricingVersion,
+          policyVersion: q.policyVersion,
+          customerChargeMinor: q.customerChargeMinor,
+        };
       }
 
       const total = Math.round(subtotal + deliveryFee);
@@ -691,6 +705,9 @@ const PURPOSES = {
         metadata: {
           orderId, sellerUid,
           subtotal, deliveryFee, deliverySource,
+          /* Provenance of the delivery charge: the quote it came from. Recorded, not yet consumed —
+             binding the quote to the order is the order-creation step's job (RES-1). */
+          ...(deliveryQuoteRef ? { deliveryQuote: deliveryQuoteRef } : {}),
           itemCount: lines.length,
           items: lines,
           pricingSource: 'server_recomputed',

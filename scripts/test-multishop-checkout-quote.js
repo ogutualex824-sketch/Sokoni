@@ -47,18 +47,24 @@ console.log('\nA. Core: 3 shops, delivery requested, independent per-shop fees')
 
   ck('3 shop groups', q.shopCount === 3, { shopCount: q.shopCount });
   ck('Njeri itemTotal 1695 (grouped across two lines)', njeri.itemTotal === 1695, { got: njeri.itemTotal });
-  ck('Njeri delivery flat 150 (below freeAbove 2000)', njeri.delivery.fee === 150 && njeri.delivery.free === false, njeri.delivery);
-  ck('Tech delivery flat 300', tech.delivery.fee === 300 && tech.delivery.free === false, tech.delivery);
-  ck('Bloom FREE (seller mode:free)', bloom.delivery.fee === 0 && bloom.delivery.free === true, bloom.delivery);
-  ck('fees are INDEPENDENT per shop', njeri.delivery.fee !== tech.delivery.fee);
-  ck('Njeri shopTotal 1845', njeri.shopTotal === 1845, { got: njeri.shopTotal });
-  ck('Tech shopTotal 8300', tech.shopTotal === 8300, { got: tech.shopTotal });
+  /* MARKETPLACE DELIVERY AUTHORITY = the RES-1 server-issued quote (owner decision 2026-09-27).
+     These shops still carry seller deliveryConfig (flat 150 / flat 300 / mode free) — deliberately:
+     the assertions prove that config now has NO effect. A multi-shop basket has no RES-1 quote, so
+     delivery is UNPRICED — never a seller figure, never 0, never "free". */
+  const unpriced = (d) => d.available === false && d.fee === null && d.free === false && d.reason === 'res1_quote_required';
+  ck('Njeri (seller flat 150) delivery is UNPRICED, not 150', unpriced(njeri.delivery), njeri.delivery);
+  ck('Tech (seller flat 300) delivery is UNPRICED, not 300', unpriced(tech.delivery), tech.delivery);
+  ck('Bloom (seller mode:free) is NOT free — seller config is not authoritative', unpriced(bloom.delivery), bloom.delivery);
+  ck('three different seller configs produce the SAME unpriced answer', [njeri, tech, bloom].every((x) => unpriced(x.delivery)));
+  ck('Njeri shopTotal = items only (1695)', njeri.shopTotal === 1695, { got: njeri.shopTotal });
+  ck('Tech shopTotal = items only (8000)', tech.shopTotal === 8000, { got: tech.shopTotal });
   ck('Bloom shopTotal 1500', bloom.shopTotal === 1500, { got: bloom.shopTotal });
   ck('itemsTotal 11195', q.itemsTotal === 11195, { got: q.itemsTotal });
-  ck('deliveryTotal 450 (150+300+0)', q.deliveryTotal === 450, { got: q.deliveryTotal });
-  ck('grandTotal 11645 (items + delivery)', q.grandTotal === 11195 + 450, { got: q.grandTotal });
+  ck('deliveryTotal is UNKNOWN (null), not 0 and not a seller sum', q.deliveryTotal === null, { got: q.deliveryTotal });
+  ck('grandTotal = the items the basket actually charges (11195)', q.grandTotal === 11195, { got: q.grandTotal });
+  ck('deliveryPriced is false', q.deliveryPriced === false, { got: q.deliveryPriced });
   ck('quote is authoritative + time-boxed', q.authoritative === true && q.expiresAt === NOW + DET.ttlMs);
-  ck('allDeliverable true', q.allDeliverable === true);
+  ck('allDeliverable false — no shop may take a delivery order without a RES-1 quote', q.allDeliverable === false);
 }
 
 console.log('\nB. Never free by default: a shop with NO delivery config, delivery requested');
@@ -67,25 +73,26 @@ console.log('\nB. Never free by default: a shop with NO delivery config, deliver
   const q = Q.assembleQuote({ validatedLines: lines, sellerConfigs: {}, order: { fulfillmentType: 'delivery' }, ...DET });
   const shop = q.shops[0];
   ck('unconfigured shop is available:false', shop.delivery.available === false, shop.delivery);
-  ck('reason is delivery_not_offered (NOT free)', shop.delivery.reason === 'delivery_not_offered' && shop.delivery.free === false, shop.delivery);
-  ck('no phantom delivery charge', shop.delivery.fee === 0 && shop.shopTotal === 500);
+  ck('reason is res1_quote_required (NOT free)', shop.delivery.reason === 'res1_quote_required' && shop.delivery.free === false, shop.delivery);
+  ck('no phantom delivery charge: fee unknown (null), shopTotal = items', shop.delivery.fee === null && shop.shopTotal === 500);
   ck('allDeliverable false when a shop cannot deliver', q.allDeliverable === false);
 }
 
-console.log('\nC. Free ONLY where policy makes it free: freeAbove threshold');
+console.log('\nC. The seller freeAbove threshold no longer prices marketplace delivery');
 {
   const cfg = { s_thr: { shopName: 'Thresh', deliveryConfig: { enabled: true, mode: 'flat', defaultFee: 200, freeAbove: 2000 } } };
   const below = Q.assembleQuote({ validatedLines: [{ productId: 'a', qty: 1, unitPrice: 1500, sellerUid: 's_thr' }], sellerConfigs: cfg, order: { fulfillmentType: 'delivery' }, ...DET });
   const above = Q.assembleQuote({ validatedLines: [{ productId: 'a', qty: 1, unitPrice: 2500, sellerUid: 's_thr' }], sellerConfigs: cfg, order: { fulfillmentType: 'delivery' }, ...DET });
-  ck('below threshold → charged 200', below.shops[0].delivery.fee === 200 && below.shops[0].delivery.free === false);
-  ck('at/above threshold → free_above_threshold', above.shops[0].delivery.fee === 0 && above.shops[0].delivery.free === true && above.shops[0].delivery.reason === 'free_above_threshold');
+  /* The seller's freeAbove threshold no longer decides anything for marketplace delivery. */
+  ck('below the seller threshold: not charged the seller 200 — unpriced', below.shops[0].delivery.fee === null && below.shops[0].delivery.reason === 'res1_quote_required');
+  ck('above the seller threshold: not made free by it — unpriced', above.shops[0].delivery.fee === null && above.shops[0].delivery.free === false && above.shops[0].delivery.reason === 'res1_quote_required');
 }
 
-console.log('\nD. Distance mode priced from server config, not client');
+console.log('\nD. A distance-mode seller config no longer prices marketplace delivery');
 {
   const cfg = { s_dist: { deliveryConfig: { enabled: true, mode: 'distance', baseFee: 80, perKm: 15 } } };
   const q = Q.assembleQuote({ validatedLines: [{ productId: 'a', qty: 1, unitPrice: 1000, sellerUid: 's_dist' }], sellerConfigs: cfg, order: { fulfillmentType: 'delivery', distanceKm: 4 }, ...DET });
-  ck('distance fee 80 + 15*4 = 140', q.shops[0].delivery.fee === 140, q.shops[0].delivery);
+  ck('a distance-mode seller config (80 + 15/km) does NOT price it — unpriced', q.shops[0].delivery.fee === null && q.shops[0].delivery.reason === 'res1_quote_required', q.shops[0].delivery);
 }
 
 console.log('\nE. Pickup: no delivery charge, and it is NOT labelled free');
