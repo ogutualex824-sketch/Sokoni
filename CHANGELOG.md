@@ -1,3 +1,73 @@
+## 2026-09-27 (201) — Events: permanent ticket number + 4-digit event PIN, SOKONI QR vs KRA fiscal, reconciliation
+
+- **Ticket identity (`functions/event-ops.js`):**
+  - The permanent identity is `SK-EVT-YYYY-NNNNNN`: random within the year, unique via `eventTicketNumbers`,
+    immutable.
+  - The event-day credential is a **4-digit PIN** (it replaces the 8-character PIN of the first build, per the owner
+    brief). It is drawn independently with `crypto.randomInt` and is never derived from the ticket number.
+  - The PIN is unique within the event for its whole life and never recycled.
+- **Choosing free PINs:** only 10,000 values exist, so collisions are routine. Free values are **chosen by reading**
+  candidate index docs in each issuing transaction's read phase (`allocateIdentities`), then confirmed by `create()`.
+  Create-and-hope would fail PAID sales with ALREADY_EXISTS, which Firestore does not retry.
+- **All three issuing paths use it:** payment activation, door sales (cash, card, card confirm) and free orders. Free
+  orders moved from a batch to a transaction.
+- **Ceiling:** at most 8,000 tickets per event, refused when ticket types are configured.
+- **Lifetime:** ISSUED → ACTIVE (admission window: 12 h before the start until 12 h after the end, overridable) →
+  CONSUMED / EXPIRED. Refunded, void and cancelled tickets are INVALID. The **QR check-in obeys the same lifetime**.
+- **Guessing throttle:** 5 wrong PINs per staff member and 100 per event in 10 minutes. A crossed limit writes a
+  security event (`event_pin_lockout`, no PIN).
+- **A gate cashier may check and admit a ticket by PIN.** Quick Sale handles an existing online ticket (owner brief),
+  through the same admission authority, never a second one.
+- **Fiscal (new `functions/event-fiscal.js`):**
+  - One record per PAID sale (online, cashier M-PESA, cash, card) in the sale's own transaction.
+  - It is submitted through the **existing** `etims.generateForOrder`, with the organizer as seller, and **queued**.
+    `etimsProcessQueue`, which holds the secrets, transmits and retries.
+  - The ticket shows KRA's receipt, QR (https only) and verification link **only as KRA returned them**. Otherwise it
+    shows the fiscal status in words: *Pending fiscal confirmation*, *delayed*, *organizer not registered for eTIMS*
+    or *free ticket*.
+  - **Nothing is ever fabricated.**
+  - Payment, ticket, admission and fiscal are separate states.
+  - A refund marks CREDIT_NOTE_REQUIRED.
+  - The existing 15-minute schedule sweeps unsubmitted records; retries are bounded.
+- **`etims.js` interface correction (additive):**
+  - `generateForOrder` gains `submitNow` (default true, so existing callers are unchanged) and is exported.
+  - New `requeueInvoice`, which `etimsResubmitInvoice` now uses.
+  - eTIMS suites: audit 6, lifecycle 16, tax 22, commission-invoice 52, merchant-tax 95 — all green.
+- **UI:**
+  - New `sokoni-event-ticket.js`: the one ticket card (event, date, venue, ticket number, big PIN, SOKONI TICKET QR
+    drawn locally by `sokoni-qr.js`, a KRA / FISCAL section kept separate, tier and price).
+  - My Tickets uses it.
+  - Quick Sale shows **SALE COMPLETE** with Show / Print / Send per ticket, plus a **Check ticket (PIN)** mode.
+  - The admission input takes 4 digits.
+- **AdminOS:**
+  - PIN shown only as `••••`.
+  - Search by payment reference, admission status, refund status (within an event) and fiscal status.
+  - The trace has a **fiscal** stage.
+  - New **Fiscal (KRA)** reconciliation tab with an audited retry (`eventAdminFiscal`, `eventAdminFiscalRetry`).
+- **Bug fixed:** sale-complete cards showed "Fiscal status unavailable" (the fiscal state is per sale; the card read it
+  per ticket).
+- **Rules:** `eventTicketNumbers` deny-all; `eventFiscal` admin-read, server-write.
+- **Test fake:** opt-in `strictReadOrder` — a transaction read after a write throws, as the Admin SDK does. All event
+  suites run with it.
+- **Tests:**
+  - New `test-event-ticket-identity.js`: 67/0, including 12 concurrent issuers with real contention (18 transaction
+    runs); committed PINs never shared.
+  - Events: ops 55 · sales 46 · refunds 53 · settlement 84 · admin 64 · notifications 17 · rules 86 · browser 196.
+  - Entertainment: registry 65 · agreements 25 · entertainment browser 230.
+  - Creator: 260 · 66 · 64 · 78 · 19. AdminOS wiring 316.
+- **Sabotage:** 50/50 caught. The full run found 2 crashes and 2 misses — test gaps, not code defects — which were
+  fixed and re-verified.
+- **Files:**
+  - Code: `functions/{event-ops,event-sales,event-settlement,event-hub,event-admin,etims}.js`, `functions/event-fiscal.js`
+    (new), `sokoni-event-ticket.js` (new), `sokoni-event-ops.js`, `sokoni-aos-entertainment.js`, `event-hub.html`,
+    `event-manager.html`, `firestore.rules(.build)`.
+  - Tests: `scripts/lib/fake-firestore-txn.js`, event suites, `scripts/sabotage-event-ops.js`.
+  - Docs: `docs/EVENTS_OPERATIONS.md` §3, §10–13.
+- **Database:** new `eventTicketNumbers`, `eventFiscal`; reads `etimsInvoices`.
+- **API:** 2 new AdminOS ops; `eventSaleTickets` / `getMyTickets` return `pinState`, fiscal, price and the QR.
+- **Breaking (pre-deploy only):** the PIN format is now 4 digits; no 8-character PINs exist outside tests.
+- **Not deployed.** The onboarding hotfix remains its own separate deployment (`1171a16`, already live).
+
 ## 2026-09-27 (200) — Events ops P7: Quick Sale add/reduce, proven M-PESA journeys, rules + sabotage, docs
 
 - **Quick Sale add / reduce tickets** (`sokoni-event-ops.js`):
