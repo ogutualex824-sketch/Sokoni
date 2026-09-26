@@ -49,16 +49,18 @@ const bucket = { file: (p) => ({
   getMetadata: async () => [{ ...objects.get(p) }],
   getSignedUrl: async (o) => { signed.push({ path: p, ...o }); return [`https://storage.googleapis.com/fake/${encodeURIComponent(p)}?X-Goog-Expires=${Math.round((o.expires - NOW) / 1000)}&sig=abc`]; },
 }) };
-const users = { v1: { uid: 'v1', email: 'viewer.one@gmail.com', phoneNumber: '+254712345678', displayName: 'Wanjiku Muthoni' } };
+const users = { v1: { uid: 'v1', email: 'viewer.one@gmail.com', phoneNumber: '+254712345678', displayName: 'Wanjiku Muthoni' }, cA: { uid: 'cA', email: 'studio@kibera.film' } };
 
 const resolveIn = (m) => require.resolve(m, { paths: [FN] });
 const stub = (m, exp) => { require.cache[resolveIn(m)] = { id: m, filename: m, loaded: true, exports: exp }; };
 stub('firebase-admin/firestore', { getFirestore: () => db, FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath });
 stub('firebase-admin/storage', { getStorage: () => ({ bucket: () => bucket }) });
-stub('firebase-admin/auth', { getAuth: () => ({ getUser: async (u) => { if (!users[u]) throw new Error('no user'); return users[u]; } }) });
+/* A registered user has a linked provider; an anonymous one has none (users[u].anon). */
+const authRec = (u) => ({ providerData: users[u].anon ? [] : [{ providerId: 'password' }], ...users[u] });
+stub('firebase-admin/auth', { getAuth: () => ({ getUser: async (u) => { if (!users[u]) throw new Error('no user'); return authRec(u); } }) });
 const adminNs = { apps: [{}], initializeApp: () => ({}), app: () => ({}),
   firestore: Object.assign(() => db, { FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath }),
-  auth: () => ({ getUser: async (u) => users[u] }), storage: () => ({ bucket: () => bucket }) };
+  auth: () => ({ getUser: async (u) => (users[u] ? authRec(u) : undefined) }), storage: () => ({ bucket: () => bucket }) };
 stub('firebase-admin', adminNs);
 
 const H = require(Path.join(FN, 'creator-hub.js'));
@@ -72,7 +74,7 @@ try { intents = require(Path.join(FN, 'payment-intents.js')); } catch (e) { cons
 
 let pass = 0, fail = 0;
 const ck = (l, ok, d) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d !== undefined && d !== '' ? '   [' + String(d).slice(0, 100) + ']' : '')); ok ? pass++ : fail++; };
-const who = (uid, claims = {}) => ({ auth: uid ? { uid, token: { ...claims } } : null, rawRequest: { headers: { 'x-forwarded-for': '41.90.1.23' } } });
+const who = (uid, claims = {}) => ({ auth: uid ? { uid, token: { ...(users[uid] && users[uid].anon ? { firebase: { sign_in_provider: 'anonymous' } } : {}), ...claims } } : null, rawRequest: { headers: { 'x-forwarded-for': '41.90.1.23' } } });
 const call = (op, uid, data = {}, claims) => H._internal.OPS[op]({ ...who(uid, claims), data: { op, ...data } });
 const adm = (op, uid, data = {}, claims = { admin: true }) => H._adminH[op]({ ...who(uid, claims), data });
 async function code(p) { try { await p; return null; } catch (e) { return e.code || e.message; } }
@@ -442,6 +444,37 @@ async function buy(buyer, filmId) {
     ck("cross-creator analytics impossible (rival sees only own films)", !rival.films.some((x) => x.filmId === FILM));
     ck('film stats hot counters are sharded (≤10 shard docs)', docs('filmStats/' + FILM + '/shards/').length >= 1 && docs('filmStats/' + FILM + '/shards/').length <= 10);
     ck('viewer marker holds no viewer data', Object.keys(docs('filmViewers/')[0] || {}).every((k) => ['path', 'filmId', 'firstViewAtMs'].includes(k)));
+  }
+
+  /* ═══ guest (anonymous) checkout ═══ */
+  console.log('\n── guest checkout & viewer identity ──');
+  {
+    users.g1 = { uid: 'g1', anon: true };
+    ck('guest checkout is OFF by default', (await call('catalog.get', 'g1', { filmId: FILM })).checkout.guestCheckout === false);
+    ck('anonymous buyer refused while guest checkout is OFF', /Sign in to buy/.test(await msg(purposes.priceFor('film_access', 'g1', { filmId: FILM }))));
+    for (const op of ['creator.register', 'film.saveDraft', 'agreement.saveDraft', 'verification.saveDraft', 'royalty.mine', 'creator.analytics']) {
+      ck(`anonymous token refused for ${op}`, (await code(H.creatorDispatch.run({ ...who('g1'), data: { op, filmId: FILM } }))) === 'permission-denied');
+    }
+    ck('anonymous token may browse', Array.isArray((await H.creatorDispatch.run({ ...who('g1'), data: { op: 'catalog.list' } })).films));
+    ck('only super admin can turn guest checkout on', (await code(adm('creatorAdminConfig', 'adm1', { set: { guestCheckoutEnabled: true } }))) === 'permission-denied');
+    await adm('creatorAdminConfig', 'sa1', { set: { guestCheckoutEnabled: true } }, { superAdmin: true });
+    const refG = await buy('g1', FILM);
+    const ig = await read('paymentIntents/' + refG);
+    ck('guest intent bound to the anonymous uid (server-verified)', ig.uid === 'g1' && ig.ownerUid === 'g1');
+    const forged = await purposes.priceFor('film_access', 'g1', { filmId: FILM, uid: 'v1', buyerUid: 'v1', ownerUid: 'v1' });
+    ck('client-supplied uid ignored by the pricer (forged viewer UID)', !JSON.stringify(forged).includes('"v1"'));
+    ck('guest gets NOTHING before payment completes', !(await read('contentAccess/g1_' + FILM)));
+    await settle(refG, { uid: 'g1', value: 500, net: 485 });
+    await H._internal.processFilmPayment(refG);
+    ck('guest entitlement granted only after COMPLETE', (await read('contentEntitlements/' + refG)).status === 'ACTIVE');
+    ck('another user cannot use the guest entitlement', /no_entitlement/.test(await msg(call('playback.authorize', 'v5', { filmId: FILM, deviceId: 'x' }))));
+    const entBefore = docs('contentEntitlements/').length;
+    users.g1.anon = false; users.g1.email = 'guest@x.co';           /* linkWithCredential: SAME uid gains a provider */
+    const libG = await call('viewer.library', 'g1', {});
+    ck('after account upgrade the SAME uid owns the film', libG.myFilms.some((m) => m.entitlementId === refG));
+    ck('upgrade created NO second entitlement (nothing copied)', docs('contentEntitlements/').length === entBefore && docs('contentEntitlements/').filter((e) => e.buyerUid === 'g1').length === 1);
+    ck('upgraded account can now reach account-level ops', Array.isArray((await call('royalty.mine', 'g1', {})).statements));
+    await adm('creatorAdminConfig', 'sa1', { set: { guestCheckoutEnabled: false } }, { superAdmin: true });
   }
 
   /* ═══ creator verification ═══ */

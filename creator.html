@@ -80,7 +80,7 @@
   'use strict';
   import { app, auth } from '/firebase.js';
   import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
-  import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+  import { onAuthStateChanged, signInAnonymously, linkWithCredential, EmailAuthProvider, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 
   const fn = getFunctions(app, 'us-central1');
   const cd = (op, data = {}) => httpsCallable(fn, 'creatorDispatch')({ op, ...data }).then((r) => r.data);
@@ -169,6 +169,31 @@
       </div>
       <div id="watch"></div>`;
     const bp = document.getElementById('buyPanel');
+    if (hasAccess && USER && USER.isAnonymous) {
+      bp.innerHTML = `<b>You have access ✓</b>
+        <p style="margin-top:10px"><button class="btn" id="watchBtn">▶ Watch now</button></p>
+        <div class="panel"><b>Create your SOKONI account</b>
+          <p class="muted">Keep this film and watch it on any device. Until you do, access lives only in this browser.</p>
+          <form id="claimForm"><input type="email" name="email" required autocomplete="email" placeholder="Email" style="width:100%;background:#0b0b0b;border:1px solid var(--line);color:var(--tx);border-radius:12px;padding:12px;margin:8px 0">
+          <input type="password" name="pw" required minlength="8" autocomplete="new-password" placeholder="Password (8+ characters)" style="width:100%;background:#0b0b0b;border:1px solid var(--line);color:var(--tx);border-radius:12px;padding:12px;margin:8px 0">
+          <button class="btn">Create account</button></form><div class="msg" id="claimMsg" role="status"></div></div>`;
+      document.getElementById('watchBtn').onclick = () => watch(f.filmId);
+      document.getElementById('claimForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target), m = document.getElementById('claimMsg');
+        try {
+          /* LINK, never create: the same uid keeps the same entitlement — nothing is copied. */
+          const cred = EmailAuthProvider.credential(String(fd.get('email')).trim(), String(fd.get('pw')));
+          const r = await linkWithCredential(USER, cred);
+          await sendEmailVerification(r.user).catch(() => {});
+          m.className = 'msg ok'; m.textContent = 'Account created. Check your email to verify it — your films are in My films on every device.';
+        } catch (err) {
+          m.className = 'msg bad';
+          m.textContent = /email-already-in-use|credential-already-in-use/.test(err.code || '') ? 'That email already has a SOKONI account. Sign in with it — contact support to move this purchase.' : errText(err);
+        }
+      };
+      return;
+    }
     if (hasAccess) {
       bp.innerHTML = `<b>You have access</b>${access.expiresAtMs ? `<p class="muted">Rental ends ${new Date(access.expiresAtMs).toLocaleString('en-KE')}</p>` : ''}
         <p style="margin-top:10px"><button class="btn" id="watchBtn">▶ Watch now</button></p>
@@ -177,7 +202,16 @@
       return;
     }
     const priceLine = `<div class="price">${kes(f.priceCents)}</div><p class="muted">${f.accessType === 'rental' ? `${f.rentalDays}-day rental` : 'Buy — watch any time'} · ${esc(f.currency)}</p>`;
-    if (!USER) { bp.innerHTML = priceLine + `<p style="margin-top:10px"><a class="btn" href="/login.html?redirect=${encodeURIComponent(location.pathname + location.search)}">Sign in to watch</a></p>`; return; }
+    if (!USER) {
+      /* Guest checkout only when the SERVER says it is on. The guest session is
+         an anonymous Firebase account: the payment, the entitlement and — after
+         "Create your account" — the permanent account all share ONE uid. */
+      bp.innerHTML = priceLine + `<p style="margin-top:10px"><a class="btn" href="/login.html?redirect=${encodeURIComponent(location.pathname + location.search)}">Sign in to watch</a>
+        ${co.guestCheckout ? ' <button class="btn ghost" id="guestBtn">Buy without an account</button>' : ''}</p>`;
+      const gb = document.getElementById('guestBtn');
+      if (gb) gb.onclick = async () => { gb.disabled = true; try { await signInAnonymously(auth); } catch (e) { gb.disabled = false; bp.insertAdjacentHTML('beforeend', '<p class="msg bad">Guest checkout is not available right now — please sign in.</p>'); } };
+      return;
+    }
     if (v.isCreator) { bp.innerHTML = priceLine + '<p class="muted">This is your film. Manage it in <a href="/creator-studio.html">Creator Studio</a>.</p>'; return; }
     if (avail && !avail.available) {
       bp.innerHTML = priceLine + `<p class="msg bad">${avail.reason === 'country_unknown' ? 'This film is licensed for specific countries. Set your country in your profile to continue.' : 'This film is not licensed in your country.'}</p>`;

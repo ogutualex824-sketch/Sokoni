@@ -141,6 +141,10 @@
         return `<p>Film purchases: <b>${c.purchasesEnabled ? 'OPEN' : 'CLOSED'}</b></p>
           <p class="aos-muted">Keep CLOSED until the webhook's film branch is deployed — the old webhook would credit the payer. Changing this needs super admin.</p>
           <button class="aos-btn${c.purchasesEnabled ? ' aos-btn-ghost' : ''}" data-a="cfg-purchases" data-to="${c.purchasesEnabled ? '0' : '1'}">${c.purchasesEnabled ? 'Close purchases' : 'Open purchases'}</button>
+          <h4>Guest checkout (buy without an account)</h4>
+          <p>Status: <b>${c.guestCheckoutEnabled ? 'ON' : 'OFF'}</b></p>
+          <p class="aos-muted">Needs Firebase Anonymous Auth, which is a PLATFORM-WIDE change: anonymous users would pass every "signed-in" rule and callable. Keep OFF until that decision is made.</p>
+          <button class="aos-btn aos-btn-ghost" data-a="cfg-guest" data-to="${c.guestCheckoutEnabled ? '0' : '1'}">${c.guestCheckoutEnabled ? 'Turn guest checkout off' : 'Turn guest checkout on'}</button>
           <h4>Verified checkout methods</h4>
           <p class="aos-muted">Only methods verified against the LIVE IntaSend account (scripts/probe-intasend-capability.js) may be named to buyers.</p>
           <form class="aoscr-inline" data-f="cfg-methods"><input name="methods" value="${esc((c.checkoutMethods || []).join(', '))}" placeholder="M-PESA, CARD-PAYMENT"> <button class="aos-btn">Save (super admin)</button></form>`;
@@ -232,6 +236,7 @@
           break;
         }
         case 'cfg-purchases': act('creatorAdminConfig', { set: { purchasesEnabled: t.dataset.to === '1' } }, 'Saved.'); break;
+        case 'cfg-guest': act('creatorAdminConfig', { set: { guestCheckoutEnabled: t.dataset.to === '1' } }, 'Saved.'); break;
         default:
       }
     });

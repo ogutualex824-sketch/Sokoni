@@ -106,6 +106,25 @@ const ck = (l, ok, d) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (
       ck('Open purchases → creatorAdminConfig {set:{purchasesEnabled:true}}', cf && cf.d.set.purchasesEnabled === true);
       const opsUsed = new Set((await page.evaluate(() => window.CALLS)).map((c) => c.op));
       ck('every op the UI sent is a whitelisted server op', [...opsUsed].every((o) => SERVER_OPS.includes(o)), [...opsUsed].join(','));
+      /* Pricing section of subscriptions.html, rendered in Chromium from the served
+         commercial copy — its numbers must equal the server's computePool. */
+      const html = rd('subscriptions.html');
+      const inline = html.slice(html.lastIndexOf('<script>', html.indexOf('renderCreatorPpv')) + 8, html.indexOf('</script>', html.indexOf('renderCreatorPpv')));
+      const p2 = await browser.newPage();
+      await p2.setContent('<div id="creatorPpv"></div>');
+      await p2.addScriptTag({ content: rd('sokoni-creator-commercial.js') });
+      await p2.addScriptTag({ content: inline });
+      const txt = await p2.locator('#creatorPpv').innerText();
+      const Rm = require(path.join(ROOT, 'functions', 'shared', 'creator-royalty.js'));
+      const Cm = require(path.join(ROOT, 'functions', 'shared', 'creator-commercial.js'));
+      const srv = Rm.computePool({ grossCents: 50000, providerFeeCents: 2000, policy: Cm.CREATOR_PPV });
+      ck('pricing: shows 30% SOKONI and 70% creator pool', /30% SOKONI commission/.test(txt) && /70% Creator royalty pool/.test(txt), txt.slice(0, 120));
+      ck('pricing: example equals the server split (480 → 144 / 336)', txt.includes('KES ' + (srv.commissionCents / 100)) && txt.includes('KES ' + (srv.poolCents / 100)) && srv.commissionCents === 14400);
+      ck('pricing: provider fee separate, quarterly, not immediately withdrawable, refunds reverse', /provider/i.test(txt) && /quarterly/i.test(txt) && /not immediately withdrawable/i.test(txt) && /reverses/i.test(txt));
+      const p3 = await browser.newPage();
+      await p3.setContent('<div id="creatorPpv"></div>');
+      await p3.addScriptTag({ content: inline });
+      ck('pricing: without the policy file it says unavailable (no guessed rate)', /unavailable/.test(await p3.locator('#creatorPpv').innerText()));
       await browser.close();
     }
   }
@@ -127,7 +146,18 @@ const ck = (l, ok, d) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (
   ck('creator.html: no "copy-proof" / "cannot be recorded" claims', !/copy-?proof|cannot be recorded|impossible to record|screen[- ]recording (is )?blocked/i.test(viewer));
   ck('creator.html: fullscreens the CONTAINER so the watermark stays on', /p\.requestFullscreen/.test(viewer) && /nofullscreen/.test(viewer));
   ck('creator.html: tamper → pause + report', /report\('overlay_removed'\)/.test(viewer) && /report\('overlay_hidden'\)/.test(viewer));
+  ck('creator.html: guest account = LINK (same uid), never a second account', /linkWithCredential\(USER, cred\)/.test(viewer) && !/createUserWithEmailAndPassword/.test(viewer));
+  ck('creator.html: guest checkout offered only when the server says so', /co\.guestCheckout \?/.test(viewer));
+  ck('creator.html: My films (library) view', viewer.includes("params.get('view') === 'library') library()") && /viewer\.library/.test(viewer));
+  ck('creator.html: heartbeat reports progress', /beat\.positionSec = Math\.floor\(v\.currentTime\)/.test(viewer));
+  const pricing = rd('subscriptions.html');
+  ck('pricing: Creator section on the canonical Monetisation & Pricing page', /SOKONI Monetisation & Pricing/.test(pricing) && /id="creatorPpv"/.test(pricing) && /sokoni-creator-commercial\.js/.test(pricing));
+  ck('pricing: no isolated Creator pricing page', !fs.existsSync(path.join(ROOT, 'creator-pricing.html')));
   const studio = rd('creator-studio.html');
+  ck('studio: Apply for Creator Verification', /Apply for Creator Verification/.test(studio) && /verification\.submit/.test(studio));
+  ck('studio: verification docs go to private KYC storage', /kyc-documents\/\$\{USER\.uid\}\//.test(studio));
+  ck('studio: rights attestation required before saving a split', /rightsAttestation: ME\.rightsAttestation\.version/.test(studio));
+  ck('studio: analytics panel (aggregates)', /creator\.analytics/.test(studio));
   ck('studio: split sent as INTEGER basis points', /Math\.round\(Number\(e\.target\.value\) \* 100\)/.test(studio));
   ck('studio: master upload goes through the server-issued target', /film\.mediaUploadTarget/.test(studio) && /film\.attachMedia/.test(studio));
 

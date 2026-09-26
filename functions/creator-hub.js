@@ -104,6 +104,11 @@ async function _config() {
        Only these are named to buyers; an empty list means "not verified yet". */
     checkoutMethods: Array.isArray(d.checkoutMethods) ? d.checkoutMethods.map(String).slice(0, 12) : [],
     checkoutMethodsVerifiedAt: d.checkoutMethodsVerifiedAt || null,
+    /* Guest (anonymous) checkout. OFF by default and BLOCKED on a platform
+       decision: enabling Firebase Anonymous Auth lets anonymous tokens satisfy
+       every isAuthed() rule and req.auth-only callable platform-wide
+       (docs/CREATOR_HUB.md "Guest checkout"). */
+    guestCheckoutEnabled: d.guestCheckoutEnabled === true,
   };
 }
 
@@ -464,6 +469,7 @@ async function catalogGet(req) {
       enabled: cfg.purchasesEnabled,
       /* §8: never promise a method the live account has not been verified for. */
       notice: 'Payment methods available at checkout',
+      guestCheckout: cfg.guestCheckoutEnabled,
       verifiedMethods: cfg.checkoutMethods,
       currency: f.currency,
     },
@@ -489,6 +495,11 @@ async function priceFilmAccess(uid, data) {
   /* Kill switch, default OFF: purchases stay closed until the webhook's film
      branch is deployed — otherwise the old webhook would credit the payer. */
   if (!cfg.purchasesEnabled) fail('failed-precondition', 'Film purchases are not open yet.');
+  /* The pricer receives only the verified uid; anonymity is read from the auth
+     record (an anonymous user has no linked provider), never from the client. */
+  const rec = await require('firebase-admin/auth').getAuth().getUser(uid).catch(() => null);
+  const anonymous = !rec || !Array.isArray(rec.providerData) || rec.providerData.length === 0;
+  if (anonymous && !cfg.guestCheckoutEnabled) fail('failed-precondition', 'Sign in to buy this film.');
   if (!fSnap.exists || fSnap.data().creatorHub !== true) fail('not-found', 'Film not found.');
   const f = fSnap.data();
   if (f.pubState !== P.FILM_STATE.PUBLISHED) fail('failed-precondition', 'This film is not on sale.');
@@ -1431,6 +1442,7 @@ _adminH.creatorAdminConfig = async (req) => {
     const actor = _superAdmin(req);
     const patch = {};
     if (typeof d.set.purchasesEnabled === 'boolean') patch.purchasesEnabled = d.set.purchasesEnabled;
+    if (typeof d.set.guestCheckoutEnabled === 'boolean') patch.guestCheckoutEnabled = d.set.guestCheckoutEnabled;
     if (Array.isArray(d.set.checkoutMethods)) {
       const known = ['M-PESA', 'CARD-PAYMENT', 'GOOGLE-PAY', 'APPLE-PAY', 'PESALINK', 'BITCOIN', 'BANK-ACH', 'COOP_B2B'];
       const m = d.set.checkoutMethods.map((x) => String(x).toUpperCase());
@@ -1734,10 +1746,17 @@ const OPS = {
   'verification.attachDocument': verificationAttachDocument, 'verification.submit': verificationSubmit,
 };
 
+/* What an anonymous (guest) viewer may do: browse, watch what they paid for,
+   see their own library. Nothing that creates identity, content or money. */
+const ANON_OPS = new Set(['catalog.list', 'catalog.get', 'playback.authorize', 'playback.heartbeat', 'playback.end', 'playback.report',
+  'viewer.library', 'viewer.endSession']);
+
 exports.creatorDispatch = onCall({ region: REGION, enforceAppCheck: true, maxInstances: 20, timeoutSeconds: 60, memory: '256MiB' }, async (req) => {
   const op = req.data && req.data.op;
   const h = typeof op === 'string' && Object.prototype.hasOwnProperty.call(OPS, op) ? OPS[op] : null;
   if (!h) fail('not-found', 'Unknown creator operation.');
+  const provider = req.auth && req.auth.token && req.auth.token.firebase && req.auth.token.firebase.sign_in_provider;
+  if (provider === 'anonymous' && !ANON_OPS.has(op)) fail('permission-denied', 'Create your SOKONI account to do this.');
   return h(req);
 });
 
@@ -1745,7 +1764,7 @@ exports._adminH = _adminH;
 exports.RIGHTS_ATTESTATION = RIGHTS_ATTESTATION;
 exports._internal = {
   OPS, COL, PURPOSE, priceFilmAccess, filmAccessAdapter, accrueRoyalty, processFilmPayment, onFilmRefundProcessed,
-  shouldProcess, _providerFee, _setClock: (fn) => { _clock = fn || _now; },
+  shouldProcess, _providerFee, ANON_OPS, _setClock: (fn) => { _clock = fn || _now; },
 };
 exports.priceFilmAccess = priceFilmAccess;
 exports.filmAccessAdapter = filmAccessAdapter;
