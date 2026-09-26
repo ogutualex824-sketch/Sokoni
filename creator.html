@@ -104,7 +104,7 @@
       const S = rules() ? rules().SUBCATEGORIES : {};
       $app.innerHTML = `
         <h1>🎬 Creator</h1>
-        <p class="sub">Films, series, documentaries and music from independent creators. <a href="/creator-studio.html">Publish your work →</a>${USER ? ' · <a href="?view=royalties">My royalties</a>' : ''}</p>
+        <p class="sub">Films, series, documentaries and music from independent creators. <a href="/creator-studio.html">Publish your work →</a>${USER ? ' · <a href="?view=library">My films</a> · <a href="?view=royalties">My royalties</a>' : ''}</p>
         <div class="tabs" role="toolbar" aria-label="Subcategories">
           <button class="tab" data-sub="" aria-pressed="${!sub}">All</button>
           ${Object.entries(S).map(([k, v]) => `<button class="tab" data-sub="${esc(k)}" aria-pressed="${sub === k}">${esc(v)}</button>`).join('')}
@@ -256,7 +256,10 @@
     startWatermark();
     clearInterval(hbTimer);
     hbTimer = setInterval(async () => {
-      try { const h = await cd('playback.heartbeat', { sessionId: session.sessionId }); if (!h.ok) stop(h.revoked ? 'Your access to this film has ended.' : 'Playback session ended.'); }
+      const v = document.getElementById('vid');
+      const beat = { sessionId: session.sessionId };
+      if (v && Number.isFinite(v.duration)) { beat.positionSec = Math.floor(v.currentTime); beat.durationSec = Math.floor(v.duration); beat.playing = !v.paused; }
+      try { const h = await cd('playback.heartbeat', beat); if (!h.ok) stop(h.revoked ? 'Your access to this film has ended.' : 'Playback session ended.'); }
       catch (_) { /* transient: the next beat or the URL expiry settles it */ }
     }, g.heartbeatMs || 30000);
   }
@@ -314,6 +317,31 @@
   }
   addEventListener('pagehide', () => { if (session) cd('playback.end', { sessionId: session.sessionId }).catch(() => {}); });
 
+  /* ═══ MY FILMS (viewer dashboard) — own records only ═══ */
+  const mmss = (s) => { s = Math.max(0, Math.floor(s || 0)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return (h ? h + 'h ' : '') + m + 'm'; };
+  async function library() {
+    if (!USER) { location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return; }
+    $app.innerHTML = '<div class="state">Loading your films…</div>';
+    let L;
+    try { L = await cd('viewer.library'); } catch (e) { $app.innerHTML = `<div class="state">Could not load your films: ${esc(errText(e))}</div>`; return; }
+    const card = (m, extra) => `<button class="card" data-film="${esc(m.filmId)}"><img class="poster" loading="lazy" alt="" src="${esc(safeUrl(m.posterUrl))}"><div class="meta"><div class="t">${esc(m.title || 'Film')}</div><div class="muted">${extra}</div></div></button>`;
+    $app.innerHTML = `
+      <p><a href="/creator.html">← Creator</a></p>
+      <h1>My films</h1>
+      ${L.continueWatching.length ? `<h2 style="margin-top:14px">Continue watching</h2><div class="grid">${L.continueWatching.map((c) => card(c, 'At ' + mmss(c.positionSec) + ' of ' + mmss(c.durationSec))).join('')}</div>` : ''}
+      <h2 style="margin-top:14px">Library</h2>
+      <div class="grid">${L.myFilms.length ? L.myFilms.map((m) => card(m, m.type === 'rental' && m.expiresAtMs ? 'Rental ends ' + new Date(m.expiresAtMs).toLocaleDateString('en-KE') : 'Owned')).join('') : '<p class="muted">No films yet. <a href="/creator.html">Browse Creator</a></p>'}</div>
+      <div class="panel"><b>Purchase history</b><div class="scroll"><table><thead><tr><th>Film</th><th>Type</th><th>Paid</th><th>Date</th><th>Status</th></tr></thead><tbody>
+        ${L.purchases.map((p) => `<tr><td>${esc(p.title || p.filmId)}</td><td>${esc(p.type)}</td><td>${kes(p.amountCents)}</td><td>${p.acquiredAtMs ? new Date(p.acquiredAtMs).toLocaleDateString('en-KE') : '—'}</td><td>${esc(p.status)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No purchases yet.</td></tr>'}
+      </tbody></table></div></div>
+      <div class="panel"><b>Devices watching now</b><p class="muted">Up to 2 devices can play at the same time. Sign a device out to free a slot.</p><div class="scroll"><table><tbody>
+        ${L.sessions.map((x) => `<tr><td>Device ${esc(x.device)}</td><td>${esc(x.title || '')}</td><td>${x.live ? 'playing' : 'idle'}</td><td><button class="btn ghost" data-end="${esc(x.sessionId)}">Sign out device</button></td></tr>`).join('') || '<tr><td class="muted">No active devices.</td></tr>'}
+      </tbody></table></div></div>
+      <div class="panel"><b>Account</b><p class="muted"><a href="${esc(L.account.page)}">Account settings</a> · <a href="${esc(L.account.recovery)}">Reset password</a></p></div>`;
+    $app.querySelectorAll('[data-film]').forEach((c) => c.onclick = () => { location.search = '?film=' + encodeURIComponent(c.dataset.film); });
+    $app.querySelectorAll('[data-end]').forEach((b) => b.onclick = async () => { b.disabled = true; await cd('viewer.endSession', { sessionId: b.dataset.end }).catch(() => {}); library(); });
+  }
+
   /* ═══ ROYALTIES (participant dashboard) ═══ */
   async function royalties() {
     if (!USER) { location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return; }
@@ -346,6 +374,7 @@
     const film = params.get('film');
     if (film && /^[A-Za-z0-9_-]{1,128}$/.test(film)) filmPage(film);
     else if (params.get('view') === 'royalties') royalties();
+    else if (params.get('view') === 'library') library();
     else discover(false);
   });
   </script>

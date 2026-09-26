@@ -26,6 +26,8 @@
   <link rel="stylesheet" href="mobile.css">
   <link rel="stylesheet" href="sokoni-premium-v2.css">
   <script src="sokoni-commission-rates.js"></script>
+  <!-- Creator Hub commercial authority (byte-identical copy of functions/shared/creator-commercial.js) -->
+  <script src="sokoni-creator-commercial.js"></script>
 <script src="sokoni-pay.js" defer></script>
   <script src="sokoni-intasend.js" defer></script>
   <script>
@@ -239,6 +241,11 @@
       <tbody id="commRatesTable"></tbody>
     </table>
   </div>
+
+  <!-- CREATOR PAY-PER-VIEW — rendered ONLY from SokoniCreatorCommercial (the server's policy) -->
+  <div class="sub-sec-h">🎬 Creator Pay-Per-View (films, series, music videos)</div>
+  <div class="sub-sec-sub">How a Creator film sale is shared. The split is applied by SOKONI's servers — this section is generated from the same policy.</div>
+  <div id="creatorPpv" style="border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:18px;margin-bottom:32px;"><p style="color:rgba(255,255,255,0.5);font-size:13px;">Creator pricing is loading…</p></div>
 
   <!-- BOOST YOUR LISTING -->
   <div class="sub-sec-h">🚀 Boost Your Listing</div>
@@ -564,6 +571,36 @@ window.addEventListener('load', function(){
 <script src="analytics.js" defer></script>
 <script src="sokoni-config.js" defer></script>
 <script src="sokoni-invoice.js"></script><script src="sokoni-ui-extras.js" defer></script>
+  <script>
+  /* Creator PPV section. Every number comes from SokoniCreatorCommercial; if the
+     policy file is missing the section says so instead of showing a guess. */
+  (function renderCreatorPpv() {
+    var box = document.getElementById('creatorPpv');
+    var C = window.SokoniCreatorCommercial;
+    if (!box) return;
+    if (!C || !C.CREATOR_PPV) { box.innerHTML = '<p style="color:rgba(255,255,255,0.5);font-size:13px;">Creator pricing is unavailable right now.</p>'; return; }
+    var P = C.CREATOR_PPV;
+    var sok = C.pctLabel(P.sokoniCommissionBps), pool = C.pctLabel(P.creatorPoolBps);
+    /* Worked example with the server's rule: commission = floor(net × bps / 10000), pool = the rest. */
+    var grossC = 50000, feeC = 2000, netC = grossC - feeC;
+    var comC = Math.floor(netC * P.sokoniCommissionBps / 10000), poolC = netC - comC;
+    var k = function (c) { return 'KES ' + (c / 100).toLocaleString('en-KE', { maximumFractionDigits: 2 }); };
+    box.innerHTML =
+      '<div style="font-family:ui-monospace,monospace;font-size:13px;line-height:1.9;color:#e8e8e8;white-space:pre;overflow-x:auto;">' +
+      'Customer payment\n        ↓\nIntaSend payment fee (charged by the provider, not SOKONI)\n        ↓\nRemaining distributable amount\n' +
+      '        ├── ' + sok + ' SOKONI commission\n        └── ' + pool + ' Creator royalty pool\n                  ↓\n            shared by the film\'s royalty split</div>' +
+      '<table class="comm-table" style="margin-top:12px"><tbody>' +
+      '<tr><td>SOKONI commission</td><td><b>' + sok + '</b> of the amount after the payment fee</td></tr>' +
+      '<tr><td>Creator / rights-holder pool</td><td><b>' + pool + '</b> of the amount after the payment fee</td></tr>' +
+      '<tr><td>Payment provider fee</td><td>Separate — deducted first, exactly as IntaSend reports it</td></tr>' +
+      '<tr><td>Royalty participants</td><td>Paid from the Creator pool by the film\'s locked split (producer, actors, director…)</td></tr>' +
+      '<tr><td>When earnings are paid</td><td>Accrued per sale · settled quarterly (Kenya time) · released to the SOKONI wallet · withdrawable after settlement</td></tr>' +
+      '<tr><td>Refunds</td><td>A refunded sale reverses its royalty accrual</td></tr>' +
+      '</tbody></table>' +
+      '<p style="font-size:12px;color:rgba(255,255,255,0.55);margin-top:10px;">Example: a ' + k(grossC) + ' purchase with a ' + k(feeC) + ' payment fee leaves ' + k(netC) +
+      ' → SOKONI ' + k(comC) + ' · Creator pool ' + k(poolC) + '. The pool is <b>not</b> immediately withdrawable: it is settled at the end of the quarter first.</p>';
+  })();
+  </script>
   <script src="sw-register.js" defer></script>
 <script>
 /* Nav state init */

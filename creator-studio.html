@@ -99,15 +99,43 @@
       </div>
       <div class="row"><button class="btn" id="newFilm" ${['ACTIVE', 'PENDING'].includes(c.state) ? '' : 'disabled'}>+ New film</button>
         ${c.state !== 'SUSPENDED' ? '<button class="btn ghost" id="editProfile">Edit profile</button>' : ''}</div>
+      <h2>Audience &amp; earnings</h2>
+      <div class="panel" id="analytics"><p class="muted">Loading analytics…</p></div>
       <h2>Your films</h2>
       <div class="panel scroll">${ME.films.length ? `<table><thead><tr><th>Title</th><th>State</th><th>Price</th><th>Master</th><th>Split</th><th></th></tr></thead><tbody>${ME.films.map((f) => `
         <tr><td>${esc(f.title)}</td><td><span class="chip" data-s="${esc(f.pubState)}">${esc(f.pubState)}</span></td><td>${kes(f.priceCents)}</td>
         <td>${f.mediaReady ? 'uploaded' : '<span class="muted">missing</span>'}</td><td>${f.agreementVersion ? 'v' + f.agreementVersion + ' locked' : '<span class="muted">draft</span>'}</td>
         <td><button class="btn ghost" data-open="${esc(f.filmId)}">Open</button></td></tr>`).join('')}</tbody></table>` : '<p class="muted">No films yet.</p>'}</div>`;
     const nf = document.getElementById('newFilm'); if (nf) nf.onclick = () => editor(null);
+    renderAnalytics();
     const av = document.getElementById('applyVer'); if (av) av.onclick = () => verification();
     const ep = document.getElementById('editProfile'); if (ep) ep.onclick = () => register(c);
     $app.querySelectorAll('[data-open]').forEach((b) => b.onclick = () => editor(ME.films.find((f) => f.filmId === b.dataset.open)));
+  }
+
+  /* Owner-scoped aggregates only — counts and sums, never viewers. */
+  const dur = (s) => (s == null ? '—' : (s >= 3600 ? Math.floor(s / 3600) + 'h ' : '') + Math.floor((s % 3600) / 60) + 'm');
+  async function renderAnalytics() {
+    const box = document.getElementById('analytics');
+    if (!box) return;
+    let A;
+    try { A = await cd('creator.analytics'); } catch (e) { box.innerHTML = '<p class="muted">—</p>'; return; }
+    const t = A.totals;
+    const pct = (b) => (b == null ? '—' : (b / 100).toFixed(1) + '%');
+    box.innerHTML = `<div class="kpis">
+        <div class="kpi"><span class="muted">Views</span><b>${t.views}</b></div>
+        <div class="kpi"><span class="muted">Completed views</span><b>${t.completedViews}</b></div>
+        <div class="kpi"><span class="muted">Watch time</span><b>${dur(t.watchSeconds)}</b></div>
+        <div class="kpi"><span class="muted">Purchases</span><b>${t.purchases}</b></div>
+        <div class="kpi"><span class="muted">Revenue (gross)</span><b>${kes(t.grossCents)}</b></div>
+        <div class="kpi"><span class="muted">Provider fees</span><b>${kes(t.providerFeeCents)}</b></div>
+        <div class="kpi"><span class="muted">SOKONI commission (${(A.policy.sokoniCommissionBps / 100)}%)</span><b>${kes(t.commissionCents)}</b></div>
+        <div class="kpi"><span class="muted">Creator royalty pool (${(A.policy.creatorPoolBps / 100)}%)</span><b>${kes(t.poolCents)}</b></div>
+      </div>
+      <p class="muted" style="margin-top:8px">Quarter ${esc(A.settlement.periodId)} · ${esc(A.settlement.status)} · closes ${new Date(A.settlement.periodEndsAtMs).toLocaleDateString('en-KE')}. Viewer figures are aggregates — individual viewers are never shown.</p>
+      <div class="scroll"><table><thead><tr><th>Film</th><th>Views</th><th>Unique viewers</th><th>Completed</th><th>Avg watch</th><th>Page views</th><th>Purchases</th><th>Conversion</th><th>Pool</th></tr></thead><tbody>
+      ${A.films.map((x) => `<tr><td>${esc(x.title)}</td><td>${x.views}</td><td>${x.uniqueViewers}</td><td>${x.completedViews}</td><td>${dur(x.avgWatchSeconds)}</td><td>${x.pageViews}</td><td>${x.purchases}</td><td>${pct(x.conversionBps)}</td><td>${kes(x.poolCents)}</td></tr>`).join('') || '<tr><td colspan="9" class="muted">No films yet.</td></tr>'}
+      </tbody></table></div>`;
   }
 
   /* ═══ Creator verification application ═══ */

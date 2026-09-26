@@ -400,6 +400,50 @@ async function buy(buyer, filmId) {
   const fd = await call('royalty.film', 'cA', { filmId: FILM });
   ck('owner dashboard: gross / fee / commission / pool totals', fd.totals.grossCents > 0 && fd.totals.commissionCents > 0 && fd.totals.poolCents > 0 && fd.totals.providerFeeCents > 0);
 
+  /* ═══ viewer dashboard & creator analytics ═══ */
+  console.log('\n── viewer dashboard & creator analytics ──');
+  {
+    const pv0 = await call('creator.analytics', 'cA', {});
+    const a0 = pv0.films.find((x) => x.filmId === FILM);
+    const s1 = await call('playback.authorize', 'v1', { filmId: FILM, deviceId: 'dash-dev' });
+    NOW += 30000;
+    await call('playback.heartbeat', 'v1', { sessionId: s1.sessionId, positionSec: 600, durationSec: 5760, playing: true });
+    NOW += 5 * 60000;                              /* claims 5 minutes of play in one beat */
+    await call('playback.heartbeat', 'v1', { sessionId: s1.sessionId, positionSec: 900, durationSec: 5760, playing: true });
+    const sess = await read('playbackSessions/' + s1.sessionId);
+    ck('watch time credits real elapsed time only (30s + capped 60s)', sess.watchedSec === 90, sess.watchedSec);
+    NOW += 30000;
+    await call('playback.heartbeat', 'v1', { sessionId: s1.sessionId, positionSec: 999999, durationSec: 5760, playing: false });
+    ck('position clamped to the duration', (await read('watchProgress/v1_' + FILM)).positionSec === 5760);
+    const lib = await call('viewer.library', 'v1', {});
+    ck('My Films lists the owned film with progress', lib.myFilms.some((m) => m.filmId === FILM && m.progress && m.progress.durationSec === 5760));
+    ck('completed film is NOT in Continue Watching', !lib.continueWatching.some((c) => c.filmId === FILM));
+    ck('purchase history shows the expired rental as EXPIRED', lib.purchases.some((p) => p.type === 'rental' && p.status === 'EXPIRED'));
+    ck('devices shown as short hashes — no IP / network data', lib.sessions.every((x) => x.device.length === 8 && !('netHash' in x)) && !JSON.stringify(lib.sessions).includes('41.90'));
+    ck('account settings + password recovery reachable', !!lib.account.page && /reset/.test(lib.account.recovery));
+    const lib2 = await call('viewer.library', 'v2', {});
+    ck("another buyer's library holds none of v1's purchases", !lib2.purchases.some((p) => p.entitlementId === ref1));
+    ck('refunded purchase is history only (REVOKED, not in My Films)', lib2.purchases.some((p) => p.entitlementId === ref2 && p.status === 'REVOKED') && !lib2.myFilms.some((m) => m.entitlementId === ref2));
+    ck("cannot end another buyer's device session", (await code(call('viewer.endSession', 'v2', { sessionId: s1.sessionId }))) === 'permission-denied');
+    ck('can end own device session', (await call('viewer.endSession', 'v1', { sessionId: s1.sessionId })).ok === true && (await read('playbackSessions/' + s1.sessionId)).ended === true);
+    await call('catalog.get', null, { filmId: FILM });
+    const an = await call('creator.analytics', 'cA', {});
+    const a1 = an.films.find((x) => x.filmId === FILM);
+    ck('analytics: views counted per new session', a1.views === (a0 ? a0.views : 0) + 1, JSON.stringify(a1).slice(0, 160));
+    ck('analytics: repeat viewer is NOT a new unique viewer', a1.uniqueViewers === (a0 ? a0.uniqueViewers : 0));
+    ck('analytics: completed view counted once', a1.completedViews === (a0 ? a0.completedViews : 0) + 1);
+    ck('analytics: watch time summed from shards', a1.watchSeconds >= 90);
+    ck('analytics: page views summed from shards (conversion input)', a1.pageViews >= 1 && a1.conversionBps !== undefined);
+    ck('analytics: money columns from the ledger (commission = 30% basis)', a1.commissionCents > 0 && a1.poolCents > a1.commissionCents);
+    ck('analytics: settlement status of the current quarter', an.settlement.periodId === '2026-Q4' && !!an.settlement.status);
+    const blob = JSON.stringify(an);
+    ck('analytics carry NO viewer identity (uid / email / phone)', !/\bv1\b|\bv2\b|viewer\.one|@gmail|712345678/.test(blob));
+    const rival = await call('creator.analytics', 'cEvil', {});
+    ck("cross-creator analytics impossible (rival sees only own films)", !rival.films.some((x) => x.filmId === FILM));
+    ck('film stats hot counters are sharded (≤10 shard docs)', docs('filmStats/' + FILM + '/shards/').length >= 1 && docs('filmStats/' + FILM + '/shards/').length <= 10);
+    ck('viewer marker holds no viewer data', Object.keys(docs('filmViewers/')[0] || {}).every((k) => ['path', 'filmId', 'firstViewAtMs'].includes(k)));
+  }
+
   /* ═══ creator verification ═══ */
   console.log('\n── creator verification ──');
   {

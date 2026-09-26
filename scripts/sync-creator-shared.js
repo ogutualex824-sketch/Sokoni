@@ -13,6 +13,7 @@ const ROOT = path.join(__dirname, '..');
 const PAIRS = [
   ['functions/shared/creator-publishing.js', 'sokoni-creator-rules.js'],
   ['functions/shared/creator-watermark.js', 'sokoni-watermark.js'],
+  ['functions/shared/creator-commercial.js', 'sokoni-creator-commercial.js'],
 ];
 const check = process.argv.includes('--check');
 let drift = 0;

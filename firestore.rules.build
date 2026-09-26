@@ -3756,6 +3756,16 @@ service cloud.firestore {
   match /playbackRate/{uid}          { allow read, write: if false; }
   match /creatorExceptions/{id}      { allow read: if isAdmin(); allow write: if false; }
   match /creatorPayoutHolds/{uid}    { allow read: if isAdmin(); allow write: if false; }
+  match /watchProgress/{id} {
+  allow read:  if isAuthed() && (resource.data.uid == request.auth.uid || isAdmin());
+  allow write: if false;
+  }
+  match /filmStats/{filmId} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  match /shards/{shard} { allow read: if isAdmin(); allow write: if false; }
+  }
+  match /filmViewers/{id}            { allow read, write: if false; }
   match /creatorVerifications/{uid} {
   allow read:  if isAuthed() && (request.auth.uid == uid || isAdmin());
   allow write: if false;

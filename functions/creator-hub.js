@@ -60,6 +60,7 @@ const COL = Object.freeze({
   SESSIONS: 'playbackSessions', AUDIT: 'playbackAudit', RATE: 'playbackRate',
   EXCEPTIONS: 'creatorExceptions', HOLDS: 'creatorPayoutHolds', CONFIG: 'config',
   VERIFICATIONS: 'creatorVerifications',
+  PROGRESS: 'watchProgress', STATS: 'filmStats', VIEWERS: 'filmViewers',
   WALLETS: 'wallets', WALLET_TX: 'walletTransactions', ADMIN_AUDIT: 'adminAudit',
 });
 
@@ -82,6 +83,11 @@ function _id(v, what) {
 }
 const _ms = (ts) => (ts && typeof ts.toMillis === 'function') ? ts.toMillis() : (Number.isFinite(ts) ? ts : null);
 const _hash = (s) => crypto.createHash('sha256').update(String(s)).digest('hex').slice(0, 24);
+/* Hot-path counters (heartbeats, page views) go to one of STAT_SHARDS docs so a
+   popular film never exceeds Firestore's ~1 write/s sustained per-document rate;
+   analytics sums the shards. Per-session counters stay on the main doc. */
+const STAT_SHARDS = 10;
+const _statShard = (filmId, key) => _db().collection('filmStats').doc(filmId).collection('shards').doc(String(parseInt(_hash(key).slice(0, 6), 16) % STAT_SHARDS));
 
 async function _adminAudit(action, actorUid, details) {
   await _db().collection(COL.ADMIN_AUDIT).add({
@@ -449,6 +455,7 @@ async function catalogGet(req) {
   ]);
   const country = userSnap && userSnap.exists ? String(userSnap.data().country || userSnap.data().countryCode || '') : '';
   const avail = P.isAvailableIn(f.availability, country);
+  _statShard(filmId, crypto.randomBytes(4).toString('hex')).set({ pageViews: FieldValue.increment(1) }, { merge: true }).catch(() => {});
   return {
     film: _publicFilm(filmId, f),
     creator: cSnap.exists && cSnap.data().state === P.CREATOR_STATE.ACTIVE ? _publicCreator(f.creatorUid, cSnap.data()) : null,
@@ -852,6 +859,8 @@ async function playbackAuthorize(req) {
     const dec = P.decidePlayback({ entitlement, film, viewerUid: uid, nowMs, activeSessions: sessions, authorizationsLastHour: countLastHour, sessionId: requestedSession });
 
     /* ── writes ── */
+    const viewerMarkRef = _db().collection(COL.VIEWERS).doc(`${filmId}_${uid}`);
+    const viewerMark = dec.allow && !requestedSession ? await txn.get(viewerMarkRef) : null;
     txn.set(rateRef, { windowStartMs: inWindow ? rate.windowStartMs : nowMs, count: countLastHour + 1, updatedAtMs: nowMs });
     if (!dec.allow) return { ...dec };
     let sessionId = requestedSession;
@@ -865,7 +874,10 @@ async function playbackAuthorize(req) {
       txn.update(sRef, { lastSeenMs: nowMs, grants: FieldValue.increment(1), netHash });
     } else {
       txn.create(sRef, { uid, filmId, entitlementId: entitlement.id, deviceHash, netHash, seed, createdAtMs: nowMs,
-        lastSeenMs: nowMs, ended: false, grants: 1, sessionCode: W.sessionCode(seed) });
+        lastSeenMs: nowMs, ended: false, grants: 1, sessionCode: W.sessionCode(seed), watchedSec: 0, maxPositionSec: 0, completed: false });
+      const first = viewerMark && !viewerMark.exists;
+      if (first) txn.create(viewerMarkRef, { filmId, firstViewAtMs: nowMs });   /* marker holds NO viewer data beyond its id */
+      txn.set(_db().collection(COL.STATS).doc(filmId), { filmId, views: FieldValue.increment(1), ...(first ? { uniqueViewers: FieldValue.increment(1) } : {}) }, { merge: true });
     }
     const risk = P.assessSessionRisk({ devices24h: sessions.map((s) => s.deviceHash).concat(deviceHash), networks1h: sessions.map((s) => s.netHash).concat(netHash) });
     return { ...dec, sessionId, isNew: !existing, entitlementId: entitlement.id, expiresAtMs: entitlement.expiresAtMs, risk };
@@ -916,7 +928,31 @@ async function playbackHeartbeat(req) {
     await sRef.update({ ended: true, endedReason: 'entitlement_' + (ent ? String(ent.status).toLowerCase() : 'missing'), lastSeenMs: nowMs });
     return { ok: false, revoked: true };
   }
-  await sRef.update({ lastSeenMs: nowMs });
+  /* Progress + analytics. Watch time credits at most the real time elapsed since
+     the last beat (capped at 2 beats), so a client cannot inflate it; position is
+     clamped to the reported duration and to the film's runtime. */
+  const d = req.data || {};
+  const sd = s.data();
+  const dur = Number.isFinite(Number(d.durationSec)) ? Math.max(0, Math.min(86400, Math.round(Number(d.durationSec)))) : null;
+  const pos = Number.isFinite(Number(d.positionSec)) ? Math.max(0, Math.min(dur || 86400, Math.round(Number(d.positionSec)))) : null;
+  const playing = d.playing === true;
+  const elapsedSec = Math.max(0, Math.min(60, Math.round((nowMs - Number(sd.lastSeenMs || nowMs)) / 1000)));
+  const credited = playing ? elapsedSec : 0;
+  const completedNow = !sd.completed && pos != null && dur && pos >= dur * 0.9;
+  const patch = { lastSeenMs: nowMs };
+  if (pos != null) patch.maxPositionSec = Math.max(Number(sd.maxPositionSec || 0), pos);
+  if (credited) patch.watchedSec = FieldValue.increment(credited);
+  if (completedNow) patch.completed = true;
+  await sRef.update(patch);
+  if (pos != null) {
+    await _db().collection(COL.PROGRESS).doc(`${uid}_${sd.filmId}`).set({ uid, filmId: sd.filmId, positionSec: pos, durationSec: dur,
+      completed: !!(sd.completed || completedNow), updatedAtMs: nowMs }, { merge: true }).catch(() => {});
+  }
+  if (credited || completedNow) {
+    await _statShard(sd.filmId, sessionId).set({
+      ...(credited ? { watchSeconds: FieldValue.increment(credited) } : {}),
+      ...(completedNow ? { completedViews: FieldValue.increment(1) } : {}) }, { merge: true }).catch(() => {});
+  }
   return { ok: true };
 }
 
@@ -1409,6 +1445,95 @@ _adminH.creatorAdminConfig = async (req) => {
 };
 
 
+
+/* ═══ VIEWER DASHBOARD ═══════════════════════════════════════════════════
+   Only the caller's own records — entitlements, progress, sessions. */
+async function viewerLibrary(req) {
+  const uid = _uid(req);
+  const nowMs = _clock();
+  const [ents, prog, sess] = await Promise.all([
+    _db().collection(COL.ENTITLEMENTS).where('buyerUid', '==', uid).limit(200).get(),
+    _db().collection(COL.PROGRESS).where('uid', '==', uid).limit(200).get(),
+    _db().collection(COL.SESSIONS).where('uid', '==', uid).where('ended', '==', false).limit(20).get(),
+  ]);
+  const progress = Object.fromEntries(prog.docs.map((d) => [d.data().filmId, d.data()]));
+  const filmIds = [...new Set(ents.docs.map((d) => d.data().contentId))].slice(0, 100);
+  const films = {};
+  await Promise.all(filmIds.map(async (id) => { const x = await _db().collection(COL.FILMS).doc(id).get(); if (x.exists) films[id] = x.data(); }));
+  const purchases = ents.docs.map((d) => {
+    const e = d.data();
+    const expired = e.expiresAtMs != null && nowMs >= e.expiresAtMs;
+    return { entitlementId: d.id, filmId: e.contentId, title: (films[e.contentId] || {}).title || null, posterUrl: (films[e.contentId] || {}).posterUrl || null,
+      type: e.entitlementType, amountCents: e.purchasedAmountCents, currency: e.currency, acquiredAtMs: _ms(e.acquiredAt),
+      expiresAtMs: e.expiresAtMs || null, status: e.status === 'ACTIVE' && expired ? 'EXPIRED' : e.status };
+  }).sort((a, b) => (b.acquiredAtMs || 0) - (a.acquiredAtMs || 0));
+  const myFilms = purchases.filter((p) => p.status === 'ACTIVE');
+  return {
+    myFilms: myFilms.map((p) => ({ ...p, progress: progress[p.filmId] ? { positionSec: progress[p.filmId].positionSec, durationSec: progress[p.filmId].durationSec, completed: !!progress[p.filmId].completed } : null })),
+    continueWatching: myFilms.filter((p) => progress[p.filmId] && !progress[p.filmId].completed && progress[p.filmId].positionSec > 0)
+      .sort((a, b) => progress[b.filmId].updatedAtMs - progress[a.filmId].updatedAtMs)
+      .map((p) => ({ filmId: p.filmId, title: p.title, posterUrl: p.posterUrl, positionSec: progress[p.filmId].positionSec, durationSec: progress[p.filmId].durationSec })),
+    purchases,
+    /* devices: hashed identifiers only — never IPs */
+    sessions: sess.docs.map((d) => ({ sessionId: d.id, filmId: d.data().filmId, title: (films[d.data().filmId] || {}).title || null, device: String(d.data().deviceHash || '').slice(0, 8),
+      startedAtMs: d.data().createdAtMs, lastSeenMs: d.data().lastSeenMs, live: nowMs - d.data().lastSeenMs < P.PLAYBACK.SESSION_IDLE_MS })),
+    account: { page: '/profile.html', recovery: '/login.html?mode=reset' },
+  };
+}
+
+async function viewerEndSession(req) {
+  const uid = _uid(req);
+  const sessionId = _id((req.data || {}).sessionId, 'sessionId');
+  const ref = _db().collection(COL.SESSIONS).doc(sessionId);
+  const s = await ref.get();
+  if (!s.exists || s.data().uid !== uid) fail('permission-denied', 'Unknown session.');   /* never another buyer's */
+  await ref.update({ ended: true, endedReason: 'viewer_signed_out_device', lastSeenMs: _clock() });
+  return { ok: true };
+}
+
+/* ═══ CREATOR ANALYTICS ══════════════════════════════════════════════════
+   Aggregates for films the caller owns. No viewer identity ever leaves here:
+   counts, sums and ratios only. */
+async function creatorAnalytics(req) {
+  const uid = _uid(req);
+  const filmsSnap = await _db().collection(COL.FILMS).where('creatorUid', '==', uid).where('creatorHub', '==', true).limit(200).get();
+  const nowPeriod = R.periodFor(_clock());
+  const perSnap = await _db().collection(COL.PERIODS).doc(nowPeriod.periodId).get();
+  const rows = await Promise.all(filmsSnap.docs.map(async (fd) => {
+    const [st, shards, accs] = await Promise.all([
+      _db().collection(COL.STATS).doc(fd.id).get(),
+      _db().collection(COL.STATS).doc(fd.id).collection('shards').get(),
+      _db().collection(COL.ACCRUALS).where('filmId', '==', fd.id).limit(5000).get(),
+    ]);
+    const x = { ...(st.exists ? st.data() : {}) };
+    for (const sh of shards.docs) for (const k of ['watchSeconds', 'completedViews', 'pageViews']) x[k] = Number(x[k] || 0) + Number(sh.data()[k] || 0);
+    const t = { purchases: 0, grossCents: 0, providerFeeCents: 0, commissionCents: 0, poolCents: 0, refundedCents: 0, withheld: 0 };
+    for (const a of accs.docs.map((d) => d.data())) {
+      if (a.status === 'VOID_REFUNDED') continue;
+      t.purchases++; t.grossCents += a.grossCents; t.poolCents += a.poolCents; t.refundedCents += Number(a.refundedCents || 0);
+      t.providerFeeCents += a.deductions.providerFeeCents; t.commissionCents += a.deductions.commissionCents;
+    }
+    const views = Number(x.views || 0), pageViews = Number(x.pageViews || 0), watch = Number(x.watchSeconds || 0);
+    return {
+      filmId: fd.id, title: fd.data().title, pubState: fd.data().pubState,
+      views, uniqueViewers: Number(x.uniqueViewers || 0), completedViews: Number(x.completedViews || 0),
+      watchSeconds: watch, avgWatchSeconds: views ? Math.round(watch / views) : null,
+      pageViews, purchases: t.purchases,
+      /* purchases per film-page view; null (shown "—") when there are no page views yet */
+      conversionBps: pageViews ? Math.round((t.purchases * 10000) / pageViews) : null,
+      grossCents: t.grossCents, providerFeeCents: t.providerFeeCents, commissionCents: t.commissionCents, poolCents: t.poolCents, refundedCents: t.refundedCents,
+    };
+  }));
+  const sum = (k) => rows.reduce((a, r) => a + (Number(r[k]) || 0), 0);
+  return {
+    films: rows,
+    totals: { views: sum('views'), uniqueViewersBySum: sum('uniqueViewers'), completedViews: sum('completedViews'), watchSeconds: sum('watchSeconds'),
+      purchases: sum('purchases'), grossCents: sum('grossCents'), providerFeeCents: sum('providerFeeCents'), commissionCents: sum('commissionCents'), poolCents: sum('poolCents') },
+    settlement: { periodId: nowPeriod.periodId, status: perSnap.exists ? perSnap.data().status : 'OPEN', periodEndsAtMs: nowPeriod.endMs },
+    policy: { sokoniCommissionBps: require('./shared/creator-commercial').CREATOR_PPV.sokoniCommissionBps, creatorPoolBps: require('./shared/creator-commercial').CREATOR_PPV.creatorPoolBps },
+  };
+}
+
 /* ═══ CREATOR VERIFICATION ═══════════════════════════════════════════════
    One application per creator: creatorVerifications/{uid}, keyed by the
    AUTHENTICATED uid — so nobody can apply for someone else and a second active
@@ -1604,6 +1729,7 @@ const OPS = {
   'agreement.saveDraft': agreementSaveDraft,
   'playback.authorize': playbackAuthorize, 'playback.heartbeat': playbackHeartbeat, 'playback.end': playbackEnd, 'playback.report': playbackReport,
   'royalty.mine': royaltyMine, 'royalty.film': royaltyFilm,
+  'viewer.library': viewerLibrary, 'viewer.endSession': viewerEndSession, 'creator.analytics': creatorAnalytics,
   'verification.get': verificationGet, 'verification.saveDraft': verificationSaveDraft,
   'verification.attachDocument': verificationAttachDocument, 'verification.submit': verificationSubmit,
 };

@@ -173,7 +173,7 @@ console.log('\n── watermark ──');
 console.log('\n── hosting copies ──');
 {
   const root = path.join(__dirname, '..');
-  for (const [src, dst] of [['functions/shared/creator-publishing.js', 'sokoni-creator-rules.js'], ['functions/shared/creator-watermark.js', 'sokoni-watermark.js']]) {
+  for (const [src, dst] of [['functions/shared/creator-publishing.js', 'sokoni-creator-rules.js'], ['functions/shared/creator-watermark.js', 'sokoni-watermark.js'], ['functions/shared/creator-commercial.js', 'sokoni-creator-commercial.js']]) {
     const same = fs.existsSync(path.join(root, dst)) && fs.readFileSync(path.join(root, src)).equals(fs.readFileSync(path.join(root, dst)));
     ck(`${dst} byte-identical to ${src}`, same, same ? '' : 'run node scripts/sync-creator-shared.js');
   }
