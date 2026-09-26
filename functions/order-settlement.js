@@ -20,6 +20,7 @@
    ========================================================================== */
 const admin = require('firebase-admin');
 const SE = require('./settlement-engine');
+const DH = require('./dispute-hold');
 
 const STATES = { UNSETTLED: 'UNSETTLED', HELD: 'HELD', ELIGIBLE: 'ELIGIBLE_FOR_SETTLEMENT', SETTLING: 'SETTLING', SETTLED: 'SETTLED', REFUNDED: 'REFUNDED', REVERSED: 'REVERSED' };
 
@@ -131,6 +132,18 @@ async function settleOrder(db, adminSdk, orderId) {
     if (st === STATES.REFUNDED) return { outcome: 'refunded-skip' };     /* refunded before settlement */
     /* Only a held/eligible, non-cancelled/refunded order settles. */
     if (['cancelled', 'refunded'].includes(o.status)) return { outcome: 'terminal-skip' };
+
+    /* ── DISPUTE HOLD (functions/dispute-hold.js) ──────────────────────────────────────
+       An open dispute pauses seller settlement. The AUTHORITY is the server-written dispute
+       record, read here inside this transaction — never the order's own flags, which a stale
+       mirror or a forged field could otherwise decide. Parked, not refused: releasing the hold
+       resumes settlement (DH.resumeSettlement). */
+    const _dSnap = await t.get(DH.disputeRef(db, orderId));
+    if (DH.holdActive(_dSnap.exists ? _dSnap.data() : null, orderId)) {
+      t.update(orderRef, { settlementStatus: STATES.HELD, settlementNote: DH.SETTLEMENT_NOTE,
+        disputeId: _dSnap.id, updatedAt: FV.serverTimestamp() });
+      return { outcome: 'dispute-hold', disputeId: _dSnap.id };
+    }
     if (!sellerId) { t.update(orderRef, { settlementStatus: STATES.SETTLED, settlementNote: 'no-seller', settledAt: FV.serverTimestamp() }); return { outcome: 'no-seller' }; }
 
     /* ── DELIVERY PROOF GATE ────────────────────────────────────────────────────────
@@ -347,13 +360,24 @@ async function autoConfirmDeliveredOrders(db, adminSdk) {
   for (const doc of snap.docs) {
     const o = doc.data();
     if (isAlreadySettled(o.settlementStatus) || o.settlementStatus === STATES.REFUNDED) continue;
-    if (o.disputeOpen === true || o.hasDispute === true) continue;   /* dispute pauses auto-confirm */
     const deliveredMs = o.deliveredAt && o.deliveredAt.toMillis ? o.deliveredAt.toMillis()
       : (typeof o.deliveredAt === 'number' ? o.deliveredAt : 0);
     if (!deliveredMs || deliveredMs > cutoff) continue;              /* still inside the window */
     try {
-      await doc.ref.update({ status: 'completed', autoConfirmed: true, autoConfirmedAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp() });
-      confirmed++;
+      /* A dispute pauses auto-confirm. The dispute record is the authority (the disputeOpen /
+         hasDispute flags this used to read were never written by anything), and it is read in
+         the SAME transaction as the completion, so a dispute opened mid-sweep is honoured. */
+      const done = await db.runTransaction(async (t) => {
+        const [os, ds] = await Promise.all([t.get(doc.ref), t.get(DH.disputeRef(db, doc.id))]);
+        if (!os.exists) return false;
+        const cur = os.data() || {};
+        if (cur.status !== 'delivered') return false;
+        if (isAlreadySettled(cur.settlementStatus) || cur.settlementStatus === STATES.REFUNDED) return false;
+        if (DH.holdActive(ds.exists ? ds.data() : null, doc.id)) return false;
+        t.update(doc.ref, { status: 'completed', autoConfirmed: true, autoConfirmedAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp() });
+        return true;
+      });
+      if (done) confirmed++;
     } catch (e) { console.error('[order-settlement] auto-confirm failed', doc.id, e.message); }
   }
   if (confirmed) console.log(`[order-settlement] auto-confirmed ${confirmed} delivered order(s) past ${days}d`);

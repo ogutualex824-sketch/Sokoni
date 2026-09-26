@@ -231,9 +231,14 @@ console.log('\nPART G — nothing local, nothing removed\n');
 console.log('\nPART H — the layer agrees with the server\n');
 {
   const fn = SRC('functions/disputes.js');
+  /* The server's list lives in functions/dispute-hold.js (Repair 1: settlement and disputes must never
+     disagree about what "open" means). Compared against the LOADED server value, not a source literal,
+     and disputes.js must take its list from there — one list on the server, mirrored exactly here. */
+  const SERVER_OPEN = require(require('path').join(__dirname, '..', 'functions', 'dispute-hold.js')).OPEN_STATUSES;
   ck('H1  OPEN_STATUSES matches the server exactly',
-    /const OPEN_STATUSES = \['open', 'investigating', 'seller_responded'\]/.test(fn) &&
-    DP.OPEN_STATUSES.join(',') === 'open,investigating,seller_responded');
+    /const OPEN_STATUSES = DH\.OPEN_STATUSES;/.test(fn) &&
+    DP.OPEN_STATUSES.join(',') === SERVER_OPEN.join(',') &&
+    SERVER_OPEN.join(',') === 'open,investigating,seller_responded');
   ck('H2  sellerRespondToDispute really is seller-only', /data\.sellerId !== uid/.test(fn));
   ck('H3  createDispute really is buyer-only', /if \(!isBuyer\)/.test(fn));
   ck('H4  cancelDispute really is buyer-only', /data\.buyerId !== uid/.test(fn));

@@ -41,8 +41,18 @@ const MUTANTS = [
   { name: 'settleOrder reverted to the case-sensitive check (helper still defined + exported)',
     src: () => mutate('m1', [[SETTLE_GUARD, "    if (st === STATES.SETTLED)  return { outcome: 'already-settled' };"]]),
     expect: ['S5', 'S6', 'B3'] },
-  { name: 'sweep reverted to the case-sensitive check',
+  /* Repair 1 (dispute hold) made the sweep complete each order in its own transaction, which
+     re-checks isAlreadySettled on the fresh snapshot. Reverting only the pre-filter is therefore no
+     longer behaviourally observable — the gate still refuses it STRUCTURALLY (S7, S8). m2b reverts
+     BOTH guards and must fail behaviourally, so behavioural coverage of the sweep is kept. */
+  { name: 'sweep pre-filter reverted to the case-sensitive check (in-transaction guard still present)',
     src: () => mutate('m2', [[SWEEP_GUARD, '    if (o.settlementStatus === STATES.SETTLED || o.settlementStatus === STATES.REFUNDED) continue;']]),
+    expect: ['S7', 'S8'] },
+  { name: 'sweep: BOTH guards reverted to the case-sensitive check',
+    src: () => mutate('m2b', [
+      [SWEEP_GUARD, '    if (o.settlementStatus === STATES.SETTLED || o.settlementStatus === STATES.REFUNDED) continue;'],
+      ['        if (isAlreadySettled(cur.settlementStatus) || cur.settlementStatus === STATES.REFUNDED) return false;',
+       '        if (cur.settlementStatus === STATES.SETTLED || cur.settlementStatus === STATES.REFUNDED) return false;']]),
     expect: ['S7', 'S8', 'B4'] },
   { name: 'guard called but its result ignored in settleOrder',
     src: () => mutate('m3', [[SETTLE_GUARD, "    isAlreadySettled(st);"]]),

@@ -22,7 +22,10 @@ const VALID_REASONS = [
   'overcharged',      // Charged wrong amount
   'other',
 ];
-const OPEN_STATUSES = ['open', 'investigating', 'seller_responded'];
+/* The dispute SETTLEMENT HOLD lives in functions/dispute-hold.js, and so does the one list of open
+   statuses — settlement and this module must never disagree about what "open" means. */
+const DH = require('./dispute-hold');
+const OPEN_STATUSES = DH.OPEN_STATUSES;
 
 function _requireAuth(auth) {
   if (!auth) throw new HttpsError('unauthenticated', 'Login required');
@@ -65,11 +68,16 @@ exports.createDispute = onCall({ enforceAppCheck: true }, async request => {
   let isReplay = false;
   let replayData = null;
 
+  const orderRef = db.collection('orders').doc(orderId);
   await db.runTransaction(async (txn) => {
-    const snap = await txn.get(disputeRef);
+    const [snap, oSnap] = await Promise.all([txn.get(disputeRef), txn.get(orderRef)]);
     if (snap.exists) { isReplay = true; replayData = snap.data(); return; }
 
+    /* SETTLEMENT HOLD — opened with the dispute, in the same transaction, so there is no moment
+       where the dispute exists and settlement is not paused. The order field is a mirror. */
+    if (oSnap.exists) txn.update(orderRef, DH.orderMirror(FieldValue, true, disputeRef.id));
     txn.set(disputeRef, {
+      settlementHold: DH.HOLD.HELD,
       orderId,
       buyerId:  uid,
       sellerId: order.sellerId || order.vendorId || null,
@@ -88,10 +96,12 @@ exports.createDispute = onCall({ enforceAppCheck: true }, async request => {
       resolvedAt:  null,
       resolvedBy:  null,
       adminNotes:  null,
+      /* null, never undefined: Firestore rejects undefined, and 9 of 10 production orders carry no
+         deliveryStatus — so this snapshot used to make createDispute throw on almost every order. */
       orderSnapshot: {
-        status:         order.status,
-        deliveryStatus: order.deliveryStatus,
-        amount:         order.total || order.amount,
+        status:         order.status ?? null,
+        deliveryStatus: order.deliveryStatus ?? null,
+        amount:         order.total ?? order.amount ?? null,
         itemCount:      (order.items || []).length,
       },
     });
@@ -210,15 +220,22 @@ exports.cancelDispute = onCall({ enforceAppCheck: true }, async request => {
     throw new HttpsError('failed-precondition', 'Cannot cancel a resolved dispute');
 
   const tlEntry = { event: 'buyer_cancelled', actor: uid, actorRole: 'buyer', note: 'Dispute withdrawn by buyer', ts: new Date().toISOString() };
-  await snap.ref.update({
-    status:     'closed',
-    resolution: 'buyer_cancelled',
-    resolvedAt: FieldValue.serverTimestamp(),
-    resolvedBy: uid,
-    timeline:   FieldValue.arrayUnion(tlEntry),
-    updatedAt:  FieldValue.serverTimestamp(),
+  const orderRef = data.orderId ? db.collection('orders').doc(String(data.orderId)) : null;
+  await db.runTransaction(async (txn) => {
+    const oSnap = orderRef ? await txn.get(orderRef) : null;
+    txn.update(snap.ref, {
+      status:     'closed',
+      resolution: 'buyer_cancelled',
+      settlementHold: DH.HOLD.RELEASED,              /* the buyer withdrew: nothing left to hold for */
+      resolvedAt: FieldValue.serverTimestamp(),
+      resolvedBy: uid,
+      timeline:   FieldValue.arrayUnion(tlEntry),
+      updatedAt:  FieldValue.serverTimestamp(),
+    });
+    if (oSnap && oSnap.exists) txn.update(orderRef, DH.orderMirror(FieldValue, false, snap.id));
   });
-  return { success: true };
+  const resumed = data.orderId ? await DH.resumeSettlement(db, admin, data.orderId) : null;
+  return { success: true, settlementHold: DH.HOLD.RELEASED, settlement: resumed ? resumed.outcome : null };
 });
 
 // ─── getSellerDisputes — seller sees disputes raised against them ─────────────
@@ -256,7 +273,7 @@ exports.adminResolveDispute = onCall({ enforceAppCheck: true }, async request =>
     throw new HttpsError('permission-denied', 'Admin access required');
 
   const uid = request.auth.uid;
-  const { disputeId, action, resolution } = request.data || {};
+  const { disputeId, action, resolution, releaseSettlement } = request.data || {};
   if (!disputeId) throw new HttpsError('invalid-argument', 'disputeId required');
   if (!action)    throw new HttpsError('invalid-argument', 'action required');
 
@@ -291,7 +308,24 @@ exports.adminResolveDispute = onCall({ enforceAppCheck: true }, async request =>
     update.resolvedBy  = uid;
   }
 
-  await snap.ref.update(update);
+  /* SETTLEMENT HOLD. Re-opening or investigating holds. Resolving or closing does NOT release by
+     itself: the resolution is free text, and "the seller was right" and "the buyer was refunded"
+     read the same to the system. Release is an explicit admin decision (releaseSettlement:true);
+     without it the hold stays — the safe failure is a delayed payout, not a wrong one. */
+  const releasing = (action === 'resolved' || action === 'closed') && releaseSettlement === true;
+  update.settlementHold = releasing ? DH.HOLD.RELEASED : DH.HOLD.HELD;
+  if (!releasing && (action === 'resolved' || action === 'closed')) {
+    update.timeline = FieldValue.arrayUnion(tlEntry, { event: 'settlement_hold_retained', actor: uid, actorRole: 'admin',
+      note: 'Settlement stays held until an admin releases it (releaseSettlement:true).', ts: new Date().toISOString() });
+  }
+
+  const _oid = snap.data().orderId;
+  const _oRef = _oid ? db.collection('orders').doc(String(_oid)) : null;
+  await db.runTransaction(async (txn) => {
+    const oSnap = _oRef ? await txn.get(_oRef) : null;
+    txn.update(snap.ref, update);
+    if (oSnap && oSnap.exists) txn.update(_oRef, DH.orderMirror(FieldValue, !releasing, snap.id));
+  });
 
   // Sync the linked order's dispute status when fully resolved
   if (action === 'resolved' || action === 'closed') {
@@ -304,5 +338,6 @@ exports.adminResolveDispute = onCall({ enforceAppCheck: true }, async request =>
     }
   }
 
-  return { success: true, disputeId, action };
+  const resumed = (releasing && _oid) ? await DH.resumeSettlement(db, admin, _oid) : null;
+  return { success: true, disputeId, action, settlementHold: update.settlementHold, settlement: resumed ? resumed.outcome : null };
 });

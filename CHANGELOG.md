@@ -1,3 +1,15 @@
+## 2026-09-26 — Repair 1: an open dispute pauses auto-confirm and seller settlement (branch `repair-1/dispute-settlement-pause`, NOT landed)
+
+The `disputeOpen`/`hasDispute` flags the sweep checked were never written, and `settleOrder` checked no dispute.
+The server-written dispute record is now the authority. It is read **inside** the settlement and auto-confirm
+transactions (`functions/dispute-hold.js`). Buyer withdrawal releases the hold; admin release is explicit and
+fail-closed (`releaseSettlement: true`). Also fixed: `createDispute` threw on orders without `deliveryStatus`
+(9 of 10 in production). `scripts/test-dispute-settlement-hold.js` **39/0** (includes served-rules forgery
+proofs and a counterproof); old code **FAILS 11/12**, including 12 of 12 races settling after the dispute.
+Record: `docs/repairs/R1-dispute-settlement-hold.md`.
+API: `adminResolveDispute` accepts `releaseSettlement`. Database: `disputes.settlementHold`, `orders.disputeHold`
+(mirror). Breaking: disputed orders no longer auto-complete or settle.
+
 ## 2026-09-26 — Track G: initiateRefund binds the escrow to the requested order (branch `track-g/refund-escrow-binding`, NOT landed, NOT deployed)
 
 `initiateRefund` previously accepted "caller owns SOME escrow" and then refunded ANY order named alongside it.
