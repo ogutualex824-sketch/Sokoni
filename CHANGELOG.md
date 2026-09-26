@@ -1,3 +1,16 @@
+## 2026-09-26 (193) — Entertainment: docs, sabotage 29/29, copy fix
+
+- **Docs:** `docs/ENTERTAINMENT_CATEGORY_MATRIX.md` (the required matrix + lifecycles),
+  `docs/ENTERTAINMENT_HUB.md` (architecture; commercial, application/approval/dashboard, role, payment,
+  refund, AdminOS, dashboard, responsive, test, security matrices; gaps; deployment status);
+  `docs/CREATOR_HUB.md` (Streaming subcategory).
+- **Sabotage:** `scripts/sabotage-entertainment.js` — 29/29 CAUGHT after three weak assertions were
+  strengthened (first run 26 / 1 MISSED / 2 CRASHED; each re-planted and caught). Tree restored
+  byte-identical; event 84/0, registry 65/0, rules 28/0, browser 230/0 post-restore.
+- **Copy:** entertainment.html told performers "10% commission" — a rate no authority configures; it
+  now says a platform commission applies to paid bookings, without an invented number.
+- **Not deployed.**
+
 ## 2026-09-26 (192) — Legacy pay-per-view closed; creator dashboard stops counting unpaid sales
 
 - **Summary:** `purchaseEntertainment` wrote paid purchases at `pending_payment` and bumped

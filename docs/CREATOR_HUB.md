@@ -6,6 +6,10 @@
 frozen money paths may be changed and committed (not deployed) · full vertical, staged ·
 **Creator PPV = SOKONI 30 % / creator pool 70 % of NET (gross − IntaSend fee)** — supersedes the
 first slice's "gross − fee − ppv 15 %" (§17).
+**Streaming (owner decision 2026-09-26):** a Creator content TYPE — subcategory `streaming`
+("Streaming (series & episodic)") under the same approval, 30 / 70 policy and signed-URL playback.
+On-demand only; live broadcast is not implemented. See [[ENTERTAINMENT_CATEGORY_MATRIX]] ·
+[[ENTERTAINMENT_HUB]].
 
 Related: [[CREATOR_HUB_OWNERSHIP_MAP]] · [[Marketplace]] · [[Payments]] · [[PAYMENT_ARCHITECTURE_UNIFICATION]] ·
 [[WITHDRAWAL_ENGINE_CHANGE_PLAN]] · [[WALLET_FREEZE_ACCEPTANCE]] · [[AdminOS]] · [[docs/API]] · [[docs/SECURITY]]
