@@ -1061,7 +1061,11 @@ window.SokoniWalletV2 = (function () {
     const titleEl = document.querySelector('#wdrSuccess h3');
     const emojiEl = document.querySelector('#wdrSuccess > div');
     let title, msg, emoji;
-    if (mode === 'instant' || d.status === 'processing') {
+    if (d.status === 'outcome_unknown') {
+      /* Never drawn as sent: the provider gave no definitive answer. */
+      emoji = '⏳'; title = 'Confirming your payout';
+      msg = 'KSh ' + _fmt(amt) + ' to ' + acct + ' is being confirmed with M-PESA. Your funds are held safely — please do not request it again.';
+    } else if (mode === 'instant' || d.status === 'processing') {
       emoji = '✅'; title = 'KSh ' + _fmt(amt) + ' sent successfully';
       msg = 'On its way to ' + acct + '. Expected arrival: ' + (d.estimatedArrival || '1–3 minutes') + '.' +
             (d.reference ? '\nReference: ' + d.reference : '');
@@ -1106,6 +1110,7 @@ window.SokoniWalletV2 = (function () {
       approved:        { t: 'Approved',   c: 'var(--g)',   i: '✓'  },
       processing:      { t: 'Processing', c: '#f6c945',    i: '⏳' },
       approval_failed: { t: 'Retrying',   c: '#f6c945',    i: '⚠️' },
+      outcome_unknown: { t: 'Being confirmed', c: '#f6c945', i: '⏳' },
       paid:            { t: 'Paid',       c: 'var(--g)',   i: '✅' },
       rejected:        { t: 'Rejected',   c: 'var(--red)', i: '✕'  },
       failed:          { t: 'Failed',     c: 'var(--red)', i: '✕'  },

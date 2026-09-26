@@ -1337,7 +1337,7 @@ const W={
   },
   _payoutCard(p){
     const steps=['Requested','Approved','Processing','Paid'];
-    const order={requested:0,pending:0,approved:1,scheduled:2,processing:2,retry_scheduled:2,paid:3};
+    const order={requested:0,pending:0,approved:1,scheduled:2,processing:2,retry_scheduled:2,outcome_unknown:2,paid:3};
     const failed=['rejected','failed','reversed','approval_failed'].includes(p.status);
     const idx=order[p.status]!=null?order[p.status]:0;
     const sh=Array.isArray(p.statusHistory)?p.statusHistory:[];

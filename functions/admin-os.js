@@ -941,7 +941,7 @@ exports.adminGetPayout = onCall({ region: 'us-central1', maxInstances: 10, enfor
   const w  = walletSnap && walletSnap.exists ? walletSnap.data() : null;
   const tx = txSnap && txSnap.exists ? txSnap.data() : null;
   /* stage: -2 refunded, -1 failed/rejected, 1 pending … 5 paid. Drives the UI progress. */
-  const STAGE = { pending: 1, approved: 2, approving: 3, sending: 3, retry_scheduled: 3, processing: 4, paid: 5, settled_manually: 5, completed: 5, failed: -1, rejected: -1, refunded: -2 };
+  const STAGE = { pending: 1, approved: 2, approving: 3, sending: 3, retry_scheduled: 3, outcome_unknown: 3, processing: 4, paid: 5, settled_manually: 5, completed: 5, failed: -1, rejected: -1, refunded: -2 };
   return {
     found: true,
     request:   { id, providerName: x.sellerName || x.name || '', sellerUid: uid, amount: Number(x.amount) || 0, phone: x.accountNumber || x.phone || '', method: x.method || 'mpesa', createdAt: _iso(x.createdAt) },

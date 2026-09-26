@@ -36,7 +36,7 @@ const GATE = process.argv.includes('--gate');   /* --gate: fail ONLY on CRITICAL
   const issues = [];
   const refSeen = new Map();          /* gatewayReference → [ids] for duplicate detection */
   const reservedBySeller = new Map(); /* sellerUid → sum of IN-FLIGHT payout amounts (should == wallet.pendingPayout) */
-  const IN_FLIGHT = new Set(['pending', 'approved', 'approving', 'sending', 'processing', 'retry_scheduled']);
+  const IN_FLIGHT = new Set(['pending', 'approved', 'approving', 'sending', 'processing', 'retry_scheduled', 'outcome_unknown']);
 
   for (const d of snap.docs) {
     const x = d.data();

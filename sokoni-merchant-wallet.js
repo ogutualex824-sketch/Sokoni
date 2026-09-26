@@ -58,7 +58,7 @@
    off)". So:
 
        PENDING    pending · scheduled · approving · approved · processing ·
-                  retry_scheduled · approval_failed
+                  retry_scheduled · approval_failed · outcome_unknown
        COMPLETED  paid · settled_manually
        FAILED     failed · rejected
        REVERSED   reversed        ← its own state, never folded into COMPLETED
@@ -220,6 +220,7 @@
   var PAYOUT_STATE = {
     pending: 'pending', scheduled: 'pending', approving: 'pending',
     approved: 'pending', processing: 'pending', retry_scheduled: 'pending',
+    outcome_unknown: 'pending',
     approval_failed: 'pending',
     paid: 'completed', settled_manually: 'completed',
     failed: 'failed', rejected: 'failed',
@@ -244,6 +245,7 @@
     approved: 'Approved — awaiting manual disbursement',
     processing: 'Being sent',
     retry_scheduled: 'Retrying',
+    outcome_unknown: 'Being confirmed with M-PESA — funds held',
     approval_failed: 'Approval failed — under review',
     paid: 'Paid out',
     settled_manually: 'Paid out manually',

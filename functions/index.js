@@ -11664,6 +11664,7 @@ exports.getPayoutHistory       = wallet.getPayoutHistory;
 exports.adminProcessPayout     = wallet.adminProcessPayout;
 exports.adminGetPendingPayouts = wallet.adminGetPendingPayouts;
 exports.adminPayoutOps         = wallet.adminPayoutOps;
+exports.adminResolvePayoutOutcome = wallet.adminResolvePayoutOutcome;
 exports.reconcilePayouts       = wallet.reconcilePayouts;
 exports.processPayoutRetries   = wallet.processPayoutRetries;
 exports.sweepEarningsToWallet  = wallet.sweepEarningsToWallet;

@@ -890,6 +890,7 @@ window.SokoniAOS = (() => {
               <button class="aos-btn-sm danger" onclick="SokoniAOS.rejectPayout('${p.id}')">Reject</button>
             </td>
           </tr>`).join("")}</tbody></table>` : _emptyMsg("No pending payouts");
+        body.insertAdjacentHTML("beforeend", await _outcomeUnknownSection());
       } else if (tab === "disputes") {
         const data = await _call("adminGetDisputes", { status: "open", limit: 30 });
         const disputes = data.disputes || [];
@@ -1059,6 +1060,64 @@ window.SokoniAOS = (() => {
       return;
     }
     _toast("Payout approved", "success"); _financialTab("payouts");
+  }
+  /* OUTCOME_UNKNOWN payouts: a B2C request was sent and the provider gave no
+     definitive answer, so the money may or may not have left. Funds stay reserved
+     and nothing re-sends them. Listed for every admin; only a Super Admin can
+     resolve one, and only with provider evidence (wallet.js
+     adminResolvePayoutOutcome enforces all of it — this form is convenience). */
+  async function _outcomeUnknownSection() {
+    let list;
+    try { list = ((await _call("adminPayoutOps")).lists || {}).outcomeUnknown; }
+    catch (e) { return `<h3 style="margin-top:20px">Outcome unknown</h3><p class="aos-muted">Could not load: ${_esc(e.message)}</p>`; }
+    if (!Array.isArray(list)) return `<h3 style="margin-top:20px">Outcome unknown</h3><p class="aos-muted">—</p>`;
+    if (!list.length) return `<h3 style="margin-top:20px">Outcome unknown</h3>` + _emptyMsg("No payouts with an unknown provider outcome");
+    const sup = !!(_currentUser && _currentUser.isSuper);
+    return `<h3 style="margin-top:20px">Outcome unknown — confirm with IntaSend before resolving</h3>
+      <p class="aos-muted">The provider gave no definitive answer. Funds are held and will NOT be re-sent.
+      Check the IntaSend account, then record what it shows.${sup ? "" : " Only a Super Admin can resolve."}</p>
+      <table class="aos-table"><thead><tr><th>Payout</th><th>Seller</th><th>Amount</th><th>Destination</th><th>Since</th>${sup ? "<th>Resolve</th>" : ""}</tr></thead><tbody>
+      ${list.map(p => `<tr>
+        <td class="aos-mono">${_esc(p.id)}</td>
+        <td class="aos-mono">${_esc(p.sellerUid || "—")}</td>
+        <td>${p.amount != null ? _kes(p.amount) : "—"}</td>
+        <td class="aos-mono">${_esc(p.destinationMasked || "—")}</td>
+        <td class="aos-muted">${(() => { const t = p.updatedAt || p.createdAt; return _date(t && t._seconds != null ? { seconds: t._seconds } : t); })()}</td>
+        ${sup ? `<td><form class="aos-resolve" data-id="${_esc(p.id)}" onsubmit="event.preventDefault();SokoniAOS.resolvePayoutOutcome(this)">
+          <select name="decision" aria-label="Decision" required>
+            <option value="">IntaSend shows…</option>
+            <option value="paid">Transfer COMPLETED (paid)</option>
+            <option value="not_paid">No transfer (not paid)</option>
+          </select>
+          <select name="type" aria-label="Evidence type" required>
+            <option value="intasend_transaction">IntaSend transaction id</option>
+            <option value="provider_statement">Provider statement</option>
+            <option value="provider_support_confirmation">Provider support confirmation</option>
+          </select>
+          <input name="reference" aria-label="Evidence reference" placeholder="Transaction / statement ref" required minlength="4" maxlength="120">
+          <input name="note" aria-label="What you checked" placeholder="What you checked (min 20 chars)" required minlength="20" maxlength="1000">
+          <button class="aos-btn-sm" type="submit">Resolve</button>
+        </form></td>` : ""}
+      </tr>`).join("")}</tbody></table>`;
+  }
+  async function resolvePayoutOutcome(form) {
+    const id = form.getAttribute("data-id");
+    const v = (n) => (form.elements[n] && form.elements[n].value || "").trim();
+    const decision = v("decision");
+    if (!decision) { _toast("Choose what IntaSend shows", "error"); return; }
+    const label = decision === "paid" ? "settle it as PAID (the hold is released)" : "mark it NOT PAID (the funds return to the seller)";
+    if (!(await SK.dialog.confirm("This is final and recorded with your evidence. Only proceed if the IntaSend account confirms it.", null, null,
+      { title: "Resolve " + id + " — " + label + "?", variant: "danger", confirmLabel: "Resolve" }))) return;
+    const btn = form.querySelector("button"); if (btn) btn.disabled = true;
+    try {
+      const r = await _call("adminResolvePayoutOutcome", { requestId: id, decision, evidence: { type: v("type"), reference: v("reference"), note: v("note") } });
+      _toast(r.alreadyResolved ? "Already resolved as " + r.decision : "Resolved — payout " + r.status, "success");
+    } catch (e) {
+      _toast(e.message, "error");
+      if (btn) btn.disabled = false;
+      return;
+    }
+    _financialTab("payouts");
   }
   async function rejectPayout(id) {
     const note = prompt("Rejection reason:");
@@ -3224,6 +3283,7 @@ window.SokoniAOS = (() => {
     approveAllPayouts,
     approvePayout,
     rejectPayout,
+    resolvePayoutOutcome,
     resolveDispute,
     processRefund,
     // Support

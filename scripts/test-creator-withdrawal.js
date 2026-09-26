@@ -12,7 +12,8 @@
  *   - approval initiates B2C and leaves the payout PROCESSING — NOT paid
  *   - only the provider's COMPLETE webhook marks it paid; a replay cannot flip it
  *   - a permanent provider failure → FAILED, funds returned, never paid
- *   - a transient provider failure → retry_scheduled, never paid
+ *   - an ambiguous provider failure → outcome_unknown (never retried), never paid
+ *     (the full ambiguous-outcome machine: scripts/test-payout-outcome-unknown.js)
  *   - a second approval cannot disburse twice
  *
  *   node scripts/test-creator-withdrawal.js
@@ -111,7 +112,7 @@ const ck = (l, ok, d) => { quiet('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d ? ' 
   B2C = 'transient';
   await approve('pout_K5').catch(() => {});
   const f5 = await read('payoutRequests/pout_K5');
-  ck('transient provider failure → retry_scheduled, not paid', f5.status === 'retry_scheduled', f5.status);
+  ck('ambiguous provider failure → outcome_unknown (not retried), not paid', f5.status === 'outcome_unknown', f5.status);
   ck('…funds still reserved (not released, not paid)', (await read('wallets/p3')).pendingPayout === 200);
 
   quiet('\n  ' + pass + ' passed, ' + fail + ' failed\n');

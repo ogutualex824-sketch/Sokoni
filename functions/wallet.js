@@ -74,11 +74,23 @@ async function _settlePayoutPaid(db, rid, extra = {}) {
      be conflated in the UI or in reporting. */
   const finalStatus = extra.finalStatus || 'paid';
   let settled = null;   // set to the payout data only when THIS call performs the settlement
+  let outcome = { applied: false, status: null };
   await db.runTransaction(async (t) => {
+    settled = null; outcome = { applied: false, status: null };   // reset per optimistic attempt
     const reqSnap = await t.get(reqRef);
     if (!reqSnap.exists) return;
     const payout = reqSnap.data();
+    outcome.status = payout.status;
     if (['paid', 'settled_manually'].includes(payout.status)) return;   // idempotent
+    /* The funds of a rejected/failed/reversed payout were already RETURNED to the
+       seller's balance — settling it now would release a hold that no longer exists
+       and pay the same money twice. A later gateway COMPLETE for such a payout is
+       corrected by reconcileB2CPayout, which also claws back the erroneous refund. */
+    if (['rejected', 'failed', 'reversed'].includes(payout.status)) return;
+    if (extra.requireStatus && payout.status !== extra.requireStatus) return;
+    if (extra.refuseStatuses && extra.refuseStatuses.includes(payout.status)) return;
+    const res = extra.resolution ? await _readResolution(t, extra.resolution) : null;
+    if (res && res.blocked) { outcome.blocked = res.blocked; return; }
     const walletRef = db.collection('wallets').doc(payout.sellerUid);
     const txRef     = db.collection('walletTransactions').doc(`${payout.sellerUid}_${rid}_payout`);
     const txExisting = await t.get(txRef);
@@ -105,14 +117,44 @@ async function _settlePayoutPaid(db, rid, extra = {}) {
         externalReference: extra.externalReference || null,
         attestation: extra.attestation || null,
       } : {}),
+      ...(extra.resolution ? { outcomeResolution: extra.resolution.record } : {}),
     });
+    if (extra.resolution) _writeResolution(t, extra.resolution, payout, finalStatus);
     settled = { ...payout, status: finalStatus, intasendRef: extra.intasendRef || payout.intasendRef };
+    outcome = { applied: true, status: finalStatus };
   });
   if (settled) {
     /* Record end-to-end processing latency (request → paid) for analytics. */
     const startMs = settled.createdAt?.toMillis ? settled.createdAt.toMillis() : null;
     if (startMs) await _payoutMetric(db, 'paid', 0, Date.now() - startMs);
     _notifyPayout('paid', settled, rid);
+  }
+  return outcome;
+}
+
+/* ─── OUTCOME_UNKNOWN resolution record (see adminResolvePayoutOutcome) ───────
+   Written INSIDE the settle/refund transaction, so the financial transition and
+   its audit record commit together or not at all. payoutResolutions/{rid} is
+   create()d — it is the exactly-once anchor: a second resolution of the same
+   payout cannot commit. A 'paid' decision also create()s
+   payoutEvidenceClaims/{sha256(reference)}, so one provider transaction can
+   never be used to settle two payouts. Reads happen before any write. */
+async function _readResolution(t, resolution) {
+  if (resolution.claimRef) {
+    const c = await t.get(resolution.claimRef);
+    if (c.exists && c.data().requestId !== resolution.record.requestId) return { blocked: 'evidence_reused' };
+  }
+  const r = await t.get(resolution.ref);
+  if (r.exists) return { blocked: 'already_resolved' };
+  return {};
+}
+function _writeResolution(t, resolution, payout, resultingStatus) {
+  t.create(resolution.ref, {
+    ...resolution.record, resultingStatus,
+    sellerUid: payout.sellerUid, amount: payout.amount, previousStatus: payout.status,
+  });
+  if (resolution.claimRef) {
+    t.create(resolution.claimRef, { requestId: resolution.record.requestId, reference: resolution.record.evidence.reference, createdAt: Timestamp.now() });
   }
 }
 
@@ -124,11 +166,19 @@ async function _settlePayoutPaid(db, rid, extra = {}) {
 async function _refundPayout(db, rid, newStatus, extra = {}) {
   const reqRef = db.collection('payoutRequests').doc(rid);
   let refunded = null;
+  let outcome = { applied: false, status: null };
   await db.runTransaction(async (t) => {
+    refunded = null; outcome = { applied: false, status: null };   // reset per optimistic attempt
     const reqSnap = await t.get(reqRef);
     if (!reqSnap.exists) return;
     const payout = reqSnap.data();
-    if (['paid', 'rejected', 'failed'].includes(payout.status)) return;   // terminal — idempotent
+    outcome.status = payout.status;
+    /* terminal — idempotent. settled_manually and reversed are terminal too: the
+       money of the first left the business, the second was already returned. */
+    if (['paid', 'settled_manually', 'rejected', 'failed', 'reversed'].includes(payout.status)) return;
+    if (extra.requireStatus && payout.status !== extra.requireStatus) return;
+    const res = extra.resolution ? await _readResolution(t, extra.resolution) : null;
+    if (res && res.blocked) { outcome.blocked = res.blocked; return; }
     const walletRef = db.collection('wallets').doc(payout.sellerUid);
     /* Release the daily payout-velocity slot this request consumed at reserve time. A
        failed/rejected payout returned the funds → it must NOT burn the seller's 3-per-day
@@ -153,11 +203,15 @@ async function _refundPayout(db, rid, newStatus, extra = {}) {
       statusHistory: FieldValue.arrayUnion(_payoutEvent(newStatus, extra.detail || 'Payout refunded')),
       ...(extra.note ? { note: extra.note } : {}),
       ...(extra.processedBy ? { processedBy: extra.processedBy } : {}),
+      ...(extra.resolution ? { outcomeResolution: extra.resolution.record } : {}),
     });
+    if (extra.resolution) _writeResolution(t, extra.resolution, payout, newStatus);
     refunded = payout;
+    outcome = { applied: true, status: newStatus };
   });
   /* Notify only when a provider FAILURE returned the funds (not an admin reject). */
   if (refunded && newStatus === 'failed') _notifyPayout('failed', refunded, rid);
+  return outcome;
 }
 
 /**
@@ -227,7 +281,7 @@ async function _todayPayoutTotal(db, uid) {
 async function _hasActivePayout(db, uid) {
   try {
     const snap = await db.collection('payoutRequests').where('sellerUid', '==', uid).limit(50).get();
-    return snap.docs.some((d) => ['pending', 'approving', 'approved', 'processing', 'approval_failed', 'scheduled'].includes(d.data().status));
+    return snap.docs.some((d) => ['pending', 'approving', 'approved', 'processing', 'approval_failed', 'scheduled', 'outcome_unknown'].includes(d.data().status));
   } catch (_) { return true; }   // fail safe → treat as active → not instant
 }
 
@@ -285,64 +339,107 @@ async function _assessPayoutRisk(db, uid, amount, method, pin, cfg) {
 
 /**
  * Initiate an IntaSend B2C disbursement for a reserved payout and advance its status.
- * Shared by the instant path (requestSellerPayout) and admin approval. On success →
- * 'processing' + intasendRef (webhook later confirms 'paid'). On failure → parks at
- * 'approval_failed' WITHOUT refunding (an initiate error can be ambiguous). Returns
- * { ok, intasendRef?, error? }.
+ * Shared by the instant path (requestSellerPayout) and admin approval. Runs from the
+ * 'approving' claim state. The provider's answer decides the next state:
+ *
+ *   2xx                       → 'processing' + intasendRef (the webhook later confirms 'paid')
+ *   definitive rejection      → 'failed', funds returned to the balance ONCE (_refundPayout)
+ *     (a 4xx the provider answered, except 408/409/425/429; or a failure BEFORE any
+ *      request was sent)
+ *   anything else             → 'outcome_unknown': funds STAY reserved, NEVER retried
+ *     (timeout, reset, DNS, 5xx, 408/409/425/429, an unreadable answer)
+ *
+ * Why no retry: the B2C initiate body carries NO reference IntaSend deduplicates on
+ * (payment-adapters.js sendMoneyB2C), so an ambiguous attempt may already have sent
+ * the money — a second request can pay the seller twice. The same missing reference
+ * means the webhook cannot find a payout that never received a tracking id, so an
+ * outcome_unknown payout is resolved only by adminResolvePayoutOutcome (Super Admin,
+ * with provider evidence). Returns { ok, intasendRef?, outcomeUnknown?, error? }.
  */
 async function _disburseB2C(db, rid, payout) {
   const reqRef = db.collection('payoutRequests').doc(rid);
   const ctx    = { ...payout, id: rid };
   const tries  = (payout.retryCount || 0) + 1;
   _plog('b2c_initiate', ctx, { attempt: tries });
+
+  /* SOKONI Pay convergence — the withdrawal goes through the provider-agnostic
+     adapter layer (payment-adapters.js). Sandbox is config-driven. A failure HERE
+     happens before any request leaves the process: provably nothing was sent. */
+  let adapter;
   try {
-    /* SOKONI Pay convergence — the withdrawal no longer calls IntaSend directly. It
-       goes through the provider-agnostic adapter layer (payment-adapters.js), so the
-       gateway is a swappable plugin. Sandbox is config-driven (config/payouts.sandbox
-       or INTASEND_SANDBOX). sendMoneyB2C throws a gateway-tagged Error on failure, which
-       the catch below turns into retry/refund — unchanged behaviour. */
     const { getAdapter } = require('./payment-adapters');
     const useSandbox = process.env.INTASEND_SANDBOX === 'true' || !!(payout.sandbox);
-    const adapter = getAdapter('intasend', { key: INTASEND_KEY.value(), sandbox: useSandbox });
-    const resp = await adapter.sendMoneyB2C({
+    adapter = getAdapter('intasend', { key: INTASEND_KEY.value(), sandbox: useSandbox });
+  } catch (e) {
+    const errMsg = String(e.message || e);
+    await _refundPayout(db, rid, 'failed', { detail: 'Payout rail unavailable — no provider request was sent: ' + errMsg.slice(0, 150) });
+    await _payoutMetric(db, 'b2cErrors');
+    _plog('b2c_failed', { ...ctx, status: 'failed' }, { kind: 'not_sent', error: errMsg.slice(0, 160) });
+    return { ok: false, error: errMsg };
+  }
+
+  let resp;
+  try {
+    resp = await adapter.sendMoneyB2C({
       phone: payout.accountNumber, amountKES: payout.amount,
       ref: rid, narrative: 'SOKONI Earnings Payout',
     });
-    const ref = resp?.tracking_id || resp?.invoice_id || resp?.file_id || null;
-    await reqRef.update({
-      status: 'processing', intasendRef: ref, b2cInitiatedAt: Timestamp.now(), updatedAt: Timestamp.now(),
-      b2cResponse: _redact(resp),
-      /* Immutable gateway evidence — the record that justifies eventually marking paid.
-         confirmedAt/webhookReceivedAt are filled by the webhook on success. */
-      gatewayName: 'IntaSend', gatewayReference: ref,
-      gatewayStatus: String(resp?.status || resp?.state || 'accepted'),
-      gatewayResponse: _redact(resp), submittedAt: Timestamp.now(),
-      statusHistory: FieldValue.arrayUnion(_payoutEvent('processing', 'IntaSend B2C initiated' + (ref ? ' · ' + ref : ''))),
-    });
-    await _payoutMetric(db, 'b2cInitiated');
-    _plog('b2c_ok', { ...ctx, intasendRef: ref, status: 'processing' });
-    return { ok: true, intasendRef: ref };
   } catch (e) {
     const errMsg = String(e.message || e);
-    const kind   = _classifyB2CError(errMsg);
-    if (kind === 'retryable' && tries <= PAYOUT_RETRY_MAX) {
-      const delay = Math.min(PAYOUT_RETRY_BASE_MS * Math.pow(2, tries - 1), PAYOUT_RETRY_MAX_MS);
-      await reqRef.update({
-        status: 'retry_scheduled', retryCount: tries, retryAt: Timestamp.fromMillis(Date.now() + delay),
-        b2cError: errMsg.slice(0, 300), updatedAt: Timestamp.now(),
-        statusHistory: FieldValue.arrayUnion(_payoutEvent('retry_scheduled', `Transient B2C error (try ${tries}/${PAYOUT_RETRY_MAX}) — retry in ${Math.round(delay / 60000)}m: ` + errMsg.slice(0, 120))),
-      });
-      await _payoutMetric(db, 'b2cRetries');
-      _plog('b2c_retry', { ...ctx, status: 'retry_scheduled' }, { attempt: tries, delayMs: delay, error: errMsg.slice(0, 160) });
-      return { ok: false, retry: true, error: errMsg };
+    const kind   = _classifyB2CError(e);
+    if (kind === 'rejected') {
+      /* The provider answered NO — nothing was sent → Failed + funds returned once. */
+      await _refundPayout(db, rid, 'failed', { detail: 'Provider rejected the B2C request: ' + errMsg.slice(0, 150) });
+      await _payoutMetric(db, 'b2cErrors');
+      _plog('b2c_failed', { ...ctx, status: 'failed' }, { kind, attempt: tries, error: errMsg.slice(0, 160) });
+      return { ok: false, error: errMsg };
     }
-    /* Permanent, or retries exhausted → Failed immediately + refund the seller (the
-       initiate was rejected, so money never left) for admin review. */
-    await _refundPayout(db, rid, 'failed', { detail: (kind === 'permanent' ? 'Permanent B2C error: ' : 'Retries exhausted: ') + errMsg.slice(0, 150) });
-    await _payoutMetric(db, 'b2cErrors');
-    _plog('b2c_failed', { ...ctx, status: 'failed' }, { kind, attempt: tries, error: errMsg.slice(0, 160) });
-    return { ok: false, error: errMsg };
+    await _markOutcomeUnknown(db, rid, errMsg, e && e.gateway ? e.gateway.http : null);
+    await _payoutMetric(db, 'b2cOutcomeUnknown');
+    _plog('b2c_outcome_unknown', { ...ctx, status: 'outcome_unknown' }, { attempt: tries, error: errMsg.slice(0, 160) });
+    return { ok: false, outcomeUnknown: true, error: errMsg };
   }
+
+  /* Accepted. Recorded OUTSIDE the send's try: a failure to record an accepted send
+     must never be classified as a provider error (that path used to schedule a
+     resend). If this write throws, the payout stays 'approving' and reconcilePayouts
+     flags it for review — it is never sent again. */
+  const ref = resp?.tracking_id || resp?.invoice_id || resp?.file_id || null;
+  await reqRef.update({
+    status: 'processing', intasendRef: ref, b2cInitiatedAt: Timestamp.now(), updatedAt: Timestamp.now(),
+    b2cResponse: _redact(resp),
+    /* Immutable gateway evidence — the record that justifies eventually marking paid.
+       confirmedAt/webhookReceivedAt are filled by the webhook on success. */
+    gatewayName: 'IntaSend', gatewayReference: ref,
+    gatewayStatus: String(resp?.status || resp?.state || 'accepted'),
+    gatewayResponse: _redact(resp), submittedAt: Timestamp.now(),
+    statusHistory: FieldValue.arrayUnion(_payoutEvent('processing', 'IntaSend B2C initiated' + (ref ? ' · ' + ref : ''))),
+  });
+  await _payoutMetric(db, 'b2cInitiated');
+  _plog('b2c_ok', { ...ctx, intasendRef: ref, status: 'processing' });
+  return { ok: true, intasendRef: ref };
+}
+
+/**
+ * Park a payout at 'outcome_unknown' — only from the 'approving' claim state, in a
+ * transaction, so a concurrent terminal transition is never overwritten. The funds
+ * stay reserved (balance already debited, pendingPayout still held). Nothing in the
+ * system re-sends from this state: processPayoutRetries skips it, adminProcessPayout
+ * refuses it; only adminResolvePayoutOutcome or a matching provider webhook ends it.
+ */
+async function _markOutcomeUnknown(db, rid, errMsg, httpStatus) {
+  const reqRef = db.collection('payoutRequests').doc(rid);
+  await db.runTransaction(async (t) => {
+    const s = await t.get(reqRef);
+    if (!s.exists || s.data().status !== 'approving') return;
+    t.update(reqRef, {
+      status: 'outcome_unknown', outcomeUnknownAt: Timestamp.now(), updatedAt: Timestamp.now(),
+      b2cError: String(errMsg).slice(0, 300), b2cHttpStatus: Number.isInteger(httpStatus) ? httpStatus : null,
+      reconcileFlag: 'needs_review', reconcileFlaggedAt: Timestamp.now(),
+      statusHistory: FieldValue.arrayUnion(_payoutEvent('outcome_unknown',
+        'No definitive provider answer — the transfer may or may not have been sent. Funds stay reserved; NOT retried. Resolve with provider evidence. ' + String(errMsg).slice(0, 120))),
+    });
+  });
 }
 
 /** Mask an M-Pesa/account number for user-facing messages: 0712****678. */
@@ -411,25 +508,28 @@ function _redact(obj) {
   } catch (_) { return null; }
 }
 
-/* Retry policy for transient B2C failures. */
-const PAYOUT_RETRY_MAX     = 4;
-const PAYOUT_RETRY_BASE_MS = 2 * 60 * 1000;   // 2 min
-const PAYOUT_RETRY_MAX_MS  = 30 * 60 * 1000;  // cap at 30 min
-
 /**
- * Classify a B2C failure. 'retryable' = transient (network/timeout/5xx/429) → back off
- * and retry. 'permanent' = won't fix itself (invalid number, insufficient PROVIDER
- * funds, 4xx validation) → move to Failed immediately for review.
+ * Classify a B2C initiate failure — the ONLY question is whether the provider
+ * definitively did NOT execute the transfer.
+ *   'rejected' — IntaSend answered with a 4xx: it read the request and refused it
+ *                (invalid number, validation, insufficient float). Nothing was sent.
+ *   'unknown'  — everything else: no answer (timeout, reset, DNS, socket), a 5xx, or a
+ *                4xx that does not prove refusal of THIS request (408 timeout, 409
+ *                conflict, 425 too early, 429 rate limit). The transfer may have
+ *                executed → the caller parks it at outcome_unknown and never resends.
+ * The status comes from the adapter's structured e.gateway.http, else from the
+ * `(NNN)` in its message; a message with no status is a transport error → unknown.
  */
-function _classifyB2CError(msg) {
-  const m = String(msg || '').toLowerCase();
-  if (/timeout|econnreset|etimedout|econnrefused|network|socket|enotfound|eai_again|fetch failed/.test(m)) return 'retryable';
-  const statusMatch = m.match(/\((\d{3})\)/);
-  const status = statusMatch ? Number(statusMatch[1]) : 0;
-  if (status >= 500 || status === 429) return 'retryable';
-  if (/invalid.*(phone|number|msisdn|account)|unregistered|insufficient|not.*enough|balance/.test(m)) return 'permanent';
-  if (status >= 400 && status < 500) return 'permanent';
-  return 'retryable';   // unknown → retryable, but bounded by PAYOUT_RETRY_MAX
+const _AMBIGUOUS_4XX = new Set([408, 409, 425, 429]);
+function _classifyB2CError(err) {
+  const g = err && err.gateway && Number.isInteger(err.gateway.http) ? err.gateway.http : null;
+  let status = g;
+  if (status == null) {
+    const m = String((err && err.message) || err || '').match(/\((\d{3})\)/);
+    status = m ? Number(m[1]) : null;
+  }
+  if (status != null && status >= 400 && status < 500 && !_AMBIGUOUS_4XX.has(status)) return 'rejected';
+  return 'unknown';
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -989,13 +1089,15 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true, secret
         message: 'Sending your money…',
       };
     }
-    if (res.retry) {
-      /* Transient provider error — funds reserved, auto-retry scheduled. */
+    if (res.outcomeUnknown) {
+      /* No definitive provider answer — the money may or may not have left. Funds stay
+         reserved; nothing is re-sent; an admin confirms with the provider. Never
+         reported as sent. */
       return {
-        success: true, requestId: reqId, mode: 'instant', status: 'retry_scheduled',
+        success: true, requestId: reqId, mode: 'instant', status: 'outcome_unknown',
         amount: amt, accountNumber: sanitizedAccount,
-        estimatedArrival: 'A few minutes',
-        message: 'Sending your money… completing shortly.',
+        estimatedArrival: 'Being confirmed',
+        message: 'We are confirming this payout with M-PESA. Your funds are held safely — please do not request it again.',
       };
     }
     /* Permanent failure — funds were returned to the wallet. */
@@ -1111,17 +1213,30 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, invoker
     if (!externalReference || !attestation) {
       throw new HttpsError('failed-precondition', 'Manual settlement requires externalReference (e.g. M-Pesa code) + attestation that funds were sent.');
     }
-    await _settlePayoutPaid(db, rid, {
-      finalStatus: 'settled_manually', processedBy: request.auth.uid,
+    /* An outcome_unknown payout is NOT settled by attestation: a B2C request was sent
+       and may have executed, so it needs provider evidence and a Super Admin — the
+       controlled path is adminResolvePayoutOutcome. */
+    if (payout.status === 'outcome_unknown') {
+      throw new HttpsError('failed-precondition', 'This payout has an unknown provider outcome — resolve it with provider evidence (adminResolvePayoutOutcome), not a manual mark.');
+    }
+    const settled = await _settlePayoutPaid(db, rid, {
+      finalStatus: 'settled_manually', processedBy: request.auth.uid, refuseStatuses: ['outcome_unknown'],
       externalReference, attestation, detail: 'Settled manually — ref ' + externalReference,
     });
-    await _payoutMetric(db, 'settledManually');
-    return { success: true, status: 'settled_manually', externalReference };
+    if (!settled.applied && !['paid', 'settled_manually'].includes(settled.status)) {
+      throw new HttpsError('failed-precondition', settled.status === 'outcome_unknown'
+        ? 'This payout has an unknown provider outcome — resolve it with provider evidence (adminResolvePayoutOutcome), not a manual mark.'
+        : `Cannot settle a payout that is "${settled.status}" — its funds were already returned.`);
+    }
+    if (settled.applied) await _payoutMetric(db, 'settledManually');
+    return { success: true, status: settled.applied ? 'settled_manually' : settled.status, externalReference, ...(settled.applied ? {} : { alreadySettled: true }) };
   }
 
   // ── REJECTED (refund reserved funds) — only pre-disbursement states ─────────
   if (status === 'rejected') {
-    if (!['pending', 'approved', 'approval_failed', 'retry_scheduled'].includes(payout.status)) {
+    /* NOT retry_scheduled / outcome_unknown: a B2C request was already sent for those
+       and may have executed — returning the funds could pay the seller twice. */
+    if (!['pending', 'approved', 'approval_failed'].includes(payout.status)) {
       throw new HttpsError('failed-precondition', `Cannot reject a payout that is "${payout.status}" — funds may already be disbursed.`);
     }
     await _refundPayout(db, rid, 'rejected', { processedBy: request.auth.uid, note: _san(note, 500) || null, detail: 'Rejected by admin' });
@@ -1130,7 +1245,9 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, invoker
   }
 
   // ── APPROVED → (optionally) auto-disburse via IntaSend B2C ──────────────────
-  if (!['pending', 'approval_failed', 'retry_scheduled'].includes(payout.status)) {
+  /* NOT retry_scheduled / outcome_unknown — approving would send a SECOND B2C request
+     for a transfer that may already have executed. */
+  if (!['pending', 'approval_failed'].includes(payout.status)) {
     throw new HttpsError('failed-precondition', `Cannot approve a payout that is "${payout.status}".`);
   }
   /* Atomic gate: flip to a transient 'approving' so a concurrent approve can't
@@ -1139,7 +1256,7 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, invoker
   await db.runTransaction(async (t) => {
     const s  = await t.get(reqRef);
     const st = s.exists ? s.data().status : null;
-    if (!['pending', 'approval_failed', 'retry_scheduled'].includes(st)) return;
+    if (!['pending', 'approval_failed'].includes(st)) return;
     t.update(reqRef, {
       status: 'approving', approvedAt: Timestamp.now(), processedBy: request.auth.uid,
       note: _san(note, 500) || payout.note || null, updatedAt: Timestamp.now(),
@@ -1164,11 +1281,118 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, invoker
   // Automated M-Pesa disbursement via the shared B2C helper (webhook confirms 'paid').
   const res = await _disburseB2C(db, rid, { ...payout, id: rid });
   if (res.ok)    return { success: true, status: 'processing', intasendRef: res.intasendRef };
-  if (res.retry) return { success: true, status: 'retry_scheduled', message: 'Transient provider error — automatic retry scheduled.' };
+  if (res.outcomeUnknown) return { success: true, status: 'outcome_unknown', message: 'No definitive answer from the provider — funds stay reserved and the payout will NOT be re-sent. Confirm with IntaSend, then resolve it with evidence.' };
   /* Structured gateway failure (NOT bare "internal") — the admin UI shows the real reason. */
   throw new HttpsError('failed-precondition',
     'PAYOUT_GATEWAY_FAILED — ' + (res.error || 'IntaSend B2C error') + ' · funds returned to the seller.',
     { code: 'PAYOUT_GATEWAY_FAILED', gateway: 'IntaSend', reason: res.error || null });
+});
+
+// ─── 8b. adminResolvePayoutOutcome — evidence-based end of OUTCOME_UNKNOWN ────
+/**
+ * The ONLY way an 'outcome_unknown' payout is ended by a person. There is no safe
+ * provider status lookup for a B2C transfer that never returned a tracking id
+ * (the B2C request carries no reference IntaSend can be queried by, and
+ * /api/v1/payment/status/ is the COLLECTION invoice lookup) — so none is invented.
+ * A Super Admin confirms the outcome in the IntaSend account and records it:
+ *
+ *   decision 'paid'     evidence.type 'intasend_transaction', evidence.reference =
+ *                       the IntaSend transfer id → settled 'paid' (hold released,
+ *                       ledger row written). One provider transfer settles ONE
+ *                       payout: payoutEvidenceClaims/{sha256(ref)} is create()d, and
+ *                       a payout already carrying that intasendRef is refused.
+ *   decision 'not_paid' evidence.type 'provider_statement' |
+ *                       'provider_support_confirmation' → 'failed', funds returned
+ *                       to the balance once.
+ *
+ * Both require a written note. The transition, the ledger effect and the audit
+ * record (payoutResolutions/{rid}: who, when, previous state, decision, evidence,
+ * resulting state) commit in ONE transaction, only while the payout is still
+ * 'outcome_unknown'. Concurrent or repeated calls yield one terminal outcome: a
+ * repeat of the same decision is a no-op, a contradicting one is refused.
+ */
+const _RESOLUTION_EVIDENCE = {
+  paid:     ['intasend_transaction'],
+  not_paid: ['provider_statement', 'provider_support_confirmation'],
+};
+exports.adminResolvePayoutOutcome = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
+  _requireAuth(request);
+  if (request.auth.token?.superAdmin !== true) throw new HttpsError('permission-denied', 'Super admin only');
+  const d = request.data || {};
+  const rid = _san(d.requestId, 128);
+  if (!rid || !/^[A-Za-z0-9_-]+$/.test(rid)) throw new HttpsError('invalid-argument', 'requestId is required');
+  const decision = String(d.decision || '');
+  if (!Object.prototype.hasOwnProperty.call(_RESOLUTION_EVIDENCE, decision)) throw new HttpsError('invalid-argument', 'decision must be "paid" or "not_paid"');
+  const ev = d.evidence && typeof d.evidence === 'object' ? d.evidence : {};
+  const evType = String(ev.type || '');
+  if (!_RESOLUTION_EVIDENCE[decision].includes(evType)) {
+    throw new HttpsError('invalid-argument', `evidence.type for "${decision}" must be one of: ${_RESOLUTION_EVIDENCE[decision].join(', ')}`);
+  }
+  const reference = _san(ev.reference, 120);
+  if (!/^[A-Za-z0-9._:\/-]{4,120}$/.test(reference)) throw new HttpsError('invalid-argument', 'evidence.reference is required (the provider transaction / statement reference)');
+  const note = _san(ev.note, 1000);
+  if (note.length < 20) throw new HttpsError('invalid-argument', 'evidence.note must describe what was checked (at least 20 characters)');
+
+  const db = getFirestore();
+  const reqRef = db.collection('payoutRequests').doc(rid);
+  const snap = await reqRef.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Payout request not found');
+  const resRef = db.collection('payoutResolutions').doc(rid);
+
+  /* A repeat after the payout was resolved: same decision → no-op, other → refused. */
+  const already = async () => {
+    const r = await resRef.get();
+    if (!r.exists) return null;
+    const x = r.data();
+    if (x.decision !== decision) {
+      throw new HttpsError('failed-precondition', `Already resolved as "${x.decision}" by ${x.resolvedBy} — a contradicting resolution is refused.`);
+    }
+    return { success: true, alreadyResolved: true, requestId: rid, decision: x.decision, status: x.resultingStatus };
+  };
+  if (snap.data().status !== 'outcome_unknown') {
+    const prior = await already();
+    if (prior) return prior;
+    throw new HttpsError('failed-precondition', `Payout is "${snap.data().status}" — only an outcome_unknown payout is resolved here.`);
+  }
+
+  if (decision === 'paid') {
+    const clash = await db.collection('payoutRequests').where('intasendRef', '==', reference).limit(2).get();
+    if (clash.docs.some((x) => x.id !== rid)) {
+      throw new HttpsError('failed-precondition', 'That IntaSend transaction is already recorded on another payout.');
+    }
+  }
+
+  const record = {
+    requestId: rid, decision,
+    evidence: { type: evType, reference, note },
+    resolvedBy: request.auth.uid, resolvedByEmail: request.auth.token?.email || null,
+    resolvedAt: Timestamp.now(),
+  };
+  const resolution = {
+    ref: resRef, record,
+    claimRef: decision === 'paid' ? db.collection('payoutEvidenceClaims').doc(_sha256(reference.toUpperCase())) : null,
+  };
+  const outcome = decision === 'paid'
+    ? await _settlePayoutPaid(db, rid, {
+      finalStatus: 'paid', requireStatus: 'outcome_unknown', resolution,
+      intasendRef: reference, processedBy: request.auth.uid,
+      detail: 'Outcome confirmed PAID from provider evidence (' + evType + ' ' + reference + ') by Super Admin',
+    })
+    : await _refundPayout(db, rid, 'failed', {
+      requireStatus: 'outcome_unknown', resolution, processedBy: request.auth.uid,
+      detail: 'Outcome confirmed NOT PAID from provider evidence (' + evType + ' ' + reference + ') by Super Admin — funds returned',
+    });
+
+  if (!outcome.applied) {
+    if (outcome.blocked === 'evidence_reused') throw new HttpsError('failed-precondition', 'That IntaSend transaction is already recorded on another payout.');
+    const prior = await already();
+    if (prior) return prior;
+    throw new HttpsError('failed-precondition', `Payout is "${outcome.status}" — only an outcome_unknown payout is resolved here.`);
+  }
+  await _payoutMetric(db, decision === 'paid' ? 'outcomeResolvedPaid' : 'outcomeResolvedNotPaid');
+  _plog('outcome_resolved', { id: rid, status: outcome.status }, { decision, evidenceType: evType, resolvedBy: request.auth.uid });
+  console.warn('[adminResolvePayoutOutcome] ' + JSON.stringify({ requestId: rid, decision, resultingStatus: outcome.status, resolvedBy: request.auth.uid, evidenceType: evType }));
+  return { success: true, requestId: rid, decision, status: outcome.status };
 });
 
 // ─── 9. adminGetPendingPayouts ─────────────────────────────────────────────
@@ -1401,42 +1625,52 @@ exports.reconcilePayouts = onSchedule(
   }
 );
 
-// ─── 11b. processPayoutRetries — retry queue for transient B2C failures ──────
+// ─── 11b. processPayoutRetries — retired resend; parks legacy retries ────────
 /**
- * Scheduled retry of payouts parked in 'retry_scheduled' whose backoff window has
- * elapsed. Re-runs _disburseB2C (which re-classifies: another transient error backs
- * off again up to PAYOUT_RETRY_MAX, then fails+refunds; a permanent error fails+
- * refunds immediately). Claims each atomically so a slow run can't double-fire.
+ * This job used to RE-SEND every 'retry_scheduled' payout once its backoff elapsed.
+ * 'retry_scheduled' was written after a timeout / 5xx / 429 — exactly the answers
+ * that do not prove the first B2C request failed — and the B2C request carries no
+ * reference IntaSend deduplicates on, so a resend could pay the seller twice
+ * (executed locally: timeout → retry job → a second send for the same payout).
+ *
+ * It now NEVER calls the provider (no secret is bound to it). It moves any legacy
+ * 'retry_scheduled' payout to 'outcome_unknown' — funds stay reserved — for
+ * evidence-based resolution (adminResolvePayoutOutcome). _disburseB2C no longer
+ * writes 'retry_scheduled', so after one run this finds nothing. It never reads or
+ * touches 'outcome_unknown'. The export and schedule are kept so the deployed
+ * function is replaced, not deleted.
  */
 exports.processPayoutRetries = onSchedule(
-  { schedule: 'every 5 minutes', region: 'us-central1', timeoutSeconds: 300, memory: '256MiB', secrets: [INTASEND_KEY] },
+  { schedule: 'every 5 minutes', region: 'us-central1', timeoutSeconds: 300, memory: '256MiB' },
   async () => {
-    const db  = getFirestore();
-    const now = Date.now();
+    const db   = getFirestore();
     const snap = await db.collection('payoutRequests')
       .where('status', '==', 'retry_scheduled').limit(50).get().catch(() => null);
     if (!snap || snap.empty) return;
 
-    let ran = 0;
+    let parked = 0;
     for (const doc of snap.docs) {
-      const p = doc.data();
-      if (p.retryAt && p.retryAt.toMillis() > now) continue;   // backoff not elapsed
-      /* Claim atomically: flip 'retry_scheduled' → 'approving' so a concurrent run
-         can't disburse twice. */
-      let claimed = false;
+      let moved = false;
       await db.runTransaction(async (t) => {
+        moved = false;
         const s = await t.get(doc.ref);
-        if (s.exists && s.data().status === 'retry_scheduled') {
-          t.update(doc.ref, { status: 'approving', updatedAt: Timestamp.now() });
-          claimed = true;
-        }
+        if (!s.exists || s.data().status !== 'retry_scheduled') return;
+        t.update(doc.ref, {
+          status: 'outcome_unknown', outcomeUnknownAt: Timestamp.now(), updatedAt: Timestamp.now(),
+          reconcileFlag: 'needs_review', reconcileFlaggedAt: Timestamp.now(),
+          statusHistory: FieldValue.arrayUnion(_payoutEvent('outcome_unknown',
+            'Legacy automatic retry retired — the earlier B2C attempt had no definitive answer and may have executed. Funds stay reserved; resolve with provider evidence.')),
+        });
+        moved = true;
       }).catch(() => {});
-      if (!claimed) continue;
-      _plog('retry_run', { ...p, id: doc.id }, { attempt: (p.retryCount || 0) + 1 });
-      await _disburseB2C(db, doc.id, { ...p, id: doc.id });
-      ran++;
+      if (!moved) continue;
+      parked++;
+      _plog('legacy_retry_parked', { ...doc.data(), id: doc.id, status: 'outcome_unknown' });
     }
-    if (ran) console.log(`[processPayoutRetries] ran ${ran} retr(y/ies)`);
+    if (parked) {
+      await _payoutMetric(db, 'b2cOutcomeUnknown', parked);
+      console.warn(`[processPayoutRetries] parked ${parked} legacy retry_scheduled payout(s) at outcome_unknown — NOT re-sent`);
+    }
   }
 );
 
@@ -1515,7 +1749,7 @@ exports.adminPayoutOps = onCall({ cors: true, enforceAppCheck: true }, async (re
   _requireAdmin(request);
   const db = getFirestore();
 
-  const states = ['processing', 'retry_scheduled', 'failed', 'approval_failed', 'pending', 'approved', 'scheduled'];
+  const states = ['processing', 'retry_scheduled', 'outcome_unknown', 'failed', 'approval_failed', 'pending', 'approved', 'scheduled'];
   const byState = {};
   await Promise.all(states.map(async (st) => {
     const snap = await db.collection('payoutRequests').where('status', '==', st).limit(100).get().catch(() => null);
@@ -1549,6 +1783,7 @@ exports.adminPayoutOps = onCall({ cors: true, enforceAppCheck: true }, async (re
     counts: {
       processing: byState.processing.length,
       retrying: byState.retry_scheduled.length,
+      outcomeUnknown: byState.outcome_unknown.length,
       failed: byState.failed.length,
       approvalFailed: byState.approval_failed.length,
       pending: byState.pending.length,
@@ -1562,6 +1797,7 @@ exports.adminPayoutOps = onCall({ cors: true, enforceAppCheck: true }, async (re
     lists: {
       processing:  trim(byState.processing),
       retrying:    trim(byState.retry_scheduled),
+      outcomeUnknown: trim(byState.outcome_unknown),
       failed:      trim(byState.failed),
       needsReview: trim(all.filter((p) => p.reconcileFlag === 'needs_review')),
       pending:     trim(byState.pending),

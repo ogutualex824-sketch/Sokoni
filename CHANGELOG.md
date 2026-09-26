@@ -1,3 +1,39 @@
+## 2026-09-26 (184) — P0 payout: ambiguous B2C outcome is never re-sent (`outcome_unknown`)
+
+**NO DEPLOY. NO PUSH.** Branch `feat/creator-hub`, base `fd5066d`. Production writes 0 · provider
+calls 0. Wallet backend is FROZEN — deploying this needs the owner's release decision.
+
+**Defect (executed).** A B2C timeout / 5xx / 429 parked the payout at `retry_scheduled` and
+`processPayoutRetries` sent it again: 2 provider calls for one payout. The B2C request has no
+reference IntaSend deduplicates on, so an executed first request meant a double payout. Also: admin
+approve/reject was allowed on `retry_scheduled` (re-send / return funds that may have left), and a
+manual mark-paid of a `failed` payout drove `pendingPayout` negative.
+
+**Fix.** `_disburseB2C`: a 4xx IntaSend answered (not 408/409/425/429), or a failure before any
+request → `failed`, funds returned once; everything else → `outcome_unknown`, funds stay reserved,
+never retried. `processPayoutRetries` makes no provider call (no secret bound); it parks legacy
+`retry_scheduled` rows at `outcome_unknown`. `adminProcessPayout` refuses approve/reject/mark-paid on
+`retry_scheduled`/`outcome_unknown`. `_settlePayoutPaid` refuses `rejected/failed/reversed`;
+`_refundPayout` treats `settled_manually/reversed` as terminal. New Super-Admin callable
+`adminResolvePayoutOutcome` (evidence required, one transaction, exactly-once). AdminOS Payouts tab
+gains an "Outcome unknown" list + evidence form. Status labels in the seller/provider/merchant
+wallets and AdminOS payout detail. No provider-status lookup was invented (none is safe for B2C).
+
+**Files.** `functions/wallet.js`, `functions/index.js` (export), `functions/admin-os.js` (STAGE),
+`sokoni-aos.js`, `sokoni-wallet-v2.js`, `sokoni-merchant-wallet.js`, `provider-dashboard.html`,
+`scripts/reconcile-payouts.js` (in-flight set), `scripts/test-payout-outcome-unknown.js` (new),
+`scripts/test-creator-withdrawal.js` (transient → outcome_unknown), `scripts/sabotage-creator-hub.js`
+(payout group), `docs/PAYOUT_OUTCOME_UNKNOWN.md` (new), `docs/PAYOUT_SANDBOX_VERIFICATION.md`.
+**Database.** New status `outcome_unknown` on `payoutRequests` (+ `outcomeUnknownAt`,
+`b2cHttpStatus`, `outcomeResolution`); new server-only `payoutResolutions/{rid}`,
+`payoutEvidenceClaims/{sha256}`. No rules change (client default-deny). **API.** New
+`adminResolvePayoutOutcome`; `requestSellerPayout` / `adminProcessPayout` return `outcome_unknown`
+instead of `retry_scheduled`. **Security.** Super Admin only, evidence-bound, one provider transfer
+settles one payout. **Breaking.** `retry_scheduled` is no longer written; approve/reject of it is
+refused. **Tests.** outcome-unknown 62/0 (base: 14 FAIL + crash — the defect reproduced) ·
+withdrawal 21/0 · payout sabotage 9/9 CAUGHT · all prior Creator / wallet suites unchanged.
+Docs: [[PAYOUT_OUTCOME_UNKNOWN]].
+
 ## 2026-09-26 (183) — Creator Hub: 30/70 authority, refund P0, verification, viewer identity
 
 **NO DEPLOY. NO PUSH. Readiness BLOCKED** (docs/CREATOR_HUB.md §13). Branch `feat/creator-hub`,

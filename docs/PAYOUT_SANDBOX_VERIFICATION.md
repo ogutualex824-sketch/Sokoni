@@ -74,15 +74,18 @@ matcher/state extraction gets a one-line adjust. Until stage 7 flips to `paid`
 
 ---
 
-## 2. Verify retry behaviour (transient vs permanent)
+## 2. Verify ambiguous vs definitive failure (NO automatic retry)
 
-- **Transient**: simulate by pointing at an unreachable sandbox base or forcing a 5xx →
-  expect `_plog stage:"b2c_retry"`, doc `status:"retry_scheduled"` with `retryAt` +
-  `retryCount`, then `processPayoutRetries` (every 5 min) re-runs with exponential
-  backoff (2→4→8→16 min, cap 30), max 4 tries, then Failed + refund.
-- **Permanent**: withdraw to a clearly invalid/unregistered number → expect
-  `_plog stage:"b2c_failed" kind:"permanent"`, doc `status:"failed"`, funds **refunded**
-  to the wallet (balance restored, pendingPayout released). No retries.
+> Changed 2026-09-26 — the automatic retry was a double-send vector and is retired.
+> Full state machine: [[PAYOUT_OUTCOME_UNKNOWN]].
+
+- **Ambiguous** (unreachable base, timeout, 5xx, 408/409/425/429): expect
+  `_plog stage:"b2c_outcome_unknown"`, doc `status:"outcome_unknown"`, `reconcileFlag:"needs_review"`,
+  funds still **reserved** (balance debited, `pendingPayout` held). `processPayoutRetries` must make
+  **no** provider call. Resolve with `adminResolvePayoutOutcome` (Super Admin + IntaSend evidence).
+- **Definitive** (a 4xx IntaSend answered, e.g. an invalid number) → expect
+  `_plog stage:"b2c_failed" kind:"rejected"`, doc `status:"failed"`, funds **refunded** to the
+  wallet once (balance restored, pendingPayout released). No retries.
 
 ---
 

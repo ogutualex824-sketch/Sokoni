@@ -29,6 +29,7 @@ const SUITES = {
   hosted:     ['node', ['scripts/test-hosted-checkout.js']],
   withdrawal: ['node', ['scripts/test-creator-withdrawal.js']],
   refund:     ['node', ['scripts/test-refund-exactly-once.js']],
+  payout:     ['node', ['scripts/test-payout-outcome-unknown.js']],
 };
 const IDX = 'functions/index.js';
 const FOS = 'functions/financial-os.js';
@@ -169,6 +170,44 @@ const M = [
   { group: 'hosted', name: 'withdrawal: payout marked paid on an in-flight provider status', file: 'functions/wallet.js', suite: 'withdrawal',
     from: "const completedWord = /COMPLETE/.test(S) || ['SUCCESS', 'PAID', 'SETTLED'].includes(S);", to: "const completedWord = /COMPLETE|PROCESSING/.test(S) || ['SUCCESS', 'PAID', 'SETTLED'].includes(S);",
     expect: /in-flight provider status leaves it PROCESSING/ },
+
+  /* ── payout ambiguous outcome (OUTCOME_UNKNOWN) — test-payout-outcome-unknown.js ── */
+  { group: 'payout', name: 'payout: an ambiguous B2C answer is treated as a rejection (funds released)', file: 'functions/wallet.js', suite: 'payout',
+    from: "    if (kind === 'rejected') {\n      /* The provider answered NO", to: "    if (true) {\n      /* The provider answered NO",
+    expect: /W3B timeout → OUTCOME_UNKNOWN/ },
+  { group: 'payout', name: 'payout: HTTP 429 treated as a definitive rejection', file: 'functions/wallet.js', suite: 'payout',
+    from: "const _AMBIGUOUS_4XX = new Set([408, 409, 425, 429]);", to: "const _AMBIGUOUS_4XX = new Set([408, 409, 425]);",
+    expect: /HTTP 429 → OUTCOME_UNKNOWN/ },
+  { group: 'payout', name: 'payout: retry worker re-sends OUTCOME_UNKNOWN payouts', file: 'functions/wallet.js', suite: 'payout',
+    edits: [
+      [".where('status', '==', 'retry_scheduled').limit(50).get().catch(() => null);\n    if (!snap || snap.empty) return;\n\n    let parked", ".where('status', '==', 'outcome_unknown').limit(50).get().catch(() => null);\n    if (!snap || snap.empty) return;\n\n    let parked"],
+      ["      if (!moved) continue;\n      parked++;", "      await _disburseB2C(db, doc.id, { ...doc.data(), id: doc.id });\n      if (!moved) continue;\n      parked++;"],
+    ],
+    expect: /retry worker skips it/ },
+  { group: 'payout', name: 'payout: admin approve re-sends an OUTCOME_UNKNOWN payout', file: 'functions/wallet.js', suite: 'payout',
+    edits: [
+      ["  if (!['pending', 'approval_failed'].includes(payout.status)) {\n    throw new HttpsError('failed-precondition', `Cannot approve", "  if (!['pending', 'approval_failed', 'outcome_unknown'].includes(payout.status)) {\n    throw new HttpsError('failed-precondition', `Cannot approve"],
+      ["    if (!['pending', 'approval_failed'].includes(st)) return;", "    if (!['pending', 'approval_failed', 'outcome_unknown'].includes(st)) return;"],
+    ],
+    expect: /admin approve refused/ },
+  { group: 'payout', name: 'payout: generic manual mark-paid settles an OUTCOME_UNKNOWN payout', file: 'functions/wallet.js', suite: 'payout',
+    edits: [
+      ["    if (payout.status === 'outcome_unknown') {\n      throw new HttpsError('failed-precondition', 'This payout has an unknown provider outcome", "    if (false) {\n      throw new HttpsError('failed-precondition', 'This payout has an unknown provider outcome"],
+      [", refuseStatuses: ['outcome_unknown'],", ","],
+    ],
+    expect: /generic manual mark-paid refused/ },
+  { group: 'payout', name: 'payout: resolution without Super Admin', file: 'functions/wallet.js', suite: 'payout',
+    from: "  if (request.auth.token?.superAdmin !== true) throw new HttpsError('permission-denied', 'Super admin only');", to: "",
+    expect: /admin \(not super admin\) refused/ },
+  { group: 'payout', name: 'payout: resolution without a written evidence note', file: 'functions/wallet.js', suite: 'payout',
+    from: "  if (note.length < 20) throw new HttpsError(", to: "  if (false) throw new HttpsError(",
+    expect: /note that says nothing refused/ },
+  { group: 'payout', name: 'payout: one IntaSend transaction settles two payouts (evidence claim removed)', file: 'functions/wallet.js', suite: 'payout',
+    from: "    claimRef: decision === 'paid' ? db.collection('payoutEvidenceClaims').doc(_sha256(reference.toUpperCase())) : null,", to: "    claimRef: null,",
+    expect: /same IntaSend transaction cannot settle a second payout/ },
+  { group: 'payout', name: 'payout: returned funds settled a second time (terminal guard removed)', file: 'functions/wallet.js', suite: 'payout',
+    from: "    if (['rejected', 'failed', 'reversed'].includes(payout.status)) return;\n", to: "",
+    expect: /COMPLETE webhook afterwards does not settle|manual mark-paid of a FAILED payout refused/ },
 
   /* ── security: identity, verification, viewer, analytics (§26) ── */
   { group: 'security', name: 'creator impersonation: anonymous tokens reach creator ops', file: HUB, suite: 'hub',
