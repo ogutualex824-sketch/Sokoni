@@ -52,6 +52,8 @@ async function suite(env, label, served) {
     await f('eventSales/s1', { eventId: 'e1', organizerUid: 'org1', cashierUid: 'till1', status: 'COMPLETED', grossCents: 200000 });
     await f('eventCommissionReceivables/s1', { saleId: 's1', organizerUid: 'org1', amountCents: 6000, collectedCents: 0, status: 'OUTSTANDING' });
     await f('eventRefundRequests/o1', { orderId: 'o1', buyerUid: 'buyer1', status: 'PENDING_REVIEW' });
+    await f('eventTicketNumbers/SK-EVT-2026-000184', { eventId: 'e1', ticketId: 'k1' });
+    await f('eventFiscal/PAY1', { saleKey: 'PAY1', eventId: 'e1', organizerUid: 'org1', status: 'SUBMITTED', invoiceId: 'inv1' });
   });
   const till = env.authenticatedContext('till1', { email: 'till1@x.co', email_verified: true }).firestore();
   const admin = env.authenticatedContext('admin1', { admin: true }).firestore();
@@ -104,6 +106,12 @@ async function suite(env, label, served) {
   await expectDeny('buyer files a refund request directly (bypassing the wizard server)', buyer.doc('eventRefundRequests/o2').set({ orderId: 'o2', buyerUid: 'buyer1', status: 'PENDING_REVIEW' }));
   await expectDeny('buyer approves own refund request', buyer.doc('eventRefundRequests/o1').update({ status: 'REFUNDED' }));
   await expectDeny('stranger reads another buyer\'s refund request', stranger.doc('eventRefundRequests/o1').get());
+  /* ticket identity + fiscal (KRA eTIMS) records: server-owned */
+  await expectDeny('buyer reads the ticket-number index', buyer.doc('eventTicketNumbers/SK-EVT-2026-000184').get());
+  await expectDeny('a client claims a ticket number', buyer.doc('eventTicketNumbers/SK-EVT-2026-000999').set({ eventId: 'e1', ticketId: 'x' }));
+  await expectDeny('organizer marks own sale fiscally CONFIRMED', org.doc('eventFiscal/PAY1').update({ status: 'CONFIRMED', receiptNumber: 'FAKE-1' }));
+  await expectDeny('organizer writes a fiscal record (hides a sale from reconciliation)', org.doc('eventFiscal/PAY2').set({ status: 'NOT_APPLICABLE' }));
+  await expectDeny('organizer reads fiscal records directly', org.doc('eventFiscal/PAY1').get());
 
   if (served) {
     ck(`${label}: venue created PENDING is allowed (the product still works)`,
@@ -116,6 +124,7 @@ async function suite(env, label, served) {
     ck(`${label}: buyer reads own order`, await allowed(buyer.doc('eventOrders/o1').get()));
     ck(`${label}: buyer reads OWN refund request`, await allowed(buyer.doc('eventRefundRequests/o1').get()));
     ck(`${label}: admin reads sales, admissions, receivables, ops audit`, (await allowed(admin.doc('eventSales/s1').get())) && (await allowed(admin.doc('eventAdmissions/k1').get())) && (await allowed(admin.doc('eventCommissionReceivables/s1').get())) && (await allowed(admin.doc('eventOpsAudit/a1').get())));
+    ck(`${label}: admin reads fiscal records (reconciliation)`, await allowed(admin.doc('eventFiscal/PAY1').get()));
     ck(`${label}: even an admin cannot read a raw PIN or the PIN index`, (await denied(admin.doc('eventTicketSecrets/k1').get())) && (await denied(admin.doc('eventTicketPins/e1_abc').get())));
   }
 }

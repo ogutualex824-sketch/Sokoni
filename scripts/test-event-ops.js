@@ -31,7 +31,7 @@ const Path = require('path');
 const FN = Path.resolve(__dirname, '..', 'functions');
 const { makeFakeFirestore } = require('./lib/fake-firestore-txn');
 let NOW = Date.now();
-const F = makeFakeFirestore({ clock: () => NOW });
+const F = makeFakeFirestore({ clock: () => NOW, strictReadOrder: true });
 const db = F.db;
 const claimsOf = {};
 const authApi = { getUser: async (u) => ({ uid: u, customClaims: claimsOf[u] || {} }) };
@@ -55,7 +55,7 @@ async function code(p) { try { await p; return null; } catch (e) { return e.code
 const get = async (p) => { const s = await db.doc(p).get(); return s.exists ? s.data() : null; };
 const H = 3600 * 1000;
 
-async function event(id, org = 'org1', startMs = NOW + 48 * H) {
+async function event(id, org = 'org1', startMs = NOW + 6 * H) {
   await db.doc(`events/${id}`).set({ title: 'Gig ' + id, organizerUid: org, status: 'live', startDate: new Date(startMs).toISOString(), endDate: new Date(startMs + 4 * H).toISOString(), checkinsCount: 0 });
   await db.doc(`eventTicketTiers/${id}_t`).set({ eventId: id, name: 'Regular', price: 500, quantity: 50, sold: 0, isActive: true, currency: 'KES' });
 }
@@ -73,10 +73,17 @@ const pinOf = async (ticketId) => (await get(`eventTicketSecrets/${ticketId}`) |
   /* ═══ PIN primitives ═══ */
   console.log('\n── PIN ──');
   const p = OPS.generatePin();
-  ck('PIN is XXXX-XXXX from the 32-char alphabet (no 0/O/1/I)', /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(p), p.length);
-  ck('normalisation accepts spacing/case, refuses foreign chars', OPS.normalizePin(p.toLowerCase().replace('-', ' ')) === p.replace('-', '') && OPS.normalizePin('ABCD-EF01') === null && OPS.normalizePin('SHORT') === null);
-  ck('hash binds the PIN to ONE event', OPS.pinHash('evA', p) !== OPS.pinHash('evB', p) && OPS.pinHash('evA', p) === OPS.pinHash('evA', p.toLowerCase()));
-  ck('1,000 PINs, no repeats (crypto.randomInt)', new Set(Array.from({ length: 1000 }, () => OPS.generatePin())).size === 1000);
+  ck('PIN is exactly 4 digits', /^\d{4}$/.test(p) && Array.from({ length: 500 }, () => OPS.generatePin()).every((x) => /^\d{4}$/.test(x)), p);
+  ck('normalisation accepts spaces / dashes, refuses anything but 4 digits', OPS.normalizePin(' 48-27 ') === '4827' && OPS.normalizePin('482') === null && OPS.normalizePin('48271') === null && OPS.normalizePin('ABCD') === null && OPS.normalizePin('4827a') === null);
+  ck('hash binds the PIN to ONE event', OPS.pinHash('evA', p) !== OPS.pinHash('evB', p) && OPS.pinHash('evA', p) === OPS.pinHash('evA', ' ' + p));
+  const draws = Array.from({ length: 20000 }, () => Number(OPS.generatePin()));
+  const hi = draws.filter((x) => x >= 5000).length;
+  ck('PINs spread over the whole 0000-9999 space (20,000 draws, no bias to low values)', hi > 9400 && hi < 10600 && new Set(draws).size > 8000, [hi, new Set(draws).size]);
+  const opsSrc = require('fs').readFileSync(Path.join(FN, 'event-ops.js'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  ck('PIN drawn by crypto.randomInt, independently of the ticket number (no Math.random, no derivation)',
+    /crypto\.randomInt\(0, n\)/.test(opsSrc) && !/Math\.random/.test(opsSrc) && /function generatePin\(\) \{ return String\(_randInt\(PIN_SPACE\)\)/.test(opsSrc));
+  const tn = OPS.generateTicketNumber(2026);
+  ck('ticket number is SK-EVT-YYYY-NNNNNN', OPS.TICKET_NUMBER_RE.test(tn) && tn.startsWith('SK-EVT-2026-'), tn);
   /* In Cloud Functions a missing key must FAIL CLOSED — never fall back to the test key, which is in
      this repository and would make every production PIN hash forgeable. */
   process.env.K_SERVICE = 'eventopsdispatch';
@@ -91,9 +98,10 @@ const pinOf = async (ticketId) => (await get(`eventTicketSecrets/${ticketId}`) |
   ck('a reserved (unpaid) ticket carries NO PIN', !unpaidBefore);
   const act = await paidOrder('O1', 'evA');
   const t0 = await get('eventTickets/O1_k0');
-  ck('payment activation issues credentials: ticketNumber, pinHash, NOT_ADMITTED, refund NONE', act.activated && /^SK-EVT-[A-Z2-9]{6}$/.test(t0.ticketNumber) && /^[0-9a-f]{64}$/.test(t0.pinHash) && t0.admissionStatus === 'NOT_ADMITTED' && t0.refundStatus === 'NONE', act);
+  ck('payment activation issues credentials: ticketNumber, pinHash, NOT_ADMITTED, refund NONE', act.activated && OPS.TICKET_NUMBER_RE.test(t0.ticketNumber) && /^[0-9a-f]{64}$/.test(t0.pinHash) && t0.admissionStatus === 'NOT_ADMITTED' && t0.refundStatus === 'NONE', act);
   const pin0 = await pinOf('O1_k0'); const pin1 = await pinOf('O1_k1');
-  ck('raw PIN lives ONLY in eventTicketSecrets (not on the ticket)', !!pin0 && !JSON.stringify(t0).includes(pin0.replace('-', '')) && !JSON.stringify(t0).includes(pin0));
+  ck('raw PIN lives ONLY in eventTicketSecrets (not on the ticket)', /^\d{4}$/.test(pin0) && !Object.values(t0).some((v) => String(v) === pin0));
+  ck('ticket number index created (uniqueness is confirmed by a create())', (await get(`eventTicketNumbers/${t0.ticketNumber}`) || {}).ticketId === 'O1_k0');
   ck('two tickets, two different PINs', pin0 && pin1 && pin0 !== pin1);
   ck('PIN index created per event (uniqueness is a create())', !!(await get(`eventTicketPins/evA_${t0.pinHash}`)));
   const pr = await EH.purchaseTickets.run({ ...who('buyer2'), data: { tierId: 'evA_t', quantity: 1, idempotencyKey: 'free-1' } }).catch((e) => ({ err: e.message }));
@@ -106,7 +114,7 @@ const pinOf = async (ticketId) => (await get(`eventTicketSecrets/${ticketId}`) |
   /* ═══ visibility ═══ */
   console.log('\n── visibility ──');
   const mine = await EH.getMyTickets.run({ ...who('buyer1'), data: {} });
-  ck('getMyTickets returns the buyer their own PINs', mine.tickets.filter((x) => x.orderId === 'O1').every((x) => /^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(x.pin) && x.ticketNumber));
+  ck('getMyTickets returns the buyer their own PINs + ticket numbers + PIN state', mine.tickets.filter((x) => x.orderId === 'O1').every((x) => /^\d{4}$/.test(x.pin) && OPS.TICKET_NUMBER_RE.test(x.ticketNumber) && x.pinState === 'ACTIVE'));
   const other = await EH.getMyTickets.run({ ...who('buyer9'), data: {} });
   ck('another user sees none of them', other.tickets.length === 0);
   const orgView = await EH.getTicket.run({ ...who('org1'), data: { ticketId: 'O1_k0' } });
@@ -130,7 +138,7 @@ const pinOf = async (ticketId) => (await get(`eventTicketSecrets/${ticketId}`) |
   ck('accepted staff are bound by uid', (await get('eventStaff/evA_gate1')).role === 'admission' && (await get('eventStaff/evA_till1')).role === 'cashier');
   const my = await op('eventMyAssignments', 'gate1');
   ck('staff see their live assignment (event + role)', my.assignments.length === 1 && my.assignments[0].eventId === 'evA' && my.assignments[0].role === 'admission');
-  ck('cashier cannot admit', (await code(op('eventAdmitTicket', 'till1', { eventId: 'evA', pin: pin0 }))) === 'permission-denied');
+  ck('a gate cashier CAN check a ticket by PIN (same admission authority)', (await op('eventVerifyPin', 'till1', { eventId: 'evA', pin: pin0 })).valid === true);
   ck('marketing cannot admit', (await code(op('eventVerifyPin', 'promo1', { eventId: 'evA', pin: pin0 }))) === 'permission-denied');
   ck('staff cannot manage staff (even a manager)', (await code(op('eventStaffInvite', 'boss1', { eventId: 'evA', email: 'x@x.co', role: 'cashier' }))) === 'permission-denied');
   ck('staff of event A have NO access to event B', (await code(op('eventVerifyPin', 'gate1', { eventId: 'evB', pin: pin0 }))) === 'permission-denied');
@@ -159,12 +167,15 @@ const pinOf = async (ticketId) => (await get(`eventTicketSecrets/${ticketId}`) |
   ck('no raw PIN and no PIN hash in any audit row', !audit.some((a) => { const j = JSON.stringify(a); return [pin0, pin1, pinC].some((x) => x && (j.includes(x) || j.includes(x.replace('-', '')))) || j.includes(t0.pinHash); }));
 
   /* brute force */
+  const issued = new Set(db._dump('eventTicketSecrets/').map((x) => x.pin));
+  const wrong = []; for (let i = 0; wrong.length < 8; i++) { const c = String(i).padStart(4, '0'); if (!issued.has(c)) wrong.push(c); }
   let locked = null;
-  for (let i = 0; i < 12; i++) {
-    const r = await op('eventVerifyPin', 'gate1', { eventId: 'evA', pin: 'ZZZZ-ZZZ' + 'ABCDEFGHJKLM'[i] }).catch((e) => ({ code: e.code }));
+  for (let i = 0; i < 8; i++) {
+    const r = await op('eventVerifyPin', 'gate1', { eventId: 'evA', pin: wrong[i] }).catch((e) => ({ code: e.code }));
     if (r.code === 'resource-exhausted') { locked = i; break; }
   }
-  ck('per-staff lockout after 10 wrong PINs', locked === 10, locked);
+  ck('per-staff lockout after 5 wrong PINs (a 4-digit space is small)', locked === OPS.ATTEMPTS.PER_STAFF_FAILS && OPS.ATTEMPTS.PER_STAFF_FAILS === 5, locked);
+  ck('crossing the limit records a security event (no PIN in it)', db._dump('eventOpsAudit/').some((a) => a.action === 'event_pin_lockout' && a.detail && a.detail.scope === 'staff' && !wrong.some((w) => JSON.stringify(a).includes('"' + w + '"'))));
   ck('…even a CORRECT PIN is refused while locked', (await code(op('eventVerifyPin', 'gate1', { eventId: 'evA', pin: pinC }))) === 'resource-exhausted');
   NOW += 11 * 60 * 1000;
   ck('lockout lifts after the window', (await op('eventVerifyPin', 'gate1', { eventId: 'evA', pin: pinC })).valid === true);

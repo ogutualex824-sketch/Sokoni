@@ -56,6 +56,11 @@
   /* ═══ QUICK SALE ═══ */
   function quicksale(host, ctx) {
     host.innerHTML = `<div class="eo">
+      <div class="eo-pay" role="tablist" aria-label="Quick Sale mode">
+        <button type="button" role="tab" data-qsmode="sale" class="on" aria-selected="true">New sale</button>
+        <button type="button" role="tab" data-qsmode="check" aria-selected="false">Check ticket (PIN)</button></div>
+      <div id="qsCheck" hidden></div>
+      <div id="qsSale" style="display:flex;flex-direction:column;gap:14px">
       <div class="eo-card"><div class="eo-row"><label>Event ${eventSelect(ctx, 'qsEv', (e) => e.status === 'live')}</label></div></div>
       <div class="eo-card"><div id="qsTiers" class="eo-tiers">Loading tickets…</div></div>
       <div class="eo-card"><div class="eo-row" style="justify-content:space-between"><span>Total</span><span class="eo-total" id="qsTotal">KES 0</span></div>
@@ -67,7 +72,7 @@
         <div id="qsTender" style="margin-top:10px"></div></div>
       <button type="button" class="eo-btn primary" id="qsDo" disabled>Complete sale</button>
       <div id="qsMsg" role="status" aria-live="polite"></div>
-      <div id="qsOut"></div></div>`;
+      <div id="qsOut"></div></div></div>`;
     const cart = {}; let tiers = []; let tender = null; let key = newKey();
     const $ = (id) => host.querySelector('#' + id);
     const total = () => tiers.reduce((a, t) => a + (cart[t.tierId] || 0) * Math.round(Number(t.price) * 100), 0);
@@ -122,12 +127,50 @@
       else if (tender === 'intasend') f.innerHTML = '<label>Buyer M-PESA number <input id="qsPhone" type="tel" inputmode="tel" placeholder="07XX XXX XXX"></label>';
       else f.innerHTML = '';
     }
+    let lastSale = null;
+    /* SALE COMPLETE — one card per ticket (ticket number + its own PIN), with Show / Print / Send.
+       The PIN comes from the server for this cashier's walk-in sale; nothing is kept in storage. */
     async function showTickets(eventId, saleId) {
       const r = await ctx.ops('eventSaleTickets', { eventId, saleId });
-      $('qsOut').innerHTML = `<div class="eo-card"><b>Hand these to the buyer</b><div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">${r.tickets.map((t) => `<div><div style="font-size:12px;opacity:.75">${esc(t.tierName)} · ${esc(t.ticketNumber || '')}</div>${t.pin ? `<span class="eo-pin">${esc(t.pin)}</span>` : '<span class="eo-bad">Not issued</span>'}</div>`).join('')}</div></div>`;
+      /* the fiscal (KRA) state belongs to the SALE; every ticket of it shows the same one */
+      r.tickets = r.tickets.map((t) => ({ ...t, fiscal: r.fiscal }));
+      lastSale = r;
+      const T = root.SokoniEventTicket;
+      const issued = r.tickets.filter((t) => t.pin);
+      $('qsOut').innerHTML = `<div class="eo-card"><b class="eo-ok">SALE COMPLETE</b> · ${issued.length} ticket${issued.length === 1 ? '' : 's'} — give each buyer their own PIN
+        <div id="qsTix" style="margin-top:12px">${r.tickets.map((t) => (T ? T.html(t, r.event, { actions: !!t.pin })
+          : `<div><div style="font-size:12px;opacity:.75">${esc(t.tierName)} · ${esc(t.ticketNumber || '')}</div>${t.pin ? `<span class="eo-pin">${esc(t.pin)}</span>` : '<span class="eo-bad">Not issued</span>'}</div>`)).join('')}</div></div>`;
+      if (T) T.drawQr($('qsOut'));
     }
+    const ticketOf = (num) => (lastSale && lastSale.tickets.find((t) => t.ticketNumber === num)) || null;
+    const cardOf = (num) => [...host.querySelectorAll('.sk-ticket')].find((a) => a.dataset.ticket === num) || null;
     host.addEventListener('click', async (e) => {
       const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.qsmode) {
+        const check = b.dataset.qsmode === 'check';
+        host.querySelectorAll('[data-qsmode]').forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-selected', String(on)); });
+        $('qsSale').style.display = check ? 'none' : 'flex';
+        $('qsCheck').hidden = !check;
+        /* the SAME admission screen and authority as the gate (eventVerifyPin / eventAdmitTicket) */
+        if (check) { const box = document.createElement('div'); $('qsCheck').replaceChildren(box); admission(box, ctx); }
+        return;
+      }
+      if (b.dataset.tkShow || b.dataset.tkPrint || b.dataset.tkSend) {
+        const T = root.SokoniEventTicket; const num = b.dataset.tkShow || b.dataset.tkPrint || b.dataset.tkSend;
+        const t = ticketOf(num); const card = cardOf(num);
+        if (!T || !t || !card) return;
+        if (b.dataset.tkPrint) { if (!T.printTickets(card)) $('qsMsg').textContent = 'Allow pop-ups to print the ticket.'; return; }
+        if (b.dataset.tkSend) { await T.send(t, lastSale.event); return; }
+        /* Show: the ticket full-screen so the buyer can photograph it */
+        const ov = document.createElement('div');
+        ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Ticket ' + num);
+        ov.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.85);overflow:auto;padding:16px;box-sizing:border-box';
+        ov.innerHTML = T.html(t, lastSale.event, {}) + '<div style="text-align:center"><button type="button" class="eo-btn" data-tk-close="1">Close</button></div>';
+        document.body.appendChild(ov); T.drawQr(ov);
+        ov.addEventListener('click', (ev) => { if (ev.target === ov || ev.target.closest('[data-tk-close]')) ov.remove(); });
+        ov.querySelector('[data-tk-close]').focus();
+        return;
+      }
       if (b.dataset.inc || b.dataset.dec) {
         const id = b.dataset.inc || b.dataset.dec;
         setQty(id, (cart[id] || 0) + (b.dataset.inc ? 1 : -1)); paint(); return;
@@ -190,7 +233,7 @@
     host.innerHTML = `<div class="eo">
       <div class="eo-card"><label>Event ${eventSelect(ctx, 'adEv')}</label></div>
       <div class="eo-card"><label for="adPin">Ticket PIN</label>
-        <div class="eo-row"><input id="adPin" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX" maxlength="11" style="font:700 22px ui-monospace,monospace;letter-spacing:2px;width:220px">
+        <div class="eo-row"><input id="adPin" autocomplete="off" inputmode="numeric" pattern="[0-9]*" spellcheck="false" placeholder="0000" maxlength="5" aria-label="4-digit ticket PIN" style="font:800 28px ui-monospace,monospace;letter-spacing:6px;width:150px;text-align:center">
         <button type="button" class="eo-btn" id="adVerify">Check ticket</button></div></div>
       <div id="adOut" role="status" aria-live="polite"></div></div>`;
     const $ = (id) => host.querySelector('#' + id);
@@ -202,7 +245,7 @@
         const r = await ctx.ops('eventVerifyPin', { eventId: $('adEv').value, pin });
         if (!r.valid) { $('adOut').innerHTML = `<div class="eo-card eo-bad">✗ ${esc(r.reason)}</div>`; return; }
         const t = r.ticket;
-        $('adOut').innerHTML = `<div class="eo-card"><b>${esc(t.tierName)}</b> · ${esc(t.ticketNumber || '')}<br>${esc(t.event || '')}${t.attendeeInitials ? ' · ' + esc(t.attendeeInitials) : ''}<br>
+        $('adOut').innerHTML = `<div class="eo-card"><div style="font:700 16px ui-monospace,monospace">${esc(t.ticketNumber || '')}</div><b>${esc(t.tierName)}</b><br>${esc(t.event || '')}${t.attendeeInitials ? ' · ' + esc(t.attendeeInitials) : ''}<br>
           Status: ${esc(t.status)} · Admission: ${esc(t.admissionStatus)}${t.refundStatus && t.refundStatus !== 'NONE' ? ' · Refund: ' + esc(t.refundStatus) : ''}<br>
           ${r.admissible ? '<button type="button" class="eo-btn primary" id="adAdmit" style="margin-top:10px">Admit</button>' : `<span class="eo-bad">${esc(r.reason)}</span>`}</div>`;
       } catch (e) { $('adOut').innerHTML = `<div class="eo-card eo-bad">${esc(errText(e))}</div>`; }

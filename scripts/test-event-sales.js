@@ -32,7 +32,7 @@ const Path = require('path');
 const FN = Path.resolve(__dirname, '..', 'functions');
 const { makeFakeFirestore } = require('./lib/fake-firestore-txn');
 let NOW = Date.now();
-const F = makeFakeFirestore({ clock: () => NOW });
+const F = makeFakeFirestore({ clock: () => NOW, strictReadOrder: true });
 const db = F.db;
 const authApi = { getUser: async (u) => ({ uid: u, customClaims: {} }) };
 const resolveIn = (m) => require.resolve(m, { paths: [FN] });
@@ -152,7 +152,7 @@ async function setup() {
   /* ═══ PIN visibility + scope ═══ */
   console.log('\n── scope ──');
   const mine = await op('eventSaleTickets', 'till1', { eventId: 'evA', saleId: cs.saleId });
-  ck('the selling cashier gets the walk-in PINs to hand over', mine.tickets.length === 3 && mine.tickets.every((t) => /^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(t.pin)));
+  ck('the selling cashier gets the walk-in PINs to hand over', mine.tickets.length === 3 && mine.tickets.every((t) => /^\d{4}$/.test(t.pin) && OPS.TICKET_NUMBER_RE.test(t.ticketNumber)));
   ck("another cashier cannot read that sale's PINs", (await code(op('eventSaleTickets', 'till2', { eventId: 'evA', saleId: cs.saleId }))) === 'permission-denied');
   ck('organizer can', (await op('eventSaleTickets', 'org1', { eventId: 'evA', saleId: cs.saleId })).tickets.every((t) => !!t.pin));
   ck('admission staff cannot sell', (await code(op('eventQuickSale', 'gate1', { ...cashReq, idempotencyKey: key() }))) === 'permission-denied');

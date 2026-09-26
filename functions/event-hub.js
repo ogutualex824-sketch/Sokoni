@@ -435,6 +435,14 @@ exports.createTicketTier = onCall(CF_OPTS, async (req) => {
     if (cap && allocated + parsedQty > cap) {
       throw new HttpsError('failed-precondition', `Ticket quantities would exceed the event capacity (${cap}); ${Math.max(0, cap - allocated)} left to allocate.`);
     }
+    /* Admission PINs are 4 digits and never recycled within an event, so an event may configure at
+       most EVENT_PIN_CEILING tickets across ALL its tiers (inactive ones too — their tickets keep
+       their PINs). Refused here, at configuration, so a PAID order never meets an exhausted space. */
+    const PIN_CEILING = require('./event-ops').EVENT_PIN_CEILING;
+    const everConfigured = tiersNow.docs.reduce((a, d) => a + (Number(d.data().quantity) || 0), 0);
+    if (everConfigured + parsedQty > PIN_CEILING) {
+      throw new HttpsError('failed-precondition', `An event can sell at most ${PIN_CEILING.toLocaleString()} tickets (4-digit admission PINs); ${Math.max(0, PIN_CEILING - everConfigured).toLocaleString()} left to configure.`);
+    }
     txn.set(ref, {
     tierId: ref.id,
     eventId,
@@ -658,35 +666,49 @@ exports.purchaseTickets = onCall({ ...CF_OPTS, secrets: [require('./event-ops').
   if (isReplay) return { orderId: replayData.orderId, idempotent: true };
 
   // Generate individual ticket documents
-  const ticketBatch = db().batch();
   const tokens = [];
   const _free = totalAmount <= 0;
-  for (let i = 0; i < qty; i++) {
-    const ticketRef = db().collection('eventTickets').doc();
-    const token = genTicketToken();
-    tokens.push(token);
-    ticketBatch.set(ticketRef, {
-      /* Paid tickets get their PIN at payment activation; nothing to pay = issued now. */
-      ...(_free ? require('./event-ops').issueCredentials(ticketBatch, { eventId: tier.eventId, ticketId: ticketRef.id, buyerUid: uid }) : {}),
-      ticketId: ticketRef.id,
-      orderId,
-      eventId: tier.eventId,
-      tierId,
-      tierName: tier.name,
-      buyerUid: uid,
-      token,
-      qrData: `sokoni-ticket:${ticketRef.id}:${token}`,
-      attendeeName: sanitize(attendeeName, 120),
-      attendeeEmail: sanitize(attendeeEmail, 200),
-      status: totalAmount <= 0 ? 'valid' : 'awaiting_payment',
-      checkedIn: false,
-      checkedInAt: null,
-      checkedInBy: null,
-      seatNumber: null,
-      createdAt: FieldValue.serverTimestamp(),
+  const OPS = require('./event-ops');
+  const _writeTickets = (writer, ids) => {
+    for (let i = 0; i < qty; i++) {
+      const ticketRef = db().collection('eventTickets').doc();
+      const token = genTicketToken();
+      tokens.push(token);
+      writer.set(ticketRef, {
+        /* Paid tickets get their PIN at payment activation; nothing to pay = issued now. */
+        ...(_free ? OPS.issueCredentials(writer, { eventId: tier.eventId, ticketId: ticketRef.id, buyerUid: uid, identity: ids[i] }) : {}),
+        ticketId: ticketRef.id,
+        orderId,
+        eventId: tier.eventId,
+        tierId,
+        tierName: tier.name,
+        buyerUid: uid,
+        token,
+        qrData: `sokoni-ticket:${ticketRef.id}:${token}`,
+        attendeeName: sanitize(attendeeName, 120),
+        attendeeEmail: sanitize(attendeeEmail, 200),
+        status: _free ? 'valid' : 'awaiting_payment',
+        checkedIn: false,
+        checkedInAt: null,
+        checkedInBy: null,
+        seatNumber: null,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+  };
+  if (_free) {
+    /* Free tickets are credentials NOW: their 4-digit PINs + ticket numbers are chosen by reading the
+       index inside this transaction (event-ops.allocateIdentities), never create()-and-hope. */
+    await db().runTransaction(async (txn) => {
+      tokens.length = 0;
+      const ids = await OPS.allocateIdentities(txn, tier.eventId, qty);
+      _writeTickets(txn, ids);
     });
+  } else {
+    const ticketBatch = db().batch();
+    _writeTickets(ticketBatch, []);
+    await ticketBatch.commit();
   }
-  await ticketBatch.commit();
   /* Free / fully-discounted: issued now, so confirm now (no PIN in the notice; best effort). */
   if (_free) await require('./event-settlement').notifyTicketsConfirmed(orderId);
 
@@ -731,6 +753,16 @@ exports.getMyTickets = onCall(CF_OPTS, async (req) => {
   const eventSnaps = await Promise.all(eventIds.map(id => db().collection('events').doc(id).get()));
   const eventMap = {};
   eventSnaps.forEach(s => { if (s.exists) eventMap[s.id] = s.data(); });
+  /* Ticket display: the tier price, the PIN lifetime state, and the FISCAL state derived from the
+     eTIMS invoice (event-fiscal) — genuine KRA values only, never a SOKONI stand-in. */
+  const tierIds = [...new Set(tickets.map((t) => t.tierId).filter(Boolean))];
+  const tierSnaps = await Promise.all(tierIds.map((id) => db().collection('eventTicketTiers').doc(id).get()));
+  const tierPrice = {};
+  tierSnaps.forEach((s3) => { if (s3.exists) tierPrice[s3.id] = Number(s3.data().price); });
+  const FISCAL = require('./event-fiscal');
+  const fiscal = await FISCAL.viewsFor(tickets.map(FISCAL.keyOfTicket));
+  const OPS = require('./event-ops');
+  const nowMs = Date.now();
 
   return {
     tickets: tickets.map(t => ({
@@ -744,6 +776,10 @@ exports.getMyTickets = onCall(CF_OPTS, async (req) => {
       pin: pins[t.ticketId] || null,
       admissionStatus: t.admissionStatus || null,
       refundStatus: t.refundStatus || null,
+      pinState: t.pinHash && eventMap[t.eventId] ? OPS.pinState(t, eventMap[t.eventId], nowMs) : null,
+      priceKes: Number.isFinite(tierPrice[t.tierId]) ? tierPrice[t.tierId] : null,
+      /* no payment and no sale = a free ticket: nothing was sold, so nothing is fiscalised */
+      fiscal: FISCAL.keyOfTicket(t) ? (fiscal[FISCAL.keyOfTicket(t)] || { status: 'NOT_RECORDED' }) : { status: tierPrice[t.tierId] === 0 ? 'NOT_APPLICABLE' : 'NOT_RECORDED' },
       status: t.status,
       checkedIn: t.checkedIn,
       checkedInAt: t.checkedInAt,
@@ -814,11 +850,14 @@ exports.checkInTicket = onCall(CF_OPTS, async (req) => {
   if (a.length === 0 || a.length !== b.length || !crypto.timingSafeEqual(a, b)) throw new HttpsError('invalid-argument', 'Invalid ticket token');
   const admRef = db().collection('eventAdmissions').doc(String(ticketId));
   const out = await db().runTransaction(async (txn) => {
-    const [ts, as] = await Promise.all([txn.get(ticketRef), txn.get(admRef)]);
+    const evRef = db().collection('events').doc(String(pre.data().eventId));
+    const [ts, as, evs] = await Promise.all([txn.get(ticketRef), txn.get(admRef), txn.get(evRef)]);
     const t = ts.data();
     if (as.exists || t.admissionStatus === 'ADMITTED' || t.checkedIn) return { result: 'already_used', checkedInAt: t.checkedInAt || null, checkedInBy: t.checkedInBy || null, ticketId };
-    if (t.status !== 'valid') return { result: 'invalid', reason: `Ticket status: ${t.status}`, ticketId };
-    if (['REQUESTED', 'APPROVED', 'REFUNDED'].includes(t.refundStatus)) return { result: 'invalid', reason: 'A refund is in progress for this ticket', ticketId };
+    /* The SAME lifetime as PIN admission (event-ops.pinState): refunded / void / cancelled / outside
+       the admission window are refused here too — the QR is never a way around the PIN rules. */
+    const why = OPS.admissibleReason(t, evs.exists ? evs.data() : actor.event, Date.now());
+    if (why) return { result: 'invalid', reason: why, ticketId };
     txn.create(admRef, { ticketId, eventId: t.eventId, admittedBy: uid, admittedRole: actor.role, method: 'qr', admittedAt: FieldValue.serverTimestamp() });
     txn.update(ticketRef, { admissionStatus: 'ADMITTED', admittedAt: FieldValue.serverTimestamp(), admittedBy: uid,
       checkedIn: true, checkedInAt: FieldValue.serverTimestamp(), checkedInBy: uid });

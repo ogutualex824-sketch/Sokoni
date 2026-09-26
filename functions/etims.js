@@ -552,7 +552,11 @@ async function bumpStats(sellerUid, field) {
 /* ══════════════════════════════════════════════════════════════════════
    CORE: GENERATE + SUBMIT INVOICE FOR AN ORDER
 ══════════════════════════════════════════════════════════════════════ */
-async function generateForOrder({ sellerUid, orderId, order, buyer, isPlatform = false }) {
+/* submitNow:false — create the invoice and hand it straight to the retry queue (etimsProcessQueue, which
+   holds the eTIMS secrets) without an immediate KRA attempt. For callers that run WITHOUT the eTIMS
+   secrets bound (e.g. event ticket sales): an immediate attempt there could only fail, and would
+   notify the seller of a failure that is not one. Default true: existing callers are unchanged. */
+async function generateForOrder({ sellerUid, orderId, order, buyer, isPlatform = false, submitNow = true }) {
   const idempotencyKey = isPlatform
     ? `platform-order-${orderId}`
     : `${sellerUid}-order-${orderId}`;
@@ -593,6 +597,14 @@ async function generateForOrder({ sellerUid, orderId, order, buyer, isPlatform =
   await invRef.set(invDoc);
   Audit.auditSafe(db, { entityType: "invoice", entityId: invRef.id, event: "created",
     newStatus: "pending_submission", sellerUid, detail: `invoiceNumber=${invNo} order=${orderId || "-"} isPlatform=${!!isPlatform}` });
+
+  if (submitNow === false) {
+    await invRef.update({ status: "pending_submission", updatedAt: new Date().toISOString() });
+    await enqueue({ invoiceId: invRef.id, sellerUid, priority: 2 });
+    Audit.auditSafe(db, { entityType: "invoice", entityId: invRef.id, event: "queued", newStatus: "queued", sellerUid, detail: "deferred submission (caller holds no eTIMS secret)" });
+    bumpStats(sellerUid, "pendingInvoices");
+    return { invoiceId: invRef.id, invoiceNumber: invNo, status: "queued" };
+  }
 
   /* Attempt immediate KRA submission */
   try {
@@ -789,12 +801,20 @@ const etimsResubmitInvoice = onCall({ secrets: _ALL_SECRETS, enforceAppCheck: tr
   const isAdmin = _ac.isAdmin(req);
   if (inv.sellerUid !== req.auth.uid && !isAdmin)
     throw new HttpsError("permission-denied","Not your invoice");
-  if (inv.status === "accepted") return { success: true, message: "Already accepted" };
+  return requeueInvoice(invoiceId);
+});
 
+/* Put a not-yet-accepted invoice back on the retry queue. The ONE resubmission implementation —
+   etimsResubmitInvoice (seller/admin) and AdminOS event-fiscal reconciliation both call it. */
+async function requeueInvoice(invoiceId) {
+  const snap = await db.collection("etimsInvoices").doc(invoiceId).get();
+  if (!snap.exists) throw new HttpsError("not-found","Invoice not found");
+  const inv = snap.data();
+  if (inv.status === "accepted") return { success: true, message: "Already accepted" };
   await db.collection("etimsInvoices").doc(invoiceId).update({ status:"pending_submission", updatedAt:new Date().toISOString() });
   await enqueue({ invoiceId, sellerUid: inv.sellerUid, priority: 1 });
   return { success: true, message: "Queued for resubmission" };
-});
+}
 
 /* 8 ─ Scheduled: Process queue every 5 minutes */
 const etimsProcessQueue = onSchedule(
@@ -1325,6 +1345,10 @@ module.exports = {
      commission generator reuses it instead of growing a second one. Callers must
      supply `vatInclusive` — it has no default by design. */
   _issuePlatformInvoice,
+  /* Event ticket fiscalisation (functions/event-fiscal.js) reuses the ONE order-invoice path and the
+     ONE requeue path — no second eTIMS implementation. */
+  generateForOrder,
+  requeueInvoice,
   etimsGetBuyerReceipts,
   etimsDownloadReceipt,
   etimsGetSellerStats,

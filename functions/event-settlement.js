@@ -45,6 +45,7 @@ const { providerFee } = require('./shared/provider-fee');
 const POLICY = require('./shared/commercial-policy');
 const AC = require('./admin-claim');
 const OPS = require('./event-ops');
+const FISCAL = require('./event-fiscal');
 
 const REGION = 'us-central1';
 const PURPOSE = 'event_ticket';
@@ -142,6 +143,10 @@ const eventTicketAdapter = {
     const fee = providerFee(ctx.payment || {});
     const s = computeSettlement({ grossCents: ctx.amountCents, providerFeeCents: fee.cents });
     const organizerUid = ev.organizerUid || (ctx.intent.metadata || {}).organizerUid || null;
+    /* Ticket identities (4-digit PIN + ticket number) are CHOSEN here, in the read phase, for every
+       ticket this activation issues — see event-ops.allocateIdentities. */
+    const needIds = tixSnap.empty ? qty : tixSnap.docs.filter((d) => !d.data().pinHash).length;
+    const ids = await OPS.allocateIdentities(txn, o.eventId, needIds);
 
     /* ── writes ── */
     txn.update(orderRef, {
@@ -161,7 +166,7 @@ const eventTicketAdapter = {
           attendeeName: o.attendeeName || null, attendeeEmail: o.attendeeEmail || null,
           status: 'valid', checkedIn: false, checkedInAt: null, checkedInBy: null, seatNumber: null,
           paymentRef: ctx.paymentRef, createdAt: FieldValue.serverTimestamp(),
-          ...OPS.issueCredentials(txn, { eventId: o.eventId, ticketId: tRef.id, buyerUid: o.channel === 'cashier' ? null : o.buyerUid, soldBy: o.soldBy || null }),
+          ...OPS.issueCredentials(txn, { eventId: o.eventId, ticketId: tRef.id, buyerUid: o.channel === 'cashier' ? null : o.buyerUid, soldBy: o.soldBy || null, identity: ids.shift() }),
         });
       }
     } else {
@@ -169,7 +174,7 @@ const eventTicketAdapter = {
          the activation transaction (event-ops.issueCredentials), never at reservation time. */
       tixSnap.docs.forEach((d) => txn.update(d.ref, {
         status: 'valid', paymentRef: ctx.paymentRef, validatedAt: FieldValue.serverTimestamp(),
-        ...(d.data().pinHash ? {} : OPS.issueCredentials(txn, { eventId: o.eventId, ticketId: d.id, buyerUid: o.channel === 'cashier' ? null : o.buyerUid, soldBy: o.soldBy || null })),
+        ...(d.data().pinHash ? {} : OPS.issueCredentials(txn, { eventId: o.eventId, ticketId: d.id, buyerUid: o.channel === 'cashier' ? null : o.buyerUid, soldBy: o.soldBy || null, identity: ids.shift() })),
       }));
     }
     /* A cashier-assisted IntaSend sale (event-sales) completes with its order. */
@@ -201,6 +206,11 @@ const eventTicketAdapter = {
         createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
       });
       if (s.feeKnown) txn.create(comRef, _commissionRow(ctx.paymentRef, orderId, o.eventId, organizerUid, s));
+      /* ONE fiscal record per paid sale, in the same transaction (event-fiscal; submitted after commit). */
+      FISCAL.recordSale(txn, { saleKey: ctx.paymentRef, event: { id: o.eventId, title: ev.title, organizerUid },
+        channel: o.channel === 'cashier' ? 'cashier_online' : 'online', orderId, saleId: o.saleId || null,
+        lines: [{ name: `${ev.title || 'Event'} — ${o.tierName || 'Ticket'}`, qty, unitCents: qty ? Math.round(ctx.amountCents / qty) : 0 }],
+        grossCents: ctx.amountCents, paymentMethod: (ctx.payment && (ctx.payment.method || ctx.payment.provider)) || 'MOBILE_MONEY' });
     }
     return { ref: `${COL.ORDERS}/${orderId}` };
   },
@@ -308,6 +318,7 @@ async function activateIfEventTicket(paymentRef, opts = {}) {
     const r = await engine.activate(ref, { source: opts.source || 'payment-trigger' });
     if (r && r.alreadyActive) return { alreadyActive: true };
     await _notifyConfirmed(intent.resourceId);
+    await FISCAL.submit(ref);                       /* best effort; never throws — the sweep retries */
     return { activated: true };
   } catch (e) {
     /* A refusal (unpaid, short, reversed, mis-owned) is the engine doing its job. Recorded for
@@ -463,7 +474,10 @@ const eventExpireUnpaidOrders = onSchedule({ schedule: 'every 15 minutes', timeZ
   }
   let pendingCard = 0;
   try { pendingCard = await require('./event-sales').expirePendingSales(); } catch (e) { logger.error('[eventSettlement] pending card sweep failed', { err: e.message }); }
-  logger.info('[eventSettlement] expiry sweep', { scanned: snap.size, expired, pendingCardExpired: pendingCard });
+  /* Fiscal records a crash left unsubmitted, and bounded retries of submission errors (no new function). */
+  let fiscal = null;
+  try { fiscal = await FISCAL.sweep(); } catch (e) { logger.error('[eventSettlement] fiscal sweep failed', { err: e.message }); }
+  logger.info('[eventSettlement] expiry sweep', { scanned: snap.size, expired, pendingCardExpired: pendingCard, fiscal });
 });
 
 /* ═══ REFUND HOOK (called by financial-os after a refund settles) ═══════════════════════ */
@@ -487,7 +501,11 @@ async function onEventRefundProcessed({ payRef, refundId, amountCents, source })
     return { partial: true };
   }
   const engine = registerPurpose();
-  return engine.revoke(ref, `refund:${refundId || 'unknown'}`, { source: source || 'fos-refund' });
+  const out = await engine.revoke(ref, `refund:${refundId || 'unknown'}`, { source: source || 'fos-refund' });
+  /* The fiscal side of the reversal: a credit note is owed wherever an eTIMS invoice exists
+     (issued through the eTIMS lifecycle — never faked here). Best effort; AdminOS lists it. */
+  await FISCAL.markRefunded(ref, { refundId: refundId || null }).catch((e) => logger.error('[eventSettlement] fiscal reversal mark failed', { ref, err: e.message }));
+  return out;
 }
 
 /** A declined refund: the tickets return to "no refund" (admissible again); the request closes. */

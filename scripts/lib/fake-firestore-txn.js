@@ -12,6 +12,9 @@
  *     is RE-RUN (optimistic retry, up to 5), as the real client retries
  *   - FieldValue.serverTimestamp / increment / arrayUnion, dotted update paths
  *   - queries: where(==, in, array-contains) · orderBy · limit · startAfter
+ *   - opts.strictReadOrder: a transaction read AFTER a write throws, as the real Admin SDK does
+ *     ("Firestore transactions require all reads to be executed before all writes"). Opt-in so
+ *     suites written before it are not silently changed.
  *
  * It is still a fake. It proves the CODE's claim discipline; it does not prove
  * Firestore's (docs/CREATOR_HUB.md "UNPROVEN").
@@ -163,6 +166,7 @@ function makeFakeFirestore(opts = {}) {
       const reads = new Map(); const writes = [];
       const txn = {
         get: async (r) => {
+          if (opts.strictReadOrder && writes.length) throw err(3, 'INVALID_ARGUMENT: Firestore transactions require all reads to be executed before all writes.');
           if (r._q) { const res = await r.get(); res.docs.forEach((d) => reads.set(d._path, d._v)); return res; }
           const s = snap(r._path); reads.set(r._path, s._v); return s;
         },

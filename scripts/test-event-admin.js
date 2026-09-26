@@ -31,7 +31,7 @@ const Path = require('path');
 const FN = Path.resolve(__dirname, '..', 'functions');
 const { makeFakeFirestore } = require('./lib/fake-firestore-txn');
 let NOW = Date.now();
-const F = makeFakeFirestore({ clock: () => NOW });
+const F = makeFakeFirestore({ clock: () => NOW, strictReadOrder: true });
 const db = F.db;
 const authApi = { getUser: async (u) => ({ uid: u, customClaims: {} }) };
 const resolveIn = (m) => require.resolve(m, { paths: [FN] });
@@ -86,7 +86,7 @@ const LEAK = /"(pin|pinHash|token|qrData|qrCode|secret)"\s*:/;
 
   console.log('\n── guard ──');
   const NAMES = Object.keys(EA._adminH);
-  ck('seven eventAdmin ops', NAMES.length === 7 && NAMES.every((n) => /^eventAdmin/.test(n)), NAMES);
+  ck('nine eventAdmin ops (incl. fiscal reconciliation + retry)', NAMES.length === 9 && NAMES.every((n) => /^eventAdmin/.test(n)), NAMES);
   for (const n of NAMES) {
     const res = await Promise.all([
       code(EA._adminH[n]({ ...who(null), data: {} })),
@@ -154,7 +154,7 @@ const LEAK = /"(pin|pinHash|token|qrData|qrCode|secret)"\s*:/;
   ck('cash sale: commission + receivable + proceeds observed', ['commission', 'receivable', 'organizer_proceeds'].every((n) => st(tCash, n).state === 'observed'));
   ck('cash sale: proceeds are organizer-collected, receivable = the commission record', st(tCash, 'organizer_proceeds').record.status === 'ORGANIZER_COLLECTED' && st(tCash, 'receivable').record.amountCents === st(tCash, 'commission').record.commissionCents);
   ck('cash sale: refund n/a (offline), payout n/a', st(tCash, 'refund').state === 'n/a' && st(tCash, 'payout').state === 'n/a');
-  ck('stage order is the brief\'s chain', tCash.stages.map((s) => s.stage).join('>') === 'event>tickets>sale>payment>commission>receivable>organizer_proceeds>refund>payout');
+  ck('stage order is the brief\'s chain', tCash.stages.map((s) => s.stage).join('>') === 'event>tickets>sale>payment>fiscal>commission>receivable>organizer_proceeds>refund>payout');
   const tOnline = await adm('eventAdminTrace', { ticketId: 'TK1' });
   ck('online (via ticket): resolves the order and payment', tOnline.orderId === 'ORD001' && tOnline.paymentRef === 'PAYREF1' && tOnline.channel === 'online');
   ck('online: payment, commission, proceeds, refund observed', ['payment', 'commission', 'organizer_proceeds', 'refund'].every((n) => st(tOnline, n).state === 'observed'));

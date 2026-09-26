@@ -31,7 +31,7 @@ const Path = require('path');
 const FN = Path.resolve(__dirname, '..', 'functions');
 const { makeFakeFirestore } = require('./lib/fake-firestore-txn');
 let NOW = Date.now();
-const F = makeFakeFirestore({ clock: () => NOW });
+const F = makeFakeFirestore({ clock: () => NOW, strictReadOrder: true });
 const db = F.db;
 const authApi = { getUser: async (u) => ({ uid: u, customClaims: {} }) };
 const resolveIn = (m) => require.resolve(m, { paths: [FN] });
@@ -139,7 +139,10 @@ const reason = (c) => RS.get(c);
   /* rejected → tickets back to NONE, admissible again */
   await ES.onEventRefundRejected({ payRef: 'ORD0A1', refundId: 'ref_ORD0A1', reason: 'Not eligible after review' });
   ck('rejected → tickets NONE again, request REJECTED', (await get('eventTickets/ORD0A1_k0')).refundStatus === 'NONE' && (await get('eventRefundRequests/ORD0A1')).status === 'REJECTED');
-  ck('…and the ticket can be admitted again', (await OPS._h.eventAdmitTicket({ ...who('org1'), data: { eventId: 'evA', pin: pinA } })).result === 'admitted');
+  ck('…but not before the admission window opens (the PIN is ISSUED, not yet ACTIVE)', /not opened yet/.test((await OPS._h.eventAdmitTicket({ ...who('org1'), data: { eventId: 'evA', pin: pinA } })).reason || ''));
+  { const keep = NOW; NOW = Date.parse((await get('events/evA')).startDate) - H;   /* event day */
+    ck('…and on event day the ticket can be admitted again', (await OPS._h.eventAdmitTicket({ ...who('org1'), data: { eventId: 'evA', pin: pinA } })).result === 'admitted');
+    NOW = keep; }
 
   /* processed → REFUNDED */
   await paid('ORD0B1', 'evA');

@@ -202,6 +202,9 @@
 <script src="/sokoni-config.js"></script>
 <!-- The refund reason catalogue — the SAME vocabulary the server validates (functions/shared). -->
 <script src="/sokoni-event-refund-reasons.js"></script>
+<!-- One ticket presentation (ticket number + PIN, SOKONI QR, KRA fiscal status) + the local QR encoder. -->
+<script src="/sokoni-qr.js"></script>
+<script src="/sokoni-event-ticket.js"></script>
 <script>
   const app  = firebase.initializeApp(window.SOKONI_CONFIG, 'event-hub');
   const auth = firebase.auth(app);
@@ -611,14 +614,13 @@
         return `<div class="ticket-card" style="margin-bottom:10px;flex-direction:column;align-items:stretch">
           <div class="ticket-event">${esc(ev.title || list[0].eventId)}</div>
           <div class="ticket-meta">${dateStr ? '📅 ' + esc(dateStr) + ' · ' : ''}📍 ${esc(ev.venue || ev.city || '')}</div>
-          ${list.map((t) => `<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--border);padding-top:8px;margin-top:8px">
-            <div><div class="ticket-tier">${esc(t.tierName)} ${t.ticketNumber ? '· ' + esc(t.ticketNumber) : ''}</div>
-              <div style="font-size:11px;color:var(--text2)">${esc(String(t.status || '').replace('_', ' '))}${t.admissionStatus === 'ADMITTED' ? ' · admitted' : ''}${t.refundStatus && t.refundStatus !== 'NONE' ? ' · refund ' + esc(t.refundStatus.toLowerCase()) : ''}</div></div>
-            ${t.pin ? `<div aria-label="Ticket PIN" style="font:800 20px ui-monospace,Menlo,monospace;letter-spacing:2px;padding:6px 10px;border-radius:8px;background:var(--bg3,#21262d)">${esc(t.pin)}</div>` : ''}
-          </div>`).join('')}
+          <div style="margin-top:10px">${list.map((t) => window.SokoniEventTicket
+            ? window.SokoniEventTicket.html(t, t.event)
+            : `<div>${esc(t.tierName)} · ${esc(t.ticketNumber || '')}${t.pin ? ' · PIN ' + esc(t.pin) : ''}</div>`).join('')}</div>
           ${refundable ? `<button type="button" class="btn-secondary" style="margin-top:10px" onclick="openRefundWizard('${esc(orderId)}')">Request refund</button>` : ''}
         </div>`;
-      }).join('') + '<p style="font-size:12px;color:var(--text2)">Show your PIN at the gate. Keep it private — anyone with the PIN can use the ticket.</p>';
+      }).join('') + '<p style="font-size:12px;color:var(--text2)">Tell the gate staff your 4-digit PIN — no scanning needed. Keep it private: anyone with the PIN can use the ticket.</p>';
+      if (window.SokoniEventTicket) window.SokoniEventTicket.drawQr(el);
     } catch(e) { el.innerHTML = '<div class="empty"><p>Could not load tickets.</p></div>'; }
   }
 

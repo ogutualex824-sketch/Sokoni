@@ -31,6 +31,7 @@ const logger = require('firebase-functions/logger');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const OPS = require('./event-ops');
 const POLICY = require('./shared/commercial-policy');
+const FISCAL = require('./event-fiscal');
 
 const _db = () => getFirestore();
 const fail = (code, msg) => { throw new HttpsError(code, msg); };
@@ -46,6 +47,9 @@ const CARD_PROVIDERS = Object.freeze(['pesapal', 'kcb', 'equity', 'coop', 'absa'
 const PENDING_TTL_MS = 30 * 60 * 1000;
 
 const _cents = (kes) => Math.round(Number(kes) * 100);
+/* The optional SOKONI QR — same shape as online tickets (event-hub genTicketToken / checkInTicket):
+   a random token and the ticket id only. Never the PIN, a payment secret or personal data. */
+const _qr = (ticketId) => { const token = require('crypto').randomBytes(16).toString('hex'); return { token, qrData: `sokoni-ticket:${ticketId}:${token}` }; };
 const _ref = (r) => String(r == null ? '' : r).trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
 
 function _saleCommission(grossCents) {
@@ -81,16 +85,17 @@ async function _priceLines(txn, eventId, items) {
   return lines;
 }
 
-function _issueTickets(txn, { sale, lines, event, soldBy, attendeeName }) {
+/* `ids`: identities allocated in the transaction READ phase (event-ops.allocateIdentities), one per ticket. */
+function _issueTickets(txn, { sale, lines, event, soldBy, attendeeName, ids }) {
   const out = [];
   for (const l of lines) {
     for (let i = 0; i < l.qty; i++) {
       const tRef = _db().collection(COL.TICKETS).doc();
-      const cred = OPS.issueCredentials(txn, { eventId: event.id, ticketId: tRef.id, buyerUid: null, soldBy });
+      const cred = OPS.issueCredentials(txn, { eventId: event.id, ticketId: tRef.id, buyerUid: null, soldBy, identity: ids.shift() });
       txn.set(tRef, {
         ticketId: tRef.id, saleId: sale.id, orderId: null, eventId: event.id, tierId: l.tierId, tierName: l.tierName,
         buyerUid: null, walkIn: true, soldBy, channel: 'cashier', tender: sale.tender,
-        attendeeName: attendeeName || null, status: 'valid', checkedIn: false,
+        attendeeName: attendeeName || null, status: 'valid', checkedIn: false, ..._qr(tRef.id),
         createdAt: FieldValue.serverTimestamp(), ...cred,
       });
       out.push(tRef.id);
@@ -101,8 +106,12 @@ function _issueTickets(txn, { sale, lines, event, soldBy, attendeeName }) {
 
 /* Post the money side of a COMPLETED door sale: settlement row (organizer-collected) + commission
    receivable + commission ledger row. All inside the sale transaction. */
-function _postDoorSale(txn, { sale, event, grossCents, quantity }) {
+function _postDoorSale(txn, { sale, event, grossCents, quantity, lines }) {
   const c = _saleCommission(grossCents);
+  /* ONE fiscal record per completed door sale (event-fiscal; submitted to eTIMS after commit). */
+  FISCAL.recordSale(txn, { saleKey: sale.id, event, channel: sale.tender === 'cash' ? 'door_cash' : 'door_card', saleId: sale.id,
+    lines: (lines || []).map((l) => ({ name: `${event.title || 'Event'} — ${l.tierName}`, qty: l.qty, unitCents: l.unitCents })),
+    grossCents, paymentMethod: sale.tender === 'cash' ? 'CASH' : 'CARD' });
   txn.create(_db().collection(COL.SETTLEMENTS).doc(sale.id), {
     paymentRef: null, saleId: sale.id, orderId: null, eventId: event.id, organizerUid: event.organizerUid,
     channel: sale.tender === 'cash' ? 'CASH' : 'CARD_EXTERNAL', quantity: quantity || 0, grossCents, providerFeeCents: 0, netCents: grossCents,
@@ -174,6 +183,8 @@ async function quickSale(req) {
       const received = _cents(d.cashReceivedKes);
       if (!(received >= grossCents)) fail('invalid-argument', `Cash received must be at least KES ${(grossCents / 100).toLocaleString()}.`);
     }
+    /* Tickets issued NOW (cash, or card with its reference) get their identities chosen here — last read. */
+    const ids = (tender === 'cash' || (tender === 'card_external' && cardRefKey)) ? await OPS.allocateIdentities(txn, event.id, qtyTotal) : [];
 
     /* ── writes ── */
     for (const l of lines) txn.update(l.ref, { sold: FieldValue.increment(l.qty), updatedAt: FieldValue.serverTimestamp() });
@@ -190,15 +201,15 @@ async function quickSale(req) {
 
     if (tender === 'cash') {
       const received = _cents(d.cashReceivedKes);
-      const c = _postDoorSale(txn, { sale, event, grossCents, quantity: qtyTotal });
-      const tickets = _issueTickets(txn, { sale, lines, event, soldBy: actor.uid, attendeeName });
+      const c = _postDoorSale(txn, { sale, event, grossCents, quantity: qtyTotal, lines });
+      const tickets = _issueTickets(txn, { sale, lines, event, soldBy: actor.uid, attendeeName, ids });
       txn.create(saleRef, { ...base, status: 'COMPLETED', cashReceivedCents: received, changeCents: received - grossCents,
         commissionCents: c.commissionCents, ticketIds: tickets, completedAt: FieldValue.serverTimestamp() });
       return { saleId: saleRef.id, status: 'COMPLETED', tickets: tickets.length, changeCents: received - grossCents };
     }
     if (tender === 'card_external' && cardRefKey) {
-      const c = _postDoorSale(txn, { sale, event, grossCents, quantity: qtyTotal });
-      const tickets = _issueTickets(txn, { sale, lines, event, soldBy: actor.uid, attendeeName });
+      const c = _postDoorSale(txn, { sale, event, grossCents, quantity: qtyTotal, lines });
+      const tickets = _issueTickets(txn, { sale, lines, event, soldBy: actor.uid, attendeeName, ids });
       txn.create(cardRefKey, { saleId: saleRef.id, eventId: event.id, organizerUid: event.organizerUid, recordedBy: actor.uid, createdAt: FieldValue.serverTimestamp() });
       txn.create(saleRef, { ...base, status: 'COMPLETED', card: { provider: String(card.provider).toLowerCase(), reference: cardRef },
         paymentVerified: false, attestation: { by: actor.uid, role: actor.role, method: 'external_terminal_reference' },
@@ -223,7 +234,7 @@ async function quickSale(req) {
       const tRef = db.collection(COL.TICKETS).doc();
       txn.set(tRef, { ticketId: tRef.id, orderId: saleRef.id, saleId: saleRef.id, eventId: event.id, tierId: l.tierId, tierName: l.tierName,
         buyerUid: null, walkIn: true, soldBy: actor.uid, channel: 'cashier', tender, attendeeName, status: 'awaiting_payment',
-        checkedIn: false, createdAt: FieldValue.serverTimestamp() });
+        checkedIn: false, ..._qr(tRef.id), createdAt: FieldValue.serverTimestamp() });
     }
     txn.create(saleRef, { ...base, status: 'AWAITING_PAYMENT', orderId: saleRef.id });
     return { saleId: saleRef.id, status: 'AWAITING_PAYMENT', payment: { purpose: 'event_ticket', orderId: saleRef.id } };
@@ -234,6 +245,7 @@ async function quickSale(req) {
     return { saleId: result.saleId, status: s.status, replay: true };
   }
   logger.info('[eventSales] sale', { saleId: result.saleId, eventId: event.id, tender, status: result.status, by: actor.uid });
+  if (result.status === 'COMPLETED' && !result.replay) await FISCAL.submit(result.saleId);   /* never throws */
   return result;
 }
 
@@ -248,7 +260,7 @@ async function confirmExternalCard(req) {
   const cardRef = _ref(d.reference);
   if (cardRef.length < 6 || cardRef.length > 64) fail('invalid-argument', 'Enter the terminal transaction reference (6-64 characters).');
   const refKey = _db().collection(COL.CARD_REFS).doc(`${event.organizerUid}__${provider}__${cardRef}`);
-  return _db().runTransaction(async (txn) => {
+  const out = await _db().runTransaction(async (txn) => {
     const [ss, used] = await Promise.all([txn.get(saleRef), txn.get(refKey)]);
     if (!ss.exists || ss.data().eventId !== event.id) fail('not-found', 'Sale not found.');
     const s = ss.data();
@@ -257,16 +269,19 @@ async function confirmExternalCard(req) {
     if (_ms(s.expiresAt) <= _now()) fail('failed-precondition', 'This pending sale has expired. Start a new sale.');
     if (_cents(d.amountKes) !== s.grossCents) fail('invalid-argument', `The card amount must equal the sale total (KES ${(s.grossCents / 100).toLocaleString()}).`);
     if (used.exists) fail('already-exists', 'That card reference has already been recorded for a sale.');
+    const ids = await OPS.allocateIdentities(txn, event.id, s.quantity);
     const lines = s.lines;
     const sale = { id: saleRef.id, tender: 'card_external' };
-    const c = _postDoorSale(txn, { sale, event, grossCents: s.grossCents, quantity: s.quantity });
-    const tickets = _issueTickets(txn, { sale, lines, event, soldBy: s.cashierUid, attendeeName: s.attendeeName });
+    const c = _postDoorSale(txn, { sale, event, grossCents: s.grossCents, quantity: s.quantity, lines: s.lines });
+    const tickets = _issueTickets(txn, { sale, lines, event, soldBy: s.cashierUid, attendeeName: s.attendeeName, ids });
     txn.create(refKey, { saleId: saleRef.id, eventId: event.id, organizerUid: event.organizerUid, recordedBy: actor.uid, createdAt: FieldValue.serverTimestamp() });
     txn.update(saleRef, { status: 'COMPLETED', card: { provider, reference: cardRef }, paymentVerified: false,
       attestation: { by: actor.uid, role: actor.role, method: 'external_terminal_reference' },
       commissionCents: c.commissionCents, ticketIds: tickets, completedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
     return { saleId: saleRef.id, status: 'COMPLETED', tickets: tickets.length };
   });
+  await FISCAL.submit(out.saleId);                  /* never throws; the sweep retries */
+  return out;
 }
 
 /** Cancel a PENDING_EXTERNAL sale (or let the sweep expire it): seats are released, nothing issued. */
@@ -309,13 +324,21 @@ async function saleTickets(req) {
   if (s.cashierUid !== actor.uid && !actor.caps.includes(OPS.CAPS.VIEW_SALES)) fail('permission-denied', 'Only the cashier who made this sale can see its PINs.');
   const tix = await _db().collection(COL.TICKETS).where('saleId', '==', saleId).limit(100).get();
   const secrets = await Promise.all(tix.docs.map((t) => _db().collection(COL.SECRETS).doc(t.id).get()));
+  const ev = actor.event;
+  const unit = Object.fromEntries((s.lines || []).map((l) => [l.tierId, l.unitCents]));
+  /* The fiscal (KRA eTIMS) state of this sale — derived from the invoice, never invented. */
+  const fiscal = (await FISCAL.viewsFor([s.paymentRef || saleId]))[s.paymentRef || saleId] || { status: 'NOT_RECORDED' };
+  const nowMs = _now();
   return {
-    saleId, status: s.status, tender: s.tender, grossCents: s.grossCents,
+    saleId, status: s.status, tender: s.tender, grossCents: s.grossCents, fiscal,
+    event: { title: ev.title || null, startDate: ev.startDate || null, venue: ev.venue || null, city: ev.city || null },
     tickets: tix.docs.map((t, i) => {
       const x = t.data(); const sec = secrets[i].exists ? secrets[i].data() : null;
       /* A PIN is released only for an issued, walk-in ticket this sale owns. */
       const pin = x.status === 'valid' && x.walkIn && sec && sec.soldBy === s.cashierUid ? sec.pin : null;
-      return { ticketId: t.id, ticketNumber: x.ticketNumber || null, tierName: x.tierName, status: x.status, pin };
+      return { ticketId: t.id, ticketNumber: x.ticketNumber || null, tierName: x.tierName, status: x.status, pin,
+        pinState: x.pinHash ? OPS.pinState(x, ev, nowMs) : null, unitCents: unit[x.tierId] != null ? unit[x.tierId] : null,
+        qrData: x.status === 'valid' ? (x.qrData || null) : null };
     }),
   };
 }

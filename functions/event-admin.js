@@ -15,8 +15,14 @@
  *   eventAdminAdmissions    an event's admissions and PIN lockout counters
  *   eventAdminRefundRequests  wizard refund requests (eventRefundRequests)
  *   eventAdminReceivables   door-sale commission receivables
+ *   eventAdminFiscal        KRA eTIMS reconciliation queue: failed / pending / not-registered sales
+ *                           and refunds owing a credit note (event-fiscal views, never invented)
+ *   (investigate also searches by payment reference, admission / refund status within an event,
+ *    and fiscal status; ticket rows show the PIN only as ••••)
  * WRITE op:
  *   eventAdminRevokeStaff   end a staff member's access at once (reason required, audited)
+ *   eventAdminFiscalRetry   re-submit a sale's fiscal record, or re-queue its failed eTIMS invoice
+ *                           (etims.requeueInvoice) — the SAME eTIMS paths; audited
  *
  * PIN HANDLING. A PIN is a bearer credential. An admin may ask "which ticket does PIN X of event E
  * belong to?" — the server hashes it with the event-bound HMAC and reads the index. The raw PIN is
@@ -32,6 +38,7 @@ const logger = require('firebase-functions/logger');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const AC = require('./admin-claim');
 const OPS = require('./event-ops');
+const FISCAL = require('./event-fiscal');
 
 const _db = () => getFirestore();
 const fail = (code, msg) => { throw new HttpsError(code, msg); };
@@ -40,7 +47,7 @@ const LIMIT = 100;
 const COL = Object.freeze({
   EVENTS: 'events', TICKETS: 'eventTickets', ORDERS: 'eventOrders', SALES: 'eventSales',
   SETTLEMENTS: 'eventSettlements', RECEIVABLES: 'eventCommissionReceivables', COMMISSION: 'commissionLedger',
-  REFUND_REQUESTS: 'eventRefundRequests', REFUNDS: 'fosRefundQueue', PAYMENTS: 'payments',
+  REFUND_REQUESTS: 'eventRefundRequests', FISCAL: 'eventFiscal', REFUNDS: 'fosRefundQueue', PAYMENTS: 'payments',
   WALLET_TX: 'walletTransactions', STAFF: 'eventStaff', INVITES: 'eventStaffInvites',
   ADMISSIONS: 'eventAdmissions', ATTEMPTS: 'eventPinAttempts', ADMIN_AUDIT: 'adminAudit',
 });
@@ -62,6 +69,8 @@ function maskEmail(v) { const s = String(v || ''); const at = s.indexOf('@'); re
 function clean(id, x) {
   if (!x) return null;
   const out = { id };
+  /* A ticket's PIN is never returned — only that one exists. */
+  if (x.pinHash) out.pinDisplay = '••••';
   for (const [k, v] of Object.entries(x)) {
     if (NEVER.has(k)) continue;
     if (/phone|msisdn/i.test(k) && typeof v === 'string') out[k] = maskPhone(v);
@@ -81,7 +90,21 @@ async function _audit(action, actorUid, target, detail) {
 }
 
 /* ═══ INVESTIGATE ═══════════════════════════════════════════════════════════════════════ */
-const SEARCH_BY = Object.freeze(['event', 'ticket', 'ticketNumber', 'order', 'sale', 'buyer', 'cashier', 'cardRef', 'pin']);
+const SEARCH_BY = Object.freeze(['event', 'ticket', 'ticketNumber', 'order', 'sale', 'paymentRef', 'buyer', 'cashier', 'cardRef', 'pin',
+  'admissionStatus', 'refundStatus', 'fiscalStatus']);
+const ADMISSION_STATES = Object.freeze(['ADMITTED', 'NOT_ADMITTED']);
+const REFUND_STATES = Object.freeze(['NONE', 'REQUESTED', 'APPROVED', 'REFUNDED']);
+
+/* Every search result carries the FISCAL state of its sale, derived from the eTIMS invoice. */
+async function _decorate(out) {
+  const keys = out.tickets.map(FISCAL.keyOfTicket).concat(out.sales.map((x) => x.paymentRef || x.id), out.orders.map((o) => o.paymentRef));
+  const views = await FISCAL.viewsFor(keys.filter(Boolean).slice(0, 150));
+  const fx = (k) => (k && views[k]) || null;
+  out.tickets = out.tickets.map((t) => ({ ...t, fiscal: fx(FISCAL.keyOfTicket(t)) }));
+  out.sales = out.sales.map((x) => ({ ...x, fiscal: fx(x.paymentRef || x.id) }));
+  out.orders = out.orders.map((o) => ({ ...o, fiscal: fx(o.paymentRef) }));
+  return out;
+}
 
 async function investigate(req) {
   const actor = _admin(req);
@@ -89,28 +112,49 @@ async function investigate(req) {
   const by = String(d.by || '');
   if (!SEARCH_BY.includes(by)) fail('invalid-argument', `Search by one of: ${SEARCH_BY.join(', ')}.`);
   const raw = String(d.value == null ? '' : d.value).trim();
-  const out = { by, tickets: [], orders: [], sales: [] };
+  const out = { by, tickets: [], orders: [], sales: [], fiscal: [] };
 
   if (by === 'pin') {
     /* PIN identity: resolved through the event-bound HMAC index. The PIN itself is not echoed,
        not stored, and the lookup is audited either way. */
     const eventId = _id(d.eventId, 'eventId');
-    if (!OPS.normalizePin(raw)) fail('invalid-argument', 'A PIN is 8 characters (XXXX-XXXX).');
+    if (!OPS.normalizePin(raw)) fail('invalid-argument', 'A PIN is 4 digits.');
     const hit = await OPS.lookupPin(eventId, raw);
     await _audit('event_admin_pin_lookup', actor, { eventId }, { found: !!hit, ticketId: hit ? hit.ticketId : null });
     if (hit) { const t = await _doc(COL.TICKETS, hit.ticketId); if (t) out.tickets.push(t); }
-    return out;
+    return _decorate(out);
   }
   if (by === 'ticketNumber') {
     const n = raw.toUpperCase();
-    if (!/^SK-EVT-[A-Z0-9]{6}$/.test(n)) fail('invalid-argument', 'A ticket number looks like SK-EVT-XXXXXX.');
+    if (!OPS.TICKET_NUMBER_RE.test(n)) fail('invalid-argument', 'A ticket number looks like SK-EVT-2026-000184.');
     out.tickets = await _where(COL.TICKETS, 'ticketNumber', n, 10);
-    return out;
+    return _decorate(out);
   }
   if (by === 'cardRef') {
     const ref = raw.toUpperCase().replace(/[^A-Z0-9_-]/g, '');
     if (ref.length < 4 || ref.length > 64) fail('invalid-argument', 'Enter the card terminal reference.');
     out.sales = await _where(COL.SALES, 'card.reference', ref, 20);
+    return _decorate(out);
+  }
+  if (by === 'admissionStatus' || by === 'refundStatus') {
+    /* Status searches are scoped to ONE event (an unscoped one would read the whole platform). */
+    const eventId = _id(d.eventId, 'eventId');
+    const val = raw.toUpperCase();
+    if (!(by === 'admissionStatus' ? ADMISSION_STATES : REFUND_STATES).includes(val)) fail('invalid-argument', `Unknown ${by}.`);
+    const snap = await _db().collection(COL.TICKETS).where('eventId', '==', eventId).where(by, '==', val).limit(LIMIT).get();
+    out.tickets = _rows(snap);
+    out.truncated = out.tickets.length >= LIMIT;
+    return _decorate(out);
+  }
+  if (by === 'fiscalStatus') {
+    const val = raw.toUpperCase();
+    if (!Object.values(FISCAL.REC).includes(val)) fail('invalid-argument', 'Unknown fiscal status.');
+    let q = _db().collection(COL.FISCAL).where('status', '==', val);
+    if (d.eventId) q = q.where('eventId', '==', _id(d.eventId, 'eventId'));
+    const recs = _rows(await q.limit(LIMIT).get());
+    const views = await FISCAL.viewsFor(recs.map((r) => r.saleKey || r.id));
+    out.fiscal = recs.map((r) => ({ ...r, view: views[r.saleKey || r.id] || null }));
+    out.truncated = recs.length >= LIMIT;
     return out;
   }
 
@@ -126,13 +170,15 @@ async function investigate(req) {
   } else if (by === 'sale') {
     const s = await _doc(COL.SALES, v); if (s) out.sales.push(s);
     out.tickets = await _where(COL.TICKETS, 'saleId', v);
+  } else if (by === 'paymentRef') {
+    [out.orders, out.tickets, out.sales] = await Promise.all([_where(COL.ORDERS, 'paymentRef', v), _where(COL.TICKETS, 'paymentRef', v), _where(COL.SALES, 'paymentRef', v)]);
   } else if (by === 'buyer') {
     [out.orders, out.tickets] = await Promise.all([_where(COL.ORDERS, 'buyerUid', v), _where(COL.TICKETS, 'buyerUid', v)]);
   } else if (by === 'cashier') {
     [out.sales, out.tickets] = await Promise.all([_where(COL.SALES, 'cashierUid', v), _where(COL.TICKETS, 'soldBy', v)]);
   }
   out.truncated = [out.tickets, out.orders, out.sales].some((a) => a.length >= LIMIT);
-  return out;
+  return _decorate(out);
 }
 
 /* ═══ FINANCIAL TRACE ═══════════════════════════════════════════════════════════════════ */
@@ -177,6 +223,8 @@ async function trace(req) {
   ]);
   const admissions = await Promise.all(tickets.map((t) => _doc(COL.ADMISSIONS, t.id)));
   const walletTx = settlement && settlement.walletTxId ? await _doc(COL.WALLET_TX, settlement.walletTxId) : null;
+  /* KRA eTIMS: the fiscal record of this sale and its invoice — observed, never invented. */
+  const fiscal = settleKey ? ((await FISCAL.viewsFor([settleKey]))[settleKey] || null) : null;
 
   const ev = event ? { id: event.id, title: event.title, status: event.status, organizerUid: event.organizerUid,
     startDate: event.startDate || null, endDate: event.endDate || null, refundPolicy: event.refundPolicy || null } : null;
@@ -186,6 +234,11 @@ async function trace(req) {
     stage('sale', sale ? 'observed' : 'n/a', sale, sale ? null : 'Online purchase — no cashier sale.'),
     doorSale ? stage('payment', 'n/a', null, sale.tender === 'cash' ? 'Cash collected at the door by the organizer.' : 'Card on the organizer\'s own terminal (reference on the sale).')
              : stage('payment', payment ? 'observed' : 'empty', payment, paymentRef ? null : 'The order has no payment reference.'),
+    stage('fiscal', !settleKey ? 'n/a' : (fiscal && fiscal.status !== 'NOT_RECORDED' ? 'observed' : 'empty'), fiscal,
+      !settleKey ? 'Nothing was sold (free ticket).' : fiscal && fiscal.status === 'CONFIRMED' ? 'KRA accepted the invoice; the receipt and QR shown are exactly as KRA returned them.'
+        : fiscal && fiscal.status === 'NOT_REGISTERED' ? 'The organizer has no active eTIMS profile — no fiscal receipt exists.'
+        : fiscal && fiscal.status === 'FAILED' ? 'Fiscal submission failed — reconcile in the Fiscal tab.'
+        : fiscal && fiscal.status === 'PENDING' ? 'Pending fiscal confirmation.' : 'No fiscal record for this sale.'),
     stage('commission', commission ? 'observed' : (settleKey ? 'empty' : 'n/a'), commission,
       doorSale ? 'Door sale: SOKONI\'s commission is a receivable netted from the organizer\'s next online release.' : null),
     stage('receivable', doorSale ? (receivable ? 'observed' : 'empty') : 'n/a', receivable),
@@ -215,6 +268,46 @@ async function admissions(req) {
 }
 
 const REFUND_REQUEST_STATES = Object.freeze(['SUBMITTING', 'PENDING_REVIEW', 'DUPLICATE', 'REJECTED', 'REFUNDED']);
+/* ═══ FISCAL RECONCILIATION (KRA eTIMS) ════════════════════════════════════════════════ */
+const RECON = Object.freeze(['FAILED', 'PENDING', 'NOT_REGISTERED', 'CREDIT_NOTE_REQUIRED']);
+/** The reconciliation queue: failed / stuck / unregistered sales, and refunds owing a credit note. */
+async function fiscalQueue(req) {
+  _admin(req);
+  const d = req.data || {};
+  const want = d.view ? String(d.view) : null;
+  if (want && !RECON.includes(want)) fail('invalid-argument', 'Unknown reconciliation view.');
+  let q = _db().collection(COL.FISCAL);
+  if (d.eventId) q = q.where('eventId', '==', _id(d.eventId, 'eventId'));
+  const recs = _rows(await q.limit(300).get());
+  const views = await FISCAL.viewsFor(recs.map((r) => r.saleKey || r.id));
+  const rows = recs.map((r) => ({ ...r, view: views[r.saleKey || r.id] || null }))
+    .filter((r) => r.view && (want === 'CREDIT_NOTE_REQUIRED' ? (r.reversal && r.reversal.status === 'CREDIT_NOTE_REQUIRED')
+      : want ? r.view.status === want : (r.view.status !== 'CONFIRMED' || (r.reversal && r.reversal.status === 'CREDIT_NOTE_REQUIRED'))));
+  return { fiscal: rows, truncated: recs.length >= 300 };
+}
+
+/** Retry one sale's fiscalisation through the SAME paths: re-submit the record, or re-queue its failed
+ *  eTIMS invoice (etims.requeueInvoice). Accepted invoices are never touched. Audited. */
+async function fiscalRetry(req) {
+  const actor = _admin(req);
+  const saleKey = _id((req.data || {}).saleKey, 'saleKey');
+  const ref = _db().collection(COL.FISCAL).doc(saleKey);
+  const snap = await ref.get();
+  if (!snap.exists) fail('not-found', 'No fiscal record for that sale.');
+  const f = snap.data();
+  const v = (await FISCAL.viewsFor([saleKey]))[saleKey];
+  let result;
+  if (v.status === 'CONFIRMED' || v.status === 'NOT_APPLICABLE') fail('failed-precondition', `Nothing to retry: fiscal status is ${v.status}.`);
+  if (f.invoiceId) {
+    result = await require('./etims').requeueInvoice(f.invoiceId);
+  } else {
+    await ref.update({ claimedAt: null, updatedAt: FieldValue.serverTimestamp() });
+    result = await FISCAL.submit(saleKey);
+  }
+  await _audit('event_fiscal_retry', actor, { saleKey }, { before: v.status, invoiceId: f.invoiceId || null, result });
+  return { ok: true, result };
+}
+
 async function refundRequests(req) {
   _admin(req);
   const st = (req.data || {}).status ? String(req.data.status) : null;
@@ -252,6 +345,7 @@ async function revokeStaff(req) {
 const _adminH = {
   eventAdminInvestigate: investigate, eventAdminTrace: trace, eventAdminStaff: staff, eventAdminAdmissions: admissions,
   eventAdminRefundRequests: refundRequests, eventAdminReceivables: receivables, eventAdminRevokeStaff: revokeStaff,
+  eventAdminFiscal: fiscalQueue, eventAdminFiscalRetry: fiscalRetry,
 };
 
 module.exports = { _adminH, SEARCH_BY, clean, maskPhone, maskEmail };

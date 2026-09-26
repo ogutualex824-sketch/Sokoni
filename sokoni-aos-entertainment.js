@@ -20,7 +20,7 @@
 
   const TABS = [
     ['overview', 'Overview'], ['investigate', 'Investigate'], ['events', 'Events'], ['eventops', 'Staff & gate'], ['settlements', 'Settlements'],
-    ['refunds', 'Refund queue'], ['refundreq', 'Refund requests'], ['receivables', 'Receivables'],
+    ['refunds', 'Refund queue'], ['refundreq', 'Refund requests'], ['receivables', 'Receivables'], ['fiscal', 'Fiscal (KRA)'],
     ['exceptions', 'Exceptions'], ['listings', 'Venues & artists'], ['matrix', 'Categories & policy'],
   ];
 
@@ -42,7 +42,7 @@
     let tab = 'overview';
     let listingKind = 'venue', listingStatus = 'pending';
     /* Investigation state survives a re-render (after an action) — the PIN itself is never kept. */
-    let search = null, traced = null, opsEvent = '', rqStatus = '', rvStatus = 'OUTSTANDING';
+    let search = null, traced = null, opsEvent = '', rqStatus = '', rvStatus = 'OUTSTANDING', fView = '';
 
     host.innerHTML = `
       <div class="aoscr-tabs" role="tablist">${TABS.map(([k, l]) => `<button type="button" role="tab" class="aos-btn aos-btn-ghost" data-tab="${k}">${esc(l)}</button>`).join('')}</div>
@@ -71,8 +71,10 @@
     }
 
     /* ── Event investigation helpers ─────────────────────────────────────────────── */
-    const BY = [['event', 'Event id'], ['ticketNumber', 'Ticket number (SK-EVT-…)'], ['ticket', 'Ticket id'], ['order', 'Order id'], ['sale', 'Sale id'],
-      ['buyer', 'Buyer uid'], ['cashier', 'Cashier uid'], ['cardRef', 'Card terminal reference'], ['pin', 'Ticket PIN (with event id)']];
+    const BY = [['event', 'Event id'], ['ticketNumber', 'Ticket number (SK-EVT-YYYY-NNNNNN)'], ['ticket', 'Ticket id'], ['order', 'Order id'], ['sale', 'Sale id'],
+      ['paymentRef', 'Payment reference'], ['buyer', 'Buyer uid'], ['cashier', 'Cashier uid'], ['cardRef', 'Card terminal reference'], ['pin', 'Ticket PIN (with event id)'],
+      ['admissionStatus', 'Admission status (with event id)'], ['refundStatus', 'Refund status (with event id)'], ['fiscalStatus', 'Fiscal status (KRA)']];
+    const fchip = (f) => chip(f && f.status ? f.status : '—');
     const trBtn = (kind, id) => `<button type="button" class="aos-btn aos-btn-ghost" data-trace-${kind}="${esc(id)}">Trace</button>`;
     /* A record's plain fields; *Cents render as money, nested objects are summarised. */
     function kv(o) {
@@ -95,28 +97,48 @@
         <ol class="aos-trace">${t.stages.map((s) => `<li><strong>${esc(s.stage.replace('_', ' '))}</strong> ${chip(s.state)}${s.note ? `<div class="aos-muted">${esc(s.note)}</div>` : ''}${body(s)}</li>`).join('')}</ol>`;
     }
 
+    /* A fiscal (KRA eTIMS) record: KRA values shown only as KRA returned them; retry reuses eTIMS. */
+    const FISCAL_HEAD = ['Sale', 'Event', 'Channel', 'Gross', 'Fiscal', 'Invoice', 'KRA receipt', 'Reversal', ''];
+    function fiscalRow(f) {
+      const v = f.view || {};
+      const canRetry = v.status && v.status !== 'CONFIRMED' && v.status !== 'NOT_APPLICABLE';
+      const tr = f.orderId ? trBtn('order', f.orderId) : (f.saleId ? trBtn('sale', f.saleId) : '');
+      return `<tr><td class="aos-mono">${esc(f.saleKey || f.id)}</td><td class="aos-mono">${esc(f.eventId)}</td><td>${esc(f.channel)}</td><td>${kes(f.grossCents)}</td>
+        <td>${chip(v.status)}${f.error ? `<div class="aos-muted">${esc(f.error)}</div>` : ''}</td><td class="aos-mono">${esc(v.invoiceNumber || f.invoiceNumber || '—')}</td>
+        <td class="aos-mono">${esc(v.receiptNumber || '—')}</td><td>${f.reversal ? chip(f.reversal.status) : '—'}</td>
+        <td>${canRetry ? `<button type="button" class="aos-btn aos-btn-ghost" data-fiscal-retry="${esc(f.saleKey || f.id)}">Retry</button> ` : ''}${tr}</td></tr>`;
+    }
+
     const R = {
+      async fiscal() {
+        const r = await call('eventAdminFiscal', fView ? { view: fView } : {});
+        const filt = `<div class="aos-filters"><label>Show <select data-fview><option value="">Everything needing attention</option>${['FAILED', 'PENDING', 'NOT_REGISTERED', 'CREDIT_NOTE_REQUIRED'].map((x) => `<option ${x === fView ? 'selected' : ''}>${x}</option>`).join('')}</select></label></div>`;
+        return filt + '<p class="aos-muted">Event ticket sales on KRA eTIMS (invoices under the organizer). Payment, ticket and admission never depend on this: a ticket stays valid while its fiscal record is reconciled. Nothing here is fabricated — a KRA receipt and QR exist only when KRA accepted the invoice.</p>'
+          + table(FISCAL_HEAD, (r.fiscal || []).map(fiscalRow).join(''), 'Nothing to reconcile.');
+      },
       async investigate() {
         const cur = search ? search.q : { by: 'event' };
         const form = `<form class="aos-filters" data-evsearch>
           <label>Search by <select name="by">${BY.map(([k, l]) => `<option value="${k}" ${k === cur.by ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
           <label>Value <input name="value" autocomplete="off" spellcheck="false" maxlength="128" value="${cur.by === 'pin' ? '' : esc(cur.value || '')}"></label>
-          <label>Event id (PIN search) <input name="eventId" autocomplete="off" maxlength="128" value="${esc(cur.eventId || '')}"></label>
+          <label>Event id (PIN / status search) <input name="eventId" autocomplete="off" maxlength="128" value="${esc(cur.eventId || '')}"></label>
           <button type="submit" class="aos-btn">Search</button></form>
-          <p class="aos-muted">Every PIN search is audited. The PIN is never displayed or stored — only the ticket it belongs to.</p>`;
+          <p class="aos-muted">Every PIN search is audited. PINs show as •••• — never displayed or stored; a PIN search returns only the ticket it belongs to.</p>`;
         if (traced) return form + traceView(traced);
         if (!search) return form;
         const r = search.result;
-        const tix = r.tickets.map((x) => `<tr><td class="aos-mono">${esc(x.ticketNumber || x.id)}</td><td class="aos-mono">${esc(x.eventId)}</td><td>${esc(x.tierName)}</td><td>${chip(x.status)}</td>
-          <td>${esc(x.admissionStatus || '—')}</td><td>${chip(x.refundStatus)}</td><td class="aos-mono">${esc(x.buyerUid || (x.soldBy ? 'walk-in · ' + x.soldBy : '—'))}</td><td>${trBtn('ticket', x.id)}</td></tr>`).join('');
+        const tix = r.tickets.map((x) => `<tr><td class="aos-mono">${esc(x.ticketNumber || x.id)}</td><td class="aos-mono">${esc(x.pinDisplay || '—')}</td><td class="aos-mono">${esc(x.eventId)}</td><td>${esc(x.tierName)}</td><td>${chip(x.status)}</td>
+          <td>${esc(x.admissionStatus || '—')}</td><td>${chip(x.refundStatus)}</td><td>${fchip(x.fiscal)}</td><td class="aos-mono">${esc(x.buyerUid || (x.soldBy ? 'walk-in · ' + x.soldBy : '—'))}</td><td>${trBtn('ticket', x.id)}</td></tr>`).join('');
         const ords = r.orders.map((o) => `<tr><td class="aos-mono">${esc(o.id)}</td><td class="aos-mono">${esc(o.eventId)}</td><td class="aos-mono">${esc(o.buyerUid)}</td><td>${num(o.quantity)}</td>
-          <td>${o.totalAmount == null ? '—' : 'KES ' + num(o.totalAmount)}</td><td>${chip(o.status)}</td><td>${trBtn('order', o.id)}</td></tr>`).join('');
+          <td>${o.totalAmount == null ? '—' : 'KES ' + num(o.totalAmount)}</td><td>${chip(o.status)}</td><td>${fchip(o.fiscal)}</td><td>${trBtn('order', o.id)}</td></tr>`).join('');
         const sales = r.sales.map((x) => `<tr><td class="aos-mono">${esc(x.id)}</td><td class="aos-mono">${esc(x.eventId)}</td><td>${esc(x.tender)}</td><td class="aos-mono">${esc(x.cashierUid)}</td>
-          <td>${num(x.quantity)}</td><td>${kes(x.grossCents)}</td><td>${chip(x.status)}</td><td>${trBtn('sale', x.id)}</td></tr>`).join('');
+          <td>${num(x.quantity)}</td><td>${kes(x.grossCents)}</td><td>${chip(x.status)}</td><td>${fchip(x.fiscal)}</td><td>${trBtn('sale', x.id)}</td></tr>`).join('');
+        const fis = (r.fiscal || []).map(fiscalRow).join('');
         return form + (r.truncated ? '<p class="aos-muted">Showing the first 100 of each — narrow the search.</p>' : '') +
-          `<h4>Tickets</h4>${table(['Ticket', 'Event', 'Tier', 'Status', 'Admission', 'Refund', 'Buyer / sold by', ''], tix, 'No tickets.')}
-          <h4>Orders</h4>${table(['Order', 'Event', 'Buyer', 'Tickets', 'Amount', 'Status', ''], ords, 'No orders.')}
-          <h4>Door &amp; cashier sales</h4>${table(['Sale', 'Event', 'Tender', 'Cashier', 'Tickets', 'Gross', 'Status', ''], sales, 'No sales.')}`;
+          (search.q.by === 'fiscalStatus' ? `<h4>Fiscal records</h4>${table(FISCAL_HEAD, fis, 'No fiscal records in that state.')}`
+          : `<h4>Tickets</h4>${table(['Ticket', 'PIN', 'Event', 'Tier', 'Status', 'Admission', 'Refund', 'Fiscal', 'Buyer / sold by', ''], tix, 'No tickets.')}
+          <h4>Orders</h4>${table(['Order', 'Event', 'Buyer', 'Tickets', 'Amount', 'Status', 'Fiscal', ''], ords, 'No orders.')}
+          <h4>Door &amp; cashier sales</h4>${table(['Sale', 'Event', 'Tender', 'Cashier', 'Tickets', 'Gross', 'Status', 'Fiscal', ''], sales, 'No sales.')}`);
       },
       async eventops() {
         const form = `<form class="aos-filters" data-evops><label>Event id <input name="eventId" autocomplete="off" maxlength="128" value="${esc(opsEvent)}"></label>
@@ -231,6 +253,7 @@
         return render();
       }
       if (t.dataset.untrace) { traced = null; return render(); }
+      if (t.dataset.fiscalRetry) return act('eventAdminFiscalRetry', { saleKey: t.dataset.fiscalRetry }, 'Fiscal retry queued through eTIMS.');
       if (t.dataset.revoke) {
         return ask('Revoke access', [{ label: 'Reason (kept in the audit log)', area: true }], ([reason]) => {
           if (String(reason || '').trim().length < 5) return msg('A reason is required.', true);
@@ -281,6 +304,7 @@
     host.addEventListener('change', (ev) => {
       if (ev.target.matches('[data-rqstatus]')) { rqStatus = ev.target.value; render(); }
       if (ev.target.matches('[data-rvstatus]')) { rvStatus = ev.target.value; render(); }
+      if (ev.target.matches('[data-fview]')) { fView = ev.target.value; render(); }
       if (ev.target.matches('[data-lkind]')) { listingKind = ev.target.value; render(); }
       if (ev.target.matches('[data-lstatus]')) { listingStatus = ev.target.value; render(); }
     });
@@ -298,7 +322,7 @@
   const OPS = ['eventAdminOverview', 'eventAdminEvents', 'eventAdminSettlements', 'eventAdminRefundQueue', 'eventAdminExceptions',
     'eventAdminAttestFee', 'entAdminMatrix', 'entAdminListings', 'entAdminSetListingStatus',
     'eventAdminInvestigate', 'eventAdminTrace', 'eventAdminStaff', 'eventAdminAdmissions', 'eventAdminRefundRequests',
-    'eventAdminReceivables', 'eventAdminRevokeStaff'];
+    'eventAdminReceivables', 'eventAdminRevokeStaff', 'eventAdminFiscal', 'eventAdminFiscalRetry'];
 
   root.SokoniAOSEntertainment = { mount, OPS, _kes: kes, _esc: esc };
 }(typeof window !== 'undefined' ? window : globalThis));

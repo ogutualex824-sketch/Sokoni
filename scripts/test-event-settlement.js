@@ -41,7 +41,7 @@ const FN = Path.join(ROOT, 'functions');
 const { makeFakeFirestore } = require('./lib/fake-firestore-txn');
 
 let NOW = Date.now();                 /* real clock: purchaseTickets reads new Date() */
-const F = makeFakeFirestore({ clock: () => NOW });
+const F = makeFakeFirestore({ clock: () => NOW, strictReadOrder: true });
 const db = F.db;
 const users = { buyer1: { uid: 'buyer1' }, buyer2: { uid: 'buyer2' }, org1: { uid: 'org1' }, adm: { uid: 'adm' } };
 const resolveIn = (m) => require.resolve(m, { paths: [FN] });

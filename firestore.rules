@@ -4611,6 +4611,11 @@ service cloud.firestore {
     // staff assignment could give itself the gate.
     match /eventTicketSecrets/{ticketId} { allow read, write: if false; }
     match /eventTicketPins/{pinId}       { allow read, write: if false; }
+    // Ticket-number uniqueness index (SK-EVT-YYYY-NNNNNN) and the fiscal (KRA eTIMS) record of each
+    // paid sale: server-owned. A client that could write the fiscal record could mark a sale
+    // fiscalised, or hide one from reconciliation.
+    match /eventTicketNumbers/{number}   { allow read, write: if false; }
+    match /eventFiscal/{saleKey}         { allow read: if isAdmin(); allow write: if false; }
     match /eventStaff/{assignmentId}     { allow read, write: if false; }
     match /eventStaffInvites/{inviteId}  { allow read, write: if false; }
     match /eventAdmissions/{ticketId}    { allow read: if isAdmin(); allow write: if false; }

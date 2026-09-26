@@ -3,21 +3,25 @@
  * SOKONI — Event operations: ticket PINs, event-scoped temporary staff, PIN admission.
  * ============================================================================================
  * TICKET IDENTITY — PIN FIRST, QR OPTIONAL. Every ISSUED ticket gets:
- *   ticketNumber  SK-EVT-XXXXXX   human reference (random, never sequential; not a credential)
- *   PIN           XXXX-XXXX       the admission credential (8 chars from a 32-char alphabet with no
- *                                 0/O/1/I — ~1.1 × 10^12 values), generated server-side with
- *                                 crypto.randomInt
+ *   ticketNumber  SK-EVT-YYYY-NNNNNN  the PERMANENT identity (random within the year, never
+ *                                     sequential; unique via eventTicketNumbers; not a credential)
+ *   PIN           NNNN                the EVENT-DAY admission credential: exactly 4 digits,
+ *                                     crypto.randomInt, drawn independently of the ticket number,
+ *                                     unique within the event for its whole life (never recycled)
  * The PIN is a BEARER CREDENTIAL, so:
  *   · it is stored as HMAC-SHA256(SOKONI_HMAC_KEY, "evtpin|eventId|PIN") — the hash on the ticket
  *     is useless without the server key, and binds the PIN to ONE event (a PIN from event A can
- *     never match a ticket of event B);
+ *     never match a ticket of event B, and event B is its own namespace);
  *   · the raw PIN lives only in eventTicketSecrets/{ticketId} (no client rule — deny by default)
- *     and is returned only to the ticket's buyer, or to the cashier who sold a walk-in ticket;
+ *     and is returned only to the ticket's buyer, or to the staff who sold a walk-in ticket;
  *   · it is never logged, never put in a notification, never stored in an audit row;
- *   · uniqueness per event is enforced by create() on eventTicketPins/{eventId}_{hash};
- *   · verification is rate-limited per staff member AND per event (distributed guessing), with
- *     transactional counters; admission is a transaction with a create()-only admission record,
- *     so two gates admitting the same PIN at once cannot both succeed.
+ *   · free PINs are CHOSEN by reading the index inside the issuing transaction (see
+ *     allocateIdentities) and confirmed by create() on eventTicketPins/{eventId}_{hash};
+ *   · lifetime: ISSUED → ACTIVE in the admission window → CONSUMED once admitted, EXPIRED after
+ *     the window; refunded / void / cancelled are INVALID (pinState);
+ *   · a 4-digit space is small: guessing is throttled per staff member AND per event, and a
+ *     crossed limit is recorded as a security event; admission is a transaction with a
+ *     create()-only admission record, so two gates admitting one PIN cannot both succeed.
  * The QR/token of the legacy check-in stays as a convenience; SOKONI never depends on scanning.
  *
  * STAFF — organizer → event → temporary staff member → role → event-day capabilities.
@@ -45,24 +49,40 @@ let _now = () => Date.now();
 
 const COL = Object.freeze({
   EVENTS: 'events', TICKETS: 'eventTickets', SECRETS: 'eventTicketSecrets', PINS: 'eventTicketPins',
-  STAFF: 'eventStaff', INVITES: 'eventStaffInvites', ADMISSIONS: 'eventAdmissions', ATTEMPTS: 'eventPinAttempts',
+  NUMBERS: 'eventTicketNumbers', STAFF: 'eventStaff', INVITES: 'eventStaffInvites', ADMISSIONS: 'eventAdmissions', ATTEMPTS: 'eventPinAttempts',
   AUDIT: 'eventOpsAudit',
 });
 
-/* ═══ PIN ═══════════════════════════════════════════════════════════════════════════════ */
-const PIN_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   /* 32 chars, no 0/O/1/I */
-const PIN_LEN = 8;
+/* ═══ TICKET IDENTITY ═══════════════════════════════════════════════════════════════════
+   ticketNumber  SK-EVT-YYYY-NNNNNN  the PERMANENT identity (receipts, support, AdminOS). Six random
+                 digits within the year, unique via eventTicketNumbers/{number}. Never sequential:
+                 a sequence would publish sales volume.
+   PIN           NNNN                the EVENT-DAY admission credential: exactly 4 digits from
+                 crypto.randomInt, drawn INDEPENDENTLY of the ticket number (never its last digits,
+                 never a truncated hash). Unique within the EVENT for the event's whole life — never
+                 recycled while that event's tickets remain auditable. Another event is another
+                 namespace: the index key is HMAC(event, PIN).
+   Only 10,000 PINs exist per event, so collisions are routine. Free values are CHOSEN by reading
+   candidate index docs inside the issuing transaction (reads before writes); create() then only
+   confirms them. Never create()-and-hope: a create() conflict is ALREADY_EXISTS, which Firestore
+   does not retry, so it would fail a paid sale. A concurrent issuer that takes the same value
+   changes a doc this transaction read, and the transaction retries and re-probes. */
+const PIN_DIGITS = 4;
+const PIN_SPACE = 10000;
+/* The most tickets one event may issue with 4-digit PINs. Enforced when ticket types are
+   configured (event-hub createTicketTier), so a paid order can never meet an exhausted PIN space;
+   at 80 % fill a free PIN still takes ~5 reads to find. */
+const EVENT_PIN_CEILING = 8000;
+const TICKET_NUMBER_RE = /^SK-EVT-\d{4}-\d{6}$/;
+let _randInt = (n) => crypto.randomInt(0, n);
 
-function _rand(n) { let s = ''; for (let i = 0; i < n; i++) s += PIN_ALPHABET[crypto.randomInt(0, PIN_ALPHABET.length)]; return s; }
-function generatePin() { const r = _rand(PIN_LEN); return r.slice(0, 4) + '-' + r.slice(4); }
-function generateTicketNumber() { return 'SK-EVT-' + _rand(6); }
+function generatePin() { return String(_randInt(PIN_SPACE)).padStart(PIN_DIGITS, '0'); }
+function generateTicketNumber(year) { return `SK-EVT-${year}-${String(_randInt(1000000)).padStart(6, '0')}`; }
 
-/** Canonical form: separators/spaces removed, upper-cased; anything outside the alphabet → null. */
+/** Canonical form: spaces/dashes removed; exactly four digits, else null. */
 function normalizePin(raw) {
-  const s = String(raw == null ? '' : raw).toUpperCase().replace(/[\s-]/g, '');
-  if (s.length !== PIN_LEN) return null;
-  for (const c of s) if (PIN_ALPHABET.indexOf(c) < 0) return null;
-  return s;
+  const s = String(raw == null ? '' : raw).replace(/[\s-]/g, '');
+  return /^\d{4}$/.test(s) ? s : null;
 }
 
 function _pinKey() {
@@ -79,22 +99,86 @@ function pinHash(eventId, rawPin) {
   return crypto.createHmac('sha256', _pinKey()).update(`evtpin|${String(eventId)}|${p}`).digest('hex');
 }
 
+/* Draw `need` values whose index docs do not exist, reading candidates in widening rounds. */
+async function _probeFree(txn, need, draw, refOf, space) {
+  const out = []; const seen = new Set();
+  let size = need + 2;
+  for (let round = 0; round < 6 && out.length < need && seen.size < space; round++) {
+    const cands = [];
+    for (let guard = 0; cands.length < size && guard < size * 50 && seen.size + cands.length < space; guard++) {
+      const v = draw();
+      if (!seen.has(v) && !cands.includes(v)) cands.push(v);
+    }
+    const snaps = await Promise.all(cands.map((v) => txn.get(refOf(v))));
+    cands.forEach((v, i) => { seen.add(v); if (!snaps[i].exists && out.length < need) out.push(v); });
+    size = Math.min(400, size * 4);
+  }
+  return out;
+}
+
 /**
- * Issue credentials for ONE ticket inside the caller's transaction/batch.
- * Writes the PIN index (create — uniqueness) and the secret; returns the fields to put on the ticket.
- * Inside a transaction a hash collision aborts the create and the whole transaction retries,
- * generating a fresh PIN — so a duplicate PIN within an event is impossible, not improbable.
+ * Allocate `n` ticket identities for one event — call in the transaction's READ phase.
+ * @returns {Promise<Array<{pin:string, hash:string, ticketNumber:string}>>}
  */
-function issueCredentials(writer, { eventId, ticketId, buyerUid = null, soldBy = null }) {
+async function allocateIdentities(txn, eventId, n, opts = {}) {
+  const need = Math.max(0, Math.floor(Number(n) || 0));
+  if (!need) return [];
+  if (need > 100) fail('invalid-argument', 'At most 100 tickets can be issued at once.');
   const db = _db();
-  const pin = generatePin();
-  const hash = pinHash(eventId, pin);
-  const ticketNumber = generateTicketNumber();
-  writer.create(db.collection(COL.PINS).doc(`${eventId}_${hash}`), { eventId, ticketId, createdAt: FieldValue.serverTimestamp() });
+  const year = new Date(Number.isFinite(opts.nowMs) ? opts.nowMs : _now()).getUTCFullYear();
+  const pins = await _probeFree(txn, need, generatePin,
+    (p) => db.collection(COL.PINS).doc(`${eventId}_${pinHash(eventId, p)}`), PIN_SPACE);
+  if (pins.length < need) fail('resource-exhausted', 'This event has no free admission PINs left — contact SOKONI support.');
+  const numbers = await _probeFree(txn, need, () => generateTicketNumber(year),
+    (x) => db.collection(COL.NUMBERS).doc(x), 1000000);
+  if (numbers.length < need) fail('resource-exhausted', 'Could not allocate a ticket number — please try again.');
+  return pins.map((pin, i) => ({ pin, hash: pinHash(eventId, pin), ticketNumber: numbers[i] }));
+}
+
+/**
+ * Issue credentials for ONE ticket inside the caller's transaction, with an identity from
+ * allocateIdentities (read phase). Writes the PIN index + ticket-number index (create — the
+ * uniqueness confirmation) and the raw-PIN secret; returns the fields to put on the ticket.
+ */
+function issueCredentials(writer, { eventId, ticketId, buyerUid = null, soldBy = null, identity }) {
+  if (!identity || !normalizePin(identity.pin) || !TICKET_NUMBER_RE.test(String(identity.ticketNumber || ''))) {
+    throw new Error('issueCredentials: allocate the identity in the transaction read phase (allocateIdentities)');
+  }
+  const db = _db();
+  writer.create(db.collection(COL.PINS).doc(`${eventId}_${identity.hash}`), { eventId, ticketId, createdAt: FieldValue.serverTimestamp() });
+  writer.create(db.collection(COL.NUMBERS).doc(identity.ticketNumber), { eventId, ticketId, createdAt: FieldValue.serverTimestamp() });
   writer.set(db.collection(COL.SECRETS).doc(ticketId), {
-    ticketId, eventId, pin, buyerUid: buyerUid || null, soldBy: soldBy || null, createdAt: FieldValue.serverTimestamp(),
+    ticketId, eventId, pin: identity.pin, buyerUid: buyerUid || null, soldBy: soldBy || null, createdAt: FieldValue.serverTimestamp(),
   });
-  return { ticketNumber, pinHash: hash, admissionStatus: 'NOT_ADMITTED', refundStatus: 'NONE', credentialIssuedAt: FieldValue.serverTimestamp() };
+  return { ticketNumber: identity.ticketNumber, pinHash: identity.hash, admissionStatus: 'NOT_ADMITTED', refundStatus: 'NONE',
+    credentialIssuedAt: FieldValue.serverTimestamp() };
+}
+
+/* ═══ PIN LIFETIME ═══════════════════════════════════════════════════════════════════════
+   ISSUED (before the admission window) → ACTIVE (window open) → CONSUMED (admitted, once)
+                                                             ↘ EXPIRED (window closed)
+   A refund in flight SUSPENDS it; refunded / void / cancelled-event tickets are INVALID. The
+   window defaults to 12 h before the start until 12 h after the end; an organizer may set
+   admissionOpensAt / admissionClosesAt on the event. */
+const ADMISSION_OPEN_BEFORE_MS = 12 * 3600 * 1000;
+const ADMISSION_CLOSE_AFTER_MS = 12 * 3600 * 1000;
+function admissionWindow(ev) {
+  const start = _ms(ev && ev.startDate), end = eventEndMs(ev);
+  return {
+    opensAt: _ms(ev && ev.admissionOpensAt) != null ? _ms(ev.admissionOpensAt) : (start != null ? start - ADMISSION_OPEN_BEFORE_MS : null),
+    closesAt: _ms(ev && ev.admissionClosesAt) != null ? _ms(ev.admissionClosesAt) : (end != null ? end + ADMISSION_CLOSE_AFTER_MS : null),
+  };
+}
+function pinState(t, ev, nowMs) {
+  if (ev && ev.status === 'cancelled') return 'INVALID_CANCELLED';
+  if (t.status === 'refunded' || t.refundStatus === 'REFUNDED') return 'INVALID_REFUNDED';
+  if (t.status !== 'valid') return 'INVALID';
+  if ((t.admissionStatus || 'NOT_ADMITTED') === 'ADMITTED') return 'CONSUMED';
+  if (['REQUESTED', 'APPROVED'].includes(t.refundStatus)) return 'SUSPENDED_REFUND';
+  const w = admissionWindow(ev || {});
+  if (w.opensAt != null && nowMs < w.opensAt) return 'ISSUED';
+  if (w.closesAt != null && nowMs > w.closesAt) return 'EXPIRED';
+  return 'ACTIVE';
 }
 
 /* ═══ STAFF / ACTOR AUTHORITY ════════════════════════════════════════════════════════════ */
@@ -105,7 +189,9 @@ const CAPS = Object.freeze({
   MARKETING: 'marketing', MANAGE_STAFF: 'manage_staff', FINANCE: 'finance', MANAGE_EVENT: 'manage_event',
 });
 const STAFF_ROLES = Object.freeze({
-  cashier:   [CAPS.SELL, CAPS.VIEW_OWN_SALES],
+  /* A gate cashier also checks online tickets by PIN (owner brief, 2026-09-27: Quick Sale handles a new
+     sale AND an existing ticket) — through the SAME admission authority, never a second one. */
+  cashier:   [CAPS.SELL, CAPS.VIEW_OWN_SALES, CAPS.ADMIT],
   admission: [CAPS.ADMIT],
   marketing: [CAPS.MARKETING],
   manager:   [CAPS.SELL, CAPS.VIEW_SALES, CAPS.ADMIT, CAPS.MARKETING],
@@ -279,7 +365,9 @@ async function myAssignments(req) {
 }
 
 /* ═══ PIN VERIFICATION + ADMISSION ═══════════════════════════════════════════════════════ */
-const ATTEMPTS = Object.freeze({ WINDOW_MS: 10 * 60 * 1000, PER_STAFF_FAILS: 10, PER_EVENT_FAILS: 200 });
+/* A 4-digit space is small, so guessing is throttled hard: 5 wrong PINs per staff member and 100 per
+   event in any 10 minutes. Crossing a limit records a security event (event_pin_lockout). */
+const ATTEMPTS = Object.freeze({ WINDOW_MS: 10 * 60 * 1000, PER_STAFF_FAILS: 5, PER_EVENT_FAILS: 100 });
 
 /** Charge one attempt against the per-staff and per-event windows; refuses when either is exhausted. */
 async function _chargeAttempt(eventId, uid, failed) {
@@ -297,7 +385,8 @@ async function _chargeAttempt(eventId, uid, failed) {
     const locked = state.findIndex((s, i) => s.fails >= limits[i]);
     if (locked >= 0) return { locked: locked === 0 ? 'staff' : 'event', retryAtMs: state[locked].windowStart + ATTEMPTS.WINDOW_MS };
     if (failed) state.forEach((s, i) => txn.set(refs[i], { fails: s.fails + 1, windowStart: Timestamp.fromMillis(s.windowStart), eventId, updatedAt: FieldValue.serverTimestamp() }, { merge: true }));
-    return { locked: null };
+    const crossed = failed ? state.findIndex((s, i) => s.fails + 1 === limits[i]) : -1;
+    return { locked: null, crossed: crossed < 0 ? null : (crossed === 0 ? 'staff' : 'event') };
   });
 }
 
@@ -314,17 +403,33 @@ function _summary(t, ev) {
   return {
     ticketId: t.ticketId, ticketNumber: t.ticketNumber || null, tierName: t.tierName || null,
     event: ev ? ev.title : null, status: t.status, admissionStatus: t.admissionStatus || 'NOT_ADMITTED',
-    refundStatus: t.refundStatus || 'NONE',
+    refundStatus: t.refundStatus || 'NONE', pinState: pinState(t, ev, _now()),
     /* minimal attendee information: initials only */
     attendeeInitials: name ? name.split(/\s+/).map((p) => p[0].toUpperCase()).slice(0, 3).join('') : null,
   };
 }
 
-function _admissible(t) {
-  if (t.status !== 'valid') return `Ticket is ${t.status}.`;
-  if ((t.admissionStatus || 'NOT_ADMITTED') === 'ADMITTED') return 'Already admitted.';
-  if (['REQUESTED', 'APPROVED', 'REFUNDED'].includes(t.refundStatus)) return 'A refund is in progress for this ticket — contact the organizer.';
-  return null;
+const _when = (ms) => new Date(ms).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' });
+/** Why this ticket cannot be admitted now — null when it can. Driven by pinState, so every surface agrees. */
+function _admissible(t, ev, nowMs) {
+  const st = pinState(t, ev, nowMs);
+  switch (st) {
+    case 'ACTIVE': return null;
+    case 'CONSUMED': return 'Already admitted.';
+    case 'SUSPENDED_REFUND': return 'A refund is in progress for this ticket — contact the organizer.';
+    case 'INVALID_REFUNDED': return 'Ticket is refunded.';
+    case 'INVALID_CANCELLED': return 'This event was cancelled.';
+    case 'ISSUED': return `Admission has not opened yet — it opens ${_when(admissionWindow(ev).opensAt)}.`;
+    case 'EXPIRED': return 'The admission window for this ticket has closed.';
+    default: return `Ticket is ${t.status}.`;
+  }
+}
+
+/* A wrong PIN: counted, audited without the PIN, and a crossed limit is a security event. */
+async function _wrongPin(actor) {
+  const r = await _chargeAttempt(actor.event.id, actor.uid, true);
+  await _audit('event_pin_failed', actor, { eventId: actor.event.id }, null);   /* no PIN, no hash */
+  if (r.crossed) await _audit('event_pin_lockout', actor, { eventId: actor.event.id }, { scope: r.crossed, windowMs: ATTEMPTS.WINDOW_MS });
 }
 
 /** Staff enters a PIN for the SELECTED event → ticket summary + whether it can be admitted. */
@@ -335,13 +440,12 @@ async function verifyPin(req) {
   if (pre.locked) fail('resource-exhausted', 'Too many wrong PINs. Wait a few minutes before trying again.');
   const hit = await _lookupPin(actor.event.id, d.pin);
   if (!hit) {
-    await _chargeAttempt(actor.event.id, actor.uid, true);
-    await _audit('event_pin_failed', actor, { eventId: actor.event.id }, null);   /* no PIN, no hash */
+    await _wrongPin(actor);
     return { valid: false, reason: 'No ticket for this event matches that PIN.' };
   }
   const t = (await _db().collection(COL.TICKETS).doc(hit.ticketId).get()).data();
   if (!t || t.eventId !== actor.event.id || t.pinHash !== hit.hash) return { valid: false, reason: 'No ticket for this event matches that PIN.' };
-  const blocked = _admissible(t);
+  const blocked = _admissible(t, actor.event, _now());
   return { valid: true, admissible: !blocked, reason: blocked, ticket: _summary(t, actor.event) };
 }
 
@@ -353,8 +457,7 @@ async function admit(req) {
   if (pre.locked) fail('resource-exhausted', 'Too many wrong PINs. Wait a few minutes before trying again.');
   const hit = await _lookupPin(actor.event.id, d.pin);
   if (!hit) {
-    await _chargeAttempt(actor.event.id, actor.uid, true);
-    await _audit('event_pin_failed', actor, { eventId: actor.event.id }, null);
+    await _wrongPin(actor);
     fail('not-found', 'No ticket for this event matches that PIN.');
   }
   const db = _db();
@@ -362,12 +465,13 @@ async function admit(req) {
   const aRef = db.collection(COL.ADMISSIONS).doc(hit.ticketId);
   const deviceSession = String(d.deviceSession || '').slice(0, 80) || null;
   const res = await db.runTransaction(async (txn) => {
-    const [ts, as] = await Promise.all([txn.get(tRef), txn.get(aRef)]);
+    const evRef = db.collection(COL.EVENTS).doc(actor.event.id);
+    const [ts, as, evs] = await Promise.all([txn.get(tRef), txn.get(aRef), txn.get(evRef)]);
     if (!ts.exists) fail('not-found', 'Ticket not found.');
     const t = ts.data();
     if (t.eventId !== actor.event.id || t.pinHash !== hit.hash) fail('not-found', 'No ticket for this event matches that PIN.');
     if (as.exists) return { already: true, t };
-    const blocked = _admissible(t);
+    const blocked = _admissible(t, evs.exists ? { id: evs.id, ...evs.data() } : actor.event, _now());
     if (blocked) return { blocked, t };
     txn.create(aRef, {
       ticketId: hit.ticketId, eventId: actor.event.id, admittedBy: actor.uid, admittedRole: actor.role,
@@ -375,7 +479,7 @@ async function admit(req) {
     });
     txn.update(tRef, { admissionStatus: 'ADMITTED', admittedAt: FieldValue.serverTimestamp(), admittedBy: actor.uid,
       checkedIn: true, checkedInAt: FieldValue.serverTimestamp(), checkedInBy: actor.uid });
-    txn.update(db.collection(COL.EVENTS).doc(actor.event.id), { checkinsCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+    txn.update(evRef, { checkinsCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
     return { admitted: true, t };
   });
   if (res.admitted) await _audit('event_ticket_admitted', actor, { eventId: actor.event.id, ticketId: hit.ticketId }, { method: 'pin', deviceSession });
@@ -399,8 +503,10 @@ const eventOpsDispatch = onCall(OPS_OPTS(), async (req) => {
 function OPS_OPTS() { return { ...OPTS, timeoutSeconds: 30, memory: '256MiB' }; }
 
 module.exports = {
-  COL, CAPS, STAFF_ROLES, ORGANIZER_CAPS, ATTEMPTS, PIN_ALPHABET, PIN_LEN, SOKONI_HMAC_KEY,
-  generatePin, generateTicketNumber, normalizePin, pinHash, issueCredentials,
+  COL, CAPS, STAFF_ROLES, ORGANIZER_CAPS, ATTEMPTS, PIN_DIGITS, PIN_SPACE, EVENT_PIN_CEILING, TICKET_NUMBER_RE, SOKONI_HMAC_KEY,
+  generatePin, generateTicketNumber, normalizePin, pinHash, allocateIdentities, issueCredentials, admissionWindow, pinState, admissibleReason: _admissible,
   resolveEventActor, staffActive, eventEndMs, lookupPin: _lookupPin, _h, eventOpsDispatch,
   _setClock: (fn) => { _now = fn || (() => Date.now()); },
+  /* tests only: force the random draws (collision / exhaustion proofs) */
+  _setRandom: (fn) => { _randInt = fn || ((n) => crypto.randomInt(0, n)); },
 };

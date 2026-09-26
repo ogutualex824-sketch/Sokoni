@@ -30,7 +30,7 @@ const http = require('http');
 const ROOT = Path.resolve(__dirname, '..');
 const FN = Path.join(ROOT, 'functions');
 const { makeFakeFirestore } = require('./lib/fake-firestore-txn');
-const F = makeFakeFirestore({ clock: () => Date.now() });
+const F = makeFakeFirestore({ clock: () => Date.now(), strictReadOrder: true });
 const db = F.db;
 const say = console.log; console.log = console.info = console.warn = console.error = console.debug = () => {};
 const authApi = { getUser: async (u) => ({ uid: u, customClaims: {} }) };
@@ -117,7 +117,7 @@ const COMPAT = `
   window.SOKONI_CONFIG = {};
   window.SK = { dialog: { confirm: async () => true } };
 })();`;
-const REAL = new Set(['/event-manager.html', '/event-hub.html', '/sokoni-event-ops.js', '/sokoni-event-refund-reasons.js', '/sokoni-hub-nav.js',
+const REAL = new Set(['/event-manager.html', '/event-hub.html', '/sokoni-event-ops.js', '/sokoni-event-refund-reasons.js', '/sokoni-hub-nav.js', '/sokoni-qr.js', '/sokoni-event-ticket.js',
   '/sokoni-dashboard-profile.js', '/sokoni-dashboard-profile-core.js', '/sokoni-aos-entertainment.js']);
 /* AdminOS › Entertainment, mounted with the REAL admin-os.html stylesheet and AdminOS's call shape. */
 const AOS_PAGE = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
@@ -140,8 +140,10 @@ const get = async (p) => { const s = await db.doc(p).get(); return s.exists ? s.
 async function seed() {
   const NOW = Date.now(); const H = 3600e3;
   await db.doc('users/org1').set({ roles: ['event_organizer'] });
-  await db.doc('events/evA').set({ eventId: 'evA', title: 'Nairobi Jazz Night', organizerUid: 'org1', status: 'live', startDate: new Date(NOW + 48 * H).toISOString(), endDate: new Date(NOW + 52 * H).toISOString(), totalTicketsSold: 0, createdAt: F.Timestamp.fromMillis(NOW),
-    refundPolicy: { mode: 'before_cutoff', cutoffAt: new Date(NOW + 24 * H).toISOString(), noShowRefund: true } });
+  await db.doc('events/evA').set({ eventId: 'evA', title: 'Nairobi Jazz Night', organizerUid: 'org1', status: 'live', startDate: new Date(NOW + 3 * H).toISOString(), endDate: new Date(NOW + 7 * H).toISOString(), totalTicketsSold: 0, createdAt: F.Timestamp.fromMillis(NOW),
+    venue: 'KICC', city: 'Nairobi', refundPolicy: { mode: 'before_cutoff', cutoffAt: new Date(NOW + 1 * H).toISOString(), noShowRefund: true } });
+  /* the organizer is registered for KRA eTIMS: paid sales get a REAL (queued) eTIMS invoice */
+  await db.doc('etimsProfiles/org1').set({ status: 'active', kraPin: 'P051234567T', businessName: 'Kamau Events', branchId: '00', vatStatus: 'registered', invoicePrefix: 'KEV' });
   await db.doc('eventTicketTiers/VIP').set({ tierId: 'VIP', eventId: 'evA', name: 'VIP', price: 5000, quantity: 100, sold: 0, isActive: true, currency: 'KES' });
   await db.doc('eventTicketTiers/REG').set({ tierId: 'REG', eventId: 'evA', name: 'Regular', price: 2000, quantity: 500, sold: 0, isActive: true, currency: 'KES' });
   await db.doc('eventTicketTiers/FEW').set({ tierId: 'FEW', eventId: 'evA', name: 'Backstage', price: 9000, quantity: 2, sold: 0, isActive: true, currency: 'KES' });
@@ -152,10 +154,13 @@ async function seed() {
   /* a paid online order for the buyer, through the REAL activation */
   const oid = 'ORDBUY1';
   await db.doc(`eventOrders/${oid}`).set({ orderId: oid, buyerUid: 'buyer1', eventId: 'evA', tierId: 'REG', tierName: 'Regular', quantity: 2, totalAmount: 4000, currency: 'KES', status: 'pending_payment', attendeeName: 'Achieng Otieno', createdAt: F.Timestamp.fromMillis(NOW) });
-  for (let i = 0; i < 2; i++) await db.doc(`eventTickets/${oid}_k${i}`).set({ ticketId: `${oid}_k${i}`, orderId: oid, eventId: 'evA', buyerUid: 'buyer1', tierName: 'Regular', status: 'awaiting_payment', createdAt: F.Timestamp.fromMillis(NOW) });
+  for (let i = 0; i < 2; i++) await db.doc(`eventTickets/${oid}_k${i}`).set({ ticketId: `${oid}_k${i}`, orderId: oid, eventId: 'evA', buyerUid: 'buyer1', tierId: 'REG', tierName: 'Regular', status: 'awaiting_payment', token: 'tok' + i + 'buy1aaaaaaaaaaaaaaaaaaaaaaaaaaa', qrData: `sokoni-ticket:${oid}_k${i}:tok${i}buy1aaaaaaaaaaaaaaaaaaaaaaaaaaa`, createdAt: F.Timestamp.fromMillis(NOW) });
   await db.doc(`paymentIntents/${oid}`).set({ ref: oid, purpose: 'event_ticket', resourceType: 'eventOrder', resourceId: oid, uid: 'buyer1', ownerUid: 'buyer1', amount: 4000, amountCents: 400000, currency: 'KES', metadata: { eventId: 'evA', organizerUid: 'org1' } });
   await db.doc(`payments/${oid}`).set({ ref: oid, uid: 'buyer1', amount: 4000, amountCents: 400000, currency: 'KES', status: 'COMPLETE', provider: 'intasend', providerReport: { charges: 60 } });
   await ES.activateIfEventTicket(oid);
+  /* KRA accepted the buyer's invoice (the fields etimsProcessQueue writes from KRA's answer) */
+  const fr = await get(`eventFiscal/${oid}`);
+  await db.doc(`etimsInvoices/${fr.invoiceId}`).set({ status: 'accepted', receiptNumber: 'KRA-RCPT-4411', qrCode: 'https://etims.kra.go.ke/qr/KRA-RCPT-4411.png', verificationUrl: 'https://etims.kra.go.ke/verify?r=KRA-RCPT-4411' }, { merge: true });
   /* a SEPARATE paid order the gate flows admit — the buyer's own order stays unused for the refund wizard */
   const g = 'ORDGATE1';
   await db.doc(`eventOrders/${g}`).set({ orderId: g, buyerUid: 'buyer2', eventId: 'evA', tierId: 'REG', tierName: 'Regular', quantity: 2, totalAmount: 4000, currency: 'KES', status: 'pending_payment', createdAt: F.Timestamp.fromMillis(NOW) });
@@ -163,6 +168,13 @@ async function seed() {
   await db.doc(`paymentIntents/${g}`).set({ ref: g, purpose: 'event_ticket', resourceType: 'eventOrder', resourceId: g, uid: 'buyer2', ownerUid: 'buyer2', amount: 4000, amountCents: 400000, currency: 'KES', metadata: { eventId: 'evA', organizerUid: 'org1' } });
   await db.doc(`payments/${g}`).set({ ref: g, uid: 'buyer2', amount: 4000, amountCents: 400000, currency: 'KES', status: 'COMPLETE', provider: 'intasend', providerReport: { charges: 60 } });
   await ES.activateIfEventTicket(g);
+  /* an ONLINE order a gate cashier checks in Quick Sale (one ticket per flow width) */
+  const c = 'ORDCHK1';
+  await db.doc(`eventOrders/${c}`).set({ orderId: c, buyerUid: 'buyer3', eventId: 'evA', tierId: 'REG', tierName: 'Regular', quantity: 2, totalAmount: 4000, currency: 'KES', status: 'pending_payment', createdAt: F.Timestamp.fromMillis(NOW) });
+  for (let i = 0; i < 2; i++) await db.doc(`eventTickets/${c}_k${i}`).set({ ticketId: `${c}_k${i}`, orderId: c, eventId: 'evA', buyerUid: 'buyer3', tierName: 'Regular', status: 'awaiting_payment', createdAt: F.Timestamp.fromMillis(NOW) });
+  await db.doc(`paymentIntents/${c}`).set({ ref: c, purpose: 'event_ticket', resourceType: 'eventOrder', resourceId: c, uid: 'buyer3', ownerUid: 'buyer3', amount: 4000, amountCents: 400000, currency: 'KES', metadata: { eventId: 'evA', organizerUid: 'org1' } });
+  await db.doc(`payments/${c}`).set({ ref: c, uid: 'buyer3', amount: 4000, amountCents: 400000, currency: 'KES', status: 'COMPLETE', provider: 'intasend', providerReport: { charges: 60 } });
+  await ES.activateIfEventTicket(c);
   return oid;
 }
 
@@ -213,11 +225,40 @@ async function seed() {
         ck(`cashier @${w}: stepper controls cause no overflow`, await noOverflow(pg, w));
         await pg.click('[data-inc="VIP"]'); await pg.click('[data-tender="cash"]');
         await pg.fill('#qsCash', '6000'); await pg.click('#qsDo');
-        await pg.waitForSelector('.eo-pin', { timeout: 8000 }).catch(() => null);
+        await pg.waitForSelector('#qsOut .sk-t-pin', { timeout: 8000 }).catch(() => null);
         const pinShown = await pg.textContent('#qsOut').catch(() => '');
         const sales = db._dump('eventSales/').filter((x) => x.cashierUid === 'till1' && x.tender === 'cash');
         const last = sales[sales.length - 1] || {};
-        ck(`cashier @${w}: cash sale → PIN shown to hand over`, /[A-Z2-9]{4}-[A-Z2-9]{4}/.test(pinShown), pinShown.slice(0, 60));
+        const pins = await pg.$$eval('#qsOut .sk-t-pin', (xs) => xs.map((x) => x.textContent.trim()));
+        const nums = await pg.$$eval('#qsOut .sk-t-num', (xs) => xs.map((x) => x.textContent.trim()));
+        ck(`cashier @${w}: SALE COMPLETE — the ticket card shows its number + 4-digit PIN to hand over`, /SALE COMPLETE/.test(pinShown) && pins.length === 1 && /^\d{4}$/.test(pins[0]) && /^SK-EVT-\d{4}-\d{6}$/.test(nums[0]), [pins, nums]);
+        ck(`cashier @${w}: the SOKONI QR is drawn (local encoder) and KRA shows its real status`, (await pg.$$('#qsOut .sk-t-qr canvas')).length === 1 && /Pending fiscal confirmation/.test(pinShown) && !/KRA \/ FISCAL QR/.test(pinShown), [(await pg.$$('#qsOut .sk-t-qr canvas')).length, pinShown.slice(Math.max(0, pinShown.indexOf('KRA'))).replace(/\s+/g, ' '), db._dump('eventFiscal/').filter((f) => /door/.test(f.channel)).map((f) => f.saleKey + ':' + f.status), last.saleId]);
+        ck(`cashier @${w}: the ticket card fits the screen (no overflow)`, await noOverflow(pg, w));
+        /* Show ticket → full-screen dialog; Send ticket → WhatsApp with number + PIN; Print ticket → print window */
+        await pg.click('#qsOut [data-tk-show]');
+        const dlg = await pg.waitForSelector('[role="dialog"] .sk-ticket', { timeout: 5000 }).catch(() => null);
+        ck(`cashier @${w}: Show ticket opens the ticket full-screen`, !!dlg && (await dlg.textContent()).includes(nums[0]) && await noOverflow(pg, w));
+        await pg.click('[data-tk-close]');
+        const [wa] = await Promise.all([pg.waitForEvent('popup', { timeout: 5000 }).catch(() => null), pg.click('#qsOut [data-tk-send]')]);
+        const waUrl = wa ? decodeURIComponent(wa.url()) : '';
+        ck(`cashier @${w}: Send ticket hands over the ticket number + PIN (WhatsApp, no Web Share in this browser)`, /wa\.me/.test(waUrl) && waUrl.includes(nums[0]) && waUrl.includes('PIN: ' + pins[0]), waUrl.slice(0, 120));
+        if (wa) await wa.close();
+        const [pw] = await Promise.all([pg.waitForEvent('popup', { timeout: 5000 }).catch(() => null), pg.click('#qsOut [data-tk-print]')]);
+        if (pw) await pw.waitForLoadState().catch(() => null);
+        const printed = pw ? await pw.content().catch(() => '') : '';
+        ck(`cashier @${w}: Print ticket opens a printable ticket (QR as an image, no buttons)`, /SOKONI EVENT TICKET/.test(printed) && printed.includes(nums[0]) && /<img[^>]+data:image\/png/.test(printed) && !/data-tk-print/.test(printed));
+        if (pw) await pw.close();
+        /* an ONLINE ticket at the gate: Quick Sale → Check ticket → PIN → Admit (same authority) */
+        const chk = w === 390 ? 'ORDCHK1_k0' : 'ORDCHK1_k1';
+        await pg.click('[data-qsmode="check"]'); await pg.waitForSelector('#qsCheck #adPin', { timeout: 5000 }).catch(() => null);
+        await pg.fill('#qsCheck #adPin', (await get(`eventTicketSecrets/${chk}`)).pin); await pg.click('#qsCheck #adVerify');
+        await pg.waitForSelector('#qsCheck #adAdmit', { timeout: 5000 }).catch(() => null);
+        ck(`cashier @${w}: Check ticket shows the ONLINE ticket (number, tier) for its PIN`, (await pg.textContent('#qsCheck #adOut')).includes((await get(`eventTickets/${chk}`)).ticketNumber));
+        await pg.click('#qsCheck #adAdmit'); await pg.waitForTimeout(400);
+        const adm1 = await get(`eventAdmissions/${chk}`);
+        ck(`cashier @${w}: Admit → server ADMITTED by the cashier (canonical admission record)`, adm1 && adm1.admittedBy === 'till1' && adm1.method === 'pin' && (await get(`eventTickets/${chk}`)).admissionStatus === 'ADMITTED');
+        ck(`cashier @${w}: Check ticket has no horizontal overflow`, await noOverflow(pg, w));
+        await pg.click('[data-qsmode="sale"]');
         ck(`cashier @${w}: server wrote a COMPLETED 5,000 sale + valid ticket + 3 % receivable`, last.status === 'COMPLETED' && last.grossCents === 500000
           && db._dump('eventTickets/').some((t) => t.saleId === last.saleId && t.status === 'valid') && ((await get(`eventCommissionReceivables/${last.saleId}`)) || {}).amountCents === 15000);
         ck(`cashier @${w}: change shown (1,000)`, /change KES 1,000/.test(await pg.textContent('#qsMsg')));
@@ -228,11 +269,11 @@ async function seed() {
           const before = STK.length;
           await pg.click('[data-inc="REG"]'); await pg.click('[data-tender="intasend"]');
           await pg.fill('#qsPhone', '0712 345 678'); await pg.click('#qsDo');
-          await pg.waitForSelector('.eo-pin', { timeout: 15000 }).catch(() => null);
+          await pg.waitForSelector('#qsOut .sk-t-pin', { timeout: 15000 }).catch(() => null);
           const push = STK[before] || {};
           const msale = db._dump('eventSales/').filter((x) => x.tender === 'intasend' && x.cashierUid === 'till1').pop() || {};
           ck('cashier: M-PESA prompt sent to the buyer number for the SERVER price (KES 2,000)', STK.length === before + 1 && push.phone === '254712345678' && Number(push.amount) === 2000 && push.ref === msale.saleId, push);
-          ck('cashier: after the M-PESA payment the sale is COMPLETED and the PIN is shown', msale.saleId && ((await get('eventSales/' + msale.saleId)) || {}).status === 'COMPLETED' && /[A-Z2-9]{4}-[A-Z2-9]{4}/.test(await pg.textContent('#qsOut')) && /Payment confirmed/.test(await pg.textContent('#qsMsg')));
+          ck('cashier: after the M-PESA payment the sale is COMPLETED and the PIN is shown', msale.saleId && ((await get('eventSales/' + msale.saleId)) || {}).status === 'COMPLETED' && /^\d{4}$/.test(((await pg.$$eval('#qsOut .sk-t-pin', (xs) => xs.map((x) => x.textContent.trim()))) || [])[0] || '') && /Payment confirmed/.test(await pg.textContent('#qsMsg')));
           const st = (await get('eventSettlements/' + msale.saleId)) || {};
           ck('cashier: M-PESA sale settles HELD at 3 % of (gross − fee), never the POS 5 %', st.status === 'HELD' && st.commissionCents === Math.round((200000 - 3000) * 0.03), st);
         }
@@ -299,7 +340,17 @@ async function seed() {
       await pg.evaluate(() => { document.getElementById('my-tickets-panel').style.display = 'block'; return window.loadMyTickets ? null : null; });
       await pg.evaluate(() => (typeof loadMyTickets === 'function') && loadMyTickets()); await pg.waitForTimeout(400);
       const mt = await pg.textContent('#my-tickets-list');
-      ck(`buyer @${w}: My Tickets shows the ticket PIN + number`, /[A-Z2-9]{4}-[A-Z2-9]{4}/.test(mt) && /SK-EVT-/.test(mt));
+      const bpins = await pg.$$eval('#my-tickets-list .sk-t-pin', (xs) => xs.map((x) => x.textContent.trim()));
+      /* A ticket whose refund is in flight (the 1280 flow requests one) shows NO PIN and NO QR — it is
+         not valid for entry; every other card shows its own 4-digit PIN. */
+      const suspended = /Refund in progress/.test(mt);
+      const shown = bpins.filter((x) => x !== '————');
+      ck(`buyer @${w}: My Tickets shows each ticket as a card: SK-EVT-YYYY-NNNNNN + its own 4-digit PIN (hidden only while a refund is in flight)`,
+        shown.length >= 1 && shown.every((x) => /^\d{4}$/.test(x)) && /SK-EVT-\d{4}-\d{6}/.test(mt) && new Set(shown).size === shown.length && (shown.length === bpins.length || suspended), bpins);
+      ck(`buyer @${w}: the SOKONI TICKET QR is drawn for every usable ticket, labelled optional`, (await pg.$$('#my-tickets-list .sk-t-qr canvas')).length === shown.length && /SOKONI TICKET QR/.test(mt));
+      const kraImgs = await pg.$$eval('#my-tickets-list .sk-t-fiscal img', (xs) => xs.map((x) => x.getAttribute('src')));
+      ck(`buyer @${w}: KRA / FISCAL QR only as KRA returned it (accepted invoice), with the KRA receipt`, kraImgs.length >= 1 && kraImgs.every((u) => u === 'https://etims.kra.go.ke/qr/KRA-RCPT-4411.png') && /KRA receipt: KRA-RCPT-4411/.test(mt) && /KRA \/ FISCAL QR/.test(mt), kraImgs);
+      ck(`buyer @${w}: the price shows on the card (VIP/Regular • KES)`, /Regular • KES 2,000/.test(mt));
       ck(`buyer @${w}: My Tickets has no horizontal overflow`, await noOverflow(pg, w));
       if (flows) {
         const p2 = await c.newPage();
@@ -354,6 +405,7 @@ async function seed() {
       await pg.click('[data-evsearch] button[type="submit"]'); await pg.waitForSelector('[data-trace-order]', { timeout: 5000 }).catch(() => null);
       const inv = await pg.textContent('#aosentBody');
       ck(`admin @${w}: search by event lists tickets, orders and door sales`, /SK-EVT-/.test(inv) && /ORDBUY1/.test(inv) && /Door & cashier sales/.test(inv));
+      ck(`admin @${w}: ticket PINs show only as ••••; each row has its fiscal status`, /••••/.test(inv) && /CONFIRMED|PENDING/.test(inv));
       ck(`admin @${w}: investigation has no horizontal page overflow`, await noOverflow(pg, w));
       const html0 = await pg.content();
       const allPins = db._dump('eventTicketSecrets/').map((x) => x.pin);
@@ -390,6 +442,9 @@ async function seed() {
         }
         await pg.click('[data-tab="receivables"]'); await pg.waitForTimeout(400);
         ck(`admin @${w}: receivables render without overflow`, /Owed|No receivables/.test(await pg.textContent('#aosentBody')) && await noOverflow(pg, w));
+        await pg.click('[data-tab="fiscal"]'); await pg.waitForTimeout(400);
+        const fb = await pg.textContent('#aosentBody');
+        ck(`admin @${w}: Fiscal (KRA) reconciliation renders without overflow`, /Nothing here is fabricated/.test(fb) && /Sale|Nothing to reconcile/.test(fb) && await noOverflow(pg, w), fb.slice(0, 300));
       }
       await c.close();
     }

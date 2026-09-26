@@ -25,7 +25,7 @@ delete process.env.K_SERVICE; delete process.env.FUNCTION_TARGET;
 const Path = require('path');
 const FN = Path.resolve(__dirname, '..', 'functions');
 const { makeFakeFirestore } = require('./lib/fake-firestore-txn');
-const F = makeFakeFirestore({ clock: () => Date.now() });
+const F = makeFakeFirestore({ clock: () => Date.now(), strictReadOrder: true });
 const db = F.db;
 /* Firestore refuses a batch of more than 500 writes; the fake did not. */
 const _batch = db.batch.bind(db);
