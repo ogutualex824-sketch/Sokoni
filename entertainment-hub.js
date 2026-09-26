@@ -135,7 +135,17 @@ const EntHub = {
      EVENTS
   ═══════════════════════════════════════════════════════════ */
 
+  /* CONVERGED ONTO EVENT HUB (2026-09-26, owner decision). Events are created by the server
+     event-hub (createEvent → draft → tiers → publishEvent) behind the organizer gate; a
+     browser-created, instantly 'published' entEvents doc is no longer accepted by the rules.
+     The error carries the canonical destination so every caller routes the organizer there. */
   async createEvent(data) {
+    const e = new Error('Events are now created in Event Manager.');
+    e.code = 'converged'; e.redirect = '/event-manager.html';
+    throw e;
+  },
+
+  async _legacyCreateEvent(data) {
     const uid = _uid();
     const u = _user();
     const ref = await addDoc(collection(db, 'entEvents'), {
@@ -200,7 +210,17 @@ const EntHub = {
      TICKETS
   ═══════════════════════════════════════════════════════════ */
 
+  /* CONVERGED ONTO EVENT HUB. This minted an entTickets doc as 'valid' BEFORE payment, took the
+     price from the browser, charged no commission and fired a client-side STK outside the
+     payment authority. Tickets are sold by event-hub purchaseTickets → event_ticket intent →
+     webhook → entitlement; the rules no longer let a client create an entTickets doc. */
   async purchaseTicket(eventId, buyerData) {
+    const e = new Error('Tickets are sold through Event Hub.');
+    e.code = 'converged'; e.redirect = '/event-hub.html';
+    throw e;
+  },
+
+  async _legacyPurchaseTicket(eventId, buyerData) {
     const uid = _uid();
     const u = _user();
     const eventDoc = await getDoc(doc(db, 'entEvents', eventId));
@@ -345,7 +365,9 @@ const EntHub = {
       reviewCount: 0,
       verified: false,
       available: true,
-      status: 'active',
+      /* A venue is listed for REVIEW, as the page promises ("after review") — it was written
+         'active' and was public at once. Approval is an AdminOS action. */
+      status: 'pending',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });

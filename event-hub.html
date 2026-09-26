@@ -35,6 +35,8 @@
     .btn-sm:hover{background:#2d333b;}
     .btn-primary{padding:8px 18px;background:var(--blue);color:#000;border:none;border-radius:6px;font-weight:600;font-size:13px;cursor:pointer;}
     .btn-primary:hover{opacity:.85;}
+    .btn-secondary{padding:10px 18px;background:transparent;color:var(--text,#fff);border:1px solid var(--border,#444);border-radius:6px;font-weight:600;font-size:13px;cursor:pointer;min-height:44px;}
+    .btn-secondary:hover{opacity:.85;}
     .hero{background:linear-gradient(135deg,rgba(88,166,255,.08) 0%,rgba(113,255,0,.08) 100%);border-bottom:1px solid var(--border);padding:48px 24px 36px;}
     .hero-inner{max-width:860px;margin:0 auto;text-align:center;}
     .hero h1{font-size:32px;font-weight:800;margin-bottom:10px;}
@@ -221,6 +223,11 @@
 
   auth.onAuthStateChanged(async user => {
     currentUser = user;
+    const _ret = new URLSearchParams(location.search);
+    if (user && _ret.get('checkout') === 'returned' && /^[A-Za-z0-9_-]{6,128}$/.test(_ret.get('order') || '')) {
+      toast('Checking your payment…');
+      waitForTickets(_ret.get('order'), null).then((ok) => { if (!ok) toast('Payment not confirmed yet — your tickets appear under "My Tickets" once it is.'); });
+    }
     if (user) {
       const tok = await user.getIdTokenResult();
       currentRole = tok.claims.role || 0;
@@ -469,12 +476,13 @@
         attendeeEmail: currentUser.email || '',
       });
 
-      closeModal();
-      if (res.status === 'paid' || res.totalAmount === 0) {
+      if (res.status === 'paid' || !res.payment) {
+        closeModal();
         toast(`🎟 ${res.ticketCount} ticket(s) confirmed! Check "My Tickets".`);
       } else {
-        toast('Order placed! Complete payment to confirm your tickets.');
-        location.href = '/checkout.html?orderId=' + res.orderId + '&type=event';
+        /* Seats are reserved; pay for THIS order. The previous redirect went to
+           checkout.html, which never read the order — paid tickets could not complete. */
+        showPayPanel(res);
       }
     } catch(e) {
       btn.disabled = false; btn.textContent = 'Buy Tickets';
@@ -483,6 +491,88 @@
   }
 
   function closeModal() { document.getElementById('overlay').classList.remove('open'); }
+
+  /* ── Pay for a reserved order ─────────────────────────────────────────────────
+     The SERVER prices the order (createPaymentIntent purpose 'event_ticket'); the
+     amount shown here is informational and is never sent. M-PESA STK is always
+     offered; card / other methods appear ONLY when getCheckoutMethods says the
+     account has them PROVEN for event tickets. Success is the server's: we wait
+     for the tickets to turn valid, never for a prompt or a redirect. */
+  function validPhone(raw) {
+    const d = String(raw || '').replace(/[\s-]/g, '').replace(/^\+/, '');
+    if (/^254[17]\d{8}$/.test(d)) return d;
+    if (/^0[17]\d{8}$/.test(d)) return '254' + d.slice(1);
+    return null;
+  }
+  function payErr(e) {
+    const m = (e && e.message) || 'Something went wrong.';
+    return m.replace(/^FirebaseError:\s*/, '');
+  }
+  async function showPayPanel(order) {
+    const box = document.getElementById('modal-content');
+    box.innerHTML = `<div class="modal-body">
+      <div class="modal-title">Complete payment</div>
+      <p class="modal-desc">${esc(order.ticketCount)} ticket(s) reserved. Total <strong>${esc(order.currency || 'KES')} ${Number(order.totalAmount || 0).toLocaleString()}</strong>.
+        Seats are held for a short time while you pay.</p>
+      <label for="pay-phone" style="display:block;font-weight:600;margin:12px 0 6px">M-PESA number</label>
+      <input id="pay-phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="07XX XXX XXX"
+        style="width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid var(--border,#ddd);font-size:16px">
+      <button class="btn-primary" id="pay-stk" style="width:100%;margin-top:12px">Pay with M-PESA</button>
+      <div id="pay-hosted-wrap"></div>
+      <div id="pay-msg" role="status" aria-live="polite" style="margin-top:12px;min-height:1.2em"></div>
+    </div>`;
+    document.getElementById('pay-stk').onclick = () => payStk(order);
+    try {
+      const m = await callCF('getCheckoutMethods', { purpose: 'event_ticket' });
+      if (m && m.hosted && Array.isArray(m.hostedMethods) && m.hostedMethods.length) {
+        const w = document.getElementById('pay-hosted-wrap');
+        w.innerHTML = `<button class="btn-secondary" id="pay-hosted" style="width:100%;margin-top:10px">Card &amp; other methods</button>
+          <div style="font-size:12px;opacity:.75;margin-top:4px">${m.hostedMethods.map(esc).join(' · ')}</div>`;
+        document.getElementById('pay-hosted').onclick = () => payHosted(order);
+      }
+    } catch (_) { /* no extra methods: M-PESA remains the only offered rail (fail closed) */ }
+  }
+  async function payStk(order) {
+    const msg = document.getElementById('pay-msg'), btn = document.getElementById('pay-stk');
+    const phone = validPhone(document.getElementById('pay-phone').value);
+    if (!phone) { msg.textContent = 'Enter a valid Safaricom number.'; return; }
+    btn.disabled = true; msg.textContent = 'Creating payment…';
+    try {
+      const intent = await callCF('createPaymentIntent', { purpose: 'event_ticket', orderId: order.orderId, phone });
+      msg.textContent = 'Sending the M-PESA prompt…';
+      await callCF('initiateSTKPush', { phone, ref: intent.ref, amount: intent.amount, meta: { type: 'event_ticket' } });
+      msg.textContent = '📲 Enter your M-PESA PIN. Your tickets appear here once the payment is confirmed.';
+      await waitForTickets(order.orderId, msg);
+    } catch (e) { msg.textContent = payErr(e); btn.disabled = false; }
+  }
+  async function payHosted(order) {
+    const msg = document.getElementById('pay-msg');
+    try {
+      msg.textContent = 'Opening secure checkout…';
+      const intent = await callCF('createPaymentIntent', { purpose: 'event_ticket', orderId: order.orderId });
+      const r = await callCF('initiateHostedCheckout', { ref: intent.ref, returnPath: '/event-hub.html?order=' + encodeURIComponent(order.orderId) + '&checkout=returned' });
+      const u = new URL(r.url);
+      if (u.protocol !== 'https:' || !/(^|\.)intasend\.com$/.test(u.hostname)) throw new Error('Unexpected checkout address.');
+      location.href = u.href;
+    } catch (e) { msg.textContent = payErr(e); }
+  }
+  async function waitForTickets(orderId, msgEl) {
+    const until = Date.now() + 180000;
+    while (Date.now() < until) {
+      await new Promise((r) => setTimeout(r, 4000));
+      try {
+        const res = await callCF('getMyTickets', { limit: 50 });
+        const mine = (res.tickets || []).filter((t) => t.orderId === orderId);
+        if (mine.length && mine.every((t) => t.status === 'valid')) {
+          if (msgEl) msgEl.textContent = '✓ Payment confirmed.';
+          closeModal(); toast(`🎟 ${mine.length} ticket(s) confirmed! Check "My Tickets".`);
+          return true;
+        }
+      } catch (_) { /* keep waiting; the webhook decides */ }
+    }
+    if (msgEl) msgEl.textContent = 'We have not received confirmation yet. If you paid, your tickets appear under "My Tickets" automatically.';
+    return false;
+  }
 
   /* ── My Tickets ── */
   function toggleMyTickets() {

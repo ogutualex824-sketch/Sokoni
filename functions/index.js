@@ -12204,6 +12204,7 @@ exports.creatorOnFilmPayment = creatorHub.creatorOnFilmPayment;
 /* Hosted IntaSend checkout (all account-enabled methods) for any intent whose
    purpose is allowed in config/hostedCheckout — sibling of initiateSTKPush. */
 exports.initiateHostedCheckout = require('./hosted-checkout').initiateHostedCheckout;
+exports.getCheckoutMethods     = require('./hosted-checkout').getCheckoutMethods;   // read-only: which checkout rails a page may offer for a purpose
 
 /* ── Payment State Machine v1.0 ─────────────────────────────────────────── */
 const paymentFSM = require('./payment-state-machine');

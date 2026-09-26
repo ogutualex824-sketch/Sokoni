@@ -648,6 +648,7 @@ window.submitCreateEvent = async function() {
     if (btn) { btn.textContent = '🚀 Publish Event'; delete btn.dataset.editId; }
     setTimeout(() => showTab('events', document.querySelector('.eo-tab:nth-child(2)')), 1500);
   } catch (e) {
+    if (e && e.redirect) { msg.textContent = 'Events are created in Event Manager — opening it…'; location.href = e.redirect; return; }
     msg.textContent = '❌ Error: ' + e.message;
     msg.style.color = '#f87171';
   }

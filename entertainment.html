@@ -1923,6 +1923,7 @@ window.submitTicketPurchase = async function() {
     document.getElementById('tkModal').style.display = 'none';
     showQRModal(ticket);
   } catch (e) {
+    if (e && e.redirect) { msg.textContent = 'Opening Event Hub…'; location.href = e.redirect; return; }
     msg.textContent = '❌ ' + e.message; msg.style.color = '#f87171';
     document.querySelector('#tkModal .modal-btn').disabled = false;
   }
@@ -2165,21 +2166,12 @@ function promoteEvent() {
   if (!name || !date || !phone) { if(msgEl) { msgEl.textContent='Fill event name, date and contact'; msgEl.style.color='#ff9800'; } return; }
   const evtType = document.getElementById('evtType')?.value || 'other';
   const evtPrice = Number(document.getElementById('evtPrice')?.value || 0);
-  const evt = { id:'EV'+Date.now(), name, date, venue, phone, price:evtPrice, type:evtType, emoji:'🎭', color:'rgba(168,85,247,0.08)', border:'rgba(168,85,247,0.2)', desc:'' };
-  let local = []; try { local = JSON.parse(localStorage.getItem('sokoniEvents'))||[]; } catch(e) {}
-  local.unshift(evt); localStorage.setItem('sokoniEvents', JSON.stringify(local));
-  /* Also save to Firestore so events persist across devices */
-  if(window.EntHub) {
-    EntHub.createEvent({
-      title: name, date, venueName: venue, organizerPhone: phone,
-      type: evtType, price: evtPrice,
-      ticketTypes: evtPrice > 0 ? [{ name:'General', price:evtPrice, capacity:500, sold:0 }] : [],
-      totalCapacity: 500,
-    }).catch(e => console.warn('[SOKONI] Event save:', e.message));
-  }
-  renderEventsGrid();
-  togglePromoteForm();
-  if(msgEl) { msgEl.textContent='Event submitted!'; msgEl.style.color='#71ff00'; }
+  /* Events are created by the SERVER in Event Manager (organizer gate, draft → publish).
+     This used to save to localStorage and report "Event submitted!" before anything was
+     stored — a success message for an operation that never happened. */
+  void evtType; void evtPrice;
+  if(msgEl) { msgEl.textContent='Opening Event Manager…'; msgEl.style.color='#c084fc'; }
+  location.href = '/event-manager.html';
 }
 function showEntTab(name, btn){
   document.querySelectorAll('.en-pane').forEach(p => p.classList.remove('active'));

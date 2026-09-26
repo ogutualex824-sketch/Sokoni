@@ -1827,23 +1827,32 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Legacy Entertainment (EntHub) — CONVERGED onto event-hub 2026-09-26. Profiles remain for
+    // discovery, but a profile is created PENDING and its status is an ADMIN decision:
+    // noAdminFields() does not cover `status`, so an owner could approve themselves.
     match /entArtists/{artistId} {
       allow read:   if true;
-      allow create: if claimsOwner() && noAdminFields();
-      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+      allow create: if claimsOwner() && noAdminFields()
+                    && request.resource.data.get('status', 'pending') == 'pending';
+      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields()
+                    && request.resource.data.get('status', '') == resource.data.get('status', ''));
       allow delete: if isAdmin() || isOwner();
     }
 
+    // Events are created by the server event-hub (organizer gate, draft → publish). A client-created,
+    // instantly 'published' entEvents doc is no longer accepted.
     match /entEvents/{eventId} {
       allow read:   if true;
-      allow create: if claimsOwner();
+      allow create: if false;
       allow update: if isAdmin()
                     || (isOwner() && uidUnchanged() && noAdminFields());
       allow delete: if isAdmin() || isOwner();
     }
 
+    // Tickets are minted only by event-hub + the entitlement engine after a verified payment.
+    // A client could create an entTickets doc as 'valid' with its own price and no payment.
     match /entTickets/{ticketId} {
-      allow create: if claimsOwner();
+      allow create: if false;
       allow read:   if isAdmin()
                     || (isAuthed() && resource.data.uid == request.auth.uid)
                     || (isAuthed() && resource.data.organizerUid == request.auth.uid);
@@ -1855,8 +1864,9 @@ service cloud.firestore {
 
     match /entVenues/{venueId} {
       allow read:   if true;
-      allow create: if claimsOwner();
-      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+      allow create: if claimsOwner() && request.resource.data.get('status', 'pending') == 'pending';
+      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields()
+                    && request.resource.data.get('status', '') == resource.data.get('status', ''));
       allow delete: if isAdmin() || isOwner();
     }
 

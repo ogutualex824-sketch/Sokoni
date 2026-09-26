@@ -1,3 +1,24 @@
+## 2026-09-26 (190) — Entertainment: legacy client ticketing converged onto Event Hub; buyers can pay
+
+- **Summary:** event-hub.html's "pay" step now works: an in-modal panel creates the server-priced
+  `event_ticket` intent, offers M-PESA STK always and card/other methods ONLY when the new read-only
+  `getCheckoutMethods` reports them proven for that purpose, and waits for the tickets to turn
+  valid on the server. The legacy EntHub client stack (owner decision: converge) no longer mints
+  `entTickets` as 'valid' before payment, takes a browser price, skips commission or fires a client
+  STK — `purchaseTicket`/`createEvent` refuse with the canonical destination (Event Hub / Event
+  Manager); entertainment.html's promote form no longer shows "Event submitted!" for an event that
+  was only saved to localStorage. Venue and artist profiles are created PENDING and owners can no
+  longer approve themselves (`noAdminFields()` never covered `status`).
+- **Production impact measured first (read-only):** entEvents, entTickets, entArtists, entVenues,
+  entContent, entertainmentListings, events, eventOrders, creators all 0 docs (positive control
+  users = 105) — the convergence strands no live data.
+- **Files:** `event-hub.html`, `entertainment.html`, `ent-organizer.html`, `entertainment-hub.js`,
+  `functions/hosted-checkout.js` (+`getCheckoutMethods`), `functions/index.js`, `firestore.rules`
+  (+build), `scripts/{test,run}-entertainment-rules.js` (new).
+- **Rules:** entTickets/entEvents client create → false; entVenues/entArtists create PENDING only,
+  owner cannot change `status`. **Evidence:** entertainment rules 28/0 incl. counterproof; creator
+  rules 127/0. **Not deployed.**
+
 ## 2026-09-26 (189) — Events: paid tickets finally work — payment → entitlement → held settlement → release
 
 - **Summary:** event-hub reserved seats and priced orders, then redirected to a checkout that

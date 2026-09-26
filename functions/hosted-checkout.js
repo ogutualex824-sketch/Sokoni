@@ -143,4 +143,25 @@ exports.initiateHostedCheckout = onCall(
   { region: 'us-central1', enforceAppCheck: true, secrets: [INTASEND_PUBLIC_KEY], timeoutSeconds: 30 },
   (req) => hostedCheckout(req, INTASEND_PUBLIC_KEY.value()),
 );
-exports._internal = { hostedCheckout, _setHttps: (h) => { _https = h; }, _setClock: (c) => { _clock = c; } };
+/* ── getCheckoutMethods — what a checkout page may OFFER for a purpose ─────────────────────
+   The SAME gate initiateHostedCheckout applies, read-only, so a page never shows a button the
+   server will refuse: M-PESA STK is always offered (its own rail, initiateSTKPush); the hosted
+   checkout only when config/hostedCheckout enables this purpose AND at least one method is
+   LIVE_AND_PROVEN with evidence. Methods are never listed from SDK documentation — only from
+   the proven capability record. Returns no amount and no account data. */
+async function checkoutMethods(req) {
+  if (!req.auth || !req.auth.uid) fail('unauthenticated', 'Sign in required.');
+  const purpose = String((req.data || {}).purpose || '');
+  if (!/^[a-z_]{3,40}$/.test(purpose)) fail('invalid-argument', 'Invalid purpose.');
+  const db = _db();
+  const [cfgSnap, capSnap] = await Promise.all([
+    db.collection('config').doc('hostedCheckout').get(),
+    db.collection('config').doc(PC.RECORD).get(),
+  ]);
+  const cfg = cfgSnap.exists ? cfgSnap.data() : {};
+  const proven = PC.provenHostedMethods(capSnap.exists ? capSnap.data() : null);
+  const hosted = cfg.enabled === true && Array.isArray(cfg.purposes) && cfg.purposes.includes(purpose) && proven.length > 0;
+  return { purpose, stk: { method: 'M-PESA', rail: 'initiateSTKPush' }, hosted, hostedMethods: hosted ? proven : [] };
+}
+exports.getCheckoutMethods = onCall({ region: 'us-central1', enforceAppCheck: true, timeoutSeconds: 15 }, checkoutMethods);
+exports._internal = { hostedCheckout, checkoutMethods, _setHttps: (h) => { _https = h; }, _setClock: (c) => { _clock = c; } };
