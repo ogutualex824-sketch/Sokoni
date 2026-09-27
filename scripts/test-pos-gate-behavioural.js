@@ -178,7 +178,9 @@ function reset() {
   CTL.membershipOk = false; CTL.liabilities = [];
   CTL.ledgerUnreadable = false; CTL.shopsUnreadable = false;
   DOCS.set('businesses/' + MERCHANT, { ownerId: 'SOMEONE_ELSE' });
-  DOCS.set('products/P1', { name: 'Rice', price: 100, stock: 50, trackInventory: true });
+  /* shopId is what the canonical product writer stamps (pos-inventory-pro.js: shopId = the owner's uid = the
+     till's merchantId). Checkout refuses any product another shop owns (CHANGELOG 225). */
+  DOCS.set('products/P1', { name: 'Rice', price: 100, stock: 50, trackInventory: true, shopId: MERCHANT, sellerUid: MERCHANT });
 }
 
 const call = async (uid, over = {}) => {
@@ -355,6 +357,77 @@ console.log('\nPART D — adversarial controls\n');
   reset(); const b = seedActor('owner');    const rB = await call(b);
   ck('D4  the actor fixture genuinely moves the outcome', rA.code !== rB.code,
     rA.code + ' vs ' + rB.code);
+}
+
+console.log('\nPART E — every line and the customer must belong to THIS shop (CHANGELOG 225)\n');
+{
+  /* Positive control first: the proven owner sells their OWN product, and it deducts THEIR stock. */
+  reset(); const o = seedActor('owner');
+  const r0 = await call(o);
+  /* This harness does not model every downstream field, so (like D1) the sale may stop after the
+     transaction. What matters is proven directly: the transaction RAN past both ownership checks and
+     wrote the decrement for OUR product (the stub records increment() as {__inc:n}). */
+  ck('E0  the owner\'s own product passes both ownership checks (positive control)', r0.code !== 'permission-denied', r0.code || 'completed');
+  ck('E0b ...and the transaction wrote the stock decrement for THAT product', ((DOCS.get('products/P1') || {}).stock || {}).__inc === -1, JSON.stringify((DOCS.get('products/P1') || {}).stock));
+}
+{
+  /* ANOTHER shop's product, named by id at this shop's till. */
+  reset(); const o = seedActor('owner');
+  DOCS.set('products/PX', { name: 'Rival Amoxicillin', price: 100, stock: 7, trackInventory: true, shopId: 'OTHER_SHOP', sellerUid: 'OTHER_SHOP' });
+  const r = await call(o, { items: [{ productId: 'PX', qty: 1, unitPrice: 100 }] });
+  ck('E1  another shop\'s product is REFUSED at this till — by the OWNERSHIP guard', r.ok === false && r.code === 'permission-denied' && /does not belong to this shop/.test(r.message || ''), r.message);
+  ck('E2  ...its stock is untouched and no sale was written', (DOCS.get('products/PX') || {}).stock === 7 && noSale());
+}
+{
+  /* One own line + one foreign line: the whole sale is refused, nothing partial. */
+  reset(); const o = seedActor('owner');
+  DOCS.set('products/PX', { name: 'Rival', price: 100, stock: 7, trackInventory: true, shopId: 'OTHER_SHOP' });
+  const r = await call(o, { items: [{ productId: 'P1', qty: 1, unitPrice: 100 }, { productId: 'PX', qty: 1, unitPrice: 100 }], subtotal: 200, grandTotal: 200, payments: [{ method: 'cash', amount: 200 }] });
+  ck('E3  a mixed cart (own + foreign) is refused whole — nothing partial', r.ok === false && (DOCS.get('products/P1') || {}).stock === 50 && (DOCS.get('products/PX') || {}).stock === 7 && noSale(), r.code);
+}
+{
+  /* A product that names NO owner belongs to nobody — refused, never assumed to be ours. */
+  reset(); const o = seedActor('owner');
+  DOCS.set('products/P0', { name: 'Orphan', price: 100, stock: 3, trackInventory: true });
+  const r = await call(o, { items: [{ productId: 'P0', qty: 1, unitPrice: 100 }] });
+  ck('E4  an ownerless product is refused', r.ok === false && r.code === 'permission-denied' && noSale(), r.code);
+}
+{
+  /* An older product that carries only sellerUid (no shopId) is still this shop's. */
+  reset(); const o = seedActor('owner');
+  DOCS.set('products/PL', { name: 'Legacy', price: 100, stock: 4, trackInventory: true, sellerUid: MERCHANT });
+  const r = await call(o, { items: [{ productId: 'PL', qty: 1, unitPrice: 100 }] });
+  ck('E5  a legacy product owned by sellerUid only is admitted (its decrement is written)', r.code !== 'permission-denied' && ((DOCS.get('products/PL') || {}).stock || {}).__inc === -1, r.code || 'completed');
+}
+{
+  /* A staff cashier of THIS shop cannot sell another shop's product either. */
+  reset(); const c = seedActor('employee');
+  DOCS.set('products/PX', { name: 'Rival', price: 100, stock: 7, trackInventory: true, shopId: 'OTHER_SHOP' });
+  const r = await call(c, { items: [{ productId: 'PX', qty: 1, unitPrice: 100 }] });
+  ck('E6  a cashier of this shop cannot sell another shop\'s product', r.ok === false && r.code === 'permission-denied' && noSale(), r.code);
+}
+{
+  /* Another shop's CUSTOMER named on this sale: their loyalty must not be touched. */
+  reset(); const o = seedActor('owner');
+  DOCS.set('posCustomers/C9', { sellerId: 'OTHER_SHOP', name: 'Their customer', loyaltyPoints: 500, purchaseCount: 3 });
+  const r = await call(o, { customer: { id: 'C9' } });
+  ck('E7  another shop\'s customer is refused on this sale — by the CUSTOMER guard', r.ok === false && r.code === 'permission-denied' && /not a customer of this shop/.test(r.message || ''), r.message);
+  ck('E8  ...their points and purchase count are untouched, no sale written', (DOCS.get('posCustomers/C9') || {}).loyaltyPoints === 500 && (DOCS.get('posCustomers/C9') || {}).purchaseCount === 3 && noSale());
+}
+{
+  /* This shop's customer (body owner) and a pos-crm composite-id customer are both admitted. */
+  reset(); const o = seedActor('owner');
+  DOCS.set('posCustomers/C1', { sellerId: MERCHANT, name: 'Ours', loyaltyPoints: 0, purchaseCount: 0 });
+  const r1 = await call(o, { customer: { id: 'C1' } });
+  const c1Recorded = ((DOCS.get('posCustomers/C1') || {}).purchaseCount || {}).__inc === 1;   /* read BEFORE the next reset() */
+  reset(); const o2 = seedActor('owner');
+  DOCS.set('posCustomers/' + MERCHANT + '_0712000000', { name: 'Ours (crm id)', loyaltyPoints: 0, purchaseCount: 0 });
+  const r2 = await call(o2, { customer: { id: MERCHANT + '_0712000000' } });
+  ck('E9  this shop\'s own customers are admitted (body owner + composite id) — their purchase is recorded',
+    r1.code !== 'permission-denied' && r2.code !== 'permission-denied'
+      && c1Recorded
+      && ((DOCS.get('posCustomers/' + MERCHANT + '_0712000000') || {}).purchaseCount || {}).__inc === 1,
+    (r1.code || 'ok') + ' / ' + (r2.code || 'ok'));
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

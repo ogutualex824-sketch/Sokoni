@@ -502,6 +502,21 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       _e('You are not authorised to record a sale for this shop.', 'permission-denied');
     }
 
+    /* ══ EVERY LINE MUST BE THIS SHOP'S PRODUCT (CHANGELOG 225) ══════════════
+       The cart was priced from `products/{productId}` for ANY id the till sent — the
+       product's owner was never compared to the proven merchant. A till could therefore
+       "sell" another shop's product: deduct THEIR stock, bump THEIR sales counters, and
+       book the revenue into this shop's sale. The owner is the product's canonical
+       `shopId` (the owner's uid — the key merchantAdjustStock checks, and the one the
+       till sends as `merchantId`), falling back to `sellerUid` only for older products
+       that carry no shopId. Never `businesses.ownerId`: that field is client-writable. */
+    const _ownerOfProduct = (p) => String((p && (p.shopId || p.sellerUid)) || '');
+    productSnaps.forEach((snap) => {
+      if (_ownerOfProduct(snap.data()) !== String(merchantId)) {
+        _e('One of these products does not belong to this shop, so the sale was not recorded. Nothing has been charged.', 'permission-denied');
+      }
+    });
+
     /* ══ THE COMMISSION GATE ═════════════════════════════════════════════════
        Unpaid POS/Till commission from a previous settlement day closes the till
        at 07:00 Africa/Nairobi. Enforced HERE, on the operation, and not only in
@@ -745,11 +760,22 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
           throw new HttpsError('failed-precondition',
             `Insufficient wallet balance: has KES ${Math.max(0, bal)}, needs KES ${walletAmt}`);
       }
+      /* A named customer must be THIS shop's customer (pos-customer-scope.ownsCustomer —
+         the same predicate every customer read uses). The checkout used to update loyalty
+         points, total spent and purchase count on ANY posCustomers id it was sent, so one
+         shop could redeem or inflate another shop's customer's points (CHANGELOG 225). */
+      if (custSnap && custSnap.exists && !require('./pos-customer-scope').ownsCustomer(custSnap.id, custSnap.data(), merchantId)) {
+        throw new HttpsError('permission-denied', 'That customer is not a customer of this shop, so the sale was not recorded.');
+      }
       /* Inventory: assert stock before deducting anything. */
       productSnaps.forEach((snap, i) => {
         const item = enrichedItems[i];
         if (!snap.exists) throw new Error(`Product ${item.productId} disappeared`);
         const prod  = snap.data();
+        /* ownership re-checked on the transaction's own read (CHANGELOG 225) */
+        if (_ownerOfProduct(prod) !== String(merchantId)) {
+          throw new HttpsError('permission-denied', 'One of these products does not belong to this shop, so the sale was not recorded.');
+        }
         /* Canonical stock field is `stock`; fall back to legacy names for older docs. */
         const stock = prod.stock ?? prod.stockQty ?? prod.quantity ?? 9999;
         if (stock < (item.qty || 1) && prod.trackInventory !== false)

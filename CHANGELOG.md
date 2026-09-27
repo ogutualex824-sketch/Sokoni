@@ -1,3 +1,42 @@
+## 2026-09-27 (225) — POS: a till sells only its own shop's products, to its own shop's customers
+
+Owner decision (2026-09-27): fix now, in its own commit, before any Healthcare POS work. This is platform-wide, not
+Healthcare-specific. Not deployed. No production writes. KRA not called.
+
+**Defect** (`functions/pos-zero-friction.js`, `posCompleteCheckout`, live since the 09-22 deploy):
+- Every cart line was priced from `products/{productId}` for **any** id the till sent, and the product's owner was
+  never compared to the proven merchant. A till could "sell" **another shop's** product: deduct their stock, increment
+  their sales counters, and book the revenue into this shop's sale.
+- The named `posCustomers/{id}` was updated (loyalty points, total spent, purchase count) with no tenant check, so one
+  shop could redeem or inflate another shop's customer's points.
+
+**Fix:**
+- **Product ownership.** After the merchant is proven, every line's owner must equal the proven `merchantId` (the
+  shop id). The owner is the product's canonical `shopId` (the owner's uid — the same key `merchantAdjustStock` checks,
+  and what the till sends). Only older products with no `shopId` fall back to `sellerUid`. It is never
+  `businesses.ownerId`, which clients can write (`firestore.rules` businesses create).
+  - An ownerless product belongs to nobody.
+  - The check is repeated on the transaction's own read.
+- **Customer ownership.** A named customer must pass the existing `pos-customer-scope.ownsCustomer`: body `sellerId`
+  or the `{shopId}_{phone}` composite id. The till's customer lookup already returns only owned customers, so a
+  legitimate sale is unaffected.
+- Both refusals happen **before any write**, so nothing is charged and nothing is partially written.
+
+**Files:** `functions/pos-zero-friction.js`; `scripts/test-pos-gate-behavioural.js` (+ Part E: 10 ownership cases,
+proven by execution against the real identity authority; the P1 fixture now carries the `shopId` the canonical product
+writer stamps); `scripts/sabotage-event-ops.js`.
+
+**Database / API:** none. **Security:** cross-tenant stock, revenue and loyalty tampering is closed.
+**Breaking:** a sale naming a product or customer that belongs to another shop is refused.
+
+**Tests:**
+- `test-pos-gate-behavioural` 43/0.
+- 17 POS / merchant / catalogue suites compared with `5649e46`: same, apart from two differences.
+  - The gate suite's fixture lacked the canonical `shopId` (fixed as above).
+  - `test-catalogue-canonical-migration`'s "pos-zero-friction untouched" check is a `git status` working-tree check,
+    which clears once this is committed; it was re-run after the commit.
+- Sabotage `posown` 4/4 caught, with the tree byte-identical afterwards.
+
 ## 2026-09-27 (224) — Healthcare security slice 4: one public provider projection
 
 Not deployed. No production writes. KRA not called. No migration.

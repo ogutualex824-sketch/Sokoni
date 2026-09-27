@@ -63,6 +63,7 @@ const SUITES = {
   hcclin:   ['node', ['scripts/test-healthcare-clinical-authority.js']],
   hcclinrules: ['node', ['scripts/run-rules-suite.js', 'scripts/test-healthcare-clinical-rules.js']],
   hcpub:    ['node', ['scripts/test-healthcare-public-projection.js']],
+  posown:   ['node', ['scripts/test-pos-gate-behavioural.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -1022,6 +1023,16 @@ const M = [
     from: "  if (typeof providerId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(providerId)) {", to: "  if (!providerId) {", expect: /malformed providerId/ },
   { group: 'hcpub', browser: false, name: "a pending provider is served publicly", file: "functions/healthcare-hub.js", suite: 'hcpub',
     from: "  if (!snap.exists || snap.data().status !== 'active') throw new HttpsError('not-found', 'Provider not found');\n  /* the same public projection", to: "  if (!snap.exists) throw new HttpsError('not-found', 'Provider not found');\n  /* the same public projection", expect: /pending\) provider is not found/ },
+
+  /* ── POS: every line and the customer must belong to the selling shop (CHANGELOG 225) ── */
+  { group: 'posown', browser: false, name: "the ownership predicate trusts the till (any product counts as ours)", file: "functions/pos-zero-friction.js", suite: 'posown',
+    from: "    const _ownerOfProduct = (p) => String((p && (p.shopId || p.sellerUid)) || '');", to: "    const _ownerOfProduct = (p) => String(merchantId);", expect: /E1 |E4 / },
+  { group: 'posown', browser: false, name: "an ownerless product is assumed to be ours", file: "functions/pos-zero-friction.js", suite: 'posown',
+    from: "    const _ownerOfProduct = (p) => String((p && (p.shopId || p.sellerUid)) || '');", to: "    const _ownerOfProduct = (p) => String((p && (p.shopId || p.sellerUid)) || merchantId);", expect: /E4 / },
+  { group: 'posown', browser: false, name: "the legacy sellerUid owner is ignored (older own products refused — till outage)", file: "functions/pos-zero-friction.js", suite: 'posown',
+    from: "    const _ownerOfProduct = (p) => String((p && (p.shopId || p.sellerUid)) || '');", to: "    const _ownerOfProduct = (p) => String((p && p.shopId) || '');", expect: /E5 / },
+  { group: 'posown', browser: false, name: "another shop's customer credited / debited on this sale (customer guard removed)", file: "functions/pos-zero-friction.js", suite: 'posown',
+    from: "      if (custSnap && custSnap.exists && !require('./pos-customer-scope').ownsCustomer(custSnap.id, custSnap.data(), merchantId)) {", to: "      if (false) {", expect: /E7 |E8 / },
 ];
 
 const argv = process.argv.slice(2);
