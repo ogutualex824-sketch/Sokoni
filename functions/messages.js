@@ -50,7 +50,9 @@ const TX_COLLECTIONS = {
 /* Server-anchored: a client can neither create these nor choose their participants — the booking or
    the enquiry does. ent_booking is PRIVATE / transactional; ent_enquiry is PUBLIC (rate-limited,
    blockable, closable — ent-enquiries.assertCanSend). */
-const SERVER_ANCHORED = new Set(['ent_booking', 'ent_enquiry']);
+/* hc_booking (CHANGELOG 231, owner-authorized): a Healthcare consultation's private conversation, opened by
+   healthcare-conversations.js from the canonical providerBookings row's own two parties. */
+const SERVER_ANCHORED = new Set(['ent_booking', 'ent_enquiry', 'hc_booking']);
 
 /* ── Spam / fraud detection patterns ─────────────────────────── */
 const SPAM_PATTERNS = [
@@ -516,7 +518,10 @@ exports.onMessageCreated = onDocumentCreated(
     await Promise.all(
       tokenSnaps.map((tokenSnap) => {
         const token = tokenSnap?.data()?.fcmToken;
-        return _sendFcm(token, senderName, preview, {
+        /* A healthcare consultation push never carries the message text or the sender — a lock screen is
+           not a private place (CHANGELOG 231). */
+        const clinical = conv.transactionType === 'hc_booking';
+        return _sendFcm(token, clinical ? 'SOKONI Healthcare' : senderName, clinical ? 'You have a new message about your appointment.' : preview, {
           type:            'new_message',
           conversationId:  convId,
           messageId:       msgId,
@@ -1160,6 +1165,11 @@ exports.sendMessage = onCall(
        PRIVATE booking conversation (ent_booking) is transactional and is never gated here. */
     if (conv.transactionType === 'ent_enquiry') {
       await require('./ent-enquiries').assertCanSend(db, conv, req.auth.uid, type === 'text' ? text : null);
+    }
+    /* Healthcare consultation chat (CHANGELOG 231): the clinical relationship is RE-READ on every message
+       (cancelled / refunded → read-only), plus a server-side limit and duplicate suppression. */
+    if (conv.transactionType === 'hc_booking') {
+      await require('./healthcare-conversations').assertCanSend(db, conv, req.auth.uid, type === 'text' ? text : null);
     }
     const userSnap   = await db.collection('users').doc(req.auth.uid).get();
     const ud         = userSnap.exists ? userSnap.data() : {};

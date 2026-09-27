@@ -328,8 +328,8 @@ exports.updateAppointmentStatus = onCall(CF_OPTS, exports._h.updateAppointmentSt
    record ref · booking = authorization basis · time — never the diagnosis or medicines), in the SAME
    transaction. Records are APPEND-ONLY (no update/delete path; rules write:false). A correction /
    amendment workflow is a clinical-records policy decision, recorded in CHANGELOG 223, not invented here. */
-const CLINICAL_STATUSES = ['confirmed', 'completed'];
-const CLINICAL_PAID = ['paid_held', 'settled'];
+/* ONE definition of the clinical relationship, shared with the consultation chat (CHANGELOG 231). */
+const { CLINICAL_STATUSES, CLINICAL_PAID } = require('./healthcare-conversations');
 const _reqId = (v) => { const r = String(v || '').trim(); if (!/^[A-Za-z0-9_-]{8,64}$/.test(r)) throw new HttpsError('invalid-argument', 'requestId (8–64 letters, digits, - or _) is required so a retry cannot duplicate the record.'); return r; };
 
 /** Inside a transaction: the qualifying booking, or a refusal. Reads only — callers write after. */

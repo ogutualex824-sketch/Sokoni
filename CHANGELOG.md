@@ -1,3 +1,64 @@
+## 2026-09-28 (231) — Healthcare consultation conversations: private messaging only inside a clinical relationship
+
+Owner-authorized Comms amendment (2026-09-28), Healthcare only. The Connect call authority is untouched: healthcare
+calls are **not** anchored, and remain UNPROVEN with no TURN relay. Not deployed. No production writes.
+
+**Gap.** A paid healthcare consultation opened **no** conversation; only Entertainment bookings did.
+- There was no send-time relationship check: a cancelled or refunded booking kept a chat until 30 idle days.
+- There was no rate limit outside public enquiries.
+- Push notifications put 100 characters of message text on the lock screen.
+
+**Fix** (`functions/healthcare-conversations.js`, using the existing Comms authority — no second chat system):
+- **One clinical-relationship predicate:** `commissionHub 'healthcare'`, `confirmed|completed`, `paid_held|settled`.
+  The records gate now uses the **same** lists (`healthcare-hub` imports them).
+- **Trigger `hcBookingConversationOnProviderBooking`** (providerBookings writes):
+  - A qualifying booking opens **`hc_booking_{bookingId}`** through `messages.ensureAnchoredConversation`, with
+    exactly the booking's patient and provider.
+  - The conversation metadata carries no clinical content, notes or amount.
+  - It is idempotent.
+  - A cancelled, declined, no-show or refunded booking makes it **read-only**, with a system note.
+- **`hc_booking` is SERVER_ANCHORED**, so `createConversation` refuses it whatever participants are sent, and the
+  rules refuse every client create (CHANGELOG 230).
+- **`sendMessage` gate** (`assertCanSend`):
+  - the booking is **re-read on every message**, and a message refused because the relationship ended also turns
+    the chat read-only;
+  - the sender must still be a party *to the booking* (a reassigned provider is refused);
+  - **30 messages / hour** per sender per consultation;
+  - an **identical message within 60 s** is refused as a duplicate.
+
+  The limits live in `hcMessageLimits`, which is server-only in the rules. A "new thread" cannot reset them, because
+  the conversation id is the booking.
+- **Push privacy.** A consultation push reads "SOKONI Healthcare — You have a new message about your appointment.",
+  with no text and no sender.
+- **Completed consultations keep follow-up chat.** Public questions before a booking are enquiries (CHANGELOG 232),
+  never this.
+
+**Files:**
+- `functions/healthcare-conversations.js` (new), `functions/messages.js`, `functions/healthcare-hub.js`,
+  `functions/index.js` (trigger export).
+- `firestore.rules` (+ `.build`).
+- `scripts/test-healthcare-conversations.js` (new), `scripts/test-conversation-create-rules.js`.
+- `scripts/sabotage-event-ops.js`.
+
+**Database:** `conversations/hc_booking_*` and `hcMessageLimits` (server-only).
+**API:** new trigger `hcBookingConversationOnProviderBooking`.
+
+**Tests:**
+- `test-healthcare-conversations` 35/0, covering: predicate; opening rules; forged participants; strangers, other
+  patients and other providers; a reassigned provider; a deactivated sender; the rate limit and duplicates; a new
+  thread not resetting the limit; completed follow-up; cancel, refund, decline and no-show; refund without the
+  trigger; push privacy.
+- `test-conversation-create-rules` 11/0; `test-connect-rules` 37/0.
+- Connect 858, ent-communications 76, ent-bookings 95, shop boundary 33, participant authority 32, clinical
+  authority 56, directory 51 and the booking suites all match `f890075`.
+- Sabotage `hcconv` 9/9 caught.
+  - One attack first **CRASHED**: the test's trigger helper let the server's refusal escape. It now fails closed.
+  - One attack was first **MISSED**: the predicate's hub check was only exercised behind the trigger's own check.
+    It is now tested directly.
+
+**Deploy note:** a new trigger function, plus rules. **Open:** staff and clinic access to consultation chats (owner
+deferred); a healthcare call anchor (not authorized).
+
 ## 2026-09-28 (230) — Conversations: participants derived by the server, no client-created conversations
 
 Owner decision (2026-09-28): port the certified B931 participant-authority fix and close the client create rule, in

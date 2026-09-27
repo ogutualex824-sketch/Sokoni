@@ -4930,6 +4930,10 @@ service cloud.firestore {
     }
     /* Clinical-write audit (actor · patient · provider · action · record ref · booking basis · time — no
        clinical content). Written only by the server in the same transaction as the record. */
+    /* Healthcare consultation-chat limits (healthcare-conversations.js) — server-only counters. */
+    match /hcMessageLimits/{id} {
+      allow read, write: if false;
+    }
     match /healthClinicalAudit/{auditId} {
       allow read:  if isAdmin();
       allow write: if false;

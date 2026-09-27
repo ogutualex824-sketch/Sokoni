@@ -12898,6 +12898,8 @@ exports.rateHealthProvider       = _health.rateHealthProvider;
 exports.getHealthDashboard       = _health.getHealthDashboard;
 /* Public Healthcare directory over the canonical providers/{uid} (CHANGELOG 229). */
 exports.healthcareDirectory      = require('./healthcare-directory').healthcareDirectory;
+/* Healthcare consultation conversations — opened / closed from the canonical providerBookings (CHANGELOG 231). */
+exports.hcBookingConversationOnProviderBooking = require('./healthcare-conversations').hcBookingConversationOnProviderBooking;
 
 /* ── Application Lifecycle ─────────────────────────────────────────────────────
    The convergence point between `applications` (the request) and the canonical

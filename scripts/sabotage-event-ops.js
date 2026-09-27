@@ -71,6 +71,7 @@ const SUITES = {
   msgpart:  ['node', ['scripts/test-messages-participant-authority.js']],
   convrules: ['node', ['scripts/run-rules-suite.js', 'scripts/test-conversation-create-rules.js']],
   entcomms: ['node', ['scripts/test-ent-communications.js']],
+  hcconv:   ['node', ['scripts/test-healthcare-conversations.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -1098,6 +1099,26 @@ const M = [
     from: "  match /conversations/{convId} {\n  function isParticipant() {\n  return isAuthed() && request.auth.uid in resource.data.participants;\n  }\n  allow read: if isParticipant();\n  allow update: if isParticipant()\n  && request.resource.data.diff(resource.data)\n  .affectedKeys().hasOnly(['lastMessage','lastMessageAt','lastSenderId','unread']);\n  allow create: if false;", to: "  match /conversations/{convId} {\n  function isParticipant() {\n  return isAuthed() && request.auth.uid in resource.data.participants;\n  }\n  allow read: if isParticipant();\n  allow update: if isParticipant()\n  && request.resource.data.diff(resource.data)\n  .affectedKeys().hasOnly(['lastMessage','lastMessageAt','lastSenderId','unread']);\n  allow create: if isAuthed() && request.auth.uid in request.resource.data.participants;", expect: /DENIED/ },
   { group: 'msgauth', browser: false, name: "a server-anchored type is no longer refused as such (Entertainment / Healthcare booking chats)", file: "functions/messages.js", suite: "entcomms",
     from: "  if (SERVER_ANCHORED.has(transactionType)) {\n    throw new HttpsError('permission-denied', 'This conversation is opened from the booking itself.');\n  }\n  if (!PARTY_FIELDS[transactionType]) {", to: "  if (!PARTY_FIELDS[transactionType]) {", expect: /client cannot create an enquiry conversation/ },
+
+  /* ── Healthcare consultation conversations (CHANGELOG 231) ── */
+  { group: 'hcconv', browser: false, name: "forged relationship: hc_booking is no longer server-anchored", file: "functions/messages.js", suite: 'hcconv',
+    from: "const SERVER_ANCHORED = new Set(['ent_booking', 'ent_enquiry', 'hc_booking']);", to: "const SERVER_ANCHORED = new Set(['ent_booking', 'ent_enquiry']);", expect: /createConversation refuses hc_booking/ },
+  { group: 'hcconv', browser: false, name: "an unpaid booking counts as a clinical relationship", file: "functions/healthcare-conversations.js", suite: 'hcconv',
+    from: "CLINICAL_STATUSES.includes(b.status) && CLINICAL_PAID.includes(b.paymentStatus);", to: "CLINICAL_STATUSES.includes(b.status);", expect: /unpaid booking/ },
+  { group: 'hcconv', browser: false, name: "any provider booking counts (hub check removed)", file: "functions/healthcare-conversations.js", suite: 'hcconv',
+    from: "  return !!b && b.commissionHub === 'healthcare' && CLINICAL_STATUSES", to: "  return !!b && CLINICAL_STATUSES", expect: /gen booking|ent booking|any other hub is NOT/ },
+  { group: 'hcconv', browser: false, name: "the send gate is not consulted (relationship never re-read)", file: "functions/messages.js", suite: 'hcconv',
+    from: "      await require('./healthcare-conversations').assertCanSend(db, conv, req.auth.uid, type === 'text' ? text : null);", to: "", expect: /RELATIONSHIP_ENDED|RATE_LIMITED|DUPLICATE/ },
+  { group: 'hcconv', browser: false, name: "a reassigned provider keeps messaging (party re-check removed)", file: "functions/healthcare-conversations.js", suite: 'hcconv',
+    from: "  if (uid !== booking.customerUid && uid !== booking.providerId) {", to: "  if (false) {", expect: /reassigned/ },
+  { group: 'hcconv', browser: false, name: "no rate limit", file: "functions/healthcare-conversations.js", suite: 'hcconv',
+    from: "    if (count >= LIMITS.perHour) {", to: "    if (false) {", expect: /RATE_LIMITED/ },
+  { group: 'hcconv', browser: false, name: "no duplicate suppression", file: "functions/healthcare-conversations.js", suite: 'hcconv',
+    from: "    if (d && d.exists && now - (Number(d.data().atMs) || 0) < LIMITS.duplicateWindowMs) {", to: "    if (false) {", expect: /DUPLICATE/ },
+  { group: 'hcconv', browser: false, name: "a cancelled / refunded booking keeps an open chat (end not detected)", file: "functions/healthcare-conversations.js", suite: 'hcconv',
+    from: "  if (isEnded(after)) return", to: "  if (false) return", expect: /read-only/ },
+  { group: 'hcconv', browser: false, name: "the push shows the clinical message text again", file: "functions/messages.js", suite: 'hcconv',
+    from: "        const clinical = conv.transactionType === 'hc_booking';", to: "        const clinical = false;", expect: /neither the text nor the sender/ },
 ];
 
 const argv = process.argv.slice(2);

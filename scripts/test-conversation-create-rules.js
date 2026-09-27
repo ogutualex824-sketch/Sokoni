@@ -41,6 +41,11 @@ if (!FS_HOST) { console.error('REFUSING: FIRESTORE_EMULATOR_HOST must be set (ru
   await check('a conversation with yourself alone DENIED', assertFails(setDoc(doc(mallory, 'conversations/solo'), { participants: ['mallory'] })));
   await check('a client message create DENIED (sendMessage is the only writer)', assertFails(addDoc(collection(alice, 'conversations/order_o1/messages'), { senderId: 'alice', text: 'hi' })));
 
+  console.log('\nhcMessageLimits — server-only counters (CHANGELOG 231)');
+  await env.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'hcMessageLimits/m_b1_alice_1'), { count: 29 }); });
+  await check('a client cannot reset its own message counter', assertFails(setDoc(doc(alice, 'hcMessageLimits/m_b1_alice_1'), { count: 0 })));
+  await check('a client cannot read the counters', assertFails(getDoc(doc(alice, 'hcMessageLimits/m_b1_alice_1'))));
+
   console.log('\nreads (positive control)');
   await check('a participant reads a server-created conversation', assertSucceeds(getDoc(doc(alice, 'conversations/order_o1'))));
   await check('a stranger cannot', assertFails(getDoc(doc(stranger, 'conversations/order_o1'))));
