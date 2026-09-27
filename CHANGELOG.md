@@ -1,3 +1,30 @@
+## 2026-09-27 (217) — Support and contact stay in the app (no WhatsApp)
+
+Owner directive: "no WhatsApp … everything in app communication". Not deployed. No production writes.
+
+- **What changed.** 29 links across 21 support, contact, policy and footer surfaces sent users to SOKONI's WhatsApp
+  numbers (254705726803, and 254703480154 for legal). They now open the **in-app support ticket**
+  (`support.html#ticket`), and replies arrive in the SOKONI inbox. The surfaces were:
+  - about, careers, community-guidelines, contact, cookie-policy, faq, payment-security, press, provider-terms,
+    refund- and returns-policy, seller-terms, index (3), help, checkout (2), dispute-portal, driver (2), support (3)
+    and legal;
+  - the KASS chatbot replies in `script.js`;
+  - the dead `sokoni-ui-extras.js` WhatsApp button.
+- **`support.html`.** `#ticket` deep-links to the ticket form. The contact card reads "Support chat — in the SOKONI
+  app". "Follow up on WhatsApp" became "Track this ticket", and "ticket not found" offers a new in-app ticket instead
+  of WhatsApp.
+- **Copy.** The contact meta descriptions and the "WhatsApp: best-effort" line now describe in-app support.
+- **Not in this commit.** Seller, provider and booking WhatsApp hand-offs are converted with each hub, in its own
+  commit.
+- **Tests:**
+  - `scripts/test-in-app-support.js` (new): 11/0.
+    - A static check that no support surface links SOKONI's WhatsApp, with a positive control.
+    - The **real** `support.html#ticket` opens the ticket form, with no WhatsApp link, at 360 and 1280.
+    - The contact, help and home pages link to the in-app ticket.
+  - `test-communication-engine` 572/0 and `test-health-claim-honesty` 21/0.
+  - `test-auth-verify-gate` is identical to the baseline (125/126, pre-existing).
+  - Sabotage group `support`: 2/2 caught; the tree is byte-identical afterwards.
+
 ## 2026-09-27 (216) — SOKONI Pay gateway: server-priced only, every IntaSend method, no WhatsApp
 
 Owner directives: "use IntaSend… make sure all payments are covered", "all payments IntaSend provides… include all",

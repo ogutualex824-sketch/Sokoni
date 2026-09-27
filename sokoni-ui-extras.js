@@ -16,7 +16,7 @@
 
     var btn = document.createElement('a');
     btn.id = 'sokoni-wa-support';
-    btn.href = 'https://wa.me/254705726803?text=' + encodeURIComponent('Hi SOKONI Support, I need help with...');
+    btn.href = '/support.html#ticket'; void encodeURIComponent('Hi SOKONI Support, I need help with...');
     btn.target = '_blank';
     btn.rel = 'noopener noreferrer';
     btn.setAttribute('aria-label', 'Contact SOKONI Support on WhatsApp');

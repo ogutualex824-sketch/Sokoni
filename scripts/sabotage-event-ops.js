@@ -53,6 +53,7 @@ const SUITES = {
   payer:    ['node', ['scripts/test-webhook-payer-credit.js']],
   integrity: ['node', ['scripts/test-money-integrity.js']],
   gateway:  ['node', ['scripts/test-sokoni-pay-gateway.js']],
+  support:  ['node', ['scripts/test-in-app-support.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -832,6 +833,12 @@ const M = [
     from: "            .then((m)=>{ if(m && m.hosted) hostedBtn.style.display = \"block\"; })", to: "            .then(()=>{ hostedBtn.style.display = \"block\"; })", expect: /only M-PESA is offered/ },
   { group: 'gateway', browser: true, name: 'waConnect hands the booking to WhatsApp again', file: 'sokoni-pay.js', suite: 'gateway',
     from: "  const uid = opts.providerUid || opts.providerId || null;", to: "  window.open(\"https://wa.me/\"+String(providerPhone||\"\").replace(/^0/,\"254\")+\"?text=\"+encodeURIComponent(message||\"\"),\"_blank\");\n  const uid = opts.providerUid || opts.providerId || null;", expect: /never wa\.me/ },
+
+  /* ── support stays in the app (CHANGELOG 217) ── */
+  { group: 'support', browser: true, name: 'a footer sends users to SOKONI\'s WhatsApp again', file: 'faq.html', suite: 'support',
+    from: '<a href="/support.html#ticket" aria-label="SOKONI Support" title="SOKONI Support">💬</a>', to: '<a href="https://wa.me/254705726803" aria-label="WhatsApp" title="WhatsApp">📱</a>', expect: /links SOKONI's WhatsApp numbers/ },
+  { group: 'support', browser: true, name: 'support.html#ticket no longer opens the ticket form (dead deep link)', file: 'support.html', suite: 'support',
+    from: "(function(){ function go(){ if (location.hash === '#ticket'", to: "(function(){ function go(){ if (false && location.hash === '#ticket'", expect: /opens the in-app ticket form/ },
 ];
 
 const argv = process.argv.slice(2);
