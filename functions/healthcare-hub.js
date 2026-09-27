@@ -84,6 +84,31 @@ exports.approveHealthProvider = onCall(CF_OPTS, exports._h.approveHealthProvider
     { code: 'HEALTH_APPROVAL_MOVED' });
 });
 
+/* ══ PUBLIC PROVIDER PROJECTION (CHANGELOG 224 — Healthcare security slice 4) ══════════════════════
+   The ONE shape a public (unauthenticated) surface may return about a healthcare provider — a WHITELIST,
+   so a field added to the document later is private until it is added here on purpose. getHealthProvider
+   used to return the WHOLE document to anyone, signed in or not: licence number, private phone, street
+   address, reviewer id and review notes. The list and search built their own field lists; all three now
+   share this one.
+   providerId stays: booking, messaging and profile routing address a provider by account id today — the
+   platform-wide public-handle work is tracked separately and is not a Healthcare exception.
+   `sokoniApproved` is only what the server knows (an active, admin-approved record); it never claims a
+   professional-council (KMPDC / PPB) verification that SOKONI has not performed. */
+function _publicHealthProvider(p) {
+  return {
+    providerId: p.providerId, name: p.name || '', specialization: p.specialization || null,
+    clinic: p.clinic || null, city: p.city || null, county: p.county || null,
+    bio: p.bio || '', qualifications: p.qualifications || '',
+    consultationFee: p.consultationFee == null ? null : p.consultationFee, currency: p.currency || 'KES',
+    rating: p.rating == null ? null : p.rating, ratingCount: p.ratingCount || 0,
+    isOnline: p.isOnline === true, isAvailable: p.isAvailable === true,
+    languages: Array.isArray(p.languages) ? p.languages : [],
+    insuranceAccepted: Array.isArray(p.insuranceAccepted) ? p.insuranceAccepted : [],
+    sokoniApproved: p.status === 'active',
+  };
+}
+const PUBLIC_PROVIDER_FIELDS = Object.keys(_publicHealthProvider({}));
+
 /* â”€â”€ 3. getHealthProviders â”€â”€ */
 exports.getHealthProviders = onCall(CF_OPTS, exports._h.getHealthProviders = async (req) => {
   const { specialization, city, isOnline, limit = 24, cursor } = req.data;
@@ -107,17 +132,7 @@ exports.getHealthProviders = onCall(CF_OPTS, exports._h.getHealthProviders = asy
   }
 
   const snap = await q.get();
-  let providers = snap.docs.map(d => {
-    const p = d.data();
-    return {
-      providerId: p.providerId, name: p.name, specialization: p.specialization,
-      clinic: p.clinic, city: p.city, county: p.county,
-      consultationFee: p.consultationFee, currency: p.currency,
-      rating: p.rating, ratingCount: p.ratingCount,
-      isOnline: p.isOnline, isAvailable: p.isAvailable,
-      languages: p.languages, insuranceAccepted: p.insuranceAccepted,
-    };
-  });
+  let providers = snap.docs.map(d => _publicHealthProvider(d.data()));
 
   if (city) providers = providers.filter(p => (p.city || '').toLowerCase().includes(city.toLowerCase()));
   if (isOnline) providers = providers.filter(p => p.isOnline);
@@ -129,11 +144,15 @@ exports.getHealthProviders = onCall(CF_OPTS, exports._h.getHealthProviders = asy
 
 /* â”€â”€ 4. getHealthProvider â”€â”€ */
 exports.getHealthProvider = onCall(CF_OPTS, exports._h.getHealthProvider = async (req) => {
-  const { providerId } = req.data;
-  if (!providerId) throw new HttpsError('invalid-argument', 'providerId required');
+  const providerId = (req.data || {}).providerId;
+  /* a document id, nothing else: a path, an object or an over-long value never reaches Firestore */
+  if (typeof providerId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(providerId)) {
+    throw new HttpsError('invalid-argument', 'providerId required');
+  }
   const snap = await db().collection('healthProviders').doc(providerId).get();
   if (!snap.exists || snap.data().status !== 'active') throw new HttpsError('not-found', 'Provider not found');
-  return snap.data();
+  /* the same public projection for every caller — signed out, patient, the provider, an admin */
+  return _publicHealthProvider(snap.data());
 });
 
 /* â”€â”€ 5. bookAppointment â”€â”€ */
@@ -443,9 +462,7 @@ exports.searchHealthProviders = onCall(CF_OPTS, exports._h.searchHealthProviders
       (p.city || '').toLowerCase().includes(q)
     )
     .slice(0, Math.min(40, parseInt(limit) || 20))
-    .map(p => ({ providerId: p.providerId, name: p.name, specialization: p.specialization,
-      clinic: p.clinic, city: p.city, consultationFee: p.consultationFee,
-      rating: p.rating, isOnline: p.isOnline }));
+    .map(_publicHealthProvider);
   return { results };
 });
 
@@ -488,6 +505,7 @@ exports.getHealthDashboard = onCall(CF_OPTS, exports._h.getHealthDashboard = asy
 });
 
 module.exports = {
+  PUBLIC_PROVIDER_FIELDS,
   registerHealthProvider: exports.registerHealthProvider,
   approveHealthProvider:  exports.approveHealthProvider,
   getHealthProviders:     exports.getHealthProviders,

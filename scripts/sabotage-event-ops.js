@@ -62,6 +62,7 @@ const SUITES = {
   hcadm:    ['node', ['scripts/test-healthcare-admin-authority.js']],
   hcclin:   ['node', ['scripts/test-healthcare-clinical-authority.js']],
   hcclinrules: ['node', ['scripts/run-rules-suite.js', 'scripts/test-healthcare-clinical-rules.js']],
+  hcpub:    ['node', ['scripts/test-healthcare-public-projection.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -1007,6 +1008,20 @@ const M = [
     from: "  match /healthPrescriptions/{rxId} {\n  allow read:  if isAuthed() && resource.data.patientUid == request.auth.uid;", to: "  match /healthPrescriptions/{rxId} {\n  allow read:  if isAuthed();", expect: /cross-provider read|cross-patient read/ },
   { group: 'hcclin', browser: false, name: "client-created audit event (rules)", file: "firestore.rules.build", suite: "hcclinrules",
     from: "  match /healthClinicalAudit/{auditId} {\n  allow read:  if isAdmin();\n  allow write: if false;", to: "  match /healthClinicalAudit/{auditId} {\n  allow read:  if isAdmin();\n  allow write: if isAuthed();", expect: /client-created audit event/ },
+
+  /* ── Healthcare security slice 4: the public provider projection (CHANGELOG 224) ── */
+  { group: 'hcpub', browser: false, name: "the full provider record is returned again", file: "functions/healthcare-hub.js", suite: 'hcpub',
+    from: "  return _publicHealthProvider(snap.data());", to: "  return snap.data();", expect: /only whitelisted fields|no licence number/ },
+  { group: 'hcpub', browser: false, name: "the licence number and phone join the projection", file: "functions/healthcare-hub.js", suite: 'hcpub',
+    from: "    sokoniApproved: p.status === 'active',\n  };", to: "    sokoniApproved: p.status === 'active', licenseNumber: p.licenseNumber, phone: p.phone,\n  };", expect: /only whitelisted fields|no licence number|whitelist the code exports/ },
+  { group: 'hcpub', browser: false, name: "the list returns raw documents", file: "functions/healthcare-hub.js", suite: 'hcpub',
+    from: "  let providers = snap.docs.map(d => _publicHealthProvider(d.data()));", to: "  let providers = snap.docs.map(d => d.data());", expect: /getHealthProviders: only whitelisted/ },
+  { group: 'hcpub', browser: false, name: "search returns raw documents", file: "functions/healthcare-hub.js", suite: 'hcpub',
+    from: "    .map(_publicHealthProvider);", to: "    .map((p) => p);", expect: /searchHealthProviders: only whitelisted/ },
+  { group: 'hcpub', browser: false, name: "malformed ids reach Firestore (validation removed)", file: "functions/healthcare-hub.js", suite: 'hcpub',
+    from: "  if (typeof providerId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(providerId)) {", to: "  if (!providerId) {", expect: /malformed providerId/ },
+  { group: 'hcpub', browser: false, name: "a pending provider is served publicly", file: "functions/healthcare-hub.js", suite: 'hcpub',
+    from: "  if (!snap.exists || snap.data().status !== 'active') throw new HttpsError('not-found', 'Provider not found');\n  /* the same public projection", to: "  if (!snap.exists) throw new HttpsError('not-found', 'Provider not found');\n  /* the same public projection", expect: /pending\) provider is not found/ },
 ];
 
 const argv = process.argv.slice(2);

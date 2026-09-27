@@ -1,3 +1,29 @@
+## 2026-09-27 (224) — Healthcare security slice 4: one public provider projection
+
+Not deployed. No production writes. KRA not called. No migration.
+
+**Defect.** `getHealthProvider` needed no sign-in and returned the **whole** `healthProviders` document: licence
+number, private phone, street address, reviewer id and review notes. The list and search each built their own field
+list.
+
+**Fix:**
+- `_publicHealthProvider` is one **whitelist** projection used by `getHealthProvider`, `getHealthProviders` and
+  `searchHealthProviders`. A field added to the document later stays private until it is deliberately added.
+- Every caller gets the same projection: signed out, a patient, the provider, an admin.
+- It carries only `sokoniApproved`, what the server knows, and no council (KMPDC / PPB) verification claim.
+- Malformed `providerId` (empty, path, object, number, over-long) is refused before Firestore, and pending or unknown
+  providers are `not-found`.
+- `providerId` stays because booking, messaging and profile routing need it. The platform-wide public-handle work is
+  tracked separately.
+
+**Files:** `functions/healthcare-hub.js`, `scripts/test-healthcare-public-projection.js` (new),
+`scripts/sabotage-event-ops.js`.
+
+**API:** `getHealthProvider` now returns the public projection. There are no client callers.
+
+**Tests:** `test-healthcare-public-projection` 25/0. Sabotage `hcpub` 6/6 caught, with the tree byte-identical
+afterwards.
+
 ## 2026-09-27 (223) — Healthcare security slice 3: medical records and prescriptions need a clinical relationship
 
 Scope: owner-authorized Healthcare security slices 1–4. ADR-014 is still NOT authorized. Not deployed. No production
