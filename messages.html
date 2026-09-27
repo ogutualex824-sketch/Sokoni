@@ -111,6 +111,11 @@ body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);m
 <div class="filters">
   <button class="filter-chip active" data-filter="all">All</button>
   <button class="filter-chip" data-filter="unread">Unread</button>
+  <!-- Entertainment (2026-09-27): PUBLIC enquiries and PRIVATE bookings are separate tabs -->
+  <button class="filter-chip" data-filter="ent_enquiry">Enquiries</button>
+  <button class="filter-chip" data-filter="ent_booking">Bookings</button>
+  <button class="filter-chip" data-filter="tag_refund">Refunds</button>
+  <button class="filter-chip" data-filter="tag_payment">Payments</button>
   <button class="filter-chip" data-filter="delivery">🚚 Delivery</button>
   <button class="filter-chip" data-filter="favourites">⭐ Favourites</button>
   <button class="filter-chip" data-filter="order">Orders</button>
@@ -196,6 +201,9 @@ function _render(){
     list=list.filter(function(c){
       return c.transactionType==='logistics_request' || _hasDelivery(c);
     });
+  } else if(_filter==='tag_refund'||_filter==='tag_payment'){
+    var _t=_filter.slice(4);
+    list=list.filter(function(c){return Array.isArray(c.entTags)&&c.entTags.indexOf(_t)>=0;});
   } else if(_filter==='favourites'){
     list=list.filter(function(c){return _isFav(c.conversationId);});
   } else if(_filter!=='all'){

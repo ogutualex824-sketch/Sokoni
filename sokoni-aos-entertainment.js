@@ -22,6 +22,8 @@
     ['overview', 'Overview'], ['investigate', 'Investigate'], ['events', 'Events'], ['eventops', 'Staff & gate'], ['settlements', 'Settlements'],
     ['refunds', 'Refund queue'], ['refundreq', 'Refund requests'], ['receivables', 'Receivables'], ['fiscal', 'Fiscal (KRA)'],
     ['exceptions', 'Exceptions'], ['listings', 'Venues & artists'], ['orgint', 'Organizer integrations'], ['matrix', 'Categories & policy'],
+    /* 2026-09-27 — booking identity, the ONE availability authority, communications, rate cards */
+    ['entbookings', 'Bookings'], ['availability', 'Availability'], ['comms', 'Communications'], ['ratecards', 'Rate cards'],
   ];
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -44,6 +46,9 @@
     let listingKind = 'booking_venue', listingStatus = 'active';
     /* Investigation state survives a re-render (after an action) — the PIN itself is never kept. */
     let search = null, traced = null, opsEvent = '', orgUid = '', rqStatus = '', rvStatus = 'OUTSTANDING', fView = '';
+    /* Entertainment bookings / availability / communications / rate cards — query state survives a re-render. */
+    let bkQ = null, bkTrace = null, avQ = null, cmQ = {}, cmContent = null, rcQ = null;
+    const isoOrDash = (ms) => (ms ? new Date(Number(ms)).toLocaleString('en-KE') : '—');
 
     host.innerHTML = `
       <div class="aoscr-tabs" role="tablist">${TABS.map(([k, l]) => `<button type="button" role="tab" class="aos-btn aos-btn-ghost" data-tab="${k}">${esc(l)}</button>`).join('')}</div>
@@ -254,6 +259,56 @@
           <td class="aos-mono">${esc(l.uid || l.ownerId)}</td><td>${chip(l.status)}</td><td>${when(l.createdAt)}</td><td>${acts(l)}</td></tr>`).join('');
         return filters + table(['Name', 'Type', 'Owner', 'Status', 'Created', ''], rows, 'Nothing here.');
       },
+      async entbookings() {
+        const form = `<form class="aos-filters" data-bksearch><label>By <select name="by"><option value="ref">Booking reference</option><option value="buyer">Buyer uid</option><option value="provider">Provider uid</option></select></label>
+          <label>Value <input name="value" value="${esc(bkQ ? bkQ.value : '')}" required></label><button class="aos-btn" type="submit">Search</button></form>`;
+        let out = '';
+        if (bkQ) {
+          const r = await call('entAdminBookings', bkQ);
+          out = table(['Reference', 'Category', 'Status', 'Payment', 'Refund', 'Buyer', 'Provider', ''], (r.bookings || r.results || []).map((b) => `<tr><td class="aos-mono">${esc(b.bookingRef)}</td><td>${esc(b.category)}</td><td>${chip(b.status)}</td>
+            <td>${chip(b.payment && b.payment.state)}</td><td>${chip(b.refund && b.refund.state)}</td><td class="aos-mono">${esc(b.buyerUid)}</td><td class="aos-mono">${esc(b.providerUid)}</td>
+            <td><button type="button" class="aos-btn aos-btn-ghost" data-bktrace="${esc(b.bookingRef)}">Trace</button></td></tr>`).join(''), 'No bookings.');
+        }
+        if (bkTrace) {
+          const t = bkTrace;
+          out += `<h4>Trace ${esc(t.envelope && t.envelope.bookingRef)}</h4><pre class="aos-mono" style="white-space:pre-wrap;max-height:360px;overflow:auto">${esc(JSON.stringify(t, null, 2))}</pre>
+            <button type="button" class="aos-btn aos-btn-ghost" data-bkconv="${esc(t.envelope && t.envelope.bookingRef)}">Read conversation (super admin, audited)</button>`;
+        }
+        return form + out;
+      },
+      async availability() {
+        const form = `<form class="aos-filters" data-avsearch><label>Calendar <select name="kind"><option value="providerId">Provider uid</option><option value="venueId">Venue id</option></select></label>
+          <label>Id <input name="id" value="${esc(avQ ? (avQ.providerId || avQ.venueId) : '')}" required></label><label>Month <input name="month" type="month" value="${esc(avQ ? avQ.month : new Date().toISOString().slice(0, 7))}"></label>
+          <button class="aos-btn" type="submit">Inspect</button></form>`;
+        if (!avQ) return form + '<p class="aos-muted">Inspect one provider or venue calendar: states, times and booking references (buyer details stay in the booking trace).</p>';
+        const r = await call('entAdminAvailability', avQ);
+        const rows = (r.items || []).map((it) => `<tr><td>${chip(it.state)}</td><td>${isoOrDash(it.start)}</td><td>${isoOrDash(it.end)}</td><td class="aos-mono">${esc(it.bookingRef || '—')}</td>
+          <td>${esc(it.label == null ? '—' : it.label)}</td><td>${it.state === 'BLOCKED' ? `<button type="button" class="aos-btn aos-btn-ghost" data-avact="unblock" data-item="${esc(it.id)}">Unblock</button>` : `<button type="button" class="aos-btn aos-btn-ghost" data-avact="release_orphan" data-item="${esc(it.id)}">Release orphan</button>`}</td></tr>`).join('');
+        return form + `<p>${esc(r.calKey)} · ${esc(r.category)} · owner <span class="aos-mono">${esc(r.ownerUid)}</span> · ${r.bookable && r.bookable.ok ? chip('BOOKABLE') : chip(r.bookable && r.bookable.code)}</p>
+          <p class="aos-muted">Horizon ${num(r.config.horizonDays)} days · duration ${num(r.config.durationMins)} min · capacity ${num(r.config.capacity)} · buffers ${num(r.config.bufferBeforeMins)}/${num(r.config.bufferAfterMins)} min</p>
+          ${table(['State', 'Start', 'End', 'Booking', 'Private label (super admin)', ''], rows, 'Nothing booked or blocked this month.')}
+          <button type="button" class="aos-btn" data-avact="block">Block time (super admin)</button>
+          <h4>Audit</h4>${table(['When', 'Actor', 'Role', 'Action', 'Reason'], (r.audit || []).slice(0, 50).map((a) => `<tr><td>${isoOrDash(a.at)}</td><td class="aos-mono">${esc(a.actor)}</td><td>${esc(a.role)}</td><td>${esc(a.action)}</td><td>${esc(a.reason || '')}</td></tr>`).join(''), 'No changes recorded.')}`;
+      },
+      async comms() {
+        const form = `<form class="aos-filters" data-cmsearch><label>Provider uid <input name="providerUid" value="${esc(cmQ.providerUid || '')}"></label><label>Buyer uid <input name="buyerUid" value="${esc(cmQ.buyerUid || '')}"></label>
+          <label>Status <select name="status"><option value="">Any</option>${['OPEN', 'ACKNOWLEDGED', 'RESPONDED', 'PROPOSAL_SENT', 'BOOKING_PENDING', 'CONVERTED', 'CLOSED', 'EXPIRED', 'BLOCKED'].map((s) => `<option ${cmQ.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select></label><button class="aos-btn" type="submit">Search</button></form>`;
+        const r = await call('entAdminCommunications', cmQ);
+        const pol = r.policy ? `<p class="aos-muted">Messaging policy: ${esc(r.policy.whoCanMessage)} · enquiries ${r.policy.enquiriesEnabled === false ? 'off' : 'on'} · call requests ${esc(r.policy.callRequests)} · response ${esc(r.policy.responseTime || '—')}</p>` : '';
+        const content = cmContent ? `<h4>Conversation content (audited)</h4>${table(['When', 'Sender', 'Type', 'Text'], (cmContent.messages || []).map((m) => `<tr><td>${esc(String(m.timestamp && (m.timestamp._seconds ? new Date(m.timestamp._seconds * 1000).toLocaleString('en-KE') : m.timestamp) || '—'))}</td><td class="aos-mono">${esc(m.senderId)}</td><td>${esc(m.type)}</td><td>${esc(m.text || '')}</td></tr>`).join(''), 'No messages.')}` : '';
+        return form + pol + '<h4>Enquiries (metadata only)</h4>' + table(['Enquiry', 'Status', 'Category', 'Provider', 'Buyer', 'Quote', 'Booking', ''], (r.enquiries || []).map((e) => `<tr><td class="aos-mono">${esc(String(e.id).slice(0, 10))}</td><td>${chip(e.status)}</td><td>${esc(e.category)}</td>
+          <td class="aos-mono">${esc(e.providerUid)}</td><td class="aos-mono">${esc(e.buyerUid)}</td><td class="aos-mono">${esc(e.quoteId || '—')}</td><td class="aos-mono">${esc(e.bookingId || '—')}</td>
+          <td><button type="button" class="aos-btn aos-btn-ghost" data-cmread="${esc(e.id)}">Read content</button></td></tr>`).join(''), 'No enquiries.') +
+          '<h4>Abuse reports</h4>' + table(['Reporter', 'Subject', 'Reason', 'Status'], (r.reports || []).map((x) => `<tr><td class="aos-mono">${esc(x.reporterUid)}</td><td class="aos-mono">${esc(x.subjectUid)}</td><td>${esc(x.reason)}</td><td>${chip(x.status)}</td></tr>`).join(''), 'No reports.') + content;
+      },
+      async ratecards() {
+        const form = `<form class="aos-filters" data-rcsearch><label>Provider / owner uid <input name="ownerUid" value="${esc(rcQ ? rcQ.ownerUid : '')}" required></label><button class="aos-btn" type="submit">Inspect</button></form>`;
+        if (!rcQ) return form;
+        const r = await call('entAdminRateCards', rcQ);
+        return form + table(['Rate card', 'Visibility', 'Segment', 'Status', 'Versions (price · effective)', ''], (r.cards || []).map((c) => `<tr><td>${esc(c.name)}<div class="aos-muted aos-mono">${esc(c.calKey)}</div></td><td>${chip(c.visibility)}</td><td>${esc(c.segment)}</td><td>${chip(c.status)}</td>
+          <td>${(c.versions || []).map((v) => `v${esc(v.version)} ${kes(v.priceCents)}${v.unit && v.unit !== 'booking' ? '/' + esc(v.unit) : ''} · ${isoOrDash(v.effectiveFrom)} → ${v.effectiveTo ? isoOrDash(v.effectiveTo) : 'now'}`).join('<br>')}</td>
+          <td><button type="button" class="aos-btn aos-btn-ghost" data-rcmod="${esc(c.id)}" data-restore="${c.status === 'SUSPENDED' ? '1' : ''}">${c.status === 'SUSPENDED' ? 'Restore' : 'Suspend'} (super admin)</button></td></tr>`).join(''), 'No rate cards.');
+      },
       async matrix() {
         const m = await call('entAdminMatrix', {});
         const cats = (m.categories || []).map((c) => `<tr><td><strong>${esc(c.label)}</strong><div class="aos-muted">${esc(c.id)}${c.contentTypeOf ? ' · content type of ' + esc(c.contentTypeOf) : ''}</div></td>
@@ -312,6 +367,32 @@
           act('eventAdminRefundCancelled', { orderId: t.dataset.refund, reason }, 'Refund submitted to the refund authority.');
         });
       }
+      if (t.dataset.bktrace) { msg('Tracing…'); try { bkTrace = await call('entAdminBookingTrace', { bookingRef: t.dataset.bktrace }); msg(''); } catch (e) { msg((e && e.message) || 'Trace failed.', true); } return render(); }
+      if (t.dataset.bkconv) {
+        return ask('Read conversation', [{ label: 'Reason (audited)', area: true }], async ([reason]) => {
+          try { const r = await call('entAdminBookingConversation', { bookingRef: t.dataset.bkconv, reason }); bkTrace = Object.assign({}, bkTrace, { conversationContent: r }); msg('Read (audited).'); render(); }
+          catch (e) { msg((e && e.message) || 'Refused.', true); }
+        });
+      }
+      if (t.dataset.avact) {
+        const action = t.dataset.avact;
+        if (action === 'block') {
+          return ask('Block time', [{ label: 'Start (YYYY-MM-DDTHH:MM, Nairobi)' }, { label: 'End (YYYY-MM-DDTHH:MM, Nairobi)' }, { label: 'Reason (audited)', area: true }], ([s, e, reason]) =>
+            act('entAdminAvailabilityIntervene', Object.assign({}, avQ, { action, reason, startMs: Date.parse(s + ':00+03:00'), endMs: Date.parse(e + ':00+03:00') }), 'Blocked (audited).'));
+        }
+        return ask(action === 'unblock' ? 'Unblock' : 'Release orphan', [{ label: 'Reason (audited)', area: true }], ([reason]) =>
+          act('entAdminAvailabilityIntervene', Object.assign({}, avQ, { action, itemId: t.dataset.item, reason }), 'Done (audited).'));
+      }
+      if (t.dataset.cmread) {
+        return ask('Read enquiry content', [{ label: 'Reason — e.g. abuse report reference (audited)', area: true }], async ([reason]) => {
+          try { cmContent = await call('entAdminEnquiryConversation', { enquiryId: t.dataset.cmread, reason }); msg('Read (audited).'); render(); }
+          catch (e) { msg((e && e.message) || 'Refused.', true); }
+        });
+      }
+      if (t.dataset.rcmod) {
+        return ask(t.dataset.restore ? 'Restore rate card' : 'Suspend rate card', [{ label: 'Reason (audited)', area: true }], ([reason]) =>
+          act('entAdminRateCardSuspend', { cardId: t.dataset.rcmod, reason, restore: !!t.dataset.restore }, 'Saved (audited).'));
+      }
       if (t.dataset.ldecide) {
         const decision = t.dataset.ldecide;
         if (decision === 'approve') return act('entAdminSetListingStatus', { kind: listingKind, id: t.dataset.lid, decision }, 'Approved.');
@@ -324,6 +405,10 @@
       const f = ev.target;
       if (f.matches('[data-evops]')) { ev.preventDefault(); opsEvent = f.eventId.value.trim(); return render(); }
       if (f.matches('[data-orgint]')) { ev.preventDefault(); orgUid = f.uid.value.trim(); return render(); }
+      if (f.matches('[data-bksearch]')) { ev.preventDefault(); bkQ = { by: f.by.value, value: f.value.value.trim() }; bkTrace = null; return render(); }
+      if (f.matches('[data-avsearch]')) { ev.preventDefault(); avQ = { [f.kind.value]: f.id.value.trim(), month: f.month.value }; return render(); }
+      if (f.matches('[data-cmsearch]')) { ev.preventDefault(); cmQ = {}; ['providerUid', 'buyerUid', 'status'].forEach((k) => { if (f[k].value.trim()) cmQ[k] = f[k].value.trim(); }); cmContent = null; return render(); }
+      if (f.matches('[data-rcsearch]')) { ev.preventDefault(); rcQ = { ownerUid: f.ownerUid.value.trim() }; return render(); }
       if (!f.matches('[data-evsearch]')) return undefined;
       ev.preventDefault();
       const q = { by: f.by.value, value: f.value.value.trim() };
@@ -359,7 +444,10 @@
   const OPS = ['eventAdminOverview', 'eventAdminEvents', 'eventAdminSettlements', 'eventAdminRefundQueue', 'eventAdminExceptions',
     'eventAdminAttestFee', 'entAdminMatrix', 'entAdminListings', 'entAdminSetListingStatus',
     'eventAdminInvestigate', 'eventAdminTrace', 'eventAdminStaff', 'eventAdminAdmissions', 'eventAdminRefundRequests',
-    'eventAdminReceivables', 'eventAdminRevokeStaff', 'eventAdminFiscal', 'eventAdminFiscalRetry', 'eventAdminCreditNoteRetry', 'eventAdminCreditNoteResolve', 'eventAdminFiscalResolve', 'eventAdminRefundCancelled', 'eventAdminIntegrationStatus'];
+    'eventAdminReceivables', 'eventAdminRevokeStaff', 'eventAdminFiscal', 'eventAdminFiscalRetry', 'eventAdminCreditNoteRetry', 'eventAdminCreditNoteResolve', 'eventAdminFiscalResolve', 'eventAdminRefundCancelled', 'eventAdminIntegrationStatus',
+    'entAdminBookings', 'entAdminBookingTrace', 'entAdminBookingConversation',
+    'entAdminAvailability', 'entAdminAvailabilityIntervene', 'entAdminAvailabilityPolicy',
+    'entAdminCommunications', 'entAdminEnquiryConversation', 'entAdminRateCards', 'entAdminRateCardSuspend'];
 
   root.SokoniAOSEntertainment = { mount, OPS, _kes: kes, _esc: esc };
 }(typeof window !== 'undefined' ? window : globalThis));

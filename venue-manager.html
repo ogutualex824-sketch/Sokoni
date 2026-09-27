@@ -302,7 +302,15 @@
 <div class="tabbar" role="tablist">
   <button class="tab-btn active" onclick="showTab('calendar',this)">Calendar</button>
   <button class="tab-btn" onclick="showTab('bookings',this)">Bookings</button>
-  <button class="tab-btn" onclick="showTab('blockdates',this)">Block Dates</button>
+  <!-- Blocks now live in the ONE availability authority: the workspace calendar shows and edits them
+       (the legacy venueBlockouts list could not see them). -->
+  <button class="tab-btn" onclick="VW.open('calendar',this)">Availability calendar</button>
+  <button class="tab-btn" onclick="VW.open('availability',this)">Hours &amp; slots</button>
+  <button class="tab-btn" onclick="VW.open('ratecards',this)">Rate cards</button>
+  <button class="tab-btn" onclick="VW.open('enquiries',this)">Enquiries</button>
+  <button class="tab-btn" onclick="VW.open('calls',this)">Calls</button>
+  <button class="tab-btn" onclick="VW.open('messaging',this)">Message settings</button>
+  <button class="tab-btn" onclick="VW.open('discounts',this)">Marketing</button>
   <button class="tab-btn" onclick="showTab('settings',this)">Settings</button>
   <button class="tab-btn" onclick="showTab('stats',this)">Stats</button>
   <!-- The buyer's booking PIN (PIN YAKO NI BOOKING YAKO) must be verified before check-in; it releases the payment. -->
@@ -345,6 +353,10 @@
 <!-- ═══════════════════════════════════════
      TAB: BLOCK DATES
 ═══════════════════════════════════════ -->
+<div class="tab-panel" id="tab-entws">
+  <div class="card"><div id="entwsHost"></div></div>
+</div>
+
 <div class="tab-panel" id="tab-blockdates">
   <div class="card">
     <div class="card-hd">Block a Date Range</div>
@@ -710,6 +722,18 @@ function toast(msg, type = 'ok') {
 }
 
 // ─── Tab nav ─────────────────────────────────────────────
+/* Entertainment business workspace for the SELECTED venue (sokoni-ent-workspace.js). */
+const VW = {
+  _ws: null, _venue: null,
+  open(section, btn) {
+    showTab('entws', btn);
+    if (!_activeId) { $('entwsHost').innerHTML = '<p style="color:#9a9a9a">Choose a venue first.</p>'; return; }
+    if (!window.SokoniEntWorkspace) { $('entwsHost').innerHTML = '<p style="color:#9a9a9a">Loading…</p>'; window.addEventListener('load', () => VW.open(section, btn), { once: true }); return; }
+    if (!VW._ws || VW._venue !== _activeId) { if (VW._ws) VW._ws.destroy(); VW._ws = SokoniEntWorkspace.mount($('entwsHost'), { section, venueId: _activeId }); VW._venue = _activeId; }
+    else VW._ws.show(section);
+  },
+};
+
 function showTab(name, btn) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -1266,6 +1290,8 @@ document.addEventListener('keydown', e => {
   }
 });
 </script>
+<script src="/sokoni-ent-calendar.js" defer></script>
+<script src="/sokoni-ent-workspace.js" defer></script>
 <script src="/sokoni-dashboard-profile-core.js"></script>
 <script src="/sokoni-dashboard-profile.js"></script>
 <script>

@@ -1,3 +1,174 @@
+## 2026-09-27 (207) — Entertainment Availability Calendar (all providers) + Messaging Controls, Enquiries and Rate Cards
+
+- **Scope.** One canonical availability authority for every bookable Entertainment provider, used by both booking
+  engines. It adds structured public enquiries, messaging controls, call requests, versioned rate cards, quotes and
+  booking discounts. Full design: `docs/ENTERTAINMENT_AVAILABILITY.md` ([[ENTERTAINMENT_AVAILABILITY]]).
+  - **Not deployed.** Provider calls: 0. Production writes: 0. KRA: deferred / unproven.
+  - Booking, PIN, payment, refund, wallet, messaging, AdminOS and Marketing authorities are preserved.
+- **Availability authority** (`functions/ent-availability.js` + pure `functions/shared/ent-availability-core.js`).
+  - Calendar keys are `svc_<providerUid>` (the service-appointment engine) and `ven_<venueId>` (the venue engine), so
+    no category has a calendar of its own.
+  - Occupancy is `entAvailability/{calKey}/months/{YYYY-MM}` (server-only). The realtime signal is
+    `entAvailabilityPublic/*`, a counter only.
+  - Reservations are claimed **inside** the engine's transaction:
+    - 12 simultaneous buyers on one slot → 1 booking;
+    - 12 buyers on overlapping windows → 1 (the slot lock alone could not do this).
+  - Buffers close the time around a booking; the public sees UNAVAILABLE.
+  - `BOOKING_NOT_OPEN` is distinct from `UNAVAILABLE`.
+  - The public sees only AVAILABLE / LIMITED / BOOKED / UNAVAILABLE / BOOKING_NOT_OPEN / TEMPORARILY_HELD, and a public
+    slot is exactly `{ start, end, state }`.
+  - Lifecycle: hold → BOOKED only when the payment authority confirms. The slot reopens only on the canonical cancel /
+    decline / reject / expiry / executed refund, or becomes UNAVAILABLE under a cooldown policy. A refund **request**
+    never reopens it.
+  - A payment still **in flight** keeps the slot: neither the customer closing the sheet nor the expiry timer releases it
+    (`paymentAmbiguousSince`).
+  - Reschedule is atomic in both engines.
+  - Provider controls (all audited): blocks with private labels, hours, durations and steps, notice, horizon, buffers,
+    capacity, per-day limits, blackout dates, cooldown, per-service availability, statistics.
+  - **Premium / Equipped** (from `subscription-core`) gate: capacity > 1, split buffers, extended horizon, per-service
+    availability, utilisation / hours / repeat-customer statistics. These are enforced **at use**, so a setting written
+    directly without the plan is ignored.
+  - Category policy lives in `platformConfig/entAvailabilityPolicy` (super admin).
+  - Verification: an unverified Entertainment provider, an unapproved venue or a suspended provider takes no public
+    bookings or enquiries.
+  - AdminOS › Availability: states and references; labels only for a super admin. Super-admin interventions need a
+    reason and are audited.
+  - `scripts/migrate-ent-availability.js`: a one-time backfill, dry-run by default, **not run**.
+- **Security fixed in the booking engines.**
+  - `bookingSaveVenue` took `status` from the owner (self-publish / un-suspend). A new venue now starts pending, and an
+    edit never changes the status.
+  - `bookingCreate` checked neither the venue's status nor Nairobi time. Now it does.
+  - `bookingCancel` on a PAID venue booking cancelled it with no refund and reopened the slot. It is now refused ("request
+    a refund").
+  - `bookingReschedule` never moved the slot lock and was not atomic. Fixed.
+  - `bookingHoldSlot` let any user hold any venue's time. Retired.
+  - `bookingReleaseHold` had no owner check. Owner only now.
+  - `reserveSlot` / `releaseSlot` (a confirmed booking with no payment, in a store nothing read) and `venueCreateBooking`
+    (no lock; its overlap query matched nothing) are retired.
+  - `getAvailabilitySlots` / `bookingGetAvailability` wrote configuration on a public read and returned private reasons.
+    Both now answer from the authority in safe states.
+  - Provider cancel and decline are now transactional (the status is re-read, and the release happens in the same
+    commit).
+- **Messaging controls and enquiries** (`functions/ent-enquiries.js`). Public enquiry first; a private conversation only
+  after a real relationship.
+  - Structured enquiries create `ent_enquiry_{id}` conversations **on the server only** (a server-anchored type).
+  - Server anti-spam:
+    - 10 per user per day;
+    - 3 open per user and provider;
+    - a 2-minute cooldown;
+    - duplicate suppression for 24 h;
+    - 300 per provider per day;
+    - 30 messages per hour per conversation;
+    - a duplicate message within 60 s is refused.
+
+    Every refusal is explicit; no message is silently dropped.
+  - Server-owned states: OPEN → ACKNOWLEDGED → RESPONDED → PROPOSAL_SENT → BOOKING_PENDING → CONVERTED · CLOSED · EXPIRED
+    · BLOCKED.
+  - Settings: who can message, enquiry types, business hours ("Provider is currently unavailable." — never an online
+    claim), response time, public info / FAQs.
+  - Quick responses may **not** claim that a payment, booking or refund is complete.
+  - Blocks apply to public enquiries only. **A paying buyer is never stranded**: booking conversations are never gated.
+  - Call requests are REQUEST → accept / decline / schedule (window authorised, parties only).
+  - Booking conversations get state-derived events: BOOKING CONFIRMED · PAYMENT CONFIRMED · PIN ISSUED · UPCOMING · the
+    refund stages.
+  - Inbox tabs: Enquiries / Bookings / Refunds / Payments.
+  - Conversation card: provider, reference, status, date, service, PIN (**buyer only**), with View booking / Message /
+    Call / Refund.
+- **Rate cards, quotes, discounts** (`functions/ent-rate-cards.js`).
+  - Immutable price versions. A booking stores `rateCardId · rateCardVersion · price · currency · pricingAuthority` and is
+    never re-priced.
+  - Visibility is PUBLIC / ENQUIRY_ONLY / BOOKING_ONLY / PRIVATE. Segments are shown and bookable only for
+    server-eligible buyers.
+  - Quotes: enquiry → quote → accept (not payment) → reserve + pay → CONVERTED.
+  - Discounts are stored in the **Marketing** store (`mktCouponCodes`, scope `ent_booking`) and redeemed inside the
+    booking transaction.
+  - Checkout (`entCheckoutQuote`) shows service / date / time / rate card / base / discount / final / payment method /
+    refund policy. CONFIRM & PAY carries `expectedTotalCents`, and the answer is "Price changed." or "That time was just
+    booked." — never a charge at an old price.
+- **Connect.** `booking` gains its call surface: the owner-authorized booking conversation CALL. It is a product
+  widening only; the authority always permitted voice on `booking`.
+  - The certification suite has been updated to encode it: 858/0.
+  - A public-enquiry **voice leg** is NOT added: the frozen authority caps enquiries at chat, which needs an owner
+    decision.
+  - Calls stay **UNPROVEN** (no TURN / STUN).
+- **Surfaces.**
+  - New modules: `sokoni-ent-calendar.js`, `sokoni-ent-storefront.js`, `sokoni-ent-workspace.js`,
+    `sokoni-ent-conversation.js`.
+    - Calendar: month / year navigation (bounded to this year plus two), lazy months, bounded realtime listeners.
+      Providers also get Week / Year views.
+  - Changed pages:
+    - `provider-profile.html`: storefront. "Message" now opens a structured enquiry, not an unrestricted chat.
+    - `provider-dashboard.html`: sidebar entries for Rate Cards, Availability, Calendar, Enquiries, Calls, Message
+      Settings, Marketing, Booked Hours and Live Status.
+    - `venue-manager.html`: workspace tabs.
+    - `venue-booking.html`: calendar, Questions & rates, price race.
+    - `services.html` and `venue-booking.html`: availability badges.
+    - `entertainment.html`: My enquiries & quotes.
+    - `messages.html`: tabs.
+    - `chat.html`: card.
+    - `creator-studio.html`: Bookings & availability — creators take consultations on the same authority after
+      approval.
+    - `sokoni-book-service.js`: calendar + `payFor`.
+  - AdminOS › Entertainment gains the tabs Bookings (Slice A ops, which had no UI), Availability, Communications and Rate
+    cards.
+- **Files.**
+  - New:
+    - `functions/ent-availability.js`, `functions/shared/ent-availability-core.js`;
+    - `functions/ent-enquiries.js`, `functions/ent-rate-cards.js`;
+    - `sokoni-ent-{calendar,storefront,workspace,conversation}.js`;
+    - `docs/ENTERTAINMENT_AVAILABILITY.md`;
+    - `scripts/test-ent-availability.js`, `scripts/test-ent-communications.js`, `scripts/test-ent-availability-browser.js`;
+    - `scripts/migrate-ent-availability.js`.
+  - Changed:
+    - availability, booking-service, booking-payment-sweep, provider-ops, booking, venue-payments, venue-booking;
+    - messages, entertainment-bookings, connect-calls, shared/connect-call-surface;
+    - booking-dispatch, admin-os-dispatch;
+    - firestore.rules (+ build);
+    - the pages above, sokoni-connect-call.js, sokoni-aos-entertainment.js;
+    - scripts: sabotage-event-ops (plus the `also` two-file attack support), test-entertainment-bookings,
+      test-entertainment-rules, test-connect-authority.
+- **Database.**
+  - New collections: `entAvailability(/months)`, `entAvailabilityPublic`, `entAvailabilityAudit`,
+    `entRateCards(/versions)`, `entRateCardEligibility`, `entRateCardAudit`, `entQuotes`, `mktCouponRedemptions`,
+    `entMessagingSettings`, `entEnquiries`, `entEnquiryLimits`, `entEnquiryDedup`, `entBlocks`, `entCallRequests`,
+    `entCommsAudit`, and `platformConfig/entAvailabilityPolicy`.
+  - Bookings gain `availability`, `rateCardId`, `rateCardVersion`, `pricingAuthority`, `listPriceCents`, `discountCents`,
+    `couponId`, `quoteId` and `enquiryId`.
+  - `conversations` / `userConversations` gain `entTags`.
+- **API.** New ops on the existing `bookingDispatch` and `adminOsDispatch`. No new Cloud Function or schedule: enquiry
+  expiry runs in `bookingCleanupHolds`, and reminders run in `bookingSendReminders`.
+- **Rules.**
+  - New collections, all server-written.
+  - `ent_enquiry_*` conversations are reserved.
+  - Tightened:
+    - `bookingHolds` create;
+    - `venueBlockouts` read / create;
+    - `providerCalendar` read;
+    - `availabilityStatus` write;
+    - `mktCouponCodes` read;
+    - `bookings`: no client venue reservation, and no direct client cancel of a venue booking.
+- **Breaking.**
+  - Legacy `reserveSlot` / `releaseSlot` / `venueCreateBooking` / `bookingHoldSlot` refuse with `RETIRED`.
+  - A paid venue booking cancels through a refund only.
+  - Owners cannot set a venue's status.
+  - Public availability responses no longer carry reasons.
+- **Tests.**
+  - availability 88/0 · communications 74/0 · availability browser 54/0 · bookings 95/0 · rules 236/0 ·
+    event-ops browser 282/0.
+  - Connect 858/0 · 572/0 · 33/0 · 30/0.
+  - availability / booking / provider / pricing suites unchanged from baseline.
+  - Full sabotage suite: **185/185 CAUGHT** (0 missed · 0 crashed · 0 no-anchor), 19 suites green after restore, tree byte-identical.
+  - Sabotage `[avail]`: 37 attacks. On the first run 5 were not caught; the tests were hardened (null-safe refusal codes,
+    an overlap-only venue reschedule) and a two-file attack was added. Result: **37/37 caught**. Full suite: see the
+    final report.
+- **Known limits.**
+  - Calls are unproven (no TURN).
+  - The public-enquiry voice leg is an owner decision.
+  - Travel pricing trusts the declared distance (pre-existing, unchanged).
+  - Pre-existing live bookings need the backfill.
+  - Venue waitlist offers no longer hold time.
+  - Existing venue bookings keep their UTC-based times.
+
 ## 2026-09-27 (206) — Entertainment Convergence Slice A: one booking identity, booking PIN, show-up settlement, cash removed
 
 - **Scope.** Convergence Slice A, implementing these owner decisions (2026-09-27):

@@ -95,6 +95,14 @@
   /* ── 1. Slot picker — renders exactly what getAvailabilitySlots returns. ── */
   async function loadSlots() {
     title('Pick a time' + (_ctx.serviceName ? ' — ' + _ctx.serviceName : ''));
+    /* The ONE availability calendar (month / year, safe states, realtime) when the page loads it. */
+    if (global.SokoniEntCalendar) {
+      body('<div id="sbsCal"></div><button class="sbs-btn" id="sbsGo" disabled onclick="SokoniBookService._chooseOptions()">Select a time</button>');
+      if (_ctx.cal) { try { _ctx.cal.destroy(); } catch (_) {} }
+      _ctx.cal = global.SokoniEntCalendar.mount(document.getElementById('sbsCal'), { providerId: _ctx.providerId, serviceId: _ctx.serviceId, mode: 'public',
+        onSelect: function (s) { _ctx.date = s.date; _ctx.time = s.start; var go = document.getElementById('sbsGo'); if (go) { go.disabled = false; go.textContent = 'Continue — ' + s.date + ' at ' + fmtTime(s.start); } } });
+      return;
+    }
     body('<div class="sbs-empty">Loading available times…</div>');
     let res;
     try { res = await call('bookingDispatch', { op: 'getAvailabilitySlots', providerId: _ctx.providerId, serviceId: _ctx.serviceId, days: 14 }); }
@@ -373,7 +381,18 @@
       observe(saved.bookingId);
       return true;
     },
+    /* Payment for a booking another surface already reserved (the storefront checkout): same observe →
+       preparePayment → pay path, so there is one payment UI. */
+    payFor(opts) {
+      _ctx = Object.assign({}, opts || {});
+      if (!firebase.auth().currentUser) { location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search); return; }
+      if (!_ctx.bookingId) return;
+      _ctx.expiresAt = Number(_ctx.expiresAt) || null; _ctx.settled = false;
+      try { sessionStorage.setItem(K, JSON.stringify({ bookingId: _ctx.bookingId, providerId: _ctx.providerId, serviceName: _ctx.serviceName })); } catch (_) {}
+      show(); observe(_ctx.bookingId); preparePayment();
+    },
     close() {
+      if (_ctx && _ctx.cal) { try { _ctx.cal.destroy(); } catch (_) {} _ctx.cal = null; }
       /* Leaving with an unpaid hold → free the slot NOW so it doesn't sit "ghost booked"
          until the sweep. Fire-and-forget; the server releases only an unpaid hold owned by
          this customer and no-ops otherwise, so this is safe even if payment just landed. */

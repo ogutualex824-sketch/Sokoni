@@ -41,6 +41,30 @@ exports._h = {}; // handler registry — consumed by booking-dispatch.js
 
 /* ── Pure helpers ───────────────────────────────────────────────────────── */
 
+/* The default an approved provider is bookable under until they set their own hours
+   (Mon–Fri 09:00–17:00, 60-minute appointments). Previously PERSISTED by a public read of
+   getAvailabilitySlots; now applied purely — by the availability authority's view AND the
+   booking gate (booking-service._prepareSlot) — so both see the same calendar. */
+const DEFAULT_SCHEDULE = {
+  monday:    { closed: false, periods: [{ open: "09:00", close: "17:00" }], breaks: [] },
+  tuesday:   { closed: false, periods: [{ open: "09:00", close: "17:00" }], breaks: [] },
+  wednesday: { closed: false, periods: [{ open: "09:00", close: "17:00" }], breaks: [] },
+  thursday:  { closed: false, periods: [{ open: "09:00", close: "17:00" }], breaks: [] },
+  friday:    { closed: false, periods: [{ open: "09:00", close: "17:00" }], breaks: [] },
+  saturday:  { closed: true, periods: [], breaks: [] },
+  sunday:    { closed: true, periods: [], breaks: [] },
+};
+const DEFAULT_APPT = { enabled: true, durationMins: 60, bufferMins: 0, travelMins: 0, minNoticeHours: 1, allowSameDay: false, maxDaysAhead: 30 };
+function withDefaults(raw) {
+  const cfg = Object.assign({}, raw || {});
+  const anyOpen = cfg.schedule && Object.keys(cfg.schedule).some((k) => cfg.schedule[k] && !cfg.schedule[k].closed && (cfg.schedule[k].periods || []).length > 0);
+  const apptOk = cfg.appt && cfg.appt.enabled === true && Number(cfg.appt.durationMins) > 0;
+  if (!anyOpen) cfg.schedule = DEFAULT_SCHEDULE;
+  if (!apptOk) cfg.appt = Object.assign({}, DEFAULT_APPT, cfg.appt || {}, { enabled: true, durationMins: Number(cfg.appt && cfg.appt.durationMins) > 0 ? cfg.appt.durationMins : 60 });
+  cfg._defaulted = !anyOpen || !apptOk;
+  return cfg;
+}
+
 /** Validate HH:MM time format and logical ordering. */
 function _validPeriod(p) {
   const re = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -266,10 +290,13 @@ function normalizeAvailabilityConfig(d, targetUid) {
 
   const appt = {
     enabled:         Boolean(d.appt?.enabled),
-    durationMins:    _clamp(d.appt?.durationMins,  5,  480, 30),
+    durationMins:    _clamp(d.appt?.durationMins,  5,  1440, 30),
     bufferMins:      _clamp(d.appt?.bufferMins,     0,  120, 0),
     travelMins:      _clamp(d.appt?.travelMins,     0,  120, 0),
-    maxDaysAhead:    _clamp(d.appt?.maxDaysAhead,   1,  365, 30),
+    maxDaysAhead:    _clamp(d.appt?.maxDaysAhead,   1,  730, 30),   /* 730: venues / artists book up to two years ahead (category policy caps it) */
+    bufferBeforeMins: d.appt?.bufferBeforeMins != null ? _clamp(d.appt.bufferBeforeMins, 0, 720, 0) : null,
+    bufferAfterMins:  d.appt?.bufferAfterMins  != null ? _clamp(d.appt.bufferAfterMins,  0, 720, 0) : null,
+    slotStepMins:     d.appt?.slotStepMins     != null ? _clamp(d.appt.slotStepMins,    15, 1440, null) : null,
     minNoticeHours:  _clamp(d.appt?.minNoticeHours, 0,   72, 1),
     allowSameDay:    Boolean(d.appt?.allowSameDay),
     allowAfterHours: Boolean(d.appt?.allowAfterHours),
@@ -318,6 +345,8 @@ function normalizeAvailabilityConfig(d, targetUid) {
   };
 }
 exports.normalizeAvailabilityConfig = normalizeAvailabilityConfig;
+exports._buildStatusDoc = (cfg) => _buildStatusDoc(cfg);
+exports.withDefaults = withDefaults;
 
 /* ══════════════════════════════════════════════════════════════════════════
    CF 1 — setProviderAvailability
@@ -331,6 +360,10 @@ exports.setProviderAvailability = onCall(CF_OPTIONS, exports._h.setProviderAvail
 
   // Allow admins to configure any provider
   const targetUid = request.auth.token?.admin && d.providerId ? d.providerId : uid;
+  if (targetUid !== uid) {
+    await db.collection("entAvailabilityAudit").add({ calKey: "svc_" + targetUid, actor: uid, role: "admin", action: "admin_config",
+      at: Date.now(), createdAt: admin.firestore.FieldValue.serverTimestamp() });
+  }
 
   /* ONE canonical normalization pipeline (shared with the onboarding adapter, D2b). */
   const config = normalizeAvailabilityConfig(d, targetUid);
@@ -343,6 +376,8 @@ exports.setProviderAvailability = onCall(CF_OPTIONS, exports._h.setProviderAvail
     _buildStatusDoc(config),
     { merge: false },
   );
+  /* the storefronts listening to this calendar refetch (a counter — no schedule data is public) */
+  batch.set(db.collection("entAvailabilityPublic").doc("svc_" + targetUid), { calKey: "svc_" + targetUid, rev: admin.firestore.FieldValue.increment(1), updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
   await batch.commit();
 
   /* Availability-convergence telemetry (D2): count canonical-pipeline saves so the
@@ -406,208 +441,32 @@ exports.setLiveStatus = onCall(CF_OPTIONS, exports._h.setLiveStatus = async (req
    that allow range queries on the document ID itself.
 ══════════════════════════════════════════════════════════════════════════ */
 exports.getAvailabilitySlots = onCall(CF_OPTIONS, exports._h.getAvailabilitySlots = async (request) => {
-  const { providerId, startDate, days = 7, serviceId } = request.data;
+  /* 2026-09-27 (availability convergence): this view is now answered by the ONE availability
+     authority (functions/ent-availability.js) so displayed and bookable availability are the same
+     decision, over the same occupancy, in the same words. The old body generated its own slots,
+     wrote a default configuration on a PUBLIC read, and returned the private reason behind each
+     blocked slot ("break", "too_soon" …); the public now sees only a safe state. The response keeps
+     its shape ({ results: [{ date, available, slots: [{ startTime, endTime, available … }] }] }). */
+  const { providerId, startDate, days = 7, serviceId } = request.data || {};
   if (!providerId) throw new HttpsError("invalid-argument", "providerId required.");
-
-  /* Slot duration MUST match what booking validation (_prepareSlot) will use, or a displayed slot can
-     be rejected as "outside working hours". When a serviceId is given, generate slots at the SERVICE's
-     duration (the same value bookingCreateService validates against) — one availability authority. */
-  let _serviceDur = 0;
-  if (serviceId) {
-    try {
-      const svcSnap = await db.collection("providerServices").doc(String(serviceId)).get();
-      if (svcSnap.exists) {
-        const svc = svcSnap.data();
-        _serviceDur = Math.max(0, Math.round(Number((svc.pricing && svc.pricing.durationMins) || svc.durationMins) || 0));
-      }
-    } catch (e) { console.warn("[getAvailabilitySlots] service duration lookup failed", { serviceId, message: e && e.message }); }
-  }
-
-  /* ── Canonical availability, with convergence fallback so an approved provider is NEVER
-     permanently unbookable. A default (Mon–Fri 09:00–17:00, appointments enabled) is applied —
-     and PERSISTED once — when the doc is missing or effectively unconfigured (empty schedule /
-     appointments not enabled). This is the one availability authority; no parallel source. ── */
-  const DEFAULT_SCHEDULE = {
-    monday:    { closed: false, periods: [{ open: "09:00", close: "17:00" }], breaks: [] },
-    tuesday:   { closed: false, periods: [{ open: "09:00", close: "17:00" }], breaks: [] },
-    wednesday: { closed: false, periods: [{ open: "09:00", close: "17:00" }], breaks: [] },
-    thursday:  { closed: false, periods: [{ open: "09:00", close: "17:00" }], breaks: [] },
-    friday:    { closed: false, periods: [{ open: "09:00", close: "17:00" }], breaks: [] },
-    saturday:  { closed: true, periods: [], breaks: [] },
-    sunday:    { closed: true, periods: [], breaks: [] },
-  };
-  const DEFAULT_APPT = { enabled: true, durationMins: 60, bufferMins: 0, travelMins: 0, minNoticeHours: 1, allowSameDay: false, maxDaysAhead: 30 };
-
-  const configSnap = await db.collection("providerAvailability").doc(providerId).get();
-  let cfg = configSnap.exists ? configSnap.data() : {};
-  const _anyOpen = cfg.schedule && Object.keys(cfg.schedule).some(function (k) {
-    return cfg.schedule[k] && !cfg.schedule[k].closed && (cfg.schedule[k].periods || []).length > 0;
-  });
-  const _apptOk = cfg.appt && cfg.appt.enabled === true && Number(cfg.appt.durationMins) > 0;
-  const _unconfigured = !configSnap.exists || !_anyOpen || !_apptOk;
-  if (_unconfigured) {
-    if (!_anyOpen) cfg.schedule = DEFAULT_SCHEDULE;
-    cfg.appt = Object.assign({}, DEFAULT_APPT, cfg.appt || {});
-    if (cfg.appt.enabled == null) cfg.appt.enabled = true;
-    if (!(Number(cfg.appt.durationMins) > 0)) cfg.appt.durationMins = DEFAULT_APPT.durationMins;
-    /* One-time backfill so the manager shows it + the config is canonical. Non-fatal on failure. */
-    try {
-      await db.collection("providerAvailability").doc(providerId).set({
-        schedule: cfg.schedule, appt: cfg.appt, modes: cfg.modes || ["fixed_hours"], uid: providerId,
-        autoConfiguredAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true });
-      console.info("[getAvailabilitySlots] auto-configured default availability", { providerId, existed: configSnap.exists });
-    } catch (e) { console.warn("[getAvailabilitySlots] default backfill failed", { providerId, code: e && e.code, message: e && e.message }); }
-  }
-
-  // Booking-window bounds (all authoritative, all enforced per slot below):
-  //  · nowMs        — wall clock; a slot in the past is NEVER bookable (independent of allowSameDay).
-  //  · minNoticeMs  — lead time; earliestBookable = now + notice (same-day still governs whether today is allowed).
-  //  · horizonMs    — max advance; a slot beyond now + maxDaysAhead is not bookable.
-  //  · bufMs        — provider buffer/travel, applied to booking-overlap exactly as the booking gate does.
-  const nowMs = Date.now();
-  const minNoticeMs = (cfg.appt?.minNoticeHours || 1) * 3_600_000;
-  const earliestBookableMs = nowMs + minNoticeMs;
-  const maxAheadDays = Math.max(1, Number(cfg.appt?.maxDaysAhead) || 30);
-  const horizonMs = nowMs + maxAheadDays * 86_400_000;
-  const bufMs = ((cfg.appt?.bufferMins || 0) + (cfg.appt?.travelMins || 0)) * 60_000;
-
-  const safeStart = startDate || _nairobiNow().date;
-  const numDays   = Math.max(1, Math.min(30, maxAheadDays, Number(days) || 7));
-
-  const DOW_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  const AV = require("./ent-availability");
+  const CORE = require("./shared/ent-availability-core");
+  const numDays = Math.max(1, Math.min(31, Number(days) || 7));
+  const first = CORE.isDate(startDate) ? startDate : _nairobiNow().date;
   const results = [];
-
+  let durationMins = null;
   for (let i = 0; i < numDays; i++) {
-    const dateObj = new Date(safeStart + "T00:00:00+03:00"); // Nairobi offset
-    dateObj.setDate(dateObj.getDate() + i);
-    const dateStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}-${String(dateObj.getDate()).padStart(2, "0")}`;
-    const dow     = DOW_NAMES[dateObj.getDay()];
-
-    /* ── Check date override (holiday / special hours) ── */
-    const overSnap = await db.collection("providerAvailability").doc(providerId)
-      .collection("overrides").doc(dateStr).get();
-
-    let periods  = [];
-    let breaks   = [];
-    let dayClosed = false;
-
-    if (overSnap.exists) {
-      const ov = overSnap.data();
-      dayClosed = Boolean(ov.closed);
-      periods   = dayClosed ? [] : (ov.periods || []);
-      breaks    = dayClosed ? [] : (ov.breaks  || []);
-    } else {
-      const day = cfg.schedule?.[dow];
-      dayClosed = !day || day.closed;
-      periods   = dayClosed ? [] : (day.periods || []);
-      breaks    = dayClosed ? [] : (day.breaks  || []);
-    }
-
-    const _rej = dayClosed ? "closed" : (!cfg.appt?.enabled ? "appointments_disabled" : (periods.length === 0 ? "no_periods" : null));
-    if (_rej) {
-      console.info("[getAvailabilitySlots] day unavailable", { providerId, date: dateStr, dow, reason: _rej });
-      results.push({ date: dateStr, available: false, closedReason: _rej, slots: [] });
-      continue;
-    }
-
-    /* ── Load booked slots for this date via doc-ID prefix range ── */
-    const startDocId = `${dateStr}_0000`;
-    const endDocId   = `${dateStr}_2359`;
-    const bookingsSnap = await db.collection("providerAvailability").doc(providerId)
-      .collection("bookings")
-      .orderBy(admin.firestore.FieldPath.documentId())
-      .startAt(startDocId)
-      .endAt(endDocId)
-      .get();
-
-    const bookedTimes = new Set(
-      bookingsSnap.docs
-        .filter((d) => d.data().status !== "cancelled")
-        .map((d) => d.data().startTime),
-    );
-
-    /* Canonical service-booking holds. bookingCreateService (the path the customer UI
-       uses) writes providerBookings + slotLocks, NOT the legacy `bookings` sub-collection
-       read above (that is reserveSlot's store). Read the ACTIVE providerBookings for this
-       date — status pending is a live pre-payment HOLD, so it hides the slot too — and
-       union by true interval overlap (same buffer as the booking gate) so DISPLAYED
-       availability matches BOOKABLE availability regardless of which path reserved it.
-       Reuses the providerId+date+status index bookingCreateService already runs. */
-    let activeBookings = [];
-    try {
-      const pbSnap = await db.collection("providerBookings")
-        .where("providerId", "==", providerId)
-        .where("date", "==", dateStr)
-        .where("status", "in", rc.ACTIVE_STATUSES)
-        .get();
-      activeBookings = pbSnap.docs
-        .map((d) => d.data())
-        .filter((b) => Number(b.startTs) > 0 && Number(b.endTs) > 0);
-    } catch (e) {
-      console.warn("[getAvailabilitySlots] providerBookings read failed", { providerId, date: dateStr, message: e && e.message });
-    }
-
-    /* ── Generate slots ── */
-    const dur  = _serviceDur > 0 ? _serviceDur : cfg.appt.durationMins;   /* service duration when known → matches _prepareSlot */
-    const buf  = cfg.appt.bufferMins + cfg.appt.travelMins;
-    const step = dur + buf;
-    const daySlots = [];
-
-    for (const period of periods.filter(_validPeriod)) {
-      let cur = _mins(period.open);
-      const last = _mins(period.close) - dur;
-      while (cur <= last) {
-        const hh  = String(Math.floor(cur / 60)).padStart(2, "0");
-        const mm  = String(cur % 60).padStart(2, "0");
-        const startT = `${hh}:${mm}`;
-        const endC   = cur + dur;
-        const endMm  = endC % 60;
-        const endT   = `${String(Math.floor(endC / 60)).padStart(2, "0")}:${String(endMm).padStart(2, "0")}`;
-
-        const slotStartMs = new Date(`${dateStr}T${startT}:00+03:00`).getTime();
-        const slotEndMs   = new Date(`${dateStr}T${endT}:00+03:00`).getTime();
-
-        /* One authoritative bookability decision (pure, unit-tested) so DISPLAYED and
-           BOOKABLE availability can never disagree. */
-        const reason = computeSlotReason({
-          startT, startMins: cur, endMins: endC, slotStartMs, slotEndMs,
-          nowMs, earliestBookableMs, horizonMs, allowSameDay: cfg.appt.allowSameDay,
-          breaks, activeBookings, bufMs, bookedStartTimes: bookedTimes,
-        });
-        const bookable = reason === null;
-
-        daySlots.push({
-          startTime: startT,
-          endTime:   endT,
-          status:    bookable ? "available" : "blocked",   /* self-describing for client/admin/debug tools */
-          bookable,
-          reason,                                           /* null when bookable; else why it is blocked */
-          available: bookable,                              /* back-compat: existing client filters on this */
-          booked:    reason === "booked",
-        });
-        cur += step;
-      }
-    }
-
-    const _availCount = daySlots.filter((s) => s.available).length;
-    if (!_availCount && daySlots.length) {
-      const _booked = daySlots.filter((s) => s.booked).length;
-      console.info("[getAvailabilitySlots] day generated but no open slots", { providerId, date: dateStr, total: daySlots.length, booked: _booked, tooSoon: daySlots.length - _booked });
-    }
-    results.push({
-      date:      dateStr,
-      available: daySlots.some((s) => s.available),
-      slots:     daySlots,
+    const date = CORE.addDays(first, i);
+    const r = await AV._h.entAvailDay({ auth: request.auth || null, data: { providerId, serviceId, date } });
+    durationMins = r.durationMins;
+    const slots = (r.slots || []).map((x) => {
+      const ok = x.state === CORE.PUBLIC_STATE.AVAILABLE || x.state === CORE.PUBLIC_STATE.LIMITED;
+      return { startTime: x.start, endTime: x.end, state: x.state, status: ok ? "available" : "blocked", bookable: ok,
+        reason: ok ? null : x.state.toLowerCase(), available: ok, booked: x.state === CORE.PUBLIC_STATE.BOOKED };
     });
+    results.push({ date, available: slots.some((x) => x.available), state: r.state || null, slots });
   }
-
-  return {
-    providerId,
-    startDate: safeStart,
-    durationMins: cfg.appt?.durationMins || 30,
-    results,
-  };
+  return { providerId, startDate: first, durationMins, results };
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -617,135 +476,18 @@ exports.getAvailabilitySlots = onCall(CF_OPTIONS, exports._h.getAvailabilitySlot
    Slot doc ID format: {YYYY-MM-DD}_{HHmm}  →  "2026-07-15_0900"
 ══════════════════════════════════════════════════════════════════════════ */
 exports.reserveSlot = onCall(CF_OPTIONS, exports._h.reserveSlot = async (request) => {
+  /* RETIRED 2026-09-27. This wrote a CONFIRMED booking with no payment, no notice, no horizon and no
+     provider gate into providerAvailability/{p}/bookings — a store no booking authority reads, so it
+     could double-book the canonical calendar. Bookings are made by bookingCreateService (service
+     engine) or bookingCreate (venue engine), which reserve through the availability authority. */
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
-  const customerUid = request.auth.uid;
-  const { providerId, date, startTime, endTime, hubType, serviceNote, idempotencyKey } = request.data;
-
-  if (!providerId || !date || !startTime || !endTime) {
-    throw new HttpsError("invalid-argument", "providerId, date, startTime, endTime required.");
-  }
-
-  const timeNoColon = startTime.replace(":", "");
-  const slotDocId   = `${date}_${timeNoColon}`;
-  const slotRef     = db.collection("providerAvailability").doc(providerId)
-    .collection("bookings").doc(slotDocId);
-  const configRef   = db.collection("providerAvailability").doc(providerId);
-
-  await db.runTransaction(async (tx) => {
-    const [slotDoc, configDoc] = await Promise.all([tx.get(slotRef), tx.get(configRef)]);
-
-    /* Check slot not already taken */
-    if (slotDoc.exists && slotDoc.data().status !== "cancelled") {
-      throw new HttpsError("already-exists", "This time slot is already booked. Please choose another.");
-    }
-
-    const cfg = configDoc.data() || {};
-
-    /* Check daily capacity */
-    const now = _nairobiNow();
-    const todayCount = cfg.cap?.todayDate === date ? (cfg.cap.todayCount || 0) : 0;
-    if (cfg.cap?.maxPerDay != null && todayCount >= cfg.cap.maxPerDay) {
-      throw new HttpsError("resource-exhausted", "Provider is fully booked for this day.");
-    }
-
-    /* Verify the requested slot falls within a valid schedule period */
-    const dow = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][
-      new Date(date + "T00:00:00+03:00").getDay()
-    ];
-    const day = cfg.schedule?.[dow];
-    const slotMins = _mins(startTime);
-    const validPeriod = cfg.modes?.includes("open_24_7") ||
-      cfg.appt?.allowAfterHours ||
-      (day && !day.closed && (day.periods || []).some(
-        (p) => _validPeriod(p) && _mins(p.open) <= slotMins && (slotMins + (cfg.appt?.durationMins || 30)) <= _mins(p.close),
-      ));
-
-    if (!validPeriod) {
-      throw new HttpsError("out-of-range", "This slot falls outside the provider's working hours.");
-    }
-
-    /* Create the booking */
-    tx.set(slotRef, {
-      providerId,
-      customerUid,
-      date,
-      startTime,
-      endTime,
-      status:        "confirmed",
-      hubType:       VALID_HUB_TYPES.has(hubType) ? hubType : "general",
-      serviceNote:   String(serviceNote || "").slice(0, 300),
-      idempotencyKey: idempotencyKey || slotDocId,
-      createdAt:     admin.firestore.FieldValue.serverTimestamp(),
-      bookedAt:      admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    /* Increment daily counter */
-    tx.update(configRef, {
-      "cap.todayCount": todayCount + 1,
-      "cap.todayDate":  date,
-      updatedAt:        admin.firestore.FieldValue.serverTimestamp(),
-    });
-  });
-
-  return { success: true, bookingId: slotDocId, providerId, date, startTime, endTime };
+  throw new HttpsError("failed-precondition", "Book through the provider's booking page.", { code: "RETIRED" });
 });
 
-/* ══════════════════════════════════════════════════════════════════════════
-   CF 5 — releaseSlot
-   Cancel a booking and free the slot. Decrements capacity counter.
-══════════════════════════════════════════════════════════════════════════ */
 exports.releaseSlot = onCall(CF_OPTIONS, exports._h.releaseSlot = async (request) => {
+  /* RETIRED with reserveSlot. A slot opens only when its booking reaches a canonical cancelled state. */
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
-  const callerUid = request.auth.uid;
-  const isAdmin   = Boolean(request.auth.token?.admin);
-  const { providerId, bookingId, reason } = request.data;
-
-  if (!providerId || !bookingId) {
-    throw new HttpsError("invalid-argument", "providerId and bookingId required.");
-  }
-
-  const slotRef = db.collection("providerAvailability").doc(providerId)
-    .collection("bookings").doc(bookingId);
-
-  await db.runTransaction(async (tx) => {
-    const slotDoc = await tx.get(slotRef);
-    if (!slotDoc.exists) throw new HttpsError("not-found", "Booking not found.");
-
-    const booking = slotDoc.data();
-    if (booking.status === "cancelled") {
-      return; // idempotent
-    }
-
-    // Only the customer, the provider, or an admin may cancel
-    if (!isAdmin && booking.customerUid !== callerUid && booking.providerId !== callerUid) {
-      throw new HttpsError("permission-denied", "Not authorised to cancel this booking.");
-    }
-
-    tx.update(slotRef, {
-      status:      "cancelled",
-      cancelledBy: callerUid,
-      cancelReason: String(reason || "").slice(0, 200),
-      cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    // Decrement counter only if booking was for today
-    const now = _nairobiNow();
-    if (booking.date === now.date) {
-      const configRef = db.collection("providerAvailability").doc(providerId);
-      const configDoc = await tx.get(configRef);
-      if (configDoc.exists) {
-        const count = configDoc.data()?.cap?.todayCount || 0;
-        if (count > 0) {
-          tx.update(configRef, {
-            "cap.todayCount": count - 1,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-        }
-      }
-    }
-  });
-
-  return { success: true, bookingId };
+  throw new HttpsError("failed-precondition", "Cancel the booking from your bookings.", { code: "RETIRED" });
 });
 
 /* ══════════════════════════════════════════════════════════════════════════

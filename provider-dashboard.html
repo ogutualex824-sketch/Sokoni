@@ -294,11 +294,21 @@ a{color:var(--acc);text-decoration:none}
     <nav class="sb-nav">
       <div class="sb-item active" onclick="P.show('overview',this)"><span class="sb-icon">🏠</span>Overview</div>
       <div class="sb-item" onclick="P.show('settings',this,'services')"><span class="sb-icon">🧰</span>Services</div>
-      <div class="sb-item" onclick="P.show('calendar',this)"><span class="sb-icon">📆</span>Calendar</div>
+      <!-- Entertainment business workspace (2026-09-27): ONE availability authority, rate cards, enquiries,
+           calls, message settings, discounts — sokoni-ent-workspace.js -->
+      <div class="sb-item" onclick="WS.open('ratecards',this)"><span class="sb-icon">🏷️</span>Rate Cards</div>
+      <div class="sb-item" onclick="WS.open('availability',this)"><span class="sb-icon">🕘</span>Availability</div>
+      <div class="sb-item" onclick="WS.open('calendar',this)"><span class="sb-icon">📆</span>Calendar</div>
       <div class="sb-item" onclick="P.show('bookings',this)"><span class="sb-icon">📅</span>Bookings</div>
       <!-- Entertainment bookings: the buyer's PIN confirms the show-up and releases the payment (entertainment.html#provide). -->
       <a class="sb-item" href="/entertainment.html?tab=mine#provide" style="text-decoration:none;color:inherit"><span class="sb-icon">🔑</span>Verify booking PIN</a>
+      <div class="sb-item" onclick="WS.open('enquiries',this)"><span class="sb-icon">❓</span>Enquiries</div>
       <a class="sb-item" href="/messages.html" style="text-decoration:none;color:inherit"><span class="sb-icon">💬</span>Messages</a>
+      <div class="sb-item" onclick="WS.open('calls',this)"><span class="sb-icon">📞</span>Calls</div>
+      <div class="sb-item" onclick="WS.open('messaging',this)"><span class="sb-icon">🛎️</span>Message Settings</div>
+      <div class="sb-item" onclick="WS.open('discounts',this)"><span class="sb-icon">📣</span>Marketing</div>
+      <div class="sb-item" onclick="WS.open('stats',this)"><span class="sb-icon">⏱️</span>Booked Hours</div>
+      <div class="sb-item" onclick="P.show('calendar',this)"><span class="sb-icon">🟢</span>Live Status</div>
       <div class="sb-item" onclick="P.show('earnings',this)"><span class="sb-icon">💰</span>Wallet</div>
       <div class="sb-item" onclick="P.show('customers',this)"><span class="sb-icon">👥</span>Customers</div>
       <div class="sb-item" onclick="P.show('reviews',this)"><span class="sb-icon">⭐</span>Reviews</div>
@@ -468,6 +478,12 @@ a{color:var(--acc);text-decoration:none}
     </div>
 
     <!-- ── Bookings ───────────────────────────────────────────────────── -->
+    <!-- ── Entertainment business workspace (sokoni-ent-workspace.js) ───────── -->
+    <div class="panel" id="panel-entws">
+      <div class="pg-header"><div><div class="pg-title">Your business</div><div class="pg-sub" style="color:var(--muted,#9a9a9a);font-size:.8rem">Availability, calendar, rate cards, enquiries, calls and marketing</div></div></div>
+      <div style="padding:16px 18px" id="entwsHost"></div>
+    </div>
+
     <div class="panel" id="panel-bookings">
       <div class="pg-header"><div><div class="pg-title">Bookings</div></div></div>
       <div id="skResolution" style="padding:4px 20px;display:none;"></div>
@@ -733,7 +749,7 @@ a{color:var(--acc);text-decoration:none}
   <!-- Bottom nav (mobile) -->
   <div class="bn">
     <div class="bn-item active" onclick="P.show('overview',this)"><span class="bn-icon">🏠</span>Home</div>
-    <div class="bn-item" onclick="P.show('calendar',this)"><span class="bn-icon">📆</span>Calendar</div>
+    <div class="bn-item" onclick="WS.open('calendar',this)"><span class="bn-icon">📆</span>Calendar</div>
     <div class="bn-item" onclick="P.show('bookings',this)"><span class="bn-icon">📅</span>Bookings</div>
     <div class="bn-item" onclick="P.show('earnings',this)"><span class="bn-icon">💰</span>Wallet</div>
     <div class="bn-item" onclick="More.open()"><span class="bn-icon">⋯</span>More</div>
@@ -832,6 +848,8 @@ a{color:var(--acc);text-decoration:none}
 <script src="sokoni-provider.js" defer></script>
 <script src="sokoni-booking-resolution.js" defer></script>
 <script src="sokoni-pricing-studio.js" defer></script>
+<script src="sokoni-ent-calendar.js" defer></script>
+<script src="sokoni-ent-workspace.js" defer></script>
 <script>
 const _q=id=>document.getElementById(id);
 const _esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -843,6 +861,15 @@ function toast(m,t='ok',ms=3500){const d=document.createElement('div');d.classNa
 let _sdk=null,_data=null,_bkFilter='all',_bkDocs=[];
 
 /* ── Panel switcher ─────────────────────────────────────────────────────── */
+/* Entertainment business workspace — one mount, sections switched in place. */
+const WS={
+  _ws:null,
+  open(section,el){
+    P.show('entws',el);
+    if(!window.SokoniEntWorkspace){_q('entwsHost').innerHTML='<p style="color:#9a9a9a">Loading…</p>';window.addEventListener('load',()=>WS.open(section,el),{once:true});return;}
+    if(!WS._ws)WS._ws=SokoniEntWorkspace.mount(_q('entwsHost'),{section});else WS._ws.show(section);
+  }
+};
 const P={
   show(id,el,subTab){
     document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));

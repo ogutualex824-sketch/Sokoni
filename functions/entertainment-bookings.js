@@ -93,6 +93,9 @@ async function readSource(collection, id, data) {
   }
   if (collection === 'bookings') {
     if (!d.venueId || !d.ownerId || !d.customerId) return { skip: 'not_venue_core' };  /* legacy service shape shares this collection */
+    /* Only a SERVER-written venue booking (bookingCreate stamps pricingBreakdown, which no client may
+       write) gets an identity, a PIN and a conversation with the owner. */
+    if (!d.pricingBreakdown) return { skip: 'not_server_written' };
     const venue = (await db.collection('venues').doc(String(d.venueId)).get()).data();
     if (!venue || venue.ownerId !== d.ownerId) return { skip: 'owner_mismatch' };       /* the provider is the VENUE's owner, re-derived */
     return {
@@ -165,9 +168,9 @@ async function _conversation(envId, env) {
   return r.conversationId;
 }
 
-async function _system(env, key, text, status) {
+async function _system(env, key, text, status, tag) {
   if (!env.conversationId) return;
-  await require('./messages').postSystemMessage(_db(), env.conversationId, `${env.envId}_${key}`, text, { status: status || null, bookingRef: env.bookingRef })
+  await require('./messages').postSystemMessage(_db(), env.conversationId, `${env.envId}_${key}`, text, { status: status || null, bookingRef: env.bookingRef, tag: tag || 'booking' })
     .catch((e) => logger.warn('[entBookings] system message failed', { envId: env.envId, err: e.message }));
 }
 
@@ -185,6 +188,13 @@ async function _afterCreate(envId, env) {
   await _system(e2, 'created', env.category === ID.CATEGORY.EVENT
     ? `Ticket order confirmed — ${env.bookingRef}${env.quantity > 1 ? ` (+${env.quantity - 1} more)` : ''}. Payment ${String(env.payment.state).toLowerCase().replace(/_/g, ' ')}.`
     : `${ID.TITLE[env.category]} created — ${env.bookingRef}. Payment ${String(env.payment.state).toLowerCase().replace(/_/g, ' ')}.`, env.status);
+  /* The envelope is usually born already paid: post the canonical events now, under the SAME keys
+     syncEnvelope uses, so a later sync never repeats them. Derived from state, never authored. */
+  if (env.status === ID.STATUS.CONFIRMED) await _system(e2, 'status_' + env.status, `BOOKING CONFIRMED — ${env.bookingRef}.`, env.status, 'booking');
+  if (env.payment && env.payment.state === ID.PAYMENT.CONFIRMED) {
+    await _system(e2, 'payment_' + env.payment.state, `PAYMENT CONFIRMED — ${env.bookingRef}.`, null, 'payment');
+    if (env.category !== ID.CATEGORY.EVENT && env.pin) await _system(e2, 'pin_issued', `PIN ISSUED — ${ID.PHRASE.BOOKING}. The buyer's PIN is on their booking; the provider verifies it at the booking.`, null, 'booking');
+  }
   await _notify(env.buyerUid, 'ent_booking_created', env.category === ID.CATEGORY.EVENT ? 'Your ticket is confirmed' : 'Your booking is recorded',
     env.category === ID.CATEGORY.EVENT ? `${env.title} — ${env.bookingRef}. ${ID.PHRASE.EVENT}: open My Tickets.` : `${env.title} — ${env.bookingRef}. ${ID.PHRASE.BOOKING}: open your booking to see your PIN.`, e2, 'created');
   await _notify(env.providerUid, 'ent_booking_created', `New ${LABEL[env.category]}`, `${env.title} — ${env.bookingRef}.`, e2, 'created');
@@ -198,15 +208,22 @@ async function syncEnvelope(envId, src) {
   const cur = (await ref.get()).data();
   if (!cur) return null;
   const patch = {}; const events = [];
-  if (src.status !== cur.status) { patch.status = src.status; events.push(['status_' + src.status, `Booking ${src.status.toLowerCase().replace(/_/g, ' ')} — ${cur.bookingRef}.`, src.status]); }
-  if (src.payment && (!cur.payment || src.payment.state !== cur.payment.state)) { patch.payment = src.payment; events.push(['payment_' + src.payment.state, `Payment ${src.payment.state.toLowerCase().replace(/_/g, ' ')} — ${cur.bookingRef}.`, null]); }
-  if (src.refund && (!cur.refund || src.refund.state !== cur.refund.state)) { patch.refund = src.refund; events.push(['refund_' + src.refund.state, `Refund ${src.refund.state.toLowerCase().replace(/_/g, ' ')} — ${cur.bookingRef}.`, null]); }
+  /* System events are derived from the AUTHORITATIVE state only — never provider-authored. */
+  const STATUS_TEXT = { CONFIRMED: 'BOOKING CONFIRMED', COMPLETED: 'COMPLETED', CANCELLED: 'BOOKING CANCELLED', DECLINED: 'BOOKING DECLINED', NO_SHOW: 'MARKED NO-SHOW', IN_PROGRESS: 'BOOKING STARTED', EXPIRED: 'BOOKING EXPIRED' };
+  const REFUND_TEXT = { REQUESTED: 'REFUND REQUESTED', UNDER_REVIEW: 'REFUND UNDER REVIEW', APPROVED: 'REFUND APPROVED', PROCESSING: 'REFUND PROCESSING', COMPLETED: 'REFUND COMPLETED', DECLINED: 'REFUND DECLINED', OUTCOME_UNKNOWN: 'REFUND OUTCOME UNKNOWN — SOKONI is confirming with the payment provider' };
+  if (src.status !== cur.status) { patch.status = src.status; events.push(['status_' + src.status, `${STATUS_TEXT[src.status] || 'Booking ' + src.status.toLowerCase().replace(/_/g, ' ')} — ${cur.bookingRef}.`, src.status, 'booking']); }
+  if (src.payment && (!cur.payment || src.payment.state !== cur.payment.state)) {
+    patch.payment = src.payment;
+    events.push(['payment_' + src.payment.state, `${src.payment.state === 'CONFIRMED' ? 'PAYMENT CONFIRMED' : 'Payment ' + src.payment.state.toLowerCase().replace(/_/g, ' ')} — ${cur.bookingRef}.`, null, 'payment']);
+    if (src.payment.state === 'CONFIRMED' && cur.category !== ID.CATEGORY.EVENT && cur.pin) events.push(['pin_issued', `PIN ISSUED — ${ID.PHRASE.BOOKING}. The buyer's PIN is on their booking; the provider verifies it at the booking.`, null, 'booking']);
+  }
+  if (src.refund && (!cur.refund || src.refund.state !== cur.refund.state)) { patch.refund = src.refund; events.push(['refund_' + src.refund.state, `${REFUND_TEXT[src.refund.state] || 'Refund ' + src.refund.state.toLowerCase().replace(/_/g, ' ')} — ${cur.bookingRef}.`, null, 'refund']); }
   if (src.ticketNumbers && JSON.stringify(src.ticketNumbers) !== JSON.stringify(cur.ticketNumbers || [])) patch.ticketNumbers = src.ticketNumbers;
   if (!Object.keys(patch).length) return { changed: false };
   await ref.update({ ...patch, updatedAt: FieldValue.serverTimestamp() });
   const env = { ...cur, ...patch };
-  for (const [key, text, status] of events) {
-    await _system(env, key, text, status);
+  for (const [key, text, status, tag] of events) {
+    await _system(env, key, text, status, tag);
     const refund = key.startsWith('refund_');
     const type = refund ? 'ent_booking_refund_update' : 'ent_booking_update';
     await _notify(env.buyerUid, type, refund ? 'Refund update' : 'Booking update', text, env, key);
@@ -217,12 +234,50 @@ async function syncEnvelope(envId, src) {
 
 async function onSourceWritten(collection, id, after) {
   if (!after) return { skipped: 'deleted' };
+  if (collection === 'providerBookings' && (after.quoteId || after.enquiryId) && ['paid_held', 'settled'].includes(after.paymentStatus)) {
+    await _convertEnquiry(id, after).catch((e) => logger.warn('[entBookings] enquiry conversion failed', { id, err: e.message }));
+  }
   const src = await readSource(collection, id, after);
   if (src.skip) return { skipped: src.skip };
   const envId = ID.envIdFor(collection, id);
   const exists = (await _db().collection(COL.ENV).doc(envId).get()).exists;
   if (!exists) return ensureEnvelope(collection, id, src);
   return syncEnvelope(envId, src);
+}
+
+/* Enquiry → quote → booking: the paid booking CONVERTS its quote and enquiry (idempotent). */
+async function _convertEnquiry(bookingId, b) {
+  if (b.quoteId) {
+    const qRef = _db().collection('entQuotes').doc(String(b.quoteId));
+    await _db().runTransaction(async (txn) => {
+      const q = await txn.get(qRef);
+      if (!q.exists || q.data().status === 'CONVERTED' || q.data().buyerUid !== b.customerUid) return;
+      txn.update(qRef, { status: 'CONVERTED', bookingId, updatedAt: FieldValue.serverTimestamp() });
+    });
+  }
+  if (b.enquiryId) {
+    const e = await _db().collection('entEnquiries').doc(String(b.enquiryId)).get();
+    if (e.exists && e.data().buyerUid === b.customerUid && e.data().status !== 'CONVERTED') {
+      await require('./ent-enquiries').transition(e.id, 'CONVERTED', { by: 'system', bookingId, note: 'This enquiry became a paid booking.' }).catch(() => {});
+    }
+  }
+}
+
+/** UPCOMING REMINDER — once per booking, in its conversation, the day before (from the 30-minute
+ *  reminder job). A system event derived from the booking's own time, never provider-authored. */
+async function sendReminders(nowMs) {
+  const now = nowMs || _now();
+  const s = await _db().collection(COL.ENV).where('when.startMs', '>', now).where('when.startMs', '<', now + 24 * 3600000).limit(300).get().catch(() => ({ docs: [] }));
+  let n = 0;
+  for (const d of s.docs) {
+    const env = d.data();
+    if (env.reminderSent || !['CONFIRMED', 'PENDING'].includes(env.status) || env.category === ID.CATEGORY.EVENT) continue;
+    if (!env.payment || !['CONFIRMED', 'NOT_REQUIRED'].includes(env.payment.state)) continue;
+    await _system(env, 'reminder', `UPCOMING — ${env.title} is within 24 hours (${env.bookingRef}). ${ID.PHRASE.BOOKING}: have your PIN ready.`, null, 'booking');
+    await d.ref.update({ reminderSent: true }).catch(() => {});
+    n++;
+  }
+  return n;
 }
 
 /* ═══ VERIFICATION — the one server primitive for a category booking PIN ═══════════════════ */
@@ -479,7 +534,7 @@ const entBookingOnProviderBooking = onDocumentWritten({ document: 'providerBooki
 const entBookingOnVenueBooking = onDocumentWritten({ document: 'bookings/{id}', region: REGION, secrets: _secret() }, TRIG('bookings'));
 
 module.exports = {
-  COL, ATTEMPTS, CONV_TYPE, readSource, ensureEnvelope, syncEnvelope, onSourceWritten, verifyPin, assertVerified, _h, _adminH,
+  COL, ATTEMPTS, CONV_TYPE, readSource, ensureEnvelope, syncEnvelope, onSourceWritten, verifyPin, assertVerified, sendReminders, _h, _adminH,
   entBookingOnEventOrder, entBookingOnEventRefund, entBookingOnProviderBooking, entBookingOnVenueBooking,
   _setClock: (fn) => { _now = fn || (() => Date.now()); },
   _setRandom: (fn) => { _randInt = fn || ((n) => crypto.randomInt(0, n)); },

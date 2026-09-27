@@ -684,6 +684,8 @@ body.sk-favs-only #sk-favs-empty{display:block}
 <script type="module" src="firebase.js"></script>
 <script src="sokoni-appcheck.js"></script>
 <script src="sokoni-chat-engine.js"></script>
+<script src="/sokoni-connect-call.js" defer></script>
+<script src="/sokoni-ent-conversation.js" defer></script>
 
 <script>
 (function () {
@@ -746,7 +748,7 @@ var TX_PAGES = {
   hotel_reservation:'hotel',logistics_request:'delivery-tracking',
   support_ticket:'profile',rfq:'marketplace',
   /* Entertainment bookings: opens the Hub's My bookings on that booking (entertainment.html?id=<envId>). */
-  ent_booking:'entertainment',
+  ent_booking:'entertainment', ent_enquiry:'entertainment',
 };
 
 if (!CONV_ID) { location.href = 'messages.html'; }
@@ -774,6 +776,9 @@ function _loadConversation() {
     IS_RO = conv.status === 'read_only' || conv.status === 'suspended' || conv.status === 'closed';
     _renderHeader(conv);
     _renderCtxBanner(conv);
+    /* Entertainment booking / enquiry: the transaction card (details, PIN for the buyer, actions). */
+    if (window.SokoniEntConversation) window.SokoniEntConversation.mount(conv, UID);
+    else window.addEventListener('load', function () { if (window.SokoniEntConversation) window.SokoniEntConversation.mount(conv, UID); }, { once: true });
     if (IS_RO) {
       document.getElementById('ro-banner').classList.add('show');
       document.getElementById('input-area').classList.add('hidden');

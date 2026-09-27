@@ -405,6 +405,7 @@
 <script src="sokoni-commission-rates.js"></script>
 <script src="sokoni-pay.js" defer></script>
 <script src="sokoni-intasend.js" defer></script>
+<script src="sokoni-ent-calendar.js" defer></script>
 <script src="sokoni-book-service.js" defer></script>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"Service","name":"SOKONI Services — Book Local Professionals in Kenya","description":"Find and hire verified plumbers, electricians, cleaners, mechanics, barbers, tutors and 30+ service providers in Nairobi, Mombasa, Kisumu. Pay via M-Pesa.","url":"https://mysokoni.co.ke/services.html","provider":{"@type":"Organization","name":"SOKONI","legalName":"Bravilex International Co. Limited"},"areaServed":{"@type":"Country","name":"Kenya"},"serviceType":["Plumbing","Electrical","Cleaning","Photography","Graphic Design","Tutoring","Catering","Event Planning","Hair & Beauty","IT Repair","Fitness Training","Accounting","Legal Services","Healthcare"]}</script>
 <script src="shared-header.js" defer></script>
@@ -1097,6 +1098,8 @@ function renderProviders(){
 
   /* Patch follow buttons after rendering */
   setTimeout(function(){ if(window.SokoniSocial) SokoniSocial.patchServicesFollowBtns(); },150);
+  /* Availability badges from the ONE availability authority (Available · date / Limited / Fully booked). */
+  setTimeout(function(){ if(window.SokoniEntCalendar) SokoniEntCalendar.badges(grid); },200);
 
   grid.innerHTML = providers.map(p => {
     const initials   = String(p.name||"?").trim().split(/\s+/).map(w=>w[0]).join("").substring(0,2).toUpperCase();
@@ -1117,6 +1120,7 @@ function renderProviders(){
       : `<div class="pv-stars" style="color:rgba(255,255,255,0.4);font-size:12px;">New on SOKONI</div>`;
     return `
     <div class="pv-card ${p.available===false?'pv-unavail':''}" data-provider-id="${pid}">
+      <span class="pv-avail" data-avail-provider="${pid}" hidden style="position:absolute;z-index:2;margin:8px;padding:3px 9px;border-radius:12px;background:rgba(0,0,0,.72);color:#71ff00;font-size:11px;font-weight:700"></span>
       <div class="pv-cover ${coverCls}">
         <div class="pv-avatar-wrap">
           <div class="pv-avatar" data-initials="${esc(initials)}">${p.photo

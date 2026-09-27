@@ -257,7 +257,7 @@ async function _anchorBooking(db, anchorId) {
    buyer who paid / booked and its providerUid is re-derived from the source record (the event's
    organizer, the venue's owner, the Entertainment provider). It reuses the existing `booking` kind —
    buyer ↔ provider, already in RELATIONSHIPS — so no authority or call-surface change is needed; the
-   `booking` kind deliberately has no call surface, so no call button is offered from it. */
+   `booking` kind carries a call surface since 2026-09-27 (the booking conversation's CALL). */
 const ENT_BOOKING_STATE = { PENDING: 'active', CONFIRMED: 'active', IN_PROGRESS: 'active', COMPLETED: 'closed',
   CANCELLED: 'cancelled', DECLINED: 'cancelled', NO_SHOW: 'cancelled', EXPIRED: 'cancelled' };
 async function _anchorEntBooking(db, anchorId) {

@@ -70,6 +70,23 @@ async function suite(env, label, served) {
     await f('entBookingPinAttempts/svc_b1_owner1', { fails: 2 });
     await f('bookings/vk1', { venueId: 'cv1', ownerId: 'owner1', customerId: 'buyer1', status: 'confirmed', date: '2026-10-01' });
     await f('venueSettlements/VB-1', { ownerUid: 'owner1', netCents: 940000, status: 'HELD' });
+    /* availability authority / rate cards / enquiries / call requests (2026-09-27) */
+    await f('entAvailability/svc_owner1', { calKey: 'svc_owner1', ownerUid: 'owner1' });
+    await f('entAvailability/svc_owner1/months/2026-10', { items: [{ id: 'blk_1', k: 'X', s: 1, e: 2, label: 'Private wedding' }] });
+    await f('entAvailabilityPublic/svc_owner1_2026-10', { calKey: 'svc_owner1', month: '2026-10', rev: 3 });
+    await f('entRateCards/rc1', { ownerUid: 'owner1', calKey: 'svc_owner1', visibility: 'PRIVATE', name: 'VIP' });
+    await f('entRateCards/rc1/versions/1', { version: 1, priceCents: 500000 });
+    await f('entQuotes/q1', { ownerUid: 'owner1', buyerUid: 'buyer1', status: 'SENT', finalCents: 100 });
+    await f('entEnquiries/en1', { providerUid: 'owner1', buyerUid: 'buyer1', status: 'OPEN', question: 'hi' });
+    await f('entMessagingSettings/owner1', { whoCanMessage: 'ANYONE', templates: { WELCOME: 'Hi' } });
+    await f('entBlocks/owner1_buyer1', { providerUid: 'owner1', userUid: 'buyer1' });
+    await f('entCallRequests/cr1', { requesterUid: 'buyer1', recipientUid: 'owner1', status: 'REQUESTED' });
+    await f('mktCouponCodes/cp1', { merchantId: 'owner1', code: 'OCT10', type: 'percent', value: 10, status: 'active' });
+    await f('bookingHolds/h1', { userId: 'buyer1', venueId: 'cv1', expiresAt: 9e12 });
+    await f('venueBlockouts/vb1', { venueId: 'cv1', createdBy: 'owner1', reason: 'private', note: 'CEO party' });
+    await f('providerCalendar/pc1', { providerId: 'owner1', customerName: 'Achieng Otieno' });
+    await f('availabilityStatus/owner1', { isOpen: true, liveStatus: 'available' });
+    await f('bookings/prop1', { customerId: 'buyer1', hub: 'property', status: 'pending' });
   });
   const till = env.authenticatedContext('till1', { email: 'till1@x.co', email_verified: true }).firestore();
   const admin = env.authenticatedContext('admin1', { admin: true }).firestore();
@@ -99,13 +116,48 @@ async function suite(env, label, served) {
   await expectDeny('the customer moves the booking date directly', buyer.doc('bookings/vk1').update({ date: '2026-12-25' }));
   await expectDeny('a stranger reads a venue settlement', stranger.doc('venueSettlements/VB-1').get());
   await expectDeny('the owner forges a settlement release', owner.doc('venueSettlements/VB-1').update({ status: 'RELEASED' }));
+  /* ── availability authority · rate cards · enquiries · call requests (2026-09-27) ── */
+  await expectDeny('a stranger reads a provider\'s private occupancy (bookings, blocks, labels)', stranger.doc('entAvailability/svc_owner1/months/2026-10').get());
+  await expectDeny('even the OWNER cannot read or write the occupancy directly (audited callables only)', owner.doc('entAvailability/svc_owner1/months/2026-10').set({ items: [] }));
+  await expectDeny('a client forges an availability item (direct Firestore availability write)', member.doc('entAvailability/svc_owner1/months/2026-11').set({ items: [{ id: 'x', k: 'X' }] }));
+  await expectDeny('a client bumps / rewrites the public availability signal', member.doc('entAvailabilityPublic/svc_owner1_2026-10').set({ rev: 999 }));
+  await expectDeny('a stranger reads another provider\'s rate card', stranger.doc('entRateCards/rc1').get());
+  await expectDeny('…or its price versions', stranger.doc('entRateCards/rc1/versions/1').get());
+  await expectDeny('the owner flips a PRIVATE rate to PUBLIC directly', owner.doc('entRateCards/rc1').update({ visibility: 'PUBLIC' }));
+  await expectDeny('the owner rewrites a price version (versions are immutable)', owner.doc('entRateCards/rc1/versions/1').update({ priceCents: 1 }));
+  await expectDeny('a stranger reads a quote', stranger.doc('entQuotes/q1').get());
+  await expectDeny('the buyer marks a quote ACCEPTED directly', buyer.doc('entQuotes/q1').update({ status: 'ACCEPTED' }));
+  await expectDeny('a stranger reads an enquiry', stranger.doc('entEnquiries/en1').get());
+  await expectDeny('a client creates an enquiry directly (bypassing the rate limits)', member.doc('entEnquiries/en2').set({ providerUid: 'owner1', buyerUid: 'member1', status: 'OPEN' }));
+  await expectDeny('a party moves the enquiry state (fake status)', buyer.doc('entEnquiries/en1').update({ status: 'CONVERTED' }));
+  await expectDeny('a client pre-creates an ENQUIRY conversation id', member.doc('conversations/ent_enquiry_en9').set({ participants: ['member1', 'owner1'], transactionType: 'x' }));
+  await expectDeny('a client creates an ent_enquiry-typed conversation under another id', member.doc('conversations/c_enq').set({ participants: ['member1', 'owner1'], transactionType: 'ent_enquiry' }));
+  await expectDeny('another user reads a provider\'s messaging settings / templates', stranger.doc('entMessagingSettings/owner1').get());
+  await expectDeny('the provider disables transactional messaging by writing settings directly', owner.doc('entMessagingSettings/owner1').set({ whoCanMessage: 'NOBODY', transactional: false }));
+  await expectDeny('a blocked user deletes their block', buyer.doc('entBlocks/owner1_buyer1').delete());
+  await expectDeny('a client fakes a call authorization (creates an ACCEPTED call request)', member.doc('entCallRequests/cr9').set({ requesterUid: 'member1', recipientUid: 'owner1', status: 'ACCEPTED' }));
+  await expectDeny('a stranger reads someone\'s call request', stranger.doc('entCallRequests/cr1').get());
+  await expectDeny('any signed-in user lists another merchant\'s coupon codes', stranger.doc('mktCouponCodes/cp1').get());
+  await expectDeny('a client creates a hold on a venue\'s time (any expiry)', member.doc('bookingHolds/h9').set({ userId: 'member1', venueId: 'cv1', expiresAt: 9e12 }));
+  await expectDeny('a stranger reads a venue\'s block reasons and notes', stranger.doc('venueBlockouts/vb1').get());
+  await expectDeny('the owner writes a legacy blockout the authority would never see', owner.doc('venueBlockouts/vb9').set({ venueId: 'cv1', createdBy: 'owner1' }));
+  await expectDeny('a stranger reads the provider calendar mirror (customer names)', stranger.doc('providerCalendar/pc1').get());
+  await expectDeny('the owner spoofs their public open / closed status', owner.doc('availabilityStatus/owner1').set({ isOpen: true, liveStatus: 'available' }));
+  await expectDeny('a client creates a VENUE booking directly (skipping the availability authority)', member.doc('bookings/vk9').set({ customerId: 'member1', venueId: 'cv1', ownerId: 'owner1', startTs: 1, endTs: 2, status: 'pending' }));
+  await expectDeny('the customer cancels a VENUE booking directly (skipping refund + slot release)', buyer.doc('bookings/vk1').update({ status: 'cancelled', cancelReason: 'plans changed' }));
+  if (served) {
+    ck(`${label}: anyone reads the public availability COUNTER`, await allowed(stranger.doc('entAvailabilityPublic/svc_owner1_2026-10').get()));
+    ck(`${label}: the owner reads their own rate card; the buyer their own quote and enquiry`, (await allowed(owner.doc('entRateCards/rc1').get())) && (await allowed(buyer.doc('entQuotes/q1').get())) && (await allowed(buyer.doc('entEnquiries/en1').get())));
+    ck(`${label}: the merchant reads their own coupon`, await allowed(owner.doc('mktCouponCodes/cp1').get()));
+    ck(`${label}: positive control — a property viewing request (no venue) is still client-creatable`, await allowed(member.doc('bookings/prop9').set({ customerId: 'member1', hub: 'property', status: 'pending' })));
+    ck(`${label}: …and its customer can still cancel it`, await allowed(buyer.doc('bookings/prop1').update({ status: 'cancelled', cancelReason: 'no longer needed' })));
+  }
   if (served) {
     /* POSITIVE CONTROL: the same actor, same shape, a non-booking id is ALLOWED — so the ent_booking denial
        above is decided by the reserved-id clause, not by some other clause failing. */
     ck(`${label}: positive control — the same client creates an ordinary conversation (ALLOWED)`, await allowed(member.doc('conversations/c_ok_1').set({ participants: ['member1', 'owner1'], transactionType: 'x' })));
     ck(`${label}: the buyer reads their own booking and PIN`, (await allowed(buyer.doc('entBookings/svc_b1').get())) && (await allowed(buyer.doc('entBookingSecrets/svc_b1').get())));
     ck(`${label}: the provider reads the booking envelope (not the PIN)`, await allowed(owner.doc('entBookings/svc_b1').get()));
-    ck(`${label}: the customer can still cancel their own booking`, await allowed(buyer.doc('bookings/vk1').update({ status: 'cancelled', cancelReason: 'plans changed' })));
     ck(`${label}: the owner reads their own venue settlement`, await allowed(owner.doc('venueSettlements/VB-1').get()));
   }
 

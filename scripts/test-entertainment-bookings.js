@@ -192,7 +192,7 @@ const h = (op, uid, data = {}, token) => EB._h[op]({ ...who(uid, token), data })
   await EB.onSourceWritten('providerBookings', 'pbB', await get('providerBookings/pbB'));
   const envB = await get('entBookings/svc_pbB');
   ck('source cancelled + refunded → envelope CANCELLED, refund COMPLETED, PIN INVALID', envB.status === 'CANCELLED' && envB.refund.state === 'COMPLETED' && ID.pinState(envB, NOW) === 'INVALID');
-  ck('the conversation received "Refund completed" and a notification went out', db._dump('conversations/ent_booking_svc_pbB/messages/').some((m) => /Refund completed/.test(m.text)) && notices.some((n) => n.type === 'ent_booking_refund_update'));
+  ck('the conversation received "Refund completed" and a notification went out', db._dump('conversations/ent_booking_svc_pbB/messages/').some((m) => /REFUND COMPLETED/i.test(m.text)) && notices.some((n) => n.type === 'ent_booking_refund_update'));
   /* a fresh booking (no lockout), cancelled, then its RIGHT PIN */
   const pbC = { ...pb, paymentRef: 'PAYART3', startTs: NOW + 120 * H, endTs: NOW + 124 * H };
   await db.doc('providerBookings/pbC').set(pbC); await EB.onSourceWritten('providerBookings', 'pbC', pbC);
@@ -209,13 +209,14 @@ const h = (op, uid, data = {}, token) => EB._h[op]({ ...who(uid, token), data })
   /* ═══ VENUE ═══ */
   say('\n── venue booking ──');
   await db.doc('venues/v1').set({ ownerId: 'owner1', name: 'Karura Garden', status: 'active', city: 'Nairobi' });
-  const vb = { venueId: 'v1', venueName: 'Karura Garden', ownerId: 'owner1', customerId: 'buyer1', status: 'confirmed', paymentStatus: 'unpaid', startTs: NOW + 1 * H, endTs: NOW + 5 * H, date: '2026-10-01', startTime: '10:00', endTime: '14:00' };
+  const vb = { venueId: 'v1', venueName: 'Karura Garden', ownerId: 'owner1', customerId: 'buyer1', status: 'confirmed', paymentStatus: 'unpaid', startTs: NOW + 1 * H, endTs: NOW + 5 * H, date: '2026-10-01', startTime: '10:00', endTime: '14:00', pricingBreakdown: { total: 0 } };
   await db.doc('bookings/vbk1').set(vb);
   await EB.onSourceWritten('bookings', 'vbk1', vb);
   const envV = await get('entBookings/ven_vbk1');
   ck('venue booking → BK-VEN, provider = the VENUE\'s owner', envV && envV.bookingRef.startsWith('BK-VEN-') && envV.providerUid === 'owner1' && envV.category === 'VENUE');
   ck('a booking whose ownerId does not match the venue\'s owner gets no identity (forged provider)', (await EB.onSourceWritten('bookings', 'vbk9', { ...vb, ownerId: 'mallory' })).skipped === 'owner_mismatch');
   ck('a legacy service doc in the shared collection is not taken for a venue', (await EB.onSourceWritten('bookings', 'vbk8', { customerUid: 'x', providerId: 'y', status: 'confirmed' })).skipped === 'not_venue_core');
+  ck('a CLIENT-written venue booking (no server pricing) gets no identity, PIN or conversation', (await EB.onSourceWritten('bookings', 'vbk7', { ...vb, pricingBreakdown: undefined })).skipped === 'not_server_written');
   const BK = require(Path.join(FN, 'booking.js'));
   ck('the CUSTOMER can no longer check themselves in', (await code(BK._h.bookingCheckIn({ ...who('buyer1'), data: { bookingId: 'vbk1' } }))) === 'permission-denied');
   ck('the venue cannot check in BEFORE verifying the booking PIN', (await code(BK._h.bookingCheckIn({ ...who('owner1'), data: { bookingId: 'vbk1' } }))) === 'failed-precondition');
@@ -240,7 +241,7 @@ const h = (op, uid, data = {}, token) => EB._h[op]({ ...who(uid, token), data })
   ck('an unpaid order and a walk-in (cashier) order get none', (await EB.onSourceWritten('eventOrders', 'EO2', { ...eo, status: 'pending_payment' })).skipped === 'not_paid' && (await EB.onSourceWritten('eventOrders', 'EO3', { ...eo, channel: 'cashier' })).skipped === 'walk_in');
   await db.doc('eventRefundRequests/EO1').set({ status: 'PENDING_REVIEW' });
   await EB.onSourceWritten('eventOrders', 'EO1', eo);
-  ck('the refund wizard\'s request → envelope refund UNDER_REVIEW + conversation event', (await get('entBookings/evt_EO1')).refund.state === 'UNDER_REVIEW' && db._dump('conversations/ent_booking_evt_EO1/messages/').some((m) => /Refund under review/.test(m.text)));
+  ck('the refund wizard\'s request → envelope refund UNDER_REVIEW + conversation event', (await get('entBookings/evt_EO1')).refund.state === 'UNDER_REVIEW' && db._dump('conversations/ent_booking_evt_EO1/messages/').some((m) => /REFUND UNDER REVIEW/i.test(m.text)));
 
   /* ═══ conversations: server-only ═══ */
   say('\n── conversations are server-anchored ──');

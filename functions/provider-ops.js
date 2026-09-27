@@ -180,6 +180,34 @@ async function _disburseHeldFunds(data, ref, opts) {
   return { refundC, forfeitC, providerNetC, refundShillings, forfeitShillings };
 }
 
+/* ── Terminal transition (cancel / decline) ─────────────────────────────────────────────────────
+   ONE transaction: re-read the booking, run the caller's guard, make it terminal, drop its slot
+   lock and calendar mirror, and release its availability item — reopening the time only because
+   the booking reached its canonical terminal state (never because a refund was requested). The
+   calendar's policy may require a cooldown instead: the time then shows UNAVAILABLE. */
+async function _terminalTransition(ref, patch, guard) {
+  const AV = require('./ent-availability');
+  const pre = (await ref.get()).data() || {};
+  let cooldown = false; let cooldownMins = 0;
+  try { const cal = await AV.loadCalendar({ providerId: pre.providerId }); cooldown = cal.cfg.reopenAfterCancel === false; cooldownMins = cal.cfg.cooldownMins || 0; } catch (_) { /* no calendar → plain release */ }
+  let result = null;
+  await _db().runTransaction(async (t) => {
+    const s = await t.get(ref);
+    if (!s.exists) throw new HttpsError('not-found', 'Booking not found.');
+    const cur = s.data();
+    const avRec = AV.planFromRecord(cur.availability);
+    const avSt = avRec ? await AV.readPlan(t, avRec) : null;
+    result = guard ? guard(cur) : null;
+    if (result === 'already') return;
+    t.update(ref, patch);
+    t.delete(_db().collection('providerCalendar').doc(ref.id));
+    const lockRef = _slotLockRef(cur.providerId, cur);
+    if (lockRef) t.delete(lockRef);
+    if (avRec) AV.release(t, avRec, avSt, { cooldown, cooldownMins });
+  });
+  return result;
+}
+
 const _h = {};
 exports._h = _h;
 
@@ -219,13 +247,10 @@ _h.providerDeclineBooking = async (req) => {
   if (['completed', 'cancelled'].includes(data.status)) {
     throw new HttpsError('failed-precondition', `Cannot decline a "${data.status}" booking.`);
   }
-  const batch = _db().batch();
-  batch.update(ref, { status: 'declined', declinedAt: _ts(), updatedAt: _ts(),
-    declineReason: _san(req.data?.reason, 300) || null });
-  batch.delete(_db().collection('providerCalendar').doc(ref.id));
-  const lockRef = _slotLockRef(uid, data);   /* §3.2 — release the slot lock on decline */
-  if (lockRef) batch.delete(lockRef);
-  await batch.commit();
+  /* 2026-09-27 (availability convergence): one transaction — the status is re-read, and the slot is
+     released through the availability authority in the SAME commit that makes the booking terminal. */
+  await _terminalTransition(ref, { status: 'declined', declinedAt: _ts(), updatedAt: _ts(), declineReason: _san(req.data?.reason, 300) || null },
+    (cur) => { if (['completed', 'cancelled', 'declined', 'no_show'].includes(cur.status)) throw new HttpsError('failed-precondition', `Cannot decline a "${cur.status}" booking.`); });
   /* 2026-09-27: a DECLINED paid booking kept the customer's held money — nothing released it. A
      provider decline is a provider cancellation: full refund through the same disbursement the
      cancel path uses (idempotent on paymentStatus 'paid_held'). */
@@ -468,16 +493,16 @@ _h.providerCancelBooking = async (req) => {
   }
   if (data.status === 'completed') throw new HttpsError('failed-precondition', 'A completed booking cannot be cancelled.');
 
-  const batch = _db().batch();
-  batch.update(ref, {
-    status: 'cancelled', cancelledAt: _ts(), updatedAt: _ts(),
-    cancelledBy: isProvider ? 'provider' : 'customer',
-    cancelReason: _san(req.data?.reason, 300) || null,
-  });
-  const lockRef = _slotLockRef(data.providerId, data);   /* §3.2 release */
-  if (lockRef) batch.delete(lockRef);
-  batch.delete(_db().collection('providerCalendar').doc(id));
-  await batch.commit();
+  const done = await _terminalTransition(ref, { status: 'cancelled', cancelledAt: _ts(), updatedAt: _ts(),
+    cancelledBy: isProvider ? 'provider' : 'customer', cancelReason: _san(req.data?.reason, 300) || null },
+    (cur) => {
+      if (['cancelled', 'declined', 'no_show'].includes(cur.status)) return 'already';
+      if (cur.status === 'completed') throw new HttpsError('failed-precondition', 'A completed booking cannot be cancelled.');
+      /* Show-up already settled the money: the booking is past the point a cancellation can undo. */
+      if (cur.paymentStatus === 'settled') throw new HttpsError('failed-precondition', 'This booking has already taken place.');
+      return null;
+    });
+  if (done === 'already') return { success: true, status: data.status, alreadyDone: true };
 
   /* Move held money per the refund policy (no-op if the booking was never paid). */
   try { await _disburseHeldFunds(data, ref, { by: isProvider ? 'provider' : 'customer', isNoShow: false }); }
@@ -553,6 +578,11 @@ _h.providerRescheduleBooking = async (req) => {
   const slot = await _prepareSlot(_db(), { providerId, date: newDate, startTime: newStart, durationMins });
   const { endTime, startTs, endTs, slotKey, cfg, bufMs, cfgRef } = slot;
 
+  const AV = require('./ent-availability');
+  const fromRec = AV.planFromRecord(data.availability);
+  const toPlan = await AV.planReservation({ providerId, serviceId: data.serviceId || null, startMs: startTs, endMs: endTs,
+    itemId: fromRec ? fromRec.itemId : 'pb_' + id, ref: 'providerBookings/' + id, excludeId: fromRec ? fromRec.itemId : null, skipBookable: isProvider })
+    .catch((e) => { if (e && e.code === 'not-found') return AV.planReservation({ providerId, service: null, startMs: startTs, endMs: endTs, itemId: fromRec ? fromRec.itemId : 'pb_' + id, ref: 'providerBookings/' + id, excludeId: fromRec ? fromRec.itemId : null, skipBookable: isProvider }); throw e; });
   const oldLockRef = _slotLockRef(providerId, data);
   const newLockRef = cfgRef.collection('slotLocks').doc(String(slotKey));
   const sameSlot   = oldLockRef && oldLockRef.path === newLockRef.path;
@@ -564,16 +594,24 @@ _h.providerRescheduleBooking = async (req) => {
   const existing = activeSnap.docs.filter(d => d.id !== id).map(d => d.data());
 
   await _db().runTransaction(async (txn) => {
-    if (!sameSlot) {
-      const newLock = await txn.get(newLockRef);
-      if (newLock.exists) throw new HttpsError('already-exists', 'That slot was just taken. Choose another time.');
-    }
+    /* reads first: the booking (status re-checked), the new lock, the occupancy of BOTH slots */
+    const cur = await txn.get(ref);
+    if (!cur.exists || !['pending', 'confirmed'].includes(cur.data().status)) throw new HttpsError('failed-precondition', 'This booking can no longer be rescheduled.');
+    const newLock = sameSlot ? null : await txn.get(newLockRef);
+    const avSt = await AV.readPlan(txn, fromRec, toPlan);
+    if (newLock && newLock.exists) throw new HttpsError('already-exists', 'That slot was just taken. Choose another time.');
     const maxConcurrent = Math.max(1, Number(cfg.cap && cfg.cap.maxSimultaneous || 1));
     const overlap = existing.filter(b => rc.pairOverlaps(startTs, endTs, b.startTs, b.endTs, bufMs, bufMs)).length;
     if (overlap >= maxConcurrent) throw new HttpsError('already-exists', 'That time overlaps another booking.');
     const maxPerDay = Number(cfg.cap && cfg.cap.maxPerDay || 0);
     if (maxPerDay > 0 && existing.length >= maxPerDay) throw new HttpsError('resource-exhausted', 'The provider is fully booked that day.');
 
+    /* The authority's atomic move: the new time is evaluated with this booking's own item excluded,
+       and the old time opens only if the new one is taken — in this same commit. */
+    let moved;
+    if (fromRec) moved = AV.move(txn, fromRec, toPlan, avSt);
+    else moved = AV.claim(txn, toPlan, avSt, { kind: cur.data().paymentStatus === 'paid_held' ? 'B' : 'H' });
+    if (!moved.ok) throw AV.refusalError(moved.code);
     /* Acquire new BEFORE releasing old — never zero locks (§3.2). */
     txn.set(newLockRef, {
       bookingId: id, providerId, customerUid: data.customerUid || null,
@@ -583,7 +621,7 @@ _h.providerRescheduleBooking = async (req) => {
 
     /* Identity immutable (§3.5): only scheduling fields change. */
     txn.update(ref, {
-      date: newDate, startTime: newStart, endTime, startTs, endTs, slotKey,
+      date: newDate, startTime: newStart, endTime, startTs, endTs, slotKey, availability: moved.record,
       scheduledAt: Timestamp.fromMillis(startTs),
       rescheduleCount: _inc(1),
       rescheduleHistory: FieldValue.arrayUnion({

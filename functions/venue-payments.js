@@ -100,12 +100,18 @@ const venueBookingAdapter = {
     const setRef = db.collection(COL.SETTLEMENTS).doc(ctx.paymentRef);
     const [bSnap, sSnap] = await Promise.all([txn.get(bRef), txn.get(setRef)]);
     const b = bSnap.data();
+    /* availability item (read before any write) */
+    const AV = require('./ent-availability');
+    const avRec = AV.planFromRecord(b.availability);
+    const avSt = avRec ? await AV.readPlan(txn, avRec) : null;
     const fee = providerFee(ctx.payment || {});
     const s = computeSettlement({ grossCents: ctx.amountCents, providerFeeCents: fee.cents });
     /* A payment for a booking that was cancelled meanwhile is still honoured as money received: it is
        recorded and flagged for a refund, never silently kept. */
     const lateOnDead = ['cancelled', 'no_show'].includes(String(b.status));
     txn.update(bRef, { paymentStatus: 'paid', paymentId: ctx.paymentRef, paidAt: FieldValue.serverTimestamp(), requiresPayment: false, updatedAt: Date.now() });
+    /* Payment authoritatively confirmed → the hold becomes a BOOKING (public: BOOKED). */
+    if (avRec && !lateOnDead) AV.setKind(txn, avRec, avSt, 'B');
     if (!sSnap.exists) {
       txn.create(setRef, {
         paymentRef: ctx.paymentRef, bookingId: id, venueId: b.venueId, ownerUid: b.ownerId, customerUid: b.customerId,
@@ -131,7 +137,12 @@ const venueBookingAdapter = {
     const setRef = db.collection(COL.SETTLEMENTS).doc(led.paymentRef);
     const comRef = db.collection(COL.COMMISSION).doc(`ven_${led.paymentRef}`);
     const [bSnap, sSnap, cSnap] = await Promise.all([txn.get(bRef), txn.get(setRef), txn.get(comRef)]);
+    const AV = require('./ent-availability');
+    const avRec = bSnap.exists ? AV.planFromRecord(bSnap.data().availability) : null;
+    const avSt = avRec ? await AV.readPlan(txn, avRec) : null;
+    /* The refund was EXECUTED (this is the refund authority's revoke) — only now does the time reopen. */
     if (bSnap.exists) txn.update(bRef, { paymentStatus: 'refunded', status: 'cancelled', refundedAt: Date.now(), updatedAt: Date.now() });
+    if (avRec) AV.release(txn, avRec, avSt);
     if (!sSnap.exists) return;
     const st = sSnap.data().status;
     if (st === SETTLEMENT.HELD || st === SETTLEMENT.FEE_UNREPORTED) {
@@ -292,7 +303,7 @@ async function onVenueRefundProcessed({ payRef, amountCents }) {
       const k = computeSettlement({ grossCents: kept, providerFeeCents: s.providerFeeCents });
       await setRef.update({ grossCents: kept, commissionCents: k.commissionCents, netCents: k.netCents, originalGrossCents: gross,
         refundedCents: Number(amountCents), keptFeeCents: kept, updatedAt: FieldValue.serverTimestamp() });
-      await _db().collection(COL.BOOKINGS).doc(String(intent.resourceId)).update({ status: 'cancelled', paymentStatus: 'partially_refunded', updatedAt: Date.now() });
+      await _cancelAndRelease(String(intent.resourceId), { status: 'cancelled', paymentStatus: 'partially_refunded', updatedAt: Date.now() });
       await _release(payRef, 'cancellation_fee', null);
     } else {
       await engine.revoke(payRef, 'refund_processed');
@@ -300,6 +311,28 @@ async function onVenueRefundProcessed({ payRef, amountCents }) {
     await reqRef.set({ status: 'REFUNDED', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     return { ok: true };
   } catch (e) { logger.error('[venuePayments] refund hook failed', { payRef, err: e.message }); return { error: e.message }; }
+}
+
+/* A venue booking becomes cancelled and its availability item is released in ONE transaction
+   (skip(cur) → true leaves it untouched). Returns true when it changed the booking. */
+async function _cancelAndRelease(bookingId, patch, skip) {
+  const AV = require('./ent-availability');
+  const ref = _db().collection(COL.BOOKINGS).doc(String(bookingId));
+  let changed = false;
+  await _db().runTransaction(async (txn) => {
+    changed = false;
+    const s = await txn.get(ref);
+    if (!s.exists) return;
+    const cur = s.data();
+    const avRec = AV.planFromRecord(cur.availability);
+    const avSt = avRec ? await AV.readPlan(txn, avRec) : null;
+    if (skip && skip(cur)) return;
+    txn.update(ref, patch);
+    txn.delete(_db().collection('venues').doc(String(cur.venueId)).collection('slotLocks').doc(`${cur.date}_${cur.startTs}_${cur.endTs}`));
+    if (avRec) AV.release(txn, avRec, avSt);
+    changed = true;
+  });
+  return changed;
 }
 
 /* ═══ SWEEP — expire unpaid holds; pay no-show bookings to the venue ════════════════════════ */
@@ -311,8 +344,11 @@ async function sweep(nowMs = _now()) {
     const b = d.data();
     if (b.paymentStatus === 'paid' || !['pending', 'confirmed'].includes(String(b.status))) continue;
     if (Number(b.paymentDueBy) && nowMs > Number(b.paymentDueBy)) {
-      await d.ref.update({ status: 'cancelled', cancelReason: 'unpaid', cancelledBy: 'system', requiresPayment: false, updatedAt: nowMs }); // eslint-disable-line no-await-in-loop
-      expired++;
+      /* A payment still in flight keeps the slot protected — the webhook's answer decides. */
+      if (await require('./ent-availability').paymentInFlight(d.id)) continue; // eslint-disable-line no-await-in-loop
+      const r = await _cancelAndRelease(d.id, { status: 'cancelled', cancelReason: 'unpaid', cancelledBy: 'system', requiresPayment: false, updatedAt: nowMs }, // eslint-disable-line no-await-in-loop
+        (cur) => cur.paymentStatus === 'paid' || !['pending', 'confirmed'].includes(String(cur.status)));
+      if (r) expired++;
     }
   }
   const held = await db.collection(COL.SETTLEMENTS).where('status', '==', SETTLEMENT.HELD).where('releaseAfter', '<=', Timestamp.fromMillis(nowMs)).limit(200).get();

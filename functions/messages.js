@@ -44,8 +44,13 @@ const TX_COLLECTIONS = {
   rfq:                      'rfqs',
   /* Entertainment bookings (entertainment-bookings.js) — SERVER-created only, see SERVER_ANCHORED. */
   ent_booking:              'entBookings',
+  /* Entertainment PUBLIC enquiries (ent-enquiries.js) — created only by entEnquirySend. */
+  ent_enquiry:              'entEnquiries',
 };
-const SERVER_ANCHORED = new Set(['ent_booking']);
+/* Server-anchored: a client can neither create these nor choose their participants — the booking or
+   the enquiry does. ent_booking is PRIVATE / transactional; ent_enquiry is PUBLIC (rate-limited,
+   blockable, closable — ent-enquiries.assertCanSend). */
+const SERVER_ANCHORED = new Set(['ent_booking', 'ent_enquiry']);
 
 /* ── Spam / fraud detection patterns ─────────────────────────── */
 const SPAM_PATTERNS = [
@@ -1057,6 +1062,12 @@ exports.sendMessage = onCall(
     }
 
     /* Server-resolve senderName so it cannot be forged by the client */
+    /* Entertainment PUBLIC enquiries carry the provider's controls: closed / blocked / rate-limited /
+       duplicate refusals are explicit errors (a legitimate message is never silently dropped). A
+       PRIVATE booking conversation (ent_booking) is transactional and is never gated here. */
+    if (conv.transactionType === 'ent_enquiry') {
+      await require('./ent-enquiries').assertCanSend(db, conv, req.auth.uid, type === 'text' ? text : null);
+    }
     const userSnap   = await db.collection('users').doc(req.auth.uid).get();
     const ud         = userSnap.exists ? userSnap.data() : {};
     const senderName = String(ud.displayName || ud.name || ud.email || 'User').slice(0, 100);
@@ -1285,7 +1296,16 @@ async function postSystemMessage(db, conversationId, key, text, extra) {
     t.set(msgRef, { senderId: 'system', senderName: 'SOKONI', timestamp: _now(), type: 'system', text: String(text).slice(0, 500),
       event: extra || null, status: 'delivered', deleted: false, edited: false, flagged: false });
     t.update(convRef, { lastMessage: String(text).slice(0, 200), lastMessageAt: _now(), updatedAt: _now(),
-      ...(extra && extra.status ? { transactionStatus: extra.status } : {}) });
+      ...(extra && extra.status ? { transactionStatus: extra.status } : {}),
+      /* inbox tabs (BOOKINGS / ENQUIRIES / REFUNDS / PAYMENTS) filter on these tags */
+      ...(extra && extra.tag ? { entTags: _union(String(extra.tag).slice(0, 20)) } : {}) });
+    /* …and on each party's own inbox row, which is what messages.html lists. */
+    if (extra && extra.tag) {
+      for (const p of (c.data().participants || [])) {
+        t.set(db.collection('userConversations').doc(String(p)).collection('items').doc(String(conversationId)),
+          { entTags: _union(String(extra.tag).slice(0, 20)), lastMessageText: String(text).slice(0, 120), lastMessageAt: _now(), updatedAt: _now() }, { merge: true });
+      }
+    }
   });
   return posted;
 }

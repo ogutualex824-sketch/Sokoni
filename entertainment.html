@@ -159,6 +159,8 @@
   <section class="panel" id="p-mine" role="tabpanel" aria-labelledby="tab-mine" hidden>
     <div class="sec-head"><h2>My bookings</h2></div>
     <div id="bookings" aria-live="polite"><div class="state">Loading…</div></div>
+    <div class="sec-head"><h2>My enquiries &amp; quotes</h2></div>
+    <div id="enquiries" aria-live="polite"><div class="state">Loading…</div></div>
     <div class="sec-head" id="provide"><h2>Bookings you provide</h2></div>
     <form class="vf" id="verifyForm" autocomplete="off">
       <label>Booking reference<br><input name="ref" placeholder="BK-VEN-2026-000000" maxlength="20" required></label>
@@ -291,7 +293,25 @@
     } catch (err) { msg.textContent = errText(err); f.pin.value = ''; }
   });
 
-  const LOADERS = { events: loadEvents, films: loadFilms, mine: loadBookings };
+  /* The buyer's PUBLIC enquiries and the quotes providers sent (bookingDispatch — server state only). */
+  const bd = (op, data) => httpsCallable(fns, 'bookingDispatch')(Object.assign({ op }, data || {})).then((r) => r.data);
+  async function loadEnquiries() {
+    const host = document.getElementById('enquiries');
+    try {
+      const [e, q] = await Promise.all([bd('entEnquiryList', {}), bd('entQuoteList', {})]);
+      const quotes = {}; (q.quotes || []).forEach((x) => { quotes[x.id] = x; });
+      const rows = (e.enquiries || []).map((x) => { const qt = x.quoteId ? quotes[x.quoteId] : null;
+        return `<article class="bk"><div class="top"><span class="badge">Enquiry</span><span class="badge">${esc(words(x.status))}</span></div>
+          <h3 style="margin:0">${esc(words(x.category))}${x.serviceName ? ' · ' + esc(x.serviceName) : ''}</h3>
+          ${qt ? `<p>Quote: <strong>${esc(kes(qt.finalCents))}</strong> · ${esc(words(qt.status))}</p>` : ''}
+          <div class="row"><a class="btn" href="/chat.html?id=${encodeURIComponent(x.conversationId)}">💬 Open conversation</a>
+          ${qt && qt.status === 'ACCEPTED' ? `<a class="btn primary" href="/provider-profile.html?uid=${encodeURIComponent(x.counterparty)}&quote=${encodeURIComponent(qt.id)}">Reserve &amp; pay</a>` : ''}</div></article>`; }).join('');
+      host.innerHTML = rows ? '<div class="grid">' + rows + '</div>' : '<div class="state">No enquiries yet.</div>';
+    } catch (err) {
+      host.innerHTML = /unauthenticated/.test(String(err && (err.code || err.message))) ? '' : `<div class="state err">Enquiries are unavailable right now (${esc(errText(err))}).</div>`;
+    }
+  }
+  const LOADERS = { events: loadEvents, films: loadFilms, mine: () => { loadBookings(); loadEnquiries(); } };
 
   /* Legacy links (the retired EntHub page took ?cat=, ?event=, ?venue=): route to the canonical owner. */
   const q = new URLSearchParams(location.search);

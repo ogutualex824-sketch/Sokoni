@@ -132,6 +132,10 @@ This was found while proving the rules suite, and it is **NOT fixed here** becau
 
 ## 9. Not in this slice
 
-The Premium Booklet (Slice B), the shared availability / calendar layer, rate cards, enquiries and messaging controls, and
-the category sidebars (Slice C). Deploying needs the new triggers (`entBookingOn*`, `venueOnBookingPayment`) and the
+This slice does not include the Premium Booklet (Slice B) or the category sidebars (Slice C).
+
+The availability / calendar layer, rate cards, enquiries and messaging controls are covered in
+[[ENTERTAINMENT_AVAILABILITY]].
+
+Deploying needs the new triggers (`entBookingOn*`, `venueOnBookingPayment`) and the
 schedule (`venuePaymentSweep`). A composite index is likely needed for `entBookings` (`buyerUid` / `providerUid`).

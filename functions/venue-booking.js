@@ -469,6 +469,15 @@ exports.venueCalculatePrice = onCall(CF_PUB, exports._h.venueCalculatePrice = as
    Creates booking in sub-collection (slot lock) + top-level (customer queries).
 ═══════════════════════════════════════════════════════════════════════════ */
 exports.venueCreateBooking = onCall(CF_OPTS, exports._h.venueCreateBooking = async (request) => {
+  /* RETIRED 2026-09-27 (availability convergence). This rollback engine could double-book: its
+     overlap query used a prefix range (`startAt(date+'_').endAt(date+'_')`) that matches no real id,
+     and its random booking suffix meant there was no lock. Venue bookings are created ONLY by
+     booking.js bookingCreate, which reserves through the availability authority. */
+  _uid(request);
+  throw new HttpsError('failed-precondition', 'Book this venue from its booking page.', { code: 'RETIRED' });
+});
+/* The retired body is kept below (unexported) for reference until the rollback engine is deleted. */
+async function _retiredVenueCreateBooking(request) {
   const uid = _uid(request);
   const d   = request.data || {};
 
@@ -601,7 +610,8 @@ exports.venueCreateBooking = onCall(CF_OPTS, exports._h.venueCreateBooking = asy
 
   console.log('venueCreateBooking', { bookingId, venueId, uid, date, startTime, status: autoStatus });
   return { bookingId, status: autoStatus, pricing, requiresApproval: venue.requiresApproval };
-});
+}
+void _retiredVenueCreateBooking;
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CF 7 — venueCancelBooking

@@ -119,6 +119,32 @@ async function _hasOverlap(venueId, startTs, endTs, excludeBookingId=null) {
   return false;
 }
 
+/* ── Terminal transition for a venue booking ─────────────────────────────────────────────────
+   ONE transaction: re-read, guard, make terminal, drop the slot lock, release the availability item
+   (or lay the calendar's cooldown). The time reopens because — and only when — the booking reaches
+   its canonical terminal state. Exported for venue-payments (unpaid expiry, executed refund). */
+async function _venueTerminal(ref, patch, guard) {
+  const AV = require('./ent-availability');
+  const pre = (await ref.get()).data() || {};
+  let cooldown = false; let cooldownMins = 0;
+  try { const cal = await AV.loadCalendar({ venueId: pre.venueId }); cooldown = cal.cfg.reopenAfterCancel === false; cooldownMins = cal.cfg.cooldownMins || 0; } catch (_) { /* plain release */ }
+  let out = null;
+  await db.runTransaction(async (t) => {
+    const s = await t.get(ref);
+    if (!s.exists) throw new HttpsError('not-found', 'Booking not found');
+    const cur = s.data();
+    const avRec = AV.planFromRecord(cur.availability);
+    const avSt = avRec ? await AV.readPlan(t, avRec) : null;
+    out = guard ? guard(cur) : null;
+    if (out === 'already') return;
+    t.update(ref, patch);
+    t.delete(db.collection('venues').doc(cur.venueId).collection('slotLocks').doc(`${cur.date}_${cur.startTs}_${cur.endTs}`));
+    if (avRec) AV.release(t, avRec, avSt, { cooldown, cooldownMins });
+  });
+  return out;
+}
+exports._venueTerminal = _venueTerminal;
+
 /* ═══════════════════════════════════════════════════════════
    1. SEARCH VENUES
 ═══════════════════════════════════════════════════════════ */
@@ -181,97 +207,22 @@ exports.bookingGetVenue = onCall(
 exports.bookingGetAvailability = onCall(
   { region: 'us-central1', maxInstances: 100, cors: true, enforceAppCheck: true },
   exports._h.bookingGetAvailability = async (req) => {
+    /* 2026-09-27 (availability convergence): answered by the ONE availability authority
+       (functions/ent-availability.js) — the same decision bookingCreate makes, over the same
+       occupancy, in SAFE public states only. The old body read other customers' holds and the
+       owner's blockouts directly and computed times in the server's UTC day. */
     const { venueId, date } = req.data || {};
     if (!venueId || !date) throw new HttpsError('invalid-argument','venueId and date required');
-
+    const AV = require('./ent-availability');
+    const r = await AV._h.entAvailDay({ auth: req.auth || null, data: { venueId, date } });
     const venueSnap = await db.collection('venues').doc(venueId).get();
-    if (!venueSnap.exists) throw new HttpsError('not-found','Venue not found');
-    const venue = venueSnap.data();
-
-    const dow   = _dayOfWeek(date);
-    const hours = (venue.openingHours||{})[dow];
-    if (!hours || hours.closed) return { date, slots: [], status: 'closed' };
-    if (venue.status === 'maintenance') return { date, slots: [], status: 'maintenance' };
-
-    /* Get day start/end timestamps */
-    const dayStart = new Date(date + 'T00:00:00').getTime();
-    const dayEnd   = dayStart + 86400000;
-
-    /* Fetch confirmed bookings for this day */
-    const bookingsSnap = await db.collection('bookings')
-      .where('venueId',  '==', venueId)
-      .where('startTs',  '>=', dayStart)
-      .where('startTs',  '<',  dayEnd)
-      .where('status',   'in', ['pending','confirmed','active'])
-      .get();
-
-    const existingBookings = bookingsSnap.docs.map(d => ({
-      startTime: d.data().startTime,
-      endTime:   d.data().endTime,
-    }));
-
-    /* Fetch active holds */
-    const holdsSnap = await db.collection('bookingHolds')
-      .where('venueId',   '==', venueId)
-      .where('expiresAt', '>',  Date.now())
-      .get();
-
-    const holds = holdsSnap.docs
-      .filter(d => { const s = d.data().startTs; return s >= dayStart && s < dayEnd; })
-      .map(d => ({ startTime: d.data().startTime, endTime: d.data().endTime }));
-
-    /* Fetch blockouts */
-    const blockSnap = await db.collection('venueBlockouts')
-      .where('venueId', '==', venueId)
-      .get();
-
-    for (const doc of blockSnap.docs) {
-      const bl = doc.data();
-      if (bl.startTs < dayEnd && bl.endTs > dayStart) {
-        existingBookings.push({
-          startTime: _minsToTime(Math.max(0, Math.floor((bl.startTs - dayStart) / 60000))),
-          endTime:   _minsToTime(Math.min(24*60, Math.ceil((bl.endTs - dayStart) / 60000))),
-        });
-      }
-    }
-
-    /* Generate slots using same logic as client engine */
-    const openM  = _timeToMins(hours.open  || '08:00');
-    const closeM = _timeToMins(hours.close || '22:00');
-    const buffer = venue.config?.cleaningBuffer || 0;
-    /* Slot length = the venue's configured duration (fall back to 30) so a
-       displayed slot's length matches the booking the client then creates. */
-    const step   = Math.max(15, Number(venue.slotDurationMins || venue.config?.slotDuration || 30));
-
-    const blocked = [...existingBookings, ...holds].map(b => [_timeToMins(b.startTime), _timeToMins(b.endTime)+buffer]);
-
-    const now   = new Date();
-    const nowM  = now.getHours()*60+now.getMinutes();
-    const today = _dayKey(Date.now());
-
-    const slots = [];
-    for (let s = openM; s+step <= closeM; s += step) {
-      if (date === today && s <= nowM+15) continue;
-      const overlap = blocked.some(([bs,be])=> s<be && s+step>bs);
-      slots.push({
-        id:          `${date}_${_minsToTime(s)}`,
-        startTime:   _minsToTime(s),
-        endTime:     _minsToTime(s+step),
-        startMins:   s,
-        endMins:     s+step,
-        durationMins: step,
-        available:   !overlap,
-      });
-    }
-
-    /* Capacity: check concurrent booking count */
-    const concurrent = venue.capacity?.concurrent || 1;
-    if (concurrent > 1) {
-      /* Mark all slots available (shared venue handles concurrent) */
-      for (const slot of slots) slot.concurrent = true;
-    }
-
-    return { date, slots, openTime: hours.open, closeTime: hours.close, venue: { name: venue.name, type: venue.type } };
+    const venue = venueSnap.exists ? venueSnap.data() : {};
+    const slots = (r.slots || []).map((x) => {
+      const ok = x.state === 'AVAILABLE' || x.state === 'LIMITED';
+      return { id: `${date}_${x.start}`, startTime: x.start, endTime: x.end, startMins: _timeToMins(x.start), endMins: _timeToMins(x.end),
+        durationMins: r.durationMins, available: ok, state: x.state };
+    });
+    return { date, slots, state: r.state || null, bookable: r.bookable !== false, venue: { name: venue.name || null, type: venue.type || null } };
   }
 );
 
@@ -281,73 +232,26 @@ exports.bookingGetAvailability = onCall(
 exports.bookingHoldSlot = onCall(
   { region: 'us-central1', maxInstances: 100, cors: true, enforceAppCheck: true },
   exports._h.bookingHoldSlot = async (req) => {
-    const uid = _authRequired(req);
-    const { venueId, startTs, endTs, holdId } = req.data || {};
-    if (!venueId || !startTs || !endTs) throw new HttpsError('invalid-argument','venueId, startTs, endTs required');
-    if (endTs <= startTs) throw new HttpsError('invalid-argument','endTs must be after startTs');
-
-    /* Provider buffer (default 0 = no change) so a hold reserves the same
-       [start-bufferBefore, end+bufferAfter] window that bookingCreate enforces. */
-    const _hv = (await db.collection('venues').doc(venueId).get()).data() || {};
-    const bufBeforeMs = Math.max(0, Number(_hv.bufferBeforeMins || 0)) * 60000;
-    const bufAfterMs  = Math.max(0, Number(_hv.bufferAfterMins  || 0)) * 60000;
-
-    /* Atomic: check + write in transaction */
-    const held = await db.runTransaction(async txn => {
-      /* Check for overlap (buffer-aware; widen the endTs pre-filter so a booking
-         ending within the buffer window is still caught). */
-      const bSnap = await db.collection('bookings')
-        .where('venueId','==',venueId)
-        .where('endTs','>', startTs - bufBeforeMs - bufAfterMs)
-        .where('status','in',['pending','confirmed','active'])
-        .get();
-
-      for (const doc of bSnap.docs) {
-        const b = doc.data();
-        if (_rc.pairOverlaps(startTs, endTs, b.startTs, b.endTs, bufBeforeMs, bufAfterMs)) return false;
-      }
-
-      /* Check existing holds */
-      const hSnap = await db.collection('bookingHolds')
-        .where('venueId','==',venueId)
-        .where('expiresAt','>',Date.now())
-        .get();
-
-      for (const doc of hSnap.docs) {
-        const h = doc.data();
-        if (h.startTs < endTs && h.endTs > startTs && h.userId !== uid) return false;
-      }
-
-      /* Write hold */
-      const date     = _dayKey(startTs);
-      const startMins = Math.round((startTs - new Date(date+'T00:00:00').getTime()) / 60000);
-      const endMins   = Math.round((endTs   - new Date(date+'T00:00:00').getTime()) / 60000);
-      const id = holdId || _uid();
-      txn.set(db.collection('bookingHolds').doc(id), {
-        venueId, userId: uid, startTs, endTs,
-        date,
-        startTime: _minsToTime(startMins), endTime: _minsToTime(endMins),
-        expiresAt: Date.now() + 2 * 60 * 1000,
-        createdAt: Date.now(),
-      });
-      return id;
-    });
-
-    if (!held) throw new HttpsError('already-exists','Slot is no longer available');
-    return { held: true, holdId: held, expiresAt: Date.now() + 2*60*1000 };
+    /* RETIRED 2026-09-27. bookingCreate reserves atomically through the availability authority (the
+       unpaid booking IS the hold, released by the payment sweep). A separate hold let any signed-in
+       user block any venue's time. */
+    _authRequired(req);
+    throw new HttpsError('failed-precondition', 'Choose a time and continue to book.', { code: 'RETIRED' });
   }
 );
 
-/* ═══════════════════════════════════════════════════════════
-   5. RELEASE HOLD
-═══════════════════════════════════════════════════════════ */
 exports.bookingReleaseHold = onCall(
   { region: 'us-central1', maxInstances: 50, cors: true, enforceAppCheck: true },
   exports._h.bookingReleaseHold = async (req) => {
-    _authRequired(req);
+    /* Only the hold's own user may release it (waitlist offers are the only holds left). */
+    const uid = _authRequired(req);
     const { holdId } = req.data || {};
     if (!holdId) throw new HttpsError('invalid-argument','holdId required');
-    await db.collection('bookingHolds').doc(holdId).delete();
+    const ref = db.collection('bookingHolds').doc(String(holdId));
+    const snap = await ref.get();
+    if (!snap.exists) return { released: true };
+    if (snap.data().userId !== uid) throw new HttpsError('permission-denied', 'Not your hold.');
+    await ref.delete();
     return { released: true };
   }
 );
@@ -360,6 +264,9 @@ exports.bookingCreate = onCall(
   exports._h.bookingCreate = async (req) => {
     const uid = _authRequired(req);
     const { venueId, holdId, date, startTime, endTime, notes, paymentId, idempotencyKey } = req.data || {};
+    const rateCardId = req.data && req.data.rateCardId ? _sanitize(req.data.rateCardId).slice(0, 128) : null;
+    const couponCode = req.data && req.data.couponCode ? _sanitize(req.data.couponCode).slice(0, 32) : null;
+    const expectedTotalCents = req.data && req.data.expectedTotalCents != null && Number.isFinite(Number(req.data.expectedTotalCents)) ? Math.round(Number(req.data.expectedTotalCents)) : null;
     /* 2026-09-27: add-on PRICES came from the client and were summed into the total (a negative one
        lowered it). Venues have no add-on catalogue and no page sends add-ons, so none are accepted. */
     const addOns = [];
@@ -371,9 +278,15 @@ exports.bookingCreate = onCall(
     const venueSnap = await db.collection('venues').doc(venueId).get();
     if (!venueSnap.exists) throw new HttpsError('not-found','Venue not found');
     const venue = venueSnap.data();
+    /* Bookability (verification / suspension) from the ONE availability authority. A venue becomes
+       bookable only through AdminOS approval (status 'active'). */
+    const AV = require('./ent-availability');
+    const cal = await AV.loadCalendar({ venueId });
+    if (!cal.bookable.ok) throw new HttpsError('failed-precondition', 'This venue is not taking bookings right now.', { code: 'NOT_BOOKABLE' });
+    if (venue.ownerId === uid) throw new HttpsError('failed-precondition', 'You cannot book your own venue.');
 
-    /* Calculate timestamps */
-    const dayStart = new Date(date + 'T00:00:00').getTime();
+    /* Calculate timestamps — Africa/Nairobi, the calendar's zone (was the server's UTC day). */
+    const dayStart = new Date(date + 'T00:00:00+03:00').getTime();
     const startMins = _timeToMins(startTime);
     const endMins   = _timeToMins(endTime);
     const startTs   = dayStart + startMins * 60000;
@@ -383,6 +296,13 @@ exports.bookingCreate = onCall(
     if (duration <= 0) throw new HttpsError('invalid-argument','endTime must be after startTime');
 
     const pricingBreakdown = _calculatePrice(venue, startMins, endMins, date, { addOns });
+    /* A rate card (versioned) replaces the calculator's total; the booking records which version. */
+    const RCARDS = require('./ent-rate-cards');
+    const terms = await RCARDS.resolveTerms({ calKey: cal.calKey, ownerUid: venue.ownerId, serviceId: null, buyerUid: uid, rateCardId, quoteId: null,
+      base: { priceCents: Math.round(Number(pricingBreakdown.total || 0) * 100), durationMins: duration, authority: 'pricing-schema' } });
+    if (terms.rateCard) { pricingBreakdown.total = terms.priceCents / 100; pricingBreakdown.rateCardId = terms.rateCard.id; pricingBreakdown.rateCardVersion = terms.rateCard.version; }
+    const coupon = couponCode ? await RCARDS.findCoupon(venue.ownerId, couponCode) : null;
+    if (couponCode && !coupon) throw new HttpsError('not-found', 'That discount code is not valid here.');
 
     /* ── Server-authoritative payment verification ────────────────────────
        paymentId arrives from req.data and its truthiness alone used to set
@@ -477,6 +397,9 @@ exports.bookingCreate = onCall(
 
     const requiresApproval = venue.config?.approvalRequired || false;
     const bookingId = _uid();
+    /* Occupancy through the ONE availability authority (claimed inside the transaction). */
+    const plan = await AV.planReservation({ cal, service: null, startMs: startTs, endMs: endTs, itemId: 'vb_' + bookingId, ref: 'bookings/' + bookingId });
+    let claimedRecord = null; let avCode = null; let priceConflict = null; let couponReason = null; let discountCents = 0;
 
     /* Slot-lock document: keyed on the exact time window.
        Writing this atomically inside the transaction prevents two concurrent
@@ -522,7 +445,12 @@ exports.bookingCreate = onCall(
          first), bail. Firestore's optimistic concurrency also retries THIS
          transaction if a concurrent write touches slotLockRef.
       ── */
+      claimedRecord = null; avCode = null; priceConflict = null; couponReason = null; discountCents = 0;
       const slotSnap = await txn.get(slotLockRef);
+      const cSnap = coupon ? await txn.get(coupon.ref) : null;
+      const avState = await AV.readPlan(txn, plan);
+      const cntSnap = maxPerCustomer > 0 ? await txn.get(counterRef) : null;
+      const holdDocSnap = holdId ? await txn.get(db.collection('bookingHolds').doc(holdId)) : null;
       if (slotSnap.exists) {
         isConflict   = true;
         conflictCode = 'already-exists';
@@ -548,9 +476,8 @@ exports.bookingCreate = onCall(
              a burst can slip past it). If no counter exists yet — the venue just
              enabled the cap — fall back to the prefetched real count and seed. ──  */
       if (maxPerCustomer > 0) {
-        const cSnap = await txn.get(counterRef);
-        counterExisted = cSnap.exists;
-        counterSeed    = cSnap.exists ? Number(cSnap.data().active || 0) : customerActiveCount;
+        counterExisted = cntSnap.exists;
+        counterSeed    = cntSnap.exists ? Number(cntSnap.data().active || 0) : customerActiveCount;
         if (_rc.customerCapExceeded(counterSeed, maxPerCustomer)) {
           isConflict   = true;
           conflictCode = 'failed-precondition';
@@ -569,14 +496,32 @@ exports.bookingCreate = onCall(
 
       /* ── 5. Validate hold ownership ────────────────────────────────────── */
       if (holdId) {
-        const holdDoc = await txn.get(db.collection('bookingHolds').doc(holdId));
+        const holdDoc = holdDocSnap;
         if (!holdDoc.exists || holdDoc.data().userId !== uid || holdDoc.data().expiresAt < Date.now()) {
           isConflict   = true;
           conflictCode = 'already-exists';
           return;
         }
-        txn.delete(db.collection('bookingHolds').doc(holdId));
       }
+      /* ── 5b. discount + the buyer's confirmed total (server-computed) ── */
+      const listCents = Math.round(Number(pricingBreakdown.total || 0) * 100);
+      if (coupon) {
+        const cd = RCARDS.couponDiscount(cSnap && cSnap.exists ? cSnap.data() : null, { priceCents: listCents, serviceId: null, nowMs: Date.now() });
+        if (!cd.ok) { isConflict = true; couponReason = cd.reason; conflictCode = 'failed-precondition'; return; }
+        discountCents = cd.discountCents;
+      }
+      if (expectedTotalCents != null && expectedTotalCents !== listCents - discountCents) { isConflict = true; priceConflict = listCents - discountCents; conflictCode = 'aborted'; return; }
+      /* ── 5c. atomic reservation through the availability authority ── */
+      const payable = listCents - discountCents > 0 && paymentStatus !== 'paid';
+      const claimed = AV.claim(txn, plan, avState, { kind: payable ? 'H' : 'B', until: payable ? Date.now() + 30 * 60 * 1000 : null });
+      if (!claimed.ok) { isConflict = true; avCode = claimed.code; conflictCode = 'already-exists'; return; }
+      claimedRecord = claimed.record;
+      if (holdId) txn.delete(db.collection('bookingHolds').doc(holdId));
+      if (coupon) {
+        txn.update(coupon.ref, { usedCount: FieldValue.increment(1) });
+        txn.create(db.collection('mktCouponRedemptions').doc(`${coupon.id}_${bookingId}`), { couponId: coupon.id, bookingId, uid, discountCents, createdAt: Date.now() });
+      }
+      if (discountCents > 0) { pricingBreakdown.listTotal = listCents / 100; pricingBreakdown.discount = discountCents / 100; pricingBreakdown.total = (listCents - discountCents) / 100; pricingBreakdown.couponId = coupon.id; }
 
       /* ── 6. Atomic writes ─────────────────────────────────────────────── */
       const booking = {
@@ -603,6 +548,9 @@ exports.bookingCreate = onCall(
         unverifiedPaymentId:     verifiedPaymentId ? null : (paymentId || null),
         paymentRejectionReason:  paymentNote,
         idempotencyKey: idempotencyKey || null,
+        availability: claimedRecord,          /* the authority's item — cancel / reject / reschedule release or move it */
+        rateCardId: terms.rateCard ? terms.rateCard.id : null, rateCardVersion: terms.rateCard ? terms.rateCard.version : null,
+        pricingAuthority: terms.pricingAuthority, discountCents,
         cancellationWindowHours: venue.pricing?.cancellationWindow || 24,
         cancellationFeeRate:     venue.pricing?.cancellationFeeRate || 0,
         reminders: [
@@ -643,6 +591,9 @@ exports.bookingCreate = onCall(
 
     /* Resolve outcomes */
     if (isReplay)   return { bookingId: replayData.bookingId, idempotent: true };
+    if (isConflict && avCode) throw AV.refusalError(avCode);
+    if (isConflict && priceConflict != null) throw new HttpsError('aborted', 'Price changed. Please review the new total.', { code: 'PRICE_CHANGED', totalCents: priceConflict });
+    if (isConflict && couponReason) throw new HttpsError('failed-precondition', couponReason, { code: 'COUPON' });
     if (isConflict) throw new HttpsError(
       conflictCode,
       conflictCode === 'resource-exhausted'  ? 'Venue is fully booked for this time'
@@ -708,6 +659,13 @@ exports.bookingCancel = onCall(
     if (['cancelled','completed'].includes(booking.status)) {
       throw new HttpsError('failed-precondition',`Booking is already ${booking.status}`);
     }
+    /* 2026-09-27: a PAID booking is not cancelled here — that set status 'cancelled' (reopening the
+       slot) while the buyer's money stayed held, with no refund. It goes through the refund authority
+       (venue-payments.requestRefund → financial-os); the booking becomes cancelled — and the time
+       opens — only when that refund is executed. */
+    if (booking.paymentStatus === 'paid') {
+      throw new HttpsError('failed-precondition', isCustomer ? 'This booking is paid — request a refund instead.' : 'This booking is paid — cancel it through a refund to the buyer.', { code: 'USE_REFUND' });
+    }
 
     /* Calculate cancellation fee */
     const hoursLeft = (booking.startTs - Date.now()) / 3600000;
@@ -715,14 +673,14 @@ exports.bookingCancel = onCall(
     const feeRate   = booking.cancellationFeeRate || 0;
     const fee       = hoursLeft < window ? (booking.pricingBreakdown?.total || 0) * feeRate : 0;
 
-    await bookingRef.update({
+    await _venueTerminal(bookingRef, {
       status:          'cancelled',
       cancelledAt:     Date.now(),
       cancelledBy:     uid,
       cancellationReason: _sanitize(reason || ''),
       cancellationFee: fee,
       updatedAt:       Date.now(),
-    });
+    }, (cur) => { if (['cancelled','completed'].includes(cur.status) || cur.paymentStatus === 'paid') throw new HttpsError('failed-precondition', 'This booking changed. Refresh and try again.'); });
 
     /* Notify */
     const notifyUid = isCustomer ? booking.ownerId : booking.customerId;
@@ -734,16 +692,6 @@ exports.bookingCancel = onCall(
         data:  { bookingId }, priority: 'high', category: 'bookings', read: false, createdAt: Date.now(),
       });
     }
-
-    /* Phase 2 (booking Phase 2): release the slot lock so the freed slot is
-       bookable again. bookingCreate's slot-lock CAS otherwise keeps a cancelled
-       slot permanently unbookable — a latent bug, and a blocker for the waitlist.
-       Then offer the slot to the next waitlisted customer (no-op if the venue has
-       no waitlist / the queue is empty). Both best-effort — must not fail cancel. */
-    try {
-      await db.collection('venues').doc(booking.venueId).collection('slotLocks')
-        .doc(`${booking.date}_${booking.startTs}_${booking.endTs}`).delete();
-    } catch (e) { console.warn('[booking] slotLock release on cancel:', e.message); }
     try {
       await require('./booking-waitlist').offerNextWaitlist(booking.venueId, {
         date: booking.date, startTs: booking.startTs, endTs: booking.endTs,
@@ -780,19 +728,37 @@ exports.bookingReschedule = onCall(
       throw new HttpsError('failed-precondition','Booking cannot be rescheduled');
     }
 
-    const dayStart   = new Date(newDate+'T00:00:00').getTime();
+    /* 2026-09-27: was check-then-write outside any transaction, and it never moved the slot lock —
+       the old time stayed locked and the new one was unprotected. Now the availability authority moves
+       the reservation atomically: the new time is claimed and the old one opens in ONE commit. */
+    const dayStart   = new Date(newDate+'T00:00:00+03:00').getTime();
     const newStartTs = dayStart + _timeToMins(newStartTime) * 60000;
     const newEndTs   = dayStart + _timeToMins(newEndTime)   * 60000;
-
-    /* Check availability at new time (excluding this booking) */
-    const overlap = await _hasOverlap(booking.venueId, newStartTs, newEndTs, bookingId);
-    if (overlap) throw new HttpsError('already-exists','New time slot is not available');
-
-    await bookingRef.update({
-      date: newDate, startTime: newStartTime, endTime: newEndTime,
-      startTs: newStartTs, endTs: newEndTs,
-      duration: _timeToMins(newEndTime) - _timeToMins(newStartTime),
-      updatedAt: Date.now(),
+    if (!(newEndTs > newStartTs)) throw new HttpsError('invalid-argument', 'The end must be after the start.');
+    const AV = require('./ent-availability');
+    const fromRec = AV.planFromRecord(booking.availability);
+    const itemId = fromRec ? fromRec.itemId : 'vb_' + bookingId;
+    const toPlan = await AV.planReservation({ venueId: booking.venueId, service: null, startMs: newStartTs, endMs: newEndTs, itemId, ref: 'bookings/' + bookingId,
+      excludeId: itemId, skipBookable: booking.ownerId === uid });
+    const oldLock = db.collection('venues').doc(booking.venueId).collection('slotLocks').doc(`${booking.date}_${booking.startTs}_${booking.endTs}`);
+    const newKey = _rc.slotKey(newDate, newStartTs, newEndTs);
+    const newLock = db.collection('venues').doc(booking.venueId).collection('slotLocks').doc(newKey);
+    await db.runTransaction(async (txn) => {
+      const cur = await txn.get(bookingRef);
+      if (!cur.exists || !['pending','confirmed'].includes(cur.data().status)) throw new HttpsError('failed-precondition', 'This booking can no longer be rescheduled.');
+      const nl = await txn.get(newLock);
+      const st = await AV.readPlan(txn, fromRec, toPlan);
+      if (nl.exists && nl.data().bookingId !== bookingId) throw new HttpsError('already-exists', 'That time was just booked. Please choose another time.');
+      const moved = fromRec ? AV.move(txn, fromRec, toPlan, st) : AV.claim(txn, toPlan, st, { kind: cur.data().paymentStatus === 'paid' ? 'B' : 'H' });
+      if (!moved.ok) throw AV.refusalError(moved.code);
+      if (oldLock.path !== newLock.path) txn.delete(oldLock);
+      txn.set(newLock, { bookingId, uid: cur.data().customerId, venueId: booking.venueId, date: newDate, startTime: newStartTime, endTime: newEndTime, createdAt: Date.now() });
+      txn.update(bookingRef, {
+        date: newDate, startTime: newStartTime, endTime: newEndTime,
+        startTs: newStartTs, endTs: newEndTs, availability: moved.record,
+        duration: _timeToMins(newEndTime) - _timeToMins(newStartTime),
+        rescheduledBy: uid, updatedAt: Date.now(),
+      });
     });
 
     return { rescheduled: true, newDate, newStartTime, newEndTime };
@@ -895,14 +861,18 @@ exports.bookingGetCalendar = onCall(
       .orderBy('startTs', 'asc')
       .get();
 
-    const blockSnap = await db.collection('venueBlockouts')
-      .where('venueId', '==', venueId)
-      .get();
-
+    /* Blocks live in the availability authority (the owner's private labels included — it is theirs). */
+    const AV = require('./ent-availability');
+    const CORE = require('./shared/ent-availability-core');
+    const months = new Set();
+    for (let t = Number(from); t <= Number(until) && months.size < 25; t += 20 * 86400000) months.add(CORE.monthOf(CORE.dateOf(t)));
+    months.add(CORE.monthOf(CORE.dateOf(Number(until))));
+    const blockouts = [];
+    for (const m of months) {
+      const ms = await AV.monthRef('ven_' + venueId, m).get();
+      if (ms.exists) for (const it of ms.data().items || []) if ((it.k === 'X' || it.k === 'C') && it.s < until && it.e > from && !blockouts.some((b) => b.id === it.id)) blockouts.push({ id: it.id, startTs: it.s, endTs: it.e, reason: it.k === 'C' ? 'cooldown' : 'blocked', note: it.label || '' });
+    }
     const bookings  = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const blockouts = blockSnap.docs
-      .filter(d => { const b=d.data(); return b.startTs<until && b.endTs>from; })
-      .map(d => ({ id: d.id, ...d.data() }));
 
     return { bookings, blockouts, venue: { name: venue.name, openingHours: venue.openingHours } };
   }
@@ -922,14 +892,17 @@ exports.bookingBlockSlots = onCall(
     if (!venueSnap.exists) throw new HttpsError('not-found','Venue not found');
     if (venueSnap.data().ownerId !== uid) throw new HttpsError('permission-denied','Not the venue owner');
 
-    const docRef = await db.collection('venueBlockouts').add({
-      venueId, startTs, endTs,
-      reason:    _sanitize(reason || 'maintenance'),
-      note:      _sanitize(note   || ''),
-      createdBy: uid,
-      createdAt: Date.now(),
-    });
-    return { blockoutId: docRef.id };
+    /* The block is an item in the ONE availability authority — every view and every reservation sees
+       it; the public sees only UNAVAILABLE (the reason / note stay private to the owner). */
+    const AV = require('./ent-availability');
+    const cal = await AV.loadCalendar({ venueId });
+    const blockId = 'blk_' + require('crypto').randomBytes(8).toString('hex');
+    const plan = await AV.planReservation({ cal, service: null, startMs: Number(startTs), endMs: Number(endTs), itemId: blockId, skipBookable: true });
+    let res;
+    await db.runTransaction(async (txn) => { const st = await AV.readPlan(txn, plan); res = AV.claim(txn, plan, st, { kind: 'X', label: _sanitize([reason || 'maintenance', note || ''].filter(Boolean).join(' — ')).slice(0, 120) }); });
+    if (!res.ok) throw new HttpsError('failed-precondition', res.message, { code: res.code });
+    await db.collection('entAvailabilityAudit').add({ calKey: cal.calKey, actor: uid, role: 'owner', action: 'block', itemId: blockId, start: Number(startTs), end: Number(endTs), at: Date.now() });
+    return { blockoutId: blockId };
   }
 );
 
@@ -957,7 +930,8 @@ exports.bookingSaveVenue = onCall(
       capacity:     data.capacity    || {},
       pricing:      data.pricing     || {},
       config:       data.config      || {},
-      status:       data.status || 'active',
+      /* status is an AdminOS decision (approve / suspend). A new venue starts pending; an edit never
+         changes it (was: data.status || 'active' — an owner could self-publish or un-suspend). */
       ownerId:      uid,
       updatedAt:    Date.now(),
     };
@@ -973,6 +947,7 @@ exports.bookingSaveVenue = onCall(
       return { venueId: id, created: false };
     } else {
       venueData.createdAt    = Date.now();
+      venueData.status       = 'pending';
       venueData.totalBookings = 0;
       venueData.rating       = 0;
       venueData.reviewCount  = 0;
@@ -1014,7 +989,9 @@ exports.bookingReject = onCall(
     if (!snap.exists) throw new HttpsError('not-found','Booking not found');
     const booking = snap.data();
     if (booking.ownerId !== uid) throw new HttpsError('permission-denied','Not the venue owner');
-    await db.collection('bookings').doc(bookingId).update({ status:'cancelled', rejectedAt: Date.now(), rejectionReason: _sanitize(reason||''), updatedAt: Date.now() });
+    if (booking.paymentStatus === 'paid') throw new HttpsError('failed-precondition', 'This booking is paid — decline it through a refund to the buyer.', { code: 'USE_REFUND' });
+    await _venueTerminal(db.collection('bookings').doc(bookingId), { status:'cancelled', rejectedAt: Date.now(), rejectionReason: _sanitize(reason||''), updatedAt: Date.now() },
+      (cur) => { if (['cancelled','completed','no_show'].includes(cur.status)) throw new HttpsError('failed-precondition', `Booking is already ${cur.status}`); });
     await db.collection('notifications').add({
       userId: booking.customerId, type: 'booking_rejected',
       title: `Booking declined — ${booking.venueName}`,
@@ -1024,10 +1001,6 @@ exports.bookingReject = onCall(
     /* A rejected booking frees the slot exactly like a cancellation — release the
        lock (else it stays permanently unbookable), offer the waitlist, and release
        the per-customer cap slot. All best-effort. */
-    try {
-      await db.collection('venues').doc(booking.venueId).collection('slotLocks')
-        .doc(`${booking.date}_${booking.startTs}_${booking.endTs}`).delete();
-    } catch (e) { console.warn('[booking] slotLock release on reject:', e.message); }
     try {
       await require('./booking-waitlist').offerNextWaitlist(booking.venueId, {
         date: booking.date, startTs: booking.startTs, endTs: booking.endTs,
@@ -1158,6 +1131,9 @@ exports.bookingSendReminders = functions.scheduler.onSchedule(
       if (changed) batch.update(doc.ref, { reminders, updatedAt: now });
     }
     await batch.commit();
+    /* Entertainment bookings: the UPCOMING REMINDER system event in the booking's conversation. */
+    try { await require('./entertainment-bookings').sendReminders(now); }
+    catch (e) { console.warn('[booking] ent booking reminders:', e.message); }
     return null;
   }
 );
@@ -1183,6 +1159,9 @@ exports.bookingCleanupHolds = functions.scheduler.onSchedule(
        expire unpaid service bookings: release the slot lock, cancel, invalidate the intent. */
     try { await require('./booking-payment-sweep').expireUnpaidServiceBookings(db); }
     catch (e) { console.warn('[booking] service-booking payment expiry:', e.message); }
+    /* Entertainment enquiries past their reply window → EXPIRED (no new Cloud Run service). */
+    try { await require('./ent-enquiries').sweepExpired(200); }
+    catch (e) { console.warn('[booking] enquiry expiry:', e.message); }
     return null;
   }
 );

@@ -72,6 +72,10 @@ async function holdServiceBookingPayment(db, adminSdk, apiRef, intentRef, amount
       if (!bSnap.exists) return { outcome: 'no-booking' };
       const b = bSnap.data();
       if (['paid_held', 'settled', 'refunded'].includes(b.paymentStatus)) return { outcome: 'noop' };  /* replay-safe no-op */
+      /* The availability item (read now — every read precedes every write). */
+      const AV = require('./ent-availability');
+      const avRec = AV.planFromRecord(b.availability);
+      const avSt = avRec ? await AV.readPlan(txn, avRec) : null;
 
       /* Race fix: payment arrived AFTER the booking became terminal (e.g. TTL expiry cancelled
          it). Do NOT revive it — the slot is gone and no settlement will run. A system/expiry
@@ -108,6 +112,8 @@ async function holdServiceBookingPayment(db, adminSdk, apiRef, intentRef, amount
         expiresAt:     FV.delete(),
         updatedAt:     FV.serverTimestamp(),
       });
+      /* The payment is authoritatively confirmed: the hold becomes a BOOKING (public: BOOKED). */
+      if (avRec) AV.setKind(txn, avRec, avSt, 'B');
       const ev = bookingEvent({
         bookingId, type: TYPES.PAYMENT_CONFIRMED, actor: 'intasend-webhook',
         providerId: b.providerId, customerUid: b.customerUid,
@@ -175,13 +181,23 @@ async function expireUnpaidServiceBookings(db) {
   if (!snap || snap.empty) return 0;
 
   let expired = 0;
+  const AV = require('./ent-availability');
   for (const doc of snap.docs) {
     if (!isExpired(doc.data(), now)) continue;
+    /* A payment still in flight (STK sent, no terminal answer) keeps the slot protected: the
+       webhook's terminal answer releases it, never this timer. */
+    if (await AV.paymentInFlight(doc.id)) {
+      await doc.ref.set({ paymentAmbiguousSince: doc.data().paymentAmbiguousSince || now }, { merge: true }).catch(() => {});
+      continue;
+    }
     try {
       const ok = await db.runTransaction(async (t) => {
         const s = await t.get(doc.ref);
         if (!s.exists || !isExpired(s.data(), Date.now())) return false;   /* raced → skip */
         const cur = s.data();
+        const avRec = AV.planFromRecord(cur.availability);
+        const avSt = avRec ? await AV.readPlan(t, avRec) : null;
+        if (avRec) AV.release(t, avRec, avSt);
         t.update(doc.ref, {
           status: 'cancelled', cancelReason: 'payment-expired', cancelledBy: 'system',
           cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -226,11 +242,17 @@ async function releaseServiceHold(db, adminSdk, opts) {
   const { reason = 'released', by = 'system', ownerUid = null } = opts || {};
   if (!bookingId) return { released: false, reason: 'no-booking' };
   const bRef = db.collection('providerBookings').doc(bookingId);
+  const AV = require('./ent-availability');
+  /* Only the webhook's TERMINAL answer may release a hold whose payment is still in flight — a
+     customer closing the sheet or a timer must not reopen a slot that may have been paid. */
+  if (by !== 'intasend-webhook' && await AV.paymentInFlight(bookingId)) return { released: false, reason: 'payment-in-flight' };
 
   const res = await db.runTransaction(async (txn) => {
     const s = await txn.get(bRef);
     if (!s.exists) return { released: false, reason: 'not-found' };
     const b = s.data();
+    const avRec = AV.planFromRecord(b.availability);
+    const avSt = avRec ? await AV.readPlan(txn, avRec) : null;
     if (ownerUid && b.customerUid !== ownerUid) return { released: false, reason: 'not-owner' };
     if ((b.paymentStatus || 'pending') !== 'pending') return { released: false, reason: 'already-paid' };
     if (TERMINAL_STATUSES.includes(b.status)) return { released: false, reason: 'already-released' };
@@ -240,6 +262,7 @@ async function releaseServiceHold(db, adminSdk, opts) {
     });
     const lock = _slotLockRef(db, b.providerId, b);
     if (lock) txn.delete(lock);
+    if (avRec) AV.release(txn, avRec, avSt);
     const ev = bookingEvent({
       bookingId, type: TYPES.RELEASED, actor: by,
       providerId: b.providerId, customerUid: b.customerUid,

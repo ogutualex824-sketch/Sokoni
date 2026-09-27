@@ -32,7 +32,11 @@ const adminOs = (() => {
   const entInt = require('./entertainment-integrations');
   /* Entertainment booking identity: search + full trace (admin), conversation read (super admin, audited). */
   const entBk = require('./entertainment-bookings');
-  return Object.assign({}, base, { _h: Object.assign({}, base._h, trace._h, creator._adminH, events._adminH, ent._adminH, eventInv._adminH, entInt._adminH, entBk._adminH) });
+  /* Entertainment › Availability · Rate Cards · Communications (2026-09-27) */
+  const entAv = require('./ent-availability');
+  const entRc = require('./ent-rate-cards');
+  const entEq = require('./ent-enquiries');
+  return Object.assign({}, base, { _h: Object.assign({}, base._h, trace._h, creator._adminH, events._adminH, ent._adminH, eventInv._adminH, entInt._adminH, entBk._adminH, entAv._adminH, entRc._adminH, entEq._adminH) });
 })();
 
 const _OPTS = {

@@ -60,7 +60,9 @@ async function _prepareSlot(db, { providerId, date, startTime, durationMins }) {
     cfgRef.get(),
     cfgRef.collection('overrides').doc(date).get(),
   ]);
-  const cfg  = cfgSnap.data() || {};
+  /* Same pure default the availability authority applies to an approved provider that has not set
+     hours yet (availability.withDefaults) — the view and this gate must agree. */
+  const cfg  = require('./availability').withDefaults(cfgSnap.data() || {});
   const appt = cfg.appt || {};
   const bufMs = rc.minsToMs(appt.bufferMins);
 
@@ -105,6 +107,11 @@ _h.bookingCreateService = async (req) => {
   const date       = _san(d.date, 10);      /* YYYY-MM-DD */
   const startTime  = _san(d.startTime, 5);  /* HH:MM */
   const idempotencyKey = _san(d.idempotencyKey, 128) || null;
+  /* Commercial inputs are IDS and a CODE — never an amount (ent-rate-cards.js decides). */
+  const rateCardId = d.rateCardId ? _san(d.rateCardId, 128) : null;
+  const quoteId    = d.quoteId ? _san(d.quoteId, 128) : null;
+  const couponCode = d.couponCode ? _san(d.couponCode, 32) : null;
+  const expectedTotalCents = d.expectedTotalCents != null && Number.isFinite(Number(d.expectedTotalCents)) ? Math.round(Number(d.expectedTotalCents)) : null;
   if (!providerId || !serviceId || !date || !startTime) {
     throw new HttpsError('invalid-argument', 'providerId, serviceId, date, startTime required.');
   }
@@ -122,6 +129,12 @@ _h.bookingCreateService = async (req) => {
   if (!prov || !ACTIVE_PROVIDER_STATES.includes(prov.status) || prov.acceptsBookings === false) {
     throw new HttpsError('failed-precondition', 'This provider isn’t currently available for bookings.');
   }
+  /* The ONE availability authority (functions/ent-availability.js) decides bookability too: an
+     Entertainment provider whose category requires verification needs a decided application;
+     a suspended provider takes no public bookings. */
+  const AV = require('./ent-availability');
+  const cal = await AV.loadCalendar({ providerId });
+  if (!cal.bookable.ok) throw new HttpsError('failed-precondition', 'This provider isn’t currently available for bookings.', { code: 'NOT_BOOKABLE' });
 
   /* ── Server-authoritative service lookup: price + duration come from the rate
      card, NEVER the client (the client cannot manipulate the amount). ── */
@@ -129,7 +142,7 @@ _h.bookingCreateService = async (req) => {
   if (!svcSnap.exists) throw new HttpsError('not-found', 'Service not found.');
   const svc = svcSnap.data();
   if (svc.providerId !== providerId) throw new HttpsError('failed-precondition', 'Service does not belong to this provider.');
-  if (svc.active === false) throw new HttpsError('failed-precondition', 'This service is not available.');
+  if (svc.active === false || svc.removedAt) throw new HttpsError('failed-precondition', 'This service is not available.');
   const serviceName = _san(svc.name, 200);
   const fee         = Math.max(0, Math.round(Number(svc.fee) || 0));     /* cents — declared per-service fee (D3) */
 
@@ -168,6 +181,24 @@ _h.bookingCreateService = async (req) => {
     deposit      = Math.max(0, Math.round(Number(svc.deposit) || 0));
   }
 
+  /* Rate card / custom quote (ent-rate-cards.js): a versioned price or an accepted quote replaces the
+     base price, and the booking records which version priced it — never re-priced later. */
+  const RCARDS = require('./ent-rate-cards');
+  const terms = await RCARDS.resolveTerms({ calKey: cal.calKey, ownerUid: providerId, serviceId, buyerUid: customerUid, rateCardId, quoteId,
+    base: { priceCents: price, durationMins, authority: 'rate-card@' + PRICING_VERSION } });
+  if (terms.rateCard || terms.quote) {
+    price = Math.max(0, Math.round(Number(terms.priceCents) || 0));
+    if (terms.durationMins) durationMins = Math.max(15, Number(terms.durationMins));
+    deposit = terms.depositCents != null ? Math.min(price, terms.depositCents) : Math.min(price, deposit);
+    pricingSnapshot = { pricingVersion: terms.pricingAuthority, currency: 'KES', totalCents: price, depositCents: deposit,
+      rateCardId: terms.rateCard ? terms.rateCard.id : null, rateCardVersion: terms.rateCard ? terms.rateCard.version : null, quoteId: terms.quote ? terms.quote.id : null };
+    if (terms.quote && terms.quote.date && (terms.quote.date !== date || (terms.quote.startTime && terms.quote.startTime !== startTime))) {
+      throw new HttpsError('failed-precondition', 'This quote is for ' + terms.quote.date + (terms.quote.startTime ? ' at ' + terms.quote.startTime : '') + '.');
+    }
+  }
+  const coupon = couponCode ? await RCARDS.findCoupon(providerId, couponCode) : null;
+  if (couponCode && !coupon) throw new HttpsError('not-found', 'That discount code is not valid here.');
+
   /* Validate the slot through the shared availability gate (same path reschedule uses). */
   const slot = await _prepareSlot(db, { providerId, date, startTime, durationMins });
   const { endTime, startTs, endTs, slotKey, cfg, appt, bufMs, cfgRef } = slot;
@@ -177,6 +208,11 @@ _h.bookingCreateService = async (req) => {
   const customerName = _san((userSnap.data() || {}).name || (userSnap.data() || {}).displayName || '', 200);
 
   const bookingId   = `${providerId}_${slotKey}`;   /* deterministic → natural lock + idempotency */
+  /* Occupancy through the ONE availability authority: claimed INSIDE the transaction below, so
+     any overlapping window (not only the identical one the slot lock covers) is refused. */
+  const svcForPlan = Object.assign({ id: serviceId }, svc, { availability: Object.assign({}, svc.availability || {}, terms.availability || {}, { durationMins }) });
+  const plan = await AV.planReservation({ cal, service: svcForPlan, startMs: startTs, endMs: endTs, itemId: 'pb_' + bookingId, ref: 'providerBookings/' + bookingId });
+  const quoteRef = terms.quote ? db.collection('entQuotes').doc(terms.quote.id) : null;
   const slotLockRef = cfgRef.collection('slotLocks').doc(slotKey);
   const bookingRef  = db.collection('providerBookings').doc(bookingId);
   const idemRef     = idempotencyKey ? db.collection('_serviceBookingIdem').doc(idempotencyKey) : null;
@@ -214,12 +250,17 @@ _h.bookingCreateService = async (req) => {
     outcome = null;
     if (idemRef) { const i = await txn.get(idemRef); if (i.exists) { outcome = { bookingId: i.data().bookingId, idempotent: true }; return; } }
     const lock = await txn.get(slotLockRef);
+    const held = await txn.get(bookingRef);
+    const cSnap = coupon ? await txn.get(coupon.ref) : null;
+    const qSnap = quoteRef ? await txn.get(quoteRef) : null;
+    const qPrevRef = qSnap && qSnap.exists && qSnap.data().activeBookingId && qSnap.data().activeBookingId !== bookingId ? db.collection('providerBookings').doc(qSnap.data().activeBookingId) : null;
+    const qPrev = qPrevRef ? await txn.get(qPrevRef) : null;
+    const avState = await AV.readPlan(txn, plan);
     if (lock.exists) {
       /* The slot is held. If it is THIS customer's own still-unpaid hold, let them
          RESUME payment (refresh the 5-min window) instead of seeing "just taken" — the
          common case of returning to a payment sheet they closed. Deterministic booking id
          means the lock points at `bookingRef`. Anyone else's hold = a real conflict. */
-      const held = await txn.get(bookingRef);
       let heldBy = 'unknown';
       if (held.exists) {
         const hb = held.data();
@@ -253,6 +294,26 @@ _h.bookingCreateService = async (req) => {
     const maxConcurrent = Math.max(1, Number(cfg.cap && cfg.cap.maxSimultaneous || 1));
     const overlapCount = existing.filter(b => rc.pairOverlaps(startTs, endTs, b.startTs, b.endTs, bufMs, bufMs)).length;
     if (overlapCount >= maxConcurrent) { outcome = { conflict: 'already-exists' }; return; }
+    /* Quote still usable (not withdrawn, not already booked by a live booking). */
+    if (quoteRef) {
+      const q = qSnap && qSnap.exists ? qSnap.data() : null;
+      if (!q || q.status !== 'ACCEPTED') { outcome = { conflict: 'quote' }; return; }
+      if (qPrev && qPrev.exists && !['cancelled', 'declined', 'no_show'].includes(qPrev.data().status)) { outcome = { conflict: 'quote' }; return; }
+    }
+    /* Discount (Marketing authority) — decided and counted inside the transaction. */
+    let discountCents = 0;
+    if (coupon) {
+      const cd = RCARDS.couponDiscount(cSnap && cSnap.exists ? cSnap.data() : null, { priceCents: price, serviceId, nowMs: Date.now() });
+      if (!cd.ok) { outcome = { conflict: 'coupon', reason: cd.reason }; return; }
+      discountCents = cd.discountCents;
+    }
+    const finalPrice = price - discountCents;
+    const finalDeposit = Math.min(finalPrice, deposit);
+    /* The buyer confirmed a total; if the authoritative total moved, nothing is reserved or charged. */
+    if (expectedTotalCents != null && expectedTotalCents !== finalPrice + fee) { outcome = { conflict: 'price', totalCents: finalPrice + fee }; return; }
+    /* Atomic reservation through the availability authority. */
+    const claimed = AV.claim(txn, plan, avState, { kind: (finalPrice + fee) > 0 ? 'H' : 'B', until: holdExpiresMs });
+    if (!claimed.ok) { outcome = { conflict: 'avail', code: claimed.code }; return; }
 
     /* Provider approves by default (status:pending); auto-confirm only if configured.
        Commission/settlement fields are DELIBERATELY absent — set at completion. */
@@ -262,10 +323,15 @@ _h.bookingCreateService = async (req) => {
       serviceId, service: serviceName,
       date, startTime, endTime, startTs, endTs, durationMins, slotKey,
       scheduledAt: admin.firestore.Timestamp.fromMillis(startTs),
-      price, fee, deposit, currency: 'KES',   /* all cents; server-authoritative. `price` is THE total —
+      price: finalPrice, fee, deposit: finalDeposit, currency: 'KES',   /* all cents; server-authoritative. `price` is THE total —
                                                  payment/held/settlement/commission/refund consume it (or the
                                                  snapshot) and NEVER recompute. */
       ...(pricingSnapshot ? { pricingSnapshot } : {}),   /* immutable price breakdown → rate-card edits can't change this booking */
+      listPriceCents: price, discountCents, couponId: coupon ? coupon.id : null,
+      rateCardId: terms.rateCard ? terms.rateCard.id : null, rateCardVersion: terms.rateCard ? terms.rateCard.version : null,
+      quoteId: terms.quote ? terms.quote.id : null, enquiryId: (qSnap && qSnap.exists && qSnap.data().enquiryId) || null,
+      pricingAuthority: terms.pricingAuthority,
+      availability: claimed.record,                 /* the authority's item — every later transition releases / moves it */
       paymentStatus: 'pending',
       status,                        /* server-authoritative */
       expiresAt: admin.firestore.Timestamp.fromMillis(holdExpiresMs),   /* pre-payment hold window; cleared on paid_held */
@@ -285,13 +351,18 @@ _h.bookingCreateService = async (req) => {
     });
     txn.set(slotLockRef, { bookingId, providerId, customerUid, date, startTime, endTime, startTs, endTs, createdAt: _ts(), expiresAt: admin.firestore.Timestamp.fromMillis(holdExpiresMs) });
     if (idemRef) txn.set(idemRef, { bookingId, providerId, customerUid, createdAt: _ts() });
+    if (coupon) {
+      txn.update(coupon.ref, { usedCount: admin.firestore.FieldValue.increment(1) });
+      txn.create(db.collection('mktCouponRedemptions').doc(`${coupon.id}_${bookingId}`), { couponId: coupon.id, bookingId, uid: customerUid, discountCents, createdAt: _ts() });
+    }
+    if (quoteRef) txn.update(quoteRef, { activeBookingId: bookingId, updatedAt: _ts() });
     const hev = bookingEvent({
       bookingId, type: TYPES.HELD, actor: 'customer', providerId, customerUid,
-      previousStatus: null, newStatus: status, data: { expiresAt: holdExpiresMs, priceCents: price, serviceId },
+      previousStatus: null, newStatus: status, data: { expiresAt: holdExpiresMs, priceCents: finalPrice, serviceId },
       key: 'held',
     });
     txn.set(hev.ref, hev.payload);
-    outcome = { bookingId, status, expiresAt: holdExpiresMs };
+    outcome = { bookingId, status, expiresAt: holdExpiresMs, totalCents: finalPrice + fee };
   });
 
   if (outcome && outcome.idempotent) return { success: true, bookingId: outcome.bookingId, idempotent: true };
@@ -306,6 +377,10 @@ _h.bookingCreateService = async (req) => {
         : 'That time overlaps another booking. Please choose another slot.';   /* overlap/unknown */
     throw new HttpsError('already-exists', msg);
   }
+  if (outcome && outcome.conflict === 'avail') throw AV.refusalError(outcome.code);
+  if (outcome && outcome.conflict === 'price') throw new HttpsError('aborted', 'Price changed. Please review the new total.', { code: 'PRICE_CHANGED', totalCents: outcome.totalCents });
+  if (outcome && outcome.conflict === 'coupon') throw new HttpsError('failed-precondition', outcome.reason || 'That discount code cannot be used.', { code: 'COUPON' });
+  if (outcome && outcome.conflict === 'quote') throw new HttpsError('failed-precondition', 'This quote can no longer be booked.', { code: 'QUOTE' });
   if (outcome && outcome.conflict) throw new HttpsError(
     outcome.conflict,
     outcome.conflict === 'resource-exhausted' ? 'The provider is fully booked for that time.'
@@ -325,7 +400,7 @@ _h.bookingCreateService = async (req) => {
     });
   } catch (e) { /* ignore */ }
 
-  return { success: true, bookingId: outcome.bookingId, status: outcome.status, price, expiresAt: outcome.expiresAt };
+  return { success: true, bookingId: outcome.bookingId, status: outcome.status, price: outcome.totalCents - fee, totalCents: outcome.totalCents, expiresAt: outcome.expiresAt };
 };
 
 /* ── bookingReleaseHold (P3) ──────────────────────────────────────────────────

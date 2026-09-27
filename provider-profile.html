@@ -175,6 +175,8 @@
      this page did not, so booking payments could never be initiated here. -->
 <script src="sokoni-intasend.js" defer></script>
 <script src="sokoni-pay.js" defer></script>
+<script src="sokoni-ent-calendar.js" defer></script>
+<script src="sokoni-ent-storefront.js" defer></script>
 <script src="sokoni-book-service.js" defer></script>
 <script src="sokoni-inbox.js" defer></script>
 <script src="nav-active.js" defer></script>
@@ -322,6 +324,20 @@
     }
     document.body.appendChild(bar);
 
+    /* Storefront: Book now · Check availability · Ask a question · Rate card — each shown only as the
+       server allows (sokoni-ent-storefront.js over the availability / rate-card / enquiry authorities). */
+    var mountSF = function () {
+    if (!window.SokoniEntStorefront) { window.addEventListener('load', function () { if (window.SokoniEntStorefront) mountSF(); }, { once: true }); return; }
+    if (!document.getElementById('ppStorefront')) {
+      var sf = document.createElement('section');
+      sf.className = 'pp-card'; sf.id = 'ppStorefront'; sf.setAttribute('aria-label', 'Book or ask ' + first);
+      var anchor = document.getElementById('ppPricing');
+      if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(sf, anchor.nextSibling); else document.body.insertBefore(sf, bar);
+      window.SokoniEntStorefront.mount(sf, { providerId: uid, name: p.name });
+    }
+    };
+    mountSF();
+
     var bookBtn = document.getElementById('ppBook');
     if (bookBtn) bookBtn.addEventListener('click', book);
     var chatBtn = document.getElementById('ppChat');
@@ -329,6 +345,13 @@
   }
 
   function chat() {
+    /* PUBLIC ENQUIRY FIRST (2026-09-27): "Message" opens the provider's structured enquiry — the
+       server applies their messaging settings, rate limits and blocks, and opens the conversation.
+       An open-ended chat is created only by a real relationship (a booking). */
+    var sf = document.getElementById('ppStorefront');
+    var ask = sf && sf.querySelector('[data-act="ask"]');
+    if (ask) { sf.scrollIntoView({ behavior: 'smooth', block: 'start' }); ask.click(); return; }
+    if (sf) { (window._skToast || window.alert)('This provider is not taking public enquiries right now.'); return; }
     if (window.SokoniInbox && _p) {
       SokoniInbox.openChat({
         otherUid: _p.uid, otherName: _p.name,

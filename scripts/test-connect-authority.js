@@ -1410,6 +1410,8 @@ console.log('\n── C3-A: a button is not a permission ──');
     ['delivery', 'seller', 'rider'],
     ['supply', 'seller', 'supplier'],
     ['support', 'buyer', 'admin'], ['support', 'admin', 'buyer'],
+    /* 2026-09-27 owner decision: CALL from the booking conversation (Entertainment convergence). */
+    ['booking', 'buyer', 'provider'], ['booking', 'provider', 'buyer'],
   ];
   approved.forEach(([a, f, t]) => {
     ck('…' + a + ': ' + f + ' → ' + t + ' shows Call', S(a, f, t, 'active').show);
@@ -1425,7 +1427,7 @@ console.log('\n── C3-A: a button is not a permission ──');
     may('rider', 'seller', 'delivery', 'active', 'voice').allowed);
   ck('…and is deliberately NOT surfaced', !S('delivery', 'rider', 'seller', 'active').show);
   ck('a booking is authorized for voice', may('buyer', 'provider', 'booking', 'active', 'voice').allowed);
-  ck('…and carries no Call surface yet', !S('booking', 'buyer', 'provider', 'active').show);
+  ck('…and now carries its Call surface — only while the booking is live', S('booking', 'buyer', 'provider', 'active').show && !S('booking', 'buyer', 'provider', 'closed').show && !S('booking', 'buyer', 'provider', 'cancelled').show);
   ck('an enquiry carries none either', !S('inquiry', 'buyer', 'seller', 'active').show);
   ck('…which is right, because the authority refuses voice on it',
     !may('buyer', 'seller', 'inquiry', 'active', 'voice').allowed);

@@ -56,10 +56,15 @@ const CALL_SURFACES = Object.freeze({
   ]),
   supply: Object.freeze(['seller:supplier']),
   support: Object.freeze(['buyer:admin', 'admin:buyer']),
-  /* `inquiry` and `booking` carry NO call surface.
+  /* booking — ADDED 2026-09-27 (owner decision, Entertainment convergence: "MESSAGE · CALL where
+     provisioned" from the booking conversation). A product widening only: the authority has always
+     permitted voice on `booking`, so no security review changes (see the test's own note). */
+  booking: Object.freeze(['buyer:provider', 'provider:buyer']),
+  /* `inquiry` carries NO call surface.
      An enquiry is capped at chat by the authority itself, so a Call button there would be a
      button that is always refused — worse than a missing one, because it teaches people the
-     product is broken. A booking is authorized for voice but has no decided screen yet. */
+     product is broken. A PUBLIC enquiry's call starts only as a REQUEST the provider answers
+     (ent-enquiries.js); its voice leg needs a Connect relationship the authority does not have. */
 });
 
 /* Only a live relationship carries a Call button. `closed` and `cancelled` keep their history

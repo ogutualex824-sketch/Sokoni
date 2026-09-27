@@ -394,6 +394,83 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /* ── Entertainment availability authority (functions/ent-availability.js, 2026-09-27) ──────────
+       Occupancy (bookings, holds, the provider's PRIVATE blocks and their labels) is server-only:
+       no client reads another provider's schedule or writes availability — not even the owner,
+       whose changes go through audited callables. The public doc is a COUNTER a storefront listens
+       to (bounded: one calendar + one month); it carries no slot, reason, booking or buyer. */
+    match /entAvailability/{calKey} {
+      allow read:  if isAdmin();
+      allow write: if false;
+      match /months/{month} {
+        allow read:  if isAdmin();
+        allow write: if false;
+      }
+    }
+    match /entAvailabilityPublic/{id} {
+      allow read:  if true;
+      allow write: if false;
+    }
+    match /entAvailabilityAudit/{id} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+    /* Rate cards — versioned prices (functions/ent-rate-cards.js). The storefront reads them through
+       entRateCardsPublic, which applies visibility (PUBLIC / ENQUIRY_ONLY / BOOKING_ONLY / PRIVATE)
+       and eligibility; the documents themselves are the owner's and AdminOS's only. */
+    match /entRateCards/{cardId} {
+      allow read:  if isAdmin() || (isAuthed() && resource.data.ownerUid == request.auth.uid);
+      allow write: if false;
+      match /versions/{v} {
+        allow read:  if isAdmin() || (isAuthed() && get(/databases/$(database)/documents/entRateCards/$(cardId)).data.ownerUid == request.auth.uid);
+        allow write: if false;
+      }
+    }
+    match /entRateCardEligibility/{id} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+    match /entRateCardAudit/{id} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+    match /entQuotes/{quoteId} {
+      allow read:  if isAdmin() || (isAuthed() && (resource.data.ownerUid == request.auth.uid || resource.data.buyerUid == request.auth.uid));
+      allow write: if false;
+    }
+    match /mktCouponRedemptions/{id} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+    /* Messaging controls, public enquiries, call requests (functions/ent-enquiries.js). Every state
+       move is the server's; a client reads only what it is party to. */
+    match /entMessagingSettings/{uid} {
+      allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
+      allow write: if false;
+    }
+    match /entEnquiries/{id} {
+      allow read:  if isAdmin() || (isAuthed() && (resource.data.providerUid == request.auth.uid || resource.data.buyerUid == request.auth.uid));
+      allow write: if false;
+    }
+    match /entEnquiryLimits/{id} {
+      allow read, write: if false;
+    }
+    match /entEnquiryDedup/{id} {
+      allow read, write: if false;
+    }
+    match /entBlocks/{id} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+    match /entCallRequests/{id} {
+      allow read:  if isAdmin() || (isAuthed() && (resource.data.requesterUid == request.auth.uid || resource.data.recipientUid == request.auth.uid));
+      allow write: if false;
+    }
+    match /entCommsAudit/{id} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
     /* Administrator invitations. Written EXCLUSIVELY by the inviteUser /
        resendInvitation / reconcileInvitations Cloud Functions via the Admin SDK,
        which bypasses these rules — so every client-side write is denied outright.
@@ -503,7 +580,11 @@ service cloud.firestore {
                     && !request.resource.data.keys().hasAny([
                          'price','pricingBreakdown','paymentStatus','paymentId',
                          'verifiedPaymentId','commission','commissionRate','net',
-                         'amountPaid','settlement','settled']);
+                         'amountPaid','settlement','settled',
+                         /* 2026-09-27: a venue booking (a reservation of a venue's time) is made only by
+                            bookingCreate through the availability authority — a client-written one could
+                            block a venue's slots or open a booking conversation with its owner. */
+                         'venueId','ownerId','startTs','endTs','availability','slotKey']);
       allow read:   if isAdmin()
                     || (isAuthed() && resource.data.uid          == request.auth.uid)
                     || (isAuthed() && resource.data.buyerId      == request.auth.uid)
@@ -518,6 +599,7 @@ service cloud.firestore {
          now only: the customer cancels their own booking; the owner / provider edits their note. */
       allow update: if isAdmin()
                     || (isAuthed() && resource.data.customerId == request.auth.uid
+                        && !('venueId' in resource.data)          /* a venue booking cancels through bookingCancel / a refund */
                         && request.resource.data.status == 'cancelled'
                         && request.resource.data.diff(resource.data).affectedKeys()
                              .hasOnly(['status','cancelReason','cancellationReason','cancelledAt','cancelledBy','updatedAt']))
@@ -550,11 +632,11 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     match /venueBlockouts/{blockId} {
-      allow read:   if isAuthed();
-      /* Creator must own the venue they are blocking out */
-      allow create: if isAuthed()
-                    && request.resource.data.createdBy == request.auth.uid
-                    && get(/databases/$(database)/documents/venues/$(request.resource.data.venueId)).data.ownerId == request.auth.uid;
+      /* 2026-09-27: legacy store. Blocks now live in the availability authority (bookingBlockSlots).
+         Any signed-in user could read every venue's block reasons and notes; now the owner / admin only,
+         and no new client-written block (it would not be seen by the authority anyway). */
+      allow read:   if isAdmin() || (isAuthed() && resource.data.createdBy == request.auth.uid);
+      allow create: if false;
       allow update: if isAdmin()
                     || (isAuthed() && resource.data.createdBy == request.auth.uid);
       allow delete: if isAdmin()
@@ -562,7 +644,9 @@ service cloud.firestore {
     }
     match /bookingHolds/{holdId} {
       allow read:   if isAdmin() || (isAuthed() && resource.data.userId == request.auth.uid);
-      allow create: if isAuthed() && request.resource.data.userId == request.auth.uid;
+      /* 2026-09-27: a client could create a hold with ANY expiry and block any venue's time. Holds are
+         server-only (waitlist offers); a reservation is the unpaid booking itself. */
+      allow create: if false;
       allow delete: if isAuthed() && resource.data.userId == request.auth.uid || isAdmin();
     }
 
@@ -1093,7 +1177,9 @@ service cloud.firestore {
                     && request.auth.uid in request.resource.data.participants
                     && request.resource.data.participants.size() <= 2
                     && !convId.matches('^ent_booking_.*')
+                    && !convId.matches('^ent_enquiry_.*')
                     && request.resource.data.get('transactionType', '') != 'ent_booking'
+                    && request.resource.data.get('transactionType', '') != 'ent_enquiry'
                     && request.resource.data.get('serverAnchored', false) != true;
       allow delete: if isAdmin();
       match /messages/{msgId} {
@@ -3703,7 +3789,9 @@ service cloud.firestore {
 
     match /availabilityStatus/{uid} {
       allow read:  if true;
-      allow write: if isAuthed() && request.auth.uid == uid;
+      /* 2026-09-27: server-written (setProviderAvailability / setLiveStatus) — an owner could publish
+         any open/closed label directly. No client writes it. */
+      allow write: if false;
     }
 
     match /priceAlerts/{alertId} {
@@ -5354,7 +5442,9 @@ service cloud.firestore {
     }
 
     match /mktCouponCodes/{couponId} {
-      allow read:  if isAuthed();
+      /* 2026-09-27: every signed-in user could list every merchant's codes. The merchant and admins
+         only; buyers validate a code through the server (applyCouponCode / booking checkout). */
+      allow read:  if isAdmin() || (isAuthed() && resource.data.merchantId == request.auth.uid);
       allow write: if false; // CF-only — applyCouponCode
     }
 
@@ -5571,7 +5661,8 @@ service cloud.firestore {
     }
 
     match /providerCalendar/{uid} {
-      allow read:  if isAuthed();
+      /* 2026-09-27: the mirror carries customerName — the provider and admins only. */
+      allow read:  if isAdmin() || (isAuthed() && resource.data.providerId == request.auth.uid);
       allow write: if false;
     }
 

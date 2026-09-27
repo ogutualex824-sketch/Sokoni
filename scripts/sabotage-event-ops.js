@@ -40,6 +40,8 @@ const SUITES = {
   legal:    ['node', ['scripts/test-legal-compliance.js']],
   crules:   ['node', ['scripts/run-creator-rules.js']],
   bkg:      ['node', ['scripts/test-entertainment-bookings.js']],
+  avail:    ['node', ['scripts/test-ent-availability.js']],
+  comms:    ['node', ['scripts/test-ent-communications.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -75,6 +77,13 @@ const BKG = 'functions/booking.js';
 const PHB = 'functions/provider-hub.js';
 const SSP = 'functions/shared/self-settling-purposes.js';
 const FOSF = 'functions/financial-os.js';
+const AVX = 'functions/ent-availability.js';
+const AVC = 'functions/shared/ent-availability-core.js';
+const BSV = 'functions/booking-service.js';
+const BPS = 'functions/booking-payment-sweep.js';
+const AVJ = 'functions/availability.js';
+const EQJ = 'functions/ent-enquiries.js';
+const RCJ = 'functions/ent-rate-cards.js';
 
 const M = [
   /* ── ticket PIN + admission ── */
@@ -371,7 +380,7 @@ const M = [
   { group: 'ready', name: 'ratings from viewers with no access', file: ENH, suite: 'ready',
     from: "    if (!has) throw new HttpsError('permission-denied', 'Only viewers who have watched this can rate it.');", to: "", expect: /WITHOUT access/ },
   { group: 'ready', name: 'the Hub page keeps business data in localStorage again', file: HUB, suite: 'ready',
-    from: "  const LOADERS = { events: loadEvents, films: loadFilms, mine: loadBookings };", to: "  try { localStorage.setItem('sokoniBookings', '[]'); } catch (_) {}\n  const LOADERS = { events: loadEvents, films: loadFilms, mine: loadBookings };", expect: /localStorage/ },
+    from: "  const LOADERS = { events: loadEvents, films: loadFilms, mine: () => { loadBookings(); loadEnquiries(); } };", to: "  try { localStorage.setItem('sokoniBookings', '[]'); } catch (_) {}\n  const LOADERS = { events: loadEvents, films: loadFilms, mine: () => { loadBookings(); loadEnquiries(); } };", expect: /localStorage/ },
   { group: 'ready', name: 'acceptance records rewritable (merge over the original signature)', file: LEG, suite: 'legal',
     edits: [{ from: "    if (existing.has(docId)) { alreadyAccepted.push({ agreementId, version }); continue; }\n", to: '' },
             { from: "    batch.create(_db().collection('legalAcceptances').doc(docId), {", to: "    batch.set(_db().collection('legalAcceptances').doc(docId), {" }],
@@ -455,6 +464,87 @@ const M = [
     from: "  && !convId.matches('^ent_booking_.*')", to: "", expect: /booking conversation id/ },
   { group: 'conv', rules: true, name: 'the venue owner checks a booking in directly (rules)', file: RULES, suite: 'rules',
     from: "  .hasOnly(['providerNote','updatedAt']));", to: "  .hasOnly(['providerNote','updatedAt','status','checkIn']));", expect: /checked-in directly/ },
+  /* ── availability authority · booking engines · communications · rate cards (2026-09-27) ── */
+  { group: 'avail', name: 'occupancy ignored (overlapping bookings allowed)', file: AVC, suite: 'avail',
+    from: "    if (!touches(c, it)) continue;", to: "    if (true) continue;", expect: /exactly ONE|a 14:00–16:00 booking closes/ },
+  { group: 'avail', name: 'buffers ignored (a booking runs into the next one)', file: AVC, suite: 'avail',
+    from: "  return (c.s < it.e + iba && c.e > it.s - ibb) || (c.s - c.bb < it.e && c.e + c.ba > it.s);", to: "  return (c.s < it.e && c.e > it.s);", expect: /buffer closes 13:00/ },
+  { group: 'avail', name: 'the public slot carries the private reason and items', file: AVC, suite: 'avail',
+    from: "    return { start: hhmm(t), end: hhmm(t + cfg.durationMins), state: r.ok ? r.publicState : r.publicState };", to: "    return { start: hhmm(t), end: hhmm(t + cfg.durationMins), state: r.ok ? r.publicState : r.publicState, why: r.code, items };", expect: /exactly \{ start, end, state \}|nothing in the response says/ },
+  { group: 'avail', name: 'BOOKING_NOT_OPEN collapsed into UNAVAILABLE', file: AVC, suite: 'avail',
+    from: "  if (dayStartMs(date) >= horizonEndMs(cfg, nowMs)) return PUBLIC_STATE.BOOKING_NOT_OPEN;", to: "  if (dayStartMs(date) >= horizonEndMs(cfg, nowMs)) return PUBLIC_STATE.UNAVAILABLE;", expect: /BOOKING_NOT_OPEN/ },
+  { group: 'avail', name: 'claim does not evaluate the occupancy (double booking)', file: AVX, suite: 'avail',
+    from: "    if (!r.ok) return { ok: false, code: r.code, message: CORE.refusalMessage(r.code) };\n  } else {", to: "  } else {", expect: /exactly ONE/ },
+  { group: 'avail', name: 'an unverified artist takes public bookings', file: AVX, suite: 'avail',
+    from: "  else if (cp.requiresVerification && category !== 'PROVIDER' && !cls.entClass) code = 'NOT_VERIFIED';", to: "", expect: /UNVERIFIED artist/ },
+  { group: 'avail', name: 'Premium settings honoured without the plan (direct write)', file: AVX, suite: 'avail',
+    from: "  if (!advanced) {\n    cfg.capacity = 1;", to: "  if (false) {\n    cfg.capacity = 1;", expect: /DIRECTLY without the plan/ },
+  { group: 'avail', name: 'Premium settings accepted without the plan (callable)', file: AVX, suite: 'avail',
+    from: "  if (used.length && !advanced) fail(", to: "  if (false) fail(", expect: /capacity 2 \(multiple staff\) is refused|730-day horizon is refused/ },
+  { group: 'avail', name: 'another provider edits / reads this calendar', file: AVX, suite: 'avail',
+    from: "  if (cal.ownerUid !== uid) fail('permission-denied', 'This calendar is not yours.');", to: "", expect: /another provider cannot block/ },
+  { group: 'avail', name: 'an ordinary admin sees the provider\'s private labels', file: AVX, suite: 'avail',
+    from: "label: _isSuper(req) ? (it.label || null) : undefined", to: "label: it.label || null", expect: /not the provider's private labels/ },
+  { group: 'avail', name: 'release_orphan opens a LIVE booking\'s time', file: AVX, suite: 'avail',
+    from: "      if (b && !TERMINAL.includes(String(b.status || '').toLowerCase())) fail(", to: "      if (false) fail(", expect: /release_orphan refuses a LIVE/ },
+  { group: 'avail', name: 'a reschedule move skips the occupancy check', file: AVX, suite: 'avail',
+    from: "  if (!r.ok) return { ok: false, code: r.code, message: CORE.refusalMessage(r.code) };\n  for (const m of fromRec.months)", to: "  for (const m of fromRec.months)", expect: /move onto a BOOKED time is refused|OVERLAPPING booked window is refused/ },
+  { group: 'avail', name: 'closing the payment sheet reopens a slot whose STK push is unanswered', file: BPS, suite: 'avail',
+    from: "  if (by !== 'intasend-webhook' && await AV.paymentInFlight(bookingId)) return { released: false, reason: 'payment-in-flight' };", to: "", expect: /does NOT release a hold whose STK push/ },
+  { group: 'avail', name: 'the expiry timer reopens a slot whose payment may have succeeded', file: BPS, suite: 'avail',
+    from: "    if (await AV.paymentInFlight(doc.id)) {", to: "    if (false) {", expect: /expiry timer does not reopen/ },
+  { group: 'avail', name: 'a confirmed payment leaves the slot as a hold (never BOOKED)', file: BPS, suite: 'avail',
+    from: "      if (avRec) AV.setKind(txn, avRec, avSt, 'B');", to: "", expect: /turns the hold into a BOOKING/ },
+  { group: 'avail', name: 'a canonical cancel never reopens the time', file: PVO, suite: 'avail',
+    from: "    if (avRec) AV.release(t, avRec, avSt, { cooldown, cooldownMins });", to: "", expect: /AVAILABLE again/ },
+  { group: 'avail', name: 'a stale client total is charged (price race)', file: BSV, suite: 'avail',
+    from: "    if (expectedTotalCents != null && expectedTotalCents !== finalPrice + fee) { outcome = { conflict: 'price', totalCents: finalPrice + fee }; return; }\n", to: "", expect: /Price changed/ },
+  { group: 'avail', name: 'a venue owner self-publishes a new venue', file: BKG, suite: 'avail',
+    from: "      venueData.status       = 'pending';", to: "      venueData.status       = data.status || 'active';", expect: /starts pending/ },
+  { group: 'avail', name: 'a PAID venue booking is cancelled directly (no refund, slot reopened)', file: BKG, suite: 'avail',
+    from: "    if (booking.paymentStatus === 'paid') {\n      throw new HttpsError('failed-precondition', isCustomer ?", to: "    if (false) {\n      throw new HttpsError('failed-precondition', isCustomer ?", expect: /PAID venue booking cannot be cancelled/ },
+  { group: 'avail', name: 'the legacy reserveSlot (unpaid confirmed booking) is re-enabled', file: AVJ, suite: 'avail',
+    from: "  throw new HttpsError(\"failed-precondition\", \"Book through the provider's booking page.\", { code: \"RETIRED\" });", to: "  return { success: true };", expect: /reserveSlot/ },
+  { group: 'avail', name: 'enquiry rate limit removed (unlimited enquiries)', file: EQJ, suite: 'comms',
+    from: "    if (bCount >= LIMITS.perBuyerPerDay) fail(", to: "    if (false) fail(", expect: /RATE_LIMITED/ },
+  { group: 'avail', name: 'duplicate enquiry suppression removed', file: EQJ, suite: 'comms',
+    from: "    if (dd.exists && now - (Number(dd.data().at) || 0) < LIMITS.dedupWindowMs) fail(", to: "    if (false) fail(", expect: /DUPLICATE/ },
+  { group: 'avail', name: 'a blocked user still sends public enquiries', file: EQJ, suite: 'comms',
+    from: "  if ((await _db().collection(COL.BLOCKS).doc(`${prov.providerUid}_${buyerUid}`).get()).exists) fail('permission-denied', 'You cannot send enquiries to this provider.', { code: 'BLOCKED' });", to: "", expect: /public enquiries from that user are refused/ },
+  { group: 'avail', name: 'a template may claim a payment / booking / refund is complete', file: EQJ, suite: 'comms',
+    from: "  if (CLAIM_RE.test(text)) return", to: "  if (false) return", expect: /CLAIMS a payment|booking is confirmed or a refund completed/ },
+  /* Two layers keep a booking conversation out of the enquiry controls: the caller only gates ent_enquiry,
+     and the gate itself returns for anything else (first run: MISSED with one layer removed). Both. */
+  { group: 'avail', name: 'enquiry controls gate the PRIVATE booking conversation (strands a paying buyer)', file: EQJ, suite: 'comms',
+    edits: [{ from: "  if (!conv || conv.transactionType !== 'ent_enquiry') return;", to: "  if (!conv) return;" }],
+    also: { file: MSG, from: "    if (conv.transactionType === 'ent_enquiry') {\n      await require('./ent-enquiries').assertCanSend(", to: "    if (conv.transactionType === 'ent_enquiry' || conv.transactionType === 'ent_booking') {\n      await require('./ent-enquiries').assertCanSend(" },
+    expect: /does not strand a paying buyer/ },
+  { group: 'avail', name: 'a PRIVATE / segment rate card shown to an ineligible buyer', file: RCJ, suite: 'comms',
+    from: "    if (restricted && !(await isEligible(doc.id, c, viewer))) continue;", to: "", expect: /PRIVATE and a CORPORATE segment are invisible/ },
+  { group: 'avail', name: 'the browser\'s discount becomes the discount', file: BSV, suite: 'comms',
+    from: "      discountCents = cd.discountCents;\n    }\n    const finalPrice", to: "      discountCents = Math.round(Number(d.discountCents) || cd.discountCents);\n    }\n    const finalPrice", expect: /browser "discount"/ },
+  { group: 'avail', name: 'an unaccepted quote can be booked (accepting skipped)', file: RCJ, suite: 'comms',
+    from: "    if (q.status !== QUOTE.ACCEPTED) fail(", to: "    if (false) fail(", expect: /unaccepted quote cannot be booked/ },
+  { group: 'avail', name: 'anyone answers a call request (fake call authorization)', file: EQJ, suite: 'comms',
+    from: "    if (c.recipientUid !== uid) fail('permission-denied', 'Only the person asked can answer.');", to: "", expect: /only the provider asked can answer/ },
+  { group: 'avail', name: 'an ordinary admin reads enquiry content', file: EQJ, suite: 'comms',
+    from: "  if (!_isSuper(req)) fail('permission-denied', 'Super admin only.');\n  const d = req.data || {};\n  const reason = _san(d.reason, 500);\n  if (reason.length < 5) fail('invalid-argument', 'A reason is required.');\n  const id = _san(d.enquiryId, 128);",
+    to: "  if (!_isAdmin(req)) fail('permission-denied', 'Super admin only.');\n  const d = req.data || {};\n  const reason = _san(d.reason, 500);\n  if (reason.length < 5) fail('invalid-argument', 'A reason is required.');\n  const id = _san(d.enquiryId, 128);", expect: /content needs a super admin/ },
+  { group: 'avail', rules: true, name: 'any signed-in user reads a provider\'s private occupancy (rules)', file: RULES, suite: 'rules',
+    from: "  match /months/{month} {\n  allow read:  if isAdmin();", to: "  match /months/{month} {\n  allow read:  if isAuthed();", expect: /private occupancy/ },
+  { group: 'avail', rules: true, name: 'a client creates a hold on any venue\'s time (rules)', file: RULES, suite: 'rules',
+    from: "  allow read:   if isAdmin() || (isAuthed() && resource.data.userId == request.auth.uid);\n  allow create: if false;", to: "  allow read:   if isAdmin() || (isAuthed() && resource.data.userId == request.auth.uid);\n  allow create: if isAuthed();", expect: /creates a hold on a venue/ },
+  { group: 'avail', rules: true, name: 'a client creates an enquiry directly, skipping the limits (rules)', file: RULES, suite: 'rules',
+    from: "  match /entEnquiries/{id} {\n  allow read:  if isAdmin() || (isAuthed() && (resource.data.providerUid == request.auth.uid || resource.data.buyerUid == request.auth.uid));\n  allow write: if false;",
+    to: "  match /entEnquiries/{id} {\n  allow read:  if isAdmin() || (isAuthed() && (resource.data.providerUid == request.auth.uid || resource.data.buyerUid == request.auth.uid));\n  allow write: if isAuthed();", expect: /creates an enquiry directly|moves the enquiry state/ },
+  { group: 'avail', rules: true, name: 'a client pre-creates an enquiry conversation (rules)', file: RULES, suite: 'rules',
+    from: "  && !convId.matches('^ent_enquiry_.*')", to: "", expect: /pre-creates an ENQUIRY conversation/ },
+  { group: 'avail', rules: true, name: 'every signed-in user lists coupon codes (rules)', file: RULES, suite: 'rules',
+    from: "  match /mktCouponCodes/{couponId} {\n  allow read:  if isAdmin() || (isAuthed() && resource.data.merchantId == request.auth.uid);", to: "  match /mktCouponCodes/{couponId} {\n  allow read:  if isAuthed();", expect: /coupon codes/ },
+  { group: 'avail', rules: true, name: 'an owner spoofs their public open / closed status (rules)', file: RULES, suite: 'rules',
+    from: "  match /availabilityStatus/{uid} {\n  allow read:  if true;\n  allow write: if false;", to: "  match /availabilityStatus/{uid} {\n  allow read:  if true;\n  allow write: if isAuthed() && request.auth.uid == uid;", expect: /spoofs their public open/ },
+  { group: 'avail', rules: true, name: 'a client creates a VENUE booking directly (rules)', file: RULES, suite: 'rules',
+    from: "  'venueId','ownerId','startTs','endTs','availability','slotKey']);", to: "  'slotKey']);", expect: /creates a VENUE booking directly/ },
 ];
 
 const argv = process.argv.slice(2);
@@ -481,7 +571,9 @@ function apply(src, m) {
 
 /* Every sabotaged file's exact bytes BEFORE the run: the proof of restoration does not depend on what
    is committed (a slice can be verified before its single commit). */
-const BEFORE = new Map([...new Set(M.map((m) => m.file))].map((f) => [f, require('crypto').createHash('sha256').update(fs.readFileSync(path.join(ROOT, f))).digest('hex')]));
+/* `also` (optional): a SECOND file mutated together with the first — for a defence that is layered across two
+   files, where removing either layer alone is (correctly) not a vulnerability. Hashed and restored like the first. */
+const BEFORE = new Map([...new Set(M.flatMap((m) => (m.also ? [m.file, m.also.file] : [m.file])))].map((f) => [f, require('crypto').createHash('sha256').update(fs.readFileSync(path.join(ROOT, f))).digest('hex')]));
 const tally = { CAUGHT: 0, 'CAUGHT-OTHER': 0, MISSED: 0, CRASHED: 0, 'NO-ANCHOR': 0, SKIPPED: 0 };
 const used = new Set();
 for (const m of M) {
@@ -495,9 +587,18 @@ for (const m of M) {
   const mm = { ...m, from: m.from && fix(m.from), to: m.to != null ? fix(m.to) : m.to, edits: m.edits && m.edits.map((e) => ({ from: fix(e.from), to: fix(e.to) })) };
   const res = apply(orig.toString('utf8'), mm);
   if (res.error) { tally['NO-ANCHOR']++; console.log(`  ?  NO-ANCHOR     ${m.name}   [${res.error}]`); continue; }
+  let file2 = null, orig2 = null, res2 = null;
+  if (m.also) {
+    file2 = path.join(ROOT, m.also.file); orig2 = fs.readFileSync(file2);
+    const crlf2 = orig2.includes(Buffer.from('\r\n'));
+    const fix2 = (s) => (crlf2 ? s.replace(/\r?\n/g, '\r\n') : s);
+    res2 = apply(orig2.toString('utf8'), { from: fix2(m.also.from), to: fix2(m.also.to) });
+    if (res2.error) { tally['NO-ANCHOR']++; console.log(`  ?  NO-ANCHOR     ${m.name} (also)   [${res2.error}]`); continue; }
+  }
   let verdict;
   try {
     fs.writeFileSync(file, res.out);
+    if (file2) fs.writeFileSync(file2, res2.out);
     const r = run(m.suite);
     /* suites mark a failed check as "FAIL" or "✗" (test-legal-compliance) — both are detections */
     const failLines = r.out.split('\n').filter((l) => /^\s+(FAIL|✗)\s/.test(l));
@@ -510,6 +611,7 @@ for (const m of M) {
     console.log(`  ${mark}  ${verdict.padEnd(13)} [${m.group}] ${m.name}` + (verdict !== 'CAUGHT' ? `   [${(failLines[0] || r.out.split('\n').slice(-3).join(' ')).trim().slice(0, 140)}]` : ''));
   } finally {
     fs.writeFileSync(file, orig);
+    if (file2) fs.writeFileSync(file2, orig2);
   }
 }
 

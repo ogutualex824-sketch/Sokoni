@@ -59,6 +59,7 @@
     delivery: ['buyer:rider', 'rider:buyer', 'seller:rider'],
     supply:   ['seller:supplier'],
     support:  ['buyer:admin', 'admin:buyer'],
+    booking:  ['buyer:provider', 'provider:buyer'],   /* 2026-09-27 — the booking conversation */
   };
 
   /* Only a live relationship. A closed order keeps its history and loses its

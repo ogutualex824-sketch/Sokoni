@@ -213,9 +213,13 @@
       <button class="tab active" onclick="switchTab('slots',this)">Slots</button>
       <button class="tab" onclick="switchTab('about',this)">About</button>
       <button class="tab" onclick="switchTab('pricing',this)">Pricing</button>
+      <button class="tab" onclick="switchTab('ask',this)">Questions &amp; rates</button>
     </div>
     <div id="tp-slots" class="tab-panel active">
-      <div class="slot-date-row">
+      <!-- The ONE availability calendar (month / year, safe states, realtime). The date field below is
+           the fallback when the calendar script is unavailable. -->
+      <div id="vb-cal" style="margin-bottom:12px"></div>
+      <div class="slot-date-row" id="vb-legacy-date">
         <label for="slot-date">Date:</label>
         <input class="sb-input" id="slot-date" type="date" style="max-width:180px" onchange="loadSlots()" />
       </div>
@@ -223,6 +227,7 @@
     </div>
     <div id="tp-about" class="tab-panel" style="padding-top:4px"></div>
     <div id="tp-pricing" class="tab-panel" style="padding-top:4px"></div>
+    <div id="tp-ask" class="tab-panel" style="padding-top:4px"></div>
   </div>
 
   <!-- ══ VIEW 3 · Booking Confirmation ═════════════════════════════════════ -->
@@ -285,6 +290,8 @@
 <script src="sokoni-config.js"></script>
 <script src="/sokoni-appcheck.js"></script>
 <script src="sokoni-availability.js"></script>
+<script src="/sokoni-ent-calendar.js"></script>
+<script src="/sokoni-ent-storefront.js"></script>
 <script>
 var _vbApp = firebase.apps.length ? firebase.app() : firebase.initializeApp(window.SOKONI_CONFIG);
 var db = firebase.firestore(_vbApp);
@@ -323,7 +330,7 @@ function bkCreate(o) {
     return _vb('bookingCreate', {
       venueId: o.venueId, date: o.date, startTime: o.startTime,
       endTime: _addMins(o.startTime, o.durationMins || 60),
-      notes: o.notes, idempotencyKey: o.idempotencyKey,
+      notes: o.notes, idempotencyKey: o.idempotencyKey, expectedTotalCents: o.expectedTotalCents,
     });
   }
   return _vb('venueCreateBooking', {
@@ -500,6 +507,8 @@ function renderVenues(grid, list) {
     var cb = document.createElement('span'); cb.className = 'badge badge-gray';
     cb.textContent = 'Up to ' + (v.capacity || '?') + ' people';
     badges.appendChild(tb); badges.appendChild(cb);
+    /* availability from the ONE authority (safe words only) */
+    var ab = document.createElement('span'); ab.className = 'badge'; ab.hidden = true; ab.setAttribute('data-avail-venue', v.id); badges.appendChild(ab);
 
     // Location
     var meta = document.createElement('div'); meta.className = 'vc-meta';
@@ -520,6 +529,7 @@ function renderVenues(grid, list) {
     card.appendChild(footer);
     grid.appendChild(card);
   });
+  if (window.SokoniEntCalendar) window.SokoniEntCalendar.badges(grid);
 }
 
 /* ── Venue Detail ─────────────────────────────────────────────────────────── */
@@ -534,8 +544,25 @@ function openVenue(v) {
   // Reset to Slots tab
   document.querySelectorAll('.tab').forEach(function(t, i) { t.classList.toggle('active', i === 0); });
   document.querySelectorAll('.tab-panel').forEach(function(p, i) { p.classList.toggle('active', i === 0); });
-  loadSlots();
+  mountVenueCalendar(v);
+  if (window.SokoniEntStorefront) window.SokoniEntStorefront.mount(document.getElementById('tp-ask'), { venueId: v.id, name: v.name, hideBook: true, hideCheck: true });
   showView('v-detail');
+}
+
+/* The shared calendar: a free time the buyer taps becomes the selected slot (the server rechecks it
+   at booking — the calendar only DISPLAYS availability). */
+var _vbCal = null;
+function mountVenueCalendar(v) {
+  if (_vbCal) { try { _vbCal.destroy(); } catch (_) {} _vbCal = null; }
+  if (!window.SokoniEntCalendar) { document.getElementById('vb-legacy-date').style.display = ''; loadSlots(); return; }
+  document.getElementById('vb-legacy-date').style.display = 'none';
+  clearEl(document.getElementById('slot-grid'));
+  _vbCal = window.SokoniEntCalendar.mount(document.getElementById('vb-cal'), { venueId: v.id, mode: 'public', onSelect: function (s) {
+    var toM = function (t) { var p = String(t).split(':'); return Number(p[0]) * 60 + Number(p[1]); };
+    var slot = { startTime: s.start, endTime: s.end, durationMins: Math.max(15, toM(s.end) - toM(s.start)) || 60, available: true };
+    S.slot = Object.assign({ date: s.date }, slot);
+    calcPrice(slot, s.date);
+  } });
 }
 
 function renderHero(v) {
@@ -746,6 +773,8 @@ function submitBooking() {
     startTime: S.slot.startTime,
     durationMins: S.slot.durationMins || 60,
     notes: notes,
+    /* the total the buyer saw — if the authority's total moved, the server answers "Price changed" */
+    expectedTotalCents: S.priceCalc && Number.isFinite(Number(S.priceCalc.total)) ? Math.round(Number(S.priceCalc.total) * 100) : undefined,
     idempotencyKey: S.iKey
   }).then(function(res) {
     var ref = (res.data && res.data.bookingId) || '—';
@@ -771,6 +800,10 @@ function submitBooking() {
   }).catch(function(err) {
     console.error('[venue-booking] createBooking:', err);
     toast((err.message || 'Booking failed. Please try again.'), 'err');
+    /* the authority's total moved: show the NEW total and let the buyer confirm it (never charge the old one) */
+    if (err && err.details && err.details.code === 'PRICE_CHANGED' && S.priceCalc) { S.priceCalc.total = Number(err.details.totalCents) / 100; buildPriceBreakdown(); }
+    /* the time was just taken: refresh the calendar so the buyer sees it */
+    if (err && (err.code === 'functions/already-exists' || (err.details && err.details.code === 'SLOT_UNAVAILABLE')) && _vbCal) _vbCal.refresh();
     btn.disabled = false; btn.textContent = 'Confirm Booking';
   });
 }

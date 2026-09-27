@@ -107,6 +107,8 @@
         ${c.state !== 'SUSPENDED' ? '<button class="btn ghost" id="editProfile">Edit profile</button>' : ''}</div>
       <h2>Audience &amp; earnings</h2>
       <div class="panel" id="analytics"><p class="muted">Loading analytics…</p></div>
+      <h2>Bookings &amp; availability</h2>
+      <div class="panel" id="creatorBookings"><p class="muted">Checking…</p></div>
       <h2>Your films</h2>
       <div class="panel scroll">${ME.films.length ? `<table><thead><tr><th>Title</th><th>State</th><th>Price</th><th>Master</th><th>Split</th><th></th></tr></thead><tbody>${ME.films.map((f) => `
         <tr><td>${esc(f.title)}</td><td><span class="chip" data-s="${esc(f.pubState)}">${esc(f.pubState)}</span></td><td>${kes(f.priceCents)}</td>
@@ -114,6 +116,7 @@
         <td><button class="btn ghost" data-open="${esc(f.filmId)}">Open</button></td></tr>`).join('')}</tbody></table>` : '<p class="muted">No films yet.</p>'}</div>`;
     const nf = document.getElementById('newFilm'); if (nf) nf.onclick = () => editor(null);
     renderAnalytics();
+    renderCreatorBookings();
     const av = document.getElementById('applyVer'); if (av) av.onclick = () => verification();
     const ep = document.getElementById('editProfile'); if (ep) ep.onclick = () => register(c);
     $app.querySelectorAll('[data-open]').forEach((b) => b.onclick = () => editor(ME.films.find((f) => f.filmId === b.dataset.open)));
@@ -121,6 +124,23 @@
 
   /* Owner-scoped aggregates only — counts and sums, never viewers. */
   const dur = (s) => (s == null ? '—' : (s >= 3600 ? Math.floor(s / 3600) + 'h ' : '') + Math.floor((s % 3600) / 60) + 'm');
+  /* Consultations / appearances. Film access needs no calendar. A creator who takes BOOKINGS does so on the ONE
+     availability authority (the svc_ calendar), which requires an approved provider application — the same
+     verification rule as every bookable Entertainment provider. The server answers; nothing is assumed here. */
+  async function renderCreatorBookings() {
+    const box = document.getElementById('creatorBookings');
+    if (!box) return;
+    let r = null;
+    try { r = (await httpsCallable(fn, 'bookingDispatch')({ op: 'entAvailGetConfig' })).data; } catch (_) { r = null; }
+    if (r && r.bookable && r.bookable.ok) {
+      box.innerHTML = '<p>Your consultation and appearance bookings run on your SOKONI calendar.</p><div class="row"><a class="btn" href="/provider-dashboard.html">Open availability, calendar &amp; rate cards</a></div>';
+    } else if (r && r.bookable && r.bookable.code === 'NOT_VERIFIED') {
+      box.innerHTML = '<p class="muted">Your bookings application is waiting for approval. Public bookings open after SOKONI approves it.</p>';
+    } else {
+      box.innerHTML = '<p class="muted">Films are sold per view — no calendar needed. To take paid consultations or appearances (with a booking calendar, booking PIN and messages), apply as an Entertainment provider.</p><div class="row"><a class="btn ghost" href="/provider-onboarding.html?category=entertainment">Offer bookings</a></div>';
+    }
+  }
+
   async function renderAnalytics() {
     const box = document.getElementById('analytics');
     if (!box) return;

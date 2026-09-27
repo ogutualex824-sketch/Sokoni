@@ -16,6 +16,12 @@ const booking      = require('./booking');
 const venueBooking = require('./venue-booking');
 const availability = require('./availability');
 const waitlist     = require('./booking-waitlist');
+/* Entertainment availability, rate cards / quotes / discounts, enquiries / messaging controls / call
+   requests (2026-09-27). Public ops (entAvailMonth, entAvailDay, entAvailSummary, entRateCardsPublic,
+   entMessagingPublic) answer signed-out callers with SAFE fields only; every other op checks auth. */
+const entAvail     = require('./ent-availability');
+const entRates     = require('./ent-rate-cards');
+const entEnq       = require('./ent-enquiries');
 
 function _merge() {
   const seen = {}, result = {};
@@ -27,7 +33,7 @@ function _merge() {
   }
   return result;
 }
-const _H = _merge( booking._h, venueBooking._h, availability._h, waitlist._h);
+const _H = _merge( booking._h, venueBooking._h, availability._h, waitlist._h, entAvail._h, entRates._h, entEnq._h);
 
 const _OPTS = {
   region:          'us-central1',
