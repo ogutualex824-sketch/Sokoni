@@ -55,6 +55,7 @@ const SUITES = {
   gateway:  ['node', ['scripts/test-sokoni-pay-gateway.js']],
   support:  ['node', ['scripts/test-in-app-support.js']],
   inapp:    ['node', ['scripts/test-in-app-booking-contact.js']],
+  legal:    ['node', ['scripts/test-legal-in-app.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -852,6 +853,20 @@ const M = [
     from: "  (window._skToast||alert)('Booking is loading — please try again in a moment. Nothing was charged.');\n  return;\n}", to: "  if(typeof SokoniPay !== 'undefined') SokoniPay.bookNow({ providerName: p.name, category: p.category || 'default' }, function(){});\n  return;\n}", expect: /never the client-priced gateway/ },
   { group: 'inapp', browser: true, name: 'business services are booked on WhatsApp again', file: 'business.html', suite: 'inapp',
     from: "      <button type=\"button\" class=\"biz-service-book\" onclick=\"bizMessage()\"", to: "      <a href=\"https://wa.me/${waNum}?text=${waMsg}\" target=\"_blank\"></a><button type=\"button\" class=\"biz-service-book\" onclick=\"bizMessage()\"", expect: /no WhatsApp hand-off|no WhatsApp contact link/ },
+
+  /* ── the Legal Hub books, registers and talks inside SOKONI (CHANGELOG 219) ── */
+  { group: 'legal', browser: true, name: "the page cannot see the signed-in user again (window._sokoniUser set by nothing)", file: 'legal-hub.html', suite: 'legal',
+    from: "  Object.defineProperty(window, '_sokoniUser', { configurable: true, get() {", to: "  Object.defineProperty(window, '_sokoniUser_OFF', { configurable: true, get() {", expect: /sees the signed-in user|IS the server record/ },
+  { group: 'legal', browser: true, name: "a failed booking is reported as sent", file: 'legal-hub.html', suite: 'legal',
+    from: "    if(m){ m.innerHTML = '⚠️ We could not send this request to the advocate, so it is <strong>not booked</strong>. '+", to: "    if(m){ m.innerHTML = '✅ Request sent. '+", expect: /not booked/ },
+  { group: 'legal', browser: true, name: "the local record promotes itself to confirmed", file: 'legal-hub.html', suite: 'legal',
+    from: "st[i].status = result.status || 'pending';", to: "st[i].status = 'confirmed';", expect: /SERVER status/ },
+  { group: 'legal', browser: true, name: "the booking modal searches localStorage only again", file: 'legal-hub.html', suite: 'legal',
+    from: "function _openConsultModal(id){\n  const l=_findLawyer(id);if(!l)return;", to: "function _openConsultModal(id){\n  const l=getLawyers().find(x=>x.id===id);if(!l)return;", expect: /opens the request modal/ },
+  { group: 'legal', browser: true, name: "a confirmed appointment goes to WhatsApp again", file: 'legal-hub.html', suite: 'legal',
+    from: "`<a href=\"messages.html?with=${encodeURIComponent(a.lawyerId)}\" class=\"appt-btn\"", to: "`<a href=\"https://wa.me/254703480154?text=q\" class=\"appt-btn\"", expect: /never WhatsApp|no WhatsApp hand-off/ },
+  { group: 'legal', browser: true, name: "the firm registration shows success without waiting for the save", file: 'legal-hub.html', suite: 'legal',
+    from: "    try { await window.SokoniDB.saveApplication(firmData); }", to: "    try { window.SokoniDB.saveApplication(firmData).catch(function(){}); }", expect: /fails: NO success/ },
 ];
 
 const argv = process.argv.slice(2);

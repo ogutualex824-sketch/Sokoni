@@ -1,3 +1,62 @@
+## 2026-09-27 (219) — Legal Hub: booking, registration and contact inside SOKONI
+
+Owner directives: IntaSend only, and no WhatsApp for booking or communication. Not deployed. No production writes.
+No function changed; `legal-hub.html` only.
+
+- **Critical: the page never knew who was signed in.** Twelve reads asked `window._sokoniUser`, which **nothing in the
+  codebase sets**. So on the live page:
+  - `bookLegalConsultation` was never called;
+  - `registerLegalProvider` was never called;
+  - My Appointments never loaded a consultation.
+
+  `_sokoniUser` is now a read-only view of the one auth authority (`firebase.js` → `window.firebaseAuth`), and
+  appointments wait (bounded) for auth readiness.
+- **Booking.** The request is now the server record: `bookLegalConsultation` → `legalConsultations`, status `pending`,
+  priced from the server's fee snapshot.
+  - Previously it asked for a deposit on the **retired** phone-number M-PESA rail. That always failed and fell through
+    to a WhatsApp hand-off with **no SOKONI record**.
+  - The other branch wrote a client "lead fee" through a secondary app, printed an invoice for an unpaid booking and
+    opened WhatsApp.
+  - Now: signed-in only, and one idempotent server call shared by the first attempt and any retry.
+  - Success is shown only once the server has the booking. It says **no payment has been taken** and links SOKONI chat
+    with the advocate.
+  - The local cache keeps the server's status and never promotes itself to "confirmed".
+  - The client-priced `SokoniPay.bookNow` step is removed, and `sokoni-mpesa.js` is no longer loaded.
+- **Bug: verified advocates could not be booked.** The booking modal looked advocates up in localStorage only, so a
+  verified (Firestore) advocate never opened it.
+- **Contact.**
+  - Card "Message" uses the advocate's own uid (`legalProviders` id = uid; the `legal_` prefix pointed at no user).
+  - A confirmed appointment is messaged in SOKONI, not WhatsApp.
+  - Verification, commission and application questions go to the in-app support ticket.
+- **Registration.**
+  - Advocate: signed-in, awaited, with success only once `registerLegalProvider` has the application. The copy says
+    *pending verification*. It used to say "your listing is **now live**" for a listing the directory does not show
+    until an admin approves it.
+  - Firm: success only once the admin-queue save resolves.
+  - Neither opens the admin's WhatsApp any more.
+- **Honest provider copy.** "Clients pay a KES 500 booking deposit through SOKONI" was false; no deposit is collected.
+- **BLOCKED — authority conflict, not solved here: in-app legal payment.** `legalProviders` / `legalConsultations`
+  ([functions/legal-hub.js:34-187](functions/legal-hub.js)) are the legal hub's own provider and booking authority. The
+  canonical held-booking engine is `providers` / `providerBookings` + purpose `service_booking`
+  ([functions/payment-purposes.js:221](functions/payment-purposes.js)).
+  - A `legal_consultation` purpose with hold-until-delivered would be a second hold/settlement path.
+  - Moving advocates onto `providers` would bypass the LSK approval that `legalProviders` carries.
+  - Owner decision required. Until then, legal bookings are requests with no payment, and the page says so.
+- **Still open.**
+  - The commission Paybill text (manual M-PESA) remains; converting it needs a commission purpose.
+  - If no time is chosen, the booking silently defaults to 24h from now (pre-existing).
+- **Tests:**
+  - `scripts/test-legal-in-app.js` (new): 29/0. It runs the real page and the real callables.
+  - Sabotage group `legal`: 6/6 caught; the tree is byte-identical afterwards.
+  - `test-secondary-firebase-apps`: the stale `lh-lead` entry is removed, so the result matches the baseline (8/1,
+    pre-existing).
+  - Also run:
+    - `test-hub-reviews` 42/0.
+    - `test-in-app-support` 11/0.
+    - `test-sokoni-pay-gateway` 16/0.
+    - `certify-daraja-ui-retirement`: C1-2 `sokoni-order-print-bridge.js`, the same on base 0865a34.
+    - `test-healthcare-provisioning`: 19/11, the same on base.
+
 ## 2026-09-27 (218) — Booking and contact stay in the app on the server-ready pages
 
 Owner directives: IntaSend only, and no WhatsApp for booking or communication. This covers the pages whose listings
