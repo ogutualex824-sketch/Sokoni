@@ -210,6 +210,95 @@ visually, printed together on one ticket.
 
 ---
 
+### Entertainment integrations and KRA transmission (integrations slice, 2026-09-27)
+
+**Owner decisions:**
+
+- Build the spec-independent work now; the KRA adapter, transmission and sandbox are reported BLOCKED on the missing spec.
+- Organizers get status cards plus canonical deep links.
+
+**Routing — no second integration system.** Entertainment has ONE entry, `entertainment-integrations.html`. It is
+**status-only**: no form, no input, and no write. Every "View integrations" link opens the page that owns the
+integration:
+
+| Card | State source | Organizer route | Admin route |
+|---|---|---|---|
+| Payments (IntaSend) | `config/intasendCapability` via `shared/payment-capability.js` | — (SOKONI runs it) | AdminOS › Integrations `?hub=entertainment&integration=intasend-collections` |
+| KRA eTIMS | caller's `etimsProfiles/{uid}` + `eventFiscal` views + `etims-kra-adapter` | `/etims-seller.html` (caller-scoped) | AdminOS › Integrations `?hub=entertainment&integration=etims` |
+| SOKONI Connect | owner freeze | — | AdminOS › Comms |
+| Creator / streaming | `creators/{uid}.state` | `/creator-studio.html` | AdminOS › Creator |
+| Events | `event_organizer` claim + the two dependencies above | `/event-manager.html` | AdminOS › Entertainment |
+
+- **Entry points.** Event Manager (sidebar), event finance (payment / fiscal links), Creator Studio (header) and the
+  Entertainment Hub tab. Each passes `context=events|creator|entertainment` and, where relevant, `integration=`.
+- **Canonical console.** `sokoni-integrations.js` now reads `hub` and `integration` from the URL and filters the
+  canonical catalogue by `hubs`; the filter survives tab changes. The Entertainment view is a **filter** of
+  `sokoni-integration-catalogue.js` (`forHub('entertainment')`), not a second list.
+- **States:** UNKNOWN · CONFIGURED · VERIFIED · LIVE_AND_PROVEN · FAILED · DISABLED · NOT_APPLICABLE.
+  - A payment method is LIVE_AND_PROVEN **only** with a recorded evidence entry; a "live" status without evidence
+    renders CONFIGURED.
+  - eTIMS is CONFIGURED at most; credit notes are DISABLED (spec missing); the sandbox is UNKNOWN.
+  - The catalogue **and** `functions/integration-registry.js` no longer claim eTIMS `live`: both say `configured`,
+    consistent with [[ETIMS_CERTIFICATION_READINESS]].
+- **Isolation.**
+  - `entIntegrationStatus` (on `eventOpsDispatch`) returns the caller's OWN status; a `uid` in the request is ignored.
+  - The KRA PIN is masked (`P05******7T`). No taxpayer secret, device serial or credential leaves the server.
+  - Organizers never receive the AdminOS route. `eventAdminIntegrationStatus` (on `adminOsDispatch`) is admin-only.
+- **AdminOS trace.** A new `integration` stage (event → **integration** → tickets → sale → payment → fiscal → …)
+  carries the organizer, payment state, masked KRA registration and credit-note capability.
+
+**KRA — what exists and what is missing.** No KRA OSCU / VSCU specification is in the repository. Nothing below
+invents one.
+
+- `etims-kra-adapter.js` now names the missing items (`MISSING_SPEC`):
+  1. credit-note / refund-receipt endpoint;
+  2. refund receipt-type code and original-receipt linkage field;
+  3. credit-note line and tax field semantics;
+  4. cmcKey device initialisation and request signing.
+- **One classifier:** `classifyResponse`. ACCEPTED needs HTTP 200 + `resultCd '000'` + a receipt number; REJECTED is
+  4xx or a non-000 result; UNKNOWN is a timeout, network error, 5xx, or '000' without a receipt.
+  `event-fiscal.classifyProviderResult` delegates to it.
+- **Invoice worker (`etims.processQueueOnce`) — defects fixed:**
+
+| Defect (before) | Now |
+|---|---|
+| Two overlapping runs could send one invoice twice | Transactional claim pending → processing; 2 runs → 1 send |
+| A timeout / 5xx was retried blindly | `outcome_unknown`; never re-sent; resolved only by a super admin with evidence, and only as NOT_ACCEPTED (→ failed → retryable) |
+| A run that crashed mid-send left the claim | After a 15-min lease → `outcome_unknown` (the send may have happened) |
+| `requeueInvoice` could duplicate a queued invoice | Only `failed` / `draft` are requeued; `outcome_unknown` is refused |
+| An accepted invoice could be re-sent from a stray entry | Accepted is terminal — never re-sent |
+
+- **Credit-note drainer (`etims.drainTransmissionQueueOnce`, on the same 5-minute schedule):**
+  - transactional claim;
+  - uses the seller's own stored identity;
+  - reports event credit notes to `event-fiscal.recordCreditNoteOutcome` (the single ingress);
+  - never re-sends an accepted document; holds an ambiguous outcome.
+  - With the real adapter every entry becomes `blocked_pending_spec` and **nothing is sent** (proved: 0 provider
+    calls). With a test-double adapter it proves 1 send under concurrency, accept, unknown → evidence → retry →
+    reject → retry → accept on the SAME credit note.
+- **AdminOS:** `eventAdminFiscalResolve` (super admin, evidence) — an outcome-unknown invoice shows
+  "Resolve with evidence". A receipt can only come from KRA.
+- **Payment / KRA outcome matrix** (`test-etims-transmission.js`, 43/0):
+
+| Payment | KRA | Ticket | Fiscal state |
+|---|---|---|---|
+| paid | success | valid | FISCAL_ACCEPTED (exact provider receipt) |
+| paid | temporary / definitive rejection | valid | FISCAL_PENDING → FISCAL_FAILED after the retry budget; AdminOS exception; requeue → accepted |
+| paid | timeout / 5xx / 000-without-receipt | valid | FISCAL_OUTCOME_UNKNOWN; never re-sent |
+| paid | organizer not registered | valid | FISCAL_NOT_REQUIRED (ORGANIZER_NOT_REGISTERED); nothing queued |
+| paid | crashed mid-send | valid | FISCAL_OUTCOME_UNKNOWN |
+
+### Gates — CODE vs PROVIDER (integrations slice)
+
+| Gate | CODE | PROVIDER |
+|---|---|---|
+| Integrations routing | GREEN | n/a |
+| Entertainment status (honest states, isolation, masking) | GREEN | n/a |
+| KRA adapter | GREEN (classifier + named gaps) | 🔴 **BLOCKED** — spec absent (4 items above) |
+| KRA invoice transmission | GREEN (worker: claim, unknown, stale, requeue) | 🟡 **UNPROVEN** — protocol unverified; 0 KRA calls |
+| KRA credit-note transmission | GREEN (drainer, test-double adapter) | 🔴 **BLOCKED** — adapter cannot build the payload |
+| KRA sandbox | — | 🔴 **BLOCKED** — spec + cmcKey device initialisation; credentials alone are insufficient |
+
 ## 4. Staff matrix
 
 | Role | Quick Sale | Own sales | All sales | PIN admission | Marketing / promo | Staff mgmt | Finance | Money movement |
@@ -438,7 +527,8 @@ restores the file byte-for-byte, and then proves the tree is green again.
 | 10 | Medium | Events above **8,000 tickets** cannot be configured (4-digit ceiling, kept as an invariant) | **decided:** a 6-digit PIN mode for large events — per-event `pinDigits` chosen before the first sale, its own ceiling, same allocator. Not built |
 | 11 | High (release gate) | **KRA live path UNPROVEN on this branch:** invoices are created and queued through the real `etims.js`; no KRA call was made. The KRA-accepted state is simulated with the fields `submitToKra` writes | **next slice:** eTIMS sandbox certification (`ETIMS_ENV=sandbox`, a registered sandbox taxpayer) — needs the owner's go-ahead and sandbox credentials |
 | 12 | ~~Medium~~ **BUILT (credit-note slice)** | Credit-note lifecycle | refund → the original stays immutable → CREDIT_NOTE_REQUIRED → `etims-lifecycle` credit note (idempotent) → PENDING → ACCEPTED / FAILED / OUTCOME_UNKNOWN, linked to the original (§3) |
-| 15 | High (external gate) | **KRA credit-note transmission is not implemented platform-wide:** `etims-kra-adapter` has `SPEC_LOADED=false`; credit notes queue as `blocked_pending_spec` and nothing drains `etimsTransmissionQueue` | map the credit-note payload in `etims-kra-adapter.js`, add a drainer that calls `event-fiscal.recordCreditNoteOutcome`, then eTIMS sandbox certification |
+| 15 | High (external gate) | **KRA credit-note transmission is BLOCKED on the KRA spec:** the drainer now exists (`drainTransmissionQueueOnce`, integrations slice) and reports to `recordCreditNoteOutcome`, but `etims-kra-adapter` has `SPEC_LOADED=false`, so every entry is `blocked_pending_spec` | obtain the KRA OSCU spec; map the four `MISSING_SPEC` items in `etims-kra-adapter.js`; then eTIMS sandbox certification |
+| 17 | Medium | `scripts/etims-release-gate.js` "Live integrity" initialises firebase-admin against the **production** project and reads `etimsInvoices` / `hubInvoices` / the audit log (read-only). It found 0 records, so its PASS is vacuous (no positive control) | point it at an explicit target and fail closed on zero records |
 | 16 | Low (baseline, outside scope) | `test-refund-authority-convergence.js` harness error (§7b parses the `merchant-identity.js` / `workforce-identity.js` POS role tables) | pre-existing; neither file is touched by the Events slices |
 | 13 | Low | Organizer not registered for eTIMS → tickets say so (NOT_REGISTERED) | **decided:** keep this. SOKONI does **not** substitute itself as the fiscal seller and never manufactures an organizer receipt. "SOKONI invoices on behalf of the organizer" is a separate commercial / legal decision and implementation |
 | 14 | Low | Existing tickets from the 8-character build | none exist outside tests (never deployed); no migration |
@@ -461,6 +551,7 @@ PRODUCTION WRITES:   0
   (existing secret), plus the event-hub callables and `eventExpireUnpaidOrders` (fiscal sweep). The eTIMS
   `etimsProcessQueue` is unchanged and already holds the eTIMS secrets;
 - the new rules blocks and indexes;
+- for the integrations slice: `functions/entertainment-integrations.js` (via `eventOpsDispatch` + `adminOsDispatch`), the updated `etimsProcessQueue` (now also drains `etimsTransmissionQueue`; it stays `blocked_pending_spec` until the adapter is mapped), and hosting for `entertainment-integrations.html`, `sokoni-integrations.js`, `sokoni-integration-catalogue.js`, `creator-studio.html` and `entertainment.html`. A query on `etimsQueue` by `status == processing` may need no new index (single-field);
 - hosting for `event-manager.html`, `event-hub.html`, `admin-os.html`, `entertainment-terms.html`,
   `sokoni-event-ops.js`, `sokoni-event-refund-reasons.js`, `sokoni-event-ticket.js`, `sokoni-qr.js` and
   `sokoni-aos-entertainment.js`.

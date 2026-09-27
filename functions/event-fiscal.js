@@ -52,6 +52,9 @@ const REC = Object.freeze({
 /* the ONE external vocabulary */
 const FS = Object.freeze({
   NOT_REQUIRED: 'FISCAL_NOT_REQUIRED', PENDING: 'FISCAL_PENDING', ACCEPTED: 'FISCAL_ACCEPTED', FAILED: 'FISCAL_FAILED',
+  /* the invoice transmission's outcome is unknown (timeout / 5xx / accepted-without-receipt): held for
+     evidence — never re-sent automatically (functions/etims.js processQueueOnce) */
+  OUTCOME_UNKNOWN: 'FISCAL_OUTCOME_UNKNOWN',
 });
 const NOT_REQUIRED_REASON = Object.freeze({ ORGANIZER_NOT_REGISTERED: 'ORGANIZER_NOT_REGISTERED', FREE_TICKET: 'FREE_TICKET', NO_FISCAL_RECORD: 'NO_FISCAL_RECORD' });
 const CN = Object.freeze({
@@ -173,6 +176,7 @@ function view(f, inv, reversals) {
       kraQrImage: _https(inv.qrCode), verificationUrl: _https(inv.verificationUrl), acceptedAt: inv.acceptedAt || null });
   }
   if (inv.status === 'failed') return out(FS.FAILED, { reason: 'kra_rejected', invoiceNumber: inv.invoiceNumber || null });
+  if (inv.status === 'outcome_unknown') return out(FS.OUTCOME_UNKNOWN, { reason: 'provider_outcome_unknown', invoiceNumber: inv.invoiceNumber || null });
   return out(FS.PENDING, { invoiceNumber: inv.invoiceNumber || f.invoiceNumber || null });
 }
 
@@ -300,17 +304,13 @@ async function executeCreditNote(executionId) {
  *   UNKNOWN    timeout, network error, HTTP 5xx, or "000" WITHOUT a reference — never assumed either way
  */
 function classifyProviderResult(p) {
-  if (!p || p.kind === 'timeout' || p.kind === 'network_error') return { outcome: 'UNKNOWN', reason: p && p.kind === 'timeout' ? 'provider_timeout' : 'provider_unreachable' };
-  const code = Number(p.httpStatus);
-  if (!Number.isFinite(code) || code >= 500) return { outcome: 'UNKNOWN', reason: `provider_http_${Number.isFinite(code) ? code : 'none'}` };
-  const body = p.body || {};
-  if (code >= 400) return { outcome: 'REJECTED', reason: String(body.resultMsg || `HTTP ${code}`).slice(0, 200) };
-  if (String(body.resultCd) !== '000') return { outcome: 'REJECTED', reason: String(body.resultMsg || `resultCd ${body.resultCd}`).slice(0, 200) };
-  const data = body.data || {};
-  const refNo = data.rcptNo != null && String(data.rcptNo).trim() ? String(data.rcptNo).trim() : null;
-  if (!refNo) return { outcome: 'UNKNOWN', reason: 'accepted_without_reference' };
-  return { outcome: 'ACCEPTED', reference: refNo, qr: _https(data.qrCodeUrl), verificationUrl: _https(data.vsdcRcptUrl),
-    providerData: { resultCd: '000', rcptNo: refNo, intrlData: data.intrlData || null, rcptSgn: data.rcptSgn || null } };
+  /* ONE implementation of provider-outcome semantics: etims-kra-adapter.classifyResponse. This only
+     shapes its answer for the credit-note record (https-only QR / verification link). */
+  const c = require('./etims-kra-adapter').classifyResponse(p);
+  if (c.outcome !== 'ACCEPTED') return { outcome: c.outcome, reason: c.reason };
+  const data = c.data || {};
+  return { outcome: 'ACCEPTED', reference: c.reference, qr: _https(data.qrCodeUrl), verificationUrl: _https(data.vsdcRcptUrl),
+    providerData: { resultCd: '000', rcptNo: c.reference, intrlData: data.intrlData || null, rcptSgn: data.rcptSgn || null } };
 }
 
 /**

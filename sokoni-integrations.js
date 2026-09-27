@@ -143,7 +143,7 @@
     loadedAt:  0,
   };
 
-  var _filter = { q: '', type: '', status: '' };
+  var _filter = { q: '', type: '', status: '', hub: '' };
   /* Optional injection point. Both consoles mount with a target only, so this
      stays empty in production and the dispatcher path above is used. */
   var _opts = {};
@@ -1073,6 +1073,8 @@
     if (!c) return [];
     var q = _filter.q.trim().toLowerCase();
     return c.integrations.filter(function (i) {
+      /* hub context (e.g. ?hub=entertainment from the Entertainment Hub's Integrations entry) */
+      if (_filter.hub && (i.hubs || []).indexOf(_filter.hub) === -1) return false;
       if (_filter.type && i.category !== _filter.type) return false;
       if (_filter.status && i.status !== _filter.status) return false;
       if (!q) return true;
@@ -2816,6 +2818,15 @@
     var el = typeof target === 'string' ? document.getElementById(target) : target;
     if (!el) return;
     _opts = opts || _opts || {};
+    /* Deep link from a hub: admin-os.html?hub=entertainment&integration=etims#integrations. The hub
+       filters the catalogue; the integration is opened. Unknown values are ignored, never invented. */
+    try {
+      var _qs = new URLSearchParams((typeof location !== 'undefined' && location.search) || '');
+      var _hub = String(_qs.get('hub') || '');
+      if (/^[a-z][a-z0-9-]{0,40}$/.test(_hub)) _filter.hub = _hub;
+      var _int = String(_qs.get('integration') || '');
+      if (/^[a-z0-9][a-z0-9-]{0,60}$/.test(_int)) { _selKind = 'catalogue'; _selected = _int; }
+    } catch (_) { /* no URL context */ }
     _styles();
     _root = el;
     if (_mounted) { _render(); return; }
@@ -2835,7 +2846,8 @@
       if (t === 'gcp') _loadGcp();
       /* Filters mean different things per tab (category vs service type), so a
          tab change clears them rather than silently applying a stale one. */
-      _filter = { q: '', type: '', status: '' };
+      /* the hub context survives a tab change; the tab-specific filters do not */
+      _filter = { q: '', type: '', status: '', hub: _filter.hub };
       _selected = null;
       _render();
     },

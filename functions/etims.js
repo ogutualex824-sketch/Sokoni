@@ -36,7 +36,8 @@ const emailSvc = require("./email-service");
 const { COMPANY, postalLine }           = require("./company-identity");
 const TaxEngine = require("./etims-tax-engine");   // canonical VAT math — single source of truth
 const Audit     = require("./etims-audit");        // immutable, tamper-evident audit trail
-const Lifecycle = require("./etims-lifecycle");    // credit/debit/cancel/amend/reversal (internal model)
+const Lifecycle = require("./etims-lifecycle");
+const KraAdapter = require("./etims-kra-adapter");   // the ONE place KRA outcome semantics live    // credit/debit/cancel/amend/reversal (internal model)
 
 const db = admin.firestore();
 
@@ -448,18 +449,32 @@ async function sellerClient(sellerUid) {
    SUBMIT TO KRA — throws on rejection
 ══════════════════════════════════════════════════════════════════════ */
 async function submitToKra(client, kraPayload) {
-  const res = await client.submitInvoice(kraPayload);
-  if (res.status !== 200 || res.body?.resultCd !== "000") {
-    throw new Error(res.body?.resultMsg || `KRA HTTP ${res.status}`);
+  /* The provider answer is classified by etims-kra-adapter (ONE implementation):
+       ACCEPTED  → returned (receipt number = what KRA returned, nothing else)
+       REJECTED  → throws err.kraOutcome='REJECTED'  (definitive — may be retried)
+       UNKNOWN   → throws err.kraOutcome='UNKNOWN'   (timeout / 5xx / network / 000-without-receipt:
+                   KRA may have recorded it — callers must NOT re-send it blindly) */
+  let providerResult;
+  try {
+    const res = await client.submitInvoice(kraPayload);
+    providerResult = { kind: "response", httpStatus: res.status, body: res.body };
+  } catch (e) {
+    providerResult = { kind: /timeout/i.test(String(e && e.message)) ? "timeout" : "network_error", message: String(e && e.message) };
   }
-  const d = res.body?.data || {};
+  const c = KraAdapter.classifyResponse(providerResult);
+  if (c.outcome !== "ACCEPTED") {
+    const err = new Error(c.outcome === "REJECTED" ? c.reason : `eTIMS outcome unknown: ${c.reason}`);
+    err.kraOutcome = c.outcome; err.kraReason = c.reason;
+    throw err;
+  }
+  const d = c.data || {};
   return {
-    receiptNumber:     d.rcptNo     || null,
+    receiptNumber:     c.reference,
     controlUnitNumber: d.intrlData  || null,
     qrCode:            d.qrCodeUrl  || d.rcptSgn || null,
     verificationUrl:   d.vsdcRcptUrl|| null,
     receiptSignature:  d.rcptSgn    || null,
-    kraResponse:       res.body,
+    kraResponse:       providerResult.body,
     status:            "accepted",
     acceptedAt:        new Date().toISOString(),
     submittedAt:       new Date().toISOString(),
@@ -629,6 +644,12 @@ async function generateForOrder({ sellerUid, orderId, order, buyer, isPlatform =
     return { invoiceId: invRef.id, invoiceNumber: invNo, status: "accepted" };
 
   } catch (err) {
+    if (err.kraOutcome === "UNKNOWN") {
+      /* KRA may have recorded it. Re-sending could fiscalise the sale twice: hold it for evidence. */
+      await invRef.update({ status: "outcome_unknown", errorMessage: err.message, updatedAt: new Date().toISOString() });
+      Audit.auditSafe(db, { entityType: "invoice", entityId: invRef.id, event: "outcome_unknown", newStatus: "outcome_unknown", sellerUid, detail: String(err.kraReason || err.message).slice(0, 150) });
+      return { invoiceId: invRef.id, invoiceNumber: invNo, status: "outcome_unknown", error: err.message };
+    }
     await invRef.update({ status: "pending_submission", errorMessage: err.message, updatedAt: new Date().toISOString() });
     await enqueue({ invoiceId: invRef.id, sellerUid, priority: 2 });
     Audit.auditSafe(db, { entityType: "invoice", entityId: invRef.id, event: "queued", newStatus: "queued", sellerUid, detail: `error=${String(err.message || "").slice(0, 150)}` });
@@ -811,72 +832,200 @@ async function requeueInvoice(invoiceId) {
   if (!snap.exists) throw new HttpsError("not-found","Invoice not found");
   const inv = snap.data();
   if (inv.status === "accepted") return { success: true, message: "Already accepted" };
+  /* Only a DEFINITIVE failure (or a draft that never reached the queue) is re-sent. A queued / in-flight
+     invoice would be transmitted twice; an outcome-unknown one may already be fiscalised at KRA. */
+  if (inv.status === "outcome_unknown") throw new HttpsError("failed-precondition", "KRA's outcome for this invoice is unknown — it must be resolved with evidence before any resubmission.");
+  if (inv.status !== "failed" && inv.status !== "draft") throw new HttpsError("failed-precondition", "This invoice is still queued with eTIMS — nothing to resubmit.");
   await db.collection("etimsInvoices").doc(invoiceId).update({ status:"pending_submission", updatedAt:new Date().toISOString() });
   await enqueue({ invoiceId, sellerUid: inv.sellerUid, priority: 1 });
   return { success: true, message: "Queued for resubmission" };
 }
 
-/* 8 ─ Scheduled: Process queue every 5 minutes */
-const etimsProcessQueue = onSchedule(
-  { schedule:"*/5 * * * *", timeZone:"Africa/Nairobi", timeoutSeconds:540, secrets: _ALL_SECRETS },
-  async () => {
-    const now  = new Date().toISOString();
-    const snap = await db.collection("etimsQueue")
-      .where("status","==","pending")
-      .where("nextRetryAt","<=",now)
-      .orderBy("priority","asc").orderBy("nextRetryAt","asc")
-      .limit(QUEUE_LIMIT).get();
+/* An outcome-unknown invoice is resolved ONLY with evidence, and only as "KRA did not record it"
+   (e.g. a KRA support reference). Acceptance can never be asserted here — a receipt comes from KRA. */
+async function resolveUnknownInvoice(invoiceId, { evidence }, actorUid) {
+  const ev = String(evidence || "").trim();
+  if (ev.length < 10) throw new HttpsError("invalid-argument", "Evidence (e.g. a KRA support reference) is required.");
+  const ref = db.collection("etimsInvoices").doc(String(invoiceId));
+  await db.runTransaction(async t => {
+    const s2 = await t.get(ref);
+    if (!s2.exists) throw new HttpsError("not-found", "Invoice not found");
+    if (s2.data().status !== "outcome_unknown") throw new HttpsError("failed-precondition", `Invoice is ${s2.data().status}, not outcome_unknown.`);
+    t.update(ref, { status: "failed", resolution: { resolution: "NOT_ACCEPTED", evidence: ev.slice(0, 300), by: actorUid, at: new Date().toISOString() }, updatedAt: new Date().toISOString() });
+  });
+  Audit.auditSafe(db, { entityType: "invoice", entityId: String(invoiceId), event: "outcome_resolved", prevStatus: "outcome_unknown", newStatus: "failed", sellerUid: null, detail: `by=${actorUid} evidence=${ev.slice(0, 80)}` });
+  return { resolved: true };
+}
 
-    if (snap.empty) return;
+/* 8 ─ Scheduled: Process queue every 5 minutes
+   Runs can overlap (every 5 min, 540 s timeout), so every queue entry is CLAIMED in a transaction
+   (pending → processing) before anything is sent: two runs can never transmit one invoice. An
+   ambiguous provider outcome is held as outcome_unknown and never re-sent automatically; a claim
+   left 'processing' by a crashed run is marked outcome_unknown too (the send may have happened). */
+const PROCESSING_LEASE_MS = 15 * 60 * 1000;
 
-    for (const doc of snap.docs) {
-      const q = doc.data();
-      await doc.ref.update({ status:"processing", processedAt: now });
+async function processQueueOnce(opts = {}) {
+  const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+  const now = new Date(nowMs).toISOString();
+  const clientFor = opts.clientFor || sellerClient;
+  const out = { claimed: 0, accepted: 0, retry: 0, failed: 0, unknown: 0, stale: 0 };
 
-      const invSnap = await db.collection("etimsInvoices").doc(q.invoiceId).get();
-      if (!invSnap.exists) { await doc.ref.update({ status:"completed", error:"Invoice gone" }); continue; }
-      const inv = invSnap.data();
-      if (inv.status === "accepted") { await doc.ref.update({ status:"completed" }); continue; }
+  /* a claim older than the lease was interrupted mid-send: its outcome is unknown, not "retry" */
+  const stale = await db.collection("etimsQueue").where("status","==","processing").limit(QUEUE_LIMIT).get();
+  for (const d of stale.docs) {
+    const at = Date.parse(d.data().processedAt || "");
+    if (Number.isFinite(at) && nowMs - at < PROCESSING_LEASE_MS) continue;
+    await d.ref.update({ status: "outcome_unknown", error: "claim expired mid-transmission" });
+    await db.collection("etimsInvoices").doc(d.data().invoiceId).update({ status: "outcome_unknown", errorMessage: "transmission interrupted — KRA outcome unknown", updatedAt: now }).catch(() => {});
+    out.stale++;
+  }
 
-      try {
-        const { client, profile } = await sellerClient(q.sellerUid);
-        const orderSnap = inv.orderId ? await db.collection("orders").doc(inv.orderId).get() : null;
-        const kraPayload = buildKraPayload({
-          profile, invcNo: inv.internalSequence,
-          lineItems: inv.lineItems,
-          pmtMethod: orderSnap?.data()?.paymentMethod,
-          buyer: inv.buyer,
-          remark: inv.orderId ? `Order ${inv.orderId}` : null,
-        });
+  const snap = await db.collection("etimsQueue")
+    .where("status","==","pending")
+    .where("nextRetryAt","<=",now)
+    .orderBy("priority","asc").orderBy("nextRetryAt","asc")
+    .limit(QUEUE_LIMIT).get();
 
-        Audit.auditSafe(db, { entityType: "invoice", entityId: q.invoiceId, event: "retried", newStatus: "submitting", sellerUid: q.sellerUid, detail: `attempt=${(inv.retryCount||0)+1}` });
-        const kraResult = await submitToKra(client, kraPayload);
-        await db.collection("etimsInvoices").doc(q.invoiceId).update({
-          ...kraResult, retryCount: (inv.retryCount||0)+1, updatedAt: new Date().toISOString(),
-        });
-        await doc.ref.update({ status:"completed" });
-        Audit.auditSafe(db, { entityType: "invoice", entityId: q.invoiceId, event: "accepted", newStatus: kraResult.status || "accepted", sellerUid: q.sellerUid, detail: `rcptNo=${kraResult.receiptNumber || kraResult.rcptNo || ""} (via retry)` });
-        bumpStats(q.sellerUid, "totalInvoices");
+  for (const doc of snap.docs) {
+    const q = await db.runTransaction(async t => {
+      const cur = await t.get(doc.ref);
+      if (!cur.exists || cur.data().status !== "pending") return null;
+      t.update(doc.ref, { status: "processing", processedAt: now });
+      return cur.data();
+    });
+    if (!q) continue;
+    out.claimed++;
 
+    const invSnap = await db.collection("etimsInvoices").doc(q.invoiceId).get();
+    if (!invSnap.exists) { await doc.ref.update({ status:"completed", error:"Invoice gone" }); continue; }
+    const inv = invSnap.data();
+    /* never re-send an accepted invoice, and never send one whose outcome is already unknown */
+    if (inv.status === "accepted") { await doc.ref.update({ status:"completed" }); continue; }
+    if (inv.status === "outcome_unknown") { await doc.ref.update({ status:"outcome_unknown" }); continue; }
+
+    let client, profile;
+    try {
+      ({ client, profile } = await clientFor(q.sellerUid));
+    } catch (err) {
+      /* nothing was sent: a local failure is safe to retry */
+      const retries = (q.retryCount||0) + 1;
+      await doc.ref.update({ status: retries >= MAX_RETRIES ? "failed" : "pending", retryCount: retries, nextRetryAt: retryAt(retries), error: err.message });
+      if (retries >= MAX_RETRIES) await db.collection("etimsInvoices").doc(q.invoiceId).update({ status:"failed", retryCount: retries, errorMessage: err.message, updatedAt: now });
+      out.retry++;
+      continue;
+    }
+    try {
+      const orderSnap = inv.orderId ? await db.collection("orders").doc(inv.orderId).get() : null;
+      const kraPayload = buildKraPayload({
+        profile, invcNo: inv.internalSequence,
+        lineItems: inv.lineItems,
+        pmtMethod: orderSnap && orderSnap.exists ? orderSnap.data().paymentMethod : undefined,
+        buyer: inv.buyer,
+        remark: inv.orderId ? `Order ${inv.orderId}` : null,
+      });
+
+      Audit.auditSafe(db, { entityType: "invoice", entityId: q.invoiceId, event: "retried", newStatus: "submitting", sellerUid: q.sellerUid, detail: `attempt=${(inv.retryCount||0)+1}` });
+      const kraResult = await submitToKra(client, kraPayload);
+      await db.collection("etimsInvoices").doc(q.invoiceId).update({
+        ...kraResult, retryCount: (inv.retryCount||0)+1, updatedAt: new Date().toISOString(),
+      });
+      await doc.ref.update({ status:"completed" });
+      out.accepted++;
+      Audit.auditSafe(db, { entityType: "invoice", entityId: q.invoiceId, event: "accepted", newStatus: kraResult.status || "accepted", sellerUid: q.sellerUid, detail: `rcptNo=${kraResult.receiptNumber || ""} (via queue)` });
+      bumpStats(q.sellerUid, "totalInvoices");
+
+      if (!opts.skipDelivery) {
         const merged  = { ...inv, ...kraResult, invoiceId: q.invoiceId };
         const pdfUrl  = await saveReceiptHtml(q.invoiceId, { invoice: merged, profile, buyer: inv.buyer });
         if (pdfUrl) await db.collection("etimsInvoices").doc(q.invoiceId).update({ pdfUrl });
         emailBuyer({ invoice: { ...merged, pdfUrl }, profile, buyer: inv.buyer });
-
-      } catch (err) {
-        const retries = (q.retryCount||0) + 1;
-        if (retries >= MAX_RETRIES) {
-          await doc.ref.update({ status:"failed", retryCount: retries, error: err.message });
-          await db.collection("etimsInvoices").doc(q.invoiceId).update({ status:"failed", retryCount: retries, errorMessage: err.message, updatedAt: new Date().toISOString() });
-          Audit.auditSafe(db, { entityType: "invoice", entityId: q.invoiceId, event: "dead_lettered", newStatus: "failed", sellerUid: q.sellerUid, detail: `max_retries error=${String(err.message||"").slice(0,120)}` });
-          notifySeller(q.sellerUid, q.invoiceId, `Max retries reached: ${err.message}`);
-          bumpStats(q.sellerUid, "failedInvoices");
-        } else {
-          await doc.ref.update({ status:"pending", retryCount: retries, nextRetryAt: retryAt(retries), error: err.message });
-          Audit.auditSafe(db, { entityType: "invoice", entityId: q.invoiceId, event: "retry_scheduled", newStatus: "pending", sellerUid: q.sellerUid, detail: `attempt=${retries} error=${String(err.message||"").slice(0,100)}` });
-        }
+      }
+    } catch (err) {
+      if (err.kraOutcome === "UNKNOWN") {
+        await doc.ref.update({ status: "outcome_unknown", error: err.message });
+        await db.collection("etimsInvoices").doc(q.invoiceId).update({ status: "outcome_unknown", errorMessage: err.message, updatedAt: new Date().toISOString() });
+        Audit.auditSafe(db, { entityType: "invoice", entityId: q.invoiceId, event: "outcome_unknown", newStatus: "outcome_unknown", sellerUid: q.sellerUid, detail: String(err.kraReason || err.message).slice(0, 150) });
+        out.unknown++;
+        continue;
+      }
+      const retries = (q.retryCount||0) + 1;
+      if (retries >= MAX_RETRIES) {
+        await doc.ref.update({ status:"failed", retryCount: retries, error: err.message });
+        await db.collection("etimsInvoices").doc(q.invoiceId).update({ status:"failed", retryCount: retries, errorMessage: err.message, updatedAt: new Date().toISOString() });
+        Audit.auditSafe(db, { entityType: "invoice", entityId: q.invoiceId, event: "dead_lettered", newStatus: "failed", sellerUid: q.sellerUid, detail: `max_retries error=${String(err.message||"").slice(0,120)}` });
+        notifySeller(q.sellerUid, q.invoiceId, `Max retries reached: ${err.message}`);
+        bumpStats(q.sellerUid, "failedInvoices");
+        out.failed++;
+      } else {
+        await doc.ref.update({ status:"pending", retryCount: retries, nextRetryAt: retryAt(retries), error: err.message });
+        Audit.auditSafe(db, { entityType: "invoice", entityId: q.invoiceId, event: "retry_scheduled", newStatus: "pending", sellerUid: q.sellerUid, detail: `attempt=${retries} error=${String(err.message||"").slice(0,100)}` });
+        out.retry++;
       }
     }
+  }
+  return out;
+}
+
+/* The lifecycle-document drainer (credit notes etc., etims-lifecycle → etimsTransmissionQueue).
+   A document is SENT only when etims-kra-adapter returns a transmittable payload — until the KRA
+   spec is mapped (SPEC_LOADED=false) every entry is marked blocked_pending_spec and nothing is sent.
+   Same discipline as the invoice queue: transactional claim; the seller's OWN stored credentials
+   (never a client-supplied identity); an accepted document is never re-sent; an ambiguous outcome
+   is held. Event credit notes are reported back to event-fiscal's single ingress. */
+async function drainTransmissionQueueOnce(opts = {}) {
+  const A = opts.adapter || KraAdapter;
+  const clientFor = opts.clientFor || sellerClient;
+  const nowIso = new Date(Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now()).toISOString();
+  const out = { claimed: 0, blocked: 0, accepted: 0, rejected: 0, unknown: 0 };
+  const snap = await db.collection("etimsTransmissionQueue").where("status","==","pending").limit(QUEUE_LIMIT).get();
+  for (const qd of snap.docs) {
+    const e = await db.runTransaction(async t => {
+      const cur = await t.get(qd.ref);
+      if (!cur.exists || cur.data().status !== "pending") return null;
+      t.update(qd.ref, { status: "transmitting", claimedAt: nowIso });
+      return cur.data();
+    });
+    if (!e) continue;
+    out.claimed++;
+    const docRef = db.collection(String(e.collection)).doc(String(e.docId));
+    const dSnap = await docRef.get();
+    if (!dSnap.exists) { await qd.ref.update({ status: "failed", error: "document missing" }); continue; }
+    const d = dSnap.data();
+    if (d.status === "accepted") { await qd.ref.update({ status: "completed" }); continue; }
+    const payload = A.buildPayload(e.docType, d);
+    if (!A.isTransmittable(payload)) {
+      await qd.ref.update({ status: "blocked_pending_spec", reason: (payload && payload.reason) || "KRA_SPEC_PENDING", updatedAt: nowIso });
+      out.blocked++;
+      continue;
+    }
+    let client;
+    try { ({ client } = await clientFor(d.sellerUid)); }
+    catch (err) { await qd.ref.update({ status: "pending", error: err.message, updatedAt: nowIso }); continue; }   /* nothing sent */
+    let providerResult;
+    try {
+      const res = await client._post(payload.path, payload.body);
+      providerResult = { kind: "response", httpStatus: res.status, body: res.body };
+    } catch (err) {
+      providerResult = { kind: /timeout/i.test(String(err && err.message)) ? "timeout" : "network_error", message: String(err && err.message) };
+    }
+    const c = A.classifyResponse(providerResult);
+    const docPatch = c.outcome === "ACCEPTED" ? { status: "accepted", kraReference: c.reference, acceptedAt: nowIso }
+      : c.outcome === "REJECTED" ? { status: "rejected", lastError: c.reason } : { status: "outcome_unknown", lastError: c.reason };
+    await docRef.update({ ...docPatch, updatedAt: nowIso });
+    await qd.ref.update({ status: c.outcome === "ACCEPTED" ? "completed" : c.outcome === "REJECTED" ? "failed" : "outcome_unknown", error: c.reason || null, updatedAt: nowIso });
+    out[c.outcome === "ACCEPTED" ? "accepted" : c.outcome === "REJECTED" ? "rejected" : "unknown"]++;
+    if (d.actor === "event-fiscal" && d.idempotencyKey) {
+      await require("./event-fiscal").recordCreditNoteOutcome(d.idempotencyKey, providerResult, { source: "etims-transmission" }).catch(() => {});
+    }
+  }
+  return out;
+}
+
+const etimsProcessQueue = onSchedule(
+  { schedule:"*/5 * * * *", timeZone:"Africa/Nairobi", timeoutSeconds:540, secrets: _ALL_SECRETS },
+  async () => {
+    await processQueueOnce();
+    await drainTransmissionQueueOnce();
   }
 );
 
@@ -1349,6 +1498,11 @@ module.exports = {
      ONE requeue path — no second eTIMS implementation. */
   generateForOrder,
   requeueInvoice,
+  resolveUnknownInvoice,
+  /* the queue workers, callable directly by tests with an injected client (no network) */
+  processQueueOnce,
+  drainTransmissionQueueOnce,
+  submitToKra,
   etimsGetBuyerReceipts,
   etimsDownloadReceipt,
   etimsGetSellerStats,

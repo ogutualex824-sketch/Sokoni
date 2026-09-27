@@ -136,7 +136,9 @@ const INTEGRATIONS = [
     requiredSecrets: ["TYPESENSE_ADMIN_KEY","TYPESENSE_SEARCH_KEY"], optionalEnv: ["TYPESENSE_NODES"] },
   { id: "etims", category: "compliance", vendor: "Kenya Revenue Authority",
     name: "KRA eTIMS — Tax Invoicing",
-    status: "live", direction: "bidirectional",
+    /* NOT live (2026-09-27, in step with the catalogue): KRA protocol unverified, spec absent from the
+       repository, sandbox never run — see docs/ETIMS_CERTIFICATION_READINESS.md. */
+    status: "configured", direction: "bidirectional",
     healthKind: "measurable",
     requiredSecrets: ["ETIMS_MASTER_KEY","ETIMS_PLATFORM_PIN","ETIMS_PLATFORM_SECRET"], optionalEnv: ["ETIMS_ENV"] },
   { id: "odpc", category: "compliance", vendor: "Office of the Data Protection Commissioner",

@@ -32,6 +32,8 @@ const SUITES = {
   notify:   ['node', ['scripts/test-event-notifications.js']],
   rules:    ['node', ['scripts/run-entertainment-rules.js']],
   browser:  ['node', ['scripts/test-event-ops-browser.js']],
+  transmit: ['node', ['scripts/test-etims-transmission.js']],
+  integ:    ['node', ['scripts/test-entertainment-integrations.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -43,7 +45,12 @@ const RULES = 'firestore.rules.build';
 const UI = 'sokoni-event-ops.js';
 const AOS = 'sokoni-aos-entertainment.js';
 const FIS = 'functions/event-fiscal.js';
+const KAD = 'functions/etims-kra-adapter.js';
+const ETM = 'functions/etims.js';
 const EH_ = 'functions/event-hub.js';
+const EI = 'functions/entertainment-integrations.js';
+const CATF = 'sokoni-integration-catalogue.js';
+const EIP = 'entertainment-integrations.html';
 
 const M = [
   /* ── ticket PIN + admission ── */
@@ -107,11 +114,11 @@ const M = [
   /* ── credit notes / refund → fiscal linkage (the credit-note slice) ── */
   { group: 'credit', name: 'fake credit-note number stamped when the credit note is built', file: FIS, suite: 'credit',
     from: "    await ref.update({ status: CN.PENDING, creditNoteDocId: res.id,", to: "    await ref.update({ status: CN.PENDING, creditNoteReference: 'CN-' + res.id, creditNoteDocId: res.id,", expect: /carries NO reference|PENDING credit note/ },
-  { group: 'credit', name: '"000" without a reference accepted with an invented number', file: FIS, suite: 'credit',
-    from: "  if (!refNo) return { outcome: 'UNKNOWN', reason: 'accepted_without_reference' };", to: "  if (!refNo) return { outcome: 'ACCEPTED', reference: 'SOKONI-CN', qr: 'https://sokoni.fake/qr.png', verificationUrl: null, providerData: {} };", expect: /WITHOUT a reference/ },
-  { group: 'credit', name: 'a timeout treated as a definitive rejection (blind retry)', file: FIS, suite: 'credit',
+  { group: 'credit', name: '"000" without a reference accepted with an invented number', file: KAD, suite: 'credit',
+    from: "  if (!rcptNo) return { outcome: 'UNKNOWN', reason: 'accepted_without_reference' };", to: "  if (!rcptNo) return { outcome: 'ACCEPTED', reference: 'SOKONI-CN', data: { qrCodeUrl: 'https://sokoni.fake/qr.png' } };", expect: /WITHOUT a reference/ },
+  { group: 'credit', name: 'a timeout treated as a definitive rejection (blind retry)', file: KAD, suite: 'credit',
     from: "  if (!p || p.kind === 'timeout' || p.kind === 'network_error') return { outcome: 'UNKNOWN',", to: "  if (!p || p.kind === 'timeout' || p.kind === 'network_error') return { outcome: 'REJECTED',", expect: /timeout → CREDIT_NOTE_OUTCOME_UNKNOWN/ },
-  { group: 'credit', name: 'a 5xx treated as a definitive rejection', file: FIS, suite: 'credit',
+  { group: 'credit', name: 'a 5xx treated as a definitive rejection', file: KAD, suite: 'credit',
     from: "  if (!Number.isFinite(code) || code >= 500) return { outcome: 'UNKNOWN',", to: "  if (!Number.isFinite(code) || code >= 500) return { outcome: 'REJECTED',", expect: /5xx/ },
   /* Two layers refuse it: the explicit UNKNOWN check, and "only a FAILED credit note is retried". The
      first run removed only the first (MISSED — the second still refused). The attack is both. */
@@ -240,6 +247,64 @@ const M = [
             { from: "      f.value.value = '';\n", to: '' },
             { from: "value=\"${cur.by === 'pin' ? '' : esc(cur.value || '')}\"", to: "value=\"${esc(cur.value || '')}\"" }],
     expect: /not left on the page/ },
+  /* ── KRA transmission workers (etims.js) ── */
+  { group: 'kra', name: 'invoice worker: no transactional claim (overlapping runs)', file: ETM, suite: 'transmit',
+    from: '      if (!cur.exists || cur.data().status !== "pending") return null;\n      t.update(doc.ref, { status: "processing"',
+    to: '      if (!cur.exists) return null;\n      t.update(doc.ref, { status: "processing"', expect: /exactly ONE transmission/ },
+  { group: 'kra', name: 'credit-note drainer: no transactional claim (concurrent drainers)', file: ETM, suite: 'transmit',
+    from: '      if (!cur.exists || cur.data().status !== "pending") return null;\n      t.update(qd.ref, { status: "transmitting"',
+    to: '      if (!cur.exists) return null;\n      t.update(qd.ref, { status: "transmitting"', expect: /2 concurrent drainers/ },
+  { group: 'kra', name: 'invoice worker retries an AMBIGUOUS outcome (timeout / 5xx treated as rejection)', file: ETM, suite: 'transmit',
+    from: '      if (err.kraOutcome === "UNKNOWN") {\n        await doc.ref.update({ status: "outcome_unknown", error: err.message });',
+    to: '      if (false) {\n        await doc.ref.update({ status: "outcome_unknown", error: err.message });', expect: /OUTCOME_UNKNOWN|does NOT re-send/ },
+  /* Two layers refuse it (the explicit outcome_unknown check, then "only failed / draft"); removing the
+     first alone leaves the second holding (observed: MISSED, 43/0), so the attack removes both. */
+  { group: 'kra', name: 'requeue accepts an outcome-unknown invoice (both refusal layers removed)', file: ETM, suite: 'transmit',
+    edits: [{ from: '  if (inv.status === "outcome_unknown") throw new HttpsError("failed-precondition", "KRA\'s outcome for this invoice is unknown', to: '  if (false) throw new HttpsError("failed-precondition", "KRA\'s outcome for this invoice is unknown' },
+            { from: '  if (inv.status !== "failed" && inv.status !== "draft") throw', to: '  if (false) throw' }], expect: /REFUSED/ },
+  /* The queue entry AND the invoice are both marked unknown; the worker then refuses an unknown invoice.
+     Re-pending only the queue entry leaves the invoice guard holding (observed: MISSED), so the attack
+     re-pends the entry and leaves the invoice untouched. */
+  { group: 'kra', name: 'a crashed claim is put back to pending (resent although it may have reached KRA)', file: ETM, suite: 'transmit',
+    edits: [{ from: '    await d.ref.update({ status: "outcome_unknown", error: "claim expired mid-transmission" });', to: '    await d.ref.update({ status: "pending", error: "claim expired mid-transmission" });' },
+            { from: '    await db.collection("etimsInvoices").doc(d.data().invoiceId).update({ status: "outcome_unknown", errorMessage: "transmission interrupted', to: '    if (false) await db.collection("etimsInvoices").doc(d.data().invoiceId).update({ status: "outcome_unknown", errorMessage: "transmission interrupted' }],
+    expect: /crashed run/ },
+  { group: 'kra', name: 'an ACCEPTED invoice is sent again', file: ETM, suite: 'transmit',
+    from: '    if (inv.status === "accepted") { await doc.ref.update({ status:"completed" }); continue; }\n', to: '', expect: /never sent again/ },
+  { group: 'kra', name: 'evidence resolution asserts ACCEPTED (a forged acceptance without a KRA receipt)', file: ETM, suite: 'transmit',
+    from: '    t.update(ref, { status: "failed", resolution: { resolution: "NOT_ACCEPTED"', to: '    t.update(ref, { status: "accepted", resolution: { resolution: "NOT_ACCEPTED"', expect: /FAILED \(retryable\)/ },
+  { group: 'kra', name: 'direct provider call: drainer sends a payload the adapter did not certify', file: ETM, suite: 'transmit',
+    from: '    if (!A.isTransmittable(payload)) {', to: '    if (false) {', expect: /NEVER sent with the real adapter/ },
+  { group: 'kra', name: 'drainer transmits under another seller\'s KRA identity', file: ETM, suite: 'transmit',
+    from: '    try { ({ client } = await clientFor(d.sellerUid)); }', to: '    try { ({ client } = await clientFor("__platform__")); }', expect: /own identity/ },
+  { group: 'kra', name: 'fake sandbox success: credit-note builder claims the spec is loaded', file: KAD, suite: 'transmit',
+    from: 'SPEC_LOADED = false', to: 'SPEC_LOADED = true', expect: /SPEC_LOADED is false|NEVER sent|blocked/ },
+
+  /* ── Entertainment integrations: status + routing (entertainment-integrations.js) ── */
+  { group: 'integ', name: 'organizer A reads organizer B (uid taken from the request)', file: EI, suite: 'integ',
+    from: '  const out = await statusFor(req.auth.uid, req.auth.token || {});', to: '  const out = await statusFor((req.data && req.data.uid) || req.auth.uid, req.auth.token || {});', expect: /IGNORED/ },
+  { group: 'integ', name: 'the organizer KRA PIN returned unmasked', file: EI, suite: 'integ',
+    from: 'kraPinMasked: maskPin(p.kraPin)', to: 'kraPinMasked: p.kraPin', expect: /IGNORED|FULL KRA PIN|masked/ },
+  { group: 'integ', name: 'the taxpayer secret leaks into the status response', file: EI, suite: 'integ',
+    from: "kraPinMasked: maskPin(p.kraPin), businessName", to: "kraPinMasked: maskPin(p.kraPin), taxpayerSecretEnc: p.taxpayerSecretEnc, businessName", expect: /no taxpayer secret/ },
+  { group: 'integ', name: 'fake LIVE: a method marked live WITHOUT evidence shows LIVE', file: EI, suite: 'integ',
+    from: "m.status === 'LIVE_AND_PROVEN' && !m.evidence ? STATE.CONFIGURED :", to: "false ? STATE.CONFIGURED :", expect: /WITHOUT evidence/ },
+  { group: 'integ', name: 'credit notes shown as enabled while the spec is missing', file: EI, suite: 'integ',
+    from: 'creditNoteCapability: { state: KRA.SPEC_LOADED ? STATE.CONFIGURED : STATE.DISABLED', to: 'creditNoteCapability: { state: STATE.CONFIGURED', expect: /credit notes DISABLED/ },
+  { group: 'integ', name: 'fake sandbox success on the status card', file: EI, suite: 'integ',
+    from: "sandbox: { state: STATE.UNKNOWN,", to: "sandbox: { state: STATE.VERIFIED,", expect: /sandbox UNKNOWN/ },
+  { group: 'integ', name: 'the admin investigation read is open to organizers', file: EI, suite: 'integ',
+    from: "  if (!AC.isAdmin(req)) fail('permission-denied', 'Admin only.');\n", to: '', expect: /admin read/ },
+  { group: 'integ', name: 'organizers are handed the AdminOS route', file: EI, suite: 'integ',
+    from: '(admin ? c : { ...c, adminRoute: undefined })', to: 'c', expect: /NO admin route/ },
+  { group: 'integ', name: 'KRA routed to a new Entertainment config page (second authority)', file: EI, suite: 'integ',
+    from: "organizerRoute: '/etims-seller.html'", to: "organizerRoute: '/entertainment-kra-setup.html'", expect: /canonical eTIMS page/ },
+  { group: 'integ', name: 'the canonical catalogue claims eTIMS live again', file: CATF, suite: 'integ',
+    from: "      status: 'configured', direction: 'bidirectional', hubs: ['entertainment'],", to: "      status: 'live', direction: 'bidirectional', hubs: ['entertainment'],", expect: /no longer claims/ },
+  { group: 'integ', name: 'the canonical console ignores the hub filter', file: 'sokoni-integrations.js', suite: 'integ',
+    from: '(i.hubs || []).indexOf(_filter.hub) === -1', to: 'false', expect: /filters the catalogue by hub/ },
+  { group: 'integ', name: 'duplicate config: the Entertainment page gains a credentials form', file: EIP, suite: 'integ',
+    from: '  <div class="grid" id="cards"></div>\n', to: '  <div class="grid" id="cards"></div>\n  <form id="cfg"><input name="apiKey" /></form>\n', expect: /no form/ },
 ];
 
 const argv = process.argv.slice(2);

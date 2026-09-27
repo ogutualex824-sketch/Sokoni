@@ -50,6 +50,7 @@
   const FISCAL = {
     FISCAL_PENDING: 'Pending fiscal confirmation',
     FISCAL_FAILED: 'Fiscal confirmation delayed — SOKONI is reconciling it with KRA',
+    FISCAL_OUTCOME_UNKNOWN: 'Fiscal confirmation delayed — SOKONI is reconciling it with KRA',
     ORGANIZER_NOT_REGISTERED: 'Organizer is not registered for eTIMS',
     FREE_TICKET: 'Free ticket — no fiscal receipt',
     NO_FISCAL_RECORD: 'No fiscal record for this ticket',

@@ -75,7 +75,7 @@
     {
       id: 'intasend-collections', name: 'IntaSend — Collections (M-Pesa STK)',
       vendor: 'IntaSend', category: 'payments', icon: '💸',
-      status: 'live', direction: 'bidirectional',
+      status: 'live', direction: 'bidirectional', hubs: ['entertainment'],
       summary: 'The production collection rail. SOKONI initiates an STK push through IntaSend; ' +
                'the customer approves it on their handset in Safaricom’s own dialog.',
       evidence: {
@@ -90,7 +90,7 @@
     {
       id: 'intasend-webhook', name: 'IntaSend — Payment Webhook',
       vendor: 'IntaSend', category: 'payments', icon: '📥',
-      status: 'live', direction: 'inbound',
+      status: 'live', direction: 'inbound', hubs: ['entertainment'],
       summary: 'The sole receiver for IntaSend payment state. Challenge-verified on every POST.',
       evidence: {
         endpoints:   ['webhookIntasend'],
@@ -104,7 +104,7 @@
     {
       id: 'intasend-payouts', name: 'IntaSend — B2C Payouts',
       vendor: 'IntaSend', category: 'payments', icon: '🏧',
-      status: 'live', direction: 'outbound',
+      status: 'live', direction: 'outbound', hubs: ['entertainment'],
       summary: 'Wallet withdrawals and refund disbursement to an M-Pesa number, Till or PayBill.',
       evidence: {
         modules:     ['functions/wallet-engine.js', 'functions/wallet.js', 'functions/finos.js'],
@@ -240,7 +240,12 @@
     {
       id: 'etims', name: 'KRA eTIMS — Tax Invoicing',
       vendor: 'Kenya Revenue Authority', category: 'compliance', icon: '🇰🇪',
-      status: 'live', direction: 'bidirectional',
+      /* NOT live (corrected 2026-09-27): docs/ETIMS_CERTIFICATION_READINESS.md is NO-GO — the transport
+         signs with a home-grown HMAC, not KRA's OSCU cmcKey; endpoints / codes are unverified against the
+         KRA spec (absent from the repository); the three eTIMS secrets are unset. Code + credentials
+         present, production serving NOT proven = 'configured'. Credit notes cannot be sent at all yet
+         (etims-kra-adapter SPEC_LOADED=false). */
+      status: 'configured', direction: 'bidirectional', hubs: ['entertainment'],
       summary: 'Fiscal invoice transmission to KRA, with the tax engine and audit trail behind it.',
       evidence: {
         modules: ['functions/etims-kra-adapter.js', 'functions/etims-tax-engine.js',
@@ -250,7 +255,7 @@
         collections: ['etimsInvoices', 'etimsAudit'],
       },
       health: { source: null, kind: 'measurable', note: 'Transmission outcome is per-invoice; read the invoice record.' },
-      notes:  'ETIMS_ENV must be "production" or "sandbox" — a missing value throws at boot rather than defaulting.',
+      notes:  'ETIMS_ENV must be "production" or "sandbox" — a missing value throws at boot rather than defaulting. Status is configured, not live: the KRA spec, cmcKey device initialisation and sandbox certification are outstanding (etims-kra-adapter MISSING_SPEC).',
     },
     {
       id: 'odpc', name: 'ODPC — Data Protection Compliance',
@@ -688,6 +693,8 @@
   }
 
   window.SokoniIntegrationCatalogue = {
+    /* Entries a hub depends on (e.g. 'entertainment'). A filter over THIS catalogue — never a second list. */
+    forHub: function (hub) { return INTEGRATIONS.filter(function (i) { return (i.hubs || []).indexOf(hub) !== -1; }); },
     version:      '1.0.0',
     categories:   CATEGORIES,
     integrations: INTEGRATIONS,

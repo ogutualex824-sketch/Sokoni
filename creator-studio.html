@@ -96,7 +96,7 @@
     }[c.state];
     $app.innerHTML = `
       <h1>Creator Studio</h1>
-      <p class="muted">${esc(c.displayName)} · <a href="/creator.html">View Creator</a> · <a href="/creator.html?view=royalties">My royalties</a></p>
+      <p class="muted">${esc(c.displayName)} · <a href="/creator.html">View Creator</a> · <a href="/creator.html?view=royalties">My royalties</a> · <a href="/entertainment-integrations.html?context=creator&amp;integration=intasend" data-int-link="intasend">Payment integrations</a> · <a href="/entertainment-integrations.html?context=creator&amp;integration=kra_etims" data-int-link="kra_etims">Fiscal integrations</a></p>
       <div class="banner">${esc(banner)}</div>
       <div class="panel" id="verPanel">
         <b>Creator verification</b> <span class="chip" data-s="${esc(ME.verificationStatus)}">${esc(({ NOT_APPLIED: 'Not applied', DRAFT: 'Draft', SUBMITTED: 'Submitted', UNDER_REVIEW: 'Under review', MORE_INFORMATION_REQUIRED: 'More information required', APPROVED: 'Verified ✓', REJECTED: 'Not approved', SUSPENDED: 'Suspended' })[ME.verificationStatus] || ME.verificationStatus)}</span>

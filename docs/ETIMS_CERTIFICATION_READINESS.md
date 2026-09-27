@@ -21,6 +21,27 @@
 
 ---
 
+## 0. Update 2026-09-27 — transmission hardening (Entertainment integrations slice)
+
+- **Still NO-GO.** No KRA OSCU / VSCU spec exists in the repository. `etims-kra-adapter.js` now lists what is
+  missing (`MISSING_SPEC`):
+  - credit-note endpoint;
+  - refund receipt-type code + original linkage;
+  - credit-note line / tax semantics;
+  - cmcKey device initialisation + signing.
+- **One response classifier** (`classifyResponse`). ACCEPTED requires 200 + `000` + a receipt. A timeout, 5xx or
+  "000 without a receipt" is UNKNOWN and is **never** retried blindly.
+- **Invoice queue.**
+  - Transactional claim (no double send under overlapping runs).
+  - `outcome_unknown` state with super-admin evidence resolution (only as NOT_ACCEPTED).
+  - A stale claim becomes unknown.
+  - `requeueInvoice` accepts only `failed` / `draft`.
+- **Lifecycle transmission queue.** It now has a drainer (`drainTransmissionQueueOnce`). It sends nothing while the
+  adapter reports the spec missing.
+- **Status.** eTIMS status is `configured` (not `live`) in the catalogue and the backend registry.
+- **Sandbox certification** needs the spec and cmcKey device initialisation; credentials alone are insufficient.
+  Provider calls made: **0**.
+
 ## 1. Overall readiness
 
 | Dimension | Readiness | Note |

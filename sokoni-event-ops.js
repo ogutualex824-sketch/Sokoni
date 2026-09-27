@@ -344,7 +344,8 @@
   /* ═══ FINANCE ═══ */
   function finance(host, ctx) {
     host.innerHTML = `<div class="eo"><div class="eo-card"><label>Event ${eventSelect(ctx, 'fnEv')}</label></div><div id="fnOut" class="eo-card">Loading…</div>
-      <p style="font-size:12px;opacity:.75">Online proceeds are paid to your SOKONI wallet 24 hours after the event ends. Withdraw from your <a href="/wallet.html">wallet</a>.</p></div>`;
+      <p style="font-size:12px;opacity:.75">Online proceeds are paid to your SOKONI wallet 24 hours after the event ends. Withdraw from your <a href="/wallet.html">wallet</a>.</p>
+      <p style="font-size:12px;opacity:.75"><a href="/entertainment-integrations.html?context=events&amp;integration=intasend" data-int-link="intasend">Payment integrations</a> · <a href="/entertainment-integrations.html?context=events&amp;integration=kra_etims" data-int-link="kra_etims">Fiscal integrations (KRA eTIMS)</a></p></div>`;
     const $ = (id) => host.querySelector('#' + id);
     async function load() {
       try {

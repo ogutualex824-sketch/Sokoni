@@ -32,6 +32,16 @@ through a local token layer with fallbacks, so no page restyles it.
 | `tests/certify-integrations-console.js` | Certification. Runs the real module against a scripted Firestore and asserts on rendered output. |
 | `tests/sabotage-integrations-console.js` | Pre-flight sabotage. Plants real defects and proves the suite catches each one. |
 
+### Hub filter (2026-09-27)
+
+A catalogue entry may declare `hubs: ['entertainment', …]`, and `forHub(hub)` returns the entries a hub depends on.
+The console reads `?hub=` and `?integration=` from the URL: it filters the catalogue rows by hub, preselects the
+entry and keeps the hub filter across tab changes. Hubs link here, e.g.
+`/admin-os.html?hub=entertainment&integration=etims#integrations`. They never build their own list. The
+Entertainment Hub's organizer-facing `entertainment-integrations.html` is **status-only** and deep-links to the
+owning pages (see [[EVENTS_OPERATIONS]] §3, "Entertainment integrations"). eTIMS is `configured`, not `live`, in
+both the catalogue and `functions/integration-registry.js` ([[ETIMS_CERTIFICATION_READINESS]]).
+
 ## What it shows
 
 Seven tabs:

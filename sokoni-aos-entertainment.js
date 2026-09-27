@@ -99,7 +99,7 @@
 
     /* A fiscal (KRA eTIMS) record: KRA values shown only as KRA returned them; retry reuses eTIMS. */
     const FISCAL_HEAD = ['Sale', 'Event', 'Channel', 'Gross', 'Fiscal', 'Invoice', 'KRA receipt', 'Credit notes (reversals)', ''];
-    const FISCAL_STATES = ['FISCAL_FAILED', 'FISCAL_PENDING', 'FISCAL_NOT_REQUIRED', 'CREDIT_NOTE_REQUIRED', 'CREDIT_NOTE_PENDING', 'CREDIT_NOTE_FAILED', 'CREDIT_NOTE_OUTCOME_UNKNOWN', 'CREDIT_NOTE_ACCEPTED', 'FISCAL_ACCEPTED'];
+    const FISCAL_STATES = ['FISCAL_OUTCOME_UNKNOWN', 'FISCAL_FAILED', 'FISCAL_PENDING', 'FISCAL_NOT_REQUIRED', 'CREDIT_NOTE_REQUIRED', 'CREDIT_NOTE_PENDING', 'CREDIT_NOTE_FAILED', 'CREDIT_NOTE_OUTCOME_UNKNOWN', 'CREDIT_NOTE_ACCEPTED', 'FISCAL_ACCEPTED'];
     /* A credit note: KRA's reference ONLY when accepted. Retry for a definitive failure; an unknown
        outcome needs super-admin evidence. No field anywhere accepts a receipt or reference. */
     function cnCell(c) {
@@ -111,12 +111,13 @@
     }
     function fiscalRow(f) {
       const v = f.view || {};
-      const canRetry = v.fiscalStatus && v.fiscalStatus !== 'FISCAL_ACCEPTED' && v.reason !== 'FREE_TICKET';
+      const canRetry = v.fiscalStatus && v.fiscalStatus !== 'FISCAL_ACCEPTED' && v.fiscalStatus !== 'FISCAL_OUTCOME_UNKNOWN' && v.reason !== 'FREE_TICKET';
+      const unknown = v.fiscalStatus === 'FISCAL_OUTCOME_UNKNOWN';
       const tr = f.orderId ? trBtn('order', f.orderId) : (f.saleId ? trBtn('sale', f.saleId) : '');
       return `<tr><td class="aos-mono">${esc(f.saleKey || f.id)}</td><td class="aos-mono">${esc(f.eventId)}</td><td>${esc(f.channel)}</td><td>${kes(f.grossCents)}</td>
         <td>${chip(v.fiscalStatus)}${v.reason ? `<div class="aos-muted">${esc(v.reason)}</div>` : ''}${f.error ? `<div class="aos-muted">${esc(f.error)}</div>` : ''}</td><td class="aos-mono">${esc(v.invoiceNumber || f.invoiceNumber || '—')}</td>
         <td class="aos-mono">${esc(v.receiptNumber || '—')}</td><td>${(v.creditNotes || []).map(cnCell).join('') || '—'}</td>
-        <td>${canRetry ? `<button type="button" class="aos-btn aos-btn-ghost" data-fiscal-retry="${esc(f.saleKey || f.id)}">Retry fiscal submission</button> ` : ''}${tr}</td></tr>`;
+        <td>${canRetry ? `<button type="button" class="aos-btn aos-btn-ghost" data-fiscal-retry="${esc(f.saleKey || f.id)}">Retry fiscal submission</button> ` : ''}${unknown ? `<button type="button" class="aos-btn aos-btn-ghost" data-fiscal-resolve="${esc(f.saleKey || f.id)}">Resolve with evidence (super admin)</button> ` : ''}${tr}</td></tr>`;
     }
 
     const R = {
@@ -264,6 +265,10 @@
       }
       if (t.dataset.untrace) { traced = null; return render(); }
       if (t.dataset.fiscalRetry) return act('eventAdminFiscalRetry', { saleKey: t.dataset.fiscalRetry }, 'Fiscal retry queued through eTIMS.');
+      if (t.dataset.fiscalResolve) {
+        return ask('Resolve as NOT recorded by KRA', [{ label: 'Evidence (e.g. KRA support reference) — a receipt can only come from KRA', area: true }], ([evidence]) =>
+          act('eventAdminFiscalResolve', { saleKey: t.dataset.fiscalResolve, evidence }, 'Resolved; the invoice may now be retried.'));
+      }
       if (t.dataset.cnRetry) return act('eventAdminCreditNoteRetry', { executionId: t.dataset.cnRetry }, 'Credit note re-queued (same credit note — no duplicate).');
       if (t.dataset.cnResolve) {
         return ask('Resolve as NOT accepted by KRA', [{ label: 'Evidence (e.g. KRA support reference) — acceptance can only come from KRA', area: true }], ([evidence]) =>
@@ -337,7 +342,7 @@
   const OPS = ['eventAdminOverview', 'eventAdminEvents', 'eventAdminSettlements', 'eventAdminRefundQueue', 'eventAdminExceptions',
     'eventAdminAttestFee', 'entAdminMatrix', 'entAdminListings', 'entAdminSetListingStatus',
     'eventAdminInvestigate', 'eventAdminTrace', 'eventAdminStaff', 'eventAdminAdmissions', 'eventAdminRefundRequests',
-    'eventAdminReceivables', 'eventAdminRevokeStaff', 'eventAdminFiscal', 'eventAdminFiscalRetry', 'eventAdminCreditNoteRetry', 'eventAdminCreditNoteResolve'];
+    'eventAdminReceivables', 'eventAdminRevokeStaff', 'eventAdminFiscal', 'eventAdminFiscalRetry', 'eventAdminCreditNoteRetry', 'eventAdminCreditNoteResolve', 'eventAdminFiscalResolve'];
 
   root.SokoniAOSEntertainment = { mount, OPS, _kes: kes, _esc: esc };
 }(typeof window !== 'undefined' ? window : globalThis));

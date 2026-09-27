@@ -223,11 +223,18 @@ async function trace(req) {
   const walletTx = settlement && settlement.walletTxId ? await _doc(COL.WALLET_TX, settlement.walletTxId) : null;
   /* KRA eTIMS: the fiscal record of this sale and its invoice — observed, never invented. */
   const fiscal = settleKey ? ((await FISCAL.viewsFor([settleKey]))[settleKey] || null) : null;
+  const integ = event && event.organizerUid ? await (async () => { const st = await require('./entertainment-integrations').statusFor(event.organizerUid, {});
+    const k = st.cards.find((c) => c.id === 'kra_etims').status; const pay = st.cards.find((c) => c.id === 'intasend').status;
+    return { organizerUid: event.organizerUid, kraRegistration: k.registration, fiscalState: k.state, invoiceCapability: k.invoiceCapability.state,
+      creditNoteCapability: k.creditNoteCapability.state, paymentState: pay.state }; })() : null;
 
   const ev = event ? { id: event.id, title: event.title, status: event.status, organizerUid: event.organizerUid,
     startDate: event.startDate || null, endDate: event.endDate || null, refundPolicy: event.refundPolicy || null } : null;
   const stages = [
     stage('event', ev ? 'observed' : 'empty', ev),
+    /* integration → provider → capability → organizer: the organizer's eTIMS registration (PIN masked, no
+       secret) and the payment / fiscal capability states — read from the canonical authorities */
+    stage('integration', integ ? 'observed' : 'empty', integ, 'Status only — configuration lives in AdminOS › Integrations and on the organizer\'s eTIMS page.'),
     stage('tickets', tickets.length ? 'observed' : 'empty', tickets.map((t, i) => ({ ...t, admission: admissions[i] }))),
     stage('sale', sale ? 'observed' : 'n/a', sale, sale ? null : 'Online purchase — no cashier sale.'),
     doorSale ? stage('payment', 'n/a', null, sale.tender === 'cash' ? 'Cash collected at the door by the organizer.' : 'Card on the organizer\'s own terminal (reference on the sale).')
@@ -331,6 +338,23 @@ async function creditNoteRetry(req) {
   return { ok: true, result: r };
 }
 
+/** SUPER ADMIN: resolve an ambiguous SALE-invoice outcome (etims.resolveUnknownInvoice) — only as "KRA did
+ *  not record it", with evidence; it may then be retried through the same queue. Acceptance (a receipt)
+ *  can only come from KRA; nothing in the request can supply one. */
+async function fiscalResolve(req) {
+  if (!req.auth || !req.auth.uid) fail('unauthenticated', 'Sign in required.');
+  if (!AC.isSuperAdmin(req)) fail('permission-denied', 'Super admin only.');
+  const d = req.data || {};
+  const saleKey = _id(d.saleKey, 'saleKey');
+  const f = await _doc(COL.FISCAL, saleKey);
+  if (!f || !f.invoiceId) fail('not-found', 'No eTIMS invoice for that sale.');
+  const ev = String(d.evidence || '').trim();
+  if (ev.length < 10) fail('invalid-argument', 'Evidence (e.g. a KRA support reference) is required.');
+  await require('./etims').resolveUnknownInvoice(f.invoiceId, { evidence: ev }, req.auth.uid);
+  await _audit('event_fiscal_resolved', req.auth.uid, { saleKey, invoiceId: f.invoiceId }, { resolution: 'NOT_ACCEPTED', evidence: ev.slice(0, 300) });
+  return { ok: true };
+}
+
 /** SUPER ADMIN: resolve an ambiguous credit-note outcome — ONLY as "the provider did not accept it",
  *  with evidence. Acceptance can never be asserted here; it arrives from the provider alone. */
 async function creditNoteResolve(req) {
@@ -386,6 +410,7 @@ const _adminH = {
   eventAdminRefundRequests: refundRequests, eventAdminReceivables: receivables, eventAdminRevokeStaff: revokeStaff,
   eventAdminFiscal: fiscalQueue, eventAdminFiscalRetry: fiscalRetry,
   eventAdminCreditNoteRetry: creditNoteRetry, eventAdminCreditNoteResolve: creditNoteResolve,
+  eventAdminFiscalResolve: fiscalResolve,
 };
 
 module.exports = { _adminH, SEARCH_BY, clean, maskPhone, maskEmail };

@@ -1,3 +1,80 @@
+## 2026-09-27 (204) — Entertainment integrations routing + KRA transmission hardening (CODE GREEN; KRA PROVIDER BLOCKED on spec)
+
+- **Owner decisions:**
+  - spec-independent work now; KRA adapter / transmission / sandbox are reported BLOCKED on the missing KRA spec;
+  - organizers get status cards plus canonical deep links (no configuration in Entertainment).
+- **Integrations routing — no second system.**
+  - New `entertainment-integrations.html` is status-only (no form or write; it self-updates via `shared-header.js`).
+    Its cards are Payments, KRA eTIMS, Connect, Creator and Events.
+  - "View integrations" opens the owning page: KRA → `etims-seller.html`; admins → AdminOS › Integrations
+    `?hub=entertainment`.
+  - Entry points (each carries `context` / `integration`): Event Manager sidebar, event finance, Creator Studio and the
+    Entertainment Hub tab.
+  - The canonical console (`sokoni-integrations.js`) reads `hub` / `integration` from the URL and filters the canonical
+    catalogue by the new `hubs` field (`forHub()`).
+- **Honest states** (`functions/entertainment-integrations.js`):
+  - Vocabulary: UNKNOWN / CONFIGURED / VERIFIED / LIVE_AND_PROVEN / FAILED / DISABLED / NOT_APPLICABLE.
+  - LIVE only with a recorded evidence entry.
+  - eTIMS is CONFIGURED; credit notes DISABLED (spec missing); sandbox UNKNOWN.
+  - **Fake LIVE removed:** the catalogue and `functions/integration-registry.js` both said eTIMS `live`,
+    contradicting the NO-GO readiness report; both are now `configured`.
+- **Isolation:**
+  - `entIntegrationStatus` returns the caller's own status (a request `uid` is ignored).
+  - The KRA PIN is masked; no taxpayer secret, device serial or credential is returned.
+  - The AdminOS route is admin-only. The new `eventAdminIntegrationStatus` is admin-only.
+  - The AdminOS trace gains an `integration` stage.
+- **KRA adapter:**
+  - `MISSING_SPEC` names what the absent KRA spec must supply: credit-note endpoint; refund receipt-type code + original
+    linkage; credit-note line / tax semantics; cmcKey device init + signing.
+  - `classifyResponse` is the ONE outcome classifier; `event-fiscal` delegates to it.
+- **Invoice worker (`etims.processQueueOnce`) — real defects fixed:**
+  - transactional claim (overlapping runs sent one invoice twice);
+  - timeout / 5xx / "000 without receipt" → `outcome_unknown`, never re-sent (was retried blindly);
+  - a crashed claim → `outcome_unknown` after a 15-min lease;
+  - `requeueInvoice` only for `failed` / `draft`;
+  - `resolveUnknownInvoice` (super admin + evidence, only as NOT_ACCEPTED) via the new AdminOS op
+    `eventAdminFiscalResolve`.
+  - New fiscal state: FISCAL_OUTCOME_UNKNOWN.
+- **Credit-note drainer:** `etims.drainTransmissionQueueOnce` (same schedule).
+  - Transactional claim; the seller's own identity; reports to `recordCreditNoteOutcome`.
+  - With the real adapter it sends **nothing** (`blocked_pending_spec`).
+- **Tests:**
+  - New `test-etims-transmission.js` 43/0 (payment/KRA outcome matrix; test-double drainer).
+  - New `test-entertainment-integrations.js` 36/0.
+  - Browser 234/0: the integrations page at 360–1440 px, routing, masking, no overflow.
+  - Events: ops 55 · sales 46 · refunds 53 · settlement 84 · admin 67 · notifications 17 · identity 75 ·
+    credit-notes 71 · rules 98.
+  - Entertainment: registry 65 · agreements 25 · browser 230.
+  - Creator: hub 260 · authority 19 · callback 78 · completion 66 · preview 46 · publishing 104 · royalty 94 ·
+    search 18 · ui 64 · withdrawal 21 · rules 127.
+  - AdminOS: wiring 316 · render 43.
+  - eTIMS: audit 6 · lifecycle 16 · tax 22 · commission-invoice 52 · merchant-tax 95 / ui 220.
+  - Integrations: console certify CERTIFIED · console 68 · status 45 · probes 85 · registry parity 26.
+  - Refund authority matrix: 24.
+  - **BASELINE:** `test-refund-authority-convergence` harness error (untouched POS role tables).
+- **Sabotage:** event-ops **93/93 caught** (0 missed, 0 crashed; sha-256 restore verified); integrations console 41/41; integration governance 8/8.
+  - New groups: `[kra]` 10 and `[integ]` 12.
+  - Three first-run misses were single-layer or no-op attacks (a second guard held, or the substituted identity was
+    identical). They were rewritten as honest multi-layer attacks, and all were caught.
+- **Production:**
+  - Provider (KRA / IntaSend) calls: 0. Production writes: 0. Deployments: 0.
+  - **Disclosed:** `scripts/etims-release-gate.js` "Live integrity" performed read-only production reads (0 records;
+    its PASS is vacuous) — recorded as gap 17.
+- **Files:**
+  - New: `functions/entertainment-integrations.js`, `entertainment-integrations.html`,
+    `scripts/test-etims-transmission.js`, `scripts/test-entertainment-integrations.js`.
+  - Changed: `functions/{etims,etims-kra-adapter,event-fiscal,event-admin,event-ops,admin-os-dispatch,integration-registry}.js`,
+    `sokoni-integration-catalogue.js`, `sokoni-integrations.js`, `sokoni-aos-entertainment.js`,
+    `sokoni-event-ticket.js`, `sokoni-event-ops.js`, `event-manager.html`, `creator-studio.html`, `entertainment.html`,
+    `scripts/{sabotage-event-ops,test-event-admin,test-event-ops-browser}.js`,
+    `docs/{EVENTS_OPERATIONS,INTEGRATIONS_CONTROL_CENTER,ETIMS_CERTIFICATION_READINESS}.md`.
+- **Database:** `etimsInvoices.status` / `etimsQueue.status` gain `outcome_unknown`; `etimsTransmissionQueue.status`
+  gains `transmitting` / `blocked_pending_spec` / `outcome_unknown`. No migration.
+- **API:** `eventOpsDispatch` op `entIntegrationStatus`; `adminOsDispatch` ops `eventAdminIntegrationStatus`,
+  `eventAdminFiscalResolve`.
+- **Security:** caller-scoped status; masking; no secrets returned; no blind resend of ambiguous fiscal outcomes.
+- **Breaking:** none.
+
 ## 2026-09-27 (203) — Events: fiscal state machine, KRA credit-note lifecycle, refund → fiscal linkage, penalties
 
 - **Audit first.** Every authority was located before any change (`docs/EVENTS_OPERATIONS.md` §3): sale, ticket,

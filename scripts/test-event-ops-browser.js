@@ -47,6 +47,7 @@ const RF = require(Path.join(FN, 'event-refunds.js'));
 const ES = require(Path.join(FN, 'event-settlement.js'));
 const EH = require(Path.join(FN, 'event-hub.js'));
 const EA = require(Path.join(FN, 'event-admin.js'));
+const EI = require(Path.join(FN, 'entertainment-integrations.js'));
 /* The REAL payment-intent authority prices a cashier M-PESA order. The provider edge (initiateSTKPush →
    IntaSend → webhook) is the ONLY simulated part: see STK below. */
 const INTENTS = require(Path.join(FN, 'payment-intents.js'));
@@ -71,7 +72,7 @@ async function server(name, data, uid) {
 async function _server(name, data, uid) {
   try {
     if (name === 'eventOpsDispatch') {
-      const h = OPS._h[data.op] || SALES._h[data.op] || RF._h[data.op];
+      const h = OPS._h[data.op] || SALES._h[data.op] || RF._h[data.op] || EI._h[data.op];
       if (!h) return { err: { code: 'not-found', message: 'unknown op ' + data.op } };
       return { ok: await h(reqFor(uid, data)) };
     }
@@ -118,7 +119,7 @@ const COMPAT = `
   window.SK = { dialog: { confirm: async () => true } };
 })();`;
 const REAL = new Set(['/event-manager.html', '/event-hub.html', '/sokoni-event-ops.js', '/sokoni-event-refund-reasons.js', '/sokoni-hub-nav.js', '/sokoni-qr.js', '/sokoni-event-ticket.js',
-  '/sokoni-dashboard-profile.js', '/sokoni-dashboard-profile-core.js', '/sokoni-aos-entertainment.js']);
+  '/sokoni-dashboard-profile.js', '/sokoni-dashboard-profile-core.js', '/sokoni-aos-entertainment.js', '/entertainment-integrations.html']);
 /* AdminOS › Entertainment, mounted with the REAL admin-os.html stylesheet and AdminOS's call shape. */
 const AOS_PAGE = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
   (fs.readFileSync(Path.join(ROOT, 'admin-os.html'), 'utf8').match(/<style[^>]*>[\s\S]*?<\/style>/g) || []).join('') +
@@ -412,6 +413,30 @@ async function seed() {
         ck('buyer: an ineligible reason is explained and CANNOT be submitted', /NO/.test(await pg.textContent('#modal-content')) && !(await pg.$('#rw-send')));
       }
       await c.close();
+
+      /* Entertainment › Integrations: status + canonical routing (the REAL page) */
+      c = await ctxFor('org1', w); pg = await c.newPage();
+      await pg.goto(BASE + '/entertainment-integrations.html?context=events&integration=kra_etims'); await pg.waitForSelector('#int-kra_etims', { timeout: 5000 }).catch(() => null);
+      const ih = await pg.content();
+      ck(`integrations @${w}: five status cards, the focused card highlighted`, (await pg.$$('section.card')).length === 5 && !!(await pg.$('#int-kra_etims.focus')));
+      ck(`integrations @${w}: KRA "View integrations" opens the canonical eTIMS page with context`, (await pg.getAttribute('[data-view="kra_etims"]', 'href')) === '/etims-seller.html?hub=entertainment&context=events');
+      ck(`integrations @${w}: an organizer sees NO AdminOS link and nothing to configure`, !(await pg.$('[data-admin]')) && !(await pg.$('form, input, select, textarea')));
+      /* read the rendered chips from the DOM (the page's own stylesheet names every state, so a text search proves nothing) */
+      const kra = await pg.evaluate(() => { const o = {}; const sp = [...document.querySelectorAll('#int-kra_etims .kv > span')]; for (let k = 0; k < sp.length; k += 2) { const ch = sp[k + 1].querySelector('.chip'); o[sp[k].textContent.trim()] = ch ? ch.dataset.s : sp[k + 1].textContent.trim(); } return o; });
+      const liveNoEv = await pg.evaluate(() => [...document.querySelectorAll('#int-intasend tbody tr')].filter((tr) => tr.querySelector('.chip').dataset.s === 'LIVE_AND_PROVEN' && tr.children[2].textContent.trim() === '—').length);
+      ck(`integrations @${w}: KRA PIN masked; credit notes DISABLED; sandbox UNKNOWN; no method LIVE without evidence`, ih.includes('P05******7T') && !ih.includes('P051234567T') && kra['Credit notes'] === 'DISABLED' && kra['Sandbox certification'] === 'UNKNOWN' && kra['Invoice transmission'] === 'CONFIGURED' && liveNoEv === 0, kra);
+      ck(`integrations @${w}: no horizontal page overflow`, await noOverflow(pg, w));
+      await c.close();
+      if (flows) {
+        c = await ctxFor('admin1', w); pg = await c.newPage();
+        await pg.goto(BASE + '/entertainment-integrations.html?context=creator'); await pg.waitForSelector('[data-admin="kra_etims"]', { timeout: 5000 }).catch(() => null);
+        ck(`integrations @${w}: an admin is routed to AdminOS › Integrations filtered to Entertainment`, (await pg.getAttribute('[data-admin="kra_etims"]', 'href')) === '/admin-os.html?hub=entertainment&integration=etims&context=creator#integrations');
+        await c.close();
+        c = await ctxFor('buyer1', w); pg = await c.newPage();
+        await pg.goto(BASE + '/entertainment-integrations.html'); await pg.waitForSelector('#int-kra_etims', { timeout: 5000 }).catch(() => null);
+        ck(`integrations @${w}: an organizer who is not on eTIMS sees NOT APPLICABLE — never another organizer's registration`, /NOT APPLICABLE/.test(await pg.textContent('#int-kra_etims')) && !(await pg.content()).includes('P05'));
+        await c.close();
+      }
 
       /* AdminOS › Entertainment › Events investigation */
       c = await ctxFor('admin1', w); pg = await c.newPage();

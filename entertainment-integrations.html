@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Entertainment Integrations — SOKONI</title>
+<!-- shared-header.js: the platform header + profile menu, and it injects sw-register.js (self-update). -->
+<script src="/shared-header.js"></script>
+<style>
+  :root { --bg:#0d1117; --bg2:#161b22; --bg3:#21262d; --border:#30363d; --text:#e6edf3; --text2:#8b949e; --green:#3fb950; --amber:#d29922; --red:#f85149; --blue:#58a6ff; }
+  :root[data-theme="light"] { --bg:#f6f8fa; --bg2:#ffffff; --bg3:#eef1f4; --border:#d0d7de; --text:#1f2328; --text2:#57606a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 22px; margin: 8px 0 4px; }
+  .lead { color: var(--text2); margin: 0 0 16px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 14px; }
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 16px; min-width: 0; }
+  .card.focus { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(88,166,255,.25); }
+  .card h2 { font-size: 16px; margin: 0 0 6px; display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .chip { font-size: 11px; font-weight: 700; letter-spacing: .04em; padding: 2px 8px; border-radius: 999px; background: var(--bg3); white-space: nowrap; }
+  .chip[data-s="LIVE_AND_PROVEN"], .chip[data-s="VERIFIED"] { color: var(--green); }
+  .chip[data-s="CONFIGURED"], .chip[data-s="UNKNOWN"] { color: var(--amber); }
+  .chip[data-s="FAILED"], .chip[data-s="DISABLED"] { color: var(--red); }
+  .chip[data-s="NOT_APPLICABLE"] { color: var(--text2); }
+  .muted { color: var(--text2); font-size: 13px; overflow-wrap: anywhere; }
+  .kv { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; font-size: 13px; margin: 8px 0; }
+  .kv > * { min-width: 0; overflow-wrap: anywhere; }
+  .tbl-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  td, th { padding: 4px 6px; border-bottom: 1px solid var(--border); text-align: left; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg3); color: inherit; text-decoration: none; font-weight: 700; }
+  .btn.primary { background: var(--blue); color: #000; border-color: transparent; }
+  #msg { margin: 12px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Entertainment Integrations</h1>
+  <p class="lead">Status of the integrations your Entertainment work depends on. Nothing is configured here —
+    each integration is managed on its own canonical page.</p>
+  <div id="msg" role="status" aria-live="polite">Loading…</div>
+  <div class="grid" id="cards"></div>
+</main>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js"></script>
+<script src="/sokoni-appcheck.js"></script>
+<script src="/sokoni-config.js"></script>
+<script>
+  /* Entertainment Hub › Integrations. STATUS + ROUTING ONLY (owner decision 2026-09-27):
+     the server (functions/entertainment-integrations.js) returns the caller's OWN status from the
+     canonical authorities; every "View integrations" link opens the canonical page that owns it
+     (KRA → etims-seller.html; admins → AdminOS › Integrations filtered to Entertainment). */
+  const app = firebase.initializeApp(window.SOKONI_CONFIG, 'ent-integrations');
+  const auth = firebase.auth(app);
+  const fns = firebase.functions(app);
+  fns.useRegion('us-central1');
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const qs = new URLSearchParams(location.search);
+  const CONTEXT = /^(events|creator|entertainment)$/.test(qs.get('context') || '') ? qs.get('context') : 'entertainment';
+  const FOCUS = /^[a-z_]{1,40}$/.test(qs.get('integration') || '') ? qs.get('integration') : null;
+  const safeRoute = (r) => (typeof r === 'string' && /^\/[A-Za-z0-9._\-\/]*(\?[A-Za-z0-9=&_\-]*)?(#[a-z-]+)?$/.test(r) ? r : null);
+  const when = (ms) => (ms ? new Date(ms).toLocaleString('en-KE') : '—');
+  const chip = (s) => `<span class="chip" data-s="${esc(s)}">${esc(String(s || 'UNKNOWN').replace(/_/g, ' '))}</span>`;
+  function withCtx(route) {
+    const r = safeRoute(route); if (!r) return null;
+    const [pathAndQuery, hash] = r.split('#');
+    const add = (/[?&]hub=/.test(pathAndQuery) ? '' : 'hub=entertainment&') + 'context=' + encodeURIComponent(CONTEXT);
+    return pathAndQuery + (pathAndQuery.includes('?') ? '&' : '?') + add + (hash ? '#' + hash : '');
+  }
+  function detail(c) {
+    const s = c.status || {};
+    if (c.id === 'intasend') {
+      const rows = (s.methods || []).map((m) => `<tr><td>${esc(m.label)}</td><td>${chip(m.state)}</td><td>${esc(m.evidence ? m.evidence.type : '—')}</td><td>${esc(m.environment || '—')}</td><td>${esc(when(m.lastVerifiedMs))}</td></tr>`).join('');
+      return `<div class="tbl-wrap"><table aria-label="Payment methods"><thead><tr><th>Method</th><th>State</th><th>Evidence</th><th>Environment</th><th>Last verified</th></tr></thead><tbody>${rows}</tbody></table></div>
+        <p class="muted">A method shows LIVE only with a recorded provider evidence entry.</p>`;
+    }
+    if (c.id === 'kra_etims') {
+      const reg = s.registration || {};
+      const inv = (s.invoices && s.invoices.byStatus) || {};
+      return `<div class="kv"><span>Your registration</span><span>${esc(reg.status === 'REGISTERED' ? 'Registered · ' + (reg.kraPinMasked || '') : 'Not registered for eTIMS')}</span>
+        <span>Invoice transmission</span><span>${chip(s.invoiceCapability && s.invoiceCapability.state)}</span>
+        <span>Credit notes</span><span>${chip(s.creditNoteCapability && s.creditNoteCapability.state)}</span>
+        <span>Sandbox certification</span><span>${chip(s.sandbox && s.sandbox.state)}</span>
+        <span>Your fiscal records</span><span>${Object.keys(inv).length ? Object.entries(inv).map(([k, v]) => esc(k.replace('FISCAL_', '').toLowerCase()) + ' ' + v).join(' · ') : '—'}</span></div>
+        ${s.creditNoteCapability && s.creditNoteCapability.note ? `<p class="muted">${esc(s.creditNoteCapability.note)}</p>` : ''}`;
+    }
+    if (c.id === 'events' && s.dependencies) {
+      return `<div class="kv"><span>Ticketing</span><span>${chip(s.dependencies.ticketing)}</span><span>Payments</span><span>${chip(s.dependencies.payments)}</span><span>Fiscal (KRA)</span><span>${chip(s.dependencies.fiscal)}</span></div>`;
+    }
+    if (c.id === 'creator_streaming' && s.creatorState) return `<div class="kv"><span>Creator account</span><span>${esc(s.creatorState)}</span><span>Verification</span><span>${esc(s.verification || '—')}</span></div>`;
+    return s.reason ? `<p class="muted">${esc(s.reason)}</p>` : '';
+  }
+  function render(out) {
+    const cards = out.cards || [];
+    document.getElementById('cards').innerHTML = cards.map((c) => {
+      const org = withCtx(c.organizerRoute), adm = withCtx(c.adminRoute);
+      return `<section class="card${FOCUS === c.id ? ' focus' : ''}" id="int-${esc(c.id)}" aria-labelledby="h-${esc(c.id)}">
+        <h2 id="h-${esc(c.id)}"><span>${esc(c.label)}</span>${chip(c.status && c.status.state)}</h2>
+        <p class="muted">${esc(c.organizerNote || '')}</p>
+        ${detail(c)}
+        <div class="actions">
+          ${org ? `<a class="btn primary" data-view="${esc(c.id)}" href="${esc(org)}">View integrations</a>` : ''}
+          ${adm ? `<a class="btn" data-admin="${esc(c.id)}" href="${esc(adm)}">Open in AdminOS › Integrations</a>` : ''}
+        </div></section>`;
+    }).join('');
+    document.getElementById('msg').textContent = '';
+    if (FOCUS) { const el = document.getElementById('int-' + FOCUS); if (el) el.scrollIntoView({ block: 'center' }); }
+  }
+  auth.onAuthStateChanged(async (user) => {
+    if (!user) { document.getElementById('msg').innerHTML = 'Sign in to see your integrations. <a href="/login.html?redirect=' + encodeURIComponent(location.pathname + location.search) + '">Sign in</a>'; return; }
+    try { const r = await fns.httpsCallable('eventOpsDispatch')({ op: 'entIntegrationStatus' }); render(r.data); }
+    catch (e) { document.getElementById('msg').textContent = 'Could not load integration status — ' + ((e && e.message) || 'try again'); }
+  });
+</script>
+</body>
+</html>
