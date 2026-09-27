@@ -129,62 +129,55 @@ function bodyOf(src, fnName) {
    PART A — the client rail (healthcare.html)
    ════════════════════════════════════════════════════════════════════════════════════════ */
 function partA() {
-  console.log('\nA. Client rail — healthcare.html' + (COUNTERPROOF ? '  (HEAD, pre-fix)' : ''));
+  /* CHANGELOG 229 — the page no longer carries its own booking UI: the hardcoded directory, openAppt /
+     submitAppt / startTCWith and every modal they drove were REMOVED. The directory is
+     sokoni-health-directory.js, which lists server-approved providers (healthcareDirectory) and hands
+     booking to the provider's canonical profile (SokoniBookService → bookingCreateService → IntaSend).
+     The Gate 2 / Gate 3 properties are asserted over the page AND that module — same guarantees, new
+     anchors. A missing anchor still fails closed. */
+  console.log('\nA. Client rail — healthcare.html + sokoni-health-directory.js' + (COUNTERPROOF ? '  (HEAD)' : ''));
   const html = strip(source('healthcare.html'), true);
+  let mod = null;
+  try { mod = strip(source('sokoni-health-directory.js'), false); } catch (_) { mod = null; }
+  const both = html + '\n' + (mod || '');
 
-  /* Anchors first: a detector that cannot find its subject proves nothing, so every
-     body-scoped check below is gated on the function actually existing in BOTH runs. */
-  const openAppt   = bodyOf(html, 'openAppt');
-  const submitAppt = bodyOf(html, 'submitAppt');
-  const startTC    = bodyOf(html, 'startTCWith');
-  ck('A0a  openAppt() located',   !!openAppt,   openAppt ? openAppt.length + ' chars' : 'NOT FOUND');
-  ck('A0b  submitAppt() located', !!submitAppt, submitAppt ? submitAppt.length + ' chars' : 'NOT FOUND');
-  ck('A0c  startTCWith() located', !!startTC,   startTC ? startTC.length + ' chars' : 'NOT FOUND');
-  if (!openAppt || !submitAppt || !startTC) {
+  const card = mod && bodyOf(mod, 'card');
+  const load = mod && bodyOf(mod, 'load');
+  ck('A0a  the directory module is loaded by the page', /<script[^>]+src=["']sokoni-health-directory\.js/.test(html));
+  ck('A0b  card() located', !!card, card ? card.length + ' chars' : 'NOT FOUND');
+  ck('A0c  load() located', !!load, load ? load.length + ' chars' : 'NOT FOUND');
+  if (!card || !load) {
     ck('A**  anchors missing — Part A cannot run', false, 'refusing to report absence as success');
     return;
   }
 
   /* — Gate 3: the Daraja / seller-till rail — */
-  ck('A1   submitAppt() makes no SokoniMpesa call', !/SokoniMpesa/.test(submitAppt));
+  ck('A1   no SokoniMpesa call on the page or in the directory', !/SokoniMpesa/.test(both));
   ck('A2   sokoni-mpesa.js is not loaded', !/<script[^>]+src=["']sokoni-mpesa\.js/.test(html));
-  ck('A3   no darajaSTKPush anywhere on the page', !/darajaSTKPush/.test(html));
+  ck('A3   no darajaSTKPush anywhere', !/darajaSTKPush/.test(both));
 
   /* — Gate 2: the legacy collect-first booking rail — */
-  ck('A4   openAppt() does not call SokoniPay.bookNow',    !/SokoniPay\s*\.\s*bookNow/.test(openAppt));
-  ck('A5   startTCWith() does not call SokoniPay.bookNow', !/SokoniPay\s*\.\s*bookNow/.test(startTC));
-  ck('A6   no SokoniPay.bookNow anywhere on the page',     !/SokoniPay\s*\.\s*bookNow/.test(html));
+  ck('A4   a directory card books ONLY through the canonical provider profile', /provider-profile\.html\?uid=/.test(card) && !/SokoniPay|bookNow|initiateSTK|intasend/i.test(card));
+  ck('A5   the directory loads ONLY the server directory (healthcareDirectory)', /callable\(\s*'healthcareDirectory'/.test(load) && !/localStorage|PROVIDERS|SPECIALISTS/.test(load));
+  ck('A6   no SokoniPay.bookNow anywhere', !/SokoniPay\s*\.\s*bookNow/.test(both));
 
-  /* — Gate 2: the canonical rail is present and wired — */
+  /* — Gate 2: the canonical rail is present — */
   ck('A7   sokoni-book-service.js is loaded', /<script[^>]+src=["']sokoni-book-service\.js/.test(html));
-  ck('A8   openAppt() delegates to SokoniBookService', /SokoniBookService\s*\.\s*open\s*\(/.test(openAppt));
+  ck('A8   no WhatsApp or tel: hand-off to a provider (the national emergency numbers only)',
+    !/wa\.me/.test(both) && (html.match(/href="tel:[^"]*"/g) || []).every((t) => /tel:(999|112)"/.test(t)));
 
   /* — Gate 3: fabricated financial records — */
-  const invoices = (html.match(/SokoniInvoice\s*\.\s*generate\s*\(/g) || []).length;
-  ck('A9   zero fabricated invoices on the page', invoices === 0, invoices + ' SokoniInvoice.generate call(s)');
+  const invoices = (both.match(/SokoniInvoice\s*\.\s*generate\s*\(/g) || []).length;
+  ck('A9   zero fabricated invoices', invoices === 0, invoices + ' SokoniInvoice.generate call(s)');
+  ck('A10  the client never writes status:"confirmed"', !/status\s*:\s*["']confirmed["']/.test(both));
+  ck('A11  no local "booking" / record is written', !/localStorage\s*\.\s*setItem/.test(both));
 
-  /* — Gate 3: the client cannot establish that a provider accepted — */
-  ck('A10  submitAppt() does not write status:"confirmed"',
-    !/status\s*:\s*["']confirmed["']/.test(submitAppt));
-
-  /* — Gate 3: finalise-on-failure — */
-  ck('A11  no _finalise() reachable from a payment failure handler',
-    !/onFailure[\s\S]{0,400}?_finalise/.test(submitAppt) && !/_finalise\s*\(/.test(submitAppt));
-
-  /* — The page still PARSES —
-     Removing a payment call can orphan the branch around it. Deleting the medicine-order
-     invoice left `if (...) <gone>; else (toast)` — a dangling else that broke the whole
-     inline block, and with it every handler on the page. Structural detectors all still
-     passed, because the text they look for was correctly absent. Parse, don't infer.
-
-     The comparison is against HEAD rather than zero: one pre-existing block does not parse
-     standalone under this crude extractor, and a baseline that reports a known condition as
-     a new regression trains everyone to ignore it. */
+  /* — The page still PARSES (parse, don't infer) — */
   const raw = source('healthcare.html');
   const bad = [];
   let blocks = 0;
   raw.replace(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi, (m, attrs, code) => {
-    if (/\bsrc=/.test(attrs) || !code.trim()) return m;
+    if (/\bsrc=/.test(attrs) || !code.trim() || /ld\+json/.test(attrs)) return m;
     blocks++;
     const isModule = /type\s*=\s*["']module["']/.test(attrs);
     try {
@@ -194,8 +187,8 @@ function partA() {
     } catch (e) { bad.push('#' + blocks + ' ' + e.message); }
     return m;
   });
-  ck('A12  every inline script block still parses (HEAD baseline: 1)',
-    bad.length <= 1, blocks + ' blocks; failing: ' + (bad.join('; ') || 'none'));
+  ck('A12  every inline script block parses (and the directory module)', bad.length === 0 && (() => { try { new (require('vm').Script)(source('sokoni-health-directory.js')); return true; } catch (_) { return false; } })(),
+    blocks + ' blocks; failing: ' + (bad.join('; ') || 'none'));
 }
 
 /* ════════════════════════════════════════════════════════════════════════════════════════
@@ -471,7 +464,10 @@ function partD() {
   ck('D2   it is resolved server-side, not read off the request',
     !/commissionHub\s*:\s*_san\s*\(\s*d\./.test(doc) && !/commissionHub\s*:\s*d\./.test(doc));
   ck('D3   the resolver runs before the transaction',
-    /resolveProviderHub\s*\(/.test(src) && src.indexOf('resolveProviderHub') < src.indexOf('runTransaction'));
+    /* the resolver was renamed by the Entertainment convergence (resolveProviderClassification returns the hub
+       AND the Entertainment class); the property is unchanged: it runs before the transaction. */
+    /(resolveProviderHub|resolveProviderClassification)\s*\(/.test(src)
+      && src.search(/resolveProvider(Hub|Classification)\s*\(/) < src.indexOf('runTransaction'));
   ck('D4   the client-supplied hubType is still present and still descriptive',
     /hubType\s*:\s*_san\s*\(\s*d\.hubType/.test(doc));
 }

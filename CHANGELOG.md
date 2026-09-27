@@ -1,3 +1,68 @@
+## 2026-09-28 (229) — Healthcare directory: real, approved providers only
+
+Healthcare convergence. Not deployed. No production writes. KRA not called.
+
+**Removed from `healthcare.html`** (1,738 → 485 lines). It was a self-contained demo:
+- Hardcoded `PROVIDERS` / `SPECIALISTS` / `TC_DOCTORS` / `LAB_TESTS` arrays naming **real institutions** (Aga Khan,
+  Gertrude's, Coast General, Lancet, Goodlife, AAR, St John) and invented doctors, with **made-up ratings, review
+  counts, fees and phone / WhatsApp numbers**.
+- `submitAppt` → `bookAppointment('hc1')`, which always failed, with the error swallowed and "the facility will
+  contact you" shown anyway.
+- Medicine, teleconsult and lab forms whose requests no provider could see, followed by a "request sent" message.
+- "My Health" built from localStorage.
+- A localStorage pharmacy inventory, and "My Pharmacy" / "My Practice" dashboards built from it (two of its handlers
+  threw).
+- A registration form that wrote an orphan `providers` doc and showed success when it was denied.
+- An "Open now" toggle reading `availabilityStatus/hc_*` ids that never exist.
+- An invented stats strip ("28 verified", "4.7 ⭐", "2 hrs") and a "KES 500 / week" spotlight product that does not
+  exist.
+- "Free ambulance referral" and "delivered within 2 hours" claims, and the retired NHIF helpline.
+- Structured data declaring SOKONI a MedicalOrganization offering emergency services and home lab tests.
+
+**Now:**
+- **`functions/healthcare-directory.js`** (`healthcareDirectory`, public, App Check) is the one source. It lists only
+  canonical `providers/{uid}` records that the server classified as healthcare (CHANGELOG 227) and that are approved,
+  unsuspended, public and searchable.
+- It returns a **whitelist projection**: no phone, email, location, licence, owner or fee. A rating appears only when
+  the reputation authority derived it.
+- **There is no sample and no fallback**: an empty registry is an empty directory.
+- **`sokoni-health-directory.js`** renders the directory, with:
+  - chips for all six categories (Telemedicine and Home care are reachable because admins classify them);
+  - loading, error-with-retry and honest empty states;
+  - links built only from the server `providerId` (`provider-profile.html?uid=` for canonical booking,
+    `messages.html?with=` for SOKONI messaging). An unsafe id is never rendered.
+- **Deep links still work:** `?tab=` specialists / teleconsult / labs map to the real categories.
+- **My health** shows the canonical bookings (`profile.html#bookings`) and the signed-in patient's **own** records
+  and prescriptions (`getHealthRecords` / `getPrescriptions`).
+- **For providers** offers the server-backed application (HubRegister) and the provider dashboard.
+- Emergency numbers: 999 and 112 only.
+
+**Files:**
+- `healthcare.html`, `sokoni-health-directory.js` (new), `functions/healthcare-directory.js` (new),
+  `functions/index.js` (export).
+- `scripts/test-healthcare-directory.js` (new).
+- `scripts/test-healthcare-payment-convergence.js`:
+  - Part A now anchors on the directory module. The removed `openAppt` / `submitAppt` / `startTCWith` had been its
+    anchors; the same Gate 2/3 properties are asserted, plus canonical-profile-only booking and no
+    WhatsApp / tel hand-offs.
+  - D3 accepts the resolver's current name (`resolveProviderClassification`), the same property.
+- `scripts/sabotage-event-ops.js`.
+
+**API:** new public callable `healthcareDirectory`. **Database:** none.
+**Security:** no private provider field reaches the page, and no provider link is built client-side.
+
+**Tests:**
+- `test-healthcare-directory` 51/0. It covers all six categories, excluded states, the projection and the real page
+  at 360 / 390 / 768 / 1280, including forged ids, server error with retry, the empty registry and My health.
+- `test-healthcare-payment-convergence` 40/0; it was 39/1 before, and the D3 failure was stale.
+- The healthcare, admin-approval, claim-honesty and secondary-apps suites match `473de85`.
+- `test-cart-market-actions`' "pages gained only the script tag" check is a `git diff HEAD` working-tree check,
+  re-run after the commit.
+- Sabotage `hcdir` 9/9. One attack was first MISSED because the category exclusion is layered (query + predicate);
+  the predicate is now proven on its own.
+
+**Deploy note:** `healthcareDirectory` is a new function and must be deployed with the hosting change.
+
 ## 2026-09-28 (228) — AdminOS Legal panel: a same-morning LSK check is not "in the future"
 
 Not deployed. No production writes.

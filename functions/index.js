@@ -12896,6 +12896,8 @@ exports.getPrescriptions         = _health.getPrescriptions;
 exports.searchHealthProviders    = _health.searchHealthProviders;
 exports.rateHealthProvider       = _health.rateHealthProvider;
 exports.getHealthDashboard       = _health.getHealthDashboard;
+/* Public Healthcare directory over the canonical providers/{uid} (CHANGELOG 229). */
+exports.healthcareDirectory      = require('./healthcare-directory').healthcareDirectory;
 
 /* ── Application Lifecycle ─────────────────────────────────────────────────────
    The convergence point between `applications` (the request) and the canonical

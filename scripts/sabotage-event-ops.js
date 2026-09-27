@@ -67,6 +67,7 @@ const SUITES = {
   hcplan:   ['node', ['scripts/test-healthcare-plan-commission.js']],
   hccat:    ['node', ['scripts/test-healthcare-category.js']],
   hccatrules: ['node', ['scripts/run-rules-suite.js', 'scripts/test-provider-identity-fields-rules.js']],
+  hcdir:    ['node', ['scripts/test-healthcare-directory.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -1066,6 +1067,26 @@ const M = [
   /* ── Legal panel date (CHANGELOG 228) ── */
   { group: 'legalv', browser: true, name: 'the Legal panel sends noon again (a same-morning LSK check is refused as future)', file: 'sokoni-aos-legal.js', suite: 'legalv',
     from: "Date.parse(f.checkedAt.value + 'T00:00:00+03:00')", to: "Date.parse(f.checkedAt.value + 'T12:00:00+03:00')", expect: /start of the chosen Nairobi day/ },
+
+  /* ── Healthcare directory: real, approved providers only (CHANGELOG 229) ── */
+  { group: 'hcdir', browser: true, name: "an unclassified (self-described) provider is listed", file: "functions/healthcare-directory.js", suite: 'hcdir',
+    from: "  if (!HCAT.categoryOf(p)) return false;\n", to: "", expect: /UNCLASSIFIED health provider|discoverability predicate itself refuses/ },
+  { group: 'hcdir', browser: true, name: "an unapproved (pending) provider is listed", file: "functions/healthcare-directory.js", suite: 'hcdir',
+    from: "  if (!['active', 'approved'].includes(p.status)) return false;\n", to: "", expect: /pending provider/ },
+  { group: 'hcdir', browser: true, name: "a suspended / non-public provider is listed", file: "functions/healthcare-directory.js", suite: 'hcdir',
+    from: "  if (p.suspended === true || p.isPublic === false || p.searchable === false) return false;\n", to: "", expect: /suspended provider|non-public provider|non-searchable/ },
+  { group: 'hcdir', browser: true, name: "the private phone leaks into the public projection", file: "functions/healthcare-directory.js", suite: 'hcdir',
+    from: "    acceptsBookings: p.acceptsBookings !== false,\n  };", to: "    acceptsBookings: p.acceptsBookings !== false, phone: p.phone,\n  };", expect: /only whitelisted fields|no phone/ },
+  { group: 'hcdir', browser: true, name: "an owner-written rating is shown (not reputation-derived)", file: "functions/healthcare-directory.js", suite: 'hcdir',
+    from: "  const hasRep = p.repV != null && Number(p.reviewCount) > 0 && Number.isFinite(Number(p.rating));", to: "  const hasRep = Number.isFinite(Number(p.rating));", expect: /rating appears only when/ },
+  { group: 'hcdir', browser: true, name: "sample providers are manufactured when the registry is empty", file: "functions/healthcare-directory.js", suite: 'hcdir',
+    from: "  return rows.slice(0, lim);", to: "  return (rows.length ? rows : [{ providerId: 'sample1', name: 'Aga Khan Hospital', category: 'facility', categoryLabel: 'Clinic', rating: 4.9, reviewCount: 312, acceptsBookings: true }]).slice(0, lim);", expect: /empty registry returns an empty directory/ },
+  { group: 'hcdir', browser: true, name: "the client renders a forged / unsafe provider id", file: "sokoni-health-directory.js", suite: 'hcdir',
+    from: "    if (!p || !ID_RE.test(String(p.providerId || ''))) return '';      /* never render a link we cannot trust */", to: "    if (!p) return '';", expect: /forged \/ unsafe providerId/ },
+  { group: 'hcdir', browser: true, name: "the contact link goes to WhatsApp instead of SOKONI messages", file: "sokoni-health-directory.js", suite: 'hcdir',
+    from: "<a class=\"hc-book-btn hc-btn-alt\" href=\"messages.html?with=${id}\">", to: "<a class=\"hc-book-btn hc-btn-alt\" href=\"https://wa.me/254700000000\">", expect: /every link is built from the server providerId|no WhatsApp/ },
+  { group: 'hcdir', browser: true, name: "a server failure is shown as an empty (successful) directory", file: "sokoni-health-directory.js", suite: 'hcdir',
+    from: "      setStatus('error', (e && e.message) || 'Something went wrong.');", to: "      state.rows = []; render();", expect: /server error shows an error with retry/ },
 ];
 
 const argv = process.argv.slice(2);
