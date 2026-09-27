@@ -151,28 +151,25 @@ console.log('\nPART D — the count is read, never computed\n');
 /* ═══ E — the storefront follow-state read is on the ONE relationship ═══ */
 console.log('\nPART E — the storefront reads the authority\n');
 {
+  /* CHANGELOG 211: shop follows converged on ONE authority — functions/reputation.js (type 'shop').
+     The storefront reads and writes the relationship through it; the retired shopFollowers store is
+     neither read nor written, and followShop delegates to the same authority. */
   const ms = SRC('sokoni-minishop.js');
-  ck('E1  the follow-state read uses the FLAT relationship document',
-    /shopFollowers\/\$\{_state\.shopId\}_\$\{user\.uid\}/.test(ms));
+  ck('E1  the follow-state read asks the ONE authority (repFollowState, type shop)',
+    /op:\s*'repFollowState',\s*items:\s*\[\{\s*type:\s*MS_FOLLOW_TYPE/.test(ms) && /const MS_FOLLOW_TYPE = 'shop';/.test(ms));
   ck('E2  ...and the subcollection path is gone',
     !/shopFollowers\/\$\{_state\.shopId\}\/followers\//.test(ms));
 
-  /* The path it now reads must be the one followShop writes. */
   const mods = SRC('functions/minishop.js');
-  ck('E3  followShop writes exactly that document',
-    /collection\('shopFollowers'\)\.doc\(`\$\{shopId\}_\$\{uid\}`\)/.test(mods));
-  /* Asserted on the ACCESS EXPRESSION, not on a count of the word.
-     The fix documents the path it replaced, so the file mentions shopFollowers
-     three times while reaching it once — and a comment-stripper is the wrong
-     tool here, because this file desynchronises one (a regex literal containing
-     a quote is enough). Matching `.doc(...)` calls is exact and needs no
-     tokenizer. */
+  ck('E3  followShop delegates to that authority (no second writer)',
+    /require\('\.\/reputation'\)/.test(mods) && !/collection\('shopFollowers'\)\.doc\(/.test(mods));
+  /* Asserted on the ACCESS EXPRESSION, not on a count of the word: the file documents the path it
+     replaced, so the word appears in comments. */
   const docCalls = (ms.match(/\.doc\(`shopFollowers\/[^`]*`\)/g) || []);
-  ck('E4  exactly one shopFollowers document is ever read',
-    docCalls.length === 1, docCalls.join(' | '));
-  ck('E5  ...and it is the flat relationship, not a subcollection',
-    docCalls.length === 1 && /_\$\{user\.uid\}`\)$/.test(docCalls[0]) && docCalls[0].indexOf('/followers/') === -1,
-    docCalls[0]);
+  ck('E4  no shopFollowers document is read any more (the race with follows/ is gone)',
+    docCalls.length === 0, docCalls.join(' | '));
+  ck('E5  ...and Follow / Unfollow go through the authority too (the client writes no follow)',
+    /op:\s*wasFollowing \? 'repUnfollow' : 'repFollow'/.test(ms) && !/m\.setDoc\(ref/.test(ms) && !/m\.deleteDoc\(ref\)/.test(ms));
 }
 
 /* ═══ F — config payloads ═══ */

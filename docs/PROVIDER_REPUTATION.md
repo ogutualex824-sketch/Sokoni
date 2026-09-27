@@ -30,7 +30,10 @@ Before this slice, provider reputation had these problems:
 - Binding gaps in `rateDigitalProduct`, `rateHealthProvider` and `rateLegalProvider`.
 - Seller-broadcast impersonation (rules ~1839–1846).
 - Client-writable aggregates on product / business / sellers / services / users.
-- MiniShop keeps two follow stores: `shopFollowers` and `follows`.
+- ~~MiniShop keeps two follow stores: `shopFollowers` and `follows`.~~ **Fixed after `0865a34`** (CHANGELOG 211):
+  - type `shop` is on this authority, and `followShop` delegates;
+  - `seller-public.html` follows by account, not by name;
+  - the migration's `migrateShopFollows` has not been run.
 - `sokoni-reviews.js` calls functions without an ID token.
 - Product review targets are keyed `"product_"+id`, which mismatches the product id.
 - Dead stores: `ratings`, `shopReviews`, `followerCounts`.
@@ -71,6 +74,9 @@ Until `repV` is set, the public rating comes from the server-written `providerPr
 ---
 
 ## 3. Followers
+
+Types: `provider`, `venue`, `creator` and `shop`. A `shop` is `shops/{shopId}`, owned by `sellerUid`, and can also be
+addressed by the owner's uid (see CHANGELOG 211).
 
 | Op | Who | Behaviour |
 |---|---|---|

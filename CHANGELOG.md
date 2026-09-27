@@ -1,3 +1,87 @@
+## 2026-09-27 (211) — MiniShop follows converge on the one follow authority
+
+Fixes known hole 2, which was outside `0865a34`. That commit is not modified. Not deployed. No KRA calls. No
+production writes. The migration has **not** been run.
+
+- **The duplicate.** A MiniShop was followed through **two** stores, and the UI never reconciled them:
+  - The storefront button wrote `follows/{uid}--shop--{shopId}` client-side, with no existence check, no self-follow
+    check and no count.
+  - `followShop` wrote `shopFollowers/{shopId}_{uid}` plus a counter in `minishopConfig`. It had no UI caller.
+  - The two stores raced on the page: `_checkFollowStatus` against `_hydrateFollowState`, with the last write winning.
+  - The owner dashboard showed a counter that follows made through the UI never reached.
+  - `seller-public.html` followed a shop by **display name** (`seller--<name>`). That was also the key the
+    seller-broadcast fan-out targeted.
+- **One authority.** `functions/reputation.js` gains type `shop`:
+  - The entity is `shops/{shopId}` and the owner is `sellerUid`.
+  - A shop reached by its owner's uid resolves to the **one** canonical doc, or is refused when that is ambiguous.
+  - Follows are transactional and idempotent. Self-follow is refused, suspended or closed shops cannot be followed, and
+    the count never goes negative. `followerCount` and `followV` live on the shop doc.
+  - Shops get no provider reviews (product reviews stay on the product authority) and no second share-handle system
+    (MiniShop keeps `/shop/{handle}`).
+- **Retired, not deleted.** `followShop` still exists for any deployed caller, but it **delegates**. It no longer writes
+  `shopFollowers` or `minishopConfig`.
+- **Readers.** Every follower count now comes from the authority, and an unknown count stays unknown (`null`, shown as
+  "—", never `0`):
+  - `getMinishopPublic` (public).
+  - `getMinishopAnalytics` (owner).
+  - The weekly digest.
+  - `minishop-admin.html`.
+  - A stale `followerCount` on a shop doc is stripped from the public response until the server maintains it.
+- **Clients.**
+  - The storefront's Follow, Unfollow and follow-state read go through `bookingDispatch`, and the `shopFollowers` read
+    is removed.
+  - `sokoni-db.js` and `sokoni-social.js` route type `shop` to the server.
+  - `seller-public.html` follows the shop by the **seller account** (`?id=` or the catalogue's `sellerUid`). A link with
+    only a name offers no Follow.
+- **Pre-existing defect fixed.** `minishop.html` never loaded `firebase.js`, so the storefront had no signed-in user.
+  Follow sent **every** shopper to sign-in, and no callable could run. It now loads the standard bootstrap and
+  re-reads follow state on `sokoniAuthReady`.
+- **Policy change.** An owner can no longer follow their own shop. It inflated their own count, and the authority
+  refuses self-follows for every entity.
+- **Migration.** `scripts/migrate-reputation.js` adds `migrateShopFollows`. It is DRY RUN → REPORT → REVIEW → APPLY and
+  is **not run**. It covers three sources:
+  - `shopFollowers` becomes server follows.
+  - Client shop follows are adopted in place.
+  - Follows by seller **name** are mapped only when exactly one shop has that name.
+  - Ambiguous and orphan names, and owner self-follows, are reported. Legacy docs are kept and stamped `migratedTo`.
+  - `recountAll` now includes shops.
+- **Rules.**
+  - `follows`: a client may not create or delete a `--shop--` id (the check is anchored on the segment, so a hyphenated
+    uid cannot bypass it).
+  - `shops.followerCount` was already outside the owner allowlist; that is now proven. `shopFollowers` stays read-only.
+- **Tests:**
+  - `scripts/test-shop-follow.js` (new): 33/0. It covers the authority, the public and owner counts, the migration, and
+    the **real** `minishop.html` (logged-out and signed-in, 360 and 1280) and `seller-public.html`.
+  - `scripts/test-follow-shop-authority.js`: rewritten for the converged model, 39/0. Every Stage 1B property is kept,
+    and B1 is flipped to the new self-follow policy.
+  - `test-entertainment-rules.js`: 301/0 (shop denials, a hyphenated uid, the owner count update, positive controls).
+  - `test-follow-rules.js`: 42/0 (`shop` moves to the server-counted types).
+  - `tests/rc/suites/rc-11-follow.js` case 12 pre-cleans through the authority.
+  - `scripts/test-merchant-store.js` Part E now asserts the converged model (the storefront reads the one authority and
+    no longer reads `shopFollowers`): 60/0.
+  - 18 MiniShop, merchant-store and related suites are identical to the `0865a34` baseline.
+  - Sabotage group `shopfollow`: 17/17 caught; the tree is byte-identical afterwards.
+- **Harness.** `scripts/lib/page-harness.js` adds HTTP (`onRequest`) routing and publishes `firebase.js`'s readiness
+  signals.
+- **Files:**
+  - Functions: `functions/reputation.js`, `functions/minishop.js`, `functions/minishop-v3.js`.
+  - Pages and client scripts: `minishop.html`, `minishop-admin.html`, `sokoni-minishop.js`, `seller-public.html`,
+    `sokoni-db.js`, `sokoni-social.js`.
+  - Rules: `firestore.rules`, `firestore.rules.build`.
+  - Scripts: `scripts/migrate-reputation.js`, `scripts/lib/page-harness.js`, `scripts/test-shop-follow.js` (new),
+    `scripts/test-follow-shop-authority.js`, `scripts/test-entertainment-rules.js`, `scripts/test-follow-rules.js`,
+    `scripts/sabotage-event-ops.js`.
+  - Tests and docs: `scripts/test-merchant-store.js`, `tests/rc/suites/rc-11-follow.js`, `docs/PROVIDER_REPUTATION.md`.
+- **API:**
+  - `repFollow`, `repUnfollow`, `repFollowState`, `repFollowVisibility`, `repSummary`, `repFollowers` and
+    `repDashboard` accept `type:'shop'`.
+  - `followShop` has the same contract; its `followerCount` may be `null` when unknown.
+  - `getMinishopPublic.followerCount` and `getMinishopAnalytics.followerCount` may be `null`.
+- **Deploy (when authorised):**
+  - Deploy `bookingDispatch`, `followShop`, `getMinishopPublic`, `getMinishopAnalytics` and the digest schedule.
+  - Deploy rules through the REST API, and hosting from the latest commit.
+  - Then run the migration: dry run → owner review → `--apply`.
+
 ## 2026-09-27 (210) — Share sheet HTML, share-card ratings and the provider share link
 
 Fixes known holes 5, 6 and 7, which were outside `0865a34`. They were reported with that commit, which is not

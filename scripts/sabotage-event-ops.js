@@ -46,6 +46,8 @@ const SUITES = {
   rep:      ['node', ['scripts/test-reputation.js']],
   repb:     ['node', ['scripts/test-reputation-browser.js']],
   share:    ['node', ['scripts/test-share-integrity-browser.js']],
+  shopf:    ['node', ['scripts/test-shop-follow.js']],
+  shopa:    ['node', ['scripts/test-follow-shop-authority.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -95,6 +97,11 @@ const SOC = 'sokoni-social.js';
 const PDB = 'provider-dashboard.html';
 const PPF = 'provider-profile.html';
 const PON = 'functions/provider-onboarding.js';
+const MSJ = 'functions/minishop.js';
+const MSUI = 'sokoni-minishop.js';
+const MSH = 'minishop.html';
+const SPUB = 'seller-public.html';
+const MIGR = 'scripts/migrate-reputation.js';
 
 const M = [
   /* ── ticket PIN + admission ── */
@@ -615,7 +622,7 @@ const M = [
   { group: 'rep', rules: true, name: 'a provider edits their own rating / follower count (rules)', file: RULES, suite: 'rules',
     from: "  'rating','reviewCount','ratingSum','ratingDist','followerCount','shareCount','shareHandle','repV','followV','reputationUpdatedAt', 'jobsCompleted']));", to: "  'jobsCompleted']));", expect: /writes their own rating|inflates their own follower count/ },
   { group: 'rep', rules: true, name: 'a client writes a server-counted follow directly (rules)', file: RULES, suite: 'rules', all: true,
-    from: "  && !followId.matches('.*--(provider|venue|creator)--.*')", to: "", expect: /PROVIDER follow directly|server-counted follow/ },
+    from: "  && !followId.matches('.*--(provider|venue|creator|shop)--.*')", to: "", expect: /PROVIDER follow directly|server-counted follow/ },
   { group: 'rep', rules: true, name: 'a stranger reads provider review records (rules)', file: RULES, suite: 'rules',
     from: "  match /providerReviews/{reviewId} {\n  allow read:  if isAdmin() || (isAuthed() && (resource.data.customerUid == request.auth.uid || resource.data.providerId == request.auth.uid));", to: "  match /providerReviews/{reviewId} {\n  allow read:  if isAuthed();", expect: /stranger reads a provider review/ },
   { group: 'rep', rules: true, name: 'the provider edits / deletes the customer\'s review (rules)', file: RULES, suite: 'rules',
@@ -654,6 +661,42 @@ const M = [
     from: "  const { url: qrData } = await require('./reputation').shareLink({ type: 'provider', id: uid, serviceId });", to: "  const qrData = `https://mysokoni.co.ke/provider-profile.html?uid=${uid}`;", expect: /QR/ },
   { group: 'share', browser: true, name: 'the dashboard share link goes back to /providers?p= (read by no page)', file: PDB, suite: 'share',
     from: "    try{const r=await SokoniRep.share({type:'provider',id:u.uid,serviceId:id||undefined,title:s?s.name:undefined});", to: "    try{const pid=(_data&&_data.profile&&_data.profile.providerId)||'PRV-X';const url=location.origin+'/providers?p='+encodeURIComponent(pid)+(id?'&s='+encodeURIComponent(id):'');await navigator.clipboard.writeText(url);const r={copied:true,url};", expect: /dashboard Share makes a HANDLE link/ },
+
+  /* ── MiniShop follows: ONE authority (CHANGELOG 211) ── */
+  { group: 'shopfollow', name: 'a shop owner follows their own shop (count self-inflation)', file: REPJ, suite: 'shopa',
+    from: "  if (ent.ownerUid === uid) fail('failed-precondition', 'You cannot follow your own profile.');", to: "", expect: /can NOT follow their own shop/ },
+  { group: 'shopfollow', name: 'the shop owner is taken from the doc id, not shops.sellerUid (owner check bypassed)', file: REPJ, suite: 'shopa',
+    from: "    owner: (id, d) => d.sellerUid || d.ownerUid || d.ownerId || id, name: (d) => d.name || d.storeName || d.businessName },", to: "    owner: (id) => id, name: (d) => d.name || d.storeName || d.businessName },", expect: /can NOT follow their own shop/ },
+  { group: 'shopfollow', name: 'duplicate shop follow inflation (a second key for the same shop by owner uid)', file: REPJ, suite: 'shopf',
+    from: "    if (q.size === 1) { s = q.docs[0]; id = s.id; }", to: "    if (q.size === 1) { s = q.docs[0]; }", expect: /ONE canonical shop|OWNER uid/ },
+  { group: 'shopfollow', name: 'unfollow by owner uid misses the canonical record (count never decreases)', file: REPJ, suite: 'shopf',
+    from: "  if (!_idOk(d.id)) fail('invalid-argument', 'Unknown profile.');\n  const id = await _canonId(type, d.id);\n  const fRef = _db().collection(COL.FOLLOWS).doc(followId(uid, type, id));\n  const eRef = _ref(type, id);\n  const eSnap = await eRef.get();", to: "  if (!_idOk(d.id)) fail('invalid-argument', 'Unknown profile.');\n  const id = String(d.id);\n  const fRef = _db().collection(COL.FOLLOWS).doc(followId(uid, type, id));\n  const eRef = _ref(type, id);\n  const eSnap = await eRef.get();", expect: /unfollow by that uid/ },
+  { group: 'shopfollow', name: 'the retired followShop writes its second store again', file: MSJ, suite: 'shopa',
+    from: "    const following = !!r.following; const followerCount = typeof r.followerCount === 'number' ? r.followerCount : null;\n", to: "    const following = !!r.following; const followerCount = typeof r.followerCount === 'number' ? r.followerCount : null;\n    await _db().collection('shopFollowers').doc(`${shopId}_${uid}`).set({ shopId, uid });\n", expect: /no legacy shopFollowers|no longer writes shopFollowers/ },
+  { group: 'shopfollow', name: 'the public storefront shows the retired minishopConfig counter', file: MSJ, suite: 'shopf',
+    from: "        followerCount: _shopFollowers(shopRaw),\n", to: "        followerCount: configRaw.followerCount,\n", expect: /UNKNOWN|AUTHORITY's count/ },
+  { group: 'shopfollow', name: 'an unknown follower count becomes 0 on the public storefront', file: MSJ, suite: 'shopf',
+    from: "      const followerCount = config.followerCount;   /* null = unknown, rendered \"—\" — never an invented 0 */", to: "      const followerCount = config.followerCount ?? 0;", expect: /UNKNOWN/ },
+  { group: 'shopfollow', name: 'a stale owner-era followerCount leaks through the shop doc', file: MSJ, suite: 'shopf',
+    from: "      if (_shopFollowers(shopRaw) === null) delete shop.followerCount;\n", to: "", expect: /UNKNOWN/ },
+  { group: 'shopfollow', name: 'owner analytics reads the retired counter', file: MSJ, suite: 'shopf',
+    from: "    const followerCount = _shopFollowers(shopData);   /* the reputation authority's count, or null */", to: "    const followerCount = ((await db.collection('minishopConfig').doc(shopId).get()).data() || {}).followerCount ?? 0;", expect: /getMinishopAnalytics/ },
+  { group: 'shopfollow', browser: true, name: 'the storefront Follow button sends the opposite operation', file: MSUI, suite: 'shopf',
+    from: "op: wasFollowing ? 'repUnfollow' : 'repFollow'", to: "op: wasFollowing ? 'repFollow' : 'repUnfollow'", expect: /signed-in Follow/ },
+  { group: 'shopfollow', browser: true, name: 'the storefront loads no auth (every shopper sent to sign-in)', file: MSH, suite: 'shopf',
+    from: "<script src=\"/firebase.js\" type=\"module\"></script>\n", to: "", expect: /signed-in Follow/ },
+  { group: 'shopfollow', browser: true, name: 'the seller page follows by DISPLAY NAME again', file: SPUB, suite: 'shopf',
+    from: "  const _spShopKey = sellerId || window._spSellerUid || '';", to: "  const _spShopKey = sellerId || window._spSellerUid || sellerName;", expect: /NAME-only seller link offers no Follow/ },
+  { group: 'shopfollow', name: 'migration guesses an AMBIGUOUS shop name', file: MIGR, suite: 'shopf',
+    from: "    if (hits.length > 1) { out.ambiguous.push({ follow: f.id, name: d.entityName || d.entityId, shops: hits.length }); continue; }\n", to: "", expect: /REPORTED, never guessed|nothing for the ambiguous/ },
+  { group: 'shopfollow', name: 'migration carries an owner\'s self-follow', file: MIGR, suite: 'shopf',
+    from: "    if (_shopOwner(shopId, sd) === uid) { out.self.push({ from, shopId }); return false; }\n", to: "", expect: /REPORTED, never guessed|nothing for the ambiguous/ },
+  { group: 'shopfollow', name: 'migration DRY RUN writes', file: MIGR, suite: 'shopf',
+    from: "    if (!o.apply) return true;\n    const ref = db.collection('follows').doc(_fid(uid, 'shop', shopId));", to: "    const ref = db.collection('follows').doc(_fid(uid, 'shop', shopId));", expect: /DRY RUN/ },
+  { group: 'shopfollow', rules: true, name: 'a client writes a SHOP follow directly (rules)', file: RULES, suite: 'rules', all: true,
+    from: "followId.matches('.*--(provider|venue|creator|shop)--.*')", to: "followId.matches('.*--(provider|venue|creator)--.*')", expect: /SHOP follow/ },
+  { group: 'shopfollow', rules: true, name: 'a shop owner writes their follower count (rules)', file: RULES, suite: 'rules',
+    from: "  'packagingNote','delMethod','delTime','zones','updatedAt']));", to: "  'packagingNote','delMethod','delTime','zones','updatedAt','followerCount']));", expect: /shop owner inflates/ },
 ];
 
 const argv = process.argv.slice(2);

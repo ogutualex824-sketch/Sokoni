@@ -1513,7 +1513,7 @@
                   String(today.getDate()).padStart(2, '0');
         _statSet('msaViewsToday', (a.daily && a.daily[key]) || 0);
         _statSet('msaTotalViews', a.views || 0);
-        _statSet('msaFollowers',  d.followerCount || 0);
+        _statSet('msaFollowers',  typeof d.followerCount === 'number' ? d.followerCount : '—');
       })
       .catch(function(e) {
         console.warn('[MSA] analytics unavailable', e && e.code);

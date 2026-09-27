@@ -980,11 +980,15 @@
   }
   _setFollowUI(spIsFollowing);
 
-  /* Load real follower count from Firestore */
-  if(window.SokoniDB){
-    SokoniDB.getFollowerCount('seller', sellerName).then(_spPaintFollowers);
-    SokoniDB.isFollowing('seller', sellerName).then(f => _setFollowUI(f));
-    SokoniDB.listenFollowerCount('seller', sellerName, _spPaintFollowers);
+  /* ONE follow identity (CHANGELOG 211): the shop is followed by its OWNER ACCOUNT (the seller uid from the
+     link, or from the catalogue), through the reputation authority (type 'shop' → shops/{id}). A display
+     name is not an identity — two shops can share one, and it was the key a forged broadcast targeted.
+     With no account to follow, Follow is not offered (never guessed from the name). */
+  const _spShopKey = sellerId || window._spSellerUid || '';
+  if(!_spShopKey){ spFollowBtn.hidden = true; }
+  if(window.SokoniDB && _spShopKey){
+    SokoniDB.getFollowerCount('shop', _spShopKey).then(_spPaintFollowers);
+    SokoniDB.isFollowing('shop', _spShopKey).then(f => _setFollowUI(f));
   }
 
   /* expose toggle */
@@ -1015,8 +1019,10 @@
     btn.setAttribute("aria-busy","true");
     _setFollowUI(!isNow);                          /* optimistic */
     try {
-      if(isNow) await SokoniDB.unfollow('seller', sellerName);
-      else      await SokoniDB.follow('seller', sellerName, sellerName);
+      if(!_spShopKey) throw { code: 'not-found' };
+      if(isNow) await SokoniDB.unfollow('shop', _spShopKey);
+      else      await SokoniDB.follow('shop', _spShopKey, sellerName);
+      SokoniDB.getFollowerCount('shop', _spShopKey).then(_spPaintFollowers);
       _spToast(isNow ? "Unfollowed" : "Following this shop", "success");
     } catch(err) {
       _setFollowUI(isNow);                         /* ROLLBACK — write did not land */

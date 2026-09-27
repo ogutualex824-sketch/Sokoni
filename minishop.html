@@ -388,6 +388,9 @@
      never runs, and the page hangs on its loading skeleton forever. Keep these
      absolute.
 ═══════════════════════════════════════════ -->
+<!-- Auth + callables (firebase.js — the same bootstrap as every signed-in page). Without it this page had no
+     signed-in user: Follow sent EVERY shopper to sign-in and no callable could run (CHANGELOG 211). -->
+<script src="/firebase.js" type="module"></script>
 <script src="/sokoni-minishop.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function() {

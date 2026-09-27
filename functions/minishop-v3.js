@@ -1410,7 +1410,8 @@ exports.miniShopScheduledDigest = onSchedule(
             }
           }
 
-          const followerCount  = config.followerCount  || 0;
+          /* followers from the reputation authority (shops/{id}, followV); unknown stays unknown */
+          const followerCount  = shop.followV && typeof shop.followerCount === 'number' ? shop.followerCount : null;
           const shopName       = _san(shop.name        || 'Your Shop', 80);
           const handle         = config.handle         || '';
           const shopUrl        = handle ? `${SHOP_URL}${handle}` : BASE_URL;
@@ -1455,7 +1456,7 @@ function _buildDigestHtml({ shopName, shopUrl, last7Views, topSource, followerCo
   const eTip         = _escHtml(tip);
   const adminUrl     = _escHtml(`${BASE_URL}/minishop-admin.html`);
   const views7       = last7Views.toLocaleString('en-KE');
-  const followersStr = followerCount.toLocaleString('en-KE');
+  const followersStr = typeof followerCount === 'number' ? followerCount.toLocaleString('en-KE') : '—';
 
   return `<!DOCTYPE html>
 <html lang="en">

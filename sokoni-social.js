@@ -402,7 +402,7 @@ function _fToast(msg,type,opts){
 /* PROVIDER / VENUE / CREATOR follows are owned by the reputation authority (functions/reputation.js):
    server-written, one per person, with a transactional follower count. The rules deny a client write
    for those types, so they go through the callable; every other hub's follow is unchanged. */
-var _REP_TYPES={provider:1,venue:1,creator:1};
+var _REP_TYPES={provider:1,venue:1,creator:1,shop:1};
 function _repCall(op,data){
   if(!(window.firebase&&firebase.functions)) return Promise.reject({code:'unavailable'});
   return firebase.functions().httpsCallable('bookingDispatch')(Object.assign({op:op},data||{})).then(function(r){return r.data;});

@@ -240,7 +240,7 @@ module.exports = {
     }},
 
     /* ── 12. MINISHOP — mandatory focus ────────────────────────────────────── */
-    { name: '12. MINISHOP Follow → writes follows/{uid}--shop--{shopId} (was a non-existent CF)',
+    { name: '12. MINISHOP Follow → the SERVER writes follows/{uid}--shop--{shopId} (reputation authority, CHANGELOG 211)',
       capability: 'Follow: minishop rail', async run(ctx) {
         requireControl(ctx);
         const p = await ctx.ui();
@@ -260,7 +260,11 @@ module.exports = {
             'exercised end-to-end until one shop exists.');
         }
         const ent = { type: 'shop', id: shopId };
-        await ctx.clientOp({ op: 'delete', path: 'follows/' + followId(ctx._uid, 'shop', shopId) });
+        /* Shop follows are SERVER-counted since CHANGELOG 211 (functions/reputation.js, type 'shop'): a client
+           delete of the follow doc is denied by the rules, so the pre-clean unfollows through the authority. */
+        await p.evaluate(async (sid) => {
+          try { await window.sokoniCallable('bookingDispatch')({ op: 'repUnfollow', type: 'shop', id: sid }); } catch (_) {}
+        }, shopId);
         const label = await clickFollow(ctx, '#msFollowBtn');
         await assertDoc(ctx, ctx._uid, ent, true, 'minishop followed');
         await p.reload({ waitUntil: 'domcontentloaded' });

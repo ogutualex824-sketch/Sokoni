@@ -1,40 +1,38 @@
 #!/usr/bin/env node
-/* followShop hardening — Store Stage 1B.
+/* Shop follows — ONE authority (CHANGELOG 211; was Store Stage 1B's followShop/shopFollowers).
  *
  *   node scripts/test-follow-shop-authority.js
  *
- * TWO DEFECTS, and the first is the more serious.
- *
- * 1. WRITE AUTHORITY. followShop accepted any `shopId` string and merge-wrote
- *    `minishopConfig/{shopId}`. A merge to a missing document CREATES it, so any
- *    authenticated caller could conjure publicly-readable storefront config
- *    documents for shop ids nobody owns.
- *
- * 2. COUNTER DESYNCHRONISATION. followShop decides idempotency by reading
- *    `shopFollowers/{shopId}_{uid}`, and firestore.rules let the client DELETE
- *    that same document. Delete it, follow again, and the counter rose a second
- *    time — an unbounded inflation loop from one account against any shop.
- *
  * THE MODEL BEING ASSERTED
  *
- *     shopFollowers/{shopId}_{uid}   the authoritative relationship
- *              |
- *     followerCount                  DERIVED, maintained in the same transaction
+ *     follows/{uid}--shop--{shopId}   the relationship — written ONLY by functions/reputation.js
+ *              |                      (repFollow / repUnfollow, type 'shop'); uid from auth
+ *     shops/{shopId}.followerCount    DERIVED, maintained in the same transaction (followV marks it)
  *
- * ...and `shops/{shopId}` must exist before either is touched.
+ * `followShop` (functions/minishop.js) was a SECOND authority — shopFollowers/{shopId}_{uid} plus a
+ * counter in minishopConfig — beside the follows docs the storefront actually wrote. It now delegates.
+ * Every property Stage 1B proved is kept:
+ *   A  the shop must EXIST before anything is written; nothing is conjured (no config doc, no shop)
+ *   C  one fact, one derived number: duplicates never inflate, unfollows never go negative, cycles land exact
+ *   D  the client cannot desynchronise truth: no client write to a shop follow or to shopFollowers
+ *   E  following never provisions anything
+ *   F  the shipped source delegates — no second writer is left
+ * ONE deliberate policy change: an owner may no longer follow their own shop (it inflated their own count;
+ * the reputation authority refuses self-follows for every entity).
  *
- * FIXTURE: SHOP_B and SHOP_C both EXIST and belong to different sellers, so
- * "denied" can never be confused with "shop missing", and following someone
- * else's shop — which is legitimate — is exercised rather than assumed.
+ * FIXTURE: SHOP_B and SHOP_C both EXIST and belong to different sellers, so "denied" can never be confused
+ * with "shop missing", and following someone else's shop — which is legitimate — is exercised.
  */
 'use strict';
+process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:1';
+process.env.GCLOUD_PROJECT = 'demo-follow-shop';
+delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
 
 const fs = require('fs');
 const path = require('path');
-const Module = require('module');
-
 const ROOT = path.resolve(__dirname, '..');
-const FUNCTIONS_DIR = path.join(ROOT, 'functions');
+const FN = path.join(ROOT, 'functions');
+const { makeFakeFirestore } = require('./lib/fake-firestore-txn');
 
 let pass = 0, fail = 0;
 const ck = (l, ok, d) => {
@@ -47,277 +45,161 @@ const SHOP_B   = 'SHOP_B_shop_91c';
 const SHOP_C   = 'SHOP_C_shop_42x';
 const BUYER    = 'BUYER_uid_11';
 
-function baseDocs() {
-  return {
-    'shops/SHOP_B_shop_91c': { sellerUid: SELLER_A, name: 'B Shop' },
-    'shops/SHOP_C_shop_42x': { sellerUid: 'OTHER_SELLER', name: 'C Shop' },
-    'minishopConfig/SHOP_B_shop_91c': { handle: 'bshop', shopId: SHOP_B, followerCount: 0 },
-  };
+let F, db;
+const stub = (m, exp) => { const p = m.startsWith('./') ? path.join(FN, m + '.js') : require.resolve(m, { paths: [FN] }); require.cache[p] = { id: p, filename: p, loaded: true, exports: exp }; };
+function freshDb() {
+  F = makeFakeFirestore({ clock: () => Date.now(), strictReadOrder: true });
+  db = F.db;
 }
+freshDb();
+const ADMIN = { apps: [{}], initializeApp() {}, app: () => ({}),
+  firestore: Object.assign(() => db, { get FieldValue() { return F.FieldValue; }, get Timestamp() { return F.Timestamp; }, get FieldPath() { return F.FieldPath; } }),
+  auth: () => ({ getUser: async (u) => ({ uid: u, customClaims: {} }) }), storage: () => ({ bucket: () => ({}) }) };
+stub('firebase-admin', ADMIN);
+stub('firebase-admin/firestore', { getFirestore: () => db, get FieldValue() { return F.FieldValue; }, get Timestamp() { return F.Timestamp; }, get FieldPath() { return F.FieldPath; } });
+stub('./notify', { notify: async () => ({ ok: true }), TYPES: {} });
+const quiet = console.log; console.info = console.warn = console.debug = () => {};
 
-/* Firestore stub with a real transaction: reads first, writes applied on commit. */
-function makeDb(docs) {
-  const writes = [];
-  const ref = (p) => ({ __p: p });
-  const snapOf = (p) => ({ exists: Object.prototype.hasOwnProperty.call(docs, p), id: p.split('/').pop(), data: () => docs[p] });
-  const tx = {
-    async get(r) { return snapOf(r.__p); },
-    set(r, d, opt) {
-      writes.push({ op: 'set', path: r.__p, doc: d, merge: !!(opt && opt.merge) });
-      docs[r.__p] = (opt && opt.merge) ? Object.assign({}, docs[r.__p] || {}, d) : Object.assign({}, d);
-    },
-    delete(r) { writes.push({ op: 'delete', path: r.__p }); delete docs[r.__p]; },
-  };
-  return {
-    writes, docs,
-    collection: (c) => ({ doc: (id) => ref(c + '/' + id) }),
-    async runTransaction(fn) {
-      const before = writes.length;
-      try { return await fn(tx); }
-      catch (e) {
-        /* A throw inside a transaction commits nothing — undo anything staged so
-           the test observes real transactional behaviour, not partial writes. */
-        writes.length = before;
-        throw e;
-      }
-    },
-  };
-}
-
-let DOCS = baseDocs();
-let DB = makeDb(DOCS);
-
-/* Capture followShop from the shipped module. */
-function loadFollowShop() {
-  const orig = Module.prototype.require;
-  let mod = null;
-  Module.prototype.require = function (id) {
-    if (id === 'firebase-admin/firestore') {
-      return { getFirestore: () => DB,
-        FieldValue: { serverTimestamp: () => ({ __s: 'ts' }), increment: (n) => ({ __s: 'inc', n }),
-          arrayUnion: () => ({ __s: 'arr' }), delete: () => ({ __s: 'del' }) },
-        Timestamp: { now: () => ({ __s: 'now' }), fromDate: (d) => ({ __s: 'ts', d }) } };
-    }
-    if (id === 'firebase-admin') {
-      return { firestore: Object.assign(() => DB, { FieldValue: { serverTimestamp: () => ({ __s: 'ts' }) } }),
-        apps: [{}], initializeApp() {} };
-    }
-    if (id === 'firebase-functions/v2/https') {
-      return { onCall: (_o, h) => h, onRequest: (_o, h) => (h || _o),
-        HttpsError: class HttpsError extends Error { constructor(code, message) { super(message); this.code = code; } } };
-    }
-    if (id === 'firebase-functions/v2/scheduler') return { onSchedule: (_o, h) => (h || _o) };
-    if (id === 'firebase-functions/params') {
-      const p = (n, o) => ({ name: n, value: () => (o && o.default) || '' });
-      return { defineSecret: p, defineString: p, defineInt: p, defineBoolean: p };
-    }
-    if (id === 'firebase-functions/logger') return { info() {}, warn() {}, error() {}, debug() {} };
-    return orig.apply(this, arguments);
-  };
-  try {
-    const f = path.join(FUNCTIONS_DIR, 'minishop.js');
-    delete require.cache[require.resolve(f)];
-    mod = require(f);
-  } finally { Module.prototype.require = orig; }
-  return mod && mod.followShop;
-}
-
-const followShop = loadFollowShop();
-const call = (uid, data) => followShop({ auth: uid ? { uid, token: {} } : null, data });
+const MS = require(path.join(FN, 'minishop.js'));
+const followShop = MS.followShop && (MS.followShop.run || MS.followShop);
+const call = (uid, data) => followShop({ auth: uid ? { uid, token: {} } : null, data, rawRequest: { headers: {} } });
 const err = async (p) => { try { await p; return null; } catch (e) { return e; } };
-const reset = () => { DOCS = baseDocs(); DB = makeDb(DOCS); };
-const count = (shopId) => (DOCS['minishopConfig/' + shopId] || {}).followerCount;
-const rel = (shopId, uid) => Object.prototype.hasOwnProperty.call(DOCS, 'shopFollowers/' + shopId + '_' + uid);
+const all = async (col) => db._dump(col + '/');
+const count = async (shopId) => ((await db.doc('shops/' + shopId).get()).data() || {}).followerCount;
+const rel = async (shopId, uid) => (await db.doc('follows/' + uid + '--shop--' + shopId.replace(/[^a-zA-Z0-9]/g, '_')).get()).exists;
+async function reset() {
+  freshDb();
+  await db.doc('shops/' + SHOP_B).set({ sellerUid: SELLER_A, name: 'B Shop' });
+  await db.doc('shops/' + SHOP_C).set({ sellerUid: 'OTHER_SELLER', name: 'C Shop' });
+  await db.doc('minishopConfig/' + SHOP_B).set({ handle: 'bshop', shopId: SHOP_B });
+}
+const snapshot = async () => JSON.stringify(db._dump(''));
 
 (async () => {
-
-if (typeof followShop !== 'function') {
-  console.error('followShop could not be captured — the suite cannot run.');
-  process.exit(1);
-}
+if (typeof followShop !== 'function') { console.error('followShop could not be captured — the suite cannot run.'); process.exit(1); }
 
 /* ═══ A — the shop must exist before anything is written ═══ */
-console.log('\nPART A — no shop, no write\n');
+quiet('\nPART A — no shop, no write\n');
 {
-  reset();
+  await reset();
   const ok = await call(BUYER, { shopId: SHOP_B, follow: true });
   ck('A1  a buyer may follow a shop that EXISTS', ok && ok.following === true);
 
-  reset();
+  await reset();
   const okC = await call(SELLER_A, { shopId: SHOP_C, follow: true });
-  ck('A2  SELLER_A may follow SHOP_C, because SHOP_C exists (following is not ownership)',
-    okC && okC.following === true);
+  ck('A2  SELLER_A may follow SHOP_C, because SHOP_C exists (following is not ownership)', okC && okC.following === true);
 
-  reset();
+  await reset();
+  const before = await snapshot();
   const missing = await err(call(BUYER, { shopId: 'shop_that_does_not_exist', follow: true }));
   ck('A3  a NONEXISTENT shop is refused', missing && missing.code === 'not-found', missing && missing.code);
-  ck('A4  ...and NOTHING was written — no config document was conjured',
-    DB.writes.length === 0 && !DOCS['minishopConfig/shop_that_does_not_exist'],
-    JSON.stringify(DB.writes));
+  ck('A4  ...and NOTHING was written — no config, no shop, no follow conjured', (await snapshot()) === before);
 
-  reset();
+  await reset();
+  const b2 = await snapshot();
   const arbitrary = await err(call(BUYER, { shopId: '../../etc/passwd', follow: true }));
-  ck('A5  an arbitrary shop id string is refused', arbitrary && arbitrary.code === 'not-found');
-  ck('A6  ...and creates no document of any kind', DB.writes.length === 0);
+  ck('A5  an arbitrary shop id string is refused', arbitrary && ['not-found', 'invalid-argument'].includes(arbitrary.code), arbitrary && arbitrary.code);
+  ck('A6  ...and creates no document of any kind', (await snapshot()) === b2);
 
-  reset();
+  await reset();
+  const b3 = await snapshot();
   const anon = await err(call(null, { shopId: SHOP_B, follow: true }));
   ck('A7  an unauthenticated caller is DENIED', anon && anon.code === 'unauthenticated');
-  ck('A8  ...and writes nothing', DB.writes.length === 0);
+  ck('A8  ...and writes nothing', (await snapshot()) === b3);
 
-  reset();
   const noShopId = await err(call(BUYER, { follow: true }));
   ck('A9  a missing shopId is invalid-argument', noShopId && noShopId.code === 'invalid-argument');
   const noFollow = await err(call(BUYER, { shopId: SHOP_B }));
   ck('A10 a missing follow flag is invalid-argument', noFollow && noFollow.code === 'invalid-argument');
 }
 
-/* ═══ B — the owner following their own shop ═══ */
-console.log('\nPART B — existing policy preserved\n');
+/* ═══ B — policy ═══ */
+quiet('\nPART B — self-follow policy\n');
 {
-  reset();
-  const own = await call(SELLER_A, { shopId: SHOP_B, follow: true });
-  ck('B1  an owner may follow their own shop — unchanged policy',
-    own && own.following === true && own.followerCount === 1);
-  ck('B2  ...and it is recorded as a normal relationship', rel(SHOP_B, SELLER_A));
+  await reset();
+  const own = await err(call(SELLER_A, { shopId: SHOP_B, follow: true }));
+  ck('B1  an owner can NOT follow their own shop (it inflated their own count — CHANGELOG 211)', own && own.code === 'failed-precondition', own && own.code);
+  ck('B2  ...and no relationship was recorded', !(await rel(SHOP_B, SELLER_A)) && (await count(SHOP_B)) === undefined);
 }
 
 /* ═══ C — the relationship is the authority, the count is derived ═══ */
-console.log('\nPART C — one fact, one derived number\n');
+quiet('\nPART C — one fact, one derived number\n');
 {
-  reset();
+  await reset();
   const f1 = await call(BUYER, { shopId: SHOP_B, follow: true });
   ck('C1  a follow creates the relationship and the count becomes 1',
-    f1.following === true && f1.followerCount === 1 && rel(SHOP_B, BUYER) && count(SHOP_B) === 1);
-
+    f1.following === true && f1.followerCount === 1 && (await rel(SHOP_B, BUYER)) && (await count(SHOP_B)) === 1);
   const f2 = await call(BUYER, { shopId: SHOP_B, follow: true });
-  ck('C2  a DUPLICATE follow does not inflate the count',
-    f2.following === true && f2.followerCount === 1 && count(SHOP_B) === 1);
-
+  ck('C2  a DUPLICATE follow does not inflate the count', f2.following === true && f2.followerCount === 1 && (await count(SHOP_B)) === 1);
   const f3 = await call(BUYER, { shopId: SHOP_B, follow: true });
-  ck('C3  ...however many times it is repeated', f3.followerCount === 1 && count(SHOP_B) === 1);
-
+  ck('C3  ...however many times it is repeated', f3.followerCount === 1 && (await count(SHOP_B)) === 1);
   const u1 = await call(BUYER, { shopId: SHOP_B, follow: false });
   ck('C4  an unfollow removes the relationship and reconciles the count',
-    u1.following === false && u1.followerCount === 0 && !rel(SHOP_B, BUYER) && count(SHOP_B) === 0);
-
+    u1.following === false && u1.followerCount === 0 && !(await rel(SHOP_B, BUYER)) && (await count(SHOP_B)) === 0);
   const u2 = await call(BUYER, { shopId: SHOP_B, follow: false });
-  ck('C5  a duplicate unfollow does not drive the count negative',
-    u2.followerCount === 0 && count(SHOP_B) === 0);
+  ck('C5  a duplicate unfollow does not drive the count negative', u2.followerCount === 0 && (await count(SHOP_B)) === 0);
+  for (let i = 0; i < 10; i++) { await call(BUYER, { shopId: SHOP_B, follow: true }); await call(BUYER, { shopId: SHOP_B, follow: false }); }
+  ck('C6  ten follow/unfollow cycles leave the count EXACTLY zero', (await count(SHOP_B)) === 0, String(await count(SHOP_B)));
 
-  /* Repeat the whole cycle — the count must land exactly, not drift. */
-  for (let i = 0; i < 10; i++) {
-    await call(BUYER, { shopId: SHOP_B, follow: true });
-    await call(BUYER, { shopId: SHOP_B, follow: false });
-  }
-  ck('C6  ten follow/unfollow cycles leave the count EXACTLY zero', count(SHOP_B) === 0, String(count(SHOP_B)));
-
-  /* Several distinct followers. */
-  reset();
-  for (const u of ['u1', 'u2', 'u3', 'u4', 'u5']) await call(u, { shopId: SHOP_B, follow: true });
-  ck('C7  five distinct followers give a count of five', count(SHOP_B) === 5, String(count(SHOP_B)));
+  await reset();
+  await Promise.all(['u1', 'u2', 'u3', 'u4', 'u5'].map((u) => call(u, { shopId: SHOP_B, follow: true })));
+  ck('C7  five CONCURRENT distinct followers give a count of five', (await count(SHOP_B)) === 5, String(await count(SHOP_B)));
   await call('u3', { shopId: SHOP_B, follow: false });
-  ck('C8  one unfollows and the count is four', count(SHOP_B) === 4, String(count(SHOP_B)));
+  ck('C8  one unfollows and the count is four', (await count(SHOP_B)) === 4, String(await count(SHOP_B)));
   ck('C9  the count equals the number of relationship documents',
-    count(SHOP_B) === Object.keys(DOCS).filter((k) => k.indexOf('shopFollowers/' + SHOP_B + '_') === 0).length);
+    (await count(SHOP_B)) === (await all('follows')).filter((f) => f.type === 'shop' && f.entityId === SHOP_B).length);
+  ck('C10 a shop reached by its OWNER\'s uid resolves to the ONE canonical shop (no second key)',
+    (await call('u9', { shopId: SELLER_A, follow: true })).following === true && (await rel(SHOP_B, 'u9')) && !(await rel(SELLER_A, 'u9')) && (await count(SHOP_B)) === 5);
 }
 
-/* ═══ D — the loop is closed at the rules, structurally ═══ */
-console.log('\nPART D — the client can no longer desynchronise truth\n');
+/* ═══ D — the client cannot desynchronise truth ═══ */
+quiet('\nPART D — the client can no longer desynchronise truth\n');
 {
   const rules = fs.readFileSync(path.join(ROOT, 'firestore.rules'), 'utf8');
-  const block = rules.slice(rules.indexOf('match /shopFollowers/{docId}'),
-    rules.indexOf('match /shopFollowers/{docId}') + 320);
-
-  ck('D1  the client can no longer CREATE a follow document', !/allow create/.test(block));
-  ck('D2  the client can no longer DELETE one', !/allow delete/.test(block), block.replace(/\s+/g, ' ').slice(0, 90));
-  ck('D3  the relationship is therefore CF-only — the loop has no first step',
-    !/allow (create|update|delete|write)/.test(block));
-  ck('D4  public READ is preserved, so a storefront can still show follow state',
-    /allow read:\s*if true/.test(block));
-
-  /* The loop simulated end to end: follow, delete the relationship out of band
-     (as the old rule permitted), then follow again. */
-  reset();
+  const block = rules.slice(rules.indexOf('match /shopFollowers/{docId}'), rules.indexOf('match /shopFollowers/{docId}') + 320);
+  ck('D1  the client can not create or delete a legacy shopFollowers document', !/allow (create|update|delete|write)/.test(block));
+  const fblock = rules.slice(rules.indexOf('match /follows/{followId}'), rules.indexOf('match /follows/{followId}') + 700);
+  ck('D2  the client can not create a SHOP follow (server-counted type)', /allow create:[\s\S]*!followId\.matches\('\.\*--\(provider\|venue\|creator\|shop\)--\.\*'\)/.test(fblock), fblock.replace(/\s+/g, ' ').slice(0, 160));
+  ck('D3  ...nor delete one', /allow delete:[\s\S]*!followId\.matches\('\.\*--\(provider\|venue\|creator\|shop\)--\.\*'\)/.test(fblock));
+  ck('D4  public READ of the legacy store is preserved (old data stays inspectable)', /allow read:\s*if true/.test(block));
+  /* the old inflation loop: delete the relationship out of band, follow again */
+  await reset();
   await call(BUYER, { shopId: SHOP_B, follow: true });
-  ck('D5  baseline: one follow, count 1', count(SHOP_B) === 1);
-  delete DOCS['shopFollowers/' + SHOP_B + '_' + BUYER];       /* what the old rule allowed */
-  await call(BUYER, { shopId: SHOP_B, follow: true });
-  ck('D6  the loop WOULD still double the count if the document vanished — which is exactly why the rule, not the function, is the fix',
-    count(SHOP_B) === 2, String(count(SHOP_B)));
-  ck('D7  ...and no shipped client can perform that delete any more',
-    !/allow delete/.test(block));
-
-  /* Control: the assertion must be able to fail. */
-  ck('D8  the rule detector catches a permissive rule (control)',
-    /allow delete/.test('match /x/{d} { allow delete: if isAuthed(); }'));
+  ck('D5  baseline: one follow, count 1', (await count(SHOP_B)) === 1);
+  const again = await call(BUYER, { shopId: SHOP_B, follow: true });
+  ck('D6  following again while the relationship exists never inflates (idempotent on the server-owned doc)', again.followerCount === 1 && (await count(SHOP_B)) === 1);
+  ck('D7  the rule detector catches a permissive rule (control)', /allow delete/.test('match /x/{d} { allow delete: if isAuthed(); }'));
 }
 
 /* ═══ E — no shop is ever created as a side effect ═══ */
-console.log('\nPART E — following never provisions anything\n');
+quiet('\nPART E — following never provisions anything\n');
 {
-  reset();
+  await reset();
+  const cfgBefore = JSON.stringify((await db.doc('minishopConfig/' + SHOP_B).get()).data());
   await call(BUYER, { shopId: SHOP_B, follow: true });
-  const created = DB.writes.filter((w) => w.path.indexOf('shops/') === 0);
-  ck('E1  following writes NOTHING to shops/', created.length === 0, JSON.stringify(created));
-  ck('E2  it touches exactly two documents — the relationship and the counter',
-    DB.writes.length === 2 &&
-    DB.writes.some((w) => w.path.indexOf('shopFollowers/') === 0) &&
-    DB.writes.some((w) => w.path.indexOf('minishopConfig/') === 0),
-    DB.writes.map((w) => w.op + ' ' + w.path).join(' | '));
-  ck('E3  the counter write is a MERGE, so it cannot clobber storefront config',
-    DB.writes.find((w) => w.path.indexOf('minishopConfig/') === 0).merge === true);
-  ck('E4  ...and the existing config survives it',
-    DOCS['minishopConfig/' + SHOP_B].handle === 'bshop');
+  const shops = await all('shops');
+  ck('E1  following creates no shop (still exactly the two fixture shops)', shops.length === 2);
+  ck('E2  it writes the relationship and the counter on the EXISTING shop doc (merge — name kept)',
+    (await rel(SHOP_B, BUYER)) && (await db.doc('shops/' + SHOP_B).get()).data().name === 'B Shop' && (await db.doc('shops/' + SHOP_B).get()).data().followV === 1);
+  ck('E3  the storefront config is not touched', JSON.stringify((await db.doc('minishopConfig/' + SHOP_B).get()).data()) === cfgBefore);
+  ck('E4  no legacy shopFollowers document is written any more', (await all('shopFollowers')).length === 0);
 }
 
 /* ═══ F — the shipped source ═══ */
-console.log('\nPART F — the fix is where it should be\n');
+quiet('\nPART F — no second writer is left\n');
 {
-  const ms = fs.readFileSync(path.join(FUNCTIONS_DIR, 'minishop.js'), 'utf8');
-  const body = ms.slice(ms.indexOf('exports.followShop'), ms.indexOf('exports.followShop') + 3200);
-
-  /* Asserted by ORDERING, not by distance. A `[\s\S]{0,400}` window between two
-     landmarks fails the moment a comment is added between them — it measures
-     prose length, not structure. */
-  const iTx      = body.indexOf('runTransaction');
-  const iShopGet = body.indexOf('tx.get(shopRef)');
-  const iRefuse  = body.indexOf('!shopSnap.exists');
-  const iFirstWrite = Math.min(
-    ...[body.indexOf('tx.set('), body.indexOf('tx.delete(')].filter((i) => i >= 0)
-  );
-
-  ck('F1  the shop existence check is INSIDE the transaction, so it cannot be raced',
-    iTx >= 0 && iShopGet > iTx, 'runTransaction@' + iTx + ' shopGet@' + iShopGet);
-  ck('F2  ...and it refuses BEFORE any write in that transaction',
-    iRefuse > iShopGet && iRefuse < iFirstWrite,
-    'refuse@' + iRefuse + ' firstWrite@' + iFirstWrite);
-  ck('F3  the relationship key is {shopId}_{uid} with uid from auth',
-    /doc\(`\$\{shopId\}_\$\{uid\}`\)/.test(body) && /const uid = _requireAuth\(request\)/.test(body));
-  /* The property is about WRITES, not mentions. `const { following,
-     followerCount } = await db.runTransaction(...)` legitimately names the
-     counter outside the transaction — it is destructuring the RESULT. What must
-     not exist is a write to the counter document from outside. */
-  const configUses = [];
-  for (let i = body.indexOf('configRef'); i >= 0; i = body.indexOf('configRef', i + 1)) configUses.push(i);
-  const configWritesOutside = configUses.filter((i) => {
-    const before = body.slice(Math.max(0, i - 12), i);
-    const isTxOp = /tx\.(set|get|delete)\(\s*$/.test(before);
-    const isDecl = /const\s+$/.test(before) || body.slice(i, i + 12).indexOf('configRef ') === 0;
-    return !isTxOp && !isDecl;
-  });
-  ck('F4  the counter document is only ever written through the transaction',
-    configWritesOutside.length === 0,
-    configWritesOutside.map((i) => body.slice(i - 14, i + 14).replace(/\s+/g, ' ')).join(' | '));
-  ck('F5  an unfollow floors the count at zero', /Math\.max\(0, currentCount - 1\)/.test(body));
-
-  /* Mutation control. */
-  const mutated = body.replace(/if \(!shopSnap\.exists\) \{[\s\S]{0,90}?\}/, '');
-  ck('F6  the existence check is a real block that can be removed (control)', mutated !== body);
+  const ms = fs.readFileSync(path.join(FN, 'minishop.js'), 'utf8');
+  const body = ms.slice(ms.indexOf('exports.followShop'), ms.indexOf('exports.getMyMinishop') > 0 ? ms.indexOf('exports.getMyMinishop') : ms.indexOf('exports.followShop') + 3000);
+  ck('F1  followShop delegates to the reputation authority', /require\('\.\/reputation'\)/.test(body) && /repFollow/.test(body) && /repUnfollow/.test(body));
+  ck('F2  it no longer writes shopFollowers', !/collection\('shopFollowers'\)/.test(body));
+  ck('F3  ...nor a counter in minishopConfig', !/collection\('minishopConfig'\)/.test(body));
+  ck('F4  the uid still comes only from auth', /_requireAuth\(request\)/.test(body) && /auth: request\.auth/.test(body) && !/request\.data\.uid/.test(body));
+  const rep = fs.readFileSync(path.join(FN, 'reputation.js'), 'utf8');
+  ck('F5  the authority floors an unfollow at zero', /const next = Math\.max\(0, cur - 1\);/.test(rep));
+  ck('F6  the detector can fail (control)', !/collection\('shopFollowers'\)/.test("db.collection('shopFollowers')") === false);
 }
 
-console.log('\n' + '='.repeat(70));
-console.log('  ' + pass + ' passed, ' + fail + ' failed');
+quiet('\n' + '='.repeat(70));
+quiet('  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
-
 })().catch((e) => { console.error(e); process.exit(1); });

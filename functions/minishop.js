@@ -78,6 +78,9 @@ const _db = () => getFirestore();
  * Require Firebase Auth on an onCall request.
  * Returns the uid on success; throws HttpsError on failure.
  */
+/* The shop's follower count as the reputation authority maintains it (functions/reputation.js, type 'shop'). */
+function _shopFollowers(shop) { return shop && shop.followV && typeof shop.followerCount === 'number' ? shop.followerCount : null; }
+
 function _requireAuth(context) {
   if (!context.auth?.uid) {
     throw new HttpsError('unauthenticated', 'Login required.');
@@ -197,7 +200,8 @@ exports.getMinishopPublic = onRequest(
         /* Counters share the config document but are not display config, so
            they are carried across explicitly rather than through the schema. */
         totalProducts: configRaw.totalProducts,
-        followerCount: configRaw.followerCount,
+        /* followers: the reputation authority's count on shops/{id} (followV), else UNKNOWN (null) */
+        followerCount: _shopFollowers(shopRaw),
       };
 
       // Strip sensitive seller fields before sending to public
@@ -207,6 +211,9 @@ exports.getMinishopPublic = onRequest(
       /* Remove the legacy blob so the response has exactly one config source —
          leaving it invites a consumer to read the un-normalised copy. */
       delete shop.minishopConfig;
+      /* the shop doc's own followerCount is shown only when the server maintains it */
+      if (_shopFollowers(shopRaw) === null) delete shop.followerCount;
+      delete shop.followV;
 
       /* 3 — Products (single-field query: shopId == shopId, no composite) */
       const productsSnap = await db
@@ -232,7 +239,7 @@ exports.getMinishopPublic = onRequest(
       /* 5 — Total product count (field: shopId) — reuse productsSnap length
              For large stores totalProducts comes from config counter if set */
       const totalProducts = config.totalProducts ?? products.length;
-      const followerCount = config.followerCount  ?? 0;
+      const followerCount = config.followerCount;   /* null = unknown, rendered "—" — never an invented 0 */
 
       res.status(200).json({
         shop,
@@ -480,17 +487,14 @@ exports.getMinishopAnalytics = onCall(
     const { shopId } = request.data || {};
 
     /* Verify ownership */
-    await _assertShopOwner(shopId, uid);
+    const shopData = await _assertShopOwner(shopId, uid);
 
     const db = _db();
 
-    const [analyticsSnap, configSnap] = await Promise.all([
-      db.collection('minishopAnalytics').doc(shopId).get(),
-      db.collection('minishopConfig').doc(shopId).get(),
-    ]);
+    const analyticsSnap = await db.collection('minishopAnalytics').doc(shopId).get();
 
     const analytics    = analyticsSnap.exists ? analyticsSnap.data() : {};
-    const followerCount = configSnap.exists ? (configSnap.data().followerCount ?? 0) : 0;
+    const followerCount = _shopFollowers(shopData);   /* the reputation authority's count, or null */
 
     return { analytics, followerCount, shopId };
   }
@@ -717,70 +721,15 @@ exports.followShop = onCall(
       throw new HttpsError('invalid-argument', 'follow must be a boolean.');
     }
 
-    const db         = _db();
-    const shopRef     = db.collection('shops').doc(shopId);
-    const followerRef = db.collection('shopFollowers').doc(`${shopId}_${uid}`);
-    const configRef   = db.collection('minishopConfig').doc(shopId);
-
-    const { following, followerCount } = await db.runTransaction(async tx => {
-      /* ── The shop must EXIST before anything is written ───────────────────
-         This ran without any existence check, and then merge-wrote
-         minishopConfig/{shopId}. A merge to a missing document CREATES it, so
-         any authenticated caller could conjure publicly-readable storefront
-         config documents for shop ids nobody owns — a write-authority defect,
-         not merely a stray counter.
-
-         The read is inside the transaction so the check cannot be raced by a
-         shop being deleted between verification and write. */
-      const [shopSnap, followerSnap, configSnap] = await Promise.all([
-        tx.get(shopRef),
-        tx.get(followerRef),
-        tx.get(configRef),
-      ]);
-
-      if (!shopSnap.exists) {
-        throw new HttpsError('not-found', 'Shop not found.');
-      }
-
-      /* ── The RELATIONSHIP is the authority; the counter is derived ─────────
-         shopFollowers/{shopId}_{uid} is the fact. followerCount is a cache of
-         it, maintained in the same transaction that changes the fact, so the
-         two cannot diverge through this path.
-
-         They previously could diverge through a DIFFERENT path:
-         firestore.rules allowed a client to delete the follow document
-         directly, while this function decides idempotency by reading that same
-         document. Delete it and follow again and the counter rose a second
-         time — an unbounded inflation loop from one account, against any shop.
-         The rule is now CF-only, so the relationship is only ever changed here. */
-      const alreadyFollowing = followerSnap.exists;
-      const currentCount     = configSnap.exists ? (configSnap.data().followerCount || 0) : 0;
-
-      if (follow && !alreadyFollowing) {
-        tx.set(followerRef, {
-          shopId,
-          uid,
-          followedAt: FieldValue.serverTimestamp(),
-        });
-        const newCount = currentCount + 1;
-        tx.set(configRef, { followerCount: newCount, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-        return { following: true, followerCount: newCount };
-      }
-
-      if (!follow && alreadyFollowing) {
-        tx.delete(followerRef);
-        /* Floored at zero: a counter that predates the relationship being
-           authoritative could otherwise be driven negative by an unfollow. */
-        const newCount = Math.max(0, currentCount - 1);
-        tx.set(configRef, { followerCount: newCount, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-        return { following: false, followerCount: newCount };
-      }
-
-      /* No change — idempotent. A repeated follow does NOT increment, because
-         the relationship already exists and the relationship is the authority. */
-      return { following: alreadyFollowing, followerCount: currentCount };
-    });
-
+    /* CONVERGED (2026-09-27, CHANGELOG 211): this was a SECOND follow authority — the relationship in
+       shopFollowers/{shopId}_{uid} and a counter in minishopConfig — beside the follows/{uid}--shop--{id}
+       documents the storefront actually wrote. The ONE authority is now functions/reputation.js
+       (type 'shop': shops/{shopId} is the entity, followerCount + followV live on it). This callable stays
+       for any deployed caller and delegates; it no longer writes shopFollowers or minishopConfig.
+       Legacy shopFollowers relationships are carried over by scripts/migrate-reputation.js (dry run first). */
+    const rep = require('./reputation');
+    const r = await rep._h[follow ? 'repFollow' : 'repUnfollow']({ auth: request.auth, data: { type: 'shop', id: shopId } });
+    const following = !!r.following; const followerCount = typeof r.followerCount === 'number' ? r.followerCount : null;
     return { following, followerCount };
   }
 );

@@ -146,11 +146,9 @@ window.SokoniMiniShop = (() => {
          `followShop` writes `shopFollowers/{shopId}_{uid}` and Store Stage 1B
          made that document CF-only, so it is the one authority on follow state.
          This reads it rather than introducing a second. */
-      const snap = await firebase.firestore()
-        .doc(`shopFollowers/${_state.shopId}_${user.uid}`)
-        .get();
-      _state.following = snap.exists;
-      _updateFollowBtn();
+      /* CONVERGED (CHANGELOG 211): the relationship lives in ONE place — follows/{uid}--shop--{shopId}, via the
+         reputation authority. Reading shopFollowers here raced _hydrateFollowState (last write won). */
+      await _hydrateFollowState();
     } catch (_) { /* silent */ }
   }
   function _updateFollowBtn() {
@@ -1336,22 +1334,29 @@ body{margin:0;font-family:sans-serif;display:flex;justify-content:center;align-i
 
   let _msFollowBusy = false;
 
+  /* firebase.js is a module (deferred): the signed-in user is known only once it publishes sokoniAuthReady.
+     Re-read the follow state then, and never decide "signed out" before auth has answered. */
+  document.addEventListener('sokoniAuthReady', function () { _hydrateFollowState(); });
+  function _msAuthSettled() {
+    if (window.__sokoniAuthReady || typeof window.waitForSokoniAuthReady !== 'function') return Promise.resolve();
+    return Promise.race([window.waitForSokoniAuthReady(), new Promise(function (r) { setTimeout(r, 4000); })]);
+  }
+
   /* Read the canonical follow doc for (this user, this shop) and paint the button.
      Per-doc get() — NOT a prefix query — because the deployed rule allows the
      single-document read but denies a list over follows/. */
   async function _hydrateFollowState() {
     const user = _msAuthUser();
-    if (!user || !_state.shopId || !window.firebaseDB) return;
+    if (!user || !_state.shopId) return;
     try {
-      const m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-      const fid = user.uid + '--' + MS_FOLLOW_TYPE + '--' + String(_state.shopId).replace(/[^a-zA-Z0-9]/g, '_');
-      const snap = await m.getDoc(m.doc(window.firebaseDB, 'follows', fid));
-      _state.following = snap.exists();
+      const r = await _callCF('bookingDispatch', { op: 'repFollowState', items: [{ type: MS_FOLLOW_TYPE, id: String(_state.shopId) }] });
+      _state.following = !!(r && r.following && r.following[MS_FOLLOW_TYPE + ':' + String(_state.shopId)]);
       _updateFollowBtn();
     } catch (e) { /* leave the button on its default state */ }
   }
 
   async function toggleFollow() {
+    if (!_msAuthUser()) await _msAuthSettled();
     const user = _msAuthUser();
     if (!user) {
       location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search);
@@ -1365,28 +1370,12 @@ body{margin:0;font-family:sans-serif;display:flex;justify-content:center;align-i
     _updateFollowBtn();
 
     try {
-      const db = window.firebaseDB;
-      if (!db) throw { code: 'unavailable' };
-      const m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-      const fid = user.uid + '--' + MS_FOLLOW_TYPE + '--' + String(_state.shopId).replace(/[^a-zA-Z0-9]/g, '_');
-      const ref = m.doc(db, 'follows', fid);
-      if (wasFollowing) {
-        await m.deleteDoc(ref);
-      } else {
-        try {
-          await m.setDoc(ref, {
-            uid: user.uid, type: MS_FOLLOW_TYPE, entityId: String(_state.shopId),
-            entityName: (_state.shop && _state.shop.name) || '', createdAt: m.serverTimestamp()
-          }, { merge: true });
-        } catch (e) {
-          /* No `allow update` on follows/ — re-writing an existing follow is
-             denied. Already following is the intended end state, so converge
-             rather than surface a permission error. scripts/test-follow-rules.js */
-          if (!/permission-denied/i.test(String((e && (e.code || e.message)) || ''))) throw e;
-          const existing = await m.getDoc(ref).catch(() => null);
-          if (!existing || !existing.exists()) throw e;
-        }
-      }
+      /* ONE follow authority (functions/reputation.js, type 'shop'): the server keys the relationship to the
+         signed-in account and keeps the count in the same transaction. The client never writes a follow. */
+      const r = await _callCF('bookingDispatch', { op: wasFollowing ? 'repUnfollow' : 'repFollow', type: MS_FOLLOW_TYPE, id: String(_state.shopId) });
+      _state.following = !!(r && r.following);
+      _updateFollowBtn();
+      if (r && typeof r.followerCount === 'number') { _state.followerCount = r.followerCount; _setEl('msFollowerCount', r.followerCount.toLocaleString()); }
       _toast(_state.following ? 'Following this shop' : 'Unfollowed', 'success');
     } catch (err) {
       _state.following = wasFollowing;              /* ROLLBACK — nothing persisted */
@@ -1396,10 +1385,7 @@ body{margin:0;font-family:sans-serif;display:flex;justify-content:center;align-i
     } finally {
       _msFollowBusy = false;
     }
-    /* The follower COUNT is deliberately not adjusted here. It is a
-       server-maintained field on the shop config (minishop-config-schema.js);
-       incrementing a local copy produced a number that disagreed with the
-       backend and with every other device. */
+    /* The follower COUNT shown is the one the server returned — never a local increment. */
   }
 
   // ─── Business Card Download ──────────────────────────────────────────────────

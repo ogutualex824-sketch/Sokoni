@@ -200,7 +200,7 @@ if (!FS_HOST) { console.error('REFUSING: FIRESTORE_EMULATOR_HOST must be set (ru
   console.log('\nEntity types — one model for every followable thing');
   /* 'provider' left this list 2026-09-27: provider / venue / creator follows are SERVER-counted
      (functions/reputation.js) — see section 5b. */
-  const TYPES = ['store', 'business', 'shop', 'seller', 'user', 'hub',
+  const TYPES = ['store', 'business', 'seller', 'user', 'hub',
                  'plumber', 'mechanic', 'electrician', 'cleaner', 'legal',
                  'hospital', 'bnb', 'car', 'entertainment', 'construction'];
   for (const t of TYPES) {
@@ -217,7 +217,7 @@ if (!FS_HOST) { console.error('REFUSING: FIRESTORE_EMULATOR_HOST must be set (ru
      write would drift the count, so the rule refuses the id shape — including for a
      uid that itself contains a hyphen. */
   console.log('\nServer-counted follow types (provider · venue · creator)');
-  for (const t of ['provider', 'venue', 'creator']) {
+  for (const t of ['provider', 'venue', 'creator', 'shop']) {   /* 'shop' since CHANGELOG 211 */
     await check('type "' + t + '" client follow DENIED (server authority)',
       assertFails(setDoc(doc(dbA, 'follows', followId(UID, t, 'entity-1')), followDoc(UID, t, 'entity-1'))));
   }

@@ -1957,9 +1957,9 @@ service cloud.firestore {
       /* 2026-09-27: a PROVIDER / VENUE / CREATOR follow is written only by the reputation authority (a
          transactional follower count). Other hubs' follows are unchanged. */
       allow create: if isAuthed() && followId.matches(request.auth.uid + '--.*')
-                    && !followId.matches('.*--(provider|venue|creator)--.*');
+                    && !followId.matches('.*--(provider|venue|creator|shop)--.*');
       allow delete: if isAdmin() || (isAuthed() && followId.matches(request.auth.uid + '--.*')
-                    && !followId.matches('.*--(provider|venue|creator)--.*'));
+                    && !followId.matches('.*--(provider|venue|creator|shop)--.*'));
     }
 
     match /driverRatings/{ratingId} {

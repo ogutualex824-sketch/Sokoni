@@ -28,7 +28,10 @@ const crypto = require('crypto');
 
 const COL = Object.freeze({ FOLLOWS: 'follows', REVIEWS: 'providerReviews', REPORTS: 'reports', HANDLES: 'shareHandles',
   SHARES: 'shareEvents', AUDIT: 'reputationAudit' });
-const TYPES = Object.freeze(['provider', 'venue', 'creator']);
+/* 'shop' (2026-09-27, CHANGELOG 211): MiniShop follows converge here — shops/{shopId} is the entity,
+   shops.sellerUid the owner; the old followShop/shopFollowers store delegates (functions/minishop.js). */
+const TYPES = Object.freeze(['provider', 'venue', 'creator', 'shop']);
+const SHOP_CLOSED = Object.freeze(['suspended', 'banned', 'deleted', 'closed', 'disabled', 'removed']);
 const REPORT_REASONS = Object.freeze(['HARASSMENT', 'SPAM', 'PERSONAL_INFORMATION', 'FRAUD_ALLEGATION', 'IRRELEVANT', 'ABUSIVE', 'OTHER']);
 const REVIEW_STATUS = Object.freeze({ PUBLISHED: 'published', HIDDEN: 'hidden', REMOVED: 'removed' });
 /* Policy (documented, not client-settable): a review is possible within 60 days of the experience;
@@ -61,13 +64,21 @@ const ENTITY = {
   provider: { col: 'providers', public: (d) => d && ['active', 'approved'].includes(d.status) && d.suspended !== true, owner: (id) => id, name: (d) => d.businessName || d.name },
   venue: { col: 'venues', public: (d) => d && d.status === 'active', owner: (id, d) => d.ownerId, name: (d) => d.name },
   creator: { col: 'creators', public: (d) => d && d.state === 'ACTIVE', owner: (id) => id, name: (d) => d.displayName || d.name },
+  shop: { col: 'shops', public: (d) => d && d.suspended !== true && d.banned !== true && !SHOP_CLOSED.includes(String(d.status || '').toLowerCase()),
+    owner: (id, d) => d.sellerUid || d.ownerUid || d.ownerId || id, name: (d) => d.name || d.storeName || d.businessName },
 };
 function _type(t) { const x = String(t || ''); if (!TYPES.includes(x)) fail('invalid-argument', 'Unknown profile type.'); return x; }
 function _ref(type, id) { return _db().collection(ENTITY[type].col).doc(String(id)); }
 async function loadEntity(type, id) {
   _type(type);
   if (!_idOk(id)) fail('invalid-argument', 'Unknown profile.');
-  const s = await _ref(type, id).get();
+  let s = await _ref(type, id).get();
+  /* A shop is also reachable by its owner's uid (new shops are keyed by it; legacy ones carry sellerUid):
+     resolved to the ONE canonical shop doc, or refused when it is ambiguous. */
+  if (!s.exists && type === 'shop') {
+    const q = await _db().collection('shops').where('sellerUid', '==', String(id)).limit(2).get();
+    if (q.size === 1) { s = q.docs[0]; id = s.id; }
+  }
   if (!s.exists) fail('not-found', 'Profile not found.');
   const d = s.data();
   return { type, id: String(id), data: d, ownerUid: ENTITY[type].owner(String(id), d), name: _san(ENTITY[type].name(d), 120) || 'SOKONI', isPublic: !!ENTITY[type].public(d) };
@@ -111,11 +122,17 @@ async function _audit(entry) {
 const _h = {};
 
 /* ═══ FOLLOWERS ═══════════════════════════════════════════════════════════════════════════ */
+/* The ONE follow-doc key for an entity: a shop reached by its owner's uid resolves to its canonical id. */
+async function _canonId(type, id) {
+  if (type !== 'shop') return String(id);
+  try { return (await loadEntity(type, id)).id; } catch (_) { return String(id); }
+}
 _h.repFollow = async (req) => {
   const uid = _need(req);
   const d = req.data || {};
-  const type = _type(d.type); const id = String(d.id || '');
-  const ent = await loadEntity(type, id);
+  const type = _type(d.type);
+  const ent = await loadEntity(type, String(d.id || ''));
+  const id = ent.id;
   if (!ent.isPublic) fail('failed-precondition', 'This profile cannot be followed right now.');
   if (ent.ownerUid === uid) fail('failed-precondition', 'You cannot follow your own profile.');
   const fRef = _db().collection(COL.FOLLOWS).doc(followId(uid, type, id));
@@ -139,8 +156,9 @@ _h.repFollow = async (req) => {
 _h.repUnfollow = async (req) => {
   const uid = _need(req);
   const d = req.data || {};
-  const type = _type(d.type); const id = String(d.id || '');
-  if (!_idOk(id)) fail('invalid-argument', 'Unknown profile.');
+  const type = _type(d.type);
+  if (!_idOk(d.id)) fail('invalid-argument', 'Unknown profile.');
+  const id = await _canonId(type, d.id);
   const fRef = _db().collection(COL.FOLLOWS).doc(followId(uid, type, id));
   const eRef = _ref(type, id);
   const eSnap = await eRef.get();
@@ -163,8 +181,9 @@ _h.repUnfollow = async (req) => {
 _h.repFollowVisibility = async (req) => {
   const uid = _need(req);
   const d = req.data || {};
-  const type = _type(d.type); const id = String(d.id || '');
-  if (!_idOk(id)) fail('invalid-argument', 'Unknown profile.');
+  const type = _type(d.type);
+  if (!_idOk(d.id)) fail('invalid-argument', 'Unknown profile.');
+  const id = await _canonId(type, d.id);
   const fRef = _db().collection(COL.FOLLOWS).doc(followId(uid, type, id));
   const f = await fRef.get();
   if (!f.exists || f.data().via !== 'server') fail('failed-precondition', 'Follow this profile first.');
@@ -179,7 +198,7 @@ _h.repFollowState = async (req) => {
   for (const it of items) {
     if (!it || !TYPES.includes(it.type) || !_idOk(it.id)) continue;
     const key = `${it.type}:${it.id}`;
-    out[key] = uid ? (await _db().collection(COL.FOLLOWS).doc(followId(uid, it.type, it.id)).get()).exists : false;
+    out[key] = uid ? (await _db().collection(COL.FOLLOWS).doc(followId(uid, it.type, await _canonId(it.type, it.id))).get()).exists : false;
   }
   return { following: out };
 };
@@ -378,6 +397,7 @@ _h.repReviews = async (req) => {
   const type = _type(d.type); const id = String(d.id || '');
   if (!_idOk(id)) fail('invalid-argument', 'Unknown profile.');
   if (type === 'creator') return { reviews: [], note: 'Creator bookings are reviewed on the creator\'s provider profile.' };
+  if (type === 'shop') return { reviews: [], note: 'Shop products are reviewed on each product.' };
   const q = type === 'venue'
     ? _db().collection(COL.REVIEWS).where('entityId', '==', id)
     : _db().collection(COL.REVIEWS).where('providerId', '==', id);
@@ -402,11 +422,11 @@ _h.repSummary = async (req) => {
   const out = {};
   for (const it of items) {
     if (!it || !TYPES.includes(it.type) || !_idOk(it.id)) continue;
-    const s = await _ref(it.type, it.id).get();
+    const s = await _ref(it.type, await _canonId(it.type, it.id)).get();   /* a shop by its owner's uid → the canonical shop */
     if (!s.exists || !ENTITY[it.type].public(s.data())) { out[`${it.type}:${it.id}`] = null; continue; }
-    const a = await aggregateOf(it.type, it.id, s.data());
+    const a = await aggregateOf(it.type, s.id, s.data());
     out[`${it.type}:${it.id}`] = { rating: a.rating, reviewCount: a.reviewCount, ratingDist: a.ratingDist, followerCount: a.followerCount,
-      verified: it.type === 'provider' ? s.data().verified === true : it.type === 'venue' ? true : s.data().verificationStatus === 'APPROVED' };
+      verified: it.type === 'provider' ? s.data().verified === true : it.type === 'venue' ? true : it.type === 'shop' ? s.data().verified === true : s.data().verificationStatus === 'APPROVED' };
   }
   return { summaries: out };
 };
@@ -436,7 +456,7 @@ _h.repDashboard = async (req) => {
   if (ent.ownerUid !== uid) fail('permission-denied', 'This profile is not yours.');
   const agg = await aggregateOf(type, id, ent.data);
   let reviews = [];
-  if (type !== 'creator') {
+  if (type === 'provider' || type === 'venue') {
     const q = type === 'venue' ? _db().collection(COL.REVIEWS).where('entityId', '==', id) : _db().collection(COL.REVIEWS).where('providerId', '==', uid);
     reviews = (await q.limit(200).get()).docs.map((x) => Object.assign({ id: x.id }, x.data()))
       .filter((r) => (type === 'venue' ? r.entityType === 'venue' : r.entityType !== 'venue') && r.status !== REVIEW_STATUS.REMOVED)
@@ -477,6 +497,8 @@ async function handleFor(type, id, ent) {
 _h.repShareLink = async (req) => shareLink(req.data || {});
 /** The link builder, also used server-side (provider QR codes — functions/provider-onboarding.js). */
 async function shareLink(d) {
+  /* A MiniShop already has its public handle (/shop/{handle}, shopHandles) — no second handle system. */
+  if (d.type === 'shop') fail('failed-precondition', 'Share this shop from its MiniShop page.');
   if (d.type === 'event') {
     if (!_idOk(d.id)) fail('invalid-argument', 'Unknown event.');
     const ev = (await _db().collection('events').doc(String(d.id)).get()).data();
@@ -616,7 +638,13 @@ _adminH.repAdminRecount = async (req) => {
 /** Derive the aggregate from the authoritative records (also used by scripts/migrate-reputation.js). */
 async function recount(type, id) {
   let reviews = [];
-  if (type !== 'creator') {
+  if (type === 'shop' || type === 'creator') {
+    /* no provider reviews on these entities — only the follower count is derived here */
+    const followers = await _followBase(type, id, null);
+    await _ref(type, id).set({ followerCount: followers, followV: REP_VERSION, reputationUpdatedAt: _FV().serverTimestamp() }, { merge: true });
+    return { rating: null, reviewCount: 0, ratingDist: null, followerCount: followers };
+  }
+  {
     const q = type === 'venue' ? _db().collection(COL.REVIEWS).where('entityId', '==', String(id)) : _db().collection(COL.REVIEWS).where('providerId', '==', String(id));
     const snap = await q.limit(5000).get();
     for (const x of snap.docs) if (!x.data().publicId) await x.ref.set({ publicId: publicReviewId(x.id) }, { merge: true });   /* backfill */

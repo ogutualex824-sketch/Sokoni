@@ -95,6 +95,10 @@ async function suite(env, label, served) {
     await f('shareHandles/jane-photography-ab12', { type: 'provider', entityId: 'owner1' });
     await f('shareEvents/se1', { uid: 'member1', type: 'provider', entityId: 'owner1' });
     await f('reputationAudit/ra1', { action: 'review_hide', actor: 'admin1' });
+    await f('follows/member1--shop--shopA', { uid: 'member1', type: 'shop', entityId: 'shopA', via: 'server' });
+    await f('shops/shopA', { sellerUid: 'owner1', name: 'Mama Mboga', followerCount: 3, followV: 1 });
+    await f('shops/owner1', { sellerUid: 'owner1', name: 'Owner Shop', followerCount: 3, followV: 1 });
+    await f('shopFollowers/shopA_member1', { shopId: 'shopA', uid: 'member1' });
   });
   const till = env.authenticatedContext('till1', { email: 'till1@x.co', email_verified: true }).firestore();
   const admin = env.authenticatedContext('admin1', { admin: true }).firestore();
@@ -135,9 +139,16 @@ async function suite(env, label, served) {
   await expectDeny('a client creates a PROVIDER follow directly (bypassing the count authority)', member.doc('follows/member1--provider--owner2').set({ uid: 'member1', type: 'provider', entityId: 'owner2' }));
   await expectDeny('a client creates a VENUE follow directly', member.doc('follows/member1--venue--cv1').set({ uid: 'member1', type: 'venue', entityId: 'cv1' }));
   await expectDeny('a client creates a CREATOR follow directly', member.doc('follows/member1--creator--cr1').set({ uid: 'member1', type: 'creator', entityId: 'cr1' }));
+  /* MiniShop follows converge on the same authority (CHANGELOG 211) */
+  await expectDeny('a client creates a SHOP follow directly (bypassing the shop count authority)', member.doc('follows/member1--shop--shopB').set({ uid: 'member1', type: 'shop', entityId: 'shopB' }));
+  await expectDeny('a client deletes a server-counted SHOP follow (count drift)', member.doc('follows/member1--shop--shopA').delete());
+  await expectDeny('a hyphenated uid cannot slip a SHOP follow past the id check', hyphen.doc('follows/evil-x--shop--shopA').set({ uid: 'evil-x', type: 'shop', entityId: 'shopA' }));
+  await expectDeny('a shop owner inflates their own follower count', owner.doc('shops/owner1').update({ followerCount: 900 }));
+  await expectDeny('a client writes a legacy shopFollowers relationship', member.doc('shopFollowers/shopA_member9').set({ shopId: 'shopA', uid: 'member9' }));
+  await expectDeny('a client deletes a legacy shopFollowers relationship', member.doc('shopFollowers/shopA_member1').delete());
   await expectDeny('a hyphenated uid cannot slip a provider follow past the id check', hyphen.doc('follows/evil-x--provider--owner1').set({ uid: 'evil-x', type: 'provider', entityId: 'owner1' }));
   await expectDeny('a client deletes a server-counted follow (count drift)', member.doc('follows/member1--provider--owner1').delete());
-  await expectDeny('a client follows on SOMEONE ELSE\'s behalf', member.doc('follows/buyer1--shop--s1').set({ uid: 'buyer1', type: 'shop', entityId: 's1' }));
+  await expectDeny('a client follows on SOMEONE ELSE\'s behalf', member.doc('follows/buyer1--business--b1').set({ uid: 'buyer1', type: 'business', entityId: 'b1' }));
   await expectDeny('a stranger reads a provider review record (reviewer uid, booking id)', stranger.doc('providerReviews/pr1').get());
   await expectDeny('a customer writes a provider review directly (no eligibility)', buyer.doc('providerReviews/pr2').set({ customerUid: 'buyer1', providerId: 'owner1', rating: 5 }));
   await expectDeny('the provider edits the customer\'s rating', owner.doc('providerReviews/pr1').update({ rating: 5 }));
@@ -289,9 +300,11 @@ async function suite(env, label, served) {
 
   if (served) {
     /* reputation positive controls — the denials above are about the FIELD / TYPE, not a blanket lock */
+    ck(`${label}: a shop owner still edits their shop name (the denial is the COUNT, not the doc)`, await allowed(owner.doc('shops/owner1').update({ name: 'Owner Shop 2', updatedAt: 1 })));
     ck(`${label}: a provider still edits their own profile text`, await allowed(owner.doc('providers/owner1').update({ name: 'Jane Photo Studio', bio: 'Portraits' })));
     ck(`${label}: a provider application without reputation fields is still created`, await allowed(member.doc('providers/member1').set({ uid: 'member1', name: 'X', status: 'pending' })));
-    ck(`${label}: a client still follows a SHOP directly (other follow types unchanged)`, await allowed(member.doc('follows/member1--shop--s1').set({ uid: 'member1', type: 'shop', entityId: 's1' })));
+    ck(`${label}: a client still follows a BUSINESS directly (other follow types unchanged)`, await allowed(member.doc('follows/member1--business--b1').set({ uid: 'member1', type: 'business', entityId: 'b1' })));
+    ck(`${label}: the follower reads their own SHOP follow; the shop's public count is readable`, (await allowed(member.doc('follows/member1--shop--shopA').get())) && (await allowed(env.unauthenticatedContext().firestore().doc('shops/shopA').get())));
     ck(`${label}: the follower reads their own provider follow`, await allowed(member.doc('follows/member1--provider--owner1').get()));
     ck(`${label}: the reviewer and the provider read the review record`, (await allowed(buyer.doc('providerReviews/pr1').get())) && (await allowed(owner.doc('providerReviews/pr1').get())));
     ck(`${label}: an admin reads the moderation audit and share records`, (await allowed(admin.doc('reputationAudit/ra1').get())) && (await allowed(admin.doc('shareEvents/se1').get())));

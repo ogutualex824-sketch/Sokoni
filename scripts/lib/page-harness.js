@@ -2,6 +2,7 @@
  * thin shim over the transactional FAKE Firestore and the REAL Cloud Function handlers.
  *
  *   const H = makePageHarness({ db, root, callables })   // callables: { bookingDispatch: { op: handler } | (req)=>… }
+ *   http: { getMinishopPublic: onRequestHandler }        // https://…cloudfunctions.net/<name> → the REAL handler
  *   await H.start(); const page = await H.page(browser, { user, viewport });   …   H.stop()
  *
  * What is REAL: every HTML/JS/CSS file served from `root`, every callable handler, the fake
@@ -75,6 +76,17 @@ const COMPAT = `${SHIM_CORE}
   window.firebaseDB = window.firebaseDB || { __db: true }; window.firebaseAuth = window.firebaseAuth || window.firebase.auth();
 })();`;
 
+/* What the real firebase.js publishes once it has run (a module — deferred): callables + auth-ready. */
+const FIREBASE_JS_SIGNALS = `
+;(function(){
+  window.sokoniCallable = (n) => window.__fsShim.call(n);
+  const detail = { user: window.__user || null };
+  window.__sokoniAuthReady = true; window.__sokoniAuthReadyDetail = detail;
+  window.waitForSokoniAuthReady = (cb) => { try { if (typeof cb === 'function') cb(detail); } catch (_) {} return Promise.resolve(detail); };
+  window.__sokoniFirebaseReady = true;
+  setTimeout(() => { window.dispatchEvent(new Event('firebaseReady')); document.dispatchEvent(new Event('firebaseReady')); document.dispatchEvent(new CustomEvent('sokoniAuthReady', { detail })); }, 0);
+})();`;
+
 function modularModule(file, names) {
   const own = {
     'firebase-app.js': `export const initializeApp = () => ({ name: '[DEFAULT]' }); export const getApps = () => [{ name: '[DEFAULT]' }]; export const getApp = () => ({ name: '[DEFAULT]' });`,
@@ -110,6 +122,18 @@ function modularModule(file, names) {
   return src;
 }
 
+/* A minimal express-like req/res for a v2 onRequest handler (its CORS wrapper waits on res 'finish'). */
+function mockHttp(method, query) {
+  let status = 200; const headers = {}; let body = ''; const listeners = {};
+  const done = () => (listeners.finish || []).forEach((f) => f());
+  const res = { statusCode: 200, on(ev, f) { (listeners[ev] = listeners[ev] || []).push(f); return res; }, once(ev, f) { return res.on(ev, f); }, emit() { return true; },
+    status(s) { status = s; res.statusCode = s; return res; }, set(k, v) { headers[k] = v; return res; }, setHeader(k, v) { headers[k] = v; return res; }, getHeader(k) { return headers[k]; }, removeHeader(k) { delete headers[k]; }, vary() { return res; },
+    json(o) { headers['Content-Type'] = 'application/json'; body = JSON.stringify(wire(o)); done(); return res; }, send(b) { body = typeof b === 'string' ? b : JSON.stringify(b); done(); return res; }, end(b) { if (b) body = String(b); done(); return res; } };
+  const hdr = { 'user-agent': 'harness', origin: 'http://127.0.0.1' };
+  const req = { method: method || 'GET', query: query || {}, headers: hdr, get: (k) => hdr[String(k).toLowerCase()], header: (k) => hdr[String(k).toLowerCase()], ip: '127.0.0.1', body: {}, url: '/', path: '/' };
+  return { req, res, result: () => ({ status, headers, body }) };
+}
+
 function makePageHarness(opts) {
   const db = opts.db; const root = Path.resolve(opts.root);
   const callables = opts.callables || {};
@@ -134,7 +158,7 @@ function makePageHarness(opts) {
   }
   const srv = http.createServer((rq, res) => {
     const p = decodeURIComponent(new URL(rq.url, 'http://x').pathname);
-    if (p === '/firebase.js') { res.writeHead(200, { 'Content-Type': 'application/javascript' }); return res.end(COMPAT + '\nexport const app = {}; export const db = {}; export const auth = window.firebase.auth(); export const functions = {}; export const storage = {};'); }
+    if (p === '/firebase.js') { res.writeHead(200, { 'Content-Type': 'application/javascript' }); return res.end(COMPAT + FIREBASE_JS_SIGNALS + '\nexport const app = {}; export const db = {}; export const auth = window.firebase.auth(); export const functions = {}; export const storage = {};'); }
     if (opts.pages && opts.pages[p]) { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end(opts.pages[p]); }
     const file = Path.join(root, p === '/' ? 'index.html' : p.slice(1));
     if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
@@ -158,6 +182,17 @@ function makePageHarness(opts) {
       await ctx.addInitScript((u) => { window.__user = u; try { localStorage.setItem('sokoniPrivacyRejected', String(Date.now())); } catch (_) {} }, user);
       /* a LATER route wins: the catch-all first, then the SDK shims */
       await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, (route) => route.fulfill({ status: 200, contentType: /\.css(\?|$)/.test(route.request().url()) ? 'text/css' : 'application/javascript', body: '' }));
+      /* HTTP (onRequest) functions: the page's fetch reaches the REAL handler with a minimal req/res */
+      await ctx.route(/cloudfunctions\.net\/([A-Za-z0-9_]+)/, async (route) => {
+        const u = new URL(route.request().url()); const name = u.pathname.split('/').pop();
+        const h = (opts.http || {})[name];
+        if (!h) return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
+        const query = Object.fromEntries(u.searchParams.entries());
+        const { req, res, result } = mockHttp(route.request().method(), query);
+        try { await h(req, res); } catch (e) { res.status(500).json({ error: e.message }); }
+        const r = result();
+        return route.fulfill({ status: r.status, headers: Object.assign({ 'Access-Control-Allow-Origin': '*' }, r.headers), contentType: r.headers['Content-Type'] || 'application/json', body: r.body });
+      });
       await ctx.route(/gstatic\.com\/firebasejs\/[^/]+\/([a-z-]+\.js)(\?.*)?$/, (route) => {
         const f = route.request().url().split('?')[0].split('/').pop();
         if (/-compat\.js$/.test(f)) return route.fulfill({ status: 200, contentType: 'application/javascript', body: f === 'firebase-app-compat.js' ? COMPAT : '' });
@@ -173,4 +208,4 @@ function makePageHarness(opts) {
   return H;
 }
 
-module.exports = { makePageHarness, wire };
+module.exports = { makePageHarness, mockHttp, wire };

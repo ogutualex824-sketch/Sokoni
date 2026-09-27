@@ -470,7 +470,7 @@ const SokoniDB = {
      The counter is best-effort and is now fired-and-caught separately. */
   async follow(type, entityId, entityName) {
     /* provider / venue / creator: the reputation authority (server-written, counted once). */
-    if (['provider', 'venue', 'creator'].includes(type)) return this._repFollow('repFollow', type, entityId, entityName);
+    if (['provider', 'venue', 'creator', 'shop'].includes(type)) return this._repFollow('repFollow', type, entityId, entityName);
     const fid    = this._followDocId(type, entityId);
     const uid    = _uid();
     const fRef   = doc(db, 'follows', fid);
@@ -508,7 +508,7 @@ const SokoniDB = {
   },
 
   async unfollow(type, entityId) {
-    if (['provider', 'venue', 'creator'].includes(type)) return this._repFollow('repUnfollow', type, entityId);
+    if (['provider', 'venue', 'creator', 'shop'].includes(type)) return this._repFollow('repUnfollow', type, entityId);
     const fid  = this._followDocId(type, entityId);
     const fRef = doc(db, 'follows', fid);
     await deleteDoc(fRef);
@@ -532,7 +532,7 @@ const SokoniDB = {
      is a fabricated business metric (CLAUDE.md, UI Data Integrity). */
   async getFollowerCount(type, entityId) {
     /* provider / venue / creator: the SERVER count (null = unknown, rendered as —) */
-    if (['provider', 'venue', 'creator'].includes(type)) {
+    if (['provider', 'venue', 'creator', 'shop'].includes(type)) {
       try { const r = (await _bookingDispatch({ op: 'repSummary', items: [{ type, id: String(entityId) }] })).data;
         const s = r.summaries[`${type}:${entityId}`]; return s && typeof s.followerCount === 'number' ? s.followerCount : null; } catch (e) { return null; }
     }
