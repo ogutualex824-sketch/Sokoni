@@ -12847,8 +12847,20 @@ exports.applicationList       = _appLife.applicationList;        // onCall (admi
    to a job that ran and found nothing to do. */
 const _posComm = require('./pos-commission-surface');
 exports.posGateStatus         = _posComm.posGateStatus;         // onCall — what do I owe, may I trade?
-exports.posSettleCommission   = _posComm.posSettleCommission;   // onCall — pay it, at any time
+/* M0-3 (2026-09-28): `posSettleCommission` is NO LONGER exported. It settled by DAY through
+   pos-commission-rail.applySettlement — reads outside a transaction, no "still OUTSTANDING"
+   precondition, a receipt that overwrote — so two payments could settle one debt. The ONE
+   settlement state machine is pos-commission-settlement.js, below. */
 exports.posCommissionReminder = _posComm.posCommissionReminder; // schedule 06:00 EAT — one hour before the gate
+
+/* M0-3 — Pay Now: every POS commission debt settles through ONE state machine
+   (claims created once per debt; SETTLED only on proven money). */
+const _posCommSettle = require('./pos-commission-settlement');
+exports.posCommissionPayNow        = _posCommSettle.posCommissionPayNow;        // IntaSend STK, or hosted checkout (card + every enabled method)
+exports.posCommissionPayNowConfirm = _posCommSettle.posCommissionPayNowConfirm; // server poll → the one state machine
+exports.posCommissionCashRecord    = _posCommSettle.posCommissionCashRecord;    // cash handed over (owner / finance)
+exports.posCommissionCashConfirm   = _posCommSettle.posCommissionCashConfirm;   // SOKONI admin confirms receipt (not the requester)
+exports.posCommissionCashCancel    = _posCommSettle.posCommissionCashCancel;    // nothing was received
 
 /* ── HEALTHCARE SUBSCRIPTION ACTIVATION ───────────────────────────────────────
    A verified Healthcare subscription payment becomes an active subscription.

@@ -370,6 +370,10 @@ async function enforceSaleGate(db, merchantUid, nowMs) {
  * retried webhook cannot clear a second day's liability for one payment.
  */
 async function applySettlement(db, { merchantUid, settlementDays, settlementRef, method, nowMs }) {
+  /* M0-3 (owner ruling 2026-09-28): RETIRED. It settled by DAY — reading outside a transaction, with no
+     "still OUTSTANDING" precondition and an overwriting receipt — so two payments could settle one debt.
+     POS commission settles ONLY through pos-commission-settlement.js (claims created once per debt). */
+  throw new RailError('SETTLEMENT_RETIRED', 'POS commission settles only through pos-commission-settlement (M0-3).');
   if (!merchantUid) throw new RailError('RAIL_NO_MERCHANT', 'merchantUid is required');
   if (!settlementRef || typeof settlementRef !== 'string') {
     throw new RailError('RAIL_NO_SETTLEMENT_REF',
@@ -451,6 +455,10 @@ function settledDaysOf(rows) {
  *                       wallet implementation stays swappable
  */
 async function settleFromBusinessWallet(db, deps, { merchantUid, shopId, settlementDays, nowMs }) {
+  /* M0-3 (owner ruling 2026-09-28): RETIRED. It settled by DAY — reading outside a transaction, with no
+     "still OUTSTANDING" precondition and an overwriting receipt — so two payments could settle one debt.
+     POS commission settles ONLY through pos-commission-settlement.js (claims created once per debt). */
+  throw new RailError('SETTLEMENT_RETIRED', 'POS commission settles only through pos-commission-settlement (M0-3).');
   const BW = deps && deps.businessWallet;
   if (!BW) throw new RailError('RAIL_NO_WALLET_DEP', 'A businessWallet dependency is required');
   if (!merchantUid) throw new RailError('RAIL_NO_MERCHANT', 'merchantUid is required');

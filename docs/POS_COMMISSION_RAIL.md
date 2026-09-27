@@ -3,6 +3,69 @@
 **Date:** 2026-09-07 · **Status:** BUILT AND TESTED, NOT DEPLOYED
 **Related:** [[Payments]] · [[SmartPOS]] · [[Orders]] · [[Marketplace]]
 
+## M0-3 — ONE settlement state machine for POS commission (2026-09-28)
+
+**Owner ruling.** A debt (`posCommissionLiabilities`, M0-1) is settled by exactly one authority, whatever the
+payment mechanism: IntaSend STK, IntaSend hosted checkout (card and **every method the account has enabled** — no
+method is hard-coded), or cash. Failed, cancelled, expired or unverified payments leave the debt OUTSTANDING. The
+till gate is untouched (still OFF).
+
+`functions/pos-commission-settlement.js`:
+
+| Record | Role |
+|---|---|
+| `posCommissionPayments/{payId}` | one ATTEMPT over a FROZEN set of debt ids and their exact `liabilityMinor` total. `payId = poscs_<sha(scope|key)>`, so the same key gives the same attempt. The charge is rounded UP to whole shillings for M-Pesa, and the difference is recorded as `roundingMinor` (0–99). |
+| `posCommissionSettlementClaims/{debtId}` | created with `create()` only: a debt is held by at most ONE open attempt |
+| the debt row | the ONLY place that says SETTLED (`settlementRef = payId`, `settledVia`) |
+
+**Transitions** (each is one transaction, with every read before any write):
+- **`openAttempt`** freezes the unclaimed OUTSTANDING debts of one business, or of the owner's unresolved debts, and
+  creates the attempt plus one claim per debt. Debts already held elsewhere are "already in progress".
+- **`completeAttempt`** runs only on proven money. Each frozen debt that is still OUTSTANDING and not held by
+  another attempt becomes SETTLED, once. Anything else goes to `PAID_RECONCILE` and is never settled twice. A late
+  proven COMPLETE after a FAILED is still honoured.
+- **`failAttempt`**: the attempt becomes FAILED, only its own claims are released, and the debts stay OUTSTANDING.
+
+**Callables:**
+- **`posCommissionPayNow`** (STK needs `phone`; checkout returns the IntaSend URL the payer opens):
+  - **Who:** the business owner, or a member holding `finance` (`workforce-identity._assertBusinessPermission`);
+    unresolved debts can be paid only by the proven shop owner.
+  - **Card data:** fields that look like card data are refused. The payer types card details only on IntaSend's
+    page.
+- **`posCommissionPayNowConfirm`** asks IntaSend. It settles **only** when the provider evidence shows `COMPLETE`,
+  `api_ref = payId`, currency `KES` and amount equal to the frozen charge. A field that is missing counts as
+  **not proven**: the attempt goes to `NEEDS_REVIEW` and nothing settles.
+- **`posCommissionCashRecord`** (owner or `finance`) records cash handed over; it settles NOTHING.
+  **`posCommissionCashConfirm`** requires a SOKONI platform admin who is not the requester, plus a receipt number;
+  that is what settles. **`posCommissionCashCancel`** releases the debts.
+
+**Provider transport:**
+- **STK:** `shared/stk-gateway` (SOKONI's IntaSend account).
+- **Checkout:** `shared/intasend-checkout`, ported verbatim from c34455d, public-key flow, no `method`.
+- **Status:** `shared/intasend-status`, the Bearer `POST /payment/status/` that the wallet sweep uses live. It
+  reads state, amount, currency, api_ref and method, each `null` when absent.
+- **Never used:** `initiateSTKPush` / `payments/{ref}`. The live webhook would take commission on the payment and
+  credit the payer. The `poscs_` prefix matches no webhook route, so the webhook is not touched.
+
+**Retired:** `applySettlement` and `settleFromBusinessWallet` now throw `SETTLEMENT_RETIRED`, and
+`posSettleCommission` is no longer exported. They settled by day, read outside a transaction, had no OUTSTANDING
+precondition and wrote an overwriting receipt: on the old tree, two payments settled one debt.
+
+**Before any deploy (NOT done):**
+- A controlled **KES 10 live payment** on M-Pesa, plus card if the account enables it. It must prove what the
+  status response states for amount, currency, api_ref and method.
+- Provision an **`INTASEND_PUBLISHABLE_KEY`**. Production has none today, so checkout refuses with
+  "not configured".
+- Choose the review path for `NEEDS_REVIEW` / `PAID_RECONCILE` (an AdminOS tool).
+- The pending-attempt **sweep** belongs to M0-4.
+- **Refunds and chargebacks** of a settling payment have no un-settle path yet (M0-5).
+
+**Evidence:**
+- `scripts/test-m03-commission-payment.js`: an emulator run with a scripted in-process IntaSend double, **31/0**
+  new vs **3/28** old.
+- `scripts/test-pos-commission-rail.js` is now 46/0. Its day-based settlement parts (D, E, G) were replaced by
+  three checks that the old paths refuse and write nothing.
+
 ## M0-2 — recordPOSSale records ONE sale per request (2026-09-28)
 
 **The gap M0-1 left open.** `recordPOSSale` took no idempotency key, so a retried request recorded a second

@@ -252,79 +252,22 @@ console.log('\nPART C — unreadable is NOT zero (the property that matters most
     !!threw && threw.code === 'RAIL_LIABILITY_UNREADABLE', threw && threw.code);
 }
 
-console.log('\nPART D — payable at ANY time, and an intent is not a collection\n');
+console.log('\nPARTS D, E, G — RETIRED settlement paths refuse (M0-3, owner ruling 2026-09-28)\n');
 {
+  /* applySettlement and settleFromBusinessWallet settled by DAY — reads outside a transaction, no
+     "still OUTSTANDING" precondition, an overwriting receipt — so two payments could settle one debt.
+     POS commission now settles ONLY through pos-commission-settlement.js (per-debt create() claims);
+     payable-at-any-time, proof-on-the-row and idempotency are certified in test-m03-commission-payment.js.
+     Here: both old paths REFUSE, and write nothing. */
   const db = makeDb();
   await R.recordSaleLiability(db, sale('S1', 1000, 'POS_CASH', eat('2026-09-05T10:00:00')));
-
-  /* The merchant clears today's accrual at 14:00, long before it is ever due. */
-  const mid = await R.evaluateMerchantGate(db, MERCHANT, eat('2026-09-05T14:00:00'));
-  ck('D1  today\'s not-yet-due accrual is still reported as payable',
-    mid.totalOutstanding.minorUnits === 5000 && mid.closed === false,
-    'outstanding=' + mid.totalOutstanding.minorUnits);
-
-  const res = await R.applySettlement(db, {
-    merchantUid: MERCHANT, settlementDays: ['2026-09-05'],
-    settlementRef: 'MPESA_ABC123', method: 'MPESA', nowMs: eat('2026-09-05T14:01:00'),
-  });
-  ck('D2  an early settlement clears it', res.action === 'settled' && res.settledMinor === 5000,
-    res.action + '/' + res.settledMinor);
-
-  const after = await R.evaluateMerchantGate(db, MERCHANT, eat('2026-09-06T08:00:00'));
-  ck('D3  ...so the next morning the gate does NOT close', after.closed === false);
-  ck('D4  ...and nothing is outstanding', after.totalOutstanding.minorUnits === 0);
-}
-{
-  const db = makeDb();
-  await R.recordSaleLiability(db, sale('S1', 1000, 'POS_CASH', eat('2026-09-05T10:00:00')));
-  let threw = null;
-  try {
-    await R.applySettlement(db, { merchantUid: MERCHANT, settlementDays: ['2026-09-05'] });
-  } catch (e) { threw = e; }
-  ck('D5  settling WITHOUT an authoritative reference is refused',
-    !!threw && threw.code === 'RAIL_NO_SETTLEMENT_REF', threw && threw.code);
-  const still = await R.evaluateMerchantGate(db, MERCHANT, eat('2026-09-06T08:00:00'));
-  ck('D6  ...and the liability is untouched', still.overdue.minorUnits === 5000);
-}
-{
-  /* PROPERTY 4 — a replayed webhook must not clear a second day. */
-  const db = makeDb();
-  await R.recordSaleLiability(db, sale('S1', 1000, 'POS_CASH', eat('2026-09-04T10:00:00')));
-  await R.recordSaleLiability(db, sale('S2', 1000, 'POS_CASH', eat('2026-09-05T10:00:00')));
-  const first = await R.applySettlement(db, { merchantUid: MERCHANT,
-    settlementDays: ['2026-09-04'], settlementRef: 'REF_1', method: 'MPESA' });
-  const replay = await R.applySettlement(db, { merchantUid: MERCHANT,
-    settlementDays: ['2026-09-05'], settlementRef: 'REF_1', method: 'MPESA' });
-  ck('D7  the first application settles one day', first.action === 'settled' && first.rowsSettled === 1);
-  ck('D8  a REPLAY of the same reference is a no-op, not a second day cleared',
-    replay.action === 'already_applied', replay.action);
-  const g = await R.evaluateMerchantGate(db, MERCHANT, eat('2026-09-06T08:00:00'));
-  ck('D9  ...so the 5th is still owed', g.overdue.minorUnits === 5000, String(g.overdue.minorUnits));
-}
-{
-  const db = makeDb();
-  await R.recordSaleLiability(db, sale('S1', 1000, 'POS_CASH', eat('2026-09-05T10:00:00')));
-  const res = await R.applySettlement(db, { merchantUid: MERCHANT,
-    settlementDays: ['2026-09-01'], settlementRef: 'REF_X' });
-  ck('D10 settling a day with nothing outstanding reports exactly that',
-    res.action === 'nothing_outstanding' && res.settledMinor === 0, res.action);
-}
-
-console.log('\nPART E — the settled row carries its proof\n');
-{
-  const db = makeDb();
-  await R.recordSaleLiability(db, sale('S1', 1000, 'POS_CASH', eat('2026-09-05T10:00:00')));
-  await R.applySettlement(db, { merchantUid: MERCHANT, settlementDays: ['2026-09-05'],
-    settlementRef: 'MPESA_XYZ', method: 'MPESA', nowMs: 1757000000000 });
-  const row = db._docs.get('posCommissionLiabilities/poscomm_S1');
-  ck('E1  the liability is SETTLED', row.status === 'SETTLED', row.status);
-  ck('E2  ...against the authoritative reference', row.settlementRef === 'MPESA_XYZ');
-  ck('E3  ...with a settlement time', row.settledAtMs === 1757000000000);
-  const receipt = db._docs.get('posCommissionSettlements/MPESA_XYZ');
-  ck('E4  a settlement receipt exists', !!receipt);
-  ck('E5  ...naming the merchant, amount and days',
-    receipt.merchantUid === MERCHANT && receipt.settledMinor === 5000 &&
-    receipt.settlementDays[0] === '2026-09-05');
+  const before = JSON.stringify([...db._docs.entries()]);
+  let e1 = null; try { await R.applySettlement(db, { merchantUid: MERCHANT, settlementDays: ['2026-09-05'], settlementRef: 'MPESA_X', method: 'MPESA' }); } catch (e) { e1 = e; }
+  let e2 = null; try { await R.settleFromBusinessWallet(db, { businessWallet: {} }, { merchantUid: MERCHANT, shopId: 'SHOP', settlementDays: ['2026-09-05'] }); } catch (e) { e2 = e; }
+  ck('D1  applySettlement is RETIRED — it refuses', !!e1 && e1.code === 'SETTLEMENT_RETIRED', e1 && e1.code);
+  ck('D2  settleFromBusinessWallet is RETIRED — it refuses', !!e2 && e2.code === 'SETTLEMENT_RETIRED', e2 && e2.code);
+  ck('D3  ...and neither wrote anything: the debt is still OUTSTANDING', JSON.stringify([...db._docs.entries()]) === before
+    && db._docs.get('posCommissionLiabilities/poscomm_S1').status === 'OUTSTANDING');
 }
 
 console.log('\nPART F — adversarial controls\n');
@@ -353,160 +296,6 @@ console.log('\nPART F — adversarial controls\n');
   ck('F4  a FREE merchant is charged the POS 5%, not the marketplace 15%',
     rec.rateFraction === 0.05 && rec.liability.minorUnits === 5000,
     rec.rateFraction + ' / ' + rec.liability.minorUnits);
-}
-
-console.log('\nPART G — settling from the BUSINESS wallet (never the personal one)\n');
-{
-  /* THE ORDER PROPERTY, PROVED. Every other case in this part throws in the PLAN step,
-     before either side effect runs — so the order of "debit" and "mark settled" never
-     mattered there, and swapping the two statements passed the entire suite. This is the
-     case that separates them: the plan succeeds and the DEBIT fails.
-
-       debit first (correct)   money not taken, rows not cleared  -> liability stands
-       settle first (wrong)    rows cleared, money not taken      -> a free day
-
-     Found by sabotage. Without this test the safety property was asserted in a comment and
-     nowhere else. */
-  const db = makeDb();
-  await BW.ensureBusinessWallet(db, { shopId: SHOP, ownerUid: MERCHANT });
-  await BW.creditBusinessWallet(db, { shopId: SHOP, amountMinor: 100000, ref: 'FLOAT' });
-  await R.recordSaleLiability(db, sale('S1', 1000, 'POS_CASH', eat('2026-09-05T10:00:00')));
-
-  const brokenWallet = {
-    getBusinessWallet: BW.getBusinessWallet,
-    debitBusinessWallet: async () => { throw new Error('wallet service unavailable'); },
-  };
-  let threw = null;
-  try {
-    await R.settleFromBusinessWallet(db, { businessWallet: brokenWallet }, {
-      merchantUid: MERCHANT, shopId: SHOP, nowMs: eat('2026-09-05T14:00:00') });
-  } catch (e) { threw = e; }
-  ck('G19 when the DEBIT fails, the settlement fails with it', !!threw, threw && threw.message);
-
-  const g = await R.evaluateMerchantGate(db, MERCHANT, eat('2026-09-06T08:00:00'));
-  ck('G20 ...and the liability is NOT cleared — no free day',
-    g.overdue.minorUnits === 5000 && g.closed === true, String(g.overdue.minorUnits));
-  ck('G21 ...and no settlement receipt was written',
-    !Array.from(db._docs.keys()).some((k) => k.indexOf('posCommissionSettlements/') === 0));
-}
-{
-  const db = makeDb();
-  await BW.ensureBusinessWallet(db, { shopId: SHOP, ownerUid: MERCHANT });
-  await BW.creditBusinessWallet(db, { shopId: SHOP, amountMinor: 100000, ref: 'FLOAT' });
-  await R.recordSaleLiability(db, sale('S1', 1000, 'POS_CASH', eat('2026-09-05T10:00:00')));
-
-  const res = await R.settleFromBusinessWallet(db, { businessWallet: BW }, {
-    merchantUid: MERCHANT, shopId: SHOP, nowMs: eat('2026-09-05T14:00:00'),
-  });
-  ck('G1  a merchant can settle at ANY time, before the gate is ever due',
-    res.action === 'settled' && res.settledMinor === 5000, res.action + '/' + res.settledMinor);
-  ck('G2  the business wallet paid for it', res.walletBalanceMinor === 95000,
-    String(res.walletBalanceMinor));
-  ck('G3  the personal wallet was never touched', !db._docs.has('wallets/' + MERCHANT));
-
-  const after = await R.evaluateMerchantGate(db, MERCHANT, eat('2026-09-06T08:00:00'));
-  ck('G4  ...so the morning gate stays OPEN', after.closed === false);
-}
-{
-  /* Insufficient float: refused with the exact shortfall, and NOTHING moves. */
-  const db = makeDb();
-  await BW.ensureBusinessWallet(db, { shopId: SHOP, ownerUid: MERCHANT });
-  await BW.creditBusinessWallet(db, { shopId: SHOP, amountMinor: 3000, ref: 'FLOAT' });
-  await R.recordSaleLiability(db, sale('S1', 1000, 'POS_CASH', eat('2026-09-05T10:00:00')));
-
-  let threw = null;
-  try {
-    await R.settleFromBusinessWallet(db, { businessWallet: BW }, {
-      merchantUid: MERCHANT, shopId: SHOP, nowMs: eat('2026-09-05T14:00:00') });
-  } catch (e) { threw = e; }
-  ck('G5  a short business wallet REFUSES a partial settlement',
-    !!threw && threw.code === 'SETTLE_INSUFFICIENT_BALANCE', threw && threw.code);
-  /* BOTH spellings must carry it. The pure module writes .detail, this module and the
-     wallet write .details, and a settle screen will read whichever its author guessed —
-     so the rail normalises and this asserts the normalisation, not one lucky spelling. */
-  ck('G6  ...naming the exact shortfall (KES 50 due, KES 30 held -> KES 20)',
-    threw && threw.details && threw.details.shortfallMinor === 2000,
-    threw && threw.details && String(threw.details.shortfallMinor));
-  ck('G6b ...under BOTH .detail and .details, so no caller loses it',
-    threw && threw.detail && threw.detail.shortfallMinor === 2000 &&
-    threw.details.shortfallMinor === threw.detail.shortfallMinor);
-  ck('G7  ...and the wallet is untouched',
-    db._docs.get('businessWallets/' + SHOP).balanceMinor === 3000);
-  const still = await R.evaluateMerchantGate(db, MERCHANT, eat('2026-09-06T08:00:00'));
-  ck('G8  ...and the liability still stands', still.overdue.minorUnits === 5000);
-}
-{
-  /* THE ORDER PROPERTY. Debit happens before the rows are cleared, so a crash between the
-     two is recoverable by calling again — never a free day. */
-  const db = makeDb();
-  await BW.ensureBusinessWallet(db, { shopId: SHOP, ownerUid: MERCHANT });
-  await BW.creditBusinessWallet(db, { shopId: SHOP, amountMinor: 100000, ref: 'FLOAT' });
-  await R.recordSaleLiability(db, sale('S1', 1000, 'POS_CASH', eat('2026-09-05T10:00:00')));
-
-  const days = ['2026-09-05'];
-  const ref = 'poscomm:' + MERCHANT + ':' + days.join('_');
-  /* Simulate the crash: the debit landed, the settlement did not. */
-  await BW.debitBusinessWallet(db, { shopId: SHOP, amountMinor: 5000, ref });
-  const midBal = db._docs.get('businessWallets/' + SHOP).balanceMinor;
-  const midGate = await R.evaluateMerchantGate(db, MERCHANT, eat('2026-09-06T08:00:00'));
-  ck('G9  after a crash mid-settlement the money is taken and the gate is still CLOSED',
-    midBal === 95000 && midGate.closed === true, 'bal=' + midBal + ' closed=' + midGate.closed);
-
-  const retry = await R.settleFromBusinessWallet(db, { businessWallet: BW }, {
-    merchantUid: MERCHANT, shopId: SHOP, settlementDays: days, nowMs: eat('2026-09-06T08:01:00') });
-  ck('G10 calling again FINISHES the job', retry.action === 'settled', retry.action);
-  ck('G11 ...and does NOT debit a second time',
-    retry.debitAction === 'already_applied' &&
-    db._docs.get('businessWallets/' + SHOP).balanceMinor === 95000,
-    retry.debitAction + ' bal=' + db._docs.get('businessWallets/' + SHOP).balanceMinor);
-  const done = await R.evaluateMerchantGate(db, MERCHANT, eat('2026-09-06T08:02:00'));
-  ck('G12 ...and the gate is now open', done.closed === false);
-}
-{
-  /* No business wallet: refused, and NEVER redirected to the personal wallet. */
-  const db = makeDb();
-  await R.recordSaleLiability(db, sale('S1', 1000, 'POS_CASH', eat('2026-09-05T10:00:00')));
-  let threw = null;
-  try {
-    await R.settleFromBusinessWallet(db, { businessWallet: BW }, {
-      merchantUid: MERCHANT, shopId: SHOP, nowMs: eat('2026-09-05T14:00:00') });
-  } catch (e) { threw = e; }
-  ck('G13 with no business wallet, settlement is REFUSED',
-    !!threw && threw.code === 'RAIL_NO_BUSINESS_WALLET', threw && threw.code);
-  ck('G14 ...and the refusal says a personal wallet is never used',
-    !!threw && /never from a personal one/i.test(threw.message));
-}
-{
-  /* A wallet owned by someone else must not pay this merchant's debt. */
-  const db = makeDb();
-  await BW.ensureBusinessWallet(db, { shopId: SHOP, ownerUid: 'SOMEONE_ELSE' });
-  await BW.creditBusinessWallet(db, { shopId: SHOP, amountMinor: 100000, ref: 'FLOAT' });
-  await R.recordSaleLiability(db, sale('S1', 1000, 'POS_CASH', eat('2026-09-05T10:00:00')));
-  let threw = null;
-  try {
-    await R.settleFromBusinessWallet(db, { businessWallet: BW }, {
-      merchantUid: MERCHANT, shopId: SHOP, nowMs: eat('2026-09-05T14:00:00') });
-  } catch (e) { threw = e; }
-  ck('G15 a business wallet owned by someone else cannot pay this debt',
-    !!threw && threw.code === 'SETTLE_WALLET_NOT_OWNED', threw && threw.code);
-  ck('G16 ...and their balance is untouched',
-    db._docs.get('businessWallets/' + SHOP).balanceMinor === 100000);
-}
-{
-  /* Settling only ONE of several days is honoured exactly. */
-  const db = makeDb();
-  await BW.ensureBusinessWallet(db, { shopId: SHOP, ownerUid: MERCHANT });
-  await BW.creditBusinessWallet(db, { shopId: SHOP, amountMinor: 100000, ref: 'FLOAT' });
-  await R.recordSaleLiability(db, sale('S1', 1000, 'POS_CASH', eat('2026-09-04T10:00:00')));
-  await R.recordSaleLiability(db, sale('S2', 2000, 'POS_CASH', eat('2026-09-05T10:00:00')));
-  const res = await R.settleFromBusinessWallet(db, { businessWallet: BW }, {
-    merchantUid: MERCHANT, shopId: SHOP, settlementDays: ['2026-09-04'],
-    nowMs: eat('2026-09-06T08:00:00') });
-  ck('G17 settling one named day charges only that day', res.settledMinor === 5000,
-    String(res.settledMinor));
-  const g = await R.evaluateMerchantGate(db, MERCHANT, eat('2026-09-06T08:01:00'));
-  ck('G18 ...and the other day is still owed', g.overdue.minorUnits === 10000,
-    String(g.overdue.minorUnits));
 }
 
 console.log('\nPART H — the early reminder: who gets warned, an hour before the gate\n');

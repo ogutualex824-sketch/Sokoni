@@ -1,3 +1,44 @@
+## 2026-09-28 (157) — M0-3: POS commission settles through ONE state machine (NOT deployed)
+
+Every POS commission debt (`posCommissionLiabilities`, M0-1) now settles through
+`functions/pos-commission-settlement.js`, whatever the payment mechanism:
+- IntaSend STK;
+- IntaSend hosted checkout (card and every account-enabled method; card data never touches SOKONI);
+- cash, confirmed by a SOKONI admin who is not the requester.
+
+How it works:
+- **Frozen attempts.** Each attempt freezes an exact set of debts. Claims are `create()`-only, so a debt is held by
+  one attempt at a time.
+- **Settlement.** A debt is settled once, and only on proven money: api_ref, amount, currency and state all match.
+  A missing field is not proof.
+- **Failure.** Failure releases the claims, and the debt stays OUTSTANDING.
+- **The unsafe path is retired.** The old day-based `applySettlement` / `settleFromBusinessWallet` are retired and
+  `posSettleCommission` is unexported (on the old tree, two payments settled one debt).
+
+- **Files:**
+  - new `functions/pos-commission-settlement.js`, `functions/shared/intasend-status.js`,
+    `functions/shared/intasend-checkout.js` (ported verbatim from c34455d);
+  - `functions/pos-commission-rail.js` (two functions retired);
+  - `functions/index.js` (posSettleCommission unexported; posCommissionPayNow, PayNowConfirm, CashRecord,
+    CashConfirm, CashCancel exported);
+  - new `scripts/test-m03-commission-payment.js`;
+  - `scripts/test-pos-commission-rail.js` (parts D/E/G replaced by retired-path checks);
+  - `docs/POS_COMMISSION_RAIL.md`.
+- **Database:** new server-only `posCommissionPayments` and `posCommissionSettlementClaims`; debts gain
+  `settlementRef` / `settledVia` / `settledAtMs` on settlement.
+- **API:**
+  - five new callables;
+  - `posSettleCommission` removed (it was never deployed);
+  - the webhook is untouched (a `poscs_` api_ref matches no route).
+- **Unchanged:** the gate (OFF), rates, wallets (no wallet source), the webhook, deployment.
+- **Deploy prerequisites:**
+  - a controlled KES 10 live proof of the status evidence;
+  - an `INTASEND_PUBLISHABLE_KEY` (production has none);
+  - a review path for NEEDS_REVIEW / PAID_RECONCILE;
+  - the sweep (M0-4);
+  - a reversal rule (M0-5).
+- **Evidence:** the new suite passes 31/0 new vs 3/28 old; mutants, the floor and syntax are reported with the unit.
+
 ## 2026-09-28 (156) — M0-2: recordPOSSale records one sale per request (NOT deployed)
 
 `recordPOSSale` took no idempotency key. A retried request recorded a second sale, and since M0-1 a second
