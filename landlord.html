@@ -1580,105 +1580,12 @@
     const btn      = document.getElementById("sendRentStkBtn");
     const resultEl = document.getElementById("collectRentResult");
 
-    /* Try Daraja (seller's own account) first */
-    const _landlordUid = (()=>{ try{ return JSON.parse(localStorage.getItem('sokoniUser')||'{}').uid||null; }catch(e){ return null; } })();
-    if(_landlordUid && window.SokoniMpesa){
-      btn.disabled = true;
-      btn.innerHTML = '⏳ Sending STK Push…';
-      resultEl.innerHTML = '<span style="color:#71ff00;">📲 Sending rent request via M-Pesa…</span>';
-      const _ordRef = 'RENT'+Date.now().toString().slice(-8);
-      SokoniMpesa.pay({
-        sellerUid: _landlordUid,
-        amount,
-        phone: rawPhone,
-        orderId: _ordRef,
-        hub: 'property',
-        sellerName: 'Landlord — SOKONI',
-        description: 'Rent Payment · '+(_collectRentData.tenant||'Tenant'),
-        onSuccess: r => {
-          btn.innerHTML = '✓ Paid!';
-          btn.style.background = "linear-gradient(135deg,#71ff00,#4fc800)";
-          btn.style.color = "black";
-          resultEl.innerHTML = '<span style="color:#71ff00;">✅ KES '+amount.toLocaleString()+' collected via M-Pesa!</span>';
-          const month = getCurrentMonth();
-          const props = getData();
-          const unit  = props.find(p=>p.id===_collectRentData.propId)?.units?.find(u=>u.id===_collectRentData.unitId);
-          if(unit){
-            unit.rentHistory = unit.rentHistory||[];
-            const idx = unit.rentHistory.findIndex(h=>h.month===month);
-            const entry = {month,paid:true,amount,paidDate:new Date().toLocaleDateString("en-KE"),method:"mpesa",ref:r.mpesaCode||_ordRef};
-            if(idx>=0) unit.rentHistory[idx]=entry; else unit.rentHistory.push(entry);
-            saveData(props); updateStats(); renderRentSection();
-            showNotif("✅ Rent collected via M-Pesa","success");
-          }
-          setTimeout(()=>document.getElementById("collectRentModal").style.display="none", 2000);
-        },
-        onFailure: reason => {
-          btn.disabled = false;
-          btn.innerHTML = '📨 Retry';
-          if(reason !== 'cancelled') resultEl.innerHTML = '<span style="color:#ff6b6b;">❌ Payment failed — please retry</span>';
-          else resultEl.innerHTML = '';
-        }
-      });
-      return;
-    }
-
-    if(!LANDLORD_INTASEND_KEY){
-      btn.disabled = true;
-      btn.innerHTML = '⏳ Sending STK Push...';
-      resultEl.innerHTML = '<span style="color:#71ff00;">📱 M-Pesa request sent — tenant should enter PIN on their phone.</span>';
-      setTimeout(()=>{
-        btn.innerHTML = '✓ Payment Confirmed!';
-        btn.style.background = "linear-gradient(135deg,#71ff00,#4fc800)";
-        btn.style.color = "black";
-        resultEl.innerHTML = '<span style="color:#71ff00;">✅ Rent collected — KES ' + amount.toLocaleString() + '</span>';
-        /* Mark rent paid in system */
-        const month = getCurrentMonth();
-        const props = getData();
-        const unit  = props.find(p=>p.id===_collectRentData.propId)?.units?.find(u=>u.id===_collectRentData.unitId);
-        if(unit){
-          unit.rentHistory = unit.rentHistory||[];
-          const idx = unit.rentHistory.findIndex(h=>h.month===month);
-          if(idx>=0) unit.rentHistory[idx] = {month,paid:true,amount,paidDate:new Date().toLocaleDateString("en-KE"),method:"mpesa"};
-          else unit.rentHistory.push({month,paid:true,amount,paidDate:new Date().toLocaleDateString("en-KE"),method:"mpesa"});
-          saveData(props);
-          updateStats();
-          renderRentSection();
-          showNotif("✅ Rent collected via M-Pesa","success");
-        }
-        setTimeout(()=>document.getElementById("collectRentModal").style.display="none", 2000);
-      }, 3000);
-      return;
-    }
-
-    /* Real IntaSend STK Push */
-    btn.disabled = true;
-    btn.innerHTML = '⏳ Connecting...';
-    resultEl.innerHTML = '<span style="color:#71ff00;">📲 Sending STK Push to phone...</span>';
-
-    new window.IntaSend({ publicAPIKey: LANDLORD_INTASEND_KEY, live: LANDLORD_INTASEND_LIVE })
-    .on("COMPLETE", result => {
-      btn.innerHTML = '✓ Paid!';
-      btn.style.background = "linear-gradient(135deg,#71ff00,#4fc800)";
-      btn.style.color = "black";
-      resultEl.innerHTML = '<span style="color:#71ff00;">✅ KES ' + amount.toLocaleString() + ' collected via M-Pesa!</span>';
-      const month = getCurrentMonth();
-      const props = getData();
-      const unit  = props.find(p=>p.id===_collectRentData.propId)?.units?.find(u=>u.id===_collectRentData.unitId);
-      if(unit){
-        unit.rentHistory = unit.rentHistory||[];
-        const idx = unit.rentHistory.findIndex(h=>h.month===month);
-        const entry = {month,paid:true,amount,paidDate:new Date().toLocaleDateString("en-KE"),method:"mpesa",ref:result.tracking_id||""};
-        if(idx>=0) unit.rentHistory[idx]=entry; else unit.rentHistory.push(entry);
-        saveData(props);
-        updateStats(); renderRentSection();
-        showNotif("✅ Rent collected via M-Pesa","success");
-      }
-      setTimeout(()=>document.getElementById("collectRentModal").style.display="none", 2000);
-    })
-    .on("IN-PROGRESS", ()=>{ resultEl.innerHTML='<span style="color:#71ff00;">📱 Enter M-Pesa PIN on your phone...</span>'; })
-    .on("FAILED", err=>{ btn.disabled=false; btn.innerHTML='📨 Retry'; resultEl.innerHTML='<span style="color:#ff6b6b;">❌ '+(err?.message||"Payment failed — retry")+'</span>'; })
-    .run({ amount, currency:"KES", phone_number:phone, email:"", first_name:(_collectRentData.tenant||"Tenant").split(" ")[0], last_name:"Tenant", api_ref:"RENT"+Date.now().toString().slice(-8), comment:"Sokoni Rent Collection" });
+    /* NO SIMULATED OR BROWSER-DECIDED RENT (CHANGELOG 215). Three paths marked rent PAID here: a retired M-PESA call
+       (always failed), a 3-second SIMULATED "Payment Confirmed!" when no key was set, and an inline IntaSend widget whose
+       COMPLETE event in this browser marked the month paid with NO server record. Properties and units live in this
+       browser, so the server cannot yet price or verify rent: collection through SOKONI Pay is being enabled. */
+    btn.disabled = false;
+    resultEl.innerHTML = '<span style="color:#ff9800;">Rent collection with SOKONI Pay is being enabled — nothing was requested or charged. Use "Mark paid" for rent you have already received.</span>';
   }
 
   window.openCollectRent = openCollectRent;

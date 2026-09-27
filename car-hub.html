@@ -2553,33 +2553,12 @@ function confirmBooking(){
   const days=Math.max(1,Math.round((new Date(r)-new Date(p))/86400000));
   const dp=surgePrice(c.priceDay),ins=document.getElementById("insuranceToggle")?.checked;
   const total=dp*days+(ins?500*days:0)+(c.deposit||0);
-  const bid="BK"+Date.now().toString().slice(-7);
-  const booking={id:bid,carId:c.id,carMake:c.make,carModel:c.model,carPlate:c.plate,carImage:c.image||"",ownerName:c.owner||"",ownerPhone:c.ownerPhone||"",renterName:name,renterPhone:phone,pickupDate:p,returnDate:r,days,priceDay:dp,insurance:ins,deposit:c.deposit||0,total,status:"active",carLat:c.lat,carLng:c.lng,createdAt:Date.now()};
-  const bookings=getBookings();bookings.unshift(booking);saveBookings(bookings);
-  _chFireWrite('carRentals',{...booking,hub:'car-rental'});
-  const cars=getCars(),idx=cars.findIndex(x=>x.id===c.id);
-  if(idx>-1){cars[idx].status="rented";saveCars(cars);}
-  /* Notify car owner via WhatsApp */
-  const ownerWA=(c.ownerPhone||"").replace(/^0/,"254").replace(/\D/g,"");
-  if(ownerWA){
-    const ownerMsg=encodeURIComponent(`🚗 *SOKONI Car Hub — New Booking*\n\nRef: ${bid}\n\n👤 Renter: ${name}\n📞 Phone: ${phone}\n🚗 Car: ${c.make} ${c.model} (${c.plate})\n📅 ${p} → ${r} (${days} day${days!==1?"s":""})\n💰 Total: KES ${total.toLocaleString()}\n\nPlease confirm availability and coordinate pickup. Thank you!`);
-    setTimeout(()=>window.open(`https://wa.me/${ownerWA}?text=${ownerMsg}`,"_blank"),800);
-  }
-  /* Show M-Pesa STK push instructions */
-  if(msgEl){
-    msgEl.innerHTML=`✅ Booking <strong>${_esc(bid)}</strong> confirmed!<br><span style="font-size:10px;color:rgba(255,255,255,0.5);">M-Pesa STK push sent to ${_esc(phone)}. Enter your PIN to complete payment. Car owner notified via WhatsApp.</span>`;
-    msgEl.style.color="#71ff00";
-  }
-  showFleetMsg("✅ Booking confirmed — M-Pesa request sent!");
-  /* Record SOKONI commission (12% car-rental rate) */
-  if(typeof SokoniPay !== 'undefined' && SokoniPay.saveCommission){
-    var _cPct =SokoniCommission.pct('car-rental');
-    var _cCut = Math.round(total * _cPct / 100);
-    SokoniPay.saveCommission({ref:bid,providerName:c.owner||'Car Owner',category:'car-rental',commissionPct:_cPct,sokoniCut:_cCut,providerNet:total-_cCut,serviceTotal:total,status:'auto_collected',note:'Car rental booking',createdAt:Date.now()});
-    SokoniPay.saveFee&&SokoniPay.saveFee({ref:bid,providerName:c.owner||'Car Owner',category:'car-rental',totalPaid:total,sokoniCut:_cCut,providerNet:total-_cCut,commissionPct:_cPct,phone:phone,providerPhone:c.ownerPhone||'',serviceDesc:c.make+' '+c.model+' rental',status:'paid',paymentType:'car_rental',createdAt:Date.now()});
-  }
-  if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'rental',buyerName:name,buyerPhone:phone,items:[{name:c.make+' '+c.model+' ('+c.plate+') Rental',category:'Car Rental',qty:days,price:dp},{name:'Security Deposit',category:'Deposit',qty:1,price:c.deposit||0}].concat(ins?[{name:'Insurance',category:'Insurance',qty:days,price:500}]:[]),subtotal:dp*days+(ins?500*days:0),total:total,paymentMethod:'M-Pesa',paymentRef:bid,sellerName:'SOKONI Car Hub',date:new Date().toISOString(),notes:'Pickup: '+p+' | Return: '+r});},1000);
-  setTimeout(()=>{closeOverlay("bookingOverlay");showTab("bookings",null);renderBookings();filterCars();},3000);
+  /* NOTHING HERE MAY SAY "PAID" (CHANGELOG 215). This wrote an ACTIVE rental, recorded a fee as status 'paid' and a
+     commission as 'auto_collected', told the renter "M-Pesa STK push sent… enter your PIN" — when NO push was sent —
+     and handed the booking to the owner's WhatsApp. The car catalogue here lives in this browser, so the server cannot
+     price or verify a rental yet: nothing is booked, charged or recorded until rentals run on SOKONI Pay. */
+  if(msgEl){ msgEl.textContent = "Car rentals with SOKONI Pay are being enabled — nothing was booked or charged."; msgEl.style.color = "#ff9800"; }
+  showFleetMsg("Car rentals with SOKONI Pay are being enabled — nothing was booked or charged.");
 }
 
 /* MY BOOKINGS */

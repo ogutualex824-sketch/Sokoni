@@ -243,17 +243,19 @@ exports.impactCheckoutDonate = onCall(
     const dateStr  = new Date().toLocaleDateString('en-KE', { year:'numeric', month:'long', day:'numeric' });
     const verifyCode = crypto.randomBytes(8).toString('hex').toUpperCase();
 
+    /* A PLEDGE, NOT MONEY (CHANGELOG 215). The donation is not part of the order's payment, yet this recorded it as
+       'completed' with a receipt, credited the Foundation LEDGER and grew totalDonations — money that was never
+       collected. It is now a pledge only: no receipt, no ledger credit, no totals, until it is charged through SOKONI Pay. */
     await fdb().runTransaction(async txn => {
-      /* Write donation record */
       txn.set(fdb().collection('foundationDonations').doc(donId), {
-        id: donId, uid, checkoutId: donId, verifyCode,
-        receiptNo: _txnId('RCP'),
+        id: donId, uid, checkoutId: donId,
         amount: amt, destination: _san(destination, 60) || 'General Foundation',
         method: type === 'roundup' ? 'Round-Up' : 'Checkout Add-On',
-        frequency: 'one-time', status: 'completed', donorName: 'SOKONI User',
+        frequency: 'one-time', status: 'pledged', paymentStatus: 'not_collected', donorName: 'SOKONI User',
         anonymous: false, orderId: orderId || null, dateStr,
-        createdAt: _now(), updatedAt: _now(), completedAt: _now(),
+        createdAt: _now(), updatedAt: _now(),
       });
+      if (false) {   /* ledger + totals only once the donation is actually charged */
 
       /* Write to Foundation ledger */
       await _writeLedgerEntry(txn, {
@@ -267,9 +269,10 @@ exports.impactCheckoutDonate = onCall(
       txn.set(fdb().collection('foundationStats').doc('current'), {
         totalDonations: _incr(amt), totalDonors: _incr(1), updatedAt: _now(),
       }, { merge: true });
+      }
     });
 
-    return { ok: true, donationId: donId };
+    return { ok: true, donationId: donId, status: 'pledged' };
   }
 );
 

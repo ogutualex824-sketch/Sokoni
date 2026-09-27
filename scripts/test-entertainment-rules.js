@@ -206,6 +206,10 @@ async function suite(env, label, served) {
   await expectDeny('a rider writes their own rating', member.doc('deliveryRiders/member1').update({ rating: 5.0, ratingCount: 99 }));
   await expectDeny('a home-services provider writes their own rating', member.doc('homeServiceProviders/hs1').update({ rating: 5 }));
   await expectDeny('a construction provider writes their own reviewCount', member.doc('constructProviders/cp1').update({ reviewCount: 50 }));
+  /* ── money integrity (CHANGELOG 215): a guest never confirms their own unpaid stay ── */
+  const stay = { bnbId: 'bnb1', uid: 'member1', name: 'M', phone: '0712', checkIn: '2026-10-10', checkOut: '2026-10-12', nights: 2, total: 9000 };
+  await expectDeny('a guest creates a CONFIRMED BnB stay (no payment)', member.doc('bnbBookings/s1').set(Object.assign({ status: 'confirmed' }, stay)));
+  await expectDeny('a guest creates a stay carrying a payment reference / paid state', member.doc('bnbBookings/s2').set(Object.assign({ status: 'requested', paymentRef: 'FAKE', paymentStatus: 'paid' }, stay)));
   /* ── availability authority · rate cards · enquiries · call requests (2026-09-27) ── */
   await expectDeny('a stranger reads a provider\'s private occupancy (bookings, blocks, labels)', stranger.doc('entAvailability/svc_owner1/months/2026-10').get());
   await expectDeny('even the OWNER cannot read or write the occupancy directly (audited callables only)', owner.doc('entAvailability/svc_owner1/months/2026-10').set({ items: [] }));
@@ -347,6 +351,7 @@ async function suite(env, label, served) {
 
   if (served) {
     /* reputation positive controls — the denials above are about the FIELD / TYPE, not a blanket lock */
+    ck(`${label}: a guest may still REQUEST a stay (unpaid, unconfirmed)`, await allowed(member.doc('bnbBookings/s3').set({ bnbId: 'bnb1', uid: 'member1', name: 'M', phone: '0712', checkIn: '2026-10-10', checkOut: '2026-10-12', nights: 2, total: 9000, status: 'requested' })));
     /* hub-review positive controls — the denials above are about the FIELD / ELIGIBILITY, not a blanket lock */
     ck(`${label}: an unboxing review with words only is still posted by its author`, await allowed(member.doc('unboxingReviews/ub6').set({ uid: 'member1', rating: 5, product: 'Kettle', comment: 'Works' })));
     ck(`${label}: the author still edits their comment`, await allowed(member.doc('unboxingReviews/ub1').update({ comment: 'Works well' })));

@@ -51,6 +51,7 @@ const SUITES = {
   bcast:    ['node', ['scripts/test-seller-broadcast.js']],
   hubrev:   ['node', ['scripts/test-hub-reviews.js']],
   payer:    ['node', ['scripts/test-webhook-payer-credit.js']],
+  integrity: ['node', ['scripts/test-money-integrity.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -804,6 +805,20 @@ const M = [
     from: "        const _payerIsMerchant = _POS_MERCHANT_INITIATED.has(String(category || \"\").toLowerCase());", to: "        const _payerIsMerchant = false;", expect: /merchant-initiated POS/ },
   { group: 'payer', name: 'an unattributed payment is held again on every replay (duplicate review entries)', file: 'functions/index.js', suite: 'payer',
     from: "            if (!snap.exists || snap.data().settlementStatus === \"UNATTRIBUTED_HOLD\" || snap.data().walletCreditedAt) return false;", to: "            if (!snap.exists) return false;\n            txn.set(db.collection(\"commissionReviewQueue\").doc(), { ref: apiRef, dup: true });", expect: /exactly ONE review entry/ },
+
+  /* ── money integrity: nothing says paid / confirmed without a server-confirmed payment (CHANGELOG 215) ── */
+  { group: 'integrity', browser: true, name: 'bnb: a simulated "Payment confirmed!" confirms an unpaid stay', file: 'bnb.html', suite: 'integrity',
+    from: "    if(_btn){ _btn.disabled = false; _btn.textContent = 'Confirm Booking'; }\n    showNotif('Booking with SOKONI Pay is being enabled for this stay — nothing was booked or charged.', 'error');", to: "    setTimeout(()=>{ showNotif('✅ Payment confirmed!', 'success'); _finalise(null); }, 1000);", expect: /no stay is written|nothing was booked or charged/ },
+  { group: 'integrity', browser: true, name: 'car-hub: "STK push sent" when none was, rental recorded', file: 'car-hub.html', suite: 'integrity',
+    from: "  if(msgEl){ msgEl.textContent = \"Car rentals with SOKONI Pay are being enabled — nothing was booked or charged.\"; msgEl.style.color = \"#ff9800\"; }", to: "  const bookings=getBookings();bookings.unshift({id:'BKX',carId:currentBookingCarId,status:'active'});saveBookings(bookings);\n  if(msgEl){ msgEl.textContent = \"✅ Booking confirmed! M-Pesa STK push sent — enter your PIN.\"; }", expect: /no rental is recorded|never "STK push sent"/ },
+  { group: 'integrity', browser: true, name: 'landlord: a simulated 3-second "Payment Confirmed" marks rent paid', file: 'landlord.html', suite: 'integrity',
+    from: "    btn.disabled = false;\n    resultEl.innerHTML = '<span style=\"color:#ff9800;\">Rent collection with SOKONI Pay is being enabled", to: "    setTimeout(()=>{ const props=getData(); const u=props[0].units[0]; u.rentHistory=[{month:getCurrentMonth(),paid:true,amount:u.rent,method:'mpesa'}]; saveData(props); }, 1000);\n    btn.disabled = false;\n    resultEl.innerHTML = '<span style=\"color:#ff9800;\">Rent collection with SOKONI Pay is being enabled", expect: /NEVER marked paid/ },
+  { group: 'integrity', name: 'impact: an uncharged checkout donation is recorded as completed money', file: 'functions/impact.js', suite: 'integrity',
+    from: "frequency: 'one-time', status: 'pledged', paymentStatus: 'not_collected',", to: "frequency: 'one-time', status: 'completed', paymentStatus: 'not_collected',", expect: /PLEDGE/ },
+  { group: 'integrity', name: 'impact: the Foundation ledger is credited for money never collected', file: 'functions/impact.js', suite: 'integrity',
+    from: "      if (false) {   /* ledger + totals only once the donation is actually charged */", to: "      if (true) {", expect: /LEDGER is not credited|PLEDGE/ },
+  { group: 'integrity', rules: true, name: 'a guest creates a confirmed stay again (rules)', file: RULES, suite: 'rules',
+    from: "  && request.resource.data.status == 'requested'\n", to: "  && request.resource.data.status in ['requested','confirmed']\n", expect: /CONFIRMED BnB stay/ },
 ];
 
 const argv = process.argv.slice(2);

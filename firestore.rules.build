@@ -1026,7 +1026,8 @@ service cloud.firestore {
   allow create: if isAuthed()
   && request.resource.data.uid == request.auth.uid
   && request.resource.data.keys().hasAll(['bnbId','uid','name','phone','checkIn','checkOut','nights','total','status'])
-  && request.resource.data.status == 'confirmed';
+  && request.resource.data.status == 'requested'
+  && !request.resource.data.keys().hasAny(['paymentRef','paymentStatus','paidAt','mpesaCode','confirmedAt','commission']);
   allow update: if isAdmin()
   || (isAuthed() && resource.data.hostUid == request.auth.uid
   && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']));

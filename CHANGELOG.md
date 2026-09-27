@@ -1,3 +1,48 @@
+## 2026-09-27 (215) — Money integrity: nothing says "paid" or "confirmed" without a server-confirmed payment
+
+This is the first step of the owner's priority: payments and WhatsApp first, money integrity before conversion. It
+covers the fake and unpaid confirmations found by the IntaSend coverage census. Not deployed. No KRA calls. No
+production writes.
+
+- **`bnb.html`.**
+  - The retired M-PESA call always failed, and its **failure** handler confirmed the stay.
+  - With no host payment configuration, a **simulated** "Payment confirmed!" did the same after 4 seconds.
+  - Both wrote a `confirmed` `bnbBookings` doc, notified the host and recorded commission.
+  - The rules **required** a client `status == 'confirmed'`.
+  - Now nothing is booked or charged, and the guest is told so. A client may at most **request** a stay, with no
+    payment, confirmation or commission fields.
+  - BnB moves to SOKONI Pay (IntaSend) with held settlement in its own commit.
+- **`car-hub.html`.** `confirmBooking` wrote an **active** rental, recorded a fee as `paid` and a commission as
+  `auto_collected`, told the renter "M-Pesa STK push sent… enter your PIN" when **no push was sent**, and handed the
+  booking to the owner's WhatsApp. The car catalogue lives in the browser, so nothing is booked, charged or recorded
+  until rentals run on SOKONI Pay.
+- **`landlord.html`.** Three paths marked rent **paid**:
+  - the retired rail;
+  - a **simulated** 3-second "Payment Confirmed!";
+  - an inline IntaSend widget whose browser COMPLETE event marked the month paid with **no server record**.
+  - Properties are browser-local, so collection is shown as being enabled. "Mark paid" remains for rent actually
+    received.
+- **`functions/impact.js` `impactCheckoutDonate`.**
+  - It recorded a checkout donation as `completed` with a receipt number, credited the Foundation **ledger** and grew
+    `totalDonations`, for money that is **not part of the order payment** and was never collected.
+  - It is now a **pledge** (`status: 'pledged'`, `paymentStatus: 'not_collected'`), with no receipt, no ledger and no
+    totals until it is charged through SOKONI Pay.
+  - Re-enabling the ledger write inside that transaction reads after writing, so the old path likely failed in
+    production as well, silently (checkout fires it and ignores the result).
+- **Tests:**
+  - `scripts/test-money-integrity.js` (new): 10/0. It covers the **real** `bnb.html`, `car-hub.html` and
+    `landlord.html` (every text shown during the old simulated windows is recorded) and `impact.js`.
+  - `test-entertainment-rules.js`: 375/0 (a confirmed or paid stay is denied; a request is still allowed).
+  - `test-cart-market-actions` and `test-cart-food` gate on committed state and pass after the commit.
+  - Sabotage group `integrity`: 6/6 caught; the tree is byte-identical afterwards.
+- **Files:**
+  - Pages: `bnb.html`, `car-hub.html`, `landlord.html`.
+  - Functions and rules: `functions/impact.js`, `firestore.rules`, `firestore.rules.build`.
+  - Scripts: `scripts/test-money-integrity.js` (new), `scripts/test-entertainment-rules.js`,
+    `scripts/sabotage-event-ops.js`.
+- **Breaking.** BnB booking, car rental and landlord rent collection are unavailable until each moves to SOKONI Pay
+  (the following commits). Before this they produced unpaid "confirmed" bookings and fake paid records.
+
 ## 2026-09-27 (214) — The payer is never their own earner (webhook C1)
 
 A money-integrity defect found by the IntaSend coverage census, which ran on the owner's directive "use IntaSend,

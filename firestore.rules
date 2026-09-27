@@ -1488,7 +1488,10 @@ service cloud.firestore {
       allow create: if isAuthed()
                     && request.resource.data.uid == request.auth.uid
                     && request.resource.data.keys().hasAll(['bnbId','uid','name','phone','checkIn','checkOut','nights','total','status'])
-                    && request.resource.data.status == 'confirmed';
+                    /* CHANGELOG 215: this REQUIRED a client 'confirmed' — a guest confirmed their own unpaid stay. A client
+                       may at most REQUEST; confirmation, payment and commission fields are the server's. */
+                    && request.resource.data.status == 'requested'
+                    && !request.resource.data.keys().hasAny(['paymentRef','paymentStatus','paidAt','mpesaCode','confirmedAt','commission']);
       allow update: if isAdmin()
                     || (isAuthed() && resource.data.hostUid == request.auth.uid
                         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']));
