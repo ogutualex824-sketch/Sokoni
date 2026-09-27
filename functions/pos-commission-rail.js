@@ -235,6 +235,30 @@ async function assertGateOpen(db, merchantUid, nowMs) {
   return gate;
 }
 
+/**
+ * P0 TILL SAFETY (owner ruling 2026-09-27) — the gate does NOT stop a sale, for now.
+ *
+ * Commission liabilities are recorded on every owed sale, but nothing deployed can PAY
+ * them: no settle callable, no collector, no Pay Now. With the gate enforced, a merchant's
+ * first cash sale would lock their till at 07:00 the next day with no way to unlock it.
+ *
+ * So until ONE certified settlement path exists (Pay Now with any IntaSend method, one
+ * collector, the evening and 06:00 reminders), the gate is not enforced. Debt still
+ * accrues exactly as before; only the refusal is withheld. The owner's target is the
+ * STRICT 07:00 gate, switched back on TOGETHER with that path — by changing this one
+ * constant, in the same certified unit, never on its own.
+ *
+ * Both sale rails (posCompleteCheckout and recordPOSSale) must call `enforceSaleGate`
+ * and nothing else, so the switch governs every door at once. While it is off there is
+ * no ledger read at all: an outage can no longer stop a sale either.
+ */
+const GATE_ENFORCED = false;
+
+async function enforceSaleGate(db, merchantUid, nowMs) {
+  if (!GATE_ENFORCED) return { enforced: false };
+  return assertGateOpen(db, merchantUid, nowMs);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    SETTLE — and the difference between paying and having paid
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -424,6 +448,8 @@ module.exports = {
   readOutstanding,
   evaluateMerchantGate,
   assertGateOpen,
+  GATE_ENFORCED,
+  enforceSaleGate,
   applySettlement,
   settleFromBusinessWallet,
 };

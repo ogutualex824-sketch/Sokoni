@@ -263,9 +263,12 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
 
      An unreadable ledger throws rather than reporting "owes nothing", and that throw refuses
      the sale. Refusing to sell during an outage is the conservative failure; the alternative
-     is untracked trading that reconciliation can never recover. */
+     is untracked trading that reconciliation can never recover.
+
+     P0 (2026-09-27): the same ONE switch as posCompleteCheckout (`enforceSaleGate`, off
+     until a certified settlement path exists). The liability is still recorded below. */
   try {
-    await require('./pos-commission-rail').assertGateOpen(fdb, String(_sellerId), Date.now());
+    await require('./pos-commission-rail').enforceSaleGate(fdb, String(_sellerId), Date.now());
   } catch (gateErr) {
     if (gateErr && gateErr.code === 'POS_GATE_CLOSED') {
       throw new HttpsError('failed-precondition', gateErr.message);

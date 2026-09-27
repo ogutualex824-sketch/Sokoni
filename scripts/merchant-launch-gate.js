@@ -335,9 +335,12 @@ const A5 = 'POS';
     /_merchantProven/.test(zfSrc) && /not authorised to record a sale for this shop/.test(zfSrc),
     'proven via resolveActor OR workspace membership', 'merchantId is taken on trust');
 
-  verdict(A5, 'BOTH sale rails enforce the commission gate',
-    /assertGateOpen/.test(zfSrc) && /assertGateOpen/.test(reSrc),
-    'checkout + recordPOSSale', 'a rail is ungated — a merchant can switch callables');
+  /* P0 (owner 2026-09-27): both rails go through the ONE switch `enforceSaleGate`, which is OFF
+     until a certified settlement path exists. The check is that no door escapes the switch. */
+  verdict(A5, 'BOTH sale rails go through the one commission-gate switch',
+    /enforceSaleGate\(/.test(zfSrc) && /enforceSaleGate\(/.test(reSrc) &&
+      !/assertGateOpen\(/.test(zfSrc) && !/assertGateOpen\(/.test(reSrc),
+    'checkout + recordPOSSale', 'a rail bypasses the switch — a merchant can switch callables');
 
   verdict(A5, 'BOTH sale rails record the commission liability',
     /recordSaleLiability/.test(zfSrc) && /recordSaleLiability/.test(reSrc),

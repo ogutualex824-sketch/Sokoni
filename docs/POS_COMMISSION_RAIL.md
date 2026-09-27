@@ -3,6 +3,44 @@
 **Date:** 2026-09-07 · **Status:** BUILT AND TESTED, NOT DEPLOYED
 **Related:** [[Payments]] · [[SmartPOS]] · [[Orders]] · [[Marketplace]]
 
+## CURRENT STATE — P0 till safety (2026-09-27): the gate is wired, and switched OFF
+
+**The history.** Commit ee37437 (deployed 2026-09-22 as `posCompleteCheckout` revision `00024-zit`)
+wired the gate into the sale path. It proves the merchant first, then calls the gate on both
+doors: `posCompleteCheckout`, and `recordPOSSale` (reachable via `smartPosDispatch`). That
+supersedes the "NOT DONE" section below. Every owed sale writes a `posCommissionLiabilities`
+row.
+
+**The risk that remained.** Nothing deployed could PAY a liability: no settle callable, no
+collector, no Pay Now. With the gate enforced, a merchant's first cash sale would lock their
+till at 07:00 the next day with no way to unlock it. An unreadable ledger also refused every
+sale.
+
+**The owner's ruling.** The strict 07:00 gate is the target, but only together with a way to
+pay. Until then:
+
+- **One switch.** `pos-commission-rail.GATE_ENFORCED = false`. Both rails call
+  `enforceSaleGate` and nothing else. While the switch is off, it returns without reading the
+  ledger and never refuses. An outage can no longer stop a sale either.
+- **Debt still accrues exactly as before:** same row, same 5%, same settlement day. Nothing is
+  deleted or settled, and no rate or collection rule changes.
+- **The gate itself is unchanged.** `evaluateMerchantGate` and `assertGateOpen` still close at
+  07:00; `test-pos-gate-enforcement` PART E proves it.
+- **Switching it back on** is one constant, changed in the same certified unit that ships the
+  settlement path:
+  - Pay Now with any IntaSend method (card, M-Pesa, …);
+  - one collector at 07:00 EAT;
+  - separate business and personal wallets;
+  - an in-app reminder the evening before and early morning;
+  - one SMS at 06:00.
+
+| Evidence | Result |
+|---|---|
+| `scripts/test-p0-till-gate-off.js` (new; emulator; real `posCompleteCheckout` and `recordPOSSale`) | **9/0** new vs **3/6** old. The old tree refuses overdue debt ("Unpaid POS commission … Settle 50.00") and an injected ledger outage (`unavailable`). The new tree completes the sale and still records the liability (5% = 5000 minor on KES 1,000). |
+| `scripts/test-pos-gate-enforcement.js` (rewritten, owner ruling) | **42/0**. Both doors call the one switch and never `assertGateOpen` directly. The gate still closes. The switch is off, reads nothing, and delegates to `assertGateOpen` when on. |
+| `scripts/test-pos-gate-behavioural.js` (rewritten, owner ruling) | **28/0** new vs **22/6** old. Overdue debt and an outage are not commission refusals, and the ledger is not read. |
+| Mutants (7) | All caught: switch-on, checkout-bypasses-switch, recordpossale-bypasses-switch, switch-off-still-reads, switch-on-weakened (by the structural E8 only), and a liability dropped on each rail. |
+
 ## The commercial rule
 
 * POS and Till are **5% per sale, every plan**. The marketplace plan ladder (15/10/5/0) does

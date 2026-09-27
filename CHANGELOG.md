@@ -1,3 +1,33 @@
+## 2026-09-27 (154) — P0 till safety: the 07:00 commission gate no longer stops a sale (NOT deployed)
+
+The deployed `posCompleteCheckout` (`00024-zit`, from ee37437) enforces the 07:00 POS commission gate. Every cash
+or direct-to-till sale records a liability. Nothing deployed can pay one: there is no settle callable, no collector
+and no Pay Now. So a merchant's first cash sale would lock their till the next morning with no way to unlock it. An
+unreadable ledger also refused every sale. Production liabilities: **0**, so no till has been locked yet.
+
+**Owner ruling:** the strict 07:00 gate is the target, switched back on only together with a certified payment path
+(any IntaSend method, one collector, in-app reminders the evening before and early morning, one SMS at 06:00). Until
+then the gate is off, and ONLY the refusal is withheld.
+
+- **Change:**
+  - `pos-commission-rail.js` adds `GATE_ENFORCED = false` and `enforceSaleGate()`. While off, it does not read the
+    ledger and never refuses; when on, it is exactly `assertGateOpen`.
+  - `posCompleteCheckout` and `recordPOSSale` both call `enforceSaleGate`, never `assertGateOpen` directly.
+  - Liability recording, the 5% rate, settlement days and the gate itself are unchanged.
+- **Files:** `functions/pos-commission-rail.js`, `functions/pos-zero-friction.js`, `functions/pos-retail-engine.js`,
+  new `scripts/test-p0-till-gate-off.js`, `scripts/test-pos-gate-enforcement.js` and `scripts/test-pos-gate-behavioural.js`
+  (both rewritten to the owner's ruling), `scripts/merchant-launch-gate.js` (the gate verdict now checks that both rails
+  go through the one switch), `docs/POS_COMMISSION_RAIL.md`.
+- **Database:** none. **API:** none. The callables' contracts are unchanged; they simply no longer return the
+  commission `failed-precondition`/`unavailable` refusals.
+- **Security:** no merchant-proof change; the identity refusal runs first, as before.
+- **Evidence:**
+  - behavioural suite 9/0 new vs 3/6 old, with every old failure being the gate refusing;
+  - 7 mutants caught;
+  - regression floor compared by full log against 53ff924, the byte-identical source of the deployed revision.
+- **Deploy:** a scoped `posCompleteCheckout` deploy from this commit. It needs separate owner authorization (see the
+  Artifact Registry notice in CLAUDE.md and the merchant-identity provenance gap).
+
 ## 2026-09-22 (150) — PayPal retired; IntaSend is the payment provider
 
 **Owner decision: SOKONI does not offer PayPal.** Hosting-side only. No Functions, no rules,

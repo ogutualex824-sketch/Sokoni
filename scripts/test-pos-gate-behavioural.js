@@ -51,6 +51,7 @@ const CTL = {
   liabilities: [],         /* rows the commission ledger holds                   */
   ledgerUnreadable: false, /* the commission ledger read fails                   */
   shopsUnreadable: false,  /* the IDENTITY authority itself is unavailable       */
+  ledgerQueries: 0,        /* P0: how many times the commission ledger was queried */
 };
 
 const DOCS = new Map();
@@ -81,6 +82,7 @@ function makeDb() {
     orderBy() { return this; },
     limit() { return this; },
     async get() {
+      if (name === 'posCommissionLiabilities') CTL.ledgerQueries++;
       if (name === 'posCommissionLiabilities' && CTL.ledgerUnreadable) {
         throw new Error('simulated Firestore outage');
       }
@@ -176,7 +178,7 @@ function seedActor(kind) {
 function reset() {
   DOCS.clear();
   CTL.membershipOk = false; CTL.liabilities = [];
-  CTL.ledgerUnreadable = false; CTL.shopsUnreadable = false;
+  CTL.ledgerUnreadable = false; CTL.shopsUnreadable = false; CTL.ledgerQueries = 0;
   DOCS.set('businesses/' + MERCHANT, { ownerId: 'SOMEONE_ELSE' });
   DOCS.set('products/P1', { name: 'Rice', price: 100, stock: 50, trackInventory: true });
 }
@@ -269,15 +271,24 @@ console.log('\nPART A — the merchant is PROVEN, against the real identity auth
   ck('A12 ...and no sale was written', noSale());
 }
 
-console.log('\nPART B — the gate closes on unpaid commission\n');
+/* P0 TILL SAFETY (owner ruling 2026-09-27). The gate is switched OFF (pos-commission-rail
+   GATE_ENFORCED) until a certified settlement path exists: nothing deployed can pay a liability,
+   so an enforced gate would lock a till with no way to unlock it. PARTS B and C therefore assert
+   the P0 invariant — overdue debt and an unreadable ledger are NOT refusals, and the ledger is not
+   even read. This fake database cannot complete a sale (it stops later, as `internal`), so the
+   assertions are "not refused by the gate", never "refused"; completion itself, and that the
+   liability is still recorded, are proved against the emulator by test-p0-till-gate-off.js. The
+   gate's own closing behaviour stays proved in test-pos-gate-enforcement.js PART E. */
+console.log('\nPART B — P0: unpaid commission does NOT close the till while the gate is off\n');
 {
   reset(); const uid = seedActor('owner'); CTL.liabilities = overdue();
   const r = await call(uid);
-  ck('B1  a merchant with overdue commission is REFUSED', r.ok === false, r.code);
-  ck('B2  ...with failed-precondition, the till-is-closed code',
-    r.code === 'failed-precondition', r.code);
-  ck('B3  ...naming what is owed', /Settle|commission/i.test(r.message || ''), r.message);
-  ck('B4  ...and NO sale was written', noSale());
+  ck('B1  a merchant with overdue commission is NOT refused as a closed till',
+    r.code !== 'failed-precondition' && !/Settle|commission/i.test(r.message || ''), r.code || 'completed');
+  ck('B2  ...and the commission ledger was not read at all', CTL.ledgerQueries === 0, 'queries=' + CTL.ledgerQueries);
+  let RAIL_ENFORCED = null;
+  try { RAIL_ENFORCED = require(path.join(FN, 'pos-commission-rail.js')).GATE_ENFORCED; } catch (e) { RAIL_ENFORCED = 'unloadable'; }
+  ck('B3  ...because the one gate switch is OFF', RAIL_ENFORCED === false, 'GATE_ENFORCED=' + RAIL_ENFORCED);
 }
 {
   reset(); const uid = seedActor('owner');
@@ -303,22 +314,17 @@ console.log('\nPART B — the gate closes on unpaid commission\n');
     r.code !== 'failed-precondition', r.code || 'completed');
 }
 
-console.log('\nPART C — an UNREADABLE ledger refuses the sale (kills the S6 sabotage)\n');
+console.log('\nPART C — P0: an UNREADABLE ledger no longer stops a sale while the gate is off\n');
 {
   reset(); const uid = seedActor('owner'); CTL.ledgerUnreadable = true;
   const r = await call(uid);
-  ck('C1  an unreadable commission ledger REFUSES the sale', r.ok === false, r.code || 'no refusal');
-  ck('C2  ...as unavailable, not as a closed gate', r.code === 'unavailable', r.code);
-
-  /* THE SUBSTRING TRAP THAT LET S6 THROUGH. Two guards in this file end with the same
-     sentence. Assert the half that DIFFERS, and assert the other one is absent. */
-  ck('C3  ...the message is about COMMISSION',
-    /commission balance could not be checked/i.test(r.message || ''), r.message);
+  /* THE SUBSTRING TRAP THAT LET S6 THROUGH still applies: assert the COMMISSION half of the
+     message is absent, not merely "could not be checked". */
+  ck('C1  an unreadable commission ledger does NOT refuse the sale on commission grounds',
+    !(r.code === 'unavailable' && /commission balance could not be checked/i.test(r.message || '')), r.code || 'completed');
+  ck('C2  ...because the ledger is never read (an outage cannot stop a sale)', CTL.ledgerQueries === 0, 'queries=' + CTL.ledgerQueries);
   ck('C4  ...and explicitly NOT the staff-permissions message',
     !/Staff permissions could not be checked/i.test(r.message || ''), r.message);
-  ck('C5  ...telling the cashier nothing has been charged',
-    /Nothing has been charged/i.test(r.message || ''), r.message);
-  ck('C6  ...and NO sale was written', noSale());
 }
 
 console.log('\nPART D — adversarial controls\n');
@@ -338,9 +344,11 @@ console.log('\nPART D — adversarial controls\n');
   const gated = await call(o1);
   reset(); const o2 = seedActor('owner'); CTL.ledgerUnreadable = true;
   const unread = await call(o2);
-  ck('D2  the three refusals are DISTINCT codes, so each names its own guard',
-    denied.code === 'permission-denied' && gated.code === 'failed-precondition'
-      && unread.code === 'unavailable',
+  /* P0: of the three former refusals only the identity one remains; debt and an outage are not
+     refusals while the gate switch is off. */
+  ck('D2  the identity guard still refuses (permission-denied); debt and an outage do not refuse on commission',
+    denied.code === 'permission-denied' && gated.code !== 'failed-precondition'
+      && !(unread.code === 'unavailable' && /commission balance/i.test(unread.message || '')),
     denied.code + ' / ' + gated.code + ' / ' + unread.code);
 
   /* An unproven caller with an overdue ledger must be refused as UNAUTHORISED — proving the

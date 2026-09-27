@@ -515,9 +515,13 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
        An UNREADABLE ledger is NOT an open gate: `assertGateOpen` throws rather
        than returning "owes nothing", and that throw stops the sale. Refusing to
        sell during an outage is the conservative failure; the alternative is a day
-       of untracked trading that reconciliation can never recover. */
+       of untracked trading that reconciliation can never recover.
+
+       P0 (2026-09-27): `enforceSaleGate` is the ONE switch. It is OFF until a certified
+       settlement path exists — see pos-commission-rail GATE_ENFORCED. While off it does not
+       read the ledger and never refuses; the liability is still recorded below. */
     try {
-      await _posRail().assertGateOpen(db, String(merchantId), Date.now());
+      await _posRail().enforceSaleGate(db, String(merchantId), Date.now());
     } catch (gateErr) {
       if (gateErr && gateErr.code === 'POS_GATE_CLOSED') {
         _e(gateErr.message, 'failed-precondition');

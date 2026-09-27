@@ -20,6 +20,12 @@
  * AND THE SECOND DOOR: `recordPOSSale` is reachable directly and via
  * smartPosDispatch({op}). Gating one of two rails is not gating.
  *
+ * P0 TILL SAFETY (owner ruling 2026-09-27): the gate is wired on BOTH rails through ONE switch,
+ * `enforceSaleGate`, which is OFF until a certified settlement path exists (nothing deployed can
+ * pay a liability yet). Liabilities are still recorded. The owner's target is the strict 07:00
+ * gate, switched back on together with that path — PART B keeps both doors on the switch, PART E
+ * proves the gate still closes and that the switch is what withholds the refusal.
+ *
  * WHY ORDER 1 HAD TO COME FIRST: gating on a forgeable id is WORSE than not gating — a
  * merchant could pass a clean shop's id to dodge their own closed gate, or a rival's id to
  * gate an innocent party, and it would look like enforcement.
@@ -116,7 +122,7 @@ console.log('\nPART A — the merchant is PROVEN before anything is done with it
 
   /* The proof must happen BEFORE the gate, or the gate is keyed on an unproven id. */
   const provenAt = ZF.indexOf('_merchantProven');
-  const gateAt = ZF.indexOf('assertGateOpen');
+  const gateAt = ZF.indexOf('enforceSaleGate');
   ck('A5  the proof runs BEFORE the gate', provenAt !== -1 && gateAt !== -1 && provenAt < gateAt,
     'proven@' + provenAt + ' gate@' + gateAt);
 
@@ -125,13 +131,17 @@ console.log('\nPART A — the merchant is PROVEN before anything is done with it
 
 console.log('\nPART B — BOTH sale rails are gated\n');
 {
-  ck('B1  posCompleteCheckout calls assertGateOpen', /assertGateOpen\(/.test(ZF));
-  ck('B2  recordPOSSale calls assertGateOpen', /assertGateOpen\(/.test(RE));
+  /* P0 (owner 2026-09-27): both rails go through the ONE switch, enforceSaleGate, and never call
+     assertGateOpen directly — so switching the gate off (or back on) governs every door at once. */
+  ck('B1  posCompleteCheckout calls the one gate switch (enforceSaleGate)', /enforceSaleGate\(/.test(ZF));
+  ck('B2  recordPOSSale calls the one gate switch (enforceSaleGate)', /enforceSaleGate\(/.test(RE));
+  ck('B2b ...and neither rail bypasses the switch by calling assertGateOpen directly',
+    !/assertGateOpen\(/.test(ZF) && !/assertGateOpen\(/.test(RE));
 
   /* recordPOSSale gates on _sellerId, which its own tenant binding already forced to equal
      auth.uid for non-admins — so it is not a forgeable field. */
   ck('B3  ...on the tenant-bound sellerId, not a raw request field',
-    /assertGateOpen\(fdb, String\(_sellerId\)/.test(RE));
+    /enforceSaleGate\(fdb, String\(_sellerId\)/.test(RE));
   ck('B4  ...and that binding still refuses another shop',
     /A sale can only be recorded for your own shop/.test(SRC_RE));
 
@@ -215,6 +225,21 @@ console.log('\nPART E — the gate actually closes, behaviourally\n');
   /* And one merchant's debt never closes another's till. */
   const other = await RAIL.assertGateOpen(makeDb(unpaid), 'SOMEONE_ELSE', eat('2026-09-06T07:30:00'));
   ck('E5  another merchant is unaffected by this debt', other.closed === false);
+
+  /* P0 (owner 2026-09-27): the switch is OFF until a certified settlement path exists. While
+     off, the sale rails' entry point neither refuses nor reads — an overdue debt and an
+     outage both let the sale through. The gate itself (E1-E5) is untouched. */
+  let reads = 0, threwOff = null, res = null;
+  const counting = { collection() { reads++; return makeDb(unpaid).collection(); } };
+  try { res = await RAIL.enforceSaleGate(counting, MERCHANT, eat('2026-09-06T07:30:00')); } catch (e) { threwOff = e; }
+  ck('E6  P0: with the switch OFF an overdue debt does NOT refuse the sale',
+    RAIL.GATE_ENFORCED === false && !threwOff && res && res.enforced === false,
+    'GATE_ENFORCED=' + RAIL.GATE_ENFORCED + (threwOff ? ' threw ' + threwOff.code : ''));
+  ck('E7  ...and does not read the ledger at all (an outage cannot stop a sale)', reads === 0, 'reads=' + reads);
+
+  const RAIL_SRC = strip(require('fs').readFileSync(path.join(FN, 'pos-commission-rail.js'), 'utf8'));
+  ck('E8  switching it back ON delegates to the real gate (assertGateOpen), nothing weaker',
+    /async function enforceSaleGate\([^)]*\)\s*\{\s*if \(!GATE_ENFORCED\) return \{ enforced: false \};\s*return assertGateOpen\(/.test(RAIL_SRC));
 }
 
 console.log('\nPART F — the comment that lied is gone\n');
