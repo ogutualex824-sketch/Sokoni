@@ -434,7 +434,8 @@ const SokoniDB = {
 
   async saveUnboxingReview(review) {
     const id = review.id || ('UBR-' + Date.now());
-    const { photos, ...meta } = review;
+    /* the author writes the words; verified / likes / status are the SERVER's (CHANGELOG 213) */
+    const { photos, verified, orderVerified, orderVerifiedAt, likes, liked, status, approved, featured, ...meta } = review;
     await setDoc(doc(db, 'unboxingReviews', id), {
       ...meta, id,
       photoEmoji: (photos || []).find(p => !p.startsWith('data:')) || meta.photoEmoji || '📦',
@@ -1015,7 +1016,10 @@ const SokoniDB = {
      Collection: driverRatings/{rideOrDeliveryRef}
   ════════════════════════════════════════ */
 
-  async saveDriverRating(ref, driverId, rating, comment, ratingType) {
+  /* RETIRED (CHANGELOG 213): a rating for any driver, any value, under any client-chosen id, plus a client-side
+     running average. Rider ratings are csatRatings — one per REAL delivery (firestore.rules). */
+  async saveDriverRating() { throw Object.assign(new Error('Rate your rider from the delivery tracking page.'), { code: 'failed-precondition' }); },
+  async _retiredSaveDriverRating(ref, driverId, rating, comment, ratingType) {
     const safeId = String(driverId || 'unknown').replace(/\W/g, '_');
     await setDoc(doc(db, 'driverRatings', ref), {
       ref,

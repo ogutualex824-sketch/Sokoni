@@ -1,3 +1,75 @@
+## 2026-09-27 (213) — Hub review stores: the client requests, the server decides
+
+Fixes known hole 1, which was outside `0865a34`. That commit is not modified. Not deployed. No KRA calls. No
+production writes.
+
+**Invariant.** A client may **request** a review. It may not decide who wrote it, who it is about, whether the
+experience happened, the aggregate, verification or moderation. Each hub keeps its own authority; they were not forced
+into the Entertainment `providerReviews` schema.
+
+| Hub | Was | Now |
+|---|---|---|
+| **Health** | `healthReviews` client-writable (writer unused). `rateHealthProvider` accepted **any** `providerId` for one completed appointment, a string rating (which concatenated into the average), and read `rated` outside the transaction. The **patient** could mark their own appointment `completed`. | Only the provider or an admin completes, confirms or records a no-show; the patient may cancel. The rating binds to the appointment's provider, is an integer 1–5, happens once (inside the transaction, so concurrent attempts count once), and self-rating is refused. `healthReviews` has no client write. |
+| **Legal** | `legalReviews` client create (a fallback the rules always denied, while the page said "Thank you" and kept a localStorage "review"). `rateLegalProvider` accepted any `providerId`, and the **client** could complete their own consultation. | Only the lawyer or an admin completes. The rating binds to the consultation's lawyer, is an integer and happens once. The page has one server path and real outcomes. No client write. |
+| **Digital products** | `rateDigitalProduct` accepted an **unpaid** `pending_payment` purchase and **any** `productId`. | A paid purchase is required; the product is the purchase's; not your own product; once. |
+| **Digital freelance** | `digitalReviews` client create with no eligibility, against **client-authored** contracts (paid through the retired Daraja flow). | Client writes are closed, and the page shows and averages only server-verified reviews. Reviews open once contract payment is server-verified (IntaSend work, next). |
+| **Home services** | Client create (always failed: an unauthenticated app with no uid) while the page said "Thank you" and stored a local copy. The provider's rating was self-declared (5.0). | No client write; an honest "not open yet". A rating is never self-declared. |
+| **Construction** | Client create, plus a client-recomputed provider rating (writers unused). `saveProvider` sent `verified:false`, so **every** registration was rejected. | No client write; the recompute is retired. Registration no longer sends `verified`, `rating` or `reviewCount`, and works. |
+| **Sports** | Reviews stored only in the author's browser and shown as posted (the Firestore write could never succeed). The average defaulted to 4.5. | No client write, no local "review", no invented average; an honest message. |
+| **Unboxing** | "✅ Verified Buy" whenever the author **typed** an order id (client `verified:true`, accepted by the rules). **12 invented demo reviews** (reviewers, likes, "Verified Buy") were appended to the **live** wall and its stats. The success toast appeared before the write. | The author writes the words. `orderVerified` is set only by the new `verifyUnboxingReview` callable: your own delivered or completed order, one order per review. The demo reviews are removed. "Posted" means saved. |
+| **CSAT** | Any buyer could rate **any** rider id, any number of times. A denormalising write was always denied, which re-enabled the button after a successful save. | One rating per **real** delivery. The doc id is the delivery, the rater is its buyer, the rider is the **assigned** driver, and the delivery is finished. The fields are fixed. |
+| **Drivers** | `driverRatings` client create (any driver, any value, any id), plus a client running average. Drivers and riders self-declared `rating: 5.0` when going online or registering. | No client write (rider ratings are CSAT). A rating is never self-declared. |
+
+- **Aggregates on review targets.** A new rules helper, `noRatingAggOnCreate` / `noRatingAggOnUpdate`, covers `rating`,
+  `ratingCount`, `ratingSum`, `reviewCount`, `reviews`, `avgRating`, `averageRating`, `totalReviews`, `_ratingSum`,
+  `_ratingCount`, `ratingDist` and `riderRating`. It applies to `lawyers`, `rideDrivers`, `deliveryRiders`,
+  `homeServiceProviders` and `constructProviders`. The legitimate writers no longer send those fields: `driver.html`,
+  `delivery-hub.js`, `provider-wiring.js`, `home-services.html` and `sokoni-construct.js`.
+- **Shared arithmetic.** `functions/shared/hub-rating.js` holds the integer check and the sum/count aggregate, and
+  carries a legacy `{rating, ratingCount}` doc over exactly.
+- **Tests:**
+  - `scripts/test-hub-reviews.js` (new): 42/0, covering server eligibility, binding, integer ratings, concurrency and
+    aggregates.
+    - Real pages: `unboxing.html` (no demo reviews at 360 and 1280; the payload carries no client `verified`; the server
+      verifies a real delivered order), `sports-venue.html` and `home-services.html` (honest, nothing stored).
+  - `test-entertainment-rules.js`: 370/0 (served + counterproof).
+    - Every hub store's client write is denied.
+    - Unboxing forged-verified, likes and range cases are denied, and the author's later flip is denied.
+    - CSAT is checked for unfinished, other-buyer, unassigned-rider, wrong-id, overwrite and extra-field cases.
+    - Owner rating writes are denied on all five provider types.
+    - Positive controls: words-only unboxing, a comment edit, the assigned-rider CSAT, and listing text edits.
+  - 18 related suites are identical to the baseline. Their failures are pre-existing and identical at base:
+    `test-healthcare-provisioning` 11, `test-secondary-firebase-apps` 1, `test-merchant-route-gate` 4.
+  - `test-cart-food` gates on committed state and is re-run after the commit.
+  - Sabotage group `hubreviews`: 26/26 caught (two first-run misses exposed weak tests, now fixed: the stored sum is checked exactly, and a CSAT naming another delivery is denied); the tree is byte-identical afterwards.
+- **Found, not fixed (reported):**
+  - `functions/healthcare-hub.js` rebinds `module.exports`, so `_h` is not exported and `servicesDispatch` carries **no**
+    healthcare ops.
+  - Digital `totalSales` is incremented before payment.
+  - Unboxing grants 50 "loyalty points" in localStorage only.
+- **Files:**
+  - Functions: `functions/shared/hub-rating.js` (new), `functions/healthcare-hub.js`, `functions/legal-hub.js`,
+    `functions/digital-hub.js`, `functions/reviews.js`, `functions/index.js`.
+  - Rules: `firestore.rules`, `firestore.rules.build`.
+  - Pages: `legal-hub.html`, `home-services.html`, `digital.html`, `sports-venue.html`, `unboxing.html`,
+    `delivery-tracking.html`, `driver.html`.
+  - Client scripts: `sokoni-construct.js`, `sokoni-health.js`, `sokoni-sports.js`, `sokoni-db.js`, `delivery-hub.js`,
+    `provider-wiring.js`.
+  - Scripts: `scripts/test-hub-reviews.js` (new), `scripts/test-entertainment-rules.js`,
+    `scripts/sabotage-event-ops.js`.
+  - Docs: `docs/PROVIDER_REPUTATION.md`.
+- **API:**
+  - `rateHealthProvider`, `rateLegalProvider` and `rateDigitalProduct` no longer need, and cross-check, the target id.
+  - New `verifyUnboxingReview`.
+- **Breaking:**
+  - Patients and clients can no longer complete appointments or consultations.
+  - Client review writes are closed in 8 stores.
+  - CSAT docs are keyed by the delivery.
+- **Deploy (when authorised):**
+  - Deploy `updateAppointmentStatus`, `rateHealthProvider`, `updateConsultationStatus`, `rateLegalProvider`,
+    `rateDigitalProduct` and `verifyUnboxingReview`.
+  - Deploy rules through the REST API, and hosting from the latest commit.
+
 ## 2026-09-27 (212) — Seller broadcasts: the sender is the shop the caller owns
 
 Fixes known hole 4, which was outside `0865a34`. That commit is not modified. Not deployed. No KRA calls. No

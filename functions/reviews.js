@@ -269,6 +269,43 @@ exports.submitReview = onCall({ region: "us-central1" }, async (req) => {
 });
 
 // ── getReviews ────────────────────────────────────────────────────────────────
+/* ─── verifyUnboxingReview (CHANGELOG 213) ─────────────────────────────────────────
+   An unboxing review said "✅ Verified Buy" whenever the author TYPED an order id — the client set
+   verified:true and the rules accepted it. Now the badge is `orderVerified`, written ONLY here: the order must
+   be the caller's own marketplace order, delivered or completed; one order verifies one review. */
+async function verifyUnboxingReview(req) {
+  const uid = req.auth && req.auth.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+  const reviewId = String((req.data || {}).reviewId || '');
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(reviewId)) throw new HttpsError('invalid-argument', 'Unknown review.');
+  const db = admin.firestore();
+  const rRef = db.collection('unboxingReviews').doc(reviewId);
+  let out = null;
+  await db.runTransaction(async (t) => {
+    const rs = await t.get(rRef);
+    if (!rs.exists) throw new HttpsError('not-found', 'Review not found.');
+    const r = rs.data();
+    if (r.uid !== uid) throw new HttpsError('permission-denied', 'Not your review.');
+    if (r.orderVerified === true) { out = { orderVerified: true, already: true }; return; }
+    const orderId = String(r.orderId || '');
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(orderId)) throw new HttpsError('failed-precondition', 'Add the order number from your SOKONI order.');
+    const oRef = db.collection('orders').doc(orderId);
+    const claimRef = db.collection('unboxingOrderClaims').doc(orderId);
+    const [os, cs] = [await t.get(oRef), await t.get(claimRef)];
+    if (!os.exists) throw new HttpsError('failed-precondition', 'That order was not found.');
+    const o = os.data();
+    if ((o.buyerUid || o.userId || o.uid) !== uid) throw new HttpsError('permission-denied', 'That order is not yours.');
+    if (!['delivered', 'completed'].includes(String(o.status || '').toLowerCase())) throw new HttpsError('failed-precondition', 'Reviews are verified once the order is delivered.');
+    if (cs.exists && cs.data().reviewId !== reviewId) throw new HttpsError('already-exists', 'That order already verifies another review.');
+    t.set(claimRef, { reviewId, uid, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+    t.update(rRef, { orderVerified: true, orderVerifiedAt: admin.firestore.FieldValue.serverTimestamp() });
+    out = { orderVerified: true };
+  });
+  return out;
+}
+exports._verifyUnboxingReview = verifyUnboxingReview;
+exports.verifyUnboxingReview = onCall({ region: "us-central1" }, verifyUnboxingReview);
+
 exports.getReviews = onCall({ region: "us-central1" }, async (req) => {
   const { targetId, targetType, sort = "recent", limit: lim = 20, startAfter } = req.data;
   if (!targetId) throw new HttpsError("invalid-argument", "targetId required.");

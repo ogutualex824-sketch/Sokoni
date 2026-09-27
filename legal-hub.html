@@ -4798,53 +4798,26 @@ function closeLegalReviewModal(){
 }
 
 async function submitLegalReview(){
+  /* ONE path (CHANGELOG 213): the server (rateLegalProvider) checks the consultation is the caller's, completed
+     BY THE LAWYER and not yet rated, and takes the lawyer from the consultation itself. The old code saved the
+     review to localStorage, fell back to a direct legalReviews write the rules always denied, and said "Thank
+     you" whatever happened. */
   if(!_reviewRating){ (window._skToast||alert)('Please select a star rating first.'); return; }
   var text = (document.getElementById('reviewText')||{}).value||'';
-  var name = (document.getElementById('reviewerName')||{}).value||'Anonymous';
-  var review = {
-    id: _lhRef('REV'),
-    apptId: _reviewApptId,
-    rating: _reviewRating,
-    text: text.trim(),
-    reviewerName: name.trim()||'Anonymous',
-    date: new Date().toISOString()
-  };
-  var list = _lhGet('sokoniLegalReviews');
-  list.unshift(review);
-  _lhSet('sokoniLegalReviews', list.slice(0,100));
-
-  /* CF path — rateLegalProvider requires a real consultationId and auth */
   const booking = (_lhGet('sokoniLegalBookings')||[]).find(b=>b.id===_reviewApptId || b.consultationId===_reviewApptId);
-  if (booking?.consultationId && booking?.lawyerId && window._sokoniUser?.uid) {
-    try {
-      await _lhCallCF('rateLegalProvider', {
-        providerId:     booking.lawyerId,
-        consultationId: booking.consultationId,
-        rating:         _reviewRating,
-        review:         text.trim(),
-      });
-    } catch(e) {
-      if ((e.code||'')!=='already-exists') {
-        console.warn('[Legal Hub] rateLegalProvider CF:', e.message);
-        /* Fallback to legacy legalReviews write on CF failure */
-        try {
-          var db = await _lhGetDb();
-          if(db){ var mod=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-            await mod.addDoc(mod.collection(db,'legalReviews'),{ apptId:_reviewApptId, rating:_reviewRating,
-              text:text.trim(), reviewerName:name.trim()||'Anonymous', date:new Date().toISOString(),
-              uid:window._sokoniUser?.uid||null }); }
-        } catch(e2){}
-      }
-    }
-  } else {
-    /* Legacy path — direct Firestore write when no real consultationId exists */
-    try {
-      var db2 = await _lhGetDb();
-      if(db2){ var mod2=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-        await mod2.addDoc(mod2.collection(db2,'legalReviews'),{ apptId:_reviewApptId, rating:_reviewRating,
-          text:text.trim(), reviewerName:name.trim()||'Anonymous', date:new Date().toISOString(),
-          uid:window._sokoniUser?.uid||null }); }
-    } catch(e){}
+  if (!booking || !booking.consultationId) {
+    (window._skToast||alert)('Reviews open for consultations booked and completed on SOKONI.');
+    return;
+  }
+  try {
+    await _lhCallCF('rateLegalProvider', { consultationId: booking.consultationId, rating: _reviewRating, review: text.trim() });
+  } catch(e) {
+    const c = String((e && (e.code || e.message)) || '');
+    (window._skToast||alert)(/already-exists/.test(c) ? 'You have already rated this consultation.'
+      : /failed-precondition/.test(c) ? 'You can rate this once the lawyer marks the consultation completed.'
+      : /permission-denied/.test(c) ? 'Only the client of this consultation can rate it.'
+      : 'Could not save your rating — nothing was posted. Please try again.');
+    return;
   }
   closeLegalReviewModal();
   (window._skToast||alert)('Thank you for your review! ⭐');

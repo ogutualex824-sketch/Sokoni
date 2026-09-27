@@ -712,8 +712,7 @@ const DeliveryHub = {
       isOnline:      false,
       isAvailable:   true,
       status:        'pending',
-      rating:        5.0,
-      ratingCount:   0,
+      /* rating / ratingCount: earned from real deliveries, never self-declared (CHANGELOG 213) */
       tripsCompleted:0,
       earnings:      0,
       todayEarnings: 0,

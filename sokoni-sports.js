@@ -283,13 +283,12 @@ function likePost(postId){
 }
 
 /* ══ REVIEWS ══ */
-function addReview(targetId,targetType,data){
-  const key='spt_rv_'+targetId; const arr=JSON.parse(localStorage.getItem(key)||'[]');
-  arr.unshift({id:'RV'+Date.now(),...data,targetId,targetType,ts:Date.now(),uid:uid()});
-  localStorage.setItem(key,JSON.stringify(arr.slice(0,30))); fsWrite('reviews',{targetId,targetType,...data,ts:Date.now()});
-}
+/* RETIRED (CHANGELOG 213): a review stored only in this browser (shown to its author as if published) plus a
+   Firestore write that could never succeed. No sports booking authority exists yet to make a review eligible. */
+function addReview(){ return false; }
 function getReviews(targetId){ return JSON.parse(localStorage.getItem('spt_rv_'+targetId)||'[]'); }
-function getAvgRating(targetId,base){ const arr=getReviews(targetId); if(!arr.length)return base||4.5; return (arr.reduce((s,r)=>s+r.rating,0)/arr.length).toFixed(1); }
+/* A rating is never invented (no 4.5 default) and never computed from this browser's own drafts. */
+function getAvgRating(targetId,base){ return typeof base === 'number' ? base : null; }
 
 /* ══ SAVED ══ */
 function saveItem(type,id){ const key='spt_saved_'+type+'_'+uid(); const arr=JSON.parse(localStorage.getItem(key)||'[]'); if(arr.includes(id)){localStorage.setItem(key,JSON.stringify(arr.filter(x=>x!==id)));return false;} arr.unshift(id);localStorage.setItem(key,JSON.stringify(arr.slice(0,100)));return true; }

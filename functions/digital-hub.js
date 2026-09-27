@@ -278,24 +278,28 @@ exports.downloadDigitalProduct = onCall(CF_OPTS, async (req) => {
 
 /* ── 9. rateDigitalProduct ── */
 exports.rateDigitalProduct = onCall(CF_OPTS, async (req) => {
+  /* ONE rating per PAID purchase of the CALLER's (CHANGELOG 213). The product rated is the purchase's (one
+     purchase could rate ANY product); an unpaid 'pending_payment' purchase is not eligible; integer 1–5;
+     "already rated" is read inside the transaction. */
   const uid = requireAuth(req);
-  const { productId, purchaseId, rating, review } = req.data;
-  if (!productId || !purchaseId || !rating) throw new HttpsError('invalid-argument', 'productId, purchaseId, rating required');
-  if (rating < 1 || rating > 5) throw new HttpsError('invalid-argument', 'Rating 1–5');
-
-  const purchaseSnap = await db().collection('digitalPurchases').doc(purchaseId).get();
-  if (!purchaseSnap.exists || purchaseSnap.data().buyerUid !== uid) throw new HttpsError('permission-denied', 'Not your purchase');
-  if (purchaseSnap.data().rated) throw new HttpsError('already-exists', 'Already rated');
-
+  const { productId, purchaseId, rating: rawRating, review } = req.data || {};
+  if (!purchaseId || typeof purchaseId !== 'string') throw new HttpsError('invalid-argument', 'purchaseId required');
+  const { intRating, addRating } = require('./shared/hub-rating');
+  const rating = intRating(rawRating);
+  const purchaseRef = db().collection('digitalPurchases').doc(purchaseId);
   await db().runTransaction(async t => {
-    const productRef = db().collection('digitalProducts').doc(productId);
+    const ps = await t.get(purchaseRef);
+    if (!ps.exists || ps.data().buyerUid !== uid) throw new HttpsError('permission-denied', 'Not your purchase');
+    const pur = ps.data();
+    if (pur.status !== 'completed') throw new HttpsError('failed-precondition', 'Only a paid purchase can be rated.');
+    if (pur.rated) throw new HttpsError('already-exists', 'Already rated');
+    if (productId && productId !== pur.productId) throw new HttpsError('permission-denied', 'This purchase is for a different product.');
+    const productRef = db().collection('digitalProducts').doc(String(pur.productId));
     const pSnap = await t.get(productRef);
     if (!pSnap.exists) throw new HttpsError('not-found', 'Product not found');
-    const p = pSnap.data();
-    const newCount = p.ratingCount + 1;
-    const newRating = ((p.rating * p.ratingCount) + rating) / newCount;
-    t.update(productRef, { rating: Math.round(newRating * 10) / 10, ratingCount: newCount, updatedAt: FieldValue.serverTimestamp() });
-    t.update(db().collection('digitalPurchases').doc(purchaseId), { rated: true, rating, review: san(review, 500) });
+    if (pSnap.data().sellerUid === uid) throw new HttpsError('permission-denied', 'You cannot rate your own product.');
+    t.update(productRef, { ...addRating(pSnap.data(), rating), updatedAt: FieldValue.serverTimestamp() });
+    t.update(purchaseRef, { rated: true, rating, review: san(review, 500) });
   });
   return { ok: true };
 });

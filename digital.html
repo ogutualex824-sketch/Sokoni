@@ -808,7 +808,9 @@ async function flLoadAll(){
     }, function(err){console.warn('[digital] contracts listener error:',err);}));
     _flDataUnsubs.push(onSnapshot(query(collection(db,'digitalReviews'), orderBy('createdAt','desc'), limit(200)), snap=>{
       var prev = _flReviews.map(r=>r.id);
-      _flReviews = snap.docs.map(d=>({id:d.id,...d.data()}));
+      /* Only SERVER-verified reviews count (CHANGELOG 213): freelance contracts — and the reviews written against
+         them — were client-authored, so an unverified review is not shown or averaged. */
+      _flReviews = snap.docs.map(d=>({id:d.id,...d.data()})).filter(r=>r.verified===true);
       _lsSet('flReviews',_flReviews);
       _flReviews.filter(r=>!prev.includes(r.id)&&r.sellerUid===_uid()).forEach(r=>{
         flPushNotif('⭐ New '+(r.rating)+'-star review from '+r.reviewerName,'review');
@@ -1443,15 +1445,10 @@ function setFlStar(n){
 }
 
 async function submitFlReview(){
-  if(!_flStarRating){_flToast('Please select a star rating.','error');return;}
-  var text=document.getElementById('reviewText').value.trim();
-  var contract=_flContracts.find(x=>x.id===_reviewRefId)||{};
-  var review={id:'REV'+Date.now().toString(36).toUpperCase(),contractId:_reviewRefId,gigId:contract.gigId||null,sellerUid:contract.freelancerUid||null,rating:_flStarRating,text,reviewerName:_userName(),reviewerUid:_uid(),createdAt:Date.now()};
-  _flReviews.unshift(review); _lsSet('flReviews',_flReviews);
-  var db=await _getDb();
-  if(db){try{var m=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');await m.addDoc(m.collection(db,'digitalReviews'),review);}catch(e){}}
+  /* A freelance review needs a contract whose PAYMENT SOKONI verified on the server. Contracts here are still
+     created in the browser (CHANGELOG 213), so reviews are not open yet — nothing is posted or shown as posted. */
   closeModal('reviewModal');
-  _flToast('⭐ Thank you for your review!');
+  _flToast('Reviews open once SOKONI verifies this contract\'s payment. Nothing was posted.','error');
 }
 
 /* ── INVOICE ── */

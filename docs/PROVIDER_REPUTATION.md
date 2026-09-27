@@ -24,10 +24,10 @@ Before this slice, provider reputation had these problems:
 
 **Reported, not fixed in this slice** (owner decision: "reputation holes now, rest reported"):
 
-- Client-written review stores in other hubs: `healthReviews`, `legalReviews` (plus its callable fallback),
+- ~~Client-written review stores in other hubs~~ **Fixed after `0865a34`** (CHANGELOG 213). Each hub keeps its own authority; no client write. The stores were: `healthReviews`, `legalReviews` (plus its callable fallback),
   `homeServiceReviews`, `constructReviews`, `digitalReviews`, `sportsReviews`, `unboxingReviews`, `csatRatings`,
   `driverRatings`.
-- Binding gaps in `rateDigitalProduct`, `rateHealthProvider` and `rateLegalProvider`.
+- ~~Binding gaps in `rateDigitalProduct`, `rateHealthProvider` and `rateLegalProvider`.~~ **Fixed** (CHANGELOG 213).
 - ~~Seller-broadcast impersonation (rules ~1839–1846).~~ **Fixed after `0865a34`** (CHANGELOG 212): the sender is the
   caller's own shop, identity and link come from the shop record, delivery is `notify.js`, and the legacy path is retired.
 - Client-writable aggregates on product / business / sellers / services / users.

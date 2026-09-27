@@ -100,6 +100,17 @@ async function suite(env, label, served) {
     await f('shops/owner1', { sellerUid: 'owner1', name: 'Owner Shop', followerCount: 3, followV: 1 });
     await f('shopFollowers/shopA_member1', { shopId: 'shopA', uid: 'member1' });
     await f('sellerBroadcasts/Mama Mboga/broadcasts/b1', { sellerUid: 'owner1', sellerName: 'Mama Mboga', title: 'Sale' });
+    /* hub reviews (CHANGELOG 213) */
+    await f('lawyers/law1', { uid: 'member1', name: 'Adv M' });
+    await f('rideDrivers/member1', { uid: 'member1', name: 'Driver M', lat: -1.28, lng: 36.82 });
+    await f('deliveryRiders/member1', { uid: 'member1', riderId: 'member1', name: 'Rider M' });
+    await f('homeServiceProviders/hs1', { uid: 'member1', name: 'Plumber M' });
+    await f('constructProviders/cp1', { uid: 'member1', name: 'Builder M' });
+    await f('unboxingReviews/ub1', { uid: 'member1', rating: 4, product: 'Blender', comment: 'ok' });
+    await f('packageRequests/pk1', { uid: 'member1', assignedDriverId: 'driver1', status: 'delivered' });
+    await f('packageRequests/pk2', { uid: 'member1', assignedDriverId: 'driver1', status: 'in_transit' });
+    await f('packageRequests/pk3', { uid: 'buyer1', assignedDriverId: 'driver1', status: 'delivered' });
+    await f('csatRatings/pk9', { deliveryRef: 'pk9', buyerUid: 'member1', riderId: 'driver1', rating: 5 });
   });
   const till = env.authenticatedContext('till1', { email: 'till1@x.co', email_verified: true }).firestore();
   const admin = env.authenticatedContext('admin1', { admin: true }).firestore();
@@ -165,6 +176,36 @@ async function suite(env, label, served) {
   await expectDeny('a client writes a share event (share-count manipulation)', member.doc('shareEvents/se2').set({ uid: 'member1', type: 'provider', entityId: 'owner1' }));
   await expectDeny('a provider reads the moderation audit', owner.doc('reputationAudit/ra1').get());
   await expectDeny('a user reads who shared a profile', member.doc('shareEvents/se1').get());
+  /* ── hub review stores: the client may REQUEST, never decide (CHANGELOG 213) ── */
+  const rv = { uid: 'member1', providerId: 'p1', rating: 5, text: 'great', date: '2026-09-27', lawyerId: 'law1', reviewerUid: 'member1', targetId: 't', targetType: 'venue', author: 'M', body: 'x', ts: 1 };
+  await expectDeny('a client writes a HEALTH review directly (no appointment behind it)', member.doc('healthReviews/x').set(rv));
+  await expectDeny('a client writes a LEGAL review directly', member.doc('legalReviews/x').set(rv));
+  await expectDeny('a client writes a HOME-SERVICES review directly', member.doc('homeServiceReviews/x').set(rv));
+  await expectDeny('a client writes a CONSTRUCTION review directly', member.doc('constructReviews/x').set(rv));
+  await expectDeny('a client writes a DIGITAL freelance review directly', member.doc('digitalReviews/x').set(rv));
+  await expectDeny('a client writes a SPORTS review directly', member.doc('sportsReviews/x').set(rv));
+  await expectDeny('a client writes a DRIVER rating directly (any driver, any value)', member.doc('driverRatings/x').set({ uid: 'member1', driverId: 'driver1', rating: 1000 }));
+  await expectDeny('an unboxing review self-marked "verified"', member.doc('unboxingReviews/ub2').set({ uid: 'member1', rating: 5, product: 'X', verified: true }));
+  await expectDeny('an unboxing review self-marked orderVerified', member.doc('unboxingReviews/ub3').set({ uid: 'member1', rating: 5, product: 'X', orderVerified: true }));
+  await expectDeny('an unboxing review with a fractional / out-of-range rating', member.doc('unboxingReviews/ub4').set({ uid: 'member1', rating: 9, product: 'X' }));
+  await expectDeny('an unboxing review seeded with likes', member.doc('unboxingReviews/ub5').set({ uid: 'member1', rating: 5, product: 'X', likes: 500 }));
+  await expectDeny('the author later flips their unboxing review to verified', member.doc('unboxingReviews/ub1').update({ orderVerified: true }));
+  await expectDeny('the author later changes the rating / likes', member.doc('unboxingReviews/ub1').update({ likes: 99 }));
+  await expectDeny('CSAT for a delivery that is not finished', member.doc('csatRatings/pk2').set({ deliveryRef: 'pk2', buyerUid: 'member1', riderId: 'driver1', rating: 1 }));
+  await expectDeny('CSAT for someone else\'s delivery', member.doc('csatRatings/pk3').set({ deliveryRef: 'pk3', buyerUid: 'member1', riderId: 'driver1', rating: 1 }));
+  await expectDeny('CSAT against a rider who was NOT assigned', member.doc('csatRatings/pk1').set({ deliveryRef: 'pk1', buyerUid: 'member1', riderId: 'driver2', rating: 1 }));
+  await expectDeny('CSAT under a doc id that is not the delivery (duplicate ratings)', member.doc('csatRatings/zzz').set({ deliveryRef: 'pk1', buyerUid: 'member1', riderId: 'driver1', rating: 1 }));
+  await expectDeny('CSAT whose deliveryRef names ANOTHER delivery than its id (misattribution)', member.doc('csatRatings/pk1').set({ deliveryRef: 'pk3', buyerUid: 'member1', riderId: 'driver1', rating: 1 }));
+  await expectDeny('a second CSAT for the same delivery (overwrite)', member.doc('csatRatings/pk9').set({ deliveryRef: 'pk9', buyerUid: 'member1', riderId: 'driver1', rating: 1 }));
+  await expectDeny('CSAT with extra fields (e.g. a forged verified flag)', member.doc('csatRatings/pk1').set({ deliveryRef: 'pk1', buyerUid: 'member1', riderId: 'driver1', rating: 5, verified: true }));
+  await expectDeny('a lawyer writes their own rating', member.doc('lawyers/law1').update({ rating: 5, reviewCount: 300 }));
+  await expectDeny('a lawyer listing is created with a rating', member.doc('lawyers/law2').set({ uid: 'member1', name: 'X', rating: 5 }));
+  await expectDeny('a driver writes their own rating (going online)', member.doc('rideDrivers/member1').update({ rating: 5.0 }));
+  await expectDeny('a driver inflates the rating counters', member.doc('rideDrivers/member1').update({ _ratingSum: 5000, _ratingCount: 1000 }));
+  await expectDeny('a rider registers with a 5.0 rating', member.doc('deliveryRiders/member9').set({ uid: 'member9', riderId: 'member9', rating: 5.0 }));
+  await expectDeny('a rider writes their own rating', member.doc('deliveryRiders/member1').update({ rating: 5.0, ratingCount: 99 }));
+  await expectDeny('a home-services provider writes their own rating', member.doc('homeServiceProviders/hs1').update({ rating: 5 }));
+  await expectDeny('a construction provider writes their own reviewCount', member.doc('constructProviders/cp1').update({ reviewCount: 50 }));
   /* ── availability authority · rate cards · enquiries · call requests (2026-09-27) ── */
   await expectDeny('a stranger reads a provider\'s private occupancy (bookings, blocks, labels)', stranger.doc('entAvailability/svc_owner1/months/2026-10').get());
   await expectDeny('even the OWNER cannot read or write the occupancy directly (audited callables only)', owner.doc('entAvailability/svc_owner1/months/2026-10').set({ items: [] }));
@@ -306,6 +347,11 @@ async function suite(env, label, served) {
 
   if (served) {
     /* reputation positive controls — the denials above are about the FIELD / TYPE, not a blanket lock */
+    /* hub-review positive controls — the denials above are about the FIELD / ELIGIBILITY, not a blanket lock */
+    ck(`${label}: an unboxing review with words only is still posted by its author`, await allowed(member.doc('unboxingReviews/ub6').set({ uid: 'member1', rating: 5, product: 'Kettle', comment: 'Works' })));
+    ck(`${label}: the author still edits their comment`, await allowed(member.doc('unboxingReviews/ub1').update({ comment: 'Works well' })));
+    ck(`${label}: the buyer rates the ASSIGNED rider of their FINISHED delivery, once`, await allowed(member.doc('csatRatings/pk1').set({ deliveryRef: 'pk1', buyerUid: 'member1', riderId: 'driver1', rating: 5, comment: 'Fast' })));
+    ck(`${label}: a lawyer / driver / rider / provider still edits their own listing text`, (await allowed(member.doc('lawyers/law1').update({ name: 'Adv M.' }))) && (await allowed(member.doc('rideDrivers/member1').update({ name: 'Driver M.' }))) && (await allowed(member.doc('deliveryRiders/member1').update({ name: 'Rider M.' }))) && (await allowed(member.doc('homeServiceProviders/hs1').update({ name: 'Plumber M.' }))) && (await allowed(member.doc('constructProviders/cp1').update({ name: 'Builder M.' }))));
     ck(`${label}: an admin can still read legacy broadcast documents (audit)`, await allowed(admin.doc('sellerBroadcasts/Mama Mboga/broadcasts/b1').get()));
     ck(`${label}: a shop owner still edits their shop name (the denial is the COUNT, not the doc)`, await allowed(owner.doc('shops/owner1').update({ name: 'Owner Shop 2', updatedAt: 1 })));
     ck(`${label}: a provider still edits their own profile text`, await allowed(owner.doc('providers/owner1').update({ name: 'Jane Photo Studio', bio: 'Portraits' })));

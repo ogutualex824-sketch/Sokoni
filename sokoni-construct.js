@@ -37,12 +37,12 @@ const SokoniConstruct = {
 
   async saveProvider(p) {
     const id = p.id || _id('CNP-');
+    /* verified / rating / reviewCount are NOT the provider's to set (CHANGELOG 213) — and `verified` made the rules
+       reject EVERY registration (noAdminFields). */
+    const { verified, rating, reviewCount, ratingCount, ratingSum, ...own } = p;
     await setDoc(doc(db, 'constructProviders', id), {
-      ...p, id, uid: _uid(),
+      ...own, id, uid: _uid(),
       status:      p.status      || 'pending',
-      verified:    p.verified    || false,
-      rating:      p.rating      || 0,
-      reviewCount: p.reviewCount || 0,
       createdAt:   p.createdAt   || serverTimestamp(),
       updatedAt:   serverTimestamp(),
     }, { merge: true });
@@ -302,14 +302,9 @@ const SokoniConstruct = {
      REVIEWS
   ════════════════════════════════════════ */
 
-  async saveReview(review) {
-    const id = review.id || _id('CRV-');
-    await setDoc(doc(db, 'constructReviews', id), {
-      ...review, id, uid: _uid(), createdAt: serverTimestamp(),
-    }, { merge: true });
-    await this._recalcRating(review.providerId);
-    return id;
-  },
+  /* RETIRED (CHANGELOG 213): a client-written review with a client-recomputed provider rating. Construction orders
+     are client-asserted, so no review can yet be tied to a real completed job. Fails loudly, never silently. */
+  async saveReview() { throw Object.assign(new Error('Construction reviews are not open yet.'), { code: 'failed-precondition' }); },
 
   listenProviderReviews(providerId, callback, limitN = 20) {
     const q = query(
@@ -324,7 +319,9 @@ const SokoniConstruct = {
     );
   },
 
-  async _recalcRating(providerId) {
+  /* RETIRED: a client must never compute a public rating (CHANGELOG 213). */
+  async _recalcRating() { return; },
+  async _retiredRecalcRating(providerId) {
     if (!providerId) return;
     try {
       const snap = await getDocs(query(

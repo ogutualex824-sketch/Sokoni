@@ -593,7 +593,7 @@ function registerProvider(){
   window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`,'_blank');
   if(msgEl){msgEl.innerHTML='✅ Registered! You\'ll start receiving job alerts.';msgEl.style.color='#f59e0b';}
   /* Firestore write — fire-and-forget */
-  _hsFireWrite('homeServiceProviders',{...p,registrationStatus:'pending',hub:'home-services'});
+  { const { rating, jobs, ...pub } = p; _hsFireWrite('homeServiceProviders',{...pub,registrationStatus:'pending',hub:'home-services'}); }   /* a rating is earned, never self-declared (CHANGELOG 213) */
   ['regName','regPhone','regArea','regRate','regBio'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
 }
 window.registerProvider=registerProvider;
@@ -692,17 +692,11 @@ function setReviewStar(n){
   document.querySelectorAll('.hs-star-btn').forEach((b,i)=>{b.style.opacity=i<n?'1':'0.3';b.style.color=i<n?'#f59e0b':'rgba(255,255,255,0.3)';});
 }
 async function submitReview(){
-  if(!_selectedStars){showHsToast('Please select a star rating');return;}
-  const text=(document.getElementById('hsReviewText')?.value||'').trim();
-  const reviewer=(document.getElementById('hsReviewerName')?.value||'').trim()||'Anonymous';
+  /* No home-services booking authority exists yet, so no review can be tied to a real completed job — and the
+     old write (an unauthenticated app, no uid) was always denied while the page said "Thank you" and kept a
+     local copy that looked published (CHANGELOG 213). Say so honestly instead. */
   const msgEl=document.getElementById('hsReviewMsg');
-  await _hsFireWrite('homeServiceReviews',{providerId:_reviewTarget.id,providerName:_reviewTarget.name,rating:_selectedStars,text,reviewer,hub:'home-services'});
-  /* Save to localStorage for immediate display */
-  let revs=[];try{revs=JSON.parse(localStorage.getItem('hsReviews')||'[]');}catch(e){}
-  revs.unshift({providerId:_reviewTarget.id,providerName:_reviewTarget.name,rating:_selectedStars,text,reviewer,ts:Date.now()});
-  localStorage.setItem('hsReviews',JSON.stringify(revs.slice(0,50)));
-  if(msgEl){msgEl.textContent='✅ Thank you for your review!';msgEl.style.color='#f59e0b';}
-  setTimeout(closeReviewModal,1800);
+  if(msgEl){msgEl.textContent='Reviews open after a completed SOKONI booking — this provider cannot be reviewed yet.';msgEl.style.color='rgba(255,255,255,0.6)';}
 }
 window.openReviewModal=openReviewModal;
 window.closeReviewModal=closeReviewModal;

@@ -262,6 +262,14 @@ exports.updateAppointmentStatus = onCall(CF_OPTS, exports._h.updateAppointmentSt
     if (appt.patientUid !== uid && appt.providerId !== uid && role < 4) {
       throw new HttpsError('permission-denied', 'Not authorized');
     }
+    /* WHO DECIDES AN APPOINTMENT HAPPENED (CHANGELOG 213). The patient could mark their own appointment
+       'completed' — and a completed appointment is what makes a rating eligible, so the reviewer decided
+       their own eligibility. Only the provider (or an admin) confirms, completes or records a no-show;
+       the patient may cancel. */
+    const isProviderSide = appt.providerId === uid || role >= 4;
+    if (status !== 'cancelled' && !isProviderSide) {
+      throw new HttpsError('permission-denied', 'Only the provider can mark this appointment ' + status + '.');
+    }
 
     const updates = { status, updatedAt: FieldValue.serverTimestamp() };
     if (notes) updates.notes = san(notes, 1000);
@@ -389,31 +397,29 @@ exports.searchHealthProviders = onCall(CF_OPTS, exports._h.searchHealthProviders
 
 /* â”€â”€ 14. rateHealthProvider â”€â”€ */
 exports.rateHealthProvider = onCall(CF_OPTS, exports._h.rateHealthProvider = async (req) => {
+  /* ONE rating per COMPLETED appointment of the CALLER's (CHANGELOG 213). The provider rated is the
+     appointment's — a providerId sent by the client is not trusted (one completed appointment could rate
+     ANY provider); the rating is an integer 1–5; "already rated" is read inside the transaction. */
   const uid = requireAuth(req);
-  const { providerId, appointmentId, rating, review } = req.data;
-  if (!providerId || !rating || !appointmentId) {
-    throw new HttpsError('invalid-argument', 'providerId, appointmentId, rating required');
-  }
-  if (rating < 1 || rating > 5) throw new HttpsError('invalid-argument', 'Rating must be 1â€“5');
-
-  const apptSnap = await db().collection('healthAppointments').doc(appointmentId).get();
-  if (!apptSnap.exists) throw new HttpsError('not-found', 'Appointment not found');
-  const appt = apptSnap.data();
-  if (appt.patientUid !== uid) throw new HttpsError('permission-denied', 'Not your appointment');
-  if (appt.status !== 'completed') throw new HttpsError('failed-precondition', 'Can only rate completed appointments');
-  if (appt.rated) throw new HttpsError('already-exists', 'Already rated');
-
-  const ref = db().collection('healthProviders').doc(providerId);
+  const { appointmentId, rating: rawRating, review } = req.data || {};
+  if (!appointmentId || typeof appointmentId !== 'string') throw new HttpsError('invalid-argument', 'appointmentId required');
+  const { intRating, addRating } = require('./shared/hub-rating');
+  const rating = intRating(rawRating);
+  const apptRef = db().collection('healthAppointments').doc(appointmentId);
   await db().runTransaction(async t => {
+    const apptSnap = await t.get(apptRef);
+    if (!apptSnap.exists) throw new HttpsError('not-found', 'Appointment not found');
+    const appt = apptSnap.data();
+    if (appt.patientUid !== uid) throw new HttpsError('permission-denied', 'Not your appointment');
+    if (appt.status !== 'completed') throw new HttpsError('failed-precondition', 'Can only rate completed appointments');
+    if (appt.rated) throw new HttpsError('already-exists', 'Already rated');
+    if (req.data.providerId && req.data.providerId !== appt.providerId) throw new HttpsError('permission-denied', 'This appointment was with a different provider.');
+    if (appt.providerId === uid) throw new HttpsError('permission-denied', 'You cannot rate yourself.');
+    const ref = db().collection('healthProviders').doc(String(appt.providerId));
     const provSnap = await t.get(ref);
     if (!provSnap.exists) throw new HttpsError('not-found', 'Provider not found');
-    const prov = provSnap.data();
-    const newCount = prov.ratingCount + 1;
-    const newRating = ((prov.rating * prov.ratingCount) + rating) / newCount;
-    t.update(ref, { rating: Math.round(newRating * 10) / 10, ratingCount: newCount, updatedAt: FieldValue.serverTimestamp() });
-    t.update(db().collection('healthAppointments').doc(appointmentId), {
-      rated: true, rating, review: san(review, 500), ratedAt: FieldValue.serverTimestamp(),
-    });
+    t.update(ref, { ...addRating(provSnap.data(), rating), updatedAt: FieldValue.serverTimestamp() });
+    t.update(apptRef, { rated: true, rating, review: san(review, 500), ratedAt: FieldValue.serverTimestamp() });
   });
   return { ok: true };
 });

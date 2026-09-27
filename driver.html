@@ -2057,7 +2057,7 @@ window.toggleOnline = async function() {
     try {
       await SokoniDB.setDriverOnline(drv.id, true, drv.vehicle, lat, lng, {
         name:drv.name, phone:drv.phone, plate:drv.plate||'', area:drv.zone||'',
-        vehicleLabel:(drv.vehicle||'motorcycle'), rating:drv.rating||5.0,
+        vehicleLabel:(drv.vehicle||'motorcycle'),   /* rating: earned, server-derived — never self-declared (CHANGELOG 213) */
         ridesCompleted:drv.tripsCompleted||0,
       });
     } catch(e) { console.warn('[driver] setDriverOnline:', e.message); }

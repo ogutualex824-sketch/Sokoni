@@ -11343,6 +11343,7 @@ exports.scheduledAvailabilityMaintenance = availability.scheduledAvailabilityMai
 const reviews = require("./reviews");
 exports.submitReview         = reviews.submitReview;
 exports.getReviews           = reviews.getReviews;
+exports.verifyUnboxingReview = reviews.verifyUnboxingReview;
 exports.flagReview           = reviews.flagReview;
 exports.markReviewHelpful    = reviews.markReviewHelpful;
 exports.adminModerateReview  = reviews.adminModerateReview;

@@ -114,6 +114,15 @@ service cloud.firestore {
        uses. This cannot open an escalation hole: adding, modifying OR removing any
        protected field still appears in affectedKeys and is still denied; only
        leaving a pre-existing field untouched is now permitted. */
+    /* Rating / review AGGREGATES on a review target are server-derived (CHANGELOG 213): the owner of a lawyer,
+       driver, rider or provider listing must not be able to write their own rating. */
+    function _ratingAggKeys() {
+      return ['rating','ratingCount','ratingSum','reviewCount','reviews','avgRating','averageRating',
+              'totalReviews','_ratingSum','_ratingCount','ratingDist','riderRating'];
+    }
+    function noRatingAggOnCreate() { return !request.resource.data.keys().hasAny(_ratingAggKeys()); }
+    function noRatingAggOnUpdate() { return !request.resource.data.diff(resource.data).affectedKeys().hasAny(_ratingAggKeys()); }
+
     function noAdminFields() {
       return resource == null
         ? !request.resource.data.keys()
@@ -1009,8 +1018,8 @@ service cloud.firestore {
 
     match /lawyers/{docId} {
       allow read:   if true;
-      allow create: if claimsOwner() && noAdminFields();
-      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+      allow create: if claimsOwner() && noAdminFields() && noRatingAggOnCreate();
+      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields() && noRatingAggOnUpdate());
       allow delete: if isAdmin();
     }
 
@@ -1053,13 +1062,10 @@ service cloud.firestore {
     match /legalReviews/{reviewId} {
       allow read:   if true;
 
-      allow create: if isAuthed()
-                    && request.resource.data.keys().hasAll(['uid','lawyerId','rating','date'])
-                    && request.resource.data.uid == request.auth.uid
-                    && request.resource.data.rating is number
-                    && request.resource.data.rating >= 1
-                    && request.resource.data.rating <= 5
-                    && !request.resource.data.keys().hasAny(['verified']);
+      /* CLIENT MAY NOT DECIDE who wrote a review, who it is about, whether the experience happened, the
+         aggregate, verification or moderation (CHANGELOG 213). No client writer is legitimate here: the hub's
+         server authority (or none yet) owns it. */
+      allow create: if false;   /* ratings: rateLegalProvider (a completed consultation of the caller's) */
       allow update: if isAdmin();
       allow delete: if isAdmin()
                     || (isAuthed() && resource.data.uid == request.auth.uid);
@@ -1314,13 +1320,11 @@ service cloud.firestore {
     }
 
     match /sportsReviews/{reviewId} {
+      /* CLIENT MAY NOT DECIDE who wrote a review, who it is about, whether the experience happened, the
+         aggregate, verification or moderation (CHANGELOG 213). No client writer is legitimate here: the hub's
+         server authority (or none yet) owns it. */
       allow read:   if true;
-      allow create: if claimsOwner()
-                    && request.resource.data.keys().hasAll(
-                         ['targetId','targetType','author','rating','body','uid','ts'])
-                    && request.resource.data.rating >= 1
-                    && request.resource.data.rating <= 5
-                    && request.resource.data.body.size() <= 2000;
+      allow create: if false;   /* no sports booking authority exists yet to make a review eligible */
       allow delete: if isAdmin();
     }
 
@@ -1712,9 +1716,18 @@ service cloud.firestore {
     }
 
     match /unboxingReviews/{reviewId} {
+      /* A community photo review: the author writes the words; the SERVER decides "Verified Buy"
+         (reviews.js verifyUnboxingReview → orderVerified), likes and moderation (CHANGELOG 213). */
       allow read:   if true;
-      allow create: if claimsOwner();
-      allow update: if (isAdmin() || isOwner()) && uidUnchanged();
+      allow create: if claimsOwner()
+                    && request.resource.data.rating is int
+                    && request.resource.data.rating >= 1
+                    && request.resource.data.rating <= 5
+                    && !request.resource.data.keys().hasAny(['verified','orderVerified','orderVerifiedAt','likes','status','approved','featured']);
+      allow update: if isAdmin()
+                    || (isOwner() && uidUnchanged()
+                        && !request.resource.data.diff(resource.data).affectedKeys()
+                             .hasAny(['verified','orderVerified','orderVerifiedAt','likes','rating','orderId','status','approved','featured']));
       allow delete: if isAdmin() || isOwner();
     }
 
@@ -1962,7 +1975,10 @@ service cloud.firestore {
     }
 
     match /driverRatings/{ratingId} {
-      allow create: if claimsOwner();
+      /* CLIENT MAY NOT DECIDE who wrote a review, who it is about, whether the experience happened, the
+         aggregate, verification or moderation (CHANGELOG 213). No client writer is legitimate here: the hub's
+         server authority (or none yet) owns it. */
+      allow create: if false;   /* rider ratings are csatRatings (bound to a delivery) */
       allow read:   if isAdmin()
                     || (isAuthed() && resource.data.driverId == request.auth.uid);
       allow update, delete: if isAdmin();
@@ -1972,13 +1988,13 @@ service cloud.firestore {
       allow read:   if isAuthed();
       allow create: if isAuthed()
                     && request.resource.data.uid == request.auth.uid
-                    && noAdminFields()
+                    && noAdminFields() && noRatingAggOnCreate()
                     && _validGPS(request.resource.data.lat, request.resource.data.lng);
       allow update: if isAdmin()
                     || (isAuthed()
                         && resource.data.uid         == request.auth.uid
                         && request.resource.data.uid == request.auth.uid
-                        && noAdminFields()
+                        && noAdminFields() && noRatingAggOnUpdate()
                         && (!request.resource.data.keys().hasAny(['lat','lng'])
                             || _validGPS(request.resource.data.lat, request.resource.data.lng)));
       allow delete: if isAdmin();
@@ -2119,12 +2135,14 @@ service cloud.firestore {
     match /deliveryRiders/{riderId} {
       allow read:   if isAuthed();
       allow create: if isAuthed() && request.auth.uid == riderId
-                    && !request.resource.data.keys().hasAny(['approved','verified','suspended','banned']);
+                    && !request.resource.data.keys().hasAny(['approved','verified','suspended','banned'])
+                    && noRatingAggOnCreate();
       allow update: if isAdmin()
                     || (isAuthed() && request.auth.uid == riderId
                         && !request.resource.data.diff(resource.data)
                              .affectedKeys()
-                             .hasAny(['approved','verified','suspended','banned']));
+                             .hasAny(['approved','verified','suspended','banned'])
+                        && noRatingAggOnUpdate());
       allow delete: if isAdmin();
     }
 
@@ -2381,21 +2399,19 @@ service cloud.firestore {
 
     match /homeServiceProviders/{provId} {
       allow read:   if true;
-      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
+      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields() && noRatingAggOnCreate();
       allow update: if isAdmin()
                     || (isAuthed() && resource.data.uid == request.auth.uid
-                        && uidUnchanged() && noAdminFields());
+                        && uidUnchanged() && noAdminFields() && noRatingAggOnUpdate());
       allow delete: if isAdmin();
     }
 
     match /homeServiceReviews/{revId} {
+      /* CLIENT MAY NOT DECIDE who wrote a review, who it is about, whether the experience happened, the
+         aggregate, verification or moderation (CHANGELOG 213). No client writer is legitimate here: the hub's
+         server authority (or none yet) owns it. */
       allow read:   if true;
-      allow create: if isAuthed()
-                    && request.resource.data.keys().hasAll(['uid','providerId','rating'])
-                    && request.resource.data.uid == request.auth.uid
-                    && request.resource.data.rating is number
-                    && request.resource.data.rating >= 1
-                    && request.resource.data.rating <= 5;
+      allow create: if false;   /* no home-services booking authority exists yet to make a review eligible */
       allow update, delete: if isAdmin();
     }
 
@@ -4121,11 +4137,22 @@ service cloud.firestore {
     match /csatRatings/{ratingId} {
       allow read:   if isAdmin()
                     || (isAuthed() && resource.data.riderId == request.auth.uid);
+      /* ONE rating per REAL delivery (CHANGELOG 213): the doc id IS the delivery reference; the rater is that
+         delivery's buyer; the rider is the driver actually assigned to it; the delivery is finished. */
       allow create: if isAuthed()
+                    && ratingId == request.resource.data.deliveryRef
                     && request.resource.data.buyerUid == request.auth.uid
-                    && request.resource.data.rating   is number
+                    && request.resource.data.rating   is int
                     && request.resource.data.rating   >= 1
-                    && request.resource.data.rating   <= 5;
+                    && request.resource.data.rating   <= 5
+                    && request.resource.data.riderId  is string
+                    && request.resource.data.keys().hasOnly(['deliveryRef','buyerUid','riderId','riderName','rating','comment','createdAt'])
+                    && exists(/databases/$(database)/documents/packageRequests/$(ratingId))
+                    && (get(/databases/$(database)/documents/packageRequests/$(ratingId)).data.get('uid', '') == request.auth.uid
+                        || get(/databases/$(database)/documents/packageRequests/$(ratingId)).data.get('buyerUid', '') == request.auth.uid)
+                    && get(/databases/$(database)/documents/packageRequests/$(ratingId)).data.get('assignedDriverId', '') == request.resource.data.riderId
+                    && (get(/databases/$(database)/documents/packageRequests/$(ratingId)).data.get('status', '') in ['delivered', 'buyer_confirmed', 'completed']
+                        || get(/databases/$(database)/documents/packageRequests/$(ratingId)).data.get('buyerConfirmedAt', null) != null);
       allow update, delete: if false;
     }
 
@@ -6011,17 +6038,20 @@ service cloud.firestore {
     }
     /* Provider reviews are public by design — that is the point of them. */
     match /healthReviews/{docId} {
+      /* CLIENT MAY NOT DECIDE who wrote a review, who it is about, whether the experience happened, the
+         aggregate, verification or moderation (CHANGELOG 213). No client writer is legitimate here: the hub's
+         server authority (or none yet) owns it. */
       allow read:   if true;
-      allow create: if claimsOwner() && noAdminFields();
-      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+      allow create: if false;   /* ratings: rateHealthProvider (a completed appointment of the caller's) */
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     /* ── Construction hub ── */
     match /constructProviders/{docId} {
       allow read:   if true;
-      allow create: if claimsOwner() && noAdminFields();
-      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+      allow create: if claimsOwner() && noAdminFields() && noRatingAggOnCreate();
+      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields() && noRatingAggOnUpdate());
       allow delete: if isAdmin();
     }
     match /constructEquipment/{docId} {
@@ -6074,9 +6104,12 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     match /constructReviews/{docId} {
+      /* CLIENT MAY NOT DECIDE who wrote a review, who it is about, whether the experience happened, the
+         aggregate, verification or moderation (CHANGELOG 213). No client writer is legitimate here: the hub's
+         server authority (or none yet) owns it. */
       allow read:   if true;
-      allow create: if claimsOwner() && noAdminFields();
-      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+      allow create: if false;   /* construction orders are client-asserted: no eligible experience yet */
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
@@ -6135,8 +6168,11 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     match /digitalReviews/{docId} {
+      /* CLIENT MAY NOT DECIDE who wrote a review, who it is about, whether the experience happened, the
+         aggregate, verification or moderation (CHANGELOG 213). No client writer is legitimate here: the hub's
+         server authority (or none yet) owns it. */
       allow read:   if true;
-      allow create: if isAuthed() && request.resource.data.reviewerUid == request.auth.uid && noAdminFields();
+      allow create: if false;   /* freelance contracts are client-authored; reviews open with server-verified contract payment */
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }

@@ -1262,26 +1262,22 @@ window.dtSubmitCSAT = function(ref) {
   if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
 
   const data = (_currentData || {});
-  firebase.firestore().collection('csatRatings').add({
-    deliveryRef:  ref,
+  /* ONE rating per delivery, for the rider actually ASSIGNED to it (CHANGELOG 213). The doc id is the delivery
+     reference, so a second submit is refused by the rules; the old follow-up write onto packageRequests was always
+     denied, which re-enabled the button after a SUCCESSFUL save and invited duplicate ratings. */
+  firebase.firestore().collection('csatRatings').doc(String(ref)).set({
+    deliveryRef:  String(ref),
     buyerUid:     uid || null,
-    riderId:      data.riderId || data.driverId || null,
+    riderId:      data.assignedDriverId || data.riderId || data.driverId || null,
     riderName:    data.driverName || null,
     rating:       _dtSelectedStar,
     comment:      comment || null,
     createdAt:    firebase.firestore.FieldValue.serverTimestamp(),
   }).then(function() {
-    /* Denormalise onto the delivery doc for quick dashboard queries */
-    return firebase.firestore().collection('packageRequests').doc(ref).update({
-      csatRating:    _dtSelectedStar,
-      csatComment:   comment || null,
-      csatAt:        firebase.firestore.FieldValue.serverTimestamp(),
-    });
-  }).then(function() {
     const el = document.getElementById('dtActions');
     if (el) el.innerHTML = `<div style="text-align:center;padding:20px 0;"><div style="font-size:32px;margin-bottom:8px;">Thank you!</div><div style="font-size:13px;color:rgba(255,255,255,0.5);">Your feedback helps improve SOKONI.</div></div>`;
   }).catch(function(e) {
-    toast('Could not save rating: ' + e.message, false);
+    toast(/permission|PERMISSION/.test(String(e && (e.code || e.message))) ? 'You can rate once, after your delivery is completed.' : 'Could not save rating: ' + e.message, false);
     if (btn) { btn.disabled = false; btn.textContent = 'Submit Rating'; }
   });
 };

@@ -49,6 +49,7 @@ const SUITES = {
   shopf:    ['node', ['scripts/test-shop-follow.js']],
   shopa:    ['node', ['scripts/test-follow-shop-authority.js']],
   bcast:    ['node', ['scripts/test-seller-broadcast.js']],
+  hubrev:   ['node', ['scripts/test-hub-reviews.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -107,6 +108,14 @@ const MV3 = 'functions/minishop-v3.js';
 const NTF = 'functions/notify.js';
 const IDX = 'functions/index.js';
 const SCRJ = 'script.js';
+const HCH = 'functions/healthcare-hub.js';
+const LGH = 'functions/legal-hub.js';
+const DGH = 'functions/digital-hub.js';
+const HRT = 'functions/shared/hub-rating.js';
+const RVJ = 'functions/reviews.js';
+const UBX = 'unboxing.html';
+const SPV = 'sports-venue.html';
+const HSV = 'home-services.html';
 
 const M = [
   /* ── ticket PIN + admission ── */
@@ -730,6 +739,62 @@ const M = [
     from: "  allow read:   if isAdmin();\n  allow create: if false;\n  allow delete: if isAdmin();\n  }\n  match /landlordProperties", to: "  allow read:   if isAdmin();\n  allow create: if isAuthed() && request.resource.data.sellerUid == request.auth.uid;\n  allow delete: if isAdmin();\n  }\n  match /landlordProperties", expect: /broadcasts AS another shop|cannot write a broadcast/ },
   { group: 'broadcast', rules: true, name: 'legacy forged broadcasts readable by every user again (rules)', file: RULES, suite: 'rules',
     from: "  match /sellerBroadcasts/{sellerName}/broadcasts/{broadcastId} {\n  allow read:   if isAdmin();", to: "  match /sellerBroadcasts/{sellerName}/broadcasts/{broadcastId} {\n  allow read:   if isAuthed();", expect: /reads legacy broadcast/ },
+
+  /* ── hub review stores (CHANGELOG 213) ── */
+  { group: 'hubreviews', name: 'health: the patient marks their own appointment completed (self-asserted eligibility)', file: HCH, suite: 'hubrev',
+    from: "    if (status !== 'cancelled' && !isProviderSide) {", to: "    if (false) {", expect: /PATIENT can no longer/ },
+  { group: 'hubreviews', name: 'health: a forged providerId is rated (one appointment rates ANY provider)', file: HCH, suite: 'hubrev',
+    edits: [{ from: "    if (req.data.providerId && req.data.providerId !== appt.providerId) throw new HttpsError('permission-denied', 'This appointment was with a different provider.');\n", to: "" },
+            { from: "    const ref = db().collection('healthProviders').doc(String(appt.providerId));", to: "    const ref = db().collection('healthProviders').doc(String(req.data.providerId || appt.providerId));" }], expect: /forged providerId/ },
+  { group: 'hubreviews', name: 'health: an appointment is rated twice', file: HCH, suite: 'hubrev',
+    from: "    if (appt.rated) throw new HttpsError('already-exists', 'Already rated');\n    if (req.data.providerId", to: "    if (req.data.providerId", expect: /second rating|CONCURRENT/ },
+  { group: 'hubreviews', name: 'health: a provider rates themselves', file: HCH, suite: 'hubrev',
+    from: "    if (appt.providerId === uid) throw new HttpsError('permission-denied', 'You cannot rate yourself.');\n", to: "", expect: /cannot rate themselves/ },
+  { group: 'hubreviews', name: 'any number is a rating (4.5, 0, 6, "abc")', file: HRT, suite: 'hubrev',
+    from: "  if (!Number.isInteger(n) || n < 1 || n > 5) throw", to: "  if (false) throw", expect: /is refused/ },
+  { group: 'hubreviews', name: 'the aggregate is a rounded running average (drift) — not sum / count', file: HRT, suite: 'hubrev',
+    from: "  const prevSum = Number.isFinite(Number(d && d.ratingSum)) ? Number(d.ratingSum)\n    : ", to: "  const prevSum = false ? 0\n    : ", expect: /SUM is kept exactly|sum \/ count/ },
+  { group: 'hubreviews', name: 'legal: the client completes their own consultation', file: LGH, suite: 'hubrev',
+    from: "  if (status !== 'cancelled' && c.providerId !== uid && role < 4) {", to: "  if (false) {", expect: /CLIENT can no longer/ },
+  { group: 'hubreviews', name: 'legal: a forged providerId is accepted', file: LGH, suite: 'hubrev',
+    from: "    if (providerId && providerId !== c.providerId) throw new HttpsError('permission-denied', 'This consultation was with a different provider.');\n", to: "", expect: /forged providerId/ },
+  { group: 'hubreviews', name: 'digital: an UNPAID purchase rates a product', file: DGH, suite: 'hubrev',
+    from: "    if (pur.status !== 'completed') throw new HttpsError('failed-precondition', 'Only a paid purchase can be rated.');\n", to: "", expect: /UNPAID/ },
+  { group: 'hubreviews', name: 'digital: one purchase rates ANY product', file: DGH, suite: 'hubrev',
+    edits: [{ from: "    if (productId && productId !== pur.productId) throw new HttpsError('permission-denied', 'This purchase is for a different product.');\n", to: "" },
+            { from: "    const productRef = db().collection('digitalProducts').doc(String(pur.productId));", to: "    const productRef = db().collection('digitalProducts').doc(String(productId || pur.productId));" }], expect: /DIFFERENT product/ },
+  { group: 'hubreviews', name: 'digital: the seller rates their own product', file: DGH, suite: 'hubrev',
+    from: "    if (pSnap.data().sellerUid === uid) throw new HttpsError('permission-denied', 'You cannot rate your own product.');\n", to: "", expect: /rate their own product/ },
+  { group: 'hubreviews', name: 'unboxing: someone else\'s order verifies your review', file: RVJ, suite: 'hubrev',
+    from: "    if ((o.buyerUid || o.userId || o.uid) !== uid) throw new HttpsError('permission-denied', 'That order is not yours.');\n", to: "", expect: /someone else's order/ },
+  { group: 'hubreviews', name: 'unboxing: an undelivered order verifies', file: RVJ, suite: 'hubrev',
+    from: "    if (!['delivered', 'completed'].includes(String(o.status || '').toLowerCase())) throw", to: "    if (false) throw", expect: /undelivered order/ },
+  { group: 'hubreviews', name: 'unboxing: one order verifies many reviews', file: RVJ, suite: 'hubrev',
+    from: "    if (cs.exists && cs.data().reviewId !== reviewId) throw new HttpsError('already-exists', 'That order already verifies another review.');\n", to: "", expect: /ONE review/ },
+  { group: 'hubreviews', browser: true, name: 'unboxing: the invented DEMO reviews return to the live wall', file: UBX, suite: 'hubrev',
+    from: "  return [...local,...fsOnly];", to: "  return [...local,...fsOnly,...DEMO];", expect: /NO invented demo/ },
+  { group: 'hubreviews', browser: true, name: 'unboxing: the author self-declares "verified" again', file: UBX, suite: 'hubrev',
+    from: "    likes:0,\n    liked:false,\n", to: "    likes:0,\n    liked:false,\n    verified:!!orderId,\n", expect: /NO client "verified"/ },
+  { group: 'hubreviews', browser: true, name: 'sports: a review kept in this browser and shown as posted', file: SPV, suite: 'hubrev',
+    from: "  closeModal('reviewModal');\n  (window._skToast||alert)('Reviews open after a completed SOKONI booking. Nothing was posted.');\n  return;", to: "  localStorage.setItem('spt_rv_' + VN_ID, JSON.stringify([{ author: name, rating: 5, body }]));\n  closeModal('reviewModal');\n  (window._skToast||alert)('Thank you for your review!');\n  return;", expect: /sports-venue.*honest/ },
+  { group: 'hubreviews', browser: true, name: 'home services: "Thank you" for a review that was never saved', file: HSV, suite: 'hubrev',
+    from: "  if(msgEl){msgEl.textContent='Reviews open after a completed SOKONI booking — this provider cannot be reviewed yet.';", to: "  if(msgEl){msgEl.textContent='✅ Thank you for your review!';", expect: /home-services.*honest/ },
+  { group: 'hubreviews', rules: true, name: 'a client writes a health review directly (rules)', file: RULES, suite: 'rules',
+    from: "  match /healthReviews/{docId} {\n  allow read:   if true;\n  allow create: if false;", to: "  match /healthReviews/{docId} {\n  allow read:   if true;\n  allow create: if claimsOwner();", expect: /HEALTH review/ },
+  { group: 'hubreviews', rules: true, name: 'a client writes a digital freelance review directly (rules)', file: RULES, suite: 'rules',
+    from: "  match /digitalReviews/{docId} {\n  allow read:   if true;\n  allow create: if false;", to: "  match /digitalReviews/{docId} {\n  allow read:   if true;\n  allow create: if isAuthed() && request.resource.data.reviewerUid == request.auth.uid;", expect: /DIGITAL freelance review/ },
+  { group: 'hubreviews', rules: true, name: 'an unboxing review self-marked verified (rules)', file: RULES, suite: 'rules',
+    from: "  && !request.resource.data.keys().hasAny(['verified','orderVerified','orderVerifiedAt','likes','status','approved','featured']);", to: ";", expect: /self-marked|seeded with likes/ },
+  { group: 'hubreviews', rules: true, name: 'CSAT against a rider who was not assigned (rules)', file: RULES, suite: 'rules',
+    from: "  && get(/databases/$(database)/documents/packageRequests/$(ratingId)).data.get('assignedDriverId', '') == request.resource.data.riderId\n", to: "", expect: /NOT assigned/ },
+  { group: 'hubreviews', rules: true, name: 'CSAT before the delivery is finished (rules)', file: RULES, suite: 'rules',
+    from: "  && (get(/databases/$(database)/documents/packageRequests/$(ratingId)).data.get('status', '') in ['delivered', 'buyer_confirmed', 'completed']\n  || get(/databases/$(database)/documents/packageRequests/$(ratingId)).data.get('buyerConfirmedAt', null) != null);", to: ";", expect: /not finished/ },
+  { group: 'hubreviews', rules: true, name: 'CSAT under any doc id (duplicate ratings) (rules)', file: RULES, suite: 'rules',
+    from: "  && ratingId == request.resource.data.deliveryRef\n", to: "", expect: /deliveryRef names ANOTHER delivery|doc id that is not the delivery/ },
+  { group: 'hubreviews', rules: true, name: 'a driver writes their own rating (rules)', file: RULES, suite: 'rules',
+    from: "  && request.resource.data.uid == request.auth.uid\n  && noAdminFields() && noRatingAggOnUpdate()\n  && (!request.resource.data.keys().hasAny(['lat','lng'])", to: "  && request.resource.data.uid == request.auth.uid\n  && noAdminFields()\n  && (!request.resource.data.keys().hasAny(['lat','lng'])", expect: /driver writes their own rating|inflates the rating counters/ },
+  { group: 'hubreviews', rules: true, name: 'a lawyer listing is created with its own rating (rules)', file: RULES, suite: 'rules',
+    from: "  allow create: if claimsOwner() && noAdminFields() && noRatingAggOnCreate();\n  allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields() && noRatingAggOnUpdate());\n  allow delete: if isAdmin();\n  }\n  match /legalAppointments", to: "  allow create: if claimsOwner() && noAdminFields();\n  allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields() && noRatingAggOnUpdate());\n  allow delete: if isAdmin();\n  }\n  match /legalAppointments", expect: /lawyer listing is created with a rating/ },
 ];
 
 const argv = process.argv.slice(2);

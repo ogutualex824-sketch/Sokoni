@@ -112,6 +112,9 @@
      only (scripts/onboard-providers.js, or providerPublish). */
   function _writeProvider(hub, id, data) {
     if (!id || !_uid) return;
+    /* A listing never carries its own rating / verification (CHANGELOG 213 — the rules refuse them). */
+    const { rating, ratingCount, ratingSum, reviewCount, reviews, verified, ...own } = data || {};
+    data = own;
     /* Also write to hub-specific collection if applicable */
     if (hub === 'legal') {
       _fsSet('lawyers', String(id), { ...data, uid: _uid });

@@ -402,7 +402,9 @@ function allReviews(){
   const local=getReviews();
   const localIds=new Set(local.map(r=>r.id));
   const fsOnly=(window._fsUnboxReviews||[]).filter(r=>!localIds.has(r.id));
-  return [...local,...fsOnly,...DEMO];
+  /* DEMO reviews were appended to the LIVE wall and its stats — invented reviewers, likes and "Verified Buy"
+     badges shown as real (CLAUDE.md: no demo data on a production path). Removed (CHANGELOG 213). */
+  return [...local,...fsOnly];
 }
 
 /* ═══════ STATS ═══════ */
@@ -412,7 +414,7 @@ function updateStats(){
   document.getElementById('statPhotos').textContent=all.reduce((s,r)=>s+(r.photoCount||r.photos?.length||1),0);
   const avg=all.reduce((s,r)=>s+r.rating,0)/all.length;
   document.getElementById('statAvg').textContent=isNaN(avg)?'—':(avg.toFixed(1)+'★');
-  document.getElementById('statVerified').textContent=all.filter(r=>r.verified).length;
+  document.getElementById('statVerified').textContent=all.filter(r=>r.orderVerified===true).length;
 }
 
 /* ═══════ RENDER GALLERY ═══════ */
@@ -444,7 +446,7 @@ function renderGallery(){
       ${isRealPhoto
         ?`<img class="ub-card-img" src="${r.photos[0]}" alt="Unboxing photo" loading="lazy">`
         :`<div class="ub-card-img-placeholder">${r.photos?r.photos[0]:catEmoji}</div>`}
-      ${r.verified?'<div class="ub-verified-badge">✅ Verified Buy</div>':''}
+      ${r.orderVerified===true?'<div class="ub-verified-badge">✅ Verified Buy</div>':''}
       ${photoCount>1?`<div class="ub-multi-badge">📷 ${photoCount}</div>`:''}
       <div class="ub-card-body">
         <div class="ub-card-stars">${stars}</div>
@@ -522,7 +524,7 @@ function openLightbox(id){
   document.getElementById('lbAvatar').textContent=initials;
   document.getElementById('lbAvatar').style.background=bg;
   document.getElementById('lbName').textContent=r.reviewer||'Anonymous';
-  document.getElementById('lbMeta').textContent=r.date+(r.verified?' · ✅ Verified Buy':'');
+  document.getElementById('lbMeta').textContent=r.date+(r.orderVerified===true?' · ✅ Verified Buy':'');
   document.getElementById('lbStars').textContent='★'.repeat(r.rating)+'☆'.repeat(5-r.rating);
   document.getElementById('lbProduct').textContent=(CAT_EMOJIS[r.category]||'📦')+' '+r.product;
   document.getElementById('lbComment').textContent=`"${r.comment}"`;
@@ -641,40 +643,37 @@ function submitReview(){
     date:new Date().toLocaleDateString('en-KE',{day:'numeric',month:'short',year:'numeric'}),
     likes:0,
     liked:false,
-    verified:!!orderId,
     photos:uploadedPhotos.length?uploadedPhotos:[CAT_EMOJIS[formCat]||'📦'],
     photoCount:uploadedPhotos.length||1
   };
 
-  setTimeout(()=>{
-    const reviews=getReviews();
-    reviews.unshift(review);
-    saveReviews(reviews);
-
-    /* Push to Firestore — photos excluded (base64 too large for Firestore) */
-    if(window.SokoniDB){
-      window.SokoniDB.saveUnboxingReview(review)
-        .catch(e=>console.warn('[SOKONI] Unboxing save failed:',e.message));
+  /* Posted means SAVED (CHANGELOG 213): the review is written first; only then is it shown, and "✅ Verified Buy" is
+     the server's decision (verifyUnboxingReview checks the order is yours and delivered), never the author's. */
+  (async ()=>{
+    const done=(ok,msg)=>{ btn.disabled=false;btn.textContent='📦 Post My Unboxing Review →'; if(!ok){ if(msgEl){msgEl.textContent=msg;msgEl.style.color='#ff6b6b';} } };
+    if(!window.SokoniDB){ return done(false,'Could not reach SOKONI — nothing was posted.'); }
+    let savedId=null;
+    try { savedId = await window.SokoniDB.saveUnboxingReview(review); }
+    catch(e){ console.warn('[SOKONI] Unboxing save failed:',e&&e.message); return done(false,'Could not post your review — nothing was saved. Please try again.'); }
+    const reviews=getReviews(); reviews.unshift(review); saveReviews(reviews);
+    let verifiedMsg='';
+    if(orderId && typeof window.sokoniCallable==='function'){
+      try { await window.sokoniCallable('verifyUnboxingReview')({ reviewId: savedId }); review.orderVerified=true; saveReviews(reviews); verifiedMsg=' ✅ Verified Buy.'; }
+      catch(e){ verifiedMsg=' (We could not verify that order number, so it shows as unverified.)'; }
     }
-
-    /* Add loyalty points */
-    try{const u=JSON.parse(localStorage.getItem('sokoniUser')||'{}');u.points=(u.points||0)+50;localStorage.setItem('sokoniUser',JSON.stringify(u));}catch{}
-
-    /* Reset form */
     uploadedPhotos=[];formStar=0;formCat='';
     document.querySelectorAll('.ub-star-btn').forEach(b=>b.classList.remove('lit'));
     document.querySelectorAll('.ub-cat-btn').forEach(b=>b.classList.remove('active'));
     ['ubProduct','ubComment','ubReviewer','ubOrderId'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
     renderPreviews();
-    btn.disabled=false;btn.textContent='📦 Post My Unboxing Review →';
-    if(msgEl){msgEl.textContent='';};
-
+    done(true);
+    if(msgEl){msgEl.textContent='';}
     closeUpload();
     confetti();
-    showToast('🎉 Review posted! +50 loyalty points added.',4000);
+    showToast('🎉 Review posted!'+verifiedMsg,4000);
     updateStats();
     renderGallery();
-  },600);
+  })();
 }
 
 /* ═══════ CONFETTI ═══════ */

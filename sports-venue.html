@@ -365,8 +365,9 @@ function submitReview() {
   const name = document.getElementById('rvName').value.trim();
   const body = document.getElementById('rvBody').value.trim();
   if (!name || !body) { (window._skToast||alert)('Please enter your name and review.'); return; }
-  S.addReview(VN_ID, 'venue', {author: name, rating: parseInt(document.getElementById('rvRating').value), body});
   closeModal('reviewModal');
+  (window._skToast||alert)('Reviews open after a completed SOKONI booking. Nothing was posted.');
+  return;
   document.getElementById('rvName').value = '';
   document.getElementById('rvBody').value = '';
   renderContent('reviews');

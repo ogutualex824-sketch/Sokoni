@@ -451,7 +451,10 @@ const SokoniHealth = {
      Public read. claimsOwner create.
   ════════════════════════════════════════ */
 
-  async saveReview(review) {
+  /* RETIRED (CHANGELOG 213): ratings are rateHealthProvider — the server checks a completed appointment of the
+     caller's, BY the provider it was with, once. */
+  async saveReview() { throw Object.assign(new Error('Rate a completed appointment from your bookings.'), { code: 'failed-precondition' }); },
+  async _retiredSaveReview(review) {
     const id = review.id || _id('HRV-');
     await setDoc(doc(db, 'healthReviews', id), {
       ...review,
@@ -471,7 +474,8 @@ const SokoniHealth = {
     );
   },
 
-  async _recalcProviderRating(providerId) {
+  async _recalcProviderRating() { return; },   /* RETIRED: a client never computes a public rating */
+  async _retiredRecalcProviderRating(providerId) {
     if (!providerId) return;
     try {
       const snap = await getDocs(query(

@@ -226,6 +226,11 @@ exports.updateConsultationStatus = onCall(CF_OPTS, async (req) => {
   const c = snap.data();
   const role = await getRole(uid);
   if (c.clientUid !== uid && c.providerId !== uid && role < 4) throw new HttpsError('permission-denied', 'Not authorized');
+  /* Only the provider (or an admin) confirms, completes, reschedules or records a no-show: a completed
+     consultation is what makes a rating eligible, so the client cannot decide it (CHANGELOG 213). */
+  if (status !== 'cancelled' && c.providerId !== uid && role < 4) {
+    throw new HttpsError('permission-denied', 'Only the provider can mark this consultation ' + status + '.');
+  }
 
   const updates = { status, updatedAt: FieldValue.serverTimestamp() };
   if (notes) updates.notes = san(notes, 1000);
@@ -237,11 +242,13 @@ exports.updateConsultationStatus = onCall(CF_OPTS, async (req) => {
 /* ── 9. rateLegalProvider ── */
 exports.rateLegalProvider = onCall(CF_OPTS, async (req) => {
   const uid = requireAuth(req);
-  const { providerId, consultationId, rating, review } = req.data;
-  if (!providerId || !consultationId || !rating) {
-    throw new HttpsError('invalid-argument', 'providerId, consultationId, rating required');
+  const { providerId, consultationId, rating: rawRating, review } = req.data || {};
+  if (!consultationId || typeof consultationId !== 'string') {
+    throw new HttpsError('invalid-argument', 'consultationId required');
   }
-  if (rating < 1 || rating > 5) throw new HttpsError('invalid-argument', 'Rating 1–5');
+  /* The provider rated is the CONSULTATION's; a client providerId is only cross-checked (CHANGELOG 213). */
+  const { intRating, addRating } = require('./shared/hub-rating');
+  const rating = intRating(rawRating);
 
   /* ── ATOMIC rating ──
      The `rated` guard used to be read OUTSIDE the transaction (a get() before runTransaction),
@@ -250,23 +257,20 @@ exports.rateLegalProvider = onCall(CF_OPTS, async (req) => {
      provider's aggregate. The consultation is now read and the `rated`/ownership/status guards
      are all evaluated INSIDE the transaction, so a repeat sees rated:true and is rejected. */
   const consultRef = db().collection('legalConsultations').doc(consultationId);
-  const provRef    = db().collection('legalProviders').doc(providerId);
 
   await db().runTransaction(async (t) => {
-    const [cSnap, pSnap] = await Promise.all([t.get(consultRef), t.get(provRef)]);
+    const cSnap = await t.get(consultRef);
     if (!cSnap.exists) throw new HttpsError('not-found', 'Consultation not found');
     const c = cSnap.data();
     if (c.clientUid !== uid) throw new HttpsError('permission-denied', 'Not your consultation');
     if (c.status !== 'completed') throw new HttpsError('failed-precondition', 'Can only rate completed consultations');
     if (c.rated) throw new HttpsError('already-exists', 'Already rated');
+    if (providerId && providerId !== c.providerId) throw new HttpsError('permission-denied', 'This consultation was with a different provider.');
+    if (c.providerId === uid) throw new HttpsError('permission-denied', 'You cannot rate yourself.');
+    const provRef = db().collection('legalProviders').doc(String(c.providerId));
+    const pSnap = await t.get(provRef);
     if (!pSnap.exists) throw new HttpsError('not-found', 'Provider not found');
-
-    const p = pSnap.data();
-    const prevCount  = p.ratingCount || 0;
-    const prevRating = p.rating || 0;
-    const newCount   = prevCount + 1;
-    const newRating  = ((prevRating * prevCount) + rating) / newCount;
-    t.update(provRef, { rating: Math.round(newRating * 10) / 10, ratingCount: newCount, updatedAt: FieldValue.serverTimestamp() });
+    t.update(provRef, { ...addRating(pSnap.data(), rating), updatedAt: FieldValue.serverTimestamp() });
     t.update(consultRef, {
       rated: true, rating, review: san(review, 500), ratedAt: FieldValue.serverTimestamp(),
     });
