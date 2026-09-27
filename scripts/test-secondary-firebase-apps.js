@@ -121,7 +121,7 @@ const BASELINE = {
   'business-os.html':          ['bos-load', 'bos-sync'],
   'car-hub.html':              ['ch-rt', 'ch-write'],
   'car-rental.html':           ['cr-write'],
-  'cleaning.html':             ['cln-write'],
+  /* cleaning.html: cln-write REMOVED (CHANGELOG 218) — the booking form now sends the customer to the cleaner's SOKONI profile */
   'commerce-os.html':          ['commerce-os'],
   'developer-portal.html':     ['developer-portal'],
   'digital.html':              ['dh-wd'],

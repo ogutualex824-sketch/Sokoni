@@ -1,3 +1,42 @@
+## 2026-09-27 (218) — Booking and contact stay in the app on the server-ready pages
+
+Owner directives: IntaSend only, and no WhatsApp for booking or communication. This covers the pages whose listings
+already carry a SOKONI account (from the hub-to-engine census). Not deployed. No production writes.
+
+- **`services.html` / `provider-profile.html`.** Book runs **one** path: the SOKONI Pay held booking
+  (`SokoniBookService`: server price, IntaSend, show-up PIN release).
+  - The client-priced `SokoniPay.bookNow` fallback and the provider-profile WhatsApp fallback are removed. If the
+    engine is unavailable, the page says "loading — nothing was charged".
+  - Booking cards message the other party through SOKONI chat (`messages.html?with=`), not WhatsApp. The WhatsApp
+    social icon is removed from provider cards.
+  - A service *listing* (a marketplace product) opens its product page, which handles SOKONI Pay checkout and in-app
+    contact.
+- **`cleaning.html`.** The booking form saved a browser-local "booking", wrote `homeServiceBookings` through an
+  **unauthenticated** secondary app (denied), handed the booking to WhatsApp and said "sent via WhatsApp!".
+  - It now sends the customer to the chosen cleaner's SOKONI profile to book (the canonical engine), or asks them to
+    choose one.
+  - Each card's contact is SOKONI chat.
+- **`product.js`.**
+  - Premium sellers got a raw `wa.me` link. They are now contacted through the in-app conversation.
+  - The conversation path's WhatsApp fallback is now: sign in, then the seller's SOKONI chat, or an honest message.
+  - **Bug found by the browser test:** `window.contactSellerWhatsApp = contactSellerGated` rebound the in-app function's
+    own global name, so the premium path would have **called itself forever**. The in-app function is now
+    `contactSellerInApp`.
+- **`business.html`.**
+  - Service "Book Now" was a WhatsApp link. It is now "Ask to book in app" (SOKONI chat with the owner; business
+    `services` are not yet on the service engine).
+  - The phone is shown as a phone number. `sokoni-inbox.js` is loaded (previously it never was).
+- **Tests:**
+  - `scripts/test-in-app-booking-contact.js` (new): 15/0. It combines a static scan (only SHARE links remain, with a
+    positive control) with the **real** pages in Chromium.
+  - `test-secondary-firebase-apps`: the stale `cln-write` allow-list entry is removed, so the result matches the
+    baseline (8/1, pre-existing).
+  - The committed-state gates (`test-cart-*`) are re-run after the commit.
+  - Sabotage group `inapp`: 5/5 caught; the tree is byte-identical afterwards.
+- **Not yet.** Static or demo hubs (plumbing, electrical, phone-repair, home-services, mechanics, tech-hub, food, BnB,
+  car rental, sports, fitness, construction, healthcare directory) need server-side listings first. Legal and
+  healthcare chat links have their own commits.
+
 ## 2026-09-27 (217) — Support and contact stay in the app (no WhatsApp)
 
 Owner directive: "no WhatsApp … everything in app communication". Not deployed. No production writes.

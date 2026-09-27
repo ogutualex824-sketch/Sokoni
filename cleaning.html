@@ -573,7 +573,7 @@ function renderProviders() {
       <div class="cl-prov-foot">
         <div class="cl-prov-rate">${p.rate != null ? 'KES ' + Number(p.rate).toLocaleString() : '<small style="color:rgba(255,255,255,0.35);">Ask for a quote</small>'} ${p.rate != null && p.rateType ? `<small>${esc(p.rateType)}</small>` : ''}</div>
         <div style="display:flex;gap:6px;align-items:center;">
-          ${waNum ? `<a href="https://wa.me/${esc(waNum)}?text=${encodeURIComponent('Hi! I found you on SOKONI and would like to book a cleaning service. Please confirm your availability.')}" target="_blank" rel="noopener" class="cl-wa-btn"><i class="fab fa-whatsapp"></i> WhatsApp</a>` : ''}
+          ${p.uid ? `<a href="messages.html?with=${encodeURIComponent(p.uid)}" class="cl-wa-btn" aria-label="Message ${esc(p.name || 'cleaner')} in SOKONI">💬</a>` : ''}
           <a class="cl-book-btn" href="${esc(p.profileUrl)}" style="text-decoration:none;display:inline-flex;align-items:center;">Book →</a>
         </div>
 <div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);"><button type="button" onclick="window.SokoniSocial&&SokoniSocial.toggleFollow('${jsId}','${jsNm}',this,'cleaner')" style="flex:1;padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">❤ Follow</button><button type="button" onclick="window.SokoniSocial&&SokoniSocial.openShareModal({id:'cleaner_${jsId}',name:'${jsNm}',category:'cleaner',tagline:'',type:'cleaner'})" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);border-radius:8px;font-size:12px;cursor:pointer;flex-shrink:0;">📣</button></div>
@@ -640,78 +640,15 @@ function toggleChip(el) {
 }
 
 function submitBooking() {
-  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('cleaning_book',10,300000)){(window._skToast||alert)('Too many booking attempts. Please wait 5 minutes.');return;}
-  const name    = document.getElementById('clName')?.value.trim();
-  const phone   = document.getElementById('clPhone')?.value.trim();
-  const date    = document.getElementById('clDate')?.value;
-  const time    = document.getElementById('clTime')?.value;
-  const address = document.getElementById('clAddress')?.value.trim();
-  const notes   = document.getElementById('clNotes')?.value.trim();
-  const msgEl   = document.getElementById('clModalMsg');
-  const services = [...document.querySelectorAll('#clServiceChips .cl-chip.sel')].map(c => c.dataset.svc).join(', ');
-
-  if (!name || !phone || !address) {
-    if (msgEl) { msgEl.textContent = '⚠️ Please fill name, phone and address.'; msgEl.style.color = '#ff6b6b'; }
+  /* ONE booking path (CHANGELOG 218). This saved a "booking" in this browser, wrote homeServiceBookings through an
+     UNAUTHENTICATED app (denied), handed the booking to WhatsApp and said "sent via WhatsApp!". A cleaner is booked on
+     their SOKONI profile: server price, SOKONI Pay (IntaSend), payment held until the job is done. */
+  const msgEl = document.getElementById('clModalMsg');
+  if (selectedProv && selectedProv.uid) {
+    location.href = 'provider-profile.html?uid=' + encodeURIComponent(selectedProv.uid);
     return;
   }
-
-  const booking = {
-    id: 'CLN' + Date.now().toString().slice(-7),
-    name, phone, date, time, address, notes, services,
-    provider: selectedProv?.name || 'Any Available Cleaner',
-    status: 'pending',
-    createdAt: Date.now()
-  };
-
-  /* Save locally */
-  let bookings = [];
-  try { bookings = JSON.parse(localStorage.getItem('sokoniCleaningBookings') || '[]'); } catch {}
-  bookings.unshift(booking);
-  localStorage.setItem('sokoniCleaningBookings', JSON.stringify(bookings));
-
-  /* Persist to Firestore */
-  (async()=>{try{
-    const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
-    const {getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-    const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "auth.mysokoni.co.ke",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
-    const _a=getApps().find(a=>a.name==="cln-write")||initializeApp(_cfg,"cln-write");
-    await addDoc(collection(getFirestore(_a),'homeServiceBookings'),{...booking,hub:'cleaning',createdAt:serverTimestamp()});
-  }catch(e){}})();
-
-  /* Open WhatsApp to confirm */
-  const provPhone = selectedProv?.phone || '0705726803';
-  const msg = `Hi${selectedProv ? ' ' + selectedProv.name : ''}! I'd like to book a cleaning service via SOKONI.\n\n` +
-    `📋 Booking ID: ${booking.id}\n` +
-    `👤 Name: ${name}\n` +
-    `📞 Phone: ${phone}\n` +
-    `🧹 Service: ${services || 'General Cleaning'}\n` +
-    `📅 Date: ${date || 'TBD'} at ${time || 'TBD'}\n` +
-    `📍 Location: ${address}\n` +
-    (notes ? `📝 Notes: ${notes}\n` : '') +
-    `\nPlease confirm your availability. Thank you!`;
-
-  const _waNum = provPhone.replace(/^0/,'254').replace(/\D/g,'');
-  if(typeof SokoniPay !== 'undefined' && SokoniPay.waConnect){
-    SokoniPay.waConnect(_waNum, msg, {providerName:booking.provider||'Cleaning Pro',category:'cleaning',serviceDesc:services||'Cleaning Service'});
-  } else {
-    window.open(`https://wa.me/${_waNum}?text=${encodeURIComponent(msg)}`, '_blank');
-  }
-
-  if (msgEl) { msgEl.innerHTML = `✅ Booking <strong style="color:#00d4ff;">${_esc(booking.id)}</strong> sent via WhatsApp! The cleaner will confirm shortly.`; msgEl.style.color = '#22c55e'; }
-
-  if(window.SokoniInvoice){
-    setTimeout(()=>{
-      SokoniInvoice.generate({
-        type:'service', buyerName:name, buyerPhone:phone,
-        items:[{name:services||'General Cleaning', category:'Cleaning Service', qty:1, price:0}],
-        subtotal:0, total:0, paymentMethod:'M-Pesa', paymentRef:booking.id,
-        sellerName:booking.provider, location:address,
-        notes:(notes||'')+' · Date: '+(date||'TBD')+' at '+(time||'TBD')
-      });
-    }, 500);
-  }
-
-  setTimeout(closeBooking, 3000);
+  if (msgEl) { msgEl.textContent = 'Choose a cleaner below to book with SOKONI Pay — nothing was booked or charged.'; msgEl.style.color = '#ff9800'; }
 }
 
 window.openBooking       = openBooking;

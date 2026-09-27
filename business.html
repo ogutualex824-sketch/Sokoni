@@ -648,6 +648,7 @@
 <script type="module" src="sokoni-init.js"></script>
 <script src="sokoni-audit.js" defer></script>
 <script src="sokoni-social.js" defer></script>
+<script src="sokoni-inbox.js" defer></script>
 
 <script type="module">
 /* ================================================================
@@ -806,7 +807,7 @@ function renderHeader() {
   if (b.location) metaParts.push(`<span>📍 ${escHtml(b.location)}</span>`);
   if (b.phone) {
     const waNum = String(b.phone).replace(/\D/g, '');
-    metaParts.push(`<a href="https://wa.me/${waNum}" target="_blank" rel="noopener">📞 ${escHtml(b.phone)}</a>`);
+    metaParts.push(`<a href="tel:+${waNum}">📞 ${escHtml(b.phone)}</a>`);   /* a phone number, not a WhatsApp hand-off (CHANGELOG 218) */
   }
   if (b.website) {
     const safe = b.website.startsWith('http') ? b.website : 'https://' + b.website;
@@ -1220,9 +1221,9 @@ function serviceCardHtml(s) {
         </div>
       </div>
       <div class="biz-service-price">KES ${Number(s.price || 0).toLocaleString()}</div>
-      <a href="https://wa.me/${waNum}?text=${waMsg}" target="_blank" rel="noopener" class="biz-service-book">
-        <i class="fab fa-whatsapp"></i> Book Now
-      </a>
+      <button type="button" class="biz-service-book" onclick="bizMessage()" aria-label="Ask ${escHtml(s.name || 'this service')} in SOKONI chat">
+        💬 Ask to book in app
+      </button>
     </div>`;
 }
 

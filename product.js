@@ -1462,7 +1462,9 @@ function changeImage(image){
 
 /* SHARE */
 
-async function contactSellerWhatsApp(){
+/* The IN-APP seller conversation. Named apart from window.contactSellerWhatsApp, which is rebound to
+   contactSellerGated below — the old shared name made the gated premium path call itself forever. */
+async function contactSellerInApp(){
     let user = null;
     try{ user = JSON.parse(localStorage.getItem("sokoniUser")||"null"); }catch(e){}
     const sellerUid = product.sellerUid || product.sellerId || "";
@@ -1497,23 +1499,13 @@ async function contactSellerWhatsApp(){
         }catch(e){ console.warn("[ContactSeller] Firestore failed:", e.message); }
     }
 
-    /* Fallback: WhatsApp — fire commission gate then open */
-    const phone = (product.sellerPhone || product.phone || '').replace(/\D/g,'');
-    const waNum = phone.length >= 9 ? (phone.startsWith('254') ? phone : '254' + phone.replace(/^0/,'')) : '254705726803';
-    const pname = (product.name || 'this item').substring(0, 60);
-    const price = Number(product.price || 0).toLocaleString();
-    const plainMsg = `Hi, I'm interested in "${pname}" (KES ${price}) on SOKONI. Is it still available?`;
-    if(typeof SokoniPay !== 'undefined' && SokoniPay.waConnect){
-        SokoniPay.waConnect(waNum, plainMsg, {
-            providerName: product.sellerName || 'Seller',
-            category: product.category || 'product',
-            serviceDesc: 'Product inquiry: ' + pname,
-        });
-    } else {
-        window.open(`https://wa.me/${waNum}?text=${encodeURIComponent(plainMsg)}`, '_blank');
-    }
+    /* NO WhatsApp fallback (CHANGELOG 218; owner directive): sign in, or the seller's SOKONI chat, or an honest message. */
+    if(!(user && user.uid)){ location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search); return; }
+    if(sellerUid && sellerUid !== user.uid){ window.location.href = 'messages.html?with=' + encodeURIComponent(sellerUid); return; }
+    (window._skToast || alert)(sellerUid === (user && user.uid) ? 'This is your own listing.' : 'This seller can\'t be messaged in SOKONI yet.');
+    return;
 }
-window.contactSellerWhatsApp = contactSellerWhatsApp;
+window.contactSellerInApp = contactSellerInApp;
 
 function shareProductWhatsApp(){
     if(window.SokoniShare){
@@ -2003,18 +1995,13 @@ function _maskPhone(phone) {
 ═══════════════════════════════════════════════════════ */
 function contactSellerGated() {
     var isPremium = window._prdSellerIsPremium;
-    var waNumber  = window._prdSellerWhatsApp || window._prdSellerPhone || '';
-    if (isPremium && waNumber) {
-        /* Premium seller — direct WhatsApp */
-        var productTitle = (typeof product !== 'undefined' && product.name) ? product.name : 'this product';
-        var msg = 'Hi, I am interested in *' + productTitle + '* listed on SOKONI. ' + window.location.href;
-        var clean = waNumber.replace(/[^0-9]/g,'');
-        if (clean.startsWith('0')) clean = '254' + clean.slice(1);
-        window.open('https://wa.me/' + clean + '?text=' + encodeURIComponent(msg), '_blank');
-    } else {
-        /* Non-premium — open in-app contact request */
-        _openContactRequestModal();
+    if (isPremium) {
+        /* Premium seller — the in-app conversation (was: direct WhatsApp — CHANGELOG 218) */
+        contactSellerInApp();
+        return;
     }
+    /* Non-premium — the in-app contact request */
+    _openContactRequestModal();
 }
 window.contactSellerGated = contactSellerGated;
 

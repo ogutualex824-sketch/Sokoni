@@ -54,6 +54,7 @@ const SUITES = {
   integrity: ['node', ['scripts/test-money-integrity.js']],
   gateway:  ['node', ['scripts/test-sokoni-pay-gateway.js']],
   support:  ['node', ['scripts/test-in-app-support.js']],
+  inapp:    ['node', ['scripts/test-in-app-booking-contact.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -839,6 +840,18 @@ const M = [
     from: '<a href="/support.html#ticket" aria-label="SOKONI Support" title="SOKONI Support">💬</a>', to: '<a href="https://wa.me/254705726803" aria-label="WhatsApp" title="WhatsApp">📱</a>', expect: /links SOKONI's WhatsApp numbers/ },
   { group: 'support', browser: true, name: 'support.html#ticket no longer opens the ticket form (dead deep link)', file: 'support.html', suite: 'support',
     from: "(function(){ function go(){ if (location.hash === '#ticket'", to: "(function(){ function go(){ if (false && location.hash === '#ticket'", expect: /opens the in-app ticket form/ },
+
+  /* ── booking & contact stay in the app on server-ready pages (CHANGELOG 218) ── */
+  { group: 'inapp', browser: true, name: 'premium sellers are contacted on WhatsApp again', file: 'product.js', suite: 'inapp',
+    from: "        contactSellerInApp();\n        return;", to: "        window.open('https://wa.me/254722000000?text=hi', '_blank');\n        return;", expect: /no WhatsApp hand-off|never wa\.me/ },
+  { group: 'inapp', browser: true, name: 'the premium path calls itself (the shared-name recursion)', file: 'product.js', suite: 'inapp',
+    from: "        contactSellerInApp();\n        return;", to: "        contactSellerWhatsApp();\n        return;", expect: /never a recursion/ },
+  { group: 'inapp', browser: true, name: 'cleaning books over WhatsApp again', file: 'cleaning.html', suite: 'inapp',
+    from: "  if (selectedProv && selectedProv.uid) {\n    location.href = 'provider-profile.html?uid=' + encodeURIComponent(selectedProv.uid);", to: "  if (selectedProv && selectedProv.uid) {\n    window.open('https://wa.me/254711000000?text=book', '_blank');", expect: /cleaner's SOKONI profile|no WhatsApp hand-off/ },
+  { group: 'inapp', browser: true, name: 'services falls back to the client-priced gateway', file: 'services.html', suite: 'inapp',
+    from: "  (window._skToast||alert)('Booking is loading — please try again in a moment. Nothing was charged.');\n  return;\n}", to: "  if(typeof SokoniPay !== 'undefined') SokoniPay.bookNow({ providerName: p.name, category: p.category || 'default' }, function(){});\n  return;\n}", expect: /never the client-priced gateway/ },
+  { group: 'inapp', browser: true, name: 'business services are booked on WhatsApp again', file: 'business.html', suite: 'inapp',
+    from: "      <button type=\"button\" class=\"biz-service-book\" onclick=\"bizMessage()\"", to: "      <a href=\"https://wa.me/${waNum}?text=${waMsg}\" target=\"_blank\"></a><button type=\"button\" class=\"biz-service-book\" onclick=\"bizMessage()\"", expect: /no WhatsApp hand-off|no WhatsApp contact link/ },
 ];
 
 const argv = process.argv.slice(2);
