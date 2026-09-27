@@ -149,8 +149,8 @@ on a public read, and returned private reasons.
 | Calls | REQUEST CALL → provider accepts / declines / schedules | Connect `booking` call surface (added 2026-09-27) |
 
 - **Settings** (`entMessagingSettings/{uid}`, owner through a callable):
-  - who can message: ANYONE / VERIFIED / PURCHASED / ACTIVE_BOOKING / NOBODY. "Followers" is not offered, because no
-    follow authority exists.
+  - who can message: ANYONE / VERIFIED / PURCHASED / ACTIVE_BOOKING / ENQUIRY (customers who have enquired before) /
+    NOBODY. "Followers" is not offered: provider follows are keyed by a display-name slug, not an account.
   - enquiry types;
   - call requests;
   - business hours;

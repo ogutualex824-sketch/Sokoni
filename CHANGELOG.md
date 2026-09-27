@@ -1,3 +1,27 @@
+## 2026-09-27 (208) — Availability slice follow-up: every provider journey end to end; "customers with an enquiry"
+
+- **Journeys** (`scripts/test-ent-journeys.js`, 49/0). Each journey runs end to end through the REAL authorities:
+  - **ARTIST, SERVICE and CREATOR** (consultation, as an approved provider): marketplace badge → public service list →
+    calendar → date → slot → checkout (server total) → atomic hold → payment confirmed → BOOKED → one booking identity +
+    buyer-only PIN → private conversation (PAYMENT CONFIRMED · PIN ISSUED) → provider confirms (BOOKING CONFIRMED) →
+    show-up PIN → SOKONI 5 % → the provider's **business** wallet → PIN used once → the slot stays BOOKED.
+  - **VENUE:** the same on the venue engine; a 730-day horizon opens next year; the `venue_booking` payment activates
+    once.
+  - **EVENT / PRODUCT:** stay on their own authorities. The calendar has no event or product key; ticket PINs keep
+    "PIN YAKO NI TICKET YAKO".
+- **Who can message me:** adds **"Customers who have enquired before"** (`ENQUIRY`). **Followers** stays deliberately
+  unsupported: provider follows are keyed by a display-name slug, not an account, so they cannot prove who follows whom.
+- **Sabotage:** 2 attacks added (the ENQUIRY gate lets a newcomer in; the journey show-up pays the buyer). The
+  `journeys` suite is added to the harness.
+- **Files:** `functions/ent-enquiries.js`, `sokoni-ent-workspace.js`, `scripts/test-ent-communications.js` (76/0),
+  `scripts/test-ent-journeys.js` (new), `scripts/sabotage-event-ops.js`, `docs/ENTERTAINMENT_AVAILABILITY.md`.
+- **Unchanged blockers:**
+  - Calls are unproven (no TURN / STUN).
+  - The public-enquiry voice leg needs a Connect relationship (owner decision).
+  - Travel pricing trusts the declared distance (pre-existing).
+  - The backfill has not been run.
+- Not deployed. No KRA calls. No production writes.
+
 ## 2026-09-27 (207) — Entertainment Availability Calendar (all providers) + Messaging Controls, Enquiries and Rate Cards
 
 - **Scope.** One canonical availability authority for every bookable Entertainment provider, used by both booking

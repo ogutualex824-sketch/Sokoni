@@ -17,7 +17,7 @@
   const num = (v) => (v == null || !Number.isFinite(Number(v)) ? '—' : Number(v).toLocaleString('en-KE'));
   const when = (ms) => (ms ? new Date(Number(ms)).toLocaleString('en-KE') : '—');
   const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const WHO = { ANYONE: 'Anyone on SOKONI', VERIFIED: 'Verified SOKONI users', PURCHASED: 'Customers who have purchased', ACTIVE_BOOKING: 'Customers with an active booking', NOBODY: 'Nobody (no public enquiries)' };
+  const WHO = { ANYONE: 'Anyone on SOKONI', VERIFIED: 'Verified SOKONI users', PURCHASED: 'Customers who have purchased', ACTIVE_BOOKING: 'Customers with an active booking', ENQUIRY: 'Customers who have enquired before', NOBODY: 'Nobody (no public enquiries)' };
   const RESP = { '': 'Not shown', WITHIN_15_MIN: 'Within 15 minutes', WITHIN_1_HOUR: 'Within 1 hour', SAME_DAY: 'Same day', WITHIN_24_HOURS: 'Within 24 hours', CUSTOM: 'Custom' };
   const CATS = ['AVAILABILITY', 'PRICING', 'SERVICE_DETAILS', 'LOCATION', 'CUSTOM_REQUEST', 'EVENT_QUESTION', 'COLLABORATION', 'OTHER'];
   const TPL = ['WELCOME', 'AWAY', 'BOOKING_CONFIRMATION', 'PAYMENT_INSTRUCTION', 'LOCATION', 'FAQ', 'REFUND_POLICY'];

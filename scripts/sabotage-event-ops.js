@@ -42,6 +42,7 @@ const SUITES = {
   bkg:      ['node', ['scripts/test-entertainment-bookings.js']],
   avail:    ['node', ['scripts/test-ent-availability.js']],
   comms:    ['node', ['scripts/test-ent-communications.js']],
+  journeys: ['node', ['scripts/test-ent-journeys.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -509,6 +510,10 @@ const M = [
     from: "    if (bCount >= LIMITS.perBuyerPerDay) fail(", to: "    if (false) fail(", expect: /RATE_LIMITED/ },
   { group: 'avail', name: 'duplicate enquiry suppression removed', file: EQJ, suite: 'comms',
     from: "    if (dd.exists && now - (Number(dd.data().at) || 0) < LIMITS.dedupWindowMs) fail(", to: "    if (false) fail(", expect: /DUPLICATE/ },
+  { group: 'avail', name: '"customers with an enquiry" lets a newcomer in', file: EQJ, suite: 'comms',
+    from: "  if (who === 'ENQUIRY') return !(await", to: "  if (who === 'ENQUIRY') return true || !(await", expect: /customers with an enquiry/ },
+  { group: 'avail', name: 'journey: the show-up settlement pays the BUYER', file: PVO, suite: 'journeys',
+    from: "  const uid = data.providerId;\n  const m = await _settlementMath(uid, ref, data);", to: "  const uid = data.customerUid;\n  const m = await _settlementMath(uid, ref, data);", expect: /BUSINESS wallet/ },
   { group: 'avail', name: 'a blocked user still sends public enquiries', file: EQJ, suite: 'comms',
     from: "  if ((await _db().collection(COL.BLOCKS).doc(`${prov.providerUid}_${buyerUid}`).get()).exists) fail('permission-denied', 'You cannot send enquiries to this provider.', { code: 'BLOCKED' });", to: "", expect: /public enquiries from that user are refused/ },
   { group: 'avail', name: 'a template may claim a payment / booking / refund is complete', file: EQJ, suite: 'comms',

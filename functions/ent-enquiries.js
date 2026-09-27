@@ -41,7 +41,9 @@ const NEXT = Object.freeze({
   BOOKING_PENDING: ['CONVERTED', 'PROPOSAL_SENT', 'CLOSED', 'BLOCKED'],
 });
 const CATEGORIES = Object.freeze(['AVAILABILITY', 'PRICING', 'SERVICE_DETAILS', 'LOCATION', 'CUSTOM_REQUEST', 'EVENT_QUESTION', 'COLLABORATION', 'OTHER']);
-const WHO = Object.freeze(['ANYONE', 'VERIFIED', 'PURCHASED', 'ACTIVE_BOOKING', 'NOBODY']);
+/* FOLLOWERS is deliberately absent: provider follows are keyed by a display-name slug (sokoni-social.js
+   'sv_<name>'), not an account, so a follow cannot prove who follows whom. Offered once follows are keyed by uid. */
+const WHO = Object.freeze(['ANYONE', 'VERIFIED', 'PURCHASED', 'ACTIVE_BOOKING', 'ENQUIRY', 'NOBODY']);
 const RESPONSE_TIMES = Object.freeze(['WITHIN_15_MIN', 'WITHIN_1_HOUR', 'SAME_DAY', 'WITHIN_24_HOURS', 'CUSTOM']);
 const TEMPLATE_KEYS = Object.freeze(['WELCOME', 'AWAY', 'BOOKING_CONFIRMATION', 'PAYMENT_INSTRUCTION', 'LOCATION', 'FAQ', 'REFUND_POLICY']);
 /* Anti-spam limits (server-side; the client limit is only a courtesy). */
@@ -130,6 +132,8 @@ async function _allowedBy(who, buyerUid, providerUid, token) {
   if (who === 'ANYONE') return true;
   if (who === 'NOBODY') return false;
   if (who === 'VERIFIED') return token.email_verified === true || !!token.phone_number;
+  /* customers who already have an enquiry history with this provider (any state) */
+  if (who === 'ENQUIRY') return !(await _db().collection(COL.ENQ).where('providerUid', '==', providerUid).where('buyerUid', '==', buyerUid).limit(1).get()).empty;
   const pb = await _db().collection('providerBookings').where('providerId', '==', providerUid).where('customerUid', '==', buyerUid).limit(20).get();
   const rows = pb.docs.map((x) => x.data());
   if (who === 'PURCHASED') return rows.some((b) => ['paid_held', 'settled'].includes(b.paymentStatus) || b.status === 'completed');

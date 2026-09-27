@@ -115,6 +115,13 @@ const send = (buyer, providerId, extra) => q(buyer, 'entEnquirySend', Object.ass
   ck('a provider who DISABLED public enquiries receives none', (await codeOf(send('buyer2', 'otto'))) === 'ENQUIRIES_DISABLED' && (await EQ._h.entMessagingPublic({ ...who('buyer2'), data: { providerId: 'otto' } })).enquiriesOpen === false);
   await q('otto', 'entMessagingSetSettings', { settings: { enquiriesEnabled: true, whoCanMessage: 'ACTIVE_BOOKING' } });
   ck('"customers with an active booking" only → a stranger is refused', (await codeOf(send('buyer2', 'otto'))) === 'NOT_ALLOWED');
+  await q('jane', 'entMessagingSetSettings', { settings: { whoCanMessage: 'ENQUIRY' } });
+  NOW += 3 * 60e3;
+  ck('"customers with an enquiry": a buyer with enquiry history may enquire again (after closing one), a newcomer may not',
+    (await codeOf(send('buyer3', 'jane', { question: 'First time asking about your rates?' }))) === 'NOT_ALLOWED' &&
+    (await q('buyer1', 'entEnquiryClose', { enquiryId: db._dump('entEnquiries/').find((x) => x.buyerUid === 'buyer1' && x.providerUid === 'jane' && x.enquiryId !== e1.enquiryId && x.status === 'OPEN').enquiryId }).then(() => send('buyer1', 'jane', { question: 'Following up on my earlier question please?' })).then((r) => !!r.enquiryId)));
+  await q('jane', 'entMessagingSetSettings', { settings: { whoCanMessage: 'ANYONE' } });
+  ck('"followers" is not offered (follows are not keyed by account)', (await codeOf(q('jane', 'entMessagingSetSettings', { settings: { whoCanMessage: 'FOLLOWERS' } }))) === 'invalid-argument');
   await q('otto', 'entMessagingSetSettings', { settings: { whoCanMessage: 'ANYONE', businessHours: { weekly: Array(7).fill([]) }, outsideHoursAcceptEnquiries: false } });
   const op = await EQ._h.entMessagingPublic({ ...who(null), data: { providerId: 'otto' } });
   ck('outside business hours: "Provider is currently unavailable." — never an online claim', op.openNow === false && op.availabilityNote === 'Provider is currently unavailable.');
