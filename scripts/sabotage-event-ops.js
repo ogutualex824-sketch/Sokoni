@@ -52,6 +52,7 @@ const SUITES = {
   hubrev:   ['node', ['scripts/test-hub-reviews.js']],
   payer:    ['node', ['scripts/test-webhook-payer-credit.js']],
   integrity: ['node', ['scripts/test-money-integrity.js']],
+  gateway:  ['node', ['scripts/test-sokoni-pay-gateway.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -819,6 +820,18 @@ const M = [
     from: "      if (false) {   /* ledger + totals only once the donation is actually charged */", to: "      if (true) {", expect: /LEDGER is not credited|PLEDGE/ },
   { group: 'integrity', rules: true, name: 'a guest creates a confirmed stay again (rules)', file: RULES, suite: 'rules',
     from: "  && request.resource.data.status == 'requested'\n", to: "  && request.resource.data.status in ['requested','confirmed']\n", expect: /CONFIRMED BnB stay/ },
+
+  /* ── SOKONI Pay gateway: server-priced only, every enabled IntaSend method, no WhatsApp (CHANGELOG 216) ── */
+  { group: 'gateway', browser: true, name: 'the gateway charges a CLIENT price when no server purpose is given', file: 'sokoni-pay.js', suite: 'gateway',
+    from: "          /* No server price → no payment. */\n          $(\"spAmount\").textContent = \"—\";\n          say(\"This payment isn't available on SOKONI Pay yet — nothing was charged.\", \"#ff9800\");\n          return;", to: "          intent = { ref: genRef(\"SKN\"), amount: Math.round(Number(options.serviceTotal || options.depositAmount || 200)) };", expect: /refused/ },
+  { group: 'gateway', browser: true, name: 'the page\'s amount overrides the server\'s price', file: 'sokoni-pay.js', suite: 'gateway',
+    from: "          intent = { ref: String(r.ref || r.paymentIntentId), amount: Math.round(Number(r.amount)) };", to: "          intent = { ref: String(r.ref || r.paymentIntentId), amount: Math.round(Number(options.depositAmount || r.amount)) };", expect: /SERVER's/ },
+  { group: 'gateway', browser: true, name: 'the gateway unlocks BEFORE the server confirms the payment', file: 'sokoni-pay.js', suite: 'gateway',
+    from: "        say(\"📲 Enter your M-PESA PIN on \"+phone+\" — waiting for confirmation…\", \"#fbbf24\");\n", to: "        if(options.onSuccess) options.onSuccess(intent.ref);\n        say(\"📲 Enter your M-PESA PIN on \"+phone+\" — waiting for confirmation…\", \"#fbbf24\");\n", expect: /onSuccess never fires/ },
+  { group: 'gateway', browser: true, name: 'card / bank shown whether or not the server enables them (a faked method)', file: 'sokoni-pay.js', suite: 'gateway',
+    from: "            .then((m)=>{ if(m && m.hosted) hostedBtn.style.display = \"block\"; })", to: "            .then(()=>{ hostedBtn.style.display = \"block\"; })", expect: /only M-PESA is offered/ },
+  { group: 'gateway', browser: true, name: 'waConnect hands the booking to WhatsApp again', file: 'sokoni-pay.js', suite: 'gateway',
+    from: "  const uid = opts.providerUid || opts.providerId || null;", to: "  window.open(\"https://wa.me/\"+String(providerPhone||\"\").replace(/^0/,\"254\")+\"?text=\"+encodeURIComponent(message||\"\"),\"_blank\");\n  const uid = opts.providerUid || opts.providerId || null;", expect: /never wa\.me/ },
 ];
 
 const argv = process.argv.slice(2);

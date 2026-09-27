@@ -150,205 +150,130 @@ function genRef(prefix){ return (prefix||"SKN")+Date.now().toString(36).toUpperC
    GATEWAY MODAL — shown before any booking / WA connect
 ═══════════════════════════════════════════════════════════ */
 function showGateway(options){
+  /* SOKONI PAY GATEWAY — SERVER-PRICED ONLY (CHANGELOG 216).
+
+     This modal used to charge whatever the page asked: options.serviceTotal, else options.depositAmount, else a
+     per-category default, else KES 200 — while ignoring options.amount — and the booking or order was then written
+     by the browser. The server priced nothing, so a page could charge the wrong amount (half of a food order, KES 200
+     for a KES 5,000 plan) and the money had no earner (CHANGELOG 214 now HOLDS such payments instead of crediting
+     the payer).
+
+     Now the gateway only charges a SERVER-MINTED payment intent:
+       · options.purpose + options.purposeData → createPaymentIntent (functions/payment-purposes.js prices it from
+         Firestore and names its earner) — the amount shown and charged is the SERVER's; or
+       · options.paymentIntentId + options.depositAmount — an intent the page already minted (subscriptions).
+     Anything else is REFUSED before any money moves ("nothing was charged").
+
+     EVERY IntaSend method the server offers for the purpose: M-PESA STK always; card / bank / other methods through
+     IntaSend's hosted checkout when getCheckoutMethods enables them for this purpose (config/hostedCheckout).
+     onSuccess(ref) fires only after the SERVER marked payments/{ref} COMPLETE. */
   return new Promise((resolve)=>{
-    /*
-      options = {
-        providerName, category, serviceDesc, depositAmount,
-        providerPhone, onSuccess(ref), onCancel
-      }
-    */
-    /* Was written as a two-line fallback with the `||` missing:
-           SokoniCommission.pct(options.category)
-           SokoniCommission.pct("default");
-       ASI split that into an assignment plus a discarded no-op call, so the
-       "fallback" never ran. Harmless only by luck — resolve() in
-       sokoni-commission-rates.js:132-139 already returns RATES.default for any
-       unrecognised key, so pct() cannot return undefined. The fallback was
-       redundant as well as dead; one call is the correct expression. */
-    const commissionPct = SokoniCommission.pct(options.category);
-
-    /* If caller provides the full service total, collect it all through SOKONI.
-       Otherwise fall back to the small upfront deposit (legacy behaviour). */
-    const serviceTotal   = Number(options.serviceTotal||0);
-    const depositFallback = options.depositAmount ||
-      SERVICE_FEES.deposits[options.category] ||
-      SERVICE_FEES.deposits.default;
-    const payAmount      = serviceTotal > 0 ? serviceTotal : depositFallback;
-    const sokoniCut      = Math.round(payAmount * commissionPct / 100);
-    const providerNet    = payAmount - sokoniCut;
-    const fullPayment    = serviceTotal > 0;   /* true = full amount through SOKONI */
-    /* Alias for backward-compat (older code may still reference depositAmount) */
-    const depositAmount  = payAmount;
-
-    /* Build modal */
-    /* Honour a server-minted reference when the caller supplies one.
-
-       createPaymentIntent writes paymentIntents/{ref} and initiateSTKPush
-       enforces the amount against that document. Minting a fresh ref here
-       would orphan the intent — the push would arrive under a reference the
-       server has no authority record for, and an enforced caller would have
-       its payment refused. Callers that do not mint an intent keep the
-       generated ref exactly as before. */
-    const ref = (options && options.paymentIntentId) || (options && options.ref) || genRef("SKN");
+    options = options || {};
+    const IS = window.SokoniIntaSend;
+    const call = (name, data) => (IS && IS.call ? IS.call(name, data) : Promise.reject(new Error("SOKONI Pay is loading — try again.")));
     const modal = document.createElement("div");
     modal.id = "sokoniPayGateway";
-    modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.88);backdrop-filter:blur(16px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;";
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-label", "SOKONI Pay");
+    modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.88);backdrop-filter:blur(16px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;";
     modal.innerHTML = `
-      <div style="background:#111;border:1px solid rgba(113,255,0,0.2);border-radius:24px;padding:28px;max-width:420px;width:100%;position:relative;animation:spGateIn .3s cubic-bezier(.34,1.56,.64,1);">
-        <style>@keyframes spGateIn{from{transform:scale(.85) translateY(20px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}</style>
-        <button id="spClose" style="position:absolute;top:14px;right:16px;background:none;border:none;color:rgba(255,255,255,0.3);font-size:20px;cursor:pointer;">✕</button>
-
-        <!-- SOKONI branding -->
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
-          <img src="assets/sokoni-logo-dark.png" style="height:28px;" onerror="this.style.display='none'">
-          <div style="font-size:11px;font-weight:800;color:rgba(113,255,0,0.7);text-transform:uppercase;letter-spacing:.08em;">Secure Booking</div>
+      <div style="background:#111;border:1px solid rgba(113,255,0,0.2);border-radius:24px;padding:24px;max-width:420px;width:100%;position:relative;max-height:92vh;overflow:auto;">
+        <button type="button" id="spClose" aria-label="Close" style="position:absolute;top:10px;right:12px;background:none;border:none;color:rgba(255,255,255,0.45);font-size:20px;cursor:pointer;min-width:44px;min-height:44px;">✕</button>
+        <div style="font-size:11px;font-weight:800;color:rgba(113,255,0,0.75);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;">🔒 SOKONI Pay</div>
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:14px 16px;margin-bottom:14px;">
+          <div style="font-size:13px;font-weight:800;color:white;margin-bottom:4px;">${_esc(options.providerName||"SOKONI")}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.5);">${_esc(options.serviceDesc||"")}</div>
         </div>
-
-        <!-- Provider info -->
-        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:14px 16px;margin-bottom:16px;">
-          <div style="font-size:13px;font-weight:800;color:white;margin-bottom:4px;">${_esc(options.providerName||"Service Provider")}</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.45);">${_esc(options.serviceDesc||"Professional Service")}</div>
+        <div id="spAmountBox" style="background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.14);border-radius:14px;padding:14px 16px;margin-bottom:14px;display:flex;justify-content:space-between;font-size:14px;font-weight:800;color:white;">
+          <span>Total to pay</span><span id="spAmount" style="color:#71ff00;">Calculating…</span>
         </div>
-
-        <!-- Payment Breakdown -->
-        <div style="background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.14);border-radius:14px;padding:16px;margin-bottom:16px;">
-          <div style="font-size:11px;font-weight:800;color:rgba(113,255,0,0.7);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px;">💳 Payment Breakdown</div>
-          <div style="display:flex;justify-content:space-between;font-size:13px;color:white;font-weight:800;margin-bottom:8px;">
-            <span>${fullPayment ? '💸 Total You Pay' : '🔒 Booking Deposit'}</span>
-            <span style="color:#71ff00;">KES ${payAmount.toLocaleString()}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:6px;">
-            <span>⚙️ SOKONI Platform Fee (${commissionPct}%)</span>
-            <span>KES ${sokoniCut.toLocaleString()}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(0,200,120,0.9);font-weight:800;padding-top:8px;border-top:1px solid rgba(255,255,255,0.07);">
-            <span>💚 ${fullPayment ? 'Provider Receives' : 'After Completion'}</span>
-            <span>KES ${providerNet.toLocaleString()}</span>
-          </div>
-          ${fullPayment
-            ? `<div style="font-size:10px;color:rgba(113,255,0,0.5);margin-top:8px;line-height:1.6;">✅ Commission auto-deducted — payment goes through SOKONI account, provider receives their net amount automatically.</div>`
-            : `<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:8px;line-height:1.6;">Deposit secures your slot. Full service fee collected at completion — commission auto-deducted at that point.</div>`
-          }
+        <div id="spPayArea" style="display:none;">
+          <label for="spPhone" style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.06em;">M-PESA number</label>
+          <input id="spPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="07XXXXXXXX" value="${_esc(_getLoggedInPhone())}" style="width:100%;box-sizing:border-box;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:10px;">
+          <button type="button" id="spPayBtn" style="width:100%;min-height:48px;padding:12px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;font-size:14px;border:none;border-radius:12px;cursor:pointer;font-family:inherit;">📲 Pay with M-PESA</button>
+          <button type="button" id="spHostedBtn" style="display:none;width:100%;min-height:48px;padding:12px;margin-top:10px;background:rgba(255,255,255,0.06);color:white;font-weight:800;font-size:14px;border:1px solid rgba(255,255,255,0.15);border-radius:12px;cursor:pointer;font-family:inherit;">💳 Card, bank &amp; other methods</button>
         </div>
-
-        <!-- Phone input -->
-        <div style="margin-bottom:14px;">
-          <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.06em;">Your M-PESA Number *</label>
-          <input id="spPhone" type="tel" placeholder="07XXXXXXXX" value="${_getLoggedInPhone()}" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:14px;outline:none;font-family:inherit;">
-        </div>
-
-        <!-- Pay button -->
-        <button id="spPayBtn" style="width:100%;padding:14px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;font-size:14px;border:none;border-radius:12px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;">
-          📲 Pay KES ${payAmount.toLocaleString()} via M-PESA
-        </button>
-
-        <div id="spMsg" style="font-size:12px;margin-top:10px;text-align:center;min-height:14px;color:rgba(255,255,255,0.5);"></div>
-
-        <!-- Booking reference (shown after payment) -->
+        <div id="spMsg" role="status" aria-live="polite" style="font-size:12px;margin-top:10px;text-align:center;min-height:14px;color:rgba(255,255,255,0.6);"></div>
         <div id="spRefBox" style="display:none;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.2);border-radius:10px;padding:10px 14px;margin-top:12px;text-align:center;">
-          <div style="font-size:10px;color:rgba(255,255,255,0.35);">Booking Reference</div>
-          <div style="font-size:20px;font-weight:900;color:#00aaff;letter-spacing:.1em;">${ref}</div>
-          <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:3px;">Quote this ref to your provider</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.45);">Payment reference</div>
+          <div id="spRef" style="font-size:18px;font-weight:900;color:#00aaff;letter-spacing:.08em;"></div>
         </div>
-
-        <!-- Continue button (after payment) -->
-        <button id="spContinueBtn" style="display:none;width:100%;padding:13px;background:linear-gradient(135deg,#00aaff,#0077cc);color:white;font-weight:900;font-size:14px;border:none;border-radius:12px;cursor:pointer;font-family:inherit;margin-top:10px;">
-          ✅ Continue to Provider →
-        </button>
-
-        <div style="text-align:center;margin-top:12px;font-size:10px;color:rgba(255,255,255,0.2);">
-          🔒 Secured by SOKONI · Powered by M-PESA
-        </div>
+        <button type="button" id="spContinueBtn" style="display:none;width:100%;min-height:48px;padding:12px;background:linear-gradient(135deg,#00aaff,#0077cc);color:white;font-weight:900;font-size:14px;border:none;border-radius:12px;cursor:pointer;font-family:inherit;margin-top:10px;">✅ Continue</button>
+        <div style="text-align:center;margin-top:12px;font-size:10px;color:rgba(255,255,255,0.3);">🔒 Secured by SOKONI · Powered by IntaSend</div>
       </div>`;
-
     document.body.appendChild(modal);
 
-    /* Close button */
-    modal.querySelector("#spClose").addEventListener("click",()=>{
-      modal.remove();
-      if(options.onCancel) options.onCancel();
-      resolve(null);
-    });
-    modal.addEventListener("click", e=>{ if(e.target===modal){ modal.remove(); resolve(null); } });
+    const $ = (id) => modal.querySelector("#"+id);
+    const msgEl = $("spMsg"), payBtn = $("spPayBtn"), hostedBtn = $("spHostedBtn");
+    const say = (t, color) => { msgEl.textContent = t; msgEl.style.color = color || "rgba(255,255,255,0.6)"; };
+    let done = false;
+    const close = (val) => { if(done) return; done = true; modal.remove(); if(val == null && options.onCancel) options.onCancel(); resolve(val); };
+    $("spClose").addEventListener("click", ()=>close(null));
+    modal.addEventListener("click", e=>{ if(e.target===modal) close(null); });
 
-    /* Pay button */
-    const payBtn = modal.querySelector("#spPayBtn");
-    const msgEl  = modal.querySelector("#spMsg");
-    const refBox = modal.querySelector("#spRefBox");
-    const contBtn= modal.querySelector("#spContinueBtn");
+    let intent = null;   /* { ref, amount } — ONLY ever the server's */
+    (async ()=>{
+      try {
+        if(options.paymentIntentId && Number(options.depositAmount) > 0){
+          intent = { ref: String(options.paymentIntentId), amount: Math.round(Number(options.depositAmount)) };
+        } else if(options.purpose){
+          const r = await call("createPaymentIntent", Object.assign({ purpose: String(options.purpose) }, options.purposeData || {}));
+          intent = { ref: String(r.ref || r.paymentIntentId), amount: Math.round(Number(r.amount)) };
+        } else {
+          /* No server price → no payment. */
+          $("spAmount").textContent = "—";
+          say("This payment isn't available on SOKONI Pay yet — nothing was charged.", "#ff9800");
+          return;
+        }
+        if(!intent.ref || !(intent.amount > 0)) throw new Error("This payment could not be priced — nothing was charged.");
+        $("spAmount").textContent = "KES " + intent.amount.toLocaleString();
+        $("spPayArea").style.display = "block";
+        if(options.purpose){
+          call("getCheckoutMethods", { purpose: String(options.purpose) })
+            .then((m)=>{ if(m && m.hosted) hostedBtn.style.display = "block"; })
+            .catch(()=>{});
+        }
+      } catch(e){
+        $("spAmount").textContent = "—";
+        say((e && e.message) || "This payment could not be priced — nothing was charged.", "#ff6b6b");
+      }
+    })();
+
+    hostedBtn.addEventListener("click", async ()=>{
+      if(!intent) return;
+      hostedBtn.disabled = true; say("Opening secure checkout…");
+      try {
+        const returnPath = location.pathname + location.search;
+        const r = await call("initiateHostedCheckout", { ref: intent.ref, returnPath });
+        const u = new URL(r.url);
+        if(u.protocol !== "https:" || !/(^|\.)intasend\.com$/.test(u.hostname)) throw new Error("Unexpected checkout address.");
+        location.href = u.href;
+      } catch(e){ hostedBtn.disabled = false; say((e && e.message) || "Could not open checkout — nothing was charged.", "#ff6b6b"); }
+    });
 
     payBtn.addEventListener("click", async ()=>{
-      const phone = modal.querySelector("#spPhone").value.trim();
-      if(!phone||!/^0[17]\d{8}$/.test(phone.replace(/\s/g,""))){
-        msgEl.textContent="⚠️ Enter a valid M-PESA number (07XX or 01XX)";
-        msgEl.style.color="#ff9800"; return;
-      }
-
-      /* Use SokoniIntaSend for real payment if available */
-      const IS = window.SokoniIntaSend;
-      if(!IS){
-        msgEl.textContent="⚠️ Payment system loading… please refresh and try again.";
-        msgEl.style.color="#ff9800"; return;
-      }
-
-      payBtn.disabled=true;
-      payBtn.textContent="⏳ Sending M-PESA request…";
-      msgEl.textContent="";
-      msgEl.style.color="#fbbf24";
-
+      if(!intent) return;
+      const phone = $("spPhone").value.trim();
+      if(!phone || !/^0[17]\d{8}$/.test(phone.replace(/\s/g,""))){ say("⚠️ Enter a valid M-PESA number (07XX or 01XX)", "#ff9800"); return; }
+      payBtn.disabled = true; hostedBtn.disabled = true;
+      say("📲 Sending the M-PESA request…", "#fbbf24");
       try {
-        /* Step 1: initiate STK Push via Cloud Function */
-        await IS.initiateSTKPush(phone, payAmount, ref, {
-          providerName:  options.providerName||"",
-          serviceDesc:   options.serviceDesc||"",
-          category:      options.category||"default",
-          commissionPct,
-          /* Booking linkage — the webhook uses these to create bookings/{ref} and
-             notify both parties on payment COMPLETE. */
-          type:          options.bookingType || undefined,
-          providerId:    options.providerId  || undefined,
-          providerPhone: options.providerPhone || undefined,
+        /* The intent carries the server's price and earner; the push is checked against it (initiateSTKPush). */
+        await IS.initiateSTKPush(phone, intent.amount, intent.ref, { category: options.category || undefined, serviceDesc: options.serviceDesc || undefined });
+        say("📲 Enter your M-PESA PIN on "+phone+" — waiting for confirmation…", "#fbbf24");
+        await IS.waitForConfirmation(intent.ref, { amount: intent.amount, phone }, (status)=>{
+          if(status==="FAILED") say("❌ Payment failed — nothing was charged. Try again.", "#ff6b6b");
         });
-
-        msgEl.textContent="📲 M-PESA prompt sent to "+phone+" — enter your PIN on your phone";
-        msgEl.style.color="#fbbf24";
-        payBtn.textContent="⏳ Waiting for payment confirmation…";
-
-        /* Step 2: wait for webhook confirmation via Firestore realtime listener */
-        const receipt = await IS.waitForConfirmation(ref, {
-          providerName:  options.providerName||"",
-          serviceDesc:   options.serviceDesc||"",
-          category:      options.category||"default",
-          amount:        payAmount,
-          sokoniCut,
-          providerNet,
-          commissionPct,
-          phone,
-          providerPhone: options.providerPhone||"",
-          fullPayment,
-        }, (status)=>{
-          if(status==="PENDING") msgEl.textContent="⏳ Waiting for M-PESA confirmation…";
-          else if(status==="FAILED") msgEl.textContent="❌ Payment failed. Please retry.";
-        });
-
-        /* Payment confirmed server-side — safe to unlock */
-        payBtn.style.display="none";
-        refBox.style.display="block";
-        contBtn.style.display="block";
-        msgEl.textContent="✅ Payment confirmed! Ref: "+ref;
-        msgEl.style.color="#71ff00";
-
-        contBtn.addEventListener("click",()=>{
-          modal.remove();
-          if(options.onSuccess) options.onSuccess(ref);
-          resolve(ref);
-        });
-
+        /* The SERVER confirmed the payment (payments/{ref} COMPLETE) — only now is it paid. */
+        $("spPayArea").style.display = "none";
+        $("spRef").textContent = intent.ref;
+        $("spRefBox").style.display = "block";
+        $("spContinueBtn").style.display = "block";
+        say("✅ Payment confirmed by SOKONI.", "#71ff00");
+        $("spContinueBtn").addEventListener("click", ()=>{ const ref = intent.ref; done = true; modal.remove(); if(options.onSuccess) options.onSuccess(ref); resolve(ref); });
       } catch(err){
-        payBtn.disabled=false;
-        payBtn.innerHTML="📲 Pay KES "+payAmount.toLocaleString()+" via M-PESA";
-        msgEl.textContent="❌ "+(err.message||"Payment failed. Please try again.");
-        msgEl.style.color="#ff5555";
+        payBtn.disabled = false; hostedBtn.disabled = false;
+        say("❌ "+((err && err.message) || "Payment failed. Please try again."), "#ff6b6b");
       }
     });
   });
@@ -358,22 +283,18 @@ function showGateway(options){
    WHATSAPP CONNECT — intercept every WA link with deposit
 ═══════════════════════════════════════════════════════════ */
 function waConnect(providerPhone, message, opts){
-  /*
-    opts = { providerName, category, serviceDesc }
-    Opens booking gateway first, then WhatsApp with ref embedded
-  */
+  /* NO WHATSAPP HAND-OFF (owner directive 2026-09-27; CHANGELOG 216). This took a client-priced "deposit" and then
+     opened the provider's WhatsApp with the booking — the booking, the conversation and the money left SOKONI.
+     Booking and talking now stay in the app: the provider's SOKONI chat when their account is known, otherwise an
+     honest message. Nothing is charged here. */
   opts = opts || {};
-  showGateway({
-    providerName:  opts.providerName  || "Service Provider",
-    category:      opts.category      || "default",
-    serviceDesc:   opts.serviceDesc   || "Book via WhatsApp",
-    providerPhone: providerPhone,
-    onSuccess: function(ref){
-      const fullMsg = "📋 Booking Ref: *"+ref+"*\n\n"+message+"\n\n_Booked via SOKONI_";
-      const ph = providerPhone.replace(/^0/,"254").replace(/\D/g,"");
-      window.open("https://wa.me/"+ph+"?text="+encodeURIComponent(fullMsg),"_blank");
-    }
-  });
+  const uid = opts.providerUid || opts.providerId || null;
+  if(uid && window.SokoniInbox && typeof window.SokoniInbox.openChat === "function"){
+    window.SokoniInbox.openChat({ otherUid: uid, otherName: opts.providerName || "Provider", type: "customer-provider", context: (opts.serviceDesc || opts.category || "SOKONI") });
+    return;
+  }
+  const t = "Message this provider on SOKONI — in-app booking and chat for this listing are being enabled. Nothing was sent or charged.";
+  if(typeof window._skToast === "function") window._skToast(t); else if(typeof alert === "function") alert(t);
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -383,6 +304,7 @@ function bookNow(opts, callback){
   /* Collect payment, then the webhook creates the booking + notifies both parties
      server-side (so a closed wizard can't lose the booking). */
   showGateway({
+    purpose: (opts && opts.purpose) || undefined, purposeData: (opts && opts.purposeData) || undefined, paymentIntentId: (opts && opts.paymentIntentId) || undefined,   /* server-priced only — CHANGELOG 216 */
     providerName:  opts.providerName  || "Provider",
     category:      opts.category      || "default",
     serviceDesc:   opts.serviceDesc   || "Service Booking",
@@ -439,6 +361,7 @@ function revealPhone(opts, callback){
   */
   const fee = SERVICE_FEES.phoneLead[opts.category] || SERVICE_FEES.phoneLead.default;
   showGateway({
+    purpose: (opts && opts.purpose) || undefined, purposeData: (opts && opts.purposeData) || undefined, paymentIntentId: (opts && opts.paymentIntentId) || undefined,   /* server-priced only — CHANGELOG 216 */
     providerName:  opts.providerName || "Service Provider",
     category:      opts.category     || "default",
     serviceDesc:   opts.serviceDesc  || "Unlock direct contact number",
@@ -481,6 +404,7 @@ function platformBook(opts){
   const platformFee  = Math.round(total * platformPct / 100);
 
   showGateway({
+    purpose: (opts && opts.purpose) || undefined, purposeData: (opts && opts.purposeData) || undefined, paymentIntentId: (opts && opts.paymentIntentId) || undefined,   /* server-priced only — CHANGELOG 216 */
     providerName:  opts.providerName  || "Provider",
     category:      opts.category      || "default",
     serviceDesc:   opts.serviceDesc   || "Platform Booking",
@@ -532,6 +456,7 @@ function chargeLead(opts){
   */
   const fee = SERVICE_FEES.leadFee[opts.category] || SERVICE_FEES.leadFee.default;
   showGateway({
+    purpose: (opts && opts.purpose) || undefined, purposeData: (opts && opts.purposeData) || undefined, paymentIntentId: (opts && opts.paymentIntentId) || undefined,   /* server-priced only — CHANGELOG 216 */
     providerName:  opts.providerName || "Provider",
     category:      opts.category     || "default",
     serviceDesc:   "New Lead: " + (opts.clientName||"Buyer") + " — " + (opts.serviceDesc||"Service Request"),
@@ -574,6 +499,7 @@ function issueVoucher(opts){
   */
   const dep = SERVICE_FEES.deposits[opts.category] || SERVICE_FEES.deposits.default;
   showGateway({
+    purpose: (opts && opts.purpose) || undefined, purposeData: (opts && opts.purposeData) || undefined, paymentIntentId: (opts && opts.paymentIntentId) || undefined,   /* server-priced only — CHANGELOG 216 */
     providerName:  opts.providerName || "Provider",
     category:      opts.category     || "default",
     serviceDesc:   opts.serviceDesc  || "Get Walk-In Voucher",
@@ -634,6 +560,7 @@ function propertyConnect(opts){
   const deposit     = SERVICE_FEES.deposits["property"] || 500;
   const platformPct = SokoniCommission.pct("property");
   showGateway({
+    purpose: (opts && opts.purpose) || undefined, purposeData: (opts && opts.purposeData) || undefined, paymentIntentId: (opts && opts.paymentIntentId) || undefined,   /* server-priced only — CHANGELOG 216 */
     providerName:  opts.landlordName  || "Property Owner",
     category:      "property",
     serviceDesc:   opts.propertyDesc  || "Property Viewing — Connect with Landlord",
@@ -705,6 +632,7 @@ function boostListing(listingId, boostType, opts){
   const boost = BOOST_PRICES[boostType]; if(!boost) return;
   opts = opts || {};
   showGateway({
+    purpose: (opts && opts.purpose) || undefined, purposeData: (opts && opts.purposeData) || undefined, paymentIntentId: (opts && opts.paymentIntentId) || undefined,   /* server-priced only — CHANGELOG 216 */
     providerName:  opts.listingName || "Your Listing",
     category:      "boost",
     serviceDesc:   boost.label+" — "+boost.description+" ("+boost.duration+" days)",

@@ -342,6 +342,9 @@
      EXPORTS
   ══════════════════════════════════════════════════════════════ */
   window.SokoniIntaSend = {
+    /* the same callable channel, reused by the SOKONI Pay gateway (createPaymentIntent / getCheckoutMethods /
+       initiateHostedCheckout) — CHANGELOG 216 */
+    call: _callFunction,
     initiateSTKPush,
     waitForConfirmation,
     cancelPayment,

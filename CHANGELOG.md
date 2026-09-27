@@ -1,3 +1,53 @@
+## 2026-09-27 (216) — SOKONI Pay gateway: server-priced only, every IntaSend method, no WhatsApp
+
+Owner directives: "use IntaSend… make sure all payments are covered", "all payments IntaSend provides… include all",
+and "no WhatsApp… everything in app". Not deployed. No KRA calls. No production writes.
+
+- **The chokepoint.** About 30 flows (bookNow, platformBook, waConnect, revealPhone, chargeLead, issueVoucher,
+  propertyConnect, boostListing and direct `SokoniPay.gateway` calls) went through `sokoni-pay.js` `showGateway`. It
+  charged whatever the page asked:
+  - `serviceTotal`, else `depositAmount`, else a category default, else **KES 200**;
+  - `options.amount` was ignored, so hub registration charged 200 instead of 500–5,000;
+  - `platformBook` defaulted to **50 %** of the total.
+  - The booking or order was then written by the browser. The server priced nothing, and the money had no earner
+    (CHANGELOG 214 now holds such payments instead of crediting the payer).
+- **Now the gateway charges only a server-minted intent:**
+  - `purpose` + `purposeData` → `createPaymentIntent`. The registry (`functions/payment-purposes.js`) prices from
+    Firestore and names the earner. The amount **shown and charged** is the server's, whatever the page claims.
+  - Or `paymentIntentId`, an intent the page already minted, such as subscriptions.
+  - Anything else is **refused before money moves** ("nothing was charged").
+  - `onSuccess` fires only after the server marks `payments/{ref}` COMPLETE. A failed payment never unlocks.
+- **Every IntaSend method the server offers.** M-PESA STK always. "Card, bank & other methods" through IntaSend's hosted
+  checkout for the **same** intent, whenever `getCheckoutMethods` enables it for the purpose
+  (`config/hostedCheckout.purposes`); it is never faked. The redirect goes only to `https://*.intasend.com`. This is
+  the pattern already proven on events and Creator film.
+- **No WhatsApp hand-off.** `waConnect` took a client-priced "deposit" and then opened the provider's WhatsApp with the
+  booking. It now opens the provider's **SOKONI chat** (`SokoniInbox.openChat`) when their account is known, and
+  otherwise says nothing was sent or charged. It never charges.
+- **Wrappers.** Every gateway wrapper passes `purpose`, `purposeData` and `paymentIntentId` through, so each hub
+  converts at its call site. Until then, those flows are refused honestly instead of taking a client-priced payment.
+- **Also:**
+  - `SokoniIntaSend.call` exposes the existing callable channel.
+  - The modal is accessible (a dialog with an aria-live status and 44 px targets) and fits at 360.
+- **Tests:**
+  - `scripts/test-sokoni-pay-gateway.js` (new): 16/0. It runs the **real** `sokoni-pay.js` and `sokoni-intasend.js` in
+    Chromium against the **real** `createPaymentIntent` and purpose registry, and records IntaSend itself.
+    - Covered: refusal, the server price over a page claim of KES 1, confirmation only after server COMPLETE, a failed
+      payment, hosted checkout (offered only when enabled), a minted intent, and WhatsApp.
+  - `test-healthcare-payment-convergence` is identical to the baseline (39/1, a pre-existing failure).
+  - Sabotage group `gateway`: 5/5 caught. The first run missed "the page's amount wins" because `bookNow` never
+    forwards an amount; the test now calls the gateway directly with a claimed amount. The tree is byte-identical
+    afterwards.
+- **Files:**
+  - `sokoni-pay.js`, `sokoni-intasend.js`.
+  - Scripts: `scripts/test-sokoni-pay-gateway.js` (new), `scripts/sabotage-event-ops.js`.
+- **Breaking.** Gateway flows without a server purpose no longer take payment. Hub-by-hub conversion follows, in this
+  order: bnb, food, fitness, legal, property, construction, boosts, hub registration, digital, AI plans, plans, and
+  delivery.
+- **Deploy (when authorised):**
+  - Hosting from the latest commit.
+  - Enable hosted-checkout purposes in `config/hostedCheckout` as each is proven.
+
 ## 2026-09-27 (215) — Money integrity: nothing says "paid" or "confirmed" without a server-confirmed payment
 
 This is the first step of the owner's priority: payments and WhatsApp first, money integrity before conversion. It
