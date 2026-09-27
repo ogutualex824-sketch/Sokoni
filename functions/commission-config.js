@@ -65,6 +65,10 @@ const RATES = {
    * and silently repriced. The values are exactly what those functions were charging. */
   event_tickets:    { pct: 3,   fixedKES: 0,    _was: 'event-hub.js:493 `const platformFeeRate = 0.03`' },
   ppv:              { pct: 15,  fixedKES: 0,    _was: 'entertainment-hub.js:215 `listing.price * 0.15`' },
+  // Owner decision 2026-09-27 (Entertainment convergence): artist, Entertainment service and venue
+  // bookings pay 5 % — the service-provider lane — never the generic services / plan rates. Scoped to
+  // bookings the SERVER classified as Entertainment (provider-hub.resolveProviderClassification).
+  entertainment_bookings: { pct: 5, fixedKES: 0, _was: 'new 2026-09-27 — owner decision (was: provider plan rate 20/15/10/7/5 %)' },
 
   /* ── no hub counterpart, so no conflict: the existing category rate stands ── */
   services:         { pct: 15,  fixedKES: 0,    _was: 'category only' },

@@ -1,20 +1,20 @@
 'use strict';
 /**
- * SOKONI — Event-day cashier sales (Quick Sale): cash, external card, cashier-assisted IntaSend.
+ * SOKONI — Event-day cashier sales (Quick Sale): cashier-assisted IntaSend, external card.
  * ============================================================================================
  * THE RULE: no ticket sale exists outside SOKONI. A cashier cannot take KES 2,000 and hand over a
  * ticket off the books — every door sale is created HERE, by a named, event-scoped staff member,
  * priced by the server, and produces the same canonical ticket (number + PIN) as an online sale.
  *
- *   tender 'cash'           cashier confirms cash received ≥ total → sale COMPLETED → tickets
- *                           issued → SOKONI 3 % recorded as a RECEIVABLE (the organizer holds the
- *                           cash) → netted from the organizer's next online settlement release.
+ *   CASH IS NOT ACCEPTED (owner decision 2026-09-27). SOKONI is the official ticketing and payment
+ *   record for event sales; a cash sale produces no verifiable payment. tender 'cash' is refused. Cash
+ *   sales recorded before the decision stay on record (their settlement rows and receivables unchanged).
  *   tender 'card_external'  a card taken on the ORGANIZER'S OWN terminal. Never "CARD → PAID":
  *                           it needs the terminal provider + transaction reference + an amount equal
  *                           to the server total. The reference is claimed once per organizer
  *                           (create()) — a replayed / reused reference is refused. Recorded as
- *                           operator-attested (paymentVerified:false), commission receivable as for
- *                           cash. No reference yet → PENDING_EXTERNAL: seats held, NO tickets, until
+ *                           operator-attested (paymentVerified:false); SOKONI's 3 % is a commission
+ *                           receivable netted from the organizer's next release. No reference yet → PENDING_EXTERNAL: seats held, NO tickets, until
  *                           the reference is recorded (or the sale is cancelled / expires).
  *   tender 'intasend'       cashier-assisted M-PESA / hosted checkout: this creates an event ORDER
  *                           and the cashier completes it through the canonical createPaymentIntent
@@ -42,7 +42,7 @@ const COL = Object.freeze({
   TICKETS: 'eventTickets', EVENTS: 'events', ORDERS: 'eventOrders', SETTLEMENTS: 'eventSettlements',
   RECEIVABLES: 'eventCommissionReceivables', COMMISSION: 'commissionLedger', SECRETS: 'eventTicketSecrets',
 });
-const TENDERS = Object.freeze(['cash', 'card_external', 'intasend']);
+const TENDERS = Object.freeze(['card_external', 'intasend']);   /* no 'cash' — owner decision 2026-09-27 */
 const CARD_PROVIDERS = Object.freeze(['pesapal', 'kcb', 'equity', 'coop', 'absa', 'ncba', 'stanbic', 'dtb', 'ipay', 'flutterwave', 'other']);
 const PENDING_TTL_MS = 30 * 60 * 1000;
 
@@ -140,6 +140,7 @@ async function quickSale(req) {
   const event = actor.event;
   if (event.status !== 'live') fail('failed-precondition', 'This event is not selling tickets.');
   const tender = String(d.tender || '');
+  if (tender === 'cash') fail('failed-precondition', 'Cash is not accepted for event ticket sales. Take M-PESA through SOKONI, or a card with its terminal reference.');
   if (!TENDERS.includes(tender)) fail('invalid-argument', `Payment must be one of: ${TENDERS.join(', ')}.`);
   const key = String(d.idempotencyKey || '');
   if (!/^[A-Za-z0-9_-]{8,80}$/.test(key)) fail('invalid-argument', 'A sale key is required.');
@@ -179,12 +180,8 @@ async function quickSale(req) {
       const used = await txn.get(cardRefKey);
       if (used.exists) fail('already-exists', 'That card reference has already been recorded for a sale.');
     }
-    if (tender === 'cash') {
-      const received = _cents(d.cashReceivedKes);
-      if (!(received >= grossCents)) fail('invalid-argument', `Cash received must be at least KES ${(grossCents / 100).toLocaleString()}.`);
-    }
-    /* Tickets issued NOW (cash, or card with its reference) get their identities chosen here — last read. */
-    const ids = (tender === 'cash' || (tender === 'card_external' && cardRefKey)) ? await OPS.allocateIdentities(txn, event.id, qtyTotal) : [];
+    /* Tickets issued NOW (card with its reference) get their identities chosen here — last read. */
+    const ids = (tender === 'card_external' && cardRefKey) ? await OPS.allocateIdentities(txn, event.id, qtyTotal) : [];
 
     /* ── writes ── */
     for (const l of lines) txn.update(l.ref, { sold: FieldValue.increment(l.qty), updatedAt: FieldValue.serverTimestamp() });
@@ -199,14 +196,6 @@ async function quickSale(req) {
     };
     const sale = { id: saleRef.id, tender };
 
-    if (tender === 'cash') {
-      const received = _cents(d.cashReceivedKes);
-      const c = _postDoorSale(txn, { sale, event, grossCents, quantity: qtyTotal, lines });
-      const tickets = _issueTickets(txn, { sale, lines, event, soldBy: actor.uid, attendeeName, ids });
-      txn.create(saleRef, { ...base, status: 'COMPLETED', cashReceivedCents: received, changeCents: received - grossCents,
-        commissionCents: c.commissionCents, ticketIds: tickets, completedAt: FieldValue.serverTimestamp() });
-      return { saleId: saleRef.id, status: 'COMPLETED', tickets: tickets.length, changeCents: received - grossCents };
-    }
     if (tender === 'card_external' && cardRefKey) {
       const c = _postDoorSale(txn, { sale, event, grossCents, quantity: qtyTotal, lines });
       const tickets = _issueTickets(txn, { sale, lines, event, soldBy: actor.uid, attendeeName, ids });
@@ -386,8 +375,9 @@ async function finance(req) {
     grossCents: sum(live, 'grossCents'),
     online: { grossCents: sum(online, 'grossCents'), providerFeeCents: unknownFee ? null : sum(online, 'providerFeeCents'),
       commissionCents: unknownFee ? null : sum(online, 'commissionCents'),
-      heldCents: unknownFee ? null : sum(online.filter((x) => x.status === 'HELD'), 'organizerNetCents'),
-      releasedCents: sum(online.filter((x) => x.status === 'RELEASED'), 'organizerNetCents'),
+      /* Admission settles a ticket's share at the gate (releaseTicketShare): a HELD settlement may be part-paid. */
+      heldCents: unknownFee ? null : online.filter((x) => x.status === 'HELD').reduce((a, x) => a + Math.max(0, (Number(x.organizerNetCents) || 0) - (Number(x.releasedCents) || 0)), 0),
+      releasedCents: sum(online.filter((x) => x.status === 'RELEASED'), 'organizerNetCents') + sum(online.filter((x) => x.status === 'HELD'), 'releasedCents'),
       awaitingFeeCount: online.filter((x) => x.status === 'FEE_UNREPORTED').length },
     door: { grossCents: sum(door, 'grossCents'), commissionCents: sum(door, 'commissionCents'),
       byChannel: door.reduce((a, x) => { a[x.channel] = (a[x.channel] || 0) + (Number(x.grossCents) || 0); return a; }, {}) },

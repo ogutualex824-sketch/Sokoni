@@ -106,6 +106,18 @@ const TYPES = {
   booking_paid:         { priority: 'commerce',  category: 'orders',   smsTemplate: null },
   booking_refund:       { priority: 'commerce',  category: 'payments', smsTemplate: null },
   booking_released:     { priority: 'commerce',  category: 'orders',   smsTemplate: null },
+  /* 2026-09-27 (Entertainment convergence): four types the booking engines already SEND were never
+     registered, so notify() threw and the fire-and-forget catch swallowed them — the customer was
+     never told of a confirmation, a cancellation, a completed refund or a reschedule proposal. */
+  booking_confirmed:           { priority: 'commerce', category: 'orders',   smsTemplate: null },
+  booking_cancelled:           { priority: 'commerce', category: 'orders',   smsTemplate: null },
+  booking_refund_completed:    { priority: 'commerce', category: 'payments', smsTemplate: null },
+  booking_reschedule_proposed: { priority: 'commerce', category: 'orders',   smsTemplate: null },
+  /* Entertainment booking identity (entertainment-bookings.js) — anchored to the booking. */
+  ent_booking_created:         { priority: 'commerce', category: 'orders',   smsTemplate: null },
+  ent_booking_update:          { priority: 'commerce', category: 'orders',   smsTemplate: null },
+  ent_booking_refund_update:   { priority: 'commerce', category: 'payments', smsTemplate: null },
+  ent_booking_verified:        { priority: 'commerce', category: 'orders',   smsTemplate: null },
   /* SOKONI Connect — an incoming business call.
      COMMERCE, not critical, and that is a decision: critical ignores preferences AND quiet
      hours, and a buyer must not be able to ring a merchant at 3am about an order. The cost is

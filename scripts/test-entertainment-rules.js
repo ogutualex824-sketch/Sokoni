@@ -64,6 +64,12 @@ async function suite(env, label, served) {
     await f('applications/app1', { uid: 'buyer1', role: 'event_organizer_applicant', status: 'pending' });
     await f('applicationDecisions/app1', { status: 'rejected', decidedBy: 'admin1' });
     await f('eventPromoCodes/pc1', { eventId: 'e1', code: 'JAZZ20', discountValue: 20 });
+    await f('entBookings/svc_b1', { envId: 'svc_b1', buyerUid: 'buyer1', providerUid: 'owner1', bookingRef: 'BK-ART-2026-000001', pin: { hash: 'h' } });
+    await f('entBookingSecrets/svc_b1', { envId: 'svc_b1', pin: '4827', buyerUid: 'buyer1' });
+    await f('entBookingRefs/BK-ART-2026-000001', { envId: 'svc_b1' });
+    await f('entBookingPinAttempts/svc_b1_owner1', { fails: 2 });
+    await f('bookings/vk1', { venueId: 'cv1', ownerId: 'owner1', customerId: 'buyer1', status: 'confirmed', date: '2026-10-01' });
+    await f('venueSettlements/VB-1', { ownerUid: 'owner1', netCents: 940000, status: 'HELD' });
   });
   const till = env.authenticatedContext('till1', { email: 'till1@x.co', email_verified: true }).firestore();
   const admin = env.authenticatedContext('admin1', { admin: true }).firestore();
@@ -71,9 +77,37 @@ async function suite(env, label, served) {
   const buyer = env.authenticatedContext('buyer1').firestore();
   const org = env.authenticatedContext('org1').firestore();
   const stranger = env.authenticatedContext('stranger').firestore();
+  /* isActive() reads token.deactivated; a token WITHOUT that claim errors -> deny for every clause (see the
+     positive control). The booking-conversation denials use an actor whose isActive() is TRUE, so only the
+     reserved-id / type clauses decide. */
+  const member = env.authenticatedContext('member1', { deactivated: false }).firestore();
 
   /* expectDeny: denied under SERVED rules; under the allow-all counterproof the same op must SUCCEED. */
   const expectDeny = async (name, p) => { if (served) ck(`${label}: ${name} DENIED`, await denied(p)); else ck(`${label}: ${name} flips to ALLOWED under allow-all`, await allowed(p)); };
+
+  /* ── Entertainment booking identity + venue rail (convergence Slice A) ── */
+  await expectDeny('a stranger reads a booking envelope', stranger.doc('entBookings/svc_b1').get());
+  await expectDeny('the PROVIDER reads the raw booking PIN of the buyer', owner.doc('entBookingSecrets/svc_b1').get());
+  await expectDeny('a stranger reads the raw booking PIN', stranger.doc('entBookingSecrets/svc_b1').get());
+  await expectDeny('the buyer forges their booking as verified', buyer.doc('entBookings/svc_b1').update({ verification: { state: 'VERIFIED' } }));
+  await expectDeny('anyone writes a booking PIN secret', buyer.doc('entBookingSecrets/svc_b1').set({ pin: '0000', buyerUid: 'buyer1' }));
+  await expectDeny('anyone reads the booking-reference index', buyer.doc('entBookingRefs/BK-ART-2026-000001').get());
+  await expectDeny('the provider resets their own wrong-PIN counter', owner.doc('entBookingPinAttempts/svc_b1_owner1').set({ fails: 0 }));
+  await expectDeny('a client pre-creates a booking conversation id (participant substitution)', member.doc('conversations/ent_booking_svc_b1').set({ participants: ['member1', 'owner1'], transactionType: 'x' }));
+  await expectDeny('a client creates an ent_booking-typed conversation under another id', member.doc('conversations/c123').set({ participants: ['member1', 'owner1'], transactionType: 'ent_booking' }));
+  await expectDeny('the venue owner marks a booking checked-in directly (skipping the PIN)', owner.doc('bookings/vk1').update({ status: 'active', checkIn: { time: 1 } }));
+  await expectDeny('the customer moves the booking date directly', buyer.doc('bookings/vk1').update({ date: '2026-12-25' }));
+  await expectDeny('a stranger reads a venue settlement', stranger.doc('venueSettlements/VB-1').get());
+  await expectDeny('the owner forges a settlement release', owner.doc('venueSettlements/VB-1').update({ status: 'RELEASED' }));
+  if (served) {
+    /* POSITIVE CONTROL: the same actor, same shape, a non-booking id is ALLOWED — so the ent_booking denial
+       above is decided by the reserved-id clause, not by some other clause failing. */
+    ck(`${label}: positive control — the same client creates an ordinary conversation (ALLOWED)`, await allowed(member.doc('conversations/c_ok_1').set({ participants: ['member1', 'owner1'], transactionType: 'x' })));
+    ck(`${label}: the buyer reads their own booking and PIN`, (await allowed(buyer.doc('entBookings/svc_b1').get())) && (await allowed(buyer.doc('entBookingSecrets/svc_b1').get())));
+    ck(`${label}: the provider reads the booking envelope (not the PIN)`, await allowed(owner.doc('entBookings/svc_b1').get()));
+    ck(`${label}: the customer can still cancel their own booking`, await allowed(buyer.doc('bookings/vk1').update({ status: 'cancelled', cancelReason: 'plans changed' })));
+    ck(`${label}: the owner reads their own venue settlement`, await allowed(owner.doc('venueSettlements/VB-1').get()));
+  }
 
   /* ── readiness sweep 2026-09-27: organizer self-mint, forged application decision, promo codes ── */
   await expectDeny('buyer adds event_organizer to their OWN users.roles (organizer self-mint)',

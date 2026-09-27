@@ -226,6 +226,10 @@ _h.providerDeclineBooking = async (req) => {
   const lockRef = _slotLockRef(uid, data);   /* §3.2 — release the slot lock on decline */
   if (lockRef) batch.delete(lockRef);
   await batch.commit();
+  /* 2026-09-27: a DECLINED paid booking kept the customer's held money — nothing released it. A
+     provider decline is a provider cancellation: full refund through the same disbursement the
+     cancel path uses (idempotent on paymentStatus 'paid_held'). */
+  if (data.paymentStatus === 'paid_held') await _disburseHeldFunds(data, ref, { by: 'provider', isNoShow: false });
   return { success: true, status: 'declined' };
 };
 
@@ -233,6 +237,158 @@ _h.providerDeclineBooking = async (req) => {
    confirmed/in_progress → completed. Computes commission from the provider's
    subscription and writes a pending providerPayouts entry + analytics rollup.
    This is the enforcement point for commissionRate. Idempotent per booking. */
+
+/* ── SETTLEMENT, shared by completion and show-up (2026-09-27) ────────────────────────────────
+   The commission, amounts and ledger writes providerCompleteBooking always made, factored out so the
+   Entertainment show-up settlement (a verified booking PIN — owner decision 2026-09-27) uses the SAME
+   engine call and the SAME writes, never a copy. */
+async function _settlementMath(uid, ref, data) {
+    const gross = Math.max(0, Math.round(Number(data.price) || 0)); // cents
+
+    /* ── COMMISSION: the ONE engine ────────────────────────────────────────────────────────
+     * This used to compute commission itself:
+     *     const rate = await _commissionRate(uid);          // subscription-core, a fraction
+     *     const commission = Math.round(gross * rate);
+     * That bypassed the Commission Engine entirely, so provider bookings ignored
+     * commissionRules, revenueConfig overrides, promotional/holiday campaigns, plan adjustments
+     * and the audit trail. It was the last money path on the platform outside the engine.
+     *
+     * PRICING IS UNCHANGED. `subscriptionRole: 'provider'` puts the engine in compatibility
+     * mode, where it consumes the provider's own plan rate through the SAME
+     * subscription-core.getCommissionRate() call this code used to make. Free Trial 20%,
+     * Starter 15%, Professional 10%, Business 7%, Enterprise 5% — exactly as before.
+     * Migrating to the engine's flat `services` rate would have charged an Enterprise provider
+     * 15% instead of 5%; that is a commercial decision, and it is not taken here.
+     *
+     * What the provider GAINS: commissionRules and revenueConfig now reach these bookings for
+     * the first time, so the platform can price, discount or run a commission holiday for
+     * providers without a deploy. An operator retires compatibility mode by writing
+     * revenueConfig/hub_provider — no code change. */
+    const { calculateCommission } = require('./finos-utils');
+    /* ── WHICH inputs, per hub (ADR-015) ──────────────────────────────────────────────────
+     * Healthcare bookings are priced at the approved 5% from the SAME canonical table
+     * (commission-config.RATES.healthcare); every other provider booking keeps the plan rate
+     * through compatibility mode, byte-identical to before. The selection lives in
+     * provider-hub.commissionArgsForHub so this call site and the forfeited-deposit one above
+     * cannot drift, and `commissionHub` is the server-resolved snapshot taken at booking
+     * creation — never the client-supplied `hubType`, and never the provider's own category. */
+    const comm = await calculateCommission(_db(), {
+      orderAmountCents: gross,
+      sellerId:         uid,
+      ...require('./provider-hub').commissionArgsForHub(data.commissionHub),
+    });
+
+    const commission = comm.commissionCents;
+    const net        = gross - commission;
+    const rate       = comm.effectiveRate / 100;   /* fraction — the shape every reader expects */
+    const dayKey     = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+    /* ── SETTLEMENT → WALLET (Phase C, docs/BOOKING_CONVERGENCE.md) ────────────────────────
+     * The earning must reach the provider's WITHDRAWABLE balance, not sit forever as a
+     * `pending` providerPayouts row. `wallets.balance` is the canonical withdrawable field
+     * and is denominated in whole SHILLINGS (requestSellerPayout / the FinOS sweep both treat
+     * it that way); `net` here is CENTS. Credit floor(net/100) shillings and record the
+     * sub-shilling remainder for exact reconciliation — never round up (money integrity).
+     *
+     * DOUBLE-PAY GUARD: crediting the wallet AND marking the payout `settled` (not `pending`)
+     * removes it from providerRequestPayout's `status==='pending'` sweep, so an earning can be
+     * withdrawn through exactly ONE path (the wallet). providerPayouts stays as the audit
+     * ledger; the wallet is the money. This does NOT touch FinOS availableBalance/
+     * withdrawableBalance, so sweepEarningsToWallet never sees it either — two disjoint paths.
+     *
+     * EXACTLY-ONCE: the whole thing runs in a runTransaction that re-reads the booking status
+     * inside the txn. Two concurrent completions cannot both credit — the loser retries, sees
+     * `completed`, and returns without a second increment. */
+    /* Provider earnings = (price − commission) + fee. Commission applies to the service
+       PRICE only; the booking fee passes through to the provider (decision a). Both come
+       from the booking's OWN immutable snapshot (data.price / data.fee) — settlement never
+       re-reads the current providerServices record (contract: snapshot-only settlement). */
+    const feeCents        = Math.max(0, Math.round(Number(data.fee) || 0));
+    const settleCents     = net + feeCents;
+    const settleShillings = Math.floor(settleCents / 100);
+    const remainderCents  = settleCents - settleShillings * 100;
+    /* willCredit is decided INSIDE the txn from the live paymentStatus (paid_held) — the
+       single provider credit point; an unpaid completion moves no money. */
+
+    const payoutRef   = _db().collection('providerPayouts').doc(ref.id);
+    const profileRef  = _db().collection('providerProfiles').doc(uid);
+    const analyticsRef = _db().collection('providerAnalytics').doc(`${uid}_${dayKey}`);
+    const walletRef   = _db().collection('wallets').doc(uid);
+    const walletTxId  = `${uid}_${ref.id}_bookingsettle`;   /* deterministic → no duplicate txn */
+    const walletTxRef = _db().collection('walletTransactions').doc(walletTxId);
+
+
+  return { gross, comm, commission, net, rate, dayKey, feeCents, settleCents, settleShillings, remainderCents,
+    payoutRef, profileRef, analyticsRef, walletRef, walletTxId, walletTxRef };
+}
+
+/** The ledger writes of a settlement (inside the caller's transaction, after its reads). */
+function _settlementWrites(t, { ref, uid, cur, m, statusPatch, trigger }) {
+  const isHeld     = cur.paymentStatus === 'paid_held';
+  const willCredit = isHeld && m.settleShillings >= 1;
+  t.update(ref, Object.assign({ updatedAt: _ts() }, statusPatch || {},
+    isHeld ? { paymentStatus: 'settled', settledAt: _ts(), settledTrigger: trigger } : {}));
+  t.set(m.payoutRef, {
+    providerId: uid, bookingId: ref.id, sourceType: 'booking', sourceId: ref.id,
+    gross: m.gross, commission: m.commission, commissionRate: m.rate,
+    fee: m.feeCents, net: m.net, settlementCents: m.settleCents,
+    amount: m.net, currency: 'KES', method: null, reference: null,
+    status: isHeld ? 'settled' : 'unpaid', createdAt: _ts(),
+    walletCredited: willCredit, netShillingsCredited: willCredit ? m.settleShillings : 0,
+    remainderCents: m.remainderCents, walletTxnId: willCredit ? m.walletTxId : null, settledAt: isHeld ? _ts() : null,
+    settledTrigger: trigger,
+    commissionPct: m.comm.effectiveRate, baseRate: m.comm.baseRate, pricingSource: m.comm.pricingSource,
+    ruleId: m.comm.ruleId, ruleSource: m.comm.ruleSource, planId: m.comm.planId, planName: m.comm.planName,
+    planAdjustment: m.comm.planAdjustment, adjustmentType: m.comm.adjustmentType, planApplied: m.comm.planApplied,
+    reason: m.comm.reason, hubType: 'provider', category: m.comm.category, idempotencyKey: ref.id,
+    calculatedAt: m.comm.calculatedAt, engineVersion: m.comm.engineVersion,
+  }, { merge: true });
+  if (willCredit) {
+    t.set(m.walletRef, { balance: _inc(m.settleShillings), updatedAt: _ts() }, { merge: true });
+    t.set(m.walletTxRef, {
+      uid, type: 'booking_earning', amount: m.settleShillings,
+      description: `Earnings — ${_san(cur.service || 'service booking', 120)}`,
+      bookingId: ref.id, sourceType: 'booking', sourceId: ref.id, trigger, status: 'completed', createdAt: _ts(),
+    });
+  }
+  t.set(m.profileRef, { bookingCount: _inc(1), lifetimeGrossKes: _inc(m.gross), updatedAt: _ts() }, { merge: true });
+  t.set(m.analyticsRef, {
+    providerId: uid, date: m.dayKey, bookingsCompleted: _inc(1),
+    grossCents: _inc(m.gross), commissionCents: _inc(m.commission), netCents: _inc(m.net), updatedAt: _ts(),
+  }, { merge: true });
+  return { credited: willCredit ? m.settleShillings : 0, remainderCents: m.remainderCents, held: isHeld };
+}
+
+/**
+ * SHOW-UP SETTLES THE BOOKING (owner decision 2026-09-27). For an ENTERTAINMENT booking (artist /
+ * Entertainment service), the moment the provider verifies the buyer's booking PIN
+ * (entertainment-bookings.verifyPin) the held payment settles: SOKONI's 5 % commission is booked and the
+ * provider's net is credited to the PROVIDER's business wallet (wallets/{providerId}). Never the buyer's.
+ * The booking moves to in_progress; completion later only closes it (no second settlement).
+ * Exactly once: re-reads paymentStatus inside the transaction (paid_held → settled).
+ */
+async function settleOnShowUp(bookingId) {
+  const ref = _db().collection('providerBookings').doc(String(bookingId));
+  const snap = await ref.get();
+  if (!snap.exists) return { skipped: 'missing' };
+  const data = snap.data();
+  if (data.commissionHub !== 'entertainment') return { skipped: 'not_entertainment' };
+  if (data.paymentStatus !== 'paid_held') return { skipped: `payment_${data.paymentStatus}` };
+  if (!['confirmed', 'in_progress'].includes(data.status)) return { skipped: `status_${data.status}` };
+  const uid = data.providerId;
+  const m = await _settlementMath(uid, ref, data);
+  let out = null;
+  await _db().runTransaction(async (t) => {
+    const cur = (await t.get(ref)).data();
+    if (!cur || cur.paymentStatus !== 'paid_held' || !['confirmed', 'in_progress'].includes(cur.status)) { out = { skipped: 'already_settled_or_changed' }; return; }
+    out = _settlementWrites(t, { ref, uid, cur, m, trigger: 'show_up',
+      statusPatch: { status: 'in_progress', startedAt: cur.startedAt || _ts(), showUpVerifiedAt: _ts() } });
+  });
+  if (out && out.credited !== undefined) logger.info('settleOnShowUp', { bookingId, uid, gross: m.gross, commission: m.commission, credited: out.credited });
+  return out;
+}
+/* exported through the module.exports rebind at the end of this file */
+
 _h.providerCompleteBooking = async (req) => {
   const uid = _uid(req);
   await legal.assertLegalCompliance(uid, 'provider'); // receive settlement — dark-launched
@@ -242,79 +398,8 @@ _h.providerCompleteBooking = async (req) => {
     throw new HttpsError('failed-precondition', `Cannot complete a "${data.status}" booking.`);
   }
 
-  const gross = Math.max(0, Math.round(Number(data.price) || 0)); // cents
-
-  /* ── COMMISSION: the ONE engine ────────────────────────────────────────────────────────
-   * This used to compute commission itself:
-   *     const rate = await _commissionRate(uid);          // subscription-core, a fraction
-   *     const commission = Math.round(gross * rate);
-   * That bypassed the Commission Engine entirely, so provider bookings ignored
-   * commissionRules, revenueConfig overrides, promotional/holiday campaigns, plan adjustments
-   * and the audit trail. It was the last money path on the platform outside the engine.
-   *
-   * PRICING IS UNCHANGED. `subscriptionRole: 'provider'` puts the engine in compatibility
-   * mode, where it consumes the provider's own plan rate through the SAME
-   * subscription-core.getCommissionRate() call this code used to make. Free Trial 20%,
-   * Starter 15%, Professional 10%, Business 7%, Enterprise 5% — exactly as before.
-   * Migrating to the engine's flat `services` rate would have charged an Enterprise provider
-   * 15% instead of 5%; that is a commercial decision, and it is not taken here.
-   *
-   * What the provider GAINS: commissionRules and revenueConfig now reach these bookings for
-   * the first time, so the platform can price, discount or run a commission holiday for
-   * providers without a deploy. An operator retires compatibility mode by writing
-   * revenueConfig/hub_provider — no code change. */
-  const { calculateCommission } = require('./finos-utils');
-  /* ── WHICH inputs, per hub (ADR-015) ──────────────────────────────────────────────────
-   * Healthcare bookings are priced at the approved 5% from the SAME canonical table
-   * (commission-config.RATES.healthcare); every other provider booking keeps the plan rate
-   * through compatibility mode, byte-identical to before. The selection lives in
-   * provider-hub.commissionArgsForHub so this call site and the forfeited-deposit one above
-   * cannot drift, and `commissionHub` is the server-resolved snapshot taken at booking
-   * creation — never the client-supplied `hubType`, and never the provider's own category. */
-  const comm = await calculateCommission(_db(), {
-    orderAmountCents: gross,
-    sellerId:         uid,
-    ...require('./provider-hub').commissionArgsForHub(data.commissionHub),
-  });
-
-  const commission = comm.commissionCents;
-  const net        = gross - commission;
-  const rate       = comm.effectiveRate / 100;   /* fraction — the shape every reader expects */
-  const dayKey     = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-
-  /* ── SETTLEMENT → WALLET (Phase C, docs/BOOKING_CONVERGENCE.md) ────────────────────────
-   * The earning must reach the provider's WITHDRAWABLE balance, not sit forever as a
-   * `pending` providerPayouts row. `wallets.balance` is the canonical withdrawable field
-   * and is denominated in whole SHILLINGS (requestSellerPayout / the FinOS sweep both treat
-   * it that way); `net` here is CENTS. Credit floor(net/100) shillings and record the
-   * sub-shilling remainder for exact reconciliation — never round up (money integrity).
-   *
-   * DOUBLE-PAY GUARD: crediting the wallet AND marking the payout `settled` (not `pending`)
-   * removes it from providerRequestPayout's `status==='pending'` sweep, so an earning can be
-   * withdrawn through exactly ONE path (the wallet). providerPayouts stays as the audit
-   * ledger; the wallet is the money. This does NOT touch FinOS availableBalance/
-   * withdrawableBalance, so sweepEarningsToWallet never sees it either — two disjoint paths.
-   *
-   * EXACTLY-ONCE: the whole thing runs in a runTransaction that re-reads the booking status
-   * inside the txn. Two concurrent completions cannot both credit — the loser retries, sees
-   * `completed`, and returns without a second increment. */
-  /* Provider earnings = (price − commission) + fee. Commission applies to the service
-     PRICE only; the booking fee passes through to the provider (decision a). Both come
-     from the booking's OWN immutable snapshot (data.price / data.fee) — settlement never
-     re-reads the current providerServices record (contract: snapshot-only settlement). */
-  const feeCents        = Math.max(0, Math.round(Number(data.fee) || 0));
-  const settleCents     = net + feeCents;
-  const settleShillings = Math.floor(settleCents / 100);
-  const remainderCents  = settleCents - settleShillings * 100;
-  /* willCredit is decided INSIDE the txn from the live paymentStatus (paid_held) — the
-     single provider credit point; an unpaid completion moves no money. */
-
-  const payoutRef   = _db().collection('providerPayouts').doc(ref.id);
-  const profileRef  = _db().collection('providerProfiles').doc(uid);
-  const analyticsRef = _db().collection('providerAnalytics').doc(`${uid}_${dayKey}`);
-  const walletRef   = _db().collection('wallets').doc(uid);
-  const walletTxId  = `${uid}_${ref.id}_bookingsettle`;   /* deterministic → no duplicate txn */
-  const walletTxRef = _db().collection('walletTransactions').doc(walletTxId);
+  const m = await _settlementMath(uid, ref, data);
+  const { gross, commission, net, feeCents, settleCents } = m;
 
   let result = null;
   await _db().runTransaction(async (t) => {
@@ -323,91 +408,22 @@ _h.providerCompleteBooking = async (req) => {
     const cur = bSnap.data();
     if (cur.status === 'completed') { result = { alreadyDone: true }; return; }
     if (cur.providerId !== uid) throw new HttpsError('permission-denied', 'Not your booking.');
-
-    /* Credit only when the funds are HELD (paid_held) — the SINGLE provider credit point.
-       Re-read inside the txn so two concurrent completions can't both credit, and a
-       post-settlement retry is a no-op (status==='completed' already returned above). */
-    const isHeld     = cur.paymentStatus === 'paid_held';
-    const willCredit = isHeld && settleShillings >= 1;
-
-    t.update(ref, Object.assign(
-      { status: 'completed', completedAt: _ts(), updatedAt: _ts() },
-      isHeld ? { paymentStatus: 'settled', settledAt: _ts() } : {}));   /* paid_held → settled */
-
     /* §3.2 — completed is terminal; release the slot lock (harmless no-op if absent). */
     const lockRef = _slotLockRef(uid, cur);
     if (lockRef) t.delete(lockRef);
-
-    /* Earnings ledger entry (deterministic id = booking id → one payout per booking).
-       status:'settled' — credited to the withdrawable wallet, NOT awaiting a separate payout. */
-    t.set(payoutRef, {
-      providerId: uid, bookingId: ref.id,
-      sourceType: 'booking', sourceId: ref.id,   /* explicit FK — reconciliation/reporting/exports */
-      gross, commission, commissionRate: rate,
-      fee: feeCents, net, settlementCents: settleCents,   /* provider earns (price−commission)+fee */
-      amount: net, currency: 'KES', method: null, reference: null,
-      status: isHeld ? 'settled' : 'unpaid',   /* 'unpaid' = completed with no held funds → no credit */
-      createdAt: _ts(),
-      /* settlement evidence — how the earning reached the wallet */
-      walletCredited:      willCredit,
-      netShillingsCredited: willCredit ? settleShillings : 0,
-      remainderCents,                       /* sub-shilling not withdrawable; recorded for reconciliation */
-      walletTxnId:         willCredit ? walletTxId : null,
-      settledAt:           isHeld ? _ts() : null,
-
-      /* ── AUDIT TRAIL ──────────────────────────────────────────────────────────────────────
-       * A provider booking now carries the same evidence as every other payment on the
-       * platform, so a settlement is reproducible years later: which authority priced it,
-       * which rule, which plan, what adjustment, and under which engine version.
-       * `commissionRate` above is retained unchanged so existing analytics, receipts,
-       * exports, dashboards and payout reports keep working untouched. */
-      commissionPct:   comm.effectiveRate,
-      baseRate:        comm.baseRate,
-      pricingSource:   comm.pricingSource,
-      ruleId:          comm.ruleId,
-      ruleSource:      comm.ruleSource,
-      planId:          comm.planId,
-      planName:        comm.planName,
-      planAdjustment:  comm.planAdjustment,
-      adjustmentType:  comm.adjustmentType,
-      planApplied:     comm.planApplied,
-      reason:          comm.reason,
-      hubType:         'provider',
-      category:        comm.category,
-      idempotencyKey:  ref.id,        /* the booking id IS the key — one payout per booking */
-      calculatedAt:    comm.calculatedAt,
-      engineVersion:   comm.engineVersion,
-    }, { merge: true });
-
-    /* Credit the withdrawable wallet + a matching ledger row (set-merge creates the wallet
-       doc if the provider never had one; increment starts an absent field at 0). */
-    if (willCredit) {
-      t.set(walletRef, { balance: _inc(settleShillings), updatedAt: _ts() }, { merge: true });
-      t.set(walletTxRef, {
-        uid, type: 'booking_earning', amount: settleShillings,
-        description: `Earnings — ${_san(cur.service || 'service booking', 120)}`,
-        bookingId: ref.id,
-        sourceType: 'booking', sourceId: ref.id,   /* explicit FK — don't rely on the encoded doc id */
-        status: 'completed', createdAt: _ts(),
-      });
+    /* Settled already at SHOW-UP (Entertainment booking PIN): completion only closes the booking —
+       the payout, wallet credit and counters were written then; writing them again would pay twice. */
+    if (cur.settledTrigger === 'show_up' && cur.paymentStatus === 'settled') {
+      t.update(ref, { status: 'completed', completedAt: _ts(), updatedAt: _ts() });
+      result = { credited: 0, remainderCents: 0, held: false, settledAtShowUp: true };
+      return;
     }
-
-    // Profile counters
-    t.set(profileRef, { bookingCount: _inc(1), lifetimeGrossKes: _inc(gross), updatedAt: _ts() }, { merge: true });
-
-    // providerAnalytics — daily rollup (id = uid_YYYY-MM-DD)
-    t.set(analyticsRef, {
-      providerId: uid, date: dayKey, bookingsCompleted: _inc(1),
-      grossCents: _inc(gross), commissionCents: _inc(commission), netCents: _inc(net),
-      updatedAt: _ts(),
-    }, { merge: true });
-
-    result = { credited: willCredit ? settleShillings : 0, remainderCents, held: isHeld };
+    result = _settlementWrites(t, { ref, uid, cur, m, trigger: 'completion', statusPatch: { status: 'completed', completedAt: _ts() } });
   });
 
   if (result && result.alreadyDone) return { success: true, status: 'completed', alreadyDone: true };
-  logger.info('providerCompleteBooking', { uid, bookingId: ref.id, gross, commission, net, fee: feeCents, creditedShillings: result.credited, held: result.held, remainderCents });
-  return { success: true, status: 'completed', gross, commission, net, fee: feeCents, settlementCents: settleCents, held: result.held, creditedShillings: result.credited, remainderCents };
+  logger.info('providerCompleteBooking', { uid, bookingId: ref.id, gross, commission, net, fee: feeCents, creditedShillings: result.credited, held: result.held, remainderCents: result.remainderCents });
+  return { success: true, status: 'completed', gross, commission, net, fee: feeCents, settlementCents: settleCents, held: result.held, creditedShillings: result.credited, remainderCents: result.remainderCents, settledAtShowUp: !!result.settledAtShowUp };
 };
 
 /* ============================================================================
@@ -428,6 +444,9 @@ _h.providerStartBooking = async (req) => {
   if (data.startTs && Date.now() < data.startTs - 2 * 3600000) {
     throw new HttpsError('failed-precondition', 'Too early to start this booking.');
   }
+  /* Entertainment bookings (artist / Entertainment service): the performance / service starts only
+     after the buyer's booking PIN is verified (entertainment-bookings, "PIN YAKO NI BOOKING YAKO"). */
+  if (data.commissionHub === 'entertainment') await require('./entertainment-bookings').assertVerified('providerBookings', ref.id);
   await ref.update({ status: 'in_progress', startedAt: _ts(), updatedAt: _ts() });
   return { success: true, status: 'in_progress' };
 };
@@ -996,4 +1015,4 @@ _h.providerToggleService = async (req) => {
 
 /* _disburseHeldFunds + _slotLockRef are reused by the booking resolution engine (Step 3 refund):
    the ONE place booking money moves, and the canonical slot-lock ref. No behavior change. */
-module.exports = { _h, _disburseHeldFunds, _slotLockRef };
+module.exports = { _h, _disburseHeldFunds, _slotLockRef, settleOnShowUp };   /* rebind: every export must be listed here */

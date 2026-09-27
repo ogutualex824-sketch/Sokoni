@@ -83,21 +83,26 @@ async function setup() {
 (async () => {
   await setup();
 
-  /* ═══ cash ═══ */
-  console.log('\n── cash ──');
-  const cashReq = { eventId: 'evA', tender: 'cash', items: [{ tierId: 'VIP', qty: 1, price: 1 }, { tierId: 'REG', qty: 2 }], cashReceivedKes: 10000, idempotencyKey: key(), attendeeName: 'Wanjiru Kamau' };
-  ck('cash below the total refused', (await code(op('eventQuickSale', 'till1', { ...cashReq, cashReceivedKes: 8999, idempotencyKey: key() }))) === 'invalid-argument');
+  /* ═══ cash is refused (owner decision 2026-09-27) ═══ */
+  console.log('\n── cash refused ──');
+  const salesBefore = db._dump('eventSales/').length;
+  const cashTry = await code(op('eventQuickSale', 'till1', { eventId: 'evA', tender: 'cash', items: [{ tierId: 'REG', qty: 1 }], cashReceivedKes: 5000, idempotencyKey: key() }));
+  ck('CASH is refused outright for event ticket sales — no sale, no ticket, no seat held', cashTry === 'failed-precondition' && db._dump('eventSales/').length === salesBefore && (await get('eventTicketTiers/REG')).sold === 0, cashTry);
+
+  /* ═══ door sale on the organizer's card terminal (the remaining door route) ═══ */
+  console.log('\n── door card sale ──');
+  const cashReq = { eventId: 'evA', tender: 'card_external', items: [{ tierId: 'VIP', qty: 1, price: 1 }, { tierId: 'REG', qty: 2 }], card: { provider: 'equity', reference: 'DOOR000001', amountKes: 9000 }, idempotencyKey: key(), attendeeName: 'Wanjiru Kamau' };
   const cs = await op('eventQuickSale', 'till1', cashReq);
   const sale = await get(`eventSales/${cs.saleId}`);
   ck('server total = 5,000 + 2 × 2,000 = 9,000 (the client "price: 1" is ignored)', sale.grossCents === 900000 && sale.status === 'COMPLETED', sale.grossCents);
-  ck('change computed by the server (1,000)', cs.changeCents === 100000);
+  ck('the terminal reference is recorded; the payment is attested, not verified', sale.card && sale.card.reference === 'DOOR000001' && sale.paymentVerified === false);
   ck('sale attributed to the cashier (uid, role, device)', sale.cashierUid === 'till1' && sale.cashierRole === 'cashier');
   const tix = db._dump('eventTickets/').filter((t) => t.saleId === cs.saleId);
   ck('3 tickets issued, valid, walk-in, soldBy the cashier, each with a PIN', tix.length === 3 && tix.every((t) => t.status === 'valid' && t.walkIn && t.soldBy === 'till1' && !t.buyerUid && t.pinHash && /^SK-EVT-/.test(t.ticketNumber)));
   const rec = await get(`eventCommissionReceivables/${cs.saleId}`);
   ck('SOKONI 3 % (270) recorded as a RECEIVABLE — not the POS 5 %', rec && rec.amountCents === 27000 && rec.status === 'OUTSTANDING', rec && rec.amountCents);
   const st = await get(`eventSettlements/${cs.saleId}`);
-  ck('settlement row ORGANIZER_COLLECTED (organizer holds the cash; nothing to release)', st.status === 'ORGANIZER_COLLECTED' && st.channel === 'CASH' && st.organizerNetCents === 900000 - 27000);
+  ck('settlement row ORGANIZER_COLLECTED (the organizer\'s terminal took it; nothing to release — never withdrawable)', st.status === 'ORGANIZER_COLLECTED' && st.channel === 'CARD_EXTERNAL' && st.organizerNetCents === 900000 - 27000);
   ck('commission ledger row is a receivable at 3 %', (await get(`commissionLedger/evt_${cs.saleId}`)).status === 'receivable' && (await get(`commissionLedger/evt_${cs.saleId}`)).commissionPct === 3);
   ck('inventory decremented (VIP 1, Regular 2, event 3)', (await get('eventTicketTiers/VIP')).sold === 1 && (await get('eventTicketTiers/REG')).sold === 2 && (await get('events/evA')).totalTicketsSold === 3);
 
@@ -109,11 +114,11 @@ async function setup() {
 
   /* ═══ inventory ═══ */
   console.log('\n── inventory ──');
-  const race = await Promise.all(Array.from({ length: 6 }, (_, i) => op('eventQuickSale', i % 2 ? 'till1' : 'till2', { eventId: 'evA', tender: 'cash', items: [{ tierId: 'LAST', qty: 1 }], cashReceivedKes: 1000, idempotencyKey: key() }).catch((e) => ({ err: e.code }))));
+  const race = await Promise.all(Array.from({ length: 6 }, (_, i) => op('eventQuickSale', i % 2 ? 'till1' : 'till2', { eventId: 'evA', tender: 'card_external', items: [{ tierId: 'LAST', qty: 1 }], card: { provider: 'equity', reference: `RACE00000${i}`, amountKes: 1000 }, idempotencyKey: key() }).catch((e) => ({ err: e.code }))));
   ck('6 concurrent sales for the last 3 seats → exactly 3 succeed', race.filter((r) => r.status === 'COMPLETED').length === 3 && (await get('eventTicketTiers/LAST')).sold === 3, race.map((r) => r.status || r.err).join(','));
-  ck('sold out → refused', (await code(op('eventQuickSale', 'till1', { eventId: 'evA', tender: 'cash', items: [{ tierId: 'LAST', qty: 1 }], cashReceivedKes: 1000, idempotencyKey: key() }))) === 'resource-exhausted');
+  ck('sold out → refused', (await code(op('eventQuickSale', 'till1', { eventId: 'evA', tender: 'card_external', items: [{ tierId: 'LAST', qty: 1 }], card: { provider: 'equity', reference: 'SOLDOUT001', amountKes: 1000 }, idempotencyKey: key() }))) === 'resource-exhausted');
   await db.doc('events/evA').set({ capacity: (await get('events/evA')).totalTicketsSold + 1 }, { merge: true });
-  ck('event capacity enforced across tiers', (await code(op('eventQuickSale', 'till1', { eventId: 'evA', tender: 'cash', items: [{ tierId: 'REG', qty: 2 }], cashReceivedKes: 4000, idempotencyKey: key() }))) === 'resource-exhausted');
+  ck('event capacity enforced across tiers', (await code(op('eventQuickSale', 'till1', { eventId: 'evA', tender: 'card_external', items: [{ tierId: 'REG', qty: 2 }], card: { provider: 'equity', reference: 'CAPACITY01', amountKes: 4000 }, idempotencyKey: key() }))) === 'resource-exhausted');
   await db.doc('events/evA').set({ capacity: 1000 }, { merge: true });
 
   /* ═══ card (external terminal) ═══ */
@@ -166,15 +171,15 @@ async function setup() {
   ck('organizer can', (await op('eventSaleTickets', 'org1', { eventId: 'evA', saleId: cs.saleId })).tickets.every((t) => !!t.pin));
   ck('admission staff cannot sell', (await code(op('eventQuickSale', 'gate1', { ...cashReq, idempotencyKey: key() }))) === 'permission-denied');
   ck('marketing staff cannot sell', (await code(op('eventQuickSale', 'promo1', { ...cashReq, idempotencyKey: key() }))) === 'permission-denied');
-  ck('a cashier of event A cannot sell for event B', (await code(op('eventQuickSale', 'till1', { eventId: 'evB', tender: 'cash', items: [{ tierId: 'B1', qty: 1 }], cashReceivedKes: 800, idempotencyKey: key() }))) === 'permission-denied');
+  ck('a cashier of event A cannot sell for event B', (await code(op('eventQuickSale', 'till1', { eventId: 'evB', tender: 'card_external', items: [{ tierId: 'B1', qty: 1 }], card: { provider: 'equity', reference: 'EVB0000001', amountKes: 800 }, idempotencyKey: key() }))) === 'permission-denied');
   const l1 = await op('eventListSales', 'till1', { eventId: 'evA' });
   ck('a cashier lists ONLY their own sales', l1.scope === 'mine' && l1.sales.every((s) => s.cashierUid === 'till1'));
   const lo = await op('eventListSales', 'org1', { eventId: 'evA' });
-  ck('organizer lists all sales with the tender breakdown', lo.scope === 'event' && lo.byTender.cash && lo.byTender.card_external && lo.byTender.intasend, JSON.stringify(Object.keys(lo.byTender)));
+  ck('organizer lists all sales with the tender breakdown — and no cash tender exists', lo.scope === 'event' && !lo.byTender.cash && lo.byTender.card_external && lo.byTender.intasend, JSON.stringify(Object.keys(lo.byTender)));
 
-  /* ═══ end to end: a cash ticket admits by PIN ═══ */
+  /* ═══ end to end: a door-card ticket admits by PIN ═══ */
   const pinCash = mine.tickets[0].pin;
-  ck('a cash-sold ticket is admitted at the gate by its PIN', (await op('eventAdmitTicket', 'gate1', { eventId: 'evA', pin: pinCash })).result === 'admitted');
+  ck('a door-card ticket is admitted at the gate by its PIN', (await op('eventAdmitTicket', 'gate1', { eventId: 'evA', pin: pinCash })).result === 'admitted');
 
   /* ═══ netting at release ═══ */
   console.log('\n── netting ──');
@@ -187,7 +192,7 @@ async function setup() {
   const netted = after.doorCommissionNettedCents;
   ck('release nets outstanding door-sale commission before paying the organizer', rel.released && netted === Math.min(outstanding, ist.organizerNetCents), `${netted} of ${outstanding}`);
   ck('organizer credited net of the netting (whole shillings)', (await get('wallets/org1')).balance - beforeBal === Math.floor((ist.organizerNetCents - netted) / 100));
-  ck('the cash-sale receivable is COLLECTED', (await get(`eventCommissionReceivables/${cs.saleId}`)).status === 'COLLECTED');
+  ck('the door card-sale receivable is COLLECTED', (await get(`eventCommissionReceivables/${cs.saleId}`)).status === 'COLLECTED');
   ck('its commission ledger row is marked collected', (await get(`commissionLedger/evt_${cs.saleId}`)).status === 'collected');
 
   /* partial: a small settlement against a larger receivable */

@@ -226,8 +226,15 @@ const ck = (l, ok, d) => { quiet('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d !== 
   ck('policy is 30 % SOKONI / 70 % creator pool (bps)', C.CREATOR_PPV.sokoniCommissionBps === 3000 && C.CREATOR_PPV.creatorPoolBps === 7000);
   ck('pricing renders both shares FROM the policy, fee deducted first', /pctLabel\(P\.sokoniCommissionBps\)/.test(sub) && /pctLabel\(P\.creatorPoolBps\)/.test(sub) && /IntaSend payment fee/.test(sub));
   ck('pricing says the marketplace commission does not apply to films', /Marketplace commission<\/td><td>Does <b>not<\/b> apply to films/.test(sub));
-  const cc = require('child_process').spawnSync('git', ['diff', '--quiet', 'a38b31a', '--', 'functions/commission-config.js'], { cwd: ROOT });
-  ck('marketplace commission config byte-identical to the pre-Creator base (a38b31a)', cc.status === 0, cc.status);
+  /* 2026-09-27: only the owner-decided Entertainment booking lane was added since the pre-Creator base. */
+  ck('marketplace commission config vs the pre-Creator base (a38b31a): ONLY the added entertainment_bookings 5 % row', (() => {
+    const r = require('child_process').spawnSync('git', ['-C', ROOT, 'diff', '-U0', 'a38b31a', '--', 'functions/commission-config.js'], { encoding: 'utf8' });
+    const lines = String(r.stdout || '').split('\n').filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l));
+    const removed = lines.filter((l) => l.startsWith('-'));
+    const added = lines.filter((l) => l.startsWith('+')).map((l) => l.slice(1).trim()).filter(Boolean);
+    const allowed = added.every((l) => /^entertainment_bookings: \{ pct: 5,/.test(l) || /^\/\//.test(l));
+    return r.status === 0 && removed.length === 0 && allowed && added.some((l) => /^entertainment_bookings: \{ pct: 5,/.test(l));
+  })());
 
   /* ═══ PAYMENT-METHOD READINESS (no provider call) ═══ */
   quiet('\n── payment-method readiness: the record controls availability ──');

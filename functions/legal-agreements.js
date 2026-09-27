@@ -88,25 +88,34 @@ const ROLE_AGREEMENTS = {
   /* ── Entertainment (docs/ENTERTAINMENT_CATEGORY_MATRIX.md). Key points state ONLY rules the code
      enforces; the wording is v1.0 operational terms pending owner/legal review before deploy. ── */
   event_organizer: [
-    { id: 'event-organizer-agreement', name: 'Event Organizer Agreement', url: '/entertainment-terms.html#event-organizer-agreement',
+    /* v1.1 (owner decisions 2026-09-27): SOKONI is the official ticketing / payment record; online
+       purchase is the preferred route; CASH IS PROHIBITED; only credited sales become withdrawable;
+       buyer communication through SOKONI. A new version: organizers accept it again (write-once). */
+    { id: 'event-organizer-agreement', name: 'Event Organizer Agreement', version: '1.1', url: '/entertainment-terms.html#event-organizer-agreement',
       summary: 'How you run ticketed events on SOKONI.',
-      keyPoints: ['Every ticket — online, cash or card at the door — is sold through SOKONI.',
-        'Each ticket has a unique PIN; admission is recorded against it.',
+      keyPoints: ['SOKONI is the official ticketing and payment record for your event: every ticket is sold and recorded in SOKONI.',
+        'Online purchase through SOKONI is the recommended way to sell. Cash sales are not allowed.',
+        'SOKONI charges 3% per ticket sale, deducted when the sale settles; only paid, confirmed sales become withdrawable.',
+        'Each ticket has a unique number and PIN (PIN YAKO NI TICKET YAKO); admission is recorded against it.',
+        'Talk to buyers through SOKONI Messages — each order has its own conversation.',
         'You may add temporary event staff; you are responsible for what they do.'] },
-    { id: 'event-ticketing-refund-obligations', name: 'Ticketing & Refund Obligations', url: '/entertainment-terms.html#event-ticketing-refund-obligations',
+    { id: 'event-ticketing-refund-obligations', name: 'Ticketing & Refund Obligations', version: '1.1', url: '/entertainment-terms.html#event-ticketing-refund-obligations',
       summary: 'The refund policy you set before sales, and when buyers are refunded.',
       keyPoints: ['You set the refund policy before selling; it is locked once a ticket is sold.',
+        'A penalty, if any, is part of that policy and applies only to buyer-driven reasons.',
         'If you cancel an event, buyers are refunded.',
-        'Refunds are reviewed by SOKONI and paid through the original payment method.'] },
-    { id: 'event-staff-cash-handling', name: 'Event Staff & Cash Handling', url: '/entertainment-terms.html#event-staff-cash-handling',
+        'Buyers request refunds through SOKONI; SOKONI reviews them and pays through the original payment method.'] },
+    { id: 'event-staff-cash-handling', name: 'Event Staff, Payments & Door Sales', version: '1.1', url: '/entertainment-terms.html#event-staff-cash-handling',
       summary: 'Door sales and the people you authorise to make them.',
-      keyPoints: ['Cash and card sales at the door must be recorded in SOKONI by a named staff member.',
-        'Card sales need the terminal transaction reference and must match the ticket total.',
-        "SOKONI's commission on door sales is deducted from your online ticket proceeds."] },
+      keyPoints: ['Cash is not accepted for ticket sales.',
+        'A card sale at the door needs the terminal provider, the transaction reference and an amount equal to the ticket total; a reference can be recorded only once.',
+        "Every door sale is recorded in SOKONI by a named staff member; SOKONI's 3% on it is deducted from your online ticket proceeds."] },
     { id: 'commission-agreement',     name: 'Commission Agreement', url: '/entertainment-terms.html#event-commission',
       keyPoints: ['SOKONI charges 3% per ticket, on the ticket value after payment-provider fees.'] },
-    { id: 'payment-settlement-terms', name: 'Payment Settlement Terms', url: '/entertainment-terms.html#event-settlement',
-      keyPoints: ['Online ticket proceeds are held until 24 hours after your event ends, then paid to your SOKONI wallet.'] },
+    /* v1.1 (owner decision 2026-09-27): admission settles the ticket. */
+    { id: 'payment-settlement-terms', name: 'Payment Settlement Terms', version: '1.1', url: '/entertainment-terms.html#event-settlement',
+      keyPoints: ['Each ticket is paid to your SOKONI business wallet when your staff admit it with its PIN (3% already deducted).',
+        'Tickets never admitted are paid 24 hours after your event ends; an unpaid ticket is never paid out.'] },
     { id: 'data-processing-agreement', name: 'Data Processing Agreement' },
   ],
   creator: [
@@ -216,7 +225,9 @@ async function _catalogueFor(roleIn, atMs) {
   return list.map((a) => {
     const o = overrides[a.id] || {};
     if (o.status === 'archived') return null;
-    let version = o.version || DEFAULT_VERSION;
+    /* An admin-published override wins; otherwise the version the CODE declares for changed terms
+       (so a text change is a new version to accept, never a silent edit under an old one). */
+    let version = o.version || a.version || DEFAULT_VERSION;
     let effectiveDate = o.effectiveDate || null;
 
     const sch = o.scheduled;

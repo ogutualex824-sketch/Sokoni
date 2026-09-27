@@ -140,8 +140,16 @@ console.log('\n── commission authority ──');
   const cc = require(path.join(ROOT, 'functions', 'commission-config.js'));
   ck('ordinary marketplace commission is still 5%', cc.RATES.marketplace.pct === 5);
   ck('legacy ppv rate untouched (15%) — Creator does not use it', cc.RATES.ppv.pct === 15);
-  const diffCC = spawnSync('git', ['-C', ROOT, 'diff', '--quiet', 'a38b31a', '--', 'functions/commission-config.js']).status;
-  ck('commission-config.js byte-identical to base a38b31a', diffCC === 0);
+  /* 2026-09-27: the only permitted change since base a38b31a is the owner-decided Entertainment booking
+     lane (RATES.entertainment_bookings 5 %). Every existing row — marketplace, POS, ppv — is byte-identical. */
+  ck('commission-config.js vs base a38b31a: ONLY the added entertainment_bookings 5 % row (nothing removed or repriced)', (() => {
+    const r = spawnSync('git', ['-C', ROOT, 'diff', '-U0', 'a38b31a', '--', 'functions/commission-config.js'], { encoding: 'utf8' });
+    const lines = String(r.stdout || '').split('\n').filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l));
+    const removed = lines.filter((l) => l.startsWith('-'));
+    const added = lines.filter((l) => l.startsWith('+')).map((l) => l.slice(1).trim()).filter(Boolean);
+    const allowed = added.every((l) => /^entertainment_bookings: \{ pct: 5,/.test(l) || /^\/\//.test(l));
+    return r.status === 0 && removed.length === 0 && allowed && added.some((l) => /^entertainment_bookings: \{ pct: 5,/.test(l));
+  })());
   const C = require(path.join(ROOT, 'functions', 'shared', 'creator-commercial.js'));
   const R = require(path.join(ROOT, 'functions', 'shared', 'creator-royalty.js'));
   const saved = cc.RATES.ppv.pct; cc.RATES.ppv.pct = 99;

@@ -247,6 +247,14 @@ const eventTicketAdapter = {
           retainedPenaltyCents: penaltyCents, refundReason: String(reason || '').slice(0, 300), updatedAt: FieldValue.serverTimestamp() });
         if (comSnap.exists) txn.update(comRef, { status: 'adjusted_after_refund', commissionCents: kept.commissionCents,
           sokoniCut: kept.commissionCents == null ? null : kept.commissionCents / 100, adjustedAt: FieldValue.serverTimestamp() });
+      } else if (st === SETTLEMENT.HELD && (Number(setSnap.data().releasedCents) || 0) > 0) {
+        /* Part of this order was already paid to the organizer at admission (releaseTicketShare). Never
+           debit a wallet silently: record it for AdminOS, like a refund after a full release. */
+        txn.set(db.collection(COL.EXCEPTIONS).doc(`refund_after_admission_release_${led.paymentRef}`), {
+          kind: 'refund_after_admission_release', paymentRef: led.paymentRef, orderId, organizerUid: setSnap.data().organizerUid || null,
+          releasedCents: setSnap.data().releasedCents, organizerNetCents: setSnap.data().organizerNetCents || null,
+          reason: String(reason || '').slice(0, 300), status: 'OPEN', createdAt: FieldValue.serverTimestamp(),
+        });
       } else if (st === SETTLEMENT.HELD || st === SETTLEMENT.FEE_UNREPORTED) {
         txn.update(setRef, { status: SETTLEMENT.REFUNDED, refundReason: String(reason || '').slice(0, 300), updatedAt: FieldValue.serverTimestamp() });
         if (comSnap.exists) txn.update(comRef, { status: 'reversed', reversedAt: FieldValue.serverTimestamp() });
@@ -362,6 +370,107 @@ const eventOnTicketPayment = onDocumentWritten({ document: 'payments/{paymentId}
  * (wallets/{uid}.balance — the rail requestSellerPayout pays out); sub-shilling cents stay
  * recorded on the settlement as `roundingRemainderCents`, never silently dropped.
  */
+/* Credit the organizer's business wallet (wallets/{organizerUid}.balance, whole shillings) with
+   `amountCents` of THIS settlement, after netting SOKONI's outstanding door-sale commission (card
+   terminal sales; historical cash) oldest first. Reads first, then writes — call it after the caller's
+   own reads and before the caller's own writes. The wallet transaction id is deterministic (create). */
+async function _nettedCredit(txn, { s, paymentRef, amountCents, txId, description, extra }) {
+  const db = _db();
+  const recSnap = await txn.get(db.collection('eventCommissionReceivables')
+    .where('organizerUid', '==', s.organizerUid).where('status', '==', 'OUTSTANDING').limit(50));
+  const wRef = db.collection(COL.WALLETS).doc(s.organizerUid);
+  const wSnap = await txn.get(wRef);
+  const recs = recSnap.docs.slice().sort((a, b) => (_ms(a.data().createdAt) || 0) - (_ms(b.data().createdAt) || 0));
+  let payableCents = Math.max(0, Math.floor(Number(amountCents) || 0));
+  const netted = [];
+  for (const r of recs) {
+    if (payableCents <= 0) break;
+    const owed = (Number(r.data().amountCents) || 0) - (Number(r.data().collectedCents) || 0);
+    if (owed <= 0) continue;
+    const take = Math.min(owed, payableCents);
+    payableCents -= take;
+    netted.push({ ref: r.ref, id: r.id, take, closes: take === owed });
+  }
+  const shillings = Math.floor(payableCents / 100);
+  const txRef = db.collection(COL.WALLET_TX).doc(txId);
+  if (shillings > 0) {
+    if (wSnap.exists) txn.update(wRef, { balance: FieldValue.increment(shillings), updatedAt: FieldValue.serverTimestamp() });
+    else txn.set(wRef, { uid: s.organizerUid, balance: shillings, currency: 'KES', createdAt: FieldValue.serverTimestamp() }, { merge: true });
+    txn.create(txRef, { uid: s.organizerUid, type: 'event_ticket_earning', amount: shillings, paymentRef, orderId: s.orderId,
+      eventId: s.eventId, description, status: 'completed', ...(extra || {}), createdAt: FieldValue.serverTimestamp() });
+  }
+  for (const n of netted) {
+    txn.update(n.ref, { collectedCents: FieldValue.increment(n.take), status: n.closes ? 'COLLECTED' : 'OUTSTANDING',
+      collectedFrom: FieldValue.arrayUnion(paymentRef), updatedAt: FieldValue.serverTimestamp() });
+    if (n.closes) txn.set(db.collection(COL.COMMISSION).doc(`evt_${n.id}`), { status: 'collected', collectedAt: FieldValue.serverTimestamp() }, { merge: true });
+  }
+  return { shillings, remainderCents: payableCents - shillings * 100, grossCents: Math.max(0, Math.floor(Number(amountCents) || 0)),
+    nettedCents: netted.reduce((a, n) => a + n.take, 0), netted: netted.map((n) => n.id), txId: txRef.id };
+}
+
+/**
+ * ADMISSION SETTLES THE TICKET (owner decision 2026-09-27): when gate staff admit a ticket by its PIN
+ * (or QR), that ticket's share of its ONLINE-PAID order settles at once — SOKONI's 3 % was fixed when the
+ * payment settled, and the organizer's net share is credited to the ORGANIZER's business wallet
+ * (wallets/{organizerUid}). Never the buyer's. Tickets never admitted settle at event end + 24 h
+ * (releaseOne). Exactly once per ticket (deterministic wallet transaction + releasedTicketIds).
+ * Door sales on the organizer's terminal are not paid through SOKONI — nothing to credit (receivable).
+ * Never throws: the admission is already recorded; a skipped share is paid by the scheduled release.
+ */
+async function releaseTicketShare(ticketId, opts = {}) {
+  const db = _db();
+  try {
+    const t = (await db.collection(COL.TICKETS).doc(String(ticketId)).get()).data();
+    if (!t || t.admissionStatus !== 'ADMITTED') return { skipped: 'not_admitted' };
+    if (!t.orderId) return { skipped: 'not_online' };                    /* door (terminal) sale */
+    const order = (await db.collection(COL.ORDERS).doc(String(t.orderId)).get()).data();
+    if (!order) return { skipped: 'order_missing' };
+    const paymentRef = String(order.paymentRef || t.orderId);
+    const setRef = db.collection(COL.SETTLEMENTS).doc(paymentRef);
+    return await db.runTransaction(async (txn) => {
+      const sSnap = await txn.get(setRef);
+      if (!sSnap.exists) return { skipped: 'no_settlement' };
+      const s = sSnap.data();
+      if (s.status !== SETTLEMENT.HELD) return { skipped: `status_${s.status}` };   /* FEE_UNREPORTED: paid once the fee is attested */
+      const done = Array.isArray(s.releasedTicketIds) ? s.releasedTicketIds : [];
+      if (done.includes(t.ticketId)) return { skipped: 'already_released' };
+      const [evSnap, refSnap, oSnap] = await Promise.all([
+        txn.get(db.collection(COL.EVENTS).doc(String(s.eventId || '_'))),
+        txn.get(db.collection(COL.REFUNDS).doc(`ref_${paymentRef}`)),
+        txn.get(db.collection(COL.ORDERS).doc(String(s.orderId || '_'))),
+      ]);
+      if (!evSnap.exists || evSnap.data().status === 'cancelled') return { skipped: 'event_cancelled' };
+      if (refSnap.exists && REFUND_OPEN.has(String(refSnap.data().status))) return { skipped: 'refund_open' };
+      if (!oSnap.exists || oSnap.data().status !== 'paid') return { skipped: `order_${oSnap.exists ? oSnap.data().status : 'missing'}` };
+      if (!s.organizerUid) return { skipped: 'no_organizer' };
+      const qty = Math.max(1, Number(s.quantity) || 1);
+      const net = Math.max(0, Number(s.organizerNetCents) || 0);
+      const releasedCents = Math.max(0, Number(s.releasedCents) || 0);
+      const last = done.length + 1 >= qty;
+      const share = last ? Math.max(0, net - releasedCents) : Math.floor(net / qty);
+      const cr = await _nettedCredit(txn, { s, paymentRef, amountCents: share, txId: `${s.organizerUid}_${paymentRef}_${t.ticketId}_admit`,
+        description: `Ticket admitted — ${t.ticketNumber || t.ticketId}`, extra: { ticketId: t.ticketId, ticketNumber: t.ticketNumber || null, trigger: 'admission' } });
+      const comShare = last ? Math.max(0, (Number(s.commissionCents) || 0) - (Number(s.commissionCollectedCents) || 0)) : Math.floor((Number(s.commissionCents) || 0) / qty);
+      txn.update(setRef, {
+        releasedTicketIds: FieldValue.arrayUnion(t.ticketId), releasedCents: releasedCents + share,
+        commissionCollectedCents: (Number(s.commissionCollectedCents) || 0) + comShare,
+        creditedKES: (Number(s.creditedKES) || 0) + cr.shillings, roundingRemainderCents: (Number(s.roundingRemainderCents) || 0) + cr.remainderCents,
+        doorCommissionNettedCents: (Number(s.doorCommissionNettedCents) || 0) + cr.nettedCents,
+        ...(cr.netted.length ? { nettedReceivables: FieldValue.arrayUnion(...cr.netted) } : {}),
+        ...(last ? { status: SETTLEMENT.RELEASED, releasedAt: FieldValue.serverTimestamp(), releasedBy: 'admission' } : {}),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      txn.set(db.collection(COL.COMMISSION).doc(`evt_${paymentRef}`), last
+        ? { status: 'collected', collectedAt: FieldValue.serverTimestamp(), collectedCents: (Number(s.commissionCollectedCents) || 0) + comShare }
+        : { status: 'partially_collected', collectedCents: (Number(s.commissionCollectedCents) || 0) + comShare, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      return { released: true, ticketId: t.ticketId, shareCents: share, creditedKES: cr.shillings, organizerUid: s.organizerUid, settlementReleased: last, by: opts.actorUid || null };
+    });
+  } catch (e) {
+    logger.error('[eventSettlement] ticket share release failed', { ticketId, err: e.message });
+    return { skipped: 'error', error: e.message };
+  }
+}
+
 async function releaseOne(paymentRef, opts = {}) {
   const db = _db();
   const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
@@ -390,47 +499,18 @@ async function releaseOne(paymentRef, opts = {}) {
     if (!_o || (_o.status !== 'paid' && !_penaltyKept)) return { skipped: `order_${_o ? _o.status : 'missing'}` };
     if (!s.organizerUid) return { skipped: 'no_organizer' };
 
-    /* Door sales (cash / organizer-held card terminal) left SOKONI's 3 % as a RECEIVABLE with the
-       organizer (event-sales). Before paying the organizer, net it off — oldest first — so cash
-       collected at the door cannot leave SOKONI's commission uncollected. Read before any write. */
-    const recSnap = await txn.get(db.collection('eventCommissionReceivables')
-      .where('organizerUid', '==', s.organizerUid).where('status', '==', 'OUTSTANDING').limit(50));
-    const recs = recSnap.docs.slice().sort((a, b) => (_ms(a.data().createdAt) || 0) - (_ms(b.data().createdAt) || 0));
-    let payableCents = Math.max(0, Number(s.organizerNetCents) || 0);
-    const netted = [];
-    for (const r of recs) {
-      if (payableCents <= 0) break;
-      const owed = (Number(r.data().amountCents) || 0) - (Number(r.data().collectedCents) || 0);
-      if (owed <= 0) continue;
-      const take = Math.min(owed, payableCents);
-      payableCents -= take;
-      netted.push({ ref: r.ref, id: r.id, take, closes: take === owed });
-    }
-    const shillings = Math.floor(payableCents / 100);
-    const remainder = payableCents - shillings * 100;
-    const wRef = db.collection(COL.WALLETS).doc(s.organizerUid);
-    const txRef = db.collection(COL.WALLET_TX).doc(`${s.organizerUid}_${paymentRef}_event`);
-    const wSnap = await txn.get(wRef);
-    if (shillings > 0) {
-      if (wSnap.exists) txn.update(wRef, { balance: FieldValue.increment(shillings), updatedAt: FieldValue.serverTimestamp() });
-      else txn.set(wRef, { uid: s.organizerUid, balance: shillings, currency: 'KES', createdAt: FieldValue.serverTimestamp() }, { merge: true });
-      txn.create(txRef, {
-        uid: s.organizerUid, type: 'event_ticket_earning', amount: shillings, paymentRef, orderId: s.orderId,
-        eventId: s.eventId, description: `Ticket sales — order ${s.orderId}`, status: 'completed',
-        createdAt: FieldValue.serverTimestamp(),
-      });
-    }
-    for (const n of netted) {
-      txn.update(n.ref, { collectedCents: FieldValue.increment(n.take), status: n.closes ? 'COLLECTED' : 'OUTSTANDING',
-        collectedFrom: FieldValue.arrayUnion(paymentRef), updatedAt: FieldValue.serverTimestamp() });
-      if (n.closes) txn.set(db.collection(COL.COMMISSION).doc(`evt_${n.id}`), { status: 'collected', collectedAt: FieldValue.serverTimestamp() }, { merge: true });
-    }
+    /* Tickets already ADMITTED were settled at the gate (releaseTicketShare); pay the rest. */
+    const already = Math.max(0, Number(s.releasedCents) || 0);
+    const cr = await _nettedCredit(txn, { s, paymentRef, amountCents: Math.max(0, (Number(s.organizerNetCents) || 0) - already),
+      txId: `${s.organizerUid}_${paymentRef}_event`, description: already ? `Ticket sales (not admitted) — order ${s.orderId}` : `Ticket sales — order ${s.orderId}` });
     txn.update(setRef, {
-      doorCommissionNettedCents: netted.reduce((a, n) => a + n.take, 0), nettedReceivables: netted.map((n) => n.id),
-      status: SETTLEMENT.RELEASED, releasedAt: FieldValue.serverTimestamp(), creditedKES: shillings,
-      roundingRemainderCents: remainder, walletTxId: shillings > 0 ? txRef.id : null,
+      doorCommissionNettedCents: (Number(s.doorCommissionNettedCents) || 0) + cr.nettedCents, ...(cr.netted.length ? { nettedReceivables: FieldValue.arrayUnion(...cr.netted) } : {}),
+      status: SETTLEMENT.RELEASED, releasedAt: FieldValue.serverTimestamp(), creditedKES: (Number(s.creditedKES) || 0) + cr.shillings,
+      releasedCents: already + cr.grossCents,
+      roundingRemainderCents: (Number(s.roundingRemainderCents) || 0) + cr.remainderCents, walletTxId: cr.shillings > 0 ? cr.txId : (s.walletTxId || null),
       releasedBy: opts.actorUid || 'schedule', updatedAt: FieldValue.serverTimestamp(),
     });
+    const shillings = cr.shillings;
     txn.set(db.collection(COL.COMMISSION).doc(`evt_${paymentRef}`), { status: 'collected', collectedAt: FieldValue.serverTimestamp() }, { merge: true });
     return { released: true, creditedKES: shillings };
   });
@@ -674,6 +754,6 @@ _adminH.eventAdminAttestFee = async (req) => {
 module.exports = {
   PURPOSE, COL, SETTLEMENT, RELEASE_GRACE_MS, UNPAID_ORDER_TTL_MS,
   eventTicketAdapter, registerPurpose, computeSettlement, releaseAfterMs, shouldActivate,
-  activateIfEventTicket, notifyTicketsConfirmed: _notifyConfirmed, releaseOne, expireOne, onEventRefundProcessed, onEventRefundRejected,
+  activateIfEventTicket, notifyTicketsConfirmed: _notifyConfirmed, releaseOne, releaseTicketShare, expireOne, onEventRefundProcessed, onEventRefundRejected,
   eventOnTicketPayment, eventReleaseSettlements, eventExpireUnpaidOrders, _adminH,
 };

@@ -68,6 +68,20 @@
   .btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg3); font-weight: 700; text-decoration: none; }
   .btn.primary { background: var(--acc); border-color: transparent; color: #fff; }
   .muted { color: var(--txt2); font-size: 13px; }
+  /* bookings */
+  .bk { display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 14px; background: var(--bg2); border: 1px solid var(--border); min-width: 0; }
+  .bk.focus { border-color: var(--acc); box-shadow: 0 0 0 2px rgba(168,85,247,.25); }
+  .bk .top { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .badge { font-size: 11px; font-weight: 800; letter-spacing: .06em; padding: 3px 9px; border-radius: 999px; background: var(--bg3); }
+  .ref { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 700; overflow-wrap: anywhere; }
+  .pinbox { border-radius: 12px; padding: 12px; background: linear-gradient(135deg, rgba(168,85,247,.16), rgba(236,72,153,.10)); text-align: center; }
+  .pinbox .phrase { font-size: 11px; font-weight: 800; letter-spacing: .08em; color: var(--txt2); }
+  .pinbox .pin { font-size: 34px; font-weight: 800; letter-spacing: .3em; margin: 4px 0; }
+  .kv2 { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 2px 10px; font-size: 13px; }
+  .kv2 > span:nth-child(odd) { color: var(--txt2); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .vf { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+  .vf input { min-height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg3); color: var(--txt); font: inherit; min-width: 0; }
 </style>
 </head>
 <body>
@@ -143,6 +157,17 @@
 
   <!-- MINE: routes to the canonical ticket wallet / film library -->
   <section class="panel" id="p-mine" role="tabpanel" aria-labelledby="tab-mine" hidden>
+    <div class="sec-head"><h2>My bookings</h2></div>
+    <div id="bookings" aria-live="polite"><div class="state">Loading…</div></div>
+    <div class="sec-head" id="provide"><h2>Bookings you provide</h2></div>
+    <form class="vf" id="verifyForm" autocomplete="off">
+      <label>Booking reference<br><input name="ref" placeholder="BK-VEN-2026-000000" maxlength="20" required></label>
+      <label>Buyer's PIN<br><input name="pin" inputmode="numeric" pattern="\d{4}" maxlength="4" placeholder="••••" required></label>
+      <button class="btn primary" type="submit">Verify PIN</button>
+    </form>
+    <p class="muted" id="verifyMsg" role="status" aria-live="polite">The buyer shows you their booking PIN when they arrive — verifying it confirms the show-up and releases your payment to your business wallet (SOKONI commission deducted).</p>
+    <div id="provided" aria-live="polite"></div>
+    <div class="sec-head"><h2>More</h2></div>
     <div class="grid">
       <a class="tile" href="/event-hub.html?view=tickets"><span class="ic">🎟</span><h3>My event tickets</h3><p>Ticket number, PIN, QR and KRA status. Request a refund from the ticket.</p></a>
       <a class="tile" href="/creator.html?view=library"><span class="ic">📚</span><h3>My film library</h3><p>Films you bought or rented.</p></a>
@@ -207,7 +232,66 @@
     } catch (e) { host.innerHTML = `<div class="state err">Films are unavailable right now (${esc(errText(e))}). <a href="/creator.html">Open Creator Hub</a></div>`; }
   }
 
-  const LOADERS = { events: loadEvents, films: loadFilms };
+  /* ── Bookings: the canonical booking identity (entertainment-bookings via eventOpsDispatch) ── */
+  const ops = (op, data) => httpsCallable(fns, 'eventOpsDispatch')({ op, ...(data || {}) }).then((r) => r.data);
+  const words = (s) => String(s || '—').toLowerCase().replace(/_/g, ' ');
+  const LABEL = { EVENT: 'SOKONI EVENT PASS', ARTIST: 'ARTIST BOOKING', SERVICE: 'SERVICE BOOKING', VENUE: 'VENUE RESERVATION' };
+  const FOCUS_ID = /^(evt|svc|ven)_[A-Za-z0-9_-]{1,128}$/.test(q0('id')) ? q0('id') : null;
+  const FOCUS_REF = /^BK-(ART|SVC|VEN)-\d{4}-\d{6}$/.test(q0('booking')) ? q0('booking') : null;
+  function q0(k) { return new URLSearchParams(location.search).get(k) || ''; }
+  function bookingCard(b) {
+    const focus = (FOCUS_REF && b.bookingRef === FOCUS_REF) ? ' focus' : '';
+    const pin = b.category === 'EVENT'
+      ? `<div class="pinbox"><div class="phrase">${esc(b.phrase)}</div><p class="muted" style="margin:6px 0 0">Each ticket has its own PIN — <a href="/event-hub.html?view=tickets">open My Tickets</a>.</p></div>`
+      : (b.role === 'buyer' && b.pin ? `<div class="pinbox"><div class="phrase">${esc(b.phrase)}</div><div class="pin" aria-label="Booking PIN">${esc(b.pin)}</div><div class="muted">Keep this PIN safe. Give it to the provider only when you arrive.</div></div>` : '');
+    const start = b.when && b.when.startMs ? new Date(b.when.startMs).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+    return `<article class="bk${focus}" data-ref="${esc(b.bookingRef)}">
+      <div class="top"><span class="badge">${esc(LABEL[b.category] || b.category)}</span><span class="badge">${esc(words(b.status))}</span></div>
+      <h3 style="margin:0">${esc(b.title)}</h3><div class="ref">${esc(b.bookingRef)}</div>
+      ${pin}
+      <div class="kv2"><span>When</span><span>${esc(start)}</span><span>Where</span><span>${esc(b.location || '—')}</span>
+        <span>Payment</span><span>${esc(words(b.payment && b.payment.state))}</span><span>Refund</span><span>${esc(words(b.refund && b.refund.state))}</span>
+        ${b.role === 'provider' ? `<span>Buyer</span><span>${esc((b.buyer && b.buyer.initials) || '—')}</span><span>PIN</span><span>${esc(words(b.pinState))}</span>` : ''}</div>
+      <div class="row"><button class="btn" type="button" data-msg="${esc(b.bookingRef)}" data-env="${esc(b.category === 'EVENT' ? '' : '')}">💬 Message ${b.role === 'buyer' ? 'the provider' : 'the buyer'}</button>
+        ${b.category === 'EVENT' && b.role === 'buyer' ? '<a class="btn" href="/event-hub.html?view=tickets">View tickets &amp; refunds</a>' : ''}
+        ${b.category === 'VENUE' && b.role === 'buyer' ? '<a class="btn" href="/venue-booking.html?tab=mine">Manage / refund</a>' : ''}</div>
+    </article>`;
+  }
+  let _mine = [];
+  async function loadBookings() {
+    const host = document.getElementById('bookings'); const prov = document.getElementById('provided');
+    try {
+      const [a, b] = await Promise.all([ops('entBookingMine', {}), ops('entBookingMine', { as: 'provider' })]);
+      _mine = (a.bookings || []).concat(b.bookings || []);
+      host.innerHTML = (a.bookings || []).length ? '<div class="grid">' + a.bookings.map(bookingCard).join('') + '</div>' : '<div class="state">No bookings yet.</div>';
+      prov.innerHTML = (b.bookings || []).length ? '<div class="grid">' + b.bookings.map(bookingCard).join('') + '</div>' : '';
+      const f = document.querySelector('.bk.focus'); if (f) f.scrollIntoView({ block: 'center' });
+    } catch (e) {
+      host.innerHTML = /unauthenticated/.test(String(e && (e.code || e.message)))
+        ? '<div class="state"><a href="/login.html?next=/entertainment.html%3Ftab%3Dmine">Sign in</a> to see your bookings.</div>'
+        : `<div class="state err">Bookings are unavailable right now (${esc(errText(e))}).</div>`;
+    }
+  }
+  document.getElementById('p-mine').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-msg]'); if (!b) return;
+    b.disabled = true;
+    try { const r = await ops('entBookingOpenConversation', { bookingRef: b.dataset.msg }); location.href = r.url; }
+    catch (err) { b.disabled = false; b.textContent = 'Messaging unavailable (' + errText(err) + ')'; }
+  });
+  document.getElementById('verifyForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target; const msg = document.getElementById('verifyMsg');
+    const ref = String(f.ref.value || '').trim().toUpperCase(); const pin = String(f.pin.value || '').trim();
+    msg.textContent = 'Checking…';
+    try {
+      const r = await ops('entBookingVerifyPin', { bookingRef: ref, pin });
+      msg.textContent = r.verified ? (r.settled ? 'Verified — the booking is confirmed as shown up; your payment is released to your business wallet.' : 'Verified — the booking is confirmed as shown up.') : (r.reason || 'Not verified.');
+      f.pin.value = '';
+      if (r.verified) loadBookings();
+    } catch (err) { msg.textContent = errText(err); f.pin.value = ''; }
+  });
+
+  const LOADERS = { events: loadEvents, films: loadFilms, mine: loadBookings };
 
   /* Legacy links (the retired EntHub page took ?cat=, ?event=, ?venue=): route to the canonical owner. */
   const q = new URLSearchParams(location.search);
@@ -215,7 +299,7 @@
   if (legacyCat) { location.replace('/services.html?cat=' + encodeURIComponent(legacyCat)); }
   else if (/^[A-Za-z0-9_-]{1,128}$/.test(q.get('event') || '')) { location.replace('/event-hub.html?event=' + encodeURIComponent(q.get('event'))); }
   else if (/^[A-Za-z0-9_-]{1,128}$/.test(q.get('venue') || '')) { location.replace('/venue-booking.html?venue=' + encodeURIComponent(q.get('venue'))); }
-  else show(['events', 'films', 'artists', 'venues', 'mine'].includes(q.get('tab')) ? q.get('tab') : 'home');
+  else show(FOCUS_ID || FOCUS_REF ? 'mine' : (['events', 'films', 'artists', 'venues', 'mine'].includes(q.get('tab')) ? q.get('tab') : 'home'));
 </script>
 </body>
 </html>

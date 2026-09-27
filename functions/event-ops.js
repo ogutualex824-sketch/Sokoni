@@ -93,6 +93,12 @@ function _pinKey() {
   return 'sokoni-event-pin-TEST-ONLY';            /* local test process only — never in Cloud Functions */
 }
 
+/** The SAME secret, for another credential DOMAIN (entertainment-bookings: `entbk|<envId>|<pin>`). The
+    domain prefix keeps a booking PIN and a ticket PIN from ever hashing to one another. */
+function credentialHash(message) {
+  return crypto.createHmac('sha256', _pinKey()).update(String(message)).digest('hex');
+}
+
 function pinHash(eventId, rawPin) {
   const p = normalizePin(rawPin);
   if (!p) return null;
@@ -503,6 +509,9 @@ async function admit(req) {
     return { result: 'refused', reason: 'The ticket number does not match this PIN — do not admit.', mismatch: true };
   }
   if (res.admitted) await _audit('event_ticket_admitted', actor, { eventId: actor.event.id, ticketId: hit.ticketId }, { method: 'pin', confirmation: 'ticket_number', deviceSession });
+  /* Admission settles the ticket (owner decision 2026-09-27): its share of the online order is credited to
+     the ORGANIZER's business wallet now, SOKONI's 3 % already deducted. Never throws. */
+  if (res.admitted) await require('./event-settlement').releaseTicketShare(hit.ticketId, { actorUid: actor.uid });
   if (res.already) return { result: 'already_admitted', ticket: _summary(res.t, actor.event) };
   if (res.blocked) return { result: 'refused', reason: res.blocked, ticket: _summary(res.t, actor.event) };
   return { result: 'admitted', ticket: _summary({ ...res.t, admissionStatus: 'ADMITTED' }, actor.event) };
@@ -533,7 +542,7 @@ const _h = {
 /* One Cloud Run service for all event-day operations (ops routed by name), like the other dispatchers. */
 const eventOpsDispatch = onCall(OPS_OPTS(), async (req) => {
   const op = String((req.data || {}).op || '');
-  const h = _h[op] || require('./event-sales')._h[op] || require('./event-refunds')._h[op] || require('./entertainment-integrations')._h[op];
+  const h = _h[op] || require('./event-sales')._h[op] || require('./event-refunds')._h[op] || require('./entertainment-integrations')._h[op] || require('./entertainment-bookings')._h[op] || require('./venue-payments')._h[op];
   if (!h) fail('not-found', `Unknown event operation "${op}".`);
   return h(req);
 });
@@ -541,7 +550,7 @@ function OPS_OPTS() { return { ...OPTS, timeoutSeconds: 30, memory: '256MiB' }; 
 
 module.exports = {
   COL, CAPS, STAFF_ROLES, ORGANIZER_CAPS, ATTEMPTS, PIN_DIGITS, PIN_SPACE, EVENT_PIN_CEILING, TICKET_NUMBER_RE, SOKONI_HMAC_KEY,
-  generatePin, generateTicketNumber, normalizePin, pinHash, allocateIdentities, issueCredentials, admissionWindow, pinState, admissibleReason: _admissible,
+  generatePin, generateTicketNumber, normalizePin, pinHash, credentialHash, allocateIdentities, issueCredentials, admissionWindow, pinState, admissibleReason: _admissible,
   resolveEventActor, staffActive, eventEndMs, lookupPin: _lookupPin, _h, eventOpsDispatch,
   _setClock: (fn) => { _now = fn || (() => Date.now()); },
   /* tests only: force the random draws (collision / exhaustion proofs) */

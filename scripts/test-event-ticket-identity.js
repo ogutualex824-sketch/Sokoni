@@ -17,11 +17,11 @@
  *                 cancelled event / refunded ticket refused · the QR path obeys the SAME lifetime
  *   Identity      ticket number SK-EVT-YYYY-NNNNNN, indexed, immutable across a replayed activation;
  *                 the PIN resolves exactly its ticket
- *   Quick Sale    mixed cart 2 VIP + 3 Regular (cash) → 5 tickets, 5 PINs, 5 numbers · a gate cashier
+ *   Quick Sale    mixed cart 2 VIP + 3 Regular (card terminal; cash refused) → 5 tickets, 5 PINs, 5 numbers · a gate cashier
  *                 checks and admits an ONLINE ticket by PIN (same authority) · card sale tickets too
  *   QR            SOKONI QR = sokoni-ticket:<id>:<token>, never the PIN; door tickets have one too ·
  *                 a refunded ticket shows no PIN and no QR
- *   Fiscal        one record per paid sale (online / cash / card), none for free · the REAL eTIMS
+ *   Fiscal        one record per paid sale (online / card), none for free · the REAL eTIMS
  *                 invoice is created and QUEUED (no immediate KRA call, no failure notice) · PENDING
  *                 until KRA accepts → CONFIRMED with exactly KRA's receipt + https QR · a non-https
  *                 KRA value is never rendered as an image · organizer not on eTIMS → FISCAL_NOT_REQUIRED ·
@@ -255,9 +255,9 @@ async function paidOnline(orderId, eventId, { qty = 1, buyer = 'buyer1', tier = 
   ck('the QR path needs no number confirmation (its 128-bit token names ONE ticket)', (await EH.checkInTicket.run({ ...who('org1'), data: { ticketId: 'CONF1_k1', token: qrT.token } })).result === 'success');
 
   say('\n── Quick Sale ──');
-  const mixed = await op('eventQuickSale', 'till1', { eventId: 'evA', tender: 'cash', items: [{ tierId: 'evA_VIP', qty: 2 }, { tierId: 'evA_REG', qty: 3 }], cashReceivedKes: 16000, idempotencyKey: key() });
+  const mixed = await op('eventQuickSale', 'till1', { eventId: 'evA', tender: 'card_external', items: [{ tierId: 'evA_VIP', qty: 2 }, { tierId: 'evA_REG', qty: 3 }], card: { provider: 'equity', reference: 'MIXED00001', amountKes: 16000 }, idempotencyKey: key() });
   const mt = await op('eventSaleTickets', 'till1', { eventId: 'evA', saleId: mixed.saleId });
-  ck('mixed cart 2 VIP + 3 Regular (cash) → 5 tickets, 5 distinct PINs, 5 distinct numbers',
+  ck('mixed cart 2 VIP + 3 Regular (card) → 5 tickets, 5 distinct PINs, 5 distinct numbers',
     mt.tickets.length === 5 && new Set(mt.tickets.map((t) => t.pin)).size === 5 && new Set(mt.tickets.map((t) => t.ticketNumber)).size === 5
     && mt.tickets.filter((t) => t.tierName === 'VIP').length === 2 && mt.tickets.every((t) => /^\d{4}$/.test(t.pin)));
   ck('sale view carries the event, unit prices (server) and the PIN state', mt.event.title === 'Nairobi Jazz Night' && mt.tickets.find((t) => t.tierName === 'VIP').unitCents === 500000 && mt.tickets.every((t) => t.pinState === 'ACTIVE'));
@@ -285,7 +285,7 @@ async function paidOnline(orderId, eventId, { qty = 1, buyer = 'buyer1', tier = 
   const onlineRec = await get('eventFiscal/ONL1');
   ck('online sale → ONE fiscal record (organizer, gross, M-PESA)', onlineRec && onlineRec.organizerUid === 'org1' && onlineRec.grossCents === 200000 && onlineRec.channel === 'online');
   const cashRec = await get(`eventFiscal/${mixed.saleId}`);
-  ck('cash sale → fiscal record with the server-priced lines', cashRec && cashRec.channel === 'door_cash' && cashRec.paymentMethod === 'CASH' && cashRec.grossCents === 1600000
+  ck('door card sale → fiscal record with the server-priced lines', cashRec && cashRec.channel === 'door_card' && cashRec.paymentMethod === 'CARD' && cashRec.grossCents === 1600000
     && cashRec.lines.reduce((a, l) => a + l.qty * l.unitCents, 0) === 1600000);
   ck('card sale → fiscal record', ((await get(`eventFiscal/${cardSale.saleId}`)) || {}).paymentMethod === 'CARD');
   const freeOrders = race.map((r) => r.orderId);

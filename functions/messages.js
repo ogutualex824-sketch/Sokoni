@@ -42,7 +42,10 @@ const TX_COLLECTIONS = {
   logistics_request:        'packageRequests',
   support_ticket:           'supportTickets',
   rfq:                      'rfqs',
+  /* Entertainment bookings (entertainment-bookings.js) — SERVER-created only, see SERVER_ANCHORED. */
+  ent_booking:              'entBookings',
 };
+const SERVER_ANCHORED = new Set(['ent_booking']);
 
 /* ── Spam / fraud detection patterns ─────────────────────────── */
 const SPAM_PATTERNS = [
@@ -106,6 +109,12 @@ exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, expo
   }
   if (!TX_COLLECTIONS[transactionType]) {
     throw new HttpsError('invalid-argument', `Unknown transactionType: ${transactionType}`);
+  }
+  /* Anchored business conversations (Entertainment bookings) are created by the SERVER from the
+     booking's own parties (ensureAnchoredConversation) — never from a client-supplied participant
+     list, which is how a participant could be substituted. */
+  if (SERVER_ANCHORED.has(transactionType)) {
+    throw new HttpsError('permission-denied', 'This conversation is opened from the booking itself.');
   }
 
   const db = _db();
@@ -1219,3 +1228,68 @@ exports.onFoodOrderStatusChanged = onDocumentUpdated(
   }
 );
 
+
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+   SERVER-ANCHORED CONVERSATIONS (2026-09-27, Entertainment convergence — owner-authorized Connect
+   amendment). A business conversation attached to a transaction, created by the SERVER with the
+   participants the CALLER derived from the transaction's own record (the booking envelope's buyer
+   and provider). The same conversations / userConversations shape as createConversation, so the
+   inbox, chat.html, moderation and the history boundary all work unchanged — no second chat system.
+   ══════════════════════════════════════════════════════════════════════════════════════════ */
+async function ensureAnchoredConversation(db, { transactionType, transactionId, title, participants, metadata }) {
+  if (!SERVER_ANCHORED.has(transactionType)) throw new Error('ensureAnchoredConversation: not a server-anchored type');
+  const parts = [...new Set((participants || []).filter((p) => typeof p === 'string' && p))];
+  if (parts.length !== 2) throw new Error('ensureAnchoredConversation: exactly two distinct parties required');
+  const conversationId = `${transactionType}_${transactionId}`;
+  const convRef = db.collection('conversations').doc(conversationId);
+  const profiles = await Promise.all(parts.map((p) => db.collection('users').doc(p).get().catch(() => null)));
+  const participantNames = {}; const participantAvatars = {};
+  profiles.forEach((snap, i) => { const d = (snap && snap.exists && snap.data()) || {}; participantNames[parts[i]] = d.displayName || d.name || 'SOKONI user'; participantAvatars[parts[i]] = d.photoURL || d.avatar || null; });
+  let created = false;
+  await db.runTransaction(async (t) => {
+    const snap = await t.get(convRef);
+    if (snap.exists) return;
+    created = true;
+    t.set(convRef, {
+      transactionType, transactionId, transactionTitle: title,
+      participants: parts, participantNames, participantAvatars,
+      status: 'active', lastMessage: null, lastMessageAt: null,
+      unreadCounts: Object.fromEntries(parts.map((p) => [p, 0])),
+      metadata: metadata || {}, serverAnchored: true,
+      moderationFlags: [], reportCount: 0, readOnlyAt: null, createdAt: _now(), updatedAt: _now(),
+    });
+    for (const puid of parts) {
+      const other = parts.find((p) => p !== puid);
+      t.set(db.collection('userConversations').doc(puid).collection('items').doc(conversationId), {
+        conversationId, transactionType, transactionId, title,
+        participantName: participantNames[other], participantAvatar: participantAvatars[other] || null,
+        lastMessageAt: null, lastMessageText: null, lastMessageSenderId: null, unreadCount: 0,
+        status: 'active', createdAt: _now(), updatedAt: _now(),
+      });
+    }
+  });
+  return { conversationId, created };
+}
+
+/** A SYSTEM event in a conversation (booking created, payment confirmed, refund …). Deterministic
+ *  message id per (conversation, key) so a re-fired trigger never posts the same event twice. */
+async function postSystemMessage(db, conversationId, key, text, extra) {
+  const convRef = db.collection('conversations').doc(String(conversationId));
+  const msgRef = convRef.collection('messages').doc(`sys_${String(key).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 120)}`);
+  let posted = false;
+  await db.runTransaction(async (t) => {
+    const [c, m] = await Promise.all([t.get(convRef), t.get(msgRef)]);
+    if (!c.exists || m.exists) return;
+    posted = true;
+    t.set(msgRef, { senderId: 'system', senderName: 'SOKONI', timestamp: _now(), type: 'system', text: String(text).slice(0, 500),
+      event: extra || null, status: 'delivered', deleted: false, edited: false, flagged: false });
+    t.update(convRef, { lastMessage: String(text).slice(0, 200), lastMessageAt: _now(), updatedAt: _now(),
+      ...(extra && extra.status ? { transactionStatus: extra.status } : {}) });
+  });
+  return posted;
+}
+
+exports.ensureAnchoredConversation = ensureAnchoredConversation;
+exports.postSystemMessage = postSystemMessage;
+exports.SERVER_ANCHORED = SERVER_ANCHORED;

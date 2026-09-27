@@ -10,7 +10,7 @@
  *   PIN identity an admin finds a ticket by (event, PIN) through the event-bound HMAC index; the
  *                same PIN on another event finds nothing; malformed PINs refused; every lookup
  *                (hit AND miss) audited WITHOUT the PIN
- *   Trace        cash sale: payment n/a, commission + receivable + organizer proceeds observed ·
+ *   Trace        door card sale (cash refused since 2026-09-27): payment n/a, commission + receivable + organizer proceeds observed ·
  *                online order: payment → commission → settlement → refund → payout all observed,
  *                amounts copied from their records, never computed · unreleased order: payout n/a ·
  *                missing payment record reported as `empty`, not invented
@@ -73,7 +73,7 @@ const LEAK = /"(pin|pinHash|token|qrData|qrCode|secret)"\s*:/;
     await OPS._h.eventStaffInvite({ ...who('org1'), data: { eventId: 'evA', email: uid + '@x.co', role } });
     await OPS._h.eventStaffAccept({ ...who(uid, { email: uid + '@x.co', email_verified: true }), data: { eventId: 'evA' } });
   }
-  const cs = await op('eventQuickSale', 'till1', { eventId: 'evA', tender: 'cash', items: [{ tierId: 'REG', qty: 2 }], cashReceivedKes: 4000, idempotencyKey: key(), attendeeName: 'Achieng' });
+  const cs = await op('eventQuickSale', 'till1', { eventId: 'evA', tender: 'card_external', items: [{ tierId: 'REG', qty: 2 }], card: { provider: 'kcb', reference: 'DOORADM001', amountKes: 4000 }, idempotencyKey: key(), attendeeName: 'Achieng' });
   const card = await op('eventQuickSale', 'till1', { eventId: 'evA', tender: 'card_external', items: [{ tierId: 'REG', qty: 1 }], card: { provider: 'equity', reference: 'EQ55667788', amountKes: 2000 }, idempotencyKey: key() });
   const pins = (await op('eventSaleTickets', 'till1', { eventId: 'evA', saleId: cs.saleId })).tickets.map((t) => t.pin);
 
@@ -159,10 +159,10 @@ const LEAK = /"(pin|pinHash|token|qrData|qrCode|secret)"\s*:/;
   console.log('\n── trace ──');
   const tCash = await adm('eventAdminTrace', { saleId: cs.saleId });
   const st = (t, n) => t.stages.find((s) => s.stage === n);
-  ck('cash sale: channel cash, payment n/a', tCash.channel === 'cash' && st(tCash, 'payment').state === 'n/a');
-  ck('cash sale: commission + receivable + proceeds observed', ['commission', 'receivable', 'organizer_proceeds'].every((n) => st(tCash, n).state === 'observed'));
-  ck('cash sale: proceeds are organizer-collected, receivable = the commission record', st(tCash, 'organizer_proceeds').record.status === 'ORGANIZER_COLLECTED' && st(tCash, 'receivable').record.amountCents === st(tCash, 'commission').record.commissionCents);
-  ck('cash sale: refund n/a (offline), payout n/a', st(tCash, 'refund').state === 'n/a' && st(tCash, 'payout').state === 'n/a');
+  ck('door card sale: channel card_external, payment n/a (no SOKONI payment rail at the terminal)', tCash.channel === 'card_external' && st(tCash, 'payment').state === 'n/a');
+  ck('door card sale: commission + receivable + proceeds observed', ['commission', 'receivable', 'organizer_proceeds'].every((n) => st(tCash, n).state === 'observed'));
+  ck('door card sale: proceeds are organizer-collected, receivable = the commission record', st(tCash, 'organizer_proceeds').record.status === 'ORGANIZER_COLLECTED' && st(tCash, 'receivable').record.amountCents === st(tCash, 'commission').record.commissionCents);
+  ck('door card sale: refund n/a (offline), payout n/a', st(tCash, 'refund').state === 'n/a' && st(tCash, 'payout').state === 'n/a');
   ck('stage order is the brief\'s chain', tCash.stages.map((s) => s.stage).join('>') === 'event>integration>tickets>sale>payment>fiscal>commission>receivable>organizer_proceeds>fiscal_reversal>refund>payout');
   const tOnline = await adm('eventAdminTrace', { ticketId: 'TK1' });
   ck('online (via ticket): resolves the order and payment', tOnline.orderId === 'ORD001' && tOnline.paymentRef === 'PAYREF1' && tOnline.channel === 'online');
@@ -186,7 +186,7 @@ const LEAK = /"(pin|pinHash|token|qrData|qrCode|secret)"\s*:/;
   ck('revoke needs a reason', (await code(adm('eventAdminRevokeStaff', { eventId: 'evA', uid: 'till1', reason: '' }))) === 'invalid-argument');
   ck('revoke unknown staff → not-found', (await code(adm('eventAdminRevokeStaff', { eventId: 'evA', uid: 'ghost', reason: 'suspected fraud' }))) === 'not-found');
   await adm('eventAdminRevokeStaff', { eventId: 'evA', uid: 'till1', reason: 'suspected fraud at the door' });
-  ck('revoked cashier cannot sell', (await code(op('eventQuickSale', 'till1', { eventId: 'evA', tender: 'cash', items: [{ tierId: 'REG', qty: 1 }], cashReceivedKes: 2000, idempotencyKey: key() }))) === 'permission-denied');
+  ck('revoked cashier cannot sell', (await code(op('eventQuickSale', 'till1', { eventId: 'evA', tender: 'card_external', items: [{ tierId: 'REG', qty: 1 }], card: { provider: 'kcb', reference: 'REVOKED001', amountKes: 2000 }, idempotencyKey: key() }))) === 'permission-denied');
   const ra = (await db.collection('adminAudit').where('action', '==', 'event_staff_revoked_by_admin').get()).docs.map((d) => d.data());
   ck('revocation audited with actor and reason', ra.length === 1 && ra[0].performedBy === 'admin1' && ra[0].after.reason === 'suspected fraud at the door');
 

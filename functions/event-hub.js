@@ -893,6 +893,8 @@ exports.checkInTicket = onCall(CF_OPTS, async (req) => {
     txn.update(db().collection('events').doc(t.eventId), { checkinsCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
     return { result: 'success', ticketId, attendeeName: t.attendeeName, tierName: t.tierName };
   });
+  /* Admission settles the ticket (owner decision 2026-09-27) — the QR path settles exactly like the PIN path. */
+  if (out && out.result === 'success') await require('./event-settlement').releaseTicketShare(ticketId, { actorUid: uid });
   return out;
 });
 

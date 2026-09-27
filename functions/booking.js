@@ -359,7 +359,10 @@ exports.bookingCreate = onCall(
   { region: 'us-central1', maxInstances: 50, cors: true, enforceAppCheck: true },
   exports._h.bookingCreate = async (req) => {
     const uid = _authRequired(req);
-    const { venueId, holdId, date, startTime, endTime, addOns = [], notes, paymentId, idempotencyKey } = req.data || {};
+    const { venueId, holdId, date, startTime, endTime, notes, paymentId, idempotencyKey } = req.data || {};
+    /* 2026-09-27: add-on PRICES came from the client and were summed into the total (a negative one
+       lowered it). Venues have no add-on catalogue and no page sends add-ons, so none are accepted. */
+    const addOns = [];
     if (!venueId || !date || !startTime || !endTime) {
       throw new HttpsError('invalid-argument','venueId, date, startTime, endTime required');
     }
@@ -593,6 +596,10 @@ exports.bookingCreate = onCall(
            mistaking it for a payment. */
         paymentId:        verifiedPaymentId,
         paymentStatus,
+        /* Paid online through SOKONI (venue-payments, owner decision 2026-09-27): a priced booking must be
+           paid within 30 minutes or the sweep releases the slot. */
+        requiresPayment: paymentStatus !== 'paid' && Number(pricingBreakdown && pricingBreakdown.total) > 0,
+        paymentDueBy: paymentStatus !== 'paid' && Number(pricingBreakdown && pricingBreakdown.total) > 0 ? Date.now() + 30 * 60 * 1000 : null,
         unverifiedPaymentId:     verifiedPaymentId ? null : (paymentId || null),
         paymentRejectionReason:  paymentNote,
         idempotencyKey: idempotencyKey || null,
@@ -671,7 +678,9 @@ exports.bookingCreate = onCall(
       });
     }
 
-    return { bookingId, status: (venue.config?.approvalRequired ? 'pending' : 'confirmed'), total: pricingBreakdown.total };
+    const _pay = Number(pricingBreakdown && pricingBreakdown.total) > 0;
+    return { bookingId, status: (venue.config?.approvalRequired ? 'pending' : 'confirmed'), total: pricingBreakdown.total,
+      requiresPayment: _pay, payment: _pay ? { purpose: 'venue_booking', bookingId } : null };
   }
 );
 
@@ -802,12 +811,21 @@ exports.bookingCheckIn = onCall(
     const snap = await bookingRef.get();
     if (!snap.exists) throw new HttpsError('not-found','Booking not found');
     const booking = snap.data();
-    if (booking.customerId !== uid && booking.ownerId !== uid) {
-      throw new HttpsError('permission-denied','Not authorised');
+    /* 2026-09-27 (Entertainment convergence): the CUSTOMER could check themselves in, from any status,
+       with their own time and method. Check-in is the venue's act on a confirmed booking, and it
+       requires the buyer's booking PIN to have been verified (entertainment-bookings, "PIN YAKO NI
+       BOOKING YAKO"). The time is the server's. */
+    if (booking.ownerId !== uid) {
+      throw new HttpsError('permission-denied','Only the venue can check a booking in.');
     }
+    if (booking.status !== 'confirmed') {
+      throw new HttpsError('failed-precondition', `Only a confirmed booking can be checked in (is "${booking.status}").`);
+    }
+    await require('./entertainment-bookings').assertVerified('bookings', bookingId);
+    void time;
     await bookingRef.update({
       status:    'active',
-      checkIn:   { time: time || Date.now(), method: method || 'manual', by: uid },
+      checkIn:   { time: Date.now(), method: ['pin', 'manual', 'qr'].includes(method) ? method : 'pin', by: uid },
       updatedAt: Date.now(),
     });
     return { checkedIn: true };

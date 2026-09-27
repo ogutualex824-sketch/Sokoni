@@ -30,7 +30,9 @@ const adminOs = (() => {
   const eventInv = require('./event-admin');
   /* Entertainment integration STATUS per organizer (read-only; configuration lives on canonical pages). */
   const entInt = require('./entertainment-integrations');
-  return Object.assign({}, base, { _h: Object.assign({}, base._h, trace._h, creator._adminH, events._adminH, ent._adminH, eventInv._adminH, entInt._adminH) });
+  /* Entertainment booking identity: search + full trace (admin), conversation read (super admin, audited). */
+  const entBk = require('./entertainment-bookings');
+  return Object.assign({}, base, { _h: Object.assign({}, base._h, trace._h, creator._adminH, events._adminH, ent._adminH, eventInv._adminH, entInt._adminH, entBk._adminH) });
 })();
 
 const _OPTS = {

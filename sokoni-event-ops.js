@@ -68,7 +68,8 @@
         <p style="font-size:12px;opacity:.7;margin:6px 0 0">The server prices the sale; this total is a preview.</p>
         <button type="button" class="eo-btn" id="qsClear" style="margin-top:8px" disabled>Clear tickets</button></div>
       <div class="eo-card"><div class="eo-pay" role="group" aria-label="Payment">
-        <button type="button" data-tender="cash">Cash</button><button type="button" data-tender="intasend">M-PESA</button><button type="button" data-tender="card_external">Card (terminal)</button></div>
+        <button type="button" data-tender="intasend">M-PESA</button><button type="button" data-tender="card_external">Card (terminal)</button></div>
+        <p style="font-size:12px;opacity:.75;margin:6px 0 0">Cash is not accepted for ticket sales — every ticket is paid through SOKONI (M-PESA) or a card with its terminal reference.</p>
         <div id="qsTender" style="margin-top:10px"></div></div>
       <button type="button" class="eo-btn primary" id="qsDo" disabled>Complete sale</button>
       <div id="qsMsg" role="status" aria-live="polite"></div>
@@ -102,7 +103,7 @@
       });
       $('qsClear').disabled = !ls.length;
       $('qsDo').disabled = !(total() > 0 && tender) || mpesaMixed();
-      if (mpesaMixed()) $('qsMsg').innerHTML = '<span class="eo-bad">M-PESA takes one ticket type per sale — remove the other type, or use Cash / Card.</span>';
+      if (mpesaMixed()) $('qsMsg').innerHTML = '<span class="eo-bad">M-PESA takes one ticket type per sale — remove the other type, or take it by card (terminal).</span>';
       else if (/one ticket type per sale/.test($('qsMsg').textContent)) $('qsMsg').textContent = '';
       host.querySelectorAll('[data-tender]').forEach((b) => b.classList.toggle('on', b.dataset.tender === tender));
     };
@@ -120,8 +121,7 @@
     }
     function tenderForm() {
       const f = $('qsTender');
-      if (tender === 'cash') f.innerHTML = '<label>Cash received (KES) <input id="qsCash" type="number" inputmode="decimal" min="0"></label>';
-      else if (tender === 'card_external') f.innerHTML = `<div class="eo-row"><label>Terminal <select id="qsProv">${['pesapal', 'kcb', 'equity', 'coop', 'absa', 'ncba', 'stanbic', 'dtb', 'ipay', 'flutterwave', 'other'].map((p) => `<option>${p}</option>`).join('')}</select></label>
+      if (tender === 'card_external') f.innerHTML = `<div class="eo-row"><label>Terminal <select id="qsProv">${['pesapal', 'kcb', 'equity', 'coop', 'absa', 'ncba', 'stanbic', 'dtb', 'ipay', 'flutterwave', 'other'].map((p) => `<option>${p}</option>`).join('')}</select></label>
         <label>Transaction reference <input id="qsRef" autocomplete="off" placeholder="from the terminal slip"></label></div>
         <p style="font-size:12px;opacity:.75">No reference yet? Leave it empty — the sale is held as pending and tickets are issued only when you record the reference.</p>`;
       else if (tender === 'intasend') f.innerHTML = '<label>Buyer M-PESA number <input id="qsPhone" type="tel" inputmode="tel" placeholder="07XX XXX XXX"></label>';
@@ -180,7 +180,6 @@
       if (b.id === 'qsDo') {
         const eventId = $('qsEv').value; const items = Object.entries(cart).filter(([, q]) => q > 0).map(([tierId, qty]) => ({ tierId, qty }));
         const data = { eventId, items, tender, idempotencyKey: key };
-        if (tender === 'cash') data.cashReceivedKes = Number($('qsCash').value);
         if (tender === 'card_external' && $('qsRef').value.trim()) data.card = { provider: $('qsProv').value, reference: $('qsRef').value.trim(), amountKes: total() / 100 };
         let phone = null;
         if (tender === 'intasend') { phone = String($('qsPhone').value || '').replace(/\s/g, ''); if (!/^(\+?254|0)[17]\d{8}$/.test(phone)) { $('qsMsg').textContent = 'Enter a valid Safaricom number.'; return; } phone = phone.replace(/^\+/, '').replace(/^0/, '254'); }
@@ -188,7 +187,7 @@
         try {
           const r = await ctx.ops('eventQuickSale', data);
           if (r.status === 'COMPLETED') {
-            $('qsMsg').innerHTML = `<span class="eo-ok">✓ Sale recorded${r.changeCents ? ' · change ' + kes(r.changeCents) : ''}</span>`;
+            $('qsMsg').innerHTML = '<span class="eo-ok">✓ Sale recorded</span>';
             await showTickets(eventId, r.saleId);
           } else if (r.status === 'PENDING_EXTERNAL') {
             $('qsMsg').innerHTML = `Card sale held (seats reserved). Record the terminal reference to issue tickets.`;
@@ -344,7 +343,7 @@
   /* ═══ FINANCE ═══ */
   function finance(host, ctx) {
     host.innerHTML = `<div class="eo"><div class="eo-card"><label>Event ${eventSelect(ctx, 'fnEv')}</label></div><div id="fnOut" class="eo-card">Loading…</div>
-      <p style="font-size:12px;opacity:.75">Online proceeds are paid to your SOKONI wallet 24 hours after the event ends. Withdraw from your <a href="/wallet.html">wallet</a>.</p>
+      <p style="font-size:12px;opacity:.75">Each online ticket is paid to your SOKONI business wallet when your staff admit it (SOKONI's 3% already deducted); tickets never admitted are paid 24 hours after the event ends. Withdraw from your <a href="/wallet.html">wallet</a>.</p>
       <p style="font-size:12px;opacity:.75"><a href="/entertainment-integrations.html?context=events&amp;integration=intasend" data-int-link="intasend">Payment integrations</a> · <a href="/entertainment-integrations.html?context=events&amp;integration=kra_etims" data-int-link="kra_etims">Fiscal integrations (KRA eTIMS)</a></p></div>`;
     const $ = (id) => host.querySelector('#' + id);
     async function load() {
@@ -355,9 +354,9 @@
         $('fnOut').innerHTML = `<table class="eo-tbl">${
           row('Tickets sold (paid)', num(r.ticketsSold)) + row('Gross ticket sales', kes(r.grossCents))
           + row('Online sales', kes(r.online.grossCents)) + row('Payment-provider fees', kes(r.online.providerFeeCents))
-          + row('SOKONI commission (online, 3%)', kes(r.online.commissionCents)) + row('Held — paid after the event', kes(r.online.heldCents))
-          + row('Paid to your wallet', kes(r.online.releasedCents))
-          + row('Door sales (you collected)', kes(r.door.grossCents)) + row('SOKONI commission on door sales', kes(r.door.commissionCents))
+          + row('SOKONI commission (online, 3%)', kes(r.online.commissionCents)) + row('Held — paid as each ticket is admitted, or 24 h after the event', kes(r.online.heldCents))
+          + row('Paid to your business wallet (withdrawable)', kes(r.online.releasedCents))
+          + row('Card-terminal door sales (you collected)', kes(r.door.grossCents)) + row('SOKONI commission on door sales', kes(r.door.commissionCents))
           + row('Door commission still owed', kes(r.commissionReceivable.outstandingCents)) + row('Door commission settled', kes(r.commissionReceivable.collectedCents))
           + row('Refund requests', num(r.refunds.requested)) + row('Refunded', `${num(r.refunds.refunded)} · ${kes(r.refunds.refundedCents)}`)
         }</table>${r.online.awaitingFeeCount ? `<p class="eo-bad">${num(r.online.awaitingFeeCount)} payment(s) await the provider fee; those figures show "—" until it is confirmed.</p>` : ''}`;

@@ -355,6 +355,45 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /* ENTERTAINMENT BOOKING IDENTITY (functions/entertainment-bookings.js) — server-written only.
+       The envelope: its two parties and admins read it. The raw booking PIN: its BUYER only (the
+       provider verifies through entBookingVerifyPin and never sees it). References, attempt counters and
+       the audit trail: admins only. */
+    match /entBookings/{envId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && (resource.data.buyerUid == request.auth.uid || resource.data.providerUid == request.auth.uid));
+      allow write: if false;
+    }
+    match /entBookingSecrets/{envId} {
+      allow read:  if isAuthed() && resource.data.buyerUid == request.auth.uid;
+      allow write: if false;
+    }
+    match /entBookingRefs/{ref} {
+      allow read, write: if false;
+    }
+    match /entBookingPinAttempts/{id} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+    match /entBookingAudit/{id} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+    /* VENUE PAYMENTS (functions/venue-payments.js) — server-written only. The venue owner reads their own
+       settlement; the buyer and the owner read the refund request on their booking; exceptions are admin. */
+    match /venueSettlements/{ref} {
+      allow read:  if isAdmin() || (isAuthed() && resource.data.ownerUid == request.auth.uid);
+      allow write: if false;
+    }
+    match /venueRefundRequests/{bookingId} {
+      allow read:  if isAdmin() || (isAuthed() && (resource.data.requestedBy == request.auth.uid));
+      allow write: if false;
+    }
+    match /venueExceptions/{id} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
     /* Administrator invitations. Written EXCLUSIVELY by the inviteUser /
        resendInvitation / reconcileInvitations Cloud Functions via the Admin SDK,
        which bypasses these rules — so every client-side write is denied outright.
@@ -472,16 +511,19 @@ service cloud.firestore {
                     || (isAuthed() && resource.data.providerId   == request.auth.uid)
                     || (isAuthed() && resource.data.customerId   == request.auth.uid)
                     || (isAuthed() && resource.data.ownerId      == request.auth.uid);
+      /* 2026-09-27 (Entertainment convergence): either party could write ANY status directly —
+         the owner could mark a booking active / checked-in (skipping the buyer's booking PIN) or
+         completed; the customer could move the date. Lifecycle moves are the callables' (bookingApprove
+         / bookingCheckIn / bookingCheckOut / bookingReschedule / bookingCancel — Admin SDK). A client may
+         now only: the customer cancels their own booking; the owner / provider edits their note. */
       allow update: if isAdmin()
                     || (isAuthed() && resource.data.customerId == request.auth.uid
+                        && request.resource.data.status == 'cancelled'
                         && request.resource.data.diff(resource.data).affectedKeys()
-                             .hasOnly(['status','cancelReason','cancellationReason','cancelledAt','cancelledBy','updatedAt','date','time','notes']))
-                    || (isAuthed() && resource.data.ownerId == request.auth.uid
+                             .hasOnly(['status','cancelReason','cancellationReason','cancelledAt','cancelledBy','updatedAt']))
+                    || (isAuthed() && (resource.data.ownerId == request.auth.uid || resource.data.providerId == request.auth.uid)
                         && request.resource.data.diff(resource.data).affectedKeys()
-                             .hasOnly(['status','providerNote','updatedAt','confirmedAt','completedAt','approvedAt','rejectedAt','rejectionReason','checkIn','checkOut','reminders','autoCompletedAt']))
-                    || (isAuthed() && resource.data.providerId == request.auth.uid
-                        && request.resource.data.diff(resource.data).affectedKeys()
-                             .hasOnly(['status','providerNote','updatedAt','confirmedAt','completedAt']));
+                             .hasOnly(['providerNote','updatedAt']));
       allow delete: if isAdmin();
     }
     match /venues/{venueId} {
@@ -1044,9 +1086,15 @@ service cloud.firestore {
       allow update: if isParticipant()
                     && request.resource.data.diff(resource.data)
                          .affectedKeys().hasOnly(['lastMessage','lastMessageAt','lastSenderId','unread']);
+      /* A booking conversation (ent_booking_*) is created by the SERVER from the booking's own
+         parties (messages.ensureAnchoredConversation). A client pre-creating that id could seat a
+         participant of its choosing, so the id space and the type are closed to clients. */
       allow create: if isActive() && isAuthed()
                     && request.auth.uid in request.resource.data.participants
-                    && request.resource.data.participants.size() <= 2;
+                    && request.resource.data.participants.size() <= 2
+                    && !convId.matches('^ent_booking_.*')
+                    && request.resource.data.get('transactionType', '') != 'ent_booking'
+                    && request.resource.data.get('serverAnchored', false) != true;
       allow delete: if isAdmin();
       match /messages/{msgId} {
         function inConvo() {

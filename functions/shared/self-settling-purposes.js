@@ -9,12 +9,14 @@
  *       payData.uid and pay the BUYER; and
  *   (b) their commercial policy is not the marketplace one (shared/commercial-policy.js):
  *         film_access  → Creator 30 / 70 royalty ledger (creator-hub.js)
- *         event_ticket → 3 % net of provider fee, organizer paid after the event
+ *         event_ticket → 3 % net of provider fee, organizer paid when each ticket is admitted
  *                        (event-settlement.js)
+ *         venue_booking → 5 % Entertainment booking lane, venue owner paid at the buyer's show-up
+ *                        (venue-payments.js)
  * Activation hangs off the payments/{ref} trigger of each module, so it runs whichever webhook
  * wrote the payment. Purpose is read from the server-minted INTENT, never from client meta.
  */
-const SELF_SETTLING_PURPOSES = Object.freeze(new Set(['film_access', 'event_ticket']));
+const SELF_SETTLING_PURPOSES = Object.freeze(new Set(['film_access', 'event_ticket', 'venue_booking']));
 
 function isSelfSettling(purposeOrType) {
   return SELF_SETTLING_PURPOSES.has(String(purposeOrType || ''));

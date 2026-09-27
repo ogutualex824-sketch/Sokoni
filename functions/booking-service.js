@@ -203,7 +203,11 @@ _h.bookingCreateService = async (req) => {
      once here, and read unchanged at settlement. See functions/provider-hub.js for why it
      comes from the provider's DECIDED application role rather than the self-declared
      `providers/{uid}.category`, and why it is NOT the client-supplied `hubType` below. */
-  const commissionHub = await require('./provider-hub').resolveProviderHub(db, providerId);
+  const _cls = await require('./provider-hub').resolveProviderClassification(db, providerId);
+  const commissionHub = _cls.hub;
+  /* Entertainment class (ARTIST / SERVICE), resolved and stamped the same way — the booking identity
+     (entertainment-bookings.js) reads it; null for every non-Entertainment provider. */
+  const entClass = _cls.entClass;
 
   let outcome = null;
   await db.runTransaction(async (txn) => {
@@ -268,6 +272,7 @@ _h.bookingCreateService = async (req) => {
       note: _san(d.note, 300),
       hubType: _san(d.hubType, 40) || 'services',   /* CLIENT-SUPPLIED, descriptive only — never price on this */
       commissionHub,                                /* SERVER-RESOLVED, immutable — the settlement rate selector */
+      entClass: entClass || null,                   /* SERVER-RESOLVED, immutable — ARTIST / SERVICE / null */
       idempotencyKey,
       /* Provenance — which path/engine/rev priced & reserved this booking, so a
          record is reproducible and future engine/pricing revisions need no

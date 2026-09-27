@@ -13024,3 +13024,15 @@ exports.eventReleaseSettlements  = _eventSettle.eventReleaseSettlements;  // sch
 exports.eventExpireUnpaidOrders  = _eventSettle.eventExpireUnpaidOrders;  // schedule: 15 min — release unpaid seats
 /* Event-day operations (ticket PIN admission, event-scoped temporary staff) — one dispatcher. */
 exports.eventOpsDispatch         = require('./event-ops').eventOpsDispatch;
+/* ENTERTAINMENT BOOKING IDENTITY (entertainment-bookings.js): one envelope per Entertainment booking —
+   reference, category booking PIN, buyer↔provider conversation, notifications, AdminOS trace. One
+   trigger per source engine; the source engines themselves are unchanged. Re-exported BY NAME. */
+const _entBookings = require('./entertainment-bookings');
+exports.entBookingOnEventOrder      = _entBookings.entBookingOnEventOrder;       // trigger: eventOrders/{id}
+exports.entBookingOnEventRefund     = _entBookings.entBookingOnEventRefund;      // trigger: eventRefundRequests/{id}
+exports.entBookingOnProviderBooking = _entBookings.entBookingOnProviderBooking;  // trigger: providerBookings/{id}
+exports.entBookingOnVenueBooking    = _entBookings.entBookingOnVenueBooking;     // trigger: bookings/{id}
+/* VENUE PAYMENTS (venue-payments.js): venue_booking activation + the unpaid-expiry / no-show sweep. */
+const _venuePay = require('./venue-payments');
+exports.venueOnBookingPayment       = _venuePay.venueOnBookingPayment;           // trigger: payments/{id}
+exports.venuePaymentSweep           = _venuePay.venuePaymentSweep;               // schedule: 15 min

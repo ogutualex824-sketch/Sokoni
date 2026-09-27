@@ -533,6 +533,10 @@ async function _afterRefundSettled(refundId, refund, actorUid, source) {
          entitlement engine; a partial refund is recorded for AdminOS. Never throws here. */
       await require('./event-settlement').onEventRefundProcessed({ payRef: refund.payRef, refundId, amountCents: refund.amountCents, source });
     } catch (e) { logger.error('[FOS/refund] event reversal hook failed (refund stands)', { refundId, err: e.message }); }
+    try {
+      /* No-op unless the payment is a venue booking (venue-payments.js). Never throws. */
+      await require('./venue-payments').onVenueRefundProcessed({ payRef: refund.payRef, refundId, amountCents: refund.amountCents, source });
+    } catch (e) { logger.error('[FOS/refund] venue reversal hook failed (refund stands)', { refundId, err: e.message }); }
   }
 }
 
@@ -648,6 +652,17 @@ async function _submitRefundHandler(req, opts = {}) {
       if (_fi.exists && _fi.data().purpose === 'event_ticket' && opts.via !== 'event_wizard' && opts.via !== 'event_admin') {
         throw new HttpsError('failed-precondition', 'Event ticket refunds are requested from the ticket (refund wizard), or by an administrator from AdminOS › Entertainment.');
       }
+      /* SECURITY (2026-09-27, found in the Entertainment convergence audit — cross-system, reported
+         separately): a service-booking payment is HELD by the booking engine and refunded ONLY by its
+         own disbursement (provider-ops _disburseHeldFunds / booking resolution). fosSubmitRefund had
+         no guard, so the same payment could ALSO be refunded here — a double refund. */
+      /* Venue bookings are refunded under the VENUE's policy, priced by venue-payments.requestRefund. */
+      if (_fi.exists && _fi.data().purpose === 'venue_booking' && opts.via !== 'venue_booking') {
+        throw new HttpsError('failed-precondition', 'Venue booking refunds are requested from the booking (the venue\'s cancellation policy applies).');
+      }
+      if (_fi.exists && _fi.data().purpose === 'service_booking') {
+        throw new HttpsError('failed-precondition', 'Service booking refunds are handled by the booking itself (cancel / resolution).');
+      }
       if (_fi.exists && _fi.data().purpose === 'film_access') {
         tx = { ...pd, payRef, buyerUid: pd.uid, sellerUid: null, uid: null, creatorFilm: true,
                amountKES: Number(pd.amount) || null };
@@ -663,7 +678,10 @@ async function _submitRefundHandler(req, opts = {}) {
       }
     }
 
-    if (!isAdmin && tx.buyerUid !== auth.uid)
+    /* venue-payments.requestRefund resolved the caller as the booking's buyer OR its venue owner and
+       priced the refund itself; the refund still goes to the BUYER (tx.buyerUid). */
+    const _trustedParty = opts.via === 'venue_booking' && opts.onBehalfOfBuyer && opts.onBehalfOfBuyer === tx.buyerUid;
+    if (!isAdmin && tx.buyerUid !== auth.uid && !_trustedParty)
       throw new HttpsError('permission-denied', 'Not authorized to refund this transaction');
 
     /* Validate refund does not exceed the original payment amount */

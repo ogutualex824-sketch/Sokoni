@@ -241,6 +241,12 @@
       <h2 id="success-title">Booking request sent</h2>
       <p class="desc" id="success-desc">—</p>
       <div class="booking-id-chip" id="success-ref"></div>
+      <div id="success-pay" style="display:none;margin:14px 0">
+        <p class="desc">Pay online through SOKONI to secure this slot (within 30 minutes). Your booking PIN — "PIN YAKO NI BOOKING YAKO" — is in My Bookings on the Entertainment Hub.</p>
+        <input id="pay-phone" type="tel" inputmode="tel" placeholder="M-PESA number 07XX XXX XXX" style="min-height:44px;width:100%;max-width:320px;margin:8px 0;padding:0 12px;border-radius:10px">
+        <button class="btn-primary" id="pay-btn" type="button">Pay with M-PESA</button>
+        <p class="desc" id="pay-msg" role="status" aria-live="polite"></p>
+      </div>
       <p class="desc" style="margin-bottom:28px">You will receive a confirmation notification shortly.</p>
       <button class="btn-primary" onclick="showMyBookings()">View My Bookings</button>
     </div>
@@ -753,6 +759,11 @@ function submitBooking() {
       ? 'The venue has reserved this slot. SOKONI does not collect payment for venue bookings — the venue will tell you how to pay.'
       : 'The venue must approve this request before the slot is yours. You will be notified of its decision.';
     document.getElementById('success-ref').textContent = 'Booking ID: ' + ref;
+    /* Venue bookings are paid online through SOKONI (venue-payments). The SERVER prices the payment. */
+    if (res.data && res.data.requiresPayment) {
+      document.getElementById('success-pay').style.display = '';
+      document.getElementById('pay-btn').onclick = function () { payVenue(res.data.bookingId, document.getElementById('pay-phone').value, document.getElementById('pay-msg')); };
+    }
     document.getElementById('confirm-back').style.display = 'none';
     btn.style.display = 'none';
     document.getElementById('success-screen').classList.add('show');
@@ -762,6 +773,28 @@ function submitBooking() {
     toast((err.message || 'Booking failed. Please try again.'), 'err');
     btn.disabled = false; btn.textContent = 'Confirm Booking';
   });
+}
+
+/* ── Pay / refund (venue-payments; canonical intent → STK; refund → the canonical refund authority) ── */
+function _fn(name) { return firebase.functions(_vbApp).httpsCallable(name); }
+function _errText(e) { return String((e && e.message) || 'Please try again.').replace(/^[a-z_-]+:\s*/, ''); }
+function payVenue(bookingId, phoneRaw, msg) {
+  var phone = String(phoneRaw || '').replace(/\s/g, '');
+  if (!/^(\+?254|0)[17]\d{8}$/.test(phone)) { msg.textContent = 'Enter a valid M-PESA number.'; return; }
+  phone = phone.replace(/^\+/, '').replace(/^0/, '254');
+  msg.textContent = 'Preparing payment…';
+  _fn('createPaymentIntent')({ purpose: 'venue_booking', bookingId: bookingId, phone: phone })
+    .then(function (r) { msg.textContent = 'Sending the M-PESA prompt…'; return _fn('initiateSTKPush')({ phone: phone, ref: r.data.ref, amount: r.data.amount, meta: { type: 'venue_booking' } }); })
+    .then(function () { msg.textContent = 'Enter your M-PESA PIN on your phone. Your booking shows Paid once SOKONI confirms the payment.'; })
+    .catch(function (e) { msg.textContent = _errText(e); });
+}
+function requestVenueRefund(bookingId, msg) {
+  var reason = window.prompt('Why are you cancelling? (The venue\'s cancellation policy decides the refund.)');
+  if (!reason || reason.trim().length < 5) { msg.textContent = 'A reason (5+ characters) is required.'; return; }
+  msg.textContent = 'Submitting…';
+  _fn('eventOpsDispatch')({ op: 'venueRequestRefund', bookingId: bookingId, reason: reason.trim() })
+    .then(function (r) { var d = r.data || {}; msg.textContent = 'Refund requested: KES ' + Number(d.refundKes || 0).toLocaleString() + (d.feeKes ? ' (venue cancellation fee KES ' + Number(d.feeKes).toLocaleString() + ')' : '') + ' — under review.'; })
+    .catch(function (e) { msg.textContent = _errText(e); });
 }
 
 /* ── My Bookings ──────────────────────────────────────────────────────────── */
@@ -794,7 +827,21 @@ function loadMyBookings() {
         var badge = document.createElement('span');
         badge.className = 'st-badge st-' + st;
         badge.textContent = st.replace(/_/g, ' ');
-        item.appendChild(info); item.appendChild(badge); list.appendChild(item);
+        item.appendChild(info); item.appendChild(badge);
+        var id = bk.bookingId || bk.id;
+        var msgP = document.createElement('p'); msgP.className = 'desc'; msgP.setAttribute('role', 'status');
+        if (id && bk.requiresPayment && bk.paymentStatus !== 'paid' && ['pending', 'confirmed'].indexOf(st) > -1) {
+          var ph = document.createElement('input'); ph.type = 'tel'; ph.placeholder = 'M-PESA 07XX…'; ph.style.cssText = 'min-height:40px;max-width:160px';
+          var pb = document.createElement('button'); pb.type = 'button'; pb.className = 'btn-primary'; pb.textContent = 'Pay';
+          pb.onclick = function () { payVenue(id, ph.value, msgP); };
+          info.appendChild(ph); info.appendChild(pb);
+        } else if (id && bk.paymentStatus === 'paid' && ['pending', 'confirmed'].indexOf(st) > -1) {
+          var rb = document.createElement('button'); rb.type = 'button'; rb.className = 'back-btn'; rb.textContent = 'Cancel & request refund';
+          rb.onclick = function () { requestVenueRefund(id, msgP); };
+          info.appendChild(rb);
+        }
+        info.appendChild(msgP);
+        list.appendChild(item);
       });
     })
     .catch(function(err) {

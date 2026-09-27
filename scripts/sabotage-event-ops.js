@@ -39,6 +39,7 @@ const SUITES = {
   ready:    ['node', ['scripts/test-entertainment-readiness.js']],
   legal:    ['node', ['scripts/test-legal-compliance.js']],
   crules:   ['node', ['scripts/run-creator-rules.js']],
+  bkg:      ['node', ['scripts/test-entertainment-bookings.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -65,6 +66,15 @@ const APL = 'functions/application-lifecycle.js';
 const LEG = 'functions/legal-agreements.js';
 const HUB = 'entertainment.html';
 const STR = 'storage.rules';
+const EBK = 'functions/entertainment-bookings.js';
+const EBI = 'functions/shared/ent-booking-identity.js';
+const PVO = 'functions/provider-ops.js';
+const VPY = 'functions/venue-payments.js';
+const MSG = 'functions/messages.js';
+const BKG = 'functions/booking.js';
+const PHB = 'functions/provider-hub.js';
+const SSP = 'functions/shared/self-settling-purposes.js';
+const FOSF = 'functions/financial-os.js';
 
 const M = [
   /* ── ticket PIN + admission ── */
@@ -181,8 +191,8 @@ const M = [
   { group: 'staff', name: 'invitation accepted from an UNVERIFIED email', file: OPS, suite: 'ops',
     from: "if (!email || tok.email_verified !== true) fail(", to: 'if (!email) fail(', expect: /UNVERIFIED/ },
   /* ── door sales ── */
-  { group: 'sales', name: 'cash below the total accepted', file: SALES, suite: 'sales',
-    from: 'if (!(received >= grossCents)) fail(', to: 'if (false) fail(', expect: /cash below the total refused/ },
+  /* 'cash below the total accepted' RETIRED 2026-09-27: cash tender was removed from event sales (owner
+     decision). Re-enabling cash at all is the attack now — [conv] 'cash re-enabled for event ticket sales'. */
   { group: 'sales', name: 'another cashier may replay a sale key', file: SALES, suite: 'sales',
     from: 'if (c.actorUid !== actor.uid) fail(', to: 'if (false) fail(', expect: /another cashier cannot reuse the key/ },
   { group: 'sales', name: 'tier availability not checked (oversell)', file: SALES, suite: 'sales',
@@ -190,7 +200,7 @@ const M = [
   { group: 'sales', name: 'door commission priced at the POS rate (5 %) not events (3 %)', file: SALES, suite: 'sales',
     from: "POLICY.commissionCents('event_ticket', { grossCents, providerFeeCents: 0 })", to: "POLICY.commissionCents('pos_till', { grossCents, providerFeeCents: 0 })", expect: /3 %/ },
   { group: 'sales', name: 'release pays the organizer without netting door commission', file: ES, suite: 'sales',
-    from: '    for (const r of recs) {', to: '    for (const r of []) {', expect: /nets outstanding door-sale commission|COLLECTED|collects PART/ },
+    from: '  for (const r of recs) {', to: '  for (const r of []) {', expect: /nets outstanding door-sale commission|COLLECTED|collects PART/ },
   { group: 'sales', name: 'any cashier reads another cashier\'s walk-in PINs', file: SALES, suite: 'sales',
     from: "if (s.cashierUid !== actor.uid && !actor.caps.includes(OPS.CAPS.VIEW_SALES)) fail('permission-denied', 'Only the cashier who made this sale can see its PINs.');",
     to: '', expect: /another cashier cannot read that sale's PINs/ },
@@ -361,7 +371,7 @@ const M = [
   { group: 'ready', name: 'ratings from viewers with no access', file: ENH, suite: 'ready',
     from: "    if (!has) throw new HttpsError('permission-denied', 'Only viewers who have watched this can rate it.');", to: "", expect: /WITHOUT access/ },
   { group: 'ready', name: 'the Hub page keeps business data in localStorage again', file: HUB, suite: 'ready',
-    from: "  const LOADERS = { events: loadEvents, films: loadFilms };", to: "  try { localStorage.setItem('sokoniBookings', '[]'); } catch (_) {}\n  const LOADERS = { events: loadEvents, films: loadFilms };", expect: /localStorage/ },
+    from: "  const LOADERS = { events: loadEvents, films: loadFilms, mine: loadBookings };", to: "  try { localStorage.setItem('sokoniBookings', '[]'); } catch (_) {}\n  const LOADERS = { events: loadEvents, films: loadFilms, mine: loadBookings };", expect: /localStorage/ },
   { group: 'ready', name: 'acceptance records rewritable (merge over the original signature)', file: LEG, suite: 'legal',
     edits: [{ from: "    if (existing.has(docId)) { alreadyAccepted.push({ agreementId, version }); continue; }\n", to: '' },
             { from: "    batch.create(_db().collection('legalAcceptances').doc(docId), {", to: "    batch.set(_db().collection('legalAcceptances').doc(docId), {" }],
@@ -380,6 +390,71 @@ const M = [
     from: "                       || request.auth.token.superAdmin == true\n", to: "", expect: /SUPER ADMIN/ },
   { group: 'ready', browser: true, name: 'Hub event cards link to a non-canonical page', file: HUB, suite: 'browser',
     from: 'href="/event-hub.html?event=${encodeURIComponent(e.eventId)}"', to: 'href="/entertainment.html?event=${encodeURIComponent(e.eventId)}"', expect: /canonical page/ },
+  /* ── convergence Slice A: booking identity, PIN, conversation, show-up settlement, venue rail (2026-09-27) ── */
+  { group: 'conv', name: 'booking PIN not bound to its booking (cross-booking PIN)', file: EBK, suite: 'bkg',
+    from: "  return p ? _key().credentialHash(`entbk|${envId}|${p}`) : null;", to: "  return p ? _key().credentialHash(`entbk|${p}`) : null;", expect: /PIN never verifies booking A/ },
+  { group: 'conv', name: 'booking PIN in the TICKET PIN domain (cross-category PIN)', file: EBK, suite: 'bkg',
+    from: "  return p ? _key().credentialHash(`entbk|${envId}|${p}`) : null;", to: "  return p ? _key().credentialHash(`evtpin|${envId}|${p}`) : null;", expect: /TICKET PIN hash never equals/ },
+  { group: 'conv', name: 'any signed-in user verifies someone else\'s booking', file: EBK, suite: 'bkg',
+    from: "  if (!env || env.providerUid !== uid) fail('permission-denied', 'This booking is not one of yours to verify.');", to: "  if (!env) fail('permission-denied', 'This booking is not one of yours to verify.');", expect: /only the booking's provider can verify|buyer cannot verify/ },
+  { group: 'conv', name: 'wrong-PIN lockout removed', file: EBK, suite: 'bkg',
+    from: "  if (pre.locked) fail('resource-exhausted', 'Too many wrong PINs. Wait a few minutes before trying again.');", to: "", expect: /locked out|RIGHT PIN is refused while locked/ },
+  { group: 'conv', name: 'a booking PIN verifies again after use / after cancellation', file: EBK, suite: 'bkg',
+    from: "    if (st !== ID.PIN_STATE.ACTIVE) return { verified: false, state: st };", to: "    if (false) return { verified: false, state: st };", expect: /used ONCE|cancelled booking is refused|TOO EARLY/ },
+  { group: 'conv', name: 'show-up window removed (verify, and get paid, days early)', file: EBI, suite: 'bkg',
+    from: "  if (Number.isFinite(startMs) && nowMs < startMs - SHOW_UP_OPENS_MS) return PIN_STATE.NOT_YET;", to: "", expect: /TOO EARLY/ },
+  { group: 'conv', name: 'the provider is shown the buyer\'s raw booking PIN', file: EBK, suite: 'bkg',
+    from: "buyer: { initials: ID.initials(name) }, pin: env.pin ? '••••' : null,", to: "buyer: { initials: ID.initials(name) }, pin: ((await _db().collection(COL.SECRETS).doc(env.envId).get()).data() || {}).pin || null,", expect: /PROVIDER sees ••••/ },
+  { group: 'conv', name: 'a stranger can read any booking', file: EBK, suite: 'bkg',
+    from: "  }\n  return null;\n}\n\nasync function mine(req) {", to: "  }\n  return { ..._base(env), role: 'other' };\n}\n\nasync function mine(req) {", expect: /stranger learns nothing|stranger cannot open/ },
+  { group: 'conv', name: 'the booking conversation seats someone other than the provider', file: EBK, suite: 'bkg',
+    from: "    participants: [env.buyerUid, env.providerUid],", to: "    participants: [env.buyerUid, 'support_bot'],", expect: /parties = the booking's buyer \+ provider/ },
+  { group: 'conv', name: 'a client may create a booking conversation (participant substitution)', file: MSG, suite: 'bkg',
+    from: "  if (SERVER_ANCHORED.has(transactionType)) {\n    throw new HttpsError('permission-denied', 'This conversation is opened from the booking itself.');\n  }", to: "", expect: /client cannot create an ent_booking conversation/ },
+  { group: 'conv', name: 'a venue booking with a forged owner gets an identity', file: EBK, suite: 'bkg',
+    from: "    if (!venue || venue.ownerId !== d.ownerId) return { skip: 'owner_mismatch' };", to: "    if (!venue) return { skip: 'owner_mismatch' };", expect: /forged provider/ },
+  { group: 'conv', name: 'venue check-in without the booking PIN', file: BKG, suite: 'bkg',
+    from: "    await require('./entertainment-bookings').assertVerified('bookings', bookingId);\n", to: "", expect: /cannot check in BEFORE verifying/ },
+  { group: 'conv', name: 'the customer checks themselves in', file: BKG, suite: 'bkg',
+    from: "    if (booking.ownerId !== uid) {\n      throw new HttpsError('permission-denied','Only the venue can check a booking in.');", to: "    if (booking.ownerId !== uid && booking.customerId !== uid) {\n      throw new HttpsError('permission-denied','Only the venue can check a booking in.');", expect: /CUSTOMER can no longer check themselves in/ },
+  { group: 'conv', name: 'show-up settlement credits the PAYER (wallet substitution)', file: PVO, suite: 'bkg',
+    from: "  const uid = data.providerId;\n  const m = await _settlementMath(uid, ref, data);", to: "  const uid = data.customerUid;\n  const m = await _settlementMath(uid, ref, data);", expect: /PROVIDER's business wallet|never the buyer/ },
+  { group: 'conv', name: 'completion pays AGAIN after a show-up settlement', file: PVO, suite: 'bkg',
+    from: "    if (cur.settledTrigger === 'show_up' && cur.paymentStatus === 'settled') {", to: "    if (false) {", expect: /WITHOUT paying again/ },
+  { group: 'conv', name: 'the 5 % lane leaks to every provider (commission policy changed)', file: PHB, suite: 'bkg',
+    from: "  return { category: 'services', hubId: 'provider', subscriptionRole: 'provider' };", to: "  return { category: 'entertainment_bookings', hubId: 'entertainment', skipMinimum: true };", expect: /NO plan-rate override/ },
+  { group: 'conv', name: 'venue release credits the buyer (wallet substitution)', file: VPY, suite: 'bkg',
+    from: "    const wRef = db.collection(COL.WALLETS).doc(s.ownerUid);", to: "    const wRef = db.collection(COL.WALLETS).doc(s.customerUid);", expect: /owner's business wallet|never the buyer/ },
+  { group: 'conv', name: 'venue refund ignores the venue policy (fee refunded too)', file: VPY, suite: 'bkg',
+    from: "amountKES: q.refundKes, reason", to: "amountKES: q.refundKes + q.feeKes, reason", expect: /priced by the policy/ },
+  { group: 'conv', name: 'a no-show is paid to the venue before the dispute window', file: VPY, suite: 'bkg',
+    from: "    if (due == null || nowMs < due) return 'not_due';", to: "", expect: /NOT paid before end/ },
+  { group: 'conv', name: 'venue_booking not self-settling (the webhook credits the payer)', file: SSP, suite: 'bkg',
+    from: "'film_access', 'event_ticket', 'venue_booking'", to: "'film_access', 'event_ticket'", expect: /SELF-SETTLING/ },
+  { group: 'conv', name: 'direct fosSubmitRefund accepted for a venue payment (refund bypass)', file: FOSF, suite: 'bkg',
+    from: "      if (_fi.exists && _fi.data().purpose === 'venue_booking' && opts.via !== 'venue_booking') {", to: "      if (false) {", expect: /DIRECT fosSubmitRefund for a venue payment/ },
+  { group: 'conv', name: 'a declined paid booking keeps the customer\'s money', file: PVO, suite: 'bkg',
+    from: "  if (data.paymentStatus === 'paid_held') await _disburseHeldFunds(data, ref, { by: 'provider', isNoShow: false });", to: "", expect: /DECLINING a paid booking refunds/ },
+  { group: 'conv', name: 'an ordinary admin reads booking conversation content', file: EBK, suite: 'bkg',
+    from: "  if (!AC.isSuperAdmin(req)) fail('permission-denied', 'Super admin only.');\n  const reason = String((req.data || {}).reason || '').trim();", to: "  if (!AC.isAdmin(req)) fail('permission-denied', 'Super admin only.');\n  const reason = String((req.data || {}).reason || '').trim();", expect: /ordinary admin cannot read the conversation content/ },
+  { group: 'conv', name: 'a conversation read is not audited', file: EBK, suite: 'bkg',
+    from: "  await _db().collection('adminAudit').add({ action: 'ent_conversation_read',", to: "  if (false) await _db().collection('adminAudit').add({ action: 'ent_conversation_read',", expect: /AUDITED/ },
+  { group: 'conv', name: 'admission payout credits the BUYER (wallet substitution)', file: ES, suite: 'settle',
+    from: "  const wRef = db.collection(COL.WALLETS).doc(s.organizerUid);", to: "  const wRef = db.collection(COL.WALLETS).doc(s.buyerUid || s.organizerUid);", expect: /NEVER the buyer|business wallet/ },
+  { group: 'conv', name: 'an admitted ticket settles twice (both guards removed)', file: ES, suite: 'settle',
+    edits: [{ from: "      if (done.includes(t.ticketId)) return { skipped: 'already_released' };\n", to: '' },
+            { from: "    txn.create(txRef, { uid: s.organizerUid, type: 'event_ticket_earning',", to: "    txn.set(txRef, { uid: s.organizerUid, type: 'event_ticket_earning'," }],
+    expect: /never settles twice/ },
+  { group: 'conv', name: 'cash re-enabled for event ticket sales', file: SALES, suite: 'sales',
+    edits: [{ from: "  if (tender === 'cash') fail('failed-precondition', 'Cash is not accepted for event ticket sales. Take M-PESA through SOKONI, or a card with its terminal reference.');\n", to: '' },
+            { from: "const TENDERS = Object.freeze(['card_external', 'intasend']);", to: "const TENDERS = Object.freeze(['cash', 'card_external', 'intasend']);" }],
+    expect: /CASH is refused/ },
+  { group: 'conv', rules: true, name: 'the provider reads the buyer\'s booking PIN (rules)', file: RULES, suite: 'rules',
+    from: "  match /entBookingSecrets/{envId} {\n  allow read:  if isAuthed() && resource.data.buyerUid == request.auth.uid;", to: "  match /entBookingSecrets/{envId} {\n  allow read:  if isAuthed();", expect: /raw booking PIN/ },
+  { group: 'conv', rules: true, name: 'a client pre-creates a booking conversation (rules)', file: RULES, suite: 'rules',
+    from: "  && !convId.matches('^ent_booking_.*')", to: "", expect: /booking conversation id/ },
+  { group: 'conv', rules: true, name: 'the venue owner checks a booking in directly (rules)', file: RULES, suite: 'rules',
+    from: "  .hasOnly(['providerNote','updatedAt']));", to: "  .hasOnly(['providerNote','updatedAt','status','checkIn']));", expect: /checked-in directly/ },
 ];
 
 const argv = process.argv.slice(2);

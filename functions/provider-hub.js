@@ -74,16 +74,28 @@ const DEFAULT_HUB = 'provider';
  * @returns {Promise<string>} hub key, e.g. 'healthcare' | 'provider'
  */
 async function resolveProviderHub(db, providerId) {
+  return (await resolveProviderClassification(db, providerId)).hub;
+}
+
+/**
+ * The provider's commercial hub AND Entertainment class, from the DECIDED application only (never the
+ * self-editable providerProfiles.category — a provider could otherwise re-file themselves into a
+ * cheaper lane). { hub: 'healthcare' | 'entertainment' | 'provider', entClass: 'ARTIST' | 'SERVICE' | null }.
+ * Entertainment (owner decision 2026-09-27): a decided `provider` application whose category is a
+ * performer / Entertainment service type (shared/ent-booking-identity.classifyApplication).
+ */
+async function resolveProviderClassification(db, providerId) {
+  const out = { hub: DEFAULT_HUB, entClass: null };
   const uid = String(providerId || '').trim();
-  if (!uid) return DEFAULT_HUB;
+  if (!uid) return out;
 
   let snap;
   try {
     snap = await db.collection('applications').where('uid', '==', uid).limit(10).get();
   } catch (_) {
-    return DEFAULT_HUB;                      /* see fail-soft note above */
+    return out;                              /* see fail-soft note above */
   }
-  if (!snap || snap.empty) return DEFAULT_HUB;
+  if (!snap || snap.empty) return out;
 
   const apps = snap.docs.map((d) => d.data() || {});
   /* A DECIDED application is the account's standing classification; an undecided one is only
@@ -92,10 +104,13 @@ async function resolveProviderHub(db, providerId) {
      a provider off the default, only a decided one is. */
   const decided = apps.find((a) =>
     ['approved', 'active', 'verified'].includes(String(a.status || '').toLowerCase()));
-  if (!decided) return DEFAULT_HUB;
+  if (!decided) return out;
 
   const role = String(decided.role || '').trim().toLowerCase();
-  return ROLE_TO_HUB[role] || DEFAULT_HUB;
+  if (ROLE_TO_HUB[role]) return { hub: ROLE_TO_HUB[role], entClass: null };
+  const entClass = require('./shared/ent-booking-identity').classifyApplication(decided);
+  if (entClass) return { hub: 'entertainment', entClass };
+  return out;
 }
 
 /**
@@ -126,7 +141,13 @@ function commissionArgsForHub(hub) {
   if (String(hub || '') === 'healthcare') {
     return { category: 'healthcare', hubId: 'healthcare', skipMinimum: true };
   }
+  /* Entertainment bookings: a flat 5 % (RATES.entertainment_bookings), NOT the plan rate — so no
+     subscriptionRole (which would make the plan rate absolute), and no KES 10 floor (same reason as
+     healthcare above: this lane never had one). */
+  if (String(hub || '') === 'entertainment') {
+    return { category: 'entertainment_bookings', hubId: 'entertainment', skipMinimum: true };
+  }
   return { category: 'services', hubId: 'provider', subscriptionRole: 'provider' };
 }
 
-module.exports = { resolveProviderHub, commissionArgsForHub, ROLE_TO_HUB, DEFAULT_HUB };
+module.exports = { resolveProviderHub, resolveProviderClassification, commissionArgsForHub, ROLE_TO_HUB, DEFAULT_HUB };

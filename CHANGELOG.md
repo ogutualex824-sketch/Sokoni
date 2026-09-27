@@ -1,3 +1,124 @@
+## 2026-09-27 (206) — Entertainment Convergence Slice A: one booking identity, booking PIN, show-up settlement, cash removed
+
+- **Scope.** Convergence Slice A, implementing these owner decisions (2026-09-27):
+  - Foundation first.
+  - The Connect booking-anchor amendment is AUTHORIZED.
+  - Artist / service / venue bookings pay **5 %**.
+  - **Cash is removed** from event ticket sales.
+  - "When staff enter the PIN, SOKONI gets its commission and the organizer's **business wallet** is credited, not the
+    buyer's". The same rule applies to bookings **after a successful show-up**, with security and refund policies.
+
+  Full design: `docs/ENTERTAINMENT_BOOKINGS.md` ([[ENTERTAINMENT_BOOKINGS]]). **Not deployed.** Provider calls: 0.
+  Production writes: 0.
+- **One booking identity** (`functions/entertainment-bookings.js`, `functions/shared/ent-booking-identity.js`).
+  - A server-written envelope `entBookings/{evt|svc|ven}_{sourceId}` is kept in step by triggers on `eventOrders`,
+    `eventRefundRequests`, `providerBookings` and `bookings`.
+  - It references its source; it copies no price, slot or status authority.
+  - References are `BK-ART / BK-SVC / BK-VEN-YYYY-NNNNNN`. Events keep their `SK-EVT` ticket numbers.
+  - Parties are derived on the server. A venue booking whose `ownerId` does not match `venues/{id}.ownerId` gets no
+    identity.
+- **Booking PIN — "PIN YAKO NI BOOKING YAKO"** (events keep "PIN YAKO NI TICKET YAKO").
+  - 4 digits from `crypto.randomInt`. The hash is `HMAC(SOKONI_HMAC_KEY, "entbk|<envId>|<pin>")`, so it is bound to the
+    booking and kept separate from the ticket domain.
+  - The raw PIN is stored only in `entBookingSecrets`, which only the buyer can read. The provider sees `••••` and the
+    buyer's initials.
+  - Only the provider can verify. Wrong PINs are limited to 5 per booking and actor and 20 per actor, per 10 min. They are
+    audited without the PIN, and a lockout writes a `securityEvents` record.
+  - States: `NOT_YET` (earlier than start − 2 h) / `ACTIVE` / `USED` once / `SUSPENDED` / `INVALID` / `EXPIRED`.
+  - Protected actions now require a verified PIN:
+    - venue check-in (`bookingCheckIn`), which is now **owner-only** and uses server time;
+    - the start of an Entertainment service.
+- **Show-up / admission settles the money into the BUSINESS wallet — never the buyer.**
+  - **Event ticket:** `event-settlement.releaseTicketShare` runs on PIN or QR admission. SOKONI keeps 3 % (booked at
+    payment). The organizer is credited that ticket's share, and the last ticket takes the remainder. Tickets never
+    admitted are released at event end + 24 h.
+  - **Artist / service:** `provider-ops.settleOnShowUp` runs at PIN verification (5 %). A later completion only closes
+    the booking and never pays again.
+  - **Venue:** a new `venue_booking` rail (`functions/venue-payments.js`).
+    - It is self-settling, activates once through the entitlement engine, and is HELD until show-up or no-show.
+    - A no-show is released at end + 24 h.
+    - An unpaid booking is cancelled after 30 min.
+  - A refund after a gate release is recorded as an AdminOS exception (`refund_after_admission_release`). There is no
+    silent debit.
+- **Refund policies** (every refund is a REQUEST to the canonical authority).
+  - **Venue:**
+    - venue cancels → full refund;
+    - buyer cancels ≥ the window → full refund;
+    - buyer cancels inside the window → refund less the venue's fee (the kept fee is released to the venue);
+    - after the start → refused.
+  - **Provider decline of a paid booking now refunds.** The money was previously stuck.
+  - `fosSubmitRefund` refuses direct refunds of `service_booking` (a double-refund defect) and `venue_booking`.
+- **Conversations and notifications.**
+  - The server creates `conversations/ent_booking_{envId}` (`messages.ensureAnchoredConversation`), seating exactly the two
+    parties.
+  - Deterministic system messages record: created · payment · status · refund · verified.
+  - A Connect `entBooking` anchor was added. Calls are UNPROVEN (no TURN / STUN).
+  - Four booking notification types were silently dropped because they were unregistered; they are now registered.
+    Four `ent_booking_*` types were added.
+- **Cash removed.**
+  - `event-sales` TENDERS is now `['card_external','intasend']`, and `cash` is refused explicitly.
+  - The Quick Sale UI and the organizer agreement **v1.1** were updated (admission settles the ticket).
+- **Commission.**
+  - `commission-config.RATES.entertainment_bookings` is 5 % (only this row was added).
+  - The classification comes from the provider's **decided application**, never the self-editable profile.
+  - The generic marketplace / POS policy is unchanged.
+- **AdminOS.**
+  - `entAdminBookings` (search).
+  - `entAdminBookingTrace`: envelope · source · payment · settlement · conversation **metadata** · PIN state · audit.
+  - `entAdminBookingConversation`: **super admin only**, needs a reason, audited as `ent_conversation_read`.
+- **Files.**
+  - New: `functions/entertainment-bookings.js`, `functions/shared/ent-booking-identity.js`,
+    `functions/venue-payments.js`, `scripts/test-entertainment-bookings.js`, `docs/ENTERTAINMENT_BOOKINGS.md`.
+  - Changed functions: admin-os-dispatch, booking-service, booking, commission-config, connect-calls, event-hub,
+    event-ops, event-sales, event-settlement, financial-os, index, legal-agreements, messages, notify, payment-purposes,
+    provider-hub, provider-ops, shared/commercial-policy, shared/self-settling-purposes.
+  - Changed rules: `firestore.rules` and `firestore.rules.build`.
+  - Changed UI: chat, entertainment, entertainment-terms, event-manager, provider-dashboard, venue-booking,
+    venue-manager, sokoni-event-ops.js.
+  - Changed tests / sabotage: sabotage-event-ops plus 9 suites.
+- **Database.**
+  - New collections: `entBookings`, `entBookingSecrets`, `entBookingRefs`, `entBookingPinAttempts`, `entBookingAudit`,
+    `venueSettlements`, `venueRefundRequests`, `venueExceptions`.
+  - New conversation ids: `conversations/ent_booking_*`.
+  - A composite index is likely needed for `entBookings` (`buyerUid` / `providerUid` + time).
+- **API.**
+  - New callables (via dispatchers): `entBookingMine / Get / OpenConversation / VerifyPin`, `venueRequestRefund`, and the
+    three AdminOS ops above.
+  - New triggers: `entBookingOnEventOrder / OnEventRefund / OnProviderBooking / OnVenueBooking`,
+    `venueOnBookingPayment`.
+  - New schedule: `venuePaymentSweep`.
+- **Security.**
+  - Rules added for all new collections. The PIN secret can be read by the buyer only.
+  - A client can no longer create `ent_booking_*` conversations (id, type and `serverAnchored` are all closed).
+  - The `bookings` update rule is tightened: a customer may only cancel; an owner or provider may only edit
+    `providerNote`.
+- **Breaking.**
+  - Cash tender for event tickets is refused.
+  - A customer can no longer check themselves in to a venue.
+  - Venue add-on prices from the client are ignored.
+- **Tests.**
+  - bookings 94/0 · settlement 111/0 · sales 46/0 · admin 68/0 · identity 75/0 · agreements 25/0 · legal 47/0 ·
+    rules 176/0 · browser 282/0 · creator-callback 78/0 · creator-completion 66/0.
+  - Sabotage `[conv]`: **30/30 CAUGHT**, tree byte-identical after restore.
+  - Full sabotage suite: **148/148 CAUGHT** (0 missed · 0 crashed), with 17 suites green after restore.
+    - Two attacks were re-anchored to the refactored code: door-commission netting, and the Hub's localStorage.
+    - `cash below the total accepted` was retired, because cash tender no longer exists; `[conv] cash re-enabled`
+      covers it.
+  - Six attacks first came back MISSED or CRASHED; the **tests** were fixed, not the code:
+    - forced identical PIN draws;
+    - null-safe wallet reads;
+    - the payout record is asserted to survive completion;
+    - the rules actor now has an active token, and there is a positive control.
+- **Separate finding (NOT fixed here; cross-system).**
+  - Under the emulator, `isActive()` **errors, and so denies, for any token without a `deactivated` claim**. Every
+    `isActive()`-gated client write, for example `conversations` create, is therefore denied for ordinary users.
+  - The booking-conversation denial had been passing for that reason. It now uses an actor whose `isActive()` is true,
+    and a positive control proves the reserved-id clause is what decides.
+  - Whether production behaves the same way is **UNVERIFIED**. This needs its own rules slice.
+- **Deploy (NOT done).**
+  - Needs the new triggers, the schedule and the rules, together with the functions they depend on.
+  - Re-read the CLAUDE.md Artifact Registry notice first.
+
 ## 2026-09-27 (205) — Entertainment Hub whole-hub readiness sweep (KRA provider DEFERRED)
 
 - **Scope.**

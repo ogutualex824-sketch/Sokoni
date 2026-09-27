@@ -93,23 +93,24 @@ async function acceptAll(uid, role, { declaration = true, signature = true } = {
   const before = await msg(AL.applicationDecide.run(adm));
   ck('client boolean agreementAccepted:true but NO acceptances → approval REFUSED', /event organizer application cannot be approved/.test(before || ''), before);
   await acceptAll('org1', 'event_organizer');
-  const rec = await get('legalAcceptances/org1_event-organizer-agreement_1.0');
-  ck('acceptance record: version, uid, time, signature hash, server user-agent', rec && rec.version === '1.0' && rec.userId === 'org1' && rec.acceptedAt && rec.signatureHash && rec.userAgent === 'Chromium-test', rec && Object.keys(rec).slice(0, 8));
+  /* v1.1 since 2026-09-27 (cash prohibited, SOKONI the official record) — read the CURRENT version */
+  const rec = await get('legalAcceptances/org1_event-organizer-agreement_1.1');
+  ck('acceptance record: version, uid, time, signature hash, server user-agent', rec && rec.version === '1.1' && rec.userId === 'org1' && rec.acceptedAt && rec.signatureHash && rec.userAgent === 'Chromium-test', rec && Object.keys(rec).slice(0, 8));
   const ok = await code(AL.applicationDecide.run(adm));
   ck('with acceptances → approved', ok === null, ok);
   ck('…and the organizer role granted', ((await get('users/org1')) || {}).roles && (await get('users/org1')).roles.includes('event_organizer'));
 
   /* ═══ versioning ═══ */
   console.log('\n── versioning ──');
-  await db.doc('legalAgreements/event-ticketing-refund-obligations').set({ version: '1.1', name: 'Ticketing & Refund Obligations', status: 'active' });
+  await db.doc('legalAgreements/event-ticketing-refund-obligations').set({ version: '1.2', name: 'Ticketing & Refund Obligations', status: 'active' });
   skipCaches(6 * 60 * 1000);
   const comp = await LA.complianceFor('org1', 'event_organizer');
   ck('a NEW version makes the organizer non-compliant (must re-accept)', comp.compliant === false && comp.missing.some((m) => m.agreementId === 'event-ticketing-refund-obligations' && m.reason === 'outdated'), comp.missing && comp.missing.map((m) => m.agreementId + ':' + m.reason));
-  ck('the historical 1.0 acceptance is KEPT (a new record per version)', !!(await get('legalAcceptances/org1_event-ticketing-refund-obligations_1.0')));
+  ck('the historical 1.1 acceptance is KEPT (a new record per version)', !!(await get('legalAcceptances/org1_event-ticketing-refund-obligations_1.1')));
   await db.doc('applications/APP2').set({ ...app, status: 'pending' });
   ck('approval refused again until the new version is accepted', /cannot be approved/.test(await msg(AL.applicationDecide.run({ ...adm, data: { applicationId: 'APP2', decision: 'approve' } })) || ''));
   await acceptAll('org1', 'event_organizer');
-  ck('after re-accepting 1.1 → compliant; both records exist', (await LA.complianceFor('org1', 'event_organizer')).compliant && !!(await get('legalAcceptances/org1_event-ticketing-refund-obligations_1.1')) && !!(await get('legalAcceptances/org1_event-ticketing-refund-obligations_1.0')));
+  ck('after re-accepting 1.2 → compliant; both records exist', (await LA.complianceFor('org1', 'event_organizer')).compliant && !!(await get('legalAcceptances/org1_event-ticketing-refund-obligations_1.2')) && !!(await get('legalAcceptances/org1_event-ticketing-refund-obligations_1.1')));
   Date.now = realNow;
 
   /* ═══ creator (dark-launched) ═══ */

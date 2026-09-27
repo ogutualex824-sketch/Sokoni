@@ -87,6 +87,16 @@ const POLICIES = Object.freeze({
     refundAuthority: 'merchant refund authority (not owned by this registry)',
     paymentPurpose: 'pos_till_sale',
   }),
+  entertainment_booking: Object.freeze({
+    /* Artist, Entertainment-service and venue bookings (owner decision 2026-09-27). */
+    commercialPolicyId: 'entertainment_booking_5',
+    domain: 'entertainment', hubId: 'entertainment', transactionType: 'booking',
+    basis: BASIS.GROSS,
+    resolve: () => { const r = CC.resolveRate('entertainment_bookings'); return { pct: r.pct, source: 'commission-config.RATES.entertainment_bookings' }; },
+    settlement: 'on_completion (provider) / after the booking (venue)',
+    refundAuthority: 'provider booking resolution (_disburseHeldFunds) / financial-os (venue)',
+    paymentPurpose: 'service_booking | venue_booking',
+  }),
   quick_charge: Object.freeze({
     /* A Quick Charge is a keyed-in line of a POS / Till sale (shared/pos-service-pricing.js,
        priceSource 'quick_charge'), so it is priced by the POS lane — the same 5 %. */
@@ -107,6 +117,9 @@ const ENTERTAINMENT_POLICY_BY_CATEGORY = Object.freeze({
   streaming: 'creator_ppv',          /* owner 2026-09-26: Streaming is a Creator content type */
   events: 'event_ticket',
   entertainment_listing: 'entertainment_ppv',
+  artists: 'entertainment_booking',
+  services: 'entertainment_booking',
+  venues: 'entertainment_booking',
 });
 
 /**

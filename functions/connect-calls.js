@@ -252,6 +252,29 @@ async function _anchorBooking(db, anchorId) {
   };
 }
 
+/* ENTERTAINMENT BOOKING ANCHOR (owner-authorized amendment, 2026-09-27). The booking identity
+   envelope entBookings/{envId} (entertainment-bookings.js) is SERVER-WRITTEN only: its buyerUid is the
+   buyer who paid / booked and its providerUid is re-derived from the source record (the event's
+   organizer, the venue's owner, the Entertainment provider). It reuses the existing `booking` kind —
+   buyer ↔ provider, already in RELATIONSHIPS — so no authority or call-surface change is needed; the
+   `booking` kind deliberately has no call surface, so no call button is offered from it. */
+const ENT_BOOKING_STATE = { PENDING: 'active', CONFIRMED: 'active', IN_PROGRESS: 'active', COMPLETED: 'closed',
+  CANCELLED: 'cancelled', DECLINED: 'cancelled', NO_SHOW: 'cancelled', EXPIRED: 'cancelled' };
+async function _anchorEntBooking(db, anchorId) {
+  const snap = await db.collection('entBookings').doc(anchorId).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Booking not found');
+  const b = snap.data() || {};
+  if (!b.buyerUid || !b.providerUid) throw new HttpsError('failed-precondition', 'Booking has no resolvable parties');
+  return {
+    kind: 'booking',
+    state: ENT_BOOKING_STATE[String(b.status || '')] || 'unknown',
+    parties: { buyer: String(b.buyerUid), provider: String(b.providerUid) },
+    anchorType: 'entBookings',
+    anchorId,
+    advisory: null,
+  };
+}
+
 /* ---------------------------------------------------------------------------
    THE DELIVERY ANCHOR IS `packageRequests`, AND THAT WAS DETERMINED BY EVIDENCE.
 
@@ -374,6 +397,7 @@ const ANCHORS = Object.freeze({
   order: _anchorOrder,
   inquiry: _anchorInquiry,
   booking: _anchorBooking,
+  entBooking: _anchorEntBooking,
   delivery: _anchorDelivery,
   support: _anchorSupport,
   supply: _anchorSupply,

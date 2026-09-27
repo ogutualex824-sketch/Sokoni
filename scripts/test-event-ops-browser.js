@@ -246,11 +246,13 @@ async function seed() {
         await pg.click('#qsClear');
         ck(`cashier @${w}: Clear empties the cart; Complete disabled`, (await qv('VIP')) === '0' && (await qv('FEW')) === '0' && /KES 0/.test(await pg.textContent('#qsTotal')) && await pg.$eval('#qsDo', (b) => b.disabled));
         ck(`cashier @${w}: stepper controls cause no overflow`, await noOverflow(pg, w));
-        await pg.click('[data-inc="VIP"]'); await pg.click('[data-tender="cash"]');
-        await pg.fill('#qsCash', '6000'); await pg.click('#qsDo');
+        /* CASH IS NOT ACCEPTED (owner decision 2026-09-27): no Cash tender; the door sale is a card on the organizer's terminal */
+        ck(`cashier @${w}: no Cash tender is offered, and the page says cash is not accepted`, !(await pg.$('[data-tender="cash"]')) && /Cash is not accepted for ticket sales/.test(await pg.textContent('#qsTender').catch(() => '') + await pg.textContent('body')));
+        await pg.click('[data-inc="VIP"]'); await pg.click('[data-tender="card_external"]');
+        await pg.fill('#qsRef', 'BRWREF' + w.toString(36).toUpperCase());   /* no 4-digit run: cannot look like a PIN */ await pg.click('#qsDo');
         await pg.waitForSelector('#qsOut .sk-t-pin', { timeout: 8000 }).catch(() => null);
         const pinShown = await pg.textContent('#qsOut').catch(() => '');
-        const sales = db._dump('eventSales/').filter((x) => x.cashierUid === 'till1' && x.tender === 'cash');
+        const sales = db._dump('eventSales/').filter((x) => x.cashierUid === 'till1' && x.tender === 'card_external' && x.status === 'COMPLETED');
         const last = sales[sales.length - 1] || {};
         const pins = await pg.$$eval('#qsOut .sk-t-pin', (xs) => xs.map((x) => x.textContent.trim()));
         const nums = await pg.$$eval('#qsOut .sk-t-num', (xs) => xs.map((x) => x.textContent.trim()));
@@ -285,7 +287,7 @@ async function seed() {
         await pg.click('[data-qsmode="sale"]');
         ck(`cashier @${w}: server wrote a COMPLETED 5,000 sale + valid ticket + 3 % receivable`, last.status === 'COMPLETED' && last.grossCents === 500000
           && db._dump('eventTickets/').some((t) => t.saleId === last.saleId && t.status === 'valid') && ((await get(`eventCommissionReceivables/${last.saleId}`)) || {}).amountCents === 15000);
-        ck(`cashier @${w}: change shown (1,000)`, /change KES 1,000/.test(await pg.textContent('#qsMsg')));
+        ck(`cashier @${w}: the card sale records the terminal reference (attested, not verified)`, !!last.card && last.card.reference === ('BRWREF' + w.toString(36).toUpperCase()) && last.paymentVerified === false && /Sale recorded/.test(await pg.textContent('#qsMsg')));
         const vip = await get('eventTicketTiers/VIP');
         ck(`cashier @${w}: after the sale the tickets-left count is re-read from the server`, Number(await pg.textContent('[data-left="VIP"]')) === vip.quantity - vip.sold && (await qv('VIP')) === '0', [await pg.textContent('[data-left="VIP"]'), vip.quantity - vip.sold]);
         if (w === 1280) {
@@ -521,7 +523,12 @@ async function seed() {
       ck(`admin @${w}: investigation has no horizontal page overflow`, await noOverflow(pg, w));
       const html0 = await pg.content();
       const allPins = db._dump('eventTicketSecrets/').map((x) => x.pin);
-      ck(`admin @${w}: no ticket PIN anywhere in the investigation page`, allPins.length > 0 && allPins.every((p) => !html0.includes(p)));
+      /* a PIN counts as leaked only as a STANDALONE 4-digit token: ticket numbers (SK-EVT-2026-NNNNNN) and amounts contain 4-digit windows that are not PINs (a substring search here was flaky). */
+      const _tok = (p) => new RegExp('(^|\\D)' + p + '(\\D|$)');
+      /* ticket numbers are shown on purpose; remove them first so their year / digit groups cannot pose as a PIN */
+      const htmlScan = html0.replace(/SK-EVT-\d{4}-\d{6}/g, 'SK-EVT-#');
+      const leaked = allPins.filter((p) => _tok(p).test(htmlScan)).map((p) => { const i = htmlScan.search(_tok(p)); return p + ' @ …' + htmlScan.slice(Math.max(0, i - 40), i + 8).replace(/\s+/g, ' ') + '…'; });
+      ck(`admin @${w}: no ticket PIN anywhere in the investigation page`, allPins.length > 0 && leaked.length === 0, leaked.join(' | '));
       if (flows) {
         await pg.click('[data-trace-order="ORDBUY1"]'); await pg.waitForSelector('.aos-trace', { timeout: 5000 }).catch(() => null);
         const tr = await pg.textContent('#aosentBody');

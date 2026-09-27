@@ -194,12 +194,12 @@ async function pay(ref, { buyer = 'buyer1', amountCents = 100000, status = 'COMP
   ck('not due before the event ends + 24 h', (await ES.releaseOne('O1', { nowMs: NOW })).skipped === 'not_due');
   NOW += 80 * H;
   const rl = await ES.releaseOne('O1', { nowMs: NOW });
-  const w = await get('wallets/org1');
-  ck('due → organizer wallets.balance credited in whole shillings', rl.released && w.balance === Math.floor(95545 / 100), JSON.stringify(rl));
+  const w = (await get('wallets/org1')) || {};             /* null-safe: a substituted wallet must FAIL here, not crash */
+  ck('due → the organizer business wallet (wallets.balance) credited in whole shillings', rl.released && w.balance === Math.floor(95545 / 100), JSON.stringify(rl));
   ck('rounding remainder recorded, not dropped', (await get('eventSettlements/O1')).roundingRemainderCents === 95545 - Math.floor(95545 / 100) * 100);
   ck('wallet transaction id is deterministic', !!(await get('walletTransactions/org1_O1_event')));
   const rr = await ES.releaseOne('O1', { nowMs: NOW }).catch((e) => ({ threw: e.message }));
-  ck('replay release → skipped by the status guard, balance unchanged', rr.skipped === 'status_RELEASED' && (await get('wallets/org1')).balance === w.balance, JSON.stringify(rr));
+  ck('replay release → skipped by the status guard, balance unchanged', rr.skipped === 'status_RELEASED' && ((await get('wallets/org1')) || {}).balance === w.balance, JSON.stringify(rr));
   ck('commission row marked collected', (await get('commissionLedger/evt_O1')).status === 'collected');
   ck('FEE_UNREPORTED never releases', (await ES.releaseOne('O5', { nowMs: NOW })).skipped === 'status_FEE_UNREPORTED');
   await seedEvent('evC', { startMs: NOW - 30 * H, endMs: NOW - 26 * H }); await seedOrder('C1', { eventId: 'evC' }); await pay('C1', { eventId: 'evC' });
@@ -311,6 +311,60 @@ async function pay(ref, { buyer = 'buyer1', amountCents = 100000, status = 'COMP
   await db.doc('eventOrders/PEN2').set({ orderId: 'PEN2', eventId: 'evPen', buyerUid: 'buyer1', status: 'refunded', paymentRef: 'PEN2' });
   await db.doc('eventSettlements/PEN2').set({ paymentRef: 'PEN2', orderId: 'PEN2', eventId: 'evPen', organizerUid: 'orgPen2', status: 'HELD', grossCents: 50000, organizerNetCents: 47045 });
   ck('G3 …while a fully refunded order (no penalty kept) is still never released', (await ES.releaseOne('PEN2', { nowMs: NOW })).skipped === 'order_refunded');
+
+  /* ═══ 10c. ADMISSION SETTLES THE TICKET (owner decision 2026-09-27) ═══ */
+  console.log('\n── admission settles the ticket ──');
+  await seedEvent('evAdm', { startMs: NOW + 2 * H, endMs: NOW + 6 * H });
+  await seedOrder('ADM1', { eventId: 'evAdm', buyer: 'buyerAdm', qty: 2, total: 1000 });
+  await pay('ADM1', { buyer: 'buyerAdm', amountCents: 100000, charges: 15, eventId: 'evAdm' });
+  await ES.activateIfEventTicket('ADM1');
+  const sA = await get('eventSettlements/ADM1');
+  const orgBefore = ((await get('wallets/org1')) || {}).balance || 0;
+  const admit = async (tid) => { await db.doc(`eventTickets/${tid}`).set({ admissionStatus: 'ADMITTED' }, { merge: true }); return ES.releaseTicketShare(tid, { actorUid: 'gate1' }); };
+  ck('a NOT-admitted ticket settles nothing', (await ES.releaseTicketShare('ADM1_k0')).skipped === 'not_admitted');
+  const r1 = await admit('ADM1_k0');
+  const half = Math.floor(sA.organizerNetCents / 2);
+  ck('admitting ticket 1 of 2 credits the ORGANIZER\'s business wallet with that ticket\'s net share (3 % already deducted)',
+    r1.released && r1.shareCents === half && ((await get('wallets/org1')).balance - orgBefore) === Math.floor(half / 100), JSON.stringify(r1));
+  ck('…recorded as a ticket-level wallet transaction (create-once id)', (await get(`walletTransactions/org1_ADM1_ADM1_k0_admit`)).type === 'event_ticket_earning');
+  ck('…and NEVER the buyer\'s wallet', !(await get('wallets/buyerAdm')));
+  ck('the settlement stays HELD until every ticket settles; commission partially collected', (await get('eventSettlements/ADM1')).status === 'HELD' && (await get('commissionLedger/evt_ADM1')).status === 'partially_collected');
+  const again = await admit('ADM1_k0');
+  ck('the same ticket never settles twice (re-admission / replay)', again.skipped === 'already_released' && ((await get('wallets/org1')).balance - orgBefore) === Math.floor(half / 100));
+  const r2 = await admit('ADM1_k1');
+  const sA2 = await get('eventSettlements/ADM1');
+  ck('the LAST ticket takes the remainder; the settlement is RELEASED by admission; commission collected',
+    r2.shareCents === sA.organizerNetCents - half && sA2.status === 'RELEASED' && sA2.releasedBy === 'admission' && sA2.releasedCents === sA.organizerNetCents && (await get('commissionLedger/evt_ADM1')).status === 'collected');
+  NOW += 200 * H;
+  ck('the scheduled release cannot pay it again', (await ES.releaseOne('ADM1', { nowMs: NOW })).skipped === 'status_RELEASED');
+  /* partial: 1 of 3 admitted, the rest settle at event end + 24 h */
+  await seedEvent('evAdm2', { startMs: Date.now() - 1 * H, endMs: Date.now() + 3 * H });
+  await seedOrder('ADM2', { eventId: 'evAdm2', buyer: 'buyerAdm', qty: 3, total: 3000 });
+  await pay('ADM2', { buyer: 'buyerAdm', amountCents: 300000, charges: 45, eventId: 'evAdm2' });
+  await ES.activateIfEventTicket('ADM2');
+  const s2 = await get('eventSettlements/ADM2');
+  const w0 = ((await get('wallets/org1')) || {}).balance || 0;
+  const one = await admit('ADM2_k0');
+  const due = Date.parse((await get('events/evAdm2')).endDate) + 25 * H;
+  const rest = await ES.releaseOne('ADM2', { nowMs: due });
+  const s2b = await get('eventSettlements/ADM2');
+  ck('1 of 3 admitted → the scheduled release pays ONLY the unadmitted remainder; total = the organizer net, once',
+    one.released && rest.released && s2b.releasedCents === s2.organizerNetCents && ((await get('wallets/org1')).balance - w0) === Math.floor(one.shareCents / 100) + rest.creditedKES, JSON.stringify({ one: one.shareCents, rest }));
+  /* a refund after part of the order was paid at the gate → exception for AdminOS, never a silent debit */
+  await seedEvent('evAdm3', { startMs: NOW + 2 * H, endMs: NOW + 6 * H });
+  await seedOrder('ADM3', { eventId: 'evAdm3', buyer: 'buyerAdm', qty: 2, total: 1000 });
+  await pay('ADM3', { buyer: 'buyerAdm', amountCents: 100000, charges: 15, eventId: 'evAdm3' });
+  await ES.activateIfEventTicket('ADM3');
+  await admit('ADM3_k0');
+  const wBefore3 = (await get('wallets/org1')).balance;
+  await engine.revoke('ADM3', 'test refund after admission');
+  ck('refund after an admission payout → exception refund_after_admission_release, organizer wallet untouched',
+    !!(await get('eventExceptions/refund_after_admission_release_ADM3')) && (await get('wallets/org1')).balance === wBefore3);
+  /* a door (terminal) ticket has no online order → nothing to credit */
+  await db.doc('eventTickets/DOORT1').set({ ticketId: 'DOORT1', saleId: 'S9', orderId: null, eventId: 'evAdm', admissionStatus: 'ADMITTED' });
+  ck('a door-sale ticket credits nothing at admission (the organizer\'s terminal took the money)', (await ES.releaseTicketShare('DOORT1')).skipped === 'not_online');
+  const opsSrc = fs.readFileSync(Path.join(FN, 'event-ops.js'), 'utf8'); const hubSrc = fs.readFileSync(Path.join(FN, 'event-hub.js'), 'utf8');
+  ck('BOTH admission paths settle (PIN admit + QR check-in)', /if \(res\.admitted\) await require\('\.\/event-settlement'\)\.releaseTicketShare\(hit\.ticketId/.test(opsSrc) && /releaseTicketShare\(ticketId, \{ actorUid: uid \}\)/.test(hubSrc));
 
   /* ═══ 11. wiring ═══ */
   console.log('\n── wiring ──');

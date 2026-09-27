@@ -212,6 +212,12 @@ const PURPOSES = {
      never the client. `deposit` is the forfeitable PORTION of that price, not an
      extra charge. The intent's resourceId (bookingId) becomes the authoritative
      link the webhook trusts instead of client metadata. */
+  /* Venue bookings (owner decision 2026-09-27): priced from the booking's SERVER total by
+     venue-payments.priceVenueBooking; self-settling (settled on the buyer's show-up). */
+  venue_booking: {
+    resourceType: 'venueBooking',
+    price: (uid, data) => require('./venue-payments').priceVenueBooking(uid, data),
+  },
   service_booking: {
     resourceType: 'providerBooking',
     async price(uid, data) {
