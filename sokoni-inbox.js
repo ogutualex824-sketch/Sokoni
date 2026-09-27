@@ -75,31 +75,10 @@ SokoniInbox.openChat = function(params) {
 };
 
 // ── Create or open conversation in Firestore ──────────────────
-SokoniInbox.createOrOpen = async function(db, params) {
-  if (!db || !params.myUid || !params.otherUid) return null;
-  const { collection, doc, setDoc, getDoc } = await import(
-    'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
-  ).catch(() => ({}));
-  if (!setDoc) return null;
-
-  const cid = SokoniInbox.convId(params.myUid, params.otherUid);
-  const ref = doc(db, 'conversations', cid);
-  const snap = await getDoc(ref).catch(() => null);
-
-  const payload = {
-    participants: [params.myUid, params.otherUid].sort(),
-    names:        { [params.myUid]: params.myName || 'Me', [params.otherUid]: params.otherName || 'User' },
-    type:         params.type    || SokoniInbox.HUB_TYPES.GENERAL,
-    context:      params.context || '',
-    contextId:    params.contextId || '',
-    lastMessage:  snap?.exists() ? snap.data().lastMessage : '',
-    lastAt:       snap?.exists() ? snap.data().lastAt      : Date.now(),
-    unread:       snap?.exists() ? snap.data().unread      : {},
-    createdAt:    snap?.exists() ? snap.data().createdAt   : Date.now(),
-  };
-  await setDoc(ref, payload, { merge: true }).catch(() => {});
-  return cid;
-};
+/* RETIRED (CHANGELOG 230): conversations are created only by the server (createConversation derives the
+   parties; ensureAnchoredConversation for bookings / enquiries). A client-written conversation could seat
+   any uid; the rules now refuse it. No caller used this. Returns null, writes nothing. */
+SokoniInbox.createOrOpen = async function() { return null; };
 
 // ── Real-time unread count subscription ──────────────────────
 SokoniInbox.subscribeUnread = function(uid, db, callback) {

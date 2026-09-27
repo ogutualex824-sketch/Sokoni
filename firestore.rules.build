@@ -793,14 +793,7 @@ service cloud.firestore {
   allow update: if isParticipant()
   && request.resource.data.diff(resource.data)
   .affectedKeys().hasOnly(['lastMessage','lastMessageAt','lastSenderId','unread']);
-  allow create: if isActive() && isAuthed()
-  && request.auth.uid in request.resource.data.participants
-  && request.resource.data.participants.size() <= 2
-  && !convId.matches('^ent_booking_.*')
-  && !convId.matches('^ent_enquiry_.*')
-  && request.resource.data.get('transactionType', '') != 'ent_booking'
-  && request.resource.data.get('transactionType', '') != 'ent_enquiry'
-  && request.resource.data.get('serverAnchored', false) != true;
+  allow create: if false;
   allow delete: if isAdmin();
   match /messages/{msgId} {
   function inConvo() {

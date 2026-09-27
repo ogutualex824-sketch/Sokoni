@@ -68,6 +68,9 @@ const SUITES = {
   hccat:    ['node', ['scripts/test-healthcare-category.js']],
   hccatrules: ['node', ['scripts/run-rules-suite.js', 'scripts/test-provider-identity-fields-rules.js']],
   hcdir:    ['node', ['scripts/test-healthcare-directory.js']],
+  msgpart:  ['node', ['scripts/test-messages-participant-authority.js']],
+  convrules: ['node', ['scripts/run-rules-suite.js', 'scripts/test-conversation-create-rules.js']],
+  entcomms: ['node', ['scripts/test-ent-communications.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -1087,6 +1090,14 @@ const M = [
     from: "<a class=\"hc-book-btn hc-btn-alt\" href=\"messages.html?with=${id}\">", to: "<a class=\"hc-book-btn hc-btn-alt\" href=\"https://wa.me/254700000000\">", expect: /every link is built from the server providerId|no WhatsApp/ },
   { group: 'hcdir', browser: true, name: "a server failure is shown as an empty (successful) directory", file: "sokoni-health-directory.js", suite: 'hcdir',
     from: "      setStatus('error', (e && e.message) || 'Something went wrong.');", to: "      state.rows = []; render();", expect: /server error shows an error with retry/ },
+
+  /* ── Conversations: server-derived participants, no client create (CHANGELOG 230) ── */
+  { group: 'msgauth', browser: false, name: "participants taken from the client again (a victim seated beside the caller)", file: "functions/messages.js", suite: "msgpart",
+    from: "  const participantUids = _partiesOf(transactionType, txSnap.data());", to: "  const participantUids = Array.isArray(req.data.participantUids) ? req.data.participantUids : _partiesOf(transactionType, txSnap.data());", expect: /forged participantUids DENIED|stranger is in NO written participant list|participants are the transaction parties/ },
+  { group: 'msgauth', browser: false, name: "the client conversation-create rule is reopened", file: "firestore.rules.build", suite: "convrules",
+    from: "  match /conversations/{convId} {\n  function isParticipant() {\n  return isAuthed() && request.auth.uid in resource.data.participants;\n  }\n  allow read: if isParticipant();\n  allow update: if isParticipant()\n  && request.resource.data.diff(resource.data)\n  .affectedKeys().hasOnly(['lastMessage','lastMessageAt','lastSenderId','unread']);\n  allow create: if false;", to: "  match /conversations/{convId} {\n  function isParticipant() {\n  return isAuthed() && request.auth.uid in resource.data.participants;\n  }\n  allow read: if isParticipant();\n  allow update: if isParticipant()\n  && request.resource.data.diff(resource.data)\n  .affectedKeys().hasOnly(['lastMessage','lastMessageAt','lastSenderId','unread']);\n  allow create: if isAuthed() && request.auth.uid in request.resource.data.participants;", expect: /DENIED/ },
+  { group: 'msgauth', browser: false, name: "a server-anchored type is no longer refused as such (Entertainment / Healthcare booking chats)", file: "functions/messages.js", suite: "entcomms",
+    from: "  if (SERVER_ANCHORED.has(transactionType)) {\n    throw new HttpsError('permission-denied', 'This conversation is opened from the booking itself.');\n  }\n  if (!PARTY_FIELDS[transactionType]) {", to: "  if (!PARTY_FIELDS[transactionType]) {", expect: /client cannot create an enquiry conversation/ },
 ];
 
 const argv = process.argv.slice(2);

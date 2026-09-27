@@ -1,3 +1,53 @@
+## 2026-09-28 (230) — Conversations: participants derived by the server, no client-created conversations
+
+Owner decision (2026-09-28): port the certified B931 participant-authority fix and close the client create rule, in
+their own commit, before any Healthcare chat. Not deployed. No production writes. Connect (C1/C2/C3-A) untouched.
+
+**Defect on this branch** (fixed on the release line only):
+- **`createConversation`** took `participantUids` from the request and checked only that the caller listed
+  themselves. Anyone could seat any uid in a conversation. Through `getConversationContext`, anyone who knew an
+  order or booking id could read its notes, location and amount.
+- **The rules let any signed-in client create a conversation document** outside the `ent_*` id space, with any
+  second participant.
+
+**Fix:**
+- **Ported `bcf9df7` + `1507df7`** (release line, authored 2026-08-19 / 2026-09-19), taking `functions/messages.js`,
+  both tests, `docs/B931_GATE_MESSAGES_PARTICIPANT_AUTHORITY.md` and `scripts/deploy/census-conversation-party-fields.js`.
+  - Participants are **derived from the transaction** (`PARTY_FIELDS` / `_partiesOf`); a client list is inert.
+  - The conversation doc is created with `t.create`, so concurrent opens make one document.
+  - Files this branch deleted (`sokoni-contact.js`, a deploy manifest, two docs) stay deleted.
+  - `package.json` and `CHANGELOG.md` keep this branch's versions.
+- **Merge ordering.** The explicit refusal of server-anchored types (`ent_booking` / `ent_enquiry`, and Healthcare
+  bookings next) runs **before** party derivation, so it is refused *as such* (`permission-denied`), as this branch's
+  Entertainment tests certify.
+- **Rules.** `conversations` has `allow create: if false`; conversations are created only by the server.
+- **Clients:**
+  - `product.js contactSellerInApp` no longer writes a conversation from the browser. Its message write was always
+    refused, which left an orphaned conversation doc.
+  - `sokoni-inbox.js createOrOpen` (no callers) is retired and writes nothing.
+
+**Still open, recorded:**
+- `messages.html` ignores `?with=`, so those links on services, legal-hub, cleaning and product go nowhere. This is a
+  platform gap; the Healthcare directory card moves to the enquiry authority in CHANGELOG 231.
+- A participant can still rewrite the `lastMessage` preview.
+- `typingIndicators` is readable by any signed-in user.
+
+**Files:**
+- `functions/messages.js`, `firestore.rules` (+ `.build`), `product.js`, `sokoni-inbox.js`.
+- `docs/B931_GATE_MESSAGES_PARTICIPANT_AUTHORITY.md` (ported).
+- `scripts/deploy/census-conversation-party-fields.js` (ported).
+- `scripts/test-messages-participant-authority.js` (ported), `scripts/test-messages-participant-concurrency.js`
+  (ported), `scripts/test-conversation-create-rules.js` (new).
+- `scripts/sabotage-event-ops.js`.
+
+**Tests:**
+- `test-messages-participant-authority` 32/0.
+- `test-messages-participant-concurrency` 26/0 on a real Firestore emulator (8 concurrent opens → 1 document).
+- `test-conversation-create-rules` 9/0 with a counterproof; HEAD's rules fail 4 of those checks.
+- `test-connect-authority` 858/0, `test-connect-rules` 37/0, `test-ent-communications` 76/0,
+  `test-entertainment-bookings` 95/0, shop communication boundary 33/0, `test-in-app-booking-contact` 15/0.
+- Sabotage `msgauth` 3/3 caught.
+
 ## 2026-09-28 (229) — Healthcare directory: real, approved providers only
 
 Healthcare convergence. Not deployed. No production writes. KRA not called.

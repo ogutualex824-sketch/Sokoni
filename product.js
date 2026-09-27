@@ -1469,35 +1469,9 @@ async function contactSellerInApp(){
     try{ user = JSON.parse(localStorage.getItem("sokoniUser")||"null"); }catch(e){}
     const sellerUid = product.sellerUid || product.sellerId || "";
 
-    /* Logged-in buyer + seller has a UID → create Firestore conversation */
-    if(user && user.uid && sellerUid && sellerUid !== user.uid && window.firebaseDB){
-        try{
-            const FS_URL = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-            const { doc, setDoc, addDoc, collection } = await import(FS_URL);
-            const db      = window.firebaseDB;
-            const convId  = [user.uid, sellerUid].sort().join("_");
-            const firstMsg = `Hi, I'm interested in "${(product.name||"").substring(0,50)}" (KES ${Number(product.price||0).toLocaleString()}). Is it still available?`;
-            await setDoc(doc(db,"conversations",convId), {
-                participants: [user.uid, sellerUid].sort(),
-                names:       { [user.uid]: user.name||user.email||"Buyer", [sellerUid]: product.sellerName||"Seller" },
-                productName: (product.name||"").substring(0,60),
-                productId:   String(product.id||""),
-                lastMessage: firstMsg.substring(0,80),
-                lastAt:      Date.now(),
-                unread:      { [sellerUid]: 1 },
-                createdAt:   Date.now()
-            }, { merge: true });
-            await addDoc(collection(db,"conversations",convId,"messages"), {
-                senderId:   user.uid,
-                senderName: user.name||user.email||"Buyer",
-                text:       firstMsg,
-                guarded:    false,
-                ts:         Date.now()
-            });
-            window.location.href = "messages.html?convo=" + convId;
-            return;
-        }catch(e){ console.warn("[ContactSeller] Firestore failed:", e.message); }
-    }
+    /* CHANGELOG 230 — no client-created conversation. This wrote conversations/{a_b} from the browser
+       (any uid could be seated) and then a message the rules always refused, leaving an orphan
+       conversation; conversations are now created only by the server. */
 
     /* NO WhatsApp fallback (CHANGELOG 218; owner directive): sign in, or the seller's SOKONI chat, or an honest message. */
     if(!(user && user.uid)){ location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search); return; }
