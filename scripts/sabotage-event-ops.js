@@ -74,6 +74,8 @@ const SUITES = {
   hcconv:   ['node', ['scripts/test-healthcare-conversations.js']],
   hcenq:    ['node', ['scripts/test-healthcare-enquiries.js']],
   hcws:     ['node', ['scripts/test-healthcare-workspace.js']],
+  hcavail:  ['node', ['scripts/test-healthcare-availability.js']],
+  hcavailrules: ['node', ['scripts/run-rules-suite.js', 'scripts/test-healthcare-availability-rules.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -1161,6 +1163,30 @@ const M = [
     from: "const WIRED_SECTIONS = Object.freeze([]);", to: "const WIRED_SECTIONS = Object.freeze(['pos', 'products', 'inventory', 'delivery', 'staff']);", expect: /no dead ends/ },
   { group: 'hcws', browser: false, name: "the banner renders the label unescaped", file: "sokoni-health-workspace.js", suite: 'hcws',
     from: "'<div class=\"hc-ws-head\"><span class=\"hc-ws-cat\">' + esc(w.label) + '</span>'", to: "'<div class=\"hc-ws-head\"><span class=\"hc-ws-cat\">' + w.label + '</span>'", expect: /escaped/ },
+
+  /* ── Healthcare availability through the ONE authority (CHANGELOG 234) ── */
+  { group: 'hcavail', browser: false, name: "a Healthcare provider updates its availability directly (rules)", file: "firestore.rules.build", suite: "hcavailrules",
+    from: "  allow update: if isAuthed() && request.auth.uid == uid && !hcProvider();", to: "  allow update: if isAuthed() && request.auth.uid == uid;", expect: /updating its own availability DENIED/ },
+  { group: 'hcavail', browser: false, name: "a Healthcare provider writes a closure override directly (rules)", file: "firestore.rules.build", suite: "hcavailrules",
+    from: "  allow write: if isAuthed() && request.auth.uid == uid && !hcProvider();\n  }\n  }", to: "  allow write: if isAuthed() && request.auth.uid == uid;\n  }\n  }", expect: /closure override DENIED/ },
+  { group: 'hcavail', browser: false, name: "the rules recognise no Healthcare provider (predicate always false)", file: "firestore.rules.build", suite: "hcavailrules",
+    from: "  && ('healthcare' in get(/databases/$(database)/documents/providers/$(uid)).data);", to: "  && false;", expect: /DENIED/ },
+  { group: 'hcavail', browser: false, name: "the lock goes the other way: every provider loses its direct write", file: "firestore.rules.build", suite: "hcavailrules",
+    from: "  allow update: if isAuthed() && request.auth.uid == uid && !hcProvider();", to: "  allow update: if false;", expect: /photographer still updates/ },
+  { group: 'hcavail', browser: false, name: "the legacy healthcare booking path is restored", file: "functions/healthcare-hub.js", suite: "hcavail",
+    from: "  requireAuth(req);\n  throw new HttpsError('failed-precondition',\n    'Appointments are booked from the provider page on SOKONI. Nothing was booked.',", to: "  requireAuth(req);\n  await db().collection('healthSlotLocks').doc('x_' + Date.now()).set({ at: 1 });\n  throw new HttpsError('failed-precondition',\n    'Appointments are booked from the provider page on SOKONI. Nothing was booked.',", expect: /writes no appointment and no slot lock/ },
+  { group: 'hcavail', browser: false, name: "the booking pre-check doubles the buffer again", file: "functions/booking-service.js", suite: "hcavail",
+    from: "    const overlapCount = existing.filter(b => startTs < Number(b.endTs) + bufMs && endTs > Number(b.startTs) - bufMs).length;", to: "    const overlapCount = existing.filter(b => rc.pairOverlaps(startTs, endTs, b.startTs, b.endTs, bufMs, bufMs)).length;", expect: /agree on every slot/ },
+  { group: 'hcavail', browser: false, name: "the booking pre-check ignores buffers", file: "functions/booking-service.js", suite: "hcavail",
+    from: "    const overlapCount = existing.filter(b => startTs < Number(b.endTs) + bufMs && endTs > Number(b.startTs) - bufMs).length;", to: "    const overlapCount = existing.filter(b => startTs < Number(b.endTs) && endTs > Number(b.startTs)).length;", expect: /buffer refuses 10:30|agree on every slot/ },
+  { group: 'hcavail', browser: false, name: "the dashboard block-a-date writes Firestore directly", file: "sokoni-health-workspace.js", suite: "hcavail",
+    from: "      return close(d, 'Blocked', 'Date blocked: ' + d);", to: "      return firebase.firestore().collection('providerAvailability').doc('me').collection('overrides').doc(d).set({ closed: true });", expect: /NOTHING was written|block a date/ },
+  { group: 'hcavail', browser: false, name: "vacation is sent without an end date", file: "sokoni-health-workspace.js", suite: "hcavail",
+    from: "      return call('setVacationMode', { active: true, startDate: start, endDate: end })", to: "      return call('setVacationMode', { active: true, startDate: start })", expect: /start AND an end date/ },
+  { group: 'hcavail', browser: false, name: "a success toast before the server answered", file: "sokoni-health-workspace.js", suite: "hcavail",
+    from: "      busy('Saving…');\n      return call('addAvailabilityOverride', { date: date, closed: true, label: label })\n        .then(function () { done(); say(okMsg); refresh(); }, function (e) { done(); failed(e); });", to: "      say(okMsg);\n      return call('addAvailabilityOverride', { date: date, closed: true, label: label })\n        .then(function () { done(); refresh(); }, function (e) { done(); failed(e); });", expect: /server refusal shows an error and no success/ },
+  { group: 'hcavail', browser: false, name: "the editor keeps the page's direct-write sheet", file: "sokoni-health-workspace.js", suite: "hcavail",
+    from: "      AvE.open = function () {", to: "      AvE._unused = function () {", expect: /editor opens the server-backed|NOTHING was written/ },
 ];
 
 const argv = process.argv.slice(2);

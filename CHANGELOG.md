@@ -1,3 +1,97 @@
+## 2026-09-28 (234) — Healthcare availability: the server is the only writer, one booking path, and the calendar matches the booking
+
+Slice: availability. Not deployed. No production writes. No migrations. POS/Till and pharmacy delivery stay deferred
+(owner, 2026-09-28) until the canonical SOK-ID business-wallet authority lands.
+
+**What already held, now proven for Healthcare** (`test-healthcare-availability`):
+- A Healthcare appointment goes through the ONE authority: `bookingCreateService` → `ent-availability` claims the slot
+  on the provider's calendar (`svc_<uid>`), atomically, in the same transaction as the booking. It is a Healthcare
+  booking (`commissionHub 'healthcare'`).
+- The following are all enforced:
+  - working hours and breaks, closed weekdays;
+  - appointment length and buffers;
+  - closed dates, closed overrides and vacation;
+  - minimum notice and the horizon;
+  - the per-day limit.
+- 12 patients racing one slot produce exactly one booking. 12 patients racing overlapping windows also produce one.
+
+**Fixed:**
+- **A Healthcare provider can no longer write its availability from the browser.**
+  - `firestore.rules`: `providerAvailability/{uid}` and its `overrides` deny create, update and write when
+    `providers/{uid}.healthcare` exists.
+  - The only writers are the server callables:
+    - `entAvailSetConfig` (audited, plan-enforced);
+    - `add/removeAvailabilityOverride`;
+    - `setVacationMode`.
+  - Reads stay open.
+  - Other providers are unchanged by this slice. A positive control proves it.
+- **The dashboard follows.** For a Healthcare workspace, `sokoni-health-workspace.js` routes each control to the server
+  and shows success only after the server answers:
+  - close today and block a date → `addAvailabilityOverride`;
+  - open today → `removeAvailabilityOverride` + `setVacationMode(false)`;
+  - vacation → `setVacationMode` with a start and an end date;
+  - the editor → the server-backed workspace editor.
+
+  Nothing is written to Firestore from the page.
+- **The legacy healthcare booking path is retired.** `healthcare-hub.bookAppointment` booked against the retired
+  `healthProviders` registry, with 30-minute `healthSlotLocks`, no hours, buffers or limits, and no payment. It now
+  refuses with `HEALTH_BOOKING_MOVED` and writes nothing. No page loads its only client caller. The export stays.
+- **The calendar and the booking disagreed about buffers** (shared `booking-service.js`; affects every provider with a
+  buffer).
+  - The pre-check padded BOTH appointments' windows, doubling the gap.
+  - After a 10:00–10:30 appointment with a 30-minute buffer, the public calendar showed 11:00 AVAILABLE and booking it
+    was refused.
+  - The pre-check now uses the availability core's rule: an appointment may not overlap another's buffer, but buffers
+    may meet.
+  - The atomic claim, which is the authority, is unchanged. The suite asserts that what a patient is shown and what
+    booking does agree for every slot around a buffer.
+
+**Not in this commit** (reported):
+- **Per-practitioner (staff) availability.** Calendars are per provider (`svc_<uid>`). A facility booking a specific
+  doctor needs the staff model first. It belongs to the staff step.
+- **Premium-gated settings.** Capacity above 1, split buffers and per-service availability are Premium-only in
+  `ent-availability._enforcePlan`, and the Healthcare plans are not mapped to that feature. This is a commercial
+  decision for the owner.
+- **`setProviderAvailability` does not apply `_enforcePlan`.** It is a second server config writer beside
+  `entAvailSetConfig`. Healthcare's dashboard does not use it. Platform-wide.
+- **Direct writes from other surfaces.** `availability-manager.html` and non-Healthcare dashboards still write
+  `providerAvailability` directly. That is platform-wide and outside this slice. For a Healthcare account those writes
+  are now refused by the rules.
+
+**Files:**
+- `firestore.rules`, `firestore.rules.build`
+- `functions/healthcare-hub.js`, `functions/booking-service.js`
+- `sokoni-health-workspace.js`
+- `scripts/test-healthcare-availability.js` (new), `scripts/test-healthcare-availability-rules.js` (new)
+- `scripts/sabotage-event-ops.js`
+
+**Database:** no schema change.
+**API:** `bookAppointment` → `HEALTH_BOOKING_MOVED`.
+**Security:**
+- Healthcare availability is server-written only.
+- The retired booking path writes nothing.
+
+**Breaking:**
+- A Healthcare provider's direct availability writes are refused. The dashboard is re-routed for this.
+- `bookAppointment` refuses.
+
+**Tests:**
+- `test-healthcare-availability` 37/0 (real code), and `test-healthcare-availability-rules` 13/0 (emulator, with a
+  positive control and a counterproof).
+- Both 12-way races produce exactly one booking.
+- Unchanged against `cccb609`, all SAME:
+  - availability enforcement / slots / view (42);
+  - booking buffer / events / hold-expiry / payment-auth / waitlist;
+  - ent-availability 88, ent-communications 76, ent-journeys 49, ent-availability-browser 54;
+  - Healthcare workspace 47, payment convergence 40, clinical authority 56, admin authority 26, conversations 35,
+    directory 51, enquiries 15, subscription foundation 120.
+- Baseline, unchanged: entertainment-browser 3 failures; availability-canonical times out on both trees.
+
+**Sabotage `hcavail`:** 10/11 caught, tree restored byte-identical.
+- The one MISSED attack is "the pre-check ignores buffers". It is an equivalent mutant: the atomic claim in the
+  availability core refuses the same slot, so nothing a patient can observe changes. The pre-check is
+  defence-in-depth, not the authority.
+
 ## 2026-09-28 (233) — Healthcare dashboards: one workspace, decided by the server from the category and the plan
 
 Slice: category-aware dashboards (the first step after `1895db1`). Not deployed. No production writes. No migrations.

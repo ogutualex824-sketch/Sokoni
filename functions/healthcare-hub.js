@@ -156,59 +156,17 @@ exports.getHealthProvider = onCall(CF_OPTS, exports._h.getHealthProvider = async
 });
 
 /* â”€â”€ 5. bookAppointment â”€â”€ */
+/* RETIRED (CHANGELOG 234). A second booking path outside the ONE availability authority: it booked against the
+   retired healthProviders registry, locked 30-minute buckets in healthSlotLocks instead of claiming the provider's
+   calendar (ent-availability), ignored working hours, buffers, blackouts and limits, and took no payment. No page
+   loads its only caller (sokoni-health.js). Healthcare appointments are booked through bookingCreateService, which
+   claims the slot atomically in the same transaction as the booking. The export stays so a deployed caller gets a
+   plain answer; it reads and writes nothing. */
 exports.bookAppointment = onCall(CF_OPTS, exports._h.bookAppointment = async (req) => {
-  const uid = requireAuth(req);
-  const { providerId, dateTime, reason, isOnline, idempotencyKey } = req.data;
-  if (!providerId || !dateTime || !idempotencyKey) {
-    throw new HttpsError('invalid-argument', 'providerId, dateTime, idempotencyKey required');
-  }
-  if (new Date(dateTime) < new Date()) throw new HttpsError('invalid-argument', 'Appointment must be in the future');
-
-  // Round to 30-min bucket for the slot-lock document key
-  const apptMs   = new Date(dateTime).getTime();
-  const bucketMs = Math.floor(apptMs / (30 * 60000)) * (30 * 60000);
-  const slotKey  = new Date(bucketMs).toISOString().replace(/[:.]/g, '-');
-
-  // Fetch provider outside the transaction (read-only, no races)
-  const provSnap = await db().collection('healthProviders').doc(providerId).get();
-  if (!provSnap.exists || provSnap.data().status !== 'active') {
-    throw new HttpsError('not-found', 'Provider not found or unavailable');
-  }
-  const prov = provSnap.data();
-
-  const idemRef  = db().collection('healthApptIdempotency').doc(idempotencyKey);
-  // Slot-lock doc prevents double-bookings without needing a query inside the transaction
-  const lockRef  = db().collection('healthSlotLocks').doc(`${providerId}_${slotKey}`);
-  const apptRef  = db().collection('healthAppointments').doc();
-
-  let result;
-  try {
-    result = await db().runTransaction(async t => {
-      const [idemSnap, lockSnap] = await Promise.all([t.get(idemRef), t.get(lockRef)]);
-      if (idemSnap.exists) return { appointmentId: idemSnap.data().appointmentId, idempotent: true };
-      if (lockSnap.exists) throw new HttpsError('resource-exhausted', 'This time slot is already booked. Please choose another.');
-
-      t.set(lockRef, { providerId, slotKey, appointmentId: apptRef.id, createdAt: FieldValue.serverTimestamp() });
-      t.set(apptRef, {
-        appointmentId: apptRef.id, patientUid: uid, providerId,
-        providerName: prov.name, specialization: prov.specialization,
-        dateTime: new Date(dateTime).toISOString(),
-        reason: san(reason, 500), isOnline: Boolean(isOnline),
-        consultationFee: prov.consultationFee, currency: prov.currency,
-        status: 'pending', idempotencyKey, slotKey,
-        createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
-      });
-      t.update(db().collection('healthProviders').doc(providerId), {
-        totalAppointments: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp(),
-      });
-      t.set(idemRef, { appointmentId: apptRef.id, createdAt: FieldValue.serverTimestamp() });
-      return { appointmentId: apptRef.id, status: 'pending' };
-    });
-  } catch (err) {
-    if (err && err.httpErrorCode) throw err;
-    throw new HttpsError('internal', 'Booking failed. Please try again.');
-  }
-  return result;
+  requireAuth(req);
+  throw new HttpsError('failed-precondition',
+    'Appointments are booked from the provider page on SOKONI. Nothing was booked.',
+    { code: 'HEALTH_BOOKING_MOVED' });
 });
 
 /* â”€â”€ 6. getMyAppointments (patient) â”€â”€ */

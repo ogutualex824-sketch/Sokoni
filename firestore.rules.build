@@ -4245,13 +4245,17 @@ service cloud.firestore {
   allow write: if false;
   }
   match /providerAvailability/{uid} {
+  function hcProvider() {
+  return exists(/databases/$(database)/documents/providers/$(uid))
+  && ('healthcare' in get(/databases/$(database)/documents/providers/$(uid)).data);
+  }
   allow read:   if isAuthed();
-  allow create: if isAuthed() && request.auth.uid == uid;
-  allow update: if isAuthed() && request.auth.uid == uid;
+  allow create: if isAuthed() && request.auth.uid == uid && !hcProvider();
+  allow update: if isAuthed() && request.auth.uid == uid && !hcProvider();
   allow delete: if false;
   match /overrides/{date} {
   allow read:  if isAuthed();
-  allow write: if isAuthed() && request.auth.uid == uid;
+  allow write: if isAuthed() && request.auth.uid == uid && !hcProvider();
   }
   }
   match /providerPortfolio/{uid} {

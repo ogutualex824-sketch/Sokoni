@@ -292,7 +292,12 @@ _h.bookingCreateService = async (req) => {
        Defaults to 1 (no double-book); >1 = a shared resource (e.g. a class). This
        counts only OVERLAPPING bookings, not the whole day — the correct semantic. */
     const maxConcurrent = Math.max(1, Number(cfg.cap && cfg.cap.maxSimultaneous || 1));
-    const overlapCount = existing.filter(b => rc.pairOverlaps(startTs, endTs, b.startTs, b.endTs, bufMs, bufMs)).length;
+    /* ONE buffer rule — the availability core's (shared/ent-availability-core.js, the atomic claim above is the
+       authority): an appointment may not overlap another appointment's BUFFER, but two buffers may overlap each
+       other. `rc.pairOverlaps(…, bufMs, bufMs)` padded BOTH windows, doubling the gap, so a slot the public
+       calendar showed AVAILABLE was refused here (CHANGELOG 234). With equal buffers either side, "the new
+       appointment overlaps the existing one's buffered window" is exactly the core's test. */
+    const overlapCount = existing.filter(b => startTs < Number(b.endTs) + bufMs && endTs > Number(b.startTs) - bufMs).length;
     if (overlapCount >= maxConcurrent) { outcome = { conflict: 'already-exists' }; return; }
     /* Quote still usable (not withdrawn, not already booked by a live booking). */
     if (quoteRef) {

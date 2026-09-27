@@ -21,6 +21,7 @@
   function apply(w) {
     var root = document.documentElement;
     root.setAttribute('data-hc-workspace', w.category || 'unclassified');
+    routeAvailability();
     var allowed = {};
     (w.sections || []).forEach(function (s) { allowed[s] = true; });
     Array.prototype.forEach.call(document.querySelectorAll('[data-hc-section]'), function (el) {
@@ -43,6 +44,73 @@
       '<span class="hc-ws-plan">' + plan + '</span></div>' +
       (notes.length ? '<ul class="hc-ws-notes">' + notes.map(function (n) { return '<li>' + n + '</li>'; }).join('') + '</ul>' : '');
     box.hidden = false;
+  }
+
+  /* ── Availability through the server, never a direct write (CHANGELOG 234) ──────────────────────
+     firestore.rules deny a Healthcare provider direct writes to providerAvailability/{uid} and its overrides:
+     the ONE availability authority is the server. The dashboard's quick actions (AvQ) and its bottom-sheet
+     editor (AvE) write that doc from the browser, so for a Healthcare workspace they are routed to the existing
+     callables instead:
+       editor                 → the workspace editor (entAvailSetConfig — audited, plan-enforced)
+       close today / block    → addAvailabilityOverride      (server-validated date, closed)
+       open today             → removeAvailabilityOverride + setVacationMode(false)
+       vacation               → setVacationMode              (a start AND an end date — the server requires both)
+     Success is shown only after the server answered. Other providers keep the page as it was. */
+  function routeAvailability() {
+    var AvQ = window.AvQ, AvE = window.AvE;
+    if (!AvQ || AvQ._hcRouted) return;
+    var call = function (op, data) {
+      return firebase.functions().httpsCallable('bookingDispatch')(Object.assign({ op: op }, data || {}));
+    };
+    var say = function (m, kind) { try { window.toast ? window.toast(m, kind) : alert(m); } catch (_) {} };
+    var busy = function (m) { try { if (window.showLoad) window.showLoad(m); } catch (_) {} };
+    var done = function () { try { if (window.hideLoad) window.hideLoad(); } catch (_) {} };
+    var failed = function (e) { say((e && e.message) || 'That did not save. Try again.', 'err'); };
+    var today = function () { return new Date().toISOString().slice(0, 10); };
+    var isDate = function (d) { return /^\d{4}-\d{2}-\d{2}$/.test(d); };
+    var refresh = function () { try { AvQ._refresh(); } catch (_) {} };
+    var close = function (date, label, okMsg) {
+      busy('Saving…');
+      return call('addAvailabilityOverride', { date: date, closed: true, label: label })
+        .then(function () { done(); say(okMsg); refresh(); }, function (e) { done(); failed(e); });
+    };
+    AvQ.emergencyClose = function () {
+      var go = function () { return close(today(), 'Closed today', 'Closed today for new bookings.'); };
+      if (window.SK && SK.dialog && SK.dialog.confirm) {
+        return SK.dialog.confirm('Close TODAY for new bookings? Existing confirmed bookings are unaffected.', null, null,
+          { title: 'Close today', variant: 'danger', confirmLabel: 'Close today' }).then(function (ok) { if (ok) return go(); });
+      }
+      return go();
+    };
+    AvQ.blockDate = function () {
+      var d = (prompt('Block which date? (YYYY-MM-DD)') || '').trim();
+      if (!d) return;
+      if (!isDate(d)) { say('Use YYYY-MM-DD format.', 'err'); return; }
+      return close(d, 'Blocked', 'Date blocked: ' + d);
+    };
+    AvQ.openToday = function () {
+      busy('Opening today…');
+      return call('removeAvailabilityOverride', { date: today() })
+        .then(function () { return call('setVacationMode', { active: false }); })
+        .then(function () { done(); say("You're open today."); refresh(); }, function (e) { done(); failed(e); });
+    };
+    AvQ.vacation = function () {
+      var start = (prompt('Vacation from? (YYYY-MM-DD)', today()) || '').trim();
+      if (!start) return;
+      var end = (prompt('Vacation until? (YYYY-MM-DD)') || '').trim();
+      if (!isDate(start) || !isDate(end) || end < start) { say('Enter a start and an end date (YYYY-MM-DD), end on or after start.', 'err'); return; }
+      busy('Saving…');
+      return call('setVacationMode', { active: true, startDate: start, endDate: end })
+        .then(function () { done(); say('Vacation set until ' + end + '.'); refresh(); }, function (e) { done(); failed(e); });
+    };
+    if (AvE) {
+      AvE.open = function () {
+        /* WS is a top-level const in provider-dashboard.html: a shared global binding, NOT a window property. */
+        if (typeof WS !== 'undefined' && WS && typeof WS.open === 'function') return WS.open('availability', null);
+        say('The availability editor is still loading. Try again in a moment.', 'err');
+      };
+    }
+    AvQ._hcRouted = true;
   }
 
   /* A failed call cannot tell us whether this is a Healthcare account at all, so nothing is shown to a
@@ -73,6 +141,6 @@
     '.hc-ws-notes li{margin:2px 0;overflow-wrap:anywhere}';
   document.head.appendChild(css);
 
-  window.SokoniHealthWorkspace = { apply: apply };
+  window.SokoniHealthWorkspace = { apply: apply, routeAvailability: routeAvailability };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', load); else load();
 })();
