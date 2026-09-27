@@ -192,8 +192,12 @@ const DOC = (uid, status, extra) => Object.assign({
     assertFails(getDoc(doc(alice, 'healthApptIdempotency', 'k1'))));
   await check('healthProviderAvailability: still has NO rule -> denied (ADR-014 keeps it dead)',
     assertFails(setDoc(doc(alice, 'healthProviderAvailability', 'alice'), { slots: [] })));
-  await check('healthLabBookings: owner create STILL ALLOWED (untouched parallel collection)',
+  /* CHANGELOG 221 — a patient request no longer NOMINATES its recipient (scripts/test-healthcare-request-rules.js). */
+  await check('healthLabBookings: owner create STILL ALLOWED (no nominated recipient)',
     assertSucceeds(setDoc(doc(alice, 'healthLabBookings', 'lab1'),
+      { uid: 'alice', service: 'FBC' })));
+  await check('healthLabBookings: nominating a provider uid DENIED (CHANGELOG 221)',
+    assertFails(setDoc(doc(alice, 'healthLabBookings', 'lab2'),
       { uid: 'alice', providerId: 'active1', service: 'FBC' })));
 
   await env.cleanup();

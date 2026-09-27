@@ -1,3 +1,52 @@
+## 2026-09-27 (221) — Healthcare security slice 1: a patient's request belongs to the patient
+
+Owner authorization: Healthcare security slices 1–4 only. ADR-014 is still NOT authorized, and no booking or payment
+convergence is included. Not deployed. No production writes. KRA not called. No migration.
+
+Affected collections: `healthLabBookings`, `healthMedOrders`, `healthTelemedicine`, `healthHomeServices`,
+`healthEmergency`.
+
+**Defect.** These patient requests let the client choose who could see them. A patient's device wrote
+`providerId` / `pharmacyId`, and whatever uid it named got **read and write access** to the patient's symptoms,
+medicines and phone number. The named party could also rewrite `providerId` / `pharmacyId` (only `uid` was
+protected), which amounts to reassignment. An emergency report could be filed under any uid or `'anonymous'`.
+
+**Fix (fail closed — there is no server-authorized patient-to-provider relationship for these collections yet):**
+- **Rules** (`healthRequestCreate` / `Read` / `PatientUpdate`):
+  - the requester must be the authenticated caller;
+  - a request may not name a recipient (`providerId`, `pharmacyId`, `facilityId`, `assignedTo`,
+    `assignedProviderId`, `labId`);
+  - only the patient and admins can read it; a provider or pharmacy named on a legacy document no longer can;
+  - the patient may update their own request but never its owner or recipient, and may only set status to
+    `cancelled`;
+  - assignment and reassignment are admin-only;
+  - an emergency report requires sign-in and binds its uid; only admins (or a server dispatcher) update it.
+- **`sokoni-health.js`:**
+  - request writers strip recipient fields and never accept a caller-supplied `uid`;
+  - `saveEmergency` refuses when signed out instead of writing `'anonymous'` (the page already shows 999 / 112 to
+    everyone);
+  - the provider and pharmacy queue listeners (`listenProviderLabBookings`, `listenPharmacyOrders`,
+    `listenProviderTelemedicine`) are retired and return nothing — they had no callers, and the rules now refuse
+    them.
+
+**Limitations:**
+- Admin writes to these collections are not audited by any server authority (none exists for them).
+- Providers have no queue for these requests until ADR-014/015 moves them onto canonical bookings.
+
+**Files:** `firestore.rules` (+ `.build`), `sokoni-health.js`, `scripts/test-healthcare-request-rules.js` (new),
+`scripts/test-healthcare-provider-rules.js` (the lab-request assertion now matches the new rule),
+`scripts/sabotage-event-ops.js`.
+
+**Database / API:** no new collections or functions. **Security:** rules tightened as above.
+**Breaking:** a client can no longer create a request that names a recipient. No page did.
+
+**Tests:**
+- `test-healthcare-request-rules` 91/0, with a counterproof. HEAD's rules fail 34 of the same checks.
+- `test-healthcare-provider-rules` 34/0.
+- The healthcare suites (claim-honesty, admin-approval, payment-convergence, provisioning, subscription-foundation)
+  and `secondary-firebase-apps` all match baseline `b24b052`.
+- Sabotage group `hcreq`: 9/9 caught; the tree is byte-identical afterwards.
+
 ## 2026-09-27 (220) — Legal Verification Authority: SOKONI admin approval + LSK verification → one booking-eligibility rule
 
 Owner decision (2026-09-27): an advocate is bookable only when a **SOKONI AdminOS approval** and a **current Law Society

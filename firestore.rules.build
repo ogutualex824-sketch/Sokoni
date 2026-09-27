@@ -4450,54 +4450,49 @@ service cloud.firestore {
   && uidUnchanged() && noAdminFields());
   allow delete: if isAdmin() || (isAuthed() && resource.data.ownerId == request.auth.uid);
   }
+  function healthRecipientFields() {
+  return ['providerId', 'pharmacyId', 'facilityId', 'assignedTo', 'assignedProviderId', 'labId'];
+  }
+  function healthRequestCreate() {
+  return claimsOwner() && noAdminFields()
+  && !request.resource.data.keys().hasAny(healthRecipientFields());
+  }
+  function healthRequestRead() {
+  return isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+  }
+  function healthRequestPatientUpdate() {
+  return isAuthed() && resource.data.uid == request.auth.uid && uidUnchanged() && noAdminFields()
+  && !request.resource.data.diff(resource.data).affectedKeys().hasAny(healthRecipientFields())
+  && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['status'])
+  || request.resource.data.status == 'cancelled');
+  }
   match /healthLabBookings/{docId} {
-  allow read:   if isAdmin()
-  || (isAuthed() && (resource.data.uid == request.auth.uid
-  || resource.data.providerId == request.auth.uid));
-  allow create: if claimsOwner() && noAdminFields();
-  allow update: if isAdmin()
-  || (isAuthed() && (resource.data.uid == request.auth.uid
-  || resource.data.providerId == request.auth.uid)
-  && uidUnchanged() && noAdminFields());
+  allow read:   if healthRequestRead();
+  allow create: if healthRequestCreate();
+  allow update: if isAdmin() || healthRequestPatientUpdate();
   allow delete: if isAdmin();
   }
   match /healthMedOrders/{docId} {
-  allow read:   if isAdmin()
-  || (isAuthed() && (resource.data.uid == request.auth.uid
-  || resource.data.providerId == request.auth.uid
-  || resource.data.pharmacyId == request.auth.uid));
-  allow create: if claimsOwner() && noAdminFields();
-  allow update: if isAdmin()
-  || (isAuthed() && (resource.data.uid == request.auth.uid
-  || resource.data.providerId == request.auth.uid)
-  && uidUnchanged() && noAdminFields());
+  allow read:   if healthRequestRead();
+  allow create: if healthRequestCreate();
+  allow update: if isAdmin() || healthRequestPatientUpdate();
   allow delete: if isAdmin();
   }
   match /healthTelemedicine/{docId} {
-  allow read:   if isAdmin()
-  || (isAuthed() && (resource.data.uid == request.auth.uid
-  || resource.data.providerId == request.auth.uid));
-  allow create: if claimsOwner() && noAdminFields();
-  allow update: if isAdmin()
-  || (isAuthed() && (resource.data.uid == request.auth.uid
-  || resource.data.providerId == request.auth.uid)
-  && uidUnchanged() && noAdminFields());
+  allow read:   if healthRequestRead();
+  allow create: if healthRequestCreate();
+  allow update: if isAdmin() || healthRequestPatientUpdate();
   allow delete: if isAdmin();
   }
   match /healthHomeServices/{docId} {
-  allow read:   if isAdmin()
-  || (isAuthed() && (resource.data.uid == request.auth.uid
-  || resource.data.providerId == request.auth.uid));
-  allow create: if claimsOwner() && noAdminFields();
-  allow update: if isAdmin()
-  || (isAuthed() && (resource.data.uid == request.auth.uid
-  || resource.data.providerId == request.auth.uid)
-  && uidUnchanged() && noAdminFields());
+  allow read:   if healthRequestRead();
+  allow create: if healthRequestCreate();
+  allow update: if isAdmin() || healthRequestPatientUpdate();
   allow delete: if isAdmin();
   }
   match /healthEmergency/{docId} {
-  allow read:   if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
-  allow create: if isAuthed() && noAdminFields();
+  allow read:   if healthRequestRead();
+  allow create: if healthRequestCreate();
   allow update: if isAdmin();
   allow delete: if isAdmin();
   }

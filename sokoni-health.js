@@ -33,6 +33,16 @@ import {
    rules been written permissively to accommodate it, one patient's lab
    bookings, prescriptions and telemedicine sessions would have been delivered
    to every other patient's device. */
+/* A patient request never nominates its recipient (CHANGELOG 221 — firestore.rules healthRecipientFields).
+   Stripped here so a caller that still passes one is not refused outright; the server/admin assigns. */
+const _RECIPIENT_FIELDS = ['providerId', 'pharmacyId', 'facilityId', 'assignedTo', 'assignedProviderId', 'labId'];
+function _ownRequest(obj) {
+  const out = Object.assign({}, obj || {});
+  _RECIPIENT_FIELDS.forEach((k) => { delete out[k]; });
+  delete out.uid;           /* the requester is the signed-in caller, set below — never the caller's input */
+  return out;
+}
+
 function _sortByCreatedAtDesc(rows) {
   return rows.sort((a, b) => {
     const at = a.createdAt?.seconds ?? a.createdAt ?? 0;
@@ -272,7 +282,7 @@ const SokoniHealth = {
   async saveLabBooking(booking) {
     const id = booking.id || _id('LAB-');
     await setDoc(doc(db, 'healthLabBookings', id), {
-      ...booking,
+      ..._ownRequest(booking),
       id,
       uid:       _uid(),
       phone:     _phone(booking.phone),
@@ -298,12 +308,12 @@ const SokoniHealth = {
     );
   },
 
-  listenProviderLabBookings(providerId, callback, limitN = 200) {
-    const q = query(collection(db, 'healthLabBookings'), where('providerId', '==', providerId), limit(limitN));
-    return onSnapshot(q,
-      snap => callback(_sortByCreatedAtDesc(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })))),
-      err  => console.warn('[SokoniHealth] provLabBookings:', err.message)
-    );
+  /* RETIRED (CHANGELOG 221). A provider/pharmacy queue keyed on a PATIENT-NOMINATED id: the nominee
+     is not an authorized relationship, so the rules no longer let it read the request. Canonical
+     provider queues arrive with ADR-014/015 (not authorized). Returns nothing and never queries. */
+  listenProviderLabBookings(_id, callback) {
+    if (typeof callback === 'function') callback([]);
+    return () => {};
   },
 
   /* ════════════════════════════════════════
@@ -313,7 +323,7 @@ const SokoniHealth = {
   async saveMedOrder(order) {
     const id = order.id || _id('MED-');
     await setDoc(doc(db, 'healthMedOrders', id), {
-      ...order,
+      ..._ownRequest(order),
       id,
       uid:       _uid(),
       phone:     _phone(order.phone),
@@ -339,12 +349,12 @@ const SokoniHealth = {
     );
   },
 
-  listenPharmacyOrders(pharmacyId, callback, limitN = 200) {
-    const q = query(collection(db, 'healthMedOrders'), where('pharmacyId', '==', pharmacyId), limit(limitN));
-    return onSnapshot(q,
-      snap => callback(_sortByCreatedAtDesc(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })))),
-      err  => console.warn('[SokoniHealth] pharmacyOrders:', err.message)
-    );
+  /* RETIRED (CHANGELOG 221). A provider/pharmacy queue keyed on a PATIENT-NOMINATED id: the nominee
+     is not an authorized relationship, so the rules no longer let it read the request. Canonical
+     provider queues arrive with ADR-014/015 (not authorized). Returns nothing and never queries. */
+  listenPharmacyOrders(_id, callback) {
+    if (typeof callback === 'function') callback([]);
+    return () => {};
   },
 
   /* ════════════════════════════════════════
@@ -354,7 +364,7 @@ const SokoniHealth = {
   async saveTelemedicine(session) {
     const id = session.id || _id('TLM-');
     await setDoc(doc(db, 'healthTelemedicine', id), {
-      ...session,
+      ..._ownRequest(session),
       id,
       uid:       _uid(),
       phone:     _phone(session.phone),
@@ -380,12 +390,12 @@ const SokoniHealth = {
     );
   },
 
-  listenProviderTelemedicine(providerId, callback, limitN = 100) {
-    const q = query(collection(db, 'healthTelemedicine'), where('providerId', '==', providerId), limit(limitN));
-    return onSnapshot(q,
-      snap => callback(_sortByCreatedAtDesc(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })))),
-      err  => console.warn('[SokoniHealth] provTele:', err.message)
-    );
+  /* RETIRED (CHANGELOG 221). A provider/pharmacy queue keyed on a PATIENT-NOMINATED id: the nominee
+     is not an authorized relationship, so the rules no longer let it read the request. Canonical
+     provider queues arrive with ADR-014/015 (not authorized). Returns nothing and never queries. */
+  listenProviderTelemedicine(_id, callback) {
+    if (typeof callback === 'function') callback([]);
+    return () => {};
   },
 
   /* ════════════════════════════════════════
@@ -396,7 +406,7 @@ const SokoniHealth = {
   async saveHomeService(service) {
     const id = service.id || _id('HHS-');
     await setDoc(doc(db, 'healthHomeServices', id), {
-      ...service,
+      ..._ownRequest(service),
       id,
       uid:       _uid(),
       phone:     _phone(service.phone),
@@ -428,11 +438,16 @@ const SokoniHealth = {
   ════════════════════════════════════════ */
 
   async saveEmergency(req) {
+    /* CHANGELOG 221 — an emergency report is the SIGNED-IN requester's own. It used to be written
+       under any uid or 'anonymous'; the rules now refuse both. A signed-out person must call the
+       national emergency numbers (999 / 112) — that is what the page tells them. */
+    const uid = _uid();
+    if (!uid) throw new Error('Sign in to send an emergency request through SOKONI — or call 999 / 112 now.');
     const id = req.id || _id('EMG-');
     await setDoc(doc(db, 'healthEmergency', id), {
-      ...req,
+      ..._ownRequest(req),
       id,
-      uid:       _uid() || 'anonymous',
+      uid,
       phone:     _phone(req.phone),
       status:    'active',
       createdAt: serverTimestamp(),

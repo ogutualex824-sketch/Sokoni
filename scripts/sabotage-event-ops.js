@@ -58,6 +58,7 @@ const SUITES = {
   legal:    ['node', ['scripts/test-legal-in-app.js']],
   legalv:   ['node', ['scripts/test-legal-verification.js']],
   legalvrules: ['node', ['scripts/run-rules-suite.js', 'scripts/test-legal-verification-rules.js']],
+  hcreq:    ['node', ['scripts/run-rules-suite.js', 'scripts/test-healthcare-request-rules.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -929,6 +930,26 @@ const M = [
     from: "    title: d => (d.projectedBy === 'legal-verification' && d.name) || '',", to: "    title: d => d.name || '',", expect: /never appears in site search/ },
   { group: 'legalv', browser: true, name: "the AdminOS panel offers a bookable toggle", file: "sokoni-aos-legal.js", suite: "legalv",
     from: "<p data-eligibility>${ELIG(a.eligibility)}", to: "<p data-eligibility><label><input type=\"checkbox\" name=\"bookable\"> bookable</label>${ELIG(a.eligibility)}", expect: /no control that sets|no control anywhere sets/ },
+
+  /* ── Healthcare security slice 1: patient requests belong to the patient (CHANGELOG 221) ── */
+  { group: 'hcreq', browser: false, name: "forged patient / requester uid (owner binding removed)", file: "firestore.rules.build", suite: 'hcreq',
+    from: "  return claimsOwner() && noAdminFields()\n  && !request.resource.data.keys().hasAny(healthRecipientFields());", to: "  return isAuthed() && noAdminFields()\n  && !request.resource.data.keys().hasAny(healthRecipientFields());", expect: /forged patient uid|forged requester uid/ },
+  { group: 'hcreq', browser: false, name: "arbitrary provider / pharmacy uid nominated (recipient check removed)", file: "firestore.rules.build", suite: 'hcreq',
+    from: "  return claimsOwner() && noAdminFields()\n  && !request.resource.data.keys().hasAny(healthRecipientFields());", to: "  return claimsOwner() && noAdminFields();", expect: /arbitrary provider uid|arbitrary pharmacy uid/ },
+  { group: 'hcreq', browser: false, name: "pharmacy uid no longer a recipient field", file: "firestore.rules.build", suite: 'hcreq',
+    from: "  return ['providerId', 'pharmacyId', 'facilityId',", to: "  return ['providerId', 'facilityId',", expect: /arbitrary pharmacy uid/ },
+  { group: 'hcreq', browser: false, name: "a nominated provider reads the patient's request again", file: "firestore.rules.build", suite: 'hcreq',
+    from: "  return isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);\n  }\n  function healthRequestPatientUpdate", to: "  return isAdmin() || (isAuthed() && (resource.data.uid == request.auth.uid || resource.data.providerId == request.auth.uid || resource.data.pharmacyId == request.auth.uid));\n  }\n  function healthRequestPatientUpdate", expect: /can no longer read it/ },
+  { group: 'hcreq', browser: false, name: "cross-patient read (owner check removed from read)", file: "firestore.rules.build", suite: 'hcreq',
+    from: "  return isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);\n  }\n  function healthRequestPatientUpdate", to: "  return isAdmin() || isAuthed();\n  }\n  function healthRequestPatientUpdate", expect: /cross-patient read/ },
+  { group: 'hcreq', browser: false, name: "provider reassignment / cross-user mutation (patient-update owner check removed)", file: "firestore.rules.build", suite: 'hcreq',
+    from: "  return isAuthed() && resource.data.uid == request.auth.uid && uidUnchanged() && noAdminFields()\n  && !request.resource.data.diff(resource.data).affectedKeys().hasAny(healthRecipientFields())", to: "  return isAuthed() && uidUnchanged() && noAdminFields()", expect: /cross-patient write|reassign/ },
+  { group: 'hcreq', browser: false, name: "the patient self-completes a request (status gate removed)", file: "firestore.rules.build", suite: 'hcreq',
+    from: "  && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['status'])\n  || request.resource.data.status == 'cancelled');", to: "  && true;", expect: /self-confirm/ },
+  { group: 'hcreq', browser: false, name: "unauthenticated / anonymous emergency report", file: "firestore.rules.build", suite: 'hcreq',
+    from: "  match /healthEmergency/{docId} {\n  allow read:   if healthRequestRead();\n  allow create: if healthRequestCreate();", to: "  match /healthEmergency/{docId} {\n  allow read:   if healthRequestRead();\n  allow create: if true;", expect: /healthEmergency: (unauthenticated|forged requester uid)/ },
+  { group: 'hcreq', browser: false, name: "the emergency requester rewrites the report", file: "firestore.rules.build", suite: 'hcreq',
+    from: "  match /healthEmergency/{docId} {\n  allow read:   if healthRequestRead();\n  allow create: if healthRequestCreate();\n  allow update: if isAdmin();", to: "  match /healthEmergency/{docId} {\n  allow read:   if healthRequestRead();\n  allow create: if healthRequestCreate();\n  allow update: if isAdmin() || healthRequestPatientUpdate() || (isAuthed() && resource.data.uid == request.auth.uid);", expect: /cannot rewrite an emergency report|healthEmergency: the patient cannot reassign/ },
 ];
 
 const argv = process.argv.slice(2);
