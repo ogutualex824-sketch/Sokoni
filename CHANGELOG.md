@@ -1,3 +1,31 @@
+## 2026-09-27 (226) — Healthcare plans are platform revenue (one alias in the one commission table)
+
+Owner decision (2026-09-27). Not deployed. No production writes.
+
+**Defect:** `healthcare_subscription` (clinic KES 2,499 / hospital 4,999 / enterprise 9,999 a month, priced by
+`healthcare-plans.js`) was in neither `RATES` nor `ALIASES`, so it resolved to `RATES.default`. Executed against the
+baseline, a KES 2,499 plan booked KES 124.95 as SOKONI revenue and KES 2,374.05 as `sellerNetCents` owed to the
+subscriber. This is the same accident C2 fixed for `subscription`. No client could buy a plan yet, so nothing was ever
+booked this way.
+
+**Fix:**
+- `ALIASES.healthcare_subscription = 'subscriptions'` (100%, platform revenue). **No new rate.**
+- The client snapshot `sokoni-commission-rates.js` is regenerated from the one config
+  (`scripts/build-commission-snapshot.js`). This also picks up the owner-decided `entertainment_bookings` entry the
+  snapshot was already missing (a pre-existing stale-snapshot failure of `verify-commission-single-source`, now
+  cleared).
+
+**Files:** `functions/commission-config.js`, `sokoni-commission-rates.js` (generated),
+`scripts/test-healthcare-plan-commission.js` (new), `scripts/sabotage-event-ops.js`.
+
+**Tests:**
+- `test-healthcare-plan-commission` 16/0, run through the real `calculateCommission` for every plan the server
+  sells. On the baseline it fails exactly as described above.
+- 10 commission / webhook / subscription suites match `c4f6ced`.
+- `verify-commission-single-source`: the only remaining failure is the pre-existing hardcoded rate in
+  `scripts/test-event-ops-browser.js:304`, unchanged here.
+- Sabotage `hcplan` 3/3 caught.
+
 ## 2026-09-27 (225) — POS: a till sells only its own shop's products, to its own shop's customers
 
 Owner decision (2026-09-27): fix now, in its own commit, before any Healthcare POS work. This is platform-wide, not

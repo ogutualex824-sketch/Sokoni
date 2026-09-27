@@ -113,6 +113,12 @@ const ALIASES = {
      C1 `659a350` stops the wallet credit), so this is under-reported revenue, not a
      leak. Mapping it deliberately, exactly as `product` was. */
   subscription: 'subscriptions',
+  /* Owner decision 2026-09-27 (CHANGELOG 226): a Healthcare plan (healthcare_subscription —
+     clinic / hospital / enterprise, priced by healthcare-plans.js) is paid TO SOKONI, so the
+     whole amount is platform revenue — the same commercial meaning as `subscription` above,
+     and the same accident it would otherwise repeat (RATES.default 5%, 95% "owed" to the
+     subscriber). No new rate: it prices exactly as `subscriptions`. */
+  healthcare_subscription: 'subscriptions',
   restaurant: 'food_delivery', food: 'food_delivery',
   home_services: 'services', insurance: 'services', fitness: 'services',
   pharmacy: 'healthcare',

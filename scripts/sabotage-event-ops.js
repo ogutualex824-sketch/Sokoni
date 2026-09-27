@@ -64,6 +64,7 @@ const SUITES = {
   hcclinrules: ['node', ['scripts/run-rules-suite.js', 'scripts/test-healthcare-clinical-rules.js']],
   hcpub:    ['node', ['scripts/test-healthcare-public-projection.js']],
   posown:   ['node', ['scripts/test-pos-gate-behavioural.js']],
+  hcplan:   ['node', ['scripts/test-healthcare-plan-commission.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -1033,6 +1034,14 @@ const M = [
     from: "    const _ownerOfProduct = (p) => String((p && (p.shopId || p.sellerUid)) || '');", to: "    const _ownerOfProduct = (p) => String((p && p.shopId) || '');", expect: /E5 / },
   { group: 'posown', browser: false, name: "another shop's customer credited / debited on this sale (customer guard removed)", file: "functions/pos-zero-friction.js", suite: 'posown',
     from: "      if (custSnap && custSnap.exists && !require('./pos-customer-scope').ownsCustomer(custSnap.id, custSnap.data(), merchantId)) {", to: "      if (false) {", expect: /E7 |E8 / },
+
+  /* ── Healthcare plans are platform revenue (CHANGELOG 226) ── */
+  { group: 'hcplan', browser: false, name: "the plan alias is removed (5% default, 95% owed to the subscriber)", file: "functions/commission-config.js", suite: 'hcplan',
+    from: "  healthcare_subscription: 'subscriptions',", to: "", expect: /whole amount is SOKONI revenue|resolves to the EXISTING/ },
+  { group: 'hcplan', browser: false, name: "plans priced as healthcare services (5%) instead of platform revenue", file: "functions/commission-config.js", suite: 'hcplan',
+    from: "  healthcare_subscription: 'subscriptions',", to: "  healthcare_subscription: 'healthcare',", expect: /whole amount is SOKONI revenue|resolves to the EXISTING/ },
+  { group: 'hcplan', browser: false, name: "a separate Healthcare plan rate is invented", file: "functions/commission-config.js", suite: 'hcplan',
+    from: "  subscriptions:    { pct: 100,", to: "  healthcare_subscription: { pct: 50, fixedKES: 0, _was: 'invented' },\n  subscriptions:    { pct: 100,", expect: /no RATES entry was added/ },
 ];
 
 const argv = process.argv.slice(2);

@@ -63,6 +63,10 @@
       "pct": 15,
       "fixedKES": 0
     },
+    "entertainment_bookings": {
+      "pct": 5,
+      "fixedKES": 0
+    },
     "services": {
       "pct": 15,
       "fixedKES": 0
@@ -108,6 +112,7 @@
     "pos": "marketplace",
     "b2b": "marketplace",
     "subscription": "subscriptions",
+    "healthcare_subscription": "subscriptions",
     "restaurant": "food_delivery",
     "food": "food_delivery",
     "home_services": "services",
