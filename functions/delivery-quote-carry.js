@@ -30,6 +30,8 @@ const dqa = require('./delivery-quote-authority');
 
 const ORDERS = 'orders';
 const SESSIONS = 'checkoutSessions';
+const INTENTS = 'paymentIntents';
+const PAYMENTS = 'payments';
 
 const kesMajor = (m) => (m < 0 ? '-' : '') + Math.trunc(Math.abs(m) / 100) + '.'
   + String(Math.abs(m) % 100).padStart(2, '0');
@@ -143,12 +145,156 @@ async function bindSessionQuoteToOrder(store, { orderId, sessionId, quoteId }) {
   });
 }
 
+/* The quote fields that ARE the pin. Two pins agreeing on these are the same authority. */
+const _pinKey = (p) => JSON.stringify([
+  p && p.quoteId, p && p.pricingVersion, p && p.sokoniSharePct, p && p.vehicleClass,
+  p && p.customerCharge && p.customerCharge.minorUnits,
+  p && p.riderEarning && p.riderEarning.minorUnits,
+  p && p.sokoniCommission && p.sokoniCommission.minorUnits,
+]);
+
+/**
+ * The server-owned `product_order` intent that paid for this order, or null when there is none.
+ *
+ * The intent is minted AT the order id (payment-purposes `preferredRef: orderId`), and the webhook
+ * knows it as `payments/{ref}.intentRef`. Both are server-written. Anything that is not a
+ * product_order intent is "no intent" here, and the caller keeps its pre-existing behaviour.
+ */
+async function productIntentFor(store, { orderId, intentRef }) {
+  const ref = intentRef || orderId;
+  if (!ref) return null;
+  const snap = await store.collection(INTENTS).doc(String(ref)).get();
+  if (!snap.exists) return null;
+  const intent = snap.data() || {};
+  return intent.purpose === 'product_order' ? { ref: String(ref), intent } : null;
+}
+
+/**
+ * BIND THE INTENT'S QUOTE TO ITS ORDER — RES-1 option 2.
+ *
+ * The live Place Order path has no checkout session. The quote the buyer was charged for is named
+ * on the SERVER-OWNED payment intent (`metadata.deliveryQuote`, written by the product_order pricer
+ * when it resolved the quote for this buyer). That is the authority carried here — never the
+ * order's `deliveryQuote` / `deliveryQuoteId` / `sessionId`, which the browser can write.
+ *
+ * ONE transaction, all reads before any write:
+ *   - the intent is a product_order intent FOR THIS ORDER (pairing);
+ *   - its payment exists, is COMPLETE, and was paid by the intent's owner;
+ *   - the intent's owner, the quote's buyer and the order's buyer are the same uid;
+ *   - the charge the intent recorded is the quote's charge (the buyer paid for THIS pin);
+ *   - an order already naming a DIFFERENT quote is refused — a bound quote is never replaced, and
+ *     a browser-written quote never competes with the server's;
+ *   - the quote itself is bound through the ONE single-use binder (`bindQuoteToOrderTx`): a quote
+ *     consumed by another order is refused; the same order is a no-op.
+ *   - when `policy` is given, the pin is revalidated against it BEFORE anything is written, so a pin
+ *     that could never settle never consumes the quote.
+ * It then writes the SERVER's pin (from `deliveryQuotes/{id}`) onto the order. Expiry is NOT
+ * re-checked: the quote was unexpired when the charge was priced, and payment can land later.
+ *
+ * @returns {Promise<{pinned: object, quoteId: string, replay: boolean}>}
+ * @throws {dqa.QuoteRefused} with a stated reason; nothing is written on refusal.
+ */
+async function bindIntentQuoteToOrder(store, { orderId, intentRef, policy } = {}) {
+  const endpoint = require('./delivery-quote-endpoint');
+  const DI = require('./dispute-identity');
+  const refuse = (reason, detail) => { throw new dqa.QuoteRefused(reason, detail || null); };
+  if (!orderId) refuse('order_not_found');
+  const ref = String(intentRef || orderId);
+  const orderRef = store.collection(ORDERS).doc(String(orderId));
+  const intentDocRef = store.collection(INTENTS).doc(ref);
+  const paymentRef = store.collection(PAYMENTS).doc(ref);
+
+  return store.runTransaction(async (tx) => {
+    const iSnap = await tx.get(intentDocRef);
+    const pSnap = await tx.get(paymentRef);
+    const oSnap = await tx.get(orderRef);
+    if (!iSnap.exists) refuse('intent_not_found', ref);
+    const intent = iSnap.data() || {};
+    const m = intent.metadata || {};
+    if (intent.purpose !== 'product_order') refuse('intent_not_product_order', ref);
+    if (String(m.orderId || '') !== String(orderId)) refuse('intent_order_mismatch', ref);
+    if (m.fulfillmentType === 'pickup') refuse('pickup_order_no_delivery', String(orderId));
+    const dq = m.deliveryQuote || null;
+    const quoteId = dq && typeof dq.deliveryQuoteId === 'string' ? dq.deliveryQuoteId : null;
+    if (!quoteId) refuse('intent_carries_no_quote', ref);
+    const qSnap = await tx.get(store.collection(endpoint.QUOTES).doc(quoteId));
+
+    if (!pSnap.exists) refuse('payment_not_found', ref);
+    const payment = pSnap.data() || {};
+    if (payment.status !== 'COMPLETE') refuse('payment_not_complete', String(payment.status || ''));
+    if (!oSnap.exists) refuse('order_not_found', String(orderId));
+    if (!qSnap.exists) refuse('quote_record_missing', quoteId);
+    const order = oSnap.data() || {}, quote = qSnap.data() || {};
+
+    const buyer = intent.uid ? String(intent.uid) : null;
+    if (!buyer || String(payment.uid || '') !== buyer) refuse('payer_mismatch', ref);
+    if (quote.buyerUid !== buyer || DI.orderBuyerUid(order) !== buyer) refuse('buyer_mismatch', String(orderId));
+    if (dq.customerChargeMinor !== quote.customerChargeMinor || dq.pricingVersion !== quote.pricingVersion) {
+      refuse('intent_quote_diverges', quoteId);
+    }
+
+    /* The order's own quote fields are browser-writable (B2, a separate rules repair). They are
+       never the authority here; a DIFFERENT quote named there is a conflict, refused. */
+    if (order.deliveryQuoteId && order.deliveryQuoteId !== quoteId) {
+      refuse('order_bound_to_another_quote', String(order.deliveryQuoteId));
+    }
+    if (order.deliveryQuote && order.deliveryQuote.quoteId !== quoteId) {
+      refuse('browser_quote_conflict', String(order.deliveryQuote.quoteId || ''));
+    }
+
+    const pinned = endpoint.pinnedFromStored({ ...quote, quoteId });
+    if (policy) dqa.assertSettleable(pinned, null, { currentPolicy: policy });
+
+    const quoteBound = quote.status === 'consumed' && String(quote.orderId || '') === String(orderId);
+    const orderPinned = order.deliveryQuoteId === quoteId && _pinKey(order.deliveryQuote) === _pinKey(pinned);
+
+    /* ── all reads above, all writes below ── */
+    if (!quoteBound) {
+      try {
+        endpoint.bindQuoteToOrderTx(tx, store, quoteId, orderId, buyer, qSnap);
+      } catch (e) {
+        const msg = String((e && e.message) || '');
+        refuse(/already_bound/.test(msg) ? 'quote_bound_to_another_order'
+          : /not_yours/.test(msg) ? 'buyer_mismatch' : 'quote_not_bindable', msg);
+      }
+    }
+    if (!orderPinned) {
+      tx.update(orderRef, { deliveryQuoteId: quoteId, deliveryQuote: pinned });
+    }
+    return { pinned, quoteId, replay: quoteBound && orderPinned };
+  });
+}
+
 /**
  * The `_deliveryPricing` fragment the dispatch record is built from: the carried pin, revalidated,
  * or a stated refusal. Never throws — the delivery must still be created so the order is not lost.
+ *
+ * RES-1 option 2: when a product_order intent paid for the order, THAT intent is the only authority
+ * (`bindIntentQuoteToOrder`). A refusal there is final — it never falls back to the order's or a
+ * session's browser-writable fields. Without such an intent the pre-existing carry is unchanged.
  */
-async function deliveryPricingForOrder(store, { orderId, sessionId } = {}) {
+async function deliveryPricingForOrder(store, { orderId, sessionId, intentRef } = {}) {
   try {
+    const found = await productIntentFor(store, { orderId, intentRef });
+    if (found) {
+      const policy = await dqa.loadPolicy(store);
+      if (!policy) {
+        throw new dqa.QuoteRefused('pricing_policy_required',
+          'platformConfig/deliveryPricing is unset — SOKONI has not approved commercial values');
+      }
+      const { pinned } = await bindIntentQuoteToOrder(store, { orderId, intentRef: found.ref, policy });
+      return {
+        quoteBoundBy: 'intent',
+        deliveryQuote: pinned,
+        quotePinSource: 'intent',
+        quotedVehicleClass: pinned.vehicleClass || null,
+        quoteId: pinned.quoteId,
+        pricingVersion: pinned.pricingVersion,
+        riderFeeKES: kesMajor(pinned.riderEarning.minorUnits),
+        platformCut: kesMajor(pinned.sokoniCommission.minorUnits),
+      };
+    }
+
     const { pinned, source, sessionId: sessionUsed } = await findCarriedPin(store, { orderId, sessionId });
 
     const policy = await dqa.loadPolicy(store);
@@ -192,4 +338,7 @@ async function deliveryPricingForOrder(store, { orderId, sessionId } = {}) {
   }
 }
 
-module.exports = { findCarriedPin, bindSessionQuoteToOrder, deliveryPricingForOrder, kesMajor, ORDERS, SESSIONS };
+module.exports = {
+  findCarriedPin, bindSessionQuoteToOrder, bindIntentQuoteToOrder, productIntentFor, deliveryPricingForOrder,
+  kesMajor, ORDERS, SESSIONS, INTENTS, PAYMENTS,
+};

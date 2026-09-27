@@ -37,8 +37,14 @@
  * Deliberately OUT OF SCOPE (docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md §2-3):
  * commission `category` (a real, evidenced regression risk — see the doc),
  * and the cosmetic/logistics fields (hub, sellerName, buyerName, address,
- * fulfillmentType, serviceDesc, providerName) that no pricer's metadata
- * carries today.
+ * serviceDesc, providerName) that no pricer's metadata carries today.
+ *
+ * `fulfillmentType` and `deliveryQuoteId` LEFT that list with RES-1 option 2
+ * (docs/repairs/RES1-opt2-intent-quote-binding.md): the product_order pricer
+ * now records both, and they decide whether a delivery is dispatched and which
+ * quote pins its rider pay. They are taken from the intent only; the legacy
+ * branch reports them as null (unknown), and the webhook's legacy fallback for
+ * an intent-less payment is unchanged.
  */
 
 function mergeAttribution({ intent, legacyMeta }) {
@@ -58,6 +64,12 @@ function mergeAttribution({ intent, legacyMeta }) {
       shopId:       m.shopId || null,
       branchId:     m.branchId || null,
       merchantUid:  m.merchantUid || null,
+      /* RES-1 option 2 — the fulfilment the SERVER priced the charge for, and the quote it priced the
+         delivery from. Both are server-owned: recorded by the pricer on the intent, never taken from
+         browser payment metadata. null on an intent that predates them (the caller keeps its legacy
+         fallback for those). Only the two real values are accepted. */
+      fulfillmentType: (m.fulfillmentType === 'delivery' || m.fulfillmentType === 'pickup') ? m.fulfillmentType : null,
+      deliveryQuoteId: (m.deliveryQuote && typeof m.deliveryQuote.deliveryQuoteId === 'string') ? m.deliveryQuote.deliveryQuoteId : null,
     };
   }
 
@@ -79,6 +91,9 @@ function mergeAttribution({ intent, legacyMeta }) {
     shopId:       null,
     branchId:     null,
     merchantUid:  null,
+    /* Unknown without an intent (RES-1 option 2 — see header). */
+    fulfillmentType: null,
+    deliveryQuoteId: null,
   };
 }
 

@@ -93,6 +93,15 @@ affect delivery *logistics*, not *payment authority* (the amount charged already
 delivery fee server-side, in the pricer, before any of this); a tampered delivery address is a
 real but different-class problem from a misrouted wallet credit, and is not what D1 was about.
 
+> **Update 2026-09-27 — RES-1 option 2.** `fulfillmentType` is no longer deferred for
+> `product_order`. It turned out to be more than logistics: every STK order defaulted to
+> `"delivery"` because the browser meta never carried it, so a paid PICKUP order was dispatched to
+> a rider. The `product_order` pricer now records `fulfillmentType` and the pricing quote on the
+> intent. `mergeAttribution` returns `fulfillmentType` and `deliveryQuoteId` from the intent
+> (null on the legacy branch), and the webhook prefers them. An intent-less payment keeps its meta
+> value and the `"delivery"` default, unchanged. The other fields above remain deferred. See
+> [[RES1-opt2-intent-quote-binding]].
+
 ## 4. `_isBooking`/`type==='booking'` — confirmed already-dead for the intent-backed flow
 
 `functions/booking-payment-sweep.js`'s `holdServiceBookingPayment` (called at

@@ -7866,9 +7866,9 @@ exports.webhookIntasend = onRequest(
            attribution (intent-derived when available) so every read below
            (_finalizeMarketplacePayment, posReceipts, clickAndCollect, delivery
            dispatch, notifications) gets the authoritative value with no
-           further changes. Every OTHER field (hub, sellerName, buyerName,
-           address, fulfillmentType, serviceDesc) is deliberately still read
-           from payData.meta, unchanged — see
+           further changes. fulfillmentType joined them with RES-1 option 2
+           (below). Every OTHER field (hub, sellerName, buyerName, address,
+           serviceDesc) is deliberately still read from payData.meta, unchanged — see
            docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md §3 for why those stay in
            scope for a later slice rather than this one. */
         const _pm  = {
@@ -7876,6 +7876,12 @@ exports.webhookIntasend = onRequest(
           sellerUid: attribution.sellerUid || (payData.meta || {}).sellerUid,
           orderId:   attribution.orderId   || (payData.meta || {}).orderId,
           items:     (attribution.items && attribution.items.length) ? attribution.items : (payData.meta || {}).items,
+          /* RES-1 option 2 — the fulfilment the SERVER priced this charge for, from the
+             product_order intent. The browser's STK meta never carried it, so every STK order
+             defaulted to "delivery" below and a PICKUP order was dispatched to a rider. The meta
+             value remains only for an intent-less (legacy) payment; the "delivery" default is
+             unchanged for that case. */
+          fulfillmentType: attribution.fulfillmentType || (payData.meta || {}).fulfillmentType,
         };
         const _cat = String(_pm.category || "").toLowerCase();
         const _isProductPay = !!_pm.orderId
@@ -8025,6 +8031,10 @@ exports.webhookIntasend = onRequest(
                 const _deliveryPricing = await _dqCarry.deliveryPricingForOrder(db, {
                   orderId:   _pm.orderId,
                   sessionId: _pm.sessionId || null,
+                  /* RES-1 option 2 — the server-owned intent that paid for this order. When it is
+                     a product_order intent, ITS quote is bound and carried; the order's and the
+                     session's browser-writable quote fields are never consulted. */
+                  intentRef: existing.intentRef || apiRef,
                 });
                 if (_deliveryPricing.pricingBlocked) {
                   console.warn('[webhookIntasend] delivery created UNPRICED', {

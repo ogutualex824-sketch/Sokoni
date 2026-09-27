@@ -1,3 +1,35 @@
+## 2026-09-27 — RES-1 option 2: the server-owned payment intent carries the delivery quote to the rider (branch `res1-opt2/census`, UNCOMMITTED, for review)
+
+On the live Place Order path (intent → STK → webhook; no session, no verify):
+- every paid **pickup** order was dispatched as a delivery, because the webhook's `fulfillmentType` came from
+  browser meta that never carried it;
+- every delivery was created `pricingBlocked`, because the carry only looked at the order and a session, the charged
+  quote was never bound, and no rider could be paid;
+- a browser-written pin or session on the order was trusted first.
+
+The repair:
+- `product_order` intents record `fulfillmentType`;
+- attribution returns it and the quote id from the intent;
+- the webhook dispatches from the intent's value;
+- the new `bindIntentQuoteToOrder` binds the intent's quote in one transaction. It checks pairing, payment
+  COMPLETE, payer, buyer, the charge matching the quote, browser-field conflicts, single-use, no replacement, and
+  revalidation before any write. A refusal never falls back to browser fields.
+
+Intent-less payments are unchanged.
+- **Files:** `functions/payment-purposes.js`, `functions/payment-attribution.js`, `functions/delivery-quote-carry.js`,
+  `functions/index.js` (webhook only), new `scripts/test-res1-intent-quote-binding.js`,
+  `docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md`.
+- **Database:** new server-written `paymentIntents.metadata.fulfillmentType`; the order's `deliveryQuoteId` /
+  `deliveryQuote` are server-written on the main path. No migration.
+- **API:** none; `deliveryPricingForOrder` takes an optional `intentRef`.
+- **Security:** a browser pin or session is no longer carry authority when an intent exists. B2 (the rules) is
+  separate and untouched.
+- **Breaking:** none.
+
+Evidence: the seven-path suite drives the real `webhookIntasend`, `initiateSTKPush` (outbound stubbed) and
+`createPaymentIntent`. **34/0** on the new tree; the old tree **fails 24**.
+Record: `docs/repairs/RES1-opt2-intent-quote-binding.md`.
+
 ## 2026-09-27 — Marketplace delivery pricing: the RES-1 server-issued quote is the authority (branch `delivery-authority/res1-quote`, UNCOMMITTED, for review)
 
 Owner decision: for marketplace orders the buyer's delivery charge is the RES-1 quote the buyer was shown; seller

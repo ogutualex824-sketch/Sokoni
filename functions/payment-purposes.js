@@ -704,6 +704,11 @@ const PURPOSES = {
         preferredRef: orderId,
         metadata: {
           orderId, sellerUid,
+          /* THE FULFILMENT THIS CHARGE WAS PRICED FOR (RES-1 option 2). The buyer chooses it; the
+             SERVER records it here, where it priced the charge, so the webhook reads it from this
+             server-owned intent rather than from browser payment metadata (which never carried it,
+             so every STK order used to default to "delivery" — a pickup order was dispatched). */
+          fulfillmentType: wantsDelivery ? 'delivery' : 'pickup',
           subtotal, deliveryFee, deliverySource,
           /* Provenance of the delivery charge: the quote it came from. Recorded, not yet consumed —
              binding the quote to the order is the order-creation step's job (RES-1). */
