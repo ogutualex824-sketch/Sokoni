@@ -115,7 +115,8 @@ function allows(category, capabilities, op) {
    operation with no working screen would be a dead end. Later commits in this slice add to this set. */
 const WIRED_SECTIONS = Object.freeze([]);
 function sectionsFor(category, ops) {
-  const s = ['overview', 'services', 'availability', 'calendar'];
+  /* storefront = the public page patients see, its editor and its share link (CHANGELOG 235) */
+  const s = ['overview', 'storefront', 'services', 'availability', 'calendar'];
   if (ops.appointments) s.push('bookings');
   s.push('enquiries', 'messages');
   if (ops.patients) s.push('customers');

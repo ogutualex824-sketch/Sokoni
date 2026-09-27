@@ -29,7 +29,18 @@
     });
     Array.prototype.forEach.call(document.querySelectorAll('[data-hc-label="customers"]'), function (el) {
       el.textContent = w.customersLabel || 'Patients';
+      var item = el.closest ? el.closest('.sb-item') : null;
+      if (item) item.title = w.customersLabel || 'Patients';   /* the collapsed-rail tooltip */
     });
+    /* A sidebar group whose every item is hidden disappears with its heading (no empty "Growth" header). */
+    Array.prototype.forEach.call(document.querySelectorAll('.sb-group'), function (g) {
+      var items = g.querySelectorAll ? g.querySelectorAll('[data-hc-section]') : [];
+      var anyVisible = Array.prototype.some.call(items, function (el) { return !el.hidden; });
+      if (!anyVisible) g.hidden = true;
+    });
+    /* Under the practice's name: the SERVER's category label (never the provider's free text). */
+    var kind = document.getElementById('sbKind');
+    if (kind) kind.textContent = (w.label || 'Healthcare provider') + ' · SOKONI';
     var box = document.getElementById('hcWorkspace');
     if (!box) return;
     var plan = w.plan && w.plan.found && w.plan.tier

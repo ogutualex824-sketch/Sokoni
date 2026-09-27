@@ -43,27 +43,63 @@ a{color:var(--acc);text-decoration:none}
    a phone had NO profile menu and NO sign-out. The same shared widget is mounted a second time here. */
 .mob-identity{display:none;position:fixed;top:max(8px,env(safe-area-inset-top));right:8px;z-index:101;
   background:rgba(5,5,5,.9);border:1px solid var(--border);border-radius:999px;padding:2px 4px}
-.sidebar{width:240px;flex-shrink:0;background:var(--surf);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
-.sb-logo{padding:20px 18px 14px;display:flex;align-items:center;gap:9px;font-weight:800;color:var(--acc);font-size:1.05rem;letter-spacing:-.3px}
-.sb-logo img{height:24px}
-.sb-provider{padding:12px 16px;border-bottom:1px solid var(--border)}
-.sb-avatar{width:44px;height:44px;border-radius:50%;background:var(--acc-dim);display:flex;align-items:center;justify-content:center;font-size:1.1rem;margin-bottom:7px}
-.sb-name{font-weight:700;font-size:.88rem;margin-bottom:2px}
-.sb-plan{display:inline-block;font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--acc);color:#000}
-.sb-nav{flex:1;padding:10px 0}
-.sb-item{display:flex;align-items:center;gap:10px;padding:10px 18px;cursor:pointer;color:var(--sub);font-size:.87rem;transition:all var(--t)}
-.sb-item:hover,.sb-item.active{color:var(--text);background:var(--surf2)}
-.sb-item.active{border-left:3px solid var(--acc);padding-left:15px}
+/* merchant-v2's shell: the brand head and the account footer stay PINNED; only the sections scroll (min-height:0 is what makes
+   the middle scroll instead of pushing the account widget below the fold). */
+.sidebar{width:240px;flex-shrink:0;background:var(--surf);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+/* Sidebar brand (CHANGELOG 235): the SOKONI mark + the provider's / facility's own name. */
+.sb-brand{position:relative;flex-shrink:0;display:flex;align-items:center;gap:12px;padding:18px 16px 16px;border-bottom:1px solid var(--border);
+  background:radial-gradient(120% 140% at 0% 0%,rgba(113,255,0,.10),transparent 60%)}
+.sb-mark{width:42px;height:42px;flex-shrink:0;object-fit:contain;border-radius:12px;box-shadow:0 6px 16px rgba(113,255,0,.22),0 0 0 1px rgba(255,255,255,.08)}
+.sb-id{min-width:0;flex:1}
+.sb-name{font-weight:800;font-size:.95rem;letter-spacing:-.2px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+.sb-kind{font-size:.7rem;color:var(--sub);margin:2px 0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-plan{display:inline-block;font-size:.62rem;font-weight:800;padding:2px 9px;border-radius:99px;background:var(--acc);color:#000;letter-spacing:.2px}
+.sb-close{display:none;position:absolute;top:10px;right:10px;background:transparent;border:1px solid var(--border);color:var(--text);border-radius:10px;width:32px;height:32px;cursor:pointer}
+.sb-nav{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:6px 0 10px}
+.sb-group{padding:4px 0 6px}
+.sb-group[hidden]{display:none}
+.sb-group-h{padding:12px 18px 4px;font-size:.62rem;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;color:var(--muted,#7a7a7a)}
+.sb-item{display:flex;align-items:center;gap:10px;margin:1px 8px;padding:9px 12px;border-radius:10px;cursor:pointer;color:var(--sub);font-size:.86rem;transition:all var(--t);outline-offset:2px}
+.sb-item:hover{color:var(--text);background:var(--surf2)}
+.sb-item:focus-visible{outline:2px solid var(--acc)}
+.sb-item.active{color:var(--acc);background:var(--acc-dim,rgba(113,255,0,.12));box-shadow:inset 0 0 0 1px rgba(113,255,0,.35);font-weight:700}
+/* Desktop: collapse to an icon rail (merchant-v2's pattern). A per-viewer preference; the phone drawer never collapses. */
+.sb-collapse{display:inline-flex;align-items:center;justify-content:center;margin-left:auto;flex-shrink:0;width:28px;height:28px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--sub);cursor:pointer;font-size:.8rem}
+.sb-collapse:hover{color:var(--text);border-color:var(--acc)}
+@media(min-width:769px){
+  .sidebar{transition:width .2s ease}
+  body.sb-collapsed .sidebar{width:72px}
+  body.sb-collapsed .sb-id,body.sb-collapsed .sb-group-h{display:none}
+  body.sb-collapsed .sb-brand{flex-direction:column;padding:14px 6px;gap:8px}
+  body.sb-collapsed .sb-collapse{margin:0;transform:scaleX(-1)}
+  body.sb-collapsed .sb-item{font-size:0;justify-content:center;padding:10px 0;margin:2px 10px}
+  body.sb-collapsed .sb-item .sb-icon{font-size:1.05rem}
+  body.sb-collapsed .sb-item [data-hc-label]{display:none}
+  body.sb-collapsed .sb-foot{padding:10px 6px}
+  body.sb-collapsed .sb-foot > a{display:none}   /* the account widget stays reachable in the rail */
+}
+.sb-item[hidden]{display:none}
 .sb-icon{font-size:1rem;width:20px;text-align:center}
-.sb-foot{padding:14px 16px;border-top:1px solid var(--border)}
+/* Mobile: the SAME sidebar slides in as a drawer, so every control is reachable on a phone. */
+.sb-backdrop{display:none;position:fixed;inset:0;z-index:2400;background:rgba(0,0,0,.55);backdrop-filter:blur(2px)}
+@media(prefers-reduced-motion:reduce){.sidebar,.sb-item{transition:none!important}}
+.sb-foot{flex-shrink:0;padding:14px 16px;border-top:1px solid var(--border)}
 .main{flex:1;overflow-y:auto;padding-bottom:80px}
+/* The bottom bar's BASE rule must precede the phone media query: declared after it (as it was), its display:none
+   overrode the query's display:flex, so phones had NO navigation at all (found by CHANGELOG 235's browser suite). */
+.bn{display:none;position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(5,5,5,.96);backdrop-filter:blur(12px);border-top:1px solid var(--border);height:58px}
 @media(max-width:768px){
-  .sidebar{display:none}
+  .sidebar{position:fixed;top:0;bottom:0;left:0;z-index:2500;width:min(86vw,320px);transform:translateX(-102%);transition:transform .22s ease;
+    box-shadow:0 0 40px rgba(0,0,0,.6);padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+  body.nav-open .sidebar{transform:none}
+  body.nav-open .sb-backdrop{display:block}
+  .sb-close{display:block}
+  .sb-collapse{display:none}
+  .sb-brand{padding-right:52px}
   .mob-identity{display:block}
   .bn{display:flex}
   .main{padding-bottom:72px}
 }
-.bn{display:none;position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(5,5,5,.96);backdrop-filter:blur(12px);border-top:1px solid var(--border);height:58px}
 .bn-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--sub);font-size:.6rem;font-weight:600;transition:color var(--t)}
 .bn-item.active{color:var(--acc)}
 .bn-icon{font-size:1.2rem}
@@ -176,10 +212,6 @@ a{color:var(--acc);text-decoration:none}
 .cu-New{background:rgba(255,184,0,.15);color:var(--warn)}
 .cu-repeat{background:rgba(160,120,255,.15);color:#b79aff}
 /* Mobile More menu */
-.more-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.more-item{display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 10px;background:var(--surf2);border:1px solid var(--border);border-radius:14px;color:var(--text);font-size:.82rem;font-weight:600;cursor:pointer;transition:border-color var(--t),transform var(--t)}
-.more-item:hover{border-color:var(--acc)}.more-item:active{transform:scale(.97)}
-.more-item span{font-size:1.5rem}
 
 /* Booking item */
 .booking-item{padding:12px 0;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px}
@@ -284,37 +316,69 @@ a{color:var(--acc);text-decoration:none}
 
 <div class="app">
   <!-- Sidebar -->
-  <div class="sidebar">
-    <div class="sb-logo"><img src="assets/logo.svg" alt="" onerror="this.style.display='none'">SOKONI</div>
-    <div class="sb-provider" id="sbProv">
-      <div class="sb-avatar" id="sbAva">🔧</div>
-      <div class="sb-name" id="sbName">Loading…</div>
-      <span class="sb-plan" id="sbPlan">Free Trial</span>
+  <div class="sb-backdrop" id="sbBackdrop" onclick="Nav.close()" aria-hidden="true"></div>
+  <div class="sidebar" id="sidebar" aria-label="Dashboard navigation">
+    <!-- Brand + identity (CHANGELOG 235): the SOKONI mark and the provider's / facility's OWN name, from the server. -->
+    <div class="sb-brand">
+      <img class="sb-mark" src="assets/logosokoni.png" alt="SOKONI" width="40" height="40" decoding="async">
+      <div class="sb-id">
+        <div class="sb-name" id="sbName">Loading…</div>
+        <div class="sb-kind" id="sbKind">Provider · SOKONI</div>
+        <span class="sb-plan" id="sbPlan">Free Trial</span>
+      </div>
+      <button type="button" class="sb-collapse" id="sbCollapse" aria-label="Collapse sidebar" aria-pressed="false" onclick="Nav.toggleRail()">«</button>
+      <button type="button" class="sb-close" aria-label="Close menu" onclick="Nav.close()">✕</button>
     </div>
-    <nav class="sb-nav">
-      <div data-hc-section="overview" class="sb-item active" onclick="P.show('overview',this)"><span class="sb-icon">🏠</span>Overview</div>
-      <div data-hc-section="services" class="sb-item" onclick="P.show('settings',this,'services')"><span class="sb-icon">🧰</span>Services</div>
-      <!-- Entertainment business workspace (2026-09-27): ONE availability authority, rate cards, enquiries,
-           calls, message settings, discounts — sokoni-ent-workspace.js -->
-      <div data-hc-section="ent" class="sb-item" onclick="WS.open('ratecards',this)"><span class="sb-icon">🏷️</span>Rate Cards</div>
-      <div data-hc-section="availability" class="sb-item" onclick="WS.open('availability',this)"><span class="sb-icon">🕘</span>Availability</div>
-      <div data-hc-section="calendar" class="sb-item" onclick="WS.open('calendar',this)"><span class="sb-icon">📆</span>Calendar</div>
-      <div data-hc-section="bookings" class="sb-item" onclick="P.show('bookings',this)"><span class="sb-icon">📅</span>Bookings</div>
-      <!-- Entertainment bookings: the buyer's PIN confirms the show-up and releases the payment (entertainment.html#provide). -->
-      <a data-hc-section="ent" class="sb-item" href="/entertainment.html?tab=mine#provide" style="text-decoration:none;color:inherit"><span class="sb-icon">🔑</span>Verify booking PIN</a>
-      <div data-hc-section="enquiries" class="sb-item" onclick="WS.open('enquiries',this)"><span class="sb-icon">❓</span>Enquiries</div>
-      <a data-hc-section="messages" class="sb-item" href="/messages.html" style="text-decoration:none;color:inherit"><span class="sb-icon">💬</span>Messages</a>
-      <div data-hc-section="ent" class="sb-item" onclick="WS.open('calls',this)"><span class="sb-icon">📞</span>Calls</div>
-      <div data-hc-section="enquiries" class="sb-item" onclick="WS.open('messaging',this)"><span class="sb-icon">🛎️</span>Message Settings</div>
-      <div data-hc-section="marketing" class="sb-item" onclick="WS.open('discounts',this)"><span class="sb-icon">📣</span>Marketing</div>
-      <div data-hc-section="ent" class="sb-item" onclick="WS.open('stats',this)"><span class="sb-icon">⏱️</span>Booked Hours</div>
-      <div data-hc-section="reviews" class="sb-item" onclick="WS.open('reputation',this)"><span class="sb-icon">🌟</span>Followers &amp; Reputation</div>
-      <div data-hc-section="calendar" class="sb-item" onclick="P.show('calendar',this)"><span class="sb-icon">🟢</span>Live Status</div>
-      <div data-hc-section="earnings" class="sb-item" onclick="P.show('earnings',this)"><span class="sb-icon">💰</span>Wallet</div>
-      <div data-hc-section="customers" class="sb-item" onclick="P.show('customers',this)"><span class="sb-icon">👥</span><span data-hc-label="customers">Customers</span></div>
-      <div data-hc-section="reviews" class="sb-item" onclick="P.show('reviews',this)"><span class="sb-icon">⭐</span>Reviews</div>
-      <div data-hc-section="analytics" class="sb-item" onclick="P.show('analytics',this)"><span class="sb-icon">📊</span>Analytics</div>
-      <div data-hc-section="settings" class="sb-item" onclick="P.show('settings',this)"><span class="sb-icon">⚙️</span>Settings</div>
+    <nav class="sb-nav" aria-label="Dashboard sections">
+      <div class="sb-group" role="group" aria-label="Overview">
+        <div class="sb-group-h" aria-hidden="true">Overview</div>
+        <div data-hc-section="overview" class="sb-item active" onclick="P.show('overview',this)"><span class="sb-icon">🏠</span>Overview</div>
+      </div>
+      <!-- Storefront (CHANGELOG 235): the public page customers / patients see, its editor, and its link. -->
+      <div class="sb-group" role="group" aria-label="Storefront">
+        <div class="sb-group-h" aria-hidden="true">Storefront</div>
+        <a data-hc-section="storefront" class="sb-item" id="sbStoreView" href="provider-profile.html" target="_blank" rel="noopener" style="text-decoration:none"><span class="sb-icon">🏪</span>View storefront</a>
+        <div data-hc-section="storefront" class="sb-item" onclick="location.href='provider-onboarding.html'"><span class="sb-icon">🎨</span>Edit storefront</div>
+        <div data-hc-section="storefront" class="sb-item" onclick="Store.share()"><span class="sb-icon">🔗</span>Share storefront</div>
+      </div>
+      <div class="sb-group" role="group" aria-label="Bookings">
+        <div class="sb-group-h" aria-hidden="true">Bookings</div>
+        <div data-hc-section="calendar" class="sb-item" onclick="WS.open('calendar',this)"><span class="sb-icon">📆</span>Calendar</div>
+        <div data-hc-section="availability" class="sb-item" onclick="WS.open('availability',this)"><span class="sb-icon">🕘</span>Availability</div>
+        <div data-hc-section="bookings" class="sb-item" onclick="P.show('bookings',this)"><span class="sb-icon">📅</span>Bookings</div>
+        <div data-hc-section="calendar" class="sb-item" onclick="P.show('calendar',this)"><span class="sb-icon">🟢</span>Live Status</div>
+        <a data-hc-section="ent" class="sb-item" href="/entertainment.html?tab=mine#provide" style="text-decoration:none;color:inherit"><span class="sb-icon">🔑</span>Verify booking PIN</a>
+        <div data-hc-section="ent" class="sb-item" onclick="WS.open('stats',this)"><span class="sb-icon">⏱️</span>Booked Hours</div>
+      </div>
+      <div class="sb-group" role="group" aria-label="Business">
+        <div class="sb-group-h" aria-hidden="true">Business</div>
+        <div data-hc-section="services" class="sb-item" onclick="P.show('settings',this,'services')"><span class="sb-icon">🧰</span>Services</div>
+        <div data-hc-section="ent" class="sb-item" onclick="WS.open('ratecards',this)"><span class="sb-icon">🏷️</span>Rate Cards</div>
+        <div data-hc-section="customers" class="sb-item" onclick="P.show('customers',this)"><span class="sb-icon">👥</span><span data-hc-label="customers">Customers</span></div>
+      </div>
+      <div class="sb-group" role="group" aria-label="Communication">
+        <div class="sb-group-h" aria-hidden="true">Communication</div>
+        <div data-hc-section="enquiries" class="sb-item" onclick="WS.open('enquiries',this)"><span class="sb-icon">❓</span>Enquiries</div>
+        <a data-hc-section="messages" class="sb-item" href="/messages.html" style="text-decoration:none;color:inherit"><span class="sb-icon">💬</span>Messages</a>
+        <div data-hc-section="ent" class="sb-item" onclick="WS.open('calls',this)"><span class="sb-icon">📞</span>Calls</div>
+        <div data-hc-section="enquiries" class="sb-item" onclick="WS.open('messaging',this)"><span class="sb-icon">🛎️</span>Message Settings</div>
+      </div>
+      <div class="sb-group" role="group" aria-label="Growth">
+        <div class="sb-group-h" aria-hidden="true">Growth</div>
+        <div data-hc-section="marketing" class="sb-item" onclick="WS.open('discounts',this)"><span class="sb-icon">📣</span>Marketing</div>
+        <div data-hc-section="reviews" class="sb-item" onclick="WS.open('reputation',this)"><span class="sb-icon">🌟</span>Followers &amp; Reputation</div>
+        <div data-hc-section="reviews" class="sb-item" onclick="P.show('reviews',this)"><span class="sb-icon">⭐</span>Reviews</div>
+        <div data-hc-section="analytics" class="sb-item" onclick="P.show('analytics',this)"><span class="sb-icon">📊</span>Analytics</div>
+      </div>
+      <div class="sb-group" role="group" aria-label="Finance">
+        <div class="sb-group-h" aria-hidden="true">Finance</div>
+        <div data-hc-section="earnings" class="sb-item" onclick="P.show('earnings',this)"><span class="sb-icon">💰</span>Wallet</div>
+      </div>
+      <div class="sb-group" role="group" aria-label="Plan">
+        <div class="sb-group-h" aria-hidden="true">Plan</div>
+        <div data-hc-section="subscription" class="sb-item" onclick="P.show('settings',this,'sub')"><span class="sb-icon">💎</span>Plan &amp; Subscription</div>
+        <div data-hc-section="settings" class="sb-item" onclick="P.show('settings',this)"><span class="sb-icon">⚙️</span>Settings</div>
+      </div>
     </nav>
     <div class="sb-foot">
       <a href="onboarding.html" class="btn btn-s btn-sm" style="display:block;text-align:center;margin-bottom:8px">+ Add Another Role</a>
@@ -754,7 +818,7 @@ a{color:var(--acc);text-decoration:none}
     <div class="bn-item" onclick="WS.open('calendar',this)"><span class="bn-icon">📆</span>Calendar</div>
     <div class="bn-item" onclick="P.show('bookings',this)"><span class="bn-icon">📅</span>Bookings</div>
     <div class="bn-item" onclick="P.show('earnings',this)"><span class="bn-icon">💰</span>Wallet</div>
-    <div class="bn-item" onclick="More.open()"><span class="bn-icon">⋯</span>More</div>
+    <div class="bn-item" id="bnMenu" role="button" tabindex="0" aria-controls="sidebar" aria-expanded="false" onclick="Nav.open()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();Nav.open()}"><span class="bn-icon">☰</span>Menu</div>
   </div>
 </div><!-- .app -->
 
@@ -774,24 +838,6 @@ a{color:var(--acc);text-decoration:none}
   <div class="bk-drawer" role="dialog" aria-modal="true" aria-label="Booking detail">
     <div class="bk-drawer-hdr"><div style="font-weight:800;font-size:1rem">Booking</div><button class="btn btn-g btn-sm" onclick="D.close()" aria-label="Close">✕</button></div>
     <div class="bk-drawer-body" id="bkDrawerBody"></div>
-  </div>
-</div>
-
-<!-- Mobile "More" menu — makes Services/Customers/Reviews/Analytics/Settings reachable on phones -->
-<div id="moreSheet" class="av-sheet-wrap" style="display:none;z-index:2300">
-  <div class="av-sheet-backdrop" onclick="More.close()"></div>
-  <div class="av-sheet">
-    <div class="av-sheet-hdr"><div style="font-weight:800;font-size:1rem">More</div><button class="btn btn-g btn-sm" onclick="More.close()" aria-label="Close">✕</button></div>
-    <div class="av-sheet-body">
-      <div class="more-grid">
-        <button data-hc-section="services" class="more-item" onclick="More.go('services')"><span>🧰</span>Services</button>
-        <button data-hc-section="customers" class="more-item" onclick="More.go('customers')"><span>👥</span><span data-hc-label="customers">Customers</span></button>
-        <button data-hc-section="reviews" class="more-item" onclick="More.go('reviews')"><span>⭐</span>Reviews</button>
-        <button data-hc-section="analytics" class="more-item" onclick="More.go('analytics')"><span>📊</span>Analytics</button>
-        <button data-hc-section="availability" class="more-item" onclick="More.go('availability')"><span>🕐</span>Availability</button>
-        <button data-hc-section="settings" class="more-item" onclick="More.go('settings')"><span>⚙️</span>Settings</button>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -1074,19 +1120,40 @@ const RS={
   },
 };
 /* Mobile "More" menu — routes to the panels that don't fit the 5-slot bottom nav. */
-const More={
-  open(){_q('moreSheet').style.display='flex';document.body.style.overflow='hidden';},
-  close(){_q('moreSheet').style.display='none';document.body.style.overflow='';},
-  go(key){this.close();
-    if(key==='services')return P.show('settings',null,'services');
-    if(key==='availability')return AvE.open();
-    _navTo(key);
-  }
+/* ── Nav (CHANGELOG 235): on a phone the SAME sidebar — every control — slides in as a drawer. It replaces the
+   partial "More" sheet, which reached six of twenty sections. Choosing an item, the backdrop, ✕ or Escape
+   closes it, and focus returns to the Menu button. More.open stays as an alias for older callers. */
+const Nav={
+  _mq:()=>window.matchMedia('(max-width:768px)').matches,
+  open(){document.body.classList.add('nav-open');const b=_q('bnMenu');if(b)b.setAttribute('aria-expanded','true');
+    const first=document.querySelector('#sidebar .sb-item:not([hidden])');if(first&&first.focus){first.setAttribute('tabindex','0');first.focus();}},
+  close(){if(!document.body.classList.contains('nav-open'))return;document.body.classList.remove('nav-open');
+    const b=_q('bnMenu');if(b){b.setAttribute('aria-expanded','false');b.focus();}},
 };
+/* Desktop rail: remembered per viewer (localStorage — a convenience, wrapped: private windows may refuse it). */
+Nav.toggleRail=function(force){const on=typeof force==='boolean'?force:!document.body.classList.contains('sb-collapsed');
+  document.body.classList.toggle('sb-collapsed',on);const b=_q('sbCollapse');if(b){b.setAttribute('aria-pressed',String(on));b.setAttribute('aria-label',on?'Expand sidebar':'Collapse sidebar');}
+  try{localStorage.setItem('sokoni.provDash.rail',on?'1':'0');}catch(_){}};
+const More={open(){Nav.open();},close(){Nav.close();}};
+const Store={
+  url(){const u=firebase.auth().currentUser;return u?location.origin+'/provider-profile.html?uid='+encodeURIComponent(u.uid):null;},
+  async share(){const url=this.url();if(!url){toast('Sign in required','err');return;}
+    const name=(_q('sbName')||{}).textContent||'My storefront';
+    try{if(navigator.share){await navigator.share({title:name+' on SOKONI',url});return;}
+      await navigator.clipboard.writeText(url);toast('Storefront link copied.');}
+    catch(e){if(e&&e.name==='AbortError')return;toast('Could not share — your link is '+url,'err');}}
+};window.Store=Store;
+document.addEventListener('click',e=>{const it=e.target&&e.target.closest&&e.target.closest('#sidebar .sb-item');if(it&&Nav._mq())setTimeout(()=>Nav.close(),0);});
+/* keyboard: every sidebar item is focusable and Enter/Space activates it (the items are divs with onclick) */
+document.addEventListener('DOMContentLoaded',()=>{try{if(localStorage.getItem('sokoni.provDash.rail')==='1')Nav.toggleRail(true);}catch(_){}
+  document.querySelectorAll('#sidebar .sb-item').forEach(el=>{if(!el.title){const ic=el.querySelector('.sb-icon');el.title=el.textContent.replace(ic?ic.textContent:'','').trim();}});
+  document.querySelectorAll('#sidebar .sb-item').forEach(el=>{
+  if(el.tagName!=='A'){el.setAttribute('role','button');el.setAttribute('tabindex','0');
+    el.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();el.click();}});}});});
 
 /* Escape closes the topmost overlay (a11y). */
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
-  if(_q('moreSheet')&&_q('moreSheet').style.display!=='none')return More.close();
+  if(document.body.classList.contains('nav-open'))return Nav.close();
   if(_q('wdSheet')&&_q('wdSheet').style.display!=='none')return W.wdClose();
   if(_q('rsSheet')&&_q('rsSheet').style.display!=='none')return RS.close();
   if(_q('cuDrawer')&&_q('cuDrawer').style.display!=='none')return Cu.close();
@@ -1893,8 +1960,11 @@ async function loadDashboard(user){
     const p=res.profile||{};
     const sub=res.subscription||{};
     _q('sbName').textContent=p.name||user.displayName||'Provider';
+    {const sv=_q('sbStoreView');if(sv)sv.href='provider-profile.html?uid='+encodeURIComponent(user.uid);}
     _q('sbPlan').textContent=(sub.plan||'free').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
-    _q('sbAva').textContent=p.category?'🔧':SokoniProvider?'🔧':'🔧';
+    /* The kind of business under the name (textContent — never HTML). A Healthcare workspace replaces it with the
+       SERVER's category label (sokoni-health-workspace.js), never the provider's free text. */
+    {const k=_q('sbKind');if(k&&!document.documentElement.hasAttribute('data-hc-workspace'))k.textContent=(p.category?String(p.category).slice(0,40)+' · ':'')+'SOKONI';}
     _mountDashIdentity(p, user);
     // Greeting
     const hr=new Date().getHours();

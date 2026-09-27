@@ -160,16 +160,24 @@ const NOPLAN = { shopRequestable: false };
   const html = fs.readFileSync(Path.join(ROOT, 'provider-dashboard.html'), 'utf8');
   ck('the dashboard loads sokoni-health-workspace.js and has the workspace banner slot', /<script src="sokoni-health-workspace\.js" defer><\/script>/.test(html) && /id="hcWorkspace"/.test(html));
   const items = (html.match(/<(div|a|button)[^>]*>/g) || []).filter((t) => /class="(sb-item[^"]*|more-item)"/.test(t));
-  ck('every sidebar and "More" item carries a section key (none can escape the workspace)', items.length >= 25 && items.every((t) => /data-hc-section="[a-z]+"/.test(t)), items.filter((t) => !/data-hc-section/.test(t)));
+  /* CHANGELOG 235: the partial mobile "More" sheet is gone — on a phone the whole sidebar is the drawer — so every
+     control is a sidebar item (20 + Plan & Subscription). */
+  ck('every sidebar item carries a section key (none can escape the workspace)', items.length >= 21 && items.every((t) => /data-hc-section="[a-z]+"/.test(t)), items.filter((t) => !/data-hc-section/.test(t)));
+  ck('the sidebar brand is the SOKONI mark (assets/logosokoni.png) with the provider / facility name slot', html.includes('<img class="sb-mark" src="assets/logosokoni.png"') && html.includes('id="sbName"') && html.includes('id="sbKind"') && fs.existsSync(Path.join(ROOT, 'assets', 'logosokoni.png')));
+  const groups = (html.match(/<div class="sb-group" role="group" aria-label="([A-Za-z]+)">/g) || []).map((m) => m.match(/aria-label="([A-Za-z]+)"/)[1]);
+  ck('the sidebar is grouped: Overview · Storefront · Bookings · Business · Communication · Growth · Finance · Plan', groups.join() === 'Overview,Storefront,Bookings,Business,Communication,Growth,Finance,Plan', groups);
+  ck('Plan & Subscription is reachable from the sidebar (not only a settings tab)', items.some((t) => t.includes('data-hc-section="subscription"') && t.includes("P.show('settings',this,'sub')")));
+  ck('on a phone the SAME sidebar is a drawer: the bottom bar Menu opens it (aria-controls/expanded), the old sheet is gone', (() => { const m = (html.match(/<div class="bn-item" id="bnMenu"[^>]*>/) || [''])[0]; return m.includes('aria-controls="sidebar"') && m.includes('aria-expanded="false"') && m.includes('onclick="Nav.open()"'); })()
+    && !html.includes('id="moreSheet"') && html.includes('body.nav-open .sidebar{transform:none}'));
   const entTagged = items.filter((t) => /data-hc-section="ent"/.test(t));
   ck('rate cards, the booking-PIN page, call requests and booked-hours are tagged Entertainment-only',
     entTagged.length === 4 && ['ratecards', 'entertainment.html', "'calls'", "'stats'"].every((k) => entTagged.some((t) => t.includes(k))), entTagged);
-  ck('every roster label is swappable to "Patients" (sidebar, More sheet, page title)', (html.match(/data-hc-label="customers"/g) || []).length === 3);
+  ck('every roster label is swappable to "Patients" (sidebar, page title)', (html.match(/data-hc-label="customers"/g) || []).length === 2);
 
   say('\n── the client applies only the server\'s answer ──');
   /* A minimal DOM: enough to run apply() against the tagged markup. */
   const els = items.map((t) => ({ key: (t.match(/data-hc-section="([a-z]+)"/) || [])[1], hidden: false, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return k === 'data-hc-section' ? this.key : null; } }));
-  const labels = [0, 1, 2].map(() => ({ textContent: 'Customers' }));
+  const labels = [0, 1].map(() => ({ textContent: 'Customers' }));
   const box = { hidden: true, innerHTML: '' };
   global.window = {}; global.document = { readyState: 'complete', documentElement: { setAttribute() {} }, head: { appendChild() {} }, createElement: () => ({}),
     querySelectorAll: (q) => (q === '[data-hc-section]' ? els : q === '[data-hc-label="customers"]' ? labels : []), getElementById: (id) => (id === 'hcWorkspace' ? box : null), addEventListener() {} };

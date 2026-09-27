@@ -1,3 +1,61 @@
+## 2026-09-28 (235) — Provider dashboard: the premium merchant-v2-style shell (SOKONI mark, business name, grouped sidebar, storefront controls, phone drawer)
+
+The foundation checkpoint for the category-aware workspace programme (owner, 2026-09-28): one merchant-v2-style shell
+for every hub, with a sidebar generated per business. Not deployed. No production writes.
+
+**Now** (`provider-dashboard.html`, which serves every provider type):
+- **Brand head:**
+  - the SOKONI mark (`assets/logosokoni.png`, owner's choice) beside the provider's / facility's OWN name, from the
+    server;
+  - the kind of business under it. For Healthcare this is the server's category label, never free text.
+  - the plan chip.
+- **Grouped sidebar** in merchant-v2's pattern: Overview · Storefront · Bookings · Business · Communication · Growth ·
+  Finance · Plan.
+  - **Plan & Subscription** is now a sidebar entry, not only a settings tab.
+  - The head and the account footer stay pinned and only the sections scroll, so the account widget is on screen at
+    every desktop width.
+- **Storefront controls:**
+  - View storefront opens the provider's own public page (`provider-profile.html?uid=`).
+  - Edit storefront.
+  - Share storefront uses the native share sheet, or copies the link. It says "copied" only after the copy succeeded.
+- **Phones:** the SAME sidebar, with every control, slides in as a drawer from a Menu button in the bottom bar.
+  - It replaces the "More" sheet, which reached 6 of 20 sections.
+  - Choosing an item, the backdrop, ✕ or Escape closes it, and focus returns to Menu.
+- **Desktop rail:** the sidebar collapses to an icon rail, with a tooltip per icon. This is a per-viewer preference in
+  `localStorage`, wrapped for failure.
+- **Keyboard:** every item is focusable, Enter and Space activate it, and there is a visible focus ring. Reduced motion
+  is respected.
+- **Healthcare:** a group whose items the server hides disappears with its heading. The server now lists `storefront`
+  for Healthcare workspaces.
+
+**Fixed:**
+- **Phones had NO navigation.** The bottom bar's base rule (`display:none`) was declared AFTER the phone media query
+  that showed it, so it always won. This was pre-existing; the baseline `3d8428a` has the same order.
+- **The account widget was below the fold on desktop.** This was the known 3-failure baseline in
+  `test-entertainment-browser` "profile icon visible and on-screen", which is now 230/0.
+
+**Files:**
+- `provider-dashboard.html`, `sokoni-health-workspace.js`, `functions/healthcare-workspace.js`
+- `scripts/test-provider-dashboard-sidebar-browser.js` (new), `scripts/test-healthcare-workspace.js`,
+  `scripts/sabotage-event-ops.js`
+
+**Tests:**
+- `test-provider-dashboard-sidebar-browser` 90/0: a real Chromium run at 360 · 390 · 414 · 768 · 1024 · 1280 · 1440,
+  as a Healthcare facility AND a photographer.
+- `test-healthcare-workspace` 51/0. The "More" sheet assertions were replaced by sidebar ones, because the sheet was
+  removed.
+- Unchanged against `3d8428a`: withdrawal-browser 23, share-integrity-browser 64, ent-availability-browser 54,
+  healthcare-availability 37, nav-routes 12, event-ops-browser.
+- `test-entertainment-browser` 230/0 (baseline 227/3).
+
+**Sabotage `sidebar`:** 10/10 caught, tree restored byte-identical.
+- The first run MISSED the bottom-bar attack. The mutation deleted the rule rather than hiding the bar, and nothing
+  checked the bar stays hidden on desktop. The attack was corrected, a second attack and a desktop check were added.
+- The first run CRASHED on "storefront not listed". The test now checks visibility before clicking, so it FAILs
+  instead.
+- One post-restore run was 81/1. It did not reproduce in three clean runs (82/0, 82/0, 90/0), so it is recorded as a
+  load flake.
+
 ## 2026-09-28 (234) — Healthcare availability: the server is the only writer, one booking path, and the calendar matches the booking
 
 Slice: availability. Not deployed. No production writes. No migrations. POS/Till and pharmacy delivery stay deferred

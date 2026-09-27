@@ -76,6 +76,7 @@ const SUITES = {
   hcws:     ['node', ['scripts/test-healthcare-workspace.js']],
   hcavail:  ['node', ['scripts/test-healthcare-availability.js']],
   hcavailrules: ['node', ['scripts/run-rules-suite.js', 'scripts/test-healthcare-availability-rules.js']],
+  sidebar:  ['node', ['scripts/test-provider-dashboard-sidebar-browser.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -1187,6 +1188,28 @@ const M = [
     from: "      busy('Saving…');\n      return call('addAvailabilityOverride', { date: date, closed: true, label: label })\n        .then(function () { done(); say(okMsg); refresh(); }, function (e) { done(); failed(e); });", to: "      say(okMsg);\n      return call('addAvailabilityOverride', { date: date, closed: true, label: label })\n        .then(function () { done(); refresh(); }, function (e) { done(); failed(e); });", expect: /server refusal shows an error and no success/ },
   { group: 'hcavail', browser: false, name: "the editor keeps the page's direct-write sheet", file: "sokoni-health-workspace.js", suite: "hcavail",
     from: "      AvE.open = function () {", to: "      AvE._unused = function () {", expect: /editor opens the server-backed|NOTHING was written/ },
+
+  /* ── Provider dashboard sidebar (CHANGELOG 235) ── */
+  { group: 'sidebar', browser: true, name: "the phone bottom bar is hidden again (CSS order)", file: "provider-dashboard.html", suite: 'sidebar',
+    from: ".bn{display:none;position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(5,5,5,.96);backdrop-filter:blur(12px);border-top:1px solid var(--border);height:58px}\n@media(max-width:768px){", to: ".bn{display:none!important;position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(5,5,5,.96);backdrop-filter:blur(12px);border-top:1px solid var(--border);height:58px}\n@media(max-width:768px){", expect: /Menu button are visible/ },
+  { group: 'sidebar', browser: true, name: "the bottom bar's base rule is deleted (bar shows on desktop)", file: "provider-dashboard.html", suite: 'sidebar',
+    from: ".bn{display:none;position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(5,5,5,.96);backdrop-filter:blur(12px);border-top:1px solid var(--border);height:58px}\n@media(max-width:768px){", to: "@media(max-width:768px){", expect: /bottom bar stays hidden/ },
+  { group: 'sidebar', browser: true, name: "the sidebar logo is not logosokoni.png", file: "provider-dashboard.html", suite: 'sidebar',
+    from: "<img class=\"sb-mark\" src=\"assets/logosokoni.png\"", to: "<img class=\"sb-mark\" src=\"assets/logo.svg\"", expect: /SOKONI mark loads/ },
+  { group: 'sidebar', browser: true, name: "the provider name is not shown", file: "provider-dashboard.html", suite: 'sidebar',
+    from: "    _q('sbName').textContent=p.name||user.displayName||'Provider';", to: "    _q('sbName').textContent='Provider';", expect: /SOKONI mark loads beside/ },
+  { group: 'sidebar', browser: true, name: "choosing an item leaves the drawer open", file: "provider-dashboard.html", suite: 'sidebar',
+    from: "if(it&&Nav._mq())setTimeout(()=>Nav.close(),0);", to: "if(it&&Nav._mq())void 0;", expect: /navigates AND closes the drawer/ },
+  { group: 'sidebar', browser: true, name: "Escape no longer closes the drawer", file: "provider-dashboard.html", suite: 'sidebar',
+    from: "  if(document.body.classList.contains('nav-open'))return Nav.close();", to: "", expect: /Escape closes the drawer/ },
+  { group: 'sidebar', browser: true, name: "the storefront link points at the wrong page", file: "provider-dashboard.html", suite: 'sidebar',
+    from: "sv.href='provider-profile.html?uid='+encodeURIComponent(user.uid);", to: "sv.href='provider-profile.html';", expect: /OWN public page/ },
+  { group: 'sidebar', browser: true, name: "share shows success without copying", file: "provider-dashboard.html", suite: 'sidebar',
+    from: "      await navigator.clipboard.writeText(url);toast('Storefront link copied.');}", to: "      toast('Storefront link copied.');}", expect: /Share copies the storefront link/ },
+  { group: 'sidebar', browser: true, name: "the rail preference is not remembered", file: "provider-dashboard.html", suite: 'sidebar',
+    from: "  try{localStorage.setItem('sokoni.provDash.rail',on?'1':'0');}catch(_){}};", to: "};", expect: /remembered across a reload/ },
+  { group: 'sidebar', browser: true, name: "Healthcare workspace does not list the storefront", file: "functions/healthcare-workspace.js", suite: 'sidebar',
+    from: "  const s = ['overview', 'storefront', 'services', 'availability', 'calendar'];", to: "  const s = ['overview', 'services', 'availability', 'calendar'];", expect: /Plan reachable|every visible item/ },
 ];
 
 const argv = process.argv.slice(2);
