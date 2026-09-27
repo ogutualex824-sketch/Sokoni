@@ -1,3 +1,53 @@
+## 2026-09-28 (227) — Healthcare provider category: recorded by the server, never by the provider
+
+Healthcare convergence. Not deployed. No production writes.
+
+**Gap.** Nothing recorded **what kind** of healthcare provider an account is (clinician, facility, pharmacy,
+laboratory, telemedicine, home care). The category-aware directory, dashboards and capability matrix all need it.
+`projectProvider` wrote only the provider-editable free-text `category`, so keying anything on it would let a clinic
+re-file itself as a pharmacy.
+
+**Fix:**
+- **`functions/healthcare-category.js`** holds the enum and an exact-match mapping from what the applicant chose.
+  - The `hub-register.js` ids hospital, dental, optician, physiotherapy, mental-health and vet map to **facility**;
+    pharmacy maps to **pharmacy** and laboratory to **laboratory**.
+  - The `provider-onboarding.js` professions (Doctor, Nurse, Clinical Officer, …) map to **clinician**.
+  - Ambiguous or unknown applications map to **null (UNCLASSIFIED)**, never a guess. **telemedicine** and
+    **home_care** are reachable only by an administrator.
+- **`projectProvider`** (on an AdminOS approval of a `health` application) stamps `providers/{uid}.healthcare =
+  {category, source:'application'}`. A later re-approval never overwrites an administrator's classification.
+- **`functions/healthcare-admin.js`**, merged into the one `adminOsDispatch`:
+  - `healthAdminProviders` lists healthcare providers by category and shows the UNCLASSIFIED ones.
+  - `healthAdminClassify` uses the canonical admin claim, the enum only and a required reason. It only touches an
+    account already approved as a health provider, and writes the existing `adminAudit` trail.
+  - Both are operational only; they never read clinical records.
+- **Rules.** A provider can no longer create or edit `healthcare`.
+  - The same protection now covers the Legal authority's link fields `provisionedBy`, `legalProviderId` and
+    `legalVerification`, which the rules left owner-writable in b24b052.
+  - Setting `provisionedBy:'legal-verification'` on one's own record defeated the Legal identity-conflict guard.
+  - b24b052 itself is not amended.
+
+**Files:**
+- `functions/healthcare-category.js` (new), `functions/healthcare-admin.js` (new).
+- `functions/application-lifecycle.js`, `functions/admin-os-dispatch.js`, `firestore.rules` (+ `.build`).
+- `scripts/test-healthcare-category.js` (new), `scripts/test-provider-identity-fields-rules.js` (new).
+- `scripts/test-healthcare-admin-approval.js`: its guard-removed control shims every sibling module, and now shims
+  the new one.
+- `scripts/sabotage-event-ops.js`.
+
+**Database:** `providers/{uid}.healthcare {category, source, applicationId|classifiedBy, setAt}`.
+**API:** adminOsDispatch `healthAdminProviders`, `healthAdminClassify`. **Security:** 4 identity fields are now
+server-only.
+
+**Tests:**
+- `test-healthcare-category` 34/0.
+- `test-provider-identity-fields-rules` 10/0 with a counterproof; HEAD's rules fail 6 of those checks.
+- Lifecycle, provider, Legal, AdminOS, reputation and healthcare suites match `6a0b2a7`.
+- The rules suites pass: healthcare-provider 34, follow 42, Legal 28, entertainment 377.
+- Sabotage `hccat` 8/8 caught.
+- `test-legal-verification` now fails on both HEAD and baseline: a time-of-day defect in the b24b052 AdminOS Legal
+  panel, fixed separately (CHANGELOG 228).
+
 ## 2026-09-27 (226) — Healthcare plans are platform revenue (one alias in the one commission table)
 
 Owner decision (2026-09-27). Not deployed. No production writes.

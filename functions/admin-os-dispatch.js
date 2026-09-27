@@ -40,7 +40,9 @@ const adminOs = (() => {
   const rep = require('./reputation');
   /* Legal Verification — SOKONI admin decision + LSK evidence (functions/legal-verification.js). */
   const legalV = require('./legal-verification');
-  return Object.assign({}, base, { _h: Object.assign({}, base._h, trace._h, creator._adminH, events._adminH, ent._adminH, eventInv._adminH, entInt._adminH, entBk._adminH, entAv._adminH, entRc._adminH, entEq._adminH, rep._adminH, legalV._adminH) });
+  /* Healthcare — provider category + operations (functions/healthcare-admin.js). */
+  const hcAdm = require('./healthcare-admin');
+  return Object.assign({}, base, { _h: Object.assign({}, base._h, trace._h, creator._adminH, events._adminH, ent._adminH, eventInv._adminH, entInt._adminH, entBk._adminH, entAv._adminH, entRc._adminH, entEq._adminH, rep._adminH, legalV._adminH, hcAdm._adminH) });
 })();
 
 const _OPTS = {

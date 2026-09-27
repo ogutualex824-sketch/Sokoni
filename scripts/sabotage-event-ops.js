@@ -65,6 +65,8 @@ const SUITES = {
   hcpub:    ['node', ['scripts/test-healthcare-public-projection.js']],
   posown:   ['node', ['scripts/test-pos-gate-behavioural.js']],
   hcplan:   ['node', ['scripts/test-healthcare-plan-commission.js']],
+  hccat:    ['node', ['scripts/test-healthcare-category.js']],
+  hccatrules: ['node', ['scripts/run-rules-suite.js', 'scripts/test-provider-identity-fields-rules.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -1042,6 +1044,24 @@ const M = [
     from: "  healthcare_subscription: 'subscriptions',", to: "  healthcare_subscription: 'healthcare',", expect: /whole amount is SOKONI revenue|resolves to the EXISTING/ },
   { group: 'hcplan', browser: false, name: "a separate Healthcare plan rate is invented", file: "functions/commission-config.js", suite: 'hcplan',
     from: "  subscriptions:    { pct: 100,", to: "  healthcare_subscription: { pct: 50, fixedKES: 0, _was: 'invented' },\n  subscriptions:    { pct: 100,", expect: /no RATES entry was added/ },
+
+  /* ── Healthcare provider category (CHANGELOG 227) ── */
+  { group: 'hccat', browser: false, name: "the provider re-files their own healthcare category (update protection removed)", file: "firestore.rules.build", suite: "hccatrules",
+    from: "'healthcare','legalProviderId','provisionedBy','legalVerification']));", to: "]));", expect: /cannot re-file|cannot set provisionedBy|cannot set legalProviderId|cannot set legalVerification/ },
+  { group: 'hccat', browser: false, name: "a new provider creates themselves with a category (create protection removed)", file: "firestore.rules.build", suite: "hccatrules",
+    from: "&& !request.resource.data.keys().hasAny(['healthcare','legalProviderId','provisionedBy','legalVerification']);", to: ";", expect: /cannot CREATE their record|nor with provisionedBy/ },
+  { group: 'hccat', browser: false, name: "an unknown application is GUESSED into a category", file: "functions/healthcare-category.js", suite: "hccat",
+    from: "  return found.size === 1 ? [...found][0] : null;", to: "  return found.size === 1 ? [...found][0] : 'clinician';", expect: /UNCLASSIFIED/ },
+  { group: 'hccat', browser: false, name: "an ambiguous application picks one category", file: "functions/healthcare-category.js", suite: "hccat",
+    from: "  return found.size === 1 ? [...found][0] : null;", to: "  return found.size >= 1 ? [...found][0] : null;", expect: /pharmacy.*Doctor|UNCLASSIFIED/ },
+  { group: 'hccat', browser: false, name: "a non-admin classifies a provider", file: "functions/healthcare-admin.js", suite: "hccat",
+    from: "  if (!ADMIN.isAdmin(req)) throw new HttpsError('permission-denied', 'Administrators only.');", to: "", expect: /non-admin cannot classify|numeric role 4 claim cannot classify|non-admin cannot list/ },
+  { group: 'hccat', browser: false, name: "a plumber is classified as a healthcare provider", file: "functions/healthcare-admin.js", suite: "hccat",
+    from: "    if (!p.healthcare) throw new HttpsError('failed-precondition', 'This provider was not approved as a healthcare provider.');", to: "", expect: /plumber can never be classified/ },
+  { group: 'hccat', browser: false, name: "a classification is not audited", file: "functions/healthcare-admin.js", suite: "hccat",
+    from: "      action: 'healthcare_classify', targetUid: uid, performedBy: actor,", to: "      action: 'x', targetUid: uid, performedBy: actor,", expect: /adminAudit trail/ },
+  { group: 'hccat', browser: false, name: "a re-approval overwrites the admin classification", file: "functions/application-lifecycle.js", suite: "hccat",
+    from: "    if (!(prior && prior.source === 'admin' && HCAT.isCategory(prior.category))) {", to: "    if (true) {", expect: /never overwrites the admin classification/ },
 ];
 
 const argv = process.argv.slice(2);

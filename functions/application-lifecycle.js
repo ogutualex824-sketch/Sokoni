@@ -489,6 +489,18 @@ async function projectProvider(db, app, uid, approved) {
     sourceApplicationId: app.applicationId || null,
   };
   if (app.geo) doc.geo = app.geo;
+  /* HEALTHCARE CATEGORY (CHANGELOG 227) — what kind of health provider this is, recorded by the
+     SERVER at approval (functions/healthcare-category.js): an exact match on what the applicant
+     chose, or null (UNCLASSIFIED → AdminOS). An administrator's classification is never
+     overwritten by a later re-approval; the provider can never write this field (rules). */
+  if ((app.role || resolveRole(app).role) === 'health') {
+    const HCAT = require('./healthcare-category');
+    const prior = existing.healthcare || null;
+    if (!(prior && prior.source === 'admin' && HCAT.isCategory(prior.category))) {
+      doc.healthcare = { category: HCAT.categoryFromApplication(app), source: 'application',
+        applicationId: app.applicationId || app.id || null, setAt: _ts() };
+    }
+  }
   doc.searchableTerms = buildProviderTerms({ ...existing, ...doc });
 
   /* Seed counters only on first creation — never reset a live provider's

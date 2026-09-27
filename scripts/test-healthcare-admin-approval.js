@@ -483,7 +483,9 @@ const wrote   = (c) => ENV.log.filter(e => e.coll === c || (e.path || '').starts
        AGREEMENT check rather than proving anything about the AUTHORITY guard. The shim
        re-exports the already-cached, stub-bound instance. */
     for (const sib of ['role-authority', 'seller-trial', 'sokoni-till', 'business-wallet',
-                       'search-terms', 'notify', 'legal-agreements']) {
+                       'search-terms', 'notify', 'legal-agreements',
+                       /* CHANGELOG 227: projectProvider stamps the healthcare category for role 'health' */
+                       'healthcare-category']) {
       fs.writeFileSync(path.join(dir, sib + '.js'),
         `module.exports = require(${JSON.stringify(path.join(FUNCTIONS_DIR, sib + '.js'))});`);
     }

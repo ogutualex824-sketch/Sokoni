@@ -574,7 +574,11 @@ service cloud.firestore {
                     && (!request.resource.data.keys().hasAny(['status'])
                         || request.resource.data.status == 'pending')
                     /* 2026-09-27: reputation is server-derived (functions/reputation.js) */
-                    && !request.resource.data.keys().hasAny(['rating','reviewCount','ratingSum','ratingDist','followerCount','shareCount','shareHandle','repV','followV','reputationUpdatedAt','jobsCompleted']);
+                    && !request.resource.data.keys().hasAny(['rating','reviewCount','ratingSum','ratingDist','followerCount','shareCount','shareHandle','repV','followV','reputationUpdatedAt','jobsCompleted'])
+                    /* CHANGELOG 227 — server-set identity attributes: the healthcare category (application-lifecycle /
+                       AdminOS) and the Legal authority's link (legal-verification.js). A provider setting
+                       provisionedBy:'legal-verification' on their own record defeated the Legal identity-conflict guard. */
+                    && !request.resource.data.keys().hasAny(['healthcare','legalProviderId','provisionedBy','legalVerification']);
       allow update: if isAdmin()
                     || (isAuthed()
                         && resource.data.uid == request.auth.uid
@@ -584,7 +588,9 @@ service cloud.firestore {
                              .hasAny(['status', 'verified', 'suspended', 'approved',
                                       /* 2026-09-27: an owner could set their own public rating, review count and
                                          jobs completed (shown on the profile and used by search). Server-derived. */
-                                      'rating','reviewCount','ratingSum','ratingDist','followerCount','shareCount','shareHandle','repV','followV','reputationUpdatedAt', 'jobsCompleted']));
+                                      'rating','reviewCount','ratingSum','ratingDist','followerCount','shareCount','shareHandle','repV','followV','reputationUpdatedAt', 'jobsCompleted',
+                                      /* CHANGELOG 227 — server-set: healthcare category, Legal authority link */
+                                      'healthcare','legalProviderId','provisionedBy','legalVerification']));
       allow delete: if isAdmin();
     }
 

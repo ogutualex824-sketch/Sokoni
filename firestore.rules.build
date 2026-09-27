@@ -349,7 +349,8 @@ service cloud.firestore {
   allow create: if isActive() && isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()
   && (!request.resource.data.keys().hasAny(['status'])
   || request.resource.data.status == 'pending')
-  && !request.resource.data.keys().hasAny(['rating','reviewCount','ratingSum','ratingDist','followerCount','shareCount','shareHandle','repV','followV','reputationUpdatedAt','jobsCompleted']);
+  && !request.resource.data.keys().hasAny(['rating','reviewCount','ratingSum','ratingDist','followerCount','shareCount','shareHandle','repV','followV','reputationUpdatedAt','jobsCompleted'])
+  && !request.resource.data.keys().hasAny(['healthcare','legalProviderId','provisionedBy','legalVerification']);
   allow update: if isAdmin()
   || (isAuthed()
   && resource.data.uid == request.auth.uid
@@ -357,7 +358,8 @@ service cloud.firestore {
   && !request.resource.data.diff(resource.data)
   .affectedKeys()
   .hasAny(['status', 'verified', 'suspended', 'approved',
-  'rating','reviewCount','ratingSum','ratingDist','followerCount','shareCount','shareHandle','repV','followV','reputationUpdatedAt', 'jobsCompleted']));
+  'rating','reviewCount','ratingSum','ratingDist','followerCount','shareCount','shareHandle','repV','followV','reputationUpdatedAt', 'jobsCompleted',
+  'healthcare','legalProviderId','provisionedBy','legalVerification']));
   allow delete: if isAdmin();
   }
   match /bookings/{bookingId} {
