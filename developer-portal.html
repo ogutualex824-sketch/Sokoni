@@ -366,7 +366,7 @@ app.post(<span class="str">'/hook'</span>, (req, res) => {
     ]},
     { title:'SmartPOS', entries:[
       { n:'createPosSession', d:'Open a POS terminal session', p:[{n:'shopId',t:'string',r:1,d:'Shop ID'},{n:'terminalId',t:'string',r:1,d:'Terminal ID'},{n:'openingFloat',t:'number',r:0,d:'Opening cash float KES'}] },
-      { n:'recordPOSSale', d:'Record a completed POS sale', p:[{n:'items',t:'array',r:1,d:'Sale line items'},{n:'paymentMethod',t:'string',r:1,d:'cash|mpesa|card|wallet'},{n:'customerId',t:'string',r:0,d:'POS customer ID'}] },
+      { n:'recordPOSSale', d:'Record a completed POS sale (one sale per idempotencyKey: a retry returns the original sale; the same key with a different sale is refused)', p:[{n:'idempotencyKey',t:'string',r:1,d:'8-128 chars [A-Za-z0-9_.:-], unique per sale attempt'},{n:'items',t:'array',r:1,d:'Sale line items'},{n:'payment',t:'object',r:1,d:'{ method: cash|mpesa|card|wallet, amount, ref? }'},{n:'customerId',t:'string',r:0,d:'POS customer ID'}] },
       { n:'getPOSSale', d:'Get sale details + receipt data', p:[{n:'saleId',t:'string',r:1,d:'Sale document ID'}] },
       { n:'getPOSCustomer', d:'Look up customer by phone or loyalty card', p:[{n:'phone',t:'string',r:0,d:'Phone number'},{n:'cardId',t:'string',r:0,d:'Loyalty card'}] },
       { n:'getLivePOSMetrics', d:'Real-time sales KPIs for today', p:[{n:'shopId',t:'string',r:1,d:'Shop ID'}] },

@@ -3,6 +3,44 @@
 **Date:** 2026-09-07 · **Status:** BUILT AND TESTED, NOT DEPLOYED
 **Related:** [[Payments]] · [[SmartPOS]] · [[Orders]] · [[Marketplace]]
 
+## M0-2 — recordPOSSale records ONE sale per request (2026-09-28)
+
+**The gap M0-1 left open.** `recordPOSSale` took no idempotency key, so a retried request recorded a second
+sale, and since M0-1 a second debt with it. That was one debt per sale, but not one sale per request.
+
+**The contract now.**
+- **The key is required.** `recordPOSSale({ idempotencyKey, items, payment, … })`, where the key is 8–128
+  characters from `[A-Za-z0-9_.:-]`. A missing or malformed key is refused `invalid-argument` before anything
+  is read or written. This applies both to the direct callable and to `smartPosDispatch({ op: 'recordPOSSale' })`,
+  the route production actually exposes.
+- **The server owns the claim.** It lives at `posRecordSaleClaims/{sha256(sellerId|key)}`: scoped to the
+  tenant-bound seller, separate from checkout's `posIdempotency`, and server-only (no client rule matches it).
+- **One transaction** creates the claim, moves the stock, and creates the sale and receipt. A retry can never
+  find stock taken for an unwritten sale, and a refused attempt (e.g. insufficient stock) leaves no claim, so
+  the same key succeeds once the problem is fixed.
+- **The claim carries a fingerprint** of what makes it the same sale: seller, branch, session, lines
+  (product · name · sku · qty · price · cost · discount · tax), payment (method · ref · amount), customer and
+  discount. Display-only fields (`cashierName`) are excluded.
+
+| Request | Result |
+|---|---|
+| Same key, same sale | The original result, `replayed: true`. Nothing written; no loyalty, event or receipt re-runs. The M0-1 debt is re-ensured, which repairs a crash between the sale commit and the debt write. |
+| Same key, different sale | Refused `failed-precondition`; nothing written |
+| Concurrent identical requests | Converge on one sale, one stock move, one debt |
+
+**Evidence:**
+- `scripts/test-m02-recordpossale-idempotency.js` (emulator; real `recordPOSSale`, direct and via
+  `smartPosDispatch`): **13/0** new vs **3/10** old. On the old tree, 6 concurrent identical requests made
+  6 sales, took 12 units of stock and created 6 debts.
+- Mutants: 8, all caught. S-3b exists because the first run let `claim-check-not-atomic` survive: S-3's
+  requests all read the same product row, so the emulator's product lock serialised them whatever the claim
+  did. S-3b uses a custom line, where only the claim serialises.
+
+**Known limits (recorded, not solved):**
+- **The emulator locks; production aborts and retries.** Real contention is still unproven here.
+- **`pos-onboard.html`'s demo call** sends no key and no `payment`. It was already refused ("payment required")
+  and swallowed; it is still refused.
+
 ## M0-1 — ONE authoritative POS commission debt per sale (2026-09-27)
 
 **Owner ruling (decision A):** `posCommissionLiabilities/poscomm_<saleId>` is the ONE collectible POS

@@ -80,6 +80,31 @@ function _boundSellerId(auth, requested) {
   return sid;
 }
 /* Receipt ID generator */
+/* ── M0-2: ONE SALE PER REQUEST (owner ruling 2026-09-28) ───────────────────────────────
+   recordPOSSale took no idempotency key, so a retried request recorded a SECOND sale — and,
+   since M0-1, a second commission debt with it. The caller now names the attempt; the SERVER
+   owns the claim: posRecordSaleClaims/{sha256(sellerId|key)} is created in the SAME transaction
+   as the stock movement, the sale and the receipt, together with a fingerprint of what was sold.
+     same key, same sale      → the ORIGINAL result, nothing new written
+     same key, different sale → refused, nothing written
+     no key                   → refused, nothing written
+   The key is scoped to the tenant-bound seller, so it can neither collide with another shop's
+   key nor with posCompleteCheckout's posIdempotency namespace. */
+const RECORD_SALE_CLAIMS = 'posRecordSaleClaims';
+const IDEMPOTENCY_KEY_RE = /^[A-Za-z0-9_.:-]{8,128}$/;
+const _sha256 = (x) => require('crypto').createHash('sha256').update(String(x)).digest('hex');
+function _recordSaleClaimId(sellerId, key) { return _sha256(String(sellerId) + '|' + String(key)).slice(0, 40); }
+/* What makes two requests THE SAME SALE: who sold, what, for how much, how it was paid, to whom.
+   Display-only fields (cashierName) are deliberately not part of it. */
+function _recordSaleFingerprint(f) {
+  return _sha256(JSON.stringify([
+    f.sellerId, f.branchId || null, f.sessionId || null,
+    (f.items || []).map((i) => [i.productId, i.name, i.sku, i.qty, i.price, i.cost, i.discount, i.taxRate]),
+    [f.payment.method, f.payment.ref, f.payment.amount],
+    f.customerId || null, f.customerPhone || null, f.discountTotal,
+  ]));
+}
+
 function _receiptId() {
   const d   = new Date();
   const ymd = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
@@ -251,6 +276,15 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
 
   const fdb = admin.firestore();
 
+  /* M0-2: no key, no sale. Refused before anything is read or written, so an old caller that
+     sends none fails explicitly instead of silently recording duplicates. */
+  const idempotencyKey = typeof (req.data || {}).idempotencyKey === 'string' ? req.data.idempotencyKey : '';
+  if (!IDEMPOTENCY_KEY_RE.test(idempotencyKey)) {
+    throw new HttpsError('invalid-argument',
+      'idempotencyKey is required (8-128 characters: letters, digits, _ . : -). A sale is not ' +
+      'recorded without one, so that a retry can never record it twice.');
+  }
+
   /* ══ THE COMMISSION GATE — the second sale rail ═══════════════════════════════════════
      `posCompleteCheckout` is not the only way to create a sale. This callable is reachable
      directly and through `smartPosDispatch({op:'recordPOSSale'})`, and it was recording sales
@@ -340,8 +374,10 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
      Each product is validated and decremented inside a single runTransaction so that
      concurrent sales cannot both claim the last unit (TOCTOU-safe). */
   const stockItems = validatedItems.filter(i => i.productId);
-  if (stockItems.length > 0) {
-    await fdb.runTransaction(async t => {
+  /* M0-2: this runs INSIDE the one sale transaction below (claim · stock · sale · receipt),
+     so a retry can never find stock taken for a sale that was not written. */
+  const _reserveStockInTxn = async (t) => {
+    if (stockItems.length > 0) {
       const refs  = stockItems.map(i => fdb.collection('products').doc(i.productId));
       const snaps = await Promise.all(refs.map(r => t.get(r)));
 
@@ -381,14 +417,14 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
           lastSoldAt: now(),
         });
       }
-    });
-  }
+    }
+  };
 
-  /* Write sale + receipt in a batch (stock already secured above) */
-  const batch = fdb.batch();
+  /* The sale + receipt are CREATED in the one transaction below, with the claim and the stock (M0-2). */
+  const _creates = [];
 
   /* Sale record */
-  batch.set(saleRef, {
+  _creates.push([saleRef, {
     saleId,
     receiptId,
     sellerId:      _sellerId,
@@ -409,11 +445,11 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
     pointsEarned,
     status:    'completed',
     createdAt: now(),
-  });
+  }]);
 
   /* Receipt record */
   const receiptRef = fdb.collection('receipts').doc(receiptId);
-  batch.set(receiptRef, {
+  _creates.push([receiptRef, {
     receiptId,
     saleId,
     sellerId: _sellerId,
@@ -437,9 +473,66 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
     } : null,
     verifyUrl: `https://mysokoni.co.ke/receipt/${receiptId}`,
     createdAt: now(),
+  }]);
+
+  /* ── M0-2: ONE transaction — the claim, the stock, the sale and the receipt ──────────────── */
+  const _soldAtMs = Date.now();
+  const _result = {
+    saleId,
+    receiptId,
+    receiptUrl: `https://mysokoni.co.ke/receipt/${receiptId}`,
+    total,
+    pointsEarned,
+    pointsTotal,
+    tier: tier.name,
+  };
+  const _fingerprint = _recordSaleFingerprint({
+    sellerId: _sellerId, branchId: branchId ? _san(branchId, 40) : null, sessionId: sessionId ? _san(sessionId, 40) : null,
+    items: validatedItems,
+    payment: { method: _san(payment.method || 'cash', 20), ref: payment.ref ? _san(payment.ref, 100) : null, amount: _num(payment.amount, 0) },
+    customerId: customerId ? _san(customerId, 40) : null,
+    customerPhone: customerPhone ? _normalizePhone(customerPhone) : null,
+    discountTotal: itemDiscount,
+  });
+  const claimRef = fdb.collection(RECORD_SALE_CLAIMS).doc(_recordSaleClaimId(_sellerId, idempotencyKey));
+  const _outcome = await fdb.runTransaction(async (t) => {
+    const c = await t.get(claimRef);
+    if (c.exists) {
+      const cd = c.data() || {};
+      if (cd.fingerprint !== _fingerprint) {
+        throw new HttpsError('failed-precondition',
+          'This idempotencyKey was already used for a different sale. Nothing was recorded.');
+      }
+      return { replay: true, claim: cd };
+    }
+    await _reserveStockInTxn(t);
+    for (const [ref, data] of _creates) t.create(ref, data);
+    t.create(claimRef, {
+      sellerId: _sellerId, fingerprint: _fingerprint, saleId, receiptId, result: _result,
+      grossMinor: Math.round(Number(total || 0) * 100), soldAtMs: _soldAtMs, createdAt: now(),
+    });
+    return { replay: false };
   });
 
-  await batch.commit();
+  if (_outcome.replay) {
+    /* The ORIGINAL sale stands. Re-ensure its debt (M0-1 is idempotent): this is what repairs a
+       crash that landed between the sale commit and the debt write. Nothing else re-runs —
+       no loyalty, no event, no second receipt. */
+    const cd = _outcome.claim;
+    try {
+      const _P = require('./pos-sale-commission');
+      const _MA = require('./money-authority');
+      await require('./pos-commission-rail').recordSaleLiability(fdb, _P.planSaleCommission({
+        rail: 'TILL_DIRECT', gross: _MA.fromMinor(Number(cd.grossMinor) || 0), planId: null,
+        soldAtMs: Number(cd.soldAtMs) || Date.now(), saleId: String(cd.saleId), merchantUid: String(_sellerId),
+      }));
+    } catch (commErr) {
+      console.error('[recordPOSSale] replay could not re-ensure the commission debt', {
+        saleId: cd.saleId, sellerId: _sellerId, error: commErr && commErr.message,
+      });
+    }
+    return Object.assign({}, cd.result, { replayed: true });
+  }
 
   /* ── THE COMMISSION LIABILITY ─────────────────────────────────────────────────────────
      The gate above reads liability rows; this rail was writing none, so every sale recorded
@@ -464,7 +557,7 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
       rail: 'TILL_DIRECT',
       gross: _MA.fromMinor(Math.round(Number(total || 0) * 100)),
       planId: null,
-      soldAtMs: Date.now(),
+      soldAtMs: _soldAtMs,
       saleId: String(saleId),
       merchantUid: String(_sellerId),
     });
@@ -492,15 +585,7 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
     paymentMethod: payment.method, customerId: customer ? customerDocRef?.id : null,
   });
 
-  return {
-    saleId,
-    receiptId,
-    receiptUrl: `https://mysokoni.co.ke/receipt/${receiptId}`,
-    total,
-    pointsEarned,
-    pointsTotal,
-    tier: tier.name,
-  };
+  return Object.assign({}, _result);
 });
 
 /**

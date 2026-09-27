@@ -100,9 +100,14 @@ const fdb = {
   },
   runTransaction: async (fn) => {
     const writes = [];
+    /* M0-2: recordPOSSale creates its claim, sale and receipt in the transaction. create() must
+       FAIL when the document exists, as Firestore's does, or a duplicate would pass as new. */
     const out = await fn({ get: async (r) => r.get(),
-      update: (r, v) => writes.push([r, v]) });
-    writes.forEach(([r, v]) => applyPatch(STORE[r._key] = STORE[r._key] || {}, v));
+      update: (r, v) => writes.push([r, v, 'update']),
+      create: (r, v) => writes.push([r, v, 'create']) });
+    for (const [r, , op] of writes) if (op === 'create' && Object.prototype.hasOwnProperty.call(STORE, r._key)) {
+      const e = new Error('ALREADY_EXISTS: ' + r._key); e.code = 6; throw e; }
+    writes.forEach(([r, v, op]) => { if (op === 'create') STORE[r._key] = v; else applyPatch(STORE[r._key] = STORE[r._key] || {}, v); });
     return out;
   },
 };
@@ -144,7 +149,10 @@ function reset () {
   STORE['products/P_A'] = { sellerUid: SHOP_A, stock: 10, soldCount: 0, name: 'A item' };
   STORE['products/P_B'] = { sellerUid: SHOP_B, stock: 10, soldCount: 0, name: 'B item' };
 }
+/* M0-2: recordPOSSale requires an idempotency key; every sale here is a distinct request. */
+let KEYN = 0;
 const sale = (o) => Object.assign({
+  idempotencyKey: 'mp-sale-' + (++KEYN),
   items: [{ productId: 'P_A', name: 'A item', qty: 2, price: 100, cost: 40 }],
   payment: { method: 'cash', amount: 200 },
 }, o);

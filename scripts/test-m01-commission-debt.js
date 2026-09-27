@@ -81,8 +81,9 @@ async function checkout(uid, merchantId, product, key, kes) {
     payments: [{ method: 'cash', amount: kes }], subtotal: kes, discountTotal: 0, taxTotal: 0, grandTotal: kes }))));
 }
 async function record(uid, product, kes) {
+  /* M0-2: recordPOSSale requires an idempotency key; each call here is a distinct request. */
   return res(quiet(() => PRE.recordPOSSale.run(REQ(uid, {
-    items: [{ productId: product, name: 'Maize', qty: 1, price: kes, cost: 1 }], payment: { method: 'cash', amount: kes } }, { role: 'seller' }))));
+    idempotencyKey: 'rps-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10), items: [{ productId: product, name: 'Maize', qty: 1, price: kes, cost: 1 }], payment: { method: 'cash', amount: kes } }, { role: 'seller' }))));
 }
 const plan = (saleId, merchantUid, kes) => P.planSaleCommission({ rail: 'POS_CASH', gross: MA.fromMinor(Math.round(kes * 100)), planId: null, soldAtMs: Date.now(), saleId, merchantUid });
 
@@ -182,7 +183,7 @@ const plan = (saleId, merchantUid, kes) => P.planSaleCommission({ rail: 'POS_CAS
       'recordPOSSale RETRY of the debt for the same sale → already_recorded, ONE debt, ONE projection: ' + (w.ok ? w.out.action : w.msg.slice(0, 40))); }
   { const r = await record(M.ONE, 'P_' + M.ONE, 1000); const sid = saleIdOf(r);
     ok(r.ok && sid && sid !== R1 && (await debtsFor(sid)).length === 1, 'I-7',
-      'FINDING (sale level, not debt level): calling recordPOSSale AGAIN creates a NEW sale (it takes no idempotency key), and that new sale owes its own single debt — one debt per sale still holds: ' + (sid !== R1 ? 'new sale' : 'same sale')); }
+      'a NEW recordPOSSale request (a new idempotency key — M0-2) is a new sale, and it owes its own single debt — one debt per sale: ' + (sid !== R1 ? 'new sale' : 'same sale')); }
 
   process.stdout.write('\n[U] nothing historical is touched\n');
   { const h = await get('ledger', 'HISTRANDOMID0001');

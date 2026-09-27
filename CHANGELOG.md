@@ -1,3 +1,32 @@
+## 2026-09-28 (156) — M0-2: recordPOSSale records one sale per request (NOT deployed)
+
+`recordPOSSale` took no idempotency key. A retried request recorded a second sale, and since M0-1 a second
+commission debt with it.
+
+- **Change:** `idempotencyKey` is REQUIRED; a missing or malformed key is refused `invalid-argument` before anything is
+  written, on the direct callable and on `smartPosDispatch({op:'recordPOSSale'})`, the live route. A server-owned claim
+  `posRecordSaleClaims/{sha256(sellerId|key)}` is created in ONE transaction with the stock movement, the sale and the
+  receipt, and carries a fingerprint of the sale.
+  - Same key, same sale → the original result (`replayed: true`); nothing is written, and the M0-1 debt is
+    re-ensured.
+  - Same key, different sale → refused `failed-precondition`.
+- **Files:**
+  - `functions/pos-retail-engine.js` (`recordPOSSale` only);
+  - new `scripts/test-m02-recordpossale-idempotency.js`;
+  - key-passing fixtures in `scripts/test-p0-till-gate-off.js`, `scripts/test-m01-commission-debt.js` (I-7 relabelled)
+    and `scripts/test-recordpossale-money-provenance.js` (its store gains a failing-on-exists `create()`);
+  - `scripts/test-pos-gate-enforcement.js` C4 (same property, new commit marker);
+  - `developer-portal.html` (API entry: `idempotencyKey`, and `payment` instead of the wrong `paymentMethod`);
+  - `docs/POS_COMMISSION_RAIL.md`.
+- **Database:** new server-only `posRecordSaleClaims`. **API:** `recordPOSSale` requires `idempotencyKey`, and replays add
+  `replayed: true`. **Breaking:** a caller without a key is refused. The only in-repo caller (`pos-onboard.html`'s
+  demo sale) was already refused for sending no `payment`.
+- **Unchanged:** rates, gate (OFF), wallets, deployment.
+- **Evidence:**
+  - the new suite passes 13/0 new vs 3/10 old (old: 6 concurrent identical requests → 6 sales, 12 units, 6 debts);
+  - 8 mutants caught;
+  - P0 and M0-1 suites, commission-rail and the floor are reported with the unit.
+
 ## 2026-09-27 (155) — M0-1: one authoritative POS commission debt per sale (NOT deployed)
 
 **Owner ruling (decision A):** `posCommissionLiabilities/poscomm_<saleId>` is the ONE collectible POS commission

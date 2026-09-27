@@ -168,7 +168,9 @@ console.log('\nPART C — the gate has something to gate on\n');
   ck('C3  the liability is written AFTER the sale, never before',
     saleAt !== -1 && liabAt !== -1 && liabAt > saleAt, 'sale@' + saleAt + ' liab@' + liabAt);
 
-  const commitAt = RE.indexOf('batch.commit()');
+  /* M0-2 (2026-09-28): recordPOSSale now commits its sale in ONE transaction (claim · stock ·
+     sale · receipt) instead of a batch. The property is unchanged: the debt comes after it. */
+  const commitAt = RE.indexOf('const _outcome = await fdb.runTransaction');
   const liabAt2 = RE.indexOf('recordSaleLiability');
   ck('C4  ...same order on the second rail', commitAt !== -1 && liabAt2 > commitAt,
     'commit@' + commitAt + ' liab@' + liabAt2);

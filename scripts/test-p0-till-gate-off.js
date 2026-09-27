@@ -63,8 +63,9 @@ async function checkout(merchant, key) {
     payments: [{ method: 'cash', amount: 1000 }], subtotal: 1000, discountTotal: 0, taxTotal: 0, grandTotal: 1000 }))));
 }
 async function record(merchant) {
+  /* M0-2: recordPOSSale requires an idempotency key; each call here is a distinct request. */
   return res(quiet(() => PRE.recordPOSSale.run(REQ(merchant, {
-    items: [{ productId: 'P_' + merchant, name: 'Maize', qty: 1, price: 1000, cost: 600 }],
+    idempotencyKey: 'rps-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10), items: [{ productId: 'P_' + merchant, name: 'Maize', qty: 1, price: 1000, cost: 600 }],
     payment: { method: 'cash', amount: 1000 } }, { role: 'seller' }))));
 }
 const saleIdOf = (r) => r.ok && r.out && (r.out.saleId || (r.out.sale && r.out.sale.id) || r.out.id);
