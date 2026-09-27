@@ -79,7 +79,7 @@
           <div class="hc-card-info-row">${rating}</div>
           <div class="hc-card-actions">
             <a class="hc-book-btn" href="provider-profile.html?uid=${id}">${p.acceptsBookings ? '📅 View &amp; book' : '👁️ View profile'}</a>
-            <a class="hc-book-btn hc-btn-alt" href="messages.html?with=${id}">💬 Message</a>
+            <a class="hc-book-btn hc-btn-alt" href="provider-profile.html?uid=${id}&amp;ask=1">💬 Ask a question</a>
           </div>
         </div>
       </div>

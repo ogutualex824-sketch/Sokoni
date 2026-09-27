@@ -1,3 +1,40 @@
+## 2026-09-28 (232) — Healthcare public enquiries: the existing enquiry authority, with healthcare topics and no calls
+
+Owner decision (2026-09-28): reuse the existing enquiry system for healthcare. Not deployed. No production writes.
+
+**Before:** the Healthcare directory's "Message" button went to `messages.html?with=`, which ignores the parameter:
+a dead link.
+
+**Now** (existing `ent-enquiries.js` + `sokoni-ent-storefront.js` — no new system):
+- **Classification is the server's.** A provider is healthcare only when `providers/{uid}.healthcare.category` is set
+  (CHANGELOG 227). A self-described "Clinic" keeps the ordinary behaviour.
+- **What the storefront shows for a healthcare provider** (`entMessagingPublic`):
+  - healthcare topics only: Availability, Pricing, Service details, **Insurance & payment** (new), Location, Other;
+  - a **clinical-privacy notice** ("do not share symptoms, diagnoses or other medical details in an enquiry…");
+  - **no call requests**. Healthcare calls are not authorized (owner decision 2026-09-28): there is no Connect anchor
+    and no TURN relay. `entCallRequest` refuses them too.
+- **`entEnquirySend`:**
+  - refuses an Entertainment-only topic for a healthcare provider;
+  - tags the enquiry conversation `hub:'healthcare'`;
+  - keeps every existing server limit unchanged (duplicate, per-buyer daily cap, pair cooldown, provider cap, blocks,
+    who-can-message).
+- **Pushes.** A message in a healthcare enquiry pushes no text and no sender (the same rule as consultation chats).
+- **Directory.** The card's button is now "Ask a question" → `provider-profile.html?uid=…&ask=1`, which opens the
+  storefront's enquiry form directly.
+- **The enquiry stays public-mode and chat-only.** Private clinical conversation starts only with a paid booking
+  (CHANGELOG 231).
+
+**Files:** `functions/ent-enquiries.js`, `functions/messages.js`, `sokoni-ent-storefront.js`,
+`sokoni-health-directory.js`, `scripts/test-healthcare-enquiries.js` (new), `scripts/test-healthcare-directory.js`
+(the card link expectation), `scripts/sabotage-event-ops.js`.
+
+**Tests:**
+- `test-healthcare-enquiries` 15/0.
+- The directory test is 51/0; ent-communications 76, ent-bookings 95, ent-availability-browser 54, Connect 858,
+  consultation conversations 35 and the shop boundary 33 all match `469c001`.
+- entertainment-browser fails 3, a known baseline, the same on `469c001`.
+- Sabotage `hcenq` 7/7 caught.
+
 ## 2026-09-28 (231) — Healthcare consultation conversations: private messaging only inside a clinical relationship
 
 Owner-authorized Comms amendment (2026-09-28), Healthcare only. The Connect call authority is untouched: healthcare

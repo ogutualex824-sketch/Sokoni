@@ -22,7 +22,7 @@
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const kes = (c) => (c == null || !Number.isFinite(Number(c)) ? '—' : 'KES ' + (Number(c) / 100).toLocaleString('en-KE'));
   const RESPONSE = { WITHIN_15_MIN: 'Typically replies within 15 minutes', WITHIN_1_HOUR: 'Typically replies within 1 hour', SAME_DAY: 'Typically replies the same day', WITHIN_24_HOURS: 'Typically replies within 24 hours' };
-  const CAT = { AVAILABILITY: 'Availability', PRICING: 'Pricing', SERVICE_DETAILS: 'Service details', LOCATION: 'Location', CUSTOM_REQUEST: 'Custom request', EVENT_QUESTION: 'Event question', COLLABORATION: 'Collaboration', OTHER: 'Other' };
+  const CAT = { AVAILABILITY: 'Availability', PRICING: 'Pricing', SERVICE_DETAILS: 'Service details', LOCATION: 'Location', CUSTOM_REQUEST: 'Custom request', EVENT_QUESTION: 'Event question', COLLABORATION: 'Collaboration', INSURANCE: 'Insurance & payment', OTHER: 'Other' };
   function call(op, data) {
     const fn = root.firebase && root.firebase.functions && root.firebase.functions().httpsCallable('bookingDispatch');
     if (!fn) return Promise.reject(new Error('This is unavailable right now.'));
@@ -75,6 +75,8 @@
         catch (_) { st.services = []; }
       }
       renderTop();
+      /* ?ask=1 (e.g. the Healthcare directory's Message button) opens the enquiry form directly (CHANGELOG 232). */
+      if (new URLSearchParams(location.search).get('ask') === '1' && st.info && st.info.enquiriesOpen) renderAsk(null);
       /* Arriving from an accepted quote (chat → Reserve & pay): open checkout on the quote's own terms. */
       const qid = new URLSearchParams(location.search).get('quote');
       if (qid && signedIn()) {
@@ -182,6 +184,7 @@
         <h4 style="margin:0 0 8px">Have a question?</h4>
         <label>What is it about?<select class="sksf-in" name="category" required>${cats.map((c) => `<option value="${esc(c)}" ${c === cat ? 'selected' : ''}>${esc(CAT[c] || c)}</option>`).join('')}</select></label>
         ${st.services.length ? `<label>Service<select class="sksf-in" name="serviceId"><option value="">Any</option>${st.services.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select></label>` : ''}
+        ${st.info.clinicalNotice ? `<p class="sksf-muted" role="note">${esc(st.info.clinicalNotice)}</p>` : ''}
         <label>Your question<textarea class="sksf-in" name="question" rows="4" minlength="10" maxlength="1500" required></textarea></label>
         <div style="display:flex;gap:8px;flex-wrap:wrap"><label style="flex:1;min-width:140px">Date (optional)<input class="sksf-in" type="date" name="desiredDate"></label>
           <label style="flex:1;min-width:120px">Time (optional)<input class="sksf-in" type="time" name="preferredTime"></label>

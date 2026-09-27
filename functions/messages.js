@@ -520,7 +520,7 @@ exports.onMessageCreated = onDocumentCreated(
         const token = tokenSnap?.data()?.fcmToken;
         /* A healthcare consultation push never carries the message text or the sender — a lock screen is
            not a private place (CHANGELOG 231). */
-        const clinical = conv.transactionType === 'hc_booking';
+        const clinical = conv.transactionType === 'hc_booking' || (conv.metadata && conv.metadata.hub === 'healthcare');
         return _sendFcm(token, clinical ? 'SOKONI Healthcare' : senderName, clinical ? 'You have a new message about your appointment.' : preview, {
           type:            'new_message',
           conversationId:  convId,

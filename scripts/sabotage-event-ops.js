@@ -72,6 +72,7 @@ const SUITES = {
   convrules: ['node', ['scripts/run-rules-suite.js', 'scripts/test-conversation-create-rules.js']],
   entcomms: ['node', ['scripts/test-ent-communications.js']],
   hcconv:   ['node', ['scripts/test-healthcare-conversations.js']],
+  hcenq:    ['node', ['scripts/test-healthcare-enquiries.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -1088,7 +1089,7 @@ const M = [
   { group: 'hcdir', browser: true, name: "the client renders a forged / unsafe provider id", file: "sokoni-health-directory.js", suite: 'hcdir',
     from: "    if (!p || !ID_RE.test(String(p.providerId || ''))) return '';      /* never render a link we cannot trust */", to: "    if (!p) return '';", expect: /forged \/ unsafe providerId/ },
   { group: 'hcdir', browser: true, name: "the contact link goes to WhatsApp instead of SOKONI messages", file: "sokoni-health-directory.js", suite: 'hcdir',
-    from: "<a class=\"hc-book-btn hc-btn-alt\" href=\"messages.html?with=${id}\">", to: "<a class=\"hc-book-btn hc-btn-alt\" href=\"https://wa.me/254700000000\">", expect: /every link is built from the server providerId|no WhatsApp/ },
+    from: "<a class=\"hc-book-btn hc-btn-alt\" href=\"provider-profile.html?uid=${id}&amp;ask=1\">", to: "<a class=\"hc-book-btn hc-btn-alt\" href=\"https://wa.me/254700000000\">", expect: /every link is built from the server providerId|no WhatsApp/ },
   { group: 'hcdir', browser: true, name: "a server failure is shown as an empty (successful) directory", file: "sokoni-health-directory.js", suite: 'hcdir',
     from: "      setStatus('error', (e && e.message) || 'Something went wrong.');", to: "      state.rows = []; render();", expect: /server error shows an error with retry/ },
 
@@ -1119,6 +1120,22 @@ const M = [
     from: "  if (isEnded(after)) return", to: "  if (false) return", expect: /read-only/ },
   { group: 'hcconv', browser: false, name: "the push shows the clinical message text again", file: "functions/messages.js", suite: 'hcconv',
     from: "        const clinical = conv.transactionType === 'hc_booking';", to: "        const clinical = false;", expect: /neither the text nor the sender/ },
+
+  /* ── Healthcare public enquiries (CHANGELOG 232) ── */
+  { group: 'hcenq', browser: false, name: "healthcare is inferred from free text (a self-described \"Clinic\")", file: "functions/ent-enquiries.js", suite: 'hcenq',
+    from: "return !!(p.exists && require('./healthcare-category').categoryOf(p.data()));", to: "return !!(p.exists && (require('./healthcare-category').categoryOf(p.data()) || /clinic|hospital|pharmacy/i.test(String(p.data().category || ''))));", expect: /self-described/ },
+  { group: 'hcenq', browser: false, name: "call requests are offered for healthcare providers", file: "functions/ent-enquiries.js", suite: 'hcenq',
+    from: "callRequestsOpen: !hc && verifiedOk", to: "callRequestsOpen: verifiedOk", expect: /NO call requests/ },
+  { group: 'hcenq', browser: false, name: "a healthcare call request is accepted", file: "functions/ent-enquiries.js", suite: 'hcenq',
+    from: "    if (await _isHealthcare(providerUid)) fail('failed-precondition', 'Calls with healthcare providers are not available on SOKONI yet. Continue in the conversation.', { code: 'CALLS_DISABLED' });\n", to: "", expect: /call request to a healthcare provider is refused/ },
+  { group: 'hcenq', browser: false, name: "Entertainment topics are accepted for a healthcare provider", file: "functions/ent-enquiries.js", suite: 'hcenq',
+    from: "|| (hc && !HC_CATEGORIES.includes(category))", to: "", expect: /Entertainment-only topic is refused/ },
+  { group: 'hcenq', browser: false, name: "the healthcare enquiry conversation is not tagged", file: "functions/ent-enquiries.js", suite: 'hcenq',
+    from: ", hc ? { hub: 'healthcare' } : {}) });", to: ", {}) });", expect: /tagged hub|carries neither the text/ },
+  { group: 'hcenq', browser: false, name: "a healthcare enquiry push shows the message text", file: "functions/messages.js", suite: 'hcenq',
+    from: " || (conv.metadata && conv.metadata.hub === 'healthcare');", to: ";", expect: /carries neither the text/ },
+  { group: 'hcenq', browser: false, name: "the clinical-privacy notice is dropped", file: "functions/ent-enquiries.js", suite: 'hcenq',
+    from: "clinicalNotice: hc ? HC_NOTICE : null,", to: "clinicalNotice: null,", expect: /clinical-privacy notice/ },
 ];
 
 const argv = process.argv.slice(2);

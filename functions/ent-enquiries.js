@@ -40,7 +40,18 @@ const NEXT = Object.freeze({
   PROPOSAL_SENT: ['PROPOSAL_SENT', 'RESPONDED', 'BOOKING_PENDING', 'CLOSED', 'EXPIRED', 'BLOCKED'],
   BOOKING_PENDING: ['CONVERTED', 'PROPOSAL_SENT', 'CLOSED', 'BLOCKED'],
 });
-const CATEGORIES = Object.freeze(['AVAILABILITY', 'PRICING', 'SERVICE_DETAILS', 'LOCATION', 'CUSTOM_REQUEST', 'EVENT_QUESTION', 'COLLABORATION', 'OTHER']);
+const CATEGORIES = Object.freeze(['AVAILABILITY', 'PRICING', 'SERVICE_DETAILS', 'LOCATION', 'CUSTOM_REQUEST', 'EVENT_QUESTION', 'COLLABORATION', 'INSURANCE', 'OTHER']);
+/* Healthcare (CHANGELOG 232, owner decision 2026-09-28): a public question to a healthcare provider is an ENQUIRY —
+   chat-only, pre-relationship — with healthcare topics and a clinical-privacy notice. Private clinical talk happens only
+   in the consultation conversation (healthcare-conversations.js) once a paid booking exists. No call requests: healthcare
+   calls are not authorized (no Connect anchor, no TURN relay). A provider is healthcare when the SERVER classified it
+   (providers/{uid}.healthcare.category — CHANGELOG 227), never from free text. */
+const HC_CATEGORIES = Object.freeze(['AVAILABILITY', 'PRICING', 'SERVICE_DETAILS', 'INSURANCE', 'LOCATION', 'OTHER']);
+const HC_NOTICE = 'Please do not share symptoms, diagnoses or other medical details in an enquiry. Ask about availability, services, price or location — you can discuss your health privately with the provider after you book.';
+async function _isHealthcare(providerUid) {
+  try { const p = await admin.firestore().collection('providers').doc(String(providerUid)).get(); return !!(p.exists && require('./healthcare-category').categoryOf(p.data())); }
+  catch (_) { return false; }
+}
 /* FOLLOWERS is deliberately absent: provider follows are keyed by a display-name slug (sokoni-social.js
    'sv_<name>'), not an account, so a follow cannot prove who follows whom. Offered once follows are keyed by uid. */
 const WHO = Object.freeze(['ANYONE', 'VERIFIED', 'PURCHASED', 'ACTIVE_BOOKING', 'ENQUIRY', 'NOBODY']);
@@ -205,9 +216,12 @@ _h.entMessagingPublic = async (req) => {
   let blocked = false;
   if (viewer) blocked = (await _db().collection(COL.BLOCKS).doc(`${providerUid}_${viewer}`).get()).exists;
   const enquiriesOpen = verifiedOk && s.enquiriesEnabled !== false && s.whoCanMessage !== 'NOBODY' && !blocked && (on !== false || s.outsideHoursAcceptEnquiries !== false);
+  const hc = await _isHealthcare(providerUid);
+  const provCats = s.enquiryCategories && s.enquiryCategories.length ? s.enquiryCategories : CATEGORIES;
   return {
-    bookable, enquiriesOpen, callRequestsOpen: verifiedOk && s.callRequests === 'ENABLED' && !blocked,
-    whoCanMessage: s.whoCanMessage, enquiryCategories: s.enquiryCategories && s.enquiryCategories.length ? s.enquiryCategories : CATEGORIES,
+    bookable, enquiriesOpen, callRequestsOpen: !hc && verifiedOk && s.callRequests === 'ENABLED' && !blocked,
+    hub: hc ? 'healthcare' : null, clinicalNotice: hc ? HC_NOTICE : null,
+    whoCanMessage: s.whoCanMessage, enquiryCategories: hc ? HC_CATEGORIES.filter((c) => provCats.includes(c) || !s.enquiryCategories || !s.enquiryCategories.length) : provCats,
     businessHours: s.businessHours, openNow: on, availabilityNote: on === false ? 'Provider is currently unavailable.' : null,
     responseTime: s.responseTime, responseTimeCustom: s.responseTimeCustom, publicInfo: s.publicInfo || {},
   };
@@ -231,8 +245,9 @@ _h.entEnquirySend = async (req) => {
   if ((await _db().collection(COL.BLOCKS).doc(`${prov.providerUid}_${buyerUid}`).get()).exists) fail('permission-denied', 'You cannot send enquiries to this provider.', { code: 'BLOCKED' });
   const category = CATEGORIES.includes(d.category) ? d.category : null;
   if (!category) fail('invalid-argument', 'Choose what your enquiry is about.');
+  const hc = await _isHealthcare(prov.providerUid);
   const cats = s.enquiryCategories && s.enquiryCategories.length ? s.enquiryCategories : CATEGORIES;
-  if (!cats.includes(category)) fail('invalid-argument', 'This provider does not take that kind of enquiry.');
+  if (!cats.includes(category) || (hc && !HC_CATEGORIES.includes(category))) fail('invalid-argument', 'This provider does not take that kind of enquiry.');
   const question = _san(d.question, 1500);
   if (question.length < 10) fail('invalid-argument', 'Write your question (at least 10 characters).');
   const CORE = require('./shared/ent-availability-core');
@@ -276,7 +291,7 @@ _h.entEnquirySend = async (req) => {
   const MSG = require('./messages');
   const title = `Enquiry · ${category.replace(/_/g, ' ').toLowerCase()}${serviceName ? ' · ' + serviceName : ''}`;
   await MSG.ensureAnchoredConversation(_db(), { transactionType: 'ent_enquiry', transactionId: enqRef.id, title, participants: [buyerUid, prov.providerUid],
-    metadata: { enquiryId: enqRef.id, category, serviceId, desiredDate, mode: 'PUBLIC' } });
+    metadata: Object.assign({ enquiryId: enqRef.id, category, serviceId, desiredDate, mode: 'PUBLIC' }, hc ? { hub: 'healthcare' } : {}) });
   const summary = [`ENQUIRY ${enqRef.id.slice(0, 8).toUpperCase()} · ${category.replace(/_/g, ' ')}`, serviceName ? `Service: ${serviceName}` : null,
     desiredDate ? `Date: ${desiredDate}${preferredTime ? ' ' + preferredTime : ''}` : null, budgetCents != null ? `Budget: KES ${(budgetCents / 100).toLocaleString('en-KE')}` : null,
     `Question: ${question}`].filter(Boolean).join('\n');
@@ -439,6 +454,7 @@ _h.entCallRequest = async (req) => {
     if (TERMINAL.has(e.data().status)) fail('failed-precondition', 'This enquiry is closed.');
     providerUid = e.data().providerUid; mode = 'PUBLIC';
     const s = await settingsOf(providerUid);
+    if (await _isHealthcare(providerUid)) fail('failed-precondition', 'Calls with healthcare providers are not available on SOKONI yet. Continue in the conversation.', { code: 'CALLS_DISABLED' });
     if (s.callRequests !== 'ENABLED') fail('failed-precondition', 'This provider does not take call requests.', { code: 'CALLS_DISABLED' });
     if ((await _db().collection(COL.BLOCKS).doc(`${providerUid}_${uid}`).get()).exists) fail('permission-denied', 'You cannot contact this provider.');
   } else if (ctx.type === 'booking') {

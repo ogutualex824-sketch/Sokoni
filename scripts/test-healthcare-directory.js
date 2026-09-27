@@ -110,7 +110,7 @@ const WHITELIST = ['providerId', 'name', 'category', 'categoryLabel', 'descripti
       await pg.waitForFunction(() => document.querySelectorAll('#hcGrid .hc-card').length > 0, null, { timeout: 12000 }).catch(() => {});
       const cards = await cardsOf(pg);
       ck(`${w}px: the server's approved providers render (six categories)`, cards.length === 7, cards.map((c) => c.id));
-      ck(`${w}px: every link is built from the server providerId (profile + messages only)`, cards.every((c) => c.links.length === 2 && c.links[0] === 'provider-profile.html?uid=' + c.id && c.links[1] === 'messages.html?with=' + c.id));
+      ck(`${w}px: every link is built from the server providerId (profile + the enquiry on the profile)`, cards.every((c) => c.links.length === 2 && c.links[0] === 'provider-profile.html?uid=' + c.id && c.links[1] === 'provider-profile.html?uid=' + c.id + '&ask=1'));
       const page = await pg.evaluate(() => ({ html: document.body.innerHTML, tels: [...document.querySelectorAll('a[href^="tel:"]')].map((a) => a.getAttribute('href')), wa: !!document.querySelector('a[href*="wa.me"]'), grid: document.getElementById('hcGrid').innerText }));
       ck(`${w}px: no WhatsApp link; tel: only 999 / 112`, !page.wa && page.tels.every((t) => t === 'tel:999' || t === 'tel:112'), page.tels);
       ck(`${w}px: no fee on any card, no invented institution`, !/KES\s*\d/.test(page.grid) && !/Aga Khan|Gertrude|Coast General|Lancet|Goodlife/.test(page.html));
