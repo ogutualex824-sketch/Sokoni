@@ -190,6 +190,9 @@
   /* `uid` is canonical. `id` is accepted because the search adapter emitted it
      historically and those links are already out in the wild. */
   var uid = params.get('uid') || params.get('id') || '';
+  /* A shared link carries a HANDLE (p.html?h= → provider-profile.html?h=), never the uid; the reputation
+     authority resolves it (bookingDispatch repResolveHandle). */
+  var handle = uid ? '' : String(params.get('h') || '').toLowerCase();
   var wrap = document.getElementById('ppWrap');
   var _p = null;
 
@@ -419,7 +422,25 @@
     }
   }
 
+  function resolveHandle() {
+    if (!/^[a-z0-9-]{3,48}$/.test(handle)) { handle = ''; return load(); }
+    var fb = window.firebase && window.firebase.functions && window.firebase.functions();
+    if (!fb) { handle = ''; return load(); }
+    fb.httpsCallable('bookingDispatch')({ op: 'repResolveHandle', h: handle }).then(function (r) {
+      var d = r && r.data;
+      handle = '';
+      if (d && d.type === 'provider' && d.id) uid = String(d.id);
+      load();
+    }).catch(function () {
+      handle = '';
+      state('🔗', 'This link is not available',
+        'The profile behind this link could not be found or is not public right now.',
+        '<a href="providers.html" class="pp-btn ghost" style="display:inline-flex;max-width:220px;margin:0 auto;">Browse providers</a>');
+    });
+  }
+
   function load() {
+    if (!uid && handle) return resolveHandle();
     if (!uid) {
       state('🔍', 'No provider selected',
         'This link is missing a provider reference.',

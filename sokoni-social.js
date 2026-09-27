@@ -11,6 +11,18 @@ const BASE_URL = 'https://mysokoni.co.ke';
 /* ═══════════════════════════════════════════════════════════
    1. CANVAS STORY CARD GENERATOR  (1080 × 1920 — Story ratio)
 ═══════════════════════════════════════════════════════════ */
+function _canonicalRating(opts){
+  var r=Number(opts&&opts.rating), n=Number(opts&&opts.reviews);
+  if(!opts||opts.ratingVerified!==true||!isFinite(r)||r<1||r>5||!isFinite(n)||n<1) return null;
+  return { rating: r, reviews: Math.floor(n) };
+}
+/* The share link: the caller's URL (url or shareURL) when it is a SOKONI link, else the store page. */
+function _shareUrlOf(sd){
+  var u=String((sd&&(sd.url||sd.shareURL))||'');
+  if(/^https:\/\/(www\.)?mysokoni\.co\.ke\//i.test(u)) return u;
+  if(/^\/(?!\/)/.test(u)) return BASE_URL+u;
+  return BASE_URL+'/store.html?id='+encodeURIComponent((sd&&sd.id)||'');
+}
 function generateCard(opts, cb){
   const W=1080, H=1920;
   const c=document.createElement('canvas');
@@ -80,13 +92,16 @@ function generateCard(opts, cb){
     _wrapText(x, opts.tagline, W/2, 820, 860, 50);
   }
 
-  /* Rating */
-  if(opts.rating){
-    const stars='★'.repeat(Math.round(opts.rating))+'☆'.repeat(5-Math.round(opts.rating));
+  /* Rating — ONLY a canonical aggregate (ratingVerified, from the reputation authority). A caller's
+     literal ("rating:5", a static demo array, a cached profile) is never drawn: a card must not
+     advertise a rating nobody gave. No canonical rating → no stars (neutral). */
+  var cr=_canonicalRating(opts);
+  if(cr){
+    const stars='★'.repeat(Math.round(cr.rating))+'☆'.repeat(5-Math.round(cr.rating));
     x.fillStyle='#fbbf24'; x.font='56px Arial,sans-serif';
     x.fillText(stars, W/2, 970);
     x.fillStyle='rgba(255,255,255,0.45)'; x.font='32px Arial,sans-serif';
-    x.fillText(opts.rating+' rating'+(opts.reviews?' · '+opts.reviews+' reviews':''), W/2, 1020);
+    x.fillText(cr.rating.toFixed(1)+' rating · '+cr.reviews+' review'+(cr.reviews===1?'':'s'), W/2, 1020);
   }
 
   /* Follower count */
@@ -163,7 +178,7 @@ function openShareModal(opts){
   var existing=document.getElementById('_skSocModal');
   if(existing) existing.remove();
 
-  var storeUrl = opts.url || (BASE_URL + '/store.html?id=' + encodeURIComponent(opts.id||''));
+  var storeUrl = _shareUrlOf(opts);
   var modal=document.createElement('div');
   modal.id='_skSocModal';
   modal.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.88);display:flex;align-items:center;justify-content:center;padding:14px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);';
@@ -244,8 +259,7 @@ function _socialBtn(color,bg,id,icon,label,onclick){
    3. SHARE ACTIONS
 ═══════════════════════════════════════════════════════════ */
 function _getUrl(){
-  var sd=window.SokoniSocial._sd||{};
-  return sd.url||(BASE_URL+'/store.html?id='+encodeURIComponent(sd.id||''));
+  return _shareUrlOf(window.SokoniSocial._sd||{});
 }
 
 function _share(platform){
@@ -675,17 +689,28 @@ function initProviderShare(){
 
 function _openProviderShare(){
   var p=null; try{p=window._profile||JSON.parse(localStorage.getItem('sokoniProviderProfile')||'null');}catch(e){}
-  if(!p){pvToast&&pvToast('Complete your profile first');return;}
-  openShareModal({
+  if(!p){if(typeof pvToast==='function')pvToast('Complete your profile first');return;}
+  var base={
     id: p.id||'provider',
     name: p.name||'My Services',
     category: p.category||'Services',
     tagline: p.bio||p.tagline||'Professional services in Kenya',
-    rating: p.rating,
-    reviews: p.reviewCount,
-    followers: getFollowerCount(p.id||'provider'),
     tags: (p.skills||[]).slice(0,4),
     type: 'service'
+  };
+  /* The cached profile's rating is the owner's copy, not an aggregate: ask the reputation authority
+     (functions/reputation.js) for the rating and the handle link. Offline → a card with no rating. */
+  var uid=(window.firebase&&firebase.auth&&firebase.auth().currentUser&&firebase.auth().currentUser.uid)||p.uid||'';
+  var fn=uid&&window.firebase&&firebase.functions&&firebase.functions().httpsCallable('bookingDispatch');
+  if(!fn){openShareModal(base);return;}
+  Promise.all([
+    fn({op:'repSummary',items:[{type:'provider',id:uid}]}).then(function(r){return r.data.summaries['provider:'+uid];}).catch(function(){return null;}),
+    fn({op:'repShareLink',type:'provider',id:uid}).then(function(r){return r.data.url;}).catch(function(){return null;})
+  ]).then(function(res){
+    var s=res[0]; if(s&&s.rating!=null){base.rating=s.rating;base.reviews=s.reviewCount;base.ratingVerified=true;}
+    if(s&&typeof s.followerCount==='number') base.followers=s.followerCount;
+    if(res[1]) base.url=res[1];
+    openShareModal(base);
   });
 }
 

@@ -858,6 +858,7 @@ const _esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/
 const _fmt=n=>Number(n||0).toLocaleString('en-KE',{minimumFractionDigits:0,maximumFractionDigits:0});
 function showLoad(m='Loading…'){_q('lov').classList.add('vis');_q('lmsg').textContent=m}
 function hideLoad(){_q('lov').classList.remove('vis')}
+function _loadQrLib(){if(window.QRCode)return Promise.resolve();return new Promise((res)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';s.onload=res;s.onerror=res;document.head.appendChild(s)})}
 function toast(m,t='ok',ms=3500){const d=document.createElement('div');d.className=`toast t-${t}`;d.textContent=m;_q('tc').appendChild(d);setTimeout(()=>d.remove(),ms)}
 
 let _sdk=null,_data=null,_bkFilter='all',_bkDocs=[];
@@ -1802,17 +1803,31 @@ const Sv={
   async duplicate(id){showLoad('Duplicating…');try{await this._fn()({op:'providerDuplicateService',serviceId:id});toast('Service duplicated — edit the copy.');await this.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
   pricing(id){const s=this._svc.find(x=>x.id===id);if(!window.SokoniPricingStudio){toast('Pricing Studio loading — try again.','err');return}SokoniPricingStudio.open(id,(s&&s.pricing)||{},()=>Sv.load())},
   async feature(id,val){showLoad('Updating…');try{await this._fn()({op:'providerUpdateService',serviceId:id,featured:val});toast(val?'Service featured ★':'Feature removed');await this.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  /* The public link comes from the reputation authority: /p.html?h=<handle>[&s=<service>] — never a
+     uid, and it resolves to the public profile (the old /providers?p= link was read by no page). */
   async share(id){
-    const s=this._svc.find(x=>x.id===id);const pid=(_data&&_data.profile&&_data.profile.providerId)||'';
-    const url=location.origin+'/providers'+(pid?('?p='+encodeURIComponent(pid)):'')+(pid&&id?('&s='+encodeURIComponent(id)):'');
-    const text=(s?('Book "'+s.name+'" on SOKONI: '):'Book me on SOKONI: ')+url;
-    try{if(navigator.share){await navigator.share({title:'SOKONI',text,url})}else{await navigator.clipboard.writeText(url);toast('Booking link copied!')}}catch(_){}
+    const u=firebase.auth().currentUser;if(!u){toast('Sign in required.','err');return}
+    if(!window.SokoniRep){toast('Sharing is loading — try again.','err');return}
+    const s=this._svc.find(x=>x.id===id);
+    try{const r=await SokoniRep.share({type:'provider',id:u.uid,serviceId:id||undefined,title:s?s.name:undefined});
+      if(r&&r.copied)toast('Booking link copied!');else if(r&&!r.shared&&!r.cancelled)toast('Copy this link: '+r.url);}
+    catch(e){toast((e&&e.message)||'Could not create the link.','err')}
   },
   async qr(id){
     showLoad('Generating QR…');
-    try{const r=await this._fn()({op:'providerGenerateQR',serviceId:id});const d=r.data||{};const img=d.qrUrl||d.qrCode||d.url||(_data&&_data.profile&&_data.profile.qrCode);hideLoad();
-      if(img){const w=window.open('','_blank');if(w){w.document.write('<title>Service QR — SOKONI</title><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;height:100vh"><img src="'+img+'" style="max-width:90vw;max-height:90vh"></body>')}else{toast('QR ready — allow pop-ups to view it.','err')}}
-      else{toast('QR not available for this service yet.','err')}
+    /* The server returns the LINK the QR encodes (a share handle, never a uid); the code is drawn here.
+       Built as DOM — no document.write of a server string. */
+    try{const r=await this._fn()({op:'providerGenerateQR',serviceId:id});const link=(r.data||{}).qrCode;hideLoad();
+      if(!link||!/^https:\/\/mysokoni\.co\.ke\/p\.html\?h=/.test(link)){toast('QR not available for this service yet.','err');return}
+      await _loadQrLib();
+      const ov=document.createElement('div');ov.className='pd-qr-ov';ov.setAttribute('role','dialog');ov.setAttribute('aria-label','Service QR code');
+      ov.style.cssText='position:fixed;inset:0;z-index:100050;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:16px';
+      const box=document.createElement('div');box.style.cssText='background:#fff;border-radius:16px;padding:18px;max-width:340px;width:100%;text-align:center;color:#111';
+      const code=document.createElement('div');code.style.cssText='display:flex;justify-content:center';box.appendChild(code);
+      const cap=document.createElement('p');cap.style.cssText='font:12px monospace;word-break:break-all;margin:10px 0';cap.textContent=link;box.appendChild(cap);
+      const close=document.createElement('button');close.type='button';close.textContent='Close';close.style.cssText='min-height:44px;padding:8px 18px;border-radius:22px;border:0;background:#111;color:#fff;font-weight:700;cursor:pointer';close.onclick=()=>ov.remove();box.appendChild(close);
+      ov.appendChild(box);ov.addEventListener('click',(e)=>{if(e.target===ov)ov.remove()});document.body.appendChild(ov);
+      if(window.QRCode){new QRCode(code,{text:link,width:240,height:240,correctLevel:QRCode.CorrectLevel.M})}else{cap.textContent='QR drawing is unavailable offline — share this link: '+link}
     }catch(e){hideLoad();toast(e.message||'QR failed','err')}
   },
   _metrics:{},

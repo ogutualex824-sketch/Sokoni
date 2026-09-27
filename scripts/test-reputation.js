@@ -204,7 +204,7 @@ const a = (op, uid, data, token) => REP._adminH[op]({ ...who(uid, token), data: 
   ck('a provider share link is a HANDLE — no uid, phone or email', /^https:\/\/mysokoni\.co\.ke\/p\.html\?h=[a-z0-9-]+$/.test(sl.url) && !/ph1|0712|@/.test(sl.url), sl.url);
   ck('…the same handle every time', (await h('repShareLink', 'b2', { type: 'provider', id: 'ph1' })).url === sl.url);
   const res = await h('repResolveHandle', null, { h: sl.url.split('h=')[1] });
-  ck('the handle resolves to the public profile page', res.path === '/provider-profile.html?uid=ph1');
+  ck('the handle resolves to the public profile page — still by HANDLE, never the uid (the id is returned for the page only)', res.path === '/provider-profile.html?h=' + sl.url.split('h=')[1] && res.id === 'ph1' && !/uid=/.test(res.path), res);
   await db.doc('providerServices/s1').set({ providerId: 'ph1', name: 'Portraits', active: true });
   ck('a service link adds only the service id', /&s=s1$/.test((await h('repShareLink', null, { type: 'provider', id: 'ph1', serviceId: 's1' })).url));
   ck('another provider\'s service cannot be shared under this profile', (await code(h('repShareLink', null, { type: 'provider', id: 'ph2', serviceId: 's1' }))) === 'failed-precondition');

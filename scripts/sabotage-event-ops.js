@@ -45,6 +45,7 @@ const SUITES = {
   journeys: ['node', ['scripts/test-ent-journeys.js']],
   rep:      ['node', ['scripts/test-reputation.js']],
   repb:     ['node', ['scripts/test-reputation-browser.js']],
+  share:    ['node', ['scripts/test-share-integrity-browser.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -89,6 +90,11 @@ const EQJ = 'functions/ent-enquiries.js';
 const RCJ = 'functions/ent-rate-cards.js';
 const REPJ = 'functions/reputation.js';
 const REPUI = 'sokoni-reputation.js';
+const SHR = 'sokoni-share.js';
+const SOC = 'sokoni-social.js';
+const PDB = 'provider-dashboard.html';
+const PPF = 'provider-profile.html';
+const PON = 'functions/provider-onboarding.js';
 
 const M = [
   /* ── ticket PIN + admission ── */
@@ -624,6 +630,30 @@ const M = [
     from: "      else if (navigator.clipboard) { await navigator.clipboard.writeText(r.url); copied = true; }", to: "      else if (navigator.clipboard) { copied = true; }", expect: /HANDLE link/ },
   { group: 'rep', browser: true, name: 'the Report button is dead (reason select unresolved)', file: REPUI, suite: 'repb',
     from: "        const reason = b.closest(\"details\").querySelector(\"[data-reason]\").value;", to: "        const reason = host.querySelector(`[data-reason=\"${CSS.escape(b.dataset.report)}\"]`).value;", expect: /reports a review with a controlled reason/ },
+
+  /* ── share sheet · share cards · provider share link (2026-09-27, CHANGELOG 210) ── */
+  { group: 'share', browser: true, name: 'a product name is parsed as HTML in the share sheet', file: SHR, suite: 'share',
+    from: "var meta = el('div'); meta.appendChild(el('p', 'ss-name', name));", to: "var meta = el('div'); var pn = el('p', 'ss-name'); pn.innerHTML = name; meta.appendChild(pn);", expect: /renders as TEXT|nothing executed/ },
+  { group: 'share', browser: true, name: 'the share-sheet image accepts any URL scheme', file: SHR, suite: 'share',
+    from: "var safeImg = /^(https:\\/\\/|\\/(?!\\/)|assets\\/)/i.test(String(image)) ? String(image) : FALLBACK_IMG;", to: "var safeImg = String(image);", expect: /image falls back to the SOKONI logo|never fetched/ },
+  { group: 'share', browser: true, name: 'a caller-supplied rating is drawn on the share card (the hard-coded 5 stars return)', file: SOC, suite: 'share',
+    from: "if(!opts||opts.ratingVerified!==true||!isFinite(r)", to: "if(!opts||!isFinite(r)", expect: /draws NO stars|invented stars/ },
+  { group: 'share', browser: true, name: 'a rating with no reviews is drawn', file: SOC, suite: 'share',
+    from: "||!isFinite(n)||n<1) return null;", to: ") return null;", expect: /no reviews still draws nothing/ },
+  { group: 'share', browser: true, name: 'an off-site share URL is accepted on the card', file: SOC, suite: 'share',
+    from: "  if(/^https:\\/\\/(www\\.)?mysokoni\\.co\\.ke\\//i.test(u)) return u;", to: "  if(/^https:\\/\\//i.test(u)) return u;", expect: /off-site shareURL is refused/ },
+  { group: 'share', browser: true, name: 'the card ignores the caller\'s shareURL (store.html?id=<productId>)', file: SOC, suite: 'share',
+    from: "  var u=String((sd&&(sd.url||sd.shareURL))||'');", to: "  var u=String((sd&&sd.url)||'');", expect: /caller's SOKONI shareURL/ },
+  { group: 'share', browser: true, name: 'the share link carries the provider uid', file: REPJ, suite: 'share',
+    from: "  let url = `${BASE_URL}/p.html?h=${encodeURIComponent(h)}`; let title = ent.name;", to: "  let url = `${BASE_URL}/provider-profile.html?uid=${encodeURIComponent(ent.id)}`; let title = ent.name;", expect: /HANDLE link/ },
+  { group: 'share', browser: true, name: 'the handle lands on a uid address', file: REPJ, suite: 'share',
+    from: "  const path = type === 'provider' ? `/provider-profile.html?h=${encodeURIComponent(h)}${sv}`", to: "  const path = type === 'provider' ? `/provider-profile.html?uid=${encodeURIComponent(id)}${sv}`", expect: /lands by handle/ },
+  { group: 'share', browser: true, name: 'the public profile cannot open a handle link (dead link)', file: PPF, suite: 'share',
+    from: "    if (!uid && handle) return resolveHandle();\n", to: "", expect: /identity · verified|offering · availability/ },
+  { group: 'share', browser: true, name: 'the provider QR goes back to the uid address', file: PON, suite: 'share',
+    from: "  const { url: qrData } = await require('./reputation').shareLink({ type: 'provider', id: uid, serviceId });", to: "  const qrData = `https://mysokoni.co.ke/provider-profile.html?uid=${uid}`;", expect: /QR/ },
+  { group: 'share', browser: true, name: 'the dashboard share link goes back to /providers?p= (read by no page)', file: PDB, suite: 'share',
+    from: "    try{const r=await SokoniRep.share({type:'provider',id:u.uid,serviceId:id||undefined,title:s?s.name:undefined});", to: "    try{const pid=(_data&&_data.profile&&_data.profile.providerId)||'PRV-X';const url=location.origin+'/providers?p='+encodeURIComponent(pid)+(id?'&s='+encodeURIComponent(id):'');await navigator.clipboard.writeText(url);const r={copied:true,url};", expect: /dashboard Share makes a HANDLE link/ },
 ];
 
 const argv = process.argv.slice(2);

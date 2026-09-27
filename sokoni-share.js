@@ -69,33 +69,47 @@
     var waMsg = 'Check out "' + name + '"' + (price ? ' at ' + price : '') + ' on SOKONI: ' + url;
     var twTxt = '"' + name + '"' + (price ? ' at ' + price : '') + ' — SOKONI Kenya! ' + url;
 
-    var overlay = document.createElement('div');
+    /* Built as DOM, never as an HTML string: name / image / url come from seller-controlled product
+       data and payment references, so every value is set through textContent or an attribute
+       property — no caller value is ever parsed as markup. */
+    function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = String(text); return e; }
+    function btn(id, icoCls, ico, label) { var b = el('button', 'ss-btn'); b.type = 'button'; b.id = id; b.appendChild(el('span', 'ss-ico ' + icoCls, ico)); b.appendChild(document.createTextNode(label)); return b; }
+    var FALLBACK_IMG = 'assets/sokoni logoo.jpeg';
+    var safeImg = /^(https:\/\/|\/(?!\/)|assets\/)/i.test(String(image)) ? String(image) : FALLBACK_IMG;
+
+    var overlay = el('div');
     overlay.id = 'sokoni-share-overlay';
-    overlay.innerHTML =
-      '<div id="sokoni-share-sheet">'
-      + '<div class="ss-handle"></div>'
-      + '<div class="ss-preview">'
-      + '<img class="ss-thumb" src="' + image + '" alt="' + name + '" onerror="this.src=\'assets/sokoni logoo.jpeg\'">'
-      + '<div><p class="ss-name">' + name + '</p>' + (price ? '<p class="ss-price">' + price + '</p>' : '') + '</div>'
-      + '</div>'
-      + '<div class="ss-grid">'
-      + '<button class="ss-btn" id="_ss_wa"><span class="ss-ico wa">💬</span>WhatsApp</button>'
-      + '<button class="ss-btn" id="_ss_cp"><span class="ss-ico cp">🔗</span>Copy Link</button>'
-      + '<button class="ss-btn" id="_ss_tw"><span class="ss-ico tw">𝕏</span>Twitter</button>'
-      + '<button class="ss-btn" id="_ss_nt"><span class="ss-ico nt">' + (navigator.share ? '↑' : '📧') + '</span>' + (navigator.share ? 'More' : 'Email') + '</button>'
-      + '</div>'
-      + '<div class="ss-link-row"><span class="ss-link-txt">' + url + '</span><button class="ss-copy-btn" id="_ss_lcp">Copy</button></div>'
-      + '<button class="ss-cancel" id="_ss_cancel">Cancel</button>'
-      + '</div>';
+    var sheet = el('div'); sheet.id = 'sokoni-share-sheet';
+    sheet.appendChild(el('div', 'ss-handle'));
+    var preview = el('div', 'ss-preview');
+    var img = el('img', 'ss-thumb'); img.alt = String(name); img.src = safeImg;
+    img.addEventListener('error', function () { if (img.getAttribute('src') !== FALLBACK_IMG) img.src = FALLBACK_IMG; });
+    preview.appendChild(img);
+    var meta = el('div'); meta.appendChild(el('p', 'ss-name', name));
+    if (price) meta.appendChild(el('p', 'ss-price', price));
+    preview.appendChild(meta);
+    sheet.appendChild(preview);
+    var grid = el('div', 'ss-grid');
+    grid.appendChild(btn('_ss_wa', 'wa', '💬', 'WhatsApp'));
+    grid.appendChild(btn('_ss_cp', 'cp', '🔗', 'Copy Link'));
+    grid.appendChild(btn('_ss_tw', 'tw', '𝕏', 'Twitter'));
+    grid.appendChild(btn('_ss_nt', 'nt', navigator.share ? '↑' : '📧', navigator.share ? 'More' : 'Email'));
+    sheet.appendChild(grid);
+    var row = el('div', 'ss-link-row'); row.appendChild(el('span', 'ss-link-txt', url));
+    var lcp = el('button', 'ss-copy-btn', 'Copy'); lcp.type = 'button'; lcp.id = '_ss_lcp'; row.appendChild(lcp);
+    sheet.appendChild(row);
+    var cancel = el('button', 'ss-cancel', 'Cancel'); cancel.type = 'button'; cancel.id = '_ss_cancel';
+    sheet.appendChild(cancel);
+    overlay.appendChild(sheet);
 
     overlay.addEventListener('click', function (e) { if (e.target === overlay) destroy(); });
     document.body.appendChild(overlay);
 
     document.getElementById('_ss_wa').addEventListener('click', function () {
-      window.open('https://wa.me/?text=' + encodeURIComponent(waMsg), '_blank');
+      window.open('https://wa.me/?text=' + encodeURIComponent(waMsg), '_blank', 'noopener');
     });
     document.getElementById('_ss_tw').addEventListener('click', function () {
-      window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(twTxt), '_blank');
+      window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(twTxt), '_blank', 'noopener');
     });
     document.getElementById('_ss_cp').addEventListener('click', function () {
       copyText(url, document.getElementById('_ss_lcp'), 'Copy');

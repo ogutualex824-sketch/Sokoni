@@ -633,7 +633,7 @@ else{
                              purchase action, and it calls the same openReportListing() that
                              already routes into the reports queue AdminOS reads. -->
                         <button class="prd-cta-icon-btn report" onclick="openReportListing()" title="Report this listing">&#x2691; Report</button>
-                        <button class="prd-cta-icon-btn share" onclick="(function(){var url=window.SokoniReferral?SokoniReferral.getShareURL(window.location.href):window.location.href;if(window.SokoniSocial&&product)SokoniSocial.openShareModal({id:product.id||'p',name:product.name||'Product',category:product.category||'',tagline:product.description||'',rating:product.rating||5,type:'product',shareURL:url});else if(navigator.share)navigator.share({title:product&&product.name||'SOKONI',url:url}).catch(function(){});else window.open('https://wa.me/?text='+encodeURIComponent((product&&product.name||'Check this out')+' on SOKONI: '+url),'_blank');})()">&#x1F4E4; Share</button>
+                        <button class="prd-cta-icon-btn share" onclick="(function(){var url=window.SokoniReferral?SokoniReferral.getShareURL(window.location.href):window.location.href;if(window.SokoniSocial&&product)SokoniSocial.openShareModal({id:product.id||'p',name:product.name||'Product',category:product.category||'',tagline:product.description||'',type:'product',shareURL:url});else if(navigator.share)navigator.share({title:product&&product.name||'SOKONI',url:url}).catch(function(){});else window.open('https://wa.me/?text='+encodeURIComponent((product&&product.name||'Check this out')+' on SOKONI: '+url),'_blank');})()">&#x1F4E4; Share</button>
                     </div>
                 </div>
 
@@ -1521,7 +1521,7 @@ function shareProductWhatsApp(){
             name: product.name,
             price: product.price,
             image: product.image,
-            url: 'https://mysokoni.co.ke/product.html?id=' + (product.id || ''),
+            url: 'https://mysokoni.co.ke/product.html?id=' + encodeURIComponent(product.id || ''),
             description: product.description || product.name
         });
         return;

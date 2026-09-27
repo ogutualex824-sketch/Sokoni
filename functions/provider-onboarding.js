@@ -965,9 +965,11 @@ exports._h.providerGenerateQR = _h.providerGenerateQR = async (req) => {
   if (!snap.exists) throw new HttpsError('not-found', 'Profile not found.');
   const { providerId } = snap.data();
   if (!providerId) throw new HttpsError('failed-precondition', 'Publish your profile first.');
-  /* Same 404 as providerPublish — see the note there. */
-  const qrData = `https://mysokoni.co.ke/provider-profile.html?uid=${uid}`;
-  await _db().collection('providerProfiles').doc(uid).update({ qrCode: qrData, updatedAt: _ts() });
+  /* A printed QR is public forever: it carries the reputation authority's share HANDLE
+     (/p.html?h=…, optionally &s=<service>), never the uid (functions/reputation.js shareLink). */
+  const serviceId = req.data && req.data.serviceId ? String(req.data.serviceId) : undefined;
+  const { url: qrData } = await require('./reputation').shareLink({ type: 'provider', id: uid, serviceId });
+  if (!serviceId) await _db().collection('providerProfiles').doc(uid).update({ qrCode: qrData, updatedAt: _ts() });
   return { qrCode: qrData, providerId };
 };
 

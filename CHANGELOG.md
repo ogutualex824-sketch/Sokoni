@@ -1,3 +1,64 @@
+## 2026-09-27 (210) — Share sheet HTML, share-card ratings and the provider share link
+
+Fixes known holes 5, 6 and 7, which were outside `0865a34`. They were reported with that commit, which is not
+modified. Not deployed. No KRA calls. No production writes.
+
+- **5 — `sokoni-share.js` HTML injection.** The sheet interpolated product names, images and URLs into `innerHTML`
+  unescaped. The inputs are seller-controlled product data plus the invoice `paymentRef`, and the callers are
+  `wishlist.html`, `sokoni-invoice.js` and `product.js`.
+  - The sheet is now built with DOM calls. Every value is set through `textContent` or an attribute property.
+  - Images are accepted only over https, same-origin or `assets/`; anything else shows the SOKONI logo, so there is no
+    tracking pixel.
+  - Pop-ups open with `noopener`.
+- **6 — Share cards invented ratings.** `product.js:636` passed `rating||5`, and `seller-public.html:456` passed
+  `rating:5`.
+  - The generator (`sokoni-social.js generateCard`) now draws stars **only** for a canonical aggregate: `ratingVerified`
+    set by a caller that asked the reputation authority, rating 1–5, and at least one review. Otherwise the card shows
+    no stars; a rating is never invented.
+  - This also neutralises the static demo ratings (index.html 4.9 / 4.8 / 4.7, and the healthcare / car-hub arrays).
+  - The provider card asks `repSummary` (the reputation authority) for its rating.
+  - A sibling bug is fixed too: the card ignored the caller's `shareURL`, so product and seller shares linked to
+    `store.html?id=<productId|uid>`. It now uses that URL when it is a SOKONI link, and refuses off-site links.
+- **7 — The provider-dashboard share link was dead.** `/providers?p=PRV-…&s=…` was read by no page.
+  - `Sv.share` now uses the reputation authority's handle link, `/p.html?h=…&s=<service>`. It contains no uid, and it
+    counts one share event.
+  - `providerGenerateQR` returns the **same** handle link instead of `provider-profile.html?uid=`.
+  - The QR is drawn as DOM, replacing `document.write` of a server string.
+  - A handle now lands on `provider-profile.html?h=…`, which resolves it through `repResolveHandle`, so the address
+    bar a visitor may copy never carries the uid.
+  - The destination shows the provider's identity, verified status, **canonical** rating, followers, Follow, Share,
+    offering, availability, Book and Message.
+- **Harness:** new `scripts/lib/page-harness.js`. It serves the REAL pages with the Firebase SDK replaced by a shim over
+  the fake Firestore and the REAL callable handlers.
+- **Tests:**
+  - `scripts/test-share-integrity-browser.js`: 64/0.
+    - The injection payloads covered are `<script>`, `<img onerror>`, quotes, apostrophes, angle brackets, entity-encoded
+      markup and `<svg onload>`, plus an off-site image.
+    - Share cards are checked for a caller literal, a demo count and a canonical aggregate.
+    - Real pages covered: `provider-dashboard.html` (Share and QR), `p.html`, `provider-profile.html` (360 · 390 · 768 ·
+      1280, logged-out and signed-in) and `seller-public.html`.
+  - `test-reputation.js` 70/0 and `test-reputation-browser.js` 32/0: the resolver path is now a handle (an intended
+    change).
+  - 16 related suites are identical to the `0865a34` baseline.
+  - Sabotage group `share`: 11/11 caught; the tree is byte-identical afterwards.
+- **Files:**
+  - Client scripts: `sokoni-share.js`, `sokoni-social.js`, `product.js`.
+  - Pages: `seller-public.html`, `provider-dashboard.html`, `provider-profile.html`.
+  - Functions: `functions/reputation.js` (exports `shareLink`; the resolver lands by handle),
+    `functions/provider-onboarding.js` (`providerGenerateQR`).
+  - Scripts: `scripts/lib/page-harness.js` (new), `scripts/test-share-integrity-browser.js` (new),
+    `scripts/test-reputation.js`, `scripts/test-reputation-browser.js`, `scripts/sabotage-event-ops.js`.
+  - Docs: `docs/PROVIDER_REPUTATION.md`.
+- **API:**
+  - `repResolveHandle` returns `path` as `/provider-profile.html?h=…` (was `?uid=`) and adds `id`.
+  - `providerGenerateQR` returns a handle link.
+  - There are no database or rules changes.
+- **Breaking:** old `?uid=` profile links still work, because the page accepts `uid`, `id` or `h`.
+- **Deploy (when authorised):**
+  - `bookingDispatch` and `providerDispatch` (QR).
+  - Hosting from the latest commit.
+  - QR codes printed earlier still encode the uid URL; reprint them from the dashboard to get the handle.
+
 ## 2026-09-27 (209) — Provider Followers, Ratings, Reviews & Sharing: one server reputation authority
 
 - **Scope.** Adds one reputation authority, `functions/reputation.js`, for providers, venues and approved creators.

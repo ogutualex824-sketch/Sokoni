@@ -474,8 +474,9 @@ async function handleFor(type, id, ent) {
  * A clean public link — a HANDLE, never a uid, phone, email, PIN, payment reference or conversation id.
  *   provider / venue / creator → /p.html?h=<handle>   · a service → &s=<serviceId> · an event → /event-hub.html?event=<eventId>
  */
-_h.repShareLink = async (req) => {
-  const d = req.data || {};
+_h.repShareLink = async (req) => shareLink(req.data || {});
+/** The link builder, also used server-side (provider QR codes — functions/provider-onboarding.js). */
+async function shareLink(d) {
   if (d.type === 'event') {
     if (!_idOk(d.id)) fail('invalid-argument', 'Unknown event.');
     const ev = (await _db().collection('events').doc(String(d.id)).get()).data();
@@ -493,7 +494,7 @@ _h.repShareLink = async (req) => {
     url += `&s=${encodeURIComponent(d.serviceId)}`; title = `${_san(sv.name, 80)} · ${ent.name}`;
   }
   return { url, title };
-};
+}
 /** Resolve a share handle to the in-app page (public). */
 _h.repResolveHandle = async (req) => {
   const d = req.data || {};
@@ -505,9 +506,11 @@ _h.repResolveHandle = async (req) => {
   const ent = await loadEntity(type, id);
   if (!ent.isPublic) fail('not-found', 'This profile is not available.');
   const sv = d.s && _idOk(d.s) ? `&service=${encodeURIComponent(d.s)}` : '';
-  const path = type === 'provider' ? `/provider-profile.html?uid=${encodeURIComponent(id)}${sv}`
+  /* A provider lands on a HANDLE url too, so the address bar a visitor may copy never carries the uid;
+     the page resolves the handle with this same op (the id is returned for that page only). */
+  const path = type === 'provider' ? `/provider-profile.html?h=${encodeURIComponent(h)}${sv}`
     : type === 'venue' ? `/venue-booking.html?venue=${encodeURIComponent(id)}` : `/creator.html?creator=${encodeURIComponent(id)}`;
-  return { path, type, name: ent.name };
+  return { path, type, id: String(id), name: ent.name };
 };
 /**
  * Record ONE share event (a share action — not a person, not a follow, not a rating). Signed-in only;
@@ -628,6 +631,6 @@ async function recount(type, id) {
   return { rating: reviews.length ? rating : null, reviewCount: reviews.length, ratingDist: dist, followerCount: followers };
 }
 
-module.exports = { COL, TYPES, REPORT_REASONS, REVIEW_STATUS, POLICY, _h, _adminH, publicReviewId,
+module.exports = { COL, TYPES, REPORT_REASONS, REVIEW_STATUS, POLICY, _h, _adminH, publicReviewId, shareLink,
   followId, publicName, eligibility, submitReview, aggregateOf, recount, loadEntity,
   _setClock: (fn) => { _now = fn || (() => Date.now()); } };

@@ -34,9 +34,14 @@ Before this slice, provider reputation had these problems:
 - `sokoni-reviews.js` calls functions without an ID token.
 - Product review targets are keyed `"product_"+id`, which mismatches the product id.
 - Dead stores: `ratings`, `shopReviews`, `followerCounts`.
-- `sokoni-share.js` writes unescaped `innerHTML`.
-- Share cards hard-code a 5-star rating (`product.js:636`, `seller-public.html:456`).
-- The provider-dashboard share link `/providers?p=` is never read by `providers.html`.
+- ~~`sokoni-share.js` writes unescaped `innerHTML`.~~ **Fixed after `0865a34`** (CHANGELOG 210). The share sheet is
+  built as DOM, and images are limited to https or same-origin.
+- ~~Share cards hard-code a 5-star rating (`product.js:636`, `seller-public.html:456`).~~ **Fixed** (CHANGELOG 210):
+  - a card draws stars only for a canonical aggregate (`ratingVerified` with at least one review);
+  - the card link now honours the caller's SOKONI `shareURL`.
+- ~~The provider-dashboard share link `/providers?p=` is never read by `providers.html`.~~ **Fixed** (CHANGELOG 210):
+  - the link is the handle `/p.html?h=…&s=…`, and the QR code encodes the same link;
+  - a handle lands on `provider-profile.html?h=…`, so no uid appears in the address bar.
 - `reviews.html` is a localStorage page; its cloud push now fails closed.
 
 ---
@@ -225,6 +230,7 @@ follower count shows "—" until the first server follow.
 | `scripts/test-follow-rules.js` (provider moved to server-counted) | 42 / 0 |
 | `scripts/sabotage-event-ops.js --group=rep` | 34 / 34 caught |
 | `scripts/sabotage-event-ops.js` (all groups) | 221 / 221 caught · tree byte-identical |
+| `scripts/test-share-integrity-browser.js` (CHANGELOG 210; real `provider-dashboard.html`, `p.html`, `provider-profile.html`, `seller-public.html`) | 64 / 0 |
 
 ## 12. Known limitations
 

@@ -220,7 +220,7 @@ async function wirePage(page, uid) {
     await R.route(/gstatic\.com/, (route) => route.fulfill({ status: 200, contentType: 'application/javascript', body: route.request().url().includes('app-compat') ? COMPAT : '' }));
     await R.goto(BASE + '/p.html?h=' + handle);
     await R.waitForURL(/provider-profile\.html/, { timeout: 6000 }).catch(() => {});
-    ck('p.html?h=<handle> lands on the public profile', /\/provider-profile\.html\?uid=ph1$/.test(R.url()), R.url());
+    ck('p.html?h=<handle> lands on the public profile by HANDLE (no uid in the address bar)', R.url().endsWith('/provider-profile.html?h=' + handle), R.url());
     await R.goto(BASE + '/p.html?h=<script>');
     ck('an invalid handle shows "not valid", never a raw echo', /not valid/.test(await R.textContent('body')));
 
