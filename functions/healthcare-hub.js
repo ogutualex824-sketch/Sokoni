@@ -283,29 +283,86 @@ exports.updateAppointmentStatus = onCall(CF_OPTS, exports._h.updateAppointmentSt
 });
 
 /* â”€â”€ 9. createHealthRecord (provider only) â”€â”€ */
+/* ══ CLINICAL WRITE AUTHORIZATION (CHANGELOG 223 — Healthcare security slice 3) ══════════════════
+   A provider may write a medical record or prescription ONLY for a patient with whom they hold a
+   confirmed clinical relationship. createHealthRecord / createPrescription used to take `patientUid`
+   straight from the request: an active provider could chart and prescribe against ANY account.
+
+   The relationship authority is the CANONICAL booking that exists today — providerBookings/{id},
+   written only by the server (booking-service / provider-ops; firestore.rules write:false):
+     • providerId      == the caller                     (who treats)
+     • customerUid     == the patient — DERIVED from the booking, never taken from the request
+     • commissionHub   == 'healthcare'                   (server-stamped from the provider's DECIDED
+                                                           AdminOS application — not self-declared)
+     • status          ∈ confirmed | completed           (not pending / cancelled / declined / no-show)
+     • paymentStatus   ∈ paid_held | settled             (paid, never refunded — a provider can confirm
+                                                           an UNPAID booking, so "confirmed" alone is weak)
+   No healthcare booking engine is activated or added for this: healthAppointments (the hub's parallel
+   engine, which ADR-015 retires) is deliberately NOT an authorization basis.
+
+   The provider IDENTITY gate is unchanged (healthProviders/{uid}.status == 'active'). Which identity
+   clinical writes require is ADR-014's decision (not authorized) — until then both must hold, so
+   clinical writes stay unreachable in production; the relationship boundary is correct before anyone
+   can reach it.
+
+   Every write appends a content-free audit row (healthClinicalAudit: actor · patient · provider · action ·
+   record ref · booking = authorization basis · time — never the diagnosis or medicines), in the SAME
+   transaction. Records are APPEND-ONLY (no update/delete path; rules write:false). A correction /
+   amendment workflow is a clinical-records policy decision, recorded in CHANGELOG 223, not invented here. */
+const CLINICAL_STATUSES = ['confirmed', 'completed'];
+const CLINICAL_PAID = ['paid_held', 'settled'];
+const _reqId = (v) => { const r = String(v || '').trim(); if (!/^[A-Za-z0-9_-]{8,64}$/.test(r)) throw new HttpsError('invalid-argument', 'requestId (8–64 letters, digits, - or _) is required so a retry cannot duplicate the record.'); return r; };
+
+/** Inside a transaction: the qualifying booking, or a refusal. Reads only — callers write after. */
+async function _clinicalBasis(t, uid, bookingId) {
+  const bid = String(bookingId || '').trim();
+  if (!bid || /[\/]/.test(bid)) throw new HttpsError('invalid-argument', 'bookingId of the consultation is required.');
+  const [bSnap, pSnap] = await Promise.all([
+    t.get(db().collection('providerBookings').doc(bid)),
+    t.get(db().collection('healthProviders').doc(uid)),
+  ]);
+  if (!pSnap.exists || pSnap.data().status !== 'active') throw new HttpsError('permission-denied', 'Active provider account required');
+  const b = bSnap.exists ? bSnap.data() : null;
+  /* one message for every failure: the caller learns nothing about bookings that are not theirs */
+  const deny = () => new HttpsError('permission-denied', 'No confirmed, paid healthcare consultation between you and this patient.', { code: 'NO_CLINICAL_RELATIONSHIP' });
+  if (!b || b.providerId !== uid || !b.customerUid || b.customerUid === uid) throw deny();
+  if (b.commissionHub !== 'healthcare') throw deny();
+  if (!CLINICAL_STATUSES.includes(b.status) || !CLINICAL_PAID.includes(b.paymentStatus)) throw deny();
+  return { booking: b, bookingId: bid, patientUid: b.customerUid, provider: pSnap.data() };
+}
+
+function _audit(t, row) {
+  t.set(db().collection('healthClinicalAudit').doc(), Object.assign({ createdAt: FieldValue.serverTimestamp(), atMs: Date.now() }, row));
+}
+
 exports.createHealthRecord = onCall(CF_OPTS, exports._h.createHealthRecord = async (req) => {
   const uid = requireAuth(req);
-  const { patientUid, appointmentId, diagnosis, treatment, notes, followUpDate } = req.data;
-  if (!patientUid || !diagnosis) throw new HttpsError('invalid-argument', 'patientUid and diagnosis required');
-
-  const provSnap = await db().collection('healthProviders').doc(uid).get();
-  if (!provSnap.exists || provSnap.data().status !== 'active') {
-    throw new HttpsError('permission-denied', 'Active provider account required');
-  }
-
-  const ref = db().collection('healthRecords').doc();
-  await ref.set({
-    recordId: ref.id, patientUid, providerId: uid,
-    providerName: provSnap.data().name,
-    specialization: provSnap.data().specialization,
-    appointmentId: appointmentId || null,
-    diagnosis: san(diagnosis, 2000),
-    treatment: san(treatment, 2000),
-    notes: san(notes, 2000),
-    followUpDate: followUpDate ? new Date(followUpDate).toISOString() : null,
-    createdAt: FieldValue.serverTimestamp(),
+  const d = req.data || {};
+  if (!d.diagnosis) throw new HttpsError('invalid-argument', 'diagnosis required');
+  const requestId = _reqId(d.requestId);
+  /* d.patientUid is IGNORED — the patient is the booking's customer (CHANGELOG 223) */
+  let out = null;
+  await db().runTransaction(async (t) => {
+    const basis = await _clinicalBasis(t, uid, d.bookingId);
+    const ref = db().collection('healthRecords').doc(('hr_' + basis.bookingId + '_' + requestId).slice(0, 150));
+    const ex = await t.get(ref);
+    if (ex.exists) { out = { recordId: ref.id, idempotent: true }; return; }
+    t.set(ref, {
+      recordId: ref.id, patientUid: basis.patientUid, providerId: uid,
+      providerName: basis.provider.name || '',
+      specialization: basis.provider.specialization || null,
+      bookingId: basis.bookingId,
+      diagnosis: san(d.diagnosis, 2000),
+      treatment: san(d.treatment, 2000),
+      notes: san(d.notes, 2000),
+      followUpDate: d.followUpDate ? new Date(d.followUpDate).toISOString() : null,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    _audit(t, { actor: uid, action: 'record_create', patientUid: basis.patientUid, providerId: uid,
+      ref: 'healthRecords/' + ref.id, basis: 'providerBookings/' + basis.bookingId });
+    out = { recordId: ref.id };
   });
-  return { recordId: ref.id };
+  return out;
 });
 
 /* â”€â”€ 10. getHealthRecords (patient views own records) â”€â”€ */
@@ -328,31 +385,37 @@ exports.getHealthRecords = onCall(CF_OPTS, exports._h.getHealthRecords = async (
 /* â”€â”€ 11. createPrescription â”€â”€ */
 exports.createPrescription = onCall(CF_OPTS, exports._h.createPrescription = async (req) => {
   const uid = requireAuth(req);
-  const { patientUid, medications, instructions, validDays } = req.data;
-  if (!patientUid || !medications || !medications.length) {
-    throw new HttpsError('invalid-argument', 'patientUid and medications required');
-  }
-  const provSnap = await db().collection('healthProviders').doc(uid).get();
-  if (!provSnap.exists || provSnap.data().status !== 'active') {
-    throw new HttpsError('permission-denied', 'Active provider required');
-  }
+  const d = req.data || {};
+  const medications = Array.isArray(d.medications) ? d.medications : [];
+  if (!medications.length) throw new HttpsError('invalid-argument', 'medications required');
+  const requestId = _reqId(d.requestId);
+  /* d.patientUid is IGNORED — the patient is the booking's customer (CHANGELOG 223) */
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + (parseInt(validDays) || 30));
-
-  const ref = db().collection('healthPrescriptions').doc();
-  await ref.set({
-    prescriptionId: ref.id, patientUid, providerId: uid,
-    providerName: provSnap.data().name,
-    medications: medications.slice(0, 20).map(m => ({
-      name: san(m.name, 100), dosage: san(m.dosage, 100),
-      frequency: san(m.frequency, 100), duration: san(m.duration, 100),
-    })),
-    instructions: san(instructions, 1000),
-    expiresAt: expiresAt.toISOString(),
-    status: 'active',
-    createdAt: FieldValue.serverTimestamp(),
+  expiresAt.setDate(expiresAt.getDate() + Math.max(1, Math.min(365, parseInt(d.validDays) || 30)));
+  let out = null;
+  await db().runTransaction(async (t) => {
+    const basis = await _clinicalBasis(t, uid, d.bookingId);
+    const ref = db().collection('healthPrescriptions').doc(('rx_' + basis.bookingId + '_' + requestId).slice(0, 150));
+    const ex = await t.get(ref);
+    if (ex.exists) { out = { prescriptionId: ref.id, idempotent: true }; return; }
+    t.set(ref, {
+      prescriptionId: ref.id, patientUid: basis.patientUid, providerId: uid,
+      providerName: basis.provider.name || '',
+      bookingId: basis.bookingId,
+      medications: medications.slice(0, 20).map(m => ({
+        name: san(m && m.name, 100), dosage: san(m && m.dosage, 100),
+        frequency: san(m && m.frequency, 100), duration: san(m && m.duration, 100),
+      })),
+      instructions: san(d.instructions, 1000),
+      expiresAt: expiresAt.toISOString(),
+      status: 'active',
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    _audit(t, { actor: uid, action: 'prescription_create', patientUid: basis.patientUid, providerId: uid,
+      ref: 'healthPrescriptions/' + ref.id, basis: 'providerBookings/' + basis.bookingId });
+    out = { prescriptionId: ref.id };
   });
-  return { prescriptionId: ref.id };
+  return out;
 });
 
 /* â”€â”€ 12. getPrescriptions â”€â”€ */

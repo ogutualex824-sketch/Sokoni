@@ -1,3 +1,70 @@
+## 2026-09-27 (223) — Healthcare security slice 3: medical records and prescriptions need a clinical relationship
+
+Scope: owner-authorized Healthcare security slices 1–4. ADR-014 is still NOT authorized. Not deployed. No production
+writes. KRA not called. No migration.
+
+**Defect.** `createHealthRecord` and `createPrescription` took `patientUid` straight from the request. An active
+provider could chart and prescribe against **any** account, with no relationship check and no audit. Separately, the
+rules let **every platform admin** read every patient's records and prescriptions directly, and that read is unlogged.
+The two record/prescription queries also had no composite index (HC-22), so they would fail.
+
+**Fix:**
+- **Relationship authority: the canonical `providerBookings`.** It is server-written only. No Healthcare booking
+  engine is activated or added, and `healthAppointments` (the parallel engine ADR-015 retires) is **not** a basis.
+
+  A write is allowed only when all of these hold:
+  - the caller is the booking's provider;
+  - the patient is the booking's **customer**, derived from the booking (a request `patientUid` is ignored);
+  - `commissionHub == 'healthcare'`, stamped by the server from the decided AdminOS application;
+  - status is `confirmed` or `completed`;
+  - payment is `paid_held` or `settled`. A provider can confirm an **unpaid** booking, so "confirmed" alone is not
+    enough, and refunded never counts.
+
+  All failures return the same refusal, so a caller learns nothing about other people's bookings.
+- **Identity gate unchanged** (`healthProviders` status `active`). Which identity clinical writes need is ADR-014's
+  decision. Until then both must hold, so **clinical writes stay unreachable in production**. The boundary is correct
+  before anyone can reach it.
+- **Replay-safe.** A `requestId` is required and the record/prescription id derives from booking + requestId; a retry
+  returns the same document.
+- **Audit.** Each write appends one row to `healthClinicalAudit` in the same transaction: actor (from auth), patient,
+  provider, action, record ref, booking basis, time. There is **no** diagnosis or medicine content. Admins read it;
+  nobody writes it from a client.
+- **Reads.** `healthRecords` and `healthPrescriptions` are readable by **the patient only**. The blanket admin read is
+  removed because a rules-level read cannot be audited, and "admin" is not clinical access. Providers had no read path
+  and are given none. The callables return the caller's own documents.
+- **Indexes.** `healthRecords` and `healthPrescriptions` each get (patientUid ASC, createdAt DESC), matching the real
+  query shapes. Nothing speculative.
+
+**Policy decisions recorded, NOT invented here:**
+1. **Audited administrative clinical access.** Who may read a patient's clinical record, for what purpose, and under
+   what audit. Until decided, no administrator can read it.
+2. **Corrections / amendments.** Records are append-only (no update or delete path). An amendment workflow is a
+   clinical-records policy question.
+3. **Provider-side read of a treated patient's history.** No path exists, and none is opened.
+
+**Files:** `functions/healthcare-hub.js`, `firestore.rules` (+ `.build`), `firestore.indexes.json`,
+`scripts/test-healthcare-clinical-authority.js` (new), `scripts/test-healthcare-clinical-rules.js` (new),
+`scripts/sabotage-event-ops.js`.
+
+**Database:**
+- New collection `healthClinicalAudit` (admin read, server write).
+- New record fields `bookingId` and a deterministic id.
+- 2 composite indexes.
+
+**API:** `createHealthRecord` / `createPrescription` now take `bookingId` + `requestId` and ignore `patientUid`.
+There are no client callers.
+
+**Security:** as above. **Breaking:** administrators lose direct clinical reads, by design.
+
+**Deploy note:** deploy the indexes with the rules/functions.
+
+**Tests:**
+- `test-healthcare-clinical-authority` 56/0.
+- `test-healthcare-clinical-rules` 26/0 with a counterproof; HEAD's rules fail 5 of those checks.
+- `test-healthcare-provider-rules` 34/0.
+- The healthcare suites, hub-reviews and admin-os-wiring match slice-2 commit `230107d`.
+- Sabotage `hcclin` 17/17 caught, with the tree byte-identical afterwards.
+
 ## 2026-09-27 (222) — Healthcare security slice 2: the canonical admin authority only
 
 Scope: owner-authorized Healthcare security slices 1–4. ADR-014 is still NOT authorized. Not deployed. No production

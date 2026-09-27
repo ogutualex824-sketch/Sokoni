@@ -60,6 +60,8 @@ const SUITES = {
   legalvrules: ['node', ['scripts/run-rules-suite.js', 'scripts/test-legal-verification-rules.js']],
   hcreq:    ['node', ['scripts/run-rules-suite.js', 'scripts/test-healthcare-request-rules.js']],
   hcadm:    ['node', ['scripts/test-healthcare-admin-authority.js']],
+  hcclin:   ['node', ['scripts/test-healthcare-clinical-authority.js']],
+  hcclinrules: ['node', ['scripts/run-rules-suite.js', 'scripts/test-healthcare-clinical-rules.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -969,6 +971,42 @@ const M = [
     from: "    status: 'pending',\n    rating: 0, ratingCount: 0,\n    totalAppointments: 0,", to: "    status: req.data.status || 'pending',\n    rating: 0, ratingCount: 0,\n    totalAppointments: 0,", expect: /ignores injected status/ },
   { group: 'hcadm', browser: false, name: "client setting approved on a health application is honoured", file: "functions/application-lifecycle.js", suite: 'hcadm',
     from: "    if (!authority.ok) {", to: "    if (false && !authority.ok) {", expect: /client-written "approved" health application grants nothing/ },
+
+  /* ── Healthcare security slice 3: clinical writes need a clinical relationship (CHANGELOG 223) ── */
+  { group: 'hcclin', browser: false, name: "arbitrary patientUid accepted for a record", file: "functions/healthcare-hub.js", suite: "hcclin",
+    from: "      recordId: ref.id, patientUid: basis.patientUid, providerId: uid,", to: "      recordId: ref.id, patientUid: d.patientUid || basis.patientUid, providerId: uid,", expect: /record: arbitrary patientUid is IGNORED/ },
+  { group: 'hcclin', browser: false, name: "arbitrary patient on a prescription", file: "functions/healthcare-hub.js", suite: "hcclin",
+    from: "      prescriptionId: ref.id, patientUid: basis.patientUid, providerId: uid,", to: "      prescriptionId: ref.id, patientUid: d.patientUid || basis.patientUid, providerId: uid,", expect: /prescription: arbitrary patientUid is IGNORED/ },
+  { group: 'hcclin', browser: false, name: "forged provider: another provider's booking accepted", file: "functions/healthcare-hub.js", suite: "hcclin",
+    from: "  if (!b || b.providerId !== uid || !b.customerUid || b.customerUid === uid) throw deny();", to: "  if (!b || !b.customerUid || b.customerUid === uid) throw deny();", expect: /forged provider/ },
+  { group: 'hcclin', browser: false, name: "a non-healthcare (unrelated) booking accepted", file: "functions/healthcare-hub.js", suite: "hcclin",
+    from: "  if (b.commissionHub !== 'healthcare') throw deny();", to: "", expect: /non-healthcare booking|no hub/ },
+  { group: 'hcclin', browser: false, name: "cancelled / declined / pending booking accepted (status gate removed)", file: "functions/healthcare-hub.js", suite: "hcclin",
+    from: "  if (!CLINICAL_STATUSES.includes(b.status) || !CLINICAL_PAID.includes(b.paymentStatus)) throw deny();", to: "  if (!CLINICAL_PAID.includes(b.paymentStatus)) throw deny();", expect: /declined booking|no-show booking|pending booking/ },
+  { group: 'hcclin', browser: false, name: "unpaid / refunded booking accepted (payment gate removed)", file: "functions/healthcare-hub.js", suite: "hcclin",
+    from: "  if (!CLINICAL_STATUSES.includes(b.status) || !CLINICAL_PAID.includes(b.paymentStatus)) throw deny();", to: "  if (!CLINICAL_STATUSES.includes(b.status)) throw deny();", expect: /UNPAID booking|refunded booking/ },
+  { group: 'hcclin', browser: false, name: "refunded counted as paid", file: "functions/healthcare-hub.js", suite: "hcclin",
+    from: "const CLINICAL_PAID = ['paid_held', 'settled'];", to: "const CLINICAL_PAID = ['paid_held', 'settled', 'refunded'];", expect: /refunded booking/ },
+  { group: 'hcclin', browser: false, name: "provider identity gate removed", file: "functions/healthcare-hub.js", suite: "hcclin",
+    from: "  if (!pSnap.exists || pSnap.data().status !== 'active') throw new HttpsError('permission-denied', 'Active provider account required');", to: "", expect: /unapproved provider identity|unregistered provider|NO_CLINICAL|patient themselves/ },
+  { group: 'hcclin', browser: false, name: "replayed record creation duplicates (idempotency removed)", file: "functions/healthcare-hub.js", suite: "hcclin",
+    from: "    if (ex.exists) { out = { recordId: ref.id, idempotent: true }; return; }", to: "", expect: /record: a replayed request/ },
+  { group: 'hcclin', browser: false, name: "forged audit actor taken from the request", file: "functions/healthcare-hub.js", suite: "hcclin",
+    from: "    _audit(t, { actor: uid, action: 'record_create',", to: "    _audit(t, { actor: d.actor || uid, action: 'record_create',", expect: /record: one audit row/ },
+  { group: 'hcclin', browser: false, name: "clinical content leaks into the audit", file: "functions/healthcare-hub.js", suite: "hcclin",
+    from: "    _audit(t, { actor: uid, action: 'record_create',", to: "    _audit(t, { diagnosis: d.diagnosis, actor: uid, action: 'record_create',", expect: /audit carries NO clinical content/ },
+  { group: 'hcclin', browser: false, name: "a prescription is written without an audit row", file: "functions/healthcare-hub.js", suite: "hcclin",
+    from: "    _audit(t, { actor: uid, action: 'prescription_create',", to: "    void (0) && _audit(t, { actor: uid, action: 'prescription_create',", expect: /prescription: one audit row/ },
+  { group: 'hcclin', browser: false, name: "a caller-supplied patientUid reads another patient's records", file: "functions/healthcare-hub.js", suite: "hcclin",
+    from: "  const targetUid = uid;", to: "  const targetUid = req.data.patientUid || uid;", expect: /reads nothing of the patient's/ },
+  { group: 'hcclin', browser: false, name: "the records index is dropped", file: "firestore.indexes.json", suite: "hcclin",
+    from: "\"collectionGroup\": \"healthRecords\"", to: "\"collectionGroup\": \"healthRecordsX\"", expect: /exactly one index/ },
+  { group: 'hcclin', browser: false, name: "admins read clinical records directly again (rules)", file: "firestore.rules.build", suite: "hcclinrules",
+    from: "  match /healthRecords/{recordId} {\n  allow read:  if isAuthed() && resource.data.patientUid == request.auth.uid;", to: "  match /healthRecords/{recordId} {\n  allow read:  if isAuthed() && (resource.data.patientUid == request.auth.uid || isAdmin());", expect: /ADMIN cannot read clinical content/ },
+  { group: 'hcclin', browser: false, name: "cross-provider read of prescriptions (rules)", file: "firestore.rules.build", suite: "hcclinrules",
+    from: "  match /healthPrescriptions/{rxId} {\n  allow read:  if isAuthed() && resource.data.patientUid == request.auth.uid;", to: "  match /healthPrescriptions/{rxId} {\n  allow read:  if isAuthed();", expect: /cross-provider read|cross-patient read/ },
+  { group: 'hcclin', browser: false, name: "client-created audit event (rules)", file: "firestore.rules.build", suite: "hcclinrules",
+    from: "  match /healthClinicalAudit/{auditId} {\n  allow read:  if isAdmin();\n  allow write: if false;", to: "  match /healthClinicalAudit/{auditId} {\n  allow read:  if isAdmin();\n  allow write: if isAuthed();", expect: /client-created audit event/ },
 ];
 
 const argv = process.argv.slice(2);

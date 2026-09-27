@@ -4912,13 +4912,25 @@ service cloud.firestore {
                    );
       allow write: if false; // CF-only
     }
+    /* CHANGELOG 223 (Healthcare security slice 3) — clinical records are read by THE PATIENT only.
+       The blanket `|| isAdmin()` let every platform administrator read every patient's diagnoses and
+       prescriptions straight from the database, unlogged (a rules-level read cannot be audited). "Admin"
+       is not clinical access: an audited, purpose-bound administrative read is a separate policy decision
+       (CHANGELOG 223), and until it is made no administrator reads these here. A provider reads nothing
+       here either — no provider-side read path exists yet, and none is opened by this slice. */
     match /healthRecords/{recordId} {
-      allow read:  if isAuthed() && (resource.data.patientUid == request.auth.uid || isAdmin());
-      allow write: if false; // CF-only
+      allow read:  if isAuthed() && resource.data.patientUid == request.auth.uid;
+      allow write: if false; // CF-only — createHealthRecord (relationship-gated, audited)
     }
     match /healthPrescriptions/{rxId} {
-      allow read:  if isAuthed() && (resource.data.patientUid == request.auth.uid || isAdmin());
-      allow write: if false; // CF-only
+      allow read:  if isAuthed() && resource.data.patientUid == request.auth.uid;
+      allow write: if false; // CF-only — createPrescription (relationship-gated, audited)
+    }
+    /* Clinical-write audit (actor · patient · provider · action · record ref · booking basis · time — no
+       clinical content). Written only by the server in the same transaction as the record. */
+    match /healthClinicalAudit/{auditId} {
+      allow read:  if isAdmin();
+      allow write: if false;
     }
     match /healthApptIdempotency/{key} {
       allow read:  if false;
