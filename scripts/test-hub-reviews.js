@@ -43,7 +43,8 @@ const LG = require(Path.join(FN, 'legal-hub.js'));
 const DG = require(Path.join(FN, 'digital-hub.js'));
 const RV = require(Path.join(FN, 'reviews.js'));
 const { makePageHarness } = require('./lib/page-harness.js');
-const run = (fnOrCall, uid, data) => (fnOrCall.run || fnOrCall)({ auth: uid ? { uid, token: {} } : null, data: data || {}, rawRequest: { headers: {} } });
+/* admin9 is a platform admin through the CANONICAL claim (admin-claim.js) — the numeric role >= 4 is minted by nothing (CHANGELOG 222). */
+const run = (fnOrCall, uid, data) => (fnOrCall.run || fnOrCall)({ auth: uid ? { uid, token: uid === 'admin9' ? { admin: true } : {} } : null, data: data || {}, rawRequest: { headers: {} } });
 async function code(p) { try { await p; return null; } catch (e) { return e.code || e.message; } }
 const get = async (p) => { const s = await db.doc(p).get(); return s.exists ? s.data() : null; };
 let pass = 0, fail = 0;
@@ -62,7 +63,7 @@ const noOverflow = (page) => page.evaluate(() => document.documentElement.scroll
   ck('the PATIENT can no longer mark their own appointment completed', (await code(run(upd, 'p1', { appointmentId: 'a1', status: 'completed' }))) === 'permission-denied' && (await get('healthAppointments/a1')).status === 'confirmed');
   ck('…nor record a no-show or confirm it', (await code(run(upd, 'p1', { appointmentId: 'a1', status: 'no_show' }))) === 'permission-denied' && (await code(run(upd, 'p1', { appointmentId: 'a1', status: 'confirmed' }))) === 'permission-denied');
   ck('…the patient may still cancel; the provider completes', (await run(upd, 'doc1', { appointmentId: 'a1', status: 'completed' })).ok === true && (await get('healthAppointments/a1')).status === 'completed');
-  ck('an admin (role ≥ 4) may complete', (await run(upd, 'admin9', { appointmentId: 'a3', status: 'completed' })).ok === true);
+  ck('an admin (canonical admin claim) may complete', (await run(upd, 'admin9', { appointmentId: 'a3', status: 'completed' })).ok === true);
   const rate = HC.rateHealthProvider;
   ck('a forged providerId is refused (one appointment cannot rate ANY provider)', (await code(run(rate, 'p1', { appointmentId: 'a2', providerId: 'doc2', rating: 1 }))) === 'permission-denied' && (await get('healthProviders/doc2')).ratingCount === undefined);
   for (const bad of [4.5, 0, 6, 'abc', '5.5', null]) ck(`rating ${JSON.stringify(bad)} is refused`, (await code(run(rate, 'p1', { appointmentId: 'a2', rating: bad }))) === 'invalid-argument');

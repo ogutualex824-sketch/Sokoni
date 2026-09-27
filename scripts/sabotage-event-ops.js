@@ -59,6 +59,7 @@ const SUITES = {
   legalv:   ['node', ['scripts/test-legal-verification.js']],
   legalvrules: ['node', ['scripts/run-rules-suite.js', 'scripts/test-legal-verification-rules.js']],
   hcreq:    ['node', ['scripts/run-rules-suite.js', 'scripts/test-healthcare-request-rules.js']],
+  hcadm:    ['node', ['scripts/test-healthcare-admin-authority.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -764,7 +765,7 @@ const M = [
   { group: 'hubreviews', name: 'the aggregate is a rounded running average (drift) — not sum / count', file: HRT, suite: 'hubrev',
     from: "  const prevSum = Number.isFinite(Number(d && d.ratingSum)) ? Number(d.ratingSum)\n    : ", to: "  const prevSum = false ? 0\n    : ", expect: /SUM is kept exactly|sum \/ count/ },
   { group: 'hubreviews', name: 'legal: the client completes their own consultation', file: LGH, suite: 'hubrev',
-    from: "  if (status !== 'cancelled' && c.providerId !== uid && role < 4) {", to: "  if (false) {", expect: /CLIENT can no longer/ },
+    from: "  if (status !== 'cancelled' && c.providerId !== uid && !isAdm) {", to: "  if (false) {", expect: /CLIENT can no longer/ },
   { group: 'hubreviews', name: 'legal: a forged providerId is accepted', file: LGH, suite: 'hubrev',
     from: "    if (providerId && providerId !== c.providerId) throw new HttpsError('permission-denied', 'This consultation was with a different provider.');\n", to: "", expect: /forged providerId/ },
   { group: 'hubreviews', name: 'digital: an UNPAID purchase rates a product', file: DGH, suite: 'hubrev',
@@ -803,7 +804,7 @@ const M = [
   { group: 'hubreviews', rules: true, name: 'a driver writes their own rating (rules)', file: RULES, suite: 'rules',
     from: "  && request.resource.data.uid == request.auth.uid\n  && noAdminFields() && noRatingAggOnUpdate()\n  && (!request.resource.data.keys().hasAny(['lat','lng'])", to: "  && request.resource.data.uid == request.auth.uid\n  && noAdminFields()\n  && (!request.resource.data.keys().hasAny(['lat','lng'])", expect: /driver writes their own rating|inflates the rating counters/ },
   { group: 'hubreviews', rules: true, name: 'a lawyer listing is created with its own rating (rules)', file: RULES, suite: 'rules',
-    from: "  allow create: if claimsOwner() && noAdminFields() && noRatingAggOnCreate();\n  allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields() && noRatingAggOnUpdate());\n  allow delete: if isAdmin();\n  }\n  match /legalAppointments", to: "  allow create: if claimsOwner() && noAdminFields();\n  allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields() && noRatingAggOnUpdate());\n  allow delete: if isAdmin();\n  }\n  match /legalAppointments", expect: /lawyer listing is created with a rating/ },
+    from: "  match /lawyers/{docId} {\n  allow read:   if true;\n  allow create: if false;", to: "  match /lawyers/{docId} {\n  allow read:   if true;\n  allow create: if claimsOwner() && noAdminFields();", expect: /lawyer listing is created with a rating|self-publishes a lawyer directory card/ },
 
   /* ── C1: the payer is never their own earner (CHANGELOG 214) ── */
   { group: 'payer', name: 'the webhook credits the PAYER when no earner is attributed (the old fallback)', file: 'functions/index.js', suite: 'payer',
@@ -950,6 +951,24 @@ const M = [
     from: "  match /healthEmergency/{docId} {\n  allow read:   if healthRequestRead();\n  allow create: if healthRequestCreate();", to: "  match /healthEmergency/{docId} {\n  allow read:   if healthRequestRead();\n  allow create: if true;", expect: /healthEmergency: (unauthenticated|forged requester uid)/ },
   { group: 'hcreq', browser: false, name: "the emergency requester rewrites the report", file: "firestore.rules.build", suite: 'hcreq',
     from: "  match /healthEmergency/{docId} {\n  allow read:   if healthRequestRead();\n  allow create: if healthRequestCreate();\n  allow update: if isAdmin();", to: "  match /healthEmergency/{docId} {\n  allow read:   if healthRequestRead();\n  allow create: if healthRequestCreate();\n  allow update: if isAdmin() || healthRequestPatientUpdate() || (isAuthed() && resource.data.uid == request.auth.uid);", expect: /cannot rewrite an emergency report|healthEmergency: the patient cannot reassign/ },
+
+  /* ── Healthcare security slice 2: the canonical admin authority (CHANGELOG 222) ── */
+  { group: 'hcadm', browser: false, name: "the retired standalone approval is revived (admin sets status active)", file: "functions/healthcare-hub.js", suite: 'hcadm',
+    from: "  requireAuth(req);\n  throw new HttpsError('failed-precondition',\n    'Healthcare provider approval is made in AdminOS", to: "  requireAuth(req);\n  if (ADMIN.isAdmin(req) || Number(req.auth.token.role) >= 4) { await db().collection('healthProviders').doc(String(req.data.providerId)).update({ status: 'active', reviewedBy: req.auth.uid }); return { ok: true }; }\n  throw new HttpsError('failed-precondition',\n    'Healthcare provider approval is made in AdminOS", expect: /approveHealthProvider refuses|nothing was written/ },
+  { group: 'hcadm', browser: false, name: "the retired healthcare dashboard is revived", file: "functions/healthcare-hub.js", suite: 'hcadm',
+    from: "  requireAuth(req);\n  throw new HttpsError('failed-precondition', 'Healthcare administration is in AdminOS.'", to: "  requireAuth(req);\n  if (ADMIN.isAdmin(req)) return { pendingProviders: 1 };\n  throw new HttpsError('failed-precondition', 'Healthcare administration is in AdminOS.'", expect: /getHealthDashboard refuses/ },
+  { group: 'hcadm', browser: false, name: "old numeric role claim spoof accepted as admin", file: "functions/healthcare-hub.js", suite: 'hcadm',
+    from: "  const isAdmin = ADMIN.isAdmin(req);", to: "  const isAdmin = ADMIN.isAdmin(req) || Number(req.auth.token && req.auth.token.role) >= 4;", expect: /numeric role 4 cannot read another provider/ },
+  { group: 'hcadm', browser: false, name: "forged admin identity accepted (truthy instead of the canonical claim)", file: "functions/healthcare-hub.js", suite: 'hcadm',
+    from: "  const isAdmin = ADMIN.isAdmin(req);", to: "  const isAdmin = ADMIN.isAdmin(req) || !!(req.auth.token && (req.auth.token.admin || req.auth.token.isAdmin || req.auth.token.superAdmin));", expect: /forged admin token/ },
+  { group: 'hcadm', browser: false, name: "unauthorized caller changes an appointment it is not party to", file: "functions/healthcare-hub.js", suite: 'hcadm',
+    from: "    if (appt.patientUid !== uid && appt.providerId !== uid && !isAdm) {", to: "    if (false && appt.patientUid !== uid && appt.providerId !== uid && !isAdm) {", expect: /cannot change an appointment it is not party to|not even cancel it/ },
+  { group: 'hcadm', browser: false, name: "a caller-supplied patientUid reads another patient's records", file: "functions/healthcare-hub.js", suite: 'hcadm',
+    from: "  const targetUid = uid;", to: "  const targetUid = req.data.patientUid || uid;", expect: /cannot read another patient's records|no admin reads a patient/ },
+  { group: 'hcadm', browser: false, name: "provider self-approval: registration accepts a client status", file: "functions/healthcare-hub.js", suite: 'hcadm',
+    from: "    status: 'pending',\n    rating: 0, ratingCount: 0,\n    totalAppointments: 0,", to: "    status: req.data.status || 'pending',\n    rating: 0, ratingCount: 0,\n    totalAppointments: 0,", expect: /ignores injected status/ },
+  { group: 'hcadm', browser: false, name: "client setting approved on a health application is honoured", file: "functions/application-lifecycle.js", suite: 'hcadm',
+    from: "    if (!authority.ok) {", to: "    if (false && !authority.ok) {", expect: /client-written "approved" health application grants nothing/ },
 ];
 
 const argv = process.argv.slice(2);

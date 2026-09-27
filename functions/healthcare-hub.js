@@ -11,17 +11,16 @@ const admin = require('firebase-admin');
 const REGION = 'us-central1';
 const CF_OPTS = { region: REGION, enforceAppCheck: true };
 const db = () => admin.firestore();
-const auth = () => admin.auth();
 const FieldValue = admin.firestore.FieldValue;
+/* The canonical admin authority (CHANGELOG 222, Healthcare security slice 2). The numeric
+   `customClaims.role >= 4` this module used is minted by NOTHING (event-hub.js:210), so every admin
+   branch here was dead — and a numeric claim must never be invented to revive it. */
+const ADMIN = require('./admin-claim');
 exports._h = {};
 
 function requireAuth(req) {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Authentication required');
   return req.auth.uid;
-}
-async function getRole(uid) {
-  const tok = await auth().getUser(uid);
-  return (tok.customClaims || {}).role || 0;
 }
 function san(s, max = 200) { return s == null ? '' : String(s).trim().slice(0, max); }
 
@@ -74,24 +73,15 @@ exports.registerHealthProvider = onCall(CF_OPTS, exports._h.registerHealthProvid
 });
 
 /* â”€â”€ 2. approveHealthProvider â”€â”€ */
+/* RETIRED (CHANGELOG 222). A standalone healthcare approval beside the AdminOS application decision
+   (applicationDecide → application-lifecycle → providers/{uid}, ADR-014) — a second approval authority,
+   gated on a numeric role nothing mints, that set `status:'active'` directly. It never had a client
+   caller. The export stays so a deployed caller gets a plain answer; it reads and writes nothing. */
 exports.approveHealthProvider = onCall(CF_OPTS, exports._h.approveHealthProvider = async (req) => {
-  const uid = requireAuth(req);
-  const role = await getRole(uid);
-  if (role < 4) throw new HttpsError('permission-denied', 'Admin required');
-  const { providerId, action, reason } = req.data;
-  if (!providerId || !['approve', 'reject'].includes(action)) {
-    throw new HttpsError('invalid-argument', 'providerId and action (approve|reject) required');
-  }
-  const ref = db().collection('healthProviders').doc(providerId);
-  const snap = await ref.get();
-  if (!snap.exists) throw new HttpsError('not-found', 'Provider not found');
-  await ref.update({
-    status: action === 'approve' ? 'active' : 'rejected',
-    reviewedBy: uid, reviewedAt: FieldValue.serverTimestamp(),
-    reviewNotes: san(reason, 500),
-    updatedAt: FieldValue.serverTimestamp(),
-  });
-  return { ok: true };
+  requireAuth(req);
+  throw new HttpsError('failed-precondition',
+    'Healthcare provider approval is made in AdminOS (application review). Nothing was changed.',
+    { code: 'HEALTH_APPROVAL_MOVED' });
 });
 
 /* â”€â”€ 3. getHealthProviders â”€â”€ */
@@ -226,9 +216,8 @@ exports.getMyAppointments = onCall(CF_OPTS, exports._h.getMyAppointments = async
 exports.getProviderAppointments = onCall(CF_OPTS, exports._h.getProviderAppointments = async (req) => {
   const uid = requireAuth(req);
   const { date, status, limit = 50 } = req.data;
-  const role = await getRole(uid);
-  const isAdmin = role >= 4;
-  const providerId = isAdmin && req.data.providerId ? req.data.providerId : uid;
+  const isAdmin = ADMIN.isAdmin(req);
+  const providerId = isAdmin && req.data.providerId ? String(req.data.providerId) : uid;
 
   let q = db().collection('healthAppointments')
     .where('providerId', '==', providerId)
@@ -250,8 +239,8 @@ exports.updateAppointmentStatus = onCall(CF_OPTS, exports._h.updateAppointmentSt
   const VALID = ['confirmed', 'cancelled', 'completed', 'no_show'];
   if (!VALID.includes(status)) throw new HttpsError('invalid-argument', 'Invalid status');
 
-  // getRole() uses Auth Admin SDK — must be called OUTSIDE the transaction
-  const role = await getRole(uid);
+  /* The canonical admin claim, read from the verified token (no Auth round-trip). */
+  const isAdm = ADMIN.isAdmin(req);
 
   const ref = db().collection('healthAppointments').doc(appointmentId);
   await db().runTransaction(async t => {
@@ -259,14 +248,14 @@ exports.updateAppointmentStatus = onCall(CF_OPTS, exports._h.updateAppointmentSt
     if (!snap.exists) throw new HttpsError('not-found', 'Appointment not found');
     const appt = snap.data();
 
-    if (appt.patientUid !== uid && appt.providerId !== uid && role < 4) {
+    if (appt.patientUid !== uid && appt.providerId !== uid && !isAdm) {
       throw new HttpsError('permission-denied', 'Not authorized');
     }
     /* WHO DECIDES AN APPOINTMENT HAPPENED (CHANGELOG 213). The patient could mark their own appointment
        'completed' — and a completed appointment is what makes a rating eligible, so the reviewer decided
        their own eligibility. Only the provider (or an admin) confirms, completes or records a no-show;
        the patient may cancel. */
-    const isProviderSide = appt.providerId === uid || role >= 4;
+    const isProviderSide = appt.providerId === uid || isAdm;
     if (status !== 'cancelled' && !isProviderSide) {
       throw new HttpsError('permission-denied', 'Only the provider can mark this appointment ' + status + '.');
     }
@@ -322,9 +311,11 @@ exports.createHealthRecord = onCall(CF_OPTS, exports._h.createHealthRecord = asy
 /* â”€â”€ 10. getHealthRecords (patient views own records) â”€â”€ */
 exports.getHealthRecords = onCall(CF_OPTS, exports._h.getHealthRecords = async (req) => {
   const uid = requireAuth(req);
-  const { patientUid, limit = 20 } = req.data;
-  const role = await getRole(uid);
-  const targetUid = (role >= 4 && patientUid) ? patientUid : uid;
+  const { limit = 20 } = req.data;   /* a caller-supplied patientUid is ignored */
+  /* Each caller reads their OWN records. The numeric-role branch that let an "admin" read any patient
+     was dead (nothing mints the claim); it is removed, not revived. Whether any administrator may read a
+     patient's clinical records — and under what audit — is decided in security slice 3. */
+  const targetUid = uid;
 
   const snap = await db().collection('healthRecords')
     .where('patientUid', '==', targetUid)
@@ -425,20 +416,12 @@ exports.rateHealthProvider = onCall(CF_OPTS, exports._h.rateHealthProvider = asy
 });
 
 /* â”€â”€ 15. getHealthDashboard (admin) â”€â”€ */
+/* RETIRED (CHANGELOG 222). An admin dashboard outside AdminOS (the ONE administrative workspace),
+   gated on a numeric role nothing mints, counting the retired healthProviders identity. No client
+   caller. It reads and returns nothing. */
 exports.getHealthDashboard = onCall(CF_OPTS, exports._h.getHealthDashboard = async (req) => {
-  const uid = requireAuth(req);
-  const role = await getRole(uid);
-  if (role < 4) throw new HttpsError('permission-denied', 'Admin required');
-
-  const [pending, active, totalAppts] = await Promise.all([
-    db().collection('healthProviders').where('status', '==', 'pending').get(),
-    db().collection('healthProviders').where('status', '==', 'active').get(),
-    db().collection('healthAppointments').orderBy('createdAt', 'desc').limit(1).get(),
-  ]);
-  return {
-    pendingProviders: pending.size, activeProviders: active.size,
-    specializations: SPECIALIZATIONS,
-  };
+  requireAuth(req);
+  throw new HttpsError('failed-precondition', 'Healthcare administration is in AdminOS.', { code: 'HEALTH_DASHBOARD_MOVED' });
 });
 
 module.exports = {

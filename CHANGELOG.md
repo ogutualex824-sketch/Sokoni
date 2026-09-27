@@ -1,3 +1,47 @@
+## 2026-09-27 (222) — Healthcare security slice 2: the canonical admin authority only
+
+Scope: owner-authorized Healthcare security slices 1–4. ADR-014 is still NOT authorized. Not deployed. No production
+writes. KRA not called. No migration.
+
+**Defect.** `functions/healthcare-hub.js` decided "admin" from a numeric `customClaims.role >= 4`, a claim nothing in
+SOKONI mints (event-hub.js:210). Every admin branch was dead. Two functions were a second, standalone admin surface
+next to AdminOS:
+- `approveHealthProvider` set `healthProviders.status:'active'` directly;
+- `getHealthDashboard` counted the retired identity.
+
+Neither had a client caller.
+
+**Fix:**
+- **Retired, fail-closed:**
+  - `approveHealthProvider` refuses every caller (`HEALTH_APPROVAL_MOVED`) and reads and writes nothing;
+  - `getHealthDashboard` refuses every caller (`HEALTH_DASHBOARD_MOVED`);
+  - both exports stay, so a deployed caller gets a plain answer;
+  - historical `healthProviders` data is untouched.
+- **Canonical admin:** `getProviderAppointments` and `updateAppointmentStatus` use `admin-claim.isAdmin`. No
+  numeric claim is minted or honoured, and `getRole` is removed.
+- **`getHealthRecords`:** every caller reads their own records, and a caller-supplied `patientUid` is ignored. This
+  is today's effective behaviour made explicit (the numeric-role admin branch was dead). Whether any administrator
+  may read clinical records, and under what audit, is slice 3.
+- **Approval stays with AdminOS** (applicationDecide → application-lifecycle → `providers/{uid}`), and that path is
+  unchanged.
+
+**Files:** `functions/healthcare-hub.js`; `scripts/test-healthcare-admin-authority.js` (new);
+`scripts/test-hub-reviews.js` (its test admin now holds the canonical `admin` claim instead of the numeric role,
+which no longer means anything); `scripts/sabotage-event-ops.js`.
+
+**API:** `approveHealthProvider` / `getHealthDashboard` now refuse. **Database:** none. **Security:** the dead
+admin model is removed, and no new claim is introduced.
+
+**Tests:**
+- `test-healthcare-admin-authority` 26/0 covers: retired functions for every caller; numeric-role spoof; forged
+  admin tokens; a non-party cancel; injected registration status; a client-approved application; applicant
+  self-decision; and AdminOS approval still provisioning `providers/{uid}`.
+- `test-hub-reviews` 42/0.
+- The healthcare, AdminOS, application-decision, provider and role suites match slice-1 commit `1fa5874`.
+- Sabotage `hcadm` 8/8 caught. One attack was first MISSED; the test was then strengthened with the non-party-cancel
+  probe and the attack re-run.
+- `hubreviews`: 26/26 caught (24 in the full run; two entries whose anchors b24b052 had changed — the legal consultation admin check and the lawyers create rule — were re-pointed at the current code and re-run: both caught; one transient crash in a first run did not reproduce).
+
 ## 2026-09-27 (221) — Healthcare security slice 1: a patient's request belongs to the patient
 
 Owner authorization: Healthcare security slices 1–4 only. ADR-014 is still NOT authorized, and no booking or payment
