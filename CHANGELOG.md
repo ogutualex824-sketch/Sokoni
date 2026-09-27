@@ -1,3 +1,21 @@
+## 2026-09-28 (228) — AdminOS Legal panel: a same-morning LSK check is not "in the future"
+
+Not deployed. No production writes.
+
+**Defect (from b24b052).** The AdminOS › Legal Verification form sent the chosen "checked on" date as **noon, Nairobi
+time**. An administrator recording an LSK check the same morning, before 12:00 EAT, was refused by the server:
+"The check date cannot be in the future." It surfaced when the date rolled over to 2026-09-28 and the browser test ran
+before noon. That test's failure depended on the time of day it ran, so it was hidden rather than wrong.
+
+**Fix.** The panel sends the **start** of the chosen day in Nairobi (`T00:00:00+03:00`). The practising-year validity
+is unchanged, because the start of 1 January still belongs to that year. The server rule (no future check date) is
+unchanged.
+
+**Test.** `test-legal-verification` 105/0. The new assertion is deterministic and independent of the time the suite
+runs. Sabotage: restoring noon is caught.
+
+**Files:** `sokoni-aos-legal.js`, `scripts/test-legal-verification.js`, `scripts/sabotage-event-ops.js`.
+
 ## 2026-09-28 (227) — Healthcare provider category: recorded by the server, never by the provider
 
 Healthcare convergence. Not deployed. No production writes.

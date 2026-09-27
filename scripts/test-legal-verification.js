@@ -202,6 +202,12 @@ async function seedAdv(uid, verification, over) {
   /* a throw is a FAIL here, never a crash — the harness must fail closed */
   const auto = await H.legalAdminRunLskCheck(req('adm1', { uid: 'adv1' }, ADM)).catch((e) => ({ threw: String(e && e.message) }));
   ck('the integration says NOT AVAILABLE / NOT AUTHORIZED and writes nothing', auto.available === false && /NOT AVAILABLE \/ NOT AUTHORIZED/.test(auto.statement) && (await all('legalVerificationEvents')).length === evN);
+  /* CHANGELOG 228 — deterministic, whatever the time of day the suite runs: the panel sends the START of the
+     chosen day in Nairobi, and "checked today" at that instant is never in the server's future. */
+  const PANEL = fs.readFileSync(Path.join(ROOT, 'sokoni-aos-legal.js'), 'utf8');
+  const todayEAT = new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10);
+  ck('the panel sends the start of the chosen Nairobi day (a same-morning check is not "in the future")',
+    /Date\.parse\(f\.checkedAt\.value \+ 'T00:00:00\+03:00'\)/.test(PANEL) && Date.parse(todayEAT + 'T00:00:00+03:00') <= Date.now());
   ck('the adapter holds no endpoint, fetch or scraping code', !/https?:\/\/|fetch\(|axios|puppeteer|playwright|request\(/.test(fs.readFileSync(Path.join(FN, 'lsk-adapter.js'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')));
 
   say('\n── the canonical booking gate ──');

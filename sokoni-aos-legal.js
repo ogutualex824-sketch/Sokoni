@@ -126,7 +126,9 @@
         ev.preventDefault();
         const f = ev.target;
         const data = { uid: current, p105Number: f.p105Number.value, verifiedName: f.verifiedName.value, practiceStatus: f.practiceStatus.value,
-          checkedAt: f.checkedAt.value ? Date.parse(f.checkedAt.value + 'T12:00:00+03:00') : null, evidenceRef: f.evidenceRef.value, notes: f.notes.value };
+          /* the START of the chosen day in Nairobi (CHANGELOG 228): noon made a check recorded the same
+             morning read as "in the future" and the server refused it */
+          checkedAt: f.checkedAt.value ? Date.parse(f.checkedAt.value + 'T00:00:00+03:00') : null, evidenceRef: f.evidenceRef.value, notes: f.notes.value };
         act(() => call('legalAdminRecordLsk', data), 'LSK check recorded (audited).');
       }
     });

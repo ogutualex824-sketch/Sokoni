@@ -1062,6 +1062,10 @@ const M = [
     from: "      action: 'healthcare_classify', targetUid: uid, performedBy: actor,", to: "      action: 'x', targetUid: uid, performedBy: actor,", expect: /adminAudit trail/ },
   { group: 'hccat', browser: false, name: "a re-approval overwrites the admin classification", file: "functions/application-lifecycle.js", suite: "hccat",
     from: "    if (!(prior && prior.source === 'admin' && HCAT.isCategory(prior.category))) {", to: "    if (true) {", expect: /never overwrites the admin classification/ },
+
+  /* ── Legal panel date (CHANGELOG 228) ── */
+  { group: 'legalv', browser: true, name: 'the Legal panel sends noon again (a same-morning LSK check is refused as future)', file: 'sokoni-aos-legal.js', suite: 'legalv',
+    from: "Date.parse(f.checkedAt.value + 'T00:00:00+03:00')", to: "Date.parse(f.checkedAt.value + 'T12:00:00+03:00')", expect: /start of the chosen Nairobi day/ },
 ];
 
 const argv = process.argv.slice(2);
