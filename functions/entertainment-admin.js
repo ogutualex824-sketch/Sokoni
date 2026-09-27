@@ -28,14 +28,16 @@ function _admin(req) { if (!req.auth || !req.auth.uid) fail('unauthenticated', '
 const _row = (d) => { const x = d.data(); const o = { id: d.id }; for (const [k, v] of Object.entries(x)) o[k] = (v && typeof v.toMillis === 'function') ? v.toMillis() : v; return o; };
 
 /* Collections this surface moderates, and the statuses a decision may set. */
-const LISTINGS = Object.freeze({ venue: 'entVenues', artist: 'entArtists' });
+/* booking_venue = the CANONICAL venue booking engine (venues/*) — the venues users actually book;
+   venue / artist = the legacy EntHub records (retired from the client 2026-09-27, still moderated). */
+const LISTINGS = Object.freeze({ venue: 'entVenues', artist: 'entArtists', booking_venue: 'venues' });
 const DECISIONS = Object.freeze({
   approve: 'active', reject: 'rejected', suspend: 'suspended', restore: 'active',
 });
 /* Which current states each decision may act on — a rejected profile is not silently revived by
    "approve"; it is restored deliberately. */
 const FROM = Object.freeze({
-  approve: ['pending'], reject: ['pending'], suspend: ['active', 'approved'], restore: ['suspended', 'rejected'],
+  approve: ['pending'], reject: ['pending'], suspend: ['active', 'approved', 'inactive'], restore: ['suspended', 'rejected'],
 });
 
 const _adminH = {};
@@ -56,8 +58,8 @@ _adminH.entAdminListings = async (req) => {
   const kind = String((req.data || {}).kind || 'venue');
   const status = String((req.data || {}).status || 'pending');
   const col = LISTINGS[kind];
-  if (!col) fail('invalid-argument', 'kind must be venue or artist.');
-  if (!['pending', 'active', 'approved', 'suspended', 'rejected'].includes(status)) fail('invalid-argument', 'Unknown status.');
+  if (!col) fail('invalid-argument', 'kind must be venue, artist or booking_venue.');
+  if (!['pending', 'active', 'approved', 'suspended', 'rejected', 'inactive'].includes(status)) fail('invalid-argument', 'Unknown status.');
   const snap = await _db().collection(col).where('status', '==', status).limit(200).get();
   return { kind, status, listings: snap.docs.map(_row) };
 };
@@ -66,7 +68,7 @@ _adminH.entAdminSetListingStatus = async (req) => {
   const actor = _admin(req);
   const d = req.data || {};
   const col = LISTINGS[String(d.kind || '')];
-  if (!col) fail('invalid-argument', 'kind must be venue or artist.');
+  if (!col) fail('invalid-argument', 'kind must be venue, artist or booking_venue.');
   const id = String(d.id || '');
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) fail('invalid-argument', 'Invalid id.');
   const decision = String(d.decision || '');
@@ -81,9 +83,14 @@ _adminH.entAdminSetListingStatus = async (req) => {
     if (!s.exists) fail('not-found', 'Listing not found.');
     from = String(s.data().status || 'pending');
     if (!FROM[decision].includes(from)) fail('failed-precondition', `Cannot ${decision} a listing that is ${from}.`);
+    /* The moderator's uid is recorded in adminAudit, NOT on the listing: an active listing is public,
+       and admin uids exposed on public documents were the lever of the forged application approval
+       (application-lifecycle decisionAuthority, fixed 2026-09-27). */
     txn.update(ref, {
-      status: to, moderatedBy: actor, moderatedAt: FieldValue.serverTimestamp(),
-      moderationReason: reason || null, updatedAt: FieldValue.serverTimestamp(),
+      status: to, moderatedAt: FieldValue.serverTimestamp(),
+      ...(col === 'venues' ? {} : { moderationReason: reason || null }),
+      ...(col === 'venues' && to === 'suspended' ? { suspendReason: reason } : {}),
+      updatedAt: FieldValue.serverTimestamp(),
     });
   });
   await _db().collection('adminAudit').add({

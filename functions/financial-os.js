@@ -599,7 +599,7 @@ async function _executeRefund(refundId, actorUid, source) {
 /* The submit handler is a named function so the Entertainment refund wizard (event-refunds.js)
    submits through EXACTLY this authority — the same buyer-owns-payment check, the same one-request-
    per-transaction id, the same admin-review queue. There is no second refund-request writer. */
-async function _submitRefundHandler(req) {
+async function _submitRefundHandler(req, opts = {}) {
     const auth = _requireAuth(req);
     const {
       fosTransactionId,
@@ -640,6 +640,14 @@ async function _submitRefundHandler(req) {
          creator-hub.onFilmRefundProcessed — never by a wallet debit here. */
       const _fi = await db().collection('paymentIntents').doc(payRef).get();
       const _im = _fi.exists ? (_fi.data().metadata || {}) : {};
+      /* Event tickets (2026-09-27 readiness sweep): a refund of an event_ticket payment enters ONLY
+         through the Entertainment paths that price it — the buyer's refund wizard (eligibility,
+         penalty, tickets suspended at the gate) or the AdminOS cancelled-event op (amount from the
+         payment record). A direct fosSubmitRefund skipped all of that: the ticket stayed admissible
+         while its refund was pending, and the pending queue doc held the organizer's settlement. */
+      if (_fi.exists && _fi.data().purpose === 'event_ticket' && opts.via !== 'event_wizard' && opts.via !== 'event_admin') {
+        throw new HttpsError('failed-precondition', 'Event ticket refunds are requested from the ticket (refund wizard), or by an administrator from AdminOS › Entertainment.');
+      }
       if (_fi.exists && _fi.data().purpose === 'film_access') {
         tx = { ...pd, payRef, buyerUid: pd.uid, sellerUid: null, uid: null, creatorFilm: true,
                amountKES: Number(pd.amount) || null };

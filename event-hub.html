@@ -237,9 +237,14 @@
       const tok = await user.getIdTokenResult();
       currentRole = tok.claims.role || 0;
       document.getElementById('auth-btn').textContent = user.displayName || user.email || 'Profile';
-      document.getElementById('auth-btn').onclick = () => location.href = 'login.html';
+      /* A signed-in user's button opens their profile (was: the login page). */
+      document.getElementById('auth-btn').onclick = () => location.href = 'profile.html';
       document.getElementById('my-tickets-btn').style.display = 'flex';
-      if (currentRole >= 2) document.getElementById('organizer-link').style.display = 'inline-flex';
+      /* The organizer authority is the event_organizer CLAIM (event-hub requireOrganizer); the numeric
+         role this read is minted by nothing, so real organizers never saw the link. */
+      if (tok.claims.event_organizer === true || currentRole >= 2) document.getElementById('organizer-link').style.display = 'inline-flex';
+      /* Deep link from the Entertainment Hub: event-hub.html?view=tickets opens My Tickets. */
+      if (_ret.get('view') === 'tickets' && !myTicketsVisible) toggleMyTickets();
     }
   });
 
@@ -328,8 +333,8 @@
           </div>
         </div>
         <div class="event-footer">
-          <span class="event-price" id="price-${esc(e.eventId)}">—</span>
-          <span class="event-tickets">${e.totalTicketsSold || 0} attending</span>
+          <span class="event-price">View tickets</span>
+          <span class="event-tickets">${e.totalTicketsSold == null ? '' : esc(e.totalTicketsSold) + ' attending'}</span>
         </div>`;
       grid.appendChild(card);
     });

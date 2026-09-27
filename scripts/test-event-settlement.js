@@ -47,10 +47,12 @@ const users = { buyer1: { uid: 'buyer1' }, buyer2: { uid: 'buyer2' }, org1: { ui
 const resolveIn = (m) => require.resolve(m, { paths: [FN] });
 const stub = (m, exp) => { require.cache[resolveIn(m)] = { id: m, filename: m, loaded: true, exports: exp }; };
 stub('firebase-admin/firestore', { getFirestore: () => db, FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath });
-stub('firebase-admin/auth', { getAuth: () => ({ getUser: async (u) => ({ uid: u, customClaims: {} }) }) });
+/* Auth custom claims — the ONLY organizer authority (event-hub requireOrganizer). */
+const CLAIMS = {};
+stub('firebase-admin/auth', { getAuth: () => ({ getUser: async (u) => ({ uid: u, customClaims: CLAIMS[u] || {} }) }) });
 const adminNs = { apps: [{}], initializeApp: () => ({}), app: () => ({}),
   firestore: Object.assign(() => db, { FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath }),
-  auth: () => ({ getUser: async (u) => ({ uid: u, customClaims: {} }) }) };
+  auth: () => ({ getUser: async (u) => ({ uid: u, customClaims: CLAIMS[u] || {} }) }) };
 stub('firebase-admin', adminNs);
 
 const ES = require(Path.join(FN, 'event-settlement.js'));
@@ -256,14 +258,59 @@ async function pay(ref, { buyer = 'buyer1', amountCents = 100000, status = 'COMP
 
   /* ═══ 10. event-hub authority fixes ═══ */
   console.log('\n── event-hub authority ──');
-  await db.doc('users/orgApproved').set({ roles: ['event_organizer'] });
+  CLAIMS.orgApproved = { event_organizer: true };
   await db.doc('users/plain').set({ roles: ['buyer'] });
-  ck('organizer gate accepts an approved event_organizer', !(await code(EH._internal.requireOrganizer('orgApproved'))));
+  ck('organizer gate accepts the approved event_organizer CLAIM', !(await code(EH._internal.requireOrganizer('orgApproved'))));
   ck('organizer gate refuses a plain account', (await code(EH._internal.requireOrganizer('plain'))) === 'permission-denied');
+  /* The self-mint: users.roles is client-writable, so it must grant NOTHING. */
+  await db.doc('users/selfMint').set({ roles: ['event_organizer'], role: 9 });
+  ck('SELF-MINT: users.roles:[event_organizer] (client-writable) does NOT make an organizer', (await code(EH._internal.requireOrganizer('selfMint'))) === 'permission-denied');
+  ck('SELF-MINT: …so createEvent is refused', (await code(EH.createEvent.run({ ...who('selfMint'), data: { title: 'Mine', startDate: new Date(Date.now() + 9e8).toISOString() } }))) === 'permission-denied');
+  CLAIMS.suspendedOrg = { event_organizer: false };
+  await seedEvent('evSusp', { organizerUid: 'suspendedOrg', status: 'draft', refundPolicy: { mode: 'none' }, ticketTiersCount: 1 });
+  ck('a SUSPENDED organizer (claim revoked) cannot publish their own draft', (await code(EH.publishEvent.run({ ...who('suspendedOrg'), data: { eventId: 'evSusp' } }))) === 'permission-denied');
   await seedEvent('evK', { organizerUid: 'someoneElse' });
   ck('cancelEvent: boolean-claim admin may cancel (was locked out)', !(await code(EH.cancelEvent.run({ ...who('adm', { admin: true }), data: { eventId: 'evK', reason: 'test' } }))));
   await seedEvent('evK2', { organizerUid: 'someoneElse' });
   ck('cancelEvent: a stranger may not', (await code(EH.cancelEvent.run({ ...who('buyer1'), data: { eventId: 'evK2' } }))) === 'permission-denied');
+
+  /* ═══ 10b. readiness sweep money fixes (2026-09-27) ═══ */
+  console.log('\n── readiness money fixes ──');
+  /* G12 — the idempotency key is the buyer's, not global */
+  const other = await EH.purchaseTickets.run({ ...who('buyer2'), data: { tierId: 'evP_t', quantity: 1, idempotencyKey: 'idem-paid-1' } });
+  ck("G12 another buyer reusing a key gets THEIR OWN order, never the first buyer's", other.orderId && other.orderId !== pr2.orderId && !other.idempotent, other.orderId);
+  const replay = await EH.purchaseTickets.run({ ...who('buyer1'), data: { tierId: 'evP_t', quantity: 1, idempotencyKey: 'idem-paid-1' } });
+  ck('G12 …while the same buyer replaying the key still gets the same order', replay.idempotent === true && replay.orderId === pr2.orderId);
+  ck('G12 a malformed key is refused', (await code(EH.purchaseTickets.run({ ...who('buyer1'), data: { tierId: 'evP_t', quantity: 1, idempotencyKey: '../x' } }))) === 'invalid-argument');
+  /* G9 — the last promo use cannot be redeemed twice by concurrent checkouts */
+  await seedEvent('evPromo');
+  await db.doc('eventPromoCodes/pcLast').set({ eventId: 'evPromo', code: 'LAST', isActive: true, discountType: 'fixed', discountValue: 100, uses: 0, maxUses: 1 });
+  const race = await Promise.all(['buyer1', 'buyer2', 'buyer3'].map((b, i) => EH.purchaseTickets.run({ ...who(b), data: { tierId: 'evPromo_t', quantity: 1, promoCode: 'last', idempotencyKey: 'race-' + i } }).then((r) => ({ ok: r }), (e) => ({ err: e.code }))));
+  const redeemed = race.filter((r) => r.ok).length;
+  ck('G9 three concurrent checkouts on a 1-use code → exactly ONE redeems it; uses = 1', redeemed === 1 && (await get('eventPromoCodes/pcLast')).uses === 1, JSON.stringify(race.map((r) => r.ok ? 'ok' : r.err)));
+  ck('G9 …the others are told the code is gone (not silently charged full price)', race.filter((r) => r.err === 'failed-precondition').length === 2);
+  /* G8 — whole shillings */
+  await seedEvent('evTier');
+  ck('G8 a fractional tier price is refused', (await code(EH.createTicketTier.run({ ...who('org1'), data: { eventId: 'evTier', name: 'Half', price: 99.5, quantity: 10 } }))) === 'invalid-argument');
+  ck('G8 a non-numeric tier price is refused (was NaN-accepted)', (await code(EH.createTicketTier.run({ ...who('org1'), data: { eventId: 'evTier', name: 'Bad', price: 'abc', quantity: 10 } }))) === 'invalid-argument');
+  await db.doc('eventTicketTiers/evTier_odd').set({ eventId: 'evTier', name: 'Odd', price: 333, quantity: 50, sold: 0, isActive: true, currency: 'KES' });
+  await db.doc('eventPromoCodes/pc15').set({ eventId: 'evTier', code: 'P15', isActive: true, discountType: 'percent', discountValue: 15, uses: 0 });
+  const odd = await EH.purchaseTickets.run({ ...who('buyer1'), data: { tierId: 'evTier_odd', quantity: 3, promoCode: 'p15', idempotencyKey: 'odd-1' } });
+  const oddOrder = await get('eventOrders/' + odd.orderId);
+  ck('G8 a percent promo leaves a WHOLE-shilling total (999 − 15 % = 849, not 849.15)', oddOrder.totalAmount === 849 && Number.isInteger(oddOrder.discountAmount), oddOrder.totalAmount);
+  /* G4 — no organizer cancellation once the event has started */
+  await seedEvent('evStarted', { startMs: Date.now() - 2 * H, endMs: Date.now() + 2 * H });   /* cancelEvent reads the real clock */
+  ck('G4 the organizer cannot cancel an event that has already started', (await code(EH.cancelEvent.run({ ...who('org1'), data: { eventId: 'evStarted', reason: 'late' } }))) === 'failed-precondition');
+  ck('G4 …an administrator still can (AdminOS decision)', !(await code(EH.cancelEvent.run({ ...who('adm', { admin: true }), data: { eventId: 'evStarted', reason: 'safety' } }))));
+  /* G3 — a retained refund penalty is released, not stranded */
+  await seedEvent('evPen', { startMs: NOW - 60 * H, endMs: NOW - 56 * H });
+  await db.doc('eventOrders/PEN1').set({ orderId: 'PEN1', eventId: 'evPen', buyerUid: 'buyer1', status: 'refunded', paymentRef: 'PEN1' });
+  await db.doc('eventSettlements/PEN1').set({ paymentRef: 'PEN1', orderId: 'PEN1', eventId: 'evPen', organizerUid: 'orgPen', status: 'HELD', grossCents: 50000, providerFeeCents: 1500, commissionCents: 1455, organizerNetCents: 47045, retainedPenaltyCents: 50000 });
+  const pen = await ES.releaseOne('PEN1', { nowMs: NOW });
+  ck('G3 a refunded order whose settlement kept a PENALTY is released to the organizer (was stranded)', pen.released === true && (await get('wallets/orgPen')).balance === 470, JSON.stringify(pen));
+  await db.doc('eventOrders/PEN2').set({ orderId: 'PEN2', eventId: 'evPen', buyerUid: 'buyer1', status: 'refunded', paymentRef: 'PEN2' });
+  await db.doc('eventSettlements/PEN2').set({ paymentRef: 'PEN2', orderId: 'PEN2', eventId: 'evPen', organizerUid: 'orgPen2', status: 'HELD', grossCents: 50000, organizerNetCents: 47045 });
+  ck('G3 …while a fully refunded order (no penalty kept) is still never released', (await ES.releaseOne('PEN2', { nowMs: NOW })).skipped === 'order_refunded');
 
   /* ═══ 11. wiring ═══ */
   console.log('\n── wiring ──');

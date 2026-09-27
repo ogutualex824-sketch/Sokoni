@@ -1051,6 +1051,10 @@ function renderProviders(){
      tab without being duplicated into two records. */
   const CAT_ALIASES = {
     "cleaning": ["cleaning","laundry"],   /* cleaning & laundry are the same hub */
+    /* The Entertainment Hub routes its "Artists & services" here (entertainment.html). These are the
+       provider-onboarding SERVICE_CATEGORIES entertainment subcategories, lower-cased. */
+    "entertainment": ["dj","mc","photographer","videographer","content creator","creative & media",
+                      "event planner","caterer","decorator","sound engineer","lighting technician","events","music teacher"],
   };
   if(activeCat){
     const matchCats = CAT_ALIASES[activeCat] || [activeCat];

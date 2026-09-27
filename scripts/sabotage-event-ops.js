@@ -34,6 +34,11 @@ const SUITES = {
   browser:  ['node', ['scripts/test-event-ops-browser.js']],
   transmit: ['node', ['scripts/test-etims-transmission.js']],
   integ:    ['node', ['scripts/test-entertainment-integrations.js']],
+  settle:   ['node', ['scripts/test-event-settlement.js']],
+  appdec:   ['node', ['scripts/test-application-decision-authority.js']],
+  ready:    ['node', ['scripts/test-entertainment-readiness.js']],
+  legal:    ['node', ['scripts/test-legal-compliance.js']],
+  crules:   ['node', ['scripts/run-creator-rules.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -51,6 +56,15 @@ const EH_ = 'functions/event-hub.js';
 const EI = 'functions/entertainment-integrations.js';
 const CATF = 'sokoni-integration-catalogue.js';
 const EIP = 'entertainment-integrations.html';
+const FOS = 'functions/financial-os.js';
+const CRH = 'functions/creator-hub.js';
+const VBK = 'functions/venue-booking.js';
+const ENH = 'functions/entertainment-hub.js';
+const ENA = 'functions/entertainment-admin.js';
+const APL = 'functions/application-lifecycle.js';
+const LEG = 'functions/legal-agreements.js';
+const HUB = 'entertainment.html';
+const STR = 'storage.rules';
 
 const M = [
   /* ── ticket PIN + admission ── */
@@ -305,12 +319,74 @@ const M = [
     from: '(i.hubs || []).indexOf(_filter.hub) === -1', to: 'false', expect: /filters the catalogue by hub/ },
   { group: 'integ', name: 'duplicate config: the Entertainment page gains a credentials form', file: EIP, suite: 'integ',
     from: '  <div class="grid" id="cards"></div>\n', to: '  <div class="grid" id="cards"></div>\n  <form id="cfg"><input name="apiKey" /></form>\n', expect: /no form/ },
+  /* ── whole-hub readiness sweep (2026-09-27) ── */
+  { group: 'ready', name: 'organizer authority back on the client-writable users.roles (self-mint)', file: EH, suite: 'settle',
+    from: "  const claims = (u && u.customClaims) || {};\n  if (claims.event_organizer !== true)",
+    to: "  const claims = { event_organizer: ((await getUser(uid).catch(() => ({}))).roles || []).includes('event_organizer') };\n  if (claims.event_organizer !== true)",
+    expect: /SELF-MINT/ },
+  { group: 'ready', name: 'a suspended organizer may publish (no re-check on publish)', file: EH, suite: 'settle',
+    from: "  await requireOrganizer(uid);\n  if (ev.status === 'live')", to: "  if (ev.status === 'live')", expect: /SUSPENDED/ },
+  { group: 'ready', name: 'promo maxUses checked outside the transaction only (over-redemption)', file: EH, suite: 'settle',
+    from: "    if (promoCodeId) {\n      const ps = await t.get(", to: "    if (false) {\n      const ps = await t.get(", expect: /G9/ },
+  { group: 'ready', name: 'purchase idempotency key global (another buyer\'s order returned)', file: EH, suite: 'settle',
+    from: ".doc(`${uid}__${_ik}`)", to: ".doc(_ik)", expect: /G12/ },
+  { group: 'ready', name: 'fractional / NaN ticket prices accepted', file: EH, suite: 'settle',
+    from: "  if (!Number.isFinite(parsedPrice) || !Number.isInteger(parsedPrice)) throw", to: "  if (false) throw", expect: /G8/ },
+  { group: 'ready', name: 'organizer cancels after the event started (refunds from SOKONI funds)', file: EH, suite: 'settle',
+    from: "  if (!isAdmin && ev.startDate && new Date(ev.startDate).getTime() <= Date.now()) {", to: "  if (false) {", expect: /G4/ },
+  { group: 'ready', name: 'a retained refund penalty is never released (stranded)', file: ES, suite: 'settle',
+    from: "    if (!_o || (_o.status !== 'paid' && !_penaltyKept))", to: "    if (!_o || _o.status !== 'paid')", expect: /G3/ },
+  { group: 'ready', name: 'event-ticket refund accepted DIRECTLY by fosSubmitRefund (wizard bypass)', file: FOS, suite: 'refunds',
+    from: "      if (_fi.exists && _fi.data().purpose === 'event_ticket' && opts.via !== 'event_wizard' && opts.via !== 'event_admin') {", to: "      if (false) {", expect: /DIRECTLY/ },
+  { group: 'ready', name: 'cancelled-event refund priced from the REQUEST, not the payment record', file: EA, suite: 'refunds',
+    from: "  const amountKES = pay ? Number(pay.amount) : NaN;", to: "  const amountKES = Number(d.amountKES) || (pay ? Number(pay.amount) : NaN);", expect: /PAYMENT RECORD/ },
+  { group: 'ready', name: 'forged approval: decidedBy trusted without the server decision record', file: APL, suite: 'appdec',
+    edits: [{ from: "  if (!rec) return { ok: false, reason: 'no server decision record — a decision is only made through applicationDecide' };\n", to: '' },
+            { from: "  if (rec.status !== canonStatus(after.status) || rec.decidedBy !== by) {", to: "  if (false) {" }],
+    expect: /A8|A9/ },
+  { group: 'ready', name: 'reconcile applies a status with no server decision (repair = grant)', file: APL, suite: 'ready',
+    from: "        const authN = await decisionAuthority(app, d.id);", to: "        const authN = { ok: true, by: req.auth.uid };", expect: /reconcile/ },
+  { group: 'ready', name: 'a suspended creator\'s films stay public (no visibility sync)', file: CRH, suite: 'ready',
+    from: "  const filmsChanged = await _syncCreatorVisibility(uid, out.to);", to: "  const filmsChanged = 0;", expect: /suspension moves/ },
+  { group: 'ready', name: 'catalogue lists films of a non-ACTIVE creator', file: CRH, suite: 'ready',
+    from: "films: snap.docs.filter((x) => activeC.has(x.data().creatorUid)).map(", to: "films: snap.docs.map(", expect: /legacy active film/ },
+  { group: 'ready', name: 'venue owner lifts their own suspension through venueUpdate', file: VBK, suite: 'ready',
+    from: "  if (updates.status !== undefined && !require('./admin-claim').isAdmin(request)) {", to: "  if (false) {", expect: /lift their own suspension/ },
+  { group: 'ready', name: 'moderator uid written onto the public venue document', file: ENA, suite: 'ready',
+    from: "      status: to, moderatedAt: FieldValue.serverTimestamp(),", to: "      status: to, moderatedBy: actor, moderatedAt: FieldValue.serverTimestamp(),", expect: /moderator's uid/ },
+  { group: 'ready', name: 'unlimited ratings (both the prior check and create-once removed)', file: ENH, suite: 'ready',
+    edits: [{ from: "    if (prior.exists) throw new HttpsError('already-exists', 'You have already rated this.');\n", to: '' },
+            { from: "    t.create(reviewRef, {", to: "    t.set(reviewRef, {" }],
+    expect: /cannot rate again/ },
+  { group: 'ready', name: 'ratings from viewers with no access', file: ENH, suite: 'ready',
+    from: "    if (!has) throw new HttpsError('permission-denied', 'Only viewers who have watched this can rate it.');", to: "", expect: /WITHOUT access/ },
+  { group: 'ready', name: 'the Hub page keeps business data in localStorage again', file: HUB, suite: 'ready',
+    from: "  const LOADERS = { events: loadEvents, films: loadFilms };", to: "  try { localStorage.setItem('sokoniBookings', '[]'); } catch (_) {}\n  const LOADERS = { events: loadEvents, films: loadFilms };", expect: /localStorage/ },
+  { group: 'ready', name: 'acceptance records rewritable (merge over the original signature)', file: LEG, suite: 'legal',
+    edits: [{ from: "    if (existing.has(docId)) { alreadyAccepted.push({ agreementId, version }); continue; }\n", to: '' },
+            { from: "    batch.create(_db().collection('legalAcceptances').doc(docId), {", to: "    batch.set(_db().collection('legalAcceptances').doc(docId), {" }],
+    expect: /unchanged|byte-identical/ },
+  { group: 'ready', rules: true, name: 'users.roles may add event_organizer (organizer self-mint, rules layer)', file: RULES, suite: 'rules',
+    from: "  return noSelfGrant() && noServerRoleSelfGrant()", to: "  return noSelfGrant()", expect: /self-mint|already holding event_organizer/ },
+  { group: 'ready', rules: true, name: 'applicant may write a decisive status / decidedBy (rules layer)', file: RULES, suite: 'rules', all: true,
+    from: "noAdminFields() && noApplicationDecision();", to: "noAdminFields();", expect: /status:approved|decidedBy/ },
+  { group: 'ready', rules: true, name: 'every signed-in user reads every promo code', file: RULES, suite: 'rules',
+    from: "  match /eventPromoCodes/{codeId} {\n  allow read:  if isAdmin();", to: "  match /eventPromoCodes/{codeId} {\n  allow read:  if isAuthed();", expect: /promo code/ },
+  { group: 'ready', rules: true, name: 'legacy artist profiles (phone + email) public again', file: RULES, suite: 'rules',
+    from: "  match /entArtists/{artistId} {\n  allow read:   if isAdmin() || isOwner();", to: "  match /entArtists/{artistId} {\n  allow read:   if true;", expect: /PII|lists legacy artists/ },
+  { group: 'ready', rules: true, name: 'venue owner may write status / rating (rules layer)', file: RULES, suite: 'rules',
+    from: ".hasAny(['status','rating','reviewCount','suspendedBy','suspendReason']));", to: ".hasAny(['suspendedBy']));", expect: /un-suspends|inflates/ },
+  { group: 'ready', rules: true, name: 'the superAdmin claim locked out of creator KYC review again', file: STR, suite: 'crules',
+    from: "                       || request.auth.token.superAdmin == true\n", to: "", expect: /SUPER ADMIN/ },
+  { group: 'ready', browser: true, name: 'Hub event cards link to a non-canonical page', file: HUB, suite: 'browser',
+    from: 'href="/event-hub.html?event=${encodeURIComponent(e.eventId)}"', to: 'href="/entertainment.html?event=${encodeURIComponent(e.eventId)}"', expect: /canonical page/ },
 ];
 
 const argv = process.argv.slice(2);
 const noRules = argv.includes('--no-rules');
 const noBrowser = argv.includes('--no-browser');
 const onlyGroup = (argv.find((a) => a.startsWith('--group=')) || '').slice(8) || null;
+const onlyName = (() => { const v = (argv.find((x) => x.startsWith('--only=')) || '').slice(7); return v ? new RegExp(v, 'i') : null; })();   /* re-run named attacks */
 
 function run(suite) {
   const [cmd, args] = SUITES[suite];
@@ -334,7 +410,7 @@ const BEFORE = new Map([...new Set(M.map((m) => m.file))].map((f) => [f, require
 const tally = { CAUGHT: 0, 'CAUGHT-OTHER': 0, MISSED: 0, CRASHED: 0, 'NO-ANCHOR': 0, SKIPPED: 0 };
 const used = new Set();
 for (const m of M) {
-  if ((m.rules && noRules) || (m.browser && noBrowser) || (onlyGroup && m.group !== onlyGroup)) { tally.SKIPPED++; continue; }
+  if ((m.rules && noRules) || (m.browser && noBrowser) || (onlyGroup && m.group !== onlyGroup) || (onlyName && !onlyName.test(m.name))) { tally.SKIPPED++; continue; }
   used.add(m.suite);
   const file = path.join(ROOT, m.file);
   const orig = fs.readFileSync(file);
@@ -348,7 +424,8 @@ for (const m of M) {
   try {
     fs.writeFileSync(file, res.out);
     const r = run(m.suite);
-    const failLines = r.out.split('\n').filter((l) => /^\s+FAIL\s/.test(l));
+    /* suites mark a failed check as "FAIL" or "✗" (test-legal-compliance) — both are detections */
+    const failLines = r.out.split('\n').filter((l) => /^\s+(FAIL|✗)\s/.test(l));
     if (/HARNESS CRASHED|^CRASH/m.test(r.out) && failLines.length === 0) verdict = 'CRASHED';
     else if (r.code === 0) verdict = 'MISSED';
     else if (failLines.some((l) => m.expect.test(l))) verdict = 'CAUGHT';

@@ -188,8 +188,8 @@ async function profileMenu(page, hostSel, label, w) {
         await page.click('#org-form button[type=submit]'); await page.waitForTimeout(200);
         const adds = await page.evaluate(() => window.__adds);
         const a = adds.find((x) => x.name === 'applications');
-        ck('event-manager: submits a canonical application (type event_organizer, acceptance on legalAcceptances, own uid)',
-          a && a.d.type === 'event_organizer' && a.d.role === 'event_organizer' && a.d.agreementSource === 'legalAcceptances' && !('agreementAccepted' in a.d) && a.d.uid === 'buyer1' && !('status' in a.d && a.d.status !== 'pending'), a && JSON.stringify(a.d).slice(0, 140));
+        ck('event-manager: submits a canonical application (type event_organizer, NO rules-refused role key, acceptance on legalAcceptances, own uid)',
+          a && a.d.type === 'event_organizer' && !('role' in a.d) && a.d.agreementSource === 'legalAcceptances' && !('agreementAccepted' in a.d) && a.d.uid === 'buyer1' && !('status' in a.d && a.d.status !== 'pending'), a && JSON.stringify(a.d).slice(0, 140));
         ck('event-manager: ID stored as last-4 only (no full document number)', a && a.d.identity && a.d.identity.documentLast4 === '1234' && Object.keys(a.d.identity).length === 2);
       }
       await profileMenu(page, '#sk-identity', 'event-manager (applicant)', w);

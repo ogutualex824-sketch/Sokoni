@@ -1150,10 +1150,28 @@ async function applyDecision(appId, app, opts = {}) {
    Returns { ok } — never throws: an unresolvable decider is a refusal, not a
    crash that leaves the application in limbo.
    ────────────────────────────────────────────────────────────────────────── */
-async function decisionAuthority(after) {
+/* 2026-09-27 (Entertainment readiness sweep): the claims check alone was FORGEABLE. Admin uids are
+   readable in public documents (moderatedBy / reviewedBy), so an applicant could write
+   status:'approved' + decidedBy:<a real admin uid> onto their own request and pass. A decision is
+   now honoured only when applicationDecide's SERVER-ONLY record (applicationDecisions/{appId},
+   rules write:false) names the same status and the same decider. The claims check stays as the
+   second layer. */
+const DECISIONS = 'applicationDecisions';
+async function decisionAuthority(after, appId) {
   const by = typeof after.decidedBy === 'string' ? after.decidedBy.trim() : '';
   if (!by) {
     return { ok: false, reason: 'no decidedBy — a decision is only made through applicationDecide' };
+  }
+  let rec = null;
+  try {
+    const s = appId ? await _db().collection(DECISIONS).doc(String(appId)).get() : null;
+    rec = s && s.exists ? s.data() : null;
+  } catch (e) {
+    return { ok: false, reason: `the server decision record could not be read (${e.message})` };
+  }
+  if (!rec) return { ok: false, reason: 'no server decision record — a decision is only made through applicationDecide' };
+  if (rec.status !== canonStatus(after.status) || rec.decidedBy !== by) {
+    return { ok: false, reason: `the application claims "${canonStatus(after.status)}" by "${by}", but the server decision record says "${rec.status}" by "${rec.decidedBy}"` };
   }
   try {
     const user = await getAuth().getUser(by);
@@ -1196,7 +1214,7 @@ exports.applicationLifecycle = onDocumentWritten(
 
     /* Phase 2a — authorise the decision before acting on it. A submitted
        application is a REQUEST; only an admin turns it into a grant. */
-    const authority = await decisionAuthority(after);
+    const authority = await decisionAuthority(after, appId);
     if (!authority.ok) {
       /* Already recorded for this exact status: return WITHOUT writing. The
          block below is itself a write to this document, so re-writing it would
@@ -1352,6 +1370,13 @@ exports.applicationDecide = onCall(
     const status = STATUS[decision];
     const actor = req.auth.uid;
 
+    /* The SERVER-ONLY decision record the trigger and the reconcile path require (decisionAuthority).
+       Written FIRST: the application write below re-fires the trigger, which must find it. */
+    await db.collection(DECISIONS).doc(String(applicationId)).set({
+      appId: String(applicationId), decision, status: canonStatus(status), decidedBy: actor, decidedAtMs: Date.now(),
+      reason: _sanText(reason, 500) || null,
+    });
+
     await ref.set({
       status,
       statusCanonical: canonStatus(status),
@@ -1412,7 +1437,11 @@ exports.applicationReconcile = onCall(
         await snap.ref.set(norm.patch, { merge: true });
         Object.assign(app, norm.patch);
       }
-      return { ok: true, results: [await applyDecision(snap.id, app, { decidedBy: req.auth.uid })] };
+      /* A repair re-applies a decision; it never MAKES one. A status with no matching server decision
+         record (e.g. one the applicant wrote) is refused — re-decide it through applicationDecide. */
+      const auth1 = await decisionAuthority(app, snap.id);
+      if (!auth1.ok) return { ok: true, results: [{ ok: false, appId: snap.id, refused: true, reason: auth1.reason }] };
+      return { ok: true, results: [await applyDecision(snap.id, app, { decidedBy: auth1.by })] };
     }
 
     if (!all) throw new HttpsError('invalid-argument', 'Pass "applicationId" or all:true.');
@@ -1425,7 +1454,9 @@ exports.applicationReconcile = onCall(
       try {
         const norm = await buildIntakePatch(app, d.id);
         if (norm) { await d.ref.set(norm.patch, { merge: true }); Object.assign(app, norm.patch); }
-        results.push(await applyDecision(d.id, app, { decidedBy: req.auth.uid }));
+        const authN = await decisionAuthority(app, d.id);
+        if (!authN.ok) { results.push({ ok: false, appId: d.id, refused: true, reason: authN.reason }); continue; }
+        results.push(await applyDecision(d.id, app, { decidedBy: authN.by }));
       } catch (e) {
         results.push({ ok: false, appId: d.id, error: e.message });
       }

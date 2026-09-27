@@ -57,6 +57,8 @@ const fakeDb = {
     const ops = [];
     return {
       set: (ref, data, opts) => ops.push(() => ref.set(data, opts)),
+      /* Admin SDK WriteBatch.create: fails the whole commit if the document already exists. */
+      create: (ref, data) => ops.push(async () => { if ((await ref.get()).exists) { const e = new Error('ALREADY_EXISTS'); e.code = 6; throw e; } return ref.set(data); }),
       update: (ref, data) => ops.push(() => ref.update(data)),
       delete: () => {},
       async commit() { for (const op of ops) await op(); committed++; },
@@ -318,6 +320,16 @@ const accept = (acceptances, sigType, extra) => Object.assign({
   await legal._h.legalSetEnforcement(req('admin', { role: 'provider', enabled: false }, true));
   const g3 = await legal.assertLegalCompliance('u2', 'provider');
   ok('enforcement can be turned back OFF (instant rollback)', g3.enforced === false);
+
+  /* 9. Acceptances are WRITE-ONCE (2026-09-27): a repeat acceptance of the same version must not
+        rewrite the time, signature, IP or read evidence of the original. */
+  console.log('\nImmutability');
+  const once = [{ agreementId: 'privacy-policy', version: '1.0' }];
+  await legal._h.legalAccept(req('u7', accept(once)));
+  const first = JSON.stringify(store.get('legalAcceptances/u7_privacy-policy_1.0'));
+  const again = await legal._h.legalAccept(req('u7', accept(once, 'drawn', { signature: { type: 'typed', name: 'Someone Else', confirmed: true } })));
+  ok('a repeat acceptance of the same version returns unchanged (nothing rewritten)', again.unchanged === true && again.count === 0 && again.alreadyAccepted.length === 1);
+  ok('…the ORIGINAL record is byte-identical (signed name, time, evidence kept)', JSON.stringify(store.get('legalAcceptances/u7_privacy-policy_1.0')) === first && JSON.parse(first).signedName === 'Alex Ochieng');
 
   console.log(`\n${pass} passed, ${fail} failed\n`);
   process.exit(fail ? 1 : 0);

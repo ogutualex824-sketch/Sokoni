@@ -37,7 +37,10 @@ async function suite(env, label, served) {
   await env.withSecurityRulesDisabled(async (c) => {
     const db = c.firestore(); const f = (p, d) => db.doc(p).set(d);
     await f('entVenues/v1', { uid: 'owner1', name: 'Hall', status: 'pending' });
-    await f('entArtists/a1', { uid: 'owner1', name: 'DJ', status: 'pending' });
+    await f('entArtists/a1', { uid: 'owner1', name: 'DJ', status: 'pending', phone: '0712345678', email: 'dj@x.co' });
+    await f('entArtists/a2', { uid: 'owner2', name: 'Band', status: 'approved', phone: '0799999999' });
+    await f('entReviews/r1', { uid: 'owner2', rating: 5, status: 'pending' });
+    await f('venues/cv1', { ownerId: 'owner1', name: 'Hall', status: 'suspended', rating: 3.1, reviewCount: 4 });
     await f('eventSettlements/PAY1', { organizerUid: 'org1', status: 'HELD', organizerNetCents: 100 });
     await f('eventExceptions/x1', { kind: 'partial_refund', status: 'OPEN' });
     await f('eventOrders/o1', { buyerUid: 'buyer1', status: 'pending_payment' });
@@ -56,6 +59,11 @@ async function suite(env, label, served) {
     await f('eventFiscal/PAY1', { saleKey: 'PAY1', eventId: 'e1', organizerUid: 'org1', status: 'SUBMITTED', invoiceId: 'inv1' });
     await f('eventFiscalReversals/cn1', { executionId: 'cn1', fiscalRecordId: 'PAY1', organizerUid: 'org1', status: 'CREDIT_NOTE_PENDING', creditNoteReference: null });
     await f('etimsInvoices/inv1', { sellerUid: 'org1', status: 'pending_submission', receiptNumber: null, totals: { totAmt: 2000 } });
+    await f('users/buyer1', { uid: 'buyer1', roles: ['buyer'], displayName: 'B' });
+    await f('users/org1', { uid: 'org1', roles: ['buyer', 'event_organizer'], displayName: 'O' });
+    await f('applications/app1', { uid: 'buyer1', role: 'event_organizer_applicant', status: 'pending' });
+    await f('applicationDecisions/app1', { status: 'rejected', decidedBy: 'admin1' });
+    await f('eventPromoCodes/pc1', { eventId: 'e1', code: 'JAZZ20', discountValue: 20 });
   });
   const till = env.authenticatedContext('till1', { email: 'till1@x.co', email_verified: true }).firestore();
   const admin = env.authenticatedContext('admin1', { admin: true }).firestore();
@@ -66,6 +74,45 @@ async function suite(env, label, served) {
 
   /* expectDeny: denied under SERVED rules; under the allow-all counterproof the same op must SUCCEED. */
   const expectDeny = async (name, p) => { if (served) ck(`${label}: ${name} DENIED`, await denied(p)); else ck(`${label}: ${name} flips to ALLOWED under allow-all`, await allowed(p)); };
+
+  /* ── readiness sweep 2026-09-27: organizer self-mint, forged application decision, promo codes ── */
+  await expectDeny('buyer adds event_organizer to their OWN users.roles (organizer self-mint)',
+    buyer.doc('users/buyer1').update({ roles: ['buyer', 'event_organizer'] }));
+  await expectDeny('a new account is created already holding event_organizer',
+    stranger.doc('users/stranger').set({ uid: 'stranger', roles: ['event_organizer'] }));
+  await expectDeny('applicant writes status:approved on their own application',
+    buyer.doc('applications/app1').update({ status: 'approved' }));
+  await expectDeny('applicant spells it "Approved" (canonStatus lower-cases)',
+    buyer.doc('applications/app1').update({ status: 'Approved' }));
+  await expectDeny('applicant writes decidedBy naming a real admin',
+    buyer.doc('applications/app1').update({ decidedBy: 'admin1' }));
+  await expectDeny('applicant CREATES an application already approved + decidedBy',
+    buyer.doc('applications/app2').set({ uid: 'buyer1', status: 'approved', decidedBy: 'admin1' }));
+  await expectDeny('anyone writes the server decision record',
+    buyer.doc('applicationDecisions/app1').set({ status: 'approved', decidedBy: 'admin1' }));
+  await expectDeny('an applicant reads the decision record', buyer.doc('applicationDecisions/app1').get());
+  await expectDeny('a signed-in user lists every event promo code', stranger.collection('eventPromoCodes').get());
+  if (served) {
+    ck(`${label}: sign-up still writes roles:['buyer']`, await allowed(env.authenticatedContext('newbie').firestore().doc('users/newbie').set({ uid: 'newbie', roles: ['buyer'] })));
+    ck(`${label}: driver onboarding still arrayUnions 'driver'`, await allowed(buyer.doc('users/buyer1').update({ roles: ['buyer', 'driver'] })));
+    ck(`${label}: an approved organizer's unrelated edit keeps the existing role`, await allowed(org.doc('users/org1').update({ displayName: 'Kamau', roles: ['buyer', 'event_organizer', 'driver'] })));
+    ck(`${label}: applicant still submits a PENDING application`, await allowed(buyer.doc('applications/app3').set({ uid: 'buyer1', status: 'pending' })));
+    ck(`${label}: applicant still amends their own pending application`, await allowed(buyer.doc('applications/app1').update({ phone: '0712345678' })));
+    ck(`${label}: admin reads the decision record`, await allowed(admin.doc('applicationDecisions/app1').get()));
+  }
+
+  /* legacy EntHub retired from the client; canonical venues hardened (2026-09-27) */
+  await expectDeny('a stranger reads an artist profile holding a phone + email (PII)', stranger.doc('entArtists/a2').get());
+  await expectDeny('a stranger lists legacy artists', stranger.collection('entArtists').get());
+  await expectDeny('a stranger lists legacy venues', stranger.collection('entVenues').get());
+  await expectDeny('a stranger reads an unapproved review', stranger.doc('entReviews/r1').get());
+  await expectDeny('a client creates a legacy artist profile', owner.doc('entArtists/a9').set({ uid: 'owner1', name: 'X', status: 'pending' }));
+  await expectDeny('a client books a legacy artist with its own price + payment ref', buyer.doc('entArtistBookings/b9').set({ uid: 'buyer1', artistUid: '', totalPrice: 1, paymentRef: 'FAKE' }));
+  await expectDeny('a client books a legacy venue with its own price', buyer.doc('entVenueBookings/b9').set({ uid: 'buyer1', totalPrice: 1, status: 'confirmed' }));
+  await expectDeny('a venue owner un-suspends their own venue', owner.doc('venues/cv1').update({ status: 'active' }));
+  await expectDeny('a venue owner inflates their rating', owner.doc('venues/cv1').update({ rating: 5, reviewCount: 999 }));
+  await expectDeny('a venue owner creates a venue already ACTIVE', owner.doc('venues/cv2').set({ ownerId: 'owner1', name: 'Club', status: 'active' }));
+  await expectDeny('a venue owner creates a venue marked verified', owner.doc('venues/cv4').set({ ownerId: 'owner1', name: 'Club', status: 'pending', verified: true }));
 
   await expectDeny('client mints a VALID entTickets doc (own price, no payment)',
     buyer.doc('entTickets/t1').set({ uid: 'buyer1', eventId: 'e1', status: 'valid', price: 1, organizerUid: 'x' }));
@@ -123,12 +170,11 @@ async function suite(env, label, served) {
   await expectDeny('seller alters the original invoice amount', org.doc('etimsInvoices/inv1').update({ totals: { totAmt: 1 } }));
 
   if (served) {
-    ck(`${label}: venue created PENDING is allowed (the product still works)`,
-      await allowed(owner.doc('entVenues/v3').set({ uid: 'owner1', name: 'Garden', status: 'pending' })));
-    ck(`${label}: owner edits own venue WITHOUT touching status`,
-      await allowed(owner.doc('entVenues/v1').update({ name: 'Hall B' })));
-    ck(`${label}: artist profile created PENDING is allowed`,
-      await allowed(owner.doc('entArtists/a3').set({ uid: 'owner1', name: 'Band', status: 'pending' })));
+    /* Legacy EntHub RETIRED from the client (2026-09-27): owner + admin read only, no browser writes. */
+    ck(`${label}: the legacy record's OWNER can still read it (data rights)`, await allowed(owner.doc('entArtists/a1').get()));
+    ck(`${label}: an admin can read legacy records (AdminOS moderation)`, await allowed(admin.doc('entVenues/v1').get()));
+    ck(`${label}: canonical venue — owner edits the name/description`, await allowed(owner.doc('venues/cv1').update({ name: 'Hall B', description: 'Wide' })));
+    ck(`${label}: canonical venue — a PENDING venue can be created by its owner`, await allowed(owner.doc('venues/cv3').set({ ownerId: 'owner1', name: 'Garden', status: 'pending' })));
     ck(`${label}: organizer reads OWN settlement`, await allowed(org.doc('eventSettlements/PAY1').get()));
     ck(`${label}: buyer reads own order`, await allowed(buyer.doc('eventOrders/o1').get()));
     ck(`${label}: buyer reads OWN refund request`, await allowed(buyer.doc('eventRefundRequests/o1').get()));

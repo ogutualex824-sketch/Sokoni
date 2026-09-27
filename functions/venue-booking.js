@@ -352,6 +352,13 @@ exports.venueUpdate = onCall(CF_OPTS, exports._h.venueUpdate = async (request) =
 
   const updates = { updatedAt: admin.firestore.Timestamp.now() };
   allowed.forEach(k => { if (d[k] !== undefined) updates[k] = d[k]; });
+  /* Status (2026-09-27 readiness sweep): an owner may pause / resume their own venue, but a SUSPENDED
+     venue is an AdminOS decision (entAdminSetListingStatus kind:'booking_venue') — the owner could
+     previously write any status here and lift their own suspension. */
+  if (updates.status !== undefined && !require('./admin-claim').isAdmin(request)) {
+    if (String(venue.status) === 'suspended') throw new HttpsError('permission-denied', 'This venue is suspended. Contact SOKONI support.');
+    if (!['active', 'inactive'].includes(String(updates.status))) throw new HttpsError('invalid-argument', 'status must be active or inactive.');
+  }
   if (updates.waitlistEnabled !== undefined) updates.waitlistEnabled = !!updates.waitlistEnabled;
 
   if (updates.pricing)          updates.pricing          = _sanitizePricing(updates.pricing);

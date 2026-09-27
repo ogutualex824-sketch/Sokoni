@@ -453,8 +453,28 @@ _h.legalAccept = async (req) => {
   const catalogue = await _catalogueFor(role);
   const byId = {}; catalogue.forEach((a) => { byId[a.id] = a; });
 
+  /* WRITE-ONCE (2026-09-27, Entertainment readiness sweep). The record id is deterministic per
+     (user, agreement, version), but it was written with set(...{merge:true}): accepting the same version
+     again silently REWROTE acceptedAt, the signature, the IP and the read evidence of the original
+     acceptance. An acceptance is a legal fact at a moment; the first one stands. Existing records are
+     read first and left untouched; only a genuinely new (agreement, version) is written, with create(). */
+  const wanted = [];
+  for (const it of items) {
+    const agreementId = _san(it.agreementId, 100);
+    const cat = byId[agreementId];
+    if (!cat) continue;
+    const version = _san(it.version, 20) || cat.version;
+    wanted.push(_db().collection('legalAcceptances').doc(`${uid}_${agreementId}_${version}`));
+  }
+  const existing = new Set();
+  if (wanted.length) {
+    const snaps = await Promise.all(wanted.map((r) => r.get()));
+    snaps.forEach((s) => { if (s.exists) existing.add(s.id); });
+  }
+
   const batch = _db().batch();
   const recorded = [];
+  const alreadyAccepted = [];
   for (const it of items) {
     const agreementId = _san(it.agreementId, 100);
     const cat = byId[agreementId];
@@ -463,7 +483,8 @@ _h.legalAccept = async (req) => {
     if (version !== cat.version) throw new HttpsError('failed-precondition',
       `Agreement "${agreementId}" must be accepted at current version ${cat.version}.`);
     const docId = `${uid}_${agreementId}_${version}`;
-    batch.set(_db().collection('legalAcceptances').doc(docId), {
+    if (existing.has(docId)) { alreadyAccepted.push({ agreementId, version }); continue; }
+    batch.create(_db().collection('legalAcceptances').doc(docId), {
       userId: uid, businessId: businessId || null,
       role: role || null, agreementId, agreementName: cat.name, version,
       accepted: true, acceptedAt: _ts(), acceptedFrom: ip || null,
@@ -474,8 +495,12 @@ _h.legalAccept = async (req) => {
       signatureType: sigType, signedName, signatureHash,
       readEvidence: readEvidence[agreementId] || null,
       createdAt: _ts(),
-    }, { merge: true });
+    });
     recorded.push({ agreementId, version });
+  }
+  /* Everything asked for was already accepted at this version: nothing is rewritten. */
+  if (!recorded.length && alreadyAccepted.length) {
+    return { recorded: [], count: 0, alreadyAccepted, unchanged: true };
   }
   if (!recorded.length) throw new HttpsError('invalid-argument', 'No valid agreements to accept.');
 

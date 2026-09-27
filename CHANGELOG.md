@@ -1,3 +1,115 @@
+## 2026-09-27 (205) — Entertainment Hub whole-hub readiness sweep (KRA provider DEFERRED)
+
+- **Scope.**
+  - The whole Entertainment surface was inventoried in four parts (UI, server / admin authority, money,
+    lineage / communications / search / notifications). Every finding was re-verified in code before it was
+    fixed or classified.
+  - The KRA provider protocol stays **DEFERRED** (owner decision; external specification).
+  - Full matrices are in `docs/ENTERTAINMENT_READINESS.md`.
+- **Security fixed:**
+  - **Organizer self-mint.** Any user could write `users.roles:['event_organizer']` and become an organizer.
+    - `requireOrganizer` now trusts only the Auth claim.
+    - The rules forbid adding server roles to `roles`.
+    - `publishEvent` re-checks the organizer.
+  - **Forged application approval.** An applicant could write `status` plus `decidedBy` naming a real admin
+    (admin uids are public).
+    - `applicationDecide` now writes a server-only `applicationDecisions/{id}`.
+    - The trigger and the reconcile path require it.
+    - The rules refuse decisive status and decision fields from applicants.
+  - **Promo codes.** Every event's codes were readable by any user; they are now admin read only.
+  - **Legacy `ent*` collections retired from the client.** They exposed public phones and emails, pending and
+    suspended records, and accepted client-set prices, payment refs and status.
+  - **Venues.** Owners could lift their own suspension and rewrite their rating (rules and `venueUpdate`).
+  - **Ratings.** Unlimited ratings were possible on any listing, including films. Now one per viewer, and only
+    with access.
+  - **KYC.** The `superAdmin` claim could not read creator KYC documents.
+- **Money fixed:**
+  - The performer "Book Now" deposit is removed. It was browser-priced, had no payment intent, and credited the
+    **payer's** own wallet.
+  - `fosSubmitRefund` no longer accepts event tickets directly. The paths are the wizard, or the new AdminOS
+    op `eventAdminRefundCancelled`, whose amount comes from the payment record rather than the UI.
+  - Retained refund penalties are released instead of stranded.
+  - Organizers cannot cancel after the event has started.
+  - Promo `maxUses` is enforced inside the purchase transaction.
+  - Purchase idempotency keys are namespaced per buyer.
+  - Ticket prices must be whole shillings; percent promos are rounded.
+- **User-facing fixed:**
+  - `entertainment.html` is rebuilt as a canonical entry point: real events, films, provider-marketplace artists
+    and services, venue-booking venues. It has honest loading, empty and unavailable states. Removed: mock
+    performers, fake stories, static bundles, `localStorage` bookings and client money.
+  - `venue-booking.html` now boots; it threw on load. Its wording follows the server's booking status and it is
+    honest about payment.
+  - `venue-manager.html` now saves through `bookingDispatch`, and its blocked dates are listed and deleted where
+    they are written.
+  - The organizer application now submits; the rules had refused its `role` key.
+  - Suspended creators' films are hidden from the catalogue and search.
+  - Event Hub: the Profile button, the organizer link and the My Tickets deep link are fixed.
+  - Event Manager renders unknown money as "—".
+  - The terms page has a profile menu.
+  - `ent-organizer.html` now redirects to Event Manager.
+- **Agreements.**
+  - `legalAcceptances` are write-once; a repeat acceptance returns `unchanged` and never rewrites the original.
+- **AdminOS:**
+  - Canonical venues are moderated under a new listing kind, `booking_venue`.
+  - New "Organizer integrations" tab.
+  - The cancelled-event refund is priced on the server.
+  - Moderator uids are no longer written onto public listings.
+- **Release gate (gap 17).**
+  - `etims-release-gate.js` is fixture-backed by default, with positive controls, and never touches a project.
+  - A live run needs `--live --project --env`, is read-only, and treats NO_DATA as not a pass.
+- **Tests:**
+  - New suites: `test-entertainment-readiness.js` 45/0 and `test-etims-release-gate.js` 18/0.
+  - New runner: `scripts/run-rules-suite.js`, which runs any rules suite on a private port.
+  - Updated suites:
+
+    | Area | Suite and result |
+    |---|---|
+    | Events | settlement 99, refunds 61, admin 68 |
+    | Applications and legal | application decision authority 21, legal compliance 47 |
+    | Rules | entertainment 145, creator + storage 134 |
+    | Browser | real-module walk 280, Entertainment browser 230 |
+    | Creator | preview 46, ui 64 |
+    | Entertainment | integrations 36, registry 65 |
+
+  - **BASELINE:**
+    - `test-refund-authority-convergence`: harness error on the untouched POS role tables.
+    - `test-landlord-rules`: 3 failures, identical on HEAD's ruleset.
+- **Sabotage:** **119/119 caught** (0 missed, 0 crashed; 26 new `[ready]` attacks; sha-256 restore verified; 16 suites GREEN after restore).
+- **Production:**
+  - Deployments 0. Provider calls 0. Production writes 0. Production reads 0 in this slice.
+- **Remaining** (see the readiness doc):
+  - Platform webhook: a no-intent payment's seller falls back to the payer.
+  - Door-only receivable collection is an open policy question.
+  - Venue payment rail is UNPROVEN.
+  - Connect is frozen.
+  - Missing Creator and venue notifications.
+  - Typesense status mismatch.
+  - Lineage: 581 live commits are missing, money-module versions are undecided, and the onboarding self-mint fix
+    is not on this branch.
+- **Files:**
+  - Functions: `functions/{event-hub,event-settlement,event-admin,event-refunds,financial-os,application-lifecycle,creator-hub,entertainment-hub,entertainment-admin,venue-booking,legal-agreements}.js`
+  - Rules: `firestore.rules(.build)`, `storage.rules`
+  - Pages: `entertainment.html`, `ent-organizer.html`, `entertainment-terms.html`, `event-hub.html`,
+    `event-manager.html`, `venue-booking.html`, `venue-manager.html`, `services.html`
+  - Scripts: `sokoni-aos-entertainment.js`, `sokoni-firestore-search.js`, `scripts/etims-release-gate.js`,
+    `scripts/sabotage-event-ops.js`, `scripts/run-rules-suite.js`, plus tests
+  - Docs: `docs/ENTERTAINMENT_READINESS.md`, `docs/EVENTS_OPERATIONS.md`, `docs/ENTERTAINMENT_HUB.md`
+- **Database.**
+  - New server-only collection `applicationDecisions/{appId}`.
+  - Films get `status: 'creator_suspended'` while their creator is suspended.
+  - Venues get `suspendReason`.
+  - `eventOrderIdempotency` ids are now `{uid}__{key}`: an in-flight replay across deploy uses a new id.
+- **API.**
+  - New `adminOsDispatch` op `eventAdminRefundCancelled`.
+  - `entAdminListings` / `entAdminSetListingStatus` gain the kind `booking_venue`.
+  - `fosSubmitRefund` refuses `event_ticket` payments.
+  - `legalAccept` returns `unchanged` on a repeat acceptance.
+- **Breaking:**
+  - Legacy EntHub client reads and writes are denied.
+  - Organizers without the `event_organizer` claim (a `users.roles` entry alone) can no longer create events.
+  - Applications carrying a status with no server decision record are not projected; re-decide them through
+    applicationDecide.
+
 ## 2026-09-27 (204) — Entertainment integrations routing + KRA transmission hardening (CODE GREEN; KRA PROVIDER BLOCKED on spec)
 
 - **Owner decisions:**

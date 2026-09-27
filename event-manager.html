@@ -473,6 +473,8 @@
   let currentEventId = null;
 
   function esc(s){ return s==null?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  /* Unknown money renders "—", never "KES 0" (CLAUDE.md UI Data Integrity); a real canonical 0 still shows. */
+  function _kesOrDash(v){ const n = Number(v); return (v == null || !Number.isFinite(n)) ? '—' : 'KES ' + n.toLocaleString(); }
   function toast(m){ const el=document.getElementById('toast'); el.textContent=m; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),3200); }
   async function callCF(name,data={}){ const r=await fns.httpsCallable(name)(data); return r.data; }
 
@@ -596,7 +598,9 @@
       msg.textContent = 'Submitting…';
       try {
         await fs.collection('applications').add({
-          uid: user.uid, type: 'event_organizer', role: 'event_organizer', hub: 'entertainment', category: 'events',
+          /* `type` resolves the role (application-lifecycle resolveRole). A `role` key is refused by the
+             rules (noAdminFields — an applicant may not name their own role), so the old write never landed. */
+          uid: user.uid, type: 'event_organizer', hub: 'entertainment', category: 'events',
           name: String(f.get('name')).trim().slice(0, 120), organizerType: f.get('organizerType'),
           phoneNumber: phone, email: String(f.get('email') || '').trim().slice(0, 200),
           eventTypes: types.slice(0, 17), scale: f.get('scale'), payoutPhone: payout,
@@ -764,7 +768,7 @@
         <div style="font-size:24px">${statusEmoji(e.status)}</div>
         <div class="event-row-info">
           <div class="event-row-title">${esc(e.title)}</div>
-          <div class="event-row-meta">${dateStr} · ${esc(e.venue || '')} · ${e.totalTicketsSold || 0} tickets sold · KES ${(e.totalRevenue||0).toLocaleString()}</div>
+          <div class="event-row-meta">${dateStr} · ${esc(e.venue || '')} · ${e.totalTicketsSold == null ? '—' : esc(e.totalTicketsSold)} tickets sold · ${_kesOrDash(e.totalRevenue)}</div>
         </div>
         <div class="event-row-actions">
           <span class="badge ${STATUS_BADGE[e.status] || 'badge-gray'}">${esc(e.status.toUpperCase())}</span>
@@ -1015,7 +1019,7 @@
         <div class="card">
           <div class="card-title">Platform Fee</div>
           <div style="font-size:12px;color:var(--text2)">
-            Total revenue: KES ${(a.totalRevenue||0).toLocaleString()} · Platform fee (3%): KES ${(a.platformFees||0).toLocaleString()} · <b style="color:var(--green)">Your payout: KES ${(a.organizerRevenue||0).toLocaleString()}</b>
+            Total revenue: ${_kesOrDash(a.totalRevenue)} · Platform fee (3%): ${_kesOrDash(a.platformFees)} · <b style="color:var(--green)">Your payout: ${_kesOrDash(a.organizerRevenue)}</b>
           </div>
         </div>`;
     } catch(e) { el.innerHTML = `<div class="empty" style="color:var(--red)">${e.message}</div>`; }

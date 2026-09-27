@@ -27,17 +27,20 @@ function requireAuth(context) {
   return context.auth.uid;
 }
 
-/* An organizer is either the legacy numeric role (users.role >= 2) or an account the
-   canonical approval authority granted the `event_organizer` role (application-lifecycle
-   grantAccountRole → users.roles[]). Both are server-written: firestore.rules' noAdminFields
-   blocks clients from writing `role` and `roles`. Nothing in functions/ writes the numeric
-   role, so before the approval path existed NO account could create an event. */
+/* An organizer is an account holding the `event_organizer` CUSTOM CLAIM — minted only by the
+   canonical approval authority (applicationDecide → application-lifecycle → role-authority
+   claimsFor), after the organizer agreements are accepted, and revoked (false) on suspension.
+   2026-09-27 (Entertainment readiness sweep): this used to read users.roles[] / users.role from
+   Firestore on the belief that the rules blocked clients from writing them. They did not — `roles`
+   is client-writable (sign-up writes ['buyer'], driver onboarding arrayUnions 'driver') — so ANY
+   signed-in user could write roles:['event_organizer'] and create, publish and sell tickets with no
+   approval and no agreements. The Auth record is read (not the caller's token) so a suspension
+   takes effect immediately rather than at the next token refresh. */
 async function requireOrganizer(uid) {
-  const user = await getUser(uid);
-  const role = user.role || 0;
-  const approved = Array.isArray(user.roles) && user.roles.includes('event_organizer');
-  if (role < 2 && !approved) throw new HttpsError('permission-denied', 'Organizer role required');
-  return user;
+  const u = await auth().getUser(uid).catch(() => null);
+  const claims = (u && u.customClaims) || {};
+  if (claims.event_organizer !== true) throw new HttpsError('permission-denied', 'Organizer role required — apply to become an event organizer.');
+  return claims;
 }
 
 /* Legacy numeric `role` claim (>= 4 = admin) OR the canonical boolean admin claims (admin-claim.js).
@@ -169,6 +172,8 @@ exports.publishEvent = onCall(CF_OPTS, async (req) => {
   if (!snap.exists) throw new HttpsError('not-found', 'Event not found');
   const ev = snap.data();
   if (ev.organizerUid !== uid) throw new HttpsError('permission-denied', 'Not event owner');
+  /* Owning a draft is not enough: a suspended / de-roled organizer cannot put it on sale. */
+  await requireOrganizer(uid);
   if (ev.status === 'live') throw new HttpsError('failed-precondition', 'Already live');
   /* Buyers must know the refund terms before they can buy (event-refunds.js setPolicy). */
   if (!ev.refundPolicy || !ev.refundPolicy.mode) throw new HttpsError('failed-precondition', 'Set the event refund policy before publishing');
@@ -207,6 +212,12 @@ exports.cancelEvent = onCall(CF_OPTS, async (req) => {
   const isAdmin = _isAdminCaller(req, role);
   if (!isOwner && !isAdmin) throw new HttpsError('permission-denied', 'Not authorised');
   if (ev.status === 'cancelled') throw new HttpsError('failed-precondition', 'Already cancelled');
+  /* 2026-09-27: an organizer could cancel AFTER the event (and after being paid): every refund then
+     came out of SOKONI's funds (refund_after_release). Once the event has started, cancellation is an
+     administrator's decision (AdminOS), taken with the settlement exceptions in view. */
+  if (!isAdmin && ev.startDate && new Date(ev.startDate).getTime() <= Date.now()) {
+    throw new HttpsError('failed-precondition', 'This event has already started. Contact SOKONI support to cancel it.');
+  }
 
   /* The event flips FIRST, in a transaction: two concurrent cancels cannot both proceed, and from
      this moment settlement release refuses (releaseOne checks the event status). */
@@ -410,7 +421,10 @@ exports.createTicketTier = onCall(CF_OPTS, async (req) => {
   if (ev.organizerUid !== uid) throw new HttpsError('permission-denied', 'Not event owner');
   if (ev.status === 'cancelled') throw new HttpsError('failed-precondition', 'Event is cancelled');
 
-  const parsedPrice = parseFloat(price);
+  const parsedPrice = Number(price);
+  /* Whole shillings only (2026-09-27): M-PESA collects whole shillings, so a fractional price made the
+     settled gross differ from what was actually collected. NaN / Infinity were accepted too. */
+  if (!Number.isFinite(parsedPrice) || !Number.isInteger(parsedPrice)) throw new HttpsError('invalid-argument', 'Price must be a whole number of shillings');
   if (parsedPrice < 0) throw new HttpsError('invalid-argument', 'Price cannot be negative');
   const parsedQty = parseInt(quantity, 10);
   if (parsedQty < 1) throw new HttpsError('invalid-argument', 'Quantity must be at least 1');
@@ -518,7 +532,11 @@ exports.purchaseTickets = onCall({ ...CF_OPTS, secrets: [require('./event-ops').
   if (qty < 1 || qty > 20) throw new HttpsError('invalid-argument', 'Quantity 1-20');
 
   // Idempotency ref — checked INSIDE the transaction (see below) to prevent TOCTOU races
-  const idemRef = db().collection('eventOrderIdempotency').doc(idempotencyKey);
+  /* Namespaced by the buyer (2026-09-27): a global key let one buyer's replay return ANOTHER buyer's
+     orderId. The key is also bounded so it is always a valid document id. */
+  const _ik = String(idempotencyKey);
+  if (!/^[A-Za-z0-9_-]{4,128}$/.test(_ik)) throw new HttpsError('invalid-argument', 'idempotencyKey must be 4–128 letters, digits, _ or -');
+  const idemRef = db().collection('eventOrderIdempotency').doc(`${uid}__${_ik}`);
 
   const tierRef = db().collection('eventTicketTiers').doc(tierId);
   const tierSnap = await tierRef.get();
@@ -555,7 +573,7 @@ exports.purchaseTickets = onCall({ ...CF_OPTS, secrets: [require('./event-ops').
       if ((!promo.maxUses || promo.uses < promo.maxUses) && (!promo.expiresAt || new Date(promo.expiresAt) > new Date())) {
         promoCodeId = promoSnap.docs[0].id;
         if (promo.discountType === 'percent') {
-          discountAmount = (tier.price * qty * promo.discountValue) / 100;
+          discountAmount = Math.round((tier.price * qty * promo.discountValue) / 100);
         } else {
           discountAmount = Math.min(promo.discountValue, tier.price * qty);
         }
@@ -605,6 +623,15 @@ exports.purchaseTickets = onCall({ ...CF_OPTS, secrets: [require('./event-ops').
     const cap = freshEv.data().capacity;
     if (cap && (Number(freshEv.data().totalTicketsSold) || 0) + qty > cap) {
       throw new HttpsError('resource-exhausted', 'This event is at capacity');
+    }
+    /* Promo usage is re-checked HERE (2026-09-27): maxUses was only checked before the transaction, so
+       concurrent checkouts could each redeem the last use. Read phase, before any write. */
+    if (promoCodeId) {
+      const ps = await t.get(db().collection('eventPromoCodes').doc(promoCodeId));
+      const p = ps.exists ? ps.data() : null;
+      if (!p || p.isActive !== true || (p.maxUses && (Number(p.uses) || 0) >= p.maxUses) || (p.expiresAt && new Date(p.expiresAt) <= new Date())) {
+        throw new HttpsError('failed-precondition', 'This promo code is no longer available. Remove it and try again.');
+      }
     }
     if (td.maxPerBuyer) {
       const mine = await t.get(db().collection('eventOrders').where('buyerUid', '==', uid).where('tierId', '==', tierId));

@@ -1,5 +1,10 @@
 # Entertainment Hub — architecture and completion report
 
+> **2026-09-27 whole-hub readiness sweep:** authority map, AdminOS / Super Admin capability matrix,
+> payment matrix, the blockers found and fixed, and what remains — [[ENTERTAINMENT_READINESS]].
+> The Hub entry (`entertainment.html`) was rebuilt as a canonical entry point; the legacy client-side
+> EntHub (`ent*` collections, `ent-organizer.html`) is retired from the browser.
+
 **Status:** 2026-09-26, branch `feat/creator-hub`. Implemented and certified locally.
 **FUNCTION DEPLOYMENT 0 · HOSTING DEPLOYMENT 0 · RULE DEPLOYMENT 0 · PROVIDER CALLS 0 · PRODUCTION WRITES 0.**
 

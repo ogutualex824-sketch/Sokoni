@@ -33,7 +33,8 @@ const { makeFakeFirestore } = require('./lib/fake-firestore-txn');
 const F = makeFakeFirestore({ clock: () => Date.now(), strictReadOrder: true });
 const db = F.db;
 const say = console.log; console.log = console.info = console.warn = console.error = console.debug = () => {};
-const authApi = { getUser: async (u) => ({ uid: u, customClaims: {} }) };
+/* Auth records carry the users' REAL custom claims: the organizer authority is the event_organizer claim. */
+const authApi = { getUser: async (u) => ({ uid: u, customClaims: (typeof USERS !== 'undefined' && USERS[u] && USERS[u].claims) || {} }) };
 const resolveIn = (m) => require.resolve(m, { paths: [FN] });
 const stub = (m, exp) => { const p = m.startsWith('./') ? Path.join(FN, m + '.js') : resolveIn(m); require.cache[p] = { id: p, filename: p, loaded: true, exports: exp }; };
 stub('firebase-admin/firestore', { getFirestore: () => db, FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath });
@@ -48,6 +49,8 @@ const ES = require(Path.join(FN, 'event-settlement.js'));
 const EH = require(Path.join(FN, 'event-hub.js'));
 const EA = require(Path.join(FN, 'event-admin.js'));
 const EI = require(Path.join(FN, 'entertainment-integrations.js'));
+const CH = require(Path.join(FN, 'creator-hub.js'));
+let _failListEvents = false;   /* flips listEvents to a service failure for the unavailable-state check */
 /* The REAL payment-intent authority prices a cashier M-PESA order. The provider edge (initiateSTKPush →
    IntaSend → webhook) is the ONLY simulated part: see STK below. */
 const INTENTS = require(Path.join(FN, 'payment-intents.js'));
@@ -62,7 +65,7 @@ const USERS = {
   door9: { uid: 'door9', email: 'door9@x.co', displayName: 'Door Nine', claims: {} },
   admin1: { uid: 'admin1', email: 'ops@sokoni.test', displayName: 'Ops Admin', claims: { isAdmin: true } },
 };
-const reqFor = (uid, data) => ({ auth: { uid, token: { email: USERS[uid].email, email_verified: true, ...USERS[uid].claims } }, rawRequest: { headers: { 'user-agent': 'chromium-harness' } }, data });
+const reqFor = (uid, data) => ({ auth: uid && USERS[uid] ? { uid, token: { email: USERS[uid].email, email_verified: true, ...USERS[uid].claims } } : null, rawRequest: { headers: { 'user-agent': 'chromium-harness' } }, data });
 /* Like the real callable protocol, results cross the wire as JSON: Timestamps become ISO strings. */
 const wire = (v) => JSON.parse(JSON.stringify(v, (k, x) => (x && typeof x.toMillis === 'function' ? new Date(x.toMillis()).toISOString() : x)));
 async function server(name, data, uid) {
@@ -73,6 +76,11 @@ async function _server(name, data, uid) {
   try {
     if (name === 'eventOpsDispatch') {
       const h = OPS._h[data.op] || SALES._h[data.op] || RF._h[data.op] || EI._h[data.op];
+      if (!h) return { err: { code: 'not-found', message: 'unknown op ' + data.op } };
+      return { ok: await h(reqFor(uid, data)) };
+    }
+    if (name === 'creatorDispatch') {
+      const h = CH._internal.OPS[data.op];
       if (!h) return { err: { code: 'not-found', message: 'unknown op ' + data.op } };
       return { ok: await h(reqFor(uid, data)) };
     }
@@ -97,6 +105,7 @@ async function _server(name, data, uid) {
       }, 800);
       return { ok: { ok: true, checkoutId: 'SIM-' + data.ref } };
     }
+      if (name === 'listEvents' && _failListEvents) return { err: { code: 'unavailable', message: 'The service is temporarily unavailable.' } };
     const fnMap = { purchaseTickets: EH.purchaseTickets, getEvent: EH.getEvent, getMyTickets: EH.getMyTickets, getOrganizerDashboard: EH.getOrganizerDashboard, listEvents: EH.listEvents, searchEvents: EH.searchEvents };
     if (fnMap[name]) return { ok: await fnMap[name].run(reqFor(uid, data)) };
     return { ok: {} };
@@ -119,7 +128,14 @@ const COMPAT = `
   window.SK = { dialog: { confirm: async () => true } };
 })();`;
 const REAL = new Set(['/event-manager.html', '/event-hub.html', '/sokoni-event-ops.js', '/sokoni-event-refund-reasons.js', '/sokoni-hub-nav.js', '/sokoni-qr.js', '/sokoni-event-ticket.js',
-  '/sokoni-dashboard-profile.js', '/sokoni-dashboard-profile-core.js', '/sokoni-aos-entertainment.js', '/entertainment-integrations.html']);
+  '/sokoni-dashboard-profile.js', '/sokoni-dashboard-profile-core.js', '/sokoni-aos-entertainment.js', '/entertainment-integrations.html',
+  '/entertainment.html', '/venue-booking.html']);
+/* The rebuilt Entertainment Hub imports the MODULAR SDK: /firebase.js as an ES module and gstatic's
+   firebase-functions.js. Classic pages load /firebase.js as a plain script (COMPAT). The browser marks a
+   module fetch with Sec-Fetch-Mode: cors, so the server can answer each correctly. */
+const MOD_FIREBASE = 'export const app = { __stub: true }; export const auth = { currentUser: null }; export const db = {}; export const storage = {}; export const messaging = null;';
+const MOD_FUNCTIONS = `export function getFunctions() { return {}; }
+export function httpsCallable(_f, name) { return async (data) => { const r = await window.__srv(name, data || {}, window.__user && window.__user.uid); if (r.err) { const e = new Error(r.err.message); e.code = 'functions/' + r.err.code; throw e; } return { data: r.ok }; }; }`;
 /* AdminOS › Entertainment, mounted with the REAL admin-os.html stylesheet and AdminOS's call shape. */
 const AOS_PAGE = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
   (fs.readFileSync(Path.join(ROOT, 'admin-os.html'), 'utf8').match(/<style[^>]*>[\s\S]*?<\/style>/g) || []).join('') +
@@ -128,7 +144,7 @@ const AOS_PAGE = '<!doctype html><html><head><meta charset="utf-8"><meta name="v
 const srv = http.createServer((rq, res) => {
   const p = decodeURIComponent(new URL(rq.url, 'http://x').pathname);
   if (p === '/aos-events.html') { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end(AOS_PAGE); }
-  if (p === '/firebase.js') { res.writeHead(200, { 'Content-Type': 'application/javascript' }); return res.end(COMPAT); }
+  if (p === '/firebase.js') { res.writeHead(200, { 'Content-Type': 'application/javascript' }); return res.end(rq.headers['sec-fetch-mode'] === 'cors' ? MOD_FIREBASE : COMPAT); }
   if (REAL.has(p)) { res.writeHead(200, { 'Content-Type': (p.endsWith('.html') ? 'text/html' : 'application/javascript') + '; charset=utf-8' }); return res.end(fs.readFileSync(Path.join(ROOT, p.slice(1)))); }
   if (/\.m?js$/.test(p)) { res.writeHead(200, { 'Content-Type': 'application/javascript' }); return res.end(''); }
   res.writeHead(200, { 'Content-Type': 'text/css' }); res.end('');
@@ -176,6 +192,10 @@ async function seed() {
   await db.doc(`paymentIntents/${c}`).set({ ref: c, purpose: 'event_ticket', resourceType: 'eventOrder', resourceId: c, uid: 'buyer3', ownerUid: 'buyer3', amount: 4000, amountCents: 400000, currency: 'KES', metadata: { eventId: 'evA', organizerUid: 'org1' } });
   await db.doc(`payments/${c}`).set({ ref: c, uid: 'buyer3', amount: 4000, amountCents: 400000, currency: 'KES', status: 'COMPLETE', provider: 'intasend', providerReport: { charges: 60 } });
   await ES.activateIfEventTicket(c);
+  await db.doc('creators/cW').set({ uid: 'cW', state: 'ACTIVE', displayName: 'Kibera Films' });
+  await db.doc('entertainmentListings/filmW').set({ creatorHub: true, creatorUid: 'cW', creatorName: 'Kibera Films', title: 'Nairobi Nights', pubState: 'PUBLISHED', status: 'active', subcategory: 'feature_film', publishedAt: F.Timestamp.fromMillis(NOW), priceCents: 25000, currency: 'KES' });
+  await db.doc('creators/cX').set({ uid: 'cX', state: 'SUSPENDED', displayName: 'Suspended' });
+  await db.doc('entertainmentListings/filmX').set({ creatorHub: true, creatorUid: 'cX', title: 'Should Not Show', pubState: 'PUBLISHED', status: 'active', subcategory: 'feature_film', publishedAt: F.Timestamp.fromMillis(NOW), priceCents: 100, currency: 'KES' });
   return oid;
 }
 
@@ -191,6 +211,8 @@ async function seed() {
     await c.addInitScript((u) => { window.__user = u; }, USERS[uid]);
     await c.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.fulfill({ status: 200, contentType: 'application/javascript', body: '' }));
     await c.route(/gstatic\.com\/firebasejs\/.*\.js$/, (r) => r.fulfill({ status: 200, contentType: 'application/javascript', body: COMPAT }));
+    /* registered last = matched first: the modular functions SDK is an ES module */
+    await c.route(/gstatic\.com\/firebasejs\/[\d.]+\/firebase-functions\.js$/, (r) => r.fulfill({ status: 200, contentType: 'application/javascript', headers: { 'Access-Control-Allow-Origin': '*' }, body: MOD_FUNCTIONS }));
     return c;
   };
   const noOverflow = (page, w) => page.evaluate((W) => document.documentElement.scrollWidth <= W + 1 && innerWidth <= W + 1, w);
@@ -413,6 +435,55 @@ async function seed() {
         ck('buyer: an ineligible reason is explained and CANNOT be submitted', /NO/.test(await pg.textContent('#modal-content')) && !(await pg.$('#rw-send')));
       }
       await c.close();
+
+      /* Entertainment Hub — the ENTRY POINT, walked as a VISITOR (no account) on the real page with the
+         real event-hub listEvents and the real Creator catalogue behind it. */
+      c = await ctxFor(null, w); pg = await c.newPage();
+      const hubErrors = []; pg.on('pageerror', (e) => hubErrors.push(e.message));
+      await pg.goto(BASE + '/entertainment.html'); await pg.waitForSelector('#p-home a.tile', { timeout: 5000 }).catch(() => null);
+      const tiles = await pg.$$eval('#p-home a.tile', (as) => as.map((a) => a.getAttribute('href')));
+      ck(`hub @${w}: home routes to the canonical owners (events, films, services, venues, organize, publish)`,
+        ['/event-hub.html', '/creator.html', '/services.html?cat=entertainment', '/venue-booking.html', '/event-manager.html', '/creator-studio.html'].every((h) => tiles.includes(h)), tiles);
+      const allHrefs = await pg.$$eval('a[href^="/"]', (as) => [...new Set(as.map((a) => a.getAttribute('href').split(/[?#]/)[0]))]);
+      const dead = allHrefs.filter((h) => !fs.existsSync(Path.join(ROOT, h.slice(1))));
+      ck(`hub @${w}: no dead link on the page (${allHrefs.length} distinct targets)`, dead.length === 0, dead.join(','));
+      await pg.click('#tab-events'); await pg.waitForSelector('#events [data-event], #events .state:not(:empty)', { timeout: 6000 }).catch(() => null);
+      ck(`hub @${w}: Events lists the LIVE event-hub event, linking to its canonical page`, (await pg.getAttribute('#events [data-event="evA"]', 'href').catch(() => null)) === '/event-hub.html?event=evA');
+      await pg.click('#tab-films'); await pg.waitForSelector('#films [data-film], #films .state.err', { timeout: 6000 }).catch(() => null);
+      const filmIds = await pg.$$eval('#films [data-film]', (as) => as.map((a) => a.dataset.film));
+      ck(`hub @${w}: Films lists the published film of an ACTIVE creator — never a suspended creator's`, filmIds.includes('filmW') && !filmIds.includes('filmX'), filmIds);
+      await pg.click('#tab-artists');
+      ck(`hub @${w}: Artists & services route to the provider marketplace (DJ / MC / all)`, (await pg.$$eval('#artistChips a', (as) => as.map((a) => a.getAttribute('href')))).some((h) => h === '/services.html?cat=dj'));
+      ck(`hub @${w}: no horizontal overflow; no script error`, (await noOverflow(pg, w)) && hubErrors.length === 0, hubErrors.join(' | '));
+      await c.close();
+      if (flows) {
+        /* click through: Hub card → the canonical event page, which opens that event */
+        c = await ctxFor('buyer1', w); pg = await c.newPage();
+        await pg.goto(BASE + '/entertainment.html?tab=events'); await pg.waitForSelector('#events [data-event="evA"]', { timeout: 6000 }).catch(() => null);
+        await Promise.all([pg.waitForNavigation({ timeout: 8000 }).catch(() => null), pg.click('#events [data-event="evA"]')]);
+        await pg.waitForTimeout(800);
+        ck(`hub @${w}: clicking the event opens it on event-hub (canonical buyer flow)`, /event-hub\.html\?event=evA/.test(pg.url()) && /Nairobi Jazz Night/.test(await pg.content()));
+        await c.close();
+        /* unavailable is shown as unavailable, never as "no events" */
+        _failListEvents = true;
+        c = await ctxFor(null, w); pg = await c.newPage();
+        await pg.goto(BASE + '/entertainment.html?tab=events'); await pg.waitForSelector('#events .state', { timeout: 6000 }).catch(() => null);
+        ck(`hub @${w}: a failing events service renders "unavailable", not an empty list`, /unavailable right now/.test(await pg.textContent('#events')));
+        _failListEvents = false;
+        await c.close();
+        /* legacy deep links land on the canonical owner */
+        c = await ctxFor(null, w); pg = await c.newPage();
+        await pg.goto(BASE + '/entertainment.html?cat=dj'); await pg.waitForTimeout(400);
+        ck(`hub @${w}: a legacy ?cat=dj link lands on the provider marketplace`, /\/services\.html\?cat=dj/.test(pg.url()));
+        await c.close();
+        /* venue booking: the page must BOOT (it threw on load before) */
+        c = await ctxFor('buyer1', w); pg = await c.newPage();
+        const vbErr = []; pg.on('pageerror', (e) => vbErr.push(e.message));
+        await pg.goto(BASE + '/venue-booking.html?tab=mine'); await pg.waitForTimeout(800);
+        ck(`venues @${w}: venue-booking boots without a script error and opens My Bookings from the Hub link`, vbErr.length === 0 && await pg.evaluate(() => { const v = document.getElementById('v-bookings'); return !!v && getComputedStyle(v).display !== 'none'; }), vbErr.join(' | '));
+        ck(`venues @${w}: no horizontal overflow`, await noOverflow(pg, w));
+        await c.close();
+      }
 
       /* Entertainment › Integrations: status + canonical routing (the REAL page) */
       c = await ctxFor('org1', w); pg = await c.newPage();

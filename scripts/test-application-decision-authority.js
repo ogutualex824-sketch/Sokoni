@@ -208,6 +208,25 @@ async function partA(trigger, { quiet = false } = {}) {
   results.ghostMinted = minted(ENV.log).length;
   if (!quiet) ck('A7  an unresolvable decidedBy is refused, not crashed on', results.ghostMinted === 0);
 
+  /* A8 — THE REAL EXPLOIT (2026-09-27): decidedBy names a GENUINE admin (admin uids are public in
+     moderatedBy / reviewedBy). The claims check alone passed this; the server decision record does not. */
+  ENV = makeEnv({ accounts: { SELLER_A: {}, ADMIN_1: { admin: true } } });
+  await trigger(eventFor('app_5', { ...NORMALISED, status: 'approved', decidedBy: 'ADMIN_1' }));
+  results.realAdminForgedMinted = minted(ENV.log).length;
+  if (!quiet) ck('A8  decidedBy naming a REAL admin, with no server decision record, is refused', results.realAdminForgedMinted === 0);
+
+  /* A9 — a real decision record exists, but for a DIFFERENT status (the admin rejected; the applicant
+     rewrites status to approved). */
+  ENV = makeEnv({ accounts: { SELLER_A: {}, ADMIN_1: { admin: true } }, docs: { 'applicationDecisions/app_6': { status: 'rejected', decidedBy: 'ADMIN_1' } } });
+  await trigger(eventFor('app_6', { ...NORMALISED, status: 'approved', decidedBy: 'ADMIN_1' }));
+  results.statusSwapMinted = minted(ENV.log).length;
+  /* A10 — the server record names a decider who NO LONGER holds an admin claim (demoted since). */
+  ENV = makeEnv({ accounts: { SELLER_A: {}, EX_ADMIN: {} }, docs: { 'applicationDecisions/app_7': { status: 'approved', decidedBy: 'EX_ADMIN' } } });
+  await trigger(eventFor('app_7', { ...NORMALISED, status: 'approved', decidedBy: 'EX_ADMIN' }));
+  results.demotedMinted = minted(ENV.log).length;
+  if (!quiet) ck('A10 a recorded decision whose decider lost the admin claim is refused', results.demotedMinted === 0);
+  if (!quiet) ck('A9  a rejected application rewritten to approved is refused (record says rejected)', results.statusSwapMinted === 0);
+
   return results;
 }
 
@@ -216,7 +235,7 @@ async function partA(trigger, { quiet = false } = {}) {
    ═════════════════════════════════════════════════════════════════════════ */
 async function partB(trigger) {
   /* B1 — applicationDecide stamps decidedBy = an admin uid. */
-  ENV = makeEnv({ accounts: { SELLER_A: { rider: true }, ADMIN_1: { admin: true } } });
+  ENV = makeEnv({ accounts: { SELLER_A: { rider: true }, ADMIN_1: { admin: true } }, docs: { 'applicationDecisions/app_ok': { status: 'approved', decidedBy: 'ADMIN_1' } } });
   await trigger(eventFor('app_ok', { ...NORMALISED, status: 'approved', decidedBy: 'ADMIN_1' }));
   const mint = minted(ENV.log)[0];
   ck('B1  an admin decision DOES grant the role', userWrites(ENV.log).length === 1);
@@ -226,7 +245,7 @@ async function partB(trigger) {
   ck('B4  ...and records the projection as applied', !!applied);
 
   /* B5 — superAdmin is equally authoritative. */
-  ENV = makeEnv({ accounts: { SELLER_A: {}, ROOT: { superAdmin: true } } });
+  ENV = makeEnv({ accounts: { SELLER_A: {}, ROOT: { superAdmin: true } }, docs: { 'applicationDecisions/app_ok2': { status: 'approved', decidedBy: 'ROOT' } } });
   await trigger(eventFor('app_ok2', { ...NORMALISED, status: 'approved', decidedBy: 'ROOT' }));
   ck('B5  superAdmin is accepted as a decider', minted(ENV.log).length === 1);
 
@@ -263,8 +282,12 @@ async function partC() {
   const mutants = [
     {
       label: 'M1  the authority check always passes',
-      src: src.replace('const authority = await decisionAuthority(after);',
+      src: src.replace('const authority = await decisionAuthority(after, appId);',
         'const authority = { ok: true, by: after.decidedBy || null };'),
+    },
+    {
+      label: 'M3  the server decision record is not required (claims-only, the pre-2026-09-27 guard)',
+      src: src.replace(/  if \(!rec\) return \{ ok: false, reason: 'no server decision record[^\n]*\n  if \(rec\.status !== canonStatus\(after\.status\) \|\| rec\.decidedBy !== by\) \{/, '  if (false) {'),
     },
     {
       label: 'M2  the guard trusts decidedBy without reading its claims',
@@ -283,8 +306,8 @@ async function partC() {
       /* Under the mutation the forged approval must succeed — that is what
          proves PART A would have failed. M2 is only reached by A6/A7, which
          name a decidedBy. */
-      caught = r.selfApproveMinted > 0 || r.forgedDeciderMinted > 0 || r.ghostMinted > 0;
-      detail = `selfApprove=${r.selfApproveMinted} forgedDecider=${r.forgedDeciderMinted} ghost=${r.ghostMinted}`;
+      caught = r.selfApproveMinted > 0 || r.forgedDeciderMinted > 0 || r.ghostMinted > 0 || r.realAdminForgedMinted > 0 || r.statusSwapMinted > 0 || r.demotedMinted > 0;
+      detail = `selfApprove=${r.selfApproveMinted} forgedDecider=${r.forgedDeciderMinted} ghost=${r.ghostMinted} realAdmin=${r.realAdminForgedMinted} statusSwap=${r.statusSwapMinted}`;
     } catch (e) {
       detail = 'mutant failed to load: ' + e.message;
     }

@@ -52,6 +52,7 @@ const ck = (l, ok, d) => { quiet('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d !== 
 const mastersSignedFor = (n0) => signed.slice(n0).filter((s) => /creator-masters/.test(s.path));
 
 async function film(id, over = {}) {
+  await db.doc('creators/cA').set({ uid: 'cA', state: 'ACTIVE', displayName: 'Creator A' });   /* catalog.get requires an ACTIVE creator (2026-09-27) */
   await db.doc('entertainmentListings/' + id).set({ creatorHub: true, creatorUid: 'cA', title: 'Film ' + id, pubState: 'PUBLISHED', status: 'active',
     previewSeconds: 30, previewReady: true, priceCents: 50000, currency: 'KES', accessType: 'buy', ...over });
   await db.doc('creatorMedia/' + id).set({ filmId: id, creatorUid: 'cA', storagePath: `creator-masters/cA/${id}/m1`, previewStoragePath: `creator-previews/cA/${id}/p1` });

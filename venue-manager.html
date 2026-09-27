@@ -946,10 +946,13 @@ async function loadBlockouts() {
   if (!_activeId) return;
   $('blkList').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
   try {
+    /* The booking core (USE_BOOKING_CORE) writes blocks to top-level venueBlockouts (bookingBlockSlots);
+       this list read venues/{id}/blockouts, so a new block never appeared and could not be removed. */
     const snap = await firebase.firestore()
-      .collection('venues').doc(_activeId).collection('blockouts')
-      .orderBy('startDate', 'desc').get();
-    _blockouts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      .collection('venueBlockouts').where('venueId', '==', _activeId).get();
+    const _d = (ms) => (Number.isFinite(Number(ms)) ? new Date(Number(ms)).toISOString().slice(0, 10) : '—');
+    _blockouts = snap.docs.map(d => { const x = d.data(); return { id: d.id, ...x, startDate: x.startDate || _d(x.startTs), endDate: x.endDate || _d(x.endTs) }; })
+      .sort((a, b) => String(b.startDate).localeCompare(String(a.startDate)));
     renderBlockouts();
   } catch (err) {
     $('blkList').innerHTML = `<div class="empty">${xe(err.message)}</div>`;
@@ -975,7 +978,7 @@ function renderBlockouts() {
 async function deleteBlock(blockId) {
   if (!_activeId) return;
   try {
-    await firebase.firestore().collection('venues').doc(_activeId).collection('blockouts').doc(blockId).delete();
+    await firebase.firestore().collection('venueBlockouts').doc(blockId).delete();
     toast('Blockout removed');
     _blockouts = _blockouts.filter(b => b.id !== blockId);
     renderBlockouts();
@@ -1070,7 +1073,9 @@ async function saveSettings() {
   };
 
   try {
-    await cf('venueUpdate')(payload);
+    /* venueUpdate / venueCreate are served ONLY through bookingDispatch (functions/index.js); the
+       standalone callables this page called are not exported, so Save and Create always failed. */
+    await _bd('venueUpdate', payload);
     toast('Settings saved');
     const idx = _venues.findIndex(v => v.id === _activeId);
     if (idx >= 0) _venues[idx] = { ..._venues[idx], ...payload };
@@ -1135,7 +1140,7 @@ async function submitNewVenue() {
     currency: 'KES'
   };
   try {
-    const res = await cf('venueCreate')(payload);
+    const res = await _bd('venueCreate', payload);
     const id  = res.data?.venueId || res.data?.id;
     const v   = { id, ...payload };
     _venues.push(v);

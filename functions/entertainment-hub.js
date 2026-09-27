@@ -252,21 +252,34 @@ exports.rateEntertainmentContent = onCall(CF_OPTS, async (req) => {
   const uid = requireAuth(req);
   const { listingId, rating, review } = req.data;
   if (!listingId || !rating) throw new HttpsError('invalid-argument', 'listingId and rating required');
-  if (rating < 1 || rating > 5) throw new HttpsError('invalid-argument', 'Rating 1–5');
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(String(listingId))) throw new HttpsError('invalid-argument', 'listingId is invalid');
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) throw new HttpsError('invalid-argument', 'Rating 1–5');
 
+  /* 2026-09-27 (readiness sweep): any signed-in account could post UNLIMITED ratings on any listing —
+     including Creator Hub films, which live in this collection — and move its public score at will.
+     Now: one rating per viewer per listing (deterministic id, create-once), and only from a viewer who
+     actually has access: a Creator Hub film through contentAccess, a legacy listing through a purchase. */
+  const reviewRef = db().collection('entertainmentReviews').doc(`${listingId}_${uid}`);
   await db().runTransaction(async t => {
     const ref = db().collection('entertainmentListings').doc(listingId);
     const snap = await t.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', 'Content not found');
     const l = snap.data();
-    const newCount = l.contentRatingCount + 1;
-    const newRating = ((l.contentRating * l.contentRatingCount) + rating) / newCount;
+    const prior = await t.get(reviewRef);
+    if (prior.exists) throw new HttpsError('already-exists', 'You have already rated this.');
+    const access = l.creatorHub === true
+      ? await t.get(db().collection('contentAccess').doc(`${uid}_${listingId}`))
+      : await t.get(db().collection('entertainmentPurchases').where('buyerUid', '==', uid).where('listingId', '==', listingId).limit(1));
+    const has = l.creatorHub === true ? access.exists : !access.empty;
+    if (!has) throw new HttpsError('permission-denied', 'Only viewers who have watched this can rate it.');
+    const prevCount = Number(l.contentRatingCount) || 0;
+    const newCount = prevCount + 1;
+    const newRating = (((Number(l.contentRating) || 0) * prevCount) + rating) / newCount;
     t.update(ref, {
       contentRating: Math.round(newRating * 10) / 10,
       contentRatingCount: newCount, updatedAt: FieldValue.serverTimestamp(),
     });
-    const reviewRef = db().collection('entertainmentReviews').doc();
-    t.set(reviewRef, {
+    t.create(reviewRef, {
       reviewId: reviewRef.id, listingId, reviewerUid: uid,
       rating, review: san(review, 500), createdAt: FieldValue.serverTimestamp(),
     });

@@ -131,7 +131,9 @@ const pagePath = (u) => Path.join(ROOT, String(u).split(/[?#]/)[0].replace(/^\//
   const disp = fs.readFileSync(Path.join(FN, 'admin-os-dispatch.js'), 'utf8');
   const ES = require(Path.join(FN, 'event-settlement.js'));
   const EV = require(Path.join(FN, 'event-admin.js'));
-  const handlers = { ...ES._adminH, ...EA._adminH, ...EV._adminH };
+  /* the SAME modules admin-os-dispatch.js merges (incl. entertainment-integrations since 2026-09-27) */
+  const EI = require(Path.join(FN, 'entertainment-integrations.js'));
+  const handlers = { ...ES._adminH, ...EA._adminH, ...EV._adminH, ...EI._adminH };
   ck('every panel op is a dispatcher handler', OPS.every((o) => typeof handlers[o] === 'function'), OPS.filter((o) => !handlers[o]));
   ck('dispatcher merges all three Entertainment registries', /events\._adminH/.test(disp) && /ent\._adminH/.test(disp) && /eventInv\._adminH/.test(disp));
   const aos = fs.readFileSync(Path.join(ROOT, 'sokoni-aos.js'), 'utf8');

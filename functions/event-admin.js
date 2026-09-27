@@ -405,7 +405,34 @@ async function revokeStaff(req) {
   return { ok: true };
 }
 
+/** ADMIN: refund an order of a CANCELLED event through the canonical refund authority. The amount is the
+ *  payment record's own (server) — the AdminOS button used to pass a UI-supplied amountKES straight to
+ *  fosSubmitRefund. Only an order the cancellation flagged `pending_refund`, on an event that IS
+ *  cancelled, qualifies; everything else is the buyer's wizard. */
+async function refundCancelled(req) {
+  const actor = _admin(req);
+  const d = req.data || {};
+  const orderId = _id(d.orderId, 'orderId');
+  const reason = String(d.reason || '').trim().slice(0, 300);
+  if (reason.length < 5) fail('invalid-argument', 'A reason is required.');
+  const order = await _doc('eventOrders', orderId);
+  if (!order) fail('not-found', 'No such order.');
+  if (order.status !== 'pending_refund') fail('failed-precondition', `Only an order of a cancelled event awaiting refund qualifies (this one is ${order.status || 'unknown'}).`);
+  const event = order.eventId ? await _doc('events', order.eventId) : null;
+  if (!event || event.status !== 'cancelled') fail('failed-precondition', 'The event is not cancelled — a buyer refund goes through the refund wizard.');
+  const payRef = order.paymentRef || orderId;
+  const pay = await _doc('payments', payRef);
+  const amountKES = pay ? Number(pay.amount) : NaN;
+  if (!pay || !Number.isFinite(amountKES) || amountKES <= 0) fail('failed-precondition', 'No completed payment record to refund against.');
+  const fos = await require('./financial-os')._internal.submitRefund({
+    ...req, data: { payRef, amountKES, reason: `[event_cancelled] ${reason}`, refundType: 'full' },
+  }, { via: 'event_admin' });
+  await _audit('event_cancelled_refund_submitted', actor, { orderId, eventId: order.eventId }, { payRef, amountKES, fosRefundId: fos.refundId || null, fosStatus: fos.status || null, existing: !!fos.existing, reason });
+  return { ok: true, refundId: fos.refundId || null, status: fos.status || null, existing: !!fos.existing, amountKES };
+}
+
 const _adminH = {
+  eventAdminRefundCancelled: refundCancelled,
   eventAdminInvestigate: investigate, eventAdminTrace: trace, eventAdminStaff: staff, eventAdminAdmissions: admissions,
   eventAdminRefundRequests: refundRequests, eventAdminReceivables: receivables, eventAdminRevokeStaff: revokeStaff,
   eventAdminFiscal: fiscalQueue, eventAdminFiscalRetry: fiscalRetry,

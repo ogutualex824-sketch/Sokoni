@@ -246,7 +246,7 @@ async function request(req) {
   try {
     fos = await require('./financial-os')._internal.submitRefund({
       ...req, data: { payRef: order.paymentRef, amountKES: verdict.refundCents / 100, reason: text, refundType: verdict.penaltyCents > 0 ? 'partial' : 'full' },
-    });
+    }, { via: 'event_wizard' });
   } catch (e) {
     /* Compensate: the request never reached the authority — nothing may stay marked REQUESTED. */
     await db.runTransaction(async (txn) => {

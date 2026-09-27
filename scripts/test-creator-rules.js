@@ -154,6 +154,17 @@ async function storageSuite(env, label, D) {
   }
   await expectDeny('rival writes another creator\'s poster', put(cB, 'creator-public/cA/evil.jpg', 'image/jpeg'));
   await expectDeny('SVG poster (XSS vector)', put(cA, 'creator-public/cA/x.svg', 'image/svg+xml'));
+  /* creator verification (KYC) documents — 2026-09-27: the superAdmin claim was locked out */
+  if (D) ck(`${label}: creator uploads own KYC document`, await allowed(put(cA, 'kyc-documents/cA/id.pdf', 'application/pdf')));
+  else await allowed(put(cA, 'kyc-documents/cA/id.pdf', 'application/pdf'));
+  if (D) {
+    const sa = env.authenticatedContext('root', { superAdmin: true }).storage();
+    const ad = env.authenticatedContext('adm', { admin: true }).storage();
+    ck(`${label}: a SUPER ADMIN (superAdmin claim) can review a KYC document`, await allowed(sa.ref('kyc-documents/cA/id.pdf').getDownloadURL()));
+    ck(`${label}: an admin can review a KYC document`, await allowed(ad.ref('kyc-documents/cA/id.pdf').getDownloadURL()));
+  }
+  await expectDeny('another creator reads a KYC document', cB.ref('kyc-documents/cA/id.pdf').getDownloadURL());
+  await expectDeny('an ordinary viewer reads another creator KYC document', v1.ref('kyc-documents/cA/id.pdf').getDownloadURL());
 }
 
 (async () => {

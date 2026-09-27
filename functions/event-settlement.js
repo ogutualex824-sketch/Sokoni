@@ -382,7 +382,12 @@ async function releaseOne(paymentRef, opts = {}) {
     const rel = releaseAfterMs(ev);
     if (rel == null || nowMs < rel) return { skipped: 'not_due' };
     if (refSnap.exists && REFUND_OPEN.has(String(refSnap.data().status))) return { skipped: 'refund_open' };
-    if (!oSnap.exists || oSnap.data().status !== 'paid') return { skipped: `order_${oSnap.exists ? oSnap.data().status : 'missing'}` };
+    /* G3 (2026-09-27): a refund under the event's penalty sets the order to 'refunded' but keeps the
+       settlement HELD on the retained penalty (revoke). Requiring 'paid' stranded that penalty for ever
+       — the organizer was never paid it and SOKONI's 3 % on it was never collected. */
+    const _o = oSnap.exists ? oSnap.data() : null;
+    const _penaltyKept = _o && _o.status === 'refunded' && (Number(s.retainedPenaltyCents) || 0) > 0;
+    if (!_o || (_o.status !== 'paid' && !_penaltyKept)) return { skipped: `order_${_o ? _o.status : 'missing'}` };
     if (!s.organizerUid) return { skipped: 'no_organizer' };
 
     /* Door sales (cash / organizer-held card terminal) left SOKONI's 3 % as a RECEIVABLE with the

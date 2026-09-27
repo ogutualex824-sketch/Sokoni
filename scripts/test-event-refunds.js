@@ -33,7 +33,7 @@ const { makeFakeFirestore } = require('./lib/fake-firestore-txn');
 let NOW = Date.now();
 const F = makeFakeFirestore({ clock: () => NOW, strictReadOrder: true });
 const db = F.db;
-const authApi = { getUser: async (u) => ({ uid: u, customClaims: {} }) };
+const authApi = { getUser: async (u) => ({ uid: u, customClaims: u === 'org1' ? { event_organizer: true } : {} }) };
 const resolveIn = (m) => require.resolve(m, { paths: [FN] });
 const stub = (m, exp) => { const p = m.startsWith('./') ? Path.join(FN, m + '.js') : resolveIn(m); require.cache[p] = { id: p, filename: p, loaded: true, exports: exp }; };
 stub('firebase-admin/firestore', { getFirestore: () => db, FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath });
@@ -184,6 +184,31 @@ const reason = (c) => RS.get(c);
   /* walk-in (cashier) orders are not the requester's to refund */
   await db.doc('eventOrders/ORD0W1').set({ orderId: 'ORD0W1', buyerUid: 'till1', channel: 'cashier', eventId: 'evA', status: 'paid', paymentRef: 'ORD0W1' });
   ck('a cashier-sold walk-in order cannot be refunded through the buyer wizard', (await code(op('eventRefundQuote', 'till1', { orderId: 'ORD0W1', reasonCode: 'cannot_attend' }))) === 'permission-denied');
+
+  /* ═══ no bypass of the wizard (readiness sweep 2026-09-27) ═══ */
+  console.log('\n── no bypass of the event refund paths ──');
+  const FOS = require(Path.join(FN, 'financial-os.js'));
+  const EA = require(Path.join(FN, 'event-admin.js'));
+  await event('evByp', { policy: { mode: 'before_cutoff', cutoffAt: new Date(NOW + 48 * H).toISOString() } });
+  await paid('ORD0X1', 'evByp');
+  const direct = await code(FOS.fosSubmitRefund.run({ ...who('buyer1'), data: { payRef: 'ORD0X1', amountKES: 2000, reason: 'direct' } }));
+  ck('a buyer calling fosSubmitRefund DIRECTLY for an event ticket is refused (wizard only)', direct === 'failed-precondition' && !(await get('fosRefundQueue/ref_ORD0X1')), direct);
+  ck('…the ticket was never taken out of admission by a side door', (await get('eventTickets/ORD0X1_k0')).refundStatus !== 'REQUESTED');
+  const adminDirect = await code(FOS.fosSubmitRefund.run({ ...who('adm', { admin: true }), data: { payRef: 'ORD0X1', amountKES: 1, reason: 'ui amount' } }));
+  ck('an admin calling fosSubmitRefund DIRECTLY with a UI amount is refused too', adminDirect === 'failed-precondition' && !(await get('fosRefundQueue/ref_ORD0X1')), adminDirect);
+  /* cancelled event: AdminOS op, amount from the payment record */
+  await event('evCan', { policy: { mode: 'none' } });
+  await paid('ORD0Y1', 'evCan');
+  const canc = await code(EA._adminH.eventAdminRefundCancelled({ ...who('adm', { admin: true }), data: { orderId: 'ORD0Y1', reason: 'event cancelled by organizer' } }));
+  ck('admin cancelled-event refund refused while the event is NOT cancelled', canc === 'failed-precondition' && !(await get('fosRefundQueue/ref_ORD0Y1')), canc);
+  await EH.cancelEvent.run({ ...who('org1'), data: { eventId: 'evCan', reason: 'venue flooded' } });
+  ck('refused for a non-admin', (await code(EA._adminH.eventAdminRefundCancelled({ ...who('buyer1'), data: { orderId: 'ORD0Y1', reason: 'event cancelled by organizer' } }))) === 'permission-denied');
+  const rc = await EA._adminH.eventAdminRefundCancelled({ ...who('adm', { admin: true }), data: { orderId: 'ORD0Y1', reason: 'event cancelled by organizer', amountKES: 1 } });
+  const qY = await get('fosRefundQueue/ref_ORD0Y1');
+  ck('cancelled event → refund submitted for the PAYMENT RECORD amount (a request amount is ignored)', rc.ok && qY && qY.amountKES === 2000 && rc.amountKES === 2000, qY && qY.amountKES);
+  ck('…audited with the amount and the refund id', db._dump('adminAudit/').some((a) => a.action === 'event_cancelled_refund_submitted' && a.after && a.after.amountKES === 2000));
+  const again = await EA._adminH.eventAdminRefundCancelled({ ...who('adm', { admin: true }), data: { orderId: 'ORD0Y1', reason: 'event cancelled by organizer' } });
+  ck('a second click is the SAME refund (canonical one-per-payment id), not a second one', again.existing === true && again.refundId === rc.refundId);
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

@@ -95,7 +95,7 @@ const LEAK = /"(pin|pinHash|token|qrData|qrCode|secret)"\s*:/;
 
   console.log('\n── guard ──');
   const NAMES = Object.keys(EA._adminH);
-  ck('twelve eventAdmin ops (incl. fiscal reconciliation, fiscal + credit-note retry, invoice + credit-note evidence resolution)', NAMES.length === 12 && NAMES.every((n) => /^eventAdmin/.test(n)), NAMES);
+  ck('thirteen eventAdmin ops (incl. fiscal reconciliation, fiscal + credit-note retry, invoice + credit-note evidence resolution, cancelled-event refund)', NAMES.length === 13 && NAMES.every((n) => /^eventAdmin/.test(n)), NAMES);
   for (const n of NAMES) {
     const res = await Promise.all([
       code(EA._adminH[n]({ ...who(null), data: {} })),

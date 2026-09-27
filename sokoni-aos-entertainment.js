@@ -21,7 +21,7 @@
   const TABS = [
     ['overview', 'Overview'], ['investigate', 'Investigate'], ['events', 'Events'], ['eventops', 'Staff & gate'], ['settlements', 'Settlements'],
     ['refunds', 'Refund queue'], ['refundreq', 'Refund requests'], ['receivables', 'Receivables'], ['fiscal', 'Fiscal (KRA)'],
-    ['exceptions', 'Exceptions'], ['listings', 'Venues & artists'], ['matrix', 'Categories & policy'],
+    ['exceptions', 'Exceptions'], ['listings', 'Venues & artists'], ['orgint', 'Organizer integrations'], ['matrix', 'Categories & policy'],
   ];
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -40,9 +40,10 @@
     const call = opts && opts.call;
     if (!host || typeof call !== 'function') return false;
     let tab = 'overview';
-    let listingKind = 'venue', listingStatus = 'pending';
+    /* booking_venue = the canonical venue booking engine (the venues users book); venue / artist = legacy. */
+    let listingKind = 'booking_venue', listingStatus = 'active';
     /* Investigation state survives a re-render (after an action) — the PIN itself is never kept. */
-    let search = null, traced = null, opsEvent = '', rqStatus = '', rvStatus = 'OUTSTANDING', fView = '';
+    let search = null, traced = null, opsEvent = '', orgUid = '', rqStatus = '', rvStatus = 'OUTSTANDING', fView = '';
 
     host.innerHTML = `
       <div class="aoscr-tabs" role="tablist">${TABS.map(([k, l]) => `<button type="button" role="tab" class="aos-btn aos-btn-ghost" data-tab="${k}">${esc(l)}</button>`).join('')}</div>
@@ -151,6 +152,20 @@
           <h4>Orders</h4>${table(['Order', 'Event', 'Buyer', 'Tickets', 'Amount', 'Status', 'Fiscal', ''], ords, 'No orders.')}
           <h4>Door &amp; cashier sales</h4>${table(['Sale', 'Event', 'Tender', 'Cashier', 'Tickets', 'Gross', 'Status', 'Fiscal', ''], sales, 'No sales.')}`);
       },
+      /* One organizer's integration status (payments / KRA eTIMS / Connect / creator / events), from the
+         same server authority the organizer's own status page reads — masked KRA PIN, no secrets. The
+         platform integration CONFIG is AdminOS › Integrations (hub filter below), never this tab. */
+      async orgint() {
+        const form = `<form class="aos-filters" data-orgint><label>Organizer uid <input name="uid" autocomplete="off" maxlength="128" value="${esc(orgUid)}"></label>
+          <button type="submit" class="aos-btn">Load</button> <a class="aos-btn aos-btn-ghost" href="/admin-os.html?hub=entertainment#integrations">Platform integrations (Entertainment)</a></form>`;
+        if (!orgUid) return form + '<p class="aos-muted">Enter an organizer uid to see the integration states their events depend on.</p>';
+        const r = await call('eventAdminIntegrationStatus', { uid: orgUid });
+        const rows = (r.cards || []).map((c) => { const s = c.status || {}; const reg = s.registration || {};
+          return `<tr><td>${esc(c.label)}</td><td>${chip(s.state)}</td><td>${esc(s.reason || (reg.status ? reg.status + (reg.kraPinMasked ? ' · ' + reg.kraPinMasked : '') : '') || '—')}</td>
+            <td>${c.adminRoute ? `<a class="aos-btn aos-btn-ghost" href="${esc(c.adminRoute)}">Open owner</a>` : ''}</td></tr>`; }).join('');
+        return form + table(['Integration', 'State', 'Detail', ''], rows, 'No integration status.') +
+          '<p class="aos-muted">States: UNKNOWN · CONFIGURED · VERIFIED · LIVE_AND_PROVEN (evidence recorded) · FAILED · DISABLED · NOT_APPLICABLE. KRA transmission is not certified.</p>';
+      },
       async eventops() {
         const form = `<form class="aos-filters" data-evops><label>Event id <input name="eventId" autocomplete="off" maxlength="128" value="${esc(opsEvent)}"></label>
           <button type="submit" class="aos-btn">Load</button></form>`;
@@ -214,7 +229,7 @@
         const r = await call('eventAdminRefundQueue', {});
         const rows = (r.orders || []).map((o) => `<tr><td class="aos-mono">${esc(o.id)}</td><td class="aos-mono">${esc(o.buyerUid)}</td><td>${num(o.quantity)}</td>
           <td>${o.totalAmount == null ? '—' : 'KES ' + num(o.totalAmount)}</td><td>${when(o.cancelledAt)}</td>
-          <td>${o.paymentRef ? `<button type="button" class="aos-btn" data-refund="${esc(o.paymentRef)}" data-amount="${esc(o.totalAmount)}">Submit refund</button>` : '<span class="aos-muted">no payment ref</span>'}</td></tr>`).join('');
+          <td>${o.paymentRef ? `<button type="button" class="aos-btn" data-refund="${esc(o.id)}">Submit refund</button>` : '<span class="aos-muted">no payment ref</span>'}</td></tr>`).join('');
         return `<p class="aos-muted">Orders from cancelled events. Refunds run through the canonical refund authority (financial-os); the tickets and the held settlement are reversed exactly once when it completes.</p>` +
           table(['Order', 'Buyer', 'Tickets', 'Amount', 'Cancelled', ''], rows, 'No orders are waiting for a refund.');
       },
@@ -226,17 +241,17 @@
       async listings() {
         const r = await call('entAdminListings', { kind: listingKind, status: listingStatus });
         const filters = `<div class="aos-filters">
-          <label>Type <select data-lkind><option value="venue" ${listingKind === 'venue' ? 'selected' : ''}>Venues</option><option value="artist" ${listingKind === 'artist' ? 'selected' : ''}>Artists</option></select></label>
-          <label>Status <select data-lstatus>${['pending', 'active', 'suspended', 'rejected'].map((s) => `<option ${s === listingStatus ? 'selected' : ''}>${s}</option>`).join('')}</select></label></div>`;
+          <label>Type <select data-lkind><option value="booking_venue" ${listingKind === 'booking_venue' ? 'selected' : ''}>Venues (booking engine)</option><option value="venue" ${listingKind === 'venue' ? 'selected' : ''}>Legacy venues</option><option value="artist" ${listingKind === 'artist' ? 'selected' : ''}>Legacy artists</option></select></label>
+          <label>Status <select data-lstatus>${['pending', 'active', 'inactive', 'suspended', 'rejected'].map((s) => `<option ${s === listingStatus ? 'selected' : ''}>${s}</option>`).join('')}</select></label></div>`;
         const acts = (l) => {
           const st = l.status || 'pending';
           const b = (d, t) => `<button type="button" class="aos-btn aos-btn-ghost" data-ldecide="${d}" data-lid="${esc(l.id)}">${t}</button>`;
           if (st === 'pending') return b('approve', 'Approve') + ' ' + b('reject', 'Reject');
-          if (st === 'active' || st === 'approved') return b('suspend', 'Suspend');
+          if (st === 'active' || st === 'approved' || st === 'inactive') return b('suspend', 'Suspend');
           return b('restore', 'Restore');
         };
         const rows = (r.listings || []).map((l) => `<tr><td>${esc(l.name || l.stageName || l.title || l.id)}</td><td>${esc(l.type || l.category || l.venueType || '')}</td>
-          <td class="aos-mono">${esc(l.uid)}</td><td>${chip(l.status)}</td><td>${when(l.createdAt)}</td><td>${acts(l)}</td></tr>`).join('');
+          <td class="aos-mono">${esc(l.uid || l.ownerId)}</td><td>${chip(l.status)}</td><td>${when(l.createdAt)}</td><td>${acts(l)}</td></tr>`).join('');
         return filters + table(['Name', 'Type', 'Owner', 'Status', 'Created', ''], rows, 'Nothing here.');
       },
       async matrix() {
@@ -293,7 +308,8 @@
       if (t.dataset.refund) {
         return ask('Submit refund', [{ label: 'Reason', area: true }], ([reason]) => {
           if (String(reason || '').trim().length < 5) return msg('A reason is required.', true);
-          act('fosSubmitRefund', { payRef: t.dataset.refund, amountKES: Number(t.dataset.amount), reason, refundType: 'full' }, 'Refund submitted to the refund authority.');
+          /* The server prices it from the payment record (eventAdminRefundCancelled); no amount leaves the page. */
+          act('eventAdminRefundCancelled', { orderId: t.dataset.refund, reason }, 'Refund submitted to the refund authority.');
         });
       }
       if (t.dataset.ldecide) {
@@ -307,6 +323,7 @@
     host.addEventListener('submit', async (ev) => {
       const f = ev.target;
       if (f.matches('[data-evops]')) { ev.preventDefault(); opsEvent = f.eventId.value.trim(); return render(); }
+      if (f.matches('[data-orgint]')) { ev.preventDefault(); orgUid = f.uid.value.trim(); return render(); }
       if (!f.matches('[data-evsearch]')) return undefined;
       ev.preventDefault();
       const q = { by: f.by.value, value: f.value.value.trim() };
@@ -342,7 +359,7 @@
   const OPS = ['eventAdminOverview', 'eventAdminEvents', 'eventAdminSettlements', 'eventAdminRefundQueue', 'eventAdminExceptions',
     'eventAdminAttestFee', 'entAdminMatrix', 'entAdminListings', 'entAdminSetListingStatus',
     'eventAdminInvestigate', 'eventAdminTrace', 'eventAdminStaff', 'eventAdminAdmissions', 'eventAdminRefundRequests',
-    'eventAdminReceivables', 'eventAdminRevokeStaff', 'eventAdminFiscal', 'eventAdminFiscalRetry', 'eventAdminCreditNoteRetry', 'eventAdminCreditNoteResolve', 'eventAdminFiscalResolve'];
+    'eventAdminReceivables', 'eventAdminRevokeStaff', 'eventAdminFiscal', 'eventAdminFiscalRetry', 'eventAdminCreditNoteRetry', 'eventAdminCreditNoteResolve', 'eventAdminFiscalResolve', 'eventAdminRefundCancelled', 'eventAdminIntegrationStatus'];
 
   root.SokoniAOSEntertainment = { mount, OPS, _kes: kes, _esc: esc };
 }(typeof window !== 'undefined' ? window : globalThis));

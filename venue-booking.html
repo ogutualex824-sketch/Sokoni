@@ -238,8 +238,8 @@
     <!-- Success state -->
     <div class="success-screen" id="success-screen">
       <div class="success-icon">&#10003;</div>
-      <h2>Booking Confirmed!</h2>
-      <p class="desc">Your venue is reserved.</p>
+      <h2 id="success-title">Booking request sent</h2>
+      <p class="desc" id="success-desc">—</p>
       <div class="booking-id-chip" id="success-ref"></div>
       <p class="desc" style="margin-bottom:28px">You will receive a confirmation notification shortly.</p>
       <button class="btn-primary" onclick="showMyBookings()">View My Bookings</button>
@@ -267,17 +267,26 @@
 <!-- Toast container -->
 <div id="toast-box"></div>
 
+<!-- The compat SDK this page's script is written against. 2026-09-27: it assumed shared-header.js loaded
+     it (it does not — shared-header uses the modular SDK) and read a global `db` nothing defined, so the
+     script threw on its first line and the page never searched. The DEFAULT app shares the signed-in
+     session with the rest of the site. -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js"></script>
 <script src="sokoni-config.js"></script>
+<script src="/sokoni-appcheck.js"></script>
 <script src="sokoni-availability.js"></script>
 <script>
-// Firebase compat SDK is loaded by shared-header.js
-// db = firebase.firestore() available globally
-// firebase.auth(), firebase.functions().httpsCallable(name) available
+var _vbApp = firebase.apps.length ? firebase.app() : firebase.initializeApp(window.SOKONI_CONFIG);
+var db = firebase.firestore(_vbApp);
 
 /* ── Booking dispatcher helper ───────────────────────────────────────── */
 var _vbDispatch = null;
 function _vb(op, data) {
-  if (!_vbDispatch) _vbDispatch = firebase.functions().httpsCallable('bookingDispatch');
+  if (!_vbDispatch) _vbDispatch = firebase.functions(_vbApp).httpsCallable('bookingDispatch');
   return _vbDispatch(Object.assign({ op: op }, data || {}));
 }
 
@@ -339,7 +348,7 @@ var S = {
 };
 
 /* ── Auth ────────────────────────────────────────────────────────────────── */
-firebase.auth().onAuthStateChanged(function(u) { S.user = u; });
+firebase.auth(_vbApp).onAuthStateChanged(function(u) { S.user = u; });
 
 function requireAuth(fn) {
   if (S.user) { fn(); return; }
@@ -734,11 +743,20 @@ function submitBooking() {
     idempotencyKey: S.iKey
   }).then(function(res) {
     var ref = (res.data && res.data.bookingId) || '—';
+    /* The SERVER's status decides the wording (2026-09-27): a venue that requires approval returns
+       'pending', and this page used to say "Booking Confirmed! Your venue is reserved." regardless.
+       Venue bookings carry no SOKONI payment rail yet — never imply that one was taken. */
+    var st = String((res.data && res.data.status) || '').toLowerCase();
+    var confirmed = st === 'confirmed';
+    document.getElementById('success-title').textContent = confirmed ? 'Booking confirmed' : 'Booking request sent';
+    document.getElementById('success-desc').textContent = confirmed
+      ? 'The venue has reserved this slot. SOKONI does not collect payment for venue bookings — the venue will tell you how to pay.'
+      : 'The venue must approve this request before the slot is yours. You will be notified of its decision.';
     document.getElementById('success-ref').textContent = 'Booking ID: ' + ref;
     document.getElementById('confirm-back').style.display = 'none';
     btn.style.display = 'none';
     document.getElementById('success-screen').classList.add('show');
-    toast('Booking confirmed!', 'ok');
+    toast(confirmed ? 'Booking confirmed.' : 'Request sent — awaiting the venue.', 'ok');
   }).catch(function(err) {
     console.error('[venue-booking] createBooking:', err);
     toast((err.message || 'Booking failed. Please try again.'), 'err');
@@ -806,7 +824,21 @@ function clearEl(el) { while (el.firstChild) el.removeChild(el.firstChild); }
 function mkSpinner() { var d = document.createElement('div'); d.className = 'spinner'; return d; }
 
 /* ── Boot ─────────────────────────────────────────────────────────────────── */
-doSearch();
+/* Deep links from the Entertainment Hub / search: ?tab=mine opens My Bookings; ?venue=<id> opens that
+   venue (read through the same rules as the list: active venues only). */
+(function () {
+  var q = new URLSearchParams(location.search);
+  if (q.get('tab') === 'mine') { showMyBookings(); return; }
+  var vid = q.get('venue');
+  if (vid && /^[A-Za-z0-9_-]{1,128}$/.test(vid)) {
+    db.collection('venues').doc(vid).get().then(function (d) {
+      if (d.exists && d.data().status === 'active') openVenue(Object.assign({ id: d.id }, d.data()));
+      else { toast('That venue is not available.', 'err'); doSearch(); }
+    }).catch(function () { toast('That venue is not available.', 'err'); doSearch(); });
+    return;
+  }
+  doSearch();
+}());
 </script>
 </body>
 </html>

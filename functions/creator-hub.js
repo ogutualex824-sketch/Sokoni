@@ -512,9 +512,14 @@ async function catalogList(req) {
     if (c.exists) q = q.startAfter(c);
   }
   const snap = await q.get();
+  /* Defence in depth: only films of ACTIVE creators (the flag above follows suspension, but a film
+     published before that sync existed must not slip through). */
+  const cuids = [...new Set(snap.docs.map((x) => x.data().creatorUid).filter(Boolean))];
+  const cs = cuids.length ? await Promise.all(cuids.map((u) => _db().collection(COL.CREATORS).doc(u).get())) : [];
+  const activeC = new Set(cs.filter((c) => c.exists && c.data().state === P.CREATOR_STATE.ACTIVE).map((c) => c.id));
   return {
     subcategories: P.SUBCATEGORIES,
-    films: snap.docs.map((x) => _publicFilm(x.id, x.data())),
+    films: snap.docs.filter((x) => activeC.has(x.data().creatorUid)).map((x) => _publicFilm(x.id, x.data())),
     nextCursor: snap.docs.length === limit ? snap.docs[snap.docs.length - 1].id : null,
   };
 }
@@ -534,6 +539,8 @@ async function catalogGet(req) {
   if (!snap.exists || snap.data().creatorHub !== true || snap.data().status !== 'active') fail('not-found', 'Film not found.');
   const f = snap.data();
   const uid = req.auth && req.auth.uid;
+  const _cs = await _db().collection(COL.CREATORS).doc(f.creatorUid).get();
+  if (!_cs.exists || _cs.data().state !== P.CREATOR_STATE.ACTIVE) fail('not-found', 'Film not found.');
   const [cSnap, access, cfg, userSnap] = await Promise.all([
     _db().collection(COL.CREATORS).doc(f.creatorUid).get(),
     _viewerAccess(uid, filmId),
@@ -1271,6 +1278,34 @@ _adminH.creatorAdminList = async (req) => {
   return { creators: snap.docs.map((d) => ({ ..._publicCreator(d.id, d.data(), { withContact: true }), createdAt: _ms(d.data().createdAt), reviewNote: d.data().reviewNote || null })) };
 };
 
+/* A creator who is not ACTIVE must not stay discoverable (2026-09-27 readiness sweep): suspension changed
+   creators.state only, so the creator's PUBLISHED films kept status 'active' — listed by catalog.list, by
+   the platform search (sokoni-firestore-search reads entertainmentListings where status == 'active') and
+   readable under the rules. The public flag follows the account; pubState (the editorial state) is
+   untouched, so reinstatement restores exactly the films that were published. Purchases were already
+   refused (priceFilmAccess); this closes discovery. */
+function patch_state(c, action) {
+  if (action.to === P.VERIFICATION_STATE.APPROVED && [P.CREATOR_STATE.PENDING, P.CREATOR_STATE.SUSPENDED].includes(c.data().state)) return P.CREATOR_STATE.ACTIVE;
+  if (action.to === P.VERIFICATION_STATE.SUSPENDED) return P.CREATOR_STATE.SUSPENDED;
+  return c.data().state;
+}
+
+async function _syncCreatorVisibility(uid, creatorState) {
+  const visible = creatorState === P.CREATOR_STATE.ACTIVE;
+  const snap = await _db().collection(COL.FILMS).where('creatorUid', '==', uid).where('creatorHub', '==', true)
+    .where('pubState', '==', P.FILM_STATE.PUBLISHED).limit(400).get();
+  let changed = 0;
+  for (let i = 0; i < snap.docs.length; i += 400) {
+    const b = _db().batch();
+    snap.docs.slice(i, i + 400).forEach((d) => {
+      const want = visible ? 'active' : 'creator_suspended';
+      if (d.data().status !== want) { b.update(d.ref, { status: want, updatedAt: FieldValue.serverTimestamp() }); changed++; }
+    });
+    await b.commit(); // eslint-disable-line no-await-in-loop
+  }
+  return changed;
+}
+
 _adminH.creatorAdminSetState = async (req) => {
   const actor = _admin(req);
   const d = req.data || {};
@@ -1290,8 +1325,9 @@ _adminH.creatorAdminSetState = async (req) => {
       updatedAt: FieldValue.serverTimestamp() });
     return { from: s.data().state, to };
   });
-  await _adminAudit('creator_state', actor, { uid, ...out, reason });
-  return out;
+  const filmsChanged = await _syncCreatorVisibility(uid, out.to);
+  await _adminAudit('creator_state', actor, { uid, ...out, reason, filmsVisibilityChanged: filmsChanged });
+  return { ...out, filmsVisibilityChanged: filmsChanged };
 };
 
 _adminH.creatorAdminFilms = async (req) => {
@@ -2070,8 +2106,9 @@ _adminH.creatorAdminVerificationDecision = async (req) => {
       }
       txn.update(c.ref, patch);
     }
-    return { from, to: action.to };
+    return { from, to: action.to, creatorState: c.exists ? (patch_state(c, action)) : null };
   });
+  if (out.creatorState) await _syncCreatorVisibility(uid, out.creatorState);
   await _adminAudit('creator_verification', actor, { uid, action: d.action, ...out, reason });
   return out;
 };

@@ -121,7 +121,7 @@ const read = (f) => fs.readFileSync(Path.join(ROOT, f), 'utf8');
   ck('Event Manager links to the entry with context', /href="\/entertainment-integrations\.html\?context=events"/.test(read('event-manager.html')));
   ck('Event finance links payment + fiscal integrations with context', /context=events&amp;integration=intasend/.test(read('sokoni-event-ops.js')) && /context=events&amp;integration=kra_etims/.test(read('sokoni-event-ops.js')));
   ck('Creator Studio links payment + fiscal integrations with context', /context=creator&amp;integration=intasend/.test(read('creator-studio.html')) && /context=creator&amp;integration=kra_etims/.test(read('creator-studio.html')));
-  ck('the Entertainment Hub has ONE Integrations entry', (read('entertainment.html').match(/entertainment-integrations\.html/g) || []).length === 1);
+  ck('the Entertainment Hub has ONE Integrations entry (links, not comments)', (read('entertainment.html').replace(/<!--[\s\S]*?-->/g, '').match(/href="\/entertainment-integrations\.html/g) || []).length === 1);
 
   say('\n── no duplicate configuration system ──');
   const page = read('entertainment-integrations.html');

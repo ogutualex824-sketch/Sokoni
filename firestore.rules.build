@@ -85,8 +85,16 @@ service cloud.firestore {
   'trustScore','kycStatus','riskLevel','merchantStatus','providerStatus',
   'ageVerified','ageVerifiedAt','ageVerifiedMethod']);
   }
+  function noServerRoleSelfGrant() {
+  return !request.resource.data.keys().hasAny(['roles'])
+  || !(request.resource.data.roles is list)
+  || !request.resource.data.roles.hasAny(['event_organizer','admin','superAdmin','moderator'])
+  || (resource != null && resource.data.get('roles', []) is list
+  && request.resource.data.roles.toSet().intersection(['event_organizer','admin','superAdmin','moderator'].toSet())
+  .difference(resource.data.get('roles', []).toSet()).size() == 0);
+  }
   function noPrivilegeEscalation() {
-  return noSelfGrant()
+  return noSelfGrant() && noServerRoleSelfGrant()
   && (resource == null
   ? (!request.resource.data.keys().hasAny(['registeredAs'])
   || !request.resource.data.registeredAs.keys()
@@ -166,11 +174,28 @@ service cloud.firestore {
   allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
   allow write: if false;
   }
+  function noApplicationDecision() {
+  let decisive = ['approved','active','accepted','verified','rejected','declined','denied',
+  'suspended','revoked','banned','disabled'];
+  let decisionKeys = ['decidedBy','decidedAt','decisionAppliedFor','projectionStatus','blockedFor',
+  'statusCanonical','reviewReason','agreementVerifiedAt','agreementVerifiedVersion'];
+  let d = request.resource.data;
+  return (resource == null
+  ? !d.keys().hasAny(decisionKeys)
+  : !d.diff(resource.data).affectedKeys().hasAny(decisionKeys))
+  && (!d.keys().hasAny(['status'])
+  || (resource != null && !d.diff(resource.data).affectedKeys().hasAny(['status']))
+  || (d.status is string && !(d.status.lower() in decisive)));
+  }
   match /applications/{appId} {
-  allow create: if claimsOwner() && noAdminFields();
+  allow create: if claimsOwner() && noAdminFields() && noApplicationDecision();
   allow read:   if isAdmin() || isOwner();
-  allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields());
+  allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields() && noApplicationDecision());
   allow delete: if isAdmin() || isOwner();
+  }
+  match /applicationDecisions/{appId} {
+  allow read:  if isAdmin();
+  allow write: if false;
   }
   match /posCommissionLiabilities/{saleId} {
   allow read:   if isAdmin() || (isAuthed() && resource.data.merchantUid == request.auth.uid);
@@ -254,10 +279,16 @@ service cloud.firestore {
   allow create: if isAuthed()
   && request.resource.data.ownerId == request.auth.uid
   && request.resource.data.name is string
-  && request.resource.data.name.size() > 0;
+  && request.resource.data.name.size() > 0
+  && request.resource.data.get('status', 'pending') == 'pending'
+  && noAdminFields()
+  && !request.resource.data.keys().hasAny(['rating','reviewCount','suspendedBy','suspendReason']);
   allow update: if isAdmin()
   || (isAuthed() && resource.data.ownerId == request.auth.uid
-  && request.resource.data.ownerId == request.auth.uid);
+  && request.resource.data.ownerId == request.auth.uid
+  && noAdminFields()
+  && !request.resource.data.diff(resource.data).affectedKeys()
+  .hasAny(['status','rating','reviewCount','suspendedBy','suspendReason']));
   allow delete: if isAdmin();
   }
   match /venueBlockouts/{blockId} {
@@ -1283,68 +1314,45 @@ service cloud.firestore {
   allow delete: if isAdmin();
   }
   match /entArtists/{artistId} {
-  allow read:   if true;
-  allow create: if claimsOwner() && noAdminFields()
-  && request.resource.data.get('status', 'pending') == 'pending';
-  allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields()
-  && request.resource.data.get('status', '') == resource.data.get('status', ''));
+  allow read:   if isAdmin() || isOwner();
+  allow create, update: if isAdmin();
   allow delete: if isAdmin() || isOwner();
   }
   match /entEvents/{eventId} {
-  allow read:   if true;
-  allow create: if false;
-  allow update: if isAdmin()
-  || (isOwner() && uidUnchanged() && noAdminFields());
+  allow read:   if isAdmin() || isOwner();
+  allow create, update: if isAdmin();
   allow delete: if isAdmin() || isOwner();
   }
   match /entTickets/{ticketId} {
-  allow create: if false;
   allow read:   if isAdmin()
-  || (isAuthed() && resource.data.uid == request.auth.uid)
-  || (isAuthed() && resource.data.organizerUid == request.auth.uid);
-  allow update: if isAdmin()
-  || (isAuthed() && resource.data.organizerUid == request.auth.uid
-  && uidUnchanged());
-  allow delete: if isAdmin();
+  || (isAuthed() && resource.data.uid == request.auth.uid);
+  allow create, update, delete: if isAdmin();
   }
   match /entVenues/{venueId} {
-  allow read:   if true;
-  allow create: if claimsOwner() && request.resource.data.get('status', 'pending') == 'pending';
-  allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields()
-  && request.resource.data.get('status', '') == resource.data.get('status', ''));
+  allow read:   if isAdmin() || isOwner();
+  allow create, update: if isAdmin();
   allow delete: if isAdmin() || isOwner();
   }
   match /entVenueBookings/{bookId} {
-  allow create: if claimsOwner();
   allow read:   if isAdmin()
   || (isAuthed() && resource.data.uid == request.auth.uid)
   || (isAuthed() && resource.data.venueOwnerUid == request.auth.uid);
-  allow update: if isAdmin()
-  || (isAuthed() && resource.data.venueOwnerUid == request.auth.uid
-  && uidUnchanged() && noAdminFields());
-  allow delete: if isAdmin();
+  allow create, update, delete: if isAdmin();
   }
   match /entArtistBookings/{bookId} {
-  allow create: if claimsOwner();
   allow read:   if isAdmin()
   || (isAuthed() && resource.data.uid == request.auth.uid)
   || (isAuthed() && resource.data.artistUid == request.auth.uid);
-  allow update: if isAdmin()
-  || (isAuthed() && resource.data.artistUid == request.auth.uid
-  && uidUnchanged());
-  allow delete: if isAdmin() || isOwner();
+  allow create, update, delete: if isAdmin();
   }
   match /entReviews/{reviewId} {
-  allow read:   if true;
-  allow create: if claimsOwner() && noAdminFields();
-  allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+  allow read:   if isAdmin() || isOwner();
+  allow create, update: if isAdmin();
   allow delete: if isAdmin() || isOwner();
   }
   match /entContent/{contentId} {
-  allow read:   if resource.data.status == 'active' || isAdmin()
-  || (isAuthed() && resource.data.uid == request.auth.uid);
-  allow create: if claimsOwner();
-  allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+  allow read:   if isAdmin() || isOwner();
+  allow create, update: if isAdmin();
   allow delete: if isAdmin() || isOwner();
   }
   match /deliveries/{deliveryId} {
@@ -3561,7 +3569,7 @@ service cloud.firestore {
   allow write: if false;
   }
   match /eventPromoCodes/{codeId} {
-  allow read:  if isAuthed();
+  allow read:  if isAdmin();
   allow write: if false;
   }
   match /eventOrderIdempotency/{key} {

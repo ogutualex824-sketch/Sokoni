@@ -193,14 +193,18 @@ const SPECS = [
     link: (d, id) => 'car-hub.html?tab=browse&id=' + encodeURIComponent(id),
   },
   {
-    col: 'entEvents', tab: 'events', icon: '🎉', scan: 200,
-    fields: ['title', 'name', 'category', 'type', 'description', 'venue', 'location', 'city', 'organizer'],
-    title: d => d.title || d.name || '',
-    subtitle: d => [d.category || d.type, d.venue].filter(Boolean).join(' · ') || 'Event',
-    location: d => d.location || d.venue || d.city || '',
-    price: d => (d.ticketPrice != null ? kes(d.ticketPrice) : (d.free || d.isFree ? 'Free' : null)),
-    thumb: d => d.image || d.poster || null,
-    link: (d, id) => 'entertainment.html?event=' + encodeURIComponent(id),
+    /* Events (2026-09-27): the CANONICAL event-hub collection, public only while live (the same
+       guard as firestore.rules + listEvents). The legacy entEvents source had NO status guard and
+       linked to a page that could not sell the ticket. */
+    col: 'events', tab: 'events', icon: '🎉', scan: 200,
+    guard: w => [w('status', '==', 'live')],
+    fields: ['title', 'category', 'description', 'venue', 'address', 'city', 'tags'],
+    title: d => d.title || '',
+    subtitle: d => [d.category, d.venue].filter(Boolean).join(' · ') || 'Event',
+    location: d => d.venue || d.city || '',
+    price: () => null,
+    thumb: d => d.bannerImageUrl || null,
+    link: (d, id) => 'event-hub.html?event=' + encodeURIComponent(id),
   },
   {
     /* Creator Hub films (docs/CREATOR_HUB.md). The guard mirrors firestore.rules:
@@ -217,14 +221,17 @@ const SPECS = [
     link: (d, id) => 'creator.html?film=' + encodeURIComponent(id),
   },
   {
-    col: 'entVenues', tab: 'businesses', icon: '🎭', scan: 150,
+    /* Venues (2026-09-27): the CANONICAL venue booking engine, public only while active. The legacy
+       entVenues source exposed owner phone numbers and is no longer client-readable. */
+    col: 'venues', tab: 'businesses', icon: '🎭', scan: 150,
+    guard: w => [w('status', '==', 'active')],
     fields: ['name', 'type', 'category', 'description', 'location', 'city'],
     title: d => d.name || '',
     subtitle: d => d.type || d.category || 'Venue',
     location: d => d.location || d.city || '',
     price: d => (d.capacity ? 'Capacity: ' + d.capacity : null),
-    thumb: d => d.image || null,
-    link: (d, id) => 'entertainment.html?venue=' + encodeURIComponent(id),
+    thumb: d => (Array.isArray(d.photos) ? d.photos[0] : d.image) || null,
+    link: (d, id) => 'venue-booking.html?venue=' + encodeURIComponent(id),
   },
   {
     col: 'mechanics', tab: 'businesses', icon: '🔧', scan: 150,

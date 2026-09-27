@@ -177,7 +177,7 @@ const ck = (l, ok, d) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (
   ck('`creator` is a key of the canonical categoryMeta', /creator:\s*\{ title:"Creator — Films & Media"/.test(cat));
   ck('the key hands over to the live catalogue', /categoryMeta\[category\]\.href/.test(cat));
   ck('category.html pill links the canonical key', /category\.html\?cat=creator/.test(rd('category.html')));
-  ck('Entertainment hub links Creator (inside the hub, not a new hub)', /href="creator\.html"/.test(rd('entertainment.html')));
+  ck('Entertainment hub links Creator (inside the hub, not a new hub)', /href="\/?creator\.html"/.test(rd('entertainment.html')));
 
   console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
   process.exit(fail ? 1 : 0);
