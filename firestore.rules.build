@@ -645,8 +645,8 @@ service cloud.firestore {
   }
   match /lawyers/{docId} {
   allow read:   if true;
-  allow create: if claimsOwner() && noAdminFields() && noRatingAggOnCreate();
-  allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields() && noRatingAggOnUpdate());
+  allow create: if false;
+  allow update: if isAdmin();
   allow delete: if isAdmin();
   }
   match /legalAppointments/{apptId} {
@@ -3786,8 +3786,19 @@ service cloud.firestore {
   allow write: if false;
   }
   match /legalProviders/{providerId} {
-  allow read:  if resource.data.status == 'active' || isAdmin()
-  || (isAuthed() && request.auth.uid == providerId);
+  allow read:  if isAdmin() || (isAuthed() && request.auth.uid == providerId);
+  allow write: if false;
+  }
+  match /legalVerifications/{uid} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
+  match /legalVerificationEvents/{eventId} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
+  match /legalProviderQuarantine/{uid} {
+  allow read:  if isAdmin();
   allow write: if false;
   }
   match /legalConsultations/{consultationId} {

@@ -272,7 +272,9 @@ const SPECS = [
   {
     col: 'lawyers', tab: 'professionals', icon: '⚖️', scan: 150,
     fields: ['name', 'specialty', 'practice', 'firm', 'description', 'location', 'city'],
-    title: d => d.name || '',
+    /* Only the card the Legal Verification Authority projected (admin-approved AND LSK-verified) is a
+       result; a legacy self-written or script-written card has no title, so it never lists (CHANGELOG 220). */
+    title: d => (d.projectedBy === 'legal-verification' && d.name) || '',
     subtitle: d => d.specialty || d.practice || 'Legal Professional',
     location: d => d.location || d.city || '',
     price: d => kes(d.hourlyRate, '/hr'),

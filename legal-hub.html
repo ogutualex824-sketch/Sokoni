@@ -1800,10 +1800,14 @@ async function _loadLawyersFs(){
       rate:         p.consultationFee || 5000,
       rateType:     'per session',
       bio:          p.bio || '',
-      rating:       p.rating || 5.0,
+      rating:       p.rating || 0,
       jobsCompleted:p.totalConsultations || 0,
       available:    p.isOnline !== false,
-      verified:     true,
+      /* CHANGELOG 220 — "✅ LSK" only when the canonical LSK verification is verified AND current;
+         the server lists only eligible advocates, but the badge still reads the server's answer. */
+      verified:     p.lskVerified === true,
+      sokoniVerified: p.sokoniVerified === true,
+      lskPractisingYear: p.lskPractisingYear || null,
       rollNo:       p.licenseNumber || '',
       spec:         (p.specializations||[]).map(s=>(SPEC_LABELS[s]||s)).join(', ') || '📋 General Practice',
       sellerUid:    p.providerId,
@@ -1898,7 +1902,7 @@ function _renderLawyerCards(lawyers){
           ${l.firm ? `<div class="lc-firm">🏢 ${lhEsc(l.firm)}</div>` : ""}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
-          <div class="lc-badge ${l.verified?"lc-badge-lsk":"lc-badge-pending"}">${l.verified?"✅ LSK":"⏳ Pending"}</div>
+          <div class="lc-badge ${l.verified?"lc-badge-lsk":"lc-badge-pending"}" title="${l.verified?"Practising status verified with the Law Society of Kenya"+(l.lskPractisingYear?" for "+l.lskPractisingYear:""):"Not verified"}">${l.verified?"✅ LSK":"⏳ Pending"}</div>
           <div data-avail-provider="lgl_${lhEsc(l.id)}" onclick="event.stopPropagation()"></div>
         </div>
       </div>
@@ -3717,9 +3721,11 @@ async function checkExistingApp(){
         if (snap.exists()) {
           const p = snap.data();
           const statusLabel = {
-            active:         '<span style="color:#71ff00;">✅ Active — Visible to Clients</span>',
-            pending_review: '<span style="color:#ff9800;">⏳ Pending Review</span>',
-            suspended:      '<span style="color:#ff6b6b;">⛔ Suspended — Contact Support</span>',
+            active:               '<span style="color:#71ff00;">✅ Verified — Visible to Clients</span>',
+            pending_review:       '<span style="color:#ff9800;">⏳ Pending SOKONI review</span>',
+            pending_verification: '<span style="color:#ff9800;">⏳ Approved by SOKONI — awaiting LSK practising-status verification</span>',
+            rejected:             '<span style="color:#ff6b6b;">⛔ Not approved — Contact Support</span>',
+            suspended:            '<span style="color:#ff6b6b;">⛔ Suspended — Contact Support</span>',
           }[p.status] || `<span style="color:rgba(255,255,255,0.4);">${lhEsc(p.status||'unknown')}</span>`;
           card.style.display = 'block';
           const info = document.getElementById('existingAppInfo');
@@ -3806,20 +3812,9 @@ async function registerLawyer(){
   _fsLawyersCache = null;
   /* status-check hint only (the server record is authoritative) */
   try { localStorage.setItem("sokoniLawyerApp", JSON.stringify({ name, rollNo:roll, spec, location:lawyer.location, ref, createdAt:Date.now() })); } catch(e){}
-  /* Submit to admin applications queue in Firestore */
-  if(window.SokoniDB){
-    window.SokoniDB.saveApplication({
-      id: lawyer.id, name, phone, email,
-      category: spec||'general', location: lawyer.location,
-      type: 'lawyer', hub: 'legal',
-      rollNo: roll, firm: lawyer.firm||'',
-      status: 'pending',
-      date: new Date().toLocaleDateString('en-KE'),
-      submittedAt: new Date().toISOString()
-    }).catch(e=>console.warn('[SOKONI] Lawyer app save:',e.message));
-  }
-
-  /* The admin reviews the application in the approval queue — no WhatsApp notice. */
+  /* CHANGELOG 220 — the server created the AdminOS review item (applications/legal_{uid}) together with
+     the Legal record; a second, client-written application is no longer made. SOKONI approval and LSK
+     verification are separate — the advocate is listed only once both hold. */
 
   /* Show success state */
   const formEl   = document.getElementById("lawRegForm");

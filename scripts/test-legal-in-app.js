@@ -63,7 +63,10 @@ const TOMORROW = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
   ck('the detector finds a hand-off (positive control)', nonShareWa('<a href="https://wa.me/254703480154?text=hi">').length === 1);
   ck('no retired phone-number M-PESA rail, no client-priced gateway, no client lead fee', !/SokoniMpesa\.pay|sokoni-mpesa\.js|SokoniPay\.bookNow\(|leadFees/.test(SRC));
 
-  await db.doc('legalProviders/law1').set({ providerId: 'law1', name: 'Wanjiru Kamau', firmName: 'Kamau & Co', specializations: ['family_law'], county: 'Nairobi', consultationFee: 3000, currency: 'KES', rating: 4.5, status: 'active', isOnline: true });
+  /* An ELIGIBLE advocate (CHANGELOG 220): SOKONI-approved + LSK-verified (current) + linked — the directory lists nothing less. */
+  const LV = require(Path.join(FN, 'legal-verification.js'));
+  await db.doc('legalProviders/law1').set({ providerId: 'law1', name: 'Wanjiru Kamau', firmName: 'Kamau & Co', specializations: ['family_law'], county: 'Nairobi', consultationFee: 3000, currency: 'KES', rating: 4.5, status: 'active', isOnline: true,
+    verification: { admin: { status: 'approved' }, lsk: { status: 'verified', practiceStatus: 'Active', source: LV.SOURCES.OFFICIAL_SOURCE_MANUAL, checkedAtMs: Date.now() - 86400000, validUntilMs: LV.practisingYearEndMs(Date.now()) }, providerLink: { status: 'linked' } } });
   await db.doc('legalProviders/law2').set({ providerId: 'law2', name: 'Otieno Pending', specializations: ['other'], consultationFee: 2000, currency: 'KES', rating: 0, status: 'pending' });
   await db.doc('legalConsultations/lc_seed').set({ consultationId: 'lc_seed', clientUid: 'b1', providerId: 'law1', providerName: 'Wanjiru Kamau', specializations: ['family_law'], dateTime: new Date(Date.now() + 3 * 86400000).toISOString(), matter: 'Custody', status: 'confirmed' });
 
@@ -155,7 +158,7 @@ const TOMORROW = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
     };
     const r1 = await reg(P);
     const lp = await get('legalProviders/b1');
-    ck('signed in: the application IS the server record (legalProviders, pending)', lp && lp.status === 'pending', lp && lp.status);
+    ck('signed in: the application IS the server record (legalProviders pending review; SOKONI + LSK both pending — CHANGELOG 220)', lp && lp.status === 'pending_review' && lp.verification.admin.status === 'pending' && lp.verification.lsk.status === 'pending', lp && lp.status);
     ck('…the success says pending verification — never "your listing is now live"', r1.success && /Pending Verification/.test(r1.text) && !/now live/i.test(r1.text), r1.text.slice(0, 140));
     ck('…no WhatsApp to the admin', !r1.opened.some((u) => /wa\.me/.test(u)), r1.opened);
     await P.__ctx.close();

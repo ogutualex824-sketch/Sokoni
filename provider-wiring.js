@@ -116,9 +116,9 @@
     const { rating, ratingCount, ratingSum, reviewCount, reviews, verified, ...own } = data || {};
     data = own;
     /* Also write to hub-specific collection if applicable */
-    if (hub === 'legal') {
-      _fsSet('lawyers', String(id), { ...data, uid: _uid });
-    }
+    /* legal: RETIRED (CHANGELOG 220). The public legal directory card is projected by the Legal
+       Verification Authority only while an advocate is admin-approved AND LSK-verified; a self-written
+       card was an unverified "lawyer" in site search. The rules now refuse the client write. */
     if (hub === 'mechanics') {
       _fsSet('mechanics', String(id), { ...data, uid: _uid });
     }

@@ -9,18 +9,15 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 
 const REGION = 'us-central1';
+/* The ONE Legal eligibility predicate (admin verification + current LSK verification) — CHANGELOG 220. */
+const LV = require('./legal-verification');
 const CF_OPTS = { region: REGION, enforceAppCheck: true };
 const db = () => admin.firestore();
-const auth = () => admin.auth();
 const FieldValue = admin.firestore.FieldValue;
 
 function requireAuth(req) {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Authentication required');
   return req.auth.uid;
-}
-async function getRole(uid) {
-  const tok = await auth().getUser(uid);
-  return (tok.customClaims || {}).role || 0;
 }
 function san(s, max = 200) { return s == null ? '' : String(s).trim().slice(0, max); }
 
@@ -47,6 +44,10 @@ exports.registerLegalProvider = onCall(CF_OPTS, async (req) => {
 
   const existing = await db().collection('legalProviders').where('uid', '==', uid).limit(1).get();
   if (!existing.empty) throw new HttpsError('already-exists', 'Profile already exists');
+  /* A quarantined legacy identity (CHANGELOG 220) is not re-created by registering again. */
+  if ((await db().collection('legalProviderQuarantine').doc(uid).get()).exists) {
+    throw new HttpsError('failed-precondition', 'This account cannot register as an advocate. Contact SOKONI support.');
+  }
 
   const ref = db().collection('legalProviders').doc(uid);
   await ref.set({
@@ -61,30 +62,34 @@ exports.registerLegalProvider = onCall(CF_OPTS, async (req) => {
     languages: Array.isArray(languages) ? languages.slice(0, 5).map(l => san(l, 30)) : ['English', 'Swahili'],
     isOnline: Boolean(isOnline),
     yearsOfExperience: parseInt(yearsOfExperience) || 0,
-    status: 'pending',
+    /* Server-set, never from the request: both authorities start pending (CHANGELOG 220). */
+    status: 'pending_review',
+    verification: {
+      admin: { status: 'pending' }, lsk: { status: 'pending' },
+      eligibility: { bookable: false, code: 'ADMIN_PENDING', derivedAtMs: Date.now() },
+    },
     rating: 0, ratingCount: 0, totalConsultations: 0,
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
-  return { providerId: uid, status: 'pending' };
+  /* The application IS the AdminOS review item (applicationDecide → Legal Verification Authority). */
+  const app = await LV.ensureApplication(db(), uid, {
+    name: san(name, 120), firmName: san(firmName, 120), phone: san(phone, 20),
+    licenseNumber: san(licenseNumber, 60), county: san(county, 80),
+  });
+  return { providerId: uid, status: 'pending_review', applicationId: app.applicationId };
 });
 
 /* ── 2. approveLegalProvider (admin) ── */
+/* RETIRED (CHANGELOG 220). It required a numeric `role >= 4` claim that nothing mints, so no real
+   administrator could ever pass it, and it set `status:'active'` directly — an approval with no LSK
+   evidence. Advocate approval is the AdminOS application decision (applicationDecide) feeding the
+   Legal Verification Authority; LSK verification is recorded separately. The export stays so a
+   deployed caller gets a plain answer instead of a missing function. It writes nothing. */
 exports.approveLegalProvider = onCall(CF_OPTS, async (req) => {
-  const uid = requireAuth(req);
-  const role = await getRole(uid);
-  if (role < 4) throw new HttpsError('permission-denied', 'Admin required');
-  const { providerId, action, reason } = req.data;
-  if (!providerId || !['approve', 'reject'].includes(action)) {
-    throw new HttpsError('invalid-argument', 'providerId and action required');
-  }
-  const ref = db().collection('legalProviders').doc(providerId);
-  if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Provider not found');
-  await ref.update({
-    status: action === 'approve' ? 'active' : 'rejected',
-    reviewedBy: uid, reviewedAt: FieldValue.serverTimestamp(),
-    reviewNotes: san(reason, 500), updatedAt: FieldValue.serverTimestamp(),
-  });
-  return { ok: true };
+  requireAuth(req);
+  throw new HttpsError('failed-precondition',
+    'Advocate approval has moved to AdminOS › Legal Verification (application review + LSK verification). Nothing was changed.',
+    { code: 'LEGAL_APPROVAL_MOVED' });
 });
 
 /* ── 3. getLegalProviders ── */
@@ -110,14 +115,10 @@ exports.getLegalProviders = onCall(CF_OPTS, async (req) => {
   }
 
   const snap = await q.get();
-  let providers = snap.docs.map(d => {
-    const p = d.data();
-    return { providerId: p.providerId, name: p.name, firmName: p.firmName,
-      specializations: p.specializations, county: p.county,
-      consultationFee: p.consultationFee, currency: p.currency,
-      rating: p.rating, ratingCount: p.ratingCount,
-      isOnline: p.isOnline, yearsOfExperience: p.yearsOfExperience, languages: p.languages };
-  });
+  /* `status == 'active'` is only a coarse pre-filter: the ONE predicate decides (a stale LSK check or a
+     legacy record written 'active' by a script — T.M.M — is not listed). CHANGELOG 220. */
+  const now = Date.now();
+  let providers = snap.docs.filter(d => LV.eligibility(d.data(), now).bookable).map(d => _publicAdvocate(d.data(), now));
 
   if (county) providers = providers.filter(p => (p.county || '').toLowerCase().includes(county.toLowerCase()));
   if (isOnline) providers = providers.filter(p => p.isOnline);
@@ -127,13 +128,26 @@ exports.getLegalProviders = onCall(CF_OPTS, async (req) => {
   return { providers, nextCursor };
 });
 
+/* What a PUBLIC surface may carry: profile + the two verification facts. Never the licence number,
+   phone, reviewer, evidence or audit references. */
+function _publicAdvocate(p, now) {
+  const pv = LV.publicVerification(p, now);
+  return { providerId: p.providerId, name: p.name, firmName: p.firmName,
+    specializations: p.specializations, county: p.county,
+    consultationFee: p.consultationFee, currency: p.currency,
+    rating: p.rating, ratingCount: p.ratingCount,
+    isOnline: p.isOnline, yearsOfExperience: p.yearsOfExperience, languages: p.languages,
+    sokoniVerified: pv.sokoniVerified, lskVerified: pv.lskVerified, lskPractisingYear: pv.lskPractisingYear };
+}
+
 /* ── 4. getLegalProvider ── */
 exports.getLegalProvider = onCall(CF_OPTS, async (req) => {
   const { providerId } = req.data;
   if (!providerId) throw new HttpsError('invalid-argument', 'providerId required');
-  const snap = await db().collection('legalProviders').doc(providerId).get();
-  if (!snap.exists || snap.data().status !== 'active') throw new HttpsError('not-found', 'Provider not found');
-  return snap.data();
+  const snap = await db().collection('legalProviders').doc(String(providerId)).get();
+  const now = Date.now();
+  if (!snap.exists || !LV.eligibility(snap.data(), now).bookable) throw new HttpsError('not-found', 'Provider not found');
+  return _publicAdvocate(snap.data(), now);
 });
 
 /* ── 5. bookLegalConsultation ── */
@@ -167,7 +181,8 @@ exports.bookLegalConsultation = onCall(CF_OPTS, async (req) => {
     ]);
     if (idemSnap.exists) return { consultationId: idemSnap.data().consultationId, idempotent: true };
     if (consultSnap.exists) return { consultationId: consultId, idempotent: true };
-    if (!pSnap.exists || pSnap.data().status !== 'active') throw new HttpsError('not-found', 'Provider not found');
+    /* The ONE predicate — admin-approved AND LSK-verified AND current (CHANGELOG 220). */
+    if (!pSnap.exists || !LV.eligibility(pSnap.data(), Date.now()).bookable) throw new HttpsError('not-found', 'Provider not found');
     const prov = pSnap.data();
 
     t.set(consultRef, {
@@ -224,11 +239,12 @@ exports.updateConsultationStatus = onCall(CF_OPTS, async (req) => {
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'Consultation not found');
   const c = snap.data();
-  const role = await getRole(uid);
-  if (c.clientUid !== uid && c.providerId !== uid && role < 4) throw new HttpsError('permission-denied', 'Not authorized');
+  /* The canonical admin claim (admin-claim.js), not the numeric `role >= 4` nothing mints (CHANGELOG 220). */
+  const isAdm = require('./admin-claim').isAdmin(req);
+  if (c.clientUid !== uid && c.providerId !== uid && !isAdm) throw new HttpsError('permission-denied', 'Not authorized');
   /* Only the provider (or an admin) confirms, completes, reschedules or records a no-show: a completed
      consultation is what makes a rating eligible, so the client cannot decide it (CHANGELOG 213). */
-  if (status !== 'cancelled' && c.providerId !== uid && role < 4) {
+  if (status !== 'cancelled' && c.providerId !== uid && !isAdm) {
     throw new HttpsError('permission-denied', 'Only the provider can mark this consultation ' + status + '.');
   }
 

@@ -144,34 +144,12 @@
         <div class="la-out" id="sr-out">—</div>
       </div>
 
-      <!-- PROVIDER APPLICATIONS -------------------------------------------- -->
-      <div class="la-card">
-        <div class="la-sec">Provider applications</div>
-        <div class="la-bar">
-          <select class="la-sel" id="pap-status" aria-label="Filter by status">
-            <option value="pending_review">Pending review</option>
-            <option value="active">Active</option>
-            <option value="rejected">Rejected</option>
-            <option value="suspended">Suspended</option>
-          </select>
-          <button class="la-btn" id="pap-load">Load</button>
-        </div>
-        <div id="pap-list"></div>
-        <div class="la-out" id="pap-out" style="display:none">—</div>
-      </div>
-
-      <!-- APPROVE / REJECT PROVIDER (by ID) -------------------------------- -->
-      <div class="la-card">
-        <div class="la-sec">Approve / reject provider</div>
-        <div class="la-bar">
-          <input class="la-in" id="apr-id" placeholder="Provider UID" aria-label="Provider UID">
-          <input class="la-in" id="apr-reason" placeholder="Notes / reason (optional)" aria-label="Review notes">
-        </div>
-        <div class="la-bar">
-          <button class="la-btn" id="apr-approve">✅ Approve</button>
-          <button class="la-btn danger" id="apr-reject">⛔ Reject</button>
-        </div>
-        <div class="la-out" id="apr-out">—</div>
+      <!-- ADVOCATE APPLICATIONS — moved (CHANGELOG 220) ------------------------ -->
+      <div class="la-card" id="la-moved">
+        <div class="la-sec">Advocate applications &amp; verification</div>
+        <p class="la-note">Advocate approval has moved to <a href="admin-os.html#legal" style="color:inherit;font-weight:800;">AdminOS › Legal Verification</a>:
+          the SOKONI decision is made on the application, and the Law Society of Kenya practising status is verified and recorded separately.
+          An advocate is listed and bookable only when both hold. Nothing on this page approves an advocate.</p>
       </div>
 
       <!-- EXPORT ------------------------------------------------------------- -->
@@ -209,8 +187,6 @@ const LEGAL = (op, data) =>
   _fns.httpsCallable('legalDispatch', { timeout: 30000 })(Object.assign({ op }, data || {}))
       .then(r => r.data);
 
-const APPROVE_PROVIDER = (data) =>
-  _fns.httpsCallable('approveLegalProvider', { timeout: 30000 })(data).then(r => r.data);
 
 const $ = (id) => document.getElementById(id);
 const show = (id, v) => { $(id).textContent = typeof v === 'string' ? v : JSON.stringify(v, null, 2); };
@@ -327,54 +303,6 @@ async function doExport(asCsv) {
 }
 $('ex-json').addEventListener('click', (e) => run(e.target, 'ex-out', () => doExport(false)));
 $('ex-csv').addEventListener('click',  (e) => run(e.target, 'ex-out', () => doExport(true)));
-
-/* ── Provider applications ── */
-$('pap-load').addEventListener('click', (e) => run(e.target, 'pap-out', async () => {
-  const status = $('pap-status').value;
-  const snap = await _db.collection('legalProviders').where('status', '==', status).limit(50).get();
-  if (snap.empty) { $('pap-list').innerHTML = ''; return 'No providers with status "' + esc(status) + '".'; }
-  $('pap-out').style.display = 'none';
-  $('pap-list').innerHTML = snap.docs.map(d => {
-    const p = d.data();
-    const pid = esc(d.id);
-    const nm  = esc(p.name || '—');
-    const lic = esc(p.licenseNumber || '—');
-    const fee = esc(p.consultationFee != null ? 'KES ' + p.consultationFee.toLocaleString() : '—');
-    const sp  = esc((p.specializations || []).join(', ') || '—');
-    const ct  = esc(p.county || '—');
-    const dt  = p.createdAt && p.createdAt.toDate ? p.createdAt.toDate().toLocaleDateString('en-KE') : '—';
-    return `<div class="la-row" style="flex-wrap:wrap;gap:6px;">
-      <span><b>${nm}</b>  Lic: ${lic}  ${sp}  ${ct}  ${fee}  <span style="color:var(--sub)">${dt}</span></span>
-      <span style="display:flex;gap:6px;">
-        <button class="la-btn" style="padding:4px 10px;font-size:11px;" onclick="fillApprove('${pid}')">Fill ID</button>
-      </span>
-    </div>`;
-  }).join('');
-  return snap.size + ' result(s)';
-}));
-
-function fillApprove(id) {
-  $('apr-id').value = id;
-  $('apr-id').focus();
-}
-
-/* ── Approve / reject provider ── */
-$('apr-approve').addEventListener('click', async (e) => {
-  const id = $('apr-id').value.trim();
-  const reason = $('apr-reason').value.trim();
-  if (!id) return show('apr-out', 'Provider UID is required.');
-  if (!(await SK.dialog.confirm('Approve provider ' + id + '? This will set their status to ACTIVE and make them visible to clients.', null, null, { title: 'Approve provider', variant: 'success', confirmLabel: 'Approve' }))) return;
-  run(e.target, 'apr-out', () => APPROVE_PROVIDER({ providerId: id, action: 'approve', reason: reason || undefined }));
-});
-
-$('apr-reject').addEventListener('click', async (e) => {
-  const id = $('apr-id').value.trim();
-  const reason = $('apr-reason').value.trim();
-  if (!id) return show('apr-out', 'Provider UID is required.');
-  if (!reason) return show('apr-out', 'A reason is required when rejecting a provider.');
-  if (!(await SK.dialog.confirm('Reject provider ' + id + '? They will be notified. This action can be undone by approving them later.', null, null, { title: 'Reject provider', variant: 'danger', confirmLabel: 'Reject' }))) return;
-  run(e.target, 'apr-out', () => APPROVE_PROVIDER({ providerId: id, action: 'reject', reason }));
-});
 
 /* ── Access ──────────────────────────────────────────────────────────────────
    Hiding the UI is a courtesy, not the control. Every op re-checks admin on the

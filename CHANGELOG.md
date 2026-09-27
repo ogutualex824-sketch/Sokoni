@@ -1,3 +1,116 @@
+## 2026-09-27 (220) — Legal Verification Authority: SOKONI admin approval + LSK verification → one booking-eligibility rule
+
+Owner decision (2026-09-27): an advocate is bookable only when a **SOKONI AdminOS approval** and a **current Law Society
+of Kenya (LSK) practising-status verification** both hold. Admin approval alone is not "LSK verified". T.M.M is removed
+from the Legal registry. Legal payment is **not** connected in this commit.
+
+**Not deployed. No production writes. KRA not called. Migration not applied.** `0865a34`, `2c45a6f`, `0718604` and
+`1171a16` are untouched. Full design: `docs/LEGAL_VERIFICATION.md` ([[Legal Verification Authority]]).
+
+**Why.** The census found the Legal registry had no trustworthy approval state:
+- `approveLegalProvider` needed a numeric `role >= 4` claim that nothing mints, so no administrator could approve anyone.
+- An AdminOS approval of a `legal` application wrote nothing to `legalProviders`.
+- The only "active" advocate (T.M.M) had a blank LSK number and `verified:false`.
+- The directory showed "✅ LSK" on every advocate it listed.
+
+**Architecture.** `functions/legal-verification.js` is the new Legal Verification Authority.
+- **One predicate, `eligibility()`.** It requires, all together:
+  - admin status `approved`;
+  - LSK status `verified`, practising status `Active`, from a known source;
+  - an unexpired check, evaluated at read time;
+  - a link to one canonical `providers/{uid}` identity;
+  - a record that is not quarantined.
+- **Where the predicate is enforced:**
+  - `getLegalProviders` and `getLegalProvider`, which now return a public projection only;
+  - `bookLegalConsultation`;
+  - the canonical availability authority (`ent-availability.loadCalendar` → `bookingGate`).
+
+  An account that only claims a legal category is refused too.
+- **The SOKONI decision** is the existing `applicationDecide`. The `legal` role is no longer delegated: it records the
+  decision on the Legal record and provisions or links `providers/{uid}` plus an *inactive* consultation service. An
+  active provider of another kind is never merged. Approval is gated on the canonical provider-catalogue acceptances,
+  not the Seller Agreement tick.
+- **LSK verification:**
+  - **Mode B** (the only one available): an admin checks the official LSK search and records the P.105 number, the
+    name returned, the practising status, the date checked, an evidence reference and notes.
+    - The P.105 must be the advocate's registered number.
+    - A name mismatch is recorded as FAILED.
+    - A check from a previous practising year is recorded as expired.
+    - A verification is current only until 31 December (Nairobi time) of the year it was checked. An optional shorter
+      maximum age can be configured; no interval is invented.
+  - **Mode A** is `functions/lsk-adapter.js`: **LSK automated integration: NOT AVAILABLE / NOT AUTHORIZED.** There is
+    no endpoint, no scraping and no login automation.
+- **Storage:**
+  - the summary lives on the Legal record;
+  - the private detail is in `legalVerifications` (admin-only);
+  - the history is append-only in `legalVerificationEvents` (actor, action, target, previous, next, reason, time);
+  - removed legacy identities go to `legalProviderQuarantine`.
+- **AdminOS › Legal Verification** (`admin-os.html#legal`, `sokoni-aos-legal.js`): identity, provider link, application
+  decision, the LSK section (labelled manual), the server-derived **BOOKABLE / NOT BOOKABLE**, and the audit history.
+  There is no bookable toggle. `legal-admin.html` no longer approves advocates, and `approveLegalProvider` refuses and
+  writes nothing.
+- **Public directory card** (`lawyers/{uid}`): projected only while an advocate is eligible, with no P.105 and no phone.
+  Clients can no longer create or edit it (previously anyone could publish themselves as a "lawyer" in site search).
+  Site search shows projected cards only, and `provider-wiring.js` no longer writes the collection.
+- **Legal Hub:** the "✅ LSK" badge appears only when the server says the advocate is verified and current. Registration
+  creates the ONE AdminOS review item on the server, and the advocate's status shows the two layers.
+- **T.M.M:**
+  - The code refuses it everywhere now: never listed, requestable or bookable, and never in site search.
+  - Removal is `scripts/migrate-legal-quarantine.js`. Dry run by default; `--apply --operator=<uid>` quarantines it with
+    the legacy data, reason, time, script version and operator, and fabricates no LSK verification. **Not run.**
+  - `onboard-batch2.js` can no longer recreate it, and a quarantined uid cannot register or be approved again.
+- **Legal booking stays closed.** `LEGAL_BOOKING_ENABLED = false`, and the linked provider has
+  `acceptsBookings:false, searchable:false`. The next slice maps the `legal` 5% lane and connects the canonical IntaSend
+  held payment.
+
+**Files:**
+- New: `functions/legal-verification.js`, `functions/lsk-adapter.js`, `sokoni-aos-legal.js`,
+  `scripts/migrate-legal-quarantine.js`, `docs/LEGAL_VERIFICATION.md`.
+- Changed: `functions/legal-hub.js`, `functions/application-lifecycle.js`, `functions/ent-availability.js`,
+  `functions/admin-os-dispatch.js`, `firestore.rules` (+ `.build`), `admin-os.html`, `sokoni-aos.js`,
+  `legal-admin.html`, `legal-hub.html`, `provider-wiring.js`, `sokoni-firestore-search.js`, `scripts/onboard-batch2.js`, `ROADMAP.md` (the Legal row was "✅ Done").
+
+**Database:**
+- New collections: `legalVerifications`, `legalVerificationEvents`, `legalProviderQuarantine`.
+- New field: `legalProviders.verification`. `legalProviders.status` is now derived.
+- `providers/{uid}` gains `legalProviderId`, `provisionedBy`, `legalVerification`.
+- New doc: `providerServices/legal_consult_{uid}`, created inactive.
+
+**API:**
+- `adminOsDispatch` gains `legalAdminList`, `legalAdminGet`, `legalAdminRecordLsk`, `legalAdminRunLskCheck`,
+  `legalAdminRequestRecheck`, `legalAdminOpenReview`.
+- `registerLegalProvider` returns `applicationId`.
+- `getLegalProviders` and `getLegalProvider` return `sokoniVerified` / `lskVerified` / `lskPractisingYear`, and
+  `getLegalProvider` no longer returns the raw document.
+- `approveLegalProvider` is retired.
+
+**Security:**
+- Rules: `legalProviders` is readable only by the advocate and admins (no public raw read); the three new collections
+  are admin-read and server-write; `lawyers` has no client create or update.
+- `updateConsultationStatus` uses the canonical admin claim.
+
+**Breaking:**
+- **An advocate listed today disappears until verified under the new model.** In code that is T.M.M, the only active
+  record.
+- An approved legal application now needs the provider-catalogue acceptances.
+
+**Deploy (when authorized):**
+- Deploy rules, then functions: `adminOsDispatch`, `applicationDecide`, `applicationLifecycle`, the legal-hub callables
+  and every function that loads `ent-availability`.
+- Deploy hosting.
+- Then decide the migration.
+
+**Tests:**
+- `scripts/test-legal-verification.js` 104/0 (server, fake Firestore, real modules, plus AdminOS panel and Legal Hub in
+  Chromium).
+- `scripts/test-legal-verification-rules.js` 28/0 on the emulator with a counterproof. The same suite fails 3 on HEAD's
+  rules, the holes closed here.
+- `test-legal-in-app` 29/0.
+- `test-entertainment-rules` 377/0: the lawyer-card assertion moved to the new rule, via `expectDeny`.
+- 46 related suites all give the same result as baseline `0718604`: identical failure lists, with `admin-os-wiring`
+  +3 passes.
+- Sabotage group `legalv`: 29/29 caught (28 in the full run; the Mode A attack, which first CRASHED the suite instead of failing it, was re-run alone after the test was made fail-closed), tree byte-identical; group `legal` re-run 6/6.
+
 ## 2026-09-27 (219) — Legal Hub: booking, registration and contact inside SOKONI
 
 Owner directives: IntaSend only, and no WhatsApp for booking or communication. Not deployed. No production writes.

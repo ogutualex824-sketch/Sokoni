@@ -7,10 +7,8 @@
  *           and set it as the listing's contact number.
  *   [FAHIM] create fahimmarisa@gmail.com (+254713735027) as "Automate Fahim",
  *           a mechanic → mechanics/automate-fahim, searchable.
- *   [TMM]   add the REAL firm T.M.M & Partners Advocates to legalProviders
- *           (shown on legal-hub) and lawyers (global search). No LSK number is
- *           fabricated — it is left blank for the firm to supply, so this is a
- *           real-but-unverified entry, never an invented advocate.
+ *   [TMM]   REMOVED (CHANGELOG 220) — it wrote an "active" advocate with no SOKONI decision and no
+ *           LSK evidence. Legal records are created only through the Legal Verification Authority.
  *   [KASS]  make KASS SHOP searchable → sellers/{uid}.
  *
  *   node scripts/onboard-batch2.js            # dry run
@@ -110,40 +108,13 @@ const KASS_UID='xrH21J5GFbW8PluCZ2ny5nIuf602';
     }
   } else L('      would '+(fUid?'reuse':'CREATE')+' account, write mechanics/'+FSLUG+' (createdAt set → shows on car-hub)');
 
-  /* ── [TMM] real law firm ───────────────────────────────────────────────── */
-  L('\n  [TMM] T.M.M & Partners Advocates — legalProviders + lawyers (real firm, NO fabricated LSK)');
-  if(APPLY){
-    await patch('legalProviders',TMM_UID,{
-      providerId:S(TMM_UID),uid:S(TMM_UID),
-      name:S('T.M.M & Partners Advocates'),firmName:S('T.M.M & Partners Advocates'),
-      specializations:A(['other']),           /* honest default; firm can refine */
-      licenseNumber:S(''),                     /* NEVER fabricated — firm supplies real LSK */
-      bio:S(''),location:S('Nairobi'),county:S('Nairobi'),country:S('Kenya'),
-      phone:S(''),email:S('info@tmmadvocates.ke'),
-      consultationFee:{doubleValue:0},currency:S('KES'),
-      languages:A(['English','Swahili']),isOnline:B(true),yearsOfExperience:I(0),
-      status:S('active'),               /* admin-directed activation so it shows on legal-hub */
-      verified:B(false),                /* not verified until LSK is on file */
-      rating:{doubleValue:0},ratingCount:I(0),totalConsultations:I(0),
-      profilePending:A(['licenseNumber','specializations','bio','phone','address','consultationFee']),
-      onboardedBy:S('scripts/onboard-batch2.js'),
-      createdAt:T(NOW),updatedAt:T(NOW),
-    });
-    await patch('lawyers',TMM_UID,{
-      id:S(TMM_UID),uid:S(TMM_UID),sellerUid:S(TMM_UID),
-      name:S('T.M.M & Partners Advocates'),firm:S('T.M.M & Partners Advocates'),
-      specialty:S('Legal Services'),practice:S('General Practice'),
-      category:S('legal'),location:S('Nairobi'),city:S('Nairobi'),
-      status:S('active'),verified:B(false),
-      searchable:B(true),searchIndexed:B(true),
-      searchableTerms:A(terms(['T.M.M & Partners Advocates','TMM','advocates','lawyer','law firm','legal','wakili','attorney'])),
-      email:S('info@tmmadvocates.ke'),
-      createdAt:T(NOW),updatedAt:T(NOW),onboardedBy:S('scripts/onboard-batch2.js'),
-    });
-    await patch('users',TMM_UID,{accountStatus:S('active'),searchIndexed:B(true),hasLegalProfile:B(true),updatedAt:T(NOW)});
-    L('      wrote legalProviders/'+TMM_UID.slice(0,10)+'… (status=active) + lawyers/… + users link');
-    L('      NOTE: licenseNumber left blank — firm must supply real LSK number.');
-  } else L('      would write legalProviders (active) + lawyers, LSK blank (not fabricated)');
+  /* ── [TMM] REMOVED (CHANGELOG 220) ─────────────────────────────────────────
+     This block wrote legalProviders/{TMM} status:'active' with a blank LSK number, plus a searchable
+     lawyers/ card — an "approved" advocate with no SOKONI decision and no LSK evidence. Owner decision
+     2026-09-27: T.M.M is removed from the Legal registry (scripts/migrate-legal-quarantine.js). An
+     advocate now enters ONLY through registerLegalProvider → AdminOS review → LSK verification, so
+     this script must never recreate the record. */
+  L('\n  [TMM] skipped — legal records are created only through the Legal Verification Authority (CHANGELOG 220)');
 
   /* ── [KASS] make searchable ────────────────────────────────────────────── */
   L('\n  [KASS] KASS SHOP — sellers registry');
@@ -171,7 +142,7 @@ const KASS_UID='xrH21J5GFbW8PluCZ2ny5nIuf602';
   /* ── verify ────────────────────────────────────────────────────────────── */
   L('\n  VERIFY:');
   const dj=await lookupUid(DJ_UID); L('    DJ phone: '+((dj&&dj.phoneNumber)||'(none)'));
-  for(const [col,id,name] of [['mechanics',FSLUG,'Fahim'],['legalProviders',TMM_UID,'TMM legal'],['lawyers',TMM_UID,'TMM search'],['sellers',KASS_UID,'Kass']]){
+  for(const [col,id,name] of [['mechanics',FSLUG,'Fahim'],['sellers',KASS_UID,'Kass']]){
     const r=await req('GET',HOST,BASE+'/'+col+'/'+encodeURIComponent(id));
     const f=r.status<400?JSON.parse(r.body).fields:{};
     L('    '+name+' → '+col+': '+(r.status<400?('status='+plain(f.status)+' searchable='+(plain(f.searchable)??'-')):('HTTP '+r.status)));

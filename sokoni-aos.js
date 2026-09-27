@@ -115,6 +115,8 @@ window.SokoniAOS = (() => {
       entertainment: () => _loadEntertainment(),
       /* Reviews & Reputation — sokoni-aos-reputation.js over functions/reputation.js (_adminH). */
       reputation:    () => _loadReputation(),
+      /* Legal Verification — sokoni-aos-legal.js over functions/legal-verification.js (_adminH). */
+      legal:         () => _loadLegal(),
     };
     loaders[s]?.();
   }
@@ -142,6 +144,7 @@ window.SokoniAOS = (() => {
        (functions/event-settlement.js, functions/entertainment-admin.js). */
     ...((window.SokoniAOSEntertainment && window.SokoniAOSEntertainment.OPS) || []),
     ...((window.SokoniAOSReputation && window.SokoniAOSReputation.OPS) || []),
+    ...((window.SokoniAOSLegal && window.SokoniAOSLegal.OPS) || []),
   ]);
 
   // ── CF caller ─────────────────────────────────────────────────────────────────
@@ -2354,6 +2357,17 @@ window.SokoniAOS = (() => {
     }
     try { window.SokoniAOSReputation.mount({ host: body, call: _call }); }
     catch (e) { body.innerHTML = "<p class='aos-muted'>Reputation console failed to start: " + _esc(e && e.message) + "</p>"; }
+  }
+
+  async function _loadLegal() {
+    const body = document.getElementById("legalBody");
+    if (!body) return;
+    if (!(window.SokoniAOSLegal && typeof window.SokoniAOSLegal.mount === "function")) {
+      body.innerHTML = "<p class='aos-muted'>Legal verification console (sokoni-aos-legal.js) is not loaded.</p>";
+      return;
+    }
+    try { window.SokoniAOSLegal.mount({ host: body, call: _call }); }
+    catch (e) { body.innerHTML = "<p class='aos-muted'>Legal verification console failed to start: " + _esc(e && e.message) + "</p>"; }
   }
 
   async function _loadSecurity() {

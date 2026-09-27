@@ -123,7 +123,7 @@ Related: [[CHANGELOG]] [[docs/ARCHITECTURE]] [[docs/SECURITY]]
 | Events Hub | ✅ Done |
 | Property Marketplace (buy/rent, BnB) | ✅ Done |
 | Healthcare Hub | ✅ Done |
-| Legal Services Hub | ✅ Done |
+| Legal Services Hub | 🟡 Directory & requests live; advocate verification rebuilt (SOKONI admin + LSK, CHANGELOG 220); in-app payment NEXT — see docs/LEGAL_VERIFICATION.md |
 | B2B / Business Hub | ✅ Done |
 | Tech / Digital Products | ✅ Done |
 | Entertainment Hub | ✅ Done |

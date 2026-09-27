@@ -1016,10 +1016,14 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
     }
 
+    /* CHANGELOG 220 — the public legal directory card is PROJECTED by the Legal Verification
+       Authority (functions/legal-verification.js) and exists only while an advocate is admin-approved
+       AND LSK-verified. A client could create one for itself before (a self-published "lawyer" that
+       site search listed), so client create/update is closed. */
     match /lawyers/{docId} {
       allow read:   if true;
-      allow create: if claimsOwner() && noAdminFields() && noRatingAggOnCreate();
-      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields() && noRatingAggOnUpdate());
+      allow create: if false;
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
@@ -4991,10 +4995,25 @@ service cloud.firestore {
     }
 
     /* ── Legal Services Hub v1.0 ─────────────────────────────────────────── */
+    /* CHANGELOG 220 — the Legal record carries the verification SUMMARY; the public directory is served
+       by getLegalProviders (a public projection), so a raw public read is no longer needed. */
     match /legalProviders/{providerId} {
-      allow read:  if resource.data.status == 'active' || isAdmin()
-                   || (isAuthed() && request.auth.uid == providerId);
+      allow read:  if isAdmin() || (isAuthed() && request.auth.uid == providerId);
       allow write: if false; // CF-only
+    }
+    /* Legal Verification Authority: private current detail (reviewer, P.105, name returned, evidence),
+       the append-only event history, and quarantined legacy identities. Server-written, admin-read. */
+    match /legalVerifications/{uid} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+    match /legalVerificationEvents/{eventId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+    match /legalProviderQuarantine/{uid} {
+      allow read:  if isAdmin();
+      allow write: if false;
     }
     match /legalConsultations/{consultationId} {
       allow read:  if isAuthed() && (

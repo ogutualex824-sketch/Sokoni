@@ -744,17 +744,19 @@ async function projectDriver(db, app, uid, approved, opts) {
    already maps health → 'provider', so the role field and the claim were always
    correct — only the registry write was missing.
 
-   `legal` STAYS, on its own evidence rather than by analogy. Its delegation is
-   real: functions/legal-hub.js writes `legalProviders/{uid}`, legal-admin.html
-   and legal-hub.html read it, and scripts/onboard-batch2.js onboarded a real
-   firm into it. Removing it here would fork legal identity across two
-   registries — the opposite of convergence. If legal is ever converged it must
-   be re-examined on its own evidence, and with a migration plan health did not
-   need. */
+   `legal` is no longer delegated (CHANGELOG 220). Delegation meant an approved
+   legal application wrote NOTHING to legalProviders — it only granted the
+   `provider` claim — while the registry's own approval (approveLegalProvider)
+   required a numeric role claim nothing mints. A `legal` decision now goes to
+   the Legal Verification Authority (functions/legal-verification.js), which
+   records the SOKONI administrative verification on the Legal record and links
+   the canonical providers/{uid} identity. It does NOT make the advocate
+   bookable: that also needs a current LSK verification (two authorities, one
+   predicate). The legal identity stays ONE record — legalProviders/{uid}. */
 /* Roles whose capability lives outside the provider registry. event_organizer: no provider profile
    is projected — the organizer's capability is users.roles (read by event-hub requireOrganizer)
    and the events they create through the server. */
-const DELEGATED_ROLES = { legal: 'legalProviders', event_organizer: 'events' };
+const DELEGATED_ROLES = { event_organizer: 'events' };
 
 /* Shop ids that are not shop ids — the same placeholders the client rejects
    (SokoniBranch synthesises {id:'main'} on an empty device). An application
@@ -942,6 +944,11 @@ async function applyDecision(appId, app, opts = {}) {
       /* Before the role is granted — see projectSeller. A merchant is never
          authorised to sell before they have somewhere to sell from. */
       receipt.writes.push(await projectSeller(db, app, uid, approved));
+    } else if (role === 'legal') {
+      /* SOKONI administrative verification only — LSK verification is the second, independent gate. */
+      receipt.writes.push(await require('./legal-verification').applyAdminDecision(db, {
+        uid, app, appId, status, decidedBy: opts.decidedBy || app.decidedBy || null,
+      }));
     } else if (DELEGATED_ROLES[role]) {
       receipt.writes.push({ collection: DELEGATED_ROLES[role], id: uid, action: 'delegated' });
     } else {
@@ -1076,7 +1083,10 @@ async function applyDecision(appId, app, opts = {}) {
           ? 'Your rider application is approved. Open the SOKONI driver app and go online to start receiving deliveries.'
           : role === 'event_organizer'
             ? 'You are approved as an event organizer. Open Event Manager to create your first event and start selling tickets.'
-            : `${app.name || 'Your business'} is now live on SOKONI and customers can find you in search.`;
+            : role === 'legal'
+              /* Never "live": an advocate is bookable only once LSK verification is also current. */
+              ? 'SOKONI has approved your advocate application. You will appear to clients once your Law Society of Kenya practising status has been verified.'
+              : `${app.name || 'Your business'} is now live on SOKONI and customers can find you in search.`;
         await notify({
           uid,
           type: role === 'driver' ? 'rider_approved' : role === 'event_organizer' ? 'organizer_approved' : 'merchant_approved',
@@ -1309,7 +1319,11 @@ exports.applicationDecide = onCall(
          legalAccept), never the client-written boolean: healthcare, and Entertainment › Events
          organizers (their instruments: organizer agreement, ticketing & refund obligations, staff &
          cash handling, commission, settlement — legal-agreements.js ROLE_AGREEMENTS.event_organizer). */
-      if (_role === 'health' || _role === 'event_organizer') {
+      /* Advocates (CHANGELOG 220): the declaration on the Legal Hub form accepts the Terms of Service,
+         not the Seller Agreement's commission rates — mapping it to that boolean would fabricate a
+         commercial acceptance. An advocate taking bookings through SOKONI is a SERVICE PROVIDER, so the
+         canonical versioned acceptances are checked against the provider catalogue. */
+      if (_role === 'health' || _role === 'event_organizer' || _role === 'legal') {
         /* ── HEALTHCARE ACCEPTS A DIFFERENT INSTRUMENT ─────────────────────────
            The boolean below is the *Seller* Agreement acknowledgement — the
            marketplace listing ladder and the POS commission rate
@@ -1338,7 +1352,7 @@ exports.applicationDecide = onCall(
         }
         let comp;
         try {
-          comp = await require('./legal-agreements').complianceFor(uidForLegal, _role);
+          comp = await require('./legal-agreements').complianceFor(uidForLegal, _role === 'legal' ? 'provider' : _role);
         } catch (e) {
           /* FAIL CLOSED. If the compliance record cannot be read we do not know
              whether the applicant accepted anything, and "unknown" must not
@@ -1351,7 +1365,7 @@ exports.applicationDecide = onCall(
         if (!comp.compliant) {
           const names = comp.missing.map((m) => `${m.name} (${m.reason})`).join(', ');
           throw new HttpsError('failed-precondition',
-            `This ${_role === 'health' ? 'healthcare' : 'event organizer'} application cannot be approved: the applicant has not accepted the ` +
+            `This ${_role === 'health' ? 'healthcare' : _role === 'legal' ? 'advocate' : 'event organizer'} application cannot be approved: the applicant has not accepted the ` +
             'required agreements. Outstanding: ' + (names || 'unknown') +
             '. Use "request_info" to ask them to complete the acceptance. Accepting the Seller ' +
             'Agreement does not satisfy this.');

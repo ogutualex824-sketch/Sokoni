@@ -227,6 +227,10 @@ async function loadCalendar(keyOrOpts) {
   else if (p.suspended === true) code = 'SUSPENDED';
   else if (p.acceptsBookings === false) code = 'NOT_ACCEPTING';
   else if (cp.requiresVerification && category !== 'PROVIDER' && !cls.entClass) code = 'NOT_VERIFIED';
+  /* Legal (CHANGELOG 220): this authority ASKS the Legal Verification Authority — an advocate (or an
+     account presenting as one) is bookable only when SOKONI admin verification AND a current LSK
+     verification both hold, and Legal booking stays closed until the payment slice. */
+  if (!code) code = await require('./legal-verification').bookingGate(_db(), id, p);
   return { calKey, kind, id, ownerUid: id, category, entClass: cls.entClass || null, name: (p && (p.businessName || p.name)) || null,
     cfg, raw: pa.exists ? pa.data() : null, advanced, bookable: { ok: !code, code } };
 }
