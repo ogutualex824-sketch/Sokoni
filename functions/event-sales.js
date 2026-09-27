@@ -327,7 +327,7 @@ async function saleTickets(req) {
   const ev = actor.event;
   const unit = Object.fromEntries((s.lines || []).map((l) => [l.tierId, l.unitCents]));
   /* The fiscal (KRA eTIMS) state of this sale — derived from the invoice, never invented. */
-  const fiscal = (await FISCAL.viewsFor([s.paymentRef || saleId]))[s.paymentRef || saleId] || { status: 'NOT_RECORDED' };
+  const fiscal = (await FISCAL.viewsFor([s.paymentRef || saleId]))[s.paymentRef || saleId] || FISCAL.view(null);
   const nowMs = _now();
   return {
     saleId, status: s.status, tender: s.tender, grossCents: s.grossCents, fiscal,

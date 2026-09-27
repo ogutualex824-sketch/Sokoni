@@ -375,12 +375,17 @@
         <label><input type="radio" name="rpMode" value="before_cutoff" ${p && p.mode === 'before_cutoff' ? 'checked' : ''}> Refunds until a deadline</label></div>
       <label style="display:block;margin-top:8px">Refund deadline <input type="datetime-local" id="rpCut"></label>
       <label style="display:block;margin-top:8px"><input type="checkbox" id="rpNoShow" ${p && p.noShowRefund ? 'checked' : ''}> Allow refunds for tickets that were not used (no-shows)</label>
-      <p style="font-size:12px;opacity:.75">Buyers see this before they pay. It locks once the first ticket is sold.</p>
+      <div class="eo-row" style="margin-top:8px"><label>Cancellation fee kept on buyer-requested refunds
+        <select id="rpPenType"><option value="none">None — full refund</option><option value="fixed" ${p && p.penalty && p.penalty.type === 'fixed' ? 'selected' : ''}>Fixed amount (KES)</option><option value="percent" ${p && p.penalty && p.penalty.type === 'percent' ? 'selected' : ''}>Percentage (1–50 %)</option></select></label>
+        <label>Amount <input id="rpPenVal" type="number" inputmode="decimal" min="0" value="${p && p.penalty && p.penalty.value != null ? esc(p.penalty.value) : ''}"></label></div>
+      <p style="font-size:12px;opacity:.75">Buyers see this before they pay. It locks once the first ticket is sold. A cancelled or changed event is always refunded in full.</p>
       <button type="button" class="eo-btn primary" id="rpSave">Save refund policy</button> <span id="rpMsg" role="status"></span></div>`;
     host.querySelector('#rpSave').onclick = async () => {
       const mode = (host.querySelector('input[name=rpMode]:checked') || {}).value;
       const cut = host.querySelector('#rpCut').value;
-      try { await ctx.ops('eventSetRefundPolicy', { eventId: ev.eventId, mode, cutoffAt: cut ? new Date(cut).toISOString() : null, noShowRefund: host.querySelector('#rpNoShow').checked });
+      const penType = host.querySelector('#rpPenType').value;
+      const penalty = penType === 'none' ? { type: 'none' } : { type: penType, value: Number(host.querySelector('#rpPenVal').value) };
+      try { await ctx.ops('eventSetRefundPolicy', { eventId: ev.eventId, mode, cutoffAt: cut ? new Date(cut).toISOString() : null, noShowRefund: host.querySelector('#rpNoShow').checked, penalty });
         host.querySelector('#rpMsg').innerHTML = '<span class="eo-ok">Saved.</span>'; }
       catch (e) { host.querySelector('#rpMsg').innerHTML = `<span class="eo-bad">${esc(errText(e))}</span>`; }
     };

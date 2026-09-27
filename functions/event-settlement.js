@@ -232,9 +232,22 @@ const eventTicketAdapter = {
        raised from AdminOS has no wizard request, and creating a stub there would be wrong — so
        only an existing request is touched (read above, before any write). */
     if (reqSnap.exists) txn.update(reqSnap.ref, { status: 'REFUNDED', refundedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    /* A buyer refund under the event's penalty (event-refunds): the principal went back, the
+       penalty STAYS a sale of the organizer. Its settlement is recomputed on the retained amount —
+       the provider fee was incurred on the original payment and is not refunded; the 3 % event
+       commission is re-based on what was kept. Tickets are refunded either way. */
+    const penaltyCents = reqSnap.exists ? Math.max(0, Math.round(Number(reqSnap.data().penaltyCents) || 0)) : 0;
     if (setSnap.exists) {
       const st = setSnap.data().status;
-      if (st === SETTLEMENT.HELD || st === SETTLEMENT.FEE_UNREPORTED) {
+      if ((st === SETTLEMENT.HELD || st === SETTLEMENT.FEE_UNREPORTED) && penaltyCents > 0) {
+        const cur = setSnap.data();
+        const kept = computeSettlement({ grossCents: penaltyCents, providerFeeCents: cur.providerFeeCents });
+        txn.update(setRef, { grossCents: kept.grossCents, netCents: kept.netCents, commissionCents: kept.commissionCents,
+          organizerNetCents: kept.organizerNetCents, originalGrossCents: cur.grossCents, refundedCents: cur.grossCents - penaltyCents,
+          retainedPenaltyCents: penaltyCents, refundReason: String(reason || '').slice(0, 300), updatedAt: FieldValue.serverTimestamp() });
+        if (comSnap.exists) txn.update(comRef, { status: 'adjusted_after_refund', commissionCents: kept.commissionCents,
+          sokoniCut: kept.commissionCents == null ? null : kept.commissionCents / 100, adjustedAt: FieldValue.serverTimestamp() });
+      } else if (st === SETTLEMENT.HELD || st === SETTLEMENT.FEE_UNREPORTED) {
         txn.update(setRef, { status: SETTLEMENT.REFUNDED, refundReason: String(reason || '').slice(0, 300), updatedAt: FieldValue.serverTimestamp() });
         if (comSnap.exists) txn.update(comRef, { status: 'reversed', reversedAt: FieldValue.serverTimestamp() });
       } else if (st === SETTLEMENT.RELEASED) {
@@ -493,7 +506,13 @@ async function onEventRefundProcessed({ payRef, refundId, amountCents, source })
   const iSnap = await _db().collection(COL.INTENTS).doc(ref).get();
   if (!iSnap.exists || iSnap.data().purpose !== PURPOSE) return { skipped: 'not_event_ticket' };
   const intent = iSnap.data();
-  if (Number(amountCents) < Number(intent.amountCents)) {
+  const orderId = String(intent.resourceId || '');
+  const rqSnap = await _db().collection('eventRefundRequests').doc(orderId || '_').get();
+  const rq = rqSnap.exists ? rqSnap.data() : null;
+  /* A refund smaller than the payment is expected ONLY when it equals the refund case's approved
+     principal (the event's penalty was kept). Any other partial stays a human exception. */
+  const approvedPartial = rq && Number(rq.refundCents) === Number(amountCents) && Number(amountCents) < Number(intent.amountCents);
+  if (Number(amountCents) < Number(intent.amountCents) && !approvedPartial) {
     await _db().collection(COL.EXCEPTIONS).doc(`partial_refund_${ref}`).set({
       kind: 'partial_refund', paymentRef: ref, refundId: refundId || null, amountCents: Number(amountCents) || 0,
       intentAmountCents: Number(intent.amountCents) || 0, status: 'OPEN', updatedAt: FieldValue.serverTimestamp(),
@@ -502,9 +521,33 @@ async function onEventRefundProcessed({ payRef, refundId, amountCents, source })
   }
   const engine = registerPurpose();
   const out = await engine.revoke(ref, `refund:${refundId || 'unknown'}`, { source: source || 'fos-refund' });
-  /* The fiscal side of the reversal: a credit note is owed wherever an eTIMS invoice exists
-     (issued through the eTIMS lifecycle — never faked here). Best effort; AdminOS lists it. */
-  await FISCAL.markRefunded(ref, { refundId: refundId || null }).catch((e) => logger.error('[eventSettlement] fiscal reversal mark failed', { ref, err: e.message }));
+  /* The REFUND CASE: a wizard refund already has one; an AdminOS refund (e.g. a cancelled event)
+     gets one here, so every refund links sale → tickets → payment → fiscal record the same way. */
+  let caseDoc = rq;
+  if (!rq && orderId) {
+    const [oSnap, evSnap, tixSnap] = await Promise.all([
+      _db().collection(COL.ORDERS).doc(orderId).get(),
+      _db().collection(COL.EVENTS).doc(String(((intent.metadata || {}).eventId) || '_')).get(),
+      _db().collection(COL.TICKETS).where('orderId', '==', orderId).limit(100).get(),
+    ]);
+    const o = oSnap.exists ? oSnap.data() : {};
+    const ev = evSnap.exists ? evSnap.data() : {};
+    caseDoc = { orderId, eventId: o.eventId || (intent.metadata || {}).eventId || null, organizerUid: ev.organizerUid || null,
+      buyerUid: o.buyerUid || null, paymentRef: ref, saleKey: ref, ticketIds: tixSnap.docs.map((d) => d.id),
+      reasonCode: ev.status === 'cancelled' ? 'event_cancelled' : 'admin_refund', reasonBasis: ev.status === 'cancelled' ? 'organizer' : 'admin',
+      grossCents: Number(intent.amountCents) || 0, penaltyCents: 0, refundCents: Number(amountCents) || 0,
+      policyVersion: (ev.refundPolicy && ev.refundPolicy.version) || null, fosRefundId: refundId || null,
+      source: 'admin_refund', status: 'REFUNDED' };
+    await _db().collection('eventRefundRequests').doc(orderId).create({ ...caseDoc, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), refundedAt: FieldValue.serverTimestamp() })
+      .catch((e) => logger.warn('[eventSettlement] refund case exists', { orderId, err: e.message }));
+  }
+  /* The fiscal side: a credit note for the APPROVED principal, linked to the original fiscal record
+     (which is never touched). Only where a fiscal record exists and fiscalisation applies. */
+  try {
+    const cn = await FISCAL.requireCreditNote({ fiscalRecordId: ref, refundCaseId: orderId || ref, refundCents: Number(amountCents) || 0,
+      penaltyCents: caseDoc ? Number(caseDoc.penaltyCents) || 0 : 0, reason: caseDoc ? caseDoc.reasonCode : 'refund', refundId: refundId || null });
+    if (cn && cn.executionId) await FISCAL.executeCreditNote(cn.executionId);
+  } catch (e) { logger.error('[eventSettlement] credit-note requirement failed', { ref, err: e.message }); }
   return out;
 }
 

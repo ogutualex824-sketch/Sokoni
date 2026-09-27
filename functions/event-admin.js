@@ -45,6 +45,7 @@ const fail = (code, msg) => { throw new HttpsError(code, msg); };
 const LIMIT = 100;
 
 const COL = Object.freeze({
+  INVOICES: 'etimsInvoices',
   EVENTS: 'events', TICKETS: 'eventTickets', ORDERS: 'eventOrders', SALES: 'eventSales',
   SETTLEMENTS: 'eventSettlements', RECEIVABLES: 'eventCommissionReceivables', COMMISSION: 'commissionLedger',
   REFUND_REQUESTS: 'eventRefundRequests', FISCAL: 'eventFiscal', REFUNDS: 'fosRefundQueue', PAYMENTS: 'payments',
@@ -148,13 +149,10 @@ async function investigate(req) {
   }
   if (by === 'fiscalStatus') {
     const val = raw.toUpperCase();
-    if (!Object.values(FISCAL.REC).includes(val)) fail('invalid-argument', 'Unknown fiscal status.');
-    let q = _db().collection(COL.FISCAL).where('status', '==', val);
-    if (d.eventId) q = q.where('eventId', '==', _id(d.eventId, 'eventId'));
-    const recs = _rows(await q.limit(LIMIT).get());
-    const views = await FISCAL.viewsFor(recs.map((r) => r.saleKey || r.id));
-    out.fiscal = recs.map((r) => ({ ...r, view: views[r.saleKey || r.id] || null }));
-    out.truncated = recs.length >= LIMIT;
+    if (!FISCAL_STATES.includes(val)) fail('invalid-argument', 'Unknown fiscal status.');
+    const { rows, truncated } = await _fiscalRows(d.eventId);
+    out.fiscal = rows.filter((r) => _matchesState(r.view, val));
+    out.truncated = truncated;
     return out;
   }
 
@@ -234,15 +232,18 @@ async function trace(req) {
     stage('sale', sale ? 'observed' : 'n/a', sale, sale ? null : 'Online purchase — no cashier sale.'),
     doorSale ? stage('payment', 'n/a', null, sale.tender === 'cash' ? 'Cash collected at the door by the organizer.' : 'Card on the organizer\'s own terminal (reference on the sale).')
              : stage('payment', payment ? 'observed' : 'empty', payment, paymentRef ? null : 'The order has no payment reference.'),
-    stage('fiscal', !settleKey ? 'n/a' : (fiscal && fiscal.status !== 'NOT_RECORDED' ? 'observed' : 'empty'), fiscal,
-      !settleKey ? 'Nothing was sold (free ticket).' : fiscal && fiscal.status === 'CONFIRMED' ? 'KRA accepted the invoice; the receipt and QR shown are exactly as KRA returned them.'
-        : fiscal && fiscal.status === 'NOT_REGISTERED' ? 'The organizer has no active eTIMS profile — no fiscal receipt exists.'
-        : fiscal && fiscal.status === 'FAILED' ? 'Fiscal submission failed — reconcile in the Fiscal tab.'
-        : fiscal && fiscal.status === 'PENDING' ? 'Pending fiscal confirmation.' : 'No fiscal record for this sale.'),
+    stage('fiscal', !settleKey ? 'n/a' : (fiscal && fiscal.reason !== 'NO_FISCAL_RECORD' ? 'observed' : 'empty'), fiscal ? { ...fiscal, creditNotes: undefined } : null,
+      !settleKey ? 'Nothing was sold (free ticket).' : !fiscal ? 'No fiscal record for this sale.'
+        : fiscal.fiscalStatus === 'FISCAL_ACCEPTED' ? 'KRA accepted the invoice; the receipt and QR shown are exactly as KRA returned them.'
+        : fiscal.reason === 'ORGANIZER_NOT_REGISTERED' ? 'The organizer is not registered for eTIMS — no fiscal receipt exists (SOKONI does not invoice on their behalf).'
+        : fiscal.reason === 'NO_FISCAL_RECORD' ? 'No fiscal record for this sale.'
+        : fiscal.fiscalStatus === 'FISCAL_FAILED' ? 'Fiscal submission failed — reconcile in the Fiscal tab.' : 'Pending fiscal confirmation.'),
     stage('commission', commission ? 'observed' : (settleKey ? 'empty' : 'n/a'), commission,
       doorSale ? 'Door sale: SOKONI\'s commission is a receivable netted from the organizer\'s next online release.' : null),
     stage('receivable', doorSale ? (receivable ? 'observed' : 'empty') : 'n/a', receivable),
     stage('organizer_proceeds', settlement ? 'observed' : (settleKey ? 'empty' : 'n/a'), settlement),
+    stage('fiscal_reversal', fiscal && fiscal.creditNotes && fiscal.creditNotes.length ? 'observed' : 'n/a', fiscal ? fiscal.creditNotes || [] : [],
+      fiscal && fiscal.creditNotes && fiscal.creditNotes.length ? 'Credit note(s) linked to the ORIGINAL fiscal record, which is never changed. A reference exists only when KRA returned one.' : 'No credit note (no refund, or fiscalisation did not apply).'),
     stage('refund', (refundReq || fosRefund) ? 'observed' : (doorSale ? 'n/a' : 'empty'), { request: refundReq, refund: fosRefund },
       doorSale ? 'Door-sale refunds are settled offline by the organizer; SOKONI has no rail for them.' : (refundReq || fosRefund ? null : 'No refund requested.')),
     stage('payout', walletTx ? 'observed' : (settlement && settlement.status === 'RELEASED' ? 'empty' : 'n/a'), walletTx,
@@ -269,21 +270,26 @@ async function admissions(req) {
 
 const REFUND_REQUEST_STATES = Object.freeze(['SUBMITTING', 'PENDING_REVIEW', 'DUPLICATE', 'REJECTED', 'REFUNDED']);
 /* ═══ FISCAL RECONCILIATION (KRA eTIMS) ════════════════════════════════════════════════ */
-const RECON = Object.freeze(['FAILED', 'PENDING', 'NOT_REGISTERED', 'CREDIT_NOTE_REQUIRED']);
-/** The reconciliation queue: failed / stuck / unregistered sales, and refunds owing a credit note. */
+const FISCAL_STATES = Object.freeze([...Object.values(FISCAL.FS), ...Object.values(FISCAL.CN)]);
+/* one filter for the queue AND the search: a sale matches a fiscal status, or any of its credit notes does */
+const _matchesState = (v, want) => v && (v.fiscalStatus === want || (v.creditNotes || []).some((c) => c.status === want));
+const _needsAttention = (v) => v && ((v.fiscalStatus !== 'FISCAL_ACCEPTED' && v.reason !== 'FREE_TICKET')
+  || (v.creditNotes || []).some((c) => c.status !== 'CREDIT_NOTE_ACCEPTED'));
+async function _fiscalRows(eventId) {
+  let q = _db().collection(COL.FISCAL);
+  if (eventId) q = q.where('eventId', '==', _id(eventId, 'eventId'));
+  const recs = _rows(await q.limit(300).get());
+  const views = await FISCAL.viewsFor(recs.map((r) => r.saleKey || r.id));
+  return { rows: recs.map((r) => ({ ...r, view: views[r.saleKey || r.id] || null })), truncated: recs.length >= 300 };
+}
+/** The reconciliation queue: sale fiscal states AND credit notes, in the ONE vocabulary. */
 async function fiscalQueue(req) {
   _admin(req);
   const d = req.data || {};
   const want = d.view ? String(d.view) : null;
-  if (want && !RECON.includes(want)) fail('invalid-argument', 'Unknown reconciliation view.');
-  let q = _db().collection(COL.FISCAL);
-  if (d.eventId) q = q.where('eventId', '==', _id(d.eventId, 'eventId'));
-  const recs = _rows(await q.limit(300).get());
-  const views = await FISCAL.viewsFor(recs.map((r) => r.saleKey || r.id));
-  const rows = recs.map((r) => ({ ...r, view: views[r.saleKey || r.id] || null }))
-    .filter((r) => r.view && (want === 'CREDIT_NOTE_REQUIRED' ? (r.reversal && r.reversal.status === 'CREDIT_NOTE_REQUIRED')
-      : want ? r.view.status === want : (r.view.status !== 'CONFIRMED' || (r.reversal && r.reversal.status === 'CREDIT_NOTE_REQUIRED'))));
-  return { fiscal: rows, truncated: recs.length >= 300 };
+  if (want && !FISCAL_STATES.includes(want)) fail('invalid-argument', 'Unknown fiscal state.');
+  const { rows, truncated } = await _fiscalRows(d.eventId);
+  return { fiscal: rows.filter((r) => (want ? _matchesState(r.view, want) : _needsAttention(r.view))), truncated };
 }
 
 /** Retry one sale's fiscalisation through the SAME paths: re-submit the record, or re-queue its failed
@@ -297,8 +303,11 @@ async function fiscalRetry(req) {
   const f = snap.data();
   const v = (await FISCAL.viewsFor([saleKey]))[saleKey];
   let result;
-  if (v.status === 'CONFIRMED' || v.status === 'NOT_APPLICABLE') fail('failed-precondition', `Nothing to retry: fiscal status is ${v.status}.`);
+  if (v.fiscalStatus === 'FISCAL_ACCEPTED' || v.reason === 'FREE_TICKET') fail('failed-precondition', `Nothing to retry: ${v.fiscalStatus}${v.reason ? ' (' + v.reason + ')' : ''}.`);
   if (f.invoiceId) {
+    /* only a DEFINITIVELY failed invoice is re-queued: a queued one could otherwise transmit twice */
+    const inv = await _doc(COL.INVOICES, f.invoiceId);
+    if (!inv || inv.status !== 'failed') fail('failed-precondition', 'The invoice is still queued with eTIMS — nothing to retry yet.');
     result = await require('./etims').requeueInvoice(f.invoiceId);
   } else {
     await ref.update({ claimedAt: null, updatedAt: FieldValue.serverTimestamp() });
@@ -306,6 +315,36 @@ async function fiscalRetry(req) {
   }
   await _audit('event_fiscal_retry', actor, { saleKey }, { before: v.status, invoiceId: f.invoiceId || null, result });
   return { ok: true, result };
+}
+
+/** Retry a credit note (FAILED → same credit note re-queued; REQUIRED → execute). An outcome-unknown
+ *  credit note is refused until resolved with evidence. Only ids are read from the request — there is
+ *  no field through which a receipt, reference or "accepted" state could be supplied. Audited. */
+async function creditNoteRetry(req) {
+  const actor = _admin(req);
+  const executionId = _id((req.data || {}).executionId, 'executionId');
+  const r = await FISCAL.retryCreditNote(executionId, actor);
+  if (r.error === 'missing') fail('not-found', 'No such credit note.');
+  if (r.error === 'outcome_unknown_needs_evidence') fail('failed-precondition', 'The provider outcome is unknown — resolve it with evidence first (super admin).');
+  if (r.error) fail('failed-precondition', `Nothing to retry (${r.error.replace('nothing_to_retry_', '')}).`);
+  await _audit('event_credit_note_retry', actor, { executionId }, { result: r });
+  return { ok: true, result: r };
+}
+
+/** SUPER ADMIN: resolve an ambiguous credit-note outcome — ONLY as "the provider did not accept it",
+ *  with evidence. Acceptance can never be asserted here; it arrives from the provider alone. */
+async function creditNoteResolve(req) {
+  if (!req.auth || !req.auth.uid) fail('unauthenticated', 'Sign in required.');
+  if (!AC.isSuperAdmin(req)) fail('permission-denied', 'Super admin only.');
+  const d = req.data || {};
+  const executionId = _id(d.executionId, 'executionId');
+  const r = await FISCAL.resolveUnknownCreditNote(executionId, { resolution: String(d.resolution || ''), evidence: d.evidence }, req.auth.uid);
+  if (r.error === 'only_not_accepted') fail('invalid-argument', 'An unknown outcome can only be resolved as NOT_ACCEPTED here; acceptance comes from KRA alone.');
+  if (r.error === 'evidence_required') fail('invalid-argument', 'Evidence (e.g. a KRA support reference) is required.');
+  if (r.error === 'missing') fail('not-found', 'No such credit note.');
+  if (r.error) fail('failed-precondition', r.error);
+  await _audit('event_credit_note_resolved', req.auth.uid, { executionId }, { resolution: 'NOT_ACCEPTED', evidence: String(d.evidence || '').slice(0, 300) });
+  return { ok: true };
 }
 
 async function refundRequests(req) {
@@ -346,6 +385,7 @@ const _adminH = {
   eventAdminInvestigate: investigate, eventAdminTrace: trace, eventAdminStaff: staff, eventAdminAdmissions: admissions,
   eventAdminRefundRequests: refundRequests, eventAdminReceivables: receivables, eventAdminRevokeStaff: revokeStaff,
   eventAdminFiscal: fiscalQueue, eventAdminFiscalRetry: fiscalRetry,
+  eventAdminCreditNoteRetry: creditNoteRetry, eventAdminCreditNoteResolve: creditNoteResolve,
 };
 
 module.exports = { _adminH, SEARCH_BY, clean, maskPhone, maskEmail };

@@ -32,7 +32,8 @@
     '.sk-t-qr{margin:12px auto 0;width:150px;height:150px;display:flex;align-items:center;justify-content:center}.sk-t-qr canvas,.sk-t-qr img{width:150px;height:150px}',
     '.sk-t-cap{font-size:11px;color:#666;margin-top:4px}',
     '.sk-t-fiscal{margin-top:14px;border-top:1px dashed #bbb;padding-top:10px;font-size:12px;color:#333}',
-    '.sk-t-fiscal img{width:130px;height:130px;display:block;margin:6px auto}',
+    '.sk-t-fiscal img,.sk-t-credit img{width:130px;height:130px;display:block;margin:6px auto}',
+    '.sk-t-credit{margin-top:10px;border-top:1px dotted #ccc;padding-top:8px}',
     '.sk-t-tier{margin-top:14px;font-weight:800;font-size:15px}',
     '.sk-t-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:12px}',
     '.sk-t-actions button{min-height:44px;padding:0 14px;border-radius:10px;border:1px solid #ccc;background:#f4f4f4;color:#111;font-weight:700;cursor:pointer}',
@@ -45,12 +46,19 @@
     SUSPENDED_REFUND: ['Refund in progress — not valid for entry', 'bad'], INVALID_REFUNDED: ['Refunded — not valid', 'bad'],
     INVALID_CANCELLED: ['Event cancelled — not valid', 'bad'], INVALID: ['Not valid', 'bad'],
   };
+  /* The ONE fiscal vocabulary (functions/event-fiscal.js). Words only — never a stand-in receipt. */
   const FISCAL = {
-    PENDING: 'Pending fiscal confirmation',
-    FAILED: 'Fiscal confirmation delayed — SOKONI is reconciling it with KRA',
-    NOT_REGISTERED: 'The organizer is not registered for KRA eTIMS — no fiscal receipt was issued',
-    NOT_APPLICABLE: 'Free ticket — no fiscal receipt',
-    NOT_RECORDED: 'Fiscal status unavailable',
+    FISCAL_PENDING: 'Pending fiscal confirmation',
+    FISCAL_FAILED: 'Fiscal confirmation delayed — SOKONI is reconciling it with KRA',
+    ORGANIZER_NOT_REGISTERED: 'Organizer is not registered for eTIMS',
+    FREE_TICKET: 'Free ticket — no fiscal receipt',
+    NO_FISCAL_RECORD: 'No fiscal record for this ticket',
+  };
+  const CREDIT = {
+    CREDIT_NOTE_REQUIRED: 'KRA credit note pending',
+    CREDIT_NOTE_PENDING: 'KRA credit note pending',
+    CREDIT_NOTE_FAILED: 'KRA credit note delayed — SOKONI is reconciling it',
+    CREDIT_NOTE_OUTCOME_UNKNOWN: 'KRA credit note delayed — SOKONI is reconciling it',
   };
 
   function when(v) {
@@ -59,17 +67,33 @@
   }
   function money(kes) { return kes == null || !Number.isFinite(Number(kes)) ? '' : 'KES ' + Number(kes).toLocaleString('en-KE'); }
 
-  function fiscalHtml(f) {
-    const v = f || { status: 'NOT_RECORDED' };
-    if (v.status === 'CONFIRMED') {
-      const img = httpsUrl(v.kraQrImage);
-      const link = httpsUrl(v.verificationUrl);
-      return `<div class="sk-t-fiscal" data-fiscal="CONFIRMED"><div class="sk-t-lbl" style="margin-top:0">KRA / FISCAL QR</div>
-        ${img ? `<img src="${esc(img)}" alt="KRA fiscal QR (issued by KRA)" referrerpolicy="no-referrer">` : '<div>KRA did not supply a QR image for this receipt</div>'}
-        ${v.receiptNumber ? `<div>KRA receipt: <b>${esc(v.receiptNumber)}</b></div>` : ''}${v.invoiceNumber ? `<div>Invoice: ${esc(v.invoiceNumber)}</div>` : ''}
+  /* A credit note is a SEPARATE fiscal reversal record, linked to the original — never a replacement. */
+  function creditHtml(c) {
+    const amt = c.refundCents != null ? money(c.refundCents / 100) : '';
+    if (c.status === 'CREDIT_NOTE_ACCEPTED') {
+      const img = httpsUrl(c.creditNoteQr); const link = httpsUrl(c.verificationUrl);
+      return `<div class="sk-t-credit" data-credit="CREDIT_NOTE_ACCEPTED"><div class="sk-t-lbl">KRA CREDIT NOTE${amt ? ' · refund ' + esc(amt) : ''}</div>
+        ${c.creditNoteReference ? `<div>Credit note: <b>${esc(c.creditNoteReference)}</b></div>` : ''}
+        ${img ? `<img src="${esc(img)}" alt="KRA credit-note QR (issued by KRA)" referrerpolicy="no-referrer">` : ''}
         ${link ? `<div><a href="${esc(link)}" target="_blank" rel="noopener noreferrer">Verify with KRA</a></div>` : ''}</div>`;
     }
-    return `<div class="sk-t-fiscal" data-fiscal="${esc(v.status)}"><div class="sk-t-lbl" style="margin-top:0">KRA STATUS</div><div>${esc(FISCAL[v.status] || FISCAL.NOT_RECORDED)}</div></div>`;
+    return `<div class="sk-t-credit" data-credit="${esc(c.status)}"><div class="sk-t-lbl">KRA CREDIT NOTE${amt ? ' · refund ' + esc(amt) : ''}</div><div>${esc(CREDIT[c.status] || CREDIT.CREDIT_NOTE_PENDING)}</div></div>`;
+  }
+
+  function fiscalHtml(f) {
+    const v = f || { fiscalStatus: 'FISCAL_NOT_REQUIRED', reason: 'NO_FISCAL_RECORD' };
+    const st = v.fiscalStatus || v.status;
+    const credits = (v.creditNotes || []).map(creditHtml).join('');
+    if (st === 'FISCAL_ACCEPTED') {
+      const img = httpsUrl(v.kraQrImage);
+      const link = httpsUrl(v.verificationUrl);
+      return `<div class="sk-t-fiscal" data-fiscal="FISCAL_ACCEPTED"><div class="sk-t-lbl" style="margin-top:0">KRA / FISCAL QR</div>
+        ${img ? `<img src="${esc(img)}" alt="KRA fiscal QR (issued by KRA)" referrerpolicy="no-referrer">` : '<div>KRA did not supply a QR image for this receipt</div>'}
+        ${v.receiptNumber ? `<div>KRA receipt: <b>${esc(v.receiptNumber)}</b></div>` : ''}${v.invoiceNumber ? `<div>Invoice: ${esc(v.invoiceNumber)}</div>` : ''}
+        ${link ? `<div><a href="${esc(link)}" target="_blank" rel="noopener noreferrer">Verify with KRA</a></div>` : ''}${credits}</div>`;
+    }
+    const words = st === 'FISCAL_NOT_REQUIRED' ? (FISCAL[v.reason] || FISCAL.NO_FISCAL_RECORD) : (FISCAL[st] || FISCAL.NO_FISCAL_RECORD);
+    return `<div class="sk-t-fiscal" data-fiscal="${esc(st)}"><div class="sk-t-lbl" style="margin-top:0">KRA STATUS</div><div>${esc(words)}</div>${credits}</div>`;
   }
 
   /**
@@ -136,5 +160,5 @@
     return 'whatsapp';
   }
 
-  root.SokoniEventTicket = { html, fiscalHtml, drawQr, printTickets, send, shareText, css, STATE, FISCAL };
+  root.SokoniEventTicket = { html, fiscalHtml, creditHtml, drawQr, printTickets, send, shareText, css, STATE, FISCAL, CREDIT };
 }(typeof window !== 'undefined' ? window : globalThis));

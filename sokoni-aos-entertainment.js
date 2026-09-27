@@ -98,21 +98,31 @@
     }
 
     /* A fiscal (KRA eTIMS) record: KRA values shown only as KRA returned them; retry reuses eTIMS. */
-    const FISCAL_HEAD = ['Sale', 'Event', 'Channel', 'Gross', 'Fiscal', 'Invoice', 'KRA receipt', 'Reversal', ''];
+    const FISCAL_HEAD = ['Sale', 'Event', 'Channel', 'Gross', 'Fiscal', 'Invoice', 'KRA receipt', 'Credit notes (reversals)', ''];
+    const FISCAL_STATES = ['FISCAL_FAILED', 'FISCAL_PENDING', 'FISCAL_NOT_REQUIRED', 'CREDIT_NOTE_REQUIRED', 'CREDIT_NOTE_PENDING', 'CREDIT_NOTE_FAILED', 'CREDIT_NOTE_OUTCOME_UNKNOWN', 'CREDIT_NOTE_ACCEPTED', 'FISCAL_ACCEPTED'];
+    /* A credit note: KRA's reference ONLY when accepted. Retry for a definitive failure; an unknown
+       outcome needs super-admin evidence. No field anywhere accepts a receipt or reference. */
+    function cnCell(c) {
+      const act = c.status === 'CREDIT_NOTE_FAILED' || c.status === 'CREDIT_NOTE_REQUIRED'
+        ? ` <button type="button" class="aos-btn aos-btn-ghost" data-cn-retry="${esc(c.executionId)}">Retry credit note</button>`
+        : c.status === 'CREDIT_NOTE_OUTCOME_UNKNOWN' ? ` <button type="button" class="aos-btn aos-btn-ghost" data-cn-resolve="${esc(c.executionId)}">Resolve with evidence (super admin)</button>` : '';
+      return `<div>${chip(c.status)} ${kes(c.refundCents)}${c.penaltyCents ? ' (penalty kept ' + kes(c.penaltyCents) + ')' : ''}${c.creditNoteReference ? ' · <span class="aos-mono">' + esc(c.creditNoteReference) + '</span>' : ''}
+        ${c.failureReason ? `<div class="aos-muted">${esc(c.failureReason)}</div>` : ''}${c.waitingFor ? `<div class="aos-muted">waiting for the original invoice to be accepted</div>` : ''}${c.transmission === 'blocked_pending_spec' ? '<div class="aos-muted">transmission: blocked — KRA credit-note mapping pending</div>' : ''}${act}</div>`;
+    }
     function fiscalRow(f) {
       const v = f.view || {};
-      const canRetry = v.status && v.status !== 'CONFIRMED' && v.status !== 'NOT_APPLICABLE';
+      const canRetry = v.fiscalStatus && v.fiscalStatus !== 'FISCAL_ACCEPTED' && v.reason !== 'FREE_TICKET';
       const tr = f.orderId ? trBtn('order', f.orderId) : (f.saleId ? trBtn('sale', f.saleId) : '');
       return `<tr><td class="aos-mono">${esc(f.saleKey || f.id)}</td><td class="aos-mono">${esc(f.eventId)}</td><td>${esc(f.channel)}</td><td>${kes(f.grossCents)}</td>
-        <td>${chip(v.status)}${f.error ? `<div class="aos-muted">${esc(f.error)}</div>` : ''}</td><td class="aos-mono">${esc(v.invoiceNumber || f.invoiceNumber || '—')}</td>
-        <td class="aos-mono">${esc(v.receiptNumber || '—')}</td><td>${f.reversal ? chip(f.reversal.status) : '—'}</td>
-        <td>${canRetry ? `<button type="button" class="aos-btn aos-btn-ghost" data-fiscal-retry="${esc(f.saleKey || f.id)}">Retry</button> ` : ''}${tr}</td></tr>`;
+        <td>${chip(v.fiscalStatus)}${v.reason ? `<div class="aos-muted">${esc(v.reason)}</div>` : ''}${f.error ? `<div class="aos-muted">${esc(f.error)}</div>` : ''}</td><td class="aos-mono">${esc(v.invoiceNumber || f.invoiceNumber || '—')}</td>
+        <td class="aos-mono">${esc(v.receiptNumber || '—')}</td><td>${(v.creditNotes || []).map(cnCell).join('') || '—'}</td>
+        <td>${canRetry ? `<button type="button" class="aos-btn aos-btn-ghost" data-fiscal-retry="${esc(f.saleKey || f.id)}">Retry fiscal submission</button> ` : ''}${tr}</td></tr>`;
     }
 
     const R = {
       async fiscal() {
         const r = await call('eventAdminFiscal', fView ? { view: fView } : {});
-        const filt = `<div class="aos-filters"><label>Show <select data-fview><option value="">Everything needing attention</option>${['FAILED', 'PENDING', 'NOT_REGISTERED', 'CREDIT_NOTE_REQUIRED'].map((x) => `<option ${x === fView ? 'selected' : ''}>${x}</option>`).join('')}</select></label></div>`;
+        const filt = `<div class="aos-filters"><label>Show <select data-fview><option value="">Everything needing attention</option>${FISCAL_STATES.map((x) => `<option ${x === fView ? 'selected' : ''}>${x}</option>`).join('')}</select></label></div>`;
         return filt + '<p class="aos-muted">Event ticket sales on KRA eTIMS (invoices under the organizer). Payment, ticket and admission never depend on this: a ticket stays valid while its fiscal record is reconciled. Nothing here is fabricated — a KRA receipt and QR exist only when KRA accepted the invoice.</p>'
           + table(FISCAL_HEAD, (r.fiscal || []).map(fiscalRow).join(''), 'Nothing to reconcile.');
       },
@@ -254,6 +264,11 @@
       }
       if (t.dataset.untrace) { traced = null; return render(); }
       if (t.dataset.fiscalRetry) return act('eventAdminFiscalRetry', { saleKey: t.dataset.fiscalRetry }, 'Fiscal retry queued through eTIMS.');
+      if (t.dataset.cnRetry) return act('eventAdminCreditNoteRetry', { executionId: t.dataset.cnRetry }, 'Credit note re-queued (same credit note — no duplicate).');
+      if (t.dataset.cnResolve) {
+        return ask('Resolve as NOT accepted by KRA', [{ label: 'Evidence (e.g. KRA support reference) — acceptance can only come from KRA', area: true }], ([evidence]) =>
+          act('eventAdminCreditNoteResolve', { executionId: t.dataset.cnResolve, resolution: 'NOT_ACCEPTED', evidence }, 'Resolved; the credit note may now be retried.'));
+      }
       if (t.dataset.revoke) {
         return ask('Revoke access', [{ label: 'Reason (kept in the audit log)', area: true }], ([reason]) => {
           if (String(reason || '').trim().length < 5) return msg('A reason is required.', true);
@@ -322,7 +337,7 @@
   const OPS = ['eventAdminOverview', 'eventAdminEvents', 'eventAdminSettlements', 'eventAdminRefundQueue', 'eventAdminExceptions',
     'eventAdminAttestFee', 'entAdminMatrix', 'entAdminListings', 'entAdminSetListingStatus',
     'eventAdminInvestigate', 'eventAdminTrace', 'eventAdminStaff', 'eventAdminAdmissions', 'eventAdminRefundRequests',
-    'eventAdminReceivables', 'eventAdminRevokeStaff', 'eventAdminFiscal', 'eventAdminFiscalRetry'];
+    'eventAdminReceivables', 'eventAdminRevokeStaff', 'eventAdminFiscal', 'eventAdminFiscalRetry', 'eventAdminCreditNoteRetry', 'eventAdminCreditNoteResolve'];
 
   root.SokoniAOSEntertainment = { mount, OPS, _kes: kes, _esc: esc };
 }(typeof window !== 'undefined' ? window : globalThis));

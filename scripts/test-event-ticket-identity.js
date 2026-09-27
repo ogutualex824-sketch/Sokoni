@@ -24,7 +24,7 @@
  *   Fiscal        one record per paid sale (online / cash / card), none for free · the REAL eTIMS
  *                 invoice is created and QUEUED (no immediate KRA call, no failure notice) · PENDING
  *                 until KRA accepts → CONFIRMED with exactly KRA's receipt + https QR · a non-https
- *                 KRA value is never rendered as an image · organizer not on eTIMS → NOT_REGISTERED ·
+ *                 KRA value is never rendered as an image · organizer not on eTIMS → FISCAL_NOT_REQUIRED ·
  *                 submission error → FAILED, swept, bounded · idempotent (one invoice) · payment /
  *                 ticket / admission never depend on fiscal · refund → CREDIT_NOTE_REQUIRED
  *   AdminOS       PIN shown •••• only · search by payment ref / admission / refund / fiscal status ·
@@ -299,34 +299,34 @@ async function paidOnline(orderId, eventId, { qty = 1, buyer = 'buyer1', tier = 
   /* a record committed with its sale but not yet submitted (e.g. the process died after commit) */
   await db.runTransaction(async (txn) => { FISCAL.recordSale(txn, { saleKey: 'UNSUB1', event: { id: 'evA', title: 'X', organizerUid: 'org1' }, channel: 'online', lines: [{ name: 'X', qty: 1, unitCents: 100000 }], grossCents: 100000 }); });
   const vu = (await FISCAL.viewsFor(['UNSUB1'])).UNSUB1;
-  ck('recorded but not yet submitted → PENDING, with NO KRA field', vu.status === 'PENDING' && !('receiptNumber' in vu) && !('kraQrImage' in vu) && !('verificationUrl' in vu), vu);
+  ck('recorded but not yet submitted → FISCAL_PENDING, with NO KRA field', vu.fiscalStatus === 'FISCAL_PENDING' && !('receiptNumber' in vu) && !('kraQrImage' in vu) && !('verificationUrl' in vu), vu);
   const zero = await db.runTransaction(async (txn) => FISCAL.recordSale(txn, { saleKey: 'ZERO1', event: { id: 'evA', organizerUid: 'org1' }, channel: 'online', lines: [], grossCents: 0 }));
   ck('a zero-value sale is never fiscalised (the recorder refuses it)', zero === false && !(await get('eventFiscal/ZERO1')));
   let v = (await FISCAL.viewsFor(['ONL1'])).ONL1;
-  ck('fiscal view PENDING — and no KRA field at all while pending', v.status === 'PENDING' && !('receiptNumber' in v) && !('kraQrImage' in v));
+  ck('fiscal view FISCAL_PENDING — and no KRA field at all while pending', v.fiscalStatus === 'FISCAL_PENDING' && !('receiptNumber' in v) && !('kraQrImage' in v));
   const tk = (await EH.getMyTickets.run({ ...who('buyer7'), data: {} })).tickets.find((t) => t.ticketId === 'ONL1_k0');
-  ck('ticket valid + admitted regardless of fiscal PENDING (states are separate)', tk.status === 'valid' && tk.admissionStatus === 'ADMITTED' && tk.fiscal.status === 'PENDING');
+  ck('ticket valid + admitted regardless of fiscal PENDING (states are separate)', tk.status === 'valid' && tk.admissionStatus === 'ADMITTED' && tk.fiscal.fiscalStatus === 'FISCAL_PENDING');
   /* etimsProcessQueue (holds the secrets) gets KRA's answer — simulated here as the fields submitToKra writes */
   await db.doc(`etimsInvoices/${onlineRec.invoiceId}`).set({ status: 'accepted', receiptNumber: 'KRA-RCPT-000981', controlUnitNumber: 'CU-77', qrCode: 'https://etims.kra.go.ke/qr/KRA-RCPT-000981.png', verificationUrl: 'https://etims.kra.go.ke/verify?r=KRA-RCPT-000981' }, { merge: true });
   v = (await FISCAL.viewsFor(['ONL1'])).ONL1;
-  ck('KRA accepted → CONFIRMED with EXACTLY KRA\'s receipt, QR image and verification link', v.status === 'CONFIRMED' && v.receiptNumber === 'KRA-RCPT-000981'
+  ck('KRA accepted → FISCAL_ACCEPTED with EXACTLY KRA\'s receipt, QR image and verification link', v.fiscalStatus === 'FISCAL_ACCEPTED' && v.receiptNumber === 'KRA-RCPT-000981'
     && v.kraQrImage === 'https://etims.kra.go.ke/qr/KRA-RCPT-000981.png' && v.verificationUrl === 'https://etims.kra.go.ke/verify?r=KRA-RCPT-000981');
   ck('SOKONI QR ≠ KRA QR', tk.qrData && !tk.qrData.includes('KRA') && tk.qrData !== v.kraQrImage);
   await db.doc(`etimsInvoices/${onlineRec.invoiceId}`).set({ qrCode: 'RCPTSIGN-9f8e7d', verificationUrl: 'javascript:alert(1)' }, { merge: true });
   v = (await FISCAL.viewsFor(['ONL1'])).ONL1;
-  ck('a non-https KRA value is never rendered as an image or link', v.status === 'CONFIRMED' && v.kraQrImage === null && v.verificationUrl === null && v.receiptNumber === 'KRA-RCPT-000981');
+  ck('a non-https KRA value is never rendered as an image or link', v.fiscalStatus === 'FISCAL_ACCEPTED' && v.kraQrImage === null && v.verificationUrl === null && v.receiptNumber === 'KRA-RCPT-000981');
   /* organizer without eTIMS */
   await mkEvent('evN', { org: 'org2', title: 'No eTIMS' });
   await paidOnline('NOREG1', 'evN', { buyer: 'buyer9' });
-  ck('organizer not on eTIMS → NOT_REGISTERED (no invoice, nothing invented)', ((await get('eventFiscal/NOREG1')) || {}).status === 'NOT_REGISTERED'
-    && (await FISCAL.viewsFor(['NOREG1'])).NOREG1.status === 'NOT_REGISTERED' && !db._dump('etimsInvoices/').some((i) => i.sellerUid === 'org2'));
+  ck('organizer not on eTIMS → FISCAL_NOT_REQUIRED / ORGANIZER_NOT_REGISTERED (no invoice, nothing invented)', ((await get('eventFiscal/NOREG1')) || {}).status === 'NOT_REGISTERED'
+    && (await FISCAL.viewsFor(['NOREG1'])).NOREG1.fiscalStatus === 'FISCAL_NOT_REQUIRED' && (await FISCAL.viewsFor(['NOREG1'])).NOREG1.reason === 'ORGANIZER_NOT_REGISTERED' && !db._dump('etimsInvoices/').some((i) => i.sellerUid === 'org2'));
   /* submission error → FAILED → swept (bounded) */
   await db.doc('etimsProfiles/org1').set({ status: 'active', kraPin: 'P051234567T', businessName: 'Kamau Events', branchId: '00', vatStatus: 'registered', invoicePrefix: 'KEV' });
   const realGen = ETIMS.generateForOrder;
   ETIMS.generateForOrder = async () => { throw new Error('eTIMS sequence store unavailable'); };
   await paidOnline('ERR1', 'evA', { buyer: 'buyer10' });
   ck('submission error → FAILED (reconciliation), ticket still valid', ((await get('eventFiscal/ERR1')) || {}).status === 'SUBMISSION_ERROR'
-    && (await FISCAL.viewsFor(['ERR1'])).ERR1.status === 'FAILED' && (await get('eventTickets/ERR1_k0')).status === 'valid');
+    && (await FISCAL.viewsFor(['ERR1'])).ERR1.fiscalStatus === 'FISCAL_FAILED' && (await get('eventTickets/ERR1_k0')).status === 'valid');
   for (let i = 0; i < 7; i++) await FISCAL.sweep(NOW + 30 * 60 * 1000);
   ck('the sweep retries, bounded (never beyond 5 attempts)', ((await get('eventFiscal/ERR1')) || {}).attempts === FISCAL.MAX_ATTEMPTS, (await get('eventFiscal/ERR1')).attempts);
   ETIMS.generateForOrder = realGen;
@@ -335,24 +335,25 @@ async function paidOnline(orderId, eventId, { qty = 1, buyer = 'buyer1', tier = 
   await FISCAL.submit('ONL1'); await FISCAL.submit(mixed.saleId);
   ck('idempotent: re-submitting creates no second invoice', db._dump('etimsInvoices/').length === before);
   /* refund reversal */
-  await FISCAL.markRefunded('ONL1', { refundId: 'ref_ONL1' });
-  await FISCAL.markRefunded('NOREG1', { refundId: 'ref_NOREG1' });
-  ck('refund → CREDIT_NOTE_REQUIRED where an invoice exists; NOT_REQUIRED where none', (await get('eventFiscal/ONL1')).reversal.status === 'CREDIT_NOTE_REQUIRED' && (await get('eventFiscal/NOREG1')).reversal.status === 'NOT_REQUIRED');
-  await FISCAL.markRefunded('ONL1', { refundId: 'ref_again' });
-  ck('…marked exactly once', (await get('eventFiscal/ONL1')).reversal.refundId === 'ref_ONL1');
+  const cnA = await FISCAL.requireCreditNote({ fiscalRecordId: 'ONL1', refundCaseId: 'ONL1', refundCents: 200000, refundId: 'ref_ONL1' });
+  const cnB = await FISCAL.requireCreditNote({ fiscalRecordId: 'NOREG1', refundCaseId: 'NOREG1', refundCents: 200000, refundId: 'ref_NOREG1' });
+  ck('refund → CREDIT_NOTE_REQUIRED where an invoice exists; NO credit note where fiscalisation does not apply', cnA.created === true
+    && ((await get('eventFiscalReversals/' + cnA.executionId)) || {}).status === 'CREDIT_NOTE_REQUIRED' && cnB.skipped === 'ORGANIZER_NOT_REGISTERED');
+  const cnA2 = await FISCAL.requireCreditNote({ fiscalRecordId: 'ONL1', refundCaseId: 'ONL1', refundCents: 200000, refundId: 'ref_again' });
+  ck('…required exactly once (same deterministic execution id)', cnA2.executionId === cnA.executionId && cnA2.created === false && db._dump('eventFiscalReversals/').filter((r) => r.fiscalRecordId === 'ONL1').length === 1);
 
   say('\n── AdminOS ──');
   const byEv = await adm('eventAdminInvestigate', { by: 'event', value: 'evA' });
   const allPins = new Set(db._dump('eventTicketSecrets/').filter((x) => x.eventId === 'evA').map((x) => x.pin));
   ck('ticket rows show PIN as •••• — never the value', byEv.tickets.every((t) => t.pinDisplay === '••••' || !t.pinHash) && byEv.tickets.some((t) => t.pinDisplay === '••••')
     && !byEv.tickets.some((t) => 'pin' in t || 'pinHash' in t));
-  ck('rows carry the fiscal state', byEv.tickets.find((t) => t.ticketId === 'ONL1_k0').fiscal.status === 'CONFIRMED');
+  ck('rows carry the fiscal state', byEv.tickets.find((t) => t.ticketId === 'ONL1_k0').fiscal.fiscalStatus === 'FISCAL_ACCEPTED');
   ck('search by payment reference', (await adm('eventAdminInvestigate', { by: 'paymentRef', value: 'ONL1' })).tickets.some((t) => t.ticketId === 'ONL1_k0'));
   ck('search by admission status (scoped to an event)', (await adm('eventAdminInvestigate', { by: 'admissionStatus', value: 'ADMITTED', eventId: 'evA' })).tickets.some((t) => t.ticketId === 'ONL1_k0')
     && (await code(adm('eventAdminInvestigate', { by: 'admissionStatus', value: 'ADMITTED' }))) === 'invalid-argument');
   ck('search by refund status', (await adm('eventAdminInvestigate', { by: 'refundStatus', value: 'REFUNDED', eventId: 'evA' })).tickets.some((t) => t.ticketId === 'RF1_k0'));
-  const fs1 = await adm('eventAdminInvestigate', { by: 'fiscalStatus', value: 'SUBMISSION_ERROR' });
-  ck('search by fiscal status', fs1.fiscal.some((f) => f.saleKey === 'ERR1' && f.view.status === 'FAILED'));
+  const fs1 = await adm('eventAdminInvestigate', { by: 'fiscalStatus', value: 'FISCAL_FAILED' });
+  ck('search by fiscal status', fs1.fiscal.some((f) => f.saleKey === 'ERR1' && f.view.fiscalStatus === 'FISCAL_FAILED'));
   const tr = await adm('eventAdminTrace', { orderId: 'ONL1' });
   const fst = tr.stages.find((s) => s.stage === 'fiscal');
   ck('trace: Sale → Payment → FISCAL (KRA receipt) → Commission …', fst && fst.state === 'observed' && fst.record.receiptNumber === 'KRA-RCPT-000981'

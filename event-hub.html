@@ -683,6 +683,8 @@
       <p class="modal-desc">Step 3 of 3</p>
       <table style="width:100%;font-size:13px;border-collapse:collapse">
         <tr><td>Order total</td><td style="text-align:right">KES ${Number(q.amountKes).toLocaleString()}</td></tr>
+        ${q.penaltyKes ? `<tr><td>Cancellation fee (event policy)</td><td style="text-align:right">− KES ${Number(q.penaltyKes).toLocaleString()}</td></tr>` : ''}
+        <tr><td><strong>Refund amount</strong></td><td style="text-align:right"><strong>KES ${Number(q.refundKes != null ? q.refundKes : q.amountKes).toLocaleString()}</strong></td></tr>
         <tr><td>Refund policy</td><td style="text-align:right">${esc(q.policy)}</td></tr>
         <tr><td>Event date</td><td style="text-align:right">${q.eventDate ? esc(new Date(q.eventDate).toLocaleString('en-KE')) : '—'}</td></tr>
         <tr><td>Refund deadline</td><td style="text-align:right">${q.refundDeadline ? esc(new Date(q.refundDeadline).toLocaleString('en-KE')) : '—'}</td></tr>

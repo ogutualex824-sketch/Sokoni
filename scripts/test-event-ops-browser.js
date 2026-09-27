@@ -398,6 +398,7 @@ async function seed() {
         await pg.click('#rw-check'); await pg.waitForTimeout(400);
         const step3 = await pg.textContent('#modal-content');
         ck('buyer: the wizard shows the SERVER eligibility (YES, before the deadline)', /Refund eligibility/.test(step3) && /YES/.test(step3), step3.slice(0, 120));
+        ck('buyer: the wizard states the refund AMOUNT from the server quote (no fee under this policy)', /Refund amountKES 4,000/.test(step3.replace(/\s+/g, '')) || /Refund amount\s*KES 4,000/.test(step3), step3.slice(0, 200));
         ck('buyer: the wizard causes no horizontal overflow', await noOverflow(pg, w));
         await pg.click('#rw-send'); await pg.waitForTimeout(500);
         ck('buyer: submit → canonical refund request (pending admin review) + tickets REQUESTED',

@@ -779,7 +779,7 @@ exports.getMyTickets = onCall(CF_OPTS, async (req) => {
       pinState: t.pinHash && eventMap[t.eventId] ? OPS.pinState(t, eventMap[t.eventId], nowMs) : null,
       priceKes: Number.isFinite(tierPrice[t.tierId]) ? tierPrice[t.tierId] : null,
       /* no payment and no sale = a free ticket: nothing was sold, so nothing is fiscalised */
-      fiscal: FISCAL.keyOfTicket(t) ? (fiscal[FISCAL.keyOfTicket(t)] || { status: 'NOT_RECORDED' }) : { status: tierPrice[t.tierId] === 0 ? 'NOT_APPLICABLE' : 'NOT_RECORDED' },
+      fiscal: FISCAL.keyOfTicket(t) ? (fiscal[FISCAL.keyOfTicket(t)] || FISCAL.view(null)) : { ...FISCAL.view(null), reason: tierPrice[t.tierId] === 0 ? 'FREE_TICKET' : 'NO_FISCAL_RECORD' },
       status: t.status,
       checkedIn: t.checkedIn,
       checkedInAt: t.checkedInAt,

@@ -28,6 +28,7 @@ const SUITES = {
   refunds:  ['node', ['scripts/test-event-refunds.js']],
   admin:    ['node', ['scripts/test-event-admin.js']],
   identity: ['node', ['scripts/test-event-ticket-identity.js']],
+  credit:   ['node', ['scripts/test-event-credit-notes.js']],
   notify:   ['node', ['scripts/test-event-notifications.js']],
   rules:    ['node', ['scripts/run-entertainment-rules.js']],
   browser:  ['node', ['scripts/test-event-ops-browser.js']],
@@ -85,10 +86,10 @@ const M = [
     expect: /refunded ticket shows no PIN/ },
   /* ── fiscal (KRA eTIMS) ── */
   { group: 'fiscal', name: 'an unsubmitted sale shown as KRA-CONFIRMED with an invented receipt', file: FIS, suite: 'identity',
-    from: "  if (!f.invoiceId || !inv) return { ...base, status: VIEW.PENDING };", to: "  if (!f.invoiceId || !inv) return { ...base, status: VIEW.CONFIRMED, receiptNumber: 'SOKONI-' + f.saleKey };",
+    from: "  if (!f.invoiceId || !inv) return out(FS.PENDING);", to: "  if (!f.invoiceId || !inv) return out(FS.ACCEPTED, { receiptNumber: 'SOKONI-' + f.saleKey });",
     expect: /not yet submitted/ },
   { group: 'fiscal', name: 'a queued invoice shown as KRA-CONFIRMED with an invented receipt', file: FIS, suite: 'identity',
-    from: "  return { ...base, status: VIEW.PENDING, invoiceNumber: inv.invoiceNumber || f.invoiceNumber || null };", to: "  return { ...base, status: VIEW.CONFIRMED, receiptNumber: 'SOKONI-' + f.saleKey, invoiceNumber: inv.invoiceNumber || null };",
+    from: "  return out(FS.PENDING, { invoiceNumber: inv.invoiceNumber || f.invoiceNumber || null });", to: "  return out(FS.ACCEPTED, { receiptNumber: 'SOKONI-' + f.saleKey, invoiceNumber: inv.invoiceNumber || null });",
     expect: /PENDING|no KRA field/ },
   { group: 'fiscal', name: 'a non-https KRA value rendered as an image / link', file: FIS, suite: 'identity',
     from: 'const _https = (u) => (typeof u === \'string\' && /^https:\\/\\/[^\\s"\'<>]+$/.test(u) ? u : null);', to: 'const _https = (u) => u || null;',
@@ -100,9 +101,47 @@ const M = [
     from: '    .concat(errs.docs.filter((d) => (Number(d.data().attempts) || 0) < MAX_ATTEMPTS));', to: '    .concat(errs.docs);',
     expect: /bounded/ },
   { group: 'fiscal', name: 'fiscal state gates the ticket (unpaid-to-KRA ticket void)', file: FIS, suite: 'identity',
-    from: '  if (f.status === REC.SUBMISSION_ERROR) return { ...base, status: VIEW.FAILED, reason: \'submission_error\' };',
-    to: '  if (f.status === REC.SUBMISSION_ERROR) { require(\'firebase-admin/firestore\').getFirestore().doc(\'eventTickets/\' + (f.orderId || \'_\') + \'_k0\').set({ status: \'void\' }, { merge: true }); return { ...base, status: VIEW.FAILED, reason: \'submission_error\' }; }',
+    from: "  if (f.status === REC.SUBMISSION_ERROR) return out(FS.FAILED, { reason: 'submission_error' });",
+    to: "  if (f.status === REC.SUBMISSION_ERROR) { require('firebase-admin/firestore').getFirestore().doc('eventTickets/' + (f.orderId || '_') + '_k0').set({ status: 'void' }, { merge: true }); return out(FS.FAILED, { reason: 'submission_error' }); }",
     expect: /ticket still valid|states are separate/ },
+  /* ── credit notes / refund → fiscal linkage (the credit-note slice) ── */
+  { group: 'credit', name: 'fake credit-note number stamped when the credit note is built', file: FIS, suite: 'credit',
+    from: "    await ref.update({ status: CN.PENDING, creditNoteDocId: res.id,", to: "    await ref.update({ status: CN.PENDING, creditNoteReference: 'CN-' + res.id, creditNoteDocId: res.id,", expect: /carries NO reference|PENDING credit note/ },
+  { group: 'credit', name: '"000" without a reference accepted with an invented number', file: FIS, suite: 'credit',
+    from: "  if (!refNo) return { outcome: 'UNKNOWN', reason: 'accepted_without_reference' };", to: "  if (!refNo) return { outcome: 'ACCEPTED', reference: 'SOKONI-CN', qr: 'https://sokoni.fake/qr.png', verificationUrl: null, providerData: {} };", expect: /WITHOUT a reference/ },
+  { group: 'credit', name: 'a timeout treated as a definitive rejection (blind retry)', file: FIS, suite: 'credit',
+    from: "  if (!p || p.kind === 'timeout' || p.kind === 'network_error') return { outcome: 'UNKNOWN',", to: "  if (!p || p.kind === 'timeout' || p.kind === 'network_error') return { outcome: 'REJECTED',", expect: /timeout → CREDIT_NOTE_OUTCOME_UNKNOWN/ },
+  { group: 'credit', name: 'a 5xx treated as a definitive rejection', file: FIS, suite: 'credit',
+    from: "  if (!Number.isFinite(code) || code >= 500) return { outcome: 'UNKNOWN',", to: "  if (!Number.isFinite(code) || code >= 500) return { outcome: 'REJECTED',", expect: /5xx/ },
+  /* Two layers refuse it: the explicit UNKNOWN check, and "only a FAILED credit note is retried". The
+     first run removed only the first (MISSED — the second still refused). The attack is both. */
+  { group: 'credit', name: 'an unknown outcome retried blindly (both refusal layers removed)', file: FIS, suite: 'credit',
+    edits: [{ from: "    if (d.status === CN.UNKNOWN) return { error: 'outcome_unknown_needs_evidence' };\n", to: '' },
+            { from: '    if (d.status !== CN.FAILED) return { error: `nothing_to_retry_${d.status}` };', to: '    if (d.status !== CN.FAILED && d.status !== CN.UNKNOWN) return { error: `nothing_to_retry_${d.status}` };' }],
+    expect: /NOT retried blindly/ },
+  { group: 'credit', name: 'evidence resolution may assert ACCEPTED', file: FIS, suite: 'credit',
+    from: "  if (resolution !== 'NOT_ACCEPTED') return { error: 'only_not_accepted' };\n", to: '', expect: /resolve it as ACCEPTED/ },
+  { group: 'credit', name: 'an ordinary admin resolves an unknown outcome', file: EA, suite: 'credit',
+    from: "  if (!AC.isSuperAdmin(req)) fail('permission-denied', 'Super admin only.');\n  const d = req.data || {};\n  const executionId", to: "  const d = req.data || {};\n  const executionId", expect: /ordinary admin cannot resolve/ },
+  { group: 'credit', name: 'no execution claim (concurrent / replayed credit-note execution)', file: FIS, suite: 'credit',
+    edits: [{ from: '      if (d.status !== CN.REQUIRED) return null;\n      const c = _ms(d.claimedAt);\n      if (c != null && _now() - c < CLAIM_MS) return null;\n      txn.update(ref, { claimedAt:', to: '      txn.update(ref, { claimedAt:' }],
+    expect: /concurrent executions|re-execution|ONE lifecycle document/ },
+  { group: 'credit', name: 'ACCEPTED is not terminal (a replayed answer overwrites it)', file: FIS, suite: 'credit',
+    from: "    if (d.status !== CN.PENDING) return { skipped: `status_${d.status}`, outcome: c.outcome };\n", to: '', expect: /terminal/ },
+  { group: 'credit', name: 'the refund writes onto the ORIGINAL fiscal record', file: FIS, suite: 'credit',
+    from: "    return { pending: true, creditNoteDocId: res.id, deduplicated: !!res.deduplicated };", to: "    await db.collection(COL.FISCAL).doc(r.fiscalRecordId).update({ refunded: true, reversedCents: r.refundCents });\n    return { pending: true, creditNoteDocId: res.id, deduplicated: !!res.deduplicated };", expect: /ORIGINAL fiscal record/ },
+  { group: 'credit', name: 'credit note reverses the GROSS instead of the approved principal', file: FIS, suite: 'credit',
+    from: '      originalGrossCents: f.grossCents, refundCents: amount,', to: '      originalGrossCents: f.grossCents, refundCents: f.grossCents,', expect: /APPROVED principal|1,700|1,600|no-show principal/ },
+  { group: 'credit', name: 'a credit note for an organizer NOT on eTIMS (fake reversal of nothing)', file: FIS, suite: 'credit',
+    from: "  if (f.status === REC.NOT_REGISTERED) return { skipped: NOT_REQUIRED_REASON.ORGANIZER_NOT_REGISTERED };\n", to: '', expect: /NO credit note/ },
+  { group: 'credit', name: 'refund amount substituted by the client', file: 'functions/event-refunds.js', suite: 'credit',
+    from: "amountKES: verdict.refundCents / 100, reason: text,", to: "amountKES: Number(d.amountKES) || verdict.refundCents / 100, reason: text,", expect: /forged client amount/ },
+  { group: 'credit', name: 'refund bypass: ANY partial settles as if approved', file: 'functions/event-settlement.js', suite: 'credit',
+    from: '  const approvedPartial = rq && Number(rq.refundCents) === Number(amountCents) && Number(amountCents) < Number(intent.amountCents);', to: '  const approvedPartial = true;', expect: /mismatched partial/ },
+  { group: 'credit', name: 'penalty charged on an organizer-side reason (event cancelled)', file: 'functions/event-refunds.js', suite: 'credit',
+    from: "const PENALTY_BASES = new Set(['policy', 'no_show']);", to: "const PENALTY_BASES = new Set(['policy', 'no_show', 'organizer', 'payment']);", expect: /organizer-side reason never carries a penalty/ },
+  { group: 'credit', name: 'provider-answer ingress exposed as an AdminOS operation', file: EA, suite: 'credit',
+    from: '  eventAdminCreditNoteRetry: creditNoteRetry, eventAdminCreditNoteResolve: creditNoteResolve,', to: '  eventAdminCreditNoteRetry: creditNoteRetry, eventAdminCreditNoteResolve: creditNoteResolve, eventAdminCreditNoteOutcome: (req) => FISCAL.recordCreditNoteOutcome(req.data.executionId, req.data.result),', expect: /not exposed/ },
   { group: 'fiscal', name: 'AdminOS row carries the PIN hash instead of ••••', file: EA, suite: 'identity',
     from: "  if (x.pinHash) out.pinDisplay = '••••';", to: "  if (x.pinHash) out.pinDisplay = x.pinHash;", expect: /••••/ },
   { group: 'pin', name: 'a used ticket admits again (both admission guards removed)', file: OPS, suite: 'ops',
@@ -180,6 +219,9 @@ const M = [
   { group: 'rules', rules: true, name: 'organizer may write the fiscal record (fake a KRA confirmation)', file: RULES, suite: 'rules',
     from: 'match /eventFiscal/{saleKey}         { allow read: if isAdmin(); allow write: if false; }', to: 'match /eventFiscal/{saleKey}         { allow read: if isAdmin(); allow write: if isAuthed(); }',
     expect: /fiscally CONFIRMED|fiscal record/ },
+  { group: 'rules', rules: true, name: 'client may write the credit-note lifecycle (mark CREDIT_NOTE_ACCEPTED)', file: RULES, suite: 'rules',
+    from: 'match /eventFiscalReversals/{executionId} { allow read: if isAdmin(); allow write: if false; }', to: 'match /eventFiscalReversals/{executionId} { allow read: if isAdmin(); allow write: if isAuthed(); }',
+    expect: /CREDIT_NOTE_ACCEPTED|credit note to accepted/ },
   { group: 'rules', rules: true, name: 'organizer may mark own door commission COLLECTED', file: RULES, suite: 'rules',
     from: 'match /eventCommissionReceivables/{saleId}  { allow read: if isAdmin(); allow write: if false; }', to: 'match /eventCommissionReceivables/{saleId}  { allow read: if isAdmin(); allow write: if isAuthed(); }',
     expect: /COLLECTED/ },
@@ -221,6 +263,9 @@ function apply(src, m) {
   return { out };
 }
 
+/* Every sabotaged file's exact bytes BEFORE the run: the proof of restoration does not depend on what
+   is committed (a slice can be verified before its single commit). */
+const BEFORE = new Map([...new Set(M.map((m) => m.file))].map((f) => [f, require('crypto').createHash('sha256').update(fs.readFileSync(path.join(ROOT, f))).digest('hex')]));
 const tally = { CAUGHT: 0, 'CAUGHT-OTHER': 0, MISSED: 0, CRASHED: 0, 'NO-ANCHOR': 0, SKIPPED: 0 };
 const used = new Set();
 for (const m of M) {
@@ -259,8 +304,9 @@ for (const s of used) {
   console.log(`    ${s.padEnd(9)} ${r.code === 0 ? 'GREEN' : 'RED'}  ${t}`);
   if (r.code !== 0) green = false;
 }
-const clean = spawnSync('git', ['diff', '--quiet', '--', ...new Set(M.map((m) => m.file))], { cwd: ROOT }).status === 0;
-console.log(`    tree      ${clean ? 'byte-identical to HEAD for every sabotaged file' : 'DIRTY — restore failed (or uncommitted edits in a sabotaged file)'}`);
+const changed = [...BEFORE].filter(([f, h]) => require('crypto').createHash('sha256').update(fs.readFileSync(path.join(ROOT, f))).digest('hex') !== h).map(([f]) => f);
+const clean = changed.length === 0;
+console.log(`    tree      ${clean ? 'byte-identical to the pre-run content for every sabotaged file (sha-256)' : 'DIRTY — restore failed: ' + changed.join(', ')}`);
 console.log('\n  ' + Object.entries(tally).map(([k, v]) => `${k}: ${v}`).join('   '));
 const ok = tally.MISSED === 0 && tally.CRASHED === 0 && tally['NO-ANCHOR'] === 0 && green && clean;
 process.exit(ok ? 0 : 1);

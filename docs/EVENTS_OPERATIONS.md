@@ -118,6 +118,65 @@ visually, printed together on one ticket.
 - **Nothing fabricated:** no KRA QR, receipt number, control-unit number, signature or confirmation is ever produced
   by SOKONI.
 
+### Fiscal state machine and credit notes (credit-note slice)
+
+**Authorities, audited before changing anything:**
+
+| Authority | File / function | Status |
+|---|---|---|
+| Event sale | `eventOrders` (online, `event-hub.purchaseTickets`) · `eventSales` (door, `event-sales.quickSale`) | canonical, unchanged |
+| Ticket | `eventTickets` (`event-ops.issueCredentials` via activation / door sale) | canonical, unchanged |
+| Payment | `payments/{ref}` + `paymentIntents/{ref}` (`payment-intents`, webhook) | canonical, untouched |
+| Fiscal record | `eventFiscal/{saleKey}` (`event-fiscal.recordSale`) → `etimsInvoices/{id}` (`etims.generateForOrder`) | extended (one vocabulary); the original is **immutable** after a refund |
+| Refund case | `eventRefundRequests/{orderId}` (`event-refunds` wizard; `event-settlement` for AdminOS refunds) | extended (amounts, penalty, policy version, admission and fiscal status) |
+| Refund execution | `financial-os` `fosSubmitRefund` → admin approval → provider → `_afterRefundSettled` → `event-settlement.onEventRefundProcessed` | canonical, **untouched** |
+| Refund policy / penalty | `events.refundPolicy` (`event-refunds.setPolicy` / `amountsFor`) | penalty **added** (owner decision) |
+| KRA / eTIMS adapter | sale: `etims.submitToKra` via `etimsProcessQueue` · credit note: `etims-lifecycle.applyLifecycleOp` → `creditNotes` → `etimsTransmissionQueue` → `etims-kra-adapter` (**`SPEC_LOADED=false`**) | reused; credit-note transmission not implemented platform-wide |
+| AdminOS Fiscal | `event-admin` `eventAdminFiscal` / `FiscalRetry` / `CreditNoteRetry` / `CreditNoteResolve` + panel tab | completed |
+
+**One vocabulary:**
+- `fiscalStatus`:
+  - `FISCAL_NOT_REQUIRED`, with a reason: `ORGANIZER_NOT_REGISTERED`, `FREE_TICKET` or `NO_FISCAL_RECORD`;
+  - `FISCAL_PENDING`;
+  - `FISCAL_ACCEPTED`;
+  - `FISCAL_FAILED`.
+- Credit note: `CREDIT_NOTE_REQUIRED → CREDIT_NOTE_PENDING → CREDIT_NOTE_ACCEPTED`, with two other outcomes from PENDING:
+  - `CREDIT_NOTE_FAILED`: a definitive rejection; retry is allowed on the same credit note.
+  - `CREDIT_NOTE_OUTCOME_UNKNOWN`: a timeout, a 5xx, or a "000" without a reference. There is no blind retry; a super
+    admin resolves it **only** as "not accepted", with evidence, and it can then be retried.
+
+**Linkage:** refund case → refund settled by the canonical authority → `eventFiscalReversals/{executionId}`.
+
+- **Execution identity:** `executionId = sha256("evtcn|<fiscalRecordId>|<refundCaseId>")`. That is one credit note per
+  (fiscal record, refund case), never a clock, random or client identifier.
+- **Linked, never overwritten:** the reversal links to the original, which is never written.
+- **Build:** it is built on `etims-lifecycle` with `idempotencyKey = executionId`, so the `creditNotes` document ID is
+  deterministic.
+- **Amount:** it reverses **the approved principal only**, never the penalty, gross, commission or provider fee.
+- **Waiting:** while the original invoice is not accepted, the credit note waits in REQUIRED. The existing 15-minute
+  sweep executes it once the original is accepted.
+- **Provider answers:** they enter through **one server-only function** (`recordCreditNoteOutcome`). It is not a
+  callable, not an AdminOS form, and no field anywhere accepts a receipt or reference.
+
+**Penalties** (owner decision: the event refund policy is the commercial authority):
+- The organizer sets `penalty {type: fixed | percent, value}`. It is shown before purchase and locked after the first
+  sale.
+- It applies to buyer-driven reasons only (change of plans, no-show). A cancelled or changed event, and payment errors,
+  are always refunded in full.
+- The canonical refund authority is asked for the principal (gross − penalty).
+- On settlement the tickets are refunded, and the organizer's settlement is recomputed on the kept penalty: the provider
+  fee stays deducted, and the 3% is re-based on what was kept.
+
+**External gate — UNPROVEN, not hidden:**
+- There has been no KRA call. The sale invoice path has never run against KRA sandbox.
+- **Credit-note transmission to KRA does not exist anywhere on the platform yet.** `etims-kra-adapter` has
+  `SPEC_LOADED=false`, so every credit note queues as `blocked_pending_spec`, which AdminOS shows.
+- CREDIT_NOTE_ACCEPTED is reachable in tests only through the server ingress, fed simulated provider answers.
+- Closing this needs two things:
+  - the KRA credit-note payload mapped in `etims-kra-adapter.js` (the only file to change);
+  - a drainer that calls `recordCreditNoteOutcome`.
+- Both then need certification in the eTIMS sandbox with a registered organizer.
+
 ### Final gates (this slice)
 
 | Gate | Result |
@@ -135,7 +194,12 @@ visually, printed together on one ticket.
 | SOKONI QR | GREEN — local, no PIN inside, hidden when unusable |
 | KRA fiscal QR | GREEN (logic) / 🟡 **UNPROVEN** — shown only as KRA returned it; no KRA call made (sandbox certification is the next slice) |
 | KRA reconciliation | GREEN — pending / failed / not-registered / credit-note queue + audited retry |
-| KRA credit notes | 🟡 INCOMPLETE — refund → CREDIT_NOTE_REQUIRED is recorded; the note itself is not yet issued (§12) |
+| Fiscal state machine | GREEN — one vocabulary (FISCAL_NOT_REQUIRED / PENDING / ACCEPTED / FAILED), server-authoritative |
+| Credit-note lifecycle | GREEN — REQUIRED → PENDING → ACCEPTED / FAILED / OUTCOME_UNKNOWN on `etims-lifecycle`, idempotent (deterministic execution id), evidence-gated resolution |
+| Refund → fiscal linkage | GREEN — refund case (amounts, penalty, policy version, admission + fiscal status) → credit note for the approved principal, linked to the immutable original |
+| AdminOS Fiscal | GREEN — sale + credit-note states, retry where safe, evidence resolution (super admin), trace incl. `fiscal_reversal` |
+| Security / sabotage | GREEN — forged payloads refused (rules + callables); 71 / 71 attacks caught |
+| Real KRA/eTIMS sandbox | 🟡 **UNPROVEN** — no KRA call; credit-note transmission to KRA not implemented platform-wide (`etims-kra-adapter` spec pending) |
 | Refunded ticket invalidation | GREEN — PIN and QR refused; no PIN / QR shown |
 | Admission / refund separation | GREEN — refund suspends admission; admitted ≠ no-show (refund suite) |
 | AdminOS ticket investigation | GREEN — number, sale, payment ref, buyer, cashier, admission / refund / fiscal status; PIN `••••` |
@@ -229,8 +293,11 @@ Each ticket type has − / quantity / + controls, and the cashier can also type 
   provider fee.
 - **The refund policy** is required to publish, and locks after the first sale.
 - **Door sales** (cash or card) are refunded **offline** by the organizer; SOKONI has no rail for them.
-- **UNDECIDED (owner):** penalty or fee retention on refunds. The truncated brief ended at "5. EVENT ORGANIZER REFUND
-  POLICY … ○ Not permit". Today every refund is full.
+- **Penalty (decided 2026-09-27, built in the credit-note slice):** the organizer's policy may keep a fixed amount or
+  1–50 % on buyer-driven refunds (change of plans, no-show). It is shown before purchase and locked after the first
+  sale. Organizer-side and payment reasons are always refunded in full. The wizard shows gross, fee and refund amount.
+- **Refund case:** each case records gross, penalty, refund principal, policy version, admission states and the fiscal
+  status at request time. AdminOS cancellation refunds get a case too.
 
 ---
 
@@ -294,17 +361,20 @@ approve the wording before deploy.
 | `test-event-sales.js` | 46 / 0 | cash / card / IntaSend-at-till, inventory race, netting |
 | `test-event-refunds.js` | 53 / 0 | policy, 18 reasons, `decide()`, wizard submit / compensate, reject / revoke |
 | `test-event-settlement.js` | 84 / 0 | activation, HELD / release / refund, fee attestation |
-| `test-event-admin.js` | 64 / 0 | guard (9 ops), search, credential stripping, PIN identity, trace incl. fiscal stage, staff, queues |
+| **`test-event-credit-notes.js`** (new) | **71 / 0** | fiscal state machine; refunds A–I (full, fixed + % penalty, no-show, cancellation bulk, after admission, after organizer paid, with / without fiscal record); no fake credit note (unregistered, no record, unpaid, expired, rejected, not approved, mismatched partial); idempotency (replay, 3 concurrent, refresh, AdminOS retry); provider outcomes (timeout, 5xx, rejection, 000-without-reference, accepted, terminal); forged payloads; original immutable; display; AdminOS trace |
+| `test-event-admin.js` | 66 / 0 | guard (11 ops), search, credential stripping, PIN identity, trace incl. fiscal stage, staff, queues |
 | `test-event-notifications.js` | 17 / 0 | notices, 523-order cancel (500-write cap enforced + counterproof), cancel race |
 | `test-entertainment-agreements.js` | 25 / 0 | catalogue, signing, approval gate |
 | `test-entertainment-registry.js` | 65 / 0 | categories, lifecycle, AdminOS wiring |
-| `run-entertainment-rules.js` | 86 / 0 | served rules on a private-port emulator; every denial counterproofed under allow-all |
-| `test-event-ops-browser.js` | 199 / 0 | real pages + real server logic incl. Quick Sale add/reduce, both M-PESA journeys, ticket cards (number, PIN, SOKONI QR, genuine KRA receipt), Show / Print / Send, Quick Sale Check ticket for an online ticket, AdminOS `••••` + Fiscal tab, 360 · 390 · 768 · 1024 · 1280 · 1440 px |
+| `run-entertainment-rules.js` | 98 / 0 | served rules on a private-port emulator; every denial counterproofed under allow-all |
+| `test-event-ops-browser.js` | 200 / 0 | real pages + real server logic incl. Quick Sale add/reduce, both M-PESA journeys, ticket cards (number, PIN, SOKONI QR, genuine KRA receipt), Show / Print / Send, Quick Sale Check ticket for an online ticket, AdminOS `••••` + Fiscal tab, 360 · 390 · 768 · 1024 · 1280 · 1440 px |
 | `test-entertainment-browser.js` | 230 / 0 | Entertainment pages incl. legal gate |
 | `test-creator-hub` · `-completion` · `-ui` · `-callback` · `-adminos-authority` | 260 · 66 · 64 · 78 · 19 / 0 | Creator Hub incl. M-PESA-only fail-closed checkout |
 | `test-admin-os-wiring.js` | 316 / 0 | AdminOS registry |
 | `test-etims-audit` · `-lifecycle` · `-tax-engine` · `test-commission-invoice` · `test-merchant-tax` | 6 · 16 · 22 · 52 · 95 / 0 | eTIMS unchanged by the additive `etims.js` interface correction |
-| **`sabotage-event-ops.js`** | see §11 | 54 planted attacks |
+| **`sabotage-event-ops.js`** | see §11 | 71 planted attacks |
+| `test-refund-approval-gate` · `-authority-matrix` · `-exactly-once` (canonical refund authority) | 50 · 24 · 103 / 0 | no regression — `financial-os` untouched |
+| `test-refund-authority-convergence.js` | **BASELINE harness error** | outside scope — §12 row 16 |
 
 **Browser defects found and fixed:**
 
@@ -323,7 +393,15 @@ approve the wording before deploy.
 refund, admin, notify, rules and browser. For each attack it runs the suite that owns the control, requires the **expected** case to go red,
 restores the file byte-for-byte, and then proves the tree is green again.
 
-**54 / 54 CAUGHT.** The confirmation hardening added 4 attacks (`[confirm]`), all caught; the pin, staff, sales, refund and admin groups were re-run after it: all caught.
+**71 / 71 CAUGHT** (credit-note slice).
+
+- **Full run:** 70 caught and 1 missed, with 0 crashed and 0 no-anchor. All 9 suites were green after restore, and
+  every sabotaged file was byte-identical to its pre-run content (sha-256). The restore check is now independent of
+  what is committed.
+- **The miss:** "an unknown outcome retried blindly" removed only the explicit UNKNOWN refusal. The general "only a
+  FAILED credit note is retried" rule still refused the retry. The attack now removes both layers, and the
+  `[credit]` group re-ran 16/16 caught.
+- **Before this slice:** 54 / 54. The confirmation hardening added 4 `[confirm]` attacks, all caught.
 
 - **Full run** (`e5970e9`): 45 caught, 2 missed, 2 crashed, 0 no-anchor. All 8 suites were green after restore, and the
   tree was byte-identical.
@@ -359,7 +437,9 @@ restores the file byte-for-byte, and then proves the tree is green again.
 | 9 | ~~Medium~~ **CLOSED `2c365df`** | 4-digit PIN density (a random guess matches a valid ticket with probability issued ÷ 10,000) | server-enforced ticket-number confirmation (§3) |
 | 10 | Medium | Events above **8,000 tickets** cannot be configured (4-digit ceiling, kept as an invariant) | **decided:** a 6-digit PIN mode for large events — per-event `pinDigits` chosen before the first sale, its own ceiling, same allocator. Not built |
 | 11 | High (release gate) | **KRA live path UNPROVEN on this branch:** invoices are created and queued through the real `etims.js`; no KRA call was made. The KRA-accepted state is simulated with the fields `submitToKra` writes | **next slice:** eTIMS sandbox certification (`ETIMS_ENV=sandbox`, a registered sandbox taxpayer) — needs the owner's go-ahead and sandbox credentials |
-| 12 | Medium | Refund → **credit note** is flagged CREDIT_NOTE_REQUIRED, not issued | **decided flow:** refund → the original fiscal record and receipt remain (never deleted or replaced) → CREDIT_NOTE_REQUIRED → KRA credit note through `etims-lifecycle` → linked to the original receipt number. Not built |
+| 12 | ~~Medium~~ **BUILT (credit-note slice)** | Credit-note lifecycle | refund → the original stays immutable → CREDIT_NOTE_REQUIRED → `etims-lifecycle` credit note (idempotent) → PENDING → ACCEPTED / FAILED / OUTCOME_UNKNOWN, linked to the original (§3) |
+| 15 | High (external gate) | **KRA credit-note transmission is not implemented platform-wide:** `etims-kra-adapter` has `SPEC_LOADED=false`; credit notes queue as `blocked_pending_spec` and nothing drains `etimsTransmissionQueue` | map the credit-note payload in `etims-kra-adapter.js`, add a drainer that calls `event-fiscal.recordCreditNoteOutcome`, then eTIMS sandbox certification |
+| 16 | Low (baseline, outside scope) | `test-refund-authority-convergence.js` harness error (§7b parses the `merchant-identity.js` / `workforce-identity.js` POS role tables) | pre-existing; neither file is touched by the Events slices |
 | 13 | Low | Organizer not registered for eTIMS → tickets say so (NOT_REGISTERED) | **decided:** keep this. SOKONI does **not** substitute itself as the fiscal seller and never manufactures an organizer receipt. "SOKONI invoices on behalf of the organizer" is a separate commercial / legal decision and implementation |
 | 14 | Low | Existing tickets from the 8-character build | none exist outside tests (never deployed); no migration |
 

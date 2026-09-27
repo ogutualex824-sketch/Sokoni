@@ -18,8 +18,17 @@
  *
  * Ticket refund states: NONE → REQUESTED → REFUNDED, or back to NONE when the request is rejected.
  * A REQUESTED ticket cannot be admitted (event-ops); an ADMITTED ticket is never a no-show.
- * Penalty / fee retention: NOT implemented — an UNDECIDED owner + legal decision (published pages
- * promise full refunds). The request is for the full order.
+ *   policy.penalty     { type: 'none' | 'fixed' | 'percent', value } — the organizer's cancellation
+ *                      fee (owner decision 2026-09-27: the event refund policy is the commercial
+ *                      authority for fixed and percentage penalties). It is shown before purchase and
+ *                      locked with the policy. It applies ONLY to buyer-driven reasons (change of plans,
+ *                      no-show) — never to an organizer-side reason (cancelled / changed) or a payment
+ *                      error. The refund PRINCIPAL = gross − penalty; that is what the canonical refund
+ *                      authority is asked to pay back, and what the fiscal credit note reverses.
+ *
+ * The request record (eventRefundRequests/{orderId}) is the event REFUND CASE: it references the sale,
+ * tickets, payment, fiscal record, amounts (gross / penalty / principal), reason, policy version,
+ * admission states and the fiscal status at request time.
  */
 const { HttpsError } = require('firebase-functions/v2/https');
 const logger = require('firebase-functions/logger');
@@ -33,6 +42,22 @@ let _now = () => Date.now();
 const _ms = (v) => { if (!v) return null; if (typeof v.toMillis === 'function') return v.toMillis(); const t = new Date(v).getTime(); return Number.isFinite(t) ? t : null; };
 
 const MODES = Object.freeze(['none', 'before_cutoff']);
+const PENALTY_TYPES = Object.freeze(['none', 'fixed', 'percent']);
+const MAX_PENALTY_PCT = 50;
+/* Reasons a penalty may apply to: the buyer's own change. Organizer-side and payment errors never. */
+const PENALTY_BASES = new Set(['policy', 'no_show']);
+
+/** Pure: the amounts of a refund under a policy and a reason (integer cents). */
+function amountsFor(policy, reason, grossCents) {
+  const g = Math.max(0, Math.round(Number(grossCents) || 0));
+  const pen = (policy && policy.penalty) || { type: 'none' };
+  let penaltyCents = 0;
+  if (reason && PENALTY_BASES.has(reason.basis)) {
+    if (pen.type === 'fixed') penaltyCents = Math.min(g, Math.round(Number(pen.value) * 100) || 0);
+    else if (pen.type === 'percent') penaltyCents = Math.min(g, Math.round((g * (Number(pen.value) || 0)) / 100));
+  }
+  return { grossCents: g, penaltyCents, refundCents: g - penaltyCents };
+}
 /* No-show refunds may be requested for this long after the event ends. */
 const NO_SHOW_WINDOW_MS = 14 * 24 * 3600 * 1000;
 
@@ -49,7 +74,13 @@ async function setPolicy(req) {
     if (cutoffMs == null) fail('invalid-argument', 'Set the refund deadline.');
     if (startMs != null && cutoffMs > startMs) fail('invalid-argument', 'The refund deadline must be before the event starts.');
   }
-  const policy = { mode, cutoffAt: cutoffMs == null ? null : new Date(cutoffMs).toISOString(), noShowRefund: d.noShowRefund === true };
+  const pt = String((d.penalty && d.penalty.type) || 'none');
+  if (!PENALTY_TYPES.includes(pt)) fail('invalid-argument', `Penalty must be one of: ${PENALTY_TYPES.join(', ')}.`);
+  const pv = Number(d.penalty && d.penalty.value);
+  if (pt === 'fixed' && !(Number.isFinite(pv) && pv > 0 && pv <= 1000000 && Math.round(pv * 100) === pv * 100)) fail('invalid-argument', 'A fixed penalty is a KES amount above 0.');
+  if (pt === 'percent' && !(Number.isInteger(pv) && pv > 0 && pv <= MAX_PENALTY_PCT)) fail('invalid-argument', `A percentage penalty is a whole number from 1 to ${MAX_PENALTY_PCT}.`);
+  const penalty = pt === 'none' ? { type: 'none' } : { type: pt, value: pv };
+  const policy = { mode, cutoffAt: cutoffMs == null ? null : new Date(cutoffMs).toISOString(), noShowRefund: d.noShowRefund === true, penalty };
   const ref = _db().collection('events').doc(actor.event.id);
   await _db().runTransaction(async (txn) => {
     const ev = (await txn.get(ref)).data();
@@ -60,16 +91,28 @@ async function setPolicy(req) {
 }
 
 /* ═══ eligibility ══════════════════════════════════════════════════════════════════════════ */
+function describePenalty(p) {
+  const pen = (p && p.penalty) || { type: 'none' };
+  if (pen.type === 'fixed') return `; a KES ${Number(pen.value).toLocaleString('en-KE')} cancellation fee is kept on buyer-requested refunds`;
+  if (pen.type === 'percent') return `; ${pen.value}% is kept as a cancellation fee on buyer-requested refunds`;
+  return '';
+}
 function describePolicy(p) {
-  if (!p || p.mode === 'none') return p && p.noShowRefund ? 'No refunds, except no-show refunds after the event' : 'No refunds';
-  return `Refunds until ${new Date(p.cutoffAt).toLocaleString('en-KE')}${p.noShowRefund ? ', and no-show refunds after the event' : ''}`;
+  if (!p || p.mode === 'none') return (p && p.noShowRefund ? 'No refunds, except no-show refunds after the event' : 'No refunds') + describePenalty(p);
+  return `Refunds until ${new Date(p.cutoffAt).toLocaleString('en-KE')}${p.noShowRefund ? ', and no-show refunds after the event' : ''}${describePenalty(p)}`;
 }
 
 /**
  * The eligibility decision. Pure over its inputs — the suite drives it directly.
  * @returns {{ eligible:'YES'|'NO'|'REVIEW', why:string }}
  */
-function decide({ reason, event, order, tickets, nowMs, answers = {}, otherOrder = null }) {
+function decide(args) {
+  const v = _decide(args);
+  const a = amountsFor(args.event.refundPolicy, args.reason, Math.round((Number(args.order.totalAmount) || 0) * 100));
+  if (v.eligible !== 'NO' && a.penaltyCents > 0 && a.refundCents <= 0) return { eligible: 'NO', why: 'After the cancellation fee nothing would be refunded.', ...a };
+  return { ...v, ...a };
+}
+function _decide({ reason, event, order, tickets, nowMs, answers = {}, otherOrder = null }) {
   const p = event.refundPolicy || { mode: 'none', noShowRefund: false };
   const valid = tickets.filter((t) => t.status === 'valid');
   const admitted = valid.filter((t) => (t.admissionStatus || 'NOT_ADMITTED') === 'ADMITTED');
@@ -143,6 +186,8 @@ async function quote(req) {
   return {
     orderId: order.orderId, reason: { code: reason.code, label: reason.label, questions: reason.questions, explain: reason.explain },
     amountKes: Number(order.totalAmount) || 0, ticketCount: tickets.length,
+    grossKes: verdict.grossCents / 100, penaltyKes: verdict.penaltyCents / 100, refundKes: verdict.refundCents / 100,
+    policyVersion: (p && p.version) || null,
     policy: describePolicy(p), eventTitle: event.title || null, eventDate: event.startDate || null,
     refundDeadline: p.cutoffAt || null, eventStatus: event.status,
     tickets: tickets.map((t) => ({ ticketNumber: t.ticketNumber || null, status: t.status, admissionStatus: t.admissionStatus || 'NOT_ADMITTED', refundStatus: t.refundStatus || 'NONE' })),
@@ -166,6 +211,8 @@ async function request(req) {
   const answers = Object.fromEntries(Object.entries(d.answers || {}).slice(0, 10).map(([k, v]) => [String(k).slice(0, 40), String(v).slice(0, 300)]));
   const setSnap = await db.collection('eventSettlements').doc(String(order.paymentRef)).get();
   const settlement = setSnap.exists ? setSnap.data() : {};
+  const FISCAL = require('./event-fiscal');
+  const fiscalAtRequest = ((await FISCAL.viewsFor([order.paymentRef]))[order.paymentRef] || { fiscalStatus: 'FISCAL_NOT_REQUIRED' }).fiscalStatus;
 
   /* Claim the request and mark the tickets REQUESTED together — a second request, or a gate
      admission, sees it at once. */
@@ -182,7 +229,10 @@ async function request(req) {
       paymentRef: order.paymentRef, ticketIds: tickets.map((t) => t.ticketId),
       reasonCode: reason.code, reasonLabel: reason.label, reasonBasis: reason.basis, answers, explanation: explanation || null,
       eligibility: verdict.eligible, eligibilityWhy: verdict.why, policySnapshot: event.refundPolicy || { mode: 'none' },
-      originalAmountKes: Number(order.totalAmount) || 0, requestedAmountKes: Number(order.totalAmount) || 0,
+      originalAmountKes: Number(order.totalAmount) || 0, requestedAmountKes: verdict.refundCents / 100,
+      grossCents: verdict.grossCents, penaltyCents: verdict.penaltyCents, refundCents: verdict.refundCents,
+      policyVersion: (event.refundPolicy && event.refundPolicy.version) || null, saleKey: order.paymentRef,
+      admissionStatuses: fresh.map((x) => x.data().admissionStatus || 'NOT_ADMITTED'), fiscalStatusAtRequest: fiscalAtRequest, source: 'buyer_wizard',
       commissionCents: settlement.commissionCents == null ? null : settlement.commissionCents,
       providerFeeCents: settlement.providerFeeCents == null ? null : settlement.providerFeeCents,
       status: 'SUBMITTING', requestedBy: uid, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
@@ -195,7 +245,7 @@ async function request(req) {
   let fos;
   try {
     fos = await require('./financial-os')._internal.submitRefund({
-      ...req, data: { payRef: order.paymentRef, amountKES: Number(order.totalAmount), reason: text, refundType: 'full' },
+      ...req, data: { payRef: order.paymentRef, amountKES: verdict.refundCents / 100, reason: text, refundType: verdict.penaltyCents > 0 ? 'partial' : 'full' },
     });
   } catch (e) {
     /* Compensate: the request never reached the authority — nothing may stay marked REQUESTED. */
@@ -225,4 +275,4 @@ async function myRequests(req) {
 
 const _h = { eventSetRefundPolicy: setPolicy, eventRefundQuote: quote, eventRequestRefund: request, eventMyRefundRequests: myRequests };
 
-module.exports = { MODES, NO_SHOW_WINDOW_MS, decide, describePolicy, _h, _setClock: (fn) => { _now = fn || (() => Date.now()); } };
+module.exports = { MODES, PENALTY_TYPES, NO_SHOW_WINDOW_MS, decide, amountsFor, describePolicy, _h, _setClock: (fn) => { _now = fn || (() => Date.now()); } };

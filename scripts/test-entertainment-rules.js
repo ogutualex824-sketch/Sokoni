@@ -54,6 +54,8 @@ async function suite(env, label, served) {
     await f('eventRefundRequests/o1', { orderId: 'o1', buyerUid: 'buyer1', status: 'PENDING_REVIEW' });
     await f('eventTicketNumbers/SK-EVT-2026-000184', { eventId: 'e1', ticketId: 'k1' });
     await f('eventFiscal/PAY1', { saleKey: 'PAY1', eventId: 'e1', organizerUid: 'org1', status: 'SUBMITTED', invoiceId: 'inv1' });
+    await f('eventFiscalReversals/cn1', { executionId: 'cn1', fiscalRecordId: 'PAY1', organizerUid: 'org1', status: 'CREDIT_NOTE_PENDING', creditNoteReference: null });
+    await f('etimsInvoices/inv1', { sellerUid: 'org1', status: 'pending_submission', receiptNumber: null, totals: { totAmt: 2000 } });
   });
   const till = env.authenticatedContext('till1', { email: 'till1@x.co', email_verified: true }).firestore();
   const admin = env.authenticatedContext('admin1', { admin: true }).firestore();
@@ -112,6 +114,13 @@ async function suite(env, label, served) {
   await expectDeny('organizer marks own sale fiscally CONFIRMED', org.doc('eventFiscal/PAY1').update({ status: 'CONFIRMED', receiptNumber: 'FAKE-1' }));
   await expectDeny('organizer writes a fiscal record (hides a sale from reconciliation)', org.doc('eventFiscal/PAY2').set({ status: 'NOT_APPLICABLE' }));
   await expectDeny('organizer reads fiscal records directly', org.doc('eventFiscal/PAY1').get());
+  /* forged client fiscal payloads (credit-note slice) */
+  await expectDeny('client sets a credit note CREDIT_NOTE_ACCEPTED with a made-up number', org.doc('eventFiscalReversals/x1').set({ status: 'CREDIT_NOTE_ACCEPTED', creditNoteReference: 'FAKE-CN' }));
+  await expectDeny('client flips an existing credit note to accepted', org.doc('eventFiscalReversals/cn1').update({ status: 'CREDIT_NOTE_ACCEPTED' }));
+  await expectDeny('organizer reads the credit-note lifecycle directly', org.doc('eventFiscalReversals/cn1').get());
+  await expectDeny('seller marks own eTIMS invoice accepted with a fake receipt + QR', org.doc('etimsInvoices/inv1').update({ status: 'accepted', receiptNumber: 'FAKE-RCPT', qrCode: 'https://evil.example/qr.png' }));
+  await expectDeny('seller writes a credit-note document', org.doc('creditNotes/cn_fake').set({ sellerUid: 'org1', status: 'accepted' }));
+  await expectDeny('seller alters the original invoice amount', org.doc('etimsInvoices/inv1').update({ totals: { totAmt: 1 } }));
 
   if (served) {
     ck(`${label}: venue created PENDING is allowed (the product still works)`,
