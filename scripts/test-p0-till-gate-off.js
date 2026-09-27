@@ -93,7 +93,7 @@ const saleIdOf = (r) => r.ok && r.out && (r.out.saleId || (r.out.sale && r.out.s
   process.stdout.write('\n[G] posCompleteCheckout\n');
   { const r = await checkout(OWES, 'K-G1');
     ok(r.ok, 'G-1', 'a merchant with OVERDUE unpaid commission after 07:00 still completes the sale: ' + why(r));
-    const sid = saleIdOf(r); const liab = sid ? await get(LIAB, sid) : null;
+    const sid = saleIdOf(r); const liab = sid ? await get(LIAB, 'poscomm_' + sid) : null;   /* M0-1: the debt id is derived from the sale */
     ok(!!liab && liab.status === 'OUTSTANDING' && liab.merchantUid === OWES && liab.liabilityMinor > 0, 'G-2',
       "...and that sale's commission is STILL recorded as an outstanding liability: " + (liab ? liab.liabilityMinor + ' minor, ' + liab.status : 'none (saleId=' + sid + ')'));
     const old = await get(LIAB, 'old-sale-1');
@@ -104,7 +104,7 @@ const saleIdOf = (r) => r.ok && r.out && (r.out.saleId || (r.out.sale && r.out.s
   process.stdout.write('\n[R] recordPOSSale — the second door\n');
   { const r = await record(OWES);
     ok(r.ok, 'R-1', 'recordPOSSale for a merchant with overdue commission records the sale: ' + why(r));
-    const sid = saleIdOf(r); const liab = sid ? await get(LIAB, sid) : null;
+    const sid = saleIdOf(r); const liab = sid ? await get(LIAB, 'poscomm_' + sid) : null;   /* M0-1: the debt id is derived from the sale */
     ok(!!liab && liab.status === 'OUTSTANDING' && liab.liabilityMinor > 0, 'R-2', '...and its liability is still recorded: ' + (liab ? liab.liabilityMinor + ' minor' : 'none (saleId=' + sid + ')')); }
   { INJ.outage = true; const r = await record(OUT); INJ.outage = false;
     ok(r.ok, 'R-3', 'a ledger outage no longer stops recordPOSSale: ' + why(r)); }

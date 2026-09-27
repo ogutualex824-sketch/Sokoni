@@ -39,7 +39,8 @@
  * Firestore incident into a day of free trading, and it would look like resilience.
  *
  * ── IDEMPOTENCY ─────────────────────────────────────────────────────────────────────
- * The liability document id IS the sale id. A retried trigger, a double-submitted checkout
+ * The liability document id is derived from the sale id (`poscomm_<saleId>`, M0-1) and is
+ * CREATED, never overwritten; its ledger projection shares the id and is created with it. A retried trigger, a double-submitted checkout
  * or a replayed webhook converge on one row rather than billing the merchant twice. The
  * settlement writes a `settlementRef` and refuse to re-apply one they have already seen.
  */
@@ -57,6 +58,10 @@ const LIABILITIES = 'posCommissionLiabilities';
 /* Settlement attempts, so a payment can be traced from intent to authoritative success.
    Deliberately separate from the liabilities: an INTENT IS NOT A COLLECTION. */
 const SETTLEMENTS = 'posCommissionSettlements';
+
+/* The accounting ledger. A POS commission entry there is a PROJECTION of a debt row above,
+   written with it — never an obligation in its own right (M0-1). */
+const LEDGER = 'ledger';
 
 const STATUS = Object.freeze({
   OUTSTANDING: 'OUTSTANDING',
@@ -79,7 +84,7 @@ class RailError extends Error {
 /**
  * Record the commission liability for one POS/Till sale.
  *
- * Idempotent by construction: the document id is the sale id. Returns what it did rather
+ * Idempotent by construction: the document id is `poscomm_<saleId>`, created exactly once. Returns what it did rather
  * than a bare ok, because "already recorded" and "recorded" are different facts and a
  * reconciliation needs to tell them apart.
  *
@@ -101,15 +106,32 @@ async function recordSaleLiability(db, record) {
     return { action: 'none', reason: 'custodial_or_zero', saleId: record.saleId };
   }
 
-  const ref = db.collection(LIABILITIES).doc(String(record.saleId));
-  const existing = await ref.get();
-  if (existing.exists) {
-    return { action: 'already_recorded', saleId: record.saleId, id: ref.id };
+  /* M0-1 (owner ruling 2026-09-27): THIS row is the ONE collectible POS commission obligation.
+     Its id is derived from the sale, it is CREATED exactly once (create(), never get()+set()),
+     and the `ledger` entry is an accounting PROJECTION of it, written in the same transaction
+     from the debt's own figures — never a second, independently computed obligation. Pay Now
+     and the 07:00 collector will read and settle only this row. */
+  const debtRef   = db.collection(LIABILITIES).doc(debtIdFor(record.saleId));
+  const ledgerRef = db.collection(LEDGER).doc(debtIdFor(record.saleId));
+
+  /* The fast path, outside the transaction: a retry of a sale whose debt AND projection
+     both exist needs no business lookup and writes nothing. */
+  const [d0, l0] = await Promise.all([debtRef.get(), ledgerRef.get()]);
+  if (d0.exists && l0.exists) {
+    return { action: 'already_recorded', saleId: record.saleId, id: debtRef.id };
   }
 
-  await ref.set({
+  /* Which canonical business owes it. Resolved once, frozen on the debt; never blocks, never
+     drops the debt — an unresolved mapping is recorded as such and reconciled later. */
+  const business = d0.exists ? null : await resolveDebtBusiness(db, record.merchantUid);
+
+  const newDebt = d0.exists ? null : {
+    debtId:        debtRef.id,
     saleId:        String(record.saleId),
     merchantUid:   String(record.merchantUid),
+    businessId:    business.businessId,
+    businessUnresolved: business.businessId === null,
+    businessResolution: business.via,
     settlementDay: record.settlementDay,
     /* MINOR UNITS, and the field name says so. This platform carries balances in shillings
        and FinOS balances in cents in the same database; a bare `amount` here is how those
@@ -133,10 +155,80 @@ async function recordSaleLiability(db, record) {
     soldAtMs:      record.soldAtMs,
     collectibleAtMs: record.collectibleAtMs,
     createdAtMs:   Date.now(),
+  };
+
+  const action = await db.runTransaction(async (t) => {
+    /* All reads first. Inside the transaction, so two concurrent recorders of one sale
+       cannot both see "absent": the loser's create() fails at commit, the transaction
+       retries, and on the retry it sees the winner's rows. */
+    const d = await t.get(debtRef);
+    const l = await t.get(ledgerRef);
+    if (d.exists && l.exists) return 'already_recorded';
+    const debt = d.exists ? d.data() : newDebt;
+    if (!debt) throw new RailError('RAIL_DEBT_VANISHED', 'The commission debt was seen and then not found.');
+    if (!d.exists) t.create(debtRef, debt);
+    if (!l.exists) t.create(ledgerRef, ledgerProjectionOf(debt));
+    return d.exists ? 'projection_repaired' : 'recorded';
   });
 
-  return { action: 'recorded', saleId: record.saleId, id: ref.id,
-    liabilityMinor: record.liability.minorUnits, settlementDay: record.settlementDay };
+  return { action, saleId: record.saleId, id: debtRef.id,
+    liabilityMinor: record.liability.minorUnits, settlementDay: record.settlementDay,
+    businessId: business ? business.businessId : undefined };
+}
+
+/* The ONE debt id for a sale. Both sale rails converge on it. */
+function debtIdFor(saleId) { return 'poscomm_' + String(saleId); }
+
+/* The ledger entry for a debt: the SAME amount, the SAME identity, derived — never recomputed.
+   `status: 'settled'` keeps the ledger's established meaning (the entry is POSTED); whether the
+   debt is paid lives only on the debt row. Shaped like finos-utils.createLedgerEntry so every
+   existing ledger reader sees a familiar row. */
+function ledgerProjectionOf(debt) {
+  return {
+    id:            debt.debtId,
+    type:          'pos_commission_receivable',
+    amountCents:   debt.liabilityMinor,
+    currency:      debt.currency || 'KES',
+    /* The seller HOLDS the cash and OWES the commission: seller debited, platform revenue
+       credited — the same double entry posCompleteCheckout used to post directly. */
+    debitAccount:  'seller:' + debt.merchantUid,
+    creditAccount: 'platform:revenue',
+    description:   'SOKONI commission on till sale ' + debt.saleId,
+    orderId:       debt.saleId,
+    sellerId:      debt.merchantUid,
+    businessId:    debt.businessId,
+    liabilityId:   debt.debtId,
+    category:      'pos',
+    metadata:      { rail: debt.rail, rateFraction: debt.rateFraction, projectionOf: LIABILITIES + '/' + debt.debtId },
+    status:        'settled',
+    reversalRef:   null,
+    createdBy:     'pos-commission-rail',
+    idempotencyKey: debt.debtId,
+    createdAt:     new Date(),
+  };
+}
+
+/* Resolve the canonical SOK-* business for a proven merchant. Never throws, never blocks.
+     · the sale's merchant IS a SOK-* business (membership-proven sales) → that business;
+     · otherwise the owner's single business, via the ONE resolver (tenant-identity);
+     · zero, several, inactive, non-canonical or unreadable → null + the reason. */
+async function resolveDebtBusiness(db, merchantUid) {
+  const id = String(merchantUid || '');
+  try {
+    if (/^SOK-/.test(id)) {
+      const b = await db.collection('businesses').doc(id).get();
+      if (!b.exists) return { businessId: null, via: 'business-record-missing' };
+      const st = (b.data() || {}).status;
+      if (st && st !== 'active') return { businessId: null, via: 'business-not-active' };
+      return { businessId: id, via: 'sale-merchant-is-business' };
+    }
+    const r = await require('./tenant-identity').resolveMerchantIdForOwner(id, db);
+    if (!r || !r.ok) return { businessId: null, via: (r && r.reason) || 'unresolved' };
+    if (!/^SOK-/.test(String(r.merchantId))) return { businessId: null, via: 'non-canonical-business-id' };
+    return { businessId: r.merchantId, via: 'owner-single-business' };
+  } catch (e) {
+    return { businessId: null, via: 'business-lookup-failed' };
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -443,8 +535,11 @@ async function settleFromBusinessWallet(db, deps, { merchantUid, shopId, settlem
 }
 
 module.exports = {
-  LIABILITIES, SETTLEMENTS, STATUS, RailError,
+  LIABILITIES, SETTLEMENTS, LEDGER, STATUS, RailError,
   recordSaleLiability,
+  debtIdFor,
+  ledgerProjectionOf,
+  resolveDebtBusiness,
   readOutstanding,
   evaluateMerchantGate,
   assertGateOpen,

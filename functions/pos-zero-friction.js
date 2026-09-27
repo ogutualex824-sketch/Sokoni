@@ -216,30 +216,13 @@ async function _postSaleFinancials(o) {
     };
 
     /* ── THE LEDGER ENTRY ──────────────────────────────────────────────────
-       Double entry, and the direction matters. The seller HOLDS the cash and
-       OWES the commission, so the seller account is DEBITED and platform revenue
-       is CREDITED. Nothing is drawn from platform clearing, because no platform
-       cash exists for this sale.
-       Zero commission writes nothing: createLedgerEntry requires a positive
-       amount, and a zero-value entry would be noise in a reconciliation. */
-    if (commissionCents > 0) {
-      const FU = require('./finos-utils');
-      await FU.createLedgerEntry(db, {
-        type: 'pos_commission_receivable',
-        amountCents: commissionCents,
-        debitAccount: FU.ACCOUNTS ? FU.ACCOUNTS.seller(o.merchantId) : ('seller:' + o.merchantId),
-        creditAccount: (FU.ACCOUNTS && FU.ACCOUNTS.PLATFORM_REVENUE) || 'platform:revenue',
-        description: 'SOKONI commission on till sale ' + o.saleId,
-        orderId: o.saleId,
-        sellerId: o.merchantId,
-        category: 'pos',
-        createdBy: 'posCompleteCheckout',
-        /* Derived from the SALE's idempotency key, so a retried posting for the
-           same sale is recognised and cannot double-book commission. */
-        idempotencyKey: 'poscomm_' + o.idempotencyKey,
-        metadata: { collectionRoute: out.collectionRoute, commissionPct: pct },
-      });
-    }
+       M0-1 (owner ruling 2026-09-27): this function NO LONGER posts the ledger entry.
+       It used to write a `pos_commission_receivable` entry here, on its own, before the
+       sale was written, with a random id and a check-then-set key — a second record of the
+       same debt that nothing collected from and that a concurrent retry could duplicate.
+       The ONE obligation is now `posCommissionLiabilities/poscomm_<saleId>`, and its ledger
+       entry is written WITH it, from its figures, by pos-commission-rail.recordSaleLiability
+       (after the sale). `out.commission` above stays on the sale as information only. */
 
     out.status = 'posted';
     return out;

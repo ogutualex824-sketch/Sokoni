@@ -3,6 +3,65 @@
 **Date:** 2026-09-07 · **Status:** BUILT AND TESTED, NOT DEPLOYED
 **Related:** [[Payments]] · [[SmartPOS]] · [[Orders]] · [[Marketplace]]
 
+## M0-1 — ONE authoritative POS commission debt per sale (2026-09-27)
+
+**Owner ruling (decision A):** `posCommissionLiabilities/poscomm_<saleId>` is the ONE collectible POS
+commission obligation. The `ledger` entry is an accounting **projection** of it, not a second debt.
+Future Pay Now and the 07:00 collector will read and settle only this row.
+
+**Before M0-1, every checkout sale produced TWO independent records of one debt:**
+- **the liability**, keyed by the bare saleId and written by get-then-set;
+- **a `pos_commission_receivable` ledger entry** that checkout posted on its own:
+  - before the sale was written;
+  - with a random id;
+  - keyed on the browser's idempotency key;
+  - through a check-then-write that concurrent retries could duplicate;
+  - from a separately run commission engine.
+
+`recordPOSSale` wrote only the liability. Neither record carried the business.
+
+```
+sale ─ proven merchant ─ resolve SOK-* business ─┬─ exactly one  → businessId
+                                                 └─ none / several / non-SOK / unreadable → businessUnresolved (never blocks)
+     └─ ONE transaction (all reads first):
+          posCommissionLiabilities/poscomm_<saleId>   create()  OUTSTANDING · 5%, KES 10 minimum · rate frozen
+          ledger/poscomm_<saleId>                     create()  projection: same id, same amount, liabilityId
+```
+
+- **Identity:** `debtIdFor(saleId) = 'poscomm_' + saleId`. Both sale rails (`posCompleteCheckout`,
+  `recordPOSSale`) go through `pos-commission-rail.recordSaleLiability`.
+- **Created exactly once:**
+  - **fast path:** when the debt and its projection both exist, nothing is written and no business
+    lookup is made;
+  - **otherwise:** one transaction reads both, then `create()`s whatever is missing. A concurrent loser
+    retries and sees the winner's rows;
+  - **crash between the two:** a debt without a projection gets its projection **from the debt's own
+    figures**, never recomputed.
+- **Business:** resolved via `tenant-identity.resolveMerchantIdForOwner`, the one resolver, which now
+  accepts the caller's db handle. A SOK-* sale merchant (a membership sale) is its own business.
+  - Unresolved cases record the debt anyway, with `businessUnresolved: true` and the reason in
+    `businessResolution`, to be reconciled later.
+- **Unchanged:**
+  - 5% and the KES 10 minimum;
+  - the gate is still OFF (P0);
+  - no Pay Now, no collector, no deploy;
+  - the historical production ledger row is not migrated.
+- **Checkout's own ledger posting is removed.** `financial.commission` stays on the sale as information
+  only; the two engines were shown to agree to the cent from KES 20 to KES 12,345.67.
+
+**Evidence:**
+- `scripts/test-m01-commission-debt.js` (emulator; real `posCompleteCheckout`, `recordPOSSale` and rail):
+  **20/0** new vs **5/15** old.
+- `scripts/test-pos-commission-rail.js`: **80/0**, after two fixture changes:
+  - A4 is the new id rule;
+  - F1 now requires exactly the debt plus its projection.
+
+  Its in-memory store gained a `create()` that fails when the document exists, as Firestore's does.
+- `scripts/test-p0-till-gate-off.js`: debt lookups now use the new id.
+
+**Finding (not changed here):** `recordPOSSale` takes no idempotency key. Calling it again creates a new
+sale, which owes its own single debt. One debt per sale holds; one sale per request does not.
+
 ## CURRENT STATE — P0 till safety (2026-09-27): the gate is wired, and switched OFF
 
 **The history.** Commit ee37437 (deployed 2026-09-22 as `posCompleteCheckout` revision `00024-zit`)

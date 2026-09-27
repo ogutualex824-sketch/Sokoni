@@ -54,15 +54,19 @@ const REASON = {
  * has been edited by something that did not understand the contract — treated as malformed
  * rather than guessed at.
  *
+ * `fdb` is optional: a caller already holding a Firestore handle (the POS commission rail, and
+ * the tests that drive it against an emulator or an in-memory store) passes it, so the SAME
+ * resolver answers for them instead of a second copy of this query.
+ *
  * @returns {{ok: true, merchantId: string}|{ok: false, reason: string, count?: number}}
  */
-async function resolveMerchantIdForOwner (ownerUid) {
+async function resolveMerchantIdForOwner (ownerUid, fdb) {
   if (!ownerUid || typeof ownerUid !== 'string') {
     return { ok: false, reason: REASON.MALFORMED };
   }
 
   /* TWO, not one. Enough to detect ambiguity, still a cheap read. */
-  const snap = await db().collection('businesses')
+  const snap = await (fdb || db()).collection('businesses')
     .where('ownerId', '==', ownerUid)
     .limit(2)
     .get();

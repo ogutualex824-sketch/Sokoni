@@ -89,10 +89,16 @@ function makeDb(opts = {}) {
         async get(ref) { return ref.get(); },
         set(ref, v) { writes.push([ref._key, v, false]); },
         update(ref, v) { writes.push([ref._key, v, true]); },
+        /* M0-1: create() must FAIL when the document exists, as Firestore's does — a fake
+           that let it overwrite would certify a double debt as a single one. */
+        create(ref, v) { writes.push([ref._key, v, 'create']); },
       };
       const out = await fn(tx);
+      for (const [key] of writes.filter((w) => w[2] === 'create')) {
+        if (docs.has(key)) { const e = new Error('ALREADY_EXISTS: ' + key); e.code = 6; throw e; }
+      }
       for (const [key, v, merge] of writes) {
-        docs.set(key, merge ? Object.assign({}, docs.get(key) || {}, v) : Object.assign({}, v));
+        docs.set(key, merge === true ? Object.assign({}, docs.get(key) || {}, v) : Object.assign({}, v));
       }
       return out;
     },
@@ -141,8 +147,9 @@ console.log('\nPART A — a sale becomes a collectible liability\n');
   ck('A2  ...at 5% of KES 1,000 = KES 50', w.liabilityMinor === 5000, String(w.liabilityMinor));
   ck('A3  ...on the sale date settlement day', w.settlementDay === '2026-09-05', w.settlementDay);
 
-  const row = db._docs.get('posCommissionLiabilities/SALE_1');
-  ck('A4  the document id IS the sale id', !!row);
+  /* M0-1 (owner ruling 2026-09-27): the id is DERIVED from the sale — poscomm_<saleId>. */
+  const row = db._docs.get('posCommissionLiabilities/poscomm_SALE_1');
+  ck('A4  the document id is derived from the sale id (poscomm_<saleId>)', !!row);
   ck('A5  the amount field names its unit', typeof row.liabilityMinor === 'number' && !('amount' in row));
   ck('A6  rate provenance is frozen on the row',
     row.rateFraction === 0.05 && row.plan === 'seller_free' && !!row.rateSource, row.rateSource);
@@ -238,7 +245,7 @@ console.log('\nPART C — unreadable is NOT zero (the property that matters most
   /* A corrupt row must not be silently skipped into a smaller bill. */
   const db = makeDb();
   await R.recordSaleLiability(db, sale('S1', 1000, 'POS_CASH', eat('2026-09-05T10:00:00')));
-  db._docs.get('posCommissionLiabilities/S1').liabilityMinor = 'not-a-number';
+  db._docs.get('posCommissionLiabilities/poscomm_S1').liabilityMinor = 'not-a-number';
   let threw = null;
   try { await R.evaluateMerchantGate(db, MERCHANT, eat('2026-09-06T08:00:00')); } catch (e) { threw = e; }
   ck('C5  an unreadable ROW throws rather than shrinking the bill',
@@ -309,7 +316,7 @@ console.log('\nPART E — the settled row carries its proof\n');
   await R.recordSaleLiability(db, sale('S1', 1000, 'POS_CASH', eat('2026-09-05T10:00:00')));
   await R.applySettlement(db, { merchantUid: MERCHANT, settlementDays: ['2026-09-05'],
     settlementRef: 'MPESA_XYZ', method: 'MPESA', nowMs: 1757000000000 });
-  const row = db._docs.get('posCommissionLiabilities/S1');
+  const row = db._docs.get('posCommissionLiabilities/poscomm_S1');
   ck('E1  the liability is SETTLED', row.status === 'SETTLED', row.status);
   ck('E2  ...against the authoritative reference', row.settlementRef === 'MPESA_XYZ');
   ck('E3  ...with a settlement time', row.settledAtMs === 1757000000000);
@@ -326,7 +333,10 @@ console.log('\nPART F — adversarial controls\n');
   const db = makeDb();
   const before = db._docs.size;
   await R.recordSaleLiability(db, sale('S_probe', 1000, 'POS_CASH', eat('2026-09-05T10:00:00')));
-  ck('F1  the harness actually writes documents', db._docs.size === before + 1);
+  /* M0-1: one sale writes exactly TWO documents — the debt and its ledger projection. */
+  ck('F1  the harness actually writes documents (the debt + its ledger projection, nothing else)',
+    db._docs.size === before + 2 && db._docs.has('posCommissionLiabilities/poscomm_S_probe') && db._docs.has('ledger/poscomm_S_probe'),
+    String(db._docs.size - before));
 
   /* The gate must be able to say BOTH answers, or "closed" proves nothing. */
   const open = await R.evaluateMerchantGate(db, MERCHANT, eat('2026-09-05T12:00:00'));

@@ -1,3 +1,44 @@
+## 2026-09-27 (155) — M0-1: one authoritative POS commission debt per sale (NOT deployed)
+
+**Owner ruling (decision A):** `posCommissionLiabilities/poscomm_<saleId>` is the ONE collectible POS commission
+obligation. Its `ledger` entry is an accounting projection, not a second debt.
+
+Before this change, every checkout wrote two independent records of the same debt:
+- a liability keyed by the bare saleId, written get-then-set;
+- a separately computed, random-id `pos_commission_receivable` ledger entry. It was posted before the sale was
+  written, via a check-then-write that concurrent retries could duplicate.
+
+`recordPOSSale` wrote only the liability, and neither record carried the business.
+
+- **Change:**
+  - `recordSaleLiability` creates the debt (`poscomm_<saleId>`, OUTSTANDING, 5% with the KES 10 minimum) and its
+    ledger projection (same id, same amount, `liabilityId`) with `create()`, in ONE transaction. A missing
+    projection is repaired from the debt.
+  - The sale's SOK-* business is resolved through `tenant-identity`. An owner with zero, several or only
+    non-canonical businesses, or an unreadable lookup, records the debt anyway with `businessUnresolved` and the
+    reason. The sale is never blocked and the debt is never dropped.
+  - Checkout no longer posts its own ledger entry. Both sale rails converge on the rail.
+- **Files:**
+  - `functions/pos-commission-rail.js`
+  - `functions/pos-zero-friction.js`
+  - `functions/tenant-identity.js` (optional db handle)
+  - new `scripts/test-m01-commission-debt.js`
+  - `scripts/test-pos-commission-rail.js` (A4 new id rule; F1 debt + projection; `create()` in its store)
+  - `scripts/test-p0-till-gate-off.js` (new debt id)
+  - `docs/POS_COMMISSION_RAIL.md`
+- **Database:**
+  - new debt id shape `poscomm_<saleId>`, with fields `debtId`, `businessId`, `businessUnresolved`,
+    `businessResolution`;
+  - new ledger doc id `poscomm_<saleId>` with `liabilityId`;
+  - production has 0 liability rows, so nothing to migrate. The 1 historical ledger row is untouched.
+- **API:** none. **Security:** none changed; the merchant proof still runs first.
+- **Unchanged:** rates, the gate (still OFF), no Pay Now, no collector, no deploy.
+- **Evidence:**
+  - the new suite passes 20/0 new vs 5/15 old;
+  - under concurrency, 6 recorders produce one debt and one projection (old: all 6 reported "recorded");
+  - mutants and the floor are reported with the unit.
+- **Finding:** `recordPOSSale` has no idempotency key, so a repeated call is a new sale with its own single debt.
+
 ## 2026-09-27 (154) — P0 till safety: the 07:00 commission gate no longer stops a sale (NOT deployed)
 
 The deployed `posCompleteCheckout` (`00024-zit`, from ee37437) enforces the 07:00 POS commission gate. Every cash
