@@ -87,6 +87,14 @@ async function suite(env, label, served) {
     await f('providerCalendar/pc1', { providerId: 'owner1', customerName: 'Achieng Otieno' });
     await f('availabilityStatus/owner1', { isOpen: true, liveStatus: 'available' });
     await f('bookings/prop1', { customerId: 'buyer1', hub: 'property', status: 'pending' });
+    /* provider reputation (2026-09-27) */
+    await f('providers/owner1', { uid: 'owner1', name: 'Jane Photography', status: 'active', rating: 4.2, reviewCount: 3, followerCount: 7, repV: 1, followV: 1 });
+    await f('providerReviews/pr1', { customerUid: 'buyer1', providerId: 'owner1', rating: 4, status: 'published', bookingId: 'pb1' });
+    await f('reviews/gr1', { authorUid: 'buyer1', rating: 5, status: 'pending' });
+    await f('follows/member1--provider--owner1', { uid: 'member1', type: 'provider', entityId: 'owner1', via: 'server' });
+    await f('shareHandles/jane-photography-ab12', { type: 'provider', entityId: 'owner1' });
+    await f('shareEvents/se1', { uid: 'member1', type: 'provider', entityId: 'owner1' });
+    await f('reputationAudit/ra1', { action: 'review_hide', actor: 'admin1' });
   });
   const till = env.authenticatedContext('till1', { email: 'till1@x.co', email_verified: true }).firestore();
   const admin = env.authenticatedContext('admin1', { admin: true }).firestore();
@@ -116,6 +124,30 @@ async function suite(env, label, served) {
   await expectDeny('the customer moves the booking date directly', buyer.doc('bookings/vk1').update({ date: '2026-12-25' }));
   await expectDeny('a stranger reads a venue settlement', stranger.doc('venueSettlements/VB-1').get());
   await expectDeny('the owner forges a settlement release', owner.doc('venueSettlements/VB-1').update({ status: 'RELEASED' }));
+  /* ── provider reputation: followers · ratings · reviews · sharing (2026-09-27) ── */
+  const hyphen = env.authenticatedContext('evil-x', { deactivated: false }).firestore();
+  await expectDeny('a provider writes their own rating', owner.doc('providers/owner1').update({ rating: 5, reviewCount: 900 }));
+  await expectDeny('a provider inflates their own follower count', owner.doc('providers/owner1').update({ followerCount: 10000 }));
+  await expectDeny('a provider forges the server aggregate markers', owner.doc('providers/owner1').update({ repV: 2, followV: 2, ratingDist: { 5: 99 } }));
+  await expectDeny('a provider is created with a ready-made rating', member.doc('providers/member1').set({ uid: 'member1', name: 'X', status: 'pending', rating: 5, reviewCount: 50 }));
+  await expectDeny('a venue owner inflates the venue follower count', owner.doc('venues/cv1').update({ followerCount: 5000 }));
+  await expectDeny('a venue is created with a rating', owner.doc('venues/cv4').set({ ownerId: 'owner1', name: 'Y', status: 'pending', ratingSum: 50, ratingDist: { 5: 10 } }));
+  await expectDeny('a client creates a PROVIDER follow directly (bypassing the count authority)', member.doc('follows/member1--provider--owner2').set({ uid: 'member1', type: 'provider', entityId: 'owner2' }));
+  await expectDeny('a client creates a VENUE follow directly', member.doc('follows/member1--venue--cv1').set({ uid: 'member1', type: 'venue', entityId: 'cv1' }));
+  await expectDeny('a client creates a CREATOR follow directly', member.doc('follows/member1--creator--cr1').set({ uid: 'member1', type: 'creator', entityId: 'cr1' }));
+  await expectDeny('a hyphenated uid cannot slip a provider follow past the id check', hyphen.doc('follows/evil-x--provider--owner1').set({ uid: 'evil-x', type: 'provider', entityId: 'owner1' }));
+  await expectDeny('a client deletes a server-counted follow (count drift)', member.doc('follows/member1--provider--owner1').delete());
+  await expectDeny('a client follows on SOMEONE ELSE\'s behalf', member.doc('follows/buyer1--shop--s1').set({ uid: 'buyer1', type: 'shop', entityId: 's1' }));
+  await expectDeny('a stranger reads a provider review record (reviewer uid, booking id)', stranger.doc('providerReviews/pr1').get());
+  await expectDeny('a customer writes a provider review directly (no eligibility)', buyer.doc('providerReviews/pr2').set({ customerUid: 'buyer1', providerId: 'owner1', rating: 5 }));
+  await expectDeny('the provider edits the customer\'s rating', owner.doc('providerReviews/pr1').update({ rating: 5 }));
+  await expectDeny('the provider deletes a bad review', owner.doc('providerReviews/pr1').delete());
+  await expectDeny('a client creates a generic review (no transaction behind it)', member.doc('reviews/x1').set({ authorUid: 'member1', rating: 5, targetId: 'owner1' }));
+  await expectDeny('the author self-approves a generic review', buyer.doc('reviews/gr1').update({ status: 'approved' }));
+  await expectDeny('a client mints a share handle (hijacks a link)', member.doc('shareHandles/jane-photography-ab12').set({ type: 'provider', entityId: 'member1' }));
+  await expectDeny('a client writes a share event (share-count manipulation)', member.doc('shareEvents/se2').set({ uid: 'member1', type: 'provider', entityId: 'owner1' }));
+  await expectDeny('a provider reads the moderation audit', owner.doc('reputationAudit/ra1').get());
+  await expectDeny('a user reads who shared a profile', member.doc('shareEvents/se1').get());
   /* ── availability authority · rate cards · enquiries · call requests (2026-09-27) ── */
   await expectDeny('a stranger reads a provider\'s private occupancy (bookings, blocks, labels)', stranger.doc('entAvailability/svc_owner1/months/2026-10').get());
   await expectDeny('even the OWNER cannot read or write the occupancy directly (audited callables only)', owner.doc('entAvailability/svc_owner1/months/2026-10').set({ items: [] }));
@@ -256,6 +288,14 @@ async function suite(env, label, served) {
   await expectDeny('seller alters the original invoice amount', org.doc('etimsInvoices/inv1').update({ totals: { totAmt: 1 } }));
 
   if (served) {
+    /* reputation positive controls — the denials above are about the FIELD / TYPE, not a blanket lock */
+    ck(`${label}: a provider still edits their own profile text`, await allowed(owner.doc('providers/owner1').update({ name: 'Jane Photo Studio', bio: 'Portraits' })));
+    ck(`${label}: a provider application without reputation fields is still created`, await allowed(member.doc('providers/member1').set({ uid: 'member1', name: 'X', status: 'pending' })));
+    ck(`${label}: a client still follows a SHOP directly (other follow types unchanged)`, await allowed(member.doc('follows/member1--shop--s1').set({ uid: 'member1', type: 'shop', entityId: 's1' })));
+    ck(`${label}: the follower reads their own provider follow`, await allowed(member.doc('follows/member1--provider--owner1').get()));
+    ck(`${label}: the reviewer and the provider read the review record`, (await allowed(buyer.doc('providerReviews/pr1').get())) && (await allowed(owner.doc('providerReviews/pr1').get())));
+    ck(`${label}: an admin reads the moderation audit and share records`, (await allowed(admin.doc('reputationAudit/ra1').get())) && (await allowed(admin.doc('shareEvents/se1').get())));
+    ck(`${label}: an active provider profile is publicly readable (logged-out)`, await allowed(env.unauthenticatedContext().firestore().doc('providers/owner1').get()));
     /* Legacy EntHub RETIRED from the client (2026-09-27): owner + admin read only, no browser writes. */
     ck(`${label}: the legacy record's OWNER can still read it (data rights)`, await allowed(owner.doc('entArtists/a1').get()));
     ck(`${label}: an admin can read legacy records (AdminOS moderation)`, await allowed(admin.doc('entVenues/v1').get()));

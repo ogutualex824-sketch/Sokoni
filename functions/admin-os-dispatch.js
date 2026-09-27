@@ -36,7 +36,9 @@ const adminOs = (() => {
   const entAv = require('./ent-availability');
   const entRc = require('./ent-rate-cards');
   const entEq = require('./ent-enquiries');
-  return Object.assign({}, base, { _h: Object.assign({}, base._h, trace._h, creator._adminH, events._adminH, ent._adminH, eventInv._adminH, entInt._adminH, entBk._adminH, entAv._adminH, entRc._adminH, entEq._adminH) });
+  /* Reviews & Reputation (functions/reputation.js) */
+  const rep = require('./reputation');
+  return Object.assign({}, base, { _h: Object.assign({}, base._h, trace._h, creator._adminH, events._adminH, ent._adminH, eventInv._adminH, entInt._adminH, entBk._adminH, entAv._adminH, entRc._adminH, entEq._adminH, rep._adminH) });
 })();
 
 const _OPTS = {

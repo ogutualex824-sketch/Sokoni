@@ -23,6 +23,7 @@
       - royalties are royalty.mine; withdrawal is the existing wallet rail
   -->
   <script src="/sokoni-creator-rules.js" defer></script>
+  <script src="/sokoni-reputation.js" defer></script>
   <script src="/sokoni-watermark.js" defer></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -434,10 +435,16 @@
         ${c.avatarUrl ? `<img src="${esc(safeUrl(c.avatarUrl))}" alt="" style="width:72px;height:72px;border-radius:50%;object-fit:cover">` : ''}
         <div><h1>${esc(c.displayName)}${c.verification === 'VERIFIED' ? ' <span style="color:var(--g);font-size:.6em">✓ Verified</span>' : ''}</h1>
         <p class="muted">${esc(c.country || '')}${c.supportEmail ? ' · Support: ' + esc(c.supportEmail) : ''}</p></div></div>
+      <div id="creatorRep" style="margin-top:10px"></div>
       <p style="margin-top:12px;white-space:pre-line">${esc(c.bio)}</p>
       <h2 style="margin-top:16px">Films</h2>
       <div class="grid">${d.films.map((f) => `<button class="card" data-film="${esc(f.filmId)}"><img class="poster" loading="lazy" alt="" src="${esc(safeUrl(f.posterUrl))}"><div class="meta"><div class="t">${esc(f.title)}</div><div class="p">${kes(f.priceCents)}</div></div></button>`).join('') || '<p class="muted">No published films yet.</p>'}</div>`;
     $app.querySelectorAll('[data-film]').forEach((b) => b.onclick = () => { location.search = '?film=' + encodeURIComponent(b.dataset.film); });
+    /* followers · Follow · Share for the creator (functions/reputation.js). Film ratings stay with the film. */
+    if (window.SokoniRep) {
+      window.SokoniRep.configure({ callable: (name, data) => httpsCallable(fn, name)(data).then((r) => r.data), user: () => auth.currentUser });
+      window.SokoniRep.identity(document.getElementById('creatorRep'), { type: 'creator', id: c.creatorId || id, name: c.displayName });
+    }
   }
 
   /* ═══ MY FILMS (viewer dashboard) — own records only ═══ */

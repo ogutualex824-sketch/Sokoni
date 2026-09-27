@@ -118,6 +118,10 @@ const TYPES = {
   ent_booking_update:          { priority: 'commerce', category: 'orders',   smsTemplate: null },
   ent_booking_refund_update:   { priority: 'commerce', category: 'payments', smsTemplate: null },
   ent_booking_verified:        { priority: 'commerce', category: 'orders',   smsTemplate: null },
+  /* provider reputation (functions/reputation.js) — no notification per follow or per share */
+  rep_new_review:              { priority: 'commerce',   category: 'reviews',  smsTemplate: null },
+  rep_review_reply:            { priority: 'commerce',   category: 'reviews',  smsTemplate: null },
+  rep_review_moderated:        { priority: 'commerce',   category: 'reviews',  smsTemplate: null },
   /* SOKONI Connect — an incoming business call.
      COMMERCE, not critical, and that is a decision: critical ignores preferences AND quiet
      hours, and a buyer must not be able to ring a merchant at 3am about an order. The cost is

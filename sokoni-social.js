@@ -385,9 +385,25 @@ function _fToast(msg,type,opts){
    cache only. Returns a REAL promise that rejects on failure — the previous
    version swallowed every error into console.warn, so a denied write left the
    button reading "Following" forever while nothing had persisted. */
+/* PROVIDER / VENUE / CREATOR follows are owned by the reputation authority (functions/reputation.js):
+   server-written, one per person, with a transactional follower count. The rules deny a client write
+   for those types, so they go through the callable; every other hub's follow is unchanged. */
+var _REP_TYPES={provider:1,venue:1,creator:1};
+function _repCall(op,data){
+  if(!(window.firebase&&firebase.functions)) return Promise.reject({code:'unavailable'});
+  return firebase.functions().httpsCallable('bookingDispatch')(Object.assign({op:op},data||{})).then(function(r){return r.data;});
+}
 function _writeFollow(type,id,name,on){
   var uid=_fUid(), db=_fDb();
   if(!uid) return Promise.reject({code:'unauthenticated'});
+  if(_REP_TYPES[type]){
+    return _repCall(on?'repFollow':'repUnfollow',{type:type,id:String(id)}).then(function(r){
+      var m=_fCache();
+      if(r.following) m[_fKey(type,id)]={type:type,entityId:String(id),entityName:name||'',followedAt:Date.now()}; else delete m[_fKey(type,id)];
+      _fCacheSet(m);
+      return {ok:true,following:!!r.following,followerCount:r.followerCount};
+    });
+  }
   if(!db)  return Promise.reject({code:'unavailable'});
   var fid=_fDocId(uid,type,id), FV=firebase.firestore.FieldValue;
   var ref=db.collection('follows').doc(fid);
@@ -687,12 +703,15 @@ function patchServicesFollowBtns(){
       var nameText=(nameEl&&nameEl.textContent)||'Provider';
       /* Extract name cleanly (strip "Verified" badge text) */
       var name=nameText.replace(/✅.*$/,'').trim();
-      var storeId='sv_'+name.replace(/\s+/g,'_').toLowerCase();
+      /* 2026-09-27: the card's canonical provider id (data-provider-id = the provider's account), not a
+         display-name slug — two providers with one name shared a follow, and a rename lost it. */
+      var pid=card.getAttribute('data-provider-id');
+      if(!pid) return;
 
       var row=document.createElement('div');
       row.className='_skFollowRow';
       row.style.cssText='display:flex;align-items:center;gap:8px;margin-top:8px;';
-      renderFollowBtn(storeId,name,row,'service');
+      renderFollowBtn(pid,name,row,'provider');
       /* Insert AFTER the button container (pv-foot), not inside it */
       var foot=bookBtn.closest('.pv-foot')||bookBtn.parentNode;
       foot.parentNode.insertBefore(row,foot.nextSibling);

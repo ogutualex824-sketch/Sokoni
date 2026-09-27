@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SOKONI</title>
+<meta name="robots" content="noindex">
+<!-- Public share link resolver: /p.html?h=<handle>[&s=<serviceId>]. A share link carries a HANDLE —
+     never a uid, phone, email, PIN, payment reference or conversation id. The server
+     (bookingDispatch repResolveHandle, functions/reputation.js) maps it to the public page. -->
+<style>
+  body{margin:0;background:#050505;color:#eee;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}
+  .box{max-width:420px;text-align:center}
+  a{color:#71ff00}
+</style>
+</head>
+<body>
+<div class="box" id="box" role="status" aria-live="polite"><p>Opening on SOKONI…</p></div>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js"></script>
+<script src="sokoni-config.js"></script>
+<script src="/sokoni-appcheck.js"></script>
+<script>
+(function () {
+  if (!firebase.apps.length) { try { firebase.initializeApp(window.SOKONI_CONFIG); } catch (_) {} }
+  var q = new URLSearchParams(location.search);
+  var h = (q.get('h') || '').toLowerCase();
+  var s = q.get('s') || '';
+  var box = document.getElementById('box');
+  function fail(t) { box.innerHTML = '<p>' + t.replace(/[<>&]/g, '') + '</p><p><a href="/">Go to SOKONI</a></p>'; }
+  if (!/^[a-z0-9-]{3,48}$/.test(h)) return fail('This link is not valid.');
+  try {
+    firebase.functions().httpsCallable('bookingDispatch')({ op: 'repResolveHandle', h: h, s: s || undefined })
+      .then(function (r) { var p = r.data && r.data.path; if (p && p.charAt(0) === '/' && p.charAt(1) !== '/') location.replace(p); else fail('This link is not valid.'); })
+      .catch(function (e) { fail((e && e.message) || 'This link is not available.'); });
+  } catch (e) { fail('SOKONI is unavailable right now.'); }
+})();
+</script>
+<script src="/sw-register.js" defer></script>
+</body>
+</html>

@@ -22,6 +22,7 @@ const waitlist     = require('./booking-waitlist');
 const entAvail     = require('./ent-availability');
 const entRates     = require('./ent-rate-cards');
 const entEnq       = require('./ent-enquiries');
+const reputation   = require('./reputation');   /* followers · reviews · ratings · shares */
 
 function _merge() {
   const seen = {}, result = {};
@@ -33,7 +34,7 @@ function _merge() {
   }
   return result;
 }
-const _H = _merge( booking._h, venueBooking._h, availability._h, waitlist._h, entAvail._h, entRates._h, entEnq._h);
+const _H = _merge( booking._h, venueBooking._h, availability._h, waitlist._h, entAvail._h, entRates._h, entEnq._h, reputation._h);
 
 const _OPTS = {
   region:          'us-central1',

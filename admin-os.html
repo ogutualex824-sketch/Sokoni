@@ -368,6 +368,7 @@
       <button class="nav-item" data-section="audit" data-label="Audit Center" onclick="SokoniAOS.navigate('audit');_closeSidebar()"><span class="nav-icon">&#x1F4CB;</span>Audit</button>
       <button class="nav-item" data-section="creator" data-label="Creator Hub" onclick="SokoniAOS.navigate('creator');_closeSidebar()"><span class="nav-icon">&#x1F3AC;</span>Creator Hub</button>
       <button class="nav-item" data-section="entertainment" data-label="Entertainment" onclick="SokoniAOS.navigate('entertainment');_closeSidebar()"><span class="nav-icon">&#x1F3AB;</span>Entertainment</button>
+      <button class="nav-item" data-section="reputation" data-label="Reviews &amp; Reputation" onclick="SokoniAOS.navigate('reputation');_closeSidebar()"><span class="nav-icon">&#x2B50;</span>Reviews &amp; Reputation</button>
       <button class="nav-item" data-section="security" data-label="Security" onclick="SokoniAOS.navigate('security');_closeSidebar()"><span class="nav-icon">&#x1F510;</span>Security</button>
       <button class="nav-item" data-section="invoices" data-label="Invoices" onclick="SokoniAOS.navigate('invoices');_closeSidebar()"><span class="nav-icon">&#x1F9FE;</span>Invoices</button>
     </div>
@@ -725,6 +726,11 @@
         <div class="panel-toolbar"><h2>Entertainment</h2></div>
         <div id="entertainmentBody"><div class="aos-spinner"><div></div></div></div>
       </div>
+      <!-- Reviews & Reputation: provider / venue reviews, reports, moderation, follower + share counts. -->
+      <div class="aos-panel" id="panel-reputation" hidden>
+        <div class="panel-toolbar"><h2>Reviews &amp; Reputation</h2></div>
+        <div id="reputationBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
       <div class="aos-panel" id="panel-security" hidden>
         <div class="panel-toolbar"><h2>Security</h2></div>
         <div id="securityBody"><div class="aos-spinner"><div></div></div></div>
@@ -824,6 +830,7 @@
   <script src="sokoni-aos-security.js"></script>
   <script src="sokoni-aos-creator.js"></script>
   <script src="sokoni-aos-entertainment.js"></script>
+  <script src="sokoni-aos-reputation.js"></script>
   <script src="sokoni-aos.js"></script>
   <script>
     function _openSidebar()  { document.getElementById("aosSidebar").classList.add("open"); }

@@ -1,3 +1,102 @@
+## 2026-09-27 (209) — Provider Followers, Ratings, Reviews & Sharing: one server reputation authority
+
+- **Scope.** Adds one reputation authority, `functions/reputation.js`, for providers, venues and approved creators.
+  Full design: `docs/PROVIDER_REPUTATION.md` ([[PROVIDER_REPUTATION]]). Not deployed. No KRA calls. No production
+  writes. `1171a16` untouched.
+- **Census, then owner decisions.**
+  - **Store:** `providerReviews` is the one provider review store.
+  - **Follows:** provider / venue / creator follows go through a server callable.
+  - **Scope:** fix the reputation holes now and report the rest.
+  - The census found 9+ review stores, a split-brain provider rating (public `providers.rating` was **owner-writable**
+    while real reviews updated only a private mirror), follows keyed by display name, and client-created generic
+    reviews.
+- **Migrated vs replaced.**
+  - `bookingSubmitReview` stays the canonical op and now **delegates** to `reputation.submitReview`, so the public
+    aggregate and the mirror are written in one transaction.
+  - `providerReplyReview` / `providerGetReviews` are **kept** and hardened.
+  - Generic `reviews.js` **no longer resolves providers**.
+  - Follow identity is **normalised** to the account id (`{uid}--provider--{providerUid}`). `scripts/migrate-reputation.js`
+    (dry run by default, **not run**) maps slugs that are unique and reports ambiguous and orphan ones.
+- **Followers.** Transactional and idempotent. Self-follow is refused. The count floors at 0. A legacy follow is adopted
+  and counted once. `showMe` is off by default. The provider sees first name + initial only for followers who opted in:
+  never a uid, email, phone, booking or payment.
+- **Ratings & reviews.**
+  - Reviews come only from the reviewer's own **completed** booking: not cancelled or refunded, and within 60 days.
+    Venue bookings must also be paid and owner-matched.
+  - Ratings are integers from 1 to 5, with one review per booking and no self-review.
+  - Edits: author only, 14 days, up to 3 edits.
+  - The provider can reply only, never change the rating.
+  - Reports use controlled reasons, create moderation cases, and never change the rating.
+  - The aggregate (rating, count, sum, distribution) is server-derived. The `repV` and `followV` markers are separate,
+    so a follow can never launder a legacy owner-written rating.
+  - Public reviews carry an opaque `rv_…` id, never the booking id.
+- **AdminOS › Reviews & Reputation** (`sokoni-aos-reputation.js`):
+  - Hide / restore (admin) and remove (super admin), each with a reason and an audit record. The review is excluded
+    from or re-included in the aggregate in the same transaction; **the booking is never changed**.
+  - Recount (super admin).
+- **Sharing.**
+  - Links are handle-based: `/p.html?h=` (optionally `&s=` for a service); events keep `/event-hub.html?event=`.
+    A link never contains a uid, phone, email, PIN, payment reference or conversation id.
+  - Share events count once per person per profile per day, never as followers or ratings, and only when the share
+    actually left the page.
+- **UI:**
+  - identity strip and reviews on `provider-profile.html` and `venue-booking.html` (new Reviews tab);
+  - follow / share on `creator.html`;
+  - **My reviews** in `entertainment.html`;
+  - **Followers & Reputation** tab in the provider and venue workspaces;
+  - public share resolver `p.html`.
+- **Fixed on the way:**
+  - `getMinishopPublic` no longer returns raw review docs.
+  - The Report button: inside `sokoni-reputation.js`, `CSS` is the stylesheet string, so `CSS.escape` threw and the
+    button was dead (caught by the browser test).
+- **Database changes:**
+  - Server-only fields on `providers` / `venues` / `creators`: `rating, reviewCount, ratingSum, ratingDist,
+    followerCount, shareCount, shareHandle, repV, followV, reputationUpdatedAt`.
+  - New `providerReviews` fields: `publicId`, `status`, `edits`, `reportCount`, `moderation`.
+  - New collections: `shareHandles`, `shareEvents`, `reputationAudit`.
+  - New `reports` entityType: `providerReview`.
+- **API changes:**
+  - `bookingDispatch`: `repFollow`, `repUnfollow`, `repFollowVisibility`, `repFollowState`, `repFollowers`,
+    `repSubmitReview`, `repEditReview`, `repReportReview`, `repReviews`, `repSummary`, `repMyReviews`, `repDashboard`,
+    `repShareLink`, `repResolveHandle`, `repShareEvent`.
+  - `adminOsDispatch`: `repAdminReviews`, `repAdminModerate`, `repAdminEntity`, `repAdminRecount`.
+  - notify types: `rep_new_review`, `rep_review_reply`, `rep_review_moderated`.
+- **Security changes (rules):**
+  - Reputation fields are blocked on provider and venue create / update.
+  - Provider / venue / creator follow ids are denied to clients. The check is anchored on the segment, so a
+    hyphenated uid cannot bypass it.
+  - `providerReviews` is readable only by its author, the provider and admins.
+  - Generic `reviews`: client create is denied.
+  - `shareHandles`, `shareEvents` and `reputationAudit` are admin read, no client write.
+- **Breaking changes:**
+  - A client can no longer create or delete provider / venue / creator follows directly (`sokoni-social.js` and
+    `sokoni-db.js` now route to the callable).
+  - Generic `reviews.js` provider targets are refused.
+  - `test-follow-rules.js` moves `provider` to the server-counted section and no longer hardcodes `:8080`.
+- **Tests:**
+  - `test-reputation.js` 70/0 (new) · `test-reputation-browser.js` 32/0 (new).
+  - `test-entertainment-rules.js` 287/0 (served + counterproof) · `test-follow-rules.js` 42/0 · `run-creator-rules`
+    134/0.
+  - 30 related suites are identical to the `848613b` baseline.
+  - Sabotage: the `rep` group is 34/34 caught. The full harness is 221/221 caught (219 in one run; two re-run: one
+    anchor updated for the widened venue deny list, one transient emulator start). Every suite is green after
+    restore, and the tree is byte-identical.
+- **Files:**
+  - `functions/`: `reputation.js` (new), `booking-service.js`, `provider-ops.js`, `reviews.js`, `minishop.js`,
+    `notify.js`, `booking-dispatch.js`, `admin-os-dispatch.js`.
+  - Rules: `firestore.rules`, `firestore.rules.build`.
+  - Client scripts: `sokoni-reputation.js` (new), `sokoni-aos-reputation.js` (new), `sokoni-social.js`, `sokoni-db.js`,
+    `sokoni-providers.js`, `sokoni-ent-storefront.js`, `sokoni-ent-workspace.js`, `sokoni-aos.js`.
+  - Pages: `p.html` (new), `provider-profile.html`, `venue-booking.html`, `creator.html`, `entertainment.html`,
+    `provider-dashboard.html`, `venue-manager.html`, `admin-os.html`.
+  - `scripts/`: `migrate-reputation.js` (new), `test-reputation.js` (new), `test-reputation-browser.js` (new),
+    `test-entertainment-rules.js`, `test-follow-rules.js`, `sabotage-event-ops.js`.
+  - Docs: `docs/PROVIDER_REPUTATION.md` (new), `docs/ENTERTAINMENT_AVAILABILITY.md`.
+- **Deploy (when authorised):**
+  - Deploy `bookingDispatch`, `providerDispatch` and `adminOsDispatch` after re-reading the Artifact Registry notice.
+  - Deploy rules via the REST API, and hosting from the latest commit.
+  - Then run the migration: dry run → owner review → `--apply`.
+
 ## 2026-09-27 (208) — Availability slice follow-up: every provider journey end to end; "customers with an enquiry"
 
 - **Journeys** (`scripts/test-ent-journeys.js`, 49/0). Each journey runs end to end through the REAL authorities:

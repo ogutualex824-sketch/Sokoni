@@ -308,6 +308,7 @@ a{color:var(--acc);text-decoration:none}
       <div class="sb-item" onclick="WS.open('messaging',this)"><span class="sb-icon">🛎️</span>Message Settings</div>
       <div class="sb-item" onclick="WS.open('discounts',this)"><span class="sb-icon">📣</span>Marketing</div>
       <div class="sb-item" onclick="WS.open('stats',this)"><span class="sb-icon">⏱️</span>Booked Hours</div>
+      <div class="sb-item" onclick="WS.open('reputation',this)"><span class="sb-icon">🌟</span>Followers &amp; Reputation</div>
       <div class="sb-item" onclick="P.show('calendar',this)"><span class="sb-icon">🟢</span>Live Status</div>
       <div class="sb-item" onclick="P.show('earnings',this)"><span class="sb-icon">💰</span>Wallet</div>
       <div class="sb-item" onclick="P.show('customers',this)"><span class="sb-icon">👥</span>Customers</div>
@@ -850,6 +851,7 @@ a{color:var(--acc);text-decoration:none}
 <script src="sokoni-pricing-studio.js" defer></script>
 <script src="sokoni-ent-calendar.js" defer></script>
 <script src="sokoni-ent-workspace.js" defer></script>
+<script src="sokoni-reputation.js" defer></script>
 <script>
 const _q=id=>document.getElementById(id);
 const _esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');

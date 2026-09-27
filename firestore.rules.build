@@ -229,6 +229,18 @@ service cloud.firestore {
   allow read:  if isAdmin();
   allow write: if false;
   }
+  match /shareHandles/{handle} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
+  match /shareEvents/{id} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
+  match /reputationAudit/{id} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
   match /entAvailability/{calKey} {
   allow read:  if isAdmin();
   allow write: if false;
@@ -330,14 +342,16 @@ service cloud.firestore {
   || isAuthed();
   allow create: if isActive() && isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()
   && (!request.resource.data.keys().hasAny(['status'])
-  || request.resource.data.status == 'pending');
+  || request.resource.data.status == 'pending')
+  && !request.resource.data.keys().hasAny(['rating','reviewCount','ratingSum','ratingDist','followerCount','shareCount','shareHandle','repV','followV','reputationUpdatedAt','jobsCompleted']);
   allow update: if isAdmin()
   || (isAuthed()
   && resource.data.uid == request.auth.uid
   && uidUnchanged()
   && !request.resource.data.diff(resource.data)
   .affectedKeys()
-  .hasAny(['status', 'verified', 'suspended', 'approved']));
+  .hasAny(['status', 'verified', 'suspended', 'approved',
+  'rating','reviewCount','ratingSum','ratingDist','followerCount','shareCount','shareHandle','repV','followV','reputationUpdatedAt', 'jobsCompleted']));
   allow delete: if isAdmin();
   }
   match /bookings/{bookingId} {
@@ -380,13 +394,15 @@ service cloud.firestore {
   && request.resource.data.name.size() > 0
   && request.resource.data.get('status', 'pending') == 'pending'
   && noAdminFields()
-  && !request.resource.data.keys().hasAny(['rating','reviewCount','suspendedBy','suspendReason']);
+  && !request.resource.data.keys().hasAny(['rating','reviewCount','suspendedBy','suspendReason',
+  'ratingSum','ratingDist','followerCount','shareCount','shareHandle','repV','followV','reputationUpdatedAt']);
   allow update: if isAdmin()
   || (isAuthed() && resource.data.ownerId == request.auth.uid
   && request.resource.data.ownerId == request.auth.uid
   && noAdminFields()
   && !request.resource.data.diff(resource.data).affectedKeys()
-  .hasAny(['status','rating','reviewCount','suspendedBy','suspendReason']));
+  .hasAny(['status','rating','reviewCount','suspendedBy','suspendReason',
+  'ratingSum','ratingDist','followerCount','shareCount','shareHandle','repV','followV','reputationUpdatedAt']));
   allow delete: if isAdmin();
   }
   match /venueBlockouts/{blockId} {
@@ -613,9 +629,9 @@ service cloud.firestore {
   match /reviews/{reviewId} {
   allow read:   if resource.data.status == "approved"
   || (request.auth != null && (request.auth.uid == resource.data.authorUid || isAdmin()));
-  allow create: if claimsOwner() && noAdminFields();
-  allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
-  allow delete: if isAdmin() || isOwner();
+  allow create: if false;
+  allow update: if isAdmin();
+  allow delete: if isAdmin();
   }
   match /etims_submissions/{docId} {
   allow create:               if claimsOwner();
@@ -1342,8 +1358,10 @@ service cloud.firestore {
   }
   match /follows/{followId} {
   allow read:   if isAdmin() || (isAuthed() && followId.matches(request.auth.uid + '--.*'));
-  allow create: if isAuthed() && followId.matches(request.auth.uid + '--.*');
-  allow delete: if isAdmin() || (isAuthed() && followId.matches(request.auth.uid + '--.*'));
+  allow create: if isAuthed() && followId.matches(request.auth.uid + '--.*')
+  && !followId.matches('.*--(provider|venue|creator)--.*');
+  allow delete: if isAdmin() || (isAuthed() && followId.matches(request.auth.uid + '--.*')
+  && !followId.matches('.*--(provider|venue|creator)--.*'));
   }
   match /driverRatings/{ratingId} {
   allow create: if claimsOwner();
@@ -4229,7 +4247,7 @@ service cloud.firestore {
   allow write: if false;
   }
   match /providerReviews/{reviewId} {
-  allow read:  if true;
+  allow read:  if isAdmin() || (isAuthed() && (resource.data.customerUid == request.auth.uid || resource.data.providerId == request.auth.uid));
   allow write: if false;
   }
   match /providerVerification/{uid} {

@@ -214,6 +214,7 @@
       <button class="tab" onclick="switchTab('about',this)">About</button>
       <button class="tab" onclick="switchTab('pricing',this)">Pricing</button>
       <button class="tab" onclick="switchTab('ask',this)">Questions &amp; rates</button>
+      <button class="tab" onclick="switchTab('reviews',this)">Reviews</button>
     </div>
     <div id="tp-slots" class="tab-panel active">
       <!-- The ONE availability calendar (month / year, safe states, realtime). The date field below is
@@ -228,6 +229,7 @@
     <div id="tp-about" class="tab-panel" style="padding-top:4px"></div>
     <div id="tp-pricing" class="tab-panel" style="padding-top:4px"></div>
     <div id="tp-ask" class="tab-panel" style="padding-top:4px"></div>
+    <div id="tp-reviews" class="tab-panel" style="padding-top:4px"></div>
   </div>
 
   <!-- ══ VIEW 3 · Booking Confirmation ═════════════════════════════════════ -->
@@ -292,6 +294,7 @@
 <script src="sokoni-availability.js"></script>
 <script src="/sokoni-ent-calendar.js"></script>
 <script src="/sokoni-ent-storefront.js"></script>
+<script src="/sokoni-reputation.js"></script>
 <script>
 var _vbApp = firebase.apps.length ? firebase.app() : firebase.initializeApp(window.SOKONI_CONFIG);
 var db = firebase.firestore(_vbApp);
@@ -545,6 +548,13 @@ function openVenue(v) {
   document.querySelectorAll('.tab').forEach(function(t, i) { t.classList.toggle('active', i === 0); });
   document.querySelectorAll('.tab-panel').forEach(function(p, i) { p.classList.toggle('active', i === 0); });
   mountVenueCalendar(v);
+  /* reputation: rating · followers · Follow · Share (hero) and verified reviews (tab) */
+  if (window.SokoniRep) {
+    var repHost = document.getElementById('vb-rep');
+    if (!repHost) { repHost = document.createElement('div'); repHost.id = 'vb-rep'; repHost.style.marginTop = '8px'; document.getElementById('vh').appendChild(repHost); }
+    window.SokoniRep.identity(repHost, { type: 'venue', id: v.id, name: v.name });
+    window.SokoniRep.reviews(document.getElementById('tp-reviews'), { type: 'venue', id: v.id });
+  }
   if (window.SokoniEntStorefront) window.SokoniEntStorefront.mount(document.getElementById('tp-ask'), { venueId: v.id, name: v.name, hideBook: true, hideCheck: true });
   showView('v-detail');
 }

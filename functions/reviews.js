@@ -109,13 +109,15 @@ const _TARGET_SOURCES = {
   seller:        [{ col: 'sellers' }, { col: 'shops' },
                   { col: 'businesses', ownerField: ['uid', 'ownerId'] }],
   product:       [{ col: 'products' }],
-  service:       [{ col: 'services' }, { col: 'providers' }],
+  /* 2026-09-27: `providers` removed from every target — a PROVIDER is reviewed only through its booking
+     (providerReviews, functions/reputation.js; owner decision). */
+  service:       [{ col: 'services' }],
   driver:        [{ col: 'drivers' }],
-  education:     [{ col: 'courses' }, { col: 'providers' }],
-  food:          [{ col: 'listings' }, { col: 'providers' }, { col: 'services' }],
-  healthcare:    [{ col: 'providers' }, { col: 'services' }],
-  entertainment: [{ col: 'listings' }, { col: 'providers' }, { col: 'services' }],
-  legal:         [{ col: 'providers' }, { col: 'services' }],
+  education:     [{ col: 'courses' }],
+  food:          [{ col: 'listings' }, { col: 'services' }],
+  healthcare:    [{ col: 'services' }],
+  entertainment: [{ col: 'listings' }, { col: 'services' }],
+  legal:         [{ col: 'services' }],
 };
 
 /**

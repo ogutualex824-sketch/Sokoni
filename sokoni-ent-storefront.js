@@ -57,7 +57,9 @@
     css();
     const o = Object.assign({}, opts || {});
     const ident = o.venueId ? { venueId: o.venueId } : { providerId: o.providerId };
-    const st = { info: null, cards: [], services: [], serviceId: o.serviceId || null, slot: null, rateCardId: null, coupon: '', quote: null, cal: null, view: null };
+    /* a shared service link (p.html → ?service=) opens with that service selected */
+    const sharedSvc = (() => { try { const v = new URLSearchParams(location.search).get('service'); return /^[A-Za-z0-9_-]{1,128}$/.test(v || '') ? v : null; } catch (_) { return null; } })();
+    const st = { info: null, cards: [], services: [], serviceId: o.serviceId || sharedSvc || null, slot: null, rateCardId: null, coupon: '', quote: null, cal: null, view: null };
     host.innerHTML = '<div class="sksf"><div data-top></div><div data-body></div></div>';
     const top = host.querySelector('[data-top]'); const body = host.querySelector('[data-body]');
 

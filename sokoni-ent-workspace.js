@@ -50,7 +50,7 @@
   .skws-plan{font-size:11px;color:#f5c542}
   `;
   function css() { if (!document.getElementById('skws-css')) { const s = document.createElement('style'); s.id = 'skws-css'; s.textContent = CSS; document.head.appendChild(s); } }
-  const TABS = [['calendar', 'Calendar'], ['availability', 'Availability'], ['stats', 'Bookings & hours'], ['ratecards', 'Rate cards'], ['enquiries', 'Enquiries'], ['calls', 'Calls'], ['messaging', 'Message settings'], ['discounts', 'Discounts']];
+  const TABS = [['calendar', 'Calendar'], ['availability', 'Availability'], ['stats', 'Bookings & hours'], ['ratecards', 'Rate cards'], ['enquiries', 'Enquiries'], ['calls', 'Calls'], ['messaging', 'Message settings'], ['discounts', 'Discounts'], ['reputation', 'Reputation']];
 
   function mount(host, opts) {
     if (!host) return null;
@@ -170,6 +170,13 @@
           <h4 style="margin:14px 0 6px">Quick responses</h4><p class="skws-msg" style="color:#9a9a9a">A quick response may not say a payment, booking or refund is complete — SOKONI posts those from the real state.</p>
           ${TPL.map((t) => `<label>${esc(t.replace(/_/g, ' ').toLowerCase())}<textarea name="tpl_${t}" rows="2" maxlength="1000">${esc((s.templates || {})[t] || '')}</textarea></label>`).join('')}
           <button class="skws-btn pri" type="submit">Save message settings</button></form>`;
+      },
+      /* Audience · Reputation · Reported · Sharing — sokoni-reputation.js over functions/reputation.js */
+      async reputation() {
+        body.innerHTML = '<div class="skws-card" data-rep></div>';
+        if (!root.SokoniRep) { body.querySelector('[data-rep]').innerHTML = '<p class="skws-msg">Reputation is loading…</p>'; return; }
+        const u = root.firebase && root.firebase.auth && root.firebase.auth().currentUser;
+        root.SokoniRep.dashboard(body.querySelector('[data-rep]'), o.venueId ? { type: 'venue', id: o.venueId } : { type: 'provider', id: u ? u.uid : '' });
       },
       async discounts() {
         const r = await call('entDiscountList', {});

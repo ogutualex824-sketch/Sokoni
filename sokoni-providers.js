@@ -181,8 +181,11 @@
       skills:        Array.isArray(d.skills) ? d.skills : [],
       /* Counters are shown only when real. A provider with no completed jobs
          renders no jobs figure rather than a flattering zero-dressed-as-new. */
-      rating:        typeof d.rating === 'number' && d.rating > 0 ? d.rating : null,
-      reviewCount:   Number(d.reviewCount || d.ratingCount || 0),
+      /* Only a SERVER-maintained aggregate (repV, functions/reputation.js) is shown. Before the recount an
+         owner could write their own rating here; that value is never displayed. */
+      rating:        d.repV && typeof d.rating === 'number' && d.rating > 0 && Number(d.reviewCount) > 0 ? d.rating : null,
+      reviewCount:   d.repV ? Number(d.reviewCount || 0) : 0,
+      followerCount: d.followV && typeof d.followerCount === 'number' ? d.followerCount : null,
       jobsCompleted: Number(d.jobsCompleted || d.bookingCount || 0),
       rate:          d.rate != null && d.rate !== '' ? Number(d.rate) : null,
       rateType:      d.rateType || '',

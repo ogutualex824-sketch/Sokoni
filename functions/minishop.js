@@ -224,7 +224,10 @@ exports.getMinishopPublic = onRequest(
         .limit(6)
         .get();
 
-      const reviews = reviewsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      /* 2026-09-27: this PUBLIC endpoint returned every review doc — pending, rejected, flagged — with the
+         author's uid and order id. Approved reviews only, public fields only. */
+      const reviews = reviewsSnap.docs.map(d => d.data()).filter(r => r.status === 'approved')
+        .map(r => ({ rating: r.rating, text: r.text || r.comment || '', authorName: String(r.authorName || 'SOKONI customer').split(/\s+/)[0], createdAt: r.createdAt || null }));
 
       /* 5 — Total product count (field: shopId) — reuse productsSnap length
              For large stores totalProducts comes from config counter if set */

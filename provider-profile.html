@@ -177,6 +177,7 @@
 <script src="sokoni-pay.js" defer></script>
 <script src="sokoni-ent-calendar.js" defer></script>
 <script src="sokoni-ent-storefront.js" defer></script>
+<script src="sokoni-reputation.js" defer></script>
 <script src="sokoni-book-service.js" defer></script>
 <script src="sokoni-inbox.js" defer></script>
 <script src="nav-active.js" defer></script>
@@ -334,6 +335,16 @@
       var anchor = document.getElementById('ppPricing');
       if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(sf, anchor.nextSibling); else document.body.insertBefore(sf, bar);
       window.SokoniEntStorefront.mount(sf, { providerId: uid, name: p.name });
+    }
+    /* Reputation (functions/reputation.js): followers · rating · Follow · Share, then verified reviews. */
+    if (window.SokoniRep && !document.getElementById('ppRep')) {
+      var rep = document.createElement('section'); rep.className = 'pp-card'; rep.id = 'ppRep'; rep.setAttribute('aria-label', 'Rating and followers');
+      sf.parentNode.insertBefore(rep, sf);
+      window.SokoniRep.identity(rep, { type: 'provider', id: uid, name: p.name });
+      var rv = document.createElement('section'); rv.className = 'pp-card'; rv.id = 'ppReviews'; rv.setAttribute('aria-label', 'Reviews');
+      rv.innerHTML = '<h2 style="font-size:1rem;margin:0 0 8px">Reviews</h2><div id="ppReviewsBody"></div>';
+      sf.parentNode.insertBefore(rv, sf.nextSibling);
+      window.SokoniRep.reviews(document.getElementById('ppReviewsBody'), { type: 'provider', id: uid });
     }
     };
     mountSF();

@@ -62,13 +62,18 @@ const followDoc = (uid, type, entityId, name) => ({
   uid, type, entityId: String(entityId), entityName: name || '', createdAt: 1,
 });
 
+/* The emulator is the one `emulators:exec` started (it sets FIRESTORE_EMULATOR_HOST). Never a hardcoded
+   :8080 — that hits whichever agent's emulator holds the port. */
+const FS_HOST = process.env.FIRESTORE_EMULATOR_HOST;
+if (!FS_HOST) { console.error('REFUSING: FIRESTORE_EMULATOR_HOST must be set (run under firebase emulators:exec)'); process.exit(2); }
+
 (async () => {
   const env = await initializeTestEnvironment({
     projectId: 'sokoni-follow-rules-test',
     firestore: {
       rules: fs.readFileSync(path.join(__dirname, '..', process.env.RULES_FILE || 'firestore.rules'), 'utf8'),
-      host: '127.0.0.1',
-      port: 8080,
+      host: FS_HOST.split(':')[0],
+      port: Number(FS_HOST.split(':')[1]),
     },
   });
 
@@ -193,7 +198,9 @@ const followDoc = (uid, type, entityId, name) => ({
      The types actually emitted across the platform. If a new surface adds a type
      it inherits this, which is the point of an entity-agnostic model. */
   console.log('\nEntity types — one model for every followable thing');
-  const TYPES = ['store', 'business', 'shop', 'seller', 'provider', 'user', 'hub',
+  /* 'provider' left this list 2026-09-27: provider / venue / creator follows are SERVER-counted
+     (functions/reputation.js) — see section 5b. */
+  const TYPES = ['store', 'business', 'shop', 'seller', 'user', 'hub',
                  'plumber', 'mechanic', 'electrician', 'cleaner', 'legal',
                  'hospital', 'bnb', 'car', 'entertainment', 'construction'];
   for (const t of TYPES) {
@@ -202,6 +209,17 @@ const followDoc = (uid, type, entityId, name) => ({
     await check('type "' + t + '" follow + unfollow',
       assertSucceeds(setDoc(doc(dbA, 'follows', id), followDoc(UID, t, 'entity-1')))
         .then(() => assertSucceeds(deleteDoc(doc(dbA, 'follows', id)))));
+  }
+
+  /* ── 5b. Server-counted types: the client can neither create nor delete ────
+     A provider / venue / creator follower count is maintained by functions/reputation.js
+     (repFollow / repUnfollow) in the same transaction as the follow document. A client
+     write would drift the count, so the rule refuses the id shape — including for a
+     uid that itself contains a hyphen. */
+  console.log('\nServer-counted follow types (provider · venue · creator)');
+  for (const t of ['provider', 'venue', 'creator']) {
+    await check('type "' + t + '" client follow DENIED (server authority)',
+      assertFails(setDoc(doc(dbA, 'follows', followId(UID, t, 'entity-1')), followDoc(UID, t, 'entity-1'))));
   }
 
   /* ── 6. followerCounts — why it must never fail the follow ────────────────

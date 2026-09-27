@@ -159,6 +159,8 @@
   <section class="panel" id="p-mine" role="tabpanel" aria-labelledby="tab-mine" hidden>
     <div class="sec-head"><h2>My bookings</h2></div>
     <div id="bookings" aria-live="polite"><div class="state">Loading…</div></div>
+    <div class="sec-head"><h2>My reviews</h2></div>
+    <div id="myReviews" aria-live="polite"></div>
     <div class="sec-head"><h2>My enquiries &amp; quotes</h2></div>
     <div id="enquiries" aria-live="polite"><div class="state">Loading…</div></div>
     <div class="sec-head" id="provide"><h2>Bookings you provide</h2></div>
@@ -180,6 +182,7 @@
   </section>
 </main>
 
+<script src="/sokoni-reputation.js" defer></script>
 <script type="module">
   'use strict';
   import { app } from '/firebase.js';
@@ -311,7 +314,13 @@
       host.innerHTML = /unauthenticated/.test(String(err && (err.code || err.message))) ? '' : `<div class="state err">Enquiries are unavailable right now (${esc(errText(err))}).</div>`;
     }
   }
-  const LOADERS = { events: loadEvents, films: loadFilms, mine: () => { loadBookings(); loadEnquiries(); } };
+  /* rate completed bookings · my reviews (sokoni-reputation.js, modular callable handed in) */
+  function loadMyReviews() {
+    if (!window.SokoniRep) return;
+    window.SokoniRep.configure({ callable: (name, data) => httpsCallable(fns, name)(data).then((r) => r.data) });
+    window.SokoniRep.myReviews(document.getElementById('myReviews'));
+  }
+  const LOADERS = { events: loadEvents, films: loadFilms, mine: () => { loadBookings(); loadEnquiries(); loadMyReviews(); } };
 
   /* Legacy links (the retired EntHub page took ?cat=, ?event=, ?venue=): route to the canonical owner. */
   const q = new URLSearchParams(location.search);

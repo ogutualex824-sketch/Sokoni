@@ -4,7 +4,10 @@
    bookings, rides, GPS tracking and orders.
    Import as a module — exposes window.SokoniDB for inline scripts.
 ================================================================ */
-import { db, auth } from './firebase.js';
+import { db, auth, app } from './firebase.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+/* the reputation authority (provider / venue / creator follows, summaries) */
+const _bookingDispatch = (data) => httpsCallable(getFunctions(app, 'us-central1'), 'bookingDispatch')(data);
 import {
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc, getDoc, getDocs,
   onSnapshot, query, where, orderBy, serverTimestamp, increment, limit, documentId,
@@ -466,6 +469,8 @@ const SokoniDB = {
      even though the follow document had been written successfully.
      The counter is best-effort and is now fired-and-caught separately. */
   async follow(type, entityId, entityName) {
+    /* provider / venue / creator: the reputation authority (server-written, counted once). */
+    if (['provider', 'venue', 'creator'].includes(type)) return this._repFollow('repFollow', type, entityId, entityName);
     const fid    = this._followDocId(type, entityId);
     const uid    = _uid();
     const fRef   = doc(db, 'follows', fid);
@@ -492,7 +497,18 @@ const SokoniDB = {
     } catch(e) {}
   },
 
+  async _repFollow(op, type, entityId, entityName) {
+    const r = (await _bookingDispatch({ op, type, id: String(entityId) })).data;
+    try {
+      const my = JSON.parse(localStorage.getItem('sokoniFollowing') || '{}');
+      if (r.following) my[`${type}--${entityId}`] = { type, entityId, entityName, followedAt: Date.now() }; else delete my[`${type}--${entityId}`];
+      localStorage.setItem('sokoniFollowing', JSON.stringify(my));
+    } catch (e) {}
+    return r;
+  },
+
   async unfollow(type, entityId) {
+    if (['provider', 'venue', 'creator'].includes(type)) return this._repFollow('repUnfollow', type, entityId);
     const fid  = this._followDocId(type, entityId);
     const fRef = doc(db, 'follows', fid);
     await deleteDoc(fRef);
@@ -515,6 +531,11 @@ const SokoniDB = {
      state, NOT 0. Previously fell back to a per-device localStorage tally, which
      is a fabricated business metric (CLAUDE.md, UI Data Integrity). */
   async getFollowerCount(type, entityId) {
+    /* provider / venue / creator: the SERVER count (null = unknown, rendered as —) */
+    if (['provider', 'venue', 'creator'].includes(type)) {
+      try { const r = (await _bookingDispatch({ op: 'repSummary', items: [{ type, id: String(entityId) }] })).data;
+        const s = r.summaries[`${type}:${entityId}`]; return s && typeof s.followerCount === 'number' ? s.followerCount : null; } catch (e) { return null; }
+    }
     const snap = await getDoc(doc(db, 'followerCounts', `${type}--${entityId}`)).catch(() => null);
     if (snap && snap.exists() && typeof snap.data().count === 'number') return snap.data().count;
     return null;

@@ -762,13 +762,14 @@ _h.providerGetReviews = async (req) => {
 
   const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   let sum = 0;
-  const reviews = snap.docs.map((d) => {
+  /* published + hidden (shown to the owner with its status); a REMOVED review is gone for everyone */
+  const reviews = snap.docs.filter((d) => d.data().status !== 'removed').map((d) => {
     const r = d.data();
     const rating = Math.max(1, Math.min(5, Math.round(Number(r.rating) || 0)));
     distribution[rating] = (distribution[rating] || 0) + 1;
     sum += rating;
     return { id: d.id, customerName: _san(r.customerName, 120) || 'Customer',
-      rating, text: _san(r.text, 1000), reply: r.reply ? _san(r.reply, 1000) : null,
+      rating, text: _san(r.text, 1000), reply: r.reply ? _san(r.reply, 1000) : null, status: r.status || 'published', reportCount: Number(r.reportCount) || 0,
       createdAt: r.createdAt || null,
       _sort: r.createdAt?.toDate ? r.createdAt.toDate().getTime() : 0 };
   }).sort((a, b) => b._sort - a._sort).map(({ _sort, ...r }) => r);
@@ -788,7 +789,13 @@ _h.providerReplyReview = async (req) => {
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'Review not found.');
   if (snap.data().providerId !== uid) throw new HttpsError('permission-denied', 'Not your review.');
+  /* The provider REPLIES; the customer's rating, text and identity are never touched here. */
+  if (snap.data().status === 'removed') throw new HttpsError('failed-precondition', 'This review was removed.');
   await ref.update({ reply, repliedAt: _ts(), updatedAt: _ts() });
+  try {
+    if (snap.data().customerUid) await require('./notify').notify({ uid: snap.data().customerUid, type: 'rep_review_reply', title: 'The provider replied to your review',
+      body: reply.slice(0, 120), dedupeKey: `rep_reply_${id}_${Date.now()}`, awaitDelivery: false });
+  } catch (_) { /* best-effort */ }
   return { success: true };
 };
 

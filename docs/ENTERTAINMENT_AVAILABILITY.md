@@ -1,6 +1,6 @@
 # Entertainment Availability, Messaging Controls, Enquiries and Rate Cards
 
-Related: [[ENTERTAINMENT_BOOKINGS]] · [[ENTERTAINMENT_READINESS]] · [[SOKONI_CONNECT]] · [[Payments]] · [[Marketing]]
+Related: [[ENTERTAINMENT_BOOKINGS]] · [[ENTERTAINMENT_READINESS]] · [[SOKONI_CONNECT]] · [[Payments]] · [[Marketing]] · [[PROVIDER_REPUTATION]]
 
 Branch `feat/creator-hub` · 2026-09-27. **Not deployed.** Provider calls: 0. Production writes: 0. KRA: **deferred / unproven**.
 
@@ -150,7 +150,7 @@ on a public read, and returned private reasons.
 
 - **Settings** (`entMessagingSettings/{uid}`, owner through a callable):
   - who can message: ANYONE / VERIFIED / PURCHASED / ACTIVE_BOOKING / ENQUIRY (customers who have enquired before) /
-    NOBODY. "Followers" is not offered: provider follows are keyed by a display-name slug, not an account.
+    NOBODY. "Followers" is not offered yet. Since CHANGELOG 209, follows are account-based ([[PROVIDER_REPUTATION]]), so it can be added later.
   - enquiry types;
   - call requests;
   - business hours;

@@ -113,6 +113,8 @@ window.SokoniAOS = (() => {
       /* Entertainment (Events, moderation, category/policy matrix). sokoni-aos-entertainment.js
          renders it; every op is an eventAdmin* / entAdmin* handler behind adminOsDispatch. */
       entertainment: () => _loadEntertainment(),
+      /* Reviews & Reputation — sokoni-aos-reputation.js over functions/reputation.js (_adminH). */
+      reputation:    () => _loadReputation(),
     };
     loaders[s]?.();
   }
@@ -139,6 +141,7 @@ window.SokoniAOS = (() => {
     /* Entertainment — _h-only handlers merged into adminOsDispatch
        (functions/event-settlement.js, functions/entertainment-admin.js). */
     ...((window.SokoniAOSEntertainment && window.SokoniAOSEntertainment.OPS) || []),
+    ...((window.SokoniAOSReputation && window.SokoniAOSReputation.OPS) || []),
   ]);
 
   // ── CF caller ─────────────────────────────────────────────────────────────────
@@ -2340,6 +2343,17 @@ window.SokoniAOS = (() => {
     }
     try { window.SokoniAOSEntertainment.mount({ host: body, call: _call }); }
     catch (e) { body.innerHTML = "<p class='aos-muted'>Entertainment console failed to start: " + _esc(e && e.message) + "</p>"; }
+  }
+
+  async function _loadReputation() {
+    const body = document.getElementById("reputationBody");
+    if (!body) return;
+    if (!(window.SokoniAOSReputation && typeof window.SokoniAOSReputation.mount === "function")) {
+      body.innerHTML = "<p class='aos-muted'>Reputation console (sokoni-aos-reputation.js) is not loaded.</p>";
+      return;
+    }
+    try { window.SokoniAOSReputation.mount({ host: body, call: _call }); }
+    catch (e) { body.innerHTML = "<p class='aos-muted'>Reputation console failed to start: " + _esc(e && e.message) + "</p>"; }
   }
 
   async function _loadSecurity() {
