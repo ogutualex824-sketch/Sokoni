@@ -1512,13 +1512,8 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
             <input type="text" id="pushBody" class="flash-input" placeholder="e.g. Shop now before it ends. Tap to browse deals." maxlength="120">
           </div>
         </div>
-        <div class="flash-inputs" style="grid-template-columns:1fr;margin-bottom:14px;">
-          <div class="flash-input-group">
-            <label>Link URL (optional)</label>
-            <input type="url" id="pushUrl" class="flash-input" placeholder="https://mysokoni.co.ke/store.html?id=...">
-          </div>
-        </div>
-        <button type="button" class="flash-go-btn" style="padding:12px 24px;background:rgba(113,255,0,0.15);border-color:rgba(113,255,0,0.3);color:#71ff00;" onclick="sendSellerBroadcast()">📲 Send Push Notification</button>
+        <p style="font-size:12px;color:rgba(255,255,255,0.45);margin:0 0 14px;">Followers who opted in to promotions get it from your shop, and tapping it opens your shop page. Up to 3 a day.</p>
+        <button type="button" id="pushSendBtn" class="flash-go-btn" style="padding:12px 24px;background:rgba(113,255,0,0.15);border-color:rgba(113,255,0,0.3);color:#71ff00;" onclick="sendSellerBroadcast()">📲 Send Push Notification</button>
         <div id="pushBroadcastStatus" style="margin-top:10px;font-size:12px;min-height:16px;"></div>
       </div>
     </section>

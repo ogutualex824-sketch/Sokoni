@@ -2141,64 +2141,14 @@ assistant that happens to know their subject — not a menu of departments.`;
 exports.onSellerBroadcast = onDocumentCreated(
   "sellerBroadcasts/{sellerName}/broadcasts/{broadcastId}",
   async (event) => {
-    const data = event.data?.data();
-    if (!data) return;
-
-    const sellerName = event.params.sellerName;
-
-    /* Find all followers of this seller */
-    const followsSnap = await db.collection("follows")
-      .where("type",     "==", "seller")
-      .where("entityId", "==", sellerName)
-      .get()
-      .catch(() => null);
-
-    if (!followsSnap || followsSnap.empty) return;
-
-    /* Collect FCM tokens for each follower */
-    const tokens = [];
-    const tokenFetches = followsSnap.docs.map(async (followDoc) => {
-      /* Follow document ID format: {uid}--seller--{entityId} */
-      const uid = followDoc.id.split("--")[0];
-      if (!uid) return;
-      const userSnap = await db.collection("users").doc(uid).get().catch(() => null);
-      if (userSnap?.exists) {
-        const token = userSnap.data().fcmToken;
-        if (token) tokens.push(token);
-      }
-    });
-    await Promise.allSettled(tokenFetches);
-
-    if (!tokens.length) return;
-
-    /* Send FCM multicast (batch of up to 500) */
-    const batches = [];
-    for (let i = 0; i < tokens.length; i += 500) {
-      batches.push(tokens.slice(i, i + 500));
-    }
-
-    for (const batch of batches) {
-      await admin.messaging().sendEachForMulticast({
-        tokens: batch,
-        notification: {
-          title: data.title || `New from ${sellerName}`,
-          body:  data.body  || "",
-        },
-        data: {
-          url:        data.url || "/",
-          type:       "sellerBroadcast",
-          sellerName: sellerName,
-        },
-        webpush: {
-          notification: {
-            icon:  "/assets/logosokoni.png",
-            badge: "/assets/logosokoni.png",
-            requireInteraction: false,
-          },
-          fcmOptions: { link: data.url || "https://mysokoni.co.ke/" },
-        },
-      }).catch(err => console.warn("[sokoni] FCM batch error:", err.message));
-    }
+    /* RETIRED (CHANGELOG 212). This fan-out trusted the PATH (a display name any signed-in user chose), sent the
+       caller's title and link to the followers of that name, and never checked who owned the shop — seller
+       impersonation to every follower. Clients can no longer create these documents (firestore.rules); a shop
+       announcement is miniShopSendAnnouncement (owner-verified, the shop record's identity, notify.js). A document
+       that still appears here (legacy / admin-written) is logged as a security event and NOT sent. */
+    const data = (event.data && event.data.data()) || {};
+    console.warn("[security] sellerBroadcast ignored (retired path)", { path: event.data && event.data.ref && event.data.ref.path, sellerUid: data.sellerUid || null });
+    await db.collection("securityEvents").add({ type: "seller_broadcast_retired_path", path: (event.data && event.data.ref && event.data.ref.path) || null, sellerUid: data.sellerUid || null, createdAt: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {});
   }
 );
 

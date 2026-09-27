@@ -1174,65 +1174,71 @@ exports.miniShopAIMarketing = onCall(
        Seller broadcasts an announcement to all shop followers.
        Rate limit: 3 announcements per shop per 24 hours.
 ════════════════════════════════════════════════════════════════ */
-exports.miniShopSendAnnouncement = onCall(
-  { region: REGION, cors: true, enforceAppCheck: true },
-  async (request) => {
-    const uid = _requireAuth(request);
-    const { shopId, title: rawTitle, message: rawMsg, type: rawType } = request.data || {};
-
-    /* ── Validate input ── */
-    await _assertShopOwner(shopId, uid);
-
-    const safeTitle = _san(rawTitle, 80);
-    if (safeTitle.length < 2) {
-      throw new HttpsError('invalid-argument', 'title must be at least 2 characters (max 80).');
-    }
-
-    const safeMsg = _san(rawMsg, 500);
-    if (safeMsg.length < 2) {
-      throw new HttpsError('invalid-argument', 'message must be at least 2 characters (max 500).');
-    }
-
-    const safeType = _san(rawType, 20);
-    if (!ANNOUNCE_TYPES.has(safeType)) {
-      throw new HttpsError(
-        'invalid-argument',
-        'type must be one of: general, sale, new_arrival, event, closure.'
-      );
-    }
-
-    /* ── Rate limit: max 3 announcements per shop per 24h ── */
-    const db       = _db();
-    const postsRef  = db.collection('minishopAnnouncements').doc(shopId).collection('posts');
-    const cutoff    = Timestamp.fromMillis(Date.now() - 24 * 60 * 60 * 1000);
-
-    const recentSnap = await postsRef
-      .where('createdAt', '>=', cutoff)
-      .get();
-
-    if (recentSnap.size >= 3) {
-      throw new HttpsError(
-        'resource-exhausted',
-        'Maximum 3 announcements per 24 hours. Please wait before sending another.'
-      );
-    }
-
-    /* ── Write announcement ── */
-    const postRef = postsRef.doc();
-    await postRef.set({
-      title:     safeTitle,
-      message:   safeMsg,
-      type:      safeType,
-      shopId,
-      createdBy: uid,
-      createdAt: FieldValue.serverTimestamp(),
-      readCount: 0,
-    });
-
-    logger.info('miniShopSendAnnouncement', { shopId, announcementId: postRef.id, type: safeType });
-    return { announcementId: postRef.id, success: true };
+/* SELLER IDENTITY IS THE SERVER'S (CHANGELOG 212). The seller-broadcast path it replaces let ANY signed-in
+   user push to the followers of ANY display name — the name came from localStorage, keyed the Firestore path,
+   was trusted by the fan-out trigger and rendered as HTML with a caller-chosen link in followers' browsers.
+   Here: the sender is the caller's OWN shop (shops/{shopId}.sellerUid === auth uid — _assertShopOwner, or the
+   caller's one shop when no id is sent); the name, logo and destination come from that shop record; there is
+   no caller-supplied link; the rate limit and the post are ONE transaction; followers are the canonical
+   follow records (functions/reputation.js, type 'shop'); delivery is notify.js (opt-in promotions channel —
+   quiet hours and preferences apply). */
+const ANNOUNCE_MAX_PER_DAY = 3;
+const ANNOUNCE_FANOUT_CAP  = 5000;
+async function _resolveOwnShop(uid, shopId) {
+  if (shopId) return { shopId, shop: await _assertShopOwner(shopId, uid) };
+  const own = await _db().collection('shops').doc(uid).get();
+  if (own.exists && (own.data().sellerUid === uid || own.data().ownerId === uid || !own.data().sellerUid)) return { shopId: own.id, shop: await _assertShopOwner(own.id, uid) };
+  const q = await _db().collection('shops').where('sellerUid', '==', uid).limit(2).get();
+  if (q.size === 1) return { shopId: q.docs[0].id, shop: q.docs[0].data() };
+  throw new HttpsError(q.size ? 'failed-precondition' : 'not-found', q.size ? 'You have more than one shop — choose which one sends this.' : 'Set up your shop first.');
+}
+async function _sendAnnouncement(request) {
+  const uid = _requireAuth(request);
+  const { shopId: rawShopId, title: rawTitle, message: rawMsg, type: rawType } = request.data || {};
+  if (rawShopId != null && (typeof rawShopId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(rawShopId))) throw new HttpsError('invalid-argument', 'Unknown shop.');
+  const { shopId, shop } = await _resolveOwnShop(uid, rawShopId || null);
+  if (shop.suspended === true || ['suspended', 'banned', 'closed', 'deleted'].includes(String(shop.status || '').toLowerCase())) {
+    throw new HttpsError('failed-precondition', 'This shop cannot send announcements right now.');
   }
-);
+  const safeTitle = _san(rawTitle, 80);
+  if (safeTitle.length < 2) throw new HttpsError('invalid-argument', 'title must be at least 2 characters (max 80).');
+  const safeMsg = _san(rawMsg, 500);
+  if (safeMsg.length < 2) throw new HttpsError('invalid-argument', 'message must be at least 2 characters (max 500).');
+  const safeType = _san(rawType || 'general', 20);
+  if (!ANNOUNCE_TYPES.has(safeType)) throw new HttpsError('invalid-argument', 'type must be one of: general, sale, new_arrival, event, closure.');
+
+  const db = _db();
+  const counterRef = db.collection('minishopAnnouncements').doc(shopId);
+  const postRef = counterRef.collection('posts').doc();
+  const day = new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10);   /* Africa/Nairobi day */
+  await db.runTransaction(async (tx) => {
+    const c = await tx.get(counterRef);
+    const cd = c.exists ? c.data() : {};
+    const used = cd.day === day ? Number(cd.count) || 0 : 0;
+    if (used >= ANNOUNCE_MAX_PER_DAY) throw new HttpsError('resource-exhausted', 'Maximum 3 announcements per day. Please wait before sending another.');
+    tx.set(counterRef, { day, count: used + 1, shopId, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    tx.set(postRef, { title: safeTitle, message: safeMsg, type: safeType, shopId, createdBy: uid, createdAt: FieldValue.serverTimestamp(), readCount: 0 });
+  });
+
+  /* ── fan-out: identity and destination from the SHOP RECORD, never from the caller ── */
+  const shopName = _san(shop.name || shop.storeName || 'A shop you follow', 80);
+  const cfg = (await db.collection('minishopConfig').doc(shopId).get()).data() || {};
+  const deepLink = cfg.handle ? `/shop/${encodeURIComponent(cfg.handle)}` : `/minishop.html?shop=${encodeURIComponent(shopId)}`;
+  const follows = await db.collection('follows').where('type', '==', 'shop').where('entityId', '==', shopId).limit(ANNOUNCE_FANOUT_CAP).get();
+  const notify = require('./notify').notify;
+  const recipients = [...new Set(follows.docs.map((f) => f.data().uid).filter((u) => u && u !== uid))];
+  let delivered = 0;
+  for (let i = 0; i < recipients.length; i += 50) {
+    const r = await Promise.allSettled(recipients.slice(i, i + 50).map((fu) => notify({ uid: fu, type: 'shop_announcement', title: `${shopName}: ${safeTitle}`, body: safeMsg,
+      deepLink, dedupeKey: `shop_ann_${postRef.id}_${fu}`, awaitDelivery: false, anchorType: 'shop', anchorId: shopId, data: { shopId, announcementId: postRef.id } })));
+    delivered += r.filter((x) => x.status === 'fulfilled').length;
+  }
+  await postRef.set({ recipients: recipients.length, notified: delivered, capped: follows.size >= ANNOUNCE_FANOUT_CAP }, { merge: true }).catch(() => {});
+  logger.info('miniShopSendAnnouncement', { shopId, announcementId: postRef.id, type: safeType, recipients: recipients.length });
+  return { announcementId: postRef.id, success: true, shopId, recipients: recipients.length, notified: delivered };
+}
+exports._sendAnnouncement = _sendAnnouncement;
+exports.miniShopSendAnnouncement = onCall({ region: REGION, cors: true, enforceAppCheck: true }, _sendAnnouncement);
 
 /* ════════════════════════════════════════════════════════════════
    10. miniShopGetAnnouncements  (onCall — public, no auth required)

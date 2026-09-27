@@ -1861,13 +1861,12 @@ service cloud.firestore {
     }
 
     match /sellerBroadcasts/{sellerName}/broadcasts/{broadcastId} {
-      allow read:   if isAuthed();
-
-      allow create: if isAuthed()
-                    && request.resource.data.keys().hasAll(['sellerUid'])
-                    && request.resource.data.sellerUid == request.auth.uid;
-      allow delete: if isAdmin()
-                    || (isAuthed() && resource.data.sellerUid == request.auth.uid);
+      /* RETIRED (CHANGELOG 212): the path key was a caller-chosen display name, so any signed-in user could
+         broadcast AS any shop. Shop announcements are miniShopSendAnnouncement (server, owner-verified).
+         Legacy documents stay for audit — admin only; nobody writes. */
+      allow read:   if isAdmin();
+      allow create: if false;
+      allow delete: if isAdmin();
     }
 
     /* ── Landlord properties ───────────────────────────────────────────────────

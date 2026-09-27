@@ -185,6 +185,8 @@ const TYPES = {
   promotion:            { priority: 'marketing', category: 'promotions', smsTemplate: 'promotion' },
   flash_sale:           { priority: 'marketing', category: 'promotions', smsTemplate: 'promotion' },
   recommendation:       { priority: 'marketing', category: 'promotions', smsTemplate: null },
+  /* a shop's announcement to its followers (minishop-v3 miniShopSendAnnouncement) — opt-in channel */
+  shop_announcement:    { priority: 'marketing', category: 'promotions', smsTemplate: null },
 };
 
 const CATEGORIES = [...new Set(Object.values(TYPES).map(t => t.category))];

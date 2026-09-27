@@ -28,7 +28,8 @@ Before this slice, provider reputation had these problems:
   `homeServiceReviews`, `constructReviews`, `digitalReviews`, `sportsReviews`, `unboxingReviews`, `csatRatings`,
   `driverRatings`.
 - Binding gaps in `rateDigitalProduct`, `rateHealthProvider` and `rateLegalProvider`.
-- Seller-broadcast impersonation (rules ~1839–1846).
+- ~~Seller-broadcast impersonation (rules ~1839–1846).~~ **Fixed after `0865a34`** (CHANGELOG 212): the sender is the
+  caller's own shop, identity and link come from the shop record, delivery is `notify.js`, and the legacy path is retired.
 - Client-writable aggregates on product / business / sellers / services / users.
 - ~~MiniShop keeps two follow stores: `shopFollowers` and `follows`.~~ **Fixed after `0865a34`** (CHANGELOG 211):
   - type `shop` is on this authority, and `followShop` delegates;

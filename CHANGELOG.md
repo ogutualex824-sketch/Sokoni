@@ -1,3 +1,65 @@
+## 2026-09-27 (212) — Seller broadcasts: the sender is the shop the caller owns
+
+Fixes known hole 4, which was outside `0865a34`. That commit is not modified. Not deployed. No KRA calls. No
+production writes.
+
+- **The impersonation, proven.** The seller broadcast let any signed-in user send **as any shop**:
+  - `seller.js` wrote `sellerBroadcasts/<name>/broadcasts/…`, taking `name` from localStorage and a free-form link from
+    the form.
+  - The rule checked only `sellerUid == auth.uid`. The path key, the name, the link and the logo were never tied to a
+    shop.
+  - `onSellerBroadcast` trusted the **path** (a display name) and pushed the caller's title and link to every follower
+    of that name.
+  - `script.js` rendered the broadcast's own `sellerName`, title and body as HTML, and opened its link, including
+    `javascript:`. A forged broadcast became script in followers' browsers.
+- **One owner-verified sender.** `miniShopSendAnnouncement` (`functions/minishop-v3.js`), the existing server
+  authority, is now the only path. The server decides everything except the words:
+  - The sender is the caller's **own** shop (`shops.sellerUid == auth uid`, checked by `_assertShopOwner`). With no
+    shop id sent, the server uses the caller's one shop. Two shops with no choice, or no shop at all, is refused, never
+    guessed. A suspended or closed shop cannot send.
+  - The name and destination come from the **shop record** (`/shop/{handle}`). A forged sender uid, shop id, business
+    id, name, logo or link in the payload changes nothing, and the stored post carries `createdBy` = the auth uid only.
+  - The audience is the shop's canonical followers (`follows` type `shop`, from CHANGELOG 211). It never includes the
+    owner, and never a follower of a display name.
+  - Delivery goes through `notify.js` with the new `shop_announcement` type (opt-in promotions; quiet hours and
+    preferences apply) and a stable per-follower dedupe key. The fan-out is capped at 5,000 and the reach is recorded.
+  - The limit of **3 a day** is enforced in the **same transaction** as the post. It was a non-transactional count, so
+    5 concurrent sends now give exactly 3.
+- **Retired:**
+  - The `onSellerBroadcast` trigger stays deployed but inert: it sends nothing and records a `securityEvents` entry.
+  - Clients may not create `sellerBroadcasts`, and only admins can read legacy ones.
+  - `SokoniDB.saveSellerBroadcast` throws, and `listenSellerBroadcasts` is inert.
+  - The `script.js` listener is inert.
+  - The seller dashboard sends only a title and a message. The link field is removed, and success is shown only after
+    the server confirms, with the real reach.
+- **Tests:**
+  - `scripts/test-seller-broadcast.js` (new): 34/0.
+    - It covers forged seller uid, shop id, business id, sender name, sender logo and link; unauthorized, cross-seller
+      and ambiguous sends; a suspended shop; the audience; the concurrent rate limit; and the retired trigger (run
+      against a forged document).
+    - It runs the **real** `seller.html` at 360 and 1280. A forged local display name, a user with no shop, and the 4th
+      send of the day are all covered.
+  - `test-entertainment-rules.js`: 310/0 (client broadcast create and read denied, announcement posts CF-only, admin
+    audit read).
+  - 17 notify, merchant and follow suites are identical to the baseline. Their failures are pre-existing and identical
+    at base: `test-merchant-messages` 2, `test-merchant-routes` 2, `test-merchant-ecosystem-convergence` 1,
+    `test-auth-post-login-routing` 1.
+  - Sabotage group `broadcast`: 13/13 caught; the tree is byte-identical afterwards.
+- **Files:**
+  - Functions: `functions/minishop-v3.js`, `functions/notify.js`, `functions/index.js`.
+  - Rules: `firestore.rules`, `firestore.rules.build`.
+  - Pages and client scripts: `seller.js`, `seller.html`, `script.js`, `sokoni-db.js`.
+  - Scripts: `scripts/lib/page-harness.js` (localStorage seeding), `scripts/test-seller-broadcast.js` (new),
+    `scripts/test-entertainment-rules.js`, `scripts/sabotage-event-ops.js`.
+  - Docs: `docs/PROVIDER_REPUTATION.md`.
+- **API:**
+  - `miniShopSendAnnouncement`: `shopId` is optional (the caller's own shop). It returns `recipients` and `notified`.
+  - New notify type `shop_announcement`.
+- **Security:** closes seller impersonation and a stored-XSS vector.
+- **Deploy (when authorised):**
+  - Deploy `miniShopSendAnnouncement` and `onSellerBroadcast`, and the notify types with them.
+  - Deploy rules through the REST API, and hosting from the latest commit.
+
 ## 2026-09-27 (211) — MiniShop follows converge on the one follow authority
 
 Fixes known hole 2, which was outside `0865a34`. That commit is not modified. Not deployed. No KRA calls. No

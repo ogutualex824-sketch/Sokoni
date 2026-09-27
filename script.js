@@ -4555,6 +4555,12 @@ window.addEventListener("sokoniDbReady", _subscribeStories);
    Shows in-app toast when a followed seller sends a push.
 ═══════════════════════════════════════════════════════ */
 (function initBroadcastListener(){
+    /* RETIRED (CHANGELOG 212). This listened to sellerBroadcasts by FOLLOWED DISPLAY NAME and rendered the
+       broadcast's own sellerName / title / body as HTML with its own link — a forged broadcast became script in
+       every follower's browser. Shop announcements now arrive through the notification centre (notify.js), with
+       the shop's identity from its record. */
+    return;
+    // eslint-disable-next-line no-unreachable
     const follows = (()=>{
         try{ return JSON.parse(localStorage.getItem("sokoniFollowing")||"{}"); }catch(e){ return {}; }
     })();

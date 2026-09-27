@@ -99,6 +99,7 @@ async function suite(env, label, served) {
     await f('shops/shopA', { sellerUid: 'owner1', name: 'Mama Mboga', followerCount: 3, followV: 1 });
     await f('shops/owner1', { sellerUid: 'owner1', name: 'Owner Shop', followerCount: 3, followV: 1 });
     await f('shopFollowers/shopA_member1', { shopId: 'shopA', uid: 'member1' });
+    await f('sellerBroadcasts/Mama Mboga/broadcasts/b1', { sellerUid: 'owner1', sellerName: 'Mama Mboga', title: 'Sale' });
   });
   const till = env.authenticatedContext('till1', { email: 'till1@x.co', email_verified: true }).firestore();
   const admin = env.authenticatedContext('admin1', { admin: true }).firestore();
@@ -146,6 +147,11 @@ async function suite(env, label, served) {
   await expectDeny('a shop owner inflates their own follower count', owner.doc('shops/owner1').update({ followerCount: 900 }));
   await expectDeny('a client writes a legacy shopFollowers relationship', member.doc('shopFollowers/shopA_member9').set({ shopId: 'shopA', uid: 'member9' }));
   await expectDeny('a client deletes a legacy shopFollowers relationship', member.doc('shopFollowers/shopA_member1').delete());
+  /* seller broadcasts (CHANGELOG 212): the name-keyed path is retired — nobody writes, only admins read */
+  await expectDeny('a client broadcasts AS another shop (sellerBroadcasts, own uid, forged name)', member.doc('sellerBroadcasts/Safaricom/broadcasts/x').set({ sellerUid: 'member1', sellerName: 'Safaricom', title: 'FREE MONEY', url: 'javascript:alert(1)' }));
+  await expectDeny('the real owner cannot write a broadcast doc either (server callable only)', owner.doc('sellerBroadcasts/Mama Mboga/broadcasts/y').set({ sellerUid: 'owner1', title: 'Sale' }));
+  await expectDeny('a user reads legacy broadcast documents', member.doc('sellerBroadcasts/Mama Mboga/broadcasts/b1').get());
+  await expectDeny('a client writes a shop announcement post directly', owner.doc('minishopAnnouncements/owner1/posts/p1').set({ title: 'x', createdBy: 'owner1' }));
   await expectDeny('a hyphenated uid cannot slip a provider follow past the id check', hyphen.doc('follows/evil-x--provider--owner1').set({ uid: 'evil-x', type: 'provider', entityId: 'owner1' }));
   await expectDeny('a client deletes a server-counted follow (count drift)', member.doc('follows/member1--provider--owner1').delete());
   await expectDeny('a client follows on SOMEONE ELSE\'s behalf', member.doc('follows/buyer1--business--b1').set({ uid: 'buyer1', type: 'business', entityId: 'b1' }));
@@ -300,6 +306,7 @@ async function suite(env, label, served) {
 
   if (served) {
     /* reputation positive controls — the denials above are about the FIELD / TYPE, not a blanket lock */
+    ck(`${label}: an admin can still read legacy broadcast documents (audit)`, await allowed(admin.doc('sellerBroadcasts/Mama Mboga/broadcasts/b1').get()));
     ck(`${label}: a shop owner still edits their shop name (the denial is the COUNT, not the doc)`, await allowed(owner.doc('shops/owner1').update({ name: 'Owner Shop 2', updatedAt: 1 })));
     ck(`${label}: a provider still edits their own profile text`, await allowed(owner.doc('providers/owner1').update({ name: 'Jane Photo Studio', bio: 'Portraits' })));
     ck(`${label}: a provider application without reputation fields is still created`, await allowed(member.doc('providers/member1').set({ uid: 'member1', name: 'X', status: 'pending' })));

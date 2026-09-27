@@ -2942,60 +2942,37 @@ window.deleteCampaign = deleteCampaign;
 ========================= */
 
 async function sendSellerBroadcast(){
+  /* SELLER IDENTITY IS THE SERVER'S (CHANGELOG 212). This used to write sellerBroadcasts/<localStorage name>/…
+     with a caller-chosen link — any signed-in user could push AS any shop. Now the server
+     (miniShopSendAnnouncement) verifies the caller owns the shop, takes the shop's name and page from the shop
+     record, and notifies its followers through notify.js. The page sends only a title and a message. */
   const title   = (document.getElementById("pushTitle")?.value||"").trim();
   const body    = (document.getElementById("pushBody")?.value||"").trim();
-  const url     = (document.getElementById("pushUrl")?.value||"").trim();
   const statusEl = document.getElementById("pushBroadcastStatus");
+  const btn = document.getElementById("pushSendBtn");
 
-  if(!title){ showNotification("Enter a notification title","error"); return; }
-  if(!body){  showNotification("Enter a notification message","error"); return; }
-
-  /* Sanitise: no raw HTML */
-  const safe = s => s.replace(/[<>&"]/g, c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-
-  const userData = (()=>{
-    try{ return JSON.parse(localStorage.getItem("sokoniUser")||"{}"); }catch(e){ return {}; }
-  })();
-  const sellerUid  = window._sellerUid || userData.uid || "";
-  const sellerName = userData.name || userData.email || sellerUid;
-  if(!sellerUid){ showNotification("Not logged in","error"); return; }
-
+  if(title.length < 2){ showNotification("Enter a notification title","error"); return; }
+  if(body.length < 2){  showNotification("Enter a notification message","error"); return; }
+  if(btn && btn.disabled) return;                      /* double-tap guard */
+  if(btn) btn.disabled = true;
   if(statusEl) statusEl.textContent = "Sending…";
-
-  const payload = {
-    title:      safe(title).slice(0,50),
-    body:       safe(body).slice(0,120),
-    url:        url || "",
-    sellerUid,
-    sellerName,
-    createdAt:  Date.now(),
-    status:     "sent",
-  };
-
   try {
-    if(window.SokoniDB && typeof window.SokoniDB.saveSellerBroadcast === "function"){
-      await window.SokoniDB.saveSellerBroadcast(sellerName, payload);
-      showNotification("📲 Push notification sent to your followers!","success");
-      if(statusEl) statusEl.textContent = "✅ Sent at " + new Date().toLocaleTimeString("en-KE");
-      document.getElementById("pushTitle").value = "";
-      document.getElementById("pushBody").value  = "";
-      document.getElementById("pushUrl").value   = "";
-    } else {
-      /* Fallback: save to localStorage broadcast queue */
-      const key = "sokoniBroadcastQueue";
-      const q = JSON.parse(localStorage.getItem(key)||"[]");
-      q.unshift(payload);
-      if(q.length>50) q.length=50;
-      localStorage.setItem(key, JSON.stringify(q));
-      showNotification("📲 Broadcast queued (Firestore not connected)","success");
-      if(statusEl) statusEl.textContent = "⏳ Queued — will send when Firestore connects";
-      document.getElementById("pushTitle").value = "";
-      document.getElementById("pushBody").value  = "";
-      document.getElementById("pushUrl").value   = "";
-    }
+    const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js");
+    const fns = getFunctions(window.firebaseApp, "us-central1");
+    const res = await httpsCallable(fns, "miniShopSendAnnouncement")({ title: title.slice(0,80), message: body.slice(0,500), type: "general" });
+    const r = (res && res.data) || {};
+    /* success only AFTER the server confirmed — and it says how many followers were reached */
+    showNotification(r.recipients ? ("📲 Sent to " + r.recipients + " follower" + (r.recipients === 1 ? "" : "s")) : "📲 Posted — you have no followers to notify yet", "success");
+    if(statusEl) statusEl.textContent = "✅ Sent at " + new Date().toLocaleTimeString("en-KE") + (typeof r.recipients === "number" ? " · " + r.recipients + " follower" + (r.recipients === 1 ? "" : "s") : "");
+    document.getElementById("pushTitle").value = "";
+    document.getElementById("pushBody").value  = "";
   } catch(e){
-    showNotification("Failed to send broadcast","error");
-    if(statusEl) statusEl.textContent = "❌ Error: " + e.message;
+    const c = String((e && (e.code || e.message)) || "");
+    const msg = /resource-exhausted/.test(c) ? "You can send 3 announcements a day." : /not-found/.test(c) ? "Set up your shop first." : /permission-denied/.test(c) ? "Only the shop owner can send this." : /failed-precondition/.test(c) ? ((e && e.message) || "This shop cannot send announcements right now.") : "Could not send — nothing was sent.";
+    showNotification(msg, "error");
+    if(statusEl) statusEl.textContent = "❌ " + msg;
+  } finally {
+    if(btn) btn.disabled = false;
   }
 }
 

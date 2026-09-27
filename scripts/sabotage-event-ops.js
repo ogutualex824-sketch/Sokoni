@@ -48,6 +48,7 @@ const SUITES = {
   share:    ['node', ['scripts/test-share-integrity-browser.js']],
   shopf:    ['node', ['scripts/test-shop-follow.js']],
   shopa:    ['node', ['scripts/test-follow-shop-authority.js']],
+  bcast:    ['node', ['scripts/test-seller-broadcast.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -102,6 +103,10 @@ const MSUI = 'sokoni-minishop.js';
 const MSH = 'minishop.html';
 const SPUB = 'seller-public.html';
 const MIGR = 'scripts/migrate-reputation.js';
+const MV3 = 'functions/minishop-v3.js';
+const NTF = 'functions/notify.js';
+const IDX = 'functions/index.js';
+const SCRJ = 'script.js';
 
 const M = [
   /* ── ticket PIN + admission ── */
@@ -697,6 +702,34 @@ const M = [
     from: "followId.matches('.*--(provider|venue|creator|shop)--.*')", to: "followId.matches('.*--(provider|venue|creator)--.*')", expect: /SHOP follow/ },
   { group: 'shopfollow', rules: true, name: 'a shop owner writes their follower count (rules)', file: RULES, suite: 'rules',
     from: "  'packagingNote','delMethod','delTime','zones','updatedAt']));", to: "  'packagingNote','delMethod','delTime','zones','updatedAt','followerCount']));", expect: /shop owner inflates/ },
+
+  /* ── seller broadcast identity (CHANGELOG 212) ── */
+  { group: 'broadcast', name: 'cross-seller broadcast: a forged shopId is not ownership-checked', file: MV3, suite: 'bcast',
+    from: "  if (shopId) return { shopId, shop: await _assertShopOwner(shopId, uid) };", to: "  if (shopId) return { shopId, shop: (await _db().collection('shops').doc(shopId).get()).data() || {} };", expect: /forged shopId/ },
+  { group: 'broadcast', name: 'forged sender name: the payload\'s name reaches followers', file: MV3, suite: 'bcast',
+    from: "  const shopName = _san(shop.name || shop.storeName || 'A shop you follow', 80);", to: "  const shopName = _san((request.data || {}).sellerName || shop.name || shop.storeName || 'A shop you follow', 80);", expect: /SHOP RECORD|shop record says/i },
+  { group: 'broadcast', name: 'forged link / logo: the caller\'s URL becomes the destination', file: MV3, suite: 'bcast',
+    from: "  const deepLink = cfg.handle ?", to: "  const deepLink = (request.data || {}).url || (request.data || {}).logo ? String((request.data || {}).url) : cfg.handle ?", expect: /destination is the shop's own page/ },
+  { group: 'broadcast', name: 'the owner is in the audience of their own announcement', file: MV3, suite: 'bcast',
+    from: ".filter((u) => u && u !== uid)", to: ".filter(Boolean)", expect: /not the owner/ },
+  { group: 'broadcast', name: 'unlimited broadcasts (no daily limit)', file: MV3, suite: 'bcast',
+    from: "    if (used >= ANNOUNCE_MAX_PER_DAY) throw", to: "    if (false) throw", expect: /exactly 3|4th send/ },
+  { group: 'broadcast', name: 'the rate limit is checked outside the transaction (race)', file: MV3, suite: 'bcast',
+    from: "    const c = await tx.get(counterRef);", to: "    const c = await counterRef.get();", expect: /exactly 3/ },
+  { group: 'broadcast', name: 'an ambiguous multi-shop seller is guessed (first shop)', file: MV3, suite: 'bcast',
+    from: "  if (q.size === 1) return { shopId: q.docs[0].id, shop: q.docs[0].data() };", to: "  if (q.size >= 1) return { shopId: q.docs[0].id, shop: q.docs[0].data() };", expect: /ambiguous/ },
+  { group: 'broadcast', name: 'a suspended shop can broadcast', file: MV3, suite: 'bcast',
+    from: "  if (shop.suspended === true || ['suspended', 'banned', 'closed', 'deleted'].includes(String(shop.status || '').toLowerCase())) {", to: "  if (false) {", expect: /suspended shop cannot broadcast/ },
+  { group: 'broadcast', name: 'shop announcements bypass the opt-in channel (sent as critical)', file: NTF, suite: 'bcast',
+    from: "  shop_announcement:    { priority: 'marketing', category: 'promotions', smsTemplate: null },", to: "  shop_announcement:    { priority: 'critical', category: 'promotions', smsTemplate: null },", expect: /opt-in promotions/ },
+  { group: 'broadcast', name: 'the legacy name-keyed trigger sends again', file: IDX, suite: 'bcast',
+    from: "    const data = (event.data && event.data.data()) || {};\n", to: "    const data = (event.data && event.data.data()) || {};\n    await admin.messaging().sendEachForMulticast({ tokens: ['t1'], notification: { title: data.title || '' } });\n", expect: /NO FCM sent/ },
+  { group: 'broadcast', name: 'the XSS-prone name-keyed listener is re-enabled', file: SCRJ, suite: 'bcast',
+    from: "       the shop's identity from its record. */\n    return;\n", to: "       the shop's identity from its record. */\n", expect: /listener .* is inert/ },
+  { group: 'broadcast', rules: true, name: 'unauthorized broadcast: a client writes sellerBroadcasts again (rules)', file: RULES, suite: 'rules',
+    from: "  allow read:   if isAdmin();\n  allow create: if false;\n  allow delete: if isAdmin();\n  }\n  match /landlordProperties", to: "  allow read:   if isAdmin();\n  allow create: if isAuthed() && request.resource.data.sellerUid == request.auth.uid;\n  allow delete: if isAdmin();\n  }\n  match /landlordProperties", expect: /broadcasts AS another shop|cannot write a broadcast/ },
+  { group: 'broadcast', rules: true, name: 'legacy forged broadcasts readable by every user again (rules)', file: RULES, suite: 'rules',
+    from: "  match /sellerBroadcasts/{sellerName}/broadcasts/{broadcastId} {\n  allow read:   if isAdmin();", to: "  match /sellerBroadcasts/{sellerName}/broadcasts/{broadcastId} {\n  allow read:   if isAuthed();", expect: /reads legacy broadcast/ },
 ];
 
 const argv = process.argv.slice(2);

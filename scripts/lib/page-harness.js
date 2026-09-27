@@ -179,7 +179,7 @@ function makePageHarness(opts) {
       const user = o.user || null;
       await ctx.exposeBinding('__srv', (_s, name, data, uid) => server(name, data, uid, user && user.claims));
       await ctx.exposeBinding('__fs', (_s, op, arg) => fsOp(op, arg));
-      await ctx.addInitScript((u) => { window.__user = u; try { localStorage.setItem('sokoniPrivacyRejected', String(Date.now())); } catch (_) {} }, user);
+      await ctx.addInitScript(([u, st]) => { window.__user = u; try { localStorage.setItem('sokoniPrivacyRejected', String(Date.now())); Object.keys(st || {}).forEach((k) => localStorage.setItem(k, st[k])); } catch (_) {} }, [user, o.storage || null]);   /* o.storage: what a real sign-in leaves in localStorage */
       /* a LATER route wins: the catch-all first, then the SDK shims */
       await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, (route) => route.fulfill({ status: 200, contentType: /\.css(\?|$)/.test(route.request().url()) ? 'text/css' : 'application/javascript', body: '' }));
       /* HTTP (onRequest) functions: the page's fetch reaches the REAL handler with a minimal req/res */

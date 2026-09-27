@@ -826,7 +826,10 @@ const SokoniDB = {
   /* ══ SELLER BROADCASTS ══════════════════════════════════════
      sellerBroadcasts/{sellerUid}/broadcasts/{docId}
   ══════════════════════════════════════════════════════════ */
-  async saveSellerBroadcast(sellerName, payload) {
+  /* RETIRED (CHANGELOG 212): clients can no longer write sellerBroadcasts (firestore.rules) — a shop announcement
+     is the server callable miniShopSendAnnouncement. Kept so a stale caller fails LOUDLY, never silently. */
+  async saveSellerBroadcast() { throw Object.assign(new Error('Seller broadcasts moved to shop announcements.'), { code: 'failed-precondition' }); },
+  async _retiredSaveSellerBroadcast(sellerName, payload) {
     /* Key by seller name — matches the key buyers use in sokoniFollowing */
     const safeKey  = (sellerName || 'unknown').trim();
     const docId    = 'broadcast_' + Date.now();
@@ -838,7 +841,8 @@ const SokoniDB = {
     );
   },
 
-  listenSellerBroadcasts(sellerNames, callback) {
+  listenSellerBroadcasts() { return () => {}; },   /* RETIRED (CHANGELOG 212) — see saveSellerBroadcast */
+  _retiredListenSellerBroadcasts(sellerNames, callback) {
     if (!sellerNames || !sellerNames.length) return () => {};
     /* Listen to each followed seller's broadcasts subcollection */
     const unsubs = sellerNames.map(name =>
