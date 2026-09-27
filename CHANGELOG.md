@@ -1,3 +1,43 @@
+## 2026-09-27 (214) — The payer is never their own earner (webhook C1)
+
+A money-integrity defect found by the IntaSend coverage census, which ran on the owner's directive "use IntaSend,
+cover all payments". Not deployed. No KRA calls. No production writes. `0865a34` is untouched.
+
+- **The defect, proven on the real handler.** In `webhookIntasend`, the earner fell back to `payData.uid`, the account
+  that **started** the payment:
+  - That fallback is right for a merchant-initiated POS charge.
+  - For every **buyer-initiated** gateway payment with no earner in its attribution, it credited the **buyer's own
+    wallet** with their payment minus commission. That covers boosts, ads, food, contact deposits,
+    legal/property/bnb bookings and the referral "claim".
+  - For `type:'booking'` the credit went into the **withdrawable** `wallets.balance`.
+  - Measured on `0865a34`: an unattributed KES 500 booking deposit gave `wallets/buyer1.balance = 461`, and a boost gave
+    a seller-wallet sale credit to the buyer.
+- **The fix** (`functions/index.js`):
+  - The payer is the earner **only** on merchant-initiated POS categories (`pos`, `pos_till`, `pos_checkout`).
+  - Any other payment with no attributed earner is **held**: `payments/{ref}.settlementStatus = UNATTRIBUTED_HOLD` plus
+    one `commissionReviewQueue/unattributed_{ref}` entry, idempotent under the callback replay.
+  - The money stays captured (the payment is `COMPLETE`); only its settlement waits for review.
+  - Everything with an earner is unchanged: provider bookings, product orders, Till sales, POS, and subscriptions
+    (credited to nobody).
+- **Tests:**
+  - `scripts/test-webhook-payer-credit.js` (new): 13/0, on the **real** `webhookIntasend` with callback and replay,
+    through `scripts/lib/webhook-harness.js`, which gains 4 scenarios.
+  - Payment suites: 22 compared with the baseline. They are identical, except `test-subscription-commission-classification`,
+    whose source locator follows the zero-net branch into its own arm (19/2, the same 2 pre-existing failures as base).
+  - `test-creator-callback` 78/0 and `test-event-settlement` 111/0.
+  - Sabotage group `payer`: 3/3 caught; the tree is byte-identical afterwards.
+- **Still open (next commits):** the ~30 gateway flows that are still client-priced and client-created (see the
+  census). This fix stops the wrong-wallet credit; routing each flow to a server-priced purpose makes it attributable.
+- **Files:**
+  - `functions/index.js`.
+  - Scripts: `scripts/lib/webhook-harness.js`, `scripts/test-webhook-payer-credit.js` (new),
+    `scripts/test-subscription-commission-classification.js`, `scripts/sabotage-event-ops.js`.
+  - Docs: `docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md`.
+- **Deploy (when authorised):**
+  - Deploy `webhookIntasend` from the reconciled production lineage. Production functions come from several lineages,
+    so this branch alone is not deployable (see the release gates).
+  - Admins settle `UNATTRIBUTED_HOLD` payments from `commissionReviewQueue`.
+
 ## 2026-09-27 (213) — Hub review stores: the client requests, the server decides
 
 Fixes known hole 1, which was outside `0865a34`. That commit is not modified. Not deployed. No KRA calls. No

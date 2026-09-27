@@ -107,6 +107,13 @@ const S = {
       'eventTickets/tk2': { ticketId: 'tk2', orderId: 'EO1', eventId: 'ev1', buyerUid: 'buyer1', status: 'awaiting_payment' },
     },
   },
+  /* C1 (CHANGELOG 214): buyer-initiated gateway payments whose attribution names NO earner */
+  unattributedBoost: { payment: { uid: 'buyer1', amount: 500, meta: { category: 'boost', uid: 'buyer1', serviceDesc: 'Listing boost' } } },
+  unattributedBooking: { payment: { uid: 'buyer1', amount: 500, meta: { category: 'legal', type: 'booking', uid: 'buyer1', serviceDesc: 'Consultation deposit' } } },
+  /* merchant-initiated POS charge with no intent: the initiator IS the merchant — still credited */
+  posLegacy: { payment: { uid: 'merchant1', amount: 300, meta: { category: 'pos', uid: 'merchant1' } } },
+  /* a booking that names its provider — credited to the provider, never the payer */
+  bookingWithProvider: { payment: { uid: 'buyer1', amount: 500, meta: { category: 'services', type: 'booking', providerId: 'prov1', uid: 'buyer1', serviceDesc: 'Session' } } },
   topup: { ref: 'wtop_user1_1', topup: true, payment: { uid: 'user1', amount: 200 },
     /* production shape: a pending walletTransactions/{wtop_…} row, NO payments doc */
     seed: { 'walletTransactions/wtop_user1_1': { uid: 'user1', amount: 200, status: 'pending', type: 'topup', ref: 'wtop_user1_1' }, 'wallets/user1': { balance: 50 } } },

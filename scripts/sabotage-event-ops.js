@@ -50,6 +50,7 @@ const SUITES = {
   shopa:    ['node', ['scripts/test-follow-shop-authority.js']],
   bcast:    ['node', ['scripts/test-seller-broadcast.js']],
   hubrev:   ['node', ['scripts/test-hub-reviews.js']],
+  payer:    ['node', ['scripts/test-webhook-payer-credit.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -795,6 +796,14 @@ const M = [
     from: "  && request.resource.data.uid == request.auth.uid\n  && noAdminFields() && noRatingAggOnUpdate()\n  && (!request.resource.data.keys().hasAny(['lat','lng'])", to: "  && request.resource.data.uid == request.auth.uid\n  && noAdminFields()\n  && (!request.resource.data.keys().hasAny(['lat','lng'])", expect: /driver writes their own rating|inflates the rating counters/ },
   { group: 'hubreviews', rules: true, name: 'a lawyer listing is created with its own rating (rules)', file: RULES, suite: 'rules',
     from: "  allow create: if claimsOwner() && noAdminFields() && noRatingAggOnCreate();\n  allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields() && noRatingAggOnUpdate());\n  allow delete: if isAdmin();\n  }\n  match /legalAppointments", to: "  allow create: if claimsOwner() && noAdminFields();\n  allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields() && noRatingAggOnUpdate());\n  allow delete: if isAdmin();\n  }\n  match /legalAppointments", expect: /lawyer listing is created with a rating/ },
+
+  /* ── C1: the payer is never their own earner (CHANGELOG 214) ── */
+  { group: 'payer', name: 'the webhook credits the PAYER when no earner is attributed (the old fallback)', file: 'functions/index.js', suite: 'payer',
+    from: "        const _sellerId  = _explicitEarner || (_payerIsMerchant ? payData.uid : null);", to: "        const _sellerId  = _explicitEarner || payData.uid;", expect: /NO wallet is credited/ },
+  { group: 'payer', name: 'a merchant-initiated POS charge is no longer credited to the merchant', file: 'functions/index.js', suite: 'payer',
+    from: "        const _payerIsMerchant = _POS_MERCHANT_INITIATED.has(String(category || \"\").toLowerCase());", to: "        const _payerIsMerchant = false;", expect: /merchant-initiated POS/ },
+  { group: 'payer', name: 'an unattributed payment is held again on every replay (duplicate review entries)', file: 'functions/index.js', suite: 'payer',
+    from: "            if (!snap.exists || snap.data().settlementStatus === \"UNATTRIBUTED_HOLD\" || snap.data().walletCreditedAt) return false;", to: "            if (!snap.exists) return false;\n            txn.set(db.collection(\"commissionReviewQueue\").doc(), { ref: apiRef, dup: true });", expect: /exactly ONE review entry/ },
 ];
 
 const argv = process.argv.slice(2);

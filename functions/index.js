@@ -7836,8 +7836,18 @@ exports.webhookIntasend = onRequest(
            Till QR's buyer-initiated payment would otherwise have credited the
            buyer's own wallet (docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md §5). */
         const _isBooking = attribution.type === "booking" || attribution.type === "service-booking";
-        const _sellerId  = (_isBooking && attribution.providerId) ? attribution.providerId
-                         : (attribution.sellerUid || attribution.merchantUid || payData.uid);
+        /* C1 — THE PAYER IS NEVER THEIR OWN EARNER (CHANGELOG 214). The last fallback here was payData.uid, the
+           account that STARTED the payment. For a merchant-initiated POS charge that is the merchant (the comment
+           above); for every BUYER-initiated gateway payment with no earner in its attribution — boosts, ads, food,
+           contact deposits, legal / property / bnb bookings, the referral "claim" — it credited the BUYER'S OWN
+           wallet with their payment minus commission (and, for type 'booking', into the WITHDRAWABLE balance).
+           Now the payer is the earner only on the merchant-initiated POS categories; any other payment with no
+           attributed earner is HELD (below) for review — the money is SOKONI's to settle, never the payer's. */
+        const _POS_MERCHANT_INITIATED = new Set(["pos", "pos_till", "pos_checkout"]);
+        const _explicitEarner = (_isBooking && attribution.providerId) ? attribution.providerId
+                              : (attribution.sellerUid || attribution.merchantUid || null);
+        const _payerIsMerchant = _POS_MERCHANT_INITIATED.has(String(category || "").toLowerCase());
+        const _sellerId  = _explicitEarner || (_payerIsMerchant ? payData.uid : null);
         const _netCents = Math.round(Math.max(0, amount - sokoniCut) * 100);
 
         /* Creator Hub defence in depth: the early film branch above normally
@@ -7849,8 +7859,24 @@ exports.webhookIntasend = onRequest(
           console.log(`[webhookIntasend] wallet credit skipped (subscription): ${apiRef}`);
         } else if (_isFilmAccess) {
           console.log(`[webhookIntasend] wallet credit skipped (film_access → royalty ledger): ${apiRef}`);
-        } else if (!_sellerId || _netCents <= 0) {
-          console.warn(`[webhookIntasend] wallet credit skipped (no seller or zero net): ${apiRef}`);
+        } else if (!_sellerId) {
+          /* HELD, not credited (C1): recorded for review and on the payment itself, idempotently. */
+          console.warn(`[webhookIntasend] UNATTRIBUTED payment held — no earner; the payer is never credited: ${apiRef}`);
+          const _payDoc = db.collection("payments").doc(apiRef);
+          const _held = await db.runTransaction(async (txn) => {
+            const snap = await txn.get(_payDoc);
+            if (!snap.exists || snap.data().settlementStatus === "UNATTRIBUTED_HOLD" || snap.data().walletCreditedAt) return false;
+            txn.update(_payDoc, { settlementStatus: "UNATTRIBUTED_HOLD", settlementHeldAt: admin.firestore.FieldValue.serverTimestamp() });
+            txn.set(db.collection("commissionReviewQueue").doc(`unattributed_${apiRef}`), {
+              ref: apiRef, payerUid: payData.uid || null, amount, category, purpose: attribution.purpose || null,
+              reason: "unattributed payment: no earner on the intent or meta — held, the payer is never credited (C1)",
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            return true;
+          });
+          console.log(`[webhookIntasend] unattributed ${_held ? "held" : "already held"}`, { ref: apiRef });
+        } else if (_netCents <= 0) {
+          console.warn(`[webhookIntasend] wallet credit skipped (zero net): ${apiRef}`);
         } else if (_isBooking) {
           /* Booking earnings → the provider's WITHDRAWABLE wallet balance
              (wallets.balance, in SHILLINGS) — the exact field the wallet UI shows and

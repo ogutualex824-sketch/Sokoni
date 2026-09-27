@@ -241,7 +241,8 @@ function ok(label, cond, detail) {
     const idx = fs.readFileSync(path.join(ROOT, 'functions', 'index.js'), 'utf8');
     const gi  = idx.indexOf('const _isSubscription =');
     const bi  = idx.indexOf('if (_isSubscription) {', gi);
-    const zi  = idx.indexOf('!_sellerId || _netCents <= 0', gi);
+    /* the zero-net branch is its own arm since CHANGELOG 214 (the no-earner case became an UNATTRIBUTED hold) */
+    const zi  = idx.indexOf('} else if (_netCents <= 0) {', gi);
     ok('5 the C1 guard still exists', gi !== -1 && bi !== -1);
     ok('5 it still reads the server-authored purpose',
        gi !== -1 && idx.slice(gi, idx.indexOf(';', gi)).includes('attribution.purpose'));

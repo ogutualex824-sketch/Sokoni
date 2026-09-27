@@ -244,3 +244,26 @@ consumes) · `docs/INTASEND_WEBHOOK_ENDPOINT_RESOLUTION.md` (Q1, re-verified §1
 modified, the basis for §2's scoping decision) · `functions/booking-payment-sweep.js`
 (`holdServiceBookingPayment` — read, not modified, the basis for §4's finding) ·
 `scripts/test-webhook-attribution.js` (certification)
+
+---
+
+## §7 — The payer is never their own earner (CHANGELOG 214, 2026-09-27)
+
+The final fallback of the earner resolution, `payData.uid`, is the account that STARTED the payment. It is correct only
+for a merchant-initiated POS charge (`category` = `pos` / `pos_till` / `pos_checkout`). For every other payment it
+meant a buyer-initiated gateway payment with no earner on its intent or meta (boosts, ads, food, contact deposits, legal
+/ property / bnb bookings, the referral "claim") credited the **buyer's own** wallet — for `type:'booking'` into the
+withdrawable `wallets.balance`.
+
+Now:
+
+| Case | Earner |
+|---|---|
+| booking with `providerId` | the provider (withdrawable balance) — unchanged |
+| `sellerUid` / `merchantUid` on the attribution | that seller / merchant — unchanged |
+| merchant-initiated POS category, no attribution | `payData.uid` (the merchant) — unchanged |
+| anything else with no earner | **nobody** — `payments/{ref}.settlementStatus = UNATTRIBUTED_HOLD` + `commissionReviewQueue/unattributed_{ref}` (idempotent) |
+
+Proven on the real handler by `scripts/test-webhook-payer-credit.js` (harness scenarios `unattributedBoost`,
+`unattributedBooking`, `posLegacy`, `bookingWithProvider`). The durable fix is to route each such flow through a
+server-priced `createPaymentIntent` purpose that names its earner ([[project_payment_coverage_census]]).
