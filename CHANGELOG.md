@@ -1,3 +1,89 @@
+## 2026-09-28 (233) — Healthcare dashboards: one workspace, decided by the server from the category and the plan
+
+Slice: category-aware dashboards (the first step after `1895db1`). Not deployed. No production writes. No migrations.
+
+**Before:**
+- Every Healthcare provider saw the Entertainment dashboard: rate cards, the booking-PIN page, call requests and booked hours.
+- Nothing distinguished a pharmacy from a solo GP.
+- `providerRequestShop` would open a Shop and Till for any healthcare provider on a paid plan, including a telemedicine
+  provider.
+- Healthcare dashboard links went to `healthcare-dashboard.html` / `pharmacy-dashboard.html`, which do not exist.
+  `profile.js` sent providers to the patient directory.
+
+**Now:**
+- **`functions/healthcare-workspace.js` (new)** decides the workspace from two facts the provider cannot edit:
+  - the **category**: `providers/{uid}.healthcare` (CHANGELOG 227), which is WHO the practice is;
+  - the **live plan**: `capability-authority.capabilitiesFor`, which is what it paid for.
+- **The category matrix is NOT declared as plan keys in capability-authority.** Its header says a capability is what a
+  plan permits, never who someone is, so a clinician cannot *buy* a pharmacy's Till.
+- **What each category is offered:**
+  - **Patients** (the `providerGetCustomers` roster, built only from the provider's own bookings): every category,
+    unclassified included. It is labelled **"Patients"** everywhere, pharmacy included (owner, 2026-09-28), and is never
+    plan-gated.
+  - **POS/Till, products, inventory:** facility, pharmacy and laboratory only (owner: "inventory and products where
+    applicable").
+    - The plan gates the *request*.
+    - A practice that already HAS a Shop keeps its Till, products and inventory when the plan lapses.
+    - Shop existence is read from `shops/{uid}` with `ownerId == uid`, never from the provider-writable `shopId`.
+  - **Delivery:** pharmacy only.
+  - **Staff:** facility, pharmacy, laboratory, home care.
+  - **Clinical records / prescriptions:** listed per category. The server gate stays the paid clinical booking
+    (`_clinicalBasis`). Scope of practice is a professional-licence question and is not decided here.
+  - **Unclassified:** appointments and patients only, with the reason stated.
+  - **Quick Charge and calls:** returned as explicit **blocked** entries with reasons, never silently absent.
+- **Server gate.** `providerRequestShop` refuses a clinician, telemedicine, home-care or unclassified practice even on a
+  paid plan (`HC_OPERATION_NOT_OFFERED`). The plan check still runs first.
+- **Dead ends.**
+  - A dashboard section is listed only when its surface exists on the dashboard.
+  - POS, products, inventory, delivery and staff sections join the list in later commits of this slice, as their
+    screens land.
+- **Dashboard.**
+  - `providerDispatch {op:'healthcareWorkspace'}` answers for the caller only.
+  - `sokoni-health-workspace.js` applies the answer:
+    - hides Entertainment-only items;
+    - relabels the roster "Patients";
+    - shows a category/plan banner, escaped.
+  - Every sidebar and "More" item carries a `data-hc-section` key.
+  - A non-Healthcare provider is untouched. A failed call hides nothing, and the server gates hold regardless.
+- **Routing.** `onboarding.html`, `sokoni-profile-switcher.js` (healthcare, pharmacy) and `profile.js` now send
+  Healthcare providers to `provider-dashboard.html`.
+
+**Financial architecture (owner, locked 2026-09-28):**
+- Nothing here touches payments, wallets, receipts or commission.
+- The Shop that the gate allows is the existing merchant identity: `shops/{uid}`, a business wallet and a Till. Business
+  revenue therefore goes to the business wallet, never a personal one.
+
+**Files:**
+- New: `functions/healthcare-workspace.js`, `sokoni-health-workspace.js`, `scripts/test-healthcare-workspace.js`.
+- Changed: `functions/provider-shop.js`, `functions/provider-dispatch.js`, `provider-dashboard.html`, `onboarding.html`,
+  `profile.js`, `sokoni-profile-switcher.js`, `scripts/sabotage-event-ops.js`.
+- `scripts/test-healthcare-subscription-foundation.js`: the fixture clinic now carries the facility classification it
+  would have since 227. Without it the suite measured the new category gate instead of plan, status and provisioning.
+
+**Database:** no schema change. Reads `providers/{uid}.healthcare` and `shops/{uid}`.
+**API:** new `providerDispatch` op `healthcareWorkspace`. `providerRequestShop` gains the `HC_OPERATION_NOT_OFFERED`
+refusal.
+**Security:** a server category gate on Shop provisioning. The workspace answers for the caller only. The banner output
+is escaped.
+**Breaking:** a healthcare provider in a non-counter category, or an unclassified one, can no longer request a Shop.
+`providerRequestShop` has no UI caller today.
+
+**Tests:**
+- `test-healthcare-workspace` 47/0.
+- Unchanged against `1895db1`:
+  - subscription-foundation 120/0 (fixture updated);
+  - capability consumers, 18;
+  - healthcare category 34, directory 51, enquiries 15, conversations 35;
+  - POS gate 43, Connect 858, admin approval 64, withdrawal 23, share integrity 64.
+- Baseline failures, unchanged: entertainment-browser 3, entertainment-registry 1, creator-completion 1,
+  merchant-package-convergence 8, listing-limit verifier.
+- `cart-readers` fails only its working-tree guard (uncommitted files).
+- `nav-routes` 12/0; its baseline failure was parallel load and it passes solo.
+- Sabotage `hcws`: 11/11 caught, tree restored byte-identical.
+  - One attack initially CRASHED; the attack was rewritten.
+  - One was initially MISSED; the vacuous check was replaced by the invariant "every listed section exists on the
+    dashboard", which then found the unmarked Subscription tab.
+
 ## 2026-09-28 (232) — Healthcare public enquiries: the existing enquiry authority, with healthcare topics and no calls
 
 Owner decision (2026-09-28): reuse the existing enquiry system for healthcare. Not deployed. No production writes.

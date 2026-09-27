@@ -82,6 +82,20 @@ async function providerRequestShop(req) {
       'An active Healthcare subscription is required to open a Shop.');
   }
 
+  /* 2b ── The CATEGORY decides whether this kind of practice keeps a counter (CHANGELOG 233). A Shop
+     carries a Till and inventory — offered to facilities, pharmacies and laboratories, never to a solo
+     clinician, a telemedicine or home-care provider, or an account awaiting classification. The
+     category is the server's (providers/{uid}.healthcare, CHANGELOG 227) and is not purchasable, so no
+     plan can buy past this line. Hiding the button is not the gate; this is. */
+  const HW = require('./healthcare-workspace');
+  const hcCategory = require('./healthcare-category').categoryOf(prov);
+  if (!HW.allows(hcCategory, cap.capabilities, 'posTill')) {
+    throw new HttpsError('failed-precondition',
+      hcCategory ? `A Shop and Till are not offered for ${require('./healthcare-category').LABELS[hcCategory]}.`
+        : 'Your practice is awaiting classification by SOKONI before a Shop can be opened.',
+      { code: 'HC_OPERATION_NOT_OFFERED', op: 'posTill', category: hcCategory });
+  }
+
   /* 3 ── Already provisioned? Converge, do not fork. */
   /* Note what already exists, but do NOT return early.
      An earlier attempt can have produced a shop whose Till or wallet provisioning failed —

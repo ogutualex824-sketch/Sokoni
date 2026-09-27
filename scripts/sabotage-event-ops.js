@@ -73,6 +73,7 @@ const SUITES = {
   entcomms: ['node', ['scripts/test-ent-communications.js']],
   hcconv:   ['node', ['scripts/test-healthcare-conversations.js']],
   hcenq:    ['node', ['scripts/test-healthcare-enquiries.js']],
+  hcws:     ['node', ['scripts/test-healthcare-workspace.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -1136,6 +1137,30 @@ const M = [
     from: " || (conv.metadata && conv.metadata.hub === 'healthcare');", to: ";", expect: /carries neither the text/ },
   { group: 'hcenq', browser: false, name: "the clinical-privacy notice is dropped", file: "functions/ent-enquiries.js", suite: 'hcenq',
     from: "clinicalNotice: hc ? HC_NOTICE : null,", to: "clinicalNotice: null,", expect: /clinical-privacy notice/ },
+
+  /* ── Healthcare category-aware workspace (CHANGELOG 233) ── */
+  { group: 'hcws', browser: false, name: "providerRequestShop drops the category gate", file: "functions/provider-shop.js", suite: 'hcws',
+    from: "  if (!HW.allows(hcCategory, cap.capabilities, 'posTill')) {", to: "  if (false) {", expect: /clinician on a paid plan is REFUSED/ },
+  { group: 'hcws', browser: false, name: "a clinician is offered a Till", file: "functions/healthcare-workspace.js", suite: 'hcws',
+    from: "  clinician:    Object.freeze({ appointments: true, patients: true, clinicalRecords: true,  prescriptions: true,  posTill: false,", to: "  clinician:    Object.freeze({ appointments: true, patients: true, clinicalRecords: true,  prescriptions: true,  posTill: true,", expect: /NEVER offered to a clinician/ },
+  { group: 'hcws', browser: false, name: "free text makes an account Healthcare", file: "functions/healthcare-workspace.js", suite: 'hcws',
+    from: "  const healthcare = !!(prov.healthcare && typeof prov.healthcare === 'object');", to: "  const healthcare = !!(prov.healthcare && typeof prov.healthcare === 'object') || /clinic|pharm/i.test(String(prov.category || ''));", expect: /free-text "Clinic" is NOT/ },
+  { group: 'hcws', browser: false, name: "shop survival ignores the shop owner", file: "functions/healthcare-workspace.js", suite: 'hcws',
+    from: "    hasShop = sh.exists && String((sh.data() || {}).ownerId || '') === String(uid) && String((sh.data() || {}).status || '') === 'active';", to: "    hasShop = sh.exists;", expect: /owned by someone else confers nothing/ },
+  { group: 'hcws', browser: false, name: "an existing shop overrides the category", file: "functions/healthcare-workspace.js", suite: 'hcws',
+    from: "      || (hasShop && SHOP_OPS.includes(op) && matrixFor(category)[op] === true);", to: "      || (hasShop && SHOP_OPS.includes(op));", expect: /never overrides the CATEGORY/ },
+  { group: 'hcws', browser: false, name: "a lapsed plan takes the Till from a practice that has a Shop", file: "functions/healthcare-workspace.js", suite: 'hcws',
+    from: "      || (hasShop && SHOP_OPS.includes(op) && matrixFor(category)[op] === true);", to: "      || false;", expect: /keeps its Till, products and inventory/ },
+  { group: 'hcws', browser: false, name: "a pharmacy roster is labelled Customers", file: "functions/healthcare-workspace.js", suite: 'hcws',
+    from: "    customersLabel: 'Patients',", to: "    customersLabel: category === 'pharmacy' ? 'Customers' : 'Patients',", expect: /labelled "Patients" for EVERY category/ },
+  { group: 'hcws', browser: false, name: "the patient roster is plan-gated", file: "functions/healthcare-workspace.js", suite: 'hcws',
+    from: "const PLAN_GATED = Object.freeze({ posTill: 'shopRequestable',", to: "const PLAN_GATED = Object.freeze({ patients: 'shopRequestable', posTill: 'shopRequestable',", expect: /never plan-gated/ },
+  { group: 'hcws', browser: false, name: "the workspace answers for data.uid", file: "functions/healthcare-workspace.js", suite: 'hcws',
+    from: "    return workspaceFor(getFirestore(), uid);", to: "    return workspaceFor(getFirestore(), (req.data && req.data.uid) || uid);", expect: /answers for the CALLER only/ },
+  { group: 'hcws', browser: false, name: "an unwired POS section is listed", file: "functions/healthcare-workspace.js", suite: 'hcws',
+    from: "const WIRED_SECTIONS = Object.freeze([]);", to: "const WIRED_SECTIONS = Object.freeze(['pos', 'products', 'inventory', 'delivery', 'staff']);", expect: /no dead ends/ },
+  { group: 'hcws', browser: false, name: "the banner renders the label unescaped", file: "sokoni-health-workspace.js", suite: 'hcws',
+    from: "'<div class=\"hc-ws-head\"><span class=\"hc-ws-cat\">' + esc(w.label) + '</span>'", to: "'<div class=\"hc-ws-head\"><span class=\"hc-ws-cat\">' + w.label + '</span>'", expect: /escaped/ },
 ];
 
 const argv = process.argv.slice(2);

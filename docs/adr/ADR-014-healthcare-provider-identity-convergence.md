@@ -113,3 +113,34 @@ as an identity and as an authority.**
 | add `doctor` / `nurse` claims | authority by job title; a title is not a permission, and it cannot express "may act at this facility" |
 | reconcile `role >= 4` with the boolean claim | preserves two admin vocabularies so a future reader must know both; one of them has no writer |
 | fix HC-01 by widening `noAdminFields()` | recorded regression: a general `noAdminFields` change reopens the application self-approval vector |
+
+## Addendum 2026-09-28 — the category-aware workspace (CHANGELOG 233)
+
+A Healthcare provider's dashboard is decided on the server by `functions/healthcare-workspace.js` from two facts:
+
+- the **category**: `providers/{uid}.healthcare`, set at approval or by an admin (CHANGELOG 227). This is who the
+  practice is.
+- the **live plan**: `capability-authority`. This is what the practice has paid for.
+
+The category matrix is deliberately **not** a set of capability keys, because a category is identity and is not
+purchasable.
+
+| operation | clinician | facility | pharmacy | laboratory | telemedicine | home care | unclassified | server check |
+|---|---|---|---|---|---|---|---|---|
+| appointments | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | booking-service |
+| **patients** (roster) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | own `providerBookings` only |
+| POS/Till · products · inventory | — | ✓ | ✓ | ✓ | — | — | — | `providerRequestShop` (plus the plan, for the request only) |
+| delivery | — | — | ✓ | — | — | — | — | wired later in the slice |
+| staff | — | ✓ | ✓ | ✓ | — | ✓ | — | wired later in the slice |
+| clinical records | ✓ | ✓ | — | ✓ | ✓ | ✓ | — | `_clinicalBasis` (paid clinical booking) |
+| prescriptions | ✓ | ✓ | — | — | ✓ | — | — | `_clinicalBasis` (paid clinical booking) |
+| Quick Charge · calls | blocked | blocked | blocked | blocked | blocked | blocked | blocked | not offered |
+
+Rules that apply to every row:
+
+- The roster is labelled **"Patients"** in every category (owner decision 2026-09-28).
+- An existing Shop survives a lapsed plan. Its existence is read from `shops/{uid}` with `ownerId == uid`.
+- Hiding a section is presentation. Each operation names its server check, and a section is listed only once its screen
+  exists.
+
+Related: [[ADR-015]] (payments), [[Healthcare]], [[SmartPOS]].

@@ -292,29 +292,29 @@ a{color:var(--acc);text-decoration:none}
       <span class="sb-plan" id="sbPlan">Free Trial</span>
     </div>
     <nav class="sb-nav">
-      <div class="sb-item active" onclick="P.show('overview',this)"><span class="sb-icon">🏠</span>Overview</div>
-      <div class="sb-item" onclick="P.show('settings',this,'services')"><span class="sb-icon">🧰</span>Services</div>
+      <div data-hc-section="overview" class="sb-item active" onclick="P.show('overview',this)"><span class="sb-icon">🏠</span>Overview</div>
+      <div data-hc-section="services" class="sb-item" onclick="P.show('settings',this,'services')"><span class="sb-icon">🧰</span>Services</div>
       <!-- Entertainment business workspace (2026-09-27): ONE availability authority, rate cards, enquiries,
            calls, message settings, discounts — sokoni-ent-workspace.js -->
-      <div class="sb-item" onclick="WS.open('ratecards',this)"><span class="sb-icon">🏷️</span>Rate Cards</div>
-      <div class="sb-item" onclick="WS.open('availability',this)"><span class="sb-icon">🕘</span>Availability</div>
-      <div class="sb-item" onclick="WS.open('calendar',this)"><span class="sb-icon">📆</span>Calendar</div>
-      <div class="sb-item" onclick="P.show('bookings',this)"><span class="sb-icon">📅</span>Bookings</div>
+      <div data-hc-section="ent" class="sb-item" onclick="WS.open('ratecards',this)"><span class="sb-icon">🏷️</span>Rate Cards</div>
+      <div data-hc-section="availability" class="sb-item" onclick="WS.open('availability',this)"><span class="sb-icon">🕘</span>Availability</div>
+      <div data-hc-section="calendar" class="sb-item" onclick="WS.open('calendar',this)"><span class="sb-icon">📆</span>Calendar</div>
+      <div data-hc-section="bookings" class="sb-item" onclick="P.show('bookings',this)"><span class="sb-icon">📅</span>Bookings</div>
       <!-- Entertainment bookings: the buyer's PIN confirms the show-up and releases the payment (entertainment.html#provide). -->
-      <a class="sb-item" href="/entertainment.html?tab=mine#provide" style="text-decoration:none;color:inherit"><span class="sb-icon">🔑</span>Verify booking PIN</a>
-      <div class="sb-item" onclick="WS.open('enquiries',this)"><span class="sb-icon">❓</span>Enquiries</div>
-      <a class="sb-item" href="/messages.html" style="text-decoration:none;color:inherit"><span class="sb-icon">💬</span>Messages</a>
-      <div class="sb-item" onclick="WS.open('calls',this)"><span class="sb-icon">📞</span>Calls</div>
-      <div class="sb-item" onclick="WS.open('messaging',this)"><span class="sb-icon">🛎️</span>Message Settings</div>
-      <div class="sb-item" onclick="WS.open('discounts',this)"><span class="sb-icon">📣</span>Marketing</div>
-      <div class="sb-item" onclick="WS.open('stats',this)"><span class="sb-icon">⏱️</span>Booked Hours</div>
-      <div class="sb-item" onclick="WS.open('reputation',this)"><span class="sb-icon">🌟</span>Followers &amp; Reputation</div>
-      <div class="sb-item" onclick="P.show('calendar',this)"><span class="sb-icon">🟢</span>Live Status</div>
-      <div class="sb-item" onclick="P.show('earnings',this)"><span class="sb-icon">💰</span>Wallet</div>
-      <div class="sb-item" onclick="P.show('customers',this)"><span class="sb-icon">👥</span>Customers</div>
-      <div class="sb-item" onclick="P.show('reviews',this)"><span class="sb-icon">⭐</span>Reviews</div>
-      <div class="sb-item" onclick="P.show('analytics',this)"><span class="sb-icon">📊</span>Analytics</div>
-      <div class="sb-item" onclick="P.show('settings',this)"><span class="sb-icon">⚙️</span>Settings</div>
+      <a data-hc-section="ent" class="sb-item" href="/entertainment.html?tab=mine#provide" style="text-decoration:none;color:inherit"><span class="sb-icon">🔑</span>Verify booking PIN</a>
+      <div data-hc-section="enquiries" class="sb-item" onclick="WS.open('enquiries',this)"><span class="sb-icon">❓</span>Enquiries</div>
+      <a data-hc-section="messages" class="sb-item" href="/messages.html" style="text-decoration:none;color:inherit"><span class="sb-icon">💬</span>Messages</a>
+      <div data-hc-section="ent" class="sb-item" onclick="WS.open('calls',this)"><span class="sb-icon">📞</span>Calls</div>
+      <div data-hc-section="enquiries" class="sb-item" onclick="WS.open('messaging',this)"><span class="sb-icon">🛎️</span>Message Settings</div>
+      <div data-hc-section="marketing" class="sb-item" onclick="WS.open('discounts',this)"><span class="sb-icon">📣</span>Marketing</div>
+      <div data-hc-section="ent" class="sb-item" onclick="WS.open('stats',this)"><span class="sb-icon">⏱️</span>Booked Hours</div>
+      <div data-hc-section="reviews" class="sb-item" onclick="WS.open('reputation',this)"><span class="sb-icon">🌟</span>Followers &amp; Reputation</div>
+      <div data-hc-section="calendar" class="sb-item" onclick="P.show('calendar',this)"><span class="sb-icon">🟢</span>Live Status</div>
+      <div data-hc-section="earnings" class="sb-item" onclick="P.show('earnings',this)"><span class="sb-icon">💰</span>Wallet</div>
+      <div data-hc-section="customers" class="sb-item" onclick="P.show('customers',this)"><span class="sb-icon">👥</span><span data-hc-label="customers">Customers</span></div>
+      <div data-hc-section="reviews" class="sb-item" onclick="P.show('reviews',this)"><span class="sb-icon">⭐</span>Reviews</div>
+      <div data-hc-section="analytics" class="sb-item" onclick="P.show('analytics',this)"><span class="sb-icon">📊</span>Analytics</div>
+      <div data-hc-section="settings" class="sb-item" onclick="P.show('settings',this)"><span class="sb-icon">⚙️</span>Settings</div>
     </nav>
     <div class="sb-foot">
       <a href="onboarding.html" class="btn btn-s btn-sm" style="display:block;text-align:center;margin-bottom:8px">+ Add Another Role</a>
@@ -328,6 +328,7 @@ a{color:var(--acc);text-decoration:none}
 
     <!-- ── Overview ──────────────────────────────────────────────────── -->
     <div class="panel active" id="panel-overview">
+      <div id="hcWorkspace" class="hc-ws" hidden role="status" aria-live="polite"></div>
       <div class="pg-header">
         <div><div class="pg-title" id="greetTitle">Good morning!</div><div class="pg-sub" id="greetDate"></div></div>
         <button class="btn btn-p btn-sm" onclick="location.href='provider-onboarding.html'">Edit Profile</button>
@@ -553,7 +554,7 @@ a{color:var(--acc);text-decoration:none}
 
     <!-- ── Customers (Phase 6 — CRM from providerBookings) ────────────── -->
     <div class="panel" id="panel-customers">
-      <div class="pg-header"><div><div class="pg-title">Customers</div><div class="pg-sub">Built from your booking history</div></div></div>
+      <div class="pg-header"><div><div class="pg-title" data-hc-label="customers">Customers</div><div class="pg-sub">Built from your booking history</div></div></div>
       <div style="padding:14px 20px">
         <div class="health-grid" id="cuInsights"></div>
         <input id="cuSearch" class="sk-in" type="search" placeholder="Search customers by name…" oninput="Cu.search(this.value)" aria-label="Search customers" style="margin:12px 0 10px">
@@ -614,7 +615,7 @@ a{color:var(--acc);text-decoration:none}
           <button class="stab" id="stabServices" onclick="S.tab('services',this)">Rate Cards</button>
           <button class="stab" id="stabPayment" onclick="S.tab('payment',this)">Payment</button>
           <button class="stab" onclick="S.tab('notif',this)">Notifications</button>
-          <button class="stab" id="stabSub" onclick="S.tab('sub',this)">Subscription</button>
+          <button data-hc-section="subscription" class="stab" id="stabSub" onclick="S.tab('sub',this)">Subscription</button>
           <button class="stab" onclick="S.tab('verif',this)">Verification</button>
         </div>
         <!-- Profile tab -->
@@ -783,12 +784,12 @@ a{color:var(--acc);text-decoration:none}
     <div class="av-sheet-hdr"><div style="font-weight:800;font-size:1rem">More</div><button class="btn btn-g btn-sm" onclick="More.close()" aria-label="Close">✕</button></div>
     <div class="av-sheet-body">
       <div class="more-grid">
-        <button class="more-item" onclick="More.go('services')"><span>🧰</span>Services</button>
-        <button class="more-item" onclick="More.go('customers')"><span>👥</span>Customers</button>
-        <button class="more-item" onclick="More.go('reviews')"><span>⭐</span>Reviews</button>
-        <button class="more-item" onclick="More.go('analytics')"><span>📊</span>Analytics</button>
-        <button class="more-item" onclick="More.go('availability')"><span>🕐</span>Availability</button>
-        <button class="more-item" onclick="More.go('settings')"><span>⚙️</span>Settings</button>
+        <button data-hc-section="services" class="more-item" onclick="More.go('services')"><span>🧰</span>Services</button>
+        <button data-hc-section="customers" class="more-item" onclick="More.go('customers')"><span>👥</span><span data-hc-label="customers">Customers</span></button>
+        <button data-hc-section="reviews" class="more-item" onclick="More.go('reviews')"><span>⭐</span>Reviews</button>
+        <button data-hc-section="analytics" class="more-item" onclick="More.go('analytics')"><span>📊</span>Analytics</button>
+        <button data-hc-section="availability" class="more-item" onclick="More.go('availability')"><span>🕐</span>Availability</button>
+        <button data-hc-section="settings" class="more-item" onclick="More.go('settings')"><span>⚙️</span>Settings</button>
       </div>
     </div>
   </div>
@@ -852,6 +853,8 @@ a{color:var(--acc);text-decoration:none}
 <script src="sokoni-ent-calendar.js" defer></script>
 <script src="sokoni-ent-workspace.js" defer></script>
 <script src="sokoni-reputation.js" defer></script>
+<!-- CHANGELOG 233 — category-aware Healthcare workspace (server-decided sections; no-op for other providers) -->
+<script src="sokoni-health-workspace.js" defer></script>
 <script>
 const _q=id=>document.getElementById(id);
 const _esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');

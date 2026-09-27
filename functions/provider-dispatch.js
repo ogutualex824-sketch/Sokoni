@@ -40,7 +40,9 @@ function _h() {
       require('./booking-resolution')._h,          /* Slice 2: affected-booking resolution engine */
       /* Merchant identity on request — provisions the SAME shops/sellers/businesses
          projection merchant approval uses (provider-shop.js), never a healthcare variant. */
-      { providerRequestShop: require('./provider-shop').providerRequestShop });
+      { providerRequestShop: require('./provider-shop').providerRequestShop },
+      /* CHANGELOG 233 — the category-aware Healthcare workspace (what the dashboard offers, server-decided). */
+      require('./healthcare-workspace')._h);
   }
   return _mod;
 }
@@ -68,6 +70,7 @@ const ROUTES = [
   'providerGetPublicProfile',
   'providerSearchProviders',
   'providerRequestShop',
+  'healthcareWorkspace',
   'providerGetAnalytics',
   'providerGetPlans',
   // provider-ops — dashboard + service management (post-onboarding)

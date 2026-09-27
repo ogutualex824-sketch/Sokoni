@@ -24,9 +24,9 @@
     property:     'property-dashboard.html',
     hotel:        'hotel-dashboard.html',
     restaurant:   'restaurant-dashboard.html',
-    pharmacy:     'pharmacy-dashboard.html',
+    pharmacy:     'provider-dashboard.html',   /* one Healthcare workspace (CHANGELOG 233) */
     events:       'event-manager.html',
-    healthcare:   'healthcare-dashboard.html',
+    healthcare:   'provider-dashboard.html',   /* one Healthcare workspace (CHANGELOG 233) */
     employer:     'employer-dashboard.html',
     distributor:  'distributor-dashboard.html',
     wholesaler:   'wholesale-portal.html',

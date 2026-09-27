@@ -24,6 +24,10 @@
  * pre-fix module with its REAL path so sibling requires resolve normally — a mutant that
  * fails to LOAD would otherwise report "nothing detected" and read as success.
  */
+/* FIXTURE NOTE (CHANGELOG 233): HC_PROVIDER_1 ("Karen Clinic") carries the server classification a facility
+   carries since CHANGELOG 227 — providerRequestShop now also refuses a category that keeps no counter
+   (test-healthcare-workspace.js proves that gate). Without it this suite would measure the category gate
+   instead of the plan / status / provisioning behaviour it exists for. */
 'use strict';
 
 const fs = require('fs');
@@ -513,7 +517,7 @@ async function partShop() {
   async function request(tier) {
     CURRENT = makeDb({
       'applications/a1': hcApp,
-      'providers/HC_PROVIDER_1': { uid: HC, status: 'active', name: 'Karen Clinic', category: 'Healthcare' },
+      'providers/HC_PROVIDER_1': { uid: HC, status: 'active', name: 'Karen Clinic', category: 'Healthcare', healthcare: { category: 'facility', source: 'admin' } },
       'accountSubscriptions/HC_PROVIDER_1_healthcare': hcSub(tier),
     });
     try { return await shop.providerRequestShop({ auth: { uid: HC }, data: {} }); }
@@ -530,7 +534,7 @@ async function partShop() {
   /* An unapproved provider must NOT get a shop — the admin decision is the authority. */
   CURRENT = makeDb({
     'applications/a1': hcApp,
-    'providers/HC_PROVIDER_1': { uid: HC, status: 'pending' },
+    'providers/HC_PROVIDER_1': { uid: HC, status: 'pending', healthcare: { category: 'facility', source: 'admin' } },
     'accountSubscriptions/HC_PROVIDER_1_healthcare': hcSub('enterprise'),
   });
   let unapproved;
@@ -542,7 +546,7 @@ async function partShop() {
      the subscription and re-resolve capabilities. */
   CURRENT = makeDb({
     'applications/a1': hcApp,
-    'providers/HC_PROVIDER_1': { uid: HC, status: 'active', name: 'Karen Clinic' },
+    'providers/HC_PROVIDER_1': { uid: HC, status: 'active', name: 'Karen Clinic', healthcare: { category: 'facility', source: 'admin' } },
     'accountSubscriptions/HC_PROVIDER_1_healthcare': hcSub('enterprise'),
   });
   await shop.providerRequestShop({ auth: { uid: HC }, data: {} }).catch(() => {});
@@ -632,7 +636,7 @@ async function partShopOperable() {
 
   const seedApproved = (tier) => makeDb({
     'applications/a1': hcApp,
-    'providers/HC_PROVIDER_1': { uid: HC, status: 'active', name: 'Karen Clinic', category: 'Healthcare',
+    'providers/HC_PROVIDER_1': { uid: HC, status: 'active', name: 'Karen Clinic', category: 'Healthcare', healthcare: { category: 'facility', source: 'admin' },
       phone: '+254700000001', location: 'Karen, Nairobi' },
     'accountSubscriptions/HC_PROVIDER_1_healthcare': hcSub(tier),
   });
@@ -703,7 +707,7 @@ async function partShopOperable() {
   for (const [st, label] of [['pending', 'pending'], ['suspended', 'suspended']]) {
     CURRENT = makeDb({
       'applications/a1': hcApp,
-      'providers/HC_PROVIDER_1': { uid: HC, status: st },
+      'providers/HC_PROVIDER_1': { uid: HC, status: st, healthcare: { category: 'facility', source: 'admin' } },
       'accountSubscriptions/HC_PROVIDER_1_healthcare': hcSub('enterprise'),
     });
     let outcome;
