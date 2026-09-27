@@ -3452,11 +3452,9 @@ section button[onclick*="stopPropagation"]{-webkit-tap-highlight-color:transpare
     grid-template-columns:repeat(2,1fr) !important;
   }
 
-  /* Hub cards with sub-buttons: prevent overflow on wide screens */
-  section[style*="padding:0 28px 32px"] a[style*="display:flex"]{
-    flex-wrap:nowrap;
-    overflow:hidden;
-  }
+  /* Hub cards with sub-buttons: overflow is handled by WRAPPING, below (all widths).
+     This used to be nowrap + overflow:hidden, which clipped the last buttons at the card
+     edge — Sokoni Eats lost "Become Rider" on every desktop width. */
 
   /* Quick links: wider row on desktop */
   .qlinks-row{flex-wrap:wrap;}
@@ -3467,6 +3465,15 @@ section button[onclick*="stopPropagation"]{-webkit-tap-highlight-color:transpare
 
 /* ── Notification close button: high-contrast so it's easy to tap ── */
 .n-panel-x{color:rgba(255,255,255,0.7) !important;font-size:14px !important;width:32px !important;height:32px !important;}
+
+/* ── Hub cards: action buttons stay INSIDE the card at every width ──
+   The button group was flex-shrink:0 with nowrap buttons, so it could never use its own
+   wrapping and pushed past the card. Now: the card wraps, the text keeps a readable
+   column, and when icon + text + buttons do not fit on one line the buttons drop to
+   their own line and wrap there. Cards whose buttons fit are laid out exactly as before. */
+.hubs-hscroll-wrap > a{flex-wrap:wrap;}
+.hubs-hscroll-wrap > a > div[style*="flex:1"]{flex:1 1 160px !important;min-width:0;}
+.hubs-hscroll-wrap > a > div[style*="flex-shrink:0"]{flex:0 1 auto !important;min-width:0;flex-wrap:wrap !important;}
 
 /* ── Very narrow: hide hub sub-button rows to prevent overflow ── */
 @media(max-width:480px){

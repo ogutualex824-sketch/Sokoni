@@ -1,4 +1,20 @@
 ## [2026-09-30] - BnB: category pill strip made phone-safe (snap-scroll chips, sort on its own row) — built, browser certification QUEUED, NOT deployed
+## [2026-09-27] — Home: hub-card buttons stay inside the card at every width (Sokoni Eats "Become Rider") — UNCOMMITTED, NOT deployed
+
+On the home page's Sokoni Hubs grid, the Sokoni Eats card pushed "Become Rider" (and at 1024px "Sell Food") past the
+card edge on desktop; a desktop rule (`nowrap` + `overflow:hidden`) clipped it. At tablet widths (768–820px) up to 11
+hub cards overflowed the same way. Cause: every card's button group was `flex-shrink:0` with no-wrap buttons, so its
+own `flex-wrap` could never act.
+
+Fix (CSS only, `index.html`): the clipping rule is removed; at all widths the card wraps, the text keeps a readable
+column (`flex:1 1 160px; min-width:0`) and the button group may shrink and wrap (`flex:0 1 auto`). Cards whose buttons
+fit are unchanged (still right-aligned); cards that do not fit drop their buttons to their own line inside the card.
+The ≤480px rule that hides hub button rows is untouched.
+
+Verified in headless Chromium at 1440 / 1280 / 1024 / 820 / 768 / 390 / 360px: 19 overflow findings before, 0 after,
+24 cards each width. **Files:** `index.html`. **Database / API / security:** none. **Breaking:** none.
+
+## [2026-09-27] — B2: orders create refuses browser-written deliveryQuote / deliveryQuoteId / sessionId (served-rules lineage, UNCOMMITTED, NOT released)
 
 **Branch `hosting/bnb-mobile-on-0271709`, built on `0271709`.** Owner ask (verbatim): "fix the bnb mobile layout the
 categories buttons or card are in a mess".
