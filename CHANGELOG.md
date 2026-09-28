@@ -1,3 +1,27 @@
+## 2026-09-28 (161) — L-3: port Q0c-1 onto the POS lineage — the smsEnqueue callable is admin-only (NOT deployed)
+
+**Lineage reconciliation, unit 3.** On the POS lineage, `smsEnqueue` let any signed-in account choose three things:
+- the recipient;
+- any official template with its variables — a real-looking OTP, a `payment_success` message, and so on — sent
+  from SOKONI's sender to any number;
+- `targetUid`, whose preferences apply, and `dedupeKey`, which could pre-claim a victim's OTP key.
+
+The fix already existed on the Q-chain line (85e71a1), but not here.
+
+- **Change:** `functions/sms-service.js`, `smsEnqueue` only. It requires the server-minted custom claim `admin` or
+  `superAdmin`, as strict `true`. A `users.roles` field or a token `role: "admin"` string does not count. The
+  internal `enqueue()` that the product uses (notify.js) is unchanged.
+- **Files:** `functions/sms-service.js`, new `scripts/test-q0c1-sms-enqueue-admin.js`.
+- **Database:** none.
+- **API:** `smsEnqueue` returns `permission-denied` for non-admins.
+- **Security:** closes a public SMS relay (fake OTPs and payment confirmations) and OTP denial of service by
+  squatting on a dedupe key.
+- **Evidence:**
+  - 13/0 new vs 6/7 old: the old tree queued a non-admin's OTP to any number, a forged `payment_success`, the
+    `users.roles` / `role` string / `"true"` shapes, a chosen `targetUid`, and a pre-claimed victim key;
+  - 4 mutants caught: gate removed, truthy instead of strict, `role` string accepted, `superAdmin` dropped;
+  - the floor, the earlier units and syntax are reported with the unit.
+
 ## 2026-09-28 (160) — L-2: port Q0b-2c + Q0b-2d onto the POS lineage — pos-crm-pro acts only for the caller's own store (NOT deployed)
 
 **Lineage reconciliation, unit 2.** The E1 hole was open on the POS lineage, the lineage production POS deploys from.

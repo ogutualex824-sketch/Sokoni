@@ -440,9 +440,21 @@ exports.smsQueueWorker = onSchedule(
 );
 
 /* Admin/system enqueue. */
+/* Q0c-1 — ADMIN ONLY. This callable let ANY signed-in account choose the recipient (`to`), any official
+   template and its `vars` — a real-looking OTP, password reset, payment_success, wallet_credit or refund
+   message from SOKONI's sender to any number — plus `targetUid` (whose preferences are consulted) and
+   `dedupeKey` (the queue document id, so a victim's `otp:<uid>:<purpose>` key could be pre-claimed and
+   their real OTP blocked). No client calls it; the product sends through the internal `enqueue()`
+   (notify.js), which is unchanged. Admin is the SERVER-MINTED custom claim — `admin` or `superAdmin`,
+   the rules' own isAdmin() — never `users/{uid}.roles`, which a ruleset that does not guard `roles`
+   would let a user write for themselves. */
 exports.smsEnqueue = onCall({ region: REGION, secrets: sokoniAt.secrets }, async (request) => {
   const uid = request.auth && request.auth.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+  const claims = (request.auth && request.auth.token) || {};
+  if (!(claims.admin === true || claims.superAdmin === true)) {
+    throw new HttpsError('permission-denied', 'Admin access required.');
+  }
   const { to, template, vars, dedupeKey, targetUid } = request.data || {};
   return enqueue({ to, template, vars, uid: targetUid || uid, dedupeKey });
 });
