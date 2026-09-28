@@ -1,3 +1,39 @@
+## 2026-09-28 (247) — C3 certified: verified-only discovery, with its exceptions recorded
+
+Documentation only: `docs/C3_DISCOVERY_CERTIFICATION.md`. No code, no deploy, and the C3b-2 cleanup was not executed.
+Certified at `f5643ad`.
+
+**Scope of the claim:**
+- C3 certifies the implemented and tested discovery authority and convergence mechanisms: C1 → approval gate →
+  `publicEligibility` → C3a-1 index gate → C3a-2 directory → C3b-1 cascade → C3b-2 cleanup tooling.
+- It does NOT certify that production indexes are clean. C3b-2 was not run and no live Algolia / Typesense inspection
+  was performed.
+- It does NOT claim that every recommendation or operator backfill path consumes the canonical authority.
+
+**Evidence at `f5643ad`:**
+- 19 suites, 0 failures, including both rules suites under the emulator.
+- The publish counterproof fails on exactly the 13 genuine pre-fix defects.
+- Sabotage re-run for all four C3 groups: 58/58 (disc 11, dir 16, casc 14, clean 17), 0 missed or crashed, 18/18 targets
+  byte-identical, 0 restores.
+- The tree was identical to HEAD throughout.
+
+**Census findings (new, open, not fixed here):**
+- **N1:** `functions/scripts/typesense-direct.js` is an ungated production Typesense backfill that bypasses the gated
+  queue. It needs its own owner-authorized slice.
+- **N2:** the Kass tools `search_restaurants` / `search_marketplace` / `search_stays` recommend from raw collections
+  without the eligibility authority (C3/C8 boundary; remediation in C8).
+- **C8:** Kass `approve_seller` writes `providers.status` directly, bypassing AdminOS approval. It is carried into C8.
+
+**Carried forward:**
+- C3 follow-ups 1–3: `providers` phone exposure, the legacy-registry browser fallback, the legacy localStorage hub
+  lists.
+- Algolia A1 (`global_search` vs `sokoni_global`) and A2 (skipped `gs__providerServices` / `gs__providerProfiles`
+  shadows).
+- E1: the Typesense backup restore is ungated.
+- Separate booking defect: the `providers.html` false "Booking confirmed!".
+
+**Files:** New: `docs/C3_DISCOVERY_CERTIFICATION.md`. **Database / API / Security / Breaking:** none.
+
 ## 2026-09-28 (246) — C3b-2: the existing-index discovery cleanup — written and tested, NOT executed
 
 Convergence slice C3b-2, the last of C3. Not deployed. **Not executed**: no production read, no production write, and
