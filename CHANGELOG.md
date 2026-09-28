@@ -1,3 +1,38 @@
+## 2026-09-28 (249) — C4 production baseline: what production actually runs for registration and approval
+
+Documentation only: `docs/C4_PRODUCTION_BASELINE.md`. A read-only production inspection: code and rules only. No
+Firestore document read, no write, no deploy, no rule change. It records what production runs; it does not claim the
+repository reflects production and authorizes no change.
+
+**Evidence:**
+- Served rulesets: Firestore `6c67a34d` (158,659 B), sokoni-ops `c76c080c`, storage `182624f3`. Preserved exactly;
+  verdicts read from the served text, and duplicate blocks checked for nesting.
+- Functions: 13 in-scope functions read from their OWN deployed source archives at the pinned generations. Five
+  distinct archives.
+
+**LIVE:**
+- **P0 `providerPublish` is the pre-OB-1 version.** Self-serve active / searchable / public / bookable provider plus an
+  unconditional `provider` claim. No application, no admin. The branch fix was never deployed.
+- **K2 `accountReactivate`:** self-activation.
+- **K13 (new):** the deployed decision check trusts an applicant-writable `decidedBy`, and the served `applications`
+  rule has no decision guard, so an applicant self-approves given an admin uid.
+- K8a `saveShopProfile`; K8b `createBusiness`.
+- The served `providers` owner update is weaker than the repo.
+- Client-set status on sellers / stores / mechanics / homeServiceProviders / constructProviders / marketingProviders.
+- `verifications` / `verificationRequests`.
+- The duplicate `propertyListings` block.
+- uid-keyed, overwritable Storage documents.
+
+**NOT LIVE (production is STRICTER than the branch):** `businesses`, `shops`, `rideDrivers`. Rules are therefore never
+deployed wholesale from this branch.
+
+**Undetermined:** admin-uid discoverability (it needs document reads, separately authorized); `sellerApplications`
+writers (five archives inspected, not exhaustive).
+
+**Order:** providerPublish → K2 → K13 → rules hardening → C4b.
+
+**Files:** New: `docs/C4_PRODUCTION_BASELINE.md`. **Database / API / Security / Breaking:** none.
+
 ## 2026-09-28 (248) — C4a: Register My Business authority survey and the C4 contract
 
 Documentation only: `docs/C4A_REGISTRATION_AUTHORITY_SURVEY.md`. No code, no deploy, no production access. Surveyed at
