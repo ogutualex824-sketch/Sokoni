@@ -1,3 +1,41 @@
+## [2026-09-28] - Anonymous search keys no longer cover the users index
+
+**Functions, NOT deployed.** Branch `slice/c4-category-matrix`. Owner privacy rule: "anonymous search keys must not
+expose sokoni_users."
+
+**Proven defect** (LIVE, production `getalgoliasearchkey-00029-jus`; census `docs/C4_C8_PRODUCTION_PRIVACY_AUTH_CENSUS.md`
+#10; the same code at `4e9607b`):
+- Every GUEST secured key's `restrictIndices` included `sokoni_users`.
+- The deployed users sync fills that index with every non-private account, buyers included: display name, username,
+  bio, role, city, county and join date.
+- Firestore `users` is owner/admin-only, so the index was an anonymous way around that boundary.
+- Email and phone are not indexed.
+
+**Changed:** `functions/algolia-secured-keys.js`.
+- A key issued without a signed-in user covers every catalogue index except `sokoni_users`.
+- Signed-in and driver keys are unchanged.
+- Guest "All" search is unaffected: the unified index never carried users (transformer `globalSearch: false`).
+- Only the People tab (`search.html` "professionals") is empty for guests.
+- Typesense guest keys already excluded `sokoni_users`.
+
+**Tests:** `scripts/test-search-key-guest-scope.js` gives **5/0**. It runs the REAL `getAlgoliaSearchKey` handler and
+DECODES each issued secured key.
+
+| Check | Result |
+|---|---|
+| G1: a guest key excludes `sokoni_users` | fails on the `4e9607b` counterproof (the only failure there) |
+| G2: guests keep the catalogue and unified indexes | control, passes in both modes |
+| G3: members are unchanged | control, passes in both modes |
+| G4: drivers are unchanged | control, passes in both modes |
+| G5: the guest visibility filter is still applied | control, passes in both modes |
+
+**Sabotage:** 4/4 caught, byte-identical restore. It covers over-restriction in both directions.
+
+**Regression:** `test-search-pipeline` 15/0, equal to `4e9607b`. No other suite loads the key issuer.
+
+**Not changed (noted):** the guest visibility filter still admits `suspended` / `inactive` records. That belongs to
+the shop / discovery eligibility gate slice.
+
 ## [2026-09-28] - KASS stay prices come from the canonical listing; the AI is never the monetary authority
 
 **Functions, NOT deployed.** Branch `slice/c4-category-matrix`. This is the owner-authorized KASS booking-price

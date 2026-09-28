@@ -168,7 +168,13 @@ const getAlgoliaSearchKey = onCall(
     /* Role-specific index allowlists — narrowed to role's actual access needs */
     const DRIVER_INDEXES = ['sokoni_products', 'sokoni_shops', 'sokoni_services', 'sokoni_jobs',
       'sokoni_products_price_asc', 'sokoni_products_popular'];
-    const allowedIndexes = (role === 'driver') ? DRIVER_INDEXES : SEARCH_INDEXES;
+    /* A GUEST key never covers `sokoni_users`. That index holds every non-private account — buyers included — with
+       display name, username, role, city and join date, while Firestore `users` is owner/admin-only: an anonymous key
+       over it let anyone enumerate SOKONI's users (production census 2026-09-28, #10). Guests keep every catalogue
+       index; the unified index never carried users (transformer globalSearch:false), so guest "All" search is
+       unchanged — only the People tab is empty for them. Signed-in keys are unchanged. */
+    const GUEST_INDEXES = SEARCH_INDEXES.filter((i) => i !== 'sokoni_users');
+    const allowedIndexes = (role === 'driver') ? DRIVER_INDEXES : (uid ? SEARCH_INDEXES : GUEST_INDEXES);
 
     const restrictions = {
       validUntil,
