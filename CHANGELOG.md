@@ -1,3 +1,38 @@
+## [2026-09-28] - Discovery: services.html ?cat= links find approved providers under their C1 category (an approved DJ was invisible on the Entertainment hub)
+
+**Hosting only, NOT deployed.** Branch `slice/c4-category-matrix`, on the convergence line (from `4e9607b`).
+
+**Why (proven on `4e9607b`):**
+- The provider directory serves every card under its C1 key (`artist_creator`, `trades` …).
+- `services.html` still filtered `?cat=` against the link words (`dj`, `plumbing`, `entertainment` …), so every such
+  link matched nothing and said "No providers in this category yet".
+- An approved DJ (C1 `artist_creator`) was therefore invisible on the Entertainment hub's own "Artists & services"
+  links. The same was true of the plumber, photographer and MC links on `index.html` and `life-events.html`: **26 link
+  words, all dead.**
+
+**Changed (`services.html` `renderProviders` category filter):**
+- **`CAT_TO_C1`** maps each link word to the C1 key(s) it belongs to, and a C1 key passes through.
+- **`NARROW`** then narrows WITHIN that authoritative category by the provider's own words, so `?cat=dj` shows DJs,
+  not every artist. Own words can hide a provider inside its category; they can never place one into a category.
+- Wherever C1 itself classifies a link word, the table must agree with C1 exactly (pinned by the test).
+
+**Tests:** `scripts/test-services-cat-filter.js` runs the real filter block. It gives **7/0**; the `4e9607b`
+counterproof shows **5 defects**.
+- The DJ is listed under `?cat=entertainment` and `?cat=dj`; `?cat=mc` narrows correctly; `?cat=plumbing` excludes
+  the electrician.
+- Own words never place a provider; a C1 key passes through.
+- The table is pinned to C1, and there is no dead link across every page's `?cat=` words.
+
+**Sabotage:** 6/6, byte-identical restore.
+
+**Regression (vs the pristine `4e9607b` tree):** provider-directory 40/0, business-category 44/0,
+business-workspace 30/0, workspace-routing 33/0, entertainment-registry 64/1 (the same 1 failure on the baseline).
+
+**Detector updated:** `test-entertainment-readiness.js` asserted the OLD alias literal (the defect itself). It now
+asserts the C1 mapping and is 45/0.
+
+**Not changed:** `renderServices` still filters device-local `sellerProducts` (legacy localStorage) by the raw word.
+
 ## [2026-09-28] - C4–C9 gate tooling: every registrable category run through the real approval path to its dashboard
 
 **Tooling + docs only.** No product file changed, and nothing is deployed. Branch `slice/c4-category-matrix` from

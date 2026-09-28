@@ -131,7 +131,10 @@ const read = (f) => fs.readFileSync(Path.join(ROOT, f), 'utf8');
   ck('self-updates (shared-header → sw-register) and carries the profile menu', /shared-header\.js/.test(hub) && !/data-no-header/.test(hub));
   ck('legacy ?cat= / ?event= / ?venue= links are routed to the canonical owner', /location\.replace\('\/services\.html\?cat='/.test(code_) && /location\.replace\('\/event-hub\.html\?event='/.test(code_) && /location\.replace\('\/venue-booking\.html\?venue='/.test(code_));
   ck('the retired organizer page redirects to Event Manager (no client ticket validation left)', /location\.replace\('\/event-manager\.html'\)/.test(read('ent-organizer.html')) && !/entertainment-hub\.js/.test(read('ent-organizer.html')));
-  ck('services.html resolves the "entertainment" category', /"entertainment": \["dj","mc"/.test(read('services.html')));
+  /* The entertainment link resolves to its C1 categories. (This used to pin the literal alias list
+     `"entertainment": ["dj","mc",…]` — own-word aliases that never match the C1-keyed directory cards, which is
+     exactly why an approved DJ was invisible here. Behaviour is proven in scripts/test-services-cat-filter.js S1.) */
+  ck('services.html resolves the "entertainment" category', /entertainment:\["artist_creator","event_services"\]/.test(read('services.html')));
   ck('the terms page now carries the shared profile menu', !/data-no-header/.test(read('entertainment-terms.html')));
   const vb = read('venue-booking.html').replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '');
   ck('venue-booking boots its own SDK + defines db (it threw on load)', /firebase-firestore-compat\.js/.test(vb) && /var db = firebase\.firestore\(_vbApp\);/.test(vb));

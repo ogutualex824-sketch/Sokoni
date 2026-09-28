@@ -1050,18 +1050,41 @@ function renderProviders(){
   /* Filter by active category. A provider carries a primary `category` plus a
      `categories` list, so one filed under `laundry` still reaches the Cleaning
      tab without being duplicated into two records. */
-  const CAT_ALIASES = {
-    "cleaning": ["cleaning","laundry"],   /* cleaning & laundry are the same hub */
-    /* The Entertainment Hub routes its "Artists & services" here (entertainment.html). These are the
-       provider-onboarding SERVICE_CATEGORIES entertainment subcategories, lower-cased. */
-    "entertainment": ["dj","mc","photographer","videographer","content creator","creative & media",
-                      "event planner","caterer","decorator","sound engineer","lighting technician","events","music teacher"],
+  /* ?cat= LINK VOCABULARY → the C1 category (functions/business-category.js is the authority).
+     The directory serves each provider under its C1 key (artist_creator, trades, …), so the hub links' words
+     (?cat=dj, ?cat=plumbing, ?cat=entertainment …) matched nothing and every such page said "No providers in this
+     category yet" — an approved DJ was invisible on the Entertainment hub's own links. A word maps to the C1 key(s)
+     it belongs to; a C1 key passes through. Where C1 itself classifies the word, this table MUST agree with it
+     (pinned by scripts/test-services-cat-filter.js). NARROW then only narrows WITHIN that authoritative category by
+     the provider's own words — it can hide a provider inside its category, never place one into a category. */
+  const CAT_TO_C1 = {
+    entertainment:["artist_creator","event_services"], events:["event_services"], "event planner":["event_services"],
+    decorator:["event_services"], "sound engineer":["event_services"], "lighting technician":["event_services"],
+    dj:["artist_creator"], mc:["artist_creator"], photographer:["artist_creator"], photography:["artist_creator"],
+    videographer:["artist_creator"], videography:["artist_creator"],
+    plumbing:["trades"], electrical:["trades"], painting:["trades"], carpentry:["trades"], construction:["trades"], movers:["trades"],
+    cleaning:["cleaning"], laundry:["cleaning"],
+    "phone-repair":["it_services"], "computer-repair":["it_services"],
+    "graphic-design":["professional_services"], marketing:["professional_services"],
+    "hair-beauty":["salon"], tutoring:["education"], catering:["restaurant"], "delivery-service":["delivery"],
+  };
+  const NARROW = {
+    dj:["dj","deejay","sound system"], mc:["mc","emcee","master of ceremon"],
+    photographer:["photograph"], photography:["photograph"], videographer:["video"], videography:["video"],
+    "event planner":["planner","planning"], decorator:["decor"], "sound engineer":["sound"], "lighting technician":["light"],
+    plumbing:["plumb"], electrical:["electric"], painting:["paint"], carpentry:["carpent"], movers:["mov","relocat"],
+    laundry:["laund"], "phone-repair":["phone"], "computer-repair":["computer","laptop","pc"],
+    "graphic-design":["graphic","design"], marketing:["marketing","advertis","social media"], catering:["cater"],
   };
   if(activeCat){
-    const matchCats = CAT_ALIASES[activeCat] || [activeCat];
+    const cat = String(activeCat).toLowerCase();
+    const c1 = CAT_TO_C1[cat] || [cat];
+    const narrow = NARROW[cat];
     providers = providers.filter(p => {
-      const have = [p.category].concat(p.categories || []).filter(Boolean);
-      return have.some(c => matchCats.includes(String(c).toLowerCase()));
+      if (!c1.includes(String(p.category||"").toLowerCase())) return false;
+      if (!narrow) return true;
+      const own = [p.displayCategory, p.serviceType].concat(p.skills||[]).map(v => String(v||"").toLowerCase()).join(" ");
+      return narrow.some(w => own.includes(w));
     });
   }
 
