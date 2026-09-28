@@ -1,3 +1,23 @@
+## 2026-09-28 (168) — L-9C: disposition of c4f6ced — not ported; this lineage's product and customer authorities stand (documentation only)
+
+**Decision recorded.** c4f6ced ("a till sells only its own shop's products, to its own shop's customers") lives only
+on `feat/creator-hub` (tip `4e9607b`; common ancestor with this lineage `ec64f4f`). It is **not** on this lineage and
+is **not ported**.
+
+- **Its product rule is not equivalent to 0b's `_assertProductOwned`**, and neither is uniformly stricter:
+  - 0b refuses conflicting, empty and foreign-extra owner fields that c4f6ced accepts;
+  - c4f6ced refuses membership-path business-owned and `merchantId`/`sellerId`/`storeId`-only products that 0b accepts.
+- **Its customer rule** (`ownsCustomer` against the request's `merchantId`) is superseded by L-5/L-6's strict
+  `classifyCustomer` on the proven owner set.
+- Porting it would add a competing authority. A future creator-hub merge must resolve both rules toward this lineage's
+  certified semantics, and port Part E's intent, not its text.
+- c4f6ced's original finding is kept as history; on this lineage it was closed by 0b R4 and Q0a/Q0b-1.
+- Its "`businesses.ownerId` is client-writable" remark is true for this lineage's repository rules and false for the live
+  ruleset `6c67a34d`. See CHANGELOG 167 and its release control.
+- **Files:** new `docs/repairs/POS-L9C-c4f6ced-disposition.md`, `CHANGELOG.md`.
+- **Code / tests / rules / database / API / security:** none changed.
+- **Not decided here:** the `recordPOSSale` fail-open product check (L-9B: 0 production exposure measured; repair held, because it touches M0-2).
+
 ## 2026-09-28 (167) — L-9A: posCompleteCheckout's membership-path owner set is bound to one transactional read (NOT deployed)
 
 **Defect (in the code, whatever the ruleset).** On the membership path:
