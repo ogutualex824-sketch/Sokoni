@@ -1,3 +1,41 @@
+## 2026-09-28 (163) — L-5: port Q0a onto the POS lineage — the till cannot mint, burn or cross-tenant loyalty points (NOT deployed)
+
+**Lineage reconciliation, unit 5.** On the POS lineage, `posCompleteCheckout` subtracted the browser's
+`loyaltyRedeemPoints` from `posCustomers/{customer.id}` without checking either value. The defects:
+- a negative figure minted points;
+- NaN, strings, booleans, arrays and fractions coerced or corrupted the balance;
+- a positive figure burned points while the charged total never moved;
+- the customer could belong to any shop.
+
+The fix already existed on the main line (dd9dc2a), but not here.
+
+- **Change:** `functions/pos-zero-friction.js`, `posCompleteCheckout` only.
+  - `loyaltyRedeemPoints` must be a whole, non-negative number.
+  - Any non-zero redemption is refused, because no server-side point price exists and none is invented. Zero stays valid.
+  - `customer.id` must be a single document id.
+  - A named, existing customer must belong to the merchant proven for the sale. This uses the `pos-customer-scope` rule, and a present
+    `sellerId` must agree. It is checked before payment and again inside the transaction.
+  - **Ported cleanly and unmodified** onto L-4 (Q0a's parent is Batch 0b). Its one dependency,
+    `pos-customer-scope.js`, is byte-identical on both lines.
+  - Not carried: Q0b-1's shared-classifier refactor, and any change to
+    `getPOSCustomer` / `posLookupCustomer` / `upsertPOSCustomer`.
+- **Files:** `functions/pos-zero-friction.js`, new `scripts/test-q0a-loyalty-redemption.js`, new
+  `docs/repairs/POS-Q0a-loyalty-redemption.md` (with an L-5 port section), `CHANGELOG.md`.
+- **Database:** none (no schema change; writes refused that previously corrupted `loyaltyPoints`).
+- **API:** `posCompleteCheckout` returns `invalid-argument` for a bad figure or customer id,
+  `failed-precondition` for a non-zero redemption, and `permission-denied` for a customer from another shop or with no owner.
+- **Security:** closes points minting and burning, and cross-tenant loyalty writes, at the till.
+- **Evidence:**
+  - 26/0 new vs 6/20 old (`3f78a46`); all six controls pass on both trees.
+  - 11 of 12 mutants are caught. The survivor is the pre-transaction customer check, which is documented defence in depth.
+  - Earlier units all green: L-4 31/0, L-3 13/0, L-2 16/0 + 20/0, L-1 27/0, R-48H 12/0, M0-3 31/0, M0-2
+    13/0, M0-1 20/0, P0 9/0, rail 46/0.
+  - 112-suite floor: summary lines identical. The full-log differences are offsets, the L-4 auditor false positive
+    moved from :394 to :428, uncommitted-tree artifacts, and known flaky suites. None is unexplained.
+- **Open, not done here:** `posWallets/{customer.id}` tender when no customer document exists; the till's "Redeem"
+  button; `getPOSCustomer` scope.
+- **Breaking:** a till redemption is now refused instead of silently burning points.
+
 ## 2026-09-28 (162) — L-4: port Batch 0b onto the POS lineage — checkout integrity R1–R5 (NOT deployed)
 
 **Lineage reconciliation, unit 4.** On the POS lineage, `posCompleteCheckout` had five defects, all

@@ -98,6 +98,40 @@ function _assertProductOwned(prod, owners, productId) {
   }
 }
 
+/* ══ Q0a — LOYALTY REDEMPTION AND THE CUSTOMER IT TOUCHES ═════════════════════════════════════
+   The transaction wrote `loyaltyPoints = max(0, points + awarded - loyaltyRedeemPoints)` with the
+   browser's figure unchecked, on `posCustomers/{customer.id}` with the browser's id unchecked:
+     · a NEGATIVE figure minted points (−500 added 500);
+     · a non-number either coerced ("5") or wrote NaN into the balance;
+     · a positive figure burned points while the SERVER granted nothing for them — the till's
+       loyalty discount is not in `discountTotal`, and no server-side price for a point exists on
+       this path, so the charged total never moved;
+     · the customer could be ANY merchant's customer.
+   So: the figure must be a whole, non-negative number, and a non-zero redemption is refused
+   outright — honouring one would need a redemption-price authority, and none is invented here.
+   Zero stays valid. Production held 5/5 POS sales with loyaltyRedeemed 0 and no posCustomers
+   documents when this was measured (2026-09-27), so neither refusal excludes a real sale.
+
+   Ownership is `pos-customer-scope.js`'s rule (body `sellerId`, or the composite id
+   `{sellerId}_{phone}`), evaluated against the owners proven for THIS sale (_merchantOwnerSet) —
+   never a merchant or relationship the request names. Stricter than the lookup rule in one way:
+   a present `sellerId` must itself be well-formed and ours, so a record whose id prefix and body
+   disagree is not accepted on the id alone. A customer id that does not exist touches nothing,
+   exactly as before. */
+const _CUSTOMER_SCOPE = require('./pos-customer-scope');
+function _assertCustomerOwned(snap, owners) {
+  const d = snap.data() || {};
+  const sid = d[_CUSTOMER_SCOPE.OWNER_FIELD];
+  if (sid !== undefined) {
+    if (typeof sid !== 'string' || !sid.trim()) {
+      _e('This customer record has an unreadable owner, so it cannot be used here.', 'permission-denied');
+    }
+    if (!owners.has(sid.trim())) _e('This customer belongs to another shop.', 'permission-denied');
+  }
+  for (const o of owners) if (_CUSTOMER_SCOPE.ownsCustomer(snap.id, d, o)) return;
+  _e('This customer is not on record as a customer of this shop.', 'permission-denied');
+}
+
 async function _assertAuth(auth) {
   if (!auth?.uid) _e('Authentication required', 'unauthenticated');
   return auth.uid;
@@ -444,6 +478,18 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
   if (typeof taxTotal !== 'number' || !Number.isFinite(taxTotal) || taxTotal < 0) {
     _e('taxTotal must be a finite, non-negative number');
   }
+  /* Q0a — see _assertCustomerOwned. Checked before anything is claimed, priced or charged. */
+  /* Number.isInteger is false for every non-number (strings, booleans, null, arrays), NaN and ±Infinity. */
+  if (!Number.isInteger(loyaltyRedeemPoints) || loyaltyRedeemPoints < 0) {
+    _e('loyaltyRedeemPoints must be a whole, non-negative number');
+  }
+  if (loyaltyRedeemPoints > 0) {
+    _e('Loyalty points cannot be redeemed at the till yet, so no points were used and nothing was charged.',
+       'failed-precondition');
+  }
+  if (customer?.id && (typeof customer.id !== 'string' || !/^[^/]{1,200}$/.test(customer.id))) {
+    _e('customer.id must be a single customer record id');
+  }
 
   /* ── DRY-RUN (checkout-convergence shadow instrumentation) ──
      Side-effect-FREE: validate + price against the CANONICAL products collection and compute
@@ -680,6 +726,12 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
     const _owners = await _merchantOwnerSet(merchantId, _provenBy, _provenBusinessId);
     for (let i = 0; i < items.length; i++) {
       _assertProductOwned(productSnaps[i].data(), _owners, items[i].productId);
+    }
+    /* Q0a — the customer, if one is named and exists, must be this proven merchant's. Checked
+       here, before any payment is verified or claimed, and again on the transaction's own read. */
+    if (customer?.id) {
+      const _custPre = await db.collection('posCustomers').doc(customer.id).get();
+      if (_custPre.exists) _assertCustomerOwned(_custPre, _owners);
     }
 
     /* ══ THE COMMISSION GATE ═════════════════════════════════════════════════
@@ -1121,6 +1173,8 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
           throw new HttpsError('failed-precondition',
             `Insufficient wallet balance: has KES ${Math.max(0, bal)}, needs KES ${walletAmt}`);
       }
+      /* Q0a — customer ownership re-checked on the transaction's own read. */
+      if (custSnap && custSnap.exists) _assertCustomerOwned(custSnap, _owners);
       /* Inventory: assert stock before deducting anything. */
       productSnaps.forEach((snap, i) => {
         const item = enrichedItems[i];
