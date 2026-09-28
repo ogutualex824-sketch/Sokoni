@@ -202,3 +202,73 @@ The summary lines are identical except for `test-merchant-sell-ui`. Every full-l
   - `test-merchant-v2-ecosystem-runtime`: known browser/network FAIL on both; new adds a `gstatic generate_204` page error;
   - `test-approval-activates-shop`, `test-healthcare-admin-approval`, `test-healthcare-provisioning`: random ids and temp paths only.
 - **Unexplained:** none.
+
+## L-9A — the membership-path owner set is bound to one transactional read (2026-09-28)
+
+**Defect (in this code, independent of any ruleset).** On the membership path, `_assertBusinessPermission`
+(`workforce-identity.js`) reads `businesses/{biz}` and admits `ownerId === caller` as the owner, with no membership
+needed. `_merchantOwnerSet` then read the same document **again** and added its `ownerId` to the accepted product owners.
+If `ownerId` changed between the two reads, a caller could be admitted as owner and then sell the new owner's
+products. A time-of-check/time-of-use race.
+
+The consequence was proven on the emulator against the real `posCompleteCheckout`, with the flip injected right
+after the permission proof: the **victim's product sold**, the victim's stock went 10 → 9, and the sale was booked
+to the caller's business.
+
+**Who can make that write — two separate facts, both kept:**
+
+| Ruleset | Can a client change `businesses.ownerId`? |
+|---|---|
+| **Live** default database, `6c67a34d` (released 2026-09-22, fetched read-only 2026-09-28) | **No.** `create: false`; `update` is limited to an allowlist of display fields that excludes `ownerId`. Emulator-proven: C-2 and U-1 are denied. |
+| **Repository** `firestore.rules` on this lineage (e266d40) | **Yes.** Any signed-in user can create a business with any `ownerId`, and its `uid`-owner can change `ownerId`. Emulator-proven: C-2 and U-1 are allowed. |
+
+No Cloud Function sets `ownerId` to anyone but the caller: the bootstrap uses a server-generated id and `ownerId: uid`,
+and the org editor's field map excludes `ownerId`. Not client-exploitable under today's live rules is **not** the
+same as not defective. Under this lineage's repository rules the chain is:
+1. create your own business, which makes you its owner;
+2. flip `ownerId` mid-checkout.
+
+**RELEASE CONTROL:** the repository `firestore.rules` on this lineage **must not be deployed as-is**, because it
+reopens the `businesses` writes the live ruleset closes.
+
+**Repair (narrow, `posCompleteCheckout` only):**
+- On the membership path, the stock transaction now also reads the business and the caller's active membership.
+- From that **one** snapshot it re-derives both:
+  - **admission**, using `_assertBusinessPermission`'s own rule: the owner, or an active membership holding `sales`;
+  - **the owner set** `{merchantId, business, its ownerId}`.
+- The in-transaction product and customer checks use that set.
+- All reads still precede all writes.
+- The pre-transaction checks are kept as defence in depth.
+- The shop path is unchanged.
+- No shared module (`workforce-identity.js`) is modified.
+
+**Deliberate tightenings, each a consequence of binding admission to the transaction's read:**
+- a caller whose ownership moves away mid-checkout (T-2) is refused;
+- a caller whose membership is deactivated mid-checkout (T-3) is refused;
+- a caller whose `sales` capability is removed mid-checkout (T-4) is refused.
+
+On the old tree all three were SOLD.
+
+**Residual, recorded rather than hidden:**
+- The membership path still accepts the products of whoever the business's `ownerId` names **at transaction time**.
+  That is 0b's certified semantics (R4-W1). It is safe only while `ownerId` cannot be changed by an untrusted writer,
+  which is exactly the release-control constraint above.
+- c4f6ced's comment ("never `businesses.ownerId`: client-writable") is correct for the repository rules, and not for
+  the live rules.
+
+**Evidence:**
+- **New suite** `scripts/test-l9a-owner-set-toctou.js`: **7/0 new vs 3/4 old** (e266d40). The old tree fails
+  T-1 (the victim's product sold, stock moved), T-2, T-3 and T-4. All three controls, including the membership sale of
+  the business owner's product, pass on both.
+- **Mutants:** 5 of 5 L-9A mutants are caught, each against both the L-9A suite and the 0b suite:
+  - the transaction uses the pre-transaction owners;
+  - no admission check in the transaction;
+  - memberships ignored;
+  - `sales` not required;
+  - the owner's id left out of the transaction's owner set.
+- **L-4 re-certified:**
+  - the 0b suite is 31/0;
+  - all 10 of 0b's mutants are caught, with the same profile as the L-4 certification and the documented pricing-read survivor;
+  - `R4-no-intx-check`'s anchor follows the renamed variable, with the same intent.
+- Floor and earlier units: see CHANGELOG 167.
+- **Not deployed.**

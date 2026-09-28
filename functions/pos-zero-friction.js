@@ -81,6 +81,45 @@ async function _merchantOwnerSet(merchantId, provenBy, provenBusinessId) {
   }
   return owners;
 }
+/* ══ L-9A — THE MEMBERSHIP PATH'S OWNERS, BOUND TO ONE READ INSIDE THE STOCK TRANSACTION ════════
+   On the membership path the caller is admitted by _assertBusinessPermission, which reads
+   businesses/{biz} and admits `ownerId === caller` as the owner. _merchantOwnerSet then read the same
+   document AGAIN to add its `ownerId` to the accepted product owners. A change of `ownerId` between
+   those two reads (a time-of-check/time-of-use race) let a caller be admitted as owner and then sell
+   the NEW owner's products: proven on the emulator (L-9A) — victim stock 10→9, the sale booked to the
+   caller's business. The live ruleset (6c67a34d) gives no client a write to `ownerId`; the repository
+   rules on this lineage do. The defect is in this code either way.
+
+   So, inside the stock transaction, admission and the owner set are re-derived from ONE transactional
+   read of the business (and of the caller's membership in it): the same rule as
+   _assertBusinessPermission — the owner, or an active membership holding `sales` — and the owners
+   {merchantId, business, its ownerId} taken from that same snapshot. A change of either after the read
+   makes the transaction retry (production) or wait (emulator); it can never mix two states. The
+   pre-transaction checks above are kept as defence in depth: they refuse early, before any payment is
+   claimed, and the transaction is the authority. The shop path does not read `businesses.ownerId` for
+   admission and is unchanged. */
+function _txnMembershipRefs(callerUid, businessId) {
+  return {
+    bizRef: db.collection('businesses').doc(String(businessId)),
+    memQuery: db.collection('workspaceMemberships')
+      .where('uid', '==', String(callerUid))
+      .where('businessId', '==', String(businessId))
+      .where('status', '==', 'active')
+      .limit(1),
+  };
+}
+function _txnMembershipOwners(bizSnap, memSnap, callerUid, merchantId, businessId) {
+  const biz = (bizSnap && bizSnap.exists) ? (bizSnap.data() || {}) : null;
+  if (!biz) _e('This business could not be confirmed, so the sale was not recorded.', 'permission-denied');
+  const isOwner = biz.ownerId === callerUid;
+  const mem = (memSnap && !memSnap.empty) ? (memSnap.docs[0].data() || {}) : null;
+  const canSell = !!mem && Array.isArray(mem.permissions) && mem.permissions.includes('sales');
+  if (!isOwner && !canSell) _e('You are not authorised to record a sale for this shop.', 'permission-denied');
+  const owners = new Set([String(merchantId), String(businessId)]);
+  if (biz.ownerId) owners.add(String(biz.ownerId));
+  return owners;
+}
+
 function _assertProductOwned(prod, owners, productId) {
   const p = prod || {};
   const present = _PRODUCT_OWNER_FIELDS.filter((k) => p[k] !== undefined);
@@ -1195,12 +1234,16 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       const custRef = customer?.id ? db.collection('posCustomers').doc(customer.id) : null;
       const progRef = customer?.id ? db.collection('loyaltyPrograms').doc(merchantId) : null;
 
-      const [saleSnap, wTxSnap, wSnap, custSnap, progSnap, ...productSnaps] = await Promise.all([
+      /* L-9A — on the membership path, the business and the caller's membership are read here too. */
+      const _memRefs = _provenBy === 'workspace_membership' ? _txnMembershipRefs(cashierId, _provenBusinessId) : null;
+      const [saleSnap, wTxSnap, wSnap, custSnap, progSnap, bizTxSnap, memTxSnap, ...productSnaps] = await Promise.all([
         txn.get(saleRef),
         walletPayment ? txn.get(walletTxRef)  : Promise.resolve(null),
         walletPayment ? txn.get(walletDocRef) : Promise.resolve(null),
         custRef ? txn.get(custRef) : Promise.resolve(null),
         progRef ? txn.get(progRef) : Promise.resolve(null),
+        _memRefs ? txn.get(_memRefs.bizRef)   : Promise.resolve(null),
+        _memRefs ? txn.get(_memRefs.memQuery) : Promise.resolve(null),
         ...productRefs.map(r => txn.get(r)),
       ]);
 
@@ -1217,15 +1260,20 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
           throw new HttpsError('failed-precondition',
             `Insufficient wallet balance: has KES ${Math.max(0, bal)}, needs KES ${walletAmt}`);
       }
+      /* L-9A — the owners the in-transaction checks use: on the membership path, admission and owners
+         re-derived from the transaction's own read of the business; on the shop path, unchanged. */
+      const _txOwners = _memRefs
+        ? _txnMembershipOwners(bizTxSnap, memTxSnap, cashierId, merchantId, _provenBusinessId)
+        : _owners;
       /* Q0a — customer ownership re-checked on the transaction's own read. */
-      if (custSnap && custSnap.exists) _assertCustomerOwned(custSnap, _owners);
+      if (custSnap && custSnap.exists) _assertCustomerOwned(custSnap, _txOwners);
       /* Inventory: assert stock before deducting anything. */
       productSnaps.forEach((snap, i) => {
         const item = enrichedItems[i];
         if (!snap.exists) throw new Error(`Product ${item.productId} disappeared`);
         const prod  = snap.data();
-        /* 0b R4 — ownership re-checked on the transaction's own read. */
-        _assertProductOwned(prod, _owners, item.productId);
+        /* 0b R4 — ownership re-checked on the transaction's own read (owners bound to it: L-9A). */
+        _assertProductOwned(prod, _txOwners, item.productId);
         /* Canonical stock field is `stock`; fall back to legacy names for older docs. */
         const stock = prod.stock ?? prod.stockQty ?? prod.quantity ?? 9999;
         if (stock < (item.qty || 1) && prod.trackInventory !== false)

@@ -86,7 +86,12 @@ function makeDb() {
       if (name === 'posCommissionLiabilities' && CTL.ledgerUnreadable) {
         throw new Error('simulated Firestore outage');
       }
-      const rows = name === 'posCommissionLiabilities' ? CTL.liabilities : [];
+      /* L-9A: workspaceMemberships rows come from DOCS, so the membership the _assertBusinessPermission stub
+         stands for is also readable by a transactional re-read of it (posCompleteCheckout's membership path). */
+      const rows = name === 'posCommissionLiabilities' ? CTL.liabilities
+        : name === 'workspaceMemberships'
+          ? [...DOCS.entries()].filter(([k]) => k.startsWith('workspaceMemberships/')).map(([, v]) => v)
+          : [];
       const kept = rows.filter((r) => filters.every(([f, v]) => r[f] === v));
       return { docs: kept.map((r, i) => ({ id: 'L' + i, data: () => r })), empty: kept.length === 0,
                forEach(cb) { kept.forEach((r, i) => cb({ id: 'L' + i, data: () => r })); } };
@@ -261,6 +266,9 @@ console.log('\nPART A — the merchant is PROVEN, against the real identity auth
   /* Authority 2 — canonical workspace membership, for staff who exist only there. Requiring
      the actor ALONE would refuse every one of them: a till outage dressed as a security fix. */
   reset(); const uid = seedActor('stranger'); CTL.membershipOk = true;
+  /* L-9A: the membership the stub grants exists as a record — the same shape _assertBusinessPermission queries
+     (uid · businessId · status active · permissions incl. `sales`), so the stock transaction's re-read finds it. */
+  DOCS.set('workspaceMemberships/' + uid + '_' + MERCHANT, { uid, businessId: MERCHANT, status: 'active', permissions: ['sales'] });
   const r = await call(uid);
   ck('A9  canonical workspace membership ALSO admits the sale',
     !(r.code === 'permission-denied' && /not authorised to record a sale/i.test(r.message || '')),

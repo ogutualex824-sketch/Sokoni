@@ -1,3 +1,53 @@
+## 2026-09-28 (167) — L-9A: posCompleteCheckout's membership-path owner set is bound to one transactional read (NOT deployed)
+
+**Defect (in the code, whatever the ruleset).** On the membership path:
+- `_assertBusinessPermission` reads `businesses/{biz}` and admits `ownerId === caller` as the owner;
+- 0b's `_merchantOwnerSet` then read the same document again and added its `ownerId` to the accepted product owners.
+
+A change of `ownerId` between the two reads let a caller be admitted as owner and then sell the new owner's
+products. On the emulator, against the real handler, the **victim's product sold**: the victim's stock went 10 → 9,
+and the sale was booked to the caller's business.
+
+**Two separate facts, both kept:**
+- the **live** ruleset `6c67a34d` (fetched read-only 2026-09-28) gives no client a write to `ownerId` (emulator-proven);
+- the **repository** `firestore.rules` on this lineage does (emulator-proven).
+
+No Cloud Function sets `ownerId` to anyone but the caller. "Not client-exploitable today" is not "not defective".
+
+**Release control:** the repository `firestore.rules` on this lineage must NOT be deployed as-is.
+
+- **Change:** `functions/pos-zero-friction.js`, `posCompleteCheckout`, membership path only.
+  - The stock transaction also reads the business and the caller's active membership.
+  - From that one snapshot it re-derives:
+    - admission, using `_assertBusinessPermission`'s rule (the owner, or an active membership holding `sales`);
+    - the owner set `{merchantId, business, its ownerId}`, which the in-transaction product and customer checks use.
+  - All reads still precede all writes.
+  - The pre-transaction checks are kept as defence in depth.
+  - The shop path is unchanged, and `workforce-identity.js` is untouched.
+- **Deliberate tightenings:** a checkout is refused if ownership moves away (T-2), the membership is deactivated (T-3), or `sales`
+  is removed (T-4) mid-checkout. The old code sold in all three.
+- **Residual (recorded):** the membership path still accepts the products of whoever `ownerId` names at transaction time
+  (0b's certified R4-W1 semantics). It is safe only while `ownerId` has no untrusted writer, which is the release-control constraint above.
+- **Files:**
+  - `functions/pos-zero-friction.js`;
+  - new `scripts/test-l9a-owner-set-toctou.js`;
+  - `scripts/test-pos-gate-behavioural.js` (**owner-approved tripwire synchronisation**: A9 now seeds the membership record its
+    `_assertBusinessPermission` stub stands for, and the mock returns `workspaceMemberships` rows; the assertion is unchanged);
+  - `docs/repairs/POS-0b-checkout-integrity.md` (L-9A section);
+  - `CHANGELOG.md`.
+- **Database / API:** no schema change. `posCompleteCheckout` refuses the race cases above.
+- **Evidence:**
+  - L-9A suite: 7/0 new vs 3/4 old (e266d40).
+  - 5 of 5 L-9A mutants are caught, each against both the L-9A suite and the 0b suite.
+  - **L-4 re-certified:** 0b 31/0, and all 10 of 0b's mutants are caught, with the same profile and the documented pricing-read survivor.
+  - `test-pos-gate-behavioural` 28/0 on both trees with the synchronised fixture.
+  - Earlier units all green: L-8, L-7, L-6, L-5, L-4, L-3, L-2, L-1, R-48H, M0-3, M0-2, M0-1, P0, rail.
+  - Floor: only offsets, the adjudicated auditor false positive (now at :511), and known flaky suites. None is unexplained.
+  - Syntax gate clean.
+- **L-9B measured separately (no code change):**
+  - 102/102 production products carry `sellerUid`, with 0 ownerless and 0 conflicting (read-only, 2026-09-28T13:13Z);
+  - `recordPOSSale`'s fail-open check remains an open code defect with no measured production exposure.
+
 ## 2026-09-28 (166) — L-8: port Q0c-2 + Q0c-3 onto the POS lineage — merchant SMS and till receipts go only to the proven merchant's own customers (NOT deployed)
 
 **Lineage reconciliation, unit 8.** On the POS lineage there were two public relays under SOKONI's sender:
