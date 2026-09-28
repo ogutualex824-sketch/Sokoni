@@ -26,7 +26,7 @@ if (r.status !== 0) { console.log('CRASH the tool did not run: ' + (r.stderr || 
 const J = JSON.parse(r.stdout);
 const row = (id) => J.rows.find((x) => x.id === id) || {};
 
-ck('K1  parses the Register My Business list and the offer.html tiles', J.rows.length >= 100 && J.offer.providerTiles.length >= 20, { rows: J.rows.length, tiles: J.offer.providerTiles.length });
+ck('K1  parses the Register My Business list and the offer.html tiles (legacy + canonical)', J.rows.length >= 100 && J.offer.providerTiles.length + J.offer.canonicalTiles.length >= 20, { rows: J.rows.length, legacy: J.offer.providerTiles.length, canonical: J.offer.canonicalTiles.length });
 const HC = require(path.join(ROOT, 'functions/business-category.js')).HEALTHCARE;
 ck('K2  positive controls through the real approval path',
   row('dj').c1 === 'artist_creator' && row('dj').route === 'provider-dashboard.html'

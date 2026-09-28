@@ -66,6 +66,8 @@ if (CATS.length < 50) die('parsed only ' + CATS.length + ' hub-register categori
 /* ── entry point 2: offer.html provider tiles ────────────────────────── */
 const offer = fs.readFileSync(path.join(ROOT, 'offer.html'), 'utf8');
 const OFFER = [...offer.matchAll(/href="(provider\.html\?cat=([a-z0-9-]+))"/g)].map((x) => ({ href: x[1], cat: x[2] }));
+/* tiles wired to the canonical Register My Business form (HubRegister) with a preselected hub-register id */
+const OFFER_CANONICAL = [...offer.matchAll(/data-reg-category="([a-z0-9-]*)"\s+onclick="return offerRegister\(/g)].map((x) => x[1]);
 const OFFER_OTHER = [...new Set([...offer.matchAll(/href="([a-z0-9-]+\.html)(?:\?[^"]*)?"/g)].map((x) => x[1]))]
   .filter((h) => !/^(index|profile|my-orders|services|category)\.html$/.test(h));
 
@@ -106,13 +108,15 @@ const summary = {
   routedNoShop: (verdicts.ROUTED_NO_SHOP || []).length,
   noRouteEntry: (verdicts.NO_ROUTE_ENTRY || []).length,
   offerTilesToLegacyIntake: OFFER.length,
+  offerTilesToCanonicalIntake: OFFER_CANONICAL.length,
+  offerPreselectsNotRegistrable: OFFER_CANONICAL.filter((c) => c && !CATS.some((k) => k.id === c)),
   c1CategoriesReached: Object.keys(c1s).filter((k) => k !== 'null').length,
   c1CategoriesTotal: BCAT.KEYS.length,
   c1NeverReached: BCAT.KEYS.filter((k) => !c1s[k]),
 };
 
 if (JSON_OUT) {
-  console.log(JSON.stringify({ summary, rows, offer: { providerTiles: OFFER, otherDestinations: OFFER_OTHER } }, null, 2));
+  console.log(JSON.stringify({ summary, rows, offer: { providerTiles: OFFER, canonicalTiles: OFFER_CANONICAL, otherDestinations: OFFER_OTHER } }, null, 2));
 } else {
   const out = [];
   out.push('# Registrable category → dashboard matrix (executed against C1 + C2)\n');
@@ -125,6 +129,7 @@ if (JSON_OUT) {
   out.push(`- ADMIN REVIEW ONLY (exempt: AdminOS classifies by hand — C1 ADMIN_REVIEW_ONLY): **${summary.adminReview}**`);
   out.push(`- NO ROUTE ENTRY (C1 category missing from ROUTE_OF): **${summary.noRouteEntry}**`);
   out.push(`- offer.html tiles that send registrants to the legacy provider.html intake: **${summary.offerTilesToLegacyIntake}**`);
+  out.push(`- offer.html tiles that open the canonical Register My Business form: **${summary.offerTilesToCanonicalIntake}** (preselects not registrable: ${summary.offerPreselectsNotRegistrable.length})`);
   out.push(`- C1 categories reached from the register modal: ${summary.c1CategoriesReached} / ${summary.c1CategoriesTotal}; never reached: ${summary.c1NeverReached.join(', ') || 'none'}\n`);
   out.push('## By C1 category\n');
   out.push('| C1 category | Route | Profile | Registrable ids | Modules NOT_IMPLEMENTED |');
@@ -144,5 +149,5 @@ if (JSON_OUT) {
   console.log(out.join('\n'));
 }
 
-const gateFail = summary.unrouted + summary.unclassified + summary.noRouteEntry + summary.routedNoShop + summary.offerTilesToLegacyIntake;
+const gateFail = summary.unrouted + summary.unclassified + summary.noRouteEntry + summary.routedNoShop + summary.offerTilesToLegacyIntake + summary.offerPreselectsNotRegistrable.length;
 if (GATE) process.exit(gateFail ? 1 : 0);

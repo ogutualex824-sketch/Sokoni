@@ -1,3 +1,37 @@
+## [2026-09-28] - "What Are You Offering?" registers through the one canonical intake
+
+**Hosting + tooling, NOT deployed.** Branch `slice/c4-category-matrix` (convergence line).
+
+**Why (proven on `4e9607b`):** all 27 service tiles on `offer.html` (linked from `index.html` "Start Selling") opened
+the legacy `provider.html?cat=` intake. Its applications carry no agreement acknowledgement, so `applicationDecide`
+refuses them and AdminOS can never approve them. C4 contract: ONE intake.
+
+**Changed (`offer.html`):**
+- **Each provider tile opens the Register My Business form (`hub-register.js`)** with its matching hub-register
+  category preselected, e.g. plumbing → `plumbing`, "Hair & Beauty" → `salon`, "Food & Catering" → `restaurant`,
+  "DJ / Music" → `dj`. It is only a default the applicant can change, and always a real hub-register id. Healthcare
+  opens with no preselect, since there is no single healthcare id.
+- **Without the form loaded, a tile stays on the page.** It never falls back to the legacy intake.
+- **The dead helper that stashed `?cat=` for `provider.html` is removed.**
+- **"Already have a dashboard?"** points to `workspace.html` (where an approved business lands) instead of the legacy
+  `provider.html`.
+- **`scripts/audit-category-dashboards.js`** counts the tiles wired to the canonical form, and `--gate` fails on a
+  preselect that is not registrable.
+
+**Tests:** `scripts/test-offer-intake.js` gives **7/0**. `COUNTERPROOF=1` on `4e9607b` shows **6 defects**; O3b, the
+check that the other cards go to the banking hub and the driver intake, is a control.
+- No legacy intake link remains; all 27 tiles carry a real preselect; `hub-register.js` is loaded.
+- `offerRegister` is executed with a recording `location`: it opens the form with the category, and with no form it
+  never navigates.
+- Every preselect classifies through the real approval path.
+- The dashboard link points to the workspace.
+
+**Sabotage:** 6/6, byte-identical restore. A first run crashed on a mutant that navigated, because the harness had no
+`location`. Crash != refusal: it now records navigation.
+
+**Matrix:** 0 legacy tiles, 27 canonical. Still open: hotel (2) + property (3) unrouted; `provider-onboarding.html`
+files no application (G1.1).
+
 ## [2026-09-28] - Every registrable category classified; merchant and food businesses are approved INTO A SHOP (owner decisions)
 
 **Functions + tests, NOT deployed.** Branch `slice/c4-category-matrix` (convergence line).

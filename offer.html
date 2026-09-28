@@ -146,7 +146,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
   </div>
 
   <div style="text-align:center;padding:0 20px 48px;font-size:12px;color:rgba(255,255,255,0.25);">
-    Already have a dashboard? <a href="seller.html" style="color:rgba(113,255,0,0.6);">Seller ↗</a> &nbsp;·&nbsp; <a href="provider.html" style="color:rgba(0,170,255,0.6);">Provider ↗</a>
+    Already have a dashboard? <a href="seller.html" style="color:rgba(113,255,0,0.6);">Seller ↗</a> &nbsp;·&nbsp; <a href="workspace.html" style="color:rgba(0,170,255,0.6);">Business workspace ↗</a>
   </div>
 </div>
 
@@ -199,22 +199,22 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 
   <div class="of-divider">Home &amp; General</div>
   <div class="of-svc-grid" style="margin-bottom:6px;">
-    <a href="provider.html?cat=cleaning" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="cleaning" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">🧹</div>
       <div class="of-svc-label">Cleaning &amp; Laundry</div>
       <div class="of-svc-sub">House, office, laundry</div>
     </a>
-    <a href="provider.html?cat=plumbing" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="plumbing" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">🔧</div>
       <div class="of-svc-label">Plumbing</div>
       <div class="of-svc-sub">Pipes, repairs, installations</div>
     </a>
-    <a href="provider.html?cat=electrical" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="electrical" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">⚡</div>
       <div class="of-svc-label">Electrical</div>
       <div class="of-svc-sub">Wiring, fittings, repairs</div>
     </a>
-    <a href="provider.html?cat=home-repairs" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="painting" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">🏠</div>
       <div class="of-svc-label">Home Repairs</div>
       <div class="of-svc-sub">Painting, tiling, fencing</div>
@@ -223,42 +223,42 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 
   <div class="of-divider">Professional &amp; Digital</div>
   <div class="of-svc-grid" style="margin-bottom:6px;">
-    <a href="provider.html?cat=phone-repair" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="phone-repair" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">📱</div>
       <div class="of-svc-label">Phone Repair</div>
       <div class="of-svc-sub">Screen, battery, data</div>
     </a>
-    <a href="provider.html?cat=computer-repair" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="it-support" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">💻</div>
       <div class="of-svc-label">IT &amp; Computer</div>
       <div class="of-svc-sub">Repairs, networks, support</div>
     </a>
-    <a href="provider.html?cat=graphic-design" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="graphic-design" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">🎨</div>
       <div class="of-svc-label">Graphic Design</div>
       <div class="of-svc-sub">Logos, branding, print</div>
     </a>
-    <a href="provider.html?cat=photography" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="photographer" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">📸</div>
       <div class="of-svc-label">Photography</div>
       <div class="of-svc-sub">Events, portraits, products</div>
     </a>
-    <a href="provider.html?cat=videography" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="videographer" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">🎬</div>
       <div class="of-svc-label">Videography</div>
       <div class="of-svc-sub">Video production &amp; editing</div>
     </a>
-    <a href="provider.html?cat=marketing" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="social-media" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">📢</div>
       <div class="of-svc-label">Marketing</div>
       <div class="of-svc-sub">Social media, SEO, ads</div>
     </a>
-    <a href="provider.html?cat=accounting" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="accounting" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">📋</div>
       <div class="of-svc-label">Accounting</div>
       <div class="of-svc-sub">Bookkeeping, tax, payroll</div>
     </a>
-    <a href="provider.html?cat=tutoring" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="tutor" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">📚</div>
       <div class="of-svc-label">Tutoring</div>
       <div class="of-svc-sub">KCSE, CBC, university</div>
@@ -267,17 +267,17 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 
   <div class="of-divider">Lifestyle &amp; Beauty</div>
   <div class="of-svc-grid" style="margin-bottom:6px;">
-    <a href="provider.html?cat=hair-beauty" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="salon" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">💇</div>
       <div class="of-svc-label">Hair &amp; Beauty</div>
       <div class="of-svc-sub">Salon, barber, spa, nails</div>
     </a>
-    <a href="provider.html?cat=fitness" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="gym" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">🏋️</div>
       <div class="of-svc-label">Fitness &amp; Training</div>
       <div class="of-svc-sub">Personal trainer, gym</div>
     </a>
-    <a href="provider.html?cat=food" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="restaurant" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">🍽️</div>
       <div class="of-svc-label">Food &amp; Catering</div>
       <div class="of-svc-sub">Restaurant, delivery, chef</div>
@@ -286,22 +286,22 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 
   <div class="of-divider">Events &amp; Entertainment</div>
   <div class="of-svc-grid" style="margin-bottom:6px;">
-    <a href="provider.html?cat=events" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="event-planner" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">🎉</div>
       <div class="of-svc-label">Event Planning</div>
       <div class="of-svc-sub">Weddings, birthdays, corp.</div>
     </a>
-    <a href="provider.html?cat=entertainment" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="dj" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">🎵</div>
       <div class="of-svc-label">DJ / Music</div>
       <div class="of-svc-sub">DJ, musician, entertainer</div>
     </a>
-    <a href="provider.html?cat=mc" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="mc" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">🎤</div>
       <div class="of-svc-label">MC / Host</div>
       <div class="of-svc-sub">Events host, emcee</div>
     </a>
-    <a href="provider.html?cat=sports" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="sports-venue" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">⚽</div>
       <div class="of-svc-label">Sports</div>
       <div class="of-svc-sub">Turf, coaching, training</div>
@@ -310,17 +310,17 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 
   <div class="of-divider">Specialised Hubs</div>
   <div class="of-svc-grid" style="margin-bottom:6px;">
-    <a href="provider.html?cat=healthcare" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">🏥</div>
       <div class="of-svc-label">Healthcare</div>
       <div class="of-svc-sub">Doctors, clinics, pharmacy</div>
     </a>
-    <a href="provider.html?cat=legal" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="lawyer" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">⚖️</div>
       <div class="of-svc-label">Legal Services</div>
       <div class="of-svc-sub">Advocate, notary, contracts</div>
     </a>
-    <a href="provider.html?cat=construction" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="contractor" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">🏗️</div>
       <div class="of-svc-label">Construction</div>
       <div class="of-svc-sub">Contractor, supplier, labour</div>
@@ -334,7 +334,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 
   <div class="of-divider">Transport &amp; Property</div>
   <div class="of-svc-grid" style="margin-bottom:40px;">
-    <a href="provider.html?cat=delivery" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="courier" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">🛵</div>
       <div class="of-svc-label">Delivery</div>
       <div class="of-svc-sub">Courier, last-mile, errand</div>
@@ -344,22 +344,22 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
       <div class="of-svc-label">Ride Sharing</div>
       <div class="of-svc-sub">Taxi, boda boda, tuk-tuk</div>
     </a>
-    <a href="provider.html?cat=car-rental" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="car-rental" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">🚗</div>
       <div class="of-svc-label">Car Rental</div>
       <div class="of-svc-sub">Self-drive &amp; chauffeur</div>
     </a>
-    <a href="provider.html?cat=mechanic" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="mechanic" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">🔩</div>
       <div class="of-svc-label">Mechanics</div>
       <div class="of-svc-sub">Garage, diagnostics, tyres</div>
     </a>
-    <a href="provider.html?cat=bnb" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="bnb" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">🏠</div>
       <div class="of-svc-label">BnB / Short Stay</div>
       <div class="of-svc-sub">Airbnb-style listing</div>
     </a>
-    <a href="provider.html?cat=landlord" class="of-svc-card">
+    <a href="#register" class="of-svc-card" data-reg-category="landlord" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-svc-icon">🏘️</div>
       <div class="of-svc-label">Property</div>
       <div class="of-svc-sub">Rentals, sales, land</div>
@@ -374,13 +374,6 @@ function showScreen(id) {
   if (el) { el.classList.add('active'); window.scrollTo({ top: 0, behavior: 'smooth' }); }
 }
 
-/* Pre-select category in provider.html if ?cat= param passed */
-document.querySelectorAll('a[href^="provider.html?cat="]').forEach(a => {
-  a.addEventListener('click', function() {
-    const cat = new URL(this.href, location.href).searchParams.get('cat');
-    if (cat) sessionStorage.setItem('offerCat', cat);
-  });
-});
 </script>
 
 <nav class="bottom-nav" role="navigation" aria-label="Main navigation">
@@ -399,6 +392,16 @@ document.querySelectorAll('a[href^="provider.html?cat="]').forEach(a => {
     if (pl && u && u.name) pl.textContent = u.name.split(' ')[0];
   } catch(e) {}
 })();
+</script>
+<!-- "What Are You Offering?" registers through the ONE canonical intake: the Register My Business form (hub-register.js)
+     files an application AdminOS decides (applicationDecide). These tiles used to open the legacy provider.html
+     intake, whose applications carry no agreement acknowledgement and cannot be approved. -->
+<script src="hub-register.js" defer></script>
+<script>
+function offerRegister(category){
+  if (window.HubRegister) { HubRegister.open(category ? { category: category } : {}); return false; }
+  return true;   /* the form has not loaded yet — stay on the page (the #register anchor), never the legacy intake */
+}
 </script>
 <script src="seo.js" defer></script>
 <script src="nav-active.js" defer></script>
