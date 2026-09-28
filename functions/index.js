@@ -21,6 +21,11 @@ const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https")
 const _dqEndpoint = require("./delivery-quote-endpoint");
 const _dqCarry = require("./delivery-quote-carry");   /* RES-1 — the pin travels; it is never re-derived */
 const _merchantIdentity = require("./shared/merchant-identity"); /* WHO the buyer is paying, on the M-PESA prompt */
+/* KASS states commission ONLY as read from the one authority (commission-config.js) — never a prompt constant.
+   COMMISSION_CONFIG was referenced by the admin tax tool and the revenue config reads without ever being imported
+   (a ReferenceError the moment they ran); both now resolve the authority itself. */
+const COMMISSION_CONFIG = require("./commission-config");
+const _kassCommission = require("./kass-commission");
 const _qrAssoc = require("./shared/pos-qr-association"); /* P3-A — WHICH POS sale a callback names. Never whether it is paid. */
 const _kesMajor = (m) => (m < 0 ? "-" : "") + Math.trunc(Math.abs(m) / 100) + "." +
   String(Math.abs(m) % 100).padStart(2, "0");
@@ -1918,7 +1923,8 @@ PLATFORM FACTS (always accurate)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Payments: M-Pesa STK push (primary), Visa, Mastercard, SOKONI Wallet
-Seller commission: SOKONI takes 12%; seller keeps 88%. Free to list. No monthly fee on Basic plan.
+${_kassCommission.commissionPromptLine()}
+Free to list. No monthly fee on Basic plan.
 Subscription plans: Free (Basic) → Pro → Business → Enterprise. Pro from KES 999/month.
 Returns: 7-day hassle-free return on most items. Digital products non-refundable once downloaded.
 Delivery times: Same-day in Nairobi CBD & suburbs → 1–2 days Mombasa / Kisumu / Nakuru → 2–4 days other counties.

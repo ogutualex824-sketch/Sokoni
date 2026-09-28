@@ -1,3 +1,68 @@
+## [2026-09-28] - KASS states commission only from the commission authority; the "SOKONI takes 12%" claim is gone
+
+**Functions, NOT deployed.** Branch `slice/c4-category-matrix`. Owner instruction: KASS must never claim a commission
+rate that differs from the authoritative application logic, must not hard-code alternatives, must keep transaction
+types distinct, and must not regress to the old 12% / 3% statements. Payment calculations, commission code and data
+are unchanged in this slice.
+
+**Proven defect** (the public KASS prompt at `4e9607b`; also LIVE, `sokonichat-00058-hal`):
+- `functions/index.js` told every customer "Seller commission: SOKONI takes 12%; seller keeps 88%".
+- No code has ever charged 12% (`commission-config.js`: "Nobody has ever been billed 12%").
+- KASS's own corpus forbids it (`kass-corpus.js`: "Never invent fees, commissions, prices").
+- A prompt constant is a second commission table that `verify-commission-single-source` cannot see: the guard
+  scanned `index.js` and never flagged it.
+- The admin agent's tax tool and the revenue-config reads used `COMMISSION_CONFIG` without it ever being imported (a
+  ReferenceError the moment they ran).
+
+**Changed:**
+- **`functions/kass-commission.js` (new):** holds NO rate.
+  - It maps the transaction types customers ask about (online product sales, POS / Till / Quick Charge, event tickets,
+    stays, entertainment bookings, healthcare, legal, other service bookings, food, digital) to the categories the
+    authority prices.
+  - It reads them through `commission-config.resolveRate()` (the authority's only permitted reader) and the exported
+    POS lane constant, and renders one prompt line per request.
+  - A type the authority does not price, i.e. a default fallback, is omitted rather than stated.
+- **`functions/index.js`:**
+  - The 12% line is replaced by that generated line. KASS is told to quote only those figures, and to say it will
+    check for anything unlisted or for payout timing.
+  - `COMMISSION_CONFIG` is now imported.
+
+**What KASS states today** (exactly the authority on this branch): online product sales 5%, POS / Till / Quick
+Charge 5%, event tickets 3%, stays 5%, entertainment bookings 5%, healthcare 5%, legal 5%, other service bookings
+15%, food 5%, digital 10%, KES 10 minimum.
+
+> **Owner schedule PENDING, not applied.** The owner's 2026-09-28 schedule (online sales 15%, bookings 5%, …)
+> differs from this authority on several lines. The owner's three statements also conflict with each other on event
+> tickets, the booking lanes and property. **No rate was changed.** When one schedule is confirmed and applied to
+> `commission-config.js`, KASS follows automatically; C4 proves it.
+
+**Tests:** `scripts/test-kass-commission-authority.js` gives **7/0**. Every expectation is DERIVED from the authority,
+never hard-coded. The counterproof on `4e9607b` fails all 7.
+- C1: no literal commission figure in the prompt (catches 12%, 88% and any "<n>%" commission line, so a 3% regression
+  too).
+- C2: the evaluated prompt carries the authority line.
+- C3: every stated rate equals the authority.
+- C4: with the authority swapped for another schedule, KASS follows it.
+- C5: the types stay distinct.
+- C6: an unpriced type is never stated.
+- C7: the missing import.
+
+**Sabotage:** 6/6 caught, byte-identical restore. The attacks:
+- regress to "takes 12%";
+- add a stale 3% line;
+- copy a rate instead of reading it;
+- render a fallback;
+- flatten POS into online sales;
+- drop the import.
+
+**Regression:** 13 screened suites are equal to the pristine `4e9607b` tree (commission ×6, KASS ×6, kasshop).
+- `test-commission-48h-destinations` 84/3 and `test-commission-balance-ui` 37/2 fail identically on both trees.
+- `verify-commission-single-source` shows 1 failure on BOTH trees: a hard-coded 3% in
+  `scripts/test-event-ops-browser.js:304`. KASS adds no table.
+- `test-kass-cart-truth` was excluded (shared emulator port 8080): UNPROVEN.
+
+**Security / money:** no rate, calculation or record changed. KASS stops making a false financial statement.
+
 ## [2026-09-28] - Stored XSS closed on five hubs that had no escaper: community, fitness, home services, unboxing, reviews
 
 **Hosting, NOT deployed.** Branch `slice/c4-category-matrix`. This is slice 2 of the stored-XSS census. It is an
