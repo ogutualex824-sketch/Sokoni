@@ -34,6 +34,16 @@ exports.mirrorPosTransactionToRetail = onDocumentCreated(
     const t = snap.data() || {};
     const saleId = event.params.txnId;
 
+    /* 6a — `ps_` is the checkout's reserved sale-id namespace (pos-zero-friction _saleIdFor). A posTransactions id is
+       CLIENT-CHOSEN, so mirroring one in that namespace would occupy a sale id only the checkout may write. Refused: no
+       mirror, no adoption, no rewrite — only this log line. (The checkout independently refuses to resume a record it
+       did not write; either control alone holds the boundary.) */
+    if (/^ps_/.test(String(saleId))) {
+      console.warn('[mirrorPosTransactionToRetail] SECURITY — refused a transaction id in the checkout\'s reserved '
+        + 'sale-id namespace', { txnId: String(saleId), sellerId: t.sellerId || null });
+      return;
+    }
+
     const mirror = mapTxnToRetail(t, saleId);
     if (!mirror.merchantId || !saleId) return;   /* need an owner to scope by */
 

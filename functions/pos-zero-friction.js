@@ -50,6 +50,14 @@ function _saleIdFor(merchantId, idempotencyKey) {
 /* M0-4-DR-R proves a posRetailSales document is THIS writer's sale by re-deriving its id from its own stored facts —
    through this function, never a copy of it. */
 exports._saleIdFor = _saleIdFor;
+/* 6a — the idempotency record is scoped to the PROVEN merchant. It used to be posIdempotency/{raw client key}: one
+   namespace for every merchant, so a replay of another merchant's key returned that merchant's sale and receipt, and one
+   merchant's key occupied the same key for all others. Derived here, once; the certification derives it the same way. */
+function _idemIdFor(merchantId, idempotencyKey) {
+  return 'pi_' + _crypto.createHash('sha256')
+    .update(String(merchantId) + '|' + String(idempotencyKey)).digest('hex').slice(0, 40);
+}
+exports._idemIdFor = _idemIdFor;
 
 /* ══ 0b R4 — A TILL SELLS ONLY ITS OWN PRODUCTS ═════════════════════════════════════════════
    Pricing and the stock deduction read `products/{id}` by id alone. Nothing compared the
@@ -609,17 +617,105 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
     };
   }
 
+  /* ══ 6a — THE MERCHANT IS PROVEN BEFORE ANYTHING ELSE HAPPENS ══════════════════════════════════════════
+     This proof used to run AFTER the idempotency claim, the cached replay and the resume of an existing sale, so a
+     caller who was never proven for `merchantId` could claim a key, receive another merchant's cached receipt, or
+     resume a record at the merchant's sale id and write that merchant's daily summary. It is the SAME proof, moved
+     unchanged: one proven merchant identity then feeds the scoped idempotency key, the sale id, the resume check,
+     the stock and debt authority and the receipt. No claim, replay, resume or write happens before it. */
+  /* ── the actor, resolved from the server's own employment records ──────
+     resolveActor is the existing merchant-identity authority. It keys the
+     owner off the shops/{uid} document id (so ownership cannot be forged by
+     writing a field) and an employee off shopEmployees.shopOwnerId matching
+     the shop being acted on. `merchantId` here IS the shopId — the till
+     sends `merchantId: scope.shopId`.
+
+     resolveActor returns { ok:false, reason } for an ordinary refusal — this
+     person is not employed here — and that is a legitimate answer. It THROWING
+     is a different thing entirely: the authority itself is unavailable. The two
+     must not collapse into one "no actor", because that would silently turn off
+     discount authorisation for everybody at the moment the check broke. */
+  let _actor = null;
+  try {
+    _actor = await resolveActor(cashierId, merchantId);
+  } catch (err) {
+    _e('Staff permissions could not be checked, so this sale was not completed. ' +
+       'Nothing has been charged.', 'unavailable');
+  }
+
+  /* ══ THE MERCHANT MUST BE PROVEN, NOT DECLARED ═══════════════════════════
+     `merchantId` arrives in the request body. Until this block it was checked
+     for PRESENCE only (`if (!merchantId) _e('merchantId required')`) and then
+     used as the tenant for the entire sale — the products read, the shift
+     query, the sale document, the inventory deduction and the commission.
+
+     A comment further down asserted this was already handled — "merchantId is
+     enforced by resolveActor above (the sale is refused when !_actor.ok)" —
+     but NOTHING REFUSED IT. `_actor` was consumed for discount authority, for
+     one error message, and for the receipt's servedBy line. A caller could put
+     any shop's id in the body and book a sale into their books. The comment
+     described a guarantee the code did not provide, which is worse than no
+     comment: the next reader stops looking.
+
+     THIS IS WHAT MAKES THE COMMISSION GATE SAFE TO ENFORCE. Gating on a
+     forgeable id would be worse than not gating — a merchant could pass a
+     clean shop's id to dodge their own closed gate, or a rival's id to gate an
+     innocent party — and it would look like enforcement. Proving the id first
+     is the whole precondition.
+
+     TWO AUTHORITIES, UNION — deliberately the same pair the discount check
+     below already uses. resolveActor covers owners (keyed off the shops/{uid}
+     document id, so ownership cannot be forged by writing a field) and
+     shopEmployees staff. The canonical path covers staff who exist only in
+     workspaceMemberships. Requiring resolveActor alone would refuse every sale
+     by canonically-employed staff — a live till outage dressed as a security
+     fix. */
+  let _merchantProven = !!(_actor && _actor.ok);
+  let _provenBy = _merchantProven ? 'shop_actor' : null;
+  let _provenBusinessId = null;   /* 0b R4 — the business a membership proof established */
+  if (!_merchantProven) {
+    let _canon = null;
+    try {
+      const _b = await db.collection('businesses').doc(String(merchantId)).get();
+      if (_b.exists) _canon = String(merchantId);
+      else {
+        const _own = await _resolveMerchantIdForOwner(String(merchantId));
+        if (_own && _own.ok) _canon = _own.merchantId;
+      }
+    } catch (_) { _canon = null; }
+    if (_canon) {
+      try {
+        /* `sales` is the capability to transact here at all — NOT `discounts`,
+           which is a strictly narrower permission. Reusing the discount
+           capability would refuse ordinary cashiers, who are exactly the people
+           this call exists for. */
+        await _assertBusinessPermission(cashierId, _canon, 'sales');
+        _merchantProven = true;
+        _provenBy = 'workspace_membership';
+        _provenBusinessId = _canon;
+      } catch (_) { /* not a member here, or no capability */ }
+    }
+  }
+  if (!_merchantProven) {
+    _e('You are not authorised to record a sale for this shop.', 'permission-denied');
+  }
+
   /* ── 1. Idempotency claim — atomic ──
      The previous version read, checked, then set: two concurrent requests (double-tap, HTTP
      retry, two till terminals) could both read "not exists" and both proceed — the race window
      in F3. create() is atomic: exactly one caller creates the doc; every other gets
      ALREADY_EXISTS and is routed to the cached result or rejected. */
-  const idemRef = db.collection('posIdempotency').doc(idempotencyKey);
+  const idemRef = db.collection('posIdempotency').doc(_idemIdFor(merchantId, idempotencyKey));
   try {
-    await idemRef.create({ status: 'processing', startedAt: Date.now(), cashierId, merchantId });
+    await idemRef.create({ status: 'processing', startedAt: Date.now(), cashierId, merchantId, idempotencyKey });
   } catch (err) {
     if (err.code === 6 /* ALREADY_EXISTS */) {
       const prev = (await idemRef.get()).data() || {};
+      /* 6a — a completed result is returned only to the merchant it belongs to (the id is already scoped; this is the
+         second, independent check). */
+      if (prev.status === 'complete' && String(prev.merchantId || '') !== String(merchantId)) {
+        _e('This checkout key belongs to another merchant.', 'permission-denied');
+      }
       if (prev.status === 'complete') return { saleId: prev.saleId, receipt: prev.receipt, cached: true };
       /* A FAILED attempt must be retryable, or a refusal becomes permanent.
          The till deliberately holds ONE sale token across retries so the key is
@@ -630,7 +726,7 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
          "already in progress" and the sale would be stranded.
          Re-claiming here runs the whole validation again from the top. */
       if (prev.status !== 'failed') _e('Checkout already in progress', 'already-exists');
-      await idemRef.set({ status: 'processing', startedAt: Date.now(), cashierId, merchantId,
+      await idemRef.set({ status: 'processing', startedAt: Date.now(), cashierId, merchantId, idempotencyKey,
                           retryOf: prev.failedAt || null });
       /* Re-claimed: fall through to the validation below rather than rethrowing
          the ALREADY_EXISTS that brought us here. */
@@ -658,6 +754,22 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
     const _prior = await saleRef.get();
     if (_prior.exists) {
       const _p = _prior.data() || {};
+      /* 6a — resume ONLY a sale this checkout committed. The id is derived from (merchant, key), but anything else able
+         to write that id — the SmartPOS mirror copies a CLIENT-CHOSEN posTransactions id into posRetailSales — used to be
+         adopted as a committed sale: completed with no stock movement and no commission debt. The record must carry the
+         checkout's own provenance, which the mirror's whitelisted shape can never produce. Anything else fails closed:
+         nothing is adopted, charged, moved or summarised, and the key is marked failed. */
+      const _ours = _p.source !== 'pos-mirror'
+        && String(_p.merchantId || '') === _sanitize(merchantId)
+        && String(_p.idempotencyKey || '') === _sanitize(idempotencyKey)
+        && (_p.merchantProvenBy === 'shop_actor' || _p.merchantProvenBy === 'workspace_membership')
+        && Number.isSafeInteger(_p.soldAtMs);
+      if (!_ours) {
+        console.error('[posCompleteCheckout] SECURITY — sale id occupied by a record the checkout did not write; refused', {
+          saleId, merchantId, cashierId, source: _p.source || null });
+        _e('This sale could not be recorded: its sale number is already taken by a record the till did not create. ' +
+           'Nothing has been charged.', 'failed-precondition');
+      }
       if (String(_p.cashierId || '') !== String(cashierId)) {
         _e('This sale belongs to another cashier.', 'permission-denied');
       }
@@ -726,83 +838,6 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
            spent on exactly one sale */
 
     const _round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
-
-    /* ── the actor, resolved from the server's own employment records ──────
-       resolveActor is the existing merchant-identity authority. It keys the
-       owner off the shops/{uid} document id (so ownership cannot be forged by
-       writing a field) and an employee off shopEmployees.shopOwnerId matching
-       the shop being acted on. `merchantId` here IS the shopId — the till
-       sends `merchantId: scope.shopId`.
-
-       resolveActor returns { ok:false, reason } for an ordinary refusal — this
-       person is not employed here — and that is a legitimate answer. It THROWING
-       is a different thing entirely: the authority itself is unavailable. The two
-       must not collapse into one "no actor", because that would silently turn off
-       discount authorisation for everybody at the moment the check broke. */
-    let _actor = null;
-    try {
-      _actor = await resolveActor(cashierId, merchantId);
-    } catch (err) {
-      _e('Staff permissions could not be checked, so this sale was not completed. ' +
-         'Nothing has been charged.', 'unavailable');
-    }
-
-    /* ══ THE MERCHANT MUST BE PROVEN, NOT DECLARED ═══════════════════════════
-       `merchantId` arrives in the request body. Until this block it was checked
-       for PRESENCE only (`if (!merchantId) _e('merchantId required')`) and then
-       used as the tenant for the entire sale — the products read, the shift
-       query, the sale document, the inventory deduction and the commission.
-
-       A comment further down asserted this was already handled — "merchantId is
-       enforced by resolveActor above (the sale is refused when !_actor.ok)" —
-       but NOTHING REFUSED IT. `_actor` was consumed for discount authority, for
-       one error message, and for the receipt's servedBy line. A caller could put
-       any shop's id in the body and book a sale into their books. The comment
-       described a guarantee the code did not provide, which is worse than no
-       comment: the next reader stops looking.
-
-       THIS IS WHAT MAKES THE COMMISSION GATE SAFE TO ENFORCE. Gating on a
-       forgeable id would be worse than not gating — a merchant could pass a
-       clean shop's id to dodge their own closed gate, or a rival's id to gate an
-       innocent party — and it would look like enforcement. Proving the id first
-       is the whole precondition.
-
-       TWO AUTHORITIES, UNION — deliberately the same pair the discount check
-       below already uses. resolveActor covers owners (keyed off the shops/{uid}
-       document id, so ownership cannot be forged by writing a field) and
-       shopEmployees staff. The canonical path covers staff who exist only in
-       workspaceMemberships. Requiring resolveActor alone would refuse every sale
-       by canonically-employed staff — a live till outage dressed as a security
-       fix. */
-    let _merchantProven = !!(_actor && _actor.ok);
-    let _provenBy = _merchantProven ? 'shop_actor' : null;
-    let _provenBusinessId = null;   /* 0b R4 — the business a membership proof established */
-    if (!_merchantProven) {
-      let _canon = null;
-      try {
-        const _b = await db.collection('businesses').doc(String(merchantId)).get();
-        if (_b.exists) _canon = String(merchantId);
-        else {
-          const _own = await _resolveMerchantIdForOwner(String(merchantId));
-          if (_own && _own.ok) _canon = _own.merchantId;
-        }
-      } catch (_) { _canon = null; }
-      if (_canon) {
-        try {
-          /* `sales` is the capability to transact here at all — NOT `discounts`,
-             which is a strictly narrower permission. Reusing the discount
-             capability would refuse ordinary cashiers, who are exactly the people
-             this call exists for. */
-          await _assertBusinessPermission(cashierId, _canon, 'sales');
-          _merchantProven = true;
-          _provenBy = 'workspace_membership';
-          _provenBusinessId = _canon;
-        } catch (_) { /* not a member here, or no capability */ }
-      }
-    }
-    if (!_merchantProven) {
-      _e('You are not authorised to record a sale for this shop.', 'permission-denied');
-    }
 
     /* 0b R4 — the products priced above must belong to the merchant just proven. Checked on the
        SAME snapshots the prices came from, and again inside the stock transaction below. */

@@ -174,7 +174,9 @@ async function resetStock() { for (const id of ['P_OWN', 'P_OWN2', 'P_FOREIGN', 
       `the retry returns the EXISTING sale and its receipt (saleId ${retry.r && retry.r.saleId === (afterRetry[0] || {}).id ? 'matches' : 'DIFFERS'})`);
     await resetStock();
 
-    await db.collection('posIdempotency').doc('K_R1C').set({ status: 'failed', failedAt: Date.now(), startedAt: Date.now() });
+    /* 6a (owner-approved fixture sync): the idempotency record is scoped to the proven merchant — its id comes from the
+       checkout's own derivation, never a hand-written value. */
+    await db.collection('posIdempotency').doc(PZF._idemIdFor(OWNER, 'K_R1C')).set({ status: 'failed', failedAt: Date.now(), startedAt: Date.now() });
     { let rel; INJ.barrier = { n: 2, arrived: 0, gate: new Promise((r) => { rel = r; }), release: null }; INJ.barrier.release = rel; }
     const [c1, c2] = await Promise.all([checkout('K_R1C', [['P_OWN', 4]]), checkout('K_R1C', [['P_OWN', 4]])]);
     const barrierHeld = INJ.barrier.arrived >= 2; INJ.barrier = null;

@@ -140,13 +140,35 @@ exports.onPosTransactionMpesaRef = onDocumentWritten(
     if (!REF_RE.test(ref)) return;
 
     /* Already resolved on a previous delivery of this same event. */
-    if (t.mpesaRefClaim === 'claimed' || t.mpesaRefClaim === 'conflict') return;
+    if (t.mpesaRefClaim === 'claimed' || t.mpesaRefClaim === 'conflict' || t.mpesaRefClaim === 'refused') return;
 
-    const merchantId = t.merchantId || t.sellerUid || t.shopId || null;
-    if (!merchantId) {
-      console.warn('[pos-mpesa-refs] no merchant identity on', event.params.txnId);
-      return;
+    /* 6a — WHOSE reference this is comes ONLY from `sellerId`, the one field the posTransactions rule binds to the writer
+       (request.resource.data.sellerId == request.auth.uid). It used to be `merchantId || sellerUid || shopId` — all
+       client-supplied and unbound — so any signed-in account could claim a VICTIM merchant's reference and turn the
+       victim's genuine sale into a conflict. A body naming anyone else is refused, not redirected: no claim, no
+       conflict record, only a flag on this transaction. The same uid namespace as claimPosMpesaReference. */
+    const refuse = async (issue) => {
+      console.warn('[pos-mpesa-refs] SECURITY — reference claim refused (' + issue + ') on', event.params.txnId);
+      await after.ref.set({ mpesaRefClaim: 'refused', mpesaRefIssue: issue }, { merge: true }).catch(() => {});
+    };
+    const merchantId = (typeof t.sellerId === 'string' && t.sellerId) ? t.sellerId : null;
+    if (!merchantId) return refuse('no_seller_identity');
+    for (const f of ['merchantId', 'sellerUid', 'shopId']) {
+      if (t[f] != null && t[f] !== '' && String(t[f]) !== merchantId) return refuse('merchant_mismatch');
     }
+    /* …and the seller must be a merchant, by the SAME authorities the checkout proves a merchant with: the shop actor
+       (merchant-identity resolveActor — the owner of shops/{uid} or its staff) or the owner of a canonical business
+       (tenant-identity). An authority that cannot answer is not a yes. */
+    let _isMerchant = false;
+    try {
+      const actor = await require('./merchant-identity')._internal.resolveActor(merchantId, merchantId);
+      _isMerchant = !!(actor && actor.ok);
+      if (!_isMerchant) {
+        const own = await require('./tenant-identity').resolveMerchantIdForOwner(merchantId, db);
+        _isMerchant = !!(own && own.ok);
+      }
+    } catch (_) { return refuse('merchant_unverified'); }
+    if (!_isMerchant) return refuse('not_a_merchant');
 
     const result = await claimReference({
       merchantId,

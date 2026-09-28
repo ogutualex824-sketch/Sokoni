@@ -154,6 +154,31 @@ These Cloud Functions verify `request.auth.token.admin === true` before executio
 - Schema validation before dispatch
 - Rate limiting by operation type (client-side, 2–20 req/s depending on type)
 
+### POS checkout authority (6a, 2026-09-28 — built, NOT deployed)
+
+`posCompleteCheckout` is the one authority for a POS sale, its stock movement and its commission debt. It had an
+**ordering defect**: it claimed the idempotency key, returned a cached result and resumed an existing sale **before**
+proving that the caller may act for the `merchantId` in the request. Emulator-proven consequences on `8cc8ce9`:
+- an unrelated account received another merchant's `saleId` and receipt by replaying that merchant's key;
+- a record at a merchant's sale id was "resumed" for that merchant by an unproven caller, writing its daily summary;
+- a SmartPOS mirror record (client-chosen `posTransactions` id copied into `posRetailSales`) at the checkout's sale id
+  was adopted as a committed sale, with **no stock movement and no commission debt**.
+
+The contract now:
+1. **The merchant is proven first.** The existing proof (`resolveActor`, or business membership with `sales`) is moved,
+   unchanged, ahead of the claim. No claim, replay, resume or write happens for an unproven caller.
+2. **Idempotency is merchant-scoped.** The record is `posIdempotency/pi_<sha256(merchant|key)>` (`_idemIdFor`). A
+   completed result is returned only when it also names the proven merchant.
+3. **Resume adopts only the checkout's own sale.** That means `source !== 'pos-mirror'`, the same merchant and key, a
+   `merchantProvenBy`, and a numeric `soldAtMs`. Anything else fails closed: nothing is adopted, charged, moved or summarised.
+4. **The mirror refuses the reserved `ps_` namespace.** This control is independent of item 3.
+5. **M-PESA manual-Till reference claims** (`onPosTransactionMpesaRef`):
+   - the merchant is taken only from the rule-bound `sellerId`;
+   - a body naming another merchant is refused, with no claim and no conflict record;
+   - a seller who is not a merchant is refused.
+
+Evidence and design: [[POS-6a-checkout-authority]].
+
 ---
 
 ## Layer 5 — Webhook Security

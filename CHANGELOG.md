@@ -1,3 +1,68 @@
+## 2026-09-29 (173) — 6a: the POS checkout authority is proven first and owns its sale identity (NOT deployed)
+
+**Why.** The step-6 census reproduced three defects on the emulator. `posCompleteCheckout` claimed the idempotency key,
+returned a cached result and resumed an existing sale **before** proving the caller for the `merchantId` in the request:
+- a SmartPOS mirror record at the checkout's sale id (the client chooses the `posTransactions` id) was **adopted** as a
+  committed sale, with no stock movement and **no commission debt**;
+- an unrelated account resumed such a record for a victim merchant and wrote that merchant's daily summary;
+- an unrelated account replaying a victim's key received the victim's `saleId` and receipt, because
+  `posIdempotency/{raw key}` was one global namespace.
+
+The M-PESA reference trigger also took the merchant from unbound client fields, so anyone could squat a victim's reference.
+
+- **Change:**
+  - **`functions/pos-zero-friction.js`:**
+    - the existing merchant proof is **moved, unchanged** (76 lines, verified identical) ahead of the claim;
+    - idempotency is **merchant-scoped** (`posIdempotency/pi_<sha256(merchant|key)>`, `_idemIdFor`, exported);
+    - a completed record is returned only if it names the proven merchant;
+    - **resume adopts only the checkout's own record**: not `pos-mirror`, the same merchant and key, a `merchantProvenBy`,
+      and an integer `soldAtMs`. Anything else fails closed (`failed-precondition`, SECURITY log, key failed) with no side effect.
+  - **`functions/pos-retail-mirror.js`:** refuses a transaction id in the reserved `ps_` namespace (log only).
+  - **`functions/pos-mpesa-refs.js`:**
+    - the claim's merchant is taken only from the rule-bound `sellerId`;
+    - a body naming another merchant is refused (`merchant_mismatch`, no claim, no conflict);
+    - a non-merchant seller is refused (`not_a_merchant`), judged by the checkout's own authorities (`resolveActor`, then
+      the canonical business owner).
+    - **Behaviour change:** the old trigger skipped every transaction without a body `merchantId`, and SmartPOS never sends
+      one, so real SmartPOS references were never claimed. They now are, under the seller.
+  - **`scripts/test-0b-checkout-integrity.js`** (owner-approved fixture sync): the R1-c failed-attempt fixture id is
+    derived through `_idemIdFor`.
+- **Files:**
+  - `functions/pos-zero-friction.js`, `functions/pos-retail-mirror.js`, `functions/pos-mpesa-refs.js`;
+  - `scripts/test-0b-checkout-integrity.js`, `scripts/test-pos-6a-checkout-authority.js` (new);
+  - `docs/repairs/POS-6a-checkout-authority.md` (new), `docs/SECURITY.md`, `docs/POS_COMMISSION_RAIL.md`,
+    `docs/FINANCIAL_CORE_ARCHITECTURE.md`;
+  - `CHANGELOG.md`.
+- **Database:**
+  - new idempotency record ids (`pi_…`, now carrying `idempotencyKey`);
+  - `posTransactions` may carry `mpesaRefClaim: 'refused'` with `mpesaRefIssue`;
+  - no migration: production has no `ps_` sales, and a pre-deploy key falls back to the checked resume.
+- **API:**
+  - an unproven caller is refused before any claim;
+  - an occupied sale id returns `failed-precondition`;
+  - a removed cashier can no longer resume a committed sale (owner-accepted).
+- **Security:** closes cross-merchant receipt disclosure, record adoption without debt, cross-tenant summary writes, and
+  M-PESA reference squatting.
+- **Unchanged:**
+  - `firestore.rules`, the mirror's mapping, DR-R, `RATE_ERA`;
+  - wallets, collection, the till gate, payment rails;
+  - dry-run;
+  - `test-pos-confirmation-vocabulary.js`, which stays 42/0 because the replay line is textually unchanged.
+- **Evidence:**
+  - `test-pos-6a-checkout-authority` **28/0 new vs 10/18 old** (`8cc8ce9`). Each attack asserts the refusal, no side
+    effect, and the named safeguard's message. The old tree passes only the controls and boundaries.
+  - **Mutants: 13/13 caught**, each turning its own check red.
+  - **The 112-suite floor** (old `8cc8ce9` vs new) has **no summary-line difference**. The log diffs are:
+    - line and offset shifts from the moved proof (`audit-financial-safety` V3, `pos-gate-enforcement` A5);
+    - T5-6, a working-tree artifact;
+    - uncommitted-tree reporters and random ids.
+  - `test-manual-till-orders` is 67/14 on **both** trees, identically (pre-existing).
+  - The earlier units are all green: P0, M0-1..M0-4a, DR-A 16/0, DR-R 35/0, R-48H, 0b 31/0 (with the synced fixture), Q0,
+    L-1, L-7..L-9A. So are the retirement test (5/0), the gate tripwire (42/0), the rail (46/0), the mirror mapper (16/16)
+    and the syntax gate.
+- **Not in this unit:** 6b SmartPOS convergence (still locked), and the dead `posCheckPaymentStatus` fallback (it queries a
+  `ref` field the checkout never writes).
+
 ## 2026-09-28 (172) — M0-4-DR-R: deterministic reconciliation of POS commission debts, a BACKSTOP (NOT deployed)
 
 **Why.** DR-A made a sale and its `poscomm_<saleId>` debt commit together. Records made before that, and exceptional

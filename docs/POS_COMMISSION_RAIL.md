@@ -3,6 +3,21 @@
 **Date:** 2026-09-07 · **Status:** BUILT AND TESTED, NOT DEPLOYED
 **Related:** [[Payments]] · [[SmartPOS]] · [[Orders]] · [[Marketplace]]
 
+## 6a — the checkout authority is proven first and owns its sale identity (2026-09-28)
+
+The debt DR-A creates is only as trustworthy as the checkout that decides a sale happened. `posCompleteCheckout` used to
+claim the key, replay a cached result and resume an existing sale **before** proving the merchant. A SmartPOS mirror
+record at the checkout's sale id was therefore adopted as a committed sale: completed, with no stock movement and **no
+debt** (emulator-proven).
+
+Now:
+- the merchant proof runs first (moved, unchanged);
+- idempotency is scoped to the merchant (`_idemIdFor`);
+- resume adopts only a record carrying the checkout's own provenance;
+- the mirror refuses the reserved `ps_` namespace.
+
+See [[POS-6a-checkout-authority]].
+
 ## M0-4-DR-R — deterministic reconciliation, a BACKSTOP (2026-09-28)
 
 Since M0-4-DR-A a sale and its `poscomm_<saleId>` debt commit together. `functions/pos-debt-reconciliation.js` exists
