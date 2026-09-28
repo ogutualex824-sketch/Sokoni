@@ -1,3 +1,30 @@
+## [2026-09-28] - KASS prompt: no invented delivery prices, return windows, "vetted" or escrow claims
+
+**Functions, NOT deployed.** Branch `slice/c4-category-matrix`. Owner rule: KASS must never invent delivery prices,
+and must not claim all sellers are vetted unless the underlying state proves it.
+
+**Proven defect** (the public KASS prompt at `4e9607b`; also LIVE, `sokonichat-00058-hal`). It told every customer:
+- "Delivery cost: From KES 150 (bike) to KES 800+". Real delivery fees come from the dynamic quote authority (17–25%
+  SOKONI share, by route).
+- Delivery times ("Same-day in Nairobi…").
+- "All sellers vetted. Buyers protected by escrow". The code itself records that the escrows collection is empty in
+  production.
+- A "7-day hassle-free return".
+- "17 cars".
+- To "flag 20%+ savings" and "mention loyalty points earnable" when no tool supplies either.
+
+**Changed:** `functions/index.js`, prompt text only.
+- Delivery fee and time are computed at checkout and never quoted.
+- Returns are quoted only from knowledge results (the Refund Policy).
+- Businesses are described as SOKONI-approved. "Verified" or "vetted" is only used when a tool says so, and escrow is
+  never promised.
+- The car count is removed.
+- Value claims come only from results the tools returned.
+
+**Tests:** `scripts/test-kass-prompt-facts.js` gives **5/0**. The counterproof on `4e9607b` fails all 5.
+- **Sabotage:** 7/7 caught, byte-identical restore.
+- **Regression:** the KASS suites still pass (commission-authority 7/0, auth 14/0, stay-quote 14/0).
+
 ## [2026-09-28] - Anonymous search keys no longer cover the users index
 
 **Functions, NOT deployed.** Branch `slice/c4-category-matrix`. Owner privacy rule: "anonymous search keys must not
