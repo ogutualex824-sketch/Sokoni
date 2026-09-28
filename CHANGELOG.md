@@ -1,3 +1,43 @@
+## 2026-09-28 (248) — C4a: Register My Business authority survey and the C4 contract
+
+Documentation only: `docs/C4A_REGISTRATION_AUTHORITY_SURVEY.md`. No code, no deploy, no production access. Surveyed at
+`6dee0d4`, the repo only.
+
+**Findings** (three census passes; load-bearing claims re-verified against the code):
+- **There is no single "Register My Business".**
+  - 24 browser entry points; four intakes carry the label and do different things.
+  - `workspace.html`'s "Register my business" leads to `onboarding.html`, which creates NO application and says
+    "You're live".
+  - `seller.html` writes `businesses/{uid}` `status:'active'` from the browser.
+  - `provider-onboarding.html` promises "now searchable" before any approval.
+  - The merchant application reaches reviewers empty (a field-name mismatch).
+- **Server bypasses of the canonical spine (K1–K12):**
+  - **K2**: `accountReactivate` self-activates `providers.status` (it defaults to `'active'`). Present in ≥7 local
+    lineages, not `main`; live status unknown.
+  - **K8**: self-created active shops and businesses.
+  - **K11**: rejecting a second application suspends a live business.
+  - The granted role is guessed from applicant text.
+  - There are non-canonical approvers.
+- **Rules-source gaps:**
+  - eight business collections accept client-set `status`;
+  - the `providers` owner can set `featured` / `commissionRate` / `adminApproved`;
+  - decided applications can be reopened;
+  - a duplicate `propertyListings` block voids `write:false`;
+  - uid-keyed documents can be overwritten after review.
+- **No gap is claimed live.** The rules source diverges from production.
+
+**The C4 contract** (owner decisions, recorded in the survey):
+- a read-only production check first;
+- then K2, then K8 / self-activation, then rules hardening, as separate slices set by what production proves;
+- then C4b one canonical Register My Business (the merchant-application pattern);
+- then C4c, where AdminOS explicitly decides role and category (C1 stays the category source);
+- then C4d, documents under the application, locked after submission;
+- then C4 certification.
+- One live application per user per business type. Rejection ≠ suspension. Decided applications are read-only.
+- `applicationDecide` is the only approver; automatic seller approval is retired.
+
+**Files:** New: `docs/C4A_REGISTRATION_AUTHORITY_SURVEY.md`. **Database / API / Security / Breaking:** none.
+
 ## 2026-09-28 (247) — C3 certified: verified-only discovery, with its exceptions recorded
 
 Documentation only: `docs/C3_DISCOVERY_CERTIFICATION.md`. No code, no deploy, and the C3b-2 cleanup was not executed.
