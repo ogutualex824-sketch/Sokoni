@@ -74,18 +74,30 @@ Healthcare schedules are refused here (`HEALTHCARE_OWNED`); they have their own 
 - **No display strings as data.** `shops.openingHours` is the same object as `providerAvailability.hours`. A legacy
   string is ignored by every reader.
 
-## A2 — recorded, not done
+## A2 — done (2026-09-29)
 
-- **Pickup and delivery hours, and order / booking cutoffs.** Only on/off switches exist today.
-- **Bookings convergence:**
-  - `booking-service._prepareSlot` reads the legacy `providerAvailability.schedule`, the `overrides/{date}`
-    subcollection and `isOnVacation`;
-  - it does not read `hours`, the `overrides` map or the shop's live state;
-  - `provider-dashboard.html` writes that legacy store;
-  - `availability-manager.html` calls three undefined functions.
-- **KASS "is it open?"** must use `publicShopState`, never free text.
-- **Product page:** show the shop's status, from the same verdict.
+- **Bookings** — `booking-service._prepareSlot` consults the shop through the same evaluator at the slot's instant:
+  - "not taking orders" pauses bookings;
+  - a temporary closure over the slot, or a closed special date, refuses it;
+  - with canonical hours and no legacy `schedule`, the slot must fit inside an open stretch. Such a business is no
+    longer bookable on the Mon–Fri 09–17 default.
+- **KASS** — the public tool `business_hours` (`functions/kass-hours.js`) answers only for listed businesses, in the
+  evaluator's words. "Hours not published" replaces any guess. Prompt rule 1c.
+- **Product page** — the shop status comes from `getShopAvailability`. A closed shop never looks fulfillable now: the
+  page says whether orders are taken while closed.
+- **Order cutoff** (`orderCutoffMin`) and **delivery / pickup until** (`deliveryUntil` / `pickupUntil`) are in the
+  evaluator (`ordersOpen`, `ordersCloseAt`, `fulfilment`, `channelText`). They are enforced at checkout for shops that
+  refuse orders while closed.
+- **`availability-manager.html`** is a router to the editors that work.
+
+## Still open
+
 - **Rules:** neither ruleset validates the shape of `hours` / `overrides`. The branch `shops` rule dropped the served
-  `timezone` allowance. This belongs to shop discovery stage 3 (rules).
-- **`payment-purposes.validateOrderLines`** reads a `shopState` collection nothing writes, so its availability check
-  always passes.
+  `timezone` allowance. Both belong to shop discovery stage 3 (rules).
+- **Booking times** are interpreted in East Africa Time by `booking-service` (`+03:00` literals). The shop's own
+  timezone applies to its hours, not yet to how a slot's date and time are read.
+- **`provider-dashboard.html`'s availability editor** still writes the legacy `schedule` shape, which bookings read but
+  the storefront does not. Converging it onto `setShopAvailability` is its own slice.
+- **Meal / service periods** for restaurants are not modelled separately. Per-item availability remains the
+  menu/inventory authority.
+- **`payment-purposes.validateOrderLines`** reads a `shopState` collection nothing writes.

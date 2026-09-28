@@ -1114,6 +1114,16 @@ const _CHAT_TOOLS = [
     },
   },
   {
+    /* "Is it open?" — the ONE shop availability authority (functions/kass-hours.js), never inference. */
+    name: "business_hours",
+    description: "Is an approved business open right now, when does it open or close, and are delivery/pickup available? Use the id of a business returned by find_businesses. This is the ONLY way to answer opening-hours questions — never guess hours.",
+    input_schema: {
+      type: "object",
+      properties: { business_id: { type: "string", description: "The id of a business from find_businesses results" } },
+      required: ["business_id"],
+    },
+  },
+  {
     name: "search_stays",
     description: "Search BnBs, short stays, furnished apartments, serviced apartments, and hotels. Call this for: bnb, BnB, airbnb, short stay, vacation rental, furnished apartment, place to sleep, weekend getaway, accommodation, lodge, hotel, resort.",
     input_schema: {
@@ -1341,7 +1351,7 @@ async function _classifyKassAuth(token) {
    guest mode later is a deliberate change here, never a side effect of a failed token check. */
 const KASS_GUEST_CHAT = false;
 const _KASS_TOOL_ACCESS = Object.freeze({
-  get_page_url: 'public', find_businesses: 'public', search_marketplace: 'public', search_stays: 'public',
+  get_page_url: 'public', find_businesses: 'public', business_hours: 'public', search_marketplace: 'public', search_stays: 'public',
   search_restaurants: 'public', search_events: 'public', search_jobs: 'public', compare_products: 'public',
   add_to_cart: 'user', view_cart: 'user', get_my_orders: 'user', track_order: 'user', cancel_order: 'user',
   save_to_wishlist: 'user', get_wallet: 'user', book_stay: 'user',
@@ -1382,8 +1392,12 @@ async function _execChatTool(name, input, ctx) {
         image: b.photo, rating: b.rating, verified: b.verified, url: `provider-profile.html?id=${encodeURIComponent(b.providerId)}` }));
       ctx.addAction({ label: "See all on SOKONI", url: `providers.html?cat=${encodeURIComponent(r.categories[0])}` });
       if (!r.businesses.length) return { found: 0, categories: r.categories, message: `No approved ${r.categories.map((c) => c.replace(/_/g, " ")).join(" / ")} listed${input.location ? " in " + input.location : ""} yet.` };
-      return { found: r.businesses.length, businesses: r.businesses.map((b) => ({ name: b.name, category: b.categoryLabel, does: b.displayCategory,
+      return { found: r.businesses.length, businesses: r.businesses.map((b) => ({ id: b.uid, name: b.name, category: b.categoryLabel, does: b.displayCategory,
         city: b.city || b.location || null, rating: b.rating ? `${b.rating}★ (${b.reviewCount})` : "no reviews yet", verified: b.verified, acceptsBookings: b.acceptsBookings })) };
+    }
+
+    if (name === "business_hours") {
+      return await require("./kass-hours").businessHours(db, input.business_id);
     }
 
     if (name === "search_marketplace") {
@@ -2019,6 +2033,7 @@ BEHAVIOUR RULES (follow exactly)
 
 1. MARKETPLACE FIRST — for any shopping/product intent, immediately call search_marketplace. Show real items with prices and sellers. Never say "visit the marketplace" without first running a search.
 1b. BUSINESSES — for any provider, professional or business by what it does (DJ, plumber, salon, mechanic, lawyer, doctor, hotel, property agent…), call find_businesses first. It returns only APPROVED, publicly listed businesses — never describe a business it did not return.
+1c. OPENING HOURS — "is it open?", "when do they close?", "do they deliver now?": call business_hours with the business id and repeat its answer. NEVER state or guess opening hours from a name, description, search text or your own knowledge; if it says hours are not published, say so.
 2. SEARCH BEFORE ANSWERING — call a search tool before describing any specific product, listing, provider, event, job, or stay. Never invent data.
 3. NAVIGATE WITH CONFIDENCE — when a user wants to go somewhere, call get_page_url immediately. Don't ask "would you like me to take you there?" — just do it.
 4. ONE-STEP RESOLUTION — identify intent in the first turn and resolve it. Don't make users repeat themselves.
@@ -2563,12 +2578,16 @@ exports.createCheckoutSession = onCall(
        has explicitly turned the channel off. */
     const _fulfilSellers = [...new Set(sessionItems.map(i => i.sellerUid).filter(Boolean))];
     for (const sUid of _fulfilSellers) {
-      const _f = _avail.fulfillmentAllowed(_fulfil, shopState[sUid]);
+      const _f = _avail.fulfillmentAllowed(_fulfil, shopState[sUid], shopVerdict[sUid]);
       if (!_f.ok && _f.reason === "delivery-off") {
         throw new HttpsError("failed-precondition", "Delivery is currently unavailable for this shop. Please choose pickup or try again later.");
       }
       if (!_f.ok && _f.reason === "pickup-off") {
         throw new HttpsError("failed-precondition", "Pickup is currently unavailable for this shop. Please choose delivery or try again later.");
+      }
+      /* 2026-09-29: outside the shop's own delivery / pickup hours, for a shop that refuses orders while closed */
+      if (!_f.ok && (_f.reason === "delivery-closed-now" || _f.reason === "pickup-closed-now")) {
+        throw new HttpsError("failed-precondition", (_f.reason === "delivery-closed-now" ? "Delivery" : "Pickup") + " has closed for today at this shop. Please try again when it reopens.");
       }
     }
 

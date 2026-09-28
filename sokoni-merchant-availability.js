@@ -141,7 +141,8 @@
         S.shopId = d.shopId || S.shopId; S.canEdit = !!d.canEdit; S.verdict = d.verdict || null;
         var st = d.settings || {};
         S.saved = { live: st.live || {}, hours: st.hours || null, overrides: st.overrides || {}, temporaryClosure: st.temporaryClosure || null,
-          mode: st.mode || 'hours', timezone: st.timezone || 'Africa/Nairobi', ordersWhenClosed: st.ordersWhenClosed !== false };
+          mode: st.mode || 'hours', timezone: st.timezone || 'Africa/Nairobi', ordersWhenClosed: st.ordersWhenClosed !== false,
+          orderCutoffMin: st.orderCutoffMin || 0, deliveryUntil: st.deliveryUntil || '', pickupUntil: st.pickupUntil || '' };
         S.draft = clone(S.saved); if (!S.draft.hours) S.draft.hours = null;
         S.phase = 'ready'; paint();
       }).catch(function (e) {
@@ -153,11 +154,12 @@
     function preview() {
       var h = H(); if (!h || !S.draft) return null;
       return h.evaluate({ live: S.draft.live, hours: S.draft.hours, overrides: S.draft.overrides, temporaryClosure: S.draft.temporaryClosure,
-        mode: S.draft.mode, timezone: S.draft.timezone }, Date.now());
+        mode: S.draft.mode, timezone: S.draft.timezone, orderCutoffMin: +S.draft.orderCutoffMin || 0,
+        deliveryUntil: S.draft.deliveryUntil || null, pickupUntil: S.draft.pickupUntil || null }, Date.now());
     }
     function dirty() {
       if (!S.saved || !S.draft) return false;
-      var pick = function (o) { return JSON.stringify([o.hours, o.overrides, o.mode, o.timezone, o.ordersWhenClosed]); };
+      var pick = function (o) { return JSON.stringify([o.hours, o.overrides, o.mode, o.timezone, o.ordersWhenClosed, +o.orderCutoffMin || 0, o.deliveryUntil || '', o.pickupUntil || '']); };
       return pick(S.saved) !== pick(S.draft);
     }
 
@@ -169,8 +171,8 @@
         '<div class="mav-t"><span class="mav-dot" aria-hidden="true"></span>' + esc(hl.title) + '</div>' +
         '<div class="mav-d">' + esc(hl.detail || '') + '</div>' +
         (v && v.state ? '<div class="mav-row" style="margin-top:10px">' +
-          (v.state.delivery ? '<span class="mav-note" style="margin:0;padding:6px 10px">🚚 Delivery</span>' : '<span class="mav-note" style="margin:0;padding:6px 10px">🚚 No delivery</span>') +
-          (v.state.pickup ? '<span class="mav-note" style="margin:0;padding:6px 10px">🏪 Pickup</span>' : '<span class="mav-note" style="margin:0;padding:6px 10px">🏪 No pickup</span>') +
+          '<span class="mav-note" style="margin:0;padding:6px 10px">' + esc(h.channelText(v, 'delivery')) + '</span>' +
+          '<span class="mav-note" style="margin:0;padding:6px 10px">' + esc(h.channelText(v, 'pickup')) + '</span>' +
           '<span class="mav-note" style="margin:0;padding:6px 10px">🕒 ' + esc(S.draft.timezone) + '</span></div>' : '') +
         (typeof ctx.openStorefront === 'function' ? '<button type="button" class="mav-btn" data-av="storefront" style="margin-top:10px">View my storefront ↗</button>' : '') + '</div>';
     }
@@ -246,7 +248,12 @@
       var dis = S.canEdit ? '' : ' disabled';
       return '<div class="mav-card"><div class="mav-h">Settings</div><label class="mav-sub" style="display:block;margin-bottom:6px" for="mav-tz">Shop timezone</label>' +
         '<select class="mav-in" id="mav-tz" data-avin="timezone"' + dis + '>' + ZONES.map(function (z) { return '<option value="' + z[0] + '"' + (S.draft.timezone === z[0] ? ' selected' : '') + '>' + esc(z[1]) + '</option>'; }).join('') + '</select>' +
-        '<button type="button" role="switch" aria-checked="' + (S.draft.ordersWhenClosed !== false) + '" class="mav-tog" style="margin-top:12px" data-av="owc"' + dis + '><span><b>Accept orders while closed</b><small>Orders placed out of hours are prepared when you open. Turn off to refuse them.</small></span><span class="mav-pill" aria-hidden="true"></span></button></div>';
+        '<button type="button" role="switch" aria-checked="' + (S.draft.ordersWhenClosed !== false) + '" class="mav-tog" style="margin-top:12px" data-av="owc"' + dis + '><span><b>Accept orders while closed</b><small>Orders placed out of hours are prepared when you open. Turn off to refuse them.</small></span><span class="mav-pill" aria-hidden="true"></span></button>' +
+        '<label class="mav-sub" style="display:block;margin:14px 0 6px" for="mav-cut">Stop taking orders before closing</label>' +
+        '<select class="mav-in" id="mav-cut" data-avin="orderCutoffMin"' + dis + '>' + [0, 15, 30, 45, 60, 90, 120].map(function (m) { return '<option value="' + m + '"' + ((+S.draft.orderCutoffMin || 0) === m ? ' selected' : '') + '>' + (m ? m + ' min before closing' : 'No cutoff — until closing') + '</option>'; }).join('') + '</select>' +
+        '<div class="mav-row" style="margin-top:12px"><label class="mav-sub" style="margin:0" for="mav-du">🛵 Delivery until</label><input class="mav-in" type="time" step="300" id="mav-du" data-avin="deliveryUntil" value="' + esc(S.draft.deliveryUntil) + '"' + dis + '>' +
+        '<label class="mav-sub" style="margin:0" for="mav-pu">🏬 Pickup until</label><input class="mav-in" type="time" step="300" id="mav-pu" data-avin="pickupUntil" value="' + esc(S.draft.pickupUntil) + '"' + dis + '></div>' +
+        '<p class="mav-sub" style="margin-top:6px">Leave empty to follow your opening hours.</p></div>';
     }
     function weekPreviewHTML() {
       var h = H(); if (!h || !S.draft.hours) return '';
@@ -332,7 +339,8 @@
       if (a === 'save') {
         S.errors = S.draft.hours ? validate(S.draft.hours, S.draft.overrides) : [];
         if (S.errors.length) return paint();
-        var payload = { mode: S.draft.mode, timezone: S.draft.timezone, ordersWhenClosed: S.draft.ordersWhenClosed !== false };
+        var payload = { mode: S.draft.mode, timezone: S.draft.timezone, ordersWhenClosed: S.draft.ordersWhenClosed !== false,
+          orderCutoffMin: +S.draft.orderCutoffMin || 0, deliveryUntil: S.draft.deliveryUntil || null, pickupUntil: S.draft.pickupUntil || null };
         if (S.draft.hours) payload.schedule = { hours: S.draft.hours, overrides: S.draft.overrides || {} };
         else if (JSON.stringify(S.draft.overrides) !== JSON.stringify(S.saved.overrides)) {
           S.errors = ['Special dates need weekly hours — add hours first.']; return paint();
@@ -343,13 +351,17 @@
     function onInput(ev) {
       var el = ev.target; if (!el || !el.getAttribute) return;
       var k = el.getAttribute('data-avin');
-      if (k) { if (k === 'timezone') { S.draft.timezone = el.value; paint(); } else { S[k] = el.value; if (k === 'ovKind') paint(); } return; }
+      if (k) {
+        if (k === 'timezone' || k === 'orderCutoffMin' || k === 'deliveryUntil' || k === 'pickupUntil') { S.draft[k] = k === 'orderCutoffMin' ? +el.value : el.value; if (ev.type === 'change' || el.tagName === 'SELECT') paint(); }
+        else { S[k] = el.value; if (k === 'ovKind') paint(); }
+        return;
+      }
       var tk = el.getAttribute('data-avt');
       if (tk) { var p = S.draft.hours[el.getAttribute('data-d')].periods[+el.getAttribute('data-i')]; p[tk] = el.value; }
     }
     function onChange(ev) {
       var el = ev.target; if (!el || !el.getAttribute) return;
-      if (el.getAttribute('data-avt')) paint();   /* repaint on commit (not every keystroke): breaks + preview update */
+      if (el.getAttribute('data-avt') || /^(deliveryUntil|pickupUntil)$/.test(el.getAttribute('data-avin') || '')) paint();   /* repaint on commit, not every keystroke */
     }
     host.addEventListener('click', onClick); host.addEventListener('input', onInput); host.addEventListener('change', onChange);
     load();

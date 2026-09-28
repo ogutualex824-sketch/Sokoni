@@ -489,6 +489,9 @@ else{
                     <span class="prd-seller-arrow">&#x203a;</span>
                 </a>` : ''}
 
+                <!-- The SHOP's availability, from the ONE evaluator (kasshop.getShopAvailability + /sokoni-shop-hours.js) -->
+                <div id="prdShopStatus" class="prd-shop-status" role="status" aria-live="polite" hidden></div>
+
                 ${product.kebsCert
                     ? `<div style="display:inline-flex;align-items:center;gap:7px;padding:5px 13px;background:rgba(0,180,100,0.12);border:1px solid rgba(0,200,120,0.35);border-radius:10px;margin-bottom:8px;">
                         <span style="font-size:15px;">🏅</span>
@@ -932,18 +935,49 @@ else{
                                 avEl.appendChild(logoImg);
                             }
                         }
+                        /* 2026-09-29: only a response time the SELLER actually has. It used to be INVENTED from the
+                           account's age ("Replies in ~1h" / "~3h") — a fabricated metric about a real business. */
                         var rt = sd.responseTime || sd.avgResponseTime || '';
-                        if(!rt){
-                            var joined = sd.createdAt ? Date.now() - sd.createdAt.toMillis?.() : 0;
-                            rt = joined > 1000*60*60*24*180 ? 'Replies in ~1h' : 'Replies in ~3h';
-                        }
                         var rtEl = document.getElementById('prdSellerResponseTime');
-                        if(rtEl){ rtEl.textContent = '⚡ ' + rt; rtEl.style.display = ''; }
+                        if(rtEl && rt){ rtEl.textContent = '⚡ ' + (/^replies/i.test(rt) ? rt : 'Replies ' + rt); rtEl.style.display = ''; }
                     }
                 } catch(_){}
             }
 
         } catch(e){ /* silent */ }
+    })();
+
+    /* ── The shop's availability — never decided here ──────────────────────────
+       The verdict comes from the server (getShopAvailability → the ONE evaluator); the words come from
+       SokoniShopHours.headline, the same phrasing as the storefront. A closed shop is never shown as if the item
+       could be fulfilled now: the note says whether orders are taken while closed (the shop's own setting). */
+    (async function _shopStatus(){
+        var el = document.getElementById('prdShopStatus');
+        var sid = product && (product.sellerUid || product.sellerId);
+        if(!el || !sid || !window.SokoniShopHours) return;
+        try {
+            var {getApps} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+            var {getFunctions, httpsCallable} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+            if(!getApps().length) return;
+            var r = await httpsCallable(getFunctions(getApps()[0], 'us-central1'), 'getShopAvailability')({ shopId: String(sid) });
+            var v = r && r.data; if(!v || !v.status) return;
+            var H = window.SokoniShopHours, hl = H.headline(v);
+            var tone = { open: 'open', soon: 'soon', break: 'soon', closed: 'closed', info: 'info' }[hl.tone] || 'closed';
+            var note = '';
+            if(!v.open && v.status !== 'appointment'){
+                note = v.ordersWhenClosed !== false && v.status !== 'temporarily_closed' && v.status !== 'offline'
+                    ? 'You can still order — it is prepared when the shop opens.'
+                    : 'Ordering reopens when the shop opens.';
+            } else if(v.open && v.ordersOpen === false){
+                note = 'Orders for today have closed.';
+            }
+            var chips = v.open ? '<div class="prd-shop-status-ch">' + _esc(H.channelText(v, 'delivery')) + ' · ' + _esc(H.channelText(v, 'pickup')) + '</div>' : '';
+            el.className = 'prd-shop-status ' + tone;
+            el.innerHTML = '<span class="prd-shop-status-dot" aria-hidden="true"></span><div><b>' + _esc(hl.title) + '</b>' +
+                (hl.detail ? ' <span>· ' + _esc(hl.detail) + '</span>' : '') +
+                (note ? '<div class="prd-shop-status-n">' + _esc(note) + '</div>' : '') + chips + '</div>';
+            el.hidden = false;
+        } catch(_){ /* unknown → say nothing, never "Open" */ }
     })();
 
     /* ── Active offer check ── */

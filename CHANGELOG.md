@@ -1,3 +1,90 @@
+## [2026-09-29] - Availability A2: bookings, KASS, product page, order cutoff and delivery/pickup hours all read the ONE evaluator
+
+**Functions + product page + storefront + merchant-v2, NOT deployed.** Branch `slice/c4-category-matrix`. This
+completes the owner's availability brief on top of A1 (`3edaa5b`).
+
+**Bookings** (`functions/booking-service.js` `_prepareSlot`, the ONE slot gate used by create and reschedule):
+- **The defect.** A business that runs its hours in merchant-v2 (canonical `hours`, no legacy `schedule`) was
+  bookable on the **Mon–Fri 09:00–17:00 default** (`availability.withDefaults`). It could also be booked through its
+  own temporary closures and closed holidays.
+- **Now, at the slot's instant:**
+  - "not taking orders" pauses new bookings (`NOT_TAKING_ORDERS`);
+  - a temporary closure covering the slot is refused (`TEMPORARILY_CLOSED`);
+  - a closed special date is refused (`CLOSED_DATE`);
+  - with canonical hours and no legacy schedule, the slot must sit inside an open stretch for its whole duration, so
+    lunch breaks and closing are respected.
+- Appointment-mode businesses and legacy-schedule providers are gated exactly as before.
+
+**KASS "is it open?"**
+- A new public tool, `business_hours` (`functions/kass-hours.js`), answers from `kasshop.verdictFor` in the
+  evaluator's words (`headline`), including delivery and pickup.
+- It gives no hours for a business the public may not see (the shop gate / provider directory gate).
+- A business with no published hours gets "hasn't published opening hours", never a guessed "open".
+- `find_businesses` now hands KASS the business id.
+- Prompt rule 1c: opening hours only via `business_hours`, never from names, text or model knowledge.
+
+**Product page** (`product.js`, `product.css`, `product.html`):
+- The shop's status comes from `getShopAvailability` in the evaluator's words: open, closing soon, break, closed
+  with next opening, temporarily closed, by appointment.
+- It includes delivery and pickup windows.
+- A closed shop never looks fulfillable now. It says either "You can still order — it is prepared when the shop
+  opens" or "Ordering reopens when the shop opens", per the shop's own setting.
+- **Removed a fabricated metric:** the seller's response time was **invented** from account age ("Replies in ~1h" /
+  "~3h"). Only a real one is shown now.
+
+**Order cutoff and delivery/pickup hours** (evaluator + `setShopAvailability` + control centre + storefront +
+checkout):
+- `orderCutoffMin` (0–240, steps of 5): the shop stays open and orders stop N minutes before closing
+  (`ordersOpen` / `ordersCloseAt`). The headline reads "orders until 7:30 PM", then "Open · orders closed for today".
+- `deliveryUntil` / `pickupUntil` (HH:MM, empty = follow opening hours): each channel ends at its own time.
+  `channelText` gives one phrasing everywhere: "🛵 Delivery until 7:00 PM".
+- The public read carries `ordersWhenClosed`.
+- **Checkout:** for a shop that refuses orders while closed, orders after the cutoff are refused. Delivery or pickup
+  outside that channel's hours is refused (`delivery-closed-now` / `pickup-closed-now`), with a clear message.
+- The merchant-v2 control centre gains these settings, and its hero shows the channel windows.
+
+**`availability-manager.html`:**
+- It was a broken third editor: it called three functions that exist nowhere, and wrote the legacy shape the
+  storefront never read.
+- It is now a router. A shop owner goes to `merchant-v2.html#availability`, a provider to
+  `provider-dashboard.html#availability`, and a signed-out visitor to login. The server decides
+  (`getShopAvailability({settings:true})`).
+- The self-updating service worker registration is included.
+
+**Tests:**
+- **`scripts/test-shop-availability-a2.js`: 14/0.** It runs the REAL `_prepareSlot`, `kass-hours`, kasshop and the
+  checkout gate.
+  - Counterproof on `2180d30`: **12 fail**. BK1 and BK5 pass there as controls: 15:00 is inside the old default, and
+    the legacy gate is unchanged.
+  - Sabotage: **16/16 caught**.
+- **`scripts/test-product-shop-status-browser.js`: 4/0.** It loads the REAL product.html with the REAL
+  `getShopAvailability` and checks four things:
+  - the status equals the evaluator's headline;
+  - a temporary closure says ordering reopens later;
+  - orders while closed says it is prepared on opening;
+  - no invented response time.
+- A1 suites re-run: **20/0**, the browser suite **10/0**, and the browser copy is identical (`--check`).
+- **Emulator suites** (private `demo-` emulator), **equal on both trees**: `kasshop-boundary` 79/0 and
+  `availability-canonical` 26/0.
+- **Regression:** 58 suites run on the working tree and the pristine `2180d30` tree.
+  - Equal, except the two suites that inspect the uncommitted tree. They are re-run after the commit (see the
+    follow-up entry).
+  - Screened out as touching live endpoints or the shared emulator, and so NOT run: none newly.
+
+**Security:**
+- Bookings can no longer bypass closures or holidays.
+- KASS cannot state hours it does not have.
+- A fabricated seller metric is removed.
+
+**Performance:**
+- `_prepareSlot` adds one shop read.
+- The product page makes one callable read.
+- KASS makes 3 reads per question.
+
+**Database:** new shop fields `orderCutoffMin`, `deliveryUntil`, `pickupUntil`. No migration.
+
+**Docs:** `docs/SHOP_AVAILABILITY_AUTHORITY.md` has "A2 — done" and "Still open".
+
 ## [2026-09-29] - ONE shop availability authority: breaks, special hours, temporary closure, closing soon, timezone, and one evaluator for storefront, preview and checkout (availability A1)
 
 **Functions + merchant-v2 + storefront, NOT deployed.** Branch `slice/c4-category-matrix`. This is the owner's

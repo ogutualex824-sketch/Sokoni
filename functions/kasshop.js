@@ -653,7 +653,16 @@ function verdictFor(shop, availDoc, atMs) {
     temporaryClosure: s.temporaryClosure || null,
     mode: s.availabilityMode === 'appointment' ? 'appointment' : 'hours',
     timezone: s.timezone,
+    orderCutoffMin: typeof s.orderCutoffMin === 'number' ? s.orderCutoffMin : 0,
+    deliveryUntil: typeof s.deliveryUntil === 'string' ? s.deliveryUntil : null,
+    pickupUntil: typeof s.pickupUntil === 'string' ? s.pickupUntil : null,
   }, typeof atMs === 'number' ? atMs : Date.now());
+}
+/* the verdict + whether this shop takes orders while closed (the checkout and product page need both) */
+function verdictWithPolicy(shop, availDoc, atMs) {
+  const v = verdictFor(shop, availDoc, atMs);
+  v.ordersWhenClosed = (shop || {}).ordersWhenClosed !== false;
+  return v;
 }
 exports.verdictFor = verdictFor;
 
@@ -678,6 +687,18 @@ exports.setShopAvailability = onCall(
       shopPatch.timezone = data.timezone;
     }
     if ('ordersWhenClosed' in data) shopPatch.ordersWhenClosed = !!data.ordersWhenClosed;
+    if ('orderCutoffMin' in data) {
+      const c = Number(data.orderCutoffMin);
+      if (!Number.isInteger(c) || c < 0 || c > 240 || c % 5) throw new HttpsError('invalid-argument', 'Order cutoff is 0–240 minutes, in steps of 5.');
+      shopPatch.orderCutoffMin = c;
+    }
+    for (const k of ['deliveryUntil', 'pickupUntil']) {
+      if (!(k in data)) continue;
+      if (data[k] === null || data[k] === '') { shopPatch[k] = null; continue; }
+      const t = _normTime(data[k]);
+      if (!t) throw new HttpsError('invalid-argument', `${k === 'deliveryUntil' ? 'Delivery' : 'Pickup'} end time must be HH:MM.`);
+      shopPatch[k] = t;
+    }
     let schedule = null;
     if (_isObj(data.schedule)) {
       schedule = { hours: _cleanHours(data.schedule.hours), overrides: _cleanOverrides(data.schedule.overrides, now) };
@@ -804,6 +825,7 @@ async function publicShopState(shopId, ownerUid) {
         special: v.special, temporaryClosure: v.temporaryClosure, appointment: v.appointment,
         timezone: v.timezone, date: v.date, today: v.today,
         ordersWhenClosed: shop.ordersWhenClosed !== false,
+        ordersOpen: v.ordersOpen, ordersCloseAt: v.ordersCloseAt, fulfilment: v.fulfilment, state: v.state,
       },
       schedule: { hours: hours || null, overrides: upcoming },
     };
@@ -855,6 +877,9 @@ exports.getShopAvailability = onCall(
           mode: shop.availabilityMode === 'appointment' ? 'appointment' : 'hours',
           timezone: HOURS.validTimezone(shop.timezone) ? shop.timezone : HOURS.DEFAULT_TZ,
           ordersWhenClosed: shop.ordersWhenClosed !== false,
+          orderCutoffMin: typeof shop.orderCutoffMin === 'number' ? shop.orderCutoffMin : 0,
+          deliveryUntil: typeof shop.deliveryUntil === 'string' ? shop.deliveryUntil : null,
+          pickupUntil: typeof shop.pickupUntil === 'string' ? shop.pickupUntil : null,
         },
       };
     }
@@ -863,9 +888,13 @@ exports.getShopAvailability = onCall(
     if (typeof shopId !== 'string' || !shopId.trim()) {
       throw new HttpsError('invalid-argument', 'shopId is required.');
     }
-    const eff = await effectiveForShop(shopId.trim(), Date.now());
-    if (!eff) throw new HttpsError('not-found', 'Shop not found.');
-    return eff;
+    const db2 = _db();
+    const sSnap = await db2.collection('shops').doc(shopId.trim()).get();
+    if (!sSnap.exists) throw new HttpsError('not-found', 'Shop not found.');
+    const sDoc = sSnap.data() || {};
+    const own = sDoc.sellerUid || sDoc.ownerUid || sDoc.ownerId || null;
+    const aSnap2 = own ? await db2.collection('providerAvailability').doc(String(own)).get() : null;
+    return verdictWithPolicy(sDoc, aSnap2 && aSnap2.exists ? aSnap2.data() : null, Date.now());
   }
 );
 

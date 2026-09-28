@@ -153,7 +153,10 @@
     var special = todayOv ? { closed: todayOv.closed === true, periods: Array.isArray(todayOv.periods) ? todayOv.periods : [],
       label: typeof todayOv.label === 'string' ? todayOv.label.slice(0, 60) : null } : null;
     var base = { state: state, date: today, timezone: tz, today: dayInfo[0].periods, special: special,
-      temporaryClosure: null, appointment: inp.mode === 'appointment', closesAt: null, opensAt: null };
+      temporaryClosure: null, appointment: inp.mode === 'appointment', closesAt: null, opensAt: null,
+      /* closed (any reason) → no orders and no channels; the open branches below say otherwise */
+      ordersOpen: false, ordersCloseAt: null,
+      fulfilment: { delivery: { available: false, until: null }, pickup: { available: false, until: null } } };
     function out(o) { var r = {}; var k; for (k in base) r[k] = base[k]; for (k in o) r[k] = o[k]; return r; }
 
     var cur = null, next = null;
@@ -190,14 +193,30 @@
     }
     /* 4. no timetable at all and no override today → open whenever online (unchanged behaviour) */
     if (!_hasSchedule(hours) && !todayOv) {
-      return out({ open: true, status: 'open', reason: 'no_schedule', source: 'live' });
+      return out({ open: true, status: 'open', reason: 'no_schedule', source: 'live', ordersOpen: true,
+        fulfilment: { delivery: { available: state.delivery, until: null }, pickup: { available: state.pickup, until: null } } });
     }
     var src = todayOv ? 'override' : 'schedule';
     if (cur) {
       var left = cur[1] - nowMin;
       var cp = point(cur[1]);
+      /* ORDER CUTOFF (owner-set, minutes before closing): the shop stays open, orders stop earlier. Never invented —
+         absent a cutoff, orders run until closing. */
+      var cut = typeof inp.orderCutoffMin === 'number' && inp.orderCutoffMin > 0 ? inp.orderCutoffMin : 0;
+      var ordersCloseAt = cut && cur[1] - nowMin <= HORIZON_DAYS * 1440 ? point(cur[1] - cut) : null;
+      /* DELIVERY / PICKUP "until" (owner-set daily end time, HH:MM): a channel ends earlier than the shop. */
+      var chan = function (key, untilHHMM) {
+        var on = state[key];
+        var u = toMin(untilHHMM);
+        if (!on) return { available: false, until: null };
+        var end = cur[1];
+        if (u !== null && u > 0) { var capAt = u; if (capAt < end) end = capAt; }
+        return { available: nowMin < end, until: end >= cur[1] ? (cp ? cp.time : null) : fromMin(end) };
+      };
       return out({ open: true, status: left <= soon ? 'closing_soon' : 'open', reason: todayOv ? 'special_hours' : 'within_hours',
-        source: src, closesAt: cur[1] - nowMin > HORIZON_DAYS * 1440 ? null : cp, minutesToClose: left, opensAt: null });
+        source: src, closesAt: cur[1] - nowMin > HORIZON_DAYS * 1440 ? null : cp, minutesToClose: left, opensAt: null,
+        ordersOpen: !cut || left > cut, ordersCloseAt: ordersCloseAt,
+        fulfilment: { delivery: chan('delivery', inp.deliveryUntil), pickup: chan('pickup', inp.pickupUntil) } });
     }
     /* closed now: a break if the shop already opened today and opens again later today */
     var openedToday = merged.some(function (x) { return x[0] >= 0 && x[1] <= nowMin; });
@@ -221,9 +240,13 @@
   function headline(v) {
     if (!v) return { tone: 'info', title: 'Hours not available', detail: '' };
     switch (v.status) {
-      case 'open': return { tone: 'open', title: v.reason === 'special_hours' ? 'Open · special hours' : 'Open now',
-        detail: v.closesAt ? 'Closes ' + (v.closesAt.inDays === 0 ? 'at ' + fmt12(v.closesAt.time) : when(v.closesAt)) : (v.reason === 'no_schedule' ? '' : 'Open all day') };
-      case 'closing_soon': return { tone: 'soon', title: 'Closing soon', detail: 'Closes in ' + v.minutesToClose + ' min · ' + fmt12(v.closesAt ? v.closesAt.time : '') };
+      case 'open':
+        if (v.ordersOpen === false && v.ordersCloseAt) return { tone: 'soon', title: 'Open · orders closed for today', detail: 'Orders stopped at ' + fmt12(v.ordersCloseAt.time) + (v.closesAt ? ' · closes at ' + fmt12(v.closesAt.time) : '') };
+        return { tone: 'open', title: v.reason === 'special_hours' ? 'Open · special hours' : 'Open now',
+        detail: (v.closesAt ? 'Closes ' + (v.closesAt.inDays === 0 ? 'at ' + fmt12(v.closesAt.time) : when(v.closesAt)) : (v.reason === 'no_schedule' ? '' : 'Open all day'))
+          + (v.ordersCloseAt ? ' · orders until ' + fmt12(v.ordersCloseAt.time) : '') };
+      case 'closing_soon': return { tone: 'soon', title: 'Closing soon', detail: 'Closes in ' + v.minutesToClose + ' min · ' + fmt12(v.closesAt ? v.closesAt.time : '')
+        + (v.ordersOpen === false ? ' · orders closed' : '') };
       case 'break': return { tone: 'break', title: 'On a break', detail: v.opensAt ? 'Reopens at ' + fmt12(v.opensAt.time) : '' };
       case 'temporarily_closed': return { tone: 'closed', title: 'Temporarily closed', detail: v.opensAt ? 'Reopens ' + when(v.opensAt) : 'Please check back soon' };
       case 'offline': return { tone: 'closed', title: 'Not taking orders right now', detail: '' };
@@ -236,6 +259,13 @@
         detail: v.opensAt ? 'Opens ' + when(v.opensAt) : '' };
     }
   }
+  /** '🛵 Delivery until 7:00 PM' / '🛵 No delivery right now' — one phrasing for every surface. */
+  function channelText(v, key) {
+    var c = v && v.fulfilment && v.fulfilment[key];
+    var label = key === 'delivery' ? '🛵 Delivery' : '🏬 Pickup';
+    if (!c || !c.available) return label + (v && v.state && v.state[key] === false ? ' off' : ' closed now');
+    return label + (c.until ? ' until ' + fmt12(c.until) : '');
+  }
   function periodsText(periods) {
     if (!Array.isArray(periods) || !periods.length) return 'Closed';
     return periods.map(function (p) {
@@ -244,6 +274,6 @@
   }
 
   return { DAYS: DAYS, LABEL: LABEL, DEFAULT_TZ: DEFAULT_TZ, CLOSING_SOON_MIN: CLOSING_SOON_MIN,
-    evaluate: evaluate, headline: headline, periodsText: periodsText, periodsForDay: periodsForDay,
+    evaluate: evaluate, headline: headline, periodsText: periodsText, channelText: channelText, periodsForDay: periodsForDay,
     toMin: toMin, fromMin: fromMin, fmt12: fmt12, tzOffsetMin: tzOffsetMin, validTimezone: validTimezone };
 }));

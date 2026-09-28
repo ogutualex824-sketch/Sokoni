@@ -72,12 +72,37 @@ async function _prepareSlot(db, { providerId, date, startTime, durationMins }) {
   }
   if (cfg.isOnVacation === true) throw new HttpsError('failed-precondition', 'The provider is currently unavailable.');
 
+  /* ── THE SHOP AVAILABILITY AUTHORITY (2026-09-29) ──────────────────────────────────────────────────────
+     A business that runs its hours in merchant-v2 keeps them on its shop + providerAvailability.hours /
+     .overrides — the ONE evaluator (functions/shared/shop-hours.js via kasshop.verdictFor). This gate read only the
+     legacy `schedule`, so such a business was bookable on the Mon–Fri 09:00–17:00 DEFAULT (withDefaults) and
+     through its own temporary closures and holidays. At the SLOT's instant:
+       · "not taking orders" (the live switch, now) pauses new bookings;
+       · a temporary closure covering the slot, or a closed special date, refuses it;
+       · with canonical hours and NO legacy schedule, the slot must sit inside an open stretch (breaks respected).
+     Appointment-mode businesses keep the legacy/appointment rules (the booking engine decides their slots). */
+  const rawCfg = cfgSnap.exists ? (cfgSnap.data() || {}) : {};
+  const shopSnap = await db.collection('shops').doc(providerId).get();
+  let canonicalWithin = null;
+  if (shopSnap.exists) {
+    const shop = shopSnap.data() || {};
+    if (shop.acceptingOrders === false) throw new HttpsError('failed-precondition', 'This business is not taking bookings right now.', { code: 'NOT_TAKING_ORDERS' });
+    const KS = require('./kasshop');
+    const v = KS.verdictFor(Object.assign({}, shop, { online: true, acceptingOrders: true }), rawCfg, startTs);
+    if (v.status === 'temporarily_closed') throw new HttpsError('failed-precondition', 'The business is temporarily closed at that time.', { code: 'TEMPORARILY_CLOSED' });
+    if (v.reason === 'closed_today' && v.source === 'override') throw new HttpsError('failed-precondition', 'The provider is closed on this date.', { code: 'CLOSED_DATE' });
+    const hasCanonical = !!(rawCfg.hours && typeof rawCfg.hours === 'object' && !Array.isArray(rawCfg.hours)) || !!(shop.openingHours && typeof shop.openingHours === 'object');
+    if (hasCanonical && !rawCfg.schedule && shop.availabilityMode !== 'appointment') {
+      canonicalWithin = v.open === true && (!v.closesAt || v.closesAt.minutesAway >= durationMins);
+    }
+  }
+
   /* Working-hours validation (mirrors reserveSlot). */
   const dow = DOW[new Date(date + 'T00:00:00+03:00').getDay()];
   const day = cfg.schedule && cfg.schedule[dow];
-  const withinHours = (cfg.modes && cfg.modes.includes('open_24_7')) || appt.allowAfterHours ||
+  const withinHours = canonicalWithin !== null ? canonicalWithin : ((cfg.modes && cfg.modes.includes('open_24_7')) || appt.allowAfterHours ||
     (day && !day.closed && (day.periods || []).some(p =>
-      p && p.open && p.close && _mins(p.open) <= startMins && endMins <= _mins(p.close)));
+      p && p.open && p.close && _mins(p.open) <= startMins && endMins <= _mins(p.close))));
   if (!withinHours) throw new HttpsError('out-of-range', "That time is outside the provider's working hours.");
 
   /* Breaks (D2): the slot must not overlap any of the day's breaks. Overlap iff

@@ -48,7 +48,7 @@ function itemAvailability(prod, shopRaw, verdict, atMs) {
   if (!sh.acceptingOrders) return { available: false, reason: 'shop-closed' };
   if (!sh.online)          return { available: false, reason: 'online-off' };
   if (temporarilyClosed(shopRaw, atMs)) return { available: false, reason: 'temporarily-closed' };
-  if (shopRaw && shopRaw.ordersWhenClosed === false && verdict && verdict.open === false) {
+  if (shopRaw && shopRaw.ordersWhenClosed === false && verdict && (verdict.open === false || verdict.ordersOpen === false)) {
     return { available: false, reason: 'closed-now' };
   }
   return { available: true, reason: null };
@@ -56,11 +56,16 @@ function itemAvailability(prod, shopRaw, verdict, atMs) {
 
 /* Is the chosen fulfillment channel enabled by this shop?
    fulfillmentType: 'delivery' | 'pickup'. Returns { ok:boolean, reason:null|'delivery-off'|'pickup-off' }. */
-function fulfillmentAllowed(fulfillmentType, shopRaw) {
+function fulfillmentAllowed(fulfillmentType, shopRaw, verdict) {
   const sh = normalizeShop(shopRaw);
   const type = (String(fulfillmentType || 'delivery') === 'pickup') ? 'pickup' : 'delivery';
   if (type === 'delivery' && !sh.delivery) return { ok: false, reason: 'delivery-off' };
   if (type === 'pickup'   && !sh.pickup)   return { ok: false, reason: 'pickup-off' };
+  /* 2026-09-29: a shop that refuses orders while closed also refuses a channel outside its own hours
+     (deliveryUntil / pickupUntil), from the ONE evaluator's verdict. */
+  if (shopRaw && shopRaw.ordersWhenClosed === false && verdict && verdict.fulfilment && verdict.fulfilment[type] && verdict.fulfilment[type].available === false) {
+    return { ok: false, reason: type + '-closed-now' };
+  }
   return { ok: true, reason: null };
 }
 

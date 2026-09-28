@@ -232,9 +232,15 @@ window.SokoniMiniShop = (() => {
        shop is open (or closing soon), because "Delivery" beside "Closed" reads as an offer it cannot honour. */
     const fEl = document.getElementById('msFulfilment');
     if (fEl) {
+      const H = window.SokoniShopHours;
       const modes = [];
-      if (availability.delivery) modes.push('🛵 Delivery'); else modes.push('🛵 No delivery');
-      if (availability.pickup)   modes.push('🏬 Pickup');   else modes.push('🏬 No pickup');
+      if (H && availability.fulfilment) {
+        /* each channel's own window ("Delivery until 7:00 PM") — the evaluator's words */
+        modes.push(H.channelText(availability, 'delivery'), H.channelText(availability, 'pickup'));
+      } else {
+        if (availability.delivery) modes.push('🛵 Delivery'); else modes.push('🛵 No delivery');
+        if (availability.pickup)   modes.push('🏬 Pickup');   else modes.push('🏬 No pickup');
+      }
       const show = !!availability.open;
       fEl.textContent = show ? modes.join('  ·  ') : '';
       fEl.hidden = !show;
