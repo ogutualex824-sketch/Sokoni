@@ -294,6 +294,24 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
   if (!merchantId)     _e('merchantId required');
   if (!items?.length)  _e('items required');
   if (!grandTotal || grandTotal < 0) _e('grandTotal invalid');
+  /* LOYALTY REDEMPTION — ported from main's Q0a (dd9dc2a), the redemption rule only. The transaction writes
+     `loyaltyPoints = max(0, points + awarded - loyaltyRedeemPoints)` with the browser's figure: a NEGATIVE value
+     minted points, a non-number coerced or wrote NaN, and a positive value burned points while the charged total
+     never moved (the till's loyalty discount is not in discountTotal, and no server-side point price exists on
+     this path). So the figure must be a whole, non-negative number and any non-zero redemption is refused; zero
+     stays valid. Customer OWNERSHIP is already enforced on this line inside the transaction (c4f6ced,
+     pos-customer-scope.ownsCustomer) — deliberately not duplicated here. Checked before anything is read,
+     claimed, priced or charged. Number.isInteger is false for strings, booleans, null, arrays, NaN and ±Infinity. */
+  if (!Number.isInteger(loyaltyRedeemPoints) || loyaltyRedeemPoints < 0) {
+    _e('loyaltyRedeemPoints must be a whole, non-negative number');
+  }
+  if (loyaltyRedeemPoints > 0) {
+    _e('Loyalty points cannot be redeemed at the till yet, so no points were used and nothing was charged.',
+       'failed-precondition');
+  }
+  if (customer?.id && (typeof customer.id !== 'string' || !/^[^/]{1,200}$/.test(customer.id))) {
+    _e('customer.id must be a single customer record id');
+  }
 
   /* ── DRY-RUN (checkout-convergence shadow instrumentation) ──
      Side-effect-FREE: validate + price against the CANONICAL products collection and compute

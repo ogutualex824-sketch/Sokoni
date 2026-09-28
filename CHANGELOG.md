@@ -1,3 +1,52 @@
+## [2026-09-28] - merchant-v2 POS: the till cannot mint or burn loyalty points (port of main's Q0a redemption rule)
+
+**Functions, NOT deployed.** Branch `slice/c4-category-matrix` (convergence line). Merchant-v2 now also hosts every food
+and B2B business (`5908dd0`), so its POS money integrity applies to more categories.
+
+**Proven defect (the REAL `posCompleteCheckout` at `4e9607b`, harness from `test-pos-gate-behavioural`):**
+- `loyaltyRedeemPoints` went, unchecked, into `loyaltyPoints = max(0, points + awarded - loyaltyRedeemPoints)`.
+- A **−500 redemption completed a sale and MINTED points (100 → 601)**.
+- `"5"`, `NaN`, `true`, `1.5` and `[]` were all ACCEPTED, and they coerced or corrupted the balance.
+- A positive redemption burned points (100 → 51) while the charged total never moved.
+
+**Changed (`functions/pos-zero-friction.js`, before anything is read, claimed, priced or charged):**
+- `loyaltyRedeemPoints` must be a whole, non-negative number (`invalid-argument`).
+- Any non-zero redemption is refused (`failed-precondition`): no server-side point price exists on this path, and
+  none is invented. Zero stays valid.
+- `customer.id` must be a single document id.
+- **This is the redemption rule of main's Q0a (`dd9dc2a`), ported, not rewritten.** Q0a's customer-OWNERSHIP guard
+  is deliberately NOT ported: this line already enforces it inside the transaction (`c4f6ced`,
+  `pos-customer-scope.ownsCustomer`), and a second guard would be a third thing called canonical.
+
+**Other merchant-v2 defects, checked on this line:**
+- F-1 (the forgeable flash sale) is ALREADY FIXED here (`c7848e1`).
+- The POS cross-tenant product is ALREADY FIXED here (`c4f6ced`).
+- Still open and recorded: B2B is localStorage-only (not routed; must stay unrouted); Offers are withheld; the till
+  lock / commission gate follows its own owner decisions.
+
+**Tests:** `scripts/test-pos-loyalty-redemption.js` (the REAL checkout; the counterproof loads the `4e9607b` module from
+a temp file inside `functions/`, always removed) gives **7/0**; the counterproof FAILS 5, and the L0/L6 controls pass
+in both modes.
+- negative / non-number / positive redemptions and a path-like `customer.id` are refused;
+- a refusal writes nothing;
+- zero or omitted redemptions complete a normal sale.
+- A first run's control failed in BOTH modes because the copied harness's `doc()` returned no id (`saleId` =
+  `db.collection('_').doc().id`). The stub now auto-generates ids as Firestore does.
+
+**Sabotage:** 4/4, byte-identical. `test-pos-gate-behavioural` stays 43/0 throughout.
+
+**Regression (28 POS / merchant suites, screened: none calls a live endpoint):** equal to the pristine `4e9607b` tree,
+except three:
+- **`test-catalogue-canonical-migration` 46/1.** Its "pos-zero-friction untouched" guard reads
+  `git status --porcelain`, so it sees only the uncommitted edit and clears on commit (the same expected difference
+  main's Q0a recorded).
+- **`test-merchant-v2-ecosystem-runtime`.** Its "no non-environment errors" check fails 1–2× with `PAGEERROR:
+  cancelled` / a `gstatic generate_204` access-control error, and the UNTOUCHED baseline, re-run, fails the same way
+  and logs "webkit watchdog timeout". It is environmental and NOT caused by this change.
+- **`test-merchant-sell-ui`.** It stalled on the fix tree. The evidence: all **108 assertions PASS, 0 FAIL** (identical
+  to the baseline's 108/0). The stall is `await browser.close()` (line 417) under WebKit, and the summary is printed
+  only after it (line 421). The suite stubs the checkout callable and never executes `pos-zero-friction.js`.
+
 ## [2026-09-28] - Hotels / BnBs and property businesses land on the provider dashboard; a hotel room is never sold as a minute slot
 
 **Functions + hosting, NOT deployed.** Branch `slice/c4-category-matrix` (convergence line). These are the owner's
