@@ -1,3 +1,53 @@
+## 2026-09-28 (158) — R-48H: the 48-hour marketplace commission is retired from source (NOT deployed)
+
+**Owner ruling:** remove the 48-hour commission completely. All commission is now billed MONTHLY.
+
+**What was retired.** Marketplace sales used to create `commissionLedger` rows with `billingModel: PER_SALE_48H`
+and a `dueAt` 48 hours after the sale. Around them ran:
+- an hourly `sweepCommissionDue`, which sent a reminder at 46 hours, marked rows OVERDUE, assessed penalties and
+  RESTRICTED the seller (`sellerRestrictions`);
+- `getCommissionBalance`, `getSellerRestriction` and `issueCommissionInvoice`, which served it;
+- a Merchant store panel that rendered it.
+
+**What changed:**
+- `onSellerPaymentCreated` writes every row `billingModel: "MONTHLY"`, with no deadline, collection state, penalty
+  or reminder.
+- `commission-collection.js` is deleted. Its exports are gone, and `issueCommissionInvoice` is unexported.
+  `commission-invoice.js` is kept, unreachable, only because the deploy-tree governance ledger records it as
+  RESOLVED.
+- The dead store-UI panel is removed. It never rendered, because nothing provided `callCommissionBalance`.
+- **Preserved:**
+  - the commission rate authority, with identical amounts old and new (marketplace 150 / 15%, POS 50 / 5%,
+    services 150 / 15% on KES 1,000);
+  - historical rows, untouched;
+  - `generateMonthlyInvoices` still SKIPS historical PER_SALE_48H rows, so retirement can never bill a sale twice.
+
+**Files:**
+- `functions/index.js`, `functions/commission-config.js` (comments only), `functions/payment-destinations.js`
+  (comment only), `functions/commission-invoice.js` (banner only);
+- deleted `functions/commission-collection.js`;
+- `sokoni-merchant-store-ui.js`;
+- new `scripts/test-r48h-retirement.js`;
+- new `scripts/test-payment-destinations-authority.js`, which carries Parts C, I and J of the deleted 48-hour suite
+  verbatim, because they guard payment destinations, not the 48-hour commission;
+- deleted `scripts/test-commission-48h-destinations.js`, `scripts/test-commission-balance-ui.js`,
+  `scripts/test-commission-invoice.js`;
+- `scripts/test-functions-require-closure-gate.js` (issueCommissionInvoice is expected retired);
+- `docs/COMMISSION_ENFORCEMENT_CONTRACT.md` and `docs/COMMISSION_INVOICE_SPEC.md` (retirement banners).
+
+**Database:** none written. Production at retirement, read-only: PER_SALE_48H 0, DUE/OVERDUE 0,
+`sellerRestrictions` 0, `commissionSettlements` 0 (commissionLedger readable at 12 rows; control 5).
+**API:** `sweepCommissionDue`, `getCommissionBalance`, `getSellerRestriction` and `issueCommissionInvoice` are
+removed from source. **They are still DEPLOYED**; deleting them in production needs separate authorization.
+**Security:** a seller-restriction path that could lock merchants is removed.
+
+**Evidence:**
+- the new suite passes 12/0 new vs 3/9 old;
+- 7 mutants caught: 48h clock, 46h reminder, hourly sweep, seller restriction, history skip, invoice export,
+  UI panel;
+- the require-closure gate closes on a clean candidate tree;
+- the floor and syntax results are reported with the unit.
+
 ## 2026-09-28 (157) — M0-3: POS commission settles through ONE state machine (NOT deployed)
 
 Every POS commission debt (`posCommissionLiabilities`, M0-1) now settles through

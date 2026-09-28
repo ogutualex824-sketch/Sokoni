@@ -117,9 +117,13 @@ try{const idx=require('./index.js');
   check('functions/index.js LOADS with every source taken from HEAD', res && res.ok === true);
   check('  ...and it was a real tree, not an empty one', res && res.blobs > 300);
   check('  ...exporting the full surface', res && res.exports > 1500);
-  check('  ...including all four newly admitted callables',
-    res && res.have && ['claimOrder', 'createManualTillOrder', 'issueCommissionInvoice',
+  /* R-48H (owner ruling 2026-09-28): issueCommissionInvoice invoiced ONLY PER_SALE_48H rows and was retired
+     with the 48-hour commission. The other three admitted callables must still load; that one must NOT. */
+  check('  ...including the three admitted callables still in service',
+    res && res.have && ['claimOrder', 'createManualTillOrder',
                         'claimPosMpesaReference'].every((k) => res.have.indexOf(k) !== -1));
+  check('  ...and the retired 48-hour issueCommissionInvoice is NOT exported (R-48H)',
+    res && res.have && res.have.indexOf('issueCommissionInvoice') === -1);
   check('  ...and the Supply surface still loads alongside them',
     res && res.have && res.have.indexOf('findSuppliers') !== -1 && res.have.indexOf('getSupplyCatalogue') !== -1);
   check('the probe would have BLOCKED a file absent from the tree',

@@ -335,9 +335,9 @@ function resolveRate(key) {
    `pos: 'marketplace'` in ALIASES does TWO jobs, and only one of them is pricing:
 
      1. pricing            resolveRate('pos') -> marketplace 5%
-     2. settlement term    index.js:4852 `_is48hCommission()` treats any hub resolving to
-                           'marketplace' as subject to the 48-HOUR commission deadline;
-                           everything else keeps MONTHLY invoicing.
+     2. settlement term    index.js (R-48H retired) `_is48hCommission()` treated any hub resolving to
+                           'marketplace' as subject to the 48-HOUR commission deadline.
+                           Retired by R-48H (2026-09-28): ALL commission is MONTHLY now.
 
    Removing the alias — or adding a `pos` key to RATES, since RATES is checked BEFORE
    ALIASES — would move POS from a 48-hour obligation to monthly billing as a side effect of
@@ -586,7 +586,7 @@ function resolveMarketplaceRate(planIdOrTier) {
    this were keyed on the resolved value, POS would inherit the ladder and a Free merchant's
    till commission would triple. `pos` is deliberately absent from this set, and that absence
    is load-bearing. The alias itself must stay: it also decides the SETTLEMENT TERM
-   (index.js `_is48hCommission`), and moving that is a separate decision. */
+   (index.js `_is48hCommission`, retired by R-48H: all commission is MONTHLY now). */
 const MARKETPLACE_SELLER_CATEGORIES = Object.freeze(new Set([
   'marketplace', 'product', 'products', 'shopping', 'b2b',
 ]));

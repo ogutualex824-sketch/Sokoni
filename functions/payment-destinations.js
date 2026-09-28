@@ -5,7 +5,8 @@
  *
  * Where a merchant's customers actually pay: their own M-PESA Till or PayBill.
  * Direct-to-merchant. SOKONI never custodies the sale proceeds; its 5% is a
- * receivable recorded against the sale (see commission-collection.js).
+ * receivable recorded against the sale, invoiced MONTHLY (the 48-hour commission-collection.js was
+ * retired by R-48H, 2026-09-28).
  *
  * ── WHY THIS IS A SEPARATE, CF-OWNED COLLECTION ──────────────────────────────
  * The obvious homes were both unusable, and for reasons worth stating so nobody

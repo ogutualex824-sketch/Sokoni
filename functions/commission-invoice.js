@@ -1,3 +1,7 @@
+/* R-48H (owner ruling 2026-09-28): RETIRED. This module invoiced ONLY billingModel PER_SALE_48H rows, and the
+   48-hour commission is removed. issueCommissionInvoice is no longer exported from functions/index.js, so
+   nothing reaches this file. It is KEPT in the tree only because docs/DEPLOY_TREE_DISPOSITIONS.json records it
+   as a RESOLVED module; deleting it is a separate governance-ledger disposition, not part of R-48H. */
 /* ================================================================
    SOKONI — 48-hour commission invoice generator
 

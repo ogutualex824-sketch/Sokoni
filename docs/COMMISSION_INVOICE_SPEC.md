@@ -1,5 +1,7 @@
 # Commission Invoice — Spec and Implementation
 
+> **R-48H — RETIRED (owner ruling 2026-09-28).** The 48-hour per-sale marketplace commission this document describes (`billingModel: PER_SALE_48H`, a 48 h `dueAt`, a 46 h reminder, the hourly `sweepCommissionDue`, penalties and `sellerRestrictions`) is REMOVED from source. All commission is billed MONTHLY via `generateMonthlyInvoices`; the commission rate authority is unchanged. Production held 0 PER_SALE_48H rows and 0 restrictions at retirement. The deployed `sweepCommissionDue` / `getCommissionBalance` / `getSellerRestriction` are deleted only by a separately authorized production operation. Kept as history. `issueCommissionInvoice` (which invoiced only PER_SALE_48H rows) is no longer exported; `functions/commission-invoice.js` stays in the tree solely as the RESOLVED module recorded in `docs/DEPLOY_TREE_DISPOSITIONS.json`.
+
 **Status:** **BUILT 52/0 · NOT DEPLOYED · NO INVOICE CAN ISSUE** — see §9
 **Date:** 2026-08-27 (§0–§8 written as a read-only design pass; §9 records the build)
 

@@ -4324,27 +4324,12 @@ async function _resolveCommission(sellerUid, hub, grossAmount) {
   };
 }
 
-/* ── 48-hour per-sale commission: which hubs it governs ────────────────────
-   ONLY marketplace product sales. Every other hub keeps monthly invoicing, and
-   subscriptions/advertising are contractual charges that were never per-sale
-   commission at all — sweeping them into a 48-hour deadline would invent a
-   payment obligation nobody agreed to.
-
-   Resolved through commission-config's own alias table rather than a second
-   list of hub names, so "pos", "shopping", "b2b", "product" and "products" all
-   land here exactly as they do for pricing. One vocabulary, one answer. */
-const COMMISSION_DUE_HOURS      = 48;
-const COMMISSION_REMINDER_HOURS = 46;   /* 2 hours before the deadline */
-function _is48hCommission(hub) {
-  try {
-    return require("./commission-config").categoryForHub(hub) === "marketplace";
-  } catch (_e) {
-    /* Config unreadable — fall back to MONTHLY, the pre-existing behaviour.
-       Failing closed here means "bill it the old way", never "start a 48-hour
-       clock nobody can see". */
-    return false;
-  }
-}
+/* ── R-48H (owner ruling 2026-09-28): the 48-hour per-sale marketplace commission is RETIRED ──
+   Marketplace commission was once a 48-hour receivable (billingModel PER_SALE_48H: a dueAt stamped 48 h
+   after the sale, a reminder at 46 h, an hourly sweepCommissionDue that marked rows overdue and restricted
+   the seller). It is removed from source. Every new commission row is billingModel MONTHLY and is invoiced
+   by generateMonthlyInvoices; the commission AMOUNT/RATE authority (commission-config) is unchanged.
+   Historical PER_SALE_48H rows (0 in production at retirement) are left exactly as written. */
 
 /* ── Auto-record commission when a seller payment is confirmed ── */
 exports.onSellerPaymentCreated = onDocumentCreated(
@@ -4421,8 +4406,10 @@ exports.onSellerPaymentCreated = onDocumentCreated(
         invoiceId: null,
         period,
 
-        /* ── BILLING MODEL — the migration cutoff, and the ONLY thing that
-              decides which collection system owns this row ──────────────────
+        /* ── BILLING MODEL — MONTHLY, always (R-48H) ─────────────────────────
+           The 48-hour receivable is retired: every commission row is invoiced by
+           generateMonthlyInvoices. The history below is kept because historical
+           PER_SALE_48H rows still exist in principle and are still skipped there.
            Marketplace per-sale commission moved from MONTHLY invoicing to a
            48-hour receivable. Both systems read commissionLedger, so a row that
            did not say which model it belongs to would be billed twice: once by
@@ -4438,17 +4425,8 @@ exports.onSellerPaymentCreated = onDocumentCreated(
                overdue retroactively.
            A date cutoff would have done exactly that to every old pending row
            the moment it shipped. */
-        billingModel: _is48hCommission(hub) ? "PER_SALE_48H" : "MONTHLY",
-        /* Absolute deadline, stamped once at creation and never recomputed —
-           a receivable whose due date can move is not a receivable. */
-        dueAt: _is48hCommission(hub)
-          ? admin.firestore.Timestamp.fromMillis(Date.now() + COMMISSION_DUE_HOURS * 3600000)
-          : null,
-        collectionStatus: _is48hCommission(hub) ? "DUE" : null,
-        penaltyKES: 0,
-        totalOutstanding: _is48hCommission(hub) ? totalOwed : null,
+        billingModel: "MONTHLY",
         paidAt: null,
-        reminderSentAt: null,
 
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -4955,7 +4933,10 @@ exports.generateMonthlyInvoices = onSchedule(
 
     /* Group by seller.
 
-       ── DOUBLE-BILLING GUARD ────────────────────────────────────────────────
+       ── DOUBLE-BILLING GUARD — kept after R-48H, for HISTORICAL rows only ─────
+       No new row is PER_SALE_48H any more. A historical one may already have been
+       collected by the retired 48-hour sweep, so it must still never be invoiced
+       here too — skipping it is what keeps retirement from becoming a second bill.
        This query selects on status+period only — it has no hub or category
        filter, so before this guard it swept up EVERY pending row including the
        marketplace commissions now owned by the 48-hour receivable. A seller
@@ -11310,9 +11291,8 @@ const manualTill = require('./manual-till-orders');
 exports.createManualTillOrder    = manualTill.createManualTillOrder;
 exports.attestManualTillPayment  = manualTill.attestManualTillPayment;
 
-/* ── 48-hour commission invoice (fail-closed on VAT policy) ─────────── */
-const commissionInvoice = require('./commission-invoice');
-exports.issueCommissionInvoice = commissionInvoice.issueCommissionInvoice;
+/* R-48H: issueCommissionInvoice (commission-invoice.js) invoiced ONLY PER_SALE_48H rows. Retired with them;
+   monthly commission is invoiced by generateMonthlyInvoices. */
 
 /* ── Manual M-PESA Till reference claims ────────────────────────────── */
 const posMpesaRefs = require('./pos-mpesa-refs');
@@ -12744,11 +12724,9 @@ const _pdest = require("./payment-destinations");
 exports.getPaymentDestination  = _pdest.getPaymentDestination;
 exports.savePaymentDestination = _pdest.savePaymentDestination;
 
-/* ── 48-hour commission receivable (functions/commission-collection.js) ── */
-const _ccol = require("./commission-collection");
-exports.sweepCommissionDue   = _ccol.sweepCommissionDue;
-exports.getCommissionBalance = _ccol.getCommissionBalance;
-exports.getSellerRestriction = _ccol.getSellerRestriction;
+/* R-48H: the 48-hour commission receivable (commission-collection.js — sweepCommissionDue,
+   getCommissionBalance, getSellerRestriction) is RETIRED from source. The deployed copies are deleted only
+   by a separately authorized production operation. */
 
 /* ── Healthcare hub (functions/healthcare-hub.js) ──
    These 15 callables existed in the repo but were never required or

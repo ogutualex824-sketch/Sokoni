@@ -147,49 +147,7 @@
     /* Tablet and up: the two type choices sit side by side comfortably. */
     '@media (min-width:600px){.mst-seg{flex:1 1 0}}',
 
-    /* ── Commission & penalties ─────────────────────────────────────────────
-       The money grid stacks at 320px and only goes multi-column when there is
-       genuinely room — auto-fit with a min() floor, so a KSh figure never gets
-       squeezed narrower than it can render. */
-    '.mst-cb{display:block}',
-    '.mst-cb-grid{display:grid;gap:9px;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));margin-bottom:12px}',
-    '.mst-cb-cell{border:1px solid var(--line);border-radius:14px;padding:12px 13px;background:rgba(255,255,255,.03);min-width:0}',
-    '.mst-cb-cell .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--txt3)}',
-    '.mst-cb-cell .v{font-size:19px;font-weight:900;color:var(--txt);margin-top:4px;',
-      'font-variant-numeric:tabular-nums;overflow-wrap:anywhere}',
-    '.mst-cb-cell.tot{border-color:rgba(113,255,0,.35);background:rgba(113,255,0,.06)}',
-    '.mst-cb-cell.tot .v{color:var(--acc)}',
-    '.mst-cb-meta{display:flex;flex-direction:column;gap:8px;padding:12px 13px;border:1px solid var(--line);',
-      'border-radius:14px;background:rgba(255,255,255,.03);margin-bottom:12px}',
-    '.mst-cb-meta>div{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}',
-    '.mst-cb-meta .k{font-size:11.5px;color:var(--txt3);min-width:0}',
-    '.mst-cb-meta .v{font-size:12.5px;font-weight:700;color:var(--txt);text-align:right;overflow-wrap:anywhere}',
-    /* Itemised sales. A grid, not a table element, so the columns can restack
-       on a narrow phone without a horizontal scrollbar. */
-    '.mst-cb-table{border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:12px}',
-    '.mst-cb-tr{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) auto;gap:8px;',
-      'padding:11px 13px;border-top:1px solid var(--line);align-items:baseline}',
-    '.mst-cb-tr:first-child{border-top:none}',
-    '.mst-cb-tr.head{background:rgba(255,255,255,.04);font-size:10px;text-transform:uppercase;',
-      'letter-spacing:.05em;color:var(--txt3);font-weight:800}',
-    '.mst-cb-tr .ref{font-size:12.5px;font-weight:700;color:var(--txt);min-width:0;overflow-wrap:anywhere}',
-    '.mst-cb-tr .due{font-size:11px;color:var(--txt3);min-width:0;overflow-wrap:anywhere}',
-    '.mst-cb-tr .amt{font-size:13px;font-weight:800;color:var(--txt);text-align:right;white-space:nowrap;',
-      'font-variant-numeric:tabular-nums}',
-    '.mst-cb-tr .amt .pen{display:block;font-size:10.5px;font-style:normal;color:#ff9b9b;font-weight:700}',
-    '.mst-cb-st{display:block;font-style:normal;font-size:10px;font-weight:800;text-transform:uppercase;',
-      'letter-spacing:.04em;margin-top:3px}',
-    '.mst-cb-st.ok{color:#8dff3c}.mst-cb-st.warn{color:#ffc74d}',
-    '.mst-cb-st.bad{color:#ff7b7b}.mst-cb-st.mut{color:var(--txt3)}',
-    '.mst-cb-tr.more{color:var(--txt3);font-size:11.5px;display:block}',
     '.mst-note.ok{background:rgba(113,255,0,.07);border-color:rgba(113,255,0,.28);color:#a9ff6d}',
-    /* At 320px the "Due" column has nowhere useful to go — fold it under the
-       reference rather than letting three columns fight over 292 usable pixels. */
-    '@media (max-width:359px){',
-      '.mst-cb-tr{grid-template-columns:minmax(0,1fr) auto}',
-      '.mst-cb-tr .due{grid-column:1;font-size:10.5px}',
-      '.mst-cb-tr.head span:nth-child(2){display:none}',
-    '}',
   ].join('');
 
   function injectCSS(doc) {
@@ -432,146 +390,9 @@
                'Send test payment</button>';
       }
 
-      return h + balanceHTML() + '</div>';
+      return h + '</div>';   /* R-48H: the 48-hour commission panel is retired */
     }
 
-    /* ══ COMMISSION & PENALTIES ════════════════════════════════════════════
-       What this merchant owes SOKONI: 5% of each completed sale, minimum KES 10,
-       due 48 hours after the sale.
-
-       EVERY FIGURE IS RENDERED FROM THE SERVER RESPONSE. This surface never adds
-       up the line items to produce a total, never derives a penalty, and never
-       decides whether an account is restricted. Those are financial facts owned
-       by commissionLedger and sellerRestrictions, both `allow write: if false`.
-       A client that computed its own total would eventually disagree with the
-       ledger, and the merchant would be looking at a number nobody will bill. */
-    var CB = {
-      loaded: false, busy: false, err: null,
-      commissionKES: null, penaltyKES: null, totalOutstanding: null,
-      items: [], restricted: false, penaltyPolicy: null,
-    };
-
-    function loadBalance() {
-      if (typeof ctx.callCommissionBalance !== 'function') { CB.loaded = true; return; }
-      CB.err = null;
-      return ctx.callCommissionBalance({}).then(function (r) {
-        var d = (r && r.data) || {};
-        CB.loaded = true;
-        /* null, not 0, when the server did not say. A missing figure rendered as
-           zero is an invented balance — the merchant would believe they owe
-           nothing. Unknown shows as an em dash. */
-        CB.commissionKES    = (typeof d.commissionKES === 'number') ? d.commissionKES : null;
-        CB.penaltyKES       = (typeof d.penaltyKES === 'number') ? d.penaltyKES : null;
-        CB.totalOutstanding = (typeof d.totalOutstanding === 'number') ? d.totalOutstanding : null;
-        CB.items            = Array.isArray(d.items) ? d.items : [];
-        CB.restricted       = d.restricted === true;
-        CB.penaltyPolicy    = d.penaltyPolicy || null;
-        if (S.tab === 'payments') paint();
-      }).catch(function (e) {
-        CB.loaded = true;
-        CB.err = (e && e.message) || 'Your commission balance could not be loaded.';
-        if (S.tab === 'payments') paint();
-      });
-    }
-
-    function money(n) {
-      /* Unknown is "—", never 0. */
-      if (typeof n !== 'number' || !isFinite(n)) return '—';
-      return 'KSh ' + n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
-    function when(ms) {
-      if (!ms) return '—';
-      try {
-        return new Date(ms).toLocaleString('en-KE', {
-          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-        });
-      } catch (_) { return '—'; }
-    }
-    var CB_LABEL = { DUE: 'Due', REMINDED: 'Due soon', OVERDUE: 'Overdue', PAID: 'Paid', WAIVED: 'Waived' };
-    var CB_TONE  = { DUE: 'mut', REMINDED: 'warn', OVERDUE: 'bad', PAID: 'ok', WAIVED: 'ok' };
-
-    function balanceHTML() {
-      if (!CB.loaded) {
-        return '<div class="mst-cb"><div class="sk-line" style="width:50%"></div>' +
-               '<div class="sk-line" style="width:38%"></div></div>';
-      }
-      var h = '<div class="mst-cb">';
-      h += '<div class="mst-pd-label" style="margin-top:26px">SOKONI commission &amp; penalties</div>';
-
-      if (CB.err) return h + '<div class="mst-note bad">' + esc(CB.err) + '</div></div>';
-
-      /* Oldest due drives the headline deadline — it is the one that expires
-         first and therefore the one that triggers restriction. */
-      var open = CB.items.filter(function (i) { return i.status !== 'PAID' && i.status !== 'WAIVED'; });
-      var oldest = open.reduce(function (a, b) {
-        if (!a || !a.dueAt) return b; if (!b || !b.dueAt) return a;
-        return b.dueAt < a.dueAt ? b : a;
-      }, null);
-      var worst = open.some(function (i) { return i.status === 'OVERDUE'; }) ? 'OVERDUE'
-                : open.some(function (i) { return i.status === 'REMINDED'; }) ? 'REMINDED'
-                : open.length ? 'DUE' : 'PAID';
-
-      if (!open.length && CB.totalOutstanding === 0) {
-        return h + '<div class="mst-note ok"><strong>Nothing outstanding.</strong> ' +
-               'Your commission is fully settled.</div></div>';
-      }
-
-      h += '<div class="mst-cb-grid">' +
-        '<div class="mst-cb-cell"><div class="k">Outstanding commission</div><div class="v">' + esc(money(CB.commissionKES)) + '</div></div>' +
-        '<div class="mst-cb-cell"><div class="k">Penalty</div><div class="v">' + esc(money(CB.penaltyKES)) + '</div></div>' +
-        '<div class="mst-cb-cell tot"><div class="k">Total to pay</div><div class="v">' + esc(money(CB.totalOutstanding)) + '</div></div>' +
-      '</div>';
-
-      h += '<div class="mst-cb-meta">' +
-        '<div><span class="k">Oldest amount due</span><span class="v">' + esc(when(oldest && oldest.dueAt)) + '</span></div>' +
-        '<div><span class="k">Payment deadline</span><span class="v">' + esc(when(oldest && oldest.dueAt)) + '</span></div>' +
-        '<div><span class="k">Status</span><span class="mst-pd-badge ' + (CB_TONE[worst] || 'mut') + '">' +
-          esc(CB_LABEL[worst] || worst) + '</span></div>' +
-      '</div>';
-
-      if (CB.restricted) {
-        h += '<div class="mst-note bad"><strong>Merchant access restricted.</strong> ' +
-             'Settle the balance to restore full access. Access is restored automatically once ' +
-             'SOKONI confirms your payment.</div>';
-      }
-
-      /* Itemised sales. Each row is a real ledger entry; nothing is summarised
-         into an invented "other" bucket. */
-      if (open.length) {
-        h += '<div class="mst-cb-table" role="table" aria-label="Sales with commission outstanding">' +
-             '<div class="mst-cb-tr head" role="row"><span role="columnheader">Sale</span>' +
-             '<span role="columnheader">Due</span><span role="columnheader">Commission</span></div>';
-        open.slice(0, 50).forEach(function (i) {
-          h += '<div class="mst-cb-tr" role="row">' +
-            '<span class="ref" role="cell">' + esc(i.reference || i.id || '—') +
-              '<em class="mst-cb-st ' + (CB_TONE[i.status] || 'mut') + '">' + esc(CB_LABEL[i.status] || i.status || '') + '</em></span>' +
-            '<span class="due" role="cell">' + esc(when(i.dueAt)) + '</span>' +
-            '<span class="amt" role="cell">' + esc(money(i.commissionKES)) +
-              (i.penaltyKES ? '<em class="pen">+ ' + esc(money(i.penaltyKES)) + '</em>' : '') + '</span>' +
-          '</div>';
-        });
-        if (open.length > 50) {
-          h += '<div class="mst-cb-tr more" role="row"><span role="cell">' +
-               (open.length - 50) + ' more not shown</span></div>';
-        }
-        h += '</div>';
-      }
-
-      /* Payment. Gated on the SAME backend authorization as the destination test — if
-         SOKONI cannot yet collect through its payment provider, a Pay button that appears
-         to start a charge would be a lie about where the money went. */
-      if (!PD.productionAuthorized) {
-        h += '<div class="mst-note warn" role="status"><strong>Payment not yet available</strong><br>' +
-             'Commission payment is being enabled and is awaiting payment-provider authorization. ' +
-             'Contact SOKONI support to settle this balance in the meantime.</div>' +
-             '<button class="mst-btn wide" disabled aria-disabled="true" ' +
-             'title="Awaiting payment-provider authorization">Pay outstanding balance — unavailable</button>';
-      } else {
-        h += '<button class="mst-btn solid wide" data-act="cbpay">Pay outstanding balance</button>';
-      }
-
-      return h + '</div>';
-    }
 
     /* ── Render ───────────────────────────────────────────────────────────── */
     function paint() {
@@ -788,7 +609,7 @@
       var act = el.getAttribute('data-act');
       if (act === 'tab')              {
         S.tab = el.getAttribute('data-t') || 'storefront'; S.opError = null; S.opDone = null; paint();
-        if (S.tab === 'payments') { if (!PD.loaded) loadPayments(); if (!CB.loaded) loadBalance(); }
+        if (S.tab === 'payments') { if (!PD.loaded) loadPayments(); }
         return;
       }
       if (act === 'pdtype')           { PD.draftType = el.getAttribute('data-t') || 'TILL'; paint(); return; }

@@ -1,5 +1,7 @@
 # Commission Enforcement Contract
 
+> **R-48H — RETIRED (owner ruling 2026-09-28).** The 48-hour per-sale marketplace commission this document describes (`billingModel: PER_SALE_48H`, a 48 h `dueAt`, a 46 h reminder, the hourly `sweepCommissionDue`, penalties and `sellerRestrictions`) is REMOVED from source. All commission is billed MONTHLY via `generateMonthlyInvoices`; the commission rate authority is unchanged. Production held 0 PER_SALE_48H rows and 0 restrictions at retirement. The deployed `sweepCommissionDue` / `getCommissionBalance` / `getSellerRestriction` are deleted only by a separately authorized production operation. Kept as history.
+
 **Status:** DRAFT — for review · **Date:** 2026-08-26
 **Deployed:** no. Nothing in this contract is live.
 
