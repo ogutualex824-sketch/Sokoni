@@ -425,9 +425,13 @@ async function projectProvider(db, app, uid, approved) {
        the draft, pricing, coverage and portfolio all survive, so a reinstated
        provider has nothing to re-enter. providerProfiles does NOT become an
        authority — it is told what the canonical record decided. */
+    /* update(), never set/merge: a provider who never onboarded has no profile to delist, and a merge would CREATE an
+       empty providerProfiles doc — which the search sync indexes into the SAME object as the provider (objectID =
+       uid), able to overwrite the real record with a blank one. update() on a missing doc fails; the catch keeps it
+       a no-op. */
     await db.collection('providerProfiles').doc(uid)
-      .set({ searchable: false, suspendedAt: _ts(), updatedAt: _ts() }, { merge: true })
-      .catch(() => {});   /* a provider who never onboarded has no profile to delist */
+      .update({ searchable: false, suspendedAt: _ts(), updatedAt: _ts() })
+      .catch(() => {});
     return { collection: 'providers', id: uid, action: 'retracted' };
   }
 
@@ -553,8 +557,11 @@ async function projectProvider(db, app, uid, approved) {
      leaves them approved-but-unfindable: the canonical record says active while
      providerSearchProviders still filters them out. Symmetry here is what makes the
      mirror a mirror rather than a one-way delist. */
+  /* update(), never set/merge — mirror onto an EXISTING profile only (see the retraction above): approving a provider
+     who never onboarded must not create an empty providerProfiles doc that the search sync would index over the
+     provider's own record. */
   await db.collection('providerProfiles').doc(uid)
-    .set({ searchable: true, suspendedAt: FieldValue.delete(), updatedAt: _ts() }, { merge: true })
+    .update({ searchable: true, suspendedAt: FieldValue.delete(), updatedAt: _ts() })
     .catch(() => {});
   return { collection: 'providers', id: uid, action: snap.exists ? 'updated' : 'created', providerId };
 }

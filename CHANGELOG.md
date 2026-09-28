@@ -1,3 +1,47 @@
+## [2026-09-28] - Approving or suspending a provider no longer creates an empty providerProfiles doc that can blank their search record
+
+**Functions, NOT deployed.** Branch `slice/c4-category-matrix` (convergence line). This closes the open item recorded
+in the Kass discovery entry below ("the providerProfiles stub from `projectProvider` can blank-overwrite the Algolia
+record"), so an approved business stays findable.
+
+**Proven defect** (the REAL `applicationLifecycle` trigger at `4e9607b`, with `update()` on a missing doc throwing
+NOT_FOUND as Firestore does):
+- `projectProvider` mirrored `searchable` onto `providerProfiles/{uid}` with `set(…, { merge: true })`, on both
+  approval and retraction.
+  - For a provider who never onboarded a profile, this CREATED a `providerProfiles` doc holding only
+    `{ searchable, suspendedAt, updatedAt }`.
+  - The search sync indexes `providerProfiles` into the SAME object as the provider (objectID = uid). The empty doc can
+    therefore overwrite the provider's real index record with a blank one.
+
+**Changed:** `functions/application-lifecycle.js`.
+- Both mirror writes are now `update()`, so they mirror onto an EXISTING profile only.
+- The existing `.catch(() => {})` makes the missing-doc case a no-op.
+- Nothing else changed: the fields written, the retraction semantics and the `providers/{uid}` projection are the same.
+
+**Database changes:** none (no new collection or field). A `providerProfiles` doc now exists only when onboarding
+created it.
+**API / security / breaking changes:** none.
+
+**Tests:** `scripts/test-provider-profile-mirror.js` gives **4/0**. The `4e9607b` counterproof FAILS M1 and M3,
+showing the stub docs it created.
+- M1: approving a provider with no profile creates no profile.
+- M2 (control): approving a provider with a profile sets `searchable: true` and keeps its content.
+- M3: rejecting a provider with no profile creates no profile.
+- M4 (control): rejecting a provider with a profile sets `searchable: false` and keeps its content.
+
+**Sabotage:** 4/4 caught (each write back to `set`/merge; each mirror dropped), byte-identical restore, post-restore
+4/0.
+
+**Regression (16 suites, screened: every suite pins the emulator to the dead port `127.0.0.1:1`, none calls a live
+endpoint):** equal to the pristine `4e9607b` tree.
+- suspension-mirror 38/0, publish-authority 32/0, decision-authority 21/0, role-authority 30/0, agreement-role 27/0,
+  discovery-cascade 24/0, discovery-index 25/0, discovery-cleanup 35/0, provider-directory 40/0, reputation 70/0.
+- Slice suites: category-merchant-approval 7/0, accommodation-profile 6/0, kass-business-discovery 8/0.
+- Pre-existing on BOTH trees:
+  - `test-provider-verification-decision` and `test-admin-verification-counters` crash while loading
+    (`defineString is not a function`: a stale params stub, via `admin-os.js`). Their assertions are UNPROVEN here.
+  - `test-entertainment-registry` has 64/1.
+
 ## [2026-09-28] - Kass event search reads the canonical live events, never the retired entEvents store
 
 **Functions, NOT deployed.** Branch `slice/c4-category-matrix`. This is a follow-up to `7f38508` (C8).
