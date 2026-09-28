@@ -1,3 +1,67 @@
+## [2026-09-28] - The KASS chat's close button is always on screen and tappable, on every device
+
+**Hosting, NOT deployed.** Branch `slice/c4-category-matrix`. This is the owner's report: "make sure kass bot is well
+displayed in all devices and the close button can be accessed — right now it is hiding behind the header".
+
+**Proven defect** (the real `kass-widget.js` at `4e9607b`, in real Chromium, under a fixed header at the platform's
+header z-index and with a conversation in the dialog):
+- The dialog is bottom-anchored (148px up) with a FIXED height cap: 560px on desktop, 70vh on phones.
+- Its top edge, with the close button, therefore landed under the site header on:
+  - iPhone SE (375×667) and small Android (360×640);
+  - Android 412×732;
+  - landscape phones (844×390), where it was off-screen;
+  - short laptops (1280×600, 1366×768).
+- The header sits at z-index 100001+ and the dialog at 9998, so the header covered the close button. **26 checks fail
+  on the old code.**
+- An EMPTY dialog is content-sized and never reached the header. That is why it only happened once people had
+  chatted.
+- With the keyboard open, the dialog's height was set to `viewport − 72px`, leaving its top about 64px down, again
+  under a 58–80px header.
+
+**Changed:** `kass-widget.js` (CSS and the keyboard handler only; no behaviour or data change).
+- **Height cap:** the dialog's height is capped to the space BELOW the header's measured height (`--sk-header-h`,
+  published by `shared-header.js`; the notch inset when a page has no shared header). `100vh`, then `100dvh` where
+  supported (mobile URL bars).
+- **Short screens (≤520px tall, e.g. landscape phones):** the open dialog drops to the bottom edge and uses the full
+  height below the header.
+- **Stacking:** the open dialog sits above the header (z-index 100005). This covers pages whose fixed header does not
+  publish its height.
+- **Keyboard open:** the height leaves room for the measured header, with a floor of 200px.
+
+**Tests:** `scripts/test-kass-widget-reachable.js`: real widget, real browsers, fake origin, no network.
+- R1: the close button is on screen and below the header.
+- R2: a tap at the close button's centre hits the close button.
+- R3: the dialog's top is not under the header.
+- R4: a header that publishes no height does not cover the close button.
+- R5: on short screens, the dialog is at least 220px tall.
+- K1: with the keyboard open, the close button is below the header.
+- It covers 10 device classes and two header heights (58 / 80px), in **Chromium and WebKit** (the iPhone Safari
+  engine).
+
+| Run | Result |
+|---|---|
+| Chromium, fix | **66/0** |
+| Chromium, counterproof on `4e9607b` | **26 FAIL** |
+| WebKit, fix | **66 PASS / 0 FAIL** (every assertion; the process then stalls in `browser.close()`, the known WebKit shutdown stall, so the summary line prints late) |
+
+**Sabotage (Chromium):** **5/5 caught**, byte-identical restore. The attacks:
+- z-index back to 9998;
+- a fixed 560px cap;
+- a fixed 70vh cap;
+- the short-screen rule removed;
+- the keyboard path ignoring the header.
+
+Two attacks were initially missed and exposed real gaps, now covered:
+- the z-index only matters where a header does not publish its height (R4);
+- the short-screen rule buys usable height, not reachability (R5).
+
+**Not changed, recorded:** `sokoni-responsive.css` hides every FAB, including the KASS button, when the viewport is
+under 500px tall. The intent is the on-screen keyboard, but the same rule applies to landscape phones, where KASS
+therefore cannot be opened at all. Fixing it needs a keyboard signal that is not viewport height. It is its own
+slice and needs an owner decision on landscape.
+
+**Security / data / API:** none. **Deploy:** hosting only, from the latest commit, never from this branch directly.
+
 ## [2026-09-28] - Mechanics directory: real listings only, no invented reputation, author fields escaped (step 4)
 
 > **Ported 2026-09-28 to `slice/c4-category-matrix` (cherry-pick of `be66157`; code applied cleanly, CHANGELOG

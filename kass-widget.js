@@ -369,9 +369,16 @@
     'box-shadow:0 0 0 2px #0f0f0f;line-height:1;}',
 
     /* ── Modal ── */
-    '#kassModal{position:fixed;bottom:148px;right:12px;width:360px;max-height:560px;',
+    /* The modal is BOTTOM-anchored, so a fixed max-height put its top — and the close button — under the site header
+       (z-index 100001+) on any viewport shorter than ~780px: portrait phones, landscape phones, small laptops. The
+       height is now capped to the space BELOW the measured header (--sk-header-h, published by shared-header.js;
+       the notch inset when a page has no shared header), and the open dialog sits above the header, so the close
+       button is always on screen and always tappable. 100vh first, 100dvh where supported (mobile URL bars). */
+    '#kassModal{position:fixed;bottom:148px;right:12px;width:360px;',
+    'max-height:min(560px,calc(100vh - 148px - var(--sk-header-h,env(safe-area-inset-top,0px)) - 12px));',
+    'max-height:min(560px,calc(100dvh - 148px - var(--sk-header-h,env(safe-area-inset-top,0px)) - 12px));',
     'background:#111;border:1px solid rgba(255,255,255,.1);border-radius:18px;',
-    'display:none;flex-direction:column;z-index:9998;overflow:hidden;',
+    'display:none;flex-direction:column;z-index:100005;overflow:hidden;',
     'box-shadow:0 16px 56px rgba(0,0,0,.8);',
     'transform:translateY(10px) scale(.98);opacity:0;',
     'transition:transform .22s cubic-bezier(.22,1,.36,1),opacity .22s;}',
@@ -528,9 +535,19 @@
     /* ── Mobile ── */
     '@media(max-width:540px){',
     '#kassModal{width:calc(100vw - 16px);right:8px;',
-    'bottom:calc(var(--sk-kass-bottom,86px) + 62px);max-height:70vh;border-radius:18px;}}',
+    'bottom:calc(var(--sk-kass-bottom,86px) + 62px);border-radius:18px;',
+    'max-height:min(70vh,calc(100vh - var(--sk-kass-bottom,86px) - 62px - var(--sk-header-h,env(safe-area-inset-top,0px)) - 12px));',
+    'max-height:min(70dvh,calc(100dvh - var(--sk-kass-bottom,86px) - 62px - var(--sk-header-h,env(safe-area-inset-top,0px)) - 12px));}}',
     '@media(max-width:380px){',
-    '#kassModal{width:calc(100vw - 12px);right:6px;max-height:75vh;}}',
+    '#kassModal{width:calc(100vw - 12px);right:6px;',
+    'max-height:min(75vh,calc(100vh - var(--sk-kass-bottom,86px) - 62px - var(--sk-header-h,env(safe-area-inset-top,0px)) - 12px));',
+    'max-height:min(75dvh,calc(100dvh - var(--sk-kass-bottom,86px) - 62px - var(--sk-header-h,env(safe-area-inset-top,0px)) - 12px));}}',
+    /* Short screens (landscape phones, split-screen): the 148px lift above the FAB would leave almost no room, so
+       the open dialog drops to the bottom edge and takes the full height below the header. */
+    '@media(max-height:520px){',
+    '#kassModal{bottom:calc(8px + env(safe-area-inset-bottom,0px));',
+    'max-height:calc(100vh - 16px - env(safe-area-inset-bottom,0px) - var(--sk-header-h,env(safe-area-inset-top,0px)));',
+    'max-height:calc(100dvh - 16px - env(safe-area-inset-bottom,0px) - var(--sk-header-h,env(safe-area-inset-top,0px)));}}',
 
   ].join('');
   document.head.appendChild(_css);
@@ -901,8 +918,12 @@
     var keyH = window.innerHeight - vv.height - (vv.offsetTop || 0);
     if (keyH > 80) {
       /* Keyboard showing: lift modal above it */
+      /* …and keep its top (the close button) below the header: `vv.height - 72` left the top ~64px down, under
+         the 58–80px header. The header height is the one shared-header.js measures and publishes. */
+      var hdrH = 0;
+      try { hdrH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sk-header-h')) || 0; } catch (_) {}
       _modal.style.bottom    = (keyH + 8) + 'px';
-      _modal.style.maxHeight = (vv.height - 72) + 'px';
+      _modal.style.maxHeight = Math.max(200, vv.height - hdrH - 16) + 'px';
     } else {
       /* Keyboard gone: restore default (CSS takes over) */
       _modal.style.bottom    = '';
