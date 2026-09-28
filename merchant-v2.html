@@ -829,7 +829,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      the MiniShop storefront use it — so a schedule cannot mean one thing to a seller
      and another to a shopper. Where the SERVER sends a verdict it wins; this fills
      only what the payload does not carry (unsaved preview, next opening). -->
+<script src="sokoni-shop-hours.js"></script>
 <script src="sokoni-availability-model.js"></script>
+<script src="sokoni-merchant-availability.js"></script>
 <!-- ONE definition of "certified". The merchant surface and the storefront both
      call SokoniCertificationModel.evaluate, so a shop cannot be certified to its
      owner and uncertified to a shopper. The record is admin-written; nothing in
@@ -3939,293 +3941,28 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   }
 
   /* ══ AVAILABILITY ═════════════════════════════════════════════════════════
-     TRACED BEFORE BUILT, and the trace changed what this screen can be.
-
-       Authority: shops/{sellerUid} { acceptingOrders, online, delivery, pickup },
-       ABSENT = available. Enforced server-side at checkout by
-       functions/availability-enforce.js -> reason 'shop-closed'.
-
-       Can a merchant TOGGLE it?  No — twice over:
-         · the live rule limits an owner's shops/{uid} update to an allowlist of 28
-           fields (hasOnly([...])), and acceptingOrders / online / delivery / pickup
-           are NOT in it. A client write is refused.
-         · the callable that would do it server-side, setLiveStatus, is defined in
-           functions/availability.js but never re-exported in functions/index.js and
-           has no dispatcher — so it is not deployed.
-
-     A switch here would therefore fail every time. It is not built. What IS writable
-     is `hours`/`openingHours`, which the allowlist does permit, so the schedule is a
-     real editor. */
-  /* ══ PREMIUM AVAILABILITY ══════════════════════════════════════════════════
-     Writes providerAvailability/{uid} — the document functions/kasshop.js already
-     reads for the storefront's open/closed decision. There is no second collection
-     and no MiniShop-specific copy: the merchant edits the canonical timetable, and
-     the storefront reflects it because the server resolves from the same place.
-
-     `overrides` is written as a MAP FIELD, because that is what effectiveForShop
-     reads. availability-manager.html wrote an overrides/{date} SUBCOLLECTION which
-     the resolver never read — so every holiday a seller set was silently ignored by
-     the storefront. Writing the subcollection here would repeat that defect.
-
-     The TEMPORARY open/closed toggle is deliberately NOT offered. It lives on the
-     shop document as state.online / acceptingOrders, the rules do not let an owner
-     write it, and setLiveStatus is not deployed. A switch that silently fails is
-     worse than an explained absence. */
-  var AV = { hours: null, overrides: {}, loaded: false, err: null, saving: false, dirty: false };
-
-  function avModel () {
-    return (typeof window !== 'undefined') && window.SokoniAvailabilityModel;
-  }
-
-  async function avLoad () {
-    var M = avModel();
-    if (!M) { AV.err = 'The availability model did not load.'; AV.loaded = true; return; }
-    try {
-      var f = await firestore();
-      var snap = await f.m.getDoc(f.m.doc(f.db, 'providerAvailability', S.uid));
-      var d = snap.exists() ? (snap.data() || {}) : {};
-      /* hours OR openingHours — the resolver accepts either, so read both. */
-      AV.hours = d.hours || d.openingHours || null;
-      AV.overrides = d.overrides || {};
-      AV.err = null;
-    } catch (e) {
-      /* A refusal is REPORTED. Rendering an empty week would invite a merchant to
-         overwrite a timetable we simply could not read. */
-      AV.err = (e && e.code === 'permission-denied')
-        ? 'The server refused to show your availability.'
-        : 'Could not load your availability (' + ((e && e.code) || 'unknown') + ').';
-    }
-    AV.loaded = true;
-  }
-
-  function avStatusCard () {
-    var M = avModel();
-    /* THE SERVER'S VERDICT WINS where we have one. S.shop carries what the shell
-       already resolved; only when that is absent do we derive, and we say so. */
-    var serverSaid = (S.shop && S.shop.availability) || null;
-    var derived = (M && AV.hours) ? M.computeEffective(AV.hours, AV.overrides, Date.now()) : null;
-    var eff = serverSaid || derived;
-
-    if (!eff) {
-      return '<div class="dev"><div class="dev-head"><span class="dev-ico">–</span>' +
-        '<span class="dev-id"><b>Availability not set</b><small>Set your opening hours below ' +
-        'and customers will see when you are open.</small></span></div></div>';
-    }
-
-    var closes = (M && AV.hours && eff.open) ? M.closesAt(AV.hours, AV.overrides, Date.now()) : null;
-    var next   = (M && AV.hours && !eff.open) ? M.nextOpening(AV.hours, AV.overrides, Date.now()) : null;
-    var soon   = M ? M.upcomingClosure(AV.overrides, Date.now()) : null;
-
-    return '<div class="dev"><div class="dev-head">' +
-      '<span class="dev-ico">' + (eff.open ? '🟢' : '🔴') + '</span>' +
-      '<span class="dev-id"><b>' + (eff.open ? 'Open now' : 'Closed now') + '</b><small>' +
-        esc(avReason(eff)) +
-        (closes ? ' · closes ' + esc(closes) : '') +
-        (next ? ' · opens ' + esc(next.dayLabel) + ' ' + esc(next.time) : '') +
-      '</small></span></div>' +
-      (serverSaid ? '' : '<div class="note" style="margin-top:10px">Previewed from the schedule ' +
-        'below. The storefront uses the server\'s own decision.</div>') +
-      (soon ? '<div class="note" style="margin-top:10px">⚠️ Closed on <b>' + esc(soon.date) + '</b>' +
-        (soon.inDays === 0 ? ' (today)' : soon.inDays === 1 ? ' (tomorrow)' : ' (in ' + soon.inDays + ' days)') +
-        '</div>' : '') +
-    '</div>';
-  }
-
-  function avReason (eff) {
-    var r = eff && eff.reason;
-    if (r === 'closed_today')  return 'Closed for the day by a date override';
-    if (r === 'special_hours') return 'Open by a date override';
-    if (r === 'within_hours')  return 'Within your opening hours';
-    if (r === 'outside_hours') return 'Outside your opening hours';
-    if (r === 'no_schedule')   return 'No schedule set, so the shop is treated as open';
-    if (r === 'offline')       return 'Your shop is switched off';
-    return 'Current status';
-  }
-
-  function avDayRow (k) {
-    var M = avModel();
-    var cfg = (AV.hours && AV.hours[k]) || { closed: true, periods: [] };
-    var ps = Array.isArray(cfg.periods) ? cfg.periods : [];
-    return '<div class="av-day">' +
-      '<div class="av-day-h">' +
-        '<label class="av-day-n"><input type="checkbox" data-av="open" data-d="' + k + '"' +
-          (cfg.closed ? '' : ' checked') + '> ' + esc(M.LABEL[k]) + '</label>' +
-        (cfg.closed ? '<span class="av-closed">Closed</span>' :
-          '<button class="av-add" data-av="addp" data-d="' + k + '">＋ hours</button>') +
-      '</div>' +
-      (cfg.closed ? '' : ps.map(function (p, i) {
-        return '<div class="av-p">' +
-          '<input class="av-t" type="time" value="' + esc(p.open || '') + '" data-av="t" data-d="' + k + '" data-i="' + i + '" data-w="open">' +
-          '<span class="av-to">to</span>' +
-          '<input class="av-t" type="time" value="' + esc(p.close || '') + '" data-av="t" data-d="' + k + '" data-i="' + i + '" data-w="close">' +
-          '<button class="av-rm" data-av="delp" data-d="' + k + '" data-i="' + i + '" aria-label="Remove">✕</button>' +
-        '</div>';
-      }).join('')) +
-    '</div>';
-  }
-
-  function avOverrideRows () {
-    var keys = Object.keys(AV.overrides || {}).sort();
-    if (!keys.length) return '<div class="note">No closed dates yet. Add one for a holiday or a day off.</div>';
-    return keys.map(function (d) {
-      var o = AV.overrides[d] || {};
-      return '<div class="av-ov">' +
-        '<b>' + esc(d) + '</b>' +
-        '<span class="av-ovs">' + (o.closed === true ? 'Closed all day' : 'Open (overrides the weekly schedule)') + '</span>' +
-        '<button class="av-rm" data-av="delov" data-d="' + esc(d) + '" aria-label="Remove">✕</button>' +
-      '</div>';
-    }).join('');
-  }
-
+     The control centre is sokoni-merchant-availability.js (2026-09-29). It replaced an inline editor that
+     wrote providerAvailability directly, stored a DISPLAY STRING in shops.openingHours (read by the
+     evaluator as "always closed"), could not toggle the live state (its comment said setLiveStatus was
+     undeployed — setShopAvailability always was), and previewed "Open" while the shop was offline.
+     Everything now saves through kasshop.setShopAvailability and previews with the ONE evaluator
+     (/sokoni-shop-hours.js) the storefront uses. A staff session names the shop; the server checks
+     manageAvailability. */
+  var _avUI = null, _avKey = null;
   function renderAvailability (p) {
-    if (S.state !== 'in') {
-      p.innerHTML = '<div class="state"><span class="ico">🔒</span><b>Not signed in on this device</b>' +
-        '<small>Your shop\'s availability loads once you are signed in.</small></div>';
-      return;
-    }
-    if (!AV.loaded) {
-      p.innerHTML = '<div class="state"><b>Loading your availability…</b></div>';
-      avLoad().then(function () { if (!S.destroyed) renderAvailability(p); });
-      return;
-    }
-    var M = avModel();
-    if (AV.err) {
-      p.innerHTML = '<div class="state"><span class="ico">⚠️</span><b>' + esc(AV.err) + '</b>' +
-        '<small>Nothing has been changed.</small>' +
-        '<button class="act ghost" data-av="reload">↻ Try again</button></div>';
-      return;
-    }
-
-    p.innerHTML =
-      '<div class="sec-t">Current status</div>' + avStatusCard() +
-      '<div class="sec-t" style="margin-top:22px">Opening hours</div>' +
-      '<div class="note" style="margin:0 0 12px">Customers see these on your shop page. ' +
-        'A day can have more than one period — for a lunch break, set two.</div>' +
-      '<div class="dev">' + (AV.hours
-        ? M.DAYS.map(avDayRow).join('')
-        : '<div class="note">No schedule yet.</div>' +
-          '<button class="act" data-av="seed" style="margin-top:12px">Start from a standard week</button>') +
-      '</div>' +
-
-      '<div class="sec-t" style="margin-top:22px">Closed dates</div>' +
-      '<div class="note" style="margin:0 0 12px">A closed date overrides the weekly schedule for that day.</div>' +
-      '<div class="dev">' + avOverrideRows() +
-        '<div class="av-addov">' +
-          '<input class="av-t" type="date" id="av-ovdate">' +
-          '<button class="av-add" data-av="addov">＋ Closed date</button>' +
-        '</div>' +
-      '</div>' +
-
-      '<div class="note" style="margin-top:18px"><b>Temporarily closing is not available here yet.</b> ' +
-        'The on/off switch lives on your shop record, the security rules do not let a shop owner ' +
-        'change it from the app, and the server function that would (<code>setLiveStatus</code>) ' +
-        'is not deployed. Rather than show a switch that silently fails, it is left out. ' +
-        'Use a closed date for a day off.</div>' +
-
-      (AV.hours ? '<div class="sheet-actions" style="margin-top:16px">' +
-        '<button class="act" data-av="save"' + (AV.saving ? ' disabled' : '') + '>' +
-          (AV.saving ? 'Saving…' : '💾 Save availability') + '</button>' +
-        (AV.dirty ? '<span class="note" style="margin-left:10px">Unsaved changes</span>' : '') +
-      '</div>' : '');
-  }
-
-  document.addEventListener('click', function (e) {
-    var b = e.target.closest('[data-av]'); if (!b) return;
-    var act = b.getAttribute('data-av');
-    var M = avModel();
-    var p = nativePanel('availability');
-    var k = b.getAttribute('data-d');
-    var i = parseInt(b.getAttribute('data-i'), 10);
-
-    if (act === 'reload') { AV.loaded = false; AV.err = null; return renderAvailability(p); }
-    if (act === 'seed')   { AV.hours = M.emptyWeek(); AV.dirty = true; return renderAvailability(p); }
-    if (act === 'addp')   {
-      AV.hours[k].periods = (AV.hours[k].periods || []).concat([{ open: '09:00', close: '17:00' }]);
-      AV.dirty = true; return renderAvailability(p);
-    }
-    if (act === 'delp')   {
-      AV.hours[k].periods.splice(i, 1); AV.dirty = true; return renderAvailability(p);
-    }
-    if (act === 'addov')  {
-      var el = document.getElementById('av-ovdate');
-      var v = el && el.value;
-      if (!v) { toast('Pick a date first.'); return; }
-      AV.overrides[v] = { closed: true }; AV.dirty = true; return renderAvailability(p);
-    }
-    if (act === 'delov')  { delete AV.overrides[k]; AV.dirty = true; return renderAvailability(p); }
-    if (act === 'save')   return avSave(b);
-  });
-
-  document.addEventListener('change', function (e) {
-    var el = e.target;
-    if (!el || !el.getAttribute) return;
-    var act = el.getAttribute('data-av');
-    if (act !== 'open' && act !== 't') return;
-    var k = el.getAttribute('data-d');
-    if (!AV.hours || !AV.hours[k]) return;
-    if (act === 'open') {
-      AV.hours[k].closed = !el.checked;
-      if (!AV.hours[k].closed && !(AV.hours[k].periods || []).length) {
-        AV.hours[k].periods = [{ open: '09:00', close: '17:00' }];
-      }
-      AV.dirty = true;
-      return renderAvailability(nativePanel('availability'));
-    }
-    var i = parseInt(el.getAttribute('data-i'), 10);
-    var w = el.getAttribute('data-w');
-    if (AV.hours[k].periods && AV.hours[k].periods[i]) {
-      AV.hours[k].periods[i][w] = el.value;
-      AV.dirty = true;
-    }
-  });
-
-  async function avSave (btn) {
-    var M = avModel();
-    if (!M || AV.saving) return;
-    /* Validate BEFORE writing: the resolver reads a malformed period as 'no hours',
-       which would quietly close the shop. */
-    var errs = M.validate(AV.hours);
-    if (errs.length) { toast(errs[0]); return; }
-
-    AV.saving = true; renderAvailability(nativePanel('availability'));
-    try {
-      var f = await firestore();
-      await f.m.setDoc(f.m.doc(f.db, 'providerAvailability', S.uid), {
-        /* The canonical field names effectiveForShop reads. `overrides` is a MAP,
-           deliberately — the subcollection is invisible to the resolver. */
-        hours: AV.hours,
-        overrides: AV.overrides,
-        uid: S.uid,
-        updatedAt: new Date(),
-      }, { merge: true });
-      /* AND the denormalised copy on the shop record. effectiveForShop falls back to
-         shops/{uid}.openingHours when no structured schedule exists, and other surfaces
-         render it as text — so writing only providerAvailability would leave the shop
-         document describing hours the seller no longer keeps.
-
-         Only allowlisted keys: the rule uses hasOnly(), so one stray field fails the
-         entire write. A failure here is NOT fatal — the canonical schedule is already
-         saved — but it is reported rather than swallowed. */
-      var human = M.formatWeek(AV.hours);
-      try {
-        await f.m.updateDoc(f.m.doc(f.db, 'shops', S.uid), {
-          openingHours: human, hours: human, updatedAt: new Date(),
-        });
-        if (S.shop) { S.shop.openingHours = human; S.shop.hours = human; }
-      } catch (e2) {
-        toast(e2 && e2.code === 'permission-denied'
-          ? 'Saved, but the server refused to update your shop record.'
-          : 'Saved, but the shop record was not updated (' + ((e2 && e2.code) || 'unknown') + ').');
-      }
-      AV.dirty = false;
-      toast('Availability saved. Customers see this on your shop page.');
-    } catch (e) {
-      toast(e && e.code === 'permission-denied'
-        ? 'The server refused that change.'
-        : 'Could not save: ' + ((e && e.code) || e.message || 'unknown'));
-    }
-    AV.saving = false;
-    renderAvailability(nativePanel('availability'));
+    if (!window.SokoniMerchantAvailability) { p.innerHTML = '<div class="state">Availability could not load. Refresh the page.</div>'; return; }
+    var staff = !!(S.servedBy && S.servedBy.role && S.servedBy.role !== 'owner');
+    var key = (S.uid || '') + '|' + (staff ? S.activeShopId : 'own');
+    if (_avUI && _avKey === key && p.firstChild) { _avUI.refresh(); return; }
+    if (_avUI && _avUI.destroy) _avUI.destroy();
+    p.innerHTML = ''; var host = document.createElement('div'); p.appendChild(host);
+    p.classList.add('panel-scroll');
+    _avKey = key;
+    _avUI = window.SokoniMerchantAvailability.mount(host, {
+      shopId: staff ? S.activeShopId : null,
+      callGet: _callable('getShopAvailability'), callSave: _callable('setShopAvailability'),
+      openStorefront: function () { go('shop'); },
+      onToast: toast });
   }
 
   /* ══ SETTINGS ═════════════════════════════════════════════════════════════

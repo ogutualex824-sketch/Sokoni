@@ -2465,6 +2465,20 @@ exports.createCheckoutSession = onCall(
       console.warn("[createCheckoutSession] shop-state read failed, defaulting open:", e && e.message);
     }
 
+    /* The ONE availability evaluator, only for shops that REFUSE orders while closed (ordersWhenClosed:false) —
+       every other shop keeps the pre-existing behaviour (orders accepted outside hours), so no extra read. */
+    const shopVerdict = {};
+    try {
+      for (const [sid, sdoc] of Object.entries(shopState)) {
+        if (sdoc && sdoc.ordersWhenClosed === false) {
+          const asnap = await db.collection("providerAvailability").doc(String(sdoc.sellerUid || sdoc.ownerUid || sdoc.ownerId || sid)).get();
+          shopVerdict[sid] = kasshop.verdictFor(sdoc, asnap.exists ? asnap.data() : null, Date.now());
+        }
+      }
+    } catch (e) {
+      console.warn("[createCheckoutSession] schedule verdict failed, not refusing on schedule:", e && e.message);
+    }
+
     /* Build session items using server prices — any item not in the catalogue is skipped.
        Also validates stock availability: out-of-stock items are rejected so the session
        cannot be used to purchase items that are unavailable. */
@@ -2480,7 +2494,7 @@ exports.createCheckoutSession = onCall(
 
       /* Availability (canonical): product hidden/archived, or its shop closed/online-off
          → cannot be added to a NEW checkout. Pure, unit-tested decision. */
-      if (!_avail.itemAvailability(prod, shopState[prod.sellerUid]).available) {
+      if (!_avail.itemAvailability(prod, shopState[prod.sellerUid], shopVerdict[prod.sellerUid]).available) {
         unavailableItems.push(prod.name || pid);
         continue;
       }

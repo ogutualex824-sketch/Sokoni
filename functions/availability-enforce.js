@@ -27,14 +27,30 @@ function normalizeShop(raw) {
 
 /* Can this product be added to a NEW checkout on availability grounds?
    (Stock/price/qty are handled separately by the caller.)
-   Returns { available:boolean, reason:null|'hidden'|'archived'|'shop-closed'|'online-off' }. */
-function itemAvailability(prod, shopRaw) {
+   Returns { available:boolean, reason:null|'hidden'|'archived'|'shop-closed'|'online-off'|'temporarily-closed'|'closed-now' }.
+
+   2026-09-29 (availability completion):
+     · a TEMPORARY CLOSURE on the shop (the owner said "closed until …") refuses new orders until it ends —
+       read from the shop document itself, no extra read;
+     · a shop that turned OFF ordersWhenClosed refuses orders outside its hours. The caller passes the
+       ONE evaluator's verdict (functions/shared/shop-hours.js) for that shop; absent a verdict, nothing is
+       refused on schedule grounds (the pre-existing behaviour). */
+function temporarilyClosed(shopRaw, atMs) {
+  const t = shopRaw && shopRaw.temporaryClosure;
+  const now = typeof atMs === 'number' ? atMs : Date.now();
+  return !!(t && t.active === true && (t.until == null || (typeof t.until === 'number' && t.until > now)));
+}
+function itemAvailability(prod, shopRaw, verdict, atMs) {
   prod = prod || {};
   if (prod.isVisible === false) return { available: false, reason: 'hidden' };
   if (prod.status === 'archived') return { available: false, reason: 'archived' };
   const sh = normalizeShop(shopRaw);
   if (!sh.acceptingOrders) return { available: false, reason: 'shop-closed' };
   if (!sh.online)          return { available: false, reason: 'online-off' };
+  if (temporarilyClosed(shopRaw, atMs)) return { available: false, reason: 'temporarily-closed' };
+  if (shopRaw && shopRaw.ordersWhenClosed === false && verdict && verdict.open === false) {
+    return { available: false, reason: 'closed-now' };
+  }
   return { available: true, reason: null };
 }
 

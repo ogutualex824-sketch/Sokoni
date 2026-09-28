@@ -108,7 +108,11 @@ const ROLE_CAPABILITIES = {
   manager:   ['sell', 'collectPayment', 'printReceipt', 'viewReceipts', 'discount', 'refund',
               'openShift', 'closeShift', 'manageInventory', 'manageProducts', 'supply',
               'viewOrders', 'manageOrders', 'viewAnalytics', 'viewFinancials',
-              'manageNotifications'],
+              'manageNotifications',
+              /* 2026-09-29 (owner brief: 'Manager: manage availability if permission granted'): within the
+                 ceiling, so granted by default and WITHDRAWN per manager through emp.restrictions. Enforced by
+                 kasshop.setShopAvailability — the first enforcer of this declared capability. */
+              'manageAvailability'],
   cashier:   ['sell', 'collectPayment', 'printReceipt', 'viewReceipts', 'openShift', 'closeShift'],
   inventory: ['manageInventory', 'manageProducts', 'supply', 'viewOrders'],
   support:   ['viewOrders', 'manageOrders', 'viewReceipts', 'manageNotifications'],

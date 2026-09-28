@@ -569,165 +569,243 @@ exports.saveShopProfile = onCall(
 );
 
 /* ================================================================
-   3. setShopAvailability — the LIVE state
-================================================================ */
+   3. setShopAvailability — the LIVE state, AND (since 2026-09-29) the schedule
+================================================================
+   One server write path for everything that decides "is this shop open":
+     live switches (acceptingOrders / online / delivery / pickup)   → shops/{id}
+     temporaryClosure { active, until, note }                        → shops/{id}
+     availabilityMode 'hours' | 'appointment', timezone, ordersWhenClosed → shops/{id}
+     schedule { hours, overrides }                                   → providerAvailability/{ownerUid}
+                                                                       + shops/{id}.openingHours (the SAME object)
+   WHO: the owner (their own shop), or — naming `shopId` — an employee whose role carries
+   `manageAvailability` in the ONE merchant permission authority (merchant-identity.resolveActor:
+   role ceiling ∩ owner restrictions). A former employee resolves to nothing and is refused.
+   The stored shapes are VALIDATED here; merchant-v2 used to write a formatted STRING into
+   shops.openingHours, which the evaluator then read as "always closed". */
+const HOURS = require('./shared/shop-hours');
+const _isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+/* Only a real weekly map counts as hours — a legacy display string never does. */
+const _hoursObj = (v) => (_isObj(v) && HOURS.DAYS.some((d) => _isObj(v[d])) ? v : null);
+
+function _normTime(s) {
+  const m = HOURS.toMin(s);
+  return m === null ? null : (m === 1440 ? '24:00' : HOURS.fromMin(m));
+}
+function _cleanPeriods(list, where) {
+  if (!Array.isArray(list)) throw new HttpsError('invalid-argument', `${where}: periods must be a list.`);
+  if (list.length > 6) throw new HttpsError('invalid-argument', `${where}: at most 6 periods a day.`);
+  return list.map((p, i) => {
+    const open = _normTime(p && p.open), close = _normTime(p && p.close);
+    if (!open || !close || open === close) throw new HttpsError('invalid-argument', `${where}: period ${i + 1} needs a valid start and end (HH:MM).`);
+    return { open, close };
+  });
+}
+function _cleanHours(raw) {
+  if (!_isObj(raw)) throw new HttpsError('invalid-argument', 'hours must be a weekly map.');
+  const out = {};
+  for (const day of HOURS.DAYS) {
+    const cfg = raw[day];
+    if (!_isObj(cfg) || cfg.closed === true) { out[day] = { closed: true, periods: [] }; continue; }
+    const periods = _cleanPeriods(cfg.periods || [], HOURS.LABEL[day]);
+    if (!periods.length) throw new HttpsError('invalid-argument', `${HOURS.LABEL[day]} is open but has no hours.`);
+    out[day] = { closed: false, periods };
+  }
+  return out;
+}
+function _cleanOverrides(raw, atMs) {
+  if (raw == null) return {};
+  if (!_isObj(raw)) throw new HttpsError('invalid-argument', 'overrides must be a map of dates.');
+  const keys = Object.keys(raw);
+  if (keys.length > 120) throw new HttpsError('invalid-argument', 'At most 120 special dates.');
+  const lo = new Date(atMs - 31 * 86400000).toISOString().slice(0, 10), hi = new Date(atMs + 400 * 86400000).toISOString().slice(0, 10);
+  const out = {};
+  for (const k of keys) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || k < lo || k > hi) throw new HttpsError('invalid-argument', `Special date ${String(k).slice(0, 12)} is not a valid date in range.`);
+    const v = raw[k] || {};
+    const label = _san(v.label, 60);
+    if (v.closed === true) out[k] = Object.assign({ closed: true }, label ? { label } : {});
+    else if (Array.isArray(v.periods) && v.periods.length) out[k] = Object.assign({ closed: false, periods: _cleanPeriods(v.periods, k) }, label ? { label } : {});
+    else out[k] = Object.assign({ closed: false }, label ? { label } : {});
+  }
+  return out;
+}
+function _cleanTemporary(raw, atMs) {
+  if (raw === null || raw === false) return null;
+  if (!_isObj(raw)) throw new HttpsError('invalid-argument', 'temporaryClosure must be an object or null.');
+  let until = null;
+  if (raw.until != null) {
+    until = Number(raw.until);
+    if (!Number.isFinite(until) || until <= atMs || until > atMs + 90 * 86400000) {
+      throw new HttpsError('invalid-argument', 'A temporary closure must end in the future, within 90 days.');
+    }
+  }
+  /* `note` is PUBLIC — it is shown to buyers. Internal reasons do not belong here. */
+  return { active: true, until, note: _san(raw.note, 120) || null, setAt: atMs };
+}
+
+/** The verdict for a shop document + its providerAvailability document — the one evaluator. */
+function verdictFor(shop, availDoc, atMs) {
+  const s = shop || {}, a = availDoc || {};
+  return HOURS.evaluate({
+    live: s,
+    hours: _hoursObj(a.hours) || _hoursObj(a.openingHours) || _hoursObj(s.openingHours),
+    overrides: _isObj(a.overrides) ? a.overrides : null,
+    temporaryClosure: s.temporaryClosure || null,
+    mode: s.availabilityMode === 'appointment' ? 'appointment' : 'hours',
+    timezone: s.timezone,
+  }, typeof atMs === 'number' ? atMs : Date.now());
+}
+exports.verdictFor = verdictFor;
+
 exports.setShopAvailability = onCall(
   { region: REGION, cors: true },
   async (request) => {
     const uid = _requireAuth(request);
-    const raw = (request.data || {}).availability || request.data || {};
+    const data = request.data || {};
+    const raw = _isObj(data.availability) ? data.availability : data;
+    const now = Date.now();
 
-    const patch = {};
-    for (const key of AVAILABILITY_FIELDS) {
-      if (key in raw) patch[key] = !!raw[key];
+    const live = {};
+    for (const key of AVAILABILITY_FIELDS) if (key in raw) live[key] = !!raw[key];
+    const shopPatch = Object.assign({}, live);
+    if ('temporaryClosure' in data) shopPatch.temporaryClosure = _cleanTemporary(data.temporaryClosure, now);
+    if ('mode' in data) {
+      if (!['hours', 'appointment'].includes(data.mode)) throw new HttpsError('invalid-argument', 'mode must be hours or appointment.');
+      shopPatch.availabilityMode = data.mode;
     }
-    if (!Object.keys(patch).length) {
+    if ('timezone' in data) {
+      if (!HOURS.validTimezone(data.timezone)) throw new HttpsError('invalid-argument', 'Unknown timezone.');
+      shopPatch.timezone = data.timezone;
+    }
+    if ('ordersWhenClosed' in data) shopPatch.ordersWhenClosed = !!data.ordersWhenClosed;
+    let schedule = null;
+    if (_isObj(data.schedule)) {
+      schedule = { hours: _cleanHours(data.schedule.hours), overrides: _cleanOverrides(data.schedule.overrides, now) };
+    }
+    if (!Object.keys(shopPatch).length && !schedule) {
       throw new HttpsError('invalid-argument', 'No availability fields supplied.');
     }
 
-    const owned = await _ownedShop(uid);
-    /* Refuse rather than invent. A toggle with nothing to toggle is an error; creating a shop
-       as a side effect of flipping a switch is how stray documents appear. */
-    if (!owned) throw new HttpsError('not-found', 'No shop found for your account.');
+    /* WHO may change this shop's availability */
+    let shopId, actorRole;
+    if (typeof data.shopId === 'string' && data.shopId.trim()) {
+      const r = await require('./merchant-identity')._internal.resolveActor(uid, data.shopId.trim());
+      if (!r || !r.ok) throw new HttpsError('permission-denied', 'You do not work at this shop.', { code: 'NOT_AUTHORISED' });
+      if (!(r.capabilities || []).includes('manageAvailability')) {
+        throw new HttpsError('permission-denied', 'Your role cannot change this shop\'s availability. Ask the owner.', { code: 'NO_CAPABILITY' });
+      }
+      shopId = r.shopId; actorRole = (r.servedBy && r.servedBy.role) || 'staff';
+    } else {
+      const owned = await _ownedShop(uid);
+      /* Refuse rather than invent. A toggle with nothing to toggle is an error; creating a shop
+         as a side effect of flipping a switch is how stray documents appear. */
+      if (!owned) throw new HttpsError('not-found', 'No shop found for your account.');
+      shopId = owned.id; actorRole = 'owner';
+    }
 
-    await _db().collection('shops').doc(owned.id)
-      .set(Object.assign({}, patch, { sellerUid: uid, updatedAt: FieldValue.serverTimestamp() }), { merge: true });
-
-    logger.info('KassShop availability set', { shopId: owned.id });
-    return { success: true, shopId: owned.id, availability: patch };
+    const db = _db();
+    const shopRef = db.collection('shops').doc(shopId);
+    await db.runTransaction(async (tx) => {
+      const shopSnap = await tx.get(shopRef);
+      if (!shopSnap.exists) throw new HttpsError('not-found', 'Shop not found.');
+      const shop = shopSnap.data() || {};
+      const ownerUid = shop.sellerUid || shop.ownerUid || shop.ownerId || (actorRole === 'owner' ? uid : shopId);
+      const availRef = db.collection('providerAvailability').doc(String(ownerUid));
+      if (schedule) {
+        const [aSnap, provSnap] = await Promise.all([tx.get(availRef), tx.get(db.collection('providers').doc(String(ownerUid)))]);
+        /* Healthcare schedules have their own authority (healthcare availability) and rules refuse client writes for them. */
+        if (provSnap.exists && (provSnap.data() || {}).healthcare) {
+          throw new HttpsError('failed-precondition', 'Healthcare hours are managed in the healthcare workspace.', { code: 'HEALTHCARE_OWNED' });
+        }
+        const avail = aSnap.exists ? (aSnap.data() || {}) : {};
+        /* overrides are REPLACED: a date the owner removed must stop applying */
+        const ovWrite = Object.assign({}, schedule.overrides);
+        for (const k of Object.keys(_isObj(avail.overrides) ? avail.overrides : {})) if (!(k in ovWrite)) ovWrite[k] = FieldValue.delete();
+        tx.set(availRef, { hours: schedule.hours, overrides: ovWrite, uid: String(ownerUid), updatedAt: FieldValue.serverTimestamp(), updatedBy: uid }, { merge: true });
+      }
+      const write = Object.assign({}, shopPatch, { updatedAt: FieldValue.serverTimestamp(), availabilityUpdatedBy: uid });
+      if (shopPatch.temporaryClosure === null) write.temporaryClosure = FieldValue.delete();
+      if (actorRole === 'owner') write.sellerUid = uid;
+      tx.set(shopRef, write, { merge: true });
+      /* the SAME object as providerAvailability.hours — never a display string again. update() REPLACES the field
+         (a merge would fold the new map into an old string or keep a stale day). */
+      if (schedule) tx.update(shopRef, { openingHours: schedule.hours });
+    });
+    /* the verdict of what was COMMITTED — read back, not assumed */
+    const verdict = await effectiveForShop(shopId, Date.now());
+    logger.info('KassShop availability set', { shopId, actor: actorRole, schedule: !!schedule, keys: Object.keys(shopPatch) });
+    return { success: true, shopId, availability: live, verdict };
   }
 );
 
 /* ================================================================
-   4. Effective availability — live + schedule + override
+   4. Effective availability — live + schedule + override → the ONE evaluator
 ================================================================ */
 
-const _DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-
 /**
- * Combine the live state with the schedule.
- *
- *   · An explicit date override wins outright — it exists precisely to contradict the timetable.
- *   · Otherwise the shop is open only if the live state says so AND the timetable agrees.
- *
- * `at` is milliseconds; `tzOffsetMin` shifts UTC to the shop's local clock (Kenya = +180).
- * Returns the decision AND the reason, because "closed" with no reason is unactionable for the
- * seller and unexplainable to the buyer.
+ * Pre-2026-09-29 signature, kept for its callers and tests: (live, {hours|openingHours, overrides}, atMs, tz).
+ * The decision now comes from functions/shared/shop-hours.js; `tzOffsetMin` is superseded by the shop's
+ * timezone (default Africa/Nairobi = +180, the value every caller passed).
  */
-function computeEffectiveAvailability(live, schedule, at, tzOffsetMin) {
-  const state = {
-    acceptingOrders: live && live.acceptingOrders !== undefined ? !!live.acceptingOrders : true,
-    online: live && live.online !== undefined ? !!live.online : true,
-    delivery: live && live.delivery !== undefined ? !!live.delivery : true,
-    pickup: live && live.pickup !== undefined ? !!live.pickup : true,
-  };
-
-  if (!state.online || !state.acceptingOrders) {
-    return { open: false, reason: 'offline', source: 'live', state };
-  }
-
-  const local = new Date((at || 0) + (tzOffsetMin || 0) * 60000);
-  const ymd = local.toISOString().slice(0, 10);
-  const overrides = (schedule && schedule.overrides) || {};
-  const ov = overrides[ymd];
-  if (ov) {
-    if (ov.closed === true) return { open: false, reason: 'closed_today', source: 'override', state, date: ymd };
-    if (ov.closed === false) return { open: true, reason: 'special_hours', source: 'override', state, date: ymd };
-  }
-
-  const hours = (schedule && (schedule.hours || schedule.openingHours)) || null;
-  if (!hours) return { open: true, reason: 'no_schedule', source: 'live', state };
-
-  const cfg = hours[_DAYS[local.getUTCDay()]];
-  if (!cfg || cfg.closed || !Array.isArray(cfg.periods) || !cfg.periods.length) {
-    return { open: false, reason: 'outside_hours', source: 'schedule', state };
-  }
-
-  const mins = local.getUTCHours() * 60 + local.getUTCMinutes();
-  const toMin = (hhmm) => {
-    const parts = String(hhmm || '').split(':');
-    const h = parseInt(parts[0], 10), m = parseInt(parts[1], 10);
-    return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null;
-  };
-  for (const p of cfg.periods) {
-    const a = toMin(p && p.open), b = toMin(p && p.close);
-    if (a === null || b === null) continue;
-    /* A period that ends before it starts crosses midnight. */
-    if (b >= a ? (mins >= a && mins < b) : (mins >= a || mins < b)) {
-      return { open: true, reason: 'within_hours', source: 'schedule', state };
-    }
-  }
-  return { open: false, reason: 'outside_hours', source: 'schedule', state };
+function computeEffectiveAvailability(live, schedule, at, tzOffsetMin) {   // eslint-disable-line no-unused-vars
+  const sch = schedule || {};
+  const l = live || {};
+  return HOURS.evaluate({
+    live: l,
+    hours: _hoursObj(sch.hours) || _hoursObj(sch.openingHours),
+    overrides: _isObj(sch.overrides) ? sch.overrides : null,
+    temporaryClosure: l.temporaryClosure || null,
+    mode: l.availabilityMode === 'appointment' ? 'appointment' : 'hours',
+    timezone: l.timezone,
+  }, at || 0);
 }
 exports.computeEffectiveAvailability = computeEffectiveAvailability;
 
-/** Resolve the effective availability for any shop — used by the public storefront. */
+/** Resolve the effective availability for any shop. */
 async function effectiveForShop(shopId, atMs) {
   const db = _db();
   const shopSnap = await db.collection('shops').doc(String(shopId)).get();
   if (!shopSnap.exists) return null;
   const shop = shopSnap.data() || {};
   const ownerUid = shop.sellerUid || shop.ownerUid || shop.ownerId || null;
-
-  let schedule = shop.openingHours ? { hours: shop.openingHours } : null;
-  if (ownerUid) {
-    const sched = await db.collection('providerAvailability').doc(ownerUid).get();
-    if (sched.exists) {
-      const d = sched.data() || {};
-      /* The seller-managed timetable wins over the copy denormalised on the shop. */
-      schedule = { hours: d.hours || d.openingHours || (schedule && schedule.hours) || null,
-                   overrides: d.overrides || null };
-    }
-  }
-  return computeEffectiveAvailability(shop, schedule, atMs || Date.now(), 180 /* EAT */);
+  const sched = ownerUid ? await db.collection('providerAvailability').doc(ownerUid).get() : null;
+  return verdictFor(shop, sched && sched.exists ? sched.data() : null, atMs || Date.now());
 }
 exports.effectiveForShop = effectiveForShop;
 
 /**
  * The one resolver the PUBLIC storefront uses for shop state.
  *
- * KassShop Management and the buyer-facing storefront are two views of one shop, not
- * two copies of it. The seller flips "offline" or edits opening hours in the console;
- * the buyer must see that same decision. That only holds if both sides derive state
- * from the same place, so the storefront calls this rather than re-reading the shop
- * and re-deciding for itself.
- *
- * Returns the effective open/closed decision AND the timetable behind it, because a
- * storefront calendar that is not the schedule the seller actually manages is
- * decoration — it would keep looking right while being wrong.
- *
- * NEVER THROWS. A storefront that 500s because availability could not be resolved is
- * worse than one that omits the badge: callers get null and render a neutral state,
- * per the platform rule that unknown is never rendered as a value.
+ * KassShop Management and the buyer-facing storefront are two views of one shop, not two copies of it:
+ * both read the SAME verdict from the same evaluator, and the calendar returned is the schedule that
+ * produced it. NEVER THROWS — unknown renders as a neutral state, never as a value.
  */
 async function publicShopState(shopId, ownerUid) {
   try {
     const db = _db();
-    const uid = ownerUid || null;
-    const [eff, schedSnap] = await Promise.all([
-      effectiveForShop(shopId, Date.now()),
-      uid ? db.collection('providerAvailability').doc(uid).get() : Promise.resolve(null),
-    ]);
-    if (!eff) return { availability: null, schedule: null };
-
-    const sched = schedSnap && schedSnap.exists ? (schedSnap.data() || {}) : {};
     const shopSnap = await db.collection('shops').doc(String(shopId)).get();
-    const shopHours = shopSnap.exists ? (shopSnap.data() || {}).openingHours : null;
-
+    if (!shopSnap.exists) return { availability: null, schedule: null };
+    const shop = shopSnap.data() || {};
+    const uid = ownerUid || shop.sellerUid || shop.ownerUid || shop.ownerId || null;
+    const schedSnap = uid ? await db.collection('providerAvailability').doc(String(uid)).get() : null;
+    const sched = schedSnap && schedSnap.exists ? (schedSnap.data() || {}) : {};
+    const now = Date.now();
+    const v = verdictFor(shop, sched, now);
+    const hours = _hoursObj(sched.hours) || _hoursObj(sched.openingHours) || _hoursObj(shop.openingHours);
+    /* upcoming special dates only (today → 60 days) — enough for "Hours & Availability", nothing historical */
+    const upcoming = {};
+    const hi = new Date(now + 60 * 86400000).toISOString().slice(0, 10);
+    for (const [k, val] of Object.entries(_isObj(sched.overrides) ? sched.overrides : {})) if (k >= v.date && k <= hi) upcoming[k] = val;
     return {
       availability: {
-        open: eff.open, reason: eff.reason, source: eff.source,
-        acceptingOrders: eff.state.acceptingOrders,
-        delivery: eff.state.delivery,
-        pickup: eff.state.pickup,
+        open: v.open, status: v.status, reason: v.reason, source: v.source,
+        acceptingOrders: v.state.acceptingOrders, delivery: v.state.delivery, pickup: v.state.pickup,
+        closesAt: v.closesAt, opensAt: v.opensAt, minutesToClose: v.minutesToClose == null ? null : v.minutesToClose,
+        special: v.special, temporaryClosure: v.temporaryClosure, appointment: v.appointment,
+        timezone: v.timezone, date: v.date, today: v.today,
+        ordersWhenClosed: shop.ordersWhenClosed !== false,
       },
-      /* The seller-managed timetable wins over the copy denormalised on the shop —
-         the same precedence effectiveForShop() applies, so the calendar a buyer sees
-         and the decision they are given cannot disagree. */
-      schedule: {
-        hours: sched.hours || sched.openingHours || shopHours || null,
-        overrides: sched.overrides || null,
-      },
+      schedule: { hours: hours || null, overrides: upcoming },
     };
   } catch (err) {
     logger.warn('KassShop publicShopState failed', { code: err && err.code });
@@ -739,7 +817,48 @@ exports.publicShopState = publicShopState;
 exports.getShopAvailability = onCall(
   { region: REGION, cors: true },
   async (request) => {
-    const shopId = (request.data || {}).shopId;
+    const data = request.data || {};
+    /* SETTINGS mode (2026-09-29, the merchant-v2 Availability control centre): the full editable state —
+       only for the owner, or an employee of THIS shop (merchant-identity.resolveActor). `canEdit` says whether
+       the role carries manageAvailability; the write path re-checks it. */
+    if (data.settings === true) {
+      const uid = _requireAuth(request);
+      let shopId = typeof data.shopId === 'string' && data.shopId.trim() ? data.shopId.trim() : null;
+      let canEdit = false;
+      if (shopId) {
+        const r = await require('./merchant-identity')._internal.resolveActor(uid, shopId);
+        if (!r || !r.ok) throw new HttpsError('permission-denied', 'You do not work at this shop.', { code: 'NOT_AUTHORISED' });
+        canEdit = (r.capabilities || []).includes('manageAvailability');
+      } else {
+        const owned = await _ownedShop(uid);
+        if (!owned) throw new HttpsError('not-found', 'No shop found for your account.');
+        shopId = owned.id; canEdit = true;
+      }
+      const db = _db();
+      const shopSnap = await db.collection('shops').doc(shopId).get();
+      if (!shopSnap.exists) throw new HttpsError('not-found', 'Shop not found.');
+      const shop = shopSnap.data() || {};
+      const ownerUid = shop.sellerUid || shop.ownerUid || shop.ownerId || shopId;
+      const aSnap = await db.collection('providerAvailability').doc(String(ownerUid)).get();
+      const a = aSnap.exists ? (aSnap.data() || {}) : {};
+      const now = Date.now();
+      const live = {};
+      for (const k of AVAILABILITY_FIELDS) live[k] = shop[k] !== undefined ? !!shop[k] : true;
+      return {
+        shopId, canEdit,
+        verdict: verdictFor(shop, a, now),
+        settings: {
+          live,
+          hours: _hoursObj(a.hours) || _hoursObj(a.openingHours) || _hoursObj(shop.openingHours) || null,
+          overrides: _isObj(a.overrides) ? a.overrides : {},
+          temporaryClosure: HOURS.evaluate({ temporaryClosure: shop.temporaryClosure }, now).status === 'temporarily_closed' ? shop.temporaryClosure : null,
+          mode: shop.availabilityMode === 'appointment' ? 'appointment' : 'hours',
+          timezone: HOURS.validTimezone(shop.timezone) ? shop.timezone : HOURS.DEFAULT_TZ,
+          ordersWhenClosed: shop.ordersWhenClosed !== false,
+        },
+      };
+    }
+    const shopId = data.shopId;
     /* Public by design — a buyer must be able to see whether a shop is open. Reads only. */
     if (typeof shopId !== 'string' || !shopId.trim()) {
       throw new HttpsError('invalid-argument', 'shopId is required.');
@@ -752,3 +871,4 @@ exports.getShopAvailability = onCall(
 
 /* Pure helpers, for scripts/test-shop-profile-storefront.js (not a Cloud Function: index.js re-exports by name). */
 exports._profile = { storefrontProjection, _cleanProfile, _cleanPermits, CHOICES };
+exports._availability = { _cleanHours, _cleanOverrides, _cleanTemporary, verdictFor };

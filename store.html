@@ -802,43 +802,24 @@ function stSwitchTab(name, btn){
    BUSINESS HOURS
 ═══════════════════════════════════════════════════ */
 function stRenderHours(shopData) {
+  /* 2026-09-29: this legacy page used to INVENT a week ("8:00 AM – 7:00 PM") when the shop had none, and to
+     badge "Open Now" from the VISITOR's clock. Both were fabricated facts about a real business. It now shows
+     only hours the shop actually has, and no open/closed verdict — the live status comes from the ONE
+     evaluator on the storefront (/shop/{handle}, Hours & Availability). */
   const grid = document.getElementById("stHoursGrid");
   if (!grid) return;
-
-  var hrs = (shopData && shopData.businessHours) || {
-    mon:"8:00 AM – 7:00 PM", tue:"8:00 AM – 7:00 PM", wed:"8:00 AM – 7:00 PM",
-    thu:"8:00 AM – 7:00 PM", fri:"8:00 AM – 7:00 PM",
-    sat:"9:00 AM – 5:00 PM", sun:"Closed"
-  };
+  var hrs = shopData && shopData.businessHours && typeof shopData.businessHours === "object" ? shopData.businessHours : null;
+  if (!hrs) {
+    grid.innerHTML = '<div class="st-hour-row"><span class="st-hour-closed">Opening hours not shared yet</span></div>';
+    return;
+  }
   var dayKeys  = ["sun","mon","tue","wed","thu","fri","sat"];
   var dayNames = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-  var todayIdx = new Date().getDay();
-  var todayKey = dayKeys[todayIdx];
-  var todayHrs = hrs[todayKey] || "Closed";
-  var isOpenNow = todayHrs !== "Closed";
-
-  /* Add open/closed badge to header */
-  var badgesEl = document.getElementById("stBadges");
-  if (badgesEl) {
-    if (isOpenNow) {
-      badgesEl.innerHTML += '<span class="st-badge">🟢 Open Now</span>';
-    } else {
-      badgesEl.innerHTML += '<span class="st-badge" style="background:rgba(255,77,77,0.08);border-color:rgba(255,77,77,0.2);color:#ff4d4d;">🔴 Closed</span>';
-    }
-  }
-
   grid.innerHTML = dayKeys.map(function(dk, i) {
-    var isToday  = i === todayIdx;
-    var h        = hrs[dk] || "Closed";
+    var h        = typeof hrs[dk] === "string" && hrs[dk] ? hrs[dk] : "Closed";
     var isClosed = h === "Closed";
-    var pill     = isToday
-      ? '<span class="st-today-pill' + (isOpenNow ? "" : " closed-pill") + '">'
-        + (isOpenNow ? "Open" : "Closed") + "</span>"
-      : "";
     return '<div class="st-hour-row">'
-      + '<span class="st-hour-day' + (isToday ? " today" : "") + '">'
-      + dayNames[i].slice(0, 3) + pill
-      + "</span>"
+      + '<span class="st-hour-day">' + dayNames[i].slice(0, 3) + "</span>"
       + '<span class="' + (isClosed ? "st-hour-closed" : "st-hour-time") + '">' + _esc(h) + "</span>"
       + "</div>";
   }).join("");

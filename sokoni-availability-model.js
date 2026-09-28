@@ -39,7 +39,8 @@
   var DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
   var LABEL = { sun: 'Sunday', mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday',
                 thu: 'Thursday', fri: 'Friday', sat: 'Saturday' };
-  var TZ_MIN = 180;                       /* EAT — matches effectiveForShop */
+  var TZ_MIN = 180;                       /* EAT — the evaluator's default zone (Africa/Nairobi) */
+  var LABEL_KEYS = DAYS.map(function (d) { return LABEL[d]; });
 
   function toMin (hhmm) {
     var p = String(hhmm || '').split(':');
@@ -55,92 +56,47 @@
   }
   function ymdOf (d) { return d.toISOString().slice(0, 10); }
 
-  /* A period whose close is <= open crosses midnight — same rule as the server. */
-  function withinPeriod (mins, p) {
-    var a = toMin(p && p.open), b = toMin(p && p.close);
-    if (a === null || b === null) return false;
-    return b >= a ? (mins >= a && mins < b) : (mins >= a || mins < b);
+  /* ── THE DECISION IS NOT MADE HERE (2026-09-29) ──────────────────────────────
+     computeEffective / nextOpening / closesAt are ADAPTERS over the ONE evaluator,
+     functions/shared/shop-hours.js, served byte-identically as /sokoni-shop-hours.js
+     (window.SokoniShopHours). They used to be a hand-kept copy of the server rule that
+     drifted: no breaks, no special-hours times, midnight tails dropped. A page that
+     loads this file must load /sokoni-shop-hours.js first. */
+  function H () {
+    var h = (typeof globalThis !== 'undefined' ? globalThis : this).SokoniShopHours;
+    if (!h && typeof require === 'function') { try { h = require('./sokoni-shop-hours.js'); } catch (_) { h = null; } }
+    if (!h) throw new Error('SokoniShopHours (sokoni-shop-hours.js) must load before sokoni-availability-model.js');
+    return h;
+  }
+  function _eval (hours, overrides, atMs) {
+    return H().evaluate({ hours: hours || null, overrides: overrides || null }, atMs || Date.now());
   }
 
-  /* The server's decision, reproduced. Returns the same {open, reason, source}. */
-  function computeEffective (hours, overrides, atMs, tzMin) {
-    var local = localOf(atMs, tzMin);
-    var ymd = ymdOf(local);
-    var ov = (overrides || {})[ymd];
-    if (ov) {
-      if (ov.closed === true)  return { open: false, reason: 'closed_today',  source: 'override', date: ymd };
-      if (ov.closed === false) return { open: true,  reason: 'special_hours', source: 'override', date: ymd };
-    }
-    if (!hours) return { open: true, reason: 'no_schedule', source: 'live' };
-
-    var cfg = hours[DAYS[local.getUTCDay()]];
-    if (!cfg || cfg.closed || !Array.isArray(cfg.periods) || !cfg.periods.length) {
-      return { open: false, reason: 'outside_hours', source: 'schedule' };
-    }
-    var mins = local.getUTCHours() * 60 + local.getUTCMinutes();
-    for (var i = 0; i < cfg.periods.length; i++) {
-      if (withinPeriod(mins, cfg.periods[i])) {
-        return { open: true, reason: 'within_hours', source: 'schedule' };
-      }
-    }
-    return { open: false, reason: 'outside_hours', source: 'schedule' };
+  /* The server's decision — the same evaluator. Returns {open, reason, source, status, …}. */
+  function computeEffective (hours, overrides, atMs, tzMin) {   // eslint-disable-line no-unused-vars
+    return _eval(hours, overrides, atMs);
   }
 
-  function periodsFor (hours, overrides, atMs, tzMin) {
-    var local = localOf(atMs, tzMin);
-    var ov = (overrides || {})[ymdOf(local)];
-    if (ov && ov.closed === true) return [];
-    var cfg = (hours || {})[DAYS[local.getUTCDay()]];
-    if (!cfg || cfg.closed || !Array.isArray(cfg.periods)) return [];
-    return cfg.periods.slice();
+  function periodsFor (hours, overrides, atMs, tzMin) {   // eslint-disable-line no-unused-vars
+    return (_eval(hours, overrides, atMs).today || []).slice();
   }
 
-  /* The next moment the shop opens, searched forward day by day.
-     Returns null when nothing is scheduled within the horizon — null means UNKNOWN
-     and must be rendered as such, never as "closed for ever". */
-  function nextOpening (hours, overrides, atMs, tzMin, horizonDays) {
+  /* The next moment the shop opens. null = UNKNOWN (nothing within the horizon), never "closed for ever". */
+  function nextOpening (hours, overrides, atMs, tzMin, horizonDays) {   // eslint-disable-line no-unused-vars
     if (!hours) return null;
-    var days = horizonDays || 14;
-    var tz = (tzMin == null ? TZ_MIN : tzMin);
     var now = atMs || Date.now();
-    var local = localOf(now, tz);
-    var mins = local.getUTCHours() * 60 + local.getUTCMinutes();
-
-    for (var d = 0; d <= days; d++) {
-      var probe = new Date(local.getTime() + d * 86400000);
-      var ymd = ymdOf(probe);
-      var ov = (overrides || {})[ymd];
-      if (ov && ov.closed === true) continue;              /* holiday — skip */
-      var cfg = hours[DAYS[probe.getUTCDay()]];
-      if (!cfg || cfg.closed || !Array.isArray(cfg.periods) || !cfg.periods.length) continue;
-
-      var starts = cfg.periods
-        .map(function (p) { return toMin(p && p.open); })
-        .filter(function (v) { return v !== null; })
-        .sort(function (a, b) { return a - b; });
-
-      for (var i = 0; i < starts.length; i++) {
-        if (d > 0 || starts[i] > mins) {
-          return { day: DAYS[probe.getUTCDay()], dayLabel: LABEL[DAYS[probe.getUTCDay()]],
-                   date: ymd, time: fromMin(starts[i]), inDays: d };
-        }
-      }
-    }
-    return null;
+    var v = _eval(hours, overrides, now);
+    if (v.open && v.closesAt) v = _eval(hours, overrides, now + (v.closesAt.minutesAway + 1) * 60000);
+    var o = v.opensAt;
+    if (!o) return null;
+    var dayKey = DAYS[LABEL_KEYS.indexOf(o.dayLabel)] || null;
+    return { day: dayKey, dayLabel: o.dayLabel, date: o.ymd, time: o.time, inDays: o.inDays };
   }
 
-  /* When does the CURRENT open period end? null when not open or not derivable. */
-  function closesAt (hours, overrides, atMs, tzMin) {
-    var eff = computeEffective(hours, overrides, atMs, tzMin);
-    if (!eff.open || eff.source !== 'schedule') return null;
-    var local = localOf(atMs, tzMin);
-    var mins = local.getUTCHours() * 60 + local.getUTCMinutes();
-    var cfg = (hours || {})[DAYS[local.getUTCDay()]];
-    if (!cfg || !Array.isArray(cfg.periods)) return null;
-    for (var i = 0; i < cfg.periods.length; i++) {
-      if (withinPeriod(mins, cfg.periods[i])) return cfg.periods[i].close || null;
-    }
-    return null;
+  /* When does the CURRENT open stretch end? null when not open or open all day. */
+  function closesAt (hours, overrides, atMs, tzMin) {   // eslint-disable-line no-unused-vars
+    var v = _eval(hours, overrides, atMs);
+    return v.open && v.closesAt ? v.closesAt.time : null;
   }
 
   /* The next dated closure a shopper or merchant should be warned about. */

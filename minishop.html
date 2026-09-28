@@ -129,9 +129,9 @@
        customer nothing and reads as "never open". Populated from the same
        schedule KassShop Management writes — never from a separate calendar. -->
   <section id="msHours" class="ms-hours" hidden aria-labelledby="msHoursTitle">
-    <h2 id="msHoursTitle" class="ms-hours-title">Opening hours</h2>
-    <div id="msHoursOverride" class="ms-hours-override" hidden></div>
+    <h2 id="msHoursTitle" class="ms-hours-title">Hours &amp; availability</h2>
     <div id="msHoursBody" class="ms-hours-body"></div>
+    <div id="msHoursOverride" class="ms-hours-override" hidden></div>
   </section>
 
   <!-- ══ STATS BAR ══════════════════════════════ -->
@@ -257,7 +257,7 @@
   <!-- ══ ABOUT TAB (scaffolded — populated by JS) ══ -->
   <div id="msAbout" class="ms-tab-content" hidden role="tabpanel">
     <div id="msLocation" class="ms-about-block" hidden></div>
-    <div id="msHours" class="ms-about-block" hidden></div>
+    <div id="msAboutHours" class="ms-about-block" hidden></div>
     <div id="msDeliveryInfo" class="ms-about-block" hidden>
       <div id="msDeliveryAreas"></div>
       <div id="msDeliveryPolicy"></div>
@@ -392,6 +392,9 @@
 <!-- Auth + callables (firebase.js — the same bootstrap as every signed-in page). Without it this page had no
      signed-in user: Follow sent EVERY shopper to sign-in and no callable could run (CHANGELOG 211). -->
 <script src="/firebase.js" type="module"></script>
+<!-- The ONE shop-hours evaluator (byte-identical to functions/shared/shop-hours.js): the badge and the Hours &
+     Availability section use its words; this page decides nothing about open/closed on its own. -->
+<script src="/sokoni-shop-hours.js"></script>
 <script src="/sokoni-minishop.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function() {

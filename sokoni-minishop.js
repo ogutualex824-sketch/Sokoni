@@ -203,74 +203,104 @@ window.SokoniMiniShop = (() => {
     no_schedule:   { label: 'Open',                    cls: 'open' },
   };
 
+  /* The badge and the Hours & Availability section speak the ONE evaluator's words
+     (window.SokoniShopHours.headline over the server's verdict — /sokoni-shop-hours.js is byte-identical to
+     functions/shared/shop-hours.js). This page decides nothing about open/closed itself (2026-09-29): it used to
+     compute "today" on a hard-coded clock and could only say Open/Closed — no closing soon, no break, no
+     "opens tomorrow at 8:00 AM", no temporary closure. */
+  const _TONE_CLASS = { open: 'open', soon: 'soon', break: 'break', closed: 'closed', info: 'info' };
+  function _hl(availability) {
+    const H = window.SokoniShopHours;
+    if (H && availability && availability.status) return H.headline(availability);
+    /* an older server (no status yet): the reason alone */
+    const spec = _AVAILABILITY_LABEL[availability && availability.reason] ||
+      { label: availability && availability.open ? 'Open' : 'Closed', cls: availability && availability.open ? 'open' : 'closed' };
+    return { tone: spec.cls === 'unavailable' ? 'closed' : spec.cls, title: spec.label, detail: '' };
+  }
+
   function _renderAvailability(availability) {
     const osEl = document.getElementById('msOpenStatus');
     if (!osEl) return;
     if (!availability) { osEl.hidden = true; return; }   /* unknown → say nothing */
-
-    const spec = _AVAILABILITY_LABEL[availability.reason] ||
-      { label: availability.open ? 'Open' : 'Closed', cls: availability.open ? 'open' : 'closed' };
-    osEl.textContent = spec.label;
-    osEl.className = 'ms-open-status ' + spec.cls;
+    const hl = _hl(availability);
+    osEl.innerHTML = '<b>' + _esc(hl.title) + '</b>' + (hl.detail ? '<span class="ms-open-detail">' + _esc(hl.detail) + '</span>' : '');
+    osEl.className = 'ms-open-status ' + (_TONE_CLASS[hl.tone] || 'closed');
+    osEl.setAttribute('role', 'status');
     osEl.hidden = false;
 
-    /* Fulfilment is a separate question from open/closed: a shop can be open for
-       collection while its riders are stood down. Only shown when the shop is open,
-       because "Delivery" beside "Closed" reads as an offer it cannot honour. */
+    /* Fulfilment is its own answer: delivery and pickup can each be off while the shop is open. Shown while the
+       shop is open (or closing soon), because "Delivery" beside "Closed" reads as an offer it cannot honour. */
     const fEl = document.getElementById('msFulfilment');
     if (fEl) {
       const modes = [];
-      if (availability.delivery) modes.push('🛵 Delivery');
-      if (availability.pickup)   modes.push('🏬 Pickup');
-      const show = availability.open && modes.length;
+      if (availability.delivery) modes.push('🛵 Delivery'); else modes.push('🛵 No delivery');
+      if (availability.pickup)   modes.push('🏬 Pickup');   else modes.push('🏬 No pickup');
+      const show = !!availability.open;
       fEl.textContent = show ? modes.join('  ·  ') : '';
       fEl.hidden = !show;
     }
   }
 
   /**
-   * The opening-hours calendar, drawn from the schedule the seller actually manages.
-   * Rendered only when there is a real timetable — an empty week grid tells a customer
-   * nothing and implies the shop never opens.
+   * HOURS & AVAILABILITY — the schedule the seller manages, today first, breaks and special dates stated.
+   * Rendered only when there is something real to show; "today" is the SHOP's date from the server verdict.
    */
   const _DAY_LABEL = [['mon', 'Mon'], ['tue', 'Tue'], ['wed', 'Wed'], ['thu', 'Thu'],
                       ['fri', 'Fri'], ['sat', 'Sat'], ['sun', 'Sun']];
 
-  function _renderSchedule(schedule) {
+  function _renderSchedule(schedule, availability) {
     const wrap = document.getElementById('msHours');
     const body = document.getElementById('msHoursBody');
     if (!wrap || !body) return;
+    const H = window.SokoniShopHours;
     const hours = schedule && schedule.hours;
-    if (!hours || !Object.keys(hours).length) { wrap.hidden = true; return; }
+    const hasHours = !!(hours && Object.keys(hours).length);
+    const tc = availability && availability.temporaryClosure;
+    const appointment = availability && availability.appointment;
+    if (!hasHours && !tc && !appointment) { wrap.hidden = true; return; }
 
-    /* EAT (UTC+3) — the shop's clock, not the visitor's, so a customer abroad is not
-       told a Nairobi shop is open on their own timezone's Tuesday. */
-    const nowEat = new Date(Date.now() + 180 * 60000);
-    const todayKey = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][nowEat.getUTCDay()];
+    const fmtP = (periods) => (H ? H.periodsText(periods) : (periods || []).map(p => p.open + ' – ' + p.close).join(', ') || 'Closed');
+    const todayYmd = (availability && availability.date) || new Date(Date.now() + 180 * 60000).toISOString().slice(0, 10);
+    const todayKey = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date(todayYmd + 'T12:00:00Z').getUTCDay()];
+    const hl = availability ? _hl(availability) : null;
 
-    body.innerHTML = _DAY_LABEL.map(([key, label]) => {
-      const cfg = hours[key];
-      const periods = cfg && Array.isArray(cfg.periods) ? cfg.periods : [];
-      const text = (!cfg || cfg.closed || !periods.length)
-        ? 'Closed'
-        : periods.map(p => _esc(p.open) + ' – ' + _esc(p.close)).join(', ');
-      const isToday = key === todayKey;
-      return '<div class="ms-hours-row' + (isToday ? ' is-today' : '') + '">' +
-               '<span class="ms-hours-day">' + label + (isToday ? ' · today' : '') + '</span>' +
-               '<span class="ms-hours-val">' + text + '</span>' +
-             '</div>';
-    }).join('');
+    let html = '';
+    if (hl) {
+      html += '<div class="ms-hours-now ' + (_TONE_CLASS[hl.tone] || 'closed') + '"><span class="ms-hours-dot" aria-hidden="true"></span>' +
+        '<div><div class="ms-hours-now-t">' + _esc(hl.title) + '</div>' + (hl.detail ? '<div class="ms-hours-now-d">' + _esc(hl.detail) + '</div>' : '') +
+        (tc && tc.note ? '<div class="ms-hours-now-d">“' + _esc(tc.note) + '”</div>' : '') + '</div></div>';
+    }
+    if (appointment) html += '<p class="ms-hours-note">This business works by appointment — choose a time when you book.</p>';
+    if (hasHours) {
+      const todayPeriods = (availability && Array.isArray(availability.today)) ? availability.today : ((hours[todayKey] && !hours[todayKey].closed && hours[todayKey].periods) || []);
+      const sorted = todayPeriods.slice().sort((a, b) => String(a.open).localeCompare(String(b.open)));
+      const breaks = [];
+      for (let k = 1; k < sorted.length; k++) if (String(sorted[k].open) > String(sorted[k - 1].close)) breaks.push((H ? H.fmt12(sorted[k - 1].close) : sorted[k - 1].close) + ' – ' + (H ? H.fmt12(sorted[k].open) : sorted[k].open));
+      html += '<div class="ms-hours-today"><span class="ms-hours-day">Today</span><span class="ms-hours-val">' + _esc(fmtP(sorted)) + '</span></div>';
+      if (breaks.length) html += '<div class="ms-hours-break">☕ Break ' + _esc(breaks.join(', ')) + '</div>';
+      html += _DAY_LABEL.map(([key, label]) => {
+        const cfg = hours[key];
+        const periods = cfg && !cfg.closed && Array.isArray(cfg.periods) ? cfg.periods : [];
+        const isToday = key === todayKey;
+        return '<div class="ms-hours-row' + (isToday ? ' is-today' : '') + '">' +
+                 '<span class="ms-hours-day">' + label + (isToday ? ' · today' : '') + '</span>' +
+                 '<span class="ms-hours-val">' + _esc(periods.length ? fmtP(periods) : 'Closed') + '</span>' +
+               '</div>';
+      }).join('');
+    }
+    body.innerHTML = html;
 
-    /* A date override is the seller contradicting their own timetable on purpose, so it
-       is stated rather than silently folded into the grid. */
+    /* Special dates coming up — the seller contradicting their own timetable on purpose, so stated. */
     const ovEl = document.getElementById('msHoursOverride');
     if (ovEl) {
-      const ymd = nowEat.toISOString().slice(0, 10);
-      const ov = schedule.overrides && schedule.overrides[ymd];
-      if (ov) {
-        ovEl.textContent = ov.closed === true
-          ? '⚠️ Closed today (special closure)'
-          : '⭐ Open today on special hours';
+      const ovs = (schedule && schedule.overrides) || {};
+      const keys = Object.keys(ovs).filter(k => k >= todayYmd).sort().slice(0, 5);
+      if (keys.length) {
+        ovEl.innerHTML = '<div class="ms-hours-sp-t">Special dates</div>' + keys.map(k => {
+          const o = ovs[k] || {};
+          const txt = o.closed === true ? 'Closed' : (Array.isArray(o.periods) && o.periods.length ? fmtP(o.periods) : 'Open all day');
+          return '<div class="ms-hours-sp">' + _esc(k === todayYmd ? 'Today' : k) + (o.label ? ' · ' + _esc(o.label) : '') + ' <span>' + _esc(txt) + '</span></div>';
+        }).join('');
         ovEl.hidden = false;
       } else {
         ovEl.hidden = true;
@@ -694,7 +724,7 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
        `data.availability` is null when it could not be resolved, and the renderer
        hides the badge rather than inventing a state. */
     _renderAvailability(_state.availability);
-    _renderSchedule(_state.schedule);
+    _renderSchedule(_state.schedule, _state.availability);
 
     // Response time badge
     if (config.responseTime) {
@@ -799,9 +829,11 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
       }
     }
 
-    // Business hours
-    if (config.hours) {
-      const hoursEl = document.getElementById('msHours');
+    // Business hours — the LEGACY minishopConfig.hours store. Shown only for a shop with no canonical schedule;
+    // otherwise it would contradict Hours & Availability. (It wrote into the SECTION's #msHours through a
+    // duplicate id; the about block is #msAboutHours now.)
+    if (config.hours && !(_state.schedule && _state.schedule.hours)) {
+      const hoursEl = document.getElementById('msAboutHours');
       if (hoursEl) {
         const days = [
           { key: 'mon', label: 'Mon' }, { key: 'tue', label: 'Tue' },

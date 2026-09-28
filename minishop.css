@@ -383,6 +383,13 @@ ul, ol {
   color: var(--ms-warning, #f5a623);
 }
 
+/* 2026-09-29 — the evaluator's tones: closing soon / on a break / by appointment, plus the "closes at …" line */
+.ms-open-status { flex-wrap: wrap; }
+.ms-open-status.soon::before, .ms-open-status.break::before { content: "●"; color: var(--ms-warning, #f5a623); }
+.ms-open-status.info::before { content: "●"; color: #00c2ff; }
+.ms-open-detail { font-weight: 600; color: var(--ms-text-muted); }
+.ms-open-detail::before { content: "· "; }
+
 /* Fulfilment modes — shown only while the shop is open. */
 .ms-fulfilment {
   font-size: 12px;
@@ -440,6 +447,26 @@ ul, ol {
 .ms-hours-day { color: var(--ms-text-muted); }
 .ms-hours-row.is-today .ms-hours-day { color: var(--ms-accent, #71ff00); }
 .ms-hours-val { text-align: right; }
+
+/* Hours & availability — the status first, then today, breaks, the week and special dates */
+.ms-hours-now { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 12px; margin-bottom: 10px;
+  background: rgba(113, 255, 0, 0.07); border: 1px solid rgba(113, 255, 0, 0.25); }
+.ms-hours-now.soon, .ms-hours-now.break { background: rgba(245, 166, 35, 0.08); border-color: rgba(245, 166, 35, 0.3); }
+.ms-hours-now.closed { background: rgba(255, 82, 82, 0.07); border-color: rgba(255, 82, 82, 0.28); }
+.ms-hours-now.info { background: rgba(0, 194, 255, 0.07); border-color: rgba(0, 194, 255, 0.28); }
+.ms-hours-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; flex: 0 0 auto; background: var(--ms-success, #71ff00); }
+.ms-hours-now.soon .ms-hours-dot, .ms-hours-now.break .ms-hours-dot { background: var(--ms-warning, #f5a623); }
+.ms-hours-now.closed .ms-hours-dot { background: var(--ms-danger, #ff5252); }
+.ms-hours-now.info .ms-hours-dot { background: #00c2ff; }
+.ms-hours-now-t { font-size: 15px; font-weight: 800; }
+.ms-hours-now-d { font-size: 13px; color: var(--ms-text-muted); margin-top: 2px; }
+.ms-hours-today { display: flex; justify-content: space-between; gap: 12px; padding: 6px 8px; font-size: 14px; font-weight: 800; }
+.ms-hours-break { font-size: 12.5px; color: var(--ms-warning, #f5a623); padding: 0 8px 8px; }
+.ms-hours-note { font-size: 13px; color: var(--ms-text-muted); margin: 0 0 10px; }
+.ms-hours-override { margin: 10px 0 0; color: inherit; font-weight: 500; }
+.ms-hours-sp-t { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--ms-text-muted); margin-bottom: 4px; }
+.ms-hours-sp { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 4px 8px; }
+.ms-hours-sp span { color: var(--ms-warning, #f5a623); font-weight: 700; text-align: right; }
 
 .ms-response-badge {
   font-size: 12px;
