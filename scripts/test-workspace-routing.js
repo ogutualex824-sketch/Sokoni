@@ -6,8 +6,8 @@
  *   homes       an approved provider → its workspace route; a shop owner → merchant-v2 (several → choose-shop); an
  *               approved driver → driver.html; an organiser → event-manager; an ACTIVE creator → creator-studio; an
  *               ACTIVE venue → venue-manager; several at once → all of them; nothing → "apply"
- *   never       a self-selected onboarding role (accounts.currentRole) and a pending venue give NO home; an UNROUTED
- *               category (hotel) gives its message, not a dashboard
+ *   never       a self-selected onboarding role (accounts.currentRole) and a pending venue give NO home; a hotel (owner
+ *               2026-09-28) goes to the provider dashboard with its accommodation profile
  *   one map     every route source — profile switcher, onboarding.html, profile.js, shared-header, the server's
  *               DASHBOARD_MAP, the approval notification — sends business roles to workspace.html; none of them names
  *               a page that does not exist; the dead my-bookings.html links are gone
@@ -66,7 +66,7 @@ const routes = (h) => h.homes.map((x) => x.route).join(',');
   const m = await H('multi', { rider: true });
   ck('several workspaces → all of them (business, shop, driver)', routes(m) === 'provider-dashboard.html,merchant-v2.html,driver.html', routes(m));
   const hot = await H('hotel1');
-  ck('an UNROUTED category (hotel) → its message, no dashboard', hot.homes.length === 1 && hot.homes[0].route === null && /being built/.test(hot.homes[0].message || ''));
+  ck('a hotel → the provider dashboard (accommodation profile, owner 2026-09-28)', hot.homes.length === 1 && hot.homes[0].route === 'provider-dashboard.html', hot.homes);
   const u = await H('unc1');
   ck('UNCLASSIFIED → the workspace shell with the "confirming your business" message', u.homes[0] && /confirming/.test(u.homes[0].message || ''));
   ck('a SELF-SELECTED onboarding role gives NO home ("apply")', (await H('selfpick')).apply === true && (await H('selfpick')).homes.length === 0);
@@ -125,9 +125,13 @@ const routes = (h) => h.homes.map((x) => x.route).join(',');
       await p.waitForSelector('#stApply.active', { timeout: 8000 }).catch(() => {});
       ck(`${w}: nothing approved → "Register my business"`, await p.isVisible('#stApply a[href="onboarding.html"]'));
       await p.context().close();
-      p = await open('hotel1');
-      await p.waitForSelector('#stChoose.active', { timeout: 8000 }).catch(() => {});
-      ck(`${w}: an unrouted hotel → its message, no link`, /being built/.test(await p.textContent('#wsList')) && (await p.$$('#wsList a')).length === 0);
+      /* a hotel has ONE home now (owner 2026-09-28: accommodation profile) → the resolver goes straight there */
+      p = await H2.page(browser, { user: { uid: 'hotel1', claims: {} }, viewport: { width: w, height: 860 } });
+      const hnavs = []; p.on('framenavigated', (fr) => { if (fr === p.mainFrame()) hnavs.push(new URL(fr.url()).pathname); });
+      await p.goto(H2.BASE + '/workspace.html');
+      await p.waitForFunction(() => !/workspace\.html/.test(location.pathname), null, { timeout: 8000 }).catch(() => {});
+      await p.waitForTimeout(300);
+      ck(`${w}: a hotel → straight to the provider dashboard`, hnavs[0] === '/workspace.html' && hnavs.includes('/provider-dashboard.html'), hnavs);
       await p.context().close();
       p = await open(null);
       await p.waitForSelector('#stSignin.active', { timeout: 8000 }).catch(() => {});

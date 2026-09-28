@@ -45,7 +45,10 @@
     });
     var box = document.getElementById('hcWorkspace');
     var note = w.message || MESSAGE[w.reason] || null;
-    if (box && note && w.state !== 'AVAILABLE' && w.state !== 'LEGACY_UNCLASSIFIED') {
+    /* A non-AVAILABLE workspace always explains itself; an AVAILABLE one does so only when the server sends a message —
+       a profile notice for capabilities that apply but are not built yet (a hotel's stays), which the sidebar would
+       otherwise hide without a word. */
+    if (box && note && (w.state !== 'AVAILABLE' || w.message) && w.state !== 'LEGACY_UNCLASSIFIED') {
       box.innerHTML = '<div class="hc-ws-head"><span class="hc-ws-cat">' + esc(w.label || 'Your business') + '</span></div>' +
         '<ul class="hc-ws-notes"><li>' + esc(note) + '</li></ul>';
       box.hidden = false;

@@ -9,7 +9,8 @@
  *         dj → artist_creator → provider-dashboard.html · hospital → a Healthcare category → provider-dashboard.html
  *         retail-shop → retail_store → merchant-v2.html · mechanic → auto_services · courier → delivery → driver.html
  *   K3  current truth (owner 2026-09-28): food + merchant categories resolve to SELLER (a shop is provisioned);
- *       hotel / property UNROUTED; "other" ADMIN_REVIEW; nothing is routed to merchant-v2 without a shop
+ *       hotel / property route to the provider dashboard (accommodation / property profiles); nothing UNROUTED;
+ *       "other" ADMIN_REVIEW; nothing is routed to merchant-v2 without a shop
  *   K4  every C1 category the modal can reach has a ROUTE_OF entry (no silent NO_ROUTE_ENTRY)
  *   K5  --gate exits non-zero while any gap remains (it is a gate, not a report that always passes)
  *   K6  fails CLOSED (exit 2) when the category list cannot be parsed
@@ -36,9 +37,10 @@ ck('K2  positive controls through the real approval path',
   ['dj', 'hospital', 'retail-shop', 'mechanic', 'courier'].map((id) => id + '→' + row(id).c1 + '→' + row(id).route));
 /* owner decisions 2026-09-28: food → merchant-v2 as a SELLER (so a shop is provisioned); hotel / property still
    unrouted; SACCO / forex / other are ADMIN REVIEW ONLY; no merchant-v2 category may land without a shop */
-ck('K3  current truth: restaurant ROUTED as seller; hotel / property UNROUTED; "other" ADMIN_REVIEW; none ROUTED_NO_SHOP',
+ck('K3  current truth: restaurant ROUTED as seller; hotel / property ROUTED to the provider dashboard; "other" ADMIN_REVIEW; none ROUTED_NO_SHOP',
   row('restaurant').verdict === 'ROUTED' && row('restaurant').role === 'seller' && row('bakery').role === 'seller'
-  && row('hotel').verdict === 'UNROUTED' && row('landlord').verdict === 'UNROUTED' && row('other').verdict === 'ADMIN_REVIEW'
+  && row('hotel').verdict === 'ROUTED' && row('hotel').route === 'provider-dashboard.html' && row('landlord').verdict === 'ROUTED'
+  && J.summary.unrouted === 0 && row('other').verdict === 'ADMIN_REVIEW'
   && J.summary.routedNoShop === 0 && row('supermarket').role === 'seller' && row('manufacturer').role === 'seller',
   ['restaurant', 'bakery', 'supermarket', 'manufacturer', 'hotel', 'landlord', 'other'].map((id) => id + ':' + row(id).role + '/' + row(id).verdict));
 ck('K4  every reachable C1 category has a ROUTE_OF entry', J.summary.noRouteEntry === 0, J.summary.noRouteEntry);

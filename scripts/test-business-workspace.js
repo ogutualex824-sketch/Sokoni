@@ -4,7 +4,8 @@
  *
  * PROVES
  *   routes       every C1 category has an explicit route decision; each route is a page that EXISTS, or null
- *                (hotel / property are UNROUTED — their pages are demo-grade; restaurant → merchant-v2, owner 2026-09-28)
+ *                (owner 2026-09-28: restaurant → merchant-v2; hotel → provider dashboard + accommodation profile, stays
+ *                NOT_IMPLEMENTED until the stay engine; property → provider dashboard + listings, NOT_IMPLEMENTED)
  *   six states   AVAILABLE · LOCKED · NOT_APPLICABLE · NOT_IMPLEMENTED · COMMERCIAL_DECISION_REQUIRED ·
  *                PENDING_APPROVAL — each appears where it should, and "not available" ≠ "not relevant"
  *   categories   a doctor gets no POS/products/inventory/rate cards/booking PIN; a plumber gets quotes and calls;
@@ -56,8 +57,10 @@ const st = (w, m) => (w.modules[m] || {}).state;
   ck('every C1 category has an explicit route decision (a page or UNROUTED)', missingRoute.length === 0, missingRoute);
   const badPages = [...new Set(Object.values(BW.ROUTE_OF).filter(Boolean))].filter((p) => !fs.existsSync(Path.join(ROOT, p)));
   ck('every route is a page that exists', badPages.length === 0, badPages);
-  /* owner 2026-09-28: food businesses run on merchant-v2 (menu = products); hotel / property stay UNROUTED until their workspaces land */
-  ck('hotel and property are UNROUTED; restaurant is routed to merchant-v2', BW.ROUTE_OF.hotel === null && BW.ROUTE_OF.property === null && BW.ROUTE_OF.restaurant === 'merchant-v2.html');
+  /* owner 2026-09-28: food → merchant-v2 (menu = products); hotel → accommodation profile; property → property profile */
+  ck('restaurant → merchant-v2; hotel and property → the provider dashboard (accommodation / property profiles)',
+    BW.ROUTE_OF.restaurant === 'merchant-v2.html' && BW.ROUTE_OF.hotel === 'provider-dashboard.html' && BW.ROUTE_OF.property === 'provider-dashboard.html'
+    && BW.PROFILE_OF.hotel === 'accommodation' && BW.PROFILE_OF.property === 'property');
   ck('owner routes: Healthcare/Legal/trades → provider-dashboard; shop → merchant-v2; organiser → event-manager; venue → venue-manager; delivery → driver app',
     BW.ROUTE_OF.clinician === 'provider-dashboard.html' && BW.ROUTE_OF.lawyer === 'provider-dashboard.html' && BW.ROUTE_OF.trades === 'provider-dashboard.html'
     && BW.ROUTE_OF.retail_store === 'merchant-v2.html' && BW.ROUTE_OF.event_organizer === 'event-manager.html' && BW.ROUTE_OF.venue === 'venue-manager.html' && BW.ROUTE_OF.delivery === 'driver.html');
@@ -94,8 +97,10 @@ const st = (w, m) => (w.modules[m] || {}).state;
     ['pos', 'products', 'inventory', 'quotes', 'bookingPin', 'calls'].every((m) => st(W.doc1, m) === S.NOT_APPLICABLE) && st(W.doc1, 'customers') === S.AVAILABLE, W.doc1.modules);
   ck('a pharmacy (Healthcare row): its shop modules exist in its matrix but the screens are deferred → NOT_IMPLEMENTED, with or without a plan',
     ['pos', 'products', 'inventory', 'delivery'].every((m) => st(W.pharm1, m) === S.NOT_IMPLEMENTED && st(W.pharm0, m) === S.NOT_IMPLEMENTED));
-  ck('a hotel: approved + classified but UNROUTED — NOT_IMPLEMENTED, a message, Overview + Settings only',
-    W.hotel1.route === null && W.hotel1.state === S.NOT_IMPLEMENTED && /being built/.test(W.hotel1.message || '') && st(W.hotel1, 'overview') === S.AVAILABLE && st(W.hotel1, 'bookings') === S.NOT_IMPLEMENTED);
+  ck('a hotel: routed to the provider dashboard; rooms / enquiries / reviews AVAILABLE; stays NOT_IMPLEMENTED (STAY_ENGINE_PENDING), never minute slots',
+    W.hotel1.route === 'provider-dashboard.html' && W.hotel1.state === S.AVAILABLE && st(W.hotel1, 'services') === S.AVAILABLE
+    && st(W.hotel1, 'enquiries') === S.AVAILABLE && st(W.hotel1, 'reviews') === S.AVAILABLE
+    && ['bookings', 'availability', 'calendar'].every((m) => st(W.hotel1, m) === S.NOT_IMPLEMENTED && W.hotel1.modules[m].reason === 'STAY_ENGINE_PENDING'), W.hotel1.modules);
   ck('a shop: routed to merchant-v2, whose own authority decides its modules', W.shop1.route === 'merchant-v2.html' && Object.values(W.shop1.modules).every((m) => m.state === S.NOT_APPLICABLE));
   ck('UNCLASSIFIED (approved): PENDING_APPROVAL — no privileged workspace, Overview + Settings only',
     W.unc1.state === S.PENDING_APPROVAL && W.unc1.reason === 'UNCLASSIFIED' && st(W.unc1, 'bookings') === S.PENDING_APPROVAL && st(W.unc1, 'overview') === S.AVAILABLE);

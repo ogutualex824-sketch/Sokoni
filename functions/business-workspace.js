@@ -70,6 +70,9 @@ const MODULES = Object.freeze({
   inventory:     { label: 'Inventory',           section: 'inventory',    implemented: false, why: 'BUSINESS_IDENTITY_PENDING' },
   pos:           { label: 'POS / Till',          section: 'pos',          implemented: false, why: 'BUSINESS_IDENTITY_PENDING' },
   delivery:      { label: 'Delivery',            section: 'delivery',     implemented: false, why: 'BUSINESS_IDENTITY_PENDING' },
+  /* Property (owner, 2026-09-28): listings on propertyListings (owner binding 9a48051 / aecf7a7) — the dashboard
+     screen is the next build, so it is surfaced as NOT_IMPLEMENTED, never hidden. */
+  listings:      { label: 'Listings',            section: 'listings',     implemented: false, why: 'LISTINGS_MODULE_PENDING' },
 });
 Object.values(MODULES).forEach((m) => Object.freeze(m));   /* each entry too — no caller can flip `implemented` */
 const MODULE_KEYS = Object.freeze(Object.keys(MODULES));
@@ -83,6 +86,21 @@ const PROFILES = Object.freeze({
   appointment_shop: ['calls', 'bookedHours', 'staff', 'products', 'inventory', 'pos'],    /* salon, fitness studio */
   learning:         ['calls', 'bookedHours', 'staff'],                                    /* education */
   entertainment:    ['quotes', 'calls', 'bookingPin', 'bookedHours', 'content', 'staff'], /* artists, event services */
+  accommodation:    ['calls', 'staff'],                                                    /* hotel, guesthouse, BnB host */
+  property:         ['calls', 'staff', 'listings'],                                        /* agent, developer, landlord (viewings = bookings) */
+});
+/* Modules a profile NEEDS but whose screen does not yet work for that category — NOT_IMPLEMENTED with the reason,
+   never hidden and never faked. Accommodation: a stay is NIGHTS priced per night; the booking engine books minute
+   slots (booking-service.js), so selling a "room" through it would book a 30-minute room. Until the stay engine
+   lands on the one availability authority, stays are refused server-side (notBuiltFor → bookingCreateService). */
+const PROFILE_NOT_BUILT = Object.freeze({
+  accommodation: Object.freeze({ bookings: 'STAY_ENGINE_PENDING', availability: 'STAY_ENGINE_PENDING', calendar: 'STAY_ENGINE_PENDING' }),
+});
+/* What the dashboard banner tells a business whose profile has NOT_BUILT modules — the sidebar hides every module that
+   is not AVAILABLE, so without this the missing capability would simply vanish. Plain words, never an internal code. */
+const PROFILE_NOTICE = Object.freeze({
+  accommodation: 'Room bookings (stays) are being built. Guests can already find your rooms, enquire and message you; SOKONI will switch stays on when they are ready.',
+  property: 'Listings management is being built. Clients can already find you, enquire and book viewings; SOKONI will switch listings on when it is ready.',
 });
 const PROFILE_OF = Object.freeze({
   trades: 'quoted_service', cleaning: 'quoted_service', it_services: 'quoted_service', professional_services: 'quoted_service',
@@ -90,6 +108,8 @@ const PROFILE_OF = Object.freeze({
   salon: 'appointment_shop', fitness_studio: 'appointment_shop',
   education: 'learning',
   artist_creator: 'entertainment', event_services: 'entertainment',
+  hotel: 'accommodation',   /* owner 2026-09-28: the provider dashboard + an accommodation profile */
+  property: 'property',     /* owner 2026-09-28: the provider dashboard + a Listings module */
 });
 
 /* Where each category's workspace lives. null = UNROUTED (owner, 2026-09-28): no working dashboard exists yet. */
@@ -105,13 +125,11 @@ const ROUTE_OF = Object.freeze({
      a merchant-v2 category a seller. */
   restaurant: 'merchant-v2.html',
   delivery: 'driver.html',
-  hotel: null,        /* bnb-manage.html keeps listings/bookings in the browser — not a working dashboard */
-  property: null,     /* property dashboards read browser storage (sokoni-property.js) — not a working dashboard */
+  /* hotel / property → provider-dashboard.html via PROFILE_OF above (owner, 2026-09-28). bnb-manage.html and the
+     sokoni-property dashboards kept their primary data in the browser and are NOT routed to. */
 });
-const UNROUTED_REASON = Object.freeze({
-  hotel: 'A hotel workspace is being built. Your approval is recorded; SOKONI will switch it on when it is ready.',
-  property: 'A property workspace is being built. Your approval is recorded; SOKONI will switch it on when it is ready.',
-});
+/* No category is unrouted today; a future one names its honest message here. */
+const UNROUTED_REASON = Object.freeze({});
 
 /* Plan catalogues that exist and are enforced today (capability-authority hubs). Everything else: C6. */
 const PLAN_HUB_OF = (category) => (BCAT.HEALTHCARE.includes(category) ? 'healthcare' : (category === 'retail_store' ? 'merchant' : null));
@@ -135,10 +153,23 @@ function modulesForProfile(category, model) {
     const applies = CORE.includes(k) || extras.includes(k);
     if (!applies) { mods[k] = { state: STATE.NOT_APPLICABLE, reason: null }; continue; }
     if (!MODULES[k].implemented) { mods[k] = { state: STATE.NOT_IMPLEMENTED, reason: MODULES[k].why || null }; continue; }
+    const notBuilt = profile && PROFILE_NOT_BUILT[profile] && PROFILE_NOT_BUILT[profile][k];
+    if (notBuilt) { mods[k] = { state: STATE.NOT_IMPLEMENTED, reason: notBuilt }; continue; }
     if (k === 'content' && !(model && model.isCreator)) { mods[k] = { state: STATE.NOT_APPLICABLE, reason: 'NOT_A_CREATOR' }; continue; }
     mods[k] = { state: STATE.AVAILABLE, reason: null };
   }
   return mods;
+}
+
+/**
+ * Pure: the reason `module` is NOT BUILT for this provider's category, or null. For server guards on operations that
+ * reach a provider from OUTSIDE its dashboard (a customer booking) — e.g. bookingCreateService refuses a minute-slot
+ * booking of a hotel room (STAY_ENGINE_PENDING) instead of selling a 30-minute stay.
+ */
+function notBuiltFor(providerDoc, module) {
+  const category = BCAT.categoryOf(providerDoc || {});
+  const profile = category ? PROFILE_OF[category] : null;
+  return (profile && PROFILE_NOT_BUILT[profile] && PROFILE_NOT_BUILT[profile][module]) || null;
 }
 
 /**
@@ -247,7 +278,8 @@ async function workspaceFor(db, uid) {
     try { const c = await db.collection('creators').doc(String(uid)).get(); isCreator = c.exists && String((c.data() || {}).state || '') === 'ACTIVE'; } catch (_) { isCreator = false; }
     modules = modulesForProfile(category, { isCreator });
   }
-  return { found: true, category, label: BCAT.label(category), route, state: STATE.AVAILABLE, reason: null, modules, entitlement, publicEligibility: elig };
+  const notice = PROFILE_NOTICE[PROFILE_OF[category]] || null;
+  return { found: true, category, label: BCAT.label(category), route, state: STATE.AVAILABLE, reason: null, message: notice, modules, entitlement, publicEligibility: elig };
 }
 
 /** Throws failed-precondition unless `module` is AVAILABLE for this account — the server gate (C2b). */
@@ -338,4 +370,4 @@ const _h = {
   },
 };
 
-module.exports = { STATE, MODULES, MODULE_KEYS, CORE, PROFILES, PROFILE_OF, ROUTE_OF, modulesForProfile, healthcareModules, workspaceFor, homeFor, assertModule, gateCalendarModule, gateIfProvider, _h };
+module.exports = { STATE, MODULES, MODULE_KEYS, CORE, PROFILES, PROFILE_OF, PROFILE_NOT_BUILT, ROUTE_OF, modulesForProfile, notBuiltFor, healthcareModules, workspaceFor, homeFor, assertModule, gateCalendarModule, gateIfProvider, _h };

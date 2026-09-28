@@ -15,8 +15,8 @@ Source: hub-register.js CATS (104) + offer.html tiles (0 to provider.html). Gene
 
 ## Summary
 
-- ROUTED to a working dashboard: **96** / 104
-- UNROUTED (approved, but no working dashboard): **5**
+- ROUTED to a working dashboard: **101** / 104
+- UNROUTED (approved, but no working dashboard): **0**
 - UNCLASSIFIED (C1 cannot place it → hidden from discovery, no dashboard): **0**
 - ROUTED TO MERCHANT-V2 WITHOUT A SHOP (decided role is not seller → no shop is provisioned): **0**
 - ADMIN REVIEW ONLY (exempt: AdminOS classifies by hand — C1 ADMIN_REVIEW_ONLY): **3**
@@ -32,7 +32,7 @@ Source: hub-register.js CATS (104) + offer.html tiles (0 to provider.html). Gene
 | `facility` Clinic / Hospital / Facility | provider-dashboard.html | — | hospital, dental, optician, physiotherapy, mental-health, vet | — |
 | `pharmacy` Pharmacy | provider-dashboard.html | — | pharmacy | — |
 | `laboratory` Laboratory | provider-dashboard.html | — | laboratory | — |
-| `hotel` Hotel / BnB | **UNROUTED** | — | bnb, hotel | — |
+| `hotel` Hotel / BnB | provider-dashboard.html | accommodation | bnb, hotel | availability, calendar, bookings, staff |
 | `restaurant` Restaurant / Food business | merchant-v2.html | — | restaurant, cafe, fast-food, bakery, catering, food-truck | — |
 | `trades` Trades & repairs (plumber, electrician…) | provider-dashboard.html | quoted_service | plumbing, electrical, painting, carpentry, landscaping, moving, ac-repair, contractor | staff |
 | `cleaning` Cleaning & laundry | provider-dashboard.html | quoted_service | cleaning, laundry, pest-control | staff |
@@ -48,7 +48,7 @@ Source: hub-register.js CATS (104) + offer.html tiles (0 to provider.html). Gene
 | `event_services` Event services | provider-dashboard.html | entertainment | event-planner | staff |
 | `venue` Venue | venue-manager.html | — | swimming-pool, sports-venue, venue | — |
 | `retail_store` Retail store | merchant-v2.html | — | retail-shop, wholesale, supermarket, hardware, water-supplier, butcher, sports-equipment, auto-parts, boutique, farm, dairy, agri-input, manufacturer, wholesaler, importer | — |
-| `property` Property | **UNROUTED** | — | property-agent, developer, landlord | — |
+| `property` Property | provider-dashboard.html | property | property-agent, developer, landlord | staff, listings |
 | `delivery` Delivery / Courier | driver.html | — | courier, boda-delivery | — |
 | **UNCLASSIFIED** | **UNROUTED** | — | sacco, forex, other | — |
 
@@ -106,11 +106,11 @@ Source: hub-register.js CATS (104) + offer.html tiles (0 to provider.html). Gene
 | auto-parts | Auto Parts / Tyre Shop | car | seller | retail_store (exact) | ROUTED | merchant-v2.html |
 | driving-school | Driving School | car | provider | education (exact) | ROUTED | provider-dashboard.html |
 | insurance-auto | Car Insurance Agent | car | provider | professional_services (exact) | ROUTED | provider-dashboard.html |
-| property-agent | Property Agent / Broker | property | provider | property (exact) | UNROUTED | — |
-| developer | Property Developer | property | provider | property (exact) | UNROUTED | — |
-| landlord | Landlord / Long-Term Rental | property | provider | property (exact) | UNROUTED | — |
-| bnb | BnB / Short-Stay Host | bnb | provider | hotel (exact) | UNROUTED | — |
-| hotel | Hotel / Guesthouse | bnb | provider | hotel (exact) | UNROUTED | — |
+| property-agent | Property Agent / Broker | property | provider | property (exact) | ROUTED | provider-dashboard.html |
+| developer | Property Developer | property | provider | property (exact) | ROUTED | provider-dashboard.html |
+| landlord | Landlord / Long-Term Rental | property | provider | property (exact) | ROUTED | provider-dashboard.html |
+| bnb | BnB / Short-Stay Host | bnb | provider | hotel (exact) | ROUTED | provider-dashboard.html |
+| hotel | Hotel / Guesthouse | bnb | provider | hotel (exact) | ROUTED | provider-dashboard.html |
 | plumbing | Plumber | home-services | provider | trades (exact) | ROUTED | provider-dashboard.html |
 | electrical | Electrician | home-services | provider | trades (exact) | ROUTED | provider-dashboard.html |
 | cleaning | Cleaning Company / Housekeeping | home-services | provider | cleaning (exact) | ROUTED | provider-dashboard.html |

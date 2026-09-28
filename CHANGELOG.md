@@ -1,3 +1,56 @@
+## [2026-09-28] - Hotels / BnBs and property businesses land on the provider dashboard; a hotel room is never sold as a minute slot
+
+**Functions + hosting, NOT deployed.** Branch `slice/c4-category-matrix` (convergence line). These are the owner's
+decisions of 2026-09-28: hotel → provider dashboard + accommodation profile; property → provider dashboard + Listings.
+
+**Proven defect (the REAL `bookingCreateService` on the transactional fake Firestore, at `4e9607b`):** a customer
+booking a hotel's room was ACCEPTED AND WRITTEN as a 60-minute slot.
+- The service booking engine books minute slots.
+- No server-side nightly-stay engine exists; `booking.js` `checkIn/checkOut` is venue attendance, not nights.
+
+**Changed:**
+- **`functions/business-workspace.js`:**
+  - An `accommodation` profile (hotel) and a `property` profile (agent / developer / landlord); both route to
+    `provider-dashboard.html`. No category is UNROUTED any more.
+  - A generic `PROFILE_NOT_BUILT`: modules a profile NEEDS whose screen does not yet work for that category are
+    NOT_IMPLEMENTED with a reason, never hidden or faked.
+    - Accommodation: `bookings` / `availability` / `calendar` = `STAY_ENGINE_PENDING`.
+    - A new `listings` module (property) = `LISTINGS_MODULE_PENDING`.
+  - A `PROFILE_NOTICE`: the workspace carries a plain "being built" message, because the sidebar hides every
+    non-AVAILABLE module and would otherwise omit the capability silently.
+  - A pure `notBuiltFor(providerDoc, module)` for server guards.
+- **`functions/booking-service.js`:** `bookingCreateService` refuses a slot booking when the provider's profile
+  declares bookings NOT BUILT (`WORKSPACE_MODULE_NOT_IMPLEMENTED`, nothing written). It is category-scoped, so no
+  other category's booking changes.
+- **`sokoni-business-workspace.js`:** the banner also shows for an AVAILABLE workspace that carries a server message
+  (the profile notice). Every other AVAILABLE workspace is unchanged.
+
+**Tests:** `scripts/test-accommodation-profile.js` (the real handler; the counterproof runs the `4e9607b` modules from
+temp files inside `functions/`, always removed) gives **6/0**; the counterproof FAILS 5, and the P4 control passes in
+both modes.
+- Hotel: rooms / enquiries / reviews / storefront / earnings AVAILABLE; stays NOT_IMPLEMENTED.
+- Property: viewings AVAILABLE; listings NOT_IMPLEMENTED.
+- A hotel room booking is refused with nothing written; a photographer session books normally.
+- `notBuiltFor` is category-scoped; the hotel workspace carries the notice.
+- **In a real browser** (`test-business-workspace-projection-browser`): the hotel's banner reads "Room bookings
+  (stays) are being built…", and the sidebar shows exactly the server's AVAILABLE modules.
+- Superseded "hotel is UNROUTED" assertions were updated in `test-business-workspace`, `test-workspace-routing` (the
+  browser leg now follows the single home straight to the provider dashboard) and the matrix test.
+
+**Sabotage:** 6/6, byte-identical, no stray temp files.
+
+**Regression (screened first: no suite in the set calls a live endpoint):** 23 booking / workspace / reputation /
+healthcare suites equal the pristine baseline, except the intended ones. The pre-existing entertainment-registry 1
+failure is unchanged.
+
+**Matrix:** **101 / 104** routed, 0 unrouted, 0 unclassified, 3 AdminOS review (exempt). `--gate` passes.
+
+**Next builds (recommended), each its own slice:**
+1. **The stay engine:** nights × rate on the ONE availability authority (capacity = rooms, open 24/7), check-in /
+   check-out dates, IntaSend `service_booking`. Then flip `STAY_ENGINE_PENDING`.
+2. **The property Listings module:** a provider-dashboard section over `propertyListings`, using the owner binding
+   already proven. Then flip `LISTINGS_MODULE_PENDING`.
+
 ## [2026-09-28] - Every "register as a provider" entry reaches the one canonical intake (URL entry into the Register My Business form)
 
 **Hosting, NOT deployed.** Branch `slice/c4-category-matrix` (convergence line).

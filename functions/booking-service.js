@@ -129,6 +129,13 @@ _h.bookingCreateService = async (req) => {
   if (!prov || !ACTIVE_PROVIDER_STATES.includes(prov.status) || prov.acceptsBookings === false) {
     throw new HttpsError('failed-precondition', 'This provider isn’t currently available for bookings.');
   }
+  /* A category whose workspace declares service bookings NOT BUILT takes no slot bookings. A hotel / BnB stay is
+     nights priced per night; this engine books minute slots, so accepting one would sell a 30-minute "room". Refused
+     until the stay engine exists (business-workspace PROFILE_NOT_BUILT) — the dashboard says the same thing. */
+  const notBuilt = require('./business-workspace').notBuiltFor(prov, 'bookings');
+  if (notBuilt) {
+    throw new HttpsError('failed-precondition', 'Online booking for this business is not available yet.', { code: 'WORKSPACE_MODULE_NOT_IMPLEMENTED', reason: notBuilt });
+  }
   /* The ONE availability authority (functions/ent-availability.js) decides bookability too: an
      Entertainment provider whose category requires verification needs a decided application;
      a suspended provider takes no public bookings. */

@@ -6,7 +6,7 @@
  * the server says are AVAILABLE — nothing more, nothing less. No network.
  *
  * Covers: plumber · doctor · salon · artist · artist who is an ACTIVE creator · lawyer · UNCLASSIFIED · LEGACY (pre-C1)
- * · SUSPENDED · hotel (UNROUTED), at 1280 px, plus the plumber and the doctor at 390 px (the phone drawer shows the
+ * · SUSPENDED · hotel (accommodation profile: stays not built yet, a notice), at 1280 px, plus the plumber and the doctor at 390 px (the phone drawer shows the
  * same set). Empty sidebar groups disappear; pending / unclassified / suspended / unrouted businesses get their banner.
  *
  *   node scripts/test-business-workspace-projection-browser.js
