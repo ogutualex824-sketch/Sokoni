@@ -78,6 +78,15 @@ async function enqueue({ collection, docId, operation, data, beforeData, priorit
   const tsEntry = COLLECTION_MAP[collection];
   if (!tsEntry) return; /* not a mapped collection */
 
+  /* THE public-discovery gate (CHANGELOG 243, convergence C3a) — every trigger, reconciler, repair job and backfill
+     reaches the index through this enqueue, so eligibility is decided HERE, once: an ineligible document becomes a
+     DELETE (it can never be re-added by a reconciler), an eligible one is indexed under the SERVER's category. */
+  if (operation !== 'delete') {
+    const prepared = await require('./discovery-eligibility').prepareForIndex(db, collection, docId, data);
+    if (!prepared) { operation = 'delete'; data = null; beforeData = null; }
+    else if (prepared !== data) { data = prepared; beforeData = null; if (operation === 'partial') operation = 'upsert'; }
+  }
+
   const tsCollection = tsEntry.collection;
   const docRef       = db.collection(QUEUE_COL).doc(`${collection}_${docId}`);
   const now          = Date.now();

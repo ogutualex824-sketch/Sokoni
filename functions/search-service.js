@@ -238,7 +238,8 @@ function _buildAlgoliaFilters(filters) {
   if (filters.category && typeof filters.category === 'string') parts.push(`category:"${filters.category.replace(/"/g, '')}"`);
   if (filters.city     && typeof filters.city     === 'string') parts.push(`location.city:"${filters.city.replace(/"/g, '')}"`);
   if (filters.brand    && typeof filters.brand    === 'string') parts.push(`brand:"${filters.brand.replace(/"/g, '')}"`);
-  if (filters.status   && typeof filters.status   === 'string') parts.push(`status:"${filters.status.replace(/"/g, '')}"`);
+  /* CHANGELOG 243 (C3a): the CLIENT never chooses a status — the index holds only publicly eligible records (the
+     discovery gate in algolia-queue / typesense-queue), and a client-supplied status could only widen that. */
   if (typeof filters.priceMin === 'number' && isFinite(filters.priceMin)) parts.push(`price >= ${filters.priceMin}`);
   if (typeof filters.priceMax === 'number' && isFinite(filters.priceMax)) parts.push(`price <= ${filters.priceMax}`);
   if (typeof filters.rating   === 'number' && isFinite(filters.rating))   parts.push(`rating >= ${filters.rating}`);
@@ -673,6 +674,15 @@ exports.searchQuery = onCall(
     /* ── Execute search ──────────────────────────────────────────────── */
     let result;
     let usedEngine = primaryEngine;
+
+    /* CHANGELOG 243 (C3a): on the SERVICES index a category filter must be one of the SERVER's categories
+       (functions/business-category.js) — the client may ASK for a category, but what a provider IS was decided by
+       the server, and an unknown value is refused rather than silently ignored (which would widen the results). */
+    if ((entry.algoliaIndex === 'sokoni_services' || entry.typesenseCollection === 'sokoni_services') && filters && filters.category !== undefined) {
+      if (!require('./business-category').isCategory(filters.category)) {
+        throw new HttpsError('invalid-argument', 'Unknown category.', { code: 'UNKNOWN_CATEGORY' });
+      }
+    }
 
     const tryAlgolia = async () => {
       if (!algoliaConfigured) throw new Error('Algolia not configured for this collection');

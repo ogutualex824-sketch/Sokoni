@@ -1,3 +1,81 @@
+## 2026-09-28 (243) — C3a-1: ONE public-discovery gate for every search index (the server's category, eligibility only)
+
+Convergence slice C3a-1, the first of C3 (verified-only discovery). Not deployed. No production writes. No index was
+touched. Parent: `ac413fe`.
+
+**Before (C3 survey):**
+- Nothing in discovery used C1. Every search facet came from provider-editable `category` / `serviceType` /
+  `subcategory` / `hub`.
+- Pending, suspended, not-searchable and unclassified providers were indexed, and so were the services and profiles
+  of ineligible providers.
+- `searchQuery` passed the client's category through and let the client choose `status`.
+- The daily reconcilers (`algoliaReconcile`, `typesenseReconcile`), `searchFullReindex` and the backfills re-added
+  records whatever their eligibility.
+
+**Now:**
+- **`functions/discovery-eligibility.js` (new)**, `prepareForIndex(db, collection, docId, data)`, is the one
+  predicate:
+  - **providers / providerProfiles / providerServices** are indexable only when the OWNING provider is publicly
+    eligible (`business-category.publicEligibility`: approved/active, not suspended, searchable, CLASSIFIED by the
+    server). A paused or removed service never is.
+  - Their facet `category` is the C1 category (`categoryOf`), with `categories` / `categoryLabel` from it.
+    `serviceType` / `subcategory` are cleared and `hub` is `services`. The provider's own words survive only as the
+    non-facet `displayCategory`.
+  - **Legacy registries are DE-INDEXED** (owner decision 2026-09-28): `mechanics`, `lawyers`, `healthProviders`,
+    `homeServiceProviders`, `services`. The collections are untouched.
+  - **bnbListings** are indexed only when `active` (the approval gate, CHANGELOG 242).
+  - **Every other collection passes unchanged**; shop and product discovery is out of this slice.
+- **The choke point:** `algolia-queue.enqueue` and `typesense-queue.enqueue` call it. Every trigger, both
+  reconcilers, `searchFullReindex`, `searchScheduledReconcile` and the backfills reach an index through them.
+  - An ineligible UPSERT becomes a DELETE, so no reconciler or backfill can ever re-add it.
+  - An eligible one is indexed with the C1 category, and an Algolia partial update becomes a full upsert so the
+    facet is replaced.
+- **The Typesense admin reindex** (`typesense-admin.js`) bypasses the queue, so it applies the same predicate with a
+  per-page provider cache.
+- **`searchQuery`:**
+  - on the services index a category filter must be a server category, and anything else is refused
+    (`UNKNOWN_CATEGORY`) rather than silently widened;
+  - the client can no longer choose `status` in the Algolia filter.
+
+**Owner decisions applied:**
+- Legacy UNCLASSIFIED providers (approved before C1) are not discoverable until AdminOS classifies them. They are in
+  the Business Categories queue, and their dashboards keep working (C2).
+- The legacy registries are de-indexed.
+- `businesses` is the MERCHANT shop projection (`sokoni_shops`), not a legacy registry, so it is left alone. Shop
+  discovery is out of this slice.
+
+**Not in C3a-1** (next):
+- C3a-2: a server directory callable replacing the client hub directories' raw Firestore reads, and
+  `providerSearchProviders`.
+- C3b-1: CASCADE. When a provider's eligibility or category flips, its services and profile are re-queued. Today they
+  change only when their own document changes, but the queue gate already refuses them on any later write.
+- C3b-2: a paged, batched retirement job for records ALREADY in the index, sized to the Typesense queue limits
+  (10,000 per run; the DLQ alert fires above 50). NOT run.
+- The Typesense backup restore (`typesense-backup.js`) copies an index snapshot. It is an admin disaster-recovery
+  action, documented and not gated.
+
+**Files:**
+- New: `functions/discovery-eligibility.js`, `scripts/test-discovery-index.js`.
+- Changed: `functions/algolia-queue.js`, `functions/typesense-queue.js`, `functions/typesense-admin.js`,
+  `functions/search-service.js`, `scripts/sabotage-event-ops.js`.
+
+**API:** `searchQuery` refuses an unknown services category (`UNKNOWN_CATEGORY`) and ignores a client `status`.
+**Security:** discovery follows the server's classification and eligibility, never provider-editable fields.
+**Breaking:** unclassified and legacy providers leave public search on their next index write, and legacy registries
+leave search. Production has 11 providers.
+
+**Tests:**
+- `scripts/test-discovery-index.js`: **25/0**.
+- Sabotage `--group=disc`: **11/11 caught**, restore byte-identical.
+- Baseline vs `ac413fe`: **52/52 Node suites identical**. (The count is 52, not 55 as first stated.)
+- The 3 Jest search suites (`algolia-sync`, `search-monitor`, `search-worker`) are **excluded by the project's jest
+  `testPathIgnorePatterns`**, so `npm test` runs none of them.
+  - Forced with `--testPathIgnorePatterns=/node_modules/`, they give identical per-test results in both trees:
+    138 / 4 / 3 passed, 0 failed.
+  - Each suite is still reported as failed, the same in both trees, because of a pre-existing async teardown error
+    ("Cannot log after tests are done").
+  - Neither C3a-1 nor this entry changes that.
+
 ## 2026-09-28 (242) — Approval gate: creation is not publication (venues, BnB listings, food menus)
 
 The approval/publication hardening slice between C2 and C3 (owner decision 2026-09-28: approval before public). It

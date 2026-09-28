@@ -86,6 +86,7 @@ const SUITES = {
   wsproj:   ['node', ['scripts/test-business-workspace-projection-browser.js']],
   pubgate:  ['node', ['scripts/test-publication-gate.js']],
   pubgaterules: ['node', ['scripts/run-rules-suite.js', 'scripts/test-publication-gate-rules.js']],
+  disc:     ['node', ['scripts/test-discovery-index.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -1391,6 +1392,30 @@ const M = [
     from: "  allow read:   if isAdmin() || (isAuthed() && request.auth.uid == restaurantId) || approvedRestaurant(restaurantId);", to: "  allow read:   if true;", expect: /cannot read an unapproved restaurant/ },
   { group: 'pubgate', browser: false, name: "the restaurant check ignores the category", file: "firestore.rules.build", suite: "pubgaterules",
     from: "  && get(/databases/$(database)/documents/providers/$(id)).data.get('business', {}).get('category', '') == 'restaurant';", to: "  ;", expect: /NON-restaurant/ },
+
+  /* ── C3a-1: ONE public-discovery gate for every search index (CHANGELOG 243) ── */
+  { group: 'disc', browser: false, name: "the Algolia queue skips the discovery gate", file: "functions/algolia-queue.js", suite: 'disc',
+    from: "    const prepared = await require('./discovery-eligibility').prepareForIndex(_db(), collection, docId, data);", to: "    const prepared = data;", expect: /Algolia: an ineligible UPSERT|Algolia: an eligible PARTIAL|legacy registry upsert/ },
+  { group: 'disc', browser: false, name: "the Typesense queue skips the discovery gate", file: "functions/typesense-queue.js", suite: 'disc',
+    from: "    const prepared = await require('./discovery-eligibility').prepareForIndex(db, collection, docId, data);", to: "    const prepared = data;", expect: /Typesense: an ineligible|Typesense: an eligible/ },
+  { group: 'disc', browser: false, name: "the facet trusts the provider's free-text category", file: "functions/discovery-eligibility.js", suite: 'disc',
+    from: "    category: elig.category,                       /* the SERVER's category — the only facet */", to: "    category: data.category || elig.category,", expect: /NOT its free-text|OWNER's C1 category|C1 category/ },
+  { group: 'disc', browser: false, name: "the editable serviceType still reaches the facet", file: "functions/discovery-eligibility.js", suite: 'disc',
+    from: "    serviceType: null,\n", to: "", expect: /never reach a facet/ },
+  { group: 'disc', browser: false, name: "an unclassified provider is discoverable", file: "functions/discovery-eligibility.js", suite: 'disc',
+    from: "  if (!elig.eligible) return null;", to: "  if (!elig.eligible && !(elig.reasons.length === 1 && elig.reasons[0] === 'UNCLASSIFIED')) return null;", expect: /legacy \(approved before C1|unclassified → NOT indexed|ineligible \(unclassified/ },
+  { group: 'disc', browser: false, name: "a service does not follow its owner", file: "functions/discovery-eligibility.js", suite: 'disc',
+    from: "    prov = collection === 'providers' ? data : (s && s.exists ? s.data() : null);", to: "    prov = collection === 'providers' ? data : { status: 'active', business: { category: 'trades' } };", expect: /ineligible \(unclassified \/ legacy \/ pending\) provider|no owner|profile follows/ },
+  { group: 'disc', browser: false, name: "the legacy registries are indexed again", file: "functions/discovery-eligibility.js", suite: 'disc',
+    from: "  if (DEINDEXED.includes(collection)) return null;", to: "", expect: /legacy registries never reach|legacy registry upsert/ },
+  { group: 'disc', browser: false, name: "an eligible partial update keeps the stale facet (not converted to a full upsert)", file: "functions/algolia-queue.js", suite: 'disc',
+    from: "    else if (prepared !== data) { data = prepared; beforeData = null; if (operation === 'partial') operation = 'upsert'; }", to: "    else if (prepared !== data) { data = prepared; }", expect: /eligible PARTIAL becomes a full UPSERT/ },
+  { group: 'disc', browser: false, name: "the Typesense admin reindex bypasses the gate", file: "functions/typesense-admin.js", suite: 'disc',
+    from: "          if (!prepared) continue;\n          const transformed = transformer(doc.id, prepared);", to: "          const transformed = transformer(doc.id, doc.data());", expect: /admin reindex prepares/ },
+  { group: 'disc', browser: false, name: "searchQuery accepts any category on the services index", file: "functions/search-service.js", suite: 'disc',
+    from: "      if (!require('./business-category').isCategory(filters.category)) {", to: "      if (false) {", expect: /unknown category on the services index is REFUSED/ },
+  { group: 'disc', browser: false, name: "the client may choose status again", file: "functions/search-service.js", suite: 'disc',
+    from: "  if (typeof filters.priceMin === 'number' && isFinite(filters.priceMin)) parts.push(`price >= ${filters.priceMin}`);", to: "  if (filters.status && typeof filters.status === 'string') parts.push(`status:\"${filters.status}\"`);\n  if (typeof filters.priceMin === 'number' && isFinite(filters.priceMin)) parts.push(`price >= ${filters.priceMin}`);", expect: /can no longer choose `status`/ },
 ];
 
 const argv = process.argv.slice(2);

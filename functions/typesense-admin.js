@@ -192,9 +192,13 @@ exports.typesenseBackfill = onCall(
       if (snap.empty) break;
 
       const docs = [];
+      const provCache = {};   /* CHANGELOG 243: one provider read per owner per page */
       for (const doc of snap.docs) {
         try {
-          const transformed = transformer(doc.id, doc.data());
+          /* the SAME public-discovery gate the queues apply (this reindex bypasses them) */
+          const prepared = await require('./discovery-eligibility').prepareForIndex(db, firestoreCollection, doc.id, doc.data(), provCache);
+          if (!prepared) continue;
+          const transformed = transformer(doc.id, prepared);
           if (transformed) docs.push({ ...transformed, id: doc.id });
         } catch (_) { failed++; }
       }
