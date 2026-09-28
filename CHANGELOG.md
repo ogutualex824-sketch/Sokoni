@@ -1,3 +1,37 @@
+## [2026-09-28] - C4–C9 gate tooling: every registrable category run through the real approval path to its dashboard
+
+**Tooling + docs only.** No product file changed, and nothing is deployed. Branch `slice/c4-category-matrix` from
+`4e9607b`.
+
+**Why:** the owner's C4–C9 end gate is that every category offered at the registration entry points (the Register My
+Business modal and `offer.html` "What Are You Offering?") lands, on approval, in a working dashboard fitted to it.
+None may be left out. This measures that by EXECUTION, not by reading.
+
+**Added:**
+- **`scripts/audit-category-dashboards.js`**: feeds all **104** `hub-register.js` categories through the REAL approval
+  path:
+  - `resolveRole`, extracted verbatim from `application-lifecycle.js`;
+  - then C1 `categoryFromApplication`, or `healthcare-category` for role `health`;
+  - then C2 `ROUTE_OF` + `modulesForProfile`.
+  - It also lists the `offer.html` tiles and their destinations. Flags: `--json`, `--gate` (exit 1 while any gap
+    remains), and a fail-closed exit 2 on an unparseable input.
+- **`scripts/test-audit-category-dashboards.js`**: **6/0** against known answers.
+  - dj → `artist_creator` → provider dashboard; hospital → healthcare → provider dashboard; retail-shop → merchant-v2;
+    mechanic → `auto_services`; courier → driver.
+  - The known gaps are reported, `--gate` is non-zero while gaps remain, and it fails closed on an unparseable list.
+- **`docs/C4_C9_CATEGORY_DASHBOARD_MATRIX.md`**: the generated matrix.
+
+**The measured result:**
+- **84 / 104** are routed to a working dashboard.
+- **UNROUTED (11):** `restaurant` (restaurant, cafe, fast-food, bakery, catering, food-truck), `hotel` (bnb, hotel)
+  and `property` (property-agent, developer, landlord). They are approved, but no working dashboard exists (`ROUTE_OF`
+  null by design).
+- **UNCLASSIFIED (9):** football-club, basketball, car-rental, sacco, forex, manufacturer, wholesaler, importer,
+  other. Nothing in C1 places them, so they are hidden from discovery and have no dashboard.
+- **27 `offer.html` tiles** send registrants to the legacy `provider.html?cat=` intake, not the canonical application.
+- Provider-dashboard categories that need them show staff / products / inventory / pos as NOT_IMPLEMENTED. Those are
+  waiting on the SOK-ID business identity (owner, 2026-09-28).
+
 ## 2026-09-28 (249) — C4 production baseline: what production actually runs for registration and approval
 
 Documentation only: `docs/C4_PRODUCTION_BASELINE.md`. A read-only production inspection: code and rules only. No
