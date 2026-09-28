@@ -1,3 +1,53 @@
+## 2026-09-28 (237) — P0 port: onboarding can no longer self-mint a role claim (1171a16 onto feat/creator-hub)
+
+A port of `1171a16`, the P0 fix that is DEPLOYED in production (`onboardingdispatch-00006-reg`), onto this branch.
+It is its own isolated commit, landing before convergence slice C2, which touches onboarding routing. Not deployed
+from here. No production writes.
+
+**Why:**
+- `feat/creator-hub` did not contain `1171a16` (`git merge-base --is-ancestor` returned false).
+- This branch's `universal-onboarding.onbActivateRole` still ran
+  `setCustomUserClaims(uid, {…claims, [role]: true, [ck]: profileId})` after only a sign-in check.
+- A functions deploy of `onboardingDispatch` from this branch would therefore have RE-OPENED a closed P0 in production.
+  A self-minted `finance` claim passes the ADE admin guard.
+- Reported by the financial-core session (d6), whose POS lineage lacks it too.
+
+**The fix, taken verbatim from 1171a16:** `onbActivateRole` records the profile, role and draft and mints NOTHING.
+`firebase-admin/auth` is no longer imported by the onboarding rail. Claims come only from `grantAccountRole`, behind
+an admin decision.
+
+**Proof on THIS branch:**
+- **Reproduction** against this branch's pre-fix code (`13597e4`), using the suite's `--expect-vulnerable` mode,
+  25/0:
+  - a stranger mints a `merchant` and a `merchantId` claim with no approval;
+  - every one of the 19 roles is self-mintable;
+  - a real merchant's `merchantId` claim is OVERWRITTEN.
+- **Closure,** `test-onboarding-selfmint-emulator` on Firestore + Auth emulators (private ports), 27/0 + 1 N/A:
+  - no role or identifier claim is minted for any role;
+  - onboarding still records the role and profile, and answers with a dashboard;
+  - a REAL approval still grants the seller and provider claims;
+  - existing seller, merchantId, posRole and tenantId claims survive;
+  - forged, unknown, empty and non-string roles are refused.
+- **`test-claim-minter-allowlist`** 21/0: every file that mints a custom claim is allowlisted, and nothing mints a
+  `merchant` claim.
+
+**Lineage adaptations** (test fixtures only; the fix is untouched):
+- On this branch `grantAccountRole` lives in `functions/role-authority.js` (as `Object.freeze` ROLE_KEY) rather than
+  `application-lifecycle.js`. The allowlist and its role-map check name that file.
+- `sokoni-role-authority.js` (a client role authority) does not exist on this lineage, so section 2b reports **N/A**
+  explicitly, neither PASS nor skipped.
+- This branch's `resolveRole` does not read `requestedRole`. The approved-merchant control declares `type:'seller'`, the
+  vocabulary this branch uses. The control is unchanged: a real approval grants `seller`.
+
+**Files:** `functions/universal-onboarding.js`, `scripts/test-onboarding-selfmint-emulator.js` (new here),
+`scripts/test-claim-minter-allowlist.js` (new here).
+
+**Baseline against `13597e4`:** subscription-foundation 120, role-authority 30, nav-routes 12 and admin-os-wiring 325
+are all identical.
+
+**Security:** closes onboarding claim self-minting on this branch. It is already closed in production.
+**Breaking:** `onbActivateRole` no longer mints claims, which is the intended P0 behaviour.
+
 ## 2026-09-28 (236) — C1: ONE business category authority for every business type; the commercial lane is frozen at approval
 
 Convergence slice C1: the foundation of the spine application → AdminOS decision → server category → workspace (C2)
