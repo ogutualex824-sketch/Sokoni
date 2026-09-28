@@ -1207,6 +1207,29 @@ exports.applicationDecide = onCall(
     const status = STATUS[decision];
     const actor = req.auth.uid;
 
+    /* K13-A — SEPARATION OF DUTIES. An administrator never decides their OWN application: the approval authority
+       exists to be exercised over someone else's request. (Production evidence, 2026-09-28: an admin decided their
+       own driver applications.) */
+    const applicantUid = snap.data().uid || null;
+    if (applicantUid && applicantUid === actor) {
+      throw new HttpsError('permission-denied', 'An administrator cannot decide their own application.', { code: 'SELF_DECISION' });
+    }
+
+    /* K13-A — THE SERVER DECISION RECORD, written BEFORE the application is touched. `applicationDecisions/{appId}`
+       has no client rule (default deny), so it is the one record of a decision that a browser cannot author; the
+       application's own `status` / `decidedBy` are applicant-writable on the served rules and are therefore never
+       sufficient on their own (see _authoritativeDecision). One document per application = the CURRENT decision;
+       the full history stays in adminAudit. */
+    await db.collection('applicationDecisions').doc(String(applicationId)).set({
+      applicationId: String(applicationId),
+      status: canonStatus(status),
+      decision,
+      decidedBy: actor,
+      applicantUid,
+      reason: _sanText(reason, 500) || null,
+      decidedAt: _ts(),
+    });
+
     await ref.set({
       status,
       statusCanonical: canonStatus(status),
@@ -1241,8 +1264,48 @@ exports.applicationDecide = onCall(
   }
 );
 
+/* ── K13-A — what makes a stored status AUTHORITATIVE ─────────────────────────────────────
+   The served rules let an applicant write their own application's `status` (and `decidedBy`). The reconcile path
+   used to project whatever status it found, attributed to the admin who ran it — so an applicant who set
+   status:'approved' was approved by the next "reconcile all" sweep (K13b). A stored status is authoritative only when
+   an ADMINISTRATOR who is NOT the applicant decided exactly that status, evidenced by:
+     1. the server decision record applicationDecisions/{appId} (written by applicationDecide, client-unwritable), or
+     2. for decisions made before that record existed, an adminAudit row `application_<decision>` for this application.
+   Nothing else — not the application's own fields, not an operator label — makes a decision reconcilable. */
+const _DECISION_OF = { approved: 'approve', active: 'approve', verified: 'approve', rejected: 'reject', suspended: 'suspend' };
+async function _isAdminUid(uid, cache) {
+  if (!uid || typeof uid !== 'string') return false;
+  if (cache && Object.prototype.hasOwnProperty.call(cache, uid)) return cache[uid];
+  let ok = false;
+  try { const c = (await getAuth().getUser(uid)).customClaims || {}; ok = c.admin === true || c.superAdmin === true; }
+  catch (_) { ok = false; }                                /* an operator label is not an account */
+  if (cache) cache[uid] = ok;
+  return ok;
+}
+async function _authoritativeDecision(db, appId, app, cache) {
+  const status = canonStatus(app.status);
+  const applicant = app.uid || null;
+  const acceptable = async (by) => !!by && by !== applicant && await _isAdminUid(by, cache);
+
+  const rec = await db.collection('applicationDecisions').doc(String(appId)).get();
+  if (rec.exists) {
+    const r = rec.data() || {};
+    /* A record exists: it IS the current decision. A stored status that disagrees with it is not authoritative. */
+    return (r.status === status && await acceptable(r.decidedBy)) ? { ok: true, by: r.decidedBy, evidence: 'decision_record' } : { ok: false };
+  }
+  const decision = _DECISION_OF[status];
+  if (!decision) return { ok: false };
+  const audits = await db.collection('adminAudit').where('applicationId', '==', String(appId)).limit(50).get();
+  for (const a of audits.docs) {
+    const d = a.data() || {};
+    if (d.action === `application_${decision}` && await acceptable(d.performedBy)) return { ok: true, by: d.performedBy, evidence: 'admin_audit' };
+  }
+  return { ok: false };
+}
+
 /* Re-run the projection for an application whose registry record is missing or
-   stale — the repair path for anything approved before this engine existed. */
+   stale — the repair path for anything approved before this engine existed.
+   K13-A: only an AUTHORITATIVE decision is re-projected (_authoritativeDecision), attributed to its real decider. */
 exports.applicationReconcile = onCall(
   { region: REGION, maxInstances: 5, enforceAppCheck: true, timeoutSeconds: 300 },
   async (req) => {
@@ -1259,7 +1322,12 @@ exports.applicationReconcile = onCall(
         await snap.ref.set(norm.patch, { merge: true });
         Object.assign(app, norm.patch);
       }
-      return { ok: true, results: [await applyDecision(snap.id, app, { decidedBy: req.auth.uid })] };
+      const auth1 = await _authoritativeDecision(db, snap.id, app, {});
+      if (!auth1.ok) {
+        logger.warn('[appReconcile] refused: no authoritative decision', { appId: snap.id, status: app.status });
+        return { ok: true, results: [{ ok: false, appId: snap.id, refused: 'NO_AUTHORITATIVE_DECISION' }] };
+      }
+      return { ok: true, results: [await applyDecision(snap.id, app, { decidedBy: auth1.by })] };
     }
 
     if (!all) throw new HttpsError('invalid-argument', 'Pass "applicationId" or all:true.');
@@ -1267,12 +1335,19 @@ exports.applicationReconcile = onCall(
     /* Bounded sweep of decided applications. */
     const snap = await db.collection('applications').where('status', 'in', ['approved', 'active', 'verified']).limit(300).get();
     const results = [];
+    const adminCache = {};
     for (const d of snap.docs) {
       const app = d.data();
       try {
         const norm = await buildIntakePatch(app, d.id);
         if (norm) { await d.ref.set(norm.patch, { merge: true }); Object.assign(app, norm.patch); }
-        results.push(await applyDecision(d.id, app, { decidedBy: req.auth.uid }));
+        const authz = await _authoritativeDecision(db, d.id, app, adminCache);
+        if (!authz.ok) {
+          logger.warn('[appReconcile] refused: no authoritative decision', { appId: d.id, status: app.status });
+          results.push({ ok: false, appId: d.id, refused: 'NO_AUTHORITATIVE_DECISION' });
+          continue;
+        }
+        results.push(await applyDecision(d.id, app, { decidedBy: authz.by }));
       } catch (e) {
         results.push({ ok: false, appId: d.id, error: e.message });
       }

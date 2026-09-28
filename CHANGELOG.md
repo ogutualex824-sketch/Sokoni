@@ -1,3 +1,44 @@
+## [2026-09-28] - HOTFIX K13-A: applicationDecide + applicationReconcile decide only with authority
+
+**Functions only, one file, NOT deployed.** Branch `hotfix/k13a-application-decision-authority` is based on `ccf06e3`,
+byte-identical (379/379 files) to production's shared `applicationDecide` / `applicationReconcile` archive
+(md5 `b996425e38a4`). Part A of K13; deploy BEFORE K13-B.
+
+**Why (production-proven, 2026-09-28):** the served `applications` rule lets an applicant write their own `status` and
+`decidedBy`. The deployed `applicationReconcile` projected whatever status it found, attributed to the admin who ran
+it. So an applicant who wrote `status:'approved'` was approved by the next `reconcile {all:true}` sweep (**K13b**). The
+counterproof reproduces it: an ACTIVE provider was created from an applicant-written approval. An admin could also
+decide their own application (separation-of-duties weakness, CONFIRMED in production data).
+
+**Changed:** `functions/application-lifecycle.js` only.
+- `applicationDecide` refuses a SELF-decision (`SELF_DECISION`).
+- It writes the server decision record `applicationDecisions/{appId}` (client-unwritable: no rule matches it) BEFORE
+  mutating the application.
+- `applicationReconcile` (single + sweep) re-projects only an AUTHORITATIVE decision: a matching `applicationDecisions`
+  record, or, for legacy decisions, an `adminAudit` `application_<decision>` row. The decider must hold an admin claim
+  and must not be the applicant. The projection is attributed to that real decider.
+- An operator label (`reindex`, `founder-decision-…`), the application's own `decidedBy`, or a record that disagrees
+  with the stored status is never sufficient.
+
+**Tests:** `scripts/test-k13a-decision-authority.js`.
+- On the fix: **11/0**.
+- `COUNTERPROOF=1`, the deployed-identical source: **8 defects**: A2 (no record), A3 (self-decision), B1 (K13b),
+  B2, B5, B6, B7, B8.
+- Positive controls pass in both modes: a legitimate decision, a lost-projection repair, an audit-backed legacy decision.
+
+**Sabotage:** 9/9, with a byte-identical restore. The first run was 8/9; B8 (an operator-label audit performer) closed
+the gap, and the full group was re-run.
+
+**Archive:** differs in `application-lifecycle.js` only (378/379, 0 missing, 0 extra).
+
+**Baseline vs pristine `ccf06e3`:**
+- identical: approval-provisioning 28/0, legal-projection 96/0, role-provisioning 57/0, role-vocabulary 66/0;
+- jest application-lifecycle 85 passed / 2 failed, the SAME two pre-existing `resolveRole` tests in both;
+- the emulator suite was not run.
+
+**Database:** the new server-only collection `applicationDecisions`. **Rules / Breaking:** none. Legacy self-decided or
+operator-labelled approvals are no longer reconcilable, by owner decision.
+
 ## [2026-08-24] - The till said "no shop" because a query FAILED, not because it answered.
 
 Hosting only. `sokoni-pos-context.js`, `till.html`,
