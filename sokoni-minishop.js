@@ -827,12 +827,17 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
       { key: 'tiktok', icon: '🎵', label: 'TikTok', base: 'https://tiktok.com/@' },
       { key: 'twitter', icon: '🐦', label: 'X', base: 'https://x.com/' },
       { key: 'youtube', icon: '▶', label: 'YouTube', base: 'https://youtube.com/' },
+      { key: 'linkedin', icon: '💼', label: 'LinkedIn', base: 'https://www.linkedin.com/' },
       { key: 'website', icon: '🌐', label: 'Website', base: '' }
     ];
+    /* Every link must END UP http(s). `website` has no base, so a stored `javascript:` value would otherwise be a
+       clickable script (escaping the quotes does not neutralise a scheme). The server refuses such values too
+       (kasshop._checkValues); this is the storefront's own guard for anything written before that. */
+    const _safeHref = (u) => (/^https?:\/\//i.test(String(u || '')) ? u : '');
     const socEl = document.getElementById('msSocialLinks');
     if (socEl) {
-      const links = socialItems.filter(s => socials[s.key]).map(s =>
-        '<a href="' + _esc(s.base + socials[s.key]) + '" target="_blank" rel="noopener" class="ms-social-link">' + s.icon + ' ' + _esc(s.label) + '</a>'
+      const links = socialItems.filter(s => socials[s.key] && _safeHref(s.base + socials[s.key])).map(s =>
+        '<a href="' + _esc(_safeHref(s.base + socials[s.key])) + '" target="_blank" rel="noopener" class="ms-social-link">' + s.icon + ' ' + _esc(s.label) + '</a>'
       ).join('');
       if (links) {
         socEl.innerHTML = '<div class="ms-about-label">Social &amp; Contact</div><div class="ms-social-links-row">' + links + '</div>';
@@ -850,13 +855,15 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
     }
 
     // Delivery info
-    if (config.deliveryAreas || config.deliveryPolicy) {
+    if ((config.deliveryAreas && config.deliveryAreas.length) || config.deliveryPolicy || config.policies) {
       const dlEl = document.getElementById('msDeliveryInfo');
       if (dlEl) {
         dlEl.hidden = false;
         const areasEl = document.getElementById('msDeliveryAreas');
-        if (areasEl && config.deliveryAreas) areasEl.innerHTML = '<div class="ms-about-label">Delivery Areas</div><div class="ms-about-value">' + _esc(config.deliveryAreas) + '</div>';
+        if (areasEl && config.deliveryAreas) areasEl.innerHTML = '<div class="ms-about-label">Delivery Areas</div><div class="ms-about-value">' + _esc(Array.isArray(config.deliveryAreas) ? config.deliveryAreas.join(', ') : config.deliveryAreas) + '</div>';
         const policyEl = document.getElementById('msDeliveryPolicy');
+        const returnsEl = document.getElementById('msReturnPolicy');
+        if (returnsEl && config.policies) { returnsEl.innerHTML = '<div class="ms-about-label">Returns &amp; Refunds</div><div class="ms-about-value">' + _esc(config.policies) + '</div>'; }
         if (policyEl && config.deliveryPolicy) policyEl.innerHTML = '<div class="ms-about-label">Delivery Policy</div><div class="ms-about-value">' + _esc(config.deliveryPolicy) + '</div>';
       }
     }

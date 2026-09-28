@@ -93,7 +93,7 @@ const TEXT_FIELDS = {
   phone: 32, email: 160, website: 200, address: 300, city: 80, mapsLink: 400,
   instagram: 120, tiktok: 120, facebook: 120, twitter: 120, youtube: 120, linkedin: 120,
   logo: 600, logoUrl: 600, banner: 600, bannerUrl: 600, themeColor: 32,
-  shopType: 24, delMethod: 40, delTime: 60,
+  shopType: 24, sellerType: 24, delMethod: 40, delTime: 60,
   returnPolicy: 40, returnText: 1000, packagingNote: 500, freeDelivery: 60,
 };
 const AVAILABILITY_FIELDS = ['acceptingOrders', 'online', 'delivery', 'pickup'];
@@ -102,6 +102,135 @@ const AVAILABILITY_FIELDS = ['acceptingOrders', 'online', 'delivery', 'pickup'];
    or in AdminOS. They are reported back as `ignored` so a client can say so, rather than dropped silently. */
 const AUTHORITY_FIELDS = ['category', 'business', 'status', 'approved', 'verified', 'isVerified', 'searchable', 'isPublic',
   'discoveryEligible', 'featured', 'published', 'suspended', 'isVisible', 'active'];
+/* ── Shop profile VALUES (2026-09-29, the merchant-v2 Shop details port) ─────────────────────────────────────────
+   Each value below reaches the public storefront, so it is checked for what it IS, not only trimmed:
+   · choice fields accept only the codes both wizards (seller.html, merchant-v2) send;
+   · images must be https, website / maps links http(s) — never javascript:/data: (the storefront puts website in an
+     href);
+   · social fields are HANDLES (the storefront prefixes the network's URL) — a pasted profile URL is reduced to its
+     handle, anything else refused;
+   · themeColor is a #rrggbb accent (the storefront's --ms-brand). seller.html's gradient strings were 39–55 chars and
+     truncated at 32 into invalid CSS; they are now refused and reported;
+   · freeDelivery is a whole-shilling amount.
+   A non-empty value that fails is DROPPED and reported in `invalid`; an empty string clears the field. */
+const CHOICES = {
+  shopType:     ['online', 'hybrid', 'physical'],
+  sellerType:   ['longterm', 'shortterm', 'service', 'wholesale'],
+  delMethod:    ['sokoni', 'own', 'both', 'pickup'],
+  delTime:      ['30min', '1hr', '2hr', 'sameday', 'nextday', '2-3days', '1week'],
+  returnPolicy: ['7day', 'exchange', 'noreturn', 'custom'],
+};
+const IMAGE_FIELDS = ['logo', 'logoUrl', 'banner', 'bannerUrl'];
+const LINK_FIELDS = ['website', 'mapsLink'];
+const SOCIAL_FIELDS = ['instagram', 'tiktok', 'facebook', 'twitter', 'youtube', 'linkedin'];
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+function _url(v, schemes) {
+  try { const u = new URL(String(v)); return schemes.includes(u.protocol) ? u.toString() : ''; } catch (_) { return ''; }
+}
+function _socialHandle(key, v) {
+  const h = String(v || '').trim()
+    .replace(/^https?:\/\/(www\.|m\.|mobile\.)?[a-z0-9.-]+\.[a-z]{2,}\//i, '')
+    .replace(/^@/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  /* linkedin / youtube / facebook handles carry a path ("company/acme", "@acme", "pages/acme") */
+  const re = ['linkedin', 'youtube', 'facebook'].includes(key) ? /^[A-Za-z0-9._@-]+(\/[A-Za-z0-9._@-]+)?$/ : /^[A-Za-z0-9._-]+$/;
+  return h.length <= 100 && re.test(h) ? h : '';
+}
+function _checkValues(out, invalid) {
+  const bad = (k) => { delete out[k]; invalid.push(k); };
+  for (const [k, allowed] of Object.entries(CHOICES)) {
+    if (k in out && out[k] !== '' && !allowed.includes(out[k])) bad(k);
+  }
+  for (const k of IMAGE_FIELDS) if (k in out && out[k] !== '') { const u = _url(out[k], ['https:']); u ? (out[k] = u) : bad(k); }
+  for (const k of LINK_FIELDS) if (k in out && out[k] !== '') { const u = _url(out[k], ['https:', 'http:']); u ? (out[k] = u) : bad(k); }
+  for (const k of SOCIAL_FIELDS) if (k in out && out[k] !== '') { const h = _socialHandle(k, out[k]); h ? (out[k] = h) : bad(k); }
+  if ('themeColor' in out && out.themeColor !== '' && !HEX_COLOR.test(out.themeColor)) bad('themeColor');
+  if ('freeDelivery' in out && out.freeDelivery !== '') {
+    const n = String(out.freeDelivery).replace(/[,\s]/g, '');
+    /^\d{1,9}$/.test(n) ? (out.freeDelivery = n) : bad('freeDelivery');
+  }
+  return out;
+}
+
+/* Permit documents (the wizard's "Permits" step): the seller uploads to kyc-documents/{uid}/… (storage.rules: owner
+   writes, only the owner and administrators read) and this records WHICH object is which permit, in the owner-only
+   compliance document. A path outside the caller's own kyc-documents folder is refused. */
+const PERMIT_KINDS = ['kra', 'sbp', 'brs', 'fire', 'health'];
+function _cleanPermits(raw, uid) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const k of PERMIT_KINDS) {
+    const p = raw[k];
+    if (typeof p !== 'string') continue;
+    if (p === '') { out[k] = ''; continue; }
+    if (p.length <= 300 && p.startsWith('kyc-documents/' + uid + '/') && !p.includes('..') && /^[A-Za-z0-9._\-/]+$/.test(p)) out[k] = p;
+  }
+  return out;
+}
+
+/* ── The STOREFRONT projection ───────────────────────────────────────────────────────────────────────────────────
+   The public storefront (/shop/{handle} → getMinishopPublic) reads minishopConfig FIRST and the shop document only to
+   fill gaps (minishop-config-schema.resolve), so a profile saved on the shop alone was hidden behind any older
+   storefront config. After every save the server rebuilds the storefront's copy from the CANONICAL shop document —
+   the one writer of these storefront fields — whichever wizard saved it (merchant-v2 or seller.html).
+   Buyer-facing text is built only from what the seller chose. freeDelivery is NOT shown to buyers: no checkout path
+   applies it yet, and a promise checkout does not keep is worse than none. */
+const CITY_LABEL = { nairobi: 'Nairobi', mombasa: 'Mombasa', kisumu: 'Kisumu', nakuru: 'Nakuru', eldoret: 'Eldoret',
+  thika: 'Thika', nyeri: 'Nyeri', machakos: 'Machakos', malindi: 'Malindi', garissa: 'Garissa', kisii: 'Kisii',
+  kericho: 'Kericho', meru: 'Meru', nanyuki: 'Nanyuki', kakamega: 'Kakamega', bungoma: 'Bungoma', kitale: 'Kitale',
+  bomet: 'Bomet', lamu: 'Lamu', naivasha: 'Naivasha', nationwide: 'Nationwide' };
+const DEL_METHOD_TEXT = { sokoni: 'Delivered by SOKONI riders', own: 'Delivered by our own riders',
+  both: 'Delivered by SOKONI riders or our own riders', pickup: 'Pickup only — no delivery' };
+const DEL_TIME_TEXT = { '30min': 'within 30 minutes', '1hr': 'within 1 hour', '2hr': 'within 2 hours', sameday: 'same day',
+  nextday: 'next day', '2-3days': 'in 2–3 days', '1week': 'within a week' };
+const RETURN_TEXT = { '7day': '7-day returns on eligible items', exchange: 'Exchanges only — no refunds',
+  noreturn: 'All sales final — no returns' };
+function storefrontProjection(s) {
+  const d = s || {};
+  const str = (v) => (typeof v === 'string' ? v : '');
+  const p = {};
+  p.tagline = str(d.tagline);
+  p.description = str(d.about) || str(d.description);
+  p.contactPhone = str(d.phone);
+  p.contactEmail = str(d.email);
+  p.logoUrl = _url(d.logoUrl || d.logo, ['https:']);
+  p.coverUrl = _url(d.bannerUrl || d.banner, ['https:']);
+  if (HEX_COLOR.test(str(d.themeColor))) p.brandColor = d.themeColor;
+  const links = {};
+  for (const k of SOCIAL_FIELDS) { const h = _socialHandle(k, d[k]); if (h) links[k] = h; }
+  const web = _url(d.website, ['https:', 'http:']); if (web) links.website = web;
+  p.socialLinks = links;
+  p.location = [str(d.address), CITY_LABEL[str(d.city).toLowerCase()] || str(d.city)].filter(Boolean).join(', ');
+  p.deliveryAreas = Array.isArray(d.zones) ? d.zones.filter((z) => typeof z === 'string' && z).slice(0, 20) : [];
+  const del = [DEL_METHOD_TEXT[d.delMethod], d.delMethod !== 'pickup' && DEL_TIME_TEXT[d.delTime]
+    ? 'Usually ' + DEL_TIME_TEXT[d.delTime] : '', str(d.packagingNote)].filter(Boolean);
+  p.deliveryPolicy = del.join(' · ').slice(0, 500);
+  p.policies = (d.returnPolicy === 'custom' ? str(d.returnText) : (RETURN_TEXT[d.returnPolicy] || '')).slice(0, 1000);
+  return p;
+}
+async function _syncStorefront(db, shopId) {
+  try {
+    const ref = db.collection('shops').doc(shopId);
+    const snap = await ref.get();
+    if (!snap.exists) return false;
+    const shop = snap.data() || {};
+    const proj = storefrontProjection(shop);
+    const write = Object.assign(require('./minishop-config-schema').forWrite(proj), { profileSyncedAt: FieldValue.serverTimestamp() });
+    /* A merge write keeps what this projection does not own (handle, announcement, responseTime, a WhatsApp link set
+       elsewhere). The social links the PROFILE owns are written explicitly — a cleared one is DELETED, so it
+       disappears from the storefront instead of surviving the deep merge. */
+    const links = Object.assign({}, write.socialLinks || {});
+    for (const k of SOCIAL_FIELDS.concat(['website'])) if (!links[k]) links[k] = FieldValue.delete();
+    write.socialLinks = links;
+    await db.collection('minishopConfig').doc(shopId).set(write, { merge: true });
+    /* the storefront reads shops/{id}.location BEFORE the config — keep the shop's own copy in step */
+    if (proj.location && shop.location !== proj.location) await ref.set({ location: proj.location }, { merge: true });
+    return true;
+  } catch (err) {
+    logger.warn('KassShop storefront sync failed', { shopId, code: err && err.code, msg: err && err.message });
+    return false;
+  }
+}
+
 function _ignoredAuthority(raw) {
   if (!raw || typeof raw !== 'object') return [];
   return AUTHORITY_FIELDS.filter((k) => Object.prototype.hasOwnProperty.call(raw, k));
@@ -125,7 +254,7 @@ function _cleanCompliance(raw) {
 }
 
 /** Whitelist + sanitise an incoming profile patch. Absent keys are left untouched. */
-function _cleanProfile(raw) {
+function _cleanProfile(raw, invalid) {
   const out = {};
   if (!raw || typeof raw !== 'object') return out;
   for (const [key, max] of Object.entries(TEXT_FIELDS)) {
@@ -145,7 +274,7 @@ function _cleanProfile(raw) {
     if (Object.keys(hours).length) out.openingHours = hours;
   }
   if (Array.isArray(raw.zones)) out.zones = raw.zones.slice(0, 40).map((z) => _san(z, 80)).filter(Boolean);
-  return out;
+  return _checkValues(out, invalid || []);
 }
 
 /* ================================================================
@@ -191,6 +320,7 @@ exports.getShopProfile = onCall(
       for (const key of Object.keys(COMPLIANCE_FIELDS)) {
         if (c[key] !== undefined) compliance[key] = c[key];
       }
+      if (c.permits && typeof c.permits === 'object') compliance.permits = c.permits;
     }
 
     /* `ownerUid` below is the AUTHENTICATED uid, so comparing it to auth.currentUser.uid
@@ -219,6 +349,11 @@ exports.getShopProfile = onCall(
       profile,
       compliance,
       availability,
+      /* Read-only for the seller: the status and the SOKONI category are decided by approval / AdminOS
+         (business-category.shopEligibility). Shown so the page can say so instead of offering an editor. */
+      status: owned.data.status || null,
+      sokoniCategory: (() => { const e = require('./business-category').shopEligibility(owned.data);
+        return { id: e.category, label: e.category ? require('./business-category').label(e.category) : null, listed: e.eligible, reasons: e.reasons }; })(),
       schedule: schedSnap.exists ? (schedSnap.data() || null) : null,
       handle: cfg.handle || owned.data.minishopHandle || null,
       storefrontUrl: cfg.handle ? `/shop/${encodeURIComponent(cfg.handle)}` : null,
@@ -315,11 +450,14 @@ exports.saveShopProfile = onCall(
   async (request) => {
     const uid = _requireAuth(request);
     const data = request.data || {};
-    const patch = _cleanProfile(data.profile);
+    const invalid = [];
+    const patch = _cleanProfile(data.profile, invalid);
     const ignored = _ignoredAuthority(data.profile);
     /* Compliance may arrive nested (`{compliance:{…}}`) or flattened into the profile
        by an older client. Both are accepted; neither reaches the public document. */
     const compliance = Object.assign(_cleanCompliance(data.profile), _cleanCompliance(data.compliance));
+    const permits = _cleanPermits(data.compliance && data.compliance.permits, uid);
+    if (Object.keys(permits).length) compliance.permits = permits;
 
     if (!Object.keys(patch).length && !Object.keys(compliance).length) {
       throw new HttpsError('invalid-argument', 'Nothing to save.');
@@ -357,9 +495,10 @@ exports.saveShopProfile = onCall(
       });
       logger.info('KassShop profile updated', { shopId: owned.id, fields: Object.keys(patch).length });
       const handle = await _ensureHandle(db, owned.id, uid, name);
+      const storefrontSynced = await _syncStorefront(db, owned.id);
       return {
         success: true, created: false, shopId: owned.id, ownerUid: uid,
-        ignored,
+        ignored, invalid, storefrontSynced,
         handle: handle || null,
         storefrontUrl: handle ? '/shop/' + encodeURIComponent(handle) : null,
       };
@@ -419,9 +558,10 @@ exports.saveShopProfile = onCall(
     const settledId = settled ? settled.id : ref.id;
     logger.info('KassShop created', { shopId: settledId });
     const handle = await _ensureHandle(db, settledId, uid, name);
+    const storefrontSynced = await _syncStorefront(db, settledId);
     return {
       success: true, created: true, shopId: settledId, ownerUid: uid,
-        ignored,
+        ignored, invalid, storefrontSynced,
       handle: handle || null,
       storefrontUrl: handle ? '/shop/' + encodeURIComponent(handle) : null,
     };
@@ -609,3 +749,6 @@ exports.getShopAvailability = onCall(
     return eff;
   }
 );
+
+/* Pure helpers, for scripts/test-shop-profile-storefront.js (not a Cloud Function: index.js re-exports by name). */
+exports._profile = { storefrontProjection, _cleanProfile, _cleanPermits, CHOICES };

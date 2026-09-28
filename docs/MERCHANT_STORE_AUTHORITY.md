@@ -159,3 +159,57 @@ server-decided and need nothing first. That is a coherent Store surface on its o
   convergence, not Store.
 - `minishopAnalytics` rules gate on `ownerUid`, which nothing writes → the fourth instance of
   that pattern.
+
+## Shop profile → storefront (2026-09-29)
+
+The shop details wizard exists twice:
+- **merchant-v2 › Shop details › Details** (`sokoni-merchant-shop-profile.js`) is the merchant surface.
+- **seller.html "Create My Shop"** is kept for reference.
+
+Both save through one authority, `saveShopProfile` (`functions/kasshop.js`). The server owns what reaches the public
+storefront. Related: [[Marketplace]] · [[Payments]].
+
+**Steps.** These are seller.html's five steps, with every field restored on reload. seller.html's reload lost seven of
+them.
+
+| Step | Fields | Where it lives |
+|---|---|---|
+| Identity | banner, accent colour (`#rrggbb`), logo, name, tagline, story, seller type; the SOKONI category is **read-only** | `shops/{id}` (images in `seller-assets/{uid}/…`) |
+| Permits | KRA PIN, SBP, BRS numbers, plus KRA / SBP / BRS / fire / health **documents** | `shops/{id}/private/compliance` (owner-only); files in `kyc-documents/{uid}/…` (owner + admin read) |
+| Shop setup | city, presence, address, Maps link, phone, email, website, six socials incl. LinkedIn; the opening hours are shown and edited in **Availability** (one timetable) | `shops/{id}`; hours in `providerAvailability/{uid}` |
+| Delivery | method, usual time, delivery areas (15 standard plus your own), free-delivery threshold, packaging note, return policy (+ custom wording) | `shops/{id}` |
+| Go live | real-data preview, readiness checklist, storefront link, announcement, reply time | extras in `minishopConfig/{id}` via `saveMinishopConfig` |
+
+**Values are validated by the server.** A failing value is dropped and returned in `invalid`; an authority field is
+returned in `ignored`.
+- **Choice fields** accept only their codes.
+- **Links:** images must be https; website and Maps links must be http(s). `javascript:` and `data:` are refused.
+- **Socials** are stored as handles, even when a full URL is pasted.
+- **themeColor** must be a hex colour.
+- **freeDelivery** must be whole shillings.
+- **Permit paths** must sit in the caller's own `kyc-documents` folder.
+
+**The storefront projection.** `getMinishopPublic` resolves `minishopConfig` first and the shop document only to fill
+gaps, so a profile saved only on the shop was hidden behind any older config. After every save, `_syncStorefront`
+rebuilds the storefront copy from the canonical shop:
+- tagline, description (= about), contact, logo, cover (= banner), brandColor (= accent);
+- socials, where a cleared handle is deleted;
+- location (address + city), also written to `shops.location`, which the storefront reads first;
+- delivery areas and delivery policy (method + time + packaging);
+- policies (returns).
+
+The free-delivery threshold is **not** shown to buyers: no checkout path applies it. Delivery **fees** are SOKONI's
+checkout quote (RES-1), not a seller setting.
+
+**Storefront changes:**
+- LinkedIn is shown.
+- A "Returns & Refunds" block is added.
+- Delivery areas render as a list.
+- Every social and website link must be http(s) before it becomes an `href`. A stored `javascript:` website was a
+  clickable script.
+
+**Owner only.** A staff session sees "Owner only". `saveShopProfile` resolves the shop from the caller's own uid.
+
+**Known, not changed here:** merchant-v2 Availability's `avSave` writes a formatted **string** into
+`shops/{uid}.openingHours`. The server's shape is an object. The storefront reads `providerAvailability` first, so it
+is unaffected. This is fixed in the Availability slice.

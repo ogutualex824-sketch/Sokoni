@@ -780,6 +780,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script src="sokoni-merchant-customers-ui.js"></script>
 <script src="sokoni-merchant-store.js"></script>
 <script src="sokoni-merchant-store-ui.js"></script>
+<!-- Shop details › Details: the full shop profile (the seller.html wizard, ported 2026-09-29). Saved only through
+     saveShopProfile; the server rebuilds the public storefront from it. -->
+<script src="sokoni-merchant-shop-profile.js"></script>
 <script src="sokoni-merchant-tax.js"></script>
 <script src="sokoni-merchant-tax-ui.js"></script>
 <!-- SokoniQR — the same first-party, dependency-free QR encoder pay-q.html
@@ -2762,7 +2765,19 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                     scope: _scope(), origin: location.origin, shopName: _shopName(),
                     callIdentity: _callable('getMyMinishop'), callSave: _callable('saveMinishopConfig'),
                     callClaim: _callable('claimMinishopHandle'), callAnalytics: _callable('getMinishopAnalytics'),
-                    callShare: _callable('generateMinishopShareCard'), onToast: toast }; } },
+                    callShare: _callable('generateMinishopShareCard'), onToast: toast,
+                    /* one-shot tab request (Settings › Business profile opens Details) */
+                    takeTab: function () { var t = window.__mstOpenTab || null; window.__mstOpenTab = null; return t; },
+                    mountProfile: function (el) {
+                      if (!window.SokoniMerchantShopProfile) { el.innerHTML = '<div class="state">Shop details could not load. Refresh the page.</div>'; return null; }
+                      return window.SokoniMerchantShopProfile.mount(el, {
+                        uid: S.uid, origin: location.origin, isOwner: S.servedBy ? S.servedBy.role === 'owner' : undefined,   /* server-resolved (merchantIdentity); unknown → let getShopProfile answer */
+                        callGet: _callable('getShopProfile'), callSave: _callable('saveShopProfile'),
+                        callConfig: _callable('getMyMinishop'), callSaveConfig: _callable('saveMinishopConfig'),
+                        upload: _mdb.putImage,
+                        onOpenAvailability: function () { go('availability'); },
+                        onToast: toast });
+                    } }; } },
     'kra-tax':  { global: 'SokoniMerchantTaxUI',       ctx: function () { return {
                     scope: _scope(), shopName: _shopName(), origin: location.origin,
                     callProfile: _callable('etimsGetProfile'), callRegister: _callable('etimsRegisterSeller'),
@@ -4489,7 +4504,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     var a = b.dataset.set;
     if (a.indexOf('route:') === 0) return go(a.slice(6));
     if (a === 'signout') return doSignOut();
-    if (a === 'profile') return toast('The shop profile editor is not built yet — Availability covers hours today.');
+    if (a === 'profile') { window.__mstOpenTab = 'details'; return go('shop'); }
   });
   async function doSignOut () {
     try {

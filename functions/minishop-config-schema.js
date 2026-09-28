@@ -106,7 +106,9 @@ const ARRAY_FIELDS = {
 /** Free-form objects kept as-is apart from their own nested handling. */
 const OBJECT_FIELDS = ['hours', 'socialLinks'];
 
-const SOCIAL_KEYS = ['whatsapp', 'instagram', 'facebook', 'tiktok', 'twitter', 'youtube', 'website'];
+/* linkedin added 2026-09-29: the shop profile (seller.html + merchant-v2 Shop details) collects it, and it was the one
+   social the storefront silently dropped. */
+const SOCIAL_KEYS = ['whatsapp', 'instagram', 'facebook', 'tiktok', 'twitter', 'youtube', 'linkedin', 'website'];
 
 /**
  * Legacy key -> canonical key.

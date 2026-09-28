@@ -100,13 +100,13 @@ const USER = (uid) => ({ auth: { uid, token: {} } });
     business: { category: 'fashion', source: 'application' }, searchable: true, isPublic: true });
   const r2 = await KS.saveShopProfile({ auth: { uid: 'appr' }, data: { profile: { name: 'Approved', category: 'Electronics', status: 'verified',
     business: { category: 'electronics', source: 'admin' }, searchable: true, isPublic: true, featured: true, verified: true, discoveryEligible: true,
-    about: 'We sell shoes', openingHours: { mon: { closed: false, periods: [{ open: '08:00', close: '18:00' }] } }, zones: ['Westlands'], delMethod: 'rider', delTime: 'same day' } } });
+    about: 'We sell shoes', openingHours: { mon: { closed: false, periods: [{ open: '08:00', close: '18:00' }] } }, zones: ['Westlands'], delMethod: 'own', delTime: 'sameday' } } });   /* 2026-09-29: delivery fields accept only their codes (kasshop CHOICES) */
   const s2 = await get('shops/appr');
   ck('W2  authority fields are refused (category wording, SOKONI category, status, featured, verified, discoveryEligible unchanged)',
     s2.category === 'Mitumba' && s2.business.category === 'fashion' && s2.business.source === 'application' && s2.status === 'active'
     && s2.featured === undefined && s2.verified === undefined && s2.discoveryEligible === undefined, { category: s2.category, business: s2.business, status: s2.status, featured: s2.featured });
   ck('W2b …and reported back as `ignored` (not dropped silently)', Array.isArray(r2.ignored) && ['category', 'business', 'status', 'featured', 'verified', 'discoveryEligible'].every((k) => r2.ignored.includes(k)), r2.ignored);
-  ck('W3  storefront content is still saved (about, opening hours, zones, delivery)', s2.about === 'We sell shoes' && s2.openingHours && s2.openingHours.mon && s2.zones[0] === 'Westlands' && s2.delMethod === 'rider' && s2.delTime === 'same day');
+  ck('W3  storefront content is still saved (about, opening hours, zones, delivery)', s2.about === 'We sell shoes' && s2.openingHours && s2.openingHours.mon && s2.zones[0] === 'Westlands' && s2.delMethod === 'own' && s2.delTime === 'sameday');
 
   await LC.projectSeller(db, { applicationId: 'appN', businessName: 'Newbie Shop', category: 'supermarket' }, 'newbie', true);
   const s1b = await get('shops/newbie');

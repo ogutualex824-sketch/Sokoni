@@ -1,3 +1,104 @@
+## [2026-09-29] - merchant-v2 Shop details gets the full seller.html shop wizard, saved by one server authority and shown on the public storefront
+
+**Functions + merchant-v2 + storefront, NOT deployed.** Branch `slice/c4-category-matrix`. Owner: "copy all steps in
+the shop details page in seller html … all should be routed to store front". The merchant surface is merchant-v2;
+seller.html stays as the reference.
+
+**What the merchant gets:** merchant-v2 › Shop details › **Details** (`sokoni-merchant-shop-profile.js`), mounted in
+the existing Shop details tabs. It has seller.html's five steps:
+
+1. **Identity:** banner and logo upload, accent colour, name, tagline, story, seller type. The SOKONI category is
+   shown read-only.
+2. **Permits:** KRA PIN / SBP / BRS numbers, plus **real private uploads** for KRA, SBP, BRS, fire and health
+   certificates, to `kyc-documents/{uid}`. seller.html's uploads were cosmetic badges.
+3. **Shop setup:** city, presence, address, Maps link, phone, email, website and six socials, including LinkedIn.
+   Opening hours are shown here and edited in Availability, the one timetable.
+4. **Delivery:** method, usual time, delivery areas (15 standard plus custom), free-delivery threshold, packaging,
+   returns and custom wording.
+5. **Go live:** a preview built from real data only (seller.html showed an invented "4.9★ / 0 products / Electronics"),
+   a readiness checklist that jumps to the step, the storefront link, and announcement / reply-time extras.
+
+It is premium and mobile-first: stepper, progress bar, sticky save bar, 16px inputs, 44px targets, and keyboard- and
+reduced-motion-aware. "Saved" appears only after the server confirmed; a refusal says "NOT saved". A staff session
+sees "Owner only". Settings › Business profile now opens this page; before, it showed "not built yet".
+
+**Server (`functions/kasshop.js`):**
+- **Values validated:**
+  - choice fields accept only their codes;
+  - images must be https, and the website / Maps link http(s);
+  - socials are normalised to handles;
+  - themeColor must be `#rrggbb`. seller.html's gradients were truncated at 32 characters into invalid CSS, and are
+    now refused and reported;
+  - freeDelivery is whole shillings;
+  - `invalid` is returned alongside `ignored`.
+- `sellerType` is now saved.
+- The permits map (`kra` / `sbp` / `brs` / `fire` / `health`) is recorded only inside the caller's own
+  `kyc-documents` folder, in the owner-only compliance record.
+- `getShopProfile` also returns `status`, `sokoniCategory` (read-only, from the discovery gate) and `permits`.
+- **Storefront projection:** after every save, `_syncStorefront` rebuilds `minishopConfig`'s storefront copy from
+  the canonical shop, whichever wizard saved it. Before, an older config silently won over the saved profile, and
+  `about`, banner, city/address, delivery and returns never reached `/shop/{handle}`.
+  - Cleared socials are deleted.
+  - `shops.location` follows the address and city.
+  - The free-delivery threshold is **not** promised to buyers, because no checkout applies it.
+  - Delivery fees stay SOKONI's checkout quote.
+
+**Storefront:**
+- **Security fix:** `sokoni-minishop.js` rendered the website as `href` behind only HTML-escaping, so a stored
+  `javascript:` website was a clickable script. Links now render only when http(s); the server refuses such values too.
+- LinkedIn is a storefront social (`minishop-config-schema.SOCIAL_KEYS`).
+- A "Returns & Refunds" block is added (`minishop.html`).
+- Delivery areas render as a readable list.
+
+**Tests:**
+- **`scripts/test-shop-profile-storefront.js`: 12/0** (REAL kasshop plus the storefront resolver). Counterproof on
+  `62e38b3`: **11 fail**; P6 passes there as a control. Sabotage: **12/12 caught**.
+- **`scripts/test-merchant-shop-profile-browser.js`: 13/0** in Chromium, with REAL callables and the REAL
+  `getMinishopPublic` and storefront. It covers:
+  - the five steps and every field;
+  - read-only category;
+  - blocked save without a phone;
+  - a refusal never shown as saved;
+  - the full save;
+  - reload restores everything;
+  - private permit path;
+  - the public storefront shows the saved profile;
+  - hostile name escaped;
+  - staff sees "Owner only";
+  - 360px with no overflow.
+
+  Sabotage: **10/10 effective attacks caught**. One first attempt was inert (an empty phone also fails the format
+  check), and its replacement was caught. On `62e38b3` the module does not exist.
+- **Superseded, with the reason in the file:** `test-shop-writer-authority` W3 now sends valid delivery codes
+  (`own` / `sameday`); the old codes are refused by the new value checks. It is 20/0.
+- **`test-kasshop-boundary`** (private `demo-` emulator): **79/0**.
+- **Regression:** 46 suites run on the working tree and the pristine `62e38b3` tree.
+  - Equal, apart from the superseded W3.
+  - `merchant-v2-ecosystem-runtime` "no non-environment errors" is **flaky on BOTH trees** (`PAGEERROR: cancelled`,
+    four runs).
+  - `merchant-visual-gate` is 521/23 on both.
+  - Pre-existing failures are identical on both trees.
+  - Screened out as touching live endpoints or the shared emulator, and so **NOT run** (UNPROVEN here):
+    `availability-canonical`, `cart-final`, `entertainment-rules`, `gate-classify`, `merchant-v2-certification`.
+
+**Security:**
+- Closes a stored-XSS vector on the public storefront: a `javascript:` website.
+- Permit documents go to the private KYC path.
+- Server-side value validation.
+
+**Performance:**
+- Each save does one extra read and ≤2 writes: the storefront projection and the location.
+- Uploads go directly to Storage.
+- The editor is loaded with merchant-v2 and renders client-side with no extra reads.
+
+**Database:**
+- `minishopConfig.profileSyncedAt`.
+- `shops/{id}/private/compliance.permits`.
+- `shops.sellerType`.
+- No migration: existing shops sync on their next save.
+
+**Docs:** `docs/MERCHANT_STORE_AUTHORITY.md` gains the section "Shop profile → storefront".
+
 ## [2026-09-28] - A seller can no longer approve, activate, publish or classify its own shop; AdminOS classifies seller shops; six seller categories (shop discovery stage 2)
 
 **Functions + AdminOS + registration, NOT deployed.** Branch `slice/c4-category-matrix`. Stage 2 of 4 of the shop
