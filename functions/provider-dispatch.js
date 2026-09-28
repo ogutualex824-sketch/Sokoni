@@ -44,7 +44,9 @@ function _h() {
       /* CHANGELOG 233 — the category-aware Healthcare workspace (what the dashboard offers, server-decided). */
       require('./healthcare-workspace')._h,
       /* CHANGELOG 238 (C2a) — the ONE business workspace authority, for every category. */
-      require('./business-workspace')._h);
+      require('./business-workspace')._h,
+      /* CHANGELOG 244 (C3a-2) — the ONE public provider directory (C1 category + eligibility, server-decided). */
+      require('./provider-directory')._h);
   }
   return _mod;
 }
@@ -71,6 +73,7 @@ const ROUTES = [
   'providerSubmitVerification',
   'providerGetPublicProfile',
   'providerSearchProviders',
+  'providerDirectory',
   'providerRequestShop',
   'healthcareWorkspace',
   'businessWorkspace',

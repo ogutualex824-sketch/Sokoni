@@ -2061,22 +2061,9 @@ function sharePage(){
 import SokoniDB from './sokoni-db.js';
 window.SokoniDB = SokoniDB;
 
-/* Real-time Firestore providers — merge with demo + localStorage on arrival */
-SokoniDB.listenProviders(function(fsProviders){
-  if(!fsProviders.length) return;
-  let stored = [];
-  try{ stored = JSON.parse(localStorage.getItem('sokoniServiceProviders')||'[]'); }catch(e){}
-  const storedIds = new Set(stored.map(p=>p.id));
-  const newOnes = fsProviders.filter(fp=>{
-    const lid = fp._localId || fp.id || fp._fsId;
-    return lid && !storedIds.has(lid);
-  }).map(fp=>({ ...fp, id: fp._localId||fp._fsId, _fromFirestore:true }));
-  if(newOnes.length){
-    stored.push(...newOnes);
-    localStorage.setItem('sokoniServiceProviders', JSON.stringify(stored));
-    if(window.renderProviders) window.renderProviders();
-  }
-});
+/* CHANGELOG 244 (C3a-2): the raw `providers` listener that merged documents into localStorage
+   'sokoniServiceProviders' is retired. It chose providers by status alone, in the browser, and fed a second list
+   (legal-hub reads that key). This page renders from SokoniProviders, which asks the server directory. */
 
 /* Real-time bookings for provider dashboard */
 const _pvProfile = JSON.parse(localStorage.getItem('sokoniProviderProfile')||'null');

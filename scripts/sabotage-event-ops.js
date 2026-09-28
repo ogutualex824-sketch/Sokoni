@@ -87,6 +87,8 @@ const SUITES = {
   pubgate:  ['node', ['scripts/test-publication-gate.js']],
   pubgaterules: ['node', ['scripts/run-rules-suite.js', 'scripts/test-publication-gate-rules.js']],
   disc:     ['node', ['scripts/test-discovery-index.js']],
+  dir:      ['node', ['scripts/test-provider-directory.js']],
+  ppa:      ['node', ['scripts/test-provider-publish-authority.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -1416,6 +1418,40 @@ const M = [
     from: "      if (!require('./business-category').isCategory(filters.category)) {", to: "      if (false) {", expect: /unknown category on the services index is REFUSED/ },
   { group: 'disc', browser: false, name: "the client may choose status again", file: "functions/search-service.js", suite: 'disc',
     from: "  if (typeof filters.priceMin === 'number' && isFinite(filters.priceMin)) parts.push(`price >= ${filters.priceMin}`);", to: "  if (filters.status && typeof filters.status === 'string') parts.push(`status:\"${filters.status}\"`);\n  if (typeof filters.priceMin === 'number' && isFinite(filters.priceMin)) parts.push(`price >= ${filters.priceMin}`);", expect: /can no longer choose `status`/ },
+
+  /* ── C3a-2: ONE public provider directory, server-decided (CHANGELOG 244) ── */
+  { group: 'dir', browser: false, name: "the directory lists any classified provider, approved or not", file: "functions/provider-directory.js", suite: "dir",
+    from: "  return elig.eligible ? publicCard(uid, p, elig.category) : null;", to: "  return elig.category ? publicCard(uid, p, elig.category) : null;", expect: /ONLY approved|not listed, and by id|agree/ },
+  { group: 'dir', browser: false, name: "isPublic:false no longer hides a provider", file: "functions/business-category.js", suite: "dir",
+    from: "  if (p.isPublic === false) reasons.push('NOT_PUBLIC');", to: "", expect: /priv1/ },
+  { group: 'dir', browser: false, name: "an unknown category is widened to all", file: "functions/provider-directory.js", suite: "dir",
+    from: "  if (cat && !BCAT.isCategory(cat)) {", to: "  if (false) {", expect: /REFUSED, never widened|refuses an unknown category/ },
+  { group: 'dir', browser: false, name: "the category filter is ignored", file: "functions/provider-directory.js", suite: "dir",
+    from: "      if (c && (!cat || c.category === cat)) rows.push(c);", to: "      if (c) rows.push(c);", expect: /NOT listed as a clinician|trades filter|hotel filter|Legal authority/ },
+  { group: 'dir', browser: false, name: "the facet is the provider's free text", file: "functions/provider-directory.js", suite: "dir",
+    from: "  return elig.eligible ? publicCard(uid, p, elig.category) : null;", to: "  return elig.eligible ? publicCard(uid, p, p.category || elig.category) : null;", expect: /SERVER category|trades filter|agree/ },
+  { group: 'dir', browser: false, name: "the card leaks the phone", file: "functions/provider-directory.js", suite: "dir",
+    from: "    businessName: _san(p.businessName, 160),", to: "    businessName: _san(p.businessName, 160), phone: p.phone || null,", expect: /EXACTLY the whitelist|no phone/ },
+  { group: 'dir', browser: false, name: "the self-declared featured flag is carried", file: "functions/provider-directory.js", suite: "dir",
+    from: "    verified: p.verified === true,                                     /* admin-only on providers/{uid} */", to: "    verified: p.verified === true, featured: p.featured === true,", expect: /featured|EXACTLY the whitelist/ },
+  { group: 'dir', browser: false, name: "a rating is shown without repV", file: "functions/provider-directory.js", suite: "dir",
+    from: "  const hasRep = p.repV != null && Number(p.reviewCount) > 0", to: "  const hasRep = Number(p.reviewCount) > 0", expect: /rating only with repV/ },
+  { group: 'dir', browser: false, name: "a javascript: photo URL passes", file: "functions/provider-directory.js", suite: "dir",
+    from: "    photo: /^https:\\/\\//i.test(photo) ? photo.slice(0, 500) : '',", to: "    photo: photo.slice(0, 500),", expect: /only an https photo/ },
+  { group: 'dir', browser: false, name: "providerSearchProviders ignores the category", file: "functions/provider-onboarding.js", suite: "dir",
+    from: "listDirectory(_db(), { category: category || '', limit: 200 });", to: "listDirectory(_db(), { category: '', limit: 200 });", expect: /eligible trades only|refuses an unknown category/ },
+  { group: 'dir', browser: false, name: "the public profile answers to status alone again", file: "functions/provider-onboarding.js", suite: "ppa",
+    from: "  const _card = _reg && _reg.exists ? require('./provider-directory').cardIfEligible(_reg.id, _reg.data()) : null;", to: "  const _card = _reg && _reg.exists && ['active', 'approved'].includes(_reg.data().status) ? { category: _reg.data().category } : null;", expect: /E2a|SERVER category/ },
+  { group: 'dir', browser: false, name: "the healthcare directory stops using the one eligibility predicate", file: "functions/healthcare-directory.js", suite: "hcdir",
+    from: "  return elig.eligible && HCAT.isCategory(elig.category) && elig.category === HCAT.categoryOf(p);", to: "  return !!HCAT.categoryOf(p);", expect: /pending|suspended|non-public|not listed|NOT listed/i },
+  { group: 'dir', browser: false, name: "the stale pre-244 last-good copy is kept", file: "sokoni-providers.js", suite: "dir",
+    from: "  try { localStorage.removeItem('sokoniProvidersLastGood'); } catch (e) { /* private mode */ }", to: "", expect: /stale pre-244 copy/ },
+  { group: 'dir', browser: false, name: "the search fallback scans providers in the browser again", file: "sokoni-firestore-search.js", suite: "dir",
+    from: "    const docs = spec.remote ? await runRemote(spec) : await runQuery(db, sdk, spec, constraints);", to: "    const docs = await runQuery(db, sdk, spec, constraints);", expect: /search fallback/ },
+  { group: 'dir', browser: false, name: "the realtime hub bridge reads providers again", file: "realtime.js", suite: "dir",
+    from: "  async function _listenProviders(hub) { return; }", to: "  async function _listenProviders(hub) { const db = _getDb(); const { collection, query, where, getDocs } = await import(FS_URL); await getDocs(query(collection(db, 'providers'), where('hub', '==', hub))); }", expect: /realtime\.js/ },
+  { group: 'dir', browser: false, name: "the cleaning page cannot reach the directory (wrong op)", file: "sokoni-providers.js", suite: "inapp",
+    from: "          var p = { op: 'providerDirectory' };", to: "          var p = { op: 'providerList' };", expect: /cleaner card|SOKONI chat/ },
 ];
 
 const argv = process.argv.slice(2);

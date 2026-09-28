@@ -244,11 +244,12 @@ const SPECS = [
     link: () => 'car-hub.html?tab=mechanics',
   },
   {
-    col: 'providers', tab: 'professionals', icon: '👷', indexed: true, scan: 200,
-    guard: w => [w('status', 'in', ['active', 'approved'])],
-    fields: ['name', 'businessName', 'category', 'skills', 'description', 'bio', 'location', 'city'],
+    /* CHANGELOG 244 (C3a-2): read from the SERVER directory (providerDispatch { op:'providerDirectory' }) — the
+       server's C1 category and publicEligibility — never a status-guarded browser scan of raw provider documents. */
+    col: 'providers', tab: 'professionals', icon: '👷', scan: 200, remote: 'providerDirectory',
+    fields: ['name', 'businessName', 'categoryLabel', 'displayCategory', 'skills', 'description', 'location', 'city'],
     title: d => d.name || d.businessName || '',
-    subtitle: d => d.category || 'Professional',
+    subtitle: d => d.categoryLabel || 'Professional',
     location: d => d.location || d.city || '',
     price: d => kes(d.rate),
     thumb: d => d.photo || d.image || null,
@@ -305,12 +306,14 @@ const _scanCache = new Map(); /* col → { at, docs } */
    "fresh-looking" indefinitely and never refetched, so a newly approved provider
    stayed missing from search on any browser that had searched before. Bumping
    the key is the only way to clear a copy already sitting in users' devices. */
-const LS_KEY  = 'sokoni_fs_catalogue_v3';
+/* v4 (CHANGELOG 244): discards v3, whose `providers` column held raw browser-scanned provider documents — some the
+   server no longer lists. Providers now come from the server directory. */
+const LS_KEY  = 'sokoni_fs_catalogue_v4';
 const LS_TTL  = 30 * 60 * 1000;   /* serve from disk for half an hour … */
 const LS_SOFT = 3 * 60 * 1000;    /* … but revalidate in the background after 3 */
 const LS_MAX_DESC = 240;
 
-const KEEP = ['name', 'title', 'category', 'subcategory', 'brand', 'tags', 'location',
+const KEEP = ['name', 'title', 'category', 'categoryLabel', 'displayCategory', 'uid', 'subcategory', 'brand', 'tags', 'location',
   'county', 'city', 'price', 'pricePerNight', 'ticketPrice', 'budget', 'salary', 'rate',
   'consultationFee', 'hourlyRate', 'capacity', 'period', 'image', 'thumbnail', 'images',
   'logo', 'logoUrl', 'banner', 'bannerUrl', 'photo', 'poster', 'sellerName', 'storeName',
@@ -532,11 +535,21 @@ async function runQuery(db, sdk, spec, constraints) {
  * constraints so the read is permitted; without them Firestore denies the whole
  * list query and the collection silently disappears from results.
  */
+/* A spec with `remote` is answered by a server directory op, not a collection read (CHANGELOG 244). */
+async function runRemote(spec) {
+  const call = typeof window !== 'undefined' && window.sokoniCallable;
+  if (typeof call !== 'function') throw new Error('callable not ready');
+  const r = await call('providerDispatch')({ op: spec.remote, limit: spec.scan || 200 });
+  const rows = (r && r.data && Array.isArray(r.data.providers)) ? r.data.providers : null;
+  if (!rows) throw new Error(spec.remote + ': malformed reply');
+  return rows.map(c => ({ _id: c.uid, ...c }));
+}
+
 async function fetchCollection(db, sdk, spec) {
   const { where, limit } = sdk;
   const constraints = (spec.guard ? spec.guard(where) : []).concat([limit(spec.scan || 200)]);
   try {
-    const docs = await runQuery(db, sdk, spec, constraints);
+    const docs = spec.remote ? await runRemote(spec) : await runQuery(db, sdk, spec, constraints);
     /* A successful empty result IS cacheable — the collection really is empty. */
     _scanCache.set(spec.col, { at: Date.now(), docs });
     lsWrite(spec.col, docs);

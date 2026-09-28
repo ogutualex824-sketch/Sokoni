@@ -183,6 +183,9 @@ function publicEligibility(providerDoc) {
   if (!['active', 'approved'].includes(String(p.status || ''))) reasons.push('NOT_ACTIVE');
   if (p.suspended === true || String(p.status || '') === 'suspended') reasons.push('SUSPENDED');
   if (p.searchable === false) reasons.push('NOT_SEARCHABLE');
+  /* CHANGELOG 244 (C3a-2): isPublic:false is written by the server on suspension (application-lifecycle) and on Legal
+     provisioning, and an owner may set it to hide themselves. Honouring `false` only ever narrows discovery. */
+  if (p.isPublic === false) reasons.push('NOT_PUBLIC');
   const category = categoryOf(p);
   if (!category) reasons.push('UNCLASSIFIED');
   return { eligible: reasons.length === 0, category, reasons };

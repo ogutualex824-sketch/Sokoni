@@ -294,7 +294,19 @@ const minted = () => ENV.log.filter((e) => e.op === 'MINT_CLAIM');
   ENV.data[`providerProfiles/${OK_P}`].status = 'active';
   try { await OPS.providerGetPublicProfile({ data: { providerId: 'PRV-OK01' } }); pub = 'RETURNED'; }
   catch (e) { pub = e.code || 'threw'; }
-  ck('E2  ...and an approved one still is', pub === 'RETURNED', pub);
+  /* CHANGELOG 244 (C3a-2, owner decision 2026-09-28): approval alone is not public — an UNCLASSIFIED provider (e.g.
+     approved before C1) is hidden until AdminOS classifies it. The server stamps providers/{uid}.business at approval. */
+  ck('E2a ...an approved but UNCLASSIFIED provider is not fetchable until classified', pub !== 'RETURNED', pub);
+  { /* the stamp application-lifecycle.projectProvider writes at approval, derived from its producers — never hand-written */
+    const app = { role: 'provider', category: 'plumbing' };
+    const FNP = require('path').join(__dirname, '..', 'functions');
+    ENV.data[`providers/${OK_P}`].business = { category: require(require('path').join(FNP, 'business-category.js')).categoryFromApplication(app, app.role).category,
+      source: 'application', lane: require(require('path').join(FNP, 'provider-hub.js')).classifyDecidedApplication(app) };
+    if (ENV.data[`providers/${OK_P}`].business.category !== 'trades') throw new Error('fixture: the producers no longer classify plumbing as trades');
+  }
+  try { const r = await OPS.providerGetPublicProfile({ data: { providerId: 'PRV-OK01' } }); pub = r && r.category === 'trades' ? 'RETURNED' : 'WRONG_CATEGORY'; }
+  catch (e) { pub = e.code || 'threw'; }
+  ck('E2  ...and an approved, classified one still is — under the SERVER category', pub === 'RETURNED', pub);
 
   /* ═══ F — scope ═══ */
   console.log('\nF. scope');

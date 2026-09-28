@@ -24,12 +24,13 @@ const _db = () => admin.firestore();
 const _san = (s, n) => String(s == null ? '' : s).replace(/[<>]/g, '').trim().slice(0, n);
 
 /** Is this provider publicly discoverable as a healthcare provider? */
+/* CHANGELOG 244 (C3a-2): the ONE public-eligibility predicate (business-category.publicEligibility — the same one the
+   search-index gate and the provider directory use), restricted to a HEALTHCARE category. The directory lists under
+   HCAT.categoryOf (the healthcare authority's own decision); the two must agree or the provider is not listed. */
 function isDiscoverable(p) {
   if (!p) return false;
-  if (!HCAT.categoryOf(p)) return false;
-  if (!['active', 'approved'].includes(p.status)) return false;
-  if (p.suspended === true || p.isPublic === false || p.searchable === false) return false;
-  return true;
+  const elig = require('./business-category').publicEligibility(p);
+  return elig.eligible && HCAT.isCategory(elig.category) && elig.category === HCAT.categoryOf(p);
 }
 
 /** The public projection — a WHITELIST. */

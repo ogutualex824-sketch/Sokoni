@@ -1,3 +1,136 @@
+## 2026-09-28 (244) — C3a-2: ONE public provider directory — the server decides who is listed, and under which category
+
+Convergence slice C3a-2. Not deployed. No production writes. No index was touched. Parent: `d93fc01` (C3a-1).
+
+**Before (C3 survey):** every public provider list read `providers` in the browser and re-decided who was public from
+whatever fields it could read:
+- `sokoni-providers.js` covered providers / services / cleaning / index / provider-profile. It read by `status` only,
+  filtered on the provider-editable `category`, and cached raw documents, phone included.
+- A `realtime.js` hub bridge picked documents by the provider-editable `hub` field and wrote them OVER hub localStorage
+  lists such as `sokoniMechanics`, `sokoniGyms`, `sokoniHomeProviders` and `sokoniBnBs`.
+- A `services.html` raw listener fed `sokoniServiceProviders`, the list `legal-hub` reads.
+- The search fallback (`sokoni-firestore-search.js`) scanned `providers` in the browser.
+- `providerSearchProviders` answered from `providerProfiles` and its self-written category, subcategory and status.
+- `providerGetPublicProfile` checked `status` alone and returned the provider's free-text category.
+- Unclassified, not-searchable and `isPublic:false` providers were therefore listed.
+
+**Now:**
+- **`functions/provider-directory.js` (new)**, op `providerDirectory` on `providerDispatch` (no new Cloud Function):
+  - **Eligibility** is `business-category.publicEligibility`, the SAME predicate the C3a-1 search-index gate uses. The
+    suite proves they agree for every fixture.
+  - **Category** is the server's C1 category. A client may ask only for a C1 key; anything else is refused
+    (`UNKNOWN_CATEGORY`) rather than widened. Healthcare's own category and the Legal authority are found under theirs.
+  - **The card is a WHITELIST:**
+    - no phone, email, owner or internal field;
+    - no self-declared `featured` (owner-writable; placement is C7);
+    - a rating only when the reputation authority derived it (`repV`);
+    - only an `https` photo;
+    - markup stripped.
+  - `{ providerId }` returns one card, or `null` for a provider the server does not list.
+- **`publicEligibility` honours `isPublic:false`** (`NOT_PUBLIC`). The server writes it on suspension and Legal
+  provisioning, and an owner may use it to hide. Honouring `false` only narrows discovery, and the index gate inherits it.
+- **`sokoni-providers.js`:**
+  - reads through the directory and makes no Firestore read of its own;
+  - `list({category})` accepts a C1 key and returns an honest error for anything else;
+  - the pre-244 last-good copy (raw documents) is DELETED, and `.v2` holds server cards only.
+- **The search fallback's `providers` spec asks the directory** (`remote`). The persisted catalogue key moves v3 → v4,
+  so no raw provider copy is served from a device.
+- **Retired:**
+  - the `realtime.js` hub bridge, as `provider-wiring.js` retired its twin;
+  - the `services.html` raw listener.
+- **`providerSearchProviders` and `providerGetPublicProfile` answer from the directory** (`listDirectory` /
+  `cardIfEligible`). Their response keys are unchanged; `subcategory` and `county` are no longer facets.
+- **`healthcareDirectory` uses the same predicate**, restricted to a healthcare category that agrees with the healthcare
+  authority.
+
+**Owner decisions applied:** an unclassified provider, including one approved before C1, is not publicly listed or
+fetchable until AdminOS classifies it. Shop and merchant discovery is untouched.
+
+**Test fixtures updated to the C1 contract (checks not weakened).** Each approved-provider fixture now carries the
+`business` stamp, DERIVED FROM ITS PRODUCERS: `business-category.categoryFromApplication` +
+`provider-hub.classifyDecidedApplication`, exactly as `application-lifecycle.projectProvider` stamps it at approval.
+Each asserts the producers still yield the expected category.
+- `test-provider-publish-authority` E2: the approved provider is classified (`plumbing` → `trades`). A new check, E2a,
+  proves an approved but UNCLASSIFIED provider is refused.
+- `test-in-app-booking-contact`: the cleaner is classified (`cleaning`), and the page reaches the REAL directory handler.
+- `test-share-integrity-browser`: the photographer is classified (`artist_creator`, lane
+  `entertainment` / `ARTIST`), and `providerDispatch` carries the REAL directory handler.
+  - Unclassified, its profile correctly showed "not available" (8 failures vs `d93fc01`).
+  - A first repair HAND-WROTE the lane as `{hub:'provider'}`. That pushed the photographer out of the Entertainment lane
+    it is decided into, so its service was no longer bookable.
+  - Control: that hand-written fixture failed the same 8 checks on `d93fc01` code too, so it was a fixture defect and
+    not C3a-2.
+  - With the producer-derived stamp: 64/0 on head, 64/0 on `d93fc01` with its original fixture, and 64/0 on `d93fc01`
+    code with the new fixture.
+
+**Tests:**
+- `scripts/test-provider-directory.js`: **40/0**.
+
+**Sabotage `--group=dir` (16 attacks: `dir` / `ppa` / `hcdir` / `inapp`):**
+- **16/16 CAUGHT** (0 other, 0 missed, 0 crashed), and the post-restore suites are green.
+- It ran under an external supervisor that snapshots all 7 targets before the run and checks byte-identity after, with
+  no process killed. Result: 7/7 byte-identical, 0 restores needed. `scripts/run-sabotage.js` is not on
+  `feat/creator-hub`, and it refuses targets that differ from HEAD, which every uncommitted slice's targets do.
+- **The first run was 15/16.** "The category filter is ignored" SURVIVED because no fixture separated the query from the
+  post-query check.
+  - Added a discriminating check: a provider stamped `business.category: trades` but carrying a legacy
+    `healthcare.category: clinician` is fetched by the healthcare query and must NOT be listed as a clinician.
+  - The attack's `expect` names that check.
+  - The full group was re-run, with every attack, not only the survivor.
+
+**Baseline (79 suites vs `d93fc01`):** 75 SAME, 4 DIFF.
+- `test-provider-directory`: new.
+- `test-share-integrity-browser`: the fixture above; now 64/0 in both trees.
+- `test-cart-market-actions`: two blast-radius checks read `git diff HEAD`, so they fail only while the tree is
+  uncommitted. Re-run on the committed tree: see below.
+- `test-provider-dashboard-sidebar-browser`: base 89/1, head 90/0 in the comparison run.
+  - Four independent solo runs per tree gave an IDENTICAL pattern: 1/4 failed in each tree, both times on run 1, both
+    on "1280px: the rail is remembered across a reload, and expands again" with the same detail
+    (`{"kept":true,"back":72}`). The other three runs passed 90/0.
+  - It is a timing flake, independent of C3a-2, and is recorded rather than modified.
+- Failing identically in both trees (pre-existing, unchanged, not modified): `test-secondary-firebase-apps` (8/1),
+  `test-realtime-multidevice` (68/1). Exit-code-only suites are unchanged too (the rules suites run without the
+  emulator wrapper, among others).
+
+**C3 follow-ups (explicit, NOT absorbed into this slice):**
+1. **Provider record exposure.** The `providers` read rule still allows a public read of active/approved docs, phone
+   included. It is tightened once no public page reads `providers` directly.
+2. **Legacy-registry browser fallback.** The search fallback still browser-scans `mechanics`, `healthProviders`,
+   `lawyers` and `services`.
+3. **Legacy localStorage hub lists.** `mechanics.html`, `fitness-hub.html`, `home-services.html`, `bnb.html` and
+   `legal-hub` still render them. The bridge that fed them provider records is gone.
+
+Also open in C3:
+- Directory pagination: the scan is 300 per query and reports `truncated`. Production has 11 providers.
+- `providerGetPublicProfile` still returns `providerProfiles`' self-written `qualifications` / `pricing` / `bookingCount`.
+
+**Separate defect (booking UX, NOT C3):** `providers.html` shows "Booking confirmed!" from a local path with no server
+confirmation, a false success under the UI-integrity rule. It is recorded for the booking track.
+
+**Files:**
+- New: `functions/provider-directory.js`, `scripts/test-provider-directory.js`.
+- Changed:
+  - `functions/business-category.js`, `functions/provider-dispatch.js`, `functions/provider-onboarding.js`,
+    `functions/healthcare-directory.js`;
+  - `sokoni-providers.js`, `sokoni-firestore-search.js`, `realtime.js`, `services.html`;
+  - `scripts/test-provider-publish-authority.js`, `scripts/test-in-app-booking-contact.js`,
+    `scripts/test-share-integrity-browser.js`, `scripts/sabotage-event-ops.js`;
+  - `docs/BUSINESS_CATEGORY_AUTHORITY.md`, `docs/PROVIDER_REGISTRY.md`.
+
+**API:**
+- New op `providerDispatch { op:'providerDirectory' }`.
+- `providerSearchProviders` refuses an unknown category, and its values come from the server.
+- `providerGetPublicProfile` refuses an ineligible provider.
+
+**Security:**
+- The public provider list no longer carries phone numbers or owner fields.
+- Eligibility and category are server facts.
+
+**Breaking:**
+- Unclassified and hidden providers leave every public list and profile.
+- `SokoniProviders.list({category})` takes C1 keys only.
+- **Database:** none. **Deploy:** functions (`providerDispatch`) and hosting, together, when authorized.
+
 ## 2026-09-28 (243) — C3a-1: ONE public-discovery gate for every search index (the server's category, eligibility only)
 
 Convergence slice C3a-1, the first of C3 (verified-only discovery). Not deployed. No production writes. No index was

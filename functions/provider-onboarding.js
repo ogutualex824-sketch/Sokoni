@@ -1085,44 +1085,44 @@ exports._h.providerGetPublicProfile = _h.providerGetPublicProfile = async (req) 
      booking-service consults. Without this, a self-service provider who never
      reached an application was still publicly fetchable by providerId, complete
      with their self-entered `qualifications`. */
-  const _reg = await _db().collection('providers').doc(d.uid).get();
-  const _st  = _reg.exists ? (_reg.data() || {}).status : null;
-  if (!['active', 'approved'].includes(_st)) {
+  /* CHANGELOG 244 (C3a-2): the canonical record answers through the ONE public-eligibility predicate
+     (business-category.publicEligibility, via provider-directory) — approved, not suspended, searchable, public and
+     CLASSIFIED — not a status check re-derived here. The category is the SERVER's; a rating only when the
+     reputation authority derived it; placement (featured) is C7's, never the profile's own flag. */
+  const _reg = d.uid && !/[/]/.test(String(d.uid)) ? await _db().collection('providers').doc(String(d.uid)).get() : null;
+  const _card = _reg && _reg.exists ? require('./provider-directory').cardIfEligible(_reg.id, _reg.data()) : null;
+  if (!_card) {
     throw new HttpsError('not-found', 'Provider not found or not yet active.');
   }
   return {
-    providerId: d.providerId, name: d.name, bio: d.bio, category: d.category,
-    subcategory: d.subcategory, experience: d.experience, qualifications: d.qualifications,
+    providerId: d.providerId, name: d.name, bio: d.bio, category: _card.category, categoryLabel: _card.categoryLabel,
+    subcategory: null, displayCategory: _card.displayCategory, experience: d.experience, qualifications: d.qualifications,
     languages: d.languages, coverage: d.coverage, pricing: d.pricing,
-    profilePhotoUrl: d.profilePhotoUrl || null, rating: d.rating,
-    reviewCount: d.reviewCount, bookingCount: d.bookingCount,
-    verified: d.verified, featured: d.featured, plan: d.plan,
+    profilePhotoUrl: d.profilePhotoUrl || null, rating: _card.rating,
+    reviewCount: _card.reviewCount, bookingCount: d.bookingCount,
+    verified: _card.verified, featured: false, plan: d.plan,
     portfolio: d.portfolioHighlights || [], qrCode: d.qrCode,
   };
 };
 
 /* ── 17. providerSearchProviders ─────────────────────────────────────────────── */
+/* CHANGELOG 244 (C3a-2): answered by the ONE public provider directory (provider-directory.listDirectory) — the
+   SERVER's C1 category and publicEligibility — never providerProfiles' self-written category / subcategory / status /
+   searchable. 'category' must be a C1 key (UNKNOWN_CATEGORY otherwise); 'subcategory' and 'county' are no longer
+   facets and are ignored. Response keys are unchanged. */
 exports._h.providerSearchProviders = _h.providerSearchProviders = async (req) => {
-  const { category, subcategory, county, verified, limit = 20 } = req.data || {};
-
-  let q = _db().collection('providerProfiles').where('status', '==', 'active').where('searchable', '==', true);
-  if (category)    q = q.where('category', '==', _san(category, 100));
-  if (subcategory) q = q.where('subcategory', '==', _san(subcategory, 100));
-  if (verified)    q = q.where('verified', '==', true);
-  q = q.orderBy('rating', 'desc').limit(Math.min(Number(limit), 50));
-
-  const snap = await q.get();
+  const { category, verified, limit = 20 } = req.data || {};
+  const lim = Math.max(1, Math.min(Number(limit) || 20, 50));
+  const r = await require('./provider-directory').listDirectory(_db(), { category: category || '', limit: 200 });
+  const rows = r.providers.filter((c) => !verified || c.verified).slice(0, lim);
   return {
-    providers: snap.docs.map(d => {
-      const p = d.data();
-      return {
-        providerId: p.providerId, name: p.name, category: p.category,
-        subcategory: p.subcategory, rating: p.rating, reviewCount: p.reviewCount,
-        verified: p.verified, featured: p.featured, pricing: p.pricing,
-        profilePhotoUrl: p.profilePhotoUrl || null, coverage: p.coverage,
-      };
-    }),
-    count: snap.size,
+    providers: rows.map((c) => ({
+      providerId: c.providerId, name: c.name, category: c.category,
+      subcategory: null, rating: c.rating, reviewCount: c.reviewCount,
+      verified: c.verified, featured: false, pricing: c.rate != null ? { rate: c.rate, rateType: c.rateType || null } : null,
+      profilePhotoUrl: c.photo || null, coverage: null,
+    })),
+    count: rows.length,
   };
 };
 

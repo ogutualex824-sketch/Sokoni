@@ -46,6 +46,7 @@ const PON = require(Path.join(FN, 'provider-onboarding.js'));
 const AV = require(Path.join(FN, 'ent-availability.js'));
 const EQ = require(Path.join(FN, 'ent-enquiries.js'));
 const RC = require(Path.join(FN, 'ent-rate-cards.js'));
+const PD = require(Path.join(FN, 'provider-directory.js'));   /* CHANGELOG 244 — the public provider directory */
 const { makePageHarness } = require('./lib/page-harness.js');
 
 let pass = 0, fail = 0;
@@ -62,9 +63,18 @@ const CARD_PAGE = '<!doctype html><html><head><meta charset="utf-8"><meta name="
 
 (async () => {
   for (const u of ['b1', 'b2', 'ph1']) await db.doc('users/' + u).set({ displayName: u === 'b1' ? 'Achieng Otieno' : u });
-  await db.doc('providers/ph1').set({ uid: 'ph1', name: 'Jane Photography', status: 'active', verified: true, category: 'photographer', acceptsBookings: true, rating: 5, reviewCount: 99 });
+  /* CHANGELOG 244 (C3a-2): an approved provider carries the SERVER's business stamp, and an unclassified one is not
+     publicly listed or fetchable. The stamp is DERIVED FROM ITS PRODUCERS — the same two calls
+     application-lifecycle.projectProvider makes at approval — never hand-written: a hand-written lane
+     ({hub:'provider'}) moved this photographer out of the Entertainment lane it is decided into. */
+  const APP_PH1 = { uid: 'ph1', status: 'approved', role: 'provider', category: 'photographer' };
+  const STAMP_PH1 = { category: require(Path.join(FN, 'business-category.js')).categoryFromApplication(APP_PH1, APP_PH1.role).category, source: 'application', applicationId: 'app_ph1',
+    lane: require(Path.join(FN, 'provider-hub.js')).classifyDecidedApplication(Object.assign({}, APP_PH1, { role: APP_PH1.role })) };
+  if (STAMP_PH1.category !== 'artist_creator' || STAMP_PH1.lane.hub !== 'entertainment') throw new Error('fixture: the producers no longer stamp a photographer as artist_creator / entertainment — ' + JSON.stringify(STAMP_PH1));
+  await db.doc('providers/ph1').set({ uid: 'ph1', name: 'Jane Photography', status: 'active', verified: true, category: 'photographer', acceptsBookings: true, rating: 5, reviewCount: 99,
+    business: STAMP_PH1 });
   await db.doc('providerProfiles/ph1').set({ uid: 'ph1', providerId: 'PRV-AB12CD34', status: 'active', name: 'Jane Photography' });
-  await db.doc('applications/app_ph1').set({ uid: 'ph1', status: 'approved', role: 'provider', category: 'photographer' });
+  await db.doc('applications/app_ph1').set(APP_PH1);
   await db.doc('providerAvailability/ph1').set({ uid: 'ph1', modes: ['fixed_hours'], schedule: WEEK, appt: { enabled: true, durationMins: 60, maxDaysAhead: 90, minNoticeHours: 1, allowSameDay: true }, cap: {} });
   await db.doc('providerServices/s1').set({ providerId: 'ph1', name: 'Portrait session', price: 500000, fee: 0, deposit: 0, durationMins: 60, active: true });
   await EQ._h.entMessagingSetSettings({ auth: { uid: 'ph1', token: {} }, rawRequest: { headers: {} }, data: { settings: { responseTime: 'WITHIN_1_HOUR' } } });
@@ -72,7 +82,7 @@ const CARD_PAGE = '<!doctype html><html><head><meta charset="utf-8"><meta name="
   await BS._h.bookingSubmitReview({ auth: { uid: 'b1', token: {} }, rawRequest: { headers: {} }, data: { bookingId: 'pb1', rating: 4, text: 'Lovely light' } });
 
   const HAR = makePageHarness({ db, root: ROOT, pages: { '/t-share.html': SHARE_PAGE, '/t-card.html': CARD_PAGE },
-    callables: { bookingDispatch: Object.assign({}, AV._h, EQ._h, RC._h, BS._h, REP._h), providerDispatch: Object.assign({}, PON._h, PO._h) } });
+    callables: { bookingDispatch: Object.assign({}, AV._h, EQ._h, RC._h, BS._h, REP._h), providerDispatch: Object.assign({}, PON._h, PO._h, PD._h) } });
   await HAR.start();
   const { chromium } = require(Path.join(ROOT, 'node_modules', 'playwright'));
   const browser = await chromium.launch();

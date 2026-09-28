@@ -21,16 +21,21 @@
 
    THERE IS NO DEMO FALLBACK. If the read fails, this returns zero providers
    and an error. It never substitutes invented listings.
+
+   THE SERVER DECIDES WHO IS LISTED (CHANGELOG 244, convergence C3a-2).
+   The browser no longer reads `providers` and re-decides approval, category,
+   suspension or searchability from whatever fields it could read. It asks
+   providerDispatch { op:'providerDirectory' } (functions/provider-directory.js),
+   which applies business-category.publicEligibility — the same predicate the
+   search-index gate uses — and returns a public WHITELIST card under the
+   SERVER's category (C1). A category asked for here must be a C1 key.
 ============================================================================ */
 
 (function () {
   'use strict';
 
-  var FIREBASE_SDK = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-
-  /* Reads are gated by firestore.rules on `status`; a list query that cannot
-     prove it is safe is denied outright, not merely slow. Keep in sync with
-     the providers rule and with SPECS in sokoni-firestore-search.js. */
+  /* Informational only since CHANGELOG 244 — eligibility is the server's
+     (providerDirectory), never re-derived from this list in the browser. */
   var VISIBLE_STATUS = ['active', 'approved'];
   var SCAN_LIMIT     = 200;
   var CACHE_TTL_MS   = 2 * 60 * 1000;
@@ -63,7 +68,7 @@
     });
   }
 
-  var _sdk = null, _cache = null, _cacheAt = 0, _inflight = null;
+  var _cache = null, _cacheAt = 0, _inflight = null;
 
   /* ── Last-good persistent cache ─────────────────────────────────────────────
      App Check is enforced on Firestore and, on this project, fails
@@ -79,7 +84,8 @@
      nothing here is invented, and a visitor who has never had a successful
      read still gets the honest error state, because there is nothing real to
      show them yet. */
-  var LS_KEY = 'sokoniProvidersLastGood';
+  var LS_KEY = 'sokoniProvidersLastGood.v2';
+  try { localStorage.removeItem('sokoniProvidersLastGood'); } catch (e) { /* private mode */ }
   var LS_TTL_MS = 24 * 60 * 60 * 1000;   /* a day: stale-but-real beats broken */
 
   function saveLastGood(list) {
@@ -98,42 +104,19 @@
     } catch (e) { return null; }
   }
 
-  /* ── Category aliases ──────────────────────────────────────────────────────
-     Hub pages ask for a bucket, not a slug: the Cleaning hub must show both
-     cleaners and mamafua. Aliases are expanded before matching so a provider
-     filed under `laundry` still surfaces on a `cleaning` page. */
-  var CATEGORY_ALIASES = {
-    cleaning:      ['cleaning', 'laundry', 'housekeeping'],
-    laundry:       ['laundry', 'mamafua', 'cleaning'],
-    'home-repairs':['home-repairs', 'handyman', 'plumbing', 'electrical'],
-    entertainment: ['entertainment', 'mc', 'dj', 'live-band', 'comedian', 'dancer'],
-    beauty:        ['beauty', 'hair-beauty'],
-    tech:          ['phone-repair', 'computer-repair', 'electronics-repair'],
-    health:        ['healthcare', 'clinic', 'pharmacy', 'home-doctor'],
-  };
-
-  /* Display labels. A provider carries its own categoryLabel; this is the
-     fallback for records written before that field existed. */
-  var CATEGORY_LABEL = {
-    laundry: 'Mama Fua (Laundry)', cleaning: 'Cleaning', plumbing: 'Plumbing',
-    electrical: 'Electrical Work', 'phone-repair': 'Phone Repair',
-    'computer-repair': 'IT Repair', 'hair-beauty': 'Hair & Beauty',
-    photography: 'Photography', videography: 'Videography', tutoring: 'Tutoring',
-    fitness: 'Fitness Training', catering: 'Catering', events: 'Event Planning',
-    marketing: 'Marketing', accounting: 'Accounting', legal: 'Legal',
-    'delivery-service': 'Delivery', 'home-repairs': 'Home Repairs',
-    mc: 'MC / Emcee', dj: 'DJ / Disc Jockey', mechanics: 'Mechanic',
-    gardening: 'Gardening', security: 'Security',
-  };
-
+  /* ── Categories ─────────────────────────────────────────────────────────────
+     The SERVER's C1 categories (functions/business-category.js). Labels come
+     from the server card; the emoji is presentation only. There are no aliases:
+     a provider's self-described "laundry" or "mamafua" is its displayCategory,
+     not a filter key, and a page asks for the C1 key (e.g. 'cleaning'). */
   var CATEGORY_EMOJI = {
-    laundry: '🧺', cleaning: '🧹', plumbing: '🔧', electrical: '⚡',
-    'phone-repair': '📱', 'computer-repair': '💻', 'hair-beauty': '💇',
-    photography: '📸', videography: '🎥', tutoring: '📚', fitness: '🏋️',
-    catering: '🍲', events: '🎉', marketing: '📈', accounting: '🧮',
-    legal: '⚖️', 'delivery-service': '🚚', 'home-repairs': '🔨',
-    mc: '🎤', dj: '🎧', mechanics: '🔧', gardening: '🌿', security: '🛡️',
+    clinician: '👩‍⚕️', facility: '🏥', pharmacy: '💊', laboratory: '🔬', telemedicine: '📱', home_care: '🏠',
+    hotel: '🏨', restaurant: '🍽️', trades: '🔧', cleaning: '🧹', it_services: '💻', salon: '💇',
+    lawyer: '⚖️', professional_services: '💼', education: '📚', auto_services: '🚗', fitness_studio: '🏋️',
+    service_business: '🛠️', artist_creator: '🎤', event_services: '🎉', event_organizer: '🎟️', venue: '🏟️',
+    retail_store: '🏪', property: '🏠', delivery: '🚚',
   };
+  var _labels = {};   /* C1 key → label, learnt from the server's reply */
 
   /* ── XSS-safe escape. Provider names and bios are user-supplied and land in
      innerHTML on every page that renders a card. ───────────────────────────── */
@@ -143,61 +126,65 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
-  function loadSdk() {
-    if (!_sdk) _sdk = import(FIREBASE_SDK);
-    return _sdk;
-  }
-
-  function db() {
-    return window.firebaseDB || null;
+  /* firebase.js (a module) installs window.sokoniCallable; this deferred script
+     may run first, so wait briefly for it rather than failing the read. */
+  function directory(data) {
+    var waited = 0;
+    return new Promise(function (resolve, reject) {
+      (function poll() {
+        if (typeof window.sokoniCallable === 'function') {
+          var p = { op: 'providerDirectory' };
+          for (var k in data) if (Object.prototype.hasOwnProperty.call(data, k)) p[k] = data[k];
+          window.sokoniCallable('providerDispatch')(p).then(function (r) { resolve((r && r.data) || {}); }, reject);
+          return;
+        }
+        if ((waited += 100) > READ_TIMEOUT_MS) { var e = new Error('SOKONI is still loading'); e.code = 'unavailable'; reject(e); return; }
+        setTimeout(poll, 100);
+      })();
+    });
   }
 
   /* ── Normalisation ─────────────────────────────────────────────────────────
-     Documents were written by more than one path over time, so field names
-     vary (name / businessName / fullName, location / city, photo / photoURL).
-     Every consumer gets one stable shape instead of repeating this guesswork.
-     Absent fields stay absent — nothing is invented to fill a card. */
+     The server card (functions/provider-directory.publicCard) is already the
+     public whitelist under the C1 category; this maps it onto the shape pages
+     render. Absent fields stay absent — nothing is invented to fill a card. A
+     rating is present only when the reputation authority derived it; there is
+     no phone (contact is in-app) and no self-declared `featured`. */
   function normalize(id, d) {
     d = d || {};
-    var cats = Array.isArray(d.categories) && d.categories.length
-      ? d.categories
-      : (d.category ? [d.category] : []);
-    var primary = d.category || cats[0] || '';
+    var uid = String(d.uid || id || '');
+    var cat = d.category || '';
+    if (cat && d.categoryLabel) _labels[cat] = d.categoryLabel;
     return {
-      uid:           d.uid || id,
-      id:            id,
-      providerId:    d.providerId || id,
-      name:          d.name || d.businessName || d.fullName || d.displayName || '',
+      uid:           uid,
+      id:            uid,
+      providerId:    d.providerId || uid,
+      name:          d.name || '',
       businessName:  d.businessName || '',
-      category:      primary,
-      categories:    cats,
-      categoryLabel: d.categoryLabel || CATEGORY_LABEL[primary] || primary || 'Professional',
-      emoji:         CATEGORY_EMOJI[primary] || '👷',
-      serviceType:   d.serviceType || '',
-      description:   d.description || d.bio || '',
+      category:      cat,
+      categories:    cat ? [cat] : [],
+      categoryLabel: d.categoryLabel || 'Professional',
+      displayCategory: d.displayCategory || '',
+      emoji:         CATEGORY_EMOJI[cat] || '👷',
+      serviceType:   d.serviceType || d.displayCategory || '',
+      description:   d.description || '',
       location:      d.location || d.city || '',
       city:          d.city || '',
-      phone:         d.phone || '',
+      phone:         '',
       skills:        Array.isArray(d.skills) ? d.skills : [],
-      /* Counters are shown only when real. A provider with no completed jobs
-         renders no jobs figure rather than a flattering zero-dressed-as-new. */
-      /* Only a SERVER-maintained aggregate (repV, functions/reputation.js) is shown. Before the recount an
-         owner could write their own rating here; that value is never displayed. */
-      rating:        d.repV && typeof d.rating === 'number' && d.rating > 0 && Number(d.reviewCount) > 0 ? d.rating : null,
-      reviewCount:   d.repV ? Number(d.reviewCount || 0) : 0,
-      followerCount: d.followV && typeof d.followerCount === 'number' ? d.followerCount : null,
-      jobsCompleted: Number(d.jobsCompleted || d.bookingCount || 0),
+      rating:        typeof d.rating === 'number' && d.rating > 0 && Number(d.reviewCount) > 0 ? d.rating : null,
+      reviewCount:   Number(d.reviewCount || 0),
+      followerCount: typeof d.followerCount === 'number' ? d.followerCount : null,
+      jobsCompleted: Number(d.jobsCompleted || 0),
       rate:          d.rate != null && d.rate !== '' ? Number(d.rate) : null,
       rateType:      d.rateType || '',
-      photo:         d.photo || d.photoURL || d.image || '',
+      photo:         d.photo || '',
       verified:      d.verified === true,
-      featured:      d.featured === true,
-      available:     d.available !== false && d.isAvailable !== false,
+      featured:      false,
+      available:     d.available !== false,
       acceptsBookings: d.acceptsBookings !== false,
       chatEnabled:   d.chatEnabled !== false,
-      profileUrl:    'provider-profile.html?uid=' + encodeURIComponent(d.uid || id),
-      /* Fields the provider has still to supply — lets a page prompt rather
-         than render a hole. */
+      profileUrl:    'provider-profile.html?uid=' + encodeURIComponent(uid),
       profilePending: Array.isArray(d.profilePending) ? d.profilePending : [],
     };
   }
@@ -229,51 +216,19 @@
     }
 
     _inflight = (function () {
-      var d = db();
-      if (!d) {
-        return Promise.resolve(degrade(new Error('Firestore is not initialised on this page')));
-      }
-      return loadSdk().then(function (m) {
-        var q = m.query(
-          m.collection(d, 'providers'),
-          m.where('status', 'in', VISIBLE_STATUS),
-          m.orderBy('updatedAt', 'desc'),
-          m.limit(SCAN_LIMIT)
-        );
-        /* App Check on this project 403s intermittently, and its token
-           auto-refreshes — so a read that fails now frequently succeeds a
-           second later with a fresh token. One transparent retry converts most
-           of those transient failures into a normal load, before any cache or
-           error path is considered. */
-        return withTimeout(m.getDocs(q), 'providers list').catch(function (e1) {
-          return new Promise(function (res) { setTimeout(res, 1500); })
-            .then(function () { return withTimeout(m.getDocs(q), 'providers list (retry)'); });
-        });
-      }).then(function (snap) {
-        /* An unreachable backend does NOT reject. getDocs falls back to the
-           local persistence cache and resolves normally — on a cold page that
-           cache is empty, so a blocked read (App Check rejection, offline,
-           rules denial at the transport layer) arrives here as a perfectly
-           successful snapshot of zero documents. Rendered naively that becomes
-           "No providers yet", which tells the visitor something false about
-           the marketplace and hides the outage.
-
-           snap.metadata.fromCache is the discriminator: served from cache AND
-           empty means we never heard from the server and genuinely do not know
-           whether the registry is empty. Report that as an error. An empty
-           result that DID come from the server is a real, trustworthy empty. */
-        if (snap.metadata && snap.metadata.fromCache && snap.size === 0) {
-          var err = new Error('Firestore unreachable — served an empty cache, not an empty registry');
-          err.code = 'unavailable';
-          console.warn('[SokoniProviders] ' + err.message);
-          return degrade(err);
-        }
+      /* One transparent retry: App Check on this project fails intermittently
+         and its token auto-refreshes, so a second attempt usually succeeds. */
+      return withTimeout(directory({ limit: SCAN_LIMIT }), 'providers list').catch(function () {
+        return new Promise(function (res) { setTimeout(res, 1500); })
+          .then(function () { return withTimeout(directory({ limit: SCAN_LIMIT }), 'providers list (retry)'); });
+      }).then(function (r) {
+        if (!r || !Array.isArray(r.providers)) throw new Error('providers list: malformed reply');
+        (r.categories || []).forEach(function (c) { if (c && c.id) _labels[c.id] = c.label; });
         var out = [];
-        snap.forEach(function (doc) {
-          var p = normalize(doc.id, doc.data());
-          /* A record with no name cannot be rendered as a card and must not
-             become a blank tile in the grid. */
-          if (p.name) out.push(p);
+        r.providers.forEach(function (c) {
+          var p = normalize(c && c.uid, c);
+          /* A record with no name cannot be rendered as a card. */
+          if (p.name && p.uid) out.push(p);
         });
         _cache = out;
         _cacheAt = Date.now();
@@ -291,8 +246,7 @@
 
   function expandCategory(cat) {
     if (!cat || cat === 'all') return null;
-    var key = String(cat).toLowerCase();
-    return (CATEGORY_ALIASES[key] || [key]).map(String);
+    return [String(cat)];
   }
 
   function matchesCategory(p, wanted) {
@@ -323,6 +277,10 @@
     opts = opts || {};
     return fetchAll(opts.force).then(function (r) {
       var wanted = expandCategory(opts.category);
+      if (wanted && !CATEGORY_EMOJI[wanted[0]]) {
+        var ue = new Error('Unknown category: ' + wanted[0]); ue.code = 'invalid-argument';
+        return { providers: [], error: ue, stale: false };
+      }
       var out = r.providers.filter(function (p) {
         if (!matchesCategory(p, wanted)) return false;
         if (!matchesQuery(p, opts.query)) return false;
@@ -364,29 +322,14 @@
       return { provider: null, error: err };
     }
 
-    var d = db();
-    if (!d) return Promise.resolve(degradeOne(new Error('Firestore is not initialised')));
-    return loadSdk().then(function (m) {
-      var ref = m.doc(d, 'providers', String(uid));
-      /* One transparent retry, same reasoning as list(): intermittent App
-         Check failures usually clear on the next token. */
-      return withTimeout(m.getDoc(ref), 'provider read').catch(function () {
-        return new Promise(function (res) { setTimeout(res, 1500); })
-          .then(function () { return withTimeout(m.getDoc(ref), 'provider read (retry)'); });
-      });
-    }).then(function (snap) {
-      /* Same trap as list(): offline, getDoc resolves from an empty cache and
-         reports the document as non-existent. "This provider does not exist"
-         is a much worse thing to tell a visitor than "we could not load it". */
-      if (!snap.exists() && snap.metadata && snap.metadata.fromCache) {
-        return degradeOne(new Error('Firestore unreachable — cannot confirm this provider exists'));
-      }
-      if (!snap.exists()) return { provider: null, error: null };
-      var raw = snap.data();
-      if (VISIBLE_STATUS.indexOf(String(raw.status)) === -1) {
-        return { provider: null, error: null };   /* not publicly visible */
-      }
-      return { provider: normalize(snap.id, raw), error: null };
+    return withTimeout(directory({ providerId: String(uid) }), 'provider read').catch(function () {
+      return new Promise(function (res) { setTimeout(res, 1500); })
+        .then(function () { return withTimeout(directory({ providerId: String(uid) }), 'provider read (retry)'); });
+    }).then(function (r) {
+      /* null = the server does not list this provider (not approved, suspended,
+         hidden or unclassified) — "not available", which is a real answer. */
+      if (!r || !r.provider) return { provider: null, error: null };
+      return { provider: normalize(r.provider.uid, r.provider), error: null };
     }).catch(function (e) {
       console.warn('[SokoniProviders] get failed:', e && e.message);
       return degradeOne(e);
@@ -442,7 +385,7 @@
     normalize: normalize,
     esc: esc,
     emptyStateHtml: emptyStateHtml,
-    categoryLabel: function (c) { return CATEGORY_LABEL[c] || c; },
+    categoryLabel: function (c) { return _labels[c] || c; },
     categoryEmoji: function (c) { return CATEGORY_EMOJI[c] || '👷'; },
     invalidate: function () { _cache = null; _cacheAt = 0; },
     VISIBLE_STATUS: VISIBLE_STATUS.slice(),

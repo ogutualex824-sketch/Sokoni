@@ -26,6 +26,11 @@ const F = makeFakeFirestore({ clock: () => Date.now() });
 const db = F.db;
 const say = console.log; console.log = console.info = console.warn = console.error = console.debug = () => {};
 const { makePageHarness } = require('./lib/page-harness.js');
+/* CHANGELOG 244 (C3a-2): public provider lists come from the REAL server directory (provider-directory.js). */
+const FN = Path.join(ROOT, 'functions');
+const stub = (m, exp) => { const p = require.resolve(m, { paths: [FN] }); require.cache[p] = { id: p, filename: p, loaded: true, exports: exp }; };
+stub('firebase-admin', { apps: [{}], initializeApp: () => ({}), firestore: Object.assign(() => db, { FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath }), auth: () => ({}) });
+const PD = require(Path.join(FN, 'provider-directory.js'));
 let pass = 0, fail = 0;
 const ck = (l, ok, d) => { say('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d !== undefined && d !== '' ? '   [' + String(typeof d === 'object' ? JSON.stringify(d) : d).slice(0, 170) + ']' : '')); ok ? pass++ : fail++; };
 const SPY = () => { window.__opened = []; window.open = (u) => { window.__opened.push(String(u)); return null; }; window.__toasts = []; window._skToast = (m) => window.__toasts.push(String(m)); };
@@ -39,10 +44,18 @@ const nonShareWa = (src) => src.split('\n').filter((l) => /wa\.me/.test(l) && !/
   }
   ck('the detector finds a contact hand-off (positive control)', nonShareWa('<a href="https://wa.me/254700000000?text=hi">').length === 1 && nonShareWa("window.open('https://wa.me/?text=x')").length === 0);
 
-  await db.doc('providers/cl1').set({ uid: 'cl1', name: 'Sparkle Cleaners', category: 'cleaning', status: 'active', phone: '0711000000', rate: 1500 });
+  /* An approved provider carries the SERVER's category (stamped at approval — C1); since CHANGELOG 244 an unclassified
+     one is not publicly listed, so the fixture is the approved, classified cleaner this suite means. */
+  await db.doc('providers/cl1').set({ uid: 'cl1', name: 'Sparkle Cleaners', category: 'cleaning', status: 'active', phone: '0711000000', rate: 1500,
+    /* derived from the producers application-lifecycle.projectProvider calls at approval — never hand-written */
+    business: (() => { const app = { role: 'provider', category: 'cleaning' };
+      const b = { category: require(Path.join(FN, 'business-category.js')).categoryFromApplication(app, app.role).category, source: 'application',
+        lane: require(Path.join(FN, 'provider-hub.js')).classifyDecidedApplication(app) };
+      if (b.category !== 'cleaning') throw new Error('fixture: the producers no longer classify a cleaner as cleaning — ' + JSON.stringify(b));
+      return b; })() });
   await db.doc('businesses/biz1').set({ name: 'Mama Pima Salon', ownerUid: 'own1', phone: '0722333444', status: 'active' });
   await db.doc('services/sv1').set({ businessId: 'biz1', name: 'Braids', price: 2500, category: 'beauty', status: 'active' });
-  const HAR = makePageHarness({ db, root: ROOT });
+  const HAR = makePageHarness({ db, root: ROOT, callables: { providerDispatch: { providerDirectory: PD._h.providerDirectory } } });
   await HAR.start();
   const { chromium } = require(Path.join(ROOT, 'node_modules', 'playwright'));
   const browser = await chromium.launch();

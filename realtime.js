@@ -206,32 +206,16 @@
     entertainment:'sokoniEntProviders', sports:'sokoniSportsProviders',
   };
 
-  async function _listenProviders(hub) {
-    const db = _getDb(); if (!db) return;
-    try {
-      const { collection, onSnapshot, query, where } = await import(FS_URL);
-      /* /providers gates reads on status, so an unfiltered list query is denied
-         outright — the hub pages showed no providers at all. */
-      let q = query(collection(db, 'providers'), where('status', 'in', ['active', 'approved']));
-      if (hub) q = query(collection(db, 'providers'), where('status', 'in', ['active', 'approved']), where('hub', '==', hub));
-      _track(onSnapshot(q,
-        snap => {
-          const providers = snap.docs.map(d => { const v = { ...d.data() }; delete v._syncedAt; return v; });
-          if (hub) {
-            const lsKey = HUB_LS_MAP[hub];
-            if (lsKey) {
-              try { localStorage.setItem(lsKey, JSON.stringify(providers)); } catch(e) {}
-            }
-          }
-          /* If provider-wiring exposed a render hook, call it */
-          if (window.ProviderWiring && typeof window.ProviderWiring.renderProviders === 'function') {
-            window.ProviderWiring.renderProviders(hub, providers);
-          }
-        },
-        e => console.warn('[RT] providers:', e.message)
-      ));
-    } catch(e) { console.warn('[RT] listenProviders:', e.message); }
-  }
+  /* RETIRED (CHANGELOG 244, convergence C3a-2). This listened to raw `providers`
+     documents, chose them by the provider-editable `hub` field and the status
+     alone, and wrote them over the hub's localStorage list (HUB_LS_MAP) — so an
+     unclassified, not-searchable or not-public provider reached a hub page, and
+     a key such as sokoniBnBs was overwritten with provider records.
+     provider-wiring.js retired its identical bridge for the same forking reason.
+     Public provider lists come from the server directory only
+     (sokoni-providers.js → providerDispatch { op:'providerDirectory' }). Kept as a
+     no-op because _startAll still calls it. */
+  async function _listenProviders(hub) { return; }
 
   /* ================================================================
      4. PROVIDER BOOKINGS — live incoming booking badge

@@ -99,5 +99,55 @@ Judgment calls to confirm:
   - Target chain: approved business/category → authoritative transaction → canonical lane → server commission.
 - **Deploy hazard:** `feat/creator-hub` lacks `1171a16`, the deployed P0 onboarding self-mint fix. Port it before C2 and before any `onboardingDispatch` deploy.
 - **Inherited by `application-lifecycle.js`** and unchanged by C1: the release-only admin-claim grant (a do-not-deploy blocker) and the application self-approval vector.
-- **Discovery consumers** (Typesense/Algolia facets, `sokoni-providers.js`) still filter on the provider-editable `providers.category`. C3 moves them onto `publicEligibility` and `categoryOf`.
+- ~~**Discovery consumers** (Typesense/Algolia facets, `sokoni-providers.js`) still filter on the provider-editable `providers.category`.~~ Done in C3a-1 and C3a-2; see [Discovery (C3)](#discovery-c3).
 - **An UNCLASSIFIED health provider is priced on the healthcare lane (role health).** That is preserved, and the commercial decision belongs to C6.
+
+## Discovery (C3)
+
+Public discovery answers to this authority and to nothing else. `publicEligibility(provider)` is the ONE predicate:
+
+- status is `active` or `approved`;
+- not suspended (status or flag);
+- `searchable !== false`;
+- `isPublic !== false` (added in C3a-2);
+- **classified**, meaning `categoryOf` returns a C1 category.
+
+An unclassified provider, including one approved before C1, is **not discoverable** until AdminOS classifies it (owner
+decision 2026-09-28). Its dashboard keeps working (C2).
+
+| Path | Uses | Slice |
+|---|---|---|
+| Search indexes (Algolia + Typesense: every trigger, reconciler, backfill, admin reindex) | `discovery-eligibility.prepareForIndex`: ineligible upsert → delete, facet = C1 category | C3a-1 (CHANGELOG 243) |
+| `searchQuery` | a services category filter must be a C1 key (`UNKNOWN_CATEGORY`); the client cannot choose `status` | C3a-1 |
+| Public provider directory (`providerDispatch { op:'providerDirectory' }`) | `provider-directory.js` → `cardIfEligible`: a whitelist card under the C1 category | C3a-2 (CHANGELOG 244) |
+| `sokoni-providers.js` (providers / services / cleaning / index / provider-profile) | the directory; no browser Firestore read | C3a-2 |
+| Search fallback (`sokoni-firestore-search.js`, providers) | the directory (`remote` spec) | C3a-2 |
+| `providerSearchProviders`, `providerGetPublicProfile` | the directory (`listDirectory` / `cardIfEligible`) | C3a-2 |
+| `healthcareDirectory` | `publicEligibility`, restricted to a healthcare category that agrees with the healthcare authority | C3a-2 |
+
+**Retired browser paths (C3a-2):**
+
+- the `realtime.js` hub bridge, which copied raw providers into hub localStorage lists;
+- the `services.html` raw `providers` listener, which fed `sokoniServiceProviders`, the list `legal-hub` reads.
+
+**Legacy registries de-indexed** (owner decision): `mechanics`, `lawyers`, `healthProviders`, `homeServiceProviders`,
+`services`. The collections are untouched. Verified lawyers remain discoverable: the Legal authority provisions a
+`providers` doc, which `categoryOf` classifies as `lawyer`.
+
+**Out of C3:** shop and merchant discovery (`businesses` → `sokoni_shops`, sellers, products) stays in the existing
+merchant search architecture.
+
+**Next:**
+
+- C3b-1: a flip in a provider's eligibility or category re-queues its services and profile.
+- C3b-2: a batched, resumable, dry-run cleanup of records already in the indexes, which is NOT run.
+
+**Open (reported):**
+
+- **The `providers` read rule still allows a public read of `active`/`approved` docs, phone included.** Tightening it
+  follows once no public page reads `providers` directly.
+- **Directory pagination.** The directory reads at most 300 providers per query and reports `truncated`.
+- **Legacy registry specs still in the search fallback.** `mechanics`, `healthProviders`, `lawyers` and `services` are
+  browser-scanned there.
+- **Hub pages that read legacy localStorage lists.** These need their own convergence: `mechanics.html`,
+  `fitness-hub.html`, `home-services.html`, `bnb.html` and `legal-hub`.

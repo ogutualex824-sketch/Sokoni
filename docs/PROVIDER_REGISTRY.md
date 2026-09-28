@@ -16,7 +16,7 @@ If you are adding a page that lists or shows providers, you do not write a
 Firestore query. You call `SokoniProviders`.
 
 ```js
-const { providers, error } = await SokoniProviders.list({ category: 'laundry' });
+const { providers, error } = await SokoniProviders.list({ category: 'cleaning' });   // a C1 key
 const { provider, error }  = await SokoniProviders.get(uid);
 ```
 
@@ -43,6 +43,24 @@ a client cannot write into someone else's document.
 ---
 
 ## Reading
+
+### The server decides who is listed (CHANGELOG 244, C3a-2)
+
+Public reads no longer query `providers` from the browser. `SokoniProviders.list/get` call
+`providerDispatch { op:'providerDirectory' }` (`functions/provider-directory.js`). The directory:
+
+- applies `business-category.publicEligibility`, the same predicate the search-index gate uses;
+- returns a whitelist card under the server's C1 category, with no phone, email or self-declared `featured`.
+
+A category passed to `list()` must be a C1 key such as `cleaning` or `trades`. There are no aliases.
+
+The pre-244 last-good copy (`sokoniProvidersLastGood`) held raw documents, so it is deleted on load. Its successor,
+`sokoniProvidersLastGood.v2`, holds only server cards.
+
+See [[BUSINESS_CATEGORY_AUTHORITY]] → Discovery (C3).
+
+The section below describes the rules guard that still governs any **direct** read, such as an owner reading their own
+document or admin tooling.
 
 ### The status guard is a rules requirement, not an optimisation
 
