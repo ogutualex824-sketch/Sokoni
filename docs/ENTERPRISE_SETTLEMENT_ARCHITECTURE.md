@@ -83,7 +83,7 @@ Seller / Merchant / Service Provider / Rider
 | `webhookPaymentCallback` | finos.js:1017 | IntaSend | HMAC-SHA256 | Yes (commission + VAT) |
 | `fosSecureWebhook` | financial-os.js:207 | IntaSend adapter | HMAC via adapter | Yes |
 | `webhookIntasend` / `webhookMpesa` | index.js:5488 / :5528 | IntaSend / Daraja | HMAC / IP allowlist | No (log only) |
-| `webhookSmartpos` | index.js:5632 | SmartPOS | ⚠ **no signature** | No |
+| `webhookSmartpos` | RETIRED 2026-09-28 | SmartPOS | ⚠ **no signature** (the reason it was retired) | No |
 | `webhookStripe` | index.js:5580 | Stripe | disabled → 501 | — |
 | `posTerminalEventWebhook` | pos-terminal-live.js:806 | Card terminals | per-vendor HMAC | No |
 

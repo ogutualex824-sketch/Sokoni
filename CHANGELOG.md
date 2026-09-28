@@ -1,3 +1,46 @@
+## 2026-09-28 (170) — SECURITY: webhookSmartpos retired (public, unsigned sale ingress) — production function deleted, export removed
+
+**Finding (M0-4-DR census; verified read-only against production):**
+- `webhookSmartpos` was a public `onRequest` with invoker `allUsers` and ingress ALLOW_ALL. It passed no `secretKey` to
+  `_processWebhook`, so the signature check was skipped, and it `.add()`-ed the raw request body to `posTransactions`.
+- The deployed triggers turn such a document into a **completed `posRetailSales` sale for whatever merchant the body names**
+  (`mirrorPosTransactionToRetail`) and into **M-Pesa reference claims** (`onPosTransactionMpesaRef`).
+- The deployed revision `webhooksmartpos-00029-juz` (2026-09-09) was byte-identical to this source.
+- The docs claimed it was "origin-limited" and "✅ Fixed". A CORS origin list does not stop server-to-server POSTs.
+
+**Exposure (read-only, 2026-09-28):**
+- `posTransactions` 0; M-Pesa reference claims / conflicts 0 / 0; `posRetailSales` 5 (all from the normal till, 08-23).
+- **0 requests in the readable 31-day log window** (the same query shows `webhookIntasend` traffic).
+- This is evidence of no *recent observed* use, not proof of no historical use. The idempotency store is purged after 7
+  days, and `webhookLogs` records only invalid signatures, so neither can prove absence.
+- No branch had fixed it, and no caller exists (SmartPOS writes `posTransactions` directly).
+
+- **Production containment (owner-authorized):**
+  - `gcloud functions delete webhookSmartpos --gen2`, run 2026-09-28T15:56Z.
+  - Post-state: the function returns 404; the Cloud Run service is gone, and its `allUsers` binding with it; the function count went 1721 → 1720.
+  - The downstream triggers `mirrorPosTransactionToRetail`, `onPosTransactionMpesaRef` and `claimPosMpesaReference` are
+    **still deployed and untouched**. Their authority is a separate decision.
+  - **Artifact Registry:**
+    - the function's two package entries held **0 versions** before and were removed by the delete's own AR step, so no image was deleted;
+    - both cleanup policies are intact;
+    - the protected specimen `profile_get_public_profile` is untouched (1 version, revision `00007-xaz`).
+  - No request was sent to the endpoint at any point.
+- **Source:**
+  - `functions/index.js` no longer exports `webhookSmartpos`; a retirement note forbids re-adding it or replacing it with
+    a secret-bearing public endpoint.
+  - The name is removed from `deploy-batches.ps1` and `scripts/batch_deploy.sh`.
+  - `docs/SECURITY.md`, `docs/LAUNCH_CERTIFICATION.md`, `docs/API.md`, `docs/WEBHOOK.md` (including a curl example that POSTed a test
+    transaction to the production endpoint), `docs/ENTERPRISE_SETTLEMENT_ARCHITECTURE.md` and `ARCHITECTURE.md` are corrected.
+- **Release control:** other lineages still export `webhookSmartpos` (`invoker: "public"`). A functions deploy from any of them
+  would **recreate the public endpoint**. Every deploy must come from a lineage that carries this retirement.
+- **Evidence:**
+  - new `scripts/test-retire-webhook-smartpos.js`, **5/0 new vs 2/3 old** (`97b5d76`). It parses the exports rather than grepping, and
+    catches the vulnerable shape under any name;
+  - 5 of 5 mutants are caught (export restored; same shape under another name; deploy list re-added; a trigger dropped; another webhook dropped);
+  - floor and syntax: see the unit report.
+- **Files:** `functions/index.js`, `deploy-batches.ps1`, `scripts/batch_deploy.sh`, `scripts/test-retire-webhook-smartpos.js` (new), the six
+  docs above, and `CHANGELOG.md`.
+
 ## 2026-09-28 (169) — M0-4a: abandoned POS commission payment attempts converge through ONE confirm authority (NOT deployed)
 
 **Why.** M0-3's settlement machine had three gaps:

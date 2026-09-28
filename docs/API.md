@@ -48,7 +48,7 @@ See [[docs/WEBHOOK]] for full details.
 | `/webhookIntasend` | POST | Signature | IntaSend payment notifications |
 | `/webhookMpesa` | POST | None (URL secrecy) | M-Pesa Daraja callbacks |
 | `/webhookStripe` | POST | Signature | Stripe payment events |
-| `/webhookSmartpos` | POST | Origin-limited | SmartPOS transaction events |
+| ~~`/webhookSmartpos`~~ | — | **RETIRED 2026-09-28** | Was public and unsigned; see [[SECURITY]] |
 | `/webhookHealth` | GET | None | DLQ depth and retry queue status |
 | `/platformHealth` | GET | None | Firestore + Auth health check |
 

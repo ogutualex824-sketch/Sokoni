@@ -70,7 +70,7 @@ deploy_batch 2 "Payments & Webhooks" \
   createCheckoutSession verifyIntasendPayment verifyPaymentStatus \
   darajaSTKCallback \
   initiateSTKPush cancelPayment \
-  webhookIntasend webhookMpesa webhookStripe webhookSmartpos replayWebhookDLQ webhookHealth \
+  webhookIntasend webhookMpesa webhookStripe replayWebhookDLQ webhookHealth \
   releaseEscrow initiateRefund getSettlementReport initiateSellerPayout getLedgerBalance \
   expireOldEscrows cleanupIdempotencyStore processSettlementQueue getPaymentAuditTrail
 

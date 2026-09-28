@@ -80,7 +80,7 @@ The architecture targets:
           │                                         │
           │  Webhook Platform                       │
           │    webhookIntasend  webhookMpesa         │
-          │    webhookStripe    webhookSmartpos      │
+          │    webhookStripe    (webhookSmartpos: retired) │
           │    replayWebhookDLQ webhookHealth        │
           │                                         │
           │  Payment Engine                         │
@@ -320,7 +320,7 @@ Client-side API gateway.
 ```text
 External Provider (IntaSend / M-Pesa / Stripe / SmartPOS)
     │
-    ▼  POST /webhookIntasend | /webhookMpesa | /webhookStripe | /webhookSmartpos
+    ▼  POST /webhookIntasend | /webhookMpesa | /webhookStripe      (/webhookSmartpos RETIRED 2026-09-28)
     │
     ├── ACK 200 immediately (prevent provider retry)
     │

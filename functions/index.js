@@ -7335,7 +7335,7 @@ async function _processWebhook(req, res, opts) {
      create() is an atomic set-if-not-exists: exactly one caller wins, the loser gets
      ALREADY_EXISTS (gRPC code 6) and bails. This is the same pattern already used
      correctly by financial-os.js fosSecureWebhook. Shared by webhookIntasend /
-     webhookMpesa / webhookStripe / webhookSmartpos. */
+     webhookMpesa / webhookStripe (webhookSmartpos retired 2026-09-28). */
   const idemRef = db.collection("webhookIdempotency").doc(provider + "::" + eventId);
   try {
     await idemRef.create({
@@ -8389,22 +8389,14 @@ const _webhookStripeReference = onRequest(
 */
 
 /* â”€â”€ SmartPOS â”€â”€ */
-exports.webhookSmartpos = onRequest(
-  { timeoutSeconds: 30, cors: ["https://mysokoni.co.ke"], invoker: "public" },
-  async (req, res) => {
-    if (req.method !== "POST") return res.status(405).end();
-    await _processWebhook(req, res, {
-      provider:    "smartpos",
-      getEventId:  (b) => (b && b.transaction_id) || (b && b.id),
-      parsePayload:(b) => b,
-      onSuccess: async (payload, eventId) => {
-        await db.collection("posTransactions").add(
-          Object.assign({}, payload, { eventId, serverTs: admin.firestore.FieldValue.serverTimestamp() })
-        );
-      },
-    });
-  }
-);
+/* RETIRED 2026-09-28 (security) — webhookSmartpos is no longer exported.
+ * It was a PUBLIC onRequest (invoker allUsers) that passed no secretKey to _processWebhook, so the signature
+ * check was skipped, and it .add()-ed the raw request body to posTransactions — which the deployed triggers turn
+ * into a COMPLETED posRetailSales sale for whatever merchant the body named (mirrorPosTransactionToRetail) and
+ * into M-Pesa reference claims (onPosTransactionMpesaRef). A CORS origin list does not stop server-to-server POSTs.
+ * No caller exists (SmartPOS writes posTransactions directly; 0 requests in the readable 31-day window). The
+ * production function was deleted 2026-09-28 (owner-authorized containment). Do NOT re-add it, and do not
+ * replace it with a secret-bearing public endpoint: nothing legitimate needs this ingress. */
 
 /* â”€â”€ Replay DLQ entry (admin) â”€â”€ */
 exports.replayWebhookDLQ = onCall({ timeoutSeconds: 30 }, async (request) => {

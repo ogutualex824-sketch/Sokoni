@@ -144,11 +144,11 @@ POST https://us-central1-sokoni-aeb26.cloudfunctions.net/webhookStripe
 
 ---
 
-## SmartPOS
+## SmartPOS — RETIRED 2026-09-28
 
-```
-POST https://us-central1-sokoni-aeb26.cloudfunctions.net/webhookSmartpos
-```
+`webhookSmartpos` no longer exists. It was public and unsigned, and it wrote the raw body to `posTransactions`, which
+the deployed triggers turned into a completed `posRetailSales` sale for whatever merchant the body named. SmartPOS
+never used it. See [[SECURITY]].
 
 **Allowed origins:** `https://mysokoni.co.ke` only.
 
@@ -311,14 +311,9 @@ await fn({ phone: "254712345678", amount: 1 });
 
 ## Manual Test (curl)
 
-```bash
-curl -X POST \
-  https://us-central1-sokoni-aeb26.cloudfunctions.net/webhookSmartpos \
-  -H "Content-Type: application/json" \
-  -d '{"transaction_id":"TEST-001","amount":100,"currency":"KES"}'
-```
-
-SmartPOS does not require signature verification, making it safe for quick integration tests.
+Removed 2026-09-28. The example POSTed an unsigned test transaction to the production SmartPOS webhook. That was
+never safe: it wrote a real `posTransactions` document and, through the triggers, a completed sale. The endpoint is
+retired. Test webhooks against the emulator, never against production.
 
 ---
 
@@ -329,7 +324,7 @@ SmartPOS does not require signature verification, making it safe for quick integ
 | IntaSend | Dashboard → Webhooks | `.../webhookIntasend` |
 | M-Pesa Daraja | Console → STK Push → Callback | `.../webhookMpesa` |
 | Stripe | Dashboard → Developers → Webhooks | `.../webhookStripe` |
-| SmartPOS | Device settings | `.../webhookSmartpos` |
+| SmartPOS | — | RETIRED 2026-09-28 (no webhook) |
 
 ---
 

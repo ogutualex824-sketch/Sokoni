@@ -122,7 +122,7 @@ Without `invoker: "public"`, the Cloud Run service returns HTTP 403 to all reque
 | `webhookIntasend` | ✅ Fixed | functions/index.js:3764 |
 | `webhookMpesa` | ✅ Fixed | functions/index.js:3803 |
 | `webhookStripe` | ✅ Fixed | functions/index.js:3855 |
-| `webhookSmartpos` | ✅ Fixed | functions/index.js:3887 |
+| `webhookSmartpos` | ~~✅ Fixed~~ **was NOT fixed** (public, no signature). **RETIRED 2026-09-28** | export removed; production function deleted |
 | `webhookHealth` | ✅ Fixed | functions/index.js:3928 |
 | `dmarcReportWebhook` | ✅ Fixed | functions/email-dmarc.js:259 |
 | `emailWebhook` | ✅ Fixed | functions/email-triggers.js:740 |

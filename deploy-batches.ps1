@@ -63,7 +63,7 @@ $batches = @(
   "functions:typesenseReprocessDLQ,typesenseResolveAlert,typesenseRestoreBackup,typesenseVerifyBackup,typesenseVerifyDoc,updateAIPlan,updateRevenueConfig,updateSellerSubscription,verifyEntitlement,verifyIntasendPayment,verifyPaymentStatus,wapAdvanceWorkflow,wapApproveStep,wapDLQSweep,wapEscalateApprovals,wapGetDLQ,wapGetInstance,wapGetPendingApprovals,wapSaveDefinition,wapScheduledResume,wapTriggerWorkflow,wapWatchdog,webhookHealth,webhookIntasend",
 
   # ── Batch 16: Webhooks ───────────────────────────────────────────────────
-  "functions:webhookMpesa,webhookSmartpos,webhookStripe",
+  "functions:webhookMpesa,webhookStripe",   # webhookSmartpos RETIRED 2026-09-28 (security)
 
   # ── Batch 17: algoliaSync triggers — products/sellers/providers/services/events ──
   "functions:algoliaSync_products_create,algoliaSync_products_update,algoliaSync_products_delete,algoliaSync_sellers_create,algoliaSync_sellers_update,algoliaSync_sellers_delete,algoliaSync_providers_create,algoliaSync_providers_update,algoliaSync_providers_delete,algoliaSync_services_create,algoliaSync_services_update,algoliaSync_services_delete,algoliaSync_events_create,algoliaSync_events_update,algoliaSync_events_delete,algoliaSync_properties_create,algoliaSync_properties_update,algoliaSync_properties_delete,algoliaSync_cars_create,algoliaSync_cars_update,algoliaSync_cars_delete,algoliaSync_digitalJobs_create,algoliaSync_digitalJobs_update,algoliaSync_digitalJobs_delete,algoliaSync_jobs_create",

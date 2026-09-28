@@ -46,7 +46,7 @@ Current CSP includes `'unsafe-inline'` and `'unsafe-eval'` to support legacy inl
 ### CORS
 
 - `sokoniChat` limited to `https://mysokoni.co.ke` and `https://sokoni-aeb26.web.app`
-- `webhookSmartpos` limited to `https://mysokoni.co.ke` origin
+- `webhookSmartpos` **RETIRED 2026-09-28**. The earlier claim that it was "limited to the mysokoni.co.ke origin" was wrong: a CORS origin list does not stop server-to-server POSTs. It was public (`allUsers`), unsigned, and could create a completed `posRetailSales` sale for any merchant named in the body. Production function deleted, export removed.
 - All other webhook endpoints: `cors: false`
 
 ---
