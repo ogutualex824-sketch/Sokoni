@@ -34,6 +34,9 @@ function _shouldSkip(data, collection) {
   /* Bookable services: a paused (active:false) or removed service must not appear in search.
      Toggling active/removedAt fires the update trigger, which then deletes it from the index. */
   if (collection === 'providerServices' && (data.active === false || data.removedAt)) return true;
+  /* CHANGELOG 242 (approval gate): an accommodation listing is searchable only once SOKONI approved it ('active').
+     Pending / rejected / suspended never reach the index; a status change fires the update trigger, which deletes it. */
+  if (collection === 'bnbListings' && data.status !== 'active') return true;
   return false;
 }
 

@@ -84,6 +84,8 @@ const SUITES = {
   bizgate:  ['node', ['scripts/test-business-workspace-gates.js']],
   route:    ['node', ['scripts/test-workspace-routing.js']],
   wsproj:   ['node', ['scripts/test-business-workspace-projection-browser.js']],
+  pubgate:  ['node', ['scripts/test-publication-gate.js']],
+  pubgaterules: ['node', ['scripts/run-rules-suite.js', 'scripts/test-publication-gate-rules.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -1353,6 +1355,42 @@ const M = [
     from: "<div data-hc-section=\"quotes\" class=\"sb-item\" onclick=\"WS.open('ratecards',this)\">", to: "<div data-hc-section=\"ent\" class=\"sb-item\" onclick=\"WS.open('ratecards',this)\">", expect: /carry their own module keys/ },
   { group: 'wsproj', browser: true, name: "the projection script is no longer loaded", file: "provider-dashboard.html", suite: "wsproj",
     from: "<script src=\"sokoni-business-workspace.js\" defer></script>", to: "", expect: /EXACTLY the server's AVAILABLE modules|no empty sidebar group/ },
+
+  /* ── Approval gate: creation is not publication (CHANGELOG 242) ── */
+  { group: 'pubgate', browser: false, name: "venueCreate publishes immediately again", file: "functions/venue-booking.js", suite: "pubgate",
+    from: "    status:           'pending',", to: "    status:           'active',", expect: /is PENDING|not bookable/ },
+  { group: 'pubgate', browser: false, name: "venueCreate honours a client-supplied status", file: "functions/venue-booking.js", suite: "pubgate",
+    from: "    status:           'pending',", to: "    status:           d.status || 'pending',", expect: /is PENDING/ },
+  { group: 'pubgate', browser: false, name: "venueUpdate lets a pending venue activate itself", file: "functions/venue-booking.js", suite: "pubgate",
+    from: "    if (!['active', 'inactive'].includes(String(venue.status))) {\n      throw new HttpsError('failed-precondition', 'This venue is waiting for SOKONI approval.', { code: 'APPROVAL_REQUIRED' });\n    }", to: "", expect: /cannot self-activate|cannot re-activate/ },
+  { group: 'pubgate', browser: false, name: "a non-admin can run the AdminOS decision", file: "functions/entertainment-admin.js", suite: "pubgate",
+    from: "if (!AC.isAdmin(req)) fail('permission-denied', 'Admin only.');", to: "", expect: /normal user supplying another uid/ },
+  { group: 'pubgate', browser: false, name: "approve silently revives a rejected listing", file: "functions/entertainment-admin.js", suite: "pubgate",
+    from: "  approve: ['pending'], reject: ['pending'],", to: "  approve: ['pending', 'rejected'], reject: ['pending'],", expect: /cannot silently revive/ },
+  { group: 'pubgate', browser: false, name: "BnB is not a kind of the one authority", file: "functions/entertainment-admin.js", suite: "pubgate",
+    from: "booking_venue: 'venues', bnb: 'bnbListings' });", to: "booking_venue: 'venues' });", expect: /kind bnb|BnB listing \(kind bnb\)|not-found|BnB kind/ },
+  { group: 'pubgate', browser: false, name: "Algolia indexes a pending BnB listing", file: "functions/algolia-sync.js", suite: "pubgate",
+    from: "  if (collection === 'bnbListings' && data.status !== 'active') return true;\n  return false;", to: "  return false;", expect: /never indexed/ },
+  { group: 'pubgate', browser: false, name: "Typesense indexes a pending BnB listing", file: "functions/typesense-sync.js", suite: "pubgate",
+    from: "  if (collection === 'bnbListings' && data.status !== 'active') return true;\n  return false;", to: "  return false;", expect: /PENDING listing is never indexed/ },
+  { group: 'pubgate', browser: false, name: "the legacy migration publishes instead of queueing for review", file: "scripts/migrate-bnb-listing-status.js", suite: "pubgate",
+    from: "      t.update(ref, { status: 'pending', updatedAt: FieldValue.serverTimestamp() });", to: "      t.update(ref, { status: 'active', updatedAt: FieldValue.serverTimestamp() });", expect: /never active/ },
+  { group: 'pubgate', browser: false, name: "admin.html writes the decision raw from the browser again", file: "admin.html", suite: "pubgate",
+    from: "  toast('BnB listings are now approved in AdminOS › Entertainment › BnB / stays. Nothing was changed here.', 'error');\n  return null;", to: "  await window.SokoniDB.updateBnbListingStatus(id, status, { updatedBy: 'admin' });\n  return a;", expect: /legacy admin.html BnB decision/ },
+  { group: 'pubgate', browser: false, name: "a BnB listing may be created without the pending status", file: "firestore.rules.build", suite: "pubgaterules",
+    from: "  && request.resource.data.get('status', '') == 'pending'\n  && noAdminFields()", to: "  && noAdminFields()", expect: /create with status|NO status is refused/ },
+  { group: 'pubgate', browser: false, name: "a BnB listing may carry approval / publication fields", file: "firestore.rules.build", suite: "pubgaterules",
+    from: "  && !request.resource.data.keys().hasAny(['approved','verified','featured','published','discoveryEligible',\n  'isPublic','public','spotlight','bypassApproval','moderatedAt','moderationReason','approvalReason',\n  'updatedBy','rating','reviewCount']);", to: "  ;", expect: /S1–S4: create with/ },
+  { group: 'pubgate', browser: false, name: "every BnB listing is publicly readable again", file: "firestore.rules.build", suite: "pubgaterules",
+    from: "  allow read:   if resource.data.get('status', '') == 'active' || isAdmin()\n  || (isAuthed() && resource.data.hostUid == request.auth.uid);\n  allow create: if claimsOwner()\n  && request.resource.data.keys().hasAll(['id','name','type','location','price','phone','hostUid'])", to: "  allow read:   if true;\n  allow create: if claimsOwner()\n  && request.resource.data.keys().hasAll(['id','name','type','location','price','phone','hostUid'])", expect: /cannot read a PENDING listing|cannot read a REJECTED|unfiltered public query/ },
+  { group: 'pubgate', browser: false, name: "an admin may write BnB status raw (no audit)", file: "firestore.rules.build", suite: "pubgaterules",
+    from: "  allow update: if (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status','moderatedAt']))\n  || (isAuthed() && resource.data.hostUid == request.auth.uid", to: "  allow update: if isAdmin()\n  || (isAuthed() && resource.data.hostUid == request.auth.uid", expect: /ADMIN raw status write/ },
+  { group: 'pubgate', browser: false, name: "any account may publish a menu", file: "firestore.rules.build", suite: "pubgaterules",
+    from: "  allow write:  if isAdmin() || (isAuthed() && request.auth.uid == restaurantId && approvedRestaurant(restaurantId));", to: "  allow write:  if isAdmin() || (isAuthed() && request.auth.uid == restaurantId);", expect: /UNAPPROVED \(pending\) restaurant|NON-restaurant|no business at all/ },
+  { group: 'pubgate', browser: false, name: "every menu is publicly readable again", file: "firestore.rules.build", suite: "pubgaterules",
+    from: "  allow read:   if isAdmin() || (isAuthed() && request.auth.uid == restaurantId) || approvedRestaurant(restaurantId);", to: "  allow read:   if true;", expect: /cannot read an unapproved restaurant/ },
+  { group: 'pubgate', browser: false, name: "the restaurant check ignores the category", file: "firestore.rules.build", suite: "pubgaterules",
+    from: "  && get(/databases/$(database)/documents/providers/$(id)).data.get('business', {}).get('category', '') == 'restaurant';", to: "  ;", expect: /NON-restaurant/ },
 ];
 
 const argv = process.argv.slice(2);

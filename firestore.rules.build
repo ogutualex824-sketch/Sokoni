@@ -719,8 +719,13 @@ service cloud.firestore {
   allow delete: if isAdmin();
   }
   match /foodMenus/{restaurantId} {
-  allow read:   if true;
-  allow write:  if isAdmin() || (isAuthed() && request.auth.uid == restaurantId);
+  function approvedRestaurant(id) {
+  return exists(/databases/$(database)/documents/providers/$(id))
+  && get(/databases/$(database)/documents/providers/$(id)).data.get('status', '') in ['active', 'approved']
+  && get(/databases/$(database)/documents/providers/$(id)).data.get('business', {}).get('category', '') == 'restaurant';
+  }
+  allow read:   if isAdmin() || (isAuthed() && request.auth.uid == restaurantId) || approvedRestaurant(restaurantId);
+  allow write:  if isAdmin() || (isAuthed() && request.auth.uid == restaurantId && approvedRestaurant(restaurantId));
   }
   match /legalBookings/{bookingId} {
   allow read:   if isAdmin()
@@ -1014,11 +1019,17 @@ service cloud.firestore {
   allow delete: if isAdmin();
   }
   match /bnbListings/{listingId} {
-  allow read:   if true;
+  allow read:   if resource.data.get('status', '') == 'active' || isAdmin()
+  || (isAuthed() && resource.data.hostUid == request.auth.uid);
   allow create: if claimsOwner()
   && request.resource.data.keys().hasAll(['id','name','type','location','price','phone','hostUid'])
-  && request.resource.data.hostUid == request.auth.uid;
-  allow update: if isAdmin()
+  && request.resource.data.hostUid == request.auth.uid
+  && request.resource.data.get('status', '') == 'pending'
+  && noAdminFields()
+  && !request.resource.data.keys().hasAny(['approved','verified','featured','published','discoveryEligible',
+  'isPublic','public','spotlight','bypassApproval','moderatedAt','moderationReason','approvalReason',
+  'updatedBy','rating','reviewCount']);
+  allow update: if (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status','moderatedAt']))
   || (isAuthed() && resource.data.hostUid == request.auth.uid
   && request.resource.data.diff(resource.data).affectedKeys()
   .hasOnly(['name','type','location','price','pricePerNight','desc','description','amenities','phone','image','images','video','available','maxGuests','bedrooms','bathrooms','updatedAt']));

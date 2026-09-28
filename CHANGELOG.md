@@ -1,3 +1,109 @@
+## 2026-09-28 (242) — Approval gate: creation is not publication (venues, BnB listings, food menus)
+
+The approval/publication hardening slice between C2 and C3 (owner decision 2026-09-28: approval before public). It
+adds no new approval engine and no new admin page. Not deployed. No production writes. No migration executed.
+Parent: `11b8f55`.
+
+**Before (C2 survey, confirmed):**
+- `venueCreate` wrote `status:'active'`, so any signed-in user's venue was public and bookable at once.
+- `venueUpdate` let an owner set `active` on any non-suspended venue, including one never approved.
+- `bnbListings`: any signed-in host could create a listing. `read: if true` made it public immediately, and both
+  search indexers indexed it. The legacy `admin.html` approved listings by a raw browser write carrying a
+  client-supplied `updatedBy`.
+- `foodMenus`: `read: if true`, and any signed-in account could write the menu keyed by its own uid.
+
+**The authorities, reused and not duplicated:**
+- **Approval** is the ONE AdminOS listing authority, `entertainment-admin.entAdminSetListingStatus` (admin-claim
+  gated, transactional, `adminAudit`). Its FROM table blocks jumps: approve pending→active, reject pending→rejected,
+  suspend, and restore (deliberate). BnB is added as a kind (`bnb` → `bnbListings`), and AdminOS › Entertainment
+  offers "BnB / stays" in its review queue.
+- **Venue** public reads (`status == 'active'`, firestore.rules) and bookability
+  (`ent-availability.loadCalendar`: anything but active is `NOT_APPROVED`) already required `active`. So the gate
+  was the create/update paths, not the readers.
+- **Food:** a menu belongs to an APPROVED restaurant business (providers active + C1 `business.category`
+  `'restaurant'`). The business approval is the gate; there is no per-menu approval engine.
+
+**Lifecycle now:**
+
+| Surface | Create | Public when | Rejected |
+|---|---|---|---|
+| Venue | `venueCreate` → `pending` (client status/approval fields are never stored) | AdminOS approve → `active` | `rejected`: not readable, not bookable, owner cannot re-activate, "approve" cannot revive it |
+| BnB listing | rules: must be created `pending` | AdminOS approve (kind `bnb`) → `active`; public reads + the hub query are `active` only; indexed only when `active` | `rejected`: non-public, not indexed |
+| Food menu | rules: only by an approved restaurant | the restaurant is approved | n/a (no per-menu state) |
+
+**Refused client fields.**
+- **Venues:** `venueCreate` stores a whitelist only. Status, approved, active, published, verified,
+  discoveryEligible, isPublic, bypassApproval, moderatedAt, rating and reviewCount are never taken from the client.
+  An owner's `venueUpdate` may toggle active↔inactive only when the venue is already approved (`APPROVAL_REQUIRED`
+  otherwise).
+- **BnB create:** refuses any status but `pending`, plus approved, verified, featured, published, discoveryEligible,
+  isPublic, public, spotlight, bypassApproval, moderatedAt, moderationReason, approvalReason, updatedBy, rating,
+  reviewCount, and every `noAdminFields()` key.
+- **BnB status:** never a raw client write, including an admin's. The host whitelist excludes it, and an admin's raw
+  write of `status` / `moderatedAt` is refused.
+
+**Pages:**
+- `bnb-hub.html` queries `status == 'active'` (rules are not filters).
+- `bnb-manage.html` creates new listings `pending` and never sends `status` or approval fields.
+- **`admin.html`'s BnB approve/reject is RETIRED.** It writes nothing and points to AdminOS › Entertainment ›
+  BnB / stays. AdminOS is the only admin workspace, and `test-entertainment-registry` guards that `admin.html` carries
+  no Entertainment control. A first draft routed it to the op, and that guard caught it.
+
+**Search:** `algolia-sync` / `typesense-sync` skip a `bnbListings` document unless `status == 'active'`. A status
+change fires the update trigger, which removes it from the index.
+
+**Index:** `firestore.indexes.json` adds `bnbListings (status ASC, createdAt DESC)` for the hub query. This is
+configuration and is not deployed.
+
+**Legacy data (explicit; nothing executed):**
+- Venues created before this change are already `active`, so they stay public. They are grandfathered and were never
+  individually reviewed; AdminOS can suspend any of them.
+- BnB listings written before this carry NO `status`. Firestore cannot query a missing field, so after deploy they
+  are not shown publicly until given one.
+- `scripts/migrate-bnb-listing-status.js` is dry-run by default. With `--apply --operator=<admin uid>` it sets each
+  one `pending` (never `active`), so it enters AdminOS review, and it audits every change. It is tested and was NOT
+  run.
+- Evidence: `sokoni-db.js` records `bnbListings` as EMPTY in production as of 2026-08-01. That is STALE, and the dry
+  run re-measures.
+- **Food menus** written by an account that is not an approved restaurant stop being publicly readable. No public
+  reader of `foodMenus` exists today: the food hub runs on demo arrays and `food-dashboard` writes under a hard-coded
+  demo id.
+
+**Pre-existing, reported and not changed:** `bnb-hub.html`'s own "List your stay" save was already refused by the
+rules (it sends `title` with no `name` or `hostUid`) and swallows the error. The listing never persists. `bnb-manage`
+is the working writer.
+
+**Files:**
+- `functions/venue-booking.js`, `functions/entertainment-admin.js`, `functions/algolia-sync.js`,
+  `functions/typesense-sync.js`
+- `firestore.rules`, `firestore.rules.build`, `firestore.indexes.json`
+- `bnb-hub.html`, `bnb-manage.html`, `admin.html`, `sokoni-aos-entertainment.js`
+- `scripts/migrate-bnb-listing-status.js` (new), `scripts/test-publication-gate.js` (new),
+  `scripts/test-publication-gate-rules.js` (new), `scripts/sabotage-event-ops.js`
+
+**Database:** no schema migration. BnB listings gain `status` on create.
+**API:** `entAdminSetListingStatus` accepts kind `bnb`. `venueUpdate` owner status needs an approved venue.
+**Security:** closes three create-and-go-public paths and the raw browser moderation write.
+**Breaking:**
+- New venues and BnB listings are not public until approved.
+- Legacy BnB listings are hidden publicly until migrated (owner decision).
+- An admin's raw BnB status write is refused; use AdminOS.
+
+**Tests:**
+- `test-publication-gate` 34/0 (real code, server side of S1–S10, search triggers, migration artifact) and
+  `test-publication-gate-rules` 38/0 (emulator: BnB / food / venues, with positive controls and a counterproof, and
+  exactly one match block each).
+- Baseline against `11b8f55`, 31 suites plus `test-entertainment-rules` (376/1 on both trees):
+  - 30 identical at the first pass.
+  - `test-entertainment-registry` differed (63/2 vs 64/1): its guard "admin.html carries NO Entertainment control"
+    caught the first draft's routing of the legacy BnB button to the op. That button is now retired, and the suite is
+    back to 64/1, identical to the baseline.
+
+**Sabotage `pubgate`:** 17/17 caught (10 server + 7 rules), 0 no-anchor, tree restored byte-identical. The
+`admin.html` attack was re-anchored on the retired body and re-run: caught.
+
+**Migration:** NOT run. A fresh read-only dry run against current data is the next, separate step (owner decision).
+
 ## 2026-09-28 (241) — C2d: the provider dashboard is a projection of the server workspace, for every category
 
 Convergence slice C2d, which completes C2 (C2a authority → C2b server gates → C2c one route → C2d projection). Not

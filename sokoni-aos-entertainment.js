@@ -246,7 +246,7 @@
       async listings() {
         const r = await call('entAdminListings', { kind: listingKind, status: listingStatus });
         const filters = `<div class="aos-filters">
-          <label>Type <select data-lkind><option value="booking_venue" ${listingKind === 'booking_venue' ? 'selected' : ''}>Venues (booking engine)</option><option value="venue" ${listingKind === 'venue' ? 'selected' : ''}>Legacy venues</option><option value="artist" ${listingKind === 'artist' ? 'selected' : ''}>Legacy artists</option></select></label>
+          <label>Type <select data-lkind><option value="booking_venue" ${listingKind === 'booking_venue' ? 'selected' : ''}>Venues (booking engine)</option><option value="bnb" ${listingKind === 'bnb' ? 'selected' : ''}>BnB / stays</option><option value="venue" ${listingKind === 'venue' ? 'selected' : ''}>Legacy venues</option><option value="artist" ${listingKind === 'artist' ? 'selected' : ''}>Legacy artists</option></select></label>
           <label>Status <select data-lstatus>${['pending', 'active', 'inactive', 'suspended', 'rejected'].map((s) => `<option ${s === listingStatus ? 'selected' : ''}>${s}</option>`).join('')}</select></label></div>`;
         const acts = (l) => {
           const st = l.status || 'pending';

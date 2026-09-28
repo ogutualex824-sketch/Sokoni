@@ -1117,8 +1117,16 @@ service cloud.firestore {
     }
 
     match /foodMenus/{restaurantId} {
-      allow read:   if true;
-      allow write:  if isAdmin() || (isAuthed() && request.auth.uid == restaurantId);
+      /* CHANGELOG 242 (approval gate): a menu belongs to an APPROVED restaurant — providers/{uid} active and classified
+         'restaurant' by the server (C1, business-category). The business approval (AdminOS) is the gate; there is no
+         per-menu approval engine. An unapproved account can neither publish a menu nor have one read publicly. */
+      function approvedRestaurant(id) {
+        return exists(/databases/$(database)/documents/providers/$(id))
+          && get(/databases/$(database)/documents/providers/$(id)).data.get('status', '') in ['active', 'approved']
+          && get(/databases/$(database)/documents/providers/$(id)).data.get('business', {}).get('category', '') == 'restaurant';
+      }
+      allow read:   if isAdmin() || (isAuthed() && request.auth.uid == restaurantId) || approvedRestaurant(restaurantId);
+      allow write:  if isAdmin() || (isAuthed() && request.auth.uid == restaurantId && approvedRestaurant(restaurantId));
     }
 
     match /legalBookings/{bookingId} {
@@ -1494,11 +1502,22 @@ service cloud.firestore {
     // Canonical authoritative block is in the Digital Products Hub section below.
 
     match /bnbListings/{listingId} {
-      allow read:   if true;
+      /* CHANGELOG 242 (approval gate): creation is NOT publication. A listing is created 'pending' and becomes public
+         ('active') only through the AdminOS decision entAdminSetListingStatus {kind:'bnb'} — admin-claim gated,
+         audited, server-side. The public reads ACTIVE listings only (the host and admins see their own / all). */
+      allow read:   if resource.data.get('status', '') == 'active' || isAdmin()
+                    || (isAuthed() && resource.data.hostUid == request.auth.uid);
       allow create: if claimsOwner()
                     && request.resource.data.keys().hasAll(['id','name','type','location','price','phone','hostUid'])
-                    && request.resource.data.hostUid == request.auth.uid;
-      allow update: if isAdmin()
+                    && request.resource.data.hostUid == request.auth.uid
+                    && request.resource.data.get('status', '') == 'pending'
+                    && noAdminFields()
+                    && !request.resource.data.keys().hasAny(['approved','verified','featured','published','discoveryEligible',
+                         'isPublic','public','spotlight','bypassApproval','moderatedAt','moderationReason','approvalReason',
+                         'updatedBy','rating','reviewCount']);
+      /* Status is never a raw client write — not the host's, and not an admin's either (the decision is the audited
+         callable). An admin's raw edit of anything else still works. */
+      allow update: if (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status','moderatedAt']))
                     || (isAuthed() && resource.data.hostUid == request.auth.uid
                         && request.resource.data.diff(resource.data).affectedKeys()
                              .hasOnly(['name','type','location','price','pricePerNight','desc','description','amenities','phone','image','images','video','available','maxGuests','bedrooms','bathrooms','updatedAt']));

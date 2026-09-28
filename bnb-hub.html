@@ -828,7 +828,7 @@ init();
 <!-- FIRESTORE MODULE -->
 <script type="module">
 import { db, auth } from './firebase.js';
-import { collection, doc, addDoc, setDoc, onSnapshot, query, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { collection, doc, addDoc, setDoc, onSnapshot, query, where, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 window._saveBnBListing = async function(data) {
   try { await setDoc(doc(db,'bnbListings',data.id||('BL'+Date.now())), {...data, createdAt: serverTimestamp()}, {merge:true}); } catch(e){}
@@ -838,7 +838,9 @@ window._saveBnBBooking = async function(bk) {
   try { await addDoc(collection(db,'bnbBookings'), {...bk, hub:'bnb', createdAt: serverTimestamp()}); } catch(e){}
 };
 
-const q = query(collection(db,'bnbListings'), orderBy('createdAt','desc'));
+/* CHANGELOG 242: only APPROVED listings are public — firestore.rules serve status 'active' to the public, and a query
+   must say so (rules are not filters). A pending / rejected listing is never shown here. */
+const q = query(collection(db,'bnbListings'), where('status','==','active'), orderBy('createdAt','desc'));
 const _bnbListingsUnsub = onSnapshot(q, snap => {
   const live = snap.docs.map(d=>({id:d.id,...d.data()}));
   if(live.length && typeof window.injectFirestoreListings === 'function') window.injectFirestoreListings(live);

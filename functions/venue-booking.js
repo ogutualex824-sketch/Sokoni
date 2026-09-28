@@ -320,7 +320,10 @@ exports.venueCreate = onCall(CF_OPTS, exports._h.venueCreate = async (request) =
     afterHoursBooking: !!d.afterHoursBooking,
     schedule:         d.schedule || _defaultSchedule(),
     pricing:          _sanitizePricing(d.pricing),
-    status:           'active',
+    /* CHANGELOG 242 (approval gate): a new venue is PENDING — creation is not publication. It becomes public
+       (status 'active', which firestore.rules and every public reader require) only through the AdminOS decision
+       entAdminSetListingStatus {kind:'booking_venue', decision:'approve'} — admin-claim gated, audited. */
+    status:           'pending',
     rating:           0,
     reviewCount:      0,
     createdAt:        now,
@@ -357,6 +360,11 @@ exports.venueUpdate = onCall(CF_OPTS, exports._h.venueUpdate = async (request) =
      previously write any status here and lift their own suspension. */
   if (updates.status !== undefined && !require('./admin-claim').isAdmin(request)) {
     if (String(venue.status) === 'suspended') throw new HttpsError('permission-denied', 'This venue is suspended. Contact SOKONI support.');
+    /* CHANGELOG 242: pausing / resuming is for an APPROVED venue only — a pending or rejected venue could set itself
+       'active' here and publish itself without the AdminOS decision. */
+    if (!['active', 'inactive'].includes(String(venue.status))) {
+      throw new HttpsError('failed-precondition', 'This venue is waiting for SOKONI approval.', { code: 'APPROVAL_REQUIRED' });
+    }
     if (!['active', 'inactive'].includes(String(updates.status))) throw new HttpsError('invalid-argument', 'status must be active or inactive.');
   }
   if (updates.waitlistEnabled !== undefined) updates.waitlistEnabled = !!updates.waitlistEnabled;

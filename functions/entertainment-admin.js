@@ -30,7 +30,9 @@ const _row = (d) => { const x = d.data(); const o = { id: d.id }; for (const [k,
 /* Collections this surface moderates, and the statuses a decision may set. */
 /* booking_venue = the CANONICAL venue booking engine (venues/*) — the venues users actually book;
    venue / artist = the legacy EntHub records (retired from the client 2026-09-27, still moderated). */
-const LISTINGS = Object.freeze({ venue: 'entVenues', artist: 'entArtists', booking_venue: 'venues' });
+/* bnb = accommodation listings (bnbListings/*) — the SAME moderation authority, not a second one (CHANGELOG 242):
+   a new listing is created 'pending' (firestore.rules) and only this decision makes it public ('active'). */
+const LISTINGS = Object.freeze({ venue: 'entVenues', artist: 'entArtists', booking_venue: 'venues', bnb: 'bnbListings' });
 const DECISIONS = Object.freeze({
   approve: 'active', reject: 'rejected', suspend: 'suspended', restore: 'active',
 });
@@ -58,7 +60,7 @@ _adminH.entAdminListings = async (req) => {
   const kind = String((req.data || {}).kind || 'venue');
   const status = String((req.data || {}).status || 'pending');
   const col = LISTINGS[kind];
-  if (!col) fail('invalid-argument', 'kind must be venue, artist or booking_venue.');
+  if (!col) fail('invalid-argument', 'kind must be venue, artist, booking_venue or bnb.');
   if (!['pending', 'active', 'approved', 'suspended', 'rejected', 'inactive'].includes(status)) fail('invalid-argument', 'Unknown status.');
   const snap = await _db().collection(col).where('status', '==', status).limit(200).get();
   return { kind, status, listings: snap.docs.map(_row) };
@@ -68,7 +70,7 @@ _adminH.entAdminSetListingStatus = async (req) => {
   const actor = _admin(req);
   const d = req.data || {};
   const col = LISTINGS[String(d.kind || '')];
-  if (!col) fail('invalid-argument', 'kind must be venue, artist or booking_venue.');
+  if (!col) fail('invalid-argument', 'kind must be venue, artist, booking_venue or bnb.');
   const id = String(d.id || '');
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) fail('invalid-argument', 'Invalid id.');
   const decision = String(d.decision || '');

@@ -61,6 +61,8 @@ function _shouldSkip(data, collection) {
   if (data._noIndex === true) return true;
   if (SKIP_STATUSES.has(data.status)) return true;
   if (collection === 'users' && data.private === true) return true;
+  /* CHANGELOG 242 (approval gate): an accommodation listing is searchable only once SOKONI approved it ('active'). */
+  if (collection === 'bnbListings' && data.status !== 'active') return true;
   return false;
 }
 

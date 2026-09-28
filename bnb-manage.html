@@ -527,7 +527,7 @@
 <script type="module">
 import { db, auth } from './firebase.js';
 import {
-  collection, doc, setDoc, deleteDoc, onSnapshot,
+  collection, doc, getDoc, setDoc, deleteDoc, onSnapshot,
   query, where, orderBy, serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
@@ -543,7 +543,16 @@ onAuthStateChanged(auth, u => {
 window._saveBnBListingFS = async function(listing){
   if(!listing) return;
   try {
-    await setDoc(doc(db,'bnbListings',listing.id), {...listing, hostUid:_uid||listing.hostUid||'', updatedAt:serverTimestamp()}, {merge:true});
+    /* CHANGELOG 242 (approval gate): the host never decides publication. Approval / status / moderation fields are
+       stripped; a NEW listing is created 'pending' and becomes public only when SOKONI (AdminOS) approves it. */
+    const clean = Object.assign({}, listing);
+    ['status','approved','verified','featured','published','discoveryEligible','isPublic','public','spotlight','bypassApproval',
+     'moderatedAt','moderationReason','approvalReason','updatedBy','rating','reviewCount'].forEach(function(k){ delete clean[k]; });
+    const ref = doc(db,'bnbListings',listing.id);
+    const existing = await getDoc(ref).catch(function(){ return null; });
+    const payload = Object.assign(clean, { hostUid:_uid||listing.hostUid||'', updatedAt:serverTimestamp() });
+    if (!existing || !existing.exists()) payload.status = 'pending';
+    await setDoc(ref, payload, {merge:true});
   } catch(e){ console.warn('[BnB] listing save failed:',e); }
 };
 

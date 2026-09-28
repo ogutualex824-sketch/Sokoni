@@ -5837,35 +5837,13 @@ async function _decideProp(i, status, reason){
   if (!a) { toast('That listing is no longer in the list — refresh', 'error'); return; }
   var id = a._fsId || a.id;
   if (!id) { toast('This listing has no Firestore id — cannot decide', 'error'); return; }
-  if (!window.SokoniDB || !window.SokoniDB.updateBnbListingStatus) {
-    toast('Data layer unavailable — reload the page', 'error'); return;
-  }
-
-  var uid = (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null;
-  var meta = { updatedBy: uid };
-  if (reason) meta.approvalReason = reason;
-
-  try {
-    await window.SokoniDB.updateBnbListingStatus(id, status, meta);
-  } catch (e) {
-    /* Reported, never swallowed. A moderation decision that silently fails is how
-       an admin believes a listing is live when it is not. */
-    console.error('[Admin][properties] decision failed', { id: id, status: status, error: e && e.message });
-    toast('Could not save the decision: ' + (e && e.message || 'unknown error'), 'error');
-    return;
-  }
-
-  try {
-    if (window.sokoniFirestoreAudit && uid) {
-      window.sokoniFirestoreAudit({
-        uid: uid, action: 'bnb_listing_' + status, ts: Date.now(),
-        listingId: id, listingName: a.name || a.title || null,
-        reason: reason || null
-      });
-    }
-  } catch (e) {}
-
-  return a;
+  /* CHANGELOG 242 (approval gate): BnB listings are decided in AdminOS › Entertainment › BnB / stays, through the ONE
+     audited AdminOS listing decision — reviewer from the verified admin token, recorded in adminAudit).
+     AdminOS is the only administrative workspace, so this legacy page no longer carries the control; its old raw
+     browser write (status + a client-supplied updatedBy) is refused by firestore.rules even for an admin. No write
+     happens here, and nothing claims a decision was made. */
+  toast('BnB listings are now approved in AdminOS › Entertainment › BnB / stays. Nothing was changed here.', 'error');
+  return null;
 }
 
 async function approveProp(i){
