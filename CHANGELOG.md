@@ -1,3 +1,41 @@
+## [2026-09-28] - HOTFIX K13-B: applicationLifecycle projects only a server-recorded, admin decision
+
+**Functions only, one file, NOT deployed.** Branch `hotfix/k13b-lifecycle-decision-authority` sits on top of the
+PROVENANCE RECONSTRUCTION `055e509`. Production's `applicationLifecycle` (archive md5 `c52e2338a24b`) was built from a
+tree that exists in no commit, and `055e509` reproduces it exactly (384/384 files). Part B of K13; deploy AFTER K13-A.
+
+**Why (proven on the exact production trigger, 2026-09-28):** the deployed `decisionAuthority` checked only that
+`decidedBy` named an admin-claim account. `status` and `decidedBy` are applicant-writable on the served rules, so an
+applicant who wrote `status:'approved'` and any admin's uid was projected (**K13**). The counterproof C2 comes out
+`"applied"`.
+
+**Changed:** `functions/application-lifecycle.js`, `decisionAuthority` only (and its call now passes `appId`). A
+decision is authoritative only when:
+1. the decider is NOT the applicant;
+2. the decider holds an admin / superAdmin claim;
+3. the server record `applicationDecisions/{appId}`, written by K13-A's `applicationDecide` before it touches the
+   application, records exactly this status AND this decider.
+
+Already-applied decisions return at the existing `decisionAppliedFor` guard: no re-projection, no write.
+
+**Tests:** `scripts/test-k13b-lifecycle-authority.js` drives the REAL trigger handler.
+- On the fix: **8/0**.
+- `COUNTERPROOF=1`, the reconstruction source: **4 defects**: C2 K13 (no record), C3 self-decision, C4 record says
+  rejected, C5 a different admin.
+- The controls pass in both modes: C1 legitimate, C6 non-admin, C7 legacy already-applied (no write), C8 pending.
+
+**Sabotage:** 6/6 on the first run, with a byte-identical restore.
+
+**Archive:** differs from the deployed archive in `application-lifecycle.js` ONLY (383/384). No delivery / inventory
+change entered.
+
+**Baseline:** recorded on `055e509` BEFORE the change and identical after it: approval-provisioning 28/0,
+legal-projection 96/0, role-provisioning 57/0, role-vocabulary 66/0; jest 85/2, the same two pre-existing `resolveRole`
+tests.
+
+**Database / Rules / Breaking:** none. It requires K13-A deployed first; otherwise legitimate decisions have no record,
+the trigger refuses them, and alerts are raised. `applicationDecide` still applies them directly.
+
 ## [2026-09-02] — AdminOS TIER 2: success claimed before the callable resolved
 
 **Files:** `sokoni-aos.js`; `scripts/test-adminos-tier2-action-honesty.js` (new, 147/0),

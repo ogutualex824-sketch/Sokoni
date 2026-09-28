@@ -1180,18 +1180,40 @@ async function applyDecision(appId, app, opts = {}) {
    Returns { ok } — never throws: an unresolvable decider is a refusal, not a
    crash that leaves the application in limbo.
    ────────────────────────────────────────────────────────────────────────── */
-async function decisionAuthority(after) {
+/* K13-B — naming an administrator is NOT a decision. Production evidence (2026-09-28): this check trusted
+   `decidedBy` alone, and `decidedBy` + `status` are applicant-writable on the served rules — so an applicant who
+   wrote any admin's uid into their own application was projected (K13). A decision is authoritative only when:
+     1. the decider is not the applicant (separation of duties);
+     2. the decider holds an admin / superAdmin claim;
+     3. the server decision record applicationDecisions/{appId} — written by applicationDecide BEFORE it touches the
+        application, and client-unwritable (no rule matches it) — records exactly this status AND this decider.
+   Already-applied decisions never reach this (the decisionAppliedFor guard returns first), so legacy projections are
+   not re-evaluated. */
+async function decisionAuthority(after, appId) {
   const by = typeof after.decidedBy === 'string' ? after.decidedBy.trim() : '';
   if (!by) {
     return { ok: false, reason: 'no decidedBy — a decision is only made through applicationDecide' };
   }
+  if (after.uid && by === after.uid) {
+    return { ok: false, reason: 'decidedBy is the applicant — an administrator cannot decide their own application' };
+  }
   try {
     const user = await getAuth().getUser(by);
     const claims = user.customClaims || {};
-    if (claims.admin === true || claims.superAdmin === true) return { ok: true, by };
-    return { ok: false, reason: `decidedBy "${by}" holds no admin claim` };
+    if (!(claims.admin === true || claims.superAdmin === true)) return { ok: false, reason: `decidedBy "${by}" holds no admin claim` };
   } catch (e) {
     return { ok: false, reason: `decidedBy "${by}" is not a resolvable account (${e.message})` };
+  }
+  try {
+    const rec = await _db().collection('applicationDecisions').doc(String(appId)).get();
+    if (!rec.exists) return { ok: false, reason: 'no server decision record — only applicationDecide records a decision' };
+    const r = rec.data() || {};
+    if (r.status !== canonStatus(after.status) || r.decidedBy !== by) {
+      return { ok: false, reason: 'the application does not match its server decision record' };
+    }
+    return { ok: true, by };
+  } catch (e) {
+    return { ok: false, reason: `the server decision record could not be read (${e.message})` };
   }
 }
 
@@ -1218,7 +1240,7 @@ exports.applicationLifecycle = onDocumentWritten(
     if (after.decisionAppliedFor === status && after.projectionStatus === 'applied') return;
     if (status === 'pending') return;                     // nothing to grant yet
 
-    const authority = await decisionAuthority(after);
+    const authority = await decisionAuthority(after, appId);
     if (!authority.ok) {
       /* Already recorded for this exact status: return WITHOUT writing. The block
          below is itself a write to this document, so re-writing it would re-fire
