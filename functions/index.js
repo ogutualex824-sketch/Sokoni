@@ -12802,6 +12802,9 @@ exports.posCommissionPayNowConfirm = _posCommSettle.posCommissionPayNowConfirm; 
 exports.posCommissionCashRecord    = _posCommSettle.posCommissionCashRecord;    // cash handed over (owner / finance)
 exports.posCommissionCashConfirm   = _posCommSettle.posCommissionCashConfirm;   // SOKONI admin confirms receipt (not the requester)
 exports.posCommissionCashCancel    = _posCommSettle.posCommissionCashCancel;    // nothing was received
+/* M0-4a — every 15 min: converges ABANDONED IntaSend commission attempts through the same confirm authority
+   (proven → settled once; failed/never-sent → claims released; ambiguous → NEEDS_REVIEW). No wallet, no till gate. */
+exports.posCommissionAttemptSweep  = _posCommSettle.posCommissionAttemptSweep;
 
 /* ── HEALTHCARE SUBSCRIPTION ACTIVATION ───────────────────────────────────────
    A verified Healthcare subscription payment becomes an active subscription.

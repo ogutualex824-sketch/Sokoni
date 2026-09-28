@@ -1,3 +1,61 @@
+## 2026-09-28 (169) — M0-4a: abandoned POS commission payment attempts converge through ONE confirm authority (NOT deployed)
+
+**Why.** M0-3's settlement machine had three gaps:
+- An attempt whose gateway outcome was unknown, whose provider never answered, or whose merchant never returned to
+  Confirm stayed **OPEN with its debt claims HELD indefinitely**.
+- The confirm logic was inline in the callable, so a scheduler could only reuse it by copying it.
+- `markNeedsReview` was a **plain update with no status check**. Proven on `6d8b0da` (3 of 3 runs): two Confirms read an attempt
+  as OPEN, one makes it PAID and settles its debt, and the other's late review then overwrites it to
+  **NEEDS_REVIEW with the debt already SETTLED**.
+
+- **Change (`functions/pos-commission-settlement.js`):**
+  - **`confirmAttempt`** is THE confirm authority (provider status → `judgeEvidence` → one transition), used by the Confirm
+    callable (after its unchanged permission check) and by the new scheduled sweep. There is no second settlement path.
+  - **Every transition checks its source state inside its own transaction:**
+    - complete from OPEN, or from FAILED only on proven money (M0-3 F-4 retained);
+    - fail from OPEN only;
+    - review from OPEN, or from FAILED on a mismatched completion;
+    - `markNeedsReview` is transactional;
+    - NEEDS_REVIEW is left to M0-5, PAID is final, and nothing reopens FAILED.
+
+    Cash confirm and cancel are unchanged.
+  - **`posCommissionAttemptSweep`**, every 15 min (Africa/Nairobi, one instance, no retry). Its timing comes from each attempt's persisted
+    `createdAtMs`:
+    - eligible after **10 min**;
+    - still pending or provider silent **30 min after eligibility** → NEEDS_REVIEW (never guessed failed);
+    - provider never called → expired (FAILED, claims released, debt OUTSTANDING);
+    - outcome unknown, or accepted without a reference → NEEDS_REVIEW;
+    - cash is never touched.
+
+    It never opens a payment or sends an STK (status **reads** only), touches no wallet, and never blocks the till.
+  - `functions/index.js` re-exports `posCommissionAttemptSweep` by name.
+- **Files:**
+  - `functions/pos-commission-settlement.js`, `functions/index.js`;
+  - new `scripts/test-m04a-attempt-sweep.js`;
+  - new `docs/repairs/POS-M0-4a-attempt-sweep.md`;
+  - `docs/FINANCIAL_CORE_ARCHITECTURE.md` (roadmap: M0-4a built; M0-4-DR debt reconciliation next; M0-4b held for FC-1; the L-9C decision noted);
+  - `CHANGELOG.md`.
+- **Database:** no schema change. Attempts gain history events `by: 'sweep'`.
+- **API:** Confirm on an attempt in review returns it unchanged ("being reviewed by SOKONI"). New scheduled function
+  `posCommissionAttemptSweep`.
+- **Security / money:** closes the review-over-PAID race and the indefinitely held claims. No wallet movement and no new rail.
+- **Evidence:**
+  - `test-m04a-attempt-sweep` **24/0 new vs 1/20 old**. Old: the sweep and authority are absent, and X-0 reproduces the defect.
+    - The races are forced with a barrier on the provider reads: X-1 gives one PAID and one settlement; X-2 gives exactly one winner under conflicting answers.
+    - The thresholds are tested at the edges: 9m59s untouched and 10m processed; 1 ms before the cap OPEN and at the cap NEEDS_REVIEW.
+  - M0-3 **31/0** unchanged.
+  - **13/13 mutants caught**, each for its own reason.
+  - Earlier units all green: L-9A, L-8, L-7, L-6, L-5, L-4, L-3, L-2, L-1, R-48H, M0-3, M0-2, M0-1, P0, rail.
+  - **112-suite floor summary identical.** Full-log differences:
+    - `function-registration-provenance` counts one more registered function, not in the deployed snapshot (expected, since it is not deployed);
+    - the flaky stk-narrative F3-3/F3-4 checks and the Merchant V2 browser suite (environmental on both trees);
+    - uncommitted-tree artifacts and random ids.
+
+    None is unexplained.
+  - Syntax gate clean.
+- **Not in this unit:** M0-4b (held for FC-1), debt reconciliation (next), M0-5, the stale 06:00 reminder, and any scheduled M-PESA prompt.
+- **Deployment prerequisites unchanged:** the KES 10 live proof, M0-6, `INTASEND_PRIVATE_KEY`, the live-rules fetch, and the M0-3 callables it serves (none deployed).
+
 ## 2026-09-28 (168) — L-9C: disposition of c4f6ced — not ported; this lineage's product and customer authorities stand (documentation only)
 
 **Decision recorded.** c4f6ced ("a till sells only its own shop's products, to its own shop's customers") lives only

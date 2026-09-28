@@ -25,8 +25,13 @@
  *                    → SETTLED, once. Anything else is recorded for reconciliation, never settled twice.
  *   failAttempt      the payment did not happen: attempt FAILED, its claims released, debts stay OUTSTANDING.
  *
- * Money is never taken from a wallet here (no business-wallet credit writer exists yet), nothing touches the
- * till gate (still OFF — P0), and there is no scheduler (M0-4 must reuse these claims).
+ * Money is never taken from a wallet here (no business-wallet credit writer exists yet) and nothing touches the
+ * till gate (still OFF — P0).
+ *
+ * M0-4a (2026-09-28): confirmAttempt is THE confirm authority (provider status → judgeEvidence → one transition),
+ * used by the Confirm callable and by the scheduled posCommissionAttemptSweep, which converges ABANDONED
+ * IntaSend attempts (see sweepOpenAttempts). Every transition takes its expected source state inside its own
+ * transaction. The 07:00 business-wallet collector is NOT here: it waits for FC-1 (M0-4b).
  */
 const crypto = require('crypto');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
@@ -114,14 +119,23 @@ async function openAttempt({ scope, method, idempotencyKey, requestedBy, extra }
   });
 }
 
+/* ── expected source state (M0-4a) ────────────────────────────────────────────────────────────────
+   A transition that names `opts.from` happens only when the attempt is, INSIDE its own transaction, in one of
+   those states; otherwise it is a replay that writes nothing. Two actors (the merchant's Confirm and the
+   scheduled sweep) can then race on one attempt and the first transition wins: a PAID attempt can never be
+   moved to NEEDS_REVIEW, a NEEDS_REVIEW attempt is not overwritten, a FAILED one is not reopened. Callers that
+   pass no `from` keep their certified M0-3 behaviour (cash confirm, cash cancel). */
+const allowedFrom = (pd, opts) => !(opts && Array.isArray(opts.from)) || opts.from.includes(pd.status);
+
 /* ── completeAttempt — ONLY on proven money ──────────────────────────────────────────────────────── */
-async function completeAttempt(payId, evidence, by) {
+async function completeAttempt(payId, evidence, by, opts) {
   const payRef = db().collection(PAYMENTS).doc(payId);
   return db().runTransaction(async (t) => {
     const p = await t.get(payRef);
     if (!p.exists) throw new HttpsError('not-found', 'No such commission payment.');
     const pd = p.data();
     if (pd.status === STATUS.PAID || pd.status === STATUS.PAID_RECONCILE) return { status: pd.status, replay: true };
+    if (!allowedFrom(pd, opts)) return { status: pd.status, replay: true };
     const debtRefs = pd.debtIds.map((id) => db().collection(LIABILITIES).doc(id));
     const claimRefs = pd.debtIds.map((id) => db().collection(CLAIMS).doc(id));
     const [debts, claims] = [await t.getAll(...debtRefs), await t.getAll(...claimRefs)];
@@ -150,13 +164,14 @@ async function completeAttempt(payId, evidence, by) {
 }
 
 /* ── failAttempt — the payment did not happen ────────────────────────────────────────────────────── */
-async function failAttempt(payId, reason, by) {
+async function failAttempt(payId, reason, by, opts) {
   const payRef = db().collection(PAYMENTS).doc(payId);
   return db().runTransaction(async (t) => {
     const p = await t.get(payRef);
     if (!p.exists) return { status: 'none' };
     const pd = p.data();
     if (pd.status !== STATUS.OPEN && pd.status !== STATUS.NEEDS_REVIEW) return { status: pd.status, replay: true };
+    if (!allowedFrom(pd, opts)) return { status: pd.status, replay: true };
     const claimRefs = pd.debtIds.map((id) => db().collection(CLAIMS).doc(id));
     const claims = await t.getAll(...claimRefs);
     claims.forEach((c, i) => { if (c.exists && c.data().payId === payId && c.data().status === 'HELD') t.delete(claimRefs[i]); });
@@ -166,9 +181,21 @@ async function failAttempt(payId, reason, by) {
   });
 }
 
-async function markNeedsReview(payId, problem, evidence) {
-  await db().collection(PAYMENTS).doc(payId).update({ status: STATUS.NEEDS_REVIEW, reviewReason: problem, evidence: evidence || null,
-    history: admin.firestore.FieldValue.arrayUnion({ atMs: nowMs(), event: 'NEEDS_REVIEW', by: 'system', reason: problem }) });
+/* M0-4a — was a plain update with no status check, so a concurrent Confirm that had just made the attempt PAID
+   could be overwritten with NEEDS_REVIEW. Now transactional, and only from `opts.from` (default: OPEN). Nothing
+   moves an attempt OUT of NEEDS_REVIEW here — that is M0-5. */
+async function markNeedsReview(payId, problem, evidence, by, opts) {
+  const payRef = db().collection(PAYMENTS).doc(payId);
+  const from = (opts && Array.isArray(opts.from)) ? opts.from : [STATUS.OPEN];
+  return db().runTransaction(async (t) => {
+    const p = await t.get(payRef);
+    if (!p.exists) return { status: 'none' };
+    const pd = p.data();
+    if (!from.includes(pd.status)) return { status: pd.status, replay: true };
+    t.update(payRef, { status: STATUS.NEEDS_REVIEW, reviewReason: String(problem || '').slice(0, 200), evidence: evidence || null,
+      history: admin.firestore.FieldValue.arrayUnion({ atMs: nowMs(), event: 'NEEDS_REVIEW', by: by || 'system', reason: String(problem || '').slice(0, 200) }) });
+    return { status: STATUS.NEEDS_REVIEW };
+  });
 }
 
 /* ── provider evidence → a decision. Missing is "not proven", never "matches". ──────────────────── */
@@ -198,6 +225,108 @@ async function initiateProvider(pd, data) {
   const payload = K.buildPayload({ amountKES, apiRef: pd.payId, publicKey, narrative: 'SOKONI commission', email: data.email, firstName: data.firstName, lastName: data.lastName });
   const res = await K.createCheckout({ payload, publicKey, sandbox, https });
   return { outcome: K.classifyOutcome(res.status), providerRef: K.invoiceIdOf(res.data), checkoutUrl: K.checkoutUrlOf(res.data), methods: K.methodsOf(res.data) };
+}
+
+/* ══ M0-4a — THE ONE CONFIRM AUTHORITY ════════════════════════════════════════════════════════════════
+   provider status → judgeEvidence → exactly one transactional transition. The signed-in Confirm callable (after
+   its own permission check) and the scheduled sweep both call THIS; there is no second settlement path.
+     COMPLETE (proven)  → completeAttempt, from OPEN — or from FAILED (M0-3 F-4: proven money that arrives after a
+                          failure still settles an OUTSTANDING, unclaimed debt; it is never refused)
+     FAILED / EXPIRED   → failAttempt, from OPEN only (its claims are released; the debts stay OUTSTANDING)
+     not proven         → markNeedsReview, from OPEN — or from FAILED, since a COMPLETE that does not match is a
+                          money signal after a failure; nothing is guessed either way
+     PENDING            → nothing
+   An attempt already in NEEDS_REVIEW is left alone (M0-5 resolves review); PAID / PAID_RECONCILE are final.
+   Returns { outcome, status?, why?, evidence?, pd } and never throws for a provider that does not answer. */
+async function confirmAttempt(payId, opts) {
+  const by = (opts && opts.by) || 'provider';
+  const snap = await db().collection(PAYMENTS).doc(String(payId)).get();
+  if (!snap.exists) return { outcome: 'NOT_FOUND' };
+  const pd = snap.data();
+  if (pd.method === METHODS.CASH) return { outcome: 'CASH', status: pd.status, pd };
+  if (pd.status === STATUS.PAID || pd.status === STATUS.PAID_RECONCILE) return { outcome: 'ALREADY_PAID', status: pd.status, pd };
+  if (pd.status === STATUS.NEEDS_REVIEW) return { outcome: 'IN_REVIEW', status: pd.status, pd };
+  if (!pd.providerRef) return { outcome: 'NO_REFERENCE', status: pd.status, pd };
+  let ev;
+  try {
+    const S = require('./shared/intasend-status');
+    ev = (await S.readStatus({ invoiceId: pd.providerRef, privateKey: INTASEND_PRIVATE_KEY.value(),
+      sandbox: process.env.INTASEND_SANDBOX === 'true', https: require('https') })).evidence;
+  } catch (e) { return { outcome: 'PROVIDER_UNANSWERED', status: pd.status, pd }; }
+  const j = judgeEvidence(pd, ev);
+  if (j.decision === 'COMPLETE') {
+    const r = await completeAttempt(pd.payId, Object.assign({ source: 'intasend-status' }, ev), by, { from: [STATUS.OPEN, STATUS.FAILED] });
+    return { outcome: r.replay ? 'REPLAY' : 'COMPLETED', status: r.status, pd };
+  }
+  if (j.decision === 'FAILED') {
+    const r = await failAttempt(pd.payId, 'provider state ' + ev.state, by, { from: [STATUS.OPEN] });
+    return { outcome: r.replay ? 'REPLAY' : 'FAILED', status: r.status, why: j.why, pd };
+  }
+  if (j.decision === 'REVIEW') {
+    const r = await markNeedsReview(pd.payId, j.why, ev, by, { from: [STATUS.OPEN, STATUS.FAILED] });
+    return { outcome: r.replay ? 'REPLAY' : 'REVIEW', status: r.status, why: j.why, pd };
+  }
+  return { outcome: 'PENDING', status: pd.status, why: j.why, evidence: ev || null, pd };
+}
+
+/* ══ M0-4a — THE PENDING-ATTEMPT SWEEP ════════════════════════════════════════════════════════════════
+   Converges ABANDONED IntaSend attempts; it never opens one, never calls a payment provider except to READ a
+   status, never touches a wallet, and never blocks a till. Cash attempts are resolved by SOKONI, not here.
+   Timing is measured from the attempt's persisted createdAtMs (not from a count of sweeps), so a delayed or
+   missed run changes nothing:
+     eligible    createdAtMs + SWEEP_MIN_AGE_MS            (leaves the interactive Confirm its time)
+     pending cap eligible + SWEEP_PENDING_CAP_MS            still PENDING / unanswered after this → NEEDS_REVIEW
+   For an OPEN IntaSend attempt past eligibility:
+     has a provider reference         → confirmAttempt (the ONE authority)
+     no reference, provider never called (gatewayOutcome null — a crash between opening and the call)
+                                      → failAttempt: nothing can have been charged; claims released
+     no reference, gateway rejected   → failAttempt
+     no reference, outcome unknown / accepted without a reference
+                                      → NEEDS_REVIEW: a prompt may have reached the phone, so money may be moving */
+const SWEEP_MIN_AGE_MS     = 10 * 60 * 1000;
+const SWEEP_PENDING_CAP_MS = 30 * 60 * 1000;
+const SWEEP_BATCH          = 200;
+
+async function sweepOpenAttempts(opts) {
+  const at = (opts && Number.isFinite(opts.nowMs)) ? opts.nowMs : nowMs();
+  const q = await db().collection(PAYMENTS).where('status', '==', STATUS.OPEN).limit(SWEEP_BATCH).get();
+  const rows = q.docs.map((d) => d.data()).sort((a, b) => Number(a.createdAtMs) - Number(b.createdAtMs));
+  const tally = { scanned: rows.length, tooYoung: 0, cash: 0, confirmed: {}, expired: 0, review: 0, pending: 0 };
+  const bump = (k) => { tally.confirmed[k] = (tally.confirmed[k] || 0) + 1; };
+  for (const pd of rows) {
+    if (pd.method === METHODS.CASH) { tally.cash++; continue; }
+    const created = Number(pd.createdAtMs);
+    const eligibleAt = Number.isFinite(created) ? created + SWEEP_MIN_AGE_MS : 0;
+    if (at < eligibleAt) { tally.tooYoung++; continue; }
+    const capReached = at >= eligibleAt + SWEEP_PENDING_CAP_MS;
+    try {
+      if (!pd.providerRef) {
+        if (pd.gatewayOutcome == null || pd.gatewayOutcome === 'GATEWAY_REJECTED') {
+          const r = await failAttempt(pd.payId, pd.gatewayOutcome == null ? 'never reached the provider' : 'gateway rejected the request',
+            'sweep', { from: [STATUS.OPEN] });
+          if (!r.replay) tally.expired++;
+        } else {
+          const r = await markNeedsReview(pd.payId, 'no provider reference; gateway outcome ' + pd.gatewayOutcome, null, 'sweep', { from: [STATUS.OPEN] });
+          if (!r.replay) tally.review++;
+        }
+        continue;
+      }
+      const r = await confirmAttempt(pd.payId, { by: 'sweep' });
+      if ((r.outcome === 'PENDING' || r.outcome === 'PROVIDER_UNANSWERED') && capReached) {
+        const m = await markNeedsReview(pd.payId, (r.outcome === 'PENDING' ? 'still pending (' + r.why + ')' : 'provider did not answer')
+          + ' past the pending cap', r.evidence || null, 'sweep', { from: [STATUS.OPEN] });
+        if (!m.replay) tally.review++;
+      } else if (r.outcome === 'PENDING' || r.outcome === 'PROVIDER_UNANSWERED') {
+        tally.pending++;
+      } else {
+        bump(r.outcome);
+      }
+    } catch (e) {
+      /* one attempt must never stop the others; it is simply seen again on the next run */
+      console.error('[posCommissionAttemptSweep] attempt not processed', { payId: pd.payId, error: e && e.message });
+    }
+  }
+  return tally;
 }
 
 function mustKey(data) {
@@ -254,18 +383,17 @@ async function _confirmHandler(req) {
     await require('./workforce-identity')._assertBusinessPermission(uid, pd.scope.businessId, 'finance');
   }
   if (pd.method === METHODS.CASH) throw new HttpsError('failed-precondition', 'A cash payment is confirmed by SOKONI, not by the provider.');
-  if (pd.status === STATUS.PAID || pd.status === STATUS.PAID_RECONCILE) return publicView(pd, { replayed: true });
-  if (!pd.providerRef) return publicView(pd, { note: 'No provider reference yet.' });
-  let ev;
-  try {
-    const S = require('./shared/intasend-status');
-    ev = (await S.readStatus({ invoiceId: pd.providerRef, privateKey: INTASEND_PRIVATE_KEY.value(), sandbox: process.env.INTASEND_SANDBOX === 'true', https: require('https') })).evidence;
-  } catch (e) { return publicView(pd, { note: 'The provider did not answer; nothing changed.' }); }
-  const j = judgeEvidence(pd, ev);
-  if (j.decision === 'COMPLETE') { const r = await completeAttempt(payId, Object.assign({ source: 'intasend-status' }, ev), 'provider'); return publicView(pd, { status: r.status }); }
-  if (j.decision === 'FAILED') { if (pd.status === STATUS.OPEN) await failAttempt(payId, 'provider state ' + ev.state, 'provider'); return publicView(pd, { status: pd.status === STATUS.OPEN ? STATUS.FAILED : pd.status }); }
-  if (j.decision === 'REVIEW') { await markNeedsReview(payId, j.why, ev); return publicView(pd, { status: STATUS.NEEDS_REVIEW, reason: j.why }); }
-  return publicView(pd, { note: 'Still pending: ' + j.why });
+  /* M0-4a — everything past the permission check is the ONE confirm authority, shared with the sweep. */
+  const r = await confirmAttempt(payId, { by: 'provider' });
+  switch (r.outcome) {
+    case 'ALREADY_PAID':        return publicView(pd, { replayed: true });
+    case 'IN_REVIEW':           return publicView(pd, { status: STATUS.NEEDS_REVIEW, note: 'This payment is being reviewed by SOKONI.' });
+    case 'NO_REFERENCE':        return publicView(pd, { note: 'No provider reference yet.' });
+    case 'PROVIDER_UNANSWERED': return publicView(pd, { note: 'The provider did not answer; nothing changed.' });
+    case 'PENDING':             return publicView(pd, { note: 'Still pending: ' + r.why });
+    case 'REVIEW':              return publicView(pd, { status: STATUS.NEEDS_REVIEW, reason: r.why });
+    default:                    return publicView(pd, { status: r.status });
+  }
 }
 
 /** Cash, step 1 — the owner or a `finance` member records that cash was handed to SOKONI. Nothing settles yet. */
@@ -310,11 +438,22 @@ async function _cancelHandler(req) {
 }
 
 const OPTS = { region: 'us-central1', enforceAppCheck: true, secrets: [INTASEND_PRIVATE_KEY], maxInstances: 20 };
+/* M0-4a — every 15 minutes, Africa/Nairobi. One instance, no automatic retry: a missed or failed run is simply
+   followed by the next one, and every transition it makes is transactional and replay-safe. */
+const { onSchedule } = require('firebase-functions/v2/scheduler');
+const SWEEP_OPTS = { schedule: 'every 15 minutes', timeZone: 'Africa/Nairobi', region: 'us-central1',
+  secrets: [INTASEND_PRIVATE_KEY], retryCount: 0, maxInstances: 1, timeoutSeconds: 300 };
 module.exports = {
   LIABILITIES, PAYMENTS, CLAIMS, METHODS, STATUS, MAX_DEBTS_PER_ATTEMPT,
-  openAttempt, completeAttempt, failAttempt, judgeEvidence, chargeMinorFor,
+  SWEEP_MIN_AGE_MS, SWEEP_PENDING_CAP_MS, SWEEP_BATCH,
+  openAttempt, completeAttempt, failAttempt, markNeedsReview, confirmAttempt, sweepOpenAttempts, judgeEvidence, chargeMinorFor,
   _h: { posCommissionPayNow: _payNowHandler, posCommissionPayNowConfirm: _confirmHandler,
-        posCommissionCashRecord: _cashRecordHandler, posCommissionCashConfirm: _cashConfirmHandler, posCommissionCashCancel: _cancelHandler },
+        posCommissionCashRecord: _cashRecordHandler, posCommissionCashConfirm: _cashConfirmHandler, posCommissionCashCancel: _cancelHandler,
+        posCommissionAttemptSweep: sweepOpenAttempts },
+  posCommissionAttemptSweep: onSchedule(SWEEP_OPTS, async () => {
+    const tally = await sweepOpenAttempts();
+    console.log('[posCommissionAttemptSweep]', JSON.stringify(tally));
+  }),
   posCommissionPayNow:        onCall(OPTS, _payNowHandler),
   posCommissionPayNowConfirm: onCall(OPTS, _confirmHandler),
   posCommissionCashRecord:    onCall(Object.assign({}, OPTS, { secrets: [] }), _cashRecordHandler),
