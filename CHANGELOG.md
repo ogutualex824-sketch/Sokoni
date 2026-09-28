@@ -1,3 +1,88 @@
+## [2026-09-28] - Seller shops get a SERVER C1 category at approval; shop search goes through ONE eligibility gate (stage 1)
+
+**Functions, NOT deployed.** Branch `slice/c4-category-matrix`.
+
+The owner decision:
+- Every seller shop has an authoritative SOKONI category assigned at approval.
+- Public shop discovery goes through ONE server-side gate, shared by search, storefronts, QR, category hubs and KASS.
+- Approved seller ≠ discoverable shop.
+
+This is **stage 1 of 4**: the authority, the gate and search indexing. The later stages are:
+- **Writers:** `saveShopProfile` / minishop config / ADE auto-approve must not self-classify or self-activate.
+- **Rules:** built on the served ruleset lineage.
+- **Readers:** storefront, minishop, QR / share, featured shops, KASS.
+
+**Census findings (2026-09-28, read-only):**
+- No shop carried a C1 category: approval stamped the applicant's free text.
+- `bizAdminClassify` cannot classify a seller at all, because it requires a providers doc.
+- Search indexed every `sellers` / `businesses` / `stores` / `vendors` / `companies` / `restaurants` row with no gate:
+  - a driver's `businesses/SOK-*` record was indexed as a shop;
+  - a suspended shop stayed indexed.
+- Owners can write `status` on their own `sellers` / `businesses` / `stores` rows, so a gate trusting those rows could
+  be forged.
+
+**Changed:**
+- **`functions/business-category.js`:** new **`shopEligibility(shop)`**, the ONE shop predicate.
+  - It is C1's `publicEligibility` applied to the canonical `shops/{id}` record: active, not suspended, searchable,
+    public, CLASSIFIED.
+  - It adds the shop-only withdrawals: `isVisible: false`, `deactivated`, `locked`.
+  - The classification must be server-stamped (`business.source` application | admin). Free-text `category` never
+    counts.
+- **`functions/application-lifecycle.js` `projectSeller`** mirrors `projectProvider`:
+  - approval stamps `business: { category (C1 via categoryFromApplication(app, 'seller'); no exact match → retail_store), source: 'application', applicationId, setAt }` plus `searchable` / `isPublic: true` on shops, sellers and businesses;
+  - an AdminOS classification (`source: 'admin'`) is never overwritten;
+  - a server caller may pass its own C1 category (`__serverCategory`);
+  - suspension writes `searchable` / `isPublic: false` on all three, as a provider suspension does.
+- **`functions/provider-shop.js`:** a provider opting into a shop is classified with the provider's SERVER category
+  (`categoryOf(prov)`), never its free text.
+- **`functions/discovery-eligibility.js` `prepareForIndex`** (the choke point both search queues use):
+  - `sellers/{uid}` and `businesses/{uid}` rows are indexed ONLY when the owner's CANONICAL shop passes
+    `shopEligibility`, and then under the SERVER C1 category (the owner's wording is kept as `displayCategory`, not a
+    facet);
+  - a row that is not its owner's account row is refused, whether a `SOK-*` POS / driver record or a row claiming
+    another owner's shop;
+  - `stores`, `vendors`, `companies` and `restaurants` have no server writer or approval authority (`stores.ownerId`
+    is owner-mutable), so they are de-indexed like the legacy provider registries. The collections are untouched.
+- **`functions/discovery-cleanup.js`** (reconciliation tool; not deployed or scheduled): its scope now includes the
+  shop rows the gate governs. `sokoni_shops` records are reconciled like providers: eligible → retained, suspended /
+  unclassified / unauthorised → removed.
+
+> **DEPLOYMENT PREREQUISITE (migration, needs owner authorization):** shops approved BEFORE this change carry no
+> server classification, so once this is deployed the gate de-indexes them until they are classified. Before
+> deploying, existing approved shops must be classified: a server backfill of `business` on approved `shops`, or
+> AdminOS classification. `bizAdminClassify` does not yet accept sellers; that is a stage-2 item. Both are production
+> writes and are NOT done here.
+
+**Owner-decision gap (recorded, not guessed):**
+- C1 has no seller-specific categories (supermarket, wholesale, hardware, fashion, electronics, agriculture), so every
+  seller is classified `retail_store` unless the application names a C1 business type.
+- Adding keys needs a workspace route / profile for each, so it is its own slice.
+
+**Tests:**
+- **`scripts/test-shop-discovery-gate.js`: 17/0.** It runs the REAL `shopEligibility`, `projectSeller` (approve /
+  re-approve / suspend) and `prepareForIndex` on the transactional fake Firestore. The counterproof on `4e9607b`
+  fails 15; A3 and the provider control pass there vacuously.
+  - E1–E4 the predicate: server stamp required, owner-sourced classification refused, six withdrawals.
+  - A1–A5 the stamp: C1 on all three, the `retail_store` default, admin preserved, provider's server category,
+    suspension flags.
+  - I1–I7 the index gate: indexed under the server category, unstamped refused, SOK-* refused, owner-forged row
+    refused, legacy registries refused, foreign claim refused, suspended removed.
+  - C1: the provider gate is unchanged.
+- **Sabotage: 11/11 caught**, byte-identical restore.
+- **Regression:** 25 suites compared with the pristine `4e9607b` tree.
+  - Equal: approval, C1, workspace, discovery-cascade, provider-directory, search-pipeline, firestore-search,
+    kasshop, minishop, shop-follow, suspension, role-authority, and more. `test-approval-activates-shop`,
+    `test-seller-trial` and `test-d1a-driver-business-provisioning` fail identically on both trees (pre-existing).
+  - Superseded assertions updated, each with the reason in the file:
+    - `test-discovery-index` (shop rows gated, the de-index list extended) 25/0;
+    - `test-discovery-cleanup` (`sokoni_shops` now in scope; a suspended shop is STALE, an unsourced id ORPHAN) 35/0.
+  - Harness gap: `test-application-decision-authority`'s mutant loader now shims `business-category` (21/0).
+  - **Correction to `67e6d05`** (provider profile mirror): the jest suite `functions/test/application-lifecycle.test.js`
+    was not run for that commit. Its fake document had no `update()`, so 8 `projectProvider` tests threw. The fake now
+    behaves like Firestore (`update` rejects NOT_FOUND on a missing doc), and the suite is back to 88/1, equal to
+    `4e9607b`. The failure (a `resolveRole` Lawyer case) is pre-existing on both. Production behaviour was never
+    affected: a real Firestore `update` exists and its rejection is caught.
+
 ## [2026-09-28] - KASS prompt: no invented delivery prices, return windows, "vetted" or escrow claims
 
 **Functions, NOT deployed.** Branch `slice/c4-category-matrix`. Owner rule: KASS must never invent delivery prices,

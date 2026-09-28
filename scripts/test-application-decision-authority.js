@@ -127,7 +127,8 @@ function loadLifecycle(sourceOverride) {
        sibling application-lifecycle.js requires needs a shim here, or the
        mutant fails to LOAD and the mutation reports as "not detected" for the
        wrong reason. */
-    for (const sibling of ['role-authority', 'seller-trial']) {
+    /* business-category: projectSeller stamps the server C1 category since 2026-09-28 (the shop discovery gate) */
+    for (const sibling of ['role-authority', 'seller-trial', 'business-category']) {
       fs.writeFileSync(path.join(path.dirname(file), `${sibling}.js`),
         `module.exports = require(${JSON.stringify(path.join(FUNCTIONS_DIR, `${sibling}.js`))});`);
     }

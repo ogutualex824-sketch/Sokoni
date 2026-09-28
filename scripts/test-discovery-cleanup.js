@@ -110,15 +110,18 @@ const snapshotSources = async () => {
   await S('businesses/shop1', { name: 'Mama Pima Shop', status: 'suspended' });
 
   const W = A_WRITERS('sokoni_services');
-  ck('the REAL Algolia map: sokoni_services is written by 7 collections, all in C3 scope; sokoni_shops by none in scope',
+  /* 2026-09-28: shops now have a discovery gate (business-category.shopEligibility via prepareForIndex), so every
+     collection writing sokoni_shops is in scope — superseding "sokoni_shops by none in scope". */
+  ck('the REAL Algolia map: sokoni_services is written by 7 collections, all in scope; sokoni_shops now ALL in scope (the shop gate)',
     W.slice().sort().join() === 'healthProviders,lawyers,mechanics,providerProfiles,providerServices,providers,services'
-    && A_WRITERS('sokoni_shops').every((c) => !DC.SCOPE.includes(c)) && A_WRITERS('sokoni_properties').includes('bnbListings'), { services: W, shops: A_WRITERS('sokoni_shops') });
+    && A_WRITERS('sokoni_shops').length > 0 && A_WRITERS('sokoni_shops').every((c) => DC.SCOPE.includes(c)) && A_WRITERS('sokoni_properties').includes('bnbListings'), { services: W, shops: A_WRITERS('sokoni_shops') });
 
   say('\n── the two required cases ──');
   { const { db, st } = spyDb();
     const r = await rec({ db, engine: 'algolia', index: 'sokoni_shops', writers: A_WRITERS('sokoni_shops'), readPage: fixtureIndex(['shop1', 'ghostshop']) });
-    ck('SHOP entry → the cleanup recognises it is outside provider discovery → RETAINED (both), with ZERO Firestore reads',
-      r.retained === 2 && r.wouldRemove === 0 && r.byVerdict.OUT_OF_SCOPE === 2 && Object.keys(st.reads).length === 0, { r: r.byVerdict, reads: st.reads }); }
+    /* the suspended businesses/shop1 fails the shop gate → STALE; ghostshop has no source in an all-in-scope index → ORPHAN */
+    ck('SHOP entries → reconciled by the shop gate: a suspended shop is STALE and an unsourced id ORPHAN → both removed',
+      r.wouldRemove === 2 && r.byVerdict.STALE === 1 && r.byVerdict.ORPHAN === 1, { r: r.byVerdict, reads: st.reads }); }
   { const { db } = spyDb();
     const r = await rec({ db, engine: 'algolia', index: 'sokoni_services', writers: W, readPage: fixtureIndex(['susp']) });
     ck('STALE provider (was indexed, now fails C3a-1) → removed', r.wouldRemove === 1 && r.byVerdict.STALE === 1, r.byVerdict); }
@@ -152,7 +155,8 @@ const snapshotSources = async () => {
     const v = {}; for (const id of G) v[id] = (await DC.classifyGlobal(db, id, GLOBAL_WRITERS, primaryWritersOf)).verdict;
     ck('providers_susp → STALE (primary stale) · providers_elig → ELIGIBLE · services_mix → ELIGIBLE (primary `mix` has an eligible source: deleting it would take the sibling) · products_ / sellers_ → OUT_OF_SCOPE · unprefixed → UNATTRIBUTABLE',
       v.providers_susp === 'STALE' && v.providers_elig === 'ELIGIBLE' && v.services_mix === 'ELIGIBLE' && v.providerServices_mix === 'ELIGIBLE'
-      && v.products_p1 === 'OUT_OF_SCOPE' && v.sellers_shop1 === 'OUT_OF_SCOPE' && v.noprefixid === 'UNATTRIBUTABLE' && r.wouldRemove === 1, v); }
+      /* 2026-09-28: shops are gated — the suspended shop's global copy follows its (stale) primary, like providers_susp */
+      && v.products_p1 === 'OUT_OF_SCOPE' && v.sellers_shop1 === 'STALE' && v.noprefixid === 'UNATTRIBUTABLE' && r.wouldRemove === 2, v); }
 
   say('\n── live: only the existing gated queue ──');
   const before = await snapshotSources();
@@ -215,7 +219,9 @@ const snapshotSources = async () => {
     const H = await rec({ db, engine: 'typesense', index: 'sokoni_hotels', writers: T_WRITERS('sokoni_hotels'), readPage: fixtureIndex(['b2', 'ghosth']) });
     ck('sokoni_hotels is MIXED (bnbListings + hotels): b2 stale → removed · ghosth (no source) → retained', H.byVerdict.STALE === 1 && H.byVerdict.UNATTRIBUTABLE === 1, H.byVerdict);
     const Sh = await rec({ db, engine: 'typesense', index: 'sokoni_shops', writers: T_WRITERS('sokoni_shops'), readPage: fixtureIndex(['shop1']) });
-    ck('sokoni_shops → OUT_OF_SCOPE, retained', Sh.byVerdict.OUT_OF_SCOPE === 1 && Sh.wouldRemove === 0); }
+    /* 2026-09-28: Typesense sokoni_shops is written by `sellers` only, now in scope (the shop gate); shop1 has no sellers
+       source → ORPHAN → removed (superseding "OUT_OF_SCOPE, retained") */
+    ck('sokoni_shops → in scope (shop gate): an unsourced id is ORPHAN → removed', Sh.byVerdict.ORPHAN === 1 && Sh.wouldRemove === 1, Sh.byVerdict); }
 
   say('\n── reader adapters (FAKE clients — no live engine contacted) ──');
   { const calls = [];

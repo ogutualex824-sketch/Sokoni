@@ -37,7 +37,12 @@
 const DE = require('./discovery-eligibility');
 
 /** The collections whose public discoverability C3 governs — exactly those the C3a-1 gate can refuse. */
-const SCOPE = Object.freeze([...DE.PROVIDER_SCOPED, ...DE.DEINDEXED, 'bnbListings']);
+/* 2026-09-28 (owner decision: shops are discoverable only through the ONE server gate): the gate now also governs the
+   shop rows (DE.SHOP_SCOPED — sellers / businesses) and de-indexes the shop registries with no authority (stores,
+   vendors, companies, restaurants), so `sokoni_shops` is in scope and its records are reconciled like any other —
+   an approved, classified shop is RETAINED, a suspended / unclassified / unauthorised one REMOVED. The "shop / merchant
+   discovery is never touched" rule below applied before shops had a gate; it is superseded. */
+const SCOPE = Object.freeze([...DE.PROVIDER_SCOPED, ...(DE.SHOP_SCOPED || []), ...DE.DEINDEXED, 'bnbListings']);
 const inScope = (c) => SCOPE.includes(c);
 const ID_RE = /^[^/]{1,1500}$/;
 

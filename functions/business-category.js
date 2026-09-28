@@ -196,5 +196,27 @@ function publicEligibility(providerDoc) {
   return { eligible: reasons.length === 0, category, reasons };
 }
 
+/**
+ * SHOP public eligibility — the ONE predicate for whether a seller shop may be publicly discovered (owner decision
+ * 2026-09-28: "approved seller ≠ discoverable shop"). It is publicEligibility() applied to the CANONICAL `shops/{id}`
+ * record — the one shop document owners cannot write status or classification on — plus the shop-only withdrawals:
+ * a deactivated account (isVisible:false / deactivated) and a security lock. The category must be the one the SERVER
+ * stamped at approval or AdminOS set (`business.source` application | admin); free-text `category` never counts.
+ * Search indexing, storefronts, QR/share, category hubs and KASS read shops through this, never a second rule.
+ */
+function shopEligibility(shopDoc) {
+  const s = shopDoc || {};
+  const base = publicEligibility(s);
+  const reasons = base.reasons.slice();
+  if (s.isVisible === false) reasons.push('NOT_VISIBLE');
+  if (s.deactivated === true) reasons.push('DEACTIVATED');
+  if (s.locked === true) reasons.push('LOCKED');
+  const b = s.business;
+  const stamped = !!(b && isCategory(b.category) && (b.source === 'application' || b.source === 'admin'));
+  if (!stamped && !reasons.includes('UNCLASSIFIED')) reasons.push('UNCLASSIFIED');
+  const category = stamped ? b.category : null;
+  return { eligible: reasons.length === 0, category, reasons };
+}
+
 module.exports = { CATEGORIES, KEYS, HEALTHCARE, FROM_BUSINESS_ID, FROM_PROFESSION, ROLE_CATEGORY, ADMIN_REVIEW_ONLY,
-  isCategory, categoryFromApplication, categoryOf, publicEligibility, label: (c) => (isCategory(c) ? CATEGORIES[c].label : 'Unclassified') };
+  isCategory, categoryFromApplication, categoryOf, publicEligibility, shopEligibility, label: (c) => (isCategory(c) ? CATEGORIES[c].label : 'Unclassified') };

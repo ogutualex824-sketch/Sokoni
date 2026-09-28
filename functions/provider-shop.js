@@ -115,6 +115,8 @@ async function providerRequestShop(req) {
     applicationId: null,
     name:        _san(prov.name || prov.businessName, 160),
     category:    _san(prov.category, 80),
+    /* the provider's SERVER C1 category — the shop is classified with it, never with the free-text wording above */
+    __serverCategory: require('./business-category').categoryOf(prov),
     phoneNumber: _san(prov.phone || prov.phoneNumber, 40),
     location:    _san(prov.location || prov.city, 160),
     description: _san(prov.bio || prov.description, 1000),

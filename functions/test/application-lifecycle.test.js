@@ -237,6 +237,12 @@ describe('projectDriver / projectProvider — written shape', () => {
       _path: path,
       get: async () => ({ exists: !!docs[path], data: () => docs[path] }),
       set: async (data, opts) => { writes.push({ path, data, merge: !!(opts && opts.merge) }); },
+      /* Like Firestore: update() on a missing doc rejects NOT_FOUND (projectProvider mirrors onto an EXISTING
+         providerProfiles doc only — CHANGELOG, provider profile mirror). An update never replaces the doc. */
+      update: async (data) => {
+        if (!docs[path]) { const e = new Error('NOT_FOUND: ' + path); e.code = 5; throw e; }
+        writes.push({ path, data, merge: true, update: true });
+      },
     });
     return {
       collection: (c) => ({

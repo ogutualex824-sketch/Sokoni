@@ -863,16 +863,36 @@ async function projectSeller(db, app, uid, approved) {
        suspension deactivates the shop but never deletes it — the merchant's
        products, orders and history stay intact for reinstatement. */
     if (existing.exists) {
-      await shopRef.set({ status: 'suspended', suspendedAt: _ts(), updatedAt: _ts() }, { merge: true });
-      await sellerRef.set({ status: 'suspended', active: false, updatedAt: _ts() }, { merge: true }).catch(() => {});
+      /* searchable / isPublic false: the shop discovery gate (business-category.shopEligibility) reads these, exactly
+         as a provider suspension writes them (C3a-2). */
+      await shopRef.set({ status: 'suspended', suspendedAt: _ts(), searchable: false, isPublic: false, updatedAt: _ts() }, { merge: true });
+      await sellerRef.set({ status: 'suspended', active: false, searchable: false, isPublic: false, updatedAt: _ts() }, { merge: true }).catch(() => {});
       /* Retract the directory listing too. A suspended merchant that stays
          discoverable is the same defect as an approved one that never appears —
          the registries must move together or they disagree about who is live. */
-      await bizRef.set({ status: 'suspended', updatedAt: _ts() }, { merge: true }).catch(() => {});
+      await bizRef.set({ status: 'suspended', searchable: false, isPublic: false, updatedAt: _ts() }, { merge: true }).catch(() => {});
       return { collection: 'shops', id: shopId, action: 'suspended' };
     }
     return { collection: 'shops', id: shopId, action: 'none' };
   }
+
+  /* ── C1 CLASSIFICATION, stamped by the SERVER at approval (owner decision 2026-09-28) ──────────────────────────
+     Mirrors projectProvider: the category comes from the application through business-category (a seller with no
+     exact match is `retail_store`), an AdminOS classification already on the shop is never overwritten, and a
+     server caller that already holds a C1 category (providerRequestShop — the provider's own) passes it as
+     `__serverCategory`. The applicant's free-text `category` is kept only as display wording. */
+  const BCAT = require('./business-category');
+  const priorB = existing.exists ? (existing.data() || {}).business : null;
+  const adminSet = !!(priorB && priorB.source === 'admin' && BCAT.isCategory(priorB.category));
+  const serverCat = BCAT.isCategory(app.__serverCategory) ? app.__serverCategory : null;
+  const appCat = adminSet ? priorB.category : (serverCat || BCAT.categoryFromApplication(app, 'seller').category);
+  const business = {
+    category: BCAT.isCategory(appCat) ? appCat : null,
+    source: adminSet ? 'admin' : 'application',
+    applicationId: app.applicationId || null,
+    setAt: _ts(),
+  };
+  if (adminSet && priorB.classifiedBy) business.classifiedBy = priorB.classifiedBy;
 
   const batch = db.batch();
 
@@ -890,6 +910,10 @@ async function projectSeller(db, app, uid, approved) {
     updatedAt: _ts(),
     source: 'application_approval',
     applicationId: app.applicationId || null,
+    business,
+    /* the discovery flags a suspension clears; approval (and reinstatement) restores them */
+    searchable: true,
+    isPublic: true,
     ...(existing.exists ? {} : { createdAt: _ts() }),
     ...(app.category ? { category: _sanText(app.category, 80) } : {}),
     ...(app.phoneNumber ? { phoneNumber: app.phoneNumber } : {}),
@@ -905,6 +929,9 @@ async function projectSeller(db, app, uid, approved) {
     nameLower: name.toLowerCase(),
     status: 'active',
     active: true,
+    business,
+    searchable: true,
+    isPublic: true,
     /* `updatedAt` is load-bearing: the discovery queries order by it, so a
        registry row without one is invisible to the very listing it just
        joined. */
@@ -931,6 +958,9 @@ async function projectSeller(db, app, uid, approved) {
     status: 'active',
     source: 'application_approval',
     applicationId: app.applicationId || null,
+    business,
+    searchable: true,
+    isPublic: true,
     updatedAt: _ts(),
     ...(bizExisting && bizExisting.exists ? {} : { createdAt: _ts() }),
     ...(app.category ? { category: _sanText(app.category, 80) } : {}),

@@ -80,10 +80,13 @@ const biz = (category, extra) => Object.assign({ status: 'active', name: 'Biz', 
   ck('a profile follows its owner (uid = doc id)', (await prep('providerProfiles', 'plumber', { status: 'active', category: 'x' })).category === 'trades' && (await prep('providerProfiles', 'unc1', { status: 'active' })) === null);
 
   say('\n── de-indexed and unchanged collections ──');
-  ck('the legacy registries never reach an index', (await Promise.all(D.DEINDEXED.map((c) => prep(c, 'x', { name: 'x', status: 'active' })))).every((x) => x === null) && D.DEINDEXED.slice().sort().join() === 'healthProviders,homeServiceProviders,lawyers,mechanics,services');
+  ck('the legacy registries never reach an index', (await Promise.all(D.DEINDEXED.map((c) => prep(c, 'x', { name: 'x', status: 'active' })))).every((x) => x === null) && D.DEINDEXED.slice().sort().join() === 'companies,healthProviders,homeServiceProviders,lawyers,mechanics,restaurants,services,stores,vendors');   /* 2026-09-28: + the shop registries with no authority */
   ck('a pending BnB listing is not indexed; an active one is', (await prep('bnbListings', 'b1', { status: 'pending' })) === null && (await prep('bnbListings', 'b2', { status: 'active', name: 'Stay' })).name === 'Stay');
   const prod = { name: 'Rice', category: 'food', status: 'active' };
-  ck('other collections (products, sellers, businesses) pass UNCHANGED — shop discovery is out of this slice', (await prep('products', 'p1', prod)) === prod && (await prep('businesses', 'b', { name: 'Shop' })).name === 'Shop');
+  /* 2026-09-28 (owner decision): shop rows are gated by business-category.shopEligibility on the owner's canonical
+     shop — a business with no approved, classified shop is NOT indexed. Products are still out of this gate (the
+     owner's later product-ownership step). Specified in scripts/test-shop-discovery-gate.js. */
+  ck('products pass unchanged; a sellers / businesses row with no eligible shop is NOT indexed (the shop gate)', (await prep('products', 'p1', prod)) === prod && (await prep('businesses', 'b', { name: 'Shop' })) === null && (await prep('sellers', 'b', { name: 'Shop' })) === null);
 
   say('\n── the choke point: both queues ──');
   await AQ.enqueue({ collection: 'providers', docId: 'unc1', operation: 'upsert', data: await get('providers/unc1') });

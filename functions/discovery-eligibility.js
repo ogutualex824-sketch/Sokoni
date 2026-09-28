@@ -26,7 +26,32 @@
 const BCAT = require('./business-category');
 
 const PROVIDER_SCOPED = Object.freeze(['providers', 'providerProfiles', 'providerServices']);
-const DEINDEXED = Object.freeze(['mechanics', 'lawyers', 'healthProviders', 'homeServiceProviders', 'services']);
+/* Shop search rows keyed by the owner's ACCOUNT (projectSeller writes sellers/{uid} and businesses/{uid}). They are
+   discoverable only when the owner's CANONICAL shop passes business-category.shopEligibility (owner decision
+   2026-09-28) — never on their own fields, which the owner can write. */
+const SHOP_SCOPED = Object.freeze(['sellers', 'businesses']);
+/* Legacy registries (C3a) + shop registries with NO server writer and no approval authority (stores, vendors,
+   companies, restaurants — `stores.ownerId` is even owner-mutable, so a row could claim someone else's shop). */
+const DEINDEXED = Object.freeze(['mechanics', 'lawyers', 'healthProviders', 'homeServiceProviders', 'services',
+  'stores', 'vendors', 'companies', 'restaurants']);
+
+/** The owner's canonical shop: shops/{uid} (the approval default), else the shop whose sellerUid is the owner. */
+async function ownerShop(db, uid) {
+  const direct = await db.collection('shops').doc(uid).get();
+  if (direct.exists && String((direct.data() || {}).sellerUid || (direct.data() || {}).ownerId || uid) === uid) return direct.data();
+  const q = await db.collection('shops').where('sellerUid', '==', uid).limit(5).get();
+  const docs = q.docs.map((d) => d.data());
+  return docs.find((d) => BCAT.shopEligibility(d).eligible) || docs[0] || null;
+}
+
+/** Shop-scoped rows: the owner's uid, or '' when the row is not an owner-keyed shop row (e.g. a POS SOK-* business). */
+function shopOwnerOf(collection, docId, data) {
+  const id = String(docId || '');
+  if (/^SOK-/i.test(id)) return '';                              /* POS / driver provisioning records — never a shop listing */
+  const d = data || {};
+  const uid = String(d.uid || id);
+  return uid === id ? uid : '';                                   /* the row must BE the owner's account row */
+}
 
 /** The uid of the provider that owns a provider-scoped document. */
 function ownerOf(collection, docId, data) {
@@ -47,6 +72,21 @@ async function prepareForIndex(db, collection, docId, data, cache) {
   if (!data) return null;
   if (DEINDEXED.includes(collection)) return null;
   if (collection === 'bnbListings') return data.status === 'active' ? data : null;
+  if (SHOP_SCOPED.includes(collection)) {
+    const uid = shopOwnerOf(collection, docId, data);
+    if (!uid || /[/]/.test(uid)) return null;
+    const key = 'shop:' + uid;
+    let shop;
+    if (cache && Object.prototype.hasOwnProperty.call(cache, key)) shop = cache[key];
+    else { shop = await ownerShop(db, uid); if (cache) cache[key] = shop; }
+    const se = BCAT.shopEligibility(shop);
+    if (!se.eligible) return null;
+    return Object.assign({}, data, {
+      category: se.category, categories: [se.category], categoryLabel: BCAT.label(se.category),
+      businessType: null,
+      displayCategory: String(data.category || data.businessType || '').slice(0, 80) || null,   /* the owner's words — not a facet */
+    });
+  }
   if (!PROVIDER_SCOPED.includes(collection)) return data;
 
   if (collection === 'providerServices' && (data.active === false || data.removedAt)) return null;
@@ -154,5 +194,5 @@ async function cascadeOwnerChange(db, uid, before, after, enqueue, engine) {
   }
 }
 
-module.exports = { prepareForIndex, ownerOf, PROVIDER_SCOPED, DEINDEXED,
+module.exports = { prepareForIndex, ownerOf, ownerShop, shopOwnerOf, PROVIDER_SCOPED, SHOP_SCOPED, DEINDEXED,
   discoveryChanged, requeueDependents, cascadeOwnerChange, DEPENDENT_MAX };
