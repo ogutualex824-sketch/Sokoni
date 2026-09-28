@@ -80,6 +80,7 @@ const SUITES = {
   bizcat:   ['node', ['scripts/test-business-category.js']],
   bizcatrules: ['node', ['scripts/run-rules-suite.js', 'scripts/test-business-category-rules.js']],
   bizcatui: ['node', ['scripts/test-business-category-admin-browser.js']],
+  bizws:    ['node', ['scripts/test-business-workspace.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -1259,6 +1260,30 @@ const M = [
     from: "          <td>${esc(p.name || '—')}<div", to: "          <td>${p.name || '—'}<div", expect: /escaped/ },
   { group: 'bizcat', browser: true, name: "the AdminOS panel offers authority-owned categories", file: "sokoni-aos-business.js", suite: "bizcatui",
     from: "      return cats.filter((c) => !c.authority && (!!row.healthcare) === (c.group === 'Healthcare'))", to: "      return cats.filter((c) => true)", expect: /authority-owned|Healthcare boundary/ },
+
+  /* ── C2a: the ONE business workspace authority (CHANGELOG 238) ── */
+  { group: 'bizws', browser: false, name: "the hotel demo page is routed as a working dashboard", file: 'functions/business-workspace.js', suite: 'bizws',
+    from: "  hotel: null,        /* bnb-manage.html", to: "  hotel: 'bnb-manage.html',        /* bnb-manage.html", expect: /UNROUTED|hotel/ },
+  { group: 'bizws', browser: false, name: "an UNCLASSIFIED business gets a privileged workspace", file: 'functions/business-workspace.js', suite: 'bizws',
+    from: "  if (!approved || !category) {", to: "  if (!approved) {", expect: /UNCLASSIFIED \(approved\)/ },
+  { group: 'bizws', browser: false, name: "a suspended business keeps its workspace", file: 'functions/business-workspace.js', suite: 'bizws',
+    from: "  const approved = ['active', 'approved'].includes(String(prov.status || '')) && prov.suspended !== true;", to: "  const approved = true;", expect: /pending and suspended/ },
+  { group: 'bizws', browser: false, name: "free text decides the category", file: 'functions/business-workspace.js', suite: 'bizws',
+    from: "  const category = BCAT.categoryOf(prov);", to: "  const category = BCAT.isCategory(String(prov.category || '').toLowerCase()) ? String(prov.category).toLowerCase() : BCAT.categoryOf(prov);", expect: /free-text category/ },
+  { group: 'bizws', browser: false, name: "a doctor is given POS (the healthcare matrix is ignored)", file: 'functions/business-workspace.js', suite: 'bizws',
+    from: "    if (!matrix[op]) { modules[mod] = { state: STATE.NOT_APPLICABLE, reason: null }; continue; }", to: "", expect: /doctor gets NO POS/ },
+  { group: 'bizws', browser: false, name: "content is offered without the creator authority", file: 'functions/business-workspace.js', suite: 'bizws',
+    from: "    if (k === 'content' && !(model && model.isCreator)) {", to: "    if (false) {", expect: /content NOT_APPLICABLE unless/ },
+  { group: 'bizws', browser: false, name: "a plan is guessed for an uncatalogued category", file: 'functions/business-workspace.js', suite: 'bizws',
+    from: "    : { state: STATE.COMMERCIAL_DECISION_REQUIRED, hub: null, tier: null, status: null };", to: "    : { state: 'MAPPED', hub: 'provider', tier: 'premium', status: 'active' };", expect: /COMMERCIAL_DECISION_REQUIRED/ },
+  { group: 'bizws', browser: false, name: "an unbuilt module is exposed as AVAILABLE", file: 'functions/business-workspace.js', suite: 'bizws',
+    from: "    if (!MODULES[k].implemented) { mods[k] = { state: STATE.NOT_IMPLEMENTED, reason: MODULES[k].why || null }; continue; }", to: "", expect: /NOT_IMPLEMENTED \(identity deferred\)|staff NOT_IMPLEMENTED/ },
+  { group: 'bizws', browser: false, name: "the op answers for data.uid", file: 'functions/business-workspace.js', suite: 'bizws',
+    from: "    return workspaceFor(getFirestore(), uid);", to: "    return workspaceFor(getFirestore(), (req.data && req.data.uid) || uid);", expect: /CALLER only/ },
+  { group: 'bizws', browser: false, name: "the gate lets a blocked module through", file: 'functions/business-workspace.js', suite: 'bizws',
+    from: "  if (!m || m.state !== STATE.AVAILABLE) {", to: "  if (!m) {", expect: /refuses NOT_APPLICABLE|refuses NOT_IMPLEMENTED|refuses PENDING_APPROVAL/ },
+  { group: 'bizws', browser: false, name: "LOCKED collapses into NOT_APPLICABLE", file: 'functions/business-workspace.js', suite: 'bizws',
+    from: "    modules[mod] = ops[op] ? { state: STATE.AVAILABLE, reason: null } : { state: STATE.LOCKED, reason: (hw && hw.reasons && hw.reasons[op]) || 'PLAN_REQUIRED' };", to: "    modules[mod] = ops[op] ? { state: STATE.AVAILABLE, reason: null } : { state: STATE.NOT_APPLICABLE, reason: null };", expect: /WITHOUT a plan → LOCKED/ },
 ];
 
 const argv = process.argv.slice(2);

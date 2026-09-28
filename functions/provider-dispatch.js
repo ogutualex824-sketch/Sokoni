@@ -42,7 +42,9 @@ function _h() {
          projection merchant approval uses (provider-shop.js), never a healthcare variant. */
       { providerRequestShop: require('./provider-shop').providerRequestShop },
       /* CHANGELOG 233 — the category-aware Healthcare workspace (what the dashboard offers, server-decided). */
-      require('./healthcare-workspace')._h);
+      require('./healthcare-workspace')._h,
+      /* CHANGELOG 238 (C2a) — the ONE business workspace authority, for every category. */
+      require('./business-workspace')._h);
   }
   return _mod;
 }
@@ -71,6 +73,7 @@ const ROUTES = [
   'providerSearchProviders',
   'providerRequestShop',
   'healthcareWorkspace',
+  'businessWorkspace',
   'providerGetAnalytics',
   'providerGetPlans',
   // provider-ops — dashboard + service management (post-onboarding)

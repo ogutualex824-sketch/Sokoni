@@ -1,3 +1,71 @@
+## 2026-09-28 (238) — C2a: ONE business workspace authority (category → route → modules, six explicit states)
+
+Convergence slice C2a. Not deployed. No production writes. Owner decisions 2026-09-28 (C2): canonical dashboards;
+self-selected roles never route; approval before anything goes public; plan catalogues deferred to C6; six module
+states.
+
+**Now:** `functions/business-workspace.js` (`providerDispatch {op:'businessWorkspace'}`, caller-only) answers "what
+workspace am I entitled to?" from server facts only:
+- the C1 category (`business-category.categoryOf`);
+- the business model (approval state, the creator authority);
+- the plan authority (`capability-authority.capabilitiesFor`).
+
+It returns `{category, route, state, modules{key:{state, reason}}, entitlement, publicEligibility}`.
+
+- **Six states, so "not available" ≠ "not relevant":**
+  - AVAILABLE
+  - LOCKED (exists, entitlement missing)
+  - NOT_APPLICABLE
+  - NOT_IMPLEMENTED (needed but no working screen — never exposed)
+  - COMMERCIAL_DECISION_REQUIRED
+  - PENDING_APPROVAL
+- **Routes (owner):** every one of the 25 C1 categories has an explicit decision.
+  - The service-provider model goes to `provider-dashboard`: Healthcare, Legal, trades, cleaning, IT, professional,
+    salon, education, auto, fitness, event services, and artists' bookings. `healthcare.html` stays the public
+    directory.
+  - Shops go to `merchant-v2`, organisers to `event-manager`, venues to `venue-manager`, delivery to the driver app.
+  - **Hotel, restaurant and property are UNROUTED.** Their current pages keep primary data in the browser, so the
+    account gets a "being built" message and Overview + Settings only.
+- **Profiles:** CORE modules for every provider-dashboard business, plus extras per profile:
+  - quoted service (quotes, calls);
+  - appointment shop (products/inventory/POS, all NOT_IMPLEMENTED until the SOK-ID identity exists);
+  - learning;
+  - entertainment (booking PIN, and content only for an ACTIVE creator).
+
+  A doctor never sees POS, products, inventory, rate cards, the booking PIN or calls. A plumber gets quotes and
+  calls. A salon gets no quotes.
+- **Healthcare is ROWS of this authority.** Its module states come from `healthcare-workspace` (matrix + plan)
+  through `healthcareModules`. A pharmacy's shop modules are NOT_IMPLEMENTED while the identity is deferred; LOCKED
+  (no plan) vs AVAILABLE (plan) is proven for the day those screens are wired.
+- **Eligibility:** unapproved, suspended or UNCLASSIFIED means PENDING_APPROVAL, with Overview + Settings only. An
+  unclassified business gets no privileged workspace until AdminOS classifies it.
+- **Entitlement:** a category with no approved plan catalogue gets COMMERCIAL_DECISION_REQUIRED, never a guessed
+  plan. Healthcare reads its real plan authority.
+- **Server facts only:** free-text `category` and a self-selected onboarding role (`accounts.currentRole`) change
+  nothing.
+- **`assertModule(db, uid, module)`** refuses every non-AVAILABLE module with `WORKSPACE_MODULE_<STATE>`. This is the
+  gate C2b wires into the operations.
+
+**Not in C2a** (C2b / C2c / C2d next):
+- no operation is gated yet;
+- no route source is repointed yet;
+- `provider-dashboard` still projects only the Healthcare workspace.
+
+The POS money/security findings stay with the financial-core session (d6). Neither this branch nor the POS lineage
+has the Q0 chain (`2568786`).
+
+**Files:** `functions/business-workspace.js` (new), `functions/provider-dispatch.js` (op),
+`scripts/test-business-workspace.js` (new), `scripts/sabotage-event-ops.js`.
+
+**Tests:**
+- `test-business-workspace` 30/0.
+- Unchanged against `537d17e`: healthcare-workspace 51, sidebar-browser 90, business-category 44, subscription-foundation
+  120, and the capability-consumers guard 18.
+- The guard first flagged a false "second capabilitiesFor": a one-line `capabilitiesFor(...); } catch (_) {`. The call
+  was reshaped; the guard was not weakened.
+
+**Sabotage `bizws`:** 11/11 caught, tree restored byte-identical. It was re-run on the final code.
+
 ## 2026-09-28 (237) — P0 port: onboarding can no longer self-mint a role claim (1171a16 onto feat/creator-hub)
 
 A port of `1171a16`, the P0 fix that is DEPLOYED in production (`onboardingdispatch-00006-reg`), onto this branch.
