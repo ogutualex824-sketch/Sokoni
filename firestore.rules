@@ -353,8 +353,20 @@ service cloud.firestore {
       allow read:   if isAdmin() || isOwner();
       /* The applicant may amend or withdraw a request that is still theirs
          (e.g. correcting a phone number), but cannot decide it. */
-      allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields() && noApplicationDecision());
+      allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields() && noApplicationDecision()
+                                     && classificationFrozenOnceDecided());
       allow delete: if isAdmin() || isOwner();
+    }
+    /* CHANGELOG 236 — what an application SAYS the business is, is what AdminOS decided on. Once an application is
+       decided (approved / active / verified), its applicant can no longer change the fields the category and the
+       commercial lane were derived from: editing `hub:'entertainment'` onto an approved application re-priced every
+       later booking at 5 % instead of the plan rate (provider-hub). A pending application stays editable. */
+    function classificationFrozenOnceDecided() {
+      return resource == null
+        || !(resource.data.get('status', '') is string && resource.data.get('status', '').lower() in ['approved','active','verified'])
+        || !request.resource.data.diff(resource.data).affectedKeys().hasAny(
+             ['role','type','category','subcategory','categories','performerType','hub','hubType','businessType',
+              'businessCategory','categoryId','profession','professionalType','categoryLabel']);
     }
 
     /* applicationDecide's server-only decision record — the trigger and the reconcile path grant a
@@ -578,8 +590,12 @@ service cloud.firestore {
                     /* CHANGELOG 227 — server-set identity attributes: the healthcare category (application-lifecycle /
                        AdminOS) and the Legal authority's link (legal-verification.js). A provider setting
                        provisionedBy:'legal-verification' on their own record defeated the Legal identity-conflict guard. */
-                    && !request.resource.data.keys().hasAny(['healthcare','legalProviderId','provisionedBy','legalVerification']);
-      allow update: if isAdmin()
+                    && !request.resource.data.keys().hasAny(['healthcare','legalProviderId','provisionedBy','legalVerification',
+                                                             /* CHANGELOG 236 — the ONE canonical business category + commercial lane */
+                                                             'business']);
+      /* CHANGELOG 236: `business` (category + commercial lane) is server-written ONLY — not by the provider, and not
+         by an admin's raw client write either: reclassification is the audited AdminOS callable (bizAdminClassify). */
+      allow update: if (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['business']))
                     || (isAuthed()
                         && resource.data.uid == request.auth.uid
                         && uidUnchanged()
@@ -590,7 +606,9 @@ service cloud.firestore {
                                          jobs completed (shown on the profile and used by search). Server-derived. */
                                       'rating','reviewCount','ratingSum','ratingDist','followerCount','shareCount','shareHandle','repV','followV','reputationUpdatedAt', 'jobsCompleted',
                                       /* CHANGELOG 227 — server-set: healthcare category, Legal authority link */
-                                      'healthcare','legalProviderId','provisionedBy','legalVerification']));
+                                      'healthcare','legalProviderId','provisionedBy','legalVerification',
+                                      /* CHANGELOG 236 — canonical business category + commercial lane */
+                                      'business']));
       allow delete: if isAdmin();
     }
 

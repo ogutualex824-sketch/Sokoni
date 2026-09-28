@@ -501,6 +501,29 @@ async function projectProvider(db, app, uid, approved) {
         applicationId: app.applicationId || app.id || null, setAt: _ts() };
     }
   }
+  /* BUSINESS CATEGORY + COMMERCIAL LANE (CHANGELOG 236, convergence C1) — the ONE canonical category
+     (functions/business-category.js), stamped by the SERVER here, at approval: an exact match on what the
+     applicant chose, or null (UNCLASSIFIED → AdminOS). The lane is what the EXISTING classifier
+     (provider-hub.classifyDecidedApplication) decides from this decided application — stamped once so an approved
+     provider can no longer re-file into a cheaper lane by editing the application afterwards. An administrator's
+     category is never overwritten by a re-approval. For a health provider the category IS the healthcare one
+     written above (the two are one decision, written together). */
+  {
+    const BCAT = require('./business-category');
+    const role = app.role || resolveRole(app).role;
+    const priorB = existing.business || null;
+    const adminSet = !!(priorB && priorB.source === 'admin' && BCAT.isCategory(priorB.category));
+    let category = adminSet ? priorB.category : BCAT.categoryFromApplication(app, role).category;
+    if (role === 'health') category = (doc.healthcare ? doc.healthcare.category : (existing.healthcare || {}).category) || null;
+    doc.business = {
+      category: BCAT.isCategory(category) ? category : null,
+      lane: require('./provider-hub').classifyDecidedApplication(Object.assign({}, app, { role })),
+      source: adminSet ? 'admin' : 'application',
+      applicationId: app.applicationId || app.id || null,
+      setAt: _ts(),
+    };
+    if (adminSet && priorB.classifiedBy) doc.business.classifiedBy = priorB.classifiedBy;
+  }
   doc.searchableTerms = buildProviderTerms({ ...existing, ...doc });
 
   /* Seed counters only on first creation — never reset a live provider's

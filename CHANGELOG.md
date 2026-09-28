@@ -1,3 +1,95 @@
+## 2026-09-28 (236) — C1: ONE business category authority for every business type; the commercial lane is frozen at approval
+
+Convergence slice C1: the foundation of the spine application → AdminOS decision → server category → workspace (C2)
+→ plan (C6) → public eligibility (C3). Not deployed. No production writes. No migrations. See
+`docs/BUSINESS_CATEGORY_AUTHORITY.md`.
+
+**Before:**
+- The only server-decided classification was Healthcare's.
+- Every other business was approved as a generic "provider", with a `category` text field it could edit.
+- The provider-booking commission lane was re-derived at every booking from the provider's own APPROVED application,
+  and its applicant could still edit that application.
+  - Setting `hub:'entertainment'` moved later bookings from the plan rate (up to 20%) to 5%.
+  - With several decided applications, the lane depended on read order.
+
+**Now:**
+- **`functions/business-category.js`** is the one registry.
+  - It covers all 106 `hub-register.js` business ids and all 76 `provider-onboarding.js` professions, each mapped
+    deliberately.
+  - Six ids are left UNCLASSIFIED on purpose: car-rental, forex, sacco, football-club, basketball, other.
+  - Healthcare's six categories are this registry's, as the reference pattern rather than a parallel list.
+  - Categories come from exact matches only. Ambiguity, no match, a role conflict or a hub name gives UNCLASSIFIED,
+    never a guess.
+  - `categoryOf` and `publicEligibility` read server facts only.
+- **Approval stamps `providers/{uid}.business` = {category, lane, source, applicationId}** in
+  `application-lifecycle.projectProvider`.
+  - The lane is exactly what the existing classifier (`provider-hub.classifyDecidedApplication`) decides, so no price
+    moves.
+  - An administrator's category survives re-approval.
+  - For a health provider, `business.category` and `healthcare.category` are one decision.
+- **The commission lookup reads the stamped lane.** Legacy providers without a stamp use the MOST RECENTLY decided
+  application. `commission-config` is untouched.
+- **Rules:**
+  - `business` on `providers` cannot be written by the provider (create or update), nor by an admin's raw client
+    write.
+  - An APPROVED application's classification fields are frozen for its applicant. A pending one stays editable.
+- **AdminOS › Business Categories** (`sokoni-aos-business.js` over `business-category-admin.js`, via
+  `adminOsDispatch`):
+  - The unclassified queue is the default view.
+  - Classification needs a reason and is audited in `adminAudit`, including the lane that stayed.
+  - It refuses authority-owned categories (Lawyer, Event organizer, Delivery), the Healthcare boundary in both
+    directions, and unapproved businesses.
+  - The lane is not changed. Re-pricing on reclassification is a C6 decision.
+  - `healthAdminClassify` keeps `healthcare` and `business` in step. This is also the first AdminOS screen for the
+    227 Healthcare classification.
+
+**Owner decisions recorded:**
+- The C1 mappings are IMPLEMENTATION mappings (catering→restaurant; butcher/farm/dairy→retail;
+  event-planner→event_services; nutritionist/coach→service_business). Commercial treatment is C6's.
+- Category ≠ commission lane until C6. Example: "plumbing + Photographer" is UNCLASSIFIED but keeps the entertainment
+  lane the existing classifier gives it.
+
+**Reported, not changed:**
+- **Payment/security BLOCKER, owned by d6 / FC-2:**
+  - `webhookIntasend` commission category comes from client `meta.category` (`saas` = 0%).
+  - The legacy finos callables accept a caller category.
+- **Deploy hazard:** `1171a16`, the deployed P0 self-mint fix, is not on this branch. It is ported next, before C2.
+- **Inherited in `application-lifecycle.js`:** the release-only admin-claim grant and the self-approval vector.
+- Discovery facets still read the free-text category (C3).
+
+**Files:**
+- New: `functions/business-category.js`, `functions/business-category-admin.js`, `sokoni-aos-business.js`,
+  `docs/BUSINESS_CATEGORY_AUTHORITY.md`, `scripts/test-business-category.js`,
+  `scripts/test-business-category-rules.js`, `scripts/test-business-category-admin-browser.js`.
+- Changed: `functions/application-lifecycle.js`, `functions/provider-hub.js`, `functions/healthcare-admin.js`,
+  `functions/admin-os-dispatch.js`, `firestore.rules`, `firestore.rules.build`, `admin-os.html`, `sokoni-aos.js`,
+  `scripts/sabotage-event-ops.js`.
+- `scripts/test-healthcare-admin-approval.js`: its sandbox now shims `business-category` and `provider-hub`, which
+  `projectProvider` requires. Without them I2 reported MODULE_NOT_FOUND instead of proving the guard.
+
+**Database:** a new server-only field, `providers/{uid}.business`. No migration: legacy providers keep the
+order-fixed fallback until re-approved or classified.
+**API:** new AdminOS ops `bizAdminProviders`, `bizAdminClassify`.
+**Security:** closes the post-approval lane self-selection. `business` is server-only. Reclassification is audited.
+**Breaking:**
+- An approved application's category, hub, role and related fields can no longer be edited by its applicant.
+- An admin can no longer raw-edit `providers.business`.
+
+**Tests:**
+- `test-business-category` 44/0 (real code), `test-business-category-rules` 20/0 (emulator), and
+  `test-business-category-admin-browser` 13/0 (Chromium).
+- The rules suite has positive controls on the same paths and a rules-disabled counterproof, and asserts exactly one
+  match block each for providers and applications.
+- Baseline against `8c53ea5`:
+  - 32 affected suites: 31 identical; admin-os-wiring 322 → 325; healthcare-admin-approval 64/0 after the sandbox fix.
+  - 7 rules suites identical: entertainment 376/1 baseline, healthcare-provider 34, identity-fields 10,
+    availability 13, conversation 11, request 91, clinical 26.
+  - Jest `application-lifecycle` identical: 88/1 on both trees, the pre-existing resolveRole Lawyer case.
+
+**Sabotage `bizcat`:** 22/22 caught, tree restored byte-identical. The first run missed "a hub name alone
+classifies": the test only tried the `hub` field, not a hub name written into `category` or `type`. It was
+strengthened, and the attack re-run was caught.
+
 ## 2026-09-28 (235) — Provider dashboard: the premium merchant-v2-style shell (SOKONI mark, business name, grouped sidebar, storefront controls, phone drawer)
 
 The foundation checkpoint for the category-aware workspace programme (owner, 2026-09-28): one merchant-v2-style shell

@@ -70,7 +70,9 @@ _adminH.healthAdminClassify = async (req) => {
        plumber into a clinic */
     if (!p.healthcare) throw new HttpsError('failed-precondition', 'This provider was not approved as a healthcare provider.');
     previous = HCAT.isCategory(p.healthcare.category) ? p.healthcare.category : null;
-    t.set(ref, { healthcare: Object.assign({}, p.healthcare, { category, source: 'admin', classifiedBy: actor, setAt: _ts() }), updatedAt: _ts() }, { merge: true });
+    /* one decision, two fields (CHANGELOG 236): the canonical business category moves with the healthcare one */
+    t.set(ref, { healthcare: Object.assign({}, p.healthcare, { category, source: 'admin', classifiedBy: actor, setAt: _ts() }),
+      business: Object.assign({}, p.business || {}, { category, source: 'admin', classifiedBy: actor, setAt: _ts() }), updatedAt: _ts() }, { merge: true });
     t.set(db.collection('adminAudit').doc(), {
       action: 'healthcare_classify', targetUid: uid, performedBy: actor,
       previous, next: category, reason, createdAt: _ts(),

@@ -84,11 +84,42 @@ async function resolveProviderHub(db, providerId) {
  * Entertainment (owner decision 2026-09-27): a decided `provider` application whose category is a
  * performer / Entertainment service type (shared/ent-booking-identity.classifyApplication).
  */
+/**
+ * The commercial lane a DECIDED application implies — the classification this module has always applied, as a
+ * pure function so it can be STAMPED once, at approval (application-lifecycle.projectProvider →
+ * providers/{uid}.business.lane, CHANGELOG 236) instead of being re-derived at every booking from fields the
+ * provider could still edit after approval.
+ */
+function classifyDecidedApplication(decided) {
+  const out = { hub: DEFAULT_HUB, entClass: null };
+  if (!decided) return out;
+  const role = String(decided.role || '').trim().toLowerCase();
+  if (ROLE_TO_HUB[role]) return { hub: ROLE_TO_HUB[role], entClass: null };
+  const entClass = require('./shared/ent-booking-identity').classifyApplication(decided);
+  if (entClass) return { hub: 'entertainment', entClass };
+  return out;
+}
+
+const _LANE_HUBS = ['healthcare', 'entertainment', DEFAULT_HUB];
+const _millis = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : (typeof v === 'number' ? v : (v ? Date.parse(v) || 0 : 0)));
+
 async function resolveProviderClassification(db, providerId) {
   const out = { hub: DEFAULT_HUB, entClass: null };
   const uid = String(providerId || '').trim();
   if (!uid) return out;
 
+  /* 1 — the lane STAMPED at approval (CHANGELOG 236): server-written, rule-protected, frozen. */
+  try {
+    const p = await db.collection('providers').doc(uid).get();
+    const lane = p.exists && p.data() && p.data().business && p.data().business.lane;
+    if (lane && _LANE_HUBS.includes(lane.hub)) {
+      return { hub: lane.hub, entClass: lane.hub === 'entertainment' && (lane.entClass === 'ARTIST' || lane.entClass === 'SERVICE') ? lane.entClass : null };
+    }
+  } catch (_) { /* fall through to the legacy derivation — same fail-soft stance as below */ }
+
+  /* 2 — LEGACY (approved before CHANGELOG 236, no stamp): derive from the decided application, as before. The
+     application's classification fields are frozen once decided (firestore.rules), and the MOST RECENTLY
+     decided application wins — the read order is no longer what decides a price. */
   let snap;
   try {
     snap = await db.collection('applications').where('uid', '==', uid).limit(10).get();
@@ -102,15 +133,11 @@ async function resolveProviderClassification(db, providerId) {
      what the applicant ASKED for. Pricing on a pending request would let an applicant choose
      their own rate simply by applying — so an undecided application is never allowed to move
      a provider off the default, only a decided one is. */
-  const decided = apps.find((a) =>
-    ['approved', 'active', 'verified'].includes(String(a.status || '').toLowerCase()));
+  const decided = apps
+    .filter((a) => ['approved', 'active', 'verified'].includes(String(a.status || '').toLowerCase()))
+    .sort((a, b) => _millis(b.decidedAt || b.updatedAt) - _millis(a.decidedAt || a.updatedAt))[0];
   if (!decided) return out;
-
-  const role = String(decided.role || '').trim().toLowerCase();
-  if (ROLE_TO_HUB[role]) return { hub: ROLE_TO_HUB[role], entClass: null };
-  const entClass = require('./shared/ent-booking-identity').classifyApplication(decided);
-  if (entClass) return { hub: 'entertainment', entClass };
-  return out;
+  return classifyDecidedApplication(decided);
 }
 
 /**
@@ -150,4 +177,4 @@ function commissionArgsForHub(hub) {
   return { category: 'services', hubId: 'provider', subscriptionRole: 'provider' };
 }
 
-module.exports = { resolveProviderHub, resolveProviderClassification, commissionArgsForHub, ROLE_TO_HUB, DEFAULT_HUB };
+module.exports = { resolveProviderHub, resolveProviderClassification, classifyDecidedApplication, commissionArgsForHub, ROLE_TO_HUB, DEFAULT_HUB };

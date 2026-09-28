@@ -42,7 +42,9 @@ const adminOs = (() => {
   const legalV = require('./legal-verification');
   /* Healthcare — provider category + operations (functions/healthcare-admin.js). */
   const hcAdm = require('./healthcare-admin');
-  return Object.assign({}, base, { _h: Object.assign({}, base._h, trace._h, creator._adminH, events._adminH, ent._adminH, eventInv._adminH, entInt._adminH, entBk._adminH, entAv._adminH, entRc._adminH, entEq._adminH, rep._adminH, legalV._adminH, hcAdm._adminH) });
+  /* Business categories — the ONE category authority's admin ops (functions/business-category-admin.js, CHANGELOG 236). */
+  const bizCat = require('./business-category-admin');
+  return Object.assign({}, base, { _h: Object.assign({}, base._h, trace._h, creator._adminH, events._adminH, ent._adminH, eventInv._adminH, entInt._adminH, entBk._adminH, entAv._adminH, entRc._adminH, entEq._adminH, rep._adminH, legalV._adminH, hcAdm._adminH, bizCat._adminH) });
 })();
 
 const _OPTS = {

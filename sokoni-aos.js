@@ -117,6 +117,8 @@ window.SokoniAOS = (() => {
       reputation:    () => _loadReputation(),
       /* Legal Verification — sokoni-aos-legal.js over functions/legal-verification.js (_adminH). */
       legal:         () => _loadLegal(),
+      /* Business Categories — sokoni-aos-business.js over functions/business-category-admin.js (_adminH), CHANGELOG 236. */
+      business:      () => _loadBusiness(),
     };
     loaders[s]?.();
   }
@@ -145,6 +147,7 @@ window.SokoniAOS = (() => {
     ...((window.SokoniAOSEntertainment && window.SokoniAOSEntertainment.OPS) || []),
     ...((window.SokoniAOSReputation && window.SokoniAOSReputation.OPS) || []),
     ...((window.SokoniAOSLegal && window.SokoniAOSLegal.OPS) || []),
+    ...((window.SokoniAOSBusiness && window.SokoniAOSBusiness.OPS) || []),
   ]);
 
   // ── CF caller ─────────────────────────────────────────────────────────────────
@@ -2368,6 +2371,17 @@ window.SokoniAOS = (() => {
     }
     try { window.SokoniAOSLegal.mount({ host: body, call: _call }); }
     catch (e) { body.innerHTML = "<p class='aos-muted'>Legal verification console failed to start: " + _esc(e && e.message) + "</p>"; }
+  }
+
+  async function _loadBusiness() {
+    const body = document.getElementById("businessBody");
+    if (!body) return;
+    if (!(window.SokoniAOSBusiness && typeof window.SokoniAOSBusiness.mount === "function")) {
+      body.innerHTML = "<p class='aos-muted'>Business category console (sokoni-aos-business.js) is not loaded.</p>";
+      return;
+    }
+    try { window.SokoniAOSBusiness.mount({ host: body, call: _call }); }
+    catch (e) { body.innerHTML = "<p class='aos-muted'>Business category console failed to start: " + _esc(e && e.message) + "</p>"; }
   }
 
   async function _loadSecurity() {

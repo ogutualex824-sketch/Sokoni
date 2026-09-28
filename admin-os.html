@@ -369,6 +369,7 @@
       <button class="nav-item" data-section="creator" data-label="Creator Hub" onclick="SokoniAOS.navigate('creator');_closeSidebar()"><span class="nav-icon">&#x1F3AC;</span>Creator Hub</button>
       <button class="nav-item" data-section="entertainment" data-label="Entertainment" onclick="SokoniAOS.navigate('entertainment');_closeSidebar()"><span class="nav-icon">&#x1F3AB;</span>Entertainment</button>
       <button class="nav-item" data-section="reputation" data-label="Reviews &amp; Reputation" onclick="SokoniAOS.navigate('reputation');_closeSidebar()"><span class="nav-icon">&#x2B50;</span>Reviews &amp; Reputation</button>
+      <button class="nav-item" data-section="business" data-label="Business Categories" onclick="SokoniAOS.navigate('business');_closeSidebar()"><span class="nav-icon">&#x1F3F7;</span>Business Categories</button>
       <button class="nav-item" data-section="legal" data-label="Legal Verification" onclick="SokoniAOS.navigate('legal');_closeSidebar()"><span class="nav-icon">&#x2696;</span>Legal Verification</button>
       <button class="nav-item" data-section="security" data-label="Security" onclick="SokoniAOS.navigate('security');_closeSidebar()"><span class="nav-icon">&#x1F510;</span>Security</button>
       <button class="nav-item" data-section="invoices" data-label="Invoices" onclick="SokoniAOS.navigate('invoices');_closeSidebar()"><span class="nav-icon">&#x1F9FE;</span>Invoices</button>
@@ -732,6 +733,11 @@
         <div class="panel-toolbar"><h2>Reviews &amp; Reputation</h2></div>
         <div id="reputationBody"><div class="aos-spinner"><div></div></div></div>
       </div>
+      <!-- Business Categories (CHANGELOG 236): the ONE category authority — unclassified queue + audited classification. -->
+      <div class="aos-panel" id="panel-business" hidden>
+        <div class="panel-toolbar"><h2>Business Categories</h2></div>
+        <div id="businessBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
       <!-- Legal Verification: SOKONI admin decision + LSK practising-status evidence → server-derived booking eligibility. -->
       <div class="aos-panel" id="panel-legal" hidden>
         <div class="panel-toolbar"><h2>Legal Verification</h2></div>
@@ -838,6 +844,7 @@
   <script src="sokoni-aos-entertainment.js"></script>
   <script src="sokoni-aos-reputation.js"></script>
   <script src="sokoni-aos-legal.js"></script>
+  <script src="sokoni-aos-business.js"></script>
   <script src="sokoni-aos.js"></script>
   <script>
     function _openSidebar()  { document.getElementById("aosSidebar").classList.add("open"); }

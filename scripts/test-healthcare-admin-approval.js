@@ -485,7 +485,9 @@ const wrote   = (c) => ENV.log.filter(e => e.coll === c || (e.path || '').starts
     for (const sib of ['role-authority', 'seller-trial', 'sokoni-till', 'business-wallet',
                        'search-terms', 'notify', 'legal-agreements',
                        /* CHANGELOG 227: projectProvider stamps the healthcare category for role 'health' */
-                       'healthcare-category']) {
+                       'healthcare-category',
+                       /* CHANGELOG 236: projectProvider stamps the canonical business category + commercial lane */
+                       'business-category', 'provider-hub']) {
       fs.writeFileSync(path.join(dir, sib + '.js'),
         `module.exports = require(${JSON.stringify(path.join(FUNCTIONS_DIR, sib + '.js'))});`);
     }
