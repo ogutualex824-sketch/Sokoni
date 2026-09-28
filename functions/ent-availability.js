@@ -554,11 +554,14 @@ _h.entServicesPublic = async (req) => {
 };
 
 /* ── owner (provider / venue owner) ─────────────────────────────────────────────────────── */
-async function _ownCalendar(req, d) {
+async function _ownCalendar(req, d, module) {
   const uid = _need(req);
   const key = calKeyFor(d) || ('svc_' + uid);
   const cal = await loadCalendar(key);
   if (cal.ownerUid !== uid) fail('permission-denied', 'This calendar is not yours.');
+  /* The WORKSPACE gate (CHANGELOG 239, C2b): a provider MUTATES its calendar only when its server workspace
+     (functions/business-workspace.js) has the module AVAILABLE. Venue calendars belong to venue-manager. */
+  if (module) await require('./business-workspace').gateCalendarModule(_db(), uid, cal.calKey, module, require('firebase-functions/v2/https').HttpsError);
   return { uid, cal };
 }
 
@@ -596,7 +599,7 @@ _h.entAvailProviderDay = async (req) => {
 /** Block time (private commitment, travel, holiday …). The label is private to the owner. */
 _h.entAvailBlock = async (req) => {
   const d = req.data || {};
-  const { uid, cal } = await _ownCalendar(req, d);
+  const { uid, cal } = await _ownCalendar(req, d, 'calendar');
   const date = String(d.date || ''); const endDate = CORE.isDate(d.endDate) ? d.endDate : date;
   if (!CORE.isDate(date)) fail('invalid-argument', 'Choose a date.');
   const sMin = d.start ? CORE.toMins(d.start) : 0; const eMin = d.end ? CORE.toMins(d.end) : 1440;
@@ -616,7 +619,7 @@ _h.entAvailBlock = async (req) => {
 };
 _h.entAvailUnblock = async (req) => {
   const d = req.data || {};
-  const { uid, cal } = await _ownCalendar(req, d);
+  const { uid, cal } = await _ownCalendar(req, d, 'calendar');
   const blockId = String(d.blockId || '');
   if (!/^blk_[a-f0-9]{16}$/.test(blockId) && !/^cd_[A-Za-z0-9_-]{3,160}$/.test(blockId)) fail('invalid-argument', 'Unknown block.');
   const month = CORE.isDate(d.date) ? CORE.monthOf(d.date) : null;
@@ -658,7 +661,7 @@ _h.entAvailGetConfig = async (req) => {
 };
 _h.entAvailSetConfig = async (req) => {
   const d = req.data || {};
-  const { uid, cal } = await _ownCalendar(req, d);
+  const { uid, cal } = await _ownCalendar(req, d, 'availability');
   const input = d.config || {};
   const pol = await policy();
   const cp = _catPolicy(pol, cal.category);
@@ -734,7 +737,7 @@ _h.entAvailSetConfig = async (req) => {
 /** Per-service availability (Premium): duration, buffers, weekdays, notice, horizon for ONE service. */
 _h.entAvailSetServiceAvailability = async (req) => {
   const d = req.data || {};
-  const { uid, cal } = await _ownCalendar(req, d);
+  const { uid, cal } = await _ownCalendar(req, d, 'availability');
   if (cal.kind !== 'provider') fail('failed-precondition', 'Venues book the whole space.');
   if (!(await isAdvanced(uid))) fail('permission-denied', 'Per-service availability is part of the Premium plan.', { code: 'PLAN_REQUIRED', fields: ['perService'] });
   const svc = await loadService(cal, d.serviceId);

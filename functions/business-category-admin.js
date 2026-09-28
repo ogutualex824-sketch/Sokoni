@@ -40,13 +40,20 @@ const _adminH = {};
 _adminH.bizAdminProviders = async (req) => {
   _requireAdmin(req);
   const view = _san(req.data && req.data.view, 40) || 'unclassified';
-  const snap = await _db().collection('providers').where('business.source', 'in', ['application', 'admin']).limit(500).get();
-  let rows = snap.docs.map((d) => {
+  /* Stamped businesses (C1) PLUS the LEGACY ones — approved before C1, carrying no `business` stamp. Legacy providers
+     are grandfathered in their workspace (owner decision 2026-09-28, C2) and belong in this queue until classified. */
+  const [stamped, active] = await Promise.all([
+    _db().collection('providers').where('business.source', 'in', ['application', 'admin']).limit(500).get(),
+    _db().collection('providers').where('status', 'in', ['active', 'approved']).limit(500).get(),
+  ]);
+  const seen = new Set();
+  let rows = [...stamped.docs, ...active.docs].filter((d) => (seen.has(d.id) ? false : (seen.add(d.id), true))).map((d) => {
     const p = d.data() || {};
     const cat = BCAT.categoryOf(p);
+    const legacy = !p.business && !p.healthcare;
     return { uid: d.id, name: p.name || '', status: p.status || null, category: cat, categoryLabel: BCAT.label(cat),
-      source: (p.business && p.business.source) || null, lane: (p.business && p.business.lane && p.business.lane.hub) || null,
-      healthcare: !!p.healthcare, city: p.city || null };
+      source: legacy ? 'legacy' : ((p.business && p.business.source) || null), lane: (p.business && p.business.lane && p.business.lane.hub) || null,
+      healthcare: !!p.healthcare, legacy, city: p.city || null };
   });
   if (view === 'unclassified') rows = rows.filter((r) => !r.category);
   else if (BCAT.isCategory(view)) rows = rows.filter((r) => r.category === view);

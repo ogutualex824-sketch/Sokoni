@@ -50,13 +50,21 @@ async function _audit(entry) {
   catch (e) { console.error('[ent-rate-cards] audit failed', e.message); }
 }
 
+/* The WORKSPACE gate (CHANGELOG 239, convergence C2b): a provider may operate a module only when its server
+   workspace (functions/business-workspace.js — C1 category + business model + plan) says AVAILABLE. Hiding the
+   module in the dashboard is presentation; THIS refuses a direct call. A venue calendar (ven_) belongs to
+   venue-manager's own workspace and is not decided here. */
+const _gate = (uid, calKey, module) => require('./business-workspace')
+  .gateCalendarModule(_db(), uid, calKey, module, require('firebase-functions/v2/https').HttpsError);
+
 /* The calendar (and so the owner) a card belongs to — the availability authority resolves it. */
-async function _ownerCal(req, d) {
+async function _ownerCal(req, d, module) {
   const uid = _need(req);
   const AV = require('./ent-availability');
   const key = AV.calKeyFor(d) || ('svc_' + uid);
   const cal = await AV.loadCalendar(key);
   if (cal.ownerUid !== uid) fail('permission-denied', 'This business is not yours.');
+  if (module) await _gate(uid, cal.calKey, module);
   return { uid, cal };
 }
 
@@ -177,7 +185,7 @@ function _versionInput(v) {
 }
 _h.entRateCardCreate = async (req) => {
   const d = req.data || {};
-  const { uid, cal } = await _ownerCal(req, d);
+  const { uid, cal } = await _ownerCal(req, d, 'quotes');
   const name = _san(d.name, 120);
   if (name.length < 2) fail('invalid-argument', 'Name the rate card.');
   const visibility = VISIBILITY.includes(d.visibility) ? d.visibility : 'PUBLIC';
@@ -199,6 +207,8 @@ _h.entRateCardNewVersion = async (req) => {
   const d = req.data || {};
   const uid = _need(req);
   const cardId = _san(d.cardId, 128);
+  /* the workspace gate BEFORE the transaction (its ownership check inside still decides) */
+  { const pre = await _db().collection(COL.CARDS).doc(cardId).get(); if (pre.exists && pre.data().ownerUid === uid) await _gate(uid, pre.data().calKey, 'quotes'); }
   const v = _versionInput(d.version);
   const ref = _db().collection(COL.CARDS).doc(cardId);
   let next = 0;
@@ -227,6 +237,7 @@ _h.entRateCardUpdate = async (req) => {
   const s = await ref.get();
   if (!s.exists) fail('not-found', 'Rate card not found.');
   if (s.data().ownerUid !== uid) fail('permission-denied', 'This rate card is not yours.');
+  await _gate(uid, s.data().calKey, 'quotes');
   const patch = { updatedAt: _FV().serverTimestamp() };
   if (d.name != null) patch.name = _san(d.name, 120);
   if (d.description != null) patch.description = _san(d.description, 500) || null;
@@ -255,6 +266,7 @@ _h.entRateCardGrant = async (req) => {
   const cardId = _san(d.cardId, 128); const buyer = _san(d.uid, 128);
   const s = await _db().collection(COL.CARDS).doc(cardId).get();
   if (!s.exists || s.data().ownerUid !== uid) fail('permission-denied', 'This rate card is not yours.');
+  await _gate(uid, s.data().calKey, 'quotes');
   if (!buyer || buyer === uid) fail('invalid-argument', 'Choose a customer.');
   if (d.revoke) await _db().collection(COL.ELIG).doc(`${cardId}_${buyer}`).delete();
   else await _db().collection(COL.ELIG).doc(`${cardId}_${buyer}`).set({ cardId, uid: buyer, grantedBy: uid, expiresAt: d.expiresAt ? Number(d.expiresAt) : null, createdAt: _FV().serverTimestamp() });
@@ -297,7 +309,7 @@ _h.entRateCardsPublic = async (req) => {
 /* ── quotes ────────────────────────────────────────────────────────────────────────────── */
 _h.entQuoteCreate = async (req) => {
   const d = req.data || {};
-  const { uid, cal } = await _ownerCal(req, d);
+  const { uid, cal } = await _ownerCal(req, d, 'quotes');
   const buyerUid = _san(d.buyerUid, 128);
   const enquiryId = d.enquiryId ? _san(d.enquiryId, 128) : null;
   if (enquiryId) {
@@ -355,6 +367,8 @@ _h.entQuoteRespond = async (req) => {
 _h.entQuoteWithdraw = async (req) => {
   const uid = _need(req);
   const ref = _db().collection(COL.QUOTES).doc(_san((req.data || {}).quoteId, 128));
+  /* the workspace gate BEFORE the transaction (its ownership check inside still decides) */
+  { const pre = await ref.get(); if (pre.exists && pre.data().ownerUid === uid) await _gate(uid, pre.data().calKey, 'quotes'); }
   await _db().runTransaction(async (txn) => {
     const s = await txn.get(ref);
     if (!s.exists || s.data().ownerUid !== uid) fail('permission-denied', 'This quote is not yours.');
@@ -377,7 +391,7 @@ _h.entQuoteList = async (req) => {
 /* Booking discounts, created through the Marketing store. */
 _h.entDiscountCreate = async (req) => {
   const d = req.data || {};
-  const { uid, cal } = await _ownerCal(req, d);
+  const { uid, cal } = await _ownerCal(req, d, 'marketing');
   const code = String(d.code || '').toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 32);
   if (code.length < 4) fail('invalid-argument', 'Use a code of at least 4 letters or numbers.');
   const type = d.type === 'flat' ? 'flat' : 'percent';
@@ -412,6 +426,7 @@ _h.entDiscountDisable = async (req) => {
   const ref = _db().collection(COL.COUPONS).doc(_san((req.data || {}).couponId, 128));
   const s = await ref.get();
   if (!s.exists || s.data().merchantId !== uid || s.data().scope !== 'ent_booking') fail('permission-denied', 'That code is not yours.');
+  await _gate(uid, s.data().calKey, 'marketing');
   await ref.update({ status: 'disabled', updatedAt: _FV().serverTimestamp() });
   await _audit({ couponId: ref.id, actor: uid, action: 'discount_disable' });
   return { ok: true };

@@ -191,6 +191,13 @@ _h.entMessagingSetSettings = async (req) => {
     out.templates = t;
   }
   out.updatedAt = _FV().serverTimestamp();
+  /* The WORKSPACE gate (CHANGELOG 239, C2b): enquiry settings need the Enquiries module; switching call requests ON
+     needs Calls — refused for any provider whose server workspace does not offer them (e.g. Healthcare). */
+  {
+    const BW = require('./business-workspace'); const HE = require('firebase-functions/v2/https').HttpsError;
+    await BW.gateIfProvider(_db(), uid, 'enquiries', HE);
+    if (out.callRequests === 'ENABLED') await BW.gateIfProvider(_db(), uid, 'calls', HE);
+  }
   await _db().collection(COL.SETTINGS).doc(uid).set(out, { merge: true });
   await _audit({ actor: uid, action: 'settings', fields: Object.keys(out) });
   return { ok: true };

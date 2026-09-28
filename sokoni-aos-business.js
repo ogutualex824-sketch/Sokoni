@@ -48,7 +48,7 @@
         body.innerHTML = `<div class="aos-table-wrap"><table class="aos-table"><thead><tr><th>Business</th><th>Status</th><th>Category</th><th>Commercial lane</th><th>Decide</th></tr></thead><tbody>${rows.map((p) => `<tr data-row="${esc(p.uid)}">
           <td>${esc(p.name || '—')}<div class="aos-muted aos-mono">${esc(p.uid)}</div>${p.city ? `<div class="aos-muted">${esc(p.city)}</div>` : ''}</td>
           <td><span class="aos-badge">${esc(p.status || '—')}</span></td>
-          <td>${p.category ? esc(p.categoryLabel) : '<span class="aos-badge" style="color:#ff9800">UNCLASSIFIED</span>'}<div class="aos-muted">${esc(p.source === 'admin' ? 'set by an administrator' : 'from the application')}</div></td>
+          <td>${p.category ? esc(p.categoryLabel) : '<span class="aos-badge" style="color:#ff9800">UNCLASSIFIED</span>'}<div class="aos-muted">${esc(p.source === 'admin' ? 'set by an administrator' : p.source === 'legacy' ? 'approved before categories existed (legacy)' : 'from the application')}</div></td>
           <td>${esc(LANE[p.lane] || '—')}<div class="aos-muted">not changed by a reclassification</div></td>
           <td><form data-classify="${esc(p.uid)}" class="aos-inline-form"><select name="category" required aria-label="Category for ${esc(p.name || p.uid)}"><option value="">Choose…</option>${options(p)}</select>
             <input name="reason" required minlength="3" maxlength="500" placeholder="Reason (audit log)" aria-label="Reason">

@@ -81,6 +81,7 @@ const SUITES = {
   bizcatrules: ['node', ['scripts/run-rules-suite.js', 'scripts/test-business-category-rules.js']],
   bizcatui: ['node', ['scripts/test-business-category-admin-browser.js']],
   bizws:    ['node', ['scripts/test-business-workspace.js']],
+  bizgate:  ['node', ['scripts/test-business-workspace-gates.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -1284,6 +1285,32 @@ const M = [
     from: "  if (!m || m.state !== STATE.AVAILABLE) {", to: "  if (!m) {", expect: /refuses NOT_APPLICABLE|refuses NOT_IMPLEMENTED|refuses PENDING_APPROVAL/ },
   { group: 'bizws', browser: false, name: "LOCKED collapses into NOT_APPLICABLE", file: 'functions/business-workspace.js', suite: 'bizws',
     from: "    modules[mod] = ops[op] ? { state: STATE.AVAILABLE, reason: null } : { state: STATE.LOCKED, reason: (hw && hw.reasons && hw.reasons[op]) || 'PLAN_REQUIRED' };", to: "    modules[mod] = ops[op] ? { state: STATE.AVAILABLE, reason: null } : { state: STATE.NOT_APPLICABLE, reason: null };", expect: /WITHOUT a plan → LOCKED/ },
+
+  /* ── C2b: the server refuses what the workspace does not offer (CHANGELOG 239) ── */
+  { group: 'bizgate', browser: false, name: "rate card / quote / discount CREATE skips the workspace gate", file: "functions/ent-rate-cards.js", suite: 'bizgate',
+    from: "  if (module) await _gate(uid, cal.calKey, module);", to: "", expect: /doctor: create a rate card|doctor: create a quote|UNCLASSIFIED: block the calendar/ },
+  { group: 'bizgate', browser: false, name: "rate card UPDATE skips the gate", file: "functions/ent-rate-cards.js", suite: 'bizgate',
+    from: "  if (s.data().ownerUid !== uid) fail('permission-denied', 'This rate card is not yours.');\n  await _gate(uid, s.data().calKey, 'quotes');", to: "  if (s.data().ownerUid !== uid) fail('permission-denied', 'This rate card is not yours.');", expect: /updating the existing rate card/ },
+  { group: 'bizgate', browser: false, name: "rate card NEW VERSION skips the gate", file: "functions/ent-rate-cards.js", suite: 'bizgate',
+    from: "doc(cardId).get(); if (pre.exists && pre.data().ownerUid === uid) await _gate(uid, pre.data().calKey, 'quotes'); }\n", to: "doc(cardId).get(); }\n", expect: /new price version/ },
+  { group: 'bizgate', browser: false, name: "rate card GRANT skips the gate", file: "functions/ent-rate-cards.js", suite: 'bizgate',
+    from: "  if (!s.exists || s.data().ownerUid !== uid) fail('permission-denied', 'This rate card is not yours.');\n  await _gate(uid, s.data().calKey, 'quotes');", to: "  if (!s.exists || s.data().ownerUid !== uid) fail('permission-denied', 'This rate card is not yours.');", expect: /granting the card/ },
+  { group: 'bizgate', browser: false, name: "quote WITHDRAW skips the gate", file: "functions/ent-rate-cards.js", suite: 'bizgate',
+    from: "  { const pre = await ref.get(); if (pre.exists && pre.data().ownerUid === uid) await _gate(uid, pre.data().calKey, 'quotes'); }\n", to: "", expect: /withdrawing the quote/ },
+  { group: 'bizgate', browser: false, name: "calendar and availability mutations skip the gate", file: "functions/ent-availability.js", suite: 'bizgate',
+    from: "  if (module) await require('./business-workspace').gateCalendarModule(_db(), uid, cal.calKey, module, require('firebase-functions/v2/https').HttpsError);", to: "", expect: /configure availability|block the calendar/ },
+  { group: 'bizgate', browser: false, name: "switching call requests ON skips the Calls gate", file: "functions/ent-enquiries.js", suite: 'bizgate',
+    from: "    if (out.callRequests === 'ENABLED') await BW.gateIfProvider(_db(), uid, 'calls', HE);", to: "", expect: /switch call requests ON/ },
+  { group: 'bizgate', browser: false, name: "enquiry settings skip the Enquiries gate", file: "functions/ent-enquiries.js", suite: 'bizgate',
+    from: "    await BW.gateIfProvider(_db(), uid, 'enquiries', HE);", to: "", expect: /UNCLASSIFIED: enquiry settings/ },
+  { group: 'bizgate', browser: false, name: "venue calendars are decided by the provider workspace", file: "functions/business-workspace.js", suite: 'bizgate',
+    from: "  if (String(calKey || '').startsWith('ven_')) return null;", to: "", expect: /price the VENUE/ },
+  { group: 'bizgate', browser: false, name: "legacy providers are not grandfathered", file: "functions/business-workspace.js", suite: 'bizgate',
+    from: "  if (approved && !category && !prov.business && !prov.healthcare) {", to: "  if (false) {", expect: /legacy \(approved before C1\)/ },
+  { group: 'bizgate', browser: false, name: "re-activating a service skips the plan cap", file: "functions/provider-ops.js", suite: 'bizgate',
+    from: "  if (next === true && cur.active === false) {", to: "  if (false) {", expect: /re-activating a second/ },
+  { group: 'bizgate', browser: false, name: "the gate fails open for any provider (assertModule allows every state)", file: "functions/business-workspace.js", suite: 'bizgate',
+    from: "  if (!m || m.state !== STATE.AVAILABLE) {", to: "  if (!m) {", expect: /NOT_APPLICABLE|PENDING_APPROVAL/ },
 ];
 
 const argv = process.argv.slice(2);

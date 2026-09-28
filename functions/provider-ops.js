@@ -1054,6 +1054,19 @@ _h.providerToggleService = async (req) => {
   if (cur.providerId !== uid) throw new HttpsError('permission-denied', 'Not your service.');
   if (cur.removedAt) throw new HttpsError('failed-precondition', 'This service was deleted.');
   const next = req.data?.active !== undefined ? (req.data.active === true) : !(cur.active !== false);
+  /* RE-ACTIVATING counts against the plan's service cap exactly as adding does (CHANGELOG 239): toggling a
+     deactivated service back on skipped the cap, so a plan's limit could be exceeded one toggle at a time. */
+  if (next === true && cur.active === false) {
+    const [svcSnap, cap] = await Promise.all([
+      _db().collection('providerServices').where('providerId', '==', uid).limit(200).get(),
+      _serviceCapFor(uid),
+    ]);
+    const activeCount = svcSnap.docs.filter((x) => x.id !== id && x.data().active !== false && !x.data().removedAt).length;
+    if (cap !== -1 && activeCount >= cap) {
+      throw new HttpsError('resource-exhausted',
+        `Your plan allows ${cap} active service${cap === 1 ? '' : 's'}. Deactivate another, or upgrade.`);
+    }
+  }
   await ref.update({ active: next, updatedAt: _ts() });
   return { success: true, active: next };
 };

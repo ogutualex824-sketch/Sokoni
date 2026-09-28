@@ -1,3 +1,68 @@
+## 2026-09-28 (239) — C2b: the server refuses what the workspace does not offer (hiding is no longer the gate)
+
+Convergence slice C2b. Not deployed. No production writes. No migration.
+
+**Before (C2 survey):**
+- The dashboard was the only gate:
+  - a plumber or lawyer saw Entertainment rate cards, the booking PIN and call requests;
+  - a Healthcare account had them hidden, but the server accepted a direct call.
+- Re-activating a deactivated service skipped the plan's service cap.
+
+**Now:** the owner operations of the provider surfaces call the C2a workspace authority
+(`business-workspace.assertModule`) and refuse unless the module is AVAILABLE:
+
+| Module | Operations |
+|---|---|
+| quotes | `entRateCardCreate` / `Update` / `NewVersion` / `Grant`, `entQuoteCreate` / `Withdraw` |
+| marketing | `entDiscountCreate` / `Disable` |
+| availability | `entAvailSetConfig`, `entAvailSetServiceAvailability` |
+| calendar | `entAvailBlock` / `Unblock` |
+| enquiries | `entMessagingSetSettings` |
+| calls | `entMessagingSetSettings` switching call requests ON |
+
+- **The gate covers existing records too**, not only creation. A business reclassified into a category without quotes
+  can no longer edit, re-version or grant its old rate cards, nor withdraw its old quotes.
+- **Venue calendars (`ven_…`)** belong to venue-manager's own workspace and are not decided by the provider gate.
+- **Legacy providers (owner decision 2026-09-28):** a provider approved before C1 carries no `business` stamp.
+  - It is GRANDFATHERED as `LEGACY_UNCLASSIFIED` and keeps the modules it had.
+  - It now appears in AdminOS › Business Categories, labelled "approved before categories existed".
+  - Once classified, the strict gates apply. Every new approval is strict immediately.
+- **Service cap:** `providerToggleService` re-activation counts against the plan's cap exactly as
+  `providerAddService` does.
+
+**Refusal codes:** `WORKSPACE_MODULE_NOT_APPLICABLE` / `_NOT_IMPLEMENTED` / `_PENDING_APPROVAL` / `_LOCKED` /
+`_COMMERCIAL_DECISION_REQUIRED`.
+
+**Not in C2b:**
+- **POS / wallet / payout / gift-card / staff-permission ops** are the financial-core session's (d6). The E1 fix
+  (`2568786`) is on neither this branch nor the POS lineage.
+- **Venue approval** (`venueCreate` → active) is its own slice, per the owner decision "approval before public".
+- **Routing (C2c)** and the dashboard projection (C2d) come next.
+
+**Files:**
+- `functions/business-workspace.js` (legacy branch, `gateCalendarModule`, `gateIfProvider`)
+- `functions/ent-rate-cards.js`, `functions/ent-availability.js`, `functions/ent-enquiries.js`,
+  `functions/provider-ops.js`
+- `functions/business-category-admin.js` (legacy rows in the queue), `sokoni-aos-business.js` (legacy label)
+- `scripts/test-business-workspace-gates.js` (new), `scripts/sabotage-event-ops.js`
+
+**API:** refusals as above. **Security:** hidden modules are refused server-side. **Breaking:** a classified provider
+can no longer operate modules its category does not offer. Legacy providers are unaffected until classified.
+
+**Tests:**
+- `test-business-workspace-gates` 24/0. Every call is DIRECT, as a crafted client would make it.
+  - Plumber positive controls pass: the gate is not deny-all.
+  - The quote and discount under test are proven to exist, so no check is vacuous.
+- Unchanged against `ad7265b` (18 suites):
+  - business-category 44, admin-browser 13, business-workspace 30;
+  - ent-availability 88, ent-availability-browser 54, ent-communications 76, ent-journeys 49, entertainment-bookings 95;
+  - healthcare availability 37, enquiries 15, payment-convergence 40, subscription-foundation 120;
+  - legal-verification, reputation 70, reputation-browser 32, share-integrity, sidebar-browser 90;
+  - subscription-commission-classification 19/2, a baseline failure on both trees.
+- The existing Entertainment suites seed legacy (unstamped) providers, so grandfathering is what keeps them green.
+
+**Sabotage `bizgate`:** 12/12 caught, tree restored byte-identical.
+
 ## 2026-09-28 (238) — C2a: ONE business workspace authority (category → route → modules, six explicit states)
 
 Convergence slice C2a. Not deployed. No production writes. Owner decisions 2026-09-28 (C2): canonical dashboards;

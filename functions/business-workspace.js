@@ -174,6 +174,23 @@ async function workspaceFor(db, uid) {
   const elig = BCAT.publicEligibility(prov);
   const approved = ['active', 'approved'].includes(String(prov.status || '')) && prov.suspended !== true;
 
+  /* LEGACY (owner decision 2026-09-28): a provider approved BEFORE C1 carries no `business` stamp at all (and no
+     Healthcare record). It is GRANDFATHERED — it keeps the provider-dashboard modules it has today, is marked
+     LEGACY_UNCLASSIFIED, and appears in AdminOS › Business Categories; once classified, the strict gates apply.
+     Every NEW approval is stamped (C1) and is strict immediately. No migration. */
+  if (approved && !category && !prov.business && !prov.healthcare) {
+    let isCreator = false;
+    try { const c = await db.collection('creators').doc(String(uid)).get(); isCreator = c.exists && String((c.data() || {}).state || '') === 'ACTIVE'; } catch (_) { isCreator = false; }
+    const mods = {};
+    for (const k of MODULE_KEYS) {
+      if (!MODULES[k].implemented) { mods[k] = { state: STATE.NOT_IMPLEMENTED, reason: MODULES[k].why || null }; continue; }
+      if (k === 'content' && !isCreator) { mods[k] = { state: STATE.NOT_APPLICABLE, reason: 'NOT_A_CREATOR' }; continue; }
+      mods[k] = { state: STATE.AVAILABLE, reason: null };
+    }
+    return { found: true, category: null, label: 'Awaiting classification', route: 'provider-dashboard.html', state: 'LEGACY_UNCLASSIFIED',
+      reason: 'LEGACY_UNCLASSIFIED', modules: mods, entitlement: { state: STATE.COMMERCIAL_DECISION_REQUIRED, hub: null, tier: null, status: null }, publicEligibility: elig };
+  }
+
   /* PENDING_APPROVAL: not approved / suspended, or approved but UNCLASSIFIED (AdminOS decides — no privileged
      workspace in the meantime, owner decision 2026-09-28). Overview + Settings only, so the account can see why. */
   if (!approved || !category) {
@@ -240,6 +257,22 @@ async function assertModule(db, uid, module, HttpsError) {
   return w;
 }
 
+/**
+ * The gate for an operation on a CALENDAR-scoped provider surface (rate cards, quotes, discounts, availability):
+ * a provider calendar (svc_<uid>) must have `module` AVAILABLE; a venue calendar (ven_<id>) belongs to
+ * venue-manager's own workspace and is not decided here.
+ */
+async function gateCalendarModule(db, uid, calKey, module, HttpsError) {
+  if (String(calKey || '').startsWith('ven_')) return null;
+  return assertModule(db, uid, module, HttpsError);
+}
+/** The gate for an account-scoped provider setting: applies when the account IS a provider (has a providers doc). */
+async function gateIfProvider(db, uid, module, HttpsError) {
+  const p = await db.collection('providers').doc(String(uid)).get();
+  if (!p.exists) return null;
+  return assertModule(db, uid, module, HttpsError);
+}
+
 /* providerDispatch op — the caller's OWN workspace; never another account's. */
 const _h = {
   businessWorkspace: async (req) => {
@@ -251,4 +284,4 @@ const _h = {
   },
 };
 
-module.exports = { STATE, MODULES, MODULE_KEYS, CORE, PROFILES, PROFILE_OF, ROUTE_OF, modulesForProfile, healthcareModules, workspaceFor, assertModule, _h };
+module.exports = { STATE, MODULES, MODULE_KEYS, CORE, PROFILES, PROFILE_OF, ROUTE_OF, modulesForProfile, healthcareModules, workspaceFor, assertModule, gateCalendarModule, gateIfProvider, _h };
