@@ -1,3 +1,47 @@
+## [2026-09-28] - Every "register as a provider" entry reaches the one canonical intake (URL entry into the Register My Business form)
+
+**Hosting, NOT deployed.** Branch `slice/c4-category-matrix` (convergence line).
+
+**Why (proven on `4e9607b`):** five pre-approval entries sent first-time registrants to `provider-onboarding.html`,
+whose `providerPublish` writes a `pending_approval` provider record but NO application. AdminOS therefore has nothing
+to decide and the registrant stays pending forever (census G1.1):
+- the Entertainment hub's "Are you a performer?";
+- Creator Studio's "apply as an Entertainment provider";
+- the cleaners' empty state;
+- the provider directory's empty state (`sokoni-providers.js`: services / providers / cleaning / index);
+- `profile.html` "My services" when no provider exists yet.
+
+**Changed:**
+- **`hub-register.js`:** a URL entry. `#register` opens the Register My Business form, and `#register=<business id>`
+  opens it with that category preselected (only a REAL hub-register id; anything else opens blank). This works on
+  load and on `hashchange`, from any page that loads the form.
+- **The five entries** now link to `/services.html#register=<id>` (the provider marketplace, which loads the form), or
+  to `#register=cleaning` on the same page for `cleaning.html`:
+  - performer → `dj`;
+  - Creator Studio → `content-creator`;
+  - cleaner → `cleaning`;
+  - empty state and profile → blank.
+- **Unchanged on purpose:** the provider dashboard's "Edit storefront / Edit profile / Upgrade plan" still open
+  `provider-onboarding.html`. That is the POST-approval storefront editor, not an intake.
+
+**Tests:** `scripts/test-register-entry.js` gives **4/0**; `COUNTERPROOF=1` on `4e9607b` shows **3 defects**.
+- `hub-register.js` is EXECUTED in a sandbox: the URL opens the form, an unknown id opens blank, other hashes do
+  nothing, and `hashchange` works.
+- All five entries leave `provider-onboarding.html`.
+- Every `#register=<id>` link uses a real id and lands on a page that loads the form.
+- Control: "Edit storefront" is unchanged.
+
+**Sabotage:** 5/5, byte-identical restores. One NO-ANCHOR (`cleaning.html` loads the form with `defer` first) was
+re-anchored and the group re-run.
+
+**Regression:** 31 suites touching the changed pages equal the pristine `4e9607b` baseline, except the intended ones.
+- `test-start-selling-route` A4 asserted the legacy `provider.html?cat=` link (the defect itself). It now asserts the
+  canonical form, 22/0.
+- **PRODUCTION NOTE:** that sweep included `scripts/test-auth-email.js`, a PRODUCTION certification that creates and
+  deletes a disposable Firebase Auth account on `sokoni-aeb26`. It ran 4×. One run was cut off by a timeout, so an
+  orphaned `cert<6 digits>@sokoni-cert.invalid` account may exist in production Auth. It is reported to the owner, and
+  nothing has been cleaned up without authorization.
+
 ## [2026-09-28] - "What Are You Offering?" registers through the one canonical intake
 
 **Hosting + tooling, NOT deployed.** Branch `slice/c4-category-matrix` (convergence line).

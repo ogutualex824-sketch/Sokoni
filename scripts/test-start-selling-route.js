@@ -9,7 +9,7 @@
  * THE FLOW
  *   Start Selling  →  /offer  (offer.html, "What Are You Offering?")
  *                        ├── Products  → seller.html
- *                        └── Services  → provider.html?cat=…
+ *                        └── Services  → the Register My Business form (hub-register.js), category preselected
  *
  * THE REGRESSION
  * Seven acquisition CTAs pointed straight at `seller.html` — the seller
@@ -93,8 +93,11 @@ ck('A2  it asks the question — both gates are present',
 ck('A3  the Products gate continues to the seller workspace',
   /href="seller\.html"/.test(offer));
 
-ck('A4  the Service gate continues to the provider listing form',
-  /href="provider\.html\?cat=/.test(offer));
+/* The Services gate continues to the ONE canonical intake — the Register My Business form (hub-register.js) with the
+   category preselected. It used to open the legacy provider.html?cat= intake, whose applications cannot be approved. */
+ck('A4  the Service gate continues to the provider registration form (the canonical intake)',
+  /data-reg-category="[a-z0-9-]*" onclick="return offerRegister\(/.test(offer) && /<script src="hub-register\.js"/.test(offer)
+  && !/href="provider\.html\?cat=/.test(offer));
 
 ck('A5  the chooser imposes no auth guard of its own (no bounce to login/home)',
   !/location\.(href|replace)\s*=\s*['"](login|index)/.test(offer));

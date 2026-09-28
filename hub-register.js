@@ -745,4 +745,19 @@
     if (e.key === 'Escape') HubRegister.close();
   });
 
+  /* ── URL entry: #register or #register=<business id> ─────────
+     One canonical intake, reachable by a plain link from any page (the Entertainment hub's "Are you a performer?",
+     a directory's empty state, profile …) instead of the legacy provider-onboarding.html path, which files no
+     application AdminOS can decide. Only a real category id is preselected; anything else opens the form blank. */
+  function _openFromHash() {
+    var m = /^#register(?:=([a-z0-9-]+))?$/.exec(String(window.location.hash || ''));
+    if (!m) return;
+    var id = m[1] || '';
+    var known = id && CATS.some(function (c) { return c.id === id; });
+    window.HubRegister.open(known ? { category: id } : {});
+  }
+  window.addEventListener('hashchange', _openFromHash);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _openFromHash);
+  else _openFromHash();
+
 })();

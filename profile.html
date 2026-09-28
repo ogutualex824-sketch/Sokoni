@@ -3285,8 +3285,8 @@ async function _bizRouteProvider(u){
     var m=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
     var snap=await m.getDoc(m.doc(db,'providerProfiles',String(uid)));
     var exists=!!(snap && snap.exists && snap.exists());
-    var link=document.getElementById('bizSvcMain'); if(link) link.setAttribute('href', exists?'provider-dashboard.html#services':'provider-onboarding.html');
-    var btn=document.getElementById('upMyServicesBtn'); if(btn) btn.setAttribute('href', exists?'provider-dashboard.html':'provider-onboarding.html');
+    var link=document.getElementById('bizSvcMain'); if(link) link.setAttribute('href', exists?'provider-dashboard.html#services':'/services.html#register');
+    var btn=document.getElementById('upMyServicesBtn'); if(btn) btn.setAttribute('href', exists?'provider-dashboard.html':'/services.html#register');
   }catch(e){}
 }
 /* List the provider's bookable services — the service equivalent of "My Shops & Branches".
@@ -3321,7 +3321,7 @@ async function _renderMyServices(u){
         + '</div></div>';
     }).join('');
     /* + Add Service (opens the provider service-management surface / onboarding). */
-    rows += '<a href="' + (svcs.length ? 'provider-dashboard.html' : 'provider-onboarding.html') + '" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 12px;background:rgba(113,255,0,0.08);border:1px dashed rgba(113,255,0,0.35);border-radius:12px;color:#71ff00;font-size:12px;font-weight:800;text-decoration:none;">&#43; Add Service</a>';
+    rows += '<a href="' + (svcs.length ? 'provider-dashboard.html' : '/services.html#register') + '" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 12px;background:rgba(113,255,0,0.08);border:1px dashed rgba(113,255,0,0.35);border-radius:12px;color:#71ff00;font-size:12px;font-weight:800;text-decoration:none;">&#43; Add Service</a>';
     list.innerHTML = rows;
     wrap.style.display = 'block';
   } catch(e){ wrap.style.display = 'none'; }

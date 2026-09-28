@@ -372,7 +372,7 @@
          + (categoryLabel ? ' in ' + esc(categoryLabel) : '') + ' yet</h3>'
          + '<p style="margin:0 0 14px;color:rgba(255,255,255,0.55);font-size:13px;">'
          + 'Be the first to offer this service on SOKONI.</p>'
-         + '<a href="provider-onboarding.html" style="display:inline-block;padding:10px 20px;'
+         + '<a href="/services.html#register" style="display:inline-block;padding:10px 20px;'
          + 'background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);'
          + 'color:#71ff00;border-radius:10px;font-weight:700;font-size:13px;'
          + 'text-decoration:none;">+ Register as a provider</a></div>';
