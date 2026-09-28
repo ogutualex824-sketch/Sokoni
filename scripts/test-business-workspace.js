@@ -4,7 +4,7 @@
  *
  * PROVES
  *   routes       every C1 category has an explicit route decision; each route is a page that EXISTS, or null
- *                (hotel / restaurant / property are UNROUTED — their pages are demo-grade, owner 2026-09-28)
+ *                (hotel / property are UNROUTED — their pages are demo-grade; restaurant → merchant-v2, owner 2026-09-28)
  *   six states   AVAILABLE · LOCKED · NOT_APPLICABLE · NOT_IMPLEMENTED · COMMERCIAL_DECISION_REQUIRED ·
  *                PENDING_APPROVAL — each appears where it should, and "not available" ≠ "not relevant"
  *   categories   a doctor gets no POS/products/inventory/rate cards/booking PIN; a plumber gets quotes and calls;
@@ -56,7 +56,8 @@ const st = (w, m) => (w.modules[m] || {}).state;
   ck('every C1 category has an explicit route decision (a page or UNROUTED)', missingRoute.length === 0, missingRoute);
   const badPages = [...new Set(Object.values(BW.ROUTE_OF).filter(Boolean))].filter((p) => !fs.existsSync(Path.join(ROOT, p)));
   ck('every route is a page that exists', badPages.length === 0, badPages);
-  ck('hotel, restaurant and property are UNROUTED (their pages are demo-grade)', BW.ROUTE_OF.hotel === null && BW.ROUTE_OF.restaurant === null && BW.ROUTE_OF.property === null);
+  /* owner 2026-09-28: food businesses run on merchant-v2 (menu = products); hotel / property stay UNROUTED until their workspaces land */
+  ck('hotel and property are UNROUTED; restaurant is routed to merchant-v2', BW.ROUTE_OF.hotel === null && BW.ROUTE_OF.property === null && BW.ROUTE_OF.restaurant === 'merchant-v2.html');
   ck('owner routes: Healthcare/Legal/trades → provider-dashboard; shop → merchant-v2; organiser → event-manager; venue → venue-manager; delivery → driver app',
     BW.ROUTE_OF.clinician === 'provider-dashboard.html' && BW.ROUTE_OF.lawyer === 'provider-dashboard.html' && BW.ROUTE_OF.trades === 'provider-dashboard.html'
     && BW.ROUTE_OF.retail_store === 'merchant-v2.html' && BW.ROUTE_OF.event_organizer === 'event-manager.html' && BW.ROUTE_OF.venue === 'venue-manager.html' && BW.ROUTE_OF.delivery === 'driver.html');

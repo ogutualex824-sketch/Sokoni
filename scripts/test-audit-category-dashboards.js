@@ -8,7 +8,8 @@
  *   K2  positive controls through the REAL approval path (resolveRole → C1 → ROUTE_OF):
  *         dj → artist_creator → provider-dashboard.html · hospital → a Healthcare category → provider-dashboard.html
  *         retail-shop → retail_store → merchant-v2.html · mechanic → auto_services · courier → delivery → driver.html
- *   K3  the known gaps are REPORTED, not hidden: restaurant / hotel / property are UNROUTED; "other" is UNCLASSIFIED
+ *   K3  current truth (owner 2026-09-28): food + merchant categories resolve to SELLER (a shop is provisioned);
+ *       hotel / property UNROUTED; "other" ADMIN_REVIEW; nothing is routed to merchant-v2 without a shop
  *   K4  every C1 category the modal can reach has a ROUTE_OF entry (no silent NO_ROUTE_ENTRY)
  *   K5  --gate exits non-zero while any gap remains (it is a gate, not a report that always passes)
  *   K6  fails CLOSED (exit 2) when the category list cannot be parsed
@@ -33,9 +34,13 @@ ck('K2  positive controls through the real approval path',
   && row('retail-shop').c1 === 'retail_store' && row('retail-shop').route === 'merchant-v2.html'
   && row('mechanic').c1 === 'auto_services' && row('courier').c1 === 'delivery' && row('courier').route === 'driver.html',
   ['dj', 'hospital', 'retail-shop', 'mechanic', 'courier'].map((id) => id + '→' + row(id).c1 + '→' + row(id).route));
-ck('K3  known gaps are reported: restaurant / hotel / property UNROUTED, "other" UNCLASSIFIED',
-  row('restaurant').verdict === 'UNROUTED' && row('hotel').verdict === 'UNROUTED' && row('landlord').verdict === 'UNROUTED' && row('other').verdict === 'UNCLASSIFIED',
-  ['restaurant', 'hotel', 'landlord', 'other'].map((id) => id + ':' + row(id).verdict));
+/* owner decisions 2026-09-28: food → merchant-v2 as a SELLER (so a shop is provisioned); hotel / property still
+   unrouted; SACCO / forex / other are ADMIN REVIEW ONLY; no merchant-v2 category may land without a shop */
+ck('K3  current truth: restaurant ROUTED as seller; hotel / property UNROUTED; "other" ADMIN_REVIEW; none ROUTED_NO_SHOP',
+  row('restaurant').verdict === 'ROUTED' && row('restaurant').role === 'seller' && row('bakery').role === 'seller'
+  && row('hotel').verdict === 'UNROUTED' && row('landlord').verdict === 'UNROUTED' && row('other').verdict === 'ADMIN_REVIEW'
+  && J.summary.routedNoShop === 0 && row('supermarket').role === 'seller' && row('manufacturer').role === 'seller',
+  ['restaurant', 'bakery', 'supermarket', 'manufacturer', 'hotel', 'landlord', 'other'].map((id) => id + ':' + row(id).role + '/' + row(id).verdict));
 ck('K4  every reachable C1 category has a ROUTE_OF entry', J.summary.noRouteEntry === 0, J.summary.noRouteEntry);
 const g = cp.spawnSync(process.execPath, [TOOL, '--gate'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 16e6 });
 const gaps = J.summary.unrouted + J.summary.unclassified + J.summary.noRouteEntry + J.summary.offerTilesToLegacyIntake;

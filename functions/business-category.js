@@ -99,12 +99,17 @@ const FROM_BUSINESS_ID = Object.freeze({
   developer: 'property', landlord: 'property', 'property-agent': 'property',
   courier: 'delivery', 'boda-delivery': 'delivery',
   tailor: 'service_business', 'shoe-repair': 'service_business',
-  /* DELIBERATELY UNCLASSIFIED — AdminOS decides (never guessed): */
-  'car-rental': null,      /* fleet rental: booking + inventory model undecided */
-  forex: null, sacco: null, /* regulated financial services: no workspace, no approval rule yet */
-  'football-club': null, basketball: null, /* teams/clubs: not a commercial workspace */
-  other: null,             /* "Other / General Business": says nothing */
+  /* Owner, 2026-09-28 (the executed category→dashboard matrix): map to existing categories rather than add new ones. */
+  'car-rental': 'auto_services',                                   /* fleet rental: an auto service (bookings) */
+  'football-club': 'service_business', basketball: 'service_business',  /* clubs / academies: bookable services */
+  manufacturer: 'retail_store', wholesaler: 'retail_store', importer: 'retail_store',  /* B2B suppliers sell goods → merchant-v2 */
+  /* ADMIN REVIEW ONLY — never self-classified (owner, 2026-09-28). An application is accepted, but the category is
+     decided by AdminOS at approval (bizAdminClassify): */
+  forex: null, sacco: null, /* licensed financial services (CBK / SASRA): no self-serve listing */
+  other: null,              /* "Other / General Business": says nothing */
 });
+/* The registrable ids that are UNCLASSIFIED ON PURPOSE — AdminOS classifies them by hand. Not a gap. */
+const ADMIN_REVIEW_ONLY = Object.freeze(Object.keys(FROM_BUSINESS_ID).filter((k) => FROM_BUSINESS_ID[k] === null));
 
 /* provider-onboarding.js SERVICE_CATEGORIES professions (lower-cased) → category. Every profession appears. */
 const FROM_PROFESSION = Object.freeze({
@@ -191,5 +196,5 @@ function publicEligibility(providerDoc) {
   return { eligible: reasons.length === 0, category, reasons };
 }
 
-module.exports = { CATEGORIES, KEYS, HEALTHCARE, FROM_BUSINESS_ID, FROM_PROFESSION, ROLE_CATEGORY,
+module.exports = { CATEGORIES, KEYS, HEALTHCARE, FROM_BUSINESS_ID, FROM_PROFESSION, ROLE_CATEGORY, ADMIN_REVIEW_ONLY,
   isCategory, categoryFromApplication, categoryOf, publicEligibility, label: (c) => (isCategory(c) ? CATEGORIES[c].label : 'Unclassified') };

@@ -39,7 +39,9 @@ const resolveRole = (() => {
   if (s < 0) { console.error('CANNOT RUN: resolveRole not found in application-lifecycle.js'); process.exit(2); }
   let d = 0, e = -1;
   for (let i = src.indexOf('{', s); i < src.length; i++) { if (src[i] === '{') d++; else if (src[i] === '}') { d--; if (d === 0) { e = i + 1; break; } } }
-  return new Function(src.slice(s, e) + '\nreturn resolveRole;')();
+  /* resolveRole lazily requires sibling modules ('./business-category' …): resolve them from functions/ */
+  const req = (p) => require(p.startsWith('.') ? path.join(ROOT, 'functions', p) : p);
+  return new Function('require', src.slice(s, e) + '\nreturn resolveRole;')(req);
 })();
 function approvalCategory(app) {
   const role = resolveRole(app).role;
@@ -77,9 +79,15 @@ const rows = CATS.map((c) => {
   const byState = {};
   if (mods) for (const [k, v] of Object.entries(mods)) (byState[v.state] = byState[v.state] || []).push(k);
   let verdict;
-  if (!c1) verdict = 'UNCLASSIFIED';
+  /* ADMIN REVIEW ONLY (C1 ADMIN_REVIEW_ONLY, owner 2026-09-28): unclassified on purpose — AdminOS classifies it by
+     hand at approval. An EXEMPTION with a documented authority, not a gap. */
+  if (!c1 && (BCAT.ADMIN_REVIEW_ONLY || []).includes(c.id)) verdict = 'ADMIN_REVIEW';
+  else if (!c1) verdict = 'UNCLASSIFIED';
   else if (route === undefined) verdict = 'NO_ROUTE_ENTRY';
   else if (route === null) verdict = 'UNROUTED';
+  /* merchant-v2 runs on a SHOP, and approval provisions a shop only for the `seller` role — a category routed there
+     under any other decided role would land on a dashboard with nothing behind it. */
+  else if (route === 'merchant-v2.html' && r.role !== 'seller') verdict = 'ROUTED_NO_SHOP';
   else verdict = 'ROUTED';
   return { id: c.id, label: c.label, hub: c.hub, role: r.role, c1, c1Label: c1 ? BCAT.label(c1) : 'Unclassified', reason: r && r.reason, route, verdict,
     profile: c1 ? (BW.PROFILE_OF[c1] || null) : null,
@@ -94,6 +102,8 @@ const summary = {
   routed: (verdicts.ROUTED || []).length,
   unrouted: (verdicts.UNROUTED || []).length,
   unclassified: (verdicts.UNCLASSIFIED || []).length,
+  adminReview: (verdicts.ADMIN_REVIEW || []).length,
+  routedNoShop: (verdicts.ROUTED_NO_SHOP || []).length,
   noRouteEntry: (verdicts.NO_ROUTE_ENTRY || []).length,
   offerTilesToLegacyIntake: OFFER.length,
   c1CategoriesReached: Object.keys(c1s).filter((k) => k !== 'null').length,
@@ -111,6 +121,8 @@ if (JSON_OUT) {
   out.push(`- ROUTED to a working dashboard: **${summary.routed}** / ${rows.length}`);
   out.push(`- UNROUTED (approved, but no working dashboard): **${summary.unrouted}**`);
   out.push(`- UNCLASSIFIED (C1 cannot place it → hidden from discovery, no dashboard): **${summary.unclassified}**`);
+  out.push(`- ROUTED TO MERCHANT-V2 WITHOUT A SHOP (decided role is not seller → no shop is provisioned): **${summary.routedNoShop}**`);
+  out.push(`- ADMIN REVIEW ONLY (exempt: AdminOS classifies by hand — C1 ADMIN_REVIEW_ONLY): **${summary.adminReview}**`);
   out.push(`- NO ROUTE ENTRY (C1 category missing from ROUTE_OF): **${summary.noRouteEntry}**`);
   out.push(`- offer.html tiles that send registrants to the legacy provider.html intake: **${summary.offerTilesToLegacyIntake}**`);
   out.push(`- C1 categories reached from the register modal: ${summary.c1CategoriesReached} / ${summary.c1CategoriesTotal}; never reached: ${summary.c1NeverReached.join(', ') || 'none'}\n`);
@@ -132,5 +144,5 @@ if (JSON_OUT) {
   console.log(out.join('\n'));
 }
 
-const gateFail = summary.unrouted + summary.unclassified + summary.noRouteEntry + summary.offerTilesToLegacyIntake;
+const gateFail = summary.unrouted + summary.unclassified + summary.noRouteEntry + summary.routedNoShop + summary.offerTilesToLegacyIntake;
 if (GATE) process.exit(gateFail ? 1 : 0);

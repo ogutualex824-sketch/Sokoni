@@ -22,9 +22,10 @@
  *
  * ROUTES (owner decisions 2026-09-28): the general service-provider model → provider-dashboard (Healthcare, Legal,
  * trades, cleaning, IT, professional, salon, education, auto, fitness, events services, artists' bookings); shops →
- * merchant-v2; event organisers → event-manager; venues → venue-manager; delivery → the driver app. Hotel and
- * restaurant are UNROUTED — their current pages (bnb-manage, food-dashboard) keep their primary data in the browser
- * and must not be presented as working dashboards. A self-selected onboarding role never routes (537d17e).
+ * merchant-v2; food businesses (restaurant) → merchant-v2 too (owner, 2026-09-28); event organisers → event-manager;
+ * venues → venue-manager; delivery → the driver app. Hotel and property are UNROUTED — their current pages
+ * (bnb-manage, sokoni-property) keep their primary data in the browser and must not be presented as working
+ * dashboards. A self-selected onboarding role never routes (537d17e).
  *
  * HEALTHCARE IS ROWS OF THIS AUTHORITY, not a second one: for a Healthcare category the module states come from
  * functions/healthcare-workspace.js (its category matrix and plan intersection, CHANGELOG 233), mapped onto these
@@ -98,14 +99,17 @@ const ROUTE_OF = Object.freeze({
   event_organizer: 'event-manager.html',
   venue: 'venue-manager.html',
   retail_store: 'merchant-v2.html',
+  /* Owner, 2026-09-28: a food business runs on merchant-v2 — the menu is its products, and orders, POS/Till, Quick
+     Charge, delivery, staff and receipts already exist there with server authority. (food-dashboard.html ran on a
+     hard-coded restaurant + browser storage.) Approval provisions its shop exactly as retail does: resolveRole makes
+     a merchant-v2 category a seller. */
+  restaurant: 'merchant-v2.html',
   delivery: 'driver.html',
   hotel: null,        /* bnb-manage.html keeps listings/bookings in the browser — not a working dashboard */
-  restaurant: null,   /* food-dashboard.html runs on a hard-coded restaurant + browser storage — not a working dashboard */
   property: null,     /* property dashboards read browser storage (sokoni-property.js) — not a working dashboard */
 });
 const UNROUTED_REASON = Object.freeze({
   hotel: 'A hotel workspace is being built. Your approval is recorded; SOKONI will switch it on when it is ready.',
-  restaurant: 'A restaurant workspace is being built. Your approval is recorded; SOKONI will switch it on when it is ready.',
   property: 'A property workspace is being built. Your approval is recorded; SOKONI will switch it on when it is ready.',
 });
 

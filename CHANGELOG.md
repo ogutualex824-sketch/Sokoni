@@ -1,3 +1,63 @@
+## [2026-09-28] - Every registrable category classified; merchant and food businesses are approved INTO A SHOP (owner decisions)
+
+**Functions + tests, NOT deployed.** Branch `slice/c4-category-matrix` (convergence line).
+
+**Owner decisions (2026-09-28), taken on the executed category matrix:**
+- food → merchant-v2;
+- the 9 unclassified map to existing categories;
+- SACCO / forex / "other" are AdminOS review only.
+
+**Proven defect (the real `applicationLifecycle` trigger at `4e9607b`):**
+- merchant-v2 runs on a SHOP, and approval provisions a shop ONLY for the `seller` role (`projectSeller`).
+- A hub-register "Supermarket / Minimart", "Hardware", butchery, farm, dairy, agri-input, water supplier or wholesale
+  business carries no "shop" word, so `resolveRole` made it a `provider`.
+- It was then approved into a provider record and routed to a merchant-v2 dashboard with NO SHOP behind it.
+- That covered 8 retail categories already; the 3 B2B ones and the 6 food ones would have joined them under the
+  owner's routing.
+
+**Changed:**
+- **`functions/application-lifecycle.js` `resolveRole`:** a business that C1 places EXACTLY in a category whose
+  workspace is merchant-v2 resolves to `seller` (`by: 'category:<key>'`), so approval provisions its shop.
+  - A DECLARED type is never overridden, since the rule sits after the declared-type return.
+  - Driver / legal / health keyword precedence is unchanged.
+- **`functions/business-workspace.js`:** `ROUTE_OF.restaurant = 'merchant-v2.html'` (it was UNROUTED; the menu is its
+  products). Hotel and property stay unrouted, pending their own slices.
+- **`functions/business-category.js`:**
+  - `car-rental` → `auto_services`;
+  - `football-club` / `basketball` → `service_business`;
+  - `manufacturer` / `wholesaler` / `importer` → `retail_store`.
+  - `forex` / `sacco` / `other` stay null, as the new `ADMIN_REVIEW_ONLY` list: AdminOS classifies them by hand.
+- **Detector fix:** `test-business-category.js` "every hub-register id is mapped" used `hub:'[a-z-]+'`, which skipped
+  `hub:'b2b'`. The 3 B2B ids were unmapped and invisible to it. The class now admits digits.
+- **`scripts/audit-category-dashboards.js`:** new `ROUTED_NO_SHOP` verdict (a merchant-v2 route under a non-seller
+  role) and an `ADMIN_REVIEW` exemption. `resolveRole`'s lazy requires are resolved.
+
+**Evidence:**
+- **`scripts/test-category-merchant-approval.js`** (the REAL trigger, two steps: intake normalisation, then an admin
+  decision with the server `applicationDecisions` record): **7/0**.
+  - A supermarket and a restaurant are stamped seller and approved into a LIVE shop with `activeShopId` and the seller
+    claim.
+  - Controls: the plumber stays a provider; a declared intake is not overridden; pharmacy stays health.
+  - The counterproof at `4e9607b` FAILS T1–T4 (provider record, no shop); the controls pass in both modes.
+- **Sabotage:** 6/6 across the three functions files, with 3 suites per attack, byte-identical restores.
+- **Regression:** 30 approval-related suites are identical to the pristine `4e9607b` baseline, except the intended
+  ones (business-category 45/0 with the new owner-mapping assertion; business-workspace 30/0 with its superseded
+  "restaurant unrouted" assertion updated).
+  - Pre-existing on the baseline, unchanged: `test-approval-activates-shop` and `test-seller-trial` crash (a stale
+    fixture that predates `applicationDecisions`), healthcare-provisioning 11 fail, entertainment-registry 1 fail.
+
+**Matrix now:** **96 / 104** routed.
+- 5 unrouted (hotel ×2, property ×3: the next slices).
+- 0 unclassified, 0 without a shop, 3 AdminOS review.
+- The 27 `offer.html` tiles still use the legacy intake.
+
+**Money note:** a food business approved as a seller runs on the retail commercial lane (marketplace / POS / Quick
+Charge rates), exactly as a shop does. That is the owner's "approval provisions a shop exactly as retail does".
+
+**Migration (not run):** applications normalised BEFORE this change carry a stored `role:'provider'`. They keep it
+until AdminOS re-classifies them (C4c override) or they are re-normalised. A dry-run census of pending merchant-category
+applications is a release-gate item.
+
 ## [2026-09-28] - Discovery: services.html ?cat= links find approved providers under their C1 category (an approved DJ was invisible on the Entertainment hub)
 
 **Hosting only, NOT deployed.** Branch `slice/c4-category-matrix`, on the convergence line (from `4e9607b`).

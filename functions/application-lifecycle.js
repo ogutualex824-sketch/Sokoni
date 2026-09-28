@@ -242,6 +242,18 @@ function resolveRole(app) {
   if (test(/\b(seller|merchant|vendor|shop|store|retail|stockist|wholesal)\b/)) {
     return { role: 'seller', by: 'keyword' };
   }
+  /* ── The CATEGORY decides when the words do not (owner, 2026-09-28) ─────────
+     A business the category authority (C1) places EXACTLY in a category whose workspace is merchant-v2 is a
+     MERCHANT: merchant-v2 runs on a shop, and only the seller projection provisions one. Without this, a
+     "Supermarket / Minimart", a "Hardware" store, a butchery, a farm, a manufacturer or a restaurant — none of whose
+     words say "shop" — fell through to `provider`, was approved into a provider record, and was routed to a
+     merchant-v2 dashboard with no shop behind it. Declared types never reach this line (they returned above), so
+     an applicant's stated intake is never overridden. */
+  {
+    const BCAT = require('./business-category');
+    const cat = BCAT.categoryFromApplication(app, 'provider').category;
+    if (cat && require('./business-workspace').ROUTE_OF[cat] === 'merchant-v2.html') return { role: 'seller', by: 'category:' + cat };
+  }
   if (test(/\b(provider|professional|service|business|company|cleaning|housekeep|laundry|mama\s*fua|moving|relocat|salon|barber|dj|mc|plumb|electric|carpent|paint|tutor|photograph|caterer|mechanic)\b/)) {
     return { role: 'provider', by: 'keyword' };
   }

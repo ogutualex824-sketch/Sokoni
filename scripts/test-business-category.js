@@ -55,7 +55,9 @@ const USER = (uid) => ({ auth: { uid, token: {} } });
 
 (async () => {
   say('\n── the registry covers every business type ──');
-  const hubIds = [...fs.readFileSync(Path.join(ROOT, 'hub-register.js'), 'utf8').matchAll(/\{ id:'([a-z0-9-]+)',\s*label:'[^']+',\s*hub:'[a-z-]+'/g)].map((m) => m[1]);
+  /* hub ids may contain digits ('b2b'): a [a-z-] class silently skipped the manufacturer / wholesaler / importer
+     entries, so this check passed while they were unmapped. */
+  const hubIds = [...fs.readFileSync(Path.join(ROOT, 'hub-register.js'), 'utf8').matchAll(/\{ id:'([a-z0-9-]+)',\s*label:'[^']+',\s*hub:'[a-z0-9-]+'/g)].map((m) => m[1]);
   const missing = hubIds.filter((id) => !Object.prototype.hasOwnProperty.call(BC.FROM_BUSINESS_ID, id));
   ck(`every hub-register.js business id (${hubIds.length}) is mapped or deliberately null`, hubIds.length >= 100 && missing.length === 0, missing);
   const onb = fs.readFileSync(Path.join(FN, 'provider-onboarding.js'), 'utf8');
@@ -65,8 +67,14 @@ const USER = (uid) => ({ auth: { uid, token: {} } });
   const pMissing = profs.filter((p) => !groupNames.includes(p)).filter((p) => !Object.prototype.hasOwnProperty.call(BC.FROM_PROFESSION, p.toLowerCase()));
   ck('every provider-onboarding.js profession is mapped', profs.length >= 60 && pMissing.length === 0, pMissing);
   ck('every mapped value is a real category', [...Object.values(BC.FROM_BUSINESS_ID), ...Object.values(BC.FROM_PROFESSION)].every((c) => c === null || BC.isCategory(c)));
-  ck('the deliberately-unclassified ids are exactly: car-rental, forex, sacco, football-club, basketball, other',
-    Object.keys(BC.FROM_BUSINESS_ID).filter((k) => BC.FROM_BUSINESS_ID[k] === null).sort().join() === 'basketball,car-rental,football-club,forex,other,sacco');
+  /* Owner, 2026-09-28: car-rental / clubs / B2B map to existing categories; only licensed finance and "other" stay
+     for AdminOS to classify by hand (ADMIN_REVIEW_ONLY). */
+  ck('the deliberately-unclassified (ADMIN REVIEW ONLY) ids are exactly: forex, other, sacco',
+    Object.keys(BC.FROM_BUSINESS_ID).filter((k) => BC.FROM_BUSINESS_ID[k] === null).sort().join() === 'forex,other,sacco'
+    && BC.ADMIN_REVIEW_ONLY.slice().sort().join() === 'forex,other,sacco');
+  ck('owner mappings: car-rental → auto_services; clubs → service_business; manufacturer / wholesaler / importer → retail_store',
+    BC.FROM_BUSINESS_ID['car-rental'] === 'auto_services' && BC.FROM_BUSINESS_ID['football-club'] === 'service_business'
+    && BC.FROM_BUSINESS_ID.basketball === 'service_business' && ['manufacturer', 'wholesaler', 'importer'].every((k) => BC.FROM_BUSINESS_ID[k] === 'retail_store'));
   ck('Healthcare\'s categories ARE this registry\'s (reference pattern, not a parallel list)', BC.HEALTHCARE.slice().sort().join() === HC.CATEGORIES.slice().sort().join()
     && Object.keys(HC.FROM_BUSINESS_ID).every((k) => BC.FROM_BUSINESS_ID[k] === HC.FROM_BUSINESS_ID[k]));
 

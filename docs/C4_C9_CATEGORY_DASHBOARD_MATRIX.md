@@ -15,9 +15,11 @@ Source: hub-register.js CATS (104) + offer.html tiles (27 to provider.html). Gen
 
 ## Summary
 
-- ROUTED to a working dashboard: **84** / 104
-- UNROUTED (approved, but no working dashboard): **11**
-- UNCLASSIFIED (C1 cannot place it → hidden from discovery, no dashboard): **9**
+- ROUTED to a working dashboard: **96** / 104
+- UNROUTED (approved, but no working dashboard): **5**
+- UNCLASSIFIED (C1 cannot place it → hidden from discovery, no dashboard): **0**
+- ROUTED TO MERCHANT-V2 WITHOUT A SHOP (decided role is not seller → no shop is provisioned): **0**
+- ADMIN REVIEW ONLY (exempt: AdminOS classifies by hand — C1 ADMIN_REVIEW_ONLY): **3**
 - NO ROUTE ENTRY (C1 category missing from ROUTE_OF): **0**
 - offer.html tiles that send registrants to the legacy provider.html intake: **27**
 - C1 categories reached from the register modal: 21 / 25; never reached: clinician, telemedicine, home_care, event_organizer
@@ -30,7 +32,7 @@ Source: hub-register.js CATS (104) + offer.html tiles (27 to provider.html). Gen
 | `pharmacy` Pharmacy | provider-dashboard.html | — | pharmacy | — |
 | `laboratory` Laboratory | provider-dashboard.html | — | laboratory | — |
 | `hotel` Hotel / BnB | **UNROUTED** | — | bnb, hotel | — |
-| `restaurant` Restaurant / Food business | **UNROUTED** | — | restaurant, cafe, fast-food, bakery, catering, food-truck | — |
+| `restaurant` Restaurant / Food business | merchant-v2.html | — | restaurant, cafe, fast-food, bakery, catering, food-truck | — |
 | `trades` Trades & repairs (plumber, electrician…) | provider-dashboard.html | quoted_service | plumbing, electrical, painting, carpentry, landscaping, moving, ac-repair, contractor | staff |
 | `cleaning` Cleaning & laundry | provider-dashboard.html | quoted_service | cleaning, laundry, pest-control | staff |
 | `it_services` Cyber / IT services | provider-dashboard.html | quoted_service | web-developer, app-developer, it-support, phone-repair, cctv, software, data-entry | staff |
@@ -38,41 +40,41 @@ Source: hub-register.js CATS (104) + offer.html tiles (27 to provider.html). Gen
 | `lawyer` Lawyer / Advocate | provider-dashboard.html | quoted_service | lawyer, accounting, tax-consultant, notary | staff |
 | `professional_services` Professional services | provider-dashboard.html | quoted_service | insurance-auto, graphic-design, social-media, advertising, pr-firm, insurance, architect | staff |
 | `education` Education & training | provider-dashboard.html | learning | driving-school, school, tutor, online-course | staff |
-| `auto_services` Auto services | provider-dashboard.html | quoted_service | mechanic, car-wash | staff |
+| `auto_services` Auto services | provider-dashboard.html | quoted_service | mechanic, car-wash, car-rental | staff |
 | `fitness_studio` Fitness studio | provider-dashboard.html | appointment_shop | gym, yoga-studio, martial-arts, dance-fitness, spinning | staff, products, inventory, pos |
-| `service_business` Service business | provider-dashboard.html | quoted_service | nutrition, coach, security-guard, printing, tailor, shoe-repair | staff |
+| `service_business` Service business | provider-dashboard.html | quoted_service | nutrition, football-club, basketball, coach, security-guard, printing, tailor, shoe-repair | staff |
 | `artist_creator` Artist / Creator | provider-dashboard.html | entertainment | dj, mc, photographer, videographer, band, comedian, content-creator | staff |
 | `event_services` Event services | provider-dashboard.html | entertainment | event-planner | staff |
 | `venue` Venue | venue-manager.html | — | swimming-pool, sports-venue, venue | — |
-| `retail_store` Retail store | merchant-v2.html | — | retail-shop, wholesale, supermarket, hardware, water-supplier, butcher, sports-equipment, auto-parts, boutique, farm, dairy, agri-input | — |
+| `retail_store` Retail store | merchant-v2.html | — | retail-shop, wholesale, supermarket, hardware, water-supplier, butcher, sports-equipment, auto-parts, boutique, farm, dairy, agri-input, manufacturer, wholesaler, importer | — |
 | `property` Property | **UNROUTED** | — | property-agent, developer, landlord | — |
 | `delivery` Delivery / Courier | driver.html | — | courier, boda-delivery | — |
-| **UNCLASSIFIED** | **UNROUTED** | — | football-club, basketball, car-rental, sacco, forex, manufacturer, wholesaler, importer, other | — |
+| **UNCLASSIFIED** | **UNROUTED** | — | sacco, forex, other | — |
 
 ## Every registrable category
 
 | id | label | hub | decided role | C1 | verdict | route |
 |---|---|---|---|---|---|---|
 | retail-shop | Retail Shop / Boutique | shopping | seller | retail_store (exact) | ROUTED | merchant-v2.html |
-| wholesale | Wholesale / Distributor | shopping | provider | retail_store (exact) | ROUTED | merchant-v2.html |
-| supermarket | Supermarket / Minimart | shopping | provider | retail_store (exact) | ROUTED | merchant-v2.html |
-| hardware | Hardware / Building Materials | construction | provider | retail_store (exact) | ROUTED | merchant-v2.html |
-| water-supplier | Water Supplier / Refill Station | shopping | provider | retail_store (exact) | ROUTED | merchant-v2.html |
-| restaurant | Restaurant / Hotel | food | provider | restaurant (exact) | UNROUTED | — |
-| cafe | Café / Coffee Shop | food | seller | restaurant (exact) | UNROUTED | — |
-| fast-food | Fast Food / Chips Mwitu | food | provider | restaurant (exact) | UNROUTED | — |
-| bakery | Bakery / Confectionery | food | provider | restaurant (exact) | UNROUTED | — |
-| catering | Catering / Events Catering | food | provider | restaurant (exact) | UNROUTED | — |
-| food-truck | Food Truck / Kiosk / Mkokoteni | food | provider | restaurant (exact) | UNROUTED | — |
-| butcher | Butchery / Deli | food | provider | retail_store (exact) | ROUTED | merchant-v2.html |
+| wholesale | Wholesale / Distributor | shopping | seller | retail_store (exact) | ROUTED | merchant-v2.html |
+| supermarket | Supermarket / Minimart | shopping | seller | retail_store (exact) | ROUTED | merchant-v2.html |
+| hardware | Hardware / Building Materials | construction | seller | retail_store (exact) | ROUTED | merchant-v2.html |
+| water-supplier | Water Supplier / Refill Station | shopping | seller | retail_store (exact) | ROUTED | merchant-v2.html |
+| restaurant | Restaurant / Hotel | food | seller | restaurant (exact) | ROUTED | merchant-v2.html |
+| cafe | Café / Coffee Shop | food | seller | restaurant (exact) | ROUTED | merchant-v2.html |
+| fast-food | Fast Food / Chips Mwitu | food | seller | restaurant (exact) | ROUTED | merchant-v2.html |
+| bakery | Bakery / Confectionery | food | seller | restaurant (exact) | ROUTED | merchant-v2.html |
+| catering | Catering / Events Catering | food | seller | restaurant (exact) | ROUTED | merchant-v2.html |
+| food-truck | Food Truck / Kiosk / Mkokoteni | food | seller | restaurant (exact) | ROUTED | merchant-v2.html |
+| butcher | Butchery / Deli | food | seller | retail_store (exact) | ROUTED | merchant-v2.html |
 | gym | Gym / Fitness Centre | fitness | provider | fitness_studio (exact) | ROUTED | provider-dashboard.html |
 | yoga-studio | Yoga / Pilates Studio | fitness | provider | fitness_studio (exact) | ROUTED | provider-dashboard.html |
 | martial-arts | Martial Arts / Boxing | fitness | provider | fitness_studio (exact) | ROUTED | provider-dashboard.html |
 | dance-fitness | Dance Fitness / Zumba | fitness | provider | fitness_studio (exact) | ROUTED | provider-dashboard.html |
 | nutrition | Nutritionist / Dietitian | fitness | provider | service_business (exact) | ROUTED | provider-dashboard.html |
 | spinning | Spinning / Cycling Studio | fitness | provider | fitness_studio (exact) | ROUTED | provider-dashboard.html |
-| football-club | Football Club / Academy | sports | provider | — (no-exact-match) | UNCLASSIFIED | — |
-| basketball | Basketball / Netball Team | sports | provider | — (no-exact-match) | UNCLASSIFIED | — |
+| football-club | Football Club / Academy | sports | provider | service_business (exact) | ROUTED | provider-dashboard.html |
+| basketball | Basketball / Netball Team | sports | provider | service_business (exact) | ROUTED | provider-dashboard.html |
 | swimming-pool | Swimming Pool / Aquatic Centre | sports | provider | venue (exact) | ROUTED | venue-manager.html |
 | sports-venue | Sports Ground / Venue | sports | provider | venue (exact) | ROUTED | venue-manager.html |
 | sports-equipment | Sports Equipment Shop | sports | seller | retail_store (exact) | ROUTED | merchant-v2.html |
@@ -99,7 +101,7 @@ Source: hub-register.js CATS (104) + offer.html tiles (27 to provider.html). Gen
 | venue | Event Venue / Hall | entertainment | provider | venue (exact) | ROUTED | venue-manager.html |
 | mechanic | Auto Mechanic / Garage | car | provider | auto_services (exact) | ROUTED | provider-dashboard.html |
 | car-wash | Car Wash / Auto Detailing | car | provider | auto_services (exact) | ROUTED | provider-dashboard.html |
-| car-rental | Car Rental / Self-Drive | car | provider | — (no-exact-match) | UNCLASSIFIED | — |
+| car-rental | Car Rental / Self-Drive | car | provider | auto_services (exact) | ROUTED | provider-dashboard.html |
 | auto-parts | Auto Parts / Tyre Shop | car | seller | retail_store (exact) | ROUTED | merchant-v2.html |
 | driving-school | Driving School | car | provider | education (exact) | ROUTED | provider-dashboard.html |
 | insurance-auto | Car Insurance Agent | car | provider | professional_services (exact) | ROUTED | provider-dashboard.html |
@@ -146,17 +148,17 @@ Source: hub-register.js CATS (104) + offer.html tiles (27 to provider.html). Gen
 | courier | Courier / Parcel Delivery | delivery | driver | delivery (role:driver) | ROUTED | driver.html |
 | boda-delivery | Boda Boda Delivery | delivery | driver | delivery (role:driver) | ROUTED | driver.html |
 | insurance | Insurance Agent / Broker | financial | provider | professional_services (exact) | ROUTED | provider-dashboard.html |
-| sacco | SACCO / Microfinance / Chama | financial | provider | — (no-exact-match) | UNCLASSIFIED | — |
-| forex | Forex / Bureau de Change | financial | provider | — (no-exact-match) | UNCLASSIFIED | — |
-| farm | Farm / Fresh Produce Supplier | agri | provider | retail_store (exact) | ROUTED | merchant-v2.html |
-| dairy | Dairy / Poultry Farm | agri | provider | retail_store (exact) | ROUTED | merchant-v2.html |
-| agri-input | Agrovet / Farm Inputs | agri | provider | retail_store (exact) | ROUTED | merchant-v2.html |
+| sacco | SACCO / Microfinance / Chama | financial | provider | — (no-exact-match) | ADMIN_REVIEW | — |
+| forex | Forex / Bureau de Change | financial | provider | — (no-exact-match) | ADMIN_REVIEW | — |
+| farm | Farm / Fresh Produce Supplier | agri | seller | retail_store (exact) | ROUTED | merchant-v2.html |
+| dairy | Dairy / Poultry Farm | agri | seller | retail_store (exact) | ROUTED | merchant-v2.html |
+| agri-input | Agrovet / Farm Inputs | agri | seller | retail_store (exact) | ROUTED | merchant-v2.html |
 | contractor | Contractor / Builder | construction | provider | trades (exact) | ROUTED | provider-dashboard.html |
 | architect | Architect / Civil Engineer | construction | provider | professional_services (exact) | ROUTED | provider-dashboard.html |
-| manufacturer | Manufacturer / Factory | b2b | provider | — (no-exact-match) | UNCLASSIFIED | — |
-| wholesaler | Wholesaler / Bulk Supplier | b2b | provider | — (no-exact-match) | UNCLASSIFIED | — |
-| importer | Importer / Exporter | b2b | provider | — (no-exact-match) | UNCLASSIFIED | — |
-| other | Other / General Business | other | provider | — (no-exact-match) | UNCLASSIFIED | — |
+| manufacturer | Manufacturer / Factory | b2b | seller | retail_store (exact) | ROUTED | merchant-v2.html |
+| wholesaler | Wholesaler / Bulk Supplier | b2b | seller | retail_store (exact) | ROUTED | merchant-v2.html |
+| importer | Importer / Exporter | b2b | seller | retail_store (exact) | ROUTED | merchant-v2.html |
+| other | Other / General Business | other | provider | — (no-exact-match) | ADMIN_REVIEW | — |
 
 ## offer.html ("What Are You Offering?")
 
