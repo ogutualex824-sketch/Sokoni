@@ -88,114 +88,172 @@ exports.posSyncToMarketplace = onCall(
   }
 );
 
-/* ══════════════════════════════════════════════════════════
-   2. SEND POS RECEIPT
-   Sends receipt via SMS (Africa's Talking) or email (SendGrid)
-   after a POS sale. Falls back gracefully if service unavailable.
-══════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   2. sendPOSReceipt — a TILL SALE's receipt, from the server's record, to the customer on record (Q0c-3)
+
+   THE DEFECT. The caller supplied the recipient (`phone` / `email`) AND the whole receipt (`sale`: shop name, item
+   names, quantities, totals), so any signed-in account could send any text — SMS or email — to anyone, under any shop
+   name it chose. No client calls it (pos-customers.js defines, but nothing invokes, its receipt helpers).
+
+   THE AUTHORITY — the caller names ONLY the sale: { saleId, channel: 'sms' | 'email' }.
+     · scope — a TILL sale only: posReceipts/{saleId} AND posRetailSales/{saleId} must both exist and name the same
+       merchant. posReceipts is shared with subscription and marketplace-order receipts; those, the marketplace
+       `receipts` collection and recordPOSSale's receipts are other products and fail closed here;
+     · sender — the sale's merchant is PROVEN for the caller by the till customer authority
+       (pos-zero-friction _provenCustomerOwners, `customers`): the shop owner and its staff, or a business member
+       holding `customers`. There is deliberately NO admin override — the till authority has none, and no second
+       seller authority is introduced for receipts;
+     · recipient — ONLY the posCustomers record the sale names, which must exist and be owned by that proven merchant
+       (pos-customer-scope classifyCustomer), and must carry the channel's contact. The phone copied onto the sale at
+       checkout came from the browser and is never used; no email is looked up anywhere else. Anything missing fails
+       closed;
+     · content — ONE builder renders both channels from the same posReceipts document: receipt number derived from the
+       sale, product names from the product records (set server-side at checkout), server-computed prices and totals,
+       and the shop / business name from the server's own record;
+     · repeat sends — at most 3 per sale per channel, reserved in a Firestore TRANSACTION before dispatch, so
+       concurrent requests cannot together exceed it; the 4th is refused without sending;
+     · audit — every attempt after sign-in (auditLogs, type posSendReceipt) with HASHED sale / customer references,
+       the channel and the outcome; no phone number or email address is stored.
+   `sent` means the provider accepted the message — not that it was delivered.
+════════════════════════════════════════════════════════════════════════════════════════════ */
+const _crypto = require('crypto');
+const RECEIPT_SENDS_PER_CHANNEL = 3;
+const _hash = (s) => _crypto.createHash('sha256').update(String(s)).digest('hex');
+const _esc = (s) => String(s == null ? '' : s).replace(/[&<>"'`]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' }[c]));
+
+/* The ONE receipt model both channels render from — built only from the server's records. */
+function _receiptModel(receipt, shopName) {
+  const items = (Array.isArray(receipt.items) ? receipt.items : []).map((i) => {
+    const qty = Number(i.qty) || 0, unit = Number(i.unitPrice) || 0;
+    return { name: _sanitize(i.name), qty, lineTotal: Math.round(qty * unit * 100) / 100 };
+  });
+  return {
+    shopName: _sanitize(shopName || 'SOKONI'),
+    receiptNo: _sanitize(receipt.receiptNo),
+    items,
+    subtotal: Number(receipt.subtotal) || 0,
+    discount: Number(receipt.discount) || 0,
+    tax: Number(receipt.tax) || 0,
+    total: Number(receipt.total) || 0,
+  };
+}
+function _receiptSms(m) {
+  return [
+    `${m.shopName} Receipt #${m.receiptNo}`,
+    ...m.items.slice(0, 5).map((i) => `${i.qty}x ${i.name}: ${_kes(i.lineTotal)}`),
+    m.items.length > 5 ? `+${m.items.length - 5} more items` : '',
+    `TOTAL: ${_kes(m.total)}`,
+    `Thank you for shopping at ${m.shopName}!`,
+  ].filter(Boolean).join('\n').slice(0, 320);
+}
+function _receiptEmailHtml(m) {
+  const rows = m.items.map((i) => `<tr><td style="padding:6px 10px">${i.qty}x ${_esc(i.name)}</td><td style="padding:6px 10px;text-align:right">${_kes(i.lineTotal)}</td></tr>`).join('');
+  return `<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f5f5f5;padding:20px">
+    <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden">
+      <div style="background:#71ff00;padding:20px;text-align:center;color:#000">
+        <h2 style="margin:0">${_esc(m.shopName)}</h2><p style="margin:4px 0;opacity:.8">Receipt #${_esc(m.receiptNo)}</p>
+      </div>
+      <div style="padding:20px"><table style="width:100%;border-collapse:collapse"><tbody>${rows}</tbody><tfoot>
+        ${m.discount > 0 ? `<tr><td style="padding:6px 10px;color:#888">Discount</td><td style="padding:6px 10px;text-align:right">-${_kes(m.discount)}</td></tr>` : ''}
+        ${m.tax > 0 ? `<tr><td style="padding:6px 10px;color:#888">VAT</td><td style="padding:6px 10px;text-align:right">${_kes(m.tax)}</td></tr>` : ''}
+        <tr style="border-top:2px solid #4db800"><td style="padding:8px 10px;font-weight:700">TOTAL</td><td style="padding:8px 10px;text-align:right;font-weight:700">${_kes(m.total)}</td></tr>
+      </tfoot></table></div>
+    </div></body></html>`;
+}
+async function _shopNameFor(merchantId) {
+  const id = String(merchantId);
+  const [shop, biz] = await Promise.all([db.collection('shops').doc(id).get(), db.collection('businesses').doc(id).get()]);
+  const s = shop.exists ? (shop.data() || {}) : null, b = biz.exists ? (biz.data() || {}) : null;
+  return (s && (s.storeName || s.name || s.shopName)) || (b && (b.name || b.businessName)) || 'SOKONI';
+}
+function _receiptAudit(entry) {
+  return db.collection('auditLogs').add(Object.assign({ type: 'posSendReceipt', ts: admin.firestore.FieldValue.serverTimestamp() }, entry)).catch(() => {});
+}
+
 exports.sendPOSReceipt = onCall(
   { secrets: [SENDGRID_SK, ...sokoniAt.secrets], region: 'us-central1', maxInstances: 30, cors: true, enforceAppCheck: true },
   async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in');
+    if (!request.auth || !request.auth.uid) throw new HttpsError('unauthenticated', 'Must be signed in');
+    const callerUid = request.auth.uid;
+    const { saleId, channel } = request.data || {};
+    if (typeof saleId !== 'string' || !/^[^/]{1,200}$/.test(saleId)) throw new HttpsError('invalid-argument', 'saleId is required.');
+    if (channel !== 'sms' && channel !== 'email') throw new HttpsError('invalid-argument', "channel must be 'sms' or 'email'.");
+    const saleRef = _hash(saleId).slice(0, 16);
 
-    const { customerId, phone, email, sale, channel = 'email' } = request.data;
-    if (!sale || !sale.receiptNumber) {
-      throw new HttpsError('invalid-argument', 'sale.receiptNumber required');
+    /* 1. a TILL sale: the receipt and the sale both exist and name the same merchant */
+    const [rSnap, sSnap] = await Promise.all([db.collection('posReceipts').doc(saleId).get(), db.collection('posRetailSales').doc(saleId).get()]);
+    const receipt = rSnap.exists ? (rSnap.data() || {}) : null, sale = sSnap.exists ? (sSnap.data() || {}) : null;
+    if (!receipt || !sale || !receipt.merchantId || String(receipt.merchantId) !== String(sale.merchantId)) {
+      _receiptAudit({ callerUid, saleRef, channel, outcome: 'refused_not_a_till_sale' });
+      throw new HttpsError('not-found', 'No till sale receipt was found for that sale.');
+    }
+    const merchantId = String(sale.merchantId);
+
+    /* 2. the caller may act for that merchant (the till customer authority; no admin override) */
+    let owners;
+    try {
+      owners = await require('./pos-zero-friction')._provenCustomerOwners(callerUid, merchantId);
+    } catch (e) {
+      _receiptAudit({ callerUid, saleRef, channel, outcome: 'refused_unproven_merchant' });
+      throw e;
     }
 
-    /* Sanitize receipt data */
-    const receiptNo = _sanitize(sale.receiptNumber);
-    const shopName  = _sanitize(sale.shopName || 'SOKONI');
-    const total     = _kes(sale.total);
-    const items     = (sale.items || []).map(i => ({
-      name:  _sanitize(i.name),
-      qty:   Number(i.qty)  || 0,
-      price: Number(i.price)|| 0,
-      lineTotal: Number(i.lineTotal) || (i.qty * i.price),
-    }));
+    /* 3. the recipient is the posCustomers record the sale names, owned by that merchant, with this channel's contact */
+    const custScope = require('./pos-customer-scope');
+    const customerId = sale.customer && typeof sale.customer.id === 'string' ? sale.customer.id : null;
+    const cSnap = customerId && custScope.isCustomerDocId(customerId) ? await db.collection('posCustomers').doc(customerId).get() : null;
+    const owned = !!(cSnap && cSnap.exists && custScope.classifyCustomer(cSnap.id, cSnap.data(), owners) === 'owned');
+    const cust = owned ? (cSnap.data() || {}) : {};
+    const phone = owned ? custScope.canonicalPhone(cust.phone) : null;
+    const email = owned && typeof cust.email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cust.email.trim()) ? cust.email.trim() : null;
+    const to = channel === 'sms' ? phone : email;
+    if (!to) {
+      _receiptAudit({ callerUid, saleRef, channel, customerRef: customerId ? _hash(customerId).slice(0, 16) : null,
+        outcome: owned ? 'refused_no_contact_for_channel' : 'refused_no_owned_customer' });
+      throw new HttpsError('failed-precondition',
+        'This sale has no customer on record with ' + (channel === 'sms' ? 'a phone number' : 'an email address') + ', so no receipt was sent.');
+    }
 
-    let result = { sent: false, channel };
+    /* 4. at most 3 sends per sale per channel — reserved atomically before dispatch */
+    const counterRef = db.collection('posReceiptSends').doc(_hash(merchantId + '|' + saleId + '|' + channel).slice(0, 40));
+    let attempt;
+    try {
+      attempt = await db.runTransaction(async (t) => {
+        const c = await t.get(counterRef);
+        const used = (c.exists && Number(c.data().count)) || 0;
+        if (used >= RECEIPT_SENDS_PER_CHANNEL) {
+          throw new HttpsError('resource-exhausted', `This receipt has already been sent ${used} times by ${channel}. Nothing was sent.`);
+        }
+        t.set(counterRef, { count: used + 1, channel, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+        return used + 1;
+      });
+    } catch (e) {
+      _receiptAudit({ callerUid, saleRef, channel, outcome: e && e.code === 'resource-exhausted' ? 'refused_send_limit' : 'refused_limit_unavailable' });
+      if (e instanceof HttpsError) throw e;
+      throw new HttpsError('unavailable', 'The send limit could not be checked, so no receipt was sent.');
+    }
 
-    if (channel === 'sms' && phone) {
-      try {
-        sokoniAt.resolveAtCredentials();
-      } catch (e) {
-        throw new HttpsError('failed-precondition', e.message);
-      }
-
-      const smsBody = [
-        `${shopName} Receipt #${receiptNo}`,
-        ...items.slice(0, 5).map(i => `${i.qty}x ${i.name}: ${_kes(i.lineTotal)}`),
-        items.length > 5 ? `+${items.length - 5} more items` : '',
-        `TOTAL: ${total}`,
-        `Thank you for shopping at ${shopName}!`,
-      ].filter(Boolean).join('\n').slice(0, 320);
-
-      /* Route through the central sender. This previously called the AT SDK directly
-         with a HARDCODED from:'SOKONI' — a sender ID that is still PENDING operator
-         approval, so Africa's Talking would reject the message. The sender must come
-         from AT_SENDER_ID (empty until approved), never from a literal. */
-      const smsRes = await sokoniAt.atSendSMSWithRetry(phone, smsBody);
-      if (!smsRes || !smsRes.ok) {
-        throw new HttpsError('unavailable', 'Receipt SMS could not be sent.');
-      }
-      result = { sent: true, channel: 'sms', to: phone, messageId: (smsRes.results || [])[0]?.messageId || null };
-
-    } else if (channel === 'email' && email) {
-      const sgMail = require('@sendgrid/mail');
+    /* 5. ONE model, rendered for the requested channel, dispatched to the contact on record */
+    const model = _receiptModel(receipt, await _shopNameFor(merchantId));
+    let sent = false;
+    if (channel === 'sms') {
+      try { sokoniAt.resolveAtCredentials(); } catch (e) { throw new HttpsError('failed-precondition', e.message); }
+      const r = await sokoniAt.atSendSMSWithRetry(to, _receiptSms(model));
+      sent = !!(r && r.ok);
+    } else {
       const apiKey = SENDGRID_SK.value();
       if (!apiKey) throw new HttpsError('failed-precondition', 'Email service not configured');
+      const sgMail = require('@sendgrid/mail');
       sgMail.setApiKey(apiKey);
-
-      const itemRows = items.map(i =>
-        `<tr><td style="padding:6px 10px">${i.qty}x ${i.name}</td><td style="padding:6px 10px;text-align:right">${_kes(i.lineTotal)}</td></tr>`
-      ).join('');
-
-      const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f5f5f5;padding:20px">
-        <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden">
-          <div style="background:#71ff00;padding:20px;text-align:center;color:#000">
-            <h2 style="margin:0">${shopName}</h2>
-            <p style="margin:4px 0;opacity:.8">Receipt #${receiptNo}</p>
-          </div>
-          <div style="padding:20px">
-            <table style="width:100%;border-collapse:collapse">
-              <thead><tr style="background:#f5f5f5"><th style="padding:8px 10px;text-align:left">Item</th><th style="padding:8px 10px;text-align:right">Amount</th></tr></thead>
-              <tbody>${itemRows}</tbody>
-              <tfoot>
-                ${sale.discountAmount>0?`<tr><td style="padding:6px 10px;color:#888">Discount</td><td style="padding:6px 10px;text-align:right;color:#ef4444">-${_kes(sale.discountAmount)}</td></tr>`:''}
-                ${sale.taxAmount>0?`<tr><td style="padding:6px 10px;color:#888">VAT</td><td style="padding:6px 10px;text-align:right">${_kes(sale.taxAmount)}</td></tr>`:''}
-                <tr style="border-top:2px solid #4db800"><td style="padding:8px 10px;font-weight:700">TOTAL</td><td style="padding:8px 10px;text-align:right;font-weight:700;color:#4db800">${total}</td></tr>
-              </tfoot>
-            </table>
-            ${(sale.payments||[]).map(p=>`<p style="font-size:13px;color:#555;margin:4px 0">Payment: ${p.method} — ${_kes(p.amount)}</p>`).join('')}
-            ${sale.loyaltyEarned>0?`<p style="font-size:13px;color:#4db800">⭐ You earned ${sale.loyaltyEarned} loyalty points!</p>`:''}
-            <p style="text-align:center;color:#888;font-size:12px;margin-top:20px">Thank you for shopping at ${shopName}!<br>Powered by SOKONI SmartPOS<br>${COMPANY.operatedBy}</p>
-          </div>
-        </div>
-      </body></html>`;
-
       try {
-        await sgMail.send({
-          to:      email,
-          from:    { email: 'receipts@mysokoni.co.ke', name: shopName },
-          subject: `Receipt #${receiptNo} — ${shopName}`,
-          html,
-        });
-      } catch (e) {
-        logger.error('sendgrid error', e.message);
-        throw new HttpsError('internal', 'Failed to send receipt email');
-      }
-      result = { sent: true, channel: 'email', to: email };
+        await sgMail.send({ to, from: { email: 'receipts@mysokoni.co.ke', name: model.shopName },
+          subject: `Receipt #${model.receiptNo} — ${model.shopName}`, html: _receiptEmailHtml(model) });
+        sent = true;
+      } catch (e) { sent = false; }
     }
-
-    /* Log receipt delivery */
-    if (customerId) {
-      await db.collection('posReceiptLog').add({
-        customerId, receiptNumber: receiptNo, ...result, timestamp: Date.now(),
-      });
-    }
-
-    return result;
+    await _receiptAudit({ callerUid, saleRef, channel, customerRef: _hash(customerId).slice(0, 16), attempt, outcome: sent ? 'sent' : 'provider_failed' });
+    if (!sent) throw new HttpsError('unavailable', 'The receipt could not be sent.');
+    return { sent: true, channel, attempt, receiptNo: model.receiptNo };
   }
 );
 

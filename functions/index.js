@@ -5361,47 +5361,10 @@ If no products are detectable, return: []`,
    Used for receipts, marketing blasts, and low-stock alerts.
    Requires AFRICASTALKING_API_KEY secret + AT_ENV in functions/.env.
 ══════════════════════════════════════════════════════════════ */
-exports.posSendSMS = onCall(
-  { secrets: [...sokoniAt.secrets], timeoutSeconds: 20, cors: true },
-  async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
-
-    const { to, message, bulk } = request.data || {};
-
-    /* Validate credentials early — surfaces AT_ENV misconfiguration as a clear error */
-    try {
-      sokoniAt.resolveAtCredentials();
-    } catch (e) {
-      throw new HttpsError("failed-precondition", e.message);
-    }
-
-    /* Bulk send: array of phone numbers */
-    if (bulk && Array.isArray(bulk)) {
-      if (bulk.length > 100) throw new HttpsError("invalid-argument", "Maximum 100 numbers per bulk send.");
-      if (!message || typeof message !== "string") throw new HttpsError("invalid-argument", "message required.");
-      const msg = message.slice(0, 160);
-      const results = await Promise.allSettled(
-        bulk.map(phone => sendSms(phone, msg))
-      );
-      const sent = results.filter(r => r.status === "fulfilled").length;
-      db.collection("auditLogs").add({
-        type: "posSendSMS_bulk", callerUid: request.auth.uid,
-        count: bulk.length, sent, ts: admin.firestore.FieldValue.serverTimestamp(),
-      }).catch(() => {});
-      return { success: true, sent, failed: bulk.length - sent };
-    }
-
-    /* Single send */
-    if (!to || !message) throw new HttpsError("invalid-argument", "to and message required.");
-    const msg = String(message).slice(0, 160);
-    await sendSms(to, msg);
-    db.collection("auditLogs").add({
-      type: "posSendSMS", callerUid: request.auth.uid,
-      ts: admin.firestore.FieldValue.serverTimestamp(),
-    }).catch(() => {});
-    return { success: true };
-  }
-);
+/* Q0c-2 — posSendSMS moved to ./pos-merchant-sms: a merchant's SMS to THEIR OWN customers only (proven merchant,
+   customer ids never phone numbers, 100 per request, 500 per merchant per day reserved atomically, audited).
+   The inline version here was a public relay: any text to any number, bulk 100, no merchant, no limit. */
+exports.posSendSMS = require('./pos-merchant-sms').posSendSMS;
 
 exports.onDeliveryStatusChange = onDocumentUpdated(
   "deliveries/{deliveryId}",

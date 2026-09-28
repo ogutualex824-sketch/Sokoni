@@ -1,3 +1,52 @@
+## 2026-09-28 (166) — L-8: port Q0c-2 + Q0c-3 onto the POS lineage — merchant SMS and till receipts go only to the proven merchant's own customers (NOT deployed)
+
+**Lineage reconciliation, unit 8.** On the POS lineage there were two public relays under SOKONI's sender:
+- `posSendSMS` sent any text to any number (`to`, or `bulk` up to 100) for any signed-in account;
+- `sendPOSReceipt` took the recipient and the whole receipt from the caller, over both SMS and email.
+
+The fixes already existed on the main line (a63f6de, e67bac7), but not here.
+
+- **Change:**
+  - **Q0c-2** (line-for-line; `functions/pos-merchant-sms.js` is byte-identical):
+    - `posSendSMS` is `{merchantId, customerIds, message}`, and the merchant is proven by L-7's `_provenCustomerOwners`;
+    - every recipient is an owned customer, or nothing is sent, and the phone number on record is used;
+    - ≤100 per request, and ≤500 per merchant per Nairobi day, reserved in a transaction keyed on the proven owners;
+    - requests are audited with hashed references and no phone numbers;
+    - `functions/index.js` replaces the inline relay with a named re-export.
+  - **Q0c-3** (line-for-line; `functions/pos-retail.js` had an identical pre-image):
+    - `sendPOSReceipt` is `{saleId, channel}`, for till sales only, and the sender is proven with no admin override;
+    - the recipient is only the sale's own `posCustomers` record;
+    - one server-built model from `posReceipts` renders both SMS and email;
+    - ≤3 sends per sale per channel, reserved in a transaction;
+    - requests are audited with hashed references.
+- **Files:**
+  - `functions/index.js`, `functions/pos-retail.js`, new `functions/pos-merchant-sms.js`;
+  - new tests `scripts/test-q0c2-pos-send-sms.js`, `scripts/test-q0c3-pos-receipt.js`;
+  - new **owner-directed** `scripts/test-l8-q0c2-quota-concurrency.js`;
+  - new `docs/repairs/POS-Q0c2-pos-send-sms.md`, `docs/repairs/POS-Q0c3-pos-receipt.md` (with L-8 port sections);
+  - `CHANGELOG.md`.
+- **Database:** new server-only counters `smsMerchantQuota/{ownerKey}_{day}` and `posReceiptSends/*`. Neither the repo rules
+  nor the last-fetched served-rules copies have a client path to them. **The live ruleset must be re-fetched before any deploy**; those copies are not proof of the live rules.
+- **API:** both callables change their request contract. Neither contract change breaks a working client path:
+  - `pos-modules.js` already sent a shape the old SMS handler never read;
+  - the `pos-customers.js` receipt helpers are never invoked.
+
+  Both client repairs remain separate units.
+- **Security:** closes the public SMS relay (bulk included) and the brand-spoofing SMS/email receipt relay.
+- **Delivery:** **nothing was sent.** Both providers were stubbed in-process, and the suites refuse to run otherwise. This is
+  authorization to attempt a send, not proof of delivery. Delivery certification is its own workstream.
+- **Evidence:**
+  - Q0c-2 20/0 vs 3/17; Q0c-3 29/0 vs 0/29.
+  - Mutants: Q0c-3 15/15. For Q0c-2, the source's `quota-not-transactional` mutant was malformed. The corrected mutant was caught 4/5 by Q-2,
+    and **5/5 by the new forced-race test**, which shows 60 sends while the counter read 480. The real handler is 4/0 in 5 of 5 runs.
+  - Earlier units all green, including the customer authority they depend on: L-7 23/0 + 13/0 + 6/0, L-6 40/0,
+    L-5 26/0, L-4 31/0, L-3 13/0, L-2 16/0 + 20/0, L-1 27/0, R-48H 12/0, M0-3 31/0, M0-2 13/0, M0-1 20/0, P0 9/0,
+    rail 46/0.
+  - Floor: structural counts only (one more module; `index.js` shifts 37 lines; one more `shops` reference), plus
+    uncommitted-tree artifacts, the adjudicated auditor false positive, and flaky suites (stk-narrative; the v2-runtime browser suite, which timed out on both trees). None is unexplained.
+  - Syntax gate clean.
+- **Breaking:** yes, for any caller of the old relay contract. None was working.
+
 ## 2026-09-28 (165) — L-7: port Q0b-2a + Q0b-2b onto the POS lineage — recordPOSSale and customer insights serve only the seller's own customers (NOT deployed)
 
 **Lineage reconciliation, unit 7.** On the POS lineage:
