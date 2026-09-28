@@ -413,7 +413,7 @@ const TOOLS = [
   },
   {
     name: "approve_seller",
-    description: "Approve or suspend a seller account.",
+    description: "Kass cannot approve or suspend businesses — approvals are decided only in AdminOS (applicationDecide). Calling this returns where to go; it changes nothing.",
     input_schema: {
       type: "object",
       properties: {
@@ -598,13 +598,12 @@ async function executeTool(name, input) {
       }
 
       case "approve_seller": {
-        await db.collection("providers").doc(input.sellerId).set({
-          status: input.approve ? "active" : "suspended",
-          adminNote: input.note || "",
-          reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
-          reviewedBy: "kass-admin-agent",
-        }, { merge: true });
-        return { success: true, sellerId: input.sellerId, status: input.approve ? "active" : "suspended" };
+        /* RETIRED as an approver (C8). This wrote providers/{id}.status directly — a second approval / suspension
+           authority beside AdminOS applicationDecide: no decision record, no role or claim, no category, no audit,
+           and it could create a bare provider doc for any id. Approval and suspension are decided ONLY in AdminOS
+           (applicationDecide). Kass refuses and says where to go; it writes nothing. */
+        return { refused: true, sellerId: input.sellerId || null,
+          message: "Kass cannot approve or suspend a business. Open the application in AdminOS → Applications and decide it there (applicationDecide)." };
       }
 
       case "get_analytics": {
@@ -1095,6 +1094,21 @@ const _CHAT_TOOLS = [
     },
   },
   {
+    /* The ONE way Kass finds a business: the canonical provider directory (live Firestore, publicEligibility on every
+       row — the same gate site search uses). A business AdminOS approved a minute ago is returned; a suspended,
+       unapproved or unclassified one never is. functions/kass-directory.js. */
+    name: "find_businesses",
+    description: "Find APPROVED businesses and service providers on SOKONI by what they do — e.g. DJ, MC, photographer, plumber, electrician, cleaner, salon, barber, mechanic, tutor, lawyer, doctor, clinic, pharmacy, hotel, BnB host, property agent, landlord, gym, event planner. Returns only businesses that are approved and publicly listed right now, including ones approved minutes ago. Call this FIRST whenever a user wants a provider, professional or business.",
+    input_schema: {
+      type: "object",
+      properties: {
+        category: { type: "string", description: "What the business does, in the user's words e.g. 'dj', 'plumber', 'hotel', 'lawyer'" },
+        location: { type: "string", description: "Optional city or area e.g. 'Nairobi', 'Kisumu'" },
+      },
+      required: ["category"],
+    },
+  },
+  {
     name: "search_stays",
     description: "Search BnBs, short stays, furnished apartments, serviced apartments, and hotels. Call this for: bnb, BnB, airbnb, short stay, vacation rental, furnished apartment, place to sleep, weekend getaway, accommodation, lodge, hotel, resort.",
     input_schema: {
@@ -1325,6 +1339,19 @@ async function _execChatTool(name, input, ctx) {
       return { url, label };
     }
 
+    if (name === "find_businesses") {
+      const r = await require("./kass-directory").findBusinesses(db, { category: input.category, location: input.location, limit: 8 });
+      if (!r.categories.length) {
+        return { found: 0, message: "I couldn't tell what kind of business that is. Try a word like 'plumber', 'DJ', 'salon' or 'hotel'." };
+      }
+      r.businesses.forEach((b) => ctx.addResult({ type: "business", id: b.uid, name: b.name, category: b.categoryLabel, city: b.city || b.location,
+        image: b.photo, rating: b.rating, verified: b.verified, url: `provider-profile.html?id=${encodeURIComponent(b.providerId)}` }));
+      ctx.addAction({ label: "See all on SOKONI", url: `providers.html?cat=${encodeURIComponent(r.categories[0])}` });
+      if (!r.businesses.length) return { found: 0, categories: r.categories, message: `No approved ${r.categories.map((c) => c.replace(/_/g, " ")).join(" / ")} listed${input.location ? " in " + input.location : ""} yet.` };
+      return { found: r.businesses.length, businesses: r.businesses.map((b) => ({ name: b.name, category: b.categoryLabel, does: b.displayCategory,
+        city: b.city || b.location || null, rating: b.rating ? `${b.rating}★ (${b.reviewCount})` : "no reviews yet", verified: b.verified, acceptsBookings: b.acceptsBookings })) };
+    }
+
     if (name === "search_marketplace") {
       const { query = "", category, type: t, maxPrice } = input;
       const rows = [];
@@ -1369,6 +1396,14 @@ async function _execChatTool(name, input, ctx) {
     if (name === "search_stays") {
       const { location, type: t, maxPrice } = input;
       const rows = [];
+      /* Approved hotels / BnB hosts first, through the canonical directory (C1 `hotel`, publicEligibility) — an
+         approved hotel was never returned: this tool only read `hotels` / `listings`, which approval does not write. */
+      const _stays = await require("./kass-directory").findBusinesses(db, { category: "hotel", location, limit: 8 }).catch(() => ({ businesses: [] }));
+      _stays.businesses.forEach((b) => {
+        const card = { type: "hotel", id: b.uid, name: b.name, price: null, city: b.city || b.location || location, image: b.photo, rating: b.rating,
+          url: `provider-profile.html?id=${encodeURIComponent(b.providerId)}` };
+        rows.push(card); ctx.addResult(card);
+      });
       const cols = t === "hotel" ? ["hotels"] : t === "bnb" ? ["listings"] : ["listings", "hotels"];
       for (const col of cols) {
         let q = db.collection(col).limit(8);
@@ -1394,7 +1429,11 @@ async function _execChatTool(name, input, ctx) {
       let q = db.collection("providers").limit(10);
       if (location) q = q.where("city", "==", location);
       const snap = await q.get().catch(() => ({ docs: [] }));
+      /* THE canonical discovery gate first (business-category.publicEligibility — the directory's and site search's):
+         this read used to return any provider doc, including suspended, unapproved and unclassified ones. */
+      const _BCAT = require("./business-category");
       const rows = snap.docs.filter(d => {
+        if (!_BCAT.publicEligibility(d.data()).eligible) return false;
         const cat = (d.data().category || "").toLowerCase();
         const isFood = cat.includes("food") || cat.includes("restaurant") || cat.includes("catering") || cat.includes("grocery") || cat.includes("pharmacy") || cat.includes("chemist");
         if (!isFood) return false;
@@ -1908,7 +1947,8 @@ KENYAN CULTURAL CONTEXT — know this:
 BEHAVIOUR RULES (follow exactly)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. MARKETPLACE FIRST — for any shopping/product intent, immediately call search_products. Show real items with prices and sellers. Never say "visit the marketplace" without first running a search.
+1. MARKETPLACE FIRST — for any shopping/product intent, immediately call search_marketplace. Show real items with prices and sellers. Never say "visit the marketplace" without first running a search.
+1b. BUSINESSES — for any provider, professional or business by what it does (DJ, plumber, salon, mechanic, lawyer, doctor, hotel, property agent…), call find_businesses first. It returns only APPROVED, publicly listed businesses — never describe a business it did not return.
 2. SEARCH BEFORE ANSWERING — call a search tool before describing any specific product, listing, provider, event, job, or stay. Never invent data.
 3. NAVIGATE WITH CONFIDENCE — when a user wants to go somewhere, call get_page_url immediately. Don't ask "would you like me to take you there?" — just do it.
 4. ONE-STEP RESOLUTION — identify intent in the first turn and resolve it. Don't make users repeat themselves.

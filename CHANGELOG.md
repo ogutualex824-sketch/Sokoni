@@ -1,3 +1,79 @@
+## [2026-09-28] - Kass finds approved businesses immediately through the canonical directory, and is never an approver (C8)
+
+**Functions, NOT deployed.** Branch `slice/c4-category-matrix` (convergence line). These are the owner's requirements:
+"any approved business must be known by Kass", immediately and at low marginal cost; Kass must never become an
+alternative AdminOS.
+
+**Proven defects** (the SHIPPED handlers, sliced from `functions/index.js` at `4e9607b` and run on the transactional
+fake Firestore; the real `autoOnSellerApplication` trigger):
+- **No public Kass tool could find an approved business, however long you waited.**
+  - `search_marketplace` read the legacy `services` registry.
+  - `search_stays` read `hotels` / `listings`, which approval never writes. An approved hotel was never returned.
+  - `search_restaurants` read raw `providers` with NO eligibility gate, and returned a SUSPENDED food provider.
+- **Admin Kass `approve_seller` flipped a suspended provider to `active`, and created a bare provider doc for an
+  unknown id.** It had no decision record, no role or claim, no category and no audit: a second approval authority.
+- **`autoOnSellerApplication`, with its rule enabled and complete documents, APPROVED the application, wrote an ACTIVE
+  shop and minted the seller claim**, entirely outside AdminOS `applicationDecide`. The C4 contract already said it
+  was retired.
+
+**Changed:**
+- **`functions/kass-directory.js` (new, a thin adapter; no new store and no second rule):**
+  - `resolveCategories(words)` maps a user's words to C1 keys using ONLY the existing C1 / healthcare tables
+    (business ids, professions, label words): "DJ Bambino" → `artist_creator`, "plumbers in Kisumu" → `trades`,
+    "cheap hotels" → `hotel`. Unknown or noise words map to nothing.
+  - `findBusinesses(db, …)` calls `provider-directory.listDirectory`: live Firestore, with `publicEligibility` on every
+    row.
+- **`functions/index.js`:**
+  - A new public tool, **`find_businesses`**, and prompt rule 1b to call it first for any provider or business.
+    Rule 1 named a non-existent `search_products`; it now names `search_marketplace`.
+  - `search_restaurants` applies `publicEligibility` before anything else.
+  - `search_stays` returns approved hotels from the directory first.
+  - **`approve_seller` REFUSES and writes nothing.** It points the admin to AdminOS → Applications; its description
+    says so too.
+- **`functions/automation-engine.js`:** `autoOnSellerApplication`'s auto-approval is retired (`autoApprove = false`).
+  Every application takes the existing manual-review path: `under_review` plus a review queue item.
+
+**Kass capability accounting (owner cost objective):**
+
+| Capability | SOURCE | CACHE | COST | AUTHORITY |
+|---|---|---|---|---|
+| `find_businesses` | `providers` via `provider-directory.listDirectory`, which runs 1–3 bounded queries (≤300 docs each) for the C1 key(s) the user named | none needed: live, and immediate by construction | ≈1 query per category named, no new function, no index, no write | `business-category.publicEligibility`, the gate site search and the directory use |
+| `search_stays` (hotels) | the same | the same | +1 bounded query | the same |
+| `search_restaurants` | unchanged read (`providers` limit 10) | — | no added reads (the filter is in memory) | `publicEligibility` added |
+| `approve_seller` | none | — | zero (it refuses) | AdminOS `applicationDecide` only |
+
+**Tests:** `scripts/test-kass-business-discovery.js` gives **7/0**; the `4e9607b` counterproof FAILS 6.
+- K1/K2: the approved DJ is found immediately; suspended / pending / unclassified / hidden DJs never are.
+- K3: location narrows, and an unknown word gets an honest answer.
+- K4: `search_restaurants` drops the suspended provider but keeps the eligible one (control).
+- K5: `search_stays` returns the approved hotel.
+- K6: `approve_seller` writes nothing.
+- K7: the real trigger no longer approves, writes no shop and grants no claim; on the counterproof it approved,
+  created the shop and minted the claim.
+- A first K7 run exercised the wrong trigger, because the stub kept only the last registered `onDocumentCreated`.
+  Handlers are now captured by document path.
+
+**Sabotage:** 7/7, byte-identical.
+
+**Open, recorded (not in this slice):**
+- **Seller shops (food, retail, B2B businesses approved as sellers) have NO C1 category stamp and NO public-eligibility
+  predicate.** Kass and site search cannot apply the canonical gate to them. This needs an OWNER DECISION: a shop
+  discovery predicate; the census found none, so creating one needs a decision to avoid a second rule.
+- `search_events` still reads the legacy `entEvents`.
+- The providerProfiles stub from `projectProvider` can blank-overwrite the Algolia record.
+- A driver's `businesses/SOK-*` doc is indexed as a shop.
+- The index queues run every 5 minutes (not the 30s / 1m their comments claim). Kass no longer depends on them.
+
+**Regression (26 screened suites):** equal to the pristine `4e9607b` tree.
+- **Excluded before running:** 1 suite that calls a live endpoint (`test-gcp-evidence`), and 3 that need a shared
+  8080 emulator (`test-kass-cart-truth`, `test-availability-canonical`, `test-minishop-claim-firestore`). Those are
+  UNPROVEN here, not passed.
+- `test-kasshop-boundary` SKIPs without an emulator (UNPROVEN).
+- `test-shop-setup-hydration` is 27/0 on the fix. Its baseline run stalls in `browser.close()` AFTER 27 PASS / 0 FAIL
+  (the summary prints after close), the same WebKit shutdown stall recorded for merchant-sell-ui. That is equal
+  evidence, not a pass by assumption.
+- Pre-existing on both trees: the `test-approval-activates-shop` / `test-seller-trial` crashes.
+
 ## [2026-09-28] - merchant-v2 POS: the till cannot mint or burn loyalty points (port of main's Q0a redemption rule)
 
 **Functions, NOT deployed.** Branch `slice/c4-category-matrix` (convergence line). Merchant-v2 now also hosts every food

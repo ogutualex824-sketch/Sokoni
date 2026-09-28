@@ -279,7 +279,12 @@ exports.autoOnSellerApplication = onDocumentCreated(
     const requiredFields = ['businessName', 'phone'];
     const hasRequiredFields = requiredFields.every(f => app[f] || app.documents?.[f]);
     const hasIdDoc = !!(app.idDocumentUrl || app.documents?.id_document);
-    const autoApprove = rule.autoApproveStandardDocs && hasRequiredFields && hasIdDoc;
+    /* RETIRED as an approver (owner, C4 contract: "autoOnSellerApplication is retired"; C8). This used to APPROVE
+       the application, write an ACTIVE shop and mint the seller claim whenever the rule was enabled — a second
+       approval authority beside AdminOS applicationDecide, with no decision record and no category. Approval is
+       decided only in AdminOS. Every application now takes the manual-review path below (status under_review + a
+       queued review item); nothing here approves, activates a shop or grants a role. */
+    const autoApprove = false;
 
     if (autoApprove) {
       await _db().runTransaction(async tx => {
