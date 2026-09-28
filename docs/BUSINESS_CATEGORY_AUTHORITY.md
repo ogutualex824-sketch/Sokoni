@@ -160,7 +160,60 @@ merchant search architecture.
 **Next:**
 
 - ~~C3b-1: a flip in a provider's eligibility or category re-queues its services and profile.~~ Done (CHANGELOG 245).
-- C3b-2: a batched, resumable, dry-run cleanup of records already in the indexes, which is NOT run.
+- ~~C3b-2: a batched, resumable, dry-run cleanup of records already in the indexes, which is NOT run.~~ Written and
+  tested (CHANGELOG 246), **not executed**. See [Existing-index cleanup (C3b-2)](#existing-index-cleanup-c3b-2).
+
+## Existing-index cleanup (C3b-2)
+
+`functions/discovery-cleanup.js` is the core; `scripts/discovery-cleanup.js` is the CLI. It is a **reconciliation tool,
+not a discovery authority**. It walks records ALREADY in an index and asks the same C3a-1 gate whether each may stay.
+
+**It starts from the index, not Firestore.** Firestore-driven reconcilers cannot see an orphaned record, whose source
+doc is gone.
+
+**Ownership is resolved, never read from the id.** A record does not say which collection wrote it: Algolia
+`sokoni_services` is written by 7 collections keyed by raw doc id (`providers/{uid}` and `providerProfiles/{uid}` share
+one objectID); Typesense uses raw ids too; `sokoni_properties` / `sokoni_hotels` mix `bnbListings` with out-of-scope
+collections. Each record is resolved against every collection that writes its index:
+
+| Verdict | When | Action |
+|---|---|---|
+| `OUT_OF_SCOPE` | no writer of the index is C3 provider discovery (shops, products…) | **retain**, with no Firestore read |
+| `SHARED_OUT_OF_SCOPE` | a doc with this id exists in an out-of-scope collection of the index | **retain** |
+| `ELIGIBLE` | an in-scope source passes the gate, even if a same-id sibling is stale | **retain** |
+| `STALE` | in-scope source(s) exist and the gate refuses every one | **remove** |
+| `ORPHAN` | no source anywhere, and every writer of the index is in scope | **remove** |
+| `UNATTRIBUTABLE` | no source in a MIXED index, or an id that cannot be a doc id | **retain** |
+| `PRIMARY_RETAINED` | a global copy whose primary record would be retained | **retain** |
+
+Global copies (`{collection}_{docId}`) are SUBORDINATE to their primary's verdict: a queued delete also removes the
+primary record, so a global copy goes only when its primary would.
+
+**Guarantees:**
+
+| Mode | Guarantee |
+|---|---|
+| Dry run (the default) | zero engine deletes and zero Firestore writes |
+| Live | only the EXISTING gated queue, as `delete` entries; never a direct Algolia / Typesense call, never provider data, never an approval or a publish |
+| Error | `failed` AND retained |
+| Bounds | page size, pages per run, removals per run |
+| Resumable | via `nextCursor` |
+| Idempotent | yes |
+| Report | examined / eligible / removed / (would remove) / retained / failed, by verdict |
+
+**The CLI** needs an explicit `--project` and runs a dry run by default. `--apply` needs
+`SOKONI_C3B2_APPLY_AUTHORIZED=<same project>` and is refused on production outright in this programme. A dry run
+against production is a production READ, so run one only when the owner asks.
+
+**Evidence boundary.** The engine readers (Algolia browse, Typesense id export) are thin and have been exercised ONLY
+against fake clients. The suite's indexes are in-memory fixtures. Nothing here is evidence about live index contents.
+
+**Pre-existing Algolia findings (reported, not changed):**
+- The queue writes global shadows to an index named `global_search`, while `COLLECTION_INDEX_MAP` names the global
+  index `sokoni_global`.
+- `gs__providerServices` and `gs__providerProfiles` have no map entry, so the queue processor SKIPS their shadow
+  upserts (`if (!mapping) continue`): they are never indexed and never marked done. Deletes are unaffected, since
+  deleting by objectID needs no mapping. The cleanup's global writer set (`globalWritersOf`) includes them regardless.
 
 **Open (reported):**
 

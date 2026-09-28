@@ -1,3 +1,110 @@
+## 2026-09-28 (246) — C3b-2: the existing-index discovery cleanup — written and tested, NOT executed
+
+Convergence slice C3b-2, the last of C3. Not deployed. **Not executed**: no production read, no production write, and
+no live Algolia or Typesense instance was contacted. Parent: `03ecfbc` (C3b-1).
+
+**Why:** the C3a-1 gate stops ineligible records ENTERING an index, and C3b-1 re-queues a provider's dependents when
+its public state changes. Records already in the indexes from before C3 stay until something touches them. The existing
+tools cannot find them:
+- the reconcilers sample 200 random Firestore docs;
+- `searchFullReindex` walks Firestore, not the index, so it cannot see an orphaned record whose source is gone;
+- `searchRepairOrphanedDocs` is an explicit stub.
+
+**Now:**
+- **`functions/discovery-cleanup.js`** walks a search index and asks the SAME C3a-1 gate
+  (`discovery-eligibility.prepareForIndex`) whether each record may stay. It is a reconciliation tool, not a discovery
+  authority.
+- **Ownership is resolved, never read from the id.** Index records carry no source tag: Algolia `sokoni_services` is
+  written by 7 collections keyed by raw doc id, and `providers/{uid}` and `providerProfiles/{uid}` share one objectID.
+  Each record is resolved against every collection that writes its index, using the engines' own maps, and removed ONLY
+  when attribution is certain:
+
+  | Verdict | Action |
+  |---|---|
+  | `STALE` (in-scope source(s) exist and the gate refuses every one) | removed |
+  | `ORPHAN` (no source anywhere, and every writer of the index is in scope) | removed |
+  | `OUT_OF_SCOPE` (shops, products…; no Firestore read) | retained |
+  | `SHARED_OUT_OF_SCOPE` | retained |
+  | `ELIGIBLE` (even with a stale same-id sibling) | retained |
+  | `UNATTRIBUTABLE` (a mixed index with no source) | retained |
+  | `PRIMARY_RETAINED` | retained |
+
+- **Global copies** (`{collection}_{docId}`) are subordinate to their primary's verdict. `globalWritersOf` derives them
+  from the queue's real behaviour (`globalSearch` primaries ∪ `gs__` keys), not from the map alone.
+- **Dry run by default:** zero engine deletes, zero Firestore writes.
+- **Live:** only the EXISTING gated queue, as `delete` entries. Never a direct engine call, never provider data, never
+  an approval or a publish.
+- **Error:** failed AND retained. The run is bounded (page, pages, removals), resumable (`nextCursor`) and idempotent.
+  It reports examined / eligible / removed / would remove / retained / failed, by verdict.
+- **`scripts/discovery-cleanup.js`** is the CLI:
+  - it needs an explicit `--project` and runs a dry run by default;
+  - `--apply` needs `SOKONI_C3B2_APPLY_AUTHORIZED=<same project>`;
+  - `--apply` is REFUSED on production in this programme;
+  - no key is ever printed.
+- Not exported as a Cloud Function, and nothing schedules it.
+
+**EVIDENCE BOUNDARY:** every index in the suite is an in-memory fixture, and the engine readers (Algolia browse,
+Typesense id export) were exercised only against FAKE clients. These results prove the cleanup's decisions and
+guarantees; they prove NOTHING about what production indexes contain, and the readers are unverified against a live
+engine.
+
+**Tests:** `scripts/test-discovery-cleanup.js`, **35/0**, using the engines' REAL collection→index maps, the REAL gate
+and the REAL `algolia-queue.enqueue`. It covers:
+- the owner's two required cases: a shop entry is RETAINED with zero Firestore reads, and a stale provider is REMOVED;
+- every verdict, including a shared raw id with an eligible sibling (retained), and the mixed-index
+  `sokoni_properties` / `sokoni_hotels` indexes;
+- global copies subordinate to their primary;
+- a dry run that makes zero Firestore writes and zero enqueue calls;
+- a live run that writes only gated queue `delete` entries, leaves the source data byte-identical, and contains no
+  direct engine delete in the module;
+- read and enqueue errors, which fail closed;
+- the removal cap and the page cap;
+- a paged resume that equals one full walk;
+- idempotency;
+- the Typesense map;
+- the reader adapters (against FAKE clients);
+- the CLI guards.
+
+Every call is guarded, so a throw fails a check instead of crashing the suite.
+
+The first run was 32/2. Neither failure was a safety defect:
+1. The test derived global writers from the `gs__` keys alone. That exposed the Algolia map gap below, and the
+   derivation moved into the module (`globalWritersOf`), shared with the CLI.
+2. One expectation named WHICH in-scope writer carries an orphan's delete. In one index that choice is incidental, so
+   the check now asserts the objectID and the index.
+
+**Sabotage `--group=clean` (17 attacks):** **17/17 CAUGHT on the first run** (0 other, 0 missed, 0 crashed),
+post-restore green. It ran under the external supervisor: 2/2 targets byte-identical, 0 restores needed.
+
+**Baseline (81 suites vs `03ecfbc`):** 78 SAME, 3 DIFF.
+- `test-discovery-cleanup`: new.
+- `test-cart-market-actions`: only its `git diff HEAD` blast-radius check fails, naming
+  `scripts/sabotage-event-ops.js`, the one tracked file changed. Re-verified on the committed tree.
+- `test-provider-dashboard-sidebar-browser`: 89/1 on head in the comparison. Four solo runs per tree: 1/4 failed in
+  EACH tree (head run 2, base run 4), on the same check with identical detail. It is the symmetric timing flake
+  recorded in CHANGELOG 244, and C3b-2 touches no file the dashboard loads.
+- Pre-existing and unchanged in both trees: `test-secondary-firebase-apps` (8/1), `test-realtime-multidevice` (68/1).
+
+**Pre-existing Algolia findings (reported, not changed):**
+- The queue writes global shadows to `global_search`, while `COLLECTION_INDEX_MAP` names the global index
+  `sokoni_global`.
+- `gs__providerServices` / `gs__providerProfiles` have no map entry, so the processor SKIPS their shadow upserts:
+  never indexed, never marked done. Deletes are unaffected.
+
+**C3 follow-ups carried forward UNCHANGED:**
+1. `providers` record exposure (phone).
+2. The legacy-registry browser fallback.
+3. The legacy localStorage hub lists.
+
+Still separate (booking UX, not C3): the `providers.html` false "Booking confirmed!".
+
+**Files:**
+- New: `functions/discovery-cleanup.js`, `scripts/discovery-cleanup.js`, `scripts/test-discovery-cleanup.js`.
+- Changed: `scripts/sabotage-event-ops.js`, `docs/BUSINESS_CATEGORY_AUTHORITY.md`.
+
+**API:** none. **Database:** none. **Security:** removal only through the gated queue; the CLI refuses an
+unauthorized or production `--apply`. **Breaking:** none. **Deploy:** none. The module is not a Cloud Function.
+
 ## 2026-09-28 (245) — C3b-1: an owner's public change reaches its profile and services in search
 
 Convergence slice C3b-1. Not deployed. No production writes. No index was touched, and the existing-index cleanup

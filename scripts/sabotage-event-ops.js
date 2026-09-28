@@ -90,6 +90,7 @@ const SUITES = {
   dir:      ['node', ['scripts/test-provider-directory.js']],
   ppa:      ['node', ['scripts/test-provider-publish-authority.js']],
   casc:     ['node', ['scripts/test-discovery-cascade.js']],
+  clean:    ['node', ['scripts/test-discovery-cleanup.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -1483,6 +1484,42 @@ const M = [
     from: "      await _cascade(col, event.params.docId, before || null, after || null);", to: "", expect: /BOTH engines/ },
   { group: 'casc', browser: false, name: "publishing mirrors a status-only reading again", file: "functions/provider-onboarding.js", suite: "ppa",
     from: "    searchable: require('./business-category').publicEligibility(_regCur).eligible,", to: "    searchable: _regSnap.exists && ['active', 'approved'].includes(_regCur.status),", expect: /G1|G2|searchable anchor/ },
+
+  /* ── C3b-2: the existing-index discovery cleanup (CHANGELOG 246) — written and tested, NOT executed ── */
+  { group: 'clean', browser: false, name: "a shop / out-of-scope index is examined like provider discovery", file: "functions/discovery-cleanup.js", suite: 'clean',
+    from: "  if (!scoped.length) return { verdict: 'OUT_OF_SCOPE', collection: null };\n", to: "", expect: /SHOP entry|sokoni_shops/ },
+  { group: 'clean', browser: false, name: "an id shared with an out-of-scope collection is not protected", file: "functions/discovery-cleanup.js", suite: 'clean',
+    from: "    if (await _source(db, c, String(id))) return { verdict: 'SHARED_OUT_OF_SCOPE', collection: c };", to: "", expect: /b1 \(pending stay|mixed index/ },
+  { group: 'clean', browser: false, name: "the first stale source wins over an eligible sibling (ownership inferred from the id)", file: "functions/discovery-cleanup.js", suite: 'clean',
+    from: "    stale = stale || c;", to: "    return { verdict: 'STALE', collection: c };", expect: /shared raw id|verdicts:|services_mix|global/ },
+  { group: 'clean', browser: false, name: "a no-source record in a MIXED index is treated as an orphan", file: "functions/discovery-cleanup.js", suite: 'clean',
+    from: "  return scoped.length === writers.length ? { verdict: 'ORPHAN', collection: scoped[0] } : { verdict: 'UNATTRIBUTABLE', collection: null };", to: "  return { verdict: 'ORPHAN', collection: scoped[0] };", expect: /ghostp|ghosth|sokoni_hotels|mixed index/ },
+  { group: 'clean', browser: false, name: "the C3a-1 gate is bypassed (every existing source is eligible)", file: "functions/discovery-cleanup.js", suite: 'clean',
+    from: "    if (await DE.prepareForIndex(db, c, String(id), data, cache)) return { verdict: 'ELIGIBLE', collection: c };", to: "    return { verdict: 'ELIGIBLE', collection: c };", expect: /STALE provider|verdicts:|would remove/ },
+  { group: 'clean', browser: false, name: "a global copy is judged on its own collection, not subordinate to the primary", file: "functions/discovery-cleanup.js", suite: 'clean',
+    from: "  const primary = await classifyPrimary(db, docId, primaryWritersOf(col), cache);", to: "  const primary = await classifyPrimary(db, docId, [col], cache);", expect: /services_mix|global copies|PRIMARY/ },
+  { group: 'clean', browser: false, name: "the global writer set loses the shadows the map omits", file: "functions/discovery-cleanup.js", suite: 'clean',
+    from: "    else if (m && m.globalSearch) s.add(c);", to: "", expect: /global writer set|providers_susp|global/ },
+  { group: 'clean', browser: false, name: "a dry run enqueues deletes", file: "functions/discovery-cleanup.js", suite: 'clean',
+    from: "      if (dryRun) { report.wouldRemove++; continue; }", to: "      if (dryRun) { report.wouldRemove++; }", expect: /DRY RUN: zero|dry run/i },
+  { group: 'clean', browser: false, name: "the default becomes a live run", file: "functions/discovery-cleanup.js", suite: 'clean',
+    from: "  const dryRun = opt.dryRun !== false;                          /* only an explicit `false` applies */", to: "  const dryRun = false;", expect: /DEFAULT|DRY RUN|SHOP entry|STALE provider/ },
+  { group: 'clean', browser: false, name: "the removal cap is ignored", file: "functions/discovery-cleanup.js", suite: 'clean',
+    from: "  const removalsLeft = () => opt.maxRemovals - (report.removed + report.wouldRemove);", to: "  const removalsLeft = () => Infinity;", expect: /removal cap/ },
+  { group: 'clean', browser: false, name: "a resume restarts from the beginning", file: "functions/discovery-cleanup.js", suite: 'clean',
+    from: "  let cursor = opt.cursor == null ? null : opt.cursor;", to: "  let cursor = null;", expect: /resuming page by page/ },
+  { group: 'clean', browser: false, name: "a read error removes the record instead of failing closed", file: "functions/discovery-cleanup.js", suite: 'clean',
+    from: "      } catch (e) {\n        report.failed++; report.retained++;\n        if (report.failures.length < 50) report.failures.push({ id: String(id), stage: 'classify'", to: "      } catch (e) { v = { verdict: 'ORPHAN', collection: opt.writers[0] }; }\n      if (false) { report.failed++; report.retained++;\n        if (report.failures.length < 50) report.failures.push({ id: String(id), stage: 'classify'", expect: /read error/ },
+  { group: 'clean', browser: false, name: "an enqueue error counts as removed", file: "functions/discovery-cleanup.js", suite: 'clean',
+    from: "        report.failed++; report.retained++;\n        if (report.failures.length < 50) report.failures.push({ id: String(id), stage: 'enqueue'", to: "        report.removed++;\n        if (false) report.failures.push({ id: String(id), stage: 'enqueue'", expect: /enqueue error/ },
+  { group: 'clean', browser: false, name: "the reader deletes directly from the engine", file: "functions/discovery-cleanup.js", suite: 'clean',
+    from: "    const r = await client._request('POST', `/1/indexes/${encodeURIComponent(index)}/browse`, body);", to: "    await client.deleteObjects(index, []); const r = await client._request('POST', `/1/indexes/${encodeURIComponent(index)}/browse`, body);", expect: /NO direct engine delete|algoliaReader/ },
+  { group: 'clean', browser: false, name: "the CLI defaults to a live run", file: "scripts/discovery-cleanup.js", suite: 'clean',
+    from: "  return { opts: o, errors: errs, dryRun: !o.apply };", to: "  return { opts: o, errors: errs, dryRun: false };", expect: /no flags → a DRY RUN/ },
+  { group: 'clean', browser: false, name: "the CLI applies without authorization", file: "scripts/discovery-cleanup.js", suite: 'clean',
+    from: "    else if (!env || env.SOKONI_C3B2_APPLY_AUTHORIZED !== o.project) errs.push(", to: "    else if (false) errs.push(", expect: /WITHOUT authorization|DIFFERENT project/ },
+  { group: 'clean', browser: false, name: "the CLI allows --apply on production", file: "scripts/discovery-cleanup.js", suite: 'clean',
+    from: "const PRODUCTION = Object.freeze(['sokoni-aeb26']);", to: "const PRODUCTION = Object.freeze([]);", expect: /on PRODUCTION/ },
 ];
 
 const argv = process.argv.slice(2);
