@@ -119,6 +119,8 @@ const ROUTE_OF = Object.freeze({
   event_organizer: 'event-manager.html',
   venue: 'venue-manager.html',
   retail_store: 'merchant-v2.html',
+  /* The seller categories (owner, 2026-09-28) — one commerce workspace, no new dashboard. */
+  ...Object.fromEntries(BCAT.SELLER_CATEGORIES.map((c) => [c, 'merchant-v2.html'])),
   /* Owner, 2026-09-28: a food business runs on merchant-v2 — the menu is its products, and orders, POS/Till, Quick
      Charge, delivery, staff and receipts already exist there with server authority. (food-dashboard.html ran on a
      hard-coded restaurant + browser storage.) Approval provisions its shop exactly as retail does: resolveRole makes
@@ -132,7 +134,7 @@ const ROUTE_OF = Object.freeze({
 const UNROUTED_REASON = Object.freeze({});
 
 /* Plan catalogues that exist and are enforced today (capability-authority hubs). Everything else: C6. */
-const PLAN_HUB_OF = (category) => (BCAT.HEALTHCARE.includes(category) ? 'healthcare' : (category === 'retail_store' ? 'merchant' : null));
+const PLAN_HUB_OF = (category) => (BCAT.HEALTHCARE.includes(category) ? 'healthcare' : (BCAT.SELLER_CATEGORIES.includes(category) ? 'merchant' : null));
 
 function _moduleSet(state, reason) {
   const out = {};

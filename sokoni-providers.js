@@ -114,7 +114,7 @@
     hotel: '🏨', restaurant: '🍽️', trades: '🔧', cleaning: '🧹', it_services: '💻', salon: '💇',
     lawyer: '⚖️', professional_services: '💼', education: '📚', auto_services: '🚗', fitness_studio: '🏋️',
     service_business: '🛠️', artist_creator: '🎤', event_services: '🎉', event_organizer: '🎟️', venue: '🏟️',
-    retail_store: '🏪', property: '🏠', delivery: '🚚',
+    retail_store: '🏪', supermarket: '🛒', wholesale: '📦', hardware: '🧱', electronics: '📱', fashion: '👗', agriculture: '🌾', property: '🏠', delivery: '🚚',
   };
   var _labels = {};   /* C1 key → label, learnt from the server's reply */
 

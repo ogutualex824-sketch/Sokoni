@@ -104,7 +104,10 @@ const dir = (data) => PD._h.providerDirectory(req(data));
     clin.join() === 'doc1' && !!trd && trd.category === 'trades', { clinician: clin, tradesCard: trd && trd.category });
   await db.doc('providers/dual1').delete();
   ck('an unknown category is REFUSED, never widened to all', await code(dir({ category: 'Plumbing' })) === 'UNKNOWN_CATEGORY' && await code(dir({ category: 'laundry' })) === 'UNKNOWN_CATEGORY');
-  ck('the reply names the C1 categories', all.categories.length === 25 && all.categories.every((c) => c.id && c.label));
+  /* 2026-09-28: the count is DERIVED from the registry (was a literal 25) — the seller categories (supermarket, wholesale,
+     hardware, electronics, fashion, agriculture) were added deliberately (owner, shop discovery stage 2). */
+  const _C1 = require(Path.join(FN, 'business-category.js')).KEYS;
+  ck('the reply names the C1 categories', all.categories.length === _C1.length && all.categories.map((c) => c.id).join() === _C1.join() && all.categories.every((c) => c.id && c.label));
 
   say('\n── projection: a whitelist ──');
   ck('every card carries EXACTLY the whitelist', all.providers.every((c) => Object.keys(c).sort().join() === WHITELIST.slice().sort().join()) && PD.PUBLIC_FIELDS.slice().sort().join() === WHITELIST.slice().sort().join());

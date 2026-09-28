@@ -1,3 +1,117 @@
+## [2026-09-28] - A seller can no longer approve, activate, publish or classify its own shop; AdminOS classifies seller shops; six seller categories (shop discovery stage 2)
+
+**Functions + AdminOS + registration, NOT deployed.** Branch `slice/c4-category-matrix`. Stage 2 of 4 of the shop
+discovery authority (stage 1: `dca1049`). Provider-plan booking rates are **unchanged** (owner, 2026-09-28: no
+migration of the 20/15/10/7/5 plan economics yet).
+
+**Closed:**
+- **The shop wizard self-activated.** `saveShopProfile` (`functions/kasshop.js`) needs only a signed-in caller, yet
+  created `shops/{uid}` as `status: 'active'`, `isVisible: true`, and accepted the owner's `category`.
+  - A shop it creates is now **`pending`**; only approval (`projectSeller`) activates it.
+  - `category` is no longer writable.
+  - Authority fields a client sends (`category`, `business`, `status`, `approved`, `verified`, `searchable`,
+    `isPublic`, `discoveryEligible`, `featured`, `published`, `suspended`, `isVisible`, `active`) are returned as
+    `ignored`, not dropped silently.
+  - Storefront content (name, tagline, about, contact, socials, hours, zones, delivery, returns) is unchanged.
+- **ADE was a second approval authority.** `functions/ade.js` `_autoApprove` wrote `sellers/{id}.status: 'active'`
+  (payments and POS enabled) whenever an `auto_approve` rule matched. It was triggered by a client-writable
+  `sellers.status: 'pending'`, and its seed rule shipped enabled.
+  - For a **seller or provider**, `auto_approve` now becomes an escalation to the exception queue, pointing to AdminOS
+    › Applications.
+  - An administrator resolving that exception with "approve" is refused **before** the exception is marked resolved
+    (`APPROVAL_OWNED_BY_APPLICATIONS`).
+  - The seed rule now escalates.
+  - Hold, reject and escalate are unchanged; they only narrow what an account can do.
+- **Pre-existing ADE defect found by the new suite.** `_processEvent` passed `entityData`, which was never bound, so
+  **every** ADE escalation (no matching rule, an escalate action, a failed action) threw `ReferenceError` and queued
+  nothing. It is now bound to the event's data.
+- **An application could transfer another merchant's shop.** `applications.shopId` is applicant-writable (served
+  rules: `claimsOwner() && noAdminFields()`), and `projectSeller` wrote `ownerId` / `sellerUid` onto the shop it named.
+  - Approval handed that shop to the applicant; suspension suspended it.
+  - A declared shop that exists and names another owner now fails the projection (`SHOP_OWNED_BY_ANOTHER_ACCOUNT`;
+    `projectionStatus: 'failed'`, no role granted).
+  - Live status is **UNDETERMINED**: the pinned deployed bundle (`sokoniChat` revision) has no declared-shopId path, and
+    the `applicationDecide` revision's source was not fetched.
+
+**Added:**
+- **Seller categories in C1** (`functions/business-category.js`): `supermarket`, `wholesale`, `hardware`,
+  `electronics`, `fashion`, `agriculture`, plus `SELLER_CATEGORIES`.
+  - Exact registrable ids: `supermarket`, `wholesale` / `wholesaler` / `importer`, `hardware`, `electronics` (new id in
+    `hub-register.js`), `boutique` → fashion, and `farm` / `dairy` / `agri-input` → agriculture.
+  - `retail-shop` and `manufacturer` stay `retail_store`; no category names a manufacturer, and one is not guessed.
+  - All route to merchant-v2 on the merchant plan catalogue (`functions/business-workspace.js`). `resolveRole` makes
+    them sellers by their own category. Icons are in `sokoni-providers.js`.
+- **AdminOS › Business categories › Seller shops** (`functions/business-category-admin.js`, `sokoni-aos-business.js`):
+  - `bizAdminShops` lists shops with their SOKONI category, their approval record and the discovery answer, in plain
+    words.
+  - `bizAdminClassifyShop`:
+    - requires an administrator, a shop category (a merchant-v2 category) and a reason;
+    - refuses a `pending` shop (`NOT_APPROVED`);
+    - refuses a shop with no approval record unless the administrator attests they verified the business
+      (`NO_APPROVAL_RECORD`; the attestation is audited);
+    - stamps `shops/{id}.business` (source `admin`) and mirrors it to the owner's existing `sellers` / `businesses`
+      rows, which re-runs the search gate;
+    - writes `adminAudit` `shop_classify`;
+    - never approves, activates or un-suspends.
+  - The provider view is unchanged and remains the default.
+
+**Tests:**
+- **`scripts/test-shop-writer-authority.js`: 20/0.** It runs the REAL `saveShopProfile`, `projectSeller` /
+  `resolveRole`, `adeOnSellerApplied` / `adeResolveException`, C1, workspace and the AdminOS ops on the transactional
+  fake Firestore.
+  - Counterproof on `dca1049`: **17 fail**. W1b, W3 and O3 pass there as controls.
+  - Sabotage: **17/17 caught**, byte-identical restore.
+- **Superseded, with the reason in the file:**
+  - `test-kasshop-boundary` "status was not writable" now expects `pending` for a wizard-created shop. Run on a PRIVATE
+    `demo-` Firestore emulator (port 8793): **79/0 on both trees**.
+  - `test-business-category`: `wholesaler` / `importer` → `wholesale`, and a supermarket seller → `supermarket` (45/0).
+  - `test-category-merchant-approval` T1: a supermarket is a SELLER `by category:supermarket` (7/0).
+  - `test-provider-directory`: the category count is derived from the registry, no longer a literal 25 (40/0).
+- **`scripts/test-business-category-admin-shops-browser.js`: 13/0** (Chromium, 390 + 1280 px). It covers:
+  - the queue, with pending shops excluded;
+  - escaping of hostile names and wording;
+  - shop-only category options;
+  - the attestation, enforced by the page and the server;
+  - server-first success, and the audited attestation;
+  - the provider view is still the default;
+  - no overflow.
+
+  On `dca1049` the suite crashes: the registry switch does not exist there.
+- **Regression:** 47 suites run on the working tree and the pristine `dca1049` tree.
+  - All are equal except the three superseded assertions above.
+  - Pre-existing failures identical on both: `approval-activates-shop`, `seller-trial`, `healthcare-provisioning` 19/11,
+    `entertainment-registry` 64/1, `overlays` 2.
+  - `shop-setup-hydration`: 27 assertions pass on both; the base run then hit the known WebKit close stall.
+  - Jest `application-lifecycle.test.js`: 88/1 on both.
+  - Screened out: suites that touch live endpoints or the shared emulator (`availability-canonical`,
+    `d1a-driver-business-provisioning`, `onboarding-selfmint-emulator`). `business-category-rules` needs the rules
+    emulator runner and was **NOT run**, so it is **UNPROVEN** here.
+
+**Reviewed, not changed:**
+- `saveMinishopConfig` `category` is a storefront label in `minishopConfig`, never read by the gate.
+- `merchant-pipeline.html` is an ADMIN page setting the `businesses.verified` trust badge (the explicit admin action
+  `projectSeller` leaves to administrators). The gate reads neither `verified` nor `onboardingStatus`.
+
+**Security:**
+- Closes seller self-activation and self-classification through the wizard.
+- Closes the ADE auto-approval path.
+- Closes shop transfer through an application.
+
+**Performance:**
+- `bizAdminShops` makes two bounded queries (≤500 each).
+- `bizAdminClassifyShop` is one transaction: 3 reads and ≤4 writes.
+
+**Database:**
+- New `adminAudit` action: `shop_classify`.
+- New `shops.business` fields: `classifiedBy`, `approvalAttestedBy`.
+- No migration.
+
+**Deploy:** unchanged prerequisite. Classify existing approved shops in AdminOS › Seller shops before deploying the
+stage 1 gate. No blind backfill.
+
+**Docs:** `docs/BUSINESS_CATEGORY_AUTHORITY.md` gains the seller-categories mapping and a "Seller shops" section (who
+writes what).
+
 ## [2026-09-28] - Seller shops get a SERVER C1 category at approval; shop search goes through ONE eligibility gate (stage 1)
 
 **Functions, NOT deployed.** Branch `slice/c4-category-matrix`.

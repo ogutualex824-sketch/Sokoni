@@ -254,7 +254,10 @@ async function wipe () {
                  rating: 5, sellerUid: B, isAdmin: true, balance: 999999 },
     });
     const d = (await db.collection('shops').doc(shopId).get()).data();
-    ok('status was not writable', d.status === 'active', d.status);
+    /* 2026-09-28 (owner decision, shop discovery stage 2): a shop the wizard CREATES is `pending` — only approval
+       (projectSeller) activates it. The assertion is unchanged in intent: the seller's 'verified' never lands and the
+       server-set status stands. Specified in scripts/test-shop-writer-authority.js W1/W2. */
+    ok('status was not writable', d.status === 'pending', d.status);
     ok('commissionRate was not injected', d.commissionRate === undefined, d.commissionRate);
     ok('rating was not injected', d.rating === undefined, d.rating);
     ok('balance was not injected', d.balance === undefined, d.balance);

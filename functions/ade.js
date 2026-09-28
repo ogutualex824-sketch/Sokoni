@@ -177,7 +177,20 @@ function _scoreEvidence(evidence) {
 }
 
 // â”€â”€â”€ Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* APPROVAL IS OWNED ELSEWHERE for these entities (owner, 2026-09-28 — 'automatic seller approval must not become a
+   second approval authority'). A seller / provider becomes a trading, discoverable business ONLY through AdminOS
+   applicationDecide → application-lifecycle projection, which stamps the SOKONI category (business-category.js) and
+   the discovery flags. ADE may still hold, reject or escalate them — each only narrows what the account can do — but
+   it never approves: a rule whose action is auto_approve is ESCALATED to the exception queue instead, and an
+   administrator resolving that exception is sent to the Applications queue. */
+const APPROVAL_OWNED_BY_APPLICATIONS = new Set(['seller', 'provider']);
+function _approvalOwnedElsewhere(entityType) { return APPROVAL_OWNED_BY_APPLICATIONS.has(String(entityType || '')); }
+
 async function _autoApprove(entityType, entityId, data, reason) {
+  if (_approvalOwnedElsewhere(entityType)) {
+    throw new HttpsError('failed-precondition',
+      'A ' + entityType + ' is approved only in AdminOS › Applications, which assigns its SOKONI category.', { code: 'APPROVAL_OWNED_BY_APPLICATIONS' });
+  }
   const base = {
     status: 'active',
     approvedAt: FieldValue.serverTimestamp(),
@@ -292,6 +305,10 @@ async function _recordDecision(params) {
 
 // â”€â”€â”€ Core Engine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function _processEvent(eventType, entityType, entityId, eventData, trigger) {
+  /* The escalation paths below pass `entityData`, which was never bound here — every escalation (no matching rule,
+     an escalate action, a failed action) threw ReferenceError and queued nothing (found 2026-09-28 by
+     scripts/test-shop-writer-authority.js A1). It is the event's own data. */
+  const entityData = eventData;
   console.log(`ADE: ${eventType} â†’ ${entityType}/${entityId} [${trigger}]`);
 
   const evidence      = await _gatherEvidence(eventType, entityId, eventData);
@@ -326,7 +343,9 @@ async function _processEvent(eventType, entityType, entityId, eventData, trigger
   const confidence  = matchedRule.confidence_override ?? evidenceScore;
   const threshold   = matchedRule.confidence_threshold ?? 70;
   const autoExecute = confidence >= threshold;
-  const decision    = autoExecute ? matchedRule.action : 'escalated';
+  /* auto_approve on an application-owned entity never executes — it becomes an escalation (see _autoApprove). */
+  const approvalRefused = autoExecute && matchedRule.action === 'auto_approve' && _approvalOwnedElsewhere(entityType);
+  const decision    = (autoExecute && !approvalRefused) ? matchedRule.action : 'escalated';
 
   const decisionId = await _recordDecision({
     eventType, entityType, entityId, trigger, evidence,
@@ -334,6 +353,19 @@ async function _processEvent(eventType, entityType, entityId, eventData, trigger
     ruleId: matchedRule.id, ruleName: matchedRule.name,
     action: matchedRule.action, actionParams: matchedRule.action_params || {},
   });
+
+  if (approvalRefused) {
+    await _addToExceptionQueue({
+      eventType, entityId, entityType, entityData,
+      priority: 'medium',
+      recommendation: 'Decide this application in AdminOS › Applications — it assigns the SOKONI category. ADE does not approve ' + entityType + 's.',
+      confidence, evidence, policy: 'Approval owned by AdminOS Applications (2026-09-28)',
+      decisionId,
+    });
+    await _log({ actionType: 'escalated', eventType, entityId, entityType, decision: 'escalated', confidence, trigger,
+      ruleId: matchedRule.id, ruleName: matchedRule.name, outcome: 'approval_refused', metadata: { reason: 'APPROVAL_OWNED_BY_APPLICATIONS' } });
+    return { decision: 'escalated', ruleId: matchedRule.id, confidence, autoExecute: false, reason: 'APPROVAL_OWNED_BY_APPLICATIONS' };
+  }
 
   if (autoExecute) {
     try {
@@ -483,6 +515,11 @@ exports.adeResolveException = onCall({ enforceAppCheck: true }, async request =>
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'Exception not found');
   const exc = snap.data();
+  /* Refused BEFORE anything is written: an approve that cannot execute must not leave the exception marked resolved. */
+  if (applyAction && decision === 'approve' && _approvalOwnedElsewhere(exc.entity_type)) {
+    throw new HttpsError('failed-precondition',
+      'A ' + exc.entity_type + ' is approved only in AdminOS › Applications, which assigns its SOKONI category.', { code: 'APPROVAL_OWNED_BY_APPLICATIONS' });
+  }
 
   await ref.update({
     status: 'resolved',
@@ -657,7 +694,7 @@ exports.adeSeedDefaultRules = onCall({ enforceAppCheck: true }, async request =>
   const uid = request.auth.uid;
   const seed = [
     { name: 'Auto-approve standard registration', description: 'Activate all new customer accounts automatically', event_type: 'account_registration', conditions: [], action: 'auto_approve', action_params: { message: 'Welcome to SOKONI! Your account is now active.' }, confidence_threshold: 0, priority: 100, enabled: true, tags: ['accounts'] },
-    { name: 'Auto-approve complete seller applications', description: 'Approve sellers who have submitted all required documents', event_type: 'seller_application', conditions: [{ field: 'idDocument', operator: 'exists' }, { field: 'businessAddress', operator: 'exists' }, { field: 'county', operator: 'exists' }], action: 'auto_approve', action_params: { message: 'Seller account approved. Start listing products.' }, confidence_threshold: 65, priority: 200, enabled: true, tags: ['sellers'] },
+    { name: 'Escalate complete seller applications', description: 'Sellers are approved only in AdminOS Applications; complete applications are queued for review', event_type: 'seller_application', conditions: [{ field: 'idDocument', operator: 'exists' }, { field: 'businessAddress', operator: 'exists' }, { field: 'county', operator: 'exists' }], action: 'escalate', action_params: { recommendation: 'Decide in AdminOS › Applications (assigns the SOKONI category).' }, confidence_threshold: 65, priority: 200, enabled: true, tags: ['sellers'] },
     { name: 'Escalate incomplete seller applications', description: 'Route sellers with missing documents for manual review', event_type: 'seller_application', conditions: [], action: 'escalate', action_params: { priority: 'medium', recommendation: 'Check submitted documents and approve or request missing info.' }, confidence_threshold: 0, priority: 100, enabled: true, tags: ['sellers'] },
     { name: 'Process completed payments', description: 'Auto-process verified payment completions', event_type: 'payment_received', conditions: [{ field: 'status', operator: 'eq', value: 'completed' }], action: 'auto_approve', action_params: { message: 'Payment confirmed.' }, confidence_threshold: 80, priority: 200, enabled: true, tags: ['payments'] },
     { name: 'Auto-approve small refunds', description: 'Automatically refund amounts under KES 500 with sufficient evidence', event_type: 'refund_request', conditions: [{ field: 'amount', operator: 'lte', value: 50000 }], action: 'auto_approve', action_params: { message: 'Refund approved and will be processed within 24 hours.' }, confidence_threshold: 70, priority: 200, enabled: true, tags: ['refunds'] },

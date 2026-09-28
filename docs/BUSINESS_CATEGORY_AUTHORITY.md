@@ -86,7 +86,13 @@ Judgment calls to confirm:
 | `event_services` | Event services | event-planner | event planner, caterer, decorator, sound engineer, lighting technician |
 | `event_organizer` | Event organizer *(owned by event_organizer role)* | — | — |
 | `venue` | Venue | venue, sports-venue, swimming-pool | — |
-| `retail_store` | Retail store | butcher, retail-shop, supermarket, boutique, wholesale, water-supplier, hardware, auto-parts, sports-equipment, agri-input, farm, dairy | — |
+| `retail_store` | Retail store | butcher, retail-shop, water-supplier, auto-parts, sports-equipment, manufacturer | — |
+| `supermarket` | Supermarket / Minimart | supermarket | — |
+| `wholesale` | Wholesale & distribution | wholesale, wholesaler, importer | — |
+| `hardware` | Hardware & building materials | hardware | — |
+| `electronics` | Electronics & phones | electronics *(new registrable id, 2026-09-28)* | — |
+| `fashion` | Fashion & clothing | boutique | — |
+| `agriculture` | Agriculture & farm inputs | agri-input, farm, dairy | — |
 | `property` | Property | developer, landlord, property-agent | — |
 | `delivery` | Delivery / Courier *(owned by driver role)* | courier, boda-delivery | delivery service, courier, freight agent |
 | **UNCLASSIFIED** | classification required — AdminOS decides | car-rental, forex, sacco, football-club, basketball, other | — |
@@ -154,8 +160,62 @@ eligible → indexed under the owner's current category        ineligible → DE
 `services`. The collections are untouched. Verified lawyers remain discoverable: the Legal authority provisions a
 `providers` doc, which `categoryOf` classifies as `lawyer`.
 
-**Out of C3:** shop and merchant discovery (`businesses` → `sokoni_shops`, sellers, products) stays in the existing
-merchant search architecture.
+**Out of C3:** shop and merchant discovery is governed by the seller-shop authority below; product discovery is the
+next step.
+
+## Seller shops (shop discovery authority, 2026-09-28)
+
+Owner decision: every seller shop gets a SOKONI category from SOKONI, and public discovery goes through one server
+gate. **Approved seller ≠ discoverable shop.** Related: [[Marketplace]] · [[Authentication]].
+
+**The record.** The canonical shop is `shops/{id}`. Its SOKONI category is `shops/{id}.business`
+`{ category, source: 'application' | 'admin', applicationId, setAt, classifiedBy?, approvalAttestedBy? }`. The root
+`category` string is the applicant's wording, shown as a label and never used as a facet or a filter.
+
+**The gate.** `business-category.shopEligibility(shop)` is `publicEligibility` plus three shop-only checks. A shop is
+eligible only when it is:
+- active and not suspended;
+- searchable and public;
+- visible, not deactivated and not locked;
+- server-classified.
+
+Search indexing (`discovery-eligibility.prepareForIndex`) applies it to `sellers` and `businesses` rows through the
+owner's canonical shop. Stage 4 routes storefronts, QR, share links, featured shops and KASS through the same gate.
+
+**Seller categories.** `SELLER_CATEGORIES` are `retail_store`, `supermarket`, `wholesale`, `hardware`, `electronics`,
+`fashion` and `agriculture`. All of them:
+- route to merchant-v2 on the merchant plan catalogue, which gives the full commerce backbone: products, variants,
+  inventory, POS / Till / Quick Charge, orders, delivery, staff, invoices and receipts;
+- resolve to the seller role at approval, through `resolveRole`'s `category:` rule.
+
+The commission follows the transaction type, not the category ([[Payments]]). Per-category extras, such as hardware
+job cards or fashion custom orders, belong to the planned Work/Job Engine and are not built.
+
+**Who writes what (stage 2).**
+
+| Writer | May set | Never sets |
+|---|---|---|
+| AdminOS Applications → `projectSeller` (approval) | status active, `business` (C1 from the application), searchable / isPublic; suspension clears them | — |
+| AdminOS › Business categories › **Seller shops** (`bizAdminClassifyShop`) | `business` (source `admin`), mirrored to the owner's existing `sellers` / `businesses` rows | status, searchable, isPublic, suspension |
+| Shop wizard `saveShopProfile` | storefront content (name, tagline, about, contact, socials, hours, zones, delivery, returns) | category, business, status, approved, verified, searchable, isPublic, featured, published, discoveryEligible, suspended, isVisible, active. These are returned as `ignored`. A shop it creates is **`pending`**. |
+| ADE (`ade.js`) | may hold, reject or escalate a seller or provider | **never approves** one. An `auto_approve` rule becomes an escalation, and resolving an exception with approve is refused (`APPROVAL_OWNED_BY_APPLICATIONS`). |
+| An application's `shopId` | names the applicant's own shop, or a new one | a shop that belongs to another account fails the projection (`SHOP_OWNED_BY_ANOTHER_ACCOUNT`) |
+
+**Classifying a shop in AdminOS** is audited as `adminAudit` `shop_classify`, with a reason. It never approves,
+activates or un-suspends anything:
+- a `pending` shop is refused (`NOT_APPROVED`);
+- a shop with no approval record (legacy, or created by the wizard before this change) needs the administrator to tick
+  "I verified this business" (`NO_APPROVAL_RECORD` otherwise). The attestation is audited.
+
+**Deploy prerequisite.** Shops approved before 2026-09-28 carry no `business`, so the gate de-indexes them until they
+are classified. Classify them in the AdminOS Seller shops queue **before** deploying the gate. Do not run a blind
+backfill (owner, 2026-09-28).
+
+**Next:**
+- stage 3: rules on the served lineage for `sellers`, `businesses`, `stores` and `shopSettings` status and category,
+  and `shops` authority fields;
+- stage 4: readers through the gate;
+- then product → shop ownership.
 
 **Next:**
 

@@ -93,10 +93,19 @@ const TEXT_FIELDS = {
   phone: 32, email: 160, website: 200, address: 300, city: 80, mapsLink: 400,
   instagram: 120, tiktok: 120, facebook: 120, twitter: 120, youtube: 120, linkedin: 120,
   logo: 600, logoUrl: 600, banner: 600, bannerUrl: 600, themeColor: 32,
-  category: 80, shopType: 24, delMethod: 40, delTime: 60,
+  shopType: 24, delMethod: 40, delTime: 60,
   returnPolicy: 40, returnText: 1000, packagingNote: 500, freeDelivery: 60,
 };
 const AVAILABILITY_FIELDS = ['acceptingOrders', 'online', 'delivery', 'pickup'];
+/* Fields a seller may SEND but that this boundary does not accept (owner decision 2026-09-28). `category` on shops/{id}
+   is written at APPROVAL (application-lifecycle.projectSeller); the SOKONI category is `business.category`, set there
+   or in AdminOS. They are reported back as `ignored` so a client can say so, rather than dropped silently. */
+const AUTHORITY_FIELDS = ['category', 'business', 'status', 'approved', 'verified', 'isVerified', 'searchable', 'isPublic',
+  'discoveryEligible', 'featured', 'published', 'suspended', 'isVisible', 'active'];
+function _ignoredAuthority(raw) {
+  if (!raw || typeof raw !== 'object') return [];
+  return AUTHORITY_FIELDS.filter((k) => Object.prototype.hasOwnProperty.call(raw, k));
+}
 
 /* Regulatory identifiers. Deliberately NOT in TEXT_FIELDS: `shops/{shopId}` is
    `allow read: if true`, so anything listed there is public. These are the seller's
@@ -307,6 +316,7 @@ exports.saveShopProfile = onCall(
     const uid = _requireAuth(request);
     const data = request.data || {};
     const patch = _cleanProfile(data.profile);
+    const ignored = _ignoredAuthority(data.profile);
     /* Compliance may arrive nested (`{compliance:{…}}`) or flattened into the profile
        by an older client. Both are accepted; neither reaches the public document. */
     const compliance = Object.assign(_cleanCompliance(data.profile), _cleanCompliance(data.compliance));
@@ -349,6 +359,7 @@ exports.saveShopProfile = onCall(
       const handle = await _ensureHandle(db, owned.id, uid, name);
       return {
         success: true, created: false, shopId: owned.id, ownerUid: uid,
+        ignored,
         handle: handle || null,
         storefrontUrl: handle ? '/shop/' + encodeURIComponent(handle) : null,
       };
@@ -387,8 +398,12 @@ exports.saveShopProfile = onCall(
       tx.set(ref, Object.assign({}, patch, {
         sellerUid: uid,
         name: name,
-        status: 'active',
-        isVisible: true,
+        /* PENDING, not active (owner decision 2026-09-28: a seller never activates or approves itself). Setting up a
+           shop is not approval: this callable only needs a signed-in caller. The shop becomes active — and gets its
+           SOKONI category and discovery flags — only when AdminOS approves the application (projectSeller merges
+           status:'active', business, searchable, isPublic onto this same shops/{uid}). No isVisible is written: an
+           explicit `false` would outlive the approval, and visibility is not the seller's to grant. */
+        status: 'pending',
         createdAt: now,
         updatedAt: now,
       }));
@@ -406,6 +421,7 @@ exports.saveShopProfile = onCall(
     const handle = await _ensureHandle(db, settledId, uid, name);
     return {
       success: true, created: true, shopId: settledId, ownerUid: uid,
+        ignored,
       handle: handle || null,
       storefrontUrl: handle ? '/shop/' + encodeURIComponent(handle) : null,
     };

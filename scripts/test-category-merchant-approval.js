@@ -12,7 +12,7 @@
  *      an admin decidedBy), is PROJECTED: seller → a live shop; provider → a provider record
  *
  * PROVES
- *   T1  a hub-register "Supermarket / Minimart" is stamped SELLER (by category:retail_store)
+ *   T1  a hub-register "Supermarket / Minimart" is stamped SELLER (by category:supermarket — its own seller category since 2026-09-28)
  *   T2  a hub-register "Restaurant / Hotel" and a "Bakery" are stamped SELLER (by category:restaurant)
  *   T3  approving the supermarket creates its LIVE SHOP (shops/{uid} active, ownerId) + activeShopId + seller claim
  *   T4  approving the restaurant creates its live shop too — merchant-v2 has something behind it
@@ -122,7 +122,7 @@ async function approve(appId, app) {
   console.log('\nSOURCE: application-lifecycle.js @ ' + (CPM ? BASE + ' (before) — failures below ARE the defects' : 'working tree (fix)'));
 
   const sup = await intake('app_sup', hubApp('supermarket', 'Supermarket / Minimart', 'shopping'));
-  ck('T1  "Supermarket / Minimart" is stamped SELLER by its category', sup.role === 'seller' && /category:retail_store/.test(sup.roleResolvedBy || ''), { role: sup.role, by: sup.roleResolvedBy });
+  ck('T1  "Supermarket / Minimart" is stamped SELLER by its category', sup.role === 'seller' && /category:supermarket/.test(sup.roleResolvedBy || '') /* 2026-09-28: supermarket is its own seller category (was retail_store); still SELLER by category */, { role: sup.role, by: sup.roleResolvedBy });
   const rest = await intake('app_rest', hubApp('restaurant', 'Restaurant / Hotel', 'food'));
   const bak = await intake('app_bak', hubApp('bakery', 'Bakery / Confectionery', 'food'));
   ck('T2  "Restaurant / Hotel" and "Bakery" are stamped SELLER by category:restaurant', rest.role === 'seller' && bak.role === 'seller' && /category:restaurant/.test(rest.roleResolvedBy || ''), { restaurant: rest.role + '/' + rest.roleResolvedBy, bakery: bak.role });

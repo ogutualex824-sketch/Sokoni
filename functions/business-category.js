@@ -59,11 +59,23 @@ const CATEGORIES = Object.freeze({
   venue:                 { label: 'Venue', group: 'Entertainment' },
   /* Commerce, property, logistics */
   retail_store:          { label: 'Retail store', group: 'Retail' },
+  /* Seller categories (owner, 2026-09-28: "extend the category registry deliberately" — not every seller is a
+     "retail store"). Each runs on merchant-v2 (business-workspace.ROUTE_OF) with the full commerce backbone; the
+     transaction type, not the category, decides the commission (commission-config.js). */
+  supermarket:           { label: 'Supermarket / Minimart', group: 'Retail' },
+  wholesale:             { label: 'Wholesale & distribution', group: 'Retail' },
+  hardware:              { label: 'Hardware & building materials', group: 'Retail' },
+  electronics:           { label: 'Electronics & phones', group: 'Retail' },
+  fashion:               { label: 'Fashion & clothing', group: 'Retail' },
+  agriculture:           { label: 'Agriculture & farm inputs', group: 'Agriculture' },
   property:              { label: 'Property', group: 'Property' },
   delivery:              { label: 'Delivery / Courier', group: 'Logistics', authority: 'driver role' },
 });
 const KEYS = Object.freeze(Object.keys(CATEGORIES));
 const HEALTHCARE = Object.freeze(KEYS.filter((k) => CATEGORIES[k].healthcare));
+/* The merchant (goods-selling) categories: retail_store and the seller categories (owner, 2026-09-28). One list, read by
+   business-workspace (route merchant-v2, merchant plan catalogue) — never re-listed by a consumer. */
+const SELLER_CATEGORIES = Object.freeze(['retail_store', 'supermarket', 'wholesale', 'hardware', 'electronics', 'fashion', 'agriculture']);
 
 /* hub-register.js business ids → category. EVERY id in hub-register.js appears here, either mapped or with
    null + the reason it is left to AdminOS (scripts/test-business-category.js fails on any id missing here). */
@@ -89,9 +101,10 @@ const FROM_BUSINESS_ID = Object.freeze({
   photographer: 'artist_creator', videographer: 'artist_creator', 'content-creator': 'artist_creator',
   'event-planner': 'event_services',
   venue: 'venue', 'sports-venue': 'venue', 'swimming-pool': 'venue',
-  'retail-shop': 'retail_store', supermarket: 'retail_store', boutique: 'retail_store', wholesale: 'retail_store',
-  'water-supplier': 'retail_store', hardware: 'retail_store', 'auto-parts': 'retail_store', 'sports-equipment': 'retail_store',
-  'agri-input': 'retail_store', farm: 'retail_store', dairy: 'retail_store',
+  'retail-shop': 'retail_store', 'water-supplier': 'retail_store', 'auto-parts': 'retail_store', 'sports-equipment': 'retail_store',
+  /* Owner, 2026-09-28 — the seller categories: each registrable id whose label names the category EXACTLY. */
+  supermarket: 'supermarket', wholesale: 'wholesale', hardware: 'hardware', electronics: 'electronics', boutique: 'fashion',
+  'agri-input': 'agriculture', farm: 'agriculture', dairy: 'agriculture',
   gym: 'fitness_studio', 'yoga-studio': 'fitness_studio', 'martial-arts': 'fitness_studio', 'dance-fitness': 'fitness_studio', spinning: 'fitness_studio',
   nutrition: 'service_business', coach: 'service_business',
   school: 'education', tutor: 'education', 'online-course': 'education', 'driving-school': 'education',
@@ -102,7 +115,9 @@ const FROM_BUSINESS_ID = Object.freeze({
   /* Owner, 2026-09-28 (the executed category→dashboard matrix): map to existing categories rather than add new ones. */
   'car-rental': 'auto_services',                                   /* fleet rental: an auto service (bookings) */
   'football-club': 'service_business', basketball: 'service_business',  /* clubs / academies: bookable services */
-  manufacturer: 'retail_store', wholesaler: 'retail_store', importer: 'retail_store',  /* B2B suppliers sell goods → merchant-v2 */
+  /* B2B suppliers sell goods → merchant-v2. A wholesaler and an importer are distribution (the `wholesale` category,
+     2026-09-28); a manufacturer is left `retail_store` — no category names it and one is not guessed. */
+  manufacturer: 'retail_store', wholesaler: 'wholesale', importer: 'wholesale',
   /* ADMIN REVIEW ONLY — never self-classified (owner, 2026-09-28). An application is accepted, but the category is
      decided by AdminOS at approval (bizAdminClassify): */
   forex: null, sacco: null, /* licensed financial services (CBK / SASRA): no self-serve listing */
@@ -218,5 +233,5 @@ function shopEligibility(shopDoc) {
   return { eligible: reasons.length === 0, category, reasons };
 }
 
-module.exports = { CATEGORIES, KEYS, HEALTHCARE, FROM_BUSINESS_ID, FROM_PROFESSION, ROLE_CATEGORY, ADMIN_REVIEW_ONLY,
+module.exports = { CATEGORIES, KEYS, HEALTHCARE, SELLER_CATEGORIES, FROM_BUSINESS_ID, FROM_PROFESSION, ROLE_CATEGORY, ADMIN_REVIEW_ONLY,
   isCategory, categoryFromApplication, categoryOf, publicEligibility, shopEligibility, label: (c) => (isCategory(c) ? CATEGORIES[c].label : 'Unclassified') };

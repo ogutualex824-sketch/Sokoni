@@ -858,6 +858,22 @@ async function projectSeller(db, app, uid, approved) {
     bizRef.get().catch(() => null),
   ]);
 
+  /* OWNERSHIP IS NEVER TRANSFERRED BY AN APPLICATION (2026-09-28, stage 2 of the shop discovery authority). The
+     application's `shopId` is applicant-writable (served rules: applications create/update need only claimsOwner +
+     noAdminFields), and the writes below set ownerId / sellerUid on that shop — so naming ANOTHER merchant's shop
+     would hand it to the applicant the moment an administrator approved, or suspend it on a suspension. A declared
+     shop that exists and names a different owner fails the projection (applyDecision records projectionStatus
+     'failed' and grants no role); the administrator sees why. */
+  if (declared && existing.exists) {
+    const d = existing.data() || {};
+    const owner = d.sellerUid || d.ownerId || d.ownerUid || null;
+    if (owner && String(owner) !== String(uid)) {
+      const err = new Error(`Application names shop ${shopId}, which belongs to another account.`);
+      err.code = 'SHOP_OWNED_BY_ANOTHER_ACCOUNT';
+      throw err;
+    }
+  }
+
   if (!approved) {
     /* A rejection has nothing to retract (no shop was ever created). A
        suspension deactivates the shop but never deletes it — the merchant's

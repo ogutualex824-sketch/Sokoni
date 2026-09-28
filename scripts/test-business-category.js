@@ -72,9 +72,12 @@ const USER = (uid) => ({ auth: { uid, token: {} } });
   ck('the deliberately-unclassified (ADMIN REVIEW ONLY) ids are exactly: forex, other, sacco',
     Object.keys(BC.FROM_BUSINESS_ID).filter((k) => BC.FROM_BUSINESS_ID[k] === null).sort().join() === 'forex,other,sacco'
     && BC.ADMIN_REVIEW_ONLY.slice().sort().join() === 'forex,other,sacco');
-  ck('owner mappings: car-rental → auto_services; clubs → service_business; manufacturer / wholesaler / importer → retail_store',
+  /* 2026-09-28 (owner, shop discovery stage 2: "extend the category registry deliberately"): wholesaler / importer are
+     now `wholesale`; manufacturer stays retail_store (no category names it). Specified in test-shop-writer-authority C2. */
+  ck('owner mappings: car-rental → auto_services; clubs → service_business; wholesaler / importer → wholesale; manufacturer → retail_store',
     BC.FROM_BUSINESS_ID['car-rental'] === 'auto_services' && BC.FROM_BUSINESS_ID['football-club'] === 'service_business'
-    && BC.FROM_BUSINESS_ID.basketball === 'service_business' && ['manufacturer', 'wholesaler', 'importer'].every((k) => BC.FROM_BUSINESS_ID[k] === 'retail_store'));
+    && BC.FROM_BUSINESS_ID.basketball === 'service_business' && ['wholesaler', 'importer'].every((k) => BC.FROM_BUSINESS_ID[k] === 'wholesale')
+    && BC.FROM_BUSINESS_ID.manufacturer === 'retail_store');
   ck('Healthcare\'s categories ARE this registry\'s (reference pattern, not a parallel list)', BC.HEALTHCARE.slice().sort().join() === HC.CATEGORIES.slice().sort().join()
     && Object.keys(HC.FROM_BUSINESS_ID).every((k) => BC.FROM_BUSINESS_ID[k] === HC.FROM_BUSINESS_ID[k]));
 
@@ -94,7 +97,7 @@ const USER = (uid) => ({ auth: { uid, token: {} } });
   ck('a Healthcare category without a health approval → UNCLASSIFIED (role conflict)', c({ category: 'pharmacy' }, 'provider').category === null && /role-conflict/.test(c({ category: 'pharmacy' }, 'provider').reason));
   ck('a health approval with a non-health answer → UNCLASSIFIED', c({ category: 'plumbing' }, 'health').category === null);
   ck('Legal / Event organizer / Driver roles → their own authorities\' categories', c({}, 'legal').category === 'lawyer' && c({}, 'event_organizer').category === 'event_organizer' && c({}, 'driver').category === 'delivery');
-  ck('a seller with no specific type → retail store; a seller claiming a service type → UNCLASSIFIED', c({}, 'seller').category === 'retail_store' && c({ category: 'supermarket' }, 'seller').category === 'retail_store' && c({ category: 'plumbing', subcategory: 'Photographer' }, 'seller').category === null);
+  ck('a seller with no specific type → retail store; a seller claiming a service type → UNCLASSIFIED', c({}, 'seller').category === 'retail_store' && /* 2026-09-28: a supermarket is now its own seller category (was folded into retail_store) */ c({ category: 'supermarket' }, 'seller').category === 'supermarket' && c({ category: 'plumbing', subcategory: 'Photographer' }, 'seller').category === null);
 
   say('\n── approval stamps the category and the lane ──');
   const approve = async (uid, app) => { await AL.projectProvider(db, Object.assign({ applicationId: 'app_' + uid, name: uid }, app), uid, true); return (await get('providers/' + uid)) || {}; };
