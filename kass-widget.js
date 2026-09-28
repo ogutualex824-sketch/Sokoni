@@ -186,11 +186,12 @@
      read currentUser synchronously, so a click before session restore sent no token and the
      server answered "Authentication required to use KASS AI." even though the user was
      signed in. */
-  function _getAuthToken() {
+  function _getAuthToken(forceRefresh) {
     return _authReady().then(function (user) {
       if (!user) { _dbg('token: none (guest)'); return null; }
-      /* forceRefresh=false: Firebase refreshes automatically when the token is near expiry. */
-      return user.getIdToken(false).then(function (t) {
+      /* forceRefresh=false: Firebase refreshes automatically when the token is near expiry. forceRefresh=true only on
+         the one retry after the server refused the token as expired / invalid. */
+      return user.getIdToken(!!forceRefresh).then(function (t) {
         _dbg('token: acquired (' + (t ? t.length : 0) + ' chars)');
         return t;
       }).catch(function (e) {
@@ -775,9 +776,9 @@
   }
 
   /* ── API call ────────────────────────────────────────────────── */
-  function _callKass(text) {
+  function _callKass(text, _retried) {
     _history.push({ role: 'user', content: text });
-    return _getAuthToken().then(function (token) {
+    return _getAuthToken(!!_retried).then(function (token) {
       var t0 = performance.now();
       /* AbortController is available in all modern browsers but guard for iOS < 12.1 */
       var ctrl = null, cSig;
@@ -816,13 +817,21 @@
         if (tid) clearTimeout(tid);
         _dbg('callKass ←', resp.status, resp.statusText, '| ms:', Math.round(performance.now() - t0));
         return resp.json().then(function (data) {
+          /* The server refuses an expired / invalid sign-in (it is never downgraded to a guest). A signed-in user whose
+             token went stale gets ONE retry with a freshly minted token; a second refusal is shown as it is. */
+          if (resp.status === 401 && !_retried && data && (data.code === 'auth_expired' || data.code === 'auth_invalid')) {
+            _history.pop();
+            /* the retry owns its own history entry: if it fails it has already removed it, so mark the error and the
+               outer handler must not remove a second (earlier) turn */
+            return _callKass(text, true).catch(function (e) { if (e && typeof e === 'object') e._kassPopped = true; throw e; });
+          }
           if (!resp.ok) throw new Error(data.error || 'KASS is temporarily unavailable.');
           _history.push({ role: 'assistant', content: data.response || '' });
           return data;
         });
       }).catch(function (err) {
         if (tid) clearTimeout(tid);
-        _history.pop();
+        if (!(err && err._kassPopped)) _history.pop();
         _dbg('callKass ERROR:', err && err.name, '|', err && err.message,
              '| ms:', Math.round(performance.now() - t0));
         if (err.name === 'AbortError') throw new Error('Request timed out — please try again.');

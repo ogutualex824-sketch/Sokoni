@@ -1319,12 +1319,39 @@ const _PAGE_MAP = {
 };
 
 /* Verify Firebase ID token and return uid, or null on failure. */
-async function _verifyKassToken(token) {
-  if (!token) return null;
+/* KASS authentication has THREE distinct outcomes, and an invalid credential is NEVER a guest.
+   It used to be: verifyIdToken failed → null → the request continued as a guest with every read tool, so ANY
+   non-empty string ("x") bypassed the "Authentication required" check that a MISSING token hit. Missing and invalid
+   are now told apart, and only a verified Firebase ID token reaches the tools. */
+async function _classifyKassAuth(token) {
+  if (token === undefined || token === null || token === '') return { state: 'missing' };
+  if (typeof token !== 'string' || token.length > 4096) return { state: 'invalid', reason: 'malformed' };
   try {
-    const decoded = await admin.auth().verifyIdToken(String(token).slice(0, 4096));
-    return decoded.uid || null;
-  } catch(e) { return null; }
+    const decoded = await admin.auth().verifyIdToken(token);
+    return decoded && decoded.uid ? { state: 'valid', uid: decoded.uid } : { state: 'invalid', reason: 'invalid' };
+  } catch (e) {
+    const code = (e && e.code) || '';
+    return { state: 'invalid', reason: code === 'auth/id-token-expired' ? 'expired' : code === 'auth/id-token-revoked' ? 'revoked' : 'invalid' };
+  }
+}
+
+/* Which caller may run each KASS tool — EXPLICIT, default deny. 'user' needs a verified identity; 'public' is a
+   read-only catalogue/directory lookup that exposes nothing about the caller. Anonymous chat is NOT enabled
+   (KASS_GUEST_CHAT = false): the endpoint refuses a missing token, as it always has, so today every tool runs for a
+   verified user. The map is enforced anyway, so a tool can never run without an explicit grant — and enabling a
+   guest mode later is a deliberate change here, never a side effect of a failed token check. */
+const KASS_GUEST_CHAT = false;
+const _KASS_TOOL_ACCESS = Object.freeze({
+  get_page_url: 'public', find_businesses: 'public', search_marketplace: 'public', search_stays: 'public',
+  search_restaurants: 'public', search_events: 'public', search_jobs: 'public', compare_products: 'public',
+  add_to_cart: 'user', view_cart: 'user', get_my_orders: 'user', track_order: 'user', cancel_order: 'user',
+  save_to_wishlist: 'user', get_wallet: 'user', book_stay: 'user',
+});
+function _kassToolAllowed(name, ctx) {
+  const access = _KASS_TOOL_ACCESS[name];
+  if (access === 'user') return !!(ctx && ctx.uid);
+  if (access === 'public') return !!(ctx && ctx.uid) || KASS_GUEST_CHAT;
+  return false;   /* unlisted tool: never runs */
 }
 
 /* Standard auth-required response for action tools. */
@@ -1333,6 +1360,9 @@ function _authRequired() {
 }
 
 async function _execChatTool(name, input, ctx) {
+  if (!_kassToolAllowed(name, ctx)) {
+    return _KASS_TOOL_ACCESS[name] ? _authRequired() : { error: 'That action is not available.' };
+  }
   try {
     if (name === "get_page_url") {
       const d = (input.intent || "").toLowerCase();
@@ -1712,13 +1742,19 @@ exports.sokoniChat = onRequest(
       return;
     }
 
-    /* Require auth — unauthenticated callers get free AI access at platform cost.
-       Verify the Firebase ID token; fall back to the legacy KASS token for old clients. */
-    if (!auth_token) {
-      res.status(401).json({ error: "Authentication required to use KASS AI." });
+    /* Require auth — unauthenticated callers get free AI access at platform cost. A MISSING token and an INVALID
+       one are different answers, and neither becomes a guest: only a verified Firebase ID token continues. */
+    const _auth = await _classifyKassAuth(auth_token);
+    if (_auth.state === 'missing') {
+      res.status(401).json({ error: "Authentication required to use KASS AI.", code: "auth_required" });
       return;
     }
-    const uid = await _verifyKassToken(auth_token);
+    if (_auth.state !== 'valid') {
+      res.status(401).json({ error: "Your sign-in has expired or is not valid. Please sign in again to use KASS AI.",
+        code: _auth.reason === 'expired' ? "auth_expired" : "auth_invalid" });
+      return;
+    }
+    const uid = _auth.uid;
 
     /* Sanitize: keep last 20 turns, text only */
     const history = messages.slice(-20).map(m => ({

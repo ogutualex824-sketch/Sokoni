@@ -60,7 +60,13 @@ function sliceFunction(src, signature) {
   throw new Error('unbalanced: ' + signature);
 }
 
-const EXEC_SRC = sliceFunction(SRC, 'async function _execChatTool');
+/* Since the KASS auth fix, _execChatTool consults an explicit per-tool access map; slice that gate with it when the
+   source has it (older trees do not). */
+const _opt = (sig) => { try { return sliceFunction(SRC, sig); } catch (e) { return ''; } };
+const EXEC_SRC = [(SRC.match(/const KASS_GUEST_CHAT = [^;]+;/) || [''])[0],
+  (SRC.match(/const _KASS_TOOL_ACCESS = Object\.freeze\(\{[\s\S]*?\}\);/) || [''])[0],
+  _opt('function _kassToolAllowed(name, ctx)'), _opt('function _authRequired()'),
+  sliceFunction(SRC, 'async function _execChatTool')].join('\n');
 
 function makeCtx(uid) {
   const ctx = { uid: uid, actions: [], results: [] };

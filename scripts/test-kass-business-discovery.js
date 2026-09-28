@@ -66,12 +66,19 @@ function sliceFunction(src, signature) {
 const SRC = read('index.js');
 const fnRequire = (m) => require(m.startsWith('./') ? path.join(FN, m) : resolveIn(m));
 const sandbox = vm.createContext({ db, admin: ADMIN, require: fnRequire, console: { log() {}, warn() {}, error() {} }, encodeURIComponent, Promise, Object, Array, JSON, Number, String, Date, Math });
-vm.runInContext(sliceFunction(SRC, 'async function _execChatTool') + '\nthis.__chat = _execChatTool;', sandbox);
+/* Since the KASS auth fix, _execChatTool consults an explicit per-tool access map and only a VERIFIED caller reaches
+   it (an invalid token is refused before any tool). Slice that gate when the source has it (the 4e9607b counterproof
+   does not), and call as the signed-in customer that is the only real path to these tools. */
+const _opt = (sig) => { try { return sliceFunction(SRC, sig); } catch (e) { return ''; } };
+const _gate = [(SRC.match(/const KASS_GUEST_CHAT = [^;]+;/) || [''])[0],
+  (SRC.match(/const _KASS_TOOL_ACCESS = Object\.freeze\(\{[\s\S]*?\}\);/) || [''])[0],
+  _opt('function _kassToolAllowed(name, ctx)'), _opt('function _authRequired()')].join('\n');
+vm.runInContext(_gate + '\n' + sliceFunction(SRC, 'async function _execChatTool') + '\nthis.__chat = _execChatTool;', sandbox);
 vm.runInContext(sliceFunction(SRC, 'async function executeTool') + '\nthis.__admin = executeTool;', sandbox);
 
 let pass = 0, fail = 0;
 const ck = (l, ok, d) => { say('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d !== undefined ? '   [' + String(typeof d === 'object' ? JSON.stringify(d) : d).slice(0, 170) + ']' : '')); ok ? pass++ : fail++; };
-async function chat(name, input) { const results = [], actions = []; const r = await sandbox.__chat(name, input, { addResult: (x) => results.push(x), addAction: (a) => actions.push(a) }); return { r, results, actions }; }
+async function chat(name, input) { const results = [], actions = []; const r = await sandbox.__chat(name, input, { uid: 'cust_1', addResult: (x) => results.push(x), addAction: (a) => actions.push(a) }); return { r, results, actions }; }
 const names = (res) => res.results.map((x) => x.name);
 
 const prov = (uid, o) => db.doc('providers/' + uid).set(Object.assign({ name: uid, status: 'active', searchable: true, isPublic: true, city: 'Nairobi' }, o));

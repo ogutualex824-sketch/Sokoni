@@ -1,3 +1,73 @@
+## [2026-09-28] - KASS authentication: a missing and an invalid sign-in are told apart, and neither ever becomes a guest
+
+**Functions + hosting, NOT deployed.** Branch `slice/c4-category-matrix`. This is an isolated security slice with no
+commerce or discovery changes. The owner authorized it after the read-only production census
+(`docs/C4_C8_PRODUCTION_PRIVACY_AUTH_CENSUS.md` finding #1).
+
+**Proven defect** (LIVE in production `sokonichat-00058-hal`, and at `4e9607b`):
+- `/api/chat` refused only a MISSING `auth_token`.
+- Any non-empty string that failed verification (garbage, expired, revoked) made `_verifyKassToken` return `null`.
+- The request then continued as a guest: the model was called (at platform cost) and every read tool was offered.
+- The counterproof shows a garbage, expired or revoked token each getting 200 with a model call.
+
+**Changed:**
+- **`functions/index.js`:**
+  - **`_classifyKassAuth`** returns `missing`, `valid` (uid) or `invalid` (expired / revoked / malformed / invalid).
+    A malformed credential (non-string, or over 4 KB) never reaches the verifier. The handler answers:
+    - missing → **401 `auth_required`** (unchanged behaviour, now with a code);
+    - invalid → **401 `auth_invalid`**; expired → **401 `auth_expired`**;
+    - only a verified Firebase ID token continues.
+  - **Explicit guest policy:**
+    - `KASS_GUEST_CHAT = false`. Anonymous chat was never permitted (a missing token was always refused), so no
+      legitimate anonymous capability is removed.
+    - `_KASS_TOOL_ACCESS` grants each of the 16 tools either `user` (cart, orders, wallet, wishlist, bookings) or
+      `public` (read-only directory and catalogue lookups).
+    - `_kassToolAllowed` enforces it with default deny. An unmapped tool never runs, and a public tool runs without
+      identity only if guest chat is deliberately enabled.
+- **`kass-widget.js`:**
+  - On `auth_expired` / `auth_invalid` the widget retries ONCE with a freshly minted token; a second refusal is shown
+    as it is.
+  - A bug in the first draft of that retry would have removed an earlier conversation turn on a failed retry. It was
+    caught by W3 and fixed: each failure removes only its own message.
+
+**Tests:** `scripts/test-kass-auth.js`: the REAL handler, classifier, access map, tool executor and widget
+`_callKass`, driven with a Firebase-like verifier and a counting model stub (no network).
+
+| Check | Result |
+|---|---|
+| Fix | **14/0** |
+| Counterproof on `4e9607b` | **fails 8** (A3–A6, T1, T3, W1, W2) |
+| Sabotage | **9/9 caught**, byte-identical restore |
+
+- A1 a valid token proceeds; A2 missing → `auth_required`; A3 garbage → `auth_invalid`; A4 expired →
+  `auth_expired`; A5 revoked → `auth_invalid`; A6 malformed is refused without calling the verifier. The model is
+  never called on A2–A6.
+- T1 every tool has an explicit grant; T2 a user tool needs identity; T3 a public tool is closed without identity;
+  T4 an unknown tool never runs; T5 a verified user runs both (control).
+- W1 one refresh-and-retry succeeds; W2 no second retry; W3 history is intact.
+- The sabotage attacks:
+  - downgrade to guest again;
+  - collapse expired into invalid;
+  - send a malformed credential to the verifier;
+  - remove the tool gate;
+  - silently enable guest chat;
+  - drop a tool's grant;
+  - no retry;
+  - retry forever;
+  - double-pop the history.
+
+**Harness updates** (both slice `_execChatTool` and now also slice the gate):
+- `test-kass-business-discovery` calls as the verified customer, which is the only real path. It is back to 8/0; its
+  counterproof still fails.
+- `test-kass-cart-truth` was updated the same way but **not run**: it needs the shared emulator port 8080. UNPROVEN.
+
+**Regression:** the KASS suites pass on this tree: commission-authority 7/0, page-boundary 9/0, catalog 16/0,
+retrieval 15/0, widget, modes-memory, kasshop-boundary, and widget-reachable 66/0 (Chromium, after the widget
+change).
+
+**Not in this slice (noted):** the `kass-*.html` role pages call `sokoniChat` through `httpsCallable`, but it is an
+HTTP endpoint expecting `{messages, auth_token}`, so they already get a 400. The same holds on the baseline.
+
 ## [2026-09-28] - KASS states commission only from the commission authority; the "SOKONI takes 12%" claim is gone
 
 **Functions, NOT deployed.** Branch `slice/c4-category-matrix`. Owner instruction: KASS must never claim a commission
