@@ -6,7 +6,12 @@
  *              accountHandles/{handle}
  */
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
-const { getAuth } = require('firebase-admin/auth');
+/* firebase-admin/auth is deliberately NOT imported. This module is the
+   self-service onboarding rail: it writes account and profile DOCUMENTS, and it
+   has no business holding a handle that can mint custom claims. Custom claims
+   come from application-lifecycle.js's grantAccountRole, behind an admin
+   decision, and from nowhere else. Re-adding this import is the first step of
+   reopening the hole scripts/test-onboarding-selfmint-emulator.js closes. */
 const { HttpsError } = require('firebase-functions/v2/https');
 
 const _CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -53,15 +58,15 @@ const DASHBOARD_MAP = {
   finance: 'business-os.html',
 };
 
-const CLAIM_KEY = {
-  merchant: 'merchantId', provider: 'providerId', rider: 'riderId',
-  driver: 'driverId', courier: 'courierId', property: 'propertyId',
-  hotel: 'hotelId', restaurant: 'restaurantId', pharmacy: 'pharmacyId',
-  events: 'eventsId', employer: 'employerId', freelancer: 'freelancerId',
-  distributor: 'distributorId', wholesaler: 'wholesalerId',
-  manufacturer: 'manufacturerId', ngo: 'ngoId', school: 'schoolId',
-  healthcare: 'healthcareId', finance: 'financeId', buyer: 'buyerId',
-};
+/* CLAIM_KEY was here. It mapped each role to the identifier CLAIM this rail
+   minted alongside the role claim — merchant -> merchantId, provider ->
+   providerId, and so on. Both mints are gone (see onbActivateRole below), so the
+   table described something that no longer happens, and a table of claims nothing
+   writes is a table that will eventually be trusted by someone reading it.
+
+   The identifier it carried still exists as DATA: accountProfiles/{profileId},
+   reached through accounts/{uid}.profiles[role]. That is a document gated on
+   request.auth.uid by firestore.rules:5177-5191 — not a claim, and not authority. */
 
 // ── Subscription plans ──────────────────────────────────────────────────────
 const PLANS = {
@@ -176,7 +181,9 @@ _h.onbActivateRole = async (req) => {
   const role = _san(req.data?.role || '');
   if (!VALID_ROLES.has(role)) throw new HttpsError('invalid-argument', 'Invalid role.');
   const db = getFirestore();
-  const auth = getAuth();
+  /* No `getAuth()` here any more — this handler no longer touches custom claims,
+     and holding an Auth admin handle in a self-service path is exactly the shape
+     that invited the mint back. */
   const prefix = ID_PREFIX[role];
   let profileId, attempts = 0;
   do {
@@ -203,10 +210,51 @@ _h.onbActivateRole = async (req) => {
       completed: true, profileId, updatedAt: now,
     }, { merge: true });
   });
-  const existing = await auth.getUser(uid);
-  const claims = existing.customClaims || {};
-  const ck = CLAIM_KEY[role] || `${role}Id`;
-  await auth.setCustomUserClaims(uid, { ...claims, [role]: true, [ck]: profileId });
+  /* ── NO CUSTOM CLAIM IS MINTED HERE. THIS IS THE POINT OF THE FUNCTION'S
+        SECURITY MODEL, NOT AN OMISSION. ──────────────────────────────────────
+     This line used to be:
+
+         await auth.setCustomUserClaims(uid, { ...claims, [role]: true, [ck]: profileId });
+
+     ...reached after `_assertAuth(req)` and a VALID_ROLES membership test, and
+     nothing else. VALID_ROLES is the key set of ID_PREFIX — twenty entries
+     including `merchant`, `provider`, `rider` and `driver` — and this handler is
+     live, routed as op `onbActivateRole` through onboarding-dispatch.js:21 and
+     exported at index.js:12436. So any account that could sign in could give
+     itself any of those twenty claims.
+
+     A custom claim is this platform's authority primitive. Every security rule
+     and every callable that trusts one trusts it BECAUSE no client can write it.
+     Minting one from a self-service call breaks that premise for every reader at
+     once, including readers that do not exist yet — which is the real cost, since
+     the escalation lands the day someone reasonably decides `token.merchant`
+     means merchant.
+
+     WHAT WAS ACTUALLY REACHABLE, established by census rather than assumed:
+       · `driver` was read at api-gateway.js:116 (a display string) and
+         shared/errors.js:172 (rate budget 20/min instead of 10) — minor, real.
+       · `merchantId` is read by firestore.rules:5017-5037 and
+         marketing-engine.js:123, and THIS was its only minter anywhere in
+         functions/. The value it wrote is BIZ-shaped; a real merchantId is
+         SOK-shaped (business-bootstrap), so it matched no live document.
+       · every other one of the twenty was read by nothing at all.
+     The hole was therefore mostly latent — and it also OVERWROTE a real
+     merchant's live merchantId claim with a fresh BIZ- id, costing them the POS
+     cash-session reads those four rules grant.
+
+     WHAT IS LOST BY MINTING NOTHING: nothing. accounts/{uid},
+     accountDrafts/{id} and accountProfiles/{id} are the collections this rail
+     actually uses, and firestore.rules:5177-5191 gates all three on
+     request.auth.uid or public read — not one of them consults a claim. The
+     transaction above still records the role, the profile and the draft, and the
+     return value below is unchanged, so onboarding.html is untouched.
+
+     WHERE A ROLE CLAIM COMES FROM INSTEAD: grantAccountRole in
+     application-lifecycle.js, reached only through an admin decision. That is the
+     whole of the authority rail, and it stays the whole of it.
+
+     scripts/test-onboarding-selfmint-emulator.js reproduces the original hole
+     against this handler before asserting it is shut. */
   return { profileId, role, activated: true, dashboard: DASHBOARD_MAP[role] || 'index.html' };
 };
 

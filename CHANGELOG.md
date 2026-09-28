@@ -1,3 +1,30 @@
+## 2026-09-28 (159) — L-1: port 1171a16 onto the POS lineage — onboarding can no longer self-mint a role claim (NOT deployed)
+
+**Lineage reconciliation, unit 1** (owner ruling 2026-09-28: reconcile the POS lineage before any Financial Core
+work). The P0 self-mint fix `1171a16` is DEPLOYED in production (onboardingdispatch-00006-reg), but this POS lineage
+did not contain it. Any `onboardingDispatch` deploy from here would have reopened the hole: `onbActivateRole` let any
+signed-in account self-grant `{[role]: true, [role]Id}` for all 20 roles, including `merchant`, and overwrite a real
+`merchantId`.
+
+- **Change:** the `functions/universal-onboarding.js` fix from 1171a16, verbatim. `onbActivateRole` records the role
+  as DATA only (the account and profile documents) and mints no claim. Claims come only from `grantAccountRole`
+  behind an admin decision.
+- **Tests:** the two suites of 1171a16, in the lineage-adapted form of the feat/creator-hub port 537d17e, reused
+  rather than re-written:
+  - `grantAccountRole` lives in `functions/role-authority.js` on this lineage;
+  - `sokoni-role-authority.js` is absent here, so that check is reported N/A;
+  - a merchant application declares `type:'seller'`.
+- **Files:** `functions/universal-onboarding.js`, new `scripts/test-onboarding-selfmint-emulator.js`, new
+  `scripts/test-claim-minter-allowlist.js`.
+- **Database:** none. **API:** `onbActivateRole` returns as before but no longer changes custom claims.
+- **Security:** closes role-claim self-minting on this lineage.
+- **Evidence:**
+  - the emulator suite (Firestore + Auth on private ports) passes 27/0 + 1 N/A on the new tree and 22/6 on the old;
+    with `--expect-vulnerable` the old tree passes 25/0, proving the reproduction is real;
+  - the allowlist suite passes 21/0 new vs 16/5 old;
+  - 3 mutants (mint all roles, mint non-merchant roles, mint merchant only) are each caught;
+  - the floor and syntax results are reported with the unit.
+
 ## 2026-09-28 (158) — R-48H: the 48-hour marketplace commission is retired from source (NOT deployed)
 
 **Owner ruling:** remove the 48-hour commission completely. All commission is now billed MONTHLY.
