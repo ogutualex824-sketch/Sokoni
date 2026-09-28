@@ -45,18 +45,11 @@ const VALID_ROLES = new Set(Object.keys(ID_PREFIX));
    healthcare/manufacturer/ngo/school/finance), so those roles completed onboarding
    and landed on a 404 — a dead-end journey. Every entry below is now an EXISTING
    page. When a purpose-built dashboard ships, point the role back at it. */
-const DASHBOARD_MAP = {
-  buyer: 'index.html', merchant: 'pos.html', provider: 'provider-dashboard.html',
-  rider: 'rider-dashboard.html', driver: 'driver.html',
-  courier: 'driver.html', property: 'property-dashboard.html',
-  hotel: 'bnb-manage.html', restaurant: 'pos.html',
-  pharmacy: 'pos.html', events: 'event-manager.html',
-  employer: 'job-post.html', freelancer: 'jobs.html',
-  distributor: 'pos.html', wholesaler: 'pos.html',
-  manufacturer: 'business-os.html', ngo: 'business-os.html',
-  school: 'education.html', healthcare: 'healthcare.html',
-  finance: 'business-os.html',
-};
+/* CHANGELOG 240 (convergence C2c) — owner decision 2026-09-28: a SELF-SELECTED onboarding role never determines
+   dashboard routing or authority. Every business role now resolves through ONE place, workspace.html, which asks the
+   server (business-workspace.homeFor) what this account has actually been APPROVED for. The previous per-role table
+   (hotel → bnb-manage, restaurant/pharmacy → pos, healthcare → healthcare.html, …) routed on a role anyone could pick. */
+const DASHBOARD_MAP = new Proxy({ buyer: 'index.html' }, { get: (t, k) => (k === 'buyer' ? 'index.html' : 'workspace.html') });
 
 /* CLAIM_KEY was here. It mapped each role to the identifier CLAIM this rail
    minted alongside the role claim — merchant -> merchantId, provider ->

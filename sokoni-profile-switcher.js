@@ -13,28 +13,9 @@
 
   /* ── Configuration ─────────────────────────────────────────────── */
   const SKIP_PAGES = ['onboarding', 'provider-onboarding', 'login', 'signup', 'forgot-password', 'index'];
-  const DASH = {
-    buyer:        'index.html',
-    merchant:     'pos.html',
-    provider:     'provider-dashboard.html',
-    freelancer:   'provider-dashboard.html',
-    rider:        'rider-dashboard.html',
-    driver:       'driver-dashboard.html',
-    courier:      'courier-dashboard.html',
-    property:     'property-dashboard.html',
-    hotel:        'hotel-dashboard.html',
-    restaurant:   'restaurant-dashboard.html',
-    pharmacy:     'provider-dashboard.html',   /* one Healthcare workspace (CHANGELOG 233) */
-    events:       'event-manager.html',
-    healthcare:   'provider-dashboard.html',   /* one Healthcare workspace (CHANGELOG 233) */
-    employer:     'employer-dashboard.html',
-    distributor:  'distributor-dashboard.html',
-    wholesaler:   'wholesale-portal.html',
-    manufacturer: 'manufacturer-dashboard.html',
-    ngo:          'ngo-dashboard.html',
-    school:       'school-dashboard.html',
-    finance:      'finance-dashboard.html'
-  };
+  /* CHANGELOG 240 (C2c): every business role opens workspace.html — the server decides the workspace from what the
+     account was APPROVED for (business-workspace.homeFor). A role picked here is never a route (owner, 2026-09-28). */
+  const DASH = new Proxy({ buyer: 'index.html' }, { get: (t, k) => (k === 'buyer' ? 'index.html' : 'workspace.html') });
   const META = {
     buyer:        { icon: '🛍️', label: 'Buyer' },
     merchant:     { icon: '🏪', label: 'Merchant' },

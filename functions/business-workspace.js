@@ -273,6 +273,48 @@ async function gateIfProvider(db, uid, module, HttpsError) {
   return assertModule(db, uid, module, HttpsError);
 }
 
+/**
+ * HOME (CHANGELOG 240, convergence C2c): every workspace this account ACTUALLY holds, from server facts only —
+ * never a self-selected onboarding role (accounts.currentRole), never localStorage, never a free-text category.
+ * `workspace.html` is the ONE place every "my dashboard" link goes; it asks this and follows the answer.
+ *
+ *   providers/{uid}            → the business workspace's route (or UNROUTED: its message)
+ *   shops where ownerId == uid → merchant-v2.html (choose-shop.html when there are several)
+ *   token.rider                → driver.html          (granted by an approved driver application)
+ *   token.event_organizer      → event-manager.html   (granted by an approved organiser application)
+ *   creators/{uid} ACTIVE      → creator-studio.html
+ *   venues where ownerId == uid, status active → venue-manager.html
+ *   none                       → { apply: true }      (Register my business — never a guessed dashboard)
+ */
+async function homeFor(db, uid, token) {
+  const t = token || {};
+  const homes = [];
+  const add = (h) => { if (!homes.some((x) => x.route === h.route && x.route)) homes.push(h); };
+  try {
+    const w = await workspaceFor(db, uid);
+    if (w.found) {
+      add({ kind: 'business', label: w.label || 'My business', category: w.category, state: w.state, route: w.route,
+        message: w.message || (w.state === STATE.PENDING_APPROVAL ? (w.reason === 'UNCLASSIFIED' ? 'SOKONI is confirming what kind of business you are. You will get your workspace as soon as it is done.' : 'Your business is not active yet.') : null) });
+    }
+  } catch (_) { /* fall through — never invent a workspace */ }
+  try {
+    const shops = await db.collection('shops').where('ownerId', '==', String(uid)).limit(10).get();
+    const active = shops.docs.filter((d) => String((d.data() || {}).status || 'active') !== 'suspended');
+    if (active.length) add({ kind: 'shop', label: active.length > 1 ? 'My shops' : ((active[0].data() || {}).name || 'My shop'), route: active.length > 1 ? 'choose-shop.html' : 'merchant-v2.html', state: STATE.AVAILABLE });
+  } catch (_) { /* no shop read → no shop home */ }
+  if (t.rider === true) add({ kind: 'driver', label: 'Driver app', route: 'driver.html', state: STATE.AVAILABLE });
+  if (t.event_organizer === true) add({ kind: 'events', label: 'Event Manager', route: 'event-manager.html', state: STATE.AVAILABLE });
+  try {
+    const c = await db.collection('creators').doc(String(uid)).get();
+    if (c.exists && String((c.data() || {}).state || '') === 'ACTIVE') add({ kind: 'creator', label: 'Creator Studio', route: 'creator-studio.html', state: STATE.AVAILABLE });
+  } catch (_) { /* none */ }
+  try {
+    const v = await db.collection('venues').where('ownerId', '==', String(uid)).limit(5).get();
+    if (v.docs.some((d) => String((d.data() || {}).status || '') === 'active')) add({ kind: 'venue', label: 'Venue Manager', route: 'venue-manager.html', state: STATE.AVAILABLE });
+  } catch (_) { /* none */ }
+  return { homes, apply: homes.length === 0, primary: homes.find((h) => h.route) || null };
+}
+
 /* providerDispatch op — the caller's OWN workspace; never another account's. */
 const _h = {
   businessWorkspace: async (req) => {
@@ -282,6 +324,14 @@ const _h = {
     const { getFirestore } = require('firebase-admin/firestore');
     return workspaceFor(getFirestore(), uid);
   },
+  /* C2c: every workspace this account holds — the ONE answer behind workspace.html. Caller-only. */
+  workspaceHome: async (req) => {
+    const { HttpsError } = require('firebase-functions/v2/https');
+    const uid = req && req.auth && req.auth.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+    const { getFirestore } = require('firebase-admin/firestore');
+    return homeFor(getFirestore(), uid, req.auth.token || {});
+  },
 };
 
-module.exports = { STATE, MODULES, MODULE_KEYS, CORE, PROFILES, PROFILE_OF, ROUTE_OF, modulesForProfile, healthcareModules, workspaceFor, assertModule, gateCalendarModule, gateIfProvider, _h };
+module.exports = { STATE, MODULES, MODULE_KEYS, CORE, PROFILES, PROFILE_OF, ROUTE_OF, modulesForProfile, healthcareModules, workspaceFor, homeFor, assertModule, gateCalendarModule, gateIfProvider, _h };

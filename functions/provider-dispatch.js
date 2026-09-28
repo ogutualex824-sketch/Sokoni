@@ -74,6 +74,7 @@ const ROUTES = [
   'providerRequestShop',
   'healthcareWorkspace',
   'businessWorkspace',
+  'workspaceHome',
   'providerGetAnalytics',
   'providerGetPlans',
   // provider-ops — dashboard + service management (post-onboarding)

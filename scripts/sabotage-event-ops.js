@@ -82,6 +82,7 @@ const SUITES = {
   bizcatui: ['node', ['scripts/test-business-category-admin-browser.js']],
   bizws:    ['node', ['scripts/test-business-workspace.js']],
   bizgate:  ['node', ['scripts/test-business-workspace-gates.js']],
+  route:    ['node', ['scripts/test-workspace-routing.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -1311,6 +1312,28 @@ const M = [
     from: "  if (next === true && cur.active === false) {", to: "  if (false) {", expect: /re-activating a second/ },
   { group: 'bizgate', browser: false, name: "the gate fails open for any provider (assertModule allows every state)", file: "functions/business-workspace.js", suite: 'bizgate',
     from: "  if (!m || m.state !== STATE.AVAILABLE) {", to: "  if (!m) {", expect: /NOT_APPLICABLE|PENDING_APPROVAL/ },
+
+  /* ── C2c: ONE route to every workspace (CHANGELOG 240) ── */
+  { group: 'route', browser: true, name: "the profile switcher routes on the self-selected role again", file: "sokoni-profile-switcher.js", suite: 'route',
+    from: "  const DASH = new Proxy({ buyer: 'index.html' }, { get: (t, k) => (k === 'buyer' ? 'index.html' : 'workspace.html') });", to: "  const DASH = { buyer: 'index.html', hotel: 'hotel-dashboard.html', provider: 'provider-dashboard.html' };", expect: /profile switcher|names a page that does not exist/ },
+  { group: 'route', browser: true, name: "the server DASHBOARD_MAP routes on the self-selected role again", file: "functions/universal-onboarding.js", suite: 'route',
+    from: "const DASHBOARD_MAP = new Proxy({ buyer: 'index.html' }, { get: (t, k) => (k === 'buyer' ? 'index.html' : 'workspace.html') });", to: "const DASHBOARD_MAP = { buyer: 'index.html', hotel: 'bnb-manage.html', healthcare: 'healthcare.html' };", expect: /server DASHBOARD_MAP/ },
+  { group: 'route', browser: true, name: "the approval notification links to a role table again", file: "functions/application-lifecycle.js", suite: 'route',
+    from: "        const _dash = 'workspace.html';", to: "        const _dash = require('./shared/entertainment-registry').dashboardForRole(receipt.roleKey || role);", expect: /approval notification/ },
+  { group: 'route', browser: true, name: "homeFor trusts a self-selected onboarding role", file: "functions/business-workspace.js", suite: 'route',
+    from: "  if (t.rider === true) add({ kind: 'driver', label: 'Driver app', route: 'driver.html', state: STATE.AVAILABLE });", to: "  if (t.rider === true) add({ kind: 'driver', label: 'Driver app', route: 'driver.html', state: STATE.AVAILABLE });\n  try { const a = await db.collection('accounts').doc(String(uid)).get(); if (a.exists && a.data().currentRole) add({ kind: 'role', label: 'My role', route: 'provider-dashboard.html', state: STATE.AVAILABLE }); } catch (_) {}", expect: /SELF-SELECTED onboarding role/ },
+  { group: 'route', browser: true, name: "a PENDING venue is a home", file: "functions/business-workspace.js", suite: 'route',
+    from: "    if (v.docs.some((d) => String((d.data() || {}).status || '') === 'active'))", to: "    if (v.docs.length)", expect: /PENDING venue/ },
+  { group: 'route', browser: true, name: "a non-ACTIVE creator is a home", file: "functions/business-workspace.js", suite: 'route',
+    from: "    if (c.exists && String((c.data() || {}).state || '') === 'ACTIVE') add({ kind: 'creator'", to: "    if (c.exists) add({ kind: 'creator'", expect: /PENDING one → nothing/ },
+  { group: 'route', browser: true, name: "an UNROUTED hotel is sent to a dashboard", file: "functions/business-workspace.js", suite: 'route',
+    from: "      add({ kind: 'business', label: w.label || 'My business', category: w.category, state: w.state, route: w.route,", to: "      add({ kind: 'business', label: w.label || 'My business', category: w.category, state: w.state, route: w.route || 'provider-dashboard.html',", expect: /UNROUTED category|unrouted hotel/ },
+  { group: 'route', browser: true, name: "several shops skip the chooser", file: "functions/business-workspace.js", suite: 'route',
+    from: "route: active.length > 1 ? 'choose-shop.html' : 'merchant-v2.html'", to: "route: 'merchant-v2.html'", expect: /two shops → choose-shop/ },
+  { group: 'route', browser: true, name: "workspace.html follows a route the server did not constrain", file: "workspace.html", suite: 'route',
+    from: "  const safe = (r) => (typeof r === 'string' && /^[a-z0-9-]+\\.html$/.test(r) ? r : null);", to: "  const safe = (r) => (typeof r === 'string' ? r : null);", expect: /NEVER followed/ },
+  { group: 'route', browser: true, name: "workspace.html never auto-opens the single home", file: "workspace.html", suite: 'route',
+    from: "    if (homes.length === 1 && routed.length === 1) { location.replace('/' + safe(routed[0].route)); return; }", to: "", expect: /ONE home → straight there/ },
 ];
 
 const argv = process.argv.slice(2);

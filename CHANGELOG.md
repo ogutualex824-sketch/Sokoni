@@ -1,3 +1,76 @@
+## 2026-09-28 (240) — C2c: ONE route to every workspace (workspace.html asks the server)
+
+Convergence slice C2c. Not deployed. No production writes.
+
+**Before (C2 survey):** six route sources disagreed, and none consulted the approved category:
+
+| Source | Routed on | Problem |
+|---|---|---|
+| Profile switcher `DASH` | a self-selected role | 10 of its pages do not exist |
+| `onboarding.html` | a self-selected role | — |
+| `profile.js` | signup checkboxes | — |
+| `shared-header` | localStorage roles | provider → `provider.html` |
+| Server `DASHBOARD_MAP` | a role anyone could self-activate | — |
+| Approval notification | the entertainment role table | — |
+
+Booking notifications also linked customers to `my-bookings.html`, which never existed.
+
+**Now:**
+- **`business-workspace.homeFor(uid, token)`** (`providerDispatch {op:'workspaceHome'}`, caller-only) lists every
+  workspace the account ACTUALLY holds, from server facts only:
+
+  | Fact | Workspace |
+  |---|---|
+  | the approved business | its C2a route, or its UNROUTED message |
+  | owned shops | `merchant-v2`; `choose-shop` when there are several |
+  | an approved driver (`rider` claim) | `driver.html` |
+  | an organiser | `event-manager` |
+  | an ACTIVE creator | `creator-studio` |
+  | an ACTIVE venue | `venue-manager` |
+  | none of these | "apply" |
+
+  A self-selected role (`accounts.currentRole`), a pending venue and a non-active creator give NO home.
+- **`workspace.html` (new)** is the ONE place every "my dashboard" link goes.
+  - One home: it navigates straight there.
+  - Several: a chooser.
+  - None: "Register my business".
+  - An unrouted category (hotel, restaurant, property): its "being built" message, with no link.
+  - Signed out: sign in.
+  - It follows only a same-site `*.html` page the server named.
+  - It shows the SOKONI mark and self-updates (`sw-register.js`).
+- **Every route source now points at `workspace.html`** for business roles (buyers are unchanged): the switcher
+  `DASH`, `onboarding.html`, `profile.js`, the `shared-header` role menu (seller/provider/driver), the server
+  `DASHBOARD_MAP` (`onbActivateRole` / `onbSwitchRole` / `onbGetDashboard`), and the approval notification link.
+- **Booking notifications** link the customer to `profile.html#myServiceBookingsCard`, the canonical providerBookings
+  card, and the provider to `workspace.html`.
+
+**Owner decisions applied:** a self-selected onboarding role never routes; hotel and restaurant stay unrouted;
+`healthcare.html` is the public directory, never a workspace.
+
+**Files:**
+- New: `workspace.html`, `scripts/test-workspace-routing.js`.
+- Changed: `functions/business-workspace.js` (`homeFor`, `workspaceHome` op), `functions/provider-dispatch.js`,
+  `functions/universal-onboarding.js`, `functions/application-lifecycle.js`, `functions/provider-ops.js`,
+  `sokoni-profile-switcher.js`, `onboarding.html`, `profile.js`, `shared-header.js`, `scripts/sabotage-event-ops.js`.
+- `scripts/test-healthcare-workspace.js`: the `profile.js` Healthcare check now expects the resolver, which
+  `test-workspace-routing` proves lands on provider-dashboard, and still refuses the patient directory.
+
+**API:** new `providerDispatch` op `workspaceHome`. The onboarding ops' `dashboard` value is now `workspace.html`
+for business roles.
+**Security:** routing no longer follows a self-selected role or client storage. The resolver refuses any route that
+is not a same-site page.
+
+- `scripts/test-entertainment-registry.js`: "approval notice routes to Event Manager" now expects the resolver link AND proves, against the real `homeFor`, that an approved organiser lands on `event-manager.html`.
+
+**Tests:**
+- `test-workspace-routing` 33/0: `homeFor` for every workspace kind, the route sources as text, and the real `workspace.html` in Chromium at 390 and 1280.
+- Baseline against `36e82b9`, 63 suites: 55 identical; 8 differ, each explained:
+  - the five `cart-*` suites fail only their working-tree guard ("nothing dirty…"), which clears on commit;
+  - `merchant-shell-boundary` passes solo, and `pos-cart-defer` improved against the baseline: load flakes;
+  - `entertainment-registry` changed only by the intended approval-link contract, now 64/1, identical to the baseline.
+
+**Sabotage `route`:** 10/10 caught, tree restored byte-identical.
+
 ## 2026-09-28 (239) — C2b: the server refuses what the workspace does not offer (hiding is no longer the gate)
 
 Convergence slice C2b. Not deployed. No production writes. No migration.

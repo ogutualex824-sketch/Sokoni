@@ -2262,9 +2262,10 @@
    */
   var ROLE_ROUTES = {
     buyer:    'profile.html',
-    seller:   'seller.html',
-    provider: 'provider.html',
-    driver:   'rider-nav.html',
+    /* CHANGELOG 240 (C2c): business roles open workspace.html — the server decides where (business-workspace.homeFor) */
+    seller:   'workspace.html',
+    provider: 'workspace.html',
+    driver:   'workspace.html',
     admin:    'admin-os.html',
     moderator:'admin-os.html',
   };

@@ -1113,7 +1113,9 @@ async function applyDecision(appId, app, opts = {}) {
            message would be a success notice over a half-applied decision. */
         /* Approval routes to ONE deterministic dashboard (shared/entertainment-registry.js
            role → dashboard); roles the registry does not cover keep their message unchanged. */
-        const _dash = require('./shared/entertainment-registry').dashboardForRole(receipt.roleKey || role);
+        /* CHANGELOG 240 (C2c): the approval link is the ONE resolver — workspace.html asks the server where this account
+           belongs now that it is approved (business-workspace.homeFor), instead of a second role → page table. */
+        const _dash = 'workspace.html';
         const approvedBody = role === 'driver'
           ? 'Your rider application is approved. Open the SOKONI driver app and go online to start receiving deliveries.'
           : role === 'event_organizer'

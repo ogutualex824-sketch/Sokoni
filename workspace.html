@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My workspace · SOKONI</title>
+  <!-- CHANGELOG 240 (convergence C2c): the ONE place every "my dashboard" link goes. It asks the server
+       (providerDispatch {op:'workspaceHome'}) which workspaces this account ACTUALLY holds — from its approved
+       business, shops, driver / organiser approval, creator and venue records — and follows that answer. No
+       self-selected role, no local storage, no free-text category decides where anyone lands. -->
+  <script src="/security.js"></script>
+  <script src="/shared-header.js"></script>
+  <style>
+    :root { --bg:#050505; --surf:#101010; --border:#232323; --text:#f2f2f2; --sub:#9a9a9a; --acc:#71ff00; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+    .ws-wrap { max-width:560px; margin:0 auto; padding:32px 16px 64px; }
+    .ws-brand { display:flex; align-items:center; gap:12px; margin-bottom:22px; }
+    .ws-brand img { width:44px; height:44px; border-radius:12px; }
+    .ws-brand h1 { font-size:1.2rem; margin:0; }
+    .ws-card { background:var(--surf); border:1px solid var(--border); border-radius:16px; padding:18px; }
+    .ws-state { display:none; } .ws-state.active { display:block; }
+    .ws-muted { color:var(--sub); font-size:.9rem; }
+    .ws-list { display:grid; gap:10px; margin-top:12px; }
+    .ws-item { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; text-align:left; padding:14px 16px;
+      border-radius:12px; border:1px solid var(--border); background:#151515; color:var(--text); text-decoration:none; font:inherit; }
+    .ws-item:hover, .ws-item:focus-visible { border-color:var(--acc); outline:none; }
+    .ws-item .lbl { font-weight:700; } .ws-item .sub { display:block; color:var(--sub); font-size:.8rem; font-weight:400; }
+    .ws-btn { display:inline-block; margin-top:14px; padding:11px 18px; border-radius:12px; background:var(--acc); color:#000; font-weight:800; text-decoration:none; }
+    .ws-spin { width:28px; height:28px; border-radius:50%; border:3px solid #222; border-top-color:var(--acc); animation:ws 0.8s linear infinite; }
+    @keyframes ws { to { transform:rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .ws-spin { animation:none; } }
+  </style>
+</head>
+<body>
+  <main class="ws-wrap">
+    <div class="ws-brand"><img src="assets/logosokoni.png" alt="SOKONI" width="44" height="44"><h1>My workspace</h1></div>
+    <div class="ws-card" aria-live="polite">
+      <div class="ws-state active" id="stLoading"><div class="ws-spin" role="img" aria-label="Loading"></div><p class="ws-muted">Finding your workspace…</p></div>
+      <div class="ws-state" id="stSignin"><p>Sign in to open your workspace.</p><a class="ws-btn" href="login.html?next=workspace.html">Sign in</a></div>
+      <div class="ws-state" id="stApply"><p><strong>You don't have an approved business on SOKONI yet.</strong></p>
+        <p class="ws-muted">Register your business — once SOKONI approves it, your workspace opens here.</p>
+        <a class="ws-btn" href="onboarding.html">Register my business</a></div>
+      <div class="ws-state" id="stChoose"><p><strong>Choose a workspace</strong></p><div class="ws-list" id="wsList"></div></div>
+      <div class="ws-state" id="stError"><p>We couldn't load your workspace. <a href="workspace.html" style="color:var(--acc)">Try again</a>.</p></div>
+    </div>
+  </main>
+
+  <script type="module">
+  'use strict';
+  import { app, auth } from '/firebase.js';
+  import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+  import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+  const fn = getFunctions(app, 'us-central1');
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const show = (id) => { ['stLoading', 'stSignin', 'stApply', 'stChoose', 'stError'].forEach((s) => $(s).classList.toggle('active', s === id)); };
+  /* Only same-site pages the SERVER named are ever followed — never a URL from anywhere else. */
+  const safe = (r) => (typeof r === 'string' && /^[a-z0-9-]+\.html$/.test(r) ? r : null);
+
+  function render(res) {
+    const homes = (res && res.homes) || [];
+    if (!homes.length) { show('stApply'); return; }
+    const routed = homes.filter((h) => safe(h.route));
+    if (homes.length === 1 && routed.length === 1) { location.replace('/' + safe(routed[0].route)); return; }
+    $('wsList').innerHTML = homes.map((h) => safe(h.route)
+      ? `<a class="ws-item" href="/${safe(h.route)}"><span><span class="lbl">${esc(h.label)}</span>${h.message ? `<span class="sub">${esc(h.message)}</span>` : ''}</span><span aria-hidden="true">›</span></a>`
+      : `<div class="ws-item" role="note"><span><span class="lbl">${esc(h.label)}</span><span class="sub">${esc(h.message || 'This workspace is not available yet.')}</span></span></div>`).join('');
+    show('stChoose');
+  }
+
+  onAuthStateChanged(auth, (user) => {
+    if (!user) { show('stSignin'); return; }
+    httpsCallable(fn, 'providerDispatch')({ op: 'workspaceHome' }).then((r) => render(r.data)).catch(() => show('stError'));
+  });
+  </script>
+  <script src="/sw-register.js" defer></script>
+</body>
+</html>

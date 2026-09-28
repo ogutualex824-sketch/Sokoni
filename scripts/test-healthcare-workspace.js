@@ -156,7 +156,11 @@ const NOPLAN = { shopRequestable: false };
   walk(ROOT);
   const dead = pages.filter((p) => /(healthcare|pharmacy)-dashboard\.html/.test(fs.readFileSync(p, 'utf8'))).map((p) => Path.relative(ROOT, p));
   ck('no page links to the non-existent healthcare-/pharmacy-dashboard.html', dead.length === 0 && !fs.existsSync(Path.join(ROOT, 'healthcare-dashboard.html')), dead);
-  ck('profile.js sends a Healthcare provider to its workspace, not to the patient directory', /healthcare: \{[^}]*dash: "provider-dashboard\.html"/.test(fs.readFileSync(Path.join(ROOT, 'profile.js'), 'utf8')));
+  /* CHANGELOG 240 (C2c): every business role now opens the ONE resolver, workspace.html, which the server answers
+     (business-workspace.homeFor → provider-dashboard.html for Healthcare; proven in test-workspace-routing.js). */
+  ck('profile.js sends a Healthcare provider to its workspace (the resolver), not to the patient directory',
+    /healthcare: \{[^}]*dash: "workspace\.html"/.test(fs.readFileSync(Path.join(ROOT, 'profile.js'), 'utf8'))
+    && !/healthcare: \{[^}]*dash: "healthcare\.html"/.test(fs.readFileSync(Path.join(ROOT, 'profile.js'), 'utf8')));
   const html = fs.readFileSync(Path.join(ROOT, 'provider-dashboard.html'), 'utf8');
   ck('the dashboard loads sokoni-health-workspace.js and has the workspace banner slot', /<script src="sokoni-health-workspace\.js" defer><\/script>/.test(html) && /id="hcWorkspace"/.test(html));
   const items = (html.match(/<(div|a|button)[^>]*>/g) || []).filter((t) => /class="(sb-item[^"]*|more-item)"/.test(t));

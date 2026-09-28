@@ -258,13 +258,13 @@ function displayUserRoles(){
     const roles = user.registeredAs;
     const roleDefinitions = {
         buyer: { icon: "🛍️", label: "Buyer", color: "#71ff00", dash: "index.html" },
-        seller: { icon: "🏪", label: "Seller", color: "#00d4ff", dash: "seller.html" },
-        healthcare: { icon: "🏥", label: "Healthcare", color: "#00d4ff", dash: "provider-dashboard.html" },
-        mechanic: { icon: "🔧", label: "Mechanic", color: "#fb923c", dash: "mechanics.html" },
-        driver: { icon: "🚗", label: "Driver", color: "#fb923c", dash: "driver.html" },
-        delivery: { icon: "📦", label: "Delivery", color: "#9b59b6", dash: "delivery.html" },
-        landlord: { icon: "🏠", label: "Landlord", color: "#2ecc71", dash: "landlord.html" },
-        legal: { icon: "⚖️", label: "Legal", color: "#e74c3c", dash: "legal-hub.html" }
+        seller: { icon: "🏪", label: "Seller", color: "#00d4ff", dash: "workspace.html" },
+        healthcare: { icon: "🏥", label: "Healthcare", color: "#00d4ff", dash: "workspace.html" },
+        mechanic: { icon: "🔧", label: "Mechanic", color: "#fb923c", dash: "workspace.html" },
+        driver: { icon: "🚗", label: "Driver", color: "#fb923c", dash: "workspace.html" },
+        delivery: { icon: "📦", label: "Delivery", color: "#9b59b6", dash: "workspace.html" },
+        landlord: { icon: "🏠", label: "Landlord", color: "#2ecc71", dash: "workspace.html" },
+        legal: { icon: "⚖️", label: "Legal", color: "#e74c3c", dash: "workspace.html" }
     };
     
     let html = "";

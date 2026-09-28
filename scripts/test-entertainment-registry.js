@@ -99,7 +99,12 @@ const pagePath = (u) => Path.join(ROOT, String(u).split(/[?#]/)[0].replace(/^\//
   ck('approval mints the event_organizer claim, MERGED with existing claims', claims.org1.event_organizer === true && claims.org1.seller === true && claims.org1.merchantId === 'SOK-1', claims.org1);
   ck('NO provider profile projected for an organizer', !(await get('providers/org1')) && !(await get('providerProfiles/org1')));
   const n = notified.find((x) => x.uid === 'org1');
-  ck('approval notice routes to Event Manager', n && n.type === 'organizer_approved' && n.data.dashboard === '/event-manager.html' && /Event Manager/.test(n.body), n && n.data);
+  /* CHANGELOG 240 (C2c): the approval link is the ONE resolver, workspace.html; the SERVER then routes an approved
+     organiser (event_organizer claim) to Event Manager — proven here against the real business-workspace.homeFor. */
+  const BWh = require(Path.join(FN, 'business-workspace.js'));
+  const home = await BWh.homeFor(db, 'org1', claims.org1 || {});
+  ck('approval notice routes to Event Manager (via the one resolver)', n && n.type === 'organizer_approved' && n.data.dashboard === 'workspace.html' && /Event Manager/.test(n.body)
+    && home.homes.some((h) => h.route === 'event-manager.html'), { data: n && n.data, homes: home.homes.map((h) => h.route) });
   const EH = require(Path.join(FN, 'event-hub.js'));
   ck('the event-hub organizer gate now admits the approved organizer', !(await code(EH._internal.requireOrganizer('org1'))));
   const rej = { ...app, status: 'rejected' };

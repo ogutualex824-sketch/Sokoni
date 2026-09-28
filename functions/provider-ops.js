@@ -514,7 +514,7 @@ _h.providerCancelBooking = async (req) => {
     if (targetUid) await _db().collection('notifications').add({
       targetUid, type: 'booking', heading: 'Booking cancelled',
       sub: `${_san(data.service, 120)} · ${data.date || ''} ${data.startTime || ''}`,
-      link: isProvider ? 'my-bookings.html' : 'provider-dashboard.html',
+      link: isProvider ? 'profile.html#myServiceBookingsCard' : 'workspace.html',   /* CHANGELOG 240: the old customer link pointed at a page that never existed */
       createdAt: _ts(), read: false,
     });
   } catch (e) { /* ignore */ }
@@ -643,7 +643,7 @@ _h.providerRescheduleBooking = async (req) => {
     if (targetUid) await _db().collection('notifications').add({
       targetUid, type: 'booking', heading: 'Booking rescheduled',
       sub: `${_san(data.service, 120)} → ${newDate} ${newStart}`,
-      link: isProvider ? 'my-bookings.html' : 'provider-dashboard.html',
+      link: isProvider ? 'profile.html#myServiceBookingsCard' : 'workspace.html',   /* CHANGELOG 240: the old customer link pointed at a page that never existed */
       createdAt: _ts(), read: false,
     });
   } catch (e) { /* ignore */ }
