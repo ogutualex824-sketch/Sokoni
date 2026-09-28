@@ -32,6 +32,7 @@ stub('firebase-admin/firestore', { getFirestore: () => db, FieldValue: F.FieldVa
 stub('firebase-admin', { apps: [{}], initializeApp: () => ({}), firestore: Object.assign(() => db, { FieldValue: F.FieldValue, Timestamp: F.Timestamp }), auth: () => ({}) });
 stub('./subscription-core', { resolveSubscription: async () => ({ found: false }) });
 const HW = require(Path.join(FN, 'healthcare-workspace.js'));
+const BWS = require(Path.join(FN, 'business-workspace.js'));   /* CHANGELOG 241: the dashboard projects this */
 const { makePageHarness } = require('./lib/page-harness.js');
 
 let pass = 0, fail = 0;
@@ -42,6 +43,7 @@ const H_BASE = () => _base;
 const NAMES = { hc1: 'Karen Health Centre', ph1: 'Lens & Light Studio' };
 const providerDispatch = {
   healthcareWorkspace: HW._h.healthcareWorkspace,
+  businessWorkspace: BWS._h.businessWorkspace,
   providerDashboard: async (req) => ({ profile: { name: NAMES[req.auth.uid], category: req.auth.uid === 'ph1' ? 'photographer' : 'Healthcare' }, subscription: { plan: 'free' }, bookings: [] }),
 };
 
@@ -89,9 +91,10 @@ const providerDispatch = {
         ck(`${tag}: the SOKONI mark loads beside "${NAMES[uid]}", no horizontal overflow`, base, { logo: S.logo, name: S.name, overflow: S.overflow });
         if (hc) {
           ck(`${tag}: Healthcare — Entertainment items hidden, "Patients", the server's category label, Plan reachable`,
-            !S.visibleKeys.includes('ent') && S.patients.every((t) => t === 'Patients') && /Clinic \/ Hospital \/ Facility/.test(S.kind) && S.visibleKeys.includes('subscription') && S.groups.includes('Plan'), { kind: S.kind, keys: S.visibleKeys.length, groups: S.groups });
+            !['quotes', 'bookingPin', 'calls', 'bookedHours'].some((k) => S.visibleKeys.includes(k)) && S.patients.every((t) => t === 'Patients') && /Clinic \/ Hospital \/ Facility/.test(S.kind) && S.visibleKeys.includes('subscription') && S.groups.includes('Plan'), { kind: S.kind, keys: S.visibleKeys.length, groups: S.groups });
         } else {
-          ck(`${tag}: photographer — every item and every group present`, S.visibleKeys.length === S.total && S.groups.join() === 'Overview,Storefront,Bookings,Business,Communication,Growth,Finance,Plan', { keys: S.visibleKeys.length, total: S.total, groups: S.groups });
+          /* ph1 has no business stamp → LEGACY (grandfathered): every implemented module, except Content (not a creator) */
+          ck(`${tag}: photographer (legacy) — every item except Content, every group present`, S.visibleKeys.length === S.total - 1 && !S.visibleKeys.includes('content') && S.groups.join() === 'Overview,Storefront,Bookings,Business,Communication,Growth,Finance,Plan', { keys: S.visibleKeys.length, total: S.total, groups: S.groups });
         }
         if (!phone) {
           ck(`${tag}: desktop — the sidebar is on screen`, S.left >= 0 && S.width >= 200);

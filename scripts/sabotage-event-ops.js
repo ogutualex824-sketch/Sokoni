@@ -83,6 +83,7 @@ const SUITES = {
   bizws:    ['node', ['scripts/test-business-workspace.js']],
   bizgate:  ['node', ['scripts/test-business-workspace-gates.js']],
   route:    ['node', ['scripts/test-workspace-routing.js']],
+  wsproj:   ['node', ['scripts/test-business-workspace-projection-browser.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -1334,6 +1335,24 @@ const M = [
     from: "  const safe = (r) => (typeof r === 'string' && /^[a-z0-9-]+\\.html$/.test(r) ? r : null);", to: "  const safe = (r) => (typeof r === 'string' ? r : null);", expect: /NEVER followed/ },
   { group: 'route', browser: true, name: "workspace.html never auto-opens the single home", file: "workspace.html", suite: 'route',
     from: "    if (homes.length === 1 && routed.length === 1) { location.replace('/' + safe(routed[0].route)); return; }", to: "", expect: /ONE home → straight there/ },
+
+  /* ── C2d: the dashboard is a projection of the server workspace (CHANGELOG 241) ── */
+  { group: 'wsproj', browser: true, name: "the projection shows every module", file: "sokoni-business-workspace.js", suite: "wsproj",
+    from: "      var show = !!(m && m.state === 'AVAILABLE');", to: "      var show = true;", expect: /EXACTLY the server's AVAILABLE modules/ },
+  { group: 'wsproj', browser: true, name: "the projection ignores the module state (shows anything the server mentions)", file: "sokoni-business-workspace.js", suite: "wsproj",
+    from: "      var show = !!(m && m.state === 'AVAILABLE');", to: "      var show = !!m;", expect: /EXACTLY the server's AVAILABLE modules/ },
+  { group: 'wsproj', browser: true, name: "empty sidebar groups stay visible", file: "sokoni-business-workspace.js", suite: "wsproj",
+    from: "      g.hidden = !Array.prototype.some.call(items, function (el) { return !el.hidden; });", to: "      g.hidden = false;", expect: /no empty sidebar group/ },
+  { group: 'wsproj', browser: true, name: "a pending / unclassified business gets no banner", file: "sokoni-business-workspace.js", suite: "wsproj",
+    from: "    if (box && note && w.state !== 'AVAILABLE' && w.state !== 'LEGACY_UNCLASSIFIED') {", to: "    if (false) {", expect: /banner explains the state/ },
+  { group: 'wsproj', browser: true, name: "the banner leaks the internal commercial state", file: "sokoni-business-workspace.js", suite: "wsproj",
+    from: "    var note = w.message || MESSAGE[w.reason] || null;", to: "    var note = (w.entitlement && w.entitlement.state) || w.message || MESSAGE[w.reason] || null;", expect: /banner explains the state/ },
+  { group: 'wsproj', browser: true, name: "Content & royalties is visible by default (a failed call would expose it)", file: "provider-dashboard.html", suite: "wsproj",
+    from: "<a data-hc-section=\"content\" class=\"sb-item\" href=\"/creator-studio.html\" style=\"text-decoration:none;color:inherit\" hidden>", to: "<a data-hc-section=\"content\" class=\"sb-item\" href=\"/creator-studio.html\" style=\"text-decoration:none;color:inherit\">", expect: /FAILED workspace call/ },
+  { group: 'wsproj', browser: true, name: "the four lumped items revert to one \"ent\" tag", file: "provider-dashboard.html", suite: "hcws",
+    from: "<div data-hc-section=\"quotes\" class=\"sb-item\" onclick=\"WS.open('ratecards',this)\">", to: "<div data-hc-section=\"ent\" class=\"sb-item\" onclick=\"WS.open('ratecards',this)\">", expect: /carry their own module keys/ },
+  { group: 'wsproj', browser: true, name: "the projection script is no longer loaded", file: "provider-dashboard.html", suite: "wsproj",
+    from: "<script src=\"sokoni-business-workspace.js\" defer></script>", to: "", expect: /EXACTLY the server's AVAILABLE modules|no empty sidebar group/ },
 ];
 
 const argv = process.argv.slice(2);

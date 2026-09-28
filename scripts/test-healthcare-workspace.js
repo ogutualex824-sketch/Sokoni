@@ -122,7 +122,7 @@ const NOPLAN = { shopRequestable: false };
   ck('no Entertainment-only section is ever listed', all.every((w) => !w.sections.includes('ent')));
   /* No dead ends: every section the server lists must be a REAL screen on the dashboard (an element carrying
      that data-hc-section key). A later commit that wires POS adds both the key and the screen — or this fails. */
-  const dashKeys = new Set((fs.readFileSync(Path.join(ROOT, 'provider-dashboard.html'), 'utf8').match(/data-hc-section="([a-z]+)"/g) || []).map((m) => m.slice(17, -1)));
+  const dashKeys = new Set((fs.readFileSync(Path.join(ROOT, 'provider-dashboard.html'), 'utf8').match(/data-hc-section="([a-zA-Z]+)"/g) || []).map((m) => m.slice(17, -1)));
   const listed = [...new Set(all.flatMap((w) => w.sections))];
   ck('every section the server lists exists on the dashboard — an unwired surface is never offered (no dead ends)',
     listed.every((k) => dashKeys.has(k)) && all.some((w) => w.operations.posTill), listed.filter((k) => !dashKeys.has(k)));
@@ -166,21 +166,24 @@ const NOPLAN = { shopRequestable: false };
   const items = (html.match(/<(div|a|button)[^>]*>/g) || []).filter((t) => /class="(sb-item[^"]*|more-item)"/.test(t));
   /* CHANGELOG 235: the partial mobile "More" sheet is gone — on a phone the whole sidebar is the drawer — so every
      control is a sidebar item (20 + Plan & Subscription). */
-  ck('every sidebar item carries a section key (none can escape the workspace)', items.length >= 21 && items.every((t) => /data-hc-section="[a-z]+"/.test(t)), items.filter((t) => !/data-hc-section/.test(t)));
+  ck('every sidebar item carries a section key (none can escape the workspace)', items.length >= 21 && items.every((t) => /data-hc-section="[a-zA-Z]+"/.test(t)), items.filter((t) => !/data-hc-section/.test(t)));
   ck('the sidebar brand is the SOKONI mark (assets/logosokoni.png) with the provider / facility name slot', html.includes('<img class="sb-mark" src="assets/logosokoni.png"') && html.includes('id="sbName"') && html.includes('id="sbKind"') && fs.existsSync(Path.join(ROOT, 'assets', 'logosokoni.png')));
   const groups = (html.match(/<div class="sb-group" role="group" aria-label="([A-Za-z]+)">/g) || []).map((m) => m.match(/aria-label="([A-Za-z]+)"/)[1]);
   ck('the sidebar is grouped: Overview · Storefront · Bookings · Business · Communication · Growth · Finance · Plan', groups.join() === 'Overview,Storefront,Bookings,Business,Communication,Growth,Finance,Plan', groups);
   ck('Plan & Subscription is reachable from the sidebar (not only a settings tab)', items.some((t) => t.includes('data-hc-section="subscription"') && t.includes("P.show('settings',this,'sub')")));
   ck('on a phone the SAME sidebar is a drawer: the bottom bar Menu opens it (aria-controls/expanded), the old sheet is gone', (() => { const m = (html.match(/<div class="bn-item" id="bnMenu"[^>]*>/) || [''])[0]; return m.includes('aria-controls="sidebar"') && m.includes('aria-expanded="false"') && m.includes('onclick="Nav.open()"'); })()
     && !html.includes('id="moreSheet"') && html.includes('body.nav-open .sidebar{transform:none}'));
-  const entTagged = items.filter((t) => /data-hc-section="ent"/.test(t));
-  ck('rate cards, the booking-PIN page, call requests and booked-hours are tagged Entertainment-only',
-    entTagged.length === 4 && ['ratecards', 'entertainment.html', "'calls'", "'stats'"].every((k) => entTagged.some((t) => t.includes(k))), entTagged);
+  /* CHANGELOG 241 (C2d): the four items once lumped as "ent" now carry their OWN module keys, so the server workspace
+     (business-workspace) offers each per category — a plumber gets quotes and calls, a doctor none of them. */
+  const tagOf = (needle) => ((items.find((t) => t.includes(needle)) || '').match(/data-hc-section="([a-zA-Z]+)"/) || [])[1];
+  ck('rate cards, the booking-PIN page, call requests and booked-hours carry their own module keys',
+    tagOf("'ratecards'") === 'quotes' && tagOf('entertainment.html') === 'bookingPin' && tagOf("WS.open('calls'") === 'calls' && tagOf("'stats'") === 'bookedHours'
+    && !items.some((t) => /data-hc-section="ent"/.test(t)), { q: tagOf("'ratecards'"), p: tagOf('entertainment.html'), c: tagOf("WS.open('calls'"), h: tagOf("'stats'") });
   ck('every roster label is swappable to "Patients" (sidebar, page title)', (html.match(/data-hc-label="customers"/g) || []).length === 2);
 
   say('\n── the client applies only the server\'s answer ──');
   /* A minimal DOM: enough to run apply() against the tagged markup. */
-  const els = items.map((t) => ({ key: (t.match(/data-hc-section="([a-z]+)"/) || [])[1], hidden: false, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return k === 'data-hc-section' ? this.key : null; } }));
+  const els = items.map((t) => ({ key: (t.match(/data-hc-section="([a-zA-Z]+)"/) || [])[1], hidden: false, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return k === 'data-hc-section' ? this.key : null; } }));
   const labels = [0, 1].map(() => ({ textContent: 'Customers' }));
   const box = { hidden: true, innerHTML: '' };
   global.window = {}; global.document = { readyState: 'complete', documentElement: { setAttribute() {} }, head: { appendChild() {} }, createElement: () => ({}),
@@ -190,7 +193,9 @@ const NOPLAN = { shopRequestable: false };
   const evil = Object.assign({}, W.p_pharmacy, { label: '<img src=x onerror=alert(1)>' });
   window.SokoniHealthWorkspace.apply(evil);
   const visible = els.filter((e) => !e.hidden).map((e) => e.key);
-  ck('Entertainment-only items are hidden for a Healthcare practice', els.filter((e) => e.key === 'ent').every((e) => e.hidden));
+  /* the four once-lumped "ent" items, by their own module keys — present (not vacuous) AND hidden for Healthcare */
+  const entItems = els.filter((e) => ['quotes', 'bookingPin', 'calls', 'bookedHours'].includes(e.key));
+  ck('rate cards, booking PIN, calls and booked hours are hidden for a Healthcare practice', entItems.length === 4 && entItems.every((e) => e.hidden), entItems.map((e) => e.key + ':' + e.hidden));
   ck('the patient roster stays visible', visible.includes('customers') && labels.every((l) => l.textContent === 'Patients'));
   ck('the banner states the category, plan and blocked items — escaped', !box.hidden && /&lt;img/.test(box.innerHTML) && !/<img/.test(box.innerHTML) && /Quick Charge/.test(box.innerHTML));
 

@@ -1,3 +1,50 @@
+## 2026-09-28 (241) — C2d: the provider dashboard is a projection of the server workspace, for every category
+
+Convergence slice C2d, which completes C2 (C2a authority → C2b server gates → C2c one route → C2d projection). Not
+deployed. No production writes.
+
+**Before:**
+- `provider-dashboard` hid modules only for Healthcare accounts. Every other provider saw every module, including
+  Entertainment's rate cards, booking PIN, call requests and booked hours, whatever its category.
+- Those four were lumped under one `ent` tag, so they could not be offered per category.
+
+**Now:**
+- **`sokoni-business-workspace.js` (new)** asks the server (`providerDispatch {op:'businessWorkspace'}`, C2a) and
+  renders the answer.
+  - AVAILABLE modules are shown. Every other state is hidden: NOT_APPLICABLE, NOT_IMPLEMENTED, LOCKED,
+    COMMERCIAL_DECISION_REQUIRED, PENDING_APPROVAL.
+  - A group left empty disappears with its heading.
+  - The server gates (C2b) refuse the same modules on a direct call, so the sidebar and the server agree.
+- **Separate module keys:** the four former `ent` items carry their own keys (`quotes`, `bookingPin`, `calls`,
+  `bookedHours`). A plumber gets quotes and calls, a doctor gets none of the four, and an artist gets the booking PIN.
+- **Content & royalties** is a new sidebar entry to creator-studio. It is hidden by default and shown only when the
+  server says AVAILABLE, which means an ACTIVE creator.
+- **Banners** explain a pending, unclassified or suspended business, and a category whose workspace is not built yet
+  (hotel, restaurant, property). Internal commercial states are never shown to the provider.
+- **A failed workspace call** hides nothing that was visible and invents nothing. Content stays hidden, and the server
+  gates still hold.
+- **Healthcare:** `sokoni-health-workspace.js` keeps its patient labels, category/plan banner and availability
+  routing. Both scripts read the same authority, which has Healthcare as rows, so they agree.
+
+**Files:**
+- New: `sokoni-business-workspace.js`, `scripts/test-business-workspace-projection-browser.js`.
+- Changed: `provider-dashboard.html` (module keys, Content entry, script), `scripts/sabotage-event-ops.js`.
+- `scripts/test-healthcare-workspace.js`: the tag checks accept camelCase keys and assert the four items' own keys.
+  The Healthcare-hides-them check no longer passes vacuously; it requires all four present AND hidden.
+- `scripts/test-provider-dashboard-sidebar-browser.js`: routes the real `businessWorkspace`. The legacy photographer
+  now sees every item except Content, since it is not a creator.
+
+**Tests:**
+- `test-business-workspace-projection-browser` 29/0 (Chromium): for 10 kinds of business the sidebar shows EXACTLY the server's AVAILABLE modules.
+  - The kinds: plumber, doctor, salon, artist, artist + creator, lawyer, unclassified, legacy, suspended, hotel.
+  - The plumber and the doctor are also checked at 390 px, through the phone drawer.
+  - Also checked: empty groups, banners, and the failed-call fallback.
+- Baseline against `300ddaa`, 11 suites: 9 identical. `sidebar-browser` (89/1) and `withdrawal-browser` (22/1) differed under parallel load and pass solo twice (90/0, 23/0).
+
+**Sabotage `wsproj`:** 8/8 caught, tree restored byte-identical.
+
+**C2 complete:** C1 category → C2a workspace authority → C2b server gates → C2c one route → C2d dashboard projection.
+
 ## 2026-09-28 (240) — C2c: ONE route to every workspace (workspace.html asks the server)
 
 Convergence slice C2c. Not deployed. No production writes.
