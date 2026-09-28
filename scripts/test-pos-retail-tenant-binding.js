@@ -138,9 +138,37 @@ ck('a single helper binds every handler', CODE.indexOf('function _boundSellerId(
 ck('it refuses a caller naming another shop',
    CODE.indexOf('if (!isAdmin && sid !== auth.uid) {') > -1 &&
    CODE.indexOf("'You can only access your own shop.'") > -1);
-ck('admin is the only exception, declared once',
-   (CODE.split('_boundSellerId').length - 1) === 8,
-   'one definition plus seven call sites');
+/* Counted on the PARSED file, not its text: a comment can never be an Identifier, so
+   prose mentioning the helper cannot move the count. The invariant is one definition
+   and the handlers that call it — nothing else may reference the binding (an alias or
+   a second definition is how a second admin exception would appear). Q0b-1 added two
+   call sites (getPOSCustomer, upsertPOSCustomer): 7 → 9. */
+{
+  let parser = null;
+  for (const at of ['@babel/parser', path.join(ROOT, 'functions', 'node_modules', '@babel/parser')]) {
+    try { parser = require(at); break; } catch (_) { /* try the next */ }
+  }
+  let defs = -1, calls = -1, refs = -1;
+  if (parser) {
+    defs = 0; calls = 0; refs = 0;
+    const walk = (n) => {
+      if (!n || typeof n.type !== 'string') return;
+      if (n.type === 'FunctionDeclaration' && n.id && n.id.name === '_boundSellerId') defs++;
+      if (n.type === 'CallExpression' && n.callee.type === 'Identifier' && n.callee.name === '_boundSellerId') calls++;
+      if (n.type === 'Identifier' && n.name === '_boundSellerId') refs++;
+      for (const k of Object.keys(n)) {
+        if (k === 'loc' || /Comments$/.test(k)) continue;
+        const v = n[k];
+        if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v.type === 'string') walk(v);
+      }
+    };
+    walk(parser.parse(RE, { sourceType: 'script' }).program);
+  }
+  ck('admin is the only exception, declared once',
+     !!parser && defs === 1 && calls === 9 && refs === defs + calls,
+     parser ? 'definitions=' + defs + ' call sites=' + calls + ' references=' + refs + ' (expected 1 / 9 / 10)'
+            : '@babel/parser unavailable — UNVERIFIED, not passed');
+}
 ['getInventoryAlerts', 'getInventoryInsights', 'getReorderSuggestions',
  'getPOSAnalytics', 'getLivePOSMetrics', 'getBranchComparison'].forEach((fn) => {
   const at = CODE.indexOf('exports.' + fn + ' = onCall');

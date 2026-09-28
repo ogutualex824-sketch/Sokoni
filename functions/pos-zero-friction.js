@@ -120,16 +120,51 @@ function _assertProductOwned(prod, owners, productId) {
    exactly as before. */
 const _CUSTOMER_SCOPE = require('./pos-customer-scope');
 function _assertCustomerOwned(snap, owners) {
-  const d = snap.data() || {};
-  const sid = d[_CUSTOMER_SCOPE.OWNER_FIELD];
-  if (sid !== undefined) {
-    if (typeof sid !== 'string' || !sid.trim()) {
-      _e('This customer record has an unreadable owner, so it cannot be used here.', 'permission-denied');
-    }
-    if (!owners.has(sid.trim())) _e('This customer belongs to another shop.', 'permission-denied');
+  /* Q0b-1 — the strict rule lives in pos-customer-scope.js (classifyCustomer), the one authority
+     every POS customer read and write uses; this only turns its verdict into the sale's refusal. */
+  const verdict = _CUSTOMER_SCOPE.classifyCustomer(snap.id, snap.data(), owners);
+  if (verdict === 'owned') return;
+  if (verdict === 'malformed') {
+    _e('This customer record has an unreadable owner, so it cannot be used here.', 'permission-denied');
   }
-  for (const o of owners) if (_CUSTOMER_SCOPE.ownsCustomer(snap.id, d, o)) return;
+  if (verdict === 'foreign') _e('This customer belongs to another shop.', 'permission-denied');
   _e('This customer is not on record as a customer of this shop.', 'permission-denied');
+}
+
+/* ══ Q0b-1 — WHOSE CUSTOMERS A TILL MAY LOOK UP ══════════════════════════════════════════════
+   The request's `merchantId` is a CLAIM. It is proven by the same two authorities the checkout
+   admits a sale by — resolveActor (the shop owner and the shop's staff), or the canonical business
+   membership — and the accepted customer owners are then _merchantOwnerSet's, exactly as for the
+   sale's customer check (Q0a). So a till can look up precisely the customers it can sell to.
+
+   The membership capability is `customers`, the canonical permission for customer work (cashier,
+   waiter, receptionist, supervisor, manager hold it) — not the checkout's `sales`, which no default
+   role grants. This is a separate helper by decision: the checkout's inline proof is pinned
+   verbatim by gate suites and is left untouched; converging the two is workforce-authority work. */
+async function _proveCustomerMerchant(callerUid, merchantId) {
+  let actor = null;
+  try {
+    actor = await resolveActor(callerUid, merchantId);
+  } catch (_) {
+    _e('Staff permissions could not be checked, so no customer was looked up.', 'unavailable');
+  }
+  if (actor && actor.ok) return { provenBy: 'shop_actor', provenBusinessId: null };
+  let canon = null;
+  try {
+    const b = await db.collection('businesses').doc(String(merchantId)).get();
+    if (b.exists) canon = String(merchantId);
+    else {
+      const own = await _resolveMerchantIdForOwner(String(merchantId));
+      if (own && own.ok) canon = own.merchantId;
+    }
+  } catch (_) { canon = null; }
+  if (canon) {
+    try {
+      await _assertBusinessPermission(callerUid, canon, 'customers');
+      return { provenBy: 'workspace_membership', provenBusinessId: canon };
+    } catch (_) { /* not a member here, or no `customers` capability */ }
+  }
+  _e('You are not authorised to look up customers for this shop.', 'permission-denied');
 }
 
 async function _assertAuth(auth) {
@@ -1329,36 +1364,38 @@ exports.posValidateCoupon = onCall(cfg, async ({ data, auth }) => {
    posLookupCustomer — multi-method: phone, QR code, member ID, email
 ════════════════════════════════════════════════════════════════ */
 exports.posLookupCustomer = onCall(cfg, async ({ data, auth }) => {
-  await _assertAuth(auth);
+  const callerUid = await _assertAuth(auth);
   const { query, method = 'auto', merchantId } = data || {};
-  if (!query) _e('query required');
+  if (!query || typeof query !== 'string' || !query.trim() || query.length > 200) _e('query required');
+  if (!merchantId || typeof merchantId !== 'string') _e('merchantId required');
 
-  const q    = String(query).trim();
-  const coll = db.collection('posCustomers');
-  let snap   = null;
+  /* Q0b-1 — every lookup is scoped to the customers of the merchant PROVEN for this caller (see
+     _proveCustomerMerchant). Previously this searched posCustomers platform-wide by phone, id, email
+     and member card and returned name, phone, email, points, tier and spend: enumerable
+     cross-tenant PII. A miss and "exists but belongs to someone else" are the same `{found:false}`;
+     telling them apart would itself disclose that the customer exists. */
+  const proof  = await _proveCustomerMerchant(callerUid, merchantId);
+  const owners = await _merchantOwnerSet(merchantId, proof.provenBy, proof.provenBusinessId);
+
+  const q   = query.trim();
+  let doc   = null;
 
   if (method === 'phone' || method === 'auto') {
     const phone = q.replace(/\s/g, '').replace(/^0/, '+254');
-    snap = await coll.where('phone', '==', phone).limit(1).get();
-    if (snap.empty) snap = await coll.where('phone', '==', q).limit(1).get();
+    doc = await _CUSTOMER_SCOPE.findOwnedByPhone(db, owners, [phone, q], q);
+  }
+  if (!doc && (method === 'id' || method === 'auto')) {
+    doc = await _CUSTOMER_SCOPE.getOwnedIn(db, owners, q);
+  }
+  if (!doc && (method === 'email' || method === 'auto')) {
+    doc = await _CUSTOMER_SCOPE.findOwnedIn(db, owners, 'email', q.toLowerCase());
+  }
+  if (!doc && (method === 'memberCard' || method === 'auto')) {
+    doc = await _CUSTOMER_SCOPE.findOwnedIn(db, owners, 'memberCardCode', q.toUpperCase());
   }
 
-  if ((!snap || snap.empty) && (method === 'id' || method === 'auto')) {
-    const direct = await coll.doc(q).get();
-    if (direct.exists) snap = { docs: [direct], empty: false };
-  }
+  if (!doc) return { found: false };
 
-  if ((!snap || snap.empty) && (method === 'email' || method === 'auto')) {
-    snap = await coll.where('email', '==', q.toLowerCase()).limit(1).get();
-  }
-
-  if ((!snap || snap.empty) && (method === 'memberCard' || method === 'auto')) {
-    snap = await coll.where('memberCardCode', '==', q.toUpperCase()).limit(1).get();
-  }
-
-  if (!snap || snap.empty) return { found: false };
-
-  const doc  = snap.docs[0];
   const cust = doc.data();
 
   /* Fetch loyalty info if merchantId provided */

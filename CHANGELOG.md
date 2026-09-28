@@ -1,3 +1,51 @@
+## 2026-09-28 (164) — L-6: port Q0b-1 onto the POS lineage — a till and a merchant see and write only their own customers (NOT deployed)
+
+**Lineage reconciliation, unit 6.** On the POS lineage, `posLookupCustomer`, `getPOSCustomer` and `upsertPOSCustomer`
+read and wrote `posCustomers` across the whole platform:
+- any account could look up any merchant's customer by phone, id, email or member card;
+- `upsertPOSCustomer` with a `customerId` could replace another merchant's customer document.
+
+The fix already existed on the main line (64d68b1, with the tripwire repairs d2a6f3c and 287bf37), but not here.
+
+- **Change** (line-for-line the source patch; applied cleanly on L-5):
+  - **`pos-customer-scope.js`:** `classifyCustomer` is the one strict authority (owned / foreign / malformed / unowned),
+    with owner-scoped query helpers. Q0a's checkout check now uses it.
+  - **`posLookupCustomer`:** proves the claimed merchant (resolveActor, or membership with `customers`) and returns only
+    that merchant's customers. A miss and a foreign customer give the same `{found:false}`.
+  - **`getPOSCustomer` / `upsertPOSCustomer`:** bound by the existing `_boundSellerId`.
+  - **`upsertPOSCustomer`:** runs as one transaction. It creates new customers with `create()` at `{owner}_{254…}`, a
+    `customerId` must be the caller's own, and an owner that changes mid-request fails closed.
+  - **Also fixed in these handlers** (from the source patch): a customer without an email was rejected, and
+    upserted customers could not be found by phone.
+  - `recordPOSSale` is untouched (M0-2's sale path; its customer is L-7).
+- **Tests:**
+  - new `scripts/test-q0b-customer-scope.js`;
+  - tripwires `scripts/test-pos-customer-scope.js` (d2a6f3c: it now protects Q0b-1's authority, not 9360cbd's) and
+    `scripts/test-pos-retail-tenant-binding.js` (287bf37: it counts on the parsed file — 1 definition, 9 call sites).
+    Both are byte-identical to the main line.
+- **Files:** `functions/pos-customer-scope.js`, `functions/pos-retail-engine.js`, `functions/pos-zero-friction.js`, the three
+  scripts above, new `docs/repairs/POS-Q0b1-customer-scope.md` (with an L-6 port section), `CHANGELOG.md`.
+- **Database:** new customers are created at a deterministic id `{owner}_{254…}` with `sellerId`. Existing documents
+  are untouched, and no migration is needed.
+- **API:**
+  - `posLookupCustomer` requires a proven `merchantId`;
+  - a foreign or missing `customerId` on upsert returns the same refusal;
+  - `getPOSCustomer` never returns another merchant's customer.
+- **Security:** closes the platform-wide customer PII read and the cross-tenant overwrite of customer records.
+- **Evidence:**
+  - 40/0 new vs 5/35 old (`304c971`); Q0a re-certified 26/0.
+  - Mutants: 16/17 and 10/11 caught. Both survivors are documented: `unowned-allowed`, which the Q0a suite catches, and the
+    pre-transaction check (defence in depth).
+  - Earlier units all green: L-5 26/0, L-4 31/0, L-3 13/0, L-2 16/0 + 20/0, L-1 27/0, R-48H 12/0, M0-3 31/0, M0-2 13/0,
+    M0-1 20/0, P0 9/0, rail 46/0.
+  - Repaired tripwires: 51/0 and 33/0 on new; 25/26 and 32/1 on the old code.
+  - Floor: only the two tripwire suites change summary line. The rest are offsets, the adjudicated auditor false positive
+    (moved to :463), uncommitted-tree artifacts, and flaky suites. None is unexplained.
+  - Syntax gate clean.
+- **Open, not done here:** `recordPOSSale` customer (L-7), `posGetCustomerInsights` (L-7), Q0c (L-8), and
+  `posWallets/{customer.id}`.
+- **Breaking:** `posLookupCustomer` without a proven `merchantId` is refused. The shipped till sends it.
+
 ## 2026-09-28 (163) — L-5: port Q0a onto the POS lineage — the till cannot mint, burn or cross-tenant loyalty points (NOT deployed)
 
 **Lineage reconciliation, unit 5.** On the POS lineage, `posCompleteCheckout` subtracted the browser's

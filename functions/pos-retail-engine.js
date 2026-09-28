@@ -160,19 +160,35 @@ function _calcPoints(amount) { return Math.floor(amount / 10); }
  * CF: getPOSCustomer — look up by phone or customerId
  * Returns customer profile + loyalty status
  */
+/* Q0b-1 — getPOSCustomer and upsertPOSCustomer read and write ONLY the caller's own customers.
+
+   Both searched posCustomers collection-wide, so any seller could read any merchant's customer by
+   phone or id, and upsert's "existing customer" match UPDATED another merchant's record — and, given
+   a customerId, `set()` REPLACED another merchant's document outright. The 2026-08-16 scope fix
+   (9360cbd, reverted by the 2026-09-15 bulk capture 2f4fc20) stamped the attacker as owner of that
+   overwrite rather than refusing it; it is not restored as it was.
+
+   The owner is this file's tenant binding (_boundSellerId): the caller's own uid, or — for an admin,
+   the one authority that convention already recognises — a seller the admin names. A non-admin
+   naming another seller is refused. Staff are refused here by that same convention, as it states.
+   Ownership is pos-customer-scope's strict rule (classifyCustomer); the owner is part of every
+   query. A miss and a foreign record answer the same `{found:false}`. */
+const _custScope = require('./pos-customer-scope');
+
 exports.getPOSCustomer = onCall({ enforceAppCheck: true }, exports._h.getPOSCustomer = async (req) => {
-  _adminOrSeller(req);
-  const { phone, customerId } = req.data || {};
+  const auth = _adminOrSeller(req);
+  const { phone, customerId, sellerId } = req.data || {};
+  const owners = new Set([_boundSellerId(auth, sellerId)]);
+  const fdb = admin.firestore();
 
   let snap;
   if (customerId) {
-    snap = await admin.firestore().collection('posCustomers').doc(_san(customerId, 40)).get();
+    if (!_custScope.isCustomerDocId(customerId)) throw new HttpsError('invalid-argument', 'Invalid customerId');
+    snap = await _custScope.getOwnedIn(fdb, owners, customerId);
   } else if (phone) {
-    const normalized = _normalizePhone(phone);
+    const normalized = _custScope.canonicalPhone(phone);
     if (!normalized) throw new HttpsError('invalid-argument', 'Invalid phone number');
-    const q = await admin.firestore().collection('posCustomers')
-      .where('phone', '==', normalized).limit(1).get();
-    snap = q.empty ? null : q.docs[0];
+    snap = await _custScope.findOwnedByPhone(fdb, owners, [normalized], normalized);
   } else {
     throw new HttpsError('invalid-argument', 'phone or customerId required');
   }
@@ -188,40 +204,79 @@ exports.getPOSCustomer = onCall({ enforceAppCheck: true }, exports._h.getPOSCust
  * CF: upsertPOSCustomer — create or update customer profile
  */
 exports.upsertPOSCustomer = onCall({ enforceAppCheck: true }, exports._h.upsertPOSCustomer = async (req) => {
-  _adminOrSeller(req);
-  const { customerId, phone, name, email } = req.data || {};
+  const auth = _adminOrSeller(req);
+  const { customerId, phone, name, email, sellerId } = req.data || {};
+  const owner  = _boundSellerId(auth, sellerId);
+  const owners = new Set([owner]);
+  const fdb    = admin.firestore();
+  const coll   = fdb.collection('posCustomers');
 
-  const normalized = _normalizePhone(phone);
+  const normalized = _custScope.canonicalPhone(phone);
   if (!normalized) throw new HttpsError('invalid-argument', 'Invalid phone number');
+  if (customerId !== undefined && customerId !== null && customerId !== '' && !_custScope.isCustomerDocId(customerId)) {
+    throw new HttpsError('invalid-argument', 'Invalid customerId');
+  }
+  /* One message for "no such customer" and "someone else's customer": a refusal must not tell the
+     caller whether another merchant's record exists. */
+  const notYours = () => new HttpsError('permission-denied', 'That customer is not one of your customers.');
 
-  /* Look up existing by phone */
-  const existing = await admin.firestore().collection('posCustomers')
-    .where('phone', '==', normalized).limit(1).get();
+  /* Read, verify and write in ONE transaction, so an owner that changes between the read and the
+     write aborts the write instead of landing on a record that is no longer ours. A new customer is
+     CREATED at the deterministic id {owner}_{phone}: two simultaneous first upserts of one phone make
+     one record (the loser's create() fails, and its retry finds and updates the winner's). */
+  const upsertOnce = () => fdb.runTransaction(async (txn) => {
+    let target = null;
+    if (customerId) {
+      const s = await txn.get(coll.doc(customerId));
+      if (!s.exists || _custScope.classifyCustomer(s.id, s.data(), owners) !== 'owned') throw notYours();
+      target = s;
+    } else {
+      const compRef = coll.doc(owner + '_' + normalized);
+      const [comp, byField] = await Promise.all([
+        txn.get(compRef),
+        txn.get(coll.where(_custScope.OWNER_FIELD, '==', owner).where('phone', '==', normalized).limit(1)),
+      ]);
+      if (comp.exists) {
+        /* our deterministic id, but the body says otherwise: never write through it */
+        if (_custScope.classifyCustomer(comp.id, comp.data(), owners) !== 'owned') throw notYours();
+        target = comp;
+      } else if (!byField.empty && _custScope.classifyCustomer(byField.docs[0].id, byField.docs[0].data(), owners) === 'owned') {
+        target = byField.docs[0];   /* an owned record from before the deterministic id */
+      }
+    }
 
-  const docRef = !existing.empty
-    ? existing.docs[0].ref
-    : (customerId
-        ? admin.firestore().collection('posCustomers').doc(_san(customerId, 40))
-        : admin.firestore().collection('posCustomers').doc());
-
-  const payload = {
-    phone:         normalized,
-    name:          name ? _san(name, 100)  : (existing.empty ? 'Guest Customer' : admin.firestore.FieldValue.delete()),
-    email:         email ? _san(email, 200) : admin.firestore.FieldValue.delete(),
-    updatedAt:     now(),
-  };
-
-  if (existing.empty) {
-    /* New customer */
-    await docRef.set({
+    const payload = {
+      phone:     normalized,
+      name:      name ? _san(name, 100) : (target ? admin.firestore.FieldValue.delete() : 'Guest Customer'),
+      email:     email ? _san(email, 200) : admin.firestore.FieldValue.delete(),
+      updatedAt: now(),
+    };
+    if (target) {
+      /* An owned record keeps its owner; stamping repairs one owned only through its composite id. */
+      txn.update(target.ref, { ...payload, ..._custScope.ownerStamp(owner) });
+      return target.ref;
+    }
+    const ref = coll.doc(owner + '_' + normalized);
+    txn.create(ref, {
       ...payload,
+      name:          name ? _san(name, 100) : 'Guest Customer',
+      email:         email ? _san(email, 200) : null,
+      ..._custScope.ownerStamp(owner),
       loyaltyPoints: 0,
       totalSpend:    0,
       visitCount:    0,
       createdAt:     now(),
     });
-  } else {
-    await docRef.update(payload);
+    return ref;
+  });
+
+  let docRef;
+  try {
+    docRef = await upsertOnce();
+  } catch (e) {
+    /* ALREADY_EXISTS: a concurrent first upsert created the record — the retry updates it. */
+    if (e && (e.code === 6 || e.code === 'already-exists' || /ALREADY_EXISTS/.test(String(e.message)))) docRef = await upsertOnce();
+    else throw e;
   }
 
   const snap = await docRef.get();

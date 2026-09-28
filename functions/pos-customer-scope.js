@@ -100,6 +100,92 @@ function ownsCustomer(docId, data, ownerUid) {
 }
 
 /**
+ * STRICT ownership against the SET of identities proven for the caller — the one authority every
+ * POS customer read and write uses (posLookupCustomer, getPOSCustomer, upsertPOSCustomer, and the
+ * checkout's customer check).
+ *
+ *   'malformed'  a present `sellerId` that is not a non-empty string
+ *   'foreign'    a present `sellerId` naming someone outside the set — even when the document id
+ *                carries one of our prefixes: id and body disagreeing is not ownership
+ *   'owned'      ownsCustomer() holds for one of the proven identities
+ *   'unowned'    nothing on the record names anyone in the set (including no owner at all)
+ */
+function classifyCustomer(docId, data, owners) {
+  const d = data || {};
+  const sid = d[OWNER_FIELD];
+  if (sid !== undefined) {
+    if (typeof sid !== 'string' || !sid.trim()) return 'malformed';
+    if (!owners.has(sid.trim())) return 'foreign';
+  }
+  for (const o of owners) if (ownsCustomer(docId, d, o)) return 'owned';
+  return 'unowned';
+}
+
+/** A customer document id as a caller may name it: one path segment, bounded. */
+function isCustomerDocId(id) {
+  return typeof id === 'string' && /^[^/]{1,200}$/.test(id) && id !== '.' && id !== '..' && !/^__.*__$/.test(id);
+}
+
+/**
+ * The canonical phone key of a POS customer — `254XXXXXXXXX`, or null. This is the phone segment
+ * of the deterministic id `{owner}_{phone}` that upsertPOSCustomer creates, so every lookup that
+ * reads a composite id must derive it here. (Same accepted shapes as pos-retail-engine's
+ * _normalizePhone: 07…/01… and 2547…/2541…, any punctuation or '+' stripped.)
+ */
+function canonicalPhone(phone) {
+  if (phone === undefined || phone === null) return null;
+  const p = String(phone).replace(/\D/g, '');
+  if (/^0[17]\d{8}$/.test(p)) return '254' + p.slice(1);
+  if (/^254[17]\d{8}$/.test(p)) return p;
+  return null;
+}
+
+/* ── Owner-scoped reads over a SET of proven identities ────────────────────────────────────────
+   Every query carries the owner filter, so another merchant's customer never enters memory. The
+   only direct document reads are of ids that carry one of OUR prefixes (`{owner}_…`); such a
+   record is still classified, so a body naming someone else is refused, never returned. */
+async function findOwnedIn(db, owners, field, value) {
+  if (!owners || !owners.size || value === undefined || value === null || value === '') return null;
+  const snap = await db.collection(COLLECTION)
+    .where(OWNER_FIELD, 'in', [...owners])
+    .where(field, '==', value)
+    .limit(5)
+    .get();
+  for (const d of snap.docs) if (classifyCustomer(d.id, d.data(), owners) === 'owned') return d;
+  return null;
+}
+async function getOwnedIn(db, owners, customerId) {
+  if (!owners || !owners.size || !isCustomerDocId(customerId)) return null;
+  for (const o of owners) {
+    if (String(customerId).indexOf(String(o) + '_') === 0) {
+      const s = await db.collection(COLLECTION).doc(customerId).get();
+      return s.exists && classifyCustomer(s.id, s.data(), owners) === 'owned' ? s : null;
+    }
+  }
+  const { FieldPath } = require('firebase-admin/firestore');
+  const q = await db.collection(COLLECTION)
+    .where(FieldPath.documentId(), '==', db.collection(COLLECTION).doc(customerId))
+    .where(OWNER_FIELD, 'in', [...owners])
+    .limit(1)
+    .get();
+  const d = q.empty ? null : q.docs[0];
+  return d && classifyCustomer(d.id, d.data(), owners) === 'owned' ? d : null;
+}
+async function findOwnedByPhone(db, owners, storedForms, phone) {
+  for (const p of storedForms) {
+    const d = await findOwnedIn(db, owners, 'phone', p);
+    if (d) return d;
+  }
+  const key = canonicalPhone(phone);
+  if (!key || !owners || !owners.size) return null;
+  for (const o of owners) {
+    const s = await db.collection(COLLECTION).doc(String(o) + '_' + key).get();
+    if (s.exists && classifyCustomer(s.id, s.data(), owners) === 'owned') return s;
+  }
+  return null;
+}
+
+/**
  * The stamp every create must carry. Written from the resolved owner, so a
  * record can never be created without one again.
  */
@@ -143,6 +229,12 @@ module.exports = {
   OWNER_FIELD,
   resolveOwner,
   ownsCustomer,
+  classifyCustomer,
+  isCustomerDocId,
+  canonicalPhone,
+  findOwnedIn,
+  getOwnedIn,
+  findOwnedByPhone,
   ownerStamp,
   findOwned,
   getOwned,
