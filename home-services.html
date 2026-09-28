@@ -455,18 +455,18 @@ function renderProvidersGrid(list){
   grid.innerHTML=list.map(p=>`
     <div class="hs-card">
       <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px;">
-        <div style="width:48px;height:48px;border-radius:12px;background:rgba(245,158,11,0.1);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;border:1px solid rgba(245,158,11,0.15);">${p.emoji}</div>
+        <div style="width:48px;height:48px;border-radius:12px;background:rgba(245,158,11,0.1);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;border:1px solid rgba(245,158,11,0.15);">${escapeHTML(p.emoji)}</div>
         <div style="flex:1;">
-          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:1px;">${p.name} ${p.certified?'<span style="font-size:8px;background:rgba(245,158,11,0.1);color:#f59e0b;padding:1px 5px;border-radius:3px;border:1px solid rgba(245,158,11,0.2);">✓ Verified</span>':''}</div>
-          <div style="font-size:11px;color:#f59e0b;font-weight:700;">${p.specialty}</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.35);">📍 ${p.area} · ${p.exp} · ⭐ ${p.rating} <span style="color:rgba(255,255,255,0.2);">(${p.jobs} jobs)</span></div>
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:1px;">${escapeHTML(p.name)} ${p.certified?'<span style="font-size:8px;background:rgba(245,158,11,0.1);color:#f59e0b;padding:1px 5px;border-radius:3px;border:1px solid rgba(245,158,11,0.2);">✓ Verified</span>':''}</div>
+          <div style="font-size:11px;color:#f59e0b;font-weight:700;">${escapeHTML(p.specialty)}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);">📍 ${escapeHTML(p.area)} · ${escapeHTML(p.exp)} · ⭐ ${escapeHTML(p.rating)} <span style="color:rgba(255,255,255,0.2);">(${escapeHTML(p.jobs)} jobs)</span></div>
         </div>
       </div>
-      <div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.55;margin-bottom:10px;">${p.bio}</div>
-      <div style="font-size:15px;font-weight:900;color:#f59e0b;margin-bottom:12px;">${p.rate}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.55;margin-bottom:10px;">${escapeHTML(p.bio)}</div>
+      <div style="font-size:15px;font-weight:900;color:#f59e0b;margin-bottom:12px;">${escapeHTML(p.rate)}</div>
       <div style="display:flex;gap:6px;">
-        <button type="button" onclick="contactProvider('${(p.id||'').replace(/'/g,'').replace(/"/g,'')}','${(p.name||'').replace(/'/g,'\\\'').replace(/"/g,'')}','${(p.phone||'').replace(/'/g,'').replace(/"/g,'')}')" class="hs-wa-btn" style="flex:1;">💬 WhatsApp</button>
-        <button type="button" onclick="openReviewModal('${(p.id||'').replace(/'/g,'').replace(/"/g,'')}','${(p.name||'').replace(/'/g,'\\\'').replace(/"/g,'')}')" style="padding:8px 12px;border:1px solid rgba(245,158,11,0.2);border-radius:9px;background:rgba(245,158,11,0.05);color:#f59e0b;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;" title="Rate this provider">⭐ Rate</button>
+        <button type="button" data-id="${escapeHTML(p.id)}" data-name="${escapeHTML(p.name)}" data-phone="${escapeHTML(p.phone)}" onclick="contactProvider(this.dataset.id,this.dataset.name,this.dataset.phone)" class="hs-wa-btn" style="flex:1;">💬 WhatsApp</button>
+        <button type="button" data-id="${escapeHTML(p.id)}" data-name="${escapeHTML(p.name)}" onclick="openReviewModal(this.dataset.id,this.dataset.name)" style="padding:8px 12px;border:1px solid rgba(245,158,11,0.2);border-radius:9px;background:rgba(245,158,11,0.05);color:#f59e0b;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;" title="Rate this provider">⭐ Rate</button>
       </div>
     </div>`).join('');
 }

@@ -547,9 +547,9 @@ function renderFeed(){
   if(trendEl){
     const top = [...posts].sort((a,b)=>(b.likes+b.helpful)-(a.likes+a.helpful)).slice(0,5);
     trendEl.innerHTML = top.map((p,i)=>`
-      <div class="cm-trend-item" onclick="scrollToPost('${p.id}')">
+      <div class="cm-trend-item" data-pid="${escapeHTML(p.id)}" onclick="scrollToPost(this.dataset.pid)">
         <span class="cm-trend-num">${i+1}</span>
-        <span class="cm-trend-text">${p.title}</span>
+        <span class="cm-trend-text">${escapeHTML(p.title)}</span>
       </div>`).join("") || `<div style="font-size:12px;color:rgba(255,255,255,0.25);">No posts yet</div>`;
   }
 
@@ -567,50 +567,50 @@ function renderFeed(){
     const helpfulKey = localStorage.getItem("cmReacted_"+p.id+"_helpful");
     const replies    = p.replies || [];
     return `
-    <div class="cm-post" id="post-${p.id}">
+    <div class="cm-post" id="post-${escapeHTML(p.id)}">
       <div class="cm-post-header">
-        <div class="cm-post-avatar">${(p.author||"?")[0].toUpperCase()}</div>
+        <div class="cm-post-avatar">${escapeHTML(String(p.author||"?")[0].toUpperCase())}</div>
         <div class="cm-post-meta">
-          <div class="cm-post-author">${p.author||"Anonymous"}</div>
-          <div class="cm-post-date">${p.date||""}</div>
+          <div class="cm-post-author">${escapeHTML(p.author||"Anonymous")}</div>
+          <div class="cm-post-date">${escapeHTML(p.date||"")}</div>
         </div>
         <span class="cm-post-type-badge ${meta.badge}">${meta.label}</span>
-        ${isOwn ? `<button type="button" onclick="deletePost('${p.id}')" style="background:none;border:none;color:rgba(255,255,255,0.2);cursor:pointer;font-size:13px;margin-left:auto;">✕</button>` : ""}
+        ${isOwn ? `<button type="button" data-pid="${escapeHTML(p.id)}" onclick="deletePost(this.dataset.pid)" style="background:none;border:none;color:rgba(255,255,255,0.2);cursor:pointer;font-size:13px;margin-left:auto;">✕</button>` : ""}
       </div>
-      ${p.product ? `<div class="cm-product-tag">🏷️ ${p.product}</div>` : ""}
+      ${p.product ? `<div class="cm-product-tag">🏷️ ${escapeHTML(p.product)}</div>` : ""}
       ${stars ? `<div class="cm-star-rating">${stars}</div>` : ""}
-      <div class="cm-post-title">${p.title||""}</div>
-      <div class="cm-post-body">${ContactGuard.sanitiseForDisplay(p.body||"")}</div>
+      <div class="cm-post-title">${escapeHTML(p.title||"")}</div>
+      <div class="cm-post-body">${escapeHTML(ContactGuard.sanitiseForDisplay(p.body||""))}</div>
       ${p.bodyGuarded ? `<div style="font-size:10px;color:rgba(255,100,100,0.6);margin:4px 0 8px;display:flex;align-items:center;gap:5px;">🛡️ Contact info was hidden by Sokoni Guard · <a href="marketing.html" style="color:#fb923c;font-weight:700;text-decoration:none;">Boost to share contacts</a></div>` : ""}
       <div class="cm-post-actions">
-        <button type="button" class="cm-action-btn ${likedKey?"liked":""}" onclick="likePost('${p.id}')">
+        <button type="button" class="cm-action-btn ${likedKey?"liked":""}" data-pid="${escapeHTML(p.id)}" onclick="likePost(this.dataset.pid)">
           ❤️ ${p.likes||0}
         </button>
-        <button type="button" class="cm-action-btn ${helpfulKey?"helpful":""}" onclick="markHelpful('${p.id}')">
+        <button type="button" class="cm-action-btn ${helpfulKey?"helpful":""}" data-pid="${escapeHTML(p.id)}" onclick="markHelpful(this.dataset.pid)">
           👍 Helpful ${p.helpful||0}
         </button>
-        <button type="button" class="cm-action-btn" onclick="toggleReplies('${p.id}')">
+        <button type="button" class="cm-action-btn" data-pid="${escapeHTML(p.id)}" onclick="toggleReplies(this.dataset.pid)">
           💬 ${replies.length} repl${replies.length===1?"y":"ies"}
         </button>
-        <button type="button" class="cm-action-btn" onclick="shareToWhatsApp('${encodeURIComponent(p.title||"")}')">
+        <button type="button" class="cm-action-btn" data-t="${escapeHTML(encodeURIComponent(p.title||""))}" onclick="shareToWhatsApp(this.dataset.t)">
           <i class="fab fa-whatsapp" style="color:#25d366;"></i> Share
         </button>
-        ${!isOwn && p.authorUid ? `<button type="button" class="cm-action-btn" onclick="toggleFollowUser('${p.authorUid}','${(p.author||'User').replace(/'/g,"\\'")}')">👤 Follow</button>` : ''}
-        <button type="button" class="cm-action-btn" onclick="openReport('${p.id}','post')" title="Report post" style="color:rgba(255,100,100,0.4);">🚩</button>
+        ${!isOwn && p.authorUid ? `<button type="button" class="cm-action-btn" data-uid="${escapeHTML(p.authorUid)}" data-name="${escapeHTML(p.author||'User')}" onclick="toggleFollowUser(this.dataset.uid,this.dataset.name)">👤 Follow</button>` : ''}
+        <button type="button" class="cm-action-btn" data-pid="${escapeHTML(p.id)}" onclick="openReport(this.dataset.pid,'post')" title="Report post" style="color:rgba(255,100,100,0.4);">🚩</button>
       </div>
-      <div class="cm-replies" id="replies-${p.id}">
+      <div class="cm-replies" id="replies-${escapeHTML(p.id)}">
         ${replies.map(r=>`
           <div class="cm-reply">
-            <div class="cm-reply-av">${(r.author||"?")[0].toUpperCase()}</div>
+            <div class="cm-reply-av">${escapeHTML(String(r.author||"?")[0].toUpperCase())}</div>
             <div>
-              <div class="cm-reply-author">${r.author||"Anonymous"} <span style="font-size:10px;color:rgba(255,255,255,0.3);font-weight:400;">· ${r.time||""}</span></div>
-              <div class="cm-reply-body">${ContactGuard.sanitiseForDisplay(r.text||"")}</div>
+              <div class="cm-reply-author">${escapeHTML(r.author||"Anonymous")} <span style="font-size:10px;color:rgba(255,255,255,0.3);font-weight:400;">· ${escapeHTML(r.time||"")}</span></div>
+              <div class="cm-reply-body">${escapeHTML(ContactGuard.sanitiseForDisplay(r.text||""))}</div>
             </div>
           </div>
         `).join("")}
         <div class="cm-reply-input-row">
-          <input class="cm-reply-input" id="reply-input-${p.id}" placeholder="Write a reply..." onkeydown="if(event.key==='Enter')submitReply('${p.id}')">
-          <button type="button" class="cm-reply-send" onclick="submitReply('${p.id}')">Send</button>
+          <input class="cm-reply-input" id="reply-input-${escapeHTML(p.id)}" data-pid="${escapeHTML(p.id)}" placeholder="Write a reply..." onkeydown="if(event.key==='Enter')submitReply(this.dataset.pid)">
+          <button type="button" class="cm-reply-send" data-pid="${escapeHTML(p.id)}" onclick="submitReply(this.dataset.pid)">Send</button>
         </div>
       </div>
     </div>`;
@@ -770,12 +770,12 @@ function renderCCGroups() {
   grid.innerHTML = list.map(g => {
     const isJoined = _myGroups.includes(g.id);
     return `<div class="cc-group-card" style="border-color:rgba(255,255,255,0.08);" onmouseover="this.style.borderColor='rgba(113,255,0,0.2)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'">
-      <span class="cc-group-emoji">${g.emoji}</span>
-      <div class="cc-group-name">${g.name}</div>
-      <div class="cc-group-desc">${g.desc}</div>
+      <span class="cc-group-emoji">${escapeHTML(g.emoji)}</span>
+      <div class="cc-group-name">${escapeHTML(g.name)}</div>
+      <div class="cc-group-desc">${escapeHTML(g.desc)}</div>
       <div class="cc-group-meta">
         <span class="cc-group-members">👥 ${Number(g.members+(isJoined?0:0)).toLocaleString()} members</span>
-        <button type="button" class="cc-join-btn" onclick="joinGroup('${g.id}')"
+        <button type="button" class="cc-join-btn" data-gid="${escapeHTML(g.id)}" onclick="joinGroup(this.dataset.gid)"
           style="background:${isJoined?'rgba(34,197,94,0.1)':'rgba(113,255,0,0.1)'};border:1px solid ${isJoined?'rgba(34,197,94,0.25)':'rgba(113,255,0,0.25)'};color:${isJoined?'#4ade80':'#71ff00'};">
           ${isJoined?'✓ Joined':'+ Join'}
         </button>

@@ -1221,20 +1221,20 @@ function renderClasses() {
   grid.innerHTML = list.map(c=>`
     <div class="cls-card">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-        <div style="width:44px;height:44px;border-radius:12px;background:rgba(57,255,20,0.08);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">${c.emoji||'🧘'}</div>
+        <div style="width:44px;height:44px;border-radius:12px;background:rgba(57,255,20,0.08);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">${escapeHTML(c.emoji||'🧘')}</div>
         <div>
-          <div class="cls-name">${c.name}</div>
-          <div style="font-size:11px;color:#39ff14;font-weight:700;">${c.instructor}</div>
+          <div class="cls-name">${escapeHTML(c.name)}</div>
+          <div style="font-size:11px;color:#39ff14;font-weight:700;">${escapeHTML(c.instructor)}</div>
         </div>
       </div>
-      <span class="cls-type">${c.type.charAt(0).toUpperCase()+c.type.slice(1)}</span>
-      <div class="cls-meta">📍 ${c.loc}<br>⏰ ${c.time} · ⏱ ${c.duration}<br>👥 ${c.slots} slots · 🎯 ${c.level}</div>
+      <span class="cls-type">${escapeHTML(String(c.type||'').charAt(0).toUpperCase()+String(c.type||'').slice(1))}</span>
+      <div class="cls-meta">📍 ${escapeHTML(c.loc)}<br>⏰ ${escapeHTML(c.time)} · ⏱ ${escapeHTML(c.duration)}<br>👥 ${escapeHTML(c.slots)} slots · 🎯 ${escapeHTML(c.level)}</div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
         <div class="fh-card-price" style="font-size:15px;">KES ${Number(c.fee).toLocaleString()}<span style="font-size:10px;color:rgba(255,255,255,0.3);font-weight:400;">/session</span></div>
-        <span style="font-size:10px;padding:2px 8px;background:rgba(57,255,20,0.08);border:1px solid rgba(57,255,20,0.18);border-radius:5px;color:#71ff00;font-weight:700;">${c.slots} available</span>
+        <span style="font-size:10px;padding:2px 8px;background:rgba(57,255,20,0.08);border:1px solid rgba(57,255,20,0.18);border-radius:5px;color:#71ff00;font-weight:700;">${escapeHTML(c.slots)} available</span>
       </div>
-      <button type="button" class="fh-book-btn" onclick="bookClass('${c.id}','${(c.name||'').replace(/'/g,"\\'")}','${(c.phone||'').replace(/'/g,"\\'")}',${c.fee||0})">📅 Book Class</button>
-      <button type="button" class="fh-wa-btn" style="margin-top:6px;" onclick="fitCoachConnect('${(c.phone||'').replace(/'/g,"\\'")}','${(c.instructor||'').replace(/'/g,"\\'")}',${c.fee||0})">💬 WhatsApp Instructor</button>
+      <button type="button" class="fh-book-btn" data-id="${escapeHTML(c.id)}" data-name="${escapeHTML(c.name)}" data-phone="${escapeHTML(c.phone)}" data-fee="${Number(c.fee)||0}" onclick="bookClass(this.dataset.id,this.dataset.name,this.dataset.phone,Number(this.dataset.fee))">📅 Book Class</button>
+      <button type="button" class="fh-wa-btn" style="margin-top:6px;" data-phone="${escapeHTML(c.phone)}" data-name="${escapeHTML(c.instructor)}" data-fee="${Number(c.fee)||0}" onclick="fitCoachConnect(this.dataset.phone,this.dataset.name,Number(this.dataset.fee))">💬 WhatsApp Instructor</button>
     </div>`).join('');
 }
 
@@ -1585,13 +1585,13 @@ function renderClubs() {
   grid.innerHTML=list.map(c=>`
     <div class="cm-card">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-        <div style="font-size:30px;">${c.emoji}</div>
-        <div><div style="font-size:14px;font-weight:900;color:white;">${c.name}</div>
-          <div style="font-size:11px;color:#39ff14;font-weight:700;">👥 ${c.members} members</div></div>
+        <div style="font-size:30px;">${escapeHTML(c.emoji)}</div>
+        <div><div style="font-size:14px;font-weight:900;color:white;">${escapeHTML(c.name)}</div>
+          <div style="font-size:11px;color:#39ff14;font-weight:700;">👥 ${escapeHTML(c.members)} members</div></div>
       </div>
-      <div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.55;margin-bottom:10px;">${c.desc}</div>
-      <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:12px;">⏰ ${c.meet} · 📍 ${c.loc}</div>
-      <button type="button" class="fh-wa-btn" onclick="joinClub('${(c.phone||'').replace(/'/g,"\\'")}','${(c.name||'').replace(/'/g,"\\'")}')">💬 Join Club</button>
+      <div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.55;margin-bottom:10px;">${escapeHTML(c.desc)}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:12px;">⏰ ${escapeHTML(c.meet)} · 📍 ${escapeHTML(c.loc)}</div>
+      <button type="button" class="fh-wa-btn" data-phone="${escapeHTML(c.phone)}" data-name="${escapeHTML(c.name)}" onclick="joinClub(this.dataset.phone,this.dataset.name)">💬 Join Club</button>
     </div>`).join('');
 }
 

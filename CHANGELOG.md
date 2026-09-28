@@ -1,3 +1,50 @@
+## [2026-09-28] - Stored XSS closed on five hubs that had no escaper: community, fitness, home services, unboxing, reviews
+
+**Hosting, NOT deployed.** Branch `slice/c4-category-matrix`. This is slice 2 of the stored-XSS census. It is an
+isolated security slice with no commerce or authority changes.
+
+**Proven defects** (the real render code at `4e9607b`, fed hostile author fields, parsed by a real browser; every
+surface failed):
+
+| Page | Source (public read, author-written) | Raw sinks |
+|---|---|---|
+| `community.html` | `communityPosts`: any signed-in user creates, and anyone may append `replies`. `communityGroups` | Post title, author, date, product, **body**; reply author, time and **text**. `ContactGuard.sanitiseForDisplay` masks phone numbers and emails but does NOT escape. The post id sat in eight inline handlers; the Follow button put the author's uid and name inside a JS string with only `'` escaped. Group emoji, name, description, id. |
+| `fitness-hub.html` | `fitness_classes`, `fitness_clubs` | Every class field (name, instructor, type, location, time, duration, slots, level) and every club field. The Book / WhatsApp / Join handlers took the name and phone inside JS strings with only `'` escaped, so a `"` broke out. |
+| `home-services.html` | `homeServiceProviders`: the author can self-publish via `registrationStatus` | Every card field. The WhatsApp / Rate handlers stripped quotes but not backslashes, which left injectable JavaScript. |
+| `unboxing.html` | `unboxingReviews` | The photo `src`, placeholder, product, comment, reviewer, photo count; the id in three handlers. |
+| `reviews.html` | `reviews`, buyer text | Name, target, comment, date; the id in the Helpful handler. |
+
+**Changed:**
+- Every author field goes through the canonical `escapeHTML` from `security.js`, which is loaded synchronously in
+  `<head>` on all five pages.
+- Every id, name and phone reaches its handler through `data-*` attributes read with `this.dataset`, never through
+  source text.
+- Contact masking still runs first; its output is then escaped.
+- Numbers shown as counts are coerced with `Number()`.
+
+**Tests:** `scripts/test-xss-community-hubs.js`, on the same probe as slice 1: real code, tagged hostile values, a
+Chromium parse with JavaScript disabled, and content controls.
+
+| Check | Result |
+|---|---|
+| Fix | **8/0** |
+| Counterproof on `4e9607b` | **fails all 8** |
+| Sabotage | **12/12 caught**, byte-identical restore. Attacks: body, reply text, follow handler, trending title, group name, class location, club description, provider bio, provider contact handler, unboxing comment and photo, review comment. |
+
+**Regression:** every suite that reads these pages is equal to the pristine `4e9607b` tree:
+- `test-hub-reviews` 42/0;
+- `test-start-selling-route` 22/0;
+- `test-secondary-firebase-apps` 8/1, where the one failure (`entertainment-integrations.html`) predates this slice
+  and is identical on the baseline.
+
+All three were screened: no live endpoint, and no shared emulator port.
+
+**Remaining from the census, own slices:** marketing-hub (with `sokoni-marketing.js`), property-hub, bnb-hub /
+bnb-manage / bnb, services with the sokoni-social follow button and the `sellerProducts` grid, digital, business
+(line 1141), sokoni-minishop, legal-hub, sokoni-jobs category label, sokoni-spotlight, and car-hub Buy & Sell.
+
+**Security:** closes cross-user stored XSS on five public hubs. **Data / API:** none. **Deploy:** hosting.
+
 ## [2026-09-28] - Stored XSS closed on the product surfaces: homepage, product page, category, seller page, store page, shared image resolver
 
 **Hosting, NOT deployed.** Branch `slice/c4-category-matrix`. This is slice 1 of the stored-XSS census across the

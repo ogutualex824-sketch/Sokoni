@@ -349,20 +349,20 @@ function _buildCard(r, idx){
   const initials = r.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
   const typeIcon = {platform:"🏪",seller:"👤",product:"📦",provider:"🛠️"}[r.type]||"⭐";
   const targetBadge = r.target
-    ? `<div class="rc-target">${typeIcon} ${r.target}</div>`
+    ? `<div class="rc-target">${typeIcon} ${escapeHTML(r.target)}</div>`
     : "";
   return `
   <div class="review-card ${cls}">
     <div class="rc-header">
-      <div class="rc-avatar" style="background:${bg};">${initials}</div>
+      <div class="rc-avatar" style="background:${bg};">${escapeHTML(initials)}</div>
       <div class="rc-stars">${stars}</div>
     </div>
-    <div class="rc-name">${r.name}</div>
+    <div class="rc-name">${escapeHTML(r.name)}</div>
     ${targetBadge}
-    <div class="rc-comment">"${r.comment}"</div>
+    <div class="rc-comment">"${escapeHTML(r.comment)}"</div>
     <div class="rc-footer">
-      <span class="rc-date">${r.date}</span>
-      <button type="button" class="rc-helpful" onclick="markHelpful('${r.id}')">👍 ${r.helpful||0}</button>
+      <span class="rc-date">${escapeHTML(r.date)}</span>
+      <button type="button" class="rc-helpful" data-rid="${escapeHTML(r.id)}" onclick="markHelpful(this.dataset.rid)">👍 ${Number(r.helpful)||0}</button>
     </div>
   </div>`;
 }

@@ -442,24 +442,24 @@ function renderGallery(){
     const photoCount=r.photoCount||r.photos?.length||1;
     const isRealPhoto=r.photos&&r.photos[0]&&r.photos[0].startsWith('data:');
 
-    return `<div class="ub-card" onclick="openLightbox('${r.id}')">
+    return `<div class="ub-card" data-rid="${escapeHTML(r.id)}" onclick="openLightbox(this.dataset.rid)">
       ${isRealPhoto
-        ?`<img class="ub-card-img" src="${r.photos[0]}" alt="Unboxing photo" loading="lazy">`
-        :`<div class="ub-card-img-placeholder">${r.photos?r.photos[0]:catEmoji}</div>`}
+        ?`<img class="ub-card-img" src="${escapeHTML(r.photos[0])}" alt="Unboxing photo" loading="lazy">`
+        :`<div class="ub-card-img-placeholder">${escapeHTML(r.photos?r.photos[0]:catEmoji)}</div>`}
       ${r.orderVerified===true?'<div class="ub-verified-badge">✅ Verified Buy</div>':''}
-      ${photoCount>1?`<div class="ub-multi-badge">📷 ${photoCount}</div>`:''}
+      ${photoCount>1?`<div class="ub-multi-badge">📷 ${escapeHTML(photoCount)}</div>`:''}
       <div class="ub-card-body">
         <div class="ub-card-stars">${stars}</div>
-        <div class="ub-card-product">${r.product}</div>
-        <div class="ub-card-comment">${r.comment}</div>
+        <div class="ub-card-product">${escapeHTML(r.product)}</div>
+        <div class="ub-card-comment">${escapeHTML(r.comment)}</div>
         <div class="ub-card-footer">
           <div class="ub-card-author">
-            <div class="ub-card-avatar" style="background:${bg};">${initials}</div>
-            <span class="ub-card-name">${r.reviewer||'Anonymous'}</span>
+            <div class="ub-card-avatar" style="background:${bg};">${escapeHTML(initials)}</div>
+            <span class="ub-card-name">${escapeHTML(r.reviewer||'Anonymous')}</span>
           </div>
           <div class="ub-card-actions">
-            <button type="button" class="ub-card-like ${r.liked?'liked':''}" onclick="event.stopPropagation();toggleLike('${r.id}',this)">❤️ ${r.likes||0}</button>
-            <button type="button" class="ub-card-share" onclick="event.stopPropagation();shareReview('${r.id}')">🔗</button>
+            <button type="button" class="ub-card-like ${r.liked?'liked':''}" data-rid="${escapeHTML(r.id)}" onclick="event.stopPropagation();toggleLike(this.dataset.rid,this)">❤️ ${Number(r.likes)||0}</button>
+            <button type="button" class="ub-card-share" data-rid="${escapeHTML(r.id)}" onclick="event.stopPropagation();shareReview(this.dataset.rid)">🔗</button>
           </div>
         </div>
       </div>
