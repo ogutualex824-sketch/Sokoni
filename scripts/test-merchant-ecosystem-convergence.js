@@ -44,7 +44,13 @@ head('1. SALES — lineage separation (the §22 gate)');
 const ZF = R('functions/pos-zero-friction.js');      /* TILL     */
 const RE = R('functions/pos-retail-engine.js');      /* DISPATCH */
 
-ck('TILL creates posRetailSales', /collection\('posRetailSales'\)\.doc\(saleId\)\.set\(/.test(ZF));
+/* 0b R1: the till creates its sale INSIDE the stock transaction, at an id derived from the merchant
+   and the idempotency key, and refuses to create a second one — the sale authority, not a spelling. */
+ck('TILL creates posRetailSales',
+   /const saleId\s*=\s*_saleIdFor\(merchantId,\s*idempotencyKey\)/.test(ZF)
+   && /const saleRef\s*=\s*db\.collection\('posRetailSales'\)\.doc\(saleId\)/.test(ZF)
+   && /txn\.create\(saleRef,/.test(ZF)
+   && /if \(saleSnap\.exists\) return/.test(ZF));
 ck('DISPATCH creates posSales',   /collection\('posSales'\)\.doc\(\)/.test(RE));
 /* THE SEPARATION CLAIM. Both directions, and it is an ABSENCE — so each is paired with
    the positive the same detector must find, or "0 references" could mean "cannot match". */

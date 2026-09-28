@@ -180,7 +180,12 @@ function reset() {
   CTL.membershipOk = false; CTL.liabilities = [];
   CTL.ledgerUnreadable = false; CTL.shopsUnreadable = false; CTL.ledgerQueries = 0;
   DOCS.set('businesses/' + MERCHANT, { ownerId: 'SOMEONE_ELSE' });
-  DOCS.set('products/P1', { name: 'Rice', price: 100, stock: 50, trackInventory: true });
+  /* 0b R4: a till sells only products that belong to the proven merchant, and a product with no
+     owner is refused. The fixture product therefore names its owner — the merchant under test —
+     exactly as every production product does (measured 2026-09-27: 102/102 owned). The gate
+     assertions below are unchanged. */
+  DOCS.set('products/P1', { name: 'Rice', price: 100, stock: 50, trackInventory: true,
+    sellerUid: MERCHANT, shopId: MERCHANT });
 }
 
 const call = async (uid, over = {}) => {

@@ -35,6 +35,69 @@ function _e(msg, code='invalid-argument') {
   throw new HttpsError(code, msg);
 }
 
+/* ══ 0b R1 — ONE SALE PER IDEMPOTENCY KEY, WHATEVER FAILS AFTERWARDS ═════════════════════
+   The sale id used to be random (`uid()`) and the sale, receipt and daily summary were written
+   AFTER the stock transaction. A failure in any of those writes marked the key 'failed'; the
+   retry re-claimed it and ran the whole checkout again — a second sale id, a second stock
+   deduction, a second loyalty award. The id is now DERIVED from the merchant and the key, and
+   the sale, its receipt and its base daily counters are created INSIDE the stock transaction.
+   A retry finds the committed sale and completes it instead of selling again. */
+const _crypto = require('crypto');
+function _saleIdFor(merchantId, idempotencyKey) {
+  return 'ps_' + _crypto.createHash('sha256')
+    .update(String(merchantId) + '|' + String(idempotencyKey)).digest('hex').slice(0, 40);
+}
+
+/* ══ 0b R4 — A TILL SELLS ONLY ITS OWN PRODUCTS ═════════════════════════════════════════════
+   Pricing and the stock deduction read `products/{id}` by id alone. Nothing compared the
+   product's owner to the merchant this sale was proven for, so a till could price and deduct
+   another shop's stock. A product is sellable here only if it names an owner, every owner field
+   is well-formed, and every one of them resolves to THE MERCHANT PROVEN FOR THIS SALE. A product
+   with no owner is refused, not assumed: production held 0 such products when this was measured
+   (2026-09-27, 102/102 owned, 0 malformed or conflicting), so failing closed costs nothing
+   legitimate.
+
+   The accepted identities come ONLY from the authority that proved the merchant:
+     · shop_actor (resolveActor): the shop id — which IS the owner's uid (shops/{uid}) — and the
+       one business that resolves FROM that proven uid (resolveMerchantIdForOwner);
+     · workspace_membership: the business the membership proved, and that business's own owner
+       (products are stamped with the owner's uid).
+   A `businesses/{merchantId}` record is NOT consulted on the shop path: a business document that
+   merely exists under that id is not the authority this sale was admitted by. */
+const _PRODUCT_OWNER_FIELDS = ['sellerUid', 'sellerId', 'shopId', 'merchantId', 'storeId', 'ownerId', 'ownerUid'];
+async function _merchantOwnerSet(merchantId, provenBy, provenBusinessId) {
+  const owners = new Set([String(merchantId)]);
+  if (provenBy === 'workspace_membership' && provenBusinessId) {
+    owners.add(String(provenBusinessId));
+    try {
+      const b = await db.collection('businesses').doc(String(provenBusinessId)).get();
+      if (b.exists && (b.data() || {}).ownerId) owners.add(String(b.data().ownerId));
+    } catch (_) { /* unreadable adds nothing — the set only ever narrows what is accepted */ }
+  } else if (provenBy === 'shop_actor') {
+    try {
+      const own = await _resolveMerchantIdForOwner(String(merchantId));
+      if (own && own.ok && own.merchantId) owners.add(String(own.merchantId));
+    } catch (_) { /* as above */ }
+  }
+  return owners;
+}
+function _assertProductOwned(prod, owners, productId) {
+  const p = prod || {};
+  const present = _PRODUCT_OWNER_FIELDS.filter((k) => p[k] !== undefined);
+  if (!present.length) {
+    _e('Product ' + productId + ' has no owner on record, so it cannot be sold here.', 'permission-denied');
+  }
+  for (const k of present) {
+    const v = p[k];
+    if (typeof v !== 'string' || !v.trim()) {
+      _e('Product ' + productId + ' has an unreadable owner (' + k + '), so it cannot be sold here.', 'permission-denied');
+    }
+    if (!owners.has(v.trim())) {
+      _e('Product ' + productId + ' belongs to another shop.', 'permission-denied');
+    }
+  }
+}
+
 async function _assertAuth(auth) {
   if (!auth?.uid) _e('Authentication required', 'unauthenticated');
   return auth.uid;
@@ -241,6 +304,103 @@ async function _postSaleFinancials(o) {
   }
 }
 
+/* ══ 0b R1 — COMPLETE A COMMITTED SALE (fresh or resumed) ═════════════════════════════════════
+   Everything that happens after the stock transaction, written so that running it again for the
+   same sale changes nothing:
+     · the financial trace posts once and the sale is updated in place (L-4 port note: on this
+       lineage _postSaleFinancials posts NO ledger entry — M0-1 made the ledger entry a projection
+       of the debt, written with it by pos-commission-rail.recordSaleLiability);
+     · the commission debt (M0-1: posCommissionLiabilities/poscomm_<saleId>, created once) is keyed
+       on the (now deterministic) sale id;
+     · the money-position daily counters are applied exactly once, behind a flag on the sale,
+       inside their own transaction;
+     · the metric is written at a deterministic id;
+     · the receipt was created with the sale and is only read here. */
+async function _completeCommittedSale(o) {
+  const { saleId, saleRef, idemRef, merchantId, cashierId, idempotencyKey } = o;
+  const metadata = o.metadata || {};
+  let sale = (await saleRef.get()).data() || {};
+
+  let financial = { tax: sale.tax, commission: sale.commission, position: sale.position,
+                    collectionRoute: sale.collectionRoute, status: sale.financialPosting,
+                    error: sale.financialError || null };
+  if (sale.financialPosting !== 'posted' && sale.financialPosting !== 'failed') {
+    financial = await _postSaleFinancials({
+      saleId, merchantId, cashierId, idempotencyKey,
+      items: sale.items || [],
+      subtotal: sale.subtotal,
+      discount: sale.discountTotal,
+      total: sale.grandTotal,
+      payments: sale.payments || [],
+      changeDue: sale.changeDue || 0,
+    });
+    await saleRef.set({
+      tax: financial.tax, commission: financial.commission, position: financial.position,
+      collectionRoute: financial.collectionRoute, financialPosting: financial.status,
+      financialError: financial.error || null,
+    }, { merge: true });
+  }
+
+  /* Commission liability — best-effort as before, idempotent on the sale id. */
+  try {
+    const _rail = _posRail();
+    const _P = require('./pos-sale-commission');
+    const _MA = require('./money-authority');
+    const _railKey = _posRailKeyFor(financial && financial.collectionRoute);
+    const _rec = _P.planSaleCommission({
+      rail: _railKey,
+      gross: _MA.fromMinor(Math.round(Number(sale.grandTotal || 0) * 100)),
+      planId: null,
+      soldAtMs: Date.now(),
+      saleId: String(saleId),
+      merchantUid: String(merchantId),
+    });
+    await _rail.recordSaleLiability(db, _rec);
+  } catch (commErr) {
+    console.error('[posCompleteCheckout] commission liability not recorded', {
+      saleId, merchantId, error: commErr && commErr.message,
+    });
+  }
+
+  /* The money-position counters, exactly once per sale. */
+  const dailyRef = db.collection('posDailySummary').doc(`${merchantId}_${sale.saleDate}`);
+  await db.runTransaction(async (txn) => {
+    const snap = await txn.get(saleRef);
+    if ((snap.data() || {}).dailyFinancialsApplied === true) return;
+    txn.set(dailyRef, {
+      cashCents:        FieldValue.increment((financial.position && financial.position.cashCents) || 0),
+      electronicCents:  FieldValue.increment((financial.position && financial.position.electronicCents) || 0),
+      changeGivenCents: FieldValue.increment((financial.position && financial.position.changeGivenCents) || 0),
+      byMethod:         _methodIncrements(financial.position),
+      commissionCents:  FieldValue.increment((financial.commission && financial.commission.amountCents) || 0),
+      totalTaxCents:    FieldValue.increment((financial.tax && financial.tax.vatCents) || 0),
+      updatedAt:        FieldValue.serverTimestamp(),
+    }, { merge: true });
+    txn.update(saleRef, { dailyFinancialsApplied: true });
+  });
+
+  /* Queue metric (cashier speed analytics) — deterministic id, so a resume rewrites the same row. */
+  if (metadata.checkoutStartedAt) {
+    const _pay = Array.isArray(sale.payments) ? sale.payments : [];
+    await db.collection('posCheckoutMetrics').doc(String(saleId)).set({
+      merchantId, branchId: sale.branchId, cashierId, saleId,
+      itemCount:      (sale.items || []).reduce((s, i) => s + (i.qty || 1), 0),
+      durationMs:     Date.now() - metadata.checkoutStartedAt,
+      grandTotal:     sale.grandTotal,
+      paymentMethod:  (_pay.length === 1 ? String(_pay[0].method) : 'mixed'),
+      paymentMethods: _pay.map((p) => String(p.method)),
+      createdAt:      FieldValue.serverTimestamp(),
+      saleDate:       sale.saleDate,
+    });
+  }
+
+  const rSnap = await db.collection('posReceipts').doc(String(saleId)).get();
+  const receipt = rSnap.exists ? (() => { const r = Object.assign({}, rSnap.data()); delete r.createdAt; return r; })() : null;
+
+  await idemRef.set({ status: 'complete', saleId, receipt, completedAt: Date.now() }, { merge: true });
+  return { saleId, receipt, loyaltyAwarded: sale.loyaltyAwarded || 0 };
+}
+
 /* ════════════════════════════════════════════════════════════════
    posCompleteCheckout
    Idempotent authoritative checkout:
@@ -277,6 +437,13 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
   if (!merchantId)     _e('merchantId required');
   if (!items?.length)  _e('items required');
   if (!grandTotal || grandTotal < 0) _e('grandTotal invalid');
+  /* 0b R3 — the TAX POLICY is unchanged here (inclusive vs on-top, and which store is the
+     authority, are a separate repair). What changes is only that the caller's figure must be a
+     real, non-negative number: a negative taxTotal lowered the charged total with no discount
+     authority behind it, and a non-number broke the arithmetic after stock had moved. */
+  if (typeof taxTotal !== 'number' || !Number.isFinite(taxTotal) || taxTotal < 0) {
+    _e('taxTotal must be a finite, non-negative number');
+  }
 
   /* ── DRY-RUN (checkout-convergence shadow instrumentation) ──
      Side-effect-FREE: validate + price against the CANONICAL products collection and compute
@@ -348,7 +515,28 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
      the customer's money spent on nothing. */
   const _consumed = [];
 
+  /* 0b R1/R2 — the sale this key can ever produce, and whether it has COMMITTED. Once the stock
+     transaction has committed, the sale exists and the payment it spent is spent: nothing after
+     that point may release the payment claim or allow a second sale. */
+  const saleId  = _saleIdFor(merchantId, idempotencyKey);
+  const saleRef = db.collection('posRetailSales').doc(saleId);
+  let _committed = false;
+
   try {
+    /* 0b R1 — a retry of a key whose sale ALREADY COMMITTED completes that sale; it is not
+       re-validated (a price changed since must not fail a sale that already happened) and it is
+       not sold again. Only the cashier who committed it may resume it. */
+    const _prior = await saleRef.get();
+    if (_prior.exists) {
+      const _p = _prior.data() || {};
+      if (String(_p.cashierId || '') !== String(cashierId)) {
+        _e('This sale belongs to another cashier.', 'permission-denied');
+      }
+      _committed = true;
+      return await _completeCommittedSale({ saleId, saleRef, idemRef, merchantId, cashierId,
+        idempotencyKey, metadata });
+    }
+
     /* ── 2. Validate cart totals server-side — batch fetch all products ──
        Reads the CANONICAL `products` collection (Stage 2 convergence). posProducts was empty for
        most merchants, so the till failed "product not found" on every sale; and it deducted a
@@ -459,6 +647,7 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
        fix. */
     let _merchantProven = !!(_actor && _actor.ok);
     let _provenBy = _merchantProven ? 'shop_actor' : null;
+    let _provenBusinessId = null;   /* 0b R4 — the business a membership proof established */
     if (!_merchantProven) {
       let _canon = null;
       try {
@@ -478,11 +667,19 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
           await _assertBusinessPermission(cashierId, _canon, 'sales');
           _merchantProven = true;
           _provenBy = 'workspace_membership';
+          _provenBusinessId = _canon;
         } catch (_) { /* not a member here, or no capability */ }
       }
     }
     if (!_merchantProven) {
       _e('You are not authorised to record a sale for this shop.', 'permission-denied');
+    }
+
+    /* 0b R4 — the products priced above must belong to the merchant just proven. Checked on the
+       SAME snapshots the prices came from, and again inside the stock transaction below. */
+    const _owners = await _merchantOwnerSet(merchantId, _provenBy, _provenBusinessId);
+    for (let i = 0; i < items.length; i++) {
+      _assertProductOwned(productSnaps[i].data(), _owners, items[i].productId);
     }
 
     /* ══ THE COMMISSION GATE ═════════════════════════════════════════════════
@@ -712,7 +909,39 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       if (pay.paidPhone) p.paidPhone = pay.paidPhone;
     }
 
-    const saleId   = uid();
+    /* ── 4b. Derive the authoritative open shift ──────────────────────────
+       `shiftId` arrived in the request body and was only sanitized, so a caller
+       could attach a sale to another cashier's shift, or to one already closed.
+       Both inputs to this query are already server-bound: `merchantId` is enforced
+       by resolveActor above (the sale is refused when !_actor.ok), and `cashierId`
+       is auth.uid. This is the SAME query openShift and getCurrentShift use, against
+       posShifts — it introduces no second shift authority.
+
+       Having no open shift is a legitimate state: a till can sell without one. The
+       result is therefore null, never a fabricated id and never the caller's claim. */
+    let resolvedShiftId = null;
+    try {
+      const _shiftSnap = await db.collection('posShifts')
+        .where('sellerId', '==', merchantId)
+        .where('cashierUid', '==', cashierId)
+        .where('status', '==', 'open')
+        .limit(1)
+        .get();
+      resolvedShiftId = _shiftSnap.empty ? null : _shiftSnap.docs[0].id;
+    } catch (err) {
+      /* A shift lookup must never fail a sale the customer has already paid for.
+         Record nothing rather than guess: an unattributed sale is recoverable,
+         a misattributed one is not. */
+      console.error('[posCompleteCheckout] shift resolution failed:', err && err.message);
+      resolvedShiftId = null;
+    }
+    if (shiftId && shiftId !== resolvedShiftId) {
+      /* Security signal, not an error: the caller named a shift that is not their
+         open one. The sale proceeds against the authoritative value. */
+      console.warn('[posCompleteCheckout] client shiftId ignored — claimed=' +
+        String(shiftId).slice(0, 64) + ' authoritative=' + String(resolvedShiftId));
+    }
+
     const now      = Date.now();
     const saleDate = new Date(now).toISOString().split('T')[0];
 
@@ -733,6 +962,130 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       walletDocRef = db.collection('posWallets').doc(customer.id);
     }
 
+    /* 0b R1 — built BEFORE the transaction, created INSIDE it. */
+    const sale = {
+      /* CALLER-SUPPLIED, AND FIRST. `metadata` is client data spread into the sale
+         document. It used to be spread LAST, which meant a caller could send
+         { metadata: { grandTotal: 1 } } and overwrite the figure the server had
+         just computed — silently, after every authority check had passed.
+         Spreading it first makes every authoritative field below win. */
+      ...metadata,
+
+      id:              saleId,
+      merchantId:      _sanitize(merchantId),
+      /* sellerId IS the read key. The served rule authorises a read with
+         `resource.data.sellerId == request.auth.uid`, and this writer only ever set
+         `merchantId` — so a shop owner could not read their own POS sales at all, and
+         POS sales were invisible to every non-admin surface. The mirror writer
+         (pos-retail-mirror-map.js) already writes BOTH under the same convention and
+         says so; this brings the primary writer into line with it rather than
+         inventing a third spelling.
+
+         IT IS WRITTEN AFTER `...metadata` — like every field here — so a caller cannot
+         supply its own `sellerId` through metadata and choose who may read the sale.
+         Before this, `sellerId` was a name nothing wrote, which made it exactly the
+         kind of gap caller-supplied metadata could fill. */
+      sellerId:        _sanitize(merchantId),
+      branchId:        _sanitize(branchId),
+      cashierId:       _sanitize(cashierId),
+      /* SERVER-DERIVED (4b). Never the caller's claim. */
+      shiftId:         resolvedShiftId,
+      items:           enrichedItems,
+      customer:        customer ? {
+        id:    _sanitize(customer.id || ''),
+        name:  _sanitize(customer.name || 'Guest'),
+        phone: _sanitize(customer.phone || ''),
+      } : null,
+      payments,
+      couponCode:         couponCode ? _sanitize(couponCode) : null,
+      couponDiscount,
+      loyaltyRedeemed:    loyaltyRedeemPoints,
+      loyaltyAwarded:     0,           /* set inside the transaction */
+      subtotal:           serverSubtotal,
+      discountTotal:      totalDiscount,
+      taxTotal,
+      grandTotal:         authoritativeTotal,
+      status:             'completed',
+      createdAt:          FieldValue.serverTimestamp(),
+      saleDate,
+      idempotencyKey:     _sanitize(idempotencyKey),
+
+      /* ── THE FINANCIAL TRACE, carried on the sale itself ─────────────────
+         Stored here so the sale is self-describing: the tax pack, billing and
+         reconciliation all read one record rather than re-deriving figures from
+         line items months later and getting a different answer.
+         `financialPosting` is the honest status of the bookkeeping — 'posted',
+         or 'failed' with a reason and a row in posFinancialRepair. A sale whose
+         books did not land is findable instead of invisible. */
+      tax:                null,
+      commission:         null,
+      /* WHERE the money is, per sale: drawer vs provider, split by method. */
+      position:           null,
+      collectionRoute:    null,
+      /* HOW the merchant was proven for this sale — shop_actor (owner/shopEmployees) or
+         workspace_membership. Recorded so an audit can tell which authority admitted the
+         sale, rather than inferring it from a role months later. */
+      merchantProvenBy:   _provenBy,
+      financialPosting:   'pending',
+      financialError:     null,
+      changeDue,
+      tendered,
+      dailyFinancialsApplied: false,
+
+    };
+
+
+    const receipt = {
+      receiptNo:  saleId.slice(-8).toUpperCase(),
+      saleId,
+      merchantId,
+      items:      enrichedItems,
+      subtotal:   serverSubtotal,
+      discount:   totalDiscount,
+      tax:        taxTotal,
+      total:      authoritativeTotal,
+      payments,
+      loyaltyAwarded:  0,             /* set inside the transaction */
+      loyaltyRedeemed: loyaltyRedeemPoints,
+      customer:   customer?.name || 'Guest',
+      cashier:    cashierId,
+      timestamp:  new Date(now).toISOString(),
+
+      /* ── What the customer actually handed over, and what went back ──────
+         Recorded on the receipt because a cash receipt that shows only the total
+         cannot be checked by the person holding the change. `amountPaid` is what
+         was tendered (3,000), `total` is what the sale was (2,800), `changeDue`
+         is the difference the drawer gave back (200). */
+      amountPaid: tendered,
+      changeDue:  changeDue,
+
+      /* ── SERVED BY, resolved by the SERVER ───────────────────────────────
+         From merchant-identity's employment records — never from anything the
+         client sent. A cashier cannot put "Alex / Manager" on a financial
+         document by typing it. When the employment cannot be resolved this is
+         null and the printed receipt omits the line entirely, rather than
+         naming the wrong person or silently crediting the shop owner. */
+      servedBy: (_actor && _actor.ok && _actor.servedBy) ? {
+        uid:        _actor.servedBy.uid,
+        name:       _actor.servedBy.name,
+        role:       _actor.servedBy.role,
+        label:      _actor.servedBy.label,
+        /* Present only when the employment relationship actually carries one.
+           TODAY IT DOES NOT: shopEmployees has no employee-number field, and the
+           `employeeNumber` that exists in hr-payroll belongs to a separate staff
+           registry keyed {merchantId}_{employeeNumber} that POS identity is not
+           joined to. So this is null and the receipt omits the line — which is the
+           correct output for "the employment relationship does not provide one",
+           not a placeholder pretending to be wired. Joining the two registries is
+           the multi-shop employment slice, not this one. */
+        employeeNo: _actor.servedBy.employeeNo || null,
+      } : null,
+    };
+
+
+    const receiptRef = db.collection('posReceipts').doc(saleId);
+    const dailyRef   = db.collection('posDailySummary').doc(`${merchantId}_${saleDate}`);
+
     /* ── 4. Firestore transaction: wallet + inventory + loyalty ──
        Firestore requires ALL READS before ALL WRITES in a transaction. The previous version
        wrote the wallet debit and then read inventory inside the same transaction, so
@@ -746,13 +1099,18 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       const custRef = customer?.id ? db.collection('posCustomers').doc(customer.id) : null;
       const progRef = customer?.id ? db.collection('loyaltyPrograms').doc(merchantId) : null;
 
-      const [wTxSnap, wSnap, custSnap, progSnap, ...productSnaps] = await Promise.all([
+      const [saleSnap, wTxSnap, wSnap, custSnap, progSnap, ...productSnaps] = await Promise.all([
+        txn.get(saleRef),
         walletPayment ? txn.get(walletTxRef)  : Promise.resolve(null),
         walletPayment ? txn.get(walletDocRef) : Promise.resolve(null),
         custRef ? txn.get(custRef) : Promise.resolve(null),
         progRef ? txn.get(progRef) : Promise.resolve(null),
         ...productRefs.map(r => txn.get(r)),
       ]);
+
+      /* 0b R1 — another attempt with this key committed first (a concurrent re-claim of a failed
+         key). That sale stands; this attempt writes NOTHING — no stock, no wallet, no loyalty. */
+      if (saleSnap.exists) return { loyaltyAwarded: (saleSnap.data() || {}).loyaltyAwarded || 0, alreadyCommitted: true };
 
       /* ── PHASE 2: VALIDATE (no writes yet, so a rejection touches nothing) ── */
       /* Wallet: idempotent skip if the deterministic txn doc already exists (prior attempt). */
@@ -768,6 +1126,8 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
         const item = enrichedItems[i];
         if (!snap.exists) throw new Error(`Product ${item.productId} disappeared`);
         const prod  = snap.data();
+        /* 0b R4 — ownership re-checked on the transaction's own read. */
+        _assertProductOwned(prod, _owners, item.productId);
         /* Canonical stock field is `stock`; fall back to legacy names for older docs. */
         const stock = prod.stock ?? prod.stockQty ?? prod.quantity ?? 9999;
         if (stock < (item.qty || 1) && prod.trackInventory !== false)
@@ -833,319 +1193,28 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
         txn.update(cpRef, update);
       }
 
+      /* 0b R1 — the sale, its receipt and the base daily counters commit WITH the stock. */
+      txn.create(saleRef, Object.assign({}, sale, { loyaltyAwarded }));
+      txn.create(receiptRef, Object.assign({}, receipt, { loyaltyAwarded, createdAt: FieldValue.serverTimestamp() }));
+      txn.set(dailyRef, {
+        merchantId, branchId, saleDate,
+        totalSales:    FieldValue.increment(1),
+        totalRevenue:  FieldValue.increment(authoritativeTotal),
+        totalItems:    FieldValue.increment(items.reduce((s, i) => s + (i.qty || 1), 0)),
+        totalDiscount: FieldValue.increment(totalDiscount),
+        totalTax:      FieldValue.increment(taxTotal),
+        updatedAt:     FieldValue.serverTimestamp(),
+      }, { merge: true });
+
       return { loyaltyAwarded };
     });
 
-    /* ══════════════════════════════════════════════════════════════════════
-       4b. THE FINANCIAL TRACE — tax, commission, and a balanced ledger entry
-       ══════════════════════════════════════════════════════════════════════
-       Before this, a till sale wrote posRetailSales, posDaily and posReceipts
-       and STOPPED. No commission, no ledger entry, no tax computation. The
-       commission writer (payment-success.onPaymentSucceeded) watches
-       `payments/{id}` — the IntaSend collection — while POS writes
-       `posPayments`, so a till sale reached NO financial path at all. Every
-       downstream product built on it — billing, settlement, the tax pack —
-       was reading records nobody wrote.
-
-       COMPOSED, NOT REINVENTED: the VAT figures come from etims-tax-engine and
-       the rate from finos-utils.calculateCommission, the same authorities the
-       marketplace uses. A second set of tax or commission maths would be a
-       second set of numbers.
-
-       WHAT THIS DELIBERATELY DOES NOT DO: it does not call
-       settlement-engine.computeSettlement(). That function assumes "100% of
-       every customer payment is collected into the Bravilex account first",
-       which is FALSE for a till — the cash is in the merchant's drawer and a
-       DIRECT_TO_SELLER M-Pesa payment went to the merchant's own shortcode.
-       Posting a till sale as a settlement out of platform clearing would invent
-       platform cash and create seller liabilities with nothing behind them,
-       which is exactly the defect payment-config.js:41-55 warns about.
-       On a till sale SOKONI's commission is a RECEIVABLE: the seller already
-       holds the money and owes us a share. */
-    const financial = await _postSaleFinancials({
-      saleId, merchantId, cashierId, idempotencyKey,
-      items: enrichedItems,
-      subtotal: serverSubtotal,
-      discount: totalDiscount,
-      total: authoritativeTotal,
-      payments: _pay,
-      /* So the drawer figure can be recorded NET of what was handed back. */
-      changeDue: changeDue,
-    });
-
-    /* ── 4b. Derive the authoritative open shift ──────────────────────────
-       `shiftId` arrived in the request body and was only sanitized, so a caller
-       could attach a sale to another cashier's shift, or to one already closed.
-       Both inputs to this query are already server-bound: `merchantId` is enforced
-       by resolveActor above (the sale is refused when !_actor.ok), and `cashierId`
-       is auth.uid. This is the SAME query openShift and getCurrentShift use, against
-       posShifts — it introduces no second shift authority.
-
-       Having no open shift is a legitimate state: a till can sell without one. The
-       result is therefore null, never a fabricated id and never the caller's claim. */
-    let resolvedShiftId = null;
-    try {
-      const _shiftSnap = await db.collection('posShifts')
-        .where('sellerId', '==', merchantId)
-        .where('cashierUid', '==', cashierId)
-        .where('status', '==', 'open')
-        .limit(1)
-        .get();
-      resolvedShiftId = _shiftSnap.empty ? null : _shiftSnap.docs[0].id;
-    } catch (err) {
-      /* A shift lookup must never fail a sale the customer has already paid for.
-         Record nothing rather than guess: an unattributed sale is recoverable,
-         a misattributed one is not. */
-      console.error('[posCompleteCheckout] shift resolution failed:', err && err.message);
-      resolvedShiftId = null;
-    }
-    if (shiftId && shiftId !== resolvedShiftId) {
-      /* Security signal, not an error: the caller named a shift that is not their
-         open one. The sale proceeds against the authoritative value. */
-      console.warn('[posCompleteCheckout] client shiftId ignored — claimed=' +
-        String(shiftId).slice(0, 64) + ' authoritative=' + String(resolvedShiftId));
-    }
-
-    /* ── 5. Write sale record ── */
-    const sale = {
-      /* CALLER-SUPPLIED, AND FIRST. `metadata` is client data spread into the sale
-         document. It used to be spread LAST, which meant a caller could send
-         { metadata: { grandTotal: 1 } } and overwrite the figure the server had
-         just computed — silently, after every authority check had passed.
-         Spreading it first makes every authoritative field below win. */
-      ...metadata,
-
-      id:              saleId,
-      merchantId:      _sanitize(merchantId),
-      /* sellerId IS the read key. The served rule authorises a read with
-         `resource.data.sellerId == request.auth.uid`, and this writer only ever set
-         `merchantId` — so a shop owner could not read their own POS sales at all, and
-         POS sales were invisible to every non-admin surface. The mirror writer
-         (pos-retail-mirror-map.js) already writes BOTH under the same convention and
-         says so; this brings the primary writer into line with it rather than
-         inventing a third spelling.
-
-         IT IS WRITTEN AFTER `...metadata` — like every field here — so a caller cannot
-         supply its own `sellerId` through metadata and choose who may read the sale.
-         Before this, `sellerId` was a name nothing wrote, which made it exactly the
-         kind of gap caller-supplied metadata could fill. */
-      sellerId:        _sanitize(merchantId),
-      branchId:        _sanitize(branchId),
-      cashierId:       _sanitize(cashierId),
-      /* SERVER-DERIVED (4b). Never the caller's claim. */
-      shiftId:         resolvedShiftId,
-      items:           enrichedItems,
-      customer:        customer ? {
-        id:    _sanitize(customer.id || ''),
-        name:  _sanitize(customer.name || 'Guest'),
-        phone: _sanitize(customer.phone || ''),
-      } : null,
-      payments,
-      couponCode:         couponCode ? _sanitize(couponCode) : null,
-      couponDiscount,
-      loyaltyRedeemed:    loyaltyRedeemPoints,
-      loyaltyAwarded,
-      subtotal:           serverSubtotal,
-      discountTotal:      totalDiscount,
-      taxTotal,
-      grandTotal:         authoritativeTotal,
-      status:             'completed',
-      createdAt:          FieldValue.serverTimestamp(),
-      saleDate,
-      idempotencyKey:     _sanitize(idempotencyKey),
-
-      /* ── THE FINANCIAL TRACE, carried on the sale itself ─────────────────
-         Stored here so the sale is self-describing: the tax pack, billing and
-         reconciliation all read one record rather than re-deriving figures from
-         line items months later and getting a different answer.
-         `financialPosting` is the honest status of the bookkeeping — 'posted',
-         or 'failed' with a reason and a row in posFinancialRepair. A sale whose
-         books did not land is findable instead of invisible. */
-      tax:                financial.tax,
-      commission:         financial.commission,
-      /* WHERE the money is, per sale: drawer vs provider, split by method. */
-      position:           financial.position,
-      collectionRoute:    financial.collectionRoute,
-      /* HOW the merchant was proven for this sale — shop_actor (owner/shopEmployees) or
-         workspace_membership. Recorded so an audit can tell which authority admitted the
-         sale, rather than inferring it from a role months later. */
-      merchantProvenBy:   _provenBy,
-      financialPosting:   financial.status,
-      financialError:     financial.error || null,
-
-    };
-
-    await db.collection('posRetailSales').doc(saleId).set(sale);
-
-    /* ── 5b. THE COMMISSION LIABILITY ────────────────────────────────────────
-       The gate above is only as good as what it reads. Nothing was writing the
-       liability rows it evaluates, so every merchant looked permanently clear and
-       the 07:00 gate could never close on anyone. A gate over an empty ledger is
-       not a control, it is a decoration.
-
-       AFTER the sale is written, deliberately. A liability recorded for a sale
-       that then failed to write would bill a merchant for money they never took;
-       this order can only fail the other way — a completed sale whose liability
-       write failed — which is recoverable by reconciliation from posRetailSales
-       and is visible in the error log. Charging for a sale that did not happen is
-       not recoverable, because nobody knows to look.
-
-       IDEMPOTENT ON THE SALE ID, so the retry paths above converge on one row
-       instead of billing twice. CUSTODIAL rails write nothing: their commission
-       already came out of money SOKONI was holding, and billing it again at 07:00
-       would look like diligence.
-
-       Best-effort by design: a failure here is logged and does NOT fail a sale the
-       customer has already paid for. The gate is what makes it collectible; losing
-       one row delays collection, whereas throwing here would reject a completed
-       transaction at the counter. */
-    try {
-      const _rail = _posRail();
-      const _P = require('./pos-sale-commission');
-      const _MA = require('./money-authority');
-      /* CUSTODY comes from `collectionRoute`, which this sale already computed — not from a
-         second reading of the tenders. Custody is the question "who is holding this money",
-         and the route is the system's existing answer to it:
-
-           CASH_IN_DRAWER    the merchant has the notes            -> owed
-           DIRECT_TO_SELLER  paid to the merchant's own till       -> owed
-           CENTRAL_MOR       SOKONI collected it                   -> already netted
-
-         Deriving it again from `payments` would be a second authority on the same fact, and
-         the two would eventually disagree — which is how a sale gets billed twice or not at
-         all. */
-      const _railKey = _posRailKeyFor(financial && financial.collectionRoute);
-      const _rec = _P.planSaleCommission({
-        rail:        _railKey,
-        gross:       _MA.fromMinor(Math.round(authoritativeTotal * 100)),
-        /* NULL, deliberately. POS/Till is a FLAT 5% on every plan (owner ruling), so the
-           plan cannot change the rate — and resolving one here would cost a read per sale to
-           record a value that changes nothing. Passing null makes `resolvePosRate` return
-           `matched: false`, which honestly records "no plan was resolved" rather than
-           stamping a plan nobody verified. */
-        planId:      null,
-        soldAtMs:    Date.now(),
-        saleId:      String(saleId),
-        merchantUid: String(merchantId),
-      });
-      await _rail.recordSaleLiability(db, _rec);
-    } catch (commErr) {
-      console.error('[posCompleteCheckout] commission liability not recorded', {
-        saleId, merchantId, error: commErr && commErr.message,
-      });
-    }
-
-    /* ── 6. Daily counter aggregation ──
-       These increments run exactly once per idempotencyKey: the atomic create() claim at the
-       top of this function admits a single caller per key, a retry of a 'complete' key returns
-       cached before reaching here, and a retry of a 'processing' key is rejected before reaching
-       here. So the counter cannot double on retry. (@financial-safe: guarded by the atomic
-       idempotency claim above.) */
-    const dailyRef = db.collection('posDailySummary').doc(`${merchantId}_${saleDate}`);
-    await dailyRef.set({
-      merchantId, branchId, saleDate,
-      totalSales:    FieldValue.increment(1),
-      totalRevenue:  FieldValue.increment(authoritativeTotal),
-      totalItems:    FieldValue.increment(items.reduce((s, i) => s + (i.qty || 1), 0)),
-      totalDiscount: FieldValue.increment(totalDiscount),
-      totalTax:      FieldValue.increment(taxTotal),
-
-      /* ── WHERE THE MONEY IS ────────────────────────────────────────────────
-         `totalRevenue` above says how much was SOLD. These say where it went,
-         and they are the only figures a merchant can actually reconcile:
-         count the drawer against cashCents, check the provider against
-         electronicCents. One merged total could never be checked against
-         anything, because it mixes money that entered the drawer with money
-         that never did.
-         cashCents is NET of change; byMethod.cash is the gross tendered. */
-      cashCents:       FieldValue.increment((financial.position && financial.position.cashCents) || 0),
-      electronicCents: FieldValue.increment((financial.position && financial.position.electronicCents) || 0),
-      changeGivenCents: FieldValue.increment((financial.position && financial.position.changeGivenCents) || 0),
-      byMethod:        _methodIncrements(financial.position),
-
-      /* Commission accrued today, and the tax SOKONI estimated — the latter in
-         cents from the tax engine, NOT the caller-supplied `taxTotal` that
-         `totalTax` above still carries for backward compatibility. */
-      commissionCents: FieldValue.increment((financial.commission && financial.commission.amountCents) || 0),
-      totalTaxCents:   FieldValue.increment((financial.tax && financial.tax.vatCents) || 0),
-
-      updatedAt:     FieldValue.serverTimestamp(),
-    }, { merge: true });
-
-    /* ── 7. Queue metric (for cashier speed analytics) ── */
-    if (metadata.checkoutStartedAt) {
-      const elapsed = now - metadata.checkoutStartedAt;
-      await db.collection('posCheckoutMetrics').add({
-        merchantId, branchId, cashierId, saleId,
-        itemCount:     items.reduce((s, i) => s + (i.qty || 1), 0),
-        durationMs:    elapsed,
-        grandTotal:   authoritativeTotal,
-        /* EVERY method, not the first. `payments[0].method` filed a 4,000 M-Pesa
-           + 2,000 cash sale entirely under whichever tender happened to be first
-           in the array, so split sales were silently misattributed in every
-           report built on this. `paymentMethod` is kept as the single-tender
-           answer for existing readers, and is 'mixed' when it genuinely is. */
-        paymentMethod: (_pay.length === 1 ? String(_pay[0].method) : 'mixed'),
-        paymentMethods: _pay.map((p) => String(p.method)),
-        createdAt:     FieldValue.serverTimestamp(),
-        saleDate,
-      });
-    }
-
-    /* ── 8. Build receipt ── */
-    const receipt = {
-      receiptNo:  saleId.slice(-8).toUpperCase(),
-      saleId,
-      merchantId,
-      items:      enrichedItems,
-      subtotal:   serverSubtotal,
-      discount:   totalDiscount,
-      tax:        taxTotal,
-      total:      authoritativeTotal,
-      payments,
-      loyaltyAwarded,
-      loyaltyRedeemed: loyaltyRedeemPoints,
-      customer:   customer?.name || 'Guest',
-      cashier:    cashierId,
-      timestamp:  new Date(now).toISOString(),
-
-      /* ── What the customer actually handed over, and what went back ──────
-         Recorded on the receipt because a cash receipt that shows only the total
-         cannot be checked by the person holding the change. `amountPaid` is what
-         was tendered (3,000), `total` is what the sale was (2,800), `changeDue`
-         is the difference the drawer gave back (200). */
-      amountPaid: tendered,
-      changeDue:  changeDue,
-
-      /* ── SERVED BY, resolved by the SERVER ───────────────────────────────
-         From merchant-identity's employment records — never from anything the
-         client sent. A cashier cannot put "Alex / Manager" on a financial
-         document by typing it. When the employment cannot be resolved this is
-         null and the printed receipt omits the line entirely, rather than
-         naming the wrong person or silently crediting the shop owner. */
-      servedBy: (_actor && _actor.ok && _actor.servedBy) ? {
-        uid:        _actor.servedBy.uid,
-        name:       _actor.servedBy.name,
-        role:       _actor.servedBy.role,
-        label:      _actor.servedBy.label,
-        /* Present only when the employment relationship actually carries one.
-           TODAY IT DOES NOT: shopEmployees has no employee-number field, and the
-           `employeeNumber` that exists in hr-payroll belongs to a separate staff
-           registry keyed {merchantId}_{employeeNumber} that POS identity is not
-           joined to. So this is null and the receipt omits the line — which is the
-           correct output for "the employment relationship does not provide one",
-           not a placeholder pretending to be wired. Joining the two registries is
-           the multi-shop employment slice, not this one. */
-        employeeNo: _actor.servedBy.employeeNo || null,
-      } : null,
-    };
-
-    await db.collection('posReceipts').doc(saleId).set({ ...receipt, createdAt: FieldValue.serverTimestamp() });
-
-    /* ── 9. Mark idempotency complete ── */
-    await idemRef.update({ status: 'complete', saleId, receipt, completedAt: now });
-
-    return { saleId, receipt, loyaltyAwarded };
+    /* 0b R1 — the stock transaction COMMITTED this sale (or found it already committed).
+       From here on nothing may release the payment claim or sell again: the rest is the
+       resumable completion, the same code a retry runs. */
+    _committed = true;
+    return await _completeCommittedSale({ saleId, saleRef, idemRef, merchantId, cashierId,
+      idempotencyKey, metadata });
 
   } catch (err) {
     /* RELEASE any confirmed payment this attempt claimed. The money is still the
@@ -1153,8 +1222,13 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
        place would make their genuinely paid M-PESA unusable on the retry, which
        is a worse outcome than the failure itself. Released before the failure is
        recorded, so a crash between the two leaves the claim rather than losing it. */
-    for (const ref of _consumed) {
-      try { await db.collection('posPaymentClaims').doc(ref).delete(); } catch (_) {}
+    /* 0b R2 — ONLY if nothing committed. After the stock transaction the sale exists and has
+       spent this payment; releasing the claim then let the same confirmed M-PESA fund a second
+       sale under a new key. A failure after commit is completed by the retry instead. */
+    if (!_committed) {
+      for (const ref of _consumed) {
+        try { await db.collection('posPaymentClaims').doc(ref).delete(); } catch (_) {}
+      }
     }
     await idemRef.update({ status: 'failed', error: err.message, failedAt: Date.now() });
     if (err instanceof HttpsError) throw err;

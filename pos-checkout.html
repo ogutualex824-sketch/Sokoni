@@ -2809,10 +2809,40 @@ const Checkout = (() => {
     return _s.merchantId;
   }
 
+  /* ── 0b R5 — ONE KEY PER SALE, NOT PER PRESS ─────────────────────────────────────────────
+     The key used to be `merchant_cashier_${Date.now()}`, minted on every press of Pay — so a
+     retry after a network error or a timeout was a NEW sale to the server, and the stock was
+     deducted again. The key is now minted once for the sale in progress and kept (the same
+     sessionStorage pattern Merchant V2's Sell already uses) until the sale is finished, voided
+     or parked — _resetSale() clears it. A retry therefore reproduces the key, and the server
+     completes the sale it already has instead of selling twice. */
+  function _saleKeySlot() {
+    return 'sokoni.posCheckout.saleKey.' + (_s.merchantId || '') + '.' + (_s.cashierId || '');
+  }
+  function _saleKey() {
+    const slot = _saleKeySlot();
+    try {
+      const k = sessionStorage.getItem(slot);
+      if (k) return k;
+    } catch (_) { /* storage unavailable — fall back to an in-memory key for this sale */ }
+    if (_s._saleKey && _s._saleKey.indexOf(_s.merchantId + '_' + _s.cashierId + '_') === 0) return _s._saleKey;
+    const rnd = (window.crypto && crypto.getRandomValues)
+      ? Array.from(crypto.getRandomValues(new Uint32Array(2))).map((n) => n.toString(36)).join('')
+      : Math.random().toString(36).slice(2);
+    const k = `${_s.merchantId}_${_s.cashierId}_${Date.now().toString(36)}${rnd}`;
+    _s._saleKey = k;
+    try { sessionStorage.setItem(slot, k); } catch (_) {}
+    return k;
+  }
+  function _clearSaleKey() {
+    try { sessionStorage.removeItem(_saleKeySlot()); } catch (_) {}
+    _s._saleKey = null;
+  }
+
   async function _finalize(method, payments, totals) {
     _setState('CONFIRMING');
     _resolveMerchantId();
-    const idempotencyKey = `${_s.merchantId}_${_s.cashierId}_${Date.now()}`;
+    const idempotencyKey = _saleKey();
     try {
       const fn = firebase.functions().httpsCallable('posCompleteCheckout');
       const res = await fn({
@@ -3062,6 +3092,7 @@ const Checkout = (() => {
 
   /* ── Reset ── */
   function _resetSale() {
+    _clearSaleKey();   /* 0b R5 — the next sale gets a new key */
     _s.items = [];
     _s.customer = null;
     _s.discount = { type: 'pct', value: 0 };

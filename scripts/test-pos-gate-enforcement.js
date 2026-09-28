@@ -163,10 +163,33 @@ console.log('\nPART C — the gate has something to gate on\n');
 
   /* AFTER the sale is written: a liability for a sale that failed to write would bill a
      merchant for money they never took. */
-  const saleAt = ZF.indexOf("collection('posRetailSales').doc(saleId).set(sale)");
-  const liabAt = ZF.indexOf('recordSaleLiability');
-  ck('C3  the liability is written AFTER the sale, never before',
-    saleAt !== -1 && liabAt !== -1 && liabAt > saleAt, 'sale@' + saleAt + ' liab@' + liabAt);
+  /* 0b R1 moved the sale into the stock transaction and everything after it into ONE completion
+     step (_completeCommittedSale). "Later in the file" no longer means "after the sale", so the
+     property is checked as what it is: the liability is recorded ONLY in the completion step, and
+     every call of that step happens AFTER the sale committed — either right after the transaction
+     that created it, or on a retry that found it already committed. (Runtime counterpart:
+     test-0b-checkout-integrity C-L1/C-L2 — a liability exists for each committed sale and for no
+     refused or failed attempt.) */
+  const _body = (src, head) => {
+    const i = src.indexOf(head); if (i < 0) return '';
+    let j = src.indexOf('{', i), d = 0;
+    for (let k = j; k < src.length; k++) { if (src[k] === '{') d++; else if (src[k] === '}') { d--; if (!d) return src.slice(i, k + 1); } }
+    return '';
+  };
+  const completion = _body(ZF, 'async function _completeCommittedSale(');
+  const outside = ZF.replace(completion, '');
+  const calls = (outside.match(/_completeCommittedSale\(/g) || []).length;
+  const gated = (outside.match(/_committed = true;\s*return await _completeCommittedSale\(/g) || []).length;
+  const createAt = outside.indexOf('txn.create(saleRef,');
+  const postTxCallAt = outside.lastIndexOf('return await _completeCommittedSale(');
+  ck('C3  the liability is written AFTER the sale commits, never before',
+    completion.length > 0 && /recordSaleLiability/.test(completion)
+      && !/recordSaleLiability/.test(outside)
+      && calls >= 2 && gated === calls
+      && createAt !== -1 && postTxCallAt > createAt
+      && /if \(_prior\.exists\)/.test(outside),
+    'liability only in completion=' + /recordSaleLiability/.test(completion) + ' outside=' + /recordSaleLiability/.test(outside)
+      + ' calls=' + calls + ' gated=' + gated + ' create@' + createAt + ' postTxCall@' + postTxCallAt);
 
   /* M0-2 (2026-09-28): recordPOSSale now commits its sale in ONE transaction (claim · stock ·
      sale · receipt) instead of a batch. The property is unchanged: the debt comes after it. */

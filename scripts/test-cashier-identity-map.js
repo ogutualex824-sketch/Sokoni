@@ -98,8 +98,15 @@ ck('the mirror writer also writes cashierId',
 ck('NEGATIVE no writer produces cashierUid on posRetailSales',
    ZF_C.indexOf('cashierUid:') === -1 && strip(MIRROR).indexOf('cashierUid:') === -1,
    'two independent writers agree; the alternative has none');
-ck('CONTROL the sale document really is posRetailSales',
-   ZF_C.indexOf("db.collection('posRetailSales').doc(saleId).set(sale)") > -1);
+/* 0b R1: the till sale is no longer written with a free-standing `.doc(saleId).set(sale)`. It is
+   CREATED inside the stock transaction at a DETERMINISTIC id, guarded against a second sale. The
+   control still proves the same thing — the document the cashier fields above land in is the till's
+   posRetailSales sale — against the form the sale authority now takes. */
+ck('CONTROL the sale document really is posRetailSales (created in the stock transaction, deterministic id)',
+   /const saleId\s*=\s*_saleIdFor\(merchantId,\s*idempotencyKey\)/.test(ZF_C)
+   && /const saleRef\s*=\s*db\.collection\('posRetailSales'\)\.doc\(saleId\)/.test(ZF_C)
+   && /txn\.create\(saleRef,/.test(ZF_C)
+   && /if \(saleSnap\.exists\) return/.test(ZF_C));
 
 /* ── 2 · posSales: cashierUid, and that is correct ────────────────────────── */
 head('2 · posSales legitimately uses cashierUid');

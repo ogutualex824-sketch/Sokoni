@@ -1,3 +1,52 @@
+## 2026-09-28 (162) — L-4: port Batch 0b onto the POS lineage — checkout integrity R1–R5 (NOT deployed)
+
+**Lineage reconciliation, unit 4.** On the POS lineage, `posCompleteCheckout` had five defects, all
+reproduced on `c7b8d39`. The fix already existed on the main line (96d31e4, Batch 0b), but not here.
+The defects:
+- **R1:** a late failure or a concurrent retry with the same key sold twice and deducted stock twice.
+- **R2:** a committed sale released its payment claim, so one confirmed payment funded a second sale.
+- **R3:** a negative, non-number or NaN `taxTotal` was sold, or failed only after the sale was written.
+- **R4:** another shop's product, or an ownerless one, could be sold.
+- **R5:** the client minted a new idempotency key on every retry.
+
+- **Change:**
+  - **`functions/pos-zero-friction.js`:**
+    - the sale id is derived from merchant and key;
+    - the sale, receipt and base counters are created inside the stock transaction;
+    - everything after commit is one resumable completion step;
+    - payment claims are released only when nothing committed;
+    - `taxTotal` must be finite and ≥ 0;
+    - every product must resolve to the merchant proven for this sale, checked in the pricing read and again inside the transaction.
+  - **`pos-checkout.html`:** one key per sale, cleared by `_resetSale()`.
+  - **Port, not replay:** applied three-way without conflict, and none of the Q0 chain was carried. These are preserved and re-proved:
+    - P0 (gate off);
+    - M0-1 (one debt per sale, with its ledger projection; **checkout posts no ledger entry of its own** — the stale 0b comment claiming one was corrected);
+    - M0-2 and M0-3;
+    - the live `assertConfirmable` check;
+    - L-1, L-2 and L-3.
+  - **Prerequisite:** 0b's precondition for R4 holds on this lineage, because the merchant is proven from auth before use.
+- **Files:**
+  - `functions/pos-zero-friction.js`, `pos-checkout.html`;
+  - new: `scripts/test-0b-checkout-integrity.js`, `docs/repairs/POS-0b-checkout-integrity.md`, both with an L-4 port section;
+  - updated from 0b, with properties unchanged: `scripts/test-cashier-identity-map.js`,
+    `scripts/test-merchant-ecosystem-convergence.js`, `scripts/test-pos-gate-behavioural.js`,
+    `scripts/test-pos-gate-enforcement.js`.
+- **Database:**
+  - `posRetailSales` / `posReceipts` ids are now deterministic (`ps_` + sha256(merchant|key));
+  - sales carry `dailyFinancialsApplied`;
+  - no migration is needed, since existing documents are untouched.
+- **API:** `posCompleteCheckout` refuses bad `taxTotal` and foreign or ownerless products; a same-key retry returns
+  the committed sale.
+- **Security:** closes the cross-tenant product sale, payment-claim replay and double sale on retry.
+- **Evidence:**
+  - **Differential:** 31/0 new vs 14/17 old, the same profile as the main line.
+  - **Fixture adaptation:** the fixtures were adapted to this lineage (debt at `poscomm_<saleId>`, the QR `posPayments` shape) with the assertions unchanged.
+  - **Mutants:** every repair turns the suite red. The only survivor is the documented defence-in-depth pricing-read check.
+  - **Earlier units:** all green (L-3 13/0, L-2 16/0 + 20/0, L-1 27/0, R-48H 12/0, M0-3 31/0, M0-2 13/0, M0-1 20/0, P0 9/0, rail 46/0).
+  - **Floor:** 112 suites; the differences are classified in the repair record.
+  - **Syntax:** clean.
+- **Breaking:** none for a correct client.
+
 ## 2026-09-28 (161) — L-3: port Q0c-1 onto the POS lineage — the smsEnqueue callable is admin-only (NOT deployed)
 
 **Lineage reconciliation, unit 3.** On the POS lineage, `smsEnqueue` let any signed-in account choose three things:
