@@ -1,3 +1,77 @@
+## [2026-09-28] - KASS stay prices come from the canonical listing; the AI is never the monetary authority
+
+**Functions, NOT deployed.** Branch `slice/c4-category-matrix`. This is the owner-authorized KASS booking-price
+authority slice: "listing → canonical price → availability → booking total, not AI → invented nightly price →
+booking."
+
+**Proven defects** (the real `_execChatTool` at `4e9607b`; also LIVE, `sokonichat-00058-hal`, census #2):
+- **`book_stay` made a booking at the model's price.** It computed `totalPrice = pricePerNight × nights` from the
+  model's input and wrote it. The counterproof shows bookings "created" at **KES 2** and at **KES NaN**, for pending
+  and legacy listings, with no availability or guest check.
+- **It wrote into `bookings`, a store no host reads.** Hosts manage stays from `bnbBookings`, so a stay KASS
+  "confirmed" was invisible to the host. It also offered "Pay Now" to `wallet.html?bookingId=`, which the live wallet
+  ignores.
+- **`search_stays` read the legacy stores raw.** It read `listings` / `hotels` with no status gate, so the ids it
+  handed out were never SOKONI's canonical, AdminOS-approved stays.
+- **It showed directory hotels as "KES 0/night"**, a fabricated figure.
+- **KASS linked to pages that do not exist.** `short-stays.html` and `hotels.html` are missing both here and in live
+  hosting `be7c676`, so every KASS stay link was a 404.
+
+**Changed:**
+- **`functions/kass-stays.js` (new; reads only, never writes):**
+  - `listStays` returns ACTIVE `bnbListings` only (public once AdminOS approves them), priced by the listing's own
+    `pricePerNight`, and never exposes the host's phone or uid.
+  - `quoteStay` refuses rather than guesses in each of these cases:
+    - the listing is not an active canonical listing;
+    - the listing has no price;
+    - the dates are invalid, in the past (Nairobi date), or longer than 60 nights;
+    - there are more guests than the listing's `maxGuests`;
+    - the dates overlap a live `bnbBookings` stay (cancelled, rejected or expired bookings do not block).
+- **`functions/index.js`:**
+  - **`book_stay`:**
+    - The tool no longer has a price input.
+    - It returns a server-computed QUOTE (listing price × nights) with a link to book the listing on
+      `bnb-hub.html`, and writes nothing.
+    - Hotels are handed to their own page.
+  - **`search_stays`:**
+    - It returns canonical listings (with their ids and prices) plus approved directory hotels.
+    - The legacy stores are no longer read.
+    - An unpriced hotel says "price on the listing page".
+  - **Prompt and page map:** stays go to `bnb-hub.html` and hotels to `services.html?cat=hotel` (the C1 filter). The
+    prompt calls `book_stay` a quote and forbids any stay price not produced by it.
+
+**Not in this slice (the owner's later step):** creating the booking through KASS ("KASS booking actions"). No
+server-side stay engine exists yet (`STAY_ENGINE_PENDING`); the guest completes the booking in the host's existing
+`bnbBookings` flow.
+
+**Tests:** `scripts/test-kass-stay-quote.js`: the REAL tool executor with the KASS access gate, on a transactional
+fake Firestore seeded with active / pending / unpriced listings and host bookings.
+
+| Check | Result |
+|---|---|
+| Fix | **14/0** |
+| Counterproof on `4e9607b` | **fails 13** |
+| Sabotage | **11/11 caught**, byte-identical restore |
+
+- **What the checks cover:**
+  - Q1: no price input.
+  - Q2: a supplied price is ignored.
+  - Q3: a pending listing is refused. Q4: a legacy id is refused. Q5: an unpriced listing is refused.
+  - Q6: dates are validated. Q7: the guest cap applies.
+  - Q8: overlap blocks, and cancelled bookings do not (control).
+  - Q9: nothing is written. Q10: hotels are handed off.
+  - S1–S3: search returns canonical listings only, never shows "KES 0", and does not read the legacy stores.
+  - L1: no dead links.
+- S2 cannot discriminate at the baseline (it predates directory hotels); sabotage proves it instead.
+- One sabotage attack initially could not reach the handler (no price is passed through any more). It was re-aimed
+  at the tool layer and caught.
+
+**Regression:** the KASS, discovery and publication-gate suites are equal to `4e9607b` (and the new KASS suites are
+green).
+
+**Security / money:** KASS can no longer create a money record at an invented price or a booking hosts never see.
+**Data / API:** none written. **Deploy:** functions.
+
 ## [2026-09-28] - Owner-confirmed commission schedule applied to the one charging authority; POS decoupled from online sales
 
 **Functions + hosting, NOT deployed, NOT pushed.** Branch `slice/c4-category-matrix`, one isolated commit. The owner

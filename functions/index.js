@@ -1260,19 +1260,18 @@ const _CHAT_TOOLS = [
   },
   {
     name: "book_stay",
-    description: "Book a BnB or hotel. ALWAYS confirm listing name, check-in, check-out, guests, and total cost with the user BEFORE calling. Dates must be YYYY-MM-DD.",
+    description: "Quote a stay for a BnB listing from search_stays: SOKONI reads the listing's OWN nightly price, checks the dates are free, and returns the total with a link where the guest completes the booking. You never supply a price. Dates must be YYYY-MM-DD.",
     input_schema: {
       type: "object",
       properties: {
-        listingId:     { type: "string", description: "Listing ID from search results" },
-        listingName:   { type: "string", description: "Listing name" },
+        listingId:     { type: "string", description: "Listing ID from search_stays results" },
+        listingName:   { type: "string", description: "Listing name (for your reply only — the listing's own record is authoritative)" },
         listingType:   { type: "string", enum: ["bnb", "hotel"] },
         checkIn:       { type: "string", description: "Check-in date YYYY-MM-DD" },
         checkOut:      { type: "string", description: "Check-out date YYYY-MM-DD" },
         guests:        { type: "number", description: "Number of guests (default 1)" },
-        pricePerNight: { type: "number", description: "Price per night in KES" },
       },
-      required: ["listingId", "listingName", "checkIn", "checkOut", "pricePerNight"],
+      required: ["listingId", "checkIn", "checkOut"],
     },
   },
   {
@@ -1293,11 +1292,11 @@ const _CHAT_TOOLS = [
 ];
 
 const _PAGE_MAP = {
-  'bnb':'short-stays.html', 'airbnb':'short-stays.html', 'short stay':'short-stays.html', 'short-stay':'short-stays.html',
-  'vacation':'short-stays.html', 'furnished':'short-stays.html', 'serviced apartment':'short-stays.html',
-  'accommodation':'short-stays.html', 'place to stay':'short-stays.html', 'place to sleep':'short-stays.html',
-  'self catering':'short-stays.html', 'weekend':'short-stays.html',
-  'hotel':'hotels.html', 'lodge':'hotels.html', 'resort':'hotels.html',
+  'bnb':'bnb-hub.html', 'airbnb':'bnb-hub.html', 'short stay':'bnb-hub.html', 'short-stay':'bnb-hub.html',
+  'vacation':'bnb-hub.html', 'furnished':'bnb-hub.html', 'serviced apartment':'bnb-hub.html',
+  'accommodation':'bnb-hub.html', 'place to stay':'bnb-hub.html', 'place to sleep':'bnb-hub.html',
+  'self catering':'bnb-hub.html', 'weekend':'bnb-hub.html',
+  'hotel':'services.html?cat=hotel', 'lodge':'services.html?cat=hotel', 'resort':'services.html?cat=hotel',
   'ride':'ride.html', 'boda':'ride.html', 'taxi':'ride.html', 'cab':'ride.html', 'lift':'ride.html',
   'shop':'/', 'marketplace':'/', 'product':'/', 'buy':'/', 'shopping':'/',
   'service':'services.html', 'plumber':'services.html', 'cleaner':'services.html', 'tutor':'services.html',
@@ -1439,24 +1438,31 @@ async function _execChatTool(name, input, ctx) {
           url: `provider-profile.html?id=${encodeURIComponent(b.providerId)}` };
         rows.push(card); ctx.addResult(card);
       });
-      const cols = t === "hotel" ? ["hotels"] : t === "bnb" ? ["listings"] : ["listings", "hotels"];
-      for (const col of cols) {
+      /* Canonical stay listings: `bnbListings`, public only once AdminOS approves them ('active'), priced by the
+         listing's OWN pricePerNight. The legacy `listings` / `hotels` stores used to be read raw here — no status
+         gate, and ids book_stay could never resolve — so they are no longer read. */
+      if (t !== "hotel") {
+        const _listed = await require("./kass-stays").listStays(db, { location, maxPrice, limit: 8 }).catch(() => []);
+        _listed.forEach((c) => { const card = { type: "bnb", id: c.id, name: c.name, price: c.pricePerNight, city: c.city, image: c.image, url: c.url, maxGuests: c.maxGuests };
+          rows.push(card); ctx.addResult(card); });
+      }
+      for (const col of []) {   /* legacy stores retired from KASS (see above) */
         let q = db.collection(col).limit(8);
         if (location) q = q.where("city", "==", location);
         if (maxPrice && col !== "hotels") q = q.where("pricePerNight", "<=", maxPrice);
         const snap = await q.get().catch(() => ({ docs: [] }));
         snap.docs.forEach(d => {
           const r = d.data();
-          const card = { type:col==="hotels"?"hotel":"bnb", id:d.id, name:r.name||r.title, price:r.pricePerNight||r.price, city:r.city||r.location||location, image:r.image||r.photo||(r.images||[])[0], rating:r.rating||r.avgRating, bedrooms:r.bedrooms, url:col==="hotels"?`hotels.html?id=${d.id}`:`short-stays.html?id=${d.id}` };
+          const card = { type:col==="hotels"?"hotel":"bnb", id:d.id, name:r.name||r.title, price:r.pricePerNight||r.price, city:r.city||r.location||location, image:r.image||r.photo||(r.images||[])[0], rating:r.rating||r.avgRating, bedrooms:r.bedrooms, url:col==="hotels"?`services.html?cat=hotel&id=${d.id}`:`bnb-hub.html?id=${d.id}` };
           rows.push(card); ctx.addResult(card);
         });
       }
       if (!rows.length) {
-        ctx.addAction({ label: "Browse Short Stays", url: "short-stays.html" });
+        ctx.addAction({ label: "Browse stays", url: "bnb-hub.html" });
         return { found: 0, message: `No ${t||"stays"} found${location?" in "+location:""}. Browse the Short Stays page for all listings.` };
       }
-      ctx.addAction({ label: "View all Short Stays", url: "short-stays.html" });
-      return { found: rows.length, stays: rows.map(r => ({ name:r.name, pricePerNight:`KES ${Number(r.price||0).toLocaleString()}/night`, city:r.city, type:r.type, rating:r.rating?`${r.rating}★`:null, bedrooms:r.bedrooms })) };
+      ctx.addAction({ label: "View all stays", url: "bnb-hub.html" });
+      return { found: rows.length, stays: rows.map(r => ({ name:r.name, pricePerNight: r.price ? `KES ${Number(r.price).toLocaleString()}/night` : "price on the listing page", id:r.id, city:r.city, type:r.type, rating:r.rating?`${r.rating}★`:null, bedrooms:r.bedrooms })) };
     }
 
     if (name === "search_restaurants") {
@@ -1691,15 +1697,25 @@ async function _execChatTool(name, input, ctx) {
     /* ── ACTION: book_stay ── */
     if (name === "book_stay") {
       if (!ctx.uid) return _authRequired();
-      const { listingId, listingName, listingType = "bnb", checkIn, checkOut, guests = 1, pricePerNight } = input;
-      const cin = new Date(checkIn), cout = new Date(checkOut);
-      const nights = Math.round((cout - cin) / 86400000);
-      if (nights <= 0) return { error: "Check-out must be after check-in." };
-      const totalPrice = pricePerNight * nights;
-      const ref = await db.collection("bookings").add({ uid: ctx.uid, listingId, listingName, listingType, checkIn, checkOut, nights, guests: Number(guests), pricePerNight, totalPrice, status: "pending", bookedAt: new Date().toISOString(), bookedByKASS: true, paymentStatus: "unpaid" });
-      ctx.addAction({ label: "📋 View Booking", url: "profile.html?tab=bookings" });
-      ctx.addAction({ label: "💳 Pay Now", url: `wallet.html?bookingId=${ref.id}` });
-      return { success: true, bookingRef: ref.id.slice(0,8).toUpperCase(), listingName, checkIn, checkOut, nights, guests, totalPrice: `KES ${totalPrice.toLocaleString()}`, status: "pending", message: `Booking created for **${listingName}** — ${checkIn} to ${checkOut} (${nights} night${nights>1?"s":""}), ${guests} guest${guests>1?"s":""}. Total: **KES ${totalPrice.toLocaleString()}**. Status: pending host confirmation. Please pay to secure your booking.` };
+      /* The model selects a listing; it is NEVER the monetary authority (owner, 2026-09-28). The price is the listing's
+         own pricePerNight, the dates are checked against the host's bookings, and nothing is written: the guest
+         completes the booking on the listing page (the host's bnbBookings flow). The old path wrote the model's
+         price into `bookings`, a store no host reads. */
+      const { listingId, listingType = "bnb", checkIn, checkOut, guests = 1 } = input;
+      if (listingType === "hotel") {
+        return { quoted: false, message: "Hotel rooms are booked on the hotel's own page — their prices are set there, not by me." };
+      }
+      const q = await require("./kass-stays").quoteStay(db, { listingId, checkIn, checkOut, guests })
+        .catch(() => ({ ok: false, reason: "error", message: "I couldn't check that listing just now." }));
+      if (!q.ok) {
+        if (q.listing) ctx.addAction({ label: `🏡 ${q.listing.name}`, url: q.listing.url });
+        return { quoted: false, reason: q.reason, message: q.message };
+      }
+      ctx.addAction({ label: `🏡 Book ${q.listing.name}`, url: q.listing.url });
+      return { quoted: true, listingName: q.listing.name, checkIn: q.checkIn, checkOut: q.checkOut, nights: q.nights, guests: q.guests,
+        pricePerNight: `KES ${q.pricePerNight.toLocaleString()}`, totalPrice: `KES ${q.total.toLocaleString()}`,
+        priceSource: "the listing's own nightly price",
+        message: `Quote only — nothing is booked yet. Tap "Book ${q.listing.name}" to confirm it with the host.` };
     }
 
     /* ── ACTION: compare_products ── */
@@ -1855,9 +1871,9 @@ FOOD & DINING
   Restaurants, cafes, cloud kitchens, groceries, fresh produce, pastries, juices, alcohol, pharmacy/chemist deliveries. Order online → tracked delivery or self-collect. Filter by cuisine: Kenyan, Indian, Chinese, Italian, Ethiopian, Swahili coast, fast food, healthy, vegan, halal.
 
 ACCOMMODATION
-• Short Stays → short-stays.html
+• Short Stays → bnb-hub.html
   BnBs, Airbnb-style self-catering, furnished apartments, serviced apartments, vacation homes, cottages, beach houses, lakeside retreats, self-catering villas. Book per night. Instant confirmation.
-• Hotels → hotels.html
+• Hotels → services.html?cat=hotel
   Full-service hotels, boutique hotels, lodges, resorts, safari camps, guesthouses, motels. Breakfast/HB/FB options. Room types: single, double, twin, suite, family.
 
 HEALTH & WELLNESS
@@ -1929,8 +1945,8 @@ ACCOUNT & REWARDS
 INTENT → DESTINATION (know every alias)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-"bnb / airbnb / short stay / furnished / place to sleep / weekend / self-catering / vacation / holiday home / beach house" → short-stays.html
-"hotel / lodge / resort / safari camp / guesthouse / motel / guest house" → hotels.html
+"bnb / airbnb / short stay / furnished / place to sleep / weekend / self-catering / vacation / holiday home / beach house" → bnb-hub.html
+"hotel / lodge / resort / safari camp / guesthouse / motel / guest house" → services.html?cat=hotel
 "boda / bodaboda / piki / taxi / cab / uber / bolt / ride / lift / matatu alternative / airport pickup" → ride.html
 "food / pizza / nyama choma / ugali / githeri / mandazi / samosa / biryani / restaurant / takeaway / delivery food / groceries / supermarket" → food-hub.html
 "doctor / daktari / hospital / clinic / lab test / blood test / pharmacy / dawa / dentist / therapist / physiotherapy" → healthcare.html
@@ -2031,7 +2047,7 @@ track_order       — live GPS tracking + ETA
 cancel_order      — cancel pending/confirmed order (confirm first)
 save_to_wishlist  — save item to favourites + price-drop alert
 get_wallet        — check wallet balance + loyalty points
-book_stay         — book BnB or hotel (confirm check-in/out, guests, total first)
+book_stay         — QUOTE a BnB stay from the listing's own price (nothing is booked; the guest books on the listing page). Never state a stay price that did not come from this tool.
 compare_products  — side-by-side comparison of up to 3 products
 get_page_url      — navigate user to correct page (use for food, rides, events, car hire, tickets)
 
