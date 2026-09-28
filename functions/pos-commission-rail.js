@@ -125,8 +125,39 @@ async function recordSaleLiability(db, record) {
      drops the debt — an unresolved mapping is recorded as such and reconciled later. */
   const business = d0.exists ? null : await resolveDebtBusiness(db, record.merchantUid);
 
-  const newDebt = d0.exists ? null : {
-    debtId:        debtRef.id,
+  const newDebt = d0.exists ? null : buildDebt(record, business, Date.now());
+
+  const action = await db.runTransaction(async (t) => {
+    /* All reads first. Inside the transaction, so two concurrent recorders of one sale
+       cannot both see "absent": the loser's create() fails at commit, the transaction
+       retries, and on the retry it sees the winner's rows. */
+    const d = await t.get(debtRef);
+    const l = await t.get(ledgerRef);
+    if (d.exists && l.exists) return 'already_recorded';
+    const debt = d.exists ? d.data() : newDebt;
+    if (!debt) throw new RailError('RAIL_DEBT_VANISHED', 'The commission debt was seen and then not found.');
+    if (!d.exists) t.create(debtRef, debt);
+    if (!l.exists) t.create(ledgerRef, ledgerProjectionOf(debt));
+    return d.exists ? 'projection_repaired' : 'recorded';
+  });
+
+  return { action, saleId: record.saleId, id: debtRef.id,
+    liabilityMinor: record.liability.minorUnits, settlementDay: record.settlementDay,
+    businessId: business ? business.businessId : undefined };
+}
+
+/* The ONE debt id for a sale. Both sale rails converge on it. */
+function debtIdFor(saleId) { return 'poscomm_' + String(saleId); }
+
+/* ══ M0-4-DR-A — THE ONE DEBT BUILDER ═══════════════════════════════════════════════════════════
+   PURE. The debt is derived ONLY from the planned sale record (pos-sale-commission.planSaleCommission
+   over the sale's own facts: gross, rail/custody, soldAtMs, saleId, merchant) and the business that was
+   resolved for it. It never reads the database, today's product prices, category configuration, merchant
+   settings, payment status or customer state. The same builder serves the in-transaction path (the sale
+   and its debt commit together) and recordSaleLiability (a replay re-ensure; later, reconciliation). */
+function buildDebt(record, business, createdAtMs) {
+  return {
+    debtId:        debtIdFor(record.saleId),
     saleId:        String(record.saleId),
     merchantUid:   String(record.merchantUid),
     businessId:    business.businessId,
@@ -154,30 +185,43 @@ async function recordSaleLiability(db, record) {
     grossMinor:    record.gross.minorUnits,
     soldAtMs:      record.soldAtMs,
     collectibleAtMs: record.collectibleAtMs,
-    createdAtMs:   Date.now(),
+    createdAtMs:   Number(createdAtMs),
   };
-
-  const action = await db.runTransaction(async (t) => {
-    /* All reads first. Inside the transaction, so two concurrent recorders of one sale
-       cannot both see "absent": the loser's create() fails at commit, the transaction
-       retries, and on the retry it sees the winner's rows. */
-    const d = await t.get(debtRef);
-    const l = await t.get(ledgerRef);
-    if (d.exists && l.exists) return 'already_recorded';
-    const debt = d.exists ? d.data() : newDebt;
-    if (!debt) throw new RailError('RAIL_DEBT_VANISHED', 'The commission debt was seen and then not found.');
-    if (!d.exists) t.create(debtRef, debt);
-    if (!l.exists) t.create(ledgerRef, ledgerProjectionOf(debt));
-    return d.exists ? 'projection_repaired' : 'recorded';
-  });
-
-  return { action, saleId: record.saleId, id: debtRef.id,
-    liabilityMinor: record.liability.minorUnits, settlementDay: record.settlementDay,
-    businessId: business ? business.businessId : undefined };
 }
 
-/* The ONE debt id for a sale. Both sale rails converge on it. */
-function debtIdFor(saleId) { return 'poscomm_' + String(saleId); }
+/* ══ M0-4-DR-A — THE DEBT WRITTEN INSIDE THE SALE'S OWN TRANSACTION ══════════════════════════════
+   The sale path used to commit the sale and THEN call recordSaleLiability, best-effort: a failure left a
+   completed sale with no debt, and a same-key retry did not repair it. Now:
+     prepareSaleDebt(db, record)   BEFORE the sale transaction: validates the record and resolves the
+                                   business (a read that must not happen inside a transaction's write
+                                   phase). Returns { refs:[debtRef, ledgerRef], debt, ledger } or
+                                   { none } for a custodial / zero sale, which owes nothing here.
+     applySaleDebtInTxn(t, plan, debtSnap, ledgerSnap)
+                                   INSIDE the caller's transaction, after the caller read plan.refs in its
+                                   own read phase: create-only writes of the debt and its ledger
+                                   projection. If either write fails, the WHOLE transaction — the sale,
+                                   its receipt, its stock — fails with it. */
+async function prepareSaleDebt(db, record) {
+  if (!db || typeof db.collection !== 'function') throw new RailError('RAIL_NO_DB', 'prepareSaleDebt(db, record): db is required');
+  if (!record || !record.saleId || !record.merchantUid || !record.settlementDay) {
+    throw new RailError('RAIL_UNREADABLE_RECORD', 'A sale record without saleId, merchantUid and settlementDay cannot be collected.');
+  }
+  if (!record.createsLiability) return { none: true, reason: 'custodial_or_zero', saleId: record.saleId };
+  const business = await resolveDebtBusiness(db, record.merchantUid);
+  const debt = buildDebt(record, business, record.soldAtMs);
+  return {
+    none: false,
+    refs: [db.collection(LIABILITIES).doc(debt.debtId), db.collection(LEDGER).doc(debt.debtId)],
+    debt, ledger: ledgerProjectionOf(debt),
+  };
+}
+function applySaleDebtInTxn(t, plan, debtSnap, ledgerSnap) {
+  if (!plan || plan.none) return { action: 'none' };
+  if (!debtSnap || !ledgerSnap) throw new RailError('RAIL_DEBT_NOT_READ', 'The debt refs must be read in the transaction before they are written.');
+  if (!debtSnap.exists) t.create(plan.refs[0], plan.debt);
+  if (!ledgerSnap.exists) t.create(plan.refs[1], debtSnap.exists ? ledgerProjectionOf(debtSnap.data()) : plan.ledger);
+  return { action: debtSnap.exists ? (ledgerSnap.exists ? 'already_recorded' : 'projection_repaired') : 'recorded' };
+}
 
 /* The ledger entry for a debt: the SAME amount, the SAME identity, derived — never recomputed.
    `status: 'settled'` keeps the ledger's established meaning (the entry is POSTED); whether the
@@ -546,6 +590,9 @@ module.exports = {
   LIABILITIES, SETTLEMENTS, LEDGER, STATUS, RailError,
   recordSaleLiability,
   debtIdFor,
+  buildDebt,
+  prepareSaleDebt,
+  applySaleDebtInTxn,
   ledgerProjectionOf,
   resolveDebtBusiness,
   readOutstanding,

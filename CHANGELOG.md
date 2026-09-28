@@ -1,3 +1,56 @@
+## 2026-09-28 (171) — M0-4-DR-A: a POS sale and its commission debt commit together, or not at all (NOT deployed)
+
+**Why.** Both server sale paths (`posCompleteCheckout`, `recordPOSSale`) wrote the POS commission debt **after** the sale
+committed, best-effort, so a failed debt write left a **completed sale with no debt**. In `posCompleteCheckout`,
+completion then marked the key complete, so a retry never repaired it, and the debt was dated by completion time, not
+the sale's. Proven on the old tree: suite C-3/C-4/R-2/R-3 kept the sale and moved stock with no debt, and C-2/C-7
+showed the wrong date.
+
+- **Change:**
+  - **`functions/pos-commission-rail.js`:** one debt authority.
+    - `buildDebt`: a **pure** builder, with no second schema, fed only the planned sale record and its resolved business. It never reads prices,
+      category configuration, merchant settings, payment status or customer state.
+    - `prepareSaleDebt`: runs before the sale transaction and resolves the business.
+    - `applySaleDebtInTxn`: create-only writes inside the caller's transaction.
+    - `recordSaleLiability`: unchanged behaviour, now built on the same builder.
+  - **`posCompleteCheckout`:**
+    - `soldAtMs` and `collectionRoute` are sale facts fixed before the transaction and stored on the sale. The route is one helper
+      (`_collectionRouteFor`: configuration plus "all cash is in the drawer", never a payment outcome), reused by completion.
+    - The debt is planned before the transaction, read in phase 1, and **created in phase 3 with the sale and receipt**.
+    - If the debt cannot be planned, the sale is refused and the payment claim released.
+    - The post-commit best-effort write is removed.
+  - **`recordPOSSale`:** the same inside its one M0-2 transaction. The post-commit write is removed; the replay re-ensure is kept as defence in depth.
+  - **Unchanged:** payment authorities, the till gate (OFF), wallets, collection, `recordPOSSale`'s TILL_DIRECT custody, and custodial
+    sales (still no debt).
+- **Tripwire (owner-approved, candidate `3cf1d1a5a9ce`):** `scripts/test-pos-gate-enforcement.js` Part C encoded the superseded order
+  ("after the commit"; "a liability failure never fails a paid sale"). C1–C5 now check the same intents against the
+  approved invariant: each path creates the debt; it commits inside the sale's own transaction, never after; a debt that cannot
+  be recorded refuses the sale.
+  - 42/0 new; 37/5 old (all for the right reasons).
+  - It catches both "debt moved out of the transaction" mutants.
+- **Files:**
+  - `functions/pos-commission-rail.js`, `functions/pos-zero-friction.js`, `functions/pos-retail-engine.js`;
+  - new `scripts/test-m04dr-a-atomic-debt.js`;
+  - `scripts/test-pos-gate-enforcement.js`;
+  - new `docs/repairs/POS-M0-4-DR-A-atomic-debt.md`;
+  - `docs/FINANCIAL_CORE_ARCHITECTURE.md` (DR-A / DR-R rows);
+  - `CHANGELOG.md`.
+- **Database:** sales gain `soldAtMs`, and `collectionRoute` is now set at creation. There is no migration. Pre-change sales without a debt are
+  M0-4-DR-R's.
+- **API:** a sale whose debt cannot be recorded is refused (`unavailable`); nothing is charged.
+- **Evidence:**
+  - `test-m04dr-a-atomic-debt` **16/0 new vs 9/7 old**, with injected failures at the exact write.
+  - **107 categories** parsed from the repository's own category sources all take one authority (one rate, rail, amount, schema).
+  - 9/9 mutants (one indirect, disclosed).
+  - Re-certified in full after the rebase onto `b12405d` (fresh runs; an earlier attempt cut short by a machine
+    out-of-memory condition was discarded, not counted):
+    - the 112-suite floor, old (`b12405d`) vs new: one summary line differs. `test-merchant-v2-ecosystem-runtime`
+      (a browser suite that cannot reach `posCompleteCheckout`) timed out on the old tree and ended 130/1 on the new.
+      It flips the same way on both trees across earlier units, so it is pre-existing flake.
+    - the earlier units are all green: P0, M0-1, M0-2, M0-3, M0-4a, R-48H, 0b, the Q0 series, L-1, L-7, L-8, L-9A.
+    - also green: the retirement test 5/0, the gate-enforcement tripwire 42/0, the rail 46/0, and the syntax gate.
+- **Not in this unit:** M0-4-DR-R, SmartPOS / POS QR / C2B / Till QR convergence, Quick Charge, FC-1, M0-4b, wallets, M0-5.
+
 ## 2026-09-28 (170) — SECURITY: webhookSmartpos retired (public, unsigned sale ingress) — production function deleted, export removed
 
 **Finding (M0-4-DR census; verified read-only against production):**

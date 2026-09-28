@@ -158,48 +158,50 @@ console.log('\nPART B — BOTH sale rails are gated\n');
 
 console.log('\nPART C — the gate has something to gate on\n');
 {
-  ck('C1  posCompleteCheckout records the liability', /recordSaleLiability/.test(ZF));
-  ck('C2  recordPOSSale records the liability', /recordSaleLiability/.test(RE));
+  /* M0-4-DR-A (owner-approved 2026-09-28): the debt is no longer written AFTER the sale, best-effort. It is
+     created INSIDE the sale's own transaction (pos-commission-rail applySaleDebtInTxn), so the sale and its debt
+     commit together or not at all. The old C1/C3/C4/C5 encoded the superseded order ("after the commit";
+     "a liability failure never fails a paid sale"); each is kept as the SAME intent against the approved
+     invariant. The intent C3 always protected — no liability for a sale that was not written — holds more
+     strongly: the debt cannot exist without its sale's commit. (Runtime counterpart: test-m04dr-a-atomic-debt
+     C-1..C-8, R-1..R-3 — an injected debt failure leaves no sale; every committed sale has exactly one debt.) */
+  ck('C1  posCompleteCheckout creates the debt', /applySaleDebtInTxn\(txn, _debtPlan/.test(ZF));
+  ck('C2  recordPOSSale creates the debt', /applySaleDebtInTxn\(t, _debtPlan/.test(RE));
 
-  /* AFTER the sale is written: a liability for a sale that failed to write would bill a
-     merchant for money they never took. */
-  /* 0b R1 moved the sale into the stock transaction and everything after it into ONE completion
-     step (_completeCommittedSale). "Later in the file" no longer means "after the sale", so the
-     property is checked as what it is: the liability is recorded ONLY in the completion step, and
-     every call of that step happens AFTER the sale committed — either right after the transaction
-     that created it, or on a retry that found it already committed. (Runtime counterpart:
-     test-0b-checkout-integrity C-L1/C-L2 — a liability exists for each committed sale and for no
-     refused or failed attempt.) */
   const _body = (src, head) => {
     const i = src.indexOf(head); if (i < 0) return '';
     let j = src.indexOf('{', i), d = 0;
     for (let k = j; k < src.length; k++) { if (src[k] === '{') d++; else if (src[k] === '}') { d--; if (!d) return src.slice(i, k + 1); } }
     return '';
   };
+  /* C3 — posCompleteCheckout: the debt is created in the SAME commit as the sale — inside the stock transaction,
+     after txn.create(saleRef, …) — and nowhere after the commit (not in the completion step). */
   const completion = _body(ZF, 'async function _completeCommittedSale(');
-  const outside = ZF.replace(completion, '');
-  const calls = (outside.match(/_completeCommittedSale\(/g) || []).length;
-  const gated = (outside.match(/_committed = true;\s*return await _completeCommittedSale\(/g) || []).length;
-  const createAt = outside.indexOf('txn.create(saleRef,');
-  const postTxCallAt = outside.lastIndexOf('return await _completeCommittedSale(');
-  ck('C3  the liability is written AFTER the sale commits, never before',
-    completion.length > 0 && /recordSaleLiability/.test(completion)
-      && !/recordSaleLiability/.test(outside)
-      && calls >= 2 && gated === calls
-      && createAt !== -1 && postTxCallAt > createAt
-      && /if \(_prior\.exists\)/.test(outside),
-    'liability only in completion=' + /recordSaleLiability/.test(completion) + ' outside=' + /recordSaleLiability/.test(outside)
-      + ' calls=' + calls + ' gated=' + gated + ' create@' + createAt + ' postTxCall@' + postTxCallAt);
+  /* anchored AFTER the destructuring brace of `const { loyaltyAwarded }`, so the body found is the callback's */
+  const txBody = _body(ZF, 'loyaltyAwarded } = await db.runTransaction(async txn =>');
+  const saleAt = txBody.indexOf('txn.create(saleRef,'), debtAt = txBody.indexOf('applySaleDebtInTxn(txn, _debtPlan');
+  ck('C3  the debt commits WITH the sale — in the stock transaction, never after it',
+    txBody.length > 0 && saleAt !== -1 && debtAt > saleAt
+      && !/recordSaleLiability|applySaleDebtInTxn/.test(completion),
+    'in-transaction sale@' + saleAt + ' debt@' + debtAt + ' completion writes debt=' + /recordSaleLiability|applySaleDebtInTxn/.test(completion));
 
-  /* M0-2 (2026-09-28): recordPOSSale now commits its sale in ONE transaction (claim · stock ·
-     sale · receipt) instead of a batch. The property is unchanged: the debt comes after it. */
-  const commitAt = RE.indexOf('const _outcome = await fdb.runTransaction');
-  const liabAt2 = RE.indexOf('recordSaleLiability');
-  ck('C4  ...same order on the second rail', commitAt !== -1 && liabAt2 > commitAt,
-    'commit@' + commitAt + ' liab@' + liabAt2);
+  /* C4 — recordPOSSale: the same, inside its ONE M0-2 transaction; after the commit only the replay re-ensure
+     (idempotent, from the claim's immutable facts) may touch the debt. */
+  const reHead = 'const _outcome = await fdb.runTransaction(';
+  const reTx = _body(RE, reHead);
+  const reAfter = RE.slice(RE.indexOf(reHead) + reTx.length);
+  const replayBlock = _body(reAfter, 'if (_outcome.replay) {');
+  const afterNonReplay = reAfter.replace(replayBlock, '');
+  ck('C4  ...same on the second rail: the debt commits inside the M0-2 transaction',
+    reTx.length > 0 && /applySaleDebtInTxn\(t, _debtPlan/.test(reTx) && !/recordSaleLiability\(fdb, _rec\)/.test(afterNonReplay),
+    'in-transaction=' + /applySaleDebtInTxn\(t, _debtPlan/.test(reTx) + ' post-commit write=' + /recordSaleLiability\(fdb, _rec\)/.test(afterNonReplay));
 
-  ck('C5  a liability failure never fails a paid sale',
-    /commission liability not recorded/.test(SRC_ZF) && /commission liability not recorded/.test(SRC_RE));
+  /* C5 — a debt that cannot be recorded never leaves a sale without its debt: the sale is refused and nothing is
+     charged (a confirmed payment's claim is released, so it can fund the retry). The old best-effort
+     "liability not recorded — carry on" path is gone from both rails. */
+  ck('C5  a debt that cannot be recorded refuses the sale — never a sale without its debt',
+    /commission debt could not be planned — sale refused/.test(SRC_ZF) && /commission debt could not be planned — sale refused/.test(SRC_RE)
+      && !/commission liability not recorded/.test(SRC_ZF) && !/\[recordPOSSale\] commission liability not recorded/.test(SRC_RE));
 }
 
 console.log('\nPART D — custody comes from the route, not a second guess\n');

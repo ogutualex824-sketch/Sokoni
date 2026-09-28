@@ -582,6 +582,32 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
     discountTotal: itemDiscount,
   });
   const claimRef = fdb.collection(RECORD_SALE_CLAIMS).doc(_recordSaleClaimId(_sellerId, idempotencyKey));
+
+  /* M0-4-DR-A — THE COMMISSION DEBT, planned from this sale's own facts (gross, TILL_DIRECT custody,
+     _soldAtMs, saleId, seller) BEFORE the transaction, created INSIDE it with the claim, the sale and the
+     receipt. It used to be written after the commit, best-effort, so a failure left a recorded sale with
+     no debt. If the debt cannot be planned, nothing is recorded. CUSTODY is TILL_DIRECT — this rail
+     records sales the merchant took themselves; `planId: null` because POS/Till is a flat rate on every
+     plan. (Whether every recordPOSSale tender is truly merchant-held is a flagged question, not changed here.) */
+  let _debtPlan;
+  try {
+    const _P  = require('./pos-sale-commission');
+    const _MA = require('./money-authority');
+    _debtPlan = await require('./pos-commission-rail').prepareSaleDebt(fdb, _P.planSaleCommission({
+      rail: 'TILL_DIRECT',
+      gross: _MA.fromMinor(Math.round(Number(total || 0) * 100)),
+      planId: null,
+      soldAtMs: _soldAtMs,
+      saleId: String(saleId),
+      merchantUid: String(_sellerId),
+    }));
+  } catch (planErr) {
+    console.error('[recordPOSSale] commission debt could not be planned — sale refused', {
+      saleId, sellerId: _sellerId, error: planErr && planErr.message,
+    });
+    throw new HttpsError('unavailable', 'The commission for this sale could not be recorded, so the sale was not recorded.');
+  }
+
   const _outcome = await fdb.runTransaction(async (t) => {
     const c = await t.get(claimRef);
     if (c.exists) {
@@ -592,12 +618,17 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
       }
       return { replay: true, claim: cd };
     }
+    /* M0-4-DR-A — read the debt refs BEFORE _reserveStockInTxn (which reads, then writes). */
+    const _dr = _debtPlan && !_debtPlan.none ? _debtPlan.refs : null;
+    const [_debtSnap, _ledgerSnap] = _dr ? await Promise.all([t.get(_dr[0]), t.get(_dr[1])]) : [null, null];
     await _reserveStockInTxn(t);
     for (const [ref, data] of _creates) t.create(ref, data);
     t.create(claimRef, {
       sellerId: _sellerId, fingerprint: _fingerprint, saleId, receiptId, result: _result,
       grossMinor: Math.round(Number(total || 0) * 100), soldAtMs: _soldAtMs, createdAt: now(),
     });
+    /* M0-4-DR-A — the debt and its ledger projection, in the SAME commit: both or neither. */
+    require('./pos-commission-rail').applySaleDebtInTxn(t, _debtPlan, _debtSnap, _ledgerSnap);
     return { replay: false };
   });
 
@@ -621,39 +652,11 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
     return Object.assign({}, cd.result, { replayed: true });
   }
 
-  /* ── THE COMMISSION LIABILITY ─────────────────────────────────────────────────────────
-     The gate above reads liability rows; this rail was writing none, so every sale recorded
-     here was invisible to it. Gating one rail while the other accrues nothing would let a
-     merchant run their whole day through this callable and owe nothing on paper.
-
-     AFTER the commit, deliberately: a liability for a sale that then failed to write would
-     bill a merchant for money they never took. This order can only fail the other way — a
-     completed sale whose liability write failed — which is recoverable by reconciling against
-     posSales and is visible in the log.
-
-     Idempotent on the sale id. Best-effort: a failure here never fails a sale the customer has
-     already paid for. CUSTODY is TILL_DIRECT — this rail records sales the merchant took
-     themselves, so the merchant is holding the money and owes the commission. `planId: null`
-     because POS/Till is a flat 5% on every plan; passing null records honestly that no plan
-     was resolved rather than stamping one nobody verified. */
-  try {
-    const _rail = require('./pos-commission-rail');
-    const _P = require('./pos-sale-commission');
-    const _MA = require('./money-authority');
-    const _rec = _P.planSaleCommission({
-      rail: 'TILL_DIRECT',
-      gross: _MA.fromMinor(Math.round(Number(total || 0) * 100)),
-      planId: null,
-      soldAtMs: _soldAtMs,
-      saleId: String(saleId),
-      merchantUid: String(_sellerId),
-    });
-    await _rail.recordSaleLiability(fdb, _rec);
-  } catch (commErr) {
-    console.error('[recordPOSSale] commission liability not recorded', {
-      saleId, sellerId: _sellerId, error: commErr && commErr.message,
-    });
-  }
+  /* M0-4-DR-A — the commission debt is no longer written here, after the commit. It was best-effort: a
+     failure left a recorded sale with no debt. It is now created INSIDE the one M0-2 transaction above, with the
+     claim, the sale and the receipt (prepareSaleDebt / applySaleDebtInTxn) — both or neither. The replay path
+     above still re-ensures it (recordSaleLiability, idempotent, from the claim's immutable facts): defence in
+     depth, not the mechanism. */
 
   /* Award loyalty points (outside batch — ok if this fails).
      Q0b-2a — written in a transaction that re-checks ownership: the sale has committed, so it cannot

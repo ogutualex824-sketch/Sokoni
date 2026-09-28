@@ -271,6 +271,20 @@ function _methodIncrements(position) {
   return out;
 }
 
+/* The collection route of a sale — which collection model applied, so reconciliation never assumes. It is
+   platform configuration (payment-config) plus the tenders: cash is never centrally collected whatever the
+   route says — it is in a drawer — so an all-cash sale is CASH_IN_DRAWER. A payment OUTCOME never enters
+   into it. ONE helper: the pre-transaction custody decision and _postSaleFinancials both use it. */
+async function _collectionRouteFor(payments) {
+  const allCash = (payments || []).every((p) => String(p.method).toLowerCase() === 'cash');
+  if (allCash) return 'CASH_IN_DRAWER';
+  try {
+    const pc = require('./payment-config');
+    const r = await pc.resolveCollectionRoute(db);
+    return r.route;
+  } catch (_) { return 'DIRECT_TO_SELLER'; }
+}
+
 async function _postSaleFinancials(o) {
   const out = { status: 'pending', tax: null, commission: null, collectionRoute: null,
                 position: null, error: null };
@@ -278,16 +292,10 @@ async function _postSaleFinancials(o) {
 
   try {
     /* ── which collection model applied, so reconciliation never assumes ──── */
-    try {
-      const pc = require('./payment-config');
-      const r = await pc.resolveCollectionRoute(db);
-      out.collectionRoute = r.route;
-    } catch (_) { out.collectionRoute = 'DIRECT_TO_SELLER'; }
-    /* Cash is never centrally collected whatever the route says — it is in a
-       drawer. Recording the configured route against a cash sale would misstate
-       who holds the money. */
-    const allCash = (o.payments || []).every((p) => String(p.method).toLowerCase() === 'cash');
-    if (allCash) out.collectionRoute = 'CASH_IN_DRAWER';
+    /* M0-4-DR-A — the route is a SALE fact decided once, before the sale transaction (the debt's custody
+       depends on it); the sale carries it and completion reuses it. Only a sale committed before that
+       (no route on the record) derives it here, through the same helper. */
+    out.collectionRoute = o.collectionRoute || await _collectionRouteFor(o.payments);
 
     /* ══ THE MONEY POSITION ══════════════════════════════════════════════════
        WHERE the money physically is, which is not the same question as how much
@@ -450,6 +458,7 @@ async function _completeCommittedSale(o) {
       total: sale.grandTotal,
       payments: sale.payments || [],
       changeDue: sale.changeDue || 0,
+      collectionRoute: sale.collectionRoute || null,
     });
     await saleRef.set({
       tax: financial.tax, commission: financial.commission, position: financial.position,
@@ -458,26 +467,11 @@ async function _completeCommittedSale(o) {
     }, { merge: true });
   }
 
-  /* Commission liability — best-effort as before, idempotent on the sale id. */
-  try {
-    const _rail = _posRail();
-    const _P = require('./pos-sale-commission');
-    const _MA = require('./money-authority');
-    const _railKey = _posRailKeyFor(financial && financial.collectionRoute);
-    const _rec = _P.planSaleCommission({
-      rail: _railKey,
-      gross: _MA.fromMinor(Math.round(Number(sale.grandTotal || 0) * 100)),
-      planId: null,
-      soldAtMs: Date.now(),
-      saleId: String(saleId),
-      merchantUid: String(merchantId),
-    });
-    await _rail.recordSaleLiability(db, _rec);
-  } catch (commErr) {
-    console.error('[posCompleteCheckout] commission liability not recorded', {
-      saleId, merchantId, error: commErr && commErr.message,
-    });
-  }
+  /* M0-4-DR-A — the commission debt is NO LONGER written here. It was best-effort after the commit:
+     a failure left a completed sale with no debt, and because this step then marked the key complete,
+     a retry never repaired it. The debt is now created INSIDE the stock transaction, with the sale
+     (see prepareSaleDebt / applySaleDebtInTxn there) — the two commit together or not at all. A sale
+     committed before this change that lacks a debt is M0-4-DR-R's (reconciliation) to find. */
 
   /* The money-position counters, exactly once per sale. */
   const dailyRef = db.collection('posDailySummary').doc(`${merchantId}_${sale.saleDate}`);
@@ -1079,6 +1073,9 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
 
     const now      = Date.now();
     const saleDate = new Date(now).toISOString().split('T')[0];
+    /* M0-4-DR-A — the sale's own custody fact, fixed BEFORE the transaction: platform configuration plus the
+       tenders, never a payment outcome. The sale carries it; the debt's rail and completion both read it. */
+    const _saleRoute = await _collectionRouteFor(payments);
 
     /* ── 3b. Wallet payment pre-validation ── */
     const walletPayment = payments.find(p => p.method === 'wallet');
@@ -1156,7 +1153,9 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       commission:         null,
       /* WHERE the money is, per sale: drawer vs provider, split by method. */
       position:           null,
-      collectionRoute:    null,
+      collectionRoute:    _saleRoute,
+      /* M0-4-DR-A — the sale's own time, the one its debt is dated by (never a later completion's). */
+      soldAtMs:           now,
       /* HOW the merchant was proven for this sale — shop_actor (owner/shopEmployees) or
          workspace_membership. Recorded so an audit can tell which authority admitted the
          sale, rather than inferring it from a role months later. */
@@ -1221,6 +1220,29 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
     const receiptRef = db.collection('posReceipts').doc(saleId);
     const dailyRef   = db.collection('posDailySummary').doc(`${merchantId}_${saleDate}`);
 
+    /* M0-4-DR-A — THE COMMISSION DEBT, planned from the sale's own facts BEFORE the transaction (the
+       business lookup is a read that cannot sit in a write phase), created INSIDE it with the sale. If the
+       debt cannot be planned, the sale is not recorded — a completed sale without its debt is exactly
+       the state this unit removes. A custodial sale (SOKONI holds the money) plans no debt, as before. */
+    let _debtPlan;
+    try {
+      const _P  = require('./pos-sale-commission');
+      const _MA = require('./money-authority');
+      _debtPlan = await _posRail().prepareSaleDebt(db, _P.planSaleCommission({
+        rail:        _posRailKeyFor(_saleRoute),
+        gross:       _MA.fromMinor(Math.round(Number(authoritativeTotal || 0) * 100)),
+        planId:      null,
+        soldAtMs:    now,
+        saleId:      String(saleId),
+        merchantUid: String(merchantId),
+      }));
+    } catch (planErr) {
+      console.error('[posCompleteCheckout] commission debt could not be planned — sale refused', {
+        saleId, merchantId, error: planErr && planErr.message,
+      });
+      _e('The commission for this sale could not be recorded, so the sale was not recorded. Nothing has been charged.', 'unavailable');
+    }
+
     /* ── 4. Firestore transaction: wallet + inventory + loyalty ──
        Firestore requires ALL READS before ALL WRITES in a transaction. The previous version
        wrote the wallet debit and then read inventory inside the same transaction, so
@@ -1236,7 +1258,9 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
 
       /* L-9A — on the membership path, the business and the caller's membership are read here too. */
       const _memRefs = _provenBy === 'workspace_membership' ? _txnMembershipRefs(cashierId, _provenBusinessId) : null;
-      const [saleSnap, wTxSnap, wSnap, custSnap, progSnap, bizTxSnap, memTxSnap, ...productSnaps] = await Promise.all([
+      /* M0-4-DR-A — the debt and its ledger projection are read here too (create-only writes follow). */
+      const _debtRefs = _debtPlan && !_debtPlan.none ? _debtPlan.refs : null;
+      const [saleSnap, wTxSnap, wSnap, custSnap, progSnap, bizTxSnap, memTxSnap, debtSnap, ledgerSnap, ...productSnaps] = await Promise.all([
         txn.get(saleRef),
         walletPayment ? txn.get(walletTxRef)  : Promise.resolve(null),
         walletPayment ? txn.get(walletDocRef) : Promise.resolve(null),
@@ -1244,6 +1268,8 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
         progRef ? txn.get(progRef) : Promise.resolve(null),
         _memRefs ? txn.get(_memRefs.bizRef)   : Promise.resolve(null),
         _memRefs ? txn.get(_memRefs.memQuery) : Promise.resolve(null),
+        _debtRefs ? txn.get(_debtRefs[0]) : Promise.resolve(null),
+        _debtRefs ? txn.get(_debtRefs[1]) : Promise.resolve(null),
         ...productRefs.map(r => txn.get(r)),
       ]);
 
@@ -1342,6 +1368,8 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       /* 0b R1 — the sale, its receipt and the base daily counters commit WITH the stock. */
       txn.create(saleRef, Object.assign({}, sale, { loyaltyAwarded }));
       txn.create(receiptRef, Object.assign({}, receipt, { loyaltyAwarded, createdAt: FieldValue.serverTimestamp() }));
+      /* M0-4-DR-A — and the commission debt + its ledger projection, in the SAME commit: both or neither. */
+      _posRail().applySaleDebtInTxn(txn, _debtPlan, debtSnap, ledgerSnap);
       txn.set(dailyRef, {
         merchantId, branchId, saleDate,
         totalSales:    FieldValue.increment(1),
