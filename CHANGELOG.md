@@ -1,3 +1,37 @@
+## 2026-09-28 (160) — L-2: port Q0b-2c + Q0b-2d onto the POS lineage — pos-crm-pro acts only for the caller's own store (NOT deployed)
+
+**Lineage reconciliation, unit 2.** The E1 hole was open on the POS lineage, the lineage production POS deploys from.
+`pos-crm-pro._resolveSellerId` returned the CLIENT-supplied `sellerId` whenever the token carried no `sellerId`
+claim, and nothing mints that claim. So any signed-in caller could spend, top up and read another store's customer
+wallets, store credit, gift cards and CRM personal data by naming that store.
+- **Evidence of the hole:** on the old tree, a forged call from store A deducted 100 from, and topped up, store B's
+  customer wallet.
+- **Where the fix already existed:** on the Q-chain line (2568786 / ceb82bf), but not on this lineage.
+
+- **Change:**
+  - `functions/pos-crm-pro.js` gets the Q0b-2c resolver. Without a claim, the caller acts for its own store. Naming
+    another store is refused, unless the caller is a platform admin (the same admin set as `_boundSellerId`). A
+    malformed `sellerId` is `invalid-argument`.
+  - `pos-crm-pro.html` gets the Q0b-2d client contract. It sends `{ phone }` or `{ customerId }`, and renders the
+    server's `{found, customer}` response and its counter set.
+- **Tests:** `test-q0b2c-resolve-seller.js` and `test-q0b2d-crm-client-contract.js` are ported.
+  - One lineage adaptation: the parity check P-1 exercises `_boundSellerId` through `getInventoryAlerts`, because on
+    this lineage `getPOSCustomer` is still the unscoped lookup.
+  - That unscoped `getPOSCustomer` is Q0b-1, reconciliation unit L-4. The property P-1 checks is unchanged.
+- **Files:** `functions/pos-crm-pro.js`, `pos-crm-pro.html`, new `scripts/test-q0b2c-resolve-seller.js`, new
+  `scripts/test-q0b2d-crm-client-contract.js`.
+- **Database:** none.
+- **API:** CRM callables refuse a foreign `sellerId` for non-admins, and refuse a malformed one.
+- **Security:** closes cross-store customer wallet, store-credit and gift-card spending and CRM PII reads on this
+  lineage.
+- **Evidence:**
+  - Q0b-2c: 16/0 new vs 9/7 old. The old failures are the hole itself: 23 forged handlers served, B's wallet mutated,
+    the malformed id served.
+  - Q0b-2d: 20/0 with the new page vs 1/19 with the pre-2d page on the same server.
+  - 5 mutants caught: client sellerId trusted, malformed id accepted, admin override dropped, a non-admin shape
+    treated as admin, the page sending `{query}`.
+  - The floor, the earlier units and syntax are reported with the unit.
+
 ## 2026-09-28 (159) — L-1: port 1171a16 onto the POS lineage — onboarding can no longer self-mint a role claim (NOT deployed)
 
 **Lineage reconciliation, unit 1** (owner ruling 2026-09-28: reconcile the POS lineage before any Financial Core

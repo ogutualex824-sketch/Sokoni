@@ -96,6 +96,21 @@ function _walletId(sellerId, phone) {
 // their claim (a mismatching client value is rejected — no cross-tenant access); an
 // admin/owner without a claim may target a store by passing sellerId; else fall back
 // to the caller uid. Never trust a client-supplied tenant id over the token claim.
+/* Q0b-2c — WHICH STORE A CRM CALL ACTS FOR.
+   Every handler below that takes a seller resolves it here, first, before any read or write. The
+   branch without a claim used to return the REQUEST's `sellerId` as given — and no `sellerId` claim is
+   minted anywhere — so any signed-in caller could name any store and read or move its customers'
+   wallets, gift cards, store credit, referrals, offers and membership data.
+     · a `sellerId` claim            → that claim (unchanged; a request naming another is refused)
+     · no claim, no seller named     → the caller's own uid
+     · no claim, the caller's own uid named → allowed
+     · an ADMIN naming another seller → allowed: the same admin set as pos-retail-engine's
+       _boundSellerId (admin / superAdmin claims, role admin / super_admin), stated here rather than
+       imported because that helper is not exported (tripwire-counted). A parity test holds the two
+       to one answer.
+     · anyone else naming another seller → REFUSED, never quietly redirected to their own store
+   A malformed seller is a bad request. Composite ids ({sellerId}_{phone}), the seller-keyed
+   queries and redeemGiftCard's card.sellerId check then scope every family by construction. */
 function _resolveSellerId(req) {
   const claim = req.auth && req.auth.token ? req.auth.token.sellerId : null;
   const provided = req.data ? req.data.sellerId : null;
@@ -104,8 +119,16 @@ function _resolveSellerId(req) {
       throw new HttpsError('permission-denied', 'sellerId does not match your account');
     return claim;
   }
-  if (provided) return provided;
-  return req.auth ? req.auth.uid : null;
+  if (!req.auth || !req.auth.uid) return null;
+  if (provided === undefined || provided === null || provided === '') return req.auth.uid;
+  if (typeof provided !== 'string' || !provided.trim() || provided.length > 128 || provided.indexOf('/') !== -1) {
+    throw new HttpsError('invalid-argument', 'sellerId is not a valid store id');
+  }
+  if (provided === req.auth.uid) return provided;
+  const t = req.auth.token || {};
+  const isAdmin = !!(t.admin || t.role === 'admin' || t.superAdmin || t.role === 'super_admin');
+  if (isAdmin) return provided;
+  throw new HttpsError('permission-denied', 'sellerId does not match your account');
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

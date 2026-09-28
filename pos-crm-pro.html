@@ -210,7 +210,7 @@
     <div class="card">
       <p class="section-title">Customer Lookup</p>
       <div class="search-row">
-        <input type="text" id="custSearch" placeholder="Search by phone or name…" />
+        <input type="text" id="custSearch" placeholder="Search by phone or customer ID…" />
         <button class="btn btn-primary" onclick="searchCustomer()">Search</button>
         <button class="btn btn-ghost" onclick="openModal('newCustomerModal')">+ New Customer</button>
       </div>
@@ -556,15 +556,88 @@ document.querySelectorAll('.modal-overlay').forEach(o => o.addEventListener('cli
 // ──────── CUSTOMERS ────────
 let currentCustomer = null;
 
+/* ── Q0b-2d — this page's customer CONTRACT with the server ──────────────────────────────
+   The page sent getPOSCustomer `{query}` (the handler reads phone / customerId, so every
+   lookup was refused), rendered the raw `{found, customer}` envelope as if it were the
+   customer, called .toLowerCase() on a tier OBJECT, and sent `customerId` to three follow-on
+   calls whose handlers require `phone`. These helpers speak the server's actual contract.
+   INTEGRITY: nothing here computes, sums or infers a figure. A value the server did not
+   return — or returned ambiguously — renders "—". */
+const CustomerContract = (() => {
+  /* a phone-like input is looked up by phone; anything else is a customer id */
+  function lookupPayload(input) {
+    const s = String(input == null ? '' : input).trim();
+    const digits = s.replace(/\D/g, '');
+    const phoneLike = /^[+\d\s()-]+$/.test(s) && (/^0[17]\d{8}$/.test(digits) || /^254[17]\d{8}$/.test(digits));
+    return phoneLike ? { phone: s } : { customerId: s };
+  }
+  /* the tier as the presentation logic expects it: a name string, or '' */
+  function tierName(t) {
+    if (t && typeof t === 'object') return typeof t.name === 'string' ? t.name : '';
+    return typeof t === 'string' ? t : '';
+  }
+  /* unwrap getPOSCustomer's `{found, customer}`; null when not found */
+  function fromLookup(data) {
+    if (!data || data.found !== true || !data.customer || typeof data.customer !== 'object') return null;
+    const c = data.customer;
+    return Object.assign({}, c, { id: c.customerId, tier: tierName(c.tier) });
+  }
+  /* Spend and visits are written by two paths under two names — the till checkout
+     (totalSpent / purchaseCount) and recordPOSSale / upsert (totalSpend / visitCount) — and
+     nothing writes totalVisits. With exactly ONE set on the record its values are shown; with
+     BOTH, the client cannot tell which is complete and must not add them, so both show "—";
+     with neither, "—". Returns { spent, visits }, each a number or null. */
+  function counters(c) {
+    const num = (v) => typeof v === 'number' && isFinite(v);
+    const a = c && (num(c.totalSpend) || num(c.visitCount));
+    const b = c && (num(c.totalSpent) || num(c.purchaseCount));
+    if (a && !b) return { spent: num(c.totalSpend) ? c.totalSpend : null, visits: num(c.visitCount) ? c.visitCount : null };
+    if (b && !a) return { spent: num(c.totalSpent) ? c.totalSpent : null, visits: num(c.purchaseCount) ? c.purchaseCount : null };
+    return { spent: null, visits: null };
+  }
+  /* a callable-serialised Firestore Timestamp, a Date or an ISO string → YYYY-MM-DD; else null */
+  function dateOf(v) {
+    if (!v) return null;
+    const secs = typeof v === 'object' ? (v._seconds ?? v.seconds) : undefined;
+    const d = typeof secs === 'number' ? new Date(secs * 1000) : new Date(v);
+    return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+  }
+  /* getCustomerInsights → the panel: only fields the server returned */
+  function fromInsights(d) {
+    const profile = (d && d.profile) || {};
+    const favourites = Array.isArray(d && d.favouriteProducts)
+      ? d.favouriteProducts.map((p) => (p && p.productId != null ? String(p.productId) : null)).filter(Boolean) : [];
+    const purchases = Array.isArray(d && d.recentPurchases) ? d.recentPurchases.slice(0, 5).map((s) => ({
+      date: dateOf(s && s.createdAt),
+      items: Array.isArray(s && s.items) ? s.items.map((i) => (i && i.name) || '').filter(Boolean).join(', ') : '',
+      amount: s && typeof s.total === 'number' ? s.total : null,
+    })) : [];
+    return { favourites, lastVisit: dateOf(profile.lastVisit), purchases };
+  }
+  /* checkBirthdayReward is a WRITE: it awards the points. Report exactly what the server did. */
+  function fromBirthday(d) {
+    if (d && d.rewarded === true) {
+      return { type: 'success', text: `🎂 Birthday reward given: ${typeof d.points === 'number' ? d.points : '—'} points added.` };
+    }
+    return { type: 'info', text: `No birthday reward given${d && d.reason ? ': ' + d.reason : ''}.` };
+  }
+  return { lookupPayload, tierName, fromLookup, counters, dateOf, fromInsights, fromBirthday };
+})();
+window.CustomerContract = CustomerContract;   /* exposed for the contract test */
+
 window.searchCustomer = async () => {
   const q = document.getElementById('custSearch').value.trim();
   if (!q) return;
   const el = document.getElementById('custResult');
   el.innerHTML = '<div class="spinner" style="margin:20px auto;"></div>';
   try {
-    const res = await cf('getPOSCustomer')({ query: q });
-    currentCustomer = res.data;
-    renderCustomerCard(res.data);
+    const res = await cf('getPOSCustomer')(CustomerContract.lookupPayload(q));
+    currentCustomer = CustomerContract.fromLookup(res.data);
+    if (!currentCustomer) {
+      el.innerHTML = '<div class="empty"><div class="icon">🔍</div><p>No customer found for that phone or ID.</p></div>';
+      return;
+    }
+    renderCustomerCard(currentCustomer);
   } catch (e) {
     el.innerHTML = `<div class="empty"><div class="icon">😕</div><p>${e.message}</p></div>`;
   }
@@ -583,6 +656,7 @@ function tierLabel(tier) {
 function renderCustomerCard(c) {
   const el = document.getElementById('custResult');
   const initial = (c.name || 'C').charAt(0).toUpperCase();
+  const cnt = CustomerContract.counters(c);
   el.innerHTML = `
     <div class="customer-card" style="margin-top:16px;">
       <div class="customer-header">
@@ -604,8 +678,8 @@ function renderCustomerCard(c) {
       </div>
       <div class="stat-grid">
         <div class="stat-item"><div class="val">${(c.loyaltyPoints||0).toLocaleString()}</div><div class="lbl">Loyalty Points</div></div>
-        <div class="stat-item"><div class="val">KES ${(c.totalSpent||0).toLocaleString()}</div><div class="lbl">Total Spent</div></div>
-        <div class="stat-item"><div class="val">${c.totalVisits||0}</div><div class="lbl">Total Visits</div></div>
+        <div class="stat-item"><div class="val">${cnt.spent === null ? '—' : 'KES ' + cnt.spent.toLocaleString()}</div><div class="lbl">Total Spent</div></div>
+        <div class="stat-item"><div class="val">${cnt.visits === null ? '—' : cnt.visits}</div><div class="lbl">Total Visits</div></div>
         <div class="stat-item"><div class="val">KES ${(c.storeCredit||0).toLocaleString()}</div><div class="lbl">Store Credit</div></div>
         <div class="stat-item"><div class="val">KES ${(c.walletBalance||0).toLocaleString()}</div><div class="lbl">Wallet Balance</div></div>
       </div>
@@ -619,14 +693,14 @@ window.viewHistory = async () => {
   panel.style.display = 'block';
   inner.innerHTML = '<div class="spinner"></div>';
   try {
-    const res = await cf('getCustomerInsights')({ customerId: currentCustomer.id });
-    const d = res.data;
+    const res = await cf('getCustomerInsights')({ phone: currentCustomer.phone });
+    const d = CustomerContract.fromInsights(res.data);
     inner.innerHTML = `
-      <div class="insight-row"><span style="color:var(--muted);">Favourite Products</span><span>${(d.favourites||[]).join(', ') || '—'}</span></div>
-      <div class="insight-row"><span style="color:var(--muted);">Last Visit</span><span>${d.lastVisit || '—'}</span></div>
+      <div class="insight-row"><span style="color:var(--muted);">Favourite Products</span><span>${esc(d.favourites.join(', ')) || '—'}</span></div>
+      <div class="insight-row"><span style="color:var(--muted);">Last Visit</span><span>${d.lastVisit ? esc(d.lastVisit) : '—'}</span></div>
       <div style="margin-top:12px;"><p class="section-title">Last 5 Purchases</p>
         <div class="table-wrap"><table><thead><tr><th>Date</th><th>Items</th><th>Amount</th></tr></thead><tbody>
-          ${(d.lastPurchases||[]).map(p => `<tr><td>${esc(p.date)}</td><td>${esc(p.items)}</td><td>KES ${(p.amount||0).toLocaleString()}</td></tr>`).join('') || '<tr><td colspan="3">No purchases</td></tr>'}
+          ${d.purchases.map(p => `<tr><td>${p.date ? esc(p.date) : '—'}</td><td>${esc(p.items) || '—'}</td><td>${p.amount === null ? '—' : 'KES ' + p.amount.toLocaleString()}</td></tr>`).join('') || '<tr><td colspan="3">No purchases</td></tr>'}
         </tbody></table></div></div>`;
   } catch(e) { inner.innerHTML = `<p style="color:var(--red);">${e.message}</p>`; }
 };
@@ -634,9 +708,9 @@ window.viewHistory = async () => {
 window.checkBirthdayReward = async () => {
   if (!currentCustomer) return;
   try {
-    const res = await cf('checkBirthdayReward')({ customerId: currentCustomer.id });
-    const d = res.data;
-    toast(d.eligible ? `🎂 Birthday reward available! ${d.reward}` : 'No birthday reward at this time.', d.eligible ? 'success' : 'info');
+    const res = await cf('checkBirthdayReward')({ phone: currentCustomer.phone });
+    const m = CustomerContract.fromBirthday(res.data);
+    toast(m.text, m.type);
   } catch(e) { toast(e.message, 'error'); }
 };
 
@@ -669,7 +743,7 @@ window.doStoreCredit = async () => {
   const reason = document.getElementById('scReason').value.trim();
   if (!amount || amount <= 0) { toast('Enter a valid amount.', 'error'); return; }
   try {
-    await cf('issueStoreCredit')({ customerId: currentCustomer.id, amount, reason });
+    await cf('issueStoreCredit')({ phone: currentCustomer.phone, amount, reason });
     closeModal('storeCreditModal');
     toast(`KES ${amount} store credit added.`, 'success');
   } catch(e) { toast(e.message, 'error'); }
@@ -684,13 +758,14 @@ window.loadWallet = async () => {
   document.getElementById('walletDisplay').style.display = 'none';
   try {
     const [custRes, balRes, txRes] = await Promise.all([
-      cf('getPOSCustomer')({ query: phone }),
+      cf('getPOSCustomer')({ phone }),
       cf('posGetWalletBalance')({ phone }),
       cf('posGetWalletTransactions')({ phone })
     ]);
-    walletCustomerId = custRes.data.id;
+    const walletCustomer = CustomerContract.fromLookup(custRes.data);
+    walletCustomerId = walletCustomer ? walletCustomer.id : null;
     document.getElementById('walletAmount').textContent = `KES ${(balRes.data.balance||0).toLocaleString()}`;
-    document.getElementById('walletCustomerName').textContent = custRes.data.name || phone;
+    document.getElementById('walletCustomerName').textContent = (walletCustomer && walletCustomer.name) || phone;
     document.getElementById('walletDisplay').style.display = 'block';
     renderWalletTx(txRes.data || []);
   } catch(e) { toast(e.message, 'error'); }
