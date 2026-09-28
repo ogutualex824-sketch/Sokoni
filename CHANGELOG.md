@@ -1,3 +1,44 @@
+## [2026-09-28] - HOTFIX K13-C: an applicant never writes a decision on `applications` (served-rules lineage)
+
+**Rules only, NOT released.** Branch `hotfix/k13c-applications-rules` is based on `618aadd`, whose generated
+`firestore.rules.build` is **byte-identical to the SERVED ruleset `6c67a34d`**. Rebuilding from the unmodified source
+reproduces the served bytes exactly. This is deliberately NOT based on `578a71d` (the lineage tip, which is ahead of
+production by B2) or on any other rules tree. Part C of K13; independent of A/B.
+
+**Why (production-proven, 2026-09-28):** the served `applications` rule is `create: claimsOwner() && noAdminFields()`.
+There is no decision guard, so an applicant could:
+- write `status:'approved'` (the first step of K13b) and `decidedBy` / decision metadata;
+- edit, reopen or delete an application that had already been DECIDED.
+
+**Changed:** `firestore.rules`, regenerated into `firestore.rules.build`.
+- Two helpers: `appNoDecision()` (no decision keys touched, no decisive status in any letter case) and
+  `appUndecided()` (the stored application is not decided).
+- `applications`:
+  - create requires `appNoDecision()`;
+  - the owner's update requires `appUndecided() && appNoDecision()`;
+  - the owner's delete requires `appUndecided()`.
+- Unchanged: the admin branches and read. The Admin SDK decision path (`applicationDecide`) is not governed by rules.
+
+**Tests:** `scripts/test-k13c-applications-rules.js`, an emulator run on private ports via `run-rules-suite.js`.
+- Candidate: **14/0**.
+- COUNTERPROOF against the SERVED ruleset: **8 defects** (R2 R3 R4 R12 R5 R6 R7 R8).
+- The positive controls (pending create / edit / withdraw, an admin decision, other users denied) pass in BOTH modes,
+  so this is not a deny-all.
+
+**Sabotage:** 7/7. Source and build were byte-identical after every attack (mutate → rebuild → emulator suite).
+
+**Diff:** the served → candidate change is 3 hunks, all in the `applications` section; ZERO lines change elsewhere.
+
+**Size:** the `.build` grows from 158,659 to 159,471 B (+812 B source). **The COMPILED size against the 256,000 B
+ceiling is NOT measured.** Measuring it requires a Rules API ruleset, which is a production write, so the compiled-size
+gate is OPEN until it is measured through an authorized mechanism.
+
+**Release:** a Rules REST release of THIS file on the served lineage, never the feature branch's rules file, and never
+together with B2 unless separately decided.
+
+**Database / API / Breaking:** an applicant can no longer edit or withdraw an already-DECIDED application. A rejected
+applicant reapplies with a new application, per the C4 contract.
+
 ## [2026-09-21] — Port the catalogue / business-application / POS-tender surface onto the served hosting lineage
 
 **Files:** new — `catalogue.html`, `business-apply.html`, `sokoni-catalogue-model.js`,

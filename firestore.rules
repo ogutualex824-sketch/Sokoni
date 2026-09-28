@@ -201,11 +201,25 @@ service cloud.firestore {
   match /users/{uid}/analytics/{doc} {
   allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
   }
+  /* K13-C: an applicant never writes a decision. Decisive statuses and decision metadata are the server's
+     (applicationDecide via the Admin SDK, which rules do not govern), and a DECIDED application is frozen to its
+     applicant: no edit, no reopen, no delete. appNoDecision() = no decision keys touched and no decisive status
+     written; appUndecided() = the stored application is not decided. */
+  function appNoDecision() {
+  let d = request.resource.data;
+  let dk = ['decidedBy','decidedAt','decisionAppliedFor','projectionStatus','blockedFor','statusCanonical','reviewReason'];
+  return (resource == null ? !d.keys().hasAny(dk) : !d.diff(resource.data).affectedKeys().hasAny(dk))
+  && (!d.keys().hasAny(['status']) || (d.status is string && !(d.status.lower() in ['approved','active','accepted','verified','rejected','declined','denied','suspended','revoked','banned','disabled'])));
+  }
+  function appUndecided() {
+  let s = resource.data.get('status', 'pending');
+  return !(s is string && s.lower() in ['approved','active','accepted','verified','rejected','declined','denied','suspended','revoked','banned','disabled']);
+  }
   match /applications/{appId} {
-  allow create: if claimsOwner() && noAdminFields();
+  allow create: if claimsOwner() && noAdminFields() && appNoDecision();
   allow read:   if isAdmin() || isOwner();
-  allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields());
-  allow delete: if isAdmin() || isOwner();
+  allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields() && appUndecided() && appNoDecision());
+  allow delete: if isAdmin() || (isOwner() && appUndecided());
   }
   match /invitations/{inviteId} {
   allow read:   if isAdmin();

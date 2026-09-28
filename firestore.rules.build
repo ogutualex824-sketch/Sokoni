@@ -201,11 +201,21 @@ service cloud.firestore {
   match /users/{uid}/analytics/{doc} {
   allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
   }
+  function appNoDecision() {
+  let d = request.resource.data;
+  let dk = ['decidedBy','decidedAt','decisionAppliedFor','projectionStatus','blockedFor','statusCanonical','reviewReason'];
+  return (resource == null ? !d.keys().hasAny(dk) : !d.diff(resource.data).affectedKeys().hasAny(dk))
+  && (!d.keys().hasAny(['status']) || (d.status is string && !(d.status.lower() in ['approved','active','accepted','verified','rejected','declined','denied','suspended','revoked','banned','disabled'])));
+  }
+  function appUndecided() {
+  let s = resource.data.get('status', 'pending');
+  return !(s is string && s.lower() in ['approved','active','accepted','verified','rejected','declined','denied','suspended','revoked','banned','disabled']);
+  }
   match /applications/{appId} {
-  allow create: if claimsOwner() && noAdminFields();
+  allow create: if claimsOwner() && noAdminFields() && appNoDecision();
   allow read:   if isAdmin() || isOwner();
-  allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields());
-  allow delete: if isAdmin() || isOwner();
+  allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields() && appUndecided() && appNoDecision());
+  allow delete: if isAdmin() || (isOwner() && appUndecided());
   }
   match /invitations/{inviteId} {
   allow read:   if isAdmin();
