@@ -1,3 +1,62 @@
+## [2026-09-28] - Profile page: no AI assistant, and one command prompt that displays properly on every device
+
+**Hosting, NOT deployed.** Branch `slice/c4-category-matrix`. These are the owner's instructions: "remove AI from
+profile page and leave the command prompt" and "display the command prompt well".
+
+**Proven defects** (the real `profile.html` + `sokoni-command-palette.js` at `4e9607b`, in real Chromium, with the
+page's real stylesheet and palette code):
+- **Two command prompts opened at once.** The header's global palette and the profile page's own workspace palette
+  both bind Ctrl+K, so one keypress opened both, stacked. The header button opened a different prompt from the
+  page's ⌘ button.
+- **The prompt ran off short screens.** The box had no height cap and a fixed 350px list. On a landscape phone
+  (844×390) its bottom was at 506px, and the results and footer were unreachable.
+- **iOS Safari zoomed the page on focus.** The search field was 15px; Safari zooms into any focused field under 16px.
+- **An AI chat bubble on the profile page, and four "Ask KASS" entries** (the quick actions, the links, the grid and
+  the palette). All four called `piOpenKass`, which is **defined nowhere**, so they were dead buttons.
+- **Counterproof:** 24 checks fail, and the A1 AI check fails.
+
+**Changed:**
+- **`profile.html`:**
+  - The `kass-widget.js` include and the four dead "Ask KASS" entries are removed. The KASS chat stays on every other
+    page.
+  - Command prompt CSS:
+    - it sits above the header (z-index 100010) and starts below the notch;
+    - the box is capped to the visible height (`100dvh`), and the list scrolls inside it;
+    - items are 44px tap targets;
+    - on touch screens the search field is 16px and the keyboard hints are hidden.
+  - The ⌘ button clears the iPhone home indicator.
+  - The page registers its workspace palette as `window.skPagePalette`. Its own Ctrl+K binding now only acts if the
+    global palette is absent.
+- **`sokoni-command-palette.js`:** when a page registers `window.skPagePalette`, Ctrl+K and the header button
+  (`SokoniCP.open`) open that palette instead, so a page never shows two stacked prompts. Every other page is
+  unchanged.
+
+**Not changed, flagged for the owner:** the profile page still shows the KASS-branded insight cards ("KASS — Action
+Items", "KASS Recommendations", and the 🤖 brief line). They are recommendation lists built from profile data, not a
+chat assistant. They stay until the owner says whether "remove AI" covers them.
+
+**Tests:** `scripts/test-profile-command-prompt.js`: real code, real browsers, fake origin, no network.
+- P1: Ctrl+K opens exactly one prompt, the page's workspace palette (the same one the ⌘ button opens).
+- P2: the header button opens that same prompt.
+- P3: the search field is on screen and tappable.
+- P4: the box fits the viewport.
+- P5: on touch screens the field is at least 16px.
+- A1: there is no AI widget and no "Ask KASS" entry.
+- It covers 8 device classes, in Chromium and WebKit.
+
+| Run | Result |
+|---|---|
+| Chromium, fix | **39/0** |
+| Chromium, counterproof on `4e9607b` | **24 FAIL** |
+| WebKit, fix | **39/0** |
+
+- **Honest limit:** the old search field was NOT proven to be under an 80px header. It sat just below it, so that
+  claim is not made.
+- **Sabotage (Chromium):** **6/6 caught**, byte-identical restore. One miss (the page not registering its palette)
+  exposed a gap: P1 now asserts WHICH prompt opens, not just how many.
+
+**Security / data / API:** none. The global palette's hand-off is opt-in per page.
+
 ## [2026-09-28] - The KASS chat's close button is always on screen and tappable, on every device
 
 **Hosting, NOT deployed.** Branch `slice/c4-category-matrix`. This is the owner's report: "make sure kass bot is well

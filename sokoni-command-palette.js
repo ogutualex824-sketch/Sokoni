@@ -302,7 +302,11 @@
     document.documentElement.style.overflowY = '';
   }
 
+  /* A page with its own workspace palette registers window.skPagePalette (profile.html): Ctrl+K and the header button
+     then open THAT palette, so a page never shows two command prompts stacked on each other. */
+  function _pagePalette() { return typeof window.skPagePalette === 'function' ? window.skPagePalette : null; }
   function _toggle() {
+    const pp = _pagePalette(); if (pp) { pp(); return; }
     if (_overlay && _overlay.classList.contains('sk-cp-open')) _close(); else _open();
   }
 
@@ -317,5 +321,5 @@
   }, true);
 
   // ── Public API ────────────────────────────────────────────────────────────
-  window.SokoniCP = { open: _open, close: _close, toggle: _toggle };
+  window.SokoniCP = { open: () => { const pp = _pagePalette(); if (pp) pp(); else _open(); }, close: _close, toggle: _toggle };
 })();
