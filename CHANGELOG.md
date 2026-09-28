@@ -1,3 +1,48 @@
+## [2026-09-28] - Profile page: every KASS / AI surface removed; KASS stays on home, services and every hub
+
+**Hosting, NOT deployed.** Branch `slice/c4-category-matrix`, on top of `8764a5f`. This answers the owner's decision
+on the item flagged in the entry below.
+- **Boundary:** HOME → KASS ✅ · SERVICES → KASS ✅ · ALL SERVICE / BUSINESS HUBS → KASS ✅ · PROFILE → KASS ❌.
+- **The owner's instruction:** remove the KASS chat, the "Ask KASS" buttons, "KASS — Action Items", "KASS
+  Recommendations", the 🤖 summary line, and any profile-only AI code left unused; keep shared KASS code.
+
+**Removed from `profile.html` only** (the chat include and the "Ask KASS" entries went in `8764a5f`):
+- **The cards:** "KASS — Action Items" (`piKassCard`) and "KASS Recommendations" (`piRecoCard`), with their
+  renderers and CSS (`pi-kass-*`, `pi-reco-*`).
+- **The strip loader** (`_s4Loaded._kass`). It re-called `profileGetCompletion` only to fill the Action Items card,
+  so **each profile session now makes one fewer callable invocation.**
+- **The 🤖 line in the daily brief:** its generator `_kassRec7`, its markup, its CSS and its workspace-accent
+  overrides.
+- **The `pi-kass-priority` CSS**, which nothing used.
+- **`piKassCard`** from the widget-collapse skip list.
+
+**Kept on the profile page** (not AI, not on the owner's list):
+- the profile-completion step list, which uses the same `profileGetCompletion` data;
+- the "Smart Insights" status chips, computed from profile data.
+
+**Untouched:** `kass-widget.js` and every other page. The landscape KASS-button behaviour was explicitly not part of
+this change.
+
+**Tests:** `scripts/test-kass-page-boundary.js` gives **9/0**. The counterproof on `4e9607b` fails B1–B5, the profile
+AI surfaces; the controls pass in both modes.
+- B1–B4: no widget, no "Ask KASS", no cards or 🤖 line, no leftover profile-only KASS code or CSS.
+- B5: the extra `profileGetCompletion` fetch is gone.
+- B6 (control): the inline scripts parse and the completion steps still render.
+- K1: home (via its lazy loader) and services still load KASS.
+- K2: **all 101 other pages that loaded KASS at `4e9607b` still do.** This is derived from the baseline tree, not a
+  hand-kept list.
+- K3: the shared widget still boots.
+- The first run exposed two detector defects, both fixed in the test:
+  - it missed home's lazy loader;
+  - a comment-stripping regex swallowed real code at `accept="image/*"`.
+
+**Sabotage:** 5/5 caught, byte-identical restore.
+- Restoring the Action Items card, the 🤖 line or the re-fetch fails B3 / B5.
+- Dropping KASS from services or from home's lazy loader fails K1 / K2.
+
+**Regression:** `test-profile-command-prompt` gives 39/0 on the changed page (Chromium).
+**Security / data / API:** none (one fewer read-only callable call).
+
 ## [2026-09-28] - Profile page: no AI assistant, and one command prompt that displays properly on every device
 
 **Hosting, NOT deployed.** Branch `slice/c4-category-matrix`. These are the owner's instructions: "remove AI from

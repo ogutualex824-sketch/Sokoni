@@ -912,17 +912,6 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:var(--bg);color:
 }
 .pi-step-link:hover{background:rgba(113,255,0,0.15);}
 
-/* ── AI Recommendation cards ── */
-.pi-reco-card{
-  display:flex;align-items:flex-start;gap:12px;padding:14px 16px;
-  border-radius:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
-  margin-bottom:8px;
-}
-.pi-reco-icon{font-size:20px;flex-shrink:0;margin-top:2px;}
-.pi-reco-body{flex:1;}
-.pi-reco-action{font-size:13px;font-weight:800;color:#fff;}
-.pi-reco-impact{font-size:11px;color:#71ff00;margin-top:3px;}
-
 /* ── Stat grid ── */
 .pi-stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0;}
 .pi-stat-card{
@@ -978,24 +967,6 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:var(--bg);color:
   text-align:center;line-height:1.3;
 }
 
-/* KASS insight strip */
-.pi-kass-strip{margin:0;padding:0;}
-.pi-kass-item{
-  display:flex;align-items:flex-start;gap:10px;padding:11px 14px;
-  border-radius:13px;background:rgba(255,255,255,0.02);
-  border:1px solid rgba(255,255,255,0.06);margin-bottom:7px;
-}
-.pi-kass-emoji{font-size:18px;flex-shrink:0;margin-top:1px;}
-.pi-kass-body{flex:1;}
-.pi-kass-action{font-size:13px;font-weight:800;color:#fff;}
-.pi-kass-impact{font-size:11px;color:#71ff00;margin-top:2px;}
-.pi-kass-go{
-  padding:5px 11px;border-radius:8px;background:rgba(113,255,0,0.08);
-  border:1px solid rgba(113,255,0,0.2);color:#71ff00;font-size:11px;
-  font-weight:800;text-decoration:none;white-space:nowrap;flex-shrink:0;
-  align-self:center;
-}
-.pi-kass-go:hover{background:rgba(113,255,0,0.15);}
 
 /* Wallet snapshot in Overview */
 .pi-wallet-snap{
@@ -1304,14 +1275,6 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 .pi-tl-pending  {background:rgba(255,200,0,0.08);color:#ffc800;}
 .pi-tl-active   {background:rgba(113,255,0,0.08);color:#71ff00;}
 
-/* ── KASS Executive Assistant enhanced layout ── */
-.pi-kass-priority{
-  display:inline-block;padding:1px 6px;border-radius:5px;font-size:9px;
-  font-weight:900;text-transform:uppercase;letter-spacing:.07em;margin-right:5px;
-}
-.pi-kass-priority.high{background:rgba(255,77,77,0.15);color:#ff6b6b;}
-.pi-kass-priority.med {background:rgba(255,200,0,0.12);color:#ffc800;}
-.pi-kass-priority.low {background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.4);}
 
 /* ── Adaptive hub chips ── */
 .pi-hub-wrap{display:flex;gap:8px;flex-wrap:wrap;margin-top:0;}
@@ -1448,18 +1411,6 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 .pi7-brief-icon{font-size:17px;line-height:1;}
 .pi7-brief-val{font-size:15px;font-weight:900;color:#fff;margin-top:1px;}
 .pi7-brief-lbl{font-size:9px;font-weight:800;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.05em;}
-.pi7-brief-kass{
-  display:flex;align-items:center;gap:10px;padding:10px 12px;
-  background:rgba(113,255,0,0.04);border:1px solid rgba(113,255,0,0.12);border-radius:12px;
-}
-.pi7-brief-kass-icon{font-size:15px;flex-shrink:0;}
-.pi7-brief-kass-text{flex:1;font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);line-height:1.4;}
-.pi7-brief-kass-btn{
-  padding:5px 11px;border-radius:8px;background:rgba(113,255,0,0.1);
-  border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-size:11px;font-weight:900;
-  cursor:pointer;text-decoration:none;white-space:nowrap;flex-shrink:0;font-family:inherit;
-}
-.pi7-brief-kass-btn:hover{background:rgba(113,255,0,0.18);}
 
 /* ── Business Health ── */
 .pi7-biz-layout{display:flex;align-items:stretch;gap:14px;}
@@ -2103,11 +2054,6 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
       </div>
     </div>
 
-    <!-- ── KASS Recommendations ── -->
-    <div class="up-card" id="piKassCard" style="display:none;padding:16px;">
-      <div class="up-card-title">&#129504; KASS — Action Items</div>
-      <div class="pi-kass-strip" id="piKassStrip"></div>
-    </div>
 
     <div class="up-stats" id="upOverviewStats">
       <div class="up-stat"><div class="up-stat-val" id="statOrders">0</div><div class="up-stat-lbl">Orders</div></div>
@@ -2315,10 +2261,6 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
       <div class="pi-steps" id="piStepsList"></div>
     </div>
 
-    <div class="up-card" id="piRecoCard" style="display:none;">
-      <div class="up-card-title">&#129504; KASS Recommendations</div>
-      <div id="piRecoList"></div>
-    </div>
   </div>
 
   <!-- ══ EMPLOYMENT PANEL ══ -->
@@ -5043,7 +4985,6 @@ window.logoutUser = logoutUser;
       var done  = (data && data.done)      || 0;
       var total = (data && data.total)     || 10;
       var steps = (data && data.steps)     || [];
-      var recos = (data && data.recommendations) || [];
 
       var bar   = document.getElementById('piComplBar');
       var pctEl = document.getElementById('piComplPct');
@@ -5088,25 +5029,6 @@ window.logoutUser = logoutUser;
         }).join('');
       }
 
-      if (recos.length) {
-        var ICONS = { photo:'📷', bio:'✍️', email:'✉️', phone:'📱', identity:'🪪',
-                      address:'📍', skills:'🎯', cert:'📄', bank:'💳', kra:'📑' };
-        var recoList = document.getElementById('piRecoList');
-        var recoCard = document.getElementById('piRecoCard');
-        if (recoList) {
-          recoList.innerHTML = recos.map(function(r) {
-            return '<div class="pi-reco-card">'
-                 + '<span class="pi-reco-icon">' + (ICONS[r.id] || '⚡') + '</span>'
-                 + '<div class="pi-reco-body">'
-                 + '<div class="pi-reco-action">' + _esc(r.action) + '</div>'
-                 + '<div class="pi-reco-impact">' + _esc(r.impact) + '</div>'
-                 + '</div>'
-                 + (r.href ? '<a href="' + r.href + '" class="pi-step-link">Go</a>' : '')
-                 + '</div>';
-          }).join('');
-        }
-        if (recoCard) recoCard.style.display = '';
-      }
     }
 
     if (_piOverview) {
@@ -5661,7 +5583,7 @@ window.logoutUser = logoutUser;
 
   /* ══════════════════════════════════════════════════════════════
      OVERVIEW DASHBOARD
-     Fills Command Summary, Wallet Snapshot, and KASS strip.
+     Fills Command Summary and Wallet Snapshot. (No KASS strip: no AI on the profile page — owner 2026-09-28.)
      Uses already-cached _piOverview (set in Sprint-3 boot).
   ══════════════════════════════════════════════════════════════ */
   function _loadOverviewDashboard() {
@@ -5716,30 +5638,6 @@ window.logoutUser = logoutUser;
       }).catch(function(){});
     }
 
-    /* KASS — load once per session */
-    if (!_s4Loaded._kass) {
-      _s4Loaded._kass = true;
-      _call('profileGetCompletion').then(function(data) {
-        var recos = (data && data.recommendations) || [];
-        if (!recos.length) return;
-        var strip = document.getElementById('piKassStrip');
-        var card  = document.getElementById('piKassCard');
-        var ICONS = {photo:'📷',bio:'✍️',email:'✉️',phone:'📱',identity:'🪪',address:'📍',skills:'🎯',cert:'📄',bank:'💳',kra:'📑'};
-        if (strip) {
-          strip.innerHTML = recos.slice(0,4).map(function(r){
-            return '<div class="pi-kass-item">'
-                 + '<span class="pi-kass-emoji">' + (ICONS[r.id]||'⚡') + '</span>'
-                 + '<div class="pi-kass-body">'
-                 + '<div class="pi-kass-action">' + _esc(r.action) + '</div>'
-                 + '<div class="pi-kass-impact">' + _esc(r.impact) + '</div>'
-                 + '</div>'
-                 + (r.href ? '<a href="' + _esc(r.href) + '" class="pi-kass-go">Fix ›</a>' : '')
-                 + '</div>';
-          }).join('');
-        }
-        if (card) card.style.display = '';
-      }).catch(function(){});
-    }
   }
 
   /* ══════════════════════════════════════════════════════════════
@@ -7147,25 +7045,6 @@ window.logoutUser = logoutUser;
     return new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' });
   }
 
-  function _kassRec7(ov, comp) {
-    var v   = (ov && ov.verifications) || {};
-    var sc  = (ov && ov.trustScore)    || 0;
-    var pct = (comp && comp.percent)   || 0;
-    if (!v.phone)
-      return { text:'Verify your phone to secure your account and boost trust by 15 pts.', tab:'security', cta:'Verify →' };
-    if (!v.identity && !v.identityVerified)
-      return { text:'Identity verification unlocks Premium and adds 20 trust points.', tab:'identity', cta:'Verify ID →' };
-    if (!v.kra)
-      return { text:'Adding your KRA PIN enables eTIMS compliance and business features.', tab:'identity', cta:'Add KRA →' };
-    if (pct < 70)
-      return { text:'Your profile is ' + pct + '% complete. Complete it for 3× more opportunities.', tab:'career', cta:'Complete →' };
-    if (sc < 45)
-      return { text:'Reach Silver Trust (45+ pts) to unlock Priority Support and analytics.', tab:'identity', cta:'Boost Trust →' };
-    if (sc < 70)
-      return { text:'You\'re ' + (70 - sc) + ' pts from Gold status — verify KRA or add bank account.', tab:'identity', cta:'View Steps →' };
-    return { text:'Your profile looks great. Explore new growth opportunities on SOKONI.', href:'/', cta:'Explore →' };
-  }
-
   function _renderMorningBrief(ov, comp) {
     var wrap = _el7('pi7Brief');
     if (!wrap) return;
@@ -7197,8 +7076,6 @@ window.logoutUser = logoutUser;
     }).length;
     if (expCt > 0) items.push({ icon:'⚠️', val: expCt, lbl:'Docs Expiring' });
 
-    var rec = _kassRec7(ov, comp);
-
     var html = '<div class="pi7-brief-header">' +
       '<div class="pi7-brief-salute">' + salute + ', <strong>' + name + '</strong></div>' +
       '<div class="pi7-brief-date">' + _todayLabel() + '</div>' +
@@ -7214,15 +7091,6 @@ window.logoutUser = logoutUser;
                  '</div>';
         }).join('') + '</div>';
     }
-
-    var btnHtml = rec.tab
-      ? '<button type="button" class="pi7-brief-kass-btn" onclick="switchTab(\'' + rec.tab + '\')">' + rec.cta + '</button>'
-      : '<a class="pi7-brief-kass-btn" href="' + (rec.href || '#') + '">' + rec.cta + '</a>';
-
-    html += '<div class="pi7-brief-kass">' +
-      '<span class="pi7-brief-kass-icon">🤖</span>' +
-      '<span class="pi7-brief-kass-text">' + rec.text + '</span>' +
-      btnHtml + '</div>';
 
     wrap.innerHTML = html;
     wrap.style.display = '';
@@ -7791,8 +7659,6 @@ window.logoutUser = logoutUser;
     s.textContent=[
       ':root{--pi8-ws-accent:'+t.accent+';--pi8-ws-accent2:'+t.accent2+';}',
       '.pi7-brief-salute strong{color:var(--pi8-ws-accent);}',
-      '.pi7-brief-kass{background:var(--pi8-ws-accent2);border-color:var(--pi8-ws-accent);}',
-      '.pi7-brief-kass-btn{background:var(--pi8-ws-accent2);border-color:var(--pi8-ws-accent);color:var(--pi8-ws-accent);}',
       '.pi7-biz-fill,.pi6-goal-fill{background:var(--pi8-ws-accent);}',
       '.pi8-filter-chip.active{background:var(--pi8-ws-accent2);border-color:var(--pi8-ws-accent);color:var(--pi8-ws-accent);}',
       '.pi6-hc-dot.done{color:var(--pi8-ws-accent);}',
@@ -7960,7 +7826,7 @@ window.logoutUser = logoutUser;
   var _SKIP=['pi7Brief','pi7BizHealth','pi7NotifSummary','piMyDayCard',
              'pi6ProfileHealth','pi6Goals','pi6ExecCmdsWrap','pi7PinsWrap',
              'pi7ModuleCards','pi6RoleCardWrap','piCmdGrid','pi6ResumeBar',
-             'piInsightsStrip','piKassCard','piWalletSnap'];
+             'piInsightsStrip','piWalletSnap'];
 
   function _initWidgetCollapse(){
     var panel=_el8('panel-overview');
