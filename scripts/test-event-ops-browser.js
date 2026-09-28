@@ -29,6 +29,9 @@ const fs = require('fs');
 const http = require('http');
 const ROOT = Path.resolve(__dirname, '..');
 const FN = Path.join(ROOT, 'functions');
+/* The ticket commission is READ from the policy the server uses (→ commission-config.RATES.event_tickets), never
+   typed here — the owner schedule of 2026-09-28 moved it from 3% to 5%, and a literal would have gone stale. */
+const TICKET_PCT = require(Path.join(FN, 'shared', 'commercial-policy.js')).policyFor({ policyKey: 'event_ticket' }).pct;
 const { makeFakeFirestore } = require('./lib/fake-firestore-txn');
 const F = makeFakeFirestore({ clock: () => Date.now(), strictReadOrder: true });
 const db = F.db;
@@ -285,8 +288,8 @@ async function seed() {
         ck(`cashier @${w}: Admit → server ADMITTED by the cashier (canonical admission record)`, adm1 && adm1.admittedBy === 'till1' && adm1.method === 'pin' && (await get(`eventTickets/${chk}`)).admissionStatus === 'ADMITTED');
         ck(`cashier @${w}: Check ticket has no horizontal overflow`, await noOverflow(pg, w));
         await pg.click('[data-qsmode="sale"]');
-        ck(`cashier @${w}: server wrote a COMPLETED 5,000 sale + valid ticket + 3 % receivable`, last.status === 'COMPLETED' && last.grossCents === 500000
-          && db._dump('eventTickets/').some((t) => t.saleId === last.saleId && t.status === 'valid') && ((await get(`eventCommissionReceivables/${last.saleId}`)) || {}).amountCents === 15000);
+        ck(`cashier @${w}: server wrote a COMPLETED 5,000 sale + valid ticket + ticket-rate receivable (${TICKET_PCT}% per policy)`, last.status === 'COMPLETED' && last.grossCents === 500000
+          && db._dump('eventTickets/').some((t) => t.saleId === last.saleId && t.status === 'valid') && ((await get(`eventCommissionReceivables/${last.saleId}`)) || {}).amountCents === Math.round(500000 * TICKET_PCT / 100));
         ck(`cashier @${w}: the card sale records the terminal reference (attested, not verified)`, !!last.card && last.card.reference === ('BRWREF' + w.toString(36).toUpperCase()) && last.paymentVerified === false && /Sale recorded/.test(await pg.textContent('#qsMsg')));
         const vip = await get('eventTicketTiers/VIP');
         ck(`cashier @${w}: after the sale the tickets-left count is re-read from the server`, Number(await pg.textContent('[data-left="VIP"]')) === vip.quantity - vip.sold && (await qv('VIP')) === '0', [await pg.textContent('[data-left="VIP"]'), vip.quantity - vip.sold]);
@@ -301,7 +304,7 @@ async function seed() {
           ck('cashier: M-PESA prompt sent to the buyer number for the SERVER price (KES 2,000)', STK.length === before + 1 && push.phone === '254712345678' && Number(push.amount) === 2000 && push.ref === msale.saleId, push);
           ck('cashier: after the M-PESA payment the sale is COMPLETED and the PIN is shown', msale.saleId && ((await get('eventSales/' + msale.saleId)) || {}).status === 'COMPLETED' && /^\d{4}$/.test(((await pg.$$eval('#qsOut .sk-t-pin', (xs) => xs.map((x) => x.textContent.trim()))) || [])[0] || '') && /Payment confirmed/.test(await pg.textContent('#qsMsg')));
           const st = (await get('eventSettlements/' + msale.saleId)) || {};
-          ck('cashier: M-PESA sale settles HELD at 3 % of (gross − fee), never the POS 5 %', st.status === 'HELD' && st.commissionCents === Math.round((200000 - 3000) * 0.03), st);
+          ck(`cashier: M-PESA sale settles HELD at the ticket rate (${TICKET_PCT}% per policy) of (gross − fee), never the POS rate`, st.status === 'HELD' && st.commissionCents === Math.round((200000 - 3000) * TICKET_PCT / 100), st);
         }
       }
       await c.close();

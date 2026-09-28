@@ -60,6 +60,11 @@ const EH = require(Path.join(FN, 'event-hub.js'));
 const engine = require(Path.join(FN, 'entitlement-engine.js'));
 ES.registerPurpose();
 const POLICY = require(Path.join(FN, 'shared', 'commercial-policy.js'));
+/* Ticket commission READ from the policy the server uses (→ commission-config.RATES.event_tickets). The owner schedule
+   of 2026-09-28 moved it 3% → 5%; every expected amount below is derived from it, never typed. */
+const TPCT = POLICY.policyFor({ policyKey: 'event_ticket' }).pct;
+const TBPS = Math.round(TPCT * 100);
+const O1_COMM = Math.floor((100000 - 1500) * TBPS / 10000), O1_NET = (100000 - 1500) - O1_COMM;   /* KES 1,000 ticket, KES 15 fee */
 let intents = null;
 try { intents = require(Path.join(FN, 'payment-intents.js')); } catch (e) { console.log('  (payment-intents not loadable: ' + e.message.split('\n')[0] + ')'); }
 
@@ -101,8 +106,8 @@ async function pay(ref, { buyer = 'buyer1', amountCents = 100000, status = 'COMP
     ck('branch: the self-settling exit fired', br.logs.some((l) => /self-settling purpose — no generic commission/.test(l)));
     ck('branch: order paid + both tickets valid', st['eventOrders/EO1'].status === 'paid' && st['eventTickets/tk1'].status === 'valid' && st['eventTickets/tk2'].status === 'valid');
     const s = st['eventSettlements/EO1'];
-    ck('branch: settlement HELD, 3 % of NET (1000 − 15 = 985 → 29.55)', s && s.status === 'HELD' && s.commissionCents === 2955 && s.organizerNetCents === 95545 && s.providerFeeCents === 1500, s && JSON.stringify({ c: s.commissionCents, n: s.organizerNetCents }));
-    ck('branch: event commission row evt_EO1 (source event_ticket, 3 %)', st['commissionLedger/evt_EO1'] && st['commissionLedger/evt_EO1'].commissionPct === 3 && st['commissionLedger/evt_EO1'].status === 'held');
+    ck(`branch: settlement HELD, ticket rate (${TPCT} %) of NET (1000 − 15 = 985)`, s && s.status === 'HELD' && s.commissionCents === O1_COMM && s.organizerNetCents === O1_NET && s.providerFeeCents === 1500, s && JSON.stringify({ c: s.commissionCents, n: s.organizerNetCents }));
+    ck(`branch: event commission row evt_EO1 (source event_ticket, ${TPCT} %)`, st['commissionLedger/evt_EO1'] && st['commissionLedger/evt_EO1'].commissionPct === TPCT && st['commissionLedger/evt_EO1'].status === 'held');
     ck('branch: replay → alreadyActive', br.eventActivation && br.eventActivation.activated && br.eventActivation.replay.alreadyActive);
   }
   const BASE = process.env.CREATOR_BASE_TREE || 'C:/temp/sok-creator-base2';
@@ -156,7 +161,7 @@ async function pay(ref, { buyer = 'buyer1', amountCents = 100000, status = 'COMP
   const [o1, s1, c1] = [await get('eventOrders/O1'), await get('eventSettlements/O1'), await get('commissionLedger/evt_O1')];
   ck('order paid, tickets valid', o1.status === 'paid' && (await get('eventTickets/O1_k0')).status === 'valid' && (await get('eventTickets/O1_k1')).status === 'valid');
   ck('settlement HELD with release after the event end + 24 h', s1.status === 'HELD' && s1.releaseAfter.toMillis() === NOW + 52 * H + 24 * H);
-  ck('commission = 3 % of (gross − fee) exactly', s1.commissionCents === Math.floor((100000 - 1500) * 300 / 10000) && c1.commissionCents === s1.commissionCents);
+  ck(`commission = ticket rate (${TPCT} %) of (gross − fee) exactly`, s1.commissionCents === Math.floor((100000 - 1500) * TBPS / 10000) && c1.commissionCents === s1.commissionCents);
   ck('organizer + commission + fee == gross (value conserved)', s1.organizerNetCents + s1.commissionCents + s1.providerFeeCents === s1.grossCents);
   ck('rate source is commission-config RATES.event_tickets', s1.rateSource === 'commission-config.RATES.event_tickets' && s1.policy === 'event_ticket_v1');
   const conc = await Promise.all([1, 2, 3, 4, 5, 6].map(() => ES.activateIfEventTicket('O1')));
@@ -181,13 +186,15 @@ async function pay(ref, { buyer = 'buyer1', amountCents = 100000, status = 'COMP
   console.log('\n── commercial policy ──');
   const m = Object.fromEntries(POLICY.matrix().map((r) => [r.key, r]));
   ck('Creator Hub 30 % (net of fee)', m.creator_ppv.pct === 30 && m.creator_ppv.basis === 'NET_OF_PROVIDER_FEE');
-  ck('Events 3 % per ticket (net of fee)', m.event_ticket.pct === 3);
+  ck(`Events ${TPCT} % per ticket (net of fee) — the policy equals the authority`, m.event_ticket.pct === require(Path.join(FN, 'commission-config.js')).resolveRate('event_tickets').pct);
   ck('Marketplace online 15 %', m.marketplace_online.pct === 15);
   ck('POS / Till 5 %', m.pos_till.pct === 5);
   ck('Quick Charge 5 % (POS lane)', m.quick_charge.pct === 5 && m.quick_charge.source === m.pos_till.source);
   ck('Streaming resolves to the Creator policy (owner decision)', POLICY.policyFor({ domain: 'entertainment', category: 'streaming' }).commercialPolicyId === 'creator_ppv_v1');
   ck('NO global Entertainment rate: an unmapped category is refused', (await code(Promise.resolve().then(() => POLICY.policyFor({ domain: 'entertainment', category: 'music' })))) === 'policy_unknown');
-  ck('five distinct rates across the matrix (not one flattened number)', new Set(Object.values(m).map((r) => r.pct)).size >= 4);
+  /* Distinct TRANSACTION TYPES, each with its own policy and source — the owner schedule makes tickets and entertainment
+     bookings both 5 %, so distinct NUMBERS is no longer the right test of "not flattened". */
+  ck('distinct transaction policies across the matrix (not one flattened rule)', Object.keys(m).length >= 5 && new Set(Object.values(m).map((r) => r.source)).size >= 4, Object.keys(m));
 
   /* ═══ 6. release ═══ */
   console.log('\n── release ──');
@@ -195,8 +202,8 @@ async function pay(ref, { buyer = 'buyer1', amountCents = 100000, status = 'COMP
   NOW += 80 * H;
   const rl = await ES.releaseOne('O1', { nowMs: NOW });
   const w = (await get('wallets/org1')) || {};             /* null-safe: a substituted wallet must FAIL here, not crash */
-  ck('due → the organizer business wallet (wallets.balance) credited in whole shillings', rl.released && w.balance === Math.floor(95545 / 100), JSON.stringify(rl));
-  ck('rounding remainder recorded, not dropped', (await get('eventSettlements/O1')).roundingRemainderCents === 95545 - Math.floor(95545 / 100) * 100);
+  ck('due → the organizer business wallet (wallets.balance) credited in whole shillings', rl.released && w.balance === Math.floor(O1_NET / 100), JSON.stringify(rl));
+  ck('rounding remainder recorded, not dropped', (await get('eventSettlements/O1')).roundingRemainderCents === O1_NET - Math.floor(O1_NET / 100) * 100);
   ck('wallet transaction id is deterministic', !!(await get('walletTransactions/org1_O1_event')));
   const rr = await ES.releaseOne('O1', { nowMs: NOW }).catch((e) => ({ threw: e.message }));
   ck('replay release → skipped by the status guard, balance unchanged', rr.skipped === 'status_RELEASED' && ((await get('wallets/org1')) || {}).balance === w.balance, JSON.stringify(rr));
@@ -252,7 +259,7 @@ async function pay(ref, { buyer = 'buyer1', amountCents = 100000, status = 'COMP
   ck('fee attest refuses an ordinary admin', (await code(ES._adminH.eventAdminAttestFee({ ...who('adm', { admin: true }), data: { paymentRef: 'O5', feeKes: 15, evidence: 'IS-DASH-123' } }))) === 'permission-denied');
   ck('fee attest refuses missing evidence', (await code(ES._adminH.eventAdminAttestFee({ ...who('adm', { superAdmin: true }), data: { paymentRef: 'O5', feeKes: 15 } }))) === 'invalid-argument');
   const at = await ES._adminH.eventAdminAttestFee({ ...who('adm', { superAdmin: true }), data: { paymentRef: 'O5', feeKes: 15, evidence: 'IS-DASH-123' } });
-  ck('super admin attests → HELD + commission booked', at.ok && (await get('eventSettlements/O5')).status === 'HELD' && (await get('commissionLedger/evt_O5')).commissionCents === 2955);
+  ck('super admin attests → HELD + commission booked', at.ok && (await get('eventSettlements/O5')).status === 'HELD' && (await get('commissionLedger/evt_O5')).commissionCents === O1_COMM);
   ck('attest is one-shot (fee immutable once recognised)', (await code(ES._adminH.eventAdminAttestFee({ ...who('adm', { superAdmin: true }), data: { paymentRef: 'O5', feeKes: 1, evidence: 'IS-DASH-999' } }))) === 'failed-precondition');
   ck('attest is audited with before/after (AdminOS Audit Center reads createdAt)', db._dump('adminAudit/').some((a) => a.action === 'event_fee_attested' && a.before && a.after && a.createdAt));
 

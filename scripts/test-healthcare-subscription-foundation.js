@@ -383,7 +383,8 @@ async function partCommission(plans) {
     await ops._disburseHeldFunds(CURRENT.store['providerBookings/BK1'], ref, { by: 'customer', isNoShow: true });
     commission = (CURRENT.store['providerPayouts/BK1'] || {}).commission;
   } catch (e) { commission = 'threw:' + e.message; }
-  ck('T12  healthcare booking settlement is still 5%', commission === 500,
+  const HC_PCT = require(require('path').join(__dirname, '..', 'functions', 'commission-config.js')).resolveRate('healthcare').pct;   /* 12% since 2026-09-28 */
+  ck(`T12  healthcare booking settlement is the healthcare booking rate (${HC_PCT}%), not the plan`, commission === Math.round(10000 * HC_PCT / 100),
     commission + ' cents of 10000 (Enterprise tier held)');
 }
 

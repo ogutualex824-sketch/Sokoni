@@ -47,9 +47,11 @@ const db = { collection: () => ({ where() { return this; }, doc() { return { get
   console.log('\n── nothing else moved ──');
   const same = (k, cat) => { const x = CC.resolveRate(k); return x.category === cat && x.pct === CC.RATES[cat].pct; };
   ck('consultations still price as healthcare', same('healthcare', 'healthcare'));
-  ck('pharmacy still aliases to healthcare', same('pharmacy', 'healthcare'));
+  /* owner schedule 2026-09-28: healthcare PRODUCT sales (pharmacy) are 15%, apart from healthcare bookings (12%) */
+  ck('pharmacy prices as healthcare PRODUCT sales, apart from healthcare bookings', same('pharmacy', 'healthcare_products'));
   ck('subscription still aliases to subscriptions', same('subscription', 'subscriptions'));
-  ck('pos still aliases to marketplace', same('pos', 'marketplace'));
+  /* owner schedule 2026-09-28: POS has its own key so it can never follow the 15% online rate */
+  ck('pos prices on its own pos key', same('pos', 'pos'));
   ck('an unknown category still falls to default', CC.resolveRate('no_such_category').category === 'default');
 
   console.log('\n── the client snapshot ──');

@@ -315,12 +315,17 @@ async function partB() {
      minimum, so this doubles as the proof that skipMinimum keeps the floor off a path that
      has never had one. */
   const GROSS = 10000;
+  /* The healthcare BOOKING rate is READ from the authority (owner schedule 2026-09-28: 12%, was 5%). */
+  const HC_PCT = require(require('path').join(__dirname, '..', 'functions', 'commission-config.js')).resolveRate('healthcare').pct;
+  /* A consultation small enough that the healthcare rate stays BELOW the KES 10 floor, so B4 still discriminates:
+     at 12% KES 100 would pay KES 12 — above the floor — and could not show the floor is off. */
+  const SMALL = Math.floor((1000 - 1) * 100 / HC_PCT / 100) * 100;
 
-  function fixture(hub) {
+  function fixture(hub, gross = GROSS) {
     return makeDb({
       'providerBookings/BK1': {
         providerId: PROV, customerUid: CUST, paymentStatus: 'paid_held',
-        price: GROSS, fee: 0, deposit: GROSS, service: 'Consultation',
+        price: gross, fee: 0, deposit: gross, service: 'Consultation',
         startTs: Date.now() + 3600000,            /* < 24h away → late cancel forfeits deposit */
         ...(hub === undefined ? {} : { commissionHub: hub }),
       },
@@ -336,8 +341,8 @@ async function partB() {
   }
 
   /* Drive the REAL disbursement and read the commission off the providerPayouts write. */
-  async function commissionFor(hub) {
-    CURRENT = fixture(hub);
+  async function commissionFor(hub, gross) {
+    CURRENT = fixture(hub, gross);
     const ref = CURRENT.db.collection('providerBookings').doc('BK1');
     await ops._disburseHeldFunds(CURRENT.store['providerBookings/BK1'], ref,
       { by: 'customer', isNoShow: true });
@@ -349,12 +354,14 @@ async function partB() {
 
   const health = await commissionFor('healthcare');
   ck('B1   healthcare booking settles a commission at all', !!health, JSON.stringify(health));
-  ck('B2   healthcare commission is the approved 5%',
-    !!health && health.commission === 500, health ? health.commission + ' cents of ' + GROSS : 'no payout');
+  ck(`B2   healthcare commission is the healthcare booking rate (${HC_PCT}%)`,
+    !!health && health.commission === Math.round(GROSS * HC_PCT / 100), health ? health.commission + ' cents of ' + GROSS : 'no payout');
   ck('B3   healthcare is NOT charged the 20% plan rate',
     !!health && health.commission !== 2000, health ? health.commission + ' cents' : 'no payout');
-  ck('B4   KES 10 platform floor is NOT applied to healthcare',
-    !!health && health.commission < 1000, health ? health.commission + ' cents (floor would be 1000)' : 'no payout');
+  const healthSmall = await commissionFor('healthcare', SMALL);
+  ck(`B4   KES 10 platform floor is NOT applied to healthcare (KES ${SMALL / 100} consultation)`,
+    !!healthSmall && healthSmall.commission === Math.round(SMALL * HC_PCT / 100) && healthSmall.commission < 1000,
+    healthSmall ? healthSmall.commission + ' cents (floor would be 1000)' : 'no payout');
 
   const generic = await commissionFor('provider');
   ck('B5   a NON-healthcare booking still pays the plan rate (unchanged)',
@@ -370,8 +377,8 @@ async function partB() {
      generic path, so pinning PLAN_RATE elsewhere proves healthcare is not coincidentally right. */
   PLAN_RATE = 0.07;                                                       /* Business plan 7% */
   const health7 = await commissionFor('healthcare');
-  ck('B7   healthcare stays 5% when the plan rate is 7%',
-    !!health7 && health7.commission === 500, health7 ? health7.commission + ' cents' : 'no payout');
+  ck(`B7   healthcare stays ${HC_PCT}% when the plan rate is 7%`,
+    !!health7 && health7.commission === Math.round(GROSS * HC_PCT / 100), health7 ? health7.commission + ' cents' : 'no payout');
   const generic7 = await commissionFor('provider');
   ck('B8   generic follows the plan rate to 7%',
     !!generic7 && generic7.commission === 700, generic7 ? generic7.commission + ' cents' : 'no payout');

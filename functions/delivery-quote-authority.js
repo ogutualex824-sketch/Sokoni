@@ -40,7 +40,7 @@ const PRICING_VERSION = 'dq-1.0.0';
 
 /* The commercial guardrail, owner-set. A band, deliberately: a single fixed percentage is exactly
    the legacy defect (0.82 / 0.88 / 0.80) being reintroduced under a new name. */
-const SHARE_MIN_PCT = 16;
+const SHARE_MIN_PCT = 17;   /* owner schedule 2026-09-28: SOKONI's delivery share is 17–25% (was a 16% floor) */
 const SHARE_MAX_PCT = 25;
 
 class QuoteRefused extends Error {

@@ -385,7 +385,8 @@ async function finance(req) {
       collectedCents: sum(R2, 'collectedCents') },
     refunds: { requested: rq.size, refunded: S.filter((x) => x.status === 'REFUNDED').length,
       refundedCents: sum(S.filter((x) => x.status === 'REFUNDED'), 'grossCents') },
-    commissionPolicy: '3% per ticket (net of provider fee for online sales)',
+    /* derived from the policy (→ commission-config.RATES.event_tickets) — never a typed rate */
+    commissionPolicy: POLICY.policyFor({ policyKey: 'event_ticket' }).pct + '% per ticket (net of provider fee for online sales)',
   };
 }
 

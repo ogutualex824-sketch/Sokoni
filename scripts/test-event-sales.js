@@ -30,6 +30,11 @@ delete process.env.K_SERVICE; delete process.env.FUNCTION_TARGET;
 
 const Path = require('path');
 const FN = Path.resolve(__dirname, '..', 'functions');
+/* Ticket commission READ from the policy the server uses (→ commission-config.RATES.event_tickets). The owner schedule
+   of 2026-09-28 moved it 3% → 5%; every expected amount below is derived from it, never typed. */
+const TPCT = require(Path.join(FN, 'shared', 'commercial-policy.js')).policyFor({ policyKey: 'event_ticket' }).pct;
+const TBPS = Math.round(TPCT * 100);
+const tc = (cents) => Math.floor(cents * TBPS / 10000);   /* commercial-policy.commissionCents floors toward the payer */
 const { makeFakeFirestore } = require('./lib/fake-firestore-txn');
 let NOW = Date.now();
 const F = makeFakeFirestore({ clock: () => NOW, strictReadOrder: true });
@@ -100,10 +105,10 @@ async function setup() {
   const tix = db._dump('eventTickets/').filter((t) => t.saleId === cs.saleId);
   ck('3 tickets issued, valid, walk-in, soldBy the cashier, each with a PIN', tix.length === 3 && tix.every((t) => t.status === 'valid' && t.walkIn && t.soldBy === 'till1' && !t.buyerUid && t.pinHash && /^SK-EVT-/.test(t.ticketNumber)));
   const rec = await get(`eventCommissionReceivables/${cs.saleId}`);
-  ck('SOKONI 3 % (270) recorded as a RECEIVABLE — not the POS 5 %', rec && rec.amountCents === 27000 && rec.status === 'OUTSTANDING', rec && rec.amountCents);
+  ck(`SOKONI ticket rate (${TPCT} %) recorded as a RECEIVABLE — the ticket policy, not the POS lane`, rec && rec.amountCents === tc(900000) && rec.status === 'OUTSTANDING', rec && rec.amountCents);
   const st = await get(`eventSettlements/${cs.saleId}`);
-  ck('settlement row ORGANIZER_COLLECTED (the organizer\'s terminal took it; nothing to release — never withdrawable)', st.status === 'ORGANIZER_COLLECTED' && st.channel === 'CARD_EXTERNAL' && st.organizerNetCents === 900000 - 27000);
-  ck('commission ledger row is a receivable at 3 %', (await get(`commissionLedger/evt_${cs.saleId}`)).status === 'receivable' && (await get(`commissionLedger/evt_${cs.saleId}`)).commissionPct === 3);
+  ck('settlement row ORGANIZER_COLLECTED (the organizer\'s terminal took it; nothing to release — never withdrawable)', st.status === 'ORGANIZER_COLLECTED' && st.channel === 'CARD_EXTERNAL' && st.organizerNetCents === 900000 - tc(900000));
+  ck(`commission ledger row is a receivable at the ticket rate (${TPCT} %)`, (await get(`commissionLedger/evt_${cs.saleId}`)).status === 'receivable' && (await get(`commissionLedger/evt_${cs.saleId}`)).commissionPct === TPCT);
   ck('inventory decremented (VIP 1, Regular 2, event 3)', (await get('eventTicketTiers/VIP')).sold === 1 && (await get('eventTicketTiers/REG')).sold === 2 && (await get('events/evA')).totalTicketsSold === 3);
 
   /* ═══ replay ═══ */
@@ -134,7 +139,7 @@ async function setup() {
   ck('card with reference but wrong amount refused', (await code(op('eventQuickSale', 'till1', { eventId: 'evA', tender: 'card_external', items: [{ tierId: 'REG', qty: 1 }], card: { provider: 'kcb', reference: 'NEWREF123', amountKes: 1500 }, idempotencyKey: key() }))) === 'invalid-argument');
   ck('unknown terminal provider refused', (await code(op('eventQuickSale', 'till1', { eventId: 'evA', tender: 'card_external', items: [{ tierId: 'REG', qty: 1 }], card: { provider: 'magic', reference: 'NEWREF123', amountKes: 2000 }, idempotencyKey: key() }))) === 'invalid-argument');
   const direct = await op('eventQuickSale', 'till1', { eventId: 'evA', tender: 'card_external', items: [{ tierId: 'REG', qty: 1 }], card: { provider: 'equity', reference: 'EQ12345678', amountKes: 2000 }, idempotencyKey: key() });
-  ck('card with a valid reference completes at once, receivable 3 %', direct.status === 'COMPLETED' && (await get(`eventCommissionReceivables/${direct.saleId}`)).amountCents === 6000);
+  ck(`card with a valid reference completes at once, receivable at the ticket rate (${TPCT} %)`, direct.status === 'COMPLETED' && (await get(`eventCommissionReceivables/${direct.saleId}`)).amountCents === tc(200000));
   const p2 = await op('eventQuickSale', 'till1', { eventId: 'evA', tender: 'card_external', items: [{ tierId: 'VIP', qty: 2 }], idempotencyKey: key() });
   const vipHeld = (await get('eventTicketTiers/VIP')).sold;
   await op('eventCancelPendingSale', 'till1', { eventId: 'evA', saleId: p2.saleId });
@@ -161,7 +166,7 @@ async function setup() {
   ck('activation issues PINs; tickets stay WALK-IN (no buyerUid)', act.activated && itix.length === 2 && itix.every((t) => t.status === 'valid' && t.pinHash && !t.buyerUid));
   ck('the cashier sale is COMPLETED by the activation', (await get(`eventSales/${is.saleId}`)).status === 'COMPLETED');
   const ist = await get(`eventSettlements/${is.saleId}`);
-  ck('online settlement HELD at 3 % of (gross − fee)', ist.status === 'HELD' && ist.commissionCents === Math.floor((400000 - 2000) * 300 / 10000));
+  ck(`online settlement HELD at the ticket rate (${TPCT} %) of (gross − fee)`, ist.status === 'HELD' && ist.commissionCents === Math.floor((400000 - 2000) * TBPS / 10000));
 
   /* ═══ PIN visibility + scope ═══ */
   console.log('\n── scope ──');

@@ -33,18 +33,26 @@ const ROOT = path.join(__dirname, '..');
 const CC   = require(path.join(ROOT, 'functions', 'commission-config.js'));
 
 /* ── 1. The rate, and that it is deliberate ─────────────────────────────── */
-console.log('\nA. Marketplace rate = 5%, by intent\n');
+/* SUPERSEDED 2026-09-28: the owner-confirmed schedule makes online product sales 15% and gives POS / Till / Quick
+   Charge its OWN 5% key (it no longer rides the marketplace alias). The full schedule is specified in
+   scripts/test-commission-schedule.js; this suite keeps its original purpose — the rates are deliberate, real
+   categories, the minimum is disclosed — against the new schedule. */
+console.log('\nA. Online sales rate = 15%, by intent (owner schedule 2026-09-28)\n');
 {
   const m = CC.resolveRate('marketplace');
-  ck('marketplace resolves to 5%', m.pct === 5, m.pct + '%');
+  ck('marketplace resolves to 15%', m.pct === 15, m.pct + '%');
   ck('  ...and matches a real category (not the default bucket)',
      m.matched === true && m.category === 'marketplace', m.category);
 }
-for (const alias of ['product', 'products', 'pos', 'shopping', 'b2b']) {
+for (const alias of ['product', 'products', 'shopping', 'b2b']) {
   const r = CC.resolveRate(alias);
-  ck(`"${alias}" -> marketplace @ 5%`,
-     r.pct === 5 && r.category === 'marketplace' && r.matched === true,
+  ck(`"${alias}" -> marketplace @ 15%`,
+     r.pct === 15 && r.category === 'marketplace' && r.matched === true,
      r.pct + '% ' + r.category);
+}
+{
+  const r = CC.resolveRate('pos');
+  ck('"pos" -> its OWN pos category @ 5% (never the online rate)', r.pct === 5 && r.category === 'pos' && r.matched === true, r.pct + '% ' + r.category);
 }
 {
   /* The regression this guards. "product" is what checkout.html and the IntaSend
@@ -56,9 +64,9 @@ for (const alias of ['product', 'products', 'pos', 'shopping', 'b2b']) {
 
 /* ── 2. Unrelated categories untouched ──────────────────────────────────── */
 console.log('\nB. Unrelated categories unchanged\n');
-const EXPECTED = {
-  food_delivery: 5, property: 2, vehicles: 0, healthcare: 5, legal: 5, events: 5,
-  hotel: 5, digital_products: 10, event_tickets: 3, ppv: 15, services: 15,
+const EXPECTED = {   /* owner schedule 2026-09-28 (property/jobs/classifieds/ppv/hub/advertising/saas unchanged) */
+  food_delivery: 15, property: 2, vehicles: 0, healthcare: 12, legal: 5, events: 5,
+  hotel: 15, digital_products: 10, event_tickets: 5, ppv: 15, services: 5,
   education: 15, jobs: 15, classifieds: 8, hub: 12, subscriptions: 100,
   advertising: 100, saas: 0,
 };
@@ -67,21 +75,24 @@ for (const [k, want] of Object.entries(EXPECTED)) {
   const got = CC.resolveRate(k).pct;
   if (got !== want) drift.push(`${k}: ${want}% -> ${got}%`);
 }
-ck('all 18 unrelated category rates are exactly as before', drift.length === 0, drift.join('; ') || 'no drift');
+ck('all 18 other category rates match the 2026-09-28 schedule', drift.length === 0, drift.join('; ') || 'no drift');
 ck('vehicles keeps its flat fee (KES 2000, 0%)', CC.resolveRate('vehicles').fixedKES === 2000);
-ck('event_tickets stays 3% (NOT swept up by the marketplace change)', CC.resolveRate('event_tickets').pct === 3);
+ck('event_tickets is 5% (owner schedule 2026-09-28; was 3%)', CC.resolveRate('event_tickets').pct === 5);
 
 /* ── 3. The KES 10 minimum ──────────────────────────────────────────────── */
-console.log('\nC. Minimum commission — the reason "flat 5%" would be a lie\n');
+console.log('\nC. Minimum commission — the reason "flat 5%" would be a lie (on the 5% POS / Till lane)\n');
 {
   ck('MIN_COMMISSION_KES is 10', CC.MIN_COMMISSION_KES === 10);
-  const raw = (amt) => amt * CC.resolveRate('marketplace').pct / 100;
+  const raw = (amt) => amt * CC.resolveRate('pos').pct / 100;
   const eff = (amt) => Math.max(raw(amt), CC.MIN_COMMISSION_KES);
   ck('KES 97 sale -> KES 10 charged, not 4.85', eff(97) === 10, '5% would be ' + raw(97).toFixed(2));
   ck('  ...which is 10.3%, so copy saying a flat 5% is wrong below ~KES 200',
      +(eff(97) / 97 * 100).toFixed(1) === 10.3);
   ck('KES 1000 sale -> KES 50 (the minimum does not bite)', eff(1000) === 50);
   ck('KES 200 sale -> KES 10 (the crossover)', eff(200) === 10 && raw(200) === 10);
+  const rawOnline = (amt) => amt * CC.resolveRate('marketplace').pct / 100;
+  ck('online: KES 1000 order -> KES 150 at 15%', Math.max(rawOnline(1000), CC.MIN_COMMISSION_KES) === 150);
+  ck('online: the KES 10 minimum only bites below ~KES 67', Math.max(rawOnline(60), CC.MIN_COMMISSION_KES) === 10 && rawOnline(70) > 10);
 }
 
 /* ── 4. Seller-facing text discloses BOTH LANES and the minimum ─────────── */
@@ -107,15 +118,16 @@ for (const f of ['legal.html', 'seller-terms.html', 'seller.html', 'hub-register
 }
 {
   const legal = fs.readFileSync(path.join(ROOT, 'legal.html'), 'utf8');
+  /* was /12% commission/ — which never matched the page's actual wording ("12% platform fee … you keep 88%") */
   ck('legal.html no longer advertises the old 12% / 88% split',
-     !/12% commission/.test(legal) && !/88% of every sale/.test(legal));
+     !/12% (commission|platform fee)/.test(legal) && !/(keep|of every sale)[^<]{0,20}88%|88%[^<]{0,20}(of every sale)/.test(legal) && !/you keep 88%/.test(legal));
 }
 
 /* ── 5. Generated snapshot is in sync, not hand-edited ──────────────────── */
 console.log('\nE. Generated client snapshot\n');
 {
   const snap = fs.readFileSync(path.join(ROOT, 'sokoni-commission-rates.js'), 'utf8');
-  ck('snapshot carries marketplace 5%', /"marketplace":\s*\{\s*"pct":\s*5/.test(snap));
+  ck('snapshot carries marketplace 15%', /"marketplace":\s*\{\s*"pct":\s*15/.test(snap));
   ck('snapshot carries the product -> marketplace alias', /"product":\s*"marketplace"/.test(snap));
   ck('snapshot still declares itself generated', /GENERATED FILE\. DO NOT EDIT/.test(snap));
 }

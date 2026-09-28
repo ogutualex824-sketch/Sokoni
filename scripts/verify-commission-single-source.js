@@ -42,6 +42,10 @@ const ALLOWLIST = {
   'scripts/test-pos-commission-lane.js':        'certification fixture deliberately plants a prohibited rate for the guard',
   'scripts/test-healthcare-subscription-foundation.js':
     'regression fixture preserves legacy subscription documents without applying their rate',
+  'scripts/test-kass-commission-authority.js':
+    'test double: swaps in a FAKE authority to prove KASS reads, never copies, the rates; not deployed, read by no charging path',
+  'scripts/test-commission-schedule.js':
+    'the owner-confirmed 2026-09-28 schedule written out as the SPEC the authority is checked against; not deployed, read by no charging path',
   /* Different concepts that legitimately carry rates. Not commission-per-transaction.
 
      The three entries below had inaccurate reasons until 2026-07-22. Each was

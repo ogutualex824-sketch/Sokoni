@@ -254,13 +254,17 @@ const CHAIN_COMM = Math.round(CHAIN_GROSS_MINOR * POS_RATE);
 }
 
 /* ── 6 · nothing live changed ──────────────────────────────────────────────── */
-ok('marketplace still 5%', CC.resolveRate('marketplace').pct === 5);
-ok('POS still PRICES as marketplace (alias intact)',
-   CC.resolveRate('pos').category === 'marketplace' && CC.resolveRate('pos').pct === 5);
-ok('the 48-HOUR settlement gate still sees POS as marketplace',
-   CC.categoryForHub('pos') === 'marketplace', CC.categoryForHub('pos'));
-ok('no `pos` key was added to RATES (it would beat the alias)',
-   !Object.prototype.hasOwnProperty.call(CC.RATES, 'pos'));
+/* SUPERSEDED 2026-09-28 (owner schedule): online sales moved to 15%, so the alias that made POS price AS marketplace
+   was removed — it would have tripled the till. POS now has its own `pos` key at the SAME 5%, and the 48-hour gate
+   (index.js _is48hCommission) treats the `pos` category as 48-hour, so the till's price AND its settlement term are
+   unchanged. These checks now pin that. */
+ok('online sales (marketplace) are 15%', CC.resolveRate('marketplace').pct === 15);
+ok('POS prices on its OWN key at 5% (never follows the online rate)',
+   CC.resolveRate('pos').category === 'pos' && CC.resolveRate('pos').pct === 5);
+ok('the 48-HOUR settlement gate still covers POS (index.js _is48hCommission accepts the pos category)',
+   /_cat === "marketplace" \|\| _cat === "pos"/.test(fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8')));
+ok('RATES.pos equals the POS lane (both till paths agree)',
+   Object.prototype.hasOwnProperty.call(CC.RATES, 'pos') && CC.RATES.pos.pct === CC.POS_FLAT_RATE_FRACTION * 100);
 ['product', 'shopping', 'b2b', 'food', 'property'].forEach((k) => {
   ok('alias ' + k + ' unchanged', CC.resolveRate(k).matched === true);
 });

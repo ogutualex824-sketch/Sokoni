@@ -3600,37 +3600,10 @@ Both parties should retain a signed copy of this agreement.
       </div>`).join("");
   }
 
-  /* ══════════════════════════════════════════════════════════
-     COMMISSION WIRING — 2% of rent collected → SOKONI ledger
-  ══════════════════════════════════════════════════════════ */
-  const SOKONI_COMMISSION_RATE = 0.02; /* 2% platform fee on rent collected */
-
-  function _recordCommission(amount, ref){
-    if(!amount||amount<=0) return;
-    const fee = Math.round(amount * SOKONI_COMMISSION_RATE);
-    try {
-      const ledger = JSON.parse(localStorage.getItem("sokoniCommissionLedger")||"[]");
-      ledger.unshift({ ref, amount, fee, type:"rent_collection", ts: Date.now() });
-      localStorage.setItem("sokoniCommissionLedger", JSON.stringify(ledger.slice(0,200)));
-    } catch(e){}
-    /* Wire to sokoni-pay.js if available */
-    if(window.SokoniPay && typeof window.SokoniPay.recordCommission === "function"){
-      window.SokoniPay.recordCommission({ type:"landlord_rent", amount, fee, ref, ts:Date.now() });
-    }
-  }
-
-  /* Hook toggleRent to record commission when rent is marked paid */
-  ;(function(){
-    var _origToggleRent = window.toggleRent || toggleRent;
-    window.toggleRent = function(propId, unitId){
-      const props = getData();
-      const unit  = props.find(p=>p.id===propId)?.units?.find(u=>u.id===unitId);
-      const month = getCurrentMonth();
-      const wasPaid = rentStatus(unit||{}, month).paid;
-      _origToggleRent(propId, unitId);
-      if(!wasPaid && unit){ _recordCommission(unit.rent, `RENT-${propId}-${unitId}-${month}`); }
-    };
-  })();
+  /* No SOKONI commission on rent (owner, 2026-09-28): long-term rental is a SUBSCRIPTION business. A landlord
+     marking rent paid records a payment SOKONI did not process; charging a fee on it — the 2% this page used to
+     write into a browser-local "commission ledger" — invented revenue. Payment/platform fees apply only where
+     SOKONI actually facilitates the payment, via the canonical commission authority. */
 
   /* Wire new sections into showSection dispatcher — IIFE avoids hoisting collision */
   ;(function(){

@@ -4382,7 +4382,10 @@ const COMMISSION_DUE_HOURS      = 48;
 const COMMISSION_REMINDER_HOURS = 46;   /* 2 hours before the deadline */
 function _is48hCommission(hub) {
   try {
-    return require("./commission-config").categoryForHub(hub) === "marketplace";
+    /* POS / Till / Quick Charge now resolve to their own `pos` category (2026-09-28) so the till can never follow the
+       marketplace rate; they keep the 48-hour per-sale term they have always had. */
+    const _cat = require("./commission-config").categoryForHub(hub);
+    return _cat === "marketplace" || _cat === "pos";
   } catch (_e) {
     /* Config unreadable — fall back to MONTHLY, the pre-existing behaviour.
        Failing closed here means "bill it the old way", never "start a 48-hour

@@ -186,7 +186,13 @@ console.log('\nF. Deadline and reminder timing\n');
 console.log('\nG. Scope — only marketplace sales enter the 48-hour model\n');
 {
   const CFG = require(path.join(ROOT, 'functions', 'commission-config.js'));
-  const is48 = (hub) => CFG.categoryForHub(hub) === 'marketplace';
+  /* The REAL gate, evaluated — not a private copy of its old one-line logic. Since 2026-09-28 POS has its own `pos`
+     category (it no longer rides the marketplace alias) and the gate accepts it explicitly, so a copy of the old
+     `=== 'marketplace'` expression would mis-model it. */
+  const _s = IDX.indexOf('function _is48hCommission(hub) {');
+  let _d = 0, _i = IDX.indexOf('{', _s);
+  for (; _i < IDX.length; _i++) { if (IDX[_i] === '{') _d++; else if (IDX[_i] === '}' && --_d === 0) break; }
+  const is48 = new Function('__CC', IDX.slice(_s, _i + 1).replace(/require\("\.\/commission-config"\)/g, '__CC') + '\nreturn _is48hCommission;')(CFG);
   for (const h of ['marketplace', 'product', 'products', 'pos', 'shopping', 'b2b']) {
     ck(`"${h}" IS governed by the 48-hour model`, is48(h) === true);
   }
@@ -195,7 +201,7 @@ console.log('\nG. Scope — only marketplace sales enter the 48-hour model\n');
     ck(`"${h}" is NOT (keeps monthly / contractual billing)`, is48(h) === false);
   }
   ck('hub resolution reuses commission-config, not a second hub list',
-     /require\("\.\/commission-config"\)\.categoryForHub\(hub\) === "marketplace"/.test(IDX));
+     /require\("\.\/commission-config"\)\.categoryForHub\(hub\)/.test(IDX) && /_cat === "marketplace" \|\| _cat === "pos"/.test(IDX));
   ck('config failure falls back to MONTHLY (never starts an unseen clock)',
      /catch \(_e\) \{[\s\S]{0,300}?return false;/.test(IDX));
 }

@@ -20,11 +20,11 @@
 
   var RATES = {
     "marketplace": {
-      "pct": 5,
+      "pct": 15,
       "fixedKES": 0
     },
     "food_delivery": {
-      "pct": 5,
+      "pct": 15,
       "fixedKES": 0
     },
     "property": {
@@ -36,7 +36,11 @@
       "fixedKES": 2000
     },
     "healthcare": {
-      "pct": 5,
+      "pct": 12,
+      "fixedKES": 0
+    },
+    "healthcare_products": {
+      "pct": 15,
       "fixedKES": 0
     },
     "legal": {
@@ -48,7 +52,7 @@
       "fixedKES": 0
     },
     "hotel": {
-      "pct": 5,
+      "pct": 15,
       "fixedKES": 0
     },
     "digital_products": {
@@ -56,7 +60,7 @@
       "fixedKES": 0
     },
     "event_tickets": {
-      "pct": 3,
+      "pct": 5,
       "fixedKES": 0
     },
     "ppv": {
@@ -68,7 +72,19 @@
       "fixedKES": 0
     },
     "services": {
-      "pct": 15,
+      "pct": 5,
+      "fixedKES": 0
+    },
+    "home_services": {
+      "pct": 14,
+      "fixedKES": 0
+    },
+    "car_rental": {
+      "pct": 16,
+      "fixedKES": 0
+    },
+    "pos": {
+      "pct": 5,
       "fixedKES": 0
     },
     "education": {
@@ -109,16 +125,20 @@
     "product": "marketplace",
     "products": "marketplace",
     "shopping": "marketplace",
-    "pos": "marketplace",
     "b2b": "marketplace",
+    "till": "pos",
+    "quick_charge": "pos",
+    "quickcharge": "pos",
     "subscription": "subscriptions",
     "healthcare_subscription": "subscriptions",
     "restaurant": "food_delivery",
     "food": "food_delivery",
-    "home_services": "services",
     "insurance": "services",
     "fitness": "services",
-    "pharmacy": "healthcare",
+    "car-rental": "car_rental",
+    "car_hire": "car_rental",
+    "car-hire": "car_rental",
+    "pharmacy": "healthcare_products",
     "property_agent": "property",
     "bnb": "hotel",
     "car_dealer": "vehicles",

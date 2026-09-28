@@ -80,21 +80,24 @@ head('4. THE TRAP — the live till path reads the MARKETPLACE CATEGORY');
    marketplace CATEGORY row — which is what posCompleteCheckout's calculateCommission call
    lands on, because `pos` is deliberately NOT in MARKETPLACE_SELLER_CATEGORIES and therefore
    never reaches the marketplace LADDER. */
-ck('resolveRate("pos") resolves THROUGH the marketplace category',
-   CC.resolveRate('pos').category === 'marketplace', CC.resolveRate('pos').category);
+/* SUPERSEDED 2026-09-28 (owner schedule): the till no longer resolves THROUGH the marketplace category — it has its
+   own `pos` key, so raising online sales to 15% cannot raise the till. The invariant this section guards is
+   unchanged and asserted below: both till paths (category row and POS_PLAN_RATES) must agree. */
+ck('resolveRate("pos") resolves to its OWN pos category (decoupled from online sales)',
+   CC.resolveRate('pos').category === 'pos', CC.resolveRate('pos').category);
 ck('"pos" is NOT a marketplace SELLER sale — so the 15% ladder never applies to the till',
    CC.isMarketplaceSellerSale('pos') === false);
 ck('  CONTROL — "marketplace" IS a marketplace seller sale', CC.isMarketplaceSellerSale('marketplace') === true);
-ck('so the live till path lands on the category rate, not POS_PLAN_RATES',
-   TILL_VIA_CATEGORY === MKT_CATEGORY,
-   'resolveRate(pos)=' + TILL_VIA_CATEGORY + '% === RATES.marketplace.pct=' + MKT_CATEGORY + '%');
+ck('the live till path (category row) charges the till rate, not the online rate',
+   TILL_VIA_CATEGORY !== MKT_CATEGORY,
+   'resolveRate(pos)=' + TILL_VIA_CATEGORY + '% vs RATES.marketplace.pct=' + MKT_CATEGORY + '%');
 /* THE GUARD THE BRIEF ASKS FOR, made executable. */
-ck('RATES.marketplace.pct still equals the till rate — raising it WOULD charge the till',
-   MKT_CATEGORY === TILL_VIA_PLAN,
+ck('the two till paths agree (category row === POS_PLAN_RATES) — the invariant, now without the alias',
+   TILL_VIA_CATEGORY === TILL_VIA_PLAN,
    'category ' + MKT_CATEGORY + '% vs POS_PLAN_RATES ' + TILL_VIA_PLAN + '% — if these diverge, ' +
    'the two till paths disagree and one of them is wrong');
-ck('the marketplace LANE is above the category fallback (the lane is what an online order pays)',
-   MKT > MKT_CATEGORY, 'lane ' + MKT + '% > category ' + MKT_CATEGORY + '%');
+ck('the marketplace LANE and the category fallback agree (a seller-less online call can no longer undercharge)',
+   MKT === MKT_CATEGORY, 'lane ' + MKT + '% === category ' + MKT_CATEGORY + '%');
 
 head('5. The client snapshot agrees with the server, lane by lane');
 const SNAP = fs.readFileSync(path.join(ROOT, 'sokoni-commission-rates.js'), 'utf8');

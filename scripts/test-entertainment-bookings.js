@@ -85,7 +85,8 @@ const h = (op, uid, data = {}, token) => EB._h[op]({ ...who(uid, token), data })
   ck('a plumber who edited their PROFILE to "DJ" stays on the provider plan rate (no self-chosen lane)', (await PH.resolveProviderClassification(db, 'plumb')).hub === 'provider');
   ck('an UNDECIDED application cannot move a provider into the lane', (await PH.resolveProviderClassification(db, 'maybe')).hub === 'provider');
   const CC = require(Path.join(FN, 'commission-config.js'));
-  ck('the lane is 5 % (RATES.entertainment_bookings); the generic services rate is untouched (15 %)', CC.resolveRate('entertainment_bookings').pct === 5 && CC.resolveRate('services').pct === 15);
+  /* owner schedule 2026-09-28: entertainment bookings 5 %, other service bookings 5 % — distinct KEYS even at the same rate */
+  ck('the lane is 5 % (RATES.entertainment_bookings), its own key apart from generic services', CC.resolveRate('entertainment_bookings').pct === 5 && CC.resolveRate('entertainment_bookings').category === 'entertainment_bookings' && CC.resolveRate('services').category === 'services');
   ck('settlement args: entertainment → 5 % category, NO plan-rate override', JSON.stringify(PH.commissionArgsForHub('entertainment')) === JSON.stringify({ category: 'entertainment_bookings', hubId: 'entertainment', skipMinimum: true }) && PH.commissionArgsForHub('provider').subscriptionRole === 'provider');
   const bsSrc = fs.readFileSync(Path.join(FN, 'booking-service.js'), 'utf8');
   ck('booking creation stamps entClass server-side next to commissionHub', /entClass: entClass \|\| null,/.test(bsSrc) && /resolveProviderClassification\(db, providerId\)/.test(bsSrc));

@@ -235,7 +235,9 @@ async function profileMenu(page, hostSel, label, w) {
         ck(`AdminOS Entertainment @${w}: ${tab} tab renders`, !/Could not load/.test(t), t.slice(0, 60));
       }
       const mt = await page.textContent('#aosentBody');
-      ck(`AdminOS Entertainment @${w}: matrix shows every category + 30 / 3 / 15 / 5 rates`, /Streaming/.test(mt) && /Events & Ticketing/.test(mt) && /30%/.test(mt) && /3%/.test(mt) && /15%/.test(mt) && /5%/.test(mt));
+      /* the rates are READ from the policy matrix the page renders (owner schedule 2026-09-28 moved tickets 3% → 5%) */
+      const _pcts = [...new Set(require(Path.join(ROOT, 'functions', 'shared', 'commercial-policy.js')).matrix().map((r) => r.pct))];
+      ck(`AdminOS Entertainment @${w}: matrix shows every category + the policy rates (${_pcts.join(' / ')}%)`, /Streaming/.test(mt) && /Events & Ticketing/.test(mt) && _pcts.every((p) => new RegExp('(^|[^0-9.])' + String(p).replace('.', '\\.') + '%').test(mt)), (mt || '').replace(/\s+/g, ' ').match(/.{0,50}%/g));
       ck(`AdminOS Entertainment @${w}: no horizontal page overflow`, await noOverflow(page));
       await c.close();
     }

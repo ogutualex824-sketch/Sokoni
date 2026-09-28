@@ -18,17 +18,23 @@
 const CC = require('./commission-config');
 
 /* Transaction type → authority category. Labels are what KASS says; `key` is what the authority prices. */
+/* Only types whose charging path READS these categories are listed. Generic provider bookings (home services, other
+   services, car rental booked through a provider) are priced by the provider's subscription plan in compatibility
+   mode (provider-hub.commissionArgsForHub → subscriptionRole), NOT by RATES — so KASS states no rate for them and
+   says it will check. They join this list when that path reads the schedule. */
 const TYPES = [
   { id: 'online_products', label: 'Online product sales', key: 'marketplace' },
   { id: 'pos',             label: 'POS / Till / Quick Charge sales', pos: true },
-  { id: 'event_tickets',   label: 'Event ticket sales', key: 'event_tickets' },
-  { id: 'stays',           label: 'Stay bookings (hotels, BnBs)', key: 'hotel' },
-  { id: 'entertainment',   label: 'Entertainment bookings (artists, venues)', key: 'entertainment_bookings' },
-  { id: 'healthcare',      label: 'Healthcare', key: 'healthcare' },
-  { id: 'legal',           label: 'Legal services', key: 'legal' },
-  { id: 'services',        label: 'Other service bookings', key: 'services' },
-  { id: 'food',            label: 'Food orders', key: 'food_delivery' },
+  { id: 'food',            label: 'Food ordered online', key: 'food_delivery' },
   { id: 'digital',         label: 'Digital products', key: 'digital_products' },
+  { id: 'event_tickets',   label: 'Event ticket sales', key: 'event_tickets' },
+  { id: 'stays',           label: 'BnB / hotel bookings', key: 'hotel' },
+  { id: 'healthcare',      label: 'Healthcare bookings', key: 'healthcare' },
+  { id: 'healthcare_products', label: 'Healthcare product sales', key: 'healthcare_products' },
+  { id: 'entertainment',   label: 'Entertainment bookings (artists, venues)', key: 'entertainment_bookings' },
+  { id: 'legal',           label: 'Legal bookings', key: 'legal' },
+  { id: 'education',       label: 'Education', key: 'education' },
+  { id: 'vehicle_sales',   label: 'Car Hub vehicle sales', key: 'vehicles' },
 ];
 
 function _fmtPct(p) { return (Math.round(p * 1000) / 1000) + '%'; }
@@ -37,6 +43,10 @@ function _fmtPct(p) { return (Math.round(p * 1000) / 1000) + '%'; }
 function commissionFacts() {
   const rows = TYPES.map((t) => {
     if (t.pos) return { id: t.id, label: t.label, pct: Math.round(CC.POS_FLAT_RATE_FRACTION * 100000) / 1000, fixedKES: 0, source: 'commission-config.POS_FLAT_RATE_FRACTION' };
+    if (t.key === 'marketplace' && typeof CC.resolveMarketplaceRate === 'function') {   /* the online-sale lane itself */
+      const m = CC.resolveMarketplaceRate(null);
+      return { id: t.id, label: t.label, pct: m.pct, fixedKES: 0, source: m.source || 'commission-config.resolveMarketplaceRate' };
+    }
     const r = CC.resolveRate(t.key);
     if (!r || r.matched === false) return null;   /* never render a default-fallback as if it were this type's rate */
     return { id: t.id, label: t.label, pct: r.pct, fixedKES: r.fixedKES || 0, source: 'commission-config.resolveRate(' + t.key + ')' };
@@ -49,7 +59,9 @@ function commissionPromptLine() {
   const f = commissionFacts();
   const parts = f.rows.map((r) => r.label + ' ' + (r.fixedKES ? ('KES ' + r.fixedKES + (r.pct ? ' + ' + _fmtPct(r.pct) : '')) : _fmtPct(r.pct)));
   return 'Commission (from SOKONI\'s commission authority — quote ONLY these, never another figure; each is per sale, with a KES '
-    + f.minimumKES + ' minimum): ' + parts.join('; ') + '. If asked about a sale type not listed, or about payout timing, say you will check rather than guessing.';
+    + f.minimumKES + ' minimum): ' + parts.join('; ') + '. Long-term rent carries no commission (property management is a subscription). '
+    + 'Other service bookings (home services, car rental, other services) are priced by the provider\'s plan — do not quote a rate for them. '
+    + 'If asked about a sale type not listed, or about payout timing, say you will check rather than guessing.';
 }
 
 module.exports = { commissionFacts, commissionPromptLine, TYPES };

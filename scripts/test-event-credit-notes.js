@@ -21,6 +21,9 @@ delete process.env.K_SERVICE; delete process.env.FUNCTION_TARGET;
 const Path = require('path');
 const fs = require('fs');
 const FN = Path.resolve(__dirname, '..', 'functions');
+/* Ticket commission READ from the policy the server uses (→ commission-config.RATES.event_tickets). The owner schedule
+   of 2026-09-28 moved it 3% → 5%; every expected amount below is derived from it, never typed. */
+const TPCT = require(Path.join(FN, 'shared', 'commercial-policy.js')).policyFor({ policyKey: 'event_ticket' }).pct;
 const { makeFakeFirestore } = require('./lib/fake-firestore-txn');
 let NOW = Date.now();
 const F = makeFakeFirestore({ clock: () => NOW, strictReadOrder: true });
@@ -135,8 +138,8 @@ const ok = (rcpt) => ({ kind: 'response', httpStatus: 200, body: { resultCd: '00
   await settle('ORDRB1', 170000);
   const setB = await get('eventSettlements/ORDRB1');
   ck('B the approved partial is honoured (not an exception): tickets refunded', (await get('eventTickets/ORDRB1_k0')).status === 'refunded' && !(await get('eventExceptions/partial_refund_ORDRB1')));
-  ck('B the penalty stays the organizer\'s: settlement recomputed on KES 300, 3 % commission re-based', setB.status === 'HELD' && setB.grossCents === 30000 && setB.originalGrossCents === setB0.grossCents
-    && setB.retainedPenaltyCents === 30000 && setB.commissionCents === Math.round((30000 - Math.min(30000, setB0.providerFeeCents)) * 0.03), setB);
+  ck(`B the penalty stays the organizer's: settlement recomputed on KES 300, ticket-rate (${TPCT} %) commission re-based`, setB.status === 'HELD' && setB.grossCents === 30000 && setB.originalGrossCents === setB0.grossCents
+    && setB.retainedPenaltyCents === 30000 && setB.commissionCents === Math.round((30000 - Math.min(30000, setB0.providerFeeCents)) * TPCT / 100), setB);
   const rB = await get(`eventFiscalReversals/${FISCAL.executionIdFor('ORDRB1', 'ORDRB1')}`);
   ck('B credit note reverses the APPROVED principal only (1,700) — not the penalty, gross, commission or fee',
     rB.refundCents === 170000 && rB.penaltyCents === 30000 && Math.abs(creditNotesOf((await get('eventFiscal/ORDRB1')).invoiceId)[0].totals.totAmt) === 1700);

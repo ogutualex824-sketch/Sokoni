@@ -75,6 +75,50 @@ marketplace 3% → 10%).
 
 See `functions/commission-config.js` for the table. Each entry records its provenance.
 
+### Current schedule: owner-confirmed 2026-09-28
+
+This replaces the previous schedule outright. It is specified, row by row, in `scripts/test-commission-schedule.js`.
+Related: [[Payments]] · [[SmartPOS]] · [[Marketplace]] · [[Events]] · [[KASS]]
+
+| Transaction | SOKONI rate | Authority entry |
+|---|---|---|
+| Online product sales (merchant keeps 85%) | 15% | `marketplace` (aliases `product`, `products`, `shopping`, `b2b`) and the online lane `resolveMarketplaceRate` |
+| Food ordered online | 15% | `food_delivery` (`food`, `restaurant`) |
+| Digital products | 10% | `digital_products` |
+| POS / Till / Quick Charge | 5% | **`pos`** (`till`, `quick_charge`) and the POS lane `resolvePosRate` |
+| Event tickets | 5% | `event_tickets`; event sales and settlement read it through `shared/commercial-policy` |
+| BnB / hotel bookings | 15% | `hotel` (`bnb`) |
+| Healthcare bookings | 12% | `healthcare` |
+| Healthcare product sales | 15% | `healthcare_products` (`pharmacy`) |
+| Home services | 14% | `home_services` |
+| Car rental | 16% | `car_rental` (`car-rental`, which the car pages send) |
+| Entertainment bookings | 5% | `entertainment_bookings` |
+| Legal bookings | 5% | `legal` |
+| Other service bookings | 5% | `services` (`fitness`, `insurance`) |
+| Education | 15% | `education` |
+| Car Hub vehicle sales | KES 2,000 flat | `vehicles` (`car_hub`, `car_dealer`) |
+| SOKONI's own subscription plans | 100% | `subscriptions` |
+| Delivery (SOKONI's share) | 17–25%, dynamic | `delivery-quote-authority` `SHARE_MIN_PCT` 17 / `SHARE_MAX_PCT` 25 |
+
+**POS is decoupled from online sales.** POS used to be priced through `ALIASES.pos → marketplace`, so raising online
+sales to 15% would have tripled every till sale. POS now has its own `pos` key at 5%, and `_is48hCommission` accepts
+the `pos` category, so the till keeps its 48-hour settlement term.
+
+**Not reached by this schedule yet** (reported to the owner; nothing was guessed):
+- **Provider bookings.** Home services, other services, and car rental booked through a provider are priced by the
+  provider's subscription plan in compatibility mode (`provider-hub.commissionArgsForHub` → `subscriptionRole`:
+  20 / 15 / 10 / 7 / 5%), not by the table. Retiring that mode changes every provider's price, which is an owner
+  decision. Healthcare and entertainment bookings already use the table. KASS states no rate for the plan-priced types.
+- **Merchant-sold subscriptions / packages (15%).** No payment flow sends a package category yet.
+- **Property.**
+  - Long-term rent is a subscription business with no commission on rent; the client-side 2% "rent commission" on
+    `landlord.html` was removed.
+  - A property / land sale is KES 5,000 flat, but no code distinguishes a sale from rent yet, so `property` (2%) is
+    unchanged.
+  - BnB is `hotel`.
+- `default` (5%, unknown categories), `hub` (legacy flat 12% delivery split), `jobs` 15%, `classifieds` 8% and `ppv`
+  15% are outside the confirmed table and unchanged.
+
 ---
 
 ## Plan adjustments — capability shipped, policy OFF

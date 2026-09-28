@@ -81,7 +81,7 @@ else {
 if (!KC) { ck('C5  transaction types stay distinct', false, 'no authority reader'); ck('C6  an unpriced type is never rendered with a fallback rate', false, 'no authority reader'); }
 else {
   const ids = KC.commissionFacts().rows.map((r) => r.id);
-  ck('C5  online sales, POS, event tickets and bookings are separate entries', ['online_products', 'pos', 'event_tickets', 'stays', 'services'].every((i) => ids.includes(i)), ids);
+  ck('C5  online sales, POS, tickets and booking lanes are separate entries; plan-priced service bookings are not stated', ['online_products', 'pos', 'event_tickets', 'stays', 'healthcare', 'healthcare_products'].every((i) => ids.includes(i)) && !ids.includes('services'), ids);
   const orig = Module._load;
   const kcPath = path.join(ROOT, 'functions/kass-commission.js');
   delete require.cache[kcPath];

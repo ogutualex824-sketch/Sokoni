@@ -443,7 +443,7 @@ function generateInvoice(orderId){
       ETR Serial: <strong>SKN-ETR-${o.id}</strong><br>
       Taxable Amount: KES ${vatExcl.toLocaleString()} | VAT Amount: KES ${vatAmount.toLocaleString()}
     </div>
-    <div style="margin-top:8px;font-size:11px;color:#888;">Seller net payout: KES ${sellerPayout.toLocaleString()} (after 12% platform fee)</div>
+    <div style="margin-top:8px;font-size:11px;color:#888;">Seller net payout: KES ${sellerPayout.toLocaleString()} (after ${SokoniCommission.pct("marketplace")}% platform fee)</div>
   `;
 
   /* Inject KRA fields into header area if not already there */

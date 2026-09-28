@@ -1,3 +1,102 @@
+## [2026-09-28] - Owner-confirmed commission schedule applied to the one charging authority; POS decoupled from online sales
+
+**Functions + hosting, NOT deployed, NOT pushed.** Branch `slice/c4-category-matrix`, one isolated commit. The owner
+confirmed the table "exactly as listed" and replaced the previous schedule. It then corrected property: there is no
+18% property rate. Long-term rent is a subscription, BnB is a 15% booking, and a property or land sale is KES 5,000
+flat.
+
+**The authority** (`functions/commission-config.js`, read by `finos-utils.calculateCommission`, the online and POS
+lanes, `shared/commercial-policy`, the client snapshot and KASS):
+
+| Transaction | Was | Now |
+|---|---|---|
+| Online product sales (`marketplace`; lane was already 15%) | 5% | **15%** |
+| Food ordered online | 5% | **15%** |
+| Digital products | 10% | 10% |
+| POS / Till / Quick Charge | 5% via `ALIASES.pos → marketplace` | **5% on its own `pos` key** (`till`, `quick_charge`) |
+| Event tickets | 3% | **5%** |
+| BnB / hotel bookings | 5% | **15%** |
+| Healthcare bookings | 5% | **12%** |
+| Healthcare product sales (`pharmacy`) | 5% | **15%** (`healthcare_products`) |
+| Home services | 15% (via `services`) | **14%** (`home_services`) |
+| Car rental (`car-rental`, already sent by the car pages) | unmatched → default 5% | **16%** (`car_rental`) |
+| Entertainment bookings, legal bookings | 5% | 5% |
+| Other service bookings | 15% | **5%** |
+| Education | 15% | 15% |
+| Car Hub vehicle sales | KES 2,000 flat | KES 2,000 flat |
+| SOKONI's own plans | 100% | 100% |
+| Delivery, SOKONI's share (`delivery-quote-authority`) | 16–25% | **17–25%**, same dynamic model |
+
+**Why POS needed its own key:**
+- POS was priced THROUGH the marketplace category.
+- Raising online sales to 15% would have tripled every till sale.
+- The alias also decided POS's 48-hour settlement term.
+- POS now has its own 5% key, and `_is48hCommission` (`functions/index.js`) accepts the `pos` category, so the till
+  keeps the same price and the same term. Only the coupling is gone.
+
+**Also changed:**
+- **`sokoni-commission-rates.js`:** regenerated (`build-commission-snapshot.js`). It is `SokoniCommission.pct()` on
+  47 pages, so bnb, digital, food, invoice totals, services and growth update automatically.
+- **Seller-facing text:**
+  - `seller-terms.html` §5: the retired 15/10/5/0 plan ladder and the old category table are replaced by the
+    schedule. Provider-plan-priced bookings are stated honestly as "your plan's booking rate".
+  - `legal.html`: the "12% platform fee … keep 88%" line is replaced.
+  - `invoice.html`: "after 12% platform fee" now reads the snapshot.
+  - `entertainment-terms.html`: 3% → 5% per ticket.
+  - `digital-esoko.html`: "keep up to 95%" → 90%.
+  - `merchant-v2.html`: states both lanes.
+- **`functions/event-sales.js`:** the organizer-report label is now derived from the ticket policy instead of the
+  literal "3%".
+- **`landlord.html`:** removed a client-side 2% "commission on rent" that marking rent paid wrote into a
+  browser-local ledger. Under the owner's property model that was invented revenue, and it was a second rate table
+  the guard could not see.
+- **KASS (`functions/kass-commission.js`):**
+  - It now states the online rate from the online lane, and adds healthcare products, education and vehicle sales.
+  - It deliberately states NO rate for the provider-plan-priced booking types (see below): KASS must never claim a
+    rate the code does not charge.
+- **`docs/COMMISSION_ENGINE.md`:** the confirmed schedule, the POS decoupling, and what the schedule does not yet
+  reach.
+
+**Not mapped, reported rather than guessed:**
+1. **Provider bookings.** Home services (14%), other services (5%), and car rental booked through a provider are
+   priced by the provider's plan in compatibility mode (`provider-hub.commissionArgsForHub` → `subscriptionRole`:
+   20 / 15 / 10 / 7 / 5%), not by the table. Retiring it changes every provider's price, so it is an owner decision.
+   Healthcare (12%) and entertainment (5%) bookings already use the table.
+2. **Merchant-sold subscriptions / packages (15%).** No payment flow sends a package category, so there is nothing to
+   map.
+3. **Property / land sale (KES 5,000 flat).** No code distinguishes a property sale from rent, so `property` (2%) is
+   unchanged pending a sale classification.
+4. **Outside the table, unchanged:** `default` 5%, legacy `hub` 12% delivery split, jobs 15%, classifieds 8%,
+   ppv 15%.
+
+**Tests:**
+- **`scripts/test-commission-schedule.js` (new, the SPEC, allow-listed in the guard): 25/0.** The counterproof on
+  `4e9607b` fails 17: online 5%, food 5%, BnB 5%, healthcare 5%, home services 15%, the delivery 16% floor, tickets
+  3%, POS riding the alias, and the old page text. It covers:
+  - every table row through the real resolver;
+  - the online and POS lanes, and that they are decoupled;
+  - the event policy and the delivery band;
+  - the 48-hour term, from the real `_is48hCommission`;
+  - `calculateCommission` end to end: KES 1,000 → POS 50, online 150, car rental 160, BnB 150, healthcare 120; a
+    KES 1.8M vehicle → KES 2,000;
+  - the client snapshot and the seller-facing pages.
+- **Sabotage: 14/14 caught**, byte-identical restore. It includes each of the owner's stale rates, POS re-coupling,
+  POS losing its 48-hour term, car rental falling to default, a percentage vehicle fee, and the legal / landlord
+  text.
+- **Superseded assertions updated, each with the reason recorded in the file:**
+  - `test-commission-5pct-agreement` 60/0. Its legal-page check could never match the page's real "12% platform
+    fee" wording; it is tightened and proven to catch the old page.
+  - `test-commission-lane-separation` 22/0: the till-paths-agree invariant is kept.
+  - `test-pos-commission-lane` 92/0, equal to the baseline.
+  - `test-commission-48h-destinations` 84/3, equal to the baseline. It now evaluates the real gate instead of a copy
+    of its old logic.
+  - `test-event-ops-browser`: the ticket rate is read from the policy.
+  - `test-kass-commission-authority` 7/0.
+- **Wider regression:** 62 screened money suites (event, delivery, POS, provider-booking, entertainment, healthcare, FinOS, commission, KASS) were compared with the pristine `4e9607b` tree. 54 were equal as run. 8 differed ONLY in old-rate assertions: `test-event-sales` / `-settlement` / `-credit-notes`, `test-healthcare-payment-convergence` / `-plan-commission` / `-subscription-foundation`, and `test-entertainment-bookings` / `-browser`. Each now DERIVES its rate from the policy / authority and is back to its baseline total. `test-healthcare-payment-convergence` B4 now uses a KES 83 consultation, so it still proves the KES 10 floor is off at 12%. `test-entertainment-browser` had a word-boundary matcher that failed on concatenated cells. `test-entertainment-rules` and `test-kass-cart-truth` were excluded (shared emulator port 8080): UNPROVEN.
+- **`verify-commission-single-source`: GREEN, the first time on this branch.** Before, it had one failure (the
+  hard-coded 3% in `test-event-ops-browser`). The first KASS commit's test fake had added a second, because that test
+  was untracked when the guard ran.
+
 ## [2026-09-28] - KASS authentication: a missing and an invalid sign-in are told apart, and neither ever becomes a guest
 
 **Functions + hosting, NOT deployed.** Branch `slice/c4-category-matrix`. This is an isolated security slice with no

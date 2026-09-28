@@ -47,14 +47,21 @@ const RATES = {
      is charged KES 10 (10.3%), not KES 4.85. Any seller-facing copy that says a flat
      "5%" without the minimum is inaccurate under ~KES 200; legal.html and
      seller-terms.html disclose both. */
-  marketplace:      { pct: 5,   fixedKES: 0,    _was: 'hub 3% / category 10%; raised 3->5 on 2026-08-25' },
-  food_delivery:    { pct: 5,   fixedKES: 0,    _was: 'hub restaurant 5% / category 8%' },
+  /* ── OWNER-CONFIRMED SCHEDULE, 2026-09-28 ─────────────────────────────────────────────────────────────────────
+     The owner replaced the previous schedule outright ("the rates currently in code are outdated"). Every entry
+     that changed records its previous value in `_was`. POS keeps its 5% through its OWN key below — it no longer
+     rides the marketplace alias, so raising online sales can never raise the till. */
+  marketplace:      { pct: 15,  fixedKES: 0,    _was: 'owner schedule 2026-09-28: online product sales 15% (was 5%; the plan lane was already a flat 15%)' },
+  food_delivery:    { pct: 15,  fixedKES: 0,    _was: 'owner schedule 2026-09-28: food ordered online 15% (was 5%)' },
   property:         { pct: 2,   fixedKES: 0,    _was: 'hub 2% / category 3%' },
   vehicles:         { pct: 0,   fixedKES: 2000, _was: 'hub flat KES 2000 / category 5%' },
-  healthcare:       { pct: 5,   fixedKES: 0,    _was: 'hub 5% / category 12%' },
+  healthcare:       { pct: 12,  fixedKES: 0,    _was: 'owner schedule 2026-09-28: healthcare BOOKINGS 12% (was 5%)' },
+  /* Healthcare PRODUCT sales price as merchant online sales (owner: "same as merchant"). `pharmacy` — the only
+     product-selling healthcare vocabulary in the codebase — resolves here instead of to healthcare bookings. */
+  healthcare_products: { pct: 15, fixedKES: 0, _was: 'owner schedule 2026-09-28: healthcare product sales 15% (pharmacy was 5% via healthcare)' },
   legal:            { pct: 5,   fixedKES: 0,    _was: 'hub 5% / category 12%' },
   events:           { pct: 5,   fixedKES: 0,    _was: 'hub entertainment 5% / category 10%' },
-  hotel:            { pct: 5,   fixedKES: 0,    _was: 'hub bnb 5%' },
+  hotel:            { pct: 15,  fixedKES: 0,    _was: 'owner schedule 2026-09-28: BnB / hotel bookings 15% (was 5%)' },
   digital_products: { pct: 10,  fixedKES: 0,    _was: 'hub digital 10% / category 20%' },
 
   /* ── rates that were buried inside hub Cloud Functions as bare literals ──
@@ -63,7 +70,7 @@ const RATES = {
    * them. They are distinct products — a pay-per-view stream is not an event ticket is not a
    * venue booking — so they get their own categories rather than being flattened into `events`
    * and silently repriced. The values are exactly what those functions were charging. */
-  event_tickets:    { pct: 3,   fixedKES: 0,    _was: 'event-hub.js:493 `const platformFeeRate = 0.03`' },
+  event_tickets:    { pct: 5,   fixedKES: 0,    _was: 'owner schedule 2026-09-28: event tickets 5% (was 3%, event-hub.js `platformFeeRate = 0.03`)' },
   ppv:              { pct: 15,  fixedKES: 0,    _was: 'entertainment-hub.js:215 `listing.price * 0.15`' },
   // Owner decision 2026-09-27 (Entertainment convergence): artist, Entertainment service and venue
   // bookings pay 5 % — the service-provider lane — never the generic services / plan rates. Scoped to
@@ -71,7 +78,14 @@ const RATES = {
   entertainment_bookings: { pct: 5, fixedKES: 0, _was: 'new 2026-09-27 — owner decision (was: provider plan rate 20/15/10/7/5 %)' },
 
   /* ── no hub counterpart, so no conflict: the existing category rate stands ── */
-  services:         { pct: 15,  fixedKES: 0,    _was: 'category only' },
+  services:         { pct: 5,   fixedKES: 0,    _was: 'owner schedule 2026-09-28: other service bookings 5% (was 15%)' },
+  home_services:    { pct: 14,  fixedKES: 0,    _was: 'owner schedule 2026-09-28: home services 14% (was 15% via services)' },
+  /* Car rental is a BOOKING of a vehicle — distinct from a vehicle SALE (`vehicles`, KES 2,000 flat). The car hub
+     and car-rental pages already send category/hub 'car-rental'; before this it matched nothing and fell to default. */
+  car_rental:       { pct: 16,  fixedKES: 0,    _was: 'owner schedule 2026-09-28: car rental 16% (was unmatched → default 5%)' },
+  /* POS / Till / Quick Charge: its own key, so it can never follow the marketplace rate through an alias. Same 5%
+     as before; its 48-hour settlement term is preserved in index.js _is48hCommission. */
+  pos:              { pct: 5,   fixedKES: 0,    _was: 'owner schedule 2026-09-28: POS / Till / Quick Charge 5% (unchanged; was via ALIASES.pos -> marketplace)' },
   education:        { pct: 15,  fixedKES: 0,    _was: 'category only' },
   jobs:             { pct: 15,  fixedKES: 0,    _was: 'category only' },
   classifieds:      { pct: 8,   fixedKES: 0,    _was: 'category only' },
@@ -102,7 +116,8 @@ const ALIASES = {
      silently CHANGED the moment anyone "corrected" the string to "marketplace".
      Mapping it deliberately is what makes the 5% intentional rather than incidental. */
   product: 'marketplace', products: 'marketplace',
-  shopping: 'marketplace', pos: 'marketplace', b2b: 'marketplace',
+  shopping: 'marketplace', b2b: 'marketplace',
+  till: 'pos', quick_charge: 'pos', quickcharge: 'pos',
   /* C2 — the same accident as `product`, on the one category where it inverts the
      commercial meaning. RATES has `subscriptions` (plural, pct 100: the full amount
      IS platform revenue, because SOKONI is the payee). subscriptions.html — the only
@@ -120,8 +135,9 @@ const ALIASES = {
      subscriber). No new rate: it prices exactly as `subscriptions`. */
   healthcare_subscription: 'subscriptions',
   restaurant: 'food_delivery', food: 'food_delivery',
-  home_services: 'services', insurance: 'services', fitness: 'services',
-  pharmacy: 'healthcare',
+  insurance: 'services', fitness: 'services',
+  'car-rental': 'car_rental', car_hire: 'car_rental', 'car-hire': 'car_rental',
+  pharmacy: 'healthcare_products',
   property_agent: 'property',
   bnb: 'hotel',
   car_dealer: 'vehicles', car_hub: 'vehicles',
@@ -341,7 +357,13 @@ function resolveRate(key) {
    moved to the MARKETPLACE lane, where a subscription is buying something SOKONI actually
    provides — the order. See MARKETPLACE_PLAN_RATES below.
 
-   ── NOT YET WIRED, AND WHY THE ALIAS IS STILL HERE ───────────────────────────────────────
+   ── SUPERSEDED 2026-09-28 (owner schedule) ────────────────────────────────────────────────
+   The alias below is GONE. Raising online sales to 15% would have tripled every till sale through it, so POS now has
+   its own `pos` key in RATES (5%, with `till` / `quick_charge` aliases) and index.js `_is48hCommission` treats the
+   `pos` category as 48-hour, exactly as it did while POS resolved to marketplace. The settlement term is unchanged;
+   only the coupling is removed. The history below is kept as the record of why the coupling existed.
+
+   ── NOT YET WIRED, AND WHY THE ALIAS IS STILL HERE (historical) ─────────────────────────
    `pos: 'marketplace'` in ALIASES does TWO jobs, and only one of them is pricing:
 
      1. pricing            resolveRate('pos') -> marketplace 5%
@@ -515,9 +537,10 @@ function resolvePosRate(planId) {
  *
  * POS AND TILL ARE UNAFFECTED. The till resolves through resolvePosRate -> POS_PLAN_RATES ->
  * POS_FLAT_RATE_FRACTION (5%), which does not read this table. Verified: pos-sale-commission.js
- * calls CC.resolvePosRate(planId) and nothing else. `RATES.marketplace.pct` is likewise NOT
- * changed — `ALIASES.pos = 'marketplace'` means a POS sale RESOLVES to that category, so
- * moving it would have tripled every till commission through the alias. The two lanes stay
+ * calls CC.resolvePosRate(planId) and nothing else. (2026-09-22: `RATES.marketplace.pct` was left
+ * at 5% because `ALIASES.pos = 'marketplace'` would have tripled every till commission. SUPERSEDED
+ * 2026-09-28: POS has its own `pos` key, the alias is removed, and RATES.marketplace is 15% — the
+ * same as this lane, so a seller-less marketplace call can no longer undercharge at 5%.) The two lanes stay
  * separate commercial products, which is the invariant this file has defended throughout.
  *
  * floorExempt stays FALSE everywhere: the invariant asserted elsewhere is "only a genuine 0%
