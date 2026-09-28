@@ -397,17 +397,37 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
   const total        = _r2(taxable);
   const profit       = _r2(total - costTotal);
 
-  /* Customer lookup */
+  /* Customer lookup — Q0b-2a: a NAMED customer must be one of THIS seller's customers.
+     The lookup was collection-wide by phone or document id, so a sale recorded here copied
+     another merchant's customer (name, phone, points total, tier) into this merchant's sale and
+     receipt, and then credited that customer with loyalty points. The seller is already bound
+     (`_sellerId`), so the owners are exactly {_sellerId}, judged by the one customer-scope
+     authority (pos-customer-scope). A customer that is foreign, unowned, malformed or absent is
+     REFUSED — not quietly turned into a walk-in, which would hide the failure behind a sale that
+     no longer says who it was for — and all of those get ONE message, so a refusal never tells a
+     caller whether another merchant's customer exists. A sale that names no customer is still a
+     walk-in. The ownership is checked again inside the stock transaction and again before the
+     points are written (below). */
   let customer = null, customerDocRef = null;
-  if (customerId || customerPhone) {
-    const phone = customerPhone ? _normalizePhone(customerPhone) : null;
+  const _named = (v) => v !== undefined && v !== null && v !== '';
+  if (_named(customerId) || _named(customerPhone)) {
+    const owners = new Set([_sellerId]);
+    const phone  = _named(customerPhone) ? _custScope.canonicalPhone(customerPhone) : null;
+    let snap = null;
     if (phone) {
-      const q = await fdb.collection('posCustomers').where('phone', '==', phone).limit(1).get();
-      if (!q.empty) { customer = q.docs[0].data(); customerDocRef = q.docs[0].ref; }
-    } else if (customerId) {
-      const snap = await fdb.collection('posCustomers').doc(_san(customerId, 40)).get();
-      if (snap.exists) { customer = snap.data(); customerDocRef = snap.ref; }
+      snap = await _custScope.findOwnedByPhone(fdb, owners, [phone], phone);
+    } else if (_named(customerId)) {
+      if (!_custScope.isCustomerDocId(customerId)) throw new HttpsError('invalid-argument', 'Invalid customerId');
+      snap = await _custScope.getOwnedIn(fdb, owners, customerId);
+    } else {
+      throw new HttpsError('invalid-argument', 'Invalid customer phone number');
     }
+    if (!snap) {
+      throw new HttpsError('permission-denied',
+        'That customer is not one of your customers, so this sale was not recorded.');
+    }
+    customer = snap.data();
+    customerDocRef = snap.ref;
   }
 
   const pointsEarned  = _calcPoints(total);
@@ -430,11 +450,23 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
      concurrent sales cannot both claim the last unit (TOCTOU-safe). */
   const stockItems = validatedItems.filter(i => i.productId);
   /* M0-2: this runs INSIDE the one sale transaction below (claim · stock · sale · receipt),
-     so a retry can never find stock taken for a sale that was not written. */
+     so a retry can never find stock taken for a sale that was not written.
+     Q0b-2a (L-7 port) — a named customer's ownership is re-read here, inside that same transaction,
+     so a customer whose owner changed after the lookup refuses the sale before anything is written.
+     That is why this also runs for a customer sale with no stock items. On the main line this was a
+     separate runTransaction; on this lineage M0-2 already made it part of the one sale transaction,
+     so the re-read joins it (every read — claim, products, customer — precedes every write). */
   const _reserveStockInTxn = async (t) => {
-    if (stockItems.length > 0) {
+    if (stockItems.length > 0 || customerDocRef) {
       const refs  = stockItems.map(i => fdb.collection('products').doc(i.productId));
       const snaps = await Promise.all(refs.map(r => t.get(r)));
+      if (customerDocRef) {
+        const cs = await t.get(customerDocRef);
+        if (!cs.exists || _custScope.classifyCustomer(cs.id, cs.data(), new Set([_sellerId])) !== 'owned') {
+          throw new HttpsError('permission-denied',
+            'That customer is not one of your customers, so this sale was not recorded.');
+        }
+      }
 
       for (let i = 0; i < snaps.length; i++) {
         if (!snaps[i].exists) continue;
@@ -623,14 +655,23 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
     });
   }
 
-  /* Award loyalty points (outside batch — ok if this fails) */
+  /* Award loyalty points (outside batch — ok if this fails).
+     Q0b-2a — written in a transaction that re-checks ownership: the sale has committed, so it cannot
+     be refused now, but a customer whose owner changed since is never credited. */
   if (customerDocRef && pointsEarned > 0) {
-    await customerDocRef.update({
-      loyaltyPoints: incr(pointsEarned),
-      totalSpend:    incr(total),
-      visitCount:    incr(1),
-      lastVisit:     now(),
-      savedReceipts: arrU(receiptId),
+    await fdb.runTransaction(async t => {
+      const cs = await t.get(customerDocRef);
+      if (!cs.exists || _custScope.classifyCustomer(cs.id, cs.data(), new Set([_sellerId])) !== 'owned') {
+        console.warn('[recordPOSSale] points not awarded: customer is no longer this seller\'s', { saleId, sellerId: _sellerId });
+        return;
+      }
+      t.update(customerDocRef, {
+        loyaltyPoints: incr(pointsEarned),
+        totalSpend:    incr(total),
+        visitCount:    incr(1),
+        lastVisit:     now(),
+        savedReceipts: arrU(receiptId),
+      });
     }).catch(() => {});
   }
 

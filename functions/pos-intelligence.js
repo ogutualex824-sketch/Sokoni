@@ -579,11 +579,22 @@ exports.posGetCustomerInsights = onCall({ ...(_CF), secrets: [Anthropic] }, asyn
   _requireString(merchantId, 'merchantId');
   _requireString(customerId, 'customerId');
 
+  /* Q0b-2b — the merchant is PROVEN, not taken from the request. Before this, any signed-in
+     account could name any merchant and any customer and read 90 days of that customer's
+     purchases there — items, spend, visits — and have them summarised by the model below. The
+     claim is proven by the till's customer-lookup authority (pos-zero-friction
+     _proveCustomerMerchant: the shop owner or its staff, or a business member holding
+     `customers`); an unproven caller is refused before anything is read. The sales query is then
+     keyed on the PROVEN merchant's identities, so the model only ever sees that merchant's own
+     sales. (Required per call: pos-zero-friction is loaded by index.js anyway, and this module's
+     load order stays unchanged.) */
+  const provenOwners = await require('./pos-zero-friction')._provenCustomerOwners(req.auth.uid, merchantId);
+
   const now       = new Date();
   const ninetyAgo = admin.firestore.Timestamp.fromDate(new Date(now.getTime() - 90 * 86400_000));
 
   const salesSnap = await db.collection('posRetailSales')
-    .where('merchantId', '==', merchantId)
+    .where('merchantId', 'in', [...provenOwners])
     .where('customerId', '==', customerId)
     .where('createdAt', '>=', ninetyAgo)
     .orderBy('createdAt', 'desc')

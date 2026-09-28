@@ -1,3 +1,55 @@
+## 2026-09-28 (165) — L-7: port Q0b-2a + Q0b-2b onto the POS lineage — recordPOSSale and customer insights serve only the seller's own customers (NOT deployed)
+
+**Lineage reconciliation, unit 7.** On the POS lineage:
+- `recordPOSSale`'s customer lookup covered every merchant. A sale naming another merchant's customer copied that
+  customer's name, phone, points and tier into this merchant's `posSales` and receipts, and credited them with points.
+- `posGetCustomerInsights` took `merchantId` from the request and returned 90 days of any customer's history at any
+  merchant, and sent it to the model.
+
+The fixes already existed on the main line (3d03a70, 1cbd12f), but not here.
+
+- **Change:**
+  - **`functions/pos-retail-engine.js` (Q0b-2a):**
+    - A named customer is resolved through `pos-customer-scope` with owners `{_sellerId}`. Foreign, unowned,
+      malformed and missing customers get one `permission-denied` and never become a walk-in.
+    - Ownership is re-read inside the sale transaction.
+    - Points are awarded in a transaction that re-checks ownership.
+    - **Reconciled with M0-2, not replayed.** On this lineage the stock reservation already runs inside M0-2's one
+      sale transaction (claim · stock · sale · receipt), so the re-read joins it. Q0b-2a's widening (the
+      transaction also runs for a customer sale with no stock items) is applied to that helper's guard.
+    - All reads precede all writes. A replay returns before the points award.
+  - **`functions/pos-intelligence.js` + `functions/pos-zero-friction.js` (Q0b-2b):** line-for-line the source patch.
+    - The merchant is proven by L-6's customer authority (internal `_provenCustomerOwners`; `index.js` re-exports
+      by name only, so it is not a function).
+    - The query is keyed on the proven owners.
+- **Files:**
+  - `functions/pos-retail-engine.js`, `functions/pos-intelligence.js`, `functions/pos-zero-friction.js`;
+  - new tests `scripts/test-q0b2a-recordpossale-customer.js` (lineage-adapted: M0-2 idempotency keys, and S-2's injection at
+    the sale transaction) and `scripts/test-q0b2b-customer-insights.js`;
+  - new **owner-approved** `scripts/test-l7-replay-customer-binding.js`;
+  - new `docs/repairs/POS-Q0b2a-recordpossale-customer.md` and `docs/repairs/POS-Q0b2b-customer-insights.md`, with L-7 port sections;
+  - `CHANGELOG.md`.
+- **Database:** none.
+- **API:**
+  - `recordPOSSale` refuses a customer that is not the seller's own (`permission-denied`), and a malformed customer
+    id or phone (`invalid-argument`).
+  - `posGetCustomerInsights` refuses an unproven merchant claim.
+- **Security:** closes cross-tenant customer PII disclosure through sales and receipts, loyalty credit to another
+  merchant's customer, and cross-merchant purchase-history disclosure (including to the model).
+- **M0-2 (hard condition):**
+  - the M0-2 suite is 13/0, and stays 13/0 under every Q0b-2a mutant;
+  - the new replay suite is 6/0 on the port and 5/1 on `52b9ed6` (the one old red is P-4, a sale to a foreign customer). It covers: a replay never re-credits; the same key naming a foreign customer is refused with nothing written; a customer whose owner changed is never re-credited by a replay; concurrent same-key calls credit once.
+- **Evidence:**
+  - Q0b-2a 23/0 vs 7/16; Q0b-2b 13/0 vs 5/8.
+  - 12 of 12 mutants caught, none surviving.
+  - Earlier units all green: L-6 40/0, L-5 26/0, L-4 31/0, L-3 13/0, L-2 16/0 + 20/0, L-1 27/0, R-48H 12/0,
+    M0-3 31/0, M0-1 20/0, P0 9/0, rail 46/0.
+  - Floor: the only summary difference is `certify-stk-narrative`. F3-1/F3-2 are flaky: the same pair failed in the L-2 and L-4 floors,
+    reruns on this tree were 2/3 GREEN, and the suite loads none of the changed modules. Everything else is offsets, the adjudicated auditor false positive (now at :472), uncommitted-tree artifacts, and random ids. None is unexplained.
+  - Syntax gate clean.
+- **Open, not done here:** Q0c (L-8), `posWallets/{customer.id}`, retirement of the uncalled `posGetCustomerInsights`.
+- **Breaking:** none for a correct caller.
+
 ## 2026-09-28 (164) — L-6: port Q0b-1 onto the POS lineage — a till and a merchant see and write only their own customers (NOT deployed)
 
 **Lineage reconciliation, unit 6.** On the POS lineage, `posLookupCustomer`, `getPOSCustomer` and `upsertPOSCustomer`

@@ -167,6 +167,15 @@ async function _proveCustomerMerchant(callerUid, merchantId) {
   _e('You are not authorised to look up customers for this shop.', 'permission-denied');
 }
 
+/* Q0b-2b — the same proof for another module that serves a till's customer data
+   (pos-intelligence posGetCustomerInsights): the owners proven for this caller's merchant claim,
+   refused exactly as posLookupCustomer refuses. Not a Cloud Function — index.js re-exports this
+   module by name only. */
+exports._provenCustomerOwners = async function (callerUid, merchantId) {
+  const proof = await _proveCustomerMerchant(callerUid, merchantId);
+  return _merchantOwnerSet(merchantId, proof.provenBy, proof.provenBusinessId);
+};
+
 async function _assertAuth(auth) {
   if (!auth?.uid) _e('Authentication required', 'unauthenticated');
   return auth.uid;
