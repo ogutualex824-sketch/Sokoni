@@ -97,11 +97,29 @@ console.log('\nD. Receipt path — the hop that was broken\n');
   ck('the LIVE renderer prints a code from the tender', /p\.ref \|\| p\.mpesaCode/.test(PRINT));
   ck('  ...and has a human label for this method', /mpesa_till_manual:'M-Pesa Till'/.test(PRINT));
 
-  /* The live renderer is PosPrintService, NOT SokoniReceiptDoc — verified
-     2026-08-27: SokoniReceiptDoc is loaded by pos.html but referenced zero
-     times by the print service. Wiring to it would have printed nothing. */
-  ck('SokoniReceiptDoc is still NOT the POS renderer (assumption stays checked)',
-     !/SokoniReceiptDoc/.test(PRINT));
+  /* The live renderer for a SALE is PosPrintService's own builder, NOT SokoniReceiptDoc — verified 2026-08-27.
+     BOUNDARY (owner-authorized 2026-09-29): the POS Setup page may print a SAMPLE of the premium receipt, and only
+     through an explicitly requested path. So this no longer asserts "SokoniReceiptDoc never appears"; it asserts the
+     boundary that keeps a live sale's receipt — and this method's Till code — on the existing builder:
+       · the sale builder (_buildSaleReceipt) never references SokoniReceiptDoc;
+       · every SokoniReceiptDoc reference in the print service is inside the opt-in _buildDocReceipt;
+       · that path is taken ONLY when a caller passes context.useDoc AND a document. */
+  const _body = (src, head) => {
+    const i = src.indexOf(head); if (i < 0) return '';
+    /* The BODY's brace — after the parameter list, which may itself contain `= {}` defaults. */
+    let j = src.indexOf(') {', i); if (j < 0) return ''; j += 2; let d = 0;
+    for (let k = j; k < src.length; k++) { if (src[k] === '{') d++; else if (src[k] === '}') { d--; if (!d) return src.slice(i, k + 1); } }
+    return '';
+  };
+  const _sale = _body(PRINT, '_buildSaleReceipt (receipt');
+  const _doc  = _body(PRINT, '_buildDocReceipt (doc');
+  const _refsOutsideDoc = PRINT.replace(_doc, '').match(/SokoniReceiptDoc/g) || [];
+  ck('a sale receipt is still NOT rendered by SokoniReceiptDoc — only an explicitly requested sample may be (boundary checked)',
+     _sale.length > 0 && !/SokoniReceiptDoc|_buildDocReceipt/.test(_sale) && /b\.payment\(/.test(_sale)
+       && _doc.length > 0 && _refsOutsideDoc.length === 0
+       && /\(context\.useDoc && context\.doc\)\s*\?\s*this\._buildDocReceipt\(/.test(PRINT)
+       && (PRINT.match(/this\._buildDocReceipt\(/g) || []).length === 1,
+     'sale builder clean=' + !/SokoniReceiptDoc/.test(_sale) + ' refs outside doc path=' + _refsOutsideDoc.length);
 }
 
 /* ══ E. Server-side uniqueness ═════════════════════════════════════════════ */

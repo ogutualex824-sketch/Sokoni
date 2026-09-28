@@ -1,3 +1,74 @@
+## [2026-09-29] — POS Setup: one page, set up once, edit anytime · premium receipt with KRA eTIMS (NOT deployed)
+
+**Why.** POS setup was a seven-step wizard whose business step silently turned a failed lookup into "create your
+business". Its device step could never register a device: it sent `navigator.platform`, which the server refuses.
+Hardware and diagnostics lived on separate pages, payment setup was a Daraja-only Till card that can no longer
+verify, and receipts carried no KRA eTIMS code.
+
+- **Change:**
+  - **`pos-setup.html`:** after sign-in, ONE scrolling page with a sticky chip bar:
+    Business · Branch · Device · Payments · Receipt · Hardware · Diagnostics · Commission.
+    - **Chips** are green only from server answers (never `localStorage`), amber when the server reports a gap.
+    - **Business:** a dropdown of the merchant's businesses, each with its business type.
+    - **Branch:** chips; change at any time.
+    - **Device:** registered once through `bootstrapDevice`/`registerDevice`, with a mapped platform, `deviceType`
+      and `deviceName`, confirmed by `getDeviceList`. Rename it or move it to another branch at any time.
+    - **Payments:** IntaSend. SOKONI Till / QR are shown as "Activates with your business wallet" (no collection,
+      no QR drawn).
+    - **Receipt:** the premium receipt (`SokoniReceiptDoc`) as a SAMPLE, at 58mm or 80mm (the till's paper width),
+      with an honest test print: the printer when connected, otherwise the print dialog; never "printed" unless it was.
+    - **Hardware and Diagnostics:** the existing wizard and console embedded. Diagnostics opens straight into the FULL
+      advanced console: all 12 tabs, Diagnostics included.
+    - **Commission:** 5% POS/Till, 15% online on every package, 07:00 daily once the business wallet is live;
+      outstanding "—".
+    - `?edit=1` keeps a set-up merchant on the page. The Daraja payment-destination card and its code are removed.
+  - **`sokoni-receipt.js` (the receipt contract):**
+    - an `eTIMS Inv:` line only when KRA issued one;
+    - a KRA eTIMS code (`closing.kraQr`) EQUAL to the SOKONI code, printed only from a real `https://*.kra.go.ke`
+      eTIMS URL, otherwise "eTIMS pending" (every sample too);
+    - `isKraEtimsUrl`, and `toText({ qrSentinel })` for image adapters.
+  - **`sokoni-pos-print-service.js`:**
+    - the two codes print SIDE BY SIDE as one raster image that fits the paper: 384 dots at 58mm, 576 at 80mm.
+      Without a canvas they print stacked;
+    - the legacy sale receipt and invoice use the same pair (a look-alike KRA host prints "eTIMS pending");
+    - `sampleBanner`;
+    - an OPT-IN `context.useDoc` path prints the premium `SokoniReceiptDoc` document. Every existing caller prints
+      what it printed before.
+  - **`pos-printer-setup.html`:** "Back to POS" removed (a `?return=` caller still gets "Back" to itself when not
+    embedded). There is an embed mode, and the console's commission card is hidden when embedded.
+  - **`pos-hardware-wizard.html`:** embed mode (back link hidden).
+- **Files:**
+  - `pos-setup.html`, `pos-printer-setup.html`, `pos-hardware-wizard.html`;
+  - `sokoni-receipt.js`, `sokoni-pos-print-service.js`;
+  - `scripts/test-pos-setup-page.js` (new), `scripts/test-pos-manual-till-payment.js` (boundary tripwire only);
+  - `docs/POS_SETUP_PAGE.md` (new), `docs/RECEIPT_CONTRACT.md`;
+  - `CHANGELOG.md`.
+- **Database / API:** none. The page calls only callables that are already deployed; no server change.
+- **Security:**
+  - the KRA code cannot be forged by a look-alike host;
+  - the printer console's return link now accepts only same-origin paths (it accepted any `?return=` value before);
+  - no Daraja surface remains on the setup page.
+- **Evidence:**
+  - `test-pos-setup-page`: **44 passed, 0 failed**, stable across 3 consecutive runs (WebKit iPhone 13 and Chromium 1280), plus 1 UNPROVEN (the
+    embedded consoles' signed-in content needs a real session). Old tree (`be7c676`): 0 passed (no setup page).
+  - **Tripwire (owner-authorized 2026-09-29):** `scripts/test-pos-manual-till-payment.js`'s "SokoniReceiptDoc is
+    still NOT the POS renderer" became a BOUNDARY check. It verifies that:
+    - the sale builder never references `SokoniReceiptDoc`, and still renders the payment (manual-Till codes);
+    - every `SokoniReceiptDoc` reference sits inside the opt-in `_buildDocReceipt`;
+    - that path is taken only with `context.useDoc` and a document.
+
+    57/0 on the new tree. It catches 3 of 3 mutants: premium receipt in the sale builder, doc path unconditional, a
+    stray reference elsewhere. Live sale receipts and manual-Till behaviour are unchanged.
+  - The 30 related suites, old vs new: the only difference is that approved tripwire change.
+  - `test-receipt-contract` 132/0 on both.
+  - The syntax gate is clean.
+- **Commission — UI policy display ≠ deployed commission authority.** The page states the owner's rules (5% POS/Till,
+  15% online) as a DISPLAY. The rate table deployed on this line still carries the earlier figures, and production
+  charges follow it until the commission rules ship. This commit does not change the commission table. The
+  outstanding balance shows "—" because no balance service is deployed.
+- **Not in this commit:** commission deployment, eTIMS generation, the print host's unread `doc`, payment convergence.
+- **UNPROVEN:** the embedded consoles' signed-in content (paired devices, printer state) — needs a real merchant session.
+
 ## [2026-09-21] — Port the catalogue / business-application / POS-tender surface onto the served hosting lineage
 
 **Files:** new — `catalogue.html`, `business-apply.html`, `sokoni-catalogue-model.js`,
