@@ -95,8 +95,13 @@
      single field is why real photos rendered as placeholders. This returns the BEST
      source: first real URL (http/https or root-absolute) wins; base64 only if no URL
      exists; '' if nothing. One resolver so every surface reads the same thing. */
+  /* Image fields are SELLER-WRITTEN, and many callers splice pick()'s result straight into `src="…"` (only render()
+     escapes). A value carrying a quote, angle bracket or backtick can therefore close the attribute and inject
+     markup. No real URL or base64 data URI contains those characters unencoded, so such a value is not an image:
+     reject it here, once, for every caller. */
+  function _attrSafe(v) { return !/["'<>`]/.test(v); }
   function pick(o) {
-    if (!o || typeof o !== 'object') return (typeof o === 'string' ? o.trim() : '');
+    if (!o || typeof o !== 'object') { var s = (typeof o === 'string' ? o.trim() : ''); return _attrSafe(s) ? s : ''; }
     var c = [];
     if (Array.isArray(o.imageStorageUrls)) c.push(o.imageStorageUrls[0]);
     if (Array.isArray(o.images)) o.images.forEach(function (x) { c.push(x && typeof x === 'object' ? (x.url || x.src) : x); });
@@ -106,7 +111,7 @@
       var v = c[i];
       if (typeof v !== 'string') continue;
       v = v.trim();
-      if (!v || v === 'null' || v === 'undefined') continue;
+      if (!v || v === 'null' || v === 'undefined' || !_attrSafe(v)) continue;
       if (v.charAt(0) === '/' || v.slice(0, 4).toLowerCase() === 'http') return v;   // real URL — best
       if (isData(v) && !data) data = v;                                              // remember base64
     }

@@ -325,13 +325,13 @@ function renderProducts(list){
         const _csn = p.sellerName || '';
         const _csi = _csn ? _csn.split(' ').map(w=>w[0]||'').join('').substring(0,2).toUpperCase() : '';
         const _csc = _csn ? ['#6366f1','#f59e0b','#10b981','#e11d48','#a8ff58','#0891b2','#dc2626','#059669'][_csn.split('').reduce((a,c)=>a+c.charCodeAt(0),0)%8] : '';
-        const cShopRing = _csn ? `<a class="pcard-shop-ring" href="seller-public.html?seller=${encodeURIComponent(_csn)}" onclick="event.stopPropagation()" title="Visit ${_csn.replace(/"/g,'&quot;').replace(/</g,'&lt;')}" style="background:${_csc};">${_csi}</a>` : '';
+        const cShopRing = _csn ? `<a class="pcard-shop-ring" href="seller-public.html?seller=${encodeURIComponent(_csn)}" onclick="event.stopPropagation()" title="Visit ${_esc(_csn)}" style="background:${_csc};">${_esc(_csi)}</a>` : '';
         const cardHtml = `
-        <div class="product-card" style="position:relative;animation:cardFadeIn 0.35s ease;cursor:pointer;" onclick="openProductCat('${_esc(p.id)}')">
+        <div class="product-card" style="position:relative;animation:cardFadeIn 0.35s ease;cursor:pointer;" data-pid="${_esc(p.id)}" onclick="openProductCat(this.dataset.pid)">
             ${adultBadge}
             ${oosOverlay}
             <div class="product-img-wrap">
-                <img src="${(window.pickProductImage && pickProductImage(p)) || p.image || p.imageUrl || p.thumbnail || p.photo || p.coverImage || 'assets/default-product.png'}" alt="${_esc(p.name)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/default-product.png'">
+                <img src="${_esc((window.pickProductImage && pickProductImage(p)) || p.image || p.imageUrl || p.thumbnail || p.photo || p.coverImage || 'assets/default-product.png')}" alt="${_esc(p.name)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/default-product.png'">
                 ${cShopRing}
             </div>
             <div class="product-body">
@@ -371,6 +371,8 @@ function renderProducts(list){
                        required because the whole card carries its own onclick to
                        open the product; without it every add would also navigate
                        away, which is the likely reason buttons were left out. */
+                    /* pid is attribute-escaped for data-pid only: an HTML entity inside an inline JS string decodes back
+                       to a quote, so the handlers read the id from the element, never from spliced source text. */
                     const pid = _esc(p.id);
                     const dis = oos ? 'disabled' : '';
                     const btn = 'flex:1;padding:7px 0;border-radius:9px;font-size:12px;font-weight:800;'
@@ -378,20 +380,20 @@ function renderProducts(list){
                               + 'transition:transform .12s,opacity .12s;opacity:' + (oos ? '0.35' : '1') + ';';
                     return '<div class="pcard-actions" style="display:flex;gap:6px;margin-top:7px;">'
                       + '<button type="button" ' + dis + ' aria-label="Add ' + _esc(p.name) + ' to cart" '
-                      +   'onclick="event.stopPropagation();addToCart(\'' + pid + '\')" '
+                      +   'data-pid="' + pid + '" onclick="event.stopPropagation();addToCart(this.dataset.pid)" '
                       +   'style="' + btn + 'background:#71ff00;color:#050505;border:none;">🛒 Add</button>'
                       /* data-wish-pid lets _catSyncWishlistButtons() reflect canonical
                          state on this card without re-rendering the grid. */
                       + '<button type="button" ' + dis + ' aria-label="Save ' + _esc(p.name) + ' to wishlist" '
-                      +   'data-wish-pid="' + _esc(pid) + '" '
-                      +   'onclick="event.stopPropagation();addToWishlistCat(\'' + pid + '\')" '
+                      +   'data-wish-pid="' + pid + '" '
+                      +   'onclick="event.stopPropagation();addToWishlistCat(this.dataset.wishPid)" '
                       +   'style="' + btn + 'background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.22);flex:0 0 42px;">🤍</button>'
                       + '</div>'
                       /* Buy Now — for shoppers who want to purchase immediately
                          without a cart round-trip. Calls the existing buyNowCat
                          handler (checkout with just this item). */
                       + '<button type="button" ' + dis + ' aria-label="Buy ' + _esc(p.name) + ' now" '
-                      +   'onclick="event.stopPropagation();buyNowCat(\'' + pid + '\')" '
+                      +   'data-pid="' + pid + '" onclick="event.stopPropagation();buyNowCat(this.dataset.pid)" '
                       +   'style="' + btn + 'width:100%;margin-top:6px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#050505;border:none;">⚡ Buy Now</button>';
                 })()}
             </div>

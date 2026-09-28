@@ -428,8 +428,8 @@ else{
                 const thumbsHtml = allMedia.map((m, idx) =>
                   `<div class="prd-thumb ${idx===0?'active':''} ${m.type==='video'?'prd-video-thumb':''}" data-idx="${idx}" onclick="_prdGalleryGo(${idx})">`+
                     (m.type==='video'
-                      ? `<video src="${m.src}" style="width:100%;height:100%;object-fit:cover;" muted playsinline></video>`
-                      : `<img src="${m.src}" alt="" loading="lazy" onerror="this.onerror=null;this.src='assets/default-product.png'">`)+
+                      ? `<video src="${_esc(m.src)}" style="width:100%;height:100%;object-fit:cover;" muted playsinline></video>`
+                      : `<img src="${_esc(m.src)}" alt="" loading="lazy" onerror="this.onerror=null;this.src='assets/default-product.png'">`)+
                   `</div>`
                 ).join('');
                 const dotsHtml = allMedia.length > 1
@@ -441,8 +441,8 @@ else{
                 return `<div class="prd-gallery-wrap" id="prdGalleryWrap">
                   <div class="prd-gallery-main" id="prdGalleryMain" onclick="_prdLightboxOpen()" title="Tap to enlarge">
                     ${first.type==='video'
-                      ? `<video id="prdMainVid" src="${first.src}" controls muted playsinline style="width:100%;height:100%;object-fit:contain;"></video>`
-                      : `<img id="prdMainImg" src="${first.src}" alt="${(product.name||'').replace(/"/g,'&quot;')}" onerror="this.onerror=null;this.src='assets/default-product.png'">`}
+                      ? `<video id="prdMainVid" src="${_esc(first.src)}" controls muted playsinline style="width:100%;height:100%;object-fit:contain;"></video>`
+                      : `<img id="prdMainImg" src="${_esc(first.src)}" alt="${_esc(product.name)}" onerror="this.onerror=null;this.src='assets/default-product.png'">`}
                     ${navHtml}
                     <div class="prd-gallery-zoom-hint">Tap to zoom</div>
                   </div>
@@ -475,7 +475,7 @@ else{
 
                 <!-- Seller card v2 -->
                 ${(product.sellerName || product.sellerUid) ? `
-                <a href="store.html?id=${product.sellerUid||product.sellerId||''}" class="prd-seller-card" id="prdSellerCard">
+                <a href="store.html?id=${encodeURIComponent(product.sellerUid||product.sellerId||'')}" class="prd-seller-card" id="prdSellerCard">
                     <div class="prd-seller-avatar" id="prdSellerAvatar">&#x1F3EA;</div>
                     <div class="prd-seller-info">
                         <div class="prd-seller-name" id="prdSellerName">${(product.sellerName||'View Store').replace(/</g,'&lt;')}</div>
@@ -494,7 +494,7 @@ else{
                         <span style="font-size:15px;">🏅</span>
                         <div>
                             <div style="font-size:11px;font-weight:900;color:#00c864;letter-spacing:0.3px;">KEBS CERTIFIED</div>
-                            <div style="font-size:10px;color:rgba(0,200,120,0.65);font-weight:600;">${product.kebsCert}</div>
+                            <div style="font-size:10px;color:rgba(0,200,120,0.65);font-weight:600;">${_esc(product.kebsCert)}</div>
                         </div>
                     </div>`
                     : (["food","agriculture","electronics","computers","appliances","health","beauty"].includes((product.category||"").toLowerCase())
@@ -516,13 +516,13 @@ else{
                     <span style="font-size:11px;font-weight:800;background:rgba(0,170,255,0.15);color:#00aaff;padding:3px 10px;border-radius:20px;">🏷️ BULK DEAL</span>
                     <div>
                         <div style="font-size:13px;color:rgba(255,255,255,0.5);">Retail: <span style="color:white;font-weight:700;">KES ${Number(product.price).toLocaleString()}</span> / unit</div>
-                        <div style="font-size:14px;color:#00aaff;font-weight:800;">Wholesale: KES ${Number(product.wholesalePrice).toLocaleString()} / unit <span style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:400;">(min. ${product.minWholesaleQty} units)</span></div>
+                        <div style="font-size:14px;color:#00aaff;font-weight:800;">Wholesale: KES ${Number(product.wholesalePrice).toLocaleString()} / unit <span style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:400;">(min. ${_esc(String(product.minWholesaleQty))} units)</span></div>
                     </div>
                 </div>` : ""}
 
                 <p class="premium-description">
 
-                    ${product.description || "Premium quality product from Sokoni marketplace. Designed for style, comfort and reliability."}
+                    ${product.description ? _esc(product.description) : "Premium quality product from Sokoni marketplace. Designed for style, comfort and reliability."}
 
                 </p>
 
@@ -592,9 +592,9 @@ else{
                     if (_dDate.getDay() === 0) _dDate.setDate(_dDate.getDate() + 1);
                     var _dStr = _dDate.toLocaleDateString('en-KE',{weekday:'short',day:'numeric',month:'short'});
                     var deliveryCopy = product.deliveryTime
-                        ? 'Est. delivery: ' + product.deliveryTime
+                        ? 'Est. delivery: ' + _esc(product.deliveryTime)
                         : 'Get it by <strong style="color:#71ff00;">' + _dStr + '</strong>'
-                          + (product.location||product.county ? ' · Ships from ' + (product.location||product.county) : '');
+                          + (product.location||product.county ? ' · Ships from ' + _esc(product.location||product.county) : '');
                     return `<div class="prd-delivery-bar" id="prdDeliveryBar">
                     <span class="dv-icon">&#x1F6F5;</span>
                     <span id="prdDeliveryEst">${deliveryCopy}</span>
@@ -693,7 +693,7 @@ else{
         ${product.video ? `
         <div style="margin:24px 0;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:24px;">
           <div style="font-size:16px;font-weight:800;color:white;margin-bottom:14px;">🎬 Product Video</div>
-          <video id="productVideoEl" src="${product.video}" controls style="width:100%;border-radius:14px;max-height:340px;background:#000;" preload="metadata"></video>
+          <video id="productVideoEl" src="${_esc(product.video)}" controls style="width:100%;border-radius:14px;max-height:340px;background:#000;" preload="metadata"></video>
           <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
             <button onclick="downloadProductVideo(false)" style="padding:11px 18px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:700;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;display:flex;align-items:center;gap:7px;">
               <i class="fas fa-download"></i> Download Original
@@ -1030,14 +1030,14 @@ function renderRelatedProducts(){
             return "";
         })();
         return `
-        <div class="yml-card" onclick="openRelatedProduct('${p.id}')">
+        <div class="yml-card" data-pid="${_esc(p.id)}" onclick="openRelatedProduct(this.dataset.pid)">
             ${oosOverlay}
             <div class="yml-img-wrap">
-                <img src="${img}" alt="${p.name}" loading="lazy" decoding="async" onerror="this.src='assets/default-product.png'">
+                <img src="${_esc(img)}" alt="${_esc(p.name)}" loading="lazy" decoding="async" onerror="this.src='assets/default-product.png'">
                 ${badge}
             </div>
             <div class="yml-body">
-                <div class="yml-name">${p.name}</div>
+                <div class="yml-name">${_esc(p.name)}</div>
                 <div class="yml-price">KES ${price}</div>
             </div>
         </div>`;

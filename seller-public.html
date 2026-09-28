@@ -614,7 +614,7 @@
   if(_vb.verifiedBusiness)badgesEl.innerHTML+='<span class="vbadge vbadge-lg vbadge-business">&#10003; Verified Business</span>';
   if(_vb.verifiedShop)    badgesEl.innerHTML+='<span class="vbadge vbadge-lg vbadge-shop">&#10003; Verified Shop</span>';
   if(_vb.sameDayDelivery) badgesEl.innerHTML+='<span class="vbadge vbadge-lg vbadge-sameday">&#9889; Same Day Delivery</span>';
-  badgesEl.innerHTML += `<span class="sp-badge-location">📍 ${locationName}</span>`;
+  badgesEl.innerHTML += `<span class="sp-badge-location">📍 ${escapeHTML(locationName)}</span>`;
 
   /* Physical address + Maps link */
   if(miniStore?.address) {
@@ -690,10 +690,10 @@
     qs("spProductsEmpty").style.display = "block";
   } else {
     qs("spProductsGrid").innerHTML = products.map(p => `
-      <a class="sp-product-card" href="product.html?id=${p.id}">
-        <img src="${(window.pickProductImage && pickProductImage(p)) || p.image || 'assets/default-product.png'}" alt="${p.name}" loading="lazy" onerror="this.onerror=null;this.src='assets/default-product.png'">
+      <a class="sp-product-card" href="product.html?id=${encodeURIComponent(p.id)}">
+        <img src="${escapeHTML((window.pickProductImage && pickProductImage(p)) || p.image || 'assets/default-product.png')}" alt="${escapeHTML(p.name)}" loading="lazy" onerror="this.onerror=null;this.src='assets/default-product.png'">
         <div class="sp-product-info">
-          <div class="sp-product-name">${p.name}</div>
+          <div class="sp-product-name">${escapeHTML(p.name)}</div>
           <div class="sp-product-price">KES ${Number(p.price).toLocaleString()}</div>
         </div>
       </a>
@@ -723,11 +723,11 @@
   } else {
     qs("spSalesTbody").innerHTML = salesRows.slice(0,30).map(r => `
       <tr>
-        <td style="color:#71ff00;font-weight:800;">${r.orderId}</td>
-        <td style="color:rgba(255,255,255,0.5);">${r.date}</td>
-        <td style="font-weight:600;">${r.product}</td>
+        <td style="color:#71ff00;font-weight:800;">${escapeHTML(r.orderId)}</td>
+        <td style="color:rgba(255,255,255,0.5);">${escapeHTML(r.date)}</td>
+        <td style="font-weight:600;">${escapeHTML(r.product)}</td>
         <td style="color:#71ff00;font-weight:800;">KES ${r.revenue.toLocaleString()}</td>
-        <td><span class="sp-pill ${statusPill[r.status]||'sp-pill-orange'}">${r.status}</span></td>
+        <td><span class="sp-pill ${statusPill[r.status]||'sp-pill-orange'}">${escapeHTML(r.status)}</span></td>
       </tr>
     `).join("");
   }
@@ -825,24 +825,24 @@
       ${ratings.slice(0,15).map(r=>{
         const rAvg = r.avgScore||r.stars||0;
         const dims = [
-          r.delivery     ? `🚚 ${r.delivery}`     : "",
-          r.responseTime ? `⚡ ${r.responseTime}` : "",
-          r.returns      ? `🔄 ${r.returns}`      : "",
-          r.satisfaction ? `😊 ${r.satisfaction}` : "",
+          r.delivery     ? `🚚 ${escapeHTML(r.delivery)}`     : "",
+          r.responseTime ? `⚡ ${escapeHTML(r.responseTime)}` : "",
+          r.returns      ? `🔄 ${escapeHTML(r.returns)}`      : "",
+          r.satisfaction ? `😊 ${escapeHTML(r.satisfaction)}` : "",
         ].filter(Boolean);
         return `<div class="sp-review-card">
           <div class="sp-review-top">
             <div class="sp-reviewer-row">
-              <div class="sp-reviewer-avatar">${(r.buyerName||"A").charAt(0).toUpperCase()}</div>
+              <div class="sp-reviewer-avatar">${escapeHTML(String(r.buyerName||"A").charAt(0).toUpperCase())}</div>
               <div>
-                <div class="sp-reviewer-name">${r.buyerName||"Anonymous"}</div>
-                <div class="sp-reviewer-meta">${r.date||""} · Order ${r.orderId||""}</div>
+                <div class="sp-reviewer-name">${escapeHTML(r.buyerName||"Anonymous")}</div>
+                <div class="sp-reviewer-meta">${escapeHTML(r.date||"")} · Order ${escapeHTML(r.orderId||"")}</div>
               </div>
             </div>
-            <div class="sp-review-stars">${"★".repeat(Math.round(rAvg))}${"☆".repeat(5-Math.round(rAvg))} <span style="font-size:11px;color:rgba(255,255,255,0.35);">${rAvg}</span></div>
+            <div class="sp-review-stars">${"★".repeat(Math.round(rAvg))}${"☆".repeat(5-Math.round(rAvg))} <span style="font-size:11px;color:rgba(255,255,255,0.35);">${escapeHTML(rAvg)}</span></div>
           </div>
           ${dims.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">${dims.map(d=>`<span style="font-size:10px;background:rgba(255,193,7,0.08);border:1px solid rgba(255,193,7,0.15);color:#ffc107;padding:2px 7px;border-radius:5px;">${d}</span>`).join("")}</div>` : ""}
-          ${r.comment ? `<div class="sp-review-comment">"${r.comment}"</div>` : ""}
+          ${r.comment ? `<div class="sp-review-comment">"${escapeHTML(r.comment)}"</div>` : ""}
         </div>`;
       }).join("")}
     `;

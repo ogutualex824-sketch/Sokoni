@@ -5,6 +5,12 @@ let getDocs = null;
 /* HTML-escapes the 5 dangerous characters for safe innerHTML / attribute insertion.
    Defined here so buildProductCard() and all callers share one implementation. */
 const _escHtml = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+/* Author-written CSS backgrounds (stories) reach style attributes / cssText: allow colours and gradients only — never
+   url(), quotes, semicolons or anything that can leave the declaration. */
+const _safeCssBg = (v, dflt) => { const s = String(v == null ? '' : v).trim(); return /^[#\w\s(),.%-]{1,200}$/.test(s) && !/url\s*\(|expression/i.test(s) ? s : dflt; };
+/* Author-written links: http(s) or a same-site path only. The browser's own URL parser decides the scheme, so
+   obfuscations such as java\tscript: or entity-encoded prefixes cannot pass. Returns '' when unsafe. */
+const _safeHref = (v) => { const s = String(v == null ? '' : v).trim(); if (!s || /["'<>`\s]/.test(s)) return ''; try { const u = new URL(s, (typeof location !== 'undefined' && location.href) || 'https://mysokoni.co.ke/'); return (u.protocol === 'https:' || u.protocol === 'http:') ? s : ''; } catch (e) { return ''; } };
 
 /* Self-bootstrap the shared image render helper (sokoni-image.js) when the host page
    didn't load it. This decouples the trending grid's renderProductImage() upgrade from
@@ -714,19 +720,19 @@ function displayNearbySection(){
         const tags = [...new Set(s.products.map(p => p.category))].slice(0, 2);
         const profileUrl = `seller-public.html?seller=${encodeURIComponent(s.name)}`;
 
-        return `<div class="seller-card" style="cursor:pointer;" onclick="window.location.href='${profileUrl}'">
+        return `<div class="seller-card" style="cursor:pointer;" data-href="${_escHtml(profileUrl)}" onclick="window.location.href=this.dataset.href">
             <div class="seller-avatar" style="background:linear-gradient(135deg,rgba(113,255,0,0.15),rgba(0,170,255,0.15));display:flex;align-items:center;justify-content:center;width:72px;height:72px;border-radius:50%;border:2px solid rgba(113,255,0,0.3);">
-                <span style="font-size:22px;font-weight:900;color:#71ff00;">${initials}</span>
+                <span style="font-size:22px;font-weight:900;color:#71ff00;">${_escHtml(initials)}</span>
             </div>
-            <h3>${s.name}</h3>
-            <div class="seller-location-tag">📍 ${locationName}</div>
+            <h3>${_escHtml(s.name)}</h3>
+            <div class="seller-location-tag">📍 ${_escHtml(locationName)}</div>
             <div class="seller-stars">${starsHtml}</div>
             <p class="seller-rating-text">${ratingText}${totalSales > 0 ? " · " + totalSales + " Sales" : ""}</p>
             <div class="seller-tags">
-                ${tags.map(t => `<span class="seller-tag">${CAT_LABELS[t] || "🛍️ " + t}</span>`).join("")}
+                ${tags.map(t => `<span class="seller-tag">${CAT_LABELS[t] || "🛍️ " + _escHtml(t)}</span>`).join("")}
                 <span class="seller-tag">📦 ${s.products.length} listing${s.products.length !== 1 ? "s" : ""}</span>
             </div>
-            <a href="${profileUrl}" class="seller-visit-btn" onclick="event.stopPropagation()">
+            <a href="${_escHtml(profileUrl)}" class="seller-visit-btn" onclick="event.stopPropagation()">
                 <i class="fas fa-store"></i> View Seller
             </a>
         </div>`;
@@ -838,7 +844,7 @@ function wishlistDemandBadge(product){
 
 function kebsBadge(product){
     if(product.kebsCert){
-        return `<div class="kebs-badge kebs-certified" title="KEBS Certified: ${product.kebsCert}">🏅 KEBS</div>`;
+        return `<div class="kebs-badge kebs-certified" title="KEBS Certified: ${_escHtml(product.kebsCert)}">🏅 KEBS</div>`;
     }
     if(KEBS_REQUIRED_CATS.has(product.category)){
         return `<div class="kebs-badge kebs-unverified" title="KEBS certification not provided">⚠️ No KEBS</div>`;
@@ -1020,7 +1026,7 @@ function buildProductCard(product){
                    || "assets/default-product.png";
     const price    = Number(product.price).toLocaleString();
     const locLabel = product.location ? locationLabels[product.location] || product.location : "";
-    const locTag   = locLabel ? `<span class="product-location-tag">📍 ${locLabel}</span>` : "";
+    const locTag   = locLabel ? `<span class="product-location-tag">📍 ${_escHtml(locLabel)}</span>` : "";
     const descTag  = product.description ? `<p class="product-desc-text">${_escHtml(product.description)}</p>` : "";
     const boosted  = isProductBoosted(product.id);
     const isAdult     = typeof isAdultCategory === "function" && isAdultCategory(product.category);
@@ -1043,7 +1049,7 @@ function buildProductCard(product){
       ? `<div class="seller-verified-badge" title="Verified Seller">✅ Verified${sellerAvgRating ? " · ⭐"+sellerAvgRating : ""}</div>`
       : (sellerAvgRating ? `<div class="seller-verified-badge" style="color:rgba(255,193,7,0.9);background:rgba(255,193,7,0.08);border-color:rgba(255,193,7,0.2);">⭐ ${sellerAvgRating} seller rating</div>` : "");
     const wholesaleBadge  = product.wholesalePrice && product.minWholesaleQty
-      ? `<div style="font-size:10px;font-weight:800;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.2);color:#00aaff;padding:3px 8px;border-radius:6px;display:inline-block;margin-bottom:6px;">🏷️ Bulk: KES ${Number(product.wholesalePrice).toLocaleString()} / min ${product.minWholesaleQty}</div>`
+      ? `<div style="font-size:10px;font-weight:800;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.2);color:#00aaff;padding:3px 8px;border-radius:6px;display:inline-block;margin-bottom:6px;">🏷️ Bulk: KES ${Number(product.wholesalePrice).toLocaleString()} / min ${_escHtml(product.minWholesaleQty)}</div>`
       : "";
     const ownerVerifiedBadge = product.verificationStatus === "approved"
       ? `<div style="font-size:10px;font-weight:800;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);color:#71ff00;padding:3px 8px;border-radius:6px;display:inline-block;margin-bottom:4px;">✅ Verified Owner</div>`
@@ -1073,7 +1079,7 @@ function buildProductCard(product){
             <div class="product-img-wrap" data-emoji="${catEmoji[product.category]||'🛍️'}">
                 ${window.renderProductImage
                   ? renderProductImage({ src: img, alt: product.name, wrap: false, fallbackMode: 'css-hide', failClass: 'img-failed' })
-                  : `<img src="${img}" alt="${_escHtml(product.name)}" loading="lazy" decoding="async" onerror="this.style.display='none';this.parentNode.classList.add('img-failed')">`}
+                  : `<img src="${_escHtml(img)}" alt="${_escHtml(product.name)}" loading="lazy" decoding="async" onerror="this.style.display='none';this.parentNode.classList.add('img-failed')">`}
                 ${locTag}
                 ${_cardOfferBadge(product)}
                 ${nameOverlay}
@@ -2713,7 +2719,7 @@ function renderCompareBar(){
             <span class="cb-title">⇄ Compare (${compareList.length}/3)</span>
             ${compareList.map((p,i)=>`
                 <div class="cb-item">
-                    <img src="${p.image||'assets/default-product.png'}" onerror="this.src='assets/default-product.png'">
+                    <img src="${_escHtml(p.image||'assets/default-product.png')}" onerror="this.src='assets/default-product.png'">
                     <span>${_escHtml(p.name.substring(0,22))}${p.name.length>22?"…":""}</span>
                     <button data-compare-remove="${i}">✕</button>
                 </div>
@@ -2760,16 +2766,16 @@ function openCompareModal(){
     }
 
     const rows = [
-        { label:"Image",       fn: p => `<img src="${p.image||'assets/default-product.png'}" style="width:90px;height:90px;object-fit:cover;border-radius:12px;">` },
-        { label:"Name",        fn: p => `<strong>${p.name}</strong>` },
+        { label:"Image",       fn: p => `<img src="${_escHtml(p.image||'assets/default-product.png')}" style="width:90px;height:90px;object-fit:cover;border-radius:12px;">` },
+        { label:"Name",        fn: p => `<strong>${_escHtml(p.name)}</strong>` },
         { label:"Price",       fn: p => `<span style="color:#71ff00;font-weight:800;">KES ${Number(p.price).toLocaleString()}</span>` },
         { label:"Price Trend", fn: p => priceChangeBadge(p) || `<span style="color:rgba(255,255,255,0.3);">Stable</span>` },
-        { label:"Category",    fn: p => p.category||"—" },
-        { label:"Location",    fn: p => p.location||"—" },
-        { label:"Stock",       fn: p => p.stock!==undefined ? (p.outOfStock?"<span style='color:#ff4444'>Out of Stock</span>":p.stock+" units") : "—" },
-        { label:"Demand",      fn: p => p.wishlistCount ? `❤️ ${p.wishlistCount} wishlists` : "—" },
-        { label:"Description", fn: p => p.description||"—" },
-        { label:"KEBS",        fn: p => p.kebsCert ? `✅ ${p.kebsCert}` : "—" },
+        { label:"Category",    fn: p => _escHtml(p.category)||"—" },
+        { label:"Location",    fn: p => _escHtml(p.location)||"—" },
+        { label:"Stock",       fn: p => p.stock!==undefined ? (p.outOfStock?"<span style='color:#ff4444'>Out of Stock</span>":_escHtml(String(p.stock))+" units") : "—" },
+        { label:"Demand",      fn: p => p.wishlistCount ? `❤️ ${_escHtml(p.wishlistCount)} wishlists` : "—" },
+        { label:"Description", fn: p => _escHtml(p.description)||"—" },
+        { label:"KEBS",        fn: p => p.kebsCert ? `✅ ${_escHtml(p.kebsCert)}` : "—" },
     ];
 
     modal.innerHTML = `
@@ -2781,7 +2787,7 @@ function openCompareModal(){
                     <thead>
                         <tr>
                             <th>Feature</th>
-                            ${compareList.map(p=>`<th>${p.name.substring(0,20)}</th>`).join("")}
+                            ${compareList.map(p=>`<th>${_escHtml(String(p.name||"").substring(0,20))}</th>`).join("")}
                         </tr>
                     </thead>
                     <tbody>
@@ -3484,10 +3490,10 @@ function loadStoriesSection(){
             : "linear-gradient(135deg,#71ff00,#00aaff,#ff9800)";
 
         /* Inner display: photo thumbnail or colored initial */
-        const innerBg = s.bgGradient || "#111";
+        const innerBg = _safeCssBg(s.bgGradient, "#111");
         const thumb = (s.type==="photo" && s.media)
-            ? `<img src="${s.media}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
-            : `<div style="font-size:24px;line-height:1;">${s.emoji || initials}</div>`;
+            ? `<img src="${_escHtml(s.media)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
+            : `<div style="font-size:24px;line-height:1;">${_escHtml(s.emoji || initials)}</div>`;
 
         /* Premium crown badge */
         const crown = isPrem
@@ -3502,8 +3508,8 @@ function loadStoriesSection(){
                 </div>
                 ${crown}
             </div>
-            <div style="font-size:10px;color:${isPrem ? "#fbbf24" : "rgba(255,255,255,0.8)"};font-weight:700;max-width:72px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.sellerName.split(" ")[0]}</div>
-            <div style="font-size:9px;color:${isPrem ? "rgba(245,158,11,0.7)" : "rgba(113,255,0,0.6)"};">${allS.length>1 ? allS.length+" stories" : (isPrem ? "Premium" : s.type)}</div>
+            <div style="font-size:10px;color:${isPrem ? "#fbbf24" : "rgba(255,255,255,0.8)"};font-weight:700;max-width:72px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_escHtml(s.sellerName.split(" ")[0])}</div>
+            <div style="font-size:9px;color:${isPrem ? "rgba(245,158,11,0.7)" : "rgba(113,255,0,0.6)"};">${allS.length>1 ? allS.length+" stories" : (isPrem ? "Premium" : _escHtml(s.type))}</div>
         </div>`;
     }).join("");
 
@@ -4286,7 +4292,7 @@ function showCurrentStory(){
         /* Sanitize emoji: strip HTML tags, allow only printable non-tag chars */
         const safeEmoji = String(s.emoji||"📢").replace(/[<>"'&]/g, c => ({"<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;","&":"&amp;"}[c]));
         const bg = document.createElement("div");
-        bg.style.cssText = `position:absolute;inset:0;background:${s.bgGradient||"#111"};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;`;
+        bg.style.cssText = `position:absolute;inset:0;background:${_safeCssBg(s.bgGradient, "#111")};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;`;
         bg.innerHTML = `
             <div style="font-size:90px;line-height:1;filter:drop-shadow(0 0 32px ${accent}88);animation:promoEmojiFloat 3s ease-in-out infinite;">${safeEmoji}</div>
             <div style="font-size:13px;font-weight:900;color:${accent};letter-spacing:0.12em;text-transform:uppercase;opacity:0.8;">${s.premium?"⭐ Premium Story":"Promoted"}</div>
@@ -4313,7 +4319,7 @@ function showCurrentStory(){
                       transition:border-color .2s;" onmouseover="this.style.borderColor='rgba(113,255,0,0.6)'"
                onmouseout="this.style.borderColor='rgba(113,255,0,0.25)'"
                onclick="(function(el){try{viewStoryProduct(el.dataset.storyPid,JSON.parse(el.dataset.storySnap))}catch(e){}})(this)">
-            ${pimg ? `<img src="${pimg.replace(/"/g,"&quot;")}" alt="" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0;">` : '<div style="width:44px;height:44px;border-radius:8px;background:rgba(113,255,0,0.1);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">📦</div>'}
+            ${pimg ? `<img src="${_escHtml(pimg)}" alt="" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0;">` : '<div style="width:44px;height:44px;border-radius:8px;background:rgba(113,255,0,0.1);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">📦</div>'}
             <div style="flex:1;min-width:0;">
               <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;margin-bottom:2px;">Featured Product</div>
               <div style="font-size:13px;font-weight:800;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${ename}</div>
@@ -4323,8 +4329,8 @@ function showCurrentStory(){
           </div>`;
     } else if(s.ctaLink){
         const _rawLink = String(s.ctaLink).trim();
-        /* Allow relative (internal) and absolute links; block javascript: protocol */
-        const safeLink = /^javascript:/i.test(_rawLink) ? "#" : _rawLink.replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+        /* http(s) or a same-site path only (the URL parser decides the scheme — a prefix test missed java\tscript:) */
+        const safeLink = _escHtml(_safeHref(_rawLink) || "#");
         const label = (s.ctaLabel || "View Now").replace(/</g,"&lt;").replace(/>/g,"&gt;");
         /* Sanitize CSS color to prevent style-attribute injection */
         const _rawAccent = String(s.accentColor || "");

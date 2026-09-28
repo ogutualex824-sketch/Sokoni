@@ -1,3 +1,63 @@
+## [2026-09-28] - Stored XSS closed on the product surfaces: homepage, product page, category, seller page, store page, shared image resolver
+
+**Hosting, NOT deployed.** Branch `slice/c4-category-matrix`. This is slice 1 of the stored-XSS census across the
+category hubs. **The defects are LIVE:** the same sinks exist unchanged at `be7c676` (live hosting) and on `main`.
+
+**Why it matters:**
+- `products`, `stories`, `sellers` and reviews are publicly readable and written by sellers or buyers.
+- `localStorage.sellerProducts` holds OTHER sellers' products (the global catalogue is cached there).
+- So one seller's product name, location, image URL or KEBS number could run script in every buyer's browser.
+
+**Proven defects** (the real render code at `4e9607b`, fed hostile author fields, parsed by a real browser):
+
+| Surface | File | Raw fields |
+|---|---|---|
+| Shared image resolver | `sokoni-image.js` | `pick()` returned any value starting `http` or `/`, quotes included. Many callers splice it into `src="…"`. |
+| Homepage product card | `script.js` | location; KEBS number inside `title="…"`; bulk minimum quantity; image-src fallback |
+| Nearby sellers | `script.js` | name, location, category tag; the name inside an inline `onclick` |
+| Compare bar / modal | `script.js` | image, name, category, location, stock, description, KEBS |
+| Stories ring | `script.js` | media URL, emoji, seller name, background CSS, type |
+| Story link | `script.js` | the `javascript:` block only matched the literal prefix, so `&#106;avascript:` passed |
+| Product page | `product.js` | gallery / video sources, seller link, KEBS, bulk qty, **description**, and, **found by the probe beyond the census**, the ships-from location and delivery time |
+| "You may also like" | `product.js` | id in an inline handler, image, name |
+| Category grid | `category.js` | image fallback, shop-ring initials. The card and its cart / wishlist / buy buttons put an HTML-escaped id INSIDE an inline JS string, where entities decode back to quotes. |
+| Seller page | `seller-public.html` | location, product cards, sales-history rows, **buyer reviews** (name, comment, date, order, rating dimensions) |
+| Store page | `store.html` | product grid (both render paths), reviews, **business hours**, collection names, logo, fallback logo |
+
+**Changed** (no new helper; each page's existing escaper is reused):
+- `script.js`, via `_escHtml`:
+  - two small guards next to it: `_safeCssBg` (author CSS backgrounds limited to colours and gradients) and
+    `_safeHref` (http(s) or same-site only; the browser's URL parser decides the scheme).
+- `product.js` (`_esc`) and `category.js` (`_esc`); ids now reach handlers through `data-*` attributes.
+- `seller-public.html`: the canonical `escapeHTML` from `security.js`, which is loaded synchronously.
+- `store.html`: its existing `_esc`.
+- `sokoni-image.js`: `pick()` rejects values carrying `"` `'` `<` `>` or a backtick. No real URL or base64 data URI
+  contains them unencoded. One change covers every caller.
+
+**Tests:**
+- **The new probe library, `scripts/lib/xss-probe.js`:**
+  - The real code is extracted by balanced parsing and runs in a scope where unknown helpers are inert stubs.
+  - Hostile values are tagged per field. Chromium parses the output with JavaScript disabled.
+  - Executable contexts (on* handlers, `<script>`, `javascript:` URLs, injected elements) are reported with the
+    field that leaked.
+  - It is proven by `scripts/test-xss-probe-selftest.js` (7/0), including that an entity-escaped value inside an
+    inline JS string is still flagged.
+- **`scripts/test-xss-product-surfaces.js`: 15/0.** The counterproof on `4e9607b` fails 13. The two controls pass in
+  both modes: real URLs survive `pick()`, and a same-site story link is kept.
+- **Sabotage: 15/15 caught** across all six files, byte-identical restore.
+- The first run exposed two probe defects, both fixed:
+  - `tplAt` skipped a template whose opening backtick sat inside the anchor. That could have let a check pass
+    vacuously.
+  - A callable stub made a `typeof x === 'function'` branch replace the card.
+
+**Regression:** 22 screened suites are equal to the pristine `4e9607b` tree. Excluded before running (they default to the SHARED emulator port 8080, which another session was using): `test-cart-final` and `test-wishlist-category` / `-marketplace` / `-phase47`; these are UNPROVEN here. The cart suites' dirty-tree check flagged the then-uncommitted `sokoni-image.js` and was re-run after this commit (see the commit message).
+
+**Not in this slice (census follow-ups, own slices):** community, fitness, home-services, marketing, property, bnb
+(×3), unboxing, reviews, services / sokoni-social follow button, digital, business, minishop, legal, jobs,
+spotlight, and car-hub's Buy & Sell grid.
+
+**Security:** closes stored XSS on the highest-traffic buyer surfaces. **Data / API:** none. **Deploy:** hosting.
+
 ## [2026-09-28] - Profile page: every KASS / AI surface removed; KASS stays on home, services and every hub
 
 **Hosting, NOT deployed.** Branch `slice/c4-category-matrix`, on top of `8764a5f`. This answers the owner's decision

@@ -629,14 +629,14 @@ const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
   } else {
     gridEl.innerHTML = products.map(p=>{
       const wsTag = p.wholesalePrice
-        ? `<div class="st-wholesale-tag">🏷️ Bulk: KES ${Number(p.wholesalePrice).toLocaleString()} (min ${p.minWholesaleQty})</div>`
+        ? `<div class="st-wholesale-tag">🏷️ Bulk: KES ${Number(p.wholesalePrice).toLocaleString()} (min ${_esc(String(p.minWholesaleQty))})</div>`
         : "";
-      return `<a class="st-product-card" href="product.html?id=${p.id}">
+      return `<a class="st-product-card" href="product.html?id=${encodeURIComponent(p.id)}">
         ${window.renderProductImage
           ? renderProductImage({ product: p, alt: p.name, wrap: false })
-          : `<img src="${(window.pickProductImage?pickProductImage(p):p.image)||'assets/default-product.png'}" alt="${p.name}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/default-product.png'">`}
+          : `<img src="${_esc((window.pickProductImage?pickProductImage(p):p.image)||'assets/default-product.png')}" alt="${_esc(p.name)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/default-product.png'">`}
         <div class="st-product-info">
-          <div class="st-product-name">${p.name}</div>
+          <div class="st-product-name">${_esc(p.name)}</div>
           <div class="st-product-price">KES ${Number(p.price).toLocaleString()}</div>
           ${wsTag}
         </div>
@@ -665,24 +665,24 @@ const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
       ${ratings.slice(0,20).map(r=>{
         const rAvg = r.avgScore||r.stars||0;
         const dims = [
-          r.delivery     ? `🚚 ${r.delivery}`     : "",
-          r.responseTime ? `⚡ ${r.responseTime}` : "",
-          r.returns      ? `🔄 ${r.returns}`      : "",
-          r.satisfaction ? `😊 ${r.satisfaction}` : "",
+          r.delivery     ? `🚚 ${_esc(r.delivery)}`     : "",
+          r.responseTime ? `⚡ ${_esc(r.responseTime)}` : "",
+          r.returns      ? `🔄 ${_esc(r.returns)}`      : "",
+          r.satisfaction ? `😊 ${_esc(r.satisfaction)}` : "",
         ].filter(Boolean);
         return `<div class="st-review-card">
           <div class="st-review-top">
             <div class="st-reviewer">
-              <div class="st-reviewer-av">${(r.buyerName||"A")[0].toUpperCase()}</div>
+              <div class="st-reviewer-av">${_esc(String(r.buyerName||"A")[0].toUpperCase())}</div>
               <div>
-                <div class="st-reviewer-name">${r.buyerName||"Anonymous"}</div>
-                <div class="st-reviewer-meta">${r.date||""} · Order ${r.orderId||""}</div>
+                <div class="st-reviewer-name">${_esc(r.buyerName||"Anonymous")}</div>
+                <div class="st-reviewer-meta">${_esc(r.date||"")} · Order ${_esc(r.orderId||"")}</div>
               </div>
             </div>
             <div class="st-review-stars">${"★".repeat(Math.round(rAvg))}${"☆".repeat(5-Math.round(rAvg))} <span style="font-size:12px;color:rgba(255,255,255,0.4);">${rAvg}</span></div>
           </div>
           ${dims.length ? `<div class="st-review-dims">${dims.map(d=>`<span class="st-dim-badge">${d}</span>`).join("")}</div>` : ""}
-          ${r.comment ? `<div class="st-review-comment">"${r.comment}"</div>` : ""}
+          ${r.comment ? `<div class="st-review-comment">"${_esc(r.comment)}"</div>` : ""}
         </div>`;
       }).join("")}
     `;
@@ -839,7 +839,7 @@ function stRenderHours(shopData) {
       + '<span class="st-hour-day' + (isToday ? " today" : "") + '">'
       + dayNames[i].slice(0, 3) + pill
       + "</span>"
-      + '<span class="' + (isClosed ? "st-hour-closed" : "st-hour-time") + '">' + h + "</span>"
+      + '<span class="' + (isClosed ? "st-hour-closed" : "st-hour-time") + '">' + _esc(h) + "</span>"
       + "</div>";
   }).join("");
 }
@@ -912,15 +912,15 @@ function stRenderCollections(prods) {
         return '<div>'
           + '<div class="st-collection-hd">'
           + '<div class="st-collection-dot"></div>'
-          + '<span class="st-collection-name">' + cat + '</span>'
+          + '<span class="st-collection-name">' + _esc(cat) + '</span>'
           + '<span class="st-collection-count">' + byCat[cat].length + ' item' + (byCat[cat].length !== 1 ? 's' : '') + '</span>'
           + '</div>'
           + '<div class="st-collection-grid">'
           + items.map(function(p) {
               var img  = (window.pickProductImage ? pickProductImage(p) : p.image) || "assets/default-product.png";
-              var name = (p.name || "").replace(/</g, "&lt;");
-              return '<a class="st-product-card" href="product.html?id=' + p.id + '">'
-                + '<img src="' + img + '" alt="' + name + '" loading="lazy" onerror="this.src=\'assets/default-product.png\'">'
+              var name = _esc(p.name || "");
+              return '<a class="st-product-card" href="product.html?id=' + encodeURIComponent(p.id) + '">'
+                + '<img src="' + _esc(img) + '" alt="' + name + '" loading="lazy" onerror="this.src=\'assets/default-product.png\'">'
                 + '<div class="st-product-info">'
                 + '<div class="st-product-name">' + name + '</div>'
                 + '<div class="st-product-price">KES ' + Number(p.price || 0).toLocaleString() + '</div>'
@@ -972,7 +972,7 @@ async function _stLoadFirestore(uid) {
     }
     if (sd.logo || sd.logoUrl) {
       var lw = document.getElementById("stLogoWrap");
-      if (lw) lw.innerHTML = '<img src="' + (sd.logo || sd.logoUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;">';
+      if (lw) lw.innerHTML = '<img src="' + _esc(sd.logo || sd.logoUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;">';
     }
     /* ── Branch selection ──────────────────────────────────────────────
        store.html?id=<uid>&branch=<branchId> opens one branch as its own
@@ -1052,7 +1052,7 @@ async function _stLoadFirestore(uid) {
         var dlw = document.getElementById("stLogoWrap");
         var dimg = (window.pickProductImage ? pickProductImage(pd) : null) || pd.image || (Array.isArray(pd.images) ? pd.images[0] : null);
         if (dlw && dimg && !dlw.querySelector("img")) {
-          dlw.innerHTML = '<img src="' + dimg + '" alt="" style="width:100%;height:100%;object-fit:cover;">';
+          dlw.innerHTML = '<img src="' + _esc(dimg) + '" alt="" style="width:100%;height:100%;object-fit:cover;">';
         }
       }
 
@@ -1085,11 +1085,11 @@ async function _stLoadFirestore(uid) {
           grid.innerHTML = fsProds.map(function(p) {
             var ws = p.wholesalePrice
               ? '<div class="st-wholesale-tag">🏷️ Bulk: KES ' + Number(p.wholesalePrice).toLocaleString()
-                + ' (min ' + p.minWholesaleQty + ')</div>' : "";
-            return '<a class="st-product-card" href="product.html?id=' + p.id + '">'
-              + '<img src="' + (p.image || "assets/default-product.png") + '" alt="' + (p.name||"").replace(/</g,"&lt;") + '" loading="lazy">'
+                + ' (min ' + _esc(String(p.minWholesaleQty)) + ')</div>' : "";
+            return '<a class="st-product-card" href="product.html?id=' + encodeURIComponent(p.id) + '">'
+              + '<img src="' + _esc((window.pickProductImage && pickProductImage(p)) || p.image || "assets/default-product.png") + '" alt="' + _esc(p.name||"") + '" loading="lazy">'
               + '<div class="st-product-info">'
-              + '<div class="st-product-name">' + (p.name||"").replace(/</g,"&lt;") + '</div>'
+              + '<div class="st-product-name">' + _esc(p.name||"") + '</div>'
               + '<div class="st-product-price">KES ' + Number(p.price||0).toLocaleString() + '</div>'
               + ws + '</div></a>';
           }).join("");
