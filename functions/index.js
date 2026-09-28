@@ -12797,6 +12797,10 @@ exports.posCommissionCashCancel    = _posCommSettle.posCommissionCashCancel;    
 /* M0-4a — every 15 min: converges ABANDONED IntaSend commission attempts through the same confirm authority
    (proven → settled once; failed/never-sent → claims released; ambiguous → NEEDS_REVIEW). No wallet, no till gate. */
 exports.posCommissionAttemptSweep  = _posCommSettle.posCommissionAttemptSweep;
+/* M0-4-DR-R — admin-only BACKSTOP: a proven, completed, commission-bearing POS sale with no poscomm_<saleId> debt is
+   rebuilt from its own recorded facts through the DR-A builder (create-only), or recorded NEEDS_REVIEW. Dry-run by
+   default and then genuinely read-only; execute re-judges each sale inside its transaction. No wallet, no gate. */
+exports.reconcilePosSaleDebts      = require('./pos-debt-reconciliation').reconcilePosSaleDebts;
 
 /* ── HEALTHCARE SUBSCRIPTION ACTIVATION ───────────────────────────────────────
    A verified Healthcare subscription payment becomes an active subscription.

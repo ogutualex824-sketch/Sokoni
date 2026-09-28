@@ -47,6 +47,9 @@ function _saleIdFor(merchantId, idempotencyKey) {
   return 'ps_' + _crypto.createHash('sha256')
     .update(String(merchantId) + '|' + String(idempotencyKey)).digest('hex').slice(0, 40);
 }
+/* M0-4-DR-R proves a posRetailSales document is THIS writer's sale by re-deriving its id from its own stored facts —
+   through this function, never a copy of it. */
+exports._saleIdFor = _saleIdFor;
 
 /* ══ 0b R4 — A TILL SELLS ONLY ITS OWN PRODUCTS ═════════════════════════════════════════════
    Pricing and the stock deduction read `products/{id}` by id alone. Nothing compared the
@@ -242,6 +245,9 @@ function _posRailKeyFor(collectionRoute) {
     default:               return 'TILL_DIRECT';     /* merchant's own till   — owed  */
   }
 }
+/* M0-4-DR-R maps a sale's RECORDED route through this same mapper (after refusing any route it does not name, so the
+   default branch never decides a reconstructed debt). */
+exports._posRailKeyFor = _posRailKeyFor;
 
 /* Fetch merchant config from Firestore */
 async function _getMerchant(merchantId) {

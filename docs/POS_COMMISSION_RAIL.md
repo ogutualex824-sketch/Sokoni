@@ -3,6 +3,30 @@
 **Date:** 2026-09-07 · **Status:** BUILT AND TESTED, NOT DEPLOYED
 **Related:** [[Payments]] · [[SmartPOS]] · [[Orders]] · [[Marketplace]]
 
+## M0-4-DR-R — deterministic reconciliation, a BACKSTOP (2026-09-28)
+
+Since M0-4-DR-A a sale and its `poscomm_<saleId>` debt commit together. `functions/pos-debt-reconciliation.js` exists
+only for the residue: a **proven, completed, commission-bearing** sale that nevertheless has no debt. For ordinary sales
+it should find nothing. Design and evidence: [[POS-M0-4-DR-R-reconciliation]].
+
+- **`reconcilePosSaleDebts`** (onCall, SOKONI admin only; `store` = `posRetailSales` | `posSales`, page ≤ 100):
+  - `mode: 'dry_run'` (the default) evaluates and reports. It writes **nothing**.
+  - `mode: 'execute'` re-judges each sale **inside its transaction**. Only then does it create the debt and its ledger
+    projection through the DR-A builder (create-only, `createdAtMs` = reconciliation time), with ONE outcome record
+    in `posDebtReconciliation/poscomm_<saleId>`.
+- **A candidate is proven from the sale's own record**, never from the absence of a debt:
+  - the writer: the checkout's id re-derives from `merchantId` + `idempotencyKey`, or `recordPOSSale` has its M0-2 claim.
+    SmartPOS mirror sales are out of scope;
+  - `status: 'completed'`, with no void or refund;
+  - `soldAtMs`, the recorded route and gross;
+  - the rate era;
+  - an unambiguous business.
+- **Anything missing or ambiguous is `NEEDS_REVIEW`** with a reason code. Nothing is defaulted.
+- **Rate era:** `RATE_ERA` pins the rate table's fingerprint and a deployment boundary, **null until the deploying
+  commit fixes it**. Until then DR-R reconstructs nothing.
+- **Never:** prices, category configuration, payment status, collection, wallets, the till gate, an existing debt
+  altered.
+
 ## M0-3 — ONE settlement state machine for POS commission (2026-09-28)
 
 **Owner ruling.** A debt (`posCommissionLiabilities`, M0-1) is settled by exactly one authority, whatever the

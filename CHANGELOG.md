@@ -1,3 +1,59 @@
+## 2026-09-28 (172) — M0-4-DR-R: deterministic reconciliation of POS commission debts, a BACKSTOP (NOT deployed)
+
+**Why.** DR-A made a sale and its `poscomm_<saleId>` debt commit together. Records made before that, and exceptional
+states, can still hold a completed commission-bearing sale with no debt. DR-R repairs that residue **only** where every
+fact is proven from the sale's own record. It is not a second debt-writing path.
+
+- **Change:**
+  - **new `functions/pos-debt-reconciliation.js`**, the admin callable **`reconcilePosSaleDebts`** (exported by name in `functions/index.js`).
+    - **Candidate:** a *proven server sale*:
+      - the checkout's id re-derives from its own `merchantId` + `idempotencyKey`, or `recordPOSSale` has its M0-2 claim for
+        the same seller. SmartPOS mirror sales are out of scope;
+      - `completed`, with no void or refund (status or `posRefunds`);
+      - recorded `soldAtMs`, route and gross;
+      - inside the **rate era**;
+      - with an unambiguous business (the one resolver);
+      - with no debt, ledger row or legacy receivable.
+    - **Anything else:** `NEEDS_REVIEW` with a reason code. Nothing is defaulted, and `createdAt` is never used as a sale time.
+    - **`dry_run`** (the default) writes nothing.
+    - **`execute`** re-judges each sale inside its transaction. It then creates the debt and its projection through the DR-A
+      builder (create-only, `createdAtMs` = reconciliation time), plus one outcome record in `posDebtReconciliation`.
+  - **Rate era:** `RATE_ERA` pins the rate-table fingerprint (`460545db…`, flat 5%) and a deployment boundary.
+    The boundary is **null until the deployment commit sets it**, so DR-R reconstructs nothing before then.
+  - **`functions/pos-zero-friction.js`:** exports `_saleIdFor` and `_posRailKeyFor`, so DR-R uses the checkout's own
+    derivations (no copies). Its behaviour is unchanged.
+- **Files:**
+  - `functions/pos-debt-reconciliation.js` (new), `functions/pos-zero-friction.js`, `functions/index.js`;
+  - `scripts/test-m04dr-r-reconcile.js` (new);
+  - `docs/repairs/POS-M0-4-DR-R-reconciliation.md` (new), `docs/POS_COMMISSION_RAIL.md`, `docs/FINANCIAL_CORE_ARCHITECTURE.md`;
+  - `CHANGELOG.md`.
+- **Database:** a new `posDebtReconciliation/poscomm_<saleId>` outcome log. It is Admin SDK only; no client rule opens it
+  (default deny). There is no migration.
+- **API:** new `reconcilePosSaleDebts({store, mode?, after?, limit?})`, callable by SOKONI admins only.
+- **Security:**
+  - admin claim required; App Check enforced; `maxInstances: 1`;
+  - every input validated; the page is bounded (≤ 100);
+  - the era is never a caller input;
+  - no wallet, payment, collection or gate is touched, and an existing debt is never altered.
+- **Evidence:**
+  - `test-m04dr-r-reconcile` **35/0 new vs 0/35 old** (`91ac925`: no reconciler). It uses the real handlers; a residual is
+    a real sale with its debt removed.
+  - The production shape (5 historical sales, one with a legacy 3% receivable) gives **5 NEEDS_REVIEW, 0 reconstructed**.
+  - **Mutants: 25/25 caught.** Twenty-four turn their own check red. `claim-absent-accepted` is caught only because the mutated
+    build crashes on a sale with no claim; its seller variant is caught directly by R-3b.
+  - **The 112-suite floor** (old `91ac925` vs new) differs on two summary lines, and both are pre-existing flakes:
+    - `test-merchant-v2-ecosystem-runtime`;
+    - `certify-stk-narrative` F3-3, which is 3/3 green on rerun and has failed on old trees in earlier units.
+  - Registration, module-count and offset shifts follow from the one new export and module.
+  - The earlier units are all green (P0, M0-1..M0-4a, DR-A 16/0, R-48H, 0b, Q0, L-1, L-7..L-9A), as are the retirement
+    test (5/0), the gate tripwire (42/0), the rail (46/0) and the syntax gate.
+- **Not in this unit:**
+  - `sale.commission` vs the rail debt;
+  - the `recordPOSSale` replay fallbacks;
+  - SmartPOS / POS QR / C2B / Till QR convergence;
+  - M0-5 review resolution;
+  - FC-1 and M0-4b.
+
 ## 2026-09-28 (171) — M0-4-DR-A: a POS sale and its commission debt commit together, or not at all (NOT deployed)
 
 **Why.** Both server sale paths (`posCompleteCheckout`, `recordPOSSale`) wrote the POS commission debt **after** the sale
