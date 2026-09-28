@@ -1,3 +1,62 @@
+## [2026-09-28] - Mechanics directory: real listings only, no invented reputation, author fields escaped (step 4)
+
+> **Ported 2026-09-28 to `slice/c4-category-matrix` (cherry-pick of `be66157`; code applied cleanly, CHANGELOG
+> merged by hand).** It was found missing from the convergence line by the stored-XSS census. The pages here differ
+> from `be66157`'s (a different lineage), so its evidence was re-run on THIS branch, not assumed:
+> - `test-mechanics-directory` gives 9/0.
+> - The counterproof on `4e9607b` (this line's baseline) fails 8/9: all eight defects were present here too.
+> - Sabotage is 7/7 caught, with a byte-identical restore.
+>
+> Not covered by this commit: the car-hub **Buy & Sell** grid (`sellerProducts`, which holds other sellers' products)
+> renders unescaped. It is fixed in its own slice.
+
+**Hosting only, NOT deployed.** Branch `hotfix/verified-client-writers`, based on `be7c676`, the live lineage.
+
+**Proven production defects:** the real `be7c676` render functions were run against a DOM stub.
+- **`mechanics.html` fabricated its directory:**
+  - It carried `DEMO_MECHS`: 12 invented garages with 4.5–5.0 ratings, job counts, "✓ Verified" badges and dialable
+    phone numbers. With the demo flag on and no real listings, it listed 12 businesses that do not exist.
+  - Every real listing without a rating was shown as ★★★★★ "5.0", "0 jobs", "1 yrs exp". An author-written
+    `rating`/`jobs` (e.g. 999 jobs) was shown as fact.
+  - The header counts read "1+" / "2+".
+- **`car-hub.html`'s mechanics tab** gave every locally registered garage `rating:5.0, years:1`, and printed the
+  author's own rating/jobs (or `undefined`).
+- **STORED XSS on both pages.** The mechanics collection is publicly readable and self-registered, and both pages put
+  `name`, `area`, `bio`, `services`, `features` and `emoji` into `innerHTML` unescaped. They also spliced the listing
+  id into inline `onclick` JavaScript (`openBookMech('<id>')`). Any registrant could run script in every visitor's
+  session.
+- A listing with no `name` threw inside the search filter and blanked the directory.
+
+**Changed:**
+- **`mechanics.html`:**
+  - `DEMO_MECHS` is deleted (as `car-hub.html` already did); `_demoAllowed` stays for `DEMO_PARTS`.
+  - Cards show "No reviews yet": mechanics have NO server-derived reputation, so no stars, rating, job count or
+    default years. A business's own declared years of experience still show.
+  - Exact counts, with no "+".
+  - Every author field is escaped (`_mEsc`: text and attribute contexts, including `'`). The id travels via
+    `data-mech-id`, and the phone is digits-only in `tel:`.
+  - A defensive search filter.
+- **`car-hub.html`:**
+  - The local registration has no invented rating, years or jobs.
+  - The card and booking modal show "No reviews yet".
+  - Every author field is escaped (`_mechEsc`); the id travels via `data-mech-id`.
+  - A missing phone no longer throws in the booking modal.
+- **C3 discovery eligibility is unchanged:** the same Firestore documents are listed by the same queries. Only
+  invented entries and invented numbers are gone.
+
+**Tests:** `scripts/test-mechanics-directory.js` (the REAL functions from both pages, DOM stubbed) gives **9/0**.
+`COUNTERPROOF=1` on `be7c676` shows **8 defects**; the M7 declared-years control passes in both modes.
+
+**Sabotage:** 12/12, byte-identical restores.
+
+**Regression:** 3a 13/0, 3b 10/0, 3c 7/0, scanner 7/0.
+
+**Recorded, not changed:**
+- The mechanics card's Follow/Share buttons reference a global `m` at click time and are already broken on
+  production.
+- `DEMO_PARTS` (local development only) remains.
+- Mechanics have no review authority yet (C4–C9 capability matrix: reviews = NOT BUILT for mechanics on this line).
+
 ## [2026-09-28] - Approving or suspending a provider no longer creates an empty providerProfiles doc that can blank their search record
 
 **Functions, NOT deployed.** Branch `slice/c4-category-matrix` (convergence line). This closes the open item recorded

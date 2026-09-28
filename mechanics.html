@@ -433,71 +433,12 @@
 
 <script>
 /* """""""""""""""""""""""""""""""
-   DEMO MECHANICS / GARAGES
+   MECHANICS DIRECTORY — real listings only
 """"""""""""""""""""""""""""""" */
 var _demoAllowed=(function(){try{if(localStorage.getItem('sokoniDemoData')==='true')return true;}catch(e){}return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);})();
-const DEMO_MECHS = [
-  { id:"MCH001", name:"Kamau Auto Garage", type:"garage", spec:"general", emoji:"🔧",
-    location:"nairobi", area:"Industrial Area, Nairobi", phone:"0712001001", years:15,
-    rate:1500, services:["Engine overhaul","Brake pads","Oil change","Suspension","Gearbox"],
-    features:["diag","mpesa","warranty"], rating:4.9, jobs:432, verified:true,
-    bio:"15 years in Industrial Area. Specialists in Toyota, Nissan & Subaru. OBD diagnostics on site." },
-  { id:"MCH002", name:"Patrick Mobile Mechanic", type:"mobile", spec:"mobile", emoji:"🔧",
-    location:"nairobi", area:"Westlands / CBD", phone:"0723002002", years:8,
-    rate:1000, services:["Roadside repair","Battery jump-start","Tyre change","Oil top-up","AC regas"],
-    features:["mpesa","247"], rating:4.8, jobs:287, verified:true,
-    bio:"Come to you anywhere in Nairobi within 30 mins. 24/7 emergency callout. No callout fee within 15 km." },
-  { id:"MCH003", name:"Coast Auto Electricals", type:"electrician", spec:"electrical", emoji:"⚡",
-    location:"mombasa", area:"Changamwe, Mombasa", phone:"0734003003", years:12,
-    rate:1200, services:["ECU repair","Wiring","Alternator","Starter motor","Central locking","Alarm"],
-    features:["diag","mpesa","warranty"], rating:4.8, jobs:198, verified:true,
-    bio:"Mombasa's top auto electrician. All makes. ECU reprogramming, anti-theft systems, full electrical diagnostics." },
-  { id:"MCH004", name:"Precision Wheel & Tyre", type:"tyre", spec:"tyres", emoji:"🔄",
-    location:"nairobi", area:"Mombasa Road, Nairobi", phone:"0745004004", years:10,
-    rate:800, services:["Tyre fitting","Wheel balancing","Alignment","Nitrogen inflation","Puncture repair"],
-    features:["mpesa","warranty"], rating:4.7, jobs:876, verified:true,
-    bio:"All tyre brands. Same-day fitment. Digital wheel alignment. Truck tyres available." },
-  { id:"MCH005", name:"Pro Body & Paint Shop", type:"bodyshop", spec:"bodywork", emoji:"🎨",
-    location:"nairobi", area:"South C, Nairobi", phone:"0756005005", years:14,
-    rate:2000, services:["Panel beating","Spray paint","Denting","Chrome work","Rust treatment"],
-    features:["mpesa","warranty"], rating:4.8, jobs:156, verified:true,
-    bio:"Professional panel beating and spray painting. Insurance approved. All paint types including metallic." },
-  { id:"MCH006", name:"Kisumu Motors Garage", type:"garage", spec:"general", emoji:"🔧",
-    location:"kisumu", area:"Kondele, Kisumu", phone:"0767006006", years:9,
-    rate:1200, services:["General repair","Engine","Clutch","Brakes","Exhaust","AC service"],
-    features:["mpesa","diag"], rating:4.6, jobs:312, verified:true,
-    bio:"Kisumu's trusted garage since 2015. All Japanese and European makes. Quick turnaround guaranteed." },
-  { id:"MCH007", name:"4x4 Safari Mechanics", type:"garage", spec:"4x4", emoji:"🛻",
-    location:"nairobi", area:"Karen, Nairobi", phone:"0778007007", years:18,
-    rate:2500, services:["Land Cruiser","Prado","Defender","Lift kits","Diff locks","Winch install","Snorkels"],
-    features:["diag","mpesa","warranty","tow"], rating:5.0, jobs:203, verified:true,
-    bio:"Kenya's #1 4x4 and offroad specialist. Land Cruiser, Defender, Pajero, Ranger. Safari prep packages." },
-  { id:"MCH008", name:"Nakuru AC & Cooling", type:"garage", spec:"aircon", emoji:"❄️",
-    location:"nakuru", area:"Section 58, Nakuru", phone:"0789008008", years:7,
-    rate:1000, services:["AC gas recharge","Compressor repair","Radiator flush","Coolant","Fan motor"],
-    features:["mpesa","warranty"], rating:4.7, jobs:445, verified:false,
-    bio:"AC specialists for all vehicles. Radiator and cooling system experts. Quick 2-hour service." },
-  { id:"MCH009", name:"Thika Road Auto Centre", type:"dealer", spec:"diagnosis", emoji:"🔍",
-    location:"nairobi", area:"Roasters, Thika Rd", phone:"0700009009", years:11,
-    rate:2000, services:["Full diagnostics","Engine management","ABS","Airbags","Transmission ECU","DPF cleaning"],
-    features:["diag","mpesa","warranty"], rating:4.9, jobs:167, verified:true,
-    bio:"Advanced diagnostics for all makes. BMW, Mercedes, Audi, VW specialists. ADAS calibration." },
-  { id:"MCH010", name:"Eldoret Diesel Specialists", type:"garage", spec:"transmission", emoji:"⚙️",
-    location:"eldoret", area:"Langas, Eldoret", phone:"0711010010", years:16,
-    rate:2000, services:["Gearbox rebuild","Differential","Transfer case","Propshaft","Engine rebuild"],
-    features:["mpesa","warranty","tow"], rating:4.8, jobs:289, verified:true,
-    bio:"Diesel engine and gearbox specialists. Trucks, pickups, matatus. 16 years rebuilding gearboxes." },
-  { id:"MCH011", name:"Machakos Roadside Help", type:"mobile", spec:"mobile", emoji:"🔧",
-    location:"machakos", area:"Machakos Town", phone:"0722011011", years:5,
-    rate:800, services:["Puncture","Battery boost","Fuel delivery","Tow hookup","Emergency repair"],
-    features:["mpesa","247","tow"], rating:4.5, jobs:134, verified:false,
-    bio:"24/7 roadside assistance in Machakos and along Mombasa highway. 30-minute response time." },
-  { id:"MCH012", name:"Nairobi Gearbox Centre", type:"garage", spec:"transmission", emoji:"⚙️",
-    location:"nairobi", area:"Enterprise Road, Industrial Area", phone:"0733012012", years:20,
-    rate:2200, services:["Auto gearbox","Manual gearbox","Clutch kit","Flywheel","CV joints","Driveshaft"],
-    features:["diag","mpesa","warranty"], rating:4.9, jobs:521, verified:true,
-    bio:"20 years rebuilding automatic and manual gearboxes. All makes. 6-month warranty on rebuilt gearboxes." },
-];
+/* DEMO_MECHS (twelve invented garages with fabricated 4.5–5.0 ratings, job counts, "verified" badges and dialable
+   phone numbers) was deleted — the same decision car-hub.html made. The directory shows real listings only; an empty
+   list says so. _demoAllowed stays: DEMO_PARTS below still uses it (local development only). */
 
 const FEAT_LBL = { diag:"🔍 OBD Diag", mpesa:"💳 M-Pesa", warranty:"✅ Warranty", "247":"⏰ 24/7", tow:"🚗 Towing" };
 const TYPE_LBL  = { garage:"Garage", mobile:"Mobile Mechanic", bodyshop:"Body Shop", dealer:"Dealer Service", tyre:"Tyre Shop", electrician:"Auto Electrician" };
@@ -549,12 +490,13 @@ async function loadMechs(){
 
   const fsIds=new Set((_fsCache||[]).map(m=>m.id));
   let local=[]; try{local=JSON.parse(localStorage.getItem("sokoniMechanics"))||[];}catch(e){}
-  _all=[...(_fsCache||[]),...local.filter(m=>!fsIds.has(m.id)),...(_demoAllowed?DEMO_MECHS.filter(d=>!fsIds.has(d.id)&&!local.some(l=>l.id===d.id)):[])];
+  _all=[...(_fsCache||[]),...local.filter(m=>!fsIds.has(m.id))];
 
   const verified=_all.filter(m=>m.verified).length;
   const garages =_all.filter(m=>m.type==="garage"||m.type==="bodyshop"||m.type==="dealer"||m.type==="tyre"||m.type==="electrician").length;
   const s=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
-  s("statMechs",verified+"+"); s("statGarages",garages+"+");
+  /* exact counts of what is listed — a "+" implied more businesses than exist */
+  s("statMechs",String(verified)); s("statGarages",String(garages));
 
   applyFilters();
 }
@@ -566,9 +508,12 @@ function applyFilters(){
   const q=(document.getElementById("srchMech")?.value||"").toLowerCase().trim();
   const loc=document.getElementById("srchLoc")?.value||"";
   let list=[..._all];
-  if(_activeCat!=="all") list=list.filter(m=>m.spec===_activeCat||(m.services||[]).some(s=>s.toLowerCase().includes(_activeCat))||(m.type===_activeCat));
+  /* listings are author-controlled: a missing or non-string field must not throw and blank the whole directory */
+  const _lc=(v)=>String(v==null?"":v).toLowerCase();
+  const _svcs=(m)=>Array.isArray(m.services)?m.services:[];
+  if(_activeCat!=="all") list=list.filter(m=>m.spec===_activeCat||_svcs(m).some(s=>_lc(s).includes(_activeCat))||(m.type===_activeCat));
   if(loc) list=list.filter(m=>m.location===loc);
-  if(q) list=list.filter(m=>m.name.toLowerCase().includes(q)||(m.area||"").toLowerCase().includes(q)||(m.bio||"").toLowerCase().includes(q)||(m.services||[]).some(s=>s.toLowerCase().includes(q)));
+  if(q) list=list.filter(m=>_lc(m.name).includes(q)||_lc(m.area).includes(q)||_lc(m.bio).includes(q)||_svcs(m).some(s=>_lc(s).includes(q)));
   _filtered=list;
   const cnt=document.getElementById("mechCount"); if(cnt) cnt.textContent=`${list.length} found`;
   renderGrid();
@@ -592,29 +537,38 @@ function renderGrid(){
     grid.innerHTML=`<div class="mc-empty"><div style="font-size:48px;margin-bottom:14px;">🔧</div><p style="margin-bottom:14px;">No mechanics found for this filter.</p><button type="button" onclick="document.getElementById('srchMech').value='';document.getElementById('srchLoc').value='';filterMechs('all',document.querySelector('.mc-pill'))" style="padding:10px 20px;background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.25);color:#f97316;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;">Reset</button></div>`;
     return;
   }
+  /* Every field below is AUTHOR-CONTROLLED (mechanics is publicly readable and self-registered), so each one is
+     escaped — attribute contexts included — and the listing id reaches the handler through a data attribute, never
+     spliced into inline JavaScript.
+     No rating, job count or experience is invented: mechanics have no server-derived reputation yet, so a listing
+     shows "No reviews yet" rather than the old fallback of 5 stars / "5.0" / "1 yrs exp". A years-of-experience
+     figure the business itself declared is shown as the business's own statement. */
   grid.innerHTML=_filtered.map(m=>{
-    const stars="★".repeat(Math.round(m.rating||5))+"☆".repeat(5-Math.round(m.rating||5));
-    const feats=(m.features||[]).map(f=>`<span class="mc-service-tag ${f==="mpesa"?"cert":f==="warranty"?"cert":""}">${FEAT_LBL[f]||f}</span>`).join("");
-    const svcs=(m.services||[]).slice(0,4).map(s=>`<span class="mc-service-tag">${s}</span>`).join("");
+    const feats=(Array.isArray(m.features)?m.features:[]).map(f=>`<span class="mc-service-tag ${f==="mpesa"?"cert":f==="warranty"?"cert":""}">${_mEsc(FEAT_LBL[f]||f)}</span>`).join("");
+    const svcs=(Array.isArray(m.services)?m.services:[]).slice(0,4).map(s=>`<span class="mc-service-tag">${_mEsc(s)}</span>`).join("");
+    const bio=typeof m.bio==="string"?m.bio:"";
+    const years=Number(m.years)>0?Math.floor(Number(m.years)):0;
+    const loc=String(m.location||"Kenya");
+    const tel=String(m.phone||"").replace(/[^\d+]/g,"");
     return `<div class="mc-card">
       <div class="mc-card-top">
-        <div class="mc-avatar">${m.emoji||"🔧"}</div>
+        <div class="mc-avatar">${_mEsc(m.emoji||"🔧")}</div>
         <div style="flex:1;min-width:0;">
-          <div class="mc-name">${m.name} ${m.verified?`<span style="font-size:8px;background:rgba(113,255,0,0.1);color:#71ff00;padding:1px 5px;border-radius:3px;border:1px solid rgba(113,255,0,0.2);">✓ Verified</span>`:""}</div>
-          <div class="mc-type">${TYPE_LBL[m.type]||m.type}</div>
-          <div class="mc-loc">📍 ${m.area||m.location}</div>
+          <div class="mc-name">${_mEsc(m.name)} ${m.verified===true?`<span style="font-size:8px;background:rgba(113,255,0,0.1);color:#71ff00;padding:1px 5px;border-radius:3px;border:1px solid rgba(113,255,0,0.2);">✓ Verified</span>`:""}</div>
+          <div class="mc-type">${_mEsc(TYPE_LBL[m.type]||m.type)}</div>
+          <div class="mc-loc">📍 ${_mEsc(m.area||m.location)}</div>
         </div>
       </div>
-      <div class="mc-rating"><span class="stars">${stars}</span><span>${m.rating||"5.0"}</span><span></span><span>${m.jobs||0} jobs</span><span></span><span>${m.years||1} yrs exp</span></div>
+      <div class="mc-rating"><span>No reviews yet</span>${years?`<span></span><span>${years} yrs exp</span>`:""}</div>
       <div class="mc-services">${feats}${svcs}</div>
-      ${m.bio?`<div class="mc-bio">"${m.bio.substring(0,90)}${m.bio.length>90?"⬦":""}"</div>`:""}
+      ${bio?`<div class="mc-bio">"${_mEsc(bio.substring(0,90))}${bio.length>90?"⬦":""}"</div>`:""}
       <div class="mc-meta">
-        ${m.rate?`<span class="mc-meta-chip"> KES ${Number(m.rate).toLocaleString()}/hr</span>`:""}
-        <span class="mc-meta-chip">📍 ${(m.location||"Kenya").charAt(0).toUpperCase()+(m.location||"Kenya").slice(1)}</span>
+        ${Number(m.rate)>0?`<span class="mc-meta-chip"> KES ${Number(m.rate).toLocaleString()}/hr</span>`:""}
+        <span class="mc-meta-chip">📍 ${_mEsc(loc.charAt(0).toUpperCase()+loc.slice(1))}</span>
       </div>
       <div class="mc-actions">
-        <button type="button" class="mc-book-btn" onclick="openBookMech('${m.id}')">📅 Book Now</button>
-        ${m.phone?`<a href="tel:${m.phone}" class="mc-call-btn">📞</a>`:""}
+        <button type="button" class="mc-book-btn" data-mech-id="${_mEsc(m.id)}" onclick="openBookMech(this.dataset.mechId)">📅 Book Now</button>
+        ${tel?`<a href="tel:${_mEsc(tel)}" class="mc-call-btn">📞</a>`:""}
       <div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);"><button type="button" onclick="window.SokoniSocial&&SokoniSocial.toggleFollow('mech_'+(m.id||m.name),m.name||"Mechanic",this,'mechanic')" style="flex:1;padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">❤ Follow</button><button type="button" onclick="window.SokoniSocial&&SokoniSocial.openShareModal({id:'mech_'+m.id,name:m.name||"Mechanic",category:'Mechanic',type:'mechanic'})" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);border-radius:8px;font-size:12px;cursor:pointer;flex-shrink:0;">📣</button></div>
     </div>`;
   }).join("");
@@ -631,12 +585,12 @@ function openBookMech(id){
   document.getElementById("mechModalTitle").textContent=`Book  ${m.name}`;
   document.getElementById("mechModalBody").innerHTML=`
     <div style="display:flex;align-items:center;gap:12px;padding:12px;background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);border-radius:12px;margin-bottom:16px;">
-      <div style="font-size:36px;">${m.emoji||"x"}</div>
+      <div style="font-size:36px;">${_mEsc(m.emoji||"🔧")}</div>
       <div>
-        <div style="font-size:14px;font-weight:800;color:white;">${m.name}</div>
-        <div style="font-size:11px;color:#f97316;font-weight:700;">${TYPE_LBL[m.type]||m.type}</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);">📍 ${m.area||m.location}</div>
-        ${m.rate?`<div style="font-size:13px;font-weight:900;color:#f97316;margin-top:2px;">KES ${Number(m.rate).toLocaleString()}/hr</div>`:""}
+        <div style="font-size:14px;font-weight:800;color:white;">${_mEsc(m.name)}</div>
+        <div style="font-size:11px;color:#f97316;font-weight:700;">${_mEsc(TYPE_LBL[m.type]||m.type)}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">📍 ${_mEsc(m.area||m.location)}</div>
+        ${Number(m.rate)>0?`<div style="font-size:13px;font-weight:900;color:#f97316;margin-top:2px;">KES ${Number(m.rate).toLocaleString()}/hr</div>`:""}
       </div>
     </div>
     <label class="mc-label">Your Name *</label>
@@ -646,7 +600,7 @@ function openBookMech(id){
     <label class="mc-label">Job / Problem Description *</label>
     <select id="bkMService" class="mc-input">
       <option value="">-- Select service --</option>
-      ${(m.services||[]).map(s=>`<option value="${s}">${s}</option>`).join("")}
+      ${(Array.isArray(m.services)?m.services:[]).map(s=>`<option value="${_mEsc(s)}">${_mEsc(s)}</option>`).join("")}
       <option value="Other / Not listed">Other / Not listed</option>
     </select>
     <label class="mc-label">Describe the Problem</label>
@@ -806,6 +760,8 @@ function mechTimeAgo(ts) {
 function safeHtml(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+/* Escape for text AND quoted-attribute contexts (safeHtml leaves ' unescaped); null/undefined render as empty. */
+function _mEsc(v){ return v==null ? "" : safeHtml(v).replace(/'/g,"&#39;"); }
 
 function showMechToast(msg) {
   if(typeof window._sokoniToast==='function'){window._sokoniToast(msg,'warning',2800);return;}
