@@ -89,6 +89,7 @@ const SUITES = {
   disc:     ['node', ['scripts/test-discovery-index.js']],
   dir:      ['node', ['scripts/test-provider-directory.js']],
   ppa:      ['node', ['scripts/test-provider-publish-authority.js']],
+  casc:     ['node', ['scripts/test-discovery-cascade.js']],
 };
 const OPS = 'functions/event-ops.js';
 const SALES = 'functions/event-sales.js';
@@ -1452,6 +1453,36 @@ const M = [
     from: "  async function _listenProviders(hub) { return; }", to: "  async function _listenProviders(hub) { const db = _getDb(); const { collection, query, where, getDocs } = await import(FS_URL); await getDocs(query(collection(db, 'providers'), where('hub', '==', hub))); }", expect: /realtime\.js/ },
   { group: 'dir', browser: false, name: "the cleaning page cannot reach the directory (wrong op)", file: "sokoni-providers.js", suite: "inapp",
     from: "          var p = { op: 'providerDirectory' };", to: "          var p = { op: 'providerList' };", expect: /cleaner card|SOKONI chat/ },
+
+  /* ── C3b-1: an owner's public change reaches its profile and services (CHANGELOG 245) ── */
+  { group: 'casc', browser: false, name: "no owner change is ever detected", file: "functions/discovery-eligibility.js", suite: "casc",
+    from: "  if (b.eligible !== a.eligible) return true;", to: "  if (b.eligible !== a.eligible) return false;", expect: /suspended \/ pending|approval \/ reinstatement|DELETE|UPSERT/ },
+  { group: 'casc', browser: false, name: "a reclassification while eligible is not a change", file: "functions/discovery-eligibility.js", suite: "casc",
+    from: "  return a.eligible && b.category !== a.category;      /* both hidden → nothing indexed either way */", to: "  return false;", expect: /reclassified while eligible|NEW category/ },
+  { group: 'casc', browser: false, name: "every provider write cascades (write amplification)", file: "functions/discovery-eligibility.js", suite: "casc",
+    from: "  if (!discoveryChanged(before, after)) return null;", to: "", expect: /content edit|unchanged owner|created PENDING/ },
+  { group: 'casc', browser: false, name: "the cascade decides DELETE itself instead of the gate (a second definition)", file: "functions/discovery-eligibility.js", suite: "casc",
+    from: "          enqueue({ collection: 'providerServices', docId: d.id, operation: 'upsert', data: d.data() })));", to: "          enqueue({ collection: 'providerServices', docId: d.id, operation: 'delete', data: null })));", expect: /reinstatement|UPSERT under|NEW category|created ALREADY eligible/ },
+  { group: 'casc', browser: false, name: "services owned through `uid` are missed", file: "functions/discovery-eligibility.js", suite: "casc",
+    from: "  for (const field of ['providerId', 'uid']) {", to: "  for (const field of ['providerId']) {", expect: /both owner fields|EVERY service|DELETE/ },
+  { group: 'casc', browser: false, name: "only the first page of services is re-queued", file: "functions/discovery-eligibility.js", suite: "casc",
+    from: "      if (out.truncated || snap.size < o.page) break;", to: "      break;", expect: /paging/ },
+  { group: 'casc', browser: false, name: "the per-change cap is removed", file: "functions/discovery-eligibility.js", suite: "casc",
+    from: "        if (seen.size >= o.max) { out.truncated = true; break; }", to: "", expect: /TRUNCATES/ },
+  { group: 'casc', browser: false, name: "the profile is not re-queued", file: "functions/discovery-eligibility.js", suite: "casc",
+    from: "  if (prof.exists) { await enqueue({ collection: 'providerProfiles', docId: uid, operation: 'upsert', data: prof.data() }); out.profiles = 1; }", to: "", expect: /DELETE|UPSERT|re-indexed|paging/ },
+  { group: 'casc', browser: false, name: "a cascade failure is thrown into the provider sync", file: "functions/discovery-eligibility.js", suite: "casc",
+    from: "    return { error: (e && e.message) || String(e) };", to: "    throw e;", expect: /REPORTED/ },
+  { group: 'casc', browser: false, name: "the Algolia update trigger does not cascade", file: "functions/algolia-sync.js", suite: "casc",
+    from: "        await _cascade(col, docId, event.data?.before?.data() || null, event.data?.after?.data() || null);", to: "", expect: /Algolia: profile|BOTH engines|UPSERT under|re-indexed|DELETE/ },
+  { group: 'casc', browser: false, name: "the Algolia delete trigger does not cascade", file: "functions/algolia-sync.js", suite: "casc",
+    from: "        await _cascade(col, docId, event.data?.data() || null, null);", to: "", expect: /provider deleted/ },
+  { group: 'casc', browser: false, name: "the Algolia create trigger does not cascade", file: "functions/algolia-sync.js", suite: "casc",
+    from: "        await _cascade(col, docId, null, data || null);", to: "", expect: /created ALREADY eligible/ },
+  { group: 'casc', browser: false, name: "the Typesense update trigger does not cascade", file: "functions/typesense-sync.js", suite: "casc",
+    from: "      await _cascade(col, event.params.docId, before || null, after || null);", to: "", expect: /BOTH engines/ },
+  { group: 'casc', browser: false, name: "publishing mirrors a status-only reading again", file: "functions/provider-onboarding.js", suite: "ppa",
+    from: "    searchable: require('./business-category').publicEligibility(_regCur).eligible,", to: "    searchable: _regSnap.exists && ['active', 'approved'].includes(_regCur.status),", expect: /G1|G2|searchable anchor/ },
 ];
 
 const argv = process.argv.slice(2);

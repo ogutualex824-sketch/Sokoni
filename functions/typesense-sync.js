@@ -79,6 +79,15 @@ function _updateDecision(before, after, collection) {
 
 const _CF_OPTS = { memory: '256MiB', timeoutSeconds: 30 };
 
+/* C3b-1 (CHANGELOG 245): a provider's public change (eligibility / C1 category) re-queues its profile and services
+   through THIS engine's gated enqueue — discovery-eligibility.cascadeOwnerChange; a no-op for every other collection
+   (and for any dependent collection this engine does not map: enqueue ignores it). */
+function _cascade(col, docId, before, after) {
+  if (col !== 'providers') return null;
+  return require('./discovery-eligibility').cascadeOwnerChange(
+    require('firebase-admin/firestore').getFirestore(), docId, before, after, enqueue, 'typesense');
+}
+
 function _makeTriggers(firestoreCollection, opts = {}) {
   const col         = firestoreCollection;
   const safeKey     = col.replace(/-/g, '_');
@@ -89,8 +98,8 @@ function _makeTriggers(firestoreCollection, opts = {}) {
     { document: `${col}/{docId}`, ..._CF_OPTS },
     async event => {
       const data = event.data?.data();
-      if (!data || _shouldSkip(data, col)) return;
-      await enqueue({ collection: col, docId: event.params.docId, operation: 'upsert', data, priority });
+      if (data && !_shouldSkip(data, col)) await enqueue({ collection: col, docId: event.params.docId, operation: 'upsert', data, priority });
+      await _cascade(col, event.params.docId, null, data || null);
     }
   );
 
@@ -100,15 +109,17 @@ function _makeTriggers(firestoreCollection, opts = {}) {
       const before = event.data?.before?.data();
       const after  = event.data?.after?.data();
       const decision = _updateDecision(before, after, col);
-      if (decision === 'ignore') return;
-      await enqueue({
-        collection: col,
-        docId:      event.params.docId,
-        operation:  decision,
-        data:       decision === 'delete' ? null : after,
-        beforeData: before,
-        priority,
-      });
+      if (decision !== 'ignore') {
+        await enqueue({
+          collection: col,
+          docId:      event.params.docId,
+          operation:  decision,
+          data:       decision === 'delete' ? null : after,
+          beforeData: before,
+          priority,
+        });
+      }
+      await _cascade(col, event.params.docId, before || null, after || null);
     }
   );
 
@@ -116,6 +127,7 @@ function _makeTriggers(firestoreCollection, opts = {}) {
     { document: `${col}/{docId}`, ..._CF_OPTS },
     async event => {
       await enqueue({ collection: col, docId: event.params.docId, operation: 'delete', priority });
+      await _cascade(col, event.params.docId, event.data?.data() || null, null);
     }
   );
 

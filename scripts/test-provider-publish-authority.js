@@ -137,7 +137,11 @@ function prefixSource() {
     available:   true,`;
   if (!s.includes(stateNow)) throw new Error('state-field anchor not found — refusing to guess');
   s = s.replace(stateNow, stateWas);
-  s = s.replace('    searchable: approved,', '    searchable: true,');
+  /* CHANGELOG 245 (C3b-1): the mirror is now the ONE predicate. Guarded like its siblings — an unguarded replace
+     silently no-ops when the anchor moves, and the counterproof then reconstructs a source that was never vulnerable. */
+  const searchableNow = `    searchable: require('./business-category').publicEligibility(_regCur).eligible,`;
+  if (!s.includes(searchableNow)) throw new Error('searchable anchor not found — refusing to guess');
+  s = s.replace(searchableNow, '    searchable: true,');
   const claimNow = `  if (approved) {
     await _auth().setCustomUserClaims(uid, { ...(await _auth().getUser(uid)).customClaims, provider: true, providerId });
   }`;
@@ -177,7 +181,9 @@ function load(sourceOverride) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pub-'));
     file = path.join(dir, 'provider-onboarding.js');
     fs.writeFileSync(file, sourceOverride);
-    for (const sib of ['legal-agreements', 'availability', 'notify']) {
+    /* provider-directory (CHANGELOG 244) / business-category: required by the current source; without the forward the
+       counterproof CRASHED (MODULE_NOT_FOUND) — a crash is not the defect the counterproof is meant to exhibit. */
+    for (const sib of ['legal-agreements', 'availability', 'notify', 'provider-directory', 'business-category']) {
       fs.writeFileSync(path.join(dir, sib + '.js'),
         `module.exports = require(${JSON.stringify(path.join(FUNCTIONS_DIR, sib + '.js'))});`);
     }
@@ -307,6 +313,24 @@ const minted = () => ENV.log.filter((e) => e.op === 'MINT_CLAIM');
   try { const r = await OPS.providerGetPublicProfile({ data: { providerId: 'PRV-OK01' } }); pub = r && r.category === 'trades' ? 'RETURNED' : 'WRONG_CATEGORY'; }
   catch (e) { pub = e.code || 'threw'; }
   ck('E2  ...and an approved, classified one still is — under the SERVER category', pub === 'RETURNED', pub);
+
+  /* ═══ G — CHANGELOG 245 (C3b-1): publishing mirrors the ONE eligibility predicate, never a status-only reading ═══ */
+  console.log('\nG. providerPublish mirrors publicEligibility');
+  ENV = seedFor(OK_P, { uid: OK_P, providerId: 'PRV-OK01', status: 'active' });   /* approved, NOT classified */
+  await publish(OK_P);
+  ck('G1  an approved but UNCLASSIFIED provider publishes NOT searchable (a status-only mirror said true)',
+    ENV.data[`providerProfiles/${OK_P}`].searchable === false, String(ENV.data[`providerProfiles/${OK_P}`].searchable));
+  ENV.data[`providers/${OK_P}`].business = { category: 'trades', source: 'application', lane: { hub: 'provider', entClass: null } };
+  ENV.data[`providers/${OK_P}`].isPublic = false;
+  await publish(OK_P);
+  ck('G2  ...classified but hidden (isPublic:false) → still NOT searchable',
+    ENV.data[`providerProfiles/${OK_P}`].searchable === false, String(ENV.data[`providerProfiles/${OK_P}`].searchable));
+  delete ENV.data[`providers/${OK_P}`].isPublic;
+  await publish(OK_P);
+  ck('G3  ...approved, classified and public → searchable (the positive control)',
+    ENV.data[`providerProfiles/${OK_P}`].searchable === true, String(ENV.data[`providerProfiles/${OK_P}`].searchable));
+  ck('G4  ...and publishing wrote NO public state onto the canonical record (the lifecycle owns it)',
+    ENV.data[`providers/${OK_P}`].status === 'active' && ENV.data[`providers/${OK_P}`].business.category === 'trades');
 
   /* ═══ F — scope ═══ */
   console.log('\nF. scope');

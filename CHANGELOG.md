@@ -1,3 +1,89 @@
+## 2026-09-28 (245) — C3b-1: an owner's public change reaches its profile and services in search
+
+Convergence slice C3b-1. Not deployed. No production writes. No index was touched, and the existing-index cleanup
+(C3b-2) is NOT part of this slice. Parent: `1b07fec` (C3a-2).
+
+**Before:** a provider's profile (`providerProfiles/{uid}`) and services (`providerServices`) are gated on the OWNER's
+eligibility and indexed under the OWNER's C1 category (C3a-1). But they were re-evaluated only when a search trigger
+fired for THEM. Suspending, inactivating, hiding or reclassifying a provider therefore re-queued the provider document
+alone. Its profile and services stayed searchable, under the old category, until each happened to be edited.
+Separately, `providerPublish` mirrored `providerProfiles.searchable` from a status-only reading of the registry, a
+second definition of public eligibility.
+
+**Now:**
+- **`discovery-eligibility.js`** (the C3a-1 gate module) gains the cascade:
+  - `discoveryChanged(before, after)` is true when the owner's eligibility flipped, or when its C1 category changed
+    while eligible. A content edit is not a change, so there is no write amplification.
+  - `requeueDependents` re-queues `providerProfiles/{uid}` and every `providerServices` owned through `providerId` or
+    `uid`, as UPSERTS, through one engine's own gated `enqueue`. It pages by 100, caps at 500 per change, and reports a
+    truncation.
+  - `cascadeOwnerChange` is the fail-soft entry point: an error is logged, never thrown into the provider's own sync.
+- **The cascade never decides delete versus index.** The queue's own gate (`prepareForIndex`) does: eligible means
+  indexed under the owner's current category; ineligible means DELETE. There is no second definition.
+- **Wired into both engines' EXISTING `providers` triggers** (create / update / delete), after the provider's own
+  enqueue. No new Cloud Function. Algolia maps both dependents. Typesense maps neither, so its cascade enqueues nothing
+  today, but the wiring is proven and it follows if Typesense ever maps them.
+- **Idempotent.** Both queues key an entry by `collection_docId`, so a repeated change overwrites and never duplicates.
+- **`providerPublish`** mirrors `providerProfiles.searchable` from `business-category.publicEligibility`.
+  - An approved-but-UNCLASSIFIED or hidden provider no longer publishes as searchable. No public surface reads the
+    mirror since C3a.
+  - Unchanged, by decision: `providerProfiles.status:'active'` is the ONBOARDING state ("draft published"), which
+    application-lifecycle deliberately does not overwrite. No public path trusts it: the C3a-1 gate and the C3a-2
+    directory decide from `providers/{uid}`.
+  - Also unchanged: the `approved` provider-claim mint, which is account authority, not discovery.
+
+**Test integrity repaired in `test-provider-publish-authority`:**
+- Its counterproof's `searchable` anchor was the one UNGUARDED replace in `prefixSource()`. When the line changed it
+  silently no-oped, so the "pre-fix" source would not have been vulnerable. It is now guarded like its siblings, and the
+  counterproof fails on the genuine pre-fix defects (A2–A7, B1, D2–D5).
+- The counterproof also CRASHED on E2 (`MODULE_NOT_FOUND`: `provider-directory` was not forwarded into its temp
+  directory since C3a-2). A crash is not the defect, so the module is now forwarded.
+
+**Tests:**
+- `scripts/test-discovery-cascade.js`: **24/0**. It runs the REAL `providers` trigger handlers of both engines, the REAL
+  gated queues and the REAL gate, covering:
+  - suspension, inactivation, `searchable`, `isPublic`, reinstatement, reclassification, delete, create-eligible and
+    create-pending;
+  - no cascade on a content edit;
+  - paging, the cap, idempotency and fail-soft.
+- `test-provider-publish-authority`: 32/0 (+G1–G4). The counterproof fails on the pre-fix defects only.
+
+**Sabotage `--group=casc` (14 attacks: `casc` / `ppa`):**
+- **14/14 CAUGHT** (0 other, 0 missed, 0 crashed), with post-restore green.
+- It ran under the external supervisor: 4/4 targets byte-identical, 0 restores needed.
+- **The first run was 13 caught + 1 CRASHED.** "A cascade failure is thrown into the provider sync" made the suite's
+  unguarded direct call throw, which crashed the suite rather than failing a check. A crash is not a catch. The check now
+  records a throw as an explicit FAIL, and the full group was re-run.
+
+**Baseline (80 suites vs `1b07fec`):** 78 SAME, 2 DIFF.
+- `test-discovery-cascade`: new.
+- `test-cart-market-actions`: only its `git diff HEAD` blast-radius check fails, while the tree is uncommitted.
+  Re-verified on the committed tree.
+- Count changes on SAME suites: `test-provider-publish-authority` 28 → 32 (G1–G4). `test-stk-single-flight` differs
+  in a timing value only.
+- Pre-existing and unchanged in both trees: `test-secondary-firebase-apps` (8/1), `test-realtime-multidevice` (68/1).
+- The jest-excluded `functions/test/algolia-sync.test.js` was forced in both trees: 138 ✓ / 0 ✕ in each, with the same
+  pre-existing teardown report.
+
+**C3 follow-ups carried forward UNCHANGED (not absorbed):**
+1. `providers` record exposure (phone).
+2. The legacy-registry browser fallback.
+3. The legacy localStorage hub lists.
+
+Still separate (booking UX, not C3): the `providers.html` false "Booking confirmed!".
+
+**Files:**
+- New: `scripts/test-discovery-cascade.js`.
+- Changed:
+  - `functions/discovery-eligibility.js`, `functions/algolia-sync.js`, `functions/typesense-sync.js`,
+    `functions/provider-onboarding.js`;
+  - `scripts/test-provider-publish-authority.js`, `scripts/sabotage-event-ops.js`;
+  - `docs/BUSINESS_CATEGORY_AUTHORITY.md`.
+
+**API:** none. **Database:** none. **Security:** a suspended, hidden or unclassified provider's profile and services
+leave search with it. **Breaking:** none. **Deploy:** the `algoliaSync_providers_*` and `ts_providers_*` triggers, plus
+`providerDispatch` (for `providerPublish`), together, when authorized.
+
 ## 2026-09-28 (244) — C3a-2: ONE public provider directory — the server decides who is listed, and under which category
 
 Convergence slice C3a-2. Not deployed. No production writes. No index was touched. Parent: `d93fc01` (C3a-1).

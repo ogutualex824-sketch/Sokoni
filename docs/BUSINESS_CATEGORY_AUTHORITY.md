@@ -124,6 +124,26 @@ decision 2026-09-28). Its dashboard keeps working (C2).
 | Search fallback (`sokoni-firestore-search.js`, providers) | the directory (`remote` spec) | C3a-2 |
 | `providerSearchProviders`, `providerGetPublicProfile` | the directory (`listDirectory` / `cardIfEligible`) | C3a-2 |
 | `healthcareDirectory` | `publicEligibility`, restricted to a healthcare category that agrees with the healthcare authority | C3a-2 |
+| An owner's public change → its profile + services (both engines' `providers` triggers) | `discovery-eligibility.cascadeOwnerChange`: re-queues dependents as upserts; the queue's gate decides delete vs index | C3b-1 (CHANGELOG 245) |
+| `providerPublish` → `providerProfiles.searchable` | mirrors `publicEligibility` (no longer a status-only reading); `status:'active'` there is the onboarding state | C3b-1 |
+
+**The C3b-1 invariant:**
+
+```
+authoritative provider change (approval · suspension · inactivation · searchable · isPublic · reclassification · delete)
+        ↓  discoveryChanged(before, after) — eligibility flipped, or the C1 category changed while eligible
+requeue providerProfiles/{uid} + every providerServices (providerId or uid) as UPSERT
+        ↓  the SAME gated enqueue (prepareForIndex)
+eligible → indexed under the owner's current category        ineligible → DELETE
+```
+
+- **No second definition.** The cascade never decides delete versus index; it only re-queues.
+- **Idempotent.** Queue entries are keyed `collection_docId`.
+- **Bounded.** Pages of 100, at most 500 services per change. A truncation is logged, and C3b-2 covers the rest.
+- **Fail-soft.** A cascade error is logged and never fails the provider's own sync.
+- **Cheap.** A content edit does not cascade.
+- **Engines.** Typesense maps neither dependent, so its cascade enqueues nothing today. It is still wired, so it follows
+  if Typesense ever maps them.
 
 **Retired browser paths (C3a-2):**
 
@@ -139,7 +159,7 @@ merchant search architecture.
 
 **Next:**
 
-- C3b-1: a flip in a provider's eligibility or category re-queues its services and profile.
+- ~~C3b-1: a flip in a provider's eligibility or category re-queues its services and profile.~~ Done (CHANGELOG 245).
 - C3b-2: a batched, resumable, dry-run cleanup of records already in the indexes, which is NOT run.
 
 **Open (reported):**

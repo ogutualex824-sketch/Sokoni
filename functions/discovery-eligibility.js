@@ -73,4 +73,86 @@ async function prepareForIndex(db, collection, docId, data, cache) {
   });
 }
 
-module.exports = { prepareForIndex, ownerOf, PROVIDER_SCOPED, DEINDEXED };
+/* ── C3b-1 (CHANGELOG 245): an OWNER's public change reaches its dependents ──────────────────────────────────────
+   A provider's profile and services are gated on the OWNER's eligibility and indexed under the OWNER's category, but
+   they are re-evaluated only when a search trigger fires for THEM. Without this, suspending, hiding or reclassifying a
+   provider re-indexed the provider document alone and left its profile and services in search, under the old category.
+
+   The cascade adds NO second definition: it only re-queues the dependents as upserts, and the queue's own gate
+   (prepareForIndex above) decides — eligible → indexed under the owner's current category, ineligible → DELETE. */
+
+const _NONE = Object.freeze({ eligible: false, category: null });
+
+/** Did the owner's PUBLIC state change — eligibility, or the C1 category while eligible? (null/absent = not public) */
+function discoveryChanged(before, after) {
+  const b = before ? BCAT.publicEligibility(before) : _NONE;
+  const a = after ? BCAT.publicEligibility(after) : _NONE;
+  if (b.eligible !== a.eligible) return true;
+  return a.eligible && b.category !== a.category;      /* both hidden → nothing indexed either way */
+}
+
+const DEPENDENT_PAGE = 100;   /* per query page */
+const DEPENDENT_MAX = 500;    /* per owner change — bounded; a truncation is reported, and the C3b-2 cleanup covers it */
+const DEPENDENT_CONCURRENCY = 20;
+
+/**
+ * Re-queue an owner's profile and services through `enqueue` (the SAME gated enqueue of one engine's queue). Idempotent:
+ * both queues key an entry by `${collection}_${docId}`, so a repeat overwrites rather than duplicates.
+ * @returns {Promise<{profiles:number, services:number, truncated:boolean}>}
+ */
+async function requeueDependents(db, uid, enqueue, opts) {
+  const o = Object.assign({ page: DEPENDENT_PAGE, max: DEPENDENT_MAX }, opts || {});
+  const out = { profiles: 0, services: 0, truncated: false };
+  uid = String(uid || '');
+  if (!uid || /[/]/.test(uid)) return out;
+
+  const prof = await db.collection('providerProfiles').doc(uid).get();
+  if (prof.exists) { await enqueue({ collection: 'providerProfiles', docId: uid, operation: 'upsert', data: prof.data() }); out.profiles = 1; }
+
+  /* ownerOf reads providerId || uid — page both, de-duplicated */
+  const docId = require('firebase-admin').firestore.FieldPath.documentId();
+  const seen = new Set();
+  for (const field of ['providerId', 'uid']) {
+    let last = null;
+    for (;;) {
+      let q = db.collection('providerServices').where(field, '==', uid).orderBy(docId).limit(o.page);
+      if (last) q = q.startAfter(last);
+      const snap = await q.get();
+      const batch = [];
+      for (const d of snap.docs) {
+        if (seen.has(d.id)) continue;
+        if (seen.size >= o.max) { out.truncated = true; break; }
+        seen.add(d.id); batch.push(d);
+      }
+      for (let i = 0; i < batch.length; i += DEPENDENT_CONCURRENCY) {
+        await Promise.all(batch.slice(i, i + DEPENDENT_CONCURRENCY).map((d) =>
+          enqueue({ collection: 'providerServices', docId: d.id, operation: 'upsert', data: d.data() })));
+      }
+      out.services += batch.length;
+      if (out.truncated || snap.size < o.page) break;
+      last = snap.docs[snap.docs.length - 1];
+    }
+    if (out.truncated) break;
+  }
+  return out;
+}
+
+/**
+ * The one cascade entry point both engines' `providers` triggers call AFTER enqueuing the provider itself.
+ * Never throws: a cascade failure is logged and must not fail (or retry-storm) the provider's own sync.
+ */
+async function cascadeOwnerChange(db, uid, before, after, enqueue, engine) {
+  if (!discoveryChanged(before, after)) return null;
+  try {
+    const r = await requeueDependents(db, uid, enqueue);
+    const log = require('firebase-functions/logger');
+    (r.truncated ? log.warn : log.info)('[discovery] owner change re-queued dependents', { engine, uid, ...r });
+    return r;
+  } catch (e) {
+    try { require('firebase-functions/logger').error('[discovery] dependent re-queue failed', { engine, uid, error: e && e.message }); } catch (_) { /* logger unavailable */ }
+    return { error: (e && e.message) || String(e) };
+  }
+}
+
+module.exports = { prepareForIndex, ownerOf, PROVIDER_SCOPED, DEINDEXED,
+  discoveryChanged, requeueDependents, cascadeOwnerChange, DEPENDENT_MAX };

@@ -56,6 +56,14 @@ function _shouldSkipAfterUpdate(before, after, collection) {
  * @param {string} col   - Firestore collection name
  * @param {object} opts  - { skipDraft: bool }
  */
+/* C3b-1 (CHANGELOG 245): a provider's public change (eligibility / C1 category) re-queues its profile and services
+   through THIS engine's gated enqueue — discovery-eligibility.cascadeOwnerChange; a no-op for every other collection. */
+function _cascade(col, docId, before, after) {
+  if (col !== 'providers') return null;
+  return require('./discovery-eligibility').cascadeOwnerChange(
+    require('firebase-admin/firestore').getFirestore(), docId, before, after, enqueue, 'algolia');
+}
+
 function _makeTriggers(col, { skipDraft = true } = {}) {
   return {
 
@@ -64,8 +72,8 @@ function _makeTriggers(col, { skipDraft = true } = {}) {
       async (event) => {
         const data  = event.data?.data();
         const docId = event.params.docId;
-        if (!data || (skipDraft && _shouldSkip(data, col))) return;
-        await enqueue({ collection: col, docId, operation: 'upsert', data });
+        if (data && !(skipDraft && _shouldSkip(data, col))) await enqueue({ collection: col, docId, operation: 'upsert', data });
+        await _cascade(col, docId, null, data || null);
       }
     ),
 
@@ -77,19 +85,18 @@ function _makeTriggers(col, { skipDraft = true } = {}) {
         const docId  = event.params.docId;
         const action = _shouldSkipAfterUpdate(before, after, col);
 
-        if (action === 'ignore') return;
         if (action === 'delete') {
           await enqueue({ collection: col, docId, operation: 'delete' });
-          return;
+        } else if (action !== 'ignore') {
+          await enqueue({
+            collection:  col,
+            docId,
+            operation:   'partial',
+            data:        after,
+            beforeData:  before,
+          });
         }
-
-        await enqueue({
-          collection:  col,
-          docId,
-          operation:   'partial',
-          data:        after,
-          beforeData:  before,
-        });
+        await _cascade(col, docId, event.data?.before?.data() || null, event.data?.after?.data() || null);
       }
     ),
 
@@ -98,6 +105,7 @@ function _makeTriggers(col, { skipDraft = true } = {}) {
       async (event) => {
         const docId = event.params.docId;
         await enqueue({ collection: col, docId, operation: 'delete' });
+        await _cascade(col, docId, event.data?.data() || null, null);
       }
     ),
 

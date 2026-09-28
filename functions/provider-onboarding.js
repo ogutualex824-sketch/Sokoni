@@ -445,10 +445,13 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
     notifications: draft.notifications || { sms: true, email: true, push: true },
     qrCode: qrData, rating: 0, reviewCount: 0, bookingCount: 0,
     featured: false, verified: false,
-    /* `searchable` gates providerSearchProviders, which queries THIS collection
-       (`where status == 'active' and searchable == true`). Hardcoding true made
-       the self-service wizard a public-listing switch. Approval decides it. */
-    searchable: approved,
+    /* `searchable` on this ONBOARDING projection is a mirror of what the server decided, never a decision: publishing
+       is not a public-listing switch. CHANGELOG 245 (C3b-1): it mirrors the ONE public-eligibility predicate
+       (business-category.publicEligibility — approved, not suspended, searchable, public, CLASSIFIED), not a
+       status-only reading of the registry, so an approved-but-unclassified or hidden provider is not mirrored as
+       searchable. No public surface reads it any more: the search-index gate and the provider directory decide from
+       providers/{uid} (C3a). `status:'active'` above is the ONBOARDING state ("the draft is published"). */
+    searchable: require('./business-category').publicEligibility(_regCur).eligible,
     updatedAt: _ts(),
   }, { merge: true });
 
