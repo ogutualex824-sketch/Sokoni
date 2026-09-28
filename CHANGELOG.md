@@ -88,7 +88,7 @@ editor and its document-wide `[data-av]` listener.
   - Private `demo-` emulator, **equal on both trees**: `kasshop-boundary` 79/0 and `availability-canonical` 26/0.
 - **Regression:** 54 suites run on the working tree and the pristine `d83b2f3` tree.
   - Equal, apart from the enforcement export (fixed) and two suites that inspect the **uncommitted** tree
-    (`cart-2-3-4`, `checkout-fallback-total`). Those were re-run after this commit; results are below.
+    (`cart-2-3-4`, `checkout-fallback-total`). Re-run after the commit (`3edaa5b`): **50/0** and **58/58**.
   - `merchant-v2-ecosystem-runtime`'s "no non-environment errors" remains flaky on both trees.
   - `merchant-visual-gate` has 521 passed on both.
   - Screened out as touching live endpoints or the shared emulator, and so NOT run (UNPROVEN): `cart-final`,
