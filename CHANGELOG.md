@@ -1,4 +1,68 @@
 ## [2026-10-03] — Tech Hub slice 4P (server): the public Verified badge is a projection of admin-decided facets — NOT deployed
+## [2026-09-28] - HOTFIX: providerDispatch self-grant — publishing no longer activates a provider; paid plans are no longer self-granted
+
+**Functions only, one file, NOT deployed.** Branch `hotfix/provider-publish-selfgrant` is based on `de6888b`, whose
+functions tree is byte-identical to production's deployed `providerDispatch` archive (generation `1787386174474483`,
+md5 `6f155e8b5e0e`; 379/379 files). It is recorded in `docs/C4_PRODUCTION_BASELINE.md` on the convergence line
+(`4e9607b`). Deployment is a separate, pending authorization.
+
+**Why:** the read-only production baseline (2026-09-28) proved the deployed `providerPublish` is the version before the
+OB-1 fix.
+- Any non-suspended caller got `providers/{uid}` set `active` / searchable / public / bookable plus an unconditional
+  `provider` claim, with no application and no admin decision.
+- Re-publishing also restored a DEACTIVATED provider to `active`.
+- `providerActivateSubscription` set any PRICED plan `active` from an unverified, client-supplied `paymentRef`, which
+  also changed the provider's commission rate and limits.
+
+**Changed:** `functions/provider-onboarding.js` only, with exactly two behaviour changes, ported from `2f4fc20`:
+1. **OB-1 `providerPublish`:**
+   - publishing writes content only;
+   - a first publish creates the registry row CLOSED (`pending_approval`, not searchable / public / bookable /
+     available);
+   - an existing row's state is never written;
+   - the `provider` claim is minted only for an already-approved provider;
+   - `providerProfiles.searchable` follows approval.
+2. **Paid-plan refusal in `providerActivateSubscription`:** a priced plan cannot be activated from the client
+   (`failed-precondition`), whatever `paymentRef` is sent. `free_trial` stays self-serve.
+
+**Deliberately unchanged** (same bytes as production):
+- the suspended-listing refusal;
+- the legal-agreement role (OB-6);
+- the counter-reset behaviour;
+- the providerId fallback;
+- `providerGenerateQR` / `providerGetPublicProfile`;
+- K2 / K13, rules, and existing accounts.
+
+**Tests:** `scripts/test-provider-publish-hotfix.js` (outside the functions archive).
+- On the hotfix: **15/0**.
+- `COUNTERPROOF=1`, the deployed-identical source: **9 failures, exactly the defects**:
+  - A2–A5: self-activation plus claim;
+  - B1: a pending provider escalates;
+  - B2: a deactivated provider is restored;
+  - E2 ×3: starter / enterprise / professional self-granted.
+- Positive controls pass in both modes: approved republish + claim, suspended refused, free trial.
+
+**Sabotage:** 10/10 caught, with a byte-identical restore after every attack (standalone supervisor).
+
+**Archive proof:** the hotfix tree differs from the deployed archive in `provider-onboarding.js` only (378/379
+byte-identical, 0 missing).
+
+**Baseline vs pristine `de6888b`:** `audit-commission-paths`, `verify-commission-single-source` and `test-otp` pass in
+both. `verify-listing-limit-single-source` fails identically in both (pre-existing: 63 declarations). No script that can
+reach production was run.
+
+**Not covered:** accounts that were ALREADY self-activated, restored from deactivation, or self-granted a paid plan. A
+separately authorized read-only investigation will find them.
+
+**Deploy (pending authorization):** `firebase deploy --only functions:providerDispatch` from this worktree, then
+post-deploy verification. `providerDispatch` is outside CLAUDE.md's rebuild list, so the Artifact Registry risk must be
+accepted first.
+
+**Database / Rules / Breaking:** none.
+- Paid provider plans have no self-serve path until the verified-payment flow is wired; that was already the correct
+  state.
+
+## [2026-08-22] - Admin shortcut, Marketplace return, and the Health INTERNAL traced.
 
 **Census (10-03):**
 - No admin path granted `providers/{uid}.verified`; only scripts/onboard-providers.js ever set it, with no audit.

@@ -276,6 +276,22 @@ exports._h.providerActivateSubscription = _h.providerActivateSubscription = asyn
   if (!plan || !PLANS[plan]) throw new HttpsError('invalid-argument', 'Invalid plan.');
 
   const p   = PLANS[plan];
+
+  /* ── A CLIENT-SUPPLIED paymentRef IS NOT PROOF OF PAYMENT (hotfix, from 2f4fc20) ──────
+   * This handler took `paymentRef` from the request, never verified it, and wrote
+   * status:'active' along with the plan's commissionRate and limits. It is reachable from
+   * the browser (provider-dispatch.js -> sokoni-provider.js), so any provider could
+   * self-grant a priced plan for nothing, taking its listing limits and lower commission.
+   * A PRICED plan therefore cannot be activated here at all: the purchase path is the
+   * verified-payment flow, and this handler is not part of it. free_trial stays
+   * self-serve because it costs nothing — there is no payment to forge. */
+  const priceCents = billingCycle === 'yearly' ? Number(p.yearly) : Number(p.monthly);
+  if (Number.isFinite(priceCents) && priceCents > 0) {
+    logger.warn('[provider] refused unverified paid activation', { uid, plan, hadRef: !!paymentRef });
+    throw new HttpsError('failed-precondition',
+      'A paid plan cannot be activated from the client. Start a payment with '
+      + 'createPaymentIntent; the subscription activates once the payment is verified.');
+  }
   const now = new Date();
   const renewalDate = plan === 'free_trial'
     ? new Date(now.getTime() + p.trialDays * 86400000)
@@ -340,6 +356,18 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
       'This provider listing is suspended. Contact support to be reinstated.');
   }
 
+  /* ── PUBLISH WRITES CONTENT. THE APPLICATION LIFECYCLE OWNS PUBLIC STATE. (hotfix, OB-1 from 2f4fc20) ──
+     Completing the self-service wizard wrote providers/{uid} with status:'active',
+     searchable:true, acceptsBookings:true and minted claims.provider — with no
+     application, no admin decision and no audit record: a second authority path into
+     the canonical registry. Publishing may only ever write CONTENT. The fields that make
+     a provider publicly discoverable and bookable — status, searchable, isPublic,
+     acceptsBookings, available — are written by projectProvider() when an administrator
+     approves the application, and by nothing else. `approved` excludes a suspended or
+     deactivated provider, so re-running the wizard cannot restore them. */
+  const _regCur  = pubSnap.exists ? (pubSnap.data() || {}) : {};
+  const approved = pubSnap.exists && ['active', 'approved'].includes(_regCur.status);
+
   const providerId = d.providerId || await _genProviderId();
   /* /provider/{providerId} has no hosting rewrite — firebase.json routes
      /shop, /@, /card and /pay, but not /provider — so every QR code and
@@ -366,7 +394,9 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
     bookingConfig: draft.bookings || {},
     notifications: draft.notifications || { sms: true, email: true, push: true },
     qrCode: qrData, rating: 0, reviewCount: 0, bookingCount: 0,
-    featured: false, verified: false, searchable: true,
+    featured: false, verified: false,
+    /* `searchable` on the onboarding projection: approval decides it, never publishing. */
+    searchable: approved,
     updatedAt: _ts(),
   }, { merge: true });
 
@@ -402,11 +432,18 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
     location:    _pubLoc,
     city:        _pubCity,
     skills:      _pubSkills,
-    status:      'active',
-    searchable:  true,
-    isPublic:    true,
-    acceptsBookings: true,
-    available:   true,
+    /* THE STATE FIELDS — written on FIRST CREATION ONLY, and then closed. If the registry
+       row already exists, publishing writes no state at all: the lifecycle owns it and
+       merge:true leaves whatever it set (an approved provider stays active; a suspended
+       or deactivated one stays so). A first publish creates the row explicitly closed —
+       booking-service refuses `pending_approval` (ACTIVE_PROVIDER_STATES). */
+    ...(pubSnap.exists ? {} : {
+      status:          'pending_approval',
+      searchable:      false,
+      isPublic:        false,
+      acceptsBookings: false,
+      available:       false,
+    }),
     /* Index inline — do NOT rely on the create-only indexProviderCreate trigger,
        which never fires on a re-publish of an existing doc. */
     nameLower:       _pubName ? _pubName.toLowerCase() : '',
@@ -439,8 +476,13 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
     uid, ...(draft.notifications || { sms: true, email: true, push: true }), updatedAt: _ts(),
   }, { merge: true });
 
-  // Set custom auth claim
-  await _auth().setCustomUserClaims(uid, { ...(await _auth().getUser(uid)).customClaims, provider: true, providerId });
+  /* Custom auth claim — ONLY for an already-approved provider. Minting `provider: true`
+     here was the second half of the bypass. `grantAccountRole` (applicationDecide →
+     applicationLifecycle) is the one writer of that claim; for an approved provider this
+     is idempotent and re-stamps providerId, for everyone else claims are left untouched. */
+  if (approved) {
+    await _auth().setCustomUserClaims(uid, { ...(await _auth().getUser(uid)).customClaims, provider: true, providerId });
+  }
 
   await batch.commit();
   logger.info('[provider] profile published', { uid, providerId });
