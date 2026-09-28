@@ -1,3 +1,29 @@
+## [2026-09-28] - Kass event search reads the canonical live events, never the retired entEvents store
+
+**Functions, NOT deployed.** Branch `slice/c4-category-matrix`. This is a follow-up to `7f38508` (C8).
+
+**Proven defect (the shipped `_execChatTool` at `4e9607b`):**
+- `search_events` read the legacy `entEvents` store, which the convergence line retired.
+- It returned only a legacy record and never the live canonical event, and it linked to `events.html`, which cannot
+  sell the ticket.
+
+**Changed (`functions/index.js` `search_events`):**
+- One bounded query on `events`, `status == 'live'`, ordered by `startDate`: the same guard `firestore.rules`,
+  `listEvents` and site search use.
+- Upcoming only; city / venue / category narrow in memory, so no new composite index is needed.
+- Results link to `event-hub.html?event=<id>`.
+- **SOURCE** `events` (live) · **CACHE** none (live) · **COST** 1 query ≤48 docs · **AUTHORITY** the event-hub
+  `live` status.
+
+**Tests:** `test-kass-business-discovery.js` gains **K8**, making the suite **8/0**; the counterproof fails 7.
+- On the counterproof it returned `["Legacy Gig"]` linked to `events.html`.
+- Now: only the live upcoming event, with no draft, past or legacy event.
+
+**Sabotage:** 3/3 (the live guard removed, past events kept, the legacy link restored).
+
+**Regression:** kass-catalog 16/0, kass-retrieval 15/0, kass-modes-memory 14 checks, kass-widget, and
+communication-engine 572/0 all pass; firestore-search is 23/23.
+
 ## [2026-09-28] - Kass finds approved businesses immediately through the canonical directory, and is never an approver (C8)
 
 **Functions, NOT deployed.** Branch `slice/c4-category-matrix` (convergence line). These are the owner's requirements:

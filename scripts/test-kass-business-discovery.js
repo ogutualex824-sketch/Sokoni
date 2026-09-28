@@ -17,6 +17,7 @@
  *       eligible one (control)
  *   K5  search_stays returns an APPROVED hotel (it only read hotels/listings, which approval never writes)
  *   K6  admin Kass approve_seller REFUSES and writes nothing — neither flips an existing provider nor creates one
+ *   K8  search_events reads the CANONICAL live events (status live, upcoming) — never the retired entEvents store
  *   K7  autoOnSellerApplication with the rule ENABLED and complete documents does NOT approve: the application goes
  *       under_review, no shop is written, no seller role is granted
  */
@@ -129,6 +130,17 @@ const prov = (uid, o) => db.doc('providers/' + uid).set(Object.assign({ name: ui
     ck('K7  autoOnSellerApplication (rule ENABLED, docs complete) does NOT approve: under_review, no shop, no seller claim',
       app.status === 'under_review' && !shop && !CLAIMS.some((c) => c.u === 'u_sa1'), { status: app.status, shop, claims: CLAIMS.length });
   }
+
+  /* K8 — search_events reads the CANONICAL live events, never the retired entEvents store */
+  const soon = new Date(Date.now() + 5 * 864e5).toISOString(), past = new Date(Date.now() - 5 * 864e5).toISOString();
+  await db.doc('events/ev_live').set({ title: 'Live Gig', status: 'live', startDate: soon, city: 'Nairobi', venue: 'KICC', category: 'music' });
+  await db.doc('events/ev_draft').set({ title: 'Draft Gig', status: 'draft', startDate: soon, city: 'Nairobi' });
+  await db.doc('events/ev_past').set({ title: 'Past Gig', status: 'live', startDate: past, city: 'Nairobi' });
+  await db.doc('entEvents/legacy1').set({ title: 'Legacy Gig', status: 'published', date: soon.slice(0, 10), city: 'Nairobi' });
+  let k8 = null, k8e = null; try { k8 = await chat('search_events', { location: 'Nairobi' }); } catch (e) { k8e = e.message; }
+  const evNames = k8 ? names(k8) : [];
+  ck('K8  search_events returns only LIVE upcoming canonical events (no draft, past or legacy entEvents), linked to the event hub',
+    JSON.stringify(evNames) === '["Live Gig"]' && !!k8 && k8.results.every((x) => /^event-hub\.html\?event=/.test(x.url)), k8e || { names: evNames, urls: k8 && k8.results.map((x) => x.url) });
 
   say(`\n${pass} passed, ${fail} failed`);
   if (CPM) say('(counter-proof: failures here ARE the defects; K4 includes a control)');

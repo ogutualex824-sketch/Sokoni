@@ -1456,16 +1456,29 @@ async function _execChatTool(name, input, ctx) {
 
     if (name === "search_events") {
       const { location, category, dateFrom } = input;
-      let q = db.collection("entEvents").where("status", "==", "published").limit(6);
-      if (location) q = q.where("city", "==", location);
-      if (dateFrom)  q = q.where("date", ">=", dateFrom);
-      const snap = await q.get().catch(() => ({ docs: [] }));
+      /* The CANONICAL event-hub collection, public only while `live` — the same guard firestore.rules, listEvents and
+         site search use (sokoni-firestore-search.js). This read the legacy entEvents store, which the convergence line
+         retired, and linked to a page that could not sell the ticket. One bounded query ordered like listEvents;
+         city / date / category narrow in memory, so no new composite index is needed. */
+      const _from = dateFrom ? new Date(dateFrom).toISOString() : new Date().toISOString();
+      const _raw = await db.collection("events").where("status", "==", "live").orderBy("startDate", "asc").limit(48).get().catch(() => ({ docs: [] }));
+      const _loc = String(location || "").trim().toLowerCase();
+      const _cat = String(category || "").trim().toLowerCase();
+      const _docs = (_raw.docs || []).filter((d) => {
+        const r = d.data();
+        if (String(r.startDate || "") < _from) return false;
+        if (_loc && !(String(r.city || "").toLowerCase().includes(_loc) || String(r.venue || "").toLowerCase().includes(_loc))) return false;
+        if (_cat && String(r.category || "").toLowerCase() !== _cat) return false;
+        return true;
+      }).slice(0, 6);
+      const snap = { empty: _docs.length === 0, docs: _docs.map((d) => ({ id: d.id, data: () => {
+        const r = d.data(); return Object.assign({}, r, { title: r.title, date: String(r.startDate || "").slice(0, 10), image: r.bannerImageUrl }); } })) };
       if (snap.empty) {
-        ctx.addAction({ label: "Browse Events", url: "events.html" });
-        return { found: 0, message: "No events found. Browse all events on the Events page." };
+        ctx.addAction({ label: "Browse Events", url: "event-hub.html" });
+        return { found: 0, message: "No upcoming events found. Browse all events on the Events page." };
       }
-      snap.docs.forEach(d => { const r = d.data(); ctx.addResult({ type:"event", id:d.id, name:r.title||r.name, date:r.date, venue:r.venue, city:r.city, price:r.ticketPrice||r.price, image:r.image||r.poster, url:`events.html?id=${d.id}` }); });
-      ctx.addAction({ label: "Browse all Events", url: "events.html" });
+      snap.docs.forEach(d => { const r = d.data(); ctx.addResult({ type:"event", id:d.id, name:r.title||r.name, date:r.date, venue:r.venue, city:r.city, price:r.ticketPrice||r.price, image:r.image||r.poster, url:`event-hub.html?event=${encodeURIComponent(d.id)}` }); });
+      ctx.addAction({ label: "Browse all Events", url: "event-hub.html" });
       return { found: snap.docs.length, events: snap.docs.map(d => ({ name:d.data().title||d.data().name, date:d.data().date, venue:d.data().venue, price:d.data().ticketPrice?`KES ${Number(d.data().ticketPrice).toLocaleString()}`:"Free" })) };
     }
 
