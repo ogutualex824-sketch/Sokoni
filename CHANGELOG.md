@@ -1,3 +1,17 @@
+## [2026-09-29] - Hosting preflight for the re-acknowledgement surface (READ ONLY; deployment NOT authorized)
+
+docs/HOSTING_PREFLIGHT_REACK_SURFACE.md + docs/release-gates/hosting-preflight-reack.json. Live hosting = ff9d762 (fix/track-hub-on-93c5783,
+v641; release 1790708874166000 / version 00cbd1b719fa3898, 862 files). This capability line is NOT a descendant of live (merge-base
+3dcf572): it passes the rollback guard yet would replace production with the c4 tree, so it is not a hosting candidate. Candidate built
+in a new worktree C:/temp/sok-reack, branch slice/reack-surface-on-live, tip d108f6c = ff9d762 + cherry-pick fd21e9b (+ lineage-honest test,
++ test-only harness libs). Hosting would ship EXACTLY two files (agreement-acknowledge.html a474d0a6..., sokoni-agreement-acknowledge.js
+352c3eab..., byte-identical to fd21e9b); 0 functions/rules paths; preservation ab3a891 absent from the candidate by design. Read-only
+predeploy gates all pass on the candidate (syntax gate 1788 files); suites there 21/0 + 14/0. Served rules re-fetched after the peer P0
+release (b87c94e4, 20:43Z): applications block unchanged; the re-ack write is permitted; production still lacks every decision protection
+(applicant can write decidedBy/status/agreementVerifiedAt) -> Kasindi gate G2 must prove by field diff. Live hub-register.js has NO
+agreement handling (providers never acknowledge at intake). Rollback target: release 1790702102972000 / version a3552ac70cd81400.
+No deploy, no Firestore read or write for Kasindi.
+
 ## [2026-09-29] - Kasindi repair preconditions: `priorDecisions` preservation on applicationDecide + Seller Agreement re-acknowledgement surface (built, tested; NOT deployed; Kasindi untouched)
 
 `docs/KASINDI_REPAIR_PRECONDITIONS.md`. Owner decisions on the [[KASINDI_REPAIR_CENSUS]]: proper user-facing re-acknowledgement
