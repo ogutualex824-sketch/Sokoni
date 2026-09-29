@@ -230,3 +230,97 @@ Meta, not exported, not deployed. The handshake has never been performed against
 No catalogue entry — WhatsApp still does not meet the bar for the 52, and will enter through the
 delta process when it is real. No outbound. No campaigns, Flows or in-conversation ordering. No
 `wa.me` replacement work. No deployment.
+
+---
+
+## 9 · Slice 2 — provisioning preparation (no handshake, no catalogue change)
+
+`node scripts/whatsapp-preflight.js` — read-only, names only, never a secret value.
+
+```
+[ok]  Secret Manager readable                     observed       41 secrets in sokoni-aeb26
+[ok]  POSITIVE CONTROL — a known secret is found  observed       FACEBOOK_APP_SECRET
+[--]  secret WHATSAPP_VERIFY_TOKEN                absent
+[--]  secret WHATSAPP_APP_SECRET                  absent
+[ok]  receiver module present                     observed
+[--]  exported from functions/index.js            absent         INTENTIONALLY
+[ok]  receiver certification                      observed       25 passed, 0 failed
+[--]  function deployed                           absent         404 from gcloud
+[n/a] callback URL                                n/a            no endpoint until deployed
+[  ]  WABA · phone-number-id · subscription · handshake   not-attempted
+```
+
+### The census UNPROVEN is now closed
+
+*"Whether any WhatsApp credential exists outside the repository"* — **it does not.** 41 secrets in
+`sokoni-aeb26`, neither of the two present. That is a measured absence, not an assumption, because
+the same query **finds `FACEBOOK_APP_SECRET`**: the positive control proves the detector works. An
+empty result without that control would have been worthless.
+
+### A finding that changes what you provision
+
+**`FACEBOOK_APP_SECRET` already exists.** WhatsApp's `X-Hub-Signature-256` is signed with the **Meta
+app secret** of the app that owns the WABA — so if SOKONI puts WhatsApp on the *same* Meta app as
+Facebook Login, the value SOKONI needs is **already in Secret Manager**, under a different name.
+
+That makes this a decision, not a fetch:
+
+| option | consequence |
+|---|---|
+| **Separate Meta app for WhatsApp** *(recommended)* | its own app secret, its own `WHATSAPP_APP_SECRET`. Rotating WhatsApp cannot break Login, and a WhatsApp compromise does not reach the Login app. |
+| Same Meta app as Facebook Login | no new app secret needed — bind `FACEBOOK_APP_SECRET` directly. **Do not copy its value into a second secret name**: two names holding one value drift the moment either is rotated, and nothing would detect it. |
+
+Either way the **verify token is always new** — SOKONI chooses that value; Meta only echoes it.
+
+### What to provision
+
+1. **Decide one Meta app or two** (above).
+2. **`WHATSAPP_VERIFY_TOKEN`** — a fresh high-entropy random string. It authenticates the one-time
+   handshake and nothing else.
+3. **`WHATSAPP_APP_SECRET`** — the Meta app secret, *or* rebind the function to `FACEBOOK_APP_SECRET`
+   if the same app is used.
+4. In Meta: a **WhatsApp Business Account**, a **business phone number**, and its **phone-number-id**.
+
+Secrets go in Secret Manager only. Never in `functions/.env` — that file is foreign working state
+here and has its own standing rule against being committed.
+
+### Then, in order
+
+```
+secrets created
+   ↓  two lines in functions/index.js
+const whatsapp = require('./whatsapp-webhook');
+exports.whatsappWebhook = whatsapp.buildFunction();
+   ↓  deploy  --only functions:whatsappWebhook     (scoped; see the estate note)
+   ↓  preflight again — `function deployed` and `callback URL` become observed
+   ↓  paste the callback URL + verify token into Meta, subscribe to `messages`
+   ↓  Meta performs the GET handshake — the FIRST real proof
+   ↓  send one message to the business number; confirm a row in whatsappInbound
+```
+
+The handshake is **the first evidence that anything works**, and nothing before it counts as one.
+Until Meta has echoed a challenge and a signed POST has been recorded, the rail is certified logic
+and nothing more.
+
+### Why the export is still absent
+
+`defineSecret` binds at deploy time. Exporting before the secrets exist makes the **next functions
+deploy fail for every agent in this repository**, on lanes unrelated to WhatsApp. The preflight
+reports this row as `absent` with the reason attached, so it reads as a deliberate state rather than
+an oversight.
+
+### Two things the checker itself demonstrated
+
+- **It reported `unreadable`, not `absent`, when it could not run `gcloud`.** Node 24 on Windows
+  refuses to spawn a `.cmd` shim directly, and the first run hit that. A broken tool must never read
+  as "the secret is not there" — that is the invitation to re-create a credential that already
+  exists.
+- **It classified a real 404 as `unreadable` until the pattern was corrected.** gcloud returns
+  `status=[404] … was not found`, which the original regex missed. Fixed — an absent function is a
+  known fact; only an *unrecognised* failure stays unreadable.
+
+### Not done
+
+No handshake, no deployment, no export, no secret created, no catalogue change (still 52 + 2), no
+outbound, no campaigns, no Flows, no `wa.me` replacement. Share attribution remains a separate slice
+needing no Meta credential.
