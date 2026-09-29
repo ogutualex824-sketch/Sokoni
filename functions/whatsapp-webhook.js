@@ -293,8 +293,20 @@ function _fnDeps () {
 /** Called from functions/index.js ONCE the two secrets exist. */
 function buildFunction () {
   const { onRequest, defineSecret } = _fnDeps();
-  const VERIFY = defineSecret(SECRET_NAMES.verifyToken);
-  const APPSEC = defineSecret(SECRET_NAMES.appSecret);
+  /* STRING LITERALS, not SECRET_NAMES.verifyToken — deliberately, and the
+     duplication is the point.
+
+     Every secret-inventory tool in this repository finds bound secrets by
+     grepping for defineSecret('NAME'). Passing a variable makes this function's
+     two secrets INVISIBLE to all of them: they would not appear in a
+     provisioning audit, and a preflight gate would report the deploy as ready
+     while these were missing. Greppability is a property worth a duplicated
+     string.
+
+     A test asserts the literals and SECRET_NAMES agree, so the duplication
+     cannot drift. */
+  const VERIFY = defineSecret('WHATSAPP_VERIFY_TOKEN');
+  const APPSEC = defineSecret('WHATSAPP_APP_SECRET');
 
   const logger = require('firebase-functions/logger');
 

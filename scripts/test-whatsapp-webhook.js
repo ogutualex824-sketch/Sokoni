@@ -344,6 +344,26 @@ await T('it is exported as webhookWhatsapp, matching the house convention', () =
   });
 });
 
+await T('defineSecret uses STRING LITERALS, so inventory tools can find them', () => {
+  /* The failure this guards is invisible: defineSecret(SOME_VARIABLE) binds
+     correctly at runtime but is unreadable to every grep-based secret
+     inventory in this repo — including the predeploy gate. The deploy would be
+     reported as ready while these two were missing, then fail and take every
+     other function with it. */
+  const src = require('fs').readFileSync(path.join(ROOT, 'functions/whatsapp-webhook.js'), 'utf8');
+  const bare = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+  const found = [];
+  const re = /defineSecret\(\s*(['"])([A-Z0-9_]+)\1\s*\)/g;
+  let m; while ((m = re.exec(bare))) found.push(m[2]);
+  eq(found.length, 2, 'expected two literal defineSecret bindings, got ' + found.join(','));
+
+  /* ...and the literals must agree with SECRET_NAMES, or the duplication has
+     drifted and the module and the preflight are describing different secrets. */
+  const declared = [wa.SECRET_NAMES.verifyToken, wa.SECRET_NAMES.appSecret].sort();
+  eq(JSON.stringify(found.slice().sort()), JSON.stringify(declared),
+    'the literals and SECRET_NAMES disagree: ');
+});
+
 await T('the secrets are NAMED, not embedded', () => {
   eq(wa.SECRET_NAMES.verifyToken, 'WHATSAPP_VERIFY_TOKEN', '');
   eq(wa.SECRET_NAMES.appSecret, 'WHATSAPP_APP_SECRET', '');
