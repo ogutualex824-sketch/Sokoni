@@ -101,7 +101,7 @@ const APPLICATION = { uid: UID, applicationId: APP, name: 'DG wines and spirits'
   const rm = CAPS.readModel({ seller: null, provider: await get('providers/' + UID), business: await get('businesses/' + UID), applications: [await get('applications/' + APP)], productCount: 0 });
   ck('the read model now reads SERVICES / STAMPED / no conflicts', rm.classification === 'SERVICES' && rm.authorityStatus === 'STAMPED' && rm.conflicts.length === 0, rm.conflicts);
   const w = await BW.workspaceFor(db, UID);
-  ck('the workspace authority: SERVICES, STAMPED, route unchanged by the stamp (provider path — LEGACY_UNCLASSIFIED until the category authority stamps)', w.capability.classification === 'SERVICES' && w.capability.authorityStatus === 'STAMPED' && w.route === 'provider-dashboard.html' && w.servicesWorkspace === false, { route: w.route, state: w.state, cap: w.capability });
+  ck('the workspace authority (R2): SERVICES, STAMPED, but NO category stamp → PENDING_CLASSIFICATION, no route — the stamp changed authority, not routing', w.capability.classification === 'SERVICES' && w.capability.authorityStatus === 'STAMPED' && w.route === null && w.state === 'PENDING_CLASSIFICATION' && w.servicesWorkspace === false, { route: w.route, state: w.state, cap: w.capability.classification });
   ck('the unrelated identity is byte-identical', J(await get('providers/other')) === before.otherP && J(await get('sellers/other')) === before.otherS);
 
   say('\n' + pass + ' passed, ' + fail + ' failed');

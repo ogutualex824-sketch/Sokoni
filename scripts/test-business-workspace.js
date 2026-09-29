@@ -78,7 +78,10 @@ const st = (w, m) => (w.modules[m] || {}).state;
   PLANS.pharm1 = { tier: 'clinic', status: 'active' };
   await seed('pharm0', { healthcare: { category: 'pharmacy', source: 'admin' }, business: { category: 'pharmacy', source: 'admin', lane: { hub: 'healthcare', entClass: null } } });
   await seed('hotel1', biz('hotel'));
-  await seed('shop1', biz('retail_store'));
+  /* R2: a shop is the PRODUCER shape — a live seller + the C1 stamp projectSeller writes on businesses/{uid}; no providers doc.
+     (A provider-only record carrying a products-lane category is a category/capability disagreement → CONFLICT.) */
+  await db.doc('sellers/shop1').set({ status: 'active', active: true, approvedAt: 1 });
+  await db.doc('businesses/shop1').set({ uid: 'shop1', ownerId: 'shop1', business: { category: 'retail_store', source: 'application' } });
   await seed('unc1', biz(null));
   await seed('pend1', Object.assign({ status: 'pending' }, biz('trades')));
   await seed('susp1', Object.assign({ status: 'suspended' }, biz('trades')));
@@ -102,8 +105,8 @@ const st = (w, m) => (w.modules[m] || {}).state;
     && st(W.hotel1, 'enquiries') === S.AVAILABLE && st(W.hotel1, 'reviews') === S.AVAILABLE
     && ['bookings', 'availability', 'calendar'].every((m) => st(W.hotel1, m) === S.NOT_IMPLEMENTED && W.hotel1.modules[m].reason === 'STAY_ENGINE_PENDING'), W.hotel1.modules);
   ck('a shop: routed to merchant-v2, whose own authority decides its modules', W.shop1.route === 'merchant-v2.html' && Object.values(W.shop1.modules).every((m) => m.state === S.NOT_APPLICABLE));
-  ck('UNCLASSIFIED (approved): PENDING_APPROVAL — no privileged workspace, Overview + Settings only',
-    W.unc1.state === S.PENDING_APPROVAL && W.unc1.reason === 'UNCLASSIFIED' && st(W.unc1, 'bookings') === S.PENDING_APPROVAL && st(W.unc1, 'overview') === S.AVAILABLE);
+  ck('UNCLASSIFIED (approved, no category): PENDING_CLASSIFICATION, NO route — Overview + Settings only (R2: the grandfather clause is gone)',
+    W.unc1.state === 'PENDING_CLASSIFICATION' && W.unc1.reason === 'UNCLASSIFIED' && W.unc1.route === null && st(W.unc1, 'bookings') === S.PENDING_APPROVAL && st(W.unc1, 'overview') === S.AVAILABLE);
   ck('pending and suspended businesses are PENDING_APPROVAL (NOT_APPROVED / SUSPENDED)', W.pend1.reason === 'NOT_APPROVED' && W.susp1.reason === 'SUSPENDED' && st(W.susp1, 'earnings') === S.PENDING_APPROVAL);
   ck('no provider record: not found, PENDING_APPROVAL', W.nobody.found === false && st(W.nobody, 'overview') === S.PENDING_APPROVAL);
 

@@ -74,7 +74,12 @@ const WEEK = {}; ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'satur
 
 async function seedProvider(uid, opts) {
   const o = opts || {};
-  await db.doc(`providers/${uid}`).set({ name: uid, status: o.status || 'active', approvedAt: 1, category: o.category || 'photographer', acceptsBookings: true });
+  /* R2: an approved provider carries the C1 category stamp projectProvider writes (derived through the real classifier). */
+  const _fn = require('path').join(__dirname, '..', 'functions');
+  const _app = { category: o.category || 'photographer', role: 'provider' };
+  const c1 = require(_fn + '/business-category.js').categoryFromApplication(_app, 'provider').category;
+  const lane = require(_fn + '/provider-hub.js').classifyDecidedApplication(_app);   /* the producer's own lane classifier */
+  await db.doc(`providers/${uid}`).set({ name: uid, status: o.status || 'active', approvedAt: 1, category: o.category || 'photographer', acceptsBookings: true, ...(o.decided !== false ? { business: { category: c1, lane, source: 'application' } } : {}) });   /* the stamp exists only once an application was DECIDED (projectProvider writes it at approval) */
   if (o.decided !== false) await db.doc(`applications/app_${uid}`).set({ uid, status: 'approved', role: 'provider', category: o.category || 'photographer' });
   await db.doc(`providerAvailability/${uid}`).set({ uid, modes: ['fixed_hours'], schedule: WEEK, appt: { enabled: true, durationMins: 60, maxDaysAhead: 90, minNoticeHours: 1, allowSameDay: true }, cap: {} });
   await db.doc(`providerServices/svc_${uid}`).set({ providerId: uid, name: 'Wedding Photography', price: 3000000, fee: 0, deposit: 0, durationMins: 240, active: true });

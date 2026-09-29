@@ -71,14 +71,23 @@ for (const m of ['set', 'update']) {
   ck('an approved trades provider → provider-dashboard, quotes AVAILABLE, POS NOT_APPLICABLE (as before)', w1.route === 'provider-dashboard.html' && w1.state === S.AVAILABLE && w1.modules.quotes.state === S.AVAILABLE && w1.modules.pos.state === S.NOT_APPLICABLE, { route: w1.route, q: w1.modules.quotes, pos: w1.modules.pos });
   ck('   …and now carries its capability: SERVICES, NOT_YET_STAMPED, no conflicts, servicesWorkspace false', w1.capability.classification === 'SERVICES' && w1.capability.authorityStatus === 'NOT_YET_STAMPED' && w1.capability.conflicts.length === 0 && w1.servicesWorkspace === false, w1.capability);
   const w1b = await BW.workspaceFor(db, 'shop1');
-  ck('a retail_store category → merchant-v2 (the category route), capability SERVICES-by-registry is reported honestly', w1b.route === 'merchant-v2.html' && w1b.capability.classification === 'SERVICES', { route: w1b.route, cap: w1b.capability.classification });
+  ck('R2: a PROVIDER-ONLY record with a retail_store (products-lane) category and capability SERVICES → CONFLICT (category/capability disagreement), NO route — not merchant-v2, not provider-dashboard',
+     w1b.route === null && w1b.state === 'CAPABILITY_CONFLICT' && w1b.reason === 'CATEGORY_CAPABILITY_DISAGREEMENT' && w1b.lane === 'products' && w1b.capability.classification === 'SERVICES', { route: w1b.route, state: w1b.state, lane: w1b.lane, cap: w1b.capability.classification });
+  await db.doc('sellers/shopx').set({ status: 'active', active: true, approvedAt: 1 });
+  await db.doc('businesses/shopx').set({ uid: 'shopx', ownerId: 'shopx', business: { category: 'retail_store', source: 'application' } });
+  const w1s = await BW.workspaceFor(db, 'shopx');
+  ck('R2: the PRODUCER shape of a shop (live seller + businesses.business retail_store from approval, no provider) → merchant-v2, PRODUCTS, AVAILABLE',
+     w1s.route === 'merchant-v2.html' && w1s.state === S.AVAILABLE && w1s.capability.classification === 'PRODUCTS' && w1s.category === 'retail_store' && w1s.lane === 'products', { route: w1s.route, cap: w1s.capability.classification, cat: w1s.category });
   const w1c = await BW.workspaceFor(db, 'doc1');
   ck('healthcare rows unchanged: clinician → provider-dashboard, AVAILABLE, POS NOT_APPLICABLE, capability SERVICES with no conflict', w1c.route === 'provider-dashboard.html' && w1c.state === S.AVAILABLE && w1c.modules.pos.state === S.NOT_APPLICABLE && w1c.capability.classification === 'SERVICES' && w1c.capability.conflicts.length === 0, { state: w1c.state, pos: w1c.modules.pos, cap: w1c.capability.classification });
 
   say('\n── 2 · capability-aware routing ──');
   await db.doc('sellers/seller1').set({ status: 'active', active: true, approvedAt: 1, name: 'Mama Mboga' });
+  const w2u = await BW.workspaceFor(db, 'seller1');
+  ck('R2: a live seller with NO category anywhere → PENDING_CLASSIFICATION, no route (capability alone never routes)', w2u.route === null && w2u.state === 'PENDING_CLASSIFICATION' && w2u.capability.classification === 'PRODUCTS' && w2u.category === null, { route: w2u.route, state: w2u.state });
+  await db.doc('businesses/seller1').set({ uid: 'seller1', ownerId: 'seller1', business: { category: 'supermarket', source: 'application' } });
   const w2 = await BW.workspaceFor(db, 'seller1');
-  ck('a live seller with NO provider → merchant-v2, AVAILABLE, PRODUCTS (before: "no approved business")', w2.found === true && w2.route === 'merchant-v2.html' && w2.state === S.AVAILABLE && w2.capability.classification === 'PRODUCTS' && w2.servicesWorkspace === false, { route: w2.route, cap: w2.capability.classification });
+  ck('a live seller with a products-lane category (supermarket) and NO provider → merchant-v2, AVAILABLE, PRODUCTS', w2.found === true && w2.route === 'merchant-v2.html' && w2.state === S.AVAILABLE && w2.capability.classification === 'PRODUCTS' && w2.servicesWorkspace === false, { route: w2.route, cap: w2.capability.classification });
   ck('   modules are OWN_WORKSPACE (merchant-v2 decides its own)', Object.values(w2.modules).every((m) => m.state === S.NOT_APPLICABLE && m.reason === 'OWN_WORKSPACE'));
   await db.doc('sellers/salon1').set({ status: 'active', active: true, approvedAt: 1 });
   await db.doc('providers/salon1').set(Object.assign({ name: 'Cuts & Co' }, APPROVED, biz('salon')));
@@ -130,7 +139,67 @@ for (const m of ['set', 'update']) {
   say('\n── unreadable ≠ unclassified ──');
   const brokenDb = { collection: (c) => c === 'sellers' ? { doc: () => ({ get: async () => { throw new Error('permission-denied'); } }) } : db.collection(c) };
   const wu = await BW.workspaceFor(brokenDb, 'plumber');
-  ck('a failing capability read → readable:false with the error; the category path still answers (provider-dashboard)', wu.capability.readable === false && /permission-denied/.test(wu.capability.error) && wu.route === 'provider-dashboard.html', wu.capability);
+  ck('R2: a failing capability read → readable:false with the error, CAPABILITY_UNREADABLE, NO route (fail closed — never a route on one authority)', wu.capability.readable === false && /permission-denied/.test(wu.capability.error) && wu.route === null && wu.state === 'CAPABILITY_UNREADABLE', { cap: wu.capability, route: wu.route, state: wu.state });
+
+  say('\n── R2 · THE MATRIX — route = f(category lane, capability), both required ──');
+  const seedProv = (uid, cat, extra) => db.doc('providers/' + uid).set(Object.assign({ name: uid }, APPROVED, cat ? biz(cat) : {}, extra || {}));
+  const seedSeller = (uid, cat) => Promise.all([db.doc('sellers/' + uid).set({ status: 'active', active: true, approvedAt: 1 }), cat ? db.doc('businesses/' + uid).set({ uid, ownerId: uid, business: { category: cat, source: 'application' } }) : Promise.resolve()]);
+  const M = {};
+  await seedSeller('m_prod_prodcat', 'hardware');                                  /* products lane + PRODUCTS */
+  await seedProv('m_svc_svccat', 'cleaning');                                       /* services lane + SERVICES */
+  await seedProv('m_both_svccat', 'salon'); await seedSeller('m_both_svccat');      /* services lane + BOTH */
+  await seedProv('m_both_prodcat', 'electronics'); await seedSeller('m_both_prodcat'); /* products lane + BOTH */
+  await seedProv('m_svc_nocat', null);                                              /* SERVICES, no category (the seven grandfathered) */
+  await seedSeller('m_prod_nocat');                                                 /* PRODUCTS, no category */
+  await seedProv('m_both_nocat', null); await seedSeller('m_both_nocat');          /* BOTH, no category */
+  await seedProv('m_svc_prodcat', 'wholesale');                                     /* products lane + SERVICES only (DG Wine / Latomi once stamped) */
+  await seedSeller('m_prod_svccat', 'trades');                                      /* services lane + PRODUCTS only */
+  await db.doc('providers/m_unc_pending').set(Object.assign({ name: 'p', status: 'pending' }, biz('cleaning'))); /* UNCLASSIFIED, category present */
+  await db.doc('providers/m_susp').set(Object.assign({ name: 's', status: 'suspended', approvedAt: 1 }, biz('cleaning')));
+  await db.doc('providers/m_conf').set(Object.assign({ name: 'c', status: 'active' }, biz('cleaning')));  /* status only → CONFLICT */
+  for (const u of ['m_prod_prodcat', 'm_svc_svccat', 'm_both_svccat', 'm_both_prodcat', 'm_svc_nocat', 'm_prod_nocat', 'm_both_nocat', 'm_svc_prodcat', 'm_prod_svccat', 'm_unc_pending', 'm_susp', 'm_conf', 'nobody']) M[u] = await BW.workspaceFor(db, u);
+  const row = (u) => ({ route: M[u].route, state: M[u].state, cap: M[u].capability.classification, lane: M[u].lane, sw: M[u].servicesWorkspace });
+  ck('M1  products lane (hardware) + PRODUCTS → merchant-v2', M.m_prod_prodcat.route === 'merchant-v2.html' && M.m_prod_prodcat.state === S.AVAILABLE, row('m_prod_prodcat'));
+  ck('M2  services lane (cleaning) + SERVICES → provider-dashboard with its modules', M.m_svc_svccat.route === 'provider-dashboard.html' && M.m_svc_svccat.state === S.AVAILABLE && M.m_svc_svccat.modules.quotes.state === S.AVAILABLE, row('m_svc_svccat'));
+  ck('M3  services lane (salon) + PRODUCTS_AND_SERVICES → merchant-v2 + Services workspace, service modules kept', M.m_both_svccat.route === 'merchant-v2.html' && M.m_both_svccat.servicesWorkspace === true && M.m_both_svccat.modules.services.state === S.AVAILABLE, row('m_both_svccat'));
+  ck('M4  products lane (electronics) + PRODUCTS_AND_SERVICES → merchant-v2 + Services workspace', M.m_both_prodcat.route === 'merchant-v2.html' && M.m_both_prodcat.servicesWorkspace === true, row('m_both_prodcat'));
+  ck('M5  missing category + SERVICES (an approved provider with no C1 stamp — the seven) → PENDING_CLASSIFICATION, no route, NOT the provider dashboard', M.m_svc_nocat.route === null && M.m_svc_nocat.state === 'PENDING_CLASSIFICATION', row('m_svc_nocat'));
+  ck('M6  missing category + PRODUCTS → no route', M.m_prod_nocat.route === null && M.m_prod_nocat.state === 'PENDING_CLASSIFICATION', row('m_prod_nocat'));
+  ck('M7  missing category + BOTH → no route (both authorities are required)', M.m_both_nocat.route === null && M.m_both_nocat.state === 'PENDING_CLASSIFICATION', row('m_both_nocat'));
+  ck('M8  products lane (wholesale) + SERVICES only → CONFLICT, no route — not merchant-v2, not a service provider (DG Wine / Latomi if C1 stamps them wholesale)', M.m_svc_prodcat.route === null && M.m_svc_prodcat.state === 'CAPABILITY_CONFLICT' && M.m_svc_prodcat.reason === 'CATEGORY_CAPABILITY_DISAGREEMENT', row('m_svc_prodcat'));
+  ck('M9  services lane (trades) + PRODUCTS only → CONFLICT, no route', M.m_prod_svccat.route === null && M.m_prod_svccat.state === 'CAPABILITY_CONFLICT', row('m_prod_svccat'));
+  ck('M10 UNCLASSIFIED (pending provider, category present) → PENDING_APPROVAL, no route', M.m_unc_pending.route === null && M.m_unc_pending.state === S.PENDING_APPROVAL && M.m_unc_pending.reason === 'NOT_APPROVED', row('m_unc_pending'));
+  ck('M11 suspended → PENDING_APPROVAL / SUSPENDED, no route', M.m_susp.route === null && M.m_susp.reason === 'SUSPENDED', row('m_susp'));
+  ck('M12 CONFLICT from the read model (status without approval evidence) → no route', M.m_conf.route === null && M.m_conf.state === 'CAPABILITY_CONFLICT', row('m_conf'));
+  ck('M13 nothing → not found, no route', M.nobody.found === false && M.nobody.route === null);
+  ck('M14 no answer routes on ONE authority: every routed row has BOTH a category and a routable capability', Object.values(M).filter((w) => w.route).every((w) => w.category && ['PRODUCTS', 'SERVICES', 'PRODUCTS_AND_SERVICES'].includes(w.capability.classification)));
+  ck('M15 every answer carries category, lane and capability', Object.values(M).every((w) => 'category' in w && 'lane' in w && w.capability && w.capability.authorityStatus !== undefined));
+
+  say('\n── R2 · DG Wine and Latomi, as they are in production and as C1 would stamp them ──');
+  /* production shape (17:31Z census): provider live, SERVICES stamped on businesses/{uid}, NO C1 category stamp anywhere */
+  await db.doc('providers/dg').set(Object.assign({ name: 'DG wines and spirits', category: 'wholesaler' }, APPROVED));
+  await db.doc('businesses/dg').set({ uid: 'dg', ownerId: 'dg', source: 'capability_migration_c4', capabilities: stamp(undefined, 'approved') });
+  const dgNow = await BW.workspaceFor(db, 'dg');
+  ck('DG/Latomi TODAY: SERVICES / STAMPED / no C1 category → PENDING_CLASSIFICATION, no route (free-text category "wholesaler" is NOT read)', dgNow.route === null && dgNow.state === 'PENDING_CLASSIFICATION' && dgNow.capability.authorityStatus === 'STAMPED' && dgNow.category === null, { route: dgNow.route, state: dgNow.state, cat: dgNow.category });
+  await db.doc('providers/dg').set({ business: { category: 'wholesale', source: 'admin', lane: { hub: 'provider', entClass: null } } }, { merge: true });
+  const dgStamped = await BW.workspaceFor(db, 'dg');
+  ck('DG/Latomi ONCE C1 STAMPS wholesale: category wholesale (products lane) + SERVICES → CONFLICT, no route — never merchant-v2, never the provider dashboard', dgStamped.route === null && dgStamped.state === 'CAPABILITY_CONFLICT' && dgStamped.reason === 'CATEGORY_CAPABILITY_DISAGREEMENT' && dgStamped.category === 'wholesale' && dgStamped.lane === 'products', { route: dgStamped.route, state: dgStamped.state, reason: dgStamped.reason });
+  ck('   CONTROL: the same record with an admin-stamped SERVICES-lane category (service_business) routes to the provider dashboard', await (async () => { await db.doc('providers/dg').set({ business: { category: 'service_business', source: 'admin' } }, { merge: true }); const w = await BW.workspaceFor(db, 'dg'); return w.route === 'provider-dashboard.html' && w.state === S.AVAILABLE; })());
+
+  say('\n── R2 · the resolver CONSUMES the canonical authority; it does not re-derive capability ──');
+  const srcNoComments = fs.readFileSync(Path.join(FN, 'business-workspace.js'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  ck('X1  business-workspace.js requires ./shared/business-capabilities and calls readModel() exactly once (in capabilityFor)', /require\('\.\/shared\/business-capabilities'\)/.test(srcNoComments) && (srcNoComments.match(/\.readModel\(/g) || []).length === 1);
+  /* 'UNCLASSIFIED' is ALSO the category authority's word (the reason on a PENDING_CLASSIFICATION holding answer, which
+     the dashboard's MESSAGE map keys on); it is allowed there and nowhere else. The capability classifications are
+     never spelled out — they are read through CAPS.CLASSIFICATION. */
+  const capLiterals = srcNoComments.match(/'(PRODUCTS|SERVICES|PRODUCTS_AND_SERVICES|CONFLICT)'/g) || [];
+  const unclassifiedUses = (srcNoComments.match(/'UNCLASSIFIED'/g) || []).length;
+  const unclassifiedAsReason = (srcNoComments.match(/_holding\('PENDING_CLASSIFICATION', 'UNCLASSIFIED'/g) || []).length;
+  ck('X2  no local liveness or classification logic: never tests approvedAt / adminApproved, never spells a capability classification, never requires business-scope; UNCLASSIFIED appears only as the pending-classification reason',
+     !/approvedAt|adminApproved/.test(srcNoComments) && capLiterals.length === 0 && unclassifiedUses === unclassifiedAsReason && !/business-scope/.test(srcNoComments), { capLiterals, unclassifiedUses, unclassifiedAsReason });
+  ck('X3  category comes only from the C1 authority (categoryOf / isCategory) — the source never reads free-text category, categoryLabel, hub or type to route', !/prov\.category\b|\.categoryLabel|\.hub\b|prov\.type\b/.test(srcNoComments));
+  ck('X4  lane comes only from C1\'s SELLER_CATEGORIES', /BCAT\.SELLER_CATEGORIES\.includes\(category\)/.test(srcNoComments) && !/'retail_store'|'wholesale'|'supermarket'/.test(srcNoComments));
+  ck('X5  the grandfather clause is gone: no LEGACY_UNCLASSIFIED in the resolver', !/LEGACY_UNCLASSIFIED/.test(srcNoComments));
 
   say('\n── 6 · no capability writes ──');
   const authorityWrites = writes.filter((w) => /capabilities/.test(JSON.stringify(w.data || {})) && !/^(businesses\/plumber)$/.test(w.path));

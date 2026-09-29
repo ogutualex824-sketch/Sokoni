@@ -102,11 +102,11 @@ const card = (uid) => RC._h.entRateCardCreate({ ...who(uid), data: { name: 'Stan
   ck('…withdrawing the quote → refused', !!q.quoteId && await codeOf(RC._h.entQuoteWithdraw({ ...who('plumber'), data: { quoteId: q.quoteId } })) === 'WORKSPACE_MODULE_NOT_APPLICABLE', q);
   ck('…disabling the discount still works (marketing is offered to a salon)', !!disc && !(await codeOf(RC._h.entDiscountDisable({ ...who('plumber'), data: { couponId: disc.id } }))));
 
-  say('\n── legacy providers are grandfathered ──');
-  ck('legacy (approved before C1): rate card, discount, availability, calendar, calls all still work',
+  say('\n── legacy providers are NO LONGER grandfathered (owner 2026-09-29: no category = not routable) ──');
+  ck('legacy (approved before C1, no category): rate card, discount, availability, calendar, calls are ALL refused (WORKSPACE_MODULE_PENDING_APPROVAL) until AdminOS classifies',
     (await Promise.all([card('legacy1'), RC._h.entDiscountCreate({ ...who('legacy1'), data: { code: 'OLDIE10', type: 'percent', value: 10, campaign: 'Launch', validTo: NOW + 30 * 86400e3, usageLimit: 50 } }),
       AV._h.entAvailSetConfig({ ...who('legacy1'), data: { config: { durationMins: 45 } } }), AV._h.entAvailBlock({ ...who('legacy1'), data: { date: D(6) } }),
-      EQ._h.entMessagingSetSettings({ ...who('legacy1'), data: { settings: { callRequests: 'ENABLED' } } })].map(codeOf))).every((c) => c === null));
+      EQ._h.entMessagingSetSettings({ ...who('legacy1'), data: { settings: { callRequests: 'ENABLED' } } })].map(codeOf))).every((c) => c === 'WORKSPACE_MODULE_PENDING_APPROVAL'));
 
   say('\n── venue calendars are venue-manager\'s ──');
   await db.doc('venues/V1').set({ name: 'Karura Hall', ownerId: 'doc1', status: 'active', openingHours: {}, slotDurationMins: 60, bookingHorizonDays: 365, pricing: { hourlyRate: 2000 } });

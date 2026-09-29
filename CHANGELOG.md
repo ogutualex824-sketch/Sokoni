@@ -1,3 +1,19 @@
+## [2026-09-29] - R2: the workspace resolver routes on category + capability — both authorities required, neither inferred (server; NOT deployed)
+
+`functions/business-workspace.js` only. Category from the C1 stamp (`providers.business` / healthcare, else
+`businesses.business` from approval), lane from C1's `SELLER_CATEGORIES`; capability from the C2 read model through
+the R1-protected authority. products+PRODUCTS → merchant-v2; services+SERVICES → the category's route and modules
+(unchanged); both → merchant-v2 + Services workspace; lane/capability disagreement → CONFLICT, no route; **no category
+→ PENDING_CLASSIFICATION, no route (the grandfather clause is removed, owner 2026-09-29)**; UNCLASSIFIED / CONFLICT /
+unreadable → no route. DG Wine and Latomi today → PENDING_CLASSIFICATION; once C1 stamps `wholesale` → CONFLICT — never
+Merchant V2, never a service provider. Static proof the resolver consumes the authority rather than re-deriving it.
+Evidence: `test-workspace-capability.js` 51/0 (matrix M1–M15 + DG/Latomi + consumption proofs); regression node
+30 · 24 · 51 · 6 · 6 (+gate exit 0, matrix unchanged) · 28 · 88 · 76 · 49 · 95 · 27 · 40 · 46 · 45 · 18; browser 33 · 29 · 13 · 13 ·
+54 · sidebar 90; entertainment-registry 64/1 pre-existing. Assertion changes are explained by name in
+`docs/R2_ROUTING_RESOLVER.md`: grandfather removed; producer-shaped fixtures through the real classifiers, stamped only
+for DECIDED applications; the sidebar suite compares the set of visible sections (not an item count) and waits for the
+projection to apply. No stamp, no migration, no classification, no deploy.
+
 ## [2026-09-29] - R1: `businesses.capabilities` and `businesses.business` are server-written only (rules; NOT deployed)
 
 Closes the self-stamp vector found by the routing census: any owner could create `businesses/{their uid}` carrying a

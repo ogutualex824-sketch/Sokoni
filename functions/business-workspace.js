@@ -222,82 +222,122 @@ async function capabilityFor(db, uid) {
   }
 }
 
+/* ── R2: THE CATEGORY AUTHORITY'S ANSWER, and its commercial lane ───────────────────────────────────────────
+   The category is READ from the stamp C1 wrote at approval — on providers/{uid}.business (or the healthcare
+   authority), or on businesses/{uid}.business for a seller approved into a shop — never from application text,
+   free-text `category`, or the capability. `lane` says which kind of trade that category is: SELLER_CATEGORIES
+   are the products lane; every other C1 category (healthcare included) is the services lane. */
+function laneOf(category) {
+  if (!category) return null;
+  return BCAT.SELLER_CATEGORIES.includes(category) ? 'products' : 'services';
+}
+function categoryFor(providerDoc, businessDoc) {
+  const fromProvider = providerDoc ? BCAT.categoryOf(providerDoc) : null;
+  if (fromProvider) return fromProvider;
+  const b = businessDoc && businessDoc.business;
+  if (b && BCAT.isCategory(b.category) && ['application', 'admin'].includes(String(b.source || ''))) return b.category;
+  return null;
+}
+
+/* A holding answer: no working dashboard, Overview + Settings only, and the reason named. */
+function _holding(state, reason, category, message, extra) {
+  const mods = _moduleSet(STATE.PENDING_APPROVAL, reason);
+  mods.overview = { state: STATE.AVAILABLE, reason: null };
+  mods.settings = { state: STATE.AVAILABLE, reason: null };
+  return Object.assign({ found: true, category, label: category ? BCAT.label(category) : 'Awaiting classification', route: null, state, reason,
+    message, modules: mods, entitlement: { state: null, hub: null } }, extra || {});
+}
+
+/**
+ * R2 — route = f(category, capability). Two authorities, BOTH required, neither inferred from the other:
+ *
+ *   category lane   capability               → route
+ *   products        PRODUCTS                 → merchant-v2 (the category's own route)
+ *   services        SERVICES                 → the category's route (provider-dashboard, venue-manager, …) + modules
+ *   any             PRODUCTS_AND_SERVICES    → merchant-v2 WITH the Services workspace (one business)
+ *   products        SERVICES only            → CONFLICT — no route
+ *   services        PRODUCTS only            → CONFLICT — no route
+ *   none            any routable capability  → PENDING_CLASSIFICATION — no route (the grandfather clause is REMOVED:
+ *                                              an approved provider with no category no longer inherits the provider
+ *                                              dashboard; AdminOS classifies it, then the contract applies)
+ *   any             UNCLASSIFIED             → no route (PENDING_APPROVAL / not found, as before)
+ *   any             CONFLICT                 → no route
+ *   —               unreadable               → no route (CAPABILITY_UNREADABLE; fail closed, never route on one authority)
+ */
 async function workspaceFor(db, uid) {
   const capability = await capabilityFor(db, uid);
-  const withCap = (w) => Object.assign(w, { capability, servicesWorkspace: w.servicesWorkspace === true });
+  const [p, b] = await Promise.all([db.collection('providers').doc(String(uid)).get(), db.collection('businesses').doc(String(uid)).get()]);
+  const prov = p.exists ? (p.data() || {}) : null, biz = b.exists ? (b.data() || {}) : null;
+  const category = categoryFor(prov, biz);
+  const lane = laneOf(category);
+  const withCap = (w) => Object.assign(w, { capability, category: w.category === undefined ? category : w.category, lane, servicesWorkspace: w.servicesWorkspace === true });
+  const K = CAPS.CLASSIFICATION;
 
-  /* CONFLICT refuses routing: the records disagree (a live-looking status with no approval evidence, a stamp that
-     disagrees with the registry, a malformed stamp). No working dashboard until a human resolves it — never a
-     default to provider or merchant. */
-  if (capability.readable && capability.classification === CAPS.CLASSIFICATION.CONFLICT) {
-    const mods = _moduleSet(STATE.PENDING_APPROVAL, 'CAPABILITY_CONFLICT');
-    mods.overview = { state: STATE.AVAILABLE, reason: null };
-    mods.settings = { state: STATE.AVAILABLE, reason: null };
-    const p = await db.collection('providers').doc(String(uid)).get();
-    const prov = p.exists ? (p.data() || {}) : {};
-    const category = p.exists ? BCAT.categoryOf(prov) : null;
-    return withCap({ found: true, category, label: category ? BCAT.label(category) : 'Awaiting review', route: null, state: 'CAPABILITY_CONFLICT',
-      reason: 'CAPABILITY_CONFLICT', conflicts: capability.conflicts,
-      message: 'Your business records need a SOKONI review before your workspace opens.', modules: mods, entitlement: { state: null, hub: null } });
+  if (!capability.readable) {
+    return withCap(_holding('CAPABILITY_UNREADABLE', 'CAPABILITY_UNREADABLE', category,
+      'Your business record could not be read just now. Nothing has changed; please try again shortly.'));
+  }
+  const cls = capability.classification;
+
+  /* CONFLICT from the read model: a live-looking status with no approval evidence, a stamp that disagrees with the
+     registry, a malformed stamp. */
+  if (cls === K.CONFLICT) {
+    return withCap(_holding('CAPABILITY_CONFLICT', 'CAPABILITY_CONFLICT', category,
+      'Your business records need a SOKONI review before your workspace opens.', { conflicts: capability.conflicts }));
   }
 
-  /* PRODUCTS only (a live, approved seller with no live provider): the merchant workspace, whose own authority
-     decides its modules. Before C2 this account was "no approved business" because only providers were read. */
-  if (capability.readable && capability.classification === CAPS.CLASSIFICATION.PRODUCTS) {
-    return withCap({ found: true, category: null, label: 'My shop', route: 'merchant-v2.html', state: STATE.AVAILABLE, reason: null,
-      modules: _moduleSet(STATE.NOT_APPLICABLE, 'OWN_WORKSPACE'), entitlement: { state: null, hub: 'merchant' } });
+  /* UNCLASSIFIED: no approved capability. Not found, or the pre-existing pending / suspended answer — with NO route. */
+  if (cls === K.UNCLASSIFIED) {
+    if (!prov) {
+      return withCap({ found: false, category: null, route: null, state: STATE.PENDING_APPROVAL, reason: 'NO_APPROVED_BUSINESS',
+        modules: _moduleSet(STATE.PENDING_APPROVAL, 'NO_APPROVED_BUSINESS'), entitlement: { state: null, hub: null } });
+    }
+    const suspended = String(prov.status || '') === 'suspended' || prov.suspended === true;
+    return withCap(_holding(STATE.PENDING_APPROVAL, suspended ? 'SUSPENDED' : 'NOT_APPROVED', category,
+      suspended ? 'Your business is suspended.' : 'Your business is not active yet.', { publicEligibility: BCAT.publicEligibility(prov || {}) }));
   }
 
-  const w = await _categoryWorkspace(db, uid);
+  /* An approved capability with NO category: pending classification. AdminOS decides; nothing is inferred. */
+  if (!category) {
+    return withCap(_holding('PENDING_CLASSIFICATION', 'UNCLASSIFIED', null,
+      'SOKONI is confirming what kind of business you are. Your full workspace opens as soon as that is done.'));
+  }
 
-  /* PRODUCTS + SERVICES = ONE business: Merchant V2 with the Services workspace (owner decision). The category
-     path still supplies the category and the service-module states the Services side entry will render. */
-  if (capability.readable && capability.classification === CAPS.CLASSIFICATION.PRODUCTS_AND_SERVICES && w.found) {
+  /* The two authorities disagree on what kind of trade this is. */
+  if ((lane === 'products' && cls === K.SERVICES) || (lane === 'services' && cls === K.PRODUCTS)) {
+    return withCap(_holding('CAPABILITY_CONFLICT', 'CATEGORY_CAPABILITY_DISAGREEMENT', category,
+      'Your business records need a SOKONI review before your workspace opens.',
+      { conflicts: ['category_capability_disagreement:' + lane + '/' + cls] }));
+  }
+
+  /* products lane + PRODUCTS: the category's own route (merchant-v2), whose own authority decides its modules. */
+  if (cls === K.PRODUCTS) {
+    const route = Object.prototype.hasOwnProperty.call(ROUTE_OF, category) ? ROUTE_OF[category] : null;
+    return withCap({ found: true, category, label: BCAT.label(category), route, state: route ? STATE.AVAILABLE : STATE.NOT_IMPLEMENTED,
+      reason: route ? null : 'WORKSPACE_NOT_BUILT', modules: _moduleSet(STATE.NOT_APPLICABLE, 'OWN_WORKSPACE'), entitlement: { state: null, hub: 'merchant' } });
+  }
+
+  /* services lane + SERVICES, or both: the category path supplies route and module states (unchanged behaviour for a
+     valid combination); both capabilities make it ONE business on merchant-v2 with the Services workspace. */
+  const w = await _categoryWorkspace(db, uid, prov, category);
+  if (cls === K.PRODUCTS_AND_SERVICES) {
     return withCap(Object.assign(w, { route: 'merchant-v2.html', state: STATE.AVAILABLE, reason: null, servicesWorkspace: true }));
   }
   return withCap(w);
 }
 
-/* The category path — unchanged: what this authority did before C2, now reached only when the capability read
-   model did not already decide (SERVICES, UNCLASSIFIED, or an unreadable capability). */
-async function _categoryWorkspace(db, uid) {
-  const snap = await db.collection('providers').doc(String(uid)).get();
-  if (!snap.exists) {
-    return { found: false, category: null, route: null, state: STATE.PENDING_APPROVAL, reason: 'NO_APPROVED_BUSINESS',
-      modules: _moduleSet(STATE.PENDING_APPROVAL, 'NO_APPROVED_BUSINESS'), entitlement: { state: null, hub: null } };
+/* The category path for an APPROVED provider WITH a category: the category's route and the module states. Reached
+   only through workspaceFor once both authorities agree. The pre-R2 branches for "no provider", "not approved" and
+   the LEGACY grandfather clause ("approved before C1, no category → full provider dashboard", owner 2026-09-28) are
+   gone: the owner removed the clause on 2026-09-29 — no category + no authoritative combination = not routable. */
+async function _categoryWorkspace(db, uid, prov, category) {
+  /* A services-lane category on an account whose provider record is missing cannot happen through workspaceFor
+     (the capability would not be SERVICES); guarded anyway — fail closed, never a route on one authority. */
+  if (!prov || !category) {
+    return _holding('PENDING_CLASSIFICATION', 'UNCLASSIFIED', null,
+      'SOKONI is confirming what kind of business you are. Your full workspace opens as soon as that is done.');
   }
-  const prov = snap.data() || {};
-  const category = BCAT.categoryOf(prov);
   const elig = BCAT.publicEligibility(prov);
-  const approved = ['active', 'approved'].includes(String(prov.status || '')) && prov.suspended !== true;
-
-  /* LEGACY (owner decision 2026-09-28): a provider approved BEFORE C1 carries no `business` stamp at all (and no
-     Healthcare record). It is GRANDFATHERED — it keeps the provider-dashboard modules it has today, is marked
-     LEGACY_UNCLASSIFIED, and appears in AdminOS › Business Categories; once classified, the strict gates apply.
-     Every NEW approval is stamped (C1) and is strict immediately. No migration. */
-  if (approved && !category && !prov.business && !prov.healthcare) {
-    let isCreator = false;
-    try { const c = await db.collection('creators').doc(String(uid)).get(); isCreator = c.exists && String((c.data() || {}).state || '') === 'ACTIVE'; } catch (_) { isCreator = false; }
-    const mods = {};
-    for (const k of MODULE_KEYS) {
-      if (!MODULES[k].implemented) { mods[k] = { state: STATE.NOT_IMPLEMENTED, reason: MODULES[k].why || null }; continue; }
-      if (k === 'content' && !isCreator) { mods[k] = { state: STATE.NOT_APPLICABLE, reason: 'NOT_A_CREATOR' }; continue; }
-      mods[k] = { state: STATE.AVAILABLE, reason: null };
-    }
-    return { found: true, category: null, label: 'Awaiting classification', route: 'provider-dashboard.html', state: 'LEGACY_UNCLASSIFIED',
-      reason: 'LEGACY_UNCLASSIFIED', modules: mods, entitlement: { state: STATE.COMMERCIAL_DECISION_REQUIRED, hub: null, tier: null, status: null }, publicEligibility: elig };
-  }
-
-  /* PENDING_APPROVAL: not approved / suspended, or approved but UNCLASSIFIED (AdminOS decides — no privileged
-     workspace in the meantime, owner decision 2026-09-28). Overview + Settings only, so the account can see why. */
-  if (!approved || !category) {
-    const reason = !approved ? (String(prov.status || '') === 'suspended' || prov.suspended ? 'SUSPENDED' : 'NOT_APPROVED') : 'UNCLASSIFIED';
-    const mods = _moduleSet(STATE.PENDING_APPROVAL, reason);
-    mods.overview = { state: STATE.AVAILABLE, reason: null };
-    mods.settings = { state: STATE.AVAILABLE, reason: null };
-    return { found: true, category, label: BCAT.label(category), route: 'provider-dashboard.html', state: STATE.PENDING_APPROVAL, reason,
-      modules: mods, entitlement: { state: null, hub: null }, publicEligibility: elig };
-  }
 
   const route = Object.prototype.hasOwnProperty.call(ROUTE_OF, category) ? ROUTE_OF[category] : null;
   const planHub = PLAN_HUB_OF(category);
@@ -393,7 +433,7 @@ async function homeFor(db, uid, token) {
     if (w.found) {
       add({ kind: 'business', label: w.label || 'My business', category: w.category, state: w.state, route: w.route,
         servicesWorkspace: w.servicesWorkspace === true, capability: w.capability ? w.capability.classification : null,
-        message: w.message || (w.state === STATE.PENDING_APPROVAL ? (w.reason === 'UNCLASSIFIED' ? 'SOKONI is confirming what kind of business you are. You will get your workspace as soon as it is done.' : 'Your business is not active yet.') : null) });
+        message: w.message || (w.state === STATE.PENDING_APPROVAL ? 'Your business is not active yet.' : null) });
     }
   } catch (_) { /* fall through — never invent a workspace */ }
   try {
@@ -433,4 +473,4 @@ const _h = {
   },
 };
 
-module.exports = { STATE, MODULES, MODULE_KEYS, CORE, PROFILES, PROFILE_OF, PROFILE_NOT_BUILT, ROUTE_OF, modulesForProfile, notBuiltFor, healthcareModules, workspaceFor, capabilityFor, homeFor, assertModule, gateCalendarModule, gateIfProvider, _h };
+module.exports = { STATE, MODULES, MODULE_KEYS, CORE, PROFILES, PROFILE_OF, PROFILE_NOT_BUILT, ROUTE_OF, modulesForProfile, notBuiltFor, healthcareModules, workspaceFor, capabilityFor, categoryFor, laneOf, homeFor, assertModule, gateCalendarModule, gateIfProvider, _h };
