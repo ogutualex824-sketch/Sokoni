@@ -1,3 +1,16 @@
+## [2026-09-29] - R1: `businesses.capabilities` and `businesses.business` are server-written only (rules; NOT deployed)
+
+Closes the self-stamp vector found by the routing census: any owner could create `businesses/{their uid}` carrying a
+well-formed capability stamp and be read as STAMPED. `firestore.rules` (one `businesses` block): create may not carry
+`capabilities` or `business`; owner updates may not affect them; an admin's RAW client write may not either — the
+audited server paths (approval projection, migration contract, AdminOS reclassification) are the only writers. All
+other business behaviour unchanged. `firestore.rules.build` rebuilt (braces 1702/1702).
+Evidence: `scripts/test-business-capability-rules.js` **24/0** on the rebuilt ruleset; **negative control 12/12 failing
+on the pre-R1 build** (the self-stamp writes succeed there, positive controls still pass); regression
+business-category-rules 20/0 · employment-events-rules 26/0 · employment-invites-rules 40/0 · shop-writer-authority
+20/0. Ledger `docs/R1_CAPABILITY_RULES.md`. No consumer change, no classification, no migration, no deploy — the served
+ruleset still carries the vector until a rules release is authorized.
+
 ## [2026-09-29] - Routing convergence: read-only ownership/provenance census of C1 and the workspace authority (nothing changed)
 
 `docs/ROUTING_CONVERGENCE_CENSUS.md`. Provenance: C1 (`13597e4`) and the workspace authority (`ad7265b`…`300ddaa`) are the
