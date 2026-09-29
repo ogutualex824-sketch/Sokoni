@@ -1,3 +1,50 @@
+## 2026-09-29 — Integration catalogue: proposed delta + the webhook engine that talks to nothing (branch `feat/integrations-control-center`, NOT deployed)
+
+Proposal only — steps 1–6 of the owner's locked order, stopping at step 7 (review) by instruction. **No entry
+added, no taxonomy implemented, no test rebaselined, no deploy.** The count is still 47 and the frozen digest
+`ac1b9ea3204f70756903762c0b95047f5f72e3bc0a00d26580f9fab1cbb82638` still matches.
+Full note: `docs/INTEGRATION_CATALOGUE_DELTA_PROPOSAL.md`.
+
+**Already covered, though asked for:** every GCP/Firebase service named — cloud-run, cloud-functions, firestore(+
+indexes, sokoni-ops), secret-manager, cloud-monitoring, artifact-registry, memorystore-redis, firebase-hosting,
+cloud-storage, app-check, cloud-scheduler, cloudflare — plus **HostPinnacle twice** (`hostpinnacle-dns`,
+`hostpinnacle-mail`). Cloud Run and Firestore reading blank is the undeployed Step B/E wiring, **not** a missing
+entry.
+
+**`sokoni-webhook-engine.js` is not what its header says.** It IS reachable and DOES execute — `index.html:4151`
+lazily injects it after load, on idle, so every homepage visitor runs it. It makes **no network calls of any kind**
+— no fetch, no XHR, no axios, no httpsCallable, in 485 lines. Its header claims *"every external payment provider…
+sends events through a single hardened pipeline"*; there is no pipeline. It declares **17 providers** — intasend,
+**mpesa**, **stripe**, flutterwave, airtel_money, visa, mastercard, apple_pay, google_pay, smartpos, sendy, fargo,
+africastalking, mailgun, twilio, firebase, custom — and cannot contact one of them. Three separable consequences:
+none belongs in the catalogue (the Daraja lane is the model — named as excluded, with the reason); `mpesa` is
+declared although Daraja is retired and the card/wallet rails are declared although **IntaSend is the sole payment
+provider and merchant of record**; and it is a **claim surface** — shipped to every visitor, so the delivered
+JavaScript declares support for Stripe, Visa, Mastercard and Apple Pay that the platform cannot honour. Recommended
+as its own gated lane; this proposal does not touch it.
+
+**New class specified, not coded — OPERATIONAL_DEPENDENCY.** A business-critical provider with no SOKONI code path.
+It must never render as `unknown`, NOT VERIFIED or REFUSED BY DESIGN: those are states of our *measurement*, while
+**NOT PROBEABLE** is a property of the *relationship*. It carries no requiredSecrets, no stage model, no
+probeAvailability and no evidence record — inventory, not measurement — and lives in a **separate console section**,
+not in the 47.
+
+**Proposed delta (not applied):** five code integrations — `google-maps` (CSP + service-worker.js:382 +
+rider-nav.html:449), `ga4-analytics`, `firebase-remote-config`, `cloud-logging`, `eventarc` — taking 47 → 52; and
+two operational dependencies, `google-workspace` and `google-admin`, in their own list. **HELD as weak:** Firebase
+Performance (1 file), Cloud Build (1 file, AR-forensics context). **Rejected:** cPanel — the hit was the regex
+matching the variable `discPanel`; Twilio — SendGrid's vendor name, already catalogued. **Caveat on GA4:** the
+loader and CSP allowance exist but **no `G-XXXXXXXX` measurement id is committed**, so "wired" is evidenced and
+"configured" is not.
+
+This delta would deliberately turn parity (26/0), the pinned absence partition (3·4·9·15·5·11=47) and the baseline
+digest red. **That is the guard working.** Rebaselining is step 8 and is not authorized here.
+
+Files: `docs/INTEGRATION_CATALOGUE_DELTA_PROPOSAL.md` (new).
+Database: none. API: none. Security: none. Breaking changes: none. Deploy: none.
+UNPROVEN: whether the deployed bundle matches this source; whether GA4 is configured outside the repo; whether
+cPanel is used operationally at all.
+
 ## 2026-09-29 — AdminOS navigation, Slice E: final certification on the landed tree (branch `feat/integrations-control-center`, NOT deployed)
 
 No feature change. E re-ran every navigation suite against the committed tree `3f437f7` with the navigation files
