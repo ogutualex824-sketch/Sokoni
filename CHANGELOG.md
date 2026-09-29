@@ -1,3 +1,23 @@
+## 2026-09-29 — Classification → storefront → dashboard: read-only census (branch `feat/integrations-control-center`, NOT deployed)
+
+First slice of the new convergence track (business / service provider / Double Business). Nothing changed, nothing
+deployed. Ledger: `docs/CLASSIFICATION_STOREFRONT_CENSUS.md` — ownership map (collection → writers → readers →
+authoritative field), the six places two fields claim the same thing, the fourteen resolvers routing on display or
+self-declared fields, the current production state of DG Wine and Latomi Gadgets (each a `providers/{uid}` + one approved
+application; no business, shop or product record; `provider` claim), and the findings that gate any migration.
+
+Findings that change the premise: the dual-business intake (`business-apply.html`, the only "What are you offering?"
+step) IS merged into this branch but is unreachable and stores no offering field; there is no persisted capability state
+(`business-scope.js` derives one from `sellers`/`providers` liveness and nothing routes on it); `resolveRole` classifies
+85 of 114 Register-My-Business categories as providers; the category authority (`business-category.js`) lives on
+`slice/c4-category-matrix`, not here; the production self-mint hotfix `1171a16` is NOT an ancestor of HEAD, so a functions
+deploy from this branch would re-open `onbActivateRole`; admin user counts read Firestore `users` only (85) while Auth
+holds 77, with 6 accounts lacking a doc and 14 docs lacking an account.
+
+Production census was read-only and aggregate; the per-record listing needed to name fake users/shops/products, and the
+scan of the remaining product-bearing collections for the two owners, were blocked by the session's production-read
+permission and remain unrun (scripts in the session scratchpad). No deletion has been performed or scheduled.
+
 ## 2026-09-29 — Connected workspace: final certification of D → E → V1–V3 → C1–C6 (branch `feat/integrations-control-center`, NOT deployed)
 
 The owner's 13-point convergence directive is complete on this branch: one canonical AdminOS workspace for
