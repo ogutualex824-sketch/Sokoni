@@ -139,6 +139,8 @@
         lowStock: (stock != null && typeof p.lowStockThreshold === 'number')
           ? stock <= p.lowStockThreshold : (stock != null ? stock <= 5 : null),
         inventoryVersion: (typeof p.inventoryVersion === 'number') ? p.inventoryVersion : null,
+        /* buyer price offers are opt-in per product (owner rule, T2b 2026-09-29) */
+        acceptOffers: p.acceptOffers === true,
       };
     });
   }

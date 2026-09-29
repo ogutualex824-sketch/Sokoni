@@ -77,6 +77,10 @@ async function validateOrderLines(uid, items) {
   const avail = require('./availability-enforce');
   const lines = [];
   let subtotal = 0;
+  /* An AGREED buyer offer (functions/product-offers.js) is the only thing that can change a line's unit price, and it
+     is read HERE from productOffers — never from the request. A line naming an offer that is not this buyer's, not
+     accepted, expired, used, or over its quantity is REFUSED (never silently re-priced). 2026-09-29. */
+  const priceLine = await require('./product-offers').offerResolver(db(), uid, items, Date.now());
 
   for (const raw of items) {
     const pid = String((raw && (raw.productId || raw.id)) || '').trim();
@@ -97,11 +101,12 @@ async function validateOrderLines(uid, items) {
       fail('failed-precondition',
         `Only ${stockQty} of ${prod.name || pid} remain. Please update your cart.`);
 
-    const unitPrice = Number(prod.salePrice || prod.price || 0);
-    if (!(unitPrice > 0)) fail('failed-precondition', `${prod.name || pid} has no price.`);
+    const catalogueUnit = Number(prod.salePrice || prod.price || 0);
+    if (!(catalogueUnit > 0)) fail('failed-precondition', `${prod.name || pid} has no price.`);
+    const { unitPrice, offerId } = priceLine(raw, pid, qty, catalogueUnit);
 
     subtotal += unitPrice * qty;
-    lines.push({ productId: pid, qty, unitPrice, sellerUid: prod.sellerUid || null });
+    lines.push(Object.assign({ productId: pid, qty, unitPrice, sellerUid: prod.sellerUid || null }, offerId ? { offerId, listUnitPrice: catalogueUnit } : {}));
   }
 
   return { lines, subtotal };

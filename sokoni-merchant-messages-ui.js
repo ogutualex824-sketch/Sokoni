@@ -97,6 +97,8 @@
     /* system notes (product Q&A, 2026-09-29) — centred, quiet, with the Publish-answer action */
     '.mmg-sys{align-self:center;max-width:92%;text-align:center;font-size:12px;color:var(--txt2);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:8px 12px}',
     '.mmg-sys-act{margin-top:8px;display:flex;flex-direction:column;align-items:center;gap:4px}',
+    '.mmg-offer{border-color:rgba(255,193,7,.3);background:rgba(255,193,7,.06);color:var(--txt)}',
+    '.mmg-offer-btns{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}',
     '.mmg-sys-hint{font-size:11px;color:var(--txt3)}',
     '.mmg-msg.deleted{opacity:.5;font-style:italic}',
     '.mmg-day{align-self:center;font-size:10.5px;color:var(--txt3);background:rgba(255,255,255,.05);',
@@ -301,8 +303,20 @@
           '<div class="hd">No messages yet</div>Say hello — they will see it straight away.</div></div>';
       } else {
         var openQa = MM.openQuestions ? MM.openQuestions(S.messages) : [];
+        var offers = MM.offerStates ? MM.offerStates(S.messages) : {};
         body = '<div class="mmg-msgs">' + S.messages.map(function (m) {
           var mine = me && m.senderId === me;
+          if (m.type === 'system' && m.event && m.event.kind === 'offer') {
+            /* a buyer's price offer — Accept / Decline / Counter only on the LATEST note, and only on the seller's turn */
+            var latest = offers[m.event.offerId];
+            var myTurn = latest && latest.id === m.id && m.event.state === 'pending' && m.event.by === 'buyer';
+            return '<div class="mmg-sys mmg-offer" role="note">' + esc(m.text) +
+              (myTurn ? '<div class="mmg-sys-act"><div class="mmg-offer-btns">' +
+                '<button class="mmg-btn" data-act="offer" data-v="accept" data-offer="' + esc(m.event.offerId) + '"' + (S.offerBusy ? ' disabled' : '') + '>Accept</button>' +
+                '<button class="mmg-btn" data-act="offer" data-v="reject" data-offer="' + esc(m.event.offerId) + '"' + (S.offerBusy ? ' disabled' : '') + '>Decline</button>' +
+                '<button class="mmg-btn" data-act="offer" data-v="counter" data-offer="' + esc(m.event.offerId) + '"' + (S.offerBusy ? ' disabled' : '') + '>Counter</button></div>' +
+                '<div class="mmg-sys-hint">Counter uses the price (KES) typed in the box below. An accepted price holds for 24 hours.</div></div>' : '') + '</div>';
+          }
           if (m.type === 'system') {
             /* a buyer's PUBLIC product question: publish the answer from here (product-enquiries.productQuestionAnswer) */
             var pending = m.event && m.event.kind === 'public_question' && openQa.indexOf(m.event.qaId) !== -1;
@@ -377,6 +391,25 @@
       }).catch(function (e) { S.publishing = false; S.sendError = (e && e.message) || 'The answer could not be published.'; paint(); });
     }
 
+    /* Accept / decline / counter a buyer's offer. "Accepted" shows only after the server. */
+    function respondOffer(offerId, action) {
+      if (S.offerBusy || !S.open) return;
+      var amount = null;
+      if (action === 'counter') {
+        amount = Math.round(Number(String(S.draft || '').replace(/[^0-9.]/g, '')));
+        if (!(amount > 0)) { S.sendError = 'Type your counter price (KES) in the box below, then press Counter.'; paint(); return; }
+      }
+      S.offerBusy = true; S.sendError = null; paint();
+      MM.respondOffer({ offerId: offerId, action: action, amount: amount, dispatch: ctx.dispatch }).then(function (r) {
+        S.offerBusy = false;
+        if (!r.ok) { S.sendError = r.error; paint(); return; }
+        if (action === 'counter') S.draft = '';
+        toast(action === 'accept' ? 'Offer accepted — the buyer has 24 hours to pay' : action === 'reject' ? 'Offer declined' : 'Counter sent', 'ok');
+        var t = S.open;
+        MM.loadMessages({ conversationId: t.id, db: ctx.db }).then(function (m) { if (S.open && S.open.id === t.id && m.ok) S.messages = m.messages; paint(); });
+      }).catch(function (e) { S.offerBusy = false; S.sendError = (e && e.message) || 'The offer could not be updated.'; paint(); });
+    }
+
     function onClick(ev) {
       var el = ev.target && ev.target.closest ? ev.target.closest('[data-act]') : null;
       if (!el || !host.contains(el)) return;
@@ -389,6 +422,7 @@
       if (act === 'retry-thread')  { if (S.open) openThread(S.open); return; }
       if (act === 'send')          { send(); return; }
       if (act === 'publish-qa')    { publishQa(el.getAttribute('data-qa')); return; }
+      if (act === 'offer')         { respondOffer(el.getAttribute('data-offer'), el.getAttribute('data-v')); return; }
     }
 
     function onInput(ev) {

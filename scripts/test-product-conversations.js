@@ -117,7 +117,8 @@ const msgsOf = async (cid) => (await db.collection('conversations').doc(cid).col
   ck('PC9 no localStorage Q&A / comments / offers or contactRequests; Chat / Ask / Offer go to the server; Q&A reads productQA; merchant-v2 publishes answers',
     !/localStorage\.setItem\("sokoniQA"/.test(pj) && !/localStorage\.setItem\("sokoniComments"/.test(pj) && !/localStorage\.setItem\("sokoniOffers"/.test(pj)
     && !/collection\(db,\s*'contactRequests'\)/.test(pj) && /op: "productEnquirySend"/.test(pj) && /FS\.collection\(db, "productQA"\)/.test(pj)
-    && /openAskSeller\(\{ publicQuestion: false \}\)/.test(pj) && /_sendToSeller\(text, false\)/.test(pj)
+    /* T2b (2026-09-29): an offer is a STRUCTURED server record (productOfferSend), no longer a chat message */
+    && /openAskSeller\(\{ publicQuestion: false \}\)/.test(pj) && /op = "productOfferSend"/.test(pj)
     && /data-act="publish-qa"/.test(mmu) && /answer: 'productQuestionAnswer'/.test(mm));
 
   say(`\n${pass} passed, ${fail} failed`);

@@ -2427,10 +2427,12 @@ async function _placeOrderCore(){
       const _ordId = _ckOrderId();
 
       /* {productId, qty} the webhook decrements stock from. */
-      const _items = currentCart2.map(i => ({
+      const _items = currentCart2.map(i => Object.assign({
         productId: i.id || i.productId,
         qty:       Math.max(1, parseInt(i.qty, 10) || 1),
-      })).filter(i => i.productId);
+      /* an agreed buyer offer travels as a REFERENCE; the server pricer reads productOffers and charges the agreed
+         price or refuses — no price leaves this page (T2b, 2026-09-29) */
+      }, i.offerId ? { offerId: String(i.offerId) } : {})).filter(i => i.productId);
 
       try {
         if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('preparing', 'Creating your order…');
@@ -2720,10 +2722,10 @@ async function sendStkPush(){
     try {
       const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js");
       const createSession = httpsCallable(getFunctions(undefined, "us-central1"), "createCheckoutSession");
-      const cartForSession = cart.map(i => ({
+      const cartForSession = cart.map(i => Object.assign({
         productId: String(i.id || i.productId || ""),
         qty:       Math.max(1, Math.round(Number(i.qty) || Number(i.quantity) || 1)),
-      })).filter(i => i.productId);
+      }, i.offerId ? { offerId: String(i.offerId) } : {})).filter(i => i.productId);   /* agreed offer = a reference (T2b) */
 
       const sessionRes = await createSession({
         cartItems:   cartForSession,

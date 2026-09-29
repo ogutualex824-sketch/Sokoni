@@ -56,6 +56,8 @@
     report: 'reportConversation',
     /* product Q&A (product-enquiries.js, 2026-09-29): publish the public answer from the thread */
     answer: 'productQuestionAnswer',
+    /* buyer price offers (product-offers.js, T2b): accept / reject / counter on the seller's turn */
+    offer: 'productOfferRespond',
   };
 
   var MAX_TEXT = 4000;      /* mirrors sendMessage's server-side cap */
@@ -154,7 +156,9 @@
           timestamp: m.timestamp || null,
           deleted: m.deleted === true,
           /* a system message's event (e.g. { qaId, kind:'public_question' }) — drives the Publish-answer action */
-          event: (m.event && typeof m.event === 'object') ? { qaId: m.event.qaId || null, kind: m.event.kind || null } : null,
+          event: (m.event && typeof m.event === 'object') ? { qaId: m.event.qaId || null, kind: m.event.kind || null,
+            offerId: m.event.offerId || null, state: m.event.state || null, by: m.event.by || null,
+            amount: typeof m.event.amount === 'number' ? m.event.amount : null, qty: typeof m.event.qty === 'number' ? m.event.qty : null } : null,
         };
       }) };
     } catch (e) {
@@ -199,6 +203,29 @@
     return Object.keys(st).filter(function (id) { return st[id] === 'public_question'; });
   }
 
+  /** Respond to a buyer's price offer (the server checks it is the seller's turn). action: accept | reject | counter */
+  async function respondOffer(o) {
+    if (!o.offerId) throw new Error('merchant messages: offerId is required');
+    if (['accept', 'reject', 'counter'].indexOf(o.action) === -1) throw new Error('merchant messages: unknown offer action');
+    var payload = { offerId: String(o.offerId), action: o.action };
+    if (o.action === 'counter') {
+      var amt = Math.round(Number(o.amount));
+      if (!(amt > 0)) throw new Error('Enter the counter price in KES.');
+      payload.amount = amt;
+    }
+    return _op(o.dispatch, OPS.offer, payload, 'The offer could not be updated.');
+  }
+
+  /** The latest note of each offer in a thread; an offer is the SELLER's move while its latest note is a pending
+      proposal made by the buyer. The server re-checks the turn — this only decides which buttons to show. */
+  function offerStates(messages) {
+    var st = {};
+    (messages || []).forEach(function (m) {
+      if (m && m.event && m.event.kind === 'offer' && m.event.offerId) st[m.event.offerId] = { id: m.id, ev: m.event };
+    });
+    return st;
+  }
+
   async function markRead(o) {
     if (!o.conversationId) throw new Error('merchant messages: conversationId is required');
     return _op(o.dispatch, OPS.markRead, { conversationId: String(o.conversationId) },
@@ -235,6 +262,8 @@
     MAX_TEXT: MAX_TEXT,
     scopeNote: scopeNote,
     answerQuestion: answerQuestion,
+    respondOffer: respondOffer,
+    offerStates: offerStates,
     openQuestions: openQuestions,
     projectThread: projectThread,
     listThreads: listThreads,

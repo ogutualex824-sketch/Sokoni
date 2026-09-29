@@ -622,7 +622,7 @@ else{
                     <button class="prd-cta-primary" onclick="_prdPrimaryAction()">${_lt().primary.icon} ${_prdPrimaryLabel(product)}</button>
                     <div class="prd-cta-row">
                         ${_lt().secondary ? `<button class="prd-cta-secondary" onclick="_prdSecondaryAction()">${_lt().secondary.icon} ${_lt().secondary.label}</button>` : ''}
-                        <button onclick="openMakeOffer()" class="prd-cta-secondary" style="flex:0 0 auto;padding:14px 16px;">&#x1F3F7;&#xFE0F; Offer</button>
+                        ${product.acceptOffers === true ? '<button onclick="openMakeOffer()" class="prd-cta-secondary" style="flex:0 0 auto;padding:14px 16px;">&#x1F3F7;&#xFE0F; Offer</button>' : ''}
                     </div>
                     <div class="prd-cta-row" style="margin-top:8px;">
                         <button class="prd-cta-icon-btn whatsapp" id="prdWaBtn" onclick="contactSellerGated()">
@@ -642,16 +642,8 @@ else{
                     </div>
                 </div>
 
-                <!-- MAKE AN OFFER PANEL -->
-                <div id="offerPanel" style="display:none;margin-top:14px;background:rgba(255,152,0,0.06);border:1px solid rgba(255,152,0,0.2);border-radius:14px;padding:16px;">
-                    <div style="font-size:14px;font-weight:800;color:white;margin-bottom:8px;">&#x1F3F7;&#xFE0F; Make an Offer</div>
-                    <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:10px;">Listed at <strong style="color:#71ff00;">KES ${Number(product.price).toLocaleString()}</strong> — offer the seller a price.</div>
-                    <input type="number" id="offerPrice" placeholder="Your offer price (KES)" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:white;font-size:14px;outline:none;font-family:inherit;margin-bottom:8px;">
-                    <input type="text" id="offerMsg" placeholder="Message to seller (optional)" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:white;font-size:13px;outline:none;font-family:inherit;margin-bottom:10px;">
-                    <button onclick="submitOffer()" style="padding:11px 24px;background:linear-gradient(135deg,#ff9800,#e06000);color:white;font-weight:800;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">&#x1F4E4; Send Offer</button>
-                    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:6px;">Your offer goes to the seller as a message in SOKONI; they reply in the conversation.</div>
-                    <div id="offerConfirm" style="margin-top:8px;font-size:12px;"></div>
-                </div>
+                <!-- MAKE AN OFFER — drawn from the SERVER's offer state (functions/product-offers.js; T2b 2026-09-29) -->
+                <div id="offerPanel" role="region" aria-label="Make an offer" aria-live="polite" style="display:none;margin-top:14px;background:rgba(255,152,0,0.06);border:1px solid rgba(255,152,0,0.2);border-radius:14px;padding:16px;"></div>
 
                 <!-- 2026-09-29: the fixed "✔ Premium Quality / Fast Delivery / Trusted Seller / Secure Payments" claims were
                      shown on EVERY product regardless of fact — removed (UI data integrity). Real signals follow. -->
@@ -1439,33 +1431,132 @@ function shareProductWhatsApp(){
     window.open(`https://wa.me/?text=${text}`, "_blank");
 }
 
-/* MAKE AN OFFER */
+/* MAKE AN OFFER — T2b (2026-09-29). The offer is a SERVER record (productOffers, via messagesDispatch): the seller
+   sees it in merchant-v2 › Messages and accepts, declines or counters; an agreed price holds 24 h for the agreed
+   quantity and checkout charges it only because the SERVER pricer reads it. Before: localStorage, seen by nobody. */
+const _OFFER_FLOOR = 0.5;   /* display hint only — the server enforces the owner's 50% floor */
+let _offerState = null, _offerBusy = false, _offerTimer = null;
+
+function _offerKes(n){ return "KES " + Math.round(Number(n) || 0).toLocaleString("en-KE"); }
+function _offerListPrice(){ return Number(product && (product.salePrice || product.price)) || 0; }
+
+async function _offerCall(op, data){
+    const user = window.SokoniReport ? await SokoniReport.currentUser() : null;
+    if(!user){ location.href = "login.html?next=" + encodeURIComponent(location.pathname + location.search); return null; }
+    if(!window.SokoniSecureCall) throw new Error("Offers are still loading — try again in a moment.");
+    return SokoniSecureCall("messagesDispatch", Object.assign({ op: op }, data));
+}
+
+function _offerLeft(ms){
+    const m = Math.max(0, Math.floor((ms - Date.now()) / 60000));
+    return m >= 60 ? Math.floor(m / 60) + " h " + (m % 60) + " min" : m + " min";
+}
+
+function renderOfferPanel(msg, isErr){
+    const el = document.getElementById("offerPanel");
+    if(!el || !product) return;
+    const o = _offerState, list = _offerListPrice(), floor = Math.ceil(list * _OFFER_FLOOR);
+    const B = "min-height:44px;padding:10px 18px;border-radius:10px;font-weight:800;font-size:13px;font-family:inherit;cursor:pointer;";
+    const input = (id, ph) => '<input type="number" inputmode="numeric" id="' + id + '" min="1" placeholder="' + ph + '" style="width:100%;box-sizing:border-box;padding:12px 14px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:white;font-size:16px;font-family:inherit;margin-bottom:8px;">';
+    let h = '<div style="font-size:14px;font-weight:800;color:white;margin-bottom:6px;">&#x1F3F7;&#xFE0F; Make an offer</div>';
+    const st = o && o.state;
+    if(st === "pending" && o.turn === "seller"){
+        h += '<div style="font-size:13px;color:rgba(255,255,255,0.75);margin-bottom:10px;">Your offer of <b style="color:#ffc107">' + _offerKes(o.amount) + '</b> each for ' + o.qty + ' is with the seller.</div>' +
+             '<button type="button" data-offer="withdraw" style="' + B + 'background:transparent;border:1px solid rgba(255,255,255,0.18);color:white;">Withdraw offer</button>';
+    } else if(st === "pending" && o.turn === "buyer"){
+        h += '<div style="font-size:13px;color:rgba(255,255,255,0.8);margin-bottom:10px;">The seller countered: <b style="color:#ffc107">' + _offerKes(o.amount) + '</b> each for ' + o.qty + ' (listed ' + _offerKes(o.listPrice) + ').</div>' +
+             '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;"><button type="button" data-offer="accept" style="' + B + 'background:#71ff00;border:0;color:#000;">Accept ' + _offerKes(o.amount) + '</button>' +
+             '<button type="button" data-offer="reject" style="' + B + 'background:transparent;border:1px solid rgba(255,90,95,0.4);color:#ff8a8d;">Decline</button></div>' +
+             input("offerCounter", "Or counter (KES, at least " + _offerKes(floor) + ")") +
+             '<button type="button" data-offer="counter" style="' + B + 'background:transparent;border:1px solid rgba(255,152,0,0.4);color:#ffc107;">Send counter</button>';
+    } else if(st === "accepted"){
+        h += '<div style="font-size:13px;color:rgba(255,255,255,0.85);margin-bottom:10px;">Agreed: <b style="color:#71ff00">' + _offerKes(o.amount) + '</b> each for ' + o.qty + '. Holds for <b id="offerLeft">' + _offerLeft(o.expiresAt) + '</b>.</div>' +
+             '<button type="button" data-offer="buy" style="' + B + 'width:100%;background:linear-gradient(135deg,#71ff00,#4fc800);border:0;color:#000;">Buy ' + o.qty + ' at ' + _offerKes(o.amount) + '</button>' +
+             '<div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:6px;">Checkout confirms the agreed price with SOKONI before you pay.</div>';
+    } else {
+        const prev = st === "rejected" ? "Your last offer was declined." : st === "expired" ? "Your agreed price expired." : st === "withdrawn" ? "You withdrew your last offer." : st === "purchased" ? "You bought this at your agreed price." : "";
+        h += (prev ? '<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:6px;">' + prev + '</div>' : '') +
+             '<div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:10px;">Listed at <strong style="color:#71ff00;">' + _offerKes(list) + '</strong>. The lowest offer is ' + _offerKes(floor) + '. The seller can accept, decline or counter in SOKONI Messages.</div>' +
+             input("offerPrice", "Your price per item (KES)") +
+             '<label for="offerQty" style="font-size:12px;color:rgba(255,255,255,0.55);">Quantity</label>' +
+             '<input type="number" inputmode="numeric" id="offerQty" min="1" max="99" value="1" style="width:90px;margin:4px 0 10px 8px;padding:10px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:white;font-size:16px;font-family:inherit;">' +
+             '<div><button type="button" data-offer="send" style="' + B + 'background:linear-gradient(135deg,#ff9800,#e06000);border:0;color:white;">&#x1F4E4; Send offer</button></div>';
+    }
+    h += '<div id="offerConfirm" role="status" style="margin-top:8px;font-size:12.5px;color:' + (isErr ? '#ff6b6b' : 'rgba(255,255,255,0.7)') + ';">' + (msg ? _prdEsc(msg) : '') + '</div>';
+    el.innerHTML = h;
+    clearInterval(_offerTimer);
+    if(st === "accepted") _offerTimer = setInterval(function(){ const t = document.getElementById("offerLeft"); if(!t){ clearInterval(_offerTimer); return; } t.textContent = _offerLeft(o.expiresAt); if(Date.now() >= o.expiresAt){ clearInterval(_offerTimer); loadMyOffer(); } }, 30000);
+}
+
+async function loadMyOffer(){
+    if(!product || product.acceptOffers !== true) return;
+    try {
+        const r = await _offerCall("productOfferMine", { productId: String(product.id) });
+        if(r) { _offerState = r.offer; renderOfferPanel(); }
+    } catch(e){ renderOfferPanel("Your offer could not be loaded — " + ((e && e.message) || "try again") + ".", true); }
+}
 
 function openMakeOffer(){
     const panel = document.getElementById("offerPanel");
-    if(panel) panel.style.display = panel.style.display === "none" ? "block" : "none";
+    if(!panel) return;
+    const show = panel.style.display === "none";
+    panel.style.display = show ? "block" : "none";
+    if(show){ renderOfferPanel("Loading…"); loadMyOffer(); }
 }
 
-/* 2026-09-29: the offer used to go into the buyer's OWN localStorage and then claim "sent! The seller will respond via
-   Messages" — no seller ever received it. It now goes to the seller as a message in the product conversation. */
-function submitOffer(){
-    const priceEl = document.getElementById("offerPrice");
-    const msgEl   = document.getElementById("offerMsg");
-    const confirmEl = document.getElementById("offerConfirm");
-    const offerPrice = Math.round(Number(priceEl?.value || 0));
-    if(!offerPrice || offerPrice <= 0){
-        if(confirmEl){ confirmEl.textContent = "Please enter a valid offer price."; confirmEl.style.color = "#ff6b6b"; }
-        return;
-    }
-    const note = (msgEl?.value || "").trim();
-    const text = "💰 Offer: KES " + offerPrice.toLocaleString() + " (listed at KES " + Number(product.price).toLocaleString() + ")" + (note ? "\n" + note : "");
-    if(confirmEl){ confirmEl.textContent = "Sending…"; confirmEl.style.color = "rgba(255,255,255,0.6)"; }
-    _sendToSeller(text, false).then(function(r){
-        if(!r) { if(confirmEl) confirmEl.textContent = ""; return; }
-        if(confirmEl){ confirmEl.innerHTML = "✅ Offer sent to the seller. <a href=\"chat.html?id=" + encodeURIComponent(r.conversationId) + "\" style=\"color:#71ff00;\">Open the conversation</a>"; confirmEl.style.color = "#71ff00"; }
-        if(priceEl) priceEl.value = ""; if(msgEl) msgEl.value = "";
-    }).catch(function(e){ if(confirmEl){ confirmEl.textContent = "Offer NOT sent — " + ((e && e.message) || "please try again") + "."; confirmEl.style.color = "#ff6b6b"; } });
+async function _offerAct(kind){
+    if(_offerBusy) return;
+    const o = _offerState;
+    let op, data;
+    if(kind === "send"){
+        const amount = Math.round(Number((document.getElementById("offerPrice") || {}).value || 0));
+        const qty = Math.round(Number((document.getElementById("offerQty") || {}).value || 1));
+        if(!(amount > 0)) return renderOfferPanel("Enter your price per item.", true);
+        op = "productOfferSend"; data = { productId: String(product.id), amount: amount, qty: qty };
+    } else if(kind === "counter"){
+        const amount = Math.round(Number((document.getElementById("offerCounter") || {}).value || 0));
+        if(!(amount > 0)) return renderOfferPanel("Enter your counter price.", true);
+        op = "productOfferRespond"; data = { offerId: o.offerId, action: "counter", amount: amount };
+    } else if(kind === "accept" || kind === "reject"){
+        op = "productOfferRespond"; data = { offerId: o.offerId, action: kind };
+    } else if(kind === "withdraw"){
+        op = "productOfferWithdraw"; data = { offerId: o.offerId };
+    } else if(kind === "buy"){
+        return _buyAtOffer();
+    } else return;
+    _offerBusy = true; renderOfferPanel("Sending…");
+    try {
+        const r = await _offerCall(op, data);
+        _offerBusy = false;
+        if(!r) return renderOfferPanel();
+        _offerState = r.offer;
+        const say = { productOfferSend: "Offer sent to the seller.", productOfferWithdraw: "Offer withdrawn." }[op]
+          || (kind === "accept" ? "Agreed — the price holds for 24 hours." : kind === "reject" ? "You declined the counter." : "Counter sent.");
+        renderOfferPanel(say);
+    } catch(e){ _offerBusy = false; renderOfferPanel("Not sent — " + ((e && e.message) || "please try again") + ".", true); }
 }
+
+/* The agreed price goes into the cart AS a reference (offerId). The amount shown is for display; the SERVER pricer
+   (validateOrderLines / createCheckoutSession) reads productOffers and charges the agreed price — or refuses. */
+function _buyAtOffer(){
+    const o = _offerState, c = _cartSvc();
+    if(!o || o.state !== "accepted") return loadMyOffer();
+    if(!c){ return renderOfferPanel("Cart is still loading — try again in a moment.", true); }
+    const already = c.list().some(function(i){ return i && i.offerId === o.offerId; });
+    if(!already){
+        const line = Object.assign(_cartItem(), { price: o.amount, salePrice: o.amount, listPrice: o.listPrice, qty: o.qty,
+            offerId: o.offerId, cartId: "offer_" + o.offerId, agreedPrice: true });
+        if(!c.add(line)) return renderOfferPanel("Couldn't add to cart — please try again.", true);
+    }
+    location.href = "checkout.html";
+}
+
+document.addEventListener("click", function(ev){
+    const b = ev.target && ev.target.closest ? ev.target.closest("[data-offer]") : null;
+    if(b && document.getElementById("offerPanel") && document.getElementById("offerPanel").contains(b)) _offerAct(b.getAttribute("data-offer"));
+});
+/* the old entry point, now the real path */
+function submitOffer(){ _offerAct("send"); }
 
 /* WISHLIST (product page) */
 
@@ -1513,6 +1604,7 @@ window.addEventListener('sokoni:wishlist-changed', _syncWishlistBtn);
 
 window.shareProductWhatsApp  = shareProductWhatsApp;
 window.openMakeOffer         = openMakeOffer;
+window.loadMyOffer           = loadMyOffer;
 window.submitOffer           = submitOffer;
 window.addToWishlistProduct  = addToWishlistProduct;
 

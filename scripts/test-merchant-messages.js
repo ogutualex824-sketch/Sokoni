@@ -77,7 +77,8 @@ console.log('\nPART A — every mutation is an op on the router\n');
      refuses anyone but that product's seller (NOT_SELLER, test-product-conversations PC5). Still no admin op. */
   ck('A7  the layer names ONLY participant-scoped ops',
     Object.values(MM.OPS).sort().join(',') ===
-    'getConversationContext,markRead,productQuestionAnswer,reportConversation,searchConversations,sendMessage',
+    /* T2b (2026-09-29): + productOfferRespond — the server lets only the party whose turn it is act (PO3) */
+    'getConversationContext,markRead,productOfferRespond,productQuestionAnswer,reportConversation,searchConversations,sendMessage',
     Object.values(MM.OPS).join(','));
 
   /* The router also exposes four superAdmin ops. A merchant surface must not

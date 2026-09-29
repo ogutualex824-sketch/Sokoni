@@ -2547,6 +2547,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       scope: _scope(), db: _mdb, shopName: _shopName(),
       callSale: _callable('posCompleteCheckout'),
       callAdjust: _callable('merchantAdjustStock'),
+      /* messagesDispatch — productOfferSettings (buyer offers opt-in per product, T2b) */
+      callMessages: _callable('messagesDispatch'),
       /* ── M-PESA, as two halves that must stay separate ───────────────────
          REQUESTING money and BEING PAID are different events, and this client can only
          ever do the first. `callVerify` reads back what the server already knows and is

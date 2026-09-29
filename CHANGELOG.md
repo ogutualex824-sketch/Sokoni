@@ -1,3 +1,100 @@
+## [2026-09-29] - Buyer price offers (T2b): offer, counter, accept — and checkout charges the agreed price
+
+**Functions + product page + checkout + merchant-v2, NOT deployed.** Branch `slice/c4-category-matrix`. This is the
+owner's product brief ("offers accept / reject / counter"). Commercial rules were decided by the owner on 2026-09-29.
+The authority is described in `docs/PRODUCT_OFFERS.md`.
+
+**Owner rules:** each product opts in; the lowest buyer offer is 50% of the price; an accepted price holds 24 h; it
+covers the offered quantity; commission is on the agreed (paid) price.
+
+**Census:** no offer authority existed on any branch. The product page's offer, and seller.html's offer inbox
+(`sokoniOffers`), lived in localStorage. "Accepted" changed nothing at checkout.
+
+**Built:**
+- **`functions/product-offers.js`:** one record per product and buyer (`productOffers/{pid}__{uid}`).
+  - Ops on the **existing `messagesDispatch`**: `productOfferSend`, `productOfferRespond` (accept / reject / counter,
+    on your turn only), `productOfferWithdraw`, `productOfferMine` and `productOfferSettings` (seller-only opt-in).
+  - Transactions throughout, with turn and party checks, a floor and ceiling, 6 moves, 20 offers per day and a 24 h
+    hold.
+  - Every step posts a note into the product conversation. The seller answers it in merchant-v2 › Messages.
+- **Checkout honours an offer ONLY on the server.** The cart line carries `offerId`, never a trusted price.
+  `validateOrderLines` (the `product_order` charge and the multi-shop quote) and `createCheckoutSession` (card) both
+  price through the one `offerResolver`.
+  - It refuses another buyer's offer, another product, not accepted, expired, used, and over quantity (including a
+    split across lines).
+  - It never silently re-prices.
+- **Payment success** (`_finalizeMarketplacePayment`) marks the offer `purchased` inside the order transaction. A
+  second paid order is **flagged** in `offerOveruseAlerts` and never refused. The receipt line shows the charged price.
+- **Product page:** "Offer" appears only when the seller opted in. The panel is drawn from the server state: send,
+  waiting, counter (Accept / Decline / Counter), and agreed with a countdown and "Buy N at KES X".
+- **merchant-v2:**
+  - **Inventory:** the product sheet has an "Accept price offers" switch (server-confirmed).
+  - **Messages:** offer notes carry Accept / Decline / Counter on the seller's turn. A counter uses the price typed in
+    the composer.
+- **Test library:** the fake Firestore now matches `FieldPath.documentId()` against the document id, as Firestore does.
+  Before, every `documentId()` query returned nothing.
+
+**Tests:**
+- **`scripts/test-product-offers.js`: 9/0.** It runs the REAL product-offers module via messagesDispatch, the REAL
+  `validateOrderLines`, and the REAL `_finalizeMarketplacePayment` extracted verbatim from index.js.
+  - Counterproof on `4fbd029`: **9 fail**.
+  - Sabotage: **17/18 caught.** The miss removes the per-line quantity check. The aggregate check still refuses the
+    same cart, so that is redundant depth, not a gap.
+- **`scripts/test-product-offers-browser.js`: 7/0** (Chromium; the REAL inventory module, product.html, Messages
+  module and messagesDispatch):
+  - no Offer button without opt-in;
+  - the seller opts in → the buyer offers → the seller counters in Messages → the buyer accepts;
+  - the cart line carries the offerId;
+  - the server charges KES 1,800 × 2 and refuses the same cart for another buyer.
+
+**Regression:** 215 suites: every suite that uses the fake Firestore, plus every suite that reads a changed file. Work
+tree vs `ec40b9b`.
+- Everything is equal except the following.
+- **The fake Firestore `documentId()` fix changed no other suite's result.**
+- **Superseded, each updated with its reason:**
+  - **`test-product-conversations` PC9** (9/0): an offer is now a structured record, not a chat message.
+  - **`test-merchant-messages` A7:** the op allowlist gains `productOfferRespond`. B7 and C7 fail **identically on
+    both trees** (pre-existing).
+- **Flaky, not a regression:**
+  - `merchant-v2-ecosystem-runtime` printed no summary in the parallel run. It was re-run on the work tree:
+    **131/0** (base 130/1).
+  - `merchant-customers-ui` printed no summary on the base tree; the work tree is 185/0.
+- **Dirty-tree suites** (`cart-*` ×9, `checkout-fallback-total`) fail only because this slice was uncommitted. They
+  are re-run after this commit.
+
+**UNPROVEN / NOT DONE:**
+- Not deployed.
+- `createCheckoutSession` honouring an offer is proven through the **shared resolver plus its wiring** (PO9 static);
+  the full callable is not run (index.js's module-level dependencies).
+- **Promo and loyalty stacking on an agreed price is an OPEN owner question.** Today they still apply.
+- Staff cannot yet answer offers (T2c).
+- There are no Firestore rules for `productOffers` / `offerOveruseAlerts`. Both are server-only (default deny), and
+  this is stage 3.
+
+**Files:**
+- `functions/product-offers.js` (new), `functions/messages-dispatch.js`, `functions/payment-purposes.js`,
+  `functions/index.js` (`createCheckoutSession` pricer, `_finalizeMarketplacePayment` consumption and receipt price)
+- `product.js`, `checkout.html`, `merchant-v2.html`
+- `sokoni-merchant-messages.js`, `sokoni-merchant-messages-ui.js`, `sokoni-merchant-inventory-ui.js`,
+  `sokoni-merchant-data.js`
+- `scripts/lib/fake-firestore-txn.js`, `docs/PRODUCT_OFFERS.md` (new), the 2 new suites and 2 updated suites
+
+**Database:**
+- New server-written collections: `productOffers`, `offerOveruseAlerts`.
+- New product field `acceptOffers` (written by the server op).
+- Order lines may carry `offerId` / `listUnitPrice`.
+- There is no migration and no new index.
+
+**API:** new `messagesDispatch` ops `productOfferSend`, `productOfferRespond`, `productOfferWithdraw`,
+`productOfferMine` and `productOfferSettings`. Cart lines may carry `offerId`.
+
+**Security:**
+- No client price is ever trusted; the agreed price is read from `productOffers` by both pricers.
+- Party and turn checks run inside transactions.
+- A race after payment is flagged, never refused.
+
+**Breaking:** none.
+
 ## [2026-09-29] - Disputes and reports readable on every side: AdminOS, super admin, merchant-v2 and the buyer
 
 **Functions + AdminOS + super admin + merchant-v2 + buyer pages, NOT deployed.** Branch `slice/c4-category-matrix`.

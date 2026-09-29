@@ -139,7 +139,9 @@ function makeFakeFirestore(opts = {}) {
       : [...store.keys()].filter((p) => p.startsWith(cpath + '/') && p.split('/').length === depth).map(snap);
     for (const [f, op, v] of q.where) {
       rows = rows.filter((s) => {
-        const x = val(s.data(), f);
+        /* FieldPath.documentId() ('__name__') matches the DOCUMENT ID, as in Firestore — it read a data field of that
+           name, so every documentId() query returned nothing (2026-09-29, found by test-product-offers). */
+        const x = f === '__name__' ? s.id : val(s.data(), f);
         if (op === '==') return JSON.stringify(x) === JSON.stringify(v);
         if (op === 'in') return v.some((y) => JSON.stringify(y) === JSON.stringify(x));
         if (op === 'array-contains') return Array.isArray(x) && x.includes(v);

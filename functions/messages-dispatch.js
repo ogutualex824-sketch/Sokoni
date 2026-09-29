@@ -15,7 +15,9 @@ const REGION = 'us-central1';
 const messages = require('./messages');
 /* Product enquiries & public Q&A (product-enquiries.js, 2026-09-29) — served by this same dispatcher: no new Cloud Function. */
 const productEnquiries = require('./product-enquiries');
-const HANDLERS = Object.assign({}, messages._h, productEnquiries._h);
+/* buyer price offers (T2b, 2026-09-29) — negotiated in the same product conversation */
+const productOffers = require('./product-offers');
+const HANDLERS = Object.assign({}, messages._h, productEnquiries._h, productOffers._h);
 
 // Dispatcher options: widest superset (sendMessage uses enforceAppCheck: true)
 const _OPTS = {

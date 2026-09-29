@@ -386,7 +386,7 @@
 
       return '<div class="mnv-sh-h"><div class="t">' + esc(p.name || 'Adjust stock') + '</div>' +
           '<button class="mnv-sh-x" data-act="close" aria-label="Close"' + (busy ? ' disabled' : '') + '>×</button></div>' +
-        '<div class="mnv-sh-b">' +
+        '<div class="mnv-sh-b">' + offersRowHTML(p) +
 
           (!known
             ? '<div class="mnv-err" style="margin-top:0">This product has no tracked stock count, so there ' +
@@ -459,7 +459,37 @@
     }
 
     /* ── Actions ──────────────────────────────────────────────────────────── */
+    /* ── Buyer price offers — opt-in per product (product-offers.productOfferSettings; seller-only on the server).
+       The switch shows the SERVER's answer: it flips only after the write succeeds. ─────────────────────── */
+    function offersRowHTML(p) {
+      if (typeof ctx.callMessages !== 'function') return '';
+      var on = p.acceptOffers === true, busy = S.offersBusy === true;
+      return '<label class="mnv-offers" style="display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:12px;border-radius:14px;' +
+          'border:1px solid var(--line);background:rgba(255,255,255,.03);cursor:pointer">' +
+        '<input type="checkbox" data-act="offers" style="width:22px;height:22px;accent-color:var(--acc)"' + (on ? ' checked' : '') + (busy ? ' disabled' : '') + '>' +
+        '<span style="flex:1;min-width:0"><b style="display:block;font-size:13.5px">Accept price offers</b>' +
+          '<span style="font-size:11.5px;color:var(--txt3)">Buyers can offer from 50% of the price; you accept, decline or counter in Messages. ' +
+          'An accepted price holds 24 hours.</span></span>' +
+        (busy ? '<span style="font-size:11px;color:var(--txt3)">Saving…</span>' : '') + '</label>' +
+        (S.offersError ? '<div class="mnv-err" style="margin:-4px 0 12px">' + esc(S.offersError) + '</div>' : '');
+    }
+
+    function toggleOffers(want) {
+      var p = S.product; if (!p || S.offersBusy) return;
+      S.offersBusy = true; S.offersError = null; paint();
+      Promise.resolve(ctx.callMessages({ op: 'productOfferSettings', productId: p.id, acceptOffers: want })).then(function (r) {
+        var d = r && r.data ? r.data : r;
+        S.offersBusy = false;
+        if (!d || d.acceptOffers !== want) { S.offersError = 'The setting could not be saved.'; paint(); return; }
+        p.acceptOffers = want;
+        (S.products || []).forEach(function (x) { if (x.id === p.id) x.acceptOffers = want; });
+        toast(want ? 'Buyers can now make offers on ' + (p.name || 'this product') : 'Offers turned off for ' + (p.name || 'this product'), 'success');
+        paint();
+      }).catch(function (e) { S.offersBusy = false; S.offersError = (e && e.message) || 'The setting could not be saved.'; paint(); });
+    }
+
     function openProduct(p) {
+      S.offersBusy = false; S.offersError = null;
       S.sheet = p.id; S.product = p;
       S.dir = -1; S.amount = 1; S.reason = null; S.note = '';
       S.apply = 'idle'; S.applyError = null; S.applied = null;
@@ -521,6 +551,7 @@
       if (!el || !host.contains(el)) return;
       var act = el.getAttribute('data-act');
 
+      if (act === 'offers')   { ev.preventDefault(); toggleOffers(!(S.product && S.product.acceptOffers === true)); return; }
       if (act === 'tab')      { S.tab = el.getAttribute('data-t') || 'all';
                                 if (S.tab === 'history' && S.movements == null) loadMovements();
                                 paint(); return; }

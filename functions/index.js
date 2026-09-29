@@ -2499,6 +2499,8 @@ exports.createCheckoutSession = onCall(
        cannot be used to purchase items that are unavailable. */
     const sessionItems = [];
     let serverSubtotal = 0;
+    /* agreed buyer offers — read from productOffers by the server, never a client price (product-offers.js) */
+    const _offerPrice = await require("./product-offers").offerResolver(db, request.auth.uid, cartItems, Date.now());
     const outOfStockItems = [];
     const unavailableItems = [];   /* product hidden/archived, or its shop closed/online-off */
     const adjustedItems   = [];
@@ -2522,7 +2524,7 @@ exports.createCheckoutSession = onCall(
         continue;
       }
 
-      const unitPrice = Number(prod.salePrice || prod.price || 0);
+      const _catalogueUnit = Number(prod.salePrice || prod.price || 0);
       let   qty       = Math.max(1, Math.min(99, Math.round(Number(item.qty) || 1)));
 
       /* Quantity revalidation: never authorise a session for more than remains.
@@ -2534,12 +2536,14 @@ exports.createCheckoutSession = onCall(
         qty = stockQty;
       }
 
+      const { unitPrice, offerId: _offerId } = _offerPrice(item, pid, qty, _catalogueUnit);
       const lineTotal = unitPrice * qty;
       serverSubtotal += lineTotal;
       sessionItems.push({
         productId:  pid,
         name:       prod.name   || "Item",
         unitPrice,
+        ...(_offerId ? { offerId: _offerId, listUnitPrice: _catalogueUnit } : {}),
         qty,
         lineTotal,
         sellerUid:  prod.sellerUid  || null,
@@ -3739,7 +3743,14 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
         if (!pid || qty < 1) continue;
         const pRef  = db.collection("products").doc(String(pid));
         const pSnap = await txn.get(pRef);
-        stockReads.push({ ref: pRef, pid: String(pid), qty, snap: pSnap });
+        stockReads.push({ ref: pRef, pid: String(pid), qty, snap: pSnap,
+          unitPrice: Number(line.unitPrice) > 0 ? Number(line.unitPrice) : null });
+      }
+      /* Agreed buyer offers carried on the SERVER-priced lines (product-offers.js). Read here, consumed below. */
+      const offerReads = [];
+      for (const oid of [...new Set(lines.map((l) => l && l.offerId ? String(l.offerId) : "").filter((s) => s && !s.includes("/")))]) {
+        const oRef = db.collection("productOffers").doc(oid);
+        offerReads.push({ ref: oRef, id: oid, snap: await txn.get(oRef) });
       }
 
       const paidFields = {
@@ -3800,10 +3811,25 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
         }, { merge: true });
       }
 
+      /* An agreed offer is USED by this paid order. A second paid order on the same offer is a post-payment race:
+         FLAGGED (offerOveruseAlerts), never refused — the money is already taken. */
+      for (const { ref: oRef, id: oid, snap: oSnap } of offerReads) {
+        const od = oSnap.exists ? (oSnap.data() || {}) : null;
+        const ordKey = orderId || checkoutId || null;
+        if (od && !od.consumedOrderId) {
+          txn.update(oRef, { state: "purchased", consumedOrderId: ordKey, consumedAt: ts, updatedAt: ts });
+        } else if (!od || od.consumedOrderId !== ordKey) {
+          txn.set(db.collection("offerOveruseAlerts").doc(), {
+            offerId: oid, orderId: ordKey, previousOrderId: od ? od.consumedOrderId || null : null,
+            reason: od ? "offer_already_used" : "offer_missing", path: pathLabel || "marketplace", createdAt: ts,
+          });
+        }
+      }
+
       /* Priced line items (name + unit price) captured here from the product docs
          we already read, so the caller can build a receipt without re-reading. */
       const _priced = [];
-      for (const { ref, pid, qty, snap } of stockReads) {
+      for (const { ref, pid, qty, snap, unitPrice: _lineUnit } of stockReads) {
         const pdata = snap.exists ? snap.data() : {};
         const cur = snap.exists ? pdata.stock : null;
         const priorVer = Number(pdata.inventoryVersion) || 0;
@@ -3843,8 +3869,9 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
           productId: pid,
           name:      pdata.name || "Item",
           qty:       dec,
-          unitPrice: Number(pdata.price) || 0,
-          lineTotal: (Number(pdata.price) || 0) * dec,
+          /* the price the line was CHARGED at (server-priced; an agreed offer included) — the catalogue only as fallback */
+          unitPrice: _lineUnit || Number(pdata.price) || 0,
+          lineTotal: (_lineUnit || Number(pdata.price) || 0) * dec,
         });
         console.log(`[${pathLabel || "mkt"}] stock deduct product=${pid} -${dec} sold+${dec} inventoryVersion ${priorVer}->${priorVer + 1}`);
       }
