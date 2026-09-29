@@ -263,13 +263,29 @@ await T('a PROBE reason overrides the static one — what happened beats what wa
 
 sec('5 · PROOF 3 — REFUSED BY DESIGN is therefore reachable');
 
-await T('the field the console predicate reads was ABSENT before this commit', () => {
+/* The commit that introduced the passthrough. Its PARENT is the last tree in
+   which REFUSED BY DESIGN was unreachable.
+
+   ~1 rather than ^: on Windows execSync runs through cmd.exe, where ^ is the
+   ESCAPE character and is silently eaten — 'abc^' became 'abc', so the check
+   read Step B itself and reported that the premise of the slice was wrong.
+
+   Named explicitly rather than written as HEAD: this repository is worked by
+   several agents in parallel, so HEAD moves under the suite between runs. The
+   first version of this assertion used HEAD and went red the moment another
+   agent committed — it was measuring "has anything landed since?" while
+   claiming to measure the resolver. A historical claim needs a historical
+   reference. */
+const STEP_B_COMMIT = '5e8ec59';
+
+await T('the field the console predicate reads was ABSENT before Step B', () => {
   /* sokoni-integrations.js:398 — `if (r && r.notRunReason) return _chipOf('refused', ...)`.
      The claim "REFUSED BY DESIGN was unreachable" is a claim about the PREVIOUS
      resolver, so it is checked against the previous resolver, not against a
      re-run of the new one with a different argument. */
   const prev = require('child_process')
-    .execSync('git show HEAD:functions/integration-status.js', { cwd: ROOT, encoding: 'utf8' });
+    .execSync('git show ' + STEP_B_COMMIT + '~1:functions/integration-status.js',
+      { cwd: ROOT, encoding: 'utf8' });
   ok(prev.indexOf('notRunReason') === -1,
     'HEAD\'s resolver already emitted notRunReason — the premise of this slice is wrong');
   ok(prev.indexOf('probe.evidence') > -1,
@@ -406,6 +422,120 @@ await T('runProbe without a store persists NOTHING and reports nothing', async (
   });
   eq(r.health, 'connected', 'the probe must still work: ');
   eq(r.persisted, undefined, 'no store, no persistence, and no claim that there was: ');
+});
+
+sec('10 · THE ABSENCE PARTITION — a missing record is SIX facts, not one');
+
+/* THE PROOF-SURFACE GUARD.
+
+   The typed meaning of absence lived only in prose until now, which means a
+   console change that collapsed the six kinds back into one grey `unknown`
+   would have gone undetected — no suite would have turned red. This is the
+   assertion that makes the distinction mechanically visible.
+
+   It is a PARTITION assertion, not six count assertions. Counts alone pass
+   against a classifier that puts an entry in two classes while another falls
+   through, so exclusivity and exhaustiveness are asserted directly.
+
+   It classifies through classifyEvidenceSource() — the producer — rather than
+   recomputing the rule here. A test that reimplements the logic it is checking
+   asserts only that it agrees with itself. */
+const EXPECTED_PARTITION = {
+  'runnable-with-evidence':     3,
+  'inbound-awaiting-callback':  4,
+  'declared-refusal':           9,
+  'measurable-unwritten':      15,
+  'not-applicable':             5,
+  'observed-elsewhere':        11,
+};
+
+const CLASS_OF = {};
+registry.INTEGRATIONS.forEach((e) => { CLASS_OF[e.id] = evidence.classifyEvidenceSource(e.id); });
+const MEMBERS = {};
+evidence.EVIDENCE_CLASSES.forEach((c) => { MEMBERS[c] = []; });
+Object.keys(CLASS_OF).forEach((id) => {
+  if (MEMBERS[CLASS_OF[id]]) MEMBERS[CLASS_OF[id]].push(id);
+});
+
+await T('the six classes are the declared vocabulary — no class invented here', () => {
+  eq(JSON.stringify(evidence.EVIDENCE_CLASSES.slice().sort()),
+     JSON.stringify(Object.keys(EXPECTED_PARTITION).sort()),
+     'the suite and the model disagree about which classes exist: ');
+});
+
+await T('COLLECTIVELY EXHAUSTIVE — every one of the 47 lands in a class', () => {
+  const unclassified = Object.keys(CLASS_OF).filter((id) => !CLASS_OF[id]);
+  eq(unclassified.length, 0, 'unclassified: ' + unclassified.join(', ') + ' — ');
+  const unknownClass = Object.keys(CLASS_OF)
+    .filter((id) => evidence.EVIDENCE_CLASSES.indexOf(CLASS_OF[id]) === -1);
+  eq(unknownClass.length, 0, 'classified into a class the model does not declare: ' + unknownClass.join(', ') + ' — ');
+});
+
+await T('MUTUALLY EXCLUSIVE — pairwise intersection of every class pair is empty', () => {
+  const cs = evidence.EVIDENCE_CLASSES;
+  let pairs = 0;
+  for (let i = 0; i < cs.length; i++) {
+    for (let j = i + 1; j < cs.length; j++) {
+      const a = new Set(MEMBERS[cs[i]]);
+      const overlap = MEMBERS[cs[j]].filter((id) => a.has(id));
+      eq(overlap.length, 0, cs[i] + ' ∩ ' + cs[j] + ' = {' + overlap.join(', ') + '} — ');
+      pairs++;
+    }
+  }
+  eq(pairs, 15, 'control: all 15 pairs of six classes must be compared, got ');
+});
+
+await T('EXACT SET COVERAGE — the union is the catalogue id set, not a subset', () => {
+  const union = [].concat.apply([], evidence.EVIDENCE_CLASSES.map((c) => MEMBERS[c])).sort();
+  const ids = registry.INTEGRATIONS.map((e) => e.id).sort();
+  eq(union.length, ids.length, 'union size: ');
+  eq(new Set(union).size, union.length, 'an id appears in the union twice: ');
+  eq(JSON.stringify(union), JSON.stringify(ids), 'the union is not the catalogue id set: ');
+  /* The 47 are held equal to the BROWSER catalogue by
+     scripts/test-integration-registry-parity.js (26/0, both directions, with its
+     own positive control). Re-parsing the browser file here would duplicate that
+     contract and give it a second place to drift. */
+});
+
+await T('PINNED COUNTS — the exact partition, and it sums to 47', () => {
+  let total = 0;
+  Object.keys(EXPECTED_PARTITION).forEach((c) => {
+    eq(MEMBERS[c].length, EXPECTED_PARTITION[c], c + ': ');
+    total += MEMBERS[c].length;
+  });
+  eq(total, 47, 'partition total: ');
+  eq(total, registry.INTEGRATIONS.length, 'partition total vs registry size: ');
+  console.log('        ' + evidence.EVIDENCE_CLASSES
+    .map((c) => c + '=' + MEMBERS[c].length).join(' · '));
+});
+
+await T('THE MIGRATION BOUNDARY — runnable-with-evidence is exactly the three, by name', () => {
+  eq(JSON.stringify(MEMBERS['runnable-with-evidence'].slice().sort()),
+     JSON.stringify(['cloud-storage', 'firestore', 'memorystore-redis']),
+     'the three entries Step E authorises for migration have changed: ');
+});
+
+await T('THE INBOUND RAILS — exactly the four, and none is runnable', () => {
+  eq(JSON.stringify(MEMBERS['inbound-awaiting-callback'].slice().sort()),
+     JSON.stringify(['fcm', 'intasend-webhook', 'inventory-webhooks', 'pos-webhooks']),
+     '');
+  MEMBERS['inbound-awaiting-callback'].forEach((id) => {
+    eq(execs.probeAvailability(id), 'none',
+      id + ' has an executor — it is not inbound-only: ');
+  });
+});
+
+await T('INVERTING CONTROL — the partition can actually FAIL', () => {
+  /* Six counts that all happen to be right prove nothing if the classifier
+     cannot be wrong. An id outside the catalogue must not be silently absorbed
+     into a class, and a deliberately miscounted expectation must be detected. */
+  eq(evidence.classifyEvidenceSource('daraja'), null,
+    'a non-catalogue id was given a class: ');
+  eq(evidence.classifyEvidenceSource('intasend-collections'), 'declared-refusal',
+    'control on a known member: ');
+  const wrong = Object.assign({}, EXPECTED_PARTITION, { 'not-applicable': 6 });
+  ok(MEMBERS['not-applicable'].length !== wrong['not-applicable'],
+    'a wrong expected count must not match the measured one');
 });
 
 console.log('\n' + '='.repeat(66));

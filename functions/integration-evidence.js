@@ -132,6 +132,64 @@ function staticNotRunReason (integrationId) {
   return probes.NOT_RUN_CODES.indexOf(availability) > -1 ? availability : null;
 }
 
+/* ── TYPED ABSENCE ─────────────────────────────────────────────────────────
+   WHY A MISSING RECORD IS NOT ONE FACT
+
+   An integration with no evidence record can be in six materially different
+   situations, and the whole return on keeping declaration and observation apart
+   is that they stop rendering as one grey `unknown`:
+
+     runnable-with-evidence      a probe runs; evidence can exist NOW
+     inbound-awaiting-callback   no executor to call — evidence can arrive ONLY
+                                 through a correlated inbound event
+     declared-refusal            a probe exists and deliberately will not run
+     measurable-unwritten        a probe COULD exist; none has been written
+     not-applicable              health is not a meaningful concept here
+     observed-elsewhere          a real signal exists, authoritatively elsewhere
+
+   An architectural constraint, an unmeasured system, an inbound-only system and
+   a genuine failure are four different reasons a record can be missing. Before
+   this function the distinction lived only in prose, which means nothing would
+   have gone red if the console ever collapsed them back.
+
+   TOTAL AND MUTUALLY EXCLUSIVE BY CONSTRUCTION. One if/else chain, one return,
+   no entry in two classes and none in none. The final branch is
+   `measurable-unwritten` rather than a distinct "unclassified", deliberately: it
+   agrees with deriveHealth(), which already resolves an absent or unrecognised
+   healthKind to `unknown` — i.e. measurable-but-unestablished. A classification
+   mistake therefore understates certainty rather than inventing a constraint,
+   and the pinned partition counts in the suite catch it either way. */
+const EVIDENCE_CLASSES = [
+  'runnable-with-evidence',
+  'inbound-awaiting-callback',
+  'declared-refusal',
+  'measurable-unwritten',
+  'not-applicable',
+  'observed-elsewhere',
+];
+
+function classifyEvidenceSource (integrationId) {
+  const entry = registry.byId(integrationId);
+  if (!entry) return null;          /* not a catalogue entry; not a class */
+
+  let availability = 'none';
+  try { availability = require('./integration-probe-executors').probeAvailability(integrationId); }
+  catch (_) { /* probe layer unavailable: fall through on the declared kind */ }
+
+  if (availability === 'runnable') return 'runnable-with-evidence';
+  if (probes.NOT_RUN_CODES.indexOf(availability) > -1) return 'declared-refusal';
+
+  /* No executor. A SUPPORT row means the rail nonetheless DECLARES stages it can
+     evidence — which, with nothing to call, can only mean an inbound correlated
+     event. intasend-webhook is the clearest case: there is no endpoint to probe,
+     and its evidence is a POST arriving at recordProbeEvent(). */
+  if (probes.SUPPORT[integrationId]) return 'inbound-awaiting-callback';
+
+  if (entry.healthKind === 'not-applicable') return 'not-applicable';
+  if (entry.healthKind === 'elsewhere')      return 'observed-elsewhere';
+  return 'measurable-unwritten';
+}
+
 /* ── THE RECORD ────────────────────────────────────────────────────────────
    Built FROM a probe result, so the field names the resolver already reads —
    detail, support, checkedAt — are preserved verbatim and the record is a
@@ -351,6 +409,7 @@ async function readLatestEvidence (opts) {
 module.exports = {
   COLLECTION, LEGACY_COLLECTION, SCHEMA_VERSION,
   HEALTH_STATES, ENVIRONMENTS, CAPABILITY_STATES, RUNTIME_STAGES, ALL_STAGES,
+  EVIDENCE_CLASSES, classifyEvidenceSource,
   declaredEnvironment, staticNotRunReason,
   buildRecord, validate, writeEvidence, readLatestEvidence,
   memoryStore, firestoreStore,

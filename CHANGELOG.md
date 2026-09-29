@@ -1,3 +1,61 @@
+## 2026-09-29 — Integration Evidence: the Firestore adapter PROVEN on the emulator, and absence made a partition (branch `feat/integrations-control-center`, NOT deployed)
+
+Adapter-proof gate, lifted by the owner for the **emulator only**. No production access, no migration, no
+deployment, no `integrationProbeLatest` change. Full note: `docs/INTEGRATION_EVIDENCE_ADAPTER_PROOF.md`.
+
+**Adapter proof: 17 passed · 0 failed · 1 UNPROVEN.** In-memory suite now **60/0** with the partition guard.
+
+- **The absence partition guard.** The typed meaning of absence lived only in prose — a console change that
+  collapsed the six kinds back into one grey `unknown` would have turned no suite red. `classifyEvidenceSource(id)`
+  now lives in the **model**, not the test: a suite that reimplements the rule it checks asserts only that it agrees
+  with itself. `runnable-with-evidence` 3 · `inbound-awaiting-callback` 4 · `declared-refusal` 9 ·
+  `measurable-unwritten` 15 · `not-applicable` 5 · `observed-elsewhere` 11 = **47**. Asserted as a PARTITION, not
+  six counts — counts alone pass against a classifier that puts one entry in two classes while another falls
+  through. Exhaustive · all **15** class pairs disjoint · union *equals* the registry id set · counts pinned · the
+  three named · the inbound four named · and an inverting control where `daraja` gets **no** class rather than being
+  absorbed into one.
+- **Control 1 — the real adapter chain, PROVEN.** `adapter.set` → validated write → `adapter.get` → resolver
+  observes it, against `firestoreStore()` asserted to be `kind: 'firestore'`. Then through
+  `resolveIntegrationStatus({ listSecretNames })` with **nothing injected** — how `admin-os.js` calls it, and a path
+  **no in-memory test exercises**, because every one of them injects a store.
+- **Control 2 — the negative path, PROVEN.** Empty store → `unknown` for all 47, `probedAt` null, and
+  `evidenceReadable: true` — an empty collection is readable, not an error.
+- **Control 3 — the known-positive `{merge:true}` control, PROVEN.** Written against **raw Firestore**, not the
+  adapter: its job is to establish what merge does, not to vouch for our code. `set({notRunReason:X},{merge:true})`
+  then `set({health:Y},{merge:true})` leaves `notRunReason === X`. Only then is the adapter measured against it —
+  `set()` replaces, so a stale refusal is cleared. The defect that makes `integrationProbeLatest` unadoptable is now
+  **measured, not asserted in a vacuum**. The two claims stay separate; Control 1 passes on its own.
+- **Only provable against a database:** tri-state `null` survives serialisation as `null`, not as absent
+  (`'delivered' in stages` is true after the round trip; a missing key reads as `undefined`, a different fact); a
+  refused record leaves the collection empty; an invalid stored document is dropped and reported, never rendered; a
+  **legacy-shaped document is refused on `schemaVersion`**, so pointing the reader at `integrationProbeLatest` could
+  not silently work; `list()` over twelve round-trips all twelve.
+- **UNPROVEN — the adapter against an unreachable endpoint.** Two attempts, both recorded. First: a client pointed
+  at a dead port reported the store **readable**, because `FIRESTORE_EMULATOR_HOST` takes precedence over
+  `settings.host` — the "dead" client was reading the live emulator. **The assertion failed, which is the harness
+  working**: it refused to certify a control whose premise was false. Second: clearing the variable does reach the
+  dead port, and the read never returns — **gRPC retries `UNAVAILABLE` indefinitely and the Admin SDK exposes no
+  per-call deadline**; still pending after 25s. The **resolver's** fail-closed logic is proven (throwing store,
+  in-memory suite); the **adapter's** is not, and a slow hang is a different and worse failure than a clean error.
+- **The runner, not a documented command.** `scripts/run-evidence-firestore-cert.js` picks a free port from
+  8091–8099 and **refuses to fall back to 8080** — several agents work this repo in parallel, and binding the
+  default would collide with another emulator or quietly attach to it. Own config in a temp dir; repository
+  `firebase.json` neither read nor modified; `emulators:exec` owns teardown, so no emulator process is killed by
+  name. The suite's guard runs **before** `firebase-admin` is required and **fails closed** — verified, exit 2 — and
+  its predicates are themselves asserted so it can be shown capable of refusing.
+- **Two defects in my own harness, found and fixed:** `git show <sha>^` — `execSync` goes through `cmd.exe` where
+  `^` is the **escape character** and is silently eaten, so `5e8ec59^` read Step B itself and reported the slice's
+  premise was wrong; now `~1`. And the same assertion first used `HEAD`, going red the moment another agent
+  committed — it was measuring "has anything landed since?" while claiming to measure the resolver.
+
+Files: `functions/integration-evidence.js` (+classifier), `scripts/test-integration-evidence.js` (+partition guard,
+commit pin fix), `scripts/test-integration-evidence-firestore.js` (new), `scripts/run-evidence-firestore-cert.js`
+(new), `docs/INTEGRATION_EVIDENCE_ADAPTER_PROOF.md` (new).
+Database: none — the emulator is throwaway and no production collection was touched. API: none. Security: none; the
+guard makes production unreachable by accident. Breaking changes: none. Deploy: none.
+Regression unchanged: probes 85/0 · parity 26/0 (47/47) · status 45/0 · console 86/0.
+UNPROVEN: production IAM, indexes and latency; the adapter against an unreachable endpoint.
+
 ## 2026-09-29 — AdminOS sidebar, Slice D: one primary navigation path, header preserved, responsive finalized (branch `feat/integrations-control-center`, NOT deployed)
 
 Architecture after D: **global destination → sidebar → canonical route → existing panel/tab**; **contextual action →
