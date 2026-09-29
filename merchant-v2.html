@@ -861,6 +861,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script src="sokoni-authority.js"></script>
 <script src="sokoni-ai-subscriptions.js"></script>
 <script src="sokoni-creative.js"></script>
+<script src="sokoni-barcode.js"></script>
 <script src="sokoni-merchant-products.js"></script>
 <!-- THE COMMERCE MODELS. Listing types decide what a listing IS; the listing model owns
      which fields each type collects, how complete it is and what state it is in; the
@@ -2481,6 +2482,21 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
         return m.fs.getDoc(m.fs.doc(window.firebaseDB, 'products', id));
       }).then(function (s) { return s.exists() ? s.data() : null; });
     },
+    /* U7b (2026-09-29): ids of THIS shop's products carrying a code — the canonical top-level `barcode`, and legacy
+       records that hold it only in specs.barcode. Scoped by shopId in the query itself, so another merchant's product
+       is never read, let alone adopted. Equality-only filters: no composite index needed. */
+    findByBarcode: function (scope, code) {
+      if (!scope || !scope.shopId || !code) return Promise.resolve([]);
+      var q = function (field) {
+        return _q({ collection: 'products', where: [['shopId', '==', scope.shopId], [field, '==', code]], limit: 5 },
+                  'The product catalogue is not available yet.').catch(function () { return []; });
+      };
+      return Promise.all([q('barcode'), q('specs.barcode')]).then(function (r) {
+        var ids = {};
+        r[0].concat(r[1]).forEach(function (p) { if (p && p.id && p.status !== 'archived') ids[p.id] = 1; });
+        return Object.keys(ids);
+      });
+    },
     /* The Inventory + POS projections. `path` is an array so no caller ever
        assembles a collection string. A failure here is REPORTED by the writer,
        never swallowed — a product that did not reach the till must not be
@@ -2590,10 +2606,15 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
         });
       },
       openScanner: function () {
-        /* Not wired in v2 yet. Say so rather than resolving with a fake code — a
-           silent no-op here would look like a broken scan to a merchant at the till. */
-        toast('Barcode scanning is not available in this workspace yet.');
-        return Promise.resolve(null);
+        /* U7b (2026-09-29): the camera / manual-entry scanner (sokoni-barcode.js). It DECODES only — the code is
+           then matched against THIS shop's loaded catalogue by SokoniMerchantData.findByCode (barcode or SKU), so a
+           scan can never reach another merchant's product. Absent module: said, never mimed. */
+        var B = window.SokoniBarcode;
+        if (!B || typeof B.scanOnce !== 'function') {
+          toast('Barcode scanning is not available on this device.');
+          return Promise.resolve(null);
+        }
+        return B.scanOnce({ title: 'Scan an item' });
       },
       /* WHO MADE THE SALE — passed straight through, never constructed here.
          S.servedBy is whatever merchantIdentity resolved on the server; the shell

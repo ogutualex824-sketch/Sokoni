@@ -894,7 +894,7 @@ const TRANSFORMERS = {
     subcategory:     _str(data.subcategory)   || undefined,
     brand:           _str(data.brand)         || undefined,
     sku:             _str(data.sku)           || undefined,
-    barcode:         _str(data.barcode || data.ean || data.upc) || undefined,
+    barcode:         _str(data.barcode || (data.specs && data.specs.barcode) || data.ean || data.upc) || undefined,
     price:           _float(data.price),
     originalPrice:   _float(data.originalPrice || data.price) || undefined,
     discountPercent: _float(data.discountPercent || data.discount) || undefined,

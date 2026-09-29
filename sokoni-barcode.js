@@ -79,16 +79,26 @@
   }
 
   /* ─── Firestore product lookup by barcode ─── */
-  async function _lookupProduct(barcode) {
+  /* U7b (2026-09-29): SCOPED TO ONE SHOP. This used to query every merchant's products for the code and return the
+     first hit — a scan could surface (and a caller could adopt) another seller's product. A lookup now needs the
+     caller's shopId and asks only that shop's catalogue; without one it answers null rather than searching everyone.
+     Legacy records that hold the code only in specs.barcode are found too. */
+  async function _lookupProduct(barcode, opts) {
+    const shopId = opts && opts.shopId;
+    if (!barcode || !shopId) return null;
     try {
       const { db }         = await import('./firebase.js');
       const { collection, query, where, getDocs, limit } = await import(
         'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
       );
-      const snap = await getDocs(
-        query(collection(db, 'products'), where('barcode', '==', barcode), limit(1))
-      );
-      if (!snap.empty) return { _id: snap.docs[0].id, ...snap.docs[0].data() };
+      for (const field of ['barcode', 'specs.barcode']) {
+        const snap = await getDocs(
+          query(collection(db, 'products'), where('shopId', '==', shopId), where(field, '==', barcode), limit(2))
+        );
+        const live = snap.docs.filter(d => (d.data() || {}).status !== 'archived');
+        if (live.length === 1) return { _id: live[0].id, ...live[0].data() };
+        if (live.length > 1) return null;          /* two products, one code: never guess */
+      }
     } catch (err) {
       console.warn('[SokoniBarcode] Firestore lookup failed', err);
     }
@@ -205,12 +215,23 @@
       }
     },
 
-    /* Open scanner specifically for POS product lookup */
-    async openPOSScan({ onProduct, onNotFound } = {}) {
+    /* U7b: one scan as a Promise — resolves the decoded string, or null if the merchant closed the scanner. This is
+       the call the merchant-v2 Listing Studio's scan buttons make; it DECODES only and is handed no catalogue. */
+    scanOnce({ title } = {}) {
+      return new Promise((resolve, reject) => {
+        let done = false;
+        const settle = (v) => { if (!done) { done = true; resolve(v); } };
+        this.openScanner({ title: title || 'Scan the barcode', onScan: (v) => settle(v || null), onClose: () => settle(null) })
+          .catch((e) => { if (!done) { done = true; reject(e); } });
+      });
+    },
+
+    /* Open scanner specifically for POS product lookup — within ONE shop (U7b) */
+    async openPOSScan({ onProduct, onNotFound, shopId } = {}) {
       await this.openScanner({
         title: 'Scan Product Barcode',
         onScan: async (barcode, format) => {
-          const product = await _lookupProduct(barcode);
+          const product = await _lookupProduct(barcode, { shopId });
           if (product) {
             onProduct?.(product, barcode);
           } else {

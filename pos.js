@@ -719,7 +719,7 @@ const SPos = (function () {
           id: String(p.id || p._id || p.productId || ''), name: p.name || p.title || 'Product',
           price: Number(p.price || p.sellingPrice || 0), cost: Number(p.cost || p.costPrice || 0) || 0,
           stock: (p.stock != null ? Number(p.stock) : null), category: p.category || 'general',
-          barcode: p.barcode || '', sku: p.sku || '', unit: p.unit || 'pc',
+          barcode: p.barcode || (p.specs && p.specs.barcode) || '', sku: p.sku || '', unit: p.unit || 'pc',
         }));
       } catch (_) {}
       if (!window.PosInvSync) return _additiveInsertNew(list);   /* module absent — safe additive fallback */
@@ -747,7 +747,7 @@ const SPos = (function () {
       const id = String(p.id || p._id || p.productId || ''); if (!id) continue;
       const existing = await PosDB.products.get(id).catch(() => null);
       if (existing) continue;
-      await PosDB.products.save({ id, name: p.name || 'Product', price: Number(p.price || 0), stock: (p.stock != null ? Number(p.stock) : null), track: p.stock != null, category: p.category || 'general', barcode: p.barcode || '', sku: p.sku || '', image: p.image || (Array.isArray(p.images) ? p.images[0] : '') || '', unit: p.unit || 'pc', source: 'canonical' }).catch(() => {});
+      await PosDB.products.save({ id, name: p.name || 'Product', price: Number(p.price || 0), stock: (p.stock != null ? Number(p.stock) : null), track: p.stock != null, category: p.category || 'general', barcode: p.barcode || (p.specs && p.specs.barcode) || '', sku: p.sku || '', image: p.image || (Array.isArray(p.images) ? p.images[0] : '') || '', unit: p.unit || 'pc', source: 'canonical' }).catch(() => {});
       n++;
     }
     return n;

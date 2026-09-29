@@ -540,7 +540,7 @@ const TRANSFORMERS = {
       brand:           _str(data.brand),
       brandId:         _str(data.brandId),
       sku:             _str(data.sku),
-      barcode:         _str(data.barcode),
+      barcode:         _str(data.barcode || (data.specs && data.specs.barcode)),
       price:           _num(data.price),
       originalPrice:   _num(data.originalPrice || data.price),
       discountPercent: _num(data.discountPercent || data.discount),
