@@ -1,3 +1,14 @@
+## [2026-09-29] - HOSTING DEPLOYED: signed-out fix live at ec452fb (owner-authorized); the re-acknowledgement surface is now correct for both auth states
+
+Deployed 21:43:11Z from C:/temp/sok-reack @ ec452fb: Hosting release 1790718191737000, version 4c15a3ef6649eff1 (3 files changed: the page +
+the two release artefacts); version.json = ec452fb / v643 / dirty=false; served page sha256 d5bc87e3... == the committed file on both
+lines; /agreement-acknowledge, its module and /seller-terms 200. Rules release unchanged (b87c94e4); Functions estate hash identical
+before/after (1,720 rows). Live smoke signed out: state signed_out, sign-in note rendered, ZERO Firestore requests, zero console errors
+(resolving signed-out auth introduces no data access). Signed-in mount on live NOT attempted (no authorized production account; Kasindi
+not used); the signed-in path is the harness-proven one (14/0) and production firebase.js publishes sokoniAuthReady for signed-in users.
+Rollback = version 9074367eed5d10b7 (d108f6c) or a3552ac70cd81400 (pre-surface). No Kasindi read or write; applicationDecide not run.
+NEXT: the Kasindi acknowledgement gate — business signs in and acknowledges; we read the exact fields and diff against the census.
+
 ## [2026-09-29] - HOSTING DEPLOYED: re-acknowledgement surface live at d108f6c (owner-authorized, exact command); one signed-out defect found on the deployed page, fixed locally (NOT deployed)
 
 Deployed 21:09:56Z from C:/temp/sok-reack (slice/reack-surface-on-live @ d108f6c): Hosting release 1790716196877000, version 9074367eed5d10b7,
