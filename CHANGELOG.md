@@ -1,3 +1,41 @@
+## 2026-09-29 — AdminOS sidebar, Slice C2: everything reachable from Super Admin too, through the one implementation (branch `feat/integrations-control-center`, NOT deployed)
+
+Owner ruling (mid-slice): everything visible and controllable from BOTH admin consoles. Done the only way that
+does not create a second implementation — the pattern `super-admin.html` already used for Security Centre and
+Invoices: native Super Admin panels stay native (overview, users, applications, financial oversight, config,
+emergency, revenue, reports, integrations, comms, connect, audit, broadcast, secrets); every AdminOS destination
+without a native panel is a **link into the canonical AdminOS route** (`admin-os.html#section` or
+`#section/tab`), which the AdminOS router validates and opens on the right panel and tab. A superAdmin is an
+admin, so every link lands.
+
+- New sidebar group **AdminOS Workspaces** (25 links): Marketplace + Products/Orders/Reviews; Shops & Sellers +
+  Merchants; Financial Center + Wallets/Withdrawals/Disputes/Commissions; Notifications (`comms/push`); Service
+  Hubs; Delivery; Bookings; Payments; Support; Content; AI; Search; Analytics; SmartPOS; Fraud & Trust; Hub
+  Registry; Workflow Center. Children indented as in AdminOS. Security Centre and Invoices links unchanged.
+- Integrations in Super Admin was already the shared `sokoni-integrations.js`; certified, not touched.
+- **Found while certifying, fixed by reuse:** the shared admin shell painted a 244×900 sidebar and a 1196×65 header
+  over Super Admin's own 220×900 sidebar (a real click on it timed out) — the A2 defect on the other console. Applied
+  `f196c70`'s `super-admin.html` hunk verbatim (`<html data-admin-shell="own">`, the mechanism A2 already carries).
+- **A3's selector replaced by `f196c70`'s:** the ≤768px `[class*="-sidebar"]` catch-all in `sokoni-responsive.css` is
+  now keyed to the declaration — `html:not([data-admin-shell="own"]) [class*="-sidebar"]:not([class*="mini"])` —
+  instead of a growing class list. It covers `.aos-sidebar`, `.aos-sidebar-toggle` and `.sa-sidebar` (Super Admin's
+  drawer lost 128px at 390px under the old rule) and any future workspace that declares itself; pages that do not
+  declare it keep the original behaviour unchanged.
+
+Evidence — `scripts/test-adminos-nav-coverage.js` Super Admin section: every AdminOS destination (36) is reachable
+from Super Admin natively or by link; every link targets a route the AdminOS router accepts (the same 57 routes
+D1 reloads); child links mirror the AdminOS hierarchy; all native panels intact; choosing Integrations in Super
+Admin mounts the shared control center. The shared admin shell's chrome on `super-admin.html` is **measured and
+reported**, not changed.
+
+Evidence for the two reuse fixes: with them, a real click on the Super Admin sidebar lands (S6) and the shell
+injects nothing there; `test-adminos-sidebar-a11y` 34/0 and the five-viewport AdminOS probe (220px fixed drawer,
+0/36 clipped, 0 overflow) confirm the selector change regresses nothing on AdminOS; `single-navigation` 22/0.
+
+- **Files:** `super-admin.html` (one nav group, two CSS rules, the `data-admin-shell="own"` declaration),
+  `sokoni-responsive.css` (one selector), `scripts/test-adminos-nav-coverage.js`, `CHANGELOG.md`.
+- **Database / API / Security / Breaking:** none. UI only. Not deployed.
+
 ## 2026-09-29 — AdminOS sidebar, Slice C1: one navigation hierarchy, child routes, built ⇒ reachable (branch `feat/integrations-control-center`, NOT deployed)
 
 The 27-section inventory is unchanged and authoritative; nothing was invented to fill the sidebar. Users, Invoices,

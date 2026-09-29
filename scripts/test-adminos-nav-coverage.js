@@ -262,6 +262,63 @@ const state = (p) => p.evaluate(() => {
   }
   await mctx.close();
 
+  /* ── SUPER ADMIN: everything reachable from BOTH consoles, one implementation ─
+     For every AdminOS destination, super-admin.html must carry either a NATIVE
+     panel button (SA.nav) or a LINK to the canonical AdminOS route — and every
+     such link must be a route the AdminOS router accepts (proved by D1 above). */
+  console.log('\n  [super admin — reachability, shared implementation]');
+  const sctx = await newCtx(browser, { width: 1440, height: 900 });
+  const sp = await sctx.newPage();
+  await sp.goto('https://' + HOST + '/super-admin.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
+  let saBooted = true;
+  try { await sp.waitForFunction(() => !!document.querySelector('#saSidebar .nav-item'), { timeout: 20000 }); } catch (_) { saBooted = false; }
+  if (!saBooted) ok('S0  super-admin.html renders its sidebar under the same stub', false, 'no #saSidebar .nav-item');
+  else {
+    await sp.waitForTimeout(800);
+    const sa = await sp.evaluate(() => {
+      const box = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; };
+      return {
+        native: [...document.querySelectorAll('#saSidebar button.nav-item[data-section]')].map((b) => b.dataset.section),
+        links:  [...document.querySelectorAll('#saSidebar a.nav-item[href^="admin-os.html#"]')].map((a) => a.getAttribute('href').replace(/^admin-os\.html#/, '')),
+        childLinks: document.querySelectorAll('#saSidebar a.nav-item.nav-child').length,
+        shellSide: box(document.getElementById('sk-adm-side')), shellHeader: box(document.getElementById('sk-adm-header')),
+        shellCss: !!document.getElementById('sk-adm-css'),
+        saSide: box(document.getElementById('saSidebar')),
+        integrationsRootInSA: !!document.querySelector('#panel-integrations #integrationsRoot'),
+      };
+    });
+    /* AdminOS destinations = every parent + every child, from the AdminOS inventory above. */
+    const aosRoutes = [...inv.parents, ...inv.children.map(([s, t]) => s + '/' + t)];
+    /* A native SA panel covers the AdminOS section of the same id (users, applications,
+       financial, config, comms, audit, revenue, reports, integrations). Dashboard ⇔ overview. */
+    const covered = (r) => sa.links.includes(r) || sa.native.includes(r) || (r === 'dashboard' && sa.native.includes('overview'));
+    const missing = aosRoutes.filter((r) => !covered(r));
+    ok(`S1  every AdminOS destination (${aosRoutes.length}) is reachable from Super Admin — natively or by link`, missing.length === 0, missing);
+    const validRoutes = new Set([...inv.parents, ...inv.tabs.map(([s, t]) => s + '/' + t)]);
+    const badLinks = sa.links.filter((r) => !validRoutes.has(r));
+    ok('S2  every Super Admin link targets a route the AdminOS router accepts (no dead links)', badLinks.length === 0, badLinks);
+    /* A child is linked as a child only where its PARENT is a link; a child whose
+       parent is a native Super Admin panel (comms → Notifications) is a plain link. */
+    const expectChildLinks = inv.children.filter(([s]) => sa.links.includes(s)).length;
+    ok(`S3  child links mirror the AdminOS hierarchy under linked parents (${expectChildLinks})`, sa.childLinks === expectChildLinks, { childLinks: sa.childLinks, expectChildLinks });
+    ok('S4  Super Admin keeps its native panels (nothing re-implemented or removed)',
+       ['overview', 'users', 'applications', 'financial', 'config', 'revenue', 'reports', 'integrations', 'comms', 'audit'].every((n) => sa.native.includes(n)), sa.native);
+    ok('S5  Integrations in Super Admin is the SAME shared control center (#integrationsRoot in its panel)', sa.integrationsRootInSA);
+    /* "Controllable from both": a REAL click on the Super Admin sidebar must land.
+       A 3s timeout, caught, so an overlay (e.g. the shared admin shell painting
+       #sk-adm-side over #saSidebar) reads as a red check, not a dead harness. */
+    let clickable = true, clickErr = '';
+    try { await sp.click('#saSidebar button.nav-item[data-section="integrations"]', { timeout: 3000 }); } catch (e) { clickable = false; clickErr = String(e.message).split('\n').find((l) => /intercepts|Timeout/.test(l)) || e.message; }
+    ok('S6  the Super Admin sidebar is clickable — nothing paints over it', clickable,
+       { clickErr, shellSide: sa.shellSide, shellHeader: sa.shellHeader, saSidebar: sa.saSide });
+    if (!clickable) await sp.evaluate(() => { try { SA.nav('integrations'); } catch (_) {} });
+    await sp.waitForTimeout(900);
+    const saIc = await sp.evaluate(() => ({ mounted: !!document.querySelector('#panel-integrations #integrationsRoot *'), shown: !document.getElementById('panel-integrations').hidden }));
+    ok('S7  choosing Integrations in Super Admin mounts sokoni-integrations.js there', saIc.shown && saIc.mounted, saIc);
+    console.log('      shared shell on super-admin.html (measured): side=' + JSON.stringify(sa.shellSide) + ' header=' + JSON.stringify(sa.shellHeader) + ' saSidebar=' + JSON.stringify(sa.saSide));
+  }
+  await sctx.close();
+
   /* ── NEGATIVE CONTROL: the router must be what selects the tab ───────── */
   console.log('\n  [negative control]');
   const aos = fs.readFileSync(path.join(ROOT, 'sokoni-aos.js'), 'utf8');
