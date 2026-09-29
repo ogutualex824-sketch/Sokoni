@@ -41,26 +41,76 @@
 
 const https = require('https');
 
-const TOKEN = process.env.META_ACCESS_TOKEN || process.env.WHATSAPP_ACCESS_TOKEN || '';
 const VERSION = process.env.META_API_VERSION || 'v21.0';
 
-if (!TOKEN) {
-  /* Kept to two lines a person can actually retype. The earlier version offered
-     a SecureString incantation that wrapped across four lines and was the first
-     thing anyone would get wrong — advice too awkward to follow is not advice. */
-  console.error('\n  META_ACCESS_TOKEN is not set in this shell.\n');
-  console.error('  Run BOTH lines in the SAME window, from the repo folder:\n');
-  console.error('    $env:META_ACCESS_TOKEN = Read-Host "token"');
-  console.error('    node scripts/whatsapp-meta-assets.js\n');
-  console.error('  Read-Host keeps the token OUT of your PowerShell history file;');
-  console.error('  typing the value inline writes it to disk. A variable set in a');
-  console.error('  different window does not reach this one.\n');
-  process.exit(2);
+/* ── ASK, RATHER THAN INSTRUCT ─────────────────────────────────────────────
+   The environment variable stays the primary path, but "set this variable in
+   the same window, then run this command" turned out to be three chances to
+   get the order wrong — and it was got wrong three times, which makes it the
+   instruction's fault and not the operator's.
+
+   So when there is no variable and a human is present, just ask. It is no less
+   safe: input typed at this prompt never enters PowerShell history, never
+   appears in the process list, and is never written to disk — the same three
+   properties the environment-variable route was protecting. Echo is muted, so
+   it does not linger on screen either. */
+function promptForToken () {
+  return new Promise((resolve) => {
+    const readline = require('readline');
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+    process.stdout.write('  Paste the Meta access token (input hidden), then Enter:\n  > ');
+    const onData = (ch) => {
+      /* Swallow the echo so the token never appears on screen. Enter, and the
+         three interrupt keys, are left for readline to handle. */
+      const s = String(ch);
+      if (s === '\r' || s === '\n' || s === '\u0004' || s === '\u0003') return;
+      readline.moveCursor(process.stdout, -1, 0);
+      process.stdout.write('*');
+    };
+    process.stdin.on('data', onData);
+    rl.question('', (answer) => {
+      process.stdin.removeListener('data', onData);
+      rl.close();
+      process.stdout.write('\n\n');
+      resolve((answer || '').trim());
+    });
+  });
 }
 
-/* Confirms which token was exported without disclosing it. */
-console.log('\n  token: length=' + TOKEN.length + '  prefix=' + TOKEN.slice(0, 3) + '***  (never printed in full)');
-console.log('  api:   ' + VERSION + '   ALL CALLS ARE GET — nothing is created, subscribed or sent\n');
+let TOKEN = '';
+
+/* The token that was pasted into a chat on 2026-09-29 and is therefore
+   compromised. Refusing it by prefix costs nothing and stops the one mistake
+   most likely to be made under time pressure: reaching for the value that is
+   still on the clipboard. */
+const COMPROMISED_PREFIX = 'EAASOxEQWum4';
+
+async function boot () {
+  TOKEN = process.env.META_ACCESS_TOKEN || process.env.WHATSAPP_ACCESS_TOKEN || '';
+  if (!TOKEN && process.stdin.isTTY) TOKEN = await promptForToken();
+
+  if (!TOKEN) {
+    console.error('\n  No token supplied.\n');
+    console.error('  Either run this again and paste it at the prompt, or set it first:\n');
+    console.error('    $env:META_ACCESS_TOKEN = Read-Host "token"\n');
+    console.error('  Read-Host keeps the token out of your PowerShell history file;');
+    console.error('  typing the value inline writes it to disk.\n');
+    process.exit(2);
+  }
+
+  if (TOKEN.startsWith(COMPROMISED_PREFIX)) {
+    console.error('\n  REFUSED — this is the token that was exposed in chat on 2026-09-29.');
+    console.error('  It must be treated as compromised. Rotate it in Meta and use the');
+    console.error('  NEW value; a re-issue of the same string is not a rotation.\n');
+    process.exit(2);
+  }
+
+  /* Confirms which token is in use without disclosing it. */
+  console.log('\n  token: length=' + TOKEN.length + '  prefix=' + TOKEN.slice(0, 3) + '***  (never printed in full)');
+  console.log('  api:   ' + VERSION + '   ALL CALLS ARE GET — nothing is created, subscribed or sent\n');
+
+  await main();
+}
 
 function get (pathname) {
   return new Promise((resolve) => {
@@ -89,7 +139,7 @@ function get (pathname) {
 
 const line = (k, v) => console.log('  ' + String(k).padEnd(26) + (v === undefined ? '' : v));
 
-(async function main () {
+async function main () {
   /* ── 1 · WHO IS THIS TOKEN, AND WHAT MAY IT DO ─────────────────────────── */
   console.log('1 · TOKEN');
   const dbg = await get('/debug_token?input_token=' + encodeURIComponent(TOKEN));
@@ -172,4 +222,7 @@ const line = (k, v) => console.log('  ' + String(k).padEnd(26) + (v === undefine
   console.log('\n  NOT DONE: nothing was subscribed, registered or sent. No secret was');
   console.log('  created, no function exported, no deployment. The handshake remains');
   console.log('  the first real proof and has not happened.\n');
-})();
+}
+
+
+boot();
