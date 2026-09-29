@@ -72,6 +72,12 @@ duplicate stock." The design is in `docs/PACKAGES_AND_BUNDLES.md`.
   - `catalogue-canonical-migration` "pos-zero-friction untouched" is a dirty-tree check and clears on commit.
   - `merchant-v2-ecosystem-runtime`, `merchant-messages-ui` and `functions-require-closure-gate` differed only because
     of resource exhaustion (Windows fork). They are identical when re-run on their own.
+- **Post-commit cart/checkout re-run** (on `fd89c31` and on `446e826`, run one after the other): identical on both.
+  - 12 cart suites pass; `checkout-fallback-total` 58/58.
+  - `cart-universal` fails on BOTH trees. The failure predates U5: it runs `git show 69c4170~1:entertainment-terms.html`,
+    and that file does not exist at that commit.
+  - `cart-checkout` and `cart-final` are **BLOCKED, not passed**. They need the Firestore emulator on 127.0.0.1:8080
+    (fake project id, so they can never reach production), and it was not running.
 
 **Database:** new optional product fields `components` and `trackInventory`. No migration, and no production data
 touched. **API:** new `PACKAGE_*` refusal codes. **Breaking:** none.
