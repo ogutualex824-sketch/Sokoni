@@ -31,7 +31,7 @@ implemented** (no code path) · **unknown** (not measurable from here). Nothing 
 | **In-app calls / video** | implemented (transport honest) | SOKONI Connect: `PROVIDERS = { webrtc: true, pstn: false }`; TURN unprovisioned (`TURN_URL/CREDENTIAL` absent); certified 856/0. Slices V1–V3 attached video verification to records. |
 | **Provider health** | implemented | `communicationHealth`: **provisioning** (credential presence, never values) on one axis, **observations** (outcomes of real sends, `unobserved` until one happens) on the other. |
 | **Support phone — authoritative** | implemented | `functions/company-identity.js:81` and `sokoni-company.js:62`: `supportPhone: '+254 705 726 803'`; `contact.html` shows it (and a second "Call us" line `+254 722 376 801` whose authority is not in any config). |
-| **Support phone — `support.html`** | **fabricated** | `support.html:141` links `tel:+254700000000` — a placeholder, not the configured number. Violates "no fabricated support number". |
+| **Support phone — `support.html`** | ~~fabricated~~ **repaired (C5)** | `support.html` linked a placeholder `tel:` number nobody answers. Since C5 every support-number control on `support.html` and `contact.html` is `[data-support-phone]` and is filled by `SOKONI_COMPANY.applySupportPhone()`; with no configured number the control loses its href and reads "Support line not configured". Evidence `scripts/test-support-phone.js` 9/0. |
 
 ## 2 · What "email as a first-class workspace" requires — exactly what is missing
 
@@ -74,9 +74,13 @@ census and to stay so in C2–C6.
   inbound mail); operational workspace link → C2; no synthetic observation for inbound.
 - **C4 — Africa's Talking in the evidence model.** SMS outbound + delivery reports; sender-ID state as a declaration;
   voice/inbound marked not implemented; operational workspace = the existing SMS blast + `smsStats`.
-- **C5 — Support number surface.** One source (`SokoniCompany.supportPhone` ↔ `company-identity.js`); `support.html`
-  and every "Call SOKONI Support" action read it; the fabricated `+254700000000` removed; the unexplained
-  `+254 722 376 801` on `contact.html` either given an authority or removed.
+- **C5 — Support number surface. DONE (this branch).** One source (`SOKONI_COMPANY.supportPhone` ↔ `company-identity.js`,
+  parity asserted); `support.html` (Call Support, WhatsApp card, ticket follow-up) and `contact.html` (two WhatsApp
+  tiles, Alternative line, footer icon) read it through `[data-support-phone]`; the fabricated placeholder removed;
+  fail-closed "not configured" proven by a negative control. **Left for the owner:** the `+254 722 376 801` "Call us"
+  line on `contact.html` and `index.html` still has no configured authority — it was neither removed nor promoted;
+  hub pages carry placeholder-looking numbers (`car-hub`, `food-rider`, `healthcare`, `legal`), reported by the suite,
+  outside this slice.
 - **C6 — Cross-app links.** Merchant, buyer, Super Admin, Connect, support and email link to the same records by
   stable ids (`context`), never a local copy.
 

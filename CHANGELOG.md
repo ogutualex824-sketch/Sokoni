@@ -1,3 +1,32 @@
+## 2026-09-29 — Support number, Slice C5: one source, fail closed, no invented digit (branch `feat/integrations-control-center`, NOT deployed)
+
+The census (C1) found `support.html` linking a placeholder `tel:` number nobody answers, while the configured number
+lives in `functions/company-identity.js` and its client mirror `sokoni-company.js`. C5 makes that mirror the ONE
+place a page can get the number from.
+
+- **`sokoni-company.js`** — `supportPhoneDigits()`, `supportPhoneHref('tel'|'wa')` and `applySupportPhone(root)`.
+  A control is marked `data-support-phone="tel"` or `"wa"` (optional `data-support-phone-text` child for the visible
+  number, optional `data-support-phone-text-param` for a prefilled WhatsApp message). Configured → href + number
+  written, `data-support-phone-state="configured"`. **Not configured → the href is removed, `aria-disabled`, and the
+  text reads "Support line not configured"** — a page never shows a digit this file did not supply. Runs on
+  DOMContentLoaded; idempotent; no elements → no-op (`legal-centre.html`, the only prior loader, unaffected).
+- **`support.html`** — loads `sokoni-company.js`; Call Support card, WhatsApp card (prefilled text) and the "Follow up
+  on WhatsApp" button are data-driven; the ticket-lookup "follow up on WhatsApp" sentence is built from
+  `supportPhoneHref('wa')` and **omits the link** when there is no number. The fabricated placeholder is gone.
+- **`contact.html`** — loads `sokoni-company.js`; the two WhatsApp tiles, the "Alternative line" and the footer
+  WhatsApp icon are data-driven. **Not touched:** the `+254 722 376 801` "Call us" line (also on `index.html`) — no
+  configuration names it as an authority, so it was neither promoted nor removed; owner decision.
+- **Reported, not fixed:** placeholder-looking `tel:` numbers on `car-hub`, `food-rider`, `healthcare`, `legal`
+  (the suite prints them each run). Outside the support-number scope.
+
+Evidence: `scripts/test-support-phone.js` **9/0** — client↔server `supportPhone` parity; href derivation; real-browser
+render of all 3 + 4 controls (external origins aborted); **negative control**: the page served with `supportPhone: ''`
+loses every href and shows "not configured" with no digit anywhere in the controls; no literal of either number left
+in the two pages (markup, script or comment); the dynamic follow-up link built from the helper.
+`scripts/verify-company-identity.js`: 10 pre-existing issues, none in the files this slice touched.
+Files: `sokoni-company.js`, `support.html`, `contact.html`, `scripts/test-support-phone.js`,
+`docs/COMMUNICATIONS_CENSUS_C1.md`. No database, API, rules or security-boundary change. No deploy.
+
 ## 2026-09-29 — WhatsApp slice 1: the inbound receiver, signed and inert until configured (branch `feat/integrations-control-center`, NOT deployed)
 
 Owner decision 09-29: the 09-27 directive is **superseded for API-integrated WhatsApp only**. `wa.me` hand-offs
