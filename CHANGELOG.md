@@ -1,3 +1,17 @@
+## [2026-09-29] - Approval Remediation / Reapplication CENSUS (READ ONLY; owner-authorized; nothing written)
+
+docs/APPROVAL_REMEDIATION_CENSUS.md + docs/release-gates/approval-remediation-census.json (digest fc1c154f…), script
+scripts/census-approval-remediation.js. 91 accounts + 2 orphan directory records: BUYER_ONLY 64 · VALIDLY_APPROVED 5 (protected: DG Wine,
+Latomi, Julian's Closet, Hometown Movers, k Riss) · INVALID_LEGACY 3 (Kasindi "reindex"; Langa'ta mamafua "founder-decision-2026-08-01"
+— a SECOND Kasindi, already R3-classified cleaning; KASS SHOP D5Ql… live by status with SELF-decided driver approvals) ·
+NO_APPROVAL_EVIDENCE 17 (11 live-status-only incl. DJ Bvmbxno and a second KASS SHOP with 32 wallet tx, 3 seller stubs, 3 role-only) ·
+PENDING 1 (Heights, 3 duplicate apps) · REFUSED 1 (King Bruce, evidence of today's landing). Validity = approved application decided by
+a resolvable non-self admin account whose role approves the registry kind present, or an admin_decision approve. 18 accounts routed to a
+provider/business dashboard without valid approval (live shell routes on role/claim/status); 7 publicly searchable without it; 4
+reusable applications vs 18 fresh; 9 historical decisions to preserve; 18 of 27 non-buyer accounts touch the cleanup manifest.
+Findings: role/claim-only routing must be gated by the server-derived state too; remediation authority must refuse
+decidedBy === applicant. Next: design the REAPPLICATION_REQUIRED transition; no production writes.
+
 ## [2026-09-29] - Identity 4 of 6 LANDED: King Bruce REFUSED through the admin approval-decision authority (PRODUCTION, owner-authorized digest 21746cfc…)
 
 Applied 22:16:26Z by the REAL bizAdminApprovalDecide via scripts/approval-decision-manifest.js --apply, actor = the real admin account

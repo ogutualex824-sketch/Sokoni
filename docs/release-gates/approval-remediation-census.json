@@ -1,0 +1,1737 @@
+{
+  "slice": "approval-remediation-census",
+  "readOnly": true,
+  "at": "2026-09-29T22:30:49.365Z",
+  "digest": "fc1c154f92a3373271be41213dd811221f129d4b14bae7f4c9bc76070867240b",
+  "population": {
+    "accounts": 91,
+    "auth": 77,
+    "users": 85,
+    "providers": 11,
+    "sellers": 8,
+    "businesses": 12,
+    "shops": 3,
+    "applications": 13,
+    "directoryRecordsWithoutAccount": 2
+  },
+  "distribution": {
+    "BUYER_ONLY": 64,
+    "NO_APPROVAL_EVIDENCE": 17,
+    "PENDING_APPLICATION": 1,
+    "VALIDLY_APPROVED": 5,
+    "INVALID_LEGACY": 3,
+    "REFUSED": 1
+  },
+  "subtypes": {
+    "BUYER_ONLY/buyer": 64,
+    "NO_APPROVAL_EVIDENCE/live_status_only": 11,
+    "PENDING_APPLICATION/undecided_application": 1,
+    "VALIDLY_APPROVED/application_by_admin_account": 5,
+    "INVALID_LEGACY/approval_artefact_without_authority": 3,
+    "NO_APPROVAL_EVIDENCE/registry_stub_not_live": 3,
+    "NO_APPROVAL_EVIDENCE/role_without_registry": 3,
+    "REFUSED/admin_decision_refuse": 1
+  },
+  "summary": {
+    "routed": 18,
+    "pub": 7,
+    "reuse": 4,
+    "fresh": 18,
+    "preserve": 9,
+    "cleanupTouched": 18
+  },
+  "orphanRegistryRecords": [
+    {
+      "collection": "businesses",
+      "id": "SOK-84YM4L",
+      "name": "Rider",
+      "status": "active",
+      "ownerFields": {
+        "ownerId": "uid2",
+        "ownerUid": null,
+        "uid": null
+      },
+      "inCleanupManifest": true
+    },
+    {
+      "collection": "businesses",
+      "id": "SOK-RAH2MR",
+      "name": "FRED",
+      "status": "active",
+      "ownerFields": {
+        "ownerId": "uid1",
+        "ownerUid": null,
+        "uid": null
+      },
+      "inCleanupManifest": true
+    }
+  ],
+  "buyerOnly": {
+    "count": 64,
+    "withoutAuthAccount": 11,
+    "withoutUsersDoc": 4,
+    "withExtraRolesOrClaims": [
+      {
+        "uid": "WEbAS5cVDwTdyWhuCcNXsNTYeIW2",
+        "roles": [
+          "buyer",
+          "rider"
+        ],
+        "claims": []
+      },
+      {
+        "uid": "zPYdnpHfdxNVUWIA7MoFhVrSxbo2",
+        "roles": [
+          "buyer"
+        ],
+        "claims": [
+          "admin"
+        ]
+      }
+    ]
+  },
+  "rows": [
+    {
+      "uid": "WLt0VowwtFcFADIJDIxXu3e6H1p1",
+      "name": "Kasindi holdings limited",
+      "state": "INVALID_LEGACY",
+      "subtype": "approval_artefact_without_authority",
+      "why": "application PRVMS7IACKG approved, decidedBy \"reindex\" → unresolvable_account; provider carries approvedAt with no admin decision",
+      "claims": [
+        "provider"
+      ],
+      "roles": [
+        "buyer",
+        "provider"
+      ],
+      "authExists": true,
+      "lastSignIn": "Tue, 04 Aug 2026 13:17:31 GMT",
+      "registry": [
+        {
+          "kind": "provider",
+          "id": "WLt0VowwtFcFADIJDIxXu3e6H1p1",
+          "status": "active",
+          "approvedAt": "2026-07-30T15:13:13.000Z",
+          "approvedBy": null,
+          "searchable": true,
+          "isPublic": true,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": false
+        },
+        {
+          "kind": "seller",
+          "id": "WLt0VowwtFcFADIJDIxXu3e6H1p1",
+          "status": "",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": false,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": false
+        }
+      ],
+      "applications": [
+        {
+          "id": "PRVMS7IACKG",
+          "status": "approved",
+          "decidedBy": "reindex",
+          "decidedAt": "2026-07-30T15:11:12.000Z",
+          "authority": "unresolvable_account",
+          "approvesKinds": [
+            "provider"
+          ],
+          "agreementAccepted": false,
+          "agreementVersion": null,
+          "priorDecisions": 0,
+          "role": "provider",
+          "type": "Cleaning Company / Housekeeper"
+        }
+      ],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 1
+      },
+      "routedToDashboardWithoutValidApproval": true,
+      "publiclySearchableWithoutValidApproval": true,
+      "applicationPath": "redecide_existing_after_acknowledgement",
+      "preserve": [
+        "applications/PRVMS7IACKG.decidedBy=\"reindex\" @ 2026-07-30T15:11:12.000Z",
+        "provider.approvedAt=2026-07-30T15:13:13.000Z"
+      ],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [],
+      "resolver": {
+        "state": "PENDING_CLASSIFICATION",
+        "reason": "UNCLASSIFIED",
+        "route": null
+      }
+    },
+    {
+      "uid": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+      "name": "KASS SHOP",
+      "state": "INVALID_LEGACY",
+      "subtype": "approval_artefact_without_authority",
+      "why": "application DRV1785840179476 approved, decidedBy \"D5Ql2EYr95bt79IpcGTmOMTK0P83\" → admin_account_SELF_DECISION; application DRV1785840188535 approved, decidedBy \"D5Ql2EYr95bt79IpcGTmOMTK0P83\" → admin_account_SELF_DECISION; SELF-DECIDED application(s): DRV1785840179476 (driver, approved), DRV1785840188535 (driver, approved), DRV1785840190276 (driver, rejected)",
+      "claims": [
+        "admin",
+        "superAdmin",
+        "driver",
+        "rider",
+        "seller"
+      ],
+      "roles": [
+        "buyer",
+        "rider",
+        "seller",
+        "driver"
+      ],
+      "authExists": true,
+      "lastSignIn": "Wed, 23 Sep 2026 08:08:41 GMT",
+      "registry": [
+        {
+          "kind": "seller",
+          "id": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+          "status": "active",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": false,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": false
+        },
+        {
+          "kind": "business",
+          "id": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+          "status": "active",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": false,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": false
+        },
+        {
+          "kind": "business",
+          "id": "SOK-E7J2Y8",
+          "status": "retired",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": false,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": false
+        },
+        {
+          "kind": "business",
+          "id": "SOK-GL58F7",
+          "status": "active",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": false,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": false
+        },
+        {
+          "kind": "shop",
+          "id": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+          "status": "active",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": false,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": false
+        }
+      ],
+      "applications": [
+        {
+          "id": "DRV1785840179476",
+          "status": "approved",
+          "decidedBy": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+          "decidedAt": "2026-08-04T10:46:45.000Z",
+          "authority": "admin_account_SELF_DECISION",
+          "approvesKinds": [
+            "driver"
+          ],
+          "agreementAccepted": false,
+          "agreementVersion": null,
+          "priorDecisions": 0,
+          "role": "driver",
+          "type": "driver"
+        },
+        {
+          "id": "DRV1785840188535",
+          "status": "approved",
+          "decidedBy": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+          "decidedAt": "2026-08-04T10:50:30.000Z",
+          "authority": "admin_account_SELF_DECISION",
+          "approvesKinds": [
+            "driver"
+          ],
+          "agreementAccepted": false,
+          "agreementVersion": null,
+          "priorDecisions": 0,
+          "role": "driver",
+          "type": "driver"
+        },
+        {
+          "id": "DRV1785840190276",
+          "status": "rejected",
+          "decidedBy": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+          "decidedAt": "2026-08-04T10:47:27.000Z",
+          "authority": "admin_account_SELF_DECISION",
+          "approvesKinds": [
+            "driver"
+          ],
+          "agreementAccepted": false,
+          "agreementVersion": null,
+          "priorDecisions": 0,
+          "role": "driver",
+          "type": "driver"
+        }
+      ],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 50,
+        "orders": 10,
+        "walletTx": 8
+      },
+      "routedToDashboardWithoutValidApproval": true,
+      "publiclySearchableWithoutValidApproval": false,
+      "applicationPath": "redecide_existing_after_acknowledgement",
+      "preserve": [
+        "applications/DRV1785840179476.decidedBy=\"D5Ql2EYr95bt79IpcGTmOMTK0P83\" @ 2026-08-04T10:46:45.000Z",
+        "applications/DRV1785840188535.decidedBy=\"D5Ql2EYr95bt79IpcGTmOMTK0P83\" @ 2026-08-04T10:50:30.000Z",
+        "applications/DRV1785840190276.decidedBy=\"D5Ql2EYr95bt79IpcGTmOMTK0P83\" @ 2026-08-04T10:47:27.000Z"
+      ],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [
+        "DRV1785840179476",
+        "DRV1785840188535",
+        "DRV1785840190276"
+      ],
+      "inCleanupManifest": [],
+      "resolver": {
+        "state": "CAPABILITY_CONFLICT",
+        "reason": "CAPABILITY_CONFLICT",
+        "route": null
+      }
+    },
+    {
+      "uid": "H7p6ktBHogM5GcBy6mz8negKVbG2",
+      "name": "Langa'ta mamafua",
+      "state": "INVALID_LEGACY",
+      "subtype": "approval_artefact_without_authority",
+      "why": "application e0cOABIkbtu2Vb1suG5y approved, decidedBy \"founder-decision-2026-08-01\" → unresolvable_account; provider carries approvedAt with no admin decision",
+      "claims": [
+        "provider"
+      ],
+      "roles": [
+        "provider",
+        "buyer"
+      ],
+      "authExists": true,
+      "lastSignIn": "Tue, 21 Jul 2026 15:45:42 GMT",
+      "registry": [
+        {
+          "kind": "provider",
+          "id": "H7p6ktBHogM5GcBy6mz8negKVbG2",
+          "status": "active",
+          "approvedAt": "2026-08-01T06:14:23.000Z",
+          "approvedBy": null,
+          "searchable": true,
+          "isPublic": true,
+          "approvalDecision": null,
+          "business": {
+            "category": "cleaning",
+            "source": "application"
+          },
+          "capabilities": null,
+          "inCleanupManifest": false
+        }
+      ],
+      "applications": [
+        {
+          "id": "e0cOABIkbtu2Vb1suG5y",
+          "status": "approved",
+          "decidedBy": "founder-decision-2026-08-01",
+          "decidedAt": null,
+          "authority": "unresolvable_account",
+          "approvesKinds": [
+            "provider"
+          ],
+          "agreementAccepted": false,
+          "agreementVersion": null,
+          "priorDecisions": 0,
+          "role": "provider",
+          "type": "business"
+        }
+      ],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 0
+      },
+      "routedToDashboardWithoutValidApproval": true,
+      "publiclySearchableWithoutValidApproval": true,
+      "applicationPath": "redecide_existing_after_acknowledgement",
+      "preserve": [
+        "applications/e0cOABIkbtu2Vb1suG5y.decidedBy=\"founder-decision-2026-08-01\" @ null",
+        "provider.approvedAt=2026-08-01T06:14:23.000Z"
+      ],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [],
+      "resolver": {
+        "state": "AVAILABLE",
+        "reason": null,
+        "route": "provider-dashboard.html"
+      }
+    },
+    {
+      "uid": "TuOa5Ju5kXWJKzTIMosmv1a06tO2",
+      "name": "<phone-number-as-name>",
+      "state": "NO_APPROVAL_EVIDENCE",
+      "subtype": "registry_stub_not_live",
+      "why": "registry record(s) present but not live: seller:<no status>; roles [\"buyer\"]",
+      "claims": [],
+      "roles": [
+        "buyer"
+      ],
+      "authExists": true,
+      "lastSignIn": "Tue, 04 Aug 2026 15:30:56 GMT",
+      "registry": [
+        {
+          "kind": "seller",
+          "id": "TuOa5Ju5kXWJKzTIMosmv1a06tO2",
+          "status": "",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": false,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": false
+        }
+      ],
+      "applications": [],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 0
+      },
+      "routedToDashboardWithoutValidApproval": false,
+      "publiclySearchableWithoutValidApproval": false,
+      "applicationPath": "fresh_application_required",
+      "preserve": [],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [],
+      "resolver": {
+        "state": "PENDING_APPROVAL",
+        "reason": "NO_APPROVED_BUSINESS",
+        "route": null
+      }
+    },
+    {
+      "uid": "AiJp5yzTnRZZIZKZEepNUKn8NuI2",
+      "name": "DJ Bvmbxno",
+      "state": "NO_APPROVAL_EVIDENCE",
+      "subtype": "live_status_only",
+      "why": "provider status active, no approvedAt, no decision",
+      "claims": [],
+      "roles": [
+        "provider",
+        "buyer"
+      ],
+      "authExists": true,
+      "lastSignIn": "Wed, 05 Aug 2026 11:01:18 GMT",
+      "registry": [
+        {
+          "kind": "provider",
+          "id": "AiJp5yzTnRZZIZKZEepNUKn8NuI2",
+          "status": "active",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": true,
+          "isPublic": true,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": false
+        }
+      ],
+      "applications": [],
+      "activity": {
+        "bookings": 4,
+        "services": 1,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 3
+      },
+      "routedToDashboardWithoutValidApproval": true,
+      "publiclySearchableWithoutValidApproval": true,
+      "applicationPath": "fresh_application_required",
+      "preserve": [],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [],
+      "resolver": {
+        "state": "CAPABILITY_CONFLICT",
+        "reason": "CAPABILITY_CONFLICT",
+        "route": null
+      }
+    },
+    {
+      "uid": "LDBKlzIUJMQPN4iSVksszKXtsaw1",
+      "name": "Enock Kiptoo korir",
+      "state": "NO_APPROVAL_EVIDENCE",
+      "subtype": "registry_stub_not_live",
+      "why": "registry record(s) present but not live: seller:<no status>; roles [\"buyer\"]",
+      "claims": [],
+      "roles": [
+        "buyer"
+      ],
+      "authExists": true,
+      "lastSignIn": "Mon, 10 Aug 2026 08:19:21 GMT",
+      "registry": [
+        {
+          "kind": "seller",
+          "id": "LDBKlzIUJMQPN4iSVksszKXtsaw1",
+          "status": "",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": false,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": false
+        }
+      ],
+      "applications": [],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 0
+      },
+      "routedToDashboardWithoutValidApproval": false,
+      "publiclySearchableWithoutValidApproval": false,
+      "applicationPath": "fresh_application_required",
+      "preserve": [],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [],
+      "resolver": {
+        "state": "PENDING_APPROVAL",
+        "reason": "NO_APPROVED_BUSINESS",
+        "route": null
+      }
+    },
+    {
+      "uid": "Bxd4Lc4DQYaa3LabmJDfWtmTiN22",
+      "name": "John wa Pork",
+      "state": "NO_APPROVAL_EVIDENCE",
+      "subtype": "live_status_only",
+      "why": "seller status active, no approvedAt, no decision",
+      "claims": [],
+      "roles": [
+        "buyer",
+        "seller"
+      ],
+      "authExists": true,
+      "lastSignIn": "Sat, 25 Jul 2026 10:26:29 GMT",
+      "registry": [
+        {
+          "kind": "seller",
+          "id": "Bxd4Lc4DQYaa3LabmJDfWtmTiN22",
+          "status": "active",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": true,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": false
+        }
+      ],
+      "applications": [],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 0
+      },
+      "routedToDashboardWithoutValidApproval": true,
+      "publiclySearchableWithoutValidApproval": true,
+      "applicationPath": "fresh_application_required",
+      "preserve": [],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [],
+      "resolver": {
+        "state": "CAPABILITY_CONFLICT",
+        "reason": "CAPABILITY_CONFLICT",
+        "route": null
+      }
+    },
+    {
+      "uid": "xrH21J5GFbW8PluCZ2ny5nIuf602",
+      "name": "KASS SHOP",
+      "state": "NO_APPROVAL_EVIDENCE",
+      "subtype": "live_status_only",
+      "why": "seller status active, no approvedAt, no decision",
+      "claims": [],
+      "roles": [
+        "buyer",
+        "seller",
+        "driver"
+      ],
+      "authExists": true,
+      "lastSignIn": "Wed, 05 Aug 2026 20:51:06 GMT",
+      "registry": [
+        {
+          "kind": "seller",
+          "id": "xrH21J5GFbW8PluCZ2ny5nIuf602",
+          "status": "active",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": true,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": false
+        }
+      ],
+      "applications": [],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 32
+      },
+      "routedToDashboardWithoutValidApproval": true,
+      "publiclySearchableWithoutValidApproval": true,
+      "applicationPath": "fresh_application_required",
+      "preserve": [],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [],
+      "resolver": {
+        "state": "CAPABILITY_CONFLICT",
+        "reason": "CAPABILITY_CONFLICT",
+        "route": null
+      }
+    },
+    {
+      "uid": "zewfgP9OpcSTc34x07UCecTo0Mh2",
+      "name": "Maina Groceries",
+      "state": "NO_APPROVAL_EVIDENCE",
+      "subtype": "live_status_only",
+      "why": "seller status active, no approvedAt, no decision",
+      "claims": [],
+      "roles": [
+        "seller",
+        "buyer"
+      ],
+      "authExists": true,
+      "lastSignIn": "Sun, 26 Jul 2026 10:22:14 GMT",
+      "registry": [
+        {
+          "kind": "seller",
+          "id": "zewfgP9OpcSTc34x07UCecTo0Mh2",
+          "status": "active",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": true,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": true
+        }
+      ],
+      "applications": [],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 0
+      },
+      "routedToDashboardWithoutValidApproval": true,
+      "publiclySearchableWithoutValidApproval": true,
+      "applicationPath": "fresh_application_required",
+      "preserve": [],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [
+        "auth/zewfgP9OpcSTc34x07UCecTo0Mh2",
+        "sellers/zewfgP9OpcSTc34x07UCecTo0Mh2",
+        "users/zewfgP9OpcSTc34x07UCecTo0Mh2"
+      ],
+      "resolver": {
+        "state": "CAPABILITY_CONFLICT",
+        "reason": "CAPABILITY_CONFLICT",
+        "route": null
+      }
+    },
+    {
+      "uid": "FVolUQUwrWTYrlg79EG84ygS75p1",
+      "name": "Manu",
+      "state": "NO_APPROVAL_EVIDENCE",
+      "subtype": "registry_stub_not_live",
+      "why": "registry record(s) present but not live: seller:<no status>; roles [\"buyer\",\"seller\"]",
+      "claims": [],
+      "roles": [
+        "buyer",
+        "seller"
+      ],
+      "authExists": true,
+      "lastSignIn": "Tue, 28 Jul 2026 12:45:19 GMT",
+      "registry": [
+        {
+          "kind": "seller",
+          "id": "FVolUQUwrWTYrlg79EG84ygS75p1",
+          "status": "",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": false,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": false
+        }
+      ],
+      "applications": [],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 0
+      },
+      "routedToDashboardWithoutValidApproval": true,
+      "publiclySearchableWithoutValidApproval": false,
+      "applicationPath": "fresh_application_required",
+      "preserve": [],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [],
+      "resolver": {
+        "state": "PENDING_APPROVAL",
+        "reason": "NO_APPROVED_BUSINESS",
+        "route": null
+      }
+    },
+    {
+      "uid": "MERCHANT_A_uid_11",
+      "name": "Merchant A Traders",
+      "state": "NO_APPROVAL_EVIDENCE",
+      "subtype": "live_status_only",
+      "why": "business(SOK-LZMNWQ) status active, no approvedAt, no decision",
+      "claims": [],
+      "roles": [],
+      "authExists": false,
+      "lastSignIn": null,
+      "registry": [
+        {
+          "kind": "business",
+          "id": "SOK-LZMNWQ",
+          "status": "active",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": false,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": true
+        }
+      ],
+      "applications": [],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 0
+      },
+      "routedToDashboardWithoutValidApproval": true,
+      "publiclySearchableWithoutValidApproval": false,
+      "applicationPath": "fresh_application_required",
+      "preserve": [],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [
+        "users/MERCHANT_A_uid_11"
+      ],
+      "resolver": {
+        "state": "PENDING_APPROVAL",
+        "reason": "NO_APPROVED_BUSINESS",
+        "route": null
+      }
+    },
+    {
+      "uid": "MtexojeAv7gQl0suyOCJ5TUousB3",
+      "name": null,
+      "state": "NO_APPROVAL_EVIDENCE",
+      "subtype": "role_without_registry",
+      "why": "provider/seller role or claim ([\"seller\"] / []) with no registry record and no application",
+      "claims": [],
+      "roles": [
+        "seller"
+      ],
+      "authExists": true,
+      "lastSignIn": "Tue, 11 Aug 2026 09:24:33 GMT",
+      "registry": [],
+      "applications": [],
+      "activity": null,
+      "routedToDashboardWithoutValidApproval": true,
+      "publiclySearchableWithoutValidApproval": false,
+      "applicationPath": "fresh_application_required",
+      "preserve": [],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [
+        "auth/MtexojeAv7gQl0suyOCJ5TUousB3",
+        "users/MtexojeAv7gQl0suyOCJ5TUousB3"
+      ],
+      "resolver": null
+    },
+    {
+      "uid": "oXrgbq2oBwadJSfsk0NypDCAXVT2",
+      "name": "RC Seller",
+      "state": "NO_APPROVAL_EVIDENCE",
+      "subtype": "role_without_registry",
+      "why": "provider/seller role or claim ([\"buyer\"] / [\"seller\"]) with no registry record and no application",
+      "claims": [
+        "seller"
+      ],
+      "roles": [
+        "buyer"
+      ],
+      "authExists": true,
+      "lastSignIn": "Fri, 24 Jul 2026 07:13:03 GMT",
+      "registry": [],
+      "applications": [],
+      "activity": null,
+      "routedToDashboardWithoutValidApproval": true,
+      "publiclySearchableWithoutValidApproval": false,
+      "applicationPath": "fresh_application_required",
+      "preserve": [],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [],
+      "resolver": null
+    },
+    {
+      "uid": "13iuLZx63jN5evaNcUnx7bhDSfs1",
+      "name": "Shave 'n' Trims",
+      "state": "NO_APPROVAL_EVIDENCE",
+      "subtype": "live_status_only",
+      "why": "provider status active, no approvedAt, no decision",
+      "claims": [],
+      "roles": [
+        "provider",
+        "buyer"
+      ],
+      "authExists": true,
+      "lastSignIn": "Sun, 26 Jul 2026 18:37:04 GMT",
+      "registry": [
+        {
+          "kind": "provider",
+          "id": "13iuLZx63jN5evaNcUnx7bhDSfs1",
+          "status": "active",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": true,
+          "isPublic": true,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": true
+        }
+      ],
+      "applications": [],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 0
+      },
+      "routedToDashboardWithoutValidApproval": true,
+      "publiclySearchableWithoutValidApproval": true,
+      "applicationPath": "fresh_application_required",
+      "preserve": [],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [
+        "auth/13iuLZx63jN5evaNcUnx7bhDSfs1",
+        "providers/13iuLZx63jN5evaNcUnx7bhDSfs1",
+        "users/13iuLZx63jN5evaNcUnx7bhDSfs1"
+      ],
+      "resolver": {
+        "state": "CAPABILITY_CONFLICT",
+        "reason": "CAPABILITY_CONFLICT",
+        "route": null
+      }
+    },
+    {
+      "uid": "SELLER_A",
+      "name": "Shop B Traders",
+      "state": "NO_APPROVAL_EVIDENCE",
+      "subtype": "live_status_only",
+      "why": "business(SOK-UHE9XA) status active, no approvedAt, no decision",
+      "claims": [],
+      "roles": [],
+      "authExists": false,
+      "lastSignIn": null,
+      "registry": [
+        {
+          "kind": "business",
+          "id": "SOK-UHE9XA",
+          "status": "active",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": false,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": true
+        }
+      ],
+      "applications": [],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 0
+      },
+      "routedToDashboardWithoutValidApproval": true,
+      "publiclySearchableWithoutValidApproval": false,
+      "applicationPath": "fresh_application_required",
+      "preserve": [],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [
+        "users/SELLER_A"
+      ],
+      "resolver": {
+        "state": "PENDING_APPROVAL",
+        "reason": "NO_APPROVED_BUSINESS",
+        "route": null
+      }
+    },
+    {
+      "uid": "SELLER_A_uid_7f3",
+      "name": "Shop B Traders",
+      "state": "NO_APPROVAL_EVIDENCE",
+      "subtype": "live_status_only",
+      "why": "business(SOK-ALM49S) status active, no approvedAt, no decision",
+      "claims": [],
+      "roles": [],
+      "authExists": false,
+      "lastSignIn": null,
+      "registry": [
+        {
+          "kind": "business",
+          "id": "SOK-ALM49S",
+          "status": "active",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": false,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": true
+        }
+      ],
+      "applications": [],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 0
+      },
+      "routedToDashboardWithoutValidApproval": true,
+      "publiclySearchableWithoutValidApproval": false,
+      "applicationPath": "fresh_application_required",
+      "preserve": [],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [
+        "users/SELLER_A_uid_7f3"
+      ],
+      "resolver": {
+        "state": "PENDING_APPROVAL",
+        "reason": "NO_APPROVED_BUSINESS",
+        "route": null
+      }
+    },
+    {
+      "uid": "vbaSOKL4h8WWGqa6Xfi1eLaEPnS2",
+      "name": "SOKONI Store",
+      "state": "NO_APPROVAL_EVIDENCE",
+      "subtype": "live_status_only",
+      "why": "business(SOK-XX2338) status active, no approvedAt, no decision",
+      "claims": [],
+      "roles": [],
+      "authExists": true,
+      "lastSignIn": null,
+      "registry": [
+        {
+          "kind": "business",
+          "id": "SOK-XX2338",
+          "status": "active",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": false,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": false
+        },
+        {
+          "kind": "shop",
+          "id": "STR_147f5ce11b424ec4bb892519",
+          "status": "",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": false,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": false
+        }
+      ],
+      "applications": [],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 0
+      },
+      "routedToDashboardWithoutValidApproval": true,
+      "publiclySearchableWithoutValidApproval": false,
+      "applicationPath": "fresh_application_required",
+      "preserve": [],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [],
+      "resolver": {
+        "state": "PENDING_APPROVAL",
+        "reason": "NO_APPROVED_BUSINESS",
+        "route": null
+      }
+    },
+    {
+      "uid": "ZrG4N8SETmS7NMEg0src1NYjBw23",
+      "name": "T.M.M & Partners Advocates",
+      "state": "NO_APPROVAL_EVIDENCE",
+      "subtype": "role_without_registry",
+      "why": "provider/seller role or claim ([\"buyer\",\"merchant\"] / []) with no registry record and no application",
+      "claims": [],
+      "roles": [
+        "buyer",
+        "merchant"
+      ],
+      "authExists": true,
+      "lastSignIn": "Sat, 18 Jul 2026 22:10:59 GMT",
+      "registry": [],
+      "applications": [],
+      "activity": null,
+      "routedToDashboardWithoutValidApproval": true,
+      "publiclySearchableWithoutValidApproval": false,
+      "applicationPath": "fresh_application_required",
+      "preserve": [],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [],
+      "resolver": null
+    },
+    {
+      "uid": "uwpD5gx3pvPusUz3FNohykg6vch2",
+      "name": "WOODLANDS",
+      "state": "NO_APPROVAL_EVIDENCE",
+      "subtype": "live_status_only",
+      "why": "business(SOK-WDLNDS) status active, no approvedAt, no decision",
+      "claims": [
+        "admin",
+        "superAdmin"
+      ],
+      "roles": [
+        "buyer",
+        "business"
+      ],
+      "authExists": true,
+      "lastSignIn": "Fri, 28 Aug 2026 10:37:38 GMT",
+      "registry": [
+        {
+          "kind": "business",
+          "id": "SOK-WDLNDS",
+          "status": "active",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": false,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": false
+        }
+      ],
+      "applications": [],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 0
+      },
+      "routedToDashboardWithoutValidApproval": true,
+      "publiclySearchableWithoutValidApproval": false,
+      "applicationPath": "fresh_application_required",
+      "preserve": [],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [],
+      "resolver": {
+        "state": "PENDING_APPROVAL",
+        "reason": "NO_APPROVED_BUSINESS",
+        "route": null
+      }
+    },
+    {
+      "uid": "EmV3RXLmPmVE8TWRBlg3u7WKopp1",
+      "name": "ZZ Probe Shop 11711416",
+      "state": "NO_APPROVAL_EVIDENCE",
+      "subtype": "live_status_only",
+      "why": "shop status active, no approvedAt, no decision",
+      "claims": [],
+      "roles": [],
+      "authExists": true,
+      "lastSignIn": "Mon, 07 Sep 2026 20:08:39 GMT",
+      "registry": [
+        {
+          "kind": "shop",
+          "id": "EmV3RXLmPmVE8TWRBlg3u7WKopp1",
+          "status": "active",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": false,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": true
+        }
+      ],
+      "applications": [],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 0
+      },
+      "routedToDashboardWithoutValidApproval": true,
+      "publiclySearchableWithoutValidApproval": false,
+      "applicationPath": "fresh_application_required",
+      "preserve": [],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [
+        "auth/EmV3RXLmPmVE8TWRBlg3u7WKopp1",
+        "shops/EmV3RXLmPmVE8TWRBlg3u7WKopp1"
+      ],
+      "resolver": {
+        "state": "PENDING_APPROVAL",
+        "reason": "NO_APPROVED_BUSINESS",
+        "route": null
+      }
+    },
+    {
+      "uid": "28vznyvnLyNFXAJqL2wf6PjbqrK2",
+      "name": "Heights Creations",
+      "state": "PENDING_APPLICATION",
+      "subtype": "undecided_application",
+      "why": "application NlEgs7ELXlVjhoagxmmP pending; application PRVMUH8GVC0 pending; application PRVMUHCGRFH pending",
+      "claims": [],
+      "roles": [
+        "buyer"
+      ],
+      "authExists": true,
+      "lastSignIn": "Fri, 25 Sep 2026 16:38:28 GMT",
+      "registry": [
+        {
+          "kind": "provider",
+          "id": "28vznyvnLyNFXAJqL2wf6PjbqrK2",
+          "status": "pending",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": false,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": false
+        }
+      ],
+      "applications": [
+        {
+          "id": "NlEgs7ELXlVjhoagxmmP",
+          "status": "pending",
+          "decidedBy": null,
+          "decidedAt": null,
+          "authority": "no_decidedBy",
+          "approvesKinds": [
+            "seller",
+            "business",
+            "shop"
+          ],
+          "agreementAccepted": false,
+          "agreementVersion": null,
+          "priorDecisions": 0,
+          "role": "seller",
+          "type": "business"
+        },
+        {
+          "id": "PRVMUH8GVC0",
+          "status": "pending",
+          "decidedBy": null,
+          "decidedAt": null,
+          "authority": "no_decidedBy",
+          "approvesKinds": [
+            "provider"
+          ],
+          "agreementAccepted": false,
+          "agreementVersion": null,
+          "priorDecisions": 0,
+          "role": "provider",
+          "type": "provider"
+        },
+        {
+          "id": "PRVMUHCGRFH",
+          "status": "pending",
+          "decidedBy": null,
+          "decidedAt": null,
+          "authority": "no_decidedBy",
+          "approvesKinds": [
+            "provider"
+          ],
+          "agreementAccepted": false,
+          "agreementVersion": null,
+          "priorDecisions": 0,
+          "role": "provider",
+          "type": "provider"
+        }
+      ],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 0
+      },
+      "routedToDashboardWithoutValidApproval": false,
+      "publiclySearchableWithoutValidApproval": false,
+      "applicationPath": "continue_existing_pending",
+      "preserve": [],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [],
+      "resolver": {
+        "state": "PENDING_APPROVAL",
+        "reason": "NOT_APPROVED",
+        "route": null
+      }
+    },
+    {
+      "uid": "aOdQxmUGLCO4hOYsdHMhWuwYV9D2",
+      "name": "King Bruce",
+      "state": "REFUSED",
+      "subtype": "admin_decision_refuse",
+      "why": "providers.approvalDecision refuse by D5Ql2EYr95bt79IpcGTmOMTK0P83 (admin_decision)",
+      "claims": [],
+      "roles": [
+        "buyer",
+        "merchant",
+        "provider"
+      ],
+      "authExists": true,
+      "lastSignIn": "Sat, 18 Jul 2026 22:28:20 GMT",
+      "registry": [
+        {
+          "kind": "provider",
+          "id": "aOdQxmUGLCO4hOYsdHMhWuwYV9D2",
+          "status": "suspended",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": false,
+          "isPublic": false,
+          "approvalDecision": {
+            "decision": "refuse",
+            "decidedBy": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+            "decidedAt": "2026-09-29T22:16:26.000Z",
+            "source": "admin_decision"
+          },
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": false
+        }
+      ],
+      "applications": [],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 0
+      },
+      "routedToDashboardWithoutValidApproval": "refused_but_role_or_status",
+      "publiclySearchableWithoutValidApproval": false,
+      "applicationPath": "fresh_application_required",
+      "preserve": [
+        "provider.approvalDecision=refuse by D5Ql2EYr95bt79IpcGTmOMTK0P83"
+      ],
+      "protectedFromRemediation": false,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [],
+      "resolver": {
+        "state": "PENDING_APPROVAL",
+        "reason": "SUSPENDED",
+        "route": null
+      }
+    },
+    {
+      "uid": "Ohg9HrtGpCXBUSzbRfaUifOPWQ32",
+      "name": "DG wines and spirits",
+      "state": "VALIDLY_APPROVED",
+      "subtype": "application_by_admin_account",
+      "why": "application AvAE6rZEiO9FJ9UoMePY (provider) approved by admin account D5Ql2EYr95bt79IpcGTmOMTK0P83",
+      "claims": [
+        "provider"
+      ],
+      "roles": [
+        "buyer",
+        "provider"
+      ],
+      "authExists": true,
+      "lastSignIn": "Sun, 02 Aug 2026 06:21:02 GMT",
+      "registry": [
+        {
+          "kind": "provider",
+          "id": "Ohg9HrtGpCXBUSzbRfaUifOPWQ32",
+          "status": "active",
+          "approvedAt": "2026-09-03T22:55:03.000Z",
+          "approvedBy": null,
+          "searchable": true,
+          "isPublic": true,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": false
+        },
+        {
+          "kind": "business",
+          "id": "Ohg9HrtGpCXBUSzbRfaUifOPWQ32",
+          "status": "active",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": false,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": [
+            "SERVICES"
+          ],
+          "inCleanupManifest": false
+        }
+      ],
+      "applications": [
+        {
+          "id": "AvAE6rZEiO9FJ9UoMePY",
+          "status": "approved",
+          "decidedBy": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+          "decidedAt": "2026-09-03T22:55:02.000Z",
+          "authority": "admin_account",
+          "approvesKinds": [
+            "provider"
+          ],
+          "agreementAccepted": false,
+          "agreementVersion": null,
+          "priorDecisions": 0,
+          "role": "provider",
+          "type": "business"
+        }
+      ],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 0
+      },
+      "routedToDashboardWithoutValidApproval": false,
+      "publiclySearchableWithoutValidApproval": false,
+      "applicationPath": "existing_application_present",
+      "preserve": [
+        "applications/AvAE6rZEiO9FJ9UoMePY.decidedBy=\"D5Ql2EYr95bt79IpcGTmOMTK0P83\" @ 2026-09-03T22:55:02.000Z",
+        "provider.approvedAt=2026-09-03T22:55:03.000Z"
+      ],
+      "protectedFromRemediation": true,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [],
+      "resolver": {
+        "state": "PENDING_CLASSIFICATION",
+        "reason": "UNCLASSIFIED",
+        "route": null
+      }
+    },
+    {
+      "uid": "X7KZGTy3ouYmGESePPxKVlC3j613",
+      "name": "Hometown Movers kenya",
+      "state": "VALIDLY_APPROVED",
+      "subtype": "application_by_admin_account",
+      "why": "application hZN2s7YCX8qvzYpsLwhu (provider) approved by admin account D5Ql2EYr95bt79IpcGTmOMTK0P83",
+      "claims": [
+        "provider"
+      ],
+      "roles": [
+        "buyer",
+        "provider"
+      ],
+      "authExists": true,
+      "lastSignIn": "Fri, 24 Jul 2026 06:17:48 GMT",
+      "registry": [
+        {
+          "kind": "provider",
+          "id": "X7KZGTy3ouYmGESePPxKVlC3j613",
+          "status": "active",
+          "approvedAt": "2026-09-03T22:55:18.000Z",
+          "approvedBy": null,
+          "searchable": true,
+          "isPublic": true,
+          "approvalDecision": null,
+          "business": {
+            "category": "trades",
+            "source": "application"
+          },
+          "capabilities": null,
+          "inCleanupManifest": false
+        }
+      ],
+      "applications": [
+        {
+          "id": "hZN2s7YCX8qvzYpsLwhu",
+          "status": "approved",
+          "decidedBy": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+          "decidedAt": "2026-09-03T22:55:18.000Z",
+          "authority": "admin_account",
+          "approvesKinds": [
+            "provider"
+          ],
+          "agreementAccepted": false,
+          "agreementVersion": null,
+          "priorDecisions": 0,
+          "role": "provider",
+          "type": "business"
+        }
+      ],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 0
+      },
+      "routedToDashboardWithoutValidApproval": false,
+      "publiclySearchableWithoutValidApproval": false,
+      "applicationPath": "existing_application_present",
+      "preserve": [
+        "applications/hZN2s7YCX8qvzYpsLwhu.decidedBy=\"D5Ql2EYr95bt79IpcGTmOMTK0P83\" @ 2026-09-03T22:55:18.000Z",
+        "provider.approvedAt=2026-09-03T22:55:18.000Z"
+      ],
+      "protectedFromRemediation": true,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [],
+      "resolver": {
+        "state": "AVAILABLE",
+        "reason": null,
+        "route": "provider-dashboard.html"
+      }
+    },
+    {
+      "uid": "FqmCT4t4KehQD6EJR4m3dLVbHBo1",
+      "name": "Julian's Closet",
+      "state": "VALIDLY_APPROVED",
+      "subtype": "application_by_admin_account",
+      "why": "application 8XwvCN8PLsVo9WdxG1Zv (provider) approved by admin account D5Ql2EYr95bt79IpcGTmOMTK0P83",
+      "claims": [
+        "provider"
+      ],
+      "roles": [
+        "buyer",
+        "provider"
+      ],
+      "authExists": true,
+      "lastSignIn": "Mon, 03 Aug 2026 17:02:28 GMT",
+      "registry": [
+        {
+          "kind": "provider",
+          "id": "FqmCT4t4KehQD6EJR4m3dLVbHBo1",
+          "status": "active",
+          "approvedAt": "2026-09-03T22:54:56.000Z",
+          "approvedBy": null,
+          "searchable": true,
+          "isPublic": true,
+          "approvalDecision": null,
+          "business": {
+            "category": "service_business",
+            "source": "application"
+          },
+          "capabilities": null,
+          "inCleanupManifest": false
+        }
+      ],
+      "applications": [
+        {
+          "id": "8XwvCN8PLsVo9WdxG1Zv",
+          "status": "approved",
+          "decidedBy": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+          "decidedAt": "2026-09-03T22:54:50.000Z",
+          "authority": "admin_account",
+          "approvesKinds": [
+            "provider"
+          ],
+          "agreementAccepted": false,
+          "agreementVersion": null,
+          "priorDecisions": 0,
+          "role": "provider",
+          "type": "business"
+        }
+      ],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 1
+      },
+      "routedToDashboardWithoutValidApproval": false,
+      "publiclySearchableWithoutValidApproval": false,
+      "applicationPath": "existing_application_present",
+      "preserve": [
+        "applications/8XwvCN8PLsVo9WdxG1Zv.decidedBy=\"D5Ql2EYr95bt79IpcGTmOMTK0P83\" @ 2026-09-03T22:54:50.000Z",
+        "provider.approvedAt=2026-09-03T22:54:56.000Z"
+      ],
+      "protectedFromRemediation": true,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [],
+      "resolver": {
+        "state": "AVAILABLE",
+        "reason": null,
+        "route": "provider-dashboard.html"
+      }
+    },
+    {
+      "uid": "3SkVHLqJXzfeQlQ4PfBx5DFR4at2",
+      "name": "k Riss",
+      "state": "VALIDLY_APPROVED",
+      "subtype": "application_by_admin_account",
+      "why": "application ENTMS9AACTG (provider) approved by admin account D5Ql2EYr95bt79IpcGTmOMTK0P83",
+      "claims": [
+        "provider"
+      ],
+      "roles": [
+        "buyer",
+        "provider"
+      ],
+      "authExists": true,
+      "lastSignIn": "Fri, 31 Jul 2026 18:47:30 GMT",
+      "registry": [
+        {
+          "kind": "provider",
+          "id": "3SkVHLqJXzfeQlQ4PfBx5DFR4at2",
+          "status": "active",
+          "approvedAt": "2026-08-26T05:02:14.000Z",
+          "approvedBy": null,
+          "searchable": true,
+          "isPublic": true,
+          "approvalDecision": null,
+          "business": {
+            "category": "artist_creator",
+            "source": "admin"
+          },
+          "capabilities": null,
+          "inCleanupManifest": false
+        }
+      ],
+      "applications": [
+        {
+          "id": "ENTMS9AACTG",
+          "status": "approved",
+          "decidedBy": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+          "decidedAt": "2026-08-26T05:02:08.000Z",
+          "authority": "admin_account",
+          "approvesKinds": [
+            "provider"
+          ],
+          "agreementAccepted": false,
+          "agreementVersion": null,
+          "priorDecisions": 0,
+          "role": "provider",
+          "type": "voiceover"
+        }
+      ],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 0
+      },
+      "routedToDashboardWithoutValidApproval": false,
+      "publiclySearchableWithoutValidApproval": false,
+      "applicationPath": "existing_application_present",
+      "preserve": [
+        "applications/ENTMS9AACTG.decidedBy=\"D5Ql2EYr95bt79IpcGTmOMTK0P83\" @ 2026-08-26T05:02:08.000Z",
+        "provider.approvedAt=2026-08-26T05:02:14.000Z"
+      ],
+      "protectedFromRemediation": true,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [],
+      "resolver": {
+        "state": "AVAILABLE",
+        "reason": null,
+        "route": "provider-dashboard.html"
+      }
+    },
+    {
+      "uid": "IaOBkEJYcCXk23UDWk0OPp7XXeD3",
+      "name": "Latomi gadgets",
+      "state": "VALIDLY_APPROVED",
+      "subtype": "application_by_admin_account",
+      "why": "application y0dp5uPehfj4qFf4imKl (provider) approved by admin account D5Ql2EYr95bt79IpcGTmOMTK0P83",
+      "claims": [
+        "provider"
+      ],
+      "roles": [
+        "buyer",
+        "provider"
+      ],
+      "authExists": true,
+      "lastSignIn": "Sat, 01 Aug 2026 21:55:29 GMT",
+      "registry": [
+        {
+          "kind": "provider",
+          "id": "IaOBkEJYcCXk23UDWk0OPp7XXeD3",
+          "status": "active",
+          "approvedAt": "2026-09-03T22:55:11.000Z",
+          "approvedBy": null,
+          "searchable": true,
+          "isPublic": true,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": null,
+          "inCleanupManifest": false
+        },
+        {
+          "kind": "business",
+          "id": "IaOBkEJYcCXk23UDWk0OPp7XXeD3",
+          "status": "active",
+          "approvedAt": null,
+          "approvedBy": null,
+          "searchable": false,
+          "isPublic": false,
+          "approvalDecision": null,
+          "business": null,
+          "capabilities": [
+            "SERVICES"
+          ],
+          "inCleanupManifest": false
+        }
+      ],
+      "applications": [
+        {
+          "id": "y0dp5uPehfj4qFf4imKl",
+          "status": "approved",
+          "decidedBy": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+          "decidedAt": "2026-09-03T22:55:10.000Z",
+          "authority": "admin_account",
+          "approvesKinds": [
+            "provider"
+          ],
+          "agreementAccepted": false,
+          "agreementVersion": null,
+          "priorDecisions": 0,
+          "role": "provider",
+          "type": "business"
+        }
+      ],
+      "activity": {
+        "bookings": 0,
+        "services": 0,
+        "products": 0,
+        "orders": 0,
+        "walletTx": 0
+      },
+      "routedToDashboardWithoutValidApproval": false,
+      "publiclySearchableWithoutValidApproval": false,
+      "applicationPath": "existing_application_present",
+      "preserve": [
+        "applications/y0dp5uPehfj4qFf4imKl.decidedBy=\"D5Ql2EYr95bt79IpcGTmOMTK0P83\" @ 2026-09-03T22:55:10.000Z",
+        "provider.approvedAt=2026-09-03T22:55:11.000Z"
+      ],
+      "protectedFromRemediation": true,
+      "selfDecidedApplications": [],
+      "inCleanupManifest": [],
+      "resolver": {
+        "state": "PENDING_CLASSIFICATION",
+        "reason": "UNCLASSIFIED",
+        "route": null
+      }
+    }
+  ]
+}
