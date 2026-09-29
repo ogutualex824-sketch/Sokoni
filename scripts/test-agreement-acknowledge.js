@@ -26,7 +26,8 @@ const KAS = { id: 'PRVMS7IACKG', uid: 'kasindi', name: 'Kasindi holdings limited
 console.log('\n── one version ──');
 ck('sokoni-merchant-application.js exports AGREEMENT_VERSION', typeof V === 'string' && V.length > 8, V);
 const hub = fs.readFileSync(Path.join(ROOT, 'hub-register.js'), 'utf8');
-ck('hub-register.js carries the SAME string (one acknowledgement, one version)', hub.includes("AGREEMENT_VERSION = '" + V + "'"));
+const hubLit = (hub.match(/AGREEMENT_VERSION = '([^']+)'/) || [])[1] || null;
+ck('hub-register.js: if it carries a version literal it is the SAME string (one acknowledgement, one version); on the live line it carries none', hubLit === null || hubLit === V, hubLit || 'no literal on this line');
 ck('the surface module carries NO version literal of its own', !/\d{4}-\d{2}-\d{2}-lanes/.test(fs.readFileSync(Path.join(ROOT, 'sokoni-agreement-acknowledge.js'), 'utf8')));
 
 console.log('\n── payload ──');
