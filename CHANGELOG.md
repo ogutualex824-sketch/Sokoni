@@ -1,3 +1,52 @@
+## 2026-09-29 — WhatsApp slice 1: the inbound receiver, signed and inert until configured (branch `feat/integrations-control-center`, NOT deployed)
+
+Owner decision 09-29: the 09-27 directive is **superseded for API-integrated WhatsApp only**. `wa.me` hand-offs
+**remain banned** — the 98 files are still wrong; an API rail does not make a hand-off acceptable, it makes it
+replaceable by something better. IntaSend remains the payment authority. **25 passed, 0 failed.**
+Full note: `docs/WHATSAPP_CLOUD_API_CENSUS.md` §8.
+
+**Receiver first, on purpose.** `webhookSmartpos` shipped public and unsigned and anything reaching it could
+inject. The door is built and proven before anything is bolted to it.
+
+- **Fails closed in every direction:** wrong verify token · **verify token not configured** · wrong mode · missing
+  challenge · no or empty signature header · signature from the wrong secret · malformed signature · **tampered
+  body carrying a signature valid for the original** · **app secret not configured** · raw body unavailable. The
+  two *not configured* rows matter most: a receiver that accepts everything when its secret is absent is worse
+  than one switched off, because it looks like it is working. Every refusal has an **inverting control** — a
+  correctly signed payload of the same shape is accepted. `timingSafeEqual`, length-checked first; the refusal
+  reason is logged but **never returned**, since telling an unauthenticated caller why their signature failed is a
+  probing oracle.
+- **The raw body is the only verifiable thing.** `JSON.stringify(req.body)` is a re-serialisation and would fail
+  valid requests; absent `rawBody` the request is refused rather than verified against a reconstruction.
+- **Idempotent under Cloud API retries** — `create()`, not `set()`. The same batch twice writes **2 documents, not
+  4**; a replayed *delivered* cannot overwrite a later *read*; sent/delivered/read are three records because they
+  are three facts. A duplicate returns **200**: a non-200 makes Meta retry for ever.
+- **Message bodies are NOT stored.** It records that a message arrived, from whom, of what type and when. A
+  customer's words belong in the conversation store under the communications engine's retention, not in a
+  diagnostic collection. Asserted, with a control proving the fixture really contained the text.
+- **Slice boundary asserted:** no Graph call, no outbound HTTP of any kind, no order/payment/checkout/notify path,
+  one collection (`whatsappInbound`, Admin-SDK written, never client-read, so no rules entry).
+- **NOT exported from `functions/index.js`, deliberately.** `defineSecret` binds at deploy time and neither
+  `WHATSAPP_VERIFY_TOKEN` nor `WHATSAPP_APP_SECRET` exists yet — wiring it in today would break the next functions
+  deploy for every agent, on lanes unrelated to WhatsApp. `index.js` does not require the module, so nothing is
+  bound. Two lines once the secrets exist. `enforceAppCheck` is deliberately absent: Meta is not a SOKONI client
+  and cannot present a token, so the signature IS the authentication.
+
+**Two defects in my own harness, found and fixed:** `o.sigOverride || sign(...)` treated an EMPTY signature as
+falsy and substituted a **valid** one, so that case never reached the module and passed by accepting a good
+request; and an assertion matched the module's own comment warning against `JSON.stringify(req.body)`, so it would
+have failed however correct the code was — the B10 defect again. Both fixed, the second asserted on stripped
+source with a no-op control.
+
+Files: `functions/whatsapp-webhook.js` (new), `scripts/test-whatsapp-webhook.js` (new),
+`docs/WHATSAPP_CLOUD_API_CENSUS.md` (§8).
+Database: one new collection, written by nothing until the function is exported. API: none. Security: this IS the
+security boundary — signed, constant-time, inert when unconfigured. Breaking changes: none. Deploy: none.
+Catalogue unchanged at 52 + 2 — WhatsApp does not meet the bar for an entry and enters via the delta process when
+it is real.
+**UNPROVEN: no real Meta delivery.** No WABA, phone-number-id or credential exists, so what is certified is the
+logic against payloads *shaped* like Meta's. Not registered with Meta, not exported, not deployed.
+
 ## 2026-09-29 — Email workspace, Slice C2: outbound is real, inbound is not, and the UI says which (branch `feat/integrations-control-center`, NOT deployed)
 
 The census (C1) fixed the shape of this surface: SOKONI sends email and sees what happened to it; it cannot receive

@@ -134,3 +134,99 @@ stands unchanged.
 - The 09-27 hand-off census was **not** re-run; its counts are cited, not recomputed.
 - **UNPROVEN:** whether any WhatsApp credential exists outside the repository (Secret Manager was not
   queried in this pass); whether the deployed bundle differs from this source.
+
+---
+
+## 8 · Slice 1 — the inbound receiver (owner-authorised 2026-09-29)
+
+**Directive settled:** superseded **for API-integrated WhatsApp only**. `wa.me` hand-offs remain
+banned — the 98 files are still wrong, and an API rail does not make a hand-off acceptable, it makes
+it *replaceable by something better*. IntaSend remains the payment authority.
+
+**25 passed, 0 failed** — `scripts/test-whatsapp-webhook.js`.
+
+### Why the receiver is first
+
+`webhookSmartpos` shipped public and unsigned, and anything reaching it could inject. The build order
+exists so that cannot repeat: the door is built and proven before anything is bolted to it. A send
+path first would have had nothing to verify what came back.
+
+### It fails closed in every direction
+
+| condition | result |
+|---|---|
+| wrong verify token | 403 |
+| **verify token not configured** | **403 — inert, not permissive** |
+| wrong mode / missing challenge | 403 |
+| no signature header, or empty | 403 |
+| signature from the wrong secret | 403 |
+| malformed signature (wrong prefix, length, non-hex) | 403 |
+| **tampered body with a signature valid for the original** | **403** |
+| **app secret not configured** | **403 — inert** |
+| raw body unavailable | 403 — it refuses rather than verify a re-serialisation |
+
+The two *not configured* rows matter most. A receiver that accepts everything when its secret is
+absent is worse than one switched off, because it looks like it is working.
+
+Every refusal has an **inverting control**: a correctly signed payload of the same shape is accepted
+and yields 2 events. Compares are `timingSafeEqual`, length-checked first; the refusal reason is
+logged but **never returned** — telling an unauthenticated caller why their signature failed is a
+probing oracle.
+
+### The raw body is the only verifiable thing
+
+`JSON.stringify(req.body)` is a re-serialisation — key order, whitespace and unicode escaping may all
+differ from what Meta signed. Verifying against it fails valid requests, and the tempting "fix" is to
+weaken the check. Absent `rawBody`, the request is refused.
+
+### Idempotency, because Cloud API retries
+
+`create()`, not `set()`. The same batch twice writes **2 documents, not 4**, the second delivery
+reports `duplicate: 2`, and the stored records are byte-identical afterwards — a replayed *delivered*
+cannot overwrite a later *read*. Distinct statuses for one message are three records, because
+sent/delivered/read are three facts. A duplicate returns **200**: a non-200 makes Meta retry for ever.
+
+### What it deliberately does not do
+
+**Message bodies are not stored.** An inbound message is a customer's words; this records that one
+arrived, from whom, of what type and when. Content belongs in the conversation store under the
+communications engine's retention, not in a diagnostic collection. Asserted, with a control proving
+the fixture really contained the text.
+
+The module contains **no** Graph call, no outbound HTTP of any kind, and touches no order, payment,
+checkout or notify path. One collection, `whatsappInbound`, Admin-SDK written and never client-read —
+so no `firestore.rules` entry, since an unlisted path is default-deny.
+
+### Not exported from `functions/index.js`, deliberately
+
+`defineSecret` binds at deploy time, and **neither `WHATSAPP_VERIFY_TOKEN` nor `WHATSAPP_APP_SECRET`
+exists in Secret Manager yet**. Wiring this into `index.js` today would make the next functions
+deploy fail — for every agent in this repository, on lanes unrelated to WhatsApp. Because `index.js`
+does not require the module, `defineSecret` never executes and nothing is bound. Shipping it is two
+lines once the secrets are provisioned.
+
+`enforceAppCheck` is deliberately absent: Meta is not a SOKONI client and cannot present a token. The
+signature *is* the authentication, which is why it is verified before anything else happens.
+
+### Two defects in my own harness, found and fixed
+
+- **The empty-signature case never reached the module.** `o.sigOverride || sign(...)` treats `''` as
+  falsy and substituted a **valid** signature, so the test passed by accepting a good request. A
+  harness that quietly swaps a valid credential for the invalid one under test is worse than no test.
+  Now `!== undefined`.
+- **An assertion matched the module's own comment.** The check for `JSON.stringify(req.body)` hit the
+  prose warning *against* the practice, so it would have failed however correct the code was — the
+  same defect as the earlier B10 check. Now asserted on stripped source, with a control that the
+  stripper is not a no-op.
+
+### Still UNPROVEN, and not small
+
+**No real Meta delivery has occurred.** There is no WABA, no phone-number-id and no credential, so
+what is certified is the receiver's logic against payloads *shaped* like Meta's. Not registered with
+Meta, not exported, not deployed. The handshake has never been performed against Meta's servers.
+
+### Not done
+
+No catalogue entry — WhatsApp still does not meet the bar for the 52, and will enter through the
+delta process when it is real. No outbound. No campaigns, Flows or in-conversation ordering. No
+`wa.me` replacement work. No deployment.
