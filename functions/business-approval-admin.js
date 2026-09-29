@@ -66,6 +66,10 @@ _adminH.bizAdminApprovalDecide = async (req, deps) => {
   const d = req.data || {};
   const uid = _san(d.uid, 128);
   if (!uid || /[/]/.test(uid)) throw new HttpsError('invalid-argument', 'uid is required.');
+  /* SELF-APPROVAL IS NEVER APPROVAL (remediation rule 2): refused BEFORE the target is read. An administrator
+     deciding their own business record would be `decidedBy === applicant`, which the validity test rejects anyway;
+     refusing here keeps such a record from ever being written. */
+  if (uid === actor) throw new HttpsError('permission-denied', 'An administrator cannot decide their own business record.', { code: 'SELF_DECISION' });
   const decision = String(d.decision || '');
   if (!DECISIONS.includes(decision)) throw new HttpsError('invalid-argument', 'decision must be approve or refuse.');
   const reason = _san(d.reason, 500);

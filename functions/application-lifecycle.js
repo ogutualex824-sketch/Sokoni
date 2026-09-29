@@ -530,6 +530,11 @@ async function projectProvider(db, app, uid, approved) {
     const priorB = existing.business || null;
     const adminSet = !!(priorB && priorB.source === 'admin' && BCAT.isCategory(priorB.category));
     let category = adminSet ? priorB.category : BCAT.categoryFromApplication(app, role).category;
+    /* AN EXISTING STAMP IS NEVER NULLED BY A FAILED DERIVATION (remediation rule 1, 2026-09-29). A re-decision on an
+       application whose text C1 cannot match (Langa'ta mamafua: `type: "business"`) used to replace a real category
+       (stamped by the R3 landing) with null, silently un-routing a live provider. If derivation fails and a valid prior
+       category exists, the prior category stays; `source` stays what it was. An admin classification still wins above. */
+    if (!adminSet && !BCAT.isCategory(category) && priorB && BCAT.isCategory(priorB.category)) category = priorB.category;
     if (role === 'health') category = (doc.healthcare ? doc.healthcare.category : (existing.healthcare || {}).category) || null;
     doc.business = {
       category: BCAT.isCategory(category) ? category : null,
@@ -1421,6 +1426,14 @@ exports.applicationDecide = onCall(
     const ref = db.collection('applications').doc(String(applicationId));
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError('not-found', 'Application not found.');
+
+    /* SELF-APPROVAL IS NEVER APPROVAL (remediation rule 2). The applicant uid lives on the application, so the
+       earliest possible check is right after this read and BEFORE any write. An administrator may not decide an
+       application they submitted themselves — the deployed trigger's validity test would reject the decision, and
+       the remediation census found three such decisions; none may be added. */
+    if ((snap.data() || {}).uid && String((snap.data() || {}).uid) === String(req.auth.uid)) {
+      throw new HttpsError('permission-denied', 'An administrator cannot decide their own application.', { code: 'SELF_DECISION' });
+    }
 
     /* ── Seller Agreement gate ────────────────────────────────────────────
        A business may not be APPROVED until it has acknowledged the commercial

@@ -1,3 +1,19 @@
+## [2026-09-29] - REAPPLICATION_REQUIRED: derived approval state + authority design, proven 31/0; self-approval made impossible in both authorities; a category stamp is never nulled by a failed derivation (design slice; NOT a migration; nothing written)
+
+docs/REAPPLICATION_REQUIRED_DESIGN.md. functions/shared/approval-remediation.js (pure): deriveApprovalState over the census evidence →
+BUYER_ONLY · VALID_APPROVAL · INVALID_LEGACY_APPROVAL · NO_APPROVAL · PENDING_APPROVAL · REFUSED; transition REAPPLICATION_REQUIRED only
+from INVALID_LEGACY/NO_APPROVAL and only when the cleanup manifest does not claim the identity (ownership withheld otherwise);
+validity = resolvable non-self admin account whose role approves the record kind; applicationPath continue_existing /
+select_among_pending (Heights: 3 candidates, none chosen, none created) / redecide_existing / fresh; agreement satisfied only at the
+current version; preserve list; categoryStamp keep. HARDENINGS: bizAdminApprovalDecide refuses uid === actor BEFORE the target read;
+applicationDecide refuses application.uid === caller before any write (SELF_DECISION); projectProvider keeps an existing
+application-sourced category when C1 cannot derive one (Langa'ta model). Suite scripts/test-approval-remediation-design.js 31/0 —
+the REAL c4 applicationDecide makes the fresh decision end to end on a DJ Bvmbxno fixture (approval ≠ classification →
+PENDING_CLASSIFICATION; wallet/bookings/services/products byte-identical; repeat/suspend preserve) and on a Langa'ta fixture (label
+decider preserved, cleaning stamp survives). Regressions green (19/21/30/20/40/15/46/51). Files: functions/shared/approval-remediation.js,
+functions/application-lifecycle.js, functions/business-approval-admin.js, the suite, the doc. NOT built: the completion surface, the
+shell gate on the derived state, AdminOS wiring, per-identity manifests, any deploy.
+
 ## [2026-09-29] - Approval Remediation / Reapplication CENSUS (READ ONLY; owner-authorized; nothing written)
 
 docs/APPROVAL_REMEDIATION_CENSUS.md + docs/release-gates/approval-remediation-census.json (digest fc1c154f…), script
