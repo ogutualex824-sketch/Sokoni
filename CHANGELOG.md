@@ -1,3 +1,20 @@
+## [2026-09-30] — Test repair: PIN-unreachable rows 2.2 / 2.11 pin the D2 eligibility chain (owner-authorized)
+
+**Files:** `scripts/test-delivery-pin-unreachable.js`, `CHANGELOG.md`. **No production code, rules or API change.**
+- **Why.** D2 moved the rider guard out of `availableDeliveries` and `claimAvailableDelivery`. The old inline
+  `_approved`/`_blocked` read of `rideDrivers` became `rider-presence.stateFor()` → DL-01
+  `rider-eligibility.evaluate()`. The two rows regex'd the retired text, so the suite showed 63/2 while the
+  protection held.
+- **Now.** Each row asserts the same property against the new chain:
+  - the handler calls `stateFor` and refuses suspended/ineligible (403 / permission-denied);
+  - the refusal comes BEFORE any job read (2.2) or the claim transaction (2.11);
+  - `stateFor` derives eligibility from `evaluate(driver, verification)`;
+  - `evaluate` requires `approved === true` and refuses `suspendedAt`.
+  - An empty source fails closed.
+- **Result.** 65/0 on D2. Four sabotages (feed refusal removed, claim refusal removed, eligibility no longer from
+  DL-01, approval check dropped) each fail exactly their target rows; the unmodified control stays 65/0.
+  Behavioural coverage remains in `test-d2-rider-presence` P6/P7/F10 (37/0).
+
 ## [2026-09-30] — Delivery Hub D2 (server): rider presence, stale detection, server-validated job board
 
 **Files:** `functions/rider-presence.js` (new), `functions/index.js` (availableDeliveries, claimAvailableDelivery,

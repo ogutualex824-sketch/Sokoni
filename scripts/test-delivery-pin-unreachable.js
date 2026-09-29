@@ -98,6 +98,16 @@ const DISP = code(SRC('functions/dispatch.js'));
 const SYNC = code(SRC('functions/pos-marketplace-sync.js'));
 const DRIVER = code(SRC('driver.html'));
 const TRACK = code(SRC('track.html'));
+/* The rider-eligibility authority 2.2 / 2.11 delegate to (D2). stateFor must derive eligibility
+   from DL-01's evaluate() and map a refusal to suspended/ineligible; evaluate must require
+   approval and refuse suspension. Empty source → false → both rows FAIL (fail closed). */
+const RP = code(SRC('functions/rider-presence.js'));
+const RE = code(SRC('functions/rider-eligibility.js'));
+const RP_ELIGIBILITY_OK =
+  /require\('\.\/rider-eligibility'\)/.test(RP) && /riderEligibility\.evaluate\(\s*driver\s*,\s*verification\s*\)/.test(RP) &&
+  /state:\s*suspended\s*\?\s*'suspended'\s*:\s*'ineligible'/.test(RP) &&
+  /driver\.approved\s*!==\s*true\)\s*return\s*\{\s*eligible:\s*false/.test(RE) &&
+  /driver\.suspendedAt\)\s*return\s*\{\s*eligible:\s*false,\s*reason:\s*'suspended'/.test(RE);
 
 /* ══ 0. CONTROLS — a suite that cannot fail proves nothing ═════════════════ */
 console.log('\n0. Controls');
@@ -189,8 +199,18 @@ console.log('\n2. Cloud Functions reachable by a rider');
   const AVAIL = (bodyOf(IDX, 'availableDeliveries') || '');
   ck('2.1 availableDeliveries requires a verified ID token',
     /verifyIdToken/.test(AVAIL) && /authorization/i.test(AVAIL));
-  ck('2.2 ...and an APPROVED, non-suspended rider',
-    /rideDrivers/.test(AVAIL) && /_approved/.test(AVAIL) && /_blocked/.test(AVAIL));
+  /* D2 (42621ef) moved this guard out of the handler: the inline `_approved`/`_blocked` read of
+     the client-reachable rideDrivers shard became rider-presence.stateFor(), which asks DL-01's
+     rider-eligibility.evaluate() over the server-only drivers/driverVerification records. The
+     property is unchanged — approved AND not suspended, enforced BEFORE any job is read — so the
+     row now pins that chain instead of the retired text. Behaviour: test-d2-rider-presence P6/P7. */
+  const _feedGate = AVAIL.search(/_rp\.stateFor\(\s*db\s*,\s*decoded\.uid\s*\)/);
+  const _feedRefuse = AVAIL.search(/st\.state\s*===\s*"suspended"\s*\|\|\s*st\.state\s*===\s*"ineligible"\s*\)\s*\{\s*return res\.status\(403\)/);
+  const _feedJobs = AVAIL.search(/collection\("packageRequests"\)/);
+  ck('2.2 ...and an APPROVED, non-suspended rider (DL-01 via rider-presence, before any job read)',
+    /require\("\.\/rider-presence"\)/.test(AVAIL) && _feedGate > 0 && _feedRefuse > _feedGate &&
+    _feedJobs > _feedRefuse && RP_ELIGIBILITY_OK,
+    'gate@' + _feedGate + ' refuse@' + _feedRefuse + ' jobs@' + _feedJobs);
   ck('2.3 ...returns NO proofPin', !/proofPin/.test(AVAIL));
   ck('2.4 ...returns NO buyerPhone', !/buyerPhone/.test(AVAIL));
   ck('2.5 ...returns NO buyerName', !/buyerName/.test(AVAIL));
@@ -204,7 +224,15 @@ console.log('\n2. Cloud Functions reachable by a rider');
   const CLAIM = code(IDX_RAW.slice(IDX_RAW.indexOf('exports.claimAvailableDelivery'),
     IDX_RAW.indexOf('exports.claimAvailableDelivery') + 3000));
   ck('2.10 claimAvailableDelivery returns NO proofPin', !/proofPin/.test(CLAIM));
-  ck('2.11 ...and keeps its approved-rider guard', /_approved/.test(CLAIM) && /rideDrivers/.test(CLAIM));
+  /* Same move as 2.2: the claim's guard is DL-01 via rider-presence, and it must refuse BEFORE the
+     first-claim-wins transaction starts. Behaviour: test-d2-rider-presence F10. */
+  const _claimGate = CLAIM.search(/_rp\.stateFor\(\s*db\s*,\s*uid\s*\)/);
+  const _claimRefuse = CLAIM.search(/st\.state\s*===\s*"suspended"\s*\|\|\s*st\.state\s*===\s*"ineligible"\s*\)\s*\{\s*throw new HttpsError\("permission-denied"/);
+  const _claimTx = CLAIM.search(/runTransaction/);
+  ck('2.11 ...and keeps its approved-rider guard (DL-01 via rider-presence, before the transaction)',
+    /require\("\.\/rider-presence"\)/.test(CLAIM) && _claimGate > 0 && _claimRefuse > _claimGate &&
+    _claimTx > _claimRefuse && RP_ELIGIBILITY_OK,
+    'gate@' + _claimGate + ' refuse@' + _claimRefuse + ' tx@' + _claimTx);
   ck('2.12 ...and keeps atomic first-claim-wins semantics',
     /runTransaction/.test(CLAIM) && /awaiting_rider/.test(CLAIM));
 
