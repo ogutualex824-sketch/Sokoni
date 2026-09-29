@@ -270,7 +270,9 @@ async function _postSaleFinancials(o) {
    7. Create receipt
    8. Update analytics
 ════════════════════════════════════════════════════════════════ */
-exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
+/* Points P1: a sale can open the buyer's SOKONI loyalty account, whose card QR is signed with LOYALTY_HMAC_SECRET. */
+const _LOYALTY_HMAC = require('firebase-functions/params').defineSecret('LOYALTY_HMAC_SECRET');   /* same secret loyalty.js declares */
+exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, async ({ data, auth }) => {
   const cashierId = await _assertAuth(auth);
 
   const {
@@ -283,6 +285,7 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
     payments      = [],
     couponCode,
     loyaltyRedeemPoints = 0,
+    buyerPhone    = null,     /* Points P1: identifies the buyer to credit — never a points figure */
     subtotal,
     discountTotal = 0,
     taxTotal      = 0,
@@ -1293,9 +1296,27 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       await _SOp.recordRedemptionsForOrder(db, { orderId: saleId, shopId: String(merchantId), buyerUid: (customer && customer.id) ? String(customer.id) : null,
         applied: offersApplied, source: 'till' }).catch((e) => console.error('[posCompleteCheckout] offer redemption record failed:', e && e.message));
     }
+    /* ── Points P1 (2026-09-29): SOKONI-wide points for the buyer the cashier identified by phone ──────────────
+       1 point per KES 10 of the AUTHORITATIVE total, credited by the server after the sale is recorded — the phone only
+       says WHO; the amount is never the device's. A points problem (unknown number, blocked account) never undoes a
+       completed sale: it is reported on the receipt instead. Idempotent per sale (earn__till__{saleId}). */
+    let pointsEarned = null;
+    if (buyerPhone) {
+      try {
+        const _earn = await require('./loyalty-points').earnForSale(db, { buyerPhone: String(buyerPhone), issuerShopId: String(merchantId),
+          saleId, amountKES: authoritativeTotal, source: 'till', shopName: receipt.merchantName || receipt.shopName || null });
+        pointsEarned = _earn && _earn.ok ? { points: _earn.points || 0, balance: _earn.balance == null ? null : _earn.balance }
+                                         : { points: 0, reason: (_earn && _earn.reason) || 'not-credited' };
+      } catch (pe) {
+        console.error('[posCompleteCheckout] points earn failed:', pe && pe.message);
+        pointsEarned = { points: 0, reason: 'not-credited' };
+      }
+      receipt.pointsEarned = pointsEarned;
+      await db.collection('posReceipts').doc(saleId).set({ pointsEarned }, { merge: true }).catch(() => {});
+    }
     await idemRef.update({ status: 'complete', saleId, receipt, completedAt: now });
 
-    return { saleId, receipt, loyaltyAwarded };
+    return { saleId, receipt, loyaltyAwarded, pointsEarned };
 
   } catch (err) {
     /* RELEASE any confirmed payment this attempt claimed. The money is still the

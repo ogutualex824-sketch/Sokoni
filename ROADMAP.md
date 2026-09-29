@@ -419,6 +419,22 @@ Evidence from real users determines what gets built next, not assumptions.
 
 ---
 
+## SOKONI Points — P1 earning built locally (2026-09-29)
+
+One SOKONI-wide balance; 1 point per KES 10 of a completed sale; the till identifies the buyer by phone and can create
+an account with consent (SMS, feature phones included). See [[SOKONI_POINTS]].
+
+- **Completed (local, not deployed):** earning at the till, Quick Charge, online and card checkout; lookup / create
+  callables; Sell, pos-checkout and Quick Charge UI; server + browser suites; sabotage 15/15.
+- **Next — P2 spending:** till redemption with buyer confirmation, lot funding from `pointsRemaining`, online rate
+  KES 0.5 → 0.10 per point. **Blocked on the owner's funding rule** (issuing shop vs redeeming shop).
+- **Deploy prerequisite:** the `c59e0f2` loyaltyDispatch security fix first. P1 binds `LOYALTY_HMAC_SECRET` to three
+  payment functions.
+- **Debt:** shop-local `posCustomers.points` (legacy POS CRM) coexists with the SOKONI balance; legacy tills (pos-v2 online,
+  merchant.html) have no phone field; `pos-crm-pro redeemGiftCard` has no merchant scope (separate issue).
+
+---
+
 ## Creator Hub — built, tested, BLOCKED before live (2026-09-26)
 
 **Update (183):** Creator commission is now 30 % / 70 % of net (own authority); the refund rail's

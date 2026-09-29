@@ -166,6 +166,10 @@
             '<div class="sk-till-dynamic">' +
               '<input type="number" min="1" step="1" placeholder="Amount (KES)" data-f="amount">' +
               '<input type="text" maxlength="120" placeholder="What is this sale for? (optional)" data-f="note">' +
+              /* Points P1: WHO earns the SOKONI points when this is PAID — a phone, never a points figure */
+              '<input type="tel" maxlength="20" inputmode="tel" placeholder="Customer phone for SOKONI points (optional)" data-f="buyerPhone" aria-label="Customer phone for SOKONI points">' +
+              '<button type="button" data-act="buyer-check">⭐ Check points / create account</button>' +
+              '<p class="sk-till-msg" data-f="buyerMsg" aria-live="polite" hidden></p>' +
               '<button type="button" data-act="gen-dynamic">Generate QR</button>' +
             '</div>' +
             '<div class="sk-till-dynamic-msg" data-el="dynamic-msg" hidden></div>' +
@@ -183,6 +187,33 @@
 
       var genBtn = root.querySelector('[data-act="gen-dynamic"]');
       if (genBtn) genBtn.addEventListener('click', onGenerateDynamic);
+
+      /* Points P1 (2026-09-29): find the customer's SOKONI account by phone — or, with their CONSENT, create one (SOKONI
+         texts them; they sign in with their own number). The cashier sees only a masked name and the balance; the
+         points are credited by the server when this Quick Charge is PAID. */
+      var bcBtn = root.querySelector('[data-act="buyer-check"]');
+      if (bcBtn) bcBtn.addEventListener('click', function () {
+        var msg = root.querySelector('[data-f="buyerMsg"]');
+        var phone = ((root.querySelector('[data-f="buyerPhone"]') || {}).value || '').trim();
+        var say = function (t) { if (msg) { msg.hidden = false; msg.textContent = t; } };
+        if (!phone) return say('Type the customer’s phone number first.');
+        if (typeof ctx.callBuyerLookup !== 'function') return say('Points are not available here.');
+        var shopId = ctx.scope && ctx.scope.shopId;
+        state.pointsPhone = null; bcBtn.disabled = true; say('Checking…');
+        ctx.callBuyerLookup({ shopId: shopId, phone: phone }).then(function (r) {
+          var d = (r && r.data) || {};
+          if (d.found) { state.pointsPhone = phone; }
+          if (d.found) return say('⭐ ' + d.maskedName + ' · ' + d.maskedPhone + ' · ' + Number(d.points || 0).toLocaleString() + ' points');
+          var ok = window.confirm('No SOKONI account on this number. Did the customer agree to a SOKONI account? SOKONI will text them.');
+          if (!ok) return say('No account — no points this time. Nothing was created.');
+          return ctx.callCreateBuyer({ shopId: shopId, phone: phone, consent: true }).then(function (r2) {
+            var d2 = (r2 && r2.data) || {};
+            state.pointsPhone = phone;
+            say('⭐ Account created for ' + d2.maskedPhone + ' — a text is on its way. Points are credited when this sale is paid.');
+          });
+        }).catch(function (e) { say((e && e.message) || 'That did not work.'); })
+          .then(function () { bcBtn.disabled = false; });
+      });
 
       var refreshBtn = root.querySelector('[data-act="refresh-activity"]');
       if (refreshBtn) refreshBtn.addEventListener('click', function () {
@@ -220,6 +251,11 @@
         return;
       }
       var note = (noteEl && noteEl.value || '').trim();
+      var bpEl = root.querySelector('[data-f="buyerPhone"]');
+      var typedPhone = (bpEl && bpEl.value || '').trim();
+      /* Only a buyer the server has IDENTIFIED (looked up / created) for exactly this number is sent — a mistyped number
+         must never credit a stranger when the sale is paid. */
+      var buyerPhone = (state.pointsPhone && state.pointsPhone === typedPhone) ? typedPhone : '';
       var genBtn = root.querySelector('[data-act="gen-dynamic"]');
       if (genBtn) { genBtn.disabled = true; genBtn.textContent = 'Generating…'; }
 
@@ -231,13 +267,15 @@
         purpose: 'pos_till_sale',
         sokoniTillId: state.till.sokoniTillId,
         items: [{ name: note || 'Sale', price: amount, qty: 1 }],
+        buyerPhone: buyerPhone || undefined,
       }).then(function (r) {
         return ctx.callMintDynamicQR({ ref: r.data.ref });
       }).then(function (r) {
         qrEl.hidden = false;
         drawQR(qrEl, r.data.qrUrl);
         msgEl.hidden = false;
-        msgEl.textContent = 'QR ready — ' + fmtAmount(r.data.amount, r.data.currency) + '. Let the customer scan it.';
+        msgEl.textContent = 'QR ready — ' + fmtAmount(r.data.amount, r.data.currency) + '. Let the customer scan it.' +
+          (typedPhone && !buyerPhone ? ' No points on this sale: tap ⭐ Check points first.' : '');
       }).catch(function (e) {
         msgEl.hidden = false;
         msgEl.textContent = (e && e.message) || 'Could not generate the QR.';

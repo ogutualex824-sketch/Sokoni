@@ -1147,6 +1147,17 @@ body.queue-mode .hotkey-bar      { display: none; }
           <input type="text" class="cust-input" id="cust-input" placeholder="Phone / QR / Member ID (F3)" autocomplete="off">
           <button class="cust-scan-btn" onclick="Checkout.scanCustomer()" title="Scan customer QR">📷</button>
         </div>
+        <!-- Points P1 (2026-09-29): SOKONI-wide points for this buyer — identified by phone; the server credits them from the sale total -->
+        <div class="customer-search-row" id="skp-row" style="margin-top:6px">
+          <input type="text" class="cust-input" id="skp-phone" placeholder="SOKONI points — customer phone" inputmode="tel" autocomplete="off" aria-label="Customer phone for SOKONI points">
+          <button class="cust-scan-btn" onclick="Checkout.pointsLookup()" title="Find the customer's SOKONI points">⭐</button>
+        </div>
+        <div class="cust-points-row" id="skp-status" aria-live="polite"></div>
+        <div id="skp-create" style="display:none;margin:6px 0">
+          <input type="text" class="cust-input" id="skp-name" placeholder="Customer name (optional)" autocomplete="off" aria-label="Customer name">
+          <label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;margin:6px 0"><input type="checkbox" id="skp-consent"> <span>The customer agreed to a SOKONI account on this number. SOKONI texts them; they sign in with their own number.</span></label>
+          <button class="cust-scan-btn" style="width:100%" onclick="Checkout.pointsCreate()">Create account &amp; continue</button>
+        </div>
         <div class="customer-card" id="customer-card">
           <button class="cust-clear" onclick="Checkout.clearCustomer()" title="Remove customer">&times;</button>
           <div>
@@ -2871,6 +2882,46 @@ const Checkout = (() => {
     return false;
   }
 
+  /* ── SOKONI POINTS (P1) ──────────────────────────────────────────────────────────────────────────────────────
+     WHO to credit, never how many: the cashier types the buyer's phone; the server shows a masked name and balance,
+     and credits 1 point per KES 10 of the sale's OWN total after the sale is recorded. No account? With the
+     customer's consent SOKONI creates one and texts them — the cashier never gets a password, link or code. */
+  _s.pointsBuyer = null;
+  function _pointsStatus(text) { const el = document.getElementById('skp-status'); if (el) el.textContent = text || ''; }
+  async function pointsLookup() {
+    const phone = (document.getElementById('skp-phone') || {}).value || '';
+    if (!phone.trim()) { _pointsStatus('Type the customer\u2019s phone number.'); return; }
+    _pointsStatus('Checking…');
+    try {
+      const r = await firebase.functions().httpsCallable('tillBuyerLookup')({ shopId: _resolveMerchantId(), phone: phone.trim() });
+      const d = (r && r.data) || {};
+      const cr = document.getElementById('skp-create');
+      if (d.found) {
+        _s.pointsBuyer = { phone: phone.trim(), found: true };
+        _pointsStatus('⭐ ' + d.maskedName + ' · ' + d.maskedPhone + ' · ' + Number(d.points || 0).toLocaleString() + ' points');
+        if (cr) cr.style.display = 'none';
+      } else {
+        _s.pointsBuyer = { phone: phone.trim(), found: false };
+        _pointsStatus('No SOKONI account on this number.');
+        if (cr) cr.style.display = '';
+      }
+    } catch (e) { _s.pointsBuyer = null; _pointsStatus((e && e.message) || 'The number could not be checked.'); }
+  }
+  async function pointsCreate() {
+    const phone = (document.getElementById('skp-phone') || {}).value || '';
+    const consent = !!(document.getElementById('skp-consent') || {}).checked;
+    if (!consent) { _pointsStatus('Ask the customer first — tick their consent.'); return; }
+    _pointsStatus('Creating…');
+    try {
+      const r = await firebase.functions().httpsCallable('tillCreateBuyer')({ shopId: _resolveMerchantId(), phone: phone.trim(),
+        name: ((document.getElementById('skp-name') || {}).value || '').trim(), consent: true });
+      const d = (r && r.data) || {};
+      _s.pointsBuyer = { phone: phone.trim(), found: true };
+      _pointsStatus('⭐ ' + d.maskedName + ' · ' + d.maskedPhone + ' · ' + Number(d.points || 0).toLocaleString() + ' points' + (d.created ? ' · account created, a text is on its way' : ''));
+      const cr = document.getElementById('skp-create'); if (cr) cr.style.display = 'none';
+    } catch (e) { _pointsStatus((e && e.message) || 'The account could not be created.'); }
+  }
+
   async function _finalize(method, payments, totals) {
     _setState('CONFIRMING');
     _resolveMerchantId();
@@ -2896,10 +2947,14 @@ const Checkout = (() => {
         taxTotal:      totals.tax,
         grandTotal:    totals.total,
         shiftId:       _s.shiftId || null,
+        buyerPhone:    (_s.pointsBuyer && _s.pointsBuyer.found) ? _s.pointsBuyer.phone : null,   /* Points P1: WHO, never how many */
         metadata:      { checkoutStartedAt: _s.saleStartTs, note: _s.note || null },
       });
 
       const { receipt, loyaltyAwarded } = res.data;
+      if (res.data && res.data.pointsEarned && res.data.pointsEarned.points > 0) {
+        _toast('⭐ ' + res.data.pointsEarned.points + ' SOKONI points credited', 'success');
+      }
       _s.lastPayments = payments;
       /* Record sale in multi-till session counters */
       if (window.PosMultiTill) PosMultiTill.recordSale(totals.total);
@@ -3127,6 +3182,9 @@ const Checkout = (() => {
 
   /* ── Reset ── */
   function _resetSale() {
+    _s.pointsBuyer = null;
+    try { document.getElementById('skp-phone').value = ''; document.getElementById('skp-status').textContent = '';
+          document.getElementById('skp-create').style.display = 'none'; document.getElementById('skp-consent').checked = false; } catch (_) {}
     _s.items = [];
     _s.customer = null;
     _s.discount = { type: 'pct', value: 0 };
@@ -4122,6 +4180,8 @@ const Checkout = (() => {
     addItem, removeItem, changeQty, clearSearch,
     /* Customer */
     lookupCustomer, clearCustomer, scanCustomer,
+    /* SOKONI points (P1) */
+    pointsLookup, pointsCreate,
     /* Loyalty */
     toggleRedeem,
     /* Coupons */

@@ -2026,3 +2026,6 @@ exports.walletV2EscrowRelease = onCall(BASE_OPTS, async (request) => {
     throw new HttpsError('internal', 'Could not release escrow');
   }
 });
+
+/* Internals shared with functions/loyalty-points.js (Points P1, 2026-09-29): the ONE phone → SOKONI-user resolver. */
+exports._internal = { normalizePhone: _normalizePhone, resolveRecipientByPhone: _resolveRecipientByPhone };

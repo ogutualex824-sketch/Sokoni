@@ -2583,6 +2583,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     return {
       scope: _scope(), db: _mdb, shopName: _shopName(),
       callSale: _callable('posCompleteCheckout'),
+      /* Points P1: identify the buyer by phone (and, with consent, create their account) — never a points figure */
+      callBuyerLookup: _callable('tillBuyerLookup'),
+      callCreateBuyer: _callable('tillCreateBuyer'),
       callAdjust: _callable('merchantAdjustStock'),
       /* messagesDispatch — productOfferSettings (buyer offers opt-in per product, T2b) */
       callMessages: _callable('messagesDispatch'),
@@ -2870,6 +2873,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                     callMintDynamicQR: _callable('mintDynamicSokoniQR'),
                     callCreateIntent: _callable('createPaymentIntent'),
                     callSetStatus: _callable('setSokoniTillStatus'),
+                    /* Points P1: find / create (with consent) the buyer who earns SOKONI points on this Quick Charge */
+                    callBuyerLookup: _callable('tillBuyerLookup'), callCreateBuyer: _callable('tillCreateBuyer'),
                     onToast: toast }; } },
   };
   var _mounted = {};   /* id -> { ui, shopKey } */

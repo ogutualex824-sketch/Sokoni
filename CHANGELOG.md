@@ -1,3 +1,53 @@
+## [2026-09-29] - SOKONI Points P1: every purchase earns; the till identifies the buyer, the server credits them
+
+**Local only — NOT deployed. Branch `slice/c4-points-p1` on `c59e0f2`.** Owner ask: the till cart, pos-checkout and
+Quick Charge take the buyer's phone to credit points; a buyer with no account has one created by the cashier, and SOKONI
+texts them (feature phones included). Owner rule: "KES 10 of a completed eligible sale = 1 point. The server calculates
+the earned points from the authoritative sale/order amount. The cashier's phone lookup is only an identity/customer-
+assistance mechanism; it must never become authority to modify the customer's account."
+
+**Summary**
+- One SOKONI-wide balance in the EXISTING `loyaltyAccounts` / `loyaltyLedger` — no second points store.
+- Earned on: till sales (`posCompleteCheckout`, from `authoritativeTotal`), Quick Charge (webhook on PAID, confirmed
+  amount), online orders (webhook finaliser, goods − offers) and card checkout (`verifyIntasendPayment`, per shop).
+- One ledger row per sale; an ORDER earns once per (order, shop) whichever payment path confirms it. Every row records
+  `issuerShopId` and `pointsRemaining` for P2 funding.
+- `tillBuyerLookup` answers a masked name / phone and the balance to this shop's staff only. `tillCreateBuyer` needs the
+  customer's consent, never touches an existing number, gives the cashier no credential, and is capped at 100 per shop
+  per day.
+- SMS templates `till_welcome` (transactional) and `points_earned` (optional), queued — the worker sends.
+- UI: merchant-v2 Sell pay sheet, `pos-checkout.html`, Quick Charge (`sokoni-merchant-till.js`). Only a buyer the server
+  has identified — for exactly the number now in the field — is sent with the sale; a mistyped number never credits a
+  stranger.
+
+**Found and fixed in review**
+- The card QR of an account opened by an earn would have been signed with a placeholder key (the secret was not bound
+  to the earning functions) — a forgeable QR. Now: no secret, no account (the sale stands); the secret is bound to
+  `posCompleteCheckout`, `verifyIntasendPayment` and `webhookIntasend`.
+- The `points_earned` text no longer states a KES value — online checkout still redeems at 0.5/point until P2.
+- `till_welcome` no longer promises "Reply STOP" (no inbound handler exists); it says nobody can sign in without the code.
+
+**Files:** `functions/loyalty-points.js` (new), `functions/loyalty.js` and `functions/wallet-engine.js` (`_internal`
+exports only), `functions/pos-zero-friction.js`, `functions/sokoni-qr-authority.js`, `functions/index.js`,
+`functions/sms-service.js`, `sokoni-merchant-sell.js`, `sokoni-merchant-till.js`, `sokoni-merchant-data.js`,
+`merchant-v2.html`, `pos-checkout.html`, `docs/SOKONI_POINTS.md` (new), `ROADMAP.md`,
+`scripts/test-points-p1.js`, `scripts/test-points-p1-browser.js`, `scripts/test-points-p1-quick-browser.js` (new).
+
+**Database:** new ledger ids `earn__till__*`, `earn__quick__*`, `earn__order__{orderId}__{shopId}`, `welcome__{uid}`;
+new `tillBuyerCreates/{shopId}_{day}`; `users` docs created at the till carry `createdVia:'till'`, `createdByShop`,
+`claimed:false`; `posReceipts.pointsEarned`. No migration.
+
+**API:** new callables `tillBuyerLookup`, `tillCreateBuyer`; `posCompleteCheckout` accepts `buyerPhone` and returns
+`pointsEarned`; Quick Charge intents carry `metadata.buyerPhone` (normalised, else null).
+
+**Security:** no client path writes points; phones and names masked; consent-gated, capped creation; fail-closed QR
+signing. Secret bindings change on three payment functions (see [[SOKONI_POINTS]] → Deployment).
+
+**Tests:** `test-points-p1` 8/0 (sabotage 15/15); `test-points-p1-browser` 5/0 and `test-points-p1-quick-browser` 4/0
+in real Chromium (UI sabotage 4/4). Counterproof on `c59e0f2`: all three fail closed (module absent). Full regression: see the commit message.
+
+**Breaking:** none. P2 (spending) awaits the owner's funding rule.
+
 ## [2026-09-29] - SECURITY: loyaltyDispatch is an allow-list; any user could mint points; customer lookups scoped again
 
 **Functions, NOT deployed — requires an explicit owner production decision.** Found in the till-points census.

@@ -110,6 +110,24 @@ Karibu, ${name}! Your account is ready.
 Shop, sell and get paid — all in one place.
 mysokoni.co.ke`,
   },
+  /* Points P1 (2026-09-29): an account a SHOP created for the buyer at the till. Transactional — the person must be
+     told an account now exists in their number (and how to claim it: their own phone + a texted code, no password). */
+  till_welcome: {
+    category: 'transactional', pref: 'account',
+    body: ({ shop = 'a SOKONI shop', points = 0 }) =>
+`SOKONI
+
+${shop} created a SOKONI account on this number so you can earn points when you buy.${Number(points) > 0 ? ' You have ' + points + ' points.' : ''}
+
+Sign in at mysokoni.co.ke with this number - we text you a code. No password. Not you? Ignore this - nobody can sign in without the code sent to this phone.`,
+  },
+  points_earned: {
+    category: 'optional', pref: 'account',
+    body: ({ points = 0, shop = 'SOKONI', balance = 0 }) =>
+`SOKONI
+
+You earned ${points} points at ${shop}. Balance: ${balance} points.`,
+  },
   payment_success: {
     category: 'transactional', pref: 'payments',
     body: ({ amount, ref, orderId }) =>

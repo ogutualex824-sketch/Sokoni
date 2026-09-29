@@ -979,6 +979,8 @@
          computed here — and it is NOT the manual discount (discountTotal is a capability-gated cashier decision).
          The server re-applies the offers and refuses a total that disagrees, so this can only ever match or fail. */
       grandTotal: totals.subtotal - (Number(o.discountTotal) || 0) - (Number(o.offerDiscount) || 0) + (Number(o.taxTotal) || 0),
+      /* Points P1: WHO to credit — the server credits the points from its own total */
+      buyerPhone: o.buyerPhone ? String(o.buyerPhone).slice(0, 20) : null,
       channel: 'merchant_pos',
       /* posCompleteCheckout destructures a fixed field list and spreads `metadata`
          into the sale document; `sellerUid` and `channel` are NOT in that list, so

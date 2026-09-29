@@ -1416,3 +1416,7 @@ exports.processLoyaltyMilestones = onSchedule(
     logger.info('[loyalty] Birthday bonuses', { awarded });
   }
 );
+
+/* Internals shared with functions/loyalty-points.js (Points P1, 2026-09-29) so a till-created account and a
+   self-created one are the SAME shape — same loyalty id, card number, signed QR and tier logic. */
+exports._internal = { _generateLoyaltyId, _generateCardNumber, _hmac16, _tierFor, _defaultConfig, LOYALTY_HMAC };

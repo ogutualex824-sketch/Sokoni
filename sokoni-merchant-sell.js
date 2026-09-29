@@ -439,6 +439,63 @@
         '</div>';
     }
 
+    /* ── SOKONI POINTS (P1, 2026-09-29) ──────────────────────────────────────────────────────────────────────────
+       The cashier identifies the buyer by PHONE. The server shows only a masked name and the balance; the points are
+       credited by the server from the completed sale's own total — nothing typed here is a points figure. A buyer with
+       no SOKONI account can have one created, with their CONSENT; SOKONI texts them, and they claim it with their own
+       number and a code. The cashier never sees a password, a link or a code. */
+    function buyerHTML(busy) {
+      if (typeof ctx.callBuyerLookup !== 'function') return '';
+      var b = S.buyer || {};
+      var st = b.state || 'idle';
+      var head = '<div class="msl-lbl">Customer points (optional)</div>';
+      if (st === 'found') {
+        return head + '<div class="msl-note msl-buyer"><b>' + esc(b.maskedName || 'SOKONI member') + '</b> · ' + esc(b.maskedPhone || '') +
+          ' · ' + Number(b.points || 0).toLocaleString() + ' points' + (b.created ? ' · account created — a text is on its way' : '') +
+          ' <button class="msl-btn ghost" data-act="buyer-clear"' + (busy ? ' disabled' : '') + ' style="min-height:32px;padding:0 10px;margin-left:6px">Change</button></div>';
+      }
+      var out = head + '<div style="display:flex;gap:8px;margin-bottom:8px">' +
+        '<input class="msl-inp" id="msl-bphone" inputmode="tel" autocomplete="off" placeholder="07XX XXX XXX" value="' + esc(b.phone || '') + '" aria-label="Customer phone for points" style="flex:1;margin:0">' +
+        '<button class="msl-btn ghost" data-act="buyer-look"' + (busy || st === 'looking' ? ' disabled' : '') + ' style="min-height:44px">' + (st === 'looking' ? 'Checking…' : 'Look up') + '</button></div>';
+      if (st === 'notfound' || st === 'creating') {
+        out += '<div class="msl-note">No SOKONI account on this number. Create one so the customer earns points on this and every purchase — ' +
+          'SOKONI texts them; they sign in with their own number (no smartphone needed to receive the text).</div>' +
+          '<input class="msl-inp" id="msl-bname" autocomplete="off" placeholder="Customer name (optional)" value="' + esc(b.name || '') + '" aria-label="Customer name">' +
+          '<label class="msl-note" style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="msl-bconsent"' + (b.consent ? ' checked' : '') + '> ' +
+          '<span>The customer agreed to a SOKONI account on this number.</span></label>' +
+          '<button class="msl-btn ghost wide" data-act="buyer-create"' + (!b.consent || st === 'creating' || busy ? ' disabled' : '') + '>' +
+          (st === 'creating' ? 'Creating…' : 'Create account & continue') + '</button>';
+      }
+      if (st === 'error') out += '<div class="msl-note" style="color:#ffb020">' + esc(b.error || 'That did not work.') + '</div>';
+      return out;
+    }
+    function repaintPay(focusId) {
+      var f = host.querySelector('.msl-sheet'); if (!f) return;
+      f.innerHTML = paySheet();
+      if (focusId) { var e = host.querySelector('#' + focusId); if (e) { e.focus(); try { var v = e.value || ''; e.setSelectionRange(v.length, v.length); } catch (_) {} } }
+    }
+    function buyerLook() {
+      var b = S.buyer = Object.assign({}, S.buyer || {});
+      if (!b.phone) { b.state = 'error'; b.error = 'Type the customer’s phone number.'; return repaintPay('msl-bphone'); }
+      b.state = 'looking'; repaintPay();
+      Promise.resolve(ctx.callBuyerLookup({ shopId: ctx.scope && ctx.scope.shopId, phone: b.phone })).then(function (r) {
+        var d = (r && r.data) || r || {};
+        if (d.found) Object.assign(b, { state: 'found', maskedName: d.maskedName, maskedPhone: d.maskedPhone, points: d.points, created: false });
+        else b.state = 'notfound';
+        repaintPay();
+      }).catch(function (e) { b.state = 'error'; b.error = (e && e.message) || 'The number could not be checked.'; repaintPay(); });
+    }
+    function buyerCreate() {
+      var b = S.buyer = Object.assign({}, S.buyer || {});
+      if (!b.consent) return;
+      b.state = 'creating'; repaintPay();
+      Promise.resolve(ctx.callCreateBuyer({ shopId: ctx.scope && ctx.scope.shopId, phone: b.phone, name: b.name || '', consent: true })).then(function (r) {
+        var d = (r && r.data) || r || {};
+        Object.assign(b, { state: 'found', maskedName: d.maskedName, maskedPhone: d.maskedPhone, points: d.points, created: !!d.created });
+        repaintPay();
+      }).catch(function (e) { b.state = 'error'; b.error = (e && e.message) || 'The account could not be created.'; repaintPay(); });
+    }
+
     function paySheet() {
       var t = totals();
 
@@ -455,6 +512,9 @@
               '<div class="rc">Receipt ' + esc(r.receiptNo || '—') +
                 (S.cached ? ' · already completed earlier' : '') + '</div>' +
             '</div>' +
+            (S.points && S.points.points > 0 ? '<div class="msl-note msl-buyer">⭐ ' + Number(S.points.points).toLocaleString() + ' SOKONI points credited' +
+              (S.points.balance != null ? ' · balance ' + Number(S.points.balance).toLocaleString() : '') + '</div>'
+              : (S.points && S.points.reason ? '<div class="msl-note">No points this time (' + esc(S.points.reason) + ').</div>' : '')) +
             (S.cached ? '<div class="msl-warn">This sale had already been completed on the server, so ' +
               'nothing was charged twice. The receipt below is the original.</div>' : '') +
             items.map(function (it) {
@@ -490,6 +550,7 @@
           (S.preflight && !S.preflight.blocking && S.preflight.message
             ? '<div class="msl-warn">' + esc(S.preflight.message) + '</div>' : '') +
 
+          buyerHTML(busy) +
           '<div class="msl-lbl">How is the customer paying?</div>' +
           '<div class="msl-pays">' + METHODS.map(function (m) {
             return '<button class="msl-pay' + (S.method === m.id ? ' on' : '') + '" data-act="method" data-m="' + m.id + '"' +
@@ -574,7 +635,7 @@
     }
 
     function newSale() {
-      S.cart = []; S.saleToken = null; S.sheet = null; S.sale = 'idle';
+      S.cart = []; S.saleToken = null; S.sheet = null; S.sale = 'idle'; S.buyer = null; S.points = null;
       S.receipt = null; S.cached = false; S.saleError = null; S.preflight = null; S.cashGiven = null;
       /* Re-read the catalogue: the sale just changed canonical stock, and the next
          customer must not be sold against the pre-sale numbers. */
@@ -665,6 +726,7 @@
           scope: ctx.scope, cart: S.cart, saleToken: S.saleToken,
           payments: payments(), callable: ctx.callSale,
           offerDiscount: totals().offerDiscount,          /* U7c2: the server's own figure, re-checked by the sale */
+          buyerPhone: (S.buyer && S.buyer.state === 'found') ? S.buyer.phone : null,   /* Points P1: WHO, never how many */
           checkoutStartedAt: S.startedAt || null,
         }).then(function (res) {
           if (!res.ok) {
@@ -675,6 +737,7 @@
           }
           var sale = res.sale || {};
           S.receipt = sale.receipt || null;
+          S.points = sale.pointsEarned || null;
           S.cached = sale.cached === true;
           S.sale = 'done';
           paint();
@@ -768,6 +831,9 @@
                                     S.cashGiven = (v === 'exact') ? totals().subtotal : Number(v); paint(); return; }
       if (act === 'complete')     { complete(); return; }
       if (act === 'new-sale')     { newSale(); return; }
+      if (act === 'buyer-look')   { buyerLook(); return; }
+      if (act === 'buyer-create') { buyerCreate(); return; }
+      if (act === 'buyer-clear')  { S.buyer = { phone: '' }; repaintPay('msl-bphone'); return; }
       if (act === 'print')        { printReceipt(); return; }
       if (act === 'share')        { shareReceipt(); return; }
       if (act === 'clear')        { S.term = ''; S.focusSearch = true; paint(); return; }
@@ -789,6 +855,8 @@
         if (find) find.classList.toggle('has', !!S.term);
         return;
       }
+      if (el.id === 'msl-bphone') { S.buyer = Object.assign({}, S.buyer || {}, { phone: el.value, state: 'idle' }); return; }
+      if (el.id === 'msl-bname')  { S.buyer = Object.assign({}, S.buyer || {}, { name: el.value }); return; }
       if (el.id === 'msl-cash') {
         var n = parseInt(String(el.value).replace(/[^0-9]/g, ''), 10);
         S.cashGiven = isFinite(n) ? n : null;
@@ -811,6 +879,8 @@
     function onChange(ev) {
       var el = ev.target;
       if (el && el.getAttribute && el.getAttribute('data-act') === 'qty') paint();
+      /* Points P1: the customer's consent to an account — nothing is created without it */
+      if (el && el.id === 'msl-bconsent') { S.buyer = Object.assign({}, S.buyer || {}, { consent: !!el.checked }); repaintPay(); }
     }
 
     host.addEventListener('click', onClick);

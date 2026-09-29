@@ -2860,7 +2860,7 @@ exports.createCheckoutSession = onCall(
 ============================================================ */
 exports.verifyIntasendPayment = onRequest(
   {
-    secrets:        [INTASEND_PRIVATE_KEY],
+    secrets:        [INTASEND_PRIVATE_KEY, require("./loyalty")._internal.LOYALTY_HMAC],   /* Points P1: may open the buyer's loyalty account */
     cors:           ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app"],
     timeoutSeconds: 30,
     invoker:        "public",
@@ -3184,6 +3184,22 @@ exports.verifyIntasendPayment = onRequest(
           }
         }
       });
+
+      /* Points P1 (2026-09-29): the paying buyer earns SOKONI points on the GOODS paid for, per issuing shop (each shop's
+         lines less its own offer discount; delivery excluded) — once per (order, shop). Never affects the payment. */
+      if (!isReplay && sessionDoc && sessionDoc.uid && Array.isArray(sessionDoc.items)) {
+        try {
+          const _LP = require("./loyalty-points");
+          const _goods = {};
+          sessionDoc.items.forEach((l) => { const k = String(l.shopId || l.sellerUid || sellerUid || ""); _goods[k] = (_goods[k] || 0) + (Number(l.lineTotal) || 0); });
+          (sessionDoc.offersApplied || []).filter((a) => a.kind !== "delivery").forEach((a) => { const k = String(a.shopId || ""); if (_goods[k] != null) _goods[k] -= Number(a.amount) || 0; });
+          for (const k of Object.keys(_goods)) {
+            if (!k) continue;
+            await _LP.earnForSale(db, { buyerUid: String(sessionDoc.uid), issuerShopId: k, saleId: orderId,
+              amountKES: Math.max(0, _goods[k]), source: "card" });
+          }
+        } catch (ptsErr) { console.error("[verifyIntasendPayment] points not credited (recoverable):", ptsErr && ptsErr.message); }
+      }
 
       /* U7c2: one redemption row per (order, offer), per shop — create() makes a retried verification a no-op. */
       if (!isReplay && sessionDoc && Array.isArray(sessionDoc.offersApplied) && sessionDoc.offersApplied.length) {
@@ -7839,7 +7855,7 @@ async function _associatePosQrCallback(apiRef, state, gatewayInvoiceId, tag) {
    A second handler, `intasendWebhook`, was retired 2026-09-14: a strict subset that had
    received 49 requests in 180 days and answered every one 401 or 405. */
 exports.webhookIntasend = onRequest(
-  { timeoutSeconds: 30, secrets: [INTASEND_WEBHOOK_CHALLENGE], invoker: "public", minInstances: 1 },
+  { timeoutSeconds: 30, secrets: [INTASEND_WEBHOOK_CHALLENGE, require("./loyalty")._internal.LOYALTY_HMAC], invoker: "public", minInstances: 1 },   /* + Points P1 */
   async (req, res) => {
     if (req.method !== "POST") { res.status(405).send("Method Not Allowed"); return; }
 
@@ -8052,6 +8068,19 @@ exports.webhookIntasend = onRequest(
               paymentRef: apiRef,
             });
             logger.info("[webhookIntasend] Till sale PAID", { ref: apiRef, intentRef: _intentRef2, sokoniTillId: attribution.sokoniTillId });
+            /* Points P1 (2026-09-29): Quick Charge earns SOKONI points for the buyer — the one the cashier identified
+               (intent metadata, server-stored), or, when the BUYER paid from their own phone (pay-q), that paying number.
+               From the CONFIRMED amount, once, per intent. Never affects the payment. */
+            try {
+              const _md = (_iSnap2.data() || {}).metadata || {};
+              const _bp = _md.buyerPhone || (_md.sourceMode === "buyer_entered" ? (payData.phone || null) : null);
+              if (_bp) {
+                await require("./loyalty-points").earnForSale(db, { buyerPhone: String(_bp), issuerShopId: String(_md.shopId || _md.merchantUid || ""),
+                  saleId: _intentRef2, amountKES: amount, source: "quick" });
+              }
+            } catch (ptsErr) {
+              logger.error("[webhookIntasend] Quick Charge points not credited (recoverable)", { ref: apiRef, err: ptsErr && ptsErr.message });
+            }
           } else if (_decision.action === "flag_mismatch") {
             logger.error("POS_TILL_AMOUNT_MISMATCH — intent left unpaid", {
               ref: apiRef, intentRef: _intentRef2,
@@ -8380,6 +8409,15 @@ exports.webhookIntasend = onRequest(
           const _offerDisc = Math.max(0, Math.round(Number(_pm.offerDiscount) || 0));
           const _delivery = Math.max(0, Math.round(amount - (_subtotal - _offerDisc)));
           const _dateStr  = new Date().toLocaleString("en-KE", { timeZone: "Africa/Nairobi" });
+
+          /* Points P1 (2026-09-29): the paying buyer earns SOKONI points on the GOODS they paid for (delivery excluded),
+             issued by the seller's shop — once per order (earn__online__{orderId}). Never affects the payment. */
+          if (_fin && _fin.finalised && payData.uid) {
+            try {
+              await require("./loyalty-points").earnForSale(db, { buyerUid: String(payData.uid), issuerShopId: String(_pm.offerShopId || _pm.sellerUid || ""),
+                saleId: String(_pm.orderId), amountKES: Math.max(0, _subtotal - _offerDisc), source: "online", shopName: _pm.sellerName || null });
+            } catch (ptsErr) { console.error("[webhookIntasend] points not credited (recoverable):", ptsErr && ptsErr.message); }
+          }
 
           /* ── (1) Digital receipt — posReceipts/{apiRef}, deterministic + idempotent.
              ADR-009 canonical field is `receiptNumber`. create() so a webhook replay
@@ -12035,6 +12073,11 @@ exports.processExpiringPoints    = _loyaltyMod.processExpiringPoints;
 exports.processLoyaltyMilestones = _loyaltyMod.processLoyaltyMilestones;
 exports.runLuckyDraw             = _loyaltyEntMod.runLuckyDraw;
 exports.reconcileLoyaltyLedger   = _loyaltyEntMod.reconcileLoyaltyLedger;
+/* Points P1 (2026-09-29): the till identifies the buyer by phone (and, with consent, creates their account). Points
+   themselves are earned only by the server from a completed sale — see functions/loyalty-points.js earnForSale. */
+const _loyaltyPoints = require('./loyalty-points');
+exports.tillBuyerLookup  = _loyaltyPoints.tillBuyerLookup;
+exports.tillCreateBuyer  = _loyaltyPoints.tillCreateBuyer;
 
 /* ── Wallet & Seller Payouts v1.0 ────────────────────────────────────────── */
 const wallet = require('./wallet');

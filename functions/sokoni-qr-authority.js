@@ -296,6 +296,13 @@ function priceTillSale({ till, callerUid, data }) {
       category: 'pos_till',
       sourceMode,
       items: lines,
+      /* Points P1 (2026-09-29): the buyer the cashier identified, for SOKONI points on PAID. A phone, never a points
+         figure — the webhook earns from the CONFIRMED amount. Kenyan mobile only; anything else is simply absent. */
+      buyerPhone: (function (p) {
+        const c = String(p || '').replace(/[\s\-().+]/g, '');
+        const m = c.match(/^(?:254|0)([17]\d{8})$/);
+        return m ? '254' + m[1] : null;
+      })(data.buyerPhone),
     },
   };
 }
