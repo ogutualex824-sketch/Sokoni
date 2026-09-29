@@ -1,3 +1,20 @@
+## [2026-09-29] - Shell gate on the DERIVED approval state + Complete Application surface — implemented and tested (Functions + Hosting candidate; NOT deployed; no production write)
+
+docs/COMPLETE_APPLICATION_SHELL_GATE.md. business-workspace.js: approvalStateFor (reads users/sellers/providers/businesses/shops/applications,
+resolves deciders through Auth once, static cleanup-claimed-ids.json 34 ids digest 028299e7…) and workspaceFor now answer the derived
+approval state FIRST: VALID → R2 routing unchanged; BUYER_ONLY → found:false; PENDING → PENDING_APPROVAL + applicationPath; REFUSED → no
+route; INVALID_LEGACY/NO_APPROVAL → REAPPLICATION_REQUIRED with route complete-application.html ONLY (+ remediation payload); cleanup-owned
+→ REMEDIATION_WITHHELD; unreadable → APPROVAL_UNREADABLE (fail closed). homeFor gates shop homes the same way. Client consumer redirects
+REAPPLICATION_REQUIRED to the server route. NEW complete-application.html + sokoni-complete-application.js (pure decide + mount): fresh →
+the EXISTING HubRegister intake; redecide/continue → /agreement-acknowledge; select_among_pending → list + Withdraw (the page's ONLY write:
+own pending application status withdrawn, owner-permitted, decisive statuses refused by rules); REFUSED → new application; approved → route;
+buyer → optional intake. approval-remediation.js: raw status withdrawn read first; admin negative decisions → REFUSED. FIXTURE MIGRATION
+(scripts/lib/approval-fixture.js: stubAdminAuth + autoApproveOnWrite) across 12 suites — approvedAt-only fixtures now carry the admin
+decision; 5 assertions changed contract (status-only → REAPPLICATION_REQUIRED before CAPABILITY_CONFLICT). Suites: shell gate 22/0, complete
+application browser 18/0, design 31/0, re-ack rules 17/0, and 19 pre-existing suites green (entertainment-registry 64/1 pre-existing).
+Production consequence when shipped: 18 census accounts → completion surface; 5 valid + 64 buyers unchanged. NOT built: AdminOS wiring,
+per-identity manifests, deploy.
+
 ## [2026-09-29] - REAPPLICATION_REQUIRED: derived approval state + authority design, proven 31/0; self-approval made impossible in both authorities; a category stamp is never nulled by a failed derivation (design slice; NOT a migration; nothing written)
 
 docs/REAPPLICATION_REQUIRED_DESIGN.md. functions/shared/approval-remediation.js (pure): deriveApprovalState over the census evidence →

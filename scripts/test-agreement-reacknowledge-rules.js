@@ -48,6 +48,8 @@ const KAS = { uid: 'kasindi', name: 'Kasindi holdings limited', type: 'Cleaning 
   console.log('\nre-acknowledgement allowed (owner, own application)');
   await check('owner writes the three intake fields + surface marker on the APPROVED application decided by "reindex"', assertSucceeds(updateDoc(app(kas), ACK())));
   await check('owner writes the same on a PENDING application', assertSucceeds(updateDoc(app(kas, 'PEND1'), ACK())));
+  await check('owner may WITHDRAW their own pending application (status withdrawn — a non-decisive status; the completion surface\'s only write)', assertSucceeds(updateDoc(app(kas, 'PEND1'), { status: 'withdrawn', withdrawnAt: new Date().toISOString(), withdrawnBy: 'applicant' })));
+  await check('…but cannot "withdraw" into a decisive status (approved) on the same path', assertFails(updateDoc(app(kas, 'PEND1'), { status: 'approved' })));
   await seed();
 
   console.log('\nhistory and decisions stay server-only');
