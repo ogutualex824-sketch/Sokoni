@@ -150,7 +150,9 @@ function extractFinalize() {
 
   const idx = src('functions/index.js'), co = src('checkout.html'), pj = src('product.js');
   ck('PO9 the client never states a price: checkout sends offerId; the card session prices through the same resolver; Offer shown only when opted in',
-    /i\.offerId \? \{ offerId: String\(i\.offerId\) \} : \{\}/.test(co) && (co.match(/offerId: String\(i\.offerId\)/g) || []).length === 2
+    /* SUPERSEDED 2026-09-29 (U7c2): checkout gained a THIRD reference — the shop-offer display quote (shopOfferQuote), which
+       likewise sends the offer's id and never a price. "At least the two" keeps the check that the session carries it. */
+    /i\.offerId \? \{ offerId: String\(i\.offerId\) \} : \{\}/.test(co) && (co.match(/offerId: String\(i\.offerId\)/g) || []).length >= 2
     && /const _offerPrice = await require\("\.\/product-offers"\)\.offerResolver\(db, request\.auth\.uid, cartItems, Date\.now\(\)\)/.test(idx)
     && /const \{ unitPrice, offerId: _offerId \} = _offerPrice\(item, pid, qty, _catalogueUnit\)/.test(idx)
     && /product\.acceptOffers === true \? '<button onclick="openMakeOffer\(\)"/.test(pj) && !/localStorage[^\n]*sokoniOffers/.test(pj));

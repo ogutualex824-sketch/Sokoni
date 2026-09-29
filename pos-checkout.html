@@ -1123,6 +1123,8 @@ body.queue-mode .hotkey-bar      { display: none; }
       <div class="total-row" id="t-tax-row" style="display:none"><span class="label">Tax</span><span id="t-tax">KES 0.00</span></div>
       <div class="total-row loyalty-row" id="t-loyalty-row" style="display:none"><span class="label">Loyalty redemption</span><span id="t-loyalty">-KES 0.00</span></div>
       <div class="total-row" id="t-coupon-row" style="display:none"><span class="label">Coupon</span><span id="t-coupon">-KES 0.00</span></div>
+      <!-- U7c2: the shop's live offers, as the SERVER prices them (shopOfferQuote) -->
+      <div class="total-row discount-row" id="t-offer-row" style="display:none"><span class="label" id="t-offer-label">Offer</span><span id="t-offer">-KES 0.00</span></div>
       <div class="total-row grand"><span>TOTAL</span><span id="t-total">KES 0.00</span></div>
     </div>
 
@@ -2168,7 +2170,42 @@ const Checkout = (() => {
   }
 
   /* ── Totals ── */
+  /* ── U7c2 (2026-09-29): THE SHOP'S OFFERS, AS THE SERVER PRICES THEM ─────────────────────────────────────
+     The discount is never computed on this device: it is shopOfferQuote({ channel:'till' }) — the same resolver
+     posCompleteCheckout applies — for THIS cart. The sale re-applies it and refuses a total that disagrees, so the
+     figure shown is the figure charged. An offer store that cannot be read is a refusal, never "no offers". */
+  _s.offer = null;
+  let _offerSeq = 0, _offerTimer = null;
+  function _offerKey() { return _s.items.map(i => i.productId + 'x' + i.qty).join('|'); }
+  function _offerFor() { return (_s.offer && _s.offer.key === _offerKey()) ? _s.offer : null; }
+  async function _quoteOffers() {
+    const key = _offerKey();
+    if (!_s.items.length) { _s.offer = null; return null; }
+    const seq = ++_offerSeq;
+    let next;
+    try {
+      const fn = firebase.functions().httpsCallable('shopOfferQuote');
+      const r = await fn({ channel: 'till', shopId: _resolveMerchantId(), items: _s.items.map(i => ({ productId: i.productId, qty: i.qty })) });
+      const sh = ((r && r.data && r.data.shops) || [])[0];
+      next = { key, ok: true, discount: sh ? Number(sh.discount) || 0 : 0, applied: sh ? (sh.applied || []) : [] };
+    } catch (e) {
+      next = { key, ok: false, discount: 0, applied: [], error: (e && e.message) || 'offers unavailable' };
+    }
+    if (seq !== _offerSeq) return _s.offer;
+    _s.offer = next;
+    _updateTotals();
+    return next;
+  }
+  function _scheduleOffers() {
+    if (_offerFor() || !_s.items.length) return;
+    clearTimeout(_offerTimer);
+    _offerTimer = setTimeout(_quoteOffers, 300);
+  }
+
   function _updateTotals() {
+    const _off = _offerFor();
+    if (!_off) _scheduleOffers();
+    const offerDsc = (_off && _off.ok) ? _off.discount : 0;
     const subtotal = _s.items.reduce((s, i) => {
       return s + i.unitPrice * i.qty * (1 - (i.lineDiscount||0)/100);
     }, 0);
@@ -2189,7 +2226,7 @@ const Checkout = (() => {
       ? PosLoyalty.calcRedemptionValue(_s.loyaltyRedeem, _s.loyaltyData.program)
       : 0;
 
-    const afterDiscount = Math.max(0, subtotal - discount - couponDsc - loyaltyDsc);
+    const afterDiscount = Math.max(0, subtotal - discount - couponDsc - loyaltyDsc - offerDsc);
     const tax           = afterDiscount * _s.taxRate;
     const total         = afterDiscount + tax;
 
@@ -2214,6 +2251,15 @@ const Checkout = (() => {
       lr.style.display = '';
       document.getElementById('t-loyalty').textContent = '-' + _kes(loyaltyDsc);
     } else lr.style.display = 'none';
+
+    const orow = document.getElementById('t-offer-row');
+    if (orow) {
+      if (offerDsc > 0) {
+        orow.style.display = '';
+        document.getElementById('t-offer-label').textContent = '🏷 ' + ((_off.applied || []).map(a => a.label).join(' + ') || 'Offer');
+        document.getElementById('t-offer').textContent = '-' + _kes(offerDsc);
+      } else orow.style.display = 'none';
+    }
 
     const cr = document.getElementById('t-coupon-row');
     if (couponDsc > 0) {
@@ -2254,7 +2300,7 @@ const Checkout = (() => {
       }
     }
 
-    return { subtotal, discount, couponDsc, loyaltyDsc, tax, total };
+    return { subtotal, discount, couponDsc, loyaltyDsc, offerDsc, tax, total };
   }
 
   /* ── Customer lookup ── */
@@ -2809,9 +2855,28 @@ const Checkout = (() => {
     return _s.merchantId;
   }
 
+  function _items_offer_blocked(off, totals) {
+    if (!_s.items.length) return false;
+    if (!off || !off.ok) {
+      _setState('ERROR');
+      _toast('The shop’s offers could not be checked just now, so nothing was charged. Try again.', 'error');
+      return true;
+    }
+    if (Math.abs((off.discount || 0) - (totals.offerDsc || 0)) > 0.5) {
+      _updateTotals();
+      _setState('ERROR');
+      _toast('The shop’s offers changed this total. Check the new amount with the customer, then charge again.', 'warning');
+      return true;
+    }
+    return false;
+  }
+
   async function _finalize(method, payments, totals) {
     _setState('CONFIRMING');
     _resolveMerchantId();
+    /* U7c2: the offers for THIS cart must be known and must match what is on screen before anything is charged. */
+    const _off = _offerFor() || await _quoteOffers();
+    if (_items_offer_blocked(_off, totals)) return;
     const idempotencyKey = `${_s.merchantId}_${_s.cashierId}_${Date.now()}`;
     try {
       const fn = firebase.functions().httpsCallable('posCompleteCheckout');

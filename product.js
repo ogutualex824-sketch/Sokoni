@@ -881,17 +881,27 @@ else{
         } catch(_){ /* unknown → say nothing, never "Open" */ }
     })();
 
-    /* ── Active offer check ── */
+    /* ── THE SHOP'S LIVE OFFER ON THIS PRODUCT (U7c2, 2026-09-29) ──
+       Asked of the server (shopOfferQuote, one unit) — the same resolver checkout charges with — so the price shown
+       here is the price paid. This replaced the admin `offers` badge (SokoniOffers.applyBadge), which struck through
+       the price and showed an "offer price" that NO checkout ever charged: a displayed discount the buyer never got.
+       No answer → the listed price stands and nothing is claimed. */
     (async function () {
         try {
-            if (!window.SokoniOffers) return;
             var pid = new URLSearchParams(location.search).get('id') || (product && product.id);
-            if (!pid) return;
-            var offer = await SokoniOffers.getActiveOffer(String(pid));
-            if (!offer) return;
+            if (!pid || !window.firebaseApp) return;
+            var fn = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+            var r = await fn.httpsCallable(fn.getFunctions(window.firebaseApp), 'shopOfferQuote')({ items: [{ productId: String(pid), qty: 1 }] });
+            var d = (r && r.data) || {};
+            if (!(Number(d.discount) > 0) || !(Number(d.subtotal) > 0)) return;
+            var labels = (d.shops || []).reduce(function (a, sh) { return a.concat((sh.applied || []).map(function (x) { return x.label; })); }, []);
             var priceEl = document.getElementById('productPriceEl');
-            if (priceEl) SokoniOffers.applyBadge(priceEl, offer);
-        } catch(e) { /* silent — offer display is non-critical */ }
+            if (!priceEl) return;
+            priceEl.innerHTML = '<span class="prd-offer-was" style="text-decoration:line-through;opacity:.55;font-size:.7em;margin-right:8px">KES ' +
+                Number(d.subtotal).toLocaleString() + '</span>KES ' + Number(d.total).toLocaleString() +
+                '<span class="prd-offer-tag" style="display:inline-block;margin-left:8px;font-size:.5em;vertical-align:middle;background:rgba(113,255,0,.14);color:#71ff00;border-radius:999px;padding:3px 9px">🏷 ' +
+                _esc(labels.join(' + ') || 'Shop offer') + '</span>';
+        } catch (e) { /* unknown → the listed price stands; no discount is claimed */ }
     })();
 
     /* ── Trust & Analytics module ── */

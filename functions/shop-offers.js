@@ -435,6 +435,79 @@ async function resolveOfferForCharge(db, { shopId, offerIds, basket, buyerUid, a
            applied: r.applied, rejected: r.rejected };
 }
 
+/* ══ U7c2 (2026-09-29) — ONE QUOTE FOR EVERY PLACE THAT CHARGES ══════════════════════════════════════════════
+   The merchant's live offers are APPLIED BY THE SERVER, automatically, to a basket the server priced itself: the
+   online pricer (product_order), the card session (createCheckoutSession), the till (posCompleteCheckout) and the
+   display quote (shopOfferQuote) all call quoteShopOffers with their own server lines. No client names an offer and
+   no client computes a promotional price — the cart and the till SHOW the figure this returns.
+
+   Lines carrying an agreed buyer price (productOffers `offerId`) are left out of the offer basket: an agreed price is
+   final (owner stacking rule, 2026-09-29 — the same reason a promo code does not touch it). */
+const LIVE_OFFER_LIMIT = 50;
+
+function offerBasket(lines, deliveryFee, fulfilment) {
+  const eligible = _arr(lines).filter((l) => l && !l.offerId && Number(l.unitPrice) > 0 && Number(l.qty) > 0);
+  const b = {
+    lines: eligible.map((l) => ({ listingId: String(l.productId || l.id), price: _n(l.unitPrice), qty: _n(l.qty, 1) })),
+    deliveryFee: _n(deliveryFee),
+  };
+  if (fulfilment === 'delivery' || fulfilment === 'pickup') b.fulfilment = fulfilment;
+  return b;
+}
+
+async function liveOffersFor(db, shopId) {
+  const snap = await db.collection(COL).where('shopId', '==', String(shopId)).where('status', '==', 'live')
+    .limit(LIVE_OFFER_LIMIT).get();
+  return snap.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+}
+
+/**
+ * The offer discount for ONE shop's server-priced lines. Never throws for an offer problem — a malformed, expired or
+ * exhausted offer simply does not apply (resolve() lists it in `rejected`). A READ failure is reported as
+ * { unavailable: true } so a caller can decide; it is never silently treated as "no offers".
+ */
+async function quoteShopOffers(db, { shopId, lines, deliveryFee, buyerUid, fulfilment, at }) {
+  const zero = { discount: 0, deliveryFee: _n(deliveryFee), applied: [], rejected: [] };
+  const basket = offerBasket(lines, deliveryFee, fulfilment);
+  if (!shopId || !basket.lines.length) return zero;
+  let offers;
+  try { offers = await liveOffersFor(db, shopId); } catch (e) { return Object.assign({}, zero, { unavailable: true }); }
+  if (!offers.length) return zero;
+  const usage = {};
+  for (const o of offers) usage[o.id] = await usageFor(db, { offerId: o.id, buyerUid });
+  const r = resolve(basket, offers, { at: at instanceof Date ? at : new Date(), usage });
+  return { discount: r.discount, deliveryFee: r.deliveryFee, applied: r.applied, rejected: r.rejected };
+}
+
+/** The shop a server line belongs to — the product's canonical owner (shopId, else sellerUid). */
+function lineShopOf(l) { return String((l && (l.shopId || l.sellerUid)) || ''); }
+
+/**
+ * Redemptions for a PAID order — one ledger row per (order, offer), created with create() so a replayed webhook or a
+ * retried finalisation can never count twice. Post-payment, nothing is refused: the customer has paid the quoted price.
+ * An offer that raced past its limit is FLAGGED (offerOveruseAlerts), never reversed.
+ */
+async function recordRedemptionsForOrder(db, { orderId, shopId, buyerUid, applied, source }) {
+  const out = [];
+  for (const a of _arr(applied)) {
+    if (!a || !a.id || a.kind === 'delivery' && !(Number(a.amount) > 0)) continue;
+    const ref = db.collection(COL_REDEMPTIONS).doc(String(orderId) + '__' + String(a.id));
+    try {
+      await ref.create({
+        offerId: String(a.id), shopId: String(shopId), buyerUid: buyerUid || null, orderId: String(orderId),
+        discount: _n(a.amount), kind: a.kind || 'discount', source: source || null,
+        redeemedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      await db.collection(COL).doc(String(a.id)).update({ redemptionCount: admin.firestore.FieldValue.increment(1) }).catch(() => {});
+      out.push({ offerId: a.id, recorded: true });
+    } catch (e) {
+      const dup = e && (e.code === 6 || e.code === 'already-exists' || /already exists/i.test(String(e.message)));
+      out.push({ offerId: a.id, recorded: false, replay: !!dup });
+    }
+  }
+  return out;
+}
+
 /* ══ CALLABLES ═══════════════════════════════════════════════════════════════ */
 exports.shopOfferUpsert = onCall(
   { region: REGION, maxInstances: 20, memory: '256MiB', timeoutSeconds: 30, enforceAppCheck: true },
@@ -451,6 +524,62 @@ exports.shopOfferList = onCall(
   { region: REGION, maxInstances: 20, memory: '256MiB', timeoutSeconds: 30, enforceAppCheck: true },
   async (req) => listShopOffers(_db(), { uid: req.auth && req.auth.uid, shopId: (req.data || {}).shopId }),
 );
+
+/* U7c2 (2026-09-29): THE DISPLAY QUOTE. What the cart, the till and Sell SHOW is asked of the server — never
+   computed on a device — and it is the same quoteShopOffers every charge path calls, over the same server lines:
+     channel 'online' (default): validateOrderLines — the pricer product_order charges through (availability, stock,
+       agreed buyer prices) — then the offers per shop.
+     channel 'till': the caller must have access to data.shopId; lines are priced as posCompleteCheckout prices them
+       (canonical salePrice || price), owned by that shop and not refused by the till's saleability rule.
+   A quote is ADVISORY: every charge path re-resolves at payment time, so a quote can never be replayed as a price. */
+exports.shopOfferQuote = onCall(
+  { region: REGION, maxInstances: 40, memory: '256MiB', timeoutSeconds: 30, enforceAppCheck: true },
+  async (req) => quoteForCaller(_db(), { uid: req.auth && req.auth.uid, data: req.data || {} }),
+);
+
+async function quoteForCaller(db, { uid, data }) {
+  /* The till channel needs a signed-in member of the shop. The ONLINE display quote may be asked by a visitor who has
+     not signed in (the product page shows the offer before sign-in); without a uid, agreed-price references are
+     dropped — they belong to a buyer — and the answer is display only, re-resolved at every payment. */
+  if (!uid && data.channel === 'till') throw new HttpsError('unauthenticated', 'Sign in required.');
+  const items = _arr(data.items).slice(0, 100)
+    .map((it) => (uid ? it : Object.assign({}, it, { offerId: undefined })));
+  if (!items.length) return { ok: true, shops: [], subtotal: 0, discount: 0, total: 0 };
+  let lines;
+  if (data.channel === 'till') {
+    const shopId = String(data.shopId || '');
+    await resolveShopAccess(uid, shopId);               /* throws for anyone who is not this shop's */
+    const SELL = require('./shared/sellability');
+    lines = [];
+    for (const it of items) {
+      const pid = String((it && (it.productId || it.id)) || '');
+      if (!pid || pid.includes('/')) continue;
+      const snap = await db.collection('products').doc(pid).get();
+      if (!snap.exists) continue;
+      const p = snap.data() || {};
+      if (String(p.shopId || p.sellerUid || '') !== shopId || SELL.tillBlockReason(p)) continue;
+      lines.push({ productId: pid, qty: Math.max(1, Math.round(_n(it.qty, 1))), unitPrice: _n(p.salePrice || p.price), shopId });
+    }
+  } else {
+    const r = await require('./payment-purposes').validateOrderLines(uid, items);
+    lines = r.lines;
+  }
+  const byShop = {};
+  lines.forEach((l) => { const k = lineShopOf(l); (byShop[k] = byShop[k] || []).push(l); });
+  const shops = [];
+  for (const k of Object.keys(byShop)) {
+    const sub = byShop[k].reduce((s, l) => s + _n(l.unitPrice) * _n(l.qty, 1), 0);
+    const q = await quoteShopOffers(db, { shopId: k, lines: byShop[k], deliveryFee: 0, buyerUid: uid,
+      fulfilment: data.fulfilment });
+    if (q.unavailable) throw new HttpsError('failed-precondition', 'The shop\'s offers could not be checked just now.');
+    const applied = (q.applied || []).filter((a) => a.kind !== 'delivery');
+    shops.push({ shopId: k, subtotal: sub, discount: q.discount, total: Math.max(0, sub - q.discount),
+      applied: applied.map((a) => ({ id: a.id, label: a.label, type: a.type, amount: a.amount })),
+      lines: byShop[k].map((l) => ({ productId: l.productId, qty: l.qty, unitPrice: l.unitPrice, agreedPrice: !!l.offerId })) });
+  }
+  const subtotal = shops.reduce((s, x) => s + x.subtotal, 0), discount = shops.reduce((s, x) => s + x.discount, 0);
+  return { ok: true, shops, subtotal, discount, total: Math.max(0, subtotal - discount) };
+}
 
 /* Internals, exported for certification and for the charge path. */
 module.exports.COL = COL;
@@ -469,3 +598,9 @@ module.exports.listShopOffers = listShopOffers;
 module.exports.recordOfferRedemption = recordOfferRedemption;
 module.exports.usageFor = usageFor;
 module.exports.resolveOfferForCharge = resolveOfferForCharge;
+module.exports.offerBasket = offerBasket;
+module.exports.liveOffersFor = liveOffersFor;
+module.exports.quoteShopOffers = quoteShopOffers;
+module.exports.lineShopOf = lineShopOf;
+module.exports.recordRedemptionsForOrder = recordRedemptionsForOrder;
+module.exports.quoteForCaller = quoteForCaller;

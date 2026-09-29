@@ -140,6 +140,7 @@
       'font-weight:900;text-align:center;font-family:inherit;outline:none;padding:0}',
     '.msl-tot{display:flex;justify-content:space-between;align-items:baseline;padding:13px 0 2px;',
       'font-size:13px;color:var(--txt2)}',
+    '.msl-tot.msl-offer b{color:var(--acc)}',
     '.msl-tot.grand{font-size:15px;color:var(--txt);font-weight:800;border-top:1px solid var(--line);margin-top:8px;padding-top:13px}',
     '.msl-tot.grand b{font-size:21px;font-weight:900;color:var(--acc)}',
 
@@ -270,7 +271,36 @@
 
     /* ── Derived ──────────────────────────────────────────────────────────── */
     function visible() { return md.searchProducts(S.products, S.term); }
-    function totals()  { return md.cartTotals(S.cart); }
+    /* U7c2 (2026-09-29): THE SHOP'S OFFERS, AS THE SERVER PRICES THEM. The discount is never computed here: it is the
+       figure the server's own pre-sale check returns for THIS cart (posCompleteCheckout dryRun → shop-offers), and the
+       real sale re-applies the same offers and refuses a total that disagrees. `due` is what the customer pays. */
+    function cartKey() { return S.cart.map(function (l) { return l.productId + 'x' + l.qty; }).join('|'); }
+    function totals()  {
+      var t = md.cartTotals(S.cart);
+      var off = (S.offer && S.offer.key === cartKey()) ? S.offer : null;
+      t.offerDiscount = off ? off.discount : 0;
+      t.offers = off ? off.applied : [];
+      t.offersChecked = !!off;
+      t.due = Math.max(0, t.subtotal - t.offerDiscount);
+      return t;
+    }
+    /* Asked ONCE, when the cashier taps Charge — building or correcting a cart calls no sale authority — and under
+       the SALE's own token, so the quote, the pre-sale check and the sale are one idempotency key. */
+    function quoteOffers() {
+      var key = cartKey();
+      if (!S.cart.length || typeof ctx.callSale !== 'function') return;
+      if (S.offer && S.offer.key === key) return;
+      S.offerPending = true;
+      md.previewSale({ scope: ctx.scope, cart: S.cart, saleToken: S.saleToken, payments: payments(), callable: ctx.callSale })
+        .then(function (r) {
+          S.offerPending = false;
+          if (cartKey() !== key) return paint();
+          if (r && r.ran && typeof r.offerDiscount === 'number') S.offer = { key: key, discount: r.offerDiscount, applied: r.offersApplied || [] };
+          /* the quote IS the pre-sale dry run — kept so Complete does not ask the same question twice */
+          if (r && r.ran) S.preview = { key: key, at: Date.now(), r: r };
+          paint();
+        }).catch(function () { S.offerPending = false; paint(); });
+    }
     function inCart(id) {
       for (var i = 0; i < S.cart.length; i++) if (S.cart[i].productId === id) return S.cart[i].qty;
       return 0;
@@ -356,8 +386,8 @@
         '<button class="msl-btn ghost" data-act="open-cart" style="min-width:0;padding:0 14px">' +
           t.units + ' item' + (t.units === 1 ? '' : 's') + '</button>' +
         '<div class="sum" data-act="open-cart" style="cursor:pointer">' +
-          '<div class="n">' + esc(md.formatKES(t.subtotal)) + '</div>' +
-          '<div class="l">Tap to review</div>' +
+          '<div class="n">' + esc(md.formatKES(t.due)) + '</div>' +
+          '<div class="l">' + (t.offerDiscount > 0 ? 'Offer applied · tap to review' : 'Tap to review') + '</div>' +
         '</div>' +
         '<button class="msl-btn solid" data-act="charge">Charge</button>' +
       '</div>';
@@ -395,10 +425,16 @@
               '</div>' +
             '</div>';
           }).join('') +
-          '<div class="msl-tot grand"><span>Total</span><b>' + esc(md.formatKES(t.subtotal)) + '</b></div>' +
+          (t.offerDiscount > 0
+            ? '<div class="msl-tot"><span>Subtotal</span><b>' + esc(md.formatKES(t.subtotal)) + '</b></div>' +
+              t.offers.map(function (o) {
+                return '<div class="msl-tot msl-offer"><span>🏷 ' + esc(o.label || 'Offer') + '</span><b>−' + esc(md.formatKES(o.amount)) + '</b></div>';
+              }).join('')
+            : '') +
+          '<div class="msl-tot grand"><span>Total</span><b>' + esc(md.formatKES(t.due)) + '</b></div>' +
         '</div>' +
         '<div class="msl-sh-f">' +
-          '<button class="msl-btn solid wide" data-act="charge">Charge ' + esc(md.formatKES(t.subtotal)) + '</button>' +
+          '<button class="msl-btn solid wide" data-act="charge">Charge ' + esc(md.formatKES(t.due)) + '</button>' +
           '<button class="msl-btn ghost wide" data-act="clear-cart">Cancel this sale</button>' +
         '</div>';
     }
@@ -415,7 +451,7 @@
             '<button class="msl-sh-x" data-act="new-sale" aria-label="Close">×</button></div>' +
           '<div class="msl-sh-b">' +
             '<div class="msl-ok"><div class="ic">✅</div>' +
-              '<div class="hd">' + esc(md.formatKES(r.total != null ? r.total : t.subtotal)) + '</div>' +
+              '<div class="hd">' + esc(md.formatKES(r.total != null ? r.total : t.due)) + '</div>' +
               '<div class="rc">Receipt ' + esc(r.receiptNo || '—') +
                 (S.cached ? ' · already completed earlier' : '') + '</div>' +
             '</div>' +
@@ -439,13 +475,15 @@
       var busy = (S.sale === 'checking' || S.sale === 'charging');
       var cash = (S.method === 'cash');
       var given = (S.cashGiven == null) ? null : Number(S.cashGiven);
-      var change = (cash && given != null && given >= t.subtotal) ? given - t.subtotal : null;
+      var change = (cash && given != null && given >= t.due) ? given - t.due : null;
 
       return '<div class="msl-sh-h"><div class="t">Take payment</div>' +
           '<button class="msl-sh-x" data-act="close-sheet" aria-label="Close"' + (busy ? ' disabled' : '') + '>×</button></div>' +
         '<div class="msl-sh-b">' +
           '<div class="msl-tot grand" style="border-top:none;margin:0 0 14px;padding-top:0">' +
-            '<span>Amount due</span><b>' + esc(md.formatKES(t.subtotal)) + '</b></div>' +
+            '<span>Amount due</span><b>' + esc(md.formatKES(t.due)) + '</b></div>' +
+          (S.offerPending ? '<div class="msl-note"><span class="msl-spin"></span> Checking the shop’s offers…</div>' : '') +
+          (t.offerDiscount > 0 ? '<div class="msl-note">Includes ' + t.offers.map(function (o) { return esc(o.label || 'an offer') + ' −' + esc(md.formatKES(o.amount)); }).join(', ') + '.</div>' : '') +
 
           (S.preflight && S.preflight.blocking
             ? '<div class="msl-warn">' + esc(S.preflight.message) + '</div>' : '') +
@@ -461,8 +499,8 @@
           (cash
             ? '<div class="msl-lbl">Cash received</div>' +
               '<div class="msl-cash">' +
-                '<button data-act="tender" data-v="exact"' + (given === t.subtotal ? ' class="on"' : '') + '>Exact</button>' +
-                CASH_STEPS.filter(function (v) { return v >= t.subtotal; }).slice(0, 4).map(function (v) {
+                '<button data-act="tender" data-v="exact"' + (given === t.due ? ' class="on"' : '') + '>Exact</button>' +
+                CASH_STEPS.filter(function (v) { return v >= t.due; }).slice(0, 4).map(function (v) {
                   return '<button data-act="tender" data-v="' + v + '"' + (given === v ? ' class="on"' : '') + '>' + v + '</button>';
                 }).join('') +
               '</div>' +
@@ -470,7 +508,7 @@
                 'placeholder="Or type the amount" value="' + (given == null ? '' : given) + '" aria-label="Cash received">' +
               (change != null
                 ? '<div class="msl-tot grand"><span>Change due</span><b>' + esc(md.formatKES(change)) + '</b></div>'
-                : (given != null && given < t.subtotal
+                : (given != null && given < t.due
                     ? '<div class="msl-note" style="color:#ffb020">That is less than the amount due.</div>' : ''))
             : '<div class="msl-note">Confirm the ' + esc(S.method === 'mpesa' ? 'M-Pesa' : 'card') +
               ' payment has actually been received before completing. This screen <b>records</b> the ' +
@@ -491,7 +529,7 @@
         '</div>' +
         '<div class="msl-sh-f">' +
           '<button class="msl-btn solid wide" data-act="complete"' +
-            (busy || (cash && given != null && given < t.subtotal) ? ' disabled' : '') + '>' +
+            (busy || S.offerPending || (cash && given != null && given < t.due) ? ' disabled' : '') + '>' +
             (busy ? (S.sale === 'checking' ? 'Checking…' : 'Completing…')
                   : (S.sale === 'failed' ? 'Try again' : 'Complete sale')) +
           '</button>' +
@@ -531,6 +569,7 @@
       mintToken();
       S.sheet = 'pay'; S.sale = 'idle'; S.saleError = null; S.preflight = null;
       S.cashGiven = null;
+      quoteOffers();                                   /* U7c2: the server's offer figure for THIS cart */
       paint();
     }
 
@@ -544,7 +583,7 @@
 
     function payments() {
       var t = totals();
-      return [{ method: S.method, amount: t.subtotal }];
+      return [{ method: S.method, amount: t.due }];
     }
 
     /* Pre-charge guard. Uses the server's own side-effect-free dry run: it prices
@@ -556,10 +595,13 @@
        What must never happen is an unavailable check being treated as a pass. */
     function preflight() {
       if (typeof ctx.callSale !== 'function') return Promise.resolve({ blocking: false, message: null });
-      return md.previewSale({
+      /* U7c2: the dry run taken when Charge was tapped answers for THIS cart once, if fresh; a retry asks again. */
+      var fresh = (S.preview && S.preview.key === cartKey() && Date.now() - S.preview.at < 60000) ? S.preview.r : null;
+      S.preview = null;
+      return (fresh ? Promise.resolve(fresh) : md.previewSale({
         scope: ctx.scope, cart: S.cart, saleToken: S.saleToken,
         payments: payments(), callable: ctx.callSale,
-      }).then(function (r) {
+      })).then(function (r) {
         if (!r.ran) {
           return { blocking: false, message: 'Stock and prices could not be checked first — the server ' +
             'still verifies both before completing, so an oversell is refused there.' };
@@ -593,6 +635,17 @@
           return { blocking: true, message: 'The server could not accept this cart: ' +
             (r.differences[0].error || 'a product is no longer available') + '.' };
         }
+        /* U7c2: the offers must be READ, and must match what this screen is showing — otherwise the customer would
+           be charged a figure they were not shown. A change is shown first; the cashier completes again. */
+        if (r.offersUnavailable) {
+          return { blocking: true, message: 'The shop’s offers could not be checked just now, so nothing was charged. Try again in a moment.' };
+        }
+        var shown = totals();
+        if (typeof r.offerDiscount === 'number' && (!shown.offersChecked || Math.abs(r.offerDiscount - shown.offerDiscount) > 0.5)) {
+          S.offer = { key: cartKey(), discount: r.offerDiscount, applied: r.offersApplied || [] };
+          return { blocking: true, message: 'The shop’s offers changed this total to ' + md.formatKES(Math.max(0, shown.subtotal - r.offerDiscount)) +
+            '. Check the amount with the customer, then complete the sale.' };
+        }
         return { blocking: false, message: null };
       });
     }
@@ -611,6 +664,7 @@
         return md.completeSale({
           scope: ctx.scope, cart: S.cart, saleToken: S.saleToken,
           payments: payments(), callable: ctx.callSale,
+          offerDiscount: totals().offerDiscount,          /* U7c2: the server's own figure, re-checked by the sale */
           checkoutStartedAt: S.startedAt || null,
         }).then(function (res) {
           if (!res.ok) {

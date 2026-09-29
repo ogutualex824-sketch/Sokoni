@@ -1304,6 +1304,8 @@
       <div class="os-row"><span class="os-row-label">Subtotal</span><span class="os-row-val" id="summarySubtotal">KES 0</span></div>
       <div class="os-row"><span class="os-row-label">Delivery</span><span class="os-free" id="summaryDelivery">FREE</span></div>
       <div class="os-row" id="platformFeeRow" style="display:none"><span class="os-row-label" style="display:flex;align-items:center;gap:5px;">Platform Fee <span id="platformFeeRate" style="font-size:10px;background:rgba(113,255,0,0.1);color:#71ff00;border-radius:4px;padding:1px 5px;font-weight:700;"></span></span><span class="os-row-val" id="platformFeeVal">KES 0</span></div>
+      <!-- U7c2: the shop's live offers, as the SERVER prices this cart (shopOfferQuote) — charged exactly so -->
+      <div class="os-row" id="shopOfferRow" style="display:none"><span class="os-row-label" style="color:#71ff00;" id="shopOfferLabel">🏷 Shop offer</span><span class="os-row-val" style="color:#71ff00;" id="shopOfferVal">—</span></div>
       <div class="os-row" id="promoRow" style="display:none"><span class="os-row-label" style="color:#71ff00;">Promo Discount</span><span class="os-row-val" style="color:#71ff00;" id="promoSavingRow">—</span></div>
       <div class="os-row" id="loyaltyDiscountRow" style="display:none"><span class="os-row-label" style="color:#71ff00;">🏆 Points Redeemed <span id="loyaltyPtsUsedLabel" style="font-size:10px;background:rgba(113,255,0,0.1);color:#71ff00;border-radius:4px;padding:1px 5px;font-weight:700;"></span></span><span class="os-row-val" style="color:#71ff00;" id="loyaltyDiscountVal">—</span></div>
       <div class="os-total-row">
@@ -2059,15 +2061,17 @@ window.removeCartItem = function(idx){
 (function(){
   try {
     var saved = JSON.parse(localStorage.getItem("sokoniAppliedPromo") || "null");
-    if(saved && saved.code && saved.discount >= 0){
+    /* U7c2: the cart hands over a CODE, never a discount. It is named to the server, which decides. The old path
+       took a percentage the cart had read from a hard-coded list and showed a saving checkout never charged. */
+    if(saved && saved.code){
       var inp = document.getElementById("discountCodeInput");
       var msg = document.getElementById("discountMsg");
-      promoDiscount = saved.discount;
-      if(inp) inp.value = saved.code;
-      var saving = Math.round(subtotal * promoDiscount / 100);
+      _appliedPromoCode = String(saved.code).trim().toUpperCase();
+      promoDiscount = 0;
+      if(inp) inp.value = _appliedPromoCode;
       if(msg){
-        msg.innerHTML = '✅ <strong>' + _esc(saved.code) + '</strong> applied — ' + (saved.discount > 0 ? saved.discount + '% off (save KES ' + saving.toLocaleString() + ')' : 'Free delivery applied!');
-        msg.style.color = "#71ff00";
+        msg.innerHTML = '🔒 <strong>' + _esc(_appliedPromoCode) + '</strong> will be verified and applied at payment.';
+        msg.style.color = "rgba(255,255,255,0.7)";
       }
     }
   } catch(e){}
@@ -2121,7 +2125,37 @@ function toggleLoyaltyRedeem(checked) {
   updateTotals();
 }
 
+/* ── U7c2 (2026-09-29): THE SHOP'S OFFERS, AS THE SERVER PRICES THEM ─────────────────────────────────────────
+   shopOfferQuote runs the same resolver createCheckoutSession and product_order apply, over the same server
+   lines, so the "Shop offer" row is the discount the payment will carry. It is never computed on this device.
+   Until it answers, no offer is shown; if it cannot answer, the page says so rather than showing none. */
+let _shopOffer = { key: null, discount: 0, applied: [], state: 'idle' };
+function _shopOfferKey(){
+  return (cart || []).map(i => String(i.id || i.productId || '') + 'x' + (i.qty || i.quantity || 1) + (i.offerId ? '@' + i.offerId : '')).join('|') + '#' + fulfillmentType;
+}
+async function _quoteShopOffers(){
+  const key = _shopOfferKey();
+  if (!cart || !cart.length || _shopOffer.key === key) return;
+  _shopOffer = { key, discount: 0, applied: [], state: 'loading' };
+  try {
+    const fn = firebase.functions().httpsCallable('shopOfferQuote');
+    const r = await fn({ fulfilment: fulfillmentType, items: cart.map(i => Object.assign({
+      productId: String(i.id || i.productId || ''), qty: Math.max(1, Math.round(Number(i.qty) || Number(i.quantity) || 1)),
+    }, i.offerId ? { offerId: String(i.offerId) } : {})).filter(i => i.productId) });
+    if (_shopOfferKey() !== key) return;
+    const d = (r && r.data) || {};
+    _shopOffer = { key, discount: Math.max(0, Number(d.discount) || 0),
+      applied: (d.shops || []).reduce((a, sh) => a.concat(sh.applied || []), []), state: 'ok' };
+  } catch (e) {
+    if (_shopOfferKey() !== key) return;
+    _shopOffer = { key, discount: 0, applied: [], state: 'error' };
+  }
+  updateTotals();
+}
+
 function updateTotals(){
+  if (_shopOffer.key !== _shopOfferKey()) _quoteShopOffers();
+  const shopOfferDisc = (_shopOffer.state === 'ok') ? _shopOffer.discount : 0;
   /* The 1% "M-PESA Fee" is gone. It was added to the displayed total on the
      client only — createCheckoutSession computes the authoritative charge as
      `serverTotal = serverSubtotal + safeDeliveryFee` and has never applied a
@@ -2129,7 +2163,7 @@ function updateTotals(){
      actually charge. Removing it makes the quote match the charge. */
   const promoSaving = Math.round(subtotal * (promoDiscount/100));
   _platformFee      = _platformFeeRate > 0 ? Math.round(subtotal * _platformFeeRate / 100) : 0;
-  const baseTotal   = subtotal + deliveryFee + _platformFee - promoSaving;
+  const baseTotal   = subtotal + deliveryFee + _platformFee - promoSaving - shopOfferDisc;   /* U7c2 */
   const loyaltyDisc = _calcLoyaltyDiscount(baseTotal);
   orderTotal        = Math.max(0, baseTotal - loyaltyDisc);
 
@@ -2172,6 +2206,21 @@ function updateTotals(){
   }
 
   /* Promo row */
+  const soRow = document.getElementById("shopOfferRow");
+  if (soRow) {
+    if (shopOfferDisc > 0) {
+      soRow.style.display = "";
+      document.getElementById("shopOfferLabel").textContent = "🏷 " + (_shopOffer.applied.map(a => a.label).filter(Boolean).join(" + ") || "Shop offer");
+      document.getElementById("shopOfferVal").textContent = "−KES " + shopOfferDisc.toLocaleString();
+    } else if (_shopOffer.state === 'error') {
+      soRow.style.display = "";
+      document.getElementById("shopOfferLabel").textContent = "Shop offers";
+      document.getElementById("shopOfferVal").textContent = "checked at payment";
+    } else {
+      soRow.style.display = "none";
+    }
+  }
+
   const promoEl = document.getElementById("promoRow");
   if(promoEl){
     if(promoSaving > 0){

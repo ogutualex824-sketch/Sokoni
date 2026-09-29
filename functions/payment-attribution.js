@@ -58,6 +58,10 @@ function mergeAttribution({ intent, legacyMeta }) {
       shopId:       m.shopId || null,
       branchId:     m.branchId || null,
       merchantUid:  m.merchantUid || null,
+      /* U7c2: the shop-offer discount the SERVER pricer applied (payment-purposes product_order). */
+      offerDiscount: Number.isFinite(Number(m.offerDiscount)) ? Math.max(0, Number(m.offerDiscount)) : 0,
+      offersApplied: Array.isArray(m.offersApplied) ? m.offersApplied : [],
+      offerShopId:   m.offerShopId || null,
     };
   }
 
@@ -79,6 +83,10 @@ function mergeAttribution({ intent, legacyMeta }) {
     shopId:       null,
     branchId:     null,
     merchantUid:  null,
+    /* U7c2: NEVER from legacyMeta — a discount the client wrote is not a discount. */
+    offerDiscount: 0,
+    offersApplied: [],
+    offerShopId:   null,
   };
 }
 

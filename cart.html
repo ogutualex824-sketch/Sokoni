@@ -342,9 +342,8 @@ window.addEventListener('DOMContentLoaded',function(){
   window.updateSummary=function(){
     if(origUpdate) origUpdate();
     _updateHeroCount();
-    /* Re-apply saved promo after every cart mutation */
-    var saved=null; try{saved=JSON.parse(localStorage.getItem('sokoniAppliedPromo')||'null');}catch(e){}
-    if(saved&&saved.code) _applyPromoToSummary(saved.discount,saved.code);
+    /* U7c2: after every cart mutation, the SERVER's shop-offer figure for this cart (never a client percentage) */
+    _cartShopOffers();
   };
   _updateHeroCount();
   /* Auto-restore promo */
@@ -352,70 +351,65 @@ window.addEventListener('DOMContentLoaded',function(){
     var saved=JSON.parse(localStorage.getItem('sokoniAppliedPromo')||'null');
     if(saved&&saved.code){
       var inp=document.getElementById('cartPromoInput'); if(inp) inp.value=saved.code;
-      _applyPromoToSummary(saved.discount,saved.code);
       var msg=document.getElementById('cartPromoMsg');
-      if(msg){msg.textContent='✅ Code '+saved.code+' applied';msg.style.color='#71ff00';}
+      /* a remembered code is REMEMBERED — the saving is decided and shown at checkout, by the server */
+      if(msg){msg.textContent='🔒 Code '+saved.code+' will be checked at checkout';msg.style.color='rgba(255,255,255,0.7)';}
     }
   }catch(e){}
+  _cartShopOffers();
 });
 
-/* ── Promo logic ── */
-var BUILT_IN_CODES={SAVE5:5,SAVE10:10,MEGA20:20,SAVE25:25,FLASH10:10,WELCOME50:50,FOOD20:20,TECH15:15,BEAUTY30:30,SOKONI10:10,HEALTH25:25,FREEDEL:0};
-
+/* ── Promo codes: NAMED here, DECIDED by the server (U7c2, 2026-09-29) ──
+   This used to accept codes from a hard-coded list (SAVE5, MEGA20, WELCOME50 …) or localStorage, subtract a percentage
+   from the summary and count "uses" in the browser. Checkout never applied any of it — createCheckoutSession validates
+   the code server-side — so the cart showed savings the buyer was never given. A code is now only remembered and handed
+   to checkout, where the server validates it and reports the real saving. (A promo code does not stack on a shop's own
+   offer — the server says so at payment.) */
 function applyCartPromo(){
   var inp=document.getElementById('cartPromoInput');
   var msg=document.getElementById('cartPromoMsg');
   var code=(inp?inp.value:'').trim().toUpperCase();
   if(!code){if(msg){msg.textContent='Enter a promo code.';msg.style.color='#ff6b6b';}return;}
-
-  var codes=[]; try{codes=JSON.parse(localStorage.getItem('sokoniPromoCodes')||'[]');}catch(e){}
-  var now=Date.now();
-  var found=codes.find(function(c){return c.code===code&&c.expiresAt>now&&(c.maxUses==null||c.uses<c.maxUses);});
-
-  if(!found&&BUILT_IN_CODES[code]!==undefined){
-    found={code:code,discount:BUILT_IN_CODES[code],uses:0,expiresAt:now+9999999999};
-  }
-  if(!found){if(msg){msg.textContent='❌ Invalid or expired code.';msg.style.color='#ff4444';}return;}
-
-  var idx=codes.findIndex(function(c){return c.code===code;});
-  if(idx>=0){codes[idx].uses=(codes[idx].uses||0)+1;localStorage.setItem('sokoniPromoCodes',JSON.stringify(codes));}
-  localStorage.setItem('sokoniAppliedPromo',JSON.stringify({code:found.code,discount:found.discount}));
-
-  _applyPromoToSummary(found.discount,found.code);
-  if(msg){
-    var sub=_cartSubtotal();
-    var saving=found.discount>0?Math.round(sub*found.discount/100):0;
-    msg.innerHTML='✅ <strong>'+_esc(found.code)+'</strong> — '+(found.discount>0?found.discount+'% off · saving KES '+saving.toLocaleString():'Free delivery applied!');
-    msg.style.color='#71ff00';
-  }
+  if(!/^[A-Z0-9_-]{2,32}$/.test(code)){if(msg){msg.textContent='That does not look like a promo code.';msg.style.color='#ff6b6b';}return;}
+  try{localStorage.setItem('sokoniAppliedPromo',JSON.stringify({code:code}));}catch(e){}
+  if(msg){msg.innerHTML='🔒 <strong>'+_esc(code)+'</strong> will be checked and applied at checkout.';msg.style.color='rgba(255,255,255,0.7)';}
 }
 
-/* Canonical (Track 2.3.7). The arithmetic stays HERE rather than moving into the service:
-   SokoniCart deliberately exposes no money helper, because a subtotal on a shared service
-   invites a call site to render it as the authoritative amount. The server decides that in
-   verifyIntasendPayment. This is a promo-preview figure and nothing more.
-
-   Returns null, not 0, when the cart cannot be read — a promo saving computed from a
-   fabricated zero would be a made-up number shown next to a real one. */
-function _cartSubtotal(){
-  var C=window.SokoniCart;
-  if(!C) return null;
-  return C.list().reduce(function(s,p){return s+Number(p.price||0)*(p.qty||1);},0);
+/* ── THE SHOP'S OFFERS, AS THE SERVER PRICES THIS CART (U7c2) ──
+   shopOfferQuote runs the same resolver checkout charges with, over the same server lines. The Discount row shows its
+   answer — or a dash while it is unknown, never a guessed 0. */
+var _cartOfferKey=null, _cartOfferSeq=0;
+function _cartShopOffers(){
+  var C=window.SokoniCart; if(!C) return;
+  var lines=C.list();
+  var key=lines.map(function(p){return String(p.productId||p.id||'')+'x'+(p.qty||1)+(p.offerId?'@'+p.offerId:'');}).join('|');
+  var discEl=document.getElementById('summaryDiscount'), totEl=document.getElementById('summaryTotal');
+  if(!lines.length){ if(discEl){discEl.textContent='—';discEl.style.color='rgba(255,255,255,0.4)';} _cartOfferKey=null; return; }
+  if(key===_cartOfferKey) return _paintCartOffer();
+  _cartOfferKey=key; window.__cartOffer=null; _paintCartOffer();
+  var seq=++_cartOfferSeq;
+  var items=lines.map(function(p){var o={productId:String(p.productId||p.id||''),qty:Math.max(1,Math.round(Number(p.qty)||1))}; if(p.offerId)o.offerId=String(p.offerId); return o;}).filter(function(i){return i.productId;});
+  if(!window.firebaseApp){ window.__cartOffer={state:'unknown'}; return _paintCartOffer(); }
+  import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js').then(function(fn){
+    return fn.httpsCallable(fn.getFunctions(window.firebaseApp),'shopOfferQuote')({items:items});
+  }).then(function(r){
+    if(seq!==_cartOfferSeq) return;
+    var d=(r&&r.data)||{};
+    window.__cartOffer={state:'ok',subtotal:Number(d.subtotal)||0,discount:Math.max(0,Number(d.discount)||0),
+      labels:(d.shops||[]).reduce(function(a,sh){return a.concat((sh.applied||[]).map(function(x){return x.label;}));},[])};
+    _paintCartOffer();
+  }).catch(function(){ if(seq!==_cartOfferSeq) return; window.__cartOffer={state:'unknown'}; _paintCartOffer(); });
 }
-
-function _applyPromoToSummary(pct,code){
-  var sub=_cartSubtotal();
-  /* null means the cart is unreadable. Every figure below is derived from `sub`, so
-     rendering them from a stand-in 0 would put three invented KES amounts on screen —
-     including a "saving" the shopper might act on. Leave the summary as it was. */
-  if(sub===null) return;
-  var saving=pct>0?Math.round(sub*pct/100):0;
-  var discEl=document.getElementById('summaryDiscount');
-  var subEl=document.getElementById('summarySubtotal');
-  var totEl=document.getElementById('summaryTotal');
-  if(discEl){discEl.textContent=saving>0?'-KES '+saving.toLocaleString():'Free delivery';discEl.style.color='#71ff00';}
-  if(subEl) subEl.textContent='KES '+sub.toLocaleString();
-  if(totEl) totEl.textContent='KES '+(sub-saving).toLocaleString();
+function _paintCartOffer(){
+  var o=window.__cartOffer, discEl=document.getElementById('summaryDiscount'), totEl=document.getElementById('summaryTotal');
+  if(!discEl) return;
+  if(!o){ discEl.textContent='Checking offers…'; discEl.style.color='rgba(255,255,255,0.4)'; return; }
+  if(o.state!=='ok'){ discEl.textContent='Checked at checkout'; discEl.style.color='rgba(255,255,255,0.4)'; return; }
+  if(o.discount>0){
+    discEl.textContent='-KES '+o.discount.toLocaleString()+(o.labels.length?' · '+o.labels.join(' + '):'');
+    discEl.style.color='#71ff00';
+    if(totEl) totEl.textContent='KES '+Math.max(0,o.subtotal-o.discount).toLocaleString();
+  } else { discEl.textContent='—'; discEl.style.color='rgba(255,255,255,0.4)'; }
 }
 </script>
 

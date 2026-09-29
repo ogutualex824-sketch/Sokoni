@@ -1,3 +1,125 @@
+## [2026-09-29] - Universal catalogue U7c2: the shop's offers are applied by the server, identically, wherever money is taken, and every screen shows that same figure
+
+**Functions (pricer, card session, webhook, finaliser, till, new `shopOfferQuote`) + merchant-v2 Sell + pos-checkout +
+cart + checkout + product page. NOT deployed.** Branch `slice/c4-category-matrix`.
+
+**Owner:** "Offers and discounts must show in cart … and reflect for both online and shop sale POS till sales";
+"displayed = cart = server-authorised = payment = order = receipt amount". Design: `docs/MARKETING_OFFERS.md` § U7c2.
+
+**Census:**
+- `shopOffers.resolveOfferForCharge` existed and NOTHING called it. No payment path applied a merchant offer.
+- The cart showed promo "savings" from a hard-coded list (`SAVE10`, `MEGA20`, `WELCOME50` …) and localStorage, and
+  checkout pre-applied that percentage. The server never granted any of it.
+- The product page struck through the price for the admin `offers` badge, which no checkout ever charged.
+
+**Built — ONE server figure (`functions/shop-offers.js`):**
+- **`quoteShopOffers(db, { shopId, lines, deliveryFee, buyerUid, fulfilment })`:**
+  - reads the shop's live offers and applies them with the existing resolver (`resolve`) to the server-priced lines,
+    counting usage from the redemption ledger (sales limits);
+  - agreed buyer prices (`offerId` lines) are left out;
+  - an unreadable store returns `{ unavailable: true }`, never "no offers".
+- **`recordRedemptionsForOrder`:** one row per (order, offer) via `create()`, so a replayed webhook or retry counts
+  once.
+- **`shopOfferQuote`** (a new callable, re-exported in `functions/index.js`) is the DISPLAY quote:
+  - `online` uses `validateOrderLines`, the pricer that charges; a visitor who has not signed in may ask, with
+    agreed-price references dropped;
+  - `till` requires shop access and uses till pricing.
+
+**Applied at every charge:**
+- **`product_order`:** discount + offer in the intent metadata; `offerShopId`; free delivery honoured, because the shop
+  delivers itself.
+- **Card `createCheckoutSession`:**
+  - per shop, goods only;
+  - the session and the order carry `offerDiscount` / `offersApplied`;
+  - `verifyIntasendPayment` records redemptions.
+- **Webhook:**
+  - offer figures come ONLY from the intent (`payment-attribution`); `legacyMeta` can never assert a discount;
+  - the receipt shows the discount and no longer misreads it as a negative delivery fee;
+  - the finaliser stamps the order and records redemptions.
+- **Till `posCompleteCheckout`:**
+  - the offer joins the authoritative total;
+  - the sale and receipt name the offers; redemptions are recorded;
+  - the dry run returns the quote.
+- **An unreadable offer store REFUSES the sale with `failed-precondition`** on every path. Never `unavailable`:
+  `pos-checkout` treats `unavailable` as OFFLINE and would have parked the sale.
+
+**Shown on every screen — the server's figure, never a device's arithmetic:**
+- **merchant-v2 Sell:**
+  - quotes when Charge is tapped, under the sale's own token, and reuses that dry run as the pre-sale check (still one
+    dry run and one sale, one key);
+  - shows "Amount due" after the offer and names it;
+  - if the offer changes before Complete, stops and shows the new total;
+  - tenders the discounted amount.
+- **`pos-checkout.html`:** an offer row from `shopOfferQuote`, included in the total; refuses to charge when the offers
+  are unknown or have changed.
+- **`cart.html`:** the Discount row shows the server's shop offer ("Checked at checkout" when unknown, total not
+  reduced). The hard-coded promo list and the localStorage use counter are removed: a code is remembered and checked
+  at checkout.
+- **`checkout.html`:** a "Shop offer" row and the pre-payment total from the quote. The cart hand-off names a code
+  (`_appliedPromoCode`), never a percentage.
+- **`product.js`:** the live offer from the quote (listed price struck through, offer price, offer name). The admin
+  `offers` badge is removed.
+
+**Offline POS:**
+- `pos-v2` marks queued sales `metadata.offlineQueuedAt`.
+- A replay is recorded at the total the customer actually paid when a shop offer went live meanwhile, or when the offer
+  store cannot be read. The sale carries `offerSkipped: 'offline_replay'` and no redemption.
+- Without this, `pos-v2` drops a queued sale on any non-network error, so a real, paid sale would have vanished.
+- A LIVE sale during an outage is still refused.
+
+**Quick Charge audit:**
+- `priceTillSale` keeps only `{ name, price, qty }` and there is no `orderId`, so a free-typed charge cannot move
+  catalogue stock, take an offer or be finalised as an order.
+- Catalogue sales go through Sell and POS, which now apply saleability, ownership, packages and offers.
+
+**Decisions to CONFIRM with the owner (conservative defaults):**
+1. A promo code does not stack on a shop's own offer (the buyer keeps the offer; "Promo codes cannot be combined with
+   this shop's offer.").
+2. A free-delivery offer is NOT applied on the card path: its delivery fee is a pinned rider quote (RES-1), and who
+   funds a waived rider fee is undecided.
+3. The sales limit counts orders (redemptions), not units.
+
+**Tests:**
+- **`scripts/test-catalogue-u7c2-offers-apply.js`: 11/0** (AP1–AP11; AP11 = offline replay). Real resolver, `product_order` pricer, attribution,
+  extracted finaliser and till; checks AP1–AP10 including Quick Charge and the anonymous quote.
+  - Counterproof on `6e51fa8`: **1/11**. AP8 passes on both trees: Quick Charge was already safe, and it is now pinned.
+  - Sabotage: **14/14 caught**, including three attacks on the offline-replay rule.
+- **`scripts/test-sell-offers-browser.js`: 5/0.** The REAL Sell screen in Chromium, wired to the REAL
+  `posCompleteCheckout` through `exposeFunction`.
+  - Covers: a live offer; an offer published between Charge and Complete (refused unwritten, then shown, then charged);
+    no offer; store down.
+  - Counterproof: **2/7** (the controls).
+  - Sabotage: **4/5 caught.** "Preflight ignores an unreadable store" is backstopped by the server refusal, which
+    shows the same message.
+- **`scripts/test-cart-product-offers-browser.js`: 5/0.** The SHIPPED cart script and product-page block, extracted,
+  with the stub firebase-functions module routed to the REAL server quote. Counterproof: **0/1** (the code is absent).
+- Existing suites unchanged: `merchant-sell-ui` **108/0**. It first failed 8 when the quote ran on every cart change;
+  moved to Charge, the "no authority while building a cart" and "one dry run, one key" contracts both hold.
+  `closeshift-reconciliation` 79/0, `merchant-ecosystem` 119/0, `pos-till-adapters` 13/0, `receipt-contract` 132/0,
+  `start-selling-route` 22/0.
+
+**Database:**
+- orders / sessions / sales / receipts gain `offerDiscount`, `offersApplied`;
+- `shopOfferRedemptions` rows (`{orderId}__{offerId}`);
+- `shopOffers.redemptionCount` is incremented.
+- No migration.
+
+**API:** new callable `shopOfferQuote`; intent metadata `offerDiscount`, `offersApplied`, `offerShopId`. **Breaking:**
+a till that does not show the server's offer figure is refused ("Total mismatch") while an offer is live. Sell and
+pos-checkout show it; legacy `pos-v2` and `merchant.html` do not yet.
+
+- **Regression** (147 suites on the U7c2 tree vs the dev tip):
+  - `merchant-shop-access` and `merchant-tax-ui` improved.
+  - **Explained and resolved:**
+    - `product-payment-authority`: its stub had no `onCall` and its fake db no `shopOffers` query. Both are completed
+      in the fixture, with the reason recorded; 25/25.
+    - `product-offers` PO9: checkout gained a third offerId reference (the display quote) and now requires "at least
+      two"; 10/0.
+    - `creator-callback`: the store was no longer identical to BASE because every order and receipt got empty offer
+      fields. Fixed at the SOURCE: the fields are written only when an offer applied. Back to the parent's result.
+  - Re-run after the offline-replay edits: every affected suite equals the parent, including `pos-customer-scope`
+    18 pre-existing failures (the 2f4fc20 scope regression, recorded separately).
+
 ## [2026-09-29] - Universal catalogue U7c1: Offers live inside Marketing, on the one offer store, with a real wizard per type
 
 **merchant-v2 Marketing + Offers studio + route registry + `functions/shop-offers.js`, NOT deployed.** Offers are NOT

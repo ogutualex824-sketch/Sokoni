@@ -789,6 +789,9 @@ function _isNetworkErr(e){
   return /unavailable|deadline|internal|network|failed to fetch|timeout|fetch/.test(s);
 }
 function _queueOffline(payload){
+  /* U7c2: marked as an OFFLINE sale — the cash is in hand at the total shown. On replay the server records it at that
+     total even if a shop offer went live meanwhile (offerSkipped), instead of refusing it and losing a paid sale. */
+  payload = Object.assign({}, payload, { metadata: Object.assign({}, payload.metadata || {}, { offlineQueuedAt: Date.now() }) });
   try{ const q=JSON.parse(localStorage.getItem('posOfflineQueue')||'[]'); q.push({payload,ts:Date.now()}); localStorage.setItem('posOfflineQueue',JSON.stringify(q)); }catch(_){}
   _updateQueueBadge();
 }

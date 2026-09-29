@@ -52,7 +52,12 @@ const DATA = {
 function fakeFirestore() {
   const coll = (name) => ({
     doc: (id) => ({ get: async () => ({ exists: !!(DATA[name] || {})[id], data: () => (DATA[name] || {})[id] }) }),
-    where: (_f, _op, ids) => ({
+    /* U7c2 (2026-09-29): the charge path now reads the shop's LIVE OFFERS (shopOffers where shopId == … where status
+       == 'live'). This fixture's shop has none — an empty answer, which is a real "no offers", not a failed read (a
+       failed read correctly REFUSES the charge rather than overcharge). */
+    where: name === 'shopOffers'
+      ? () => ({ where: () => ({ limit: () => ({ get: async () => ({ docs: [], empty: true, size: 0 }) }) }) })
+      : (_f, _op, ids) => ({
       get: async () => ({
         forEach: (cb) => ids.filter((i) => (DATA[name] || {})[i])
           .forEach((i) => cb({ id: i, data: () => DATA[name][i] })),
@@ -72,7 +77,8 @@ class HttpsError extends Error {
 Module._load = function (req, parent, isMain) {
   if (req === 'firebase-admin/firestore')
     return { getFirestore: () => fakeFirestore(), FieldPath: { documentId: () => '__name__' } };
-  if (req === 'firebase-functions/v2/https') return { HttpsError };
+  /* U7c2: the charge path now loads shop-offers.js, which declares its callables at load — the stub provides onCall */
+  if (req === 'firebase-functions/v2/https') return { HttpsError, onCall: (_o, h) => (h || _o) };
   if (req === 'firebase-functions/logger') return { info() {}, warn() {}, error() {} };
   if (req === './availability-enforce' || req.endsWith('availability-enforce'))
     return { itemAvailability: (p) => ({ available: p.status !== 'archived' && p.hidden !== true }) };

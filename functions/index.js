@@ -2585,6 +2585,7 @@ exports.createCheckoutSession = onCall(
         qty,
         lineTotal,
         sellerUid:  prod.sellerUid  || null,
+        shopId:     prod.shopId || prod.sellerUid || null,   /* U7c2: the key the shop's offers are held under */
         sellerName: prod.sellerName || null,
         image:      prod.image      || null,
       });
@@ -2663,6 +2664,22 @@ exports.createCheckoutSession = onCall(
        never assert a discount, only name a code. An invalid or expired code is
        ignored rather than fatal, so a bad code can never block a real purchase;
        the buyer is told via promoError and simply pays full price. */
+    /* ── U7c2 (2026-09-29): THE MERCHANT'S LIVE OFFERS, per shop, applied by the server to these server lines ──────
+       functions/shop-offers.js quoteShopOffers — the same resolver product_order and the till use. Goods only: a
+       free-delivery offer is NOT applied here, because this path's delivery fee is a pinned rider quote (RES-1) and
+       the rider is paid what the buyer was charged; who funds a waived rider fee is an open owner decision.
+       An unreadable offer store refuses the session rather than charging more than the cart showed. */
+    const _SO = require("./shop-offers");
+    let offerDiscount = 0;
+    const offersApplied = [];
+    for (const _sid of [...new Set(sessionItems.map(_SO.lineShopOf).filter(Boolean))]) {
+      const _q = await _SO.quoteShopOffers(db, { shopId: _sid, lines: sessionItems.filter((l) => _SO.lineShopOf(l) === _sid),
+        deliveryFee: 0, buyerUid: request.auth.uid, fulfilment: String(fulfillmentType || "").toLowerCase() });
+      if (_q.unavailable) throw new HttpsError("failed-precondition", "The shop's offers could not be checked just now. Please try again.");
+      offerDiscount += Math.max(0, Math.round(Number(_q.discount) || 0));
+      (_q.applied || []).filter((a) => a.kind !== "delivery").forEach((a) => offersApplied.push({ id: a.id, label: a.label, type: a.type, kind: a.kind, amount: a.amount, shopId: _sid }));
+    }
+
     let promoDiscount = 0;
     let promoApplied  = null;
     let promoError    = null;
@@ -2672,6 +2689,10 @@ exports.createCheckoutSession = onCall(
     const _promoElig = require("./product-offers").promoEligibility(sessionItems);
     if (_promoCode && _promoElig.blocked) {
       promoError = _promoElig.message;
+    } else if (_promoCode && offerDiscount > 0) {
+      /* U7c2 (conservative, owner to confirm): a promo code does not stack on a shop's own offer — the same rule as an
+         agreed price. The buyer keeps the shop's offer, which the server has already applied. */
+      promoError = "Promo codes cannot be combined with this shop's offer.";
     } else if (_promoCode) {
       try {
         const { validatePromoCode } = require('./finos-utils');
@@ -2740,7 +2761,7 @@ exports.createCheckoutSession = onCall(
     /* Discounts may never take the charge below KES 1 — the gateway cannot bill
        zero, and a free order must not silently become a KES 0 STK push. Trim the
        loyalty portion first (points are refundable; a promo code is not). */
-    const _grossTotal = Math.round(serverSubtotal + safeDeliveryFee);
+    const _grossTotal = Math.round(serverSubtotal - offerDiscount + safeDeliveryFee);   /* U7c2: the shop's offer is the price */
     let   _discount   = promoDiscount + loyaltyDiscount;
     if (_discount > _grossTotal - 1) {
       const _allowed = Math.max(0, _grossTotal - 1);
@@ -2780,6 +2801,8 @@ exports.createCheckoutSession = onCall(
       promoCode:   promoApplied ? promoApplied.code : null,
       promoId:     promoApplied ? promoApplied.promoId : null,
       promoDiscount,
+      offerDiscount,           /* U7c2: server-applied shop offers — recorded on payment, redeemed per order */
+      offersApplied,
       /* Settled by verifyPayment when this session is consumed — never here, or an
          abandoned checkout would burn the buyer's points. */
       loyaltyPoints,
@@ -2802,6 +2825,8 @@ exports.createCheckoutSession = onCall(
          code that was rejected, instead of asserting a discount of its own. */
       promoApplied:    promoApplied || undefined,
       promoDiscount:   promoDiscount || undefined,
+      offerDiscount:   offerDiscount || undefined,
+      offersApplied:   offersApplied.length ? offersApplied : undefined,
       promoError:      promoError || undefined,
       loyaltyDiscount: loyaltyDiscount || undefined,
       loyaltyPoints:   loyaltyPoints || undefined,
@@ -3046,6 +3071,11 @@ exports.verifyIntasendPayment = onRequest(
         deliveryQuote:   (sessionDoc && sessionDoc.deliveryQuote)   || null,
         orderTotal:      confirmedAmount,
         total:           confirmedAmount,
+        /* U7c2: what the shop's offers took off — from the SERVER session only, never the client; written only when one applied */
+        ...((sessionDoc && Number(sessionDoc.offerDiscount) > 0) ? {
+          offerDiscount: Math.max(0, Math.round(Number(sessionDoc.offerDiscount) || 0)),
+          offersApplied: Array.isArray(sessionDoc.offersApplied) ? sessionDoc.offersApplied : [],
+        } : {}),
         items:           resolvedItems,
         sellerUid,
         sellerName:      resolvedItems?.[0]?.sellerName || null,
@@ -3136,6 +3166,18 @@ exports.verifyIntasendPayment = onRequest(
           }
         }
       });
+
+      /* U7c2: one redemption row per (order, offer), per shop — create() makes a retried verification a no-op. */
+      if (!isReplay && sessionDoc && Array.isArray(sessionDoc.offersApplied) && sessionDoc.offersApplied.length) {
+        try {
+          const _SOr = require("./shop-offers");
+          const _byShop = {};
+          sessionDoc.offersApplied.forEach((a) => { const k = String(a.shopId || sellerUid || ""); (_byShop[k] = _byShop[k] || []).push(a); });
+          for (const k of Object.keys(_byShop)) {
+            await _SOr.recordRedemptionsForOrder(db, { orderId, shopId: k, buyerUid: sessionDoc.uid || null, applied: _byShop[k], source: "card" });
+          }
+        } catch (rErr) { console.error("[verifyIntasendPayment] offer redemption record failed:", rErr.message); }
+      }
 
       /* Return cached result for replayed requests — no duplicate order created */
       if (isReplay) {
@@ -3731,6 +3773,8 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
     paymentMethod, pathLabel,
     settlementStatus = "queued",
     writeSellerPayment = true,
+    /* U7c2: the shop-offer discount the SERVER pricer applied, and the offers behind it (never client-supplied). */
+    offerDiscount = 0, offersApplied = null, offerShopId = null,
   } = opts || {};
   const ts = admin.firestore.FieldValue.serverTimestamp();
 
@@ -3858,6 +3902,12 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
         paidAmount:       amount     || null,
         paidPhone:        phone      || null,
         paidAt:           ts,
+        /* U7c2: what the merchant's offers took off this order — recorded with the payment it priced; written ONLY
+           when an offer applied, so an order without one is byte-identical to before. */
+        ...((Number(offerDiscount) > 0 || (Array.isArray(offersApplied) && offersApplied.length)) ? {
+          offerDiscount:  Math.max(0, Math.round(Number(offerDiscount) || 0)),
+          offersApplied:  (offersApplied || []).map((a) => ({ id: a.id, label: a.label || null, amount: Number(a.amount) || 0, kind: a.kind || "discount" })),
+        } : {}),
         inventoryApplied: true,
         settlementStatus: settlementStatus,
         updatedAt:        ts,
@@ -3991,6 +4041,13 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
         subtotal:  _priced.reduce((s, i) => s + i.lineTotal, 0),
       };
     });
+    /* U7c2: one redemption row per (order, offer), only once the order is written. create() makes a replayed webhook a
+       no-op, so an offer's sales limit counts each order exactly once. */
+    if (result.finalised && Array.isArray(offersApplied) && offersApplied.length) {
+      try {
+        await require("./shop-offers").recordRedemptionsForOrder(db, { orderId, shopId: offerShopId || sellerUid, buyerUid: callerUid || null, applied: offersApplied, source: pathLabel || null });
+      } catch (rErr) { console.error("[_finalizeMarketplacePayment] offer redemption record failed:", rErr.message); }
+    }
   } catch (e) {
     console.error(`[_finalizeMarketplacePayment] order/inventory txn failed for ${orderId}: ${e.message}`);
     db.collection("auditLogs").add({
@@ -8256,6 +8313,10 @@ exports.webhookIntasend = onRequest(
           sellerUid: attribution.sellerUid || (payData.meta || {}).sellerUid,
           orderId:   attribution.orderId   || (payData.meta || {}).orderId,
           items:     (attribution.items && attribution.items.length) ? attribution.items : (payData.meta || {}).items,
+          /* U7c2: the offer figures come ONLY from the server intent — overriding anything the spread meta carried. */
+          offerDiscount: attribution.offerDiscount || 0,
+          offersApplied: attribution.offersApplied || [],
+          offerShopId:   attribution.offerShopId || null,
         };
         const _cat = String(_pm.category || "").toLowerCase();
         const _isProductPay = !!_pm.orderId
@@ -8281,6 +8342,9 @@ exports.webhookIntasend = onRequest(
             pathLabel:     "intasend",
             settlementStatus:   "settled",
             writeSellerPayment: false,
+            offerDiscount: _pm.offerDiscount || 0,
+            offersApplied: _pm.offersApplied || [],
+            offerShopId:   _pm.offerShopId || null,
           });
 
           /* Server-priced line items from the finaliser (name + unit price), falling
@@ -8292,7 +8356,11 @@ exports.webhookIntasend = onRequest(
                 qty: i.qty || 1, unitPrice: 0, lineTotal: 0,
               })) : []);
           const _subtotal = (_fin && typeof _fin.subtotal === "number") ? _fin.subtotal : amount;
-          const _delivery = Math.max(0, Math.round(amount - _subtotal));
+          /* U7c2: the shop-offer discount is part of what was charged; without it the gap between the listed subtotal
+             and the amount paid would be misread as a NEGATIVE delivery fee (clamped to 0) and the receipt would show
+             no discount at all. */
+          const _offerDisc = Math.max(0, Math.round(Number(_pm.offerDiscount) || 0));
+          const _delivery = Math.max(0, Math.round(amount - (_subtotal - _offerDisc)));
           const _dateStr  = new Date().toLocaleString("en-KE", { timeZone: "Africa/Nairobi" });
 
           /* ── (1) Digital receipt — posReceipts/{apiRef}, deterministic + idempotent.
@@ -8310,7 +8378,8 @@ exports.webhookIntasend = onRequest(
               subtotal:       _subtotal,
               deliveryFee:    _delivery,
               tax:            0,
-              discount:       0,
+              discount:       _offerDisc,
+              ...((_pm.offersApplied || []).length ? { offersApplied: _pm.offersApplied.map((a) => ({ id: a.id, label: a.label, amount: a.amount, kind: a.kind || "discount" })) } : {}),
               total:          amount,
               /* Fulfillment on the receipt — pickup (collect at shop) vs delivery
                  (rider + address). Rider/ETA are assigned later; the receipt shows
@@ -12987,6 +13056,8 @@ exports.promotionArchive = _promos.promotionArchive;
 const _shopOffers = require("./shop-offers");
 exports.shopOfferUpsert = _shopOffers.shopOfferUpsert;
 exports.shopOfferList   = _shopOffers.shopOfferList;
+/* U7c2 (2026-09-29): the display quote the cart / till / Sell show — the same resolver every charge path applies */
+exports.shopOfferQuote  = _shopOffers.shopOfferQuote;
 
 /* ══════════════════════════════════════════════════════════════
    SMS PLATFORM — templates, idempotent queue, DLQ, preferences,

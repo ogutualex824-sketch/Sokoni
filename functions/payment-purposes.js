@@ -119,7 +119,8 @@ async function validateOrderLines(uid, items) {
 
     subtotal += unitPrice * qty;
     const components = PS.componentsForLine(prod);   /* null unless this is a package / bundle */
-    lines.push(Object.assign({ productId: pid, qty, unitPrice, sellerUid: prod.sellerUid || null },
+    /* shopId: the product's canonical owner — the key the merchant's offers (shopOffers.shopId) and the till use (U7c2) */
+    lines.push(Object.assign({ productId: pid, qty, unitPrice, sellerUid: prod.sellerUid || null, shopId: prod.shopId || prod.sellerUid || null },
       offerId ? { offerId, listUnitPrice: catalogueUnit } : {}, components ? { components } : {}));
   }
 
@@ -461,7 +462,20 @@ const PURPOSES = {
         }
       }
 
-      const total = Math.round(subtotal + deliveryFee);
+      /* U7c2 (2026-09-29): THE MERCHANT'S LIVE OFFERS, applied here by the server to these server-priced lines
+         (functions/shop-offers.js quoteShopOffers — the same resolver the till and the card session use). An offer
+         store that cannot be read REFUSES the checkout: charging full price while the cart showed an offer would take
+         more than the buyer agreed to. */
+      const SO = require('./shop-offers');
+      const offerShopId = SO.lineShopOf(lines[0]);
+      const off = await SO.quoteShopOffers(db(), { shopId: offerShopId, lines, deliveryFee, buyerUid: uid,
+        fulfilment: String(data.fulfillmentType || '').toLowerCase() });
+      if (off.unavailable) fail('failed-precondition', 'The shop\'s offers could not be checked just now. Please try again.');
+      const offerDiscount = Math.max(0, Math.round(Number(off.discount) || 0));
+      const deliveryAfterOffers = Math.max(0, Math.round(Number(off.deliveryFee) || 0));
+      const offersApplied = (off.applied || []).map((a) => ({ id: a.id, label: a.label, type: a.type, kind: a.kind, amount: a.amount }));
+
+      const total = Math.round(subtotal - offerDiscount + deliveryAfterOffers);
       if (!(total > 0)) fail('failed-precondition', 'Order has no payable amount.');
 
       return {
@@ -475,7 +489,11 @@ const PURPOSES = {
         preferredRef: orderId,
         metadata: {
           orderId, sellerUid,
-          subtotal, deliveryFee, deliverySource,
+          /* U7c2: deliveryFee is what the buyer PAYS for delivery (after a free-delivery offer); the offer discount
+             and the offers behind it travel with the payment so the receipt, the order and the redemption ledger
+             record the SAME figures the buyer was charged. */
+          subtotal, deliveryFee: deliveryAfterOffers, deliveryFeeBeforeOffers: deliveryFee, deliverySource,
+          offerDiscount, offersApplied, offerShopId: offerShopId || null,
           itemCount: lines.length,
           items: lines,
           pricingSource: 'server_recomputed',

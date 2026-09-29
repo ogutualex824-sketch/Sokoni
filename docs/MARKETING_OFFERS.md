@@ -67,3 +67,30 @@ Every template has its own controls, listed in `WIZARDS` in `sokoni-merchant-off
 - **No per-branch targeting yet.** `locations` exists on the record but no wizard sets it.
 - **Only one fulfilment channel can be targeted.** The field is one channel (delivery or pickup) or blank; the server compares a single string.
 - **Campaign types** (product, service, event, seasonal, referral, loyalty, reactivation and profile campaigns) belong to Marketing › Campaigns. They are distribution, not price rules, and are not offer wizards.
+
+## U7c2 — applied everywhere money is taken (2026-09-29)
+
+The live offers of a shop are applied by the SERVER, automatically, through ONE function (`functions/shop-offers.js`
+`quoteShopOffers`), to lines the server priced itself:
+
+| Path | Where | Notes |
+|---|---|---|
+| M-Pesa / IntaSend order | `payment-purposes` `product_order` | Discount and offers travel in the intent metadata. Free delivery is honoured, since the shop delivers itself. |
+| Card | `createCheckoutSession` → `verifyIntasendPayment` | Per shop, goods only. A promo code does not stack on a shop offer. |
+| Webhook | `webhookIntasend` → `_finalizeMarketplacePayment` | Offer figures come only from the intent. The receipt shows the discount. |
+| Till | `posCompleteCheckout` (+ its dry run) | Joins the authoritative total. Offline replays are recorded at the total paid (`offerSkipped`). |
+
+**Every screen shows the same server figure through `shopOfferQuote`:**
+- merchant-v2 Sell;
+- pos-checkout;
+- cart;
+- checkout;
+- the product page.
+
+No device computes a promotional price. Redemptions are one row per (order, offer) in `shopOfferRedemptions`, and sales
+limits count them.
+
+**If the offer store cannot be read**, the charge is refused with `failed-precondition` — never `unavailable`, which
+tills treat as offline. The exception is a queued offline sale, which is recorded at what the customer paid.
+
+Decisions pending the owner: promo stacking · free delivery on card · the limit counting orders, not units.

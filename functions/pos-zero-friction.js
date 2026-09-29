@@ -332,16 +332,26 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       if (Math.abs(serverPrice - (it.unitPrice || 0)) > 1) {
         differences.push({ productId: it.productId, field: 'unitPrice', expected: it.unitPrice, canonical: serverPrice });
       }
-      enriched.push({ productId: it.productId, name: p.name, qty: it.qty || 1, unitPrice: serverPrice });
+      enriched.push({ productId: it.productId, name: p.name, qty: it.qty || 1, unitPrice: serverPrice,
+        _own: String(p.shopId || p.sellerUid || '') === String(merchantId) });
       serverSubtotal += serverPrice * (it.qty || 1);
       const from = Number(p.stock || 0), to = Math.max(0, from - (it.qty || 0));
       stockDeltas.push({ productId: it.productId, from, to, delta: to - from });
     }
+    /* U7c2 (2026-09-29): the SAME offer quote the real sale will apply, so the till can SHOW it before charging.
+       Only this shop's own lines are quoted; an unreadable offer store is reported, never shown as "no offers". */
+    const _oq = await require('./shop-offers').quoteShopOffers(db, { shopId: String(merchantId),
+      lines: enriched.filter((l) => l._own), deliveryFee: 0, buyerUid: (customer && customer.id) ? String(customer.id) : null });
+    const _offerDiscount = _oq.unavailable ? null : Math.max(0, Number(_oq.discount) || 0);
+    enriched.forEach((l) => { delete l._own; });
     return {
       dryRun: true,
-      ok: differences.length === 0,
+      ok: differences.length === 0 && !_oq.unavailable,
       serverSubtotal,
-      grandTotal: serverSubtotal - (discountTotal || 0) + (taxTotal || 0),
+      offerDiscount: _offerDiscount,
+      offersApplied: _oq.unavailable ? [] : (_oq.applied || []).filter((a) => a.kind !== 'delivery').map((a) => ({ id: a.id, label: a.label, amount: a.amount })),
+      offersUnavailable: !!_oq.unavailable,
+      grandTotal: serverSubtotal - (discountTotal || 0) - (_offerDiscount || 0) + (taxTotal || 0),
       items: enriched,
       stockDeltas,
       differences,
@@ -649,7 +659,35 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       if (manualDiscount > serverSubtotal) _e('A discount cannot exceed the sale');
     }
 
-    const totalDiscount = _round2(manualDiscount + couponDiscount);
+    /* ── U7c2 (2026-09-29): THE SHOP'S LIVE OFFERS — the same server resolver online checkout uses ───────────────
+       Applied to the server-priced lines (canonical salePrice || price), so a flash sale or a meal deal prices the
+       SAME at the till as online. The till SHOWS the figure shopOfferQuote returns; the device total is compared,
+       never believed. An unreadable offer store refuses the sale BEFORE any charge — charging full price while the
+       till showed the offer would take more than the customer agreed to. */
+    const _SOp = require('./shop-offers');
+    const _offQ = await _SOp.quoteShopOffers(db, { shopId: String(merchantId), lines: enrichedItems, deliveryFee: 0,
+      buyerUid: (customer && customer.id) ? String(customer.id) : null });
+    /* OFFLINE REPLAY (pos-v2's queue marks `metadata.offlineQueuedAt`). That sale was rung up — and the CASH taken —
+       while the device could not see the shop's offers. Refusing it now would not un-take the cash: pos-v2 drops a
+       queued sale on any non-network error, so the paid sale would simply vanish. The replay is therefore recorded at
+       the total the customer actually paid — displayed = charged — without the offer, and the skip is written on the
+       sale (offerSkipped) for audit. A replay whose device total already INCLUDES the offer is charged with it. */
+    const _offlineReplay = !!(metadata && typeof metadata.offlineQueuedAt === 'number' && metadata.offlineQueuedAt <= Date.now() + 60000);
+    if (_offQ.unavailable && !_offlineReplay) _e('The shop\'s offers could not be checked just now, so the sale was not recorded. Nothing has been charged.', 'failed-precondition');  /* NOT 'unavailable': tills treat that as offline and park the sale */
+    let offerDiscount = _offQ.unavailable ? 0 : _round2(Math.max(0, Number(_offQ.discount) || 0));
+    let offersApplied = _offQ.unavailable ? [] : (_offQ.applied || []).filter((a) => a.kind !== 'delivery')
+      .map((a) => ({ id: a.id, label: a.label, type: a.type, kind: a.kind, amount: a.amount }));
+    let offerSkipped = null;
+    if (_offlineReplay) {
+      const _base = serverSubtotal - manualDiscount - couponDiscount + (taxTotal || 0);
+      if (_offQ.unavailable || (offerDiscount > 0 && Math.abs(_round2(_base - offerDiscount) - Number(grandTotal)) > 1
+          && Math.abs(_round2(_base) - Number(grandTotal)) <= 1)) {
+        if (offerDiscount > 0 || _offQ.unavailable) offerSkipped = 'offline_replay';
+        offerDiscount = 0; offersApplied = [];
+      }
+    }
+
+    const totalDiscount = _round2(manualDiscount + couponDiscount + offerDiscount);
     if (totalDiscount > serverSubtotal) _e('The discounts together exceed the sale');
 
     /* ── the authoritative total ───────────────────────────────────────────
@@ -1046,6 +1084,9 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       payments,
       couponCode:         couponCode ? _sanitize(couponCode) : null,
       couponDiscount,
+      offerDiscount,              /* U7c2: the shop's offers, server-applied */
+      offersApplied,
+      ...(offerSkipped ? { offerSkipped } : {}),
       loyaltyRedeemed:    loyaltyRedeemPoints,
       loyaltyAwarded,
       subtotal:           serverSubtotal,
@@ -1203,6 +1244,7 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       items:      enrichedItems,
       subtotal:   serverSubtotal,
       discount:   totalDiscount,
+      offersApplied: offersApplied.map((o) => ({ label: o.label, amount: o.amount })),   /* U7c2: named on the receipt */
       tax:        taxTotal,
       total:      authoritativeTotal,
       payments,
@@ -1246,6 +1288,11 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
     await db.collection('posReceipts').doc(saleId).set({ ...receipt, createdAt: FieldValue.serverTimestamp() });
 
     /* ── 9. Mark idempotency complete ── */
+    /* U7c2: one redemption row per (sale, offer) — create() makes a retried completion a no-op */
+    if (offersApplied.length) {
+      await _SOp.recordRedemptionsForOrder(db, { orderId: saleId, shopId: String(merchantId), buyerUid: (customer && customer.id) ? String(customer.id) : null,
+        applied: offersApplied, source: 'till' }).catch((e) => console.error('[posCompleteCheckout] offer redemption record failed:', e && e.message));
+    }
     await idemRef.update({ status: 'complete', saleId, receipt, completedAt: now });
 
     return { saleId, receipt, loyaltyAwarded };

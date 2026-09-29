@@ -975,7 +975,10 @@
       subtotal: totals.subtotal,
       discountTotal: Number(o.discountTotal) || 0,
       taxTotal: Number(o.taxTotal) || 0,
-      grandTotal: totals.subtotal - (Number(o.discountTotal) || 0) + (Number(o.taxTotal) || 0),
+      /* U7c2 (2026-09-29): the shop's offer discount is the SERVER's figure (the pre-sale check returns it) — never
+         computed here — and it is NOT the manual discount (discountTotal is a capability-gated cashier decision).
+         The server re-applies the offers and refuses a total that disagrees, so this can only ever match or fail. */
+      grandTotal: totals.subtotal - (Number(o.discountTotal) || 0) - (Number(o.offerDiscount) || 0) + (Number(o.taxTotal) || 0),
       channel: 'merchant_pos',
       /* posCompleteCheckout destructures a fixed field list and spreads `metadata`
          into the sale document; `sellerUid` and `channel` are NOT in that list, so
@@ -1032,6 +1035,10 @@
         differences: d.differences || [],
         stockDeltas: d.stockDeltas || [],
         serverSubtotal: (typeof d.serverSubtotal === 'number') ? d.serverSubtotal : null,
+        /* U7c2: the shop's live offers on this cart — null means the offer store could not be read (not "none") */
+        offerDiscount: (typeof d.offerDiscount === 'number') ? d.offerDiscount : null,
+        offersApplied: Array.isArray(d.offersApplied) ? d.offersApplied : [],
+        offersUnavailable: d.offersUnavailable === true,
       };
     } catch (e) {
       return { ok: false, ran: false, error: (e && e.message) || 'The pre-sale check could not run.' };
