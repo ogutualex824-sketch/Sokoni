@@ -282,6 +282,9 @@
       t.offers = off ? off.applied : [];
       t.offersChecked = !!off;
       t.due = Math.max(0, t.subtotal - t.offerDiscount);
+      /* Points P2b: points held by the BUYER'S confirmation pay part of it; the rest is paid in money */
+      t.pointsKES = (S.pts && S.pts.state === 'held') ? Number(S.pts.kes) || 0 : 0;
+      t.payable = Math.max(0, t.due - t.pointsKES);
       return t;
     }
     /* Asked ONCE, when the cashier taps Charge — building or correcting a cart calls no sale authority — and under
@@ -451,8 +454,10 @@
       var head = '<div class="msl-lbl">Customer points (optional)</div>';
       if (st === 'found') {
         return head + '<div class="msl-note msl-buyer"><b>' + esc(b.maskedName || 'SOKONI member') + '</b> · ' + esc(b.maskedPhone || '') +
-          ' · ' + Number(b.points || 0).toLocaleString() + ' points' + (b.created ? ' · account created — a text is on its way' : '') +
-          ' <button class="msl-btn ghost" data-act="buyer-clear"' + (busy ? ' disabled' : '') + ' style="min-height:32px;padding:0 10px;margin-left:6px">Change</button></div>';
+          ' · Available: ' + Number(b.points || 0).toLocaleString() + ' points' +
+          (b.valueKES != null ? ' · Value: KES ' + Number(b.valueKES).toFixed(2) : '') + (b.created ? ' · account created — a text is on its way' : '') +
+          ' <button class="msl-btn ghost" data-act="buyer-clear"' + (busy || (S.pts && S.pts.state === 'held') ? ' disabled' : '') + ' style="min-height:32px;padding:0 10px;margin-left:6px">Change</button></div>' +
+          pointsHTML(busy);
       }
       var out = head + '<div style="display:flex;gap:8px;margin-bottom:8px">' +
         '<input class="msl-inp" id="msl-bphone" inputmode="tel" autocomplete="off" placeholder="07XX XXX XXX" value="' + esc(b.phone || '') + '" aria-label="Customer phone for points" style="flex:1;margin:0">' +
@@ -469,6 +474,55 @@
       if (st === 'error') out += '<div class="msl-note" style="color:#ffb020">' + esc(b.error || 'That did not work.') + '</div>';
       return out;
     }
+    /* ── PAY WITH POINTS (P2b) ─────────────────────────────────────────────────────────────────────────────────────
+       SOKONI texts the BUYER a one-time code; the buyer reads it to the cashier; only then does the server HOLD the
+       points for this sale. Every figure here is the server's (points, KES value, the 25% limit). The cashier never sees
+       a credential — only the code the buyer chooses to read out. */
+    function pointsHTML(busy) {
+      if (typeof ctx.callPointsStart !== 'function' || !(S.buyer && Number(S.buyer.points) >= 10)) return '';
+      var p = S.pts || { state: 'idle' };
+      if (p.state === 'held') {
+        return '<div class="msl-note msl-buyer msl-pts">⭐ ' + Number(p.points).toLocaleString() + ' points = ' + esc(p.valueText || md.formatKES(p.kes)) +
+          ' paid with points <button class="msl-btn ghost" data-act="pts-cancel"' + (busy ? ' disabled' : '') + ' style="min-height:32px;padding:0 10px;margin-left:6px">Remove</button></div>';
+      }
+      if (p.state === 'code' || p.state === 'confirming') {
+        return '<div class="msl-note msl-pts">A code was texted to the customer (' + esc(p.maskedPhone || '') + '): ' + Number(p.points).toLocaleString() +
+          ' points = ' + esc(p.valueText || '') + '. Ask them to read it to you.</div>' +
+          '<div style="display:flex;gap:8px;margin-bottom:8px">' +
+          '<input class="msl-inp" id="msl-pcode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" value="' + esc(p.code || '') + '" aria-label="Customer\u2019s points code" style="flex:1;margin:0">' +
+          '<button class="msl-btn ghost" data-act="pts-confirm"' + (busy || p.state === 'confirming' ? ' disabled' : '') + ' style="min-height:44px">' + (p.state === 'confirming' ? 'Checking…' : 'Confirm') + '</button>' +
+          '<button class="msl-btn ghost" data-act="pts-cancel" style="min-height:44px">Cancel</button></div>' +
+          (p.error ? '<div class="msl-note" style="color:#ffb020">' + esc(p.error) + '</div>' : '');
+      }
+      return '<button class="msl-btn ghost wide msl-pts" data-act="pts-start"' + (busy || p.state === 'sending' ? ' disabled' : '') + '>' +
+        (p.state === 'sending' ? 'Sending the code…' : '⭐ Pay with points') + '</button>' +
+        (p.error ? '<div class="msl-note" style="color:#ffb020">' + esc(p.error) + '</div>' : '');
+    }
+    function saleKey() { mintToken(); return md.idempotencyKey({ scope: ctx.scope, cart: S.cart, saleToken: S.saleToken }); }
+    function ptsStart() {
+      var t = totals();
+      S.pts = { state: 'sending' }; repaintPay();
+      Promise.resolve(ctx.callPointsStart({ shopId: ctx.scope && ctx.scope.shopId, phone: S.buyer && S.buyer.phone, saleKey: saleKey(), saleTotalKES: t.due }))
+        .then(function (r) { var d = (r && r.data) || r || {};
+          S.pts = { state: 'code', redemptionId: d.redemptionId, points: d.points, kes: d.kes, valueText: d.valueText, maskedPhone: d.maskedPhone }; repaintPay('msl-pcode'); })
+        .catch(function (e) { S.pts = { state: 'idle', error: (e && e.message) || 'The code could not be sent.' }; repaintPay(); });
+    }
+    function ptsConfirm() {
+      var p = S.pts; if (!p || !p.redemptionId) return;
+      p.state = 'confirming'; p.error = null; repaintPay();
+      Promise.resolve(ctx.callPointsConfirm({ shopId: ctx.scope && ctx.scope.shopId, redemptionId: p.redemptionId, code: p.code || '' }))
+        .then(function (r) { var d = (r && r.data) || r || {};
+          S.pts = { state: 'held', redemptionId: d.redemptionId, points: d.points, kes: d.kes, valueText: d.valueText }; S.cashGiven = null; repaintPay(); })
+        .catch(function (e) { p.state = 'code'; p.error = (e && e.message) || 'That code did not work.'; repaintPay('msl-pcode'); });
+    }
+    function ptsCancel() {
+      var p = S.pts; S.pts = null;
+      if (p && p.redemptionId && typeof ctx.callPointsCancel === 'function') {
+        Promise.resolve(ctx.callPointsCancel({ shopId: ctx.scope && ctx.scope.shopId, redemptionId: p.redemptionId })).catch(function () {});
+      }
+      repaintPay();
+    }
+
     function repaintPay(focusId) {
       var f = host.querySelector('.msl-sheet'); if (!f) return;
       f.innerHTML = paySheet();
@@ -480,7 +534,7 @@
       b.state = 'looking'; repaintPay();
       Promise.resolve(ctx.callBuyerLookup({ shopId: ctx.scope && ctx.scope.shopId, phone: b.phone })).then(function (r) {
         var d = (r && r.data) || r || {};
-        if (d.found) Object.assign(b, { state: 'found', maskedName: d.maskedName, maskedPhone: d.maskedPhone, points: d.points, created: false });
+        if (d.found) Object.assign(b, { state: 'found', maskedName: d.maskedName, maskedPhone: d.maskedPhone, points: d.points, valueKES: d.valueKES, created: false });
         else b.state = 'notfound';
         repaintPay();
       }).catch(function (e) { b.state = 'error'; b.error = (e && e.message) || 'The number could not be checked.'; repaintPay(); });
@@ -512,6 +566,8 @@
               '<div class="rc">Receipt ' + esc(r.receiptNo || '—') +
                 (S.cached ? ' · already completed earlier' : '') + '</div>' +
             '</div>' +
+            (r.pointsRedeemed ? '<div class="msl-note msl-buyer">⭐ ' + Number(r.pointsRedeemed.points).toLocaleString() + ' points paid ' +
+              esc(md.formatKES(r.pointsRedeemed.kes)) + ' · money paid ' + esc(md.formatKES(r.paidInMoney)) + '</div>' : '') +
             (S.points && S.points.points > 0 ? '<div class="msl-note msl-buyer">⭐ ' + Number(S.points.points).toLocaleString() + ' SOKONI points credited' +
               (S.points.balance != null ? ' · balance ' + Number(S.points.balance).toLocaleString() : '') + '</div>'
               : (S.points && S.points.reason ? '<div class="msl-note">No points this time (' + esc(S.points.reason) + ').</div>' : '')) +
@@ -535,13 +591,14 @@
       var busy = (S.sale === 'checking' || S.sale === 'charging');
       var cash = (S.method === 'cash');
       var given = (S.cashGiven == null) ? null : Number(S.cashGiven);
-      var change = (cash && given != null && given >= t.due) ? given - t.due : null;
+      var change = (cash && given != null && given >= t.payable) ? given - t.payable : null;
 
       return '<div class="msl-sh-h"><div class="t">Take payment</div>' +
           '<button class="msl-sh-x" data-act="close-sheet" aria-label="Close"' + (busy ? ' disabled' : '') + '>×</button></div>' +
         '<div class="msl-sh-b">' +
           '<div class="msl-tot grand" style="border-top:none;margin:0 0 14px;padding-top:0">' +
-            '<span>Amount due</span><b>' + esc(md.formatKES(t.due)) + '</b></div>' +
+            '<span>Amount due</span><b>' + esc(md.formatKES(t.payable)) + '</b></div>' +
+          (t.pointsKES > 0 ? '<div class="msl-note">Sale ' + esc(md.formatKES(t.due)) + ' − ' + esc(md.formatKES(t.pointsKES)) + ' paid with SOKONI points.</div>' : '') +
           (S.offerPending ? '<div class="msl-note"><span class="msl-spin"></span> Checking the shop’s offers…</div>' : '') +
           (t.offerDiscount > 0 ? '<div class="msl-note">Includes ' + t.offers.map(function (o) { return esc(o.label || 'an offer') + ' −' + esc(md.formatKES(o.amount)); }).join(', ') + '.</div>' : '') +
 
@@ -560,8 +617,8 @@
           (cash
             ? '<div class="msl-lbl">Cash received</div>' +
               '<div class="msl-cash">' +
-                '<button data-act="tender" data-v="exact"' + (given === t.due ? ' class="on"' : '') + '>Exact</button>' +
-                CASH_STEPS.filter(function (v) { return v >= t.due; }).slice(0, 4).map(function (v) {
+                '<button data-act="tender" data-v="exact"' + (given === t.payable ? ' class="on"' : '') + '>Exact</button>' +
+                CASH_STEPS.filter(function (v) { return v >= t.payable; }).slice(0, 4).map(function (v) {
                   return '<button data-act="tender" data-v="' + v + '"' + (given === v ? ' class="on"' : '') + '>' + v + '</button>';
                 }).join('') +
               '</div>' +
@@ -569,7 +626,7 @@
                 'placeholder="Or type the amount" value="' + (given == null ? '' : given) + '" aria-label="Cash received">' +
               (change != null
                 ? '<div class="msl-tot grand"><span>Change due</span><b>' + esc(md.formatKES(change)) + '</b></div>'
-                : (given != null && given < t.due
+                : (given != null && given < t.payable
                     ? '<div class="msl-note" style="color:#ffb020">That is less than the amount due.</div>' : ''))
             : '<div class="msl-note">Confirm the ' + esc(S.method === 'mpesa' ? 'M-Pesa' : 'card') +
               ' payment has actually been received before completing. This screen <b>records</b> the ' +
@@ -590,7 +647,7 @@
         '</div>' +
         '<div class="msl-sh-f">' +
           '<button class="msl-btn solid wide" data-act="complete"' +
-            (busy || S.offerPending || (cash && given != null && given < t.due) ? ' disabled' : '') + '>' +
+            (busy || S.offerPending || (S.pts && (S.pts.state === 'code' || S.pts.state === 'confirming' || S.pts.state === 'sending')) || (cash && given != null && given < t.payable) ? ' disabled' : '') + '>' +
             (busy ? (S.sale === 'checking' ? 'Checking…' : 'Completing…')
                   : (S.sale === 'failed' ? 'Try again' : 'Complete sale')) +
           '</button>' +
@@ -635,7 +692,7 @@
     }
 
     function newSale() {
-      S.cart = []; S.saleToken = null; S.sheet = null; S.sale = 'idle'; S.buyer = null; S.points = null;
+      S.cart = []; S.saleToken = null; S.sheet = null; S.sale = 'idle'; S.buyer = null; S.points = null; S.pts = null;
       S.receipt = null; S.cached = false; S.saleError = null; S.preflight = null; S.cashGiven = null;
       /* Re-read the catalogue: the sale just changed canonical stock, and the next
          customer must not be sold against the pre-sale numbers. */
@@ -644,6 +701,11 @@
 
     function payments() {
       var t = totals();
+      if (t.pointsKES > 0) {
+        var ps = [{ method: 'points', amount: t.pointsKES, redemptionId: S.pts.redemptionId }];
+        if (t.payable > 0) ps.push({ method: S.method, amount: t.payable });
+        return ps;
+      }
       return [{ method: S.method, amount: t.due }];
     }
 
@@ -819,6 +881,7 @@
                                          for what is still the same sale. */
                                       S.sheet = S.cart.length ? 'cart' : null;
                                       S.sale = 'idle'; S.saleError = null; S.preflight = null;
+                                      if (S.pts && S.pts.redemptionId) ptsCancel();   /* P2b: bound to this cart — give the points back */
                                     } else S.sheet = null;
                                     paint(); return; }
       if (act === 'charge')       { S.startedAt = Date.now(); openPay(); return; }
@@ -828,12 +891,15 @@
                                     if (!S.cart.length) S.sheet = null; paint(); } return; }
       if (act === 'method')       { S.method = el.getAttribute('data-m') || 'cash'; S.cashGiven = null; paint(); return; }
       if (act === 'tender')       { var v = el.getAttribute('data-v');
-                                    S.cashGiven = (v === 'exact') ? totals().subtotal : Number(v); paint(); return; }
+                                    S.cashGiven = (v === 'exact') ? totals().payable : Number(v); paint(); return; }
       if (act === 'complete')     { complete(); return; }
       if (act === 'new-sale')     { newSale(); return; }
       if (act === 'buyer-look')   { buyerLook(); return; }
       if (act === 'buyer-create') { buyerCreate(); return; }
       if (act === 'buyer-clear')  { S.buyer = { phone: '' }; repaintPay('msl-bphone'); return; }
+      if (act === 'pts-start')    { ptsStart(); return; }
+      if (act === 'pts-confirm')  { ptsConfirm(); return; }
+      if (act === 'pts-cancel')   { ptsCancel(); return; }
       if (act === 'print')        { printReceipt(); return; }
       if (act === 'share')        { shareReceipt(); return; }
       if (act === 'clear')        { S.term = ''; S.focusSearch = true; paint(); return; }
@@ -855,6 +921,7 @@
         if (find) find.classList.toggle('has', !!S.term);
         return;
       }
+      if (el.id === 'msl-pcode')  { if (S.pts) S.pts.code = String(el.value || '').replace(/\D/g, '').slice(0, 6); return; }
       if (el.id === 'msl-bphone') { S.buyer = Object.assign({}, S.buyer || {}, { phone: el.value, state: 'idle' }); return; }
       if (el.id === 'msl-bname')  { S.buyer = Object.assign({}, S.buyer || {}, { name: el.value }); return; }
       if (el.id === 'msl-cash') {

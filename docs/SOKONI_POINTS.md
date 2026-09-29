@@ -9,7 +9,7 @@
 |---|---|---|
 | **P1 — Earning** | Till (Sell / pos-checkout), Quick Charge, online checkout, card checkout | **Built locally, not deployed** (branch `slice/c4-points-p1`) |
 | **P2a — Spending online** | One rate (0.10), holds, M-PESA = card, checkout display from the server | **Built locally, not deployed** (branch `slice/c4-points-p2`) |
-| P2b — Spending at the till | Pay with points, confirmed by a code texted to the buyer | Next |
+| **P2b — Spending at the till** | Pay with points on merchant-v2 Sell and pos-checkout, confirmed by a code texted to the buyer; SOKONI Points Terms in every business agreement | **Built locally, not deployed** |
 
 ## Owner decisions (2026-09-29)
 
@@ -99,6 +99,50 @@ Both use the same goods, cap and rate, so a KES 1,000 cart with 1,000 points cos
 Orders, the card order doc and the M-PESA receipt carry `pointsRedeemed` / `pointsDiscount` only when points were
 spent. **Nothing is earned on the part paid with points.**
 
+### At the till (P2b) — the buyer confirms
+
+1. The cashier finds the buyer by phone. The till shows **Available: N points · Value: KES X.XX**; both figures come
+   from the server (`tillBuyerLookup` → `valueKES`).
+2. **Pay with points** → `tillPointsStart({ shopId, phone, saleKey, saleTotalKES, points? })`. The server works out
+   the points (at most 25% of the sale), writes `tillRedemptions/{id}` and texts **the buyer** a 6-digit code (SMS
+   `points_redeem_code`, security category, so it can never be switched off). The till receives the redemption id
+   and figures, **never the code**. The code is stored only as a salted hash. Ceiling: 10 codes per buyer per day.
+3. The buyer reads the code out. **Confirm** → `tillPointsConfirm` checks shop, status, expiry (5 min) and code
+   (constant-time; 5 wrong attempts lock it), then **holds** the points (`pointsHolds/till__{id}`, 20 min).
+   Concurrent confirms hold once.
+4. The sale carries `{ method: 'points', amount: KES, redemptionId }` plus the money tender for the rest.
+   `posCompleteCheckout` accepts it only as a confirmed, unexpired redemption for **this shop**, for **this sale**
+   (`saleKey` = the sale's idempotency key), for **exactly its value**, within **25%**. The check runs **before** any
+   payment is claimed or anything is charged. Inside the sale transaction the hold is spent and the redemption marked
+   `consumed`. The tender names `sokoni_points`, `loyalty` and `loyalty_points`, and a bare `points` tender with no
+   confirmation, are refused. On the parent commit a bare `points` tender "paid" a KES 1,000 sale; stock moved and no
+   money was taken.
+5. **Remove / Cancel**, leaving the pay sheet, or resetting the sale releases the hold (`tillPointsCancel`).
+   pos-checkout never parks a points sale offline: it needs its live confirmation.
+
+**Books** (owner decisions 2026-09-29):
+- points are **not money**: the drawer route stays `CASH_IN_DRAWER`, `electronicCents` excludes them, and
+  `position.pointsCents` records them;
+- commission is on the **money received** (total − points);
+- **KRA:** the VAT estimate treats points and the sale's other discounts as the shop's discount, spread pro rata
+  through the tax engine's `discountRate`. It also now passes `quantity`: it had sent `qty`, so every
+  multi-quantity line was estimated as one unit;
+- nothing is earned on the part paid with points.
+
+The receipt carries `pointsRedeemed { points, kes }` and `paidInMoney`, and the sale also carries the
+`redemptionId` and `fundingShopId`.
+
+### Every business agrees to it — SOKONI Points Terms v1.0
+
+`functions/legal-agreements.js` adds `sokoni-points-terms` v1.0 to every business set that sells to buyers: merchant,
+provider, property, hotel, restaurant, healthcare, event_organizer, creator and venue_owner. It is not in the driver,
+rider or employer sets. The key points state that the business where points are **spent** funds them, and the public
+Seller Agreement (`legal.html#sellers`, section 8) carries the same clause.
+
+**Deploy note:** acceptance enforcement is flag-gated (`legalConfig/enforcement`). Where a role's flag is ON, existing
+businesses in that role are asked to accept the new terms before their next enforced action. Check the flags before
+deploying.
+
 ### Checkout display
 
 `checkout.html` renders the balance, the "N pts = KES X off this order" line and the discount row **only** from the
@@ -167,6 +211,11 @@ Queued through `sms-service.enqueue` (a worker sends). Feature-phone buyers are 
   they are inline in `index.js`. Sabotage 12/12.
 - `scripts/test-points-p2a-checkout-browser.js` — QB1–QB5, the real checkout.html in Chromium with its one points source
   (`shopOfferQuote`) served by the real module. Sabotage 3/3.
+- `scripts/test-points-p2b.js` — PB1–PB13: the code, lockout, expiry, shops, concurrency, the sale, binding, altered
+  figures, cross-shop, 25%, insufficient balance, cancel, the books (money, commission, VAT), legacy, and the agreements.
+  Sabotage 17/17.
+- `scripts/test-points-p2b-browser.js` (Sell) PW1–PW5 and `scripts/test-points-p2b-poscheckout-browser.js` PC1–PC3, in
+  real Chromium against the real callables. UI sabotage 5/5.
 - `scripts/test-points-p1-quick-browser.js` — PQ1–PQ4, the real Quick Charge module with the real callables and the real
   Quick Charge pricer; the PAID step is the webhook's own `earnForSale` call.
 - UI sabotage 4/4: a phone that was never checked is not sent; creation needs consent (Sell and Quick Charge).
@@ -176,6 +225,9 @@ Queued through `sms-service.enqueue` (a worker sends). Feature-phone buyers are 
 Not deployed. When authorised: `posCompleteCheckout`, `webhookIntasend`, `verifyIntasendPayment`,
 `createPaymentIntent` (Quick Charge metadata), and the new `tillBuyerLookup` / `tillCreateBuyer`, plus hosting for
 merchant-v2 / pos-checkout.
+
+**P2b adds** `tillPointsStart`, `tillPointsConfirm` and `tillPointsCancel` (exported in `functions/index.js`), plus hosting
+for merchant-v2, pos-checkout and legal.html.
 
 **Secret bindings change** — `LOYALTY_HMAC_SECRET` is now bound to `posCompleteCheckout`, `verifyIntasendPayment`,
 `webhookIntasend` and `tillCreateBuyer`. The secret already exists (used by `createLoyaltyAccount`); the deploy grants

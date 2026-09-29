@@ -12116,6 +12116,12 @@ exports.reconcileLoyaltyLedger   = _loyaltyEntMod.reconcileLoyaltyLedger;
 const _loyaltyPoints = require('./loyalty-points');
 exports.tillBuyerLookup  = _loyaltyPoints.tillBuyerLookup;
 exports.tillCreateBuyer  = _loyaltyPoints.tillCreateBuyer;
+/* Points P2b (2026-09-29): pay with points at the till — the BUYER confirms with a one-time code texted to them; the
+   sale (posCompleteCheckout) spends the held points. functions/loyalty-points-spend.js */
+const _pointsSpend = require('./loyalty-points-spend');
+exports.tillPointsStart   = _pointsSpend.tillPointsStart;
+exports.tillPointsConfirm = _pointsSpend.tillPointsConfirm;
+exports.tillPointsCancel  = _pointsSpend.tillPointsCancel;
 
 /* ── Wallet & Seller Payouts v1.0 ────────────────────────────────────────── */
 const wallet = require('./wallet');

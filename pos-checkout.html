@@ -1153,6 +1153,17 @@ body.queue-mode .hotkey-bar      { display: none; }
           <button class="cust-scan-btn" onclick="Checkout.pointsLookup()" title="Find the customer's SOKONI points">⭐</button>
         </div>
         <div class="cust-points-row" id="skp-status" aria-live="polite"></div>
+        <!-- Points P2b: pay with points — the BUYER confirms with a code texted to them; every figure is the server's -->
+        <button class="cust-scan-btn" id="skp-pay" style="display:none;width:100%;margin:6px 0" onclick="Checkout.pointsPayStart()">⭐ Pay with points</button>
+        <div id="skp-code-row" style="display:none;margin:6px 0">
+          <div class="cust-points-row" id="skp-code-note" aria-live="polite"></div>
+          <div class="customer-search-row">
+            <input type="text" class="cust-input" id="skp-code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code from the customer" aria-label="Customer's points code">
+            <button class="cust-scan-btn" onclick="Checkout.pointsPayConfirm()" title="Confirm the code">✓</button>
+            <button class="cust-scan-btn" onclick="Checkout.pointsPayCancel()" title="Cancel">✕</button>
+          </div>
+        </div>
+        <div class="cust-points-row" id="skp-held" style="display:none" aria-live="polite"></div>
         <div id="skp-create" style="display:none;margin:6px 0">
           <input type="text" class="cust-input" id="skp-name" placeholder="Customer name (optional)" autocomplete="off" aria-label="Customer name">
           <label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;margin:6px 0"><input type="checkbox" id="skp-consent"> <span>The customer agreed to a SOKONI account on this number. SOKONI texts them; they sign in with their own number.</span></label>
@@ -1175,7 +1186,7 @@ body.queue-mode .hotkey-bar      { display: none; }
         <div class="loyalty-redeem-row" id="loyalty-row" style="display:none">
           <span class="points-badge" id="loyalty-pts-badge">0 pts</span>
           <span class="redeem-amount" id="redeem-val"></span>
-          <button class="redeem-toggle" id="redeem-btn" onclick="Checkout.toggleRedeem()">Redeem</button>
+          <button class="redeem-toggle" id="redeem-btn" style="display:none" onclick="Checkout.toggleRedeem()" aria-hidden="true">Redeem</button><!-- P2b: legacy shop balance — refused by the server; use ⭐ Pay with points -->
         </div>
         <div class="coupon-row">
           <input type="text" class="coupon-input" id="coupon-input" placeholder="COUPON CODE" maxlength="20">
@@ -2311,7 +2322,15 @@ const Checkout = (() => {
       }
     }
 
-    return { subtotal, discount, couponDsc, loyaltyDsc, offerDsc, tax, total };
+    /* Points P2b: `total` is what the customer still pays in MONEY (every tender below reads it); the sale's own
+       total travels as saleTotal. The figures are the server's confirmed ones. */
+    const pointsKES = (_s.pointsHold && Number(_s.pointsHold.kes)) || 0;
+    const payable = Math.max(0, total - pointsKES);
+    if (pointsKES > 0) {
+      ['total-mpesa','total-cash','total-card','total-wallet'].forEach(id => { const e = document.getElementById(id); if (e) e.textContent = _kes(payable); });
+      const m = document.getElementById('mpesa-amount'); if (m) m.textContent = _kes(payable);
+    }
+    return { subtotal, discount, couponDsc, loyaltyDsc, offerDsc, tax, total: payable, saleTotal: total, pointsKES };
   }
 
   /* ── Customer lookup ── */
@@ -2897,8 +2916,10 @@ const Checkout = (() => {
       const d = (r && r.data) || {};
       const cr = document.getElementById('skp-create');
       if (d.found) {
-        _s.pointsBuyer = { phone: phone.trim(), found: true };
-        _pointsStatus('⭐ ' + d.maskedName + ' · ' + d.maskedPhone + ' · ' + Number(d.points || 0).toLocaleString() + ' points');
+        _s.pointsBuyer = { phone: phone.trim(), found: true, points: Number(d.points || 0) };
+        _pointsStatus('⭐ ' + d.maskedName + ' · ' + d.maskedPhone + ' · Available: ' + Number(d.points || 0).toLocaleString() + ' points' +
+          (d.valueKES != null ? ' · Value: KES ' + Number(d.valueKES).toFixed(2) : ''));
+        _pointsPayUI();
         if (cr) cr.style.display = 'none';
       } else {
         _s.pointsBuyer = { phone: phone.trim(), found: false };
@@ -2922,13 +2943,61 @@ const Checkout = (() => {
     } catch (e) { _pointsStatus((e && e.message) || 'The account could not be created.'); }
   }
 
+  /* ── PAY WITH POINTS (P2b) ─────────────────────────────────────────────────────────────────────────────────────
+     SOKONI texts the BUYER a one-time code bound to this shop, THIS sale (_s.saleKey — the sale's idempotency key),
+     the points and their value; the buyer reads it out; the server then HOLDS the points. The sale pays the rest. */
+  _s.pointsHold = null; _s.pointsPending = null; _s.saleKey = null;
+  function _pointsPayUI() {
+    const b = _s.pointsBuyer, btn = document.getElementById('skp-pay'), row = document.getElementById('skp-code-row'), held = document.getElementById('skp-held');
+    if (btn) btn.style.display = (b && b.found && b.points >= 10 && !_s.pointsHold && !_s.pointsPending) ? '' : 'none';
+    if (row) row.style.display = _s.pointsPending ? '' : 'none';
+    if (held) {
+      held.style.display = _s.pointsHold ? '' : 'none';
+      if (_s.pointsHold) held.textContent = '⭐ ' + Number(_s.pointsHold.points).toLocaleString() + ' points = ' + _s.pointsHold.valueText + ' paid with points';
+    }
+  }
+  async function pointsPayStart() {
+    const b = _s.pointsBuyer; if (!b || !b.found) return;
+    const t = _updateTotals();
+    if (!_s.saleKey) _s.saleKey = (_resolveMerchantId() || _s.merchantId) + '_' + _s.cashierId + '_' + Date.now();
+    try {
+      const r = await firebase.functions().httpsCallable('tillPointsStart')({ shopId: _s.merchantId, phone: b.phone, saleKey: _s.saleKey, saleTotalKES: t.saleTotal });
+      const d = (r && r.data) || {};
+      _s.pointsPending = d;
+      const n = document.getElementById('skp-code-note');
+      if (n) n.textContent = 'Code texted to ' + d.maskedPhone + ': ' + Number(d.points).toLocaleString() + ' points = ' + d.valueText + '. Ask the customer to read it out.';
+    } catch (e) { _toast((e && e.message) || 'The points code could not be sent.', 'error'); }
+    _pointsPayUI();
+  }
+  async function pointsPayConfirm() {
+    const p = _s.pointsPending; if (!p) return;
+    const code = String((document.getElementById('skp-code') || {}).value || '').replace(/\D/g, '');
+    try {
+      const r = await firebase.functions().httpsCallable('tillPointsConfirm')({ shopId: _s.merchantId, redemptionId: p.redemptionId, code });
+      const d = (r && r.data) || {};
+      _s.pointsHold = { redemptionId: d.redemptionId, points: d.points, kes: d.kes, valueText: d.valueText };
+      _s.pointsPending = null;
+      try { document.getElementById('skp-code').value = ''; } catch (_) {}
+      _updateTotals();
+    } catch (e) { _toast((e && e.message) || 'That code did not work.', 'error'); }
+    _pointsPayUI();
+  }
+  async function pointsPayCancel() {
+    const id = (_s.pointsHold && _s.pointsHold.redemptionId) || (_s.pointsPending && _s.pointsPending.redemptionId);
+    _s.pointsHold = null; _s.pointsPending = null;
+    if (id) { try { await firebase.functions().httpsCallable('tillPointsCancel')({ shopId: _s.merchantId, redemptionId: id }); } catch (_) {} }
+    _updateTotals(); _pointsPayUI();
+  }
+
   async function _finalize(method, payments, totals) {
     _setState('CONFIRMING');
     _resolveMerchantId();
     /* U7c2: the offers for THIS cart must be known and must match what is on screen before anything is charged. */
     const _off = _offerFor() || await _quoteOffers();
     if (_items_offer_blocked(_off, totals)) return;
-    const idempotencyKey = `${_s.merchantId}_${_s.cashierId}_${Date.now()}`;
+    const idempotencyKey = _s.saleKey || `${_s.merchantId}_${_s.cashierId}_${Date.now()}`;
+    if (_s.pointsPending) { _setState('ERROR'); _toast('Confirm or cancel the points code first.', 'warning'); return; }
+    if (_s.pointsHold) payments = [{ method: 'points', amount: _s.pointsHold.kes, redemptionId: _s.pointsHold.redemptionId }].concat(payments || []);
     try {
       const fn = firebase.functions().httpsCallable('posCompleteCheckout');
       const res = await fn({
@@ -2945,13 +3014,14 @@ const Checkout = (() => {
         subtotal:      totals.subtotal,
         discountTotal: totals.discount + totals.couponDsc,
         taxTotal:      totals.tax,
-        grandTotal:    totals.total,
+        grandTotal:    totals.saleTotal != null ? totals.saleTotal : totals.total,   /* P2b: the sale, not the money */
         shiftId:       _s.shiftId || null,
         buyerPhone:    (_s.pointsBuyer && _s.pointsBuyer.found) ? _s.pointsBuyer.phone : null,   /* Points P1: WHO, never how many */
         metadata:      { checkoutStartedAt: _s.saleStartTs, note: _s.note || null },
       });
 
       const { receipt, loyaltyAwarded } = res.data;
+      _s.pointsHold = null; _s.saleKey = null;   /* P2b: spent by this sale on the server */
       if (res.data && res.data.pointsEarned && res.data.pointsEarned.points > 0) {
         _toast('⭐ ' + res.data.pointsEarned.points + ' SOKONI points credited', 'success');
       }
@@ -3014,6 +3084,12 @@ const Checkout = (() => {
       }, 600);
 
     } catch (err) {
+      if (_s.pointsHold && (!navigator.onLine || err.code === 'unavailable')) {
+        /* P2b: a points payment needs its live confirmation — it is never parked to replay later. The points stay held. */
+        _setState('ERROR');
+        _toast('SOKONI points need a connection. Try again when online, or remove the points and take another payment.', 'error');
+        return;
+      }
       if (!navigator.onLine || err.code === 'unavailable') {
         await PosSales.park({
           items: _s.items, customer: _s.customer, payments, totals,
@@ -3182,6 +3258,10 @@ const Checkout = (() => {
 
   /* ── Reset ── */
   function _resetSale() {
+    if (_s.pointsHold || _s.pointsPending) { pointsPayCancel(); }
+    _s.saleKey = null;
+    try { document.getElementById('skp-pay').style.display = 'none'; document.getElementById('skp-held').style.display = 'none';
+          document.getElementById('skp-code-row').style.display = 'none'; } catch (_) {}
     _s.pointsBuyer = null;
     try { document.getElementById('skp-phone').value = ''; document.getElementById('skp-status').textContent = '';
           document.getElementById('skp-create').style.display = 'none'; document.getElementById('skp-consent').checked = false; } catch (_) {}
@@ -4182,6 +4262,7 @@ const Checkout = (() => {
     lookupCustomer, clearCustomer, scanCustomer,
     /* SOKONI points (P1) */
     pointsLookup, pointsCreate,
+    pointsPayStart, pointsPayConfirm, pointsPayCancel,
     /* Loyalty */
     toggleRedeem,
     /* Coupons */

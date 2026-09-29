@@ -74,7 +74,8 @@ async function acceptAll(uid, role, { declaration = true, signature = true } = {
   ck('creator: content, ownership, royalty, data', ['creator-content-agreement', 'content-ownership-declaration', 'royalty-settlement-terms', 'data-processing-agreement'].every((x) => ids('creator').includes(x)));
   ck('venue_owner: listing agreement', ids('venue_owner').includes('venue-listing-agreement'));
   const ent = ['event_organizer', 'creator', 'venue_owner'].flatMap((r) => LA.ROLE_AGREEMENTS[r]).filter((a) => a.url);
-  ck('every entertainment agreement links to a REAL anchor in entertainment-terms.html', ent.length === 9 && ent.every((a) => { const m = /entertainment-terms\.html#([a-z-]+)$/.exec(a.url); return m && page.includes(`id="${m[1]}"`); }), ent.filter((a) => { const m = /#([a-z-]+)$/.exec(a.url); return !m || !page.includes(`id="${m[1]}"`); }).map((a) => a.id));
+  /* 9 → 12 (Points P2b, 2026-09-29): each entertainment role also accepts SOKONI Points Terms, linked on its own terms page */
+  ck('every entertainment agreement links to a REAL anchor in entertainment-terms.html', ent.length === 12 && ent.every((a) => { const m = /entertainment-terms\.html#([a-z-]+)$/.exec(a.url); return m && page.includes(`id="${m[1]}"`); }), ent.filter((a) => { const m = /#([a-z-]+)$/.exec(a.url); return !m || !page.includes(`id="${m[1]}"`); }).map((a) => a.id));
   ck('key points state the implemented rates (events 3 %, creator 30 / 70)', JSON.stringify(LA.ROLE_AGREEMENTS.event_organizer).includes('3%') && JSON.stringify(LA.ROLE_AGREEMENTS.creator).includes('30%') && JSON.stringify(LA.ROLE_AGREEMENTS.creator).includes('70%'));
   ck('the terms page self-updates (sw-register) and says it is v1.0 pending legal review', /sw-register\.js/.test(page) && /subject to review by SOKONI's legal team/.test(page));
 

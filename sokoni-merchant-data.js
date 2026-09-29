@@ -953,7 +953,9 @@
 
     var totals = cartTotals(cart);
     var payments = (o.payments || []).map(function (p) {
-      return { method: String(p.method || 'cash'), amount: Number(p.amount) || 0, ref: p.ref || null };
+      var out = { method: String(p.method || 'cash'), amount: Number(p.amount) || 0, ref: p.ref || null };
+      if (p.redemptionId) out.redemptionId = String(p.redemptionId);   /* Points P2b: the buyer's confirmation, never a figure */
+      return out;
     });
 
     return {

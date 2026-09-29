@@ -187,7 +187,9 @@ async function lookup(db, { uid, data }) {
   if (!b) return { found: false };
   const acc = await db.collection('loyaltyAccounts').doc(b.uid).get();
   return { found: true, maskedName: maskName(b.name || (acc.exists && acc.data().name)), maskedPhone: maskPhone(b.phone),
-    points: acc.exists ? (Number(acc.data().balance) || 0) : 0, hasAccount: acc.exists };
+    points: acc.exists ? (Number(acc.data().balance) || 0) : 0, hasAccount: acc.exists,
+    /* Points P2b: the value, from the ONE rate — the till never computes it */
+    valueKES: acc.exists ? Math.round((Number(acc.data().balance) || 0) * POINT_VALUE_KES * 100) / 100 : 0 };
 }
 
 async function createBuyer(db, { uid, data }) {
@@ -253,3 +255,5 @@ module.exports.ensureAccount = ensureAccount;
 module.exports.earnForSale = earnForSale;
 module.exports.lookup = lookup;
 module.exports.createBuyer = createBuyer;
+module.exports.assertTillStaff = assertTillStaff;
+module.exports.normalize = normalize;

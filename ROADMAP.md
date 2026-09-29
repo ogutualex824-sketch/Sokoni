@@ -426,11 +426,22 @@ an account with consent (SMS, feature phones included). See [[SOKONI_POINTS]].
 
 - **Completed (local, not deployed):** earning at the till, Quick Charge, online and card checkout; lookup / create
   callables; Sell, pos-checkout and Quick Charge UI; server + browser suites; sabotage 15/15.
-- **Next — P2 spending:** till redemption with buyer confirmation, lot funding from `pointsRemaining`, online rate
-  KES 0.5 → 0.10 per point. **Blocked on the owner's funding rule** (issuing shop vs redeeming shop).
+- **P2 spending — built locally (P2a online `e19e6c0`, P2b till):** one rate (10 pts = KES 1), 25% cap everywhere,
+  held points, M-PESA = card, buyer-confirmed till redemption, and the redeeming shop funds it. SOKONI Points Terms v1.0
+  are in every selling business agreement.
+- **Next (owner asks 2026-09-29):**
+  - points on bookings and services beyond the till and Quick Charge;
+  - Quick Charge redemption;
+  - free-delivery offers shown on product cards;
+  - per-area free vs charged delivery in the shop's delivery settings wizard;
+  - a scheduled hold sweeper.
 - **Deploy prerequisite:** the `c59e0f2` loyaltyDispatch security fix first. P1 binds `LOYALTY_HMAC_SECRET` to three
   payment functions.
-- **Debt:** shop-local `posCustomers.points` (legacy POS CRM) coexists with the SOKONI balance; legacy tills (pos-v2 online,
+- **Debt / open:**
+  - any tender method other than cash / M-PESA / card / wallet / points is still accepted unconfirmed by
+    `posCompleteCheckout` (e.g. `voucher`); points names are now closed, and the general case is a separate slice
+    because tills send `split`, `gift_card` and `mpesa_till_manual`;
+  - shop-local `posCustomers.points` (legacy POS CRM) coexists with the SOKONI balance; legacy tills (pos-v2 online,
   merchant.html) have no phone field; `pos-crm-pro redeemGiftCard` has no merchant scope (separate issue).
 
 ---

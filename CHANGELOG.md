@@ -1,3 +1,94 @@
+## [2026-09-29] - SOKONI Points P2b: pay with points at the till, confirmed by the buyer; every business agreement says who pays
+
+**Local only — NOT deployed. Branch `slice/c4-points-p2` on `e19e6c0`.** Owner:
+- "SOKONI sends a one-time confirmation code to that phone. The buyer reads the code back to the cashier … bound to
+  buyer/account, shop, redemption amount, points amount, expiry, one-time-use state".
+- "make sure every business agreement has it that the shop or provider pays for the points … from the word go".
+
+Decided 2026-09-29: 25% cap everywhere; commission on money received; KRA — points are treated as the shop's discount
+for tax.
+
+**Defect closed (proven on the parent `e19e6c0`):** `posCompleteCheckout` accepted `{ method: 'points', amount: 1000 }`
+with no confirmation. A KES 1,000 sale completed, stock went 100 → 96, and no money was taken. Every points-like tender
+name now requires the buyer's confirmed redemption.
+
+**Summary**
+- `functions/loyalty-points-spend.js`:
+  - `tillStart` / `tillConfirm` / `tillCancel` and the callables `tillPointsStart` / `tillPointsConfirm` /
+    `tillPointsCancel` (exported in `index.js`), plus `validateTillTender`.
+  - The code is texted to the buyer and never returned to the till. It is stored salted-hashed, expires in 5 minutes
+    and locks after 5 wrong attempts. There are at most 10 codes per buyer per day.
+  - Confirming holds the points (`pointsHolds/till__{id}`, 20 minutes). Concurrent confirms hold once.
+- `posCompleteCheckout`:
+  - the points tender must be the confirmed redemption for this shop and this sale (the idempotency key), for exactly
+    its value and within 25%. It is checked before any payment is claimed;
+  - the hold is spent inside the sale transaction;
+  - receipt / sale fields: `pointsRedeemed`, `paidInMoney` / `amountPaidInMoney`;
+  - money position: points are not money (`pointsCents`; cash + points stays cash-in-drawer);
+  - commission on money received;
+  - VAT estimate: all sale-level discounts and points reduce the taxable amount via the engine's `discountRate`. It
+    also fixes an existing bug: it sent `qty` to an engine that reads `quantity`, so multi-quantity lines were
+    estimated as one unit;
+  - earning on money paid only.
+- **merchant-v2 Sell:**
+  - Available / Value from the server, then Pay with points → the code → Confirm, and the amount due becomes the
+    remainder;
+  - mixed tender; Remove, or leaving the pay sheet, releases the points;
+  - "Exact" cash is now the amount due (it was the subtotal, which was wrong under an offer).
+- **pos-checkout:** the same flow. Every tender reads the remainder, `grandTotal` stays the full sale, a points sale is
+  never parked offline, and the legacy shop-balance Redeem button is retired.
+- **Agreements:** `sokoni-points-terms` v1.0 is in all nine selling business sets and `legal.html#sellers` §8: the
+  business where points are spent funds them.
+- SMS `points_redeem_code` (security category, cannot be switched off). `tillBuyerLookup` returns `valueKES`.
+
+**Files:**
+- functions: `loyalty-points-spend.js`, `loyalty-points.js`, `pos-zero-friction.js`, `index.js`, `sms-service.js`,
+  `legal-agreements.js`
+- pages / modules: `sokoni-merchant-sell.js`, `sokoni-merchant-data.js`, `merchant-v2.html`, `pos-checkout.html`,
+  `legal.html`, `entertainment-terms.html`
+- docs: `docs/SOKONI_POINTS.md`, `ROADMAP.md`
+- tests (new): `scripts/test-points-p2b.js`, `scripts/test-points-p2b-browser.js`,
+  `scripts/test-points-p2b-poscheckout-browser.js`
+
+**Database (new):**
+- `tillRedemptions/{id}`, with status `code_sent → confirming → confirmed → consumed`, or `locked` / `expired` /
+  `cancelled` / `failed`
+- `tillRedeemCodes/{uid}_{day}`
+- `pointsHolds/till__{id}`
+- on sales: `pointsRedeemed` and `amountPaidInMoney`; `position.pointsCents`
+
+No migration.
+
+**API:**
+- three new callables;
+- `posCompleteCheckout` accepts a `points` tender carrying a `redemptionId`;
+- the lookup returns `valueKES`.
+
+**Security:**
+- only the buyer receives the code;
+- redemptions are bound to shop, sale, value and expiry;
+- tenders that merely call themselves points are refused;
+- no legacy balance is substituted.
+
+**Tests:**
+- Full regression, 175 suites vs `e19e6c0`: 167 identical. `catalogue-canonical-migration` is the dirty-tree check;
+  `merchant-v2-ecosystem-runtime` and `product-offers` improved. Superseded pins, each with its reason:
+  `test-legal-compliance` (8 → 9 role agreements, 13 → 14 total) and `test-entertainment-agreements` (9 → 12 linked).
+- `test-points-p2b` 13/0, sabotage 17/17 (+2/2 on the agreement clause).
+- Real Chromium: `test-points-p2b-browser` 5/0 and `test-points-p2b-poscheckout-browser` 3/0, UI sabotage 5/5.
+- Counterproof: all three fail closed on `e19e6c0`, plus the probe above.
+
+**Deploy notes:**
+- New callables. Hosting for merchant-v2, pos-checkout and legal.html.
+- If `legalConfig/enforcement` is on for a role, that role's existing businesses must accept SOKONI Points Terms before
+  their next enforced action.
+
+**Known limitations:**
+- Quick Charge earns but does not yet redeem.
+- Bookings and services beyond the till and Quick Charge are not wired for points.
+- The general "unconfirmed tender method" hole (e.g. `voucher`) is recorded, not changed: tills send `split`,
+  `gift_card` and `mpesa_till_manual`.
+
 ## [2026-09-29] - SOKONI Points P2a: spending online — one rate, held points, the same price on M-PESA and card
 
 **Local only — NOT deployed. Branch `slice/c4-points-p2` on `1adbb8d`.** Owner: "10 points = KES 1 … the shop where the

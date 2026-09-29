@@ -167,10 +167,11 @@ const accept = (acceptances, sigType, extra) => Object.assign({
   console.log('Catalogue');
   const ag = await legal._h.legalGetAgreements(req('u1', { role: 'merchant' }));
   ok('core has 5 agreements', ag.core.length === 5);
-  ok('merchant adds 8 role agreements', ag.roleSpecific.length === 8);
+  /* superseded 2026-09-29 (Points P2b): every selling business also accepts SOKONI Points Terms v1.0 — 8 → 9, 13 → 14 */
+  ok('merchant adds 9 role agreements (incl. SOKONI Points Terms)', ag.roleSpecific.length === 9);
   ok('every agreement has a version + hash', [...ag.core, ...ag.roleSpecific].every((a) => a.version && a.hash));
   const pAg = await legal._h.legalGetAgreements(req('u1', { role: 'provider' }));
-  ok('provider adds 8 role agreements', pAg.roleSpecific.length === 8);
+  ok('provider adds 9 role agreements (incl. SOKONI Points Terms)', pAg.roleSpecific.length === 9);
   const rAg = await legal._h.legalGetAgreements(req('u1', { role: 'rider' }));
   ok('rider shares the driver set (5)', rAg.roleSpecific.length === 5);
 
@@ -184,7 +185,7 @@ const accept = (acceptances, sigType, extra) => Object.assign({
   console.log('\nCompliance');
   const before = await legal._h.legalCheckCompliance(req('u1', { role: 'merchant' }));
   ok('new user is non-compliant', before.compliant === false);
-  ok('all 13 merchant agreements are missing', before.missing.length === 13);
+  ok('all 14 merchant agreements are missing', before.missing.length === 14);
   ok('missing reason = never', before.missing.every((m) => m.reason === 'never'));
 
   /* 4. DIGITAL SIGNATURE — the mandatory contract.
@@ -258,7 +259,7 @@ const accept = (acceptances, sigType, extra) => Object.assign({
   console.log('\nAcceptance');
   const all = [...ag.core, ...ag.roleSpecific].map((a) => ({ agreementId: a.id, version: a.version }));
   const r1 = await legal._h.legalAccept(req('u1', accept(all, 'typed')));
-  ok('records all 13 agreements', r1.count === 13);
+  ok('records all 14 agreements', r1.count === 14);
   const after = await legal._h.legalCheckCompliance(req('u1', { role: 'merchant' }));
   ok('user is now compliant', after.compliant === true);
 
@@ -274,10 +275,10 @@ const accept = (acceptances, sigType, extra) => Object.assign({
 
   /* All three lawful signature forms must be accepted. */
   const dr = await legal._h.legalAccept(req('u7', accept(all, 'drawn')));
-  ok('DRAWN signature accepted', dr.count === 13 &&
+  ok('DRAWN signature accepted', dr.count === 14 &&
      store.get('legalAcceptances/u7_terms-of-service_1.0').acceptanceMethod === 'drawn-signature');
   const st = await legal._h.legalAccept(req('u8', accept(all, 'stamp')));
-  ok('COMPANY STAMP accepted', st.count === 13 &&
+  ok('COMPANY STAMP accepted', st.count === 14 &&
      store.get('legalAcceptances/u8_terms-of-service_1.0').acceptanceMethod === 'stamp-signature');
   ok('drawn/stamp store only a hash, never the image',
      !store.get('legalAcceptances/u7_terms-of-service_1.0').signatureData &&

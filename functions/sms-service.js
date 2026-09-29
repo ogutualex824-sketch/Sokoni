@@ -121,6 +121,15 @@ ${shop} created a SOKONI account on this number so you can earn points when you 
 
 Sign in at mysokoni.co.ke with this number - we text you a code. No password. Not you? Ignore this - nobody can sign in without the code sent to this phone.`,
   },
+  /* Points P2b (2026-09-29): the buyer's OWN confirmation to spend points at a till. Security category — it can never be
+     switched off, and it says exactly what is being spent, where, and that nobody else should see it. */
+  points_redeem_code: {
+    category: 'transactional', pref: 'security',
+    body: ({ code = '', points = 0, kes = 0, shop = 'a SOKONI shop' }) =>
+`SOKONI
+
+Code ${code} spends ${points} points (KES ${kes}) at ${shop}. Give it ONLY to the cashier serving you now. Expires in 5 minutes. Not you? Ignore this - nothing is spent without the code.`,
+  },
   points_earned: {
     category: 'optional', pref: 'account',
     body: ({ points = 0, shop = 'SOKONI', balance = 0 }) =>

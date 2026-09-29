@@ -137,6 +137,30 @@ const ROLE_AGREEMENTS = {
 };
 ROLE_AGREEMENTS.rider = ROLE_AGREEMENTS.driver; // riders share the driver set
 
+/* ── SOKONI POINTS TERMS (owner 2026-09-29): "every business agreement has it that the shop or provider pays for the
+   points … so they are aware from the word go". ONE agreement, the same text, in EVERY business set that sells to
+   buyers — not drivers, riders or employers. The key points state only what the code does
+   (functions/loyalty-points*.js). A later wording change is a new version to accept, never a silent edit. ── */
+const POINTS_TERMS = {
+  id: 'sokoni-points-terms', name: 'SOKONI Points Terms', version: '1.0', url: '/legal.html#sellers',
+  summary: 'How SOKONI Points are earned and spent at your business, and who pays for them.',
+  keyPoints: [
+    'Buyers earn 1 SOKONI point for every KES 10 they pay you in money; SOKONI calculates this from the completed sale.',
+    '10 points are worth KES 1. A buyer may pay up to 25% of a sale with points.',
+    'When a buyer pays with points at YOUR business, YOU fund that discount: you receive that much less money for the sale. SOKONI does not reimburse it, and the shop where the points were earned does not pay it.',
+    'Points are spent only after the buyer confirms with a one-time code sent to their phone. Your staff never receive a password or code of their own.',
+    'SOKONI\u2019s commission is charged on the money you received, and the sale\u2019s tax figures treat points as your discount.',
+    'Shop-local loyalty balances from older POS tools are separate and are not SOKONI Points.',
+  ],
+};
+['merchant', 'provider', 'property', 'hotel', 'restaurant', 'healthcare', 'event_organizer', 'creator', 'venue_owner']
+  .forEach((role) => {
+    if (!ROLE_AGREEMENTS[role] || ROLE_AGREEMENTS[role].some((a) => a.id === POINTS_TERMS.id)) return;
+    /* entertainment roles read their terms on entertainment-terms.html — the same text, their own page */
+    const ent = ['event_organizer', 'creator', 'venue_owner'].includes(role);
+    ROLE_AGREEMENTS[role].push(ent ? Object.assign({}, POINTS_TERMS, { url: '/entertainment-terms.html#sokoni-points' }) : POINTS_TERMS);
+  });
+
 /* ── Intake vocabulary → catalogue key ────────────────────────────────────────
    `resolveRole()` in application-lifecycle.js classifies every healthcare intake
    as role **'health'** (ROLE_KEY, DECLARED_TYPES and the keyword pool all emit it).

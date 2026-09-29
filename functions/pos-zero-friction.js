@@ -106,7 +106,8 @@ async function _postSaleFinancials(o) {
     /* Cash is never centrally collected whatever the route says — it is in a
        drawer. Recording the configured route against a cash sale would misstate
        who holds the money. */
-    const allCash = (o.payments || []).every((p) => String(p.method).toLowerCase() === 'cash');
+    /* Points P2b: a points tender is not money (the shop funds it), so cash + points is still cash-in-drawer */
+    const allCash = (o.payments || []).every((p) => ['cash', 'points'].includes(String(p.method).toLowerCase()));
     if (allCash) out.collectionRoute = 'CASH_IN_DRAWER';
 
     /* ══ THE MONEY POSITION ══════════════════════════════════════════════════
@@ -128,11 +129,13 @@ async function _postSaleFinancials(o) {
       .reduce((s, p) => s + (Number(p.amount) || 0), 0));
     const changeC = toCents(o.changeDue);
     const byMethod = {};
-    let electronicC = 0;
+    let electronicC = 0, pointsC = 0;
     for (const p of (o.payments || [])) {
       const m = String(p.method || '').toLowerCase();
       const c = toCents(p.amount);
       byMethod[m] = (byMethod[m] || 0) + c;
+      /* Points P2b: points are a SHOP-FUNDED discount, not money held by a provider */
+      if (m === 'points') { pointsC += c; continue; }
       if (m !== 'cash') electronicC += c;
     }
     /* The drawer figure replaces the gross cash line: byMethod.cash is what the
@@ -140,6 +143,7 @@ async function _postSaleFinancials(o) {
     out.position = {
       cashCents: Math.max(0, cashTenderedC - changeC),
       electronicCents: electronicC,
+      pointsCents: pointsC,
       changeGivenCents: changeC,
       byMethod,
     };
@@ -164,9 +168,16 @@ async function _postSaleFinancials(o) {
       };
     } else {
       const TE = require('./etims-tax-engine');
+      /* KRA (owner 2026-09-29): points are a discount given BY THE SHOP, so VAT is on the reduced price — as are the
+         sale's other discounts (offers, coupon, manual), which this estimate used to ignore. Spread pro rata over the
+         lines through the engine's own discountRate. The engine reads `quantity`; it was sent `qty`, so every
+         multi-quantity line was estimated as ONE unit. */
+      const _saleDisc = Math.max(0, (Number(o.discount) || 0) + (Number(o.pointsKES) || 0));
+      const _gross = Math.max(0, Number(o.subtotal) || 0);
+      const _dcRt = _gross > 0 ? Math.min(100, Math.round(_saleDisc / _gross * 1e6) / 1e4) : 0;
       const inv = TE.computeInvoice({
         items: (o.items || []).map((it) => ({
-          name: it.name, qty: Number(it.qty || 1), unitPrice: Number(it.unitPrice || 0),
+          name: it.name, quantity: Number(it.qty || 1), unitPrice: Number(it.unitPrice || 0), discountRate: _dcRt,
         })),
         vatStatus,
       });
@@ -191,7 +202,8 @@ async function _postSaleFinancials(o) {
          returns commissionCents. Converting through shillings here would round
          twice and drift from the marketplace's figure on the same basket. */
       const c = await FU.calculateCommission(db, {
-        orderAmountCents: toCents(o.total), sellerId: o.merchantId,
+        /* owner 2026-09-29: commission on the MONEY RECEIVED — the points part is the shop's own discount */
+        orderAmountCents: toCents(Math.max(0, (Number(o.total) || 0) - (Number(o.pointsKES) || 0))), sellerId: o.merchantId,
         hubId: 'pos', category: 'pos',
       });
       pct = (c && typeof c.effectiveRate === 'number') ? c.effectiveRate : null;
@@ -206,7 +218,7 @@ async function _postSaleFinancials(o) {
     out.commission = {
       pct: (typeof pct === 'number') ? pct : null,
       amountCents: commissionCents,
-      basisCents: toCents(o.total),
+      basisCents: toCents(Math.max(0, (Number(o.total) || 0) - (Number(o.pointsKES) || 0))),
       /* What the seller keeps, from the same engine — so the merchant wallet and
          the platform never disagree about the split of one sale. */
       sellerNetCents: sellerNetCents,
@@ -727,6 +739,25 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
       _e('Only a cash payment can produce change');
     }
 
+    /* ── SOKONI POINTS (P2b) — a points tender is valid ONLY as the buyer's confirmed redemption ──────────────
+       The buyer received a one-time code and read it to the cashier; the points are already HELD for this shop and
+       THIS sale (its idempotency key), for an exact value, within 25% of the sale. Anything else that calls itself
+       points — another name, no confirmation, another shop's or another sale's — is refused before anything is
+       claimed or charged. Legacy shop-local balances (loyaltyRedeemPoints) stay refused above. */
+    const _PTS_NAMES = ['points', 'sokoni_points', 'loyalty', 'loyalty_points'];
+    const _ptsPays = _pay.filter((p) => _PTS_NAMES.includes(String((p && p.method) || '').toLowerCase()));
+    let pointsTender = null;
+    if (_ptsPays.length) {
+      if (_ptsPays.length > 1) _e('Only one points payment per sale.');
+      if (String(_ptsPays[0].method).toLowerCase() !== 'points') {
+        _e('Points are paid only with the buyer\'s SOKONI confirmation code.', 'failed-precondition');
+      }
+      try {
+        pointsTender = await require('./loyalty-points-spend').validateTillTender(db, {
+          tender: _ptsPays[0], merchantId, idempotencyKey, saleTotal: authoritativeTotal });
+      } catch (pe) { _e((pe && pe.message) || 'The points could not be confirmed.', (pe && pe.code) || 'failed-precondition'); }
+    }
+
     /* ── non-cash money must be CONFIRMED, and spent once ──────────────────
        `posPayments/{checkoutId}` is written by darajaSTKPush and moved to
        `completed` ONLY by darajaSTKCallback — the webhook Safaricom calls after
@@ -846,6 +877,14 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
       /* U5: the package components — still the read phase, before any write */
       const _compRefs  = _posCompIds.map((id) => db.collection('products').doc(id));
       const _compSnaps = await Promise.all(_compRefs.map((r) => txn.get(r)));
+      /* Points P2b: the hold and its redemption — still the read phase */
+      const _PTS = pointsTender ? require('./loyalty-points-spend') : null;
+      const _ptsCtx = pointsTender ? await _PTS.prepareConsumeTx(txn, db, { channel: 'till', ref: pointsTender.redemptionId }) : null;
+      const _redRef = pointsTender ? db.collection(_PTS.REDEMPTIONS).doc(pointsTender.redemptionId) : null;
+      const _redSnap = _redRef ? await txn.get(_redRef) : null;
+      if (pointsTender && (!_redSnap.exists || _redSnap.data().status !== 'confirmed' || !_ptsCtx.hold || _ptsCtx.hold.status !== 'held')) {
+        throw new HttpsError('failed-precondition', 'Those points were already spent or their confirmation lapsed. Nothing was charged.');
+      }
 
       /* ── PHASE 2: VALIDATE (no writes yet, so a rejection touches nothing) ── */
       /* Wallet: idempotent skip if the deterministic txn doc already exists (prior attempt). */
@@ -977,6 +1016,12 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
         txn.update(cpRef, update);
       }
 
+      /* Points P2b: spent WITH the sale, exactly once */
+      if (pointsTender) {
+        _PTS.consumeHoldTx(txn, db, _ptsCtx, { channel: 'till', ref: pointsTender.redemptionId, saleRef: saleId, orderId: saleId });
+        txn.update(_redRef, { status: 'consumed', saleId, consumedAtMs: Date.now() });
+      }
+
       return { loyaltyAwarded };
     });
 
@@ -1012,6 +1057,7 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
       subtotal: serverSubtotal,
       discount: totalDiscount,
       total: authoritativeTotal,
+      pointsKES: pointsTender ? pointsTender.kes : 0,     /* Points P2b: shop-funded, not money */
       payments: _pay,
       /* So the drawer figure can be recorded NET of what was handed back. */
       changeDue: changeDue,
@@ -1092,6 +1138,8 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
       ...(offerSkipped ? { offerSkipped } : {}),
       loyaltyRedeemed:    loyaltyRedeemPoints,
       loyaltyAwarded,
+      ...(pointsTender ? { pointsRedeemed: { points: pointsTender.points, kes: pointsTender.kes, redemptionId: pointsTender.redemptionId,
+        fundingShopId: String(merchantId) }, amountPaidInMoney: _round2(authoritativeTotal - pointsTender.kes) } : {}),
       subtotal:           serverSubtotal,
       discountTotal:      totalDiscount,
       taxTotal,
@@ -1253,6 +1301,9 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
       payments,
       loyaltyAwarded,
       loyaltyRedeemed: loyaltyRedeemPoints,
+      /* Points P2b: the receipt says what points paid and what money paid */
+      ...(pointsTender ? { pointsRedeemed: { points: pointsTender.points, kes: pointsTender.kes },
+        paidInMoney: _round2(authoritativeTotal - pointsTender.kes) } : {}),
       customer:   customer?.name || 'Guest',
       cashier:    cashierId,
       timestamp:  new Date(now).toISOString(),
@@ -1304,7 +1355,7 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
     if (buyerPhone) {
       try {
         const _earn = await require('./loyalty-points').earnForSale(db, { buyerPhone: String(buyerPhone), issuerShopId: String(merchantId),
-          saleId, amountKES: authoritativeTotal, source: 'till', shopName: receipt.merchantName || receipt.shopName || null });
+          saleId, amountKES: _round2(authoritativeTotal - (pointsTender ? pointsTender.kes : 0)), source: 'till',   /* P2b: not on points */ shopName: receipt.merchantName || receipt.shopName || null });
         pointsEarned = _earn && _earn.ok ? { points: _earn.points || 0, balance: _earn.balance == null ? null : _earn.balance }
                                          : { points: 0, reason: (_earn && _earn.reason) || 'not-credited' };
       } catch (pe) {

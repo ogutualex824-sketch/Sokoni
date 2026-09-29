@@ -254,8 +254,159 @@ async function priceAndHold(db, { uid, channel, ref, redeem, goodsKES, payableKE
   return { kes: hold.kes, points: hold.points, fundingShops: hold.fundingShops, holdId: hold.id };
 }
 
+/* ══ P2b — PAY WITH POINTS AT THE TILL ═══════════════════════════════════════════════════════════════════════════
+ * The cashier identifies the buyer by phone; SOKONI texts THE BUYER a one-time code; the buyer reads it to the cashier;
+ * only then are the points held for THIS sale. The cashier never receives a credential, and the code is bound to:
+ * the buyer, the shop, the sale (its idempotency key), the points and their value, an expiry, and one use.
+ *
+ *   tillRedemptions/{id}  status: code_sent → confirmed (points HELD) → consumed (by posCompleteCheckout)
+ *                                         ↘ locked (5 wrong codes) · expired · cancelled · failed
+ */
+const crypto = require('crypto');
+const TILL_CODE_TTL_MS = 5 * 60 * 1000;
+const TILL_HOLD_TTL_MS = 20 * 60 * 1000;
+const TILL_MAX_ATTEMPTS = 5;
+const TILL_CODES_PER_BUYER_DAY = 10;
+const REDEMPTIONS = 'tillRedemptions';
+const _hash = (salt, code) => crypto.createHash('sha256').update(String(salt) + ':' + String(code)).digest('hex');
+
+async function tillStart(db, { uid, data }) {
+  const shopId = String((data && data.shopId) || '');
+  await LP.assertTillStaff(uid, shopId);
+  const saleKey = String((data && data.saleKey) || '');
+  if (!/^[A-Za-z0-9_-]{6,128}$/.test(saleKey)) throw new HttpsError('invalid-argument', 'This sale has no reference yet — ring it up first.');
+  if (!LP.normalize(data.phone)) throw new HttpsError('invalid-argument', 'Enter a valid Kenyan phone number.');
+  const buyer = await LP.resolveBuyer(db, data.phone);
+  if (!buyer) throw new HttpsError('not-found', 'No SOKONI account on this number.');
+  await settleExpired(db, buyer.uid).catch(() => 0);
+  const a = await db.collection('loyaltyAccounts').doc(buyer.uid).get();
+  if (!a.exists) throw new HttpsError('failed-precondition', 'This customer has no SOKONI points yet.');
+  if ((a.data() || {}).status === 'blocked') throw new HttpsError('permission-denied', 'This points account is blocked.');
+  const saleTotal = Number(data.saleTotalKES);
+  if (!(saleTotal > 0)) throw new HttpsError('invalid-argument', 'The sale total is needed to work out the points allowed.');
+  const cap = capFor({ balance: a.data().balance, goodsKES: saleTotal, payableKES: saleTotal });
+  let points = cap.points;
+  if (data.points != null) points = Math.min(cap.points, Math.floor(_int(data.points) / POINTS_PER_KES) * POINTS_PER_KES);
+  if (points < POINTS_PER_KES) throw new HttpsError('failed-precondition', cap.points ? 'Choose at least 10 points.' : 'Not enough points for this sale (points can pay up to 25% of it).');
+  const kes = points / POINTS_PER_KES;
+
+  /* a ceiling per buyer per day: a till cannot spam a buyer's phone with codes */
+  const day = new Date().toISOString().slice(0, 10);
+  const capRef = db.collection('tillRedeemCodes').doc(buyer.uid + '_' + day);
+  await db.runTransaction(async (t) => {
+    const c = await t.get(capRef);
+    const used = c.exists ? _int(c.data().count) : 0;
+    if (used >= TILL_CODES_PER_BUYER_DAY) throw new HttpsError('resource-exhausted', 'Too many point codes for this customer today.');
+    t.set(capRef, { uid: buyer.uid, day, count: used + 1 }, { merge: true });
+  });
+
+  const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+  const salt = crypto.randomBytes(8).toString('hex');
+  const ref = db.collection(REDEMPTIONS).doc();
+  const shopSnap = await db.collection('shops').doc(shopId).get().catch(() => null);
+  const shopName = (shopSnap && shopSnap.exists && (shopSnap.data().name || shopSnap.data().shopName)) || 'a SOKONI shop';
+  const now = Date.now();
+  await ref.set({
+    buyerUid: buyer.uid, shopId, saleKey, points, kes, codeHash: _hash(salt, code), salt, attempts: 0,
+    status: 'code_sent', expiresAtMs: now + TILL_CODE_TTL_MS, createdBy: uid, createdAtMs: now, createdAt: FV().serverTimestamp(),
+  });
+  try {
+    await require('./sms-service').enqueue({ to: buyer.phone, template: 'points_redeem_code', uid: buyer.uid, dedupeKey: 'points_redeem_code__' + ref.id,
+      vars: { code, points, kes, shop: String(shopName).slice(0, 40) } });
+  } catch (_) {
+    await ref.update({ status: 'failed', failure: 'sms_not_queued' });
+    throw new HttpsError('unavailable', 'The confirmation text could not be sent. Nothing was spent.');
+  }
+  return { redemptionId: ref.id, points, kes, valueText: 'KES ' + kes.toFixed(2), maskedName: LP.maskName(buyer.name), maskedPhone: LP.maskPhone(buyer.phone),
+    balance: _int(a.data().balance), expiresInSec: TILL_CODE_TTL_MS / 1000 };
+}
+
+async function tillConfirm(db, { uid, data }) {
+  const shopId = String((data && data.shopId) || '');
+  await LP.assertTillStaff(uid, shopId);
+  const id = String((data && data.redemptionId) || '');
+  if (!/^[A-Za-z0-9]{10,40}$/.test(id)) throw new HttpsError('invalid-argument', 'Unknown points confirmation.');
+  const code = String((data && data.code) || '').replace(/\D/g, '');
+  const ref = db.collection(REDEMPTIONS).doc(id);
+  let verdict = null;
+  await db.runTransaction(async (t) => {
+    const s = await t.get(ref);
+    if (!s.exists) { verdict = { err: ['not-found', 'Unknown points confirmation.'] }; return; }
+    const r = s.data();
+    if (r.shopId !== shopId) { verdict = { err: ['permission-denied', 'This confirmation belongs to another shop.'] }; return; }
+    if (r.status === 'confirmed') { verdict = { ok: true, r, replay: true }; return; }
+    if (r.status !== 'code_sent') { verdict = { err: ['failed-precondition', 'This code can no longer be used (' + r.status + '). Send a new one.'] }; return; }
+    if (!(r.expiresAtMs > Date.now())) { t.update(ref, { status: 'expired' }); verdict = { err: ['deadline-exceeded', 'The code expired. Send a new one.'] }; return; }
+    const good = code.length === 6 && crypto.timingSafeEqual(Buffer.from(_hash(r.salt, code), 'hex'), Buffer.from(r.codeHash, 'hex'));
+    if (!good) {
+      const n = _int(r.attempts) + 1;
+      t.update(ref, Object.assign({ attempts: n }, n >= TILL_MAX_ATTEMPTS ? { status: 'locked' } : {}));
+      verdict = { err: ['permission-denied', n >= TILL_MAX_ATTEMPTS ? 'Too many wrong codes — this confirmation is locked.' : 'Wrong code (' + (TILL_MAX_ATTEMPTS - n) + ' tries left).'] };
+      return;
+    }
+    t.update(ref, { status: 'confirming', confirmedBy: uid });           /* one confirm wins; a racing one sees 'confirming' */
+    verdict = { ok: true, r };
+  });
+  if (verdict.err) throw new HttpsError(verdict.err[0], verdict.err[1]);
+  const r = verdict.r;
+  if (!verdict.replay) {
+    try {
+      await placeHold(db, { uid: r.buyerUid, channel: 'till', ref: id, points: r.points, kes: r.kes,
+        fundingShops: [{ shopId, kes: r.kes, points: r.points }], ttlMs: TILL_HOLD_TTL_MS, meta: { saleKey: r.saleKey } });
+    } catch (e) {
+      await ref.update({ status: 'failed', failure: String((e && e.message) || e).slice(0, 120) });
+      throw new HttpsError('failed-precondition', (e && e.message) || 'The points could not be held.');
+    }
+    await ref.update({ status: 'confirmed', confirmedAtMs: Date.now(), holdExpiresAtMs: Date.now() + TILL_HOLD_TTL_MS, codeHash: null, salt: null });
+  }
+  return { ok: true, redemptionId: id, points: r.points, kes: r.kes, valueText: 'KES ' + Number(r.kes).toFixed(2) };
+}
+
+async function tillCancel(db, { uid, data }) {
+  const shopId = String((data && data.shopId) || '');
+  await LP.assertTillStaff(uid, shopId);
+  const id = String((data && data.redemptionId) || '');
+  const ref = db.collection(REDEMPTIONS).doc(id);
+  const s = await ref.get();
+  if (!s.exists || s.data().shopId !== shopId) throw new HttpsError('not-found', 'Unknown points confirmation.');
+  if (s.data().status === 'consumed') throw new HttpsError('failed-precondition', 'These points were already spent on a completed sale.');
+  const rel = await releaseHold(db, { channel: 'till', ref: id, reason: 'cancelled_at_till' });
+  await ref.update({ status: 'cancelled', cancelledBy: uid, cancelledAtMs: Date.now() });
+  return { ok: true, released: rel.released };
+}
+
+/**
+ * THE SALE'S CHECK (posCompleteCheckout, before anything is claimed or charged): a points tender is valid only as the
+ * confirmed, unexpired redemption for THIS shop and THIS sale, for exactly its value, within 25% of the sale.
+ */
+async function validateTillTender(db, { tender, merchantId, idempotencyKey, saleTotal }) {
+  const id = String((tender && tender.redemptionId) || '');
+  if (!/^[A-Za-z0-9]{10,40}$/.test(id)) throw new HttpsError('failed-precondition', 'Points are paid only with the buyer\'s SOKONI confirmation code.');
+  const s = await db.collection(REDEMPTIONS).doc(id).get();
+  const r = s.exists ? s.data() : null;
+  if (!r) throw new HttpsError('failed-precondition', 'Unknown points confirmation.');
+  if (r.shopId !== String(merchantId)) throw new HttpsError('permission-denied', 'That points confirmation belongs to another shop.');
+  if (r.saleKey !== String(idempotencyKey)) throw new HttpsError('failed-precondition', 'That points confirmation was made for a different sale.');
+  if (r.status !== 'confirmed') throw new HttpsError('failed-precondition', 'Those points are not confirmed for spending (' + r.status + ').');
+  if (!(r.holdExpiresAtMs > Date.now())) throw new HttpsError('deadline-exceeded', 'The points confirmation expired. Ask the customer for a new code.');
+  if (Math.round(Number(tender.amount) * 100) !== Math.round(Number(r.kes) * 100)) throw new HttpsError('failed-precondition', 'The points payment must be exactly KES ' + r.kes + '.');
+  const cap = capFor({ balance: r.points, goodsKES: saleTotal, payableKES: saleTotal });
+  if (r.kes > cap.kes) throw new HttpsError('failed-precondition', 'Points can pay at most 25% of this sale (KES ' + cap.kes + ').');
+  return { redemptionId: id, points: r.points, kes: r.kes, buyerUid: r.buyerUid };
+}
+
+const { onCall } = require('firebase-functions/v2/https');
+const _OPTS = { region: 'us-central1', enforceAppCheck: true, maxInstances: 40, memory: '256MiB', timeoutSeconds: 30 };
+const _call = (fn) => onCall(_OPTS, async (req) => fn(admin.firestore(), { uid: req.auth && req.auth.uid, data: req.data || {} }));
+const tillPointsStart = _call(tillStart);
+const tillPointsConfirm = _call(tillConfirm);
+const tillPointsCancel = _call(tillCancel);
+
 module.exports = {
   POINTS_PER_KES, MAX_REDEEM_PCT, HOLD_TTL_MS, HOLDS,
   capFor, valueOf, allocate, holdRef, placeHold, releaseHold, prepareConsumeTx, consumeHoldTx, consumeHold,
   settleExpired, preview, priceAndHold,
+  TILL_CODE_TTL_MS, TILL_HOLD_TTL_MS, TILL_MAX_ATTEMPTS, REDEMPTIONS,
+  tillStart, tillConfirm, tillCancel, validateTillTender,
+  tillPointsStart, tillPointsConfirm, tillPointsCancel,
 };
