@@ -107,7 +107,7 @@ async function _postSaleFinancials(o) {
        drawer. Recording the configured route against a cash sale would misstate
        who holds the money. */
     /* Points P2b: a points tender is not money (the shop funds it), so cash + points is still cash-in-drawer */
-    const allCash = (o.payments || []).every((p) => ['cash', 'points'].includes(String(p.method).toLowerCase()));
+    const allCash = (o.payments || []).every((p) => ['cash', 'points', 'gift_card'].includes(String(p.method).toLowerCase()));
     if (allCash) out.collectionRoute = 'CASH_IN_DRAWER';
 
     /* ══ THE MONEY POSITION ══════════════════════════════════════════════════
@@ -129,13 +129,14 @@ async function _postSaleFinancials(o) {
       .reduce((s, p) => s + (Number(p.amount) || 0), 0));
     const changeC = toCents(o.changeDue);
     const byMethod = {};
-    let electronicC = 0, pointsC = 0;
+    let electronicC = 0, pointsC = 0, giftC = 0;
     for (const p of (o.payments || [])) {
       const m = String(p.method || '').toLowerCase();
       const c = toCents(p.amount);
       byMethod[m] = (byMethod[m] || 0) + c;
       /* Points P2b: points are a SHOP-FUNDED discount, not money held by a provider */
       if (m === 'points') { pointsC += c; continue; }
+      if (m === 'gift_card') { giftC += c; continue; }       /* slice 13: prepaid store value, not money arriving */
       if (m !== 'cash') electronicC += c;
     }
     /* The drawer figure replaces the gross cash line: byMethod.cash is what the
@@ -144,6 +145,7 @@ async function _postSaleFinancials(o) {
       cashCents: Math.max(0, cashTenderedC - changeC),
       electronicCents: electronicC,
       pointsCents: pointsC,
+      giftCardCents: giftC,
       changeGivenCents: changeC,
       byMethod,
     };
@@ -284,6 +286,19 @@ async function _postSaleFinancials(o) {
 ════════════════════════════════════════════════════════════════ */
 /* Points P1: a sale can open the buyer's SOKONI loyalty account, whose card QR is signed with LOYALTY_HMAC_SECRET. */
 const _LOYALTY_HMAC = require('firebase-functions/params').defineSecret('LOYALTY_HMAC_SECRET');   /* same secret loyalty.js declares */
+/* The ONE gift-card acceptance rule (giftCards store). Returns a refusal message, or null when the card may pay. */
+function _giftCardRefusal(g, { merchantId, pin, amount }) {
+  if (!g) return 'That gift card does not exist.';
+  if (String(g.shopId || '') !== String(merchantId)) return 'That gift card belongs to another shop.';
+  if (g.status !== 'active') return 'That gift card is ' + (g.status || 'not active') + '.';
+  const exp = g.expiryDate && typeof g.expiryDate.toMillis === 'function' ? g.expiryDate.toMillis() : (g.expiryDate ? Date.parse(g.expiryDate) : null);
+  if (exp && exp < Date.now()) return 'That gift card has expired.';
+  if (g.pin && String(g.pin) !== String(pin || '')) return 'Wrong gift card PIN.';
+  if (!(Number(amount) > 0)) return 'Every payment needs a positive amount';
+  if ((Number(g.balance) || 0) + 1e-9 < Number(amount)) return 'The gift card has only KES ' + (Number(g.balance) || 0) + ' left.';
+  return null;
+}
+
 exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, async ({ data, auth }) => {
   const cashierId = await _assertAuth(auth);
 
@@ -768,69 +783,83 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
        Cash is exempt: the cashier is physically holding it, and the drawer
        reconciliation is what audits it. Wallet is validated separately below
        and debited inside the transaction. */
-    const CONFIRMABLE = { mpesa: 1, card: 1, mpesa_daraja: 1 };
+    /* ── PAYMENT LABELS (convergence slice 13, 2026-09-29) ─────────────────────────────────────────────────
+       Every label is a real payment path with its own evidence, or it is refused. Before this, any label this
+       function did not recognise (gift_card, split, bank, qr, voucher …) completed the sale with NO evidence and was
+       booked as electronic money. docs/PAYMENT_LABEL_AUTHORITY.md. */
+    const _KNOWN_TENDERS = { cash: 1, mpesa: 1, card: 1, wallet: 1, points: 1, gift_card: 1 };   /* no mpesa_daraja (retired), no mpesa_till_manual (owner: IntaSend only) */
+    for (const p of _pay) {
+      const m = String((p && p.method) || '').toLowerCase();
+      if (!_KNOWN_TENDERS[m]) {
+        _e(m === 'split'
+          ? 'A split payment is sent as its separate payments (cash, M-PESA, card …), each confirmed on its own.'
+          : '"' + String((p && p.method) || '').slice(0, 30) + '" is not a payment SOKONI can confirm, so the sale was not recorded. Nothing has been charged.',
+          'failed-precondition');
+      }
+    }
+
+    /* GIFT CARD — ONE store (giftCards: shop-scoped stored value). Pre-checked here so a bad card is refused before
+       anything is claimed; re-read and debited INSIDE the sale transaction below. */
+    const _giftPays = _pay.filter((p) => String(p.method).toLowerCase() === 'gift_card');
+    const _giftCards = [];
+    for (const p of _giftPays) {
+      const code = String((p && p.code) || '').replace(/[\s-]/g, '').toUpperCase();
+      if (!/^[A-Z0-9]{8,32}$/.test(code)) _e('This gift card payment has no valid card code.', 'failed-precondition');
+      const docId = code.match(/.{1,4}/g).join('-');
+      if (_giftCards.some((g) => g.docId === docId)) _e('The same gift card cannot pay twice in one sale.');
+      const gSnap = await db.collection('giftCards').doc(docId).get();
+      const g = gSnap.exists ? gSnap.data() : null;
+      const why = _giftCardRefusal(g, { merchantId, pin: p.pin, amount: Number(p.amount) });
+      if (why) _e(why, 'failed-precondition');
+      _giftCards.push({ docId, ref: db.collection('giftCards').doc(docId), amount: _round2(Number(p.amount)), pin: p.pin });
+    }
+
+    /* MANUAL M-PESA (paid straight to the merchant's own Till) is REFUSED — owner 2026-09-29: "all electronic money
+       goes through IntaSend"; SOKONI never sees a manual Till payment. It is not on the allow-list above. */
+
+    const CONFIRMABLE = { mpesa: 1, card: 1 };
     for (const p of _pay) {
       const method = String((p && p.method) || '').toLowerCase();
       if (!CONFIRMABLE[method]) continue;
 
-      const ref = String((p && (p.ref || p.reference || p.checkoutId || p.transactionRef)) || '').trim();
-      if (!ref) {
-        _e('This ' + method.toUpperCase() + ' payment has no transaction reference, so it ' +
-           'cannot be confirmed. Send the payment request and wait for the customer to pay.');
+      /* A PAID IntaSend payment for THIS sale (convergence slice 13): the Quick Charge / createPaymentIntent authority,
+         marked paid only by the verified webhook. Bound to this shop, this sale's key and the tender amount; spent once. */
+      if (p && p.intentRef) {
+        const iref = String(p.intentRef);
+        if (!/^[A-Za-z0-9_-]{6,128}$/.test(iref)) _e('Unknown payment reference.', 'failed-precondition');
+        const iSnap = await db.collection('paymentIntents').doc(iref).get();
+        const it = iSnap.exists ? (iSnap.data() || {}) : null;
+        const md = (it && it.metadata) || {};
+        if (!it) _e('No ' + method.toUpperCase() + ' payment was found for this sale. Nothing has been charged.', 'not-found');
+        if (it.purpose !== 'pos_till_sale') _e('That payment was not made for a till sale.', 'failed-precondition');
+        if (String(md.shopId || '') !== String(merchantId)) _e('That payment belongs to a different shop.', 'permission-denied');
+        if (String(md.saleId || '') !== String(idempotencyKey)) _e('That payment was made for a different sale.', 'failed-precondition');
+        if (!['paid', 'completed'].includes(String(it.status))) {
+          _e('The customer has not completed this payment yet (' + (it.status || 'pending') + '). Wait for their confirmation, or send the request again.', 'failed-precondition');
+        }
+        if (Math.round(Number(it.amount) * 100) !== Math.round(Number(p.amount) * 100)) {
+          _e('The confirmed payment is ' + it.amount + ' but this sale is claiming ' + p.amount + '.');
+        }
+        const claimRef = db.collection('posPaymentClaims').doc(iref);
+        try {
+          await claimRef.create({ reference: iref, source: 'paymentIntent', method, merchantId, cashierId, idempotencyKey, amount: Number(p.amount), claimedAt: Date.now() });
+          _consumed.push(iref);
+        } catch (err) {
+          if (err && err.code === 6) {
+            const prior = (await claimRef.get()).data() || {};
+            if (prior.idempotencyKey !== idempotencyKey) _e('That payment has already been used for another sale.', 'already-exists');
+          } else { throw err; }
+        }
+        p.confirmed = true; p.confirmedAmount = Number(it.amount); p.intentRef = iref;
+        if (it.paymentRef) p.gatewayRef = it.paymentRef;
+        continue;
       }
 
-      const paySnap = await db.collection('posPayments').doc(ref).get();
-      if (!paySnap.exists) {
-        _e('No ' + method.toUpperCase() + ' payment was found for this sale. ' +
-           'Nothing has been charged.', 'not-found');
-      }
-      const pay = paySnap.data() || {};
-
-      if (pay.status !== 'completed') {
-        _e('The customer has not completed this payment yet (' + (pay.status || 'pending') + '). ' +
-           'Wait for their confirmation, or try the payment again.', 'failed-precondition');
-      }
-      /* The money must have reached THIS shop, not merely exist somewhere. */
-      if (pay.sellerUid && pay.sellerUid !== merchantId && pay.sellerUid !== cashierId) {
-        _e('That payment belongs to a different shop.', 'permission-denied');
-      }
-      /* And it must be enough. A 3,000 sale cannot be settled with a confirmed
-         10 shilling payment just because a reference was pasted in. */
-      const confirmedAmount = Number(pay.paidAmount != null ? pay.paidAmount : pay.amount);
-      if (isFinite(confirmedAmount) && confirmedAmount + 1 < Number(p.amount || 0)) {
-        _e('The confirmed payment is ' + confirmedAmount + ' but this sale is claiming ' +
-           p.amount + '.');
-      }
-
-      /* ── spent exactly once ────────────────────────────────────────────
-         Without this, one genuinely confirmed M-PESA payment could settle any
-         number of sales — the strongest confirmation check in the world is
-         worth nothing if its result is replayable. create() is atomic: exactly
-         one sale wins the reference, every other caller gets ALREADY_EXISTS.
-         Keyed by reference, and it records which sale spent it. */
-      const claimRef = db.collection('posPaymentClaims').doc(ref);
-      try {
-        await claimRef.create({
-          reference: ref, method, merchantId, cashierId,
-          idempotencyKey, amount: Number(p.amount || 0), claimedAt: Date.now(),
-        });
-        _consumed.push(ref);
-      } catch (err) {
-        if (err && err.code === 6 /* ALREADY_EXISTS */) {
-          const prior = (await claimRef.get()).data() || {};
-          /* The SAME sale retrying is fine — it already owns this payment. */
-          if (prior.idempotencyKey !== idempotencyKey) {
-            _e('That payment has already been used for another sale.', 'already-exists');
-          }
-        } else { throw err; }
-      }
-
-      /* Carry the confirmation onto the payment line, so the receipt and the
-         stored sale show the real M-PESA code rather than the client's guess. */
-      p.confirmed = true;
-      p.confirmedAmount = isFinite(confirmedAmount) ? confirmedAmount : null;
-      if (pay.mpesaCode) p.mpesaCode = pay.mpesaCode;
-      if (pay.paidPhone) p.paidPhone = pay.paidPhone;
+      /* ALL PAYMENTS = INTASEND (owner, 2026-09-29: "no daraja everything intasend"). The legacy posPayments record in
+         status 'completed' is written ONLY by the retired Daraja callback, so it no longer settles a sale: M-PESA and card
+         at the till are confirmed only by a PAID IntaSend payment (intentRef, above). */
+      _e('This ' + method.toUpperCase() + ' payment has no IntaSend payment reference, so it cannot be confirmed. ' +
+         'Send the payment request from SOKONI and wait for the customer to pay.', 'failed-precondition');
     }
 
     const saleId   = uid();
@@ -877,6 +906,12 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
       /* U5: the package components — still the read phase, before any write */
       const _compRefs  = _posCompIds.map((id) => db.collection('products').doc(id));
       const _compSnaps = await Promise.all(_compRefs.map((r) => txn.get(r)));
+      /* Gift cards (slice 13) — re-read in the read phase; debited with the sale below */
+      const _gcSnaps = await Promise.all(_giftCards.map((g) => txn.get(g.ref)));
+      _gcSnaps.forEach((gs, i) => {
+        const why = _giftCardRefusal(gs.exists ? gs.data() : null, { merchantId, pin: _giftCards[i].pin, amount: _giftCards[i].amount });
+        if (why) throw new HttpsError('failed-precondition', why + ' Nothing was charged.');
+      });
       /* Points P2b: the hold and its redemption — still the read phase */
       const _PTS = pointsTender ? require('./loyalty-points-spend') : null;
       const _ptsCtx = pointsTender ? await _PTS.prepareConsumeTx(txn, db, { channel: 'till', ref: pointsTender.redemptionId }) : null;
@@ -1016,6 +1051,13 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
         txn.update(cpRef, update);
       }
 
+      /* Gift cards (slice 13): debited WITH the sale, atomically */
+      _giftCards.forEach((g, i) => {
+        const cur = Number(_gcSnaps[i].data().balance) || 0;
+        const nb = _round2(cur - g.amount);
+        txn.update(g.ref, { balance: nb, status: nb <= 0 ? 'redeemed' : 'active', updatedAt: FieldValue.serverTimestamp(),
+          redemptions: FieldValue.arrayUnion({ amount: g.amount, saleKey: String(idempotencyKey), by: cashierId, at: new Date().toISOString() }) });
+      });
       /* Points P2b: spent WITH the sale, exactly once */
       if (pointsTender) {
         _PTS.consumeHoldTx(txn, db, _ptsCtx, { channel: 'till', ref: pointsTender.redemptionId, saleRef: saleId, orderId: saleId });

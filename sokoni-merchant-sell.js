@@ -523,6 +523,77 @@
       repaintPay();
     }
 
+    /* ── M-PESA / CARD THROUGH INTASEND (convergence slice 13, 2026-09-29) ───────────────────────────────────────
+       All electronic money goes through IntaSend (owner). The sale asks the server for a Quick Charge payment for
+       exactly what is still due, bound to THIS sale (its idempotency key): an M-PESA prompt to the customer's phone,
+       or a QR the customer pays on their own phone (M-PESA or card). Only when the server says PAID is the sale
+       completed — with that payment as its proof. Nothing typed here is a payment. */
+    function payHTML(t, busy) {
+      if (typeof ctx.callCreateIntent !== 'function' || typeof ctx.readIntent !== 'function') {
+        return '<div class="msl-note">M-PESA and card payments are not available on this screen.</div>';
+      }
+      var p = S.pay || { state: 'idle' };
+      var card = S.method === 'card';
+      var out = '<div class="msl-lbl">' + (card ? 'Card (paid on the customer\u2019s phone)' : 'Customer\u2019s M-PESA number') + '</div>';
+      if (p.state === 'idle' || p.state === 'failed') {
+        if (!card) out += '<input class="msl-inp" id="msl-mphone" inputmode="tel" autocomplete="off" placeholder="07XX XXX XXX" value="' +
+          esc(p.phone || (S.buyer && S.buyer.state === 'found' ? S.buyer.phone : '') || '') + '" aria-label="Customer M-PESA number">';
+        out += '<button class="msl-btn ghost wide" data-act="pay-request"' + (busy || !(t.payable > 0) ? ' disabled' : '') + '>' +
+          (card ? 'Show payment QR · ' : 'Send M-PESA request · ') + esc(md.formatKES(t.payable)) + '</button>';
+        if (p.state === 'failed') out += '<div class="msl-note" style="color:#ffb020">' + esc(p.error || 'The payment did not go through.') + '</div>';
+        return out;
+      }
+      if (p.state === 'requesting') return out + '<div class="msl-prog"><span class="msl-spin"></span>Asking IntaSend for ' + esc(md.formatKES(p.amount || t.payable)) + '…</div>';
+      if (p.state === 'waiting') {
+        return out + '<div class="msl-prog msl-waiting"><span class="msl-spin"></span>Waiting for the customer to pay ' + esc(md.formatKES(p.amount)) +
+          (card ? ' — they scan the QR and pay on their phone.' : ' — the prompt is on their phone.') + '</div>' +
+          (p.qrUrl ? '<div class="msl-qr" data-qr="' + esc(p.qrUrl) + '"></div><div class="msl-note">' + esc(p.qrUrl) + '</div>' : '') +
+          '<button class="msl-btn ghost wide" data-act="pay-cancel">Stop waiting</button>';
+      }
+      if (p.state === 'paid') return out + '<div class="msl-note msl-buyer">✅ ' + esc(md.formatKES(p.amount)) + ' paid through IntaSend — completing the sale…</div>';
+      return out;
+    }
+    function stopWatch() { if (S.payTimer) { clearInterval(S.payTimer); S.payTimer = null; } }
+    function payRequest() {
+      var t = totals();
+      var p = S.pay = { state: 'requesting', amount: t.payable, phone: S.pay && S.pay.phone };
+      var card = S.method === 'card';
+      if (!card && !p.phone) { S.pay = { state: 'failed', error: 'Type the customer\u2019s M-PESA number.' }; return repaintPay('msl-mphone'); }
+      repaintPay();
+      var shopId = ctx.scope && ctx.scope.shopId;
+      Promise.resolve(ctx.callMyTill({ shopId: shopId })).then(function (r) {
+        var till = (r && r.data) || r || {};
+        if (!till.exists || !till.sokoniTillId) throw new Error('This shop has no SOKONI Till yet, so M-PESA and card cannot be taken here.');
+        return ctx.callCreateIntent({ purpose: 'pos_till_sale', sokoniTillId: till.sokoniTillId, saleId: saleKey(),
+          items: [{ name: 'Till sale', price: t.payable, qty: 1 }] });
+      }).then(function (r) {
+        var d = (r && r.data) || r || {};
+        p.ref = d.ref; p.amount = d.amount != null ? d.amount : t.payable;
+        if (card) return Promise.resolve(ctx.callMintQR ? ctx.callMintQR({ ref: d.ref }) : null).then(function (q) { var qd = (q && q.data) || q || {}; p.qrUrl = qd.qrUrl || null; });
+        return ctx.callStkPush({ phone: normPhone(p.phone), amount: p.amount, ref: d.ref });
+      }).then(function () {
+        p.state = 'waiting'; repaintPay(); drawPayQR(); watch();
+      }).catch(function (e) { S.pay = { state: 'failed', phone: p.phone, error: (e && e.message) || 'The payment request could not be sent.' }; repaintPay(); });
+    }
+    function normPhone(v) { var c = String(v || '').replace(/[\s\-().+]/g, ''); var m = c.match(/^(?:254|0)?([17]\d{8})$/); return m ? '254' + m[1] : c; }
+    function drawPayQR() {
+      var el = host.querySelector('.msl-qr'); if (!el) return;
+      try { if (window.SokoniQR && typeof window.SokoniQR.generateCanvas === 'function') { el.innerHTML = ''; el.appendChild(window.SokoniQR.generateCanvas(el.getAttribute('data-qr'), 180)); } } catch (_) {}
+    }
+    function watch() {
+      stopWatch();
+      var started = Date.now();
+      S.payTimer = setInterval(function () {
+        var p = S.pay; if (!p || !p.ref || p.state !== 'waiting') return stopWatch();
+        if (Date.now() - started > 180000) { stopWatch(); S.pay = { state: 'failed', phone: p.phone, error: 'No payment yet after 3 minutes. You can send the request again.' }; return repaintPay(); }
+        Promise.resolve(ctx.readIntent(p.ref)).then(function (it) {
+          var st = it && it.status;
+          if (st === 'paid' || st === 'completed') { stopWatch(); p.state = 'paid'; repaintPay(); complete(); }
+          else if (st === 'failed' || st === 'cancelled' || st === 'expired') { stopWatch(); S.pay = { state: 'failed', phone: p.phone, error: 'The payment was ' + st + '. You can send the request again.' }; repaintPay(); }
+        }).catch(function () { /* keep waiting; a read blip is not a failure */ });
+      }, 3000);
+    }
+
     function repaintPay(focusId) {
       var f = host.querySelector('.msl-sheet'); if (!f) return;
       f.innerHTML = paySheet();
@@ -628,9 +699,7 @@
                 ? '<div class="msl-tot grand"><span>Change due</span><b>' + esc(md.formatKES(change)) + '</b></div>'
                 : (given != null && given < t.payable
                     ? '<div class="msl-note" style="color:#ffb020">That is less than the amount due.</div>' : ''))
-            : '<div class="msl-note">Confirm the ' + esc(S.method === 'mpesa' ? 'M-Pesa' : 'card') +
-              ' payment has actually been received before completing. This screen <b>records</b> the ' +
-              'tender against the sale — it does not request the money.</div>') +
+            : payHTML(t, busy)) +
 
           (S.sale === 'failed'
             ? '<div class="msl-err" style="margin-top:14px">' + esc(S.saleError || 'The sale was not completed.') +
@@ -647,7 +716,8 @@
         '</div>' +
         '<div class="msl-sh-f">' +
           '<button class="msl-btn solid wide" data-act="complete"' +
-            (busy || S.offerPending || (S.pts && (S.pts.state === 'code' || S.pts.state === 'confirming' || S.pts.state === 'sending')) || (cash && given != null && given < t.payable) ? ' disabled' : '') + '>' +
+            (busy || S.offerPending || (S.pts && (S.pts.state === 'code' || S.pts.state === 'confirming' || S.pts.state === 'sending')) || (cash && given != null && given < t.payable)
+              || (!cash && t.payable > 0 && !(S.pay && S.pay.state === 'paid')) ? ' disabled' : '') + '>' +
             (busy ? (S.sale === 'checking' ? 'Checking…' : 'Completing…')
                   : (S.sale === 'failed' ? 'Try again' : 'Complete sale')) +
           '</button>' +
@@ -692,6 +762,7 @@
     }
 
     function newSale() {
+      stopWatch(); S.pay = null;
       S.cart = []; S.saleToken = null; S.sheet = null; S.sale = 'idle'; S.buyer = null; S.points = null; S.pts = null;
       S.receipt = null; S.cached = false; S.saleError = null; S.preflight = null; S.cashGiven = null;
       /* Re-read the catalogue: the sale just changed canonical stock, and the next
@@ -699,14 +770,19 @@
       load();
     }
 
+    function tender(method, amount) {
+      var o = { method: method, amount: amount };
+      if (method !== 'cash' && S.pay && S.pay.state === 'paid' && S.pay.ref) o.intentRef = S.pay.ref;   /* the IntaSend proof */
+      return o;
+    }
     function payments() {
       var t = totals();
       if (t.pointsKES > 0) {
         var ps = [{ method: 'points', amount: t.pointsKES, redemptionId: S.pts.redemptionId }];
-        if (t.payable > 0) ps.push({ method: S.method, amount: t.payable });
+        if (t.payable > 0) ps.push(tender(S.method, t.payable));
         return ps;
       }
-      return [{ method: S.method, amount: t.due }];
+      return [tender(S.method, t.due)];
     }
 
     /* Pre-charge guard. Uses the server's own side-effect-free dry run: it prices
@@ -889,7 +965,8 @@
       if (act === 'inc')          { var l1 = S.cart[i]; if (l1) { S.cart = md.setLineQty(S.cart, l1.productId, l1.qty + 1); paint(); } return; }
       if (act === 'dec')          { var l2 = S.cart[i]; if (l2) { S.cart = md.setLineQty(S.cart, l2.productId, l2.qty - 1);
                                     if (!S.cart.length) S.sheet = null; paint(); } return; }
-      if (act === 'method')       { S.method = el.getAttribute('data-m') || 'cash'; S.cashGiven = null; paint(); return; }
+      if (act === 'method')       { if (S.pay && (S.pay.state === 'waiting' || S.pay.state === 'paid')) return;
+                                    S.method = el.getAttribute('data-m') || 'cash'; S.cashGiven = null; stopWatch(); S.pay = null; paint(); return; }
       if (act === 'tender')       { var v = el.getAttribute('data-v');
                                     S.cashGiven = (v === 'exact') ? totals().payable : Number(v); paint(); return; }
       if (act === 'complete')     { complete(); return; }
@@ -897,6 +974,8 @@
       if (act === 'buyer-look')   { buyerLook(); return; }
       if (act === 'buyer-create') { buyerCreate(); return; }
       if (act === 'buyer-clear')  { S.buyer = { phone: '' }; repaintPay('msl-bphone'); return; }
+      if (act === 'pay-request')  { payRequest(); return; }
+      if (act === 'pay-cancel')   { stopWatch(); S.pay = { state: 'idle', phone: S.pay && S.pay.phone }; repaintPay(); return; }
       if (act === 'pts-start')    { ptsStart(); return; }
       if (act === 'pts-confirm')  { ptsConfirm(); return; }
       if (act === 'pts-cancel')   { ptsCancel(); return; }
@@ -921,6 +1000,7 @@
         if (find) find.classList.toggle('has', !!S.term);
         return;
       }
+      if (el.id === 'msl-mphone') { S.pay = Object.assign({}, S.pay || { state: 'idle' }, { phone: el.value }); return; }
       if (el.id === 'msl-pcode')  { if (S.pts) S.pts.code = String(el.value || '').replace(/\D/g, '').slice(0, 6); return; }
       if (el.id === 'msl-bphone') { S.buyer = Object.assign({}, S.buyer || {}, { phone: el.value, state: 'idle' }); return; }
       if (el.id === 'msl-bname')  { S.buyer = Object.assign({}, S.buyer || {}, { name: el.value }); return; }
@@ -960,6 +1040,7 @@
       refresh: load,
       state: function () { return S; },
       destroy: function () {
+        stopWatch();
         host.removeEventListener('click', onClick);
         host.removeEventListener('input', onInput);
         host.removeEventListener('change', onChange);

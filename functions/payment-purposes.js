@@ -378,6 +378,9 @@ const PURPOSES = {
       } catch (e) {
         fail(e.code || 'failed-precondition', e.message || 'This Till sale could not be priced.');
       }
+      /* Slice 13 (2026-09-29): the till SALE this payment is for. posCompleteCheckout accepts an M-PESA / card tender only
+         when the paid intent names ITS sale key here, so one IntaSend payment can never settle a different sale. */
+      if (data && data.saleId && /^[A-Za-z0-9_-]{3,80}$/.test(String(data.saleId))) quote.metadata = Object.assign({}, quote.metadata, { saleId: String(data.saleId) });
       /* Points (2026-09-29): PAY PART OF A QUICK CHARGE WITH SOKONI POINTS — through the same buyer-confirmed till
          redemption the POS uses (functions/loyalty-points-spend.js), bound to THIS charge by its sale id. Only on the
          cashier's own charge (pos_cart), never on a buyer-typed permanent-Till payment. The server reads the value

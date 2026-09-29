@@ -2605,6 +2605,15 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
          silently appearing to work. */
       callStk: null,
       callVerify: _callable('verifyPaymentStatus'),
+      /* Slice 13 (2026-09-29): M-PESA / card at Sell = an IntaSend Quick Charge payment for this sale; the sale completes
+         only when the server marks it PAID. readIntent reads the caller's OWN intent (rules: uid == caller). */
+      callMyTill: _callable('getMySokoniTill'),
+      callCreateIntent: _callable('createPaymentIntent'),
+      callStkPush: _callable('initiateSTKPush'),
+      callMintQR: _callable('mintDynamicSokoniQR'),
+      readIntent: function (ref) {
+        return _mods.fs.getDoc(_mods.fs.doc(_mods.db, 'paymentIntents', String(ref))).then(function (s) { return s.exists() ? s.data() : null; });
+      },
       onToast: toast,
       onPrint: function (job) {
         /* Routed through the shell's device layer, so a receipt printed from Sell uses

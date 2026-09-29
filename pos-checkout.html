@@ -1414,6 +1414,7 @@ body.queue-mode .hotkey-bar      { display: none; }
     <div class="modal-title">Gift Card Payment</div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Scan gift card QR or type the code</div>
     <input type="text" class="gift-code-input" id="gift-card-code" placeholder="GIFT CARD CODE" maxlength="24" autocomplete="off" spellcheck="false">
+    <input type="password" class="gift-code-input" id="gift-card-pin" placeholder="PIN (if the card has one)" maxlength="8" inputmode="numeric" autocomplete="off" aria-label="Gift card PIN">
     <div id="gift-card-status" style="font-size:13px;min-height:18px;text-align:center;color:var(--muted)"></div>
     <div class="modal-actions" style="margin-top:16px">
       <button class="btn-secondary" onclick="Checkout.closeModal('gift-card-overlay')">Cancel</button>
@@ -2508,7 +2509,7 @@ const Checkout = (() => {
       /* Show card terminal instruction strip */
       document.getElementById('card-strip').classList.add('visible');
       /* Card terminal handles auth — finalize immediately once cashier confirms card was processed */
-      _finalize('card', [{ method: 'card', amount: totals.total }], totals);
+      _payCardIntasend(totals);   /* slice 13: a card is the same IntaSend proof — no simulator */
       return;
     }
 
@@ -2527,6 +2528,7 @@ const Checkout = (() => {
       } else {
         /* Open Gift Card modal */
         document.getElementById('gift-card-code').value = '';
+        try { document.getElementById('gift-card-pin').value = ''; } catch (_) {}
         document.getElementById('gift-card-status').textContent = '';
         openModal('gift-card-overlay');
         setTimeout(() => document.getElementById('gift-card-code').focus(), 80);
@@ -2538,15 +2540,9 @@ const Checkout = (() => {
   async function _processGiftCard(code, totals) {
     _setState('PAYMENT');
     try {
-      const gc = await PosLoyalty.checkGiftCard(code);
-      if (!gc.valid) { _setState('ITEMS'); _toast(gc.error || 'Gift card invalid', 'error'); return; }
-      if (gc.balance < totals.total) {
-        _setState('ITEMS');
-        _toast(`Insufficient balance: KES ${gc.balance.toFixed(2)} — use split for remainder`, 'warning');
-        return;
-      }
-      await PosLoyalty.redeemGiftCard(code, totals.total);
-      _finalize('gift_card', [{ method: 'gift_card', code, amount: totals.total }], totals);
+      /* Slice 13: the ONE gift-card store is checked and debited by the SERVER inside the sale (PIN, shop, balance,
+         expiry) — the old device-side balance check + decrement is retired. */
+      _finalize('gift_card', [{ method: 'gift_card', code, pin: (_s.giftPin || ''), amount: totals.total }], totals);
     } catch (err) {
       _setState('ITEMS');
       _toast(err.message || 'Gift card error', 'error');
@@ -2571,50 +2567,23 @@ const Checkout = (() => {
     _setState('PAYMENT');
 
     try {
-      if (window.SokoniPay) {
-        /* SokoniPay handles the push and calls onSuccess/onFail automatically */
-        SokoniPay.platformBook({
-          providerName:   _s.merchantId,
-          category:       'pos_checkout',
-          serviceDesc:    `POS Sale — ${_s.items.length} item(s)`,
-          totalAmount:    totals.total,
-          depositPct:     100,
-          providerPhone:  phone,
-          bookingDetails: { saleItems: _s.items.length, cashierId: _s.cashierId },
-          onSuccess: ref => {
-            _clearMpesaCountdown();
-            statusEl.className = 'mpesa-status success visible';
-            statusEl.textContent = '✅ Payment received';
-            _setState('CONFIRMING');
-            setTimeout(() => {
-              closeModal('mpesa-overlay');
-              _finalize('mpesa', [{ method:'mpesa', amount: totals.total, ref }], totals);
-            }, 800);
-          },
-          onFail: errMsg => {
-            _clearMpesaCountdown();
-            _showMpesaRecovery(errMsg || 'STK push was not completed');
-          },
-        });
-        /* Start the 90-second countdown regardless — UX progress indicator */
-        _startMpesaCountdown(90, () => {
-          if (_s.currentState === 'PAYMENT') {
-            _showMpesaRecovery('M-Pesa request timed out (90 seconds)');
-          }
-        });
-      } else {
-        /* Direct CF path — send STK, then poll posCheckPaymentStatus */
-        const sendFn = firebase.functions().httpsCallable('posSendMpesa');
-        const sent   = await sendFn({ phone, amount: totals.total, merchantId: _s.merchantId });
-        const ref    = sent?.data?.ref || '';
-
-        statusEl.className = 'mpesa-status pending visible';
-        statusEl.innerHTML = '<span class="mpesa-spinner">⏳</span> Waiting for customer to approve on their phone…';
-        actionRow.style.display = 'none';
-
-        _startMpesaCountdown(90, () => _showMpesaRecovery('M-Pesa request timed out (90 seconds)'));
-        _startMpesaPoll(ref, phone, totals);
-      }
+      /* Slice 13 (2026-09-29) — ALL PAYMENTS = INTASEND. This used to call SokoniPay.platformBook (the legacy BOOKING
+         path, which pays a "provider" at payment time) or the retired Daraja posSendMpesa. Now: an IntaSend Quick
+         Charge payment for exactly this sale's amount, bound to THIS sale; the prompt goes to the customer's phone and
+         the sale completes only when the server marks the payment PAID. */
+      const it = await _intasendIntent(totals.total);
+      await firebase.functions().httpsCallable('initiateSTKPush')({ phone: _normKePhone(phone), amount: it.amount, ref: it.ref });
+      statusEl.className = 'mpesa-status pending visible';
+      statusEl.innerHTML = '<span class="mpesa-spinner">⏳</span> Waiting for the customer to approve KES ' + Number(it.amount).toLocaleString() + ' on their phone…';
+      actionRow.style.display = 'none';
+      _startMpesaCountdown(180, () => _showMpesaRecovery('No payment yet (3 minutes). You can send the request again.'));
+      _watchIntent(it.ref, () => {
+        _clearMpesaCountdown();
+        statusEl.className = 'mpesa-status success visible';
+        statusEl.textContent = '✅ Payment received';
+        _setState('CONFIRMING');
+        setTimeout(() => { closeModal('mpesa-overlay'); _finalize('mpesa', [{ method: 'mpesa', amount: totals.total, intentRef: it.ref, phone }], totals); }, 600);
+      }, (why) => { _clearMpesaCountdown(); _showMpesaRecovery(why); });
     } catch (err) {
       _clearMpesaCountdown();
       _showMpesaRecovery(err.message || 'Failed to send M-Pesa request');
@@ -2737,21 +2706,11 @@ const Checkout = (() => {
     document.getElementById('gift-card-status').textContent = 'Validating…';
     document.getElementById('gift-card-status').style.color = 'var(--muted)';
     try {
-      const gc = await PosLoyalty.checkGiftCard(code);
-      if (!gc.valid) {
-        document.getElementById('gift-card-status').textContent = gc.error || 'Gift card invalid or expired';
-        document.getElementById('gift-card-status').style.color = 'var(--red)';
-        return;
-      }
-      if (gc.balance < totals.total) {
-        document.getElementById('gift-card-status').textContent =
-          `Insufficient balance: KES ${gc.balance.toFixed(2)} — use split for remainder`;
-        document.getElementById('gift-card-status').style.color = 'var(--orange)';
-        return;
-      }
+      /* Slice 13: the SERVER checks the card (PIN, this shop, balance, expiry) and debits it WITH the sale; a refusal
+         comes back from the sale itself and nothing is charged. */
+      const pin = ((document.getElementById('gift-card-pin') || {}).value || '').trim();
       closeModal('gift-card-overlay');
-      await PosLoyalty.redeemGiftCard(code, totals.total);
-      _finalize('gift_card', [{ method: 'gift_card', code, amount: totals.total }], totals);
+      _finalize('gift_card', [{ method: 'gift_card', code, pin, amount: totals.total }], totals);
     } catch (err) {
       document.getElementById('gift-card-status').textContent = err.message || 'Gift card error';
       document.getElementById('gift-card-status').style.color = 'var(--red)';
@@ -2987,6 +2946,56 @@ const Checkout = (() => {
     _s.pointsHold = null; _s.pointsPending = null;
     if (id) { try { await firebase.functions().httpsCallable('tillPointsCancel')({ shopId: _s.merchantId, redemptionId: id }); } catch (_) {} }
     _updateTotals(); _pointsPayUI();
+  }
+
+  /* ── INTASEND PAYMENTS AT THE TILL (slice 13) ────────────────────────────────────────────────────────────────── */
+  function _normKePhone(v) { const c = String(v || '').replace(/[\s\-().+]/g, ''); const m = c.match(/^(?:254|0)?([17]\d{8})$/); return m ? '254' + m[1] : c; }
+  async function _intasendIntent(amount) {
+    if (!_s.saleKey) _s.saleKey = (_resolveMerchantId() || _s.merchantId) + '_' + _s.cashierId + '_' + Date.now();
+    if (!_s.tillId) {
+      const t = await firebase.functions().httpsCallable('getMySokoniTill')({ shopId: _s.merchantId });
+      const d = (t && t.data) || {};
+      if (!d.exists || !d.sokoniTillId) throw new Error('This shop has no SOKONI Till yet, so M-PESA and card cannot be taken here.');
+      _s.tillId = d.sokoniTillId;
+    }
+    const r = await firebase.functions().httpsCallable('createPaymentIntent')({ purpose: 'pos_till_sale', sokoniTillId: _s.tillId, saleId: _s.saleKey,
+      items: [{ name: 'POS sale', price: amount, qty: 1 }] });
+    const d = (r && r.data) || {};
+    return { ref: d.ref, amount: d.amount != null ? d.amount : amount };
+  }
+  function _watchIntent(ref, onPaid, onFail) {
+    if (_s.mpesaWatchTimer) clearInterval(_s.mpesaWatchTimer);
+    _s.mpesaWatchTimer = setInterval(async () => {
+      try {
+        const snap = await firebase.firestore().collection('paymentIntents').doc(String(ref)).get();
+        const st = snap && (typeof snap.exists === 'function' ? snap.exists() : snap.exists) ? (snap.data() || {}).status : null;
+        if (st === 'paid' || st === 'completed') { clearInterval(_s.mpesaWatchTimer); _s.mpesaWatchTimer = null; onPaid(); }
+        else if (st === 'failed' || st === 'cancelled' || st === 'expired') { clearInterval(_s.mpesaWatchTimer); _s.mpesaWatchTimer = null; onFail('The payment was ' + st + '.'); }
+      } catch (_) { /* a read blip is not a failure — keep waiting */ }
+    }, 3000);
+  }
+  async function _payCardIntasend(totals) {
+    const statusEl = document.getElementById('mpesa-status');
+    openModal('mpesa-overlay');
+    document.getElementById('mpesa-amount').textContent = _kes(totals.total);
+    statusEl.className = 'mpesa-status pending visible';
+    statusEl.textContent = 'Preparing the card payment…';
+    _setState('PAYMENT');
+    try {
+      const it = await _intasendIntent(totals.total);
+      const q = await firebase.functions().httpsCallable('mintDynamicSokoniQR')({ ref: it.ref });
+      const url = ((q && q.data) || {}).qrUrl || '';
+      statusEl.innerHTML = '<span class="mpesa-spinner">⏳</span> The customer scans the payment QR and pays KES ' + Number(it.amount).toLocaleString() +
+        ' by card (or M-PESA) on their phone.<br><span style="word-break:break-all;font-size:11px">' + _e(url) + '</span>';
+      _startMpesaCountdown(180, () => _showMpesaRecovery('No payment yet (3 minutes). You can try again.'));
+      _watchIntent(it.ref, () => {
+        _clearMpesaCountdown();
+        statusEl.className = 'mpesa-status success visible';
+        statusEl.textContent = '✅ Payment received';
+        _setState('CONFIRMING');
+        setTimeout(() => { closeModal('mpesa-overlay'); _finalize('card', [{ method: 'card', amount: totals.total, intentRef: it.ref }], totals); }, 600);
+      }, (why) => { _clearMpesaCountdown(); _showMpesaRecovery(why); });
+    } catch (err) { _showMpesaRecovery((err && err.message) || 'The card payment could not be prepared.'); }
   }
 
   async function _finalize(method, payments, totals) {

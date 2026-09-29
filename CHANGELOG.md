@@ -1,3 +1,78 @@
+## [2026-09-30] - Till payment labels: every label is a real IntaSend-proven payment, or it is refused
+
+**Local only — NOT deployed, NOT pushed. Branch `slice/c4-convergence` on `8b9ca72`.** Owner:
+- "Every payment label must either represent a real authorized payment path, or be refused";
+- "no daraja everything intasend";
+- manual M-PESA refused;
+- card and gift card must work end to end.
+
+See `docs/PAYMENT_LABEL_AUTHORITY.md`.
+
+**Defects closed (shown on the parent):**
+- Any label `posCompleteCheckout` did not recognise (voucher, bank, qr, split, loyalty_full, cheque, credit,
+  gift_card, mpesa_till_manual …) completed a sale with no evidence, booked as electronic money.
+- A gift card was checked and decremented only on the device, so two sales could spend one card and the store was
+  never debited.
+- M-PESA and card at the till had no working path: pos-checkout called the legacy BOOKING payment
+  (`SokoniPay.platformBook`) or the retired Daraja `posSendMpesa`, and Sell had none.
+
+**Summary**
+- **Server (`posCompleteCheckout`):**
+  - Allow-list: cash, mpesa, card, wallet, points, gift_card. Everything else is refused, including `split` as a label
+    (its parts must prove themselves).
+  - M-PESA and card need a PAID IntaSend `pos_till_sale` payment: this shop, this sale's key, this exact amount,
+    claimed once via `posPaymentClaims`.
+  - The Daraja `posPayments` "completed" path and `mpesa_daraja` are retired. Manual M-PESA is refused.
+  - Gift cards use ONE store (`giftCards`): shop, active, unexpired, PIN, balance. It is pre-checked, then re-read and
+    debited inside the sale transaction. It is not counted as money arriving (`giftCardCents`), and
+    cash + gift card stays cash-in-drawer.
+- **Pricer (`payment-purposes pos_till_sale`):** records `metadata.saleId`, so one payment can settle only its sale.
+- **UI:**
+  - merchant-v2 Sell: M-PESA request / card payment QR through IntaSend; Complete is locked until PAID, then the sale
+    completes with `intentRef`.
+  - pos-checkout: the same, plus gift card by code + PIN (the device-side decrement is retired).
+  - `sokoni-merchant-data` carries `intentRef`.
+
+**Files:**
+- functions: `pos-zero-friction.js`, `payment-purposes.js`
+- pages / modules: `merchant-v2.html`, `pos-checkout.html`, `sokoni-merchant-sell.js`, `sokoni-merchant-data.js`
+- docs: `docs/PAYMENT_LABEL_AUTHORITY.md` (new)
+- tests (new): `scripts/test-payment-labels.js`, `scripts/test-payment-labels-sell-browser.js`,
+  `scripts/test-payment-labels-poscheckout-browser.js`
+
+**Database:**
+- `giftCards` balance debits with `redemptions` entries
+- `posPaymentClaims/{intentRef}`
+- intent `metadata.saleId`
+- sale `position.giftCardCents`
+
+No migration.
+
+**API:** `posCompleteCheckout` tenders take `intentRef` (mpesa / card) and `code` + `pin` (gift_card); unknown
+labels are refused.
+
+**Security:**
+- no payment completes on a client label;
+- the IntaSend proof is bound to shop, sale and amount, and single-use;
+- gift-card races are serialised by the transaction.
+
+**Tests:**
+- server 10/0; Chromium Sell 4/0 and pos-checkout 4/0; mutation manifest 20/20
+- counterproof on `8b9ca72`: server 9/10, Sell 5/6 and pos-checkout 5/6 fail there
+- full regression, 183 suites: 178 identical; the dirty-tree check; `merchant-v2-ecosystem-runtime` 131/0 alone;
+  3 new green
+
+**Known limitations:**
+- `pos-qr.js` is a second IntaSend till rail and needs converging.
+- Employee cashiers cannot ring a Quick Charge (owner-only pricer).
+- pos.js bypasses the sale authority.
+- Old gift-card stores are not migrated.
+
+**Deploy (when authorised):**
+- `posCompleteCheckout` and `createPaymentIntent`;
+- hosting for merchant-v2 and pos-checkout;
+- live tills sending the now-refused labels will get a clear refusal.
+
 ## [2026-09-29] - Quick Charge × SOKONI points: pay part of a Quick Charge with points, through the till's own authorities
 
 **Local only — NOT deployed. Branch `slice/c4-convergence`.**

@@ -955,6 +955,7 @@
     var payments = (o.payments || []).map(function (p) {
       var out = { method: String(p.method || 'cash'), amount: Number(p.amount) || 0, ref: p.ref || null };
       if (p.redemptionId) out.redemptionId = String(p.redemptionId);   /* Points P2b: the buyer's confirmation, never a figure */
+      if (p.intentRef) out.intentRef = String(p.intentRef);            /* slice 13: the PAID IntaSend payment that proves M-PESA / card */
       return out;
     });
 
