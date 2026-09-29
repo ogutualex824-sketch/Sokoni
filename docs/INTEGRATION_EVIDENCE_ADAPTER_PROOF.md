@@ -174,3 +174,74 @@ The guard's predicates are themselves asserted, so it can be shown capable of re
 
 Migration of exactly three — `firestore`, `memorystore-redis`, `cloud-storage` — remains **not
 authorized by this gate**, and after it the resolver disagreement states, then console adoption.
+
+---
+
+## 9 · The UNPROVEN control, investigated — it is a product finding, not a harness gap
+
+The next gate was to resolve the one UNPROVEN result. It does not resolve, and **why** it does not is
+the finding.
+
+Three configurations were tried against a dead endpoint (`127.0.0.1:1`), read-only, no repository
+file changed:
+
+| | configuration | outcome |
+|---|---|---|
+| A | `settings({ host, ssl:false })` | **HUNG** > 15000ms |
+| B | `settings({ clientConfig })` with gax `total_timeout_millis: 5000` and `RunQuery.timeout_millis` | **HUNG** > 15000ms |
+| C | `settings({ host, maxIdleChannels: 0 })` | **HUNG** > 15000ms |
+
+**The Admin SDK cannot be configured to fail fast here.** gax's per-method timeout does not bound a
+read that cannot establish a connection, so there is no test-only route to the control.
+
+### What that actually means
+
+The control was never really about the harness. **The adapter has no bounded failure mode**, and
+that has a production consequence the in-memory suite could not expose:
+
+```
+Firestore unreachable
+      ↓
+firestoreStore().list() never returns
+      ↓
+resolveIntegrationStatus never returns
+      ↓
+adminGetIntegrationStatus burns its whole invocation budget and dies
+      ↓
+the operator sees a spinner, then a generic failure
+```
+
+So `evidenceReadable: false` — the fail-closed state the model was designed around, carrying
+`evidenceError` and leaving all 52 `unknown` — **is unreachable through the real adapter**. It is
+reachable only through a store that throws, which is exactly what the in-memory suite injects. The
+logic is correct and the path to it does not exist.
+
+That is a defect in the Step B design, and only the adapter proof could have found it: every
+in-memory test injects a store, so none of them ever waits on a socket.
+
+### Proposed repair — not applied, not authorized
+
+Bound the read **inside the adapter**, so an unreachable database produces a clean, fast
+`evidenceReadable: false` instead of consuming the function's budget:
+
+```js
+async list () {
+  return await withDeadline(col().get(), EVIDENCE_READ_DEADLINE_MS);
+}
+```
+
+Two things must be got right, and both are reasons this should be reviewed rather than slipped in:
+
+- **The deadline must not turn a slow success into a false negative.** Firestore that is healthy but
+  briefly slow must not be reported as unreadable. The budget should be generous relative to a
+  normal read and small relative to the callable's own timeout — those two constraints leave a wide
+  window, but the number is a judgement, not a derivation.
+- **The reported state must stay `unreadable`, never `missing`.** The model already draws that
+  distinction correctly; a deadline must not quietly collapse it. An expired deadline is *"we could
+  not find out"*, not *"there is nothing there"*.
+
+With the deadline in place the control becomes provable in the same emulator run, so the repair and
+its proof land together.
+
+**Status: the UNPROVEN stands.** It is now understood rather than merely recorded, and it is a
+product gap rather than an environment limitation. Step E migration remains held behind it.
