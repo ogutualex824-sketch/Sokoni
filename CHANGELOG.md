@@ -1,3 +1,32 @@
+## 2026-09-29 — Capability authority, C2: the read model (branch `feat/integrations-control-center`, READ ONLY, NOT deployed)
+
+The owner locked the model: ONE business identity → approved capabilities → capability state stamped at approval;
+additive and independently approvable (PRODUCTS + SERVICES = both, never a transformation); never derived from category
+text, URL, card type, localStorage role, registry existence alone, or the dashboard entered through.
+
+- **`functions/shared/business-capabilities.js`** (new, pure) — vocabulary (two capabilities, five states, five
+  classifications of which three routable, three authority statuses); the stamp schema for
+  `businesses/{id}.capabilities` and its strict validator (a client-shaped stamp is INVALID → CONFLICT); `observe()`
+  reports what records CONTAIN through `business-scope.js` liveness (reused, not restated); `propose()` yields
+  classification, proposed states, authority status (STAMPED / NOT_YET_STAMPED / INVALID_STAMP) and coded conflicts
+  (`seller_status_without_approval`, `provider_status_without_approval`, `approval_without_projection`,
+  `products_without_products_capability`, `stamp_disagrees_with_registry`, `stamp_invalid`); `resolveRouting()` is
+  the contract for the existing surfaces — UNCLASSIFIED and CONFLICT route nowhere, never a default. **Imported by no
+  production file** (asserted); stamps nothing.
+- **`docs/CAPABILITY_AUTHORITY_READ_MODEL.md`** — model, stamp, conflicts, the safety distinction (observed ≠ proposed
+  ≠ stamped; the DG Wine / Latomi shape proposes SERVICES only, PRODUCTS absent), the routing contract, the category
+  boundary, and **§6b: the c4 lineage already holds the workspace authority (`business-workspace.js`), the canonical
+  "What are you offering?" intake (`offer.html` → Register My Business) and the category→dashboard matrix** — none of
+  it an ancestor of this branch. The read model is the missing products/services dimension of that authority and must
+  be consumed by it; C6–C8 belong on that base line. Peer sessions confirmed no overlap.
+- Not done, by design: no stamp written, no migration, no resolver wired, no deploy (this branch lacks hotfix
+  `1171a16`; no Functions deploy from here).
+
+Evidence: `scripts/test-business-capabilities.js` **45/0** — closed vocabulary; strict stamp; observation never reads a
+label (a provider with `category: retail-shop` stays provider-only); all classifications and conflicts; additivity;
+the DG Wine / Latomi shape; routing contract incl. nowhere-with-reason; static: no label read, no Firestore handle, no
+production importer (with a control); negative controls.
+
 ## 2026-09-29 — Classification → storefront → dashboard: read-only census (branch `feat/integrations-control-center`, NOT deployed)
 
 First slice of the new convergence track (business / service provider / Double Business). Nothing changed, nothing
