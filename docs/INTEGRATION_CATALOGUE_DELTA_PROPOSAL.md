@@ -260,3 +260,65 @@ promotes it to "analytics works" goes red.
   displays. That is the next slice, not this one.
 - **No deployment.** No webhook-engine repair — that finding stays frozen in §4 as its own lane. No
   weak candidate added. No HostPinnacle third row. No production change.
+
+---
+
+## 8 · Two censuses reconciled — after the fact
+
+A second, independent census (13 recursive greps, abandoned for slowness and completed later)
+disagreed with the single-pass scanner that produced §3. Where two measurements of the same question
+disagree, the disagreement is resolved by **reading the matching lines**, not by preferring the tool
+that agrees with the conclusion already committed.
+
+| candidate | scanner | grep | resolved by reading |
+|---|---|---|---|
+| **google-workspace** | 0 | 12 | **classification CONFIRMED** — see below |
+| bigquery | 0 | 15 | one comment: *"BigQuery via Firestore export **instead**"* — explicitly NOT used |
+| pubsub | 0 | 7 | Eventarc topic names in recovery baselines — Eventarc's transport, already covered by the `eventarc` entry |
+| cloud-kms | 0 | 3 | a security-audit **description string** about AES-256, not KMS usage |
+| crashlytics | 1 | 3 | `skills-lock.json` only |
+| cloud-build | 1 | 17 | **7 code files, not 1** — my count was too low. See below. |
+
+Most of the gap was prose: the grep counted `docs/` and `CHANGELOG.md`, including entries written
+during this very session. The scanner's stricter patterns looked for API endpoints, which is the
+right test for *code integration* but silently misses a comment.
+
+### Google Workspace — the evidence strengthens the classification
+
+Five files, two of which are the entries just added. The other three are:
+
+```
+functions/admin-invitations.js:43        /* Google Workspace production sender identity. */
+functions/scripts/sync-admin-estate.js   "Google Workspace mailbox state cannot be read from
+                                          here — it needs …"
+scripts/test-communication-engine.js     asserts "we have no human mailbox transport" must be
+                                          visible
+```
+
+All three are prose, and **two of them state outright that Workspace is not readable or usable as a
+transport from SOKONI**. So the loose census did not find a hidden integration — it found the
+platform already saying, in two places, that there is no code path. That is confirmation, not
+contradiction.
+
+One thing worth a later look: `admin-invitations.js:43` calls a Workspace address the *"production
+sender identity"*. A sender address is a string, not an integration — but the relationship between
+that identity and whichever rail actually sends is worth establishing in the messaging lane.
+
+### Cloud Build — the HOLD was right, my count was not
+
+I reported "1 weak file, and it's AR-forensics tooling". It is **7 code files**, and one of them
+genuinely contacts the service:
+
+```
+scripts/infra/ar-forensics.js:146   ['Cloud Build', 'protoPayload.serviceName="cloudbuild.googleapis.com"']
+scripts/infra/verify-settled-guard-deploy-20260926.js:87   gcloud builds describe …
+```
+
+**This does not change the HOLD, and it should not be acted on here.** But it removes the stated
+reason for it: "operator scripts query it, nothing deployed does" is precisely the basis on which
+`cloud-monitoring` is **already catalogued**, with `healthKind: 'elsewhere'` and the note *"Queried
+by script, not by any deployed function."* There is a precedent that would justify adding Cloud
+Build on the same terms.
+
+Recorded as a candidate for the next delta, with the corrected count, rather than slipped into this
+one. The HOLD stands until it is reviewed on its own.
