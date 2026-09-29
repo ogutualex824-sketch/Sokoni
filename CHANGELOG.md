@@ -1,3 +1,15 @@
+## [2026-09-29] - Identity 1 of 6 landed: k Riss classified `artist_creator` through the AdminOS authority (PRODUCTION, owner-authorized digest `b7a2053b…70a0`)
+
+**Applied 19:31:10Z** by the real `bizAdminClassify` handler (Admin SDK, actor `admin-sdk:classify-identity`):
+`providers/3SkVHLqJXzfeQlQ4PfBx5DFR4at2.business = { artist_creator, source admin, classifiedBy, setAt }` + `updatedAt`, and
+`adminAudit/moktBGFpfTaKTZIBvcdC` (`business_classify`, previous null → artist_creator, the owner-authorization reason).
+**Mutation count: one provider row + one audit.** Landing 14/0: every other provider field, the application, users doc,
+wallet and Auth claims byte-identical; no approval evidence written; sellers/businesses/shops still absent; bookings and
+products unchanged; counts unchanged except adminAudit +1; identity census distribution and cleanup digest unchanged.
+**Production resolver: artist_creator → services → provider-dashboard.html → AVAILABLE** (capability SERVICES). Second
+apply → `already_classified`, nothing written. Packet `docs/LANDING_KRISS_ARTIST_CREATOR.md` +
+`docs/release-gates/kriss-landing.json`. Kasindi, DJ Bvmbxno and the rest untouched; no deploy.
+
 ## [2026-09-29] - Exact-six adjudication census (READ ONLY; no writes)
 
 `docs/ADJUDICATION_SIX_UNRESOLVED.md`. The six R3-unresolved ids reconciled (the "three status-only" are Shave 'n'
