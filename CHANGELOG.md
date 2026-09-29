@@ -61,7 +61,8 @@ owner's product brief §2 / §5 / §6.
     product's seller). B7 and C7 fail **identically on both trees** (pre-existing).
   - **`test-trust-integrity` RP6** (16/0): the report callable now goes through `SokoniSecureCall`.
 - **Dirty-tree suites** (`cart-*`, `checkout-fallback-total`) fail only because this slice was uncommitted when they
-  ran. They are re-run after this commit.
+  ran. After commit `c2ad1f3` they are **green**: cart-category 45/0, cart-market-actions 56/0, cart-product 49/0,
+  cart-2-3-4 50/0, checkout-fallback-total 58/58.
 
 **UNPROVEN / NOT DONE:**
 - Not deployed.
