@@ -184,7 +184,8 @@ service cloud.firestore {
   let decisive = ['approved','active','accepted','verified','rejected','declined','denied',
   'suspended','revoked','banned','disabled'];
   let decisionKeys = ['decidedBy','decidedAt','decisionAppliedFor','projectionStatus','blockedFor',
-  'statusCanonical','reviewReason','agreementVerifiedAt','agreementVerifiedVersion'];
+  'statusCanonical','reviewReason','agreementVerifiedAt','agreementVerifiedVersion',
+  'priorDecisions'];
   let d = request.resource.data;
   return (resource == null
   ? !d.keys().hasAny(decisionKeys)
@@ -196,7 +197,8 @@ service cloud.firestore {
   match /applications/{appId} {
   allow create: if claimsOwner() && noAdminFields() && noApplicationDecision();
   allow read:   if isAdmin() || isOwner();
-  allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields() && noApplicationDecision()
+  allow update: if (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['priorDecisions']))
+  || (isOwner() && claimsOwner() && noAdminFields() && noApplicationDecision()
   && classificationFrozenOnceDecided());
   allow delete: if isAdmin() || isOwner();
   }

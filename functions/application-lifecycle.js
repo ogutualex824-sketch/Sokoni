@@ -1295,6 +1295,34 @@ async function decisionAuthority(after, appId) {
   }
 }
 
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   PRIOR-DECISION PRESERVATION (owner decision 2026-09-29, Kasindi repair).
+   applicationDecide writes `decidedBy` / `decidedAt` onto the application document, so re-deciding a
+   document that already carries a decision would DESTROY the record of who (or what) decided it
+   before — for Kasindi, the defective July `decidedBy: "reindex"` event the adjudication rests on.
+   Before the new decision is written, the existing decision is appended to `priorDecisions`, a
+   server-only array (firestore.rules noApplicationDecision withholds it from the applicant;
+   sokoni-merchant-application.js FORBIDDEN refuses it at intake).
+   Deduplicated on (decidedBy, decidedAt): re-deciding twice preserves once. The prior state is
+   copied VERBATIM — never reinterpreted, never rewritten as an admin decision. */
+function priorDecisionsPatch(app, actor, decision) {
+  const a = app || {};
+  const by = typeof a.decidedBy === 'string' ? a.decidedBy.trim() : '';
+  if (!by) return {};
+  const existing = Array.isArray(a.priorDecisions) ? a.priorDecisions : [];
+  const at = a.decidedAt || null;
+  const same = (e) => e && e.decidedBy === by && JSON.stringify(e.decidedAt) === JSON.stringify(at);
+  if (existing.some(same)) return {};
+  const entry = {
+    status: a.status || null, statusCanonical: a.statusCanonical || null, decidedBy: by, decidedAt: at,
+    decisionAppliedFor: a.decisionAppliedFor || null, projectionStatus: a.projectionStatus || null,
+    reviewReason: a.reviewReason || null,
+    preservedAt: new Date().toISOString(), preservedBy: actor, supersededBy: decision,
+  };
+  return { priorDecisions: existing.concat([entry]) };
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    TRIGGER — applications/{appId}
    Settles in at most two extra hops: normalise (1), project (1), then every
@@ -1493,7 +1521,10 @@ exports.applicationDecide = onCall(
       reason: _sanText(reason, 500) || null,
     });
 
+    /* Preserve the decision this one supersedes BEFORE overwriting decidedBy/decidedAt (see priorDecisionsPatch). */
+    const preserved = priorDecisionsPatch(snap.data(), actor, decision);
     await ref.set({
+      ...preserved,
       status,
       statusCanonical: canonStatus(status),
       reviewReason: _sanText(reason, 500) || null,
@@ -1704,6 +1735,7 @@ exports.applicationList = onCall(
 
 /* Internals exported for unit tests and for the reconcile script. */
 exports._internal = {
+  priorDecisionsPatch,
   toE164KE, toLocalKE, splitLocation, resolveRole, canonStatus, normVehicle, _san, _sanText,
   /* projectSeller is exported so provider-shop.js can provision a healthcare provider's
      merchant identity through THIS function rather than a healthcare-specific copy. One

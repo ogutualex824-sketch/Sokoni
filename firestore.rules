@@ -338,7 +338,8 @@ service cloud.firestore {
       let decisive = ['approved','active','accepted','verified','rejected','declined','denied',
                       'suspended','revoked','banned','disabled'];
       let decisionKeys = ['decidedBy','decidedAt','decisionAppliedFor','projectionStatus','blockedFor',
-                          'statusCanonical','reviewReason','agreementVerifiedAt','agreementVerifiedVersion'];
+                          'statusCanonical','reviewReason','agreementVerifiedAt','agreementVerifiedVersion',
+                          'priorDecisions'];
       let d = request.resource.data;
       return (resource == null
                 ? !d.keys().hasAny(decisionKeys)
@@ -353,7 +354,10 @@ service cloud.firestore {
       allow read:   if isAdmin() || isOwner();
       /* The applicant may amend or withdraw a request that is still theirs
          (e.g. correcting a phone number), but cannot decide it. */
-      allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields() && noApplicationDecision()
+      /* priorDecisions is the immutable record of superseded decisions, appended ONLY by applicationDecide
+         (priorDecisionsPatch); not even an administrator's raw client write may touch it. */
+      allow update: if (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['priorDecisions']))
+                    || (isOwner() && claimsOwner() && noAdminFields() && noApplicationDecision()
                                      && classificationFrozenOnceDecided());
       allow delete: if isAdmin() || isOwner();
     }

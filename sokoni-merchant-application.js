@@ -90,7 +90,7 @@
     'verified', 'isAdmin', 'admin', 'superAdmin', 'suspended', 'banned',
     'flagged', 'adminNote', 'commissionRate', 'featured',
     'claims', 'customClaims', 'sellerClaim',
-    'decidedBy', 'decidedAt', 'reviewReason',
+    'decidedBy', 'decidedAt', 'reviewReason', 'priorDecisions',
     /* The acknowledgement itself is the applicant's to give (see
        AGREEMENT_VERSION), but its VERIFICATION is server-stamped at the moment
        of approval. A client that could write these could make an unacknowledged
