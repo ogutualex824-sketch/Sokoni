@@ -353,7 +353,7 @@
       <div class="ub-lb-actions">
         <button type="button" class="ub-lb-action ub-lb-like-btn" id="lbLikeBtn" onclick="lightboxLike()">❤️ <span id="lbLikeCount">0</span> Helpful</button>
         <button type="button" class="ub-lb-action ub-lb-share-btn" onclick="lightboxShare()"><i class="fab fa-whatsapp"></i> Share</button>
-        <button type="button" class="ub-lb-action ub-lb-report-btn" onclick="showToast('Thank you for the report. We will review it.',3000)">⚑ Report</button>
+        <!-- 2026-09-29: the Report button here only showed "Thank you for the report. We will review it." — nothing was sent, and these unboxing posts live in this browser's localStorage, so no one could review them. Removed rather than faked. Real reports: product page (tsReportContent). -->
       </div>
     </div>
   </div>

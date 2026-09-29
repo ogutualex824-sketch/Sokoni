@@ -1,3 +1,127 @@
+## [2026-09-29] - Disputes and reports readable on every side: AdminOS, super admin, merchant-v2 and the buyer
+
+**Functions + AdminOS + super admin + merchant-v2 + buyer pages, NOT deployed.** Branch `slice/c4-category-matrix`.
+Owner: "make sure disputes are well connected and readable both in admins and merchant sides … make sure reports page
+is connected to both admin and superadmin and merchant … fix any reports to appear". Authority map:
+`docs/DISPUTES_AND_REPORTS_AUTHORITY.md`.
+
+**Census — why nothing appeared:**
+- **Every new dispute was locked.** `automation-engine.autoOnDisputeCreate` set `status:'under_review'` on every new
+  dispute, before it even read its rule.
+  - `under_review` is in no open list. The seller could not respond, neither party could add evidence, and the buyer
+    could not withdraw.
+  - AdminOS listed only `open`, so its queue was always empty. Its query errors were also swallowed as "No open
+    disputes".
+- **AdminOS showed "—" for both parties.** Disputes store no names.
+- **AdminOS resolved outside the dispute authority.** Its resolve wrote the status directly: no timeline entry, no
+  order sync, and "Buyer / Seller Wins" was stored as the resolution **text**.
+- **Super admin had no disputes and no content reports.**
+  - The legacy `superadmin.html` queried reports with `status=='open'`, which nothing writes, and resolved them with a
+    direct client write.
+  - Conversation reports (`moderationQueue`) reached no admin workspace.
+- **Merchants never saw reports** about their own listings.
+- **`dispute.html` (linked from index, help, legal and emails) was client-only.**
+  - It listed orders from localStorage and invented a "DSP…" reference.
+  - It said "submitted" regardless of the outcome.
+  - It wrote a raw `disputes` doc with no buyer or seller. `getSellerDisputes` never returned it.
+- **`unboxing.html`'s Report button** said "Thank you for the report" and sent nothing.
+
+**Fixed:**
+- **Trigger:** it only marks itself processed. When its rule is on, an `open` dispute moves to `investigating` (an
+  open status). Legacy `under_review` disputes are honoured as open, so **no data migration**.
+- **One admin dispute authority (`functions/disputes.js`):**
+  - List with the parties' **names**; filters `active` / `final` / `all` / one status. It queries by status only, so it
+    needs no composite index. A failure is an **error**, never an empty list.
+  - Detail with timeline, evidence and the seller's response.
+  - Resolve requires a note and records `favorBuyer`, a timeline entry, the order sync and `adminAudit`.
+  - `admin-os.js` `adminGetDisputes` / `aosResolveDispute` (and the new `adminGetDisputeDetail`) **delegate** to it.
+    trust-safety.html's `adminGetAllDisputes` uses the same list.
+- **One admin surface, `sokoni-trust-queues.js`,** mounted by:
+  - AdminOS › Financial › Disputes and Fraud › Reports Queue;
+  - super-admin.html: new **Disputes** and **Trust reports** sections;
+  - the legacy console's moderation card.
+
+  It covers disputes (drawer: complaint, both parties, seller response, evidence, timeline; Resolve for a side, Mark
+  investigating, Close), listing and user reports (every status; Dismiss, Escalate, Action, Take product down) and
+  conversation reports (Dismiss, Warn, Suspend). "Resolved" appears only after the server. Esc and ✕ close it; there
+  is no horizontal scroll at 390 px.
+- **AdminOS KPI:** counts every open status, not only `open`.
+- **merchant-v2 › Disputes › Reports:**
+  - `tsGetReports({scope:'mine'})` is filtered by the server on `context.sellerUid`. It returns the listing, the reason
+    category, the status, "Listing taken down" (the admin take-down now records `productHidden` on the report) and
+    SOKONI's outcome note.
+  - It **never** returns who reported or their free text.
+  - The admin path of `tsGetReports` is unchanged and still admin-only.
+- **Buyer:**
+  - `dispute.html` is a **router** to `dispute-portal.html` (the callable-backed centre), carrying `?order=`. The portal
+    prefills the order and honours the legacy status.
+  - `SokoniDispute.*` now calls `createDispute`, `addDisputeEvidence`, `getDisputeDetail` and `cancelDispute`. There
+    are no direct Firestore writes; `requestRefund` explains that SOKONI decides refunds.
+- **unboxing.html:** the fake Report button is removed. The product page Report button already reaches
+  `tsReportContent`.
+
+**Tests:**
+- **`scripts/test-disputes-reports-convergence.js`: 14/0.** It runs the REAL disputes, admin-os, trust-safety and
+  messages modules and the trigger.
+  - Counterproof on `2a30c78`: **12 fail**. RC1 passes there as a control (that backend already existed). DA4 passes
+    there only by a stub-shape accident, so its proof is the sabotage.
+  - Sabotage: **16/16 caught**, including the trigger, an error swallowed as an empty list, the reporter leaking to the
+    seller, and the AdminOS resolve bypass.
+- **`scripts/test-disputes-reports-browser.js`: 8/0** (Chromium; the REAL shared queue and the REAL merchant Disputes
+  module against the REAL handlers):
+  - admin sees both parties → drawer → a side is required → resolved;
+  - product report → taken down;
+  - conversation report listed;
+  - Esc closes the drawer; no horizontal scroll at 390 px;
+  - the seller sees "Listing taken down" and the reason, never the reporter;
+  - `dispute.html?order=` lands on the portal.
+
+**Regression** (59 suites that read the changed files; work tree vs `4fbd029`, the same list on both trees):
+- Everything is equal except the following.
+- **Superseded, each updated with its reason:**
+  - **`test-merchant-disputes` H1:** the open-status list is derived from the server's declaration, which gained
+    legacy `under_review`.
+  - **`test-merchant-disputes` H5:** the admin gate lives in the named core `_adminResolve`. Result: 60/0.
+  - **`test-trust-integrity` AD1:** the reports queue lives in the shared module. Result: 16/0.
+- **`test-admin-os-wiring`:** 5 checks vanished because the dispute and report calls left sokoni-aos.js. They are
+  restored as TQ0–TQ3 over the shared module: 327/0 (base 325).
+- **Unchanged pre-existing failures:** `aos-security` fails identically on both trees.
+- The AdminOS suites were re-run after the KPI edit and match the base.
+
+**UNPROVEN / NOT DONE:**
+- Not deployed.
+- The Firestore rules for `disputes` still gate reads on `uid` / `buyerUid` / `sellerUid`. They are harmless (every
+  reader is a callable) and are stage 3.
+- `_san` escapes dispute text at write time (pre-existing).
+- No Report button on marketplace cards.
+- `impact.js` and `analytics-engine.js` query dispute fields that do not exist.
+- `createCheckoutSession` is untouched in this slice.
+
+**Files:**
+- `functions/disputes.js`, `functions/admin-os.js`, `functions/trust-safety.js`, `functions/automation-engine.js`
+- `sokoni-trust-queues.js` (new), `sokoni-aos.js`, `admin-os.html`, `super-admin.html`, `superadmin.html`
+- `merchant-v2.html`, `sokoni-merchant-disputes.js`, `sokoni-merchant-disputes-ui.js`
+- `dispute.html`, `dispute-portal.html`, `sokoni-trust.js`, `unboxing.html`
+- `docs/DISPUTES_AND_REPORTS_AUTHORITY.md` (new), the 2 new suites and 3 updated suites
+
+**Database:**
+- No migration.
+- New field `reports.productHidden`, and `adminAudit` entries for dispute decisions.
+- There is no new index (the list queries by status only).
+
+**API:**
+- New `adminOsDispatch` op `adminGetDisputeDetail`.
+- `aosResolveDispute` now takes `{ disputeId, action, resolution, favorBuyer }`.
+- `tsGetReports({ scope: 'mine' })` returns a seller's own listing reports.
+
+**Security:**
+- The seller view never returns the reporter or their text.
+- Admin resolve requires a side and a note.
+- Removed client writes: `SokoniDispute.*`, the legacy console's `updateDoc(reports)`, and dispute.html.
+
+**Breaking:** the old `aosResolveDispute({ resolution: 'buyer' | 'seller' })` shape is replaced; its only caller was
+AdminOS, which is updated.
+
 ## [2026-09-29] - Product conversations (T2a): "Chat seller" and product questions reach the seller in merchant-v2 Messages; real public Q&A
 
 **Functions + product page + merchant-v2 Messages, NOT deployed.** Branch `slice/c4-category-matrix`. This is the

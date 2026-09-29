@@ -171,7 +171,9 @@
     var S = {
       phase: 'loading',      /* loading | not_signed_in | error | ready */
       error: null,
-      tab: 'open',           /* open | all */
+      tab: 'open',           /* open | all | reports */
+      /* reports about THIS account's listings (tsGetReports scope:'mine' — server-filtered, reporter never shown) */
+      reports: null, reportsPhase: 'idle', reportsError: null,
       disputes: [],
       sheet: null,           /* null | 'detail' | 'respond' | 'evidence' */
       current: null,
@@ -202,6 +204,51 @@
       });
     }
 
+    function loadReports() {
+      if (typeof ctx.callReports !== 'function') { S.reportsPhase = 'error'; S.reportsError = 'Reports are not connected on this page.'; paint(); return Promise.resolve(); }
+      S.reportsPhase = 'loading'; paint();
+      return Promise.resolve(ctx.callReports({ scope: 'mine' })).then(function (r) {
+        var d = r && r.data ? r.data : r;
+        S.reports = (d && d.reports) || []; S.reportsPhase = 'ready'; paint();
+      }).catch(function (e) {
+        S.reportsPhase = 'error'; S.reportsError = (e && e.message) || 'Reports could not be loaded.'; paint();
+      });
+    }
+
+    var REPORT_STATE = {
+      pending:   { label: 'SOKONI is reviewing', tone: 'wait' },
+      escalated: { label: 'SOKONI is reviewing', tone: 'wait' },
+      dismissed: { label: 'No action needed',    tone: 'done' },
+      actioned:  { label: 'Action taken',        tone: 'action' },
+    };
+    function reportsHTML() {
+      var head = '<div class="mdp-banner"><b>Reports on your listings.</b> A buyer can report a listing they think ' +
+        'is wrong, unsafe or fake. SOKONI reviews every report; who reported it is never shown. If a listing is taken ' +
+        'down, the reason appears here.</div>';
+      if (S.reportsPhase === 'loading' || S.reportsPhase === 'idle') {
+        return '<div class="mdp-body">' + head + '<div class="sk-line" style="width:70%;margin-top:14px"></div><div class="sk-line" style="width:52%"></div></div>';
+      }
+      if (S.reportsPhase === 'error') {
+        return '<div class="mdp-body">' + head + '<div class="mdp-state"><div class="ic">⚠️</div><div class="hd">Reports could not be loaded</div>' +
+          esc(S.reportsError || '') + '<div style="margin-top:18px"><button class="mdp-btn" data-act="reload-reports">Try again</button></div></div></div>';
+      }
+      if (!S.reports.length) {
+        return '<div class="mdp-body">' + head + '<div class="mdp-state"><div class="ic">🛡️</div><div class="hd">No reports on your listings</div>' +
+          'Nothing has been reported. Accurate photos, prices and descriptions keep it that way.</div></div>';
+      }
+      return '<div class="mdp-body">' + head + S.reports.map(function (r) {
+        var st = r.productHidden ? { label: 'Listing taken down', tone: 'action' } : (REPORT_STATE[r.status] || { label: r.status || '—', tone: 'wait' });
+        var link = r.entityType === 'product' && r.entityId ? 'product.html?id=' + encodeURIComponent(r.entityId) : null;
+        return '<div class="mdp-card' + (st.tone === 'action' ? ' action' : '') + '" style="cursor:default">' +
+          '<div class="mdp-hd"><div class="info"><div class="mdp-nm">' + esc(r.productName || r.entityId || 'Listing') + '</div>' +
+          '<div class="mdp-sub">Reported: ' + esc(r.reason || '—') + (r.createdAt ? ' · ' + esc(String(r.createdAt).slice(0, 10)) : '') + '</div></div></div>' +
+          (r.outcome ? '<div class="mdp-desc"><b>SOKONI:</b> ' + esc(r.outcome) + '</div>' : '') +
+          '<div class="mdp-status ' + st.tone + '">' + esc(st.label) + '</div>' +
+          (link ? ' <a class="mdp-btn ghost" style="min-height:40px;margin-top:10px" href="' + link + '" target="_blank" rel="noopener">View listing</a>' : '') +
+        '</div>';
+      }).join('') + '</div>';
+    }
+
     function visible() {
       return S.tab === 'open' ? S.disputes.filter(function (d) { return DP.isOpen(d.status); }) : S.disputes;
     }
@@ -218,10 +265,13 @@
           'Needs attention' + (open ? ' · ' + open : '') + '</button>' +
         '<button class="mdp-tab' + (S.tab === 'all' ? ' on' : '') + '" data-act="tab" data-t="all">' +
           'All' + (S.disputes.length ? ' · ' + S.disputes.length : '') + '</button>' +
+        '<button class="mdp-tab' + (S.tab === 'reports' ? ' on' : '') + '" data-act="tab" data-t="reports">' +
+          'Reports' + (S.reports && S.reports.length ? ' · ' + S.reports.length : '') + '</button>' +
       '</div></div>';
     }
 
     function bodyHTML() {
+      if (S.tab === 'reports') return reportsHTML();
       if (S.phase === 'loading') {
         return '<div class="mdp-body"><div class="sk-line" style="width:70%"></div>' +
           '<div class="sk-line" style="width:52%"></div><div class="sk-line" style="width:62%"></div></div>';
@@ -470,7 +520,10 @@
       var act = el.getAttribute('data-act');
       var i = parseInt(el.getAttribute('data-i'), 10);
 
-      if (act === 'tab')            { S.tab = el.getAttribute('data-t') || 'open'; paint(); return; }
+      if (act === 'tab')            { S.tab = el.getAttribute('data-t') || 'open';
+                                      if (S.tab === 'reports' && S.reportsPhase !== 'ready') { loadReports(); return; }
+                                      paint(); return; }
+      if (act === 'reload-reports') { loadReports(); return; }
       if (act === 'reload')         { load(); return; }
       if (act === 'open')           { openDetail(i); return; }
       if (act === 'close')          { if (S.busy) return; S.sheet = null; S.current = null;

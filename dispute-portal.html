@@ -293,12 +293,18 @@ var REASON_LABELS = {
   overcharged:'Wrong amount charged',other:'Other issue',
   buyer_cancelled:'Withdrawn by buyer'
 };
-var STATUS_ICONS = { open:'🔵',investigating:'🟡',seller_responded:'🟣',resolved:'✅',closed:'⚫' };
+var STATUS_ICONS = { open:'🔵',investigating:'🟡',under_review:'🟡',seller_responded:'🟣',resolved:'✅',closed:'⚫' };
 
 /* ── Auth ────────────────────────────────────────────────────────────────── */
 firebase.auth().onAuthStateChanged(function(user){
-  if(!user){ location.href='login.html'; return; }
+  if(!user){ location.href='login.html?next='+encodeURIComponent(location.pathname+location.search); return; }
   _loadDisputes();
+  /* 2026-09-29: dispute.html, order pages and emails link here with ?order= / ?orderId= — open the form with it filled */
+  var q=new URLSearchParams(location.search), oid=(q.get('orderId')||q.get('order')||'').trim().slice(0,128);
+  if(oid&&/^[A-Za-z0-9_-]+$/.test(oid)){
+    var t=document.querySelectorAll('.tab')[1]; if(t) _tab(t,'new');
+    document.getElementById('orderId').value=oid;
+  }
 });
 
 /* ── Tab navigation ─────────────────────────────────────────────────────── */

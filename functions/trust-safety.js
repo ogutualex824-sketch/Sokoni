@@ -111,6 +111,9 @@ exports.tsReportContent = onCall(OPT_REPORT, async (req) => {
    2. tsGetReports — admin: list reports with status filter
 ──────────────────────────────────────────────────────────────────────────── */
 exports.tsGetReports = onCall(OPT, async (req) => {
+  /* 2026-09-29: a SELLER may read reports about THEIR OWN products (scope:'mine'), filtered by the server on the
+     server-captured context.sellerUid — never who reported, never the reporter's free text. Everything else is admin. */
+  if ((req.data || {}).scope === 'mine') return _myListingReports(req);
   _requireAdmin(req);
   const { status, entityType, severity, limit: lim } = req.data;
 
@@ -129,6 +132,25 @@ exports.tsGetReports = onCall(OPT, async (req) => {
 
   return { reports: docs };
 });
+
+async function _myListingReports(req) {
+  const uid = req.auth && req.auth.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+  const snap = await getFirestore().collection('reports').where('context.sellerUid', '==', uid).limit(100).get();
+  const reports = snap.docs.map((d) => {
+    const r = d.data() || {}; const c = r.context || {};
+    const status = r.status || 'pending';
+    return {
+      id: d.id, entityType: r.entityType || null, entityId: r.entityId || null,
+      productName: c.productName || null, reason: r.reason || null, severity: r.severity || null, status,
+      productHidden: r.productHidden === true,
+      /* the administrator's outcome note is shown once a report is decided — it tells the seller why */
+      outcome: status === 'pending' ? null : String(r.resolution || '').slice(0, 500) || null,
+      createdAt: r.createdAt && r.createdAt.toMillis ? new Date(r.createdAt.toMillis()).toISOString() : null,
+    };
+  }).sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0));
+  return { reports, scope: 'mine' };
+}
 
 /* ─────────────────────────────────────────────────────────────────────────
    3. tsReviewReport — admin: approve | dismiss | escalate
@@ -165,6 +187,8 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
       await pref.set({ isVisible: false, moderationHold: { reportId, reason: report.reason, by: req.auth.uid, at: FieldValue.serverTimestamp() },
         updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       productHidden = true;
+      /* recorded on the report too, so the seller's view (scope:'mine') can say the listing was taken down */
+      await ref.set({ productHidden: true }, { merge: true });
     }
   }
 

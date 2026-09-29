@@ -218,6 +218,22 @@ for (const op of OPS) {
 
 console.log('\nPART F — every inline handler in the page exists on the public API\n');
 
+/* 2026-09-29: AdminOS's disputes tab and reports queue are the SHARED trust queue (sokoni-trust-queues.js, also
+   mounted by super admin). Its calls leave sokoni-aos.js, so the D1/D2 scan above no longer sees them — the same
+   reachability is asserted here for the module: every adminOsDispatch op it names has an _h handler, and every
+   callable it names directly is exported by index.js. */
+{
+  const TQ = fs.readFileSync(path.join(ROOT, 'sokoni-trust-queues.js'), 'utf8');
+  /* every op the module names, minus the ones it sends to messagesDispatch (conversation reports) */
+  const msgOps = new Set([...TQ.matchAll(/call\('messagesDispatch', \{ op: '([A-Za-z0-9_]+)'/g)].map((m) => m[1]));
+  const tqOps = [...new Set([...TQ.matchAll(/op: '([A-Za-z0-9_]+)'/g)].map((m) => m[1]))].filter((o) => !msgOps.has(o)).sort();
+  const tqDirect = [...new Set([...TQ.matchAll(/call\('([A-Za-z0-9_]+)'/g)].map((m) => m[1]))].filter((n) => !/Dispatch$/.test(n)).sort();
+  ck('TQ0 control — the trust queue names its dispute ops and report callables', tqOps.length >= 3 && tqDirect.length >= 2, { tqOps, tqDirect });
+  for (const op of tqOps) ck(`TQ1 ${op} (trust queue) has a server handler in _h`, handlers.has(op), handlers.has(op) ? '' : 'adminOsDispatch answers not-found');
+  for (const fn of tqDirect) ck(`TQ2 ${fn} (trust queue) is exported by functions/index.js`, standalone.has(fn));
+  ck('TQ3 admin-os.html loads the trust queue', /<script src="sokoni-trust-queues\.js"><\/script>/.test(HTML));
+}
+
 const invoked = [...new Set([...HTML.matchAll(/SokoniAOS\.([a-zA-Z0-9_]+)\s*\(/g)].map((m) => m[1]))].sort();
 ck('F0  inline SokoniAOS.* calls found', invoked.length > 5, invoked.length);
 for (const fnName of invoked) {

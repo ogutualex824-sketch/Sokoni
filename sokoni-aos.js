@@ -184,7 +184,9 @@ window.SokoniAOS = (() => {
     _listen(_db.collection("payoutRequests").where("status", "==", "pending"),
       snap => _set("kpiPendingPayouts", snap.size));
 
-    _listen(_db.collection("disputes").where("status", "==", "open"),
+    /* every OPEN status (functions/disputes.js OPEN_STATUSES) — counting only 'open' hid investigating, responded and
+       legacy under_review disputes (2026-09-29) */
+    _listen(_db.collection("disputes").where("status", "in", ["open", "investigating", "seller_responded", "under_review"]),
       snap => _set("kpiDisputes", snap.size));
 
     _listen(_db.collection("businesses").where("status", "==", "active"),
@@ -907,22 +909,10 @@ window.SokoniAOS = (() => {
           </tr>`).join("")}</tbody></table>` : _emptyMsg("No pending payouts");
         body.insertAdjacentHTML("beforeend", await _outcomeUnknownSection());
       } else if (tab === "disputes") {
-        const data = await _call("adminGetDisputes", { status: "open", limit: 30 });
-        const disputes = data.disputes || [];
-        body.innerHTML = disputes.length ? `<table class="aos-table"><thead><tr>
-            <th>ID</th><th>Buyer</th><th>Seller</th><th>Amount</th><th>Reason</th><th>Date</th><th>Actions</th>
-          </tr></thead><tbody>${disputes.map(d => `<tr>
-            <td class="aos-mono">${d.id?.slice(0,8)||"—"}</td>
-            <td>${_esc(d.buyerName||"—")}</td>
-            <td>${_esc(d.sellerName||"—")}</td>
-            <td>KES ${_fmt(d.amount||0)}</td>
-            <td class="aos-muted">${_esc(d.reason||"—")}</td>
-            <td class="aos-muted">${_date(d.createdAt)}</td>
-            <td>
-              <button class="aos-btn-sm success" onclick="SokoniAOS.resolveDispute('${d.id}','buyer')">Buyer Wins</button>
-              <button class="aos-btn-sm warning" onclick="SokoniAOS.resolveDispute('${d.id}','seller')">Seller Wins</button>
-            </td>
-          </tr>`).join("")}</tbody></table>` : _emptyMsg("No open disputes");
+        /* 2026-09-29: the shared trust queue (sokoni-trust-queues.js) — the same surface super admin mounts. The old
+           table listed only status 'open' (always empty: a trigger moved every dispute to 'under_review'), showed "—"
+           for both parties, and its Buyer/Seller Wins buttons stored the side as the resolution TEXT. */
+        _mountTrustQueue(body, "disputes");
       } else if (tab === "refunds") {
         const snap = await _db.collection("refundRequests").where("status","==","pending")
           .orderBy("createdAt","desc").limit(30).get().catch(() => null);
@@ -1143,16 +1133,6 @@ window.SokoniAOS = (() => {
       return;
     }
     _toast("Payout rejected","success"); _financialTab("payouts");
-  }
-  async function resolveDispute(id, winnerSide) {
-    const note = prompt("Resolution note:");
-    try {
-      await _call("aosResolveDispute", { disputeId: id, resolution: winnerSide, note });
-    } catch (e) {
-      _toast(e.message, "error");
-      return;
-    }
-    _toast("Dispute resolved","success"); _financialTab("disputes");
   }
   async function processRefund(id, action) {
     const note = action === "rejected" ? prompt("Rejection reason:") : "";
@@ -1875,29 +1855,21 @@ window.SokoniAOS = (() => {
      reported (with the server-captured product context) and offers the server's actions: dismiss, action, escalate,
      and — for a product — take it down (isVisible:false + moderationHold, audited in trustSafetyAudit). */
   async function viewReports() {
-    const data = await _call("tsGetReports", { status: "pending", limit: 50 }).catch(() => ({ reports: [] }));
-    const reports = data.reports || [];
-    const q = (v) => _esc(String(v == null ? "" : v)).replace(/'/g, "&#39;");
-    _modal("Reports Queue", `<table class="aos-table"><thead><tr>
-        <th>Type</th><th>Reported</th><th>Reason</th><th>Severity</th><th>Date</th><th>Actions</th>
-      </tr></thead><tbody>${reports.map(r => {
-        const c = r.context || {};
-        const what = r.entityType === "product"
-          ? `<a href="product.html?id=${encodeURIComponent(r.entityId || "")}" target="_blank" rel="noopener">${_esc(c.productName || r.entityId || "—")}</a><div class="aos-muted">seller ${_esc(c.sellerUid || "—")} · ${c.isVisible === false ? "hidden" : "live"}${c.price != null ? " · KES " + _esc(c.price) : ""}</div>`
-          : `<span class="aos-muted">${_esc(r.entityId || "—")}</span>`;
-        return `<tr>
-        <td>${_esc(r.entityType || "—")}</td>
-        <td>${what}</td>
-        <td>${_esc(r.reason || "—")}${r.detail ? `<div class="aos-muted">${_esc(r.detail)}</div>` : ""}</td>
-        <td>${_esc(r.severity || "—")}</td>
-        <td class="aos-muted">${_date(r.createdAt)}</td>
-        <td>
-          <button class="aos-btn-sm success" onclick="SokoniAOS.reviewReport('${q(r.id)}','dismiss')">Dismiss</button>
-          <button class="aos-btn-sm" onclick="SokoniAOS.reviewReport('${q(r.id)}','escalate')">Escalate</button>
-          <button class="aos-btn-sm danger" onclick="SokoniAOS.reviewReport('${q(r.id)}','approve')">Action</button>
-          ${r.entityType === "product" ? `<button class="aos-btn-sm danger" onclick="SokoniAOS.reviewReport('${q(r.id)}','approve',true)">Take product down</button>` : ""}
-        </td>
-      </tr>`; }).join("") || _emptyRow(6,"No pending reports")}</tbody></table>`);
+    /* 2026-09-29: the shared trust queue — listing / user reports AND conversation reports (moderationQueue, which
+       reached no admin workspace before), with every status, not only 'pending'. */
+    _modal("Reports Queue", '<div id="aosTrustReports"></div>');
+    const box = document.querySelector("#aosModal .modal-box"); if (box) box.style.maxWidth = "980px";
+    _mountTrustQueue(document.getElementById("aosTrustReports"), "reports");
+  }
+
+  function _mountTrustQueue(host, view) {
+    if (!window.SokoniTrustQueues) {
+      host.innerHTML = _emptyMsg("The trust queue did not load — check that sokoni-trust-queues.js is served on this page.");
+      return;
+    }
+    window.SokoniTrustQueues.mount(host, { view,
+      callable: (name) => (payload) => _fn.httpsCallable(name)(payload).then((r) => r.data),
+      onToast: (m, k) => _toast(m, k === "success" ? "success" : "info") });
   }
 
   async function reviewReport(id, action, hideProduct) {
@@ -3359,7 +3331,6 @@ window.SokoniAOS = (() => {
     approvePayout,
     rejectPayout,
     resolvePayoutOutcome,
-    resolveDispute,
     processRefund,
     // Support
     loadSupport:         _loadSupport,

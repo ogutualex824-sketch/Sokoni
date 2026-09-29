@@ -341,6 +341,12 @@
     <button class="nav-item" data-section="revenue" onclick="SA.nav('revenue');_closeSidebar()">
       <span class="nav-icon">&#x1F4B9;</span>Revenue
     </button>
+    <button class="nav-item" data-section="disputes" onclick="SA.nav('disputes');_closeSidebar()">
+      <span class="nav-icon">&#x2696;&#xFE0F;</span>Disputes
+    </button>
+    <button class="nav-item" data-section="trust" onclick="SA.nav('trust');_closeSidebar()">
+      <span class="nav-icon">&#x1F6A9;</span>Trust reports
+    </button>
     <button class="nav-item" data-section="reports" onclick="SA.nav('reports');_closeSidebar()">
       <span class="nav-icon">&#x1F4C8;</span>Reports
     </button>
@@ -703,6 +709,24 @@
     <!-- ══ SECTION: Reports Builder ══
          Same module admin-os.html mounts. It adopts this console's colour tokens
          on its own; nothing here is restyled. -->
+    <section class="sa-panel" id="panel-disputes" hidden>
+      <div class="panel-header">
+        <h2>&#x2696;&#xFE0F; Disputes</h2>
+        <p>Every buyer dispute, with both parties, the seller's response, evidence and timeline. Decisions go through
+           the one dispute authority (the same one AdminOS uses) and are recorded on the timeline both parties see.</p>
+      </div>
+      <div id="disputesRoot"></div>
+    </section>
+
+    <section class="sa-panel" id="panel-trust" hidden>
+      <div class="panel-header">
+        <h2>&#x1F6A9; Trust reports</h2>
+        <p>Reports on listings, users and conversations. A product report can take the listing down; the seller sees
+           the outcome in merchant-v2 › Disputes › Reports.</p>
+      </div>
+      <div id="trustRoot"></div>
+    </section>
+
     <section class="sa-panel" id="panel-reports" hidden>
       <div class="panel-header">
         <h2>&#x1F4C8; Reports Builder</h2>
@@ -1067,6 +1091,8 @@ const SA={
     else if(section==='emergency')this.loadEmergency();
     else if(section==='revenue')this.loadRevenue();
     else if(section==='reports')this.loadReports();
+    else if(section==='disputes')this.loadTrustQueue('disputesRoot','disputes');
+    else if(section==='trust')this.loadTrustQueue('trustRoot','reports');
     else if(section==='integrations')this.loadIntegrations();
     else if(section==='connect')this.loadConnect();
     else if(section==='comms')this.loadComms();
@@ -1093,6 +1119,21 @@ const SA={
       return;
     }
     window.SokoniRevenue.mount(root);
+  },
+
+  // ══ SECTIONS: Disputes + Trust reports (sokoni-trust-queues.js, shared with AdminOS) ═══
+  loadTrustQueue(rootId, view){
+    const root=document.getElementById(rootId);
+    if(!root)return;
+    if(!window.SokoniTrustQueues){
+      root.innerHTML='<p style="color:var(--muted);font-size:13px">The trust queue did not load. ' +
+        'Check that sokoni-trust-queues.js is served on this page.</p>';
+      return;
+    }
+    const fns=this._fns;
+    window.SokoniTrustQueues.mount(root,{ view,
+      callable:(name)=>(payload)=>fns.httpsCallable(name)(payload).then(r=>r.data),
+      onToast:(m,k)=>_toast(m,k==='success'?'success':'info') });
   },
 
   // ══ SECTION: Reports Builder ════════════════════════════
@@ -2260,6 +2301,7 @@ const SA={
 <script src="sokoni-aos-users.js"></script>
 <script src="sokoni-revenue-intelligence.js"></script>
 <script src="sokoni-reports-builder.js"></script>
+<script src="sokoni-trust-queues.js"></script>
 <script src="sokoni-integration-catalogue.js"></script>
 <script src="sokoni-integrations.js"></script>
 <!-- The one WRITE surface, kept in its own file so sokoni-integrations.js

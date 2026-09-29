@@ -125,7 +125,11 @@ const as = (uid, data, token) => ({ auth: uid ? { uid, token: token || {} } : nu
     /SokoniSecureCall\('tsReportContent', payload\)/.test(st) && /httpsCallable\(/.test(st) && !/addDoc\(fs\.collection\(db, 'flags'\)/.test(st) && /SokoniReport\.submit\('product',pid/.test(ph)
     && !/var u = window\.firebaseAuth && window\.firebaseAuth\.currentUser;\n  if\(!u\)\{ \(window\._skToast\|\|alert\)\('Please sign in to report a listing\.'\)/.test(ph) && !/'Report submitted\. Thank you\.'/.test(ph));
   const aos = src('sokoni-aos.js');
-  ck('AD1 AdminOS shows entityId + product context and sends only server actions', /c\.productName \|\| r\.entityId/.test(aos) && !/reviewReport\('\$\{r\.id\}','action'\)/.test(aos) && /'approve',true\)/.test(aos));
+  /* 2026-09-29: AdminOS's reports queue is now the SHARED module (sokoni-trust-queues.js — also super admin) */
+  const tq = src('sokoni-trust-queues.js');
+  ck('AD1 AdminOS shows entityId + product context and sends only server actions', /_mountTrustQueue\(document\.getElementById\("aosTrustReports"\), "reports"\)/.test(aos)
+    && /c\.productName \|\| r\.entityId/.test(tq) && /'r-dismiss': 'dismiss', 'r-escalate': 'escalate', 'r-approve': 'approve', 'r-takedown': 'approve'/.test(tq)
+    && /hideProduct: act === 'r-takedown'/.test(tq) && !/'action'\s*\}/.test(tq));
   const md = src('moderation.html');
   ck('MD1 moderation.html: no report data in onclick script, escapes \', ban only on a user report', !/onclick="reportAction\(/.test(md) && /replace\(\/'\/g,'&#39;'\)/.test(md) && /r\.type==='user' \? '<button class="mod-action-btn btn-ban"/.test(md));
 

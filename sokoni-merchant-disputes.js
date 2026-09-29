@@ -53,11 +53,13 @@
 
   /* Mirrors OPEN_STATUSES in functions/disputes.js. A dispute outside this set
      is closed to both parties — the server refuses evidence and responses. */
-  var OPEN_STATUSES = ['open', 'investigating', 'seller_responded'];
+  /* 'under_review' is legacy (a trigger wrote it until 2026-09-29); the server treats it as open, so this does too. */
+  var OPEN_STATUSES = ['open', 'investigating', 'seller_responded', 'under_review'];
 
   var STATUS_LABELS = {
     open:              { label: 'Awaiting your response', tone: 'action' },
     investigating:     { label: 'SOKONI is reviewing',    tone: 'wait' },
+    under_review:      { label: 'SOKONI is reviewing',    tone: 'wait' },
     seller_responded:  { label: 'Awaiting SOKONI review', tone: 'wait' },
     resolved:          { label: 'Resolved by SOKONI',     tone: 'done' },
     cancelled:         { label: 'Withdrawn by the buyer', tone: 'done' },

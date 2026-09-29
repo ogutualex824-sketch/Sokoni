@@ -207,160 +207,81 @@
   /* ================================================================
      window.SokoniDispute
   ================================================================ */
+  /* 2026-09-29: every method goes through the dispute AUTHORITY (functions/disputes.js) via SokoniSecureCall.
+     These used to write Firestore directly: open() created a `disputes` doc with no buyerId / sellerId (the seller and
+     AdminOS never saw it), requestRefund() wrote refund fields from the client, and close() tried to resolve from the
+     browser. Nothing here decides money or outcomes — SOKONI resolves in AdminOS / super admin. */
+  function _dErr(err, fallback) {
+    var m = err && err.message ? String(err.message).replace(/^FirebaseError:\s*/, '') : '';
+    return m && !/^internal$/i.test(m) ? m : fallback;
+  }
   window.SokoniDispute = {
+    /* { orderId, reason, description|details } → disputeId (the buyer's own order only; one dispute per order) */
     open: async function (disputeData) {
-      var uid = getUID();
-      if (!uid) {
+      disputeData = disputeData || {};
+      if (!getUID()) {
         showToast('Sign in to open a dispute.', 'error');
         setTimeout(function () { window.location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search); }, 1200);
         return null;
       }
-      if (!disputeData.orderId || !disputeData.reason) {
-        showToast('Order ID and reason are required.', 'error');
-        return null;
-      }
-      var doc = Object.assign({}, disputeData, {
-        uid:       uid,
-        status:    'open',
-        createdAt: new Date().toISOString(),
-        createdBy: uid,
-        messages:  [],
-        evidence:  []
-      });
+      if (!disputeData.orderId || !disputeData.reason) { showToast('Order ID and reason are required.', 'error'); return null; }
       try {
-        var db = getDB();
-        if (!db) throw new Error('No DB');
-        var fs = await firestoreImport();
-        var ref = await fs.addDoc(fs.collection(db, 'disputes'), doc);
-        showToast('Dispute opened. Reference: ' + ref.id.slice(0, 8).toUpperCase());
-        return ref.id;
+        var r = await window.SokoniSecureCall('createDispute', { orderId: String(disputeData.orderId), reason: String(disputeData.reason),
+          description: String(disputeData.description || disputeData.details || '').slice(0, 2000) });
+        var id = r && r.disputeId;
+        if (id) showToast('Dispute opened. SOKONI will review it.');
+        return id || null;
       } catch (err) {
-        console.error('[SokoniDispute.open]', err);
-        showToast('Could not open dispute. Try again.', 'error');
+        showToast(_dErr(err, 'Could not open the dispute. Try again.'), 'error');
         return null;
       }
     },
 
     addEvidence: async function (disputeId, evidenceUrl, label) {
-      /* Validate URL — only allow https:// to prevent javascript: injection */
       if (typeof evidenceUrl !== 'string' || !evidenceUrl.startsWith('https://')) {
         showToast('Invalid evidence URL. Only secure HTTPS links allowed.', 'error');
-        return;
+        return false;
       }
-      if (!getUID()) { showToast('Sign in to add evidence.', 'error'); return; }
       try {
-        var db = getDB();
-        if (!db) throw new Error('No DB');
-        var fs = await firestoreImport();
-        var ref = fs.doc(db, 'disputes', disputeId);
-        await fs.updateDoc(ref, {
-          evidence: fs.arrayUnion({
-            url:     evidenceUrl,
-            label:   String(label || '').slice(0, 100),
-            addedAt: new Date().toISOString(),
-            addedBy: getUID()
-          })
-        });
+        await window.SokoniSecureCall('addDisputeEvidence', { disputeId: String(disputeId), evidenceType: 'link',
+          description: String(label || 'Evidence link').slice(0, 1000), fileUrl: evidenceUrl });
         showToast('Evidence added.');
-      } catch (err) {
-        console.error('[SokoniDispute.addEvidence]', err);
-        showToast('Failed to add evidence.', 'error');
-      }
+        return true;
+      } catch (err) { showToast(_dErr(err, 'Failed to add evidence.'), 'error'); return false; }
     },
 
-    sendMessage: async function (disputeId, message, senderUid, senderName) {
-      var uid = getUID();
-      if (!uid) { showToast('Sign in to send a message.', 'error'); return; }
-      /* Hard length cap — Firestore rule also enforces 2000 chars */
-      var msg = String(message || '').trim().slice(0, 2000);
-      if (!msg) { showToast('Message cannot be empty.', 'error'); return; }
+    /* a written statement joins the dispute's evidence and timeline (both parties and SOKONI read it) */
+    sendMessage: async function (disputeId, message) {
+      var msg = String(message || '').trim().slice(0, 1000);
+      if (!msg) { showToast('Message cannot be empty.', 'error'); return false; }
       try {
-        var db = getDB();
-        if (!db) throw new Error('No DB');
-        var fs = await firestoreImport();
-        var msgCol = fs.collection(db, 'disputes', disputeId, 'messages');
-        await fs.addDoc(msgCol, {
-          message:    msg,
-          senderUid:  uid,
-          senderName: String(senderName || 'User').slice(0, 60),
-          sentAt:     new Date().toISOString()
-        });
-      } catch (err) {
-        console.error('[SokoniDispute.sendMessage]', err);
-        showToast('Message failed to send.', 'error');
-      }
+        await window.SokoniSecureCall('addDisputeEvidence', { disputeId: String(disputeId), evidenceType: 'statement', description: msg });
+        return true;
+      } catch (err) { showToast(_dErr(err, 'Message failed to send.'), 'error'); return false; }
     },
 
+    /* one read of the dispute (party or admin); returns an unsubscribe for API compatibility */
     listen: async function (disputeId, callback) {
       try {
-        var db = getDB();
-        if (!db) return function () {};
-        var fs = await firestoreImport();
-        var ref = fs.doc(db, 'disputes', disputeId);
-        return fs.onSnapshot(ref, function (snap) {
-          callback(snap.exists() ? Object.assign({ id: snap.id }, snap.data()) : null);
-        });
-      } catch (err) {
-        console.error('[SokoniDispute.listen]', err);
-        return function () {};
-      }
+        var r = await window.SokoniSecureCall('getDisputeDetail', { disputeId: String(disputeId) });
+        callback(r && r.dispute ? r.dispute : null);
+      } catch (err) { callback(null); }
+      return function () {};
     },
 
-    requestRefund: async function (disputeId, amount, reason) {
-      /* Verify caller is party to this dispute before writing */
-      var uid = getUID();
-      if (!uid) {
-        showToast('Sign in to request a refund.', 'error');
-        return;
-      }
-      var parsedAmount = parseFloat(amount);
-      if (!parsedAmount || parsedAmount <= 0) {
-        showToast('Enter a valid refund amount.', 'error');
-        return;
-      }
-      try {
-        var db = getDB();
-        if (!db) throw new Error('No DB');
-        var fs = await firestoreImport();
-        var ref = fs.doc(db, 'disputes', disputeId);
-        /* Read dispute first — confirm caller is the buyer/uid owner */
-        var snap = await fs.getDoc(ref);
-        if (!snap.exists()) { showToast('Dispute not found.', 'error'); return; }
-        var d = snap.data();
-        if (d.uid !== uid && d.buyerUid !== uid) {
-          showToast('You are not authorised to request a refund on this dispute.', 'error');
-          return;
-        }
-        await fs.updateDoc(ref, {
-          refundRequested:   true,
-          refundAmount:      parsedAmount,
-          refundReason:      String(reason || '').slice(0, 500),
-          refundRequestedAt: new Date().toISOString()
-        });
-        showToast('Refund request submitted.');
-      } catch (err) {
-        console.error('[SokoniDispute.requestRefund]', err);
-        showToast('Refund request failed.', 'error');
-      }
+    /* Refunds are decided by SOKONI when the dispute is resolved — never requested by writing fields from here. */
+    requestRefund: async function () {
+      showToast('SOKONI decides any refund when it resolves the dispute. Add your evidence to the dispute instead.', 'error');
+      return false;
     },
 
-    close: async function (disputeId, resolution) {
-      /* admin only — UI enforces, Firestore rules enforce */
+    /* the BUYER withdrawing their own dispute (cancelDispute). SOKONI's decisions are made in AdminOS. */
+    close: async function (disputeId) {
       try {
-        var db = getDB();
-        if (!db) throw new Error('No DB');
-        var fs = await firestoreImport();
-        var ref = fs.doc(db, 'disputes', disputeId);
-        await fs.updateDoc(ref, {
-          status:     'resolved',
-          resolution: resolution || '',
-          resolvedAt: new Date().toISOString()
-        });
-        showToast('Dispute closed.');
-      } catch (err) {
-        console.error('[SokoniDispute.close]', err);
-        showToast('Failed to close dispute.', 'error');
-      }
+        await window.SokoniSecureCall('cancelDispute', { disputeId: String(disputeId) });
+        showToast('Dispute withdrawn.');
+        return true;
+      } catch (err) { showToast(_dErr(err, 'Could not withdraw the dispute.'), 'error'); return false; }
     }
   };
 

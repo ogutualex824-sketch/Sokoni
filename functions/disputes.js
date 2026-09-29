@@ -22,7 +22,11 @@ const VALID_REASONS = [
   'overcharged',      // Charged wrong amount
   'other',
 ];
-const OPEN_STATUSES = ['open', 'investigating', 'seller_responded'];
+/* 'under_review' is LEGACY: automation-engine's autoOnDisputeCreate wrote it onto every new dispute until 2026-09-29,
+   which locked the dispute for everyone (it was in no open list). It is honoured as open — "SOKONI is reviewing" —
+   so those disputes work again without a data migration. Nothing writes it any more. */
+const OPEN_STATUSES = ['open', 'investigating', 'seller_responded', 'under_review'];
+const FINAL_STATUSES = ['resolved', 'closed'];
 
 function _requireAuth(auth) {
   if (!auth) throw new HttpsError('unauthenticated', 'Login required');
@@ -238,18 +242,59 @@ exports.adminGetAllDisputes = onCall({ enforceAppCheck: true }, async request =>
   if (!_ac.isAdmin(t))
     throw new HttpsError('permission-denied', 'Admin access required');
 
-  const { status, limit } = request.data || {};
-  let q = db.collection('disputes').orderBy('createdAt', 'desc');
-  if (status) q = q.where('status', '==', status);
-  q = q.limit(Math.min(Number(limit) || 100, 500));
-
-  const snap = await q.get();
-  const disputes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  return { disputes };
+  return _adminList(request.data || {});
 });
 
+/* ── The admin list, shared by trust-safety.html (adminGetAllDisputes), AdminOS and super admin
+   (adminOsDispatch → adminGetDisputes). 2026-09-29.
+   status: 'active' (default — every open status, incl. legacy under_review) | 'final' | 'all' | one status.
+   Queries by status only and sorts in memory, so no composite index is needed; a query failure is an ERROR, never an
+   empty list ("No open disputes" while the query had failed was the old AdminOS behaviour).
+   Each row carries buyerName / sellerName from users/{uid} — disputes never stored names, so AdminOS showed "—". */
+function _ts(v) { return v && typeof v.toMillis === 'function' ? v.toMillis() : (v && v.seconds ? v.seconds * 1000 : (typeof v === 'string' ? Date.parse(v) || 0 : 0)); }
+function _iso(v) { const ms = _ts(v); return ms ? new Date(ms).toISOString() : null; }
+async function _names(uids) {
+  const ids = [...new Set(uids.filter((u) => typeof u === 'string' && u && !u.includes('/')))].slice(0, 300);
+  const out = {};
+  if (!ids.length) return out;
+  const snaps = await db.getAll(...ids.map((u) => db.collection('users').doc(u)));
+  snaps.forEach((s) => {
+    const u = s.exists ? (s.data() || {}) : {};
+    out[s.id] = String(u.businessName || u.displayName || u.name || u.fullName || '').slice(0, 80) || null;
+  });
+  return out;
+}
+function _row(id, d, names) {
+  return {
+    id, orderId: d.orderId || null, buyerId: d.buyerId || null, sellerId: d.sellerId || null,
+    buyerName: names[d.buyerId] || null, sellerName: names[d.sellerId] || null,
+    reason: d.reason || null, description: d.description || null, amount: typeof d.amount === 'number' ? d.amount : null,
+    status: d.status || null, open: OPEN_STATUSES.includes(d.status),
+    sellerResponse: d.sellerResponse || null, sellerRespondedAt: _iso(d.sellerRespondedAt),
+    evidenceCount: Array.isArray(d.evidence) ? d.evidence.length : 0,
+    resolution: d.resolution || null, favorBuyer: typeof d.favorBuyer === 'boolean' ? d.favorBuyer : null,
+    createdAt: _iso(d.createdAt), updatedAt: _iso(d.updatedAt), resolvedAt: _iso(d.resolvedAt),
+  };
+}
+async function _adminList(data) {
+  const status = String(data.status || 'active');
+  const lim = Math.min(Math.max(Number(data.limit) || 100, 1), 300);
+  let q = db.collection('disputes');
+  if (status === 'active') q = q.where('status', 'in', OPEN_STATUSES);
+  else if (status === 'final') q = q.where('status', 'in', FINAL_STATUSES);
+  else if (status !== 'all') {
+    if (![...OPEN_STATUSES, ...FINAL_STATUSES].includes(status)) throw new HttpsError('invalid-argument', 'Unknown status filter.');
+    q = q.where('status', '==', status);
+  }
+  const snap = await (status === 'all' ? q.orderBy('createdAt', 'desc').limit(lim) : q.limit(lim)).get();
+  const docs = snap.docs.map((d) => ({ id: d.id, d: d.data() || {} }));
+  const names = await _names(docs.flatMap((x) => [x.d.buyerId, x.d.sellerId]));
+  const disputes = docs.map((x) => _row(x.id, x.d, names)).sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0));
+  return { disputes, items: disputes, count: disputes.length, status };
+}
+
 // ─── adminResolveDispute — admin resolves or updates a dispute status ─────────
-exports.adminResolveDispute = onCall({ enforceAppCheck: true }, async request => {
+const _adminResolve = async request => {
   _requireAuth(request.auth);
   const t = request.auth.token;
   if (!_ac.isAdmin(t))
@@ -257,6 +302,8 @@ exports.adminResolveDispute = onCall({ enforceAppCheck: true }, async request =>
 
   const uid = request.auth.uid;
   const { disputeId, action, resolution } = request.data || {};
+  /* who the decision favours — recorded when resolving (AdminOS asks); never inferred */
+  const favorBuyer = typeof (request.data || {}).favorBuyer === 'boolean' ? request.data.favorBuyer : null;
   if (!disputeId) throw new HttpsError('invalid-argument', 'disputeId required');
   if (!action)    throw new HttpsError('invalid-argument', 'action required');
 
@@ -274,7 +321,7 @@ exports.adminResolveDispute = onCall({ enforceAppCheck: true }, async request =>
     event:     'admin_action',
     actor:     uid,
     actorRole: 'admin',
-    note:      `Status changed to ${action}${resolution ? ': ' + _san(resolution, 500) : ''}`,
+    note:      `Status changed to ${action}${action === 'resolved' && favorBuyer !== null ? (favorBuyer ? ' in the buyer\'s favour' : ' in the seller\'s favour') : ''}${resolution ? ': ' + _san(resolution, 500) : ''}`,
     ts:        new Date().toISOString(),
   };
 
@@ -289,6 +336,7 @@ exports.adminResolveDispute = onCall({ enforceAppCheck: true }, async request =>
     update.resolution  = _san(resolution || '', 1000);
     update.resolvedAt  = FieldValue.serverTimestamp();
     update.resolvedBy  = uid;
+    if (action === 'resolved' && favorBuyer !== null) update.favorBuyer = favorBuyer;
   }
 
   await snap.ref.update(update);
@@ -304,5 +352,38 @@ exports.adminResolveDispute = onCall({ enforceAppCheck: true }, async request =>
     }
   }
 
+  await db.collection('adminAudit').add({ action: 'dispute_' + action, disputeId, favorBuyer, performedBy: uid,
+    createdAt: FieldValue.serverTimestamp() }).catch(() => {});
   return { success: true, disputeId, action };
-});
+};
+exports.adminResolveDispute = onCall({ enforceAppCheck: true }, _adminResolve);
+
+/* Admin detail: the whole record (timeline, evidence, seller response, order snapshot) plus the parties' names. */
+const _adminDetail = async request => {
+  _requireAuth(request.auth);
+  if (!_ac.isAdmin(request.auth.token)) throw new HttpsError('permission-denied', 'Admin access required');
+  const disputeId = String((request.data || {}).disputeId || '');
+  if (!disputeId || disputeId.includes('/')) throw new HttpsError('invalid-argument', 'disputeId required');
+  const snap = await db.collection('disputes').doc(disputeId).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Dispute not found');
+  const d = snap.data() || {};
+  const names = await _names([d.buyerId, d.sellerId]);
+  return { dispute: Object.assign(_row(snap.id, d, names), {
+    timeline: Array.isArray(d.timeline) ? d.timeline.slice(-100) : [],
+    evidence: Array.isArray(d.evidence) ? d.evidence.slice(-50) : [],
+    orderSnapshot: d.orderSnapshot || null, adminNotes: d.adminNotes || null,
+  }) };
+};
+
+/* Admin ops for adminOsDispatch (admin-os.js delegates here) — ONE dispute authority for AdminOS, super admin and
+   trust-safety.html. */
+exports._adminH = {
+  adminGetDisputes: async (req) => {
+    _requireAuth(req.auth);
+    if (!_ac.isAdmin(req.auth.token)) throw new HttpsError('permission-denied', 'Admin access required');
+    return _adminList(req.data || {});
+  },
+  adminGetDisputeDetail: _adminDetail,
+  aosResolveDispute: _adminResolve,
+};
+exports.OPEN_STATUSES = OPEN_STATUSES;

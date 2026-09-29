@@ -421,10 +421,16 @@ exports.autoOnDisputeCreate = onDocumentCreated(
     const dispute   = event.data?.data();
     if (!dispute || dispute.automationProcessed) return;
 
-    await event.data.ref.update({ automationProcessed: true, status: 'under_review' });
+    /* 2026-09-29: this used to set status 'under_review' on EVERY new dispute, before even reading its rule.
+       'under_review' is not an open status in disputes.js, so the seller could not respond, neither party could add
+       evidence, the buyer could not withdraw, and AdminOS (which listed 'open') showed nothing. The trigger now only
+       marks itself processed; when the rule is enabled, an OPEN dispute moves to 'investigating' — an open status
+       ("SOKONI is reviewing") that keeps every party's actions available. */
+    await event.data.ref.update({ automationProcessed: true });
 
     const rule   = await _getRule('disputes');
     if (!rule.enabled) return;
+    if ((dispute.status || 'open') === 'open') await event.data.ref.update({ status: 'investigating' });
 
     const amount = Number(dispute.amount || 0);
 

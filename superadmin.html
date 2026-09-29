@@ -21,6 +21,7 @@
 <script src="sokoni-cart.js"></script>
 <script src="shared-header.js"></script>
   <script src="sokoni-permissions.js"></script>
+  <script src="sokoni-trust-queues.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
     :root{
@@ -557,10 +558,11 @@ window.SAApp = {
 
   async _loadBadges() {
     try {
-      const reports = await getCountFromServer(query(collection(db,'reports'),where('status','==','open')));
+      /* reports are written 'pending' by tsReportContent — this counted 'open', which nothing writes (2026-09-29) */
+      const reports = await getCountFromServer(query(collection(db,'reports'),where('status','==','pending')));
       const n = reports.data().count;
       document.getElementById('saBadgeMod').textContent = n;
-      document.getElementById('saModCount').textContent = `${n} open`;
+      document.getElementById('saModCount').textContent = `${n} pending`;
       if (n > 0) document.getElementById('saBadgeUsers').textContent = n;
     } catch(_) {}
   },
@@ -703,37 +705,18 @@ window.SAApp = {
     } catch(e){ el.innerHTML=`<div class="sa-empty"><p>${_esc(e.message)}</p></div>`; }
   },
 
+  /* 2026-09-29: moderation is the SHARED trust queue (sokoni-trust-queues.js — also in super-admin.html and AdminOS).
+     This console queried status 'open' (reports are written 'pending', so it was always empty), read fields reports do
+     not have (type, description, reporterEmail), and resolved by writing the report directly — no audit, no product
+     take-down. Decisions now go through tsReviewReport / messagesDispatch. */
   async loadModeration() {
     const el = document.getElementById('saModerationTable');
-    el.innerHTML='<div class="sa-spinner"><div></div></div>';
-    try {
-      const snap = await getDocs(query(collection(db,'reports'), where('status','==','open'), orderBy('createdAt','desc'), limit(40)));
-      document.getElementById('saModCount').textContent = `${snap.size} open`;
-      el.innerHTML = snap.empty
-        ? '<div class="sa-empty"><div class="sa-empty-icon">✅</div><p>No open reports</p></div>'
-        : `<table class="sa-table"><thead><tr><th>Type</th><th>Description</th><th>Reporter</th><th>Date</th><th>Action</th></tr></thead>
-           <tbody>${snap.docs.map(d=>{
-             const r=d.data();
-             return `<tr>
-               <td><span class="sa-pill pill-red">${_esc(r.type||'report')}</span></td>
-               <td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;">${_esc(r.description||r.reason||'')}</td>
-               <td style="font-size:12px;color:rgba(255,255,255,.45);">${_esc(r.reporterEmail||r.reporterUid||'')}</td>
-               <td style="font-size:12px;color:rgba(255,255,255,.35);">${_ago(r.createdAt)}</td>
-               <td style="display:flex;gap:6px;">
-                 <button class="sa-btn sa-btn-ghost" style="font-size:11px;padding:5px 10px;" onclick="SAApp.resolveReport('${d.id}','resolved')">Resolve</button>
-                 <button class="sa-btn sa-btn-danger" style="font-size:11px;padding:5px 10px;" onclick="SAApp.resolveReport('${d.id}','actioned')">Action</button>
-               </td>
-             </tr>`;
-           }).join('')}</tbody></table>`;
-    } catch(e){ el.innerHTML=`<div class="sa-empty"><p>${_esc(e.message)}</p></div>`; }
+    if (!window.SokoniTrustQueues) { el.innerHTML='<div class="sa-empty"><p>The trust queue did not load.</p></div>'; return; }
+    window.SokoniTrustQueues.mount(el, { view: 'reports',
+      callable: (name) => (payload) => httpsCallable(fns, name)(payload).then((r) => r.data),
+      onToast: (m) => this.toast(m) });
   },
 
-  async resolveReport(id, status) {
-    try {
-      await updateDoc(doc(db,'reports',id), { status, resolvedAt: serverTimestamp(), resolvedBy: this._user?.uid });
-      this.toast('Report '+status); this.loadModeration();
-    } catch(e){ this.toast('Error: '+e.message); }
-  },
 
   async loadAdmins() {
     const el = document.getElementById('saAdminsTable');

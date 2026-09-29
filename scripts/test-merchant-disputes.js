@@ -231,14 +231,17 @@ console.log('\nPART G — nothing local, nothing removed\n');
 console.log('\nPART H — the layer agrees with the server\n');
 {
   const fn = SRC('functions/disputes.js');
+  /* 2026-09-29: derived from the server's own declaration (it gained the legacy 'under_review' — the trigger used to
+     write it on every dispute; disputes.js now treats it as open). A fixed literal here was a fixture, not the contract. */
+  const serverOpen = (fn.match(/const OPEN_STATUSES = \[([^\]]*)\]/) || [, ''])[1].split(',').map((s) => s.trim().replace(/'/g, '')).filter(Boolean);
   ck('H1  OPEN_STATUSES matches the server exactly',
-    /const OPEN_STATUSES = \['open', 'investigating', 'seller_responded'\]/.test(fn) &&
-    DP.OPEN_STATUSES.join(',') === 'open,investigating,seller_responded');
+    serverOpen.length >= 3 && DP.OPEN_STATUSES.join(',') === serverOpen.join(','), { server: serverOpen, client: DP.OPEN_STATUSES });
   ck('H2  sellerRespondToDispute really is seller-only', /data\.sellerId !== uid/.test(fn));
   ck('H3  createDispute really is buyer-only', /if \(!isBuyer\)/.test(fn));
   ck('H4  cancelDispute really is buyer-only', /data\.buyerId !== uid/.test(fn));
+  /* 2026-09-29: the resolve body is the named core _adminResolve (AdminOS and super admin share it); the export wraps it */
   ck('H5  resolution really is admin-gated',
-    /exports\.adminResolveDispute[\s\S]{0,240}_ac\.isAdmin/.test(fn));
+    /const _adminResolve = async request => \{[\s\S]{0,240}_ac\.isAdmin/.test(fn) && /exports\.adminResolveDispute = onCall\(\{ enforceAppCheck: true \}, _adminResolve\)/.test(fn));
   ck('H6  a response sets seller_responded, NOT resolved',
     /status:\s*'seller_responded'/.test(fn) && !/exports\.sellerRespondToDispute[\s\S]{0,700}status:\s*'resolved'/.test(fn));
 }

@@ -1110,26 +1110,17 @@ exports.adminGetPendingPayouts = onCall({ region: 'us-central1', maxInstances: 1
 /* ─────────────────────────────────────────────────────────────────────────
    Disputes
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetDisputes = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetDisputes = async (req) => {
-  _requireAdmin(req);
-  const { status, limit: lim } = req.data;
-  const db = getFirestore();
-  let q = db.collection('disputes').orderBy('createdAt', 'desc').limit(Math.min(lim || 50, 200));
-  if (status) q = q.where('status', '==', status);
-  const snap = await q.get().catch(() => ({ docs: [] }));
-  const rows = snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null }));
-  return { disputes: rows, items: rows, count: rows.length };
-});
-
-exports.adminResolveDispute = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.aosResolveDispute = async (req) => {
-  _requireAdmin(req);
-  const { disputeId, resolution, favorBuyer } = req.data;
-  if (!disputeId || !resolution) throw new Error('disputeId and resolution required');
-  const db = getFirestore();
-  await db.collection('disputes').doc(disputeId).update({ status: 'resolved', resolution, favorBuyer: !!favorBuyer, resolvedBy: req.auth.uid, resolvedAt: FieldValue.serverTimestamp() });
-  await db.collection('adminAudit').add({ action: 'dispute_resolved', disputeId, favorBuyer, performedBy: req.auth.uid, createdAt: FieldValue.serverTimestamp() });
-  return { success: true };
-});
+/* 2026-09-29: these DELEGATE to functions/disputes.js — the one dispute authority. The old copies here listed only
+   status 'open' (while the automation trigger moved every new dispute to 'under_review', so the list was always
+   empty), swallowed query errors as an empty list, returned no names, and resolved by writing status directly: no
+   timeline entry, no order sync, and the "Buyer Wins" / "Seller Wins" choice was stored as the resolution TEXT.
+   Resolve now goes through the same core as trust-safety.html (timeline, order sync, favorBuyer, audit). */
+const _disputesAdmin = () => require('./disputes')._adminH;
+exports._h.adminGetDisputes = (req) => _disputesAdmin().adminGetDisputes(req);
+exports._h.adminGetDisputeDetail = (req) => _disputesAdmin().adminGetDisputeDetail(req);
+exports._h.aosResolveDispute = (req) => _disputesAdmin().aosResolveDispute(req);
+exports.adminGetDisputes = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetDisputes);
+exports.adminResolveDispute = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.aosResolveDispute);
 
 /* ─────────────────────────────────────────────────────────────────────────
    Reviews
