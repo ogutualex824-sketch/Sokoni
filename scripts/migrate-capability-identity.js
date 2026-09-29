@@ -115,8 +115,10 @@ function plan(s) {
 async function apply(db, s0, expectDigest, FieldValue) {
   const p0 = plan(s0);
   if (!p0.ok) return { applied: false, reason: 'plan_refused', refusals: p0.refusals };
-  if (expectDigest && p0.digest !== expectDigest) return { applied: false, reason: 'digest_mismatch', expected: expectDigest, actual: p0.digest };
+  /* A completed migration is reported as such BEFORE the digest is compared: the reviewed plan's digest described the
+     pre-migration state, so a second run with that same digest must answer "already migrated", not "mismatch". */
   if (p0.noop) return { applied: false, reason: 'already_migrated', digest: p0.digest };
+  if (expectDigest && p0.digest !== expectDigest) return { applied: false, reason: 'digest_mismatch', expected: expectDigest, actual: p0.digest };
   const bizRef = db.collection('businesses').doc(s0.uid);
   const auditRef = db.collection('adminAudit').doc();
   const result = await db.runTransaction(async (t) => {

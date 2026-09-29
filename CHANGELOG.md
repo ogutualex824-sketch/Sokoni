@@ -1,3 +1,17 @@
+## [2026-09-29] - C4: DG Wine — business identity created under the same owner uid, SERVICES stamped from the original approval (PRODUCTION, owner-authorized)
+
+**Applied to production 17:20Z** under the owner's authorization naming plan digest `e1a274e2…d7b0`; two writes in one
+transaction — `businesses/Ohg9HrtGpCXBUSzbRfaUifOPWQ32` (capabilities.SERVICES approved, evidence = the 2026-09-03
+approval by the approving admin; no PRODUCTS; searchable/isPublic false) and `adminAudit/ZlbUd4RIyt9GKGtaB8bI`. Nothing
+else: provider, application, users doc, wallet and claims byte-identical after; no shop, branch, seller, subscription,
+POS data or discovery visibility (owner decisions: the shop shape is coupled to Merchant V2; no shared services branch
+model exists yet). Second apply → `already_migrated`, nothing written (the no-op check now precedes the digest check).
+Landing proof 16/0; re-census: only the DG Wine row changed (NOT_YET_STAMPED → STAMPED), cleanup manifest digest
+unchanged. **The workspace is not claimed fixed**: the category authority has not stamped this provider, so routing is
+the legacy provider path as before — the expected boundary before the category + capability routing slice.
+Packet `docs/C4_DG_WINE_MIGRATION.md` + `docs/release-gates/c4-dg-wine-migration.json`; contract suite 27/0.
+Latomi (C5), deletion, KASS and cards are NOT started. No deploy.
+
 ## [2026-09-29] - Capability slice 1: the workspace authority consumes the capability read model (route = category + approved capability)
 
 **Local only — NOT deployed. Branch `slice/c4-capability-consumer` on `4ad69bf` (worktree `C:/temp/sok-cap`).**

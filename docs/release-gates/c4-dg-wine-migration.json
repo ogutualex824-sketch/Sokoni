@@ -1,0 +1,174 @@
+{
+  "slice": "C4",
+  "identity": "Ohg9HrtGpCXBUSzbRfaUifOPWQ32",
+  "application": "AvAE6rZEiO9FJ9UoMePY",
+  "planDigest": "e1a274e2009e34049947171aae7355503910c4c7d4ce1978e80db6d54e24d7b0",
+  "preSnapshot": {
+    "at": "2026-09-29T17:10:54.035Z",
+    "digest": "bf19eb70475855d6aba97cbf2fbb945c8289ffd7c243569099eef55fac6cbe21",
+    "auth": {
+      "uid": "Ohg9HrtGpCXBUSzbRfaUifOPWQ32",
+      "email": "st***om",
+      "disabled": false,
+      "claims": {
+        "provider": true
+      },
+      "created": "Sun, 02 Aug 2026 06:21:02 GMT",
+      "lastSignIn": "Sun, 02 Aug 2026 06:21:02 GMT"
+    },
+    "providers": {
+      "featured": false,
+      "city": "Nairobi",
+      "available": true,
+      "categoryLabel": "Wholesaler / Bulk Supplier",
+      "rating": 0,
+      "description": "We***s.\nOpening hours 8.00 - 6.00",
+      "nameLower": "dg wines and spirits",
+      "uid": "Ohg9HrtGpCXBUSzbRfaUifOPWQ32",
+      "createdAt": "2026-09-03T22:55:03.000Z",
+      "reviewCount": 0,
+      "providerId": "PRV-9655FMD2",
+      "acceptsBookings": true,
+      "isPublic": true,
+      "categories": [
+        "wholesaler",
+        "Wholesaler / Bulk Supplier"
+      ],
+      "email": "St***om",
+      "area": "Kasarani",
+      "searchableTerms": "<omitted>",
+      "sourceApplicationId": "AvAE6rZEiO9FJ9UoMePY",
+      "publishedAt": "2026-09-03T22:55:03.000Z",
+      "searchable": true,
+      "jobsCompleted": 0,
+      "phoneNumber": "+2***84",
+      "phone": "07***84",
+      "name": "DG wines and spirits",
+      "location": "Nairobi Kasarani",
+      "category": "wholesaler",
+      "status": "active",
+      "approvedAt": "2026-09-03T22:55:03.000Z",
+      "updatedAt": "2026-09-03T22:55:03.000Z"
+    },
+    "application": {
+      "id": "APP1785652430946",
+      "name": "DG wines and spirits",
+      "category": "wholesaler",
+      "categoryLabel": "Wholesaler / Bulk Supplier",
+      "hub": "b2b",
+      "phone": "07***84",
+      "phoneNumber": "+2***84",
+      "email": "St***om",
+      "location": "Nairobi Kasarani",
+      "description": "We***s.\nOpening hours 8.00 - 6.00",
+      "plan": "free",
+      "type": "business",
+      "uid": "Ohg9HrtGpCXBUSzbRfaUifOPWQ32",
+      "submittedAt": "2026-08-02T06:33:50.946Z",
+      "createdAt": 1785652430946,
+      "area": "Kasarani",
+      "role": "provider",
+      "hasGeo": false,
+      "city": "Nairobi",
+      "normalizedAt": "2026-08-02T06:33:57.000Z",
+      "intakeVersion": 1,
+      "phoneVerifiable": true,
+      "nameLower": "dg wines and spirits",
+      "applicationId": "AvAE6rZEiO9FJ9UoMePY",
+      "receivedAt": "2026-08-02T06:33:57.000Z",
+      "roleResolvedBy": "keyword",
+      "reviewReason": null,
+      "decidedAt": "2026-09-03T22:55:02.000Z",
+      "decidedBy": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+      "statusCanonical": "approved",
+      "status": "approved",
+      "updatedAt": "2026-09-03T22:55:02.000Z",
+      "decisionAppliedFor": "approved",
+      "projectionStatus": "applied",
+      "projectionReceipt": [
+        {
+          "collection": "providers",
+          "id": "Ohg9HrtGpCXBUSzbRfaUifOPWQ32",
+          "action": "updated",
+          "providerId": "PRV-9655FMD2"
+        }
+      ],
+      "decisionAppliedAt": "2026-09-03T22:55:03.000Z"
+    },
+    "absent": [
+      "sellers",
+      "businesses",
+      "shops",
+      "merchants",
+      "branches",
+      "providerProfiles",
+      "providerServices",
+      "providerSubscriptions",
+      "entitlements"
+    ],
+    "products": 0,
+    "wallet": {
+      "balance": 0,
+      "currency": "KES"
+    }
+  },
+  "applied": {
+    "businessId": "Ohg9HrtGpCXBUSzbRfaUifOPWQ32",
+    "auditId": "ZlbUd4RIyt9GKGtaB8bI",
+    "secondApply": "already_migrated"
+  },
+  "landing": {
+    "at": "2026-09-29T17:22:07.501Z",
+    "pass": 16,
+    "fail": 0,
+    "business": {
+      "uid": "Ohg9HrtGpCXBUSzbRfaUifOPWQ32",
+      "ownerId": "Ohg9HrtGpCXBUSzbRfaUifOPWQ32",
+      "name": "DG wines and spirits",
+      "businessName": "DG wines and spirits",
+      "nameLower": "dg wines and spirits",
+      "status": "active",
+      "source": "capability_migration_c4",
+      "applicationId": "AvAE6rZEiO9FJ9UoMePY",
+      "searchable": false,
+      "isPublic": false,
+      "category": "wholesaler",
+      "description": "We***s.\nOpening hours 8.00 - 6.00",
+      "phone": "+2***84",
+      "email": "St***om",
+      "city": "Nairobi Kasarani",
+      "capabilities": {
+        "version": 1,
+        "SERVICES": {
+          "state": "approved",
+          "decidedBy": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+          "decidedAt": "2026-09-03T22:55:02.000Z",
+          "applicationId": "AvAE6rZEiO9FJ9UoMePY",
+          "source": "application_approval"
+        }
+      },
+      "migration": {
+        "slice": "C4",
+        "from": "providers/Ohg9HrtGpCXBUSzbRfaUifOPWQ32",
+        "providerApprovedAt": "2026-09-03T22:55:03.000Z",
+        "sourceApplicationId": "AvAE6rZEiO9FJ9UoMePY"
+      },
+      "createdAt": "2026-09-29T17:20:30.000Z",
+      "updatedAt": "2026-09-29T17:20:30.000Z",
+      "searchableTerms": "<omitted>"
+    },
+    "readModel": {
+      "classification": "SERVICES",
+      "authorityStatus": "STAMPED",
+      "conflicts": [],
+      "proposed": {
+        "PRODUCTS": "absent",
+        "SERVICES": "approved"
+      }
+    }
+  },
+  "censusAfter": {
+    "manifestDigestUnchanged": "028299e7442516d93f3a6a2ed1555bda09f548b4ee0dd0cfbbdcc1eebbad13e2",
+    "onlyRowChanged": "Ohg9HrtGpCXBUSzbRfaUifOPWQ32 NOT_YET_STAMPED -> STAMPED, biz 0 -> 1"
+  }
+}

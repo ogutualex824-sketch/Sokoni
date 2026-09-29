@@ -91,6 +91,8 @@ const APPLICATION = { uid: UID, applicationId: APP, name: 'DG wines and spirits'
   ck('no shop, no branch, no seller, no product was created', (await get('shops/' + UID)) === null && (await get('sellers/' + UID)) === null && (await db.collection('branches').where('merchantId', '==', UID).get()).size === 0 && (await db.collection('products').where('sellerUid', '==', UID).get()).size === 0);
   const again = await M.apply(db, await M.snapshot(db, UID, APP), undefined, F.FieldValue);
   ck('a second apply is a no-op (already_migrated), nothing written twice', again.applied === false && again.reason === 'already_migrated' && (await db.collection('adminAudit').get()).size === 1);
+  const againSameDigest = await M.apply(db, await M.snapshot(db, UID, APP), p.digest, F.FieldValue);
+  ck('a second apply WITH the original reviewed digest also answers already_migrated (not digest_mismatch) and writes nothing', againSameDigest.reason === 'already_migrated' && (await db.collection('adminAudit').get()).size === 1, againSameDigest);
 
   say('\n── after ──');
   const rm = CAPS.readModel({ seller: null, provider: await get('providers/' + UID), business: await get('businesses/' + UID), applications: [await get('applications/' + APP)], productCount: 0 });
