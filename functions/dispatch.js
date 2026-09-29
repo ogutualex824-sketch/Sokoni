@@ -122,7 +122,14 @@ exports.dispatchDelivery = onCall(
        candidate is now joined against `drivers` + `driverVerification`, which no client can
        write. Being online is a fact about a device, not a permission. */
     const presenceSnap = await firestore.collection('rideDrivers').where('isOnline', '==', true).limit(100).get();
-    const candidates = presenceSnap.docs.map(d => Object.assign({ uid: d.id }, d.data()));
+    /* D2: a presence row that stopped heart-beating is STALE, not available. Without this the
+       dispatcher offered jobs to any shard that still said isOnline — production held one ~54 days
+       after its last write. Freshness is read from the server-written lastSeen (riderPresence). */
+    const _rp = require('./rider-presence');
+    const _staleSec = await _rp.staleAfterSeconds(firestore);
+    const _nowMs = Date.now();
+    const candidates = presenceSnap.docs.map(d => Object.assign({ uid: d.id }, d.data()))
+      .filter(c => _rp.isFresh(c, _nowMs, _staleSec));
     const elig = await riderEligibility.filterEligible(firestore, candidates);
     const riders = elig.riders;
     if (elig.refused.length) {

@@ -1,3 +1,47 @@
+## [2026-09-30] — Delivery Hub D2 (server): rider presence, stale detection, server-validated job board
+
+**Files:** `functions/rider-presence.js` (new), `functions/index.js` (availableDeliveries, claimAvailableDelivery,
+riderPresence export), `functions/dispatch.js` (fresh-presence filter), `scripts/test-d2-rider-presence.js`,
+`CHANGELOG.md`.
+**Base:** `34eba38` (recorded production Functions lineage + the P0 payout gate).
+**Rules:** NONE required — the served ruleset already makes `rideDrivers` `write: if false`.
+**Share arithmetic:** unchanged. The board's rider figure calls the same commission function the payout uses,
+read-only. **Deployment:** NOT deployed.
+
+**Why.**
+- Browser presence writes were refused by the served rules, so "Go Online" did nothing, and nothing expired
+  presence (a rider stayed "online" ~54 days).
+- The job board and the claim trusted an inline approval check on the presence shard. The board also listed any
+  `packageRequests` doc in 'awaiting_rider', a status a browser can write at create.
+
+**Change.**
+- `riderPresence` callable (online / heartbeat / offline / status) is the ONLY writer of rider presence. It
+  decides eligibility with the DL-01 authority (drivers + driverVerification), never the shard.
+- States: online, on_delivery, stale (heartbeat older than `platformConfig/riderPresence.staleAfterSeconds`,
+  default 300, clamped 60–3600), offline (explicit), suspended/ineligible. A heartbeat never revives an explicit
+  offline; a stale rider reconnects through the same operation.
+- availableDeliveries / claimAvailableDelivery: DL-01 eligibility + fresh presence. Only SERVER-created, readied
+  jobs are listed or claimable: canonical `DEL{orderId}`, order paymentVerified and 'awaiting_rider', unassigned,
+  same seller, vehicle size-compatible.
+- The fee shown comes from the server `paymentIntents/{orderId}.metadata.deliveryFee`, never from the job doc or
+  order.deliveryFee (both can be browser-written). No server record → null (renders —).
+- Distance is always null (no coordinates exist yet).
+- dispatchDelivery skips stale presence rows.
+
+**Evidence.**
+- `test-d2-rider-presence.js`: 37/0. The pre-D2 base fails 17: it lists a forged job, a job with no order
+  (fake 99,999 fee), and a job on an unpaid order, and lets a stale rider claim.
+- 15/15 mutants killed. Mutant M15 exposed a vacuous "not listed" row on a crashed feed; the rows now require a
+  healthy board.
+- Existing suites equal to base: dispatch-authority 45/0, dl01 41/0, seller-handover 55/55, suspension-lifecycle
+  27/0, unified-tracking 15/15, d1a-provisioning 24/0.
+- `test-delivery-pin-unreachable` 63/2 vs 65/0: rows 2.2 and 2.11 regex the REPLACED inline guard's variable
+  names (`_approved`, `_blocked`). The guard is stronger now and behaviourally proven (P6/P7, M03). Updating
+  those two assertions awaits owner authorization.
+
+**Behaviour change to know.** Production's one rider has verification `incomplete`; under the DL-01 authority
+they see no jobs until verified. That is the existing DL-02 rule, now also applied at the board and the claim.
+
 ## [2026-09-29] — P0: rider payout requires server-only proof (server half)
 
 **Files:** `functions/index.js` (onOrderStatusChange rider-payout block only), `scripts/test-p0-rider-payout-gate.js`,

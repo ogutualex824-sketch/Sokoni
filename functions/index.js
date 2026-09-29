@@ -6853,37 +6853,70 @@ exports.availableDeliveries = onRequest(
       try { decoded = await admin.auth().verifyIdToken(authz.slice(7)); }
       catch (_) { return res.status(401).json({ ok: false, error: "unauthenticated" }); }
 
-      const riderSnap = await db.collection("rideDrivers").doc(decoded.uid).get();
-      const rider = riderSnap.exists ? (riderSnap.data() || {}) : {};
-      const _st = String(rider.status || "").toLowerCase();
-      const _approved = rider.approved === true || ["approved", "active", "online", "verified"].includes(_st);
-      const _blocked = ["suspended", "rejected", "banned", "deactivated"].includes(_st);
-      if (!riderSnap.exists || !_approved || _blocked) {
-        return res.status(403).json({ ok: false, error: "not_an_approved_rider" });
+      /* D2 (2026-09-29): eligibility is the DL-01 authority (drivers + driverVerification — no
+         client can write them) plus FRESH server-written presence. The inline check that stood
+         here read approval off the rideDrivers presence shard. */
+      const _rp = require("./rider-presence");
+      const st = await _rp.stateFor(db, decoded.uid);
+      if (st.state === "suspended" || st.state === "ineligible") {
+        return res.status(403).json({ ok: false, error: "not_an_approved_rider", state: "not_eligible" });
+      }
+      if (!st.eligible) {
+        /* offline or stale: the board is for riders who are actually available right now. */
+        return res.status(409).json({ ok: false, error: "not_online", state: st.state, staleAfterSeconds: st.staleSeconds });
       }
 
       const snap = await db.collection("packageRequests").where("status", "==", "awaiting_rider").limit(80).get();
-      const deliveries = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-        .filter((o) => !o.assignedRiderId && !o.riderId && !o.assignedDriverId && !o.assignedDriverUid)
-        .map((o) => ({
+      const jobs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      /* D2: only jobs the SERVER created and readied reach the board (canonical DEL{orderId},
+         order paymentVerified + awaiting_rider, unassigned, same seller). A browser can create a
+         packageRequests doc with any fields; that doc is refused here, not merely hidden. */
+      const orderIds = [...new Set(jobs.filter((j) => j.orderId).map((j) => String(j.orderId)))];
+      const orderSnaps = orderIds.length ? await db.getAll(...orderIds.map((id) => db.collection("orders").doc(id))) : [];
+      const orderMap = new Map(orderSnaps.map((s) => [s.id, s]));
+      const intentSnaps = orderIds.length ? await db.getAll(...orderIds.map((id) => db.collection("paymentIntents").doc(id))) : [];
+      const intentMap = new Map(intentSnaps.map((s) => [s.id, s]));
+      const { calculateCommission: _calcJob } = require("./finos-utils");
+      const deliveries = [];
+      let refused = 0;
+      for (const o of jobs) {
+        const v = await _rp.validateJob(db, o, async (ref) => orderMap.get(ref.id) || { exists: false, data: () => null });
+        if (!v.ok) { refused++; continue; }
+        if (!_rp.vehicleCompatible(st.driver && st.driver.vehicleType, o.vehicleType)) continue;
+        /* Money from a SERVER money record (the product_order payment intent), never from the job
+           doc or order.deliveryFee — both can carry a browser-written number. The rider figure uses
+           the SAME commission call the payout uses (read-only use of the shared authority). */
+        const fee = _rp.serverDeliveryFee(intentMap.get(String(o.orderId)), o.orderId);
+        let riderEarning = null;
+        if (fee != null && fee > 0) {
+          try {
+            const c = await _calcJob(db, { orderAmountCents: Math.round(fee * 100), category: "hub",
+              sellerId: v.order.sellerUid || null, hubId: "delivery", skipMinimum: true });
+            riderEarning = Math.max(0, Math.round(fee - (c ? c.commissionCents / 100 : 0)));
+          } catch (_) { riderEarning = null; }   /* unknown renders as — on the board, never a guess */
+        }
+        deliveries.push({
           id: o.id, orderId: o.orderId,
           /* Where to collect from — a shop, not a person. */
-          sellerName: o.sellerName, pickupAddress: o.pickupAddress,
+          sellerName: o.sellerName || v.order.sellerName || null, pickupAddress: o.pickupAddress || null,
           /* Roughly where it is going, so a rider can judge the trip. Never the
              street address, and never the customer. */
           deliveryArea: _deliveryArea(o),
-          /* What the job pays and how big it is. */
-          itemCount: Array.isArray(o.items) ? o.items.length : 0,
-          deliveryFee: o.deliveryFee, driverNet: o.driverNet,
+          itemCount: Array.isArray(v.order.items) ? v.order.items.length : (Array.isArray(o.items) ? o.items.length : 0),
+          deliveryFee: fee, riderEarning, driverNet: riderEarning,
           vehicleType: o.vehicleType || null, speed: o.speed || null,
+          /* No coordinates exist yet — distance is unknown, never invented. */
+          distanceKm: null,
           /* Deliberately ABSENT: buyerName, buyerPhone, deliveryAddress, items,
              orderTotal — and proofPin, which no rider-facing payload should ever
              have carried. The rider types the PIN the customer reads to them;
              returning it here let a rider complete a delivery without meeting
              anyone. */
-        }));
+        });
+      }
+      if (refused) console.warn("[availableDeliveries] refused non-server jobs", { refused });
       res.set("Cache-Control", "no-store");
-      res.status(200).json({ ok: true, count: deliveries.length, deliveries });
+      res.status(200).json({ ok: true, count: deliveries.length, deliveries, state: st.state });
     } catch (e) {
       console.error("[availableDeliveries] failed:", e.message);
       res.status(500).json({ ok: false, error: "unavailable" });
@@ -6901,6 +6934,15 @@ exports.claimAvailableDelivery = onCall(
     const { deliveryRef } = request.data || {};
     if (!deliveryRef) throw new HttpsError("invalid-argument", "deliveryRef required.");
     const ref = db.collection("packageRequests").doc(String(deliveryRef));
+    /* D2 (2026-09-29): the DL-01 authority + fresh server presence, instead of an inline check on
+       the rideDrivers shard. SECURITY (backend-enforced — never trust the UI): only an eligible,
+       non-suspended rider who is actually online may accept a job. */
+    const _rp = require("./rider-presence");
+    const st = await _rp.stateFor(db, uid);
+    if (st.state === "suspended" || st.state === "ineligible") {
+      throw new HttpsError("permission-denied", "Your rider account is not approved to accept deliveries.");
+    }
+    if (!st.eligible) throw new HttpsError("failed-precondition", "Go online to accept deliveries.");
     let out;
     await db.runTransaction(async (t) => {
       const s = await t.get(ref);
@@ -6908,22 +6950,22 @@ exports.claimAvailableDelivery = onCall(
       const d = s.data();
       if (d.assignedRiderId || d.riderId || d.assignedDriverId) throw new HttpsError("failed-precondition", "Just taken by another rider.");
       if (d.status !== "awaiting_rider") throw new HttpsError("failed-precondition", "Delivery no longer available.");
-      const riderDoc = await t.get(db.collection("rideDrivers").doc(uid));
-      const rider = riderDoc.exists ? (riderDoc.data() || {}) : {};
-      /* SECURITY (backend-enforced — never trust the UI): only an APPROVED, non-suspended rider
-         may accept a job. Without this, any signed-in user could claim a delivery by calling the
-         function directly. */
-      const _st = String(rider.status || "").toLowerCase();
-      const _approved = rider.approved === true || ["approved", "active", "online", "verified"].includes(_st);
-      const _blocked  = ["suspended", "rejected", "banned", "deactivated"].includes(_st);
-      if (!riderDoc.exists || !_approved || _blocked) {
-        throw new HttpsError("permission-denied", "Your rider account is not approved to accept deliveries.");
+      /* D2: the job must be one the SERVER created and readied — validated INSIDE the transaction
+         so the order read is consistent with the claim write. */
+      const v = await _rp.validateJob(db, Object.assign({ id: s.id }, d), (r) => t.get(r));
+      if (!v.ok) {
+        console.warn("[claimAvailableDelivery] refused non-server job", { deliveryRef, reason: v.reason });
+        throw new HttpsError("failed-precondition", "Delivery no longer available.");
       }
+      if (!_rp.vehicleCompatible(st.driver && st.driver.vehicleType, d.vehicleType)) {
+        throw new HttpsError("failed-precondition", "This delivery needs a larger vehicle.");
+      }
+      const drv = st.driver || {};
       const nowTs = admin.firestore.FieldValue.serverTimestamp();
       t.update(ref, {
         status: "driver_accepted", assignedRiderId: uid, riderId: uid,
         assignedDriverId: uid, assignedDriverUid: uid,
-        riderName: rider.name || "Rider", riderPhone: rider.phone || "",
+        riderName: drv.name || "Rider", riderPhone: drv.phone || drv.phoneNumber || "",
         riderAcceptedAt: nowTs, updatedAt: nowTs,
       });
       if (d.orderId) t.set(db.collection("orders").doc(String(d.orderId)),
@@ -6940,6 +6982,10 @@ exports.claimAvailableDelivery = onCall(
     return out;
   }
 );
+
+/* D2 (2026-09-29) — the ONLY writer of rider presence (rideDrivers). The browser requests
+   online / heartbeat / offline; the server decides eligibility (DL-01) and writes presence. */
+exports.riderPresence = require("./rider-presence").makeRiderPresence({ onCall, HttpsError, admin, db });
 
 exports.catalogue = onRequest(
   { cors: ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app", "https://sokoni-aeb26.firebaseapp.com", "http://localhost", "http://127.0.0.1"], timeoutSeconds: 15, invoker: "public", memory: "256MiB" },
