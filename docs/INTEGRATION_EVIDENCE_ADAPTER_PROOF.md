@@ -502,3 +502,80 @@ inbound synthetic evidence, no operational-dependency record, **no RC-1 repair**
 
 **The console is still held.** It is not taught to render these until — as now — the resolver has
 mechanically demonstrated them.
+
+---
+
+## 13 · Console adoption
+
+**119 passed, 0 failed** in `scripts/test-integrations-console.js` — 86 before, **+33** for this
+slice. Added to the existing console suite rather than a new file, so there is one console harness
+and one place it is exercised.
+
+> **One ambiguity, resolved and flagged.** The authorisation's closing sequence lists
+> *"Operational-dependency UI — held separately"*, while its certification target requires *"2
+> operational dependencies rendered separately"*. I took the **certification target** as governing —
+> it is the concrete, testable statement — and implemented the minimal separate rendering it
+> requires. Richer operational UI (controls, its own tab, filtering) remains held. Say if that reads
+> the wrong way round and I will pull the section.
+
+### The queue is the resolver's, rendered
+
+`_disagreementQueue()` reads `st.disagreements` **verbatim**. Nothing in the console decides what is
+urgent — the resolver did that against the ratified matrix with a suite behind it, and a second
+opinion here would eventually drift, leaving an operator unable to tell which was right. Asserted
+directly: the console contains no `DISAGREEMENT_SEVERITY` map and no state computation of its own.
+
+Three renderings, and the difference between them is the point:
+
+| queue | rendering |
+|---|---|
+| `null` (status read failed) | *"Disagreements could not be checked … This is not an all-clear."* |
+| `[]` | **no banner at all** — no reassuring claim |
+| rows | worst first, tripwire above action |
+
+A `null` queue rendered as "all clear" is exactly the defect this surface exists to prevent, so the
+failed-read case says plainly that no comparison could be made.
+
+### Operational dependencies, separately
+
+Rendered from `catalogue.operationalDependencies` in their own section, as **NOT PROBEABLE** with
+the words *"No SOKONI probe path"* — never an evidence-model state. `unknown`, NOT VERIFIED and
+REFUSED BY DESIGN all describe our *measurement* of something measurable; NOT PROBEABLE describes
+the *relationship*. Rendering one as the other would send an operator to check something that cannot
+be checked.
+
+Asserted: 52 technical cards render, both dependencies render in their own section, **no operational
+id produces a technical card**, the two id sets are disjoint, and `lookup()` returns `null` for both.
+
+### The certification targets
+
+| target | result |
+|---|---|
+| 52 technical records rendered | ✅ all 52, by name |
+| 2 operational rendered separately | ✅ own section, NOT PROBEABLE |
+| 0 operational ids in the technical resolver | ✅ disjoint, `lookup()` null |
+| queue matches the resolver exactly | ✅ read verbatim; no recomputation |
+| quiet resolver → empty queue | ✅ no banner, with a control that the page still rendered |
+| REFUSED BY DESIGN from legacy `notRunReason` | ✅ plus a control that it is **absent** without it |
+| six states + null distinguishable | ✅ 3 actionable queue, 3 `ok` do not, each renders its own name, tripwire styled apart, null invents nothing |
+
+The tripwire assertions check the **guard behaviour**, not that a string exists: it sorts above
+action rows, the header counts it separately (*"1 SAFETY TRIPWIRE"*), and the row carries the
+declaration, the observation, `probedAt`, and a note saying *why* — "moves money".
+
+### A defect of my own, fixed
+
+Four of the new assertions failed on the first run because those mounts read `innerHTML` **before
+`await settle()`** — they were measuring an unrendered host, not the behaviour. Converted to awaited
+mounts and a `for…of` loop. Worth recording: read synchronously, a control that is *supposed* to
+find a banner fails for a reason unrelated to what it tests, and the obvious "fix" would have been
+to weaken the assertion.
+
+### Boundaries held
+
+No deployment · no production writes · no `integrationProbeLatest` change · no synthetic inbound
+evidence · no RC-1 repair · no Cloud Build reclassification · no webhook-engine change · catalogue
+unchanged at 52 + 2.
+
+**UNPROVEN:** a real browser render. The module runs in a minimal DOM, so layout and CSS are not
+exercised — the suite has always said so and still does.

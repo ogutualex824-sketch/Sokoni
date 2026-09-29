@@ -517,6 +517,234 @@ const settle = () => new Promise(r => setImmediate(() => setImmediate(r)));
        /function _opsChipHtml[\s\S]{0,300}_chipHtml\(entry\)/.test(bare), '_opsChipHtml');
   }
 
+  /* ══════════════════════════════════════════════════════════════════════
+     CONSOLE ADOPTION — the resolver's disagreement surface, rendered
+     ══════════════════════════════════════════════════════════════════════
+     The resolver proved the six states mechanically (ec43565). This asserts the
+     console consumes them WITHOUT re-deciding anything: the queue is the
+     resolver's `disagreements` array, rendered, and nothing here recomputes
+     which states are urgent. */
+  head('11 - console adoption: 52 technical, 2 operational, queue from the resolver');
+
+  /* One record per catalogue id, so the response is the real shape and size
+     rather than a hand-picked subset that could hide a rendering gap. */
+  function fullStatus (overrides, disagreements) {
+    const probe = mountWith({ integrations: [], counts: {} });
+    const ids = probe.win.SokoniIntegrationCatalogue.integrations.map(i => i.id);
+    const over = overrides || {};
+    return {
+      integrations: ids.map(id => Object.assign(record({
+        id, name: id, credentials: [], credentialState: 'not-applicable',
+        capabilities: ['view'],
+        declaredProbeState: 'none', observedNotRunReason: null,
+        evidenceDisagreement: null, notRunReason: null,
+      }), over[id] || {})),
+      counts: {}, checkedAt: '2026-09-29T00:00:00.000Z', inventoryReadable: true,
+      evidenceReadable: true, evidenceError: null, evidenceDropped: [],
+      disagreements: disagreements || [],
+    };
+  }
+
+  {
+    const m = mountWith(fullStatus());
+    await settle();
+    const html = m.host.innerHTML;
+    const cat = m.win.SokoniIntegrationCatalogue;
+
+    ok('the browser catalogue carries 52 technical entries',
+       cat.integrations.length === 52, cat.integrations.length + '');
+    ok('and 2 operational dependencies, in a SEPARATE collection',
+       Array.isArray(cat.operationalDependencies) && cat.operationalDependencies.length === 2,
+       (cat.operationalDependencies || []).length + '');
+
+    /* Every technical id must appear; a missing card is indistinguishable from
+       an integration that does not exist. */
+    const missing = cat.integrations.filter(i => html.indexOf('>' + i.name + '<') === -1 &&
+                                                 html.indexOf(i.id) === -1);
+    ok('all 52 technical integrations render', missing.length === 0,
+       missing.length ? 'missing: ' + missing.slice(0, 4).map(i => i.id).join(', ') : '52/52');
+
+    ok('both operational dependencies render, in their own section',
+       /sic-opdep/.test(html) &&
+       cat.operationalDependencies.every(d => html.indexOf(d.name) > -1),
+       'section + ' + cat.operationalDependencies.length + ' rows');
+
+    ok('they render NOT PROBEABLE, not an evidence-model state',
+       /data-sic-opdep-state="not-probeable"/.test(html) && /NOT PROBEABLE/.test(html),
+       'NOT PROBEABLE');
+    ok('...and say WHY — "No SOKONI probe path"',
+       /No SOKONI probe path/.test(html), 'stated');
+    ok('CONTROL — an operational id is NOT rendered as a technical card',
+       cat.operationalDependencies.every(d =>
+         html.indexOf('selectCatalogue(\'' + d.id + '\')') === -1),
+       'no technical card for either');
+
+    /* The boundary the whole model rests on: the UI having two sections must
+       not put operational ids through the technical path. */
+    const techIds = new Set(cat.integrations.map(i => i.id));
+    ok('0 operational ids are in the technical collection',
+       cat.operationalDependencies.every(d => !techIds.has(d.id)), 'disjoint');
+    ok('lookup() refuses an operational id',
+       cat.operationalDependencies.every(d => cat.lookup(d.id) === null), 'null for both');
+  }
+
+  head('12 - the disagreement queue is the resolver\'s, not the console\'s');
+
+  {
+    /* QUIET: the resolver ran and found nothing. No banner, and above all no
+       reassuring claim. */
+    const quiet = mountWith(fullStatus());
+    await settle();
+    ok('a quiet resolver renders NO queue banner',
+       !/sic-dq\b/.test(quiet.host.innerHTML), 'absent');
+    ok('CONTROL — the page still rendered (the absence is not an empty page)',
+       quiet.host.innerHTML.length > 2000, quiet.host.innerHTML.length + ' chars');
+  }
+
+  {
+    /* THE TRIPWIRE. A probe ran against a rail that must never be probed. */
+    const trip = mountWith(fullStatus({}, [{
+      id: 'intasend-collections', name: 'IntaSend Collections',
+      state: 'safety-tripwire', severity: 'tripwire',
+      declared: 'no_safe_probe', observed: 'successful-probe',
+      note: 'A probe ran against a rail declared unsafe to probe. Investigate: probing this rail moves money.',
+      probedAt: '2026-09-29T10:00:00.000Z',
+    }]));
+    await settle();
+    const html = trip.host.innerHTML;
+    ok('a safety tripwire renders, at tripwire severity',
+       /sic-dq-trip/.test(html) && /TRIPWIRE/.test(html), 'rendered');
+    ok('it names the integration and the state',
+       /IntaSend Collections/.test(html) && /safety tripwire/i.test(html), 'named');
+    ok('it says WHY it matters — money, not a generic warning',
+       /moves money/.test(html), 'reason present');
+    ok('it carries the declaration, the observation and when',
+       /no_safe_probe/.test(html) && /successful-probe/.test(html) && /2026-09-29/.test(html),
+       'declared + observed + probedAt');
+  }
+
+  {
+    /* Worst first. A money tripwire must never sort below a stale label. */
+    const both = mountWith(fullStatus({}, [
+      { id: 'sendgrid', name: 'SendGrid', state: 'stale-declaration', severity: 'action',
+        declared: 'requires_secret_binding', observed: 'successful-probe', note: 'stale', probedAt: null },
+      { id: 'intasend-payouts', name: 'IntaSend Payouts', state: 'safety-tripwire', severity: 'tripwire',
+        declared: 'no_safe_probe', observed: 'successful-probe', note: 'moves money', probedAt: null },
+    ]));
+    await settle();
+    const html = both.host.innerHTML;
+    ok('both actionable states render', /SendGrid/.test(html) && /IntaSend Payouts/.test(html), '2 rows');
+    ok('the TRIPWIRE sorts above the action row',
+       html.indexOf('IntaSend Payouts') < html.indexOf('SendGrid'), 'worst first');
+    ok('the header counts them and flags the tripwire',
+       /2 integrations disagree/.test(html) && /1 SAFETY TRIPWIRE/.test(html), 'counted');
+  }
+
+  {
+    /* THE QUEUE IS TAKEN VERBATIM. If the console re-derived it, a record
+       carrying an `ok` disagreement would leak into the queue. It must not:
+       the resolver already decided, and this surface renders that decision. */
+    const okStates = mountWith(fullStatus({
+      'intasend-collections': { evidenceDisagreement: {
+        state: 'expected-refusal', severity: 'ok', declared: 'no_safe_probe',
+        observed: null, note: 'nothing has run' } },
+      'firestore': { evidenceDisagreement: {
+        state: 'verified-evidence', severity: 'ok', declared: 'runnable',
+        observed: 'successful-probe', note: 'established' } },
+    }, []));
+    await settle();
+    ok('records carrying an OK state do NOT create a queue',
+       !/sic-dq\b/.test(okStates.host.innerHTML), 'no banner');
+    /* Awaited, like every other mount here. Read synchronously it returns an
+       unrendered host, and the control would fail for a reason that has
+       nothing to do with the behaviour under test. */
+    const oneAction = mountWith(fullStatus({}, [{ id: 'x', name: 'X', state: 'stale-declaration',
+      severity: 'action', declared: 'requires_secret_binding', observed: 'successful-probe',
+      note: 'n', probedAt: null }]));
+    await settle();
+    ok('CONTROL — the same page with one ACTION row does render one',
+       /sic-dq\b/.test(oneAction.host.innerHTML), 'banner appears');
+  }
+
+  {
+    /* An UNREADABLE status must not render as an all-clear. */
+    const broken = mountWith(null);
+    await settle();
+    const html = broken.host.innerHTML;
+    ok('a FAILED status read says the comparison could not be made',
+       /could not be checked/i.test(html) || /sic-dq-unknown/.test(html), 'stated');
+    ok('...and explicitly does NOT claim all-clear',
+       /not an all-clear/i.test(html) || !/disagree/.test(html), 'no false reassurance');
+  }
+
+  head('13 - REFUSED BY DESIGN still renders from the legacy notRunReason');
+
+  {
+    const refused = mountWith(fullStatus({
+      'sendgrid': { notRunReason: 'requires_secret_binding',
+                    declaredProbeState: 'requires_secret_binding' },
+    }));
+    await settle();
+    ok('the legacy field still drives REFUSED BY DESIGN',
+       /REFUSED BY DESIGN/.test(refused.host.innerHTML), 'rendered');
+
+    const notRefused = mountWith(fullStatus());
+    await settle();
+    ok('CONTROL — without notRunReason it does NOT render',
+       !/REFUSED BY DESIGN/.test(notRefused.host.innerHTML), 'absent');
+
+    ok('the console reads notRunReason, not the new fields, for that chip',
+       /r\.notRunReason/.test(strip(SRC)), 'contract unchanged');
+  }
+
+  head('14 - the six states plus null stay distinguishable at UI level');
+
+  {
+    /* Not "each has a label" — that the SIX produce SIX distinct renderings,
+       and that the two outside-the-matrix cases produce none. */
+    const STATES = ['expected-refusal', 'safety-tripwire', 'declared-current',
+                    'stale-declaration', 'binding-regression', 'verified-evidence'];
+    const seen = {};
+    for (const st of STATES) {
+      const sev = st === 'safety-tripwire' ? 'tripwire'
+                : (st === 'stale-declaration' || st === 'binding-regression') ? 'action' : 'ok';
+      const q = sev === 'ok' ? [] : [{ id: 'sendgrid', name: 'SendGrid', state: st, severity: sev,
+        declared: 'x', observed: 'y', note: 'n for ' + st, probedAt: null }];
+      const m = mountWith(fullStatus({ 'sendgrid': { evidenceDisagreement: {
+        state: st, severity: sev, declared: 'x', observed: 'y', note: 'n for ' + st } } }, q));
+      await settle();
+      seen[st] = { queued: sev !== 'ok', html: m.host.innerHTML };
+    }
+    ok('the three ACTIONABLE states reach the queue',
+       ['safety-tripwire', 'stale-declaration', 'binding-regression']
+         .every(s => /sic-dq\b/.test(seen[s].html)), '3/3');
+    ok('the three OK states do NOT reach the queue',
+       ['expected-refusal', 'declared-current', 'verified-evidence']
+         .every(s => !/sic-dq\b/.test(seen[s].html)), '0/3 queued');
+    ok('each queued state renders its own name, so they are not one alert',
+       ['safety-tripwire', 'stale-declaration', 'binding-regression']
+         .every(s => new RegExp(s.replace(/-/g, ' '), 'i').test(seen[s].html)), 'distinct');
+    ok('the tripwire renders differently from the two actions',
+       /sic-dq-trip/.test(seen['safety-tripwire'].html) &&
+       !/sic-dq-trip/.test(seen['stale-declaration'].html), 'severity is visible');
+    const nullCase = mountWith(fullStatus());
+    await settle();
+    ok('NULL — no state renders no queue row, and invents nothing',
+       !/sic-dq\b/.test(nullCase.host.innerHTML), 'no seventh state');
+  }
+
+  {
+    /* The console must not re-derive the queue from per-record fields. */
+    const bare = strip(SRC);
+    ok('the queue is read from the resolver array, not recomputed',
+       /_disagreementQueue[\s\S]{0,900}st\.disagreements/.test(bare), 'verbatim');
+    ok('CONTROL — the stripper removed the explanatory prose',
+       bare.length < SRC.length, (SRC.length - bare.length) + ' chars removed');
+    ok('nothing in the console computes a disagreement state itself',
+       !/function _computeDisagreement|DISAGREEMENT_SEVERITY\s*=/.test(bare),
+       'no second opinion');
+  }
+
   console.log('\n  what this suite does NOT prove');
   console.log('  UNPROVEN  a real browser render. The module runs in a minimal DOM, so');
   console.log('            layout and CSS are not exercised here.');

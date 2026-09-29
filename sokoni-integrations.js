@@ -639,6 +639,23 @@
       '.sic-chipstate.error{color:var(--sic-bad);border-color:var(--sic-bad)}',
       '.sic-chipstate.unknown{color:var(--sic-muted);border-color:var(--sic-border)}',
       '.sic-ic-state{margin:2px 0 6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}',
+      /* Disagreement queue — the actionable states, worst first. */
+      '.sic-dq{border:1px solid var(--sic-line,#2a3348);border-left:3px solid #d8a13a;border-radius:10px;padding:12px 14px;margin:0 0 14px;background:rgba(216,161,58,.06)}',
+      '.sic-dq-trip{border-left-color:#e05252;background:rgba(224,82,82,.08)}',
+      '.sic-dq-unknown{border-left-color:#6b7488;background:rgba(107,116,136,.06)}',
+      '.sic-dq-h{font-weight:600;font-size:13px;display:flex;align-items:center;gap:8px}',
+      '.sic-dq-list{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}',
+      '.sic-dq-row{font-size:13px;line-height:1.45}',
+      '.sic-dq-sev{display:inline-block;font-size:10px;letter-spacing:.06em;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(216,161,58,.18);color:#d8a13a}',
+      '.sic-dq-tripwire .sic-dq-sev{background:rgba(224,82,82,.18);color:#e05252}',
+      '.sic-dq-state{text-transform:uppercase;font-size:11px;letter-spacing:.04em;opacity:.85}',
+      '.sic-dq-note{margin:3px 0 0;font-size:12px;opacity:.8}',
+      '.sic-dq-meta{margin-top:3px;font-size:11px;opacity:.6}',
+      '.sic-dq-meta code{font-size:11px}',
+      /* Operational dependencies — a separate section, visually distinct. */
+      '.sic-opdep .sic-group-h{opacity:.9}',
+      '.sic-opdep-note{margin:2px 0 10px;font-size:12px;opacity:.7;max-width:70ch}',
+      '.sic-ic-static{cursor:default;text-align:left}',
 
       /* ── Operator chip + the evidence state it came from ──────────────
          The operator chip is filled; the evidence state beside it is quiet
@@ -1063,11 +1080,23 @@
         st.data.integrations.forEach(function (i) { map[i.id] = i; });
         _data.status = { ok: true, byId: map, counts: st.data.counts || {}, error: '',
                          checkedAt: st.data.checkedAt || '',
-                         inventoryReadable: st.data.inventoryReadable };
+                         inventoryReadable: st.data.inventoryReadable,
+                         /* ── THE ACTIONABLE QUEUE, TAKEN VERBATIM ──────────
+                            The resolver decides which disagreements need
+                            acting on; this surface renders that decision and
+                            does not re-derive it. Recomputing it here would
+                            create a second opinion about what is urgent, and
+                            the two would eventually disagree — with the
+                            operator unable to tell which was right. An absent
+                            array is an EMPTY queue, never an unknown one. */
+                         disagreements: st.data.disagreements || [] };
       } else {
         _data.status = { ok: false, byId: {}, counts: {},
                          error: st.error || 'Status unavailable.',
-                         checkedAt: '', inventoryReadable: null };
+                         checkedAt: '', inventoryReadable: null,
+                         /* A failed read yields NO queue rather than an empty
+                            one that would read as "nothing is wrong". */
+                         disagreements: null };
       }
       _data.loadedAt = Date.now();
       _loading = false;
@@ -1210,6 +1239,105 @@
     return out;
   }
 
+  /* ── THE ACTIONABLE DISAGREEMENT QUEUE ─────────────────────────────────
+     Driven ONLY by the resolver's top-level `disagreements` array. This
+     surface does not decide what is urgent; the resolver already did, against
+     the ratified matrix, with a suite behind it. Re-deriving the queue here
+     would create a second opinion — and when the two drifted, the operator
+     would have no way to tell which was right.
+
+     THREE DISTINCT RENDERINGS, AND THE DIFFERENCE MATTERS:
+
+       queue is null     the status read FAILED. Nothing is claimed.
+       queue is []       the resolver ran and found nothing to act on. QUIET.
+       queue has rows    these need attention, worst first.
+
+     An absent queue rendered as "all clear" is the defect this whole surface
+     exists to prevent, so the null case says it could not check. */
+  function _disagreementQueue() {
+    var st = _data.status;
+    if (!st) return '';
+    if (!st.ok || st.disagreements === null) {
+      return '<div class="sic-dq sic-dq-unknown"><div class="sic-dq-h">' +
+        '<span aria-hidden="true">—</span> Disagreements could not be checked</div>' +
+        '<p class="sic-dq-note">The status read failed, so no comparison between what each ' +
+        'integration DECLARES and what was OBSERVED could be made. This is not an all-clear.</p></div>';
+    }
+    var rows = st.disagreements || [];
+    if (!rows.length) return '';    /* quiet: no banner, no reassuring claim */
+
+    /* Worst first. A money-rail tripwire must never sort below a stale label. */
+    var ORDER = { tripwire: 0, action: 1 };
+    var sorted = rows.slice().sort(function (a, b) {
+      return (ORDER[a.severity] === undefined ? 9 : ORDER[a.severity]) -
+             (ORDER[b.severity] === undefined ? 9 : ORDER[b.severity]);
+    });
+    var trip = sorted.filter(function (d) { return d.severity === 'tripwire'; }).length;
+
+    return '<div class="sic-dq' + (trip ? ' sic-dq-trip' : '') + '">' +
+      '<div class="sic-dq-h">' +
+      '<span aria-hidden="true">' + (trip ? '⚠' : '◆') + '</span> ' +
+      _esc(String(sorted.length)) + ' integration' + (sorted.length === 1 ? '' : 's') +
+      ' disagree' + (sorted.length === 1 ? 's' : '') + ' with ' +
+      (sorted.length === 1 ? 'its' : 'their') + ' declaration' +
+      (trip ? ' · ' + trip + ' SAFETY TRIPWIRE' + (trip === 1 ? '' : 'S') : '') +
+      '</div>' +
+      '<ul class="sic-dq-list">' + sorted.map(function (d) {
+        return '<li class="sic-dq-row sic-dq-' + _esc(d.severity) + '">' +
+          '<span class="sic-dq-sev">' + _esc(String(d.severity).toUpperCase()) + '</span> ' +
+          '<strong>' + _esc(d.name || d.id) + '</strong> — ' +
+          '<span class="sic-dq-state">' + _esc(String(d.state).replace(/-/g, ' ')) + '</span>' +
+          '<div class="sic-dq-note">' + _esc(d.note || '') + '</div>' +
+          '<div class="sic-dq-meta">declared <code>' + _esc(String(d.declared)) + '</code>' +
+          ' · observed <code>' + _esc(String(d.observed)) + '</code>' +
+          (d.probedAt ? ' · probed ' + _esc(String(d.probedAt).slice(0, 19)).replace('T', ' ') : '') +
+          '</div></li>';
+      }).join('') + '</ul></div>';
+  }
+
+  /* ── OPERATIONAL DEPENDENCIES — A SEPARATE SECTION, ON PURPOSE ──────────
+     Providers the BUSINESS relies on and the CODE does not talk to. They come
+     from a DIFFERENT catalogue collection and are rendered in a DIFFERENT
+     section, because they are a different kind of fact.
+
+     THEY MUST NOT REUSE AN EVIDENCE-MODEL STATE. `unknown`, NOT VERIFIED and
+     REFUSED BY DESIGN all describe our MEASUREMENT of something measurable.
+     NOT PROBEABLE describes the RELATIONSHIP: there is no SOKONI code path, so
+     there is nothing to measure and never will be. Rendering one as the other
+     would tell an operator to go and check something that cannot be checked.
+
+     Nothing here is passed through the technical status resolver, and the
+     registry refuses an evidence record for these ids in any case. */
+  function _operationalSection() {
+    var c = _cat();
+    var deps = (c && c.operationalDependencies) || [];
+    if (!deps.length) return '';
+    return '<div class="sic-group sic-opdep"><div class="sic-group-h">' +
+      '<span class="sic-group-i" aria-hidden="true">🏢</span>Operational dependencies' +
+      '<span class="sic-pill">' + deps.length + '</span></div>' +
+      '<p class="sic-opdep-note">The business relies on these. SOKONI’s code does not talk to ' +
+      'them, so there is no probe path — which is different from a probe that has not run.</p>' +
+      '<div class="sic-grid">' + deps.map(function (d) {
+        return '<div class="sic-ic sic-ic-static" data-opdep="' + _esc(d.id) + '">' +
+          '<div class="sic-ic-top">' +
+          '<span class="sic-ic-icon" aria-hidden="true">' + (d.icon || '🏢') + '</span>' +
+          '<div class="sic-ic-id"><div class="sic-name">' + _esc(d.name) + '</div>' +
+          '<div class="sic-sub">' + _esc(d.vendor || '') + '</div></div>' +
+          '</div>' +
+          '<div class="sic-ic-state">' +
+          '<span class="sic-chip unknown" data-sic-opdep-state="not-probeable">' +
+          '<span class="sic-dot"></span>NOT PROBEABLE</span>' +
+          '<span class="sic-sig muted">No SOKONI probe path</span>' +
+          '</div>' +
+          '<p class="sic-ic-sum">' + _esc(d.summary || '') + '</p>' +
+          (d.whyNotAnIntegration
+            ? '<p class="sic-ic-sum muted">' + _esc(d.whyNotAnIntegration) + '</p>' : '') +
+          '<div class="sic-ic-foot">' +
+          (d.authority ? '<span class="sic-sig muted">Authority: ' + _esc(d.authority) + '</span>' : '') +
+          '</div></div>';
+      }).join('') + '</div></div>';
+  }
+
   /** The header. Shows only NON-ZERO states: an empty bucket is noise, and
       TESTING is currently unreachable by design (see OPS_META). */
   function _opsSummary() {
@@ -1331,7 +1459,7 @@
     }
 
     /* Group into the catalogue's own category order, skipping empty groups. */
-    return _opsSummary() + c.categories.map(function (k) {
+    return _disagreementQueue() + _opsSummary() + c.categories.map(function (k) {
       var group = rows.filter(function (i) { return i.category === k.id; });
       if (!group.length) return '';
       return '<div class="sic-group"><div class="sic-group-h">' +
@@ -1361,7 +1489,7 @@
               (ev.secrets.length === 1 ? '' : 's') + '</span>' : '') +
             '</div></button>';
         }).join('') + '</div></div>';
-    }).join('');
+    }).join('') + _operationalSection();
   }
 
   /* ── The measured state of one integration ───────────────────────────
