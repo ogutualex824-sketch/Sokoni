@@ -1,3 +1,23 @@
+## 2026-09-29 — Communications census, Slice C1 (read-only; branch `feat/integrations-control-center`)
+
+`docs/COMMUNICATIONS_CENSUS_C1.md` records, with evidence per row, what SOKONI's communication rails actually
+implement — never what a provider offers:
+- **Email:** outbound via SendGrid (SMTP fallback), 24 send-only identities, universal `Reply-To` = `support@`
+  monitored **outside** SOKONI; SendGrid **event** webhook (open/click/bounce) deployed; Inbound Parse exists
+  **only** for DMARC reports; **no human inbound mail, no threading, no reply path** — the four missing pieces are
+  named (inbound host + signed receiver, thread store with Message-ID/In-Reply-To correlation, in-thread reply
+  headers, and a UI status that says outbound-only until inbound is proven).
+- **Africa's Talking:** outbound SMS with an idempotent queue and a token-gated delivery-report webhook (deployed);
+  sender ID on the shared shortcode until approved; **no inbound SMS, no voice/USSD**.
+- **Support number:** authoritative `+254 705 726 803` in `company-identity.js`/`sokoni-company.js`;
+  **`support.html` links a fabricated `+254700000000`** (to be repaired in C5); `contact.html` carries a second
+  number with no configured authority.
+- **Catalogue vs observed:** `sendgrid`/`africastalking` both claim `bidirectional`; true only as events / delivery
+  reports — to be reconciled in C3/C4 under the existing evidence model (no synthetic inbound observation).
+- Deployment probe: all six communication endpoints are live.
+No code, rules, schema or catalogue change in this slice.
+- **Files:** `docs/COMMUNICATIONS_CENSUS_C1.md` (new), `CHANGELOG.md`.
+
 ## 2026-09-29 — Connect video verification, Slice V3: a contextual action on the record, through the one Connect path (branch `feat/integrations-control-center`, NOT deployed)
 
 No new call system, no server change. The Connect console's video-verification request becomes a contextual action
