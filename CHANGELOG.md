@@ -1,3 +1,16 @@
+## [2026-09-29] - Identity 4 of 6 LANDED: King Bruce REFUSED through the admin approval-decision authority (PRODUCTION, owner-authorized digest 21746cfc…)
+
+Applied 22:16:26Z by the REAL bizAdminApprovalDecide via scripts/approval-decision-manifest.js --apply, actor = the real admin account
+D5Ql2EYr… (claims verified before any target read). providers/aOdQxmUG… now carries approvalDecision {refuse, decidedBy D5Ql2EYr…,
+decidedAt, owner reason verbatim, prior {active, null, null, null}, source admin_decision}; status suspended, suspended true,
+searchable/isPublic false; NO approvedAt/approvedBy; no role; adminAudit/ERx37gnfqJk4YNFHqGdA (21→22). users, claims, wallet, 0 tx,
+0 bookings, 0 services, 0 applications byte-identical; sellers/businesses/shops absent; DJ Bvmbxno, Kasindi (provider+application)
+and k Riss digests identical. SIDE EFFECT (deployed indexProviderUpdate trigger, not the authority): searchableTerms regenerated on
+the same document. Repeat apply → already_decided_same, provider byte-identical, still 1 audit. Packet docs/LANDING_KINGBRUCE_REFUSE.md
++ docs/release-gates/kingbruce-landing.json. DJ Bvmbxno: NO decision (owner). Kasindi: unchanged tonight. NEXT slice: Approval
+Remediation / Reapplication (census → server-derived approval state → complete-application surface → same-admin decision →
+projection), no production writes until tested.
+
 ## [2026-09-29] - DJ Bvmbxno + King Bruce: approval-decision plan/apply contract (15/0) and READ-ONLY production decision packets (nothing written; decisions are the owner's, tomorrow)
 
 scripts/approval-decision-manifest.js wraps the REAL bizAdminApprovalDecide: --plan (read-only snapshot, handler-mirrored refusals, exact
