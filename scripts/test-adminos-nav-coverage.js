@@ -309,8 +309,11 @@ const state = (p) => p.evaluate(() => {
        parent is a native Super Admin panel (comms → Notifications) is a plain link. */
     const expectChildLinks = inv.children.filter(([s]) => sa.links.includes(s)).length;
     ok(`S3  child links mirror the AdminOS hierarchy under linked parents (${expectChildLinks})`, sa.childLinks === expectChildLinks, { childLinks: sa.childLinks, expectChildLinks });
+    /* `applications` left this list in Slice V1b: Super Admin's native applications
+       panel was retired after equivalence (same applicationList / applicationDecide)
+       and route certification; it now reaches AdminOS's panel by link (S1). */
     ok('S4  Super Admin keeps its native panels (nothing re-implemented or removed)',
-       ['overview', 'users', 'applications', 'financial', 'config', 'revenue', 'reports', 'integrations', 'comms', 'audit'].every((n) => sa.native.includes(n)), sa.native);
+       ['overview', 'users', 'financial', 'config', 'revenue', 'reports', 'integrations', 'comms', 'audit'].every((n) => sa.native.includes(n)), sa.native);
     ok('S5  Integrations in Super Admin is the SAME shared control center (#integrationsRoot in its panel)', sa.integrationsRootInSA);
     /* "Controllable from both": a REAL click on the Super Admin sidebar must land.
        A 3s timeout, caught, so an overlay (e.g. the shared admin shell painting

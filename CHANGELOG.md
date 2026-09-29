@@ -1,3 +1,35 @@
+## 2026-09-29 — Verification convergence, Slice V1b: the duplicate reviewers retire behind the canonical routes (branch `feat/integrations-control-center`, NOT deployed)
+
+With the shared reviewer certified (V1a), every other verification entry point now resolves to it, and the copies
+are gone — each retirement proven equivalent and route-certified before removal.
+
+- **`verification-admin.html` → entry point only** (941 → ~50 lines). Immediate `location.replace`, a meta refresh
+  and a plain link to `admin-os.html#applications/verification`; keeps `data-admin-guard="admin"` and its registered
+  route (`sokoni-admin-nav.js`, `sokoni-permissions.js`) so old bookmarks still land on a reviewer — the canonical
+  one. Its former reviewer ran a private Firebase app (`sokoni-va`), took the admin's identity from `localStorage`,
+  and (rules emulator B4) could not issue a badge for any applicant who had not created their own record.
+- **`admin.html` legacy entry** → the route. Its pane carried a **fourth** reviewer over `verification_requests`
+  (underscore) — a collection nothing else on the platform writes and no rule matches; `loadVerifications`,
+  `approveVerification`, `rejectVerification` retired (138 lines).
+- **Super Admin's native Applications panel retired** (240 lines: section, `SA.nav` branch, `_apps`,
+  `loadApplications`, `decideApplication`, `reconcileAllApplications`, the `saAppsBadge`). Equivalence: it called the
+  very same `applicationList` / `applicationDecide` / `applicationReconcile` as AdminOS's panel — a second copy of one
+  server queue. Its sidebar entry is now a link to `admin-os.html#applications`; "Verification requests" links to
+  `#applications/verification` (V1a). `test-adminos-nav-coverage` S4's native-panel list drops `applications`.
+
+Evidence: `test-verification-convergence` **29/0** — B1 positive control (AdminOS still owns both callables), B2/B3
+Super Admin has no second queue and links, B4/B5 the two pages are entries only (usage checks, not words),
+**B6 route: opening `verification-admin.html` in a real browser lands on `admin-os.html#applications/verification`
+with the reviewer mounted**; `test-adminos-nav-coverage` **32/0** (Super Admin reaches all 36 AdminOS destinations,
+sidebar clickable, shared Integrations). All three pages' inline scripts parse (`node --check`, module-aware).
+
+Not yet converged (recorded): `account-centre.html#verification` is a user's own identity tasks (not an admin queue);
+Connect video verification stays in the Connect console until V3 attaches it contextually.
+
+- **Files:** `verification-admin.html`, `admin.html`, `super-admin.html`, `scripts/test-verification-convergence.js`,
+  `scripts/test-adminos-nav-coverage.js`, `CHANGELOG.md`.
+- **Database / API / rules:** none. Not deployed.
+
 ## 2026-09-29 — The Firestore evidence read is now bounded, and it cancels rather than conceals (branch `feat/integrations-control-center`, NOT deployed)
 
 The narrow repair authorized after `3288d8b`, committed as `7648996`. Adapter change, tests and timeout semantics

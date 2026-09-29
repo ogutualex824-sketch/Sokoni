@@ -184,6 +184,40 @@ const FAKES = `(() => {
   const sa = fs.readFileSync(path.join(ROOT, 'super-admin.html'), 'utf8');
   ok('S1  Super Admin links to admin-os.html#applications or #applications/verification', /href="admin-os\.html#applications(\/verification)?"/.test(sa));
 
+  console.log('\n  [V1b — the duplicate reviewers are retired behind the canonical routes]');
+  const aos = fs.readFileSync(path.join(ROOT, 'sokoni-aos.js'), 'utf8');
+  const va = fs.readFileSync(path.join(ROOT, 'verification-admin.html'), 'utf8');
+  const adm = fs.readFileSync(path.join(ROOT, 'admin.html'), 'utf8');
+  ok('B1  POSITIVE: AdminOS still owns the application queue (applicationList + applicationDecide in sokoni-aos.js)', /"applicationList"/.test(aos) && /"applicationDecide"/.test(aos));
+  ok('B2  Super Admin no longer carries a second application queue (no applicationList/applicationDecide, no panel-applications)', !/applicationList|applicationDecide|panel-applications/.test(sa));
+  ok('B3  …and links to AdminOS #applications', /href="admin-os\.html#applications"/.test(sa));
+  /* Usage, not words: both pages carry comments that NAME what was retired. */
+  ok('B4  verification-admin.html is an entry point only: routes to the reviewer, keeps the admin guard, reviews nothing',
+     /admin-os\.html#applications\/verification/.test(va) && /data-admin-guard="admin"/.test(va)
+     && !/collection\(|initializeApp\(|localStorage\s*\.|getFirestore/.test(va) && va.length < 4000, va.length);
+  ok('B5  admin.html\'s legacy entry points at the route and its orphaned reviewer (verification_requests) is gone',
+     /href="admin-os\.html#applications\/verification"/.test(adm)
+     && !/collection\(['"]verification_requests['"]\)|window\.(approve|reject)Verification\s*=|window\.loadVerifications\s*=/.test(adm));
+  /* route certification: the old page really lands on the reviewer */
+  const rctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, ignoreHTTPSErrors: true });
+  await rctx.addInitScript(shared.compatInit);
+  await rctx.route('**/*', (route) => {
+    const url = new URL(route.request().url());
+    if (url.hostname !== HOST) return route.abort();
+    if (/\/firebase\.js$/.test(url.pathname)) return route.fulfill({ status: 200, contentType: 'application/javascript', body: shared.instrumentedModule(ROOT) });
+    if (/firebasejs/.test(url.pathname)) return route.fulfill({ status: 200, contentType: 'application/javascript', body: shared.gstaticStub(url.pathname) });
+    const file = path.join(ROOT, decodeURIComponent(url.pathname).replace(/^\/+/, ''));
+    if (!file.startsWith(ROOT)) return route.fulfill({ status: 403, body: '' });
+    let buf; try { buf = fs.readFileSync(file); } catch (_) { return route.fulfill({ status: 404, body: '404' }); }
+    return route.fulfill({ status: 200, contentType: MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', body: buf });
+  });
+  const rp = await rctx.newPage();
+  await rp.goto('https://' + HOST + '/verification-admin.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
+  let landed = false;
+  try { await rp.waitForFunction(() => location.pathname.endsWith('/admin-os.html') && location.hash === '#applications/verification' && !!document.querySelector('#verificationRoot #vrList'), { timeout: 25000 }); landed = true; } catch (_) {}
+  ok('B6  ROUTE: opening verification-admin.html lands on admin-os.html#applications/verification with the reviewer mounted', landed, await rp.evaluate(() => location.href));
+  await rctx.close();
+
   console.log('\n  [negative control]');
   const mod = fs.readFileSync(path.join(ROOT, 'sokoni-verification-review.js'), 'utf8');
   const cut = mod.replace("var st = a.status || 'pending', legacy = !a.applicantUid,", "var st = a.status || 'pending', legacy = false,");

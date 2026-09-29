@@ -1294,13 +1294,14 @@ body.adm-light .adm-sec-h{color:#111;}
            SECTION 8: VERIFICATION
       ═══════════════════════════════════ -->
       <div id="adm-pane-verification" class="adm-pane">
-        <div class="adm-stats" id="verificationStats"></div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin:16px 0;">
-          <a href="verification-admin.html" class="solid-btn solid-green" style="text-decoration:none;">Open Full Verification Panel →</a>
-          <button class="solid-btn solid-blue" onclick="loadVerifications()">🔄 Refresh</button>
-        </div>
-        <div class="adm-sec-h">Pending Verifications</div>
-        <div class="adm-table-wrap"><table class="adm-table"><thead><tr><th>User</th><th>Type</th><th>Document</th><th>Submitted</th><th>Status</th><th>Actions</th></tr></thead><tbody id="verificationBody"></tbody></table></div>
+        <!-- ENTRY ONLY (Slice V1b). This pane used to carry its own reviewer over a
+             collection nothing else on the platform writes (the underscore-named
+             legacy one) — a fourth verification state machine, orphaned. Verification
+             requests are reviewed in ONE place: the AdminOS Applications & Verification
+             panel, "Verification requests" tab. -->
+        <div class="adm-sec-h">Verification</div>
+        <p style="color:rgba(255,255,255,.55);font-size:13px;margin:8px 0 14px;">Badge and tier verification requests are reviewed in the AdminOS workspace.</p>
+        <a href="admin-os.html#applications/verification" class="solid-btn solid-green" style="text-decoration:none;">Open Verification requests in AdminOS →</a>
       </div>
 
       <!-- ═══════════════════════════════════
@@ -7813,137 +7814,10 @@ window.loadSupportQueue = loadSupportQueue;
   };
 
   /* Verifications refresh */
-  window.loadVerifications = function() {
-    var db = window.firebaseDB;
-    if (!db) return;
-    var cont = document.getElementById('verificationsGrid') || document.querySelector('[id*="verif"]');
-    if (cont) cont.innerHTML = '<div style="padding:20px;color:rgba(255,255,255,0.4);">Loading…</div>';
-    db.collection('verification_requests').orderBy('createdAt', 'desc').limit(50).get().then(function(snap) {
-      if (!cont) return;
-      if (snap.empty) { cont.innerHTML = '<div class="adm-empty"><div class="adm-empty-icon">✅</div>No pending verifications</div>'; return; }
-      var rows = snap.docs.map(function(d) {
-        var v = d.data();
-        return '<tr><td>' + (v.name||'-') + '</td><td>' + (v.email||'-') + '</td><td>' + (v.type||'-') + '</td><td>' +
-          new Date(v.createdAt?.seconds ? v.createdAt.seconds * 1000 : v.createdAt || 0).toLocaleDateString() + '</td>' +
-          '<td><span style="padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;background:rgba(251,191,36,0.15);color:#fbbf24;">' + (v.status||'pending') + '</span></td>' +
-          '<td><button class="solid-btn solid-green" style="padding:4px 10px;font-size:11px;" onclick="approveVerification(\'' + d.id + '\')">Approve</button> ' +
-          '<button class="solid-btn solid-red" style="padding:4px 10px;font-size:11px;" onclick="rejectVerification(\'' + d.id + '\')">Reject</button></td></tr>';
-      }).join('');
-      cont.innerHTML = '<div class="adm-table-wrap"><table class="adm-table"><thead><tr><th>Name</th><th>Email</th><th>Type</th><th>Submitted</th><th>Status</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
-    }).catch(function() {
-      if (cont) cont.innerHTML = '<div class="adm-empty">Failed to load verifications</div>';
-    });
-  };
-
-  /* Report generator */
-  window.renderReport = function() {
-    var type    = (document.getElementById('reportType')  || {}).value || 'revenue';
-    var from    = (document.getElementById('reportFrom')  || {}).value;
-    var to      = (document.getElementById('reportTo')    || {}).value;
-    var chart   = document.getElementById('reportChart');
-    if (!chart) return;
-    chart.innerHTML = '<div style="padding:20px;color:rgba(255,255,255,0.4);">Generating ' + type + ' report…</div>';
-    var db = window.firebaseDB;
-    if (!db) { chart.innerHTML = '<div style="padding:20px;color:#ff6464;">Database not available.</div>'; return; }
-    /* Fetch data and render a simple text summary */
-    /* revenue reads canonical `payments` — `transactions` is empty (same stale-collection
-       class the dashboard/finance fixes addressed; docs/CANONICAL_COLLECTIONS.md). */
-    var colMap = { revenue: 'payments', users: 'users', orders: 'orders', rides: 'rides', sellers: 'shops', products: 'products' };
-    var col    = colMap[type] || 'transactions';
-    var q      = db.collection(col).orderBy('createdAt', 'desc').limit(100);
-    q.get().then(function(snap) {
-      var count = snap.size;
-      var label = type.charAt(0).toUpperCase() + type.slice(1);
-      chart.innerHTML =
-        '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:14px;padding:20px;margin-top:8px;">' +
-        '<div style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:8px;">' + label + ' Report' + (from ? ' | ' + from + ' → ' + (to||'today') : '') + '</div>' +
-        '<div style="font-size:32px;font-weight:900;color:#71ff00;">' + count + '</div>' +
-        '<div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;">records in last 100 entries</div>' +
-        '</div>';
-      window._lastReportData = snap.docs.map(function(d) { return Object.assign({ _id: d.id }, d.data()); });
-    }).catch(function(err) {
-      chart.innerHTML = '<div style="padding:20px;color:#ff6464;">Unable to generate report — please refresh.</div>';
-    });
-  };
-
-  window.exportReport = function() {
-    var data = window._lastReportData;
-    if (!data || !data.length) { SK.dialog.alert('Generate a report first.'); return; }
-    var json = JSON.stringify(data, null, 2);
-    var blob = new Blob([json], { type: 'application/json' });
-    var url  = URL.createObjectURL(blob);
-    var a    = document.createElement('a');
-    a.href   = url;
-    a.download = 'sokoni-report-' + Date.now() + '.json';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  /* Tax payment recording */
-  window.markTaxPaid = function() {
-    var type = (document.getElementById('taxPayType') || {}).value || 'vat';
-    var amt  = parseFloat((document.getElementById('taxPayAmt') || {}).value || '0');
-    if (!amt || amt <= 0) { SK.dialog.alert('Enter a valid amount.'); return; }
-    var db = window.firebaseDB;
-    if (!db) { SK.dialog.alert('Database not available.'); return; }
-    db.collection('taxPayments').add({
-      type: type,
-      amount: amt,
-      paidAt: window.firebase?.firestore?.FieldValue?.serverTimestamp?.() || Date.now(),
-      recordedBy: window.firebaseAuth?.currentUser?.uid || 'admin',
-    }).then(function() {
-      var input = document.getElementById('taxPayAmt');
-      if (input) input.value = '';
-      if (typeof window._skToast === 'function') window._skToast('Tax payment recorded — KES ' + amt.toLocaleString(), 'success');
-      if (typeof renderFinance === 'function') renderFinance();
-    }).catch(function(err) { SK.dialog.alert('Error: ' + err.message); });
-  };
-
-  /* Service worker cache clear */
-  window.clearSWCache = function() {
-    if (!('caches' in window)) { SK.dialog.alert('Cache API not available in this browser.'); return; }
-    caches.keys().then(function(keys) {
-      return Promise.all(keys.map(function(k) { return caches.delete(k); }));
-    }).then(function() {
-      if (typeof window._skToast === 'function') window._skToast('All caches cleared — reload to refresh assets', 'success');
-      else SK.dialog.alert('All caches cleared. Reload the page to see fresh assets.');
-    }).catch(function(err) { SK.dialog.alert('Cache clear failed: ' + err.message); });
-  };
-
-  /* ── Verification approve / reject ── */
-  window.approveVerification = function(id) {
-    if (!id) return;
-    var db = window.firebaseDB;
-    if (!db) { SK.dialog.alert('Database not available.'); return; }
-    SK.dialog.confirm('Approve this verification request?', function() {
-    db.collection('verification_requests').doc(id).update({
-      status: 'approved',
-      reviewedAt: window.firebase?.firestore?.FieldValue?.serverTimestamp?.() || Date.now(),
-      reviewedBy: window.firebaseAuth?.currentUser?.uid || 'admin',
-    }).then(function() {
-      if (typeof window._skToast === 'function') window._skToast('Verification approved ✅', 'success');
-      if (typeof window.loadVerifications === 'function') window.loadVerifications();
-    }).catch(function(err) { SK.dialog.alert('Error: ' + err.message); });
-    }, null, { title: 'Approve verification', variant: 'success', confirmLabel: 'Approve' });
-  };
-
-  window.rejectVerification = function(id) {
-    if (!id) return;
-    var db = window.firebaseDB;
-    if (!db) { SK.dialog.alert('Database not available.'); return; }
-    var reason = prompt('Reason for rejection (shown to applicant):');
-    if (!reason || !reason.trim()) return;
-    db.collection('verification_requests').doc(id).update({
-      status: 'rejected',
-      rejectionReason: reason.trim(),
-      reviewedAt: window.firebase?.firestore?.FieldValue?.serverTimestamp?.() || Date.now(),
-      reviewedBy: window.firebaseAuth?.currentUser?.uid || 'admin',
-    }).then(function() {
-      if (typeof window._skToast === 'function') window._skToast('Verification rejected', 'success');
-      if (typeof window.loadVerifications === 'function') window.loadVerifications();
-    }).catch(function(err) { SK.dialog.alert('Error: ' + err.message); });
-  };
-
+  /* loadVerifications / approveVerification / rejectVerification were retired in
+     Slice V1b: they read and wrote the underscore-named legacy collection, which
+     nothing else writes and no rule matches. The reviewer is sokoni-verification-review.js
+     on admin-os.html#applications/verification. */
   /* ── Moderation — flagged content queue ── */
   window.loadFlags = function() {
     var grid = document.getElementById('flagsGrid');
