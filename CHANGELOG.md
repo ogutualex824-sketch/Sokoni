@@ -1,3 +1,11 @@
+## [2026-09-29] - Hosting candidate: Seller Agreement re-acknowledgement surface ported onto the LIVE hosting line (ff9d762) — NOT deployed
+
+Cherry-pick of fd21e9b (slice/c4-capability-consumer) onto fix/track-hub-on-93c5783 @ ff9d762, the commit production hosting
+serves (version.json). Adds agreement-acknowledge.html + sokoni-agreement-acknowledge.js (the two files Hosting would ship) and
+their suites/doc (ignored by Hosting). No functions, no rules, no other page changes: the preservation slice (ab3a891) is NOT
+on this line by design (a Hosting-only release must not carry Functions changes). Preflight packet:
+docs/HOSTING_PREFLIGHT_REACK_SURFACE.md on the capability line. Deployment itself NOT authorized at this point.
+
 ## [2026-09-29] — Track opens a list of what you can track, not a blank map
 
 **Files:** `track.html`, `ride-book.html`, `CHANGELOG.md`.
