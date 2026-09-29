@@ -127,7 +127,7 @@ Ordered by the owner's sequence, with the census facts each slice must respect:
    (posPayments), `mpesa_daraja`, `card` (**no evidence writer exists → decision needed**), `wallet`, `points`,
    `gift_card` (**needs a server gift-card authority — three client stores today**), `split` (a client grouping, not a
    tender). pos.js labels bypass the sale authority entirely (separate lineage decision).
-4. **Refunds × points (Slice 15)** — pulled forward in priority: a refunded sale keeps its earned points and a points-
+4. **Refunds × points (Slice 15) — DONE locally 2026-09-29 (owner: fix first); see CHANGELOG.** It was pulled forward in priority because: a refunded sale keeps its earned points and a points-
    paid till sale is refunded in cash. This is a money defect in P1/P2 as built, and should be the next loyalty slice.
 5. **Delivery / offer parity (Slices 4–5).** First decide ONE delivery authority for a marketplace order (merchant
    config vs platform rider quote) — today the rail decides. Then: merchant-v2 delivery settings writing

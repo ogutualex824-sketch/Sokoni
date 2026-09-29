@@ -395,6 +395,114 @@ async function validateTillTender(db, { tender, merchantId, idempotencyKey, sale
   return { redemptionId: id, points: r.points, kes: r.kes, buyerUid: r.buyerUid };
 }
 
+/* ══ REFUNDS × POINTS (2026-09-29, owner: fix first) ═════════════════════════════════════════════════════════════
+ * A refund used to leave every points effect of the sale in place: the points the sale EARNED stayed with the buyer,
+ * and the points the buyer SPENT on it were not given back — a till refund even repaid that part as cash. Now a refund
+ * of a share of a sale (ratio 0 < r ≤ 1) does, in ONE place, for every row the sale wrote (found by its orderId —
+ * till saleId, Quick Charge intent ref, online order id):
+ *   · earned points: floor(earned × r) taken back (from that lot's unspent points first). If the buyer has already
+ *     spent them, what is there is taken and the shortfall is flagged in pointsRefundAlerts — a balance never goes
+ *     negative and the refund is never refused over it.
+ *   · spent points: floor(spent × r) given back, recorded against the funding (spending) shop — its discount on that
+ *     share is undone.
+ * `ratio` is the CUMULATIVE share of the sale refunded once this refund is counted. Each row keeps what was already
+ * reversed / restored (reversedPoints / restoredPoints), so only the difference moves; one marker per refund
+ * (pointsRefunds/{refundKey}) makes a replay change nothing, and no sequence of partial refunds can reverse more than
+ * the sale earned or spent.
+ * Money is not touched here: the refund's own authority pays money for the money-paid share only.
+ */
+async function preparePointsRefundTx(t, db, { orderId, refundKey }) {
+  const markerRef = db.collection('pointsRefunds').doc(String(refundKey).replace(/\//g, '_').slice(0, 140));
+  const [marker, rowsSnap] = await Promise.all([
+    t.get(markerRef),
+    t.get(db.collection('loyaltyLedger').where('orderId', '==', String(orderId)).limit(50)),
+  ]);
+  const rows = rowsSnap.docs.map((d) => ({ ref: d.ref, id: d.id, v: d.data() || {} }))
+    .filter((r) => r.v.type === 'earn' || r.v.type === 'redeem');
+  const uids = [...new Set(rows.map((r) => r.v.uid).filter(Boolean))];
+  const accs = {};
+  for (const u of uids) { const a = await t.get(db.collection('loyaltyAccounts').doc(u)); accs[u] = { ref: a.ref, v: a.exists ? a.data() : null }; }
+  return { markerRef, done: marker.exists, rows, accs, orderId: String(orderId) };
+}
+
+function applyPointsRefundTx(t, db, ctx, { ratio, refundKey, reason }) {
+  if (ctx.done) return { replay: true, reversed: 0, restored: 0, shortfall: 0 };
+  const r = Math.max(0, Math.min(1, Number(ratio) || 0));
+  const out = { reversed: 0, restored: 0, shortfall: 0, rows: 0 };
+  if (!r || !ctx.rows.length) {
+    t.set(ctx.markerRef, { orderId: ctx.orderId, ratio: r, reversed: 0, restored: 0, none: true, createdAt: FV().serverTimestamp() });
+    return out;
+  }
+  const delta = {};   /* uid → { balance, lifetime, redeemed } */
+  const bump = (u, k, n) => { (delta[u] = delta[u] || { balance: 0, lifetime: 0, redeemed: 0 })[k] += n; };
+  const plan = [];
+  for (const row of ctx.rows) {
+    const v = row.v, uid = v.uid;
+    if (!uid) continue;
+    if (v.type === 'earn') {
+      const earned = _int(v.points), done = _int(v.reversedPoints);
+      const take = Math.max(0, Math.min(Math.floor(earned * r), earned) - done);
+      if (take) plan.push({ row, kind: 'earn', n: take, uid });
+    } else {
+      const spent = _int(v.pointsRedeemed || -Number(v.points)), done = _int(v.restoredPoints);
+      const give = Math.max(0, Math.min(Math.floor(spent * r), spent) - done);
+      if (give) plan.push({ row, kind: 'redeem', n: give, uid });
+    }
+  }
+  /* restores first, so a buyer's own points returned can cover a reversal on the same refund */
+  plan.sort((a, b) => (a.kind === 'redeem' ? -1 : 1) - (b.kind === 'redeem' ? -1 : 1));
+  const avail = {};
+  Object.keys(ctx.accs).forEach((u) => { avail[u] = ctx.accs[u].v ? _int(ctx.accs[u].v.balance) : 0; });
+  for (const p of plan) {
+    const v = p.row.v;
+    if (p.kind === 'redeem') {
+      avail[p.uid] += p.n; bump(p.uid, 'balance', p.n); bump(p.uid, 'redeemed', -p.n); out.restored += p.n;
+      t.update(p.row.ref, { restoredPoints: _int(v.restoredPoints) + p.n });
+      t.set(db.collection('loyaltyLedger').doc('refund__' + String(refundKey).slice(0, 80) + '__' + p.row.id.slice(0, 80)), {
+        uid: p.uid, type: 'redeem_reversal', source: 'refund', orderId: ctx.orderId, reversalOf: p.row.id,
+        merchantId: v.fundingShopId || v.merchantId || null, fundingShopId: v.fundingShopId || v.merchantId || null,
+        points: p.n, pointsRedeemed: -p.n, valueKES: Math.round(p.n / POINTS_PER_KES * 100) / 100,
+        description: 'Refund: ' + p.n + ' points given back', reason: String(reason || 'refund').slice(0, 60), createdAt: FV().serverTimestamp(),
+      });
+    } else {
+      const takeable = Math.min(p.n, Math.max(0, avail[p.uid]));
+      const short = p.n - takeable;
+      avail[p.uid] -= takeable; bump(p.uid, 'balance', -takeable); bump(p.uid, 'lifetime', -p.n);
+      out.reversed += takeable; out.shortfall += short;
+      t.update(p.row.ref, { reversedPoints: _int(v.reversedPoints) + p.n, pointsRemaining: Math.max(0, _int(v.pointsRemaining) - p.n) });
+      t.set(db.collection('loyaltyLedger').doc('refund__' + String(refundKey).slice(0, 80) + '__' + p.row.id.slice(0, 80)), {
+        uid: p.uid, type: 'earn_reversal', source: 'refund', orderId: ctx.orderId, reversalOf: p.row.id,
+        merchantId: v.issuerShopId || v.merchantId || null, issuerShopId: v.issuerShopId || null,
+        points: -takeable, pointsEarned: -takeable, shortfall: short,
+        description: 'Refund: ' + takeable + ' earned points taken back', reason: String(reason || 'refund').slice(0, 60), createdAt: FV().serverTimestamp(),
+      });
+      if (short > 0) {
+        t.set(db.collection('pointsRefundAlerts').doc(String(refundKey).slice(0, 100) + '__' + p.row.id.slice(0, 60)), {
+          uid: p.uid, orderId: ctx.orderId, earnRow: p.row.id, shortfall: short, reason: 'earned_points_already_spent', status: 'open', createdAt: FV().serverTimestamp(),
+        });
+      }
+    }
+    out.rows++;
+  }
+  Object.keys(delta).forEach((u) => {
+    const a = ctx.accs[u]; if (!a || !a.v) return;
+    const d = delta[u];
+    t.update(a.ref, { balance: FV().increment(d.balance), lifetimePoints: FV().increment(d.lifetime), totalRedeemed: FV().increment(d.redeemed), lastUpdated: FV().serverTimestamp() });
+  });
+  t.set(ctx.markerRef, { orderId: ctx.orderId, ratio: r, reversed: out.reversed, restored: out.restored, shortfall: out.shortfall, reason: String(reason || 'refund').slice(0, 60), createdAt: FV().serverTimestamp() });
+  return out;
+}
+
+/** Standalone (online orders): the whole order was refunded. */
+async function refundOrderPoints(db, { orderId, refundKey, ratio, reason }) {
+  let res = null;
+  await db.runTransaction(async (t) => {
+    const ctx = await preparePointsRefundTx(t, db, { orderId, refundKey: refundKey || ('order__' + orderId) });
+    res = applyPointsRefundTx(t, db, ctx, { ratio: ratio == null ? 1 : ratio, refundKey: refundKey || ('order__' + orderId), reason });
+  });
+  return res;
+}
+
 const { onCall } = require('firebase-functions/v2/https');
 const _OPTS = { region: 'us-central1', enforceAppCheck: true, maxInstances: 40, memory: '256MiB', timeoutSeconds: 30 };
 const _call = (fn) => onCall(_OPTS, async (req) => fn(admin.firestore(), { uid: req.auth && req.auth.uid, data: req.data || {} }));
@@ -408,5 +516,6 @@ module.exports = {
   settleExpired, preview, priceAndHold,
   TILL_CODE_TTL_MS, TILL_HOLD_TTL_MS, TILL_MAX_ATTEMPTS, REDEMPTIONS,
   tillStart, tillConfirm, tillCancel, validateTillTender,
+  preparePointsRefundTx, applyPointsRefundTx, refundOrderPoints,
   tillPointsStart, tillPointsConfirm, tillPointsCancel,
 };

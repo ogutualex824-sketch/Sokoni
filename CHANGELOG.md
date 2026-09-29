@@ -1,3 +1,72 @@
+## [2026-09-29] - Refunds × SOKONI points: a refund takes back what the sale earned, gives back what it spent, and never repays points as cash
+
+**Local only — NOT deployed. Branch `slice/c4-convergence`.**
+**Owner decision 2026-09-29:** "Fix refunds × points first". The convergence census (`docs/COMMERCE_CONVERGENCE_CENSUS.md`)
+found that no refund path touched `loyaltyAccounts` / `loyaltyLedger`.
+
+**Defects closed (each shown on the parent `0824d31` by `scripts/test-points-refunds.js`):**
+- A refunded sale kept the points it earned.
+- The points a buyer spent on it were not given back, and a till refund repaid that part **in cash**: a KES 1,000 sale
+  paid 500 points + 950 cash refunded KES 1,000.
+- `posProcessRefund` refunded the **list price** even on a discounted sale: a KES 75,000 laptop sold at 67,500 under a
+  shop offer refunded 75,000.
+- An online order refund left its points untouched.
+
+**Summary**
+- `functions/loyalty-points-spend.js`: `preparePointsRefundTx` / `applyPointsRefundTx` / `refundOrderPoints`. These are
+  the ONE reversal for every refund. They find the sale's points rows by `orderId` (till sale, Quick Charge intent,
+  online order).
+  - Earned points are taken back, `floor(earned × ratio)`, from that lot's unspent points first.
+  - Spent points are given back, `floor(spent × ratio)`, recorded against the funding (spending) shop.
+  - Totals are cumulative per row (`reversedPoints` / `restoredPoints`), with one marker per refund
+    (`pointsRefunds/{key}`): replays change nothing, and partial refunds can never over-reverse.
+  - Restores are applied first. If the earned points are already spent, the available points are taken and the
+    shortfall goes to `pointsRefundAlerts`. A balance never goes negative, and the refund is never refused.
+- `posProcessRefund`:
+  - The money refunded is the lines' share of what was actually paid **in money**:
+    `ratio = listValue / subtotal`, and money = `ratio × (grandTotal − points paid)`.
+  - The points half runs in the same transaction, reading before writing.
+  - The refund record gains `listValue`, `refundRatio`, `pointsValueShareKES`, `pointsRestored`, `pointsReversed` and
+    `pointsShortfall`.
+  - The response returns `pointsRestored` and `pointsReversed`.
+- `order-settlement.handleOrderRefund` (every online order refund) reverses the order's points once, and a points
+  problem never fails the refund.
+- `pos-checkout.html`: the refund toast and the refund receipt state the points given back and taken back, as reported
+  by the server.
+
+**Files:** `functions/loyalty-points-spend.js`, `functions/pos-zero-friction.js`, `functions/order-settlement.js`,
+`pos-checkout.html`, `docs/SOKONI_POINTS.md`, `docs/COMMERCE_CONVERGENCE_CENSUS.md`,
+`scripts/test-points-refunds.js` (new).
+
+**Database (new):**
+- `pointsRefunds/{key}`
+- `pointsRefundAlerts/{key}`
+- `loyaltyLedger` rows `refund__…` (`earn_reversal` / `redeem_reversal`)
+- fields `reversedPoints` / `restoredPoints` on earn and redeem rows
+- the new `posRefunds` fields above
+
+**API:** the `posProcessRefund` response adds `pointsRestored` / `pointsReversed`. **`refundTotal` is now the money
+actually returned** — it was the list value.
+
+**Security / money:**
+- No client figure is read. The ratio comes from the stored sale, and the points rows from the ledger.
+- A discounted or points-paid till sale now refunds less money than before, because it refunds what was paid. This is a
+  deliberate correction of an over-refund, not a rate change.
+
+**Tests:**
+- Full regression, 176 suites vs `0824d31`: 175 identical. The other difference is `merchant-v2-ecosystem-runtime`, which timed
+  out in the batch; alone it fails 129/2 with `PAGEERROR: cancelled` IDENTICALLY on the parent, so it is environmental.
+- `test-points-refunds` 9/0, sabotage 8/8.
+- Counterproof on `0824d31`: 7 of 9 fail there, showing the cash-for-points, list-price and no-reversal defects. The two
+  controls pass on both.
+
+**Known limitations (recorded, not changed):**
+- A till sale is marked `refunded` after its first refund, so a second partial refund is refused (existing behaviour).
+- Commission and tax reversal on a POS refund are not part of this slice. The online settlement reversal already exists.
+- The booking, event and venue refund rails are outside this slice. Bookings carry no points today.
+- Other online refund writers that bypass `handleOrderRefund` (e.g. `automation-engine` auto-credit) do not reverse
+  points. They are listed in the census.
+
 ## [2026-09-29] - Commerce convergence census (read-only): one authority per commercial fact, and who owns what
 
 **Docs only — no code, no production reads or writes.** This is the first task of the owner's End-to-End Commerce

@@ -1640,7 +1640,7 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
   const refundId = 'rf_' + rawKey.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 100);
   const refundRef = db.collection('posRefunds').doc(refundId);
 
-  let refundTotal = 0;
+  let refundTotal = 0, listValue = 0, refundRatio = 1, pointsKESShare = 0, pointsOutcome = null;
   const alreadyDone = await db.runTransaction(async txn => {
     /* ── ALL READS FIRST ──
        The original read each product INSIDE the write loop (txn.get after txn.update), which
@@ -1650,6 +1650,9 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
       txn.get(refundRef),
       ...prodRefs.map(r => txn.get(r)),
     ]);
+    /* Refunds × points (2026-09-29): the sale's points rows — still the read phase */
+    const _PR = require('./loyalty-points-spend');
+    const _ptsCtx = refundSnap.exists ? null : await _PR.preparePointsRefundTx(txn, db, { orderId: String(saleId), refundKey: refundId });
 
     if (refundSnap.exists) return true;            // idempotent replay — change nothing
 
@@ -1665,7 +1668,21 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
       return { qty, orig, snap: prodSnaps[idx], ref: prodRefs[idx] };
     });
 
+    /* WHAT WAS ACTUALLY PAID for these lines (2026-09-29). The refund used to be `unitPrice × qty` — the LIST price —
+       so a sale discounted by a shop offer, a coupon or a manual discount refunded more than the customer paid (a KES
+       67,500 offer sale refunded 75,000), and a sale paid partly with SOKONI points repaid that part in cash. Now the
+       lines' share of the sale (their list value over the sale's subtotal) is applied to what the customer actually
+       paid: MONEY for the money-paid part, and the spent POINTS given back as points (below). */
+    listValue = Math.round(refundTotal * 100) / 100;
+    const _sub = Number(sale.subtotal) || 0, _grand = Number(sale.grandTotal) || 0;
+    const _ptsKES = (sale.pointsRedeemed && Number(sale.pointsRedeemed.kes)) || 0;
+    refundRatio = _sub > 0 ? Math.min(1, listValue / _sub) : 1;
+    refundTotal = (_sub > 0 && _grand > 0) ? Math.round(refundRatio * Math.max(0, _grand - _ptsKES) * 100) / 100 : listValue;
+    pointsKESShare = Math.round(refundRatio * _ptsKES * 100) / 100;
+
     /* ── WRITES ── */
+    /* the points: earned taken back, spent given back — with the refund, exactly once (writes only; read above) */
+    pointsOutcome = _PR.applyPointsRefundTx(txn, db, _ptsCtx, { ratio: refundRatio, refundKey: refundId, reason: 'pos_refund' });
     plan.forEach(pItem => {
       if (pItem.snap.exists && pItem.snap.data().trackInventory !== false) {
         txn.update(pItem.ref, {
@@ -1684,7 +1701,10 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
       saleId,
       merchantId:  _sanitize(merchantId),
       items:       plan.map(x => ({ productId: x.orig.productId, qty: x.qty })),
-      refundTotal,
+      refundTotal,                         /* MONEY returned — the money-paid share of what these lines cost */
+      listValue, refundRatio,              /* 2026-09-29: the list value refunded, and its share of the sale */
+      pointsValueShareKES: pointsKESShare, /* the part that was paid with SOKONI points — given back as points */
+      pointsRestored: pointsOutcome.restored, pointsReversed: pointsOutcome.reversed, pointsShortfall: pointsOutcome.shortfall,
       refundMethod,
       reason:      _sanitize(reason),
       processedBy: managerId,
@@ -1719,7 +1739,8 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
     });
   }
 
-  return { refundId, refundTotal, idempotent: alreadyDone };
+  return { refundId, refundTotal, idempotent: alreadyDone,
+    ...(pointsOutcome && (pointsOutcome.restored || pointsOutcome.reversed) ? { pointsRestored: pointsOutcome.restored, pointsReversed: pointsOutcome.reversed } : {}) };
 });
 
 /* ════════════════════════════════════════════════════════════════

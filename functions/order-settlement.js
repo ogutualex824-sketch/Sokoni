@@ -302,8 +302,17 @@ async function reverseSettledOrder(db, adminSdk, orderId, opts = {}) {
 async function handleOrderRefund(db, adminSdk, orderId, opts = {}) {
   const snap = await db.collection('orders').doc(orderId).get().catch(() => null);
   if (!snap || !snap.exists) return { outcome: 'no-order' };
-  if (snap.data().settlementStatus === STATES.SETTLED) return reverseSettledOrder(db, adminSdk, orderId, opts);
-  return markRefundedIfUnsettled(db, adminSdk, orderId);
+  const res = (snap.data().settlementStatus === STATES.SETTLED)
+    ? await reverseSettledOrder(db, adminSdk, orderId, opts)
+    : await markRefundedIfUnsettled(db, adminSdk, orderId);
+  /* Refunds × points (2026-09-29): the order is refunded in full, so its SOKONI points follow — earned points taken
+     back, spent points given back (functions/loyalty-points-spend.js). Once per order (a replay changes nothing), and
+     never allowed to fail the refund: a points problem is recorded, the money path stands. */
+  if (res && (res.outcome === 'reversed' || res.outcome === 'marked-refunded')) {
+    try { res.points = await require('./loyalty-points-spend').refundOrderPoints(db, { orderId: String(orderId), refundKey: 'order__' + orderId, ratio: 1, reason: opts.reason || 'order_refund' }); }
+    catch (e) { res.pointsError = (e && e.message) || String(e); }
+  }
+  return res;
 }
 
 /* Auto-confirm sweep: delivered orders past the config window with no open dispute become

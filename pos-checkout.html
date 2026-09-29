@@ -3449,7 +3449,10 @@ const Checkout = (() => {
       _toast(
         d.idempotent
           ? 'Refund already processed'
-          : 'Refunded KES ' + Number(d.refundTotal || 0).toLocaleString(),
+          : 'Refunded KES ' + Number(d.refundTotal || 0).toLocaleString() +
+            /* Refunds × points (2026-09-29): the server's own outcome — points paid come back as points */
+            (d.pointsRestored ? ' · ' + Number(d.pointsRestored).toLocaleString() + ' points returned to the customer' : '') +
+            (d.pointsReversed ? ' · ' + Number(d.pointsReversed).toLocaleString() + ' earned points taken back' : ''),
         'success'
       );
       /* Preserve existing receipt behaviour - reprint via the same engine. */
@@ -3458,6 +3461,7 @@ const Checkout = (() => {
           window.SokoniReceipt.print({
             type: 'refund', refundId: d.refundId, saleId: saleId,
             total: d.refundTotal, reason: reason,
+            pointsRestored: d.pointsRestored || 0, pointsReversed: d.pointsReversed || 0,
           });
         }
       } catch (_) { /* a printer fault must never undo a completed refund */ }

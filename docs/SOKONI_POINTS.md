@@ -143,6 +143,24 @@ Seller Agreement (`legal.html#sellers`, section 8) carries the same clause.
 businesses in that role are asked to accept the new terms before their next enforced action. Check the flags before
 deploying.
 
+### Refunds (2026-09-29)
+
+One reversal for every refund, in the points authority: `preparePointsRefundTx` / `applyPointsRefundTx` /
+`refundOrderPoints` (`functions/loyalty-points-spend.js`). It finds the sale's points rows by `orderId`.
+
+- **Earned** points: `floor(earned × ratio)` are taken back.
+- **Spent** points: `floor(spent × ratio)` are given back as points, recorded against the funding shop.
+- `ratio` is the cumulative share refunded. Totals per row are cumulative, and there is one marker per refund.
+- If the earned points are already spent, the available points are taken and the shortfall is flagged in
+  `pointsRefundAlerts`. A balance never goes negative.
+
+**Till** (`posProcessRefund`): money = the lines' share of what was paid **in money**; points move in the same
+transaction.
+
+**Online:** `order-settlement.handleOrderRefund` reverses the order's points once.
+
+A points-paid part is never repaid as cash, and a discounted sale refunds what was paid, not the list price.
+
 ### Checkout display
 
 `checkout.html` renders the balance, the "N pts = KES X off this order" line and the discount row **only** from the
