@@ -1,3 +1,16 @@
+## [2026-09-29] - Adjudication: Kasindi holdings limited — "reindex" is NOT valid approval evidence (READ ONLY; unclassified; no manifest)
+
+`docs/ADJUDICATION_KASINDI.md`. `applications/PRVMS7IACKG` is approved with `decidedBy: "reindex"` — a bare string, the
+only such decider in production, written by no code on any line (the word exists only as a search-reindex source label);
+`decidedAt` is **one second after intake normalisation**; no `adminAudit` for the uid or application (the audited
+`applicationDecide` arrived the same day, `5990437`, and left no record); the decider check (`bc9bf4c`, 2026-08-16) would
+refuse it today; `agreementAccepted` absent. Later processes relied on it: `provider` claim, `users.approved`,
+`searchable/isPublic` true, a stray non-live `sellers` doc, one KES 50 receive. Verdict: approval provenance NOT
+established; does not meet the k Riss standard (named admin uid, audited). Kasindi stays unclassified. Lawful routes
+named for the owner: a fresh audited admin decision on the application (blocked on the unaccepted agreement), the
+missing admin approval-decision authority (shared with DJ Bvmbxno), or leave as is. Classification target (`cleaning`)
+is not in doubt; only the approval evidence is. Nothing written.
+
 ## [2026-09-29] - Identity 1 of 6 landed: k Riss classified `artist_creator` through the AdminOS authority (PRODUCTION, owner-authorized digest `b7a2053b…70a0`)
 
 **Applied 19:31:10Z** by the real `bizAdminClassify` handler (Admin SDK, actor `admin-sdk:classify-identity`):
