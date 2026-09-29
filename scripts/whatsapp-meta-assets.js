@@ -45,13 +45,16 @@ const TOKEN = process.env.META_ACCESS_TOKEN || process.env.WHATSAPP_ACCESS_TOKEN
 const VERSION = process.env.META_API_VERSION || 'v21.0';
 
 if (!TOKEN) {
-  console.error('\n  No token in the environment.');
-  console.error('  Set META_ACCESS_TOKEN in THIS shell and re-run:');
-  console.error('    PowerShell   $env:META_ACCESS_TOKEN = (Read-Host "token" -AsSecureString |');
-  console.error('                   ForEach-Object { [Runtime.InteropServices.Marshal]::PtrToStringAuto(');
-  console.error('                   [Runtime.InteropServices.Marshal]::SecureStringToBSTR($_)) })');
-  console.error('    bash         read -rs META_ACCESS_TOKEN && export META_ACCESS_TOKEN');
-  console.error('\n  A variable set in a different shell does not reach this one.\n');
+  /* Kept to two lines a person can actually retype. The earlier version offered
+     a SecureString incantation that wrapped across four lines and was the first
+     thing anyone would get wrong — advice too awkward to follow is not advice. */
+  console.error('\n  META_ACCESS_TOKEN is not set in this shell.\n');
+  console.error('  Run BOTH lines in the SAME window, from the repo folder:\n');
+  console.error('    $env:META_ACCESS_TOKEN = Read-Host "token"');
+  console.error('    node scripts/whatsapp-meta-assets.js\n');
+  console.error('  Read-Host keeps the token OUT of your PowerShell history file;');
+  console.error('  typing the value inline writes it to disk. A variable set in a');
+  console.error('  different window does not reach this one.\n');
   process.exit(2);
 }
 
