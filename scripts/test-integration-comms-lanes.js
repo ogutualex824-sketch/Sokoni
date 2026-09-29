@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* ══════════════════════════════════════════════════════════════════════════════
-   COMMUNICATION RAILS IN THE INTEGRATION CONSOLE — lanes, not labels   (C3 / C4)
+   COMMUNICATION RAILS IN THE INTEGRATION CONSOLE — lanes, not labels   (C3 + C4)
    scripts/test-integration-comms-lanes.js
 
    WHAT THIS PROTECTS
@@ -108,6 +108,9 @@ const RAILS = [
     mustSay: [/outbound/i, /event/i, /inbound human mail not implemented/i], mustNotSay: [/two-way/i, /reply from/i, /inbox/i] },
   { id: 'sendgrid-inbound-parse', endpoint: 'dmarcReportWebhook', modules: ['functions/email-dmarc.js'], workspace: 'admin-os.html#comms/email', tab: 'email',
     mustSay: [/DMARC/, /not a mailbox/i, /not provisioned/i], mustNotSay: [/two-way/i, /reply from/i, /human mail is (?:now )?(?:provisioned|implemented)/i] },
+  /* C4 */
+  { id: 'africastalking',        endpoint: 'smsDeliveryWebhook', modules: ['functions/sokoni-at.js', 'functions/sms-service.js'], workspace: 'admin-os.html#comms/sms', tab: 'sms',
+    mustSay: [/outbound/i, /delivery report/i, /inbound SMS NOT IMPLEMENTED/i, /voice and USSD NOT IMPLEMENTED/i, /shared shortcode/i], mustNotSay: [/two-way/i, /voice (?:is )?(?:supported|implemented|available)/i, /USSD (?:is )?(?:supported|implemented|available)/i, /inbound SMS (?:is )?(?:supported|implemented)/i] },
 ];
 
 (async () => {
@@ -142,6 +145,24 @@ const RAILS = [
      (() => { const r = registry.INTEGRATIONS.find((x) => x.id === inbound.id);
               return !!r && r.status === 'inbound-only' && r.vendor === inbound.vendor && r.requiredSecrets.length === 0; })());
 
+  head('A4 - Africa\'s Talking: the negated lanes are backed by the code, not by the sentence');
+  {
+    const at = cat.lookup('africastalking');
+    const smsSvc = read('functions/sms-service.js');
+    ok('AT: its collections are the ones sms-service.js declares as constants',
+       (at.evidence.collections || []).length === 4 && at.evidence.collections.every((c) => new RegExp("= '" + c + "'").test(smsSvc)));
+    ok('AT: the delivery webhook checks a token before writing (the lane is signed, as the note says)',
+       (() => { const w = smsSvc.slice(smsSvc.indexOf('exports.smsDeliveryWebhook')); const v = w.indexOf('SMS_WEBHOOK_TOKEN.value()'); const s403 = w.indexOf('403'); const write = w.indexOf('.set('); return v > -1 && s403 > v && write > s403; })());
+    const callers = fs.readdirSync(path.join(ROOT, 'functions')).filter((f) => f.endsWith('.js') && f !== 'sokoni-at.js')
+      .filter((f) => /atBuildClient\s*\(/.test(read('functions/' + f)));
+    ok('AT: "voice / USSD not implemented" is a derived fact — atBuildClient() has NO caller outside its own module', callers.length === 0, callers.join(',') || 'none');
+    const inboundSms = fs.readdirSync(path.join(ROOT, 'functions')).filter((f) => f.endsWith('.js'))
+      .filter((f) => /exports\.(smsInbound|atInbound|inboundSms|smsReceive)\w*\s*=/.test(read('functions/' + f)));
+    ok('AT: "inbound SMS not implemented" is a derived fact — no inbound SMS receiver is exported', inboundSms.length === 0, inboundSms.join(',') || 'none');
+    ok('AT: the registry row is unchanged in lifecycle and secrets (C4 added no entry)',
+       (() => { const r = registry.INTEGRATIONS.find((x) => x.id === 'africastalking'); return !!r && r.status === 'live' && r.requiredSecrets.join() === 'AFRICASTALKING_API_KEY,AFRICASTALKING_USERNAME,SMS_WEBHOOK_TOKEN'; })());
+  }
+
   head('B - the evidence model: UNKNOWN is not REFUSED, and nothing is synthetic');
   ok('sendgrid-inbound-parse has NO executor (probeAvailability = none)', execs.probeAvailability('sendgrid-inbound-parse') === 'none');
   ok('… and NO stage-support row — a lane nothing SOKONI sends can reach cannot evidence "received"', probes.supportFor('sendgrid-inbound-parse').hasProbe === false);
@@ -158,6 +179,9 @@ const RAILS = [
      !!sg && sg.credentialState === 'configured' && sg.health === 'unknown' && sg.notRunReason === 'requires_secret_binding',
      sg && { cred: sg.credentialState, health: sg.health, reason: sg.notRunReason });
   ok('the two are DIFFERENT states on the same resolver (refused ≠ unknown)', !!ib && !!sg && (ib.notRunReason || 'null') !== (sg.notRunReason || 'null'));
+  ok('africastalking: declaration unchanged — requires_secret_binding; stage support delivered+received (its callback), no voice lane anywhere in the model',
+     execs.probeAvailability('africastalking') === 'requires_secret_binding' && probes.supportFor('africastalking').delivered === true && probes.supportFor('africastalking').received === true
+     && !/voice|ussd/i.test(JSON.stringify(probes.SUPPORT)));
   ok('inbound lane: credentialState not-applicable (no secret) — neither "configured" nor "missing"', !!ib && ib.credentialState === 'not-applicable');
   ok('integrationProbeLatest is untouched: the catalogue, registry and console never mention it; admin-os.js still owns the write',
      ['sokoni-integration-catalogue.js', 'functions/integration-registry.js', 'sokoni-integrations.js'].every((f) => read(f).indexOf('integrationProbeLatest') === -1)
@@ -180,6 +204,8 @@ const RAILS = [
   ok('inbound card: links to the same Email workspace (inbound status)', /data-sic-workspace="sendgrid-inbound-parse"/.test(ibHtml) && /Email workspace \(inbound status\)/.test(ibHtml));
   ok('POSITIVE CONTROL: an entry with no workspace declared renders the card but no workspace row',
      await (async () => { const h = await detailHtml(m, 'smtp-fallback'); return !/Operational workspace/.test(h) && /SMTP/.test(h); })());
+  const atHtml = await detailHtml(m, 'africastalking');
+  ok('AT card: WORKSPACE row links admin-os.html#comms/sms and the negated lanes are on the card', /href="admin-os\.html#comms\/sms" data-sic-workspace="africastalking"/.test(atHtml) && /voice and USSD NOT IMPLEMENTED/i.test(aside(atHtml)));
   ok('the grid renders both messaging entries as cards',
      (() => { m.api.tab('catalogue'); m.api.select(null); const h = m.host.innerHTML; return /SendGrid Inbound Parse/.test(h) && /SendGrid — Transactional Email/.test(h); })());
 

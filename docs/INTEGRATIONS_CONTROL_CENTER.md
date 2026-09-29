@@ -490,7 +490,7 @@ test a rail is not a probe.
 | Infrastructure | 17 | Two Firestore databases, Cloud Run split from Functions, OSM, HostPinnacle |
 | Outbound APIs | 6 | SmartPOS external API, webhooks, ERP, gateway, registry |
 
-### Communication rails, by lane (C3, 2026-09-29)
+### Communication rails, by lane (C3 + C4, 2026-09-29)
 
 A messaging provider is several lanes, and the card must say which exist. The detail
 aside now keeps **three rows apart**: *Configuration* (secret names and whether each
@@ -503,6 +503,7 @@ This console measures; the workspace acts.
 | --- | --- | --- | --- |
 | `sendgrid` | outbound mail ✓ · delivery events ✓ (`emailWebhook`, HMAC when the key is bound) · **inbound human mail ✗** | `requires_secret_binding` → REFUSED BY DESIGN | `#comms/email` |
 | `sendgrid-inbound-parse` | the **only** inbound mail path: DMARC aggregate reports via `dmarcReportWebhook` → `dmarcReports` / `dmarcAlerts`. Not a mailbox: no thread, no reply | **none** → NOT PROBED (UNKNOWN). No executor and no stage-support row: nothing SOKONI sends could arrive there, so a "received" capability would be synthetic | `#comms/email` (inbound status) |
+| `africastalking` | SMS outbound ✓ (`sokoni-at.js` transport under the idempotent `sms-service.js` queue) · delivery reports ✓ (`smsDeliveryWebhook`, token-checked → `smsDelivery`) · **inbound SMS ✗** (no receiver exported) · **voice / USSD ✗** (`atBuildClient()` has no caller — a derived fact, asserted by the suite). Sender ID = shared shortcode until `AT_SENDER_ID` is set: a declaration, and the correct state | `requires_secret_binding` → REFUSED BY DESIGN | `#comms/sms` — the SMS workspace now carries a **delivery evidence** card fed by `smsStats` (bounded reads labelled as such, null rate → `—`, a refused read shows no figure) beside the unchanged broadcast form |
 
 UNKNOWN and REFUSED BY DESIGN stay distinct on purpose: the first is a lane the platform
 does not measure, the second a decision it made. Certification:

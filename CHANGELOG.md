@@ -1,3 +1,30 @@
+## 2026-09-29 — Integrations, Slice C4: Africa's Talking by lane, and the SMS workspace shows what the rail reports (branch `feat/integrations-control-center`, NOT deployed)
+
+Same shape as C3, for SMS. The provider offers voice, USSD and inbound SMS; SOKONI has none of them, and the catalogue
+now says which lanes exist on code evidence rather than on the vendor's brochure.
+
+- **`sokoni-integration-catalogue.js`** — `africastalking`: lanes stated (SMS outbound ✓ through the idempotent queue;
+  delivery reports ✓ via `smsDeliveryWebhook`, token-checked; inbound SMS ✗; voice/USSD ✗ — the SDK client has no
+  caller); evidence gains `endpoints: ['smsDeliveryWebhook']`, `functions/sokoni-at.js` as a module and the four
+  collections `smsQueue` / `smsDeadLetter` / `smsPreferences` / `smsDelivery`; `workspace` → `admin-os.html#comms/sms`.
+  The sender-ID note is unchanged in meaning: shared shortcode until `AT_SENDER_ID` is set, a declaration and the
+  correct state. **No registry change** (same id, lifecycle, vendor, secrets).
+- **`sokoni-aos.js`** — the SMS tab keeps its broadcast form byte-for-byte and gains a **delivery evidence** card:
+  the lane statement as code facts, then `smsStats` rendered verbatim — sender labelled a declaration, counts at the
+  callable's read bound labelled "at the read bound", a null success rate as `—` with the reason, failures by reason
+  from the server map. A refused or failed read sets the card `unreadable`, names the reason and shows **no figure**.
+  Reads one callable, writes nothing.
+- Docs: `docs/INTEGRATIONS_CONTROL_CENTER.md` lane table, `docs/COMMUNICATIONS_CENSUS_C1.md`.
+
+Evidence: `scripts/test-integration-comms-lanes.js` **59/0** (now C3 + C4: the negated lanes are DERIVED — no exported
+inbound-SMS receiver, no `atBuildClient()` caller outside its module; the webhook checks the token before it writes;
+collections match the service's constants; AT card links the SMS workspace); `scripts/test-sms-workspace.js` **16/0**
+(real reload to `#comms/sms`; broadcast form still wired; no control offers voice/USSD/call/inbound; server values
+rendered verbatim; bound labelled; null rate `—`, real zero `0`; refused read → unreadable with zero digits on the
+card; static: one callable, no writes, no literal zero). Regression: AdminOS wiring 310/0 · render 43/0 · parity 26/0 ·
+console 119/0 · relationship census PASSED. Sabotage suites NOT run (in-place source edits in a shared repo).
+No database, API, rules or security-boundary change. No deploy.
+
 ## 2026-09-29 — Integrations, Slice C3: SendGrid by lane, and the card keeps configuration, capability and workspace apart (branch `feat/integrations-control-center`, NOT deployed)
 
 The C1 census found the SendGrid catalogue row reading as if mail flowed both ways. It does not: SOKONI sends, the

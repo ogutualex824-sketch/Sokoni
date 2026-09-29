@@ -139,18 +139,36 @@
     },
 
     /* ══ MESSAGING & DELIVERY ═══════════════════════════════════════════ */
+    /* ── Africa's Talking is lanes too (C4) ─────────────────────────────────
+       SMS outbound       implemented — sokoni-at.js is the transport; sms-service.js
+                          owns the idempotent queue, dead-letter and preferences
+       delivery reports   implemented — the provider posts to smsDeliveryWebhook
+                          (token-checked, SMS_WEBHOOK_TOKEN) → smsDelivery; inbound
+                          TRAFFIC, hence bidirectional
+       inbound SMS        NOT implemented — no receiver exists
+       voice / USSD       NOT implemented — the full SDK client (atBuildClient) has
+                          no caller; the provider offering it is not SOKONI having it
+       The sender ID is a DECLARATION: shared shortcode until AT_SENDER_ID is set. */
     {
       id: 'africastalking', name: "Africa's Talking — SMS",
       vendor: "Africa's Talking", category: 'messaging', icon: '💬',
       status: 'live', direction: 'bidirectional',
-      summary: 'Transactional SMS: OTPs, order updates, rider dispatch and receipts.',
+      summary: 'Outbound transactional SMS (OTPs, order updates, rider dispatch, receipts) through ' +
+               'an idempotent queue, plus the provider’s delivery-report callback. Bidirectional ' +
+               'means delivery reports come back — not that anyone can text SOKONI.',
       evidence: {
-        modules: ['functions/sms-service.js'],
-        secrets: ['AFRICASTALKING_API_KEY', 'AFRICASTALKING_USERNAME', 'SMS_WEBHOOK_TOKEN'],
-        env:     ['AT_ENV', 'AT_SENDER_ID'],
+        modules:     ['functions/sokoni-at.js', 'functions/sms-service.js'],
+        endpoints:   ['smsDeliveryWebhook'],
+        secrets:     ['AFRICASTALKING_API_KEY', 'AFRICASTALKING_USERNAME', 'SMS_WEBHOOK_TOKEN'],
+        env:         ['AT_ENV', 'AT_SENDER_ID'],
+        collections: ['smsQueue', 'smsDeadLetter', 'smsPreferences', 'smsDelivery'],
       },
-      health: { source: null, kind: 'measurable', note: 'Delivery reports arrive by webhook; there is no status feed to poll.' },
-      notes:  'AT_SENDER_ID stays EMPTY until the operator approves the "SOKONI" sender ID. An empty value is the correct state, not a misconfiguration.',
+      health: { source: null, kind: 'measurable', note: 'Delivery reports arrive by webhook; there is no status feed to poll. The probe declares requires_secret_binding until the credentials are bound to the probe function — a declaration, not an observation.' },
+      workspace: { route: 'admin-os.html#comms/sms', label: 'SMS workspace' },
+      notes:  'Lanes: SMS outbound IMPLEMENTED; delivery reports IMPLEMENTED (smsDeliveryWebhook, ' +
+              'token-checked); inbound SMS NOT IMPLEMENTED; voice and USSD NOT IMPLEMENTED (the SDK ' +
+              'client that would offer them has no caller). AT_SENDER_ID stays EMPTY until the operator ' +
+              'approves the "SOKONI" sender ID — the shared shortcode is the correct state, not a defect.',
     },
     /* ── SendGrid is THREE lanes, and this entry names which ones exist (C3) ──
        outbound mail      implemented — email-service.js sends, emailLogs records

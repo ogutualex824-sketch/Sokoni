@@ -1398,7 +1398,19 @@ window.SokoniAOS = (() => {
           </div>
           <p style="color:var(--aos-muted);font-size:11px;margin:8px 0">SMS charges apply. Confirm before sending.</p>
           <button class="aos-btn success" onclick="SokoniAOS.sendSMSBlast()">&#x1F4AC; Send SMS Broadcast</button>
+        </div>
+        <!-- C4: the operational workspace for the Africa's Talking rail. The lanes are
+             CODE FACTS (what is implemented); the figures are the server's smsStats
+             answer, bounded reads, and an unreadable answer renders as unreadable. -->
+        <div class="compose-form" id="smsEvidence" data-sms-evidence="loading">
+          <h3>&#x1F4E1; SMS delivery evidence</h3>
+          <p style="color:var(--aos-muted);font-size:11.5px;margin:4px 0 10px;line-height:1.55" id="smsLanes">
+            <strong>Lanes (code facts):</strong> outbound SMS &#x2713; · delivery reports &#x2713; (smsDeliveryWebhook) ·
+            inbound SMS &#x2717; not implemented · voice / USSD &#x2717; not implemented.
+            Figures below are the server’s answer and nothing else.</p>
+          <div id="smsEvidenceBody"><div class="aos-spinner"><div></div></div></div>
         </div>`;
+      _smsEvidence();
     } else if (tab === "inbox") {
       /* Communication Engine console. Self-contained like the integrations module: it reads
          its own canonical collections and one read-only callable, so it needs no dispatch op.
@@ -1489,6 +1501,44 @@ window.SokoniAOS = (() => {
       return;
     }
     _toast("Email blast queued for " + target, "success");
+  }
+
+  /* C4 — smsStats, rendered as evidence. Every figure is the callable's own value;
+     the reads behind it are BOUNDED (limit 500 / 200), so a count at the bound is
+     shown as "at the read bound", never as a total. A null success rate is "—".
+     A failed read says so and shows NO figure: an unknown is not a zero. */
+  async function _smsEvidence() {
+    const host = document.getElementById("smsEvidence");
+    const body = document.getElementById("smsEvidenceBody");
+    if (!host || !body) return;
+    let s;
+    try { s = await _call("smsStats"); }
+    catch (e) {
+      host.dataset.smsEvidence = "unreadable";
+      body.innerHTML = `<p style="color:var(--aos-warn,#f59e0b);font-size:12px;margin:0">Could not read SMS evidence
+        (${_esc(e && (e.code || e.message) || "unknown")}). Nothing below is known — no figure is shown rather than a zero.</p>`;
+      return;
+    }
+    if (!s || s.ok !== true) {
+      host.dataset.smsEvidence = "unreadable";
+      body.innerHTML = `<p style="color:var(--aos-warn,#f59e0b);font-size:12px;margin:0">The server returned no SMS evidence.</p>`;
+      return;
+    }
+    host.dataset.smsEvidence = "observed";
+    const n = (v, bound) => (typeof v === "number" && isFinite(v))
+      ? (bound && v >= bound ? `${v} (at the read bound)` : String(v)) : "—";
+    const rate = (typeof s.deliverySuccessRate === "number") ? `${s.deliverySuccessRate}%` : "—";
+    const fails = s.failuresByReason && typeof s.failuresByReason === "object" ? Object.keys(s.failuresByReason) : [];
+    const kv = (k, v, note) => `<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--aos-border,rgba(255,255,255,.06));font-size:12.5px">
+        <span style="color:var(--aos-muted)">${_esc(k)}</span><strong data-sms-kv="${_esc(k)}">${_esc(v)}</strong></div>${note ? `<div style="color:var(--aos-muted);font-size:11px;margin:2px 0 4px">${_esc(note)}</div>` : ""}`;
+    body.innerHTML =
+      kv("Sender ID", s.sender || "—", "A declaration from the deploy configuration, not an observation.") +
+      kv("Queue pending", n(s.queuePending, 500)) +
+      kv("Dead-letter", n(s.deadLetter, 200)) +
+      kv("Sent (recent, bounded read)", n(s.sent24h, 500)) +
+      kv("Delivery reports received", n(s.deliveryReports, 500), "Each is a provider callback to smsDeliveryWebhook. No report yet means unobserved, not failed.") +
+      kv("Delivery success rate", rate, s.deliverySuccessRate === null || s.deliverySuccessRate === undefined ? "No delivery report has been received, so no rate exists." : "Over the reports read, not over all SMS ever sent.") +
+      (fails.length ? `<div style="margin-top:8px;font-size:12px;color:var(--aos-muted)"><strong>Failures by reason:</strong> ${fails.map((k) => `${_esc(k)} × ${_esc(String(s.failuresByReason[k]))}`).join(" · ")}</div>` : "");
   }
 
   async function sendSMSBlast() {

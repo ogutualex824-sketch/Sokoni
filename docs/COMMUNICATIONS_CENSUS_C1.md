@@ -75,8 +75,12 @@ census and to stay so in C2–C6.
   `sendgrid-inbound-parse` with no executor and no stage support — UNKNOWN, never refused, never observed. Console
   detail gains the *Operational workspace* row (AdminOS routes only). `scripts/test-integration-comms-lanes.js` 44/0;
   parity 26/0 · status 45/0 · evidence 69/0 · disagreement 21/0 · console 119/0 · certify 1109/0 · census PASSED.
-- **C4 — Africa's Talking in the evidence model.** SMS outbound + delivery reports; sender-ID state as a declaration;
-  voice/inbound marked not implemented; operational workspace = the existing SMS blast + `smsStats`.
+- **C4 — Africa's Talking in the evidence model. DONE (this branch).** `africastalking` names its lanes (SMS outbound ✓ ·
+  delivery reports ✓ · inbound SMS ✗ · voice/USSD ✗, the last two DERIVED: no receiver exported, `atBuildClient()` has
+  no caller), declares `smsDeliveryWebhook` and its four collections, links `#comms/sms`. The SMS tab gains the
+  **delivery evidence** card from `smsStats` (server values only; bounded reads say so; null rate `—`; a refused read
+  shows no figure). No registry change. `test-integration-comms-lanes.js` 59/0 · `test-sms-workspace.js` 16/0 ·
+  wiring 310/0 · render 43/0 · parity 26/0 · console 119/0 · census PASSED.
 - **C5 — Support number surface. DONE (this branch).** One source (`SOKONI_COMPANY.supportPhone` ↔ `company-identity.js`,
   parity asserted); `support.html` (Call Support, WhatsApp card, ticket follow-up) and `contact.html` (two WhatsApp
   tiles, Alternative line, footer icon) read it through `[data-support-phone]`; the fabricated placeholder removed;
