@@ -32,7 +32,9 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const PROJECT = 'sokoni-evidence-cert';
-const SUITE = 'scripts/test-integration-evidence-firestore.js';
+/* Overridable so the migration certification can reuse this runner rather
+   than standing up a second one with the same port and project guards. */
+const SUITE = process.env.EVIDENCE_CERT_SUITE || 'scripts/test-integration-evidence-firestore.js';
 
 /* Deliberately away from 8080. */
 const CANDIDATE_PORTS = [8091, 8092, 8093, 8094, 8095, 8096, 8097, 8098, 8099];
@@ -75,6 +77,7 @@ function freePort (port) {
 
   const env = Object.assign({}, process.env, {
     GCLOUD_PROJECT: PROJECT,
+    SOKONI_ENVIRONMENT: 'emulator',   /* DECLARED, so migrated records label themselves */
     GOOGLE_CLOUD_PROJECT: PROJECT,
     /* Cleared so the suite's own guard reads what emulators:exec sets, and a
        stale value in this shell cannot satisfy it. */

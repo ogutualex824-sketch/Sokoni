@@ -253,7 +253,12 @@ await T('stages.delivered = null round-trips as null and the record still valida
   eq(back.stages.accepted, true, 'a true must stay true: ');
   eq(back.notRunReason, null, '');
   eq(back.serviceCapabilities, null, 'NOT MODELLED must survive as null, not as absent: ');
-  eq(back.environment, null, '');
+  /* DERIVED from the producer, not hardcoded. This asserted null and went red the
+     moment the runner declared SOKONI_ENVIRONMENT — it was testing the harness's
+     configuration, not the round trip. What matters is that whatever environment
+     was DECLARED survives serialisation unchanged. */
+  eq(back.environment, evidence.declaredEnvironment(),
+    'the declared environment must survive the round trip: ');
 
   const v = evidence.validate(back);
   ok(v.ok, 'a record read back from Firestore no longer validates: ' + v.errors.join('; '));

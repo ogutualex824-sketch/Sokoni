@@ -312,3 +312,98 @@ observable from this process, and no assertion here establishes it. That is a na
 §9's: the fail-closed state is now reachable through the real adapter, which it was not before. The
 adapter claims a bounded return and real stream cancellation — **not** zero residual resource — and
 the suite reports that as UNPROVEN rather than rounding it up.
+
+---
+
+## 11 · Step E — the migration of exactly three, certified on the emulator
+
+### There was nothing to migrate *from*
+
+`integrationProbeLatest` is untouched by decision and no evidence record existed, so this does not
+move data. It **creates** observations by running the declared probes and persisting what they
+establish. A migration that copied a declaration into an observation would manufacture precisely the
+fact this model exists to refuse.
+
+### Selection cannot drift
+
+The three are **derived** from `classifyEvidenceSource() === 'runnable-with-evidence'`, then
+**asserted** against the three authorised by name. A catalogue change therefore *stops* the
+migration rather than widening it.
+
+### Two guards, and one of them was found by running it
+
+**Target guard.** `--apply` requires `--target`. `--target=production` is **refused by the script
+itself** — a separate act needing its own approval, guarded so it cannot happen by momentum.
+
+**Blanket-failure guard — found by the first dry run.** With no Firestore, GCS or Redis reachable,
+all three probes returned `failed` and the content check passed, *because it counted ids and ids were
+all it counted*. Three `failed` records would have been persisted as facts about three providers.
+
+Three **independent** rails failing at the same instant is overwhelmingly a statement about the
+runner, not about GCS, Firestore and Redis being down together. A total failure is therefore refused
+— same principle as `unknown` never collapsing into `missing`: **an environment that cannot observe
+must not be recorded as an observation of failure.** `--allow-total-failure` exists for the genuine
+case. The guard immediately paid for itself: the underlying cause was that the script never called
+`initializeApp()`, which it now does.
+
+The migration also observes **all three first and persists second** — persisting inside the loop
+would have written the first record before the guard could see the third.
+
+### Content-level result
+
+| condition | result |
+|---|---|
+| 3 intended observations persisted | ✅ exactly `cloud-storage`, `firestore`, `memorystore-redis` |
+| 0 unintended records | ✅ |
+| resolver reads those 3 | ✅ and only those 3 carry a `probedAt` |
+| remaining 49 retain derived state | ✅ `probedAt` null, `health` unknown, `stages` null — **nothing synthesised** |
+| 52 technical reconcile exactly | ✅ id set equals the registry |
+| re-running is not additive | ✅ a second run leaves 3, not 6 |
+
+Every record is labelled `environment: 'emulator'` and names the migration in `recordedBy`.
+
+### The distinctions all survived, re-asserted with data present
+
+`declared ≠ observed` — the nine refusals still carry a *declared* reason with `probedAt: null`, and
+the three observed rails carry no refusal. `inbound ≠ observed` — the four inbound rails gained
+nothing; their evidence can only arrive by correlated callback. `operational ≠ technical` — neither
+dependency has a record or a document. `unreadable ≠ missing` — re-asserted **with the three
+migrated records in place**, because a populated store is where that distinction is most likely to
+blur: a 1 ms deadline still reports unreadable rather than surfacing a partial view.
+
+Partition unchanged at 3 · 4 · 9 · 18 · 5 · 13 = 52 — migration adds evidence, not classes. Parity
+re-run with the store populated: 26/0.
+
+**19 passed, 0 failed.**
+
+### A finding about RC-1, not about the migration
+
+Only `firestore` is observable from an emulator. It **was** reached — `stages.connected` and
+`stages.accepted` are both `true`, with `evidence: service_account` — but its **health reads
+`unknown`**, because `resolveIntegrationStatus` sets `credentialState: 'unknown'` whenever the Secret
+Manager inventory cannot be read, and `deriveHealth()` returns `unknown` on that before it looks at
+any stage.
+
+That is the model behaving correctly — an *observation* and a *derived health* are different things,
+and the observation survived when the health could not be computed. The suite asserts the **stages**
+rather than the health, with a control showing the identical stages grade `connected` given a
+readable inventory.
+
+But it exposes something worth its own look: **an integration that declares no secrets has its
+credential state forced to `unknown` by an unreadable inventory**, even though `not-applicable` is
+knowable without reading anything — the `inventoryError` branch is tested before the
+`!required.length` branch. Pre-existing RC-1 behaviour, outside this slice, **not changed here**.
+
+### Also fixed — a harness defect of my own
+
+`test-integration-evidence-firestore.js` asserted `environment === null` and went red the moment the
+runner declared `SOKONI_ENVIRONMENT`. It was testing the harness's configuration rather than the
+round trip. It now derives the expectation from `declaredEnvironment()`: what matters is that
+whatever was *declared* survives serialisation.
+
+### Not done
+
+**No production migration.** The script refuses `--target=production` by design, so what is certified
+is the migration *mechanism* and its content guarantees — on an emulator, where two of the three
+observations are environment artefacts and are labelled as such. A production run is a separate act
+requiring its own authorisation. No deployment. `integrationProbeLatest` untouched.
