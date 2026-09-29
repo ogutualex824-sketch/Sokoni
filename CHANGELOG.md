@@ -1,3 +1,29 @@
+## [2026-09-29] — Life Goals page no longer buried under its own closed goal-sheet overlay (mobile)
+
+**Files:** `sokoni-premium-v2.css`, `CHANGELOG.md`.
+**Database changes:** none. **API changes:** none. **Security changes:** none.
+**Breaking changes:** none. **Deployment:** HOSTING only.
+
+On mobile (≤768px) `life-events.html` rendered under a full-screen 80%-black layer. That layer is the
+page's closed goal sheet, `#leOverlay.le-detail-overlay`, which hides with `opacity:0`. The shared
+page-entrance fade (`sk-page-fade`, `fill-mode: both`) runs on every direct child of `<body>`. It ends
+at `opacity:1` and holds that value, so it pinned the closed overlay visible. The overlay has
+`pointer-events:none`, which is why the page could still be tapped but was barely visible.
+
+This is the same failure class the existing exclusion list already documents for `modal-overlay`,
+`dialog-overlay` and `popup-overlay`. The fix adds `:not([class*="detail-overlay"])` to that list.
+The goal sheet keeps its own open/close transition.
+
+**Verified** (headless Chromium, 390×844, local static serve, consent pre-accepted):
+- original CSS: closed overlay painted at opacity 1, and it stays at opacity 1 after the sheet closes;
+- fixed CSS: the closed overlay is at opacity 0 (no animation), the sheet opens (opacity 1) and closes back
+  to 0.
+- `education.html` and `manager-auth.html` also use a `detail-overlay` class, but not as a body-level
+  child, so they are unaffected.
+
+The site-wide privacy consent dialog (`#_sokoniPrivacyBanner`) is separate and intentional (Kenya DPA
+2019). It disappears once Accept or Reject is chosen.
+
 ## [2026-09-21] — Port the catalogue / business-application / POS-tender surface onto the served hosting lineage
 
 **Files:** new — `catalogue.html`, `business-apply.html`, `sokoni-catalogue-model.js`,

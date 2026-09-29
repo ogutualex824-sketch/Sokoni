@@ -128,8 +128,10 @@
      the "B2B/minishop/inventory page is black" class of bug. Same failure mode
      the transform-hidden bars above hit; overlays that hide via opacity need the
      same exclusion. (They run their own open/close transition, so they lose
-     nothing by sitting out the page-entrance fade.) */
-  body > *:not(#splashScreen):not(script):not(style):not(.bottom-nav):not(#networkToast):not(#pullRefreshIndicator):not(.chat-unread-pip):not(#notificationContainer):not(#sokoni-bell-btn):not(#sokoni-notif-drawer):not(#sokoni-wa-support):not(#sk-offline-bar):not(#sk-offline-banner):not(#sk-spl):not(#sk-splash):not(.sk-drawer):not(#sk-menu-drawer):not([class*="modal-ov"]):not([class*="modal-overlay"]):not([class*="modal-backdrop"]):not([class*="dialog-overlay"]):not([class*="popup-overlay"]) {
+     nothing by sitting out the page-entrance fade.)
+     `detail-overlay` = the Life Goals goal sheet (.le-detail-overlay, 80% black),
+     which blanketed life-events on mobile the same way. */
+  body > *:not(#splashScreen):not(script):not(style):not(.bottom-nav):not(#networkToast):not(#pullRefreshIndicator):not(.chat-unread-pip):not(#notificationContainer):not(#sokoni-bell-btn):not(#sokoni-notif-drawer):not(#sokoni-wa-support):not(#sk-offline-bar):not(#sk-offline-banner):not(#sk-spl):not(#sk-splash):not(.sk-drawer):not(#sk-menu-drawer):not([class*="modal-ov"]):not([class*="modal-overlay"]):not([class*="modal-backdrop"]):not([class*="dialog-overlay"]):not([class*="popup-overlay"]):not([class*="detail-overlay"]) {
     animation: sk-page-fade 0.28s ease both;
   }
 }
