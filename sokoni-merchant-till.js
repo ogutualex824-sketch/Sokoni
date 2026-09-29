@@ -170,6 +170,16 @@
               '<input type="tel" maxlength="20" inputmode="tel" placeholder="Customer phone for SOKONI points (optional)" data-f="buyerPhone" aria-label="Customer phone for SOKONI points">' +
               '<button type="button" data-act="buyer-check">⭐ Check points / create account</button>' +
               '<p class="sk-till-msg" data-f="buyerMsg" aria-live="polite" hidden></p>' +
+              /* Quick Charge × points (2026-09-29): the same buyer-confirmed redemption as the till */
+              '<div data-el="pts" hidden>' +
+                '<button type="button" data-act="pts-start">⭐ Pay part with points</button>' +
+                '<div data-el="pts-code" hidden>' +
+                  '<input type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code from the customer" data-f="ptsCode" aria-label="Customer\u2019s points code">' +
+                  '<button type="button" data-act="pts-confirm">Confirm</button>' +
+                  '<button type="button" data-act="pts-cancel">Cancel</button>' +
+                '</div>' +
+                '<p class="sk-till-msg" data-f="ptsMsg" aria-live="polite" hidden></p>' +
+              '</div>' +
               '<button type="button" data-act="gen-dynamic">Generate QR</button>' +
             '</div>' +
             '<div class="sk-till-dynamic-msg" data-el="dynamic-msg" hidden></div>' +
@@ -202,7 +212,7 @@
         state.pointsPhone = null; bcBtn.disabled = true; say('Checking…');
         ctx.callBuyerLookup({ shopId: shopId, phone: phone }).then(function (r) {
           var d = (r && r.data) || {};
-          if (d.found) { state.pointsPhone = phone; }
+          if (d.found) { state.pointsPhone = phone; state.buyerPoints = Number(d.points) || 0; showPts(); }
           if (d.found) return say('⭐ ' + d.maskedName + ' · ' + d.maskedPhone + ' · ' + Number(d.points || 0).toLocaleString() + ' points');
           var ok = window.confirm('No SOKONI account on this number. Did the customer agree to a SOKONI account? SOKONI will text them.');
           if (!ok) return say('No account — no points this time. Nothing was created.');
@@ -214,6 +224,60 @@
         }).catch(function (e) { say((e && e.message) || 'That did not work.'); })
           .then(function () { bcBtn.disabled = false; });
       });
+
+      /* ── PAY PART WITH POINTS (2026-09-29) ─────────────────────────────────────────────────────────────────────
+         SOKONI texts the CUSTOMER a one-time code bound to this shop, THIS charge (its sale id) and the points; the
+         customer reads it out; the server holds the points. The QR then asks for the rest only — the server takes the
+         points off (payment-purposes pos_till_sale), and spends them when the rest is paid. */
+      var q = function (sel) { return root.querySelector(sel); };
+      var ptsSay = function (t) { var m = q('[data-f="ptsMsg"]'); if (m) { m.hidden = !t; m.textContent = t || ''; } };
+      function showPts() { var p = q('[data-el="pts"]'); if (p) p.hidden = !(state.buyerPoints >= 10 && typeof ctx.callPointsStart === 'function'); }
+      function resetPts(release) {
+        var id = (state.ptsHold && state.ptsHold.redemptionId) || (state.ptsPending && state.ptsPending.redemptionId);
+        if (release && id && !state.qrIssued && typeof ctx.callPointsCancel === 'function') {
+          Promise.resolve(ctx.callPointsCancel({ shopId: ctx.scope && ctx.scope.shopId, redemptionId: id })).catch(function () {});
+        }
+        state.ptsHold = null; state.ptsPending = null; state.qcSaleId = null; state.qrIssued = false;
+        var c = q('[data-el="pts-code"]'); if (c) c.hidden = true;
+        var b = q('[data-act="pts-start"]'); if (b) b.hidden = false;
+        ptsSay('');
+      }
+      var amtEl = q('[data-f="amount"]');
+      if (amtEl) amtEl.addEventListener('input', function () { if (state.ptsHold || state.ptsPending || state.qrIssued) resetPts(true); });
+      var psBtn = q('[data-act="pts-start"]');
+      if (psBtn) psBtn.addEventListener('click', function () {
+        var amount = Number((q('[data-f="amount"]') || {}).value);
+        if (!(amount > 0)) return ptsSay('Enter the sale amount first.');
+        if (!state.qcSaleId) state.qcSaleId = 'qc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        psBtn.disabled = true; ptsSay('Sending the code…');
+        Promise.resolve(ctx.callPointsStart({ shopId: ctx.scope && ctx.scope.shopId, phone: state.pointsPhone, saleKey: state.qcSaleId, saleTotalKES: amount }))
+          .then(function (r) {
+            var d = (r && r.data) || r || {};
+            state.ptsPending = d;
+            var c = q('[data-el="pts-code"]'); if (c) c.hidden = false; psBtn.hidden = true;
+            ptsSay('Code texted to ' + d.maskedPhone + ': ' + Number(d.points).toLocaleString() + ' points = ' + d.valueText + '. Ask the customer to read it out.');
+          })
+          .catch(function (e) { ptsSay((e && e.message) || 'The code could not be sent.'); })
+          .then(function () { psBtn.disabled = false; });
+      });
+      var pcBtn = q('[data-act="pts-confirm"]');
+      if (pcBtn) pcBtn.addEventListener('click', function () {
+        var p = state.ptsPending; if (!p) return;
+        var code = String((q('[data-f="ptsCode"]') || {}).value || '').replace(/\D/g, '');
+        pcBtn.disabled = true;
+        Promise.resolve(ctx.callPointsConfirm({ shopId: ctx.scope && ctx.scope.shopId, redemptionId: p.redemptionId, code: code }))
+          .then(function (r) {
+            var d = (r && r.data) || r || {};
+            state.ptsHold = { redemptionId: d.redemptionId, points: d.points, kes: d.kes, valueText: d.valueText };
+            state.ptsPending = null;
+            var c = q('[data-el="pts-code"]'); if (c) c.hidden = true;
+            ptsSay('⭐ ' + Number(d.points).toLocaleString() + ' points = ' + d.valueText + ' paid with points. Generate the QR for the rest.');
+          })
+          .catch(function (e) { ptsSay((e && e.message) || 'That code did not work.'); })
+          .then(function () { pcBtn.disabled = false; });
+      });
+      var pxBtn = q('[data-act="pts-cancel"]');
+      if (pxBtn) pxBtn.addEventListener('click', function () { resetPts(true); });
 
       var refreshBtn = root.querySelector('[data-act="refresh-activity"]');
       if (refreshBtn) refreshBtn.addEventListener('click', function () {
@@ -256,6 +320,7 @@
       /* Only a buyer the server has IDENTIFIED (looked up / created) for exactly this number is sent — a mistyped number
          must never credit a stranger when the sale is paid. */
       var buyerPhone = (state.pointsPhone && state.pointsPhone === typedPhone) ? typedPhone : '';
+      if (state.ptsPending) { msgEl.hidden = false; msgEl.textContent = 'Confirm or cancel the points code first.'; return; }
       var genBtn = root.querySelector('[data-act="gen-dynamic"]');
       if (genBtn) { genBtn.disabled = true; genBtn.textContent = 'Generating…'; }
 
@@ -268,13 +333,18 @@
         sokoniTillId: state.till.sokoniTillId,
         items: [{ name: note || 'Sale', price: amount, qty: 1 }],
         buyerPhone: buyerPhone || undefined,
+        /* points: the confirmed redemption and the charge it is bound to — never a points figure */
+        saleId: state.ptsHold ? state.qcSaleId : undefined,
+        pointsRedemptionId: state.ptsHold ? state.ptsHold.redemptionId : undefined,
       }).then(function (r) {
+        if (state.ptsHold) state.qrIssued = true;
         return ctx.callMintDynamicQR({ ref: r.data.ref });
       }).then(function (r) {
         qrEl.hidden = false;
         drawQR(qrEl, r.data.qrUrl);
         msgEl.hidden = false;
         msgEl.textContent = 'QR ready — ' + fmtAmount(r.data.amount, r.data.currency) + '. Let the customer scan it.' +
+          (state.ptsHold ? ' (' + state.ptsHold.valueText + ' already paid with SOKONI points.)' : '') +
           (typedPhone && !buyerPhone ? ' No points on this sale: tap ⭐ Check points first.' : '');
       }).catch(function (e) {
         msgEl.hidden = false;

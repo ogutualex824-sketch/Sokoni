@@ -8088,6 +8088,35 @@ exports.webhookIntasend = onRequest(
               paymentRef: apiRef,
             });
             logger.info("[webhookIntasend] Till sale PAID", { ref: apiRef, intentRef: _intentRef2, sokoniTillId: attribution.sokoniTillId });
+            /* Quick Charge × points (2026-09-29): the points the buyer confirmed were HELD for this charge; the rest has
+               now been PAID, so the hold is spent — once (the same hold authority as the POS; a replay changes nothing;
+               a hold that lapsed first is re-deducted or its shortfall flagged, never refused). The receipt goes to the
+               canonical posReceipts store, keyed by the intent, with the payment components the sale really had. */
+            try {
+              const _qmd = (_iSnap2.data() || {}).metadata || {};
+              const _rid = _qmd.pointsRedemptionId || null;
+              if (_rid) {
+                const _PSq = require("./loyalty-points-spend");
+                await _PSq.consumeHold(db, { channel: "till", ref: String(_rid), uid: _qmd.pointsBuyerUid || null, orderId: _intentRef2, saleRef: _intentRef2,
+                  expect: { points: _qmd.pointsRedeemed, kes: _qmd.pointsDiscount, fundingShops: _qmd.pointsFunding || [] } });
+                await db.collection(_PSq.REDEMPTIONS).doc(String(_rid)).set({ status: "consumed", saleId: _intentRef2, consumedAtMs: Date.now() }, { merge: true });
+              }
+              const _components = (_rid ? [{ method: "points", amount: Number(_qmd.pointsDiscount) || 0, points: Number(_qmd.pointsRedeemed) || 0, redemptionId: String(_rid) }] : [])
+                .concat([{ method: "mpesa", amount: amount, ref: checkoutId || apiRef }]);
+              await db.collection("paymentIntents").doc(_intentRef2).set({ paymentComponents: _components }, { merge: true });
+              const _saleTotal = Number(_qmd.saleTotal) || amount;
+              await db.collection("posReceipts").doc(_intentRef2).create({
+                receiptNumber: _intentRef2, saleId: _intentRef2, channel: "quick_charge",
+                merchantId: _qmd.shopId || _qmd.merchantUid || null, sokoniTillId: _qmd.sokoniTillId || null,
+                items: (Array.isArray(_qmd.items) ? _qmd.items : []).map((i) => ({ name: i.name, qty: i.qty, unitPrice: i.price })),
+                subtotal: _saleTotal, total: _saleTotal,
+                ...(_rid ? { pointsRedeemed: { points: Number(_qmd.pointsRedeemed) || 0, kes: Number(_qmd.pointsDiscount) || 0 } } : {}),
+                paidInMoney: amount, payments: _components, paymentMethod: "M-PESA", paymentRef: checkoutId || apiRef,
+                status: "valid", createdAt: admin.firestore.FieldValue.serverTimestamp(), source: "webhookIntasend:quick_charge",
+              }).catch((e) => { if (!(e && e.code === 6)) throw e; });
+            } catch (qcErr) {
+              logger.error("[webhookIntasend] Quick Charge points/receipt not recorded (recoverable)", { ref: apiRef, err: qcErr && qcErr.message });
+            }
             /* Points P1 (2026-09-29): Quick Charge earns SOKONI points for the buyer — the one the cashier identified
                (intent metadata, server-stored), or, when the BUYER paid from their own phone (pay-q), that paying number.
                From the CONFIRMED amount, once, per intent. Never affects the payment. */

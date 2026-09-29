@@ -503,6 +503,18 @@ async function refundOrderPoints(db, { orderId, refundKey, ratio, reason }) {
   return res;
 }
 
+/**
+ * QUICK CHARGE (2026-09-29): the same confirmed till redemption, bound to a Quick Charge transaction — its sale id is
+ * the redemption's saleKey, its shop is the Till's shop, and the value is read from the redemption itself (never from
+ * the request). validateTillTender does every check (shop, sale, confirmed, unexpired, 25% of this charge).
+ */
+async function validateQuickChargeRedemption(db, { redemptionId, shopId, saleKey, saleTotal }) {
+  const s = await db.collection(REDEMPTIONS).doc(String(redemptionId || '')).get().catch(() => null);
+  if (!s || !s.exists) throw new HttpsError('failed-precondition', 'Unknown points confirmation.');
+  return validateTillTender(db, { tender: { redemptionId: String(redemptionId), amount: Number(s.data().kes) },
+    merchantId: String(shopId), idempotencyKey: String(saleKey), saleTotal: Number(saleTotal) });
+}
+
 const { onCall } = require('firebase-functions/v2/https');
 const _OPTS = { region: 'us-central1', enforceAppCheck: true, maxInstances: 40, memory: '256MiB', timeoutSeconds: 30 };
 const _call = (fn) => onCall(_OPTS, async (req) => fn(admin.firestore(), { uid: req.auth && req.auth.uid, data: req.data || {} }));
@@ -515,7 +527,7 @@ module.exports = {
   capFor, valueOf, allocate, holdRef, placeHold, releaseHold, prepareConsumeTx, consumeHoldTx, consumeHold,
   settleExpired, preview, priceAndHold,
   TILL_CODE_TTL_MS, TILL_HOLD_TTL_MS, TILL_MAX_ATTEMPTS, REDEMPTIONS,
-  tillStart, tillConfirm, tillCancel, validateTillTender,
+  tillStart, tillConfirm, tillCancel, validateTillTender, validateQuickChargeRedemption,
   preparePointsRefundTx, applyPointsRefundTx, refundOrderPoints,
   tillPointsStart, tillPointsConfirm, tillPointsCancel,
 };

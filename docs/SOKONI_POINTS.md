@@ -143,6 +143,15 @@ Seller Agreement (`legal.html#sellers`, section 8) carries the same clause.
 businesses in that role are asked to accept the new terms before their next enforced action. Check the flags before
 deploying.
 
+### Quick Charge (2026-09-29)
+
+The SAME buyer-confirmed till redemption, bound to the Quick Charge sale id:
+- the Quick Charge pricer (`pos_till_sale`) takes the points off the amount asked, on cashier charges only;
+- the webhook spends the hold when the rest is PAID, keyed by the intent;
+- the receipt goes to `posReceipts/{intentRef}` with the points and the money;
+- earning is on the money only;
+- refunds reverse by `orderId = intentRef`.
+
 ### Refunds (2026-09-29)
 
 One reversal for every refund, in the points authority: `preparePointsRefundTx` / `applyPointsRefundTx` /

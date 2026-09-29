@@ -1,3 +1,62 @@
+## [2026-09-29] - Quick Charge × SOKONI points: pay part of a Quick Charge with points, through the till's own authorities
+
+**Local only — NOT deployed. Branch `slice/c4-convergence`.**
+
+Owner: "Don't make Quick Charge call a special 'Quick Charge loyalty' implementation … the same loyalty redemption
+authority already used by POS checkout … don't create a Quick Charge-specific receipt store."
+
+**Summary**
+- **Loyalty:** the SAME buyer-confirmed till redemption (`tillPointsStart` / `tillPointsConfirm` / `tillPointsCancel`),
+  bound to the Quick Charge transaction by its sale id. `loyalty-points-spend.validateQuickChargeRedemption` is a thin
+  entry into `validateTillTender`: it checks shop, sale, confirmed, unexpired and 25% of THIS charge, and reads the
+  value from the redemption, never from the request.
+- **Price:** the one Quick Charge pricer (`payment-purposes` `pos_till_sale` → `priceTillSale`) takes the points off
+  the amount the customer is asked to pay, on the cashier's own charge only (never a buyer-typed permanent-Till
+  payment). The intent records `saleTotal`, `pointsRedeemed`, `pointsDiscount` and `pointsFunding` (the Till's shop).
+- **Payment:** when the rest is PAID, the webhook spends the held points once. It uses the same hold authority, keyed by
+  the intent. A replay changes nothing; a lapsed hold is re-deducted or its shortfall flagged. The redemption is marked
+  consumed, and the intent records the actual `paymentComponents` (points + M-PESA). Earning stays once, on the money
+  paid.
+- **Receipt:** written to the canonical `posReceipts` store (`posReceipts/{intentRef}`, `channel: 'quick_charge'`),
+  with `pointsRedeemed` and `paidInMoney`. Before this, a paid Quick Charge wrote no receipt at all.
+- **Refunds:** the redeem and earn rows carry `orderId = intentRef`, so the established refund reversal
+  (`refundOrderPoints`) applies. It is proven, although no Quick Charge refund UI exists yet.
+- **UI (`sokoni-merchant-till.js`):**
+  - After the buyer is found: "Pay part with points" → the code goes to the customer → Confirm.
+  - The QR shows the server's remaining amount and says what points paid.
+  - Changing the amount before the QR gives the points back.
+
+**Files:** `functions/loyalty-points-spend.js`, `functions/payment-purposes.js`, `functions/index.js`,
+`sokoni-merchant-till.js`, `docs/SOKONI_POINTS.md`, `scripts/test-points-quick-charge.js` (new),
+`scripts/test-points-quick-charge-browser.js` (new).
+
+**Database:**
+- intent metadata `saleTotal` / `pointsRedemptionId` / `pointsRedeemed` / `pointsDiscount` / `pointsFunding` /
+  `pointsBuyerUid`
+- `paymentIntents.paymentComponents`
+- `posReceipts/{intentRef}`
+
+No migration.
+
+**API:** `createPaymentIntent(pos_till_sale)` accepts `saleId` + `pointsRedemptionId`.
+
+**Security:**
+- no points figure is read from the client;
+- the confirmation is bound to the shop + this charge;
+- buyer-typed Till payments cannot spend points;
+- a bare "points" label still completes nothing.
+
+**Tests:**
+- Full regression, 177 suites vs `65fd706`: 173 identical. `catalogue-canonical-migration` is the dirty-tree check.
+  `merchant-v2-ecosystem-runtime` passes 131/0 (it was environmental at the base).
+- `test-points-quick-charge` 4/0, sabotage 6/6. QC4 is STRUCTURAL: the webhook is inline in `index.js`, so the spend
+  itself is executed in QC3 through the same calls.
+- `test-points-quick-charge-browser` 4/0 in real Chromium, UI sabotage 2/2.
+- Counterproof on `65fd706`: all fail there (points ignored, no binding).
+
+**Not in this slice (QC-b next):** catalogue-aware Quick Charge (a product id → canonical price / offer / saleability /
+stock). Quick Charge lines are still free-typed service charges.
+
 ## [2026-09-29] - Refunds × SOKONI points: a refund takes back what the sale earned, gives back what it spent, and never repays points as cash
 
 **Local only — NOT deployed. Branch `slice/c4-convergence`.**

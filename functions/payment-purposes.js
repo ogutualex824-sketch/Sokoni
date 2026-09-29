@@ -372,11 +372,34 @@ const PURPOSES = {
       const till = tSnap.exists ? tSnap.data() : null;
 
       const authority = require('./sokoni-qr-authority');
+      let quote;
       try {
-        return authority.priceTillSale({ till, callerUid: uid, data });
+        quote = authority.priceTillSale({ till, callerUid: uid, data });
       } catch (e) {
         fail(e.code || 'failed-precondition', e.message || 'This Till sale could not be priced.');
       }
+      /* Points (2026-09-29): PAY PART OF A QUICK CHARGE WITH SOKONI POINTS — through the same buyer-confirmed till
+         redemption the POS uses (functions/loyalty-points-spend.js), bound to THIS charge by its sale id. Only on the
+         cashier's own charge (pos_cart), never on a buyer-typed permanent-Till payment. The server reads the value
+         from the confirmed redemption and takes it off what the customer is asked to pay; the webhook spends the held
+         points when the rest is PAID. */
+      if (data && data.pointsRedemptionId) {
+        if (quote.metadata.sourceMode !== 'pos_cart') fail('failed-precondition', 'Points are spent only on a charge the cashier rings up.');
+        const saleId = String(data.saleId || '');
+        if (!/^[A-Za-z0-9_-]{6,80}$/.test(saleId)) fail('invalid-argument', 'This charge needs its sale reference to use points.');
+        const saleTotal = Math.round(Number(quote.amountCents)) / 100;
+        let r;
+        try {
+          r = await require('./loyalty-points-spend').validateQuickChargeRedemption(db(), {
+            redemptionId: data.pointsRedemptionId, shopId: till.shopId, saleKey: saleId, saleTotal });
+        } catch (e) { fail(e.code || 'failed-precondition', e.message || 'The points could not be confirmed.'); }
+        quote.amountCents = Math.round((saleTotal - r.kes) * 100);
+        quote.metadata = Object.assign({}, quote.metadata, {
+          saleTotal, pointsRedemptionId: r.redemptionId, pointsRedeemed: r.points, pointsDiscount: r.kes,
+          pointsFunding: [{ shopId: String(till.shopId), kes: r.kes, points: r.points }], pointsBuyerUid: r.buyerUid,
+        });
+      }
+      return quote;
     },
   },
 
