@@ -68,7 +68,7 @@ checkout):
   `availability-canonical` 26/0.
 - **Regression:** 58 suites run on the working tree and the pristine `2180d30` tree.
   - Equal, except the two suites that inspect the uncommitted tree. They are re-run after the commit (see the
-    follow-up entry).
+    follow-up entry). Re-run after the commit (`8d127ab`): `cart-2-3-4` **50/0**, `checkout-fallback-total` **58/58**.
   - Screened out as touching live endpoints or the shared emulator, and so NOT run: none newly.
 
 **Security:**
