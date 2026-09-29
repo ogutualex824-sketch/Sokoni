@@ -1,3 +1,54 @@
+## [2026-09-29] - SECURITY: loyaltyDispatch is an allow-list; any user could mint points; customer lookups scoped again
+
+**Functions, NOT deployed — requires an explicit owner production decision.** Found in the till-points census.
+
+**PROVEN on the parent (`938d94e`) with a probe:**
+- A signed-in stranger called `createLoyaltyAccount` for themself, then `loyaltyDispatch → awardLoyaltyPoints` twice
+  with invented order ids, and reached **600,125 points**. Online checkout redeems points against real orders.
+- `awardCashback` credited a stranger with NO auth.
+- `loyaltyDispatch` appears on the 2026-09-11 deployed-functions list, so this is very likely live.
+
+**Root cause:**
+- The dispatcher routed ANY op to its handler.
+- `awardLoyaltyPoints` checked only sign-in, then trusted customerUid / amount / merchant / orderId.
+- `awardCashback`, `loyaltyCheckoutOrchestrate`, `enterLuckyDraw`, `trackReferral`, `issueGiftCard`,
+  `joinLoyaltyNetwork` and `getVisitFrequencyReward` had no auth.
+- The enterprise "customer" reads took `uid` from the payload.
+
+**Fix (`functions/loyalty-dispatch.js`):** every one of the 40 handlers has a policy.
+- `customer`: the account is the CALLER's; the payload uid is replaced and phone / loyaltyId / customerUid are dropped.
+- `merchant`: `merchantId` must be the caller's own id or a shop they own or manage, via
+  `shop-employees.resolveShopAccess`. The ID typed into loyalty-merchant.html is checked, never believed.
+- `admin`: requires the admin claim.
+- `internal`: refused. Value is created only by servers from a verified sale or order.
+- Unknown ops are refused without listing the valid ones.
+- `lookupLoyaltyCustomer` phones are masked to the last 3 digits.
+
+**Also restored — a regression:**
+- 9360cbd scoped `posLookupCustomer` / `getPOSCustomer` / `upsertPOSCustomer` to the caller's own customers.
+- Commit 2f4fc20 (2026-09-15, a 296-file durability commit) silently put the unscoped versions back: any shop could
+  look up another shop's customers by phone, and upserts overwrote another shop's record.
+- Restored verbatim. `test-pos-customer-scope` went from 23/18 to **41/0**.
+
+**Tests:**
+- **`scripts/test-loyalty-dispatch-guard.js`: 6/0.** It uses the REAL dispatcher and REAL handlers, and ATTEMPTS the
+  mint (nothing written). Sabotage: **9/9 caught**. Counterproof: the probe above.
+- Full regression: 147 suites vs U7c2. `pos-customer-scope`, `product-offers`, `product-payment-authority` and
+  `creator-callback` improved. `catalogue-canonical-migration` is a dirty-tree check that clears on commit.
+  `merchant-v2-ecosystem-runtime` and `product-offers-browser` were load flakes: re-run alone, 131/0 and 7/0.
+
+**OPEN, recorded separately and NOT accommodated by weakening the guard:**
+- pos-crm-pro.html calls `loyaltyDispatch redeemGiftCard` without a `merchantId`. That call already failed before this
+  fix (the handler requires one) and still does. It needs its own fix.
+
+**AFTER an authorised deploy, verify in production (read-only / refusal probes):**
+- unauthorised loyalty mutations refused;
+- cross-customer mutations refused;
+- merchant ops cannot cross shops;
+- admin ops need admin;
+- no client-awarded points or cashback;
+- phones masked.
+
 ## [2026-09-29] - Owner decisions locked: free delivery on every rail (card included), promo never stacks, sales limits count orders
 
 **Card session, display quote, checkout. NOT deployed.**
