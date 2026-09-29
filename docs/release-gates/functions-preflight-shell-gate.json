@@ -6,7 +6,7 @@
   "function": "providerDispatch",
   "deployed": {
     "updateTime": "2026-09-09T06:02:15Z",
-    "revision": "",
+    "revision": "providerdispatch-00048-qiz",
     "archive": "gs://gcf-v2-sources-24799054989-us-central1/providerDispatch/function-source.zip#1787386174474483",
     "archiveUploaded": "2026-08-22T08:09:34Z",
     "closureFiles": 23,
@@ -180,5 +180,6 @@
     "gap": "live hub-register.js has no agreement acknowledgement; fresh applications arrive unacknowledged and take the acknowledge step"
   },
   "consequence": "a scoped providerDispatch redeploy ships the c4 lineage of all 59 existing ops (12 of 23 deployed modules changed, 54 new) — a lineage jump, not a surgical release",
-  "recommendation": "hold; if released, census the 12 changed modules first; rollback = previous Cloud Run revision"
+  "recommendation": "hold; if released, census the 12 changed modules first; rollback = previous Cloud Run revision",
+  "rollback": "Cloud Run revision providerdispatch-00048-qiz (traffic back to it), never run services update"
 }
