@@ -207,6 +207,11 @@ window.SokoniWalletV2 = (function () {
       const auth = getAuth(window.firebaseApp);
       onAuthStateChanged(auth, async user => {
         if (!user) {
+          /* In-profile wallet: the PROFILE owns the page — tell it; it sends the whole tab to login */
+          if (window.__sokoniWalletInProfile) {
+            try { window.parent.postMessage({ __sokoniModule: true, action: 'authRequired', page: '/wallet.html', next: '/profile.html#wallet' }, window.location.origin); } catch (e) {}
+            return;
+          }
           window.location.href = 'login.html?redirect=wallet.html';
           return;
         }
@@ -234,6 +239,10 @@ window.SokoniWalletV2 = (function () {
             openPayToUid(_payUid, _pp.get('name') || 'this contact');
             history.replaceState(null, '', location.pathname);   // don't reopen on refresh
           }
+          /* "Withdraw" from profile or the command palette (?open=withdraw / #withdraw): the withdraw sheet, opened
+             once this user is known so their M-PESA number is prefilled */
+          const _open = _pp.get('open') || (location.hash || '').replace(/^#/, '');
+          if (_open === 'withdraw') openWithdraw();
         } catch (_) {}
       });
     } catch (e) {

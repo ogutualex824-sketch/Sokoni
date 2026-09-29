@@ -6,6 +6,21 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <script src="security.js"></script>
+  <!-- In-profile wallet (2026-09-30): the buyer's wallet opens INSIDE profile.html (Wallet tab), never as a
+       separate page. Shell mode = framed by the same-origin profile page with ?shell=profile: the wallet's own top
+       bar is dropped (profile has one) and links that leave the wallet open at the top level, not in the frame. -->
+  <script>
+  (function () {
+    try {
+      var q = new URLSearchParams(location.search);
+      if (q.get('shell') !== 'profile' || window.parent === window) return;
+      if (!/(^|\/)profile(\.html)?$/.test((window.parent.location.pathname || '').toLowerCase())) return;
+      document.documentElement.classList.add('in-profile');
+      window.__sokoniWalletInProfile = true;
+      var b = document.createElement('base'); b.target = '_top'; document.head.appendChild(b);
+    } catch (e) { /* a cross-origin parent is not our profile — stay a normal page */ }
+  })();
+  </script>
   <!-- Synchronous guest gate (data-require-auth) — redirects a signed-out visitor
        to login before the wallet shell paints; the async onAuthStateChanged gate
        in sokoni-wallet-v2.js remains as the live-session backstop. -->
@@ -85,6 +100,11 @@ body{
   padding-top:var(--safe-t);
 }
 #wal-top-title{font-size:16px;font-weight:800;flex:1;letter-spacing:-.3px}
+/* In-profile wallet: profile's own header is above the frame */
+html.in-profile{--hdr-h:0px}
+html.in-profile #wal-top{display:none}
+/* role separation: the enterprise merchant dashboard is not part of a personal wallet (business money lives in merchant-v2) */
+html.in-profile a[href="sfos-wallet.html"]{display:none}
 #wal-top-avatar{
   width:34px;height:34px;border-radius:50%;
   background:var(--ga);border:2px solid var(--g);

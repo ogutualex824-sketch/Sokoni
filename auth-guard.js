@@ -68,7 +68,9 @@
           if (!window.parent || window.parent === window) return false;
           /* Same-origin read; throws for a cross-origin parent, which is NOT our shell. */
           var pp = (window.parent.location.pathname || '').toLowerCase();
-          return /(^|\/)merchant(\.html)?$/.test(pp) || !!window.parent.SokoniShell;
+          /* profile hosts the personal wallet in-page (2026-09-30) — a lost session must go to the TOP-level
+             login, not render a login form inside the Wallet tab */
+          return /(^|\/)merchant(\.html)?$/.test(pp) || /(^|\/)profile(\.html)?$/.test(pp) || !!window.parent.SokoniShell;
       } catch (e) { return false; }
   }
 

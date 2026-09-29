@@ -1,3 +1,47 @@
+## [2026-09-30] - The buyer's wallet opens inside the profile page, and stays there
+
+**Local only — NOT deployed, NOT pushed. Branch `slice/c4-convergence` on `d4a48fe`.**
+
+Owner: "MAKE SURE THE WALLET OF BUYER OPEN CORRECT IN THE PROFILE PAGE … NOT TO REDIRECT OUT … SHELL EVERYTHING TO
+PROFILE FOR BUYER WALLET", using the premium wallet that already exists. See `docs/IN_PROFILE_WALLET.md`.
+
+**Summary**
+- Profile's Wallet tab now **hosts** the existing premium wallet (`wallet.html?shell=profile`, loaded on first open)
+  instead of sending the buyer to a separate page.
+- Every wallet link and command in profile opens the tab: Open, See All, Withdraw, the finance chips, the role
+  module cards and the command palette.
+- `#wallet:withdraw` lands on the withdraw sheet, prefilled with the owner's M-PESA number.
+- The account menu's Wallet entry opens `profile.html#wallet`.
+- **In profile, the wallet runs in shell mode:**
+  - no second top bar;
+  - no enterprise "Financial OS" link (business money stays in merchant-v2);
+  - links that leave the wallet open at the top level, never trapped in the frame.
+- A lost session sends the whole tab to login and back to the profile wallet. It never shows a login form inside the
+  tab. This reuses the shell's existing `authRequired` contract.
+- The frame is viewport-high on every device, so the wallet's bottom sheets stay on-screen. Tested at 390px and
+  1280px with no sideways scroll.
+
+**Files affected:** `profile.html`, `wallet.html`, `sokoni-wallet-v2.js`, `auth-guard.js`, `shared-header.js`,
+`docs/IN_PROFILE_WALLET.md`, `scripts/test-profile-wallet-browser.js` (new).
+
+**Database changes:** none.
+**API changes:** none. The wallet backend (frozen) is untouched.
+**Security:**
+- Authentication is unchanged, and the top-level page performs the login redirect.
+- The `authRequired` message is accepted only from the wallet frame's own window and same origin.
+- Shell mode needs a same-origin `profile` parent.
+
+**Breaking changes:** none. A direct visit to `wallet.html` behaves as before.
+
+**Tests**
+- `test-profile-wallet-browser` 9/0 ×3 (real Chromium, real pages).
+- Mutation controls 7/7.
+
+**Gaps (recorded)**
+- Profile's `switchTab` wrappers drop `_fromHash`, so the hash settles as `#wallet`. This is pre-existing.
+- Wallet bank withdrawals never send `bankCode`. This is backend work and the backend is frozen.
+- Secure Release (two-key withdrawal) awaits the owner's choice of base branch.
+
 ## [2026-09-30] - Smart Customer Search: the till recognises the shop's customers, and a new customer is saved in one step
 
 **Local only — NOT deployed, NOT pushed. Branch `slice/c4-convergence` on `ef1e992`.**

@@ -325,6 +325,10 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:var(--bg);color:
 /* ── Tab panels ── */
 .up-panel{display:none;}
 .up-panel.active{display:block;}
+/* In-profile wallet: a viewport-high frame (the wallet is a full-screen app with its own scroll and bottom nav,
+   so its sheets stay on-screen on every device) */
+.up-wallet-host{border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);background:#050505}
+.up-wallet-host iframe{display:block;width:100%;border:0;height:calc(100dvh - 140px);min-height:540px;max-height:980px}
 
 /* ── Glass card ── */
 .up-card{
@@ -2190,6 +2194,10 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 
   <!-- WALLET panel -->
   <div id="panel-wallet" class="up-panel">
+    <!-- In-profile wallet (2026-09-30): the premium wallet (wallet.html + sokoni-wallet-v2), hosted HERE so the buyer
+         never leaves their profile. Loaded on first open. The summary below shows until the wallet is ready. -->
+    <div id="walletHost" class="up-wallet-host" hidden></div>
+    <div id="walletSummary">
     <div class="up-wallet-balance">
       <div class="up-wallet-lbl">Available Balance</div>
       <div class="up-wallet-amt" id="walletBalance">KES 0.00</div>
@@ -2201,6 +2209,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
       <div id="walletTxPanel">
         <div class="up-empty"><div class="up-empty-icon">&#128181;</div>No transactions yet.</div>
       </div>
+    </div>
     </div>
   </div>
 
@@ -3866,8 +3875,64 @@ function switchTab(tabKey, _fromHash){
 var _DEFAULT_TAB = 'overview';
 function _openTabFromHash(){
   var key = (location.hash || '').replace(/^#/, '') || _DEFAULT_TAB;
+  /* #wallet:withdraw — the Wallet tab, opened on the withdraw sheet */
+  var sub = null;
+  if(key.indexOf(':') > 0){ sub = key.slice(key.indexOf(':') + 1); key = key.slice(0, key.indexOf(':')); }
   if(document.getElementById('panel-'+key)) switchTab(key, true);
+  if(key === 'wallet') _ensureWalletFrame(sub);
 }
+
+/* ══ IN-PROFILE WALLET (2026-09-30) ══════════════════════════════════════════════════════════════════════════
+   Owner: "make sure the wallet of buyer opens correct in the profile page … not to redirect out … shell everything to
+   profile for buyer wallet". The personal wallet is the EXISTING premium wallet (wallet.html + sokoni-wallet-v2 —
+   the same callables, PIN and payout authority); profile hosts it in its Wallet tab instead of navigating away.
+   The business wallet stays in merchant-v2 Payments and the provider wallet in the provider dashboard. */
+function _ensureWalletFrame(action){
+  var host = document.getElementById('walletHost');
+  if(!host) return;
+  var fr = host.querySelector('iframe');
+  var src = 'wallet.html?shell=profile' + (action === 'withdraw' ? '&open=withdraw' : '');
+  if(!fr){
+    fr = document.createElement('iframe');
+    fr.title = 'SOKONI Wallet';
+    fr.id = 'walletFrame';
+    fr.setAttribute('allow', 'clipboard-write');
+    fr.src = src;
+    host.appendChild(fr);
+    host.hidden = false;
+    var sum = document.getElementById('walletSummary'); if(sum) sum.hidden = true;
+  } else if(action === 'withdraw'){
+    try { if(fr.contentWindow && fr.contentWindow.W2 && fr.contentWindow.W2.openWithdraw) { fr.contentWindow.W2.openWithdraw(); return; } } catch(e){}
+    fr.src = src;
+  }
+}
+/* Any wallet.html link or command on this page opens the Wallet TAB (never a navigation away) */
+function _openWalletIn(href){
+  var h = String(href || '');
+  var withdraw = /#withdraw|open=withdraw/.test(h);
+  var target = '#wallet' + (withdraw ? ':withdraw' : '');
+  if(location.hash !== target) location.hash = target; else _openTabFromHash();
+  var p = document.getElementById('panel-wallet'); if(p && p.scrollIntoView) p.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+function _goHref(href){
+  if(/^\/?wallet(\.html)?([?#]|$)/.test(String(href || ''))) return _openWalletIn(href);
+  location.href = href;
+}
+document.addEventListener('click', function(e){
+  var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+  if(!a || a.target === '_blank' || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+  var href = a.getAttribute('href') || '';
+  if(!/^\/?wallet(\.html)?([?#]|$)/.test(href)) return;
+  e.preventDefault();
+  _openWalletIn(href);
+}, true);
+/* The framed wallet reports a lost session; the PROFILE (top level) goes to login and comes back to the wallet */
+window.addEventListener('message', function(e){
+  var fr = document.getElementById('walletFrame');
+  if(!fr || e.source !== fr.contentWindow || e.origin !== location.origin) return;
+  var d = e.data || {};
+  if(d.__sokoniModule && d.action === 'authRequired') location.href = 'login.html?next=' + encodeURIComponent('/profile.html#wallet');
+});
 window.addEventListener('hashchange', _openTabFromHash);
 
 /* ══════════════════════════════════════════════════════════════
@@ -7304,7 +7369,7 @@ window.logoutUser = logoutUser;
       var m  = MODULE_META[key]; if (!m) return '';
       var raw = ov && ov[m.key];
       var dv  = raw != null ? (m.fmt === 'KES' ? 'KES ' + Number(raw).toLocaleString() : raw + (m.sfx || '')) : '—';
-      var dest = m.tab ? 'onclick="switchTab(\'' + m.tab + '\')"' : 'onclick="location.href=\'' + (m.href || '#') + '\'"';
+      var dest = m.tab ? 'onclick="switchTab(\'' + m.tab + '\')"' : 'onclick="_goHref(\'' + (m.href || '#') + '\')"';
       return '<button type="button" class="pi7-mc" ' + dest + '>' +
              '<span class="pi7-mc-icon">' + m.icon + '</span>' +
              '<span class="pi7-mc-val">' + dv + '</span>' +
@@ -7435,7 +7500,7 @@ window.logoutUser = logoutUser;
       } else if (cmd.tab) {
         onclick = 'switchTab(\'' + cmd.tab + '\');piCmdClose()';
       } else if (cmd.href) {
-        onclick = 'location.href=\'' + cmd.href + '\';piCmdClose()';
+        onclick = '_goHref(\'' + cmd.href + '\');piCmdClose()';
       } else if (cmd.act) {
         onclick = cmd.act + ';piCmdClose()';
       } else {
