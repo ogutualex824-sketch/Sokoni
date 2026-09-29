@@ -163,8 +163,14 @@ service cloud.firestore {
   && !request.resource.data.keys().hasAny([
   'paymentVerified', 'paidAt', 'paidAmount', 'paidPhone', 'mpesaCode',
   'settlementStatus', 'escrow', 'escrowStatus', 'payoutStatus',
-  'receiptGenerated', 'inventoryApplied', 'fulfilmentStatus'
-  ]);
+  'receiptGenerated', 'inventoryApplied', 'fulfilmentStatus',
+  // P0 2026-09-29: delivery proof is server-only — _completeDelivery writes these together with
+  // "delivered". A browser seeding them at create let a self-made order pass as proven.
+  'deliveryAuthorizedBy', 'deliveryAuthorizedActor', 'deliveredAt'
+  ])
+  // P0: a rider is assigned by the claim/dispatch authority, never named by the order creator.
+  && (!request.resource.data.keys().hasAny(['assignedDriverUid']) || request.resource.data.assignedDriverUid == null)
+  && (!request.resource.data.keys().hasAny(['riderId']) || request.resource.data.riderId == null);
   }
   function validOrderStatus() {
   return !request.resource.data.keys().hasAny(['status'])
@@ -376,6 +382,9 @@ service cloud.firestore {
   .hasOnly(['status','cancelReason','updatedAt','review']))
   || (isAuthed() && resource.data.sellerUid == request.auth.uid
   && uidUnchanged() && validOrderStatus()
+  // P0 2026-09-29: a seller never marks an order delivered/completed — that is delivery proof,
+  // produced only by completeDeliveryWithPin / buyerConfirmDelivery (rider payout fired on it).
+  && !(request.resource.data.status in ['delivered','completed'])
   && request.resource.data.diff(resource.data).affectedKeys()
   .hasOnly(['status','sellerNote','readyAt','trackingNo','updatedAt']))
   || (isAuthed() && resource.data.assignedDriverUid == request.auth.uid

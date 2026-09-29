@@ -1,3 +1,34 @@
+## [2026-09-29] — P0: orders rules close the rider-payout self-credit path (rules half)
+
+**Files:** `firestore.rules`, `firestore.rules.build`, `scripts/test-p0-rider-payout-rules.js`, `CHANGELOG.md`.
+**Base:** `ad5ef6d` (its `firestore.rules.build` is byte-identical to the served ruleset `6c67a34d`).
+**Database changes:** none. **Functions:** paired server gate in `onOrderStatusChange` (separate change).
+**Breaking changes:** none for measured legitimate flows. **Deployment:** NOT deployed. Publish the `.build`
+artifact the way the served ruleset was published (`scripts/publish-rules-candidate.js`), not
+`firebase deploy` (this lineage's firebase.json points at the commented source).
+
+**Finding (emulator-proven 2026-09-29).** An ordinary client created an order naming itself seller and rider
+with any `deliveryFee`, then marked it `delivered` through the seller branch. The deployed `onOrderStatusChange`
+credited ~88% of the fee to its withdrawable wallet: KES 88,000 from a 100,000 fee. Production showed 0 such credits.
+
+**Change.**
+1. `clientOrderInit` refuses `deliveryAuthorizedBy`, `deliveryAuthorizedActor` and `deliveredAt` (server-only
+   delivery proof), and refuses a non-null `assignedDriverUid` / `riderId`. A rider is assigned by claim/dispatch,
+   never named by the order creator.
+2. The seller update branch may not set `delivered` or `completed`.
+
+A client-chosen `sellerUid` / `deliveryFee` is still accepted at create, because the checkout pre-write
+(`_ckPersistPendingOrder`) sends both. The paired server gate makes them unable to produce a rider credit.
+Moving order creation server-side belongs to the checkout convergence track.
+
+**Evidence.**
+- `scripts/test-p0-rider-payout-rules.js`: 14/0 on this build. On the served baseline, all 7 P0 rows fail while
+  the 7 legitimate rows pass.
+- Built artifact is byte-identical to the tested emulator candidate (`78ce388a`).
+- Compiled size measured with the served-source control: 252,362 B (+600 vs served 251,762), 3,638 B under the
+  256,000 ceiling.
+- Lineage guard OK.
+
 ## [2026-09-21] — Port the catalogue / business-application / POS-tender surface onto the served hosting lineage
 
 **Files:** new — `catalogue.html`, `business-apply.html`, `sokoni-catalogue-model.js`,

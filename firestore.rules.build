@@ -163,8 +163,11 @@ service cloud.firestore {
   && !request.resource.data.keys().hasAny([
   'paymentVerified', 'paidAt', 'paidAmount', 'paidPhone', 'mpesaCode',
   'settlementStatus', 'escrow', 'escrowStatus', 'payoutStatus',
-  'receiptGenerated', 'inventoryApplied', 'fulfilmentStatus'
-  ]);
+  'receiptGenerated', 'inventoryApplied', 'fulfilmentStatus',
+  'deliveryAuthorizedBy', 'deliveryAuthorizedActor', 'deliveredAt'
+  ])
+  && (!request.resource.data.keys().hasAny(['assignedDriverUid']) || request.resource.data.assignedDriverUid == null)
+  && (!request.resource.data.keys().hasAny(['riderId']) || request.resource.data.riderId == null);
   }
   function validOrderStatus() {
   return !request.resource.data.keys().hasAny(['status'])
@@ -376,6 +379,7 @@ service cloud.firestore {
   .hasOnly(['status','cancelReason','updatedAt','review']))
   || (isAuthed() && resource.data.sellerUid == request.auth.uid
   && uidUnchanged() && validOrderStatus()
+  && !(request.resource.data.status in ['delivered','completed'])
   && request.resource.data.diff(resource.data).affectedKeys()
   .hasOnly(['status','sellerNote','readyAt','trackingNo','updatedAt']))
   || (isAuthed() && resource.data.assignedDriverUid == request.auth.uid
