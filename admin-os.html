@@ -28,9 +28,10 @@
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     html,body{height:100%;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
     body{background:var(--bg);color:var(--txt);display:flex;font-size:14px;line-height:1.5}
-    .aos-sidebar{width:var(--aos-sidebar-w);min-height:100vh;background:var(--aos-surface);border-right:1px solid var(--aos-border);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto}
+    .aos-sidebar{width:var(--aos-sidebar-w);min-height:100vh;background:linear-gradient(180deg,#0c120c 0%,#070b07 100%);border-right:1px solid var(--aos-border);box-shadow:4px 0 24px rgba(0,0,0,.35);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto}
     .aos-logo{padding:20px 16px 16px;border-bottom:1px solid var(--aos-border);display:flex;align-items:center;gap:10px}
-    .logo-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--aos-accent),var(--aos-accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+    .logo-icon{width:36px;height:36px;border-radius:9px;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:rgba(255,255,255,.04)}
+    .logo-icon img{width:100%;height:100%;object-fit:contain;display:block}
     .logo-text{font-size:13px;font-weight:700;letter-spacing:.5px}
     .logo-sub{font-size:10px;color:var(--aos-muted)}
     .nav-group{padding:8px 0}
@@ -297,14 +298,33 @@
     .aos-mono{font-family:"SFMono-Regular",Consolas,monospace;font-size:12px}
     .mobile-menu-btn{display:none;width:36px;height:36px;background:var(--aos-surface2);border:1px solid var(--aos-border);border-radius:var(--aos-radius);align-items:center;justify-content:center;cursor:pointer;font-size:18px}
     @media(max-width:900px){.config-grid{grid-template-columns:1fr}.analytics-grid{grid-template-columns:1fr}.dash-row{grid-template-columns:1fr}}
-    @media(max-width:768px){.aos-sidebar{transform:translateX(-100%);transition:transform .25s}.aos-sidebar.open{transform:translateX(0)}.aos-main{margin-left:0}.mobile-menu-btn{display:flex!important}}
+    /* ── Sidebar collapse / close ─────────────────────────────────────── */
+    .aos-sidebar{transition:width .2s ease}
+    .aos-main{transition:margin-left .2s ease}
+    .logo-titles{min-width:0;overflow:hidden}
+    .aos-sidebar-toggle{margin-left:auto;flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--aos-border);background:rgba(255,255,255,.05);color:var(--aos-muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1;transition:color .15s,border-color .15s,transform .25s}
+    .aos-sidebar-toggle:hover{color:var(--aos-accent);border-color:var(--aos-accent)}
+    .aos-scrim{display:none;position:fixed;inset:0;background:rgba(3,6,3,.55);z-index:99}
+    @media(min-width:769px){
+      body.sidebar-collapsed .aos-sidebar{width:66px}
+      body.sidebar-collapsed .aos-main{margin-left:66px}
+      body.sidebar-collapsed .logo-titles,body.sidebar-collapsed .nav-group-label,body.sidebar-collapsed .aos-user-info-text,body.sidebar-collapsed .signout-btn{display:none}
+      body.sidebar-collapsed .aos-logo{justify-content:center}
+      body.sidebar-collapsed .aos-sidebar-footer{display:flex;justify-content:center}
+      body.sidebar-collapsed .aos-sidebar-toggle{transform:rotate(180deg);margin:0}
+      body.sidebar-collapsed .nav-item{font-size:0;justify-content:center;padding:10px 0;gap:0}
+      body.sidebar-collapsed .nav-item .nav-icon{font-size:18px}
+      body.sidebar-collapsed .nav-badge{display:none}
+    }
+    @media(max-width:768px){.aos-sidebar{transform:translateX(-100%);transition:transform .25s}.aos-sidebar.open{transform:translateX(0)}.aos-sidebar.open ~ .aos-scrim{display:block}.aos-main{margin-left:0}.mobile-menu-btn{display:flex!important}}
   </style>
 </head>
 <body>
   <aside class="aos-sidebar" id="aosSidebar">
     <div class="aos-logo">
-      <div class="logo-icon">&#x1F680;</div>
-      <div><div class="logo-text">SOKONI AOS</div><div class="logo-sub">Mission Control</div></div>
+      <div class="logo-icon"><img src="/assets/logosokoni.png" alt="Sokoni" loading="eager"></div>
+      <div class="logo-titles"><div class="logo-text">SOKONI AOS</div><div class="logo-sub">Mission Control</div></div>
+      <button class="aos-sidebar-toggle" onclick="_sidebarToggle()" aria-label="Collapse or close menu" title="Collapse menu">&#x00AB;</button>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Overview</div>
@@ -377,6 +397,7 @@
       <button class="signout-btn" onclick="SokoniAOS.signOut()">Sign Out</button>
     </div>
   </aside>
+  <div class="aos-scrim" id="aosScrim" onclick="_closeSidebar()"></div>
 
   <main class="aos-main">
     <header class="aos-header">
@@ -800,6 +821,14 @@
   <script>
     function _openSidebar()  { document.getElementById("aosSidebar").classList.add("open"); }
     function _closeSidebar() { document.getElementById("aosSidebar").classList.remove("open"); }
+    /* Toggle: on mobile the button dismisses the drawer; on desktop it collapses the
+       sidebar to an icon rail, and the choice is remembered per browser. */
+    function _sidebarToggle() {
+      if (window.innerWidth <= 768) { _closeSidebar(); return; }
+      var c = document.body.classList.toggle('sidebar-collapsed');
+      try { localStorage.setItem('aosSidebarCollapsed', c ? '1' : '0'); } catch (_) {}
+    }
+    (function(){ try { if (localStorage.getItem('aosSidebarCollapsed') === '1' && window.innerWidth > 768) { var _ap = function(){ document.body.classList.add('sidebar-collapsed'); }; document.body ? _ap() : document.addEventListener('DOMContentLoaded', _ap); } } catch (_) {} })();
     document.addEventListener("DOMContentLoaded", function() {
       try {
         var _aosTicketUnsub = firebase.firestore().collection("supportTickets").where("status","==","open")

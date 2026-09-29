@@ -1,3 +1,29 @@
+## 2026-09-29 — AdminOS sidebar, Slice A: import the production sidebar (branch `feat/integrations-control-center`, NOT deployed)
+
+This brings the production sidebar work onto this branch without rewriting it. Production (`be7c676`, byte-identical
+to live `/admin-os`) and this branch split at `3dcf5724`. Two production sidebar commits never reached this line:
+- `f4a7f6a` — opaque dark sidebar (`#0c120c→#070b07` gradient + depth shadow) and the real `/assets/logosokoni.png`
+  beside **SOKONI AOS**, replacing the 🚀 emoji and a sidebar background of `rgba(255,255,255,.03)`.
+- `8f99418` — the « toggle collapses the desktop sidebar to a 66px icon rail (remembered per browser). On mobile the
+  toggle and a tap-outside scrim close the drawer; before this the drawer could open but not close.
+
+Only the `admin-os.html` portions were applied. Both commits also touch `super-admin.html`, which is out of scope and
+untouched. The one merge conflict was context only. The production side also carried lines from two other commits
+(`249e42a` is-super rule, `b2c9cb4` responsive CSS link), and those were **not** imported.
+
+Evidence: 34 insertions / 5 deletions, equal to the two commits' sum (4+3, 30+2). **All 34 added lines appear
+verbatim in production `be7c676:admin-os.html`**. Inline scripts parse. `test-admin-os-render` 43/0 and
+`test-admin-os-wiring` 308/0; neither covers the sidebar, so they rule out regressions only.
+
+**Known defect found while verifying, not fixed in this slice:** this branch loads `sokoni-admin-shell.js`
+(added in `52a2b22`; production does not load it). With a verified admin, the shell's registry sidebar `#sk-adm-side`
+and header `#sk-adm-header` render **over** `#aosSidebar`. On desktop the AdminOS sections and the new toggle are
+covered and cannot be clicked (headless Chromium: `#sk-adm-side intercepts pointer events`). The proven fix is
+`d8aea59` (page opt-out `data-admin-shell="own"`) on `feature/ent-hub-convergence`; importing it is pending owner scope.
+
+- **Files:** `admin-os.html`, `CHANGELOG.md`.
+- **Database / API / Security / Breaking:** none. UI only. No backend, rules, callable, wallet or deploy changes.
+
 ## 2026-09-27 — RES-1 option 2: the server-owned payment intent carries the delivery quote to the rider (branch `res1-opt2/census`, UNCOMMITTED, for review)
 
 On the live Place Order path (intent → STK → webhook; no session, no verify):
