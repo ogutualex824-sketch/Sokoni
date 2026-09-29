@@ -1,3 +1,16 @@
+## [2026-09-29] - PORT ffea917: checkout's order summary threw on every non-empty cart (convergence line)
+
+**Local only, not deployed. Production is NOT affected:** live `mysokoni.co.ke/checkout` already serves the fix
+(`_ckItemQty`, verified by a read-only fetch today). The C4 convergence line never received it.
+
+**Found by** the P2 checkout browser test: `ReferenceError: qty is not defined` at the item row, so no summary row
+rendered and the rest of that top-level script (the totals and `removeCartItem` included) never ran.
+
+**Change:** `ffea917` ported verbatim. `_ckQty(item)` is the one quantity rule, `_ckLineTotal` delegates to it, and the
+row binds `_ckItemQty`. Adds `scripts/test-checkout-summary.js`: 31/0 here, 24/7 on the parent `4ad69bf`.
+
+**Files:** `checkout.html`, `scripts/test-checkout-summary.js` (new). No database, API, security or breaking changes.
+
 ## [2026-09-29] - SOKONI Points P1: every purchase earns; the till identifies the buyer, the server credits them
 
 **Local only — NOT deployed. Branch `slice/c4-points-p1` on `c59e0f2`.** Owner ask: the till cart, pos-checkout and
