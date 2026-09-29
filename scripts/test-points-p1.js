@@ -166,7 +166,7 @@ const A = 'shopA';
   ck('PT6 Quick Charge carries a normalised buyerPhone (garbage → null) and earns on PAID from the confirmed amount; online + card earn once per order',
     md.buyerPhone === '254712345678' && mdBad.buyerPhone === null
     && /earnForSale\(db, \{ buyerPhone: String\(_bp\), issuerShopId: String\(_md\.shopId \|\| _md\.merchantUid \|\| ""\),\s+saleId: _intentRef2, amountKES: amount, source: "quick" \}\)/.test(ix)
-    && /earnForSale\(db, \{ buyerUid: String\(payData\.uid\), issuerShopId: String\(_pm\.offerShopId \|\| _pm\.sellerUid \|\| ""\),\s+saleId: String\(_pm\.orderId\), amountKES: Math\.max\(0, _subtotal - _offerDisc\), source: "online"/.test(ix)
+    && /earnForSale\(db, \{ buyerUid: String\(payData\.uid\), issuerShopId: String\(_pm\.offerShopId \|\| _pm\.sellerUid \|\| ""\),\s+saleId: String\(_pm\.orderId\), amountKES: Math\.max\(0, _subtotal - _offerDisc - _ptsDisc\), source: "online"/.test(ix)   /* P2a: nothing earned on the part paid WITH points */
     && /_LP\.earnForSale\(db, \{ buyerUid: String\(sessionDoc\.uid\), issuerShopId: k, saleId: orderId,/.test(ix)
     && /exports\.tillBuyerLookup\s+= _loyaltyPoints\.tillBuyerLookup;/.test(ix) && /exports\.tillCreateBuyer\s+= _loyaltyPoints\.tillCreateBuyer;/.test(ix),
     { md: md.buyerPhone, bad: mdBad.buyerPhone, err: md.err });

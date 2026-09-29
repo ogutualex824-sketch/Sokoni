@@ -2013,10 +2013,13 @@ window.setFulfillment = function(type){
   if (fulfillmentType === 'pickup') { deliveryFee = 0; if (typeof updateTotals === 'function') updateTotals(); }
   else if (typeof calcDelivery === 'function') { calcDelivery(); }
 };
-let _loyaltyBalance = 0;    // user's raw point balance
+let _loyaltyBalance = 0;    // the SERVER's balance (shopOfferQuote → points), never localStorage
 let _loyaltyRedeeming = false; // toggle state
-const POINTS_TO_KES = 0.5;  // 1 point = KES 0.50
-const MAX_REDEEM_PCT = 0.25; // max 25% of order total can be paid with points
+/* Points P2 (2026-09-29): no rate lives on this page any more. It used KES 0.50 a point and read the balance out of
+   localStorage; the server's one authority (functions/loyalty-points-spend.js: 10 points = KES 1, at most 25% of the
+   goods) now prices the points in the same quote that prices the shop's offers, and the charge re-prices them the same
+   way — card or M-PESA. */
+let _pointsPreview = null;  // { balance, valueKES, maxPoints, maxKES } from the server, for THIS cart
 const _esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 const _itemsHTML = [];
 cart.forEach((item, _idx) => {
@@ -2119,6 +2122,10 @@ function setPlatformFee(ratePct){
 })();
 
 function _calcLoyaltyDiscount(baseTotal) {
+  /* Points P2: the figure the server quoted for THESE goods (the charge re-prices it identically and holds the points). */
+  if (_loyaltyRedeeming && _pointsPreview && _shopOffer.state === 'ok' && Number(_pointsPreview.maxKES) > 0) {
+    return Math.max(0, Math.min(Number(_pointsPreview.maxKES), Math.max(0, baseTotal - 1)));
+  }
   /* Always 0 — the client no longer decides this.
      It used to compute a discount from _loyaltyBalance, which is read out of
      localStorage.sokoniLoyalty (a number the buyer's own browser owns), and
@@ -2153,13 +2160,15 @@ async function _quoteShopOffers(){
   _shopOffer = { key, discount: 0, applied: [], state: 'loading' };
   try {
     const fn = firebase.functions().httpsCallable('shopOfferQuote');
-    const r = await fn({ fulfilment: fulfillmentType, deliveryFee: (fulfillmentType === 'delivery' ? Number(deliveryFee) || 0 : 0), items: cart.map(i => Object.assign({
+    const r = await fn({ withPoints: true, fulfilment: fulfillmentType, deliveryFee: (fulfillmentType === 'delivery' ? Number(deliveryFee) || 0 : 0), items: cart.map(i => Object.assign({
       productId: String(i.id || i.productId || ''), qty: Math.max(1, Math.round(Number(i.qty) || Number(i.quantity) || 1)),
     }, i.offerId ? { offerId: String(i.offerId) } : {})).filter(i => i.productId) });
     if (_shopOfferKey() !== key) return;
     const d = (r && r.data) || {};
     _shopOffer = { key, discount: Math.max(0, Number(d.discount) || 0), deliveryWaived: Math.max(0, Number(d.deliveryWaived) || 0),
       applied: (d.shops || []).reduce((a, sh) => a.concat(sh.applied || []), []), state: 'ok' };
+    _pointsPreview = (d.points && !d.points.unavailable) ? d.points : null;
+    if (typeof window._renderPointsWidget === 'function') window._renderPointsWidget();
   } catch (e) {
     if (_shopOfferKey() !== key) return;
     _shopOffer = { key, discount: 0, applied: [], state: 'error' };
@@ -2189,8 +2198,9 @@ function updateTotals(){
     if (loyaltyDisc > 0 && _loyaltyRedeeming) {
       loyaltyDiscRow.style.display = "";
       document.getElementById("loyaltyDiscountVal").textContent = "−KES " + loyaltyDisc.toLocaleString();
-      const ptsUsed = Math.ceil(loyaltyDisc / POINTS_TO_KES);
-      document.getElementById("loyaltyPtsUsedLabel").textContent = `(${ptsUsed} pts)`;
+      /* the points the SERVER quoted for this figure (10 per shilling), never computed from a rate on this page */
+      const ptsUsed = (_pointsPreview && Number(_pointsPreview.maxKES) === loyaltyDisc) ? Number(_pointsPreview.maxPoints) : null;
+      document.getElementById("loyaltyPtsUsedLabel").textContent = ptsUsed ? `(${ptsUsed.toLocaleString()} pts)` : '';
     } else {
       loyaltyDiscRow.style.display = "none";
     }
@@ -2536,8 +2546,14 @@ async function _placeOrderCore(){
           sellerUid:       _sUid,
           fulfillmentType: fulfillmentType,
           phone:           phone,
+          /* Points P2: INTENT only (true/false) — the server prices and holds the points exactly as the card path does */
+          redeemLoyalty:   _loyaltyRedeeming === true,
         });
         const _intent = (_intentRes && _intentRes.data) || {};
+        if (_loyaltyRedeeming && window._skToast) {
+          if (Number(_intent.pointsDiscount) > 0) window._skToast('🎁 KES ' + Number(_intent.pointsDiscount).toLocaleString() + ' off using ' + Number(_intent.pointsRedeemed).toLocaleString() + ' points');
+          else if (_intent.pointsError) window._skToast('Points not applied: ' + _intent.pointsError);
+        }
         const _authTotal = Number(_intent.amount);
         if (!(_authTotal > 0)) throw new Error('Could not confirm the order total. Please try again.');
 
@@ -3442,9 +3458,10 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken, payme
   /* Deduct redeemed points first */
   let sokoniLoyalty = {points:0};
   try { sokoniLoyalty = JSON.parse(localStorage.getItem("sokoniLoyalty")||"{}"); } catch(e) {}
-  if (_loyaltyRedeeming && _loyaltyBalance > 0) {
-    const loyaltyDisc = _calcLoyaltyDiscount(orderTotal + _calcLoyaltyDiscount(orderTotal)); // pre-discount base
-    const ptsUsed     = Math.ceil(loyaltyDisc / POINTS_TO_KES);
+  /* Points P2: the SERVER spent the points (and holds the record); this local mirror only notes what it reported. */
+  if (_loyaltyRedeeming && _pointsPreview && Number(_pointsPreview.maxPoints) > 0) {
+    const loyaltyDisc = Number(_pointsPreview.maxKES) || 0;
+    const ptsUsed     = Number(_pointsPreview.maxPoints) || 0;
     if (ptsUsed > 0) {
       sokoniLoyalty.points  = Math.max(0, (sokoniLoyalty.points || 0) - ptsUsed);
       ptsData.total         = Math.max(0, ptsData.total - ptsUsed);
@@ -4195,34 +4212,30 @@ window.processPaypalPayment = processPaypalPayment;
     const ptsEl  = document.getElementById('coLoyaltyPts');
     const earnEl = document.getElementById('coLoyaltyEarn');
     if (!widget || !ptsEl || !earnEl) return;
-    try {
-      const data = JSON.parse(localStorage.getItem('sokoniLoyalty') || '{}');
-      const pts  = typeof data.points === 'number' ? data.points : null;
-      if (pts === null) return;
-      widget.style.display = 'flex';
-      ptsEl.textContent = pts.toLocaleString();
-      // Wire redemption toggle
-      _loyaltyBalance = pts;
-      const redeemRow = document.getElementById('coLoyaltyRedeemRow');
-      if (redeemRow && pts >= 20) {
-        const maxDisc = Math.floor(Math.min(pts * POINTS_TO_KES, subtotal * MAX_REDEEM_PCT));
-        document.getElementById('coRedeemDesc').textContent =
-          pts.toLocaleString() + ' pts = up to KES ' + maxDisc.toLocaleString() + ' off';
-        redeemRow.style.display = 'block';
-      }
-
-      function _updateEarn() {
-        const raw   = document.getElementById('btnTotal') ? document.getElementById('btnTotal').textContent : '';
-        const total = parseInt(raw.replace(/[^0-9]/g, ''), 10) || 0;
-        const earn  = Math.max(1, Math.floor(total / 100));
-        earnEl.textContent = '+' + earn + ' pts from this order';
-      }
-      _updateEarn();
-      const btnTotal = document.getElementById('btnTotal');
-      if (btnTotal) {
-        new MutationObserver(_updateEarn).observe(btnTotal, { childList: true, characterData: true, subtree: true });
-      }
-    } catch(e) {}
+    /* Points P2: rendered from the SERVER preview only (shopOfferQuote → points). A buyer who is not signed in, or whose
+       balance could not be read, sees no widget — never a local or guessed figure. */
+    window._renderPointsWidget = function () {
+      try {
+        const p = _pointsPreview;
+        const redeemRow = document.getElementById('coLoyaltyRedeemRow');
+        if (!p) { widget.style.display = 'none'; if (redeemRow) redeemRow.style.display = 'none'; return; }
+        _loyaltyBalance = Number(p.balance) || 0;
+        widget.style.display = 'flex';
+        ptsEl.textContent = _loyaltyBalance.toLocaleString();
+        earnEl.textContent = 'Earn 1 point for every KES 10 of goods';
+        if (redeemRow) {
+          if (Number(p.maxKES) > 0) {
+            document.getElementById('coRedeemDesc').textContent =
+              Number(p.maxPoints).toLocaleString() + ' pts = KES ' + Number(p.maxKES).toLocaleString() + ' off this order';
+            redeemRow.style.display = 'block';
+          } else {
+            redeemRow.style.display = 'none';
+            if (_loyaltyRedeeming) { _loyaltyRedeeming = false; }
+          }
+        }
+      } catch (e) {}
+    };
+    window._renderPointsWidget();
   })();
 
 })();

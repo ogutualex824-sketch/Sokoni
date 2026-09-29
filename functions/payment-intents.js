@@ -57,6 +57,13 @@ function _mintRef() {
  * still validated, and it is recorded on the intent so the STK call does not
  * re-read it from the request.
  */
+/* Points P2: what the server took off for points (product_order), so the page shows the figure it is charged. */
+function _pointsOf(md) {
+  const m = md || {};
+  return Object.assign({}, Number(m.pointsRedeemed) > 0 ? { pointsRedeemed: m.pointsRedeemed, pointsDiscount: m.pointsDiscount } : {},
+    m.pointsError ? { pointsError: m.pointsError } : {});
+}
+
 exports.createPaymentIntent = onCall(_OPTS, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
   const uid = request.auth.uid;
@@ -169,14 +176,14 @@ exports.createPaymentIntent = onCall(_OPTS, async (request) => {
 
       logger.info('[intent] idempotent replay', { ref: ref2, purpose: prior.purpose, amount: prior.amount });
       return { ref: ref2, amount: prior.amount, currency: prior.currency || 'KES',
-        purpose: prior.purpose, replay: true };
+        purpose: prior.purpose, replay: true, ..._pointsOf(prior.metadata) };
     }
     timeline.mark(ref2, 'intent_created', {
       uid, purpose: quote.purpose, resourceId: quote.resourceId, amount: quote.amount,
     });
     logger.info('[intent] created', { ref: ref2, purpose: quote.purpose, resourceId: quote.resourceId, amount: quote.amount });
 
-    return { ref: ref2, amount: quote.amount, currency: intent2.currency, purpose: quote.purpose };
+    return { ref: ref2, amount: quote.amount, currency: intent2.currency, purpose: quote.purpose, ..._pointsOf(quote.metadata) };
   }
 
   if (!planId || typeof planId !== 'string') {

@@ -475,8 +475,26 @@ const PURPOSES = {
       const deliveryAfterOffers = Math.max(0, Math.round(Number(off.deliveryFee) || 0));
       const offersApplied = (off.applied || []).map((a) => ({ id: a.id, label: a.label, type: a.type, kind: a.kind, amount: a.amount }));
 
-      const total = Math.round(subtotal - offerDiscount + deliveryAfterOffers);
-      if (!(total > 0)) fail('failed-precondition', 'Order has no payable amount.');
+      const beforePoints = Math.round(subtotal - offerDiscount + deliveryAfterOffers);
+      if (!(beforePoints > 0)) fail('failed-precondition', 'Order has no payable amount.');
+
+      /* Points P2 (2026-09-29): PAYMENT-METHOD PARITY. The card session already took points off; this M-PESA path did
+         not, so the same cart cost more on M-PESA. The SAME authority prices them here (10 points = KES 1, at most 25% of
+         the goods after offers) and HOLDS them against this order id — idempotent, so a retried intent re-prices to the
+         same amount. The webhook spends the hold on PAID; an unpaid hold is released. The selling shop funds it. */
+      let pointsDiscount = 0, pointsRedeemed = 0, pointsFunding = [], pointsError = null;
+      if (data.redeemLoyalty === true || data.redeemLoyalty === false) {
+        try {
+          const ph = await require('./loyalty-points-spend').priceAndHold(db(), { uid, channel: 'order', ref: orderId,
+            redeem: data.redeemLoyalty === true, goodsKES: Math.max(0, Math.round(subtotal - offerDiscount)), payableKES: beforePoints,
+            shops: [{ shopId: offerShopId || sellerUid, goods: Math.max(0, Math.round(subtotal - offerDiscount)) }] });
+          pointsDiscount = ph.kes || 0; pointsRedeemed = ph.points || 0; pointsFunding = ph.fundingShops || [];
+          if (data.redeemLoyalty === true && !pointsDiscount) pointsError = ph.error || 'Order too small to redeem points';
+        } catch (e) {
+          if (data.redeemLoyalty === true) pointsError = (e && e.code === 'failed-precondition' && e.message) || 'Points could not be verified';
+        }
+      }
+      const total = beforePoints - pointsDiscount;
 
       return {
         amountCents: Math.round(total * 100),
@@ -494,6 +512,9 @@ const PURPOSES = {
              record the SAME figures the buyer was charged. */
           subtotal, deliveryFee: deliveryAfterOffers, deliveryFeeBeforeOffers: deliveryFee, deliverySource,
           offerDiscount, offersApplied, offerShopId: offerShopId || null,
+          /* Points P2: written only when points were taken off (or refused, so the page can say why) */
+          ...(pointsRedeemed > 0 ? { pointsRedeemed, pointsDiscount, pointsFunding } : {}),
+          ...(pointsError ? { pointsError } : {}),
           itemCount: lines.length,
           items: lines,
           pricingSource: 'server_recomputed',

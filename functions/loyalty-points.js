@@ -109,7 +109,7 @@ async function ensureAccount(db, uid, { phone, name, email }) {
     };
     t.set(ref, account);
     t.set(db.collection('loyaltyLedger').doc('welcome__' + uid), {
-      uid, loyaltyId, type: 'welcome', merchantId: 'sokoni', issuerShopId: 'sokoni', points: welcome, amountKES: 0,
+      uid, loyaltyId, type: 'welcome', merchantId: 'sokoni', issuerShopId: 'sokoni', points: welcome, pointsEarned: welcome, amountKES: 0,
       balanceBefore: 0, balanceAfter: welcome, description: 'Welcome bonus', createdAt: FV().serverTimestamp(),
     });
     out = account;
@@ -164,7 +164,7 @@ async function earnForSale(db, { buyerUid, buyerPhone, issuerShopId, saleId, amo
     t.set(ledgerRef, {
       uid, loyaltyId: a.loyaltyId || null, type: 'earn', source: src,
       merchantId: String(issuerShopId), issuerShopId: String(issuerShopId),   /* who funds these points (P2) */
-      orderId: String(saleId), points, pointsRemaining: points, amountKES: Math.round(Number(amountKES) * 100) / 100,
+      orderId: String(saleId), points, pointsEarned: points, pointsRemaining: points, amountKES: Math.round(Number(amountKES) * 100) / 100,
       rate: '1 point per KES ' + KES_PER_POINT_EARNED, balanceBefore: before, balanceAfter: after,
       description: 'Earned at ' + String(shopName || 'a SOKONI shop').slice(0, 60), createdAt: FV().serverTimestamp(),
     });

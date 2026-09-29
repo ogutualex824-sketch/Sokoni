@@ -62,6 +62,10 @@ function mergeAttribution({ intent, legacyMeta }) {
       offerDiscount: Number.isFinite(Number(m.offerDiscount)) ? Math.max(0, Number(m.offerDiscount)) : 0,
       offersApplied: Array.isArray(m.offersApplied) ? m.offersApplied : [],
       offerShopId:   m.offerShopId || null,
+      /* Points P2: the points the SERVER pricer held for this order (payment-purposes product_order). */
+      pointsRedeemed: Number.isFinite(Number(m.pointsRedeemed)) ? Math.max(0, Math.floor(Number(m.pointsRedeemed))) : 0,
+      pointsDiscount: Number.isFinite(Number(m.pointsDiscount)) ? Math.max(0, Number(m.pointsDiscount)) : 0,
+      pointsFunding:  Array.isArray(m.pointsFunding) ? m.pointsFunding : [],
     };
   }
 
@@ -87,6 +91,10 @@ function mergeAttribution({ intent, legacyMeta }) {
     offerDiscount: 0,
     offersApplied: [],
     offerShopId:   null,
+    /* Points P2: NEVER from legacyMeta — points the client claims were spent were not. */
+    pointsRedeemed: 0,
+    pointsDiscount: 0,
+    pointsFunding:  [],
   };
 }
 

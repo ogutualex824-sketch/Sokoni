@@ -170,7 +170,9 @@ function extractFinalize() {
     && /orderAmountCents: Math\.round\(_promoElig\.eligibleSubtotal \* 100\)/.test(idx2)
     /* an all-offer cart gets the owner's wording, not a generic refusal from the validator */
     && /if \(_promoCode && _promoElig\.blocked\) \{\s*promoError = _promoElig\.message;/.test(idx2)
-    && /Math\.round\(serverSubtotal\) \* MAX_REDEEM_PCT/.test(idx2) && /_pOk\.note/.test(co),
+    /* superseded 2026-09-29 by Points P2a: loyalty is still capped on the WHOLE goods (never the promo-eligible part),
+       now after the shop's offers, and the 25% lives in the one authority (loyalty-points-spend.capFor) */
+    && /const _goods = Math\.max\(0, Math\.round\(serverSubtotal - offerDiscount\)\);/.test(idx2) && /goodsKES: _goods, payableKES: _payable/.test(idx2) && /_pOk\.note/.test(co),
     { allOffer, mixed, none });
 
   Date.now = realNow;

@@ -586,7 +586,15 @@ async function quoteForCaller(db, { uid, data }) {
   }
   const subtotal = shops.reduce((s, x) => s + x.subtotal, 0), discount = shops.reduce((s, x) => s + x.discount, 0);
   const deliveryWaived = shops.reduce((s, x) => s + (x.deliveryWaived || 0), 0);
-  return { ok: true, shops, subtotal, discount, deliveryWaived, total: Math.max(0, subtotal - discount) };
+  const total = Math.max(0, subtotal - discount);
+  /* Points P2: what this signed-in buyer's SOKONI points would take off THESE goods, by the one rate authority — the
+     checkout shows this and nothing else; the charge re-prices it the same way and holds the points. */
+  let points;
+  if (uid && data.withPoints === true && data.channel !== 'till') {
+    try { points = await require('./loyalty-points-spend').preview(db, uid, { goodsKES: total, payableKES: total + shownDelivery - deliveryWaived }); }
+    catch (_) { points = { unavailable: true }; }
+  }
+  return Object.assign({ ok: true, shops, subtotal, discount, deliveryWaived, total }, points ? { points } : {});
 }
 
 /* Internals, exported for certification and for the charge path. */

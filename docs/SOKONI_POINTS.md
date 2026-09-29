@@ -8,7 +8,8 @@
 | Phase | Scope | State |
 |---|---|---|
 | **P1 — Earning** | Till (Sell / pos-checkout), Quick Charge, online checkout, card checkout | **Built locally, not deployed** (branch `slice/c4-points-p1`) |
-| P2 — Spending | Till redemption with buyer confirmation, funding ledger, online rate 0.5 → 0.10 | Not started. **Funding rule awaiting owner confirmation** (issuing shop vs redeeming shop) |
+| **P2a — Spending online** | One rate (0.10), holds, M-PESA = card, checkout display from the server | **Built locally, not deployed** (branch `slice/c4-points-p2`) |
+| P2b — Spending at the till | Pay with points, confirmed by a code texted to the buyer | Next |
 
 ## Owner decisions (2026-09-29)
 
@@ -43,6 +44,66 @@ There is **no second points store**. Points live in the canonical loyalty collec
 
 A shop-local `posCustomers.points` figure still exists in the legacy POS CRM. It is **not** this balance
 (technical debt, recorded in `ROADMAP.md`).
+
+## Spending (P2)
+
+**Owner decision (2026-09-29): the shop where points are SPENT funds the redemption.** It simply receives that much less
+money for the sale. No money moves from the shop that issued the points.
+
+### One rate — `functions/loyalty-points-spend.js`
+
+- 10 points = KES 1 (`POINTS_PER_KES = 10`, derived from `POINT_VALUE_KES`). Online checkout used KES 0.50 until P2a.
+- `capFor({ balance, goodsKES, payableKES })` = the least of: the points, **25% of the goods after the shop's offers**, and
+  the payable less KES 1. Always whole shillings, so the points spent are a multiple of 10.
+- Every surface asks this module: the card session, the M-PESA order (`product_order`), the checkout display
+  (`shopOfferQuote` → `points`) and, in P2b, the till. **No page holds a rate.**
+
+### Holds — why points are held, not deducted at payment
+
+Pricing from the balance and deducting after payment let two checkouts spend the same points (the card path did an
+uncapped `increment(-points)`, which could go negative). Now a price that includes points first **holds** them in one
+transaction: balance −N, `heldPoints` +N, and the oldest earn lots are drawn down (`pointsRemaining`).
+
+| Hold state | When | Effect |
+|---|---|---|
+| `held` | the session / intent is priced | balance −N, lots drawn |
+| `consumed` | the payment completes (exactly once) | ledger `redeem` rows, one per funding shop; `totalRedeemed` +N |
+| `released` | the checkout is abandoned, or points switched off | balance and lots restored |
+
+`pointsHolds/{channel}__{ref}` — channel `checkout` (card session id) · `order` (M-PESA order id) · `till` (P2b).
+
+- **Idempotent:** a retried or double-tapped intent for the same order re-prices to the same amount and holds once.
+- **Expiry is settled, never guessed:** a hold past 60 minutes is checked against its payment. If it was paid it is
+  consumed, if not it is released, and if the payment state cannot be read it is left alone. This runs before a new
+  hold and before a balance is shown (`settleExpired`).
+- **A late payment is never refused:** if its hold was already released, the points are re-deducted. If they are gone,
+  the sale stands, the available points are taken, and the shortfall is flagged in `pointsRedemptionAlerts` (status
+  `open`). This is the same "flag, never reject" rule as `oversoldAlerts`.
+
+### Ledger
+
+`loyaltyLedger/redeem__{channel}__{ref}__{shopId}`: `type: 'redeem'`, `points: −N`, `pointsRedeemed: N`, `valueKES`,
+`fundingShopId` (the spending shop), `holdId`, and `lots`, the earn rows the points came from with their issuing shops.
+Together these keep *points earned → originating shop* and *points redeemed → spending shop*.
+
+### Online: every rail pays the same
+
+| Rail | Priced by | Spent by |
+|---|---|---|
+| Card / IntaSend session | `createCheckoutSession` → `priceAndHold('checkout', sessionId)` | `verifyIntasendPayment`, inside its transaction (hold read before the first write) |
+| M-PESA | `createPaymentIntent(product_order)` → `priceAndHold('order', orderId)` | `webhookIntasend` on PAID |
+
+Both use the same goods, cap and rate, so a KES 1,000 cart with 1,000 points costs **KES 900 on either rail**
+(test PS2 / QB3). Points are figures from the **server intent / session only**; points in legacy client meta are ignored.
+
+Orders, the card order doc and the M-PESA receipt carry `pointsRedeemed` / `pointsDiscount` only when points were
+spent. **Nothing is earned on the part paid with points.**
+
+### Checkout display
+
+`checkout.html` renders the balance, the "N pts = KES X off this order" line and the discount row **only** from the
+server preview returned with the offer quote. It no longer reads `localStorage.sokoniLoyalty` and no longer shows an
+invented "+N pts from this order" figure; the earn line states the rule.
 
 ## Earning — where and from what amount
 
@@ -101,6 +162,11 @@ Queued through `sms-service.enqueue` (a worker sends). Feature-phone buyers are 
   Sabotage 15/15.
 - `scripts/test-points-p1-browser.js` — PB1–PB5, the real Sell screen in Chromium wired to the real callables and
   `posCompleteCheckout`.
+- `scripts/test-points-p2a.js` — PS1–PS12 (+PS3b), real spending module, M-PESA pricer, attribution and finaliser over
+  the transactional fake (concurrency is real). The card session and verify wiring are checked **structurally** (PS11):
+  they are inline in `index.js`. Sabotage 12/12.
+- `scripts/test-points-p2a-checkout-browser.js` — QB1–QB5, the real checkout.html in Chromium with its one points source
+  (`shopOfferQuote`) served by the real module. Sabotage 3/3.
 - `scripts/test-points-p1-quick-browser.js` — PQ1–PQ4, the real Quick Charge module with the real callables and the real
   Quick Charge pricer; the PAID step is the webhook's own `earnForSale` call.
 - UI sabotage 4/4: a phone that was never checked is not sent; creation needs consent (Sell and Quick Charge).

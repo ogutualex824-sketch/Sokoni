@@ -159,7 +159,9 @@ const FLASH = { type: 'percentage', template: 'flashSale', status: 'live', name:
   ck('AP4 offer figures come ONLY from the intent; finalisation records the discount on the order and ONE redemption per (order, offer)',
     ap4.fromIntent && ap4.fromIntent.offerDiscount === 7500 && ap4.fromClient && ap4.fromClient.offerDiscount === 0 && ap4.fromClient.offersApplied.length === 0
     && ap4.order && ap4.order.offerDiscount === 7500 && ap4.order.offersApplied.length === 1 && ap4.reds === 1 && ap4.red && ap4.red.discount === 7500
-    && /offerDiscount: attribution\.offerDiscount \|\| 0,/.test(wh) && /discount:\s+_offerDisc,/.test(wh) && /Math\.round\(amount - \(_subtotal - _offerDisc\)\)/.test(wh),
+    && /offerDiscount: attribution\.offerDiscount \|\| 0,/.test(wh) && /discount:\s+_offerDisc,/.test(wh) /* superseded 2026-09-29 by Points P2a: the money NOT paid now also excludes the points discount, so the residual
+       read as delivery is amount − (subtotal − offer − points): the same rule, one more non-money deduction */
+    && /Math\.round\(amount - \(_subtotal - _offerDisc - _ptsDisc\)\)/.test(wh),
     { intent: ap4.fromIntent && ap4.fromIntent.offerDiscount, client: ap4.fromClient && ap4.fromClient.offerDiscount, order: ap4.order && ap4.order.offerDiscount, reds: ap4.reds, err: ap4.err });
 
   /* AP5 — the till */

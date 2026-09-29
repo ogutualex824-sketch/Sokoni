@@ -1,3 +1,94 @@
+## [2026-09-29] - SOKONI Points P2a: spending online — one rate, held points, the same price on M-PESA and card
+
+**Local only — NOT deployed. Branch `slice/c4-points-p2` on `1adbb8d`.** Owner: "10 points = KES 1 … the shop where the
+redemption occurs funding that redemption"; "one server authority, not separate constants"; "Both M-Pesa and card must
+receive the same KES 900 payable amount"; "points should remain subject to the existing maximum 25% of order value".
+
+**Defects found and fixed**
+- **Payment-method parity:** points came off on the card session only. The M-PESA path (`createPaymentIntent` →
+  `product_order`) ignored them, so the same cart cost more on M-PESA. Proven on the parent: the charge carried no points.
+- **Double spend:** the card session priced points from the balance and deducted with an uncapped `increment(-points)` at
+  payment. Two sessions could spend the same points, and the balance could go negative.
+- **Rate:** KES 0.50 a point was hard-coded in `index.js` and again in `checkout.html`.
+- **Fabricated display:** checkout showed the balance from `localStorage.sokoniLoyalty` and an invented
+  "+N pts from this order" figure at 1 per KES 100. On the parent the page showed a 99,999 decoy, and offered
+  redemption to a buyer with no points.
+
+**Summary**
+- New `functions/loyalty-points-spend.js`, the one spending authority:
+  - `capFor` = min(points, 25% of goods after offers, payable − 1) at 10 points = KES 1.
+  - `placeHold` / `releaseHold` / `prepareConsumeTx` + `consumeHoldTx` / `consumeHold`.
+  - `settleExpired`, which consumes a hold if its payment landed and releases it if not.
+  - `preview` and `priceAndHold`.
+- **Holds:**
+  - Pricing with points holds them atomically: balance −N, `heldPoints` +N, oldest earn lots drawn.
+  - The payment spends the hold exactly once; an abandoned checkout releases it.
+  - A payment landing after release re-deducts. If the points are gone, the shortfall is flagged in
+    `pointsRedemptionAlerts` and the sale is never refused.
+- **Funding:** the redeeming shop funds (split by goods across shops in a card session). The ledger records the funding
+  shop and the earn lots (issuing shops) the points came from.
+- **Card session:** priced and held via the authority, keyed by the session id (now minted before pricing).
+  `verifyIntasendPayment` reads the hold before its first write and spends it inside its transaction. The order records
+  `pointsRedeemed` / `pointsDiscount` / `pointsFunding`.
+- **M-PESA:** `product_order` prices and holds against the order id; it is idempotent, and `redeemLoyalty:false` releases
+  the hold. The intent carries the figures, `createPaymentIntent` returns them, `payment-attribution` reads them from the
+  intent only (never legacy meta), and the webhook spends the hold on PAID. The order, finaliser and receipt record them.
+- `shopOfferQuote` returns the buyer's points preview (`withPoints`). `checkout.html` shows only that, and sends
+  `redeemLoyalty` on the M-PESA path too.
+- **Earning:** nothing is earned on the part paid with points (online, card). Earn and welcome rows also carry
+  `pointsEarned`, and redeem rows `pointsRedeemed`, for the reconciler's field convention.
+
+**Files:**
+- functions: `loyalty-points-spend.js` (new), `index.js`, `payment-purposes.js`, `payment-intents.js`,
+  `payment-attribution.js`, `shop-offers.js`, `loyalty-points.js`
+- page: `checkout.html`
+- docs: `docs/SOKONI_POINTS.md`
+- tests: `scripts/test-points-p2a.js` (new), `scripts/test-points-p2a-checkout-browser.js` (new)
+- superseded pins, with reasons: `test-points-p1` PT6, `test-catalogue-u7c2-offers-apply` AP4,
+  `test-product-offers` PO10
+
+**Database:**
+- `pointsHolds/{channel}__{ref}` (new)
+- `pointsRedemptionAlerts/{channel}__{ref}` (new)
+- `loyaltyAccounts.heldPoints`
+- `loyaltyLedger` `redeem__…` rows
+- `loyaltyRedemptions/checkout__{sessionId}`: the id is now deterministic
+- order / receipt / intent fields `pointsRedeemed` · `pointsDiscount` · `pointsFunding`, written only when points were
+  spent
+
+No migration.
+
+**API:**
+- `createPaymentIntent(product_order)` accepts `redeemLoyalty` and returns `pointsRedeemed` / `pointsDiscount` /
+  `pointsError`.
+- `shopOfferQuote` accepts `withPoints` and returns `points`.
+- `createCheckoutSession` returns the same fields at the new rate.
+
+**Security / money:**
+- The client supplies only intent; figures from the request or legacy meta are ignored (PS5).
+- The shop-local `posCustomers` balance is never spent (PS12).
+- A blocked account redeems nothing.
+- **Rate change: KES 0.50 → 0.10 a point online. This is the owner's decision (P2), not a silent change.**
+
+**Tests:**
+- Full regression, 167 suites vs the P1 tree: 159 identical, `catalogue-canonical-migration` improved (dirty-tree
+  check), `merchant-v2-ecosystem-runtime` a load flake (131/0 alone), `product-offers` PO10 a superseded pin.
+- `test-points-p2a` 13/0, sabotage 12/12.
+- `test-points-p2a-checkout-browser` 5/0 in real Chromium, sabotage 3/3.
+- Counterproof on `1adbb8d`: the server suite fails closed (module absent); the browser suite fails 5 of 6, showing the
+  99,999 decoy, no points on M-PESA and the zero-balance redeem row.
+
+**Known limitations:**
+- A multi-shop cart paid by M-PESA is one intent per shop, each capped on its own goods. The page's single preview can
+  differ from the sum of the per-shop figures (each charge is exact and toasted).
+- Holds are settled lazily, before a new hold or a balance display; no scheduled sweeper yet.
+- `reconcileLoyaltyLedger` still sums `pointsEarned − pointsRedeemed` and ignores held points and older rows written
+  with `points` only. It flags and never corrects; this is pre-existing and recorded, not changed here.
+- Till redemption is P2b.
+
+**Breaking:** none for clients that do not send `redeemLoyalty`. A shilling off now costs 10 points
+instead of 2 (the owner's rate).
+
 ## [2026-09-29] - PORT ffea917: checkout's order summary threw on every non-empty cart (convergence line)
 
 **Local only, not deployed. Production is NOT affected:** live `mysokoni.co.ke/checkout` already serves the fix

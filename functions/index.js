@@ -2747,28 +2747,34 @@ exports.createCheckoutSession = onCall(
        NOT deducted yet — an abandoned checkout must never burn them. The intended
        redemption is recorded on the session and settled in the verifyPayment
        transaction that consumes it. */
-    const POINTS_TO_KES  = 0.5;   /* 1 point = KES 0.50  — mirrors checkout.html */
-    const MAX_REDEEM_PCT = 0.25;  /* at most 25% of goods value paid with points */
+    /* Points P2 (2026-09-29): ONE rate for every channel — functions/loyalty-points-spend.js (10 points = KES 1; it was
+       KES 0.50 here), capped at 25% of the goods after the shop's offers and at the payable less KES 1. The points are
+       HELD against this session (balance −N atomically), so two checkouts can never spend the same points; the payment
+       that consumes the session spends the hold, and an abandoned session's hold is released. The redeeming shops fund
+       it, in proportion to their goods. */
+    const sessionId = "CS" + Date.now().toString(36).toUpperCase()
+                    + Math.random().toString(36).slice(2, 6).toUpperCase();
     let loyaltyDiscount = 0;
     let loyaltyPoints   = 0;
     let loyaltyError    = null;
+    let loyaltyFunding  = [];
     if (redeemLoyalty === true) {
       try {
-        const _lSnap = await db.collection("loyaltyAccounts").doc(request.auth.uid).get();
-        const _bal   = _lSnap.exists ? Math.max(0, Math.floor(Number(_lSnap.data().balance) || 0)) : 0;
-        if (_bal <= 0) {
-          loyaltyError = "No loyalty points available to redeem";
-        } else {
-          loyaltyDiscount = Math.floor(Math.min(
-            _bal * POINTS_TO_KES,
-            Math.round(serverSubtotal) * MAX_REDEEM_PCT
-          ));
-          loyaltyPoints = loyaltyDiscount > 0 ? Math.ceil(loyaltyDiscount / POINTS_TO_KES) : 0;
-          if (loyaltyDiscount <= 0) loyaltyError = "Order too small to redeem points";
-        }
+        const _PS = require("./loyalty-points-spend");
+        const _gShops = {};
+        sessionItems.forEach((l) => { const k = String(l.shopId || l.sellerUid || ""); if (k) _gShops[k] = (_gShops[k] || 0) + (Number(l.lineTotal) || 0); });
+        offersApplied.filter((a) => a.kind !== "delivery").forEach((a) => { const k = String(a.shopId || ""); if (_gShops[k] != null) _gShops[k] -= Number(a.amount) || 0; });
+        const _goods = Math.max(0, Math.round(serverSubtotal - offerDiscount));
+        const _payable = Math.round(serverSubtotal - offerDiscount + safeDeliveryFee - deliveryWaived) - promoDiscount;
+        const _ph = await _PS.priceAndHold(db, { uid: request.auth.uid, channel: "checkout", ref: sessionId, redeem: true,
+          goodsKES: _goods, payableKES: _payable, shops: Object.keys(_gShops).map((k) => ({ shopId: k, goods: Math.max(0, _gShops[k]) })) });
+        loyaltyDiscount = _ph.kes || 0;
+        loyaltyPoints   = _ph.points || 0;
+        loyaltyFunding  = _ph.fundingShops || [];
+        if (!loyaltyDiscount) loyaltyError = _ph.error || "Order too small to redeem points";
       } catch (e) {
-        console.error("[createCheckoutSession] loyalty lookup failed:", e);
-        loyaltyError = "Loyalty balance could not be verified";
+        console.error("[createCheckoutSession] points hold failed:", e && e.message);
+        loyaltyError = (e && e.code === "failed-precondition" && e.message) || "Loyalty balance could not be verified";
       }
     }
 
@@ -2779,10 +2785,9 @@ exports.createCheckoutSession = onCall(
     let   _discount   = promoDiscount + loyaltyDiscount;
     if (_discount > _grossTotal - 1) {
       const _allowed = Math.max(0, _grossTotal - 1);
-      const _trim    = _discount - _allowed;
-      loyaltyDiscount = Math.max(0, loyaltyDiscount - _trim);
-      loyaltyPoints   = loyaltyDiscount > 0 ? Math.ceil(loyaltyDiscount / POINTS_TO_KES) : 0;
-      promoDiscount   = Math.min(promoDiscount, _allowed - loyaltyDiscount);
+      /* Points P2: the points are HELD at exactly their priced figure (capped at the payable less KES 1), so only the
+         promo is trimmed here — trimming held points would charge a figure the hold does not match. */
+      promoDiscount   = Math.max(0, Math.min(promoDiscount, _allowed - loyaltyDiscount));
       _discount       = promoDiscount + loyaltyDiscount;
       if (promoApplied) promoApplied.discount = promoDiscount;
     }
@@ -2793,8 +2798,6 @@ exports.createCheckoutSession = onCall(
       throw new HttpsError("invalid-argument", "Cart total is too low.");
     }
 
-    const sessionId = "CS" + Date.now().toString(36).toUpperCase()
-                    + Math.random().toString(36).slice(2, 6).toUpperCase();
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000); /* 30-minute window */
 
     await db.collection("checkoutSessions").doc(sessionId).set({
@@ -2822,6 +2825,7 @@ exports.createCheckoutSession = onCall(
          abandoned checkout would burn the buyer's points. */
       loyaltyPoints,
       loyaltyDiscount,
+      loyaltyFunding,          /* Points P2: which shops fund the points taken off (the redeeming shops) */
       status:      "pending",
       expiresAt:   admin.firestore.Timestamp.fromDate(expiresAt),
       createdAt:   admin.firestore.FieldValue.serverTimestamp(),
@@ -3095,6 +3099,12 @@ exports.verifyIntasendPayment = onRequest(
           ...(Number(sessionDoc.deliveryWaived) > 0 ? { deliveryWaived: Math.round(Number(sessionDoc.deliveryWaived)), deliveryPaidByBuyer: 0 } : {}),
         } : {}),
         items:           resolvedItems,
+        /* Points P2: from the SERVER session only; written only when points were spent */
+        ...((sessionDoc && Number(sessionDoc.loyaltyPoints) > 0) ? {
+          pointsRedeemed: Math.floor(Number(sessionDoc.loyaltyPoints)),
+          pointsDiscount: Math.max(0, Math.round(Number(sessionDoc.loyaltyDiscount) || 0)),
+          pointsFunding:  sessionDoc.loyaltyFunding || [],
+        } : {}),
         sellerUid,
         sellerName:      resolvedItems?.[0]?.sellerName || null,
         paymentMethod:   "mpesa",
@@ -3131,6 +3141,12 @@ exports.verifyIntasendPayment = onRequest(
           ? await tx.get(db.collection(_dqEndpoint.QUOTES).doc(String(_dqId)))
           : null;
 
+        /* Points P2 — the READ half of spending this session's points hold (all reads before any write). */
+        const _PSv = require("./loyalty-points-spend");
+        const _ptsCtx = (sessionId && sessionDoc && Number(sessionDoc.loyaltyPoints) > 0 && sessionDoc.uid)
+          ? await _PSv.prepareConsumeTx(tx, db, { channel: "checkout", ref: String(sessionId), uid: String(sessionDoc.uid) })
+          : null;
+
         tx.set(db.collection("orders").doc(orderId), orderDoc);
 
         if (_dqId) {
@@ -3163,22 +3179,21 @@ exports.verifyIntasendPayment = onRequest(
              (this transaction has already begun writing, and Firestore forbids a
              read after a write), and it is atomic. Spending the same session twice
              is already impossible — the status must be "pending" to get here. */
+          /* Points P2: the points were HELD when the session was priced; spending the hold here is atomic with the
+             order and happens once (the session must still be "pending" to get here). This replaces an uncapped
+             increment(-points) that could drive a balance negative when two sessions priced the same points. A hold
+             released before this payment landed is re-deducted, or its shortfall flagged — never refused. */
           const _pts = Math.max(0, Math.floor(Number(sessionDoc.loyaltyPoints) || 0));
-          if (_pts > 0 && sessionDoc.uid) {
-            tx.set(
-              db.collection("loyaltyAccounts").doc(String(sessionDoc.uid)),
-              {
-                balance:      admin.firestore.FieldValue.increment(-_pts),
-                lastRedeemed: admin.firestore.FieldValue.serverTimestamp(),
-              },
-              { merge: true }
-            );
-            tx.set(db.collection("loyaltyRedemptions").doc(), {
+          if (_pts > 0 && _ptsCtx) {
+            _PSv.consumeHoldTx(tx, db, _ptsCtx, { channel: "checkout", ref: String(sessionId), orderId, saleRef: orderId,
+              expect: { points: _pts, kes: Math.max(0, Math.round(Number(sessionDoc.loyaltyDiscount) || 0)), fundingShops: sessionDoc.loyaltyFunding || [] } });
+            tx.set(db.collection("loyaltyRedemptions").doc("checkout__" + String(sessionId)), {
               uid:       String(sessionDoc.uid),
               orderId,
               sessionId: String(sessionId),
               points:    _pts,
               discount:  Math.max(0, Math.round(Number(sessionDoc.loyaltyDiscount) || 0)),
+              fundingShops: sessionDoc.loyaltyFunding || [],
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
             });
           }
@@ -3193,6 +3208,8 @@ exports.verifyIntasendPayment = onRequest(
           const _goods = {};
           sessionDoc.items.forEach((l) => { const k = String(l.shopId || l.sellerUid || sellerUid || ""); _goods[k] = (_goods[k] || 0) + (Number(l.lineTotal) || 0); });
           (sessionDoc.offersApplied || []).filter((a) => a.kind !== "delivery").forEach((a) => { const k = String(a.shopId || ""); if (_goods[k] != null) _goods[k] -= Number(a.amount) || 0; });
+          /* Points P2: nothing is earned on the part paid WITH points */
+          (sessionDoc.loyaltyFunding || []).forEach((f) => { const k = String(f.shopId || ""); if (_goods[k] != null) _goods[k] -= Number(f.kes) || 0; });
           for (const k of Object.keys(_goods)) {
             if (!k) continue;
             await _LP.earnForSale(db, { buyerUid: String(sessionDoc.uid), issuerShopId: k, saleId: orderId,
@@ -3809,6 +3826,8 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
     writeSellerPayment = true,
     /* U7c2: the shop-offer discount the SERVER pricer applied, and the offers behind it (never client-supplied). */
     offerDiscount = 0, offersApplied = null, offerShopId = null,
+    /* Points P2: what the buyer's SOKONI points took off (server intent only) */
+    pointsRedeemed = 0, pointsDiscount = 0,
   } = opts || {};
   const ts = admin.firestore.FieldValue.serverTimestamp();
 
@@ -3942,6 +3961,7 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
           offerDiscount:  Math.max(0, Math.round(Number(offerDiscount) || 0)),
           offersApplied:  (offersApplied || []).map((a) => ({ id: a.id, label: a.label || null, amount: Number(a.amount) || 0, kind: a.kind || "discount" })),
         } : {}),
+        ...(Number(pointsRedeemed) > 0 ? { pointsRedeemed: Math.floor(Number(pointsRedeemed)), pointsDiscount: Math.max(0, Math.round(Number(pointsDiscount) || 0)) } : {}),
         inventoryApplied: true,
         settlementStatus: settlementStatus,
         updatedAt:        ts,
@@ -8364,6 +8384,10 @@ exports.webhookIntasend = onRequest(
           offerDiscount: attribution.offerDiscount || 0,
           offersApplied: attribution.offersApplied || [],
           offerShopId:   attribution.offerShopId || null,
+          /* Points P2: likewise ONLY from the server intent */
+          pointsRedeemed: attribution.pointsRedeemed || 0,
+          pointsDiscount: attribution.pointsDiscount || 0,
+          pointsFunding:  attribution.pointsFunding || [],
         };
         const _cat = String(_pm.category || "").toLowerCase();
         const _isProductPay = !!_pm.orderId
@@ -8391,6 +8415,8 @@ exports.webhookIntasend = onRequest(
             writeSellerPayment: false,
             offerDiscount: _pm.offerDiscount || 0,
             offersApplied: _pm.offersApplied || [],
+            pointsRedeemed: _pm.pointsRedeemed || 0,
+            pointsDiscount: _pm.pointsDiscount || 0,
             offerShopId:   _pm.offerShopId || null,
           });
 
@@ -8407,7 +8433,18 @@ exports.webhookIntasend = onRequest(
              and the amount paid would be misread as a NEGATIVE delivery fee (clamped to 0) and the receipt would show
              no discount at all. */
           const _offerDisc = Math.max(0, Math.round(Number(_pm.offerDiscount) || 0));
-          const _delivery = Math.max(0, Math.round(amount - (_subtotal - _offerDisc)));
+          /* Points P2: points are part of what the buyer did NOT pay in money — never read as a negative delivery fee */
+          const _ptsDisc = Math.max(0, Math.round(Number(_pm.pointsDiscount) || 0));
+          const _delivery = Math.max(0, Math.round(amount - (_subtotal - _offerDisc - _ptsDisc)));
+
+          /* Points P2: the payment landed — spend the points held for this order, once (idempotent per order). */
+          if (Number(_pm.pointsRedeemed) > 0) {
+            try {
+              await require("./loyalty-points-spend").consumeHold(db, { channel: "order", ref: String(_pm.orderId), uid: payData.uid || null,
+                orderId: String(_pm.orderId), saleRef: apiRef,
+                expect: { points: _pm.pointsRedeemed, kes: _ptsDisc, fundingShops: _pm.pointsFunding || [] } });
+            } catch (ptsErr) { console.error("[webhookIntasend] points hold not spent (settled later):", ptsErr && ptsErr.message); }
+          }
           const _dateStr  = new Date().toLocaleString("en-KE", { timeZone: "Africa/Nairobi" });
 
           /* Points P1 (2026-09-29): the paying buyer earns SOKONI points on the GOODS they paid for (delivery excluded),
@@ -8415,7 +8452,7 @@ exports.webhookIntasend = onRequest(
           if (_fin && _fin.finalised && payData.uid) {
             try {
               await require("./loyalty-points").earnForSale(db, { buyerUid: String(payData.uid), issuerShopId: String(_pm.offerShopId || _pm.sellerUid || ""),
-                saleId: String(_pm.orderId), amountKES: Math.max(0, _subtotal - _offerDisc), source: "online", shopName: _pm.sellerName || null });
+                saleId: String(_pm.orderId), amountKES: Math.max(0, _subtotal - _offerDisc - _ptsDisc), source: "online", shopName: _pm.sellerName || null });
             } catch (ptsErr) { console.error("[webhookIntasend] points not credited (recoverable):", ptsErr && ptsErr.message); }
           }
 
@@ -8436,6 +8473,7 @@ exports.webhookIntasend = onRequest(
               tax:            0,
               discount:       _offerDisc,
               ...((_pm.offersApplied || []).length ? { offersApplied: _pm.offersApplied.map((a) => ({ id: a.id, label: a.label, amount: a.amount, kind: a.kind || "discount" })) } : {}),
+              ...(Number(_pm.pointsRedeemed) > 0 ? { pointsRedeemed: Number(_pm.pointsRedeemed), pointsDiscount: _ptsDisc } : {}),
               total:          amount,
               /* Fulfillment on the receipt — pickup (collect at shop) vs delivery
                  (rider + address). Rider/ETA are assigned later; the receipt shows
