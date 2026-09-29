@@ -1,3 +1,25 @@
+## 2026-09-29 — Connected workspace: final certification of D → E → V1–V3 → C1–C6 (branch `feat/integrations-control-center`, NOT deployed)
+
+The owner's 13-point convergence directive is complete on this branch: one canonical AdminOS workspace for
+applications, verification, Connect video verification, support tickets, email, the support number and the
+communication rails; Super Admin reaches the same workspace by link; every other surface links to a record by its
+stable id. Ledger: `docs/CONNECTED_WORKSPACE_CERTIFICATION.md` (slice table with commits and counts, the thirteen
+constraints and where each is proven, honest boundaries, seven open items for the owner).
+
+- **`scripts/certify-connected-workspace.js`** (new) — runs the 18 slice and regression suites ONE at a time and
+  refuses the whole if any did not end green: non-zero exit, no summary line, a harness-error line, any failure, fewer
+  than 5 assertions, or fewer than the floor certified here (floors, never equality — a suite may grow). Writes
+  `docs/release-gates/connected-workspace.json`. First run failed its own detector on a green suite: an assertion
+  *named* "a BLOCKED relationship permits nothing" matched the harness marker; the check now reads only lines that
+  begin with a marker and are not PASS/FAIL results.
+- Result on `872c8f4`: **CERTIFIED — 18 / 18 suites green, one at a time** (22 · 34 · 32 · 48 · 29 · 18 · 19 · 18 · 856 · 24 · 59 · 26 · 119 · 16 · 9 · 21 · 310 · 43, zero failures); ledger JSON committed.
+
+Nothing here changes a database, an API, a rule or a security boundary. **Nothing is deployed:** live hosting is
+`be7c676`; functions deploys remain gated by the merchant-identity provenance gap; the live server drops ticket `context`
+until deployed. Open for the owner: `+254 722 376 801` authority; hub placeholder numbers; customer notification on a
+ticket reply (functions change); the role-authority/profile-menu chain; SOKONI Store backend port; users self-writing
+`isVerified` (FINDING D4); a true SMS total (aggregate) instead of bounded counts.
+
 ## 2026-09-29 — Slice C6: every app reaches the same record by its stable id (branch `feat/integrations-control-center`, NOT deployed)
 
 Before this slice a record could be opened only from inside AdminOS by a JavaScript call; no URL, no other app and no

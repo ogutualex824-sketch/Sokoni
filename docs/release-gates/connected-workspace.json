@@ -1,0 +1,205 @@
+{
+  "at": "2026-09-29T15:53:25.954Z",
+  "commit": "872c8f4",
+  "suites": [
+    {
+      "slice": "D · one navigation path",
+      "suite": "test-adminos-single-navigation",
+      "floor": 22,
+      "passed": 22,
+      "failed": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "note": "",
+      "ms": 11724
+    },
+    {
+      "slice": "B · accessible drawer / rail",
+      "suite": "test-adminos-sidebar-a11y",
+      "floor": 34,
+      "passed": 34,
+      "failed": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "note": "",
+      "ms": 19748
+    },
+    {
+      "slice": "C · built ⇒ reachable, deep links",
+      "suite": "test-adminos-nav-coverage",
+      "floor": 32,
+      "passed": 32,
+      "failed": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "note": "",
+      "ms": 147461
+    },
+    {
+      "slice": "E · shell at 320–1440",
+      "suite": "test-adminos-shell-final",
+      "floor": 48,
+      "passed": 48,
+      "failed": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "note": "",
+      "ms": 29703
+    },
+    {
+      "slice": "V1 · one verification reviewer",
+      "suite": "test-verification-convergence",
+      "floor": 29,
+      "passed": 29,
+      "failed": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "note": "",
+      "ms": 13143
+    },
+    {
+      "slice": "V2 · ticket ↔ record context (server)",
+      "suite": "test-ticket-context",
+      "floor": 18,
+      "passed": 18,
+      "failed": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "note": "",
+      "ms": 584
+    },
+    {
+      "slice": "V2 · ticket ↔ record context (client)",
+      "suite": "test-support-context",
+      "floor": 19,
+      "passed": 19,
+      "failed": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "note": "",
+      "ms": 17725
+    },
+    {
+      "slice": "V3 · contextual video verification",
+      "suite": "test-video-verification-actions",
+      "floor": 18,
+      "passed": 18,
+      "failed": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "note": "",
+      "ms": 16345
+    },
+    {
+      "slice": "V3 · Connect authority",
+      "suite": "test-connect-authority",
+      "floor": 856,
+      "passed": 856,
+      "failed": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "note": "",
+      "ms": 3631
+    },
+    {
+      "slice": "C2 · email workspace",
+      "suite": "test-email-workspace",
+      "floor": 24,
+      "passed": 24,
+      "failed": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "note": "",
+      "ms": 27084
+    },
+    {
+      "slice": "C3+C4 · rails by lane (catalogue)",
+      "suite": "test-integration-comms-lanes",
+      "floor": 59,
+      "passed": 59,
+      "failed": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "note": "",
+      "ms": 3093
+    },
+    {
+      "slice": "C3 · registry parity",
+      "suite": "test-integration-registry-parity",
+      "floor": 26,
+      "passed": 26,
+      "failed": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "note": "",
+      "ms": 498
+    },
+    {
+      "slice": "C3 · console consumption",
+      "suite": "test-integrations-console",
+      "floor": 119,
+      "passed": 119,
+      "failed": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "note": "",
+      "ms": 1819
+    },
+    {
+      "slice": "C4 · SMS workspace",
+      "suite": "test-sms-workspace",
+      "floor": 16,
+      "passed": 16,
+      "failed": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "note": "",
+      "ms": 15344
+    },
+    {
+      "slice": "C5 · support number, one source",
+      "suite": "test-support-phone",
+      "floor": 9,
+      "passed": 9,
+      "failed": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "note": "",
+      "ms": 20621
+    },
+    {
+      "slice": "C6 · record links",
+      "suite": "test-record-links",
+      "floor": 21,
+      "passed": 21,
+      "failed": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "note": "",
+      "ms": 49001
+    },
+    {
+      "slice": "AdminOS wiring (regression)",
+      "suite": "test-admin-os-wiring",
+      "floor": 310,
+      "passed": 310,
+      "failed": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "note": "",
+      "ms": 474
+    },
+    {
+      "slice": "AdminOS renderers (regression)",
+      "suite": "test-admin-os-render",
+      "floor": 43,
+      "passed": 43,
+      "failed": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "note": "",
+      "ms": 727
+    }
+  ],
+  "certified": true
+}
