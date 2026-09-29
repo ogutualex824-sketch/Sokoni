@@ -54,14 +54,30 @@
     .aos-user-info-text span{color:var(--aos-muted);font-size:10px}
     .signout-btn{width:100%;margin-top:8px;padding:7px;border-radius:var(--aos-radius);border:1px solid var(--aos-border);background:none;color:var(--aos-muted);cursor:pointer;font-size:12px;transition:background .15s,color .15s}
     .signout-btn:hover{background:rgba(244,67,54,.1);color:var(--aos-danger)}
-    .aos-main{margin-left:var(--aos-sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh}
+    /* min-width:0 is the whole responsive fix, and it is not cosmetic.
+       A flex item defaults to min-width:auto, which means it REFUSES to shrink
+       below its content's intrinsic width. .aos-main is a flex child of <body>,
+       so one wide table anywhere inside it widened the main column, which
+       widened the document, which gave every phone viewport a horizontally
+       scrolling page — measured at +618px on a 320px screen. The table's own
+       overflow-x:auto scroller could never contain it, because the ancestor was
+       growing to fit instead of letting the scroller do its job.
+       Setting min-width:0 lets the chain collapse to the viewport and hands the
+       overflow back to the container that is meant to own it. */
+    .aos-main{margin-left:var(--aos-sidebar-w);flex:1;min-width:0;display:flex;flex-direction:column;min-height:100vh}
     .aos-header{position:sticky;top:0;z-index:50;background:var(--aos-surface);border-bottom:1px solid var(--aos-border);padding:12px 24px;display:flex;align-items:center;gap:16px}
     .aos-breadcrumb{font-size:18px;font-weight:700;flex:1}
     .aos-header-search input{background:var(--aos-surface2);border:1px solid var(--aos-border);border-radius:20px;padding:7px 16px;color:var(--aos-text);font-size:13px;width:220px;outline:none}
     .aos-header-search input:focus{border-color:var(--aos-accent)}
     .header-notif-btn{width:36px;height:36px;border-radius:50%;background:var(--aos-surface2);border:1px solid var(--aos-border);color:var(--aos-text);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
     .header-notif-btn:hover{background:rgba(113,255,0,.08)}
-    .aos-content{flex:1;padding:24px;overflow-y:auto}
+    .aos-content{flex:1;min-width:0;padding:24px;overflow-y:auto}
+    /* Same rule one level down: every panel and its children must be allowed to
+       be narrower than their widest table. */
+    .aos-panel,.aos-panel>*{min-width:0}
+    /* The table wrapper owns horizontal scrolling. Without max-width it grows
+       to the table and the page scrolls instead of the container. */
+    .aos-content [style*="overflow-x"],.aos-table-wrap{max-width:100%}
     .aos-panel{display:block}
     .aos-panel[hidden]{display:none!important}
     .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px;margin-bottom:24px}

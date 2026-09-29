@@ -1,3 +1,38 @@
+## 2026-09-29 — AdminOS sidebar, Slice A3: the mobile drawer is no longer caught by the generic `*-sidebar` rule (branch `feat/integrations-control-center`, NOT deployed)
+
+Pre-existing CSS collision, also present on live `be7c676`. At ≤768px `sokoni-responsive.css` applied
+`[class*="-sidebar"]:not([class*="mini"]){width:100%!important;position:relative!important;…}` and that selector
+matches `.aos-sidebar`. AdminOS's fixed 220px drawer became an in-flow block at the head of the body flex row:
+measured **10px wide at 320px, 80px at 390px (22/27 labels clipped), 272px at 768px**, and `.aos-main` shrank to 310px.
+
+Reuses `767c0b7` (`feature/ent-hub-convergence`); imported the sidebar-layout portions only:
+- `sokoni-responsive.css` — the selector gains `:not(.aos-sidebar)`. File is **blob-identical** to `767c0b7`
+  (the branch's copy was exactly its pre-image `b3710a3`).
+- `admin-os.html` — the `min-width:0` chain only: `.aos-main`, `.aos-content`, `.aos-panel,.aos-panel>*`, and the
+  table-wrap `max-width:100%`. All 18 added lines exist verbatim in `767c0b7:admin-os.html`.
+- **Not taken** from `767c0b7`: the `--aos-sub` contrast token, header flex-wrap / ≤640px reflow, breadcrumb ellipsis,
+  search-shrink, the funnel-label colour in `sokoni-aos.js`, and its certification scripts/matrices. None is sidebar
+  layout; they remain available for a later slice.
+
+Evidence (hermetic headless Chromium, every external origin aborted, admin guard stubbed as verified):
+- `.aos-sidebar` is `position:fixed`, **220px** at 320 / 390 / 768 / 1024 / 1440; **0/27 labels clipped** at every
+  width (was 27/27 at 320). `.aos-main` = full viewport width on phones (was 310px).
+- The pre-A3 files reproduce the `min-width:auto` defect: with a wide table `.aos-main` measured **+1128px** wider
+  than a 320px viewport; post-A3 **0**, with the overflow contained by `.aos-content`'s own scroller. Document
+  `scrollWidth` reads 0 in both because a shared `overflow-x:hidden` launders it — the element excess is the
+  honest measure, as `767c0b7` itself notes.
+- Current drawer behaviour unchanged: menu button opens, scrim shows, tap-outside / « toggle / choosing a section
+  each close it, and the chosen panel opens. Desktop sidebar unchanged (220px fixed, collapse still 66px).
+- `test-adminos-single-navigation` **22/0** (27 sections + 9 links), `test-admin-os-render` **43/0**,
+  `test-admin-os-wiring` **308/0**. Inline scripts parse. Zero page errors.
+
+Provenance line: A3 fixes the pre-existing responsive collision. Slice B will add AdminOS-specific mobile behaviour
+(Escape, focus, motion); none of that is in A3.
+
+- **Files:** `admin-os.html`, `sokoni-responsive.css`, `CHANGELOG.md`.
+- **Database / API / Security / Breaking:** none. UI only. `sokoni-responsive.css` is shared: the change is one
+  `:not(.aos-sidebar)` exclusion, so no other admin or seller sidebar is affected.
+
 ## 2026-09-29 — AdminOS sidebar, Slice A2: the shared admin shell no longer covers AdminOS (branch `feat/integrations-control-center`, NOT deployed)
 
 This branch loads `sokoni-admin-shell.js` on `admin-os.html` (since `52a2b22`); production `be7c676` does not. Once an
