@@ -105,7 +105,9 @@ up('whether voiding a Merchant V2 sale is possible at all',
 
 /* ══ 3. SALES -> INVENTORY — the real convergence ══════════════════════════════ */
 head('3. SALES -> INVENTORY (canonical products/{id})');
-ck('TILL deducts canonical products.stock', /stock:\s*FieldValue\.increment\(-\(item\.qty/.test(ZF));
+/* Superseded 2026-09-29 (U5 packages): the loose-item write now folds in any package component of the same product,
+   `-((item.qty || 1) + _extra)` — still the one canonical products.stock decrement. */
+ck('TILL deducts canonical products.stock', /stock:\s*FieldValue\.increment\(-\(\(?item\.qty/.test(ZF));
 ck('TILL bumps inventoryVersion',           /inventoryVersion:\s*FieldValue\.increment\(1\)/.test(ZF));
 ck('DISPATCH deducts canonical products.stock', /stock:\s*admin\.firestore\.FieldValue\.increment\(-stockItems/.test(RE));
 ck('TILL refund restores stock',            /stock:\s*FieldValue\.increment\(pItem\.qty\)/.test(ZF));

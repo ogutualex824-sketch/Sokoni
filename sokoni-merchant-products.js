@@ -1016,6 +1016,8 @@
          null means the seller chose nothing, and nothing is written: an absent warranty
          is a real answer and must not be overwritten with an empty one on every save. */
       if (v._warranty) out.warranty = v._warranty;
+      /* U5: a package's items travel as the picker built them; the writer re-checks every one */
+      if (Array.isArray(v.components)) out.components = v.components.map(function (c) { return { productId: c.productId, qty: c.qty }; });
       FORM_KEYS.forEach(function (k) {
         var raw = v[k];
         if (raw === undefined) return;
@@ -2622,9 +2624,58 @@
 
        Derived rather than listed, so a field added to either side cannot end up as two
        boxes for one value with the writer unable to tell which the merchant meant. */
+    /* ── PACKAGE / BUNDLE ITEMS (universal catalogue U5, 2026-09-29) ─────────────────────────────────────────
+       A package is made of THIS shop's own products (Pizza × 1 · Soda × 2). Selling it takes their stock
+       (functions/shared/package-stock.js) — it has no stock of its own, so "sets available" is derived here from the
+       same helper the server uses, never typed. The writer re-checks every item belongs to this shop. */
+    function isCompositeType (p) {
+      var LTy = (typeof window !== 'undefined' && window.SokoniListingTypes) || null;
+      var t = LTy ? LTy.typeOf(liveListing(p)).id : (p && p.listingType);
+      return t === 'package' || t === 'bundle';
+    }
+    function componentsPickerHTML (p) {
+      if (!isCompositeType(p)) return '';
+      var PSm = (typeof window !== 'undefined' && window.SokoniPackageStock) || null;
+      var comps = (S.editor && Array.isArray(S.editor.values.components)) ? S.editor.values.components : [];
+      var byId = {}; (S.rows || []).forEach(function (r) { byId[r.id] = r; });
+      var selfId = S.editor && S.editor.product && S.editor.product.id;
+      var choices = (S.rows || []).filter(function (r) {
+        return r.id !== selfId && r.status !== 'archived' && !(r.listingType === 'package' || r.listingType === 'bundle')
+          && !comps.some(function (c) { return c.productId === r.id; });
+      });
+      var sets = PSm ? PSm.availableUnits({ listingType: 'package', components: comps }, byId) : null;
+      var separate = comps.reduce(function (n, c) { var r = byId[c.productId]; return n + (r && typeof r.price === 'number' ? r.price * c.qty : 0); }, 0);
+      return '<div class="pr-sec" data-pk-sec><div class="pr-sec-h"><span class="pr-sec-e">🧩</span><span class="pr-sec-t">What\'s in it</span></div>' +
+        '<div class="pr-sec-s">Choose your own products. Selling one takes these from your stock — the package has no stock of its own.</div>' +
+        (comps.length ? comps.map(function (c) {
+          var r = byId[c.productId];
+          return '<div class="pr-row" data-pk-item="' + esc(c.productId) + '" style="align-items:center;gap:8px">' +
+            '<div style="flex:1;min-width:0">' + esc(r ? r.name : 'Unavailable item') + (r && typeof r.stock === 'number' ? ' <span class="pr-note" style="display:inline">(' + r.stock + ' in stock)</span>' : '') + '</div>' +
+            '<button type="button" class="pr-btn" data-pr="pk-dec" data-id="' + esc(c.productId) + '" aria-label="One fewer">−</button>' +
+            '<b data-pk-qty="' + esc(c.productId) + '" style="min-width:24px;text-align:center">' + c.qty + '</b>' +
+            '<button type="button" class="pr-btn" data-pr="pk-inc" data-id="' + esc(c.productId) + '" aria-label="One more">+</button>' +
+            '<button type="button" class="pr-btn danger" data-pr="pk-del" data-id="' + esc(c.productId) + '" aria-label="Remove">✕</button></div>';
+        }).join('') : '<div class="pr-note" data-pk-empty>No items yet — a package needs at least one.</div>') +
+        (choices.length ? '<div class="pr-row" style="gap:8px"><select class="pr-i pr-sel" data-pk-choose aria-label="Add an item"><option value="">— Add one of your products —</option>' +
+          choices.map(function (r) { return '<option value="' + esc(r.id) + '">' + esc(r.name) + '</option>'; }).join('') + '</select>' +
+          '<button type="button" class="pr-btn" data-pr="pk-add">＋ Add</button></div>' : '') +
+        (comps.length ? '<div class="pr-note" data-pk-sets>' + (sets === null ? 'Sets available: unlimited (these items are not stock-tracked).'
+          : 'Sets available now: <b>' + sets + '</b>') + (separate ? ' · Bought separately: ' + esc(money(separate)) : '') + '</div>' : '') +
+        '</div>';
+    }
+    function pkMutate (fn) {
+      if (!S.editor) return;
+      var v = S.editor.values || (S.editor.values = {});
+      var list = Array.isArray(v.components) ? v.components.map(function (c) { return { productId: c.productId, qty: c.qty }; }) : [];
+      v.components = fn(list).filter(function (c) { return c.qty >= 1; });
+      paint();
+    }
+
     function studioSkipKeys (p) {
       var keys = ['name', 'description', 'price', 'category', 'location',
-                  'condition', 'brand', 'sku', 'stock', 'warranty'];
+                  'condition', 'brand', 'sku', 'stock', 'warranty',
+                  /* U5: a package's items are chosen from THIS shop's products by the picker below, never typed */
+                  'components'];
       var SP = specModel();
       if (SP && typeof SP.suggestionsFor === 'function') {
         try {
@@ -2757,6 +2808,7 @@
         bulkHTML(p) +
         specsHTML(p) +
         (studio() ? studio().extraFieldsHTML(liveListing(p), studioSkipKeys(p)) : '') +
+        componentsPickerHTML(p) +
         ownershipHTML(p) +
         foodHTML(p) +
         digitalHTML(p) +
@@ -3108,6 +3160,19 @@
       if (k === 'pickno') { S.selected = {}; return paint(); }
       if (k === 'submit-photos') return submitPhotos();
 
+      if (k === 'pk-add') {
+        var chooser = host.querySelector('[data-pk-choose]');
+        var pickId = chooser && chooser.value;
+        if (!pickId) return say('Choose one of your products to add.');
+        return pkMutate(function (l) { if (!l.some(function (c) { return c.productId === pickId; })) l.push({ productId: pickId, qty: 1 }); return l; });
+      }
+      if (k === 'pk-inc' || k === 'pk-dec' || k === 'pk-del') {
+        var pid = el.getAttribute('data-id');
+        return pkMutate(function (l) { return l.map(function (c) {
+          if (c.productId !== pid) return c;
+          return { productId: c.productId, qty: k === 'pk-del' ? 0 : Math.min(99, Math.max(0, c.qty + (k === 'pk-inc' ? 1 : -1))) };
+        }); });
+      }
       if (k === 'restore') {
         var ri = Number(el.getAttribute('data-i'));
         var rp = (S.painted || [])[ri];

@@ -1,3 +1,81 @@
+## [2026-09-29] - Universal catalogue U5: packages and bundles take their components off the one shelf — online and at the till
+
+**Functions (pricer, card session, both payment finalisers, POS) + merchant-v2 Products, NOT deployed.** Branch
+`slice/c4-category-matrix`. Owner brief §7: "Selling the package must consume the correct component inventory. Do NOT
+duplicate stock." The design is in `docs/PACKAGES_AND_BUNDLES.md`.
+
+**Census:**
+- No catalogue package existed.
+- `inventory-v2.inventorySaveBOM` stores bills of materials in the TENANT inventory store. ADR-016 forbids bridging
+  that to the shop's canonical products, so it is not used for sales.
+- Stock moves in four places, and none knew about packages: `_finalizeMarketplacePayment`, `verifyIntasendPayment`,
+  `posCompleteCheckout` and the retired `darajaSTKCallback`.
+- Any listing without a `stock` field would have been driven NEGATIVE by those loops' `increment(-n)`.
+
+**Built:**
+- **`functions/shared/package-stock.js`** (pure, with a byte-identical browser copy): `sanitizeComponents`,
+  `componentsForLine`, `expandLines` (merged per product) and `availableUnits` (complete sets; unmetered never limits;
+  archived → 0).
+- **`validateOrderLines`:**
+  - attaches the SERVER's components, read from the package document;
+  - checks the whole cart against the shelf once;
+  - refuses a foreign, nested, archived or out-of-stock component (`PACKAGE_*` codes).
+  - `fail()` now carries the details.
+- **`createCheckoutSession`:** a package's availability and quantity come from its components, and the session line
+  carries them.
+- **`verifyIntasendPayment`:** expands only a SERVER session and ignores client components. A package document is
+  never deducted.
+- **`_finalizeMarketplacePayment`:**
+  - the components are deducted inside the order transaction;
+  - the receipt lists the package at its charged price;
+  - a component that is not the package's shop is **flagged** (`oversoldAlerts`, `package_component_foreign`) and not
+    deducted;
+  - a package arriving without server components is not driven negative.
+- **`posCompleteCheckout`:**
+  - a foreign or nested component refuses the sale **before anything is charged**;
+  - the combined need is checked in the transaction's read phase;
+  - components are deducted, and a loose item of the same product is folded into its single write;
+  - the package's own sales counters move, but never its stock.
+- **merchant-v2 Products:**
+  - choosing Package or Bundle shows **"What's in it"**: this shop's own live, non-package products, quantity steppers,
+    "Sets available now" and the price bought separately;
+  - the writer re-checks every item against the stored record (foreign, nested, self, empty, or an opening stock are
+    all refused) and sets `trackInventory: false`.
+
+**Tests:**
+- **`scripts/test-catalogue-packages.js`: 5/0.** It runs the REAL helper, pricer, extracted finalize and POS checkout:
+  - the helper;
+  - online pricing, including the whole cart once and foreign / nested / archived components;
+  - online payment: components deducted, receipt, flagged foreign component, no negative stock;
+  - the till: components deducted, the package not; the loose item folded; foreign and short-stock refused before
+    writing;
+  - the card path's wiring.
+  - Counterproof on `446e826`: **5 fail**.
+  - Sabotage: **13/13 caught.**
+    - The first run caught 11/13. "The till deducts the package" was masked because the fixture's package carried
+      `trackInventory: false` (the writer's defence, not the till's), so the fixture now omits it.
+    - "The till accepts a foreign component": the PK4 check had lost its backslash to shell escaping and become a
+      vacuous alternation. It is repaired and now pins the pre-charge wording.
+- **`scripts/test-catalogue-packages-browser.js`: 5/0** (Chromium; the REAL Products editor):
+  - the picker offers only this shop's live non-package products;
+  - "Sets available now: 2";
+  - the saved components and `trackInventory: false`;
+  - five writer refusals;
+  - 390 px.
+  - Counterproof: **fails** (1 control).
+  - Sabotage: **6/6 caught.**
+- **`test-product-offers`:** its finalize extractor now gives the extracted function index.js's own module scope, so
+  its `require('./shared/…')` resolves as it does in production.
+- **Regression** (147 suites, on the U5 tree and on `446e826`): no new failure caused by U5.
+  - `merchant-ecosystem-convergence` "TILL deducts canonical products.stock" is **superseded, with its reason**. The
+    loose-item write now spells `-((item.qty || 1) + _extra)` and is still the one canonical decrement.
+  - `catalogue-canonical-migration` "pos-zero-friction untouched" is a dirty-tree check and clears on commit.
+  - `merchant-v2-ecosystem-runtime`, `merchant-messages-ui` and `functions-require-closure-gate` differed only because
+    of resource exhaustion (Windows fork). They are identical when re-run on their own.
+
+**Database:** new optional product fields `components` and `trackInventory`. No migration, and no production data
+touched. **API:** new `PACKAGE_*` refusal codes. **Breaking:** none.
+
 ## [2026-09-29] - Universal catalogue U6: each business is asked for ITS documents; honest review states; only a SOKONI reviewer verifies; buyers see only what was verified
 
 **Shop details (merchant-v2) + AdminOS + storefront + functions, NOT deployed.** Branch `slice/c4-category-matrix`.

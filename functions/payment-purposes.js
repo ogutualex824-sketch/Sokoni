@@ -31,7 +31,7 @@ const db = () => getFirestore();
 const MIN_KES = 1;
 const MAX_KES = 150000;
 
-const fail = (code, msg) => { throw new HttpsError(code, msg); };
+const fail = (code, msg, details) => { throw new HttpsError(code, msg, details); };   /* details carry a machine code (U5) */
 
 /* ── Canonical marketplace line validation ──────────────────────────────────
    The SINGLE source of item-price / availability / stock truth, shared by
@@ -57,6 +57,18 @@ async function validateOrderLines(uid, items) {
     const snap = await db().collection('products')
       .where(FieldPath.documentId(), 'in', chunk).get();
     snap.forEach((d) => { prods[d.id] = d.data() || {}; });
+  }
+  /* PACKAGES / BUNDLES (universal catalogue U5, 2026-09-29): a package's components come from the package's OWN
+     document, read here by the server — never from the request. They are read now so every stock check below sees
+     them; selling the package takes THEIR stock (functions/shared/package-stock.js). */
+  const PS = require('./shared/package-stock');
+  const compProds = {};
+  const compIds = [...new Set(Object.values(prods).filter(PS.isComposite)
+    .reduce((a, p) => a.concat(PS.componentsForLine(p).map((c) => c.productId)), []))];
+  for (let i = 0; i < compIds.length; i += 10) {
+    const chunk = compIds.slice(i, i + 10);
+    const snap = await db().collection('products').where(FieldPath.documentId(), 'in', chunk).get();
+    snap.forEach((d) => { compProds[d.id] = d.data() || {}; });
   }
 
   /* Shop state for availability — fail OPEN on read error, matching
@@ -106,7 +118,31 @@ async function validateOrderLines(uid, items) {
     const { unitPrice, offerId } = priceLine(raw, pid, qty, catalogueUnit);
 
     subtotal += unitPrice * qty;
-    lines.push(Object.assign({ productId: pid, qty, unitPrice, sellerUid: prod.sellerUid || null }, offerId ? { offerId, listUnitPrice: catalogueUnit } : {}));
+    const components = PS.componentsForLine(prod);   /* null unless this is a package / bundle */
+    lines.push(Object.assign({ productId: pid, qty, unitPrice, sellerUid: prod.sellerUid || null },
+      offerId ? { offerId, listUnitPrice: catalogueUnit } : {}, components ? { components } : {}));
+  }
+
+  /* U5: the whole cart against the shelf, ONCE — a Meal Deal and a loose Soda ask for the soda together. Every
+     component must be the package's own shop's live product, not itself a package, and in stock for the total. */
+  const lineSeller = {};
+  lines.forEach((l) => { lineSeller[l.productId] = l.sellerUid; });
+  for (const e of PS.expandLines(lines)) {
+    if (!e.viaPackage) {
+      const p = prods[e.productId];
+      const st = PS.stockOf(p);
+      if (p && st !== null && e.qty > st) fail('failed-precondition', `Only ${st} of ${p.name || e.productId} remain. Please update your cart.`);
+      continue;
+    }
+    const pkgName = (prods[e.viaPackage] && prods[e.viaPackage].name) || 'This package';
+    const c = compProds[e.productId] || prods[e.productId];
+    if (!c) fail('failed-precondition', `${pkgName} is not available — one of its items no longer exists.`, { code: 'PACKAGE_COMPONENT_MISSING' });
+    if ((c.sellerUid || c.shopId || null) !== (lineSeller[e.viaPackage] || null)) fail('failed-precondition', `${pkgName} is not available.`, { code: 'PACKAGE_COMPONENT_FOREIGN' });
+    if (PS.isComposite(c)) fail('failed-precondition', `${pkgName} is not available.`, { code: 'PACKAGE_NESTED' });
+    if (!avail.itemAvailability(c, shopState[c.sellerUid]).available || c.outOfStock === true)
+      fail('failed-precondition', `${pkgName} is not available right now — ${c.name || 'an item in it'} is not.`, { code: 'PACKAGE_COMPONENT_UNAVAILABLE' });
+    const cs = PS.stockOf(c);
+    if (cs !== null && e.qty > cs) fail('failed-precondition', `${pkgName}: only ${cs} of ${c.name || 'an item in it'} left.`, { code: 'PACKAGE_COMPONENT_STOCK' });
   }
 
   return { lines, subtotal };

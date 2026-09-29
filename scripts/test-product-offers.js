@@ -65,7 +65,10 @@ function extractFinalize() {
   if (i < 0) return null;
   let depth = 0, j = s.indexOf('{', s.indexOf(')', i));
   for (let k = j; k < s.length; k++) { if (s[k] === '{') depth++; else if (s[k] === '}') { depth--; if (depth === 0) { j = k; break; } } }
-  try { return new Function('return (' + s.slice(i, j + 1) + ')')(); } catch (_) { return null; }
+  /* the extracted function gets index.js's own module scope for `require` ('./x' resolves under functions/), exactly
+     as it runs in production — U5 made it require ./shared/package-stock */
+  const fnRequire = (id) => require(id.startsWith('./') ? Path.join(FN, id) : id);
+  try { return new Function('require', 'return (' + s.slice(i, j + 1) + ')')(fnRequire); } catch (_) { return null; }
 }
 
 (async () => {

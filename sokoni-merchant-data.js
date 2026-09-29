@@ -177,6 +177,8 @@
         minWholesaleQty: (typeof p.minWholesaleQty === 'number') ? p.minWholesaleQty : null,
         deliveryCost: (typeof p.deliveryCost === 'number') ? p.deliveryCost : null,
         digitalUrl: p.digitalUrl || null, digitalLicense: p.digitalLicense || null, video: p.video || null,
+        /* U5: a package's items (read so the editor opens with them) */
+        components: Array.isArray(p.components) ? p.components : null, trackInventory: p.trackInventory !== false,
       };
     });
   }
@@ -321,6 +323,11 @@
       FOOD_KEYS.forEach(function (k) { var v = _str(fl[k], 120); fout[k] = v || null; if (v) anyFood = true; });
       out.foodLicence = anyFood ? fout : null;
     }
+    /* PACKAGE / BUNDLE ITEMS (universal catalogue U5): normalised — whole quantities, merged, at most 20 */
+    if (p.components !== undefined) {
+      var PSw = (typeof window !== 'undefined' && window.SokoniPackageStock) || (typeof globalThis !== 'undefined' && globalThis.SokoniPackageStock) || null;
+      out.components = PSw ? PSw.sanitizeComponents(p.components) : (Array.isArray(p.components) ? p.components : []);
+    }
     /* OWNERSHIP — a merchant may DECLARE; only a reviewer may approve. `status` and `verificationStatus` are
        CLAMPED to pending: verificationStatus === 'approved' is what puts "✅ Verified Owner" on a card, and passing
        the object whole (as above) let a crafted write self-issue that badge. */
@@ -378,6 +385,29 @@
       e.code = v.errors[0].code; e.validation = v.errors.map(function (x) { return x.message; });
       throw e;
     }
+  }
+
+  /* U5: a package / bundle is made of THIS shop's own live products, none of them a package, never itself — checked
+     against the STORED records before anything is written. It carries no stock of its own (trackInventory:false). */
+  async function _assertComponents(o, fields, selfId, currentType) {
+    var t = fields.listingType || currentType || null;
+    var composite = t === 'package' || t === 'bundle';
+    if (!composite) { if (fields.components !== undefined && fields.components.length) delete fields.components; return; }
+    var comps = fields.components;
+    if (comps === undefined) return;                     /* an edit that does not touch the items */
+    if (!comps.length) { var e0 = new Error('A package needs at least one item.'); e0.code = 'PACKAGE_EMPTY'; throw e0; }
+    for (var i = 0; i < comps.length; i++) {
+      var c = comps[i];
+      if (selfId && c.productId === selfId) { var e1 = new Error('A package cannot contain itself.'); e1.code = 'PACKAGE_SELF'; throw e1; }
+      var got = o.db.getProduct ? await o.db.getProduct(c.productId) : null;
+      if (!got) { var e2 = new Error('An item in this package no longer exists.'); e2.code = 'PACKAGE_COMPONENT_MISSING'; throw e2; }
+      try { assertInScope(o.scope, Object.assign({ id: c.productId }, got)); }
+      catch (_) { var e3 = new Error('A package can only contain your own products.'); e3.code = 'PACKAGE_COMPONENT_FOREIGN'; throw e3; }
+      if ((got.listingType === 'package' || got.listingType === 'bundle') && Array.isArray(got.components) && got.components.length) {
+        var e4 = new Error('A package cannot contain another package.'); e4.code = 'PACKAGE_NESTED'; throw e4;
+      }
+    }
+    fields.trackInventory = false;
   }
 
   function _validate(fields, opts) {
@@ -561,6 +591,14 @@
 
     var fields = _productFields(o.product);
     _assertCatalogueType(o, fields);
+    /* U5: a package's stock comes from its items — an opening quantity for it is refused, never silently dropped */
+    if ((fields.listingType === 'package' || fields.listingType === 'bundle') && opening) {
+      var eo = new Error('A package has no stock of its own — its items\' stock is used.'); eo.code = 'PACKAGE_NO_STOCK'; throw eo;
+    }
+    await _assertComponents(o, fields, null, null);
+    if ((fields.listingType === 'package' || fields.listingType === 'bundle') && !(fields.components && fields.components.length)) {
+      var ee = new Error('A package needs at least one item.'); ee.code = 'PACKAGE_EMPTY'; throw ee;
+    }
     var errs = _validate(fields, { creating: true });
     if (errs.length) { var e = new Error(errs[0]); e.validation = errs; throw e; }
 
@@ -668,6 +706,7 @@
     var fields = _productFields(o.patch);
     if (!Object.keys(fields).length) throw new Error('merchant data: nothing to update');
     _assertCatalogueType(o, fields);
+    await _assertComponents(o, fields, o.id, existing && existing.listingType);
     var errs = _validate(fields, { creating: false });
     if (errs.length) { var e = new Error(errs[0]); e.validation = errs; throw e; }
 

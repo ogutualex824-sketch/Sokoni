@@ -535,6 +535,29 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       }
     });
 
+    /* ══ PACKAGES / BUNDLES (universal catalogue U5, 2026-09-29) ═════════════
+       A package sold at the till takes its COMPONENTS off the shelf — the canonical products/{id}.stock — read from
+       the package's own document (functions/shared/package-stock.js). A component must be THIS shop's product and not
+       itself a package; otherwise the sale is refused before anything is charged. The package document carries no
+       stock and is never deducted. */
+    const _PSp = require('./shared/package-stock');
+    const _posComp = {};
+    productSnaps.forEach((snap, i) => {
+      const p = snap.data() || {};
+      if (_PSp.isComposite(p)) {
+        _PSp.componentsForLine(p).forEach((c) => { _posComp[c.productId] = (_posComp[c.productId] || 0) + c.qty * (Number(items[i].qty) || 1); });
+      }
+    });
+    const _posCompIds = Object.keys(_posComp);
+    if (_posCompIds.length) {
+      const _cs = await Promise.all(_posCompIds.map((id) => db.collection('products').doc(id).get()));
+      _cs.forEach((c) => {
+        if (!c.exists || _ownerOfProduct(c.data()) !== String(merchantId) || _PSp.isComposite(c.data())) {
+          _e('A package in this sale contains an item that is not this shop\'s product, so the sale was not recorded. Nothing has been charged.', 'permission-denied');
+        }
+      });
+    }
+
     /* ══ THE COMMISSION GATE ═════════════════════════════════════════════════
        Unpaid POS/Till commission from a previous settlement day closes the till
        at 07:00 Africa/Nairobi. Enforced HERE, on the operation, and not only in
@@ -768,6 +791,9 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
         progRef ? txn.get(progRef) : Promise.resolve(null),
         ...productRefs.map(r => txn.get(r)),
       ]);
+      /* U5: the package components — still the read phase, before any write */
+      const _compRefs  = _posCompIds.map((id) => db.collection('products').doc(id));
+      const _compSnaps = await Promise.all(_compRefs.map((r) => txn.get(r)));
 
       /* ── PHASE 2: VALIDATE (no writes yet, so a rejection touches nothing) ── */
       /* Wallet: idempotent skip if the deterministic txn doc already exists (prior attempt). */
@@ -796,8 +822,19 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
         }
         /* Canonical stock field is `stock`; fall back to legacy names for older docs. */
         const stock = prod.stock ?? prod.stockQty ?? prod.quantity ?? 9999;
-        if (stock < (item.qty || 1) && prod.trackInventory !== false)
+        if (stock < (item.qty || 1) && prod.trackInventory !== false && !_PSp.isComposite(prod))
           throw new Error(`Insufficient stock for ${prod.name}`);
+      });
+      _compSnaps.forEach((cs, k) => {
+        const id = _posCompIds[k];
+        if (!cs.exists) throw new Error('An item in a package disappeared');
+        const cp = cs.data();
+        if (_ownerOfProduct(cp) !== String(merchantId) || _PSp.isComposite(cp)) {
+          throw new HttpsError('permission-denied', 'A package in this sale contains an item that is not this shop\'s product, so the sale was not recorded.');
+        }
+        const loose = enrichedItems.reduce((n, it) => n + (it.productId === id ? (Number(it.qty) || 1) : 0), 0);
+        const stock = cp.stock ?? cp.stockQty ?? cp.quantity ?? 9999;
+        if (cp.trackInventory !== false && stock < _posComp[id] + loose) throw new Error(`Insufficient stock for ${cp.name} (in a package)`);
       });
 
       /* ── PHASE 3: ALL WRITES ── */
@@ -817,22 +854,44 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
         });
       }
 
+      const _folded = new Set();   /* U5: component units folded into a loose item's write, so each product is written once */
       productSnaps.forEach((snap, i) => {
         const item = enrichedItems[i];
+        if (_PSp.isComposite(snap.data())) {
+          /* the package itself: no stock of its own — only its sales counters move */
+          txn.update(productRefs[i], { sold: FieldValue.increment(item.qty || 1), lastSoldAt: FieldValue.serverTimestamp(),
+            totalRevenue: FieldValue.increment(item.unitPrice * (item.qty || 1)), updatedAt: FieldValue.serverTimestamp() });
+          return;
+        }
         if (snap.data().trackInventory !== false) {
+          const _extra = (!_folded.has(item.productId) && _posComp[item.productId]) ? _posComp[item.productId] : 0;
+          if (_extra) _folded.add(item.productId);
           txn.update(productRefs[i], {
             /* Deduct the CANONICAL `stock` — the same field inventory, catalogue and dispatch
                read, so a till sale is immediately reflected everywhere. inventoryVersion bumps
                so client caches invalidate. Pre-check above guarantees stock ≥ qty. */
-            stock:            FieldValue.increment(-(item.qty || 1)),
+            stock:            FieldValue.increment(-((item.qty || 1) + _extra)),
             inventoryVersion: FieldValue.increment(1),
-            sold:             FieldValue.increment(item.qty || 1),
+            sold:             FieldValue.increment((item.qty || 1) + _extra),
             lastSoldAt:       FieldValue.serverTimestamp(),
             totalUnitsSold:   FieldValue.increment(item.qty || 1),
             totalRevenue:     FieldValue.increment(item.unitPrice * (item.qty || 1)),
             updatedAt:        FieldValue.serverTimestamp(),
           });
         }
+      });
+
+      /* U5: the components not already folded into a loose item's write */
+      _compSnaps.forEach((cs, k) => {
+        const id = _posCompIds[k];
+        if (_folded.has(id) || cs.data().trackInventory === false) return;
+        txn.update(_compRefs[k], {
+          stock:            FieldValue.increment(-_posComp[id]),
+          inventoryVersion: FieldValue.increment(1),
+          sold:             FieldValue.increment(_posComp[id]),
+          lastSoldAt:       FieldValue.serverTimestamp(),
+          updatedAt:        FieldValue.serverTimestamp(),
+        });
       });
 
       let loyaltyAwarded = 0;

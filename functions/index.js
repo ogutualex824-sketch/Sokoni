@@ -2467,6 +2467,17 @@ exports.createCheckoutSession = onCall(
         .where(admin.firestore.FieldPath.documentId(), "in", chunk).get();
       snap.forEach(doc => { priceMap[doc.id] = doc.data(); });
     }
+    /* PACKAGES / BUNDLES (universal catalogue U5): the components of any package in the cart, read here by the server
+       from the package document — never from the request (functions/shared/package-stock.js). */
+    const _PSs = require("./shared/package-stock");
+    const _compMap = {};
+    const _compIds = [...new Set(Object.values(priceMap).filter(_PSs.isComposite)
+      .reduce((a, p) => a.concat(_PSs.componentsForLine(p).map((c) => c.productId)), []))];
+    for (let ci = 0; ci < _compIds.length; ci += 10) {
+      const chunk = _compIds.slice(ci, ci + 10);
+      const snap = await db.collection("products").where(admin.firestore.FieldPath.documentId(), "in", chunk).get();
+      snap.forEach(doc => { _compMap[doc.id] = doc.data(); });
+    }
 
     /* ── Shop availability (Layer 4 authority) ─────────────────────────────────
        Read the canonical shop-state for every distinct seller in the cart. ABSENT
@@ -2528,8 +2539,22 @@ exports.createCheckoutSession = onCall(
         continue;
       }
 
+      /* U5: a package is available only as far as its COMPONENTS are — each the same shop's live product, none itself
+         a package; its "stock" is the number of complete sets they make. */
+      let _pkgComps = null, _pkgUnits = null;
+      if (_PSs.isComposite(prod)) {
+        _pkgComps = _PSs.componentsForLine(prod);
+        const _byId = Object.assign({}, _compMap, priceMap);
+        const _bad = _pkgComps.some((c) => { const cp = _byId[c.productId];
+          return !cp || String(cp.sellerUid || cp.shopId || "") !== String(prod.sellerUid || "") || _PSs.isComposite(cp) || cp.outOfStock === true
+            || !_avail.itemAvailability(cp, shopState[cp.sellerUid], shopVerdict[cp.sellerUid]).available; });
+        if (_bad) { unavailableItems.push(prod.name || pid); continue; }
+        _pkgUnits = _PSs.availableUnits(Object.assign({}, prod, { components: _pkgComps }), _byId);
+        if (_pkgUnits === 0) { outOfStockItems.push(prod.name || pid); continue; }
+      }
+
       /* Out-of-stock check: outOfStock flag OR stock field present and zero */
-      const stockQty = prod.stock !== undefined ? Number(prod.stock) : null;
+      const stockQty = _pkgComps ? _pkgUnits : (prod.stock !== undefined ? Number(prod.stock) : null);
       const isOos    = prod.outOfStock === true || (stockQty !== null && stockQty <= 0);
       if (isOos) {
         outOfStockItems.push(prod.name || pid);
@@ -2556,6 +2581,7 @@ exports.createCheckoutSession = onCall(
         name:       prod.name   || "Item",
         unitPrice,
         ...(_offerId ? { offerId: _offerId, listUnitPrice: _catalogueUnit } : {}),
+        ...(_pkgComps ? { components: _pkgComps } : {}),   /* U5: the server's components, for the deduction on payment */
         qty,
         lineTotal,
         sellerUid:  prod.sellerUid  || null,
@@ -3119,8 +3145,15 @@ exports.verifyIntasendPayment = onRequest(
 
       /* Decrement stock per-product in individual transactions (TOCTOU-safe).
          Payment is already confirmed so oversold items are flagged, not rejected. */
+      /* PACKAGES / BUNDLES (universal catalogue U5, 2026-09-29): with a SERVER session, a package line becomes its
+         components (functions/shared/package-stock.js). Without one, the items are the CLIENT's — their `components`
+         are ignored, never trusted. On every path a package document is never itself deducted: it carries no stock. */
+      const _PS = require('./shared/package-stock');
+      const _deductItems = sessionDoc
+        ? _PS.expandLines(resolvedItems || [])
+        : (resolvedItems || []).map((it) => Object.assign({}, it, { components: undefined }));
       const stockResults = await Promise.allSettled(
-        (resolvedItems || [])
+        _deductItems
           .filter(item => item.productId)
           .map(item => db.runTransaction(async (t) => {
             const qty     = Number(item.qty) || 1;
@@ -3128,6 +3161,12 @@ exports.verifyIntasendPayment = onRequest(
             const snap    = await t.get(prodRef);
             if (!snap.exists) return;
             const pdata = snap.data();
+            if (!item.viaPackage && _PS.isComposite(pdata)) return;   /* a package's own document: no stock to move */
+            if (item.viaPackage && String(pdata.sellerUid || pdata.shopId || '') !== String(item.sellerUid || '')) {
+              t.set(db.collection('oversoldAlerts').doc(), { orderId, productId: item.productId, requested: qty, available: null,
+                reason: 'package_component_foreign', viaPackage: item.viaPackage, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+              return;
+            }
             const cur = pdata.stock;
             const priorVer = Number(pdata.inventoryVersion) || 0;
             /* Payment is already confirmed, so a last-item race is flagged, not
@@ -3756,14 +3795,37 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
 
       /* All reads before any write. */
       const stockReads = [];
+      /* PACKAGES / BUNDLES (universal catalogue U5, 2026-09-29): a line a SERVER pricer marked with `components` takes
+         its COMPONENTS off the shelf (functions/shared/package-stock.js) — the package document itself carries no stock.
+         The package is still read, for the receipt; each component is re-checked below to belong to the same shop. */
+      const _PS = require("./shared/package-stock");
+      const _pkgReads = [];
+      const _compQty = {};
       for (const line of lines) {
         const pid = line && (line.productId || line.id);
         const qty = Math.floor(Number(line && line.qty) || 0);
         if (!pid || qty < 1) continue;
         const pRef  = db.collection("products").doc(String(pid));
         const pSnap = await txn.get(pRef);
+        const comps = Array.isArray(line.components) ? _PS.sanitizeComponents(line.components) : [];
+        if (comps.length) {
+          _pkgReads.push({ pid: String(pid), qty, snap: pSnap, sellerUid: line.sellerUid || null,
+            unitPrice: Number(line.unitPrice) > 0 ? Number(line.unitPrice) : null });
+          for (const c of comps) {
+            const k = c.productId;
+            if (!_compQty[k]) _compQty[k] = { qty: 0, viaPackage: String(pid), sellerUid: line.sellerUid || null };
+            _compQty[k].qty += c.qty * qty;
+          }
+          continue;
+        }
         stockReads.push({ ref: pRef, pid: String(pid), qty, snap: pSnap,
           unitPrice: Number(line.unitPrice) > 0 ? Number(line.unitPrice) : null });
+      }
+      for (const cid of Object.keys(_compQty)) {
+        const cRef  = db.collection("products").doc(cid);
+        const cSnap = await txn.get(cRef);
+        stockReads.push({ ref: cRef, pid: cid, qty: _compQty[cid].qty, snap: cSnap, unitPrice: null,
+          viaPackage: _compQty[cid].viaPackage, lineSeller: _compQty[cid].sellerUid });
       }
       /* Agreed buyer offers carried on the SERVER-priced lines (product-offers.js). Read here, consumed below. */
       const offerReads = [];
@@ -3848,8 +3910,25 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
       /* Priced line items (name + unit price) captured here from the product docs
          we already read, so the caller can build a receipt without re-reading. */
       const _priced = [];
-      for (const { ref, pid, qty, snap, unitPrice: _lineUnit } of stockReads) {
+      for (const { ref, pid, qty, snap, unitPrice: _lineUnit, viaPackage: _via, lineSeller: _viaSeller } of stockReads) {
         const pdata = snap.exists ? snap.data() : {};
+        /* a package document that arrived WITHOUT server components (the client-written o.items fallback): it carries
+           no stock, so it is neither deducted nor driven negative — recorded on the receipt only */
+        if (!_via && _PS.isComposite(pdata)) {
+          _priced.push({ productId: pid, name: pdata.name || "Package", qty, unitPrice: _lineUnit || Number(pdata.price) || 0,
+            lineTotal: (_lineUnit || Number(pdata.price) || 0) * qty });
+          continue;
+        }
+        /* U5: a package component must be the package's OWN shop's product. Anything else is not deducted — the money
+           is already taken, so it is FLAGGED (house rule for post-payment anomalies), never refused. */
+        if (_via && (!snap.exists || String(pdata.sellerUid || pdata.shopId || "") !== String(_viaSeller || ""))) {
+          txn.set(db.collection("oversoldAlerts").doc(), {
+            orderId: orderId || checkoutId || null, productId: pid, requested: qty, available: null,
+            reason: snap.exists ? "package_component_foreign" : "package_component_missing", viaPackage: _via,
+            path: pathLabel || "marketplace", createdAt: ts,
+          });
+          continue;
+        }
         const cur = snap.exists ? pdata.stock : null;
         const priorVer = Number(pdata.inventoryVersion) || 0;
         let dec = qty;
@@ -3884,6 +3963,10 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
         /* Inventory movement is now recorded centrally by the indexProductUpdate trigger
            (keyed `${pid}_v${version}`, exactly-once) rather than written here — one audit
            path for ALL stock-mutating flows, not just this one. */
+        if (_via) {   /* a component: moved on the shelf, but the RECEIPT lists the package (below) */
+          console.log(`[${pathLabel || "mkt"}] package ${_via} component ${pid} -${dec}`);
+          continue;
+        }
         _priced.push({
           productId: pid,
           name:      pdata.name || "Item",
@@ -3893,6 +3976,13 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
           lineTotal: (_lineUnit || Number(pdata.price) || 0) * dec,
         });
         console.log(`[${pathLabel || "mkt"}] stock deduct product=${pid} -${dec} sold+${dec} inventoryVersion ${priorVer}->${priorVer + 1}`);
+      }
+      /* the packages themselves, on the receipt, at the price they were charged; their own `sold` counter moves (no stock) */
+      for (const pk of _pkgReads) {
+        const pd = pk.snap.exists ? pk.snap.data() : {};
+        if (pk.snap.exists) txn.update(pk.snap.ref || db.collection("products").doc(pk.pid), { sold: admin.firestore.FieldValue.increment(pk.qty), updatedAt: ts });
+        _priced.push({ productId: pk.pid, name: pd.name || "Package", qty: pk.qty,
+          unitPrice: pk.unitPrice || Number(pd.price) || 0, lineTotal: (pk.unitPrice || Number(pd.price) || 0) * pk.qty });
       }
       result = {
         finalised: true,
