@@ -1,3 +1,30 @@
+## [2026-09-29] - Owner decisions locked: free delivery on every rail (card included), promo never stacks, sales limits count orders
+
+**Card session, display quote, checkout. NOT deployed.**
+
+**Owner decisions (2026-09-29):**
+1. A promo code never stacks with a shop offer. This was already server-enforced in U7c2 and is unchanged.
+2. **Free delivery applies on every payment rail**, because the payment method must not change the price.
+3. "Stop after N sales" counts orders. This is unchanged.
+
+**Built (decision 2):**
+- `createCheckoutSession` applies a free-delivery offer to the card session. The buyer is charged goods minus the offer,
+  plus KES 0 delivery (`deliveryWaived`).
+- The order KEEPS the pinned rider fee as `deliveryFee`, so the rider is paid in full.
+- Settlement (`gross = total − deliveryFee`) takes the fee from the SHOP. The waiver is shop-funded, never a platform
+  cost.
+- It applies only to a single-shop cart (one pinned quote) and only while the goods paid for cover the fee. Below that,
+  the seller's gross would floor at 0 and the platform would silently fund the gap.
+- `shopOfferQuote` reports `deliveryWaived` under the same rule, and `checkout.html` shows "FREE — shop offer" in the
+  pre-payment total. The session total still wins in both directions.
+
+**Tests:** `test-catalogue-u7c2-offers-apply` **12/0**.
+- New AP12: waived for a single shop; not waived when the goods are below the fee; not waived for two shops; the
+  card-session wiring.
+- AP7 / AP10 pins updated for the new lines, with the reason.
+- `product-offers` 10/0, `product-payment-authority` 25/25, `catalogue-packages` 5/0,
+  `cart-product-offers-browser` 5/0, `creator-callback` unchanged from the parent (3 pre-existing).
+
 ## [2026-09-29] - Universal catalogue U7c2: the shop's offers are applied by the server, identically, wherever money is taken, and every screen shows that same figure
 
 **Functions (pricer, card session, webhook, finaliser, till, new `shopOfferQuote`) + merchant-v2 Sell + pos-checkout +

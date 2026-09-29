@@ -2131,7 +2131,7 @@ function toggleLoyaltyRedeem(checked) {
    Until it answers, no offer is shown; if it cannot answer, the page says so rather than showing none. */
 let _shopOffer = { key: null, discount: 0, applied: [], state: 'idle' };
 function _shopOfferKey(){
-  return (cart || []).map(i => String(i.id || i.productId || '') + 'x' + (i.qty || i.quantity || 1) + (i.offerId ? '@' + i.offerId : '')).join('|') + '#' + fulfillmentType;
+  return (cart || []).map(i => String(i.id || i.productId || '') + 'x' + (i.qty || i.quantity || 1) + (i.offerId ? '@' + i.offerId : '')).join('|') + '#' + fulfillmentType + '#' + (Number(deliveryFee) || 0);
 }
 async function _quoteShopOffers(){
   const key = _shopOfferKey();
@@ -2139,12 +2139,12 @@ async function _quoteShopOffers(){
   _shopOffer = { key, discount: 0, applied: [], state: 'loading' };
   try {
     const fn = firebase.functions().httpsCallable('shopOfferQuote');
-    const r = await fn({ fulfilment: fulfillmentType, items: cart.map(i => Object.assign({
+    const r = await fn({ fulfilment: fulfillmentType, deliveryFee: (fulfillmentType === 'delivery' ? Number(deliveryFee) || 0 : 0), items: cart.map(i => Object.assign({
       productId: String(i.id || i.productId || ''), qty: Math.max(1, Math.round(Number(i.qty) || Number(i.quantity) || 1)),
     }, i.offerId ? { offerId: String(i.offerId) } : {})).filter(i => i.productId) });
     if (_shopOfferKey() !== key) return;
     const d = (r && r.data) || {};
-    _shopOffer = { key, discount: Math.max(0, Number(d.discount) || 0),
+    _shopOffer = { key, discount: Math.max(0, Number(d.discount) || 0), deliveryWaived: Math.max(0, Number(d.deliveryWaived) || 0),
       applied: (d.shops || []).reduce((a, sh) => a.concat(sh.applied || []), []), state: 'ok' };
   } catch (e) {
     if (_shopOfferKey() !== key) return;
@@ -2156,6 +2156,8 @@ async function _quoteShopOffers(){
 function updateTotals(){
   if (_shopOffer.key !== _shopOfferKey()) _quoteShopOffers();
   const shopOfferDisc = (_shopOffer.state === 'ok') ? _shopOffer.discount : 0;
+  /* free-delivery offer: the server says the delivery on screen is waived (the same rule the card session charges) */
+  const shopDeliveryWaived = (_shopOffer.state === 'ok') ? (_shopOffer.deliveryWaived || 0) : 0;
   /* The 1% "M-PESA Fee" is gone. It was added to the displayed total on the
      client only — createCheckoutSession computes the authoritative charge as
      `serverTotal = serverSubtotal + safeDeliveryFee` and has never applied a
@@ -2163,7 +2165,7 @@ function updateTotals(){
      actually charge. Removing it makes the quote match the charge. */
   const promoSaving = Math.round(subtotal * (promoDiscount/100));
   _platformFee      = _platformFeeRate > 0 ? Math.round(subtotal * _platformFeeRate / 100) : 0;
-  const baseTotal   = subtotal + deliveryFee + _platformFee - promoSaving - shopOfferDisc;   /* U7c2 */
+  const baseTotal   = subtotal + deliveryFee + _platformFee - promoSaving - shopOfferDisc - shopDeliveryWaived;   /* U7c2 */
   const loyaltyDisc = _calcLoyaltyDiscount(baseTotal);
   orderTotal        = Math.max(0, baseTotal - loyaltyDisc);
 
@@ -2237,7 +2239,8 @@ function updateTotals(){
 
   const delivEl = document.getElementById("summaryDelivery");
   if(delivEl){
-    if(deliveryFee > 0){ delivEl.className = "os-row-val"; delivEl.textContent = "KES " + deliveryFee.toLocaleString(); }
+    if(deliveryFee > 0 && (_shopOffer.state === 'ok' && _shopOffer.deliveryWaived > 0)){ delivEl.className = "os-free"; delivEl.textContent = "FREE — shop offer"; }
+    else if(deliveryFee > 0){ delivEl.className = "os-row-val"; delivEl.textContent = "KES " + deliveryFee.toLocaleString(); }
     else { delivEl.className = "os-free"; delivEl.textContent = "FREE"; }
   }
 }

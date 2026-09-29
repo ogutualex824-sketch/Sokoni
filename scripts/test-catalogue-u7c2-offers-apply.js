@@ -200,8 +200,8 @@ const FLASH = { type: 'percentage', template: 'flashSale', status: 'live', name:
   /* AP7 — the card session's wiring (index.js scope) */
   ck('AP7 card session: offers per shop before the promo; no promo stacking on a shop offer; session + order carry it; redemptions on payment',
     /_SO\.quoteShopOffers\(db, \{ shopId: _sid, lines: sessionItems\.filter/.test(wh) && /else if \(_promoCode && offerDiscount > 0\)/.test(wh)
-    && /const _grossTotal = Math\.round\(serverSubtotal - offerDiscount \+ safeDeliveryFee\)/.test(wh)
-    && /offerDiscount,\s+\/\* U7c2: server-applied shop offers/.test(wh) && /\.\.\.\(\(sessionDoc && Number\(sessionDoc\.offerDiscount\) > 0\) \? \{\s+offerDiscount: Math\.max\(0, Math\.round\(Number\(sessionDoc\.offerDiscount\)/.test(wh)
+    && /const _grossTotal = Math\.round\(serverSubtotal - offerDiscount \+ safeDeliveryFee - deliveryWaived\)/.test(wh)   /* + a waived delivery (owner decision 2, AP12) */
+    && /offerDiscount,\s+\/\* U7c2: server-applied shop offers/.test(wh) && /\.\.\.\(\(sessionDoc && \(Number\(sessionDoc\.offerDiscount\) > 0 \|\| Number\(sessionDoc\.deliveryWaived\) > 0\)\) \? \{\s+offerDiscount: Math\.max\(0, Math\.round\(Number\(sessionDoc\.offerDiscount\)/.test(wh)
     && /recordRedemptionsForOrder\(db, \{ orderId, shopId: k, buyerUid: sessionDoc\.uid \|\| null, applied: _byShop\[k\], source: "card" \}\)/.test(wh)
     && /exports\.shopOfferQuote\s+= _shopOffers\.shopOfferQuote;/.test(wh));
 
@@ -219,7 +219,7 @@ const FLASH = { type: 'percentage', template: 'flashSale', status: 'live', name:
   /* AP10 — checkout's display is the server's figure, and the cart hand-off is a code, never a discount */
   const ckh = src('checkout.html');
   ck('AP10 checkout shows the server quote (shopOfferQuote) in its total and takes a CODE from the cart, never a percentage',
-    /httpsCallable\('shopOfferQuote'\)/.test(ckh) && /- promoSaving - shopOfferDisc;/.test(ckh) && /id="shopOfferRow"/.test(ckh)
+    /httpsCallable\('shopOfferQuote'\)/.test(ckh) && /- promoSaving - shopOfferDisc - shopDeliveryWaived;/.test(ckh) && /id="shopOfferRow"/.test(ckh)
     && /_appliedPromoCode = String\(saved\.code\)\.trim\(\)\.toUpperCase\(\);\s+promoDiscount = 0;/.test(ckh) && !/promoDiscount = saved\.discount;/.test(ckh));
 
   /* AP11 — an OFFLINE sale replayed after an offer went live is recorded at what the customer paid, never lost */
@@ -244,6 +244,24 @@ const FLASH = { type: 'percentage', template: 'flashSale', status: 'live', name:
   ck('AP11 offline replay: a shelf-price queued sale is recorded as paid (offerSkipped, no redemption); one showing the offer gets it; an outage never drops a queued sale — but still refuses a live one',
     ap11.shelf === 'ok' && ap11.withOffer === 'ok' && ap11.downOffline === 'ok' && /^failed-precondition \| The shop's offers could not be checked/.test(ap11.downLive || '')
     && JSON.stringify(ap11.totals) === JSON.stringify([[67500, null], [75000, 'offline_replay'], [75000, 'offline_replay']]) && ap11.reds === 1, ap11);
+
+  /* AP12 — owner decision (2026-09-29): free delivery applies on the CARD rail too, shop-funded */
+  let ap12 = {};
+  try {
+    await reset({ fd: { type: 'freeDelivery', template: 'freeDelivery', status: 'live', name: 'Free delivery over 1,000', minSpend: 1000 } });
+    ap12.one = await SO.quoteForCaller(db, { uid: 'buyer1', data: { deliveryFee: 300, items: [{ productId: 'mouse', qty: 2 }] } });
+    ap12.below = await SO.quoteForCaller(db, { uid: 'buyer1', data: { deliveryFee: 3000, items: [{ productId: 'mouse', qty: 2 }] } });
+    await db.doc('products/other').set({ name: 'Other', price: 2000, stock: 5, sellerUid: B, shopId: B, status: 'active', isVisible: true });
+    ap12.two = await SO.quoteForCaller(db, { uid: 'buyer1', data: { deliveryFee: 300, items: [{ productId: 'mouse', qty: 2 }, { productId: 'other', qty: 1 }] } });
+  } catch (e) { ap12.err = e.message; }
+  ck('AP12 free delivery on every rail: the shown fee is waived (single shop, goods ≥ fee); the card session charges goods + 0 and the order keeps the rider fee so settlement takes it from the SHOP',
+    ap12.one && ap12.one.deliveryWaived === 300 && ap12.one.shops[0].applied.some((a) => a.kind === 'delivery')
+    && ap12.below && ap12.below.deliveryWaived === 0 && ap12.two && ap12.two.deliveryWaived === 0
+    && /deliveryFee: _single \? safeDeliveryFee : 0/.test(wh) && /\(serverSubtotal - _disc\) >= safeDeliveryFee/.test(wh)
+    && /Math\.round\(serverSubtotal - offerDiscount \+ safeDeliveryFee - deliveryWaived\)/.test(wh)
+    && /deliveryWaived: Math\.round\(Number\(sessionDoc\.deliveryWaived\)\), deliveryPaidByBuyer: 0/.test(wh)
+    && /deliveryFee:\s+Number\(\(sessionDoc && sessionDoc\.deliveryFee\) \|\| 0\)/.test(wh),
+    { one: ap12.one && ap12.one.deliveryWaived, below: ap12.below && ap12.below.deliveryWaived, two: ap12.two && ap12.two.deliveryWaived, err: ap12.err });
 
   /* AP8 — Quick Charge cannot masquerade as the catalogue */
   let ap8 = {};

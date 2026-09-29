@@ -567,18 +567,26 @@ async function quoteForCaller(db, { uid, data }) {
   const byShop = {};
   lines.forEach((l) => { const k = lineShopOf(l); (byShop[k] = byShop[k] || []).push(l); });
   const shops = [];
+  /* The delivery fee the page is showing (display only — the charge re-resolves it). A free-delivery offer waives it
+     under the SAME rule the card session applies: one shop, and the goods paid for cover the fee. */
+  const shownDelivery = data.channel === 'till' ? 0 : Math.max(0, _n(data.deliveryFee));
+  const single = Object.keys(byShop).length === 1;
   for (const k of Object.keys(byShop)) {
     const sub = byShop[k].reduce((s, l) => s + _n(l.unitPrice) * _n(l.qty, 1), 0);
-    const q = await quoteShopOffers(db, { shopId: k, lines: byShop[k], deliveryFee: 0, buyerUid: uid,
+    const q = await quoteShopOffers(db, { shopId: k, lines: byShop[k], deliveryFee: single ? shownDelivery : 0, buyerUid: uid,
       fulfilment: data.fulfilment });
     if (q.unavailable) throw new HttpsError('failed-precondition', 'The shop\'s offers could not be checked just now.');
     const applied = (q.applied || []).filter((a) => a.kind !== 'delivery');
-    shops.push({ shopId: k, subtotal: sub, discount: q.discount, total: Math.max(0, sub - q.discount),
-      applied: applied.map((a) => ({ id: a.id, label: a.label, type: a.type, amount: a.amount })),
+    const free = (q.applied || []).filter((a) => a.kind === 'delivery')[0];
+    const deliveryWaived = (single && free && shownDelivery > 0 && (sub - q.discount) >= shownDelivery) ? shownDelivery : 0;
+    if (deliveryWaived) applied.push({ id: free.id, label: free.label, type: free.type, amount: deliveryWaived, kind: 'delivery' });
+    shops.push({ shopId: k, subtotal: sub, discount: q.discount, total: Math.max(0, sub - q.discount), deliveryWaived,
+      applied: applied.map((a) => ({ id: a.id, label: a.label, type: a.type, amount: a.amount, kind: a.kind || 'discount' })),
       lines: byShop[k].map((l) => ({ productId: l.productId, qty: l.qty, unitPrice: l.unitPrice, agreedPrice: !!l.offerId })) });
   }
   const subtotal = shops.reduce((s, x) => s + x.subtotal, 0), discount = shops.reduce((s, x) => s + x.discount, 0);
-  return { ok: true, shops, subtotal, discount, total: Math.max(0, subtotal - discount) };
+  const deliveryWaived = shops.reduce((s, x) => s + (x.deliveryWaived || 0), 0);
+  return { ok: true, shops, subtotal, discount, deliveryWaived, total: Math.max(0, subtotal - discount) };
 }
 
 /* Internals, exported for certification and for the charge path. */

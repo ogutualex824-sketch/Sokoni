@@ -2671,13 +2671,27 @@ exports.createCheckoutSession = onCall(
        An unreadable offer store refuses the session rather than charging more than the cart showed. */
     const _SO = require("./shop-offers");
     let offerDiscount = 0;
+    let deliveryWaived = 0;
     const offersApplied = [];
-    for (const _sid of [...new Set(sessionItems.map(_SO.lineShopOf).filter(Boolean))]) {
+    const _offerShops = [...new Set(sessionItems.map(_SO.lineShopOf).filter(Boolean))];
+    for (const _sid of _offerShops) {
+      /* OWNER DECISION (2026-09-29): free delivery applies on EVERY payment rail — the payment method never changes the
+         commercial price. Here the fee is a pinned rider quote (RES-1) that the rider is still paid in full: the order
+         keeps that fee, so settlement (gross = total − deliveryFee) takes it from the SHOP — a shop-funded waiver, never
+         a platform one. Only for a single-shop cart (one pinned quote), and only while the goods the buyer pays for cover
+         the fee — below that the seller's gross would floor at 0 and the platform would silently fund the difference. */
+      const _single = _offerShops.length === 1;
       const _q = await _SO.quoteShopOffers(db, { shopId: _sid, lines: sessionItems.filter((l) => _SO.lineShopOf(l) === _sid),
-        deliveryFee: 0, buyerUid: request.auth.uid, fulfilment: String(fulfillmentType || "").toLowerCase() });
+        deliveryFee: _single ? safeDeliveryFee : 0, buyerUid: request.auth.uid, fulfilment: String(fulfillmentType || "").toLowerCase() });
       if (_q.unavailable) throw new HttpsError("failed-precondition", "The shop's offers could not be checked just now. Please try again.");
-      offerDiscount += Math.max(0, Math.round(Number(_q.discount) || 0));
+      const _disc = Math.max(0, Math.round(Number(_q.discount) || 0));
+      offerDiscount += _disc;
       (_q.applied || []).filter((a) => a.kind !== "delivery").forEach((a) => offersApplied.push({ id: a.id, label: a.label, type: a.type, kind: a.kind, amount: a.amount, shopId: _sid }));
+      const _free = (_q.applied || []).filter((a) => a.kind === "delivery")[0];
+      if (_single && _free && safeDeliveryFee > 0 && (serverSubtotal - _disc) >= safeDeliveryFee) {
+        deliveryWaived = safeDeliveryFee;
+        offersApplied.push({ id: _free.id, label: _free.label, type: _free.type, kind: "delivery", amount: safeDeliveryFee, shopId: _sid });
+      }
     }
 
     let promoDiscount = 0;
@@ -2761,7 +2775,7 @@ exports.createCheckoutSession = onCall(
     /* Discounts may never take the charge below KES 1 — the gateway cannot bill
        zero, and a free order must not silently become a KES 0 STK push. Trim the
        loyalty portion first (points are refundable; a promo code is not). */
-    const _grossTotal = Math.round(serverSubtotal - offerDiscount + safeDeliveryFee);   /* U7c2: the shop's offer is the price */
+    const _grossTotal = Math.round(serverSubtotal - offerDiscount + safeDeliveryFee - deliveryWaived);   /* U7c2: the shop's offer is the price; a waived delivery is shop-funded */
     let   _discount   = promoDiscount + loyaltyDiscount;
     if (_discount > _grossTotal - 1) {
       const _allowed = Math.max(0, _grossTotal - 1);
@@ -2803,6 +2817,7 @@ exports.createCheckoutSession = onCall(
       promoDiscount,
       offerDiscount,           /* U7c2: server-applied shop offers — recorded on payment, redeemed per order */
       offersApplied,
+      deliveryWaived,          /* free-delivery offer: the buyer is not charged; the order keeps the rider fee (shop-funded) */
       /* Settled by verifyPayment when this session is consumed — never here, or an
          abandoned checkout would burn the buyer's points. */
       loyaltyPoints,
@@ -2827,6 +2842,7 @@ exports.createCheckoutSession = onCall(
       promoDiscount:   promoDiscount || undefined,
       offerDiscount:   offerDiscount || undefined,
       offersApplied:   offersApplied.length ? offersApplied : undefined,
+      deliveryWaived:  deliveryWaived || undefined,
       promoError:      promoError || undefined,
       loyaltyDiscount: loyaltyDiscount || undefined,
       loyaltyPoints:   loyaltyPoints || undefined,
@@ -3072,9 +3088,11 @@ exports.verifyIntasendPayment = onRequest(
         orderTotal:      confirmedAmount,
         total:           confirmedAmount,
         /* U7c2: what the shop's offers took off — from the SERVER session only, never the client; written only when one applied */
-        ...((sessionDoc && Number(sessionDoc.offerDiscount) > 0) ? {
+        ...((sessionDoc && (Number(sessionDoc.offerDiscount) > 0 || Number(sessionDoc.deliveryWaived) > 0)) ? {
           offerDiscount: Math.max(0, Math.round(Number(sessionDoc.offerDiscount) || 0)),
           offersApplied: Array.isArray(sessionDoc.offersApplied) ? sessionDoc.offersApplied : [],
+          /* the buyer paid no delivery; deliveryFee above stays the rider's fee, so settlement charges it to the shop */
+          ...(Number(sessionDoc.deliveryWaived) > 0 ? { deliveryWaived: Math.round(Number(sessionDoc.deliveryWaived)), deliveryPaidByBuyer: 0 } : {}),
         } : {}),
         items:           resolvedItems,
         sellerUid,
