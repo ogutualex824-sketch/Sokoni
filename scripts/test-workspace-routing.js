@@ -39,7 +39,7 @@ const { makePageHarness } = require('./lib/page-harness.js');
 let pass = 0, fail = 0;
 const ck = (l, ok, d) => { say('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d !== undefined && d !== '' ? '   [' + String(typeof d === 'object' ? JSON.stringify(d) : d).slice(0, 180) + ']' : '')); ok ? pass++ : fail++; };
 const R = (f) => fs.readFileSync(Path.join(ROOT, f), 'utf8');
-const biz = (category) => ({ status: 'active', business: { category, source: 'application', lane: { hub: 'provider', entClass: null } } });
+const biz = (category) => ({ status: 'active', approvedAt: 1, business: { category, source: 'application', lane: { hub: 'provider', entClass: null } } });
 const routes = (h) => h.homes.map((x) => x.route).join(',');
 
 (async () => {

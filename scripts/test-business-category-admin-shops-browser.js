@@ -48,7 +48,7 @@ const PAGE = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewp
 </script></body></html>`;
 
 (async () => {
-  await db.doc('providers/p1').set({ name: 'Plumb Co', status: 'active', business: { category: null, source: 'application', lane: { hub: 'provider', entClass: null } } });
+  await db.doc('providers/p1').set({ name: 'Plumb Co', status: 'active', approvedAt: 1, business: { category: null, source: 'application', lane: { hub: 'provider', entClass: null } } });
   await db.doc('shops/legacyX').set({ sellerUid: 'lx', name: '<img src=x onerror=alert(1)>Old Duka', status: 'active', category: '<svg onload=alert(2)>' });
   await db.doc('shops/apprX').set({ sellerUid: 'ax', ownerId: 'ax', name: 'Approved Hardware', status: 'active', source: 'application_approval', applicationId: 'a1' });
   await db.doc('sellers/ax').set({ uid: 'ax', shopId: 'apprX', status: 'active' });

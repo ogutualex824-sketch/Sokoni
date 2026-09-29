@@ -1,3 +1,55 @@
+## [2026-09-29] - Capability slice 1: the workspace authority consumes the capability read model (route = category + approved capability)
+
+**Local only — NOT deployed. Branch `slice/c4-capability-consumer` on `4ad69bf` (worktree `C:/temp/sok-cap`).**
+Owner decisions 2026-09-29: this c4 lineage is the implementation line; `feat/integrations-control-center` stays the
+coordination/evidence line; **stamping remains prohibited** — nothing here writes a capability, migrates DG Wine or
+Latomi Gadgets, deletes anything, or deploys.
+
+### What changed
+- **Ported verbatim** from the coordination line (byte-identical, asserted): `functions/shared/business-capabilities.js`
+  (the C2 read model — vocabulary PRODUCTS / SERVICES / PRODUCTS_AND_SERVICES / UNCLASSIFIED / CONFLICT, the stamp schema
+  for `businesses/{id}.capabilities`, observe → propose → routing contract) and its dependency
+  `functions/shared/business-scope.js` (liveness = live status **and** protected approval evidence). Docs:
+  `docs/CAPABILITY_AUTHORITY_READ_MODEL.md`.
+- **`functions/business-workspace.js`** — `capabilityFor(db, uid)` (reads `sellers/{uid}`, `providers/{uid}`,
+  `businesses/{uid}`; read-only) runs first in `workspaceFor`:
+  - **CONFLICT refuses routing**: a registry document live by client-writable status alone, a stamp that disagrees with
+    the registry, or a malformed stamp → `state: CAPABILITY_CONFLICT`, `route: null`, the conflict codes named,
+    Overview + Settings only; `assertModule` refuses (`WORKSPACE_MODULE_PENDING_APPROVAL`); the home carries the entry
+    with no route and a review message, never a default dashboard.
+  - **PRODUCTS** (a live, approved seller, no live provider) → `merchant-v2.html`, AVAILABLE, modules OWN_WORKSPACE.
+    Before this slice such an account was "no approved business" because only `providers` was read.
+  - **PRODUCTS_AND_SERVICES** → **one business**: `merchant-v2.html` with `servicesWorkspace: true`, the category and its
+    service-module states kept for the Services side entry (owner rule: Double Business = Merchant V2 + Services).
+  - SERVICES / UNCLASSIFIED → the existing category path, unchanged. UNCLASSIFIED routes nowhere.
+  - An unreadable capability read is `readable: false` (named error) and the category path answers — unreadable is not
+    unclassified. Every answer, and every home, carries `capability` (classification + authority status + conflicts).
+- **Fixtures aligned with the producer** in 10 suites: `projectProvider` always writes `approvedAt`; the seeds wrote
+  `status: 'active'` alone, which under the evidence rule is exactly the client-writable-status defect the model refuses
+  (CHANGELOG C3: four production records are live that way). Each seed helper gained `approvedAt: 1`; no assertion
+  changed. `test-audit-category-dashboards` K6 copies two more pure files so the tool can still fail closed.
+  `test-business-capabilities` X3 now asserts the ONLY production importer is `business-workspace.js`.
+
+### Evidence (one Chromium at a time)
+`test-workspace-capability.js` **26/0** (the owner's seven proofs: existing category routing unchanged incl. healthcare;
+capability-aware routing for PRODUCTS and for both; UNCLASSIFIED and CONFLICT refuse, with controls that flip them;
+unstamped never routes by itself; valid / disagreeing / client-shaped stamps; unreadable ≠ unclassified; write log holds
+no capability write and the authority's source has no write call; verbatim port). Regression: business-workspace 30/0 ·
+workspace-gates 24/0 · workspace-routing 33/0 · healthcare-workspace 51/0 · accommodation-profile 6/0 ·
+projection-browser 29/0 · provider-dashboard-sidebar-browser 90/0 · business-category-admin-shops-browser 13/0 ·
+ent-availability 88/0 · ent-availability-browser 54/0 · ent-communications 76/0 · ent-journeys 49/0 ·
+entertainment-bookings 95/0 · provider-agreement-role 27/0 · provider-directory 40/0 · audit-category-dashboards 6/0 ·
+`audit-category-dashboards.js --gate` exit 0 with the generated matrix unchanged · verify-capability-consumers 18/0 ·
+business-capabilities 46/0. **Pre-existing, unrelated:** `test-entertainment-registry` 64/1 ("every panel op is a
+dispatcher handler") fails identically on the untouched `4ad69bf`.
+
+### Production consequence to decide before any deploy (not a defect of this slice)
+Under the evidence rule, the four production accounts whose provider/seller record is live by status alone (C3 census:
+John wa Pork, DJ Bvmbxno, King Bruce, the second KASS SHOP seller) would receive `CAPABILITY_CONFLICT` — no working
+dashboard until an admin decision writes real approval evidence. That is the rule doing its job; the owner decides
+whether to stamp them before or after this line ever ships. No Functions deploy from this line either way until the
+self-mint hotfix provenance is resolved.
+
 ## [2026-09-29] - SOKONI Points P1: every purchase earns; the till identifies the buyer, the server credits them
 
 **Local only — NOT deployed. Branch `slice/c4-points-p1` on `c59e0f2`.** Owner ask: the till cart, pos-checkout and

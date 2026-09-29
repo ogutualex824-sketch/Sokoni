@@ -52,7 +52,7 @@ const WEEK = {}; ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'satur
 const D = (n) => new Date(NOW + n * 86400e3).toISOString().slice(0, 10);
 
 async function seed(uid, doc) {
-  await db.doc(`providers/${uid}`).set(Object.assign({ name: uid, status: 'active', acceptsBookings: true }, doc));
+  await db.doc(`providers/${uid}`).set(Object.assign({ name: uid, status: 'active', approvedAt: 1, acceptsBookings: true }, doc));
   await db.doc(`applications/app_${uid}`).set({ uid, status: 'approved', role: doc && doc.healthcare ? 'health' : 'provider', category: 'x', decidedAt: 1 });
   await db.doc(`providerAvailability/${uid}`).set({ uid, modes: ['fixed_hours'], schedule: WEEK, appt: { enabled: true, durationMins: 60, maxDaysAhead: 90, minNoticeHours: 1, allowSameDay: true }, cap: {} });
   await db.doc(`users/${uid}`).set({ displayName: uid });

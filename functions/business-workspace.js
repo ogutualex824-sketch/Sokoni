@@ -34,6 +34,11 @@
  */
 
 const BCAT = require('./business-category');
+/* C2 (capability convergence): the capability authority READ MODEL — PRODUCTS / SERVICES / both, an APPROVED fact
+   observed from the registry documents (sellers, providers) and, once it exists, the stamp on businesses/{id}.
+   This module CONSUMES it: route = f(category, approved capability). It never derives capability from category,
+   and it never writes a capability. See docs/CAPABILITY_AUTHORITY_READ_MODEL.md. */
+const CAPS = require('./shared/business-capabilities');
 
 const STATE = Object.freeze({
   AVAILABLE: 'AVAILABLE', LOCKED: 'LOCKED', NOT_APPLICABLE: 'NOT_APPLICABLE', NOT_IMPLEMENTED: 'NOT_IMPLEMENTED',
@@ -200,7 +205,62 @@ function healthcareModules(category, hw, implementedOf) {
  * The workspace for one account, from server facts only. FAILS CLOSED: an unreadable fact yields fewer modules,
  * never more.
  */
+/**
+ * The account's capability, from server facts only (C2 read model). READ ONLY. An unreadable fact is reported as
+ * unreadable — never as UNCLASSIFIED, which is a different state: `readable:false` routes by the category path
+ * exactly as before and says so.
+ */
+async function capabilityFor(db, uid) {
+  try {
+    const [s, p, b] = await Promise.all(['sellers', 'providers', 'businesses'].map((c) => db.collection(c).doc(String(uid)).get()));
+    const rm = CAPS.readModel({ seller: s.exists ? (s.data() || {}) : null, provider: p.exists ? (p.data() || {}) : null,
+      business: b.exists ? (b.data() || {}) : null, applications: null, productCount: null });
+    return { readable: true, classification: rm.classification, proposed: rm.proposed, authorityStatus: rm.authorityStatus,
+      conflicts: rm.conflicts.map((c) => c.code + (c.capability ? ':' + c.capability : '')), routing: CAPS.resolveRouting(rm.classification) };
+  } catch (e) {
+    return { readable: false, classification: null, proposed: null, authorityStatus: null, conflicts: [], routing: null, error: String(e && e.message || e) };
+  }
+}
+
 async function workspaceFor(db, uid) {
+  const capability = await capabilityFor(db, uid);
+  const withCap = (w) => Object.assign(w, { capability, servicesWorkspace: w.servicesWorkspace === true });
+
+  /* CONFLICT refuses routing: the records disagree (a live-looking status with no approval evidence, a stamp that
+     disagrees with the registry, a malformed stamp). No working dashboard until a human resolves it — never a
+     default to provider or merchant. */
+  if (capability.readable && capability.classification === CAPS.CLASSIFICATION.CONFLICT) {
+    const mods = _moduleSet(STATE.PENDING_APPROVAL, 'CAPABILITY_CONFLICT');
+    mods.overview = { state: STATE.AVAILABLE, reason: null };
+    mods.settings = { state: STATE.AVAILABLE, reason: null };
+    const p = await db.collection('providers').doc(String(uid)).get();
+    const prov = p.exists ? (p.data() || {}) : {};
+    const category = p.exists ? BCAT.categoryOf(prov) : null;
+    return withCap({ found: true, category, label: category ? BCAT.label(category) : 'Awaiting review', route: null, state: 'CAPABILITY_CONFLICT',
+      reason: 'CAPABILITY_CONFLICT', conflicts: capability.conflicts,
+      message: 'Your business records need a SOKONI review before your workspace opens.', modules: mods, entitlement: { state: null, hub: null } });
+  }
+
+  /* PRODUCTS only (a live, approved seller with no live provider): the merchant workspace, whose own authority
+     decides its modules. Before C2 this account was "no approved business" because only providers were read. */
+  if (capability.readable && capability.classification === CAPS.CLASSIFICATION.PRODUCTS) {
+    return withCap({ found: true, category: null, label: 'My shop', route: 'merchant-v2.html', state: STATE.AVAILABLE, reason: null,
+      modules: _moduleSet(STATE.NOT_APPLICABLE, 'OWN_WORKSPACE'), entitlement: { state: null, hub: 'merchant' } });
+  }
+
+  const w = await _categoryWorkspace(db, uid);
+
+  /* PRODUCTS + SERVICES = ONE business: Merchant V2 with the Services workspace (owner decision). The category
+     path still supplies the category and the service-module states the Services side entry will render. */
+  if (capability.readable && capability.classification === CAPS.CLASSIFICATION.PRODUCTS_AND_SERVICES && w.found) {
+    return withCap(Object.assign(w, { route: 'merchant-v2.html', state: STATE.AVAILABLE, reason: null, servicesWorkspace: true }));
+  }
+  return withCap(w);
+}
+
+/* The category path — unchanged: what this authority did before C2, now reached only when the capability read
+   model did not already decide (SERVICES, UNCLASSIFIED, or an unreadable capability). */
+async function _categoryWorkspace(db, uid) {
   const snap = await db.collection('providers').doc(String(uid)).get();
   if (!snap.exists) {
     return { found: false, category: null, route: null, state: STATE.PENDING_APPROVAL, reason: 'NO_APPROVED_BUSINESS',
@@ -332,6 +392,7 @@ async function homeFor(db, uid, token) {
     const w = await workspaceFor(db, uid);
     if (w.found) {
       add({ kind: 'business', label: w.label || 'My business', category: w.category, state: w.state, route: w.route,
+        servicesWorkspace: w.servicesWorkspace === true, capability: w.capability ? w.capability.classification : null,
         message: w.message || (w.state === STATE.PENDING_APPROVAL ? (w.reason === 'UNCLASSIFIED' ? 'SOKONI is confirming what kind of business you are. You will get your workspace as soon as it is done.' : 'Your business is not active yet.') : null) });
     }
   } catch (_) { /* fall through — never invent a workspace */ }
@@ -372,4 +433,4 @@ const _h = {
   },
 };
 
-module.exports = { STATE, MODULES, MODULE_KEYS, CORE, PROFILES, PROFILE_OF, PROFILE_NOT_BUILT, ROUTE_OF, modulesForProfile, notBuiltFor, healthcareModules, workspaceFor, homeFor, assertModule, gateCalendarModule, gateIfProvider, _h };
+module.exports = { STATE, MODULES, MODULE_KEYS, CORE, PROFILES, PROFILE_OF, PROFILE_NOT_BUILT, ROUTE_OF, modulesForProfile, notBuiltFor, healthcareModules, workspaceFor, capabilityFor, homeFor, assertModule, gateCalendarModule, gateIfProvider, _h };

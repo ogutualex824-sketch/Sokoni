@@ -78,7 +78,7 @@ const itemsOf = async (calKey, month) => ((await get(`entAvailability/${calKey}/
 
 async function seedProvider(uid, opts) {
   const o = opts || {};
-  await db.doc(`providers/${uid}`).set({ name: uid, status: o.status || 'active', category: o.category || 'photographer', acceptsBookings: true });
+  await db.doc(`providers/${uid}`).set({ name: uid, status: o.status || 'active', approvedAt: 1, category: o.category || 'photographer', acceptsBookings: true });
   if (o.decided !== false) await db.doc(`applications/app_${uid}`).set({ uid, status: 'approved', role: 'provider', category: o.category || 'photographer' });
   await db.doc(`providerAvailability/${uid}`).set(cfgDoc(o.cfg));
   await db.doc(`providerServices/svc_${uid}`).set({ providerId: uid, name: 'Portrait session', price: 500000, fee: 0, deposit: 0, durationMins: 60, active: true });

@@ -74,7 +74,7 @@ const WEEK = {}; ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'satur
 
 async function seedProvider(uid, opts) {
   const o = opts || {};
-  await db.doc(`providers/${uid}`).set({ name: uid, status: o.status || 'active', category: o.category || 'photographer', acceptsBookings: true });
+  await db.doc(`providers/${uid}`).set({ name: uid, status: o.status || 'active', approvedAt: 1, category: o.category || 'photographer', acceptsBookings: true });
   if (o.decided !== false) await db.doc(`applications/app_${uid}`).set({ uid, status: 'approved', role: 'provider', category: o.category || 'photographer' });
   await db.doc(`providerAvailability/${uid}`).set({ uid, modes: ['fixed_hours'], schedule: WEEK, appt: { enabled: true, durationMins: 60, maxDaysAhead: 90, minNoticeHours: 1, allowSameDay: true }, cap: {} });
   await db.doc(`providerServices/svc_${uid}`).set({ providerId: uid, name: 'Wedding Photography', price: 3000000, fee: 0, deposit: 0, durationMins: 240, active: true });

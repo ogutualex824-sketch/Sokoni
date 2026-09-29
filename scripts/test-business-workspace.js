@@ -47,7 +47,7 @@ let pass = 0, fail = 0;
 const ck = (l, ok, d) => { say('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d !== undefined && d !== '' ? '   [' + String(typeof d === 'object' ? JSON.stringify(d) : d).slice(0, 180) + ']' : '')); ok ? pass++ : fail++; };
 const codeOf = async (p) => { try { await p; return null; } catch (e) { return (e.details && e.details.code) || e.code || e.message; } };
 const HE = class extends Error { constructor(c, m, d) { super(m); this.code = c; this.details = d; } };
-const seed = (uid, doc) => db.doc('providers/' + uid).set(Object.assign({ name: uid, status: 'active' }, doc));
+const seed = (uid, doc) => db.doc('providers/' + uid).set(Object.assign({ name: uid, status: 'active', approvedAt: 1 /* the producer (projectProvider) always stamps approvedAt; a status alone is client-writable */ }, doc));
 const biz = (category) => ({ business: { category, source: 'application', lane: { hub: 'provider', entClass: null } } });
 const st = (w, m) => (w.modules[m] || {}).state;
 

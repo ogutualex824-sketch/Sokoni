@@ -48,8 +48,8 @@ const providerDispatch = {
 };
 
 (async () => {
-  await db.doc('providers/hc1').set({ name: NAMES.hc1, status: 'active', healthcare: { category: 'facility', source: 'admin' } });
-  await db.doc('providers/ph1').set({ name: NAMES.ph1, status: 'active', category: 'photographer' });
+  await db.doc('providers/hc1').set({ name: NAMES.hc1, status: 'active', approvedAt: 1, healthcare: { category: 'facility', source: 'admin' } });
+  await db.doc('providers/ph1').set({ name: NAMES.ph1, status: 'active', approvedAt: 1, category: 'photographer' });
   const H = makePageHarness({ db, root: ROOT, callables: { providerDispatch } });
   await H.start();
   _base = H.BASE;

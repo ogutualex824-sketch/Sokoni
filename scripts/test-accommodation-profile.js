@@ -72,7 +72,7 @@ async function errCode(p) { try { await p; return null; } catch (e) { return (e.
     const today = CORE.dateOf(REAL_NOW); const D = CORE.addDays(today, 10);
     const WEEK = {}; ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].forEach((d) => { WEEK[d] = { closed: false, periods: [{ open: '08:00', close: '20:00' }], breaks: [] }; });
     const seed = async (uid, category, svcName) => {
-      await db.doc(`providers/${uid}`).set({ name: uid, status: 'active', category, acceptsBookings: true, business: { category, source: 'application' } });
+      await db.doc(`providers/${uid}`).set({ name: uid, status: 'active', approvedAt: 1, category, acceptsBookings: true, business: { category, source: 'application' } });
       await db.doc(`applications/app_${uid}`).set({ uid, status: 'approved', role: 'provider', category });
       await db.doc(`providerAvailability/${uid}`).set({ uid, modes: ['fixed_hours'], schedule: WEEK,
         appt: { enabled: true, durationMins: 60, bufferMins: 0, travelMins: 0, maxDaysAhead: 90, minNoticeHours: 1, allowSameDay: true }, cap: {} });
