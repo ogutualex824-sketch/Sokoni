@@ -104,14 +104,23 @@ function normaliseOffer(input, ownership) {
     if (v < 0) throw new HttpsError('invalid-argument', `${k} cannot be negative.`);
     rec[k] = v;
   }
-  if (rec.type === 'percentage' && (rec.percent === undefined || rec.percent > 100)) {
+  /* U7c1 (2026-09-29): a DRAFT may be incomplete — the merchant saves it to finish later. That is
+     safe because a draft can never price a basket: isLive() refuses every status but live/active,
+     and resolveOfferForCharge only ever reaches offers through resolve(). A percent above 100 is
+     refused whatever the status, and every other status still needs its price field. */
+  if (rec.type === 'percentage' && rec.percent !== undefined && rec.percent > 100) {
     throw new HttpsError('invalid-argument', 'percent must be between 0 and 100.');
   }
-  if (rec.type === 'bundle' && rec.bundlePrice === undefined) {
-    throw new HttpsError('invalid-argument', 'A bundle needs a bundlePrice.');
-  }
-  if (rec.type === 'fixed' && rec.amount === undefined) {
-    throw new HttpsError('invalid-argument', 'A fixed offer needs an amount.');
+  if (rec.status !== 'draft') {
+    if (rec.type === 'percentage' && rec.percent === undefined) {
+      throw new HttpsError('invalid-argument', 'percent must be between 0 and 100.');
+    }
+    if (rec.type === 'bundle' && rec.bundlePrice === undefined) {
+      throw new HttpsError('invalid-argument', 'A bundle needs a bundlePrice.');
+    }
+    if (rec.type === 'fixed' && rec.amount === undefined) {
+      throw new HttpsError('invalid-argument', 'A fixed offer needs an amount.');
+    }
   }
 
   for (const k of ['freeItemId', 'stacking', 'fulfilment', 'startsAt', 'endsAt',

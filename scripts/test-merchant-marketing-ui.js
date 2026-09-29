@@ -117,7 +117,10 @@ window.__mount = function (shopId) {
   if (window.__ui) { try { window.__ui.destroy(); } catch(e){} window.__ui = null; }
   const h = document.getElementById('native-marketing');
   h.innerHTML = '';
-  window.__ui = SokoniMerchantMarketing.mount(h, window.__ctx(shopId));
+  /* SUPERSEDED 2026-09-29 (U7c1): Marketing now OPENS ON OFFERS (owner: "marketing is the central location" — Offers
+     is its first tab). This suite certifies the CAMPAIGNS / PROMOTIONS / ADS surfaces, so it opens there explicitly —
+     the tab the shell's #marketing link would otherwise land on is asserted by test-marketing-offers-browser MB1. */
+  window.__ui = SokoniMerchantMarketing.mount(h, Object.assign(window.__ctx(shopId), { initialTab: 'campaigns' }));
 };
 window.__reset = reset;
 </` + `script></body></html>`;

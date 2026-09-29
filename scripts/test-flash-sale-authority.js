@@ -434,9 +434,13 @@ try {
 } catch (_) { lsAll = []; }
 ck('F-2 NOT started — the localStorage rail is still present and untouched',
    lsAll.length >= 6, lsAll.length + ' files still reference sokoniFlashSales');
-ck("F-2 NOT started — flash-sale route is still kind:'seller'",
-   /id:'flash-sale'[\s\S]{0,120}kind:'seller'/.test(R('sokoni-merchant-routes.js')),
-   'route flip belongs to F-2');
+/* SUPERSEDED 2026-09-29 (U7c1, re-read as this tripwire asks): the flash-sale ROUTE is gone, not flipped. Flash sale is
+   now an offer TYPE inside Marketing › Offers on the one merchant offer store (shopOffers); #flash-sale is an alias
+   that opens a new flash sale there. mktFlashSales is no longer written by any merchant-v2 surface — asserted here so
+   the old iframe route cannot quietly return. */
+ck("F-2 SUPERSEDED by U7c1 — no flash-sale route; #flash-sale aliases to Marketing",
+   !/id:'flash-sale'/.test(R('sokoni-merchant-routes.js')) && /'flash-sale':'marketing'/.test(R('sokoni-merchant-routes.js')),
+   'flash sale is a shopOffers type in Marketing');
 
 console.log('\n' + '='.repeat(74));
 console.log('  ' + pass + ' passed, ' + fail + ' failed');

@@ -62,6 +62,8 @@
     stayPackage: { type:'bundle',       label:'Stay package', icon:'🏨' },
     servicePack: { type:'bundle',       label:'Service package', icon:'💇' },
     spendSave:   { type:'spendAndSave', label:'Spend and save', icon:'💸' },
+    /* U7c1 (2026-09-29): the freeItem TYPE existed with no template, so no merchant could make one. */
+    freeGift:    { type:'freeItem',     label:'Free gift',    icon:'🎀' },
   };
 
   var DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];

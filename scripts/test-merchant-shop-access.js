@@ -179,7 +179,10 @@ console.log('\nPART D — the shell wiring, and no silent deletion\n');
     'availability', 'devices', 'products', 'receipts', 'staff', 'messages', 'marketing',
     'flash-sale', 'kra-tax', 'stories', 'disputes', 'customers', 'shop', 'pos', 'deliveries',
     'returns', 'plan', 'minishop', 'fulfilment', 'riders', 'verification', 'pos-setup', 'home'];
-  const missing = EXPECTED.filter(id => !C.ROUTES.some(r => r.id === id));
+  /* SUPERSEDED 2026-09-29 (U7c1, owner): Flash Sale is no longer a sidebar route — it is an offer type inside
+     Marketing › Offers, and #flash-sale is an ALIAS that opens it there. An id that still RESOLVES through the
+     registry is still reachable, so it is not a removed button; an id that resolves nowhere still fails here. */
+  const missing = EXPECTED.filter(id => !C.ROUTES.some(r => r.id === id) && !(C.resolve && C.resolve(id)));
   ck('D7  no merchant button was removed by this fix', missing.length === 0, missing.join(','));
 
   ck('D8  the sidebar still renders FROM the contract (no private list)',

@@ -85,13 +85,8 @@
        mount but be unreachable, which is the "button with no destination" this file exists
        to prevent, inverted. The rules live in sokoni-promotion-model.js; this route only
        opens the surface that edits them. */
-    { id:'offers', name:'Offers', icon:'🎁', tier:'primary',
-      kind:'native',
-      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
-      mobile:true, desktop:true, activeKey:'offers',
-      note:'Bundles, buy-X-get-Y, happy hours, spend-and-save. Composes and previews through ' +
-           'SokoniPromotionModel; no offer store is wired yet, and the surface says so rather ' +
-           'than appearing to save into nothing.' },
+    /* U7c1 (2026-09-29): Offers is no longer its own route. It is the first tab of MARKETING, on the
+       one merchant offer store (shopOffers). #offers still works — see ALIASES. */
 
     { id:'sell', name:'Sell', icon:'💳', tier:'primary',
       kind:'native',
@@ -233,7 +228,7 @@
            '(seller.html#messages), whose inbox lived in localStorage.sokoniMessages — a thread read ' +
            'on one device stayed unread on another.' },
 
-    { id:'marketing', name:'Marketing', icon:'📣', tier:'more',
+    { id:'marketing', name:'Marketing', icon:'📣', tier:'primary',
       kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'marketing',
@@ -298,10 +293,8 @@
       note:'src resolves at click time from the canonical claimed-shop record (window.__miniShopUrl): ' +
            'claimed -> /shop/<handle>, unclaimed -> claim flow. Also reachable from the header button.' },
 
-    { id:'flash-sale', name:'Flash Sale', icon:'⚡', tier:'more',
-      kind:'seller', sec:'flash',
-      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
-      mobile:true, desktop:true, activeKey:'flash-sale' },
+    /* U7c1: Flash Sale is an OFFER TYPE inside Marketing › Offers, not a sidebar entry (owner, 2026-09-29).
+       #flash-sale still works — see ALIASES — and opens a new flash sale. */
 
     { id:'kra-tax', name:'KRA Tax', icon:'🧾', tier:'more',
       kind:'native',
@@ -735,7 +728,7 @@
        a merchant thinks "what I sell" and "what deal I run on it" in the same breath.
        PRIMARY_ORDER is an explicit list, not a tier filter, so a route declared with
        tier:'primary' and omitted here mounts but never appears — present and unreachable. */
-    'dashboard', 'plan', 'sell', 'products', 'offers', 'inventory', 'pos', 'orders', 'analytics', 'revenue',
+    'dashboard', 'plan', 'sell', 'products', 'marketing', 'inventory', 'pos', 'orders', 'analytics', 'revenue',
     'payments', 'till', 'deliveries', 'returns', 'receipts', 'staff', 'messages', 'disputes', 'settings'
   ];
 
@@ -756,7 +749,7 @@
     { key:'main',       label:'Main',
       ids:['reports','availability','shop','fulfilment','riders','verification','supply'] },
     { key:'growth',     label:'Growth',
-      ids:['marketing','flash-sale','stories','customers'] },
+      ids:['stories','customers'] },
     /* KRA Tax groups with Operations rather than Main: it is back-office compliance
        configured once alongside Devices and POS Setup, not a surface a merchant reads
        daily the way they read Reports. */
@@ -894,7 +887,10 @@
     'pos-settings':'pos',
     finance:     'revenue',      /* native Finance surface is now the Revenue destination */
     team:        'staff',
-    promotions:  'flash-sale',
+    /* U7c1: Offers, Flash Sale and Promotions are Marketing tabs; the shell remembers which tab was asked for. */
+    promotions:  'marketing',
+    offers:      'marketing',
+    'flash-sale':'marketing',
     store:       'shop',
     tax:         'kra-tax',
     'pos-printer-setup': 'pos-setup'

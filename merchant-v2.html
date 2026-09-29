@@ -893,7 +893,6 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      sokoni-receipt.js, already loaded above) over the shell's one order reader — so the
      receipt a merchant reads is the document the till prints, not a second layout. -->
 <script src="sokoni-merchant-receipts.js"></script>
-<script src="sokoni-merchant-flash.js"></script>
 <!-- The canonical metric authority. Every figure on Dashboard, Revenue, Analytics and
      Reports comes from here; this shell computes none of its own. Not deferred: the
      inline shell script reads it during first paint. -->
@@ -1370,7 +1369,12 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     location.assign(exitTarget(m));
   }
 
+  /* U7c1: Offers and Flash Sale are TABS of Marketing now. Their old ids still work (aliases) and
+     land on the right tab — a flash-sale link opens a new flash sale. */
+  var MARKETING_TAB_OF = { offers: ['offers', null], 'flash-sale': ['offers', 'flashSale'], promotions: ['promotions', null] };
   function go (id) {
+    var _mk = MARKETING_TAB_OF[id];
+    _mkPending = _mk ? { tab: _mk[0], template: _mk[1] } : { tab: null, template: null };
     var rid = CONTRACT.resolve(id);
     if (!rid) {
       console.error('[merchant-v2] unknown route "' + id + '" — not in the contract. Refused.');
@@ -2640,6 +2644,37 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      asynchronously and can change when the merchant switches branch, so "already
      mounted" is not grounds to reuse: if the shop differs, tear down and rebuild
      rather than refreshing a surface that would query the previous shop's data. */
+  /* ── U7c1 (2026-09-29): THE OFFERS CONTEXT — the one merchant offer store, shopOffers ─────────────
+     shopOfferList / shopOfferUpsert are the SERVER authority: ownership is derived there, the
+     'discount' capability is enforced there, and the create is idempotent on the draftToken the studio
+     mints. Products come from the shop's OWN canonical catalogue (listProducts), so an offer can only
+     name this shop's real items — there is no second product list and no typed-in item. */
+  var _mkPending = { tab: null, template: null };
+  function _offersCtx () {
+    var sc = _scope();
+    var list = _callable('shopOfferList'), upsert = _callable('shopOfferUpsert');
+    return {
+      scope: sc, shopName: _shopName(), onToast: toast,
+      /* Known capabilities decide the editor's read-only state; unknown leaves it to the server. */
+      canWrite: Array.isArray(S.capabilities) ? can('discount') : undefined,
+      initialTemplate: _mkPending.template,
+      listOffers: function () {
+        if (!sc || !sc.ok) return Promise.reject(new Error('No shop is active yet'));
+        return list({ shopId: sc.shopId }).then(function (r) { return (r && r.data && r.data.offers) || []; });
+      },
+      saveOffer: function (offer, o) {
+        if (!sc || !sc.ok) return Promise.reject(new Error('No shop is active yet'));
+        var p = { shopId: sc.shopId, offer: offer };
+        if (o && o.offerId) p.offerId = o.offerId; else if (o && o.draftToken) p.draftToken = o.draftToken;
+        return upsert(p).then(function (r) { return (r && r.data) || {}; });
+      },
+      listListings: function () {
+        if (!sc || !sc.ok || !window.SokoniMerchantData) return Promise.resolve([]);
+        return window.SokoniMerchantData.listProducts({ scope: sc, db: _mdb });
+      },
+    };
+  }
+
   var MODULES = {
     sell:       { global: 'SokoniMerchantSell',        ctx: _ctx },
     /* OFFERS & PROMOTIONS — the commercial layer over listings: bundles, buy-X-get-Y,
@@ -2651,9 +2686,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
        a campaign that evaporates on reload is worse served than one told plainly it is not
        persisted yet. pickListing is handed through so the bundle builder reads the
        merchant's real catalogue instead of keeping a second list of products. */
-    offers:     { global: 'SokoniMerchantOffers',      ctx: function () { return {
-                    scope: _scope(), shopName: _shopName(), onToast: toast,
-                  }; } },
+    /* U7c1 (2026-09-29): Offers is no longer its own route — it is the first tab of MARKETING (see
+       _offersCtx and the marketing ctx below). */
     /* SUPPLY — the merchant-to-merchant procurement workspace (J1, sokoni-merchant-supply.js).
        Its ctx is deliberately NOT _ctx: Supply is keyed on a BUSINESS, resolved through
        merchantContext(), which is a different identifier space from the shop scope every
@@ -2732,19 +2766,11 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
        shell's ONE canonical order reader, so a receipt shown here is the same document the
        till prints. It does not read posReceipts — the served rule is `allow write: if false`
        and reads are Cloud-Function-only, so a client read would be denied and swallowed. */
-    /* Flash Sale. The SERVER owns the campaign: commerceDispatch validates the window, the
-       prices and the stock limit and DERIVES discountPct and status itself. This surface
-       does no pricing math, writes nothing, and models no entitlement — a second answer to
-       "what is 30% of this price" is how two figures for one sale appear. */
-    'flash-sale': { global: 'SokoniMerchantFlash',  ctx: function () { return {
-                    scope: _scope(), db: _mdb, shopName: _shopName(),
-                    sales: function () { return _flashSales(); },
-                    callDispatch: function (payload) {
-                      return _callable('commerceDispatch')(payload)
-                        .then(function (r) { return (r && r.data) || r; });
-                    },
-                    go: go,
-                    onToast: toast }; } },
+    /* U7c1 (2026-09-29): FLASH SALE IS AN OFFER TYPE in Marketing › Offers, on the one offer store
+       (shopOffers). The old native module (sokoni-merchant-flash.js → mktFlashSales via commerceDispatch)
+       was never reachable — its route was an iframe of seller.html#flash — resolved products against the
+       POS mirror instead of the catalogue, and nothing that charges ever read it. Its entry and script are
+       removed so there is ONE flash sale, and it is the one checkout and the till will apply. */
     receipts:   { global: 'SokoniMerchantReceipts',    ctx: function () { return {
                     scope: _scope(), shopName: _shopName(),
                     shop: S.shop || null,
@@ -2783,6 +2809,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                     } }; } },
     marketing:  { global: 'SokoniMerchantMarketing',   ctx: function () { return {
                     scope: _scope(), shopName: _shopName(), origin: location.origin,
+                    /* U7c1: the Offers studio lives inside Marketing, on the ONE offer store */
+                    offers: _offersCtx, initialTab: _mkPending.tab, initialTemplate: _mkPending.template,
                     callList: _callable('getMinishopCampaigns'), callCreate: _callable('createMinishopCampaign'),
                     callPause: _callable('pauseMinishopCampaign'), callDelete: _callable('deleteMinishopCampaign'),
                     callPromos: _callable('miniShopGetPromotions'), callCreatePromo: _callable('miniShopCreatePromotion'),
@@ -2867,7 +2895,11 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 
     var key = _scopeKey(_scope());
     var cur = _mounted[id];
-    if (cur && cur.shopKey === key) { try { cur.ui.refresh && cur.ui.refresh(); } catch (_) {} return; }
+    if (cur && cur.shopKey === key) {
+      try { cur.ui.refresh && cur.ui.refresh(); } catch (_) {}
+      if (id === 'marketing' && _mkPending.tab && cur.ui.setTab) { try { cur.ui.setTab(_mkPending.tab, _mkPending.template); } catch (_) {} }
+      return;
+    }
     if (cur) { try { cur.ui.destroy && cur.ui.destroy(); } catch (_) {} _mounted[id] = null; }
     /* The panel is CLEARED before mounting, so an exception here left a permanently
        EMPTY black surface with no message — the merchant could not tell a crash from an

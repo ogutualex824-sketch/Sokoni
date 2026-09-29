@@ -171,7 +171,8 @@
     var S = {
       phase: 'loading',        /* loading | no_shop | error | ready */
       error: null,
-      tab: 'campaigns',        /* campaigns | promotions | ads */
+      /* U7c1 (2026-09-29): Marketing is the ONE home for offers — Offers is the first tab. */
+      tab: (ctx.initialTab === 'offers' || ctx.initialTab === 'campaigns' || ctx.initialTab === 'promotions' || ctx.initialTab === 'ads') ? ctx.initialTab : 'offers',
       campaigns: [],
       promotions: [],
       promoActiveOnly: true,
@@ -213,12 +214,39 @@
     }
 
     /* ── Render ───────────────────────────────────────────────────────────── */
+    /* THE OFFERS TAB. The studio is mounted ONCE into a node that is re-attached, never rebuilt, so a
+       half-built offer survives switching tabs and every Marketing repaint. It runs on the one offer
+       store (shopOffers) through ctx.offers — with no such ctx it says plainly that nothing persists. */
+    var offersNode = null, offersUI = null;
+    function offersHost() {
+      var OM = (typeof globalThis !== 'undefined' && globalThis.SokoniMerchantOffers) || null;
+      if (!offersNode) {
+        offersNode = (host.ownerDocument || document).createElement('div');
+        offersNode.className = 'mmk-sub';
+        if (OM && typeof OM.mount === 'function') {
+          var octx = typeof ctx.offers === 'function' ? ctx.offers() : {};
+          if (ctx.initialTemplate && !octx.initialTemplate) octx.initialTemplate = ctx.initialTemplate;
+          try { offersUI = OM.mount(offersNode, octx); } catch (e) {
+            offersNode.innerHTML = '<div class="mmk-state"><div class="ic">⚠️</div><div class="hd">Offers could not open</div>' + esc((e && e.message) || '') + '</div>';
+          }
+        } else {
+          offersNode.innerHTML = '<div class="mmk-state"><div class="ic">⚠️</div><div class="hd">Offers are unavailable</div>The offers module did not load.</div>';
+        }
+      }
+      return offersNode;
+    }
     function paint() {
+      if (S.tab === 'offers') {
+        host.innerHTML = '<div class="mmk">' + topHTML() + '<div class="mmk-body mmk-body--sub" data-mmk-sub></div></div>';
+        host.querySelector('[data-mmk-sub]').appendChild(offersHost());
+        return;
+      }
       host.innerHTML = '<div class="mmk">' + topHTML() + bodyHTML() + ctaHTML() + '</div>' + sheetHTML();
     }
 
     function topHTML() {
       return '<div class="mmk-top"><div class="mmk-tabs">' +
+        '<button class="mmk-tab' + (S.tab === 'offers' ? ' on' : '') + '" data-act="tab" data-t="offers">Offers</button>' +
         '<button class="mmk-tab' + (S.tab === 'campaigns' ? ' on' : '') + '" data-act="tab" data-t="campaigns">' +
           'Campaigns' + (S.campaigns.length ? ' · ' + S.campaigns.length : '') + '</button>' +
         '<button class="mmk-tab' + (S.tab === 'promotions' ? ' on' : '') + '" data-act="tab" data-t="promotions">' +
@@ -554,6 +582,7 @@
     function onClick(ev) {
       var el = ev.target && ev.target.closest ? ev.target.closest('[data-act]') : null;
       if (!el || !host.contains(el)) return;
+      if (offersNode && offersNode.contains(el)) return;      /* the Offers studio handles its own */
       var act = el.getAttribute('data-act');
       var i = parseInt(el.getAttribute('data-i'), 10);
       var v = el.getAttribute('data-v');
@@ -589,6 +618,7 @@
       'mmk-until': 'validUntil', 'mmk-code': 'code', 'mmk-adtitle': 'title', 'mmk-budget': 'budgetKES' };
     function onInput(ev) {
       var el = ev.target; if (!el || !FIELDS[el.id]) return;
+      if (offersNode && offersNode.contains(el)) return;
       S.form[FIELDS[el.id]] = el.value;
       var f = host.querySelector('.mmk-sh-f [data-act^="save-"]');
       if (!f) return;
@@ -603,11 +633,18 @@
     load();
 
     return {
-      refresh: load,
+      refresh: function () { if (offersUI && offersUI.refresh) offersUI.refresh(); return load(); },
       state: function () { return S; },
+      /* deep link from the shell: #offers, #flash-sale (a new flash sale), #promotions */
+      setTab: function (t, template) {
+        if (['offers', 'campaigns', 'promotions', 'ads'].indexOf(t) === -1) return;
+        S.tab = t; paint();
+        if (t === 'offers' && template && offersUI && offersUI.openTemplate) offersUI.openTemplate(template);
+      },
       destroy: function () {
         host.removeEventListener('click', onClick);
         host.removeEventListener('input', onInput);
+        if (offersUI && offersUI.destroy) { try { offersUI.destroy(); } catch (_) {} }
       },
     };
   }
