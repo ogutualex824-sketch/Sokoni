@@ -72,7 +72,8 @@ content, or reached nobody.
   case still asserts the canonical target. 8/0.
 - **Regression:** 50 suites run on the working tree and the pristine `7d469f9` tree.
   - Equal, except the superseded case above and the cart / checkout suites that inspect the **uncommitted** tree.
-    Those were re-run after the commit; see the follow-up entry.
+    Re-run after the commit (`80a201b`): `cart-category`, `cart-market-actions`, `cart-marketplace`,
+    `cart-product` and `cart-2-3-4` all **0 failed**; `checkout-fallback-total` **58/58**.
 
 **Still open (recorded):**
 - **Product-level KEBS / compliance verification authority:** there is no verifier, status or expiry, so the badge
