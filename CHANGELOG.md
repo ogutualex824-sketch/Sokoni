@@ -1,3 +1,16 @@
+## [2026-09-29] - HOSTING DEPLOYED: re-acknowledgement surface live at d108f6c (owner-authorized, exact command); one signed-out defect found on the deployed page, fixed locally (NOT deployed)
+
+Deployed 21:09:56Z from C:/temp/sok-reack (slice/reack-surface-on-live @ d108f6c): Hosting release 1790716196877000, version 9074367eed5d10b7,
+864 files (862 + the two new); version.json = d108f6c / v642 / dirty=false. Served bytes byte-identical to the candidate and to fd21e9b
+(html a474d0a6..., js 352c3eab...); /agreement-acknowledge 200 (was 404); /seller-terms and /track still 200. Rules release unchanged
+(b87c94e4, 20:43Z) and the 1,720-row Functions estate hash identical before/after (aa3099d04e13e606). The deploy process issued no
+Firestore read or write; no Kasindi record touched; applicationDecide not run. Release artefacts committed on the candidate (66216a7).
+**Live smoke (Chromium, automation flag off, signed out): page stays at boot** — production firebase.js publishes sokoniAuthReady ONLY
+from its three signed-in paths, so a signed-out visitor never gets the signal (a signed-in user does; no Firestore traffic, no errors).
+FIX (local, both lines, byte-identical d5bc87e3...): the page now takes the canonical SokoniAuthState.whenResolved (first auth state
+for everyone, already loaded) as the primary trigger, keeping the auth-ready event/promise; unit 21/0 + Chromium 14/0 on both lines.
+**The fix is NOT deployed — a second Hosting release needs its own authorization.** Rollback of d108f6c = version a3552ac70cd81400.
+
 ## [2026-09-29] - Hosting preflight for the re-acknowledgement surface (READ ONLY; deployment NOT authorized)
 
 docs/HOSTING_PREFLIGHT_REACK_SURFACE.md + docs/release-gates/hosting-preflight-reack.json. Live hosting = ff9d762 (fix/track-hub-on-93c5783,
