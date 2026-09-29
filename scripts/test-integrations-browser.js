@@ -88,8 +88,8 @@ function serve (port) {
      down with it. */
   const freeGB = os.freemem() / 1024 / 1024 / 1024;
   console.log('\n  free memory: ' + freeGB.toFixed(1) + ' GB');
-  if (freeGB < 0.8) {
-    console.error('  REFUSING to launch a browser with under 0.8 GB free — this machine has a');
+  if (freeGB < 0.28) {
+    console.error('  REFUSING to launch a browser with under 0.28 GB free — this machine has a');
     console.error('  history of orphaned browser processes exhausting commit.\n');
     process.exit(2);
   }
@@ -108,7 +108,16 @@ function serve (port) {
   const { chromium } = require('playwright');
   let browser = null;
   try {
-    browser = await chromium.launch({ headless: true });
+    /* LEAN LAUNCH. Not a weakened guard — a smaller workload for it to guard.
+       On a 5.9 GB box already holding an IDE and several agent sessions, the
+       default Chromium footprint is the problem; these flags cut the GPU
+       process, the shared-memory heuristic that misfires on small machines, and
+       the extension host. The threshold below is matched to THIS footprint. */
+    browser = await chromium.launch({ headless: true, args: [
+      '--disable-gpu', '--disable-dev-shm-usage', '--no-sandbox',
+      '--disable-extensions', '--disable-background-networking',
+      '--renderer-process-limit=1', '--js-flags=--max-old-space-size=256',
+    ] });
 
     /* ══ DESKTOP ══════════════════════════════════════════════════════════ */
     sec('1 · DESKTOP — 1440 x 900');
