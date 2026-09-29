@@ -1,3 +1,32 @@
+## [2026-09-29] - Kasindi repair preconditions: `priorDecisions` preservation on applicationDecide + Seller Agreement re-acknowledgement surface (built, tested; NOT deployed; Kasindi untouched)
+
+`docs/KASINDI_REPAIR_PRECONDITIONS.md`. Owner decisions on the [[KASINDI_REPAIR_CENSUS]]: proper user-facing re-acknowledgement
+(no hidden write); a real admin Auth account decides; server-side preservation of the superseded decision BEFORE any
+re-decision; vehicle = the c4 handler run locally under the manifest gate.
+**Preservation** — `functions/application-lifecycle.js` `priorDecisionsPatch` (exported `_internal`): `applicationDecide`
+appends the existing decision VERBATIM (`status, statusCanonical, decidedBy, decidedAt, decisionAppliedFor, projectionStatus,
+reviewReason, preservedAt, preservedBy, supersededBy`) to `priorDecisions` before overwriting `decidedBy`/`decidedAt`;
+dedupe on (decidedBy, decidedAt); nothing on a first decision. **Rules:** `priorDecisions` added to `noApplicationDecision()`
+keys; applications `update` now refuses an ADMIN's raw client write to it (server-only via applicationDecide); rules rebuilt.
+`sokoni-merchant-application.js` FORBIDDEN += priorDecisions. Suite `scripts/test-application-decision-preservation.js`
+**19/0** (REAL handler via `CallableFunction.run`: gate refuses before any write; the named admin's approval preserves
+`"reindex"` verbatim, writes `applicationDecisions/`, one audit, re-projects the provider; wallet/KES 50/stray sellers
+byte-identical; dedupe; pending → no priorDecisions).
+**Surface** — `agreement-acknowledge.html` + `sokoni-agreement-acknowledge.js` (UMD `eligible` / `buildAcknowledgement` /
+`mount`): signed-in user's OWN applications (`where uid ==`), agreement fetched from `/seller-terms` as the intake modal
+does, checkbox-gated, `updateDoc` of exactly `agreementAccepted:true, agreementVersion, agreementAcceptedAt:<now>,
+agreementAcknowledgedSurface`; version read from `sokoni-merchant-application.js` (no third copy; refuses to mount without
+one); never backdates, never creates an application, never writes decision keys; healthcare/advocate/event-organizer →
+pointed to their versioned instruments; success only after the write resolved. Loads `shared-header.js`, `noindex`.
+Suites: `test-agreement-reacknowledge-rules` (emulator, built ruleset) **15/0**; `test-agreement-acknowledge` **21/0**;
+`test-agreement-acknowledge-browser` (real page in Chromium, I/O seam) **14/0**. Pre-existing unchanged:
+decision-authority 21/0 · merchant-application 54/0 · business-category-rules 20/0 · business-capability-rules 24/0 ·
+admin-os-wiring 327/0 · business-approval-decision 40/0. Files: `functions/application-lifecycle.js`, `firestore.rules`,
+`firestore.rules.build`, `sokoni-merchant-application.js`, `agreement-acknowledge.html`, `sokoni-agreement-acknowledge.js`,
+four suites, the doc. Database: new server-only array `applications.priorDecisions`; new client field
+`agreementAcknowledgedSurface`. Security: history immutable to clients AND admin raw writes. No deploy; Kasindi's
+application, DJ Bvmbxno and every production record untouched.
+
 ## [2026-09-29] - Kasindi repair census (READ ONLY) + repair manifest for agreement + legitimate approval (NOT executed)
 
 `docs/KASINDI_REPAIR_CENSUS.md`, packet `docs/release-gates/kasindi-repair-census.json`, digest `c0b194f2…2d1e` (identifies the
