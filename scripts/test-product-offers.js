@@ -6,7 +6,7 @@
  * OWNER RULES (docs/PRODUCT_OFFERS.md): per-product opt-in · floor 50% · 24 h hold · the agreed qty only · commission
  * on the paid (agreed) amount.
  *
- * PROVES
+ * PROVES   (PO10 — stacking: loyalty may apply on an agreed price, a promo code may not; owner 2026-09-29)
  *   PO1 offers are refused where the seller has not opted in; signed-out and own-product are refused
  *   PO2 the floor and the ceiling: < 50% refused, ≥ list price refused; a valid offer is a server record + a note in
  *       the product conversation (the seller's merchant-v2 Messages)
@@ -151,6 +151,22 @@ function extractFinalize() {
     && /const _offerPrice = await require\("\.\/product-offers"\)\.offerResolver\(db, request\.auth\.uid, cartItems, Date\.now\(\)\)/.test(idx)
     && /const \{ unitPrice, offerId: _offerId \} = _offerPrice\(item, pid, qty, _catalogueUnit\)/.test(idx)
     && /product\.acceptOffers === true \? '<button onclick="openMakeOffer\(\)"/.test(pj) && !/localStorage[^\n]*sokoniOffers/.test(pj));
+
+  /* PO10 — stacking (owner 2026-09-29, hybrid): loyalty may stack on an agreed price; a promo code may not */
+  const POm = require(Path.join(FN, 'product-offers.js'));
+  const allOffer = POm.promoEligibility && POm.promoEligibility([{ unitPrice: 1800, qty: 2, offerId: 'x' }]);
+  const mixed = POm.promoEligibility && POm.promoEligibility([{ unitPrice: 1800, qty: 2, offerId: 'x' }, { unitPrice: 800, qty: 1 }]);
+  const none = POm.promoEligibility && POm.promoEligibility([{ unitPrice: 800, qty: 3 }]);
+  const idx2 = src('functions/index.js');
+  ck('PO10 a promo never discounts an agreed price (all-offer cart refused with the owner\'s wording; mixed cart → listed-price lines only); loyalty still uses the whole subtotal',
+    !!allOffer && allOffer.blocked === true && allOffer.message === 'Promo codes cannot be applied to custom offer prices.'
+    && mixed.blocked === false && mixed.eligibleSubtotal === 800 && /listed price only/.test(mixed.message) && none.eligibleSubtotal === 2400 && none.message === null
+    && /const _promoElig = require\("\.\/product-offers"\)\.promoEligibility\(sessionItems\)/.test(idx2)
+    && /orderAmountCents: Math\.round\(_promoElig\.eligibleSubtotal \* 100\)/.test(idx2)
+    /* an all-offer cart gets the owner's wording, not a generic refusal from the validator */
+    && /if \(_promoCode && _promoElig\.blocked\) \{\s*promoError = _promoElig\.message;/.test(idx2)
+    && /Math\.round\(serverSubtotal\) \* MAX_REDEEM_PCT/.test(idx2) && /_pOk\.note/.test(co),
+    { allOffer, mixed, none });
 
   Date.now = realNow;
   say(`\n${pass} passed, ${fail} failed`);

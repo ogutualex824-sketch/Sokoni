@@ -280,4 +280,25 @@ async function offerResolver(db, uid, rawItems, now) {
   };
 }
 
-module.exports = { _h, RULES, effectiveState, offerPriceForLine, offerResolver, offerIdOf };
+/* ═══ STACKING (owner 2026-09-29, hybrid) ═══════════════════════════════════════════════════════════════════════
+   LOYALTY points MAY apply on top of an agreed offer price (earned currency; they clear a liability). PROMO CODES may
+   NOT apply to agreed-price lines — an already-negotiated price plus a marketing code can sell at a loss. So a promo is
+   validated and capped against the subtotal of the LISTED-price lines only; a cart of nothing but agreed prices gets a
+   clear reason instead of a silently ignored code. */
+const PROMO_ON_OFFER_MESSAGE = 'Promo codes cannot be applied to custom offer prices.';
+
+/** Given server-priced lines ({ unitPrice, qty, offerId? }), the part of the subtotal a promo code may discount. */
+function promoEligibility(lines) {
+  let eligible = 0, offerLines = 0;
+  for (const l of lines || []) {
+    const t = Math.max(0, Number(l && l.unitPrice) || 0) * Math.max(0, Number(l && l.qty) || 0);
+    if (l && l.offerId) offerLines++; else eligible += t;
+  }
+  return {
+    eligibleSubtotal: Math.round(eligible), offerLines,
+    blocked: offerLines > 0 && eligible <= 0,
+    message: offerLines > 0 ? (eligible > 0 ? 'The promo code applies to items at their listed price only.' : PROMO_ON_OFFER_MESSAGE) : null,
+  };
+}
+
+module.exports = { _h, RULES, effectiveState, offerPriceForLine, offerResolver, offerIdOf, promoEligibility, PROMO_ON_OFFER_MESSAGE };

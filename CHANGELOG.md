@@ -1,3 +1,41 @@
+## [2026-09-29] - Offer stacking (owner decision): loyalty may apply on an agreed price; a promo code may not
+
+**Checkout, NOT deployed.** Branch `slice/c4-category-matrix`. This answers the question left open in T2b ("should
+promo codes and loyalty stack on an agreed offer price?"). The owner chose the **hybrid** rule:
+- **Loyalty points MAY apply on top of an agreed offer price.** They are earned currency, and redeeming them clears
+  a liability.
+- **A promo code may NOT discount an agreed-price line.** A negotiated price plus a marketing code can sell at a loss.
+
+**Built:**
+- **`product-offers.promoEligibility(lines)`** (pure): the part of the subtotal a promo may discount, which is the
+  listed-price lines only.
+- **`createCheckoutSession`** (the card path; the M-Pesa `product_order` path has no promo or loyalty) validates and
+  caps the code against that eligible subtotal:
+  - a cart of nothing but agreed prices gets the owner's wording, **"Promo codes cannot be applied to custom offer
+    prices."**, through the existing `promoError`;
+  - a mixed cart applies the code to the listed-price lines and says so (`promoApplied.note`, shown at checkout);
+  - loyalty is unchanged and still uses the whole subtotal (capped at 25%, as before).
+- The 50% offer floor already bounds how far a negotiation can go.
+
+**Tests:**
+- **`test-product-offers` PO10** covers the rule, its wiring in the session, the unchanged loyalty base and the
+  checkout note. The suite is **10/0**.
+- Sabotage: **3/3 caught.**
+  - The first run caught 2/3. The miss showed PO10 did not check that an all-offer cart gets the owner's wording; that
+    assertion is now added.
+
+**Regression** (38 suites that read `createCheckoutSession`, promo codes, `checkout.html` or product-offers; vs
+`0f5e032`): equal. The only differences are the dirty-tree suites, re-run after this commit.
+
+**UNPROVEN:**
+- Not deployed.
+- The full `createCheckoutSession` callable is not executed here (index.js's module-level dependencies). The rule is
+  proven as the pure helper plus its exact wiring.
+
+**Files:** `functions/product-offers.js`, `functions/index.js`, `checkout.html`, `scripts/test-product-offers.js`.
+**Database / API:** none, apart from an optional `promoApplied.note` in the session response.
+**Breaking:** a promo code no longer reduces agreed-price lines.
+
 ## [2026-09-29] - Universal catalogue U4: Remove ARCHIVES (never deletes); restore; the till follows; three hard-delete paths closed
 
 **merchant-v2 Products + sokoni-db + KASS admin tool, NOT deployed.** Branch `slice/c4-category-matrix`.

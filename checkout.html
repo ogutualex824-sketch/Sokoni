@@ -2774,7 +2774,9 @@ async function sendStkPush(){
       if (_dMsg && _appliedPromoCode) {
         if (_pOk) {
           _dMsg.innerHTML = `✅ <strong>${_esc(_pOk.code)}</strong> applied — you save KES ` +
-            Number(_pOk.discount || 0).toLocaleString();
+            Number(_pOk.discount || 0).toLocaleString() +
+            /* owner 2026-09-29: a promo never discounts an agreed offer price — the server says so when the cart has one */
+            (_pOk.note ? ` <span style="color:rgba(255,255,255,0.6)">(${_esc(_pOk.note)})</span>` : "");
           _dMsg.style.color = "#71ff00";
         } else if (_pErr) {
           _dMsg.textContent = "❌ " + _pErr;

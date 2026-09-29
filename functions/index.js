@@ -2641,21 +2641,28 @@ exports.createCheckoutSession = onCall(
     let promoApplied  = null;
     let promoError    = null;
     const _promoCode = String(promoCode || "").trim().toUpperCase();
-    if (_promoCode) {
+    /* STACKING (owner 2026-09-29): a promo code never discounts an AGREED offer price — it is validated and capped
+       against the listed-price lines only (product-offers.promoEligibility). Loyalty below is unaffected. */
+    const _promoElig = require("./product-offers").promoEligibility(sessionItems);
+    if (_promoCode && _promoElig.blocked) {
+      promoError = _promoElig.message;
+    } else if (_promoCode) {
       try {
         const { validatePromoCode } = require('./finos-utils');
         const _res = await validatePromoCode(db, {
           code:             _promoCode,
           buyerUid:         request.auth.uid,
-          orderAmountCents: Math.round(serverSubtotal * 100),
+          orderAmountCents: Math.round(_promoElig.eligibleSubtotal * 100),
         });
         if (_res.valid) {
-          /* Never let a discount exceed the goods value — delivery is still owed. */
+          /* Never let a discount exceed the goods value it applies to — delivery is still owed, and agreed-price
+             lines are not the promo's to discount. */
           promoDiscount = Math.min(
             Math.round((_res.discountCents || 0) / 100),
-            Math.round(serverSubtotal)
+            Math.round(_promoElig.eligibleSubtotal)
           );
-          promoApplied = { code: _res.promoCode, promoId: _res.promoId, discount: promoDiscount };
+          promoApplied = { code: _res.promoCode, promoId: _res.promoId, discount: promoDiscount,
+            ...(_promoElig.message ? { note: _promoElig.message } : {}) };
         } else {
           promoError = _res.error || "Promo code could not be applied";
         }
