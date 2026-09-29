@@ -1,3 +1,32 @@
+## [2026-09-29] - Security: posReceiveErpUpdate may only touch the key's own seller's documents
+
+**Function, NOT deployed.** Found during the U7 census.
+- `posReceiveErpUpdate` proved that the API key belonged to `body.sellerId`, and then:
+  - `po_received` updated `posPurchaseOrders/{body.poId}`;
+  - `fulfilment_update` updated `orders/{body.orderId}`;
+  - neither checked that the document belonged to that seller.
+- Any merchant holding a write-enabled key could therefore mark another shop's purchase order received, or rewrite
+  another shop's order `erpStatus` (broken access control on an admin-SDK path; rules do not apply there).
+
+**Fix** (`functions/pos-integrations-api.js`, `_assertErpTargetOwned`):
+- Each named document is read first. Purchase orders must carry `sellerId === key seller`. Orders must name that seller
+  in `sellerUid` / `sellerId` / `shopId`.
+  - `order.sellerUid` is buyer-written, so a lying buyer can at most let the seller they named annotate that buyer's
+    own order.
+- A missing document and a foreign document return the same "not found", so a key cannot probe for ids.
+- `erpStatus` is limited to a fixed list, and path-shaped ids are refused.
+- `stock_adjustment` and `price_update` remain no-op stubs (they build a query and never run it). When implemented,
+  they must use the same shop scoping.
+
+**Tests: `scripts/test-erp-update-tenant-scope.js`, 5/0** (the real HTTP handler).
+- Counterproof on the parent: **4 fail**. Seller A's key marked shop B's purchase order received and set shop B's order
+  to `cancelled`.
+- Sabotage: **5/5 caught.**
+- No other suite references this file.
+
+**Database:** none. **API:** a foreign or missing document now returns 422 "not found". **Breaking:** only for callers
+that were writing other shops' documents.
+
 ## [2026-09-29] - Universal catalogue U7a: the till refuses what the catalogue says is no longer for sale
 
 **POS function, NOT deployed.** Branch `slice/c4-category-matrix`.

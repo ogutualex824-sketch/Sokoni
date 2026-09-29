@@ -706,12 +706,28 @@ async function _deliverWebhook(wh, payload) {
   }
 }
 
+/* ── ERP target ownership (2026-09-29) ─────────────────────────
+   The API key proves WHICH seller is calling; each document it names must belong to that seller. A missing
+   document and someone else's document give the SAME answer, so a key cannot probe for other shops' ids. */
+const ERP_FULFILMENT_STATUSES = ['processing', 'packed', 'shipped', 'delivered', 'cancelled', 'on_hold'];
+async function _assertErpTargetOwned(collection, id, sellerId, ownersOf) {
+  if (typeof id !== 'string' || !id || id.includes('/') || id.length > 128) throw new Error('not found');
+  const snap = await db().collection(collection).doc(id).get();
+  const owners = snap.exists ? (ownersOf(snap.data() || {}) || []).filter((v) => typeof v === 'string' && v) : [];
+  if (!snap.exists || !owners.includes(String(sellerId))) {
+    const e = new Error('not found'); e.status = 404; throw e;
+  }
+}
+
 /* ── ERP update processor ──────────────────────────────────── */
 async function _processErpUpdate(type, sellerId, body, updateId) {
   switch (type) {
     case 'po_received': {
       /* Update purchase order status to 'received' and apply stock adjustments */
       if (!body.poId) throw new Error('poId required for po_received');
+      /* 2026-09-29: the key is pinned to sellerId, so the DOCUMENT must be too — before this, any merchant's
+         write-enabled key could mark another shop's purchase order received. */
+      await _assertErpTargetOwned('posPurchaseOrders', body.poId, sellerId, (d) => [d.sellerId]);
       await db().collection('posPurchaseOrders').doc(body.poId).update({
         status: 'received', erpUpdateId: updateId, receivedAt: TS(),
       });
@@ -740,8 +756,13 @@ async function _processErpUpdate(type, sellerId, body, updateId) {
     }
     case 'fulfilment_update': {
       if (!body.orderId) throw new Error('orderId required for fulfilment_update');
+      /* 2026-09-29: only an order naming THIS seller. order.sellerUid is buyer-written (advisory), so a lying buyer
+         can at most let the seller they named annotate that buyer's own order — never one shop another's. */
+      await _assertErpTargetOwned('orders', body.orderId, sellerId, (d) => [d.sellerUid, d.sellerId, d.shopId]);
+      const erpStatus = body.status || 'processing';
+      if (!ERP_FULFILMENT_STATUSES.includes(erpStatus)) throw new Error(`status must be one of: ${ERP_FULFILMENT_STATUSES.join(', ')}`);
       await db().collection('orders').doc(body.orderId).update({
-        erpStatus:    body.status || 'processing',
+        erpStatus:    erpStatus,
         erpUpdatedAt: TS(),
         erpUpdateId:  updateId,
       });
