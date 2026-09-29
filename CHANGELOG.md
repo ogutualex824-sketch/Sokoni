@@ -1,3 +1,82 @@
+## [2026-09-30] - Smart Customer Search: the till recognises the shop's customers, and a new customer is saved in one step
+
+**Local only — NOT deployed, NOT pushed. Branch `slice/c4-convergence` on `ef1e992`.**
+
+Owner asks:
+- "you just type number it guess correctly or maybe giving options"
+- "Type → recognize → suggest → select → save if new → attach to sale", with resolution, ownership, duplicate
+  prevention, normalisation and attachment all on the server.
+
+See `docs/SMART_CUSTOMER_SEARCH.md`.
+
+**Summary**
+- **One authority.** Customers live in `posCustomers`, scoped by shop through `pos-customer-scope`. There is no second
+  customer store.
+- **New callables:** `posCustomerSearch`, `posCustomerSave` and `posCustomerCard`, gated to this shop's till staff.
+- **Phone forms.** Every phone form maps to one key, via the existing wallet-engine normaliser.
+- **Search keys.** `searchKeys` holds phone prefixes, name-word prefixes and the customer code, so a suggestion is one
+  indexed query.
+- **Suggestions.**
+  - Only one exact full-number match is "suggested"; everything else is a choice list that says what matched.
+  - Phones are masked. Record ids are opaque (a hash, not the number).
+- **Saving.** A save finds a legacy record in any stored phone form, never duplicates it and never renames it. A save
+  that races is resolved in one transaction.
+- **The card.** It shows purchases, lifetime spend, last purchase and SOKONI points in one of three states:
+  `member` (the balance), `none` ("No account") or `unavailable` (`—`, never 0).
+- **The sale.** It names the attached customer from the shop's own record, not from what the caller typed.
+- **Sell (merchant-v2) and pos-checkout.** Both get type-ahead suggestions, save-new-and-attach and the customer card,
+  laid out for 390px and 1280px. A typed full number is handed to the existing SOKONI points lookup.
+
+**Defects found and fixed while testing**
+- A record id spelled from the phone (`shop_2547…`) would have un-masked every result. Ids are now opaque.
+- The `created` flag survived a retried transaction, so three racing saves all reported "created". It is now reset on
+  every attempt.
+
+**Files affected**
+- `functions/pos-customer-scope.js`
+- `functions/pos-zero-friction.js`: 3 callables, plus the sale's `custOnFile`
+- `functions/index.js`: 3 exports
+- `firestore.indexes.json`
+- `sokoni-merchant-sell.js`
+- `merchant-v2.html`: Sell ctx
+- `pos-checkout.html`
+- `docs/SMART_CUSTOMER_SEARCH.md`
+- New tests:
+  - `scripts/test-smart-customer-search.js`
+  - `scripts/test-smart-customer-sell-browser.js`
+  - `scripts/test-smart-customer-poscheckout-browser.js`
+
+**Database changes**
+- `posCustomers` gains `phoneKey`, `searchKeys`, `createdVia` and `createdBy` on records created or touched by these
+  callables.
+- New composite index: `posCustomers (sellerId, searchKeys CONTAINS)`.
+- No migration.
+
+**API changes:** 3 new callables. `posCompleteCheckout` now takes the sale record's `customer.name` / `customer.phone`
+from the owned record when a customer is attached.
+
+**Security**
+- The staff gate is the one used for points.
+- Another shop gets zero results, `permission-denied` or `not-found`, and cannot attach another shop's customer.
+  This is unchanged from before.
+- Phones are masked. Record ids are opaque. The residual brute-force risk is documented.
+
+**Breaking changes:** none.
+
+**Tests**
+- Server: 12/0
+- Sell browser: 8/0
+- pos-checkout browser: 6/0
+- Mutation controls: 15/15
+
+**Deploy (NOT done):** functions (`posCustomerSearch`, `posCustomerSave`, `posCustomerCard`, `posCompleteCheckout`),
+the index and hosting — each only on explicit owner authorisation.
+
+**Gaps**
+- Quick Charge customer attachment: its own slice, on the webhook path.
+- No `searchKeys` backfill without owner authorisation.
+- `merchantId`-only legacy records are not found.
+
 ## [2026-09-30] - Till payment labels: every label is a real IntaSend-proven payment, or it is refused
 
 **Local only — NOT deployed, NOT pushed. Branch `slice/c4-convergence` on `8b9ca72`.** Owner:

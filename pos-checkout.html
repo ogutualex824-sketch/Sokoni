@@ -429,6 +429,20 @@ input, select, textarea { background: var(--sur2); color: var(--txt); border-col
 .cust-points-row { font-size: 12px; color: var(--muted); margin-top: 4px; }
 .cust-clear { float: right; background: none; border: none; cursor: pointer; font-size: 14px; color: var(--muted); }
 .cust-clear:hover { color: var(--red); }
+/* Smart Customer Search (2026-09-30): suggestions under the box — full-width rows, 44px targets, names truncate */
+.cust-suggest { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.cust-suggest:empty { display: none; }
+.cs-found { font-size: 12px; font-weight: 700; color: var(--g); }
+.cs-note { font-size: 12px; color: var(--muted); }
+.cs-row { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: #fff; cursor: pointer; text-align: left; font: inherit; }
+.cs-row.sug { border-color: var(--g); background: #f1fbf3; }
+.cs-row:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.cs-row .nm { flex: 1; min-width: 0; font-weight: 700; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-row .mt { flex: 0 0 auto; font-size: 11px; color: var(--muted); text-align: right; }
+.cs-new { display: flex; gap: 6px; margin-top: 4px; }
+.cs-new input { flex: 1; min-width: 0; }
+.cust-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 4px; margin-top: 6px; font-size: 11px; color: var(--muted); }
+.cust-stats b { display: block; color: #1a1a1a; font-size: 12.5px; }
 
 /* Loyalty & coupon */
 .loyalty-section {
@@ -1144,9 +1158,11 @@ body.queue-mode .hotkey-bar      { display: none; }
       <!-- Customer lookup -->
       <div class="customer-section">
         <div class="customer-search-row">
-          <input type="text" class="cust-input" id="cust-input" placeholder="Phone / QR / Member ID (F3)" autocomplete="off">
+          <input type="text" class="cust-input" id="cust-input" placeholder="Phone, name, code or QR (F3)" autocomplete="off" aria-label="Find a customer by phone, name or customer code" aria-controls="cust-suggest">
           <button class="cust-scan-btn" onclick="Checkout.scanCustomer()" title="Scan customer QR">📷</button>
         </div>
+        <!-- Smart Customer Search (2026-09-30): this shop's own customers, recognised as you type — never picked silently -->
+        <div class="cust-suggest" id="cust-suggest" role="listbox" aria-live="polite"></div>
         <!-- Points P1 (2026-09-29): SOKONI-wide points for this buyer — identified by phone; the server credits them from the sale total -->
         <div class="customer-search-row" id="skp-row" style="margin-top:6px">
           <input type="text" class="cust-input" id="skp-phone" placeholder="SOKONI points — customer phone" inputmode="tel" autocomplete="off" aria-label="Customer phone for SOKONI points">
@@ -1674,6 +1690,7 @@ const Checkout = (() => {
     shiftId:           null,
     items:             [],
     customer:          null,
+    custSearch:        null,   /* Smart Customer Search: { q, state, results, suggested, term } */
     discount:          { type: 'pct', value: 0 },
     coupon:            null,
     loyaltyRedeem:     0,
@@ -1837,8 +1854,13 @@ const Checkout = (() => {
 
     /* Customer input listener */
     document.getElementById('cust-input').addEventListener('keydown', e => {
-      if (e.key === 'Enter') lookupCustomer(e.target.value.trim());
+      if (e.key !== 'Enter') return;
+      /* Enter takes the server's suggestion when there is exactly one; otherwise the QR / member-id lookup */
+      const c = _s.custSearch;
+      if (c && c.state === 'results' && c.suggested) { e.preventDefault(); pickCustomer(c.suggested); return; }
+      lookupCustomer(e.target.value.trim());
     });
+    document.getElementById('cust-input').addEventListener('input', e => _custSearch(e.target.value || ''));
 
     /* Split inputs */
     ['split-mpesa','split-cash','split-card'].forEach(id => {
@@ -2385,8 +2407,114 @@ const Checkout = (() => {
     _loadRecentPurchases(cust.id || cust.customerId || cust.uid || '');
   }
 
+  /* ── SMART CUSTOMER SEARCH (2026-09-30) ──────────────────────────────────────────────────────────────────────
+     Type → recognise → suggest → select → save if new → attach. posCustomerSearch / posCustomerSave / posCustomerCard
+     answer from this shop's own customers (posCustomers, the one customer authority). One exact full-number match is
+     offered as "Customer found ✓"; anything else is a list to choose from. Phones arrive masked. The sale sends only
+     WHICH customer; the server names them from the shop's own record. */
+  /* attribute-safe (the page's _e leaves quotes as-is, and these values land inside attributes too) */
+  function _escH(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function _kePhone(v) {
+    const d = String(v || '').replace(/[\s\-().+]/g, '');
+    if (/^254[17]\d{8}$/.test(d)) return d.slice(3); if (/^0[17]\d{8}$/.test(d)) return d.slice(1); if (/^[17]\d{8}$/.test(d)) return d;
+    return null;
+  }
+  let _csSeq = 0, _csTimer = null;
+  function _paintCustSuggest() {
+    const el = document.getElementById('cust-suggest'); if (!el) return;
+    const c = _s.custSearch || {};
+    if (c.state === 'searching') { el.innerHTML = '<div class="cs-note">Looking…</div>'; return; }
+    if (c.state === 'error') { el.innerHTML = '<div class="cs-note" style="color:var(--red)">' + _escH(c.error || 'Search is unavailable — you can still sell.') + '</div>'; return; }
+    if (c.state !== 'results') { el.innerHTML = ''; return; }
+    const rs = c.results || [];
+    if (!rs.length) {
+      const n = _kePhone(c.q);
+      el.innerHTML = !n ? '<div class="cs-note">No customer of this shop matches “' + _escH(c.q) + '”.</div>'
+        : '<div class="cs-note">New customer on 0' + _escH(n.slice(0, 3)) + ' ••• •' + _escH(n.slice(-3)) + '? Save them to this shop and add them to the sale.</div>' +
+          '<div class="cs-new"><input type="text" class="cust-input" id="cust-new-name" maxlength="80" autocomplete="off" placeholder="Customer name" aria-label="New customer name" value="' + _escH(c.name || '') + '">' +
+          '<button class="cust-scan-btn" id="cust-new-save" onclick="Checkout.saveNewCustomer()"' + (c.saving ? ' disabled' : '') + '>' + (c.saving ? 'Saving…' : 'Save') + '</button></div>';
+      return;
+    }
+    const by = { phone: 'phone', name: 'name', code: 'customer code' }[c.term] || '';
+    el.innerHTML = (c.suggested ? '<div class="cs-found" role="status">Customer found ✓</div>' : '<div class="cs-note">' + rs.length + ' match' + (rs.length === 1 ? '' : 'es') + ' by ' + _escH(by) + ' — choose one</div>') +
+      rs.map((r) => '<button class="cs-row' + (r.id === c.suggested ? ' sug' : '') + '" role="option" data-cid="' + _escH(r.id) + '">' +
+        '<span class="nm">' + _escH(r.name) + '</span><span class="mt">' + _escH(r.maskedPhone) + (r.code ? ' · ' + _escH(r.code) : '') + '<br>' +
+        Number(r.purchaseCount || 0) + ' purchase' + (r.purchaseCount === 1 ? '' : 's') + '</span></button>').join('');
+    el.querySelectorAll('.cs-row').forEach((b) => b.addEventListener('click', () => pickCustomer(b.getAttribute('data-cid'))));
+  }
+  function _custSearch(q) {
+    _s.custSearch = { q, state: 'idle' };
+    clearTimeout(_csTimer);
+    if (String(q).trim().length < 2) return _paintCustSuggest();
+    _csTimer = setTimeout(async () => {
+      const seq = ++_csSeq; _s.custSearch.state = 'searching'; _paintCustSuggest();
+      try {
+        const r = await firebase.functions().httpsCallable('posCustomerSearch')({ shopId: _resolveMerchantId(), q });
+        if (seq !== _csSeq || !_s.custSearch || _s.custSearch.q !== q) return;       /* a newer keystroke owns the list */
+        const d = (r && r.data) || {};
+        Object.assign(_s.custSearch, { state: 'results', results: d.results || [], suggested: d.suggested || null, term: d.term || null });
+      } catch (e) {
+        if (seq !== _csSeq) return;
+        _s.custSearch.state = 'error'; _s.custSearch.error = (e && e.message) || null;
+      }
+      _paintCustSuggest();
+    }, 250);
+  }
+  function pickCustomer(id) {
+    const c = _s.custSearch || {};
+    const hit = (c.results || []).find((r) => r.id === id);
+    if (hit) _attachSmartCustomer(hit, false, c.q);
+  }
+  async function saveNewCustomer() {
+    const c = _s.custSearch || {};
+    const name = ((document.getElementById('cust-new-name') || {}).value || '').trim();
+    c.name = name;
+    if (name.length < 2) { _toast('Type the customer\u2019s name to save them.', 'warning'); return; }
+    c.saving = true; _paintCustSuggest();
+    try {
+      const r = await firebase.functions().httpsCallable('posCustomerSave')({ shopId: _resolveMerchantId(), phone: c.q, name });
+      const d = (r && r.data) || {};
+      _attachSmartCustomer(d, !!d.created, c.q);
+    } catch (e) {
+      c.saving = false; _paintCustSuggest();
+      _toast((e && e.message) || 'The customer could not be saved.', 'error');
+    }
+  }
+  function _paintSmartCard(k, isNew) {
+    const last = k.lastPurchaseAt ? new Date(k.lastPurchaseAt).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) : 'None yet';
+    const pts = k.sokoni === 'member' ? Number(k.sokoniPoints || 0).toLocaleString() : (k.sokoni === 'none' ? 'No account' : '—');
+    const L = (v) => k.loading ? '…' : _escH(v);
+    document.getElementById('cust-name').textContent = k.name || 'Customer';
+    const tierEl = document.getElementById('cust-tier'); tierEl.textContent = ''; tierEl.className = 'cust-tier';
+    document.getElementById('cust-points').innerHTML = _escH(k.maskedPhone || '') + (k.code ? ' · ' + _escH(k.code) : '') + (isNew ? ' · saved to your customers' : '') +
+      '<div class="cust-stats"><div>Purchases<b>' + L(Number(k.purchaseCount || 0).toLocaleString()) + '</b></div>' +
+      '<div>Lifetime spend<b>' + L('KES ' + Number(k.totalSpent || 0).toLocaleString('en-KE', { maximumFractionDigits: 2 })) + '</b></div>' +
+      '<div>Last purchase<b>' + L(last) + '</b></div><div>⭐ SOKONI points<b>' + L(pts) + '</b></div></div>';
+  }
+  async function _attachSmartCustomer(card, isNew, typed) {
+    _s.customer = { id: card.id, name: card.name };        /* WHICH customer — the server names them from its own record */
+    _s.loyaltyRedeem = 0; _s.loyaltyData = null;
+    _s.custSearch = null; _paintCustSuggest();
+    document.getElementById('cust-input').value = '';
+    document.getElementById('loyalty-row').style.display = 'none';
+    _paintSmartCard(Object.assign({ loading: true }, card), isNew);
+    document.getElementById('customer-card').classList.add('visible');
+    _updateTotals();
+    _loadRecentPurchases(card.id);
+    /* a whole number was typed: hand it to the SOKONI points box, which looks the buyer up on the server */
+    const sp = document.getElementById('skp-phone');
+    if (_kePhone(typed) && sp && !sp.value.trim()) { sp.value = String(typed).trim(); pointsLookup(); }
+    try {
+      const r = await firebase.functions().httpsCallable('posCustomerCard')({ shopId: _resolveMerchantId(), customerId: card.id });
+      if (_s.customer && _s.customer.id === card.id) _paintSmartCard(Object.assign({}, card, (r && r.data) || { sokoni: 'unavailable' }), isNew);
+    } catch (_) {
+      if (_s.customer && _s.customer.id === card.id) _paintSmartCard(Object.assign({}, card, { sokoni: 'unavailable' }), isNew);
+    }
+  }
+
   function clearCustomer() {
     _s.customer = null;
+    _s.custSearch = null; _paintCustSuggest();
     _s.loyaltyRedeem = 0;
     _s.loyaltyData   = null;
     document.getElementById('customer-card').classList.remove('visible');
@@ -4273,6 +4401,8 @@ const Checkout = (() => {
     addItem, removeItem, changeQty, clearSearch,
     /* Customer */
     lookupCustomer, clearCustomer, scanCustomer,
+    /* Smart Customer Search */
+    pickCustomer, saveNewCustomer,
     /* SOKONI points (P1) */
     pointsLookup, pointsCreate,
     pointsPayStart, pointsPayConfirm, pointsPayCancel,

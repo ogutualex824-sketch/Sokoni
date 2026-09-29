@@ -2586,6 +2586,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       /* Points P1: identify the buyer by phone (and, with consent, create their account) — never a points figure */
       callBuyerLookup: _callable('tillBuyerLookup'),
       callCreateBuyer: _callable('tillCreateBuyer'),
+      /* Smart Customer Search: this shop's own customers (posCustomers) — recognise, save, card */
+      callCustomerSearch: _callable('posCustomerSearch'), callCustomerSave: _callable('posCustomerSave'), callCustomerCard: _callable('posCustomerCard'),
       /* Points P2b: pay with points — the BUYER confirms with a code texted to them */
       callPointsStart: _callable('tillPointsStart'), callPointsConfirm: _callable('tillPointsConfirm'), callPointsCancel: _callable('tillPointsCancel'),
       callAdjust: _callable('merchantAdjustStock'),

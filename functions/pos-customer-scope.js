@@ -138,6 +138,104 @@ async function getOwned(db, ownerUid, customerId) {
   return ownsCustomer(snap.id, snap.data(), ownerUid) ? snap : null;
 }
 
+/* ══ SMART CUSTOMER SEARCH (2026-09-30) ══════════════════════════════════════════════════════════════════════════
+ * ONE customer authority for the till, Sell, pos-checkout and receipts: posCustomers, owned by the SHOP (sellerId), the
+ * same scope the sale itself enforces. Type → recognise → suggest → select → save if new → attach to the sale.
+ *   · every Kenyan phone form (0722…, 722…, +254…, 254…, spaces) is one canonical key: 2547XXXXXXXX
+ *   · searchKeys holds the prefixes a cashier types (the national number from 3 digits on, name words from 2 letters,
+ *     the customer code), so a suggestion is ONE indexed query: sellerId == shop AND searchKeys array-contains term
+ *   · never a silent pick: only ONE exact full-number match is "suggested"; anything else is a list of choices
+ *   · the shop sees its OWN customers; phones leave the server masked
+ */
+function phoneKey(raw) {
+  /* the ONE normaliser (wallet-engine, via loyalty-points); a bare national number (722376801) gains its leading 0 */
+  const c = String(raw || '').replace(/[\s\-().+]/g, '');
+  return require('./loyalty-points').normalize(/^[17]\d{8}$/.test(c) ? '0' + c : c) || null;
+}
+function customerDocId(shopId, key) {
+  return String(shopId) + '_c' + require('crypto').createHash('sha256').update('posCustomer|' + shopId + '|' + key).digest('hex').slice(0, 24);
+}
+function nationalOf(key) { return key ? key.slice(3) : ''; }                   /* 722376801 */
+function maskKePhone(key) { const n = nationalOf(key); return n ? '0' + n.slice(0, 3) + ' ••• •' + n.slice(-3) : '••••'; }
+function searchKeysFor({ phone, name, code }) {
+  const keys = new Set();
+  const n = nationalOf(phoneKey(phone));
+  for (let i = 3; i <= n.length; i++) keys.add('p:' + n.slice(0, i));
+  String(name || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).slice(0, 4).forEach((w) => {
+    for (let i = 2; i <= Math.min(w.length, 12); i++) keys.add('n:' + w.slice(0, i));
+  });
+  if (code) keys.add('c:' + String(code).toUpperCase());
+  return [...keys].slice(0, 60);
+}
+/** What the cashier typed, as ONE search term (or null). */
+function termFor(q) {
+  const s = String(q || '').trim();
+  if (!s) return null;
+  if (/^[A-Z]{2,4}-\d{3,}$/i.test(s)) return { term: 'c:' + s.toUpperCase(), by: 'code' };
+  const digits = s.replace(/[\s\-().+]/g, '');
+  if (/^\d+$/.test(digits)) {
+    let n = digits;
+    if (n.startsWith('254')) n = n.slice(3); else if (n.startsWith('0')) n = n.slice(1);
+    if (n.length < 3) return null;
+    return { term: 'p:' + n.slice(0, 9), by: 'phone', full: n.length >= 9 };
+  }
+  const w = s.toLowerCase().split(/\s+/)[0].replace(/[^a-z0-9]/g, '').slice(0, 12);
+  return w.length >= 2 ? { term: 'n:' + w, by: 'name' } : null;
+}
+function cardOf(doc) {
+  const d = doc.data() || {};
+  const key = d.phoneKey || phoneKey(d.phone);
+  const ms = d.lastPurchaseAt && typeof d.lastPurchaseAt.toMillis === 'function' ? d.lastPurchaseAt.toMillis() : (typeof d.lastPurchaseAt === 'number' ? d.lastPurchaseAt : null);
+  return { id: doc.id, name: String(d.name || 'Customer').slice(0, 80), maskedPhone: maskKePhone(key), code: d.memberCardCode || null,
+    purchaseCount: Number(d.purchaseCount) || 0, totalSpent: Math.round((Number(d.totalSpent) || 0) * 100) / 100, lastPurchaseAt: ms };
+}
+/** Suggestions for THIS shop. Exact full-number match → suggested (the only case that is). */
+async function searchOwned(db, shopId, q) {
+  const t = termFor(q);
+  if (!t) return { term: null, results: [], suggested: null };
+  const snap = await db.collection(COLLECTION).where(OWNER_FIELD, '==', String(shopId)).where('searchKeys', 'array-contains', t.term).limit(8).get();
+  let docs = snap.docs.filter((d) => ownsCustomer(d.id, d.data(), shopId));
+  /* a customer saved before search keys existed: still found by the full number (every stored form), then indexed */
+  if (!docs.length && t.by === 'phone' && t.full) {
+    const key = '254' + t.term.slice(2);
+    for (const form of [key, '+' + key, '0' + key.slice(3)]) {
+      const hit = await findOwned(db, String(shopId), 'phone', form);
+      if (hit) { docs = [hit]; await hit.ref.set({ phoneKey: key, searchKeys: searchKeysFor({ phone: key, name: hit.data().name, code: hit.data().memberCardCode }) }, { merge: true }); break; }
+    }
+  }
+  const results = docs.map((d) => Object.assign(cardOf(d), { matchedBy: t.by }));
+  const exact = t.by === 'phone' && t.full ? results.filter((r) => docs.find((d) => d.id === r.id && (d.data().phoneKey || phoneKey(d.data().phone)) === '254' + t.term.slice(2))) : [];
+  return { term: t.by, results, suggested: exact.length === 1 ? exact[0].id : null };
+}
+/** Save (or find) this shop's customer by phone — one per (shop, number); an existing one is never overwritten. */
+async function saveOwned(db, shopId, { phone, name, by }) {
+  const key = phoneKey(phone);
+  if (!key) throw new HttpsError('invalid-argument', 'Enter a valid Kenyan phone number.');
+  const clean = String(name || '').replace(/[<>]/g, '').trim().slice(0, 80);
+  if (clean.length < 2) throw new HttpsError('invalid-argument', 'Enter the customer\u2019s name.');
+  /* an existing record in ANY stored form is the customer — found, indexed, never duplicated or renamed */
+  for (const form of [key, '+' + key, '0' + key.slice(3)]) {
+    const hit = await findOwned(db, String(shopId), 'phone', form);
+    if (hit) {
+      await hit.ref.set({ phoneKey: key, searchKeys: searchKeysFor({ phone: key, name: hit.data().name, code: hit.data().memberCardCode }) }, { merge: true });
+      return Object.assign(cardOf(await hit.ref.get()), { created: false });
+    }
+  }
+  /* deterministic (one per shop+number, so concurrent saves collide on ONE doc) but OPAQUE: the id reaches the till,
+     and an id spelled from the number would un-mask it */
+  const ref = db.collection(COLLECTION).doc(customerDocId(shopId, key));
+  let created = false;
+  await db.runTransaction(async (t) => {
+    created = false;                       /* a retried attempt must not keep an earlier attempt's answer */
+    const s = await t.get(ref);
+    if (s.exists) return;
+    created = true;
+    t.set(ref, { [OWNER_FIELD]: String(shopId), name: clean, phone: key, phoneKey: key, searchKeys: searchKeysFor({ phone: key, name: clean }),
+      purchaseCount: 0, totalSpent: 0, loyaltyPoints: 0, createdVia: 'till', createdBy: String(by || ''), createdAt: new Date() });
+  });
+  return Object.assign(cardOf(await ref.get()), { created });
+}
+
 module.exports = {
   COLLECTION,
   OWNER_FIELD,
@@ -146,4 +244,5 @@ module.exports = {
   ownerStamp,
   findOwned,
   getOwned,
+  phoneKey, customerDocId, maskKePhone, searchKeysFor, termFor, cardOf, searchOwned, saveOwned,
 };

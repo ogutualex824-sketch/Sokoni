@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "posCustomers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sellerId", "order": "ASCENDING" },
+        { "fieldPath": "searchKeys", "arrayConfig": "CONTAINS" }
+      ]
+    },
+    {
       "collectionGroup": "_sokoniErrors",
       "queryScope": "COLLECTION",
       "fields": [

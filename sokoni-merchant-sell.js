@@ -161,6 +161,20 @@
     '.msl-lbl{font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;',
       'color:var(--txt3);margin:0 0 7px}',
     '.msl-note{font-size:11.5px;color:var(--txt3);line-height:1.55;margin-top:10px}',
+    /* Smart Customer Search — rows are full-width 48px tap targets; long names truncate, never push the layout */
+    '.msl-csug{display:flex;flex-direction:column;gap:6px;margin:8px 0 4px}',
+    '.msl-cfound{font-size:12px;font-weight:800;color:var(--acc);margin:2px 0}',
+    '.msl-crow{display:flex;align-items:center;gap:10px;width:100%;min-height:48px;padding:8px 12px;border-radius:12px;',
+      'border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--txt);font-family:inherit;text-align:left;cursor:pointer}',
+    '.msl-crow.sug{border-color:rgba(113,255,0,.5);background:rgba(113,255,0,.09)}',
+    '.msl-crow:focus-visible{outline:2px solid var(--acc);outline-offset:1px}',
+    '.msl-crow .nm{flex:1;min-width:0;font-weight:800;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.msl-crow .mt{flex:0 0 auto;font-size:11px;color:var(--txt3);font-weight:700;text-align:right}',
+    '.msl-ccard{padding:11px 13px;border-radius:13px;border:1px solid rgba(113,255,0,.35);background:rgba(113,255,0,.07);margin-bottom:10px}',
+    '.msl-ccard .hd{display:flex;align-items:center;gap:8px;font-weight:900;font-size:14px}',
+    '.msl-ccard .hd span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.msl-ccard .st{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(110px,100%),1fr));gap:6px;margin-top:8px;font-size:11.5px;color:var(--txt2)}',
+    '.msl-ccard .st b{display:block;color:var(--txt);font-size:13px}',
 
     /* ── Truthful progress + outcome ── */
     '.msl-prog{display:flex;align-items:center;gap:11px;padding:13px 14px;border-radius:13px;',
@@ -447,6 +461,96 @@
        credited by the server from the completed sale's own total — nothing typed here is a points figure. A buyer with
        no SOKONI account can have one created, with their CONSENT; SOKONI texts them, and they claim it with their own
        number and a code. The cashier never sees a password, a link or a code. */
+    /* ── SMART CUSTOMER SEARCH (2026-09-30) ─────────────────────────────────────────────────────────────────────
+       Type → recognise → suggest → select → save if new → attach. Every answer is the SERVER's (posCustomerSearch on
+       this shop's own customers, posCustomers — the one customer authority). Nothing is picked silently: one exact
+       full-number match is offered as "Customer found ✓", everything else is a list of choices. Phones arrive masked.
+       The sale names the customer from the shop's own record, not from anything typed here. */
+    function kePhone(v) {                       /* display-only: is this a whole Kenyan number? the server decides */
+      var d = String(v || '').replace(/[\s\-().+]/g, '');
+      if (/^254[17]\d{8}$/.test(d)) return d.slice(3); if (/^0[17]\d{8}$/.test(d)) return d.slice(1); if (/^[17]\d{8}$/.test(d)) return d;
+      return null;
+    }
+    function custSugHTML() {
+      var c = S.cust || {};
+      if (c.state === 'searching') return '<div class="msl-note" style="margin-top:4px">Looking…</div>';
+      if (c.state === 'error') return '<div class="msl-note" style="color:#ffb020">' + esc(c.error || 'Search is unavailable — you can still sell.') + '</div>';
+      if (c.state !== 'results') return '';
+      var rs = c.results || [], by = { phone: 'phone', name: 'name', code: 'customer code' }[c.term] || '';
+      if (!rs.length) {
+        var n = kePhone(c.q);
+        if (!n) return '<div class="msl-note" style="margin-top:4px">No customer of this shop matches “' + esc(c.q) + '”.</div>';
+        return '<div class="msl-note" style="margin-top:4px">New customer on 0' + esc(n.slice(0, 3)) + ' ••• •' + esc(n.slice(-3)) + '? Save them to this shop and add them to the sale.</div>' +
+          '<div style="display:flex;gap:8px;margin-top:6px"><input class="msl-inp" id="msl-cname" autocomplete="off" maxlength="80" placeholder="Customer name" value="' + esc(c.name || '') + '" aria-label="New customer name" style="flex:1;margin:0;height:48px;font-size:15px">' +
+          '<button class="msl-btn solid" data-act="cust-save"' + (c.saving ? ' disabled' : '') + ' style="min-height:48px">' + (c.saving ? 'Saving…' : 'Save') + '</button></div>';
+      }
+      var out = c.suggested ? '<div class="msl-cfound" role="status">Customer found ✓</div>' : '<div class="msl-note" style="margin-top:0">' + rs.length + ' match' + (rs.length === 1 ? '' : 'es') + ' by ' + esc(by) + ' — choose one</div>';
+      return out + rs.map(function (r) {
+        return '<button class="msl-crow' + (r.id === c.suggested ? ' sug' : '') + '" role="option" data-act="cust-pick" data-id="' + esc(r.id) + '">' +
+          '<span class="nm">' + esc(r.name) + '</span><span class="mt">' + esc(r.maskedPhone) + (r.code ? '<br>' + esc(r.code) : '') +
+          '<br>' + Number(r.purchaseCount || 0) + ' purchase' + (r.purchaseCount === 1 ? '' : 's') + '</span></button>';
+      }).join('');
+    }
+    function customerHTML(busy) {
+      if (typeof ctx.callCustomerSearch !== 'function') return '';
+      var c = S.cust || {};
+      var head = '<div class="msl-lbl">Customer (optional)</div>';
+      if (c.state === 'attached' && c.card) {
+        var k = c.card, last = k.lastPurchaseAt ? new Date(k.lastPurchaseAt).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) : 'None yet';
+        var pts = k.sokoni === 'member' ? Number(k.sokoniPoints || 0).toLocaleString() : (k.sokoni === 'none' ? 'No account' : '—');
+        return head + '<div class="msl-ccard" role="group" aria-label="Customer on this sale"><div class="hd">👤 <span>' + esc(k.name) + '</span>' +
+          '<button class="msl-btn ghost" data-act="cust-clear"' + (busy ? ' disabled' : '') + ' style="min-height:32px;padding:0 10px">Change</button></div>' +
+          '<div class="msl-note" style="margin-top:3px">' + esc(k.maskedPhone || '') + (k.code ? ' · ' + esc(k.code) : '') + (c.isNew ? ' · saved to your customers' : '') + '</div>' +
+          '<div class="st"><div>Purchases<b>' + (k.loading ? '…' : Number(k.purchaseCount || 0).toLocaleString()) + '</b></div>' +
+          '<div>Lifetime spend<b>' + (k.loading ? '…' : esc(md.formatKES(k.totalSpent || 0))) + '</b></div>' +
+          '<div>Last purchase<b>' + (k.loading ? '…' : esc(last)) + '</b></div>' +
+          '<div>⭐ SOKONI points<b>' + (k.loading ? '…' : esc(pts)) + '</b></div></div></div>';
+      }
+      return head + '<input class="msl-inp" id="msl-cq" autocomplete="off" inputmode="search" placeholder="Phone, name or customer code" value="' + esc(c.q || '') + '" aria-label="Find a customer by phone, name or customer code" aria-controls="msl-csug"' + (busy ? ' disabled' : '') + ' style="margin:0">' +
+        '<div class="msl-csug" id="msl-csug" role="listbox" aria-live="polite">' + custSugHTML() + '</div>';
+    }
+    var _cSeq = 0, _cTimer = null;
+    function paintCustSug() { var e = host.querySelector('#msl-csug'); if (e) e.innerHTML = custSugHTML(); }
+    function custSearch(q) {
+      S.cust = { q: q, state: 'idle' };
+      clearTimeout(_cTimer);
+      if (String(q).trim().length < 2) return paintCustSug();
+      _cTimer = setTimeout(function () {
+        var seq = ++_cSeq; S.cust.state = 'searching'; paintCustSug();
+        Promise.resolve(ctx.callCustomerSearch({ shopId: ctx.scope && ctx.scope.shopId, q: q })).then(function (r) {
+          if (seq !== _cSeq || !S.cust || S.cust.q !== q) return;            /* a newer keystroke owns the list */
+          var d = (r && r.data) || r || {};
+          Object.assign(S.cust, { state: 'results', results: d.results || [], suggested: d.suggested || null, term: d.term || null });
+          paintCustSug();
+        }).catch(function (e) { if (seq !== _cSeq) return; S.cust.state = 'error'; S.cust.error = (e && e.message) || null; paintCustSug(); });
+      }, 250);
+    }
+    function custAttach(card, isNew) {
+      var typed = S.cust && S.cust.q;
+      S.cust = { state: 'attached', card: Object.assign({ loading: true }, card), isNew: !!isNew, q: typed };
+      repaintPay();
+      /* the card's figures (purchases, spend, last purchase, SOKONI points) — the server's, for THIS shop only */
+      Promise.resolve(typeof ctx.callCustomerCard === 'function' ? ctx.callCustomerCard({ shopId: ctx.scope && ctx.scope.shopId, customerId: card.id }) : null).then(function (r) {
+        var d = (r && r.data) || r;
+        if (!S.cust || !S.cust.card || S.cust.card.id !== card.id) return;
+        S.cust.card = Object.assign({}, card, d || { sokoni: 'unavailable' }, { loading: false });
+        repaintPay();
+      }).catch(function () { if (S.cust && S.cust.card && S.cust.card.id === card.id) { S.cust.card = Object.assign({}, card, { sokoni: 'unavailable', loading: false }); repaintPay(); } });
+      /* a whole number was typed: offer this customer's SOKONI points through the existing points lookup */
+      if (kePhone(typed) && typeof ctx.callBuyerLookup === 'function' && !(S.buyer && S.buyer.state === 'found')) {
+        S.buyer = { phone: String(typed).trim(), state: 'idle' }; buyerLook();
+      }
+    }
+    function custSave() {
+      var c = S.cust || {};
+      if (!c.name || String(c.name).trim().length < 2) { c.state = 'error'; c.error = 'Type the customer\u2019s name to save them.'; paintCustSug(); c.state = 'results'; return; }
+      c.saving = true; paintCustSug();
+      Promise.resolve(ctx.callCustomerSave({ shopId: ctx.scope && ctx.scope.shopId, phone: c.q, name: c.name })).then(function (r) {
+        var d = (r && r.data) || r || {};
+        custAttach(d, !!d.created);
+      }).catch(function (e) { c.saving = false; c.state = 'error'; c.error = (e && e.message) || 'The customer could not be saved.'; paintCustSug(); });
+    }
+
     function buyerHTML(busy) {
       if (typeof ctx.callBuyerLookup !== 'function') return '';
       var b = S.buyer || {};
@@ -678,6 +782,7 @@
           (S.preflight && !S.preflight.blocking && S.preflight.message
             ? '<div class="msl-warn">' + esc(S.preflight.message) + '</div>' : '') +
 
+          customerHTML(busy) +
           buyerHTML(busy) +
           '<div class="msl-lbl">How is the customer paying?</div>' +
           '<div class="msl-pays">' + METHODS.map(function (m) {
@@ -763,7 +868,7 @@
 
     function newSale() {
       stopWatch(); S.pay = null;
-      S.cart = []; S.saleToken = null; S.sheet = null; S.sale = 'idle'; S.buyer = null; S.points = null; S.pts = null;
+      S.cart = []; S.saleToken = null; S.sheet = null; S.sale = 'idle'; S.buyer = null; S.points = null; S.pts = null; S.cust = null;
       S.receipt = null; S.cached = false; S.saleError = null; S.preflight = null; S.cashGiven = null;
       /* Re-read the catalogue: the sale just changed canonical stock, and the next
          customer must not be sold against the pre-sale numbers. */
@@ -865,6 +970,7 @@
           payments: payments(), callable: ctx.callSale,
           offerDiscount: totals().offerDiscount,          /* U7c2: the server's own figure, re-checked by the sale */
           buyerPhone: (S.buyer && S.buyer.state === 'found') ? S.buyer.phone : null,   /* Points P1: WHO, never how many */
+          customer: (S.cust && S.cust.state === 'attached' && S.cust.card) ? { id: S.cust.card.id, name: S.cust.card.name } : null,   /* Smart Customer: WHICH customer */
           checkoutStartedAt: S.startedAt || null,
         }).then(function (res) {
           if (!res.ok) {
@@ -972,6 +1078,10 @@
       if (act === 'complete')     { complete(); return; }
       if (act === 'new-sale')     { newSale(); return; }
       if (act === 'buyer-look')   { buyerLook(); return; }
+      if (act === 'cust-pick')    { var cid = el.getAttribute('data-id'); var hit = ((S.cust && S.cust.results) || []).filter(function (r) { return r.id === cid; })[0];
+                                    if (hit) custAttach(hit, false); return; }
+      if (act === 'cust-save')    { custSave(); return; }
+      if (act === 'cust-clear')   { S.cust = null; repaintPay('msl-cq'); return; }
       if (act === 'buyer-create') { buyerCreate(); return; }
       if (act === 'buyer-clear')  { S.buyer = { phone: '' }; repaintPay('msl-bphone'); return; }
       if (act === 'pay-request')  { payRequest(); return; }
@@ -1004,6 +1114,8 @@
       if (el.id === 'msl-pcode')  { if (S.pts) S.pts.code = String(el.value || '').replace(/\D/g, '').slice(0, 6); return; }
       if (el.id === 'msl-bphone') { S.buyer = Object.assign({}, S.buyer || {}, { phone: el.value, state: 'idle' }); return; }
       if (el.id === 'msl-bname')  { S.buyer = Object.assign({}, S.buyer || {}, { name: el.value }); return; }
+      if (el.id === 'msl-cq')     { custSearch(el.value || ''); return; }
+      if (el.id === 'msl-cname')  { if (S.cust) S.cust.name = el.value; return; }
       if (el.id === 'msl-cash') {
         var n = parseInt(String(el.value).replace(/[^0-9]/g, ''), 10);
         S.cashGiven = isFinite(n) ? n : null;

@@ -11869,6 +11869,10 @@ const posZF = require('./pos-zero-friction');
 exports.posCompleteCheckout    = posZF.posCompleteCheckout;
 exports.posValidateCoupon      = posZF.posValidateCoupon;
 exports.posLookupCustomer      = posZF.posLookupCustomer;
+/* Smart Customer Search (2026-09-30): recognise → suggest → select → save → attach, on posCustomers (one authority) */
+exports.posCustomerSearch      = posZF.posCustomerSearch;
+exports.posCustomerSave        = posZF.posCustomerSave;
+exports.posCustomerCard        = posZF.posCustomerCard;
 exports.posProcessRefund       = posZF.posProcessRefund;
 exports.posLogReprint          = posZF.posLogReprint;
 exports.posGetQueueMetrics     = posZF.posGetQueueMetrics;

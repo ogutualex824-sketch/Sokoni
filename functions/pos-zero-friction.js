@@ -889,7 +889,7 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
        Transaction.get() threw "all reads must be executed before all writes" — every
        wallet-paid sale failed 100%. This is restructured into two phases: read everything,
        validate, then write everything. */
-    const { loyaltyAwarded } = await db.runTransaction(async txn => {
+    const { loyaltyAwarded, custOnFile } = await db.runTransaction(async txn => {
 
       /* ── PHASE 1: ALL READS (parallel) ── */
       const productRefs = enrichedItems.map(item => db.collection('products').doc(item.productId));
@@ -1064,7 +1064,10 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
         txn.update(_redRef, { status: 'consumed', saleId, consumedAtMs: Date.now() });
       }
 
-      return { loyaltyAwarded };
+      /* Smart Customer Search: the attached customer is named on the sale from the shop's OWN record (the till only
+         ever holds a masked phone) — never from what the caller typed */
+      const custOnFile = custSnap && custSnap.exists ? { name: String(custSnap.data().name || ''), phone: String(custSnap.data().phoneKey || custSnap.data().phone || '') } : null;
+      return { loyaltyAwarded, custOnFile };
     });
 
     /* ══════════════════════════════════════════════════════════════════════
@@ -1169,8 +1172,8 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
       items:           enrichedItems,
       customer:        customer ? {
         id:    _sanitize(customer.id || ''),
-        name:  _sanitize(customer.name || 'Guest'),
-        phone: _sanitize(customer.phone || ''),
+        name:  _sanitize((custOnFile && custOnFile.name) || customer.name || 'Guest'),
+        phone: _sanitize(custOnFile ? custOnFile.phone : (customer.phone || '')),
       } : null,
       payments,
       couponCode:         couponCode ? _sanitize(couponCode) : null,
@@ -1480,6 +1483,39 @@ exports.posValidateCoupon = onCall(cfg, async ({ data, auth }) => {
    RESTORED 2026-09-29, verbatim from 9360cbd: commit 2f4fc20 (a durability commit of 296 uncommitted files) put
    the unscoped version back; scripts/test-pos-customer-scope.js had been failing 18 checks since. */
 const _custScope = require('./pos-customer-scope');
+
+/* ══ SMART CUSTOMER SEARCH (2026-09-30) — posCustomers (the one customer authority), scoped to the SHOP the sale is
+   for, this shop's till staff only (the same gate as the points lookup). docs/SMART_CUSTOMER_SEARCH.md */
+async function _customerShopGate(auth, data) {
+  const shopId = String((data && data.shopId) || '');
+  await require('./loyalty-points').assertTillStaff(auth && auth.uid, shopId);
+  return shopId;
+}
+exports.posCustomerSearch = onCall(cfg, async ({ data, auth }) => {
+  const shopId = await _customerShopGate(auth, data);
+  return _custScope.searchOwned(db, shopId, data && data.q);
+});
+exports.posCustomerSave = onCall(cfg, async ({ data, auth }) => {
+  const shopId = await _customerShopGate(auth, data);
+  return _custScope.saveOwned(db, shopId, { phone: data && data.phone, name: data && data.name, by: auth.uid });
+});
+exports.posCustomerCard = onCall(cfg, async ({ data, auth }) => {
+  const shopId = await _customerShopGate(auth, data);
+  const snap = await _custScope.getOwned(db, shopId, String((data && data.customerId) || ''));
+  if (!snap) _e('That customer is not a customer of this shop.', 'not-found');
+  const card = _custScope.cardOf(snap);
+  /* SOKONI points for this number — the canonical balance, never a figure from the shop's own records */
+  /* 'member' (with the balance) · 'none' (no SOKONI account on this number) · 'unavailable' (could not be read — the
+     till shows "—", never a 0 it does not know) */
+  let sokoniPoints = null, sokoni = 'unavailable';
+  try {
+    const key = snap.data().phoneKey || _custScope.phoneKey(snap.data().phone);
+    const b = key ? await require('./loyalty-points').resolveBuyer(db, key) : null;
+    if (!b) sokoni = 'none';
+    else { const a = await db.collection('loyaltyAccounts').doc(b.uid).get(); if (a.exists) { sokoniPoints = Number(a.data().balance) || 0; sokoni = 'member'; } else sokoni = 'none'; }
+  } catch (_) { sokoniPoints = null; sokoni = 'unavailable'; }
+  return Object.assign(card, { sokoniPoints, sokoni });
+});
 
 exports.posLookupCustomer = onCall(cfg, async ({ data, auth }) => {
   await _assertAuth(auth);
