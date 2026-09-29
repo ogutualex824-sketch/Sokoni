@@ -143,6 +143,11 @@ function emptyResult (id, extra) {
     health:  'unknown',
     healthKind: null,
     evidence: EVIDENCE.NONE,
+    /* Explicitly null rather than absent. Persisted whole, an absent field lets
+       a previous probe's refusal stand after a later probe that should have
+       cleared it — the stale-field defect the legacy `{ merge: true }` write
+       has today. */
+    notRunReason: null,
     correlationId: null,
     detail:  null,
     checkedAt: new Date().toISOString(),
@@ -218,6 +223,42 @@ function mintCorrelationId (id, rand) {
  * this builds ON adminGetIntegrationStatus rather than re-deciding configuration.
  */
 async function runProbe (integrationId, deps) {
+  const d = deps || {};
+  const result = await _runProbeCore(integrationId, d);
+
+  /* ── THE MISSING JOINT (RC-4, Step B) ─────────────────────────────────────
+     Until now a probe result existed only for the length of the request. It was
+     written to `integrationProbeLatest` by admin-os.js — unvalidated, with
+     `{ merge: true }` — and read back by nobody, so `resolveIntegrationStatus`
+     was always called with an empty probe map and every integration stayed
+     `unknown`. This is the producer's half of the connection.
+
+     OPT-IN, DELIBERATELY. Persistence happens only when a caller supplies a
+     store or asks for the default one. A probe is also run from suites and from
+     the relationship census, and a module that reached Firestore merely because
+     it was required would make those tests depend on a database — and would
+     write evidence nobody asked to publish. */
+  const wantsPersist = d.evidenceStore !== undefined || d.persistEvidence === true;
+  if (wantsPersist) {
+    const evidence = require('./integration-evidence');
+    try {
+      result.persisted = await evidence.writeEvidence(result, {
+        store:       d.evidenceStore || undefined,
+        recordedBy:  d.recordedBy || null,
+        environment: d.environment,          /* undefined => declared, never inferred */
+      });
+    } catch (e) {
+      /* A persistence failure must not turn a successful measurement into a
+         failed probe. The observation stands; the fact that it could not be
+         stored is reported alongside it, not substituted for it. */
+      result.persisted = { written: false, refused: false,
+        errors: [e && e.message ? String(e.message).slice(0, 200) : 'persist failed'], record: null };
+    }
+  }
+  return result;
+}
+
+async function _runProbeCore (integrationId, deps) {
   const d = deps || {};
   const entry = registry.byId(integrationId);
   if (!entry) { const e = new Error('Unknown integration: ' + integrationId); e.code = 'unknown_integration'; throw e; }

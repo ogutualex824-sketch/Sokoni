@@ -1,3 +1,52 @@
+## 2026-09-29 — Integration Evidence Model, Step B: the joint between the probe and the console (branch `feat/integrations-control-center`, NOT deployed)
+
+Step B of `91fe2b5`, after the `b9172ba` census. Persistence and wiring only — no migration, no deploy,
+`functions/admin-os.js` not modified, sidebar files not touched. Full note: `docs/INTEGRATION_EVIDENCE_MODEL_B.md`.
+
+**A correction to the census first.** Step A said nothing is persisted. `admin-os.js:2284` writes
+`integrationProbeLatest/{id}` after every probe — **one writer, zero readers**, repo-wide. The census searched for
+`latestProbes`, the parameter name; the write uses the collection name. So the defect was never "no persistence":
+the write happens, nothing reads it back, and nothing validates it. That collection is named and **left alone** —
+it is written with `{ merge: true }`, so `notRunReason` sticks forever once set and a rail that refused once would
+read as refusing after it started working. Migrating it is Step E's call.
+
+- **New `functions/integration-evidence.js`** — `integrationEvidence/{integrationId}`, a new collection so adoption
+  is deliberate. The record *is* the probe result with the producer's field names preserved verbatim, plus
+  `schemaVersion`, `environment`, `serviceCapabilities`, `recordedAt`, `recordedBy`. Written with `set()`, whole or
+  not at all. `validate()` **refuses, never repairs**: a runtime stage `true` with `evidence: 'none'`; a stage true
+  the integration cannot evidence; `health: 'connected'` over nothing; `notRunReason` set *and* a stage true — a
+  refusal laundered into an observation. A coerced record is worse than a refused one; the console cannot tell a
+  repaired claim from an observed one.
+- **Producer wired** (`integration-probes.js`) — `runProbe` persists when given `deps.evidenceStore`. **Opt-in**:
+  it is also called from suites and the relationship census, and a module that reached Firestore because it was
+  required would make those depend on a database and publish evidence nobody asked to publish. A persistence
+  failure is reported alongside the result, never substituted for it.
+- **Consumer wired** (`integration-status.js`) — the default for `latestProbes` was `{}` unconditionally, which is
+  why all 47 read `unknown`. It is now the evidence store. An explicitly injected map still wins, including an
+  explicit `{}`. An unreadable store yields `unknown` for all 47 plus `evidenceError`, never a fabricated health,
+  and does not take the credential surface down with it. A stored record that stops validating is **dropped and
+  reported** in `evidenceDropped`, never rendered.
+- **REFUSED BY DESIGN is reachable.** `sokoni-integrations.js:398` renders it from `notRunReason`, and the resolver
+  dropped that field — verified against HEAD, the string does not occur there. The state was dead in production no
+  matter how many probes ran. It now resolves from the probe when there is one, and **from the executor declaration
+  when there is not**: "probing IntaSend would move money" is true before anything runs. Nine rails, `probedAt`
+  still `null`, `health` still `unknown` — a refusal is not a health claim. No executor yet resolves to `null`:
+  unmeasured, not refused.
+- **`environment` is declared, never inferred** — `SOKONI_ENVIRONMENT` or `null`. Asserted: a project id of
+  `sokoni-aeb26` yields `null`.
+- **`serviceCapabilities` is a separate field** from `capabilities`, which already means UI affordances and is
+  consumed today. `null` = NOT MODELLED, distinct from `[]`. Nothing populates it in Step B.
+
+Files: `functions/integration-evidence.js` (new), `functions/integration-probes.js` (+41),
+`functions/integration-status.js` (+95 −4), `scripts/test-integration-evidence.js` (new),
+`docs/INTEGRATION_EVIDENCE_MODEL_B.md` (new).
+Database: one new collection, written by nothing yet. API: three additive record fields and three envelope fields.
+Security: none — Admin SDK writes, no client reads, so no rules entry (an unlisted path is default-deny; adding a
+rule would widen access). No secret enters a record. Breaking changes: none.
+Certification: **52 passed, 0 failed**, every integrity rule asserted twice — valid accepted, invalid refused.
+Regression unchanged: probes 85/0 · parity 26/0 (47/47) · status 45/0 · console 86/0.
+UNPROVEN: the Firestore adapter against a real database. No Firestore was contacted.
+
 ## 2026-09-29 — AdminOS sidebar, Slice C2: everything reachable from Super Admin too, through the one implementation (branch `feat/integrations-control-center`, NOT deployed)
 
 Owner ruling (mid-slice): everything visible and controllable from BOTH admin consoles. Done the only way that

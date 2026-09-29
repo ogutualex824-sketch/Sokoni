@@ -125,6 +125,14 @@ function _probeRunnable (id) {
   catch (_) { return false; }
 }
 
+/* The declared reason a probe will not run, independent of any probe having run.
+   Same defensive posture: if the evidence layer cannot be loaded, claim nothing
+   rather than claim a refusal. */
+function _staticNotRunReason (id) {
+  try { return require('./integration-evidence').staticNotRunReason(id); }
+  catch (_) { return null; }
+}
+
 /**
  * resolveIntegrationStatus({ listSecretNames })
  *
@@ -153,9 +161,40 @@ async function resolveIntegrationStatus (opts) {
     inventoryError = e && e.message ? String(e.message).slice(0, 200) : 'inventory unavailable';
   }
 
-  /* Latest probe result per integration id (RC-3). Absent until a probe has run;
-     an absent probe leaves health 'unknown', never a failure. */
-  const probes = o.latestProbes || {};
+  /* ── LATEST EVIDENCE PER INTEGRATION (RC-3 producer, RC-4 persistence) ────
+     `latestProbes` stays injectable — the suite passes a controlled map, and an
+     explicit map always wins. What changed in Step B is the DEFAULT. It used to
+     be `{}`, unconditionally, which is why health was `unknown` for all 47: the
+     probe layer produced results and no caller ever passed them back in.
+
+     The default is now the persistent evidence store. Absent evidence still
+     yields an empty map and leaves health `unknown` — reading a store that
+     nothing has written yet changes nothing, which is exactly the property that
+     makes this safe to land before any migration.
+
+     An unreadable store is reported, never fabricated: `evidenceReadable` goes
+     false and every record stays `unknown`, the same failure posture the secret
+     inventory already takes. */
+  let probes = o.latestProbes || null;
+  let evidenceReadable = true;
+  let evidenceError = null;
+  let evidenceDropped = [];
+  if (!probes) {
+    try {
+      const store = require('./integration-evidence');
+      const read = await store.readLatestEvidence({ store: o.evidenceStore });
+      probes = read.records;
+      evidenceReadable = read.readable;
+      evidenceError = read.error;
+      evidenceDropped = read.dropped;
+    } catch (e) {
+      /* The evidence layer being unavailable must not take the credential
+         surface down with it. RC-1's answer is independent and still correct. */
+      probes = {};
+      evidenceReadable = false;
+      evidenceError = e && e.message ? String(e.message).slice(0, 200) : 'evidence unavailable';
+    }
+  }
 
   const integrations = registry.INTEGRATIONS.map((entry) => {
     const probe = probes[entry.id] || null;
@@ -208,7 +247,46 @@ async function resolveIntegrationStatus (opts) {
       stageSupport: probe ? probe.support : null,
       evidence:    probe ? probe.evidence : 'none',
       probedAt:    probe ? probe.checkedAt : null,
+
+      /* ── WHY A PROBE DID NOT RUN (RC-4) ───────────────────────────────────
+         This field was produced by integration-probes.js and DROPPED here, and
+         the console keys REFUSED BY DESIGN on it — so the state was unreachable
+         in production no matter how many probes ran. Carrying it is the third of
+         the three defects Step A separated.
+
+         It resolves in two ways, and the second is the one that matters. With a
+         probe, the probe's own reason wins: it is what actually happened. With
+         NO probe, the reason still exists, because "IntaSend refuses because
+         probing would move money" and "SendGrid's key is not bound to the probe
+         function" are static properties of the executor table, true before
+         anything runs. A state derived only from the output of the thing that
+         did not happen can never be reached; derived from the declaration, it
+         is reachable for the nine rails that genuinely refuse.
+
+         A rail with no executor written yet resolves to null — unmeasured, not
+         refused. Calling that a refusal would claim a deliberate decision the
+         platform has not made. */
+      notRunReason: probe
+        ? (probe.notRunReason || null)
+        : _staticNotRunReason(entry.id),
+
+      /* Declared by the evidence record, or unknown. Never inferred from the
+         project id or from which host this happens to be running on. */
+      environment: probe ? (probe.environment === undefined ? null : probe.environment) : null,
+
+      /* UI affordances — view / test / view-credential-names. NOT business
+         capabilities; see `serviceCapabilities` below. Unchanged by Step B. */
       capabilities: _capabilities(entry, credentialState),
+
+      /* Business capabilities, a SEPARATE structure from `capabilities` above.
+         `null` means NOT MODELLED — distinct from `[]`, which would mean
+         modelled and empty. Step B defines the field; nothing populates it yet,
+         so every record reads null and no consumer can mistake an unfilled
+         model for an observed absence of capability. */
+      serviceCapabilities: probe
+        ? (probe.serviceCapabilities === undefined ? null : probe.serviceCapabilities)
+        : null,
+
       checkedAt,
     };
   });
@@ -225,6 +303,14 @@ async function resolveIntegrationStatus (opts) {
     counts,
     inventoryReadable: !inventoryError,
     inventoryError,
+    /* Reported separately from the secret inventory, because they are different
+       sources that fail independently and collapsing them would tell an operator
+       to go and look in the wrong place. `evidenceDropped` names records that
+       were persisted but no longer validate — they are withheld from the
+       response, and a silent drop is indistinguishable from "never probed". */
+    evidenceReadable,
+    evidenceError,
+    evidenceDropped,
     /* Orphans are reported as a COUNT only. Naming a configured secret that no
        integration claims would turn this response into a map of the estate's
        credentials for anyone who reaches it. The count is enough to tell an
@@ -236,4 +322,5 @@ async function resolveIntegrationStatus (opts) {
   };
 }
 
-module.exports = { resolveIntegrationStatus, _internal: { _capabilities, _defaultLister } };
+module.exports = { resolveIntegrationStatus,
+  _internal: { _capabilities, _defaultLister, _staticNotRunReason } };
