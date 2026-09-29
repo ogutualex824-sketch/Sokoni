@@ -1,3 +1,15 @@
+## [2026-09-29] - C5: Latomi Gadgets — business identity created under the same owner uid, SERVICES stamped from the original approval (PRODUCTION, owner-authorized)
+
+**Applied 17:29Z** with the owner-authorized command and plan digest `6b1c5044…30dc`; two writes in one transaction —
+`businesses/IaOBkEJYcCXk23UDWk0OPp7XXeD3` (capabilities.SERVICES approved, evidence = the 2026-09-03 approval; no
+PRODUCTS; searchable/isPublic false; `source: capability_migration_c5`, `migration.slice: C5`) and
+`adminAudit/kIRnqG6YJwNP70bULqmb`. Nothing else; no shop or branch (C4 decisions). Landing proof 16/0: provider,
+application, users doc, wallet and claims byte-identical; products 0 everywhere; shops/branches/sellers/merchants/
+providerProfiles absent; second apply → `already_migrated`. Full re-census: only the Latomi row changed; STAMPED set =
+DG Wine + Latomi; cleanup manifest digest unchanged. Workspace routing NOT claimed fixed (category authority unstamped).
+Packet `docs/C5_LATOMI_MIGRATION.md` + `docs/release-gates/c5-latomi-migration.json`.
+Category/capability routing, cards, cleanup and KASS are NOT started. No deploy.
+
 ## [2026-09-29] - C4: DG Wine — business identity created under the same owner uid, SERVICES stamped from the original approval (PRODUCTION, owner-authorized)
 
 **Applied to production 17:20Z** under the owner's authorization naming plan digest `e1a274e2…d7b0`; two writes in one
