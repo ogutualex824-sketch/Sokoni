@@ -105,6 +105,11 @@ The owner's note that "most business dashboards have been built by another agent
 
 **Consequence for where the track is done.** The consumer of the capability authority (`business-workspace.js`), the offering intake, the category matrix and the classifier all live on the c4 lineage. C6–C8 (resolver, intake and console convergence) cannot be built here without re-implementing them, which the owner forbade. This read model is lineage-neutral (pure; it imports only `business-scope.js`, present on both lines), so it is committed here as the certified vocabulary and **ported verbatim to the c4 lineage when the owner names the base line**. The peer census (sokoni-d6) adds two facts to carry over: `hub-register.js:421-423` defaults every b2b / food / fashion / agri / construction category to `requestedRole: 'provider'` (which is how Latomi became a provider), and `\bwholesal\b` in `application-lifecycle.js:228` never matches "wholesaler" (which is how DG Wine did).
 
+## 6c · Two distinctions pinned after peer review
+
+- **Unstamped ≠ stamped with nothing.** No stamp → `NOT_YET_STAMPED`; a valid stamp with neither capability → `STAMPED` + `UNCLASSIFIED`. The suite asserts they differ (P14), so an unstamped business can never render as "offers nothing".
+- **Naming.** `businesses.capabilities` is a different collection from the integration console's `integrations[].capabilities` (UI affordances) and `serviceCapabilities`; no consumer reads across them, and this track adds nothing to the integration registry or catalogue.
+
 ## 7 · What happens next (not started)
 
 - **C3 — existing-identity classification census (read-only).** Run `readModel` over every owner uid in production: every `sellers`, `providers`, `businesses`, `shops` record and its applications and product count. Output one row per identity: observed · proposed · authority status · conflicts. This is the migration classification the owner asked for. Requires the production-read path to be allowed for the census script.

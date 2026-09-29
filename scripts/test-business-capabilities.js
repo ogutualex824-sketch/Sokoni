@@ -88,6 +88,9 @@ const stamp = (p, s) => ({ version: 1,
   ok('P13 a stamp with state "suspended" for PRODUCTS and seller not live agrees (suspended ≠ approved) → SERVICES if provider live',
      (() => { const p = P({ provider: liveProvider, seller: { status: 'suspended', approvedAt: APPROVED_AT }, business: { capabilities: stamp('suspended', 'approved') } }); return p.classification === 'SERVICES' && p.conflicts.length === 0 && p.proposed.PRODUCTS === 'suspended'; })());
 
+  ok('P14 an UNSTAMPED business and a business STAMPED with neither capability are DIFFERENT states (null ≠ empty)',
+     (() => { const un = P({}); const st = P({ business: { capabilities: { version: 1 } } }); return un.authorityStatus === 'NOT_YET_STAMPED' && st.authorityStatus === 'STAMPED' && un.classification === 'UNCLASSIFIED' && st.classification === 'UNCLASSIFIED' && un.observed.stamp === null && st.observed.stamp !== null; })());
+
   head('A - additive, independently approvable');
   ok('A1  PRODUCTS approved, then SERVICES approved → both; PRODUCTS is not removed', (() => { const before = P({ seller: liveSeller }); const after = P({ seller: liveSeller, provider: liveProvider }); return before.classification === 'PRODUCTS' && after.classification === 'PRODUCTS_AND_SERVICES' && after.proposed.PRODUCTS === 'approved'; })());
   ok('A2  choosing a service label never transforms PRODUCTS into SERVICES', (() => { const p = P({ seller: Object.assign({ category: 'salon', businessType: 'provider' }, liveSeller) }); return p.classification === 'PRODUCTS'; })());
