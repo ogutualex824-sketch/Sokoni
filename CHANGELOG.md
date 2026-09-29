@@ -1,3 +1,33 @@
+## 2026-09-29 — Slice C6: every app reaches the same record by its stable id (branch `feat/integrations-control-center`, NOT deployed)
+
+Before this slice a record could be opened only from inside AdminOS by a JavaScript call; no URL, no other app and no
+customer page could name one. Now ONE vocabulary does, and nothing copies a record's state into a link.
+
+- **`sokoni-record-links.js`** (new, loaded by `admin-os.html`, `super-admin.html`, `support.html`): `link(kind, id)` →
+  `admin-os.html#support?open=ticket:<id>` / `#applications/queue?open=application:<id>` / `#applications/verification?open=request:<id>`;
+  `customerTicket(id)` → `support.html?ticket=<id>`; `parseOpen`, `ticketFromSearch`. Ids are `[A-Za-z0-9_-]{1,64}`,
+  case preserved (Firestore ids are case-sensitive); anything else builds no link and opens nothing. Never throws.
+- **`sokoni-aos.js`** — `_parseRoute` accepts `?open=<kind>:<id>` only through the vocabulary and only on the record's own
+  route; boot and `hashchange` open the record through the SAME `openTicket` / `openApplication` /
+  `openVerificationRequest` the in-app chips call; the id is consumed once (hash rewritten to the plain route).
+  Exports `recordLink`, `customerTicketLink`. The ticket modal shows the record link and the customer link.
+- **`sokoni-connect-console.js`** — video verifications gain an **Application** column linking the application by id
+  (dash when malformed or when the vocabulary is absent).
+- **`support.html`** — `?ticket=<id>` lands on Track with the id and looks it up for the signed-in owner; the
+  confirmation card offers the stable link. **Defect fixed:** the lookup upper-cased the id, and ticket ids are
+  Firestore auto-ids, so a real ticket could never be found from this page.
+- **Not linked, on purpose:** `emailLogs` rows carry no anchor field, so the email workspace links nothing rather than
+  something invented. **Owner decision, not done:** no customer notification on an admin reply
+  (`adminResolveSupportTicket` never calls `notify`; `support_reply` exists) — a `deepLink` of `support.html?ticket=<id>`
+  there is a functions change.
+- Docs: `docs/ADMINOS_NAVIGATION_CERTIFICATION.md` (invariant 4, suite table), `docs/COMMUNICATIONS_CENSUS_C1.md`.
+
+Evidence: `scripts/test-record-links.js` **21/0** — vocabulary (lawful/hostile ids, case), deep links open and consume,
+hostile id / wrong-route kind / unknown section open nothing, hashchange, modal links, Connect link + malformed-id
+control, `support.html?ticket=` (case preserved, bad id ignored, signed-out fails closed), vocabulary served EMPTY →
+nothing opens, nothing links. Regression, one Chromium suite at a time: connect-authority 856/0 · single-navigation 22/0 · sidebar-a11y 34/0 · nav-coverage 32/0 · shell-final 48/0 · verification-convergence 29/0 · ticket-context 18/0 · support-context 19/0 · video-verification 18/0 · email-workspace 24/0 · sms-workspace 16/0 · support-phone 9/0 · wiring 310/0 · render 43/0.
+No database, API, rules or security-boundary change. No deploy.
+
 ## 2026-09-29 — Integrations, Slice C4: Africa's Talking by lane, and the SMS workspace shows what the rail reports (branch `feat/integrations-control-center`, NOT deployed)
 
 Same shape as C3, for SMS. The provider offers voice, USSD and inbound SMS; SOKONI has none of them, and the catalogue

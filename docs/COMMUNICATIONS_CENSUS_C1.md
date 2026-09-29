@@ -88,8 +88,16 @@ census and to stay so in C2–C6.
   line on `contact.html` and `index.html` still has no configured authority — it was neither removed nor promoted;
   hub pages carry placeholder-looking numbers (`car-hub`, `food-rider`, `healthcare`, `legal`), reported by the suite,
   outside this slice.
-- **C6 — Cross-app links.** Merchant, buyer, Super Admin, Connect, support and email link to the same records by
-  stable ids (`context`), never a local copy.
+- **C6 — Cross-app links. DONE (this branch).** ONE vocabulary, `sokoni-record-links.js` (loaded by AdminOS, Super Admin,
+  support.html): `admin-os.html#<route>?open=<kind>:<id>` for ticket / application / request, `support.html?ticket=<id>`
+  for the customer. AdminOS opens a deep-linked record through the same functions the in-app chips call and consumes
+  the id; the ticket modal shows both links; the Connect console links a verification's application by id; support.html
+  lands on Track with the id (case preserved — the lookup used to upper-case Firestore ids, so it could never find a
+  real ticket; fixed) and shows the ticket only to its signed-in owner. Email rows carry no anchor field in `emailLogs`,
+  so they link nothing rather than something invented. **Not done, owner decision:** the server does not notify a
+  customer when an admin replies (`support_reply` exists in notify.js but `adminResolveSupportTicket` never calls it);
+  a `deepLink` of `support.html?ticket=<id>` on that notification is the natural next step and is a functions change.
+  `scripts/test-record-links.js` 21/0 · regression: connect-authority 856/0 · single-navigation 22/0 · sidebar-a11y 34/0 · nav-coverage 32/0 · shell-final 48/0 · verification-convergence 29/0 · ticket-context 18/0 · support-context 19/0 · video-verification 18/0 · email-workspace 24/0 · sms-workspace 16/0 · support-phone 9/0 · wiring 310/0 · render 43/0.
 
 ## 5 · Deployment state (read-only probe, 2026-09-29)
 

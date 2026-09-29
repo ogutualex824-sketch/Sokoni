@@ -18,6 +18,8 @@
 <!-- The ONE source of the support number (mirrors functions/company-identity.js).
      The Call Support card below reads it; nothing on this page types a number. -->
 <script src="sokoni-company.js"></script>
+<!-- ONE vocabulary for record links (support.html?ticket=<id>); ids are case-sensitive. -->
+<script src="sokoni-record-links.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:#fff;min-height:100vh;padding-bottom:80px;}
@@ -202,6 +204,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:#fff;m
       <p>We've received your issue and will respond within 24 hours.</p>
       <div class="sp-ticket-id" id="spTicketIdDisplay"></div>
       <p style="margin-top:14px;font-size:12px;">Save your ticket ID to track the status later.</p>
+      <a id="spTicketLink" href="#" style="display:none;margin-top:6px;font-size:12px;color:#71ff00;font-weight:800;">🔗 Track this ticket (stable link)</a>
       <a data-support-phone="wa" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:14px;padding:11px 22px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);border-radius:10px;color:#25d366;font-size:13px;font-weight:800;text-decoration:none;">💬 Follow up on WhatsApp</a>
     </div>
   </div>
@@ -306,6 +309,9 @@ function submitTicket() {
     var suc = document.getElementById('spTicketSuccess');
     suc.style.display = 'block';
     document.getElementById('spTicketIdDisplay').textContent = 'Ticket ID: ' + res.ticketId;
+    /* The stable link to THIS ticket, built by the shared vocabulary or not at all. */
+    var L = window.SokoniRecordLinks, tl = L ? L.customerTicket(String(res.ticketId || '')) : null, a = document.getElementById('spTicketLink');
+    if (a) { if (tl) { a.href = tl; a.style.display = 'inline-block'; } else { a.style.display = 'none'; } }
   }).catch(function (e) {
     btn.disabled = false;
     btn.textContent = 'Submit Support Ticket';
@@ -314,7 +320,9 @@ function submitTicket() {
 }
 
 function trackTicket() {
-  var id = (document.getElementById('spTrackId').value||'').trim().toUpperCase();
+  /* NEVER upper-case an id: ticket ids are Firestore auto-ids and case-sensitive.
+     This line upper-cased them, so a real ticket could not be found from here. */
+  var id = (document.getElementById('spTrackId').value||'').trim();
   if (!id) { (window._skToast||alert)('Please enter a ticket ID.'); return; }
   var result = document.getElementById('spTrackResult');
   result.style.display = 'block';
@@ -392,6 +400,18 @@ window.addEventListener('DOMContentLoaded', function() {
     }
   } catch {}
   buildFAQ();
+  /* C6: support.html?ticket=<id> opens the Track tab on that one ticket. The id is
+     accepted only through the shared vocabulary; the lookup itself still requires
+     the signed-in owner (the rules decide, not this page). */
+  try {
+    var L = window.SokoniRecordLinks, tid = L ? L.ticketFromSearch(location.search) : null;
+    if (tid) {
+      document.getElementById('spTrackId').value = tid;
+      showTab('track', document.querySelectorAll('.sp-tab')[2]);
+      var ran = false, run = function () { if (ran) return; ran = true; trackTicket(); };
+      if (window.firebase && firebase.auth) { firebase.auth().onAuthStateChanged(run); setTimeout(run, 1500); } else { run(); }
+    }
+  } catch (e) {}
 });
 
 function buildFAQ() {

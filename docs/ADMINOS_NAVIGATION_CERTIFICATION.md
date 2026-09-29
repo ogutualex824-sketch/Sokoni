@@ -27,6 +27,7 @@ Invariants held by the suites:
 2. A child item exists **only** for a distinct existing tab (9 children); it routes through `navigate(parent, tab)` and the existing selector — never a second implementation.
 3. Every global destination has exactly **one** primary navigation path; the dashboard carries no navigation; contextual links (8) remain in Financial, SmartPOS, Delivery.
 4. `#section/tab` deep links are validated against real nav items and tab buttons; hostile input falls back to the dashboard; all 57 routes survive a **real** reload.
+   **C6 (2026-09-29):** a route may carry **one record** — `#support?open=ticket:<id>`, `#applications/queue?open=application:<id>`, `#applications/verification?open=request:<id>` — read only through the shared vocabulary `sokoni-record-links.js`, honoured only on the record's own route, opened through the SAME functions the in-app chips call, and **consumed once** (the hash is rewritten to the plain route). A hostile id, a kind on the wrong route or an absent vocabulary module opens nothing. `scripts/test-record-links.js` **21 / 0**.
 5. The sidebar is a single scrolling `<nav aria-label="AdminOS navigation">`; the footer never scrolls away; `.active` and `aria-current="page"` move together; keyboard reaches every control with a visible ring; the phone drawer closes on Escape / « / scrim / section choice with focus returned.
 6. The shared admin shell (`sokoni-admin-shell.js`) renders nothing on a page that declares `data-admin-shell="own"` (AdminOS, Super Admin) and still renders for every other admin page.
 7. Super Admin reaches all 36 AdminOS destinations — natively or by link — and Integrations is the **same** `sokoni-integrations.js` in both consoles, rendering only its own closed `STATUS_META` vocabulary.
@@ -55,7 +56,8 @@ Blobs at the certified tree: `admin-os.html f637b9e` · `sokoni-aos.js eb2913f` 
 | `scripts/test-adminos-nav-coverage.js` | **32 / 0** | built ⇒ reachable at three levels; 57 real-reload deep links; rail and drawer tours; Integrations vocabulary; Super Admin reachability; 1 negative control |
 | `scripts/test-adminos-shell-final.js` | **48 / 0** | one primary path; dashboard link-free; contextual links kept; bell and search routes; 320/390/768/1024/1440 shell certification; 1 negative control |
 | `scripts/test-admin-os-render.js` | **43 / 0** | renderers unchanged |
-| `scripts/test-admin-os-wiring.js` | **308 / 0** | dispatch wiring unchanged |
+| `scripts/test-admin-os-wiring.js` | **310 / 0** | dispatch wiring unchanged (+2 call sites: `smsStats`, C4) |
+| `scripts/test-record-links.js` | **21 / 0** | C6: vocabulary; deep links open and consume; hostile / wrong-route / unknown open nothing; hashchange; ticket modal links; Connect links the application by id; `support.html?ticket=` (case preserved, signed-out fails closed); empty vocabulary module → nothing opens, nothing links |
 
 All suites are hermetic: the repo is served from disk under a fake host, every other origin is aborted, Firebase is the
 compat stub in `scripts/lib/adminos-probe-lib.js`. They cannot reach production. Run them **one at a time** on the

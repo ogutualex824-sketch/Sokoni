@@ -49,7 +49,8 @@ window.SokoniAOS = (() => {
        actually exist, so an unknown or hostile hash falls back to the dashboard and can
        never be spliced into a selector. */
     const _r = _parseRoute(location.hash);
-    _navigate(_r ? _r.section : "dashboard", _r ? _r.tab : null);
+    if (_r && _r.open) _openRecord(_r.open);
+    else _navigate(_r ? _r.section : "dashboard", _r ? _r.tab : null);
     _listenForRoutes();
     _startLiveKPIs();
   }
@@ -75,12 +76,23 @@ window.SokoniAOS = (() => {
      reach a selector, and both must exist in the document. A valid section with an
      unknown tab opens the section on its default tab rather than failing the route. */
   function _parseRoute(hash) {
-    const m = /^([a-z]+)(?:\/([a-z]+))?$/.exec(String(hash || "").replace(/^#/, "").toLowerCase());
+    const raw = String(hash || "").replace(/^#/, "");
+    const q = raw.indexOf("?");
+    const m = /^([a-z]+)(?:\/([a-z]+))?$/.exec((q === -1 ? raw : raw.slice(0, q)).toLowerCase());
     if (!m) return null;
     const section = m[1], tab = m[2] || null;
     if (!document.querySelector('#aosNav .nav-item[data-section="' + section + '"]:not([data-tab])')) return null;
     const tabOk = tab && document.querySelector('#panel-' + section + ' .tab-bar .tab-btn[data-tab="' + tab + '"]');
-    return { section, tab: tabOk ? tab : null };
+    /* `?open=<kind>:<id>` names ONE record (Slice C6). It is read only through the
+       shared vocabulary (sokoni-record-links.js) and honoured only when the route IS
+       that record's own route; otherwise it is dropped and the route still lands.
+       The id keeps its case — Firestore ids are case-sensitive. */
+    let open = null;
+    if (q !== -1 && window.SokoniRecordLinks) {
+      const o = window.SokoniRecordLinks.parseOpen(raw.slice(q + 1));
+      if (o && o.section === section && (o.tab || null) === (tabOk ? tab : null)) open = o;
+    }
+    return { section, tab: tabOk ? tab : null, open };
   }
 
   /* Sidebar + URL state for a route. Used by navigate() AND by a direct click on an
@@ -141,7 +153,9 @@ window.SokoniAOS = (() => {
     /* A hand-edited URL still routes (replaceState never fires this). */
     window.addEventListener("hashchange", () => {
       const r = _parseRoute(location.hash);
-      if (r && (r.section !== _route.section || r.tab !== _route.tab)) _navigate(r.section, r.tab);
+      if (!r) return;
+      if (r.open) { _openRecord(r.open); return; }
+      if (r.section !== _route.section || r.tab !== _route.tab) _navigate(r.section, r.tab);
     });
     /* A direct click on an in-panel tab is secondary navigation; it reports its state to
        the sidebar and the URL rather than leaving them pointing at the parent. */
@@ -1244,6 +1258,7 @@ window.SokoniAOS = (() => {
         <p><strong>Priority:</strong> <span class="prio-badge prio-${t.priority||"normal"}">${t.priority||"normal"}</span></p>
         <p><strong>Status:</strong> <span class="status-badge st-${t.status||"open"}">${t.status||"open"}</span></p>
         ${t.context ? `<p><strong>About:</strong> ${_ctxChips(t.context)}</p>` : ""}
+        ${(() => { const rl = recordLink("ticket", id), cl = customerTicketLink(id); return (rl || cl) ? `<p class="ticket-links" style="font-size:12px"><strong>Links:</strong> ${rl ? `<span class="aos-mono" data-record-link="${_esc(rl)}">${_esc(rl)}</span>` : ""}${cl ? ` · <a href="${_esc(cl)}" target="_blank" rel="noopener" data-customer-link>customer view</a>` : ""}</p>` : ""; })()}
         ${t.uid ? `<p><button type="button" class="aos-btn-sm" onclick="SokoniAOS.emailHistory('${_jsAttr(t.uid)}','ticketMail-${_jsAttr(id)}')">Email history</button></p><div id="ticketMail-${_esc(id)}" hidden></div>` : ""}
         <hr>
         <p>${_esc(t.message||t.body||"No message")}</p>
@@ -1277,6 +1292,26 @@ window.SokoniAOS = (() => {
   }
   function clearTicketContext() { _supportCtx = null; _loadSupport(); }
   async function openTicket(id) { _navigate("support"); await viewTicket(id); }
+
+  /* ── Record deep links (Slice C6) ──────────────────────────────────────
+     ONE vocabulary, sokoni-record-links.js: `#section[/tab]?open=<kind>:<id>`.
+     Opening goes through the SAME functions the in-app chips call, so a deep
+     link is never a second implementation of "open this record". The id is
+     consumed exactly once: _setNavState rewrites the hash to the plain route,
+     so a reload of the resulting URL re-opens nothing. With the vocabulary
+     module absent nothing is opened and no link is built — fail closed. */
+  const _RECORD_OPENERS = {
+    openTicket:              (id) => openTicket(id),
+    openApplication:         (id) => openApplication(id),
+    openVerificationRequest: (id) => openVerificationRequest(id),
+  };
+  function _openRecord(o) {
+    const fn = o && typeof o.open === "string" ? _RECORD_OPENERS[o.open] : null;
+    if (!fn) { _navigate("dashboard"); return; }
+    try { const p = fn(o.id); if (p && typeof p.catch === "function") p.catch(() => {}); } catch (_) {}
+  }
+  function recordLink(kind, id) { const L = window.SokoniRecordLinks; return L ? L.link(kind, id) : null; }
+  function customerTicketLink(id) { const L = window.SokoniRecordLinks; return L ? L.customerTicket(id) : null; }
   function openVerificationRequest(id) {
     _navigate("applications", "verification");
     if (window.SokoniVerificationReview) window.SokoniVerificationReview.open(id);
@@ -3508,6 +3543,8 @@ window.SokoniAOS = (() => {
     openTicket,
     openVerificationRequest,
     openApplication,
+    recordLink,
+    customerTicketLink,
     ticketDialog,
     videoVerification,
     emailHistory,

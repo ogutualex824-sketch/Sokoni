@@ -216,6 +216,16 @@
       '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
   }
 
+  /* A related record is a LINK to the canonical workspace by stable id (Slice C6),
+     built only by the shared vocabulary. Without the module, or with a malformed
+     id, the cell is a dash — never a hand-made URL and never a copied state. */
+  function _recordCell(kind, id) {
+    var L = global.SokoniRecordLinks;
+    var href = L && id ? L.link(kind, String(id)) : null;
+    if (!href) return DASH;
+    return '<a href="' + _esc(href) + '" class="aos-mono" data-record-link="' + _esc(kind) + '">' +
+      _esc(String(id).slice(0, 16)) + '</a>';
+  }
   function _verificationsBlock(rows) {
     var pending = rows.filter(function (r) { return !r.sessionOutcome; }).length;
     var head = '<div class="dash-section">' +
@@ -242,6 +252,7 @@
         '<td>' + _esc(r.reason || DASH) + '</td>' +
         '<td class="aos-muted">' + _esc(String(r.subjectUid || DASH).slice(0, 12)) + '</td>' +
         '<td class="aos-muted">' + _esc(r.businessId ? String(r.businessId).slice(0, 16) : DASH) + '</td>' +
+        '<td>' + _recordCell('application', r.applicationId) + '</td>' +
         '<td>' + (r.sessionOutcome ? _badge(r.sessionOutcome, OUTCOME_BADGE)
           : '<span class="aos-muted">awaiting outcome</span>') + '</td>' +
         '<td>' + _esc((r.documentsReferenced || []).length || DASH) + '</td>' +
@@ -253,7 +264,7 @@
     return head +
       '<div class="dash-section"><h3>Recent verifications</h3>' +
       '<div class="table-wrap"><table class="aos-table"><thead><tr>' +
-      '<th>Started</th><th>Reason</th><th>Subject</th><th>Business</th>' +
+      '<th>Started</th><th>Reason</th><th>Subject</th><th>Business</th><th>Application</th>' +
       '<th>Session outcome</th><th>Docs</th><th>Ended</th><th>Recording disclosed</th>' +
       '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
   }
