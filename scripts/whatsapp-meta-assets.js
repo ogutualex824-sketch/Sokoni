@@ -79,11 +79,22 @@ function promptForToken () {
 
 let TOKEN = '';
 
-/* The token that was pasted into a chat on 2026-09-29 and is therefore
-   compromised. Refusing it by prefix costs nothing and stops the one mistake
-   most likely to be made under time pressure: reaching for the value that is
-   still on the clipboard. */
-const COMPROMISED_PREFIX = 'EAASOxEQWum4';
+/* ── THE COMPROMISED TOKEN, MATCHED BY HASH AND NOT BY PREFIX ──────────────
+   This guard originally compared the first twelve characters, and it was
+   WRONG: a Meta token begins with an app-derived prefix, so EVERY token issued
+   by the same app shares it. Two freshly rotated tokens were refused because
+   they came from the same app as the exposed one — the check was identifying
+   the app, not the credential.
+
+   A false refusal here is not harmless. It tells someone their rotation did not
+   work when it did, and the obvious next move is to distrust the guard and
+   disable it — losing the real protection along with the bad one.
+
+   So: SHA-256 of the exact exposed value. Only that one string is refused. The
+   hash is safe to commit; it cannot be reversed into the token, and the token
+   itself appears nowhere in this repository. */
+const COMPROMISED_SHA256 =
+  '577404461f8e6559cc2e225eae28caa76ddc6569ee4de806e45298641fe7d135';
 
 async function boot () {
   TOKEN = process.env.META_ACCESS_TOKEN || process.env.WHATSAPP_ACCESS_TOKEN || '';
@@ -98,10 +109,11 @@ async function boot () {
     process.exit(2);
   }
 
-  if (TOKEN.startsWith(COMPROMISED_PREFIX)) {
-    console.error('\n  REFUSED — this is the token that was exposed in chat on 2026-09-29.');
-    console.error('  It must be treated as compromised. Rotate it in Meta and use the');
-    console.error('  NEW value; a re-issue of the same string is not a rotation.\n');
+  const digest = require('crypto').createHash('sha256').update(TOKEN).digest('hex');
+  if (digest === COMPROMISED_SHA256) {
+    console.error('\n  REFUSED — this is byte-for-byte the token exposed in chat on 2026-09-29.');
+    console.error('  Rotate it in Meta and use the NEW value; re-issuing the same string');
+    console.error('  is not a rotation.\n');
     process.exit(2);
   }
 
