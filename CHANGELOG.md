@@ -1,3 +1,9 @@
+## [2026-09-29] - Deployed d108f6c (Hosting release 1790716196877000 / version 9074367eed5d10b7, 864 files); signed-out fix prepared, NOT deployed
+
+Live smoke: production firebase.js publishes sokoniAuthReady only for signed-in users, so the page stayed at boot when signed out.
+agreement-acknowledge.html now starts from SokoniAuthState.whenResolved (first auth state for everyone). Unit 21/0, Chromium 14/0.
+This fix is a separate release candidate awaiting authorization.
+
 ## [2026-09-29] - Hosting candidate: Seller Agreement re-acknowledgement surface ported onto the LIVE hosting line (ff9d762) — NOT deployed
 
 Cherry-pick of fd21e9b (slice/c4-capability-consumer) onto fix/track-hub-on-93c5783 @ ff9d762, the commit production hosting

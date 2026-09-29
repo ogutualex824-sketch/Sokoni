@@ -82,9 +82,13 @@
       deps.uid = user ? user.uid : null;
       window.__ackMounted = SokoniAgreementAck.mount(deps);
     }
+    /* Production firebase.js publishes sokoniAuthReady ONLY for a signed-in user; a signed-out visitor never
+       receives it (found on the deployed page). sokoni-auth-state.js resolves the FIRST auth state for everyone,
+       so it is the primary signal; the auth-ready event/promise remain as earlier triggers for signed-in users. */
+    function viaAuthState() { if (started || !window.SokoniAuthState || typeof window.SokoniAuthState.whenResolved !== 'function') return; window.SokoniAuthState.whenResolved(function (session) { start({ user: session && session.uid ? { uid: session.uid } : null }); }); }
     document.addEventListener('sokoniAuthReady', function (ev) { start(ev.detail); }, { once: true });
     function viaPromise() { if (!started && typeof window.waitForSokoniAuthReady === 'function') window.waitForSokoniAuthReady(start); }
-    viaPromise(); window.addEventListener('load', viaPromise);
+    viaAuthState(); viaPromise(); window.addEventListener('load', function () { viaAuthState(); viaPromise(); });
   })();
   </script>
 </body>
