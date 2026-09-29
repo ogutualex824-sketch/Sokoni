@@ -297,6 +297,29 @@ async function _rbCancel(_c){
 }
 
 function _rbMsg(msg){ document.getElementById('rbMsg').textContent = msg; }
+
+/* Resume an existing ride — ride-book.html?ride=<ref>, the link the Track hub (track.html) opens.
+   The page could only follow a ride it had just booked itself; reopening one showed a blank
+   booking form. This reuses the SAME listener a fresh booking uses (_rbListenStatus). The served
+   rules let only the passenger (uid) or the assigned driver read a rideRequests doc, so it waits
+   for sokoni-db.js (a deferred module) and the known auth state before subscribing. */
+(function(){
+  var ref = (new URLSearchParams(location.search).get('ride') || '').trim();
+  if(!/^[A-Za-z0-9_-]{4,64}$/.test(ref)) return;
+  var tries = 0;
+  (function wait(){
+    if(!(window.SokoniDB && typeof SokoniDB.listenRideRequest === 'function' && window.waitForSokoniAuthReady)){
+      if(++tries <= 60) setTimeout(wait, 250);
+      return;
+    }
+    window.waitForSokoniAuthReady().then(function(){
+      _rbRef = ref;
+      document.getElementById('rbForm').style.display   = 'none';
+      document.getElementById('rbStatus').style.display = 'block';
+      _rbListenStatus(ref);
+    });
+  })();
+})();
 </script>
 <script src="sw-register.js" defer></script>
   <!-- Enterprise v2.0: core stack -->

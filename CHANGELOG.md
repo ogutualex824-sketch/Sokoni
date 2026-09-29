@@ -1,3 +1,55 @@
+## [2026-09-29] — Track opens a list of what you can track, not a blank map
+
+**Files:** `track.html`, `ride-book.html`, `CHANGELOG.md`.
+**Database / rules / API changes:** none. **Security:** no new read path — only existing SokoniDB/DeliveryHub
+listeners that the served rules already allow the owner to read. **Breaking changes:** none.
+**Deployment:** HOSTING only, NOT deployed.
+
+**Problem.**
+- The menu and bottom-bar **Track** open `track.html` with no order. That path hit `_fatal("Invalid tracking link")`
+  while a full-screen Leaflet map of Nairobi initialised underneath: a blank map, nothing to tap.
+- (`my-orders.html` already routes real orders to `delivery-tracking.html`, the premium map wired to the canonical
+  delivery record. `track.html`'s own map reads `riderLocations`, which the rules deny to buyers.)
+
+**Fix — Track hub** (only when there is no `?order=` / `?code=`):
+- Lists the signed-in buyer's in-progress **Deliveries** (`SokoniDB.listenUserOrders`), **Parcels**
+  (`DeliveryHub.listenSenderDeliveries`, the `deliveries` collection that "Send a Parcel" writes) and **Rides**
+  (`SokoniDB.listenUserRideHistory`).
+- Destinations:
+  - delivery → `delivery-tracking.html` (same routing as my-orders), plus a "Delivery PIN & confirm receipt" link to
+    this page's existing `?order=` view while a rider is on the way;
+  - parcel → `delivery-tracking.html?ref=` (the producer's own trackingUrl);
+  - ride → `ride-book.html?ride=`.
+- Signed out: a sign-in link (`next=/track`). Every visitor also gets a tracking-code box.
+- A section that never answers says "Couldn't load right now" after 12 s — an unknown is never shown as "nothing on
+  the way". No money figure is shown on any card.
+- `ride-book.html` gains `?ride=<ref>` resume. It reuses `_rbListenStatus`; the page could previously only follow a
+  ride it had just booked.
+
+**Two load-order fixes found while verifying.**
+- The compat 9.22.2 stack + its App Check now loads only for the `?order=` / `?code=` views, via an ordered loader.
+  Loading it alongside the hub's modular `firebase.js` registered App Check twice on one reCAPTCHA element
+  ("reCAPTCHA has already been rendered").
+- Guest detection uses `auth.authStateReady()`. `waitForSokoniAuthReady` is published only on signed-in paths, so a
+  guest waited forever.
+
+**Verified** (live origin, repaired pages served in place, Chromium 390×844):
+- Hub: shown; map not initialised; global header + menu + 5-item bottom bar visible; signed-out prompt; no page errors.
+- Fixture cards rendered through the page's own renderers (fields from the producers): 4 cards, correct links; an
+  HTML-injection probe rendered nothing.
+- `?order=` / `?code=` / bad code: the same end state as before in all three cases.
+- Existing suites identical to baseline 93c5783: test-track-navigation 74/0, test-bottom-nav-rendered 36/0,
+  test-customer-nav 62/0, test-delivery-pin-unreachable 65/0, test-map-engine-ratchet 6/2 (pre-existing
+  `business-apply.html` failures, same on baseline).
+- Not exercised: a signed-in buyer with live data (no production account was used).
+
+**Findings, NOT fixed here:**
+- "Send a Parcel" cannot create a parcel in production: served rules say `deliveries` `allow create: if false`, but
+  `DeliveryHub.createDelivery` writes from the browser. 0 `deliveries` docs exist.
+- The `?code=` view says "Unauthenticated" for a guest, although its comment says a code needs no sign-in
+  (same on baseline).
+- `delivery-tracking.html` still loads the retired `sokoni-delivery-pricing.js` (per sokoni-66's census).
+
 ## [2026-09-29] — Header menu (top-right) no longer opens to a black screen; it fills the screen and scrolls
 
 **Files:** `sokoni-responsive.css`, `CHANGELOG.md`.

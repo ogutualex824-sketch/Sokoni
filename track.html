@@ -105,12 +105,63 @@
     /* ── Delivered overlay ── */
     #doneOverlay{display:none;position:fixed;top:0;left:0;right:0;bottom:var(--sk-track-nav-h);z-index:200;background:rgba(0,0,0,.9);align-items:center;justify-content:center;flex-direction:column;gap:16px;text-align:center;padding:24px}
     #doneOverlay.show{display:flex}
+    /* ── Track hub — /track with no order: the buyer's active deliveries, parcels and rides.
+       A list first; the map opens only once a specific delivery is chosen. Sits between the
+       global header (--sk-header-h, published by shared-header.js) and the bottom bar. ── */
+    #hub{display:none;position:fixed;top:var(--sk-header-h,64px);left:0;right:0;bottom:var(--sk-track-nav-h);
+      overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;z-index:50;
+      padding:16px 16px 28px;background:radial-gradient(ellipse 90% 50% at 50% 0%,rgba(113,255,0,.07),transparent 70%),var(--bg)}
+    .hub-top{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+    .hub-back{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+      background:var(--surface2);border:1px solid var(--border);color:var(--txt);text-decoration:none;font-size:18px;flex-shrink:0}
+    .hub-title{font-size:22px;font-weight:900;letter-spacing:-.3px}
+    .hub-lead{color:var(--muted);font-size:13px;line-height:1.5;margin:0 0 18px}
+    .hub-sec{margin-bottom:22px}
+    .hub-sec h2{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+      margin:0 0 10px;display:flex;align-items:center;gap:8px}
+    .hub-card{display:block;background:var(--surface);border:1px solid var(--border);border-radius:16px;margin-bottom:10px;overflow:hidden}
+    .hub-main{display:flex;align-items:center;gap:12px;padding:14px;color:var(--txt);text-decoration:none}
+    .hub-main:active{background:var(--surface2)}
+    .hub-ic{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;
+      background:rgba(113,255,0,.08);border:1px solid rgba(113,255,0,.2);flex-shrink:0}
+    .hub-body{flex:1;min-width:0}
+    .hub-name{font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .hub-sub{font-size:12px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .hub-badge{font-size:10px;font-weight:800;padding:4px 9px;border-radius:999px;white-space:nowrap;
+      background:rgba(0,188,212,.12);color:#00bcd4;border:1px solid rgba(0,188,212,.35)}
+    .hub-go{color:var(--muted);font-size:18px;margin-left:4px}
+    .hub-chip{display:block;padding:10px 14px;border-top:1px solid var(--border);color:var(--accent);font-size:12px;
+      font-weight:800;text-decoration:none}
+    .hub-empty{padding:16px;border:1px dashed var(--border);border-radius:14px;color:var(--muted);font-size:13px;line-height:1.5}
+    .hub-empty a{color:var(--accent);font-weight:700;text-decoration:none}
+    .hub-code{display:flex;gap:8px;margin-top:6px}
+    .hub-code input{flex:1;min-width:0;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--surface);
+      color:var(--txt);font-size:15px;letter-spacing:.12em;text-transform:uppercase}
+    .hub-code button,.hub-cta{padding:12px 16px;border-radius:12px;border:none;background:var(--accent);color:#000;
+      font-weight:800;font-size:14px;cursor:pointer;text-decoration:none;display:inline-block}
   </style>
 </head>
 <body>
 
 <div id="loadScreen"><div class="spin"></div><p>Loading tracking…</p></div>
 <div id="map"></div>
+
+<main id="hub" aria-labelledby="hubTitle">
+  <div class="hub-top">
+    <a class="hub-back" href="/" onclick="if(history.length>1){history.back();return false;}" aria-label="Back">&#8592;</a>
+    <div class="hub-title" id="hubTitle">📍 Track</div>
+  </div>
+  <p class="hub-lead">Your deliveries, parcels and rides in progress. Tap one to follow it live on the map.</p>
+  <section class="hub-sec"><h2>📦 Deliveries</h2><div id="hubOrders"><div class="hub-empty">Checking…</div></div></section>
+  <section class="hub-sec"><h2>📮 Parcels</h2><div id="hubParcels"><div class="hub-empty">Checking…</div></div></section>
+  <section class="hub-sec"><h2>🏍 Rides</h2><div id="hubRides"><div class="hub-empty">Checking…</div></div></section>
+  <section class="hub-sec"><h2>🔎 Tracking code</h2>
+    <form class="hub-code" id="hubCodeForm" autocomplete="off">
+      <input id="hubCodeInput" maxlength="8" placeholder="8-character code" aria-label="Tracking code">
+      <button type="submit">Track</button>
+    </form>
+  </section>
+</main>
 
 <div id="doneOverlay">
   <div style="font-size:72px">🎉</div>
@@ -166,12 +217,11 @@
 </div>
 
 <script src="leaflet.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-check-compat.js"></script>
-<script src="sokoni-appcheck.js"></script>
-<script src="sokoni-config.js"></script>
+<!-- The compat Firebase stack (9.22.2 + its own App Check) is loaded by _loadCompat() below,
+     ONLY for the single-order / tracking-code views that use it. The Track hub reads through the
+     canonical modular firebase.js instead; loading both registers App Check twice on the same
+     reCAPTCHA element ("reCAPTCHA has already been rendered in this element") and the hub's reads
+     go out with no token. Same files, same order, same versions as the static tags this replaces. -->
 <script>
 'use strict';
 
@@ -182,8 +232,16 @@ var HAV=function(a,b,c,d){var R=6371,dL=(c-a)*Math.PI/180,dl=(d-b)*Math.PI/180,x
 
 function _cf(n){return firebase.functions().httpsCallable(n);}
 
+/* Hub mode = /track opened with no order and no tracking code — e.g. from the menu or the
+   bottom bar. It used to land on _fatal("Invalid tracking link") behind a full-screen map of
+   Nairobi: a blank map and nothing to tap. Hub mode lists what the buyer can actually track,
+   and the map is never initialised for it. */
+var _HUB=(function(){var p=new URLSearchParams(location.search);
+  return !(p.get('order')||'').trim() && !(p.get('code')||p.get('t')||'').trim();}());
+
 /* ── Map ── */
 (function(){
+  if (_HUB) return;
   var _mapEl = document.getElementById('map');
   if (typeof L === 'undefined') {
     if (_mapEl) _mapEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:10px;color:rgba(255,255,255,0.45);font-size:13px;text-align:center;padding:20px;background:rgba(8,8,8,0.7)"><span style="font-size:32px">🗺️</span><div>Map could not load.<br><small style="color:rgba(255,255,255,0.25)">Check your connection and retry.</small></div><button onclick="location.reload()" style="margin-top:6px;padding:9px 22px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);border-radius:10px;color:#71ff00;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit">Retry</button></div>';
@@ -498,8 +556,139 @@ function _fatal(title,detail){
     '<a href="profile.html" style="display:inline-block;padding:12px 24px;background:#71ff00;color:#000;border-radius:10px;font-weight:700;text-decoration:none">My Orders</a></div>';
 }
 
+/* ── Track hub ─────────────────────────────────────────────────────────────────────────────
+   Reads ONLY the canonical listeners every other page already uses (sokoni-db.js):
+     listenUserOrders        — orders on uid OR buyerUid (account merges)
+     DeliveryHub.listenSenderDeliveries — parcels the buyer sent (deliveries, senderUid)
+     listenUserRideHistory    — boda / tuk-tuk / car rides    (rideRequests, uid)
+   No new query, collection or rule. Destinations are the pages that already track each
+   thing: deliveries → delivery-tracking.html (the only buyer map wired to the canonical
+   delivery record — see my-orders.html orderHref), with this page's ?order= view kept for the
+   delivery PIN; parcels → delivery-tracking.html?ref=; rides → ride-book.html?ride=.
+   Money is deliberately not shown here: no fare/fee figure is displayed on a list card. */
+var _HUB_FINAL={ order:['delivered','completed','cancelled','refunded','failed','returned','pending_payment'],
+                 parcel:['delivered','completed','cancelled','failed'],
+                 ride:['completed','cancelled'] };
+var _HUB_PIN_STAGES=['rider_assigned','rider_en_route','picked_up','in_transit','out_for_delivery'];
+function _hesc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(m){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];});}
+function _hlabel(s){s=String(s||'').replace(/_/g,' ');return s?s.charAt(0).toUpperCase()+s.slice(1):'In progress';}
+function _hdate(o){var s=o&&o.createdAt&&(o.createdAt.seconds||o.createdAt._seconds);
+  if(!s)return'';try{return new Date(s*1000).toLocaleDateString();}catch(e){return'';}}
+function _hset(id,html){var el=document.getElementById(id);if(el)el.innerHTML=html;}
+function _hempty(id,text){_hset(id,'<div class="hub-empty">'+text+'</div>');}
+function _hcard(icon,name,sub,status,href,chip){
+  return '<div class="hub-card"><a class="hub-main" href="'+_hesc(href)+'">'+
+    '<div class="hub-ic">'+icon+'</div><div class="hub-body"><div class="hub-name">'+_hesc(name)+'</div>'+
+    (sub?'<div class="hub-sub">'+_hesc(sub)+'</div>':'')+'</div>'+
+    '<span class="hub-badge">'+_hesc(_hlabel(status))+'</span><span class="hub-go">›</span></a>'+
+    (chip?'<a class="hub-chip" href="'+_hesc(chip.href)+'">'+chip.text+'</a>':'')+'</div>';
+}
+function _hubOrders(list){
+  var act=(list||[]).filter(function(o){return _HUB_FINAL.order.indexOf(o.status)<0;}).slice(0,20);
+  if(!act.length){_hempty('hubOrders','No deliveries on the way. <a href="my-orders.html">See all orders ›</a>');return;}
+  _hset('hubOrders',act.map(function(o){
+    var id=o.id||o._fsId||'';
+    var href=o.deliveryRef?'delivery-tracking.html?ref='+encodeURIComponent(o.deliveryRef)
+                          :'delivery-tracking.html?order='+encodeURIComponent(id);
+    var n=(o.items&&o.items.length)?o.items.length+' item'+(o.items.length===1?'':'s'):'';
+    var sub=[n,_hdate(o)].filter(Boolean).join(' · ');
+    var chip=_HUB_PIN_STAGES.indexOf(o.status)>=0?{href:'track.html?order='+encodeURIComponent(id),text:'🔐 Delivery PIN &amp; confirm receipt ›'}:null;
+    return _hcard('📦','Order '+id,sub,o.status,href,chip);
+  }).join(''));
+}
+/* Parcels = "Send a Parcel" (delivery.html → DeliveryHub.createDelivery → `deliveries`, keyed by
+   senderUid). NOT packageRequests: those are the marketplace order deliveries, already listed
+   under Deliveries — reading them here would show every order twice. Fields and link are the
+   producer's own: deliveryAddress / recipientName, trackingUrl = delivery-tracking.html?ref=. */
+function _hubParcels(list){
+  var act=(list||[]).filter(function(p){return _HUB_FINAL.parcel.indexOf(p.status)<0;}).slice(0,20);
+  if(!act.length){_hempty('hubParcels','No parcels on the way. <a href="delivery.html">Send a parcel ›</a>');return;}
+  _hset('hubParcels',act.map(function(p){
+    var ref=p.deliveryRef||p.ref||p._fsId||'';
+    var to=p.recipientName?(p.recipientName+(p.deliveryAddress?' · '+p.deliveryAddress:'')):(p.deliveryAddress||_hdate(p));
+    return _hcard('📮','Parcel '+ref,to?'To '+to:'',p.status,'delivery-tracking.html?ref='+encodeURIComponent(ref));
+  }).join(''));
+}
+function _hubRides(list){
+  var act=(list||[]).filter(function(r){return _HUB_FINAL.ride.indexOf(r.status)<0;}).slice(0,20);
+  if(!act.length){_hempty('hubRides','No rides in progress. <a href="ride-book.html">Book a ride ›</a>');return;}
+  var VEH={boda:'🏍',bike:'🏍',motorbike:'🏍',tuktuk:'🛺','tuk-tuk':'🛺',car:'🚗'};
+  _hset('hubRides',act.map(function(r){
+    var ref=r.ref||r._fsId||'';
+    var route=[r.pickup,r.dropoff].filter(Boolean).join(' → ');
+    var who=r.driverName?' · '+r.driverName:'';
+    return _hcard(VEH[String(r.vehicleType||'').toLowerCase()]||'🚗',route||('Ride '+ref),
+      _hlabel(r.vehicleType||'ride')+who,r.status,'ride-book.html?ride='+encodeURIComponent(ref));
+  }).join(''));
+}
+function _hubSignedOut(){
+  var msg='Sign in to see your deliveries, parcels and rides. '+
+          '<a href="login.html?next='+encodeURIComponent('/track')+'">Sign in ›</a>';
+  ['hubOrders','hubParcels','hubRides'].forEach(function(id){_hempty(id,msg);});
+}
+function _hubUnavailable(){
+  ['hubOrders','hubParcels','hubRides'].forEach(function(id){
+    _hempty(id,'Couldn’t load right now. <a href="track.html">Try again ›</a>');});
+}
+function _showHub(){
+  ['loadScreen','map','hdr','panel'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display='none';});
+  document.getElementById('hub').style.display='block';
+  document.title='Track — SOKONI';
+  document.getElementById('hubCodeForm').addEventListener('submit',function(e){
+    e.preventDefault();
+    var c=(document.getElementById('hubCodeInput').value||'').trim().toUpperCase();
+    if(c.length!==8){document.getElementById('hubCodeInput').focus();return;}
+    location.href='track.html?code='+encodeURIComponent(c);
+  });
+  /* The canonical modular app + SokoniDB + DeliveryHub. firebase.js owns App Check.
+     Signed-in state comes from the Auth SDK's own authStateReady(), which resolves once the
+     initial state is known — signed in OR out. (window.waitForSokoniAuthReady is published only
+     on the signed-in paths of firebase.js, so a guest waiting on it would wait forever.) */
+  Promise.all([import('./firebase.js'),import('./sokoni-db.js'),import('./delivery-hub.js')]).then(function(mods){
+    var a=mods[0]&&mods[0].auth;
+    return (a&&typeof a.authStateReady==='function')?a.authStateReady():null;
+  }).then(function(){
+    var u=window.firebaseAuth&&window.firebaseAuth.currentUser;
+    var db=window.SokoniDB, hub=window.DeliveryHub;
+    if(!u){_hubSignedOut();return;}
+    if(!db||!hub){_hubUnavailable();return;}
+    _unsubs.push(db.listenUserOrders(u.uid,_hubOrders));
+    _unsubs.push(hub.listenSenderDeliveries(u.uid,_hubParcels));
+    _unsubs.push(db.listenUserRideHistory(u.uid,_hubRides));
+    /* SokoniDB's listeners only log a read error, so a refused or failed read would leave a
+       section on "Checking…" forever. After a bounded wait, a section that never answered says
+       so — an unknown is never rendered as "nothing on the way". */
+    setTimeout(function(){
+      ['hubOrders','hubParcels','hubRides'].forEach(function(id){
+        var el=document.getElementById(id);
+        if(el&&/Checking…/.test(el.textContent))_hempty(id,'Couldn’t load right now. <a href="track.html">Try again ›</a>');
+      });
+    },12000);
+  }).catch(function(){_hubUnavailable();});
+}
+
+/* Ordered loader for the compat stack (async=false keeps insertion order = the old tag order). */
+function _loadCompat(done){
+  var srcs=['https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js',
+            'https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js',
+            'https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js',
+            'https://www.gstatic.com/firebasejs/9.22.2/firebase-app-check-compat.js',
+            'sokoni-appcheck.js','sokoni-config.js'];
+  var left=srcs.length, failed=false;
+  srcs.forEach(function(src){
+    var s=document.createElement('script'); s.src=src; s.async=false;
+    s.onload=function(){ if(--left===0&&!failed) done(); };
+    s.onerror=function(){ if(!failed){ failed=true; _fatal('Tracking unavailable','Check your connection and try again.'); } };
+    document.body.appendChild(s);
+  });
+}
+
 /* ── Bootstrap ── */
 (function(){
+  if(_HUB){ _showHub(); return; }
+  _loadCompat(_bootTracking);
+})();
+function _bootTracking(){
   var p=new URLSearchParams(location.search);
   _orderId=(p.get('order')||'').trim();
   _code=(p.get('code')||p.get('t')||'').toUpperCase().trim();
@@ -515,7 +704,7 @@ function _fatal(title,detail){
     return;
   }
   _poll(); // single initial load; real-time takes over via _setupRealtime()
-})();
+}
 </script>
 
 <!-- The unified customer bottom navigation. Deliberately OUTSIDE every script path
