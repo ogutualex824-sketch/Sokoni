@@ -32,7 +32,7 @@ const db = F.db;
 const say = console.log; console.log = console.info = console.warn = console.debug = () => {};
 const resolveIn = (m) => require.resolve(m, { paths: [FN] });
 const stub = (m, exp) => { const p = m.startsWith('./') ? Path.join(FN, m + '.js') : resolveIn(m); require.cache[p] = { id: p, filename: p, loaded: true, exports: exp }; };
-const authApi = { getUser: async (u) => ({ uid: u, customClaims: {} }) };
+const authApi = { getUser: async (u) => ({ uid: u, customClaims: /^admin/.test(u) ? { admin: true } : {} }) };
 stub('firebase-admin/firestore', { getFirestore: () => db, FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath });
 stub('firebase-admin/auth', { getAuth: () => authApi });
 stub('firebase-admin', { apps: [{}], initializeApp: () => ({}), app: () => ({}), firestore: Object.assign(() => db, { FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath }), auth: () => authApi, storage: () => ({ bucket: () => ({}) }) });
@@ -53,7 +53,7 @@ const D = (n) => new Date(NOW + n * 86400e3).toISOString().slice(0, 10);
 
 async function seed(uid, doc) {
   await db.doc(`providers/${uid}`).set(Object.assign({ name: uid, status: 'active', approvedAt: 1, acceptsBookings: true }, doc));
-  await db.doc(`applications/app_${uid}`).set({ uid, status: 'approved', role: doc && doc.healthcare ? 'health' : 'provider', category: 'x', decidedAt: 1 });
+  await db.doc(`applications/app_${uid}`).set({ uid, status: 'approved', role: doc && doc.healthcare ? 'health' : 'provider', category: 'x', decidedBy: 'admin_1', decidedAt: 1 });
   await db.doc(`providerAvailability/${uid}`).set({ uid, modes: ['fixed_hours'], schedule: WEEK, appt: { enabled: true, durationMins: 60, maxDaysAhead: 90, minNoticeHours: 1, allowSameDay: true }, cap: {} });
   await db.doc(`users/${uid}`).set({ displayName: uid });
 }

@@ -25,6 +25,7 @@ const resolveIn = (m) => require.resolve(m, { paths: [FN] });
 const stub = (m, exp) => { const p = m.startsWith('./') ? Path.join(FN, m + '.js') : resolveIn(m); require.cache[p] = { id: p, filename: p, loaded: true, exports: exp }; };
 stub('firebase-admin/firestore', { getFirestore: () => db, FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath });
 stub('firebase-admin', { apps: [{}], initializeApp: () => ({}), app: () => ({}), firestore: Object.assign(() => db, { FieldValue: F.FieldValue }), auth: () => ({}) });
+const AF = require('./lib/approval-fixture'); AF.stubAdminAuth(stub); /* shell gate: approvedAt fixtures carry their admin decision */
 stub('./subscription-core', { resolveSubscription: async () => ({ found: false }) });
 const R3 = require(Path.join(ROOT, 'scripts', 'r3-classification-manifest.js'));
 const BW = require(Path.join(FN, 'business-workspace.js'));

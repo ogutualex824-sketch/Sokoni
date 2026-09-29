@@ -34,6 +34,9 @@ const PROVIDERISH_ROLES = ['provider', 'seller', 'merchant', 'business', 'landlo
 const PROVIDERISH_CLAIMS = ['provider', 'seller', 'merchant', 'landlord', 'organizer', 'creator'];
 const KIND_OF_ROLE = { provider: ['provider'], health: ['provider'], legal: ['provider'], event_organizer: ['provider'], seller: ['seller', 'business', 'shop'], merchant: ['seller', 'business', 'shop'], business: ['seller', 'business', 'shop'], hotel: ['business'], driver: ['driver'], rider: ['driver'], landlord: ['landlord'], property: ['landlord'] };
 const lower = (s) => String(s || '').toLowerCase();
+/* the applicant may withdraw a pending application (status 'withdrawn' — non-decisive, owner-writable); intake
+   normalisation may leave statusCanonical at 'pending', so a withdrawal is read from the raw status first */
+const statusOf = (a) => (lower(a && a.status) === 'withdrawn' ? 'withdrawn' : lower((a && (a.statusCanonical || a.status)) || ''));
 const STATES = Object.freeze({ BUYER_ONLY: 'BUYER_ONLY', VALID: 'VALID_APPROVAL', INVALID_LEGACY: 'INVALID_LEGACY_APPROVAL', NONE: 'NO_APPROVAL', PENDING: 'PENDING_APPROVAL', REFUSED: 'REFUSED' });
 const TRANSITION = 'REAPPLICATION_REQUIRED';
 
@@ -44,7 +47,7 @@ function isSelfDecision(deciderUid, applicantUid) {
 
 /** Validity of one application's decision under the authority test. */
 function decisionValidity(app, applicantUid, isAdminAccount, presentKinds) {
-  const status = lower(app.statusCanonical || app.status);
+  const status = statusOf(app);
   const by = typeof app.decidedBy === 'string' ? app.decidedBy.trim() : '';
   if (status !== 'approved') return { valid: false, why: 'not_approved', status };
   if (!by) return { valid: false, why: 'no_decidedBy', status };
@@ -69,14 +72,18 @@ function deriveApprovalState(input) {
   const validApp = apps.find((a) => a.validity.valid) || null;
   const invalidApproved = apps.filter((a) => a.validity.status === 'approved' && !a.validity.valid && a.validity.why !== 'approves_other_role');
   const otherRoleApproved = apps.filter((a) => a.validity.why === 'approves_other_role');
-  const pending = apps.filter((a) => UNDECIDED.includes(lower(a.statusCanonical || a.status)) && !a.decidedBy);
-  const rejected = apps.filter((a) => REJECTED.includes(lower(a.statusCanonical || a.status)));
+  const pending = apps.filter((a) => UNDECIDED.includes(statusOf(a)) && !a.decidedBy);
+  const rejected = apps.filter((a) => REJECTED.includes(statusOf(a)));
+  /* a NEGATIVE decision by a real admin account (reject / suspend through applicationDecide) is a decision too:
+     the account is REFUSED for now, not "in need of reapplication" */
+  const adminNegative = apps.filter((a) => ['suspended', ...REJECTED].includes(statusOf(a)) && typeof a.decidedBy === 'string' && a.decidedBy.trim() && !isSelfDecision(a.decidedBy, uid) && !/[:/ ]/.test(a.decidedBy) && isAdminAccount(a.decidedBy.trim()));
   const adminDecision = regs.map((r) => r.d.approvalDecision).find((d) => d && d.source === 'admin_decision') || null;
   const artefactRegs = regs.filter((r) => r.d.approvedAt || r.d.approved === true || r.d.adminApproved === true || r.d.approvedBy);
   const providerish = roles.some((r) => PROVIDERISH_ROLES.includes(r)) || claims.some((c) => PROVIDERISH_CLAIMS.includes(c));
   const reasons = [];
   let state, subtype;
   if (adminDecision && adminDecision.decision === 'refuse') { state = STATES.REFUSED; subtype = 'admin_decision_refuse'; reasons.push('providers.approvalDecision refuse by ' + adminDecision.decidedBy); }
+  else if (!validApp && adminNegative.length && !liveRegs.some((r) => r.d.approvedAt)) { state = STATES.REFUSED; subtype = 'application_' + lower(adminNegative[0].statusCanonical || adminNegative[0].status) + '_by_admin'; reasons.push('application ' + adminNegative[0].id + ' ' + lower(adminNegative[0].status) + ' by admin account ' + adminNegative[0].decidedBy); }
   else if (validApp) { state = STATES.VALID; subtype = 'application_by_admin_account'; reasons.push('application ' + validApp.id + ' approved by admin account ' + validApp.decidedBy); }
   else if (adminDecision && adminDecision.decision === 'approve' && !isSelfDecision(adminDecision.decidedBy, uid)) { state = STATES.VALID; subtype = 'admin_decision_approve'; reasons.push('providers.approvalDecision approve by ' + adminDecision.decidedBy); }
   else if (invalidApproved.length || artefactRegs.length) { state = STATES.INVALID_LEGACY; subtype = 'approval_artefact_without_authority'; invalidApproved.forEach((a) => reasons.push('application ' + a.id + ' approved but ' + a.validity.why + ' (decidedBy ' + JSON.stringify(a.decidedBy) + ')')); artefactRegs.forEach((r) => reasons.push(r.kind + ' carries approval fields with no valid decision')); }

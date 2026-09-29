@@ -54,7 +54,7 @@ fs.mkdirSync(path.join(tmp, 'scripts')); fs.mkdirSync(path.join(tmp, 'functions'
 fs.copyFileSync(TOOL, path.join(tmp, 'scripts', 'audit-category-dashboards.js'));
 /* business-workspace.js consumes the capability read model (capability slice 1), so the copy carries its two pure
    dependencies too — otherwise the tool dies on MODULE_NOT_FOUND (exit 1) before it can fail closed (exit 2). */
-for (const f of ['business-category.js', 'business-workspace.js', 'healthcare-category.js', 'application-lifecycle.js', 'shared/business-capabilities.js', 'shared/business-scope.js']) fs.copyFileSync(path.join(ROOT, 'functions', f), path.join(tmp, 'functions', f));
+for (const f of ['business-category.js', 'business-workspace.js', 'healthcare-category.js', 'application-lifecycle.js', 'shared/business-capabilities.js', 'shared/business-scope.js', 'shared/approval-remediation.js', 'shared/cleanup-claimed-ids.json']) fs.copyFileSync(path.join(ROOT, 'functions', f), path.join(tmp, 'functions', f));
 fs.copyFileSync(path.join(ROOT, 'offer.html'), path.join(tmp, 'offer.html'));
 fs.writeFileSync(path.join(tmp, 'hub-register.js'), '/* the list moved */\nvar CATEGORIES = [];\n');
 const c = cp.spawnSync(process.execPath, [path.join(tmp, 'scripts', 'audit-category-dashboards.js')], { cwd: tmp, encoding: 'utf8' });

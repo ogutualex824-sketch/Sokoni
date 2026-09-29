@@ -32,6 +32,7 @@ const say = console.log; console.log = console.info = console.warn = console.err
 const stub = (m, exp) => { const p = m.startsWith('./') ? Path.join(FN, m + '.js') : require.resolve(m, { paths: [FN] }); require.cache[p] = { id: p, filename: p, loaded: true, exports: exp }; };
 stub('firebase-admin/firestore', { getFirestore: () => db, FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath });
 stub('firebase-admin', { apps: [{}], initializeApp: () => ({}), firestore: Object.assign(() => db, { FieldValue: F.FieldValue, Timestamp: F.Timestamp }), auth: () => ({}) });
+const AF = require('./lib/approval-fixture'); AF.stubAdminAuth(stub); AF.autoApproveOnWrite(db); /* shell gate: approvedAt fixtures carry their admin decision */
 stub('./subscription-core', { resolveSubscription: async () => ({ found: false }) });
 const BW = require(Path.join(FN, 'business-workspace.js'));
 const { makePageHarness } = require('./lib/page-harness.js');
@@ -47,6 +48,8 @@ const routes = (h) => h.homes.map((x) => x.route).join(',');
   await db.doc('providers/plumber').set(Object.assign({ name: 'Plumb Co' }, biz('trades')));
   await db.doc('providers/hotel1').set(Object.assign({ name: 'Lake Hotel' }, biz('hotel')));
   await db.doc('providers/unc1').set(Object.assign({ name: 'Mixed' }, biz(null)));
+  /* shell gate: a shop home routes only for a validly approved account — seed the seller decisions the producer would have made */
+  for (const u of ['shop1', 'shop2', 'multi']) await AF.seedApproved(db, u, 'seller');
   await db.doc('shops/S1').set({ ownerId: 'shop1', name: 'Mama Mboga', status: 'active' });
   await db.doc('shops/S2').set({ ownerId: 'shop2', name: 'A', status: 'active' });
   await db.doc('shops/S3').set({ ownerId: 'shop2', name: 'B', status: 'active' });

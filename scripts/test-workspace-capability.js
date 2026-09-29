@@ -40,6 +40,7 @@ const resolveIn = (m) => require.resolve(m, { paths: [FN] });
 const stub = (m, exp) => { const p = m.startsWith('./') ? Path.join(FN, m + '.js') : resolveIn(m); require.cache[p] = { id: p, filename: p, loaded: true, exports: exp }; };
 stub('firebase-admin/firestore', { getFirestore: () => db, FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath });
 stub('firebase-admin', { apps: [{}], initializeApp: () => ({}), app: () => ({}), firestore: Object.assign(() => db, { FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath }), auth: () => ({}) });
+const AF = require('./lib/approval-fixture'); AF.stubAdminAuth(stub); AF.autoApproveOnWrite(db); /* shell gate: approvedAt fixtures carry their admin decision */
 stub('./subscription-core', { resolveSubscription: async () => ({ found: false }) });
 const BW = require(Path.join(FN, 'business-workspace.js'));
 const CAPS = require(Path.join(FN, 'shared', 'business-capabilities.js'));
@@ -102,26 +103,26 @@ for (const m of ['set', 'update']) {
   await db.doc('sellers/pending1').set({ status: 'pending' });
   const w3 = await BW.workspaceFor(db, 'pending1');
   const h3 = await BW.homeFor(db, 'pending1', {});
-  ck('seller present-not-live, no provider → no route, UNCLASSIFIED, home says apply', w3.route === null && w3.capability.classification === 'UNCLASSIFIED' && h3.apply === true && h3.primary === null, { route: w3.route, cap: w3.capability.classification, apply: h3.apply });
+  ck('seller present-not-live, no provider → the shell gate: REAPPLICATION_REQUIRED, the only route is the completion surface; capability UNCLASSIFIED; home points there', w3.route === 'complete-application.html' && w3.state === 'REAPPLICATION_REQUIRED' && w3.capability.classification === 'UNCLASSIFIED' && h3.primary && h3.primary.route === 'complete-application.html', { route: w3.route, cap: w3.capability.classification, apply: h3.apply });
   const w3b = await BW.workspaceFor(db, 'nobody');
   ck('an account with nothing → found:false, UNCLASSIFIED, no route', w3b.found === false && w3b.route === null && w3b.capability.classification === 'UNCLASSIFIED');
 
   say('\n── 4 · CONFLICT refuses routing ──');
   await db.doc('providers/forged').set(Object.assign({ name: 'Self-made', status: 'active' }, biz('trades')));   /* status, no approvedAt */
   const w4 = await BW.workspaceFor(db, 'forged');
-  ck('a provider live by STATUS ALONE → CAPABILITY_CONFLICT, route null, conflict named, Overview + Settings only', w4.state === 'CAPABILITY_CONFLICT' && w4.route === null && w4.capability.conflicts.includes('provider_status_without_approval') && w4.modules.overview.state === S.AVAILABLE && w4.modules.quotes.state === S.PENDING_APPROVAL, { state: w4.state, route: w4.route, conflicts: w4.capability.conflicts });
+  ck('a provider live by STATUS ALONE → the shell gate answers first: REAPPLICATION_REQUIRED, route = complete-application.html (the capability read model still names the conflict), Overview + Settings only', w4.state === 'REAPPLICATION_REQUIRED' && w4.route === 'complete-application.html' && w4.approval.state === 'NO_APPROVAL' && w4.capability.conflicts.includes('provider_status_without_approval') && w4.modules.overview.state === S.AVAILABLE && w4.modules.quotes.state === S.PENDING_APPROVAL, { state: w4.state, route: w4.route, conflicts: w4.capability.conflicts });
   ck('   the module gate refuses too (assertModule → WORKSPACE_MODULE_PENDING_APPROVAL)', (await codeOf(BW.assertModule(db, 'forged', 'quotes', HE))) === 'WORKSPACE_MODULE_PENDING_APPROVAL');
   const h4 = await BW.homeFor(db, 'forged', {});
-  ck('   home: a business entry with NO route and the review message; primary null; apply false (it is not "nothing")', h4.homes.length === 1 && h4.homes[0].route === null && /review/.test(h4.homes[0].message) && h4.primary === null && h4.apply === false, h4.homes);
-  ck('   CONTROL: adding approvedAt to the same record turns the conflict off and routes to provider-dashboard', (await (async () => { await db.doc('providers/forged').set({ approvedAt: 1 }, { merge: true }); const w = await BW.workspaceFor(db, 'forged'); return w.state === S.AVAILABLE && w.route === 'provider-dashboard.html' && w.capability.classification === 'SERVICES'; })()));
+  ck('   home: a business entry routed to the completion surface with the completion message; apply false (it is not "nothing")', h4.homes.length === 1 && h4.homes[0].route === 'complete-application.html' && /completed/.test(h4.homes[0].message) && h4.apply === false, h4.homes);
+  ck('   CONTROL: a real admin decision (approvedAt + the approved application that produced it) turns the gate off and routes to provider-dashboard', (await (async () => { await db.doc('providers/forged').set({ approvedAt: 1 }, { merge: true }); const w = await BW.workspaceFor(db, 'forged'); return w.state === S.AVAILABLE && w.route === 'provider-dashboard.html' && w.capability.classification === 'SERVICES'; })()));
   await db.doc('sellers/forgedseller').set({ status: 'active', active: true });   /* client-writable status only */
   const w4b = await BW.workspaceFor(db, 'forgedseller');
-  ck('a seller live by status alone → CONFLICT seller_status_without_approval, route null (never merchant-v2)', w4b.state === 'CAPABILITY_CONFLICT' && w4b.route === null && w4b.capability.conflicts.includes('seller_status_without_approval'));
+  ck('a seller live by status alone → REAPPLICATION_REQUIRED (never merchant-v2); the read model still names seller_status_without_approval', w4b.state === 'REAPPLICATION_REQUIRED' && w4b.route === 'complete-application.html' && w4b.capability.conflicts.includes('seller_status_without_approval'));
 
   say('\n── 5 · unstamped is not silently a provider or a merchant ──');
   const all = await Promise.all(['plumber', 'seller1', 'salon1', 'pending1', 'forged', 'nobody'].map((u) => BW.workspaceFor(db, u)));
   ck('every answer carries a capability with an authority status', all.every((w) => w.capability && w.capability.readable && ['STAMPED', 'NOT_YET_STAMPED', 'INVALID_STAMP'].includes(w.capability.authorityStatus)));
-  ck('no route was granted to any account whose registry evidence is absent (nobody, pending1) — NOT_YET_STAMPED alone routes nowhere', all.filter((w) => w.capability.classification === 'UNCLASSIFIED').every((w) => w.route === null));
+  ck('no route was granted to any account whose registry evidence is absent (nobody, pending1) — NOT_YET_STAMPED alone routes nowhere', all.filter((w) => w.capability.classification === 'UNCLASSIFIED').every((w) => w.route === null || w.route === 'complete-application.html'));
 
   say('\n── stamps ──');
   await db.doc('businesses/plumber').set({ capabilities: stamp(undefined, 'approved') });
@@ -139,7 +140,7 @@ for (const m of ['set', 'update']) {
   say('\n── unreadable ≠ unclassified ──');
   const brokenDb = { collection: (c) => c === 'sellers' ? { doc: () => ({ get: async () => { throw new Error('permission-denied'); } }) } : db.collection(c) };
   const wu = await BW.workspaceFor(brokenDb, 'plumber');
-  ck('R2: a failing capability read → readable:false with the error, CAPABILITY_UNREADABLE, NO route (fail closed — never a route on one authority)', wu.capability.readable === false && /permission-denied/.test(wu.capability.error) && wu.route === null && wu.state === 'CAPABILITY_UNREADABLE', { cap: wu.capability, route: wu.route, state: wu.state });
+  ck('R2: a failing capability read → readable:false with the error, CAPABILITY_UNREADABLE, NO route (fail closed — never a route on one authority)', wu.capability.readable === false && /permission-denied/.test(wu.capability.error) && wu.route === null && ['CAPABILITY_UNREADABLE', 'APPROVAL_UNREADABLE'].includes(wu.state), { cap: wu.capability, route: wu.route, state: wu.state });
 
   say('\n── R2 · THE MATRIX — route = f(category lane, capability), both required ──');
   const seedProv = (uid, cat, extra) => db.doc('providers/' + uid).set(Object.assign({ name: uid }, APPROVED, cat ? biz(cat) : {}, extra || {}));
@@ -154,7 +155,7 @@ for (const m of ['set', 'update']) {
   await seedProv('m_both_nocat', null); await seedSeller('m_both_nocat');          /* BOTH, no category */
   await seedProv('m_svc_prodcat', 'wholesale');                                     /* products lane + SERVICES only (DG Wine / Latomi once stamped) */
   await seedSeller('m_prod_svccat', 'trades');                                      /* services lane + PRODUCTS only */
-  await db.doc('providers/m_unc_pending').set(Object.assign({ name: 'p', status: 'pending' }, biz('cleaning'))); /* UNCLASSIFIED, category present */
+  await db.doc('providers/m_unc_pending').set(Object.assign({ name: 'p', status: 'pending' }, biz('cleaning'))); await db.doc('applications/m_unc_pending-app').set({ uid: 'm_unc_pending', role: 'provider', status: 'pending' }); /* UNCLASSIFIED, category present, application pending */
   await db.doc('providers/m_susp').set(Object.assign({ name: 's', status: 'suspended', approvedAt: 1 }, biz('cleaning')));
   await db.doc('providers/m_conf').set(Object.assign({ name: 'c', status: 'active' }, biz('cleaning')));  /* status only → CONFLICT */
   for (const u of ['m_prod_prodcat', 'm_svc_svccat', 'm_both_svccat', 'm_both_prodcat', 'm_svc_nocat', 'm_prod_nocat', 'm_both_nocat', 'm_svc_prodcat', 'm_prod_svccat', 'm_unc_pending', 'm_susp', 'm_conf', 'nobody']) M[u] = await BW.workspaceFor(db, u);
@@ -170,9 +171,9 @@ for (const m of ['set', 'update']) {
   ck('M9  services lane (trades) + PRODUCTS only → CONFLICT, no route', M.m_prod_svccat.route === null && M.m_prod_svccat.state === 'CAPABILITY_CONFLICT', row('m_prod_svccat'));
   ck('M10 UNCLASSIFIED (pending provider, category present) → PENDING_APPROVAL, no route', M.m_unc_pending.route === null && M.m_unc_pending.state === S.PENDING_APPROVAL && M.m_unc_pending.reason === 'NOT_APPROVED', row('m_unc_pending'));
   ck('M11 suspended → PENDING_APPROVAL / SUSPENDED, no route', M.m_susp.route === null && M.m_susp.reason === 'SUSPENDED', row('m_susp'));
-  ck('M12 CONFLICT from the read model (status without approval evidence) → no route', M.m_conf.route === null && M.m_conf.state === 'CAPABILITY_CONFLICT', row('m_conf'));
+  ck('M12 status without approval evidence → the shell gate: REAPPLICATION_REQUIRED, route = the completion surface only (never a dashboard)', M.m_conf.route === 'complete-application.html' && M.m_conf.state === 'REAPPLICATION_REQUIRED' && M.m_conf.approval.state === 'NO_APPROVAL', row('m_conf'));
   ck('M13 nothing → not found, no route', M.nobody.found === false && M.nobody.route === null);
-  ck('M14 no answer routes on ONE authority: every routed row has BOTH a category and a routable capability', Object.values(M).filter((w) => w.route).every((w) => w.category && ['PRODUCTS', 'SERVICES', 'PRODUCTS_AND_SERVICES'].includes(w.capability.classification)));
+  ck('M14 no answer routes on ONE authority: every routed row has BOTH a category and a routable capability', Object.values(M).filter((w) => w.route && w.route !== 'complete-application.html').every((w) => w.category && ['PRODUCTS', 'SERVICES', 'PRODUCTS_AND_SERVICES'].includes(w.capability.classification)));
   ck('M15 every answer carries category, lane and capability', Object.values(M).every((w) => 'category' in w && 'lane' in w && w.capability && w.capability.authorityStatus !== undefined));
 
   say('\n── R2 · DG Wine and Latomi, as they are in production and as C1 would stamp them ──');

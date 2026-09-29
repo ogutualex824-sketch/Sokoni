@@ -30,6 +30,7 @@ const say = console.log; console.log = console.info = console.warn = console.err
 const stub = (m, exp) => { const p = m.startsWith('./') ? Path.join(FN, m + '.js') : require.resolve(m, { paths: [FN] }); require.cache[p] = { id: p, filename: p, loaded: true, exports: exp }; };
 stub('firebase-admin/firestore', { getFirestore: () => db, FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath });
 stub('firebase-admin', { apps: [{}], initializeApp: () => ({}), firestore: Object.assign(() => db, { FieldValue: F.FieldValue, Timestamp: F.Timestamp }), auth: () => ({}) });
+const AF = require('./lib/approval-fixture'); AF.stubAdminAuth(stub); AF.autoApproveOnWrite(db); /* shell gate: approvedAt fixtures carry their admin decision */
 stub('./subscription-core', { resolveSubscription: async () => ({ found: false }) });
 const HW = require(Path.join(FN, 'healthcare-workspace.js'));
 const BWS = require(Path.join(FN, 'business-workspace.js'));   /* CHANGELOG 241: the dashboard projects this */

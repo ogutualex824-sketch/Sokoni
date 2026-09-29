@@ -29,10 +29,24 @@
     NO_APPROVED_BUSINESS: 'You do not have an approved business on SOKONI yet.',
   };
 
+  /* SHELL GATE (REAPPLICATION_REQUIRED): the server's derived approval state decides where this account belongs.
+     An account whose registration must be completed is sent to the completion surface the server names — the
+     dashboard never renders for it. REFUSED / withheld / pending accounts see the server's explanation here. */
+  var GATE_MESSAGE = {
+    REFUSED: 'SOKONI did not approve this business record. You may submit a new application.',
+    CLEANUP_OWNED: 'Your business record is under SOKONI review. Nothing is required from you right now.',
+    APPROVAL_UNREADABLE: 'Your approval record could not be read just now. Nothing has changed; please try again shortly.',
+  };
   function apply(w) {
     if (!w || !w.modules) return;
+    if (w.state === 'REAPPLICATION_REQUIRED' && w.route && !window.__sokoniNoRedirect) {
+      document.documentElement.setAttribute('data-ws-state', 'REAPPLICATION_REQUIRED');
+      window.location.replace('/' + String(w.route).replace(/^\//, ''));
+      return;
+    }
     var mods = w.modules;
     document.documentElement.setAttribute('data-ws-state', String(w.state || ''));
+    if (GATE_MESSAGE[w.reason] && !w.message) w.message = GATE_MESSAGE[w.reason];
     Array.prototype.forEach.call(document.querySelectorAll('[data-hc-section]'), function (el) {
       var m = mods[el.getAttribute('data-hc-section')];
       var show = !!(m && m.state === 'AVAILABLE');

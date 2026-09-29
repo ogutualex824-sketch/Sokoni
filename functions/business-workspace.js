@@ -39,6 +39,12 @@ const BCAT = require('./business-category');
    This module CONSUMES it: route = f(category, approved capability). It never derives capability from category,
    and it never writes a capability. See docs/CAPABILITY_AUTHORITY_READ_MODEL.md. */
 const CAPS = require('./shared/business-capabilities');
+/* SHELL GATE (2026-09-29, REAPPLICATION_REQUIRED): the FIRST question the workspace answers is "is this account validly
+   approved?" — derived by shared/approval-remediation.js from the same evidence the remediation census used, never from
+   a role, a claim or a status alone. Only VALID_APPROVAL proceeds to the category/capability routing below. */
+const REM = require('./shared/approval-remediation');
+const CLEANUP = require('./shared/cleanup-claimed-ids.json');
+const CLEANUP_IDS = new Set(CLEANUP.ids);
 
 const STATE = Object.freeze({
   AVAILABLE: 'AVAILABLE', LOCKED: 'LOCKED', NOT_APPLICABLE: 'NOT_APPLICABLE', NOT_IMPLEMENTED: 'NOT_IMPLEMENTED',
@@ -264,14 +270,91 @@ function _holding(state, reason, category, message, extra) {
  *   any             CONFLICT                 → no route
  *   —               unreadable               → no route (CAPABILITY_UNREADABLE; fail closed, never route on one authority)
  */
-async function workspaceFor(db, uid) {
+/* Resolves "is this uid an admin account?" through Firebase Auth, cached per call. Injectable for tests
+   (opts.approval.isAdminAccount); the production default is the same test the deployed trigger applies. */
+function _adminResolver(getUser) {
+  const cache = {};
+  return async (uid) => {
+    if (!uid || /[:/ ]/.test(String(uid))) return false;
+    if (Object.prototype.hasOwnProperty.call(cache, uid)) return cache[uid];
+    let ok = false;
+    try { const u = await getUser(String(uid)); const c = (u && u.customClaims) || {}; ok = c.admin === true || c.superAdmin === true; } catch (_) { ok = false; }
+    cache[uid] = ok; return ok;
+  };
+}
+
+/** The derived approval state for ONE account (read-only). `readable:false` when the evidence could not be read. */
+async function approvalStateFor(db, uid, opts) {
+  const o = opts || {};
+  try {
+    const getUser = (o.approval && o.approval.getUser) || (async (u) => require('firebase-admin/auth').getAuth().getUser(u));
+    const isAdminAsync = _adminResolver(getUser);
+    const [u, s, p, bOwn, shOwn, apps] = await Promise.all([
+      db.collection('users').doc(String(uid)).get(), db.collection('sellers').doc(String(uid)).get(), db.collection('providers').doc(String(uid)).get(),
+      db.collection('businesses').where('ownerId', '==', String(uid)).limit(10).get().catch(() => ({ docs: [] })),
+      db.collection('shops').where('ownerId', '==', String(uid)).limit(10).get().catch(() => ({ docs: [] })),
+      db.collection('applications').where('uid', '==', String(uid)).limit(20).get(),
+    ]);
+    const bSelf = await db.collection('businesses').doc(String(uid)).get();
+    const businesses = bOwn.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+    if (bSelf.exists && !businesses.some((x) => x.id === String(uid))) businesses.push(Object.assign({ id: String(uid) }, bSelf.data()));
+    const shops = shOwn.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+    const applications = apps.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+    /* resolve every decider ONCE, then hand the derivation a synchronous predicate */
+    const deciders = [...new Set(applications.map((a) => (typeof a.decidedBy === 'string' ? a.decidedBy.trim() : '')).filter(Boolean))];
+    const adminMap = {}; for (const d of deciders) adminMap[d] = await isAdminAsync(d);
+    let claims = o.claims || null;
+    if (!claims) { try { const me = await getUser(String(uid)); claims = Object.keys((me && me.customClaims) || {}).filter((k) => me.customClaims[k] === true); } catch (_) { claims = []; } }
+    else claims = Object.keys(claims).filter((k) => claims[k] === true);
+    const user = u.exists ? (u.data() || {}) : null;
+    const roles = user ? (Array.isArray(user.roles) ? user.roles : (user.role ? [user.role] : [])) : [];
+    const derived = REM.deriveApprovalState({ uid: String(uid), claims, roles, provider: p.exists ? p.data() : null, seller: s.exists ? s.data() : null, businesses, shops, applications,
+      isAdminAccount: (d) => adminMap[d] === true, cleanupIds: (o.approval && o.approval.cleanupIds) || CLEANUP_IDS, agreementVersion: o.agreementVersion || null });
+    return Object.assign({ readable: true }, derived);
+  } catch (e) {
+    return { readable: false, error: String(e && e.message || e) };
+  }
+}
+
+async function workspaceFor(db, uid, opts) {
   const capability = await capabilityFor(db, uid);
   const [p, b] = await Promise.all([db.collection('providers').doc(String(uid)).get(), db.collection('businesses').doc(String(uid)).get()]);
   const prov = p.exists ? (p.data() || {}) : null, biz = b.exists ? (b.data() || {}) : null;
   const category = categoryFor(prov, biz);
   const lane = laneOf(category);
-  const withCap = (w) => Object.assign(w, { capability, category: w.category === undefined ? category : w.category, lane, servicesWorkspace: w.servicesWorkspace === true });
+  const approval = await approvalStateFor(db, uid, opts);
+  const approvalOut = approval.readable ? { state: approval.state, subtype: approval.subtype, transition: approval.transition, ownership: approval.ownership, applicationPath: approval.applicationPath, agreement: approval.agreement } : { state: 'UNREADABLE', error: approval.error };
+  const withCap = (w) => Object.assign(w, { capability, category: w.category === undefined ? category : w.category, lane, servicesWorkspace: w.servicesWorkspace === true, approval: approvalOut });
   const K = CAPS.CLASSIFICATION;
+
+  /* ── THE GATE: only a validly approved account reaches the category/capability routing ─────────────────── */
+  if (!approval.readable) {
+    return withCap(_holding('APPROVAL_UNREADABLE', 'APPROVAL_UNREADABLE', category,
+      'Your approval record could not be read just now. Nothing has changed; please try again shortly.'));
+  }
+  const A = REM.STATES;
+  if (approval.state === A.BUYER_ONLY) {
+    return withCap({ found: false, category: null, route: null, state: STATE.PENDING_APPROVAL, reason: 'NO_APPROVED_BUSINESS',
+      modules: _moduleSet(STATE.PENDING_APPROVAL, 'NO_APPROVED_BUSINESS'), entitlement: { state: null, hub: null } });
+  }
+  if (approval.state === A.REFUSED) {
+    return withCap(_holding('REFUSED', 'REFUSED', category,
+      'SOKONI did not approve this business record. You may submit a new application.', { remediation: { applicationPath: approval.applicationPath, agreement: approval.agreement } }));
+  }
+  if (approval.state === A.PENDING) {
+    return withCap(_holding(STATE.PENDING_APPROVAL, 'NOT_APPROVED', category,
+      'Your application is with SOKONI for review.', { remediation: { applicationPath: approval.applicationPath, agreement: approval.agreement } }));
+  }
+  if (approval.state === A.INVALID_LEGACY || approval.state === A.NONE) {
+    if (approval.ownership === 'cleanup') {
+      return withCap(_holding('REMEDIATION_WITHHELD', 'CLEANUP_OWNED', category,
+        'Your business record is under SOKONI review. Nothing is required from you right now.'));
+    }
+    return withCap(_holding('REAPPLICATION_REQUIRED', approval.subtype, category,
+      'Your previous registration needs to be completed before your business workspace can open.',
+      { route: 'complete-application.html', remediation: { applicationPath: approval.applicationPath, agreement: approval.agreement, preserve: approval.preserve } }));
+  }
+  /* VALID_APPROVAL — proceed exactly as before */
 
   if (!capability.readable) {
     return withCap(_holding('CAPABILITY_UNREADABLE', 'CAPABILITY_UNREADABLE', category,
@@ -428,15 +511,20 @@ async function homeFor(db, uid, token) {
   const t = token || {};
   const homes = [];
   const add = (h) => { if (!homes.some((x) => x.route === h.route && x.route)) homes.push(h); };
+  let approvalValid = false;
   try {
-    const w = await workspaceFor(db, uid);
+    const w = await workspaceFor(db, uid, { claims: t });
+    approvalValid = !!(w.approval && w.approval.state === REM.STATES.VALID);
     if (w.found) {
       add({ kind: 'business', label: w.label || 'My business', category: w.category, state: w.state, route: w.route,
         servicesWorkspace: w.servicesWorkspace === true, capability: w.capability ? w.capability.classification : null,
+        approval: w.approval ? w.approval.state : null,
         message: w.message || (w.state === STATE.PENDING_APPROVAL ? 'Your business is not active yet.' : null) });
     }
   } catch (_) { /* fall through — never invent a workspace */ }
-  try {
+  /* SHELL GATE: a shop home is a business home; it routes only when the account's approval is VALID. A shop live by
+     status alone is answered above (REAPPLICATION_REQUIRED → the completion surface), never by merchant-v2. */
+  if (approvalValid) try {
     const shops = await db.collection('shops').where('ownerId', '==', String(uid)).limit(10).get();
     const active = shops.docs.filter((d) => String((d.data() || {}).status || 'active') !== 'suspended');
     if (active.length) add({ kind: 'shop', label: active.length > 1 ? 'My shops' : ((active[0].data() || {}).name || 'My shop'), route: active.length > 1 ? 'choose-shop.html' : 'merchant-v2.html', state: STATE.AVAILABLE });
@@ -461,7 +549,7 @@ const _h = {
     const uid = req && req.auth && req.auth.uid;
     if (!uid) throw new HttpsError('unauthenticated', 'Sign in required.');
     const { getFirestore } = require('firebase-admin/firestore');
-    return workspaceFor(getFirestore(), uid);
+    return workspaceFor(getFirestore(), uid, { claims: (req.auth && req.auth.token) || null });
   },
   /* C2c: every workspace this account holds — the ONE answer behind workspace.html. Caller-only. */
   workspaceHome: async (req) => {
@@ -473,4 +561,4 @@ const _h = {
   },
 };
 
-module.exports = { STATE, MODULES, MODULE_KEYS, CORE, PROFILES, PROFILE_OF, PROFILE_NOT_BUILT, ROUTE_OF, modulesForProfile, notBuiltFor, healthcareModules, workspaceFor, capabilityFor, categoryFor, laneOf, homeFor, assertModule, gateCalendarModule, gateIfProvider, _h };
+module.exports = { STATE, MODULES, MODULE_KEYS, CORE, PROFILES, PROFILE_OF, PROFILE_NOT_BUILT, ROUTE_OF, modulesForProfile, notBuiltFor, healthcareModules, workspaceFor, approvalStateFor, capabilityFor, categoryFor, laneOf, homeFor, assertModule, gateCalendarModule, gateIfProvider, _h };
