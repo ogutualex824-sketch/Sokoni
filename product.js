@@ -493,11 +493,13 @@ else{
                 <div id="prdShopStatus" class="prd-shop-status" role="status" aria-live="polite" hidden></div>
 
                 ${product.kebsCert
-                    ? `<div style="display:inline-flex;align-items:center;gap:7px;padding:5px 13px;background:rgba(0,180,100,0.12);border:1px solid rgba(0,200,120,0.35);border-radius:10px;margin-bottom:8px;">
-                        <span style="font-size:15px;">🏅</span>
+                    /* 2026-09-29: "KEBS CERTIFIED" was printed from text the SELLER types (kebsCert, length-capped only) —
+                       no verification authority exists. Said as what it is: a seller declaration. */
+                    ? `<div class="prd-kebs-declared" title="Declared by the seller — not verified by SOKONI" style="display:inline-flex;align-items:center;gap:7px;padding:5px 13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);border-radius:10px;margin-bottom:8px;">
+                        <span style="font-size:15px;">🏷️</span>
                         <div>
-                            <div style="font-size:11px;font-weight:900;color:#00c864;letter-spacing:0.3px;">KEBS CERTIFIED</div>
-                            <div style="font-size:10px;color:rgba(0,200,120,0.65);font-weight:600;">${_esc(product.kebsCert)}</div>
+                            <div style="font-size:11px;font-weight:800;color:rgba(255,255,255,0.85);letter-spacing:0.3px;">KEBS no. · declared by seller</div>
+                            <div style="font-size:10px;color:rgba(255,255,255,0.55);font-weight:600;">${_esc(product.kebsCert)} · not verified by SOKONI</div>
                         </div>
                     </div>`
                     : (["food","agriculture","electronics","computers","appliances","health","beauty"].includes((product.category||"").toLowerCase())
@@ -650,19 +652,8 @@ else{
                     <div id="offerConfirm" style="margin-top:8px;font-size:12px;"></div>
                 </div>
 
-                <!-- FEATURES -->
-
-                <div class="product-features">
-
-                    <p>✔ Premium Quality</p>
-
-                    <p>✔ Fast Delivery</p>
-
-                    <p>✔ Trusted Seller</p>
-
-                    <p>✔ Secure Payments</p>
-
-                </div>
+                <!-- 2026-09-29: the fixed "✔ Premium Quality / Fast Delivery / Trusted Seller / Secure Payments" claims were
+                     shown on EVERY product regardless of fact — removed (UI data integrity). Real signals follow. -->
 
                 <!-- SELLER PERFORMANCE — populated by sokoni-product-analytics.js -->
                 <div id="prdSellerPerfSlot"></div>
@@ -727,77 +718,8 @@ else{
           </div>
         </div>
 
-        <!-- REVIEWS -->
-
-        <div class="reviews-section">
-
-            <h2>
-
-                Customer Reviews
-
-            </h2>
-
-
-
-            <div class="review-card">
-
-                <div class="review-top">
-
-                    ⭐⭐⭐⭐⭐
-
-                </div>
-
-
-
-                <p>
-
-                    Amazing quality and fast delivery.
-
-                    Definitely buying again 😄🔥
-
-                </p>
-
-
-
-                <span>
-
-                    — Alex
-
-                </span>
-
-            </div>
-
-
-
-            <div class="review-card">
-
-                <div class="review-top">
-
-                    ⭐⭐⭐⭐☆
-
-                </div>
-
-
-
-                <p>
-
-                    Premium hoodie quality.
-
-                    Sokoni is becoming elite 🔥
-
-                </p>
-
-
-
-                <span>
-
-                    — Brian
-
-                </span>
-
-            </div>
-
-        </div>
+        <!-- 2026-09-29: two HARD-CODED reviews ("Alex" 5★, "Brian" 4★) were rendered on every product — removed.
+             Real, verified-purchase reviews render in #productReviewsSection (sokoni-reviews.js → reviews.js). -->
 
         <!-- TYPE MODULE — the section that changes with what this listing IS.
              Same page architecture, different modules: a dish shows ingredients and

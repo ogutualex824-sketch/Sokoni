@@ -1,6 +1,6 @@
 'use strict';
 
-const { onCall } = require('firebase-functions/v2/https');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
 /* ── Severity inference ─────────────────────────────────────────────────── */
@@ -30,11 +30,27 @@ function _requireSuperAdmin(req) {
 /* ─────────────────────────────────────────────────────────────────────────
    1. tsReportContent — any authenticated user files a report
 ──────────────────────────────────────────────────────────────────────────── */
+/* The ONE content-report store is `reports` (AdminOS › Fraud & Trust › Reports Queue reads it through tsGetReports).
+   2026-09-29 (trust integrity T1): product reports used to be written by the browser into a separate `flags`
+   collection that AdminOS never reads — they reached no administrator. They now come here. */
+const REPORT_ENTITY_TYPES = ['product', 'listing', 'user', 'business', 'message', 'review'];
+const PRODUCT_REPORT_REASONS = ['Counterfeit or suspicious product', 'Misleading information', 'Prohibited item', 'Incorrect price',
+  'Inappropriate content', 'Fraud or scam concern', 'Other'];
 exports.tsReportContent = onCall(OPT_REPORT, async (req) => {
   const uid = req.auth?.uid;
-  if (!uid) throw new Error('auth/unauthenticated');
-  const { entityId, entityType, reason, detail } = req.data;
-  if (!entityId || !entityType || !reason) throw new Error('entityId, entityType, reason required');
+  if (!uid) throw new HttpsError('unauthenticated', 'Sign in to report.');
+  const d = req.data || {};
+  const entityId = String(d.entityId || '').trim().slice(0, 128);
+  const entityType = String(d.entityType || '');
+  const reason = String(d.reason || '').trim().slice(0, 120);
+  if (!entityId || /[/]/.test(entityId) || !REPORT_ENTITY_TYPES.includes(entityType) || !reason) {
+    throw new HttpsError('invalid-argument', 'entityId, a known entityType and a reason are required.');
+  }
+  if (entityType === 'product' && !PRODUCT_REPORT_REASONS.includes(reason)) {
+    throw new HttpsError('invalid-argument', 'Choose one of the listed reasons.');
+  }
+  const evidenceUrls = (Array.isArray(d.evidenceUrls) ? d.evidenceUrls : [])
+    .filter((u) => typeof u === 'string' && /^https:\/\//.test(u)).slice(0, 5).map((u) => u.slice(0, 500));
 
   const db = getFirestore();
 
@@ -44,13 +60,28 @@ exports.tsReportContent = onCall(OPT_REPORT, async (req) => {
     .where('reportedBy', '==', uid)
     .where('status', '==', 'pending')
     .limit(1).get();
-  if (!dup.empty) throw new Error('You have already reported this content');
+  if (!dup.empty) throw new HttpsError('already-exists', 'You have already reported this. Our team is reviewing it.');
+
+  /* PRODUCT CONTEXT, captured by the SERVER at report time (the minimum an administrator needs): the product, its
+     shop / seller and its state then. A report about a product that does not exist is refused. */
+  let context = null;
+  if (entityType === 'product') {
+    const ps = await db.collection('products').doc(entityId).get();
+    if (!ps.exists) throw new HttpsError('not-found', 'That product no longer exists.');
+    const p = ps.data() || {};
+    context = { productName: String(p.name || '').slice(0, 120), sellerUid: p.sellerUid || p.sellerId || null,
+      shopId: p.shopId || p.sellerUid || null, price: typeof p.price === 'number' ? p.price : null,
+      status: p.status || null, isVisible: p.isVisible !== false };
+    if (context.sellerUid && context.sellerUid === uid) throw new HttpsError('failed-precondition', 'You cannot report your own product.');
+  }
 
   const severity = _inferSeverity(reason);
   const ref = await db.collection('reports').add({
     entityId, entityType, reason,
-    detail: (detail || '').slice(0, 500),
-    reportedBy: uid,
+    detail: String(d.detail || '').slice(0, 500),
+    evidenceUrls,
+    context,
+    reportedBy: uid,   /* visible to administrators only (tsGetReports is admin-only) */
     status: 'pending',
     severity,
     createdAt: FieldValue.serverTimestamp(),
@@ -107,7 +138,7 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
   const { reportId, action, resolution, banUser } = req.data;
   if (!reportId || !action) throw new Error('reportId, action required');
   const validActions = { approve: 'actioned', dismiss: 'dismissed', escalate: 'escalated' };
-  if (!validActions[action]) throw new Error('action must be approve|dismiss|escalate');
+  if (!validActions[action]) throw new HttpsError('invalid-argument', 'action must be approve|dismiss|escalate');
 
   const db = getFirestore();
   const ref = db.collection('reports').doc(reportId);
@@ -122,6 +153,20 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
     resolution: (resolution || '').slice(0, 500),
     reviewedAt: FieldValue.serverTimestamp(),
   });
+
+  /* A PRODUCT report actioned by an administrator takes the product off sale and out of discovery:
+     isVisible:false (checkout refuses it — availability-enforce 'hidden') plus a moderationHold that records why.
+     Only this admin path writes moderationHold; the seller cannot dismiss or approve a report (admin-only op). */
+  let productHidden = false;
+  if (action === 'approve' && report.entityType === 'product' && req.data.hideProduct === true) {
+    const pref = db.collection('products').doc(String(report.entityId));
+    const psnap = await pref.get();
+    if (psnap.exists) {
+      await pref.set({ isVisible: false, moderationHold: { reportId, reason: report.reason, by: req.auth.uid, at: FieldValue.serverTimestamp() },
+        updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      productHidden = true;
+    }
+  }
 
   // Ban the reported entity (user) if requested — only superAdmin can auto-ban
   if (banUser && req.auth?.token?.superAdmin && report.entityType === 'user') {
@@ -139,12 +184,13 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
     entityId: report.entityId,
     entityType: report.entityType,
     result: newStatus,
+    productHidden,
     resolution: resolution || '',
     performedBy: req.auth.uid,
     createdAt: FieldValue.serverTimestamp(),
   });
 
-  return { success: true, status: newStatus };
+  return { success: true, status: newStatus, productHidden };
 });
 
 /* ─────────────────────────────────────────────────────────────────────────

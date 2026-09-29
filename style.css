@@ -13591,6 +13591,13 @@ body.light-mode .bulk-upload-text{ color:#444; }
     color:#00c864;
 }
 
+/* 2026-09-29: a seller-DECLARED KEBS number — neutral, never the "certified" green */
+.kebs-declared{
+    background:rgba(255,255,255,0.08);
+    border:1px solid rgba(255,255,255,0.18);
+    color:rgba(255,255,255,0.82);
+}
+
 .kebs-unverified{
     background:rgba(255,152,0,0.14);
     border:1px solid rgba(255,152,0,0.3);

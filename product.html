@@ -344,11 +344,13 @@ document.addEventListener('DOMContentLoaded', () => {
     <h3 style="margin:0 0 16px;color:white;font-size:16px;">⚑ Report Listing</h3>
     <select id="reportListingReason" style="width:100%;padding:12px;background:#1a1a1a;border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:white;font-size:16px;margin-bottom:12px;font-family:inherit;">
       <option value="">Select a reason...</option>
-      <option>Counterfeit / fake item</option>
-      <option>Misleading description</option>
+      <!-- the server's list (functions/trust-safety.js PRODUCT_REPORT_REASONS) -->
+      <option>Counterfeit or suspicious product</option>
+      <option>Misleading information</option>
       <option>Prohibited item</option>
-      <option>Wrong price / scam</option>
-      <option>Duplicate listing</option>
+      <option>Incorrect price</option>
+      <option>Inappropriate content</option>
+      <option>Fraud or scam concern</option>
       <option>Other</option>
     </select>
     <textarea id="reportListingDetails" placeholder="Additional details (optional)" style="width:100%;padding:12px;background:#1a1a1a;border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:white;font-size:16px;resize:vertical;min-height:80px;font-family:inherit;margin-bottom:12px;"></textarea>
@@ -359,8 +361,10 @@ document.addEventListener('DOMContentLoaded', () => {
   </div>
 </div>
 <script>
-function openReportListing(){
-  var u = window.firebaseAuth && window.firebaseAuth.currentUser;
+/* 2026-09-29: the signed-in check read window.firebaseAuth, which this page never defines — every signed-in buyer
+   was sent to login. It now asks the page's own app. */
+async function openReportListing(){
+  var u = window.SokoniReport ? await SokoniReport.currentUser() : null;
   if(!u){ (window._skToast||alert)('Please sign in to report a listing.'); window.location.href='login.html?next='+encodeURIComponent(location.pathname+location.search); return; }
   document.getElementById('reportModal').style.display='flex';
 }
@@ -370,14 +374,15 @@ function submitListingReport(){
   if(!reason){(window._skToast||alert)('Please select a reason.');return;}
   var pid=new URLSearchParams(location.search).get('id')||'unknown';
   if(window.SokoniReport){
-    SokoniReport.submit('listing',pid,reason,details).then(function(){
+    SokoniReport.submit('product',pid,reason,details).then(function(r){
+      if(!r) return;   /* NOT sent — the modal stays open with the reason the server gave */
       document.getElementById('reportModal').style.display='none';
       document.getElementById('reportListingReason').value='';
       document.getElementById('reportListingDetails').value='';
     });
   } else {
-    document.getElementById('reportModal').style.display='none';
-    (window._skToast||alert)('Report submitted. Thank you.');
+    /* never claim a report was sent when nothing sent it */
+    (window._skToast||alert)('Reporting is not available right now — please try again shortly.');
   }
 }
 // Show report bar after page loads
@@ -402,7 +407,9 @@ window.addEventListener('DOMContentLoaded',function(){
     section.style.display = "block";
     function _initReviews() {
       if (window.SokoniReviews) {
-        var rv = new SokoniReviews("product_" + productId, "product", { targetName: document.title });
+        /* the RAW product id + targetType 'product' — the same key submitReview canonicalises to (it used to read
+           "product_<id>", a key no write ever produced) */
+        var rv = new SokoniReviews(productId, "product", { targetName: document.title });
         rv.render(container);
       } else {
         setTimeout(_initReviews, 200);

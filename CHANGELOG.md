@@ -1,3 +1,104 @@
+## [2026-09-29] - Product trust integrity (T1): no invented social proof, verified-purchase reviews that work, product reports that reach AdminOS
+
+**Functions + product page + cards + AdminOS + moderation, NOT deployed.** Branch `slice/c4-category-matrix`. This is
+the first slice of the owner's product/commerce brief. The census found the product page's trust surfaces invented
+content, or reached nobody.
+
+**Invented content removed** (CLAUDE.md "UI data integrity"):
+- **Two hard-coded reviews** ("Alex" 5★, "Brian" 4★) rendered on **every** product. Removed. Real reviews render in
+  `#productReviewsSection`.
+- **Fixed claims** "✔ Premium Quality / Fast Delivery / Trusted Seller / Secure Payments" were shown on every product
+  regardless of fact. Removed.
+- **KEBS "CERTIFIED"** was printed from free text the seller types; no verification authority exists. The product page
+  and cards now say **"KEBS no. · declared by seller · not verified by SOKONI"** / "KEBS (declared)", in neutral
+  styling.
+
+**Reviews:**
+- **The product-page widget could never work.**
+  - `sokoni-reviews.js` called with a raw fetch and no Authorization, so every submit failed as unauthenticated.
+  - product.html read under `product_<id>`, a key no write produces.
+  - Now the widget uses the page app's **signed-in callable** and reads and writes the **same key** (raw product id,
+    `targetType: 'product'`).
+  - The widget says "sign in" / "verified buyers only" instead of failing.
+- **Product reviews are verified-purchase only** (`functions/reviews.js` `submitReview`):
+  - the server finds a delivered/completed order **of that product** by the reviewer;
+  - a supplied order is checked against the product;
+  - the product's **own seller is refused** (`SELF_REVIEW`);
+  - the review stores `verifiedPurchase: true`, `getReviews` returns it, and the card shows "✓ Verified purchase".
+  - Before, any signed-in account could review any product, the seller included.
+
+**Reports reach AdminOS:**
+- **The old path reached no administrator.** Product reports were written by the browser into `flags`, which AdminOS
+  never reads.
+- The Report button checked `window.firebaseAuth`, which product.html never defines, so every signed-in buyer was sent
+  to login.
+- When the library was missing, the page said "Report submitted" anyway.
+- **Now:** `SokoniReport.submit` calls **`tsReportContent`** on the page's own app. It initialises App Check once
+  (same site key), which the callable enforces. The page checks sign-in on its own app and never claims success
+  unless the server accepted.
+- **Server** (`functions/trust-safety.js`):
+  - a known entity type and, for products, one of the listed reasons;
+  - the product must exist;
+  - a seller cannot report their own product;
+  - https-only evidence;
+  - **product context captured server-side**: name, seller, shop, price, state;
+  - `HttpsError` codes.
+- **AdminOS › Fraud & Trust › Reports Queue** (`sokoni-aos.js`):
+  - it showed `targetId` (reports carry `entityId`), so every row read "—";
+  - its "Action" button sent an action the server refuses, so it always failed;
+  - it now shows the product and its context, and offers Dismiss / Escalate / Action / **Take product down**.
+- **Take down** is admin-only in `tsReviewReport`: `isVisible:false` (checkout refuses it) plus a `moderationHold`
+  recording why, audited in `trustSafetyAudit`. A seller cannot review or dismiss a report.
+- **Legacy `moderation.html`:**
+  - the stored-XSS breakout is closed: report ids moved out of inline `onclick` into data attributes, and `'` is now
+    escaped;
+  - "Ban" is offered only on a **user** report (on a listing report it wrote `users/{productId}`);
+  - "Remove Content" is relabelled "Mark actioned", which is what it does.
+- The admin metrics counter counted `flags` with status "open" (written "pending", so always 0). It now counts
+  **pending `reports`**.
+
+**Tests:**
+- **`scripts/test-trust-integrity.js`: 16/0.** It runs the REAL `reviews.js` and `trust-safety.js`, plus source
+  assertions for the pages.
+  - Counterproof on `7d469f9`: **16 fail**.
+  - Sabotage: **16/16 caught**.
+- **`scripts/test-trust-integrity-browser.js`: 4/0** (Chromium, the REAL product.html, REAL callables):
+  - no invented reviews or claims, and KEBS reads "declared";
+  - a delivered buyer publishes a review, shown "Verified purchase";
+  - a stranger is refused and nothing is written;
+  - a signed-in buyer's report reaches `reports` with product context, with no login bounce.
+- **Superseded, with the reason in the file:** `test-review-target-canonicalization`'s product case. The reviewer now
+  has a delivered order of the product, and the suite's minimal fake answers equality queries from its fixture. The
+  case still asserts the canonical target. 8/0.
+- **Regression:** 50 suites run on the working tree and the pristine `7d469f9` tree.
+  - Equal, except the superseded case above and the cart / checkout suites that inspect the **uncommitted** tree.
+    Those were re-run after the commit; see the follow-up entry.
+
+**Still open (recorded):**
+- **Product-level KEBS / compliance verification authority:** there is no verifier, status or expiry, so the badge
+  stays "declared".
+- **`moderationHold` is not yet protected** in the product writers and rules, so a seller could re-show a taken-down
+  product. This belongs to stage 3 (rules) and the uploader slice.
+- **Cards read ratings and "verified seller" from each visitor's localStorage** (`script.js`). This is fixed in the
+  product-card slice.
+- **No seller response to product reviews yet.**
+- **Chat Seller, Q&A, Offers and Live Comments** are the next slice (T2): conversations.
+
+**Security:**
+- Closes a stored-XSS breakout in the moderation page.
+- Closes fake reviews and self-reviews.
+- Reports now reach administrators.
+- Take-downs are audited and admin-only.
+
+**Performance:**
+- A product review adds ≤2 reads: the product, and the reviewer's orders (≤200).
+- A report adds 1 read: the product.
+
+**Database:**
+- New fields: `reviews.verifiedPurchase`, `reports.context`, `reports.evidenceUrls`, `products.moderationHold`.
+- `trustSafetyAudit.productHidden`.
+- No migration.
+
 ## [2026-09-29] - Availability A2: bookings, KASS, product page, order cutoff and delivery/pickup hours all read the ONE evaluator
 
 **Functions + product page + storefront + merchant-v2, NOT deployed.** Branch `slice/c4-category-matrix`. This

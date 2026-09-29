@@ -221,8 +221,37 @@ exports.submitReview = onCall({ region: "us-central1" }, async (req) => {
     .limit(1).get();
   if (!existing.empty) throw new HttpsError("already-exists", "You have already reviewed this.");
 
+  /* PRODUCT REVIEWS ARE VERIFIED-PURCHASE ONLY (2026-09-29, trust integrity T1). A product review needs an order
+     of THIS product, by THIS reviewer, that was delivered or completed — the server finds it (the buyer never has
+     to pick an order), and the product's own seller can never review it. Before this, any signed-in account could
+     review any product, the product's seller included, and a supplied orderId was never checked against the
+     product. Other targets keep their existing rules. */
+  let verifiedOrderId = null;
+  if (targetType === "product") {
+    const prodSnap = await db.collection("products").doc(canonicalId).get();
+    const prod = prodSnap.exists ? (prodSnap.data() || {}) : {};
+    const sellerOf = prod.sellerUid || prod.sellerId || prod.ownerId || null;
+    if (sellerOf && sellerOf === uid) throw new HttpsError("permission-denied", "You cannot review your own product.", { code: "SELF_REVIEW" });
+    const itemsOf = (o) => (Array.isArray(o.items) ? o.items : (o.productId ? [{ productId: o.productId }] : []));
+    const hasProduct = (o) => itemsOf(o).some((it) => it && (it.productId === canonicalId || it.id === canonicalId));
+    const DONE = ["completed", "delivered"];
+    if (orderId) {
+      const od = await db.collection("orders").doc(String(orderId)).get();
+      const o = od.exists ? (od.data() || {}) : null;
+      if (!o || o.buyerUid !== uid || !DONE.includes(o.status) || !hasProduct(o)) {
+        throw new HttpsError("failed-precondition", "Only a buyer whose order of this product was delivered can review it.", { code: "NOT_A_VERIFIED_BUYER" });
+      }
+      verifiedOrderId = od.id;
+    } else {
+      const mine = await db.collection("orders").where("buyerUid", "==", uid).limit(200).get();
+      const hit = mine.docs.find((d) => { const o = d.data() || {}; return DONE.includes(o.status) && hasProduct(o); });
+      if (!hit) throw new HttpsError("failed-precondition", "Only a buyer whose order of this product was delivered can review it.", { code: "NOT_A_VERIFIED_BUYER" });
+      verifiedOrderId = hit.id;
+    }
+  }
+
   // Verify purchase (non-blocking for service reviews — orderId optional)
-  if (orderId) {
+  if (orderId && targetType !== "product") {
     const orderDoc = await db.collection("orders").doc(orderId).get();
     if (!orderDoc.exists || orderDoc.data().buyerUid !== uid) {
       throw new HttpsError("permission-denied", "Order not found or not yours.");
@@ -255,7 +284,9 @@ exports.submitReview = onCall({ region: "us-central1" }, async (req) => {
     title:   cleanTitle,
     body:    cleanBody,
     images:  safeImages,
-    orderId: orderId || null,
+    orderId: verifiedOrderId || orderId || null,
+    /* true only when the SERVER matched a delivered order of this product to this reviewer */
+    verifiedPurchase: !!verifiedOrderId,
     helpful: 0,
     flags:   0,
     status:  autoApprove ? "approved" : "pending",
@@ -370,6 +401,8 @@ exports.getReviews = onCall({ region: "us-central1" }, async (req) => {
       authorUid:  data.authorUid,
       createdAt:  data.createdAt?.toDate?.()?.toISOString() || null,
       targetType: data.targetType,
+      /* set only by submitReview when it matched a delivered order of this product (2026-09-29) */
+      verifiedPurchase: data.verifiedPurchase === true,
     };
   });
 

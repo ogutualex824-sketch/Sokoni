@@ -1870,31 +1870,47 @@ window.SokoniAOS = (() => {
     _toast("Receipt voided — audit trail recorded", "success");
   }
 
+  /* 2026-09-29 (trust integrity T1): the queue showed `targetId` (reports carry `entityId`), so every row read "—",
+     and its "Action" button sent an action the server does not accept, so it always failed. It now shows what was
+     reported (with the server-captured product context) and offers the server's actions: dismiss, action, escalate,
+     and — for a product — take it down (isVisible:false + moderationHold, audited in trustSafetyAudit). */
   async function viewReports() {
-    const data = await _call("tsGetReports", { status: "pending", limit: 20 }).catch(() => ({ reports: [] }));
+    const data = await _call("tsGetReports", { status: "pending", limit: 50 }).catch(() => ({ reports: [] }));
     const reports = data.reports || [];
+    const q = (v) => _esc(String(v == null ? "" : v)).replace(/'/g, "&#39;");
     _modal("Reports Queue", `<table class="aos-table"><thead><tr>
-        <th>Type</th><th>Target</th><th>Reason</th><th>Date</th><th>Actions</th>
-      </tr></thead><tbody>${reports.map(r => `<tr>
-        <td>${_esc(r.entityType||"—")}</td>
-        <td class="aos-muted">${_esc(r.targetId||"—")}</td>
-        <td>${_esc(r.reason||"—")}</td>
+        <th>Type</th><th>Reported</th><th>Reason</th><th>Severity</th><th>Date</th><th>Actions</th>
+      </tr></thead><tbody>${reports.map(r => {
+        const c = r.context || {};
+        const what = r.entityType === "product"
+          ? `<a href="product.html?id=${encodeURIComponent(r.entityId || "")}" target="_blank" rel="noopener">${_esc(c.productName || r.entityId || "—")}</a><div class="aos-muted">seller ${_esc(c.sellerUid || "—")} · ${c.isVisible === false ? "hidden" : "live"}${c.price != null ? " · KES " + _esc(c.price) : ""}</div>`
+          : `<span class="aos-muted">${_esc(r.entityId || "—")}</span>`;
+        return `<tr>
+        <td>${_esc(r.entityType || "—")}</td>
+        <td>${what}</td>
+        <td>${_esc(r.reason || "—")}${r.detail ? `<div class="aos-muted">${_esc(r.detail)}</div>` : ""}</td>
+        <td>${_esc(r.severity || "—")}</td>
         <td class="aos-muted">${_date(r.createdAt)}</td>
         <td>
-          <button class="aos-btn-sm success" onclick="SokoniAOS.reviewReport('${r.id}','dismiss')">Dismiss</button>
-          <button class="aos-btn-sm danger"  onclick="SokoniAOS.reviewReport('${r.id}','action')">Action</button>
+          <button class="aos-btn-sm success" onclick="SokoniAOS.reviewReport('${q(r.id)}','dismiss')">Dismiss</button>
+          <button class="aos-btn-sm" onclick="SokoniAOS.reviewReport('${q(r.id)}','escalate')">Escalate</button>
+          <button class="aos-btn-sm danger" onclick="SokoniAOS.reviewReport('${q(r.id)}','approve')">Action</button>
+          ${r.entityType === "product" ? `<button class="aos-btn-sm danger" onclick="SokoniAOS.reviewReport('${q(r.id)}','approve',true)">Take product down</button>` : ""}
         </td>
-      </tr>`).join("") || _emptyRow(5,"No pending reports")}</tbody></table>`);
+      </tr>`; }).join("") || _emptyRow(6,"No pending reports")}</tbody></table>`);
   }
 
-  async function reviewReport(id, action) {
+  async function reviewReport(id, action, hideProduct) {
+    let res;
     try {
-      await _call("tsReviewReport", { reportId: id, action });
+      res = await _call("tsReviewReport", { reportId: id, action, hideProduct: hideProduct === true });
     } catch (e) {
       _toast(e.message, "error");
       return;
     }
-    _toast("Report " + action + "ed","success"); _closeModal(); _panelCache.fraud = false; _loadFraud();
+    const word = { dismiss: "dismissed", escalate: "escalated", approve: "actioned" }[action] || action;
+    _toast("Report " + word + (res && res.productHidden ? " — product taken down" : ""), "success");
+    _closeModal(); _panelCache.fraud = false; _loadFraud();
   }
 
   async function investigateAlert(id) {

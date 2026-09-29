@@ -59,13 +59,33 @@
     types: {
       user:     ['Fake account', 'Harassment', 'Spam', 'Scam / fraud', 'Impersonation', 'Underage account', 'Other'],
       listing:  ['Fake listing', 'Prohibited item', 'Wrong category', 'Misleading price', 'Counterfeit goods', 'Stolen goods', 'Other'],
+      /* the server's own list (functions/trust-safety.js PRODUCT_REPORT_REASONS) — a reason outside it is refused */
+      product:  ['Counterfeit or suspicious product', 'Misleading information', 'Prohibited item', 'Incorrect price', 'Inappropriate content', 'Fraud or scam concern', 'Other'],
       business: ['Fake business', 'Not delivering orders', 'Fraud', 'Overcharging', 'Poor service', 'Other'],
       message:  ['Harassment', 'Spam', 'Threats', 'Phishing link', 'Scam attempt', 'Other']
     },
 
+    /* The signed-in user of the page's own Firebase app — this works on pages that start their app themselves
+       (product.html) as well as on pages that load firebase.js. */
+    currentUser: async function () {
+      var gs = 'https://www.gstatic.com/firebasejs/10.12.2/';
+      try {
+        var A = await import(gs + 'firebase-app.js');
+        for (var i = 0; i < 50 && !A.getApps().length; i++) await new Promise(function (r) { setTimeout(r, 100); });
+        var app = A.getApps()[0]; if (!app) return null;
+        var Au = await import(gs + 'firebase-auth.js');
+        var auth = Au.getAuth(app);
+        if (typeof auth.authStateReady === 'function') { try { await auth.authStateReady(); } catch (_) {} }
+        return auth.currentUser || null;
+      } catch (_) { return (window.firebaseAuth && window.firebaseAuth.currentUser) || null; }
+    },
+
     submit: async function (type, targetId, reason, details, evidenceUrls) {
-      /* Auth required — anonymous reports are rejected by Firestore rules */
-      var uid = getUID();
+      /* 2026-09-29 (trust integrity T1): reports go to the ONE store AdminOS reads — the `reports` collection, through
+         the server callable tsReportContent (dedupe, server-captured product context, audit on review). They used to be
+         written by the browser into `flags`, which AdminOS never reads: no report reached an administrator. */
+      var user = await SokoniReport.currentUser();
+      var uid = user && user.uid;
       if (!uid) {
         showToast('Sign in to submit a report.', 'error');
         setTimeout(function () { window.location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search); }, 1200);
@@ -78,30 +98,34 @@
         return typeof u === 'string' && u.startsWith('https://');
       });
 
-      var reportData = {
-        type:         type,
-        targetId:     String(targetId).slice(0, 128),
-        reason:       String(reason).slice(0, 200),
-        details:      String(details || '').slice(0, 1000),
-        evidenceUrls: evidenceUrls,
-        reporterUid:  uid,
-        createdAt:    new Date().toISOString(),
-        status:       'pending'
+      var payload = {
+        entityType:   type,
+        entityId:     String(targetId).slice(0, 128),
+        reason:       String(reason).slice(0, 120),
+        detail:       String(details || '').slice(0, 500),
+        evidenceUrls: evidenceUrls
       };
-
-      /* Firestore save */
       try {
-        var db = getDB();
-        if (!db) throw new Error('No DB');
-        var fs = await firestoreImport();
-        await fs.addDoc(fs.collection(db, 'flags'), reportData);
-        showToast('Report submitted. Our team will review within 24h.');
+        var gs = 'https://www.gstatic.com/firebasejs/10.12.2/';
+        var A = await import(gs + 'firebase-app.js');
+        var app = A.getApps()[0];
+        if (!app) throw new Error('SOKONI is still starting — try again in a moment.');
+        /* tsReportContent enforces App Check. A page that started its own app (product.html) has none yet; this
+           initialises it once (the same site key as firebase.js) and is a no-op where it already exists. */
+        try {
+          var AC = await import(gs + 'firebase-app-check.js');
+          AC.initializeAppCheck(app, { provider: new AC.ReCaptchaV3Provider('6Lf93TktAAAAAIqCj8l3YM3dIoS1MIXpilsdnsxj'), isTokenAutoRefreshEnabled: true });
+        } catch (_) { /* already initialised */ }
+        var Fn = await import(gs + 'firebase-functions.js');
+        var r = await Fn.httpsCallable(Fn.getFunctions(app, 'us-central1'), 'tsReportContent')(payload);
+        showToast('Report received — our team reviews it in AdminOS. Thank you.');
+        return (r && r.data) || { ok: true };
       } catch (err) {
-        console.error('[SokoniReport]', err);
-        showToast('Failed to submit report. Please try again.', 'error');
+        var code = String((err && err.code) || '');
+        showToast(/already-exists/.test(code) ? 'You have already reported this — our team is reviewing it.'
+          : 'Your report was NOT sent: ' + ((err && err.message) || 'please try again') + '.', 'error');
         return null;
       }
-      return reportData;
     }
   };
 

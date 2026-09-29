@@ -63,7 +63,33 @@
     return new Date(iso).toLocaleDateString("en-KE", { day:"numeric", month:"short", year:"numeric" });
   }
 
+  /* 2026-09-29 (trust integrity T1): every call goes through the SIGNED-IN callable of the page's own Firebase app.
+     The widget used a raw fetch with no Authorization header, so submitReview / flagReview / markReviewHelpful —
+     which require a signed-in user — failed for everyone. Reads (getReviews) fall back to the public endpoint when
+     no app exists. */
+  const _gs = "https://www.gstatic.com/firebasejs/10.12.2/";
+  async function _app() {
+    const { getApps } = await import(_gs + "firebase-app.js");
+    for (let i = 0; i < 50 && !getApps().length; i++) await new Promise((r) => setTimeout(r, 100));
+    return getApps()[0] || null;
+  }
+  async function _user() {
+    const app = await _app(); if (!app) return null;
+    const { getAuth } = await import(_gs + "firebase-auth.js");
+    const auth = getAuth(app);
+    if (typeof auth.authStateReady === "function") { try { await auth.authStateReady(); } catch (_) {} }
+    return auth.currentUser || null;
+  }
   async function _callCF(name, data) {
+    const app = await _app().catch(() => null);
+    if (app) {
+      const { getAuth } = await import(_gs + "firebase-auth.js");
+      const auth = getAuth(app);
+      if (typeof auth.authStateReady === "function") { try { await auth.authStateReady(); } catch (_) {} }
+      const { getFunctions, httpsCallable } = await import(_gs + "firebase-functions.js");
+      const r = await httpsCallable(getFunctions(app, "us-central1"), name)(data);
+      return r && r.data;
+    }
     const res = await fetch(`${CF_BASE}/${name}`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
@@ -92,6 +118,7 @@
     try {
       const result = await _callCF("getReviews", {
         targetId: this.targetId,
+        targetType: this.targetType,   /* reads canonicalise exactly as writes do */
         sort:     this._sort,
         limit:    10,
       });
@@ -109,7 +136,7 @@
   SokoniReviews.prototype.renderSummary = async function (el) {
     if (!el) return;
     try {
-      const result = await _callCF("getReviews", { targetId: this.targetId, limit: 1 });
+      const result = await _callCF("getReviews", { targetId: this.targetId, targetType: this.targetType, limit: 1 });
       const s = result.summary || { avg: 0, count: 0 };
       el.innerHTML = s.count > 0
         ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:#f59e0b;">
@@ -161,14 +188,14 @@
 
   SokoniReviews.prototype._buildCard = function (r) {
     return `
-    <div class="sk-review-card" data-review-id="${r.id}" style="padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+    <div class="sk-review-card" data-review-id="${_esc(r.id)}" style="padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
         <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#a855f7);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;flex-shrink:0;">
           ${_esc(r.authorName).charAt(0).toUpperCase()}
         </div>
         <div>
           <div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.9);">${_esc(r.authorName)}</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.35);">${_timeAgo(r.createdAt)}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);">${_timeAgo(r.createdAt)}${r.verifiedPurchase ? ' · <span class="sk-verified" style="color:#22c55e;font-weight:700;">✓ Verified purchase</span>' : ''}</div>
         </div>
         <div style="margin-left:auto;display:flex;align-items:center;gap:2px;">${_starHtml(r.rating)}</div>
       </div>
@@ -176,10 +203,10 @@
       <div style="font-size:13px;color:rgba(255,255,255,0.6);line-height:1.6;">${_esc(r.body)}</div>
       ${r.images && r.images.length ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">${r.images.map(u=>`<img src="${_esc(u)}" style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,0.1);" loading="lazy" alt="Review photo">`).join("")}</div>` : ""}
       <div style="display:flex;align-items:center;gap:12px;margin-top:10px;">
-        <button class="sk-helpful-btn" data-review-id="${r.id}" style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.45);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">
+        <button class="sk-helpful-btn" data-review-id="${_esc(r.id)}" style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.45);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">
           👍 Helpful${r.helpful > 0 ? ` (${r.helpful})` : ""}
         </button>
-        <button class="sk-flag-btn" data-review-id="${r.id}" style="background:none;border:none;color:rgba(255,255,255,0.2);font-size:11px;cursor:pointer;padding:0;font-family:inherit;">⚑ Flag</button>
+        <button class="sk-flag-btn" data-review-id="${_esc(r.id)}" style="background:none;border:none;color:rgba(255,255,255,0.2);font-size:11px;cursor:pointer;padding:0;font-family:inherit;">⚑ Flag</button>
       </div>
     </div>`;
   };
@@ -224,6 +251,7 @@
         try {
           const result = await _callCF("getReviews", {
             targetId:   self.targetId,
+            targetType: self.targetType,
             sort:       self._sort,
             limit:      10,
             startAfter: self._lastId,
@@ -311,6 +339,8 @@
         };
 
         if (rating < 1 || rating > 5) return showErr("Please select a rating (1–5 stars).");
+        const who = await _user().catch(() => null);
+        if (!who) return showErr("Sign in to write a review — only buyers whose order was delivered can review a product.");
         if (!body) return showErr("Please write something about your experience.");
 
         submitBtn.textContent = "Submitting…";

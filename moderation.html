@@ -316,7 +316,7 @@
 
     /* ── Security: escape all user data ── */
     function esc(s){
-      return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     }
 
     function shortId(id){ return esc(String(id||'').slice(0,10)+'…'); }
@@ -474,15 +474,23 @@
           +'<td style="font-size:11px;color:rgba(255,255,255,0.45);">'+esc((r.reporterUid||'').slice(0,12))+'…</td>'
           +'<td style="font-size:11px;color:rgba(255,255,255,0.35);">'+fmtDate(r.createdAt)+'</td>'
           +'<td><div class="mod-action-row">'
-          +'<button class="mod-action-btn btn-dismiss" onclick="reportAction(\'dismiss\',\''+esc(r.id)+'\')">Dismiss</button>'
-          +'<button class="mod-action-btn btn-warn" onclick="reportAction(\'warn\',\''+esc(r.id)+'\')">Warn</button>'
-          +'<button class="mod-action-btn btn-remove" onclick="reportAction(\'remove\',\''+esc(r.id)+'\')">Remove Content</button>'
-          +'<button class="mod-action-btn btn-ban" onclick="reportAction(\'ban\',\''+esc(r.id)+'\',\''+esc(r.targetId)+'\')">Ban User</button>'
+          /* 2026-09-29: ids travel in DATA attributes, never inside onclick script text — an HTML-escaped quote is decoded
+             back before an inline handler runs, so an attacker-chosen targetId could break out. Ban is offered only on a
+             USER report (its target is a uid); on a listing report it used to "ban" users/{productId}. */
+          +'<button class="mod-action-btn btn-dismiss" data-mod-act="dismiss" data-mod-id="'+esc(r.id)+'">Dismiss</button>'
+          +'<button class="mod-action-btn btn-warn" data-mod-act="warn" data-mod-id="'+esc(r.id)+'">Warn</button>'
+          +'<button class="mod-action-btn btn-remove" data-mod-act="remove" data-mod-id="'+esc(r.id)+'">Mark actioned</button>'
+          +(r.type==='user' ? '<button class="mod-action-btn btn-ban" data-mod-act="ban" data-mod-id="'+esc(r.id)+'" data-mod-target="'+esc(r.targetId)+'">Ban User</button>' : '')
           +'</div></td>'
           +'</tr>';
       }).join('');
     }
 
+    document.addEventListener('click', function(ev){
+      var b = ev.target && ev.target.closest ? ev.target.closest('[data-mod-act]') : null;
+      if(!b) return;
+      reportAction(b.getAttribute('data-mod-act'), b.getAttribute('data-mod-id'), b.getAttribute('data-mod-target'));
+    });
     async function reportAction(action, flagId, targetId){
       try {
         /* Server clock — this is an audit record of an admin enforcement action. */

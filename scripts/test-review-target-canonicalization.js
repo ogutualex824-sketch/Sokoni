@@ -19,6 +19,9 @@ const DOCS = {
   'businesses/MERCH_ORPHAN': { name: 'No Owner Ltd' },       // exists, no owner link
   'products/PROD_1':       { title: 'Thing' },
   'users/BUYER_1':         { createdAt: { toMillis: () => 0 } },
+  /* 2026-09-29: product reviews are verified-purchase only (test-trust-integrity.js RV1–RV5) — the reviewer has a
+     delivered order of PROD_1, so this case still asserts what it is about: the canonical target id. */
+  'orders/ORD_1':          { buyerUid: 'BUYER_1', status: 'delivered', items: [{ productId: 'PROD_1' }] },
 };
 
 const writes = {};
@@ -32,9 +35,17 @@ function mkDoc(col, id) {
   };
 }
 function mkQuery(col) {
+  /* 2026-09-29: equality `where`s answer from the fixture (the verified-purchase lookup queries orders by buyerUid);
+     every other collection still has no rows, as before. */
+  const eq = [];
   const q = {
-    where: () => q, orderBy: () => q, limit: () => q, startAfter: () => q,
-    get: async () => ({ empty: true, size: 0, docs: [], forEach() {} }),
+    where: (f, op, v) => { if (op === '==') eq.push([f, v]); return q; }, orderBy: () => q, limit: () => q, startAfter: () => q,
+    get: async () => {
+      const docs = col !== 'orders' ? [] : Object.keys(DOCS).filter((k) => k.startsWith('orders/'))
+        .filter((k) => eq.every(([f, v]) => DOCS[k][f] === v))
+        .map((k) => ({ id: k.slice(7), data: () => DOCS[k], exists: true }));
+      return { empty: !docs.length, size: docs.length, docs, forEach(fn) { docs.forEach(fn); } };
+    },
   };
   return q;
 }

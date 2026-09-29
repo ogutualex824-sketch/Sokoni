@@ -844,7 +844,8 @@ function wishlistDemandBadge(product){
 
 function kebsBadge(product){
     if(product.kebsCert){
-        return `<div class="kebs-badge kebs-certified" title="KEBS Certified: ${_escHtml(product.kebsCert)}">🏅 KEBS</div>`;
+        /* 2026-09-29: seller-declared text, not a certification SOKONI verified — labelled as such */
+        return `<div class="kebs-badge kebs-declared" title="KEBS no. declared by the seller (not verified by SOKONI): ${_escHtml(product.kebsCert)}">🏷️ KEBS (declared)</div>`;
     }
     if(KEBS_REQUIRED_CATS.has(product.category)){
         return `<div class="kebs-badge kebs-unverified" title="KEBS certification not provided">⚠️ No KEBS</div>`;

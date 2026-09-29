@@ -5273,7 +5273,9 @@ exports.aggregatePlatformMetrics = onSchedule(
       db.collection("deliveries").where("status", "in", ["assigned","in_transit"]).count().get(),
       db.collection("rides").where("status", "in", ["matched","in_progress"]).count().get(),
       db.collection("applications").where("status", "==", "pending").count().get(),
-      db.collection("flags").where("status", "==", "open").count().get(),
+      /* 2026-09-29: flags were written "pending" and counted "open" (always 0); content reports now live in `reports`
+         (trust-safety.tsReportContent, read by AdminOS) — count what is waiting there. */
+      db.collection("reports").where("status", "==", "pending").count().get(),
       db.collection("disputes").where("status", "==", "open").count().get(),
     ]);
 
