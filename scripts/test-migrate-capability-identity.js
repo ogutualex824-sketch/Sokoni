@@ -61,6 +61,9 @@ const APPLICATION = { uid: UID, applicationId: APP, name: 'DG wines and spirits'
   ck('the plan names what stays untouched (provider, application, users, wallet; no shop, branch or product created)', p.untouched.some((u) => u.startsWith('providers/')) && p.untouched.some((u) => /shops/.test(u)) && p.untouched.some((u) => /branches/.test(u)) && p.untouched.some((u) => /products/.test(u)));
   ck('the plan carries the read model: SERVICES / NOT_YET_STAMPED / no conflicts, and a digest', p.readModel.classification === 'SERVICES' && p.readModel.authorityStatus === 'NOT_YET_STAMPED' && p.readModel.conflicts.length === 0 && /^[a-f0-9]{64}$/.test(p.digest));
 
+  const p5 = M.plan(Object.assign({}, s, { slice: 'C5' }));
+  ck('the slice label is provenance: slice C5 → source capability_migration_c5 and migration.slice C5; default stays C4; digests differ', p5.manifest[0].data.source === 'capability_migration_c5' && p5.manifest[0].data.migration.slice === 'C5' && p.manifest[0].data.source === 'capability_migration_c4' && p5.digest !== p.digest);
+
   say('\n── refusals (pure) ──');
   const R = (patch) => M.plan(Object.assign({}, s, patch)).refusals;
   ck('seller present → refused', R({ seller: { status: 'active', approvedAt: 1 } }).includes('seller_present'));

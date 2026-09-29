@@ -31,8 +31,11 @@ const crypto = require('crypto');
 const ROOT = path.resolve(__dirname, '..');
 const CAPS = require(path.join(ROOT, 'functions', 'shared', 'business-capabilities.js'));
 
-const SLICE = 'C4';
-const SOURCE = 'capability_migration_' + SLICE.toLowerCase();
+/* The slice label is provenance on the created record: C4 for DG Wine, C5 for Latomi. It is set per run
+   (--slice) and the idempotency check compares against the SAME run's label, so each identity's record names the
+   slice that created it. */
+const DEFAULT_SLICE = 'C4';
+const sourceFor = (slice) => 'capability_migration_' + String(slice || DEFAULT_SLICE).toLowerCase();
 const clean = (s, n) => (s === undefined || s === null ? null : String(s).replace(/[<>]/g, '').trim().slice(0, n) || null);
 
 /** Load everything the plan depends on. `db` is a Firestore (real or fake). */
@@ -54,6 +57,8 @@ async function snapshot(db, uid, applicationId) {
 
 /** Pure. The plan, or a refusal with every reason. */
 function plan(s) {
+  const SLICE = String(s.slice || DEFAULT_SLICE).toUpperCase();
+  const SOURCE = sourceFor(SLICE);
   const refusals = [];
   const rm = CAPS.readModel({ seller: s.seller, provider: s.provider, business: s.businessById, applications: s.application ? [s.application] : [], productCount: s.productCount });
   if (!s.provider) refusals.push('provider_absent');
@@ -107,7 +112,7 @@ function plan(s) {
     { op: 'create', path: 'adminAudit/(auto)', data: { action: 'capability_migration_' + SLICE.toLowerCase(), targetUid: s.uid, businessId: s.uid, applicationId: s.applicationId, capability: 'SERVICES', performedBy: 'admin-sdk:capability-migration', reason: 'C3 census: provider-only identity; SERVICES approved by ' + (a.decidedBy || '?') } },
   ] : [];
   const untouched = ['providers/' + s.uid, 'applications/' + s.applicationId, 'users/' + s.uid, 'wallets/' + s.uid, 'providerProfiles/' + s.uid, 'sellers/' + s.uid + ' (stays absent)', 'shops/* (none created)', 'branches/* (none created)', 'products/* (none created)'];
-  const digest = crypto.createHash('sha256').update(JSON.stringify({ uid: s.uid, applicationId: s.applicationId, manifest, refusals, existing })).digest('hex');
+  const digest = crypto.createHash('sha256').update(JSON.stringify({ slice: SLICE, uid: s.uid, applicationId: s.applicationId, manifest, refusals, existing })).digest('hex');
   return { ok: refusals.length === 0 || existing === 'already_migrated', noop: existing === 'already_migrated', refusals, manifest, untouched, stamp, readModel: { classification: rm.classification, authorityStatus: rm.authorityStatus, conflicts: rm.conflicts.map((c) => c.code) }, digest };
 }
 
@@ -135,7 +140,7 @@ async function apply(db, s0, expectDigest, FieldValue) {
   return result;
 }
 
-module.exports = { SLICE, SOURCE, snapshot, plan, apply };
+module.exports = { DEFAULT_SLICE, sourceFor, snapshot, plan, apply };
 
 /* ── CLI ─────────────────────────────────────────────────────────────────── */
 if (require.main === module) {
@@ -143,15 +148,16 @@ if (require.main === module) {
   const arg = (k) => { const i = args.indexOf(k); return i > -1 ? args[i + 1] : null; };
   const uid = arg('--uid'), applicationId = arg('--application');
   const mode = args.includes('--apply') ? 'apply' : 'plan';
+  const slice = arg('--slice') || DEFAULT_SLICE;
   if (!uid || !applicationId) { console.error('usage: --uid <uid> --application <applicationId> [--plan | --apply --expect-digest <sha256>]'); process.exit(2); }
   const _r = require('module').createRequire(path.join(ROOT, 'functions', 'package.json'));
   const admin = _r('firebase-admin'); const { getFirestore, FieldValue } = _r('firebase-admin/firestore');
   const app = admin.initializeApp({ credential: admin.credential.applicationDefault(), projectId: 'sokoni-aeb26' });
   const db = getFirestore(app);
   (async () => {
-    const s = await snapshot(db, uid, applicationId);
+    const s = Object.assign(await snapshot(db, uid, applicationId), { slice });
     const p = plan(s);
-    console.log(JSON.stringify({ mode, uid, applicationId, plan: p }, null, 2));
+    console.log(JSON.stringify({ mode, slice, uid, applicationId, plan: p }, null, 2));
     if (mode === 'plan') { process.exit(p.ok ? 0 : 1); }
     const expect = arg('--expect-digest');
     if (!expect) { console.error('REFUSED: --apply requires --expect-digest <sha256 of the reviewed plan>'); process.exit(2); }
