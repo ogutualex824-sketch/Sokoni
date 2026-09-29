@@ -1,3 +1,16 @@
+## [2026-09-29] - R3 landed: three providers classified from their approval evidence (PRODUCTION, owner-authorized primary digest only)
+
+**Applied 19:04Z**, digest `cb87e8ca…98e3`: `providers/{uid}.business` stamped for Julian's Closet (service_business,
+audit `VrhGoDE16dK3M8MRwT06`), Langa'ta mamafua (cleaning, `92JzdKA9irn4VhhEFuXH`), Hometown Movers kenya (trades,
+`XMiPAmNU61c48YSqcIPn`) — projectProvider's stamp shape, from each approved application through the real C1 and lane
+classifiers. Landing proof 24/0: every other provider field and each application byte-identical; no capability, business,
+shop, seller, product, branch, KASS or cleanup record changed (counts unchanged, adminAudit +3, capability-stamped
+businesses still exactly DG Wine + Latomi); exactly those three provider rows moved; census cleanup digest unchanged.
+Post-R2 resolver on production docs for all three: **provider-dashboard.html, AVAILABLE, lane services, SERVICES**.
+Second apply with the same digest: `digest_mismatch`, `primaryCount 0`, `alreadyStampedProviders 3`, nothing written.
+Disagreement digest `9f8a96e8…8952` (DG Wine / Latomi) DEFERRED — untouched, still PENDING_CLASSIFICATION, no route.
+Packet `docs/R3_LANDING.md` + `docs/release-gates/r3-landing.json`. Apply-path suite 22/0. No deploy.
+
 ## [2026-09-29] - R3 review packet: classification manifest for approved providers with no C1 stamp (READ ONLY; nothing applied)
 
 `scripts/r3-classification-manifest.js --plan` classifies each of the 11 providers from its APPROVED APPLICATION through
