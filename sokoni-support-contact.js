@@ -71,7 +71,30 @@
     if (CATEGORIES.indexOf(category) === -1) return { ok: false, reason: 'unknown_category' };
     var priority = String(i.priority || 'medium');
     if (PRIORITIES.indexOf(priority) === -1) return { ok: false, reason: 'unknown_priority' };
+    if (i.context !== undefined && i.context !== null && !contextFor(i.context)) return { ok: false, reason: 'invalid_context' };
     return { ok: true, reason: 'valid' };
+  }
+
+  /* Optional business context (Slice V2): which SOKONI record the case is about.
+     Mirrors the server's closed key set and id alphabet so the user is told before
+     the server refuses. A POINTER only — the server stores it, the workspace that
+     follows it re-reads the record under its own authority. Returns null when
+     nothing valid is present, or false when the shape is wrong. */
+  var CONTEXT_KEYS = ['applicationId', 'requestId', 'verificationId'];
+  var ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+  function contextFor(raw) {
+    if (raw === undefined || raw === null) return null;
+    if (typeof raw !== 'object' || Array.isArray(raw)) return false;
+    var out = {}, any = false;
+    for (var k in raw) {
+      if (!Object.prototype.hasOwnProperty.call(raw, k)) continue;
+      if (CONTEXT_KEYS.indexOf(k) === -1) return false;
+      var v = raw[k];
+      if (v === undefined || v === null || v === '') continue;
+      if (typeof v !== 'string' || !ID_RE.test(v)) return false;
+      out[k] = v; any = true;
+    }
+    return any ? out : null;
   }
 
   /**
@@ -84,13 +107,16 @@
    */
   function payloadFor(input) {
     var i = input || {};
-    return {
+    var p = {
       op: 'adminCreateSupportTicket',
       category: String(i.category || 'other'),
       subject: String(i.subject || '').trim().slice(0, 200),
       message: String(i.message || '').trim().slice(0, 2000),
       priority: String(i.priority || 'medium'),
     };
+    var ctx = contextFor(i.context);
+    if (ctx) p.context = ctx;           /* absent when there is none — the old payload, unchanged */
+    return p;
   }
 
   function _fns() {
@@ -167,6 +193,8 @@
     CONTRACT: CONTRACT,
     CATEGORIES: CATEGORIES,
     PRIORITIES: PRIORITIES,
+    CONTEXT_KEYS: CONTEXT_KEYS,
+    contextFor: contextFor,
     validate: validate,
     payloadFor: payloadFor,
     describeFailure: describeFailure,

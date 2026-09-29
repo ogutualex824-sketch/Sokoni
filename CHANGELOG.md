@@ -1,3 +1,49 @@
+## 2026-09-29 — Verification ↔ Support, Slice V2: a ticket knows its record, a record knows its tickets (branch `feat/integrations-control-center`, NOT deployed)
+
+One canonical ticket store (`supportTickets`), one client path (`SokoniSupportContact`), one dialog — now closed into
+a loop with the records that raise cases. `crmSupportTickets` (a merchant's own customer tickets) stays separate.
+
+- **Server — optional business context** on `adminCreateSupportTicket` (`functions/admin-os.js`):
+  `context: { applicationId?, requestId?, verificationId? }`. Closed key set, id alphabet `[A-Za-z0-9_-]{1,128}`,
+  validated **before any read or write**; a malformed context refuses the ticket rather than dropping the pointer.
+  Stored only when present (absent, not `null`) — tickets without context are written exactly as before; echoed in
+  the response. **A pointer, not an authority:** the workspace that follows it re-reads the record under its own
+  server/rules authority, so a forged id opens nothing it could not open anyway.
+- **Client contract** (`sokoni-support-contact.js`): `contextFor()` mirrors the server's key set and alphabet so the
+  browser refuses what the server would refuse; `payloadFor()` carries `context` only when present. Now also loaded by
+  `admin-os.html` — the same module `support.html` mounts, never a second ticket path.
+- **AdminOS Support** (`sokoni-aos.js`): an "About" chip per ticket (list and detail) opens the record —
+  `requestId` → `#applications/verification` with **that** request open (`SokoniVerificationReview.open(id)`),
+  `applicationId` → `#applications/queue` with **that** card focused (status widened to all). `openTicketsFor(ctx)`
+  narrows the list to the tickets about one record — in memory, over the same canonical read, all statuses — with a
+  Clear chip. Unknown ids fail closed (nothing opened, said plainly).
+- **From the record:** application cards and the verification reviewer carry "Support ticket…" and "Tickets".
+  ONE `ticketDialog(context, subject)` in AdminOS (the reviewer calls it; it never writes tickets itself): validates
+  through the contract, submits through `adminOsDispatch` → `adminCreateSupportTicket`, shows only the **server's**
+  id, and its "Open" lands on the new ticket. Category `verification` for request/video contexts, `other` otherwise.
+
+Evidence: `scripts/test-ticket-context.js` **18/0** — the REAL handler under a `firebase-admin` stub: backward
+compatibility (no `context` key at all), valid context stored/echoed, seven malformed shapes refused before any write,
+and the client contract proven to agree with the server on every input. `scripts/test-support-context.js` **19/0**
+in a browser (fixture layer installed by accessor hooks before AdminOS captures its handles): chips render only where
+a context exists; requestId → the exact request open; applicationId → the exact card focused; "Related tickets"
+narrows/clears; the dialog refuses an empty message before any call, sends `op adminCreateSupportTicket + context`
+through `adminOsDispatch`, shows the server's id; the reviewer sends `requestId` with category `verification`; no
+Firestore write to `supportTickets` anywhere in the browser; unknown ticket/request/application ids open nothing;
+negative control (chip renderer blanked) turns T1 red. Regression: `verification-convergence` 29/0,
+`nav-coverage` 32/0, `sidebar-a11y`, `shell-final`, `single-navigation`, `wiring` 309/0, `render` 43/0.
+
+Two defects found by the suite and fixed before landing: opening an application from a ticket triggered two concurrent
+queue loads (the second rendered after the focus was consumed); the reviewer's "not found" notice was overwritten by
+its own stats re-render and left the previous card open.
+
+- **Files:** `functions/admin-os.js`, `sokoni-support-contact.js`, `sokoni-aos.js`, `sokoni-verification-review.js`,
+  `admin-os.html`, new `scripts/test-ticket-context.js`, new `scripts/test-support-context.js`, `CHANGELOG.md`.
+- **Database:** new optional `supportTickets.context` map (server-written only). **API:** `adminCreateSupportTicket`
+  accepts optional `context`; response gains `context`. **Rules:** none. **Breaking:** none. Functions **not deployed**
+  (deploys gated by the merchant-identity provenance gap): until then the live server ignores `context` and a ticket
+  raised from a record lands without its pointer — the UI shows no chip, invents nothing.
+
 ## 2026-09-29 — Verification convergence, Slice V1b: the duplicate reviewers retire behind the canonical routes (branch `feat/integrations-control-center`, NOT deployed)
 
 With the shared reviewer certified (V1a), every other verification entry point now resolves to it, and the copies

@@ -1172,19 +1172,44 @@ window.SokoniAOS = (() => {
   }
 
   // ── Support ───────────────────────────────────────────────────────────────────
+  /* Ticket ↔ record links (Slice V2). A ticket may carry a business `context`
+     ({ requestId | applicationId | verificationId }) written by the server. Here it
+     renders as a chip that opens the record; and an optional context FILTER narrows
+     the list to the tickets about one record — in memory, over the same canonical
+     read. No second query, no second store. */
+  let _supportCtx = null;
+  const _CTX_LABEL = { requestId: "Verification request", applicationId: "Application", verificationId: "Video verification" };
+  function _ctxChips(ctx) {
+    if (!ctx || typeof ctx !== "object") return "";
+    return Object.keys(ctx).filter(k => _CTX_LABEL[k] && ctx[k]).map(k => {
+      const id = _jsAttr(String(ctx[k]));
+      const open = k === "requestId" ? `SokoniAOS.openVerificationRequest('${id}')`
+                 : k === "applicationId" ? `SokoniAOS.openApplication('${id}')`
+                 : `SokoniAOS.navigate('comms','connect')`;
+      return `<button type="button" class="aos-btn-sm ctx-chip" onclick="${open}" title="Open the related record">${_esc(_CTX_LABEL[k])} <span class="aos-mono">${_esc(String(ctx[k]).slice(0, 14))}</span></button>`;
+    }).join(" ");
+  }
+  function _ctxMatches(t, ctx) { return !ctx || Object.keys(ctx).every(k => t.context && t.context[k] === ctx[k]); }
+
   async function _loadSupport(status = "open", priority = "") {
     const body = document.getElementById("supportBody");
     if (!body) return;
     body.innerHTML = _spinner();
     try {
       const data = await _call("adminGetSupportTickets", { status, priority, limit: 30 });
-      const tickets = data.tickets || [];
-      body.innerHTML = tickets.length ? `<table class="aos-table"><thead><tr>
-          <th>ID</th><th>Subject</th><th>From</th><th>Priority</th><th>Status</th><th>Date</th><th>Actions</th>
-        </tr></thead><tbody>${tickets.map(t => `<tr>
+      let tickets = data.tickets || [];
+      const loaded = tickets.length;
+      if (_supportCtx) tickets = tickets.filter(t => _ctxMatches(t, _supportCtx));
+      const filter = _supportCtx
+        ? `<div class="ctx-filter" id="supportCtxFilter"><span class="aos-muted" style="font-size:12px">Showing ${tickets.length} of ${loaded} loaded tickets about</span> ${_ctxChips(_supportCtx)} <button type="button" class="aos-btn-sm" onclick="SokoniAOS.clearTicketContext()">Clear</button></div>`
+        : "";
+      body.innerHTML = filter + (tickets.length ? `<table class="aos-table"><thead><tr>
+          <th>ID</th><th>Subject</th><th>From</th><th>About</th><th>Priority</th><th>Status</th><th>Date</th><th>Actions</th>
+        </tr></thead><tbody>${tickets.map(t => `<tr data-ticket="${_esc(t.id||"")}">
           <td class="aos-mono">${(t.id||"—").slice(0,8)}</td>
           <td>${_esc(t.subject||t.title||"—")}</td>
           <td class="aos-muted">${_esc(t.userName||t.email||"—")}</td>
+          <td>${_ctxChips(t.context) || '<span class="aos-muted">—</span>'}</td>
           <td><span class="prio-badge prio-${t.priority||"normal"}">${t.priority||"normal"}</span></td>
           <td><span class="status-badge st-${t.status||"open"}">${t.status||"open"}</span></td>
           <td class="aos-muted">${_date(t.createdAt)}</td>
@@ -1192,7 +1217,8 @@ window.SokoniAOS = (() => {
             <button class="aos-btn-sm" onclick="SokoniAOS.viewTicket('${t.id}')">View</button>
             <button class="aos-btn-sm success" onclick="SokoniAOS.resolveTicket('${t.id}')">Resolve</button>
           </td>
-        </tr>`).join("")}</tbody></table>` : _emptyMsg("No tickets found");
+        </tr>`).join("")}</tbody></table>`
+        : _emptyMsg(_supportCtx ? `No tickets about this record among the ${loaded} loaded.` : "No tickets found"));
     } catch (e) { body.innerHTML = _emptyMsg("Error: " + e.message); }
   }
 
@@ -1217,6 +1243,7 @@ window.SokoniAOS = (() => {
         <p><strong>From:</strong> ${_esc(t.userName||t.email||"—")}</p>
         <p><strong>Priority:</strong> <span class="prio-badge prio-${t.priority||"normal"}">${t.priority||"normal"}</span></p>
         <p><strong>Status:</strong> <span class="status-badge st-${t.status||"open"}">${t.status||"open"}</span></p>
+        ${t.context ? `<p><strong>About:</strong> ${_ctxChips(t.context)}</p>` : ""}
         <hr>
         <p>${_esc(t.message||t.body||"No message")}</p>
         <hr>
@@ -1236,6 +1263,75 @@ window.SokoniAOS = (() => {
       return;
     }
     _toast("Reply sent","success"); _closeModal();
+  }
+
+  /* ── Ticket ↔ record navigation (Slice V2) ───────────────────────────────
+     Every path goes through the router and the existing loaders. */
+  function openTicketsFor(ctx) {
+    _supportCtx = ctx && typeof ctx === "object" && Object.keys(ctx).length ? ctx : null;
+    _navigate("support");
+    const sel = document.querySelector("#panel-support select");
+    if (sel) sel.value = "";                       /* all statuses: a closed related ticket still matters */
+    _loadSupport("", "");
+  }
+  function clearTicketContext() { _supportCtx = null; _loadSupport(); }
+  async function openTicket(id) { _navigate("support"); await viewTicket(id); }
+  function openVerificationRequest(id) {
+    _navigate("applications", "verification");
+    if (window.SokoniVerificationReview) window.SokoniVerificationReview.open(id);
+    else _toast("The verification reviewer did not load.", "error");
+  }
+  let _appsFocusId = null;
+  function openApplication(id) {
+    _appsFocusId = String(id || "");
+    const st = document.getElementById("appsStatus");
+    if (st) st.value = "";                         /* the record may be decided already */
+    /* ONE load. On a first open the router's tab selector loads the queue itself;
+       a second concurrent load would render after the focus was consumed and win. */
+    const wasLoaded = _appsQueueLoaded;
+    _navigate("applications", "queue");
+    if (wasLoaded) _loadApplications();
+  }
+  /* ONE ticket dialog for every record that can raise a case — application cards
+     here and the verification reviewer. It goes through SokoniSupportContact, the
+     same path support.html uses, with the record as context. The id shown is the
+     server's; nothing is reported before the server returns it. */
+  function ticketDialog(context, subjectDefault) {
+    if (!window.SokoniSupportContact) { _toast("The support module did not load (sokoni-support-contact.js).", "error"); return; }
+    const ctx = window.SokoniSupportContact.contextFor(context);
+    if (!ctx) { _toast("This record has no id a ticket could be attached to.", "error"); return; }
+    _modal("Create support ticket", `
+      <div class="compose-form" id="ticketDialog">
+        <p class="aos-muted" style="font-size:12px">About: ${_ctxChips(ctx)}</p>
+        <input type="text" id="tkSubject" placeholder="Subject" value="${_esc(subjectDefault || "")}" maxlength="200" aria-label="Subject">
+        <textarea id="tkMessage" placeholder="What is the issue?" rows="4" maxlength="2000" aria-label="Message"></textarea>
+        <select id="tkPriority" aria-label="Priority"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select>
+        <button type="button" class="aos-btn success" id="tkSubmit" style="margin-top:8px">Create ticket</button>
+        <div id="tkOut" aria-live="polite"></div>
+      </div>`);
+    const btn = document.getElementById("tkSubmit");
+    if (!btn) return;
+    btn.onclick = async () => {
+      const out = document.getElementById("tkOut");
+      const input = {
+        category: (ctx.requestId || ctx.verificationId) ? "verification" : "other",
+        subject: (document.getElementById("tkSubject") || {}).value || "",
+        message: (document.getElementById("tkMessage") || {}).value || "",
+        priority: (document.getElementById("tkPriority") || {}).value || "medium",
+        context: ctx,
+      };
+      const v = window.SokoniSupportContact.validate(input);
+      if (!v.ok) { out.innerHTML = `<p style="color:#ffb74d;font-size:12.5px">${_esc(v.reason.replace(/_/g, " "))}.</p>`; return; }
+      btn.disabled = true; btn.textContent = "Creating…";
+      try {
+        const res = await window.SokoniSupportContact.submit(input);
+        out.innerHTML = `<p style="color:var(--aos-accent);font-size:12.5px">Ticket <span class="aos-mono">${_esc(res.ticketId)}</span> created. <button type="button" class="aos-btn-sm" onclick="SokoniAOS.closeModal();SokoniAOS.openTicket('${_jsAttr(res.ticketId)}')">Open</button></p>`;
+        btn.textContent = "Created";
+      } catch (e) {
+        btn.disabled = false; btn.textContent = "Create ticket";
+        out.innerHTML = `<p style="color:#ff6b6b;font-size:12.5px">${_esc(window.SokoniSupportContact.describeFailure(e))}</p>`;
+      }
+    };
   }
 
   // ── Communications ────────────────────────────────────────────────────────────
@@ -3002,6 +3098,13 @@ window.SokoniAOS = (() => {
       : _emptyMsg(statusSel === "pending"
           ? "No applications are waiting for a decision."
           : "No applications match this filter.");
+    /* Opened from a ticket: bring the card into view once, then forget the focus. */
+    if (_appsFocusId) {
+      const el = document.getElementById("app-" + _appsFocusId);
+      if (el) { try { el.scrollIntoView({ block: "nearest" }); } catch (_) {} }
+      else _toast("Application " + _appsFocusId + " is not among the loaded applications.", "error");
+      _appsFocusId = null;
+    }
   }
 
   function _setAppsSummary(data) {
@@ -3065,7 +3168,7 @@ window.SokoniAOS = (() => {
     const unpublished = a.status === "approved" && a.projectionStatus !== "applied";
     const contact = [a.phone || a.phoneNumber, a.email].filter(Boolean).join(" · ") || "no contact on file";
     const place = [a.area, a.city, a.location].filter(Boolean).join(", ") || "no location on file";
-    return `<div class="aos-card${unpublished ? " aos-card-warn" : ""}">
+    return `<div class="aos-card${unpublished ? " aos-card-warn" : ""}${_appsFocusId && a.id === _appsFocusId ? " aos-card-focus" : ""}" id="app-${id}">
       <div class="aos-card-head">
         <strong>${_esc(a.name || "(no business name)")}</strong>
         <span class="status-badge st-${_esc(a.status)}">${_esc(a.status)}</span>
@@ -3088,6 +3191,8 @@ window.SokoniAOS = (() => {
         ${decided ? "" : `<button class="aos-btn-sm danger" onclick="SokoniAOS.decideApplication('${id}','reject')">Reject</button>`}
         ${a.status === "approved" ? `<button class="aos-btn-sm danger" onclick="SokoniAOS.decideApplication('${id}','suspend')">Suspend</button>` : ""}
         <button class="aos-btn-sm" onclick="SokoniAOS.reconcileApplication('${id}')">Reconcile</button>
+        <button class="aos-btn-sm" onclick="SokoniAOS.ticketDialog({applicationId:'${id}'},'Application: ${_jsAttr(a.name || a.id)}')">Support ticket&hellip;</button>
+        <button class="aos-btn-sm" onclick="SokoniAOS.openTicketsFor({applicationId:'${id}'})">Tickets</button>
       </div>
     </div>`;
   }
@@ -3311,6 +3416,12 @@ window.SokoniAOS = (() => {
     // Shops & sellers
     estateTab:           _estateTab,
     applicationsTab:     _applicationsTab,
+    openTicketsFor,
+    clearTicketContext,
+    openTicket,
+    openVerificationRequest,
+    openApplication,
+    ticketDialog,
     openShop,
     // Marketplace
     marketplaceTab:      _marketplaceTab,

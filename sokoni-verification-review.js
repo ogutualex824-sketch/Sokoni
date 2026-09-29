@@ -55,7 +55,7 @@
      rejection records the decision and says a notice was not sent. */
   var NOTIFY_TYPE_APPROVED = 'seller_verified';
 
-  var _root = null, _all = [], _filter = 'pending', _busy = false, _open = null;
+  var _root = null, _all = [], _filter = 'pending', _busy = false, _open = null, _pendingOpen = null, _notice = null;
 
   function _esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -96,7 +96,14 @@
       var snap = await _db().collection(COLL_REQ).orderBy('createdAt', 'desc').limit(300).get();
       _all = [];
       snap.forEach(function (d) { _all.push(Object.assign({ id: d.id }, d.data())); });
+      /* A record asked for by id (from a ticket) opens on any status filter. */
+      if (_pendingOpen) {
+        var want = _pendingOpen; _pendingOpen = null;
+        if (_all.some(function (x) { return x.id === want; })) { _filter = 'all'; _open = want; _notice = null; }
+        else { _open = null; _notice = 'No verification request with id ' + _esc(want) + ' among the ' + _all.length + ' loaded — nothing was opened.'; }
+      }
       _renderStats(); _renderList();
+      if (_open) { var el = _root.querySelector('.vr-card[data-id="' + _open + '"]'); if (el && el.scrollIntoView) { try { el.scrollIntoView({ block: 'nearest' }); } catch (_) {} } }
     } catch (e) {
       /* A failed read must never look like an empty queue. */
       list.innerHTML = '<div class="empty-state"><span>&#x26A0;&#xFE0F;</span><p><strong>Could not read verification requests.</strong></p>' +
@@ -123,8 +130,11 @@
     var list = _root.querySelector('#vrList');
     var rows = _filter === 'all' ? _all : _all.filter(function (a) { return (a.status || 'pending') === _filter; });
     _root.querySelectorAll('.vr-filter').forEach(function (b) { b.classList.toggle('active', b.dataset.filter === _filter); b.setAttribute('aria-pressed', String(b.dataset.filter === _filter)); });
-    if (!rows.length) { list.innerHTML = '<div class="empty-state"><span>&#x1F4ED;</span><p>No verification requests match this filter.</p></div>'; return; }
-    list.innerHTML = rows.map(_card).join('');
+    /* A notice (an id that was asked for and is not here) sits above the list and
+       survives re-renders until the operator changes filter or reloads. */
+    var notice = _notice ? '<div class="vr-msg err" id="vrNotice">' + _notice + '</div>' : '';
+    if (!rows.length) { list.innerHTML = notice + '<div class="empty-state"><span>&#x1F4ED;</span><p>No verification requests match this filter.</p></div>'; return; }
+    list.innerHTML = notice + rows.map(_card).join('');
   }
   function _card(a) {
     var st = a.status || 'pending', legacy = !a.applicantUid, decided = st === 'approved' || st === 'rejected';
@@ -159,12 +169,16 @@
       if (st !== 'under_review') actions += '<button type="button" class="aos-btn-sm" data-act="review">Mark under review</button> ';
       actions += '<button type="button" class="aos-btn-sm danger" data-act="reject">Reject&hellip;</button>';
     }
+    /* Ticket ↔ record (Slice V2): raise a case ABOUT this request, or see the cases
+       already about it. Both go through AdminOS's one ticket dialog / support list. */
+    var links = '<button type="button" class="aos-btn-sm" data-act="ticket">Support ticket&hellip;</button> ' +
+                '<button type="button" class="aos-btn-sm" data-act="tickets">Related tickets</button>';
     return '<div class="vr-body">' +
       '<div class="vr-grid">' + grid + '</div>' +
       (a.description ? '<p style="font-size:12.5px;white-space:pre-wrap;margin:8px 0">' + _esc(a.description) + '</p>' : '') +
       '<label class="aos-muted" style="font-size:12px;display:block;margin-top:8px">Admin notes<br><input type="text" class="aos-input" data-f="notes" value="' + _esc(a.adminNotes || '') + '" style="width:100%;max-width:520px"></label>' +
       (!decided ? '<label class="aos-muted" style="font-size:12px;display:block;margin-top:6px">Rejection reason (required to reject; shown to the applicant)<br><input type="text" class="aos-input" data-f="reason" style="width:100%;max-width:520px"></label>' : '') +
-      '<div class="vr-actions" style="margin-top:10px">' + actions + '</div>' +
+      '<div class="vr-actions" style="margin-top:10px">' + actions + (actions ? ' ' : '') + links + '</div>' +
       '<div class="vr-out" aria-live="polite"></div>' +
     '</div>';
   }
@@ -241,15 +255,25 @@
   /* ── Events ────────────────────────────────────────────────────────────── */
   function _onClick(e) {
     var f = e.target.closest && e.target.closest('.vr-filter');
-    if (f) { _filter = f.dataset.filter; _renderList(); return; }
-    if (e.target.closest && e.target.closest('#vrReload')) { _load(); return; }
+    if (f) { _filter = f.dataset.filter; _notice = null; _renderList(); return; }
+    if (e.target.closest && e.target.closest('#vrReload')) { _notice = null; _load(); return; }
     var b = e.target.closest && e.target.closest('[data-act]'); if (!b) return;
     var card = b.closest('.vr-card'); var id = card && card.dataset.id;
     var a = _all.find(function (x) { return x.id === id; }); if (!a) return;
     var act = b.dataset.act;
     if (act === 'toggle') { _open = _open === id ? null : id; _renderList(); return; }
-    if (_busy) return;
     var out = card.querySelector('.vr-out');
+    if (act === 'ticket') {
+      if (global.SokoniAOS && global.SokoniAOS.ticketDialog) global.SokoniAOS.ticketDialog({ requestId: a.id }, 'Verification ' + (a.refNumber || a.id));
+      else _say(out, 'err', 'The support dialog is only available inside AdminOS.');
+      return;
+    }
+    if (act === 'tickets') {
+      if (global.SokoniAOS && global.SokoniAOS.openTicketsFor) global.SokoniAOS.openTicketsFor({ requestId: a.id });
+      else _say(out, 'err', 'The support list is only available inside AdminOS.');
+      return;
+    }
+    if (_busy) return;
     var notes = (card.querySelector('[data-f="notes"]') || {}).value || '';
     var reason = ((card.querySelector('[data-f="reason"]') || {}).value || '').trim();
     _busy = true; b.disabled = true;
@@ -298,5 +322,13 @@
     return true;
   }
 
-  global.SokoniVerificationReview = { mount: mount, reload: _load, version: '1.0.0', NOTIFY_TYPE_APPROVED: NOTIFY_TYPE_APPROVED };
+  /* open(id): show one request by id — from a support ticket's context chip. If the
+     queue is already loaded it opens now; otherwise it opens after the next load. */
+  function open(id) {
+    id = String(id || ''); if (!id) return;
+    if (_all.length && _all.some(function (x) { return x.id === id; })) { _filter = 'all'; _open = id; _renderList();
+      var el = _root && _root.querySelector('.vr-card[data-id="' + id + '"]'); if (el && el.scrollIntoView) { try { el.scrollIntoView({ block: 'nearest' }); } catch (_) {} } }
+    else { _pendingOpen = id; if (_root && _all.length) _load(); }
+  }
+  global.SokoniVerificationReview = { mount: mount, reload: _load, open: open, version: '1.1.0', NOTIFY_TYPE_APPROVED: NOTIFY_TYPE_APPROVED };
 })(window);

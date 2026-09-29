@@ -232,6 +232,10 @@
     .aos-btn-sm.danger:hover{background:rgba(244,67,54,.15)}
     .aos-btn-sm.warning{border-color:rgba(255,152,0,.4);color:#ffcc80}
     .aos-btn-sm.warning:hover{background:rgba(255,152,0,.15)}
+    /* Ticket ↔ record chips and the focused application card (Slice V2). */
+    .ctx-chip{font-size:11px}
+    .ctx-filter{margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .aos-card-focus{outline:2px solid var(--aos-accent);outline-offset:2px}
     .tab-bar{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--aos-border);margin-bottom:20px}
     .tab-btn{padding:8px 16px;border:none;background:none;color:var(--aos-muted);cursor:pointer;font-size:13px;font-weight:500;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;margin-bottom:-1px}
     .tab-btn:hover{color:var(--aos-text)}
@@ -904,6 +908,10 @@
        mounted on the Applications & Verification panel's "Verification requests" tab.
        Same client SDK writes as the former verification-admin.html, so the same
        Firestore rules decide; identity is the page's real session. -->
+  <!-- THE ONE in-platform path to SOKONI support (the same module support.html
+       mounts). A ticket raised from a verification or application record goes
+       through it with a business context — never a second ticket store. -->
+  <script src="sokoni-support-contact.js"></script>
   <script src="sokoni-verification-review.js"></script>
   <script src="sokoni-connect-verify.js"></script>
   <!-- Communication Engine console: the unified inbox, the business timeline and

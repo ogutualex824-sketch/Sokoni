@@ -306,17 +306,46 @@ exports.adminUpdateFeatureFlag = onCall({ region: 'us-central1', maxInstances: 1
 /* ─────────────────────────────────────────────────────────────────────────
    Support Tickets
 ──────────────────────────────────────────────────────────────────────────── */
+/* Optional business CONTEXT on a ticket (Slice V2): which SOKONI record the case is
+   about, so a reviewer can open the ticket from the record and support staff can open
+   the record from the ticket. Closed key set, safe id alphabet, bounded length.
+
+   A POINTER, NOT AN AUTHORITY. Nothing here verifies the record exists or that the
+   caller may see it: the workspace that follows the pointer re-reads the record under
+   its own server/rules authority, so a forged id opens nothing it could not open
+   anyway. Tickets without context are written exactly as before. */
+const TICKET_CONTEXT_KEYS = Object.freeze(['applicationId', 'requestId', 'verificationId']);
+const TICKET_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+function _ticketContext(raw) {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== 'object' || Array.isArray(raw)) throw new Error('context must be an object');
+  const out = {};
+  for (const k of Object.keys(raw)) {
+    if (!TICKET_CONTEXT_KEYS.includes(k)) throw new Error(`context.${k} is not a recognised field`);
+    const v = raw[k];
+    if (v === undefined || v === null || v === '') continue;
+    if (typeof v !== 'string' || !TICKET_ID_RE.test(v)) throw new Error(`context.${k} must be a record id (1-128 chars, A-Z a-z 0-9 _ -)`);
+    out[k] = v;
+  }
+  return Object.keys(out).length ? out : null;
+}
+exports._ticketContext = _ticketContext;
+exports.TICKET_CONTEXT_KEYS = TICKET_CONTEXT_KEYS;
+
 exports.adminCreateSupportTicket = onCall({ region: 'us-central1', enforceAppCheck: true, maxInstances: 30 }, exports._h.adminCreateSupportTicket = async (req) => {
   const uid = req.auth?.uid;
   if (!uid) throw new Error('auth/unauthenticated');
   const { category, subject, message, priority } = req.data;
   if (!subject || !message) throw new Error('subject, message required');
+  /* Validated BEFORE any read or write: a malformed context refuses the whole
+     ticket rather than silently dropping the pointer and creating an orphan case. */
+  const context = _ticketContext(req.data.context);
 
   const db = getFirestore();
   const userSnap = await db.collection('users').doc(uid).get();
   const u = userSnap.data() || {};
 
-  const ref = await db.collection('supportTickets').add({
+  const doc = {
     uid,
     email: u.email || '',
     displayName: u.displayName || '',
@@ -330,9 +359,11 @@ exports.adminCreateSupportTicket = onCall({ region: 'us-central1', enforceAppChe
     resolvedBy: null,
     resolvedAt: null,
     createdAt: FieldValue.serverTimestamp(),
-  });
+  };
+  if (context) doc.context = context;   /* absent, not null, when there is none — backward compatible */
+  const ref = await db.collection('supportTickets').add(doc);
 
-  return { ticketId: ref.id };
+  return { ticketId: ref.id, context: context || undefined };
 });
 
 exports.adminGetSupportTickets = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetSupportTickets = async (req) => {
