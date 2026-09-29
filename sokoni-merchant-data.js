@@ -141,6 +141,42 @@
         inventoryVersion: (typeof p.inventoryVersion === 'number') ? p.inventoryVersion : null,
         /* buyer price offers are opt-in per product (owner rule, T2b 2026-09-29) */
         acceptOffers: p.acceptOffers === true,
+
+        /* ── FROM 4f67b4b (ported verbatim 2026-09-29, universal catalogue U4) — carried for display and for EDIT ──
+           These were dropped, and silently: the Products surface filters on `status`, searches `category`, and
+           renders `image` — none of which survived this mapping, so the status filter matched nothing, the category
+           search found nothing, and every card fell back to the 📦 placeholder. Each of those failures looks exactly
+           like a merchant with no drafts, no categories and no photos, which is why none of them announced itself.
+           `image` is carried READ-ONLY; attaching media is attachProductImages. */
+        category: p.category || null,
+        description: p.description || '',
+        status: p.status || null,
+        costPrice: (typeof p.costPrice === 'number') ? p.costPrice : null,
+        lowStockThreshold: (typeof p.lowStockThreshold === 'number') ? p.lowStockThreshold : null,
+        image: p.image || (Array.isArray(p.images) ? p.images[0] : null) || null,
+        /* The whole gallery, because slot POSITION is the Storage path and the media surface has to know how many
+           slots are already taken. */
+        images: Array.isArray(p.images) ? p.images.filter(Boolean) : [],
+        sellerUid: p.sellerUid || null,
+
+        /* ── U4 additions (2026-09-29): what THIS branch's newer editor (Listing Studio, d0443b8's allowlist, the
+           99-category sections) reads when a merchant opens an existing listing. Without them an edit opened blank —
+           the KEBS number, the food licence, the variants and the listing type all looked unset. Passed as stored;
+           the writer's allowlist still decides what may be written back. The lifecycle fields let the list separate
+           live, draft and archived. */
+        isVisible: p.isVisible !== false,
+        statusBeforeArchive: p.statusBeforeArchive || null,
+        listingType: p.listingType || null,
+        title: p.title || null,
+        specs: p.specs || null, attributes: p.attributes || null, variants: Array.isArray(p.variants) ? p.variants : null,
+        stockUnit: p.stockUnit || null, tags: Array.isArray(p.tags) ? p.tags : null,
+        barcode: p.barcode || null, brand: p.brand || null, condition: p.condition || null, location: p.location || null,
+        kebsCert: p.kebsCert || null, foodLicence: p.foodLicence || null, ownership: p.ownership || null,
+        verificationStatus: p.verificationStatus || null, warranty: p.warranty || null,
+        wholesalePrice: (typeof p.wholesalePrice === 'number') ? p.wholesalePrice : null,
+        minWholesaleQty: (typeof p.minWholesaleQty === 'number') ? p.minWholesaleQty : null,
+        deliveryCost: (typeof p.deliveryCost === 'number') ? p.deliveryCost : null,
+        digitalUrl: p.digitalUrl || null, digitalLicense: p.digitalLicense || null, video: p.video || null,
       };
     });
   }
@@ -461,7 +497,7 @@
           category: doc.category || '', stockLevel: stock,
           reorderPoint: (doc.lowStockThreshold != null ? Number(doc.lowStockThreshold) : 10),
           unit: 'pcs', imageUrl: img, description: doc.description || '',
-          sku: sku, warehouseId: wh, active: true, tenantId: scope.sellerUid,
+          sku: sku, warehouseId: wh, active: doc.status !== 'archived', tenantId: scope.sellerUid,
           sourceProductId: doc.id,          /* the link back to the storefront */
         },
       },
@@ -472,7 +508,8 @@
           category: doc.category || '', sku: sku, unit: 'pcs', stockLevel: stock,
           reorderPoint: (doc.lowStockThreshold != null ? Number(doc.lowStockThreshold) : 10),
           imageUrl: img, description: doc.description || '',
-          sellerId: scope.sellerUid, status: 'active', tenantId: scope.sellerUid,
+          /* U4 (2026-09-29): the till copy FOLLOWS the lifecycle — an archived product is not sellable at the POS */
+          sellerId: scope.sellerUid, status: doc.status === 'archived' ? 'archived' : 'active', tenantId: scope.sellerUid,
         },
       },
     };
@@ -642,23 +679,68 @@
     return { id: o.id, patch: fields };
   }
 
-  /**
-   * deleteProduct({ scope, db, id })
-   * Ownership verified against the stored record before anything is removed.
-   */
-  async function deleteProduct(o) {
+  /* ══ LIFECYCLE: ARCHIVE / RESTORE (universal catalogue U4, 2026-09-29) ═════════════════════════════════════
+     "Remove" used to HARD-DELETE products/{id} through the adapter's deleteDoc and leave the Inventory and POS
+     mirrors behind — a till could still sell a product the shop no longer had, and every review, rating and order
+     line lost its referent. Owner invariant (B9.17): product existence is changed ONLY by an explicit lifecycle act,
+     and that act TOMBSTONES — the canonical shape is sokoni-sellability.js's tombstonePatch() (ported from 332d458):
+     { status:'archived', isVisible:false }. availability-enforce already refuses 'archived' at checkout.
+
+     Archived products leave the shop, the till (the POS mirror follows) and discovery, stay in the merchant's catalogue
+     (the Archived filter) with their history, and can be RESTORED to the status they had. */
+  function _tombstone() {
+    var SL = (typeof window !== 'undefined' && window.SokoniSellability) ||
+             (typeof globalThis !== 'undefined' && globalThis.SokoniSellability) || null;
+    return SL && typeof SL.tombstonePatch === 'function' ? SL.tombstonePatch() : { status: 'archived', isVisible: false };
+  }
+
+  async function _ownedExisting(o) {
     var scope = o.scope;
     if (!scope || !scope.ok) throw new Error('merchant data: a resolved shop scope is required');
-    if (!o.db || typeof o.db.deleteProduct !== 'function') {
-      throw new Error('merchant data: this db adapter cannot delete products');
-    }
+    _requireWriter(o.db);
     if (!o.id) throw new Error('merchant data: product id required');
-
+    /* the STORED record, and it must exist — an unknown id is refused, never silently "archived" */
     var existing = o.existing || (o.db.getProduct ? await o.db.getProduct(o.id) : null);
-    if (existing) assertInScope(scope, Object.assign({ id: o.id }, existing));
+    if (!existing) { var nf = new Error('merchant data: that product no longer exists.'); nf.code = 'not-found'; throw nf; }
+    assertInScope(scope, Object.assign({ id: o.id }, existing));
+    return existing;
+  }
 
-    await o.db.deleteProduct({ id: o.id });
-    return { id: o.id, deleted: true };
+  /** archiveProduct({ scope, db, id }) — delist: off sale, off the till, out of discovery; history kept. */
+  async function archiveProduct(o) {
+    var existing = await _ownedExisting(o);
+    if (existing.status === 'archived') return { id: o.id, archived: true, already: true };
+    var patch = Object.assign(_tombstone(), {
+      /* restore returns it to what it was (a draft stays a draft) */
+      statusBeforeArchive: existing.status && existing.status !== 'archived' ? existing.status : 'active',
+      archivedAt: o.now || Date.now(),
+    });
+    await o.db.writeProduct({ id: o.id, data: patch, mode: 'update' });
+    var doc = Object.assign({}, existing, patch, { id: o.id });
+    var mirrors = await _writeMirrors(o.db, doc, o.scope);
+    return { id: o.id, archived: true, mirrors: mirrors, complete: mirrorsComplete(mirrors) };
+  }
+
+  /** restoreProduct({ scope, db, id }) — back to the status it had before it was archived. */
+  async function restoreProduct(o) {
+    var existing = await _ownedExisting(o);
+    if (existing.status !== 'archived') return { id: o.id, restored: false, reason: 'not-archived' };
+    var back = existing.statusBeforeArchive && existing.statusBeforeArchive !== 'archived' ? existing.statusBeforeArchive : 'active';
+    var patch = { status: back, isVisible: back === 'active', archivedAt: null, statusBeforeArchive: null };
+    await o.db.writeProduct({ id: o.id, data: patch, mode: 'update' });
+    var doc = Object.assign({}, existing, patch, { id: o.id });
+    var mirrors = await _writeMirrors(o.db, doc, o.scope);
+    return { id: o.id, restored: true, status: back, mirrors: mirrors, complete: mirrorsComplete(mirrors) };
+  }
+
+  /**
+   * deleteProduct({ scope, db, id }) — KEPT so any caller gets the safe behaviour: it ARCHIVES. Merchant-v2 never
+   * physically deletes a product (owner invariant; 332d458). A permanent removal, where an authority permits one,
+   * belongs to the server, not to a client writer.
+   */
+  async function deleteProduct(o) {
+    var r = await archiveProduct(o);
+    return Object.assign({ deleted: false, method: 'tombstone' }, r);
   }
 
   /* ── FROM 4f67b4b (911ec98 / 511836c lineage), ported VERBATIM 2026-09-29 (universal catalogue U1). The
@@ -1024,6 +1106,8 @@
     createProduct: createProduct,
     updateProduct: updateProduct,
     deleteProduct: deleteProduct,
+    archiveProduct: archiveProduct,
+    restoreProduct: restoreProduct,
     attachProductImages: attachProductImages,
     assertInScope: assertInScope,
     productProjections: productProjections,

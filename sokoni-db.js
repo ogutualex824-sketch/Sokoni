@@ -630,8 +630,20 @@ const SokoniDB = {
     return product.id;
   },
 
+  /* FROM 332d458 (ported 2026-09-29, universal catalogue U4): DELETE MEANS DELIST. This called deleteDoc() and
+     destroyed the canonical document — a product id is a foreign key (reviews/{}.targetId, ratingsSummary/{id},
+     orders[].items[].productId, inventoryMovements), so that orphaned all of them. It now writes the canonical
+     tombstone from sokoni-sellability.js as a MERGE, so name/price/sellerUid/images survive for order lines and
+     review cards. Kept (not removed) so any caller gets the safe behaviour instead of a ReferenceError. */
   async deleteProduct(productId) {
-    await deleteDoc(doc(db, 'products', String(productId)));
+    const patch = (typeof window !== 'undefined' && window.SokoniSellability)
+      ? window.SokoniSellability.tombstonePatch()
+      : { status: 'archived', isVisible: false };
+    await setDoc(doc(db, 'products', String(productId)), {
+      ...patch,
+      archivedAt: serverTimestamp(),
+      updatedAt:  serverTimestamp(),
+    }, { merge: true });
     _invalidateProductSearchCache();
   },
 

@@ -484,8 +484,9 @@
     }
 
     function counts () {
-      var c = { all: 0, in: 0, low: 0, out: 0, unknown: 0 };
-      (S.rows || []).forEach(function (p) { c.all++; c[stockState(p)]++; });
+      var c = { all: 0, in: 0, low: 0, out: 0, unknown: 0, archived: 0 };
+      /* U4: archived products are not part of the live catalogue — counted apart, never as "out of stock" */
+      (S.rows || []).forEach(function (p) { if (p.status === 'archived') { c.archived++; return; } c.all++; c[stockState(p)]++; });
       return c;
     }
 
@@ -532,6 +533,9 @@
           return false;
         });
       }
+      /* U4 (2026-09-29): archived products live under their own filter — never mixed into the live list */
+      if (S.status === 'archived') rows = rows.filter(function (p) { return p.status === 'archived'; });
+      else rows = rows.filter(function (p) { return p.status !== 'archived'; });
       if (S.status === 'active')  rows = rows.filter(function (p) { return p.status === 'active'; });
       if (S.status === 'draft')   rows = rows.filter(function (p) { return p.status && p.status !== 'active'; });
       /* Stock filters go through stockState — the SAME classifier the counts use, so a
@@ -571,6 +575,8 @@
 
     /* One visible availability state per card, from the same classifier as the counts. */
     function statusPill (p) {
+      /* U4: an archived product is neither in nor out of stock — it is not for sale */
+      if (p && p.status === 'archived') return '<span class="pr-tag unk">🗄️ Archived</span>';
       var st = stockState(p);
       if (st === 'out')     return '<span class="pr-tag out">● Out of stock</span>';
       if (st === 'low')     return '<span class="pr-tag low">⚠ Low stock</span>';
@@ -629,7 +635,9 @@
             '<button role="menuitem" data-pr="go" data-route="inventory">📦 Adjust stock</button>' +
             '<button role="menuitem" data-pr="open" data-i="' + i + '">👁️ View details</button>' +
             '<button role="menuitem" data-pr="tag1" data-i="' + i + '">🖨 Print price tag</button>' +
-            '<button role="menuitem" class="danger" data-pr="del" data-i="' + i + '">🗑️ Remove</button>' +
+            ((p && p.status === 'archived')
+              ? '<button role="menuitem" data-pr="restore" data-i="' + i + '">♻️ Restore</button>'
+              : '<button role="menuitem" class="danger" data-pr="del" data-i="' + i + '">🗄️ Archive</button>') +
           '</div>' +
       '</div>';
     }
@@ -688,6 +696,7 @@
           '<select class="pr-sel" aria-label="Filter by status" data-pr="status">' +
             opt('all', 'All', S.status) + opt('active', 'Active', S.status) +
             opt('draft', 'Draft', S.status) + opt('out', 'Out of stock', S.status) +
+            opt('archived', 'Archived', S.status) +
           '</select>' +
           '<select class="pr-sel" aria-label="Sort products" data-pr="sort">' +
             opt('recent', 'Newest', S.sort) + opt('name', 'Name', S.sort) +
@@ -1361,7 +1370,7 @@
       try {
         var M = md();
         if (E.mode === 'delete') {
-          run = M.deleteProduct({ scope: ctx.scope, db: ctx.db, id: E.product.id });
+          run = M.archiveProduct({ scope: ctx.scope, db: ctx.db, id: E.product.id });
         } else if (E.mode === 'edit') {
           var patch = changedOnly(fieldsFromForm(), E.product);   /* stored record, not the form */
           if (!Object.keys(patch).length) { E.busy = false; closeEditor(); return say('Nothing changed.'); }
@@ -1395,7 +1404,7 @@
         S.editor = null;
         if (mode === 'create') reportCreate(res || {});
         else if (mode === 'edit') say('Changes saved.');
-        else say('Product deleted.');
+        else say('Product archived — find it under Archived to restore it.');
         /* Re-READ. The list is never patched from what we believe we wrote. */
         S.rows = null; load();
       })).catch(done(function (e) {
@@ -2570,7 +2579,9 @@
           '<button class="pr-add" data-pr="edit" data-i="' + i + '">✏️ Edit product</button>' +
           '<button class="pr-btn" data-pr="go" data-route="inventory">📦 Adjust inventory</button>' +
           '<button class="pr-btn" data-pr="photos" data-i="' + i + '">📸 Photos</button>' +
-          '<button class="pr-btn danger" data-pr="del" data-i="' + i + '">🗑️ Remove</button>' +
+          ((p && p.status === 'archived')
+            ? '<button class="pr-btn" data-pr="restore" data-i="' + i + '">♻️ Restore</button>'
+            : '<button class="pr-btn danger" data-pr="del" data-i="' + i + '">🗄️ Archive</button>') +
         '</div>' +
         '<button class="pr-cancel" style="width:100%;margin-top:10px" data-pr="close">Close</button>' +
         '</div></div>';
@@ -2690,16 +2701,17 @@
       /* Render from the TYPED values, falling back to the stored record. */
       var p = (E.mode === 'delete') ? (E.product || {}) : (E.values || {});
       if (E.mode === 'delete') {
-        return '<div class="pr-sheet"><div class="pr-scrim" data-pr="close"></div><div class="pr-panel" role="dialog" aria-modal="true" aria-label="Delete product">' +
-          '<div class="pr-ph2">Delete this product?</div>' +
+        /* U4 (2026-09-29): ARCHIVE, never delete — the product id is a foreign key for reviews, ratings and order lines. */
+        return '<div class="pr-sheet"><div class="pr-scrim" data-pr="close"></div><div class="pr-panel" role="dialog" aria-modal="true" aria-label="Archive product">' +
+          '<div class="pr-ph2">Archive this product?</div>' +
           '<div class="pr-psub">' + esc(p.name || 'Untitled') + '</div>' +
-          '<div class="pr-warn">It will be removed from your catalogue and from the till. ' +
-          'Orders already placed keep their record. This cannot be undone.</div>' +
+          '<div class="pr-warn">It leaves your shop, the till and marketing, and buyers can no longer order it. ' +
+          'Its orders, reviews and history are kept, and you can restore it any time from the Archived filter.</div>' +
           (E.err ? '<div class="pr-err">' + esc(E.err) + '</div>' : '') +
           '<div class="pr-foot">' +
             '<button class="pr-cancel" data-pr="close">Keep it</button>' +
             '<button class="pr-danger" data-pr="submit"' + (E.busy ? ' disabled' : '') + '>' +
-              (E.busy ? 'Deleting…' : 'Delete') + '</button>' +
+              (E.busy ? 'Archiving…' : 'Archive') + '</button>' +
           '</div></div></div>';
       }
       var creating = E.mode === 'create';
@@ -2993,7 +3005,7 @@
 
       var openCard = ev.target.closest && ev.target.closest('[data-pr="open"]');
       if (openCard && openCard.getAttribute && openCard.getAttribute('data-pr') === 'open' &&
-          !(ev.target.closest && ev.target.closest('[data-pr="edit"],[data-pr="photos"],[data-pr="del"],[data-pr="menu"]'))) {
+          !(ev.target.closest && ev.target.closest('[data-pr="edit"],[data-pr="photos"],[data-pr="del"],[data-pr="restore"],[data-pr="menu"]'))) {
         var oi = Number(openCard.getAttribute('data-i'));
         var op = S.painted && S.painted[oi];
         if (op) { S.editor = { mode: 'detail', product: op, index: oi }; paint(); }
@@ -3096,6 +3108,18 @@
       if (k === 'pickno') { S.selected = {}; return paint(); }
       if (k === 'submit-photos') return submitPhotos();
 
+      if (k === 'restore') {
+        var ri = Number(el.getAttribute('data-i'));
+        var rp = (S.painted || [])[ri];
+        if (!rp) return say('That product is no longer in view — reopen Products and try again.');
+        var MR; try { MR = md(); } catch (e) { return say(e.message); }
+        el.disabled = true;
+        MR.restoreProduct({ scope: ctx.scope, db: ctx.db, id: rp.id }).then(function (r) {
+          say(r && r.restored ? 'Restored — ' + (rp.name || 'the product') + ' is back in your catalogue.' : 'It was not archived.');
+          S.menu = null; S.rows = null; load();           /* re-READ, never patched from belief */
+        }).catch(function (e) { el.disabled = false; say((e && e.message) || 'It could not be restored.'); });
+        return;
+      }
       if (k === 'edit' || k === 'del' || k === 'photos') {
         /* Resolve through the rows captured at paint time. An index into a list
            that has since been re-filtered would open the wrong product — and for

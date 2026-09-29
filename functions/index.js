@@ -669,13 +669,25 @@ async function executeTool(name, input) {
       }
 
       case "delete_product": {
-        await db.collection("products").doc(input.productId).delete();
+        /* FROM 332d458 (ported 2026-09-29, universal catalogue U4): DELETE MEANS DELIST. This physically deleted the
+           canonical document and wrote a deleted_products row nothing reads. A product id is a FOREIGN KEY (reviews,
+           ratingsSummary, order lines, inventory movements), so destroying it orphaned all of them. It is now the
+           canonical tombstone from functions/shared/sellability.js — `archived` is already unavailable at checkout
+           (availability-enforce) and filtered from every list. The audit row is KEPT and says so. */
+        const _availability = require("./shared/sellability");
+        await db.collection("products").doc(input.productId).set({
+          ..._availability.tombstonePatch(),
+          archivedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt:  admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
         await db.collection("deleted_products").doc(input.productId).set({
           deletedAt: admin.firestore.FieldValue.serverTimestamp(),
           deletedBy: "kass-admin-agent",
           reason: input.reason || "",
+          /* The canonical document is retained and delisted, not destroyed. */
+          method: "tombstone",
         });
-        return { success: true, productId: input.productId };
+        return { success: true, productId: input.productId, method: "tombstone" };
       }
 
       case "get_rides": {

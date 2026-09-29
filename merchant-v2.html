@@ -808,6 +808,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script src="sokoni-product-taxonomy.js"></script>
 <!-- U2/U3 (2026-09-29): what each kind of business may list — byte-identical copy of functions/shared/catalogue-capabilities.js -->
 <script src="sokoni-catalogue-capabilities.js"></script>
+<!-- U4 (2026-09-29): the ONE sellability decision + the canonical tombstone (byte-identical to functions/shared/sellability.js; from dde631b / 332d458) -->
+<script src="sokoni-sellability.js"></script>
 <script src="sokoni-product-specs.js"></script>
 <link rel="stylesheet" href="sokoni-warranty-ui.css">
 <script src="sokoni-warranty-ui.js"></script>
@@ -2459,10 +2461,16 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
         return m.fs.setDoc(ref, data, { merge: true }).then(function () { return { replayed: false }; });
       });
     },
+    /* U4 (2026-09-29): this adapter NEVER physically deletes a product. It was the merchant-v2 "Remove" hard delete
+       (deleteDoc) that orphaned reviews, ratings, order lines and the POS / Inventory mirrors. The canonical tombstone
+       (sokoni-sellability.js, from 332d458) is written as a MERGE instead — the writer's archiveProduct is the path the
+       UI uses; this only makes any other caller safe. */
     deleteProduct: function (o) {
       return sdk().then(function (m) {
         if (!window.firebaseDB) throw new Error('Products cannot be changed just now.');
-        return m.fs.deleteDoc(m.fs.doc(window.firebaseDB, 'products', o.id));
+        var t = (window.SokoniSellability && window.SokoniSellability.tombstonePatch) ? window.SokoniSellability.tombstonePatch() : { status: 'archived', isVisible: false };
+        return m.fs.setDoc(m.fs.doc(window.firebaseDB, 'products', o.id),
+          Object.assign(t, { archivedAt: m.fs.serverTimestamp(), updatedAt: m.fs.serverTimestamp() }), { merge: true });
       });
     },
     getProduct: function (id) {

@@ -1,3 +1,99 @@
+## [2026-09-29] - Universal catalogue U4: Remove ARCHIVES (never deletes); restore; the till follows; three hard-delete paths closed
+
+**merchant-v2 Products + sokoni-db + KASS admin tool, NOT deployed.** Branch `slice/c4-category-matrix`.
+- Owner brief §11: Remove must not permanently delete, and must not orphan POS / Inventory copies.
+- Owner invariant B9.17: product existence changes only through an explicit lifecycle act, and that act tombstones.
+
+**Census:**
+- **Three physical deletes of `products/{id}` remained on this branch:**
+  - merchant-v2's own adapter (`deleteDoc`), which is the "Remove" bug: it orphaned the POS / Inventory mirrors;
+  - `sokoni-db.js` `deleteProduct`;
+  - the KASS admin agent's `delete_product`, which wrote a `deleted_products` row nothing reads.
+- **The fix already existed on other lineages:** `dde631b` (the one sellability decision, `tombstonePatch()`) and
+  `332d458` ("delete means delist"). Neither was on this branch.
+- **A second silent defect:** the merchant list reader (`listProducts`) passed 9 fields. The Products page's status
+  filters matched nothing, every card lost its photo and category, and opening an existing listing for edit showed
+  its KEBS number, food licence, variants and type as blank. `4f67b4b` had already fixed part of this.
+
+**Ported, verbatim, each named by its source commit:**
+- **From `dde631b`:** `functions/shared/sellability.js` and its byte-identical `sokoni-sellability.js` (pure).
+- **From `332d458`:**
+  - `sokoni-db.js` and the KASS tool write the canonical tombstone `{ status: 'archived', isVisible: false }` as a
+    merge, and the audit row now says `method: "tombstone"`;
+  - its suite `test-product-tombstone.js` passes **34/0** on this branch (it was 28/6 before the port).
+- **From `4f67b4b`:** the list reader carries `status`, `category`, `description`, `costPrice` (the merchant's own
+  list), `image`, `images`, `sellerUid` and `lowStockThreshold`.
+
+**Built on top:**
+- **The list reader** also carries what this branch's newer editor reads: listing type, specs, attributes, variants,
+  compliance, warranty, wholesale, digital, and the lifecycle fields.
+- **The writer** gains `archiveProduct` / `restoreProduct`:
+  - ownership is checked against the STORED record, and an unknown id is refused (`not-found`);
+  - archive records `statusBeforeArchive`, so a draft restores as a draft;
+  - `deleteProduct` is kept, and now **archives**.
+- **The mirrors follow the lifecycle:** the POS copy is `archived`, and the Inventory copy is `active: false`.
+- **merchant-v2's adapter** never deletes. It writes the tombstone as a merge.
+- **The Products UI:**
+  - "🗄️ Archive" replaces "🗑️ Remove", and the confirm sheet says what happens;
+  - the live list and its counts exclude archived items;
+  - an **Archived** filter shows them with "♻️ Restore";
+  - Restore re-reads from the server.
+  - Found on the way: tapping Restore opened the card instead, because the card's own click handler did not exclude it.
+- **The buyer side needed no change.** `availability-enforce` already refuses `archived` at checkout, and
+  `validateOrderLines` refuses it (proven).
+
+**Tests:**
+- **`scripts/test-catalogue-u4-archive.js`: 7/0** (the REAL Products module in Chromium, plus the REAL server pricer):
+  - Remove asks, then archives: the till copy is archived, Inventory is inactive, and there is no physical delete;
+  - the item leaves the live list and counts and appears under Archived with Restore;
+  - Restore brings back the prior status (a draft stays a draft);
+  - checkout refuses an archived product;
+  - cross-shop and unknown ids are refused with nothing written;
+  - **no code path physically deletes `products/{id}`, in any spelling.** The lineage test's regex missed the
+    `fs.deleteDoc(fs.doc(…))` form merchant-v2 uses.
+  - Counterproof on `eb7d2ac`: **9 fail** (the no-page-errors control passes).
+  - Sabotage: **10/10 caught.**
+- **`test-product-tombstone` (from 332d458): 34/0.**
+- **Superseded, with its reason:** `test-merchant-v2-products-2b` §5 and "every mutation" now assert archive / restore
+  instead of delete. Result: **59/0.**
+- **Deliberately NOT ported:** `test-sellability-contract` (from `dde631b`). It certifies that EVERY buyer surface
+  (grid, product page, home, `/api/catalogue`, `createCheckoutSession`) asks the one sellability module. That is the
+  full sellability convergence, including the money path, and it is its own slice.
+
+**Regression** (135 suites that read the writer, Products, merchant-v2, sokoni-db, index.js or sellability; work tree
+vs `eb7d2ac`):
+- Everything is equal except the following.
+- **Superseded, with its reason:** `test-merchant-ecosystem-convergence` records P-3 (no per-product channel choice).
+  Its FINDING now reads the lifecycle-derived POS status. The gap stands: every live product is POS-visible, and only
+  archiving removes it. Result 144/1, equal to the base (the flash-sale failure is pre-existing).
+- **Flaky in the parallel run:** `merchant-customers-ui`, `merchant-disputes-ui` and `merchant-store-ui` printed no
+  summary on the work tree. Re-run: 185/0, 70/0 and 120/0, equal to the base.
+- `test-product-tombstone` is new (absent on the base).
+
+**UNPROVEN / NOT DONE:**
+- Not deployed.
+- **Archived items in active marketing campaigns:** campaigns reference products but are not yet filtered by the
+  lifecycle. That is U7.
+- A draft is still POS-visible (the P-3 channel gap).
+- The Firestore rule forbidding a client delete of `products/{id}` is stage 3.
+
+**Files:**
+- New: `functions/shared/sellability.js`, `sokoni-sellability.js`, `scripts/test-product-tombstone.js`,
+  `scripts/test-catalogue-u4-archive.js`.
+- Changed: `sokoni-merchant-data.js`, `sokoni-merchant-products.js`, `merchant-v2.html`, `sokoni-db.js`,
+  `functions/index.js` (KASS `delete_product`), and 2 superseded suites.
+
+**Database:**
+- Products gain `statusBeforeArchive` / `archivedAt` when archived.
+- `deleted_products` audit rows gain `method: "tombstone"`.
+- No migration.
+
+**Security:** nothing on the client or in the KASS tool can destroy a canonical product. Cross-shop and unknown ids
+are refused.
+
+**Breaking:** `SokoniMerchantData.deleteProduct` now archives (it returns `deleted: false, method: 'tombstone'`). The
+KASS `delete_product` tool delists instead of destroying.
+
 ## [2026-09-29] - Universal catalogue U2 + U3: one capability matrix for every SOKONI business; the Listing Studio and writer obey it
 
 **merchant-v2 catalogue, NOT deployed.** Branch `slice/c4-category-matrix`. This is the owner's universal catalogue

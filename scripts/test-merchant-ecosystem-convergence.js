@@ -681,9 +681,11 @@ if (has('sokoni-merchant-data.js')) {
      /lowStockThreshold/.test(MD3));
   /* The consequence, which is the opposite of what §10 asks for. */
   const proj2 = MD3.slice(MD3.indexOf('pos: {'), MD3.indexOf('pos: {') + 600);
-  ck('FINDING — the POS projection hardcodes status:active',
-     /status:\s*'active'/.test(proj2),
-     'every canonically-created product becomes POS-visible unconditionally');
+  /* 2026-09-29 (universal catalogue U4): the POS status now follows the LIFECYCLE (an archived product is 'archived' at
+     the till). The finding stands: apart from archiving there is still no channel choice — every live product is POS-visible. */
+  ck('FINDING — the POS projection is active for every live product (only archiving removes it)',
+     /status:\s*doc\.status === 'archived' \? 'archived' : 'active'/.test(proj2) && !CHANNEL_FIELDS.test(proj2),
+     'every canonically-created live product becomes POS-visible; no channel field decides it');
   up('P-3 — a merchant cannot say "POS yes, marketplace no"',
      'There is no channel representation to configure. §10 asks that an internal POS item not ' +
      'be auto-published to the marketplace; the actual behaviour is the inverse — every ' +
