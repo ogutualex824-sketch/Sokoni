@@ -149,7 +149,9 @@ function get (pathname) {
   });
 }
 
-const line = (k, v) => console.log('  ' + String(k).padEnd(26) + (v === undefined ? '' : v));
+/* 38, not 26: the scope labels are 36 characters and ran straight into
+   their own values — 'whatsapp_business_managementABSENT'. */
+const line = (k, v) => console.log('  ' + String(k).padEnd(38) + (v === undefined ? '' : v));
 
 async function main () {
   /* ── 1 · WHO IS THIS TOKEN, AND WHAT MAY IT DO ─────────────────────────── */
