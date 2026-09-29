@@ -1,3 +1,46 @@
+## 2026-09-29 — AdminOS sidebar, Slice D: one primary navigation path, header preserved, responsive finalized (branch `feat/integrations-control-center`, NOT deployed)
+
+Architecture after D: **global destination → sidebar → canonical route → existing panel/tab**; **contextual action →
+body/page header → related existing surface**. Nothing was deleted to reach a count.
+
+- **Dashboard quick-links (10) removed.** Seven duplicated the sidebar's Tools group; the three that existed nowhere
+  else — Financial OS, Seller Success, Merchant Pipeline — now live in Tools. The dashboard carries no links: it is a
+  dashboard, not a second navigation system. The dead `.quick-link` CSS went with the markup.
+- **Contextual links kept (8):** FinOS / Financial OS inside Financial, POS / Commissioning / Observability inside
+  SmartPOS, Fleet Monitor / Rider Nav / Geo Intelligence inside Delivery. A related tool beside the work is context.
+- **Header bell** is the existing Notifications function resolved through the canonical route the sidebar child uses:
+  `SokoniAOS.navigate('comms','push')` → Communications panel → existing Push tab → `#comms/push`. Labelled, typed.
+- **Header finalized with the rest of `767c0b7`** (A3 had taken only the sidebar-layout chain): header wraps and the
+  quick search takes the full second row under 640px (at 320px it had collapsed to 44px), breadcrumb truncates
+  instead of widening the page, `--aos-sub` — referenced 9 times, defined nowhere — is defined once, and the analytics
+  funnel label is white-with-shadow so 0% no longer vanishes black-on-black. After D, `admin-os.html` and
+  `sokoni-aos.js` carry every `767c0b7` line for those files.
+- **Live profile menu (`f4dcb5b`) NOT imported — deliberately.** Walked the require graph against this branch:
+  `sokoni-admin-entry.js` needs `SokoniRoleAuthority` (`sokoni-role-authority.js`, from `68497f7`),
+  `SokoniPermissions.enterAdminContext` / `getAdminContext` (the live `sokoni-permissions.js`) and
+  `shared-header.js`'s `_skEnterAdmin`. None exists on this branch. Imported alone, its "Admin tools" entries refuse on
+  every click and the workspace switcher never renders — a control that can never work. It belongs to the role-authority
+  lineage (`e7dd99e → 68497f7 → f4dcb5b → 8814a86`), which is staff/role work outside D. D preserves and certifies this
+  branch's existing controls instead: menu button, breadcrumb, quick search, bell, and the profile (sidebar-footer user
+  chip + Sign Out) reachable at every width.
+- **Integration model untouched** by construction: no file of the evidence/capability work is in this diff.
+
+Evidence — new `scripts/test-adminos-shell-final.js` **48/0** (hermetic; every claim measured in Chromium):
+- *One primary path:* every sidebar route appears exactly once; the dashboard has no quick-link grid and no links;
+  the three moved destinations are in Tools; no body link duplicates a Tools destination except the allowed contextual
+  pair in Financial; the 8 contextual links are present; no `navigate()` control remains in the content area.
+- *Header:* the bell lands on Communications/Push with `#comms/push` (and a served-markup control that skips the child
+  route turns the check red); typing in the search routes to Users.
+- *320 / 390 / 768 / 1024 / 1440:* no horizontal overflow; header visible with search and bell inside the viewport;
+  content below the header and beside — never under — the sidebar; ≤768 the drawer opens with the user chip and Sign
+  Out inside the viewport, Escape closes it, keyboard reaches menu → search → bell; ≥1024 the rail collapses 220→66→220
+  with the content following, keyboard reaches toggle → nav → search → bell; zero page errors at every width.
+Regression: `nav-coverage` 32/0, `sidebar-a11y` 34/0, `single-navigation` 22/0, `render` 43/0, `wiring` 308/0;
+five-viewport probe 220px fixed drawer, 0/36 clipped, 0 overflow.
+
+- **Files:** `admin-os.html`, `sokoni-aos.js` (one label colour), new `scripts/test-adminos-shell-final.js`, `CHANGELOG.md`.
+- **Database / API / Security / Breaking:** none. UI only. Not deployed.
+
 ## 2026-09-29 — Integration Evidence Model, Step E decision memo: refusal has two authorities, not one (branch `feat/integrations-control-center`, NOT deployed)
 
 Decision memo only — no code, no migration, no deploy. `5e8ec59` unchanged. The Firestore adapter proof is
