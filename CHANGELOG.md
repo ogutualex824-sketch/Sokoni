@@ -1,3 +1,46 @@
+## 2026-09-29 — Integration Evidence Model, Step E decision memo: refusal has two authorities, not one (branch `feat/integrations-control-center`, NOT deployed)
+
+Decision memo only — no code, no migration, no deploy. `5e8ec59` unchanged. The Firestore adapter proof is
+**held** by owner instruction, and nothing here depends on it. Full note: `docs/INTEGRATION_EVIDENCE_STEP_E_DECISION.md`.
+
+**The nine refusals are two different kinds of fact.** `no_safe_probe` (2 — intasend-collections, intasend-payouts)
+asserts that probing would move money: true in every environment, changeable only by a design decision, so the
+**declaration is authoritative and evidence must never override it**. `requires_secret_binding` (7) asserts that the
+probe function does not hold a provider's secret — a **deployment** property that is environment-specific and stops
+being true the moment someone binds the secret. There the declaration is a *prediction* and only evidence can
+confirm it.
+
+**A defect found while deciding:** `needsBinding()` (`integration-probe-executors.js:49`) raises
+`requires_secret_binding` **unconditionally** — it never checks whether the secret is bound. It is a hardcoded
+assertion about deployment state whose own message says *"deployment is frozen"*, and it can only ever be wrong in
+one direction: it will keep claiming the secret is unbound after someone binds it, and nothing would detect that.
+Same class as the legacy `{ merge: true }`, one level up. Logged as **separate** from the migration, not bundled in.
+
+**The "38 without a reason" is five groups, not one bucket** — 3 runnable · 4 inbound with declared stages and no
+executor (`intasend-webhook`, `fcm`, `pos-webhooks`, `inventory-webhooks`, whose evidence can only arrive by
+correlated callback) · 15 measurable but unwritten · 5 not-applicable · 11 observed-elsewhere. Three authority
+regimes across the 47: declaration-only (2), persistence-only (4), both-and-they-can-disagree (7).
+
+**Recommended:** keep `notRunReason` (present tense, declared) and `lastNotRunReason` + `probedAt` (past tense,
+observed) as **separate fields** — a persisted reason is history with a timestamp, a declared reason is
+present-tense with none, and one field renders them indistinguishably. Step E should stop letting a probe's reason
+overwrite the declaration, as `5e8ec59` does today. The prize is the **disagreement**, which neither source can
+produce alone: declaration `requires_secret_binding` + a successful probe = the declaration is stale; declaration
+`runnable` + `requires_secret_binding` = a binding regressed; `no_safe_probe` + any probe result at all = **a probe
+ran against a money rail**.
+
+**Migration shrinks to 3 entries, not 47.** Refusals are derived and must not be stored — writing them creates a
+second copy of a fact already authoritative in source, which goes stale the moment the declaration changes.
+Migration carries **observations only**; the 5 not-applicable and 11 observed-elsewhere must NOT be given records at
+all, since one would imply health is measurable here when the catalogue says it is not.
+
+**`integrationProbeLatest`: not migrated, not read, not deleted.** Its contents are UNREADABLE from here —
+production Firestore was not contacted and is not authorized in this lane; nothing above assumes what it holds.
+
+Files: `docs/INTEGRATION_EVIDENCE_STEP_E_DECISION.md` (new).
+Database: none. API: none. Security: none. Breaking changes: none. Deploy: none.
+UNPROVEN: production persistence (adapter proof held); whether the deployed executor source matches this one.
+
 ## 2026-09-29 — Integration Evidence Model, Step B: the joint between the probe and the console (branch `feat/integrations-control-center`, NOT deployed)
 
 Step B of `91fe2b5`, after the `b9172ba` census. Persistence and wiring only — no migration, no deploy,
