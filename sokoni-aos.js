@@ -1244,6 +1244,7 @@ window.SokoniAOS = (() => {
         <p><strong>Priority:</strong> <span class="prio-badge prio-${t.priority||"normal"}">${t.priority||"normal"}</span></p>
         <p><strong>Status:</strong> <span class="status-badge st-${t.status||"open"}">${t.status||"open"}</span></p>
         ${t.context ? `<p><strong>About:</strong> ${_ctxChips(t.context)}</p>` : ""}
+        ${t.uid ? `<p><button type="button" class="aos-btn-sm" onclick="SokoniAOS.emailHistory('${_jsAttr(t.uid)}','ticketMail-${_jsAttr(id)}')">Email history</button></p><div id="ticketMail-${_esc(id)}" hidden></div>` : ""}
         <hr>
         <p>${_esc(t.message||t.body||"No message")}</p>
         <hr>
@@ -1334,6 +1335,17 @@ window.SokoniAOS = (() => {
     };
   }
 
+  /* ── Email history on a record (Slice C2) ─────────────────────────────────
+     Read-only delivery evidence (emailLogs, admin read) for one account, rendered
+     into the record's own container by the one email workspace module. */
+  function emailHistory(uid, containerId) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    if (!window.SokoniEmailWorkspace) { el.innerHTML = _emptyMsg("The email workspace did not load (sokoni-email-workspace.js)."); return; }
+    el.hidden = false;
+    window.SokoniEmailWorkspace.historyFor(uid, el);
+  }
+
   // ── Communications ────────────────────────────────────────────────────────────
   async function _loadComms() { _commsTab("push"); }
 
@@ -1367,38 +1379,14 @@ window.SokoniAOS = (() => {
           </div>`).join("") || "<p class='aos-muted'>No recent push notifications.</p>"}
         </div>`;
     } else if (tab === "email") {
-      body.innerHTML = `
-        <div class="compose-form">
-          <h3>&#x2709;&#xFE0F; Send Test Email</h3>
-          <p style="color:var(--aos-muted);font-size:12px;margin:0 0 10px">
-            Sends a real email rendered with the <strong>production template</strong> &mdash; same header, logo
-            and dark-mode CSS as every live SOKONI email. Use it to verify delivery <em>and</em> branding.
-          </p>
-          <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px">
-            <input type="email" id="testEmailTo" placeholder="Recipient email" autocomplete="email">
-            <select id="testEmailTemplate">
-              <option value="">Delivery + branding test</option>
-              <option value="welcome">welcome</option>
-              <option value="email-verify">email-verify</option>
-              <option value="password-reset">password-reset</option>
-              <option value="order-confirmation">order-confirmation</option>
-              <option value="order-shipped">order-shipped</option>
-            </select>
-          </div>
-          <button class="aos-btn success" style="margin-top:10px" onclick="SokoniAOS.sendTestEmail()">&#x1F9EA; Send Test Email</button>
-          <div id="testEmailResult" style="margin-top:10px"></div>
-        </div>
-        <div class="compose-form">
-          <h3>&#x1F4E7; Email Blast</h3>
-          <input type="text" id="emailSubject" placeholder="Subject line">
-          <textarea id="emailHtml" placeholder="Email body (plain text or HTML)&#x2026;" rows="6"></textarea>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <select id="emailTarget"><option value="all">All Users</option><option value="sellers">Sellers</option><option value="buyers">Buyers</option><option value="drivers">Drivers</option><option value="providers">Providers</option></select>
-            <input type="text" id="emailTag" placeholder="Template tag (optional)">
-          </div>
-          <p style="color:var(--aos-muted);font-size:11px;margin:8px 0">Requires SENDGRID_API_KEY configured in Secret Manager.</p>
-          <button class="aos-btn success" style="margin-top:6px" onclick="SokoniAOS.sendEmailBlast()">&#x1F4E8; Send Email Blast</button>
-        </div>`;
+      /* The Email workspace (sokoni-email-workspace.js): outbound send through the
+         engine, the delivery-evidence log, the honest inbound state, and the former
+         Test Email + Email Blast sections moved there unchanged. */
+      if (!window.SokoniEmailWorkspace) {
+        body.innerHTML = _emptyMsg("The email workspace did not load. Check that sokoni-email-workspace.js is served on this page.");
+      } else {
+        window.SokoniEmailWorkspace.mount(body);
+      }
     } else if (tab === "sms") {
       body.innerHTML = `
         <div class="compose-form">
@@ -3194,8 +3182,10 @@ window.SokoniAOS = (() => {
         <button class="aos-btn-sm" onclick="SokoniAOS.ticketDialog({applicationId:'${id}'},'Application: ${_jsAttr(a.name || a.id)}')">Support ticket&hellip;</button>
         <button class="aos-btn-sm" onclick="SokoniAOS.openTicketsFor({applicationId:'${id}'})">Tickets</button>
         ${_videoEligible(a) ? `<button class="aos-btn-sm" onclick="SokoniAOS.videoVerification('${id}')">Video verification&hellip;</button>` : ""}
+        ${a.uid ? `<button class="aos-btn-sm" onclick="SokoniAOS.emailHistory('${_jsAttr(a.uid)}','appMail-${id}')">Email history</button>` : ""}
       </div>
       <div class="app-video" id="appVideo-${id}"></div>
+      <div class="app-mail" id="appMail-${id}" hidden></div>
     </div>`;
   }
 
@@ -3470,6 +3460,7 @@ window.SokoniAOS = (() => {
     openApplication,
     ticketDialog,
     videoVerification,
+    emailHistory,
     openShop,
     // Marketplace
     marketplaceTab:      _marketplaceTab,

@@ -177,7 +177,9 @@
                    applicant's uid is known — the server needs a subject, and a decided
                    request has nothing left to verify. */
                 (_videoEligible(a) ? ' <button type="button" class="aos-btn-sm" data-act="video">Video verification&hellip;</button>' : '') +
-                (a.videoVerificationId ? ' <span class="aos-muted" style="font-size:12px">video verification <span class="aos-mono">' + _esc(a.videoVerificationId) + '</span> <button type="button" class="aos-btn-sm" data-act="connect">Connect console</button></span>' : '');
+                (a.videoVerificationId ? ' <span class="aos-muted" style="font-size:12px">video verification <span class="aos-mono">' + _esc(a.videoVerificationId) + '</span> <button type="button" class="aos-btn-sm" data-act="connect">Connect console</button></span>' : '') +
+                /* Email history (Slice C2): what SOKONI has sent this applicant — evidence, read-only. */
+                (a.applicantUid ? ' <button type="button" class="aos-btn-sm" data-act="mail">Email history</button>' : '');
     return '<div class="vr-body">' +
       '<div class="vr-grid">' + grid + '</div>' +
       (a.description ? '<p style="font-size:12.5px;white-space:pre-wrap;margin:8px 0">' + _esc(a.description) + '</p>' : '') +
@@ -185,6 +187,7 @@
       (!decided ? '<label class="aos-muted" style="font-size:12px;display:block;margin-top:6px">Rejection reason (required to reject; shown to the applicant)<br><input type="text" class="aos-input" data-f="reason" style="width:100%;max-width:520px"></label>' : '') +
       '<div class="vr-actions" style="margin-top:10px">' + actions + (actions ? ' ' : '') + links + '</div>' +
       '<div class="vr-video"></div>' +
+      '<div class="vr-mail" hidden></div>' +
       '<div class="vr-out" aria-live="polite"></div>' +
     '</div>';
   }
@@ -332,6 +335,11 @@
       return;
     }
     if (act === 'connect') { if (global.SokoniAOS) global.SokoniAOS.navigate('comms', 'connect'); return; }
+    if (act === 'mail') {
+      var mail = card.querySelector('.vr-mail');
+      if (!global.SokoniEmailWorkspace) { _say(out, 'err', 'The email workspace did not load (sokoni-email-workspace.js).'); return; }
+      mail.hidden = false; global.SokoniEmailWorkspace.historyFor(a.applicantUid, mail); return;
+    }
     if (act === 'video') { _videoForm(a, card); return; }
     if (_busy) return;
     var notes = (card.querySelector('[data-f="notes"]') || {}).value || '';

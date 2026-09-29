@@ -1,3 +1,40 @@
+## 2026-09-29 — Email workspace, Slice C2: outbound is real, inbound is not, and the UI says which (branch `feat/integrations-control-center`, NOT deployed)
+
+The census (C1) fixed the shape of this surface: SOKONI sends email and sees what happened to it; it cannot receive
+human mail. So the workspace offers exactly that, and no more.
+
+- **`sokoni-email-workspace.js`** (new), the ONE in-app email surface, mounted at AdminOS **Communications → Email**
+  (`#comms/email`; the tab was "Email Blast") and linked from Super Admin's AdminOS Workspaces group. Four panels:
+  1. **Inbound mail & two-way threads: not provisioned** — the human-mailbox transport row comes from the server's
+     `communicationHealth` (`google_workspace` absent); the DMARC-only Inbound Parse host, the missing thread store
+     and the missing in-thread reply headers are stated as **code facts**, labelled as such. **There is no reply
+     control anywhere on the surface** and the copy says why (replies go to the external `support@` mailbox).
+  2. **Outbound email** — SendGrid / SMTP provisioning and observed liveness verbatim from `communicationHealth`,
+     with its own "measures / does not measure" sentence.
+  3. **Message a person** — `communicationPlan` first (nothing sent; Send stays disabled until a plan exists and
+     when nothing can reach the person), then `communicationSend` through the notification engine with
+     `recipientUid`, subject, body and an anchor only when both parts are given (`order/inquiry/booking/delivery/
+     supply/support` — the send path's own vocabulary; a verification request or application is not an anchor
+     type, so such a message is honestly "about the account"). Shown: the server's answer only.
+  4. **Sent mail** — `emailLogs` (admin read) as delivery evidence: status, provider, opened / clicked / bounced,
+     filterable by account; a failed read never looks like an empty log.
+  The former **Test Email** and **Email Blast** sections moved into the workspace **verbatim** (spliced, not
+  retyped) and stay wired to `SokoniAOS.sendTestEmail` / `sendEmailBlast`.
+- **Email history on the records:** application cards (when the account uid is known), verification requests and
+  ticket detail render that account's `emailLogs` inline through the same module (`historyFor`).
+
+Evidence: `scripts/test-email-workspace.js` **24/0** (fixture layer by accessor hooks): real-reload route; Super
+Admin link; inbound card derived from the server answer + code facts; **zero reply controls**; Plan precedes Send and
+sends nothing; Send payload and anchor rules; unreachable and refused cases; log evidence and filter; failed read
+distinct from empty; legacy controls present and wired; email history on all three record kinds; static: the module
+writes nothing and names no provider; negative control (inbound card rewritten to "provisioned") turns I1 red.
+Regression suites re-run.
+
+- **Files:** new `sokoni-email-workspace.js`, `sokoni-aos.js` (tab mount, `emailHistory`, card/ticket buttons),
+  `sokoni-verification-review.js` (Email history), `admin-os.html` (tab label, script), `super-admin.html` (link),
+  new `scripts/test-email-workspace.js`, `CHANGELOG.md`.
+- **Database / API / rules / server:** none. Not deployed.
+
 ## 2026-09-29 — WhatsApp Cloud API census: the capability is ABSENT, and a ratified directive says the opposite (branch `feat/integrations-control-center`, NOT deployed)
 
 Read-only, run before writing anything — as the WhatsApp brief itself instructs, and for the reason it gives: declaring
