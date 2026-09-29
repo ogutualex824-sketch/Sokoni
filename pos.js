@@ -849,6 +849,68 @@ const SPos = (function () {
     }
   };
 
+  /* 6b — ask the server to record the sale BEFORE the till records anything.
+     Returns { out, payload } when the sale proceeds (ACCEPTED, or LOCAL_PENDING when the
+     server could not be reached), or null when it must not happen (refused, not canonical,
+     shop unconfirmed) — the reason has then already been shown. */
+  const _REFUSAL_TEXT = {
+    PRICE_CHANGED:         'A price changed since this cart was rung up. Refresh the products and ring it up again.',
+    STOCK_UNAVAILABLE:     'Not enough stock on record for this sale.',
+    PRODUCT_NOT_CANONICAL: 'A product in this cart is not in your SOKONI catalogue.',
+    NOT_AUTHORISED:        'This account is not authorised to record sales for this shop.',
+    TENDER_REFUSED:        'This payment method cannot be accepted at the till.',
+  };
+  async function _convergedDecide (txn, payInfo, t) {
+    const CS = window.PosConvergedSale, MD = window.SokoniMerchantData;
+    if (!CS || !MD) { toast('The sales module did not load, so this sale was not recorded. Reload the POS.', 'error'); return null; }
+
+    const lines = await CS.resolveLines(txn.items, (id) => PosDB.products.get(id));
+    if (!lines.ok) { toast(lines.message, 'error'); return null; }
+
+    const online = typeof navigator === 'undefined' || navigator.onLine !== false;
+    let u = null; try { u = JSON.parse(localStorage.getItem('sokoniUser') || 'null'); } catch (_) {}
+    const uid = (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid)
+             || (u && (u.uid || u.id)) || window.currentUser?.uid || null;
+    let dbAdapter = null;
+    if (online && window.firebaseDB) {
+      dbAdapter = {
+        async getDoc (coll, id) {
+          const m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+          const s = await m.getDoc(m.doc(window.firebaseDB, coll, id));
+          return s.exists() ? s.data() : null;
+        },
+      };
+    }
+    const scope = await CS.resolveScope({ uid, storage: localStorage, merchantData: MD, online: !!dbAdapter, db: dbAdapter });
+    if (!scope.ok) { toast(scope.message, 'error'); return null; }
+
+    /* The server adds taxTotal to the total. Tax-inclusive prices already contain it, so it is
+       sent as 0 there; the tax POLICY itself is a separate repair (see posCompleteCheckout 0b R3). */
+    const payload = CS.buildPayload({
+      merchantData: MD, scope, lines: lines.lines, tendered: payInfo.amountPaid, txnId: txn.id,
+      branchId: (state.settings && state.settings.branchId) || 'default', shiftId: txn.shiftId,
+      discountTotal: t.disc, taxTotal: state.settings.taxInclusive ? 0 : t.tax,
+      checkoutStartedAt: typeof t.checkoutStartedAt === 'number' ? t.checkoutStartedAt : null,
+    });
+
+    let out;
+    if (!online || !window.firebaseApp) {
+      out = { status: 'LOCAL_PENDING', code: 'offline' };
+    } else {
+      const fnMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js')
+        .catch(() => null);
+      if (!fnMod) out = { status: 'LOCAL_PENDING', code: 'functions_sdk_unavailable' };
+      else out = await CS.submit(payload, fnMod.httpsCallable(fnMod.getFunctions(window.firebaseApp), CS.CALLABLE));
+    }
+
+    if (out.status === 'SYNC_REJECTED') {
+      toast((_REFUSAL_TEXT[out.reason] || 'SOKONI did not accept this sale.') +
+        (out.message ? ' (' + out.message + ')' : '') + ' Nothing was charged and no stock moved.', 'error');
+      return null;
+    }
+    return { out, payload };
+  }
+
   /* Checkout-convergence SHADOW (Phase 1) — dry-run the canonical posCompleteCheckout and store a
      structured comparison of what it WOULD produce vs this legacy sale. Feature-flagged
      (window.POS_CHECKOUT_SHADOW), fire-and-forget, side-effect-free (dryRun). Evidence only. */
@@ -1285,7 +1347,19 @@ const SPos = (function () {
      PAYMENT
   ═══════════════════════════════════════════════════════════ */
   const payment = {
+    /* 6b — the tenders the server can settle. Cash only until SOKONI Pay (6c). Fails CLOSED:
+       without the converged-sale module nothing but cash is offered, and even cash is then
+       refused at complete() because no sale can reach the server. */
+    _tender(method) {
+      if (window.PosConvergedSale) return PosConvergedSale.tenderCheck(method);
+      return String(method) === 'cash'
+        ? { ok: true, method: 'cash' }
+        : { ok: false, reason: 'TENDER_REFUSED', message: 'Only cash can be taken at the till right now.' };
+    },
+
     setMethod(method) {
+      const _tc = payment._tender(method);
+      if (!_tc.ok) { toast(_tc.message, 'warn'); method = 'cash'; }
       state.payMethod   = method;
       state.numpadStr   = '0';
       _setVal('numpad-val', '0');
@@ -1331,6 +1405,8 @@ const SPos = (function () {
       if (!state.currentShift)   { shift.showDialog(); return; }
 
       const method = state.payMethod;
+      const _tc = payment._tender(method);
+      if (!_tc.ok) { toast(_tc.message, 'error'); payment.setMethod('cash'); return; }
 
       if (method === 'mpesa') {
         modal.open('mpesa-modal');
@@ -1388,6 +1464,11 @@ const SPos = (function () {
     },
 
     async complete(payInfo) {
+      /* 6b — the choke point every tender path reaches (M-PESA modal, Till modal, split, card).
+         A tender the server cannot settle never starts a sale here, whoever called. */
+      const _tcc = payment._tender(payInfo && payInfo.method);
+      if (!_tcc.ok) { toast(_tcc.message, 'error'); return; }
+
       /* ── Idempotency gate: prevent double-submit ───────────── */
       if (window.PosIdempotency && PosIdempotency.isPayButtonLocked()) {
         toast('Payment already in progress', 'warning'); return;
@@ -1513,6 +1594,26 @@ const SPos = (function () {
         }
       }
 
+      /* ── 6b: THE SERVER DECIDES FIRST ─────────────────────────
+         posCompleteCheckout records the sale, moves canonical stock, records the commission debt
+         and issues the receipt. Nothing below runs unless it ACCEPTED the sale, or could not be
+         reached (LOCAL_PENDING: recorded here and settled at sync with the SAME key). A refusal
+         records nothing on this till at all. */
+      const _conv = await _convergedDecide(txn, payInfo, { disc, tax, checkoutStartedAt: _checkoutStart });
+      if (!_conv) {
+        if (window.PosIdempotency) PosIdempotency.unlockPayButton();
+        if (window.PosHealth)     PosHealth.endCheckoutTimer(_checkoutStart, false);
+        return;
+      }
+      txn.serverStatus = _conv.out.status;
+      if (_conv.out.status === 'ACCEPTED') {
+        txn.canonicalSaleId = _conv.out.saleId;
+        txn.localReceiptNo  = txn.receiptNo;
+        /* One sale, one receipt number: the server's. */
+        if (_conv.out.receipt && _conv.out.receipt.receiptNo) txn.receiptNo = String(_conv.out.receipt.receiptNo);
+      }
+      const _stockReason = (kind) => 'converged:' + kind + ':' + txn.id;   /* local-only: see PosDB adjustStock */
+
       /* ── Saga: atomic multi-step write with compensating txns ─ */
       const stockSnapshot = [];  // for rollback
       const _legacyT0 = Date.now();   /* legacy local-commit timing (for the shadow comparison) */
@@ -1524,7 +1625,7 @@ const SPos = (function () {
         for (const item of txn.items) {
           const before = (await PosDB.products.get(item.id))?.stock ?? 0;
           stockSnapshot.push({ id: item.id, before, delta: item.qty });
-          await PosDB.products.adjustStock(item.id, -item.qty, 'sale:' + txn.id, txn.cashierId);
+          await PosDB.products.adjustStock(item.id, -item.qty, _stockReason('sale'), txn.cashierId);
         }
 
       /* Update shift totals */
@@ -1539,13 +1640,6 @@ const SPos = (function () {
       }
 
       txn._legacyMs = Date.now() - _legacyT0;   /* local commit duration — recorded in the shadow comparison */
-
-        /* Step 3: Queue for cloud sync */
-        await PosDB.syncQueue.add('transaction', txn);
-        /* Show offline queue count if not connected */
-        if (!navigator.onLine) {
-          PosDB.syncQueue.getPending().then(function(q){ _p7UpdateOfflineCount(q.length); }).catch(function(){});
-        }
 
         /* Step 4: Register idempotency key (prevent replay) */
         if (window.PosIdempotency) await PosIdempotency.recordKey(receiptNo, { txnId, total });
@@ -1569,11 +1663,25 @@ const SPos = (function () {
           }
         }
 
+        /* Step 3 (LAST, so a local failure above can never leave a queued sale behind): queue for cloud sync.
+           ACCEPTED → the posTransactions projection naming the server sale (compat/audit only).
+           LOCAL_PENDING → the sale itself, to be settled by posCompleteCheckout with the key
+           fixed now; its projection is written only once the server has decided. */
+        if (txn.serverStatus === 'ACCEPTED') {
+          await PosDB.syncQueue.add('transaction', PosConvergedSale.compatRecord(txn));
+        } else {
+          await PosDB.syncQueue.add('converged_sale', { localTxnId: txn.id, payload: _conv.payload });
+        }
+        /* Show offline queue count if not connected */
+        if (!navigator.onLine) {
+          PosDB.syncQueue.getPending().then(function(q){ _p7UpdateOfflineCount(q.length); }).catch(function(){});
+        }
+
         /* ── All writes committed ─────────────────────────────── */
       } catch (err) {
         /* ROLLBACK: restore stock for any items already deducted */
         for (const snap of stockSnapshot) {
-          try { await PosDB.products.adjustStock(snap.id, snap.delta, 'rollback:' + txnId, txn.cashierId); } catch (_) {}
+          try { await PosDB.products.adjustStock(snap.id, snap.delta, _stockReason('rollback'), txn.cashierId); } catch (_) {}
         }
         /* Mark transaction as failed if it was saved */
         try { await PosDB.transactions.save({ ...txn, status: 'failed', failReason: err.message }); } catch (_) {}
@@ -1581,7 +1689,12 @@ const SPos = (function () {
         if (window.PosHealth)     PosHealth.recordError('payment_failed', err.message, { txnId, total });
         if (window.PosIdempotency) PosIdempotency.unlockPayButton();
         if (window.PosHealth)     PosHealth.endCheckoutTimer(_checkoutStart, false);
-        toast('Payment error — transaction rolled back. Try again.', 'error');
+        if (txn.serverStatus === 'ACCEPTED') {
+          /* The server already recorded this sale — it is NOT rolled back and must not be rung again. */
+          toast('SOKONI recorded this sale (' + txn.receiptNo + '), but this till could not save its copy. Do not ring it again.', 'error');
+        } else {
+          toast('Payment error — transaction rolled back. Try again.', 'error');
+        }
         console.error('[POS] payment.complete saga failed:', err);
         return;
       }
@@ -1610,7 +1723,9 @@ const SPos = (function () {
       /* Print receipt — route through the single public print API (PosPrintService),
          which owns transport selection, queue, telemetry and the legacy fallback.
          Fire-and-forget: a print failure must never interrupt order completion. */
-      if (state.settings.autoPrint || payInfo.method === 'card') {
+      /* 6b — a receipt is printed only for a sale SOKONI accepted. A LOCAL_PENDING sale has no
+         server receipt yet; its receipt is available from Orders once the sale is confirmed. */
+      if (txn.serverStatus === 'ACCEPTED' && (state.settings.autoPrint || payInfo.method === 'card')) {
         if (window.PosPrintService && typeof PosPrintService.printReceipt === 'function') {
           PosPrintService.printReceipt(receiptData, { method: payInfo.method, payments: txn.payments })
             .then((r) => {
@@ -1657,7 +1772,13 @@ const SPos = (function () {
 
       /* Show success overlay — always wire up buttons */
       _showSuccessOverlay(receiptData);
-      if (window.PosBoss) PosBoss.showSuccess(receiptData, state.settings);
+      if (txn.serverStatus !== 'ACCEPTED') {
+        _setVal('suc-method', 'CASH — PENDING CONFIRMATION');
+        const _pb = document.getElementById('suc-print-btn');
+        if (_pb) _pb.onclick = () => toast('The receipt is available once SOKONI confirms this sale.', 'info');
+        toast('Saved on this till. SOKONI will confirm the sale when the connection is back — do not ring it again.', 'warn');
+      }
+      if (window.PosBoss && txn.serverStatus === 'ACCEPTED') PosBoss.showSuccess(receiptData, state.settings);
 
       /* Checkout-convergence SHADOW (Phase 1): fire-and-forget, feature-flagged, dry-run only.
          Runs the CANONICAL posCompleteCheckout in dry-run and records a structured comparison
@@ -3308,6 +3429,8 @@ const SPos = (function () {
       const t = await PosDB.transactions.getById(txnId);
       if (!t) { toast('Transaction not found', 'error'); return; }
       if (t.refunded) { toast('This transaction has already been refunded', 'error'); return; }
+      /* 6b — a converged sale is the server's; the till may not reverse it on its own. */
+      { const _blk = window.PosConvergedSale && PosConvergedSale.reversalBlock(t); if (_blk) { toast(_blk, 'warn'); return; } }
 
       const itemsHtml = (t.items || []).map((item, idx) => `
         <div style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;background:var(--card);margin-bottom:4px">
@@ -3351,6 +3474,8 @@ const SPos = (function () {
     },
 
     async _processRefund(originalTxn) {
+      /* 6b — a converged sale is the server's; the till may not reverse it on its own. */
+      { const _blk = window.PosConvergedSale && PosConvergedSale.reversalBlock(originalTxn); if (_blk) { toast(_blk, 'warn'); return; } }
       const checkboxes = document.querySelectorAll('[id^="ref-item-"]:checked');
       if (!checkboxes.length) { toast('Select at least one item to refund', 'error'); return; }
 
@@ -3476,6 +3601,8 @@ const SPos = (function () {
       if (!t) { toast('Transaction not found', 'error'); return; }
       if (t.voided)   { toast('This transaction is already voided', 'error'); return; }
       if (t.refunded) { toast('Refunded transactions cannot be voided', 'error'); return; }
+      /* 6b — a converged sale is the server's; the till may not reverse it on its own. */
+      { const _blk = window.PosConvergedSale && PosConvergedSale.reversalBlock(t); if (_blk) { toast(_blk, 'warn'); return; } }
 
       const body = `
         <div style="font-size:13px;color:var(--txt2);margin-bottom:12px">
@@ -3505,6 +3632,8 @@ const SPos = (function () {
     },
 
     async _processVoid(txn) {
+      /* 6b — a converged sale is the server's; the till may not reverse it on its own. */
+      { const _blk = window.PosConvergedSale && PosConvergedSale.reversalBlock(txn); if (_blk) { toast(_blk, 'warn'); return; } }
       /* Manager authorization required */
       if (window.ManagerAuth) {
         const ok = await ManagerAuth.request('void', {

@@ -1,6 +1,10 @@
 # POS Checkout Convergence — Design & Regression Plan
 
 **Status:** DRAFT for approval · **Author:** AI engineering · **Date:** 2026-08-07
+**Update 2026-09-29:** superseded for **cash** by 6b. SmartPOS cash now settles through `posCompleteCheckout`
+directly, owner-approved without the per-terminal flag, with `_posSyncCanonicalStock` suppressed for converged
+sales on the same change. See [[POS-6b-smartpos-cash-convergence]]. Non-cash tenders follow in 6c (IntaSend, after
+FC-1) and Step 10 (stored value).
 **Risk:** HIGHEST — the money path. Shadow-first, feature-flagged, regression-gated. **No money-path code ships from this doc without sign-off.**
 **Related:** [[project_pos_inventory_convergence]] · [[reference_pos_checkout_stock_authority]] · [[project_idempotency_hardening]]
 

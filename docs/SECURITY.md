@@ -179,6 +179,23 @@ The contract now:
 
 Evidence and design: [[POS-6a-checkout-authority]].
 
+### POS tender allowlist and SmartPOS convergence (6b, 2026-09-29 — built, NOT deployed)
+
+- **The server decides which tenders can settle a sale.** `posCompleteCheckout` accepts `cash`, a **confirmed**
+  `mpesa`/`card`, and `wallet` (server-debited). Everything else is refused before the merchant proof and before any
+  idempotency claim, with no side effect: `gift_card`, `mpesa_till`, `manual_till`, `split`, `qr`, an unknown method or
+  a missing method.
+  - Before 6b, a non-confirmable method was simply skipped, so a client could declare a gift card (or any string) paid.
+- **Stored value is not a client claim.** The pos-checkout gift card debited a client-held IndexedDB balance before
+  asking the server. It is now unavailable in the UI, and its entry points return before any lookup or redeem. Gift
+  cards return at Step 10 as a server stored-value authority (🟢 approved; see [[ROADMAP]]).
+- **A non-finite confirmed amount is refused** instead of passing a `NaN` comparison.
+- **SmartPOS no longer writes a sale on its own authority.** The canonical stock push and the posTransactions→
+  posRetailSales mirror are retired for converged sales. `posTransactions` is a projection naming the server sale.
+- **Offline sales cannot borrow another account's shop.** The cached shop scope is bound to the uid that confirmed it.
+
+Evidence and design: [[POS-6b-smartpos-cash-convergence]].
+
 ---
 
 ## Layer 5 — Webhook Security

@@ -617,6 +617,24 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
     };
   }
 
+  /* ══ 6b — THE TENDER ALLOWLIST ══════════════════════════════════════════════════════════════════════════
+     Every tender must be one this checkout can stand behind: cash (the cashier holds it), mpesa or card (CONFIRMED
+     against posPayments below, and spent once), or wallet (validated and debited inside the transaction). Anything
+     else used to be skipped by the confirmation loop and simply counted towards the total — so a `gift_card`, a
+     `manual_till`, a `split` or any invented method name completed a real sale, moved real stock and created a real
+     commission debt against money nobody verified. It now fails closed, before any claim, stock or write.
+     (Census 2026-09-29: the only caller that newly fails is pos-checkout.html's gift card, whose "redemption" is
+     device-local; production holds 0 gift cards. Stored value returns with its own server authority — step 10.)
+     Placed after the dry-run return, so the side-effect-free preview is unchanged. */
+  const _TENDERS = { cash: 1, mpesa: 1, card: 1, wallet: 1 };
+  for (const p of (Array.isArray(payments) ? payments : [])) {
+    const m = String((p && p.method) || '').toLowerCase();
+    if (!_TENDERS[m]) {
+      _e('This payment method (' + (m || 'none') + ') cannot be accepted at the till. Use cash, or an M-PESA or card ' +
+         'payment that SOKONI has confirmed. Nothing has been charged.', 'invalid-argument');
+    }
+  }
+
   /* ══ 6a — THE MERCHANT IS PROVEN BEFORE ANYTHING ELSE HAPPENS ══════════════════════════════════════════
      This proof used to run AFTER the idempotency claim, the cached replay and the resume of an existing sale, so a
      caller who was never proven for `merchantId` could claim a key, receive another merchant's cached receipt, or
@@ -1043,9 +1061,11 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
          returns the GATEWAY's figure; the sufficiency decision stays here,
          because only this caller knows what the sale is claiming. */
       const confirmedAmount = Number(_confirm.amount);
-      if (isFinite(confirmedAmount) && confirmedAmount + 1 < Number(p.amount || 0)) {
-        _e('The confirmed payment is ' + confirmedAmount + ' but this sale is claiming ' +
-           p.amount + '.');
+      /* 6b — a confirmation with no readable amount proves nothing: it is refused, not waved through. */
+      if (!isFinite(confirmedAmount) || confirmedAmount + 1 < Number(p.amount || 0)) {
+        _e(!isFinite(confirmedAmount)
+          ? 'The payment provider did not report an amount for this payment, so it cannot settle the sale.'
+          : 'The confirmed payment is ' + confirmedAmount + ' but this sale is claiming ' + p.amount + '.');
       }
 
       /* ── spent exactly once ────────────────────────────────────────────
@@ -1337,14 +1357,16 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       /* Inventory: assert stock before deducting anything. */
       productSnaps.forEach((snap, i) => {
         const item = enrichedItems[i];
-        if (!snap.exists) throw new Error(`Product ${item.productId} disappeared`);
+        /* 6b — typed, so an offline till syncing this sale can tell a REFUSAL (never retried) from an outage
+           (retried with the same key). A plain Error left here surfaced as `internal` — indistinguishable from a crash. */
+        if (!snap.exists) throw new HttpsError('not-found', `Product ${item.productId} disappeared`);
         const prod  = snap.data();
         /* 0b R4 — ownership re-checked on the transaction's own read (owners bound to it: L-9A). */
         _assertProductOwned(prod, _txOwners, item.productId);
         /* Canonical stock field is `stock`; fall back to legacy names for older docs. */
         const stock = prod.stock ?? prod.stockQty ?? prod.quantity ?? 9999;
         if (stock < (item.qty || 1) && prod.trackInventory !== false)
-          throw new Error(`Insufficient stock for ${prod.name}`);
+          throw new HttpsError('failed-precondition', `Insufficient stock for ${prod.name}`);
       });
 
       /* ── PHASE 3: ALL WRITES ── */

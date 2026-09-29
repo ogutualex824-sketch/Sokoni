@@ -1193,8 +1193,10 @@ body.queue-mode .hotkey-bar      { display: none; }
           Wallet / Loyalty Credit
           <span class="amount" id="total-wallet">KES 0.00</span>
         </button>
-        <button class="pay-btn pay-gift" onclick="Checkout.pay('gift_card')">
-          Gift Card
+        <!-- 6b — stored value has no server verification yet; the server refuses gift_card. Shown, never usable. -->
+        <button class="pay-btn pay-gift" onclick="Checkout.pay('gift_card')" aria-disabled="true" style="opacity:.5;cursor:not-allowed">
+          Gift Card — Unavailable
+          <span class="amount" style="font-size:11px;font-weight:500;white-space:normal">Gift cards are temporarily unavailable. Stored-value payments will return when server verification is enabled.</span>
         </button>
         <button class="pay-btn pay-split" onclick="Checkout.toggleSplit()">
           ✂ Split Payment
@@ -2445,21 +2447,16 @@ const Checkout = (() => {
     }
 
     if (method === 'gift_card') {
-      if (giftCode) {
-        /* Called from scanner — code already known */
-        _processGiftCard(giftCode.trim().toUpperCase(), totals);
-      } else {
-        /* Open Gift Card modal */
-        document.getElementById('gift-card-code').value = '';
-        document.getElementById('gift-card-status').textContent = '';
-        openModal('gift-card-overlay');
-        setTimeout(() => document.getElementById('gift-card-code').focus(), 80);
-      }
+      /* 6b — the server does not accept stored value until it can verify it. Nothing is looked up or redeemed. */
+      _toast(GIFT_CARD_UNAVAILABLE, 'warning');
       return;
     }
   }
 
+  const GIFT_CARD_UNAVAILABLE = 'Gift cards are temporarily unavailable. Stored-value payments will return when server verification is enabled.';
   async function _processGiftCard(code, totals) {
+    /* 6b — unreachable from pay(); closed here too so no path redeems a card for a sale the server refuses. */
+    _toast(GIFT_CARD_UNAVAILABLE, 'warning'); return;
     _setState('PAYMENT');
     try {
       const gc = await PosLoyalty.checkGiftCard(code);
@@ -2651,6 +2648,8 @@ const Checkout = (() => {
 
   /* ── Gift Card confirmation (from modal) ── */
   async function confirmGiftCard() {
+    /* 6b — see pay(): gift cards are unavailable. Nothing is looked up or redeemed. */
+    closeModal('gift-card-overlay'); _toast(GIFT_CARD_UNAVAILABLE, 'warning'); return;
     const code = (document.getElementById('gift-card-code').value || '').trim().toUpperCase();
     if (!code) {
       document.getElementById('gift-card-status').textContent = 'Enter or scan a gift card code';

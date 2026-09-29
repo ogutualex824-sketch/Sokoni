@@ -56,6 +56,13 @@
       op:       'registerClientShift',
       idKey:    'clientShiftId',
     },
+    /* 6b — a cash sale the till recorded without a server answer (offline, or the call did
+       not answer). Settled by posCompleteCheckout with the key fixed at the moment of sale, so
+       any number of syncs record ONE sale. See pos-converged-sale.js settleQueued. */
+    converged_sale: {
+      converged: true,
+      idKey:     'localTxnId',
+    },
     transaction: {
       collection: 'posTransactions',
       merge:      false,          // full document — never partial merge
@@ -212,6 +219,25 @@
     return res && res.data;
   }
 
+  /* 6b — settle a queued converged sale. A server REFUSAL resolves (markDone: it is never
+     retried — the same key would get the same answer) and gives the local stock back; no
+     answer THROWS, so the existing engine retries with the SAME idempotency key. */
+  async function _syncConverged(item) {
+    if (!window.PosConvergedSale) throw new Error('converged sale module not loaded');
+    if (!await _ensureFns()) throw new Error('functions SDK unavailable');
+    const app = window.firebaseApp || (window.firebase && window.firebase.app && window.firebase.app());
+    if (!app) throw new Error('firebase app not initialised');
+    const call = _fnsHttpsCallable(_fnsGetFunctions(app), window.PosConvergedSale.CALLABLE);
+    const out = await window.PosConvergedSale.settleQueued(item, {
+      callable:     call,
+      transactions: PosDB.transactions,
+      adjustStock:  PosDB.products.adjustStock,
+      queueCompat:  (rec) => PosDB.syncQueue.add('transaction', rec),
+    });
+    _emit('converged_sale', { localTxnId: item.data && item.data.localTxnId, status: out.status, reason: out.reason || null });
+    return out;
+  }
+
   async function _syncItem(db, item, circuitName) {
     const route = ROUTES[item.type];
     if (!route) {
@@ -222,6 +248,7 @@
     /* A callable route never touches a document. Branch before the write path so the
        existing sale sync is untouched by this addition. */
     if (route.callable) return _syncCallable(item, route);
+    if (route.converged) return _syncConverged(item);
 
     const data    = item.data;
     const docId   = data[route.idKey];

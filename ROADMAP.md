@@ -406,6 +406,37 @@ Evidence from real users determines what gets built next, not assumptions.
 
 ---
 
+## 🟢 Approved future authorities (GREEN = approved to build, NOT built)
+
+### 🟢 Stored Value — Gift Cards (Step 10)
+
+| | |
+|---|---|
+| **Status** | 🟢 Approved for Step 10 — **not implemented** |
+| **In 6b** | Refused on the server; shown "Gift Card — Unavailable" at the till |
+| **Authority** | Server-side stored-value authority |
+| **Current client implementation** | Not trusted as a payment authority (client-held balance) |
+| **Production gift-card records** | 0 identified (`giftCards` 0, `posGiftCards` 0 — 2026-09-29) |
+| **Required** | server verification · atomic redemption (card debit and sale payment in one transaction) · idempotency · balance protection · expiry/status rules · redemption ledger · stored-value liability accounting (redemption is not new cash revenue) · partial payment only after the payment-split authority is certified |
+
+**What proves payment, by tender:**
+
+| Method | What proves payment | Status |
+|---|---|---|
+| Cash | the cash sale recorded by the authorised checkout | 6b |
+| IntaSend M-PESA | provider-confirmed payment | 6c (after FC-1) |
+| IntaSend card | provider-confirmed payment | 6c (after FC-1) |
+| Wallet | server-authorised wallet debit | server-supported |
+| Gift card | server-authorised stored-value redemption | 🟢 Step 10 |
+| Manual Till | — not accepted in 6b | refused |
+| QR | — not accepted in 6b | refused |
+| Unrecognised tender | — | refused |
+
+Refusing `gift_card` in 6b does not mean SOKONI has no gift cards. It means the client-side mechanism is not treated
+as a real payment authority. Detail: [[FINANCIAL_CORE_ARCHITECTURE]] (Step 10), [[POS-6b-smartpos-cash-convergence]].
+
+---
+
 ## Technical Debt
 
 | Item | Severity | Status |

@@ -297,8 +297,15 @@ const PosDB = (function () {
       await _put('products', p);
       /* Interim inventory convergence: also push this delta to the CANONICAL products.stock
          (best-effort, online-only) so in-store sales/edits reflect on the marketplace. */
-      try { if (typeof window !== 'undefined' && window._posSyncCanonicalStock) window._posSyncCanonicalStock(id, delta, reason); } catch (_) {}
+      /* 6b — a CONVERGED sale's canonical stock is moved by posCompleteCheckout, in the server's own
+         transaction. Pushing it here as well would deduct the sale twice; so a `converged:` movement is
+         local-only — no canonical push and no second stock event. */
+      const _converged = /^converged:/.test(String(reason || ''));
+      if (!_converged) {
+        try { if (typeof window !== 'undefined' && window._posSyncCanonicalStock) window._posSyncCanonicalStock(id, delta, reason); } catch (_) {}
+      }
       await stock_movements.save({
+        converged: _converged,
         productId: id,
         productName: p.name,
         type: delta > 0 ? 'in' : 'out',
@@ -595,7 +602,7 @@ const PosDB = (function () {
          delta<0 → STOCK_DEDUCTED (sale/adjust down); delta>0 → STOCK_RECEIVED. Idempotent
          on movement id. Fire-and-forget. */
       try {
-        if (typeof window !== 'undefined' && window.SokoniSync && window.SokoniSync.stockChanged) {
+        if (!m.converged && typeof window !== 'undefined' && window.SokoniSync && window.SokoniSync.stockChanged) {
           const delta = Number(m.delta != null ? m.delta : (m.qty != null ? m.qty : 0));
           window.SokoniSync.stockChanged({
             eventId:   m.id,

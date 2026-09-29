@@ -529,17 +529,17 @@
           <div class="pay-methods-label">PAYMENT METHOD</div>
           <div class="pay-method-grid">
             <button class="pay-method-btn active" data-method="cash" onclick="SPos.payment.setMethod('cash')"><span class="method-icon">💵</span>Cash</button>
-            <button class="pay-method-btn mpesa" data-method="mpesa" onclick="SPos.payment.setMethod('mpesa')"><span class="method-icon">📱</span>M-PESA</button>
+            <button class="pay-method-btn mpesa unavailable" data-method="mpesa" aria-disabled="true" onclick="SPos.payment.setMethod('mpesa')"><span class="method-icon">📱</span>M-PESA<span class="method-na">Unavailable</span></button>
             <!-- Manual Till payment: the customer has ALREADY paid the merchant's own
                  M-PESA Till directly, and the cashier records the confirmation code.
                  Deliberately distinct from the "M-PESA" button above, which initiates an
                  STK Push. Recording that a payment happened is not the same act as
                  initiating one, and the transaction record must be able to tell them
                  apart later — see docs/POS_MANUAL_TILL_PAYMENT.md. -->
-            <button class="pay-method-btn mpesa" data-method="mpesa_till" onclick="SPos.payment.setMethod('mpesa_till')"><span class="method-icon">🏪</span>M-PESA Till</button>
-            <button class="pay-method-btn" data-method="card" onclick="SPos.payment.setMethod('card')"><span class="method-icon">💳</span>Card</button>
-            <button class="pay-method-btn" data-method="split" onclick="SPos.payment.setMethod('split')"><span class="method-icon">✂️</span>Split</button>
-            <button class="pay-method-btn" id="qr-pay-method-btn" data-method="qr" onclick="SPos.payment.setMethod('qr'); SPosQR.open()" aria-label="QR Code payment"><span class="method-icon" aria-hidden="true">⬛</span>QR Pay</button>
+            <button class="pay-method-btn mpesa unavailable" data-method="mpesa_till" aria-disabled="true" onclick="SPos.payment.setMethod('mpesa_till')"><span class="method-icon">🏪</span>M-PESA Till<span class="method-na">Unavailable</span></button>
+            <button class="pay-method-btn unavailable" data-method="card" aria-disabled="true" onclick="SPos.payment.setMethod('card')"><span class="method-icon">💳</span>Card<span class="method-na">Unavailable</span></button>
+            <button class="pay-method-btn unavailable" data-method="split" aria-disabled="true" onclick="SPos.payment.setMethod('split')"><span class="method-icon">✂️</span>Split<span class="method-na">Unavailable</span></button>
+            <button class="pay-method-btn unavailable" id="qr-pay-method-btn" data-method="qr" aria-disabled="true" onclick="SPos.payment.setMethod('qr')" aria-label="QR Code payment — unavailable"><span class="method-icon" aria-hidden="true">⬛</span>QR Pay<span class="method-na">Unavailable</span></button>
           </div>
           <!-- Terminal status indicator — populated by PosTerminals -->
           <div id="terminal-status-bar" style="display:none;gap:6px;flex-wrap:wrap;margin-top:8px;padding:2px 0"></div>
@@ -1605,6 +1605,9 @@ html[data-pos-chrome="checkout"] .pos-tabs { display: none !important; }
   opacity: 1;
   box-shadow: 0 0 0 2px rgba(59,130,246,.15);
 }
+/* 6b — tenders the server cannot settle yet: shown, with the reason on tap, never selectable */
+.pay-method-btn.unavailable { opacity: .45; cursor: not-allowed; }
+.pay-method-btn .method-na { display: block; font-size: 10px; font-weight: 600; letter-spacing: .02em; margin-top: 2px; }
 /* M-Pesa active: green */
 .pay-method-btn.mpesa.active {
   border-color: #00a84e !important;
@@ -1736,6 +1739,9 @@ html[data-pos-chrome="checkout"] .pos-tabs { display: none !important; }
 <script src="pos-resilience.js" defer></script>
 <script src="pos-idempotency.js" defer></script>
 <script src="pos-health.js" defer></script>
+<!-- 6b: the sale is recorded by posCompleteCheckout — payload authority + the till's side of it -->
+<script src="sokoni-merchant-data.js" defer></script>
+<script src="pos-converged-sale.js" defer></script>
 <script src="pos-sync.js" defer></script>
 <script src="pos-omni.js" defer></script>
 <!-- ══ POS modules ══ -->

@@ -1,3 +1,121 @@
+## 2026-09-29 (174) — 6b: SmartPOS cash converges on posCompleteCheckout — one physical sale = one server sale (NOT deployed)
+
+**Why.** SmartPOS (`pos.js`) finished a sale on the device and had three writers:
+- the local sale;
+- a client push of stock to canonical `products/{id}`;
+- a client-written `posTransactions` document that `mirrorPosTransactionToRetail` copied into `posRetailSales` under the
+  till's own id.
+
+There was no commission debt, no server price or tender judgement, and a second sale identity beside the checkout's
+`ps_…`.
+
+The tender census also found that `posCompleteCheckout` **skipped** every method that is not confirmable. A
+`pos-checkout.html` gift card, whose balance lived only in client IndexedDB and was debited **before** the server was
+asked, therefore completed a sale with nothing verifying the value.
+
+- **Change:**
+  - **`functions/pos-zero-friction.js`:**
+    - **tender allowlist** `{cash, mpesa, card, wallet}` right after the dry-run return, before the 6a merchant proof
+      and any claim. `gift_card`, `mpesa_till`, `manual_till`, `split`, `qr`, an unknown method or a missing method is
+      refused (`invalid-argument`) with no side effect. M-PESA and card still need a **confirmed** payment;
+    - a **non-finite confirmed amount** is refused with its own reason (defence in depth: `assertConfirmable`
+      normalises a missing amount to `null`);
+    - in-transaction `Insufficient stock` → `failed-precondition` and a vanished product → `not-found`, where both
+      were `internal`. The messages are unchanged.
+  - **`functions/pos-retail-mirror.js`:** after the 6a `ps_` guard the trigger **writes nothing**. The export and the
+    mapper are kept.
+  - **`pos-converged-sale.js` (new):**
+    - the till's side of the contract: a cash-only tender check, canonical product resolution (PRODUCT_NOT_CANONICAL
+      before the sale), and a shop scope from Firestore cached **per uid**;
+    - the payload is `SokoniMerchantData.buildSale`, with saleToken = the local txn id, so the key is fixed at sale;
+    - outcomes are ACCEPTED / LOCAL_PENDING (retried with the same key) / SYNC_REJECTED (never retried; local stock
+      returned);
+    - a projection is queued after the decision, and void/refund are held.
+  - **`pos.js`:**
+    - the tender is gated in `setMethod`, `process()` and `complete()`;
+    - the server decides **before** the till saves anything, and a refusal records nothing;
+    - an accepted sale takes the server's receipt number;
+    - movements use `converged:` reasons, and the queued item is the last saga write;
+    - a receipt prints only when ACCEPTED;
+    - void/refund are held at the dialogs and at `_processVoid` / `_processRefund`.
+  - **`pos-db.js`:** a `converged:` movement is local-only: no canonical push, no second `stockChanged` event.
+  - **`pos-sync.js`:** a `converged_sale` route settles through the checkout, before the document-write path.
+  - **`pos.html`:** loads `sokoni-merchant-data.js` and `pos-converged-sale.js`. M-PESA, M-PESA Till, Card, Split and
+    QR show **Unavailable**; QR no longer opens a collection (`pos-qr.js` untouched).
+  - **`pos-checkout.html` (caller-side only):**
+    - the button reads **"Gift Card — Unavailable. Gift cards are temporarily unavailable. Stored-value payments will
+      return when server verification is enabled."**;
+    - the button, the scanner, `confirmGiftCard` and `_processGiftCard` return before any lookup or redeem;
+    - `pos-loyalty-engine.js` is unchanged.
+  - **`scripts/test-pos-6a-checkout-authority.js`** (owner-authorized tripwire correction): **N-1 inverted**. An
+    ordinary `posTransactions` id reaching the mirror must now produce **no** `posRetailSales` row; the old "still
+    mirrors" expectation contradicts the one-sale invariant. The `ps_` controls N-2/N-3 are unchanged.
+- **Files:**
+  - `functions/pos-zero-friction.js`, `functions/pos-retail-mirror.js`;
+  - `pos-converged-sale.js` (new), `pos.js`, `pos-db.js`, `pos-sync.js`, `pos.html`, `pos-checkout.html`;
+  - `scripts/test-pos-6b-smartpos-cash.js` (new), `scripts/test-pos-6a-checkout-authority.js`;
+  - `docs/repairs/POS-6b-smartpos-cash-convergence.md` (new), `docs/SECURITY.md`, `docs/POS_CHECKOUT_CONVERGENCE_DESIGN.md`,
+    `docs/FINANCIAL_CORE_ARCHITECTURE.md`, `ROADMAP.md`;
+  - `CHANGELOG.md`.
+- **Database:**
+  - no schema migration;
+  - `posTransactions` records from converged sales carry `recordKind: 'converged_projection'`, `canonicalSaleId`,
+    `serverStatus` (`ACCEPTED` / `SYNC_REJECTED`) and `serverReason`;
+  - no new `posRetailSales` rows come from the mirror;
+  - legacy `transaction` queue items still write `posTransactions`, but are no longer mirrored (no historical
+    reconstruction, per the owner's decision).
+- **API:**
+  - `posCompleteCheckout` refuses non-allowlisted tenders;
+  - a stock shortage is `failed-precondition` and a vanished product is `not-found` (both were `internal`);
+  - a non-finite confirmed amount is refused.
+- **Security:**
+  - closes client-declared stored value and unverifiable tenders on the checkout;
+  - removes the SmartPOS second-sale path (no debt, no server judgement);
+  - offline sales cannot borrow another account's cached shop.
+- **Roadmap:** **Gift cards → Step 10 Stored Value Authority, 🟢 approved, not built.** A server-held liability with
+  atomic redeem-and-pay, idempotency, expiry/status rules and a redemption ledger; a redemption is not new cash revenue.
+  Production gift-card records: 0. See `ROADMAP.md` and `docs/FINANCIAL_CORE_ARCHITECTURE.md`.
+- **Unchanged:**
+  - `firestore.rules`, 6a authority, DR-A, DR-R, `RATE_ERA`;
+  - wallets, collection, the till gate (OFF), IntaSend, `pos-qr.js`, `pos-loyalty-engine.js`, `sokoni-merchant-data.js`;
+  - dry-run;
+  - M-PESA/card confirmation (only the non-finite case added).
+- **Evidence:**
+  - **`test-pos-6b-smartpos-cash` 45/0** on 3 complete runs, emulator + WebKit. A first run was 43/0 with the WebKit
+    section BLOCKED (PosDB not initialised in the harness; fixed) and is not counted.
+    - The old tree (`072e03d`, with the new client module) scores **24/21**, every failure for the right reason; both
+      controls pass on both trees.
+    - The gift-card case is explicit: T-1/T-1b show an unconfirmed gift card creates no sale, stock movement, receipt,
+      commission debt or claim, and T-4 rejects a queued gift-card sale without retry.
+  - **Mutants: 21/21 killed**, each by its own check. **M1** re-admits `gift_card` to the server allowlist, and the
+    gift-card sale then completes with stock and debt.
+  - **`test-pos-6a-checkout-authority` 28/0** on 3 consecutive runs after the N-1 inversion (27/1 before it, failing
+    only N-1). The corrected N-1 **fails on the old tree** ("MIRRORED"), so it discriminates. Only the N-1 line differs
+    in the log.
+  - **Floor: 135 suites, old vs new, fresh and uncontended, with no summary-line difference.** The log differences:
+    - caused by the unit: `audit-financial-safety` V3 goes from 7 to 6 (the mirror's racy claim is gone), and
+      `certify-pos-payment-ownership` T5-6 now passes;
+    - warn-only: `perf-guard` now counts 66 `pos.html` scripts against a baseline of 63 (old tree 64);
+    - the rest are uncommitted-tree reporters, offset/size shifts and random ids.
+  - **The earlier units are identical on both trees:**
+    - P0, M0-1..M0-4a, DR-A 16/0, DR-R 35/0, 0b 31/0, Q0 ×7, L-7..L-9A, and L-1 27/0;
+    - retire-webhook 5/0, the gate tripwire 42/0, the confirmation vocabulary 42/0, the Manual-Till boundary 57/0;
+    - the syntax gate is clean.
+  - An earlier floor attempt overlapped a leftover run from before a session break. **All of its output was discarded**;
+    every figure above is from a single fresh run.
+- **Known limitations:**
+  - a converged sale cannot yet be voided or refunded on the till;
+  - customer/loyalty stay local;
+  - tax-inclusive prices send `taxTotal: 0`;
+  - a pending sale has no receipt until confirmed;
+  - a crash after a server commit that also loses the local write leaves a server-only sale (DR-R backstop);
+  - the full `pos.js` page run on a device is **UNPROVEN** (wiring asserted statically; `PosDB.adjustStock` executed in
+    WebKit);
+  - N-2 (the `ps_` refusal) still passes, but the no-op mirror now also yields no row, so N-2 no longer isolates the
+    `ps_` guard. The guard remains in code.
+- **Deployment:** functions and hosting must come from the same lineage. Not authorized; blocked by M0-6 and the
+  CLAUDE.md Artifact Registry notice.
+
 ## 2026-09-29 (173) — 6a: the POS checkout authority is proven first and owns its sale identity (NOT deployed)
 
 **Why.** The step-6 census reproduced three defects on the emulator. `posCompleteCheckout` claimed the idempotency key,

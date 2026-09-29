@@ -44,15 +44,14 @@ exports.mirrorPosTransactionToRetail = onDocumentCreated(
       return;
     }
 
-    const mirror = mapTxnToRetail(t, saleId);
-    if (!mirror.merchantId || !saleId) return;   /* need an owner to scope by */
-
-    const ref = db.collection('posRetailSales').doc(String(saleId));
-    /* Idempotent: if a mirror already exists, do nothing (never re-stamp createdAt). */
-    const existing = await ref.get().catch(() => null);
-    if (existing && existing.exists) return;
-
-    mirror.createdAt = FieldValue.serverTimestamp();   /* the only non-pure field */
-    await ref.set(mirror, { merge: true });
+    /* 6b — THE MIRROR NO LONGER WRITES A SALE (owner-approved 2026-09-29).
+       SmartPOS now records every sale through posCompleteCheckout — the ONE authority for the sale, its stock, its
+       commission debt and its receipt — and writes posTransactions only AFTER the server decided, as a compatibility /
+       audit projection that names the authoritative saleId. Copying that projection into posRetailSales would make one
+       physical sale into two (the mirror's `TXN-…` id beside the checkout's `ps_…` id), the second with no stock
+       movement and no debt. So this trigger stays deployed under its name and does nothing: no read, no write. The
+       mapper (pos-retail-mirror-map.js) is kept for the historical records it already produced. */
+    void mapTxnToRetail; void db; void FieldValue;
+    return;
   }
 );

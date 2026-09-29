@@ -19,7 +19,8 @@
  *   R-*  race / idempotency — concurrent same key → one sale; a refused attempt does not poison another namespace
  *   M-*  M-PESA references — a body naming another merchant cannot create or alter that merchant's claim or conflict; a
  *        non-merchant cannot claim; a genuine claim and a genuine duplicate still work
- *   N-*  namespace — the mirror accepts ordinary ids, refuses the checkout's reserved ids, and a refused id is never adopted
+ *   N-*  namespace — an ordinary id is not mirrored (6b: posTransactions is a projection, never a second sale), the
+ *        checkout's reserved ids are refused, and a refused id is never adopted
  *   B-*  boundaries — dry-run unchanged; no wallet; the till gate still OFF
  *
  *   REPAIR_ROOT  tree under test (default: this repo). Refuses without FIRESTORE_EMULATOR_HOST.
@@ -220,8 +221,16 @@ async function mpesaTxn(id, data) {
   /* ── N: namespace ────────────────────────────────────────────────────────────────────────────────────── */
   process.stdout.write('\n[N] the checkout\'s sale-id namespace belongs to the checkout\n');
   { await mirrorTxn('TXN-A6-0001-ABCD', { sellerId: O, total: 100, status: 'completed', cashierId: O, items: [{ name: 'x', qty: 1, unitPrice: 100 }], paymentMethod: 'cash' });
+    /* 6b (owner-authorized 2026-09-29) — the old control required this id to be MIRRORED. 6b retires that: SmartPOS
+       sales are recorded by posCompleteCheckout, and a posTransactions document is only a projection, so copying it
+       would make one physical sale into two. The control now proves the no-mirror invariant: the transaction reached
+       the trigger, and neither this id nor any other posRetailSales row appeared. */
+    const reached = await get('posTransactions', 'TXN-A6-0001-ABCD');
     const m = await get('posRetailSales', 'TXN-A6-0001-ABCD');
-    ok(!!m && m.source === 'pos-mirror', 'N-1', `CONTROL — the mirror still mirrors an ordinary SmartPOS id (${m ? 'mirrored' : 'NOT mirrored'})`); }
+    const mirrored = (await db.collection('posRetailSales').get()).docs.filter((d) => (d.data() || {}).source === 'pos-mirror'
+      && (d.id === 'TXN-A6-0001-ABCD' || (d.data() || {}).sourceTxnId === 'TXN-A6-0001-ABCD'));
+    ok(!!reached && !m && mirrored.length === 0, 'N-1',
+      `CONTROL — an ordinary SmartPOS id reaching the mirror creates NO second sale (transaction ${reached ? 'present' : 'ABSENT'}; posRetailSales at its id: ${m ? 'MIRRORED' : 'none'})`); }
   { const id = PZF._saleIdFor(O, 'n2-key');
     await mirrorTxn(id, { sellerId: O, total: 100, status: 'completed', cashierId: O, items: [{ name: 'x', qty: 1, unitPrice: 100 }], paymentMethod: 'cash' });
     ok(!(await get('posRetailSales', id)), 'N-2', `the mirror REFUSES a transaction id in the checkout's reserved namespace (${id.slice(0, 12)}…): no posRetailSales record`);
