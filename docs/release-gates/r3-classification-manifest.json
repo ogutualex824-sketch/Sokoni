@@ -1,0 +1,542 @@
+{
+  "at": "2026-09-29T18:28:09.717Z",
+  "readOnly": true,
+  "providers": 11,
+  "digests": {
+    "primary": "cb87e8cac1931c70b7cc423cdb4de62c76256a83ef77bce98637b562defb98e3",
+    "disagreement": "9f8a96e8032bd36337bbba1cae423b237056728282e39723454fd4e916348952"
+  },
+  "primary": [
+    {
+      "uid": "FqmCT4t4KehQD6EJR4m3dLVbHBo1",
+      "name": "Julian's Closet",
+      "eligible": true,
+      "disagreement": false,
+      "reasons": [],
+      "current": {
+        "providerStatus": "active",
+        "approvedAt": "2026-09-03T22:54:56.000Z",
+        "providerCategoryText": "tailor",
+        "categoryLabelText": "Tailor / Fashion Designer",
+        "stamped": false,
+        "capability": "SERVICES",
+        "authorityStatus": "NOT_YET_STAMPED",
+        "conflicts": []
+      },
+      "evidence": {
+        "applicationId": "8XwvCN8PLsVo9WdxG1Zv",
+        "role": "provider",
+        "applicationCategory": "tailor",
+        "hub": "fashion",
+        "type": "business",
+        "requestedRole": "provider",
+        "roleResolvedBy": "explicit",
+        "decidedBy": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+        "decidedAt": "2026-09-03T22:54:50.000Z",
+        "c1": {
+          "category": "service_business",
+          "reason": "exact"
+        },
+        "lane": {
+          "hub": "provider",
+          "entClass": null
+        }
+      },
+      "expected": {
+        "lane": "services",
+        "route": "provider-dashboard.html",
+        "state": "AVAILABLE"
+      },
+      "mutation": {
+        "op": "update",
+        "path": "providers/FqmCT4t4KehQD6EJR4m3dLVbHBo1",
+        "set": {
+          "business": {
+            "category": "service_business",
+            "lane": {
+              "hub": "provider",
+              "entClass": null
+            },
+            "source": "application",
+            "applicationId": "8XwvCN8PLsVo9WdxG1Zv",
+            "setAt": "<serverTimestamp>"
+          }
+        },
+        "audit": {
+          "action": "category_backfill_r3",
+          "targetUid": "FqmCT4t4KehQD6EJR4m3dLVbHBo1",
+          "applicationId": "8XwvCN8PLsVo9WdxG1Zv",
+          "category": "service_business",
+          "evidence": "approved application 8XwvCN8PLsVo9WdxG1Zv decided by D5Ql2EYr95bt79IpcGTmOMTK0P83 at 2026-09-03T22:54:50.000Z; C1 exact",
+          "performedBy": "admin-sdk:r3-classification"
+        }
+      }
+    },
+    {
+      "uid": "H7p6ktBHogM5GcBy6mz8negKVbG2",
+      "name": "Langa'ta mamafua",
+      "eligible": true,
+      "disagreement": false,
+      "reasons": [],
+      "current": {
+        "providerStatus": "active",
+        "approvedAt": "2026-08-01T06:14:23.000Z",
+        "providerCategoryText": "cleaning",
+        "categoryLabelText": "Cleaning Company / Housekeeping",
+        "stamped": false,
+        "capability": "SERVICES",
+        "authorityStatus": "NOT_YET_STAMPED",
+        "conflicts": []
+      },
+      "evidence": {
+        "applicationId": "e0cOABIkbtu2Vb1suG5y",
+        "role": "provider",
+        "applicationCategory": "cleaning",
+        "hub": "home-services",
+        "type": "business",
+        "requestedRole": null,
+        "roleResolvedBy": "keyword",
+        "decidedBy": "founder-decision-2026-08-01",
+        "decidedAt": null,
+        "c1": {
+          "category": "cleaning",
+          "reason": "exact"
+        },
+        "lane": {
+          "hub": "provider",
+          "entClass": null
+        }
+      },
+      "expected": {
+        "lane": "services",
+        "route": "provider-dashboard.html",
+        "state": "AVAILABLE"
+      },
+      "mutation": {
+        "op": "update",
+        "path": "providers/H7p6ktBHogM5GcBy6mz8negKVbG2",
+        "set": {
+          "business": {
+            "category": "cleaning",
+            "lane": {
+              "hub": "provider",
+              "entClass": null
+            },
+            "source": "application",
+            "applicationId": "e0cOABIkbtu2Vb1suG5y",
+            "setAt": "<serverTimestamp>"
+          }
+        },
+        "audit": {
+          "action": "category_backfill_r3",
+          "targetUid": "H7p6ktBHogM5GcBy6mz8negKVbG2",
+          "applicationId": "e0cOABIkbtu2Vb1suG5y",
+          "category": "cleaning",
+          "evidence": "approved application e0cOABIkbtu2Vb1suG5y decided by founder-decision-2026-08-01 at ?; C1 exact",
+          "performedBy": "admin-sdk:r3-classification"
+        }
+      }
+    },
+    {
+      "uid": "X7KZGTy3ouYmGESePPxKVlC3j613",
+      "name": "Hometown Movers kenya",
+      "eligible": true,
+      "disagreement": false,
+      "reasons": [],
+      "current": {
+        "providerStatus": "active",
+        "approvedAt": "2026-09-03T22:55:18.000Z",
+        "providerCategoryText": "moving",
+        "categoryLabelText": "Moving / Relocation Services",
+        "stamped": false,
+        "capability": "SERVICES",
+        "authorityStatus": "NOT_YET_STAMPED",
+        "conflicts": []
+      },
+      "evidence": {
+        "applicationId": "hZN2s7YCX8qvzYpsLwhu",
+        "role": "provider",
+        "applicationCategory": "moving",
+        "hub": "home-services",
+        "type": "business",
+        "requestedRole": null,
+        "roleResolvedBy": "keyword",
+        "decidedBy": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+        "decidedAt": "2026-09-03T22:55:18.000Z",
+        "c1": {
+          "category": "trades",
+          "reason": "exact"
+        },
+        "lane": {
+          "hub": "provider",
+          "entClass": null
+        }
+      },
+      "expected": {
+        "lane": "services",
+        "route": "provider-dashboard.html",
+        "state": "AVAILABLE"
+      },
+      "mutation": {
+        "op": "update",
+        "path": "providers/X7KZGTy3ouYmGESePPxKVlC3j613",
+        "set": {
+          "business": {
+            "category": "trades",
+            "lane": {
+              "hub": "provider",
+              "entClass": null
+            },
+            "source": "application",
+            "applicationId": "hZN2s7YCX8qvzYpsLwhu",
+            "setAt": "<serverTimestamp>"
+          }
+        },
+        "audit": {
+          "action": "category_backfill_r3",
+          "targetUid": "X7KZGTy3ouYmGESePPxKVlC3j613",
+          "applicationId": "hZN2s7YCX8qvzYpsLwhu",
+          "category": "trades",
+          "evidence": "approved application hZN2s7YCX8qvzYpsLwhu decided by D5Ql2EYr95bt79IpcGTmOMTK0P83 at 2026-09-03T22:55:18.000Z; C1 exact",
+          "performedBy": "admin-sdk:r3-classification"
+        }
+      }
+    }
+  ],
+  "disagreement": [
+    {
+      "uid": "IaOBkEJYcCXk23UDWk0OPp7XXeD3",
+      "name": "Latomi gadgets",
+      "eligible": true,
+      "disagreement": true,
+      "reasons": [],
+      "current": {
+        "providerStatus": "active",
+        "approvedAt": "2026-09-03T22:55:11.000Z",
+        "providerCategoryText": "wholesaler",
+        "categoryLabelText": "Wholesaler / Bulk Supplier",
+        "stamped": false,
+        "capability": "SERVICES",
+        "authorityStatus": "STAMPED",
+        "conflicts": []
+      },
+      "evidence": {
+        "applicationId": "y0dp5uPehfj4qFf4imKl",
+        "role": "provider",
+        "applicationCategory": "wholesaler",
+        "hub": "b2b",
+        "type": "business",
+        "requestedRole": "provider",
+        "roleResolvedBy": "explicit",
+        "decidedBy": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+        "decidedAt": "2026-09-03T22:55:10.000Z",
+        "c1": {
+          "category": "wholesale",
+          "reason": "exact"
+        },
+        "lane": {
+          "hub": "provider",
+          "entClass": null
+        }
+      },
+      "expected": {
+        "lane": "products",
+        "route": null,
+        "state": "CAPABILITY_CONFLICT (CATEGORY_CAPABILITY_DISAGREEMENT products/SERVICES)"
+      },
+      "mutation": {
+        "op": "update",
+        "path": "providers/IaOBkEJYcCXk23UDWk0OPp7XXeD3",
+        "set": {
+          "business": {
+            "category": "wholesale",
+            "lane": {
+              "hub": "provider",
+              "entClass": null
+            },
+            "source": "application",
+            "applicationId": "y0dp5uPehfj4qFf4imKl",
+            "setAt": "<serverTimestamp>"
+          }
+        },
+        "audit": {
+          "action": "category_backfill_r3",
+          "targetUid": "IaOBkEJYcCXk23UDWk0OPp7XXeD3",
+          "applicationId": "y0dp5uPehfj4qFf4imKl",
+          "category": "wholesale",
+          "evidence": "approved application y0dp5uPehfj4qFf4imKl decided by D5Ql2EYr95bt79IpcGTmOMTK0P83 at 2026-09-03T22:55:10.000Z; C1 exact",
+          "performedBy": "admin-sdk:r3-classification"
+        }
+      }
+    },
+    {
+      "uid": "Ohg9HrtGpCXBUSzbRfaUifOPWQ32",
+      "name": "DG wines and spirits",
+      "eligible": true,
+      "disagreement": true,
+      "reasons": [],
+      "current": {
+        "providerStatus": "active",
+        "approvedAt": "2026-09-03T22:55:03.000Z",
+        "providerCategoryText": "wholesaler",
+        "categoryLabelText": "Wholesaler / Bulk Supplier",
+        "stamped": false,
+        "capability": "SERVICES",
+        "authorityStatus": "STAMPED",
+        "conflicts": []
+      },
+      "evidence": {
+        "applicationId": "AvAE6rZEiO9FJ9UoMePY",
+        "role": "provider",
+        "applicationCategory": "wholesaler",
+        "hub": "b2b",
+        "type": "business",
+        "requestedRole": null,
+        "roleResolvedBy": "keyword",
+        "decidedBy": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+        "decidedAt": "2026-09-03T22:55:02.000Z",
+        "c1": {
+          "category": "wholesale",
+          "reason": "exact"
+        },
+        "lane": {
+          "hub": "provider",
+          "entClass": null
+        }
+      },
+      "expected": {
+        "lane": "products",
+        "route": null,
+        "state": "CAPABILITY_CONFLICT (CATEGORY_CAPABILITY_DISAGREEMENT products/SERVICES)"
+      },
+      "mutation": {
+        "op": "update",
+        "path": "providers/Ohg9HrtGpCXBUSzbRfaUifOPWQ32",
+        "set": {
+          "business": {
+            "category": "wholesale",
+            "lane": {
+              "hub": "provider",
+              "entClass": null
+            },
+            "source": "application",
+            "applicationId": "AvAE6rZEiO9FJ9UoMePY",
+            "setAt": "<serverTimestamp>"
+          }
+        },
+        "audit": {
+          "action": "category_backfill_r3",
+          "targetUid": "Ohg9HrtGpCXBUSzbRfaUifOPWQ32",
+          "applicationId": "AvAE6rZEiO9FJ9UoMePY",
+          "category": "wholesale",
+          "evidence": "approved application AvAE6rZEiO9FJ9UoMePY decided by D5Ql2EYr95bt79IpcGTmOMTK0P83 at 2026-09-03T22:55:02.000Z; C1 exact",
+          "performedBy": "admin-sdk:r3-classification"
+        }
+      }
+    }
+  ],
+  "unresolved": [
+    {
+      "uid": "13iuLZx63jN5evaNcUnx7bhDSfs1",
+      "name": "Shave 'n' Trims",
+      "eligible": false,
+      "disagreement": false,
+      "reasons": [
+        "provider_not_live_by_evidence",
+        "no_approved_application"
+      ],
+      "current": {
+        "providerStatus": "active",
+        "approvedAt": null,
+        "providerCategoryText": "hair-beauty",
+        "categoryLabelText": "Barber Shop",
+        "stamped": false,
+        "capability": "CONFLICT",
+        "authorityStatus": "NOT_YET_STAMPED",
+        "conflicts": [
+          "provider_status_without_approval"
+        ]
+      },
+      "evidence": null,
+      "expected": {
+        "lane": null,
+        "route": null,
+        "state": "PENDING_CLASSIFICATION (unchanged)"
+      },
+      "mutation": null
+    },
+    {
+      "uid": "28vznyvnLyNFXAJqL2wf6PjbqrK2",
+      "name": "Heights Creations",
+      "eligible": false,
+      "disagreement": false,
+      "reasons": [
+        "provider_not_live_by_evidence",
+        "no_approved_application"
+      ],
+      "current": {
+        "providerStatus": "pending",
+        "approvedAt": null,
+        "providerCategoryText": "interior-design",
+        "categoryLabelText": null,
+        "stamped": false,
+        "capability": "UNCLASSIFIED",
+        "authorityStatus": "NOT_YET_STAMPED",
+        "conflicts": []
+      },
+      "evidence": null,
+      "expected": {
+        "lane": null,
+        "route": null,
+        "state": "PENDING_CLASSIFICATION (unchanged)"
+      },
+      "mutation": null
+    },
+    {
+      "uid": "3SkVHLqJXzfeQlQ4PfBx5DFR4at2",
+      "name": "k Riss",
+      "eligible": false,
+      "disagreement": false,
+      "reasons": [
+        "c1_cannot_classify:no-exact-match"
+      ],
+      "current": {
+        "providerStatus": "active",
+        "approvedAt": "2026-08-26T05:02:14.000Z",
+        "providerCategoryText": "Entertainment Performer",
+        "categoryLabelText": "voiceover",
+        "stamped": false,
+        "capability": "SERVICES",
+        "authorityStatus": "NOT_YET_STAMPED",
+        "conflicts": []
+      },
+      "evidence": {
+        "applicationId": "ENTMS9AACTG",
+        "role": "provider",
+        "applicationCategory": "Entertainment Performer",
+        "hub": "entertainment",
+        "type": "voiceover",
+        "requestedRole": null,
+        "roleResolvedBy": "default",
+        "decidedBy": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+        "decidedAt": "2026-08-26T05:02:08.000Z",
+        "c1": {
+          "category": null,
+          "reason": "no-exact-match"
+        },
+        "lane": {
+          "hub": "entertainment",
+          "entClass": "SERVICE"
+        }
+      },
+      "expected": {
+        "lane": null,
+        "route": null,
+        "state": "PENDING_CLASSIFICATION (unchanged)"
+      },
+      "mutation": null
+    },
+    {
+      "uid": "AiJp5yzTnRZZIZKZEepNUKn8NuI2",
+      "name": "DJ Bvmbxno",
+      "eligible": false,
+      "disagreement": false,
+      "reasons": [
+        "provider_not_live_by_evidence",
+        "no_approved_application"
+      ],
+      "current": {
+        "providerStatus": "active",
+        "approvedAt": null,
+        "providerCategoryText": "dj",
+        "categoryLabelText": "DJ / Disc Jockey",
+        "stamped": false,
+        "capability": "CONFLICT",
+        "authorityStatus": "NOT_YET_STAMPED",
+        "conflicts": [
+          "provider_status_without_approval"
+        ]
+      },
+      "evidence": null,
+      "expected": {
+        "lane": null,
+        "route": null,
+        "state": "PENDING_CLASSIFICATION (unchanged)"
+      },
+      "mutation": null
+    },
+    {
+      "uid": "WLt0VowwtFcFADIJDIxXu3e6H1p1",
+      "name": "Kasindi holdings limited",
+      "eligible": false,
+      "disagreement": false,
+      "reasons": [
+        "c1_cannot_classify:no-exact-match"
+      ],
+      "current": {
+        "providerStatus": "active",
+        "approvedAt": "2026-07-30T15:13:13.000Z",
+        "providerCategoryText": "Service Provider",
+        "categoryLabelText": "Cleaning Company / Housekeeper",
+        "stamped": false,
+        "capability": "SERVICES",
+        "authorityStatus": "NOT_YET_STAMPED",
+        "conflicts": []
+      },
+      "evidence": {
+        "applicationId": "PRVMS7IACKG",
+        "role": "provider",
+        "applicationCategory": "Service Provider",
+        "hub": "service",
+        "type": "Cleaning Company / Housekeeper",
+        "requestedRole": null,
+        "roleResolvedBy": "keyword",
+        "decidedBy": "reindex",
+        "decidedAt": "2026-07-30T15:11:12.000Z",
+        "c1": {
+          "category": null,
+          "reason": "no-exact-match"
+        },
+        "lane": {
+          "hub": "provider",
+          "entClass": null
+        }
+      },
+      "expected": {
+        "lane": null,
+        "route": null,
+        "state": "PENDING_CLASSIFICATION (unchanged)"
+      },
+      "mutation": null
+    },
+    {
+      "uid": "aOdQxmUGLCO4hOYsdHMhWuwYV9D2",
+      "name": "King Bruce",
+      "eligible": false,
+      "disagreement": false,
+      "reasons": [
+        "provider_not_live_by_evidence",
+        "no_approved_application"
+      ],
+      "current": {
+        "providerStatus": "active",
+        "approvedAt": null,
+        "providerCategoryText": "mc",
+        "categoryLabelText": "Entertainment",
+        "stamped": false,
+        "capability": "CONFLICT",
+        "authorityStatus": "NOT_YET_STAMPED",
+        "conflicts": [
+          "provider_status_without_approval"
+        ]
+      },
+      "evidence": null,
+      "expected": {
+        "lane": null,
+        "route": null,
+        "state": "PENDING_CLASSIFICATION (unchanged)"
+      },
+      "mutation": null
+    }
+  ]
+}

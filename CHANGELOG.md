@@ -1,3 +1,16 @@
+## [2026-09-29] - R3 review packet: classification manifest for approved providers with no C1 stamp (READ ONLY; nothing applied)
+
+`scripts/r3-classification-manifest.js --plan` classifies each of the 11 providers from its APPROVED APPLICATION through
+the real C1 classifier and lane classifier (exactly what projectProvider does at approval); provider category text is
+never evidence. **Primary set (3, digest `cb87e8ca…98e3`)**: Julian's Closet → service_business, Langa'ta mamafua →
+cleaning, Hometown Movers → trades — each `providers/{uid}.business` stamp + 1 audit; expected post-R2 route
+provider-dashboard, AVAILABLE. **Disagreement set (2, digest `9f8a96e8…8952`, kept separate, not recommended now)**: DG
+Wine and Latomi → wholesale (a seller category) vs their SERVICES stamp → CAPABILITY_CONFLICT, no route. **Unresolved
+(6, no mutation)**: three status-only accounts (no approval evidence), Heights Creations (pending), k Riss and Kasindi
+(C1 no exact match → AdminOS by hand). No capability, business identity, KASS, manifest record or branch is touched.
+Contract suite `test-r3-classification-manifest.js` 21/0. Packet `docs/R3_CLASSIFICATION_MANIFEST.md` +
+`docs/release-gates/r3-classification-manifest.json`. `--apply` not implemented until a digest is authorized.
+
 ## [2026-09-29] - R2: the workspace resolver routes on category + capability — both authorities required, neither inferred (server; NOT deployed)
 
 `functions/business-workspace.js` only. Category from the C1 stamp (`providers.business` / healthcare, else
