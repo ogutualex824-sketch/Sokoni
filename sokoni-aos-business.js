@@ -93,8 +93,48 @@
         <td><form data-classify-shop="${esc(s.shopId)}" data-approval="${esc(s.approval)}" class="aos-inline-form"><select name="category" required aria-label="Category for ${esc(s.name || s.shopId)}"><option value="">Choose…</option>${shopOptions(s)}</select>
           <input name="reason" required minlength="3" maxlength="500" placeholder="Reason (audit log)" aria-label="Reason">
           ${s.approval === 'none' ? '<label class="aos-muted"><input type="checkbox" name="attest"> I verified this business</label>' : ''}
-          <button class="aos-btn" type="submit">Save</button></form></td></tr>`).join('')}</tbody></table></div>`;
+          <button class="aos-btn" type="submit">Save</button></form>
+          <button class="aos-btn" type="button" data-docs="${esc(s.shopId)}" style="margin-top:6px">📄 Documents</button></td></tr>
+        <tr data-docs-row="${esc(s.shopId)}" hidden><td colspan="5" data-docs-body="${esc(s.shopId)}"></td></tr>`).join('')}</tbody></table></div>`;
     }
+
+    /* ── BUSINESS DOCUMENTS (universal catalogue U6, 2026-09-29) ─────────────────────────────────────────────────
+       The documents THIS kind of business is asked for, each with its honest state. Open → a 5-minute signed link;
+       Verify (optional expiry) / Reject (reason required). The server decides who may decide: the verification-reviewer
+       capability — an admin claim alone is refused, and the refusal is shown, never hidden. */
+    const DOC_STATE = { unsubmitted: 'Not provided', declared: 'Declared — number only', pending_review: 'Awaiting review',
+      verified_on_file: 'Verified', rejected: 'Rejected', expired: 'Expired' };
+    async function renderDocs(shopId) {
+      const cell = host.querySelector('[data-docs-body="' + CSS.escape(shopId) + '"]');
+      const row = host.querySelector('[data-docs-row="' + CSS.escape(shopId) + '"]');
+      if (!cell || !row) return;
+      row.hidden = false; cell.innerHTML = '<div class="aos-spinner"><div></div></div>';
+      try {
+        const r = await call('bizAdminShopCompliance', { shopId });
+        cell.innerHTML = '<div class="aos-muted" style="margin-bottom:6px">Documents a ' + esc(r.category || 'not-yet-classified') + ' business is asked for.</div>' +
+          (r.docs || []).map((d) => '<div data-doc="' + esc(d.kind) + '" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,.08)">' +
+            '<b style="min-width:220px">' + esc(d.title) + '</b>' +
+            '<span class="aos-badge" data-doc-state="' + esc(d.state) + '"' + (d.state === 'verified_on_file' ? ' style="color:#71ff00"' : d.state === 'rejected' || d.state === 'expired' ? ' style="color:#ff9800"' : '') + '>' + esc(DOC_STATE[d.state] || d.state) + '</span>' +
+            (d.number ? '<span class="aos-muted aos-mono">' + esc(d.number) + '</span>' : '') +
+            (d.note ? '<span class="aos-muted">' + esc(d.note) + '</span>' : '') +
+            (d.path ? '<button class="aos-btn" type="button" data-doc-open="' + esc(shopId) + '" data-kind="' + esc(d.kind) + '">Open</button>' +
+              '<form class="aos-inline-form" data-doc-verify="' + esc(shopId) + '" data-kind="' + esc(d.kind) + '"><input type="date" name="expires" aria-label="Valid until (optional)"><button class="aos-btn" type="submit">Verify</button></form>' +
+              '<form class="aos-inline-form" data-doc-reject="' + esc(shopId) + '" data-kind="' + esc(d.kind) + '"><input name="note" minlength="3" maxlength="500" placeholder="Why (the seller sees this)" aria-label="Rejection reason"><button class="aos-btn" type="submit">Reject</button></form>'
+              : '<span class="aos-muted">No document uploaded — a number alone cannot be verified.</span>') +
+            '</div>').join('');
+      } catch (e) { cell.innerHTML = '<p class="aos-muted">Could not load documents: ' + esc((e && e.message) || 'error') + '</p>'; }
+    }
+    host.addEventListener('click', async (ev) => {
+      const b = ev.target.closest && ev.target.closest('[data-docs],[data-doc-open]');
+      if (!b || !host.contains(b)) return;
+      if (b.hasAttribute('data-docs')) return renderDocs(b.getAttribute('data-docs'));
+      b.disabled = true;
+      try {
+        const r = await call('bizAdminDocumentUrl', { shopId: b.getAttribute('data-doc-open'), kind: b.getAttribute('data-kind') });
+        if (r && r.url) window.open(r.url, '_blank', 'noopener');
+      } catch (e) { msg((e && e.message) || 'Could not open the document.', true); }
+      b.disabled = false;
+    });
 
     async function render() {
       body.innerHTML = '<div class="aos-spinner"><div></div></div>';
@@ -108,6 +148,20 @@
       const f = ev.target;
       ev.preventDefault();
       if (f.hasAttribute('data-q')) { view = sel.value; msg(''); return render(); }
+      const vShop = f.getAttribute('data-doc-verify'), rShop = f.getAttribute('data-doc-reject');
+      if (vShop || rShop) {
+        const shopId = vShop || rShop, kind = f.getAttribute('data-kind');
+        const payload = { shopId, kind, decision: vShop ? 'verified_on_file' : 'rejected' };
+        if (vShop && f.expires && f.expires.value) payload.expiresAt = Date.parse(f.expires.value + 'T23:59:59+03:00');
+        if (rShop) { payload.note = (f.note.value || '').trim(); if (payload.note.length < 3) { msg('Say why the document is rejected — the seller sees this.', true); return; } }
+        const btn = f.querySelector('button'); btn.disabled = true;
+        try {
+          await call('bizAdminReviewPermit', payload);
+          msg(vShop ? 'Verified. The storefront shows it to buyers. Recorded in the audit log.' : 'Rejected. The seller sees your reason. Recorded in the audit log.');
+          await renderDocs(shopId);
+        } catch (e) { msg((e && e.message) || 'Could not save the decision.', true); btn.disabled = false; }
+        return;
+      }
       const uid = f.getAttribute('data-classify'); const shopId = f.getAttribute('data-classify-shop');
       if (!uid && !shopId) return;
       const category = f.category.value; const reason = f.reason.value.trim();
@@ -131,6 +185,8 @@
     return true;
   }
 
-  const OPS = ['bizAdminProviders', 'bizAdminClassify', 'bizAdminShops', 'bizAdminClassifyShop'];
+  const OPS = ['bizAdminProviders', 'bizAdminClassify', 'bizAdminShops', 'bizAdminClassifyShop',
+    /* U6: business documents */
+    'bizAdminShopCompliance', 'bizAdminReviewPermit', 'bizAdminDocumentUrl'];
   root.SokoniAOSBusiness = { mount, OPS };
 })(typeof window !== 'undefined' ? window : globalThis);

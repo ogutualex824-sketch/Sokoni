@@ -201,4 +201,99 @@ _adminH.bizAdminClassifyShop = async (req) => {
   return out;
 };
 
+/* ══ BUSINESS DOCUMENTS — review (universal catalogue U6, 2026-09-29) ═════════════════════════════════════════════
+   Each shop is asked for the documents its kind of business needs (catalogue-capabilities.businessDocsFor, keyed on the
+   shop's C1 category). The seller uploads and declares; kasshop marks each change AWAITING REVIEW. Only a SOKONI
+   verification reviewer — the verification-authority capability; an admin claim alone is NOT enough — may decide.
+   A verified document may carry an expiry; after it, the document reads EXPIRED everywhere (docState). The public shop
+   storefront is SERVED the verified KINDS (never a number or a file path) by minishop.getMinishopPublic, from the
+   server-only compliance doc — so a storefront badge can never be written by the seller. */
+const CCAP = require('./shared/catalogue-capabilities');
+const VA = require('./verification-authority');
+
+function _reviewer(req) {
+  const uid = _requireAdmin(req);
+  try { VA.assertVerificationReviewer(req.auth.token || {}); }
+  catch (e) { throw new HttpsError('permission-denied', e.message, { code: 'NOT_A_REVIEWER' }); }
+  return uid;
+}
+
+/** The documents a shop is asked for, with what it provided and each review state. { shopId } */
+_adminH.bizAdminShopCompliance = async (req) => {
+  _requireAdmin(req);
+  const shopId = _san(req.data && req.data.shopId, 128);
+  if (!shopId || shopId.includes('/')) throw new HttpsError('invalid-argument', 'shopId is required.');
+  const [sSnap, cSnap] = await Promise.all([_db().collection('shops').doc(shopId).get(),
+    _db().collection('shops').doc(shopId).collection('private').doc('compliance').get()]);
+  if (!sSnap.exists) throw new HttpsError('not-found', 'Shop not found.');
+  const cat = BCAT.shopEligibility(sSnap.data() || {}).category;
+  const c = cSnap.exists ? (cSnap.data() || {}) : {};
+  const now = Date.now();
+  const docs = CCAP.businessDocsFor(cat).map((d) => {
+    const rv = (c.review || {})[d.kind] || null;
+    return { kind: d.kind, title: d.title, number: d.num ? (c[d.num] || null) : null, path: (c.permits || {})[d.kind] || null,
+      state: CCAP.docState(rv, now), note: rv && rv.note || null, expiresAt: rv && rv.expiresAt || null, reviewedAt: rv && rv.reviewedAt || null };
+  });
+  return { shopId, category: cat, docs };
+};
+
+/** A reviewer OPENS the document before deciding — a 5-minute signed read URL for that one file. { shopId, kind }
+    Reviewer-only (the same capability that decides); audited; only a path inside the owner's kyc-documents folder. */
+_adminH.bizAdminDocumentUrl = async (req) => {
+  const reviewer = _reviewer(req);
+  const d = req.data || {};
+  const shopId = _san(d.shopId, 128), kind = _san(d.kind, 40);
+  if (!shopId || shopId.includes('/')) throw new HttpsError('invalid-argument', 'shopId is required.');
+  if (!Object.prototype.hasOwnProperty.call(CCAP.BUSINESS_DOCS, kind)) throw new HttpsError('invalid-argument', 'Unknown document.', { code: 'UNKNOWN_DOC' });
+  const [sSnap, cSnap] = await Promise.all([_db().collection('shops').doc(shopId).get(),
+    _db().collection('shops').doc(shopId).collection('private').doc('compliance').get()]);
+  if (!sSnap.exists) throw new HttpsError('not-found', 'Shop not found.');
+  const s = sSnap.data() || {};
+  const owner = s.sellerUid || s.ownerUid || s.ownerId || shopId;
+  const p = cSnap.exists ? ((cSnap.data() || {}).permits || {})[kind] : null;
+  if (!p) throw new HttpsError('failed-precondition', 'No document has been uploaded for this.', { code: 'NO_DOCUMENT' });
+  if (!String(p).startsWith('kyc-documents/' + owner + '/') || String(p).includes('..')) throw new HttpsError('failed-precondition', 'That document path is not the shop owner\'s.', { code: 'FOREIGN_PATH' });
+  const expires = Date.now() + 5 * 60 * 1000;
+  const [url] = await require('firebase-admin/storage').getStorage().bucket().file(p).getSignedUrl({ version: 'v4', action: 'read', expires, responseDisposition: 'inline' });
+  await _db().collection('adminAudit').add({ action: 'business_doc_opened', shopId, kind, performedBy: reviewer, createdAt: _ts() });
+  return { url, expiresAt: expires };
+};
+
+/** A reviewer's decision on one document. { shopId, kind, decision: 'verified_on_file'|'rejected', note?, expiresAt? } */
+_adminH.bizAdminReviewPermit = async (req) => {
+  const reviewer = _reviewer(req);
+  const d = req.data || {};
+  const shopId = _san(d.shopId, 128), kind = _san(d.kind, 40), decision = String(d.decision || '');
+  if (!shopId || shopId.includes('/')) throw new HttpsError('invalid-argument', 'shopId is required.');
+  if (!Object.prototype.hasOwnProperty.call(CCAP.BUSINESS_DOCS, kind)) throw new HttpsError('invalid-argument', 'Unknown document.', { code: 'UNKNOWN_DOC' });
+  if (['verified_on_file', 'rejected'].indexOf(decision) === -1) throw new HttpsError('invalid-argument', 'decision must be verified_on_file or rejected.');
+  const note = _san(d.note, 500);
+  if (decision === 'rejected' && note.length < 3) throw new HttpsError('invalid-argument', 'Say why the document is rejected — the seller sees this.', { code: 'NOTE_REQUIRED' });
+  const expiresAt = d.expiresAt == null || d.expiresAt === '' ? null : Number(d.expiresAt);
+  if (expiresAt !== null && !(expiresAt > Date.now())) throw new HttpsError('invalid-argument', 'An expiry must be in the future.', { code: 'BAD_EXPIRY' });
+  const db = _db();
+  const shopRef = db.collection('shops').doc(shopId), compRef = shopRef.collection('private').doc('compliance');
+  let verifiedKinds = [];
+  await db.runTransaction(async (t) => {
+    const [s, c] = [await t.get(shopRef), await t.get(compRef)];
+    if (!s.exists) throw new HttpsError('not-found', 'Shop not found.');
+    const cd = c.exists ? (c.data() || {}) : {};
+    const path = (cd.permits || {})[kind];
+    /* a document can only be VERIFIED when one was actually submitted — a typed number is a declaration */
+    if (decision === 'verified_on_file' && !path) throw new HttpsError('failed-precondition', 'No document has been uploaded for this — a number alone cannot be verified.', { code: 'NO_DOCUMENT' });
+    const review = Object.assign({}, cd.review || {});
+    review[kind] = { state: decision, reviewedBy: reviewer, reviewedAt: Date.now(), note: note || null,
+      expiresAt: decision === 'verified_on_file' ? expiresAt : null, submittedAt: (review[kind] && review[kind].submittedAt) || null };
+    const now = Date.now();
+    verifiedKinds = Object.keys(review).filter((k) => CCAP.docState(review[k], now) === 'verified_on_file' && CCAP.BUSINESS_DOCS[k]);
+    /* ONLY the server-written private compliance doc (rules: `allow write: if false`). NOT the shop doc: shops/{uid} is
+       owner-writable, so a verified list stored there could be written by the seller. The storefront reads the verified
+       kinds from here through the server (minishop.getMinishopPublic). */
+    t.set(compRef, { review: { [kind]: review[kind] }, updatedAt: _ts() }, { merge: true });
+    t.set(db.collection('adminAudit').doc(), { action: 'business_doc_' + decision, shopId, kind, note: note || null, expiresAt,
+      performedBy: reviewer, createdAt: _ts() });
+  });
+  return { ok: true, shopId, kind, decision, verifiedDocs: verifiedKinds };
+};
+
 module.exports = { _adminH };

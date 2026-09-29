@@ -241,7 +241,23 @@ exports.getMinishopPublic = onRequest(
       const totalProducts = config.totalProducts ?? products.length;
       const followerCount = config.followerCount;   /* null = unknown, rendered "—" — never an invented 0 */
 
+      /* 6 — Verified business documents (universal catalogue U6, 2026-09-29). Read from the SERVER-ONLY compliance doc
+         (rules: allow write: if false) where a SOKONI verification reviewer's decision lives — never from the shop
+         document, which its owner can write. Only the KIND and title leave the server: no number, no file path. A
+         verification past its expiry is not shown. A seller-written `verifiedDocs` on the shop is stripped. */
+      delete shop.verifiedDocs;
+      let verifiedDocs = [];
+      try {
+        const cSnap = await db.collection('shops').doc(shopId).collection('private').doc('compliance').get();
+        const review = (cSnap.exists && (cSnap.data() || {}).review) || {};
+        const CCAP = require('./shared/catalogue-capabilities');
+        const now = Date.now();
+        verifiedDocs = Object.keys(review).filter((k) => CCAP.BUSINESS_DOCS[k] && CCAP.docState(review[k], now) === 'verified_on_file')
+          .map((k) => ({ kind: k, title: CCAP.BUSINESS_DOCS[k].title }));
+      } catch (e) { verifiedDocs = []; }
+
       res.status(200).json({
+        verifiedDocs,
         shop,
         config,
         products,

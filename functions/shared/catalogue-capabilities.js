@@ -114,6 +114,45 @@
   var BOOKED = ['service', 'room', 'rental', 'event'];
   var QUOTED = ['custom_job', 'project'];
 
+  /* ── BUSINESS DOCUMENTS (universal catalogue U6, 2026-09-29) ──────────────────────────────────────────────────
+     The documents a BUSINESS of this kind is asked for in merchant-v2 › Shop details › Permits. `kind` is the permit
+     slot kasshop stores (shops/{id}/private/compliance.permits[kind], a kyc-documents path); `num` is the registration
+     number field. The five slots every shop already had (KRA, SBP, BRS, fire, health) stay for everyone; a category's
+     compliance adds its own. Listing-level compliance (KEBS, food on a product, ownership, a vehicle's logbook, a
+     property's title, an event permit) belongs to the LISTING, not here.
+     A document is only ever DECLARED or AWAITING REVIEW until a SOKONI verification reviewer decides it
+     (functions/verification-authority.js capability) — never verified by the seller's own write. */
+  var BASE_DOCS = ['kra', 'sbp', 'brs', 'fire', 'health'];
+  var BUSINESS_DOCS = {
+    kra:          { title: 'KRA PIN', num: 'kraPin', hint: 'Your Kenya Revenue Authority PIN.' },
+    sbp:          { title: 'Single Business Permit (SBP)', num: 'sbpNumber', hint: 'Issued by your county.' },
+    brs:          { title: 'Business / company registration', num: 'brsNumber', hint: 'Business Registration Service number.' },
+    fire:         { title: 'Fire safety certificate', num: null, hint: 'Upload the certificate — no number needed.' },
+    health:       { title: 'Public health certificate', num: null, hint: 'Needed for food, beauty and health businesses.' },
+    lsk:          { title: 'Practising certificate (Law Society of Kenya)', num: 'lskNumber', hint: 'Your current LSK practising certificate.', for: 'legal_credential' },
+    ppb:          { title: 'Pharmacy & Poisons Board premises licence', num: 'ppbNumber', hint: 'The PPB licence for these premises.', for: 'pharmacy_licence' },
+    kmpdc:        { title: 'Health facility licence (KMPDC)', num: 'kmpdcNumber', hint: 'The KMPDC licence for this facility.', for: 'health_facility_licence' },
+    professional: { title: 'Professional registration', num: 'professionalNumber', hint: 'From the body that licenses your profession (e.g. EBK, BORAQS, NCA, EPRA, KMPDC).', for: 'professional_licence' },
+    food:         { title: 'County food business permit', num: 'foodPermitNumber', hint: 'Required to sell food in Kenya.', for: 'food_licence' },
+    earb:         { title: 'Estate Agents Registration Board (EARB) registration', num: 'earbNumber', hint: 'For agents listing property on behalf of owners.', for: 'property_title' },
+  };
+  /* review states — the verification-authority vocabulary, plus the two a listing document needs */
+  var DOC_STATES = { unsubmitted: 'Not provided', declared: 'Declared — not yet reviewed', pending_review: 'Awaiting SOKONI review',
+    verified_on_file: 'Verified by SOKONI', rejected: 'Rejected', expired: 'Expired', not_applicable: 'Not applicable' };
+
+  function businessDocsFor(category) {
+    var comp = capsFor(category).compliance;
+    var extra = Object.keys(BUSINESS_DOCS).filter(function (k) { return BUSINESS_DOCS[k].for && comp.indexOf(BUSINESS_DOCS[k].for) !== -1; });
+    return BASE_DOCS.concat(extra).map(function (k) { return Object.assign({ kind: k }, BUSINESS_DOCS[k]); });
+  }
+  /** A document's effective state: expiry wins over an old verification. `now` in ms. */
+  function docState(review, now) {
+    var r = review || {};
+    var st = DOC_STATES[r.state] ? r.state : 'unsubmitted';
+    if (st === 'verified_on_file' && r.expiresAt && Number(r.expiresAt) > 0 && (now || Date.now()) >= Number(r.expiresAt)) return 'expired';
+    return st;
+  }
+
   function capsFor(category) {
     return (category && Object.prototype.hasOwnProperty.call(CAPS, category)) ? CAPS[category] : UNCLASSIFIED;
   }
@@ -142,5 +181,6 @@
     TYPE_IDS: TYPE_IDS, COMPLIANCE: COMPLIANCE, FULFILMENT: F, CAPS: CAPS, UNCLASSIFIED: UNCLASSIFIED,
     TYPE_TAXONOMY_KIND: TYPE_TAXONOMY_KIND, COUNTED: COUNTED, BOOKED: BOOKED, QUOTED: QUOTED,
     capsFor: capsFor, allows: allows, check: check,
+    BASE_DOCS: BASE_DOCS, BUSINESS_DOCS: BUSINESS_DOCS, DOC_STATES: DOC_STATES, businessDocsFor: businessDocsFor, docState: docState,
   };
 }));

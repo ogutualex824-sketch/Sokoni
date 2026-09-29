@@ -154,7 +154,32 @@ function _checkValues(out, invalid) {
 /* Permit documents (the wizard's "Permits" step): the seller uploads to kyc-documents/{uid}/… (storage.rules: owner
    writes, only the owner and administrators read) and this records WHICH object is which permit, in the owner-only
    compliance document. A path outside the caller's own kyc-documents folder is refused. */
-const PERMIT_KINDS = ['kra', 'sbp', 'brs', 'fire', 'health'];
+/* U6 (2026-09-29): + the documents a BUSINESS of each kind is asked for (functions/shared/catalogue-capabilities.js
+   BUSINESS_DOCS — one list, read by this writer, the Shop details Permits step and AdminOS). */
+const PERMIT_KINDS = ['kra', 'sbp', 'brs', 'fire', 'health', 'lsk', 'ppb', 'kmpdc', 'professional', 'food', 'earb'];
+/* the registration number that goes with each document slot */
+const DOC_NUM = { kra: 'kraPin', sbp: 'sbpNumber', brs: 'brsNumber', lsk: 'lskNumber', ppb: 'ppbNumber', kmpdc: 'kmpdcNumber',
+  professional: 'professionalNumber', food: 'foodPermitNumber', earb: 'earbNumber' };
+
+/* REVIEW STATE — derived HERE from what actually changed, never taken from the client (a seller cannot send one: the
+   cleaners drop it). A new or replaced document is AWAITING REVIEW; a number typed without a document is DECLARED;
+   a document removed with no number is UNSUBMITTED. Changing anything about a verified document re-opens its review.
+   Only a SOKONI verification reviewer moves a document to verified_on_file / rejected
+   (business-category-admin.bizAdminReviewPermit). */
+function _reviewPatch(prev, next) {
+  const p = prev || {}, pp = p.permits || {}, out = {};
+  for (const k of PERMIT_KINDS) {
+    const numKey = DOC_NUM[k] || null;
+    const docChanged = !!(next.permits && Object.prototype.hasOwnProperty.call(next.permits, k) && next.permits[k] !== (pp[k] || ''));
+    const numChanged = !!(numKey && Object.prototype.hasOwnProperty.call(next, numKey) && next[numKey] !== (p[numKey] || ''));
+    if (!docChanged && !numChanged) continue;
+    const doc = docChanged ? next.permits[k] : pp[k];
+    const num = numKey ? (numChanged ? next[numKey] : p[numKey]) : '';
+    out[k] = { state: doc ? 'pending_review' : (num ? 'declared' : 'unsubmitted'), submittedAt: Date.now(),
+      reviewedBy: null, reviewedAt: null, note: null, expiresAt: null };
+  }
+  return out;
+}
 function _cleanPermits(raw, uid) {
   const out = {};
   if (!raw || typeof raw !== 'object') return out;
@@ -241,7 +266,9 @@ function _ignoredAuthority(raw) {
    tax and registration numbers — they belong to the shop, but not to the storefront.
    They are stored in `shops/{shopId}/private/compliance`, which only this function
    (Admin SDK) writes and only the owner may read. */
-const COMPLIANCE_FIELDS = { kraPin: 20, sbpNumber: 40, brsNumber: 40 };
+const COMPLIANCE_FIELDS = { kraPin: 20, sbpNumber: 40, brsNumber: 40,
+  /* U6 (2026-09-29): the registration numbers of the per-business documents */
+  lskNumber: 40, ppbNumber: 40, kmpdcNumber: 40, professionalNumber: 60, foodPermitNumber: 60, earbNumber: 40 };
 const COMPLIANCE_DOC = 'compliance';
 
 function _cleanCompliance(raw) {
@@ -321,6 +348,8 @@ exports.getShopProfile = onCall(
         if (c[key] !== undefined) compliance[key] = c[key];
       }
       if (c.permits && typeof c.permits === 'object') compliance.permits = c.permits;
+      /* U6: each document's review state (server-written only) */
+      if (c.review && typeof c.review === 'object') compliance.review = c.review;
     }
 
     /* `ownerUid` below is the AUTHENTICATED uid, so comparing it to auth.currentUser.uid
@@ -478,6 +507,9 @@ exports.saveShopProfile = onCall(
       await db.runTransaction(async (tx) => {
         const snap = await tx.get(ref);
         if (!snap.exists) throw new HttpsError('not-found', 'Shop not found.');
+        /* U6: all reads before any write — the stored compliance decides which documents need review */
+        const compSnap = Object.keys(compliance).length ? await tx.get(ref.collection('private').doc(COMPLIANCE_DOC)) : null;
+        const review = compSnap ? _reviewPatch(compSnap.exists ? compSnap.data() : {}, compliance) : {};
         const d = snap.data() || {};
         if (!(d.sellerUid === uid || d.ownerUid === uid || d.ownerId === uid)) {
           throw new HttpsError('permission-denied', 'You do not own this shop.');
@@ -490,7 +522,7 @@ exports.saveShopProfile = onCall(
            together or not at all, so a half-saved form can never be reported as saved. */
         if (Object.keys(compliance).length) {
           tx.set(ref.collection('private').doc(COMPLIANCE_DOC),
-            Object.assign({}, compliance, { sellerUid: uid, updatedAt: now }), { merge: true });
+            Object.assign({}, compliance, Object.keys(review).length ? { review } : {}, { sellerUid: uid, updatedAt: now }), { merge: true });
         }
       });
       logger.info('KassShop profile updated', { shopId: owned.id, fields: Object.keys(patch).length });
@@ -527,10 +559,12 @@ exports.saveShopProfile = onCall(
       if (!dupe.empty) {
         /* Someone else's request created it first — fold into that shop rather than adding one. */
         const existing = dupe.docs[0];
+        const dComp = Object.keys(compliance).length ? await tx.get(existing.ref.collection('private').doc(COMPLIANCE_DOC)) : null;
+        const dReview = dComp ? _reviewPatch(dComp.exists ? dComp.data() : {}, compliance) : {};
         tx.set(existing.ref, Object.assign({}, patch, { sellerUid: uid, updatedAt: now }), { merge: true });
         if (Object.keys(compliance).length) {
           tx.set(existing.ref.collection('private').doc(COMPLIANCE_DOC),
-            Object.assign({}, compliance, { sellerUid: uid, updatedAt: now }), { merge: true });
+            Object.assign({}, compliance, Object.keys(dReview).length ? { review: dReview } : {}, { sellerUid: uid, updatedAt: now }), { merge: true });
         }
         return;
       }
@@ -547,8 +581,10 @@ exports.saveShopProfile = onCall(
         updatedAt: now,
       }));
       if (Object.keys(compliance).length) {
+        /* U6: a brand-new shop has no prior compliance, so every document it sends starts its review here */
+        const nReview = _reviewPatch({}, compliance);
         tx.set(ref.collection('private').doc(COMPLIANCE_DOC),
-          Object.assign({}, compliance, { sellerUid: uid, updatedAt: now }), { merge: true });
+          Object.assign({}, compliance, Object.keys(nReview).length ? { review: nReview } : {}, { sellerUid: uid, updatedAt: now }), { merge: true });
       }
     });
 

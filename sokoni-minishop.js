@@ -165,6 +165,9 @@ window.SokoniMiniShop = (() => {
   function _renderTrustSignals(shop, config) {
     const items = [];
     if (shop.verified) items.push('✅ Verified Business');
+    /* U6 (2026-09-29): one line per business document a SOKONI reviewer verified (licence, permit, registration).
+       Declared or pending documents are NEVER shown as trust — only the server's verified list. */
+    (_state.verifiedDocs || []).forEach(function (d) { if (d && d.title) items.push('📄 ' + d.title + ' — verified by SOKONI'); });
     if (shop.responseRate >= 80) items.push('⚡ ' + shop.responseRate + '% Response Rate');
     if (shop.rating >= 4) items.push('⭐ ' + Number(shop.rating).toFixed(1) + ' Star Rating');
     if (shop.completionRate) items.push('✓ ' + shop.completionRate + '% Order Completion');
@@ -953,6 +956,8 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
          treat "not told" and "could not resolve" the same way — hidden, never guessed. */
       _state.availability = data.availability || null;
       _state.schedule     = data.schedule || null;
+      /* U6: the business documents a SOKONI reviewer VERIFIED — served by the server from the private compliance doc */
+      _state.verifiedDocs = Array.isArray(data.verifiedDocs) ? data.verifiedDocs : [];
 
       if (statusMode) {
         _renderStatusMode(data);

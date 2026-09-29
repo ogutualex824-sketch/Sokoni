@@ -92,6 +92,28 @@
     { kind: 'fire', num: null, title: 'Fire safety certificate', hint: 'Upload the certificate — no number needed.' },
     { kind: 'health', num: null, title: 'Public health certificate', hint: 'Needed for food, beauty and health businesses.' },
   ];
+  /* U6 (2026-09-29): the documents are PER BUSINESS — a pharmacy is asked for its PPB licence, a lawyer for the LSK
+     practising certificate, a food business for its county food permit (functions/shared/catalogue-capabilities.js
+     businessDocsFor, keyed on the SOKONI category). The five slots above keep their placeholders and links. */
+  function CCAP() { return (typeof window !== 'undefined' && window.SokoniCatalogueCapabilities) || null; }
+  function permitsFor(catId) {
+    var C = CCAP();
+    if (!C || typeof C.businessDocsFor !== 'function') return PERMITS;
+    return C.businessDocsFor(catId || null).map(function (d) {
+      var base = PERMITS.filter(function (x) { return x.kind === d.kind; })[0] || {};
+      return { kind: d.kind, num: d.num || null, title: d.title, hint: d.hint || base.hint || '', ph: base.ph || '', link: base.link || null };
+    });
+  }
+  /* every registration-number field any business may use */
+  function allNumKeys() {
+    var C = CCAP(), keys = ['kraPin', 'sbpNumber', 'brsNumber'];
+    if (C && C.BUSINESS_DOCS) Object.keys(C.BUSINESS_DOCS).forEach(function (k) { var n = C.BUSINESS_DOCS[k].num; if (n && keys.indexOf(n) === -1) keys.push(n); });
+    return keys;
+  }
+  function allPermitKinds() {
+    var C = CCAP();
+    return C && C.BUSINESS_DOCS ? Object.keys(C.BUSINESS_DOCS) : PERMITS.map(function (x) { return x.kind; });
+  }
   var PROFILE_KEYS = ['name', 'tagline', 'about', 'sellerType', 'logoUrl', 'bannerUrl', 'themeColor', 'city', 'shopType',
     'address', 'mapsLink', 'phone', 'email', 'website', 'instagram', 'tiktok', 'facebook', 'twitter', 'youtube',
     'linkedin', 'delMethod', 'delTime', 'freeDelivery', 'zones', 'packagingNote', 'returnPolicy', 'returnText'];
@@ -130,8 +152,11 @@
     d.zones = Array.isArray(p.zones) ? p.zones.filter(function (z) { return typeof z === 'string' && z; }) : [];
     if (d.themeColor && !/^#[0-9a-fA-F]{6}$/.test(d.themeColor)) d.themeColor = '';   /* a legacy gradient: pick again */
     var c = (res && res.compliance) || {};
-    var comp = { kraPin: str(c.kraPin), sbpNumber: str(c.sbpNumber), brsNumber: str(c.brsNumber), permits: {} };
-    PERMITS.forEach(function (x) { comp.permits[x.kind] = str(c.permits && c.permits[x.kind]); });
+    var comp = { permits: {} };
+    allNumKeys().forEach(function (k) { comp[k] = str(c[k]); });
+    allPermitKinds().forEach(function (k) { comp.permits[k] = str(c.permits && c.permits[k]); });
+    /* U6: each document's review state — READ-ONLY here, written only by the server and a SOKONI reviewer */
+    comp.review = (c.review && typeof c.review === 'object') ? c.review : {};
     return { profile: d, compliance: comp };
   }
   function normPhone(v) { return str(v).replace(/[\s()-]/g, ''); }
@@ -182,8 +207,9 @@
     });
     var out = { profile: profile };
     if (comp && JSON.stringify(comp) !== JSON.stringify(savedComp || {})) {
-      out.compliance = { kraPin: str(comp.kraPin).trim().toUpperCase(), sbpNumber: str(comp.sbpNumber).trim(),
-        brsNumber: str(comp.brsNumber).trim(), permits: Object.assign({}, comp.permits) };
+      out.compliance = { permits: Object.assign({}, comp.permits) };
+      allNumKeys().forEach(function (k) { out.compliance[k] = k === 'kraPin' ? str(comp[k]).trim().toUpperCase() : str(comp[k]).trim(); });
+      /* the review state is never sent — the server decides it */
     }
     return out;
   }
@@ -411,13 +437,29 @@
         '<div class="msp-lbl">Seller type</div>' + options('sellerType', SELLER_TYPES) +
       '</div>';
     }
+    /* the honest state of one document: what SOKONI decided, or what the seller provided (never "verified" by upload) */
+    function docBadge(kind, path) {
+      if (S.uploading[kind]) return '<span class="msp-badge">Uploading…</span>';
+      var C = CCAP(), rv = (S.comp.review || {})[kind] || null;
+      var saved = S.savedComp && S.savedComp.permits ? S.savedComp.permits[kind] : undefined;
+      if (path && path !== saved) return '<span class="msp-badge">Uploaded — save to send for review</span>';
+      var st = C && C.docState ? C.docState(rv) : (path ? 'pending_review' : 'unsubmitted');
+      if (st === 'verified_on_file') return '<span class="msp-badge ok" data-docstate="verified_on_file">✓ Verified by SOKONI</span>';
+      if (st === 'pending_review') return '<span class="msp-badge" data-docstate="pending_review">Awaiting SOKONI review</span>';
+      if (st === 'declared') return '<span class="msp-badge" data-docstate="declared">Declared — not yet reviewed</span>';
+      if (st === 'rejected') return '<span class="msp-badge" data-docstate="rejected" style="color:#ff8a8d">Rejected' + (rv && rv.note ? ' — ' + esc(rv.note) : '') + '</span>';
+      if (st === 'expired') return '<span class="msp-badge" data-docstate="expired" style="color:#ffc45e">Expired — upload a current one</span>';
+      return path ? '<span class="msp-badge" data-docstate="pending_review">Awaiting SOKONI review</span>' : '<span class="msp-badge" data-docstate="unsubmitted">No document</span>';
+    }
     function stepPermits() {
+      var list = permitsFor(S.cat && S.cat.id);
       return '<div class="msp-card"><div class="msp-h">Permits &amp; registration</div>' +
-        '<p class="msp-sub">Optional, but verified documents build buyer trust. Numbers and documents are private — only you and SOKONI administrators can see them; they never appear on your storefront.</p>' +
-        PERMITS.map(function (p) {
+        '<p class="msp-sub">' + (S.cat && S.cat.label ? 'What a <b>' + esc(S.cat.label) + '</b> business is asked for. ' : '') +
+        'Documents build buyer trust once SOKONI has <b>verified</b> them — a number you type is a declaration until then. ' +
+        'Numbers and documents are private: only you and SOKONI administrators can see them. Buyers only ever see which documents SOKONI verified.</p>' +
+        list.map(function (p) {
           var path = S.comp.permits[p.kind];
-          var badge = S.uploading[p.kind] ? '<span class="msp-badge">Uploading…</span>'
-            : (path ? '<span class="msp-badge ok">✓ Document uploaded</span>' : '<span class="msp-badge">No document</span>');
+          var badge = docBadge(p.kind, path);
           return '<div class="msp-permit"><div class="msp-permit-head"><b>' + esc(p.title) + '</b>' + badge + '</div>' +
             '<div class="msp-sub" style="margin:0">' + esc(p.hint) + (p.link ? ' <a href="' + p.link + '" target="_blank" rel="noopener" style="color:var(--msp-acc)">Get it ↗</a>' : '') + '</div>' +
             (p.num ? field(p.num, p.title + ' number', { comp: true, ph: p.ph }) : '') +

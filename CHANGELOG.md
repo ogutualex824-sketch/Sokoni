@@ -1,3 +1,103 @@
+## [2026-09-29] - Universal catalogue U6: each business is asked for ITS documents; honest review states; only a SOKONI reviewer verifies; buyers see only what was verified
+
+**Shop details (merchant-v2) + AdminOS + storefront + functions, NOT deployed.** Branch `slice/c4-category-matrix`.
+Owner brief §9: a seller-entered number is NOT a verified certification; use explicit states; never invent a badge.
+Owner, repeated: "the uploader must be equipped according to business or service … for all 100+".
+
+**Census:**
+- The Shop details **Permits** step asked every business for the same five documents (KRA, SBP, BRS, fire, health).
+- Its only state was "✓ Document uploaded"; no review state existed anywhere.
+- A pharmacy was never asked for its PPB licence, and a lawyer never for the LSK certificate.
+- The verification vocabulary and reviewer capability already existed (`functions/verification-authority.js`). They
+  are **reused**; there is no new permission system.
+
+**Built:**
+- **`catalogue-capabilities.businessDocsFor(category)`:** the documents per business, from the capability row's
+  compliance.
+  - Everyone keeps KRA / SBP / BRS / fire / health.
+  - Per category: **LSK** practising certificate (lawyer), **PPB** premises licence (pharmacy), **KMPDC** facility
+    licence (clinic / hospital / lab), **professional registration** (trades, professionals, clinicians), **county
+    food permit** (food businesses; optional for goods shops), **EARB** (property agents).
+  - States: unsubmitted, declared, pending_review, verified_on_file, rejected, expired, not applicable. `docState()`
+    applies expiry.
+- **`kasshop.saveShopProfile`** accepts the new document slots and numbers, and **derives** each document's review
+  state in the save transaction:
+  - an upload awaits review, and a number alone is declared;
+  - changing a verified document re-opens it;
+  - a seller can never send a state; the cleaners drop it.
+  - `getShopProfile` returns the states to the owner.
+- **AdminOS › Business categories › Seller shops › 📄 Documents:** each document with its state.
+  - **Open** returns a 5-minute signed link (`bizAdminDocumentUrl`). **Verify** takes an optional expiry, and
+    **Reject** requires a reason (`bizAdminReviewPermit`).
+  - Both need the **verification-reviewer capability**. An admin claim alone is refused, and the refusal is shown.
+  - A number without a document cannot be verified.
+  - Every open and every decision is audited.
+- **Storefront:** `getMinishopPublic` serves `verifiedDocs` (kind and title only; never a number or path) from the
+  server-only compliance doc.
+  - `shops/{uid}` is owner-writable, so a `verifiedDocs` the seller writes there is **stripped**.
+  - The storefront shows "📄 PPB premises licence — verified by SOKONI" only for verified, unexpired documents.
+- **Permits step:** shows the documents for this shop's category, with honest badges (Awaiting SOKONI review,
+  Declared — not yet reviewed, ✓ Verified by SOKONI, Rejected — reason, Expired). It never sends a review state.
+
+**Tests:**
+- **`scripts/test-business-documents.js`: 7/0.** It covers:
+  - per-business documents;
+  - server-derived states, including a save that sends ONLY a forged review;
+  - reviewer-only decisions with a reason, an upload and a future expiry required;
+  - the storefront showing only verified documents, stripping the forged field and dropping expired ones;
+  - the owner's view.
+  - Counterproof on `43bf649`: **7 fail**.
+  - Sabotage: **11/11 caught.** The first run had one anchor miss, which exposed that the forged-review case was not
+    isolated; that case is now tested alone.
+- **`scripts/test-business-documents-browser.js`: 6/0** (Chromium; the REAL AdminOS registry module and the REAL Shop
+  details module, against the REAL ops):
+  - the pharmacy's document list;
+  - a plain admin refused, with the refusal shown;
+  - a reviewer opens, verifies and rejects (a reason is required);
+  - the merchant sees the honest states;
+  - 390 px.
+  - Counterproof on `43bf649`: **fails** (1 control passes).
+
+**Regression** (27 suites that read kasshop, business-category-admin, minishop, the storefront, the Shop details or
+AdminOS business modules, or catalogue-capabilities; vs `43bf649`):
+- Equal.
+- The parallel run hit Windows fork / resource limits. Every difference was re-run sequentially on both trees and is
+  equal: `product-shop-status-browser` 4/0 on both, `shop-availability-browser` 10/0 on both,
+  `trust-integrity-browser` 4/0 on both.
+- **`shop-setup-hydration` stops in section 4 on BOTH trees** (environment timing; it was 27/0 on the work tree earlier
+  in the same run). It is recorded as environmental, not a U6 result.
+
+**UNPROVEN / NOT DONE:**
+- Not deployed.
+- Real Firebase Storage signed URLs are not exercised (the signer is stubbed).
+- There is no notification to the seller on a decision.
+- **Listing-level documents** (a vehicle's logbook and insurance, a property's title, an event permit) are declared on
+  the listing, but not yet reviewable. That is next.
+- The rules that forbid a client from writing `verifiedDocs` onto `shops/{uid}` are stage 3. The storefront already
+  ignores it.
+
+**Files:**
+- `functions/shared/catalogue-capabilities.js` (+ copy), `functions/kasshop.js`, `functions/business-category-admin.js`,
+  `functions/minishop.js`
+- `sokoni-merchant-shop-profile.js`, `sokoni-aos-business.js`, `sokoni-minishop.js`
+- the 2 new suites
+
+**Database:**
+- `shops/{id}/private/compliance` gains new number fields and `review.{kind}` (server-only; rules already
+  `allow write: if false`).
+- `adminAudit` gains `business_doc_*` rows.
+
+**API:**
+- `adminOsDispatch` ops `bizAdminShopCompliance`, `bizAdminReviewPermit`, `bizAdminDocumentUrl`.
+- `getMinishopPublic` returns `verifiedDocs`.
+
+**Security:**
+- Only the verification capability decides.
+- A badge can only come from server-only data.
+- Numbers and paths never reach buyers.
+
+**Breaking:** none. The five existing slots behave as before, plus states.
+
 ## [2026-09-29] - Offer stacking (owner decision): loyalty may apply on an agreed price; a promo code may not
 
 **Checkout, NOT deployed.** Branch `slice/c4-category-matrix`. This answers the question left open in T2b ("should
