@@ -1,3 +1,35 @@
+## [2026-09-29] — P0: rider payout requires server-only proof (server half)
+
+**Files:** `functions/index.js` (onOrderStatusChange rider-payout block only), `scripts/test-p0-rider-payout-gate.js`,
+`CHANGELOG.md`.
+**Base:** `release/multishop-checkout-certified` (`70334fd`), the recorded production Functions lineage.
+The same payout block is byte-identical on release/multishop-on-e52fdc5, release/functions-reconciled,
+hotfix/onboarding-selfmint-live and release/comms-on-live, and this hunk ports to each unchanged (verified).
+**Database changes:** none (deliveryFees gains status "withheld" + withheldReasons).
+**Share arithmetic:** UNCHANGED — platformFee / riderFee / the hub commission (shared with the
+commerce-convergence track). **Deployment:** NOT deployed; the paired rules change is `f20be7d`.
+
+**Finding (emulator-proven 2026-09-29).** The rider credit fired on ANY transition to `delivered`. A client-made
+order naming itself seller + rider and marked delivered by its "seller" paid KES 88,000 from a 100,000 fee.
+Production: 0 such credits.
+
+**Gate.** The credit now requires all of:
+1. delivery proof (`rider_pin` | `buyer_confirmation`) established in THIS transition by `_completeDelivery`;
+2. `paymentVerified`;
+3. an approved driver in `drivers/{uid}`;
+4. the rider is neither the buyer nor the seller;
+5. on the PIN path, the PIN entrant is the credited rider;
+6. `deliveryFee <= paidAmount` when the server recorded one.
+
+Anything else is withheld and recorded with its reasons.
+
+**Evidence.**
+- `test-p0-rider-payout-gate.js`: 15/0 here. On the pre-fix base, 9 rows fail — the self-made order credits
+  88,000 there.
+- The ported block is byte-identical to the one tested against the deployed archive (patch of gen
+  1790400441458307).
+- Deployed-archive matrix, and 10/10 mutants killed.
+
 ## 2026-09-20 (84) — TWO STALE CALLERS: a dead finance page and an email-keyed exemption
 
 **53/0 across two certifications · sabotage cycles red on each · claim-auth gate 1 → 0.**

@@ -3171,8 +3171,61 @@ exports.onOrderStatusChange = onDocumentUpdated(
          record, and its sole consumer is a read-only admin report — so riders were never
          actually credited. Best-effort: a wallet hiccup never blocks the status write. */
       const riderShillings = Math.max(0, Math.round(riderFee));
+
+      /* ── P0 2026-09-29 — the rider credit requires SERVER-ONLY facts ──────────────────
+         Emulator-proven before this gate: an ordinary client could create an order naming
+         itself seller + rider with any deliveryFee, set it `delivered` through the seller
+         branch of the rules, and this trigger credited ~88% of that fee to its withdrawable
+         wallet. A status change is not proof of delivery, and nothing on the order that a
+         client can write is trusted here. Every condition below is a fact only the server
+         can produce (the rules forbid these at create, or no client update branch may
+         touch them):
+           1. PROOF established in THIS transition by the one completion path
+              (delivery-complete.js _completeDelivery): deliveryAuthorizedBy is
+              'rider_pin' | 'buyer_confirmation' AFTER and absent BEFORE — a value seeded at
+              order create shows up in `before` and is refused.
+           2. PAID: paymentVerified === true (server-set; forbidden at client create).
+           3. The credited rider is an APPROVED driver (drivers/{uid}, server-only writes)
+              and, on the PIN path, the rider who proved it (deliveryAuthorizedActor).
+           4. No self-dealing: the rider is neither the buyer nor the seller.
+           5. The fee cannot exceed money actually received, when the server recorded it.
+         Share arithmetic (platformFee / riderFee / RATES.hub) is deliberately unchanged —
+         shared authority with the commerce-convergence track. A withheld payout is recorded
+         as deliveryFees status 'withheld' with its reasons; nothing is credited. */
+      const _withheld = [];
+      const _proofBy  = after.deliveryAuthorizedBy;
+      if (!(_proofBy === "rider_pin" || _proofBy === "buyer_confirmation") || before.deliveryAuthorizedBy) {
+        _withheld.push("no_server_proof_in_this_transition");
+      }
+      if (after.paymentVerified !== true) _withheld.push("order_not_payment_verified");
+      const _buyerUid = after.buyerUid || after.uid || after.userId || null;
+      if (riderUid && (riderUid === _buyerUid || riderUid === after.sellerUid || riderUid === after.uid)) {
+        _withheld.push("rider_is_buyer_or_seller");
+      }
+      if (_proofBy === "rider_pin" && after.deliveryAuthorizedActor !== riderUid) {
+        _withheld.push("pin_proof_not_by_credited_rider");
+      }
+      if (typeof after.paidAmount === "number" && deliveryFee > after.paidAmount) {
+        _withheld.push("fee_exceeds_paid_amount");
+      }
+      if (riderUid && riderShillings > 0 && !_withheld.length) {
+        try {
+          const _dv = await db.collection("drivers").doc(riderUid).get();
+          const _dd = _dv.exists ? (_dv.data() || {}) : {};
+          const _st = String(_dd.status || "").toLowerCase();
+          const _ok = _dv.exists && (_dd.approved === true || _st === "approved" || _st === "active")
+                      && !["suspended", "rejected", "banned", "deactivated"].includes(_st);
+          if (!_ok) _withheld.push("rider_not_an_approved_driver");
+        } catch (e) {
+          _withheld.push("rider_check_unavailable");   /* fail closed — money never on an unknown */
+        }
+      }
+      if (_withheld.length && riderUid && riderShillings > 0) {
+        console.warn("[onOrderStatusChange] rider payout WITHHELD", { orderId, reasons: _withheld });
+      }
+
       let riderCredited = false;
-      if (riderUid && riderShillings > 0) {
+      if (!_withheld.length && riderUid && riderShillings > 0) {
         try {
           riderCredited = await db.runTransaction(async (t) => {
             const txnRef = db.collection("walletTransactions").doc(`${riderUid}_${orderId}_delivery`);
@@ -3208,7 +3261,10 @@ exports.onOrderStatusChange = onDocumentUpdated(
         riderFeeKES:    riderFee,
         totalFeeKES:    deliveryFee,
         grossOrderKES:  Number(after.orderTotal || 0),
-        status:         riderCredited ? "credited" : (riderUid ? "pending" : "no-rider"),
+        status:         riderCredited ? "credited"
+                        : (riderUid && riderShillings > 0 && _withheld.length ? "withheld"
+                        : (riderUid ? "pending" : "no-rider")),
+        withheldReasons: _withheld.length ? _withheld : null,
         creditedAt:     riderCredited ? admin.firestore.FieldValue.serverTimestamp() : null,
         createdAt:      admin.firestore.FieldValue.serverTimestamp(),
       }).catch(() => {});
