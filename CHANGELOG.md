@@ -1,3 +1,50 @@
+## 2026-09-29 — Verification convergence, Slice V1a: one reviewer, one route, the applicant page made lawful (branch `feat/integrations-control-center`, NOT deployed)
+
+Census found THREE verification state machines (`applications` — canonical, AdminOS + Super Admin via
+`applicationList`/`applicationDecide`; `verificationRequests` — the badge/tier queue written by `verification.html`
+and reviewed only by the standalone `verification-admin.html`; `connectVerifications` — video evidence). V1a
+converges the second onto the canonical workspace without touching any authority.
+
+- **Shared reviewer `sokoni-verification-review.js`** (new), mounted on AdminOS **Applications & Verification →
+  "Verification requests"** — a real tab, route **`#applications/verification`**, reachable from Super Admin by link.
+  Same client-SDK writes as the standalone page, so the SAME Firestore rules decide; identity is the page session
+  (`firebase.auth().currentUser`), never `localStorage`. **Fails closed, in order:** the badge
+  (`verifications/{applicantUid}` → approved) is written first; only if accepted do the profile projection, the
+  request status, `adminLog` and the notification follow — each reported individually. A request with no applicant
+  record is labelled and offered no Approve control. Notifications go through the ONE sender (`notifySend`,
+  registered type `seller_verified`); a rejection records the decision and says no notice was sent because no
+  registered type exists for it (backend follow-up).
+- **Applicant page `verification.html` made lawful against the SERVED rules** (`6c67a34d`, read on 2026-09-29,
+  byte-identical to the repo on these clauses): it used a private `sokoni-verify` Firebase app whose auth had no
+  user, sent no `applicantUid`, and ran its duplicate check by email across everyone's requests — every step the
+  rules refuse — then blamed the applicant's internet. Now it submits as the site's signed-in user (`[DEFAULT]` app,
+  after `__sokoniAuthReadyPromise`), writes `applicantUid`, checks duplicates by its own uid, creates its own pending
+  `verifications/{uid}` (the only create the rules allow, and what makes an admin approval an *update*), says
+  "sign in" when signed out, and names a rules refusal. Embedded merchant-v2 use (`?shell=merchant`) unchanged.
+- **AdminOS/Super Admin:** Applications panel gains the tab bar (`queue` | `verification`); `_TAB_SELECTORS.applications`
+  routes it; Super Admin's AdminOS Workspaces group links to the tab. Super Admin's native Applications panel and
+  the standalone `verification-admin.html` are **untouched in V1a** — they route/retire in V1b once this is certified.
+
+**Findings recorded (server/rules line, not changed here):** on the served ruleset a signed-in user can write
+`isVerified` / `verifiedTier` on their OWN `users` document (emulator: allowed) — the badge authority
+`verifications/{uid}` is safe (the applicant cannot self-approve it), the profile projection is not. Legacy requests
+(all of them before this change) carry no applicant uid and can be approved by nobody from a browser: an admin
+cannot create `verifications/{uid}` for another user; those applicants must re-submit while signed in.
+
+Evidence: `scripts/test-verification-rules.js` on the Firestore rules emulator (server authorization proof — the
+pre-V1 payload refused, the V1 payload accepted, admin cannot create a stranger's badge but can update it,
+superAdmin passes `isAdmin()`, applicant cannot decide or self-approve, strangers cannot read; D4 = FINDING);
+`scripts/test-verification-convergence.js` (route survives a real reload, tab ↔ URL both ways, reviewer renders from
+the canonical collection, legacy card without Approve, badge-first ordering, fail-closed on a refused badge write,
+reject requires a reason, one sender / no direct `notifications` write, session identity; negative control turns
+the legacy guard red). AdminOS regression suites re-run.
+
+- **Files:** new `sokoni-verification-review.js`, `admin-os.html`, `sokoni-aos.js`, `verification.html`,
+  `super-admin.html` (one link), new `scripts/test-verification-rules.js`, new
+  `scripts/test-verification-convergence.js`, `CHANGELOG.md`.
+- **Database:** no schema change; `verificationRequests.applicantUid` and the applicant's own pending
+  `verifications/{uid}` are now written as the rules already required. **API / rules:** none. Not deployed.
+
 ## 2026-09-29 — Integration catalogue rebaselined 47 → 52, and operational dependencies split off as their own collection (branch `feat/integrations-control-center`, NOT deployed)
 
 Step 8 of the owner's locked order, executed as **one** controlled slice after Step 7 passed. No deployment, no

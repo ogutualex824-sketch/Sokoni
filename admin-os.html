@@ -565,8 +565,20 @@
            is waiting or what was decided. Approving here is what runs
            projectSeller — the step that actually creates the shop. -->
       <div class="aos-panel" id="panel-applications" hidden>
+        <!-- Two REAL tabs, one destination. "Applications" is the onboarding queue
+             (applications/ via applicationList / applicationDecide). "Verification
+             requests" is the badge/tier queue (verificationRequests/) reviewed by the
+             shared sokoni-verification-review.js — the same reviewer Super Admin and
+             the former standalone verification-admin.html reach. Route:
+             #applications/verification. -->
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="queue" onclick="SokoniAOS.applicationsTab('queue')">Applications</button>
+          <button class="tab-btn" data-tab="verification" onclick="SokoniAOS.applicationsTab('verification')">Verification requests</button>
+        </div>
+        <div id="verificationRoot" hidden></div>
+        <div id="appsQueue">
         <div class="panel-toolbar">
-          <h2>Applications &amp; Approvals</h2>
+          <h2>Applications &amp; Verification</h2>
           <select id="appsStatus" class="aos-input" onchange="SokoniAOS.loadApplications()">
             <option value="pending" selected>Pending decision</option>
             <option value="">All statuses</option>
@@ -595,6 +607,7 @@
           <span id="appsSummary" style="color:var(--aos-muted);font-size:12px;margin-left:auto"></span>
         </div>
         <div id="appsBody"><div class="aos-spinner"><div></div></div></div>
+        </div>
       </div>
 
       <!-- ══ Shops & Sellers ══
@@ -887,6 +900,11 @@
   <!-- The one WRITE surface in the Connect console, deliberately a separate file so
        sokoni-connect-console.js keeps its certified guarantee of containing no write path.
        Both callables it reaches are platform-admin-gated on the server. -->
+  <!-- The ONE reviewer for badge/tier verification requests (verificationRequests/),
+       mounted on the Applications & Verification panel's "Verification requests" tab.
+       Same client SDK writes as the former verification-admin.html, so the same
+       Firestore rules decide; identity is the page's real session. -->
+  <script src="sokoni-verification-review.js"></script>
   <script src="sokoni-connect-verify.js"></script>
   <!-- Communication Engine console: the unified inbox, the business timeline and
        provider health. Same module super-admin.html mounts. Read-only. -->

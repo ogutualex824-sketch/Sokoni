@@ -60,6 +60,7 @@ window.SokoniAOS = (() => {
      implementation of a tab. A section absent here has no tab children, and a tab
      is only honoured when its button exists in that panel's tab bar. */
   const _TAB_SELECTORS = {
+    applications: (t) => _applicationsTab(t),
     estate:      (t) => _estateTab(t),
     marketplace: (t) => _marketplaceTab(t),
     financial:   (t) => _financialTab(t),
@@ -2924,9 +2925,36 @@ window.SokoniAOS = (() => {
 
   let _appsCache = [];
 
+  /* Applications & Verification has two REAL tabs over one destination:
+       queue         the onboarding queue (applications/) — the loader below
+       verification  badge/tier requests (verificationRequests/) — the shared
+                     sokoni-verification-review.js, the ONE reviewer for them.
+     Called by the tab bar and by the router for #applications/verification. */
+  let _appsQueueLoaded = false;
+  function _applicationsTab(tab) {
+    tab = tab === "verification" ? "verification" : "queue";
+    document.querySelectorAll("#panel-applications .tab-bar .tab-btn").forEach(b =>
+      b.classList.toggle("active", b.dataset.tab === tab));
+    const queue = document.getElementById("appsQueue");
+    const root = document.getElementById("verificationRoot");
+    if (queue) queue.hidden = tab !== "queue";
+    if (root) root.hidden = tab !== "verification";
+    if (tab === "verification") {
+      if (!root) return;
+      if (!window.SokoniVerificationReview) {
+        root.innerHTML = _emptyMsg("The verification reviewer did not load. Check that sokoni-verification-review.js is served on this page.");
+        return;
+      }
+      if (!root.dataset.mounted) { window.SokoniVerificationReview.mount(root); root.dataset.mounted = "1"; }
+    } else if (!_appsQueueLoaded) {
+      _loadApplications();
+    }
+  }
+
   async function _loadApplications() {
     const body = document.getElementById("appsBody");
     if (!body) return;
+    _appsQueueLoaded = true;
     body.innerHTML = _spinner();
 
     const statusSel = (document.getElementById("appsStatus") || {}).value || "";
@@ -3282,6 +3310,7 @@ window.SokoniAOS = (() => {
     reconcileApplication,
     // Shops & sellers
     estateTab:           _estateTab,
+    applicationsTab:     _applicationsTab,
     openShop,
     // Marketplace
     marketplaceTab:      _marketplaceTab,

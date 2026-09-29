@@ -1131,12 +1131,30 @@
     messagingSenderId: "24799054989",
     appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4",measurementId:"G-QT32H65TJS"};
 
-  async function getDB() {
+  /* The SITE's app, not a private one. This page used to initialise its own
+     "sokoni-verify" app, whose auth had no user — so every submission was
+     unauthenticated and the served rules refused it (verificationRequests create
+     needs applicantUid == request.auth.uid), while the page blamed the applicant's
+     internet connection. firebase.js (loaded through sokoni-init.js) owns the
+     default app and the signed-in session; use those. The private app remains only
+     as a fallback for a page that somehow loaded without firebase.js. */
+  async function getApp() {
     const { initializeApp, getApps } = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-app.js`);
-    const { getFirestore }           = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
     const apps = getApps();
-    const app  = apps.find(a => a.name === "sokoni-verify") || initializeApp(FB_CFG, "sokoni-verify");
-    return getFirestore(app);
+    return apps.find(a => a.name === "[DEFAULT]") || apps.find(a => a.name === "sokoni-verify") || initializeApp(FB_CFG, "sokoni-verify");
+  }
+  async function getDB() {
+    const { getFirestore } = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
+    return getFirestore(await getApp());
+  }
+  /* The applicant's signed-in identity, after the session has settled. null when
+     signed out — the caller must say so rather than submit an application the rules
+     will refuse. */
+  async function getSignedInUser() {
+    try { if (window.__sokoniAuthReadyPromise) await window.__sokoniAuthReadyPromise; } catch (_) {}
+    const { getAuth } = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-auth.js`);
+    const app = await getApp();
+    return app.name === "[DEFAULT]" ? (getAuth(app).currentUser || null) : null;
   }
 
   /* ═════════════ TIER COLOUR MAP ═════════════ */
@@ -1209,14 +1227,27 @@
 
     const refNumber = genRef();
 
+    /* Signed in, or say so. The served rules require the request to carry the
+       applicant's OWN uid (applicantUid == request.auth.uid), so a signed-out
+       submission cannot succeed and must not be attempted and then blamed on
+       the network. */
+    const applicant = await getSignedInUser();
+    if (!applicant) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-circle-check"></i> Submit Verification Application';
+      return showErr('Sign in to submit a verification application — it is tied to your SOKONI account. <a href="login.html?next=' + encodeURIComponent(location.pathname + location.search) + '" style="color:#71ff00;font-weight:700;">Sign in</a>');
+    }
+
     try {
       const db = await getDB();
-      const { collection, addDoc, getDocs, query, where, serverTimestamp } = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
+      const { collection, addDoc, getDocs, getDoc, setDoc, doc, query, where, serverTimestamp } = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
 
-      /* Prevent duplicate requests: one active/pending request per email */
+      /* One open request per ACCOUNT. Constrained by the applicant's own uid, which
+         is the only query the rules let a non-admin run here; the old check queried
+         by email across everyone's requests and was itself refused. */
       const existing = await getDocs(query(
         collection(db, "verificationRequests"),
-        where("email", "==", email),
+        where("applicantUid", "==", applicant.uid),
         where("status", "in", ["pending", "under_review"])
       ));
       if (!existing.empty) {
@@ -1226,7 +1257,8 @@
       }
       btn.innerHTML = '<span class="vf-spinner" style="width:18px;height:18px;border-width:2px;display:inline-block;"></span> Submitting…';
 
-      await addDoc(collection(db, "verificationRequests"), {
+      const reqRef = await addDoc(collection(db, "verificationRequests"), {
+        applicantUid: applicant.uid,
         refNumber,
         fullName,
         idNumber,
@@ -1243,13 +1275,38 @@
         createdAt:   serverTimestamp()
       });
 
+      /* The applicant's OWN badge record, pending. The rules let only the applicant
+         create verifications/{uid} (status 'pending', no verifiedAt/approvedBy) and
+         only an admin update it — so this is what makes an approval possible: the
+         reviewer flips THIS document to 'approved'. Without it, a request can be
+         marked approved by nobody. Created only if absent: an existing record is
+         admin-owned from here on and the rules refuse a non-admin update. */
+      let badgeNote = '';
+      try {
+        const badgeRef = doc(db, "verifications", applicant.uid);
+        const badge = await getDoc(badgeRef);
+        if (!badge.exists()) {
+          await setDoc(badgeRef, { uid: applicant.uid, status: "pending", verifyType, refNumber, requestId: reqRef.id, createdAt: serverTimestamp() });
+        }
+      } catch (badgeErr) {
+        console.error("Verification badge record error:", badgeErr);
+        badgeNote = ' Your application was received, but your verification record could not be prepared — quote your reference to support if it is not reviewed.';
+      }
+
       document.getElementById("vfRefDisplay").textContent = refNumber;
       document.getElementById("vfForm").style.display = "none";
       document.getElementById("vfSuccess").classList.add("show");
+      if (badgeNote) showErr(badgeNote.trim());
 
     } catch (err) {
       console.error("Verification submit error:", err);
-      showErr("Submission failed — please check your internet connection and try again.");
+      /* A rules refusal is not a network fault. Say which it was. */
+      const code = String((err && err.code) || '');
+      showErr(/permission-denied/.test(code)
+        ? "SOKONI refused this submission for your account. Sign out and back in, then try again; if it repeats, contact support quoting " + refNumber + "."
+        : /unauthenticated/.test(code)
+          ? "Your session has ended. Sign in and try again."
+          : "Submission failed — please check your internet connection and try again.");
       btn.disabled = false;
       btn.innerHTML = '<i class="fa-solid fa-circle-check"></i> Submit Verification Application';
     }
