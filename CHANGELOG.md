@@ -1,3 +1,18 @@
+## [2026-09-29] - Routing convergence: read-only ownership/provenance census of C1 and the workspace authority (nothing changed)
+
+`docs/ROUTING_CONVERGENCE_CENSUS.md`. Provenance: C1 (`13597e4`) and the workspace authority (`ad7265b`…`300ddaa`) are the
+owner's own convergence lineage (`feat/creator-hub`, shared by every `slice/c4-*`); no live session claims them; extend,
+never fork. Category stamp writers: `projectProvider` / `projectSeller` at approval, AdminOS reclassification
+(`business-category-admin.js`); `providers.business` is admin-protected in rules. **Findings:** (1) **C1 has never run
+in production** — 0 of 11 providers and 0 of 12 businesses carry a category stamp; (2) **self-stamp vector**: `businesses`
+create/update allow any owner to write `capabilities` (not in `noAdminFields`), so a client could forge a STAMPED
+capability — latent (nothing deployed reads it), must be closed before any surface trusts the stamp; (3) **C1 classifies
+DG Wine and Latomi as `wholesale`, a SELLER category routed to Merchant V2, while their stamped capability is SERVICES** —
+under the locked model that is CONFLICT → no inferred dashboard; resolving it is an admin decision (PRODUCTS approval or
+reclassification), not a resolver rule. Proposed resolver table `route = f(category, capabilities)` and slice order
+(rules first, then resolver, then owner decisions on the grandfather clause and the two identities) recorded. No code,
+rules, migration or deploy in this entry.
+
 ## [2026-09-29] - C5: Latomi Gadgets — business identity created under the same owner uid, SERVICES stamped from the original approval (PRODUCTION, owner-authorized)
 
 **Applied 17:29Z** with the owner-authorized command and plan digest `6b1c5044…30dc`; two writes in one transaction —
