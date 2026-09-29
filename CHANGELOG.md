@@ -59,8 +59,8 @@ tree vs `ec40b9b`.
   - `merchant-v2-ecosystem-runtime` printed no summary in the parallel run. It was re-run on the work tree:
     **131/0** (base 130/1).
   - `merchant-customers-ui` printed no summary on the base tree; the work tree is 185/0.
-- **Dirty-tree suites** (`cart-*` ×9, `checkout-fallback-total`) fail only because this slice was uncommitted. They
-  are re-run after this commit.
+- **Dirty-tree suites** (`cart-*` ×9, `checkout-fallback-total`) fail only because this slice was uncommitted. After
+  `ac223fa` all 10 are **green** (every cart suite FAILED 0; checkout-fallback-total 58/58).
 
 **UNPROVEN / NOT DONE:**
 - Not deployed.
