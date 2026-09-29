@@ -394,7 +394,7 @@ await T('PROOF 4 — an expired deadline is UNREADABLE, never MISSING', async ()
   eq(res.evidenceReadable, false, 'a timeout must report UNREADABLE: ');
   ok(res.evidenceError, 'and must say why');
   ok(/deadline|cancel/i.test(res.evidenceError), 'the reason must name the deadline: ' + res.evidenceError);
-  eq(res.integrations.length, 52, 'all 52 still returned: ');
+  eq(res.integrations.length, registry.INTEGRATIONS.length, 'every entry still returned: ');
   ok(res.integrations.every((i) => i.health === 'unknown'), 'every entry unknown');
   ok(res.integrations.every((i) => i.probedAt === null), 'no entry may claim a probe');
   eq(res.evidenceDropped.length, 0, 'a timeout is not a DROP — nothing was read to drop: ');
@@ -456,7 +456,7 @@ await T('PROOF 1 — an UNREACHABLE Firestore returns BOUNDED, closed, and unkno
     DL + 'ms deadline');
   eq(res.evidenceReadable, false, '');
   ok(res.evidenceError, 'the reason must be reported');
-  eq(res.integrations.length, registry.INTEGRATIONS.length, 'all 52 still returned: ');
+  eq(res.integrations.length, registry.INTEGRATIONS.length, 'every entry still returned: ');
   ok(res.integrations.every((i) => i.health === 'unknown'),
     'an unreachable database must yield unknown for all, never a fabricated health');
   console.log('        returned in ' + elapsed + 'ms · ' + String(res.evidenceError).slice(0, 56));
@@ -512,9 +512,9 @@ await T('twelve written, twelve read back, all validating', async () => {
   ids.forEach((id) => ok(read.records[id], id + ' did not come back'));
 });
 
-await T('and the resolver reports exactly those twelve, the other 40 unknown', async () => {
+await T('and the resolver reports exactly those twelve, the other 48 unknown', async () => {
   const res = await status.resolveIntegrationStatus({ listSecretNames: async () => [] });
-  eq(res.integrations.length, 52, '');
+  eq(res.integrations.length, registry.INTEGRATIONS.length, '');
   eq(res.integrations.filter((i) => i.probedAt).length, 12,
     'exactly the twelve written must carry a probedAt: ');
 });

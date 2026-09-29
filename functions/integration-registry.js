@@ -362,6 +362,64 @@ const INTEGRATIONS = [
     status: "live", direction: "internal",
     healthKind: "measurable",
     requiredSecrets: [], optionalEnv: [] },
+
+  /* ── Added 2026-09-29 by the CSP completeness pass ──────────────────────
+     Found by diffing the Content-Security-Policy against the catalogue: the
+     CSP enumerates every external host the browser may contact, and it is
+     maintained because breaking it breaks the site — which makes it a better
+     completeness source than a keyword census.
+
+     Each of these is CALLED BY CODE, verified file by file; a CSP allowance
+     alone was not treated as evidence. `*.ggpht.com` was allowed by the CSP and
+     called by nothing, so it is a stale allowance and is deliberately NOT here.
+
+     None takes a credential. They are catalogued for the same reason osm-tiles
+     already is: a third-party the platform depends on at runtime belongs in the
+     inventory whether or not it needs a key. */
+  { id: "osrm-routing", category: "infra", vendor: "Project OSRM",
+    name: "OSRM — Route Planning",
+    /* The DELIVERY ROUTING PATH. router.project-osrm.org is the project's PUBLIC
+       DEMO SERVER: no SLA, no support, and explicitly not intended for
+       production traffic. That is a standing availability risk on a customer
+       journey, and it belongs on the record rather than in a CSP line. */
+    status: "live", direction: "outbound",
+    healthKind: "measurable",
+    requiredSecrets: [], optionalEnv: [] },
+  { id: "qr-image-service", category: "infra", vendor: "QRServer (goqr.me)",
+    name: "QR Code Image API",
+    /* In the RECEIPT path — pos-receipt-engine and pos-retail-engine. A printed
+       receipt that silently loses its QR is a customer-visible failure. */
+    status: "live", direction: "outbound",
+    healthKind: "measurable",
+    requiredSecrets: [], optionalEnv: [] },
+  { id: "google-charts-image", category: "infra", vendor: "Google",
+    name: "Google Charts Image API (deprecated by vendor)",
+    /* DEPRECATED BY GOOGLE and still served on a best-effort basis. It renders
+       in POS and minishop admin surfaces. Catalogued so the dependency is
+       visible before the turndown, not after. */
+    status: "live", direction: "outbound",
+    healthKind: "measurable",
+    requiredSecrets: [], optionalEnv: [] },
+  { id: "arcgis-basemaps", category: "infra", vendor: "Esri",
+    name: "ArcGIS Online — Basemap Tiles",
+    status: "live", direction: "outbound",
+    healthKind: "measurable",
+    requiredSecrets: [], optionalEnv: [] },
+  { id: "carto-basemaps", category: "infra", vendor: "CARTO",
+    name: "CARTO — Basemap Tiles",
+    status: "live", direction: "outbound",
+    healthKind: "measurable",
+    requiredSecrets: [], optionalEnv: [] },
+  { id: "opentopomap", category: "infra", vendor: "OpenTopoMap",
+    name: "OpenTopoMap — Terrain Tiles",
+    status: "live", direction: "outbound",
+    healthKind: "measurable",
+    requiredSecrets: [], optionalEnv: [] },
+  { id: "unsplash-images", category: "infra", vendor: "Unsplash",
+    name: "Unsplash — Stock Imagery",
+    status: "live", direction: "outbound",
+    healthKind: "measurable",
+    requiredSecrets: [], optionalEnv: [] },
 ];
 
 /* ── OPERATIONAL DEPENDENCIES ───────────────────────────────────────────────

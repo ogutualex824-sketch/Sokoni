@@ -329,15 +329,15 @@ await T('serviceCapabilities is a DIFFERENT field and does not collide', async (
   });
 });
 
-sec('7 · PROOF 5 — the catalogue is exactly 53/53, and nothing was migrated');
+sec('7 · PROOF 5 — the catalogue is exactly 60/60, and nothing was migrated');
 
 await T('47 registry entries, 47 records, no addition and no loss', async () => {
-  eq(registry.INTEGRATIONS.length, 53, 'registry: ');
+  eq(registry.INTEGRATIONS.length, 60, 'registry: ');
   const res = await status.resolveIntegrationStatus({
     listSecretNames: async () => [], evidenceStore: evidence.memoryStore() });
-  eq(res.integrations.length, 53, 'resolved records: ');
+  eq(res.integrations.length, 60, 'resolved records: ');
   const ids = res.integrations.map((i) => i.id).sort();
-  eq(new Set(ids).size, 53, 'ids must be unique: ');
+  eq(new Set(ids).size, 60, 'ids must be unique: ');
   eq(JSON.stringify(ids), JSON.stringify(registry.INTEGRATIONS.map((e) => e.id).sort()),
     'the resolved id set must equal the registry id set exactly: ');
 });
@@ -358,7 +358,7 @@ await T('the legacy collection is named but NOT read', () => {
 
 sec('8 · PROOF 6 — no new status defaults everything into one bucket');
 
-await T('with no evidence at all, the 53 do NOT collapse to a single state', async () => {
+await T('with no evidence at all, the 60 do NOT collapse to a single state', async () => {
   const res = await status.resolveIntegrationStatus({
     listSecretNames: async () => [], evidenceStore: evidence.memoryStore() });
   const health = {}, reason = {};
@@ -375,7 +375,7 @@ await T('with no evidence at all, the 53 do NOT collapse to a single state', asy
   eq(health.failed    || 0, 0, 'no entry may be failed with no evidence: ');
   /* Not "everything one bucket" either: the refusals are distinguished. */
   ok(Object.keys(reason).length > 1, 'notRunReason must partition the set, not flatten it');
-  eq(reason['(none)'], 44, '');   /* C3: the inbound-parse lane has no executor, so no reason — UNKNOWN, not refused */
+  eq(reason['(none)'], 51, '');   /* 60 entries minus the 9 declared refusals */
 });
 
 await T('environment is null everywhere — declared, never inferred', async () => {
@@ -444,7 +444,7 @@ const EXPECTED_PARTITION = {
   'runnable-with-evidence':     3,
   'inbound-awaiting-callback':  4,
   'declared-refusal':           9,
-  'measurable-unwritten':      19,   /* C3: + sendgrid-inbound-parse */
+  'measurable-unwritten':      26,   /* C3 +1, CSP completeness pass +7 */
   'not-applicable':             5,
   'observed-elsewhere':        13,
 };
@@ -497,13 +497,13 @@ await T('EXACT SET COVERAGE — the union is the catalogue id set, not a subset'
      contract and give it a second place to drift. */
 });
 
-await T('PINNED COUNTS — the exact partition, and it sums to 53', () => {
+await T('PINNED COUNTS — the exact partition, and it sums to 60', () => {
   let total = 0;
   Object.keys(EXPECTED_PARTITION).forEach((c) => {
     eq(MEMBERS[c].length, EXPECTED_PARTITION[c], c + ': ');
     total += MEMBERS[c].length;
   });
-  eq(total, 53, 'partition total: ');
+  eq(total, 60, 'partition total: ');
   eq(total, registry.INTEGRATIONS.length, 'partition total vs registry size: ');
   console.log('        ' + evidence.EVIDENCE_CLASSES
     .map((c) => c + '=' + MEMBERS[c].length).join(' · '));
@@ -550,11 +550,11 @@ sec('11 · THE BOUNDARY — an operational dependency cannot become a measuremen
 
    These assert that the separation is ENFORCED, not merely documented. */
 
-await T('the two collections are the declared sizes — 53 technical, 2 operational', () => {
-  eq(registry.INTEGRATIONS.length, 53, 'technical: ');
+await T('the two collections are the declared sizes — 60 technical, 2 operational', () => {
+  eq(registry.INTEGRATIONS.length, 60, 'technical: ');
   eq(registry.OPERATIONAL_DEPENDENCIES.length, 2, 'operational: ');
-  eq(registry.INTEGRATIONS.length + registry.OPERATIONAL_DEPENDENCIES.length, 55,
-    'and 53 technical is NOT 53-including-the-operational-ones: ');
+  eq(registry.INTEGRATIONS.length + registry.OPERATIONAL_DEPENDENCIES.length, 62,
+    'and 60 technical is NOT 60-including-the-operational-ones: ');
 });
 
 await T('the id sets are DISJOINT — nothing is both probeable and not probeable', () => {
@@ -615,10 +615,10 @@ await T('INVERTING CONTROL — the SAME call succeeds for a technical integratio
   ok(out.written, 'the control must be ACCEPTED: ' + (out.errors || []).join('; '));
 });
 
-await T('the RESOLVER returns 53 and not one operational id', async () => {
+await T('the RESOLVER returns 60 and not one operational id', async () => {
   const res = await status.resolveIntegrationStatus({
     listSecretNames: async () => [], evidenceStore: evidence.memoryStore() });
-  eq(res.integrations.length, 53, '');
+  eq(res.integrations.length, 60, '');
   const ids = new Set(res.integrations.map((i) => i.id));
   registry.OPERATIONAL_DEPENDENCIES.forEach((d) => {
     ok(!ids.has(d.id), d.id + ' was fed through the technical status resolver');
@@ -635,7 +635,7 @@ await T('the BROWSER catalogue exposes them separately too — the renderer\'s o
   require('vm').runInContext(src, shim, { filename: 'sokoni-integration-catalogue.js' });
   const cat = shim.window.SokoniIntegrationCatalogue;
   ok(cat, 'the catalogue did not load');
-  eq(cat.integrations.length, 53, 'browser catalogue technical entries: ');
+  eq(cat.integrations.length, 60, 'browser catalogue technical entries: ');
   ok(Array.isArray(cat.operationalDependencies), 'operationalDependencies must be exposed');
   eq(cat.operationalDependencies.length, 2, 'browser catalogue operational entries: ');
   const techIds = new Set(cat.integrations.map((i) => i.id));
@@ -647,7 +647,7 @@ await T('the BROWSER catalogue exposes them separately too — the renderer\'s o
   /* byCategory() is what the console's category filters call. An operational
      dependency reaching it would be rendered as a technical integration. */
   const all = [].concat.apply([], cat.categories.map((c) => cat.byCategory(c.id)));
-  eq(all.length, 53, 'byCategory across every category must yield exactly the technical set: ');
+  eq(all.length, 60, 'byCategory across every category must yield exactly the technical set: ');
 });
 
 await T('GA4 keeps WIRED and CONFIGURED apart', () => {

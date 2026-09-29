@@ -12,7 +12,7 @@
      + 0 unintended observation records
      + the resolver reads those 3
      + the remaining entries retain their correct derived state
-     + 52 technical entries still reconcile exactly
+     + every technical entry still reconciles exactly
 
    and every existing distinction survives:
 
@@ -65,15 +65,15 @@ async function wipe () {
 
 (async function main () {
 
-sec('1 · BEFORE — the store is empty and the catalogue is the rebaselined 52 + 2');
+sec('1 · BEFORE — the store is empty and the catalogue reconciles');
 
 await T('the evidence collection starts empty', async () => {
   await wipe();
   eq((await db.collection(COL).get()).size, 0, '');
 });
 
-await T('52 technical, 2 operational, and the three are the runnable set', () => {
-  eq(registry.INTEGRATIONS.length, 52, '');
+await T('the catalogue reconciles, and the three are the runnable set', () => {
+  eq(registry.INTEGRATIONS.length, 60, 'technical entries: ');
   eq(registry.OPERATIONAL_DEPENDENCIES.length, 2, '');
   const derived = registry.INTEGRATIONS
     .filter((e) => evidence.classifyEvidenceSource(e.id) === 'runnable-with-evidence')
@@ -172,22 +172,22 @@ await T('the resolver observes EXACTLY the three', async () => {
   eq(JSON.stringify(observed), JSON.stringify(THREE), '');
 });
 
-await T('52 technical entries still reconcile exactly', async () => {
+await T('every technical entry still reconciles exactly', async () => {
   const res = await status.resolveIntegrationStatus({ listSecretNames: async () => [] });
-  eq(res.integrations.length, 52, '');
+  eq(res.integrations.length, registry.INTEGRATIONS.length, '');
   eq(JSON.stringify(res.integrations.map((i) => i.id).sort()),
      JSON.stringify(registry.INTEGRATIONS.map((e) => e.id).sort()), '');
 });
 
-sec('5 · THE OTHER 49 RETAIN THEIR DERIVED STATE — the distinctions survive');
+sec('5 · THE UNMIGRATED ENTRIES RETAIN THEIR DERIVED STATE — the distinctions survive');
 
 await T('NEGATIVE CONTROL — an absent observation stays absent, it is not synthesised', async () => {
-  /* The failure this guards against is a migration that fills the model: 49
+  /* The failure this guards against is a migration that fills the model: the rest
      entries must come out of this with exactly what they had before, which is
      nothing observed. */
   const res = await status.resolveIntegrationStatus({ listSecretNames: async () => [] });
   const others = res.integrations.filter((i) => THREE.indexOf(i.id) === -1);
-  eq(others.length, 49, '');
+  eq(others.length, registry.INTEGRATIONS.length - 3, 'everything except the three: ');
   others.forEach((r) => {
     eq(r.probedAt, null, r.id + ': acquired a probedAt it never earned: ');
     eq(r.health, 'unknown', r.id + ': acquired a health from a migration it was not part of: ');
@@ -257,10 +257,10 @@ await T('the absence partition is unchanged — migration adds evidence, not cla
   eq(m['runnable-with-evidence'], 3, '');
   eq(m['inbound-awaiting-callback'], 4, '');
   eq(m['declared-refusal'], 9, '');
-  eq(m['measurable-unwritten'], 18, '');
+  eq(m['measurable-unwritten'], 26, '');
   eq(m['not-applicable'], 5, '');
   eq(m['observed-elsewhere'], 13, '');
-  eq(Object.values(m).reduce((a, b) => a + b, 0), 52, 'partition total: ');
+  eq(Object.values(m).reduce((a, b) => a + b, 0), registry.INTEGRATIONS.length, 'partition total: ');
 });
 
 await T('the parity suite still passes with the store populated', () => {
@@ -294,7 +294,7 @@ console.log('  ' + pass + ' passed, ' + fail + ' failed');
 console.log('='.repeat(66));
 console.log('\n  PROVEN    the migration writes exactly the three intended observations and');
 console.log('            nothing else; the resolver consumes exactly those three; the other');
-console.log('            49 keep their derived state with no synthesised observation; the');
+console.log('            rest keep their derived state with no synthesised observation; the');
 console.log('            four inbound rails and both operational dependencies gain nothing;');
 console.log('            declared/observed/unreadable/missing/refused stay distinct; the');
 console.log('            partition and parity controls hold; re-running is not additive.');
