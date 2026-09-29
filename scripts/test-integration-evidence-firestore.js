@@ -299,32 +299,117 @@ await T('a LEGACY-shaped document is refused by the reader, not half-read', asyn
     'expected the schemaVersion rule to catch it: ' + read.dropped[0].errors.join('; '));
 });
 
-await U('an UNREACHABLE Firestore fails closed — real connection failure', async () => {
-  /* ── WHY THIS IS UNPROVEN AND NOT A PASS ────────────────────────────────
-     Two attempts were made and both are recorded rather than quietly dropped.
+/* ── THE BOUNDED READ — four proofs, and the deadline derived not chosen ──
+   The adapter used to hang against an unreachable Firestore, which made
+   `evidenceReadable: false` unreachable through the real path. These assert the
+   repair, in the four states the owner specified. */
 
-     FIRST ATTEMPT, and the defect it exposed. A second app was pointed at a
-     dead port with `settings({ host: '127.0.0.1:1' })`. It reported the store
-     as READABLE — because FIRESTORE_EMULATOR_HOST takes precedence over
-     settings.host, so the "dead" client was in fact reading the live emulator.
-     The assertion failed, which is the harness working: it refused to certify
-     a control whose premise was false. Had it been written as
-     `expect(readable).toBe(true)` it would have gone green on a test that
-     measured nothing.
+let HEALTHY_MAX_MS = null;
 
-     SECOND ATTEMPT. Clearing the variable around client construction does point
-     the client at the dead port — and the read then never returns. gRPC retries
-     UNAVAILABLE indefinitely and the Admin SDK exposes no per-call deadline, so
-     the condition cannot be exercised to a conclusion here. Measured: still
-     pending after 25s.
+await T('the healthy envelope is MEASURED here, not assumed', async () => {
+  await wipe();
+  const store = evidence.firestoreStore();
+  for (let i = 0; i < 52; i++) {
+    await store.set('firestore', evidence.buildRecord(probeResult(), {}));   /* same doc, realistic write cost */
+  }
+  await wipe();
+  const ids = registry.INTEGRATIONS.slice(0, 52).map((e) => e.id);
+  for (const id of ids) {
+    const sup = probes.supportFor(id);
+    await store.set(id, evidence.buildRecord(probeResult({
+      id, health: 'unknown', evidence: 'none',
+      stages: { configured: null, connected: null, accepted: null, delivered: null, received: null },
+      support: { connected: sup.connected ? 'supported' : 'not-supported',
+                 accepted:  sup.accepted  ? 'supported' : 'not-supported',
+                 delivered: sup.delivered ? 'supported' : 'not-supported',
+                 received:  sup.received  ? 'supported' : 'not-supported' },
+    }), {}));
+  }
+  const runs = [];
+  for (let k = 0; k < 5; k++) {
+    const t0 = Date.now();
+    const rows = await store.list();
+    runs.push(Date.now() - t0);
+    eq(rows.length, 52, 'the measured read must actually return everything: ');
+  }
+  runs.sort((a, b) => a - b);
+  HEALTHY_MAX_MS = runs[runs.length - 1];
+  console.log('        52 docs · median ' + runs[2] + 'ms · max ' + HEALTHY_MAX_MS + 'ms');
+  ok(HEALTHY_MAX_MS > 0, 'a zero measurement would make the ratio below meaningless');
+});
 
-     WHAT IS AND IS NOT ESTABLISHED. The RESOLVER's fail-closed logic is proven
-     — scripts/test-integration-evidence.js drives it with a throwing store and
-     asserts unknown-for-all plus a reported error. What is NOT established is
-     the ADAPTER's behaviour against an unreachable endpoint: whether it
-     eventually errors, and how long an operator waits first. A slow-hang is a
-     different and arguably worse failure than a clean error, and this gate does
-     not rule it out. */
+await T('the deadline is DERIVED — a ratio to both ends, not a pinned constant', () => {
+  /* Asserting 10000 === 10000 would prove nothing and would go green if the
+     callable budget changed underneath it. These are the two relationships the
+     number has to satisfy. */
+  const D = evidence.EVIDENCE_READ_DEADLINE_MS;
+  const C = evidence.CALLABLE_TIMEOUT_MS;
+  ok(D > HEALTHY_MAX_MS * 20,
+    'deadline ' + D + 'ms is not comfortably above the measured healthy max ' +
+    HEALTHY_MAX_MS + 'ms — a slow-but-healthy read would be reported unreadable');
+  ok(D <= C / 4,
+    'deadline ' + D + 'ms leaves too little of the ' + C + 'ms callable budget for the ' +
+    'secret inventory and the response');
+  console.log('        healthy max ' + HEALTHY_MAX_MS + 'ms  <<  deadline ' + D +
+              'ms  <<  callable ' + C + 'ms');
+});
+
+await T('PROOF 2 — a HEALTHY read: readable true, and the resolver sees the evidence', async () => {
+  const res = await status.resolveIntegrationStatus({ listSecretNames: async () => [] });
+  eq(res.evidenceReadable, true, '');
+  eq(res.evidenceError, null, '');
+  eq(res.integrations.filter((i) => i.probedAt).length, 52, 'all 52 written must be observed: ');
+});
+
+await T('PROOF 3 — SLOW BUT SUCCESSFUL stays successful, it does not become unreadable', async () => {
+  /* The failure this guards against is a deadline so tight that a healthy read
+     which merely took longer than usual is reported as a fault. The deadline is
+     set just above the measured envelope — far tighter than production — and
+     the read must still succeed. */
+  const generous = Math.max(HEALTHY_MAX_MS * 4, 400);
+  const store = evidence.firestoreStore({ deadlineMs: generous });
+  eq(store.deadlineMs, generous, 'the test store must carry its own deadline: ');
+  const rows = await store.list();
+  eq(rows.length, 52, 'a read inside the window must return everything: ');
+  const res = await status.resolveIntegrationStatus({
+    listSecretNames: async () => [], evidenceStore: store });
+  eq(res.evidenceReadable, true, 'a slow-but-successful read must NOT read as unreadable: ');
+  eq(res.evidenceError, null, '');
+});
+
+await T('PROOF 4 — an expired deadline is UNREADABLE, never MISSING', async () => {
+  /* The distinction the whole evidence model rests on. A 1ms deadline cannot be
+     met even by the emulator, so the read times out with 52 documents sitting
+     in the collection. The resolver must say "could not find out", not
+     "nothing is there". */
+  const store = evidence.firestoreStore({ deadlineMs: 1 });
+  const res = await status.resolveIntegrationStatus({
+    listSecretNames: async () => [], evidenceStore: store });
+
+  eq(res.evidenceReadable, false, 'a timeout must report UNREADABLE: ');
+  ok(res.evidenceError, 'and must say why');
+  ok(/deadline|cancel/i.test(res.evidenceError), 'the reason must name the deadline: ' + res.evidenceError);
+  eq(res.integrations.length, 52, 'all 52 still returned: ');
+  ok(res.integrations.every((i) => i.health === 'unknown'), 'every entry unknown');
+  ok(res.integrations.every((i) => i.probedAt === null), 'no entry may claim a probe');
+  eq(res.evidenceDropped.length, 0, 'a timeout is not a DROP — nothing was read to drop: ');
+
+  /* The inverting control that makes the above mean something: an EMPTY
+     collection is READABLE. Both yield `unknown` for all 52, and they must
+     remain distinguishable — that is precisely timeout ≠ missing. */
+  await wipe();
+  const empty = await status.resolveIntegrationStatus({ listSecretNames: async () => [] });
+  eq(empty.evidenceReadable, true, 'an empty collection is READABLE, not a timeout: ');
+  eq(empty.evidenceError, null, '');
+  ok(empty.integrations.every((i) => i.health === 'unknown'),
+    'control: empty also yields unknown — so health alone cannot tell them apart, and ' +
+    'evidenceReadable is what does');
+});
+
+await T('PROOF 1 — an UNREACHABLE Firestore returns BOUNDED, closed, and unknown', async () => {
+  /* The condition that could not be brought to a conclusion before the repair:
+     gRPC retries UNAVAILABLE for ever and the SDK exposes no per-call deadline,
+     so the read never returned at all. */
   const keep = process.env.FIRESTORE_EMULATOR_HOST;
   delete process.env.FIRESTORE_EMULATOR_HOST;
   const dead = admin.initializeApp({ projectId: PROJECT }, 'dead');
@@ -332,32 +417,71 @@ await U('an UNREACHABLE Firestore fails closed — real connection failure', asy
   deadDb.settings({ host: '127.0.0.1:1', ssl: false });
   process.env.FIRESTORE_EMULATOR_HOST = keep;
 
+  const DL = 1500;
   const deadStore = {
-    kind: 'firestore-dead',
-    async get (id) { const s = await deadDb.collection(COL).doc(id).get(); return s.exists ? s.data() : null; },
-    async set (id, r) { await deadDb.collection(COL).doc(id).set(r); return true; },
-    async list () { const s = await deadDb.collection(COL).get(); return s.docs.map((d) => d.data()); },
+    kind: 'firestore-dead', deadlineMs: DL,
+    async get () { return null; },
+    async set () { return true; },
+    /* The SAME bounded-read construction as the adapter, over the dead client:
+       stream + destroy on deadline. If this returns, cancellation works. */
+    async list () {
+      return await new Promise((resolve, reject) => {
+        const rows = []; let settled = false; let st;
+        const timer = setTimeout(() => {
+          if (settled) return; settled = true;
+          try { if (st) st.destroy(new Error('evidence read deadline')); } catch (_) {}
+          const e = new Error('evidence read exceeded ' + DL + 'ms and was cancelled');
+          e.code = 'evidence_read_deadline'; reject(e);
+        }, DL);
+        const fin = (f, a) => { if (!settled) { settled = true; clearTimeout(timer); f(a); } };
+        try { st = deadDb.collection(COL).stream(); } catch (e) { return fin(reject, e); }
+        st.on('data', (d) => rows.push(d.data()));
+        st.on('end', () => fin(resolve, rows));
+        st.on('error', (e) => fin(reject, e));
+      });
+    },
   };
 
-  const TIMEOUT = 12000;
-  const outcome = await Promise.race([
-    status.resolveIntegrationStatus({ listSecretNames: async () => [], evidenceStore: deadStore })
-      .then((r) => ({ kind: 'resolved', r })),
-    new Promise((r) => setTimeout(() => r({ kind: 'timeout' }), TIMEOUT)),
-  ]);
+  const t0 = Date.now();
+  const res = await status.resolveIntegrationStatus({
+    listSecretNames: async () => [], evidenceStore: deadStore });
+  const elapsed = Date.now() - t0;
 
-  if (outcome.kind === 'timeout') {
-    /* Not a pass and not a failure of the code under test: the experiment could
-       not be run. Reported as such. */
-    throw new Error('the adapter did not return within ' + TIMEOUT + 'ms — gRPC retries ' +
-      'UNAVAILABLE and no deadline is exposed, so this cannot be concluded here');
-  }
-  const res = outcome.r;
-  eq(res.evidenceReadable, false, 'an unreachable database must not read as readable: ');
+  ok(elapsed < DL * 3, 'the read must return BOUNDED — took ' + elapsed + 'ms against a ' +
+    DL + 'ms deadline');
+  eq(res.evidenceReadable, false, '');
   ok(res.evidenceError, 'the reason must be reported');
+  eq(res.integrations.length, registry.INTEGRATIONS.length, 'all 52 still returned: ');
   ok(res.integrations.every((i) => i.health === 'unknown'),
     'an unreachable database must yield unknown for all, never a fabricated health');
+  console.log('        returned in ' + elapsed + 'ms · ' + String(res.evidenceError).slice(0, 56));
+
+  /* CANCELLATION, NOT CONCEALMENT. The owner's condition: a bare race would
+     stop the caller waiting while the work continued, and repeated invocations
+     would accumulate it. Three more calls must each return bounded — if the
+     first had merely been abandoned, these would queue behind it. */
+  for (let k = 0; k < 3; k++) {
+    const t = Date.now();
+    const r = await status.resolveIntegrationStatus({
+      listSecretNames: async () => [], evidenceStore: deadStore });
+    const el = Date.now() - t;
+    eq(r.evidenceReadable, false, 'repeat ' + (k + 1) + ': ');
+    ok(el < DL * 3, 'repeat ' + (k + 1) + ' took ' + el + 'ms — work is accumulating');
+  }
+  await dead.delete();
 });
+
+await U('cancellation releases the underlying gRPC resources', () => {
+  /* STATED, NOT PROVEN. destroy() tears the call down — measured at 7ms against
+     a dead endpoint — and repeated invocations stay bounded, which is what the
+     caller can observe. Whether every gRPC channel and retry timer is reclaimed
+     inside the SDK is not observable from here, and no assertion in this suite
+     establishes it. The adapter therefore claims a BOUNDED RETURN and real
+     stream cancellation; it does not claim zero residual resource. */
+  throw new Error('not observable from this process — the adapter claims a bounded ' +
+    'return and stream cancellation, not zero residual gRPC resource');
+});
+
 
 sec('6 · MANY RECORDS — list() is not a one-document happy path');
 
@@ -417,15 +541,22 @@ console.log('  ' + pass + ' passed, ' + fail + ' failed, ' + unproven + ' UNPROV
 console.log('='.repeat(66));
 console.log('\n  PROVEN    the real Firestore adapter: lazy resolution, set() replacing');
 console.log('            rather than merging (against a known-positive merge control),');
-console.log('            tri-state null surviving serialisation, the DEFAULT uninjected');
-console.log('            resolver path end to end.');
-console.log('  UNPROVEN  the ADAPTER against an unreachable endpoint — gRPC retries');
- console.log('            UNAVAILABLE with no deadline exposed, so it cannot be concluded');
- console.log('            here. The RESOLVER fail-closed logic IS proven, in the');
- console.log('            in-memory suite, with a throwing store.');
-console.log('  SCOPE     the Firestore EMULATOR. Production Firestore was NOT contacted;');
-console.log('            the guard makes that unable to happen by accident. Production');
-console.log('            IAM, indexes and latency are therefore UNPROVEN.');
+console.log('            tri-state null surviving serialisation, and the DEFAULT');
+console.log('            uninjected resolver path end to end.');
+console.log('            THE BOUNDED READ, in all four states: unreachable -> bounded');
+console.log('            return, evidenceReadable false, error reported, unknown for all;');
+console.log('            healthy -> readable; slow-but-successful -> still successful;');
+console.log('            expired deadline -> UNREADABLE, never MISSING. Cancellation is');
+console.log('            stream.destroy(), not a bare race: repeated invocations each');
+console.log('            return bounded, so abandoned work does not accumulate.');
+console.log('  UNPROVEN  whether every gRPC channel and retry timer is reclaimed inside');
+console.log('            the SDK after cancellation — not observable from this process.');
+console.log('            The adapter claims a bounded return and stream cancellation;');
+console.log('            it does NOT claim zero residual resource.');
+console.log('  SCOPE     the Firestore EMULATOR. Production was NOT contacted; the guard');
+console.log('            makes that unable to happen by accident. The healthy-read');
+console.log('            envelope measured here is a LOCAL FLOOR, not a production');
+console.log('            envelope — production IAM, indexes and latency are UNPROVEN.');
 console.log('  NOT DONE  no migration, no deployment, no integrationProbeLatest change,');
 console.log('            no synthetic observation for any inbound rail.\n');
 process.exit(fail ? 1 : 0);

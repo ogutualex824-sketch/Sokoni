@@ -343,24 +343,131 @@ function memoryStore (seed) {
   };
 }
 
+/* ── THE READ DEADLINE, AND WHY IT IS THIS NUMBER ──────────────────────────
+   DERIVED, not chosen because it sounds reasonable. Three quantities bound it:
+
+     callable budget      60000 ms   adminGetIntegrationStatus declares no
+                                     timeoutSeconds, so it takes the Cloud
+                                     Functions v2 default of 60s. The resolver
+                                     ALSO lists Secret Manager before reading
+                                     evidence, and must still return a response.
+     healthy read         ~73 ms median, ~190 ms max, measured over 52 documents
+                                     against the emulator.
+     this deadline        10000 ms
+
+   That is ~50x the measured healthy maximum and one sixth of the callable
+   budget, leaving ~50s for the secret inventory and the response. The suite
+   asserts the RELATIONSHIP — deadline >> measured healthy read, and deadline
+   well inside the callable budget — rather than pinning 10000 as a magic
+   number, so a change to either end is caught rather than silently absorbed.
+
+   THE MEASUREMENT IS A FLOOR, NOT A PRODUCTION ENVELOPE. It was taken against a
+   local emulator; production Firestore crosses a network and will be slower.
+   The headroom above is sized for that, but the honest statement is that the
+   production healthy-read envelope is UNMEASURED. */
+const EVIDENCE_READ_DEADLINE_MS = 10000;
+const CALLABLE_TIMEOUT_MS = 60000;
+
+/* ── A DEADLINE THAT DOES NOT CANCEL ───────────────────────────────────────
+   Used ONLY where the SDK offers no cancellation. It stops the CALLER waiting;
+   it does not stop the work. That is a weaker guarantee and is named as one
+   here so no reader assumes otherwise: if the underlying request never
+   completes, its resources are held until the process ends.
+
+   list() does NOT use this — see below, it cancels for real. */
+function _deadlineNoCancel (promise, ms, what) {
+  let timer;
+  return Promise.race([
+    promise.then((v) => { clearTimeout(timer); return v; },
+                 (e) => { clearTimeout(timer); throw e; }),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        const e = new Error(what + ' exceeded ' + ms + 'ms (not cancelled — the SDK ' +
+          'offers no cancellation for this call, so the request may still be running)');
+        e.code = 'evidence_deadline_uncancelled';
+        reject(e);
+      }, ms);
+    }),
+  ]);
+}
+
 let _firestoreStore = null;
-function firestoreStore () {
-  if (_firestoreStore) return _firestoreStore;
+function firestoreStore (opts) {
+  const o = opts || {};
+  const deadlineMs = o.deadlineMs || EVIDENCE_READ_DEADLINE_MS;
+  /* Memoised only for the default configuration; a test asking for its own
+     deadline gets its own store rather than mutating the shared one. */
+  if (!o.deadlineMs && _firestoreStore) return _firestoreStore;
   /* Required inside the function, not at module load: admin.firestore is a
      PROTOTYPE GETTER and resolving it at require-time binds before initializeApp. */
   const admin = require('firebase-admin');
   const col = () => admin.firestore().collection(COLLECTION);
-  _firestoreStore = {
+
+  const store = {
     kind: 'firestore',
-    async get (id) { const s = await col().doc(id).get(); return s.exists ? s.data() : null; },
+    deadlineMs,
+    async get (id) {
+      const s = await _deadlineNoCancel(col().doc(id).get(), deadlineMs, 'evidence get(' + id + ')');
+      return s.exists ? s.data() : null;
+    },
     /* set(), NOT set({merge:true}). A merge leaves a field from the previous
        probe standing when the current one should have cleared it — which is
        exactly how the legacy collection can report a stale notRunReason
        forever. The record is written whole or not at all. */
-    async set (id, record) { await col().doc(id).set(record); return true; },
-    async list () { const s = await col().get(); return s.docs.map((d) => d.data()); },
+    async set (id, record) {
+      await _deadlineNoCancel(col().doc(id).set(record), deadlineMs, 'evidence set(' + id + ')');
+      return true;
+    },
+
+    /* ── THE BOUNDED READ, WITH REAL CANCELLATION ──────────────────────────
+       This is the call on the resolver's path, and the one that used to hang.
+
+       WHY IT WAS NEEDED. Against an unreachable Firestore, `.get()` never
+       returns: gRPC retries UNAVAILABLE indefinitely and the Admin SDK exposes
+       no per-call deadline. Measured: settings({host}), a gax clientConfig with
+       total_timeout_millis, and maxIdleChannels:0 ALL hang past 15s. So
+       `evidenceReadable: false` — the fail-closed state this model is built
+       around — was unreachable through the real adapter. The logic existed and
+       the path to it did not.
+
+       WHY stream() AND NOT Promise.race. Racing a timer against `.get()` would
+       stop the caller waiting while the request kept running, which hides the
+       hang rather than fixing it and lets work accumulate across invocations.
+       Query.stream() returns a Readable over the gRPC response, and destroy()
+       tears that call down. Measured: the stream settles 7ms after destroy()
+       against a dead endpoint. That is cancellation, not concealment.
+
+       A DEADLINE MEANS UNREADABLE, NEVER EMPTY. It rejects. It must never
+       resolve with the rows collected so far, because a partial list is
+       indistinguishable downstream from a complete one — the resolver would
+       report the missing entries as never probed. */
+    async list () {
+      return await new Promise((resolve, reject) => {
+        const rows = [];
+        let settled = false;
+        let stream;
+        const timer = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          try { if (stream) stream.destroy(new Error('evidence read deadline')); } catch (_) {}
+          const e = new Error('evidence read exceeded ' + deadlineMs + 'ms and was cancelled');
+          e.code = 'evidence_read_deadline';
+          reject(e);
+        }, deadlineMs);
+        const done = (fn, arg) => {
+          if (settled) return;
+          settled = true; clearTimeout(timer); fn(arg);
+        };
+        try { stream = col().stream(); }
+        catch (e) { return done(reject, e); }
+        stream.on('data', (d) => { try { rows.push(d.data()); } catch (_) {} });
+        stream.on('end',  () => done(resolve, rows));
+        stream.on('error', (e) => done(reject, e));
+      });
+    },
   };
-  return _firestoreStore;
+  if (!o.deadlineMs) _firestoreStore = store;
+  return store;
 }
 
 /* ── WRITE ─────────────────────────────────────────────────────────────────
@@ -410,6 +517,7 @@ module.exports = {
   COLLECTION, LEGACY_COLLECTION, SCHEMA_VERSION,
   HEALTH_STATES, ENVIRONMENTS, CAPABILITY_STATES, RUNTIME_STAGES, ALL_STAGES,
   EVIDENCE_CLASSES, classifyEvidenceSource,
+  EVIDENCE_READ_DEADLINE_MS, CALLABLE_TIMEOUT_MS,
   declaredEnvironment, staticNotRunReason,
   buildRecord, validate, writeEvidence, readLatestEvidence,
   memoryStore, firestoreStore,

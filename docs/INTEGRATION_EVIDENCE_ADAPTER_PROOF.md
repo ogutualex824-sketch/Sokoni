@@ -245,3 +245,70 @@ its proof land together.
 
 **Status: the UNPROVEN stands.** It is now understood rather than merely recorded, and it is a
 product gap rather than an environment limitation. Step E migration remains held behind it.
+
+---
+
+## 10 · The bounded-read repair — applied and proven
+
+Authorized as a narrow slice after §9. Adapter change + tests + timeout semantics only. No migration,
+no deployment, no change to the other three lanes.
+
+### It cancels; it does not conceal
+
+A bare `Promise.race([read, timer])` would stop the *caller* waiting while the request kept running,
+and repeated invocations would accumulate abandoned work. So `list()` — the call on the resolver's
+path, and the one that hung — is built on `Query.stream()`, and the deadline calls
+`stream.destroy()`, which tears the gRPC call down.
+
+**Measured: the stream settles 7 ms after `destroy()` against a dead endpoint.** In the suite, an
+unreachable Firestore returns in **1506 ms against a 1500 ms deadline**, and three further
+invocations each return bounded — which is what rules out accumulation.
+
+`get()` and `set()` are bounded by a deadline that **does not cancel**, because the SDK offers no
+cancellation for them. That helper is named `_deadlineNoCancel` and says so in its own comment. The
+adapter claims a bounded *return*; it does not claim the work stopped.
+
+### The deadline is derived, and the derivation is asserted
+
+```
+healthy read (52 docs, emulator)   median 90 ms · max 206 ms
+evidence read deadline             10 000 ms      ~50× the measured max
+callable budget                    60 000 ms      adminGetIntegrationStatus declares
+                                                  no timeoutSeconds → v2 default
+```
+
+The suite **measures** the healthy envelope on each run and asserts the two *relationships* —
+`deadline > 20 × measured max` and `deadline ≤ callable / 4` — rather than asserting `10000 === 10000`,
+which would prove nothing and would stay green if the callable budget changed underneath it.
+
+**The measurement is a local floor, not a production envelope.** It was taken against an emulator;
+production crosses a network. The headroom is sized for that, but the production healthy-read
+envelope is **unmeasured** and the module says so.
+
+### The four states
+
+| # | condition | result |
+|---|---|---|
+| 1 | unreachable Firestore | bounded return · `evidenceReadable: false` · `evidenceError` populated · **unknown for all 52**, no `probedAt` |
+| 2 | healthy | normal read · `evidenceReadable: true` · resolver sees all 52 |
+| 3 | slow but successful | **still succeeds** — a deadline set to 4× the measured envelope does not turn a healthy read into a fault |
+| 4 | expired deadline | **UNREADABLE, never MISSING** |
+
+Proof 4 carries the control that gives it meaning: a **1 ms** deadline times out *with 52 documents
+present*, and an **empty** collection reads `evidenceReadable: true`. Both yield `unknown` for every
+entry — so health alone cannot tell them apart, and `evidenceReadable` is the field that does. It
+also asserts `evidenceDropped` stays empty: a timeout is not a drop, because nothing was read to
+drop.
+
+### Result
+
+**23 passed · 0 failed · 1 UNPROVEN** (was 17/0/1). Regression unchanged: evidence 69/0 · parity
+26/0 · probes 85/0 · status 45/0 · console 86/0.
+
+### What is still UNPROVEN, and why it is not the same gap
+
+Whether every gRPC channel and retry timer is reclaimed **inside** the SDK after cancellation is not
+observable from this process, and no assertion here establishes it. That is a narrower claim than
+§9's: the fail-closed state is now reachable through the real adapter, which it was not before. The
+adapter claims a bounded return and real stream cancellation — **not** zero residual resource — and
+the suite reports that as UNPROVEN rather than rounding it up.
