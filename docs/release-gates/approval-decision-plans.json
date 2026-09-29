@@ -1,0 +1,233 @@
+{
+  "slice": "approval-decision-plans",
+  "readOnly": true,
+  "decisionAuthorized": false,
+  "identities": {
+    "dj": {
+      "name": "DJ Bvmbxno",
+      "uid": "AiJp5yzTnRZZIZKZEepNUKn8NuI2",
+      "digest": "7541ba8f8cf6e6086155bdfceb410aade6d42f6434a1067c70ecd5c1c796b5d7",
+      "plannedAt": "2026-09-29T22:03:51.928Z",
+      "evidenceNow": {
+        "status": "active",
+        "approvedAt": null,
+        "approvalDecision": null,
+        "publiclyListed": true,
+        "lastActivity": {
+          "providerBookings": 4,
+          "providerServices": 1,
+          "walletTransactions": 3,
+          "products": 0,
+          "orders": 0
+        }
+      },
+      "untouched": [
+        "applications/* (none created — the identity has 0)",
+        "providerBookings (4)",
+        "providerServices (1)",
+        "walletTransactions (3) + wallets/AiJp5yzTnRZZIZKZEepNUKn8NuI2",
+        "products (0)",
+        "orders (0)",
+        "sellers/ businesses/ shops/ (absent/absent/absent)",
+        "users/AiJp5yzTnRZZIZKZEepNUKn8NuI2 beyond the role authority",
+        "providers.business (category) — approval never classifies"
+      ],
+      "approve": {
+        "ok": true,
+        "refusals": [],
+        "write": {
+          "approvalDecision": {
+            "decision": "approve",
+            "decidedBy": "<actor>",
+            "decidedAt": "<serverTimestamp>",
+            "reason": "Owner decision pending — plan only",
+            "prior": {
+              "status": "active",
+              "approvedAt": null,
+              "approvedBy": null,
+              "decidedBy": null
+            },
+            "source": "admin_decision"
+          },
+          "updatedAt": "<serverTimestamp>",
+          "status": "active",
+          "approvedAt": "<serverTimestamp>",
+          "approvedBy": "<actor>",
+          "suspended": false
+        },
+        "audit": {
+          "action": "business_approval_decision",
+          "targetUid": "AiJp5yzTnRZZIZKZEepNUKn8NuI2",
+          "performedBy": "<actor>",
+          "decision": "approve",
+          "previous": {
+            "status": "active",
+            "approvedAt": null
+          },
+          "next": {
+            "status": "active"
+          },
+          "reason": "Owner decision pending — plan only"
+        },
+        "role": {
+          "via": "role-authority.grantAccountRole",
+          "uid": "AiJp5yzTnRZZIZKZEepNUKn8NuI2",
+          "role": "provider",
+          "approved": true
+        }
+      },
+      "refuse": {
+        "ok": true,
+        "refusals": [],
+        "write": {
+          "approvalDecision": {
+            "decision": "refuse",
+            "decidedBy": "<actor>",
+            "decidedAt": "<serverTimestamp>",
+            "reason": "Owner decision pending — plan only",
+            "prior": {
+              "status": "active",
+              "approvedAt": null,
+              "approvedBy": null,
+              "decidedBy": null
+            },
+            "source": "admin_decision"
+          },
+          "updatedAt": "<serverTimestamp>",
+          "status": "suspended",
+          "suspended": true,
+          "searchable": false,
+          "isPublic": false
+        },
+        "audit": {
+          "action": "business_approval_decision",
+          "targetUid": "AiJp5yzTnRZZIZKZEepNUKn8NuI2",
+          "performedBy": "<actor>",
+          "decision": "refuse",
+          "previous": {
+            "status": "active",
+            "approvedAt": null
+          },
+          "next": {
+            "status": "suspended"
+          },
+          "reason": "Owner decision pending — plan only"
+        },
+        "role": null
+      }
+    },
+    "kingbruce": {
+      "name": "King Bruce",
+      "uid": "aOdQxmUGLCO4hOYsdHMhWuwYV9D2",
+      "digest": "21746cfc69025723ec4f7a308d23c1db4c54970926b65f6762aa2e32e2cc7e8b",
+      "plannedAt": "2026-09-29T22:04:21.211Z",
+      "evidenceNow": {
+        "status": "active",
+        "approvedAt": null,
+        "approvalDecision": null,
+        "publiclyListed": true,
+        "lastActivity": {
+          "providerBookings": 0,
+          "providerServices": 0,
+          "walletTransactions": 0,
+          "products": 0,
+          "orders": 0
+        }
+      },
+      "untouched": [
+        "applications/* (none created — the identity has 0)",
+        "providerBookings (0)",
+        "providerServices (0)",
+        "walletTransactions (0) + wallets/aOdQxmUGLCO4hOYsdHMhWuwYV9D2",
+        "products (0)",
+        "orders (0)",
+        "sellers/ businesses/ shops/ (absent/absent/absent)",
+        "users/aOdQxmUGLCO4hOYsdHMhWuwYV9D2 beyond the role authority",
+        "providers.business (category) — approval never classifies"
+      ],
+      "approve": {
+        "ok": true,
+        "refusals": [],
+        "write": {
+          "approvalDecision": {
+            "decision": "approve",
+            "decidedBy": "<actor>",
+            "decidedAt": "<serverTimestamp>",
+            "reason": "Owner decision pending — plan only",
+            "prior": {
+              "status": "active",
+              "approvedAt": null,
+              "approvedBy": null,
+              "decidedBy": null
+            },
+            "source": "admin_decision"
+          },
+          "updatedAt": "<serverTimestamp>",
+          "status": "active",
+          "approvedAt": "<serverTimestamp>",
+          "approvedBy": "<actor>",
+          "suspended": false
+        },
+        "audit": {
+          "action": "business_approval_decision",
+          "targetUid": "aOdQxmUGLCO4hOYsdHMhWuwYV9D2",
+          "performedBy": "<actor>",
+          "decision": "approve",
+          "previous": {
+            "status": "active",
+            "approvedAt": null
+          },
+          "next": {
+            "status": "active"
+          },
+          "reason": "Owner decision pending — plan only"
+        },
+        "role": {
+          "via": "role-authority.grantAccountRole",
+          "uid": "aOdQxmUGLCO4hOYsdHMhWuwYV9D2",
+          "role": "provider",
+          "approved": true
+        }
+      },
+      "refuse": {
+        "ok": true,
+        "refusals": [],
+        "write": {
+          "approvalDecision": {
+            "decision": "refuse",
+            "decidedBy": "<actor>",
+            "decidedAt": "<serverTimestamp>",
+            "reason": "Owner decision pending — plan only",
+            "prior": {
+              "status": "active",
+              "approvedAt": null,
+              "approvedBy": null,
+              "decidedBy": null
+            },
+            "source": "admin_decision"
+          },
+          "updatedAt": "<serverTimestamp>",
+          "status": "suspended",
+          "suspended": true,
+          "searchable": false,
+          "isPublic": false
+        },
+        "audit": {
+          "action": "business_approval_decision",
+          "targetUid": "aOdQxmUGLCO4hOYsdHMhWuwYV9D2",
+          "performedBy": "<actor>",
+          "decision": "refuse",
+          "previous": {
+            "status": "active",
+            "approvedAt": null
+          },
+          "next": {
+            "status": "suspended"
+          },
+          "reason": "Owner decision pending — plan only"
+        },
+        "role": null
+      }
+    }
+  }
+}

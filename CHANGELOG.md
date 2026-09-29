@@ -1,3 +1,14 @@
+## [2026-09-29] - DJ Bvmbxno + King Bruce: approval-decision plan/apply contract (15/0) and READ-ONLY production decision packets (nothing written; decisions are the owner's, tomorrow)
+
+scripts/approval-decision-manifest.js wraps the REAL bizAdminApprovalDecide: --plan (read-only snapshot, handler-mirrored refusals, exact
+mutation + untouched set, digest) and --apply <digest> --actor <adminUid> (actor must be a real admin Auth account — a tool label /
+non-account / non-admin is refused before any target read; drift -> digest_mismatch; repeat -> already_decided_same). Suite
+scripts/test-approval-decision-manifest.js 15/0. Production plans (docs/MANIFEST_APPROVAL_DECISION_DJ_KINGBRUCE.md,
+docs/release-gates/approval-decision-plans.json): DJ Bvmbxno AiJp5yzT… digest 7541ba8f… (active, no evidence, public, 0 apps,
+4 bookings / 1 service / 3 wallet tx, no claims); King Bruce aOdQxmUG… digest 21746cfc… (same shape, dormant, 0 activity). Both
+approve and refuse plans ok; approve never classifies (resolver stays PENDING_CLASSIFICATION). Kasindi: acknowledgement gate
+deferred to tomorrow at the owner's instruction (one-shot gate script 4b99840 ready). No production write.
+
 ## [2026-09-29] - HOSTING DEPLOYED: signed-out fix live at ec452fb (owner-authorized); the re-acknowledgement surface is now correct for both auth states
 
 Deployed 21:43:11Z from C:/temp/sok-reack @ ec452fb: Hosting release 1790718191737000, version 4c15a3ef6649eff1 (3 files changed: the page +
