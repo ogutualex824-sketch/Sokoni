@@ -159,6 +159,20 @@
     return null;
   }
 
+  /* May the TILL sell this product? (universal catalogue U7a, 2026-09-29)
+     The online paths refuse a hidden/archived product (availability-enforce.itemAvailability); the till refused
+     nothing, so an archived product stayed sellable over the counter. The till refuses only the statuses that say
+     the product is GONE or BLOCKED — a tombstone or a moderation decision. It deliberately does NOT refuse
+     isVisible:false, draft, paused or inactive on their own: those govern the ONLINE listing, and a shop may still
+     sell an unlisted item in person. Returns null when sellable, else the reason. */
+  var TILL_BLOCKED_STATUSES = ['archived', 'deleted', 'removed', 'banned', 'suspended', 'rejected'];
+  function tillBlockReason(p) {
+    p = p || {};
+    if (TILL_BLOCKED_STATUSES.indexOf(norm(p.status)) !== -1) return 'status:' + norm(p.status);
+    if (p.isDeleted === true || p.deleted === true)          return 'deleted';
+    return null;
+  }
+
   /* Stock accounting. `reservedStock` is the field pos-hq.js already writes;
      `reserved` is accepted as an alias so a future canonical field needs no
      migration here. Neither is invented by this module. */
@@ -299,7 +313,9 @@
     normalizeShop:      normalizeShop,
     isPubliclyListed:   isPubliclyListed,
     listingBlockReason: listingBlockReason,
-    stockOf:            stockOf,
+    TILL_BLOCKED_STATUSES: TILL_BLOCKED_STATUSES,
+    tillBlockReason:    tillBlockReason,
+    stockOf:           stockOf,
     lowStockThresholdOf: lowStockThresholdOf,
     availabilityOf:     availabilityOf,
     maxOrderableQty:    maxOrderableQty,

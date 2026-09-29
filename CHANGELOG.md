@@ -1,3 +1,47 @@
+## [2026-09-29] - Universal catalogue U7a: the till refuses what the catalogue says is no longer for sale
+
+**POS function, NOT deployed.** Branch `slice/c4-category-matrix`.
+
+**Owner (U7 scope):** "Expired/archived/unavailable objects cannot silently remain purchasable."
+
+**Census (U7):**
+- `posCompleteCheckout` checked price and ownership but **never status**. An **archived** product (the tombstone
+  merchant-v2 writes instead of deleting, U4) stayed sellable over the counter, while every online path refused it
+  (`availability-enforce.itemAvailability`).
+
+**Built:**
+- **`functions/shared/sellability.tillBlockReason(p)`**, with its byte-identical browser copy. It refuses only the
+  statuses that say a product is GONE or BLOCKED: archived, deleted, removed, banned, suspended, rejected (any case),
+  plus the `isDeleted` / `deleted` flags.
+- **Not refused on their own: `isVisible: false`, draft, paused, inactive.** These govern the ONLINE listing, and a shop
+  may still sell an unlisted item in person. This is a deliberate decision, recorded here.
+- **`posCompleteCheckout`:**
+  - refuses a blocked product, or a package containing one, **before anything is charged**
+    (`failed-precondition`, "… is no longer for sale … Nothing has been charged.");
+  - re-checks on the transaction's own read, so an archive that lands mid-sale still wins.
+
+**Tests: `scripts/test-catalogue-u7a-till-sellability.js`, 6/0.**
+- The predicate, including controls for the states it must NOT refuse.
+- An archived product is refused before any write.
+- A package with an archived component is refused, with nothing deducted.
+- **Positive control:** an unlisted active item still sells, and its stock moves.
+- An archive that lands after the pre-check is still refused.
+- Online parity.
+- Counterproof on `a750daf`: **4 fail**. The till sold the archived Soda (stock 5 → 4). TS4 and TS6 are controls and
+  pass on both trees.
+- Sabotage: **6/6 caught.**
+
+**Database:** none. **API:** new `failed-precondition` refusal at the till. **Breaking:** a till can no longer sell an
+archived / removed / moderation-blocked product. That is intended.
+- **Full regression: 147 suites.** The comparison base is the U5 run of `fd89c31` (identical code: `a750daf` adds only
+  a CHANGELOG entry). **No new failure.**
+  - `merchant-ecosystem-convergence` improved, 143/2 → 144/1 (the assertion U5 updated).
+  - Seven browser suites (`merchant-marketing-ui`, `-messages-ui`, `-sell-ui`, `-store-ui`, `-tax-ui`, `-team-ui`,
+    `workspace-routing`) timed out or could not fork during the run.
+    - **Cause:** 36 orphaned Playwright WebKit processes from earlier sessions held ~9 GB of commit (24.1 of 24.5 GB).
+    - Only the parent-dead ones were killed.
+    - Re-run one at a time, all seven are identical to the parent: 92/0, 195/0, 108/0, 120/0, 220/0, 86/0, 33/0.
+
 ## [2026-09-29] - Universal catalogue U5: packages and bundles take their components off the one shelf — online and at the till
 
 **Functions (pricer, card session, both payment finalisers, POS) + merchant-v2 Products, NOT deployed.** Branch

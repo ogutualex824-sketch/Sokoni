@@ -534,6 +534,14 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
         _e('One of these products does not belong to this shop, so the sale was not recorded. Nothing has been charged.', 'permission-denied');
       }
     });
+    /* U7a (2026-09-29): an archived / removed / moderation-blocked product is not for sale at the till either —
+       the same tombstone the online checkout already refuses (functions/shared/sellability.tillBlockReason). */
+    const _SELL = require('./shared/sellability');
+    productSnaps.forEach((snap) => {
+      if (_SELL.tillBlockReason(snap.data())) {
+        _e(`${_sanitize((snap.data() || {}).name || 'An item')} is no longer for sale, so the sale was not recorded. Nothing has been charged.`, 'failed-precondition');
+      }
+    });
 
     /* ══ PACKAGES / BUNDLES (universal catalogue U5, 2026-09-29) ═════════════
        A package sold at the till takes its COMPONENTS off the shelf — the canonical products/{id}.stock — read from
@@ -554,6 +562,9 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       _cs.forEach((c) => {
         if (!c.exists || _ownerOfProduct(c.data()) !== String(merchantId) || _PSp.isComposite(c.data())) {
           _e('A package in this sale contains an item that is not this shop\'s product, so the sale was not recorded. Nothing has been charged.', 'permission-denied');
+        }
+        if (_SELL.tillBlockReason(c.data())) {
+          _e('A package in this sale contains an item that is no longer for sale, so the sale was not recorded. Nothing has been charged.', 'failed-precondition');
         }
       });
     }
@@ -820,6 +831,10 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
         if (_ownerOfProduct(prod) !== String(merchantId)) {
           throw new HttpsError('permission-denied', 'One of these products does not belong to this shop, so the sale was not recorded.');
         }
+        /* U7a: re-checked on the transaction's own read — an archive that lands after the pre-check still wins. */
+        if (_SELL.tillBlockReason(prod)) {
+          throw new HttpsError('failed-precondition', `${_sanitize(prod.name || 'An item')} is no longer for sale, so the sale was not recorded.`);
+        }
         /* Canonical stock field is `stock`; fall back to legacy names for older docs. */
         const stock = prod.stock ?? prod.stockQty ?? prod.quantity ?? 9999;
         if (stock < (item.qty || 1) && prod.trackInventory !== false && !_PSp.isComposite(prod))
@@ -831,6 +846,9 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
         const cp = cs.data();
         if (_ownerOfProduct(cp) !== String(merchantId) || _PSp.isComposite(cp)) {
           throw new HttpsError('permission-denied', 'A package in this sale contains an item that is not this shop\'s product, so the sale was not recorded.');
+        }
+        if (_SELL.tillBlockReason(cp)) {
+          throw new HttpsError('failed-precondition', 'A package in this sale contains an item that is no longer for sale, so the sale was not recorded.');
         }
         const loose = enrichedItems.reduce((n, it) => n + (it.productId === id ? (Number(it.qty) || 1) : 0), 0);
         const stock = cp.stock ?? cp.stockQty ?? cp.quantity ?? 9999;
