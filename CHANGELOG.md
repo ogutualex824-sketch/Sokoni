@@ -1,3 +1,20 @@
+## [2026-09-29] - Kasindi repair census (READ ONLY) + repair manifest for agreement + legitimate approval (NOT executed)
+
+`docs/KASINDI_REPAIR_CENSUS.md`, packet `docs/release-gates/kasindi-repair-census.json`, digest `c0b194f2…2d1e` (identifies the
+state, authorizes nothing). State: application approved by `"reindex"`, **`agreementAccepted` absent**, `applicationDecisions/`
+absent, 0 `adminAudit`, 0 `legalAcceptances`, provider live by `approvedAt` with no `approvedBy` and no C1 stamp, stray non-live
+`sellers` doc, wallet KES 50 (one completed receive), zero activity; read model SERVICES/no conflict (trusts `approvedAt`),
+resolver PENDING_CLASSIFICATION; C1 derivation `no-exact-match` → `cleaning` is an admin classification. **Deployed lineage
+verified from the built source archives:** `applicationDecide` (rev 00006-kex, archive 2026-08-24) has **no agreement gate,
+no server decision record, no decisionAuthority**; the `applicationLifecycle` trigger (00007-nox, archive 2026-09-06) has the
+**claims-only** decider check (a non-Auth actor blocks projection + raises adminAlerts); the c4 line has gate + record. Every
+version **overwrites `decidedBy`** — the July "reindex" cannot stay on the document via the existing authority; recommended:
+a `priorDecisions` arrayUnion preservation on the c4 handler before use. Agreement can be written only by the signed-in
+business (rules permit on an approved application; **no re-acknowledgement surface exists**; `legalAccept` exists but the
+generic-provider gate reads the boolean only). Manifest: gates G1–G6 → Stage 1 agreement → Stage 2 decision by a named admin
+Auth account (c4 handler via `CallableFunction.run`, or AdminOS UI without the gate) → Stage 3 projection proof →
+Stage 4 separate `cleaning` classification manifest → Stage 5 resolver. Four owner decisions listed. Nothing written.
+
 ## [2026-09-29] - Business approval-decision authority (DJ Bvmbxno class) — designed, proven 40/0, registered, NOT deployed, NOT used
 
 `functions/business-approval-admin.js` → `bizAdminApprovalDecide { uid, decision: approve|refuse, reason }`, merged into
