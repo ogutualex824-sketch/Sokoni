@@ -553,7 +553,12 @@ if (has('sokoni-merchant-products.js') && has('seller.html')) {
       (pf.match(/out\.([a-zA-Z]+)\s*=/g) || []).map(s => s.slice(4, -1).trim())
         .concat((pf.match(/'([a-zA-Z]+)'/g) || []).map(s => s.slice(1, -1)))
     )];
-    const dropped = collected.filter(k => carried.indexOf(k) < 0);
+    /* 2026-09-29 (universal catalogue U1, from 4f67b4b): `stock` is DELIBERATELY not carried by the metadata writer —
+       it is inventory authority. It counts as surviving only because it is PROVABLY routed there: createProduct files
+       the opening quantity through the injected adjustStock (merchantAdjustStock), and updateProduct refuses it. */
+    const stockRouted = /var opening = openingStockOf\(o\.product\)/.test(MD2) && /await o\.adjustStock\(\{/.test(MD2)
+      && /o\.patch\.stock !== undefined/.test(MD2);
+    const dropped = collected.filter(k => carried.indexOf(k) < 0 && !(k === 'stock' && stockRouted));
     ck('every field the editor collects survives the certified writer',
        dropped.length === 0, dropped.join(', ') || collected.length + ' fields, none dropped');
     /* CONTROL: the diff must be capable of finding a drop, or "none dropped" passes

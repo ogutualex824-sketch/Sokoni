@@ -207,7 +207,11 @@
     /* Carried because the Inventory projection maps it to buyingPrice; without it
        every mirrored product would report a 0 cost and therefore a 100% margin. */
     if (p.costPrice !== undefined) out.costPrice = Number(p.costPrice);
-    if (p.stock !== undefined) out.stock = Number(p.stock);
+    /* FROM 4f67b4b (ported 2026-09-29, U1): stock is DELIBERATELY ABSENT from product metadata. It is inventory
+       authority, and it moves only through merchantAdjustStock — a server transaction that floors at zero and
+       writes stock + updatedAt + inventoryVersion together. Allowing it here let the Products form write an
+       untransacted shelf count with no movement record. Opening stock at CREATE is still supported, routed
+       through that same server authority — see openingStockOf() and createProduct's opening stock. */
     if (p.sku !== undefined)   out.sku = p.sku ? String(p.sku).trim().slice(0, 64) : null;
     if (p.category !== undefined) out.category = p.category ? String(p.category).slice(0, 64) : null;
     if (p.description !== undefined) out.description = String(p.description || '').slice(0, 4000);
@@ -261,7 +265,62 @@
         if (p[k] !== undefined) out[k] = p[k];
       });
 
+    /* ── FROM 4f67b4b (the 99-category upload form), ported 2026-09-29 (universal catalogue U1) ─────────────
+       Layered ON this writer (d0443b8's allowlist stays the structure); these are the parts 4f67b4b had that
+       this branch did not: */
+    var TX = (typeof window !== 'undefined' && window.SokoniProductTaxonomy) ||
+             (typeof globalThis !== 'undefined' && globalThis.SokoniProductTaxonomy) || null;
+    var _str = function (v, n) { return v === null ? null : String(v || '').trim().slice(0, n); };
+    /* DIGITAL / SERVICE are DERIVED from the category, never taken from the caller — the taxonomy owns that
+       answer (a listing flagged digital in a physical category is one the checkout would try to deliver). */
+    if (p.category !== undefined && TX && out.category) {
+      var kind = TX.kindOf(out.category);
+      out.isDigital = kind === 'digital';
+      out.isService = kind === 'service';
+    }
+    /* FOOD HANDLING — the six legacy keys, normalised; an all-empty record is REMOVED (null). */
+    var FOOD_KEYS = ['permit', 'kebs', 'kmc', 'halal', 'storage', 'slaughter'];
+    if (p.foodLicence !== undefined) {
+      var fl = p.foodLicence || {}, fout = {}, anyFood = false;
+      FOOD_KEYS.forEach(function (k) { var v = _str(fl[k], 120); fout[k] = v || null; if (v) anyFood = true; });
+      out.foodLicence = anyFood ? fout : null;
+    }
+    /* OWNERSHIP — a merchant may DECLARE; only a reviewer may approve. `status` and `verificationStatus` are
+       CLAMPED to pending: verificationStatus === 'approved' is what puts "✅ Verified Owner" on a card, and passing
+       the object whole (as above) let a crafted write self-issue that badge. */
+    if (p.ownership !== undefined) {
+      var ow = p.ownership || {};
+      var serial = _str(ow.serial, 120), source = _str(ow.source, 64);
+      out.ownership = (!serial && !source) ? null
+        : { serial: serial, source: source, declared: ow.declared === true, submittedAt: Date.now(), status: 'pending' };
+      out.verificationStatus = out.ownership ? 'pending' : 'none';
+    }
+
     return out;
+  }
+
+  /* FROM 4f67b4b (ported verbatim 2026-09-29, U1).
+     The opening quantity a create is asking for, from either a plain stock figure or the sum of
+     variant rows. Returns null when none was asked for — null, never 0: an unknown shelf count
+     rendered as zero is a fabricated fact, and "no opening stock given" is not "there are none".
+     Whole numbers only, non-negative, and bounded by the server's own MAX_DELTA so a value the
+     authority will refuse is rejected here rather than after the product already exists. */
+  var MAX_OPENING = 1000000;
+  function openingStockOf(input) {
+    var p = input || {};
+    var raw = p.stock;
+    var SPm = (typeof window !== 'undefined' && window.SokoniProductSpecs) ||
+              (typeof globalThis !== 'undefined' && globalThis.SokoniProductSpecs) || null;
+    if (SPm && Array.isArray(p.variants) && p.variants.length && typeof SPm.totalStock === 'function') {
+      raw = SPm.totalStock(p.variants, p.stock);
+    }
+    if (raw === undefined || raw === null || raw === '') return null;
+    var n = Number(raw);
+    if (!isFinite(n)) throw new Error('Opening stock must be a number.');
+    if (!Number.isInteger(n)) throw new Error('Opening stock must be a whole number.');
+    if (n < 0) throw new Error('Opening stock cannot be negative.');
+    if (n > MAX_OPENING) throw new Error('Opening stock is implausibly large.');
+    return n;
   }
 
   function _validate(fields, opts) {
@@ -301,6 +360,35 @@
         (!isFinite(fields.minWholesaleQty) || fields.minWholesaleQty < 0)) {
       errs.push('Minimum wholesale quantity cannot be negative.');
     }
+
+    /* ── FROM 4f67b4b, ported 2026-09-29 (U1): the deal / download / permit rules ──────────────────────── */
+    /* BULK: both or neither; above zero; BELOW the unit price; a minimum of 2 ("bulk, minimum one" is the
+       ordinary price wearing a badge). */
+    var hasWp = fields.wholesalePrice !== undefined && fields.wholesalePrice !== null;
+    var hasWq = fields.minWholesaleQty !== undefined && fields.minWholesaleQty !== null;
+    if (hasWp !== hasWq) errs.push('A bulk deal needs both a wholesale price and a minimum quantity.');
+    if (hasWp && isFinite(fields.wholesalePrice) && fields.wholesalePrice === 0) {
+      errs.push('The wholesale price must be above zero.');
+    } else if (hasWp && isFinite(fields.price) && fields.price > 0 && fields.wholesalePrice >= fields.price) {
+      errs.push('The wholesale price must be lower than the normal price — otherwise it is not a bulk deal.');
+    }
+    if (hasWq && isFinite(fields.minWholesaleQty) && fields.minWholesaleQty >= 0
+        && (!Number.isInteger(Number(fields.minWholesaleQty)) || fields.minWholesaleQty < 2)) {
+      errs.push('The minimum bulk quantity must be a whole number of 2 or more.');
+    }
+    /* DIGITAL: a download that is not an https link cannot be fetched from an https page. */
+    if (fields.isDigital === true && fields.digitalUrl !== undefined) {
+      if (!fields.digitalUrl) errs.push('A digital product needs a download link.');
+      else if (!/^https:\/\//i.test(fields.digitalUrl)) errs.push('The download link must start with https://');
+    }
+    /* FOOD: the county permit is the one food record legally required to trade — asked only of food categories. */
+    var TXv = (typeof window !== 'undefined' && window.SokoniProductTaxonomy) ||
+              (typeof globalThis !== 'undefined' && globalThis.SokoniProductTaxonomy) || null;
+    if (TXv && fields.category && TXv.needsFoodLicence(fields.category)) {
+      if (!fields.foodLicence || !fields.foodLicence.permit) {
+        errs.push('Food and agricultural products need a county food business permit number.');
+      }
+    }
     return errs;
   }
 
@@ -330,13 +418,20 @@
          already committed — but it is never hidden either. */
   var PRODUCT_MIRRORS = ['inventory', 'pos'];
 
-  function productProjections(doc, scope) {
-    var img = '';                             /* 2c attaches media; see below */
+  /* FROM 4f67b4b (ported 2026-09-29, U1): THE SHELF COUNT THE PROJECTIONS CARRY. doc.stock no longer exists
+     (stock left the metadata write), so the mirrors take `established` — what the authority actually put on the
+     shelf: the opening quantity when the adjustment succeeded, 0 when there was none or it failed. */
+  function productProjections(doc, scope, established) {
+    /* FROM 4f67b4b / 911ec98 (ported 2026-09-29, U1): the mirrors carry the product's real photo — never an inline
+       data: URL — so the till and the Inventory Manager show what the storefront shows. */
+    var img = (typeof doc.image === 'string' && doc.image.indexOf('data:') !== 0) ? doc.image : '';
     var sku = doc.sku || ('SKU-' + String(doc.id).slice(-8).toUpperCase());
     var wh  = doc.warehouseId || scope.shopId || 'main';
     var price = Number(doc.price) || 0;
     var cost  = Number(doc.costPrice) || 0;
-    var stock = Number(doc.stock) || 0;
+    var stock = (established !== undefined && established !== null)
+      ? Number(established) || 0
+      : Number(doc.stock) || 0;
     return {
       inventory: {
         path: ['tenants', scope.sellerUid, 'inventory_products', doc.id],
@@ -364,9 +459,9 @@
 
   /* Never throws. A mirror is a projection of a record that already exists; its
      failure is reported, not raised, and never rolls back the canonical write. */
-  async function _writeMirrors(db, doc, scope) {
+  async function _writeMirrors(db, doc, scope, established) {
     var out = {};
-    var proj = productProjections(doc, scope);
+    var proj = productProjections(doc, scope, established);
     for (var i = 0; i < PRODUCT_MIRRORS.length; i++) {
       var key = PRODUCT_MIRRORS[i];
       if (!db || typeof db.writeMirror !== 'function') { out[key] = { state: 'unavailable' }; continue; }
@@ -402,6 +497,10 @@
     if (!scope || !scope.ok) throw new Error('merchant data: a resolved shop scope is required');
     _requireWriter(o.db);
 
+    /* FROM 4f67b4b (U1): computed BEFORE anything is written, so an invalid opening quantity refuses the whole
+       create rather than leaving a product behind that nobody asked for. */
+    var opening = openingStockOf(o.product);
+
     var fields = _productFields(o.product);
     var errs = _validate(fields, { creating: true });
     if (errs.length) { var e = new Error(errs[0]); e.validation = errs; throw e; }
@@ -435,14 +534,47 @@
        replay returns the existing record rather than adding a second one. */
     var res = await o.db.writeProduct({ id: id, data: doc, mode: 'create' });
 
+    /* ── FROM 4f67b4b (ported verbatim 2026-09-29, U1): OPENING STOCK — through the server authority ──────
+       The product document is created WITHOUT a stock field, so until this lands the shelf count is unknown
+       rather than zero. merchantAdjustStock is the only path that floors at zero, bumps inventoryVersion and
+       files a stockMovements row, so an opening quantity is simply the first movement.
+       adjustmentId is DETERMINISTIC on the product id: a retried create claims the same adjustment id and the
+       server's idempotency returns the original outcome instead of stacking a second opening quantity.
+       A failure here does NOT fail the create — the caller is told exactly that (openingStock.ok === false). */
+    var stockResult = null;
+    if (opening !== null && opening > 0) {
+      if (typeof o.adjustStock !== 'function') {
+        stockResult = { ok: false, reason: 'no-inventory-adapter', opening: opening };
+      } else {
+        try {
+          await o.adjustStock({
+            productId: id, shopId: scope.shopId,
+            adjustmentId: 'open_' + id,
+            delta: opening, reason: 'restock',
+            note: 'Opening stock at product creation',
+          });
+          stockResult = { ok: true, opening: opening };
+        } catch (err) {
+          stockResult = { ok: false, opening: opening,
+                          reason: (err && (err.message || err.code)) || 'adjust-failed' };
+        }
+      }
+    } else if (opening === 0) {
+      /* An explicit zero is a real statement about the shelf, but merchantAdjustStock refuses
+         a zero delta by design. Nothing to move, and nothing to invent. */
+      stockResult = { ok: true, opening: 0, noop: true };
+    }
+
     /* Mirrors run on a replay too. They are merge-writes keyed by the same id, so
        repeating one changes nothing — and a replay is exactly how a mirror that
-       failed the first time gets repaired. */
-    var mirrors = await _writeMirrors(o.db, doc, scope);
+       failed the first time gets repaired. They run AFTER the opening adjustment and carry what it established. */
+    var mirrors = await _writeMirrors(o.db, doc, scope,
+      (stockResult && stockResult.ok) ? stockResult.opening : 0);
 
     return {
       id: id, product: doc, replayed: !!(res && res.replayed),
       mirrors: mirrors, complete: mirrorsComplete(mirrors),
+      openingStock: stockResult,
     };
   }
 
@@ -462,6 +594,17 @@
     /* Ownership is verified against the STORED record, not the caller's claim. */
     var existing = o.existing || (o.db.getProduct ? await o.db.getProduct(o.id) : null);
     if (existing) assertInScope(scope, Object.assign({ id: o.id }, existing));
+
+    /* FROM 4f67b4b (ported 2026-09-29, U1): REFUSED, not dropped. Silently ignoring a stock edit is worse than
+       rejecting it: the merchant types a figure, sees "Changes saved.", and the shelf count never moves.
+       DEVIATION, recorded: 4f67b4b also refused any `variants` patch. This branch's Listing Studio (7531e57) edits
+       variants, so that refusal is NOT ported — per-variant quantities are not products.stock (UNPROVEN: whether a
+       variant quantity reaches a till anywhere). */
+    if (o.patch && o.patch.stock !== undefined) {
+      var sErr = new Error('Stock is changed in Inventory, not here.');
+      sErr.code = 'stock-not-editable';
+      throw sErr;
+    }
 
     var fields = _productFields(o.patch);
     if (!Object.keys(fields).length) throw new Error('merchant data: nothing to update');
@@ -493,6 +636,97 @@
 
     await o.db.deleteProduct({ id: o.id });
     return { id: o.id, deleted: true };
+  }
+
+  /* ── FROM 4f67b4b (911ec98 / 511836c lineage), ported VERBATIM 2026-09-29 (universal catalogue U1). The
+     products module (:1530) calls it; this branch had the media module, the putImage adapter and every helper
+     below, but not this function — so adding a photo threw. ── */
+  /**
+   * attachProductImages({ scope, db, media, storage, id, files, existing, onProgress })
+   *
+   * The ONE way a product gains photographs. The order is the whole point:
+   *
+   *   1. ownership, against the STORED record
+   *   2. upload to Storage
+   *   3. only then, the canonical product record
+   *   4. then the projections
+   *
+   * Nothing is written to the product until Storage has returned real addresses
+   * for every file. A failed upload therefore cannot leave a product claiming an
+   * image it does not have — the failure mode that matters most here, because a
+   * merchant who is told the photo is up will not try again, and their listing
+   * shows a broken image to buyers.
+   *
+   * Media is uploaded to a path derived from the SCOPE's sellerUid, which is
+   * also what the Storage rule checks against request.auth.uid. A product the
+   * merchant does not own is refused before a single byte is sent.
+   */
+  async function attachProductImages(o) {
+    var scope = o.scope;
+    if (!scope || !scope.ok) throw new Error('merchant data: a resolved shop scope is required');
+    _requireWriter(o.db);
+    if (!o.id) throw new Error('merchant data: product id required');
+    var media = o.media;
+    if (!media || typeof media.upload !== 'function') {
+      throw new Error('merchant data: the media module is not loaded — photos cannot be added just now.');
+    }
+
+    /* ── 1. OWNERSHIP, before anything is uploaded ──────────────────────── */
+    var existing = o.existing || (o.db.getProduct ? await o.db.getProduct(o.id) : null);
+    if (!existing) throw new Error('merchant data: that product no longer exists.');
+    assertInScope(scope, Object.assign({ id: o.id }, existing));
+
+    /* ── 2. VALIDATE, then UPLOAD ───────────────────────────────────────── */
+    var check = media.validateAll(o.files);
+    if (!check.ok) {
+      var ve = new Error((check.rejected[0] && check.rejected[0].reason) || check.reason ||
+                         'That file cannot be used as a photo.');
+      ve.rejected = check.rejected; ve.wrote = false;
+      throw ve;
+    }
+
+    /* Appended after what the product already has, so slot indices — and
+       therefore Storage paths — stay stable. Replacing slot i overwrites
+       exactly one object; it never orphans another. */
+    var prior = Array.isArray(existing.images) ? existing.images.slice() : [];
+    var startIndex = (typeof o.replaceAt === 'number') ? o.replaceAt : prior.length;
+
+    var result;
+    try {
+      result = await media.upload({
+        storage: o.storage, sellerUid: scope.sellerUid, productId: o.id,
+        files: check.accepted, startIndex: startIndex, onProgress: o.onProgress,
+      });
+    } catch (err) {
+      /* NOTHING has been written to the product. Say so explicitly: the caller
+         asserts on this rather than inferring it. */
+      err.wrote = false;
+      throw err;
+    }
+
+    /* ── 3. THE CANONICAL RECORD, with addresses that demonstrably exist ── */
+    var images = prior.slice();
+    result.urls.forEach(function (u, i) { images[startIndex + i] = u; });
+    images = images.filter(function (u) { return !!u; });
+
+    var patch = {
+      image: images[0] || '',
+      images: images,
+      /* seller.js writes this third field too; keeping it means the two
+         implementations describe the same product the same way. */
+      imageStorageUrls: images,
+    };
+    await o.db.writeProduct({ id: o.id, data: patch, mode: 'update' });
+
+    /* ── 4. THE PROJECTIONS ─────────────────────────────────────────────── */
+    var doc = Object.assign({}, existing, patch, { id: o.id });
+    var mirrors = await _writeMirrors(o.db, doc, scope);
+
+    return {
+      id: o.id, urls: result.urls, images: images,
+      rejected: check.rejected,
+      mirrors: mirrors, complete: mirrorsComplete(mirrors),
+    };
   }
 
   /* Only products belonging to this shop may enter a cart. A cart line from
@@ -767,6 +1001,7 @@
     createProduct: createProduct,
     updateProduct: updateProduct,
     deleteProduct: deleteProduct,
+    attachProductImages: attachProductImages,
     assertInScope: assertInScope,
     productProjections: productProjections,
     mirrorsComplete: mirrorsComplete,

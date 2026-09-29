@@ -283,8 +283,26 @@ console.log('\nPART F — control, and the sale path stays the sale path\n');
   ck('F2  the Sell layer still routes sales through posCompleteCheckout only',
     md.SALE_CALLABLE === 'posCompleteCheckout');
   const mdSrc = fs.readFileSync(path.join(ROOT, 'sokoni-merchant-data.js'), 'utf8');
+  /* 2026-09-29 (universal catalogue U1): narrowed to its intent. Opening stock at product CREATE now goes through the
+     inventory authority (ported from 4f67b4b — createProduct's injected adjustStock), and the module's comments name
+     merchantAdjustStock when explaining that. What must stay true is the SALE path: the code never calls the
+     adjustment authority by name, and the sale builder never touches an adjust adapter. */
+  const mdCode = mdSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"])\/\/[^\n]*/g, '$1');
+  const fnBody = (name) => {
+    const i = mdCode.indexOf('function ' + name + '(');
+    if (i < 0) return null;
+    let d = 0;
+    for (let k = mdCode.indexOf('{', i); k < mdCode.length; k++) {
+      if (mdCode[k] === '{') d++;
+      else if (mdCode[k] === '}' && --d === 0) return mdCode.slice(i, k + 1);
+    }
+    return null;
+  };
+  /* the sale path's three functions must all be FOUND (a missing one would make this vacuous) and none may adjust */
+  const saleFns = ['buildSale', 'previewSale', 'completeSale'].map(fnBody);
   ck('F3  ...and the Sell layer never calls the adjustment authority',
-    !/merchantAdjustStock/.test(mdSrc));
+    !/merchantAdjustStock/.test(mdCode) && saleFns.every((b) => b && !/adjustStock/.test(b)),
+    'sale functions found: ' + saleFns.filter(Boolean).length + '/3');
 
   /* An abandoned cart must not reach ANY inventory authority. */
   const scope = md.resolveScope({ uid: SELLER_A, activeShopId: SHOP_B });

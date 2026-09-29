@@ -1,3 +1,103 @@
+## [2026-09-29] - Universal catalogue U1: the release-lineage uploader dependencies, ported (not rebuilt), plus a stock regression closed
+
+**merchant-v2 Products, NOT deployed.** Branch `slice/c4-category-matrix`. This follows the owner's universal
+catalogue brief: "bring the four commits in, never rebuild, never overwrite newer convergence work". The census and
+the evidence are in `docs/UNIVERSAL_CATALOGUE_CENSUS.md`.
+
+**Census:**
+- None of `4f67b4b` / `911ec98` / `511836c` / `9e5609e` was in this branch.
+- A whole cherry-pick would have **rolled back newer work.** This branch's Products module is 841 lines ahead of
+  `4f67b4b` (Listing Studio, Media Studio, price tags), and merchant-v2.html has diverged by more than 900 lines.
+- The branch had the **callers without the modules**:
+  - `SokoniProductTaxonomy` absent: no 99 categories, and no KEBS / food / ownership sections.
+  - `attachProductImages` absent: adding a photo **threw**.
+  - `SokoniWarrantyUI` absent: it came from a fifth commit, `3f9f238`.
+- `9e5609e` was already identical, or older than this branch.
+
+**Ported, verbatim where the code matched, each named by its source commit:**
+- **Taxonomy (`4f67b4b`):** `sokoni-product-taxonomy.js` and its build script, parity test and upload-form test, plus
+  the script tag.
+- **Photo writer (`4f67b4b`, from the 911ec98 / 511836c lineage):** `attachProductImages` and its export. The mirrors
+  now carry the real photo, where before they carried `''`.
+- **Writer rules from `4f67b4b`,** layered ON the newer `d0443b8` allowlist rather than replacing it:
+  - `isDigital` / `isService` are derived from the taxonomy;
+  - the food licence is normalised;
+  - **ownership `status` / `verificationStatus` are clamped to pending**, so a crafted write can no longer self-issue
+    "✅ Verified Owner";
+  - bulk deal, https download and food permit rules.
+- **Stock authority from `4f67b4b`, which also closes a regression:**
+  - This branch's writer put `stock` straight into the product document: an untransacted shelf count with no movement
+    record.
+  - Now opening stock is `merchantAdjustStock`'s first movement (deterministic `open_<id>`), `updateProduct` refuses a
+    stock patch, and the mirrors carry the count the authority established.
+  - Recorded deviation: the lineage's refusal of `variants` patches is not ported, because the Listing Studio edits
+    variants.
+- **Warranty (`3f9f238` / `8e1ce91`):** `sokoni-warranty-ui.js` / `.css` and the PURE `functions/warranty-policy.js`,
+  with their tests.
+
+**Tests:**
+- **The lineage's own suites, now on this branch:**
+  - `test-product-taxonomy-parity` **24/0**
+  - `test-products-upload-form` **66/0**
+  - `test-merchant-products-2c-media` **53/0** (3 BLOCKED: they need the DEPLOYED Storage rules, a production read)
+  - `test-merchant-v2-products-2b` **59/0**, which was **57/2** before the stock port
+  - `test-merchant-product-writer` **37/0**
+  - `test-warranty-policy` **45/0**
+  - `test-warranty-surfaces` **55/7**. The 7 are the buyer return panel, BLOCKED on the returns / refund chain
+    (`12b56dd`, `c5f22c2`, `d4de4b8`), which is money and deliberately not ported here.
+- **`scripts/test-catalogue-u1-browser.js`: 9/0** (Chromium; the REAL modules in merchant-v2's order and the REAL
+  Products module). It covers:
+  - 99 categories in the picker;
+  - the form shaped by category (food / ownership / digital / KEBS);
+  - a food listing without a permit refused with nothing written;
+  - the photo to Storage → record → both mirrors;
+  - opening stock through the authority;
+  - an oversized or non-image file refused;
+  - a forged ownership approval clamped, a stock edit refused, and a cross-shop photo refused before upload;
+  - merchant-v2 loading the modules.
+  - Counterproof on `ec40b9b`: **7 fail**. The 2 that pass are controls (the media module was already identical, and
+    there were no page errors).
+  - Sabotage: **10/10 caught.**
+
+**Regression** (49 suites that read the changed files; work tree vs `321f5d7`):
+- **New suites (absent on the base):** taxonomy parity, upload form, 2c-media, products-2b, warranty-policy and
+  warranty-surfaces. Results are above.
+- **Superseded, each updated with its reason:**
+  - **`test-merchant-adjust-stock` F3** (51/0): narrowed to its intent. The code, with comments stripped, never names
+    `merchantAdjustStock`, and all 3 sale functions (`buildSale` / `previewSale` / `completeSale`, found 3/3) never
+    touch an adjust adapter. The release lineage's version of this suite has no F3.
+  - **`test-merchant-ecosystem-convergence`** "every field survives the writer": `stock` counts only because it is
+    provably routed to the inventory authority. Result 144/1; the remaining flash-sale failure is identical on both
+    trees (pre-existing).
+- **Flaky on the base only:** `merchant-v2-ecosystem-runtime` and `workspace-routing` printed no summary on the base
+  tree. The work tree is 131/0 and 33/0.
+- Everything else is equal.
+
+**UNPROVEN / NOT DONE:**
+- Not deployed.
+- The DEPLOYED Storage rules were not fetched (production read, 3 BLOCKED).
+- The returns chain is not ported (warranty-surfaces H1–H8 BLOCKED).
+- Per-variant quantities reaching a till are unproven.
+- The capability matrix, object types, archive / restore, packages and compliance states are U2–U7.
+
+**Files:**
+- New: `sokoni-product-taxonomy.js`, `scripts/build-product-taxonomy.js`, `sokoni-warranty-ui.js` / `.css`,
+  `functions/warranty-policy.js`, and 7 suites (taxonomy parity, upload form, 2c-media, products-2b, warranty-policy,
+  warranty-surfaces, catalogue-u1-browser).
+- Changed: `sokoni-merchant-data.js`, `merchant-v2.html`, `docs/UNIVERSAL_CATALOGUE_CENSUS.md` (new), and 2 updated
+  suites.
+
+**Database:**
+- Product docs are no longer written with `stock` by the writer (the server authority writes it).
+- `ownership.status` / `verificationStatus` are pinned to pending on seller writes.
+- No migration.
+
+**Security:**
+- A seller can no longer self-issue "Verified Owner" through this writer. The Firestore rule itself is stage 3.
+- Photos are refused cross-shop before any upload.
+
+**Breaking:** `updateProduct({ patch: { stock } })` now throws `stock-not-editable`. Stock is changed in Inventory.
+
 ## [2026-09-29] - Buyer price offers (T2b): offer, counter, accept — and checkout charges the agreed price
 
 **Functions + product page + checkout + merchant-v2, NOT deployed.** Branch `slice/c4-category-matrix`. This is the

@@ -1,0 +1,259 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   SOKONI — WARRANTY & RETURNS (styles)
+   sokoni-warranty-ui.css
+
+   Two surfaces, one language: the seller's policy builder and the buyer's protection
+   panel with its return sheet. Colours read from the --sk-* tokens with literal fallbacks,
+   so this looks right on a page that loaded the design system and on one that did not.
+
+   Selectable TILES rather than checkboxes throughout. A policy is a promise a seller is
+   making, and a row of grey checkboxes reads like a settings screen nobody finishes.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.wty-build, .wty-panel { color: inherit; font-family: inherit; }
+
+.wty-head { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 14px; }
+.wty-head-ico {
+  width: 34px; height: 34px; flex: 0 0 34px; border-radius: 10px;
+  display: grid; place-items: center; font-size: 16px;
+  background: var(--sk-green-dim, rgba(113,255,0,.14));
+  border: 1px solid var(--sk-green-border, rgba(113,255,0,.3));
+}
+.wty-head b { display: block; font-size: 15px; font-weight: 800; }
+.wty-head-sub { display: block; font-size: 12px; opacity: .68; margin-top: 2px; }
+
+.wty-group { margin-bottom: 18px; }
+.wty-glabel {
+  font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+  opacity: .62; margin-bottom: 9px;
+}
+
+/* ── THE TILES ─────────────────────────────────────────────────────────────
+   Wrapping flex rather than a fixed grid: the labels differ in length and a rigid grid
+   either truncates the long ones or leaves the short ones swimming. */
+.wty-tiles { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.wty-tile {
+  position: relative;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  padding: 10px 13px 10px 12px;
+  min-height: 46px;                       /* a thumb target, not a mouse target */
+  border-radius: 12px; cursor: pointer;
+  font: inherit; text-align: left;
+  color: inherit;
+  background: rgba(128,128,128,.10);
+  border: 1.5px solid rgba(128,128,128,.26);
+  transition: border-color .15s ease, background .15s ease, transform .1s ease;
+}
+.wty-tile:active { transform: scale(.985); }
+.wty-tile:focus-visible {
+  outline: 2px solid var(--sk-border-focus, rgba(113,255,0,.6)); outline-offset: 2px;
+}
+.wty-tile.is-on {
+  background: var(--sk-green-dim, rgba(113,255,0,.13));
+  border-color: var(--sk-green, #71ff00);
+}
+.wty-tile-ico { font-size: 15px; line-height: 1; margin-bottom: 3px; }
+.wty-tile-l { font-size: 13.5px; font-weight: 700; }
+.wty-tile-s { font-size: 11px; opacity: .6; }
+
+/* The tick appears only when chosen. A pre-drawn one would be the form claiming a choice
+   the seller has not made. */
+.wty-tile-tick {
+  position: absolute; top: 7px; right: 8px;
+  width: 15px; height: 15px; border-radius: 5px;
+  border: 1.5px solid rgba(128,128,128,.3);
+}
+.wty-tile.is-on .wty-tile-tick {
+  background: var(--sk-green, #71ff00); border-color: var(--sk-green, #71ff00);
+  display: grid; place-items: center;
+}
+.wty-tile.is-on .wty-tile-tick::after {
+  content: '✓'; font-size: 10px; font-weight: 900; color: #06210a; line-height: 1;
+}
+
+.wty-custom { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.wty-clabel { font-size: 12px; opacity: .7; }
+.wty-cinput {
+  width: 110px; min-height: 44px; padding: 10px 12px;
+  font: inherit; font-size: 14px; color: inherit;
+  border-radius: 10px; border: 1px solid rgba(128,128,128,.3);
+  background: rgba(128,128,128,.10);
+}
+
+.wty-note {
+  margin-top: 10px; font-size: 11.5px; line-height: 1.5; opacity: .7;
+}
+
+/* ── THE LIVE PREVIEW ──────────────────────────────────────────────────────
+   The point of the builder. A seller reading a form cannot tell whether they have promised
+   anything useful; a seller reading their own promise can. */
+.wty-pv {
+  padding: 14px; border-radius: 14px;
+  background: rgba(128,128,128,.08);
+  border: 1px dashed rgba(128,128,128,.34);
+}
+.wty-pv-h {
+  font-size: 10.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+  opacity: .55; margin-bottom: 9px;
+}
+.wty-pv-days { font-size: 16px; font-weight: 900; }
+.wty-pv-start { font-size: 12px; opacity: .68; margin-top: 2px; }
+.wty-pv-sub {
+  margin-top: 11px; font-size: 10.5px; font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; opacity: .55;
+}
+.wty-pv-list { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 7px; font-size: 12.5px; }
+.wty-pv-none { font-size: 13px; opacity: .7; }
+.wty-pv-warn {
+  margin-top: 11px; padding: 9px 11px; border-radius: 10px;
+  background: rgba(240,160,32,.12); border: 1px solid rgba(240,160,32,.4);
+  font-size: 12px; line-height: 1.45;
+}
+
+/* ── THE BUYER'S PANEL ─────────────────────────────────────────────────────── */
+.wty-panel {
+  padding: 15px; border-radius: 16px; margin: 12px 0;
+  background: rgba(128,128,128,.09);
+  border: 1px solid rgba(128,128,128,.22);
+}
+.wty-line { padding-top: 12px; }
+.wty-line + .wty-line { margin-top: 12px; border-top: 1px solid rgba(128,128,128,.2); }
+.wty-line-h { font-size: 13.5px; font-weight: 800; }
+.wty-days { margin-top: 6px; font-size: 16px; font-weight: 900; }
+.wty-start { font-size: 12px; opacity: .68; margin-top: 1px; }
+
+.wty-clock {
+  display: inline-block; margin-top: 9px;
+  padding: 5px 11px; border-radius: 999px;
+  font-size: 12px; font-weight: 800;
+  background: rgba(128,128,128,.14);
+}
+.wty-clock.is-live {
+  background: var(--sk-green-dim, rgba(113,255,0,.14));
+  color: var(--sk-text-brand, #4fc800);
+  border: 1px solid var(--sk-green-border, rgba(113,255,0,.32));
+}
+.wty-clock.is-done { opacity: .7; }
+
+.wty-sub {
+  margin-top: 12px; font-size: 10.5px; font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; opacity: .55;
+}
+.wty-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.wty-chip {
+  font-size: 11.5px; padding: 4px 9px; border-radius: 999px;
+  background: rgba(128,128,128,.13);
+}
+.wty-empty { font-size: 13px; opacity: .68; line-height: 1.5; }
+
+/* An expired window EXPLAINS itself. A control that vanishes reads as a platform that lost
+   the feature, and the buyer is left wondering what they did wrong. */
+.wty-why {
+  margin-top: 12px; padding: 10px 12px; border-radius: 11px;
+  background: rgba(128,128,128,.10); border: 1px solid rgba(128,128,128,.24);
+  font-size: 12.5px; line-height: 1.5;
+}
+.wty-request {
+  width: 100%; margin-top: 13px; min-height: 48px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font: inherit; font-size: 14.5px; font-weight: 800; cursor: pointer;
+  border: 1px solid transparent; border-radius: 13px;
+  background: linear-gradient(135deg, var(--sk-green, #71ff00), var(--sk-green-dark, #4fc800));
+  color: var(--sk-text-inverse, #050f05);
+}
+
+/* ── THE RETURN SHEET ──────────────────────────────────────────────────────── */
+.wty-sheet { position: fixed; inset: 0; z-index: 9992; display: flex; align-items: flex-end; }
+.wty-scrim { position: absolute; inset: 0; background: rgba(5,15,5,.72); }
+.wty-panelbox {
+  position: relative; width: 100%; max-height: 92vh; overflow-y: auto;
+  padding: 10px 16px 18px;
+  border-radius: 22px 22px 0 0;
+  background: var(--sk-bg-card, #111e11);
+  color: var(--sk-text-primary, rgba(255,255,255,.95));
+  border-top: 1px solid var(--sk-border-brand, rgba(113,255,0,.28));
+  box-shadow: 0 -20px 60px rgba(0,0,0,.55);
+  animation: wtyUp .26s cubic-bezier(.2,.7,.3,1);
+}
+@keyframes wtyUp { from { transform: translateY(14px); opacity: .6; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .wty-panelbox { animation: none; } }
+@media (min-width: 720px) {
+  .wty-sheet { align-items: center; justify-content: center; }
+  .wty-panelbox { max-width: 560px; border-radius: 22px; }
+}
+
+.wty-grab {
+  width: 40px; height: 4px; border-radius: 999px; margin: 0 auto 12px;
+  background: rgba(255,255,255,.22);
+}
+.wty-sh-h { font-size: 17px; font-weight: 900; }
+/* Reassuring rather than adversarial: a buyer opening this has already had a bad
+   experience, and a form that reads like a dispute makes it worse. */
+.wty-sh-sub { font-size: 12.5px; opacity: .7; margin-top: 3px; }
+
+.wty-steps { display: flex; gap: 5px; margin: 13px 0 14px; }
+.wty-step { flex: 1; height: 3px; border-radius: 999px; background: rgba(255,255,255,.14); }
+.wty-step.is-done { background: var(--sk-green, #71ff00); }
+
+.wty-q { font-size: 15px; font-weight: 800; margin-bottom: 11px; }
+.wty-eviq { font-size: 12.5px; opacity: .7; line-height: 1.5; margin-bottom: 11px; }
+.wty-evi { display: flex; gap: 9px; flex-wrap: wrap; }
+.wty-evi-btn {
+  display: inline-flex; align-items: center; min-height: 46px; padding: 11px 15px;
+  border-radius: 12px; cursor: pointer; font-size: 13.5px; font-weight: 700;
+  background: rgba(128,128,128,.14); border: 1px solid rgba(128,128,128,.3);
+}
+.wty-evi-count { margin-top: 8px; font-size: 12px; opacity: .6; }
+.wty-note {
+  width: 100%; margin-top: 11px; min-height: 92px; padding: 12px;
+  font: inherit; font-size: 14px; color: inherit; box-sizing: border-box;
+  border-radius: 12px; border: 1px solid rgba(128,128,128,.3);
+  background: rgba(128,128,128,.10); resize: vertical;
+}
+
+.wty-review { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; margin: 0; font-size: 13.5px; }
+.wty-review dt { opacity: .6; }
+.wty-review dd { margin: 0; font-weight: 700; }
+.wty-review-note { margin-top: 14px; font-size: 12px; opacity: .68; line-height: 1.5; }
+
+.wty-err {
+  margin: 10px 0; padding: 10px 12px; border-radius: 11px;
+  background: rgba(224,72,61,.14); border: 1px solid rgba(224,72,61,.4);
+  font-size: 12.5px; line-height: 1.45;
+}
+
+.wty-sh-foot { display: flex; gap: 9px; margin-top: 18px; }
+.wty-back, .wty-next {
+  min-height: 48px; padding: 12px 18px; border-radius: 13px;
+  font: inherit; font-size: 14.5px; font-weight: 800; cursor: pointer;
+  border: 1px solid transparent;
+}
+.wty-back { background: rgba(128,128,128,.14); border-color: rgba(128,128,128,.3); color: inherit; }
+.wty-next {
+  flex: 1;
+  background: linear-gradient(135deg, var(--sk-green, #71ff00), var(--sk-green-dark, #4fc800));
+  color: var(--sk-text-inverse, #050f05);
+}
+.wty-next[disabled] { opacity: .45; cursor: not-allowed; }
+
+/* ── THE OUTCOME ───────────────────────────────────────────────────────────
+   Every word here is the SERVER's state. Never "Refunded" because somebody pressed Submit. */
+.wty-outcome {
+  margin-top: 12px; padding: 14px; border-radius: 14px;
+  background: var(--sk-green-dim, rgba(113,255,0,.10));
+  border: 1px solid var(--sk-green-border, rgba(113,255,0,.3));
+}
+.wty-out-h { font-size: 14.5px; font-weight: 800; }
+.wty-fault {
+  margin-top: 9px; padding: 9px 11px; border-radius: 10px;
+  background: rgba(113,255,0,.10); border: 1px solid rgba(113,255,0,.28);
+  font-size: 12.5px; line-height: 1.5;
+}
+.wty-fault.is-buyer { background: rgba(128,128,128,.12); border-color: rgba(128,128,128,.3); }
+.wty-out-track { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.wty-out-step {
+  font-size: 11px; padding: 5px 10px; border-radius: 999px;
+  background: rgba(128,128,128,.14); opacity: .5;
+}
+.wty-out-step.is-done { opacity: 1; background: var(--sk-green, #71ff00); color: #06210a; font-weight: 800; }
