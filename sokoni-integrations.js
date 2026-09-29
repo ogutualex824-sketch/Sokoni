@@ -605,6 +605,36 @@
 
       '.sic-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}',
       '.sic-table{width:100%;border-collapse:collapse;font-size:13px;min-width:680px}',
+      /* Headline tiles — the glance above the breakdown. */
+      '.sic-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;margin:0 0 14px}',
+      '.sic-tile{border:1px solid var(--sic-border);border-radius:10px;padding:12px 14px;background:rgba(255,255,255,.02)}',
+      '.sic-tile-v{font-size:26px;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums}',
+      '.sic-tile-k{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--sic-muted);margin-top:3px}',
+      /* An unknown is dimmed AND em-dashed: it must not read as a big zero. */
+      '.sic-tile-dead{color:var(--sic-muted);font-weight:500}',
+      '.sic-tile.good .sic-tile-v{color:#2ecc71}',
+      '.sic-tile.warn .sic-tile-v{color:#d8a13a}',
+      '.sic-tile.bad  .sic-tile-v{color:#e05252}',
+      /* The integration table. Inherits sic-table; only what differs is here. */
+      '.sic-itable{min-width:940px}',
+      '.sic-itable td{vertical-align:middle}',
+      '.sic-irow{cursor:pointer}',
+      '.sic-irow.on{background:rgba(255,255,255,.06);box-shadow:inset 2px 0 0 var(--sic-accent,#2ecc71)}',
+      '.sic-row-i{font-size:17px;margin-right:9px;vertical-align:middle}',
+      '.sic-row-id{display:inline-block;vertical-align:middle;max-width:34ch}',
+      '.sic-row-id b{display:block;font-weight:600}',
+      '.sic-row-id i{display:block;font-style:normal;font-size:11px;color:var(--sic-muted)}',
+      /* The operator note — MUTED, not alarming. 50 of 60 entries carry one, so
+         an amber warning rule would flag 83% of the table and mean nothing. The
+         status chip carries state; this carries context. */
+      '.sic-rownote{display:block;margin-top:4px;font-size:11px;line-height:1.45;',
+      'color:var(--sic-muted);opacity:.78;max-width:64ch}',
+      '.sic-none{color:var(--sic-muted);opacity:.65}',
+      '.sic-acts{white-space:nowrap}',
+      '.sic-act{display:inline-block;font-size:11px;padding:3px 9px;margin-left:6px;border-radius:6px;',
+      'border:1px solid var(--sic-border);color:var(--sic-muted)}',
+      '.sic-irow:hover .sic-act{color:inherit;border-color:var(--sic-muted)}',
+      '@media (max-width:760px){.sic-tile-v{font-size:22px}.sic-row-id{max-width:22ch}}',
       '.sic-table th{text-align:left;font-size:10px;letter-spacing:.06em;text-transform:uppercase;',
       'color:var(--sic-muted);font-weight:600;padding:10px 12px;border-bottom:1px solid var(--sic-border);white-space:nowrap}',
       '.sic-table td{padding:11px 12px;border-bottom:1px solid var(--sic-border);vertical-align:top}',
@@ -1239,6 +1269,155 @@
     return out;
   }
 
+  /* ── HEADLINE TILES ────────────────────────────────────────────────────
+     The glance, before anything is read. The chip row below stays the full
+     breakdown and the filter control.
+
+     NO NEW TAXONOMY — each tile GROUPS existing ops states, declared here so
+     nothing acquires a meaning the evidence model did not give it:
+
+       Healthy       active              observed working
+       Attention     action + error      unconfigured or failing
+       Unverified    unverified          measurable, never established
+       Disagreements the resolver's own  declaration vs observation conflict
+
+     `refused` and `quarantine` are in NO tile, deliberately. A rail that
+     refuses by design and one deliberately quarantined are CORRECT states;
+     counting them as attention would manufacture work out of decisions already
+     taken. Both stay visible in the chip row.
+
+     Every number is counted from the catalogue at render time — nothing here
+     hardcodes a total, so a 61st integration counts itself. */
+  function _statTiles() {
+    var n = _opsCounts();
+    if (!n) return '';
+    var st = _data.status;
+    var dq = (st && st.ok && Array.isArray(st.disagreements)) ? st.disagreements.length : null;
+
+    var tiles = [
+      { label: 'Healthy',       v: n.active || 0, cls: 'good',
+        hint: 'Observed working — from evidence, not from being configured.' },
+      { label: 'Attention',     v: (n.action || 0) + (n.error || 0), cls: 'warn',
+        hint: 'Unconfigured or failing. An operator has something to do.' },
+      { label: 'Unverified',    v: n.unverified || 0, cls: 'muted',
+        hint: 'Measurable in principle; nothing has established it yet.' },
+      /* null, NOT 0. An unread status is not "no disagreements", and keeping
+         those apart is the distinction this console exists for. */
+      { label: 'Disagreements', v: dq, cls: dq ? 'bad' : 'muted',
+        hint: dq === null ? 'The status read failed, so no comparison was possible.'
+                          : 'Declaration and observation conflict.' },
+    ];
+
+    return '<div class="sic-tiles">' + tiles.map(function (t) {
+      var dead = (t.v === null || t.v === undefined);
+      return '<div class="sic-tile ' + t.cls + '" title="' + _esc(t.hint) + '">' +
+        '<div class="sic-tile-v' + (dead ? ' sic-tile-dead' : '') + '">' +
+          (dead ? '—' : t.v) + '</div>' +
+        '<div class="sic-tile-k">' + _esc(t.label) + '</div></div>';
+    }).join('') + '</div>';
+  }
+
+  /* ── THE INTEGRATION TABLE ─────────────────────────────────────────────
+     Built on the console's EXISTING table — the same sic-card / sic-scroll /
+     sic-table / thead / tbody structure the Secrets, Registered, Capabilities
+     and Dependencies views already use. A second table system styled from
+     scratch would have looked identical and drifted within a month.
+
+     WHY A TABLE AND NOT THE CARD GRID. With 60 entries — 29 of them
+     infrastructure — a grid makes an operator scroll to compare, and comparison
+     is the job. Category becomes a COLUMN rather than a heading, so the whole
+     estate reads in one pass.
+
+     COLUMNS THE PLATFORM CANNOT HONESTLY FILL ARE NOT INVENTED. An
+     events-per-day column is the obvious thing to want here and there is no
+     event count anywhere in this model, so there is none. `Environment` and
+     `Last verified` DO exist on the record but are null until a probe records
+     them, and they render `—`. Never `0`, never "Production" by assumption: an
+     unknown drawn as a value is the defect this console exists to prevent.
+
+     In place of events, `Evidence` shows what actually established the entry,
+     which is real and is what an operator is really asking. */
+  function _table(rows) {
+    if (!rows.length) {
+      return '<div class="sic-card"><div class="sic-empty">' +
+        'No integration matches these filters.</div></div>';
+    }
+    var cats = _cat().categories;
+    var total = _cat().integrations.length;
+
+    return '<div class="sic-card"><div class="sic-scroll">' +
+      '<table class="sic-table sic-itable">' +
+      '<thead><tr>' +
+        '<th>Integration</th><th>Category</th><th>Environment</th>' +
+        '<th>Status</th><th>Last verified</th><th>Evidence</th><th>Actions</th>' +
+      '</tr></thead><tbody>' +
+      rows.map(function (i) {
+        var r   = _statusFor(i.id);
+        var cat = cats.find(function (k) { return k.id === i.category; }) || {};
+        var ev  = i.evidence || {};
+        var nEv = (ev.modules || []).length + (ev.endpoints || []).length +
+                  (ev.collections || []).length;
+        var caps = (r && r.capabilities) || [];
+        var seen = _lastVerified(i);
+        /* The record's own declared environment, or nothing. Never inferred. */
+        var env  = (r && r.environment) ? r.environment : null;
+        var sel  = (_selKind === 'catalogue' && _selected === i.id);
+        var none = function (why) {
+          return '<span class="sic-none" title="' + _esc(why) + '">—</span>';
+        };
+
+        return '<tr class="sic-irow' + (sel ? ' on' : '') + '" aria-selected="' + sel + '" ' +
+          'onclick="SokoniIntegrations.selectCatalogue(\'' + _esc(i.id) + '\')">' +
+
+          '<td><span class="sic-row-i" aria-hidden="true">' + i.icon + '</span>' +
+            '<span class="sic-row-id"><b class="sic-name">' + _esc(i.name) + '</b>' +
+            '<i>' + _esc(i.vendor) + '</i></span>' +
+            /* The operator note, where the catalogue carries one. This is where
+               osrm-routing says its provider is a public demo server with no
+               SLA, and google-charts-image says it is vendor-deprecated —
+               facts that must not be flattened under the same treatment as a
+               healthy rail. Rendered from the catalogue's own prose; nothing
+               here classifies risk. */
+            (i.notes ? '<span class="sic-rownote" title="' + _esc(i.notes) + '">' +
+              _esc(i.notes.length > 132 ? i.notes.slice(0, 132).replace(/s+S*$/, '') + '…' : i.notes) +
+              '</span>' : '') +
+          '</td>' +
+
+          '<td><span class="sic-chip">' + _esc(cat.label || i.category) + '</span></td>' +
+
+          '<td>' + (env ? '<span class="sic-chip">' + _esc(env) + '</span>'
+                        : none('No environment has been declared for this record.')) + '</td>' +
+
+          '<td>' + _opsChipHtml(i) + '</td>' +
+
+          '<td>' + (seen || none('Never verified — no probe has recorded a result.')) + '</td>' +
+
+          '<td>' + (nEv
+            ? '<span class="sic-sig muted" title="' +
+                _esc((ev.modules || []).concat(ev.endpoints || []).slice(0, 6).join(' · ')) +
+                '">' + nEv + ' source' + (nEv === 1 ? '' : 's') + '</span>'
+            : none('No modules or endpoints are declared for this entry.')) +
+            ((ev.secrets || []).length
+              ? ' <span class="sic-sig muted" title="Credential NAMES only; no value is ever read.">' +
+                ev.secrets.length + ' secret' + (ev.secrets.length === 1 ? '' : 's') + '</span>'
+              : '') + '</td>' +
+
+          '<td class="sic-acts">' +
+            (caps.indexOf('test') > -1
+              ? '<span class="sic-act" title="A probe exists for this rail and would actually run.">Test</span>'
+              : '') +
+            '<span class="sic-act">Open</span>' +
+          '</td></tr>';
+      }).join('') +
+      '</tbody></table></div>' +
+      '<p class="sic-note">Showing ' + rows.length + ' of ' + total + ' integrations' +
+        (rows.length === total ? '' : ' · filtered') +
+        '. <em>Environment</em> and <em>Last verified</em> show <span class="sic-mono">—</span> ' +
+        'until a probe records one; they are not defaults. There is no events column because the ' +
+        'platform measures no event volume — an invented number would be worse than an absent one.' +
+      '</p></div>';
+  }
+
   /* ── THE ACTIONABLE DISAGREEMENT QUEUE ─────────────────────────────────
      Driven ONLY by the resolver's top-level `disagreements` array. This
      surface does not decide what is urgent; the resolver already did, against
@@ -1459,37 +1638,8 @@
     }
 
     /* Group into the catalogue's own category order, skipping empty groups. */
-    return _disagreementQueue() + _opsSummary() + c.categories.map(function (k) {
-      var group = rows.filter(function (i) { return i.category === k.id; });
-      if (!group.length) return '';
-      return '<div class="sic-group"><div class="sic-group-h">' +
-        '<span class="sic-group-i" aria-hidden="true">' + k.icon + '</span>' + _esc(k.label) +
-        '<span class="sic-pill">' + group.length + '</span></div>' +
-        '<div class="sic-grid">' + group.map(function (i) {
-          var m = _statusMeta(i.status);
-          var ev = i.evidence || {};
-          return '<button class="sic-ic" aria-selected="' + (_selKind === 'catalogue' && _selected === i.id) + '" ' +
-            'onclick="SokoniIntegrations.selectCatalogue(\'' + _esc(i.id) + '\')">' +
-            '<div class="sic-ic-top">' +
-            '<span class="sic-ic-icon" aria-hidden="true">' + i.icon + '</span>' +
-            '<div class="sic-ic-id"><div class="sic-name">' + _esc(i.name) + '</div>' +
-            '<div class="sic-sub">' + _esc(i.vendor) + '</div></div>' +
-            '<span class="sic-badge ' + m.cls + '"><span class="sic-dot"></span>' + _esc(m.label) + '</span>' +
-            '</div>' +
-            /* The OBSERVED state, beside the DECLARED lifecycle. The two are
-               different claims: the badge says what the catalogue believes,
-               the chip says what the evidence shows. */
-            '<div class="sic-ic-state">' + _opsChipHtml(i) + '</div>' +
-            '<p class="sic-ic-sum">' + _esc(i.summary) + '</p>' +
-            '<div class="sic-ic-foot">' +
-            '<span class="sic-sig muted">' + _esc(i.direction) + '</span>' +
-            _lastVerified(i) +
-            _liveSignal(i) +
-            ((ev.secrets || []).length ? '<span class="sic-sig muted">' + ev.secrets.length + ' secret' +
-              (ev.secrets.length === 1 ? '' : 's') + '</span>' : '') +
-            '</div></button>';
-        }).join('') + '</div></div>';
-    }).join('') + _operationalSection();
+    return _disagreementQueue() + _statTiles() + _opsSummary() +
+      _table(rows) + _operationalSection();
   }
 
   /* ── The measured state of one integration ───────────────────────────

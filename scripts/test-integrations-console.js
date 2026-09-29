@@ -745,6 +745,79 @@ const settle = () => new Promise(r => setImmediate(() => setImmediate(r)));
        'no second opinion');
   }
 
+  head('15 - premium layout: a table, tiles, and no invented columns');
+
+  {
+    const m = mountWith(fullStatus());
+    await settle();
+    const html = m.host.innerHTML;
+    const cat = m.win.SokoniIntegrationCatalogue;
+
+    ok('the list is the console’s EXISTING table, not a second one',
+       /<table class="sic-table sic-itable">/.test(html), 'sic-table reused');
+    ok('one row per catalogue entry, derived not hardcoded',
+       (html.match(/class="sic-irow/g) || []).length === cat.integrations.length,
+       (html.match(/class="sic-irow/g) || []).length + ' rows for ' + cat.integrations.length + ' entries');
+    ok('the count line derives from the catalogue too',
+       html.indexOf('Showing ' + cat.integrations.length + ' of ' + cat.integrations.length) > -1,
+       'showing N of N');
+
+    ok('headline tiles render', /sic-tiles/.test(html) && /Healthy/.test(html) &&
+       /Attention/.test(html) && /Unverified/.test(html), '4 tiles');
+
+    /* THE COLUMN THAT MUST NOT EXIST. There is no event count anywhere in the
+       model, so an events column could only ever be invented. */
+    ok('there is NO events/volume column',
+       !/Events \(24h\)/i.test(html) && !/>\s*Events\s*</i.test(html), 'absent');
+
+    /* Unknowns are em-dashes, never zeros or assumed defaults. */
+    ok('Environment renders an em-dash while nothing declares one',
+       (html.match(/sic-none/g) || []).length >= cat.integrations.length,
+       (html.match(/sic-none/g) || []).length + ' neutral cells');
+    ok('CONTROL — no row claims a Production environment by assumption',
+       !/>Production</.test(html), 'no assumed environment');
+    /* A COUNTED zero is correct and must render as 0 — the resolver ran and
+       found none. An UNKNOWN must render as an em-dash. The original assertion
+       conflated them and failed on a legitimate zero, which is the same mistake
+       in a test that the model forbids in the UI. Asserted as the pair. */
+    ok('a genuinely counted zero renders as 0',
+       /<div class="sic-tile-v">0<\/div>/.test(html), 'counted zero shown');
+    ok('...and it is NOT dimmed as an unknown',
+       !/<div class="sic-tile-v sic-tile-dead">0<\/div>/.test(html), 'not dimmed');
+
+    /* THE INVERSION, and the reason the pair exists: a FAILED status read must
+       show an em-dash, never a 0. "We could not check" and "there are none"
+       are different facts, and a tile is exactly where they get conflated. */
+    const deadRead = mountWith(null);
+    await settle();
+    ok('an UNREADABLE status shows the tile as an em-dash, not 0',
+       /<div class="sic-tile-v sic-tile-dead">—<\/div>/.test(deadRead.host.innerHTML),
+       'unknown rendered as —');
+  }
+
+  {
+    /* The two entries added by the CSP pass carry the operational risk, and it
+       must reach the row rather than living only in a detail panel. */
+    const m = mountWith(fullStatus());
+    await settle();
+    const html = m.host.innerHTML;
+    ok('OSRM’s no-SLA warning is visible on the row',
+       /PUBLIC DEMO SERVER|public demo server/i.test(html), 'osrm note present');
+    ok('Google Charts’ deprecation is visible on the row',
+       /DEPRECATED BY THE VENDOR/i.test(html), 'charts note present');
+
+    /* ...but the treatment must not be an alarm, because most entries have a
+       note. A warning applied to 83% of the table means nothing. */
+    const notes = (html.match(/sic-rownote/g) || []).length;
+    ok('CONTROL — notes are common, so they are styled as context not alarm',
+       notes > cat0(m).integrations.length / 2, notes + ' of ' +
+       cat0(m).integrations.length + ' rows carry one');
+    ok('no amber warning rule is applied to the note',
+       !/sic-rownote\{[^}]*border-left:2px solid #d8a13a/.test(html), 'muted treatment');
+  }
+
+  function cat0 (m) { return m.win.SokoniIntegrationCatalogue; }
+
   console.log('\n  what this suite does NOT prove');
   console.log('  UNPROVEN  a real browser render. The module runs in a minimal DOM, so');
   console.log('            layout and CSS are not exercised here.');
