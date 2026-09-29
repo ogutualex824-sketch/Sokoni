@@ -649,7 +649,11 @@ img {
      Excluded here, at the selector, rather than fought with a fourth layer of
      !important in admin-os.html: the broad match is the defect. The exclusion
      is scoped to one class, so no other admin or seller sidebar changes. */
-  [class*="-sidebar"]:not([class*="mini"]):not(.aos-sidebar) {
+  /* The exclusion is by substring, not the one class: `.aos-sidebar-toggle` and
+     `.aos-sidebar-footer` are also "-sidebar" matches, and width:100% on the
+     toggle grew it to 187px inside a 220px drawer, squeezing the SOKONI AOS
+     titles to zero width on every phone. */
+  [class*="-sidebar"]:not([class*="mini"]):not([class*="aos-sidebar"]) {
     width: 100% !important;
     position: relative !important;
     height: auto !important;

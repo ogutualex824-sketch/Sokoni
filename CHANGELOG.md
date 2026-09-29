@@ -1,3 +1,48 @@
+## 2026-09-29 — AdminOS sidebar, Slice B: scroll region, drawer, keyboard, aria-current (branch `feat/integrations-control-center`, NOT deployed)
+
+Merchant V2's sidebar contract (`merchant-v2.html` `.side` / `.side-scroll`) adapted to AdminOS. Navigation only;
+section inventory (27 + 9 links), routing, tab mappings, panels and every AdminOS operation are unchanged.
+
+- **One scrolling region.** The seven nav groups now sit in `<nav class="aos-nav" id="aosNav" aria-label="AdminOS
+  navigation">`. The sidebar is a flex column with `overflow:hidden`; the `<nav>` is `flex:1 1 auto; min-height:0;
+  overflow-y:auto`. The logo and the footer (user chip, Sign Out) are `flex:0 0 auto`, so a long list scrolls inside
+  the nav and the footer never leaves the viewport.
+- **Mobile drawer.** Open → drawer + scrim, `aria-expanded` on the menu button (`#aosMenuBtn`, `aria-controls`),
+  focus moves to the « control (now "Close menu" on phones). Escape, the « control, the scrim, or choosing a section
+  → closed, focus returned to the menu button. Crossing the 768px breakpoint clears a stuck-open drawer.
+- **Collapsed rail (desktop).** Labels are wrapped in `<span class="nav-label">` and collapse to `width:0; opacity:0`
+  instead of `font-size:0`; the icon keeps its size, the toggle carries `aria-expanded` and reads "Collapse menu" /
+  "Expand menu", and each item carries its name as a `title` only while collapsed. Persistence per browser unchanged.
+- **Keyboard.** `:focus-visible` ring (accent, 2px) on nav items, the toggle, Sign Out and the menu button;
+  `sokoni-tokens.css`'s `:focus:not(:focus-visible){outline:none}` keeps it off pointer clicks.
+- **aria-current.** `SokoniAOS.navigate()` sets `.active` **and** `aria-current="page"` together and removes both from
+  every other item, then scrolls the item into view inside the nav (`block:'nearest'`, so the page never moves).
+- **Reduced motion.** Sidebar, main, labels: no transition. Buttons need an id-scoped `!important` rule because
+  `sokoni-polish.css:198` applies `button:not(…)×4{transition:transform .13s … !important}` — specificity (0,4,1) —
+  which beats the platform's own `*{transition-duration:.001ms!important}` reset. **Platform-wide defect, found and
+  recorded, not fixed here:** under the OS preference every button on every page still animates 130ms.
+
+- **Brand in the phone drawer (pre-existing, found while certifying B).** A3's exclusion covered `.aos-sidebar` only;
+  the same ≤768px catch-all in `sokoni-responsive.css` also matched `.aos-sidebar-toggle` (and `-footer`), forcing the
+  toggle to `width:100% !important` (187px in a 220px drawer) and squeezing "SOKONI AOS" to 0px. Identical on the
+  pre-B tree and on live. Fixed at the same selector: `:not(.aos-sidebar)` → `:not([class*="aos-sidebar"])`. Toggle now
+  44px (the platform's tap-target floor), titles 84px.
+
+Evidence — new `scripts/test-adminos-sidebar-a11y.js` (hermetic: fake host from disk, other origins aborted, the
+same Firebase compat stub as the single-navigation suite): **34/0**. Not attribute-only — each claim is paired with a
+behaviour: real Tab presses land on the toggle and on a section item with a measured outline; Enter opens the section
+through the router; `SokoniAOS.navigate('security')` moves `aria-current` and scrolls the item into view; the deep
+link `#security` lands with the item visible; collapse 220→66→220 with state and titles; on 390×844 open/Escape/«/scrim/
+Enter each close the drawer with focus back on the menu button and the chosen panel shown; nav scrolls and the footer
+stays on screen on both form factors; zero horizontal overflow; zero page errors. Two served-markup negative controls:
+removing the `aria-current` setter from `sokoni-aos.js` and the Escape handler from `admin-os.html` each turn their
+check red. Regression: `test-adminos-single-navigation` **22/0**, `test-admin-os-render` **43/0**,
+`test-admin-os-wiring` **308/0**.
+
+- **Files:** `admin-os.html` (sidebar markup, CSS, inline drawer script), `sokoni-aos.js` (`_navigate` only),
+  `sokoni-responsive.css` (one selector), new `scripts/test-adminos-sidebar-a11y.js`, `CHANGELOG.md`.
+- **Database / API / Security / Breaking:** none. UI only. Not deployed.
+
 ## 2026-09-29 — AdminOS sidebar, Slice A3: the mobile drawer is no longer caught by the generic `*-sidebar` rule (branch `feat/integrations-control-center`, NOT deployed)
 
 Pre-existing CSS collision, also present on live `be7c676`. At ≤768px `sokoni-responsive.css` applied

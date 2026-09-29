@@ -57,11 +57,19 @@ window.SokoniAOS = (() => {
   // ── Navigation ───────────────────────────────────────────────────────────────
   function _navigate(section) {
     document.querySelectorAll(".aos-panel").forEach(p => p.hidden = true);
-    document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
+    document.querySelectorAll(".nav-item").forEach(n => { n.classList.remove("active"); n.removeAttribute("aria-current"); });
     const panel = document.getElementById("panel-" + section);
     if (panel) panel.hidden = false;
     const nav = document.querySelector(`.nav-item[data-section="${section}"]`);
-    if (nav) nav.classList.add("active");
+    if (nav) {
+      /* .active is the styling hook; aria-current is the state assistive tech reads.
+         Both move together here and nowhere else, so they cannot disagree. */
+      nav.classList.add("active");
+      nav.setAttribute("aria-current", "page");
+      /* Keep the chosen item in view in the long list. The <nav> is its own
+         scroller inside a fixed sidebar, so this never moves the page. */
+      try { nav.scrollIntoView({ block: "nearest" }); } catch (_) {}
+    }
     const bc = document.getElementById("aosBreadcrumb");
     if (bc) bc.textContent = nav?.dataset.label || section;
     if (!_panelCache[section]) { _loadPanel(section); _panelCache[section] = true; }
