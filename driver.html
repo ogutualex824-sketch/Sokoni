@@ -297,7 +297,7 @@
         <div id="driverAvatar" style="display:none;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#71ff00,#4fc800);color:#04120a;font-weight:900;font-size:20px;align-items:center;justify-content:center;flex:0 0 auto;background-size:cover;background-position:center;"></div>
         <div style="min-width:0;">
           <div id="driverSignedChip" style="display:none;font-size:11px;font-weight:800;color:#71ff00;margin-bottom:2px;">🟢 Signed in</div>
-          <h2 style="font-size:20px;font-weight:900;color:white;" id="driverGreet">Welcome back, Driver! 🛵</h2>
+          <h2 style="font-size:20px;font-weight:900;color:white;" id="driverGreet">Welcome back 🛵</h2>
           <p style="color:rgba(255,255,255,0.4);font-size:13px;" id="driverZone"></p>
         </div>
       </div>
@@ -313,6 +313,7 @@
          availability. It replaces the separate "Shift Management" card, which duplicated this and
          could drift out of sync (two controls writing the same field independently). -->
     <button type="button" id="driverOnlineBtn" onclick="toggleOnline()" style="width:100%;padding:16px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);color:#71ff00;font-weight:900;font-size:16px;border-radius:14px;cursor:pointer;font-family:inherit;margin-bottom:12px;">🟢 Go Online</button>
+    <div id="drvPresenceState" role="status" aria-live="polite" style="margin:6px 2px 0;font-size:12px;color:rgba(255,255,255,0.55);"></div>
 
     <!-- Apply-to-Driver — shown only when signed in but not yet a registered driver. -->
     <button type="button" id="applyDriverTopBtn" onclick="_gotoApply()" style="display:none;width:100%;padding:12px 18px;background:linear-gradient(135deg,#71ff00,#4fc800);border:none;color:#04120a;font-weight:900;font-size:14px;border-radius:12px;cursor:pointer;font-family:inherit;margin-bottom:12px;">🛵 Apply to Become a Driver</button>
@@ -351,10 +352,10 @@
 
     <!-- ── Earnings Trend Chart ── -->
     <div class="weekly-goal" style="margin-bottom:20px;">
-      <h4 style="margin-bottom:12px;">📊 Earnings History — Last 8 Weeks</h4>
-      <div style="position:relative;height:160px;">
-        <canvas id="driverEarnChart"></canvas>
-      </div>
+      <h4 style="margin-bottom:12px;">📊 Earnings History</h4>
+      <!-- D2: the 8-week chart was this week's figure times invented multipliers. No per-week
+           earnings record exists yet, so the history is not drawn rather than invented. -->
+      <div style="color:rgba(255,255,255,0.45);font-size:13px;line-height:1.6;">No earnings history yet. Weekly history appears here once SOKONI records it.</div>
     </div>
 
     <!-- ── AI Fuel Price Panel (all non-ebike vehicles) ── -->
@@ -429,8 +430,8 @@
       <p>For every delivery you complete, here's exactly where the money goes.</p>
       <table class="commission-table">
         <tr><th>What</th><th>Who Gets It</th><th>Why</th></tr>
-        <tr><td>88% of delivery fee</td><td class="green">You (Driver)</td><td style="color:rgba(255,255,255,0.4);font-size:12px;">Your sweat, your money</td></tr>
-        <tr><td>12% of delivery fee</td><td style="color:rgba(255,255,255,0.5);">Sokoni Platform</td><td style="color:rgba(255,255,255,0.4);font-size:12px;">App, insurance, support</td></tr>
+        <tr><td>Your share of the delivery fee</td><td class="green">You (Driver)</td><td style="color:rgba(255,255,255,0.4);font-size:12px;">Calculated by SOKONI's server and shown on each job before you accept</td></tr>
+        <tr><td>Platform commission</td><td style="color:rgba(255,255,255,0.5);">Sokoni Platform</td><td style="color:rgba(255,255,255,0.4);font-size:12px;">The remainder of the delivery fee</td></tr>
         <tr><td>Charging cost</td><td style="color:#00b4ff;">Deducted from gross</td><td style="color:rgba(255,255,255,0.4);font-size:12px;">E-bike only · ~KES 0.23/km</td></tr>
       </table>
       <p style="margin-top:12px;font-size:11px;color:rgba(113,255,0,0.6);">✅ No hidden fees. No surge deductions. No performance penalty charges.</p>
@@ -442,7 +443,7 @@
 
     <!-- ── Weekly Performance Bonuses ── -->
     <div class="section-heading">🎁 Weekly Performance Bonuses</div>
-    <p style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">Complete these weekly milestones and earn bonus payouts automatically via M-PESA every Sunday at 8PM.</p>
+    <!-- D2: the milestone ladder (KES 200–3,500 "paid every Sunday") has no server behind it. -->
     <div class="bonus-row" id="bonusRow"></div>
 
     <!-- ── Payout Schedule ── -->
@@ -453,7 +454,6 @@
         <div class="payout-step"><div class="ps-icon">✅</div><div class="ps-title">Deliver & Complete</div><div class="ps-desc">Mark order as delivered to log your earnings instantly.</div></div>
         <div class="payout-step"><div class="ps-icon">📊</div><div class="ps-title">Earnings Tallied</div><div class="ps-desc">Daily earnings totalled at midnight.</div></div>
         <div class="payout-step"><div class="ps-icon">📲</div><div class="ps-title">M-PESA Payout</div><div class="ps-desc">Paid every evening by 8PM to your registered number.</div></div>
-        <div class="payout-step"><div class="ps-icon">🎁</div><div class="ps-title">Weekly Bonus</div><div class="ps-desc">Milestone bonuses sent every Sunday night.</div></div>
       </div>
       <p style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:12px;">Minimum payout: KES 100 · No withdrawal fees · Instant M-PESA confirmation</p>
     </div>
@@ -1103,46 +1103,83 @@ function exitDriverWorkspace(){
 window.logoutDriver = exitDriverWorkspace;
 window.exitDriverWorkspace = exitDriverWorkspace;
 
-/* ── Online toggle ── */
-function toggleOnline(){
-  isOnline = !isOnline;
-  window.isOnline = isOnline;   /* the module/wrapper layer reads window.isOnline — keep in sync (was undefined there) */
-  /* Reliable dispatch sync: dispatch.js filters rideDrivers where isOnline==true. Write it
-     here in the base handler — always runs, correct scope, no dependency on the DeliveryHub
-     module or the _uid() helper — so the rider is actually discoverable. */
+/* ── Online toggle — D2 (2026-09-30): the SERVER decides ──────────────────────────────
+   The browser only REQUESTS online/offline. riderPresence (Cloud Function) checks eligibility
+   against the server-only rider records and writes rideDrivers itself. The served rules make
+   rideDrivers `write: if false`, so the direct writes that used to sit here were refused
+   silently — the button flipped while nothing on the server changed. State shown here is
+   always the state the server returned. */
+function _presenceFn(){
+  if (window.firebaseFunctions && window.firebaseFunctions.httpsCallable) return window.firebaseFunctions.httpsCallable('riderPresence');
+  if (window.firebase && firebase.functions) return firebase.functions().httpsCallable('riderPresence');
+  return null;
+}
+function _presenceCall(action, loc){
+  var fn = _presenceFn();
+  if (!fn) return Promise.reject(new Error('presence unavailable'));
+  var data = { action: action };
+  if (loc && isFinite(loc.lat) && isFinite(loc.lng)) { data.lat = loc.lat; data.lng = loc.lng; }
+  return fn(data).then(function(r){ return (r && r.data) || {}; });
+}
+var PRESENCE_TEXT = {
+  online:       '🟢 Online — you are visible for new deliveries',
+  on_delivery:  '🟢 Online — on a delivery',
+  offline:      '⚪ Offline',
+  stale:        '🟠 Connection lost — tap Go Online to reconnect',
+  not_eligible: '🔒 Your rider account is not cleared for deliveries yet (approval or documents pending)'
+};
+/* Apply the SERVER's answer: isOnline, both buttons, the status line and the greeting. */
+function _applyPresence(res){
+  var st = (res && res.state) || 'offline';
+  isOnline = (st === 'online' || st === 'on_delivery');
+  window.isOnline = isOnline;
+  window._presenceState = st;
+  try { _syncOnlineButtons(); } catch(_){}
+  var line = document.getElementById('drvPresenceState');
+  if (line) line.textContent = PRESENCE_TEXT[st] || '';
+  if (res && res.displayName) {
+    var g = document.getElementById('driverGreet');
+    if (g) g.textContent = 'Welcome back, ' + String(res.displayName).split(' ')[0] + ' 🛵';
+  }
+  return st;
+}
+window._applyPresence = _applyPresence;
+window._presenceCall = _presenceCall;
+async function _refreshPresence(){
+  try { return _applyPresence(await _presenceCall('status')); } catch(_) { return null; }
+}
+window._refreshPresence = _refreshPresence;
+
+async function toggleOnline(){
+  var want = isOnline ? 'offline' : 'online';
+  var btns = ['driverOnlineBtn','btnGoOnline'].map(function(id){ return document.getElementById(id); }).filter(Boolean);
+  btns.forEach(function(b){ b.disabled = true; });
   try {
-    var _ru = (window.firebase && firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.uid : null;
-    if(_ru && firebase.firestore){
-      firebase.firestore().collection('rideDrivers').doc(_ru).update({
-        isOnline: isOnline,
-        status: isOnline ? 'active' : 'offline',
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }).catch(function(){});
-      /* Derive the shift/identity state from the ONE online switch (single source of truth) —
-         mirror to users/{uid}.driverProfile so `shiftStatus` is never an independent, drift-prone
-         toggle. Additive (arrayUnion) so a multi-role account keeps every role. */
-      firebase.firestore().collection('users').doc(_ru).set({
-        /* `roles` is NOT written here. It is server-owned (Roles Phase 3): approval
-           grants `driver`/`rider` via grantAccountRole, and a shift toggle is not an
-           approval. Sending arrayUnion('driver') would be rejected for exactly the
-           account that should not have it, and — inside this one merged set() — would
-           take the shiftStatus mirror down with it. */
-        isDriver: true, isRider: true,
-        driverProfile: {
-          shiftStatus: isOnline ? 'online' : 'offline',
-          lastShiftAt: firebase.firestore.FieldValue.serverTimestamp()
-        },
+    var loc = null;
+    if (want === 'online' && window.SokoniGeo && SokoniGeo.getLocationAsync) {
+      try { loc = await SokoniGeo.getLocationAsync({ timeout: 5000, enableHighAccuracy: true }); } catch(_){}
+    }
+    if (loc) window._drvLastLoc = loc;
+    var res = await _presenceCall(want, loc);
+    _applyPresence(res);
+    /* users/{uid}.driverProfile.shiftStatus mirrors what the SERVER decided, never the tap. */
+    try {
+      var _ru = (window.firebase && firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.uid : null;
+      if (_ru && firebase.firestore) firebase.firestore().collection('users').doc(_ru).set({
+        driverProfile: { shiftStatus: isOnline ? 'online' : 'offline', lastShiftAt: firebase.firestore.FieldValue.serverTimestamp() },
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true }).catch(function(){});
-    }
-  } catch(e){}
-  _syncOnlineButtons();
-  if(isOnline){
-    if(window.SokoniDB?.startGPSTracking && currentDriver){
-      window.SokoniDB.startGPSTracking(currentDriver.id);
-    }
+    } catch(_){}
+  } catch (e) {
+    console.warn('[driver] riderPresence', e && (e.code || e.message));
+    if (window.SK && SK.dialog) SK.dialog.alert('Could not change your status — please check your connection and try again.');
+  } finally {
+    btns.forEach(function(b){ b.disabled = false; });
+  }
+  if (isOnline) {
+    if (window.SokoniDB?.startGPSTracking && currentDriver) window.SokoniDB.startGPSTracking(currentDriver.id);
   } else {
-    if(window.SokoniDB?.stopGPSTracking) window.SokoniDB.stopGPSTracking();
+    if (window.SokoniDB?.stopGPSTracking) window.SokoniDB.stopGPSTracking();
   }
   renderDeliveries();
 }
@@ -1173,8 +1210,11 @@ function showDriverDashboard(){
   const _gate = document.getElementById("driverGate");
   if(_gate) _gate.style.display="none";
   document.getElementById("driverDashboard").style.display="block";
-  /* Reflect the rider's ACTUAL online state so both Go-Online buttons match the record on load. */
-  isOnline = !!(currentDriver.isOnline || currentDriver.online || String(currentDriver.status||'').toLowerCase()==='active' || String(currentDriver.status||'').toLowerCase()==='online');
+  /* D2: the online state is the SERVER's (riderPresence status), not a guess from the record.
+     Deriving it from status==='active' showed every approved rider as online on load, so the
+     first tap took them OFFLINE. Start neutral; the server answers within a moment. */
+  isOnline = false;
+  try { if (typeof _refreshPresence === 'function') _refreshPresence(); } catch(_){}
   window.isOnline = isOnline;
   try{ _syncOnlineButtons(); }catch(_){}
   /* Identity model: the one signed-in SOKONI account = driver mode. No login/logout button;
@@ -1311,34 +1351,28 @@ function renderDriverStats(){
     _set("earnTotal",      _fmt(earned.totalEarnings));
   }
 
-  const _seeds=[0.68,0.82,0.55,0.91,0.74,1.08,0.88,1.0];
+  /* D2: the weekly chart's seven earlier weeks were _base * invented multipliers, with a KES 400
+     floor — fabricated history. Nothing is drawn until a canonical per-week record exists. */
   /* `earnings` was a bare identifier that is declared nowhere — it threw
      "earnings is not defined" and aborted renderDriverStats, so the driver
      dashboard never rendered its weekly chart, and everything after this line
      in the function was dead. This chart is weekly, and `earned.weekEarnings`
      (computed at the top of this same function) is the weekly figure; the
      currentDriver fallback mirrors the pattern used elsewhere in this file. */
-  const _base=Math.max(earned.weekEarnings || currentDriver.earnings || 400, 400);
-  const _weekEarn=_seeds.map((m,i)=>i===7?_base:Math.round(_base*m));
-  const _weekLabels=['Wk-7','Wk-6','Wk-5','Wk-4','Wk-3','Wk-2','Last','This'];
-  window._drvPendingChart={weekEarn:_weekEarn,weekLabels:_weekLabels,trips,rating:currentDriver.rating||5.0};
-  if(typeof window._updateDriverCharts==='function') window._updateDriverCharts(window._drvPendingChart);
+  window._drvPendingChart=null;
 }
 
 /* ── Weekly goal ── */
 function renderWeeklyGoal(){
   if(!currentDriver) return;
-  const WEEKLY_TARGET = 7000; // KES
-  const earned = currentDriver.weeklyEarnings || currentDriver.earnings || 0;
-  const pct = Math.min(100, Math.round((earned / WEEKLY_TARGET) * 100));
+  /* D2: the KES 7,000 target was invented and the figure fell back to ALL-TIME earnings. Show the
+     week's figure only when a server-kept weekly number exists; otherwise —. No invented target. */
+  const wk = currentDriver.weeklyEarnings;
+  const shown = (typeof wk === 'number' && isFinite(wk)) ? 'KES ' + Math.round(wk).toLocaleString() : '—';
   document.getElementById("weeklyGoalBox").innerHTML = `
-    <h4>🎯 Weekly Earnings Goal</h4>
-    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;">
-      <span style="color:#71ff00;font-weight:800;">KES ${earned.toLocaleString()}</span>
-      <span style="color:rgba(255,255,255,0.3);">Target: KES ${WEEKLY_TARGET.toLocaleString()}</span>
-    </div>
-    <div class="goal-bar-bg"><div class="goal-bar-fill" style="width:${pct}%;"></div></div>
-    <div class="goal-labels"><span>${pct}% done</span><span>${pct>=100?"🎉 Goal reached!":"KES "+(WEEKLY_TARGET-earned).toLocaleString()+" to go"}</span></div>
+    <h4>🎯 This Week</h4>
+    <div style="font-size:13px;"><span style="color:#71ff00;font-weight:800;">${shown}</span>
+      <span style="color:rgba(255,255,255,0.3);"> earned this week</span></div>
   `;
 }
 
@@ -1676,10 +1710,10 @@ function saveDriver(){
 
 /* ── Tier system ── */
 const TIERS = [
-  { name:"Bronze", icon:"🥉", minTrips:0,   maxTrips:19,  perk:"Basic listings priority",  cls:"tier-bronze" },
-  { name:"Silver", icon:"🥈", minTrips:20,  maxTrips:49,  perk:"+KES 50 bonus/week",        cls:"tier-silver" },
-  { name:"Gold",   icon:"🥇", minTrips:50,  maxTrips:99,  perk:"+KES 200 bonus/week",       cls:"tier-gold" },
-  { name:"Diamond",icon:"💎", minTrips:100, maxTrips:9999, perk:"+KES 500 bonus/week + VIP insurance", cls:"tier-diamond" },
+  { name:"Bronze", icon:"🥉", minTrips:0,   maxTrips:19,  perk:"Recognition tier",  cls:"tier-bronze" },
+  { name:"Silver", icon:"🥈", minTrips:20,  maxTrips:49,  perk:"Recognition tier",        cls:"tier-silver" },
+  { name:"Gold",   icon:"🥇", minTrips:50,  maxTrips:99,  perk:"Recognition tier",       cls:"tier-gold" },
+  { name:"Diamond",icon:"💎", minTrips:100, maxTrips:9999, perk:"Recognition tier", cls:"tier-diamond" },
 ];
 
 function getCurrentTier(trips){
@@ -1712,7 +1746,10 @@ const BONUSES = [
 
 function renderBonusRow(){
   if(!currentDriver) return;
-  const weekTrips = Math.min(currentDriver.tripsCompleted || 0, 50); // simulated; real app resets weekly
+  /* D2: no bonus programme exists server-side; the ladder was fabricated. Neutral until one does. */
+  document.getElementById("bonusRow").innerHTML = '<div style="color:rgba(255,255,255,0.45);font-size:13px;line-height:1.6;">No bonus programme is running right now. When SOKONI launches one, it will appear here.</div>';
+  return;
+  const weekTrips = 0;
   const nextBonus = BONUSES.find(b => weekTrips < b.trips);
   document.getElementById("bonusRow").innerHTML = BONUSES.map(b=>{
     const done = weekTrips >= b.trips;
@@ -1726,17 +1763,15 @@ function renderBonusRow(){
   }).join("");
 }
 
-/* ── Leaderboard (simulated) ── */
+/* ── Leaderboard (none yet — D2) ── */
 function renderLeaderboard(){
   if(!currentDriver) return;
   const myTrips = currentDriver.tripsCompleted || 0;
-  const fakeLeaders = [
-    { name:"Kevin M.", trips:48, earn:38400 },
-    { name:"Wanjiru A.", trips:41, earn:32800 },
-    { name:"Omar K.", trips:37, earn:29600 },
-    { name:"Faith C.", trips:30, earn:24000 },
-    { name:"James O.", trips:26, earn:20800 },
-  ];
+  /* D2: the five "leaders" (Kevin M., Wanjiru A., …) were invented people with invented earnings.
+     There is no server leaderboard, so none is shown. */
+  document.getElementById("leaderList").innerHTML = '<div style="color:rgba(255,255,255,0.45);font-size:13px;line-height:1.6;">The rider leaderboard is not available yet.</div>';
+  return;
+  const fakeLeaders = [];
 
   /* Insert current driver */
   const myEntry = { name:currentDriver.name+" (You)", trips:myTrips, earn:currentDriver.earnings||0, isMe:true };
@@ -2052,57 +2087,33 @@ function _drvId() {
 /* ══ EXTEND toggleOnline — add Firestore + GPS ══════════════ */
 const _origToggleOnline = window.toggleOnline;
 window.toggleOnline = async function() {
-  if (_origToggleOnline) _origToggleOnline(); /* toggles isOnline flag + UI */
+  /* D2: AWAIT the base — it asks the server, and window.isOnline is only true once the server
+     said so. (This used to call it without await and read a flag that had not changed yet.) */
+  if (_origToggleOnline) await _origToggleOnline();
   const drv = window.currentDriver;
   if (!drv) return;
 
   if (window.isOnline) {
-    /* Get current GPS via safe wrapper (handles Safari synchronous throws) */
-    let lat = null, lng = null;
-    const _gp = window.SokoniGeo
-      ? await SokoniGeo.getLocationAsync({ timeout:6000, enableHighAccuracy:true })
-      : await new Promise(res => {
-          try { navigator.geolocation?.getCurrentPosition(p=>res(p?.coords),()=>res(null),{timeout:6000}); }
-          catch(_){ res(null); }
-        }).then(c => c ? {lat:c.latitude,lng:c.longitude} : null);
-    if (_gp) { lat = _gp.lat; lng = _gp.lng; }
-    /* Write to Firestore */
-    try {
-      await SokoniDB.setDriverOnline(drv.id, true, drv.vehicle, lat, lng, {
-        name:drv.name, phone:drv.phone, plate:drv.plate||'', area:drv.zone||'',
-        vehicleLabel:(drv.vehicle||'motorcycle'), rating:drv.rating||5.0,
-        ridesCompleted:drv.tripsCompleted||0,
-      });
-    } catch(e) { console.warn('[driver] setDriverOnline:', e.message); }
-
-    /* Start GPS continuous tracking */
+    /* GPS continues to feed tracking; the fix is remembered for the next heartbeat. Presence
+       itself is written ONLY by the server (riderPresence) — every direct rideDrivers write the
+       page used to make here was refused by the served rules. */
     if (!_drvGpsActive) {
       _drvGpsActive = true;
-      SokoniDB.startGPSTracking(drv.id, (lat2, lng2) => {
-        SokoniDB.setDriverOnline(drv.id, true, drv.vehicle, lat2, lng2, { lastPing: new Date().toISOString() }).catch(()=>{});
-      });
+      SokoniDB.startGPSTracking(drv.id, (lat2, lng2) => { window._drvLastLoc = { lat: lat2, lng: lng2 }; });
     }
 
-    /* Heartbeat — updates lastPing every 60 s so staleness checks can detect ghost drivers */
+    /* Heartbeat — the server refreshes lastSeen. No heartbeat for longer than the server's
+       stale threshold = STALE (not offline). The server's answer is applied, so a rider who was
+       suspended or went stale sees it immediately instead of a button that still says Online. */
     if (!window._drvHeartbeat) {
       window._drvHeartbeat = setInterval(() => {
-        if (window.isOnline && drv) {
-          SokoniDB.setDriverOnline(drv.id, true, drv.vehicle, null, null, { lastPing: new Date().toISOString() }).catch(()=>{});
-        }
+        if (!window.isOnline) return;
+        _presenceCall('heartbeat', window._drvLastLoc).then(_applyPresence).catch(() => {});
       }, 60_000);
     }
 
-    /* Ghost-driver guard: mark offline if tab/browser is closed without explicit logout */
-    if (!window._drvBeforeUnloadBound) {
-      window._drvBeforeUnloadBound = true;
-      window.addEventListener('beforeunload', () => {
-        if (window.isOnline && drv) {
-          /* Non-blocking fire-and-forget — sendBeacon isn't available for Firestore,
-             but this handles the common case of tab close / refresh. */
-          SokoniDB.setDriverOnline(drv.id, false, drv.vehicle, null, null).catch(()=>{});
-        }
-      });
-    }
+    /* Closing the tab is NOT going offline — the heartbeat simply stops and the server marks the
+       rider stale. Offline is an explicit act; the old unload handler conflated the two. */
 
     /* Listen for incoming delivery assignments */
     if (_drvDeliveryUnsub) { _drvDeliveryUnsub(); _drvDeliveryUnsub = null; }
@@ -2112,10 +2123,8 @@ window.toggleOnline = async function() {
     });
 
   } else {
-    /* Going offline */
-    try {
-      await SokoniDB.setDriverOnline(drv.id, false, drv.vehicle, null, null);
-    } catch(e) { console.warn('[driver] setDriverOnline offline:', e.message); }
+    /* Going offline — the base handler already asked the server. */
+    if (window._drvHeartbeat) { clearInterval(window._drvHeartbeat); window._drvHeartbeat = null; }
     SokoniDB.stopGPSTracking();
     _drvGpsActive = false;
     if (_drvDeliveryUnsub) { _drvDeliveryUnsub(); _drvDeliveryUnsub = null; }
@@ -2288,7 +2297,7 @@ function _deliveryActionBtns(req) {
     </button>`;
   if (s === 'in_transit') return `
     <div style="margin-top:4px;">
-      <input id="drvPinInput_${dRef}" placeholder="Enter 4-digit delivery PIN" maxlength="4" inputmode="numeric"
+      <input id="drvPinInput_${dRef}" placeholder="Enter the customer's 6-digit PIN" maxlength="6" inputmode="numeric"
         style="width:100%;padding:11px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:white;border-radius:10px;font-size:15px;font-family:inherit;text-align:center;letter-spacing:6px;box-sizing:border-box;margin-bottom:8px;">
       <button onclick="window._drvCompleteDelivery('${dRef}')"
         style="width:100%;padding:11px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">
@@ -2377,7 +2386,6 @@ window._drvCompleteDelivery = async function(dRef) {
     }
 
     const fee       = Number(data.deliveryFee || 0);
-    const driverNet = Math.round(fee * 0.88);
 
     try {
       const _fn = window.firebaseFunctions && window.firebaseFunctions.httpsCallable
@@ -2396,21 +2404,20 @@ window._drvCompleteDelivery = async function(dRef) {
       return;
     }
 
-    /* Update driver earnings */
+    /* D2: the browser no longer adds a fixed 88% of the fee to a local earnings figure — that number was
+       invented (and fee may be a browser pre-write). Earnings come from the server ledger. */
     if (drv && fee > 0) {
-      drv.earnings       = (drv.earnings||0)       + driverNet;
       drv.tripsCompleted = (drv.tripsCompleted||0) + 1;
       try {
         const ds  = JSON.parse(localStorage.getItem('sokoniDrivers')||'[]');
         const idx = ds.findIndex(d => d.id === drv.id);
         if (idx >= 0) {
-          ds[idx].earnings       = drv.earnings;
           ds[idx].tripsCompleted = drv.tripsCompleted;
           localStorage.setItem('sokoniDrivers', JSON.stringify(ds));
         }
       } catch(e){}
       if (typeof window.renderDriverStats === 'function') window.renderDriverStats();
-      window.toast('🎉 Delivered! You earned KES ' + driverNet.toLocaleString());
+      window.toast('🎉 Delivered! Your earning is recorded by SOKONI.');
     }
     _clearDrvDelivery();
   });
@@ -3059,16 +3066,8 @@ window.toggleOnline = async function() {
     await DeliveryHub.toggleRiderOnline(uid, false).catch(() => {});
     _stopHub();
   }
-  /* Dispatch (dispatch.js) filters rideDrivers where isOnline==true, but the top
-     toggle previously only wrote DeliveryHub/`online`, never `rideDrivers.isOnline`
-     — so a rider looked online yet was never discoverable. Keep that field in sync
-     here (rules allow the owner to update their own doc; we touch only isOnline). */
-  try {
-    await firebase.firestore().collection('rideDrivers').doc(uid).update({
-      isOnline: !!window.isOnline,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    });
-  } catch (_) {}
+  /* D2: rideDrivers presence is written by the server (riderPresence) — the served rules refuse
+     this page's writes to it, so the sync that used to be here never landed. */
 };
 
 /* ── Init: restore hub if driver was already online when page loaded ── */
@@ -3163,11 +3162,14 @@ window.toggleOnline = async function() {
 
     function _setRiderOnline(online, onBreak) {
       if (!_riderUid) return;
-      firebase.firestore().collection('rideDrivers').doc(_riderUid).update({
-        isOnline: online,
-        status:   onBreak ? 'break' : (online ? 'active' : 'offline'),
-        updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
-      }).catch(function () {});
+      /* D2: presence is the server's (riderPresence). This used to write rideDrivers directly —
+         refused by the served rules and swallowed, so the browser "went online" while the server
+         never heard. A break is not an online state: it takes no jobs, so it goes offline. */
+      if (typeof window._presenceCall === 'function') {
+        window._presenceCall(online ? 'online' : 'offline')
+          .then(function (r) { if (typeof window._applyPresence === 'function') window._applyPresence(r); })
+          .catch(function () {});
+      }
       /* Canonical unified identity — an authenticated account acting as a driver is
          registered in users/{uid}.roles[] (THE single source per CANONICAL_DATA_MODEL),
          not localStorage. Additive (arrayUnion, never destructive), so a multi-role
@@ -3509,30 +3511,40 @@ window.toggleOnline = async function() {
     /* A refusal is not "no work". Showing the empty-board copy for a 401/403 would
        tell an unapproved rider that the platform is quiet, which is false and sends
        them to support with the wrong question. */
-    function _renderNotice(code){
+    function _renderNotice(code, state){
       var el = _container(); if (!el) return;
+      /* D2: 409 = the server says this rider is not currently available (offline or stale) —
+         a different answer from "not approved", and neither is "no work". */
+      var msg = code === 403
+          ? 'Your rider account is not cleared for deliveries yet (approval or documents pending). Once it is, available jobs appear here.'
+        : code === 409 && state === 'stale'
+          ? 'Your connection to SOKONI was lost, so you are not being offered jobs. Tap Go Online to reconnect.'
+        : code === 409
+          ? 'Go online to see available deliveries.'
+          : 'Sign in with your rider account to see available deliveries.';
       el.innerHTML = '<div class="section-heading">🛵 Available Deliveries</div>'
-        + '<div style="color:rgba(255,255,255,0.45);font-size:13px;padding:10px 0;line-height:1.6;">'
-        + (code === 403
-            ? 'Your rider account is not approved to take deliveries yet. Once it is approved, available jobs appear here.'
-            : 'Sign in with your rider account to see available deliveries.')
-        + '</div>';
+        + '<div style="color:rgba(255,255,255,0.45);font-size:13px;padding:10px 0;line-height:1.6;">' + msg + '</div>';
+      if (code === 409 && typeof window._applyPresence === 'function') window._applyPresence({ state: state || 'offline' });
     }
+    /* Money is shown only when the SERVER supplied it; unknown renders as —, never a guess. */
+    function _kes(n){ return (n === null || n === undefined || !isFinite(Number(n))) ? '—' : 'KES ' + Math.round(Number(n)).toLocaleString(); }
     function _render(list){
       var el = _container(); if (!el) return;
       if (!window.isOnline) { el.innerHTML = ''; return; }
       if (!list.length) { el.innerHTML = '<div class="section-heading">🛵 Available Deliveries</div><div style="color:rgba(255,255,255,0.3);font-size:13px;padding:10px 0;">No deliveries right now — check back soon.</div>'; return; }
       el.innerHTML = '<div class="section-heading">🛵 Available Deliveries ('+list.length+')</div>' + list.map(function(d){
-        var net = d.driverNet || Math.round((Number(d.deliveryFee)||0)*0.88);
+        /* D2: the rider figure is the server's (same commission as the payout) — no 0.88 in the
+           browser. Unknown (no server money record yet) renders as —. */
+        var net = _kes(d.riderEarning != null ? d.riderEarning : d.driverNet);
         return '<div class="delivery-card"><div class="dc-top"><div><div class="dc-id">Order '+_esc(String(d.orderId||d.id).slice(0,10))+'</div>'
           /* Area, not street address — and no buyer name or phone. An unclaimed job
              is assigned to nobody, so nobody has yet earned the customer's identity.
              Those details arrive after the claim, through fulfilmentScan's rider
              projection, which checks the assignment is still active. */
           + '<div class="dc-date">'+_esc(d.sellerName||'Shop')+' → '+_esc(String(d.deliveryArea||'Area not recorded').slice(0,40))+'</div></div>'
-          + '<div><div class="dc-fee">KES '+net+' <span style="font-size:11px;color:rgba(255,255,255,0.35)">to you</span></div></div></div>'
-          + '<div class="dc-info">📦 '+(Number(d.itemCount)||0)+' item(s)'+(d.vehicleType?' · '+_esc(d.vehicleType):'')+'</div>'
-          + '<div class="dc-actions"><button type="button" class="dc-accept-btn" data-del="'+_esc(d.id)+'">✅ Accept — Earn KES '+net+'</button></div></div>';
+          + '<div><div class="dc-fee">'+net+' <span style="font-size:11px;color:rgba(255,255,255,0.35)">to you</span></div></div></div>'
+          + '<div class="dc-info">📦 '+(Number(d.itemCount)||0)+' item(s)'+(d.vehicleType?' · '+_esc(d.vehicleType):'')+' · 📍 Distance —</div>'
+          + '<div class="dc-actions"><button type="button" class="dc-accept-btn" data-del="'+_esc(d.id)+'">✅ Accept'+(net !== '—' ? ' — Earn '+net : '')+'</button></div></div>';
       }).join('');
       el.querySelectorAll('button[data-del]').forEach(function(b){
         b.onclick = async function(){
@@ -3577,6 +3589,7 @@ window.toggleOnline = async function() {
         var r = await fetch('/api/available-deliveries?cb='+Date.now(),
           { cache:'no-store', headers:{ Authorization: 'Bearer ' + tok } });
         if (r.status === 401 || r.status === 403) { _renderNotice(r.status); return; }
+        if (r.status === 409) { var j409 = null; try { j409 = await r.json(); } catch(_){} _renderNotice(409, j409 && j409.state); return; }
         var j = r.ok ? await r.json() : null;
         if (j && j.ok && Array.isArray(j.deliveries)) _render(j.deliveries);
       } catch(_){}

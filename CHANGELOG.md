@@ -1,3 +1,65 @@
+## [2026-09-30] — Delivery Hub D2 (hosting half): the rider portal asks the server whether it is online — NOT deployed
+
+**Files:** `driver.html`, `CHANGELOG.md`. Built on the live hosting commit `d108f6c`.
+**Pairs with:** functions commit `42621ef` (`feat/d2-rider-presence`). It adds the `riderPresence` callable and
+gates `availableDeliveries` / `claimAvailableDelivery` / `dispatchDelivery`. **Deploy the functions first.**
+Without `riderPresence`, Go Online shows an error and the rider stays offline. That is a truthful failure, never a
+false "online".
+**Database / rules changes:** none. The page stops writing `rideDrivers`, which the served rules already refused.
+**API changes:** the page now consumes `riderPresence` and `/api/available-deliveries` 409 `{error:'not_online', state}`.
+**Security:** the browser no longer declares itself online, and it no longer computes rider earnings.
+**Breaking changes:** none for approved riders. A rider who is not DL-01-eligible now sees "not cleared" instead
+of a board.
+
+**Presence is the server's answer.**
+- Go Online, Go Offline and the 60-second heartbeat call `riderPresence` (online / offline / heartbeat / status).
+- The UI state is set only from the returned `state`: `online` | `on_delivery` | `offline` | `stale` | `not_eligible`.
+  A `#drvPresenceState` status line (aria-live) names each state.
+- A dashboard load no longer infers "online" from cached `isOnline` / `status==='active'`. It asks `status`.
+- Every direct write is gone: `rideDrivers.update` and `setDriverOnline` (both refused by the served rules and
+  silently swallowed), and the shift module's `_setRiderOnline`. The shift module now calls the server; a break
+  goes offline.
+- The beforeunload offline write is gone too. Closing the tab lets the server mark the rider stale after the
+  configurable threshold (5 minutes by default).
+
+**Job board.**
+- 409 renders a named notice: offline → "Go online…"; stale → "connection lost, tap Go Online". 403 renders
+  "not cleared (approval or documents pending)". None of these show the empty "no deliveries" board.
+- The rider figure is the server's `riderEarning` (the same commission the payout uses). The browser's
+  `fee*0.88` fallback is gone, and an unknown earning renders as `—`.
+- Distance renders as `—`: no coordinates are recorded yet, and no radius is invented.
+
+**Identity and PIN.**
+- The greeting reads "Welcome back, <first name>" from the server's canonical display name. The hard-coded
+  "Driver!" is gone.
+- The package-delivery PIN box takes 6 digits, matching the server PIN. The submit check already accepted 4–8.
+
+**Fabricated content removed** (UI data integrity):
+- the 8-week earnings chart (this week × invented multipliers, with a KES 400 floor);
+- the KES 7,000 weekly target, which fell back to all-time earnings; it now shows the week's server figure or `—`;
+- the bonus ladder (KES 200–3,500 "paid every Sunday") and the "Weekly Bonus" payout step;
+- the tier money perks and "VIP insurance";
+- the five invented leaderboard riders;
+- the fixed 88/12 commission table;
+- the local `fee*0.88` added to earnings on delivery.
+
+**Verified.**
+- Chromium, 390 and 1280 px, real page code. Test-only: the auth guard and the signed-out login redirect are
+  neutralised.
+- **37/0 on D2 vs 8/29 on the live base** (`ff9d762`, whose `driver.html` equals `d108f6c`).
+- Rows cover greeting, presence, board money and distance, 409/403 notices, the fabricated panels, and
+  horizontal scroll.
+
+**Left for later / flagged, not in D2:**
+- insurance cover copy;
+- "paid every evening by 8PM / no withdrawal fees";
+- the referral KES 500;
+- the running-cost calculator's 88% (fuel scope);
+- the legacy `deliveries` proof modal: a 4-digit PIN compared in the browser against `proofPIN`, a
+  client-side check;
+- the local `tripsCompleted` count;
+- `food-rider.html`.
+
 ## [2026-09-29] - Deployed d108f6c (Hosting release 1790716196877000 / version 9074367eed5d10b7, 864 files); signed-out fix prepared, NOT deployed
 
 Live smoke: production firebase.js publishes sokoniAuthReady only for signed-in users, so the page stayed at boot when signed out.
