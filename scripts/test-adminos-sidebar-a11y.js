@@ -113,6 +113,7 @@ const focusRing = (p) => p.evaluate(() => {
       navOverflowY: getComputedStyle(nav).overflowY, navScrolls: nav.scrollHeight > nav.clientHeight + 4, navScrolledTo: after,
       sideSelfScrolls: side.scrollHeight > side.clientHeight + 1, sideOverflow: getComputedStyle(side).overflowY,
       foot: r(foot), vh: window.innerHeight, itemsInNav: nav.querySelectorAll('.nav-item').length,
+      itemsInSidebar: side.querySelectorAll('.nav-item').length,
     };
   });
   ok('D1  the navigation is a <nav aria-label="AdminOS navigation"> inside a labelled <aside>',
@@ -123,7 +124,7 @@ const focusRing = (p) => p.evaluate(() => {
      !region.sideSelfScrolls && region.sideOverflow === 'hidden', region);
   ok('D4  the footer (Sign Out) is inside the viewport while the list overflows',
      region.foot.top >= 0 && region.foot.bottom <= region.vh, region);
-  ok('D5  all 36 nav items live inside the scrolling <nav>', region.itemsInNav === 36, region.itemsInNav);
+  ok(`D5  every nav item (${region.itemsInSidebar}) lives inside the scrolling <nav>`, region.itemsInNav === region.itemsInSidebar && region.itemsInNav >= 36, region);
 
   /* keyboard reaches the controls, and focus is visible when it does */
   await p.evaluate(() => document.body.focus());
@@ -154,7 +155,10 @@ const focusRing = (p) => p.evaluate(() => {
   ok('D12 the newly active item is scrolled into view inside the <nav>', sec.inView && sec.navScrollTop > 0, sec);
 
   /* collapsed rail */
-  await p.click('#aosSidebarToggle'); await p.waitForTimeout(350);
+  /* Wait for the width TRANSITION to settle rather than a fixed sleep: under load a
+     0.2s transition can still be mid-flight at 350ms and report the old width. */
+  const settle = (w) => p.waitForFunction((w) => Math.round(document.getElementById('aosSidebar').getBoundingClientRect().width) === w, w, { timeout: 4000 }).catch(() => {});
+  await p.click('#aosSidebarToggle'); await settle(66);
   const rail = await p.evaluate(() => {
     const t = document.getElementById('aosSidebarToggle'), it = document.querySelector('.nav-item[data-section="users"]');
     const lbl = it.querySelector('.nav-label');
@@ -165,7 +169,7 @@ const focusRing = (p) => p.evaluate(() => {
   ok('D13 collapse → 66px rail, aria-expanded="false", "Expand menu"', rail.w === 66 && rail.expanded === 'false' && rail.label === 'Expand menu', rail);
   ok('D14 collapsed labels are hidden without font-size:0, and the item carries its name as a title',
      rail.lblW === 0 && rail.lblOpacity === '0' && rail.title === 'User Management' && rail.iconFont !== '0px', rail);
-  await p.click('#aosSidebarToggle'); await p.waitForTimeout(350);
+  await p.click('#aosSidebarToggle'); await settle(220);
   const back = await p.evaluate(() => ({ w: Math.round(document.getElementById('aosSidebar').getBoundingClientRect().width),
     expanded: document.getElementById('aosSidebarToggle').getAttribute('aria-expanded'), title: document.querySelector('.nav-item[data-section="users"]').hasAttribute('title') }));
   ok('D15 expand → 220px, aria-expanded="true", titles removed', back.w === 220 && back.expanded === 'true' && !back.title, back);

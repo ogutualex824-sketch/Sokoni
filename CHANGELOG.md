@@ -1,3 +1,51 @@
+## 2026-09-29 — AdminOS sidebar, Slice C1: one navigation hierarchy, child routes, built ⇒ reachable (branch `feat/integrations-control-center`, NOT deployed)
+
+The 27-section inventory is unchanged and authoritative; nothing was invented to fill the sidebar. Users, Invoices,
+Integrations, Revenue and Reports were already first-class destinations on this branch — C1 certifies that rather
+than re-adding them.
+
+- **Children** (owner-locked, one per DISTINCT existing tab): Marketplace → Products / Orders / Reviews; Financial →
+  Wallets (`wallet`) / Withdrawals (`payouts`) / Disputes / Commissions; Shops & Sellers → Merchants (`sellers`);
+  Communications → Notifications (`push`). Applications & Verification and Config & Settings are single destinations
+  (renamed; no children). Nine children in all.
+- **Router** (`sokoni-aos.js`, `_navigate` only): `navigate(section, tab)`. A child route calls the EXISTING selector
+  (`_marketplaceTab`, `_financialTab`, …) — the same function the in-panel tab bar calls — never a re-implementation.
+  On first open a requested tab *replaces* the loader (each tab-bearing loader is exactly `_xTab(default)`, so running
+  both would race two renders into one body). `_setNavState` puts `.active` + `aria-current` on the child and
+  `parent-active` on its parent; a direct click on an in-panel tab reports back to the sidebar and URL, so the tab bar
+  (kept, secondary) and the sidebar never disagree.
+- **Deep links:** `#section` or `#section/tab`, validated by `_parseRoute` against a real nav item and a real tab
+  button; hostile input falls back to the dashboard, an unknown tab to the section's default. URL kept by
+  `replaceState` (no anchor scroll, no history spam); `hashchange` serves a hand-edited URL. Listeners attach in
+  `_bootUI`, after the operator is verified. Route convention is the router's section ids (`#comms/push`, not
+  `#communications/push`).
+- **Subscriptions:** no AdminOS panel or tab exists; the existing `admin-subscriptions.html` is now a Tools link.
+  Platform Health and FinOS Tools links certified present.
+
+Evidence — new `scripts/test-adminos-nav-coverage.js` **25/0**, inventory derived from the served document, never a
+list: 27 panels ⇔ 27 parents (no body-only panel, no decorative entry); 9 children each match a distinct tab; the two
+ruled singles have none; all 27 parents route on click with exactly one `aria-current`; all 9 children land on the
+parent panel with the existing tab bar on that tab and `#parent/tab`; **57 deep links (27 sections + 30 tabs) each
+survive a real reload** (through `about:blank`, since a hash-only `goto` is a same-document navigation); hostile and
+unknown-tab hashes fall back; all 36 destinations route from the 66px rail and from the phone drawer (drawer closes);
+every module root renders; Integrations mounts the shared `sokoni-integrations.js` and its rendered labels are within
+the module's own closed `STATUS_META` vocabulary, with "Live" shown for exactly the catalogue entries declared live
+(not for every entry). Negative control: the selector call removed from the served router turns child routing red.
+Regression: `test-adminos-sidebar-a11y` 34/0 (D5 now derived), `single-navigation` 22/0, `render` 43/0, `wiring` 308/0.
+
+Reported for Slice D (not changed): 1 in-body `navigate()` control (header bell → Communications) and 18 external
+links inside panels (dashboard quick-links and page-header tool links).
+
+**Owner asks received mid-slice and their disposition:** Commissions → child (done). Subscriptions → Tools link (done).
+Platform Health → already in Tools (certified). SOKONI Store button → exists only on `slice/realtime-control-plane`
+(`526f330`) together with its backend and `merchant-v2.html?store=sokoni` handling; a link without that port would be
+dead, so it is proposed as its own slice. Providers/garages/car washes visible on approval, and buyer money separated
+from merchant money on Financial → data/financial-surface work, recorded for their own slices.
+
+- **Files:** `admin-os.html` (children, two labels, one Tools link, child CSS), `sokoni-aos.js` (`_bootUI`, router),
+  new `scripts/test-adminos-nav-coverage.js`, `scripts/test-adminos-sidebar-a11y.js` (D5 derived), `CHANGELOG.md`.
+- **Database / API / Security / Breaking:** none. UI only. Not deployed.
+
 ## 2026-09-29 (151) — Integration Center: an operator vocabulary that cannot flatter the evidence
 
 **UI polish slice. No provider rebuilt, no rail changed, no credential created, no deploy.**
