@@ -1,3 +1,17 @@
+## [2026-09-29] - Adjudication census: DG Wine and Latomi Gadgets (READ ONLY; no mutation; deferred digest stays deferred)
+
+`docs/ADJUDICATION_DG_WINE_LATOMI.md`. Both applied through Register My Business as **"Wholesaler / Bulk Supplier"**
+(hub b2b, `type: business`); Latomi's own words: "We sell phones". No `productTypes`, `services` or `serviceTypes`;
+no service-shaped profile fields; **zero** bookings, services, enquiries, reviews, orders, POS or wallet activity since
+approval. The `provider` role is a classifier artefact: `\bwholesal\b` never matches "wholesaler" (DG Wine → default
+provider), and the LIVE form's hub default `requestedRole: 'provider'` for b2b (`hub-register.js:421-423` on the live
+line) made Latomi "explicit". C1 maps the application to `wholesale`, a seller category. **Finding: every
+applicant-authored fact points to PRODUCTS; nothing points to SERVICES** — a finding, not a decision. Three lawful
+resolutions per identity are laid out (A: PRODUCTS — needs an audited admin capability-decision op that does not exist
+yet, plus the existing seller projection and role grant; B: both — via the existing provider-initiated
+`providerRequestShop`; C: keep SERVICES and reclassify — unsupported). Each needs an explicit owner choice and its own
+manifest. Nothing stamped, reclassified, revoked, provisioned or deployed.
+
 ## [2026-09-29] - R3 landed: three providers classified from their approval evidence (PRODUCTION, owner-authorized primary digest only)
 
 **Applied 19:04Z**, digest `cb87e8ca…98e3`: `providers/{uid}.business` stamped for Julian's Closet (service_business,
