@@ -1,7 +1,7 @@
 # Step E — the source-of-truth decision, before migration
 
 **Date:** 2026-09-29 · **Branch:** `feat/integrations-control-center` · **Decision memo. No code, no
-migration, no deploy.** Adapter proof **held** by instruction.
+migration, no deploy.** Ratified 2026-09-29 — see §7; **D3 remains OPEN**. Adapter proof **held** by instruction.
 
 Follows [[INTEGRATION_EVIDENCE_CENSUS_A]] (`b9172ba`) and
 [[INTEGRATION_EVIDENCE_MODEL_B]] (`5e8ec59`).
@@ -183,7 +183,59 @@ attempts — which is a different and safe use.
    rather than an observation. This is a **separate defect**, found here, and it should not be
    quietly bundled into the migration.
 
-## 7 · Not done
+## 7 · Owner ratification — 2026-09-29
+
+Recorded after the fact, not folded back into §6: §6 is what was proposed, this is what was decided.
+
+| # | status | note |
+|---|---|---|
+| D1 | **accepted** | a probe executed against such a rail is *"a tripwire/violation"*, not a health signal |
+| D2 | **accepted** | |
+| D3 | **OPEN** | the only decision not addressed; the 4 inbound rails remain proposed, not ratified |
+| D4 | **accepted** | it stops the resolver answering *"is it refusing now, or did it refuse last time?"* with one field |
+| D5 | **accepted, conditional** | the exact three confirmed below |
+| D6 | **accepted** | *"untouched until its role is deliberately adjudicated"* |
+| D7 | **accepted** | keep as its own lane — fixing it inside migration would mix the evidence model, executor semantics and secret-binding behaviour |
+
+**The three, named.** `firestore` · `memorystore-redis` · `cloud-storage` — the only entries where
+`probeAvailability()` returns `runnable`; all three service-account rails, all `healthKind:
+measurable`.
+
+### The ratified disagreement matrix
+
+Supersedes the three-row table in §3. **Total, not exception-only** — the expected and verified rows
+are the positive controls that stop the matrix passing against a resolver which flags everything.
+
+| declaration | observation | meaning |
+|---|---|---|
+| `no_safe_probe` | none | **expected refusal** |
+| `no_safe_probe` | a probe occurred | **TRIPWIRE** — a probe ran against a money rail |
+| `requires_secret_binding` | no successful binding | **expected / unverified** |
+| `requires_secret_binding` | a successful probe | **stale declaration** |
+| `runnable` | `requires_secret_binding` observed | **binding regression** |
+| `runnable` | a successful probe | **verified evidence** |
+
+> **The Step E invariant:** the resolver must be able to **expose disagreement**, not merely choose a
+> side. Collapsing these six into one ACTIVE / PARTIAL / NOT VERIFIED chip destroys the only
+> information the two-source model exists to produce.
+
+**Migration remains HELD.** The order is unchanged and the adapter proof is still required first:
+
+```
+5e8ec59  evidence model
+   ↓
+65f3725  this memo
+   ↓
+REAL FIRESTORE ADAPTER PROOF        ← still required, currently held
+   ↓
+migration of the 3 runnable entries
+   ↓
+resolver adoption
+   ↓
+console update
+```
+
+## 8 · Not done
 
 - **No code, no migration, no deployment.** `5e8ec59` is unchanged.
 - **The Firestore adapter proof is held** at your instruction; production persistence remains
