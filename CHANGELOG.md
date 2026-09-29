@@ -1,3 +1,19 @@
+## [2026-09-29] - Business approval-decision authority (DJ Bvmbxno class) — designed, proven 40/0, registered, NOT deployed, NOT used
+
+`functions/business-approval-admin.js` → `bizAdminApprovalDecide { uid, decision: approve|refuse, reason }`, merged into
+`admin-os-dispatch.js` beside `bizAdminClassify`; design `docs/APPROVAL_DECISION_AUTHORITY.md`; suite
+`scripts/test-business-approval-decision.js` **40/0**, `test-admin-os-wiring` 327/0. Contract enforced and proven clause by
+clause: admin claim before any read/write (unauthenticated / provider / owner refused, store byte-identical); a real decision
+today (`providers/{uid}.approvalDecision = {decision, decidedBy <admin uid>, decidedAt server ts, reason, prior {status,
+approvedAt, approvedBy, decidedBy}, source admin_decision}`; approve writes `approvedAt`/`approvedBy`/`status active`, refuse
+fails closed to `suspended` + delisted with NO approval evidence); the historical status is copied into `prior`, never read as
+approval; no `applications/*` created or edited (Kasindi-shaped `"reindex"` application byte-identical); idempotent (repeat →
+`repeated:true`, original decider, no second audit, even by another admin); conflicting decision → `DECISION_EXISTS`, history
+kept; bookings/services/wallet/products untouched; approval ≠ classification (no `business` stamp; resolver still
+PENDING_CLASSIFICATION — DJ Bvmbxno does NOT become artist_creator); one `adminAudit business_approval_decision` with
+previous/next/reason/actor; role via `role-authority.grantAccountRole` only. Not pointed at any production record; the owner
+decides DJ Bvmbxno's approval, then separately its classification.
+
 ## [2026-09-29] - Adjudication: Kasindi holdings limited — "reindex" is NOT valid approval evidence (READ ONLY; unclassified; no manifest)
 
 `docs/ADJUDICATION_KASINDI.md`. `applications/PRVMS7IACKG` is approved with `decidedBy: "reindex"` — a bare string, the
