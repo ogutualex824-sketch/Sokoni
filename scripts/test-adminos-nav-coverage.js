@@ -207,7 +207,10 @@ const state = (p) => p.evaluate(() => {
 
   /* ── LEVEL 1: collapsed rail ──────────────────────────────────────────── */
   console.log('\n  [level 1 — collapsed rail]');
-  await p.click('#aosSidebarToggle'); await p.waitForTimeout(300);
+  /* Wait for the width TRANSITION to settle rather than a fixed sleep: under load a
+     0.2s transition can still be mid-flight at 300ms and read 67px. */
+  await p.click('#aosSidebarToggle');
+  await p.waitForFunction(() => Math.round(document.getElementById('aosSidebar').getBoundingClientRect().width) === 66, null, { timeout: 4000 }).catch(() => {});
   bad = [];
   const railW = await p.evaluate(() => Math.round(document.getElementById('aosSidebar').getBoundingClientRect().width));
   for (const s of inv.parents) {
@@ -225,10 +228,15 @@ const state = (p) => p.evaluate(() => {
   /* ── LEVEL 1: deep link survives a real reload — every parent, child, and tab ─ */
   console.log('\n  [level 1 — deep links, real reloads]');
   const routes = [...inv.parents.map((s) => [s, null]), ...inv.tabs];
-  const dctx = await newCtx(browser, { width: 1440, height: 900 });
-  const dp = await dctx.newPage();
+  let dctx = await newCtx(browser, { width: 1440, height: 900 });
+  let dp = await dctx.newPage();
   bad = [];
+  let reloads = 0;
   for (const [s, t] of routes) {
+    /* Recycle the context every dozen real reloads. On a memory-starved host the
+       renderer accumulates until the OS kills the browser mid-loop, which reads
+       as a harness crash rather than a product result. */
+    if (++reloads % 12 === 0) { await dctx.close(); dctx = await newCtx(browser, { width: 1440, height: 900 }); dp = await dctx.newPage(); }
     const h = '#' + s + (t ? '/' + t : '');
     if (!(await boot(dp, h))) { bad.push([h, 'no boot']); continue; }
     if (t) await dp.waitForTimeout(150);

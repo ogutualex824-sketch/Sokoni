@@ -1,3 +1,20 @@
+## 2026-09-29 — AdminOS navigation, Slice E: final certification on the landed tree (branch `feat/integrations-control-center`, NOT deployed)
+
+No feature change. E re-ran every navigation suite against the committed tree `3f437f7` with the navigation files
+quiescent (no uncommitted change to `admin-os.html`, `sokoni-aos.js`, `super-admin.html`, `sokoni-responsive.css`,
+`sokoni-admin-shell.js` or the suites) and recorded the ledger in `docs/ADMINOS_NAVIGATION_CERTIFICATION.md`.
+
+Observed: `single-navigation` **22/0** · `sidebar-a11y` **34/0** · `nav-coverage` **32/0** · `shell-final` **48/0** ·
+`render` **43/0** · `wiring` **308/0**.
+
+Harness hardening in `scripts/test-adminos-nav-coverage.js` (no assertion weakened): the collapsed-rail check waits for
+the width transition to settle instead of a fixed 300 ms (it read 67px mid-transition under load), and the real-reload
+loop recycles its browser context every twelve reloads (the OS was killing the renderer mid-loop on the 6 GB host,
+which read as a harness crash rather than a product result). Two prior runs on the same code had passed 32/0.
+
+- **Files:** `docs/ADMINOS_NAVIGATION_CERTIFICATION.md` (new), `scripts/test-adminos-nav-coverage.js`, `CHANGELOG.md`.
+- **Database / API / Security / Breaking:** none. Not deployed.
+
 ## 2026-09-29 — Integration Evidence: the Firestore adapter PROVEN on the emulator, and absence made a partition (branch `feat/integrations-control-center`, NOT deployed)
 
 Adapter-proof gate, lifted by the owner for the **emulator only**. No production access, no migration, no
