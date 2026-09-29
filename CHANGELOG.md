@@ -1,3 +1,38 @@
+## 2026-09-29 — WhatsApp Cloud API census: the capability is ABSENT, and a ratified directive says the opposite (branch `feat/integrations-control-center`, NOT deployed)
+
+Read-only, run before writing anything — as the WhatsApp brief itself instructs, and for the reason it gives: declaring
+support is not having it. Full note: `docs/WHATSAPP_CLOUD_API_CENSUS.md`.
+
+**Not a repeat of 09-27.** That census counted `wa.me` HAND-OFFS (12 payment · 39 booking · ~154 communication · 43
+share). This asks whether any mechanism exists to send or receive through **Meta’s API**.
+
+**Every Cloud API signal is ZERO** — no `graph.facebook.com` call of any kind, no `phone_number_id`, no WABA, no
+access token, no `hub.challenge` webhook verify, no Flows, no catalog. The capability is **ABSENT**, which is a
+different fact from present-but-unconfigured: an absent capability cannot be fixed by adding a secret. Two apparent
+hits were false positives of the same class as the `discPanel`→cPanel trap — an **email** `templateName`, and the
+pattern `hsm` matching inside the element id **`hsMyJobsList`**. Facebook Login (14 files) exists and is already
+catalogued; it is adjacent, not a WhatsApp capability.
+
+**SOKONI today is the inverse of the brief:** 98 code files carry `wa.me` hand-offs (the thing banned on 09-27) and
+zero carry API capability (the thing proposed).
+
+**A ratified directive conflicts and must be settled first.** `feedback_no_whatsapp_everything_in_app` (owner,
+09-27) bans WhatsApp for payments, bookings and communication, keeping only SHARE. The brief asks for campaigns,
+support and in-conversation ordering. **But the directive was built on a stated reason** — no server-verified
+payment, no booking record, no conversation anchor/audit/moderation — and the Cloud API **answers that objection**:
+messages arrive by webhook into the communications engine, events are recorded, and the brief keeps **IntaSend as
+the payment authority**. What it contradicts is the directive’s letter. That is the owner’s call; a ratified
+directive is not treated as silently superseded because a later message pointed elsewhere.
+
+**No catalogue entry was added.** Under this week’s evidence rules WhatsApp Cloud API is neither a technical
+integration (no code path) nor an operational dependency (the business does not rely on it) — **it does not exist
+yet**. Adding a row now would be exactly the `sokoni-webhook-engine.js` defect. It enters through the delta process
+when built. Catalogue unchanged at 52 + 2.
+
+Files: `docs/WHATSAPP_CLOUD_API_CENSUS.md` (new).
+Database: none. API: none. Security: none. Breaking changes: none. Deploy: none.
+UNPROVEN: whether any WhatsApp credential exists outside the repository (Secret Manager not queried).
+
 ## 2026-09-29 — Communications census, Slice C1 (read-only; branch `feat/integrations-control-center`)
 
 `docs/COMMUNICATIONS_CENSUS_C1.md` records, with evidence per row, what SOKONI's communication rails actually
