@@ -1,5 +1,10 @@
 ﻿<!DOCTYPE html>
-<html data-admin-guard="admin" lang="en" data-no-header="true">
+<!-- data-admin-shell="own": AdminOS ships its own sidebar (#aosSidebar) and its
+     own header (.aos-header), so sokoni-admin-shell.js must not render the
+     registry sidebar and global header on top of them. Without this the page
+     carried THREE global navigation trees. Declared on <html> because the shell
+     runs in <head>, before <body> exists. -->
+<html data-admin-guard="admin" lang="en" data-no-header="true" data-admin-shell="own">
 <head>
 <script src="/sokoni-admin-guard.js"></script>
 <script src="/sokoni-admin-nav.js"></script>

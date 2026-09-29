@@ -1,3 +1,35 @@
+## 2026-09-29 — AdminOS sidebar, Slice A2: the shared admin shell no longer covers AdminOS (branch `feat/integrations-control-center`, NOT deployed)
+
+This branch loads `sokoni-admin-shell.js` on `admin-os.html` (since `52a2b22`); production `be7c676` does not. Once an
+admin was verified, the shell painted its registry sidebar `#sk-adm-side` (244×900) and global header `#sk-adm-header`
+(1196×65) over `#aosSidebar`. The AdminOS sections and the Slice A collapse toggle were covered and could not be clicked.
+
+The fix reuses `d8aea59` (`feature/ent-hub-convergence`), not a new implementation. The shell returns before injecting
+any CSS or element when `<html data-admin-shell="own">`, and `admin-os.html` declares that attribute. The opt-out is
+per page, so every other registered admin surface keeps the shell.
+
+- `sokoni-admin-shell.js`, `scripts/test-adminos-single-navigation.js` and `scripts/lib/adminos-probe-lib.js` are
+  **blob-identical** to `d8aea59`. The branch's shell was exactly `d8aea59`'s pre-image (`c6c293c`). The probe
+  library is not part of `d8aea59`; it comes in only because the test requires it (hermetic: serves the fake host
+  `sokoni-cert.test` from disk and aborts every other origin).
+- `admin-os.html`: the attribute plus its explanatory comment only. `d8aea59`'s ledger file was not taken.
+
+Evidence:
+- `test-adminos-single-navigation` **22/0** at 1440×900 and 390×844, including two negative controls: `monitor.html`
+  still receives the shell, and stripping the attribute from the served bytes brings the duplicate chrome back.
+- The same test on the pre-A2 tree (`a51f268`, temporary worktree) **fails 9** (shell sidebar 244×900, header 1196×65,
+  `sk-adm-css` injected). The test tells the two trees apart.
+- Headless click: collapse 220→66→220px. Mobile tap-outside closes the drawer. No horizontal scroll. `render` 43/0,
+  `wiring` 308/0.
+
+**Found, not fixed (pre-existing, also on live):** on phones the AdminOS drawer renders about 80px wide with truncated
+labels. `sokoni-responsive.css` applies `[class*="-sidebar"]{width:100%!important;position:relative!important}` at
+≤768px and it matches `.aos-sidebar`. The shared shell had hidden this on this branch. The proven fix is `767c0b7`.
+
+- **Files:** `admin-os.html`, `sokoni-admin-shell.js`, new `scripts/test-adminos-single-navigation.js`, new
+  `scripts/lib/adminos-probe-lib.js`, `CHANGELOG.md`.
+- **Database / API / Security / Breaking:** none. UI only; the admin guard is unchanged.
+
 ## 2026-09-29 — AdminOS sidebar, Slice A: import the production sidebar (branch `feat/integrations-control-center`, NOT deployed)
 
 This brings the production sidebar work onto this branch without rewriting it. Production (`be7c676`, byte-identical

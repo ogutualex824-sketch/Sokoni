@@ -42,6 +42,32 @@
   var entry = NAV.current();
   if (!entry) return;      /* not a registered admin surface — render nothing */
 
+  /* ── PAGE-LEVEL OPT-OUT: the page owns its own chrome ────────────────────
+     A page that ships a complete workspace of its own must be able to say so.
+     admin-os.html has its own sidebar (#aosSidebar, with its own drawer toggle)
+     and its own header (.aos-header, with search and notifications), so this
+     shell was rendering a SECOND sidebar and a SECOND global header on top of
+     it — three global navigation trees on one page, measured at 220x900,
+     244x900 and 1196x65.
+
+     The opt-out lives HERE, at the point of ownership, and returns before any
+     CSS is injected or any element is created. It is deliberately not a CSS
+     override: this shell already defeats page-level `header{display:none}` and
+     `nav{display:none}` rules with display:...!important (see the notes in
+     injectCSS), so a fourth layer of CSS could not win and would only add
+     another thing to reason about. Nothing renders because nothing is asked to.
+
+     Scope: opt-in per page, so every other registered admin surface keeps this
+     shell and the fixes it carries. Only a page declaring
+     data-admin-shell="own" is skipped.
+
+     Note the <html> stamp `data-sokoni-workspace="admin"` is NOT lost by
+     skipping: sokoni-admin-nav.js sets it synchronously and independently
+     (sokoni-admin-nav.js:267), and that is the copy security.js:655 and
+     shared-header.js:2402 read to suppress the consumer header and nav. This
+     shell only mirrored it onto <body>, which nothing reads. */
+  if (document.documentElement.getAttribute('data-admin-shell') === 'own') return;
+
   var LOGO = '/assets/logosokoni.png';
   var esc = function (s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
