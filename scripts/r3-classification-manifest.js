@@ -102,16 +102,70 @@ function buildManifests(snapshots) {
   return { rows, primary, disagree, unresolved, digests: { primary: digestOf(primary), disagreement: digestOf(disagree) } };
 }
 
-module.exports = { classify, buildManifests, digestOf, snapshotAll };
+/** Snapshot ONE identity (the records a row depends on). */
+async function snapshotOne(db, uid) {
+  const [p, seller, biz, apps, prodA, prodB] = await Promise.all([db.doc('providers/' + uid).get(), db.doc('sellers/' + uid).get(), db.doc('businesses/' + uid).get(),
+    db.collection('applications').where('uid', '==', uid).limit(10).get(), db.collection('products').where('sellerUid', '==', uid).limit(5).get(), db.collection('products').where('ownerId', '==', uid).limit(5).get()]);
+  return { uid, provider: p.exists ? Object.assign({ __id: uid }, p.data()) : null, seller: seller.exists ? seller.data() : null, business: biz.exists ? biz.data() : null,
+    applications: apps.docs.map((a) => Object.assign({ __id: a.id }, a.data())), productCount: prodA.size + prodB.size };
+}
+
+/**
+ * apply(db, expectDigest, FieldValue): the ONLY writes. Recomputes the PRIMARY set from a fresh snapshot of every
+ * provider; refuses unless its digest equals the authorized one; then, one transaction PER identity: re-read the
+ * provider and its applications, recompute the row, abort that identity if the mutation differs or it is no longer
+ * eligible; write providers/{uid}.business (the stamp) and one adminAudit. An already-stamped identity is skipped
+ * (idempotent). Never touches capabilities, businesses, shops, sellers, products, or the disagreement set.
+ */
+async function apply(db, expectDigest, FieldValue) {
+  const snaps = await snapshotAll(db);
+  const m = buildManifests(snaps);
+  if (!expectDigest) return { applied: [], refused: 'no_digest' };
+  if (m.digests.primary !== expectDigest) {
+    /* an already-applied set recomputes to an EMPTY primary set (every row now already_stamped): report that as done */
+    const stampedNow = snaps.filter((s) => s.provider && s.provider.business && s.provider.business.source === 'application').length;
+    return { applied: [], refused: 'digest_mismatch', expected: expectDigest, actual: m.digests.primary, primaryCount: m.primary.length, alreadyStampedProviders: stampedNow };
+  }
+  const results = [];
+  for (const row of m.primary) {
+    const provRef = db.doc('providers/' + row.uid);
+    const auditRef = db.collection('adminAudit').doc();
+    const r = await db.runTransaction(async (t) => {
+      const p = await t.get(provRef);
+      const appSnap = await t.get(db.doc('applications/' + row.evidence.applicationId));
+      const s1 = { uid: row.uid, provider: p.exists ? Object.assign({ __id: row.uid }, p.data()) : null, seller: null, business: null,
+        applications: appSnap.exists ? [Object.assign({ __id: appSnap.id }, appSnap.data())] : [], productCount: row.current.productCount || 0 };
+      const row1 = classify(s1);
+      if (row1.reasons.some((x) => x.startsWith('already_stamped'))) return { uid: row.uid, applied: false, reason: 'already_stamped' };
+      const same = row1.eligible && !row1.disagreement && JSON.stringify(row1.mutation.set.business) === JSON.stringify(row.mutation.set.business);
+      if (!same) return { uid: row.uid, applied: false, reason: 'drift_abort', reasons: row1.reasons, now: row1.mutation && row1.mutation.set.business };
+      const ts = FieldValue && FieldValue.serverTimestamp ? FieldValue.serverTimestamp() : new Date().toISOString();
+      const business = Object.assign({}, row.mutation.set.business, { setAt: ts });
+      t.update(provRef, { business, updatedAt: ts });
+      t.set(auditRef, Object.assign({}, row.mutation.audit, { createdAt: ts }));
+      return { uid: row.uid, applied: true, category: business.category, auditId: auditRef.id };
+    });
+    results.push(r);
+  }
+  return { applied: results.filter((r) => r.applied), skipped: results.filter((r) => !r.applied), digest: expectDigest };
+}
+
+module.exports = { classify, buildManifests, digestOf, snapshotAll, snapshotOne, apply };
 
 if (require.main === module) {
   const args = process.argv.slice(2);
-  if (args.includes('--apply')) { console.error('REFUSED: --apply is not implemented until the owner reviews the plan digests.'); process.exit(2); }
   const _r = require('module').createRequire(path.join(ROOT, 'functions', 'package.json'));
-  const admin = _r('firebase-admin'); const { getFirestore } = _r('firebase-admin/firestore');
+  const admin = _r('firebase-admin'); const { getFirestore, FieldValue } = _r('firebase-admin/firestore');
   const app = admin.initializeApp({ credential: admin.credential.applicationDefault(), projectId: 'sokoni-aeb26' });
   const db = getFirestore(app);
   (async () => {
+    if (args.includes('--apply')) {
+      const expect = args[args.indexOf('--apply') + 1];
+      if (!expect || !/^[a-f0-9]{64}$/.test(expect)) { console.error('REFUSED: --apply <sha256 of the authorized PRIMARY digest>'); process.exit(2); }
+      const r = await apply(db, expect, FieldValue);
+      console.log(JSON.stringify(r, null, 2));
+      process.exit(r.refused ? 1 : 0);
+    }
     const snaps = await snapshotAll(db);
     const m = buildManifests(snaps);
     const red = (o) => JSON.parse(JSON.stringify(o, (k, v) => (/email|phone/i.test(k) && typeof v === 'string' ? v.replace(/(.{2}).+(.{2})/, '$1***$2') : v)));
