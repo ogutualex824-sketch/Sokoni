@@ -1,3 +1,16 @@
+## [2026-09-29] - Exact-six adjudication census (READ ONLY; no writes)
+
+`docs/ADJUDICATION_SIX_UNRESOLVED.md`. The six R3-unresolved ids reconciled (the "three status-only" are Shave 'n'
+Trims, DJ Bvmbxno, King Bruce; Shave 'n' Trims is also the synthetic one, already in the cleanup manifest). Per identity:
+approval, applicant offering, real C1, lane, capability evidence, decision. **k Riss** (approved, "voiceover" / rapper,
+C1 no exact match) → admin classification to `artist_creator`; **Kasindi** (approved by "reindex", type "Cleaning
+Company / Housekeeper") → admin classification to `cleaning`, provenance flagged; **DJ Bvmbxno** — no application, status
+only, **but 4 bookings, 1 service and 3 wallet transactions**: a trading provider with no approval evidence, needs an
+admin approval decision (no server op exists for a retroactive approval); **King Bruce** — status only, dormant, same
+decision class; **Heights Creations** — pending, three applications (seller + two duplicate provider), agreement not
+accepted, dual intent; **Shave 'n' Trims** — cleanup slice. Proposed order: k Riss → Kasindi → DJ Bvmbxno → King Bruce →
+Heights → cleanup. Nothing mutated.
+
 ## [2026-09-29] - Adjudication census: DG Wine and Latomi Gadgets (READ ONLY; no mutation; deferred digest stays deferred)
 
 `docs/ADJUDICATION_DG_WINE_LATOMI.md`. Both applied through Register My Business as **"Wholesaler / Bulk Supplier"**
