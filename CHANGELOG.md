@@ -1,3 +1,47 @@
+## 2026-09-29 — Integration catalogue rebaselined 47 → 52, and operational dependencies split off as their own collection (branch `feat/integrations-control-center`, NOT deployed)
+
+Step 8 of the owner's locked order, executed as **one** controlled slice after Step 7 passed. No deployment, no
+webhook-engine repair, no weak candidate, no HostPinnacle third row, no production change.
+Full note: `docs/INTEGRATION_CATALOGUE_DELTA_PROPOSAL.md` §7.
+
+| | before | after |
+|---|---|---|
+| technical integrations | 47 | **52** |
+| operational dependencies | — | **2**, separate collection |
+| baseline digest | `ac1b9ea3204f7075…` | **`08767e937c1dc5e4…`** |
+| absence partition | 3·4·9·**15**·5·**11** = 47 | 3·4·9·**18**·5·**13** = 52 |
+
+- **Five added, exactly as proposed, each on CODE evidence:** `google-maps` (CSP hosts +
+  `service-worker.js:382` + `rider-nav.html:449`), `ga4-analytics`, `firebase-remote-config`, `cloud-logging`,
+  `eventarc`. Nothing held or rejected was added. **No payment rail** — IntaSend remains the sole provider.
+- **`OPERATIONAL_DEPENDENCIES` — a separate export in both files**, for providers the BUSINESS relies on and the
+  CODE does not talk to: `google-workspace`, `google-admin`. No requiredSecrets, no stage model, no
+  probeAvailability, no evidence record. They must render **NOT PROBEABLE** — "No SOKONI probe path" — never
+  `unknown`/NOT VERIFIED/REFUSED, because those are states of our *measurement* and this is a property of the
+  *relationship*.
+- **The boundary is ENFORCED, not documented.** Operational ids are deliberately absent from `_byId`, so
+  `byId()` → `null` and `classifyEvidenceSource()` → `null` (not a kind of missing evidence). **`writeEvidence()`
+  REFUSES them** — `validate()` rejects any record whose `integrationId` is not a known registry entry, so an
+  evidence record cannot be written for one even by a future caller who tries; asserted with an inverting control
+  where the identical call **succeeds** for `firestore`. The resolver returns **52** and not one operational id. The
+  **browser catalogue** — the renderer's own source — is loaded through a `window` shim and asserted to expose 52+2
+  separately, with `lookup()` refusing operational ids and `byCategory()` across all categories yielding exactly 52.
+  The registry **throws at module load** if an id is in both collections: a contradiction making one provider both
+  probeable and not probeable should not survive `require()`.
+- **GA4 keeps wired and configured apart.** The entry states **WIRED, NOT PROVEN CONFIGURED** and names the missing
+  `G-XXXXXXXX` measurement id; a test asserts the wording and `healthKind: 'elsewhere'`, so a later edit that
+  quietly promotes it to "analytics works" goes red.
+
+Files: `functions/integration-registry.js`, `sokoni-integration-catalogue.js`,
+`scripts/test-integration-evidence.js` (+9 boundary assertions, counts rebaselined),
+`scripts/test-integration-evidence-firestore.js` (counts), `docs/INTEGRATION_CATALOGUE_DELTA_PROPOSAL.md` (§7).
+Database: none. API: `adminGetIntegrationStatus` now returns 52 records instead of 47 — additive, no field changed.
+Security: none. Breaking changes: none.
+Suites: evidence **69/0** (was 60/0) · parity **26/0** across all 52, both directions · emulator adapter **17/0 + 1
+UNPROVEN** (unchanged) · probes 85/0 · status 45/0 · console 86/0.
+**Not done:** the console does not render operational dependencies yet — the data is exported and the boundary
+enforced, but the two-section UI is the next slice. No deploy.
+
 ## 2026-09-29 — Integration catalogue: proposed delta + the webhook engine that talks to nothing (branch `feat/integrations-control-center`, NOT deployed)
 
 Proposal only — steps 1–6 of the owner's locked order, stopping at step 7 (review) by instruction. **No entry

@@ -161,7 +161,7 @@ await T('...and the RESOLVER observes it through the DEFAULT path — nothing in
   eq(fs.health, 'connected', 'the production default path did not observe the evidence: ');
   eq(fs.evidence, 'service_account', '');
   ok(fs.probedAt, 'probedAt must be populated from the persisted checkedAt');
-  eq(res.integrations.length, registry.INTEGRATIONS.length, '47/47 preserved: ');
+  eq(res.integrations.length, registry.INTEGRATIONS.length, '52/52 preserved: ');
 });
 
 await T('a real PROBE completes the chain end to end via persistEvidence', async () => {
@@ -383,9 +383,9 @@ await T('twelve written, twelve read back, all validating', async () => {
   ids.forEach((id) => ok(read.records[id], id + ' did not come back'));
 });
 
-await T('and the resolver reports exactly those twelve, the other 35 unknown', async () => {
+await T('and the resolver reports exactly those twelve, the other 40 unknown', async () => {
   const res = await status.resolveIntegrationStatus({ listSecretNames: async () => [] });
-  eq(res.integrations.length, 47, '');
+  eq(res.integrations.length, 52, '');
   eq(res.integrations.filter((i) => i.probedAt).length, 12,
     'exactly the twelve written must carry a probedAt: ');
 });

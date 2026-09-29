@@ -316,10 +316,111 @@ const INTEGRATIONS = [
     status: "live", direction: "internal",
     healthKind: "not-applicable",
     requiredSecrets: [], optionalEnv: [] },
+
+  /* ── Added by the Step 8 rebaseline, 2026-09-29. 47 -> 52. ───────────────
+     Five services the platform demonstrably talks to and the inventory did not
+     name. Each was added on CODE evidence, not on a vendor name: the census that
+     produced them also rejected cPanel (the search matched the variable
+     `discPanel`) and Twilio (SendGrid's vendor name, already catalogued here),
+     and HELD Firebase Performance and Cloud Build on one weak file each.
+     None is a payment rail; IntaSend remains the sole payment provider. */
+  { id: "google-maps", category: "infra", vendor: "Google",
+    name: "Google Maps Platform",
+    status: "live", direction: "outbound",
+    healthKind: "measurable",
+    requiredSecrets: [], optionalEnv: [] },
+  { id: "ga4-analytics", category: "infra", vendor: "Google",
+    name: "Google Analytics 4 / Tag Manager",
+    /* WIRED is evidenced; CONFIGURED is not. The loader ships and the CSP
+       allows the hosts, but no G-XXXXXXXX measurement id exists anywhere in
+       this repository. Those are two different facts and the catalogue entry
+       states both — collapsing them would report an analytics rail as working
+       on the strength of a script tag. */
+    status: "live", direction: "outbound",
+    healthKind: "elsewhere",
+    requiredSecrets: [], optionalEnv: [] },
+  { id: "firebase-remote-config", category: "infra", vendor: "Google",
+    name: "Firebase Remote Config",
+    status: "live", direction: "internal",
+    healthKind: "measurable",
+    requiredSecrets: [], optionalEnv: [] },
+  { id: "cloud-logging", category: "infra", vendor: "Google Cloud",
+    name: "Google Cloud Logging",
+    status: "live", direction: "internal",
+    healthKind: "elsewhere",
+    requiredSecrets: [], optionalEnv: [] },
+  { id: "eventarc", category: "infra", vendor: "Google Cloud",
+    name: "Eventarc",
+    status: "live", direction: "internal",
+    healthKind: "measurable",
+    requiredSecrets: [], optionalEnv: [] },
 ];
+
+/* ── OPERATIONAL DEPENDENCIES ───────────────────────────────────────────────
+   A SEPARATE COLLECTION, and the separation is the point.
+
+   An operational dependency is a provider SOKONI's BUSINESS relies on and which
+   SOKONI's CODE does not talk to. There is no client, no credential in Secret
+   Manager, no request, and therefore NO PROBE PATH — not a probe that refuses,
+   and not a probe nobody has written. Nothing to measure, ever.
+
+       CODE INTEGRATION            OPERATIONAL DEPENDENCY
+       code talks to it            the business relies on it
+       a probe path may exist      no code path exists at all
+       the evidence model applies  NOT PROBEABLE BY DESIGN
+
+   WHY THEY ARE NOT MEMBERS OF INTEGRATIONS
+   -----------------------------------------
+   Every field of the evidence model assumes a code path: requiredSecrets, the
+   five-stage support table, probeAvailability, the health vocabulary. An
+   operational dependency has none of them, so putting one in INTEGRATIONS would
+   add a record that every downstream consumer must special-case — and the first
+   one to forget would render it as `unknown`, which reads to an operator as
+   "we have not checked" rather than "there is nothing here to check".
+
+   They are deliberately ABSENT from _byId, so registry.byId() returns null for
+   them. That is not an oversight: it is what makes the boundary enforceable
+   rather than merely documented. integration-evidence.validate() refuses any
+   record whose integrationId is not a known registry entry, so an evidence
+   record for an operational dependency CANNOT be written even by mistake.
+
+   Added on the owner's Step 8 authorization. cPanel is excluded pending
+   independent verification — the census hit was a false positive. HostPinnacle
+   is deliberately NOT given a third row here: hostpinnacle-dns and
+   hostpinnacle-mail already exist as code integrations, and a third row before
+   the console visibly separates the two lists would read as duplication rather
+   than as a different kind of fact. */
+const OPERATIONAL_DEPENDENCIES = [
+  { id: "google-workspace", name: "Google Workspace", vendor: "Google",
+    kind: "operational-dependency", probePath: "none",
+    summary: "Company email and identity for the operating business. No SOKONI " +
+             "code path: the census found zero references in any source file.",
+    authority: "Google Workspace Admin console" },
+  { id: "google-admin", name: "Google Admin", vendor: "Google",
+    kind: "operational-dependency", probePath: "none",
+    summary: "Administration of the Workspace tenant — users, domains, groups. " +
+             "No SOKONI code path; the Admin SDK is not used anywhere.",
+    authority: "Google Admin console" },
+];
+
+/* An id may not be in both collections. Asserted here rather than left to the
+   suite, because a duplicate would make the same provider both probeable and
+   not probeable, and that contradiction should not survive module load. */
+(function _assertDisjoint () {
+  const tech = new Set(INTEGRATIONS.map(function (i) { return i.id; }));
+  OPERATIONAL_DEPENDENCIES.forEach(function (d) {
+    if (tech.has(d.id)) {
+      throw new Error('integration-registry: "' + d.id + '" is declared as BOTH a ' +
+        'technical integration and an operational dependency');
+    }
+  });
+}());
 
 const _byId = Object.create(null);
 INTEGRATIONS.forEach(function (i) { _byId[i.id] = i; });
 function byId (id) { return _byId[id] || null; }
 
-module.exports = { VERSION, CATEGORIES, INTEGRATIONS, byId };
+module.exports = { VERSION, CATEGORIES, INTEGRATIONS, byId,
+  /* Exported separately and never merged into INTEGRATIONS. A consumer that
+     wants both must ask for both, which is what keeps the boundary visible. */
+  OPERATIONAL_DEPENDENCIES };

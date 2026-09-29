@@ -197,3 +197,66 @@ happen quietly. Rebaselining them is **step 8** and is not authorized by this pr
 - **`sokoni-webhook-engine.js` untouched** — investigated only.
 - **UNPROVEN:** whether the *deployed* production bundle matches this source; whether GA4 has a
   measurement id configured outside the repository; whether cPanel is used operationally at all.
+
+---
+
+## 7 · APPLIED — Step 8 rebaseline, 2026-09-29
+
+Step 7 passed; step 8 authorized and executed as **one** controlled slice. Recorded here rather than
+rewritten above: §1–§6 are what was proposed, this is what was done.
+
+| | before | after |
+|---|---|---|
+| technical integrations | 47 | **52** |
+| operational dependencies | — | **2** (separate collection) |
+| baseline digest | `ac1b9ea3204f7075…` | **`08767e937c1dc5e4…`** |
+| absence partition | 3 · 4 · 9 · **15** · 5 · **11** = 47 | 3 · 4 · 9 · **18** · 5 · **13** = 52 |
+| entries with no `notRunReason` | 38 | 43 |
+
+Added exactly as proposed: `google-maps`, `ga4-analytics`, `firebase-remote-config`,
+`cloud-logging`, `eventarc`. Nothing held or rejected was added. No payment rail; IntaSend remains
+the sole provider.
+
+### The boundary, enforced rather than documented
+
+`OPERATIONAL_DEPENDENCIES` is a **separate export** in both files and is deliberately absent from
+`_byId`. That is what makes the separation real:
+
+- `registry.byId('google-workspace')` → `null`
+- `classifyEvidenceSource('google-workspace')` → `null` — it is **not** a kind of missing evidence
+- **`writeEvidence()` REFUSES it** — `validate()` rejects any record whose `integrationId` is not a
+  known registry entry, so an evidence record for an operational dependency cannot be written even
+  by a future caller who tries. Asserted with an inverting control: the identical call **succeeds**
+  for `firestore`.
+- the resolver returns **52** records and not one operational id
+- the **browser catalogue** — the renderer's own source — is loaded through a `window` shim and
+  asserted to expose 52 + 2 separately; `lookup()` does not resolve an operational id, and
+  `byCategory()` across every category yields exactly 52
+
+The registry also throws at module load if an id appears in both collections. A contradiction that
+would make one provider both probeable and not probeable should not survive `require()`.
+
+### GA4 — the two facts are kept apart
+
+The entry states **WIRED, NOT PROVEN CONFIGURED**, names the missing `G-XXXXXXXX` measurement id,
+and carries `healthKind: 'elsewhere'`. A test asserts all three, so a later edit that quietly
+promotes it to "analytics works" goes red.
+
+### Results
+
+| suite | result |
+|---|---|
+| `test-integration-evidence.js` | **69 / 0** (was 60/0; +9 boundary assertions) |
+| `test-integration-registry-parity.js` | **26 / 0** — all **52** agree, both directions |
+| `test-integration-evidence-firestore.js` (emulator) | **17 / 0**, 1 UNPROVEN (unchanged) |
+| `test-integration-probes.js` | 85 / 0 |
+| `test-integration-status.js` | 45 / 0 |
+| `test-integrations-console.js` | 86 / 0 |
+
+### Not done
+
+- **The console does not render operational dependencies yet.** The data is exported and the
+  boundary is enforced; the two-section UI from §2 is not built, so today they are inventory nobody
+  displays. That is the next slice, not this one.
+- **No deployment.** No webhook-engine repair — that finding stays frozen in §4 as its own lane. No
+  weak candidate added. No HostPinnacle third row. No production change.

@@ -329,15 +329,15 @@ await T('serviceCapabilities is a DIFFERENT field and does not collide', async (
   });
 });
 
-sec('7 · PROOF 5 — the catalogue is still exactly 47/47, and nothing was migrated');
+sec('7 · PROOF 5 — the catalogue is exactly 52/52, and nothing was migrated');
 
 await T('47 registry entries, 47 records, no addition and no loss', async () => {
-  eq(registry.INTEGRATIONS.length, 47, 'registry: ');
+  eq(registry.INTEGRATIONS.length, 52, 'registry: ');
   const res = await status.resolveIntegrationStatus({
     listSecretNames: async () => [], evidenceStore: evidence.memoryStore() });
-  eq(res.integrations.length, 47, 'resolved records: ');
+  eq(res.integrations.length, 52, 'resolved records: ');
   const ids = res.integrations.map((i) => i.id).sort();
-  eq(new Set(ids).size, 47, 'ids must be unique: ');
+  eq(new Set(ids).size, 52, 'ids must be unique: ');
   eq(JSON.stringify(ids), JSON.stringify(registry.INTEGRATIONS.map((e) => e.id).sort()),
     'the resolved id set must equal the registry id set exactly: ');
 });
@@ -358,7 +358,7 @@ await T('the legacy collection is named but NOT read', () => {
 
 sec('8 · PROOF 6 — no new status defaults everything into one bucket');
 
-await T('with no evidence at all, the 47 do NOT collapse to a single state', async () => {
+await T('with no evidence at all, the 52 do NOT collapse to a single state', async () => {
   const res = await status.resolveIntegrationStatus({
     listSecretNames: async () => [], evidenceStore: evidence.memoryStore() });
   const health = {}, reason = {};
@@ -375,7 +375,7 @@ await T('with no evidence at all, the 47 do NOT collapse to a single state', asy
   eq(health.failed    || 0, 0, 'no entry may be failed with no evidence: ');
   /* Not "everything one bucket" either: the refusals are distinguished. */
   ok(Object.keys(reason).length > 1, 'notRunReason must partition the set, not flatten it');
-  eq(reason['(none)'], 38, '');
+  eq(reason['(none)'], 43, '');
 });
 
 await T('environment is null everywhere — declared, never inferred', async () => {
@@ -444,9 +444,9 @@ const EXPECTED_PARTITION = {
   'runnable-with-evidence':     3,
   'inbound-awaiting-callback':  4,
   'declared-refusal':           9,
-  'measurable-unwritten':      15,
+  'measurable-unwritten':      18,
   'not-applicable':             5,
-  'observed-elsewhere':        11,
+  'observed-elsewhere':        13,
 };
 
 const CLASS_OF = {};
@@ -503,7 +503,7 @@ await T('PINNED COUNTS — the exact partition, and it sums to 47', () => {
     eq(MEMBERS[c].length, EXPECTED_PARTITION[c], c + ': ');
     total += MEMBERS[c].length;
   });
-  eq(total, 47, 'partition total: ');
+  eq(total, 52, 'partition total: ');
   eq(total, registry.INTEGRATIONS.length, 'partition total vs registry size: ');
   console.log('        ' + evidence.EVIDENCE_CLASSES
     .map((c) => c + '=' + MEMBERS[c].length).join(' · '));
@@ -538,12 +538,140 @@ await T('INVERTING CONTROL — the partition can actually FAIL', () => {
     'a wrong expected count must not match the measured one');
 });
 
+sec('11 · THE BOUNDARY — an operational dependency cannot become a measurement');
+
+/* THE ARCHITECTURAL ASSERTION OF THE STEP 8 REBASELINE.
+
+   "SOKONI depends on this" and "SOKONI has code integrating with this" are
+   different facts. The console will display both, which is exactly why the two
+   collections must not merge: the moment an operational dependency reaches the
+   technical resolver it acquires a health, and `unknown` reads to an operator as
+   "not checked yet" rather than "there is nothing here to check, ever".
+
+   These assert that the separation is ENFORCED, not merely documented. */
+
+await T('the two collections are the declared sizes — 52 technical, 2 operational', () => {
+  eq(registry.INTEGRATIONS.length, 52, 'technical: ');
+  eq(registry.OPERATIONAL_DEPENDENCIES.length, 2, 'operational: ');
+  eq(registry.INTEGRATIONS.length + registry.OPERATIONAL_DEPENDENCIES.length, 54,
+    'and 52 technical is NOT 52-including-the-operational-ones: ');
+});
+
+await T('the id sets are DISJOINT — nothing is both probeable and not probeable', () => {
+  const tech = new Set(registry.INTEGRATIONS.map((e) => e.id));
+  registry.OPERATIONAL_DEPENDENCIES.forEach((d) => {
+    ok(!tech.has(d.id), d.id + ' is in BOTH collections');
+  });
+});
+
+await T('byId() does not resolve an operational dependency', () => {
+  registry.OPERATIONAL_DEPENDENCIES.forEach((d) => {
+    eq(registry.byId(d.id), null, d.id + ': ');
+  });
+  ok(registry.byId('firestore'), 'control: byId must still resolve a real integration');
+});
+
+await T('it gets NO absence class — it is not a kind of missing evidence', () => {
+  /* The six classes describe why a TECHNICAL integration has no record. An
+     operational dependency is not a member of that partition at all; giving it
+     one would smuggle it into the evidence model through the back door. */
+  registry.OPERATIONAL_DEPENDENCIES.forEach((d) => {
+    eq(evidence.classifyEvidenceSource(d.id), null, d.id + ': ');
+  });
+});
+
+await T('THE HARD BOUNDARY — evidence for an operational dependency CANNOT be written', async () => {
+  /* Not a convention, a refusal. validate() rejects any record whose
+     integrationId is not a known registry entry, and operational dependencies
+     are deliberately absent from _byId — so the store refuses them even if a
+     future caller tries. */
+  const s = evidence.memoryStore();
+  for (const d of registry.OPERATIONAL_DEPENDENCIES) {
+    const out = await evidence.writeEvidence({
+      id: d.id, health: 'connected', evidence: 'provider_api',
+      stages: { configured: true, connected: true, accepted: true, delivered: null, received: null },
+      support: { connected: 'supported', accepted: 'supported',
+                 delivered: 'not-supported', received: 'not-supported' },
+      checkedAt: new Date().toISOString(), notRunReason: null,
+    }, { store: s });
+    ok(out.refused, d.id + ': an evidence record was accepted for an operational dependency');
+    ok(out.errors.some((e) => e.indexOf('not a known registry entry') > -1),
+      d.id + ': refused for the wrong reason — ' + out.errors.join('; '));
+  }
+  eq(Object.keys(s._docs).length, 0, 'nothing may be left behind: ');
+});
+
+await T('INVERTING CONTROL — the SAME call succeeds for a technical integration', async () => {
+  /* Without this, the refusal above would also pass against a writer that
+     refuses everything. */
+  const s = evidence.memoryStore();
+  const out = await evidence.writeEvidence({
+    id: 'firestore', health: 'connected', evidence: 'service_account',
+    stages: { configured: true, connected: true, accepted: true, delivered: null, received: null },
+    support: { connected: 'supported', accepted: 'supported',
+               delivered: 'not-supported', received: 'not-supported' },
+    checkedAt: new Date().toISOString(), notRunReason: null,
+  }, { store: s });
+  ok(out.written, 'the control must be ACCEPTED: ' + (out.errors || []).join('; '));
+});
+
+await T('the RESOLVER returns 52 and not one operational id', async () => {
+  const res = await status.resolveIntegrationStatus({
+    listSecretNames: async () => [], evidenceStore: evidence.memoryStore() });
+  eq(res.integrations.length, 52, '');
+  const ids = new Set(res.integrations.map((i) => i.id));
+  registry.OPERATIONAL_DEPENDENCIES.forEach((d) => {
+    ok(!ids.has(d.id), d.id + ' was fed through the technical status resolver');
+  });
+});
+
+await T('the BROWSER catalogue exposes them separately too — the renderer\'s own source', () => {
+  /* The console reads the browser catalogue, not the registry, so the boundary
+     has to hold in that file as well. Loaded with a window shim rather than
+     parsed, so this measures the actual exported shape. */
+  const shim = { window: {} };
+  const src = require('fs').readFileSync(path.join(ROOT, 'sokoni-integration-catalogue.js'), 'utf8');
+  require('vm').createContext(shim);
+  require('vm').runInContext(src, shim, { filename: 'sokoni-integration-catalogue.js' });
+  const cat = shim.window.SokoniIntegrationCatalogue;
+  ok(cat, 'the catalogue did not load');
+  eq(cat.integrations.length, 52, 'browser catalogue technical entries: ');
+  ok(Array.isArray(cat.operationalDependencies), 'operationalDependencies must be exposed');
+  eq(cat.operationalDependencies.length, 2, 'browser catalogue operational entries: ');
+  const techIds = new Set(cat.integrations.map((i) => i.id));
+  cat.operationalDependencies.forEach((d) => {
+    ok(!techIds.has(d.id), d.id + ' is inside the browser catalogue INTEGRATIONS array');
+    eq(cat.lookup(d.id), null, d.id + ': lookup() must not resolve it: ');
+    eq(d.probePath, 'none', d.id + ': ');
+  });
+  /* byCategory() is what the console's category filters call. An operational
+     dependency reaching it would be rendered as a technical integration. */
+  const all = [].concat.apply([], cat.categories.map((c) => cat.byCategory(c.id)));
+  eq(all.length, 52, 'byCategory across every category must yield exactly the technical set: ');
+});
+
+await T('GA4 keeps WIRED and CONFIGURED apart', () => {
+  /* The one entry where collapsing two facts would be easiest and worst. */
+  const shim = { window: {} };
+  require('vm').createContext(shim);
+  require('vm').runInContext(
+    require('fs').readFileSync(path.join(ROOT, 'sokoni-integration-catalogue.js'), 'utf8'),
+    shim, { filename: 'cat.js' });
+  const ga = shim.window.SokoniIntegrationCatalogue.lookup('ga4-analytics');
+  ok(ga, 'ga4-analytics is missing from the browser catalogue');
+  ok(/NOT PROVEN CONFIGURED/.test(ga.notes),
+    'the entry must state that being wired is not being configured');
+  ok(/G-X{8}|G-XXXXXXXX|measurement id/i.test(ga.notes),
+    'it must name the missing measurement id, not gesture at it');
+  eq(ga.health.kind, 'elsewhere', 'health is authoritative in GA4, not here: ');
+});
+
 console.log('\n' + '='.repeat(66));
 console.log('  ' + pass + ' passed, ' + fail + ' failed');
 console.log('='.repeat(66));
 console.log('\n  SCOPE     schema, validation and wiring, against an in-memory store.');
 console.log('  UNPROVEN  the Firestore adapter against a real database; no Firestore');
-console.log('            was contacted. The 47 are NOT migrated and');
+console.log('            was contacted. The 52 are NOT migrated and');
 console.log('            serviceCapabilities is populated by nothing — that is Step E.');
 console.log('  NOT DONE  no deployment, and functions/admin-os.js was not modified.\n');
 process.exit(fail ? 1 : 0);

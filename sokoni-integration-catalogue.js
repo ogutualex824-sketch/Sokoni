@@ -663,6 +663,121 @@
       health: { source: 'platformServices', kind: 'not-applicable', kindNote: 'This console IS the registry; it cannot poll itself.', note: 'Live: the Registered, Capabilities and Dependencies tabs are this registry.' },
       notes:  'A service appears here only if it calls platformRegisterService on boot. An empty registry means nothing registered — not that nothing is running.',
     },
+
+    /* ── Added by the Step 8 rebaseline, 2026-09-29. 47 → 52. ──────────────
+       Five services the platform demonstrably talks to and that the inventory
+       did not name. Each was added on CODE evidence, never on a vendor name.
+       The same census REJECTED cPanel (the search matched the variable
+       `discPanel`) and Twilio (SendGrid's vendor name, already here), and HELD
+       Firebase Performance and Cloud Build on one weak file each. */
+    {
+      id: 'google-maps', name: 'Google Maps Platform',
+      vendor: 'Google', category: 'infra', icon: '🗺️',
+      status: 'live', direction: 'outbound',
+      summary: 'Used alongside OpenStreetMap, not instead of it. OSM draws the tiles and ' +
+               'geocodes; Google Maps is the hand-off target when a rider taps navigate, and ' +
+               'its hosts are allowed by the Content-Security-Policy.',
+      evidence: {
+        modules:   ['rider-nav.html', 'service-worker.js'],
+        endpoints: ['https://maps.googleapis.com', 'https://maps.gstatic.com'],
+      },
+      health: { source: null, kind: 'measurable', kindNote: 'No probe is written for it yet.', note: 'A hand-off to an external app leaves no signal here; a tile or Places request would.' },
+      notes:  'Found by a census of what the platform actually contacts. It was absent from the ' +
+              'inventory while being allowed by the CSP, cached by the service worker and ' +
+              'launched from rider-nav.html — an integration nobody had written down.',
+    },
+    {
+      id: 'ga4-analytics', name: 'Google Analytics 4 / Tag Manager',
+      vendor: 'Google', category: 'infra', icon: '📊',
+      status: 'live', direction: 'outbound',
+      summary: 'The analytics loader ships in the delivered pages and the CSP allows ' +
+               'googletagmanager.com and google-analytics.com.',
+      evidence: {
+        modules:   ['analytics.js', 'admin.html', 'beta-dashboard.html'],
+        endpoints: ['https://www.googletagmanager.com', 'https://www.google-analytics.com'],
+      },
+      health: { source: null, kind: 'elsewhere', kindNote: 'Authoritative in the GA4 property, not here.', note: 'Whether events arrive is visible in GA4 and nowhere in this console.' },
+      /* ── WIRED IS NOT CONFIGURED, AND THIS ENTRY MUST NOT COLLAPSE THEM ──
+         The loader is present and the CSP permits the hosts: that is evidence
+         the integration is WIRED. No G-XXXXXXXX measurement id exists anywhere
+         in this repository: that means it is NOT PROVEN CONFIGURED. Reporting
+         a working analytics rail on the strength of a script tag is exactly
+         the inference this catalogue exists to refuse. */
+      notes:  'WIRED, NOT PROVEN CONFIGURED. No G-XXXXXXXX measurement id is committed in this ' +
+              'repository, so whether these pages report to any GA4 property is unestablished. ' +
+              'The id may be injected at deploy time; that has not been verified. Do not read ' +
+              'this entry as "analytics works".',
+    },
+    {
+      id: 'firebase-remote-config', name: 'Firebase Remote Config',
+      vendor: 'Google', category: 'infra', icon: '🎛️',
+      status: 'live', direction: 'internal',
+      summary: 'Backs the feature-flag layer, so it decides which behaviour a given ' +
+               'build actually exhibits.',
+      evidence: {
+        modules: ['functions/feature-flags.js', 'sokoni-flags.js'],
+      },
+      health: { source: null, kind: 'measurable', kindNote: 'No probe is written for it yet.', note: 'A fetch of the active template would be a real probe; none is written.' },
+      notes:  'A flag surface is worth naming in the inventory precisely because it changes ' +
+              'behaviour without a deploy — so "what is running" is not answered by the commit alone.',
+    },
+    {
+      id: 'cloud-logging', name: 'Google Cloud Logging',
+      vendor: 'Google Cloud', category: 'infra', icon: '🧾',
+      status: 'live', direction: 'internal',
+      summary: 'The log sink behind the GCP evidence reader. It is where the deployment and ' +
+               'Artifact Registry forensics in this repository actually read their facts.',
+      evidence: {
+        modules:   ['functions/gcp-evidence.js'],
+        endpoints: ['https://logging.googleapis.com'],
+      },
+      health: { source: null, kind: 'elsewhere', kindNote: 'Authoritative in Cloud Logging.', note: 'Queried by the evidence reader; there is no runtime signal to show here.' },
+      notes:  'Named because several safety investigations in this repository depend on it — an ' +
+              'unreadable log sink turns an empty result into a false all-clear.',
+    },
+    {
+      id: 'eventarc', name: 'Eventarc',
+      vendor: 'Google Cloud', category: 'infra', icon: '🔀',
+      status: 'live', direction: 'internal',
+      summary: 'Routes the platform events that second-generation Cloud Functions triggers are ' +
+               'delivered through.',
+      evidence: {
+        modules: ['scripts/audit-callable-invokers.js', 'scripts/deployment-integrity.js'],
+      },
+      health: { source: null, kind: 'measurable', kindNote: 'No probe is written for it yet.', note: 'Trigger delivery is measurable in principle; nothing measures it today.' },
+      notes:  'Appears in the deployment-integrity and invoker audits, so it is part of how ' +
+              'functions actually receive events — not an optional extra.',
+    },
+  ];
+
+  /* ── OPERATIONAL DEPENDENCIES — a SEPARATE collection ───────────────────
+     Providers the BUSINESS relies on and the CODE does not talk to. No client,
+     no credential, no request — and therefore NO PROBE PATH. Not a probe that
+     refuses, and not a probe nobody has written: nothing to measure, ever.
+
+     They are kept out of INTEGRATIONS deliberately. Every field of the evidence
+     model assumes a code path, so a member of this list placed in that one
+     would have to be special-cased by every consumer — and the first to forget
+     would render it `unknown`, which an operator reads as "not checked yet"
+     rather than "there is nothing here to check".
+
+     The console must render these as NOT PROBEABLE with the words "No SOKONI
+     probe path", never reusing an evidence-model state.
+
+     cPanel is excluded pending independent verification — the census hit was the
+     variable `discPanel`. HostPinnacle gets no third row here: hostpinnacle-dns
+     and hostpinnacle-mail already exist as code integrations. */
+  var OPERATIONAL_DEPENDENCIES = [
+    { id: 'google-workspace', name: 'Google Workspace', vendor: 'Google', icon: '🏢',
+      kind: 'operational-dependency', probePath: 'none',
+      summary: 'Company email and identity for the operating business.',
+      whyNotAnIntegration: 'No SOKONI code path — the census found zero references in any source file.',
+      authority: 'Google Workspace Admin console' },
+    { id: 'google-admin', name: 'Google Admin', vendor: 'Google', icon: '👤',
+      kind: 'operational-dependency', probePath: 'none',
+      summary: 'Administration of the Workspace tenant — users, domains, groups.',
+      whyNotAnIntegration: 'No SOKONI code path; the Admin SDK is not used anywhere.',
+      authority: 'Google Admin console' },
   ];
 
   /* ── Indexes ─────────────────────────────────────────────────────────── */
@@ -694,5 +809,9 @@
     lookup:       function (id) { return byId[id] || null; },
     byCategory:   byCategory,
     secrets:      secrets,
+    /* Exposed SEPARATELY and never merged into integrations. A consumer that
+       wants both must ask for both — which is what keeps the boundary visible
+       in the console instead of only in this comment. */
+    operationalDependencies: OPERATIONAL_DEPENDENCIES,
   };
 })();
