@@ -133,6 +133,91 @@ function _staticNotRunReason (id) {
   catch (_) { return null; }
 }
 
+/* What the EXECUTOR TABLE declares about this rail, present tense. */
+function _declaredProbeState (id) {
+  try { return require('./integration-probe-executors').probeAvailability(id); }
+  catch (_) { return 'none'; }
+}
+
+/* ── DISAGREEMENT BETWEEN DECLARATION AND OBSERVATION ───────────────────────
+   The ratified Step E matrix, computed rather than described.
+
+   WHY THIS EXISTS. A declaration is present tense and carries no timestamp: it
+   says what will happen if you press the button now. An observation is past
+   tense and carries one: it says what happened last time. Rendering both
+   through a single `notRunReason` made two of the six combinations invisible —
+   a rail declared `requires_secret_binding` whose probe then SUCCEEDED reported
+   exactly like a healthy `runnable` rail, because the successful probe's null
+   reason overwrote the declaration. The stale declaration, and the money-rail
+   tripwire, were unreachable by construction.
+
+   The two sources are therefore kept apart and COMPARED. The comparison is what
+   neither source can produce alone.
+
+     declared                observed                  state
+     ----------------------  ------------------------  --------------------
+     no_safe_probe           nothing                   expected-refusal
+     no_safe_probe           ANY observation           safety-tripwire
+     requires_secret_binding no successful observation declared-current
+     requires_secret_binding a successful observation  stale-declaration
+     runnable                requires_secret_binding   binding-regression
+     runnable                a successful observation  verified-evidence
+
+   `safety-tripwire` keys on ANY observation, not on a successful one. The rails
+   that declare `no_safe_probe` are IntaSend collections and payouts: probing
+   them moves money. That a probe ran at all is the alarm; whether it succeeded
+   is a detail.
+
+   Combinations outside those six — a `runnable` rail nobody has probed, or a
+   rail with no executor at all — return null. That is deliberate: the matrix is
+   the ratified target, and inventing a seventh state here would be exactly the
+   unratified taxonomy this model keeps refusing to grow. The suite asserts
+   which combinations return null, so the gap is stated rather than latent. */
+const DISAGREEMENT_SEVERITY = {
+  'expected-refusal':   'ok',
+  'declared-current':   'ok',
+  'verified-evidence':  'ok',
+  'stale-declaration':  'action',
+  'binding-regression': 'action',
+  'safety-tripwire':    'tripwire',
+};
+
+function _disagreement (declared, probe) {
+  const observed = !!probe;
+  const observedNotRun = probe ? (probe.notRunReason || null) : null;
+  const s = (probe && probe.stages) || {};
+  /* "Successful" means a stage actually came back true. A probe that ran and
+     established nothing is not a success, and must not retire a declaration. */
+  const succeeded = s.connected === true || s.accepted === true ||
+                    s.delivered === true || s.received === true;
+
+  let state = null;
+  if (declared === 'no_safe_probe') {
+    state = observed ? 'safety-tripwire' : 'expected-refusal';
+  } else if (declared === 'requires_secret_binding') {
+    state = succeeded ? 'stale-declaration' : 'declared-current';
+  } else if (declared === 'runnable') {
+    if (observedNotRun === 'requires_secret_binding') state = 'binding-regression';
+    else if (succeeded) state = 'verified-evidence';
+  }
+  if (!state) return null;
+
+  return {
+    state,
+    severity: DISAGREEMENT_SEVERITY[state],
+    declared,
+    observed: observed ? (observedNotRun || (succeeded ? 'successful-probe' : 'probe-without-result')) : null,
+    note: {
+      'expected-refusal':   'A probe exists and deliberately will not run. Nothing has run.',
+      'declared-current':   'The declared reason still holds; no successful probe contradicts it.',
+      'verified-evidence':  'The rail is declared runnable and a probe established it.',
+      'stale-declaration':  'Declared as unable to run, but a probe SUCCEEDED — the declaration is out of date.',
+      'binding-regression': 'Declared runnable, but a probe reported it cannot run — the binding regressed.',
+      'safety-tripwire':    'A probe ran against a rail declared unsafe to probe. Investigate: probing this rail moves money.',
+    }[state],
+  };
+}
+
 /**
  * resolveIntegrationStatus({ listSecretNames })
  *
@@ -270,6 +355,24 @@ async function resolveIntegrationStatus (opts) {
         ? (probe.notRunReason || null)
         : _staticNotRunReason(entry.id),
 
+      /* ── DECLARATION AND OBSERVATION, KEPT APART ────────────────────────
+         `notRunReason` above stays exactly as it was, because the console
+         renders REFUSED BY DESIGN from it and that contract is not this
+         slice's to change. These two are additive, and they are what make the
+         six disagreement states computable:
+
+           declaredProbeState   present tense, from the executor table. True
+                                before anything runs and never stale.
+           observedNotRunReason past tense, from persisted evidence, with
+                                `probedAt` as its timestamp. null when nothing
+                                has been observed — which is NOT the same as a
+                                probe that ran and had no reason to refuse.
+
+         Collapsing them is what hid the stale declaration and the tripwire. */
+      declaredProbeState:   _declaredProbeState(entry.id),
+      observedNotRunReason: probe ? (probe.notRunReason || null) : null,
+      evidenceDisagreement: _disagreement(_declaredProbeState(entry.id), probe),
+
       /* Declared by the evidence record, or unknown. Never inferred from the
          project id or from which host this happens to be running on. */
       environment: probe ? (probe.environment === undefined ? null : probe.environment) : null,
@@ -311,6 +414,29 @@ async function resolveIntegrationStatus (opts) {
     evidenceReadable,
     evidenceError,
     evidenceDropped,
+
+    /* ── THE ACTIONABLE DISAGREEMENTS, HOISTED ──────────────────────────────
+       A per-record field an operator has to go looking for is a field nobody
+       finds. A safety tripwire on a money rail cannot depend on somebody
+       scrolling 52 rows, so the states that need acting on are collected here:
+       `safety-tripwire`, `stale-declaration`, `binding-regression`.
+
+       The `ok` states — expected-refusal, declared-current, verified-evidence —
+       are deliberately NOT hoisted. They are on their records, where they
+       belong; putting them here too would make this list a second copy of the
+       response rather than a queue of things to do. An empty array means no rail
+       disagrees with its declaration, which is the normal, quiet state. */
+    disagreements: integrations
+      .filter((i) => i.evidenceDisagreement && i.evidenceDisagreement.severity !== 'ok')
+      .map((i) => ({
+        id: i.id, name: i.name,
+        state:    i.evidenceDisagreement.state,
+        severity: i.evidenceDisagreement.severity,
+        declared: i.evidenceDisagreement.declared,
+        observed: i.evidenceDisagreement.observed,
+        note:     i.evidenceDisagreement.note,
+        probedAt: i.probedAt,
+      })),
     /* Orphans are reported as a COUNT only. Naming a configured secret that no
        integration claims would turn this response into a map of the estate's
        credentials for anyone who reaches it. The count is enough to tell an
@@ -323,4 +449,5 @@ async function resolveIntegrationStatus (opts) {
 }
 
 module.exports = { resolveIntegrationStatus,
-  _internal: { _capabilities, _defaultLister, _staticNotRunReason } };
+  _internal: { _capabilities, _defaultLister, _staticNotRunReason,
+    _declaredProbeState, _disagreement, DISAGREEMENT_SEVERITY } };

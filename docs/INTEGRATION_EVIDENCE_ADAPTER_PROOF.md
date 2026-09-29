@@ -315,7 +315,11 @@ the suite reports that as UNPROVEN rather than rounding it up.
 
 ---
 
-## 11 · Step E — the migration of exactly three, certified on the emulator
+## 11 · Step E — an EMULATOR OBSERVATION BOOTSTRAP of exactly three
+
+> **Terminology, corrected and kept in the record.** This was an *emulator observation bootstrap*,
+> **not a production migration**. `integrationProbeLatest` remains untouched and production writes
+> were never authorised. What is certified is the mechanism and its content guarantees.
 
 ### There was nothing to migrate *from*
 
@@ -407,3 +411,94 @@ whatever was *declared* survives serialisation.
 is the migration *mechanism* and its content guarantees — on an emulator, where two of the three
 observations are environment artefacts and are labelled as such. A production run is a separate act
 requiring its own authorisation. No deployment. `integrationProbeLatest` untouched.
+
+---
+
+## 12 · The resolver disagreement states — proven
+
+**21 passed, 0 failed** — `scripts/test-integration-disagreement.js`. Resolver logic over an
+injected store: no emulator, no migration, no deployment, no console change, no
+`integrationProbeLatest` access.
+
+### What had to be built first
+
+D4 was ratified and never implemented. The resolver carried **one** `notRunReason`, and a probe's
+reason overwrote the declaration — so a rail declared `requires_secret_binding` whose probe then
+**succeeded** reported exactly like a healthy `runnable` rail, because the successful probe's null
+reason erased the declaration. Two of the six combinations were unreachable by construction: the
+stale declaration, and the money-rail tripwire.
+
+Three additive fields now carry it, and the legacy `notRunReason` is **unchanged**, because the
+console renders REFUSED BY DESIGN from it and that contract is not this slice's to alter:
+
+| field | tense | source |
+|---|---|---|
+| `declaredProbeState` | present | the executor table — true before anything runs, never stale |
+| `observedNotRunReason` | past | persisted evidence, with `probedAt` as its timestamp |
+| `evidenceDisagreement` | — | the comparison: `{ state, severity, declared, observed, note }` |
+
+### The six, each from a valid record
+
+Every fixture passes `validate()` first — otherwise the matrix would be tested on records the store
+would refuse. The three declaration kinds are read from `REFUSES_BY_DESIGN` rather than named, so
+fixtures cannot drift from the declarations they exercise (`intasend-collections` · `sendgrid` ·
+`firestore`).
+
+| declared | observed | state | severity |
+|---|---|---|---|
+| `no_safe_probe` | nothing | `expected-refusal` | ok |
+| `no_safe_probe` | **any** observation | **`safety-tripwire`** | **tripwire** |
+| `requires_secret_binding` | no successful observation | `declared-current` | ok |
+| `requires_secret_binding` | a successful observation | **`stale-declaration`** | action |
+| `runnable` | `requires_secret_binding` observed | **`binding-regression`** | action |
+| `runnable` | a successful observation | `verified-evidence` | ok |
+
+`safety-tripwire` keys on **any** observation, not a successful one. The rails declaring
+`no_safe_probe` are IntaSend collections and payouts: probing them moves money. *That a probe ran at
+all* is the alarm; whether it succeeded is a detail.
+
+### The flattening is demonstrated, not asserted
+
+The decisive test puts a successful observation on both `sendgrid` (declared
+`requires_secret_binding`) and `firestore` (declared `runnable`), and first asserts they are
+**identical** through every pre-existing field:
+
+```
+both  health=connected  evidence=provider_api  notRunReason=null
+  ->  stale-declaration          vs          verified-evidence
+```
+
+Those equality assertions are controls: if health or evidence differed, the flattening would not be
+real and the test would prove nothing. The two situations are separated **only** by the comparison.
+A further test drives all six combinations and asserts six *distinct* states — no state is an alias
+of another.
+
+### The dangerous states are observable, not merely labelled
+
+A per-record field an operator must go looking for is a field nobody finds, so the three actionable
+states are **hoisted** into a top-level `disagreements` array with `id`, `state`, `severity`,
+`declared`, `observed`, `note` and `probedAt`. The tripwire's note says *why* it matters — "probing
+this rail moves money" — and carries when the probe that should not have happened ran.
+
+The three `ok` states are deliberately **not** hoisted: they live on their records, and copying them
+here would make the list a second copy of the response rather than a queue of things to do.
+
+**Inverting control:** a quiet system hoists **nothing**. Without it, the three guards would pass
+against a resolver that hoists everything. With no evidence: 9 `ok` states exist on records and
+`disagreements` is empty.
+
+### Outside the matrix is null, and said so
+
+A `runnable` rail nobody has probed, and any rail with no executor, return `null`. Inventing a
+seventh state would be exactly the unratified taxonomy this model keeps refusing to grow — so the
+gap is asserted rather than left latent. Baseline with no evidence: **2 `expected-refusal` · 7
+`declared-current` · 43 null**, totalling 52.
+
+### Boundaries held
+
+`notRunReason` byte-identical for all nine declared refusals · 52 technical + 2 operational
+unchanged · no migration, no deployment, no console change, no `integrationProbeLatest` access, no
+inbound synthetic evidence, no operational-dependency record, **no RC-1 repair**.
+
+**The console is still held.** It is not taught to render these until — as now — the resolver has
+mechanically demonstrated them.
