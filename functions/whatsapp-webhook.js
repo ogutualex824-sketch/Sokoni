@@ -296,12 +296,32 @@ function buildFunction () {
   const VERIFY = defineSecret(SECRET_NAMES.verifyToken);
   const APPSEC = defineSecret(SECRET_NAMES.appSecret);
 
+  const logger = require('firebase-functions/logger');
+
   return onRequest(
-    { region: 'us-central1', maxInstances: 10, secrets: [VERIFY, APPSEC],
+    { region: 'us-central1', timeoutSeconds: 30, maxInstances: 10,
+      secrets: [VERIFY, APPSEC],
+
+      /* invoker: "public" IS REQUIRED, and its absence is a silent failure.
+         Without it Cloud Run demands an IAM identity and rejects the request
+         with 403 BEFORE any code here runs — so the signature check, the
+         handshake and every test in the suite would be irrelevant, and Meta
+         would report the callback as unreachable with nothing in our logs to
+         explain it. webhookIntasend, webhookMpesa and webhookStripe all set it
+         for the same reason. */
+      invoker: 'public',
+
       /* NO enforceAppCheck: Meta is not a SOKONI client and cannot present a
-         token. The signature IS the authentication, which is why it is
-         verified before anything else happens. */
+         token. The SIGNATURE is the authentication, which is why it is verified
+         before anything else happens.
+
+         NO minInstances: webhookIntasend pins one warm instance because a
+         payment callback that arrives late costs money. Meta retries failed
+         deliveries with backoff, so a cold start is recovered automatically and
+         a warm instance would be paid for around the clock to avoid a problem
+         the provider already solves. */
       cors: false },
+
     async (req, res) => {
       let out;
       try {
@@ -312,15 +332,17 @@ function buildFunction () {
         });
       } catch (e) {
         /* A crash must not read as an accepted event. 500 makes Cloud API
-           retry, which is correct for an unexpected fault — unlike a
-           validation failure, a transient fault may well succeed next time. */
-        console.error('[whatsappWebhook] unhandled', e && e.message);
+           retry, which is right for an unexpected fault — unlike a validation
+           failure, a transient fault may well succeed next time. */
+        logger.error('[webhookWhatsapp] unhandled', { message: e && e.message });
         res.status(500).send('Internal Error');
         return;
       }
-      /* Logged as a COUNT and a reason, never as content: an inbound message is
-         a customer's words and must not reach the logs. */
-      console.log('[whatsappWebhook]', {
+      /* COUNTS and a reason, never content. An inbound message is a customer's
+         words and must not reach the logs; the verify token and app secret
+         never appear here either, and `reason` is our own vocabulary rather
+         than anything echoed from the request. */
+      logger.info('[webhookWhatsapp]', {
         method: req.method, status: out.status, reason: out.reason,
         events: out.events || 0, recorded: out.recorded || null,
       });

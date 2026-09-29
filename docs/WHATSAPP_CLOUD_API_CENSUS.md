@@ -324,3 +324,110 @@ an oversight.
 No handshake, no deployment, no export, no secret created, no catalogue change (still 52 + 2), no
 outbound, no campaigns, no Flows, no `wa.me` replacement. Share attribution remains a separate slice
 needing no Meta credential.
+
+---
+
+## 10 · Production webhook — architecture inspection and implementation
+
+Meta app **1407964151404757** (new, WhatsApp use case). Test number, WABA and a test send are
+confirmed working by the owner. This slice makes the receiver deployable.
+
+### Architecture inspection, before writing anything
+
+| question | answer found in the repo |
+|---|---|
+| HTTP function routing | `functions/index.js`, one `exports.<name> = onRequest(...)` per endpoint |
+| **naming convention** | **`webhook<Provider>`** — `webhookIntasend`, `webhookMpesa`, `webhookStripe`, `webhookSmartpos`, `webhookHealth` |
+| closest analogue | `webhookIntasend` (`index.js:7468`) — signed inbound, secret-bound, `invoker: "public"` |
+| communications engine | `functions/notify.js` is the one sender; `communication-send.js`, `communication-timeline.js`, `connect-notify.js` sit around it |
+| secrets authority | `defineSecret()` + Google Secret Manager. Never `.env`, never source |
+| idempotency | `.create()` on a deterministic id, so a replay is a duplicate rather than an overwrite |
+| logging | `firebase-functions/logger`, not `console` |
+
+### Two defects the inspection found in my own module
+
+**`invoker: "public"` was missing, and its absence is silent.** Without it Cloud Run rejects Meta with
+**403 before any code runs** — the signature check, the handshake and all 27 tests would stay green
+while the webhook was unreachable, with nothing in our logs to explain it. Every other `webhook*`
+sets it. Now set, and asserted by a test.
+
+**The function was named `whatsappWebhook`**, against a house convention of `webhook<Provider>`.
+Renamed `webhookWhatsapp`, with a test that checks the neighbours exist so the convention is
+measured rather than asserted.
+
+### What it does, and deliberately does not do
+
+Verifies the handshake, verifies `X-Hub-Signature-256` over the **raw body**, normalises messages and
+statuses, and records them idempotently in `whatsappInbound`. It does **not** create Connect or
+communications events, and does not touch any order, payment or delivery state.
+
+That is the smallest correct integration. Feeding inbound messages into the communications engine
+means deciding how a WhatsApp thread anchors to a SOKONI conversation — a real design decision in
+the Connect lane, not something to settle inside a webhook. Receiving correctly is a prerequisite
+for it either way.
+
+### Deployment procedure
+
+**1 · Create the secrets** (values never in the repo, never in `.env`):
+
+```
+printf '%s' '<a fresh random string you choose>' | \
+  gcloud secrets create WHATSAPP_VERIFY_TOKEN --data-file=- --project sokoni-aeb26
+printf '%s' '<Meta App Secret for app 1407964151404757>' | \
+  gcloud secrets create WHATSAPP_APP_SECRET  --data-file=- --project sokoni-aeb26
+```
+
+**2 · Confirm readiness** — `node scripts/whatsapp-preflight.js` must show both secrets `observed`.
+
+**3 · Deploy, scoped:**
+
+```
+firebase deploy --only functions:webhookWhatsapp --project sokoni-aeb26
+```
+
+> **This is the blocker to be aware of.** `defineSecret` binds at deploy time, so from this commit
+> onward **any** functions deploy fails until both secrets exist — not just this one. Create them
+> before anyone deploys anything.
+
+**4 · Read the real callback URL — do not assume it:**
+
+```
+gcloud functions describe webhookWhatsapp --region us-central1 \
+  --project sokoni-aeb26 --format='value(serviceConfig.uri)'
+```
+
+Gen-2 functions answer on **two** hosts: the predictable
+`https://us-central1-sokoni-aeb26.cloudfunctions.net/webhookWhatsapp`, and a Cloud Run URL
+containing a deployment-specific hash (`webhookintasend-o3jpu5wacq-uc.a.run.app` is the shape).
+Either works with Meta. The hash cannot be known before deploying, which is why this reads it rather
+than predicting it — and `whatsapp-preflight.js` prints it once the function exists.
+
+### Meta configuration, after deployment
+
+Use cases → Connect on WhatsApp → Production setup → Configure Webhooks:
+
+- **Callback URL** — from step 4
+- **Verify token** — the exact `WHATSAPP_VERIFY_TOKEN` value
+- **Client certificate** — leave empty; the signature is the authentication
+- Then **Verify and save**, and subscribe the WABA to the **`messages`** field
+
+### Smoke test, after deployment
+
+| # | action | expected |
+|---|---|---|
+| 1 | Meta "Verify and save" | Meta accepts. Logs show `reason: verified`, status 200. A failure here is the verify token or the URL |
+| 2 | `curl -s -o /dev/null -w '%{http_code}' '<URL>?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=x'` | **403** — proves the token is actually checked |
+| 3 | `curl -s -o /dev/null -w '%{http_code}' -X POST '<URL>' -d '{}'` | **403** — unsigned POST refused |
+| 4 | Send a WhatsApp message **to** the business number | one document in `whatsappInbound`, id `msg_wamid…`, `kind: message`, **no message body stored** |
+| 5 | Repeat step 4's delivery (Meta retries on any non-200) | still **one** document — `create()` not `set()` |
+| 6 | Send a message **from** the business number | `kind: status` documents for sent/delivered/read — three facts, three records |
+| 7 | `node scripts/whatsapp-preflight.js` | `function deployed` and `callback URL` now **observed** |
+
+Steps 2 and 3 are the ones worth doing: they prove the refusals are live in production rather than
+only in the suite.
+
+### Still not done
+
+No deployment. No secret created. Meta configuration untouched, as instructed. No outbound send. No
+Connect or communications wiring. `27 passed, 0 failed` proves the logic against payloads shaped
+like Meta's — **not one real Meta delivery has happened.**

@@ -37,7 +37,7 @@ const ROOT = path.resolve(__dirname, '..');
 const wa = require(path.join(ROOT, 'functions/whatsapp-webhook.js'));
 const PROJECT = process.env.GCLOUD_PROJECT || 'sokoni-aeb26';
 const REGION = 'us-central1';
-const FN_NAME = 'whatsappWebhook';
+const FN_NAME = 'webhookWhatsapp';   /* house convention: webhook<Provider> */
 
 const rows = [];
 const add = (step, state, detail) => rows.push({ step, state, detail: detail || '' });
