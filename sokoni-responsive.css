@@ -488,13 +488,19 @@ img {
   }
 }
 
-/* Layer GPU for elements that animate frequently */
+/* Layer GPU for elements that animate frequently.
+   Named ids ONLY. The old [class*="modal"] / [class*="drawer"] / [class*="toast"]
+   selectors also matched <body> — sokoni-drawer.js adds `sk-drawer-active` to it —
+   and `will-change: transform` on body makes body the containing block of every
+   position:fixed child. The header menu (#sk-menu-drawer, fixed, top:0 bottom:0)
+   then grew to the full page height (11,415px on the home page), stopped scrolling,
+   and opening it while scrolled down showed only its black background.
+   They also promoted every modal/toast CHILD (modal-header, modal-body, …) to its
+   own GPU layer — memory that low-end phones answer with a blank screen.
+   Drawers and modals already declare their own will-change where they animate. */
 #sokoniScrollTop,
 #kassBtn,
-#sokoni-wa-support,
-[class*="modal"],
-[class*="drawer"],
-[class*="toast"] {
+#sokoni-wa-support {
   will-change: transform, opacity;
 }
 

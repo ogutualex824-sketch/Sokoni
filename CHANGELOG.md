@@ -1,3 +1,31 @@
+## [2026-09-29] — Header menu (top-right) no longer opens to a black screen; it fills the screen and scrolls
+
+**Files:** `sokoni-responsive.css`, `CHANGELOG.md`.
+**Database changes:** none. **API changes:** none. **Security changes:** none.
+**Breaking changes:** none. **Deployment:** HOSTING only.
+
+`sokoni-responsive.css` gave `will-change: transform, opacity` to `[class*="modal"]`, `[class*="drawer"]` and
+`[class*="toast"]`. Opening the menu adds `sk-drawer-active` to `<body>`, so `<body>` itself matched. A
+`will-change: transform` on `<body>` makes body the containing block of every `position: fixed` child. The
+menu drawer (`#sk-menu-drawer`, fixed, `top:0; bottom:0`) was therefore sized and placed against the whole
+page instead of the screen:
+- 11,415 px tall on the home page and 18,744 px on the shop page;
+- no inner scroll;
+- opened while scrolled down, its items sat above the viewport (−1,980 px on the shop page) and the user saw
+  only its black background.
+
+The same selectors also promoted every modal/toast child element to its own GPU layer, which costs memory on
+low-end phones.
+
+**Fix:** keep `will-change` on the three named floating buttons only. Drawers and modals already declare
+`will-change` where they animate.
+
+**Verified** (headless Chromium, 390×844, local serve, page scrolled 2,500 px before opening the menu):
+- index, category, services, life-events: before, the drawer had top −73 / −2069 / −362 / −1009 and was
+  4,423–13,020 px tall;
+- after: top 0, 844 px tall, first item visible, and the body scrolls inside the drawer (wheel 0 → 200);
+- vertical touch scroll is not blocked; the swipe handler only prevents horizontal swipe-to-close.
+
 ## [2026-09-29] — Life Goals page no longer buried under its own closed goal-sheet overlay (mobile)
 
 **Files:** `sokoni-premium-v2.css`, `CHANGELOG.md`.
