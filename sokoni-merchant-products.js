@@ -1365,11 +1365,13 @@
         } else if (E.mode === 'edit') {
           var patch = changedOnly(fieldsFromForm(), E.product);   /* stored record, not the form */
           if (!Object.keys(patch).length) { E.busy = false; closeEditor(); return say('Nothing changed.'); }
-          run = M.updateProduct({ scope: ctx.scope, db: ctx.db, id: E.product.id, patch: patch });
+          run = M.updateProduct({ scope: ctx.scope, db: ctx.db, id: E.product.id, patch: patch, businessCategory: bizCategory() });
         } else {
           run = M.createProduct({
             scope: ctx.scope, db: ctx.db, draftToken: E.token,
             product: fieldsFromForm(),
+            /* the capability matrix: the writer refuses a listing type this kind of business may not list (U3) */
+            businessCategory: bizCategory(),
             /* Opening stock does NOT ride in the product document. This is the invoker for
                merchantAdjustStock; the writer files the opening quantity as the product's first
                movement, transactional and versioned, exactly like every later one. */
@@ -2587,6 +2589,13 @@
       return (typeof window !== 'undefined' && window.SokoniListingStudio) || null;
     }
 
+    /* The shop's C1 business category (shops/{id}.business.category, set by AdminOS classification). The catalogue
+       capability matrix decides which listing types it may use — null means not yet classified (goods only). U3. */
+    function bizCategory () {
+      try { return (typeof ctx.businessCategory === 'function' ? ctx.businessCategory() : ctx.businessCategory) || null; }
+      catch (_) { return null; }
+    }
+
     /* The listing as it stands RIGHT NOW — stored record plus whatever is typed — so the
        quality score and the preview describe what the merchant is looking at. Scoring the
        saved record instead would report a percentage for a listing that no longer exists. */
@@ -2702,7 +2711,7 @@
           : esc(p.name || 'Untitled')) + '</div>' +
         (E.blocked ? '<div class="pr-block">' + esc(E.blocked) + '</div>' : '') +
         businessContextHTML() +
-        (studio() ? studio().typePickerHTML(liveListing(p)) : '') +
+        (studio() ? studio().typePickerHTML(liveListing(p), { businessCategory: bizCategory() }) : '') +
         fld('name', 'Product name', 'type="text" autocomplete="off" maxlength="200" required', p.name) +
         '<div class="pr-row">' +
           fld('price', 'Price (KES)', 'type="number" inputmode="decimal" min="1" step="any" required', p.price) +

@@ -806,6 +806,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <!-- U1 (2026-09-29): the 99-category product taxonomy (4f67b4b) and the warranty policy builder (3f9f238), which
      sokoni-merchant-products.js already calls — this branch had the callers without the modules. -->
 <script src="sokoni-product-taxonomy.js"></script>
+<!-- U2/U3 (2026-09-29): what each kind of business may list — byte-identical copy of functions/shared/catalogue-capabilities.js -->
+<script src="sokoni-catalogue-capabilities.js"></script>
 <script src="sokoni-product-specs.js"></script>
 <link rel="stylesheet" href="sokoni-warranty-ui.css">
 <script src="sokoni-warranty-ui.js"></script>
@@ -2640,6 +2642,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
        exactly what the Storage rule checks request.auth.uid against. */
     products:   { global: 'SokoniMerchantProducts',    ctx: function () { return {
                     scope: _scope(), db: _mdb, shopName: _shopName(),
+                    /* the shop's C1 category (set by AdminOS classification) — the catalogue capability matrix reads it (U3) */
+                    businessCategory: function () { return (S.shop && S.shop.business && S.shop.business.category) || null; },
                     /* The SAME server authority Inventory uses. Products never writes a shelf
                        count itself; an opening quantity is handed to merchantAdjustStock so it
                        is transactional, floored, versioned and recorded as a movement. */

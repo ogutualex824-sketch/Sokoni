@@ -99,6 +99,26 @@
     digital: [
       f('fileFormat','Format',T), f('fileSize','Size',T), f('licence','Licence',T),
     ],
+    /* ── Universal catalogue U2 (2026-09-29): the four added types (sokoni-listing-types.js). Components of a package
+       or bundle are REFERENCES to real catalogue listings (ids), never copies — U5 consumes their stock. ── */
+    package: [
+      f('components','What’s in the package (listings)',L,true), f('validFrom','Available from',T),
+      f('validUntil','Available until',T), f('includes','What’s included',L),
+      f('substitutions','Allowed swaps',L),
+    ],
+    bundle: [
+      f('components','Products in the bundle',L,true), f('sku','SKU',T),
+      f('warranty','Warranty',T),
+    ],
+    custom_job: [
+      f('turnaround','Typical turnaround',T,true), f('pricingBasis','How it is priced',S,false,['Fixed','From','Quote only']),
+      f('requirements','What you need from the buyer',A), f('minimumOrder','Minimum order',T),
+      f('serviceArea','Service area',T),
+    ],
+    project: [
+      f('scope','Scope of work',A,true), f('pricingBasis','How it is priced',S,false,['Fixed','From','Quote only']),
+      f('timeline','Typical timeline',T), f('portfolio','Past projects',L), f('serviceArea','Service area',T),
+    ],
   };
 
   /* Media groups per type — metadata over ONE media pipeline, never a second uploader. */
@@ -113,6 +133,10 @@
     event:    ['Poster','Venue','Past events'],
     rental:   ['Main','Condition'],
     digital:  ['Cover','Preview'],
+    package:  ['Package','Contents'],
+    bundle:   ['Bundle','Contents'],
+    custom_job:['Samples','Before / after'],
+    project:  ['Portfolio','Site','Plans'],
   };
 
   /* DRAFT is where a listing starts and where it can always return. PUBLISHING is the only

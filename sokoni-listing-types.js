@@ -96,6 +96,39 @@
       secondary:null,
       availabilityNoun: 'available',
     },
+    /* ── Universal catalogue U2 (2026-09-29): the four kinds of commerce the owner's brief names that this
+       vocabulary did not have. EXTENDED here — not a second type list. Which of them a business may offer is
+       decided per business category by sokoni-catalogue-capabilities.js. ── */
+    package: {
+      /* a priced set of existing listings or services (meal deal, spa package, service package). Its components
+         reference real catalogue items; selling it consumes theirs (U5) — never a second stock. */
+      id: 'package', label: 'Package', noun: 'package',
+      primary: { key: 'buy',   label: 'Get Package',      icon: '🎁' },
+      secondary:{ key: 'cart',  label: 'Add to Cart',     icon: '🛒' },
+      availabilityNoun: 'available',
+    },
+    bundle: {
+      /* goods sold together at one price (phone + case). Components are real products. */
+      id: 'bundle', label: 'Bundle', noun: 'bundle',
+      primary: { key: 'buy',   label: 'Buy Now',          icon: '⚡' },
+      secondary:{ key: 'cart',  label: 'Add to Cart',     icon: '🛒' },
+      availabilityNoun: 'in stock',
+    },
+    custom_job: {
+      /* made or done to order: tailoring, printing, a repair, a custom build. Priced by QUOTE — no basket, and no
+         "Buy Now" on work nobody has scoped yet. */
+      id: 'custom_job', label: 'Custom work', noun: 'job',
+      primary: { key: 'quote', label: 'Request a Quote',  icon: '📝' },
+      secondary:{ key: 'contact', label: 'Message',       icon: '💬' },
+      availabilityNoun: 'taking orders',
+    },
+    project: {
+      /* scoped, multi-stage work: construction, an architecture brief, a software build, a campaign. */
+      id: 'project', label: 'Project', noun: 'project',
+      primary: { key: 'quote', label: 'Request a Proposal', icon: '📐' },
+      secondary:{ key: 'contact', label: 'Message',        icon: '💬' },
+      availabilityNoun: 'taking projects',
+    },
   };
 
   /* Inference from the category vocabulary the marketplace already ships. Only categories
@@ -123,6 +156,10 @@
    */
   function typeOf(listing) {
     var l = listing || {};
+    /* the EXACT id first: norm() strips underscores (for category matching), which turned 'custom_job' into
+       'customjob' and silently fell back to 'product' — found by test-catalogue-capabilities M6 (U2). */
+    var exact = String(l.listingType || l.type || '').trim().toLowerCase();
+    if (exact && Object.prototype.hasOwnProperty.call(TYPES, exact)) return TYPES[exact];
     var explicit = norm(l.listingType || l.type);
     if (explicit && TYPES[explicit]) return TYPES[explicit];
     var byCat = CATEGORY_TYPE[norm(l.category)];

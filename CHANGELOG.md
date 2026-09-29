@@ -1,3 +1,94 @@
+## [2026-09-29] - Universal catalogue U2 + U3: one capability matrix for every SOKONI business; the Listing Studio and writer obey it
+
+**merchant-v2 catalogue, NOT deployed.** Branch `slice/c4-category-matrix`. This is the owner's universal catalogue
+brief: "one uploader engine and a canonical capability matrix covering every category", so that a restaurant never
+gets retail-only fields and a lawyer never gets inventory controls. The matrix is in
+`docs/CATALOGUE_CAPABILITY_MATRIX.md` (generated from the module).
+
+**Census:** the object-type architecture already existed and is **extended, not duplicated**:
+- `sokoni-listing-types.js` holds the 10 types;
+- `sokoni-listing-model.js` holds the fields per type and the lifecycle, including `archived`;
+- the Listing Studio renders them.
+
+What was missing: a rule for **which business may list what**. The Studio offered every type to every shop.
+
+**Built:**
+- **`functions/shared/catalogue-capabilities.js`** (UMD, pure; a byte-identical browser copy
+  `/sokoni-catalogue-capabilities.js` published by `scripts/build-catalogue-capabilities.js --check`).
+  - It is keyed on the **31 canonical categories** of `business-category.js`, which the **105 business ids** and
+    **73 professions** resolve to. It holds no category list of its own.
+  - Per row: the permitted listing types, inventory / booking / quote / POS / marketing / staff, fulfilment, and
+    compliance (declarations until verified, U6).
+  - Rows with a merchant workspace profile agree with `business-workspace.PROFILE_OF`.
+  - **Unclassified** shops keep exactly today's goods selling; no type is granted by guesswork.
+- **Listing vocabulary extended:** `package`, `bundle`, `custom_job` and `project` (with field sets and media groups).
+  The owner's object types map onto the 14 ids.
+- **A real bug fixed:** `typeOf()` stripped underscores before matching, so any id containing `_` silently became a
+  `product`.
+- **The Listing Studio** offers only the permitted types for the shop's C1 category (`shops/{id}.business.category`).
+  - A listing whose current type is outside the row stays visible and is **flagged**, never silently re-typed.
+  - An unclassified shop is told why it sees goods only.
+- **The writer** refuses an explicit type outside the row (`TYPE_NOT_ALLOWED`, nothing written) and a product
+  category that contradicts the type (`CATEGORY_MISMATCH`). Inferred types are never refused, so today's listings keep
+  working.
+
+**Tests:**
+- **`scripts/test-catalogue-capabilities.js`: 9/0.**
+  - Every category has a row and none is invented.
+  - All 105 business ids and 73 professions resolve.
+  - There is one vocabulary.
+  - The rows agree with the workspace profiles.
+  - The brief's examples hold (restaurant, hotel, lawyer, car hire, property, clinician, courier, construction,
+    printing, salon, retail).
+  - Every type has its own fields.
+  - `check()` refuses what it should.
+  - The browser copy is identical.
+  - **The per-category matrix passes for all 31 rows.**
+  - Sabotage: **11/11 caught.**
+- **`scripts/test-catalogue-u3-browser.js`: 7/0** (Chromium; the REAL Studio, Products module and writer):
+  - for **every one of the 31 categories plus unclassified**, the picker offers exactly the matrix's types;
+  - every type's fields render;
+  - a lawyer gets Service and Package, with Product flagged;
+  - the writer refuses a lawyer's product and writes nothing;
+  - unclassified shops cannot save a room;
+  - a dish, a room, a rental and a project each save through one writer;
+  - no overflow at 390 px.
+  - Counterproof on `312fdb4`: both suites **fail**.
+  - Sabotage: **6/6 caught.**
+
+**Regression** (52 suites that read the listing modules, Products, the writer or merchant-v2; work tree vs `312fdb4`):
+- **Equal on both trees.** Three suites printed no summary in the parallel run: `merchant-messages-ui` on the work
+  tree, and `merchant-sell-ui` and `workspace-routing` on the base. Each was re-run on that tree: 195/0, 108/0 and 33/0,
+  equal to the other tree.
+- `merchant-v2-ecosystem-runtime` is 131/0 on the work tree and 129/2 on the base (the known flaky suite).
+- **No superseded assertions** in this slice.
+
+**UNPROVEN / NOT DONE:**
+- Not deployed.
+- **The type rule is enforced CLIENT-side** (Studio + writer). The server-side rule (product rules or a writer
+  callable) is stage 3, gated for owner review.
+- Required fields per type are enforced at **publish** by the listing model's quality gate (already existing), not
+  by the writer.
+- **Next slices:**
+  - U4: archive / restore replaces the hard delete, and the mirrors follow;
+  - U5: packages / bundles consume component stock through `merchantAdjustStock`;
+  - U6: compliance states and `costPrice` privacy;
+  - U7: marketing / POS parity, barcode scan-fill and the per-category storefront proof.
+
+**Files:**
+- New: `functions/shared/catalogue-capabilities.js`, `/sokoni-catalogue-capabilities.js` (copy),
+  `scripts/build-catalogue-capabilities.js`, `docs/CATALOGUE_CAPABILITY_MATRIX.md`, and 2 suites.
+- Changed: `sokoni-listing-types.js`, `sokoni-listing-model.js`, `sokoni-listing-studio.js`,
+  `sokoni-merchant-products.js`, `sokoni-merchant-data.js`, `merchant-v2.html`.
+
+**Database:** none. `listingType` may now hold package / bundle / custom_job / project.
+
+**Security:** a seller's editor cannot choose a listing type outside its business row (client-side; the server rule is
+stage 3).
+
+**Breaking:** an explicit `listingType` outside the business row is refused by the writer (`TYPE_NOT_ALLOWED`) when
+the caller states the business category.
+
 ## [2026-09-29] - Universal catalogue U1: the release-lineage uploader dependencies, ported (not rebuilt), plus a stock regression closed
 
 **merchant-v2 Products, NOT deployed.** Branch `slice/c4-category-matrix`. This follows the owner's universal

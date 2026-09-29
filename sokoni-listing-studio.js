@@ -56,12 +56,18 @@
      `data-pf` attribute. That means a typed field and a tapped chip reach the writer by
      exactly the same route, which is the property that stops the picker becoming a second
      way into the record. */
-  function typePickerHTML (listing) {
+  function typePickerHTML (listing, opts) {
     var T = LT();
     if (!T) return '';
     var cur = typeIdOf(listing);
     var explicit = listing && listing.listingType;
-    var chips = Object.keys(T.TYPES).map(function (id) {
+    /* Universal catalogue U3 (2026-09-29): ONLY the types this kind of business may list
+       (sokoni-catalogue-capabilities.js, keyed on the shop's C1 category). A listing that already carries a type
+       outside that set keeps it visible — flagged — rather than being silently re-typed. */
+    var CC = root.SokoniCatalogueCapabilities || null;
+    var allowed = CC ? CC.capsFor((opts && opts.businessCategory) || null).types : Object.keys(T.TYPES);
+    var ids = Object.keys(T.TYPES).filter(function (id) { return allowed.indexOf(id) !== -1 || id === cur; });
+    var chips = ids.map(function (id) {
       var t = T.TYPES[id];
       var on = id === cur;
       return '<button type="button" class="ls-chip' + (on ? ' on' : '') + '" data-ls="type" ' +
@@ -86,7 +92,17 @@
             (t.secondary ? ' and <b>' + esc(t.secondary.label) + '</b>' : '') + '.'
           : 'Not set — SOKONI is reading this as <b>' + esc(t.label) + '</b> from your category. ' +
             'Pick one above to decide it yourself.') +
-      '</div></div>';
+      '</div>' +
+      (CC && allowed.indexOf(cur) === -1
+        ? '<div class="pr-note" role="alert" data-ls="type-not-allowed">A <b>' + esc(t.label) + '</b> is not something ' +
+          ((opts && opts.businessCategory) ? 'this kind of business' : 'a shop that is not yet classified') +
+          ' can list. Choose one of the types above before you save.</div>'
+        : '') +
+      ((opts && !opts.businessCategory && CC)
+        ? '<div class="pr-note" data-ls="unclassified">Your shop is not classified yet, so you can list goods. ' +
+          'SOKONI classifies your business after review — then the services, rooms or work your business offers appear here.</div>'
+        : '') +
+      '</div>';
   }
 
   /* ── 2. THE TYPE'S OWN FIELDS ───────────────────────────────────────────────────────────

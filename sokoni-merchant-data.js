@@ -323,6 +323,27 @@
     return n;
   }
 
+  /* Universal catalogue U3 (2026-09-29): an EXPLICIT listing type must be one this kind of business may list
+     (sokoni-catalogue-capabilities.js, keyed on the shop's C1 category). Enforced only when the caller states the
+     business category (`businessCategory` present — null means unclassified, goods only); inferred types are never
+     refused, so an unclassified shop's ordinary listings keep working exactly as today. CLIENT-side: the server-side
+     equivalent belongs to the product rules (stage 3). */
+  function _assertCatalogueType(o, fields) {
+    if (!o || !Object.prototype.hasOwnProperty.call(o, 'businessCategory')) return;
+    if (!fields || !fields.listingType) return;
+    var CCm = (typeof window !== 'undefined' && window.SokoniCatalogueCapabilities) ||
+              (typeof globalThis !== 'undefined' && globalThis.SokoniCatalogueCapabilities) || null;
+    if (!CCm) return;
+    var TXc = (typeof window !== 'undefined' && window.SokoniProductTaxonomy) ||
+              (typeof globalThis !== 'undefined' && globalThis.SokoniProductTaxonomy) || null;
+    var v = CCm.check(o.businessCategory || null, { listingType: fields.listingType, category: fields.category }, TXc);
+    if (!v.ok) {
+      var e = new Error(v.errors[0].message);
+      e.code = v.errors[0].code; e.validation = v.errors.map(function (x) { return x.message; });
+      throw e;
+    }
+  }
+
   function _validate(fields, opts) {
     var errs = [];
     var creating = !!(opts && opts.creating);
@@ -502,6 +523,7 @@
     var opening = openingStockOf(o.product);
 
     var fields = _productFields(o.product);
+    _assertCatalogueType(o, fields);
     var errs = _validate(fields, { creating: true });
     if (errs.length) { var e = new Error(errs[0]); e.validation = errs; throw e; }
 
@@ -608,6 +630,7 @@
 
     var fields = _productFields(o.patch);
     if (!Object.keys(fields).length) throw new Error('merchant data: nothing to update');
+    _assertCatalogueType(o, fields);
     var errs = _validate(fields, { creating: false });
     if (errs.length) { var e = new Error(errs[0]); e.validation = errs; throw e; }
 
