@@ -1,3 +1,48 @@
+## 2026-09-29 — The Firestore evidence read is now bounded, and it cancels rather than conceals (branch `feat/integrations-control-center`, NOT deployed)
+
+The narrow repair authorized after `3288d8b`, committed as `7648996`. Adapter change, tests and timeout semantics
+only — no migration, no deployment, no change to the other three lanes. Full note:
+`docs/INTEGRATION_EVIDENCE_ADAPTER_PROOF.md` §9–§10.
+
+**What was broken.** Against an unreachable Firestore the adapter never returned, so `evidenceReadable: false` — the
+fail-closed state the whole model is built around — was **unreachable through the real path**, reachable only
+through a store that throws, which is exactly what the in-memory suite injects. The logic was right and the path to
+it did not exist. Three configurations were measured first and **all hang**: `settings({host})`, a gax
+`clientConfig` with `total_timeout_millis`, and `maxIdleChannels: 0`. So this was never a harness gap.
+
+- **It cancels, it does not conceal.** A bare `Promise.race([read, timer])` would stop the *caller* waiting while
+  the request kept running, letting abandoned work accumulate across invocations. `list()` — the call on the
+  resolver's path, and the one that hung — is built on `Query.stream()`, and the deadline calls `stream.destroy()`,
+  which tears the gRPC call down. **Measured: the stream settles 7 ms after `destroy()`**; an unreachable Firestore
+  returns in **1506 ms against a 1500 ms deadline**, and three further invocations each return bounded — which is
+  what rules out accumulation.
+- **`get()`/`set()` are bounded but NOT cancelled**, because the SDK offers no cancellation for them. The helper is
+  named `_deadlineNoCancel` and says so. The adapter claims a bounded *return*, not that the work stopped.
+- **The deadline is derived and the derivation is asserted.** Healthy read (52 docs, emulator) median 90 ms / max
+  206 ms · deadline **10 000 ms** (~50×) · callable budget **60 000 ms** (`adminGetIntegrationStatus` declares no
+  `timeoutSeconds`, so v2 default). The suite **measures** the envelope each run and asserts the two *relationships*
+  — `deadline > 20 × measured max` and `deadline ≤ callable/4` — rather than `10000 === 10000`, which would prove
+  nothing and stay green if the callable budget changed. The measurement is a **local floor, not a production
+  envelope**; production crosses a network and that envelope is unmeasured.
+- **The four states:** unreachable → bounded return, `evidenceReadable:false`, error reported, unknown for all 52
+  with no `probedAt` · healthy → readable, all 52 observed · **slow but successful → still succeeds** (a deadline at
+  4× the measured envelope does not turn a healthy read into a fault) · expired deadline → **UNREADABLE, NEVER
+  MISSING**.
+- **The control that makes proof 4 mean something:** a 1 ms deadline times out **with 52 documents present**, while
+  an **empty** collection reads `evidenceReadable: true`. Both yield `unknown` for every entry — health alone cannot
+  tell them apart, and `evidenceReadable` is the field that does. `evidenceDropped` stays empty: a timeout is not a
+  drop, because nothing was read to drop.
+
+Files: `functions/integration-evidence.js`, `scripts/test-integration-evidence-firestore.js`,
+`docs/INTEGRATION_EVIDENCE_ADAPTER_PROOF.md`.
+Database: none. API: none — same fields, same shape; an unreachable database now populates `evidenceError` instead
+of hanging. Security: none. Breaking changes: none. Deploy: none.
+Suites: adapter proof **23/0 + 1 UNPROVEN** (was 17/0/1) · evidence 69/0 · parity 26/0 · probes 85/0 · status 45/0 ·
+console 86/0. Catalogue unchanged at 52 + 2, digest `08767e93…`.
+**Still UNPROVEN, and narrower than before:** whether every gRPC channel and retry timer is reclaimed *inside* the
+SDK after cancellation — not observable from this process. The fail-closed state is now reachable through the real
+adapter, which it was not before. **Step E migration remains HELD.**
+
 ## 2026-09-29 — Verification convergence, Slice V1a: one reviewer, one route, the applicant page made lawful (branch `feat/integrations-control-center`, NOT deployed)
 
 Census found THREE verification state machines (`applications` — canonical, AdminOS + Super Admin via
