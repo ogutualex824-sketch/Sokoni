@@ -1,7 +1,7 @@
 # Step E — the source-of-truth decision, before migration
 
 **Date:** 2026-09-29 · **Branch:** `feat/integrations-control-center` · **Decision memo. No code, no
-migration, no deploy.** Ratified 2026-09-29 — see §7; **D3 remains OPEN**. Adapter proof **held** by instruction.
+migration, no deploy.** **Ratified 2026-09-29 — D1–D7 all accepted**, see §7. Adapter proof **held** by instruction.
 
 Follows [[INTEGRATION_EVIDENCE_CENSUS_A]] (`b9172ba`) and
 [[INTEGRATION_EVIDENCE_MODEL_B]] (`5e8ec59`).
@@ -183,7 +183,7 @@ attempts — which is a different and safe use.
    rather than an observation. This is a **separate defect**, found here, and it should not be
    quietly bundled into the migration.
 
-## 7 · Owner ratification — 2026-09-29
+## 7 · Owner ratification — 2026-09-29 (D1–D7 all accepted)
 
 Recorded after the fact, not folded back into §6: §6 is what was proposed, this is what was decided.
 
@@ -191,7 +191,7 @@ Recorded after the fact, not folded back into §6: §6 is what was proposed, thi
 |---|---|---|
 | D1 | **accepted** | a probe executed against such a rail is *"a tripwire/violation"*, not a health signal |
 | D2 | **accepted** | |
-| D3 | **OPEN** | the only decision not addressed; the 4 inbound rails remain proposed, not ratified |
+| D3 | **accepted** | *"There should be no synthetic probe just to make these integrations appear measurable."* |
 | D4 | **accepted** | it stops the resolver answering *"is it refusing now, or did it refuse last time?"* with one field |
 | D5 | **accepted, conditional** | the exact three confirmed below |
 | D6 | **accepted** | *"untouched until its role is deliberately adjudicated"* |
@@ -219,7 +219,35 @@ are the positive controls that stop the matrix passing against a resolver which 
 > side. Collapsing these six into one ACTIVE / PARTIAL / NOT VERIFIED chip destroys the only
 > information the two-source model exists to produce.
 
-**Migration remains HELD.** The order is unchanged and the adapter proof is still required first:
+### Where an observation may come from, by rail type
+
+The matrix above governs rails that *can* disagree. This governs which rails can produce an
+observation at all, and it is deliberately **separate** — forcing unlike facts through one field is
+the error the whole model exists to avoid.
+
+| rail type | source of observation |
+|---|---|
+| runnable | an **active probe** |
+| inbound | a **correlated callback**, through `recordProbeEvent()` |
+| `no_safe_probe` | the **declaration** |
+| not-applicable | **no evidence record** |
+
+```
+inbound rail → external callback/event → recordProbeEvent() → persisted observation → resolver
+```
+
+**No synthetic probe may be written to make an inbound rail appear measurable.** A manufactured
+observation is indistinguishable, once stored, from a real one.
+
+### Why this is worth the complexity
+
+**Absence of evidence now has kinds.** An architectural constraint, an unmeasured system, an
+inbound-only system and a genuine failure are four different reasons a record can be missing, and
+under this model they no longer render as the same grey bucket. That is the whole return on keeping
+the sources apart.
+
+**Ratifying D1–D7 authorizes nothing.** No migration and no deployment follow from it; the adapter
+proof remains the next gate, and it is currently held. The order is unchanged:
 
 ```
 5e8ec59  evidence model
@@ -230,9 +258,11 @@ REAL FIRESTORE ADAPTER PROOF        ← still required, currently held
    ↓
 migration of the 3 runnable entries
    ↓
-resolver adoption
+prove the resolver DISAGREEMENT states
    ↓
-console update
+console adoption
+
+   (the 4 inbound rails run in their own persistence / correlation lane)
 ```
 
 ## 8 · Not done
