@@ -73,9 +73,11 @@ console.log('\nPART A — every mutation is an op on the router\n');
   await MM.getContext({ conversationId: 'c1', dispatch });
   ck('A6  reading context is an op', calls[3].op === 'getConversationContext');
 
+  /* 2026-09-29 (T2a): + productQuestionAnswer — publishes the public answer to a product question; the server
+     refuses anyone but that product's seller (NOT_SELLER, test-product-conversations PC5). Still no admin op. */
   ck('A7  the layer names ONLY participant-scoped ops',
     Object.values(MM.OPS).sort().join(',') ===
-    'getConversationContext,markRead,reportConversation,searchConversations,sendMessage',
+    'getConversationContext,markRead,productQuestionAnswer,reportConversation,searchConversations,sendMessage',
     Object.values(MM.OPS).join(','));
 
   /* The router also exposes four superAdmin ops. A merchant surface must not

@@ -121,7 +121,8 @@ const as = (uid, data, token) => ({ auth: uid ? { uid, token: token || {} } : nu
     && p.isVisible === false && p.moderationHold && p.moderationHold.reportId === r1.reportId && !!audit && audit.productHidden === true, { bySeller, badAct, done, hold: p.moderationHold });
   const st = src('sokoni-trust.js');
   ck('RP6 the page reports through tsReportContent, checks sign-in on its own app, never fakes success',
-    /'tsReportContent'\)\(payload\)/.test(st) && !/addDoc\(fs\.collection\(db, 'flags'\)/.test(st) && /SokoniReport\.submit\('product',pid/.test(ph)
+    /* 2026-09-29 (T2a): the callable goes through the shared SokoniSecureCall (the page's app + App Check, once) */
+    /SokoniSecureCall\('tsReportContent', payload\)/.test(st) && /httpsCallable\(/.test(st) && !/addDoc\(fs\.collection\(db, 'flags'\)/.test(st) && /SokoniReport\.submit\('product',pid/.test(ph)
     && !/var u = window\.firebaseAuth && window\.firebaseAuth\.currentUser;\n  if\(!u\)\{ \(window\._skToast\|\|alert\)\('Please sign in to report a listing\.'\)/.test(ph) && !/'Report submitted\. Thank you\.'/.test(ph));
   const aos = src('sokoni-aos.js');
   ck('AD1 AdminOS shows entityId + product context and sends only server actions', /c\.productName \|\| r\.entityId/.test(aos) && !/reviewReport\('\$\{r\.id\}','action'\)/.test(aos) && /'approve',true\)/.test(aos));

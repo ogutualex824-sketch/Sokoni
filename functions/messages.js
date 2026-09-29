@@ -46,13 +46,17 @@ const TX_COLLECTIONS = {
   ent_booking:              'entBookings',
   /* Entertainment PUBLIC enquiries (ent-enquiries.js) — created only by entEnquirySend. */
   ent_enquiry:              'entEnquiries',
+  /* Product enquiries (product-enquiries.js, 2026-09-29) — a buyer's questions to a product's seller; SERVER-created only. */
+  product_enquiry:          'productEnquiries',
 };
 /* Server-anchored: a client can neither create these nor choose their participants — the booking or
    the enquiry does. ent_booking is PRIVATE / transactional; ent_enquiry is PUBLIC (rate-limited,
    blockable, closable — ent-enquiries.assertCanSend). */
 /* hc_booking (CHANGELOG 231, owner-authorized): a Healthcare consultation's private conversation, opened by
    healthcare-conversations.js from the canonical providerBookings row's own two parties. */
-const SERVER_ANCHORED = new Set(['ent_booking', 'ent_enquiry', 'hc_booking']);
+/* product_enquiry (2026-09-29): a buyer ↔ the product's seller, opened only by product-enquiries.productEnquirySend, which
+   derives the seller from products/{id} — a client can neither create it nor pick its parties. */
+const SERVER_ANCHORED = new Set(['ent_booking', 'ent_enquiry', 'hc_booking', 'product_enquiry']);
 
 /* ── Spam / fraud detection patterns ─────────────────────────── */
 const SPAM_PATTERNS = [

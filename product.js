@@ -649,6 +649,7 @@ else{
                     <input type="number" id="offerPrice" placeholder="Your offer price (KES)" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:white;font-size:14px;outline:none;font-family:inherit;margin-bottom:8px;">
                     <input type="text" id="offerMsg" placeholder="Message to seller (optional)" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:white;font-size:13px;outline:none;font-family:inherit;margin-bottom:10px;">
                     <button onclick="submitOffer()" style="padding:11px 24px;background:linear-gradient(135deg,#ff9800,#e06000);color:white;font-weight:800;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">&#x1F4E4; Send Offer</button>
+                    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:6px;">Your offer goes to the seller as a message in SOKONI; they reply in the conversation.</div>
                     <div id="offerConfirm" style="margin-top:8px;font-size:12px;"></div>
                 </div>
 
@@ -675,11 +676,11 @@ else{
                 <span style="font-size:12px;color:rgba(255,255,255,0.4);" id="qaCount">Loading...</span>
             </div>
             <div id="qaList" style="margin-bottom:20px;"></div>
-            <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:14px;padding:18px;">
-                <div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.6);margin-bottom:10px;">Ask the seller a question</div>
-                <input id="qaNameInput" type="text" placeholder="Your name (optional)" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:13px;outline:none;margin-bottom:10px;font-family:inherit;">
-                <textarea id="qaInput" rows="2" placeholder="Type your question..." style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:13px;outline:none;resize:none;font-family:inherit;margin-bottom:10px;"></textarea>
-                <button onclick="submitQuestion()" style="padding:12px 24px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:800;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">Ask Question</button>
+            <!-- 2026-09-29: questions go to the SELLER (a real SOKONI conversation, answered in merchant-v2 › Messages);
+                 a question marked public, and the seller's public answer, are listed above — without the asker's name. -->
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                <button onclick="openAskSeller({publicQuestion:true})" style="padding:12px 24px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:800;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">❓ Ask a question</button>
+                <span style="font-size:11px;color:rgba(255,255,255,0.35);">The seller replies in your SOKONI Messages.</span>
             </div>
         </div>
 
@@ -700,23 +701,9 @@ else{
         </div>
         ` : ""}
 
-        <!-- LIVE COMMENTS -->
-        <div style="margin:24px 0;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:24px;" id="liveCommentsSection">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
-            <div style="font-size:16px;font-weight:800;color:white;">💬 Live Comments</div>
-            <span style="font-size:12px;color:rgba(255,255,255,0.4);" id="commentCount">Loading...</span>
-          </div>
-          <div id="liveCommentsList" style="margin-bottom:20px;max-height:420px;overflow-y:auto;"></div>
-          <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:14px;padding:18px;">
-            <div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.6);margin-bottom:10px;">Add a public comment</div>
-            <input id="commentName" type="text" placeholder="Your name (optional)" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:13px;outline:none;margin-bottom:10px;font-family:inherit;box-sizing:border-box;">
-            <textarea id="commentText" rows="2" placeholder="Share your thoughts about this product…" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:13px;outline:none;resize:none;font-family:inherit;margin-bottom:10px;box-sizing:border-box;"></textarea>
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-              <button onclick="postComment()" style="padding:12px 24px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:800;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">💬 Post Comment</button>
-              <span style="font-size:11px;color:rgba(255,255,255,0.3);">Visible to all buyers — not private</span>
-            </div>
-          </div>
-        </div>
+        <!-- 2026-09-29: "Live Comments" was stored in each visitor's own browser (localStorage) while claiming to be
+             "visible to all buyers" — nobody else ever saw a comment. There is no comment engine to wire it to; public
+             discussion is the Questions & Answers above (real, seller-answered, server-rate-limited). -->
 
         <!-- 2026-09-29: two HARD-CODED reviews ("Alex" 5★, "Brian" 4★) were rendered on every product — removed.
              Real, verified-purchase reviews render in #productReviewsSection (sokoni-reviews.js → reviews.js). -->
@@ -1431,7 +1418,7 @@ async function contactSellerInApp(){
 
     /* NO WhatsApp fallback (CHANGELOG 218; owner directive): sign in, or the seller's SOKONI chat, or an honest message. */
     if(!(user && user.uid)){ location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search); return; }
-    if(sellerUid && sellerUid !== user.uid){ window.location.href = 'messages.html?with=' + encodeURIComponent(sellerUid); return; }
+    if(sellerUid && sellerUid !== user.uid){ openAskSeller({ publicQuestion: false }); return; }
     (window._skToast || alert)(sellerUid === (user && user.uid) ? 'This is your own listing.' : 'This seller can\'t be messaged in SOKONI yet.');
     return;
 }
@@ -1459,40 +1446,25 @@ function openMakeOffer(){
     if(panel) panel.style.display = panel.style.display === "none" ? "block" : "none";
 }
 
+/* 2026-09-29: the offer used to go into the buyer's OWN localStorage and then claim "sent! The seller will respond via
+   Messages" — no seller ever received it. It now goes to the seller as a message in the product conversation. */
 function submitOffer(){
     const priceEl = document.getElementById("offerPrice");
     const msgEl   = document.getElementById("offerMsg");
     const confirmEl = document.getElementById("offerConfirm");
-    const offerPrice = Number(priceEl?.value || 0);
+    const offerPrice = Math.round(Number(priceEl?.value || 0));
     if(!offerPrice || offerPrice <= 0){
         if(confirmEl){ confirmEl.textContent = "Please enter a valid offer price."; confirmEl.style.color = "#ff6b6b"; }
         return;
     }
-    const user = JSON.parse(localStorage.getItem("sokoniUser")||"null");
-    const offer = {
-        id:          "OFF"+Date.now(),
-        productId:   product.id,
-        productName: product.name,
-        listedPrice: product.price,
-        offerPrice,
-        message:     msgEl?.value.trim() || "",
-        buyerName:   user?.name || "Anonymous",
-        buyerEmail:  user?.email || "",
-        sellerName:  product.sellerName || "Sokoni Seller",
-        date:        new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric"}),
-        timestamp:   Date.now(),
-        status:      "pending"
-    };
-    let offers = [];
-    try { offers = JSON.parse(localStorage.getItem("sokoniOffers"))||[]; } catch(e){}
-    offers.unshift(offer);
-    localStorage.setItem("sokoniOffers", JSON.stringify(offers));
-    if(confirmEl){
-        confirmEl.innerHTML = `✅ Offer of <strong>KES ${offerPrice.toLocaleString()}</strong> sent! The seller will respond via Messages.`;
-        confirmEl.style.color = "#71ff00";
-    }
-    if(priceEl) priceEl.value = "";
-    if(msgEl)   msgEl.value   = "";
+    const note = (msgEl?.value || "").trim();
+    const text = "💰 Offer: KES " + offerPrice.toLocaleString() + " (listed at KES " + Number(product.price).toLocaleString() + ")" + (note ? "\n" + note : "");
+    if(confirmEl){ confirmEl.textContent = "Sending…"; confirmEl.style.color = "rgba(255,255,255,0.6)"; }
+    _sendToSeller(text, false).then(function(r){
+        if(!r) { if(confirmEl) confirmEl.textContent = ""; return; }
+        if(confirmEl){ confirmEl.innerHTML = "✅ Offer sent to the seller. <a href=\"chat.html?id=" + encodeURIComponent(r.conversationId) + "\" style=\"color:#71ff00;\">Open the conversation</a>"; confirmEl.style.color = "#71ff00"; }
+        if(priceEl) priceEl.value = ""; if(msgEl) msgEl.value = "";
+    }).catch(function(e){ if(confirmEl){ confirmEl.textContent = "Offer NOT sent — " + ((e && e.message) || "please try again") + "."; confirmEl.style.color = "#ff6b6b"; } });
 }
 
 /* WISHLIST (product page) */
@@ -1550,140 +1522,108 @@ window.addToWishlistProduct  = addToWishlistProduct;
 
 function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
-function renderQa(){
-    if(!product) return;
-    let allQa = {};
-    try { allQa = JSON.parse(localStorage.getItem("sokoniQA"))||{}; } catch(e){}
-    const qs = (allQa[product.id] || []).slice(0, 20);
+/* ==============================================
+   PRODUCT CONVERSATIONS & PUBLIC Q&A  (2026-09-29, T2a)
+   ONE SOKONI conversation with the product's seller (product-enquiries.productEnquirySend through messagesDispatch,
+   answered in merchant-v2 › Messages). Public Q&A rows come from productQA (answered by the seller) and never name the
+   asker. Replaces the localStorage Q&A, comments and offers that reached nobody.
+============================================== */
+async function _sendToSeller(text, publicQuestion){
+    const user = window.SokoniReport ? await SokoniReport.currentUser() : null;
+    if(!user){ location.href = "login.html?next=" + encodeURIComponent(location.pathname + location.search); return null; }
+    if(!window.SokoniSecureCall) throw new Error("Messaging is still loading — try again in a moment.");
+    const pid = product && (product.id || new URLSearchParams(location.search).get("id"));
+    const r = await SokoniSecureCall("messagesDispatch", { op: "productEnquirySend", productId: String(pid), text: String(text), publicQuestion: publicQuestion === true });
+    if(publicQuestion) loadQa();
+    return r;
+}
+window._sendToSeller = _sendToSeller;
 
+function _ensureAskSheet(){
+    if(document.getElementById("prdAskSheet")) return;
+    const el = document.createElement("div");
+    el.id = "prdAskSheet";
+    el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true"); el.setAttribute("aria-labelledby", "prdAskTitle");
+    el.style.cssText = "display:none;position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,0.8);align-items:flex-end;justify-content:center;padding:16px;";
+    el.innerHTML =
+      '<div style="background:#111;border:1px solid rgba(113,255,0,0.25);border-radius:20px;padding:20px;width:100%;max-width:460px;box-sizing:border-box;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">' +
+          '<h3 id="prdAskTitle" style="margin:0;color:white;font-size:16px;">💬 Ask the seller</h3>' +
+          '<button type="button" id="prdAskClose" aria-label="Close" style="min-width:44px;min-height:44px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:18px;cursor:pointer;">✕</button>' +
+        '</div>' +
+        '<p style="margin:0 0 10px;font-size:12.5px;color:rgba(255,255,255,0.55);">They reply in your SOKONI Messages. Your phone and email are never shared.</p>' +
+        '<label for="prdAskText" style="position:absolute;left:-9999px;">Your message</label>' +
+        '<textarea id="prdAskText" rows="4" maxlength="1500" placeholder="e.g. Does this come in blue? Can you deliver to Langata?" style="width:100%;box-sizing:border-box;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;font-family:inherit;resize:vertical;"></textarea>' +
+        '<label style="display:flex;gap:8px;align-items:flex-start;margin:10px 0;font-size:12.5px;color:rgba(255,255,255,0.7);cursor:pointer;"><input type="checkbox" id="prdAskPublic" style="margin-top:2px;accent-color:#71ff00;"> Also show my question and the seller\'s answer on this page (your name is not shown)</label>' +
+        '<div id="prdAskStatus" role="status" aria-live="polite" style="font-size:13px;min-height:18px;margin-bottom:8px;"></div>' +
+        '<button type="button" id="prdAskSend" style="width:100%;min-height:48px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:800;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-family:inherit;">Send to seller</button>' +
+      '</div>';
+    document.body.appendChild(el);
+    const close = function(){ el.style.display = "none"; };
+    el.addEventListener("click", function(e){ if(e.target === el) close(); });
+    document.getElementById("prdAskClose").addEventListener("click", close);
+    document.addEventListener("keydown", function(e){ if(e.key === "Escape" && el.style.display === "flex") close(); });
+    document.getElementById("prdAskSend").addEventListener("click", async function(){
+        const btn = this, st = document.getElementById("prdAskStatus");
+        const text = document.getElementById("prdAskText").value.trim();
+        if(text.length < 3){ st.textContent = "Write your question first."; st.style.color = "#ff6b6b"; return; }
+        btn.disabled = true; st.textContent = "Sending…"; st.style.color = "rgba(255,255,255,0.6)";
+        try {
+            const r = await _sendToSeller(text, document.getElementById("prdAskPublic").checked);
+            if(!r) return;
+            st.innerHTML = "✅ Sent to the seller. <a href=\"chat.html?id=" + encodeURIComponent(r.conversationId) + "\" style=\"color:#71ff00;font-weight:700;\">Open the conversation</a>";
+            st.style.color = "#71ff00";
+            document.getElementById("prdAskText").value = "";
+        } catch(e){
+            st.textContent = "NOT sent — " + ((e && e.message) || "please try again") + ".";
+            st.style.color = "#ff6b6b";
+        } finally { btn.disabled = false; }
+    });
+}
+function openAskSeller(opts){
+    opts = opts || {};
+    _ensureAskSheet();
+    const sheet = document.getElementById("prdAskSheet");
+    document.getElementById("prdAskPublic").checked = opts.publicQuestion === true;
+    document.getElementById("prdAskStatus").textContent = "";
+    if(opts.prefill) document.getElementById("prdAskText").value = opts.prefill;
+    sheet.style.display = "flex";
+    setTimeout(function(){ const t = document.getElementById("prdAskText"); if(t) t.focus(); }, 60);
+}
+window.openAskSeller = openAskSeller;
+/* the old entry points, now the one real path */
+window.submitQuestion = function(){ openAskSeller({ publicQuestion: true }); };
+window.openAskQuestion = function(){ openAskSeller({ publicQuestion: true }); };
+
+async function loadQa(){
     const listEl = document.getElementById("qaList");
     const countEl = document.getElementById("qaCount");
-    if(!listEl) return;
-
-    if(countEl) countEl.textContent = qs.length + " question" + (qs.length!==1?"s":"");
-
-    if(!qs.length){
-        listEl.innerHTML = `<div style="color:rgba(255,255,255,0.25);font-size:13px;margin-bottom:8px;">No questions yet — be the first to ask!</div>`;
-        return;
+    if(!listEl || !product) return;
+    try {
+        const A = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+        for(let i = 0; i < 50 && !A.getApps().length; i++) await new Promise(function(r){ setTimeout(r, 100); });
+        if(!A.getApps().length) throw new Error("no app");
+        const FS = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+        const db = FS.getFirestore(A.getApps()[0]);
+        const pid = String(product.id || new URLSearchParams(location.search).get("id"));
+        const snap = await FS.getDocs(FS.query(FS.collection(db, "productQA"), FS.where("productId", "==", pid), FS.limit(50)));
+        const rows = snap.docs.map(function(d){ const x = d.data() || {}; return { question: x.question, answer: x.answer, status: x.status, t: (x.answeredAt && x.answeredAt.toMillis ? x.answeredAt.toMillis() : 0) }; });
+        const answered = rows.filter(function(r){ return r.status === "answered" && r.answer; }).sort(function(a, b){ return b.t - a.t; });
+        const waiting = rows.length - answered.length;
+        if(countEl) countEl.textContent = answered.length + " answered" + (waiting ? " · " + waiting + " awaiting the seller" : "");
+        listEl.innerHTML = answered.length ? answered.map(function(q){ return '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:14px 16px;margin-bottom:10px;">' +
+            '<div style="font-size:13px;font-weight:700;color:white;margin-bottom:8px;">❓ ' + _esc(q.question) + '</div>' +
+            '<div style="background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.15);border-radius:10px;padding:10px 14px;"><div style="font-size:11px;font-weight:700;color:#71ff00;margin-bottom:4px;">💬 Seller\'s answer</div>' +
+            '<div style="font-size:13px;color:rgba(255,255,255,0.85);white-space:pre-wrap;">' + _esc(q.answer) + '</div></div></div>'; }).join("")
+          : '<div style="color:rgba(255,255,255,0.35);font-size:13px;margin-bottom:8px;">No answered questions yet — ask the seller anything.</div>';
+    } catch(_){
+        /* unknown → say so, never an invented list */
+        if(countEl) countEl.textContent = "—";
+        listEl.innerHTML = '<div style="color:rgba(255,255,255,0.35);font-size:13px;">Questions could not be loaded right now.</div>';
     }
-
-    listEl.innerHTML = qs.map(q=>`
-        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:14px 16px;margin-bottom:10px;">
-            <div style="font-size:13px;font-weight:700;color:white;margin-bottom:6px;">❓ ${_esc(q.question)}</div>
-            <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:${q.answer?'10px':'0'};">— ${_esc(q.asker||"Anonymous")} · ${_esc(q.date||"")}</div>
-            ${q.answer ? `
-                <div style="background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.15);border-radius:10px;padding:10px 14px;">
-                    <div style="font-size:11px;font-weight:700;color:#71ff00;margin-bottom:4px;">💬 Seller Reply · ${_esc(q.answeredAt||"")}</div>
-                    <div style="font-size:13px;color:rgba(255,255,255,0.8);">${_esc(q.answer)}</div>
-                </div>
-            ` : `<div style="font-size:11px;color:rgba(255,152,0,0.7);">⏳ Awaiting seller reply…</div>`}
-        </div>
-    `).join("");
 }
-
-function submitQuestion(){
-    const qInput = document.getElementById("qaInput");
-    const nInput = document.getElementById("qaNameInput");
-    if(!qInput) return;
-    const question = qInput.value.trim();
-    if(!question){ return; }
-
-    let allQa = {};
-    try { allQa = JSON.parse(localStorage.getItem("sokoniQA"))||{}; } catch(e){}
-    if(!allQa[product.id]) allQa[product.id] = [];
-
-    allQa[product.id].unshift({
-        id: "q" + Date.now(),
-        question,
-        asker: (nInput && nInput.value.trim()) || "Anonymous",
-        date: new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric"}),
-        answer: null,
-        answeredAt: null
-    });
-    localStorage.setItem("sokoniQA", JSON.stringify(allQa));
-
-    qInput.value = "";
-    if(nInput) nInput.value = "";
-    renderQa();
-}
-
-window.submitQuestion = submitQuestion;
-renderQa();
-
-/* ==============================================
-   LIVE PUBLIC COMMENTS
-============================================== */
-
-function renderComments(){
-  if(!product) return;
-  let all = {};
-  try { all = JSON.parse(localStorage.getItem("sokoniComments"))||{}; } catch(e){}
-  const comments = (all[product.id] || []).slice(0, 60);
-  const listEl  = document.getElementById("liveCommentsList");
-  const countEl = document.getElementById("commentCount");
-  if(!listEl) return;
-  if(countEl) countEl.textContent = comments.length + " comment" + (comments.length!==1?"s":"");
-  if(!comments.length){
-    listEl.innerHTML = `<div style="color:rgba(255,255,255,0.25);font-size:13px;margin-bottom:8px;">No comments yet — be the first!</div>`;
-    return;
-  }
-  listEl.innerHTML = comments.map(c=>`
-    <div style="display:flex;gap:10px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
-      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#71ff00,#4fc800);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:black;flex-shrink:0;">${_esc((c.author||"?")[0].toUpperCase())}</div>
-      <div style="flex:1;min-width:0;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
-          <span style="font-size:13px;font-weight:700;color:white;">${_esc(c.author||"Anonymous")}</span>
-          <span style="font-size:10px;color:rgba(255,255,255,0.3);">${_esc(c.date||"")}</span>
-        </div>
-        <div style="font-size:13px;color:rgba(255,255,255,0.8);line-height:1.55;word-break:break-word;">${_esc(c.text)}</div>
-        <button onclick="likeComment('${_esc(c.id)}')" id="like-${_esc(c.id)}" style="margin-top:6px;background:none;border:none;color:rgba(255,255,255,0.35);font-size:11px;cursor:pointer;padding:0;font-family:inherit;transition:color 0.2s;">👍 ${c.likes||0}</button>
-      </div>
-    </div>
-  `).join("");
-}
-
-function postComment(){
-  const nameEl = document.getElementById("commentName");
-  const textEl = document.getElementById("commentText");
-  if(!textEl) return;
-  const text = textEl.value.trim();
-  if(!text){ textEl.style.borderColor="rgba(255,77,77,0.5)"; return; }
-  textEl.style.borderColor="rgba(255,255,255,0.1)";
-
-  let all = {};
-  try { all = JSON.parse(localStorage.getItem("sokoniComments"))||{}; } catch(e){}
-  if(!all[product.id]) all[product.id] = [];
-  all[product.id].unshift({
-    id:      "c"+Date.now(),
-    text,
-    author:  (nameEl&&nameEl.value.trim())||"Anonymous",
-    date:    new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}) + " · " +
-             new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short"}),
-    likes:   0,
-    timestamp: Date.now()
-  });
-  localStorage.setItem("sokoniComments", JSON.stringify(all));
-  textEl.value="";
-  if(nameEl) nameEl.value="";
-  renderComments();
-}
-
-function likeComment(id){
-  let all = {};
-  try { all = JSON.parse(localStorage.getItem("sokoniComments"))||{}; } catch(e){}
-  const list = all[product.id]||[];
-  const c = list.find(x=>x.id===id);
-  if(c){
-    c.likes=(c.likes||0)+1;
-    localStorage.setItem("sokoniComments",JSON.stringify(all));
-    const btn=document.getElementById("like-"+id);
-    if(btn) btn.textContent="👍 "+c.likes;
-  }
-}
-
-window.postComment  = postComment;
-window.likeComment  = likeComment;
-renderComments();
+window.loadQa = loadQa;
+loadQa();
 
 /* ==============================================
    VIDEO DOWNLOAD (original + compressed)
@@ -1924,140 +1864,16 @@ function _maskPhone(phone) {
          non-premium gets in-app contact request modal
 ═══════════════════════════════════════════════════════ */
 function contactSellerGated() {
-    var isPremium = window._prdSellerIsPremium;
-    if (isPremium) {
-        /* Premium seller — the in-app conversation (was: direct WhatsApp — CHANGELOG 218) */
-        contactSellerInApp();
-        return;
-    }
-    /* Non-premium — the in-app contact request */
-    _openContactRequestModal();
+    /* 2026-09-29: every seller — premium or not — is reached the same way: the ONE SOKONI product conversation,
+       answered in merchant-v2 › Messages. (Premium navigated to messages.html?with=, which nothing reads; non-premium
+       wrote a contact request the rules refused.) */
+    openAskSeller({ publicQuestion: false });
 }
 window.contactSellerGated = contactSellerGated;
 
 /* Keep legacy name for any remaining references */
 window.contactSellerWhatsApp = contactSellerGated;
 
-/* ═══════════════════════════════════════════════════════
-   P15: Contact Request Modal + Firestore lead record
-═══════════════════════════════════════════════════════ */
-function _ensureContactModal() {
-    if (document.getElementById('prd-contact-modal')) return;
-    var modal = document.createElement('div');
-    modal.id = 'prd-contact-modal';
-    modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-modal', 'true');
-    modal.setAttribute('aria-label', 'Contact seller');
-    modal.innerHTML =
-        '<div class="prd-contact-box">' +
-            '<h3>Contact Seller</h3>' +
-            '<p>Send a contact request. The seller will reach out to you directly.</p>' +
-            '<input class="prd-contact-inp" id="prdCrName"  type="text"  placeholder="Your name *" style="font-size:16px;">' +
-            '<input class="prd-contact-inp" id="prdCrPhone" type="tel"   placeholder="Your phone number *" style="font-size:16px;">' +
-            '<textarea class="prd-contact-inp" id="prdCrMsg" rows="2" placeholder="Message (optional)" style="resize:none;"></textarea>' +
-            '<button class="prd-contact-btn" id="prdCrSubmit" onclick="_submitContactRequest()">Send Request</button>' +
-            '<div id="prdCrFeedback" style="margin-top:10px;font-size:13px;"></div>' +
-            '<button onclick="document.getElementById(\'prd-contact-modal\').classList.remove(\'open\')" ' +
-              'style="display:block;width:100%;margin-top:10px;padding:10px;background:transparent;border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;">Cancel</button>' +
-        '</div>';
-    document.body.appendChild(modal);
-    modal.addEventListener('click', function(e) { if (e.target === modal) modal.classList.remove('open'); });
-}
-
-function _openContactRequestModal() {
-    _ensureContactModal();
-    document.getElementById('prd-contact-modal').classList.add('open');
-    setTimeout(function() { var el = document.getElementById('prdCrName'); if (el) el.focus(); }, 150);
-}
-
-async function _submitContactRequest() {
-    var name  = (document.getElementById('prdCrName')  || {}).value || '';
-    var phone = (document.getElementById('prdCrPhone') || {}).value || '';
-    var msg   = (document.getElementById('prdCrMsg')   || {}).value || '';
-    var fb    = document.getElementById('prdCrFeedback');
-    var btn   = document.getElementById('prdCrSubmit');
-    if (!name.trim() || !phone.trim()) {
-        if (fb) { fb.textContent = 'Please enter your name and phone number.'; fb.style.color = '#ff9800'; }
-        return;
-    }
-    /* Basic phone sanitization — no internal storage of full number outside lead record */
-    var cleanPhone = phone.replace(/[^0-9+]/g, '');
-    if (cleanPhone.length < 9) {
-        if (fb) { fb.textContent = 'Please enter a valid phone number.'; fb.style.color = '#ff9800'; }
-        return;
-    }
-    if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
-    try {
-        var {initializeApp,getApps} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
-        var {getFirestore,collection,addDoc,serverTimestamp} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-        var cfg = {apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "auth.mysokoni.co.ke",
-          projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",
-          messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
-        var app  = getApps().length ? getApps()[0] : initializeApp(cfg);
-        var db   = getFirestore(app);
-        var pid  = new URLSearchParams(location.search).get('id') || (typeof product !== 'undefined' ? (product.id || '') : '');
-        var lead = {
-            buyerName:    name.trim(),
-            buyerPhone:   cleanPhone,
-            message:      msg.trim(),
-            productId:    pid,
-            productName:  (typeof product !== 'undefined' && product.name) ? product.name : '',
-            sellerUid:    (typeof product !== 'undefined') ? (product.sellerUid || product.sellerId || '') : '',
-            sellerName:   (typeof product !== 'undefined') ? (product.sellerName || '') : '',
-            status:       'pending',
-            createdAt:    serverTimestamp(),
-            source:       'product_page',
-        };
-        await addDoc(collection(db, 'contactRequests'), lead);
-        if (fb) { fb.textContent = '✅ Request sent! The seller will contact you soon.'; fb.style.color = '#71ff00'; }
-        if (btn) { btn.textContent = 'Sent!'; }
-        setTimeout(function() { document.getElementById('prd-contact-modal').classList.remove('open'); }, 2000);
-    } catch(e) {
-        if (fb) { fb.textContent = 'Could not send request. Please try again.'; fb.style.color = '#ff4d4d'; }
-        if (btn) { btn.disabled = false; btn.textContent = 'Send Request'; }
-    }
-}
-window._submitContactRequest = _submitContactRequest;
-
-/* ═══════════════════════════════════════════════════════
-   Q&A — ask question modal
-═══════════════════════════════════════════════════════ */
-function openAskQuestion() {
-    var q = prompt('Ask the seller a question about this product:');
-    if (!q || !q.trim()) return;
-    (async function() {
-        try {
-            var {initializeApp,getApps} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
-            var {getFirestore,collection,addDoc,serverTimestamp} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-            var cfg = {apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "auth.mysokoni.co.ke",
-              projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",
-              messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
-            var app = getApps().length ? getApps()[0] : initializeApp(cfg);
-            var db  = getFirestore(app);
-            var pid = new URLSearchParams(location.search).get('id') || (typeof product !== 'undefined' ? (product.id || '') : '');
-            await addDoc(collection(db, 'productQA'), {
-                productId:  pid,
-                sellerUid:  (typeof product !== 'undefined') ? (product.sellerUid || '') : '',
-                question:   q.trim(),
-                answer:     '',
-                createdAt:  serverTimestamp(),
-            });
-            var list = document.getElementById('prdQaList');
-            if (list) {
-                var item = document.createElement('div');
-                item.className = 'prd-qa-item';
-                var qDiv = document.createElement('div');
-                qDiv.className = 'prd-qa-q';
-                qDiv.textContent = 'Q: ' + q.trim();
-                var aDiv = document.createElement('div');
-                aDiv.className = 'prd-qa-a';
-                aDiv.style.cssText = 'color:rgba(255,255,255,0.3);font-style:italic;';
-                aDiv.textContent = 'Awaiting seller reply…';
-                item.appendChild(qDiv);
-                item.appendChild(aDiv);
-                list.insertBefore(item, list.firstChild);
-            }
-        } catch(_) { alert('Could not send your question. Please try again.'); }
-    })();
-}
-window.openAskQuestion = openAskQuestion;
+/* 2026-09-29: the P15 contact-request modal (wrote contactRequests without buyerUid — every write was denied — and
+   nothing read it) and the dead openAskQuestion (a client productQA write the rules refuse) are gone. "Chat seller"
+   opens the ONE product conversation (openAskSeller). */

@@ -9,8 +9,8 @@
  *   provider-profile  the same — no bookNow, no wa.me fallback
  *   cleaning.html     the booking form sends the customer to the chosen cleaner's SOKONI profile (canonical booking);
  *                     no local "booking", no WhatsApp; each card's contact is SOKONI chat
- *   product.js        premium and non-premium sellers are contacted IN the app (conversation / contact request); a
- *                     signed-out buyer is sent to sign in — never wa.me
+ *   product.js        premium and non-premium sellers are contacted IN the app — the same "Ask the seller" sheet,
+ *                     which opens the server-anchored product conversation (T2a, 2026-09-29) — never wa.me
  *   business.html     a service is asked about in SOKONI chat (sokoni-inbox loaded); the phone is a phone number
  *
  *   node scripts/test-in-app-booking-contact.js
@@ -115,23 +115,20 @@ const nonShareWa = (src) => src.split('\n').filter((l) => /wa\.me/.test(l) && !/
       await R.addInitScript(SPY);
       await R.goto(HAR.BASE + '/product.html');
       await R.waitForFunction(() => typeof contactSellerGated === 'function', null, { timeout: 10000 }).catch(() => {});
-      /* the premium path NAVIGATES to the conversation — so no evaluate() waits across it */
-      const nav = premium ? R.waitForURL(/messages(\.html)?\?with=s1/, { timeout: 6000 }).then(() => true).catch(() => false) : null;
+      /* SUPERSEDED 2026-09-29 (T2a): premium navigated to messages.html?with= (nothing reads it — an empty inbox) and
+         non-premium opened a contact-request modal whose write the rules refused. Both now open the SAME in-app
+         "Ask the seller" sheet → the server-anchored product conversation (test-product-conversations[-browser]). */
+      const startUrl = R.url();
       const out = await R.evaluate((prem) => {
         product = { id: 'p1', name: 'Kiondo', price: 900, sellerUid: 's1', sellerPhone: '0722000000' };
         window._prdSellerIsPremium = prem; window._prdSellerWhatsApp = '0722000000';
-        window.__modal = false; window._openContactRequestModal = () => { window.__modal = true; };
-        window.firebaseDB = null;
         try { contactSellerGated(); } catch (e) { return { err: e.message }; }
-        return { ok: true };
-      }, premium).catch((e) => ({ navigated: /destroyed|navigation/i.test(String(e && e.message)) }));
-      if (premium) {
-        const went = await nav;
-        ck(`${label}: contacted IN the app (the SOKONI conversation) — never wa.me, never a recursion`, went && !out.err, { url: R.url(), out });
-      } else {
-        const st = await R.evaluate(() => ({ modal: window.__modal, opened: window.__opened.slice() }));
-        ck(`${label}: contacted IN the app (contact request) — never wa.me`, st.modal && !st.opened.some((u) => /wa\.me/.test(u)) && !out.err, st);
-      }
+        const sh = document.getElementById('prdAskSheet');
+        return { ok: true, sheet: !!sh && sh.style.display !== 'none', publicOff: !document.getElementById('prdAskPublic').checked };
+      }, premium).catch((e) => ({ err: String(e && e.message) }));
+      const st = await R.evaluate(() => ({ opened: window.__opened.slice() })).catch(() => ({ opened: [], navigatedAway: true }));
+      ck(`${label}: contacted IN the app (the "Ask the seller" sheet → SOKONI conversation) — never wa.me, never a navigation`,
+        !out.err && out.sheet && out.publicOff && R.url() === startUrl && !st.opened.some((u) => /wa\.me/.test(u)), { out, st });
       await R.__ctx.close();
     }
 

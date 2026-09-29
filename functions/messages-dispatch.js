@@ -13,6 +13,9 @@ const REGION = 'us-central1';
 
 // Load module to populate its handler registry
 const messages = require('./messages');
+/* Product enquiries & public Q&A (product-enquiries.js, 2026-09-29) — served by this same dispatcher: no new Cloud Function. */
+const productEnquiries = require('./product-enquiries');
+const HANDLERS = Object.assign({}, messages._h, productEnquiries._h);
 
 // Dispatcher options: widest superset (sendMessage uses enforceAppCheck: true)
 const _OPTS = {
@@ -28,11 +31,11 @@ const _OPTS = {
 exports.messagesDispatch = onCall(_OPTS, async (req) => {
   const op = req.data?.op;
   if (!op || typeof op !== 'string') {
-    throw new HttpsError('invalid-argument', '"op" field is required. Valid ops: ' + Object.keys(messages._h).sort().join(', '));
+    throw new HttpsError('invalid-argument', '"op" field is required. Valid ops: ' + Object.keys(HANDLERS).sort().join(', '));
   }
-  const handler = messages._h[op];
+  const handler = HANDLERS[op];
   if (!handler) {
-    throw new HttpsError('not-found', `Unknown messages operation: "${op}". Valid ops: ${Object.keys(messages._h).sort().join(', ')}`);
+    throw new HttpsError('not-found', `Unknown messages operation: "${op}". Valid ops: ${Object.keys(HANDLERS).sort().join(', ')}`);
   }
   return handler(req);
 });

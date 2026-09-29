@@ -53,6 +53,30 @@
   }
 
   /* ================================================================
+     window.SokoniSecureCall(name, data) → the callable's data
+     The ONE way a page that starts its own Firebase app (product.html) calls an App-Check-enforced callable:
+     the page's own app, its signed-in user, App Check initialised once (same site key as firebase.js).
+     Used by SokoniReport (tsReportContent) and product conversations (messagesDispatch). 2026-09-29.
+  ================================================================ */
+  window.SokoniSecureCall = async function (name, data) {
+    var gs = 'https://www.gstatic.com/firebasejs/10.12.2/';
+    var A = await import(gs + 'firebase-app.js');
+    for (var i = 0; i < 50 && !A.getApps().length; i++) await new Promise(function (r) { setTimeout(r, 100); });
+    var app = A.getApps()[0];
+    if (!app) throw new Error('SOKONI is still starting — try again in a moment.');
+    try {
+      var AC = await import(gs + 'firebase-app-check.js');
+      AC.initializeAppCheck(app, { provider: new AC.ReCaptchaV3Provider('6Lf93TktAAAAAIqCj8l3YM3dIoS1MIXpilsdnsxj'), isTokenAutoRefreshEnabled: true });
+    } catch (_) { /* already initialised */ }
+    var Au = await import(gs + 'firebase-auth.js');
+    var auth = Au.getAuth(app);
+    if (typeof auth.authStateReady === 'function') { try { await auth.authStateReady(); } catch (_) {} }
+    var Fn = await import(gs + 'firebase-functions.js');
+    var r = await Fn.httpsCallable(Fn.getFunctions(app, 'us-central1'), name)(data);
+    return r && r.data;
+  };
+
+  /* ================================================================
      window.SokoniReport
   ================================================================ */
   window.SokoniReport = {
@@ -106,20 +130,9 @@
         evidenceUrls: evidenceUrls
       };
       try {
-        var gs = 'https://www.gstatic.com/firebasejs/10.12.2/';
-        var A = await import(gs + 'firebase-app.js');
-        var app = A.getApps()[0];
-        if (!app) throw new Error('SOKONI is still starting — try again in a moment.');
-        /* tsReportContent enforces App Check. A page that started its own app (product.html) has none yet; this
-           initialises it once (the same site key as firebase.js) and is a no-op where it already exists. */
-        try {
-          var AC = await import(gs + 'firebase-app-check.js');
-          AC.initializeAppCheck(app, { provider: new AC.ReCaptchaV3Provider('6Lf93TktAAAAAIqCj8l3YM3dIoS1MIXpilsdnsxj'), isTokenAutoRefreshEnabled: true });
-        } catch (_) { /* already initialised */ }
-        var Fn = await import(gs + 'firebase-functions.js');
-        var r = await Fn.httpsCallable(Fn.getFunctions(app, 'us-central1'), 'tsReportContent')(payload);
+        var data = await window.SokoniSecureCall('tsReportContent', payload);
         showToast('Report received — our team reviews it in AdminOS. Thank you.');
-        return (r && r.data) || { ok: true };
+        return data || { ok: true };
       } catch (err) {
         var code = String((err && err.code) || '');
         showToast(/already-exists/.test(code) ? 'You have already reported this — our team is reviewing it.'

@@ -54,6 +54,8 @@
     send: 'sendMessage',
     markRead: 'markRead',
     report: 'reportConversation',
+    /* product Q&A (product-enquiries.js, 2026-09-29): publish the public answer from the thread */
+    answer: 'productQuestionAnswer',
   };
 
   var MAX_TEXT = 4000;      /* mirrors sendMessage's server-side cap */
@@ -151,6 +153,8 @@
           text: m.text || '',
           timestamp: m.timestamp || null,
           deleted: m.deleted === true,
+          /* a system message's event (e.g. { qaId, kind:'public_question' }) — drives the Publish-answer action */
+          event: (m.event && typeof m.event === 'object') ? { qaId: m.event.qaId || null, kind: m.event.kind || null } : null,
         };
       }) };
     } catch (e) {
@@ -175,6 +179,24 @@
 
   async function send(o) {
     return _op(o.dispatch, OPS.send, buildMessage(o), 'Your message could not be sent.');
+  }
+
+  /** Publish the public answer to a product question (the product's seller; the server re-checks). */
+  async function answerQuestion(o) {
+    if (!o.qaId) throw new Error('merchant messages: qaId is required');
+    var answer = String(o.answer == null ? '' : o.answer).trim();
+    if (answer.length < 2) throw new Error('Write the answer first.');
+    return _op(o.dispatch, OPS.answer, { qaId: String(o.qaId), answer: answer.slice(0, 1000) },
+      'The answer could not be published.');
+  }
+
+  /** Public questions in a thread that are not answered yet (the latest state of each qaId wins). */
+  function openQuestions(messages) {
+    var st = {};
+    (messages || []).forEach(function (m) {
+      if (m && m.event && m.event.qaId) st[m.event.qaId] = m.event.kind;
+    });
+    return Object.keys(st).filter(function (id) { return st[id] === 'public_question'; });
   }
 
   async function markRead(o) {
@@ -212,6 +234,8 @@
     OPS: OPS,
     MAX_TEXT: MAX_TEXT,
     scopeNote: scopeNote,
+    answerQuestion: answerQuestion,
+    openQuestions: openQuestions,
     projectThread: projectThread,
     listThreads: listThreads,
     messagesQuery: messagesQuery,

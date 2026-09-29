@@ -94,6 +94,10 @@
     '.mmg-msg.me{align-self:flex-end;background:rgba(113,255,0,.14);border:1px solid rgba(113,255,0,.3);',
       'color:var(--txt);border-bottom-right-radius:5px}',
     '.mmg-msg .t{font-size:10px;color:var(--txt3);margin-top:5px;text-align:right}',
+    /* system notes (product Q&A, 2026-09-29) — centred, quiet, with the Publish-answer action */
+    '.mmg-sys{align-self:center;max-width:92%;text-align:center;font-size:12px;color:var(--txt2);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:8px 12px}',
+    '.mmg-sys-act{margin-top:8px;display:flex;flex-direction:column;align-items:center;gap:4px}',
+    '.mmg-sys-hint{font-size:11px;color:var(--txt3)}',
     '.mmg-msg.deleted{opacity:.5;font-style:italic}',
     '.mmg-day{align-self:center;font-size:10.5px;color:var(--txt3);background:rgba(255,255,255,.05);',
       'border:1px solid var(--line);border-radius:9px;padding:4px 10px;margin:4px 0}',
@@ -296,8 +300,16 @@
         body = '<div class="mmg-msgs"><div class="mmg-state"><div class="ic">👋</div>' +
           '<div class="hd">No messages yet</div>Say hello — they will see it straight away.</div></div>';
       } else {
+        var openQa = MM.openQuestions ? MM.openQuestions(S.messages) : [];
         body = '<div class="mmg-msgs">' + S.messages.map(function (m) {
           var mine = me && m.senderId === me;
+          if (m.type === 'system') {
+            /* a buyer's PUBLIC product question: publish the answer from here (product-enquiries.productQuestionAnswer) */
+            var pending = m.event && m.event.kind === 'public_question' && openQa.indexOf(m.event.qaId) !== -1;
+            return '<div class="mmg-sys" role="note">' + esc(m.text) +
+              (pending ? '<div class="mmg-sys-act"><button class="mmg-btn" data-act="publish-qa" data-qa="' + esc(m.event.qaId) + '"' + (S.publishing ? ' disabled' : '') + '>' +
+                (S.publishing ? 'Publishing…' : 'Publish answer publicly') + '</button><div class="mmg-sys-hint">Uses the text in the box below, or your latest reply.</div></div>' : '') + '</div>';
+          }
           return '<div class="mmg-msg ' + (mine ? 'me' : 'them') + (m.deleted ? ' deleted' : '') + '">' +
             esc(m.deleted ? 'This message was deleted' : m.text) +
             '<div class="t">' + esc(MM.timeLabel(m.timestamp)) + '</div></div>';
@@ -349,6 +361,22 @@
       });
     }
 
+    /* Publish a public answer to a product question — the draft, or the seller's latest reply. "Published" only after the server. */
+    function publishQa(qaId) {
+      if (S.publishing || !S.open) return;
+      var mineMsgs = S.messages.filter(function (m) { return me && m.senderId === me && m.type !== 'system' && !m.deleted; });
+      var answer = (S.draft || '').trim() || (mineMsgs.length ? mineMsgs[mineMsgs.length - 1].text : '');
+      if (!answer) { S.sendError = 'Reply to the buyer first (or type the answer), then publish it.'; paint(); return; }
+      S.publishing = true; S.sendError = null; paint();
+      MM.answerQuestion({ qaId: qaId, answer: answer, dispatch: ctx.dispatch }).then(function (r) {
+        S.publishing = false;
+        if (!r.ok) { S.sendError = r.error; paint(); return; }
+        toast('Answer published on the product page', 'ok');
+        var t = S.open;
+        MM.loadMessages({ conversationId: t.id, db: ctx.db }).then(function (m) { if (S.open && S.open.id === t.id && m.ok) S.messages = m.messages; paint(); });
+      }).catch(function (e) { S.publishing = false; S.sendError = (e && e.message) || 'The answer could not be published.'; paint(); });
+    }
+
     function onClick(ev) {
       var el = ev.target && ev.target.closest ? ev.target.closest('[data-act]') : null;
       if (!el || !host.contains(el)) return;
@@ -360,6 +388,7 @@
       if (act === 'reload')        { load(); return; }
       if (act === 'retry-thread')  { if (S.open) openThread(S.open); return; }
       if (act === 'send')          { send(); return; }
+      if (act === 'publish-qa')    { publishQa(el.getAttribute('data-qa')); return; }
     }
 
     function onInput(ev) {

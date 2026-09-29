@@ -1,3 +1,88 @@
+## [2026-09-29] - Product conversations (T2a): "Chat seller" and product questions reach the seller in merchant-v2 Messages; real public Q&A
+
+**Functions + product page + merchant-v2 Messages, NOT deployed.** Branch `slice/c4-category-matrix`. This is the
+owner's product brief §2 / §5 / §6.
+
+**Census:**
+- **"Chat Seller" was a dead end.** Premium sellers were reached via `messages.html?with=<seller>`, which nothing
+  reads, so the buyer landed on an empty inbox. Everyone else got a contact-request form that wrote `contactRequests`
+  without `buyerUid`; the rules denied every write, and nothing read it.
+- **Browser-only features.** Q&A, "Live Comments" and **offers** lived in the buyer's own **localStorage**, so no
+  seller or other buyer ever saw them. The offer said "sent! The seller will respond via Messages" anyway.
+- `openAskQuestion` was dead code (a client `productQA` write the rules refuse).
+
+**One conversation per product and buyer (`functions/product-enquiries.js`):**
+- **`productEnquirySend`** is a new op on the **existing `messagesDispatch`**, so there is no new Cloud Function.
+  - It opens a **server-anchored** `product_enquiry` conversation (`messages.SERVER_ANCHORED`; the
+    `productEnquiries` record type). The parties are the buyer and the **product's seller, derived from
+    `products/{id}`**, never from the client.
+  - It posts the buyer's words as the buyer's message through `messages.sendMessage` (its caps, moderation and unread
+    counts). The seller sees and answers the thread in **merchant-v2 › Messages** (the existing inbox; no second
+    inbox).
+  - It refuses a signed-out caller, the product's own seller, and hidden / archived / missing products.
+  - **Limits:** 30 per buyer per day, 8 s between sends to the same product, and the same text refused within 5 min.
+- **Public Q&A:** a question marked public also becomes a `productQA` row **without the asker's identity**.
+  - The conversation link (whose id embeds the asker's uid) lives in the server-only `productQAPrivate`. The first
+    build put it on the public row, and the new suite caught the leak.
+  - The seller gets a system note in the thread.
+  - **`productQuestionAnswer`** is seller-only and publishes the answer.
+- **merchant-v2 › Messages:** system notes render in the thread. A pending public question offers **"Publish answer
+  publicly"**, using the composer text or the seller's latest reply. "Published" appears only after the server.
+
+**Product page:**
+- **Chat seller, for every seller:** opens an **"Ask the seller"** sheet (focus, Esc and ✕ to close, 16px input). It
+  sends through the shared `SokoniSecureCall`, which uses the page's app, its signed-in user and App Check once. That
+  helper now also carries reports, so the App Check setup lives in one place.
+- **Offers:** go to the seller as a message in the same conversation, never "sent" unless sent. Structured
+  accept / counter / reject that checkout honours is T2b.
+- **Questions & Answers:** now reads `productQA` (answered rows, with a count of those awaiting the seller). It shows
+  "—" and says so when it cannot load; it never shows an invented list.
+- **Live Comments** (localStorage, "visible to all buyers" but seen by nobody) is removed. There is no comment engine
+  to wire it to; public discussion is the Q&A.
+- **Removed:** the dead contact-request modal and `openAskQuestion`.
+
+**Tests:**
+- **`scripts/test-product-conversations.js`: 9/0.** It runs the REAL `product-enquiries.js` and `messages.js`, plus
+  the dispatcher and page sources.
+  - Counterproof on `2a30c78`: **8 fail**. PC6 passes there: the old code refused an unknown type anyway.
+  - Sabotage: **11/11 caught**.
+- **`scripts/test-product-conversations-browser.js`: 5/0** (Chromium; the REAL product.html, REAL merchant-v2
+  Messages module, REAL `messagesDispatch`):
+  - buyer asks → seller sees the thread → replies → publishes → the product page's Q&A shows the answer without the
+    asker;
+  - the ask sheet closes.
+
+**Regression** (35 suites; work tree vs `2a30c78`, the same list on both):
+- Equal on both trees except the following.
+- **Superseded, each updated with its reason:**
+  - **`test-in-app-booking-contact`** (15/0): premium and non-premium now open the same "Ask the seller" sheet, with
+    no navigation. The read after it now fails closed, and on `2a30c78` it records **2 FAIL**.
+  - **`test-merchant-messages` A7:** `productQuestionAnswer` is added to the op allowlist (the server allows only the
+    product's seller). B7 and C7 fail **identically on both trees** (pre-existing).
+  - **`test-trust-integrity` RP6** (16/0): the report callable now goes through `SokoniSecureCall`.
+- **Dirty-tree suites** (`cart-*`, `checkout-fallback-total`) fail only because this slice was uncommitted when they
+  ran. They are re-run after this commit.
+
+**UNPROVEN / NOT DONE:**
+- Not deployed.
+- The rules still let a client create or answer `productQA` directly. That closes in stage 3 (rules), after owner
+  review.
+- Structured offers (accept / counter / reject, honoured at checkout) and staff answering on the shop's behalf
+  (merchant-identity capability) are **T2b**.
+- The buyer's side of the thread opens in `messages.html` (the existing inbox). A deep link to the exact
+  conversation is not proven here.
+
+**Files:** `functions/product-enquiries.js` (new), `functions/messages.js`, `functions/messages-dispatch.js`,
+`product.js`, `sokoni-trust.js`, `sokoni-merchant-messages.js`, `sokoni-merchant-messages-ui.js`, the two new suites,
+and three superseded suites.
+**Database:**
+- New server-written collections: `productEnquiries`, `productEnquiryLimits`, `productQAPrivate`.
+- `productQA` rows are now written by the server.
+- There is no new index (a single-field `where`).
+
+**API:** new `messagesDispatch` ops `productEnquirySend` and `productQuestionAnswer`; no new Cloud Function.
+**Breaking:** none; `contactSellerGated`, `submitQuestion` and `openAskQuestion` keep their names.
+
 ## [2026-09-29] - Product trust integrity (T1): no invented social proof, verified-purchase reviews that work, product reports that reach AdminOS
 
 **Functions + product page + cards + AdminOS + moderation, NOT deployed.** Branch `slice/c4-category-matrix`. This is
