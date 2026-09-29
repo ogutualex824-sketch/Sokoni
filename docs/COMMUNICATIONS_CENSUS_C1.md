@@ -70,8 +70,11 @@ census and to stay so in C2–C6.
   `communicationSend` (anchored to a record via the V2 `context` shape), `emailLogs` timeline per record, delivery
   events shown as evidence, and an explicit **"Inbound mail: not provisioned"** panel that lists items 1–3 above with
   their current state. No "reply" control until inbound is real.
-- **C3 — SendGrid in the evidence model.** Catalogue entry split by lane (outbound send · delivery events ·
-  inbound mail); operational workspace link → C2; no synthetic observation for inbound.
+- **C3 — SendGrid in the evidence model. DONE (this branch).** `sendgrid` names its lanes (outbound ✓ · events ✓ ·
+  inbound human mail ✗) and links the Email workspace; the DMARC-only inbound path is its own `inbound-only` entry
+  `sendgrid-inbound-parse` with no executor and no stage support — UNKNOWN, never refused, never observed. Console
+  detail gains the *Operational workspace* row (AdminOS routes only). `scripts/test-integration-comms-lanes.js` 44/0;
+  parity 26/0 · status 45/0 · evidence 69/0 · disagreement 21/0 · console 119/0 · certify 1109/0 · census PASSED.
 - **C4 — Africa's Talking in the evidence model.** SMS outbound + delivery reports; sender-ID state as a declaration;
   voice/inbound marked not implemented; operational workspace = the existing SMS blast + `smsStats`.
 - **C5 — Support number surface. DONE (this branch).** One source (`SOKONI_COMPANY.supportPhone` ↔ `company-identity.js`,

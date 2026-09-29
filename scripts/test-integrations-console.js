@@ -524,7 +524,7 @@ const settle = () => new Promise(r => setImmediate(() => setImmediate(r)));
      console consumes them WITHOUT re-deciding anything: the queue is the
      resolver's `disagreements` array, rendered, and nothing here recomputes
      which states are urgent. */
-  head('11 - console adoption: 52 technical, 2 operational, queue from the resolver');
+  head('11 - console adoption: 53 technical, 2 operational, queue from the resolver');
 
   /* One record per catalogue id, so the response is the real shape and size
      rather than a hand-picked subset that could hide a rendering gap. */
@@ -551,8 +551,8 @@ const settle = () => new Promise(r => setImmediate(() => setImmediate(r)));
     const html = m.host.innerHTML;
     const cat = m.win.SokoniIntegrationCatalogue;
 
-    ok('the browser catalogue carries 52 technical entries',
-       cat.integrations.length === 52, cat.integrations.length + '');
+    ok('the browser catalogue carries 53 technical entries',
+       cat.integrations.length === 53, cat.integrations.length + '');
     ok('and 2 operational dependencies, in a SEPARATE collection',
        Array.isArray(cat.operationalDependencies) && cat.operationalDependencies.length === 2,
        (cat.operationalDependencies || []).length + '');
@@ -561,8 +561,8 @@ const settle = () => new Promise(r => setImmediate(() => setImmediate(r)));
        an integration that does not exist. */
     const missing = cat.integrations.filter(i => html.indexOf('>' + i.name + '<') === -1 &&
                                                  html.indexOf(i.id) === -1);
-    ok('all 52 technical integrations render', missing.length === 0,
-       missing.length ? 'missing: ' + missing.slice(0, 4).map(i => i.id).join(', ') : '52/52');
+    ok('all 53 technical integrations render', missing.length === 0,
+       missing.length ? 'missing: ' + missing.slice(0, 4).map(i => i.id).join(', ') : '53/53');
 
     ok('both operational dependencies render, in their own section',
        /sic-opdep/.test(html) &&

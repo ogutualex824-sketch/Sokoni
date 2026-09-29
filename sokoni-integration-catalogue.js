@@ -152,16 +152,53 @@
       health: { source: null, kind: 'measurable', note: 'Delivery reports arrive by webhook; there is no status feed to poll.' },
       notes:  'AT_SENDER_ID stays EMPTY until the operator approves the "SOKONI" sender ID. An empty value is the correct state, not a misconfiguration.',
     },
+    /* ── SendGrid is THREE lanes, and this entry names which ones exist (C3) ──
+       outbound mail      implemented — email-service.js sends, emailLogs records
+       delivery events    implemented — the provider posts to emailWebhook (HMAC when
+                          SENDGRID_WEBHOOK_KEY is bound); that is inbound TRAFFIC,
+                          and it is why the direction reads bidirectional
+       inbound human mail NOT implemented — see 'sendgrid-inbound-parse' below. No
+                          mailbox, no thread, no reply path. The Email workspace
+                          says the same thing; the two must never disagree.
+       Configuration presence (the two secret names) is provisioning, never ACTIVE. */
     {
       id: 'sendgrid', name: 'SendGrid — Transactional Email',
       vendor: 'Twilio SendGrid', category: 'messaging', icon: '📧',
       status: 'live', direction: 'bidirectional',
-      summary: 'Primary email transport, with inbound event webhooks for bounces and opens.',
+      summary: 'Outbound transactional email, plus the provider’s event webhook (delivered, ' +
+               'bounced, opened, clicked). Bidirectional means events come back — not that ' +
+               'anyone can email SOKONI through it.',
       evidence: {
-        modules: ['functions/email-service.js', 'functions/email-triggers.js', 'functions/email-templates.js'],
-        secrets: ['SENDGRID_API_KEY', 'SENDGRID_WEBHOOK_KEY'],
+        modules:     ['functions/email-service.js', 'functions/email-triggers.js', 'functions/email-templates.js'],
+        endpoints:   ['emailWebhook'],
+        secrets:     ['SENDGRID_API_KEY', 'SENDGRID_WEBHOOK_KEY'],
+        collections: ['emailLogs'],
       },
-      health: { source: null, kind: 'measurable', note: 'Judge by bounce and delivery events, not by this row.' },
+      health: { source: null, kind: 'measurable', note: 'Judge by bounce and delivery events, not by this row. The probe declares requires_secret_binding until the API key is bound to the probe function — a declaration, not an observation.' },
+      workspace: { route: 'admin-os.html#comms/email', label: 'Email workspace' },
+      notes:  'Lanes: outbound mail IMPLEMENTED; delivery events IMPLEMENTED (emailWebhook, ' +
+              'signature-checked when SENDGRID_WEBHOOK_KEY is set); inbound human mail NOT ' +
+              'IMPLEMENTED — the only inbound mail path is the DMARC report parser catalogued ' +
+              'separately. Replies to SOKONI mail land in an external mailbox, not in the platform.',
+    },
+    {
+      id: 'sendgrid-inbound-parse', name: 'SendGrid Inbound Parse — DMARC reports only',
+      vendor: 'Twilio SendGrid', category: 'messaging', icon: '📨',
+      status: 'inbound-only', direction: 'inbound',
+      summary: 'The one inbound mail path SOKONI has: the provider parses mail sent to the ' +
+               'reports host and posts DMARC aggregate reports to dmarcReportWebhook. It is ' +
+               'not a mailbox — no human mail, no threads, no reply.',
+      evidence: {
+        modules:     ['functions/email-dmarc.js', 'docs/DMARC.md'],
+        endpoints:   ['dmarcReportWebhook'],
+        collections: ['dmarcReports', 'dmarcAlerts'],
+      },
+      health: { source: null, kind: 'measurable', kindNote: 'Nothing SOKONI can send would arrive here, so no probe is written; its evidence is the posts it actually receives.', note: 'Evidence is the report posts this endpoint receives. No probe exists and none is declared as refusing: an unmeasured lane reads UNKNOWN, never healthy and never refused.' },
+      workspace: { route: 'admin-os.html#comms/email', label: 'Email workspace (inbound status)' },
+      notes:  'Inbound human mail is NOT provisioned. Building it needs an Inbound Parse host for a ' +
+              'human address, a signed receiver that stores the message, a thread store correlated ' +
+              'by Message-ID / In-Reply-To, and in-thread reply headers — none exist. Until they do, ' +
+              'this lane must never gain a synthetic observation or a “received” capability.',
     },
     {
       id: 'smtp-fallback', name: 'SMTP — Direct Mail Transport',

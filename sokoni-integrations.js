@@ -2692,6 +2692,7 @@
       '<div class="sic-kv"><span>Direction</span><strong>' + _esc(i.direction) + '</strong></div>' +
       '<div class="sic-kv"><span>Category</span><strong>' + _esc(i.category) + '</strong></div>' +
       '<div class="sic-kv"><span>Live signal</span><strong>' + _liveSignal(i) + '</strong></div>' +
+      _workspaceKv(i) +
       _liveState(i.id) +
 
       '<div class="sic-sect-l">What it does</div>' +
@@ -2716,6 +2717,23 @@
           '<p class="sic-note">Names only. No console on this platform reads or displays a secret’s value.</p>'
         : '') +
       '</aside>';
+  }
+
+  /* ── The operational workspace (C3) ─────────────────────────────────
+     Three things an operator can confuse, kept as three rows: CONFIGURATION
+     (the secrets required, and whether each is provisioned), OBSERVABLE
+     CAPABILITY (the observed-state chip and the stage evidence), and the
+     OPERATIONAL WORKSPACE — where the rail is actually USED. This console
+     measures; the workspace acts. A link is rendered only for a route inside
+     AdminOS (admin-os.html#section or #section/tab); anything else is dropped
+     rather than rendered, so a catalogue edit cannot plant a URL. */
+  var _WORKSPACE_ROUTE = /^admin-os\.html#[a-z]+(\/[a-z-]+)?$/;
+  function _workspaceKv(i) {
+    var w = i && i.workspace;
+    if (!w || typeof w.route !== 'string' || !_WORKSPACE_ROUTE.test(w.route)) return '';
+    return '<div class="sic-kv"><span>Operational workspace</span><strong>' +
+      '<a class="sic-linkfig" href="' + _esc(w.route) + '" data-sic-workspace="' + _esc(i.id) + '">' +
+      _esc(w.label || 'Open workspace') + ' →</a></strong></div>';
   }
 
   /* ── Credentials ─────────────────────────────────────────────────────

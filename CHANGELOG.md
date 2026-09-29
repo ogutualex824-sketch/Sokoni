@@ -1,3 +1,35 @@
+## 2026-09-29 — Integrations, Slice C3: SendGrid by lane, and the card keeps configuration, capability and workspace apart (branch `feat/integrations-control-center`, NOT deployed)
+
+The C1 census found the SendGrid catalogue row reading as if mail flowed both ways. It does not: SOKONI sends, the
+provider posts events back, and the only inbound mail path parses DMARC reports. C3 makes the catalogue say exactly that,
+inside the existing D1–D7 evidence model, and gives every rail a way to reach the place it is actually used.
+
+- **`sokoni-integration-catalogue.js`** — `sendgrid` summary/notes state the three lanes (outbound ✓, delivery events ✓
+  via `emailWebhook`, inbound human mail ✗); evidence gains `endpoints: ['emailWebhook']` and `collections: ['emailLogs']`.
+  **New entry `sendgrid-inbound-parse`** (`inbound-only`, `inbound`, vendor Twilio SendGrid, no secrets): the DMARC-only
+  Inbound Parse lane, `dmarcReportWebhook` → `dmarcReports`/`dmarcAlerts`, with the missing pieces for a real mailbox
+  named. Both carry `workspace: { route: 'admin-os.html#comms/email', label }`.
+- **`functions/integration-registry.js`** — mirror row for the new entry (parity contract holds, 53 = 53).
+- **`sokoni-integrations.js`** — the detail aside renders an **Operational workspace** row from `entry.workspace`,
+  only for a route matching `admin-os.html#section[/tab]`; anything else is dropped rather than rendered.
+- **Evidence model untouched:** no executor and no stage-support row for the inbound lane, so it resolves
+  `health: unknown`, `notRunReason: null`, `declaredProbeState: none` → NOT PROBED; `sendgrid` still declares
+  `requires_secret_binding` → REFUSED BY DESIGN. `integrationProbeLatest` is not mentioned by any touched file.
+- Pinned counts in `test-integration-evidence.js`, `test-integration-disagreement.js`, `test-integrations-console.js`
+  rebased 52 → 53 (partition: `measurable-unwritten` 18 → 19; nulls 43 → 44). The ledger's own rule stands: never pin a
+  literal count — these pins pre-date this slice and were moved, not added.
+- Docs: `docs/INTEGRATIONS_CONTROL_CENTER.md` (*Communication rails, by lane*), `docs/COMMUNICATIONS_CENSUS_C1.md`.
+
+Evidence: `scripts/test-integration-comms-lanes.js` **44/0** — lanes derived from `functions/index.js` exports and the
+modules on disk; resolver states for both entries on the real registry (refused ≠ unknown; configured secrets never
+LIVE); rendered card rows (configuration / capability / workspace) with the absence checks scoped to the detail aside
+and a control proving the page has a healthy chip elsewhere; negative controls: hostile and external workspace routes
+render nothing, a planted stage-support row is detected, a catalogue calling the inbound lane live is caught.
+Existing gates: parity 26/0 · status 45/0 · probes green · evidence 69/0 · disagreement 21/0 · console 119/0 ·
+`tests/certify-integrations-console.js` 1109/0 · relationship census PASSED (53 of 53 inherit governance; vendor
+Twilio SendGrid already decided). Sabotage suites NOT run (they edit source in place in a repo other agents are writing).
+No database, API, rules or security-boundary change. No deploy.
+
 ## 2026-09-29 — Support number, Slice C5: one source, fail closed, no invented digit (branch `feat/integrations-control-center`, NOT deployed)
 
 The census (C1) found `support.html` linking a placeholder `tel:` number nobody answers, while the configured number

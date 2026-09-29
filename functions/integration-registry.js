@@ -104,6 +104,14 @@ const INTEGRATIONS = [
     status: "live", direction: "bidirectional",
     healthKind: "measurable",
     requiredSecrets: ["SENDGRID_API_KEY","SENDGRID_WEBHOOK_KEY"], optionalEnv: [] },
+  /* C3: the DMARC-only inbound lane, catalogued apart from outbound so that "inbound
+     mail" can never be read off the sendgrid row. No executor, no stage support —
+     it resolves UNKNOWN, not refused. */
+  { id: "sendgrid-inbound-parse", category: "messaging", vendor: "Twilio SendGrid",
+    name: "SendGrid Inbound Parse — DMARC reports only",
+    status: "inbound-only", direction: "inbound",
+    healthKind: "measurable",
+    requiredSecrets: [], optionalEnv: [] },
   { id: "smtp-fallback", category: "messaging", vendor: "SMTP host",
     name: "SMTP — Direct Mail Transport",
     status: "configured", direction: "outbound",

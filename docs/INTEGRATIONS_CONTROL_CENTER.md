@@ -482,13 +482,34 @@ test a rail is not a probe.
 | Category | n | Notable |
 | --- | --- | --- |
 | Payments | 5 | IntaSend only. No Daraja, no Stripe, no PayPal — see below. |
-| Messaging | 6 | SendGrid **sends**; HostPinnacle/MailBaby **receives**. |
+| Messaging | 7 | SendGrid **sends** and posts **events** back; its Inbound Parse lane receives **DMARC reports only**; HostPinnacle/MailBaby holds the real mailboxes. See *Communication rails, by lane*. |
 | Search | 2 | Algolia, Typesense |
 | Compliance | 2 | KRA eTIMS, ODPC |
 | Identity | 7 | Google, Facebook, phone OTP, email/password, reCAPTCHA, Auth, age |
 | AI | 2 | Anthropic, Vertex Gemini |
 | Infrastructure | 17 | Two Firestore databases, Cloud Run split from Functions, OSM, HostPinnacle |
 | Outbound APIs | 6 | SmartPOS external API, webhooks, ERP, gateway, registry |
+
+### Communication rails, by lane (C3, 2026-09-29)
+
+A messaging provider is several lanes, and the card must say which exist. The detail
+aside now keeps **three rows apart**: *Configuration* (secret names and whether each
+is provisioned), *Observed state* (the chip and stage evidence) and **Operational
+workspace** — a link to where the rail is actually used, rendered only for a route
+inside AdminOS (`admin-os.html#section/tab`; anything else is dropped, not rendered).
+This console measures; the workspace acts.
+
+| Entry | Lanes | Declared probe state | Workspace |
+| --- | --- | --- | --- |
+| `sendgrid` | outbound mail ✓ · delivery events ✓ (`emailWebhook`, HMAC when the key is bound) · **inbound human mail ✗** | `requires_secret_binding` → REFUSED BY DESIGN | `#comms/email` |
+| `sendgrid-inbound-parse` | the **only** inbound mail path: DMARC aggregate reports via `dmarcReportWebhook` → `dmarcReports` / `dmarcAlerts`. Not a mailbox: no thread, no reply | **none** → NOT PROBED (UNKNOWN). No executor and no stage-support row: nothing SOKONI sends could arrive there, so a "received" capability would be synthetic | `#comms/email` (inbound status) |
+
+UNKNOWN and REFUSED BY DESIGN stay distinct on purpose: the first is a lane the platform
+does not measure, the second a decision it made. Certification:
+`scripts/test-integration-comms-lanes.js` (facts derived from `functions/index.js` exports,
+the executor and support tables and the status resolver; console asserted on rendered
+HTML; negative controls on in-process copies — a hostile workspace route, a planted
+stage-support row, a catalogue that calls the inbound lane live).
 
 ### HostPinnacle is the DNS provider, not Cloudflare
 
