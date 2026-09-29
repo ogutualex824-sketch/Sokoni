@@ -430,6 +430,93 @@ const settle = () => new Promise(r => setImmediate(() => setImmediate(r)));
        !/Observed elsewhere:<\/strong>|Not applicable:<\/strong>/.test(unk));
   }
 
+  /* ── THE OPERATOR VOCABULARY ────────────────────────────────────────────
+     The operator chip is DERIVED from the evidence chip. These assertions
+     protect the derivation, because the failure mode is silent: a mapping that
+     quietly promotes an unmeasured rail to green looks exactly like a working
+     console until someone trusts it. */
+  {
+    const src = fs.readFileSync(path.join(ROOT, 'sokoni-integrations.js'), 'utf8');
+
+    /* Read both tables out of the shipped source so the suite cannot drift
+       from what actually ships. */
+    const evKeys = (src.match(/var CHIP_META = \{[\s\S]*?\n  \};/) || [''])[0]
+      .split('\n').map((l) => (l.match(/^\s{4}([a-z]+)\s*:/) || [])[1]).filter(Boolean);
+    const mapBlock = (src.match(/var OPS_FROM_EVIDENCE = \{[\s\S]*?\n  \};/) || [''])[0];
+    const mapped = {};
+    mapBlock.split('\n').forEach((l) => {
+      const m = l.match(/^\s{4}([a-z]+)\s*:\s*'([a-z]+)'/);
+      if (m) mapped[m[1]] = m[2];
+    });
+
+    ok('CONTROL — both tables were located in the shipped source',
+       evKeys.length >= 10 && Object.keys(mapped).length >= 10,
+       'evidence=' + evKeys.length + ' mapped=' + Object.keys(mapped).length);
+
+    /* No silent fall-through. A new evidence state must be mapped DELIBERATELY;
+       a default would hand it whatever the default happens to flatter. */
+    const unmapped = evKeys.filter((k) => !mapped[k]);
+    ok('every evidence state has an explicit operator mapping',
+       unmapped.length === 0, unmapped.join(',') || 'none');
+
+    /* The three that must never collapse into INACTIVE. This is the whole
+       reason the vocabulary has eight chips instead of seven. */
+    ok('unprobed maps to NOT VERIFIED, never INACTIVE',
+       mapped.unprobed === 'unverified', mapped.unprobed);
+    ok('refused keeps its own chip, never INACTIVE',
+       mapped.refused === 'refused', mapped.refused);
+    ok('unreadable maps to NOT VERIFIED, never a health claim',
+       mapped.unreadable === 'unverified', mapped.unreadable);
+
+    /* Green is reserved for a CURRENT probe. */
+    ok('live is the only evidence state that earns ACTIVE',
+       mapped.live === 'active' &&
+       Object.keys(mapped).filter((k) => mapped[k] === 'active').length === 1,
+       JSON.stringify(mapped));
+    ok('evidence-without-a-probe is PARTIAL, not promoted to green',
+       mapped.active === 'partial', mapped.active);
+    ok('stale is PARTIAL — an old success is not a current one',
+       mapped.stale === 'partial', mapped.stale);
+    ok('failed maps to ERROR', mapped.failed === 'error', mapped.failed);
+    ok('a gated rail reads QUARANTINED', mapped.gated === 'quarantine', mapped.gated);
+    ok('a missing credential is ACTION REQUIRED, not a failure',
+       mapped.unconfigured === 'action', mapped.unconfigured);
+
+    /* INVERTING CONTROL — the assertions above would also pass if nothing were
+       mapped to INACTIVE because the table were empty. Prove the value is
+       reachable in principle, i.e. that 'inactive' exists as a chip at all. */
+    ok('CONTROL — INACTIVE exists as a chip even though nothing maps to it today',
+       /inactive:\s*\{ label: 'INACTIVE'/.test(src), 'OPS_META.inactive');
+    ok('CONTROL — TESTING is defined and deliberately unreachable',
+       /testing:\s*\{ label: 'TESTING'/.test(src) &&
+       !Object.keys(mapped).some((k) => mapped[k] === 'testing'), 'no evidence maps to testing');
+
+    /* The header must count with the SAME derivation the cards use. A separate
+       tally could disagree with the grid and the operator could not tell which
+       to believe. */
+    ok('the summary counts via _opsChip, not a second tally',
+       /function _opsCounts[\s\S]{0,400}_opsChip\(i\)/.test(src), '_opsCounts uses _opsChip');
+
+    /* Last verified must come from the status record, never from render time. */
+    ok('last-verified reads probedAt/checkedAt, never Date.now() as the source',
+       /function _lastVerified[\s\S]{0,300}probedAt[\s\S]{0,80}checkedAt/.test(src),
+       '_lastVerified');
+    ok('an unverified rail says so instead of showing a date',
+       /Not recently verified/.test(src), 'honest empty state');
+
+    /* The operator chip is ADDITIVE: the evidence chip must still render, or
+       the certification suite downstream loses the span it reads. */
+    /* Asserted on STRIPPED source. The explanatory comment inside this function
+       is longer than any sane character window, and a window wide enough to
+       clear it would start matching unrelated code. Strip the prose, then the
+       distance is the code's distance. */
+    const bare = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+    ok('CONTROL — the comment stripper is not a no-op',
+       bare.length < src.length, (src.length - bare.length) + ' chars removed');
+    ok('the operator chip reuses _chipHtml rather than re-rendering the label',
+       /function _opsChipHtml[\s\S]{0,300}_chipHtml\(entry\)/.test(bare), '_opsChipHtml');
+  }
+
   console.log('\n  what this suite does NOT prove');
   console.log('  UNPROVEN  a real browser render. The module runs in a minimal DOM, so');
   console.log('            layout and CSS are not exercised here.');

@@ -1,3 +1,87 @@
+## 2026-09-29 (151) — Integration Center: an operator vocabulary that cannot flatter the evidence
+
+**UI polish slice. No provider rebuilt, no rail changed, no credential created, no deploy.**
+Navigation was already done and was **reused, not rebuilt** — see below.
+
+### Navigation needed nothing
+
+`admin-os.html:420` and `super-admin.html:347` already carry an Integrations nav entry, and both
+already mount the same canonical `sokoni-integrations.js`. Check-green-first: the requested
+"AdminOS → Integrations" and "Super Admin → Integrations" both exist and point at one workspace.
+**Neither file was touched.**
+
+### The seven-chip vocabulary could not be used honestly
+
+The natural operator set — ACTIVE / PARTIAL / INACTIVE / ERROR / ACTION REQUIRED / TESTING /
+QUARANTINED — has no home for three evidence states, and between them they are **most of the
+catalogue**:
+
+| evidence state | entries | why it is not INACTIVE |
+|---|---|---|
+| `unprobed` | ~31 | nothing measures the rail; most are in daily use |
+| `refused` | 9 | a probe exists and deliberately will not run — correct behaviour |
+| `unreadable` | — | the status read failed; a fact about the console, not the rail |
+
+Rendering those ⚪ INACTIVE would have the console state, of forty integrations, a fact nobody
+established. **⚫ NOT VERIFIED was added as an eighth chip** and REFUSED BY DESIGN keeps its own,
+on the owner's decision.
+
+### What the console now actually shows
+
+Rendered through the shipped module against the real catalogue:
+
+```
+  3  PARTIAL          4  QUARANTINED         40  NOT VERIFIED
+  total catalogued 47 · chips sum to 47
+```
+
+**Zero ACTIVE** — nothing holds a current probe. Only **3 of 47** integrations are runnable-probeable
+at all (`firestore`, `memorystore-redis`, `cloud-storage`); 9 refuse by design, 31 have no executor.
+The console is mostly grey because that is the true state.
+
+### The derivation, not a second opinion
+
+`OPS_FROM_EVIDENCE` maps every evidence state explicitly — no default, so a new state must be
+mapped deliberately rather than inheriting whatever a fallback flatters. `ACTIVE` is reachable
+from **exactly one** state (`live`, a current probe). Evidence-without-a-probe is PARTIAL, not
+promoted to green. `TESTING` is defined and deliberately unreachable: an empty bucket is honest,
+a mislabelled one is not.
+
+The summary counts via `_opsChip` — the same function the cards use — so the header cannot
+disagree with the grid beneath it. Each count is a filter, so a number the operator doubts is one
+click from the rows behind it.
+
+### The operator chip is additive
+
+`_opsChipHtml` **reuses `_chipHtml`** rather than re-rendering the label. One renderer, so the two
+can never diverge — and the 1,031-assertion certification suite keeps reading the same
+`sic-chipstate` span, with the same `why` in its title, that it always did.
+
+That mattered: swapping the card to the operator chip alone turned the suite red on 25
+assertions. The gate was right — it caught that the evidence span had disappeared. The fix was to
+put it back, not to retune the gate.
+
+### Capability chips: not built, deliberately
+
+The catalogue entry schema carries `modules`, `secrets` and `collections` — no per-capability
+model. Building "🟢 M-Pesa ◐ Card checkout" would mean **inventing capabilities**, which the slice
+explicitly excludes. A capability layer needs per-capability evidence first.
+
+### Certification — 86/0 and 1031/0
+
+New assertions cover: every evidence state mapped (no fall-through), the three that must never
+collapse to INACTIVE, ACTIVE reachable from one state only, the header counting via `_opsChip`,
+last-verified reading `probedAt`/`checkedAt` rather than render time, and the additive chip.
+Plus controls: INACTIVE exists though nothing maps to it, TESTING is unreachable, and the comment
+stripper is not a no-op.
+
+One new assertion initially failed against its own explanatory comment — a character window too
+narrow for the prose inside the function. It now asserts on stripped source.
+
+**Files:** `sokoni-integrations.js` · `scripts/test-integrations-console.js`.
+Database changes: none. API changes: none. Security changes: none. Breaking changes: none.
+Deploy: none.
+
 ## 2026-09-29 — AdminOS sidebar, Slice B: scroll region, drawer, keyboard, aria-current (branch `feat/integrations-control-center`, NOT deployed)
 
 Merchant V2's sidebar contract (`merchant-v2.html` `.side` / `.side-scroll`) adapted to AdminOS. Navigation only;

@@ -143,7 +143,7 @@
     loadedAt:  0,
   };
 
-  var _filter = { q: '', type: '', status: '' };
+  var _filter = { q: '', type: '', status: '', ops: '' };
   /* Optional injection point. Both consoles mount with a target only, so this
      stays empty in production and the dispatcher path above is used. */
   var _opts = {};
@@ -269,6 +269,76 @@
     unreadable:  { label: 'EVIDENCE UNREADABLE', cls: 'unknown' },
   };
 
+  /* ── THE OPERATOR VOCABULARY ──────────────────────────────────────────
+     CHIP_META above is the EVIDENCE state — what was measured. This is the
+     OPERATIONAL state — what an operator should do about it. The second is
+     DERIVED from the first and never computed independently, so the console
+     cannot drift into asserting a health it did not measure.
+
+     WHY THIS IS NOT A SEVEN-STATE VOCABULARY
+
+     The natural operator set is ACTIVE / PARTIAL / INACTIVE / ERROR /
+     ACTION REQUIRED / TESTING / QUARANTINED. Three evidence states have no
+     honest home in it, and between them they cover most of the catalogue:
+
+       unprobed   31 of 47 entries. Nothing measures this rail. That is NOT
+                  "inactive" — most of these are in daily use; they simply have
+                  no probe. Rendering them INACTIVE would state, of forty
+                  integrations, a fact nobody established.
+       refused     9 entries. A probe exists and deliberately will not run
+                  (no safe probe, or it needs a secret binding). Refusing is
+                  correct behaviour, not disuse.
+       unreadable  the status read itself failed. A fact about the console,
+                  not about the rail.
+
+     So NOT VERIFIED is added as an eighth chip and REFUSED BY DESIGN keeps its
+     own, on the owner's decision of 2026-09-29. The console shows mostly grey
+     until probes exist — which is the true state, and the point.
+
+     TESTING is defined and currently unreachable: no evidence state maps to it.
+     It stays in the legend rather than being filled by forcing some other state
+     into it, because an empty bucket is honest and a mislabelled one is not. */
+  var OPS_META = {
+    active:    { label: 'ACTIVE',            dot: '🟢', cls: 'healthy'  },
+    partial:   { label: 'PARTIAL',           dot: '🟡', cls: 'warn'     },
+    inactive:  { label: 'INACTIVE',          dot: '⚪',       cls: 'unknown'  },
+    error:     { label: 'ERROR',             dot: '🔴', cls: 'error'    },
+    action:    { label: 'ACTION REQUIRED',   dot: '🟠', cls: 'error'    },
+    testing:   { label: 'TESTING',           dot: '🔵', cls: 'warn'     },
+    quarantine:{ label: 'QUARANTINED',       dot: '⛔',       cls: 'unknown'  },
+    unverified:{ label: 'NOT VERIFIED',      dot: '⚫',       cls: 'unknown'  },
+    refused:   { label: 'REFUSED BY DESIGN', dot: '⚪',       cls: 'unknown'  },
+  };
+
+  /* evidence key -> operator key. Every CHIP_META key MUST appear here; the
+     certification suite fails if one is missing, so a new evidence state
+     cannot silently fall through to a default that flatters it. */
+  var OPS_FROM_EVIDENCE = {
+    live:         'active',
+    active:       'partial',
+    stale:        'partial',
+    degraded:     'partial',
+    failed:       'error',
+    gated:        'quarantine',
+    unconfigured: 'action',
+    refused:      'refused',
+    unprobed:     'unverified',
+    unreadable:   'unverified',
+  };
+
+  /* `active` -> PARTIAL, deliberately. That evidence state means "operational
+     evidence exists somewhere, but no live probe runs here". ACTIVE is reserved
+     for a rail a CURRENT probe reached. Promoting evidence-without-a-probe to
+     green is precisely the optimism this console exists to refuse. */
+  function _opsChip(entry) {
+    var ev = _chip(entry);
+    if (!ev) return null;
+    var key = OPS_FROM_EVIDENCE[ev.key] || 'unverified';
+    var m = OPS_META[key];
+    return { key: key, label: m.label, dot: m.dot, cls: m.cls,
+             evidenceKey: ev.key, evidenceLabel: ev.label, why: ev.why };
+  }
+
   /* Lifecycles that describe a DELIBERATELY closed rail. Mirrors the server's
      NON_PROBEABLE_LIFECYCLES plus `retired`; if that list moves, move this. */
   var GATED_LIFECYCLES = ['quarantined', 'frozen', 'retired'];
@@ -354,6 +424,24 @@
     if (!c) return '';
     return '<span class="sic-chipstate ' + c.cls + '" title="' + _esc(c.why) + '">' +
            _esc(c.label) + '</span>';
+  }
+
+  /** The operator chip, with the evidence state it was derived from kept
+      visible beside it. Both are shown because they answer different
+      questions: the operator chip says what to do, the evidence chip says what
+      was actually observed. Showing only the first would hide the basis; only
+      the second asks every operator to learn a ten-state vocabulary. */
+  function _opsChipHtml(entry) {
+    var o = _opsChip(entry);
+    if (!o) return '';
+    /* The evidence half REUSES _chipHtml rather than re-rendering the label.
+       One renderer, so the two can never disagree — and the certification
+       suite keeps reading the same `sic-chipstate` span, with the same `why`
+       in its title, that it always did. The operator chip is additive: it did
+       not replace the evidence, it sits in front of it. */
+    return '<span class="sic-ops ' + o.cls + '" title="' + _esc(o.why) + '">' +
+           '<span aria-hidden="true">' + o.dot + '</span> ' + _esc(o.label) + '</span>' +
+           _chipHtml(entry);
   }
 
   /* ── Helpers ─────────────────────────────────────────────────────────── */
@@ -550,7 +638,44 @@
       '.sic-chipstate.degraded{color:var(--sic-warn);border-color:var(--sic-warn)}',
       '.sic-chipstate.error{color:var(--sic-bad);border-color:var(--sic-bad)}',
       '.sic-chipstate.unknown{color:var(--sic-muted);border-color:var(--sic-border)}',
-      '.sic-ic-state{margin:2px 0 6px}',
+      '.sic-ic-state{margin:2px 0 6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}',
+
+      /* ── Operator chip + the evidence state it came from ──────────────
+         The operator chip is filled; the evidence state beside it is quiet
+         text. The visual weight matches the decision weight: act on the
+         first, audit with the second. */
+      '.sic-ops{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;',
+      'border-radius:999px;font-size:10.5px;font-weight:800;letter-spacing:.03em;',
+      'text-transform:uppercase;white-space:nowrap;border:1px solid}',
+      '.sic-ops.healthy{color:var(--sic-ok);border-color:var(--sic-ok);background:rgba(113,255,0,.08)}',
+      '.sic-ops.warn{color:var(--sic-warn);border-color:var(--sic-warn);background:rgba(255,176,32,.08)}',
+      '.sic-ops.error{color:var(--sic-bad);border-color:var(--sic-bad);background:rgba(255,92,92,.08)}',
+      '.sic-ops.unknown{color:var(--sic-muted);border-color:var(--sic-border)}',
+      '.sic-ops-ev{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;',
+      'color:var(--sic-muted);white-space:nowrap}',
+
+      /* ── The operational summary header ───────────────────────────────
+         Each count is a FILTER, so a number the operator doubts is one click
+         from the rows behind it. A total that cannot be opened is a claim;
+         one that can is evidence. */
+      '.sic-summary{margin:0 0 14px;padding:13px 15px;border-radius:12px;',
+      'background:var(--sic-surface,rgba(255,255,255,.03));border:1px solid var(--sic-border)}',
+      '.sic-sum-h{font-size:13px;font-weight:800;letter-spacing:-.01em;margin-bottom:9px}',
+      '.sic-sum-sub{display:block;font-size:11px;font-weight:500;color:var(--sic-muted);',
+      'letter-spacing:0;margin-top:2px}',
+      '.sic-sum-chips{display:flex;flex-wrap:wrap;gap:7px}',
+      '.sic-sum-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;',
+      'border-radius:999px;border:1px solid var(--sic-border);background:transparent;',
+      'color:var(--sic-muted);font:inherit;font-size:11px;font-weight:600;cursor:pointer;',
+      'transition:border-color .15s,color .15s}',
+      '.sic-sum-chip b{font-weight:900;font-size:12px}',
+      '.sic-sum-chip:hover{border-color:var(--sic-muted)}',
+      '.sic-sum-chip.on{border-color:currentColor}',
+      '.sic-sum-chip.healthy{color:var(--sic-ok)}',
+      '.sic-sum-chip.warn{color:var(--sic-warn)}',
+      '.sic-sum-chip.error{color:var(--sic-bad)}',
+      '@media(max-width:560px){.sic-sum-chips{gap:5px}',
+      '.sic-sum-chip{padding:3px 8px;font-size:10.5px}}',
       /* A figure that is a way INTO its evidence, not a dead end. Styled as a
          number first and a control second — it must not read as a button that
          does something to the infrastructure. */
@@ -1068,6 +1193,59 @@
      state is overlaid on the card; where it does not, the card says the rail
      is not instrumented rather than showing a reassuring green light. */
 
+  /* ── OPERATIONAL SUMMARY ──────────────────────────────────────────────
+     Counted from the SAME derivation the cards use, never from a separate
+     tally. A header that counted independently could disagree with the grid
+     beneath it, and the operator would have no way to tell which lied. */
+  function _opsCounts() {
+    var c = _cat();
+    if (!c) return null;
+    var out = { _total: 0 };
+    Object.keys(OPS_META).forEach(function (k) { out[k] = 0; });
+    c.integrations.forEach(function (i) {
+      var ch = _opsChip(i);
+      if (!ch) return;
+      out[ch.key]++; out._total++;
+    });
+    return out;
+  }
+
+  /** The header. Shows only NON-ZERO states: an empty bucket is noise, and
+      TESTING is currently unreachable by design (see OPS_META). */
+  function _opsSummary() {
+    var n = _opsCounts();
+    if (!n) return '';
+    var order = ['active', 'partial', 'action', 'error', 'refused', 'quarantine',
+                 'unverified', 'inactive', 'testing'];
+    var parts = order.filter(function (k) { return n[k] > 0; }).map(function (k) {
+      var m = OPS_META[k];
+      var on = _filter.ops === k;
+      return '<button class="sic-sum-chip' + (on ? ' on' : '') + ' ' + m.cls + '" ' +
+        'aria-pressed="' + on + '" title="' + _esc(m.label) + ' — click to filter" ' +
+        'onclick="SokoniIntegrations.filter({ops:' + (on ? "''" : "'" + k + "'") + '})">' +
+        '<span aria-hidden="true">' + m.dot + '</span> ' +
+        '<b>' + n[k] + '</b> ' + _esc(m.label) + '</button>';
+    }).join('');
+    return '<div class="sic-summary">' +
+      '<div class="sic-sum-h">Integrations<span class="sic-sum-sub">' + n._total +
+      ' catalogued · state derived from evidence, never from the card existing</span></div>' +
+      '<div class="sic-sum-chips">' + parts +
+      (_filter.ops ? '<button class="sic-sum-chip" onclick="SokoniIntegrations.filter({ops:\'\'})">' +
+        'Clear</button>' : '') + '</div></div>';
+  }
+
+  /** Last verified, from the status record only. Never a rendering timestamp:
+      "when this page drew" is not "when the rail was checked". */
+  function _lastVerified(entry) {
+    var r = _statusFor(entry.id);
+    var at = r ? (_ms(r.probedAt) || _ms(r.checkedAt)) : 0;
+    if (!at) return '<span class="sic-sig muted">Not recently verified</span>';
+    var days = Math.floor((Date.now() - at) / 86400000);
+    var rel = days <= 0 ? 'today' : days === 1 ? 'yesterday' : days + ' days ago';
+    return '<span class="sic-sig" title="' + _esc(new Date(at).toISOString()) + '">' +
+      'Verified ' + rel + '</span>';
+  }
+
   function _catRows() {
     var c = _cat();
     if (!c) return [];
@@ -1075,6 +1253,10 @@
     return c.integrations.filter(function (i) {
       if (_filter.type && i.category !== _filter.type) return false;
       if (_filter.status && i.status !== _filter.status) return false;
+      if (_filter.ops) {
+        var ch = _opsChip(i);
+        if (!ch || ch.key !== _filter.ops) return false;
+      }
       if (!q) return true;
       var ev = i.evidence || {};
       var hay = [i.name, i.vendor, i.summary, i.notes, i.id,
@@ -1144,11 +1326,12 @@
     }
     var rows = _catRows();
     if (!rows.length) {
-      return '<div class="sic-card"><div class="sic-empty">No integration matches these filters.</div></div>';
+      return _opsSummary() +
+        '<div class="sic-card"><div class="sic-empty">No integration matches these filters.</div></div>';
     }
 
     /* Group into the catalogue's own category order, skipping empty groups. */
-    return c.categories.map(function (k) {
+    return _opsSummary() + c.categories.map(function (k) {
       var group = rows.filter(function (i) { return i.category === k.id; });
       if (!group.length) return '';
       return '<div class="sic-group"><div class="sic-group-h">' +
@@ -1168,10 +1351,11 @@
             /* The OBSERVED state, beside the DECLARED lifecycle. The two are
                different claims: the badge says what the catalogue believes,
                the chip says what the evidence shows. */
-            '<div class="sic-ic-state">' + _chipHtml(i) + '</div>' +
+            '<div class="sic-ic-state">' + _opsChipHtml(i) + '</div>' +
             '<p class="sic-ic-sum">' + _esc(i.summary) + '</p>' +
             '<div class="sic-ic-foot">' +
             '<span class="sic-sig muted">' + _esc(i.direction) + '</span>' +
+            _lastVerified(i) +
             _liveSignal(i) +
             ((ev.secrets || []).length ? '<span class="sic-sig muted">' + ev.secrets.length + ' secret' +
               (ev.secrets.length === 1 ? '' : 's') + '</span>' : '') +
@@ -2835,7 +3019,7 @@
       if (t === 'gcp') _loadGcp();
       /* Filters mean different things per tab (category vs service type), so a
          tab change clears them rather than silently applying a stale one. */
-      _filter = { q: '', type: '', status: '' };
+      _filter = { q: '', type: '', status: '', ops: '' };
       _selected = null;
       _render();
     },
