@@ -1,3 +1,179 @@
+## [2026-09-29] - Universal catalogue U7c1: Offers live inside Marketing, on the one offer store, with a real wizard per type
+
+**merchant-v2 Marketing + Offers studio + route registry + `functions/shop-offers.js`, NOT deployed.** Offers are NOT
+yet applied at checkout or the till (that is U7c2). Design: `docs/MARKETING_OFFERS.md`.
+
+**Owner, 2026-09-29:**
+- "Fix the offer page: it is saying not saved, SOKONI has no merchant writable offer store."
+- "All offer types with their own wizards … calendar … drafts … if you open you can't go back."
+- "Remove flash sale from the side bar."
+- "Take soda from inventory and add pizza, choose how many."
+
+**Census:**
+- `shopOffers` and the callables `shopOfferUpsert` / `shopOfferList` were already on this branch (GATE P, `11933e3`)
+  and exported, but merchant-v2 never handed the studio a save, list or picker function. Every save said "Not saved".
+- The studio's defects:
+  - one generic editor: flash sale, happy hour and percentage off shared identical controls;
+  - no flash start/end or limit, and no BXGY product picker;
+  - "Family Pizza Night" as the name example on every type;
+  - a made-up sample basket in the preview;
+  - `window.prompt` for items;
+  - fulfilment sent as an object, stored as "[object Object]", which disqualified every basket;
+  - no draftToken, so the server refused every create;
+  - `render()` without `collect()`, so a day-chip tap wiped typed values;
+  - no history entry, so the phone's Back left the route.
+- The Flash Sale route was an iframe of seller.html#flash. The native flash module was never shown, and it read
+  `posProducts`, not the catalogue.
+
+**Built:**
+- **Route registry:**
+  - Marketing becomes **primary**, in Offers' slot.
+  - The Offers and Flash Sale routes are removed.
+  - `#offers`, `#flash-sale` and `#promotions` alias to Marketing, and the shell remembers the tab. A flash-sale link
+    opens a new flash sale.
+  - `validate()` passes.
+- **Marketing:** a new first tab, **Offers**. The studio is mounted once into a persistent node, so a half-built offer
+  survives tab switches. `setTab()` handles deep links.
+- **Shell `_offersCtx`:**
+  - `listOffers` / `saveOffer` → `shopOfferList` / `shopOfferUpsert`;
+  - `listListings` → the shop's own `listProducts`;
+  - `canWrite` from the `discount` capability when capabilities are known.
+  - The old flash module's entry and script tag are removed.
+- **Studio rewrite** (calendar, performance panel and no-store wording kept verbatim):
+  - 12 templates in `WIZARDS`, each rendering only its own sections. A payload carries only its sections' keys.
+  - A swipeable type rail (scroll-snap on phones) and a catalogue picker sheet showing live price and stock (package
+    sets via `SokoniPackageStock`), with archived items excluded and quantity steppers.
+  - Flash sale by sale price, for one product.
+  - Drafts (save, filter, continue, publish from the list) and End offer (archive).
+  - Status derived like the resolver: live / scheduled / outside hours / ended / draft / archived.
+  - Values collected before every re-render.
+  - A sticky Back bar plus a history entry, so the phone's Back returns to the list; an unsaved change is offered as a
+    draft.
+  - Publish lists what is missing.
+  - A new **Free gift** template (the `freeItem` type had none).
+- **`shopOffers.normaliseOffer`:** a **draft** may be saved incomplete. This is safe because `isLive` refuses drafts,
+  so a draft never prices a basket. Every other status still requires its price field, and percent > 100 is refused
+  for any status.
+
+**Tests:**
+- **`scripts/test-marketing-offers-u7c1.js`: 6/0.**
+  - Covers:
+    - draft rules;
+    - `upsertOffer` idempotent on the draftToken, the owner kept, another shop's id refused;
+    - a draft never prices;
+    - routes;
+    - shell wiring;
+    - no object fulfilment and no prompt.
+  - Counterproof on the parent: **5 fail**. OC3 is an invariant control, and it passes on both trees.
+  - Sabotage: **10/10 caught.** The first run caught 9/10: OC2 CRASHED instead of failing. It is now fail-closed.
+- **`scripts/test-marketing-offers-browser.js`** (real Chromium; real Marketing + Offers + promotion model; every saved
+  payload replayed through the REAL server `normaliseOffer` + `resolve`):
+  - Offers is the first tab;
+  - the 12 wizards each have their own controls;
+  - a flash sale on a KES 75,000 laptop at a 68,000 sale price;
+  - values survive re-renders;
+  - a meal deal Pizza × 1 + Soda × 2 saved as a draft, continued and published as the SAME offer;
+  - both Backs;
+  - a type switch sends no stale fields;
+  - publish-with-gaps and End offer;
+  - server replay: 68,000 until the end time, meal deal 850;
+  - 390 px.
+- **Superseded, with reasons:**
+  - `test-flash-sale-authority` "F-2 NOT started — flash-sale route is still kind:'seller'". The tripwire flipped as
+    designed and now asserts that the route is gone and aliased.
+  - `test-merchant-routes` no longer generates its "seller sec exists: flash-sale" check (the route is gone). Its two
+    existing failures (19 vs 18 primary; spec order) are unchanged from the parent.
+- Existing offer suites are unchanged: `offer-studio` 29/0, `offer-view` 62/0, `authority-boundary` 35/0, `record`
+  64/0, `intake` 7/0, `trend-source` 32/0, `engine-parity` 35/0.
+
+**Database:** `shopOffers` now receives merchant writes (through the callable only; no rules change). **API:** none new.
+**Security:** unchanged. The server derives the owner and enforces the capability. **Breaking:** the native flash module
+is no longer loaded.
+
+- **Browser suite, `test-marketing-offers-browser`: 10/0.**
+  - **A real race, fixed:** after a save the studio called `history.back()`, whose asynchronous popstate closed an
+    offer the merchant had just re-opened. Saving no longer navigates history; the editor's entry is reused.
+  - **Two test gaps closed:** MB6 now puts another route BEFORE Marketing in history and asserts the editor adds
+    exactly one entry. The suite fails CLOSED when the studio never mounts.
+  - Counterproof on U7b: **0/10**. Sabotage: **6/6 caught**.
+- **Regression** (147 suites on the dev tip = U7a + ERP + U7b + U7c1, vs U7a):
+  - `catalogue-canonical-migration` improved (47/0) and `merchant-v2-ecosystem-runtime` improved (131/0).
+  - `merchant-tax-ui` produced no output in the run; re-run alone: 220/0.
+  - `merchant-routes`: 75 passes vs 76, the same two failures. The per-route "seller sec exists: flash-sale" check is
+    no longer generated because the route is gone.
+  - **SUPERSEDED, with reason:** `merchant-shop-access` D7 listed `flash-sale` as a button that must never disappear.
+    It now accepts an id that still RESOLVES through the registry (the alias to Marketing); an unresolvable id still
+    fails.
+  - `supply-route-slice-j2` (a historical-diff suite pinned to a long-closed slice, already failing 4/46 on the
+    parent) adds "and removes none": the owner-directed removal of the Offers / Flash Sale routes. It is recorded, not
+    edited.
+  - `merchant-marketing-ui` now opens its mount on Campaigns explicitly (92/0), because Marketing opens on Offers.
+
+## [2026-09-29] - Universal catalogue U7b: one canonical barcode; scanners that work; lookups that only find your own product
+
+**merchant-v2 Products + Sell, scanner module, legacy lookups, search indexers — NOT deployed.** Branch
+`slice/c4-category-matrix`. Owner U7: "scan → find the correct existing item … Shop B must not be able to scan
+Shop A's barcode and adopt it."
+
+**Census (U7):**
+- merchant-v2 saved the barcode ONLY in `specs.barcode`. The till mirror (`pos.js`), `pos-inventory-sync`, the
+  Algolia/Typesense indexers and every lookup read top-level `barcode`, so a code entered in merchant-v2 could not be
+  scanned at the till.
+- Both merchant-v2 scan buttons (Products "📷 Scan an item" and the field scan; Sell's scan) called
+  `SokoniBarcode.scanOnce`, which did not exist, from a module merchant-v2 did not load. Sell's `openScanner` was a stub
+  that said so.
+- Three lookups searched EVERY merchant's catalogue:
+  - `sokoni-barcode.lookupProduct` (global `where('barcode','==')`);
+  - `sokoni-inventory.getProductByBarcode` (with no signed-in seller it returned another shop's product);
+  - `warehouse-scanner` (global `sku`).
+
+**Built:**
+- **The canonical code is top-level `products/{id}.barcode`.**
+  - The writer (`_productFields`) derives it from the Studio's `specs.barcode`, so the two never diverge; an explicit
+    `barcode` wins.
+  - The code is normalised; a code no scanner can produce is refused (`BARCODE_INVALID`).
+- **Per-shop uniqueness:** a code another of THIS shop's products holds is refused on create and on update
+  (`BARCODE_TAKEN`). Re-saving the same product keeps its code.
+  - The adapter (`findByBarcode`) queries `shopId == this shop` in the query itself, so another merchant's product is
+    never read or adopted. Another shop's identical code is not a conflict.
+  - Enforced in the client writer. A server/rules uniqueness guarantee waits for Stage 3.
+- **Bridge, no migration:** readers fall back to `specs.barcode` for legacy records — the till mirror (both places),
+  `pos-inventory-sync`, Algolia, Typesense, the list reader and `findByCode` (now barcode OR SKU OR legacy code, never
+  guessing between two). No production data is touched.
+- **`sokoni-barcode.js`:**
+  - new `scanOnce()` (resolves the code, `null` on close);
+  - `lookupProduct` / `openPOSScan` now need the caller's `shopId` and query only that shop (two hits → `null`, never a
+    guess).
+  - merchant-v2 loads it, and Sell's `openScanner` uses it.
+- **Legacy lookups:** `sokoni-inventory` and `warehouse-scanner` now query only the signed-in seller's products.
+  `warehouse-scanner` still writes the legacy `stockQty` field — a second stock counter, recorded as OPEN; it is not
+  touched in this slice.
+
+**Tests:**
+- **`scripts/test-catalogue-u7b-barcode.js`: 6/0.**
+  - Covers: the writer; uniqueness; the list reader and `findByCode`; the scanner module in a vm; merchant-v2 wiring;
+    the bridge and the legacy scoping.
+  - Counterproof on the parent: **0/6**.
+  - Sabotage: **11/11 caught.** The first run caught 10/11: the "lookup unscoped" attack passed because the vm's failed
+    Firestore import made "no query without a shop" vacuous. The suite now spies on the lookup's own warning, with a
+    positive control that a shop-scoped lookup DOES attempt the query.
+- **`scripts/test-catalogue-u7b-barcode-browser.js`** (real Chromium; real scanner manual entry → real Products module):
+  - an owned code opens THAT product;
+  - a legacy code is found;
+  - another shop's code is NEW here and saves into this shop with top-level barcode;
+  - the field scan fills the box; close changes nothing;
+  - 390 px.
+
+**Database:** new top-level `barcode` written on save (it already existed on legacy/POS records). **API:** refusal codes
+`BARCODE_INVALID`, `BARCODE_TAKEN`; `SokoniBarcode.scanOnce`; `lookupProduct(code, { shopId })`. **Breaking:**
+`SokoniBarcode.lookupProduct(code)` without a shopId now answers `null` (it had no callers).
+
+- **Browser suite results:** **5/0** at the U7b commit (the first run caught a test bug: the name helper turned `''`
+  into `null`, which is fixed). Counterproof on the parent: **1/10**; the one pass is the 390 px control. Sabotage:
+  **2/3 caught**. "List drops the legacy code" is not caught in the browser because the Products scan ALSO matches
+  `specs.barcode` on the row (defence in depth); the Node suite (BC3) pins the list fallback.
+- **Regression** (147 suites, run together with ERP + U7c1 on the dev tip vs U7a): no failure attributable to U7b.
+
 ## [2026-09-29] - Security: posReceiveErpUpdate may only touch the key's own seller's documents
 
 **Function, NOT deployed.** Found during the U7 census.
