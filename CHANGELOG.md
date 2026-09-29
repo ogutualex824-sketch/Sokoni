@@ -1,3 +1,29 @@
+## [2026-09-29] - Commerce convergence census (read-only): one authority per commercial fact, and who owns what
+
+**Docs only — no code, no production reads or writes.** This is the first task of the owner's End-to-End Commerce
+Convergence master prompt.  maps the authority to EXTEND for every commercial
+fact (catalogue, stock, offers, price, till, Quick Charge, bookings, delivery, commission, tax, receipts, payments,
+points, refunds, marketing, Stories, Spotlight, discovery, KASS, AdminOS, documents, staff, categories). It also maps
+the repository / worktree state and which live session owns which workstream (sokoni-60 capabilities, sokoni-eb
+integrations, sokoni-d6 featured + Track).
+
+**Findings that reorder the work:**
+- No refund path reverses points; a points-paid till sale is refunded as money.
+- The till accepts any unrecognised tender label with no evidence.
+- The card and M-PESA rails price delivery from different authorities; no merchant UI writes .
+- Quick Charge is free-typed and writes no sale or receipt.
+- A legacy booking path pays providers at payment time.
+- Spotlight has 7 stores and none is paid through a verified path.
+-  /  are seller-writable.
+- The Marketing Promotions codes charge nothing.
+- The merchant Stories route saves to localStorage only.
+- Online eTIMS invoices ignore discounts.
+- Event terms say 3% where settlement charges 5%.
+
+Owner decisions are listed; none was taken here.
+
+**Files:**  (new). **Database / API / security changes:** none.
+
 ## [2026-09-29] - SOKONI Points P2b: pay with points at the till, confirmed by the buyer; every business agreement says who pays
 
 **Local only — NOT deployed. Branch `slice/c4-points-p2` on `e19e6c0`.** Owner:
