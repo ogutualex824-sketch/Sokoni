@@ -1,3 +1,16 @@
+## [2026-09-30] - Functions preflight for the shell gate authority (providerDispatch) — READ ONLY; both named blockers examined; deployment NOT authorized
+
+docs/FUNCTIONS_PREFLIGHT_SHELL_GATE.md + docs/release-gates/functions-preflight-shell-gate.json. SELF-MINT: this lineage already carries the
+fix (537d17e, a third port of 1171a16 — neither e5ced91 nor 1171a16 is an ancestor, which is why a cherry-pick check said "does not
+apply"); universal-onboarding.js mints nothing; test-claim-minter-allowlist 21/0; the module is not in the providerDispatch closure anyway
+→ NOT a blocker (standing note corrected). MERCHANT-IDENTITY GAP: blocks blanket deploys only; a scoped --only functions:providerDispatch
+deletes nothing (proven 09-22). WHAT PRODUCTION RUNS: providerDispatch built from a 2026-08-22 archive, 23-file closure, 59 ops, NO
+business-workspace.js (the live dashboard call fails by design). WHAT A REDEPLOY SHIPS: 98-file closure, 64 ops (+businessWorkspace,
+workspaceHome, healthcareWorkspace, providerDirectory, providerRequestShop), 12 of the 23 deployed modules changed, 54 new — the c4
+lineage of all 59 existing provider ops, a lineage jump not a surgical release. Fast Functions gates PASS; allowlist prints the
+command (not blocked). Hosting side: 3 files to port to the live line; live hub-register.js lacks the agreement step (two-step
+acknowledgement for fresh applicants). Recommendation: hold; census the 12 changed modules before any release.
+
 ## [2026-09-29] - Shell gate on the DERIVED approval state + Complete Application surface — implemented and tested (Functions + Hosting candidate; NOT deployed; no production write)
 
 docs/COMPLETE_APPLICATION_SHELL_GATE.md. business-workspace.js: approvalStateFor (reads users/sellers/providers/businesses/shops/applications,
