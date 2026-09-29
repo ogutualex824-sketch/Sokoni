@@ -164,7 +164,7 @@
     if (btn) { btn.disabled = true; btn.textContent = 'Opening…'; }
     if (out) out.innerHTML = '';
 
-    _call('connectRequestVerification', {
+    request({
       subjectUid: subjectUid,
       reason: _val(root, 'cvReason'),
       businessId: _val(root, 'cvBusiness') || undefined,
@@ -172,15 +172,7 @@
       notes: _val(root, 'cvNotes') || undefined,
     }).then(function (r) {
       /* Success is reported only from what the SERVER returned. */
-      _say(out, 'ok',
-        '<span>Verification <strong>' + _esc(r.verificationId || '?') + '</strong> opened' +
-        (r.sessionId ? ' (session ' + _esc(r.sessionId) + ')' : '') + '.</span>' +
-        '<span class="aos-muted">recording: ' + _esc(r.recording || 'DISABLED') + '</span>' +
-        '<span class="aos-muted">' +
-        ((r.transportPlan && r.transportPlan.length)
-          ? 'route: ' + _esc(r.transportPlan.join(', '))
-          : 'no route yet — the subject is offline or no transport is provisioned') +
-        '</span>');
+      _say(out, 'ok', resultHtml(r));
     }).catch(function (e) {
       _say(out, 'err', '<span>' + _failure(e) + '</span>');
     }).then(function () {
@@ -216,5 +208,42 @@
     });
   }
 
-  global.SokoniConnectVerify = { mount: _render, REASONS: REASONS, RESULTS: RESULTS };
+  /* ── The ONE request path (Slice V3) ───────────────────────────────────────
+     Used by the form above AND by the contextual "Video verification" actions on
+     application cards and verification requests, which prefill the subject from the
+     record instead of asking an operator to paste a uid. Same callable, same server
+     gate (platform admin only; a purpose outside REASONS is refused; an admin cannot
+     verify themselves). Nothing here decides anything: the response is EVIDENCE that a
+     session was opened, and the administrative verdict stays with Approve / Reject. */
+  function request(input) {
+    var i = input || {};
+    var subjectUid = String(i.subjectUid || '').trim();
+    if (!subjectUid) return Promise.reject(new Error('An account UID is required.'));
+    var reason = String(i.reason || '');
+    if (REASONS.indexOf(reason) === -1) return Promise.reject(new Error('Reason must be one of: ' + REASONS.join(', ') + '.'));
+    return _call('connectRequestVerification', {
+      subjectUid: subjectUid,
+      reason: reason,
+      businessId: i.businessId || undefined,
+      applicationId: i.applicationId || undefined,
+      notes: i.notes || undefined,
+    });
+  }
+  /* What the server said, and only that. The transport line is the honest media
+     state: webrtc is listed only when the server planned it (the subject was online
+     and a provider is provisioned); PSTN never appears unless provisioned; an empty
+     plan says "no route yet" rather than implying a call will connect. */
+  function resultHtml(r) {
+    r = r || {};
+    return '<span>Verification <strong>' + _esc(r.verificationId || '?') + '</strong> opened' +
+      (r.sessionId ? ' (session ' + _esc(r.sessionId) + ')' : '') + '.</span>' +
+      '<span class="aos-muted">recording: ' + _esc(r.recording || 'DISABLED') + '</span>' +
+      '<span class="aos-muted">' +
+      ((r.transportPlan && r.transportPlan.length)
+        ? 'route: ' + _esc(r.transportPlan.join(', '))
+        : 'no route yet — the subject is offline or no transport is provisioned') +
+      '</span>' +
+      '<span class="aos-muted">This is evidence, not a verdict — the decision stays with Approve / Reject.</span>';
+  }
+  global.SokoniConnectVerify = { mount: _render, request: request, resultHtml: resultHtml, failure: _failure, REASONS: REASONS, RESULTS: RESULTS };
 })(window);

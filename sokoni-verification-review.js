@@ -172,13 +172,19 @@
     /* Ticket ↔ record (Slice V2): raise a case ABOUT this request, or see the cases
        already about it. Both go through AdminOS's one ticket dialog / support list. */
     var links = '<button type="button" class="aos-btn-sm" data-act="ticket">Support ticket&hellip;</button> ' +
-                '<button type="button" class="aos-btn-sm" data-act="tickets">Related tickets</button>';
+                '<button type="button" class="aos-btn-sm" data-act="tickets">Related tickets</button>' +
+                /* Video verification (Slice V3): only while the decision is open AND the
+                   applicant's uid is known — the server needs a subject, and a decided
+                   request has nothing left to verify. */
+                (_videoEligible(a) ? ' <button type="button" class="aos-btn-sm" data-act="video">Video verification&hellip;</button>' : '') +
+                (a.videoVerificationId ? ' <span class="aos-muted" style="font-size:12px">video verification <span class="aos-mono">' + _esc(a.videoVerificationId) + '</span> <button type="button" class="aos-btn-sm" data-act="connect">Connect console</button></span>' : '');
     return '<div class="vr-body">' +
       '<div class="vr-grid">' + grid + '</div>' +
       (a.description ? '<p style="font-size:12.5px;white-space:pre-wrap;margin:8px 0">' + _esc(a.description) + '</p>' : '') +
       '<label class="aos-muted" style="font-size:12px;display:block;margin-top:8px">Admin notes<br><input type="text" class="aos-input" data-f="notes" value="' + _esc(a.adminNotes || '') + '" style="width:100%;max-width:520px"></label>' +
       (!decided ? '<label class="aos-muted" style="font-size:12px;display:block;margin-top:6px">Rejection reason (required to reject; shown to the applicant)<br><input type="text" class="aos-input" data-f="reason" style="width:100%;max-width:520px"></label>' : '') +
       '<div class="vr-actions" style="margin-top:10px">' + actions + (actions ? ' ' : '') + links + '</div>' +
+      '<div class="vr-video"></div>' +
       '<div class="vr-out" aria-live="polite"></div>' +
     '</div>';
   }
@@ -252,6 +258,58 @@
     await _finish(a, 'ok', 'Marked under review.');
   }
 
+  /* ── Video verification (Slice V3) ───────────────────────────────────────
+     Through SokoniConnectVerify.request — the Connect console's own callable path,
+     the same server gate — with the subject prefilled from the request. On success
+     the returned verification id is ATTACHED to the request (an admin update the
+     rules allow), so the evidence is findable from the record it is about. It is
+     evidence, not a verdict: Approve / Reject stay the only decisions. */
+  var VIDEO_STATUSES = { pending: 1, under_review: 1, request_info: 1 };
+  function _videoEligible(a) { return !!(a && a.applicantUid && VIDEO_STATUSES[a.status || 'pending']); }
+  var REASON_BY_TIER = { 'Verified Business': 'business_verification', 'Verified Property Agent': 'business_verification',
+    'Verified Driver': 'rider_verification' };
+  function _videoForm(a, card) {
+    var box = card.querySelector('.vr-video'), out = card.querySelector('.vr-out');
+    if (!box) return;
+    var V = global.SokoniConnectVerify;
+    if (!V || !V.request) { _say(out, 'err', 'The Connect verification module did not load (sokoni-connect-verify.js).'); return; }
+    if (!_videoEligible(a)) { _say(out, 'err', 'Not eligible: a video verification needs an open request and a known applicant account.'); return; }
+    var def = REASON_BY_TIER[a.verifyType] || 'identity_verification';
+    box.innerHTML = '<div class="compose-form" style="margin-top:8px">' +
+      '<div class="aos-muted" style="font-size:12px">Opens a SOKONI Connect video verification with <span class="aos-mono">' + _esc(a.applicantUid) + '</span>. The subject sees a consent dialog; recording is OFF; the server refuses to connect until they accept.</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">' +
+        '<select class="aos-input" data-v="reason" aria-label="Reason">' + V.REASONS.map(function (r) { return '<option value="' + _esc(r) + '"' + (r === def ? ' selected' : '') + '>' + _esc(r.replace(/_/g, ' ')) + '</option>'; }).join('') + '</select>' +
+        '<input class="aos-input" data-v="notes" placeholder="Notes for the record (optional)" maxlength="500" aria-label="Notes">' +
+      '</div>' +
+      '<button type="button" class="aos-btn" data-v="go" style="margin-top:8px">Open video verification</button>' +
+      '<div data-v="out" aria-live="polite"></div></div>';
+    var btn = box.querySelector('[data-v="go"]'), vout = box.querySelector('[data-v="out"]');
+    btn.onclick = function () {
+      btn.disabled = true; btn.textContent = 'Opening…';
+      V.request({ subjectUid: a.applicantUid, reason: box.querySelector('[data-v="reason"]').value,
+        notes: 'verificationRequests/' + a.id + (a.refNumber ? ' (' + a.refNumber + ')' : '') + (box.querySelector('[data-v="notes"]').value ? ' — ' + box.querySelector('[data-v="notes"]').value : '') })
+      .then(function (r) {
+        var lines = [V.resultHtml(r)];
+        /* ATTACH the evidence to the record it is about. Reported, never fatal: the
+           verification exists on the server whether or not this pointer is written. */
+        var me = _me() || {};
+        return _reqUpdate(a.id, { videoVerificationId: r.verificationId || null, videoSessionId: r.sessionId || null,
+          videoRequestedAt: global.firebase.firestore.FieldValue.serverTimestamp(), videoRequestedBy: me.email || me.uid || null })
+          .then(function () { lines.push('<span class="aos-muted">Attached to this request as videoVerificationId.</span>'); })
+          .catch(function (e) { lines.push('<span class="aos-muted">NOT attached to the request (' + _esc(_failure(e)) + ') — find it in the Connect console by subject.</span>'); })
+          .then(function () {
+            vout.innerHTML = '<div class="notif-row" style="border-left:3px solid var(--aos-accent);margin-top:8px">' + lines.join('') +
+              '<span><button type="button" class="aos-btn-sm" data-act="connect">Connect console</button></span></div>';
+            btn.textContent = 'Opened';
+          });
+      })
+      .catch(function (e) {
+        btn.disabled = false; btn.textContent = 'Open video verification';
+        vout.innerHTML = '<div class="notif-row" style="border-left:3px solid #ff4d4d;margin-top:8px"><span>' + V.failure(e) + '</span></div>';
+      });
+    };
+  }
+
   /* ── Events ────────────────────────────────────────────────────────────── */
   function _onClick(e) {
     var f = e.target.closest && e.target.closest('.vr-filter');
@@ -273,6 +331,8 @@
       else _say(out, 'err', 'The support list is only available inside AdminOS.');
       return;
     }
+    if (act === 'connect') { if (global.SokoniAOS) global.SokoniAOS.navigate('comms', 'connect'); return; }
+    if (act === 'video') { _videoForm(a, card); return; }
     if (_busy) return;
     var notes = (card.querySelector('[data-f="notes"]') || {}).value || '';
     var reason = ((card.querySelector('[data-f="reason"]') || {}).value || '').trim();

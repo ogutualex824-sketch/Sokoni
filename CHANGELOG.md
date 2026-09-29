@@ -1,3 +1,41 @@
+## 2026-09-29 — Connect video verification, Slice V3: a contextual action on the record, through the one Connect path (branch `feat/integrations-control-center`, NOT deployed)
+
+No new call system, no server change. The Connect console's video-verification request becomes a contextual action
+on the records that need it, with the subject prefilled instead of pasted.
+
+- **One request path.** `sokoni-connect-verify.js` now exposes `request({ subjectUid, reason, businessId?,
+  applicationId?, notes? })` and `resultHtml(r)`, extracted from its form; the form and both contextual actions call
+  the same function → `connectDispatch` → `connectRequestVerification`, behind the same server gate (platform admin
+  only; a purpose outside the named procedures refused; an admin cannot verify themselves — `test-connect-authority`
+  856/0, unchanged). `connectRequestVerification` is called from that module and nowhere else.
+- **Eligibility is the record's:** the action appears only while a decision is open (`pending`, `request_info`,
+  `under_review`) **and** the subject's uid is known. A decided application, an account-less request, and a support
+  ticket never show it — an action that could only fail is not offered.
+- **Application cards** (`sokoni-aos.js`): "Video verification…" → reason defaulted by role (seller → merchant,
+  driver → rider, provider → business, else identity), optional notes, consent and recording-OFF stated; the request
+  carries `subjectUid`, `applicationId`, `businessId`. The server attaches the application to the verification.
+- **Verification requests** (`sokoni-verification-review.js`): same action with the subject = `applicantUid` and the
+  request id in the notes; on success the returned `verificationId` is **attached** to the request
+  (`videoVerificationId`, `videoSessionId`, `videoRequestedAt/By` — an admin update the rules allow; reported, never
+  fatal). An existing id renders on the card with a "Connect console" link (Communications → Connect).
+- **Honest media state, verbatim from the server:** verification/session ids, `recording: DISABLED`, `route: webrtc`
+  only when the server planned it, "no route yet — the subject is offline or no transport is provisioned" otherwise;
+  PSTN never appears (the server declares it unprovisioned). Every result carries "This is evidence, not a verdict —
+  the decision stays with Approve / Reject." A refusal is shown as a refusal and nothing is written.
+
+Evidence: `scripts/test-video-verification-actions.js` **18/0** (browser, fixture layer by accessor hooks): eligibility
+exactly on the open-with-uid records; prefilled subject/application/business; role and tier defaults; server ids,
+recording, `route: webrtc` for an online subject and "no route yet" for an offline one, no PSTN; refusal recovers;
+attachment written to the request; Connect console routing; no action on tickets; one caller (static);
+negative control (eligibility guard widened) turns E1 red. Regression: `support-context` 19/0,
+`verification-convergence` 29/0, `nav-coverage` 32/0, `sidebar-a11y`, `shell-final`, `single-navigation`, `wiring`,
+`render`.
+
+- **Files:** `sokoni-connect-verify.js`, `sokoni-aos.js`, `sokoni-verification-review.js`, new
+  `scripts/test-video-verification-actions.js`, `CHANGELOG.md`.
+- **Database:** `verificationRequests.videoVerificationId / videoSessionId / videoRequestedAt / videoRequestedBy`
+  (admin-written pointers to `connectVerifications`). **API / rules / server:** none. Not deployed.
+
 ## 2026-09-29 — Verification ↔ Support, Slice V2: a ticket knows its record, a record knows its tickets (branch `feat/integrations-control-center`, NOT deployed)
 
 One canonical ticket store (`supportTickets`), one client path (`SokoniSupportContact`), one dialog — now closed into

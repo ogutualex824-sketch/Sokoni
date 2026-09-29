@@ -3193,8 +3193,55 @@ window.SokoniAOS = (() => {
         <button class="aos-btn-sm" onclick="SokoniAOS.reconcileApplication('${id}')">Reconcile</button>
         <button class="aos-btn-sm" onclick="SokoniAOS.ticketDialog({applicationId:'${id}'},'Application: ${_jsAttr(a.name || a.id)}')">Support ticket&hellip;</button>
         <button class="aos-btn-sm" onclick="SokoniAOS.openTicketsFor({applicationId:'${id}'})">Tickets</button>
+        ${_videoEligible(a) ? `<button class="aos-btn-sm" onclick="SokoniAOS.videoVerification('${id}')">Video verification&hellip;</button>` : ""}
       </div>
+      <div class="app-video" id="appVideo-${id}"></div>
     </div>`;
+  }
+
+  /* ── Video verification from a record (Slice V3) ─────────────────────────
+     Contextual, never a second call system: it prefills the subject from the record
+     and goes through SokoniConnectVerify.request — the same callable the Connect
+     console's form uses, behind the same server gate. Eligible only while a decision
+     is still open AND the subject's uid is known; a decided application, or one whose
+     applicant never signed in, shows no action that could only fail. */
+  const _VIDEO_STATUSES = new Set(["pending", "request_info", "under_review"]);
+  function _videoEligible(a) { return !!(a && a.uid && _VIDEO_STATUSES.has(a.status)); }
+  const _VIDEO_REASON_BY_ROLE = { seller: "merchant_verification", merchant: "merchant_verification", provider: "business_verification",
+    driver: "rider_verification", rider: "rider_verification", supplier: "supplier_verification", health: "identity_verification" };
+  function videoVerification(applicationId) {
+    const a = _appsCache.find((x) => x.id === applicationId);
+    const box = document.getElementById("appVideo-" + _jsAttr(applicationId));
+    if (!a || !box) return;
+    if (!window.SokoniConnectVerify) { box.innerHTML = _emptyMsg("The Connect verification module did not load (sokoni-connect-verify.js)."); return; }
+    if (!_videoEligible(a)) { box.innerHTML = _emptyMsg("Not eligible: a video verification needs an open decision and a known account."); return; }
+    const V = window.SokoniConnectVerify;
+    const def = _VIDEO_REASON_BY_ROLE[a.role] || "identity_verification";
+    box.innerHTML = `<div class="compose-form" style="margin-top:8px">
+        <div class="aos-muted" style="font-size:12px">Opens a SOKONI Connect video verification with <span class="aos-mono">${_esc(a.uid)}</span>. The subject sees a consent dialog; recording is OFF; the server refuses to connect until they accept.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">
+          <select class="aos-input" data-f="reason" aria-label="Reason">${V.REASONS.map((r) => `<option value="${_esc(r)}"${r === def ? " selected" : ""}>${_esc(r.replace(/_/g, " "))}</option>`).join("")}</select>
+          <input class="aos-input" data-f="notes" placeholder="Notes for the record (optional)" maxlength="500" aria-label="Notes">
+        </div>
+        <button type="button" class="aos-btn" data-f="go" style="margin-top:8px">Open video verification</button>
+        <div data-f="out" aria-live="polite"></div>
+      </div>`;
+    const btn = box.querySelector('[data-f="go"]'), out = box.querySelector('[data-f="out"]');
+    btn.onclick = async () => {
+      btn.disabled = true; btn.textContent = "Opening…";
+      try {
+        const r = await V.request({ subjectUid: a.uid, applicationId: a.id, businessId: a.businessId || undefined,
+          reason: box.querySelector('[data-f="reason"]').value, notes: box.querySelector('[data-f="notes"]').value || undefined });
+        /* Only what the server returned; the application record is untouched (the
+           server attached applicationId to the verification itself). */
+        out.innerHTML = `<div class="notif-row" style="border-left:3px solid var(--aos-accent);margin-top:8px">${V.resultHtml(r)}
+          <span><button type="button" class="aos-btn-sm" onclick="SokoniAOS.navigate('comms','connect')">Open Connect console</button></span></div>`;
+        btn.textContent = "Opened";
+      } catch (e) {
+        btn.disabled = false; btn.textContent = "Open video verification";
+        out.innerHTML = `<div class="notif-row" style="border-left:3px solid #ff4d4d;margin-top:8px"><span>${V.failure(e)}</span></div>`;
+      }
+    };
   }
 
   async function decideApplication(applicationId, decision) {
@@ -3422,6 +3469,7 @@ window.SokoniAOS = (() => {
     openVerificationRequest,
     openApplication,
     ticketDialog,
+    videoVerification,
     openShop,
     // Marketplace
     marketplaceTab:      _marketplaceTab,
