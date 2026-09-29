@@ -1,3 +1,26 @@
+## 2026-09-29 — C3: existing-identity classification census and the exact cleanup manifest (READ ONLY, owner-authorized; NOT deployed)
+
+Production read-only census (`sokoni-aeb26`, 16:47Z), authorized by the owner in read-only scope. Nothing created,
+updated, deleted, stamped, migrated or deployed. Ledger: `docs/C3_IDENTITY_CLASSIFICATION_CENSUS.md`; script
+`scripts/census-c3-identities.js` (re-runnable, read-only, writes its JSON to a temp dir); machine manifest
+`docs/release-gates/c3-cleanup-manifest.json` (ids, rule, redacted reason, SHA-256 digest).
+
+- **A · Classification** of all 26 business identities through the C2 read model: **0 PRODUCTS · 7 SERVICES ·
+  12 UNCLASSIFIED · 7 CONFLICT**, every one `NOT_YET_STAMPED`. The only product-bearing identity (KASS SHOP, 102
+  products, the account holding admin/superAdmin claims) is CONFLICT because its seller record's live status carries no
+  protected approval evidence. DG Wine and Latomi Gadgets: SERVICES / no conflicts / **zero rows in every product-bearing
+  collection** (`products`, `posProducts`, `inventory_products`, `listings`, `providerServices`, `services`). Four
+  provider/seller records are "live" by client-writable status alone.
+- **B · Manifest — 34 records, digest `028299e7…13e2`**, from evidence rules only: R1 four Auth accounts on RFC 2606
+  reserved `.invalid` domains (+3 users docs); R2 fourteen `users` docs with no Auth account; R4 ten
+  `businesses`/`merchants` owned by non-existent uids; R6 three registry/shop docs owned by R1 accounts. Nothing by
+  name or by "looks unused". A separate judgement list holds `products/QATEST100`, one anonymous-shaped account, three
+  real accounts without a profile, and the KASS SHOP identity itself.
+- **Both databases:** `sokoni-ops` holds no identity collection; user counts are Auth (77) vs Firestore `users` (85):
+  6 without a doc, 14 without an account. After the full manifest: 73 vs 68.
+- Deletion protocol recorded (manifest → re-census → exact-set equality or ABORT → explicit authorization naming the
+  digest → per-record re-verify). **Not started.**
+
 ## 2026-09-29 — Capability authority, C2: the read model (branch `feat/integrations-control-center`, READ ONLY, NOT deployed)
 
 The owner locked the model: ONE business identity → approved capabilities → capability state stamped at approval;
