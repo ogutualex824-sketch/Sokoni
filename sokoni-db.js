@@ -450,14 +450,26 @@ const SokoniDB = {
      Firestore stores text metadata + emoji placeholder only.
   ════════════════════════════════════════ */
 
+  /* A SUBMISSION for AdminOS review (owner, 2026-09-30): every unboxing post is approved in AdminOS before it
+     is public. It is written with an explicit field list and no status, so it is born pending. It never
+     carries verified / likes / featured / moderation fields: Verified Buy is decided by the server against the
+     order, and moderation by AdminOS. It is a pure create, because a later change is an AdminOS action. */
   async saveUnboxingReview(review) {
-    const id = review.id || ('UBR-' + Date.now());
-    const { photos, ...meta } = review;
+    const uid = _uid();
+    if (!uid) throw Object.assign(new Error('Please sign in to share your unboxing.'), { code: 'unauthenticated' });
+    const id = 'UBR-' + uid.slice(0, 6) + '-' + Date.now();
+    const str = (v, n) => String(v == null ? '' : v).slice(0, n);
     await setDoc(doc(db, 'unboxingReviews', id), {
-      ...meta, id,
-      photoEmoji: (photos || []).find(p => !p.startsWith('data:')) || meta.photoEmoji || '📦',
-      uid: _uid(), createdAt: serverTimestamp()
-    }, { merge: true });
+      id, uid,
+      rating:     Math.max(1, Math.min(5, Math.round(Number(review.rating) || 0))),
+      product:    str(review.product, 120),
+      category:   str(review.category, 40),
+      comment:    str(review.comment, 2000),
+      reviewer:   str(review.reviewer, 60),
+      orderId:    str(review.orderId, 80),
+      photoEmoji: str(review.photoEmoji || '📦', 8),
+      createdAt:  serverTimestamp(),
+    });
     return id;
   },
 

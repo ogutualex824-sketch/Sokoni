@@ -1,3 +1,23 @@
+## 2026-09-30 — Unboxing Wall: a post is a SUBMISSION for AdminOS approval, never a self-publication
+
+Owner decision: every unboxing post is approved in AdminOS (approve / decline / archive / delete) before it
+appears on the wall.
+
+- **`sokoni-db.js` `saveUnboxingReview`** writes an explicit field list: uid, rating 1-5, product, category,
+  comment, reviewer, orderId, photoEmoji, createdAt.
+  - It sends no status, so the post is born pending.
+  - It never sends `verified`, `likes` or moderation fields; Verified Buy belongs to the server, moderation
+    to AdminOS.
+  - It is a pure create and requires sign-in.
+- **`unboxing.html`** shows success only after the save completes: "Submitted. Your unboxing will appear on the
+  wall once SOKONI approves it."
+  - It no longer adds the post to the local wall as if published.
+  - It no longer invents +50 loyalty points in the browser.
+  - Sign-in and failure states are explicit.
+- **Photos** are still not uploaded (the review media pipeline is a later slice). No API change.
+- **Database:** the payload is accepted by today's served rules AND by the R0 rules candidate. This is required
+  ordering: it ships before R0.
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;
