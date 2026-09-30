@@ -1,3 +1,54 @@
+## [2026-09-30] — Phone/email verification: four entry points that could never reach the flow (live lineage, NOT deployed)
+
+The verified-phone flow on `profile.html` is complete and correct, and was **unreachable from every surface that
+offers it**. Ported onto the live lineage from `76fd002` / `58dcda7` / `7f64c30` (branch
+`feat/integrations-control-center`), **re-derived rather than cherry-picked** because the router here differs.
+**Routing only — no new phone writer, no new verification mechanism, no second authority.**
+
+**The closed loop.** All four entry points led to `account-centre.html#verification`, whose panel only DISPLAYS
+status — **zero** `type="tel"` inputs, **zero** phone-auth calls, **zero** `sendEmailVerification` calls — and whose
+own "Start Verification" button returns to `profile.html#verify`, a hash with no matching panel, so
+`_openTabFromHash` did nothing at all.
+
+| entry point | before | after |
+|---|---|---|
+| completion step "Verify phone number" | `account-centre.html#verification` | `'#phone'` → `_pvStartPhone()` |
+| completion step "Verify email address" | `account-centre.html#verification` | `'#email'` → `_pvSendEmail()` |
+| verification badge grid (phone) | `account-centre.html#verification` | `'#phone'` via new `VERIF_ONPAGE` |
+| `profile.html#verify` | silent no-op | `_ACTION_HASHES` → `_pvOpenVerifyFromHash()` |
+
+- **Router adapted, not transplanted.** This lineage's `_openTabFromHash` has `_MOVED_TABS`, uses `if(key && …)` and
+  has no `_DEFAULT_TAB`. The action-hash branch is ordered **after** `_MOVED_TABS` so a redirect still wins, and
+  **before** the panel lookup because there is no panel to find. Controls assert both moved tabs still redirect.
+- **Two gates on the `#verify` handler.** (1) **Auth readiness** — `_openTabFromHash` runs at load, before
+  `firebase.js` dispatches `sokoniAuthReady` on `document`, so `currentUser` is routinely null; a bare call would
+  return silently and re-create the dead route **intermittently, which is worse than a consistently dead one because
+  it would look fixed**. (2) **Already verified** — every other entry point is offered only when unverified, and
+  `linkWithPhoneNumber` on a linked account throws `auth/provider-already-linked`.
+- **A phone-only account has no email**, and the server's condition is `emailVerified`, not "has an email", so the
+  email step renders for them too. `window._pvSendEmail` explains instead of failing silently.
+- **Firebase Auth remains the verification authority.** Success still flows exclusively
+  `_pvVerifyCode → _pvPersistPhone`; exactly one canonical `phoneNumber` writer; the legacy `phone` field is not
+  revived; `phoneVerified` / `phoneVerifiedAt` semantics preserved.
+- **Tests:** `scripts/test-profile-verification-routing.js` (new) — **108 assertions, 0 failures**. Renderers and the
+  router are **executed** against stub DOM/location objects, not inspected as source. Negative controls, run
+  separately: router branch removed → **1** fail; step sentinel reverted → **5**; badge sentinel reverted → **3**.
+  `check-inline-js.js profile.html` → OK.
+- **Formatting:** `profile.html` in this lineage has **mixed** line endings (14 LF-only lines at 551–563 and 8120 in
+  a CRLF file). Editing normalized them; they were **restored byte-exactly**, so the whitespace-sensitive and
+  whitespace-insensitive diffs now match at **91 insertions / 5 deletions** — zero incidental drift.
+- **Files:** `profile.html`, `scripts/test-profile-verification-routing.js`. **No database, API, rules or security
+  change. No deployment.** `notify.js`, `sms-service.js`, WhatsApp, payment functions and the OTP architecture are
+  untouched — asserted against `git diff`, not by inspection.
+
+**Two lineage gaps PINNED by the suite, recorded and deliberately NOT repaired here:**
+1. The `address` completion step has the identical dead-end shape on this lineage (routes to `account-centre.html`,
+   which has no address field). Repaired on another lineage; not ported.
+2. **`functions/notify.js` on this lineage has no `users/{uid}.phoneNumber` fallback** — it still gates SMS on
+   `wantSms && t.smsTemplate && phone`, a caller-supplied argument. **Making capture reachable does not by itself
+   make a message send on this lineage.** That fix exists on `feat/integrations-control-center` and needs its own
+   port and its own decision.
+
 ## [2026-09-30] — Delivery Hub D2 released: Gates A, B and C (release record)
 
 **Files:** `CHANGELOG.md` only. **Code, rules, API and database changes:** none in this entry. It records the

@@ -4106,9 +4106,21 @@ function switchTab(tabKey){
 var _MOVED_TABS = { listings: 'merchant.html', reviews: 'merchant.html' };
 
 /* Open a tab from the URL hash (e.g. profile.html#orders) and keep it in sync */
+/* ACTION hashes are neither tabs nor moved tabs: they run something on this page.
+   '#verify' has no panel-verify, so it fell through both checks and did nothing at all —
+   and that is exactly where account-centre.html's "Start Verification" button sends
+   people. Ordered AFTER _MOVED_TABS so a future redirect still wins, and BEFORE the panel
+   lookup because there is no panel to find. The handler owns the auth-readiness wait and
+   the verified-state gate, because this runs at load when currentUser may still be null. */
+var _ACTION_HASHES = { verify: 'verify' };
+
 function _openTabFromHash(){
   var key = (location.hash || '').replace(/^#/, '');
   if(_MOVED_TABS[key]){ location.replace(_MOVED_TABS[key]); return; }
+  if(_ACTION_HASHES[key]){
+    if(window._pvOpenVerifyFromHash) window._pvOpenVerifyFromHash();
+    return;
+  }
   if(key && document.getElementById('panel-'+key)) switchTab(key);
 }
 window.addEventListener('hashchange', _openTabFromHash);
@@ -5045,19 +5057,36 @@ window.logoutUser = logoutUser;
         /* Each badge is a TAP TARGET into its verification flow — a pending badge that does
            nothing is a dead-end. All identity/KYC verifications live in the Verification Center. */
         var VERIF_HREF = {
-          email:'account-centre.html#verification', phone:'account-centre.html#verification',
+          email:'account-centre.html#verification',
+          /* account-centre.html only DISPLAYS phone status — it has no tel input and no
+             phone-auth call — and its own "Start Verification" button returns to
+             'profile.html#verify', a hash with no panel. So this badge could never reach
+             the flow it offers. '#phone' is the on-page sentinel. */
+          phone:'#phone',
           identity:'account-centre.html#verification', business:'account-centre.html#verification',
           kra:'account-centre.html#verification', bank:'account-centre.html#verification',
         };
+        /* An on-page sentinel opens the flow HERE; anything else navigates. */
+        var VERIF_ONPAGE = { '#phone': 'window._pvStartPhone&&window._pvStartPhone()' };
         grid.innerHTML = VERIF_MAP.map(function(v) {
           var done = data.verifications[v.k];
           var href = VERIF_HREF[v.k] || 'account-centre.html#verification';
-          return '<a href="' + href + '" class="pi-verif-item' + (done ? ' done' : '') + '" style="text-decoration:none;color:inherit;cursor:pointer;">'
-               + '<span class="pi-verif-icon">' + v.icon + '</span>'
+          var inner = '<span class="pi-verif-icon">' + v.icon + '</span>'
                + '<span class="pi-verif-label">' + v.label + '</span>'
                + '<span class="pi-verif-status ' + (done ? 'pi-vs-yes' : 'pi-vs-no') + '">'
                + (done ? '✓ Verified' : 'Tap to verify')
-               + '</span>'
+               + '</span>';
+          /* Only an UNVERIFIED badge opens the flow — re-opening it for a verified
+             channel would be nonsense, so a done badge keeps the status destination. */
+          if (VERIF_ONPAGE[href]) {
+            if (!done) {
+              return '<div class="pi-verif-item" role="button" tabindex="0" style="cursor:pointer;" onclick="'
+                   + VERIF_ONPAGE[href] + '">' + inner + '</div>';
+            }
+            href = 'account-centre.html#verification';
+          }
+          return '<a href="' + href + '" class="pi-verif-item' + (done ? ' done' : '') + '" style="text-decoration:none;color:inherit;cursor:pointer;">'
+               + inner
                + '</a>';
         }).join('');
       }
@@ -5095,7 +5124,17 @@ window.logoutUser = logoutUser;
          (toggleInlineEdit); the rest route to the relevant flow. No step should be a dead-end. */
       var HREFS = {
         photo:'#edit', cover:'#edit', bio:'#edit', name:'#edit', location:'#edit',
-        email:'account-centre.html#verification', phone:'account-centre.html#verification',
+        /* Confirmed dead, not assumed: account-centre.html contains zero
+           sendEmailVerification calls — its email row is painted by _setVerif() and is
+           display-only — and its one button returns to the dead 'profile.html#verify'.
+           _pvSendEmail() on THIS page is the only thing that can send the link. */
+        email:'#email',
+        /* The server marks this step done from `phoneVerified` (functions/profile-engine.js),
+           and the ONLY thing that sets it is _pvPersistPhone() on THIS page, after a
+           successful linkWithPhoneNumber confirmation. account-centre.html has no tel input
+           and no phone-auth call, so the one actionable link for this step completed a round
+           trip without ever reaching the flow that could satisfy it. */
+        phone:'#phone',
         identity:'account-centre.html#verification', bank:'account-centre.html#verification',
         kra:'account-centre.html#verification', business:'account-centre.html#verification',
         merchant:'account-centre.html#verification', legal:'account-centre.html#legal',
@@ -5114,6 +5153,16 @@ window.logoutUser = logoutUser;
           /* On-page edits open the inline editor; off-page steps navigate. Whole row is tappable. */
           if (target === '#edit') {
             return '<div class="pi-step" role="button" tabindex="0" style="cursor:pointer;" onclick="toggleInlineEdit()">' + inner + '</div>';
+          }
+          /* Phone opens the existing verify-phone modal in place. NOT a second writer:
+             the modal's own confirmation path is the only thing that persists the number. */
+          if (target === '#phone') {
+            return '<div class="pi-step" role="button" tabindex="0" style="cursor:pointer;" onclick="window._pvStartPhone&&window._pvStartPhone()">' + inner + '</div>';
+          }
+          /* Email likewise sends the link from here. Also not a writer — Firebase Auth owns
+             emailVerified entirely; this page only asks it to send the message. */
+          if (target === '#email') {
+            return '<div class="pi-step" role="button" tabindex="0" style="cursor:pointer;" onclick="window._pvSendEmail&&window._pvSendEmail()">' + inner + '</div>';
           }
           return '<a href="' + target + '" class="pi-step" style="text-decoration:none;color:inherit;cursor:pointer;">' + inner + '</a>';
         }).join('');
@@ -5422,6 +5471,8 @@ window.logoutUser = logoutUser;
         '<button class="pv-x" type="button" aria-label="Close" onclick="window._pvCloseModal&&window._pvCloseModal()">×</button>' +
         '<div class="pv-title">Verify your phone</div>' +
         '<div id="pv-step1">' +
+          '<div class="pv-hint">Adding a verified number lets SOKONI reach you about orders, ' +
+            'payments and deliveries. It’s optional — you can keep using SOKONI without it.</div>' +
           '<div class="pv-hint">We’ll text you a 6-digit code.</div>' +
           '<input id="pv-phone" class="pv-input" type="tel" inputmode="tel" autocomplete="tel" placeholder="07XX XXX XXX" value="'+ (prefill||'') +'">' +
           '<button id="pv-send" type="button" class="pv-cta">Send code</button>' +
@@ -5442,6 +5493,41 @@ window.logoutUser = logoutUser;
     var inp = document.getElementById('pv-phone'); if (inp) inp.focus();
   }
   window._pvCloseModal = function(){ var ov = document.getElementById('pv-modal'); if (ov) ov.remove(); try { document.body.style.overflow = ''; } catch(_){} };
+  /* Exposed so the completion step list and the verification badge grid can open the SAME
+     modal rather than duplicating the flow. An entry point, not a writer — every write
+     still goes through _pvVerifyCode -> _pvPersistPhone, only after Firebase confirms. */
+  window._pvStartPhone = function(){ return _pvStartPhone(); };
+  /* Same, for the email step. _pvSendEmail() returns silently when the account has no
+     email address, and the completion step is shown to phone-only users too (the server's
+     condition is `emailVerified`, not "has an email"), so a bare call would be a dead tap.
+     Say so instead. Still not a writer: Firebase Auth owns emailVerified. */
+  window._pvSendEmail = function(){
+    var u = _pvUser();
+    if (u && !u.email){ _pvToast('This account has no email address yet. Add one in Account Centre first.', 'info'); return; }
+    return _pvSendEmail();
+  };
+  /* Entry point for the '#verify' action hash — account-centre.html's "Start Verification"
+     button. Routing only: it decides WHETHER to open the one modal, never what a
+     verification means. Two gates, both mirroring the other entry points:
+       1. AUTH READINESS. _openTabFromHash runs at load, before firebase.js dispatches
+          sokoniAuthReady on document, so currentUser is routinely null here. A bare call
+          would return silently and re-create the dead route intermittently — worse than a
+          consistently dead one, because it would look fixed. Wait, then re-enter.
+       2. ALREADY VERIFIED. Every other entry point is offered only when unverified
+          (_pvRow removes the button, the step and badge renderers gate on `done`). Opening
+          the modal for a linked account would also throw auth/provider-already-linked. */
+  window._pvOpenVerifyFromHash = function(){
+    var u = _pvUser();
+    if (!u){
+      document.addEventListener('sokoniAuthReady', function _h(){
+        document.removeEventListener('sokoniAuthReady', _h);
+        window._pvOpenVerifyFromHash();
+      });
+      return;
+    }
+    if (u.phoneNumber) return;
+    return window._pvStartPhone();
+  };
   function _pvShowStep(n){
     var s1 = document.getElementById('pv-step1'), s2 = document.getElementById('pv-step2');
     if (s1) s1.style.display = n === 1 ? '' : 'none';
