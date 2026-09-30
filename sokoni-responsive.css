@@ -645,17 +645,24 @@ img {
 @media (max-width: 768px) {
   .admin-sidebar,
   .seller-sidebar,
-  /* AdminOS is excluded because it owns its own drawer behaviour.
-     [class*="-sidebar"] also matches .aos-sidebar, and forcing it to
-     width:100%;position:relative put a 320px in-flow block at the head of the
-     AdminOS flex row — collapsing .aos-main to ZERO width on every phone
-     viewport. The content area was unreachable; only the translateX(-100%)
-     hid the evidence.
+  /* Workspaces that own their chrome are excluded, by DECLARATION rather than
+     by a growing list of class names.
 
-     Excluded here, at the selector, rather than fought with a fourth layer of
-     !important in admin-os.html: the broad match is the defect. The exclusion
-     is scoped to one class, so no other admin or seller sidebar changes. */
-  [class*="-sidebar"]:not([class*="mini"]):not(.aos-sidebar) {
+     [class*="-sidebar"] matches any class containing "-sidebar", which caught
+     .aos-sidebar (AdminOS) and .sa-sidebar (Super Admin). Forcing those to
+     width:100%;position:relative put an in-flow block at the head of the
+     workspace flex row: AdminOS's content column collapsed to ZERO width on
+     every phone, and Super Admin's lost 128px at 390px wide. In both cases the
+     translateX(-100%) hid the evidence — the sidebar looked fine and the
+     content looked merely cramped or empty. It also caught .aos-sidebar-toggle,
+     growing a 28px control to 187px and squeezing the SOKONI AOS titles to 0.
+
+     A page that ships its own responsive sidebar says so with
+     data-admin-shell="own" on <html> (the same declaration a shared admin shell
+     honours). Keying the exclusion to that attribute means the next workspace
+     is covered without editing this file again, and pages that do NOT declare
+     it keep the original behaviour unchanged. */
+  html:not([data-admin-shell="own"]) [class*="-sidebar"]:not([class*="mini"]) {
     width: 100% !important;
     position: relative !important;
     height: auto !important;

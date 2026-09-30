@@ -1,5 +1,9 @@
 ﻿<!DOCTYPE html>
-<html data-admin-guard="superAdmin" lang="en" data-no-header="true">
+<!-- data-admin-shell="own": Super Admin ships its own sidebar (.sa-sidebar) and
+     its own topbar (.sa-topbar). A shared admin shell honours the declaration by
+     rendering nothing over them, and it opts the page out of the broad
+     [class*="-sidebar"] phone override in sokoni-responsive.css. -->
+<html data-admin-guard="superAdmin" lang="en" data-no-header="true" data-admin-shell="own">
 <head>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
@@ -64,6 +68,9 @@
     .nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
     .nav-item.active{background:rgba(224,64,251,.15);color:var(--accent);font-weight:600}
     .nav-icon{font-size:15px;width:18px;text-align:center;flex-shrink:0}
+    /* AdminOS child links: indented under their parent link, as in AdminOS itself. */
+    .nav-item.nav-child{padding:7px 16px 7px 30px;font-size:12.5px;color:var(--muted)}
+    .nav-item.nav-child .nav-icon{font-size:12px;width:14px}
     .nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:10px;border-radius:10px;padding:1px 6px;font-weight:700}
     .sa-sidebar-footer{margin-top:auto;padding:16px;border-top:1px solid var(--border)}
     .sa-user-chip{display:flex;align-items:center;gap:10px;padding:8px 0}
@@ -75,14 +82,16 @@
     .signout-btn:hover{background:rgba(244,67,54,.1);color:var(--red)}
 
     /* ── Main Layout ── */
-    .sa-main{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh}
+    /* min-width:0 — a flex item defaults to min-width:auto and refuses to shrink
+       below its content, so one wide table widens the column and then the page. */
+    .sa-main{margin-left:var(--sidebar-w);flex:1;min-width:0;display:flex;flex-direction:column;min-height:100vh}
     .sa-topbar{position:sticky;top:0;z-index:50;background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;gap:16px}
     .mobile-menu-btn{display:none;width:36px;height:36px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);align-items:center;justify-content:center;cursor:pointer;font-size:18px;color:var(--text)}
     .sa-topbar-title{flex:1;font-size:18px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
     .sa-topbar-email{font-size:12px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .sa-topbar-signout{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;font-size:12px;transition:all .15s}
     .sa-topbar-signout:hover{border-color:var(--red);color:var(--red)}
-    .sa-content{flex:1;padding:24px;overflow-y:auto}
+    .sa-content{flex:1;min-width:0;padding:24px;overflow-y:auto}
 
     /* ── Panels ── */
     .sa-panel{display:block}
@@ -376,6 +385,91 @@
     <button class="nav-item" data-section="secrets" onclick="SA.nav('secrets');_closeSidebar()">
       <span class="nav-icon">&#x1F511;</span>Secrets Checklist
     </button>
+  </div>
+
+  <!-- ADMINOS WORKSPACES. LINKS, not a second implementation: AdminOS is the canonical
+       admin workspace, so every one of its destinations that has no native Super Admin
+       panel is reached here through its deep link (#section, or #section/tab for a
+       child), which the AdminOS router validates and opens on the right panel and tab.
+       A superAdmin is an admin, so the link lands. Nothing here is a copy that could
+       disagree. Same-tab navigation: the console is one workspace, not two windows. -->
+  <div class="nav-group" id="saAdminOsGroup">
+    <div class="nav-group-label">AdminOS Workspaces</div>
+    <a class="nav-item" href="admin-os.html#marketplace" data-aos-route="marketplace" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F6D2;</span>Marketplace
+    </a>
+    <a class="nav-item nav-child" href="admin-os.html#marketplace/products" data-aos-route="marketplace/products" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F4E6;</span>Products
+    </a>
+    <a class="nav-item nav-child" href="admin-os.html#marketplace/orders" data-aos-route="marketplace/orders" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F9FE;</span>Orders
+    </a>
+    <a class="nav-item nav-child" href="admin-os.html#marketplace/reviews" data-aos-route="marketplace/reviews" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x2B50;</span>Reviews
+    </a>
+    <a class="nav-item" href="admin-os.html#financial" data-aos-route="financial" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F4B0;</span>Financial Center
+    </a>
+    <a class="nav-item nav-child" href="admin-os.html#financial/wallet" data-aos-route="financial/wallet" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F45B;</span>Wallets
+    </a>
+    <a class="nav-item nav-child" href="admin-os.html#financial/payouts" data-aos-route="financial/payouts" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F3E7;</span>Withdrawals
+    </a>
+    <a class="nav-item nav-child" href="admin-os.html#financial/disputes" data-aos-route="financial/disputes" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x2696;&#xFE0F;</span>Disputes
+    </a>
+    <a class="nav-item nav-child" href="admin-os.html#financial/commissions" data-aos-route="financial/commissions" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F4B8;</span>Commissions
+    </a>
+    <a class="nav-item" href="admin-os.html#comms" data-aos-route="comms" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F4E2;</span>Communications
+    </a>
+    <a class="nav-item nav-child" href="admin-os.html#comms/push" data-aos-route="comms/push" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F514;</span>Notifications
+    </a>
+    <a class="nav-item" href="admin-os.html#services" data-aos-route="services" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F527;</span>Service Hubs
+    </a>
+    <a class="nav-item" href="admin-os.html#delivery" data-aos-route="delivery" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F697;</span>Delivery Operations
+    </a>
+    <a class="nav-item" href="admin-os.html#bookings" data-aos-route="bookings" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F4C5;</span>Bookings
+    </a>
+    <a class="nav-item" href="admin-os.html#payments" data-aos-route="payments" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F4B3;</span>Payments
+    </a>
+    <a class="nav-item" href="admin-os.html#support" data-aos-route="support" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F3A7;</span>Customer Support
+    </a>
+    <a class="nav-item" href="admin-os.html#content" data-aos-route="content" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F4DD;</span>Content Management
+    </a>
+    <a class="nav-item" href="admin-os.html#ai" data-aos-route="ai" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F916;</span>AI Operations
+    </a>
+    <a class="nav-item" href="admin-os.html#search" data-aos-route="search" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F50D;</span>Search Management
+    </a>
+    <a class="nav-item" href="admin-os.html#analytics" data-aos-route="analytics" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F4CA;</span>Analytics &amp; BI
+    </a>
+    <a class="nav-item" href="admin-os.html#smartpos" data-aos-route="smartpos" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F5A8;&#xFE0F;</span>SmartPOS
+    </a>
+    <a class="nav-item" href="admin-os.html#fraud" data-aos-route="fraud" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F6E1;&#xFE0F;</span>Fraud &amp; Trust
+    </a>
+    <a class="nav-item" href="admin-os.html#hubs" data-aos-route="hubs" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F3D7;&#xFE0F;</span>Hub Registry
+    </a>
+    <a class="nav-item" href="admin-os.html#workflows" data-aos-route="workflows" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x267B;&#xFE0F;</span>Workflow Center
+    </a>
+    <a class="nav-item" href="admin-os.html#security" data-aos-route="security" onclick="_closeSidebar()">
+      <span class="nav-icon">&#x1F510;</span>Security
+    </a>
   </div>
 
   <div class="sa-sidebar-footer">
