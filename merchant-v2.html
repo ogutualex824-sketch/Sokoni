@@ -656,6 +656,12 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
         <div class="hdr-chip" title="Receipt printer status">
           <span class="dot" id="top-print"></span><span id="top-print-t">Printer</span>
         </div>
+        <!-- PROFILE / ROLE MENU — the SAME control every shared-header page carries.
+             Mounted by sokoni-profile-menu.js (see the script tags at the foot of the
+             page): avatar, account dropdown and the role switcher, fed by
+             SokoniRoleAuthority. Not a second switcher: the legacy floating
+             sokoni-profile-switcher.js is NOT loaded here and must not be. -->
+        <div class="hdr-acct" id="hdr-acct"></div>
       </div>
     </header>
 
@@ -4372,6 +4378,28 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   }
   setTimeout(report, 3500);
   addEventListener('hashchange', function () { setTimeout(report, 1800); });
+})();
+</script>
+<!-- PROFILE / ROLE MENU. The merchant shell replaces the marketplace header with its
+     own chrome, so it never received the avatar + account dropdown + role switcher
+     that shared-header.js gives every other page. That control now lives in
+     sokoni-profile-menu.js (one implementation; shared-header.js injects the same
+     file) and is mounted into the header slot above.
+
+     The two authorities it consults are loaded here by hand, permissions THEN role
+     authority, exactly as the pages that do it explicitly do — the shell does not
+     load shared-header.js, which is what bootstraps them everywhere else. Roles
+     come ONLY from SokoniRoleAuthority (signed token claims); a switch routes through
+     RA.hubFor(), the same destination the shared header would take. Size 44 = the
+     touch target this chrome uses. -->
+<script src="sokoni-permissions.js"></script>
+<script src="sokoni-role-authority.js"></script>
+<script src="sokoni-profile-menu.js"></script>
+<script>
+(function () {
+  try {
+    if (window.SokoniProfileMenu) window.SokoniProfileMenu.mount(document.getElementById("hdr-acct"), { size: 44 });
+  } catch (e) { /* the shell must render even if the menu cannot */ }
 })();
 </script>
 <script src="/sw-register.js" defer></script>
