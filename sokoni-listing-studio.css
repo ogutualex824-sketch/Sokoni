@@ -1,0 +1,160 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   SOKONI — LISTING STUDIO styling
+   sokoni-listing-studio.css
+
+   Only what the product editor did not already have. The Studio's sections reuse the
+   editor's own `.pr-sec`, `.pr-f`, `.pr-l`, `.pr-i` and `.pr-note` classes, so what is
+   styled here is exactly the four controls that are new: the type chips, the quality
+   report, the shot list and the customer preview.
+
+   It borrows the shell's tokens (--acc, --card, --line, --txt2, --txt3) rather than naming
+   fresh colours, for the same reason the Offers studio does: a merchant should see one
+   application, not a form with a differently-designed half.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── INHERITED CASE, RESET ────────────────────────────────────────────────────
+   `.pr-sec` is the editor's SECTION HEADER style — 11px, weight 900, uppercase — and its
+   children inherit all three. Its own fields escape that through `.pr-l` and `.pr-i`; the
+   Studio's blocks are not fields, so they were rendering in capitals.
+
+   That was worst in the customer preview, which exists to show the merchant what a buyer
+   will see. A buyer does not see "DELUXE KING ROOM" at 11px, so a preview that does is
+   showing them the wrong thing — the one failure this block is meant to prevent. */
+.ls-chips, .ls-groups, .ls-need, .ls-opt, .ls-ok, .ls-prev, .ls-dev, .ls-life, .ls-score {
+  text-transform: none; letter-spacing: normal; font-size: 13px; font-weight: 500;
+}
+/* The Studio's sections reuse `.pr-sec`, so their sub-lines and notes inherited the header
+   case too — and rendered in capitals while the native form's identical `.pr-note` did not.
+   Two halves of one form disagreeing about their own typography reads as a bolted-on
+   feature, which is the opposite of the intent. */
+.ls-sec .pr-sec-s, .ls-sec .pr-note, .ls-sec .pr-l, .ls-sec label {
+  text-transform: none; letter-spacing: normal; font-weight: 600;
+}
+.ls-sec .pr-sec-s, .ls-sec .pr-note { font-size: 12px; line-height: 1.5; }
+
+/* ── TYPE PICKER ──────────────────────────────────────────────────────────── */
+.ls-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+.ls-chip {
+  display: flex; align-items: center; gap: 7px;
+  min-height: 44px; padding: 9px 14px; border-radius: 13px; cursor: pointer;   /* 44px thumb target (check D) */
+  font-family: inherit; font-size: 13px; font-weight: 700; color: inherit;
+  background: var(--card, #0e0e0e); border: 1px solid var(--line, rgba(255,255,255,.12));
+  transition: border-color .14s, background .14s, transform .12s;
+}
+.ls-chip:hover { border-color: rgba(255,255,255,.28); transform: translateY(-1px); }
+.ls-chip.on { border-color: var(--acc, #71ff00); background: rgba(113,255,0,.09); }
+.ls-chip-e { font-size: 16px; line-height: 1; }
+
+.ls-sec .pr-note b { color: inherit; font-weight: 800; }
+
+/* A required-to-publish marker, said in words. A red asterisk is a convention people
+   read as "you cannot skip this", which is wrong here — a draft may always be saved
+   half-finished, and only publishing is gated. */
+.ls-req {
+  font-size: 10px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase;
+  color: var(--txt3, #8b8b8b); margin-left: 7px;
+}
+
+/* ── SHOT LIST ────────────────────────────────────────────────────────────── */
+.ls-groups { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0 2px; }
+.ls-group {
+  font-size: 11.5px; font-weight: 700; padding: 6px 11px; border-radius: 9px;
+  color: var(--txt2, rgba(255,255,255,.62));
+  border: 1px dashed var(--line, rgba(255,255,255,.16));
+}
+
+/* ── QUALITY ──────────────────────────────────────────────────────────────── */
+.ls-score { display: flex; align-items: center; gap: 12px; margin: 12px 0 14px; }
+.ls-bar {
+  flex: 1; height: 9px; border-radius: 6px; overflow: hidden;
+  background: rgba(255,255,255,.08);
+}
+.ls-bar > i { display: block; height: 100%; border-radius: 6px; transition: width .3s ease; }
+.ls-score > b { font-size: 17px; font-weight: 900; letter-spacing: -.02em; min-width: 46px; text-align: right; }
+.ls-score--good .ls-bar > i { background: var(--acc, #71ff00); }
+.ls-score--good > b { color: var(--acc, #71ff00); }
+.ls-score--ok .ls-bar > i { background: #ffb020; }
+.ls-score--ok > b { color: #ffb020; }
+.ls-score--low .ls-bar > i { background: #ff6b6b; }
+.ls-score--low > b { color: #ff6b6b; }
+
+.ls-need, .ls-opt { border-radius: 12px; padding: 11px 13px; margin-bottom: 9px; font-size: 12.5px; }
+.ls-need { border: 1px solid rgba(255,107,107,.3); background: rgba(255,107,107,.07); }
+.ls-opt { border: 1px solid var(--line, rgba(255,255,255,.12)); background: rgba(255,255,255,.03); }
+.ls-need > b, .ls-opt > b { display: block; font-size: 11px; font-weight: 800;
+  letter-spacing: .05em; text-transform: uppercase; margin-bottom: 6px; }
+.ls-need > b { color: #ff6b6b; }
+.ls-opt > b { color: var(--txt3, #8b8b8b); }
+.ls-need ul, .ls-opt ul { margin: 0; padding-left: 17px; }
+.ls-need li, .ls-opt li { margin: 3px 0; line-height: 1.5; }
+.ls-ok {
+  font-size: 12.5px; font-weight: 700; color: var(--acc, #71ff00);
+  border: 1px solid rgba(113,255,0,.26); background: rgba(113,255,0,.07);
+  border-radius: 12px; padding: 11px 13px; margin-bottom: 9px;
+}
+
+/* ── CUSTOMER PREVIEW ─────────────────────────────────────────────────────── */
+.ls-dev { display: flex; gap: 7px; margin: 10px 0 12px; }
+.ls-devbtn {
+  min-height: 44px; padding: 7px 14px; border-radius: 10px; cursor: pointer; font-family: inherit;   /* 44px thumb target (check D) */
+  font-size: 12px; font-weight: 800; color: var(--txt2, rgba(255,255,255,.6));
+  background: transparent; border: 1px solid var(--line, rgba(255,255,255,.12));
+}
+.ls-devbtn.on { color: var(--acc, #71ff00); border-color: var(--acc, #71ff00); background: rgba(113,255,0,.08); }
+
+.ls-prev {
+  border: 1px solid var(--line, rgba(255,255,255,.14)); border-radius: 15px;
+  overflow: hidden; background: var(--card, #0e0e0e); margin: 0 auto;
+}
+.ls-prev--mobile { max-width: 268px; }
+.ls-prev--desktop { max-width: 100%; display: flex; }
+.ls-prev-img {
+  aspect-ratio: 1/1; background: rgba(255,255,255,.04); display: flex;
+  align-items: center; justify-content: center;
+  font-size: 12px; color: var(--txt3, #8b8b8b);
+}
+.ls-prev--mobile .ls-prev-img { width: 100%; }
+.ls-prev--desktop .ls-prev-img { flex: 0 0 190px; }
+.ls-prev-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ls-prev-body { padding: 13px 14px 15px; min-width: 0; flex: 1; }
+.ls-prev--desktop .ls-prev-body { display: flex; flex-direction: column; justify-content: center; }
+.ls-prev-name { font-size: 14px; font-weight: 700; line-height: 1.35; word-break: break-word; }
+.ls-prev-price { font-size: 17px; font-weight: 900; margin-top: 7px; letter-spacing: -.02em; }
+/* Absent, not zero — styled as missing information so it cannot read as a free listing. */
+.ls-prev-none { font-size: 12.5px; font-weight: 600; font-style: italic; color: var(--txt3, #8b8b8b); }
+.ls-prev-facts { font-size: 11.5px; color: var(--txt2, rgba(255,255,255,.55)); margin-top: 5px; }
+.ls-prev-acts { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+.ls-prev-cta {
+  font-size: 12px; font-weight: 800; padding: 8px 13px; border-radius: 11px;
+  background: var(--acc, #71ff00); color: #050505;
+}
+.ls-prev-cta--2 {
+  background: transparent; color: inherit;
+  border: 1px solid var(--line, rgba(255,255,255,.18));
+}
+
+/* ── LIFECYCLE ────────────────────────────────────────────────────────────── */
+.ls-life { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin: 11px 0 4px; }
+.ls-life-s {
+  font-size: 11.5px; font-weight: 700; padding: 6px 11px; border-radius: 9px;
+  color: var(--txt3, #8b8b8b); border: 1px solid var(--line, rgba(255,255,255,.1));
+}
+.ls-life-s.done { color: var(--txt2, rgba(255,255,255,.6)); }
+.ls-life-s.on {
+  color: var(--acc, #71ff00); border-color: var(--acc, #71ff00);
+  background: rgba(113,255,0,.09); font-weight: 800;
+}
+.ls-life-x { color: var(--txt3, #8b8b8b); font-size: 12px; }
+
+@media (max-width: 520px) {
+  .ls-prev--desktop { display: block; }
+  .ls-prev--desktop .ls-prev-img { width: 100%; }
+}
+
+/* The availability line in the Studio's customer preview — the same reading the listing
+   page renders, so the two can never disagree about whether something is available. */
+.ls-prev-avl { margin-top: 5px; font-size: 11.5px; font-weight: 700; }
+.ls-avl { color: rgba(255,255,255,.55); }
+.ls-avl--open { color: var(--acc, #71ff00); }
+.ls-avl--closed { color: #ffb020; }
+.ls-avl--out { color: #ff6b6b; }

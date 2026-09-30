@@ -1,0 +1,40 @@
+<!doctype html>
+<!-- ═════════════════════════════════════════════════════════════════════════════
+     SOKONI — Listing Studio browser harness. scripts/harness-listing-studio.html
+
+     Proves the one thing the Node suite cannot: that the Studio's sections actually
+     ASSEMBLE inside the real product editor, rather than only rendering correctly in
+     isolation. The editor is the genuine module — nothing about it is stubbed except the
+     shop-scoped data reader, because a catalogue is not what is under test here.
+
+     Not part of the site. It lives in scripts/ and is never linked from a page.
+     ═════════════════════════════════════════════════════════════════════════════ -->
+<meta charset="utf-8">
+<title>Listing Studio harness</title>
+<style>
+  :root { --acc:#71ff00; --card:#0e0e0e; --line:rgba(255,255,255,.12);
+          --txt2:rgba(255,255,255,.55); --txt3:#8b8b8b; }
+  body { background:#050505; color:#f4f4f4; font:14px/1.5 system-ui, sans-serif; margin:0; }
+</style>
+<link rel="stylesheet" href="/sokoni-listing-studio.css">
+<div id="host"></div>
+
+<script src="/sokoni-listing-types.js"></script>
+<script src="/sokoni-listing-model.js"></script>
+<script src="/sokoni-listing-studio.js"></script>
+<script src="/sokoni-product-specs.js"></script>
+<script src="/sokoni-merchant-products.js"></script>
+<script>
+  /* The shop-scoped reader, stubbed to an empty catalogue. The editor only needs it to
+     paint the list behind the sheet; every assertion is about the sheet. */
+  window.SokoniMerchantData = {
+    listProducts: function () { return Promise.resolve([]); },
+    createProduct: function () { return Promise.reject(new Error('harness: no writer')); },
+  };
+  var host = document.getElementById('host');
+  window.__studio = window.SokoniMerchantProducts.mount(host, {
+    scope: { shopId: 'harness-shop' },
+    shopName: 'Harness Shop',
+    onToast: function (m) { window.__lastToast = m; },
+  });
+</script>
