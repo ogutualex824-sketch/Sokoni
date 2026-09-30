@@ -170,6 +170,56 @@ avatar/44px/dropdown-in-viewport/role list == authority set/switch → intercept
 + intercepted navigation to `RA.hubFor('rider')`/Escape/outside click/keyboard; negative control with zero claims; index.html
 dropdown DOM byte-identical vs the `59effdf` export), `scripts/test-header-candidate.js` (must stay 11/0),
 `scripts/test-merchant-route-gate.js`.
+## [2026-09-30] - Shop details wizard: HOSTING half of d83b2f3 ported onto the live line (gated to the live authority); server half is a separate candidate; browser certification QUEUED
+
+**Branch `hosting/shop-details-on-59effdf`, built on `59effdf`. NOT deployed, NOT pushed.** The hosting half of
+`d83b2f3` ("Shop details gets the full seller.html shop wizard, saved by one authority, shown on the storefront",
+`slice/c4-convergence`) is ported here. **The server half — `functions/kasshop.js` value validation, `sellerType`,
+permit document paths, the storefront projection rebuild, and `functions/minishop-config-schema.js` (LinkedIn) — is
+NOT in this branch; it is a separate candidate owned by sokoni-32.** `scripts/test-shop-writer-authority.js` does not
+exist on this line (it was created in `62e38b3` on the other lineage), so its 4-line change was not ported.
+
+**Ported (hosting):**
+- `sokoni-merchant-shop-profile.js` (new): merchant-v2 › Shop details › Details, the five seller.html steps
+  (Identity · Permits · Shop setup · Delivery · Go live), saved ONLY through the existing `saveShopProfile` callable.
+- `merchant-v2.html`: script tag, `takeTab` / `mountProfile` in the `shop` module context, Settings › Business profile
+  opens Details (all three hunks applied cleanly by `git apply -3`).
+- `sokoni-merchant-store-ui.js`: the Details tab hosts the profile editor in one persistent element (conflict: the
+  source lineage's `payments` tab does not exist here and was NOT introduced).
+- `sokoni-minishop.js` + `minishop.html`: a social / website link renders only when it is http(s) (a stored
+  `javascript:` website was a clickable script), LinkedIn renderer, Returns & Refunds block, array delivery areas.
+
+**Gated to the LIVE authority (proven from the live `saveShopProfile` archive by its author):** live accepts
+website, mapsLink, the six socials, logo/banner, themeColor, delMethod/delTime, returnPolicy/returnText, freeDelivery;
+it silently IGNORES `sellerType`; it validates length only. A control whose value the server drops would pretend to
+save, so in this port:
+- **Seller type** is rendered disabled with a "Not yet available" note, is never sent, and never counts as a change.
+- **Permit DOCUMENT upload** is rendered disabled with the same note (this tree's `COMPLIANCE_FIELDS` holds the three
+  numbers only; `permits` is added by the server half). The KRA / SBP / BRS numbers DO save. This gate is inferred
+  from this tree's `kasshop.js` and the d83b2f3 server diff, not from the live archive — flip `NOT_YET.permitDocs`
+  only when the server half that records `permits` is deployed.
+- The success message relays a storefront rebuild ONLY when the server reports `storefrontSynced`; live reports
+  none, so it says "Storefront refresh: not confirmed by the server" — never "up to date".
+- Unreported `status` / `sokoniCategory` (live returns neither) render as unknown ("not reported here yet"), not as
+  "pending" / "awaiting".
+- **Client-side validation (defence in depth, stated as such):** website and Maps link must be http(s) with a dotted
+  host and no whitespace / quote / angle characters (`javascript:`, `data:` refused before anything is sent); a
+  social entry is a bare handle or an http(s) profile link — any other scheme is refused. The live server does not
+  check values (the storefront suite's V1 evidence on this tree: `website: "javascript:alert(1)"` is stored verbatim).
+
+**Certification.** Non-browser, run on this tree: `test-merchant-routes` 65/0 · `test-mv2-1-sidebar` 14/0 ·
+`test-inshell-chrome` 30/0 · `predeploy-syntax-gate` exit 0 (1810 JS files + 454 inline blocks parse cleanly) ·
+`test-shop-profile-storefront` **2/10** — the 10 failures are all server-half assertions (P1–P5, V1–V5) against this
+tree's `kasshop.js`; the hosting assertions S1 and P6 pass. `test-shop-writer-authority.js`: absent on this line.
+**QUEUED under the browser hold:** `test-merchant-shop-profile-browser.js` (rewritten for this tree's server contract;
+adds G1 seller-type disabled + note + forced click inert + payload never carries it, G2 permit upload disabled + note
++ nothing uploaded, V1 `javascript:` website and social refused client-side with save NOT called, G4 unknown listing
+status, B8 storefront never renders a `javascript:` link, B8b the known projection gap) and
+`test-merchant-route-gate.js`.
+
+**Database changes:** none. **API changes:** none (client only calls existing `getShopProfile`, `saveShopProfile`,
+`getMyMinishop`, `saveMinishopConfig`). **Security:** client-side link checks + storefront http(s) guard; permit
+uploads cannot start while gated. **Breaking:** none.
 
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
