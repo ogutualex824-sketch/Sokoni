@@ -190,3 +190,18 @@ deployed before `sokoniStoreListOrders` is relied on.
 3. **Run the one-off** after deploy: dry run, then `--apply` with `--operator-uid
    D5Ql2EYr95bt79IpcGTmOMTK0P83 --expect-email alexochieng3030@gmail.com`.
 4. **Rules change** above, if admins must be locked out at the database layer too.
+
+## One-off dry run — 2026-10-01 (read-only, production, nothing written)
+
+```
+store (shops/)            STR_147f5ce11b424ec4bb892519  firstParty:true  ownerId vbaSOKL4…  sellerUid (absent)
+business (businesses/)    SOK-XX2338  SOKONI_FIRST_PARTY_STORE
+operator                  D5Ql2EYr95bt79IpcGTmOMTK0P83  alexochieng3030@gmail.com  verified, not disabled
+firstPartyStoreOperators/STR_147f…   BEFORE (absent)   PLAN create
+wallets/vbaSOKL4…                     BEFORE (absent)   PLAN create (v2 shape, balance 0)
+wallets/SOK-XX2338                    (absent)   — no store sale has settled on this lineage's path
+businessWallets/SOK-XX2338            (absent)
+```
+
+The chain resolves in production through the same code the gate runs (positive control for the
+`firstParty` query and `tenant-identity`).
