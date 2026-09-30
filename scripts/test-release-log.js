@@ -7,10 +7,13 @@
       title's leading word; the deployment claim ONLY from the heading; commits
       are short/full shas (never a bare number, never a 16-hex hosting version);
       Files are read from the entry's own **Files** block; newest-first order.
-   2. STALENESS: release-log.json must equal a regeneration from CHANGELOG.md.
-      Hosting does not serve .md, so a stale JSON would show admins a log that
-      disagrees with the tree they are looking at. Fix: run
-      `node scripts/build-release-log.js` and commit the result.
+   2. STALENESS: functions/data/release-log.json must equal a regeneration from
+      CHANGELOG.md. It is bundled in the functions source and served ONLY by the
+      admin callable adminReleaseLog (owner decision A), so a stale JSON would
+      show admins a log that disagrees with the tree it was deployed from. Fix:
+      run `node scripts/build-release-log.js` and commit the result.
+   2b. ADMIN-ONLY: no release-log.json at the hosting root, and the artefact
+      sits under a hosting-ignored path (functions/**) — never served publicly.
    3. NEGATIVE CONTROL: a changelog with one extra entry must be detected as
       stale by the same comparison.
 
@@ -90,9 +93,11 @@ console.log('\n[the committed artefact]');
 const text = fs.readFileSync(B.SRC, 'utf8');
 let committed = null;
 try { committed = JSON.parse(fs.readFileSync(B.OUT, 'utf8')); } catch (e) { committed = null; }
-ok('release-log.json exists at the site root and parses', !!committed);
+ok('functions/data/release-log.json exists and parses', !!committed);
+ok('the builder writes into functions/data/ (bundled with the admin callable)', B.OUT_REL === 'functions/data/release-log.json' && path.relative(path.join(__dirname, '..'), B.OUT).split(path.sep).join('/') === 'functions/data/release-log.json');
+ok('NO release-log.json at the hosting root (decision A: nothing public)', !fs.existsSync(path.join(__dirname, '..', 'release-log.json')));
 const fresh = JSON.parse(B.serialise(B.buildReleaseLog(text)));
-ok('release-log.json is CURRENT with CHANGELOG.md (else: node scripts/build-release-log.js)',
+ok('functions/data/release-log.json is CURRENT with CHANGELOG.md (else: node scripts/build-release-log.js)',
   committed && JSON.stringify(committed) === JSON.stringify(fresh),
   committed ? { committedSha: committed.sourceSha256, changelogSha: fresh.sourceSha256, committedCount: committed.entryCount, changelogCount: fresh.entryCount } : 'missing');
 if (committed) {
@@ -103,9 +108,10 @@ if (committed) {
   ok('every entry has an id, a title and a known type', committed.entries.every((e) => e.id && e.title && ['fix', 'feat', 'docs', 'test', 'deploy', 'other'].includes(e.type)));
   ok('claim is only deployed / not-deployed / null', committed.entries.every((e) => [null, 'deployed', 'not-deployed'].includes(e.claim)));
   ok('no generatedAt timestamp (output is a pure function of the changelog)', !('generatedAt' in committed));
-  ok('the artefact is not hosting-ignored (served at /release-log.json)', (() => {
-    const ign = (JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'firebase.json'), 'utf8')).hosting || {}).ignore || [];
-    return !ign.some((g) => g === 'release-log.json' || g === '*.json' || g === '**/*.json');
+  ok('the artefact is hosting-IGNORED (functions/** — never served at a public URL)', (() => {
+    const hc = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'firebase.json'), 'utf8')).hosting;
+    const ign = ((Array.isArray(hc) ? hc[0] : hc) || {}).ignore || [];
+    return ign.includes('functions/**');
   })());
 }
 

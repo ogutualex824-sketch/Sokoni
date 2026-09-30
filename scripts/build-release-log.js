@@ -1,14 +1,23 @@
 #!/usr/bin/env node
 /* ============================================================================
-   SOKONI — Release log builder   (CHANGELOG.md -> release-log.json)
+   SOKONI — Release log builder   (CHANGELOG.md -> functions/data/release-log.json)
    scripts/build-release-log.js
 
    WHY THIS EXISTS
    The Updates centre in AdminOS and Super Admin shows "fixes and features in
    order". The only ordered record of them is CHANGELOG.md, and hosting does NOT
    serve it: firebase.json hosting.ignore carries the glob that ignores every .md file. A browser therefore
-   cannot read the changelog. This script turns it into a served JSON artefact,
-   release-log.json, at the site root.
+   cannot read the changelog. This script turns it into a JSON artefact.
+
+   WHERE IT GOES — ADMIN-ONLY (owner decision A, 2026-10-01)
+   The output is bundled INSIDE the functions source, functions/data/release-log.json,
+   and served ONLY by the admin-checked callable `adminReleaseLog`
+   (functions/app-release-metrics.js). It is NEVER written to the hosting root:
+   33 of 775 entries describe security defects, and a static hosting file is
+   readable by anyone. `functions/**` is hosting-ignored, so the artefact cannot be
+   served by hosting even by accident. The same builder is committed in the
+   hosting tree and the functions tree; the copy that matters is the one in the
+   tree functions are DEPLOYED from — the log reflects THAT tree's CHANGELOG.md.
 
    WHAT IT DOES NOT CLAIM
    · A changelog entry is a RECORD that work was written up in this tree. It is
@@ -24,11 +33,12 @@
 
    KEEPING IT FRESH
    Not wired into predeploy here (firebase.json is owned by the release owner).
-   Add `node scripts/build-release-log.js` to hosting.predeploy so every deploy
-   ships the log of its own tree. Until then the stale-check test fails whenever
-   CHANGELOG.md changes without a regeneration.
+   Add `node scripts/build-release-log.js --check` to functions.predeploy so a
+   functions deploy refuses a stale log (or the builder itself, to regenerate).
+   Until then the stale-check test fails whenever CHANGELOG.md changes without a
+   regeneration.
 
-   Run:   node scripts/build-release-log.js            (writes release-log.json)
+   Run:   node scripts/build-release-log.js            (writes functions/data/release-log.json)
           node scripts/build-release-log.js --check    (exit 1 if stale; writes nothing)
    ========================================================================= */
 'use strict';
@@ -39,7 +49,8 @@ const crypto = require('crypto');
 
 const ROOT = path.join(__dirname, '..');
 const SRC = path.join(ROOT, 'CHANGELOG.md');
-const OUT = path.join(ROOT, 'release-log.json');
+const OUT = path.join(ROOT, 'functions', 'data', 'release-log.json');
+const OUT_REL = 'functions/data/release-log.json';
 
 const SCHEMA = 1;
 const SUMMARY_MAX = 320;
@@ -261,7 +272,7 @@ function serialise(log) {
 }
 
 module.exports = { parseChangelog, parseHeading, inferType, deployClaim, headingCommits,
-                   summaryOf, filesOf, buildReleaseLog, serialise, sourceHash, SRC, OUT };
+                   summaryOf, filesOf, buildReleaseLog, serialise, sourceHash, SRC, OUT, OUT_REL };
 
 if (require.main === module) {
   const text = fs.readFileSync(SRC, 'utf8');
@@ -270,11 +281,12 @@ if (require.main === module) {
     let have = null;
     try { have = fs.readFileSync(OUT, 'utf8'); } catch (_) {}
     const fresh = have != null && normalise(have) === normalise(out);
-    console.log(fresh ? 'release-log.json is current with CHANGELOG.md'
-                      : 'release-log.json is STALE — run: node scripts/build-release-log.js');
+    console.log(fresh ? OUT_REL + ' is current with CHANGELOG.md'
+                      : OUT_REL + ' is STALE — run: node scripts/build-release-log.js');
     process.exit(fresh ? 0 : 1);
   }
+  fs.mkdirSync(path.dirname(OUT), { recursive: true });
   fs.writeFileSync(OUT, out);
   const log = JSON.parse(out);
-  console.log('release-log.json: ' + log.entryCount + ' entries, ' + Buffer.byteLength(out) + ' bytes, source sha256 ' + log.sourceSha256.slice(0, 12));
+  console.log(OUT_REL + ': ' + log.entryCount + ' entries, ' + Buffer.byteLength(out) + ' bytes, source sha256 ' + log.sourceSha256.slice(0, 12));
 }
