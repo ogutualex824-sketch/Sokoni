@@ -44,3 +44,9 @@ The one-page POS setup (`7dd719c`, branch `ui/pos-setup-page-on-be7c676`: set up
 ## 6 · Not changed
 
 Firestore rules and indexes, App Check, `firebase.json`, storage rules, production data. The Home listener finding and `uploadedAt` server authority stay separate ([[HOME_PICKED_FOR_YOU_INVENTORY_SYNC]]).
+
+## Day boundary (2026-10-01)
+
+"Today" is the **shop's** day. Kenya is UTC+3 all year. Cloud Functions run in UTC, so the previous `setHours(0)` boundary was midnight UTC, which is 03:00 in Nairobi. Between midnight and 03:00, a merchant's "today" still held last night's sales. `dayStart` now computes Nairobi midnight arithmetically.
+
+A sale's instant is its own timestamp (`createdAt` / `checkoutStartedAt`). `saleDate` is used only as a fallback, read as noon Nairobi, because at least one till writer stamps it with `toISOString()` (a UTC date). The suite pins fixtures to Nairobi time and passes on a UTC host (`TZ=UTC`). Result: 32/0, sabotage 2/2.

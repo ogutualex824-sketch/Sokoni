@@ -1,3 +1,10 @@
+## [2026-10-01] — merchantDashboardFacts: "today" is Nairobi's day, not the server's (UTC) — candidate, NOT deployed
+
+**Files:** `functions/merchant-dashboard-facts.js`, `scripts/test-merchant-dashboard-facts.js`, `docs/MERCHANT_DASHBOARD_FACTS.md`. **Rules / data / other functions:** none.
+- The day boundary was the server's local midnight — UTC on Cloud Functions, i.e. 03:00 in Kenya — so from 00:00 to 03:00 a merchant's "today" still counted last night. `dayStart` is now Nairobi midnight (UTC+3, no DST).
+- A sale's own timestamp wins over `saleDate`, which one till writer stamps as a UTC date.
+- The suite went red at midnight (fixtures dated 09-30, handler on the real clock). Fixtures are pinned to Nairobi time; handler fixtures sit inside the current Nairobi day. 32/0 locally and with `TZ=UTC`; sabotage 2/2.
+
 ## [2026-10-01] — Printer: one setup across merchant-v2; price tags + barcode labels in Products; honest receipts and chips — candidate, NOT deployed
 
 **Files:** `merchant-v2.html`, `pos-setup.html`, `sokoni-merchant-products.js`; new `scripts/test-printer-one-setup.js`; new `docs/PRINTER_ONE_SETUP.md`.

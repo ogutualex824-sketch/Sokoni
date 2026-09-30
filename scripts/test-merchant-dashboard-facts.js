@@ -21,9 +21,13 @@ const M = require(Path.join(FN, 'merchant-dashboard-facts.js'));
 const I = M._internal;
 let pass = 0, fail = 0;
 const ck = (l, ok, d) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d !== undefined ? '   [' + String(typeof d === 'object' ? JSON.stringify(d) : d).slice(0, 170) + ']' : '')); ok ? pass++ : fail++; };
-const NOW = new Date('2026-09-30T14:00:00'); const now = NOW.getTime();
-const today = (h) => new Date(2026, 8, 30, h, 0, 0).getTime();
-const yday = (h) => new Date(2026, 8, 29, h, 0, 0).getTime();
+/* Fixtures are pinned to KENYA time (UTC+3), not to whatever timezone this machine runs in — the function's
+   day is the shop's day, so a UTC CI runner and a Nairobi laptop must see the same results. */
+const EAT = 3 * 3600 * 1000;
+const kenya = (y, mo, d, h, mi) => Date.UTC(y, mo, d, h, mi || 0, 0) - EAT;
+const NOW = new Date(kenya(2026, 8, 30, 14)); const now = NOW.getTime();
+const today = (h) => kenya(2026, 8, 30, h);
+const yday = (h) => kenya(2026, 8, 29, h);
 const TS = (ms) => ({ toMillis: () => ms });
 
 console.log('\nMERCHANT DASHBOARD FACTS — server-authoritative Business Pulse + Customers');
@@ -75,12 +79,31 @@ ck('the phone identity merges the till sale and the online order (2 orders, 650 
 ck('walk-in till sales are reported in the note, not invented as customers', /2 till sale\(s\) were walk-ins/.test(c.note), c.note);
 ck('completeness is stated', c.completeness === 'complete' && I.computeCustomers({ orders, sales, ordersReadable: true, salesReadable: false }).completeness === 'partial');
 
+console.log('\n4b — the shop\'s day is Kenya\'s day, not the server\'s (Cloud Functions run in UTC)');
+{
+  const at0100 = kenya(2026, 9, 1, 1);                 /* 01:00 in Nairobi = 22:00 UTC the day before */
+  ck('dayStart at 01:00 Nairobi is Nairobi midnight, not UTC midnight (which is 03:00 Nairobi)', I.dayStart(at0100, 0) === kenya(2026, 9, 1, 0), I.dayStart(at0100, 0));
+  const lateLastNight = { grandTotal: 400, status: 'completed', createdAt: TS(kenya(2026, 8, 30, 23)) };
+  const justAfterMidnight = { grandTotal: 60, status: 'completed', createdAt: TS(kenya(2026, 9, 1, 0, 30)) };
+  const k = I.computeFacts({ orders: [], sales: [lateLastNight, justAfterMidnight], ordersReadable: true, salesReadable: true, now: at0100 });
+  ck('at 01:00 Nairobi, last night\'s 23:00 sale is NOT today; the 00:30 sale is', k.tillToday.value === 60, k.tillToday);
+  const utcStamped = { grandTotal: 75, status: 'completed', saleDate: '2026-09-30', createdAt: TS(kenya(2026, 9, 1, 0, 45)) };
+  ck('a sale\'s own timestamp wins over a UTC-stamped saleDate (toISOString would file a 00:45 sale under yesterday)', I.computeFacts({ orders: [], sales: [utcStamped], ordersReadable: true, salesReadable: true, now: at0100 }).tillToday.value === 75);
+  ck('saleDate alone is read as that day in Nairobi', I.saleMillis({ saleDate: '2026-10-01' }) === kenya(2026, 9, 1, 12));
+  ck('control: the old server-local rule on a UTC host would have counted last night\'s sale', (function () { const d = new Date(at0100); const utcMidnight = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()); return kenya(2026, 8, 30, 23) >= utcMidnight; }()));
+}
+
 console.log('\n5 — handler against the fake Firestore: scoped by the AUTHENTICATED uid only');
 (async () => {
-  await db.doc('orders/o1').set({ sellerUid: 'kass', total: 700, status: 'paid', createdAt: F.Timestamp.fromMillis(today(9)), buyerUid: 'b9' });
-  await db.doc('orders/o2').set({ sellerUid: 'other', total: 5000, status: 'paid', createdAt: F.Timestamp.fromMillis(today(9)), buyerUid: 'b8' });
-  await db.doc('posRetailSales/s1').set({ sellerUid: 'kass', merchantId: 'kass', grandTotal: 300, status: 'completed', saleDate: new Date().toISOString().slice(0, 10), createdAt: F.Timestamp.fromMillis(Date.now()), customer: null });
-  await db.doc('posRetailSales/s2').set({ sellerUid: 'other', grandTotal: 9000, status: 'completed', saleDate: new Date().toISOString().slice(0, 10), createdAt: F.Timestamp.fromMillis(Date.now()), customer: null });
+  /* The handler reads the REAL clock, so its fixtures sit inside the CURRENT Nairobi day (halfway between its
+     midnight and now) — they stayed dated 2026-09-30 before, and the suite went red at midnight. */
+  const kd0 = I.dayStart(Date.now(), 0);
+  const inToday = kd0 + Math.floor((Date.now() - kd0) / 2);
+  const kDate = new Date(inToday + EAT).toISOString().slice(0, 10);
+  await db.doc('orders/o1').set({ sellerUid: 'kass', total: 700, status: 'paid', createdAt: F.Timestamp.fromMillis(inToday), buyerUid: 'b9' });
+  await db.doc('orders/o2').set({ sellerUid: 'other', total: 5000, status: 'paid', createdAt: F.Timestamp.fromMillis(inToday), buyerUid: 'b8' });
+  await db.doc('posRetailSales/s1').set({ sellerUid: 'kass', merchantId: 'kass', grandTotal: 300, status: 'completed', saleDate: kDate, createdAt: F.Timestamp.fromMillis(inToday), customer: null });
+  await db.doc('posRetailSales/s2').set({ sellerUid: 'other', grandTotal: 9000, status: 'completed', saleDate: kDate, createdAt: F.Timestamp.fromMillis(inToday), customer: null });
   const r = await I.handler({ auth: { uid: 'kass' }, data: { op: 'facts' } });
   ck('facts for kass see only kass rows: till 300, online today counted, other merchant invisible', r.ok && r.facts.tillToday.value === 300 && r.facts.sources.orders.count === 1 && r.facts.sources.tillSales.count === 1, r.facts && r.facts.sources);
   const rc = await I.handler({ auth: { uid: 'kass' }, data: { op: 'customers' } });
