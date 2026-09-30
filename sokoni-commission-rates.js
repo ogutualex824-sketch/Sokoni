@@ -20,7 +20,7 @@
 
   var RATES = {
     "marketplace": {
-      "pct": 3,
+      "pct": 5,
       "fixedKES": 0
     },
     "food_delivery": {
@@ -53,6 +53,10 @@
     },
     "digital_products": {
       "pct": 10,
+      "fixedKES": 0
+    },
+    "pos": {
+      "pct": 5,
       "fixedKES": 0
     },
     "event_tickets": {
@@ -102,8 +106,9 @@
   };
 
   var ALIASES = {
+    "product": "marketplace",
+    "products": "marketplace",
     "shopping": "marketplace",
-    "pos": "marketplace",
     "b2b": "marketplace",
     "restaurant": "food_delivery",
     "food": "food_delivery",
