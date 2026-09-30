@@ -26,6 +26,16 @@
      shows them and links there, rather than keeping a second, diverging timetable.
    · Storefront extras (announcement, reply time) live in minishopConfig and save through saveMinishopConfig.
 
+   LIVE-AUTHORITY GATE (hosting-only port, 2026-09-30 — see NOT_YET below)
+   · This file was ported from d83b2f3 WITHOUT that commit's server half. The LIVE saveShopProfile (its archive, read
+     by its author) accepts the profile fields listed above EXCEPT `sellerType`, and its compliance record holds the
+     three NUMBERS only (no `permits` document paths). It validates length only, and returns neither `invalid`,
+     `status`, `sokoniCategory` nor `storefrontSynced`. A control whose value the server drops would pretend to save,
+     so those two controls are rendered disabled with a "Not yet available" note and are NOT sent; unknown status /
+     category render neutrally; the success message claims a storefront refresh only when the server reports one.
+   · The URL / handle checks in validate() are CLIENT-SIDE defence in depth. Until the server half ships, the live
+     server does not check values.
+
    Mount contract:  SokoniMerchantShopProfile.mount(host, ctx) → { refresh, destroy, state }
      ctx: { uid, origin, callGet, callSave, callConfig?, callSaveConfig?, upload({path, blob, contentType,
             cacheControl}) → Promise<url>, onOpenAvailability?, onToast? }
@@ -59,6 +69,13 @@
     ['service', '🛠️', 'Services + products', 'You sell services alongside goods'],
     ['wholesale', '📦', 'Wholesale', 'Bulk and trade buyers'],
   ];
+  /* ── Live-authority gate ─────────────────────────────────────────────────────
+     `sellerType` is not in the live saveShopProfile accepted list (silently ignored); `compliance.permits` is not in
+     its compliance fields (this branch's functions/kasshop.js COMPLIANCE_FIELDS = kraPin, sbpNumber, brsNumber; the
+     d83b2f3 server half adds `permits`). Both are gated: rendered disabled with NOT_YET_NOTE, never sent, never
+     counted as a change. Flip a flag to false ONLY once the server half that accepts the field is deployed. */
+  var NOT_YET = { sellerType: true, permitDocs: true };
+  var NOT_YET_NOTE = 'Not yet available — the shop authority does not save this yet, so nothing chosen here is stored. It switches on with the next server update.';
   var CITIES = [['nairobi', 'Nairobi'], ['mombasa', 'Mombasa'], ['kisumu', 'Kisumu'], ['nakuru', 'Nakuru'],
     ['eldoret', 'Eldoret'], ['thika', 'Thika'], ['nyeri', 'Nyeri'], ['machakos', 'Machakos'], ['malindi', 'Malindi'],
     ['garissa', 'Garissa'], ['kisii', 'Kisii'], ['kericho', 'Kericho'], ['meru', 'Meru'], ['nanyuki', 'Nanyuki'],
@@ -135,6 +152,19 @@
     return { profile: d, compliance: comp };
   }
   function normPhone(v) { return str(v).replace(/[\s()-]/g, ''); }
+  /* CLIENT-SIDE link safety (defence in depth — the live server truncates length and checks no values).
+     A link must be http(s) with a host that has a dot, and carry no whitespace or quote/angle characters; a
+     `javascript:` / `data:` / `vbscript:` value is refused before anything is sent. A social entry may be a bare
+     handle (@yourshop, company/yourshop) or an http(s) profile link — any OTHER scheme is refused. */
+  var SOCIAL_KEYS = ['instagram', 'tiktok', 'facebook', 'twitter', 'youtube', 'linkedin'];
+  function safeLink(v) { v = str(v).trim(); return /^https?:\/\/[^\s\/"'<>\\]+\.[^\s"'<>\\]{2,}$/i.test(v); }
+  function safeHandle(v) {
+    v = str(v).trim();
+    if (!v) return true;
+    if (/[\s"'<>\\]/.test(v)) return false;
+    if (/^[a-z][a-z0-9+.\-]*:/i.test(v)) return safeLink(v);   /* has a scheme → must be an http(s) link */
+    return true;
+  }
   /** Field problems the seller can fix before saving. The server re-checks everything. */
   function validate(d, comp) {
     var e = {};
@@ -144,10 +174,13 @@
     if (!normPhone(d.phone)) e.phone = 'A phone / WhatsApp number is required so buyers can reach you.';
     else if (!/^(\+?254|0)(7|1)\d{8}$/.test(normPhone(d.phone))) e.phone = 'Use a Kenyan mobile number, e.g. 0712 345 678.';
     if (d.email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(d.email)) e.email = 'That email address does not look right.';
-    if (d.website && !/^https?:\/\/[^\s]+\.[^\s]{2,}/i.test(d.website)) e.website = 'Start with https:// — e.g. https://myshop.co.ke';
-    if (d.mapsLink && !/^https:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps|(www\.)?google\.[a-z.]+\/maps|maps\.google\.[a-z.]+)/i.test(d.mapsLink)) {
+    if (d.website && !safeLink(d.website)) e.website = 'Start with https:// — e.g. https://myshop.co.ke (only a web address is accepted).';
+    if (d.mapsLink && (!safeLink(d.mapsLink) || !/^https:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps|(www\.)?google\.[a-z.]+\/maps|maps\.google\.[a-z.]+)/i.test(d.mapsLink))) {
       e.mapsLink = 'Paste the share link from Google Maps (https://maps.app.goo.gl/…).';
     }
+    SOCIAL_KEYS.forEach(function (k) {
+      if (d[k] && !safeHandle(d[k])) e[k] = 'A handle (@yourshop) or an https:// profile link — nothing else.';
+    });
     if ((d.shopType === 'hybrid' || d.shopType === 'physical') && !str(d.address).trim()) e.address = 'Buyers visit you — add your street or building.';
     if (d.freeDelivery && !/^\d{1,9}$/.test(str(d.freeDelivery).replace(/[,\s]/g, ''))) e.freeDelivery = 'Whole shillings only, e.g. 3000.';
     if (d.returnPolicy === 'custom' && !str(d.returnText).trim()) e.returnText = 'Write your return policy.';
@@ -155,7 +188,7 @@
     return e;
   }
   var STEP_OF = { name: 1, tagline: 1, about: 1, kraPin: 2, phone: 3, email: 3, website: 3, mapsLink: 3, address: 3,
-    freeDelivery: 4, returnText: 4 };
+    instagram: 3, tiktok: 3, facebook: 3, twitter: 3, youtube: 3, linkedin: 3, freeDelivery: 4, returnText: 4 };
   /** The storefront checklist — each item is a fact about the saved draft, never an invented score. */
   function readiness(d) {
     return [
@@ -175,6 +208,7 @@
   function toPayload(d, comp, savedComp) {
     var profile = {};
     PROFILE_KEYS.forEach(function (k) {
+      if (k === 'sellerType' && NOT_YET.sellerType) return;   /* gated: the live authority ignores it — never sent */
       if (k === 'zones') profile.zones = (d.zones || []).slice(0, 40);
       else if (k === 'phone') profile.phone = normPhone(d.phone);
       else if (k === 'freeDelivery') profile.freeDelivery = str(d.freeDelivery).replace(/[,\s]/g, '');
@@ -182,14 +216,17 @@
     });
     var out = { profile: profile };
     if (comp && JSON.stringify(comp) !== JSON.stringify(savedComp || {})) {
-      out.compliance = { kraPin: str(comp.kraPin).trim().toUpperCase(), sbpNumber: str(comp.sbpNumber).trim(),
-        brsNumber: str(comp.brsNumber).trim(), permits: Object.assign({}, comp.permits) };
+      out.compliance = { kraPin: str(comp.kraPin).trim().toUpperCase(), sbpNumber: str(comp.sbpNumber).trim(), brsNumber: str(comp.brsNumber).trim() };
+      if (!NOT_YET.permitDocs) out.compliance.permits = Object.assign({}, comp.permits);   /* gated: not in the live compliance fields */
     }
     return out;
   }
   function changedCount(a, b) {
     var n = 0;
-    PROFILE_KEYS.forEach(function (k) { if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) n++; });
+    PROFILE_KEYS.forEach(function (k) {
+      if (k === 'sellerType' && NOT_YET.sellerType) return;
+      if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) n++;
+    });
     return n;
   }
   function labelOf(list, code) { for (var i = 0; i < list.length; i++) if (list[i][0] === code) return list[i][2] || list[i][1]; return ''; }
@@ -358,13 +395,15 @@
         (opts.count && MAX[k] ? '<div class="msp-cnt" id="' + id + '-c">' + str(v).length + ' / ' + MAX[k] + '</div>' : '') +
         (err ? '<div class="msp-err" id="' + id + '-e" role="alert">' + esc(err) + '</div>' : '');
     }
-    function options(k, list) {
-      return '<div class="msp-opts" role="radiogroup" aria-label="' + esc(LABELS[k] || k) + '">' + list.map(function (o) {
+    function options(k, list, disabled) {
+      return '<div class="msp-opts" role="radiogroup" aria-label="' + esc(LABELS[k] || k) + '"' + (disabled ? ' aria-disabled="true"' : '') + '>' + list.map(function (o) {
         var on = S.draft[k] === o[0];
-        return '<button type="button" role="radio" aria-checked="' + on + '" class="msp-opt' + (on ? ' on' : '') + '" data-pchoose="' + k + '" data-v="' + esc(o[0]) + '">' +
+        return '<button type="button" role="radio" aria-checked="' + on + '" class="msp-opt' + (on ? ' on' : '') + '" data-pchoose="' + k + '" data-v="' + esc(o[0]) + '"' + (disabled ? ' disabled aria-disabled="true"' : '') + '>' +
           '<span class="i" aria-hidden="true">' + o[1] + '</span><span><b>' + esc(o[2]) + '</b><small>' + esc(o[3]) + '</small></span></button>';
       }).join('') + '</div>';
     }
+    /* The gate note beside a control the live authority does not save (see NOT_YET). */
+    function notYetNote(k) { return '<p class="msp-sub msp-notyet" data-pnotyet="' + esc(k) + '" style="margin-top:6px">' + esc(NOT_YET_NOTE) + '</p>'; }
     function select(k, label, list, req) {
       var id = 'msp-f-' + k;
       return '<label class="msp-lbl" for="' + id + '">' + esc(label) + (req ? ' <span class="req">*</span>' : '') + '</label>' +
@@ -381,9 +420,11 @@
     /* ── steps ── */
     function stepIdentity() {
       var d = S.draft;
+      /* S.cat is null when the server did not report a category (the live getShopProfile never does): render that
+         as unknown, not as "awaiting" — an unknown must never look like a state. */
       var cat = S.cat && S.cat.label
         ? '<span class="msp-badge ok">🏷️ ' + esc(S.cat.label) + '</span>'
-        : '<span class="msp-badge warn">Awaiting SOKONI category</span>';
+        : '<span class="msp-badge" data-pcat="unknown">SOKONI category — not shown here yet</span>';
       return '<div class="msp-card"><div class="msp-h">Look &amp; feel</div>' +
         '<p class="msp-sub">Your banner and logo are the first thing buyers see on your storefront and in search.</p>' +
         '<div class="msp-banner" role="button" tabindex="0" data-pup="banner" aria-label="Upload banner photo" style="' + coverStyle(d) + '">' +
@@ -408,7 +449,7 @@
         '<div class="msp-lbl">SOKONI category</div><div class="msp-row">' + cat + '</div>' +
         '<p class="msp-sub" style="margin-top:6px">SOKONI assigns your category when your business is approved — it decides where buyers find you. To change it, contact SOKONI support.</p>' +
         field('about', 'Your shop story', { area: true, rows: 5, count: true, ph: 'What you sell, where it comes from, and why buyers choose you.' }) +
-        '<div class="msp-lbl">Seller type</div>' + options('sellerType', SELLER_TYPES) +
+        '<div class="msp-lbl">Seller type</div>' + options('sellerType', SELLER_TYPES, !!NOT_YET.sellerType) + (NOT_YET.sellerType ? notYetNote('sellerType') : '') +
       '</div>';
     }
     function stepPermits() {
@@ -421,9 +462,13 @@
           return '<div class="msp-permit"><div class="msp-permit-head"><b>' + esc(p.title) + '</b>' + badge + '</div>' +
             '<div class="msp-sub" style="margin:0">' + esc(p.hint) + (p.link ? ' <a href="' + p.link + '" target="_blank" rel="noopener" style="color:var(--msp-acc)">Get it ↗</a>' : '') + '</div>' +
             (p.num ? field(p.num, p.title + ' number', { comp: true, ph: p.ph }) : '') +
-            '<div class="msp-row"><button type="button" class="msp-btn" data-ppermit="' + p.kind + '">' + (path ? 'Replace document' : 'Upload document') + '</button>' +
-            (path ? '<button type="button" class="msp-btn" data-pclearpermit="' + p.kind + '">Remove</button>' : '') + '</div>' +
-            '<input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" hidden data-ppermitfile="' + p.kind + '"></div>';
+            (NOT_YET.permitDocs
+              /* gated: the live compliance record has no `permits` field, so an upload would store a file the
+                 authority never records. Disabled, with the note; the number fields above DO save. */
+              ? '<div class="msp-row"><button type="button" class="msp-btn" data-ppermit="' + p.kind + '" disabled aria-disabled="true">Upload document</button></div>' + notYetNote('permit:' + p.kind)
+              : '<div class="msp-row"><button type="button" class="msp-btn" data-ppermit="' + p.kind + '">' + (path ? 'Replace document' : 'Upload document') + '</button>' +
+                (path ? '<button type="button" class="msp-btn" data-pclearpermit="' + p.kind + '">Remove</button>' : '') + '</div>' +
+                '<input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" hidden data-ppermitfile="' + p.kind + '">') + '</div>';
         }).join('') + '</div>';
     }
     function hoursSummary() {
@@ -500,7 +545,10 @@
         }).join('') + '</ul></div>' +
       '<div class="msp-card"><div class="msp-h">Public listing</div>' +
         (listed ? '<div class="msp-note ok">Your shop is approved and listed — buyers can find it in SOKONI search.</div>'
-          : '<div class="msp-note warn">' + esc(S.status === 'pending' || !S.status
+          : (!S.status && !S.cat)
+            /* the server reported neither status nor category (the live getShopProfile does not): unknown, not a state */
+            ? '<div class="msp-note" data-plisting="unknown">Listing status is not reported here yet — whether buyers can find your shop is decided by SOKONI approval, not by this page.</div>'
+          : '<div class="msp-note warn">' + esc(S.status === 'pending'
               ? 'Your shop is saved but not yet listed. It goes live once SOKONI approves your business application and assigns its category.'
               : (S.status === 'suspended' ? 'Your shop is suspended, so it is hidden from buyers. Contact SOKONI support.'
                 : 'Your shop is not listed yet — SOKONI is assigning its category.')) + '</div>') +
@@ -566,6 +614,7 @@
     }
     function upload(kind, file, isPermit) {
       if (!file) return;
+      if (isPermit && NOT_YET.permitDocs) { S.result = { kind: 'warn', msg: NOT_YET_NOTE }; paint(); return; }   /* gated — never uploads */
       var okType = isPermit ? /^(image\/(jpeg|png|webp)|application\/pdf)$/ : /^image\/(jpeg|png|webp)$/;
       var max = isPermit ? 20 : 10;
       if (!okType.test(file.type || '')) { S.result = { kind: 'bad', msg: isPermit ? 'Upload a photo (JPG, PNG, WebP) or a PDF.' : 'Upload a JPG, PNG or WebP image.' }; paint(); return; }
@@ -609,7 +658,11 @@
           S.status = gd.status || S.status; S.cat = gd.sokoniCategory || S.cat;
           S.handle = gd.handle || d.handle || S.handle; S.storefrontUrl = gd.storefrontUrl || d.storefrontUrl || S.storefrontUrl;
           var parts = ['Saved.'];
-          parts.push(d.storefrontSynced === false ? 'Your storefront did not update — press Save shop again.' : 'Your storefront is up to date.');
+          /* Only a server REPORT of the storefront rebuild is relayed. The live saveShopProfile does not rebuild the
+             storefront and reports nothing (storefrontSynced undefined) — say so, never "up to date". */
+          if (d.storefrontSynced === true) parts.push('Your storefront is up to date.');
+          else if (d.storefrontSynced === false) parts.push('Your storefront did not update — press Save shop again.');
+          else parts.push('Storefront refresh: not confirmed by the server.');
           if (bad.length) parts.push('Not saved (check the format): ' + bad.join(', ') + '.');
           if (ign.length) parts.push('Set by SOKONI, not here: ' + ign.join(', ') + '.');
           S.result = { kind: bad.length || d.storefrontSynced === false ? 'warn' : 'ok', msg: parts.join(' ') };
@@ -647,7 +700,10 @@
       if (a.pnav) return go(S.step + (+a.pnav));
       if (a.psave) return save();
       if (a.preload) return load();
-      if (a.pchoose) { S.draft[a.pchoose] = S.draft[a.pchoose] === a.v && a.pchoose === 'sellerType' ? '' : a.v; delete S.errors[a.pchoose]; return paint(); }
+      if (a.pchoose) {
+        if (a.pchoose === 'sellerType' && NOT_YET.sellerType) return;   /* gated control: a click changes nothing */
+        S.draft[a.pchoose] = S.draft[a.pchoose] === a.v && a.pchoose === 'sellerType' ? '' : a.v; delete S.errors[a.pchoose]; return paint();
+      }
       if (a.paccent) { S.draft.themeColor = a.paccent; return paint(); }
       if (a.pup) { var fi = host.querySelector('[data-pfile="' + a.pup + '"]'); if (fi) fi.click(); return; }
       if (a.pclear) { S.draft[a.pclear] = ''; return paint(); }
@@ -708,5 +764,6 @@
 
   return { mount: mount, CSS_ID: CSS_ID,
     _h: { fromServer: fromServer, validate: validate, readiness: readiness, toPayload: toPayload, changedCount: changedCount,
+      safeLink: safeLink, safeHandle: safeHandle, NOT_YET: NOT_YET, NOT_YET_NOTE: NOT_YET_NOTE,
       PROFILE_KEYS: PROFILE_KEYS, PERMITS: PERMITS, ZONES: ZONES, STEPS: STEPS } };
 }));
