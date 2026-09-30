@@ -1,10 +1,10 @@
 {
-  "commit": "d108f6cc935391cc26415498ebc57f563a971b32",
-  "commitShort": "d108f6c",
-  "branch": "slice/reack-surface-on-live",
-  "buildTime": "2026-09-29T20:58:38.280Z",
+  "commit": "49e0f3a4567ac65d33590defe6d2e151aae3ad08",
+  "commitShort": "49e0f3a",
+  "branch": "feat/d2-rider-portal-on-ec452fb",
+  "buildTime": "2026-09-30T00:11:28.572Z",
   "serviceWorker": "service-worker.js",
-  "cacheVersion": "sokoni-20260929205835-v642",
+  "cacheVersion": "sokoni-20260930001126-v644",
   "environment": "production",
   "dirtyWorkingTree": false,
   "pipelineArtifacts": [
