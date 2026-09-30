@@ -1,3 +1,9 @@
+## [2026-10-01] — Till / POS M-PESA fixed: the pages called functions that do not exist in production ("internal"); now on the live IntaSend POS rail — hosting only (`hosting/pos-stk-intasend-on-72dca56`)
+
+**Root cause (proven from production):** `till.html` and merchant-v2's Sell tab called `darajaSTKPush`, `pos-checkout.html` called `posSendMpesa` — **neither is deployed** (Daraja outbound retired), so every push failed with the SDK's generic `internal`. The live rail `posInitiateIntasendPayment` (live since 2026-09-09) had **0 calls in 7 days**.
+**Files:** **new** `sokoni-pos-stk.js` (one adapter: the sell engine's callStk/callVerify → posInitiateIntasendPayment / posCheckPaymentStatus), `till.html` (wiring + `sw-register.js` so cashier devices self-update), `merchant-v2.html` (Sell tab wiring), `pos-checkout.html` (single IntaSend POS call per sale attempt; the SokoniPay booking branch that booked a till sale as a platform booking removed), **new** `scripts/test-pos-stk-intasend.js` (17/0: pages, adapter ↔ live contract, emulator chain with the LIVE functions code: request → postill_ ref → pending → webhook POS finaliser → completed; failed callback → failed; resend = new attempt).
+**Functions / rules / DB:** none — the server rail is already live. **Money:** a sale is finalised only when posCheckPaymentStatus reports the IntaSend webhook's confirmation; the shop is resolved server-side (assertShopAccess). Same fix as `7ffd640` / `3134e3f` (unpushed branch not based on live) — ported narrowly onto live `72dca56`.
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;
