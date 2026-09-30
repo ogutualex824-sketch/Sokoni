@@ -154,3 +154,8 @@ derive `plan` the way the webhook does, ignoring `request.data.plan` entirely.
 of the defect; the reference model does not need changing, and an earlier
 proposal in this session to normalize it was based on not having found the
 webhook.
+
+
+## 2026-09-30 — converged onto the production lineage; invoice hook added
+
+The writer map above predates the convergence. As of `convergence/commercial-fn-on-ef1e992`: `subActivate` (sub-billing), `subAutoActivateOnPayment` (sub-engine) and `reconcilePaidIntent` (subscription-pay-methods, the production intent rail) are the activation writers on this lineage; each now calls `subscription-invoice.recordAfterActivation(ref)` after activation — idempotent per payment reference, never blocking. **Still a rival writer here:** this index's `intasendWebhook` / `webhookMpesa` activate directly (the production line stamps the intent PAID instead). Record: [[COMMERCIAL_CONVERGENCE_2026-09-30]].

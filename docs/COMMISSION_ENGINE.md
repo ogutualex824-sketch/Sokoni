@@ -267,3 +267,10 @@ It fails the deploy on:
 
 [[PLATFORM_CONSTITUTION]] · [[FINANCIAL_TRANSACTION_STANDARD]] · [[Payment Engine]] ·
 [[Subscription Engine]] · [[Finance Engine]]
+
+
+## 2026-09-30 — fixed-rate lane restored; property / delivery rows reconciled
+
+* `FIXED_RATE_CATEGORIES = ['pos']` / `isFixedRateCategory()` are back in `commission-config.js`; `finos-utils.calculateCommission` prices the lane from `RATES.pos` only and records `fixedRateCategory`, `overrideIgnored`, `planSkipped: 'fixed_rate_category'`. The recorded decision is ABSOLUTE (09-06 · 09-26 · 09-28), not merely ladder-exempt.
+* `property` → KES 5,000 flat; `hub`/`delivery`/`logistics`/`driver` → 17%, the floor of the 17–25% share settled per quote by `delivery-quote-authority.js`.
+* Client copy binds with `data-sokoni-rate` (see the snapshot). Full record: [[COMMERCIAL_CONVERGENCE_2026-09-30]].
