@@ -748,6 +748,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <!-- B1. The offer ARITHMETIC lives in the model; the studio only edits it. -->
 <script src="sokoni-promotion-model.js"></script>
 <script src="sokoni-merchant-offers.js"></script>
+<script src="sokoni-merchant-supply.js"></script>
+<!-- MV2-2a: Chat with a supplier enters the existing in-app inbox, never a second chat system -->
+<script src="sokoni-inbox.js"></script>
 <script src="sokoni-merchant-staff.js"></script>
 <script src="sokoni-merchant-team.js"></script>
 <script src="sokoni-merchant-campaigns.js"></script>
@@ -1326,6 +1329,19 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   var S = {
     state: 'resolving',      /* resolving | in | out */
     shopError: null,         /* why activeShopId is null, when it is */
+
+    /* MERCHANT (business) IDENTITY — a DIFFERENT identifier space from activeShopId.
+       activeShopId comes from shops/{id}, where ownership is `uid === shopId`. merchantId is
+       a businesses/{id} document, and procurement is keyed on THAT. They coincide only in the
+       owner-uid form, so the two are never interchangeable and activeShopId is never used as
+       a merchantId. Server-resolved; null until resolveMerchantContext answers. */
+    merchantId: null,
+    merchantForm: null,      /* 'owner-uid' | 'generated' */
+    merchantName: null,
+    merchantSupplyEnabled: false,
+    merchantError: null,     /* the resolver's reason when merchantId is null */
+    merchantChoices: [],     /* candidate businesses when the owner has more than one */
+    uid: null, email: null, sellerUid: null,
     uid: null, email: null, sellerUid: null,
     activeShopId: null, shop: null, roles: [],
     /* SERVER-RESOLVED merchant capabilities. Empty until merchantIdentity answers
@@ -1536,6 +1552,10 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
           S.capabilities = d.capabilities;
           S.servedBy = d.servedBy || null;
           S.shopError = null;
+          /* Business identity is resolved SEPARATELY and may legitimately fail while the shop
+             resolves fine - they are different identifier spaces. A failure here must never
+             invalidate the shop session. */
+          try { await resolveMerchantContext(); } catch (_) {}
           return;
         } catch (e) {
           /* A refusal here is an ANSWER, not a failure to retry: the server
@@ -1550,6 +1570,62 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       }
     }
     console.warn('[merchant-v2] could not resolve shops/' + S.uid + ': ' + S.shopError);
+  }
+
+  /* ── MERCHANT (business) CONTEXT ─────────────────────────────────────────────────
+     Resolved from the SERVER, never from activeShopId, a URL or localStorage. An owner
+     with more than one active business has no single correct answer, so the server refuses
+     and returns the candidates; the shell records that unresolved state rather than
+     choosing. Nothing here picks a business, and no consumer may fall back to activeShopId
+     when merchantId is null — showing another business's spend, stock or payables is worse
+     than showing nothing. */
+  async function resolveMerchantContext (businessId) {
+    if (!S.uid) { S.merchantError = 'unauthenticated'; return null; }
+    try {
+      var res = await _callable('resolveMerchantContext')(businessId ? { businessId: businessId } : {});
+      var d = (res && res.data) ? res.data : res;
+      if (!d || typeof d.resolved !== 'boolean') { S.merchantError = 'context-malformed'; return null; }
+
+      if (d.resolved) {
+        S.merchantId            = d.merchantId;
+        S.merchantForm          = d.form || null;
+        S.merchantName          = d.name || null;
+        S.merchantSupplyEnabled = !!d.supplyEnabled;
+        S.merchantChoices       = [];
+        S.merchantError         = null;
+        return S.merchantId;
+      }
+
+      /* Unresolved is an ANSWER. Recorded with its reason and, when the owner simply has
+         more than one business, with the choices needed to resolve it. */
+      S.merchantId            = null;
+      S.merchantForm          = null;
+      S.merchantName          = null;
+      S.merchantSupplyEnabled = false;
+      S.merchantChoices       = Array.isArray(d.choices) ? d.choices : [];
+      S.merchantError         = d.reason || 'unresolved';
+      return null;
+    } catch (e) {
+      S.merchantId    = null;
+      S.merchantError = 'context-' + ((e && e.code) || 'unresolved');
+      return null;
+    }
+  }
+
+  /* The ONE accessor a procurement/Supply consumer may use. Returns null when the business
+     is unresolved — deliberately, so a caller cannot proceed on a guess. */
+  function merchantContext () {
+    return {
+      merchantId:    S.merchantId,
+      form:          S.merchantForm,
+      name:          S.merchantName,
+      supplyEnabled: S.merchantSupplyEnabled,
+      error:         S.merchantError,
+      choices:       (S.merchantChoices || []).slice(),
+      /* activeShopId is exposed alongside so the distinction stays visible at the call
+         site. It is NOT a merchantId and must never be substituted for one. */
+      activeShopId:  S.activeShopId,
+    };
   }
 
   async function firestore () {
@@ -2407,6 +2483,17 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     inventory:  { global: 'SokoniMerchantInventoryUI', ctx: _ctx },
     offers:     { global: 'SokoniMerchantOffers',      ctx: function () { return {
                     scope: _scope(), shopName: _shopName(), onToast: toast,
+                  }; } },
+    /* SUPPLY — the merchant-to-merchant procurement workspace (J1, sokoni-merchant-supply.js).
+       Its ctx is deliberately NOT _ctx: Supply is keyed on a BUSINESS, resolved through
+       merchantContext(), which is a different identifier space from the shop scope every
+       other module takes. Handing it _scope() would invite exactly the substitution Slice H
+       exists to prevent. It receives the resolver too, so the workspace can complete a
+       business selection when the owner has more than one. */
+    supply:     { global: 'SokoniMerchantSupply',      ctx: function () { return {
+                    merchantContext: merchantContext,
+                    resolveMerchantContext: resolveMerchantContext,
+                    callable: _callable,
                   }; } },
     /* ── WALLET — native inside Payments (ported from 82a9f3c) ─────────────
        No write adapter is handed over at all, deliberately. A free-form
@@ -4210,6 +4297,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 
   /* Public surface for modules and for the certification harness. */
   window.SokoniShell.session = S;
+  window.SokoniShell.merchantContext = merchantContext;
+  window.SokoniShell.resolveMerchantContext = resolveMerchantContext;
   window.SokoniShell.devices = DEV;
   window.SokoniShell.ready = _ready;
   window.SokoniShell.on = function (evt, fn) { (_listeners[evt] || (_listeners[evt] = [])).push(fn); };

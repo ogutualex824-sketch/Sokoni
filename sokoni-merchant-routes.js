@@ -449,6 +449,13 @@
       note:'Opens pos.html#salescontrol — the existing Sales Control Centre overlay. ' +
            'Sales stay posCompleteCheckout / the POS ledger; nothing is re-plumbed.' },
 
+    { id:'supply', name:'Supply', icon:'📦', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'supply',
+      note:'Buying, receiving, warehousing and supplying between businesses - separate from ' +
+           'customer Sales. Reads only: every figure comes from the merchant-scoped ' +
+           'procurement engine, and approve/send/receive/pay keep their own authority gates.' },
     { id:'pos-setup', name:'POS Setup', icon:'🖨️', tier:'more',
       kind:'page', src:'pos-printer-setup.html?shell=merchant',
       role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID],
@@ -485,6 +492,10 @@
       ids:['sales-control'] },
     { key:'main',       label:'Operations',
       ids:['reports','availability','shop','fulfilment','verification'] },
+    /* Owner taxonomy: Suppliers sit under Commerce, beside Products / Inventory / Analytics
+       (which are primary-tier rows). */
+    { key:'commerce',   label:'Commerce',
+      ids:['supply'] },
     { key:'growth',     label:'Growth',
       ids:['marketing','offers','flash-sale','stories','customers'] },
     /* KRA Tax groups with Operations rather than Main: it is back-office compliance
