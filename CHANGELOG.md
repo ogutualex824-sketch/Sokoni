@@ -35,6 +35,46 @@ has no category strip (its `.ll-sidebar` is the host-dashboard nav).
 **Database / API / security changes:** none. **Breaking:** none. **Deployment:** hosting only; NOT deployed.
 
 ---
+## [2026-09-30] - Messages inbox repaired: every engine category, list + thread panes, honest states; participants stay server-derived
+
+**Branch `hosting/messages-premium-on-0271709` (descends from live hosting `2bcdae2`). Certified, NOT deployed.**
+Census: `docs/MESSAGES_PAGE_CENSUS_2026_09_30.md`.
+
+**Why nothing loaded (census).** The live page's read (`userConversations/{uid}/items`) is sound, but: nothing on this line
+ever calls `createConversation`; all 13 hub "Message" buttons land on `messages.html?with=…`, which the page ignored;
+5 of the engine's 17 types had no chip; a rules denial rendered as "check your connection"; `chat.html` left its spinner
+up forever on a denied read; the header badge queries a field (`unread`) the server never writes. No branch holds a
+standalone premium inbox that descends from live — repaired in place.
+
+**Files.**
+- `sokoni-chat-engine.js` — `CATEGORIES` registry derived from `CONTEXTS` (All, Unread, Orders, Deliveries, Invoices,
+  Bookings, Healthcare, Legal, Property, Vehicles, Jobs & Work, Finance, Quotes, Support, Other); **Invoices is
+  derived from the `view_invoice` action** (order, service_booking, pharmacy_order, logistics_request) — there is no
+  invoice conversation type; `Other` appears only when a legacy row needs it. `categoryMatches` / `categorySummary`
+  read only server-written fields (`transactionType`, `unreadCount`). `createConversation` no longer sends
+  `participantUids` (the server derives parties).
+- `messages.html` — rewritten: list pane + thread pane on the SAME engine calls as `chat.html`
+  (`getConversation`, `onMessagesChanged`, `sendMessage`, `markRead`); stacked on phones with a 44px back button,
+  side by side ≥769px; chips rendered from the registry with real counts and unread badges; states **loading /
+  connecting / unauthenticated (sign-in panel, no silent redirect) / unavailable (denied or failed read, with code
+  and retry) / empty / empty-filter** — unreadable is never shown as "no messages"; `?with=` arrivals get an honest
+  notice (conversations start from a transaction); text-only composer, nothing shown as sent before the callable
+  resolves; attachments deliberately not offered (hand-off to `chat.html`).
+- `chat.html` — a denied/failed messages read now renders "Messages unavailable" instead of an eternal spinner.
+- `sokoni-inbox.js` — `createOrOpen` retired (ported from `f890075`): returns null, writes nothing.
+- `scripts/test-messages-premium.js` — new. Part A (Node): registry invariants (6). Part B (hermetic Playwright,
+  external origins aborted, stubbed compat SDK with async snapshots, every type + a legacy type + a non-participant
+  negative control): chips, filters, unread, open-every-type, states, layouts at 360/390/768/1280, `?with=`, composer.
+
+**Evidence.** Part A 6/0; `test-messages-participant-authority.js` 51/0; inline-script + `node --check` clean.
+Part B and the nav suites were queued behind a machine HOLD at certification time — see the report / census.
+
+**Database / API / security.** No schema change, no server change, no rules change. Client still writes only
+`typingIndicators/*/users/{uid}` (rules-allowed). No client participant writes; no uploads added.
+
+**Owner decisions (open).** Payments/Refunds category has no backing type on this line; direct person-to-person
+"Message" buttons need a transaction entry or a server-anchored enquiry type; header badge query and
+`messages-admin.html` unexported callables are separate repairs.
 
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
