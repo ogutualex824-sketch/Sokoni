@@ -1,3 +1,71 @@
+## [2026-10-01] - Advanced uploader, units A–C, hosting only — live variant-stock rule kept; capability limits browser-enforced (server check queued); browser certification QUEUED; NOT deployed
+
+**Branch `hosting/uploader-advanced-on-54b72cc`, built on `54b72cc` (hosting chain tip, descends from live).** Built as
+FILES from `slice/c4-convergence` @ `0f5e032` (U4), not by replaying commits. Census: the uploader port census
+(scratchpad, 2026-10-01). **Ships after the uploadedAt hosting candidate**; the uploadedAt lines (`sokoni-db.js` 803+,
+merchant-v2 `writeProduct` create stamp) are untouched.
+
+**Owner decisions (2026-10-01, binding).**
+1. **Variants: live's rule kept.** Inventory is the only stock writer. `updateProduct` refuses a stock patch and a
+   variants patch carrying any per-variant quantity (`stock-not-editable`, reason `variant-quantity`); a variants patch
+   without quantities (rename / reprice / re-SKU) is accepted and each stored row keeps its quantity by id; a row added
+   by an edit starts at 0 with a fresh id. `SokoniProductSpecs.build()` validation of specs / variants / stockUnit is
+   restored (c4 passed them whole). The editor shows existing variant quantities read-only and points to
+   "Adjust stock in Inventory". Create keeps opening stock through `merchantAdjustStock`.
+2. **Per-business-type listing limits are BROWSER-ENFORCED ONLY** (`sokoni-catalogue-capabilities.js`, writer
+   `_assertCatalogueType`). No function or rule checks them; a forged client write bypasses them. **Server check
+   queued as its own functions unit.** On this line most shops likely have no `business.category`, so they are
+   "unclassified" = goods + digital types only in the Studio (inferred types are never refused).
+
+**Unit A — pure modules (invisible until wired).** `sokoni-listing-types.js`, `sokoni-listing-model.js` (659d083 +
+a091aab + eb7d2ac), `sokoni-product-taxonomy.js` (312fdb4; 99 categories generated from `seller.html`, parity-tested),
+`sokoni-warranty-ui.js/.css` + inert `functions/warranty-policy.js` (312fdb4), `sokoni-catalogue-capabilities.js` +
+source `functions/shared/catalogue-capabilities.js` + build script (eb7d2ac), `sokoni-availability-view.js` (7531e57).
+`.wty-sheet` z-index tokenised (`--sk-z-sheet`) so the overlay ratchet does not rise.
+
+**Unit B — writer (MUST deploy with C).** `sokoni-merchant-data.js` = c4 writer (ffd608b, d0443b8, ac223fa, 312fdb4,
+eb7d2ac, 0f5e032 archive/restore) + decision 1 + `subscribeProducts` restored from live with its undefined
+`mapProducts` fixed (the listProducts mapping is now the named `mapProducts`; live throws
+`ReferenceError: mapProducts is not defined` on first delivery). Quick Charge Step 2 (2175115) absent. Till section
+byte-identical to live. merchant-v2 `_mdb.deleteProduct` tombstones through the guarded `writeProduct`
+(gate-inventory-writers stays at 2 sites); loads `sokoni-sellability.js`.
+
+**Unit C — wiring.** `sokoni-merchant-products.js` = 3-way merge c4@0f5e032 / fe52b11 / live@54b72cc, 2 CSS conflicts
+resolved per census (live visual-viewport sheet + `--sk-z-sheet`; c4 form CSS + live `.pr-foot` 14px); the 2026-09-30
+phone-scroll fix (6685eb9 + b56fbe5) survives intact. `sokoni-listing-studio.js/.css`. merchant-v2 script/link tags
+after `sokoni-product-specs.js`; ctx `businessCategory` and `callAiMetadata` (30208f3). Every sheet control made
+>= 44px (checkbox via a >= 44px label with a drawn box; `.ls-chip`, `.ls-devbtn`, `.ls-life-btn`, `.pr-ptool`,
+`.pr-pmove`). NOT taken: Offers (already live), `sokoni-merchant-routes.js` hunk, U4 `sokoni-db.js` hunk (already live),
+Unit D (buyer pages), Unit E (kass), fd89c31 (U5 bundles).
+
+**Evidence (node-only, this tree).** test-uploader-writer-decisions (new) 49/0 · test-listing-model 25/0 ·
+test-availability-view 42/0 · test-product-taxonomy-parity 24/0 · test-warranty-policy 45/0 · test-listing-studio 63/0 ·
+test-media-lifecycle 43/0 · test-price-tag-batch 31/0 · test-merchant-product-writer 37/0 (2 unproven) ·
+test-merchant-adjust-stock 39/0 · test-inventory-authority-boundary 72/0 · test-merchant-v2-products-2b (c4) 59/0 ·
+test-products-detail-sheet 30/0 (updated: Archive/Restore) · test-merchant-products-native 23/0 ·
+test-merchant-products-wizard-photos 40/0 · test-merchant-v2-panels 20/0 · test-merchant-routes 65/0 ·
+test-mv2-1-sidebar 14/0 · test-inshell-chrome 30/0 · test-module-authorities 15/0 · gate-inventory-writers PASSED ·
+`predeploy-syntax-gate`: 1852 JS files + 457 inline scripts parse (exit 0).
+48 further node suites touching these files: identical to a `git archive 54b72cc` extract.
+test-catalogue-capabilities 9/0 only with c4's `functions/business-category.js` + `business-workspace.js` in a scratch
+copy (the registry is absent on this line). Expected partial: test-warranty-surfaces 55/7 (H1–H8 =
+`delivery-tracking.html`, buyer surface, out of scope), test-price-vocabulary 28/13 (script.js/product.js = Unit D).
+Pre-existing on 54b72cc (same result there): test-overlays (ratchet 212 vs 221, body overflow lock),
+test-home-logo-routing 30/1, test-merchant-capability 44/2, test-merchant-shell-callables 18/1,
+test-merchant-products-2c-media (3 BLOCKED).
+
+**QUEUED (browser hold):** test-uploader-mobile-scroll, test-catalogue-u1-browser, test-catalogue-u3-browser,
+test-merchant-v2-modules, test-merchant-route-gate, test-listing-studio-saves, test-products-upload-form.
+**Emulator (not run):** test-catalogue-u4-archive, test-merchant-product-writer-emulator, gate-seller-product-create.
+
+**Files:** see commits 25fdc5f..HEAD. **Database:** no schema change; products gain the fields the c4 writer carries
+(listingType, attributes, warranty, kebsCert, foodLicence, tags, brand, …) and archive fields (status 'archived',
+isVisible, archivedAt, statusBeforeArchive). **API:** none (callables used are live: merchantAdjustStock,
+canPublishProduct, generateProductMetadata). **Security:** capability limits are client-side only (stated above);
+variant quantities can no longer be written through the metadata path. **Breaking:** Remove now archives (restorable)
+instead of deleting. **Deployment:** hosting only; NOT deployed; B and C in the same deploy.
+
+---
 ## [2026-09-30] - BnB: category pill strip made phone-safe (snap-scroll chips, sort on its own row) — built, browser certification QUEUED, NOT deployed
 
 **Branch `hosting/bnb-mobile-on-0271709`, built on `0271709`.** Owner ask (verbatim): "fix the bnb mobile layout the
