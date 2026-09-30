@@ -1,3 +1,37 @@
+## [2026-10-01] — SOKONI Store: company-OWNED, owner-OPERATED (server) — NOT deployed
+
+**Owner decisions (binding):** the store stays owned by the company account (`vbaSOKL4…`,
+Bravilex); `D5Ql2EYr95bt79IpcGTmOMTK0P83` is its ONLY operator; admin/superAdmin claims grant
+nothing on the store (refusal `permission-denied`, reason `not-store-operator`); the store gets its
+own wallet on the company account; `+254705726803` is the contact phone and the payout number, the
+latter to be set by the operator through a PIN-protected flow, never by an agent.
+
+**Operator record NOT yet written — run `scripts/infra/set-first-party-store-operator.js --apply`
+after deploy** (dry run first; owner-authorised). **NOT deployed.**
+
+**Files:**
+- `functions/first-party-store-operator.js` (new) — chain resolver (firstParty shop → ownerId →
+  the one `SOKONI_FIRST_PARTY_STORE` business, via `tenant-identity`) and the operator gate.
+- `functions/first-party-store-workspace.js` (new) — `sokoniStoreGetContext`,
+  `sokoniStoreSaveProfile`, `sokoniStoreListProducts`, `sokoniStoreListOrders`,
+  `sokoniStoreGetWallet` (re-modelled from 526f330: admin-only → operator-only).
+- `functions/shop-employees.js` — `resolveShopAccess`: on the first-party shop the admin arm is
+  replaced by the operator record (owner + corroborated-employee arms unchanged; ordinary shops unchanged).
+- `functions/kasshop.js` — `_internal` read-only export of the profile allowlist (no behaviour change).
+- `functions/index.js` — the five callables exported by name.
+- `scripts/infra/set-first-party-store-operator.js` (new, one-off, dry-run default, `create()`-only).
+- `scripts/test-sokoni-first-party-store.js` (new, hermetic, 63/0), `scripts/test-first-party-store-operator-rules.js`
+  (new, emulator, written NOT run), `docs/SOKONI_STORE_OPERATOR_CENSUS.md` (new).
+
+**Database:** new server-only collections `firstPartyStoreOperators/{storeId}` and
+`firstPartyStoreAudit/*` (no rules match → client default-deny). No existing document changed.
+**API:** 5 new callables (App Check enforced). **Security:** admins lose the store through
+`merchantIdentity` / staff / stock paths once the REBUILT names ship; rules still let admin clients
+update `shops/{store}` and read `wallets/*` (documented gap; rules not edited).
+**Money:** no commission, subscription, settlement, wallet or payout code changed. The payout
+destination is NOT built — no stored-destination authority exists and the payout PIN is advisory
+(see census). **Breaking:** none for ordinary shops.
+
 ## [2026-09-30] — F1 (server): the pickup-location authority — NOT deployed
 
 **Files:**
