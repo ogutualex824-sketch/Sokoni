@@ -854,43 +854,58 @@
 </div>
 
 <script>
-/*  Sample providers data  */
-const PROVIDERS = [
-  { id:"hc1", name:"Nairobi West Hospital", type:"hospital", location:"Nairobi West", area:"nairobi", desc:"Full-service hospital with A&E, maternity, surgery, paediatrics and ICU. NHIF accredited.", rating:4.7, reviews:312, hours:"24/7", open:true, emoji:"🏥" },
-  { id:"hc2", name:"Aga Khan Hospital", type:"hospital", location:"Parklands, Nairobi", area:"nairobi", desc:"Tertiary referral centre. Specialised oncology, cardiology, orthopaedics and neurology.", rating:4.9, reviews:880, hours:"24/7", open:true, emoji:"🏥" },
-  { id:"hc3", name:"Coast General Teaching Hospital", type:"hospital", location:"Mombasa", area:"mombasa", desc:"Largest public hospital in the Coast region. Specialist clinics, lab & pharmacy on site.", rating:4.2, reviews:210, hours:"24/7", open:true, emoji:"🏥" },
-  { id:"hc4", name:"Gertrude's Children's Hospital", type:"hospital", location:"Muthaiga, Nairobi", area:"nairobi", desc:"Leading paediatric hospital in East Africa. Neonatology, paediatric surgery, dentistry.", rating:4.8, reviews:540, hours:"24/7", open:true, emoji:"🏥" },
+/* ══ HEALTHCARE PROVIDERS — from the canonical `providers` registry ═════════
+   A hardcoded "sample providers" list used to live here: 28 entries naming
+   real Kenyan hospitals, pharmacies, labs and ambulance services alongside
+   invented doctors, every one with a fabricated rating, review count and
+   "Open Now" state. None of them had listed on SOKONI. They are gone.
 
-  { id:"hc5", name:"Karen Clinic", type:"clinic", location:"Karen, Nairobi", area:"nairobi", desc:"General outpatient clinic offering GP, dental, immunisation and minor procedures. Walk-in welcome.", rating:4.5, reviews:97, hours:"MonSat 7am8pm", open:true, emoji:"🩺" },
-  { id:"hc6", name:"CBD Medical Centre", type:"clinic", location:"Nairobi CBD", area:"nairobi", desc:"Affordable GP consultations, STI testing, family planning and lab. Open 7 days a week.", rating:4.3, reviews:155, hours:"7am9pm daily", open:true, emoji:"🩺" },
-  { id:"hc7", name:"Kisumu Medical Hub", type:"clinic", location:"Kisumu CBD", area:"kisumu", desc:"Multi-specialty clinic: GP, gynaecology, eye clinic, nutrition and physiotherapy.", rating:4.4, reviews:88, hours:"MonSat 8am6pm", open:true, emoji:"🩺" },
+   This hub now reads `providers` through SokoniProviders (the same client the
+   Cleaning hub, services.html and providers.html use), filtered to the
+   `health` bucket. Absent fields stay absent: no rating is shown unless the
+   record carries one, and no opening-hours / open-now claim is rendered
+   because the registry does not hold one. ─────────────────────────────────── */
+let PROVIDERS = [];
+let _hcLoaded = false;
+let _hcError  = null;
 
-  { id:"hc8", name:"Eastlands Community Dispensary", type:"dispensary", location:"Eastlands, Nairobi", area:"nairobi", desc:"Government-linked dispensary offering free OPD, ANC, child immunisation, malaria treatment.", rating:4.1, reviews:63, hours:"MonFri 8am5pm", open:false, emoji:"💊" },
-  { id:"hc9", name:"Kibera Health Post", type:"dispensary", location:"Kibera, Nairobi", area:"nairobi", desc:"NGO-supported dispensary. Family planning, nutrition, malaria, wound care, TB screening.", rating:4.3, reviews:47, hours:"MonFri 7:30am5pm", open:true, emoji:"💊" },
-  { id:"hc10", name:"Westlands Dispensary", type:"dispensary", location:"Westlands, Nairobi", area:"nairobi", desc:"County dispensary serving Westlands area. Basic OPD and essential medicine supply.", rating:3.9, reviews:34, hours:"MonFri 8am4pm", open:false, emoji:"💊" },
+/* Card type is inferred from the provider's own category / skills wording so
+   the facility tiles filter a real record without a hand-maintained list. */
+const HC_TYPE_MATCH = {
+  hospital:   ['hospital'],
+  clinic:     ['clinic', 'medical centre', 'medical center'],
+  dispensary: ['dispensary'],
+  pharmacy:   ['pharmacy', 'chemist'],
+  lab:        ['lab', 'diagnostic', 'pathology', 'imaging'],
+  ambulance:  ['ambulance', 'paramedic'],
+  doctor:     ['home-doctor', 'home doctor', 'doctor', 'nurse', 'gp'],
+};
+function _hcInferType(p) {
+  const hay = [p.category, (p.categories || []).join(' '), p.serviceType,
+               (p.skills || []).join(' '), p.categoryLabel]
+    .filter(Boolean).join(' ').toLowerCase();
+  for (const t in HC_TYPE_MATCH) {
+    if (HC_TYPE_MATCH[t].some(w => hay.indexOf(w) !== -1)) return t;
+  }
+  return '';
+}
 
-  { id:"hc11", name:"HealthMart Pharmacy", type:"pharmacy", location:"Westlands, Nairobi", area:"nairobi", desc:"Well-stocked pharmacy with prescription & OTC medicine. Licensed pharmacist on duty. Delivery available.", rating:4.6, reviews:220, hours:"8am10pm daily", open:true, emoji:"💊", delivery:true },
-  { id:"hc12", name:"Goodlife Pharmacy", type:"pharmacy", location:"Nairobi CBD", area:"nairobi", desc:"Trusted chain pharmacy. Branded & generic drugs, cosmetics, baby products and supplements.", rating:4.7, reviews:510, hours:"7am10pm daily", open:true, emoji:"💊", delivery:true },
-  { id:"hc13", name:"Mombasa Road Pharmacy", type:"pharmacy", location:"Mombasa Road, Nairobi", area:"nairobi", desc:"24-hour pharmacy. Night-time prescription dispensing, emergency medicine and first-aid supplies.", rating:4.5, reviews:188, hours:"24/7", open:true, emoji:"💊", delivery:true },
-  { id:"hc14", name:"Coast Pharma", type:"pharmacy", location:"Mombasa", area:"mombasa", desc:"Mombasa's largest retail pharmacy. Wide range of medicine, medical devices and homecare products.", rating:4.4, reviews:130, hours:"8am9pm daily", open:true, emoji:"💊", delivery:true },
-
-  { id:"hc15", name:"Nairobi Diagnostics Lab", type:"lab", location:"Upper Hill, Nairobi", area:"nairobi", desc:"Full blood panel, malaria, HIV, hepatic function, kidney function, urinalysis, PCR and imaging.", rating:4.8, reviews:340, hours:"MonSat 6am7pm", open:true, emoji:"🔬" },
-  { id:"hc16", name:"Lancet Kenya", type:"lab", location:"Multiple branches", area:"nairobi", desc:"ISO-certified pathology labs. Home sample collection available. Results via email in 2448hrs.", rating:4.9, reviews:700, hours:"MonSat 6:30am8pm", open:true, emoji:"🔬", delivery:true },
-  { id:"hc17", name:"BioMedics Lab", type:"lab", location:"Kisumu", area:"kisumu", desc:"Malaria RDT, blood sugar, HIV, hepatitis, renal & liver profile. Affordable pricing.", rating:4.4, reviews:91, hours:"MonFri 7am6pm", open:true, emoji:"🔬" },
-
-  { id:"hc18", name:"AAR Rescue Ambulance", type:"ambulance", location:"Nairobi (all zones)", area:"nairobi", desc:"Private ambulance with paramedics. Response time 1525 min in Nairobi. Advanced life support.", rating:4.7, reviews:88, hours:"24/7", open:true, emoji:"🚑" },
-  { id:"hc19", name:"St John Ambulance Kenya", type:"ambulance", location:"Kenya-wide", area:"nairobi", desc:"Non-profit ambulance service. Basic and advanced life support, patient transfer.", rating:4.5, reviews:145, hours:"24/7", open:true, emoji:"🚑" },
-
-    { id:"hc20", name:"DoctorOnCall Kenya", type:"doctor", location:"Nairobi, Mombasa", area:"nairobi", desc:"Qualified GP visits your home within 90 minutes. Blood pressure, prescriptions, wound care, sick notes.", rating:4.6, reviews:200, hours:"8am-10pm daily", open:true, emoji:"🩺" },
-  { id:"hc21", name:"HomeDoc Kisumu", type:"doctor", location:"Kisumu", area:"kisumu", desc:"Home doctor visits for the whole family. General consultations, malaria testing, chronic disease check-up.", rating:4.5, reviews:67, hours:"Mon-Sat 8am-7pm", open:true, emoji:"🩺" },
-  { id:"hc22", name:"Dr. Wanjiku Muthoni — Home GP", type:"doctor", location:"Westlands / Parklands, Nairobi", area:"nairobi", desc:"MBChB UoN, 10 yrs GP. Home visits for adults & children. Chronic disease management, ANC, immunisation.", rating:4.9, reviews:312, hours:"7am-9pm daily", open:true, emoji:"🩺" },
-  { id:"hc23", name:"Dr. Brian Omondi — Paediatrician", type:"doctor", location:"Kilimani, Nairobi", area:"nairobi", desc:"Paediatric specialist, 8 yrs. Home visits for sick children, growth monitoring, vaccinations and fever management.", rating:4.8, reviews:245, hours:"8am-8pm daily", open:true, emoji:"🩺" },
-  { id:"hc24", name:"Dr. Fatuma Said — Maternity", type:"doctor", location:"Mombasa", area:"mombasa", desc:"OB/GYN, 12 yrs. Antenatal care, postnatal home visits, family planning. Mombasa Island and Mainland.", rating:4.9, reviews:188, hours:"8am-6pm Mon-Sat", open:true, emoji:"🩺" },
-  { id:"hc25", name:"Dr. Collins Mwangi — GP", type:"doctor", location:"Thika Road, Nairobi", area:"nairobi", desc:"General practitioner, 7 yrs. Outpatient consultations, diabetes & hypertension monitoring. Quick response.", rating:4.7, reviews:143, hours:"7am-10pm daily", open:true, emoji:"🩺" },
-  { id:"hc26", name:"Dr. Achieng Ouma — Dermatology", type:"doctor", location:"Kisumu", area:"kisumu", desc:"Dermatologist, 9 yrs. Skin conditions, acne, eczema, rashes, wound assessment. Home & clinic visits.", rating:4.8, reviews:110, hours:"Mon-Fri 8am-5pm", open:false, emoji:"🩺" },
-  { id:"hc27", name:"Nurse Priscilla Kamau — ICU/Home Care", type:"doctor", location:"Nairobi South", area:"nairobi", desc:"Registered nurse, 6 yrs. Post-surgery care, IV drips, catheter, wound dressing, elderly care at home.", rating:4.9, reviews:167, hours:"24/7 on request", open:true, emoji:"🩺" },
-  { id:"hc28", name:"Dr. Samuel Kipchoge — Internal Medicine", type:"doctor", location:"Eldoret", area:"eldoret", desc:"Internal medicine specialist, 11 yrs. Home visits for complex chronic conditions. Moi Teaching Hospital affiliate.", rating:4.8, reviews:92, hours:"8am-6pm Mon-Sat", open:true, emoji:"🩺" },
-];
+function loadHealthProviders(force) {
+  if (!window.SokoniProviders) return Promise.resolve();
+  return SokoniProviders.list({ category: 'health', force: !!force }).then(function (r) {
+    PROVIDERS = r.providers.map(function (p) {
+      return {
+        id: p.uid, name: p.name, type: _hcInferType(p), categoryLabel: p.categoryLabel,
+        location: p.location || '', desc: p.description || '', phone: p.phone || '',
+        rating: p.rating, reviews: p.reviewCount, verified: p.verified,
+        profileUrl: p.profileUrl, emoji: '🏥'
+      };
+    });
+    _hcError  = r.error;
+    _hcLoaded = true;
+    renderProviders();
+  });
+}
 
 let activeCat = '';
 let apptTarget = null;
@@ -914,6 +929,17 @@ function setCat(cat, btn){
 function filterProviders(){ renderProviders(); }
 
 function renderProviders(){
+  const grid = document.getElementById("hcGrid");
+  const empty = document.getElementById("hcEmpty");
+  const esc = window.SokoniProviders ? SokoniProviders.esc : (s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'));
+  const js  = v => esc(String(v == null ? '' : v).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,' '));
+  if(!grid) return;
+  if(!_hcLoaded){
+    document.getElementById("hcResultLabel").textContent = "Healthcare Providers";
+    if(empty) empty.style.display="none";
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:rgba(255,255,255,0.28);"><div style="font-size:40px;margin-bottom:10px;">⏳</div><div style="font-size:15px;">Loading healthcare providers…</div></div>';
+    return;
+  }
   const q = (document.getElementById("hcSearch").value||"").toLowerCase();
   let list = PROVIDERS;
   if(activeCat) list = list.filter(p=>p.type===activeCat);
@@ -927,35 +953,36 @@ function renderProviders(){
   const label = activeCat ? (TYPE_LABEL[activeCat]||activeCat)+"s" : "All Healthcare Providers";
   document.getElementById("hcResultLabel").textContent = `${label} (${list.length})`;
 
-  const grid = document.getElementById("hcGrid");
-  const empty = document.getElementById("hcEmpty");
-  if(!list.length){ grid.innerHTML=""; empty.style.display="block"; return; }
+  if(!list.length){
+    /* A failed read is not an empty category — say which one it is. */
+    if(_hcError && window.SokoniProviders){ if(empty) empty.style.display="none"; grid.innerHTML = SokoniProviders.emptyStateHtml(_hcError, null); return; }
+    grid.innerHTML=""; empty.style.display="block"; return;
+  }
   empty.style.display="none";
 
   grid.innerHTML = list.map(p=>`
-    <div class="hc-card" data-provider-id="hc_${p.id}">
+    <div class="hc-card" data-provider-id="hc_${esc(p.id)}">
       <div class="hc-card-head">
         <div class="hc-card-emoji ${CARD_BG[p.type]||''}">${p.emoji}</div>
         <div class="hc-card-meta">
-          <div class="hc-card-name">${p.name}</div>
-          <span class="hc-card-type ${TYPE_CSS[p.type]||''}">${TYPE_LABEL[p.type]||p.type}</span>
-          <div class="hc-card-location"><i class="fas fa-map-marker-alt" style="color:#00c878;margin-right:4px;"></i>${p.location}</div>
+          <div class="hc-card-name"><a href="${esc(p.profileUrl)}" style="color:inherit;text-decoration:none;">${esc(p.name)}</a></div>
+          <span class="hc-card-type ${TYPE_CSS[p.type]||''}">${esc(TYPE_LABEL[p.type]||p.categoryLabel||'Healthcare')}</span>
+          ${p.location?`<div class="hc-card-location"><i class="fas fa-map-marker-alt" style="color:#00c878;margin-right:4px;"></i>${esc(p.location)}</div>`:''}
         </div>
       </div>
       <div class="hc-card-body">
-        <div class="hc-card-desc">${p.desc}${p.delivery?'<br><span style="color:#00c878;font-size:11px;font-weight:700;">✓ Delivery available</span>':""}</div>
+        <div class="hc-card-desc">${esc(p.desc)}</div>
         <div class="hc-card-footer">
           <div class="hc-card-info-row">
-            <div class="hc-card-rating"><span class="star">⭐</span> ${p.rating} <span>(${p.reviews} reviews)</span></div>
-            <span class="hc-open-badge ${p.open?'open-now':'closed'}">${p.open?'Open Now':'Closed'}</span>
+            ${p.rating?`<div class="hc-card-rating"><span class="star">⭐</span> ${p.rating.toFixed(1)}${p.reviews?` <span>(${p.reviews} reviews)</span>`:''}</div>`:'<div class="hc-card-rating" style="color:rgba(255,255,255,0.4);">New on SOKONI</div>'}
+            ${p.verified?'<span class="hc-open-badge open-now">✓ Verified</span>':''}
           </div>
-          <div class="hc-card-hours"><i class="fas fa-clock" style="margin-right:4px;"></i>${p.hours}</div>
-          <div data-avail-provider="hc_${p.id}"></div>
+          <div data-avail-provider="hc_${esc(p.id)}"></div>
           <div class="hc-card-actions">
-            <button type="button" class="hc-book-btn" onclick="openAppt('${p.id}','${p.name.replace(/'/g,"\\'")}')">📅 Book</button>
-            <button type="button" class="hc-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;" onclick="window.SokoniInbox?SokoniInbox.openChat({otherUid:'hc_${p.id}',otherName:'${p.name.replace(/'/g,"\\'")}',type:'customer-provider',context:'Healthcare: ${p.name.replace(/'/g,"\\'")}'}):window.location.href='messages.html'">💬 Message</button>
-            <button type="button" class="hc-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;" onclick="window.SokoniSocial&&window.SokoniSocial.openShareModal({id:'hc_${p.id}',name:'${p.name.replace(/'/g,"\\'")}',category:'${p.type}',tagline:'${p.desc.replace(/'/g,"\\'").replace(/\n/g,' ')}',rating:${p.rating},type:'service'})">📣 Share</button>
-            <button type="button" class="hc-book-btn" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);color:rgba(255,255,255,0.55);" id="_fhc${p.id}" onclick="window.SokoniSocial&&window.SokoniSocial.toggleFollow('hc_${p.id}','${p.name.replace(/'/g,"\\'")}',this,'hospital')">❤ Follow</button>
+            <button type="button" class="hc-book-btn" onclick="openAppt('${js(p.id)}','${js(p.name)}')">📅 Book</button>
+            <button type="button" class="hc-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;" onclick="window.SokoniInbox?SokoniInbox.openChat({otherUid:'${js(p.id)}',otherName:'${js(p.name)}',type:'customer-provider',context:'Healthcare: ${js(p.name)}'}):window.location.href='messages.html'">💬 Message</button>
+            <button type="button" class="hc-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;" onclick="window.SokoniSocial&&window.SokoniSocial.openShareModal({id:'hc_${js(p.id)}',name:'${js(p.name)}',category:'${js(p.type)}',tagline:'${js(p.desc)}',rating:${p.rating?p.rating:'null'},type:'service'})">📣 Share</button>
+            <button type="button" class="hc-book-btn" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);color:rgba(255,255,255,0.55);" onclick="window.SokoniSocial&&window.SokoniSocial.toggleFollow('hc_${js(p.id)}','${js(p.name)}',this,'hospital')">❤ Follow</button>
           </div>
         </div>
       </div>
@@ -1258,6 +1285,14 @@ window.closeReg = closeReg;
 window.submitRegFac = submitRegFac;
 
 renderProviders();
+/* SokoniProviders is deferred and firebase.js is a module — wait for both
+   rather than racing them (same boot as cleaning.html). */
+(function _hcBoot(attempt){
+  attempt = attempt || 0;
+  if (window.SokoniProviders && window.firebaseDB) { loadHealthProviders(); return; }
+  if (attempt > 40) { _hcLoaded = true; _hcError = new Error('init timeout'); renderProviders(); return; }
+  setTimeout(function(){ _hcBoot(attempt + 1); }, 150);
+}(0));
 /* Re-render once deferred market-actions.js has loaded to show cart/wishlist buttons */
 document.addEventListener('DOMContentLoaded', function(){ if(typeof SokoniMarket!=="undefined") renderProviders(); });
 
@@ -1367,25 +1402,11 @@ function hcShowTab(tab, btn){
 /* ════════════════════════════════════════════════════════════
    SPECIALISTS DATA
 ════════════════════════════════════════════════════════════ */
-const SPECIALISTS = [
-  {id:'sp01',name:'Dr. James Mwangi',title:'Cardiologist',type:'cardiologist',icon:'❤️',city:'Nairobi',hospital:'Aga Khan Hospital',rating:5.0,reviews:145,exp:'18 yrs',fee:3500,tags:['Heart Disease','ECG','Echocardiography','Hypertension'],phone:'0722301001',available:true},
-  {id:'sp02',name:'Dr. Amina Hassan',title:'Cardiologist',type:'cardiologist',icon:'❤️',city:'Mombasa',hospital:'Coast General Hospital',rating:4.8,reviews:87,exp:'14 yrs',fee:3000,tags:['Arrhythmia','Heart Failure','Angioplasty'],phone:'0733302001',available:true},
-  {id:'sp03',name:'Dr. Grace Kamau',title:'Dermatologist',type:'dermatologist',icon:'🌿',city:'Nairobi',hospital:'Karen Clinic',rating:4.9,reviews:210,exp:'11 yrs',fee:2500,tags:['Acne','Eczema','Psoriasis','Skin Cancer Screening','Rashes'],phone:'0744303001',available:true},
-  {id:'sp04',name:'Dr. Moses Otieno',title:'Dermatologist',type:'dermatologist',icon:'🌿',city:'Kisumu',hospital:'Kisumu Medical Hub',rating:4.7,reviews:96,exp:'8 yrs',fee:2000,tags:['Vitiligo','Allergies','Wound Assessment'],phone:'0755304001',available:true},
-  {id:'sp05',name:'Dr. Peter Njoroge',title:'Orthopaedic Surgeon',type:'orthopaedic',icon:'🦴',city:'Nairobi',hospital:'Nairobi West Hospital',rating:4.9,reviews:178,exp:'16 yrs',fee:4000,tags:['Fractures','Joint Replacement','Sports Injuries','Spine'],phone:'0766305001',available:true},
-  {id:'sp06',name:'Dr. Elizabeth Cheptoo',title:'ENT Specialist',type:'ent',icon:'👂',city:'Nairobi',hospital:'CBD Medical Centre',rating:4.8,reviews:132,exp:'10 yrs',fee:2800,tags:['Ear Problems','Sinusitis','Throat','Tonsils'],phone:'0711306001',available:true},
-  {id:'sp07',name:'Dr. Wanjiru Ndegwa',title:'Gynaecologist',type:'gynaecologist',icon:'🌺',city:'Nairobi',hospital:'Gertrude\'s Hospital',rating:4.9,reviews:320,exp:'15 yrs',fee:3500,tags:['ANC','Family Planning','PCOS','Fibroids','Colposcopy'],phone:'0722307001',available:true},
-  {id:'sp08',name:'Dr. Fatuma Said',title:'Obstetrician',type:'gynaecologist',icon:'🌺',city:'Mombasa',hospital:'Coast Maternity',rating:4.9,reviews:188,exp:'12 yrs',fee:3000,tags:['Maternity','High-Risk Pregnancy','Postnatal Care'],phone:'0733308001',available:true},
-  {id:'sp09',name:'Dr. Brian Omondi',title:'Paediatrician',type:'paediatrician',icon:'👶',city:'Nairobi',hospital:'Gertrude\'s Hospital',rating:4.8,reviews:245,exp:'8 yrs',fee:2500,tags:['Child Health','Vaccination','Fever','Growth Monitoring'],phone:'0744309001',available:true},
-  {id:'sp10',name:'Dr. Samuel Kipchoge',title:'Dentist & Oral Surgeon',type:'dentist',icon:'🦷',city:'Eldoret',hospital:'Moi Teaching Hospital',rating:4.8,reviews:92,exp:'11 yrs',fee:2000,tags:['Extraction','Root Canal','Braces','Teeth Whitening','Scaling'],phone:'0755310001',available:true},
-  {id:'sp11',name:'Dr. Achieng Ouma',title:'Dermatologist & Aesthetics',type:'dermatologist',icon:'🌿',city:'Kisumu',hospital:'Private Practice',rating:4.8,reviews:110,exp:'9 yrs',fee:2200,tags:['Skin Conditions','Chemical Peel','Laser','Botox'],phone:'0766311001',available:true},
-  {id:'sp12',name:'Ruth Wambua',title:'Physiotherapist',type:'physiotherapist',icon:'💪',city:'Nairobi',hospital:'Nairobi West Physio',rating:4.9,reviews:167,exp:'7 yrs',fee:1800,tags:['Sports Physio','Post-Surgery Rehab','Back Pain','Stroke Rehab'],phone:'0711312001',available:true},
-  {id:'sp13',name:'Sarah Mutua',title:'Physiotherapist',type:'physiotherapist',icon:'💪',city:'Mombasa',hospital:'Coast Rehab Centre',rating:4.7,reviews:78,exp:'5 yrs',fee:1500,tags:['Neck & Back','Knee Rehab','Manual Therapy'],phone:'0722313001',available:true},
-  {id:'sp14',name:'Joan Kariuki',title:'Nutritionist & Dietitian',type:'nutritionist',icon:'🥗',city:'Nairobi',hospital:'Aga Khan Hospital',rating:4.9,reviews:134,exp:'9 yrs',fee:2000,tags:['Weight Management','Diabetes Diet','Sports Nutrition','Child Nutrition'],phone:'0733314001',available:true},
-  {id:'sp15',name:'Dr. Kevin Ochieng',title:'Mental Health Counsellor',type:'mental',icon:'🧠',city:'Nairobi',hospital:'InnerPeace Wellness',rating:5.0,reviews:89,exp:'12 yrs',fee:2500,tags:['Depression','Anxiety','Trauma','CBT','Couples Therapy'],phone:'0744315001',available:true},
-  {id:'sp16',name:'Dr. Miriam Waweru',title:'Psychiatrist',type:'mental',icon:'🧠',city:'Nairobi',hospital:'Mathare Hospital',rating:4.8,reviews:67,exp:'14 yrs',fee:3500,tags:['Schizophrenia','Bipolar','ADHD','Medication Management'],phone:'0755316001',available:true},
-  {id:'sp17',name:'Dr. Joseph Maina',title:'Ophthalmologist',type:'ophthalmologist',icon:'👁️',city:'Nairobi',hospital:'Aga Khan Eye Unit',rating:4.9,reviews:145,exp:'13 yrs',fee:3000,tags:['LASIK','Cataracts','Glaucoma','Retina','Eye Exams'],phone:'0766317001',available:true},
-];
+/* A hardcoded list of 17 named "specialists" used to live here — invented
+   doctors placed at real hospitals, with fabricated ratings, review counts,
+   fees and phone numbers. Removed. No canonical specialist registry exists
+   yet, so this tab shows an honest empty state until one does. */
+const SPECIALISTS = [];
 
 let _activeSpecType = 'all';
 let _tcRef = null;
@@ -1400,7 +1421,7 @@ function renderSpecialists(){
   const grid = document.getElementById('specGrid');
   if(!grid) return;
   const list = _activeSpecType==='all' ? SPECIALISTS : SPECIALISTS.filter(s=>s.type===_activeSpecType);
-  if(!list.length){ grid.innerHTML='<p style="color:rgba(255,255,255,0.3);padding:36px 0;text-align:center;">No specialists found for this category.</p>'; return; }
+  if(!list.length){ grid.innerHTML='<p style="color:rgba(255,255,255,0.3);padding:36px 0;text-align:center;">'+(SPECIALISTS.length?'No specialists found for this category.':'No specialists are listed on SOKONI yet.')+'</p>'; return; }
   grid.innerHTML = list.map(s=>`
     <div class="spec-card">
       <div style="display:flex;gap:12px;align-items:flex-start;padding:16px 16px 0;">
@@ -1436,17 +1457,15 @@ function waSpecialist(phone, name){
 /* ════════════════════════════════════════════════════════════
    TELECONSULT
 ════════════════════════════════════════════════════════════ */
-const TC_DOCTORS = [
-  {id:'tc01',name:'Dr. Collins Mwangi',title:'GP',icon:'🩺',type:'gp',city:'Nairobi',fee:500,rating:4.7,reviews:143,phone:'0725001001',available:true},
-  {id:'tc02',name:'Dr. Wanjiku Muthoni',title:'GP',icon:'🩺',type:'gp',city:'Nairobi',fee:500,rating:4.9,reviews:312,phone:'0722007001',available:true},
-  {id:'tc03',name:'Dr. Kevin Ochieng',title:'Mental Wellness',icon:'🧠',type:'mental',city:'Nairobi',fee:800,rating:5.0,reviews:89,phone:'0744315001',available:true},
-  {id:'tc04',name:'Joan Kariuki',title:'Nutritionist',icon:'🥗',type:'nutrition',city:'Nairobi',fee:700,rating:4.9,reviews:134,phone:'0733314001',available:true},
-  {id:'tc05',name:'Dr. Grace Kamau',title:'Dermatologist',icon:'🌿',type:'specialist',city:'Nairobi',fee:1500,rating:4.9,reviews:210,phone:'0744303001',available:true},
-];
+/* Five invented teleconsult doctors (fabricated ratings, review counts,
+   fees and phone numbers) used to live here. Removed; the booking form above
+   remains the way to request a teleconsultation. */
+const TC_DOCTORS = [];
 
 function renderTCDoctors(){
   const grid = document.getElementById('tcDoctorGrid');
   if(!grid) return;
+  if(!TC_DOCTORS.length){ grid.innerHTML='<p style="color:rgba(255,255,255,0.3);padding:24px 0;text-align:center;grid-column:1/-1;">No teleconsult doctors are listed on SOKONI yet. Use the booking form above to request a consultation.</p>'; return; }
   grid.innerHTML = TC_DOCTORS.map(d=>`
     <div class="spec-card">
       <div style="display:flex;gap:12px;align-items:flex-start;padding:14px 14px 0;">
@@ -1665,6 +1684,7 @@ window.loadMyHealthDash=loadMyHealthDash; window.submitProviderReg=submitProvide
 <script src="sokoni-invoice.js"></script><script src="sokoni-ui-extras.js" defer></script>
   <script src="sw-register.js" defer></script>
 <script src="sokoni-availability.js" defer></script>
+<script src="sokoni-providers.js" defer></script>
 <script>
 let _hcOpenNow = false;
 async function toggleHcOpenNow(btn) {

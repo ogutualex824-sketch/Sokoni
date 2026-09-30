@@ -2153,7 +2153,7 @@ async function hwTestBarcode () {
 async function hwTestQR () {
   await hwRun('QR Code Print', async () => {
     if (!_printerConnected()) throw new Error('Printer not connected');
-    await PrinterManager.printQR('https://sokoni.co.ke/', { label: 'sokoni.co.ke', size: 5 });
+    await PrinterManager.printQR('https://mysokoni.co.ke/', { label: 'mysokoni.co.ke', size: 5 });
     PrinterManager.p58e.markChecklistItem('qrcode', true);
   });
 }

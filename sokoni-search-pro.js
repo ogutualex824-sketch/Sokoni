@@ -1186,7 +1186,7 @@ const SokoniSearchPro = (function () {
         'Upgrade path: (1) Extract embeddings via Cloud Function, ' +
         '(2) Store in Typesense vector field, ' +
         '(3) Search using typesense vector_query. ' +
-        'Contact engineering@sokoni.co.ke to enable.'
+        'Contact developers@mysokoni.co.ke to enable.'
       );
     },
 

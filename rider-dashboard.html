@@ -429,9 +429,9 @@
         <h1 id="rdName" class="rd-rider-name">—</h1>
         <p id="rdVehicle" class="rd-vehicle">—</p>
         <div id="rdRating" class="rd-rating-row">
-          <span id="rdStars" class="rd-stars">★★★★★</span>
-          <span id="rdRatingVal" class="rd-rating-val">5.0</span>
-          <span id="rdTripCount" class="rd-muted">(0 trips)</span>
+          <span id="rdStars" class="rd-stars"></span>
+          <span id="rdRatingVal" class="rd-rating-val">—</span>
+          <span id="rdTripCount" class="rd-muted"></span>
         </div>
       </div>
       <div class="rd-online-toggle">
@@ -677,11 +677,13 @@
         _el('rdName').textContent    = rider.name    || 'Rider';
         _el('rdVehicle').textContent = rider.vehicle || rider.vehicleType || '';
 
-        // Rating
-        const rating = Number(rider.avgRating || rider.rating || 5);
-        _el('rdRatingVal').textContent  = rating.toFixed(1);
-        _el('rdStars').textContent      = _stars(rating);
-        _el('rdTripCount').textContent  = '(' + (Number(rider.totalTrips || rider.completedTrips || 0)) + ' trips)';
+        // Rating — shown only when the rider record carries one. It used to
+        // default to a perfect 5.0 / ★★★★★ for a rider with no ratings.
+        const rating = Number(rider.avgRating || rider.rating || 0);
+        _el('rdRatingVal').textContent  = rating > 0 ? rating.toFixed(1) : 'No ratings yet';
+        _el('rdStars').textContent      = rating > 0 ? _stars(rating) : '';
+        const trips = rider.totalTrips != null ? rider.totalTrips : rider.completedTrips;
+        _el('rdTripCount').textContent  = (trips != null && isFinite(Number(trips))) ? '(' + Number(trips) + ' trips)' : '';
 
         // Avatar emoji by vehicle type
         const vehicleEmoji = {
@@ -739,19 +741,21 @@
         _el('rdPerfBadge').textContent = tier;
 
         // Performance bars
-        const avgRating    = Number(overall.avgRating    || d.rider?.avgRating    || d.rider?.rating || 5);
+        /* 2026-10-01 — unknown is unknown: an unrated rider used to show 5.0/5, and a rider with no
+           finished deliveries a 100% completion bar. Both now render "—" with an empty bar. */
+        const avgRating    = Number(overall.avgRating    || d.rider?.avgRating    || d.rider?.rating || 0);
         const acceptanceR  = Number(overall.acceptanceRate  || 0);
         const onTimeR      = Number(overall.onTimeRate      || 0);
         const deliveries   = Number(stats.deliveries        || 0);
         const cancelled    = Number(stats.cancelled         || 0);
         const completionR  = (deliveries + cancelled) > 0
           ? deliveries / (deliveries + cancelled)
-          : 1;
+          : null;
 
-        _setBar('rdBarRating',     'rdPerfRating',     avgRating / 5,  avgRating.toFixed(1) + '/5');
+        _setBar('rdBarRating',     'rdPerfRating',     avgRating > 0 ? avgRating / 5 : 0,  avgRating > 0 ? avgRating.toFixed(1) + '/5' : 'No ratings yet');
         _setBar('rdBarAcceptance', 'rdPerfAcceptance', acceptanceR,    _pct(acceptanceR));
         _setBar('rdBarOnTime',     'rdPerfOnTime',     onTimeR,        _pct(onTimeR));
-        _setBar('rdBarCompletion', 'rdPerfCompletion', completionR,    _pct(completionR));
+        _setBar('rdBarCompletion', 'rdPerfCompletion', completionR == null ? 0 : completionR, completionR == null ? '—' : _pct(completionR));
       }
 
       /* ── RENDER EARNINGS ────────────────────────────────────────────── */

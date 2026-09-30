@@ -140,8 +140,6 @@
     <button type="button" class="pg-search-btn" onclick="renderCars()">Search</button>
   </div>
   <div class="pg-hero-stats">
-    <div class="pg-stat"><strong>80+</strong> Vehicles</div>
-    <div class="pg-stat"><strong>4.8★</strong> Avg Rating</div>
     <div class="pg-stat"><strong>Same Day</strong> Pickup</div>
     <div class="pg-stat"><strong>M-Pesa</strong> Accepted</div>
   </div>
@@ -194,16 +192,6 @@
     <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">🚕</span>Chauffeur (driver + fuel)</div><div class="pg-price-range">KES 2,000 – 5,000 /day extra</div></div>
   </div>
   <p style="font-size:10px;color:rgba(255,255,255,0.22);margin-top:8px;padding:0 4px;">* Prices include basic insurance. Weekend & long-term rates available.</p>
-</div>
-
-<div class="pg-reviews">
-  <div class="pg-section-title"><h2>⭐ Customer Reviews</h2><span></span></div>
-  <div class="pg-review-grid">
-    <div class="pg-review-card"><div class="pg-review-stars">★★★★★</div><div class="pg-review-text">"Rented a Hilux pickup for our Maasai Mara road trip. Clean car, full tank, zero issues. Will definitely use SOKONI again."</div><div class="pg-review-author">James M. — Nairobi</div></div>
-    <div class="pg-review-card"><div class="pg-review-stars">★★★★★</div><div class="pg-review-text">"Needed a 14-seater for our office trip to Naivasha. KwikRide confirmed in 20 minutes. Professional driver, on time."</div><div class="pg-review-author">Grace K. — Westlands</div></div>
-    <div class="pg-review-card"><div class="pg-review-stars">★★★★☆</div><div class="pg-review-text">"Got a Vitz for a week at KES 3,800/day. Insurance included, M-Pesa payment was instant. Great value."</div><div class="pg-review-author">Brian O. — Mombasa</div></div>
-    <div class="pg-review-card"><div class="pg-review-stars">★★★★★</div><div class="pg-review-text">"Executive Mercedes for our CEO's airport transfer. Arrived spotless, driver was punctual and professional."</div><div class="pg-review-author">Ruth W. — Karen</div></div>
-  </div>
 </div>
 
 <div style="padding:0 20px 24px;">
@@ -262,13 +250,13 @@
 
 <script>
 const CARS = [
-  {id:'CR01',name:'Toyota Vitz',emoji:'🚗',type:['economy'],location:'nairobi',locationLabel:'Nairobi (Westlands)',rate:'KES 3,800',rateType:'per day',rating:4.8,trips:214,phone:'0711300101',available:true,seats:5,trans:'Automatic',fuel:'Petrol',specs:['5 Seats','Auto','Petrol','AC','Insurance'],owner:'QuickRide Kenya',bio:'Well-maintained economy car. Full tank on pickup. Insurance & 200km free per day.'},
-  {id:'CR02',name:'Toyota RAV4 2020',emoji:'🚙',type:['suv'],location:'nairobi',locationLabel:'Nairobi (Karen)',rate:'KES 8,500',rateType:'per day',rating:4.9,trips:98,phone:'0722300202',available:true,seats:5,trans:'Automatic',fuel:'Petrol',specs:['5 Seats','AWD','Auto','Safari-Ready','Insurance'],owner:'SafariDrive KE',bio:'4WD RAV4 perfect for safari, upcountry & city. Comes with full insurance & safari kit.'},
-  {id:'CR03',name:'Toyota Hilux D-Cab',emoji:'🛻',type:['pickup'],location:'nairobi',locationLabel:'Nairobi (Industrial Area)',rate:'KES 11,000',rateType:'per day',rating:4.7,trips:56,phone:'0733300303',available:true,seats:5,trans:'Manual',fuel:'Diesel',specs:['5 Seats','4WD','Diesel','Cargo Space','Insurance'],owner:'HeavyHire Kenya',bio:'Double cab Hilux — ideal for construction, upcountry and cargo. Robust & reliable.'},
-  {id:'CR04',name:'Toyota HiAce (14-Seater)',emoji:'🚐',type:['van'],location:'nairobi',locationLabel:'Nairobi (Eastlands)',rate:'KES 14,000',rateType:'per day',rating:4.8,trips:143,phone:'0744300404',available:true,seats:14,trans:'Manual',fuel:'Diesel',specs:['14 Seats','AC','Diesel','Events','Insurance'],owner:'EventRide KE',bio:'Clean 14-seater matatu for events, school trips and group travel. Driver available +KES 2,000/day.'},
-  {id:'CR05',name:'Mercedes E-Class',emoji:'🏎️',type:['luxury','chauffeur'],location:'nairobi',locationLabel:'Nairobi (Kilimani)',rate:'KES 22,000',rateType:'per day',rating:5.0,trips:34,phone:'0755300505',available:true,seats:4,trans:'Automatic',fuel:'Petrol',specs:['Executive','Leather','Auto','Chauffeur','Full Insurance'],owner:'Executive Cars KE',bio:'Premium executive vehicle for airport transfers, corporate events & VIP chauffeuring.'},
-  {id:'CR06',name:'Isuzu NPR Bus (33-Seater)',emoji:'🚌',type:['van'],location:'mombasa',locationLabel:'Mombasa (Nyali)',rate:'KES 28,000',rateType:'per day',rating:4.7,trips:29,phone:'0766300606',available:true,seats:33,trans:'Manual',fuel:'Diesel',specs:['33 Seats','AC','Church/School','Events','Insurance'],owner:'CoastBus Hire',bio:'Large bus for school trips, church events & corporate outings. Experienced driver included.'},
-  {id:'CR07',name:'Suzuki Alto (Budget)',emoji:'🚗',type:['economy'],location:'kisumu',locationLabel:'Kisumu (Milimani)',rate:'KES 3,500',rateType:'per day',rating:4.6,trips:88,phone:'0777300707',available:false,seats:4,trans:'Automatic',fuel:'Petrol',specs:['4 Seats','Fuel Saver','Auto','City Drive','Insurance'],owner:'LakeCity Cars',bio:'Most affordable self-drive in Kisumu. Perfect for city errands & short trips.'},
+  {id:'CR01',name:'Toyota Vitz',emoji:'🚗',type:['economy'],location:'nairobi',locationLabel:'Nairobi (Westlands)',rate:'KES 3,800',rateType:'per day',phone:'0711300101',available:true,seats:5,trans:'Automatic',fuel:'Petrol',specs:['5 Seats','Auto','Petrol','AC','Insurance'],owner:'QuickRide Kenya',bio:'Well-maintained economy car. Full tank on pickup. Insurance & 200km free per day.'},
+  {id:'CR02',name:'Toyota RAV4 2020',emoji:'🚙',type:['suv'],location:'nairobi',locationLabel:'Nairobi (Karen)',rate:'KES 8,500',rateType:'per day',phone:'0722300202',available:true,seats:5,trans:'Automatic',fuel:'Petrol',specs:['5 Seats','AWD','Auto','Safari-Ready','Insurance'],owner:'SafariDrive KE',bio:'4WD RAV4 perfect for safari, upcountry & city. Comes with full insurance & safari kit.'},
+  {id:'CR03',name:'Toyota Hilux D-Cab',emoji:'🛻',type:['pickup'],location:'nairobi',locationLabel:'Nairobi (Industrial Area)',rate:'KES 11,000',rateType:'per day',phone:'0733300303',available:true,seats:5,trans:'Manual',fuel:'Diesel',specs:['5 Seats','4WD','Diesel','Cargo Space','Insurance'],owner:'HeavyHire Kenya',bio:'Double cab Hilux — ideal for construction, upcountry and cargo. Robust & reliable.'},
+  {id:'CR04',name:'Toyota HiAce (14-Seater)',emoji:'🚐',type:['van'],location:'nairobi',locationLabel:'Nairobi (Eastlands)',rate:'KES 14,000',rateType:'per day',phone:'0744300404',available:true,seats:14,trans:'Manual',fuel:'Diesel',specs:['14 Seats','AC','Diesel','Events','Insurance'],owner:'EventRide KE',bio:'Clean 14-seater matatu for events, school trips and group travel. Driver available +KES 2,000/day.'},
+  {id:'CR05',name:'Mercedes E-Class',emoji:'🏎️',type:['luxury','chauffeur'],location:'nairobi',locationLabel:'Nairobi (Kilimani)',rate:'KES 22,000',rateType:'per day',phone:'0755300505',available:true,seats:4,trans:'Automatic',fuel:'Petrol',specs:['Executive','Leather','Auto','Chauffeur','Full Insurance'],owner:'Executive Cars KE',bio:'Premium executive vehicle for airport transfers, corporate events & VIP chauffeuring.'},
+  {id:'CR06',name:'Isuzu NPR Bus (33-Seater)',emoji:'🚌',type:['van'],location:'mombasa',locationLabel:'Mombasa (Nyali)',rate:'KES 28,000',rateType:'per day',phone:'0766300606',available:true,seats:33,trans:'Manual',fuel:'Diesel',specs:['33 Seats','AC','Church/School','Events','Insurance'],owner:'CoastBus Hire',bio:'Large bus for school trips, church events & corporate outings. Experienced driver included.'},
+  {id:'CR07',name:'Suzuki Alto (Budget)',emoji:'🚗',type:['economy'],location:'kisumu',locationLabel:'Kisumu (Milimani)',rate:'KES 3,500',rateType:'per day',phone:'0777300707',available:false,seats:4,trans:'Automatic',fuel:'Petrol',specs:['4 Seats','Fuel Saver','Auto','City Drive','Insurance'],owner:'LakeCity Cars',bio:'Most affordable self-drive in Kisumu. Perfect for city errands & short trips.'},
 ];
 let activeType='',activeLoc='',selectedCar=null,_carBkgId=null;
 
@@ -296,7 +284,6 @@ function renderCars(){
         <div class="pg-car-name">${c.name}</div>
         <div class="pg-car-meta">
           <span><i class="fas fa-map-marker-alt" style="color:#0ea5e9;font-size:9px;"></i> ${c.locationLabel}</span>
-          <span>⭐ ${c.rating} · ${c.trips}+ trips</span>
         </div>
         <div class="pg-car-specs">${c.specs.map(s=>`<span class="pg-car-spec">${s}</span>`).join('')}</div>
         <div style="font-size:11px;color:rgba(255,255,255,0.4);line-height:1.5;margin-bottom:10px;">"${c.bio}"</div>

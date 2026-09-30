@@ -475,7 +475,7 @@ function openPlayer(id) {
     </div>`:''}
     ${p.bio?`<p style="font-size:12px;color:rgba(255,255,255,0.55);line-height:1.6;margin-bottom:12px;">${p.bio}</p>`:''}
     ${p.achievements?.length?`<div style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:700;margin-bottom:6px;">🏅 Achievements</div>${p.achievements.map(a=>`<div style="font-size:11px;color:rgba(255,255,255,0.5);padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);">✓ ${a}</div>`).join('')}`:''}
-    ${p.recruitmentOpen?`<a href="https://wa.me/254700000000?text=Hi, I'm interested in ${encodeURIComponent(p.name)}'s profile on SOKONI Sports" target="_blank" style="display:block;text-align:center;padding:12px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.3);border-radius:10px;color:#25d366;font-weight:800;font-size:13px;text-decoration:none;margin-top:12px;">📲 Contact for Recruitment</a>`:''}`;
+    ${p.recruitmentOpen?`<div style="text-align:center;padding:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.6);font-weight:800;font-size:13px;margin-top:12px;">📣 Open to recruitment</div>`:''}`;
   document.getElementById('playerModal').classList.add('open');
 }
 

@@ -406,7 +406,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050a10;color:white;
         <div class="passport-verified-badge" id="passportVerifiedBadge" style="display:none;">✅ VERIFIED MEMBER</div>
       </div>
       <div style="text-align:right;">
-        <div class="trust-score-value" id="passportScore">0</div>
+        <div class="trust-score-value" id="passportScore">—</div>
         <div class="trust-score-tier" id="passportTier">Unverified</div>
         <div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:2px;">Trust Score</div>
       </div>
@@ -414,15 +414,15 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050a10;color:white;
 
     <div class="passport-score-row">
       <div class="passport-score-box">
-        <div class="passport-score-num" id="pScoreTransactions">0</div>
+        <div class="passport-score-num" id="pScoreTransactions">—</div>
         <div class="passport-score-label">Transactions</div>
       </div>
       <div class="passport-score-box">
-        <div class="passport-score-num" id="pScoreDeliveries">0</div>
+        <div class="passport-score-num" id="pScoreDeliveries">—</div>
         <div class="passport-score-label">Deliveries</div>
       </div>
       <div class="passport-score-box">
-        <div class="passport-score-num" id="pScoreDisputes" style="color:#4ade80;">0</div>
+        <div class="passport-score-num" id="pScoreDisputes" style="color:#4ade80;">—</div>
         <div class="passport-score-label">Disputes</div>
       </div>
       <div class="passport-score-box">
@@ -675,9 +675,13 @@ function loadPassport() {
   const loc    = p.loc    || 'Nairobi, Kenya';
   const joined = p.joined || Date.now();
   const days   = Math.max(1, Math.floor((Date.now()-joined)/(1000*60*60*24)));
-  const txns   = p.transactions || Math.floor(Math.random()*80)+5;
-  const dels   = p.deliveries   || 0;
-  const disp   = p.disputes     || 0;
+  /* No canonical transaction / delivery / dispute count is wired to this page.
+     An absent count is UNKNOWN and renders "—" — it used to fall back to
+     Math.floor(Math.random()*80)+5, an invented transaction history. */
+  const _count = v => (typeof v === 'number' && isFinite(v)) ? v : null;
+  const txns   = _count(p.transactions);
+  const dels   = _count(p.deliveries);
+  const disp   = _count(p.disputes);
   const verifs = p.verifications || {};
 
   /* trust score calculation */
@@ -688,9 +692,11 @@ function loadPassport() {
   if (verifs.kra)    score += 15;
   if (verifs.mpesa)  score += 15;
   if (verifs.selfie) score += 15;
-  score = Math.min(100, score + Math.min(20, Math.floor(txns/10)));
+  /* The score includes a transaction component; with the count unknown the
+     score cannot be computed honestly, so it is unknown too (null → "—"). */
+  score = txns === null ? null : Math.min(100, score + Math.min(20, Math.floor(txns/10)));
 
-  const tier = score >= 85 ? '🥇 Platinum Verified' : score >= 60 ? '🥈 Gold Trusted' : score >= 30 ? '🥉 Silver Active' : '👤 Unverified';
+  const tier = score === null ? '—' : score >= 85 ? '🥇 Platinum Verified' : score >= 60 ? '🥈 Gold Trusted' : score >= 30 ? '🥉 Silver Active' : '👤 Unverified';
   const id = p.id || ('SKN-' + String(joined).slice(-6));
 
   /* Update card */
@@ -699,16 +705,17 @@ function loadPassport() {
   set('passportId', id);
   set('passportIdBottom', id);
   set('passportLoc', '📍 '+loc);
-  set('passportScore', score);
+  const _shown = v => v === null ? '—' : v;
+  set('passportScore', _shown(score));
   set('passportTier', tier);
-  set('pScoreTransactions', txns);
-  set('pScoreDeliveries', dels);
-  set('pScoreDisputes', disp);
+  set('pScoreTransactions', _shown(txns));
+  set('pScoreDeliveries', _shown(dels));
+  set('pScoreDisputes', _shown(disp));
   set('pScoreDays', days);
   const issued = document.getElementById('passportIssued');
   if (issued) issued.textContent = 'Member since '+new Date(joined).toLocaleDateString('en-KE',{month:'short',year:'numeric'});
   const vBadge = document.getElementById('passportVerifiedBadge');
-  if (vBadge) vBadge.style.display = score >= 30 ? 'inline-flex' : 'none';
+  if (vBadge) vBadge.style.display = (score !== null && score >= 30) ? 'inline-flex' : 'none';
 
   /* Verifications */
   const vGrid = document.getElementById('verifGrid');
@@ -760,9 +767,9 @@ function buildPassport() {
     name, phone, loc, joined: existing.joined || Date.now(),
     id: existing.id || ('SKN-'+String(Date.now()).slice(-6)),
     verifications: { ...existing.verifications, ...verifs },
-    transactions: existing.transactions || 0,
-    deliveries: existing.deliveries || 0,
-    disputes: existing.disputes || 0,
+    transactions: existing.transactions,
+    deliveries: existing.deliveries,
+    disputes: existing.disputes,
   };
   localStorage.setItem('sokoniPassport', JSON.stringify(passport));
   localStorage.setItem('sokoniUserName', name);

@@ -204,14 +204,6 @@
   </div>
 </div>
 
-<!-- ── Live Ticker ── -->
-<div class="mk-ticker">
-  <div class="mk-ticker-label">🔴 LIVE</div>
-  <div class="mk-ticker-track" id="tickerTrack">
-    <!-- filled by JS -->
-  </div>
-</div>
-
 <div class="mk-body">
 
   <!-- ── Auto-Marketing Banner ── -->
@@ -232,21 +224,6 @@
   <!-- ── My Active Campaigns ── -->
   <div class="mk-section-h" style="margin-top:24px;">📡 My Active Campaigns</div>
   <div id="activeCampaigns" style="margin-bottom:8px;"></div>
-
-  <!-- ── Platform Stats ── -->
-  <div class="mk-section-h">📊 Sokoni Platform Activity</div>
-  <div class="mk-stats-row" id="mkStats">
-    <div class="mk-stat-card"><div class="mk-stat-icon">🛍️</div><div class="mk-stat-val" id="statProducts">—</div><div class="mk-stat-label">Products Listed</div></div>
-    <div class="mk-stat-card"><div class="mk-stat-icon">🏪</div><div class="mk-stat-val" id="statSellers">—</div><div class="mk-stat-label">Active Sellers</div></div>
-    <div class="mk-stat-card"><div class="mk-stat-icon">📦</div><div class="mk-stat-val" id="statOrders">—</div><div class="mk-stat-label">Orders Placed</div></div>
-    <div class="mk-stat-card"><div class="mk-stat-icon">🛵</div><div class="mk-stat-val" id="statDrivers">—</div><div class="mk-stat-label">Delivery Riders</div></div>
-    <div class="mk-stat-card"><div class="mk-stat-icon">⭐</div><div class="mk-stat-val">4.8</div><div class="mk-stat-label">Avg Seller Rating</div></div>
-  </div>
-
-  <!-- ── Live Activity Feed ── -->
-  <div class="mk-section-h">⚡ Live Activity on Sokoni</div>
-  <div class="activity-feed" id="activityFeed"></div>
-  <button type="button" onclick="refreshFeed()" style="margin-top:12px;padding:10px 20px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.5);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">↻ Refresh Feed</button>
 
   <!-- ── Boost Packages ── -->
   <div class="mk-section-h">🚀 Boost Your Listing</div>
@@ -466,93 +443,16 @@
 </div>
 
 <script>
-/* ── Ticker ── */
-const TICK_EVENTS = [
-  "🛍️ <span>Amina</span> just sold a fashion item in Nairobi",
-  "📦 New order placed in <span>Westlands</span>",
-  "⭐ <span>5-star review</span> for electronics seller in Mombasa",
-  "🆕 <span>New seller</span> joined from Kisumu",
-  "🚀 Listing boosted in <span>Fashion category</span>",
-  "💰 <span>KES 4,500</span> sale completed via M-PESA",
-  "🛵 Delivery completed in <span>Eastlands</span>",
-  "🔥 Flash deal getting <span>80+ views</span> in 1 hour",
-  "🤝 B2B order confirmed for <span>bulk electronics</span>",
-  "💊 Medicine delivery ordered from <span>HealthMart Pharmacy</span>",
-  "🎧 DJ Blaze 254 booked for <span>wedding in Karen</span>",
-  "🏥 Appointment booked at <span>Karen Clinic</span>",
-  "📱 <span>New product</span> listed: Samsung Galaxy A55",
-  "⚡ <span>E-bike rider</span> completed 8 deliveries today",
-];
-
-function buildTicker(){
-  const doubled = [...TICK_EVENTS, ...TICK_EVENTS];
-  document.getElementById("tickerTrack").innerHTML = doubled
-    .map(t=>`<span class="mk-tick-item">${t}</span>`)
-    .join("");
-}
-buildTicker();
+/* A scrolling "LIVE" ticker of invented events, a platform-stats row padded
+   with hardcoded base numbers (+1247 products, +312 sellers, +5840 orders,
+   +48 riders, "4.8" average rating) and a Math.random() "live activity feed"
+   of fake sales, sign-ups and 5-star reviews used to live on this page. None
+   of it was real, so all three are gone. If platform activity is shown here
+   again it must come from a canonical aggregate, never from localStorage or
+   generated text. */
 loadActiveCampaigns();
 
-/* ── Platform stats from localStorage ── */
-function loadStats(){
-  let products=0, sellers=0, orders=0, drivers=0;
-  try { products = (JSON.parse(localStorage.getItem("sellerProducts"))||[]).length; } catch(e){}
-  try { const p = JSON.parse(localStorage.getItem("sellerProducts"))||[]; sellers = new Set(p.map(x=>x.sellerId)).size; } catch(e){}
-  try { orders = (JSON.parse(localStorage.getItem("sokoniOrders"))||[]).length; } catch(e){}
-  try { drivers = (JSON.parse(localStorage.getItem("sokoniDrivers"))||[]).length; } catch(e){}
 
-  /* pad with platform base numbers so it never shows 0 */
-  document.getElementById("statProducts").textContent = (products + 1247).toLocaleString();
-  document.getElementById("statSellers").textContent  = (sellers + 312).toLocaleString();
-  document.getElementById("statOrders").textContent   = (orders + 5840).toLocaleString();
-  document.getElementById("statDrivers").textContent  = (drivers + 48).toLocaleString();
-}
-loadStats();
-
-/* ── Activity feed ── */
-const FEED_TEMPLATES = [
-  { type:"sale", icon:"act-sale", emoji:"💰", tpl:(n,t)=>`<strong>${n}</strong> just sold <strong>${t}</strong> — paid via M-PESA` },
-  { type:"join", icon:"act-join", emoji:"🆕", tpl:(n,t)=>`<strong>${n}</strong> joined as a seller from <strong>${t}</strong>` },
-  { type:"boost", icon:"act-boost", emoji:"🚀", tpl:(n,t)=>`<strong>${n}</strong> boosted their <strong>${t}</strong> listing` },
-  { type:"review", icon:"act-review", emoji:"⭐", tpl:(n,t)=>`<strong>${n}</strong> left a 5-star review for a <strong>${t}</strong> seller` },
-];
-const NAMES  = ["Amina","James","Faith","Kelvin","Grace","Brian","Wanjiru","Omar","Cynthia","Mose"];
-const THINGS = ["fashion item","electronics","beauty product","food order","service booking","DJ booking","medicine delivery","apartment listing","flash deal"];
-const ZONES  = ["Nairobi CBD","Westlands","Eastlands","Mombasa","Kisumu","Karen","Parklands","Thika Road"];
-
-function randomFeed(){
-  const tmpl = FEED_TEMPLATES[Math.floor(Math.random()*FEED_TEMPLATES.length)];
-  const name  = NAMES[Math.floor(Math.random()*NAMES.length)];
-  const thing = Math.random()>0.5 ? THINGS[Math.floor(Math.random()*THINGS.length)] : ZONES[Math.floor(Math.random()*ZONES.length)];
-  const ago   = [Math.floor(Math.random()*59)+" sec ago","1 min ago","2 min ago","just now"][Math.floor(Math.random()*4)];
-  return { icon:tmpl.icon, emoji:tmpl.emoji, text:tmpl.tpl(name, thing), ago };
-}
-
-function renderFeed(){
-  const feed = document.getElementById("activityFeed");
-  const items = Array.from({length:8}, randomFeed);
-  feed.innerHTML = items.map((it,i)=>`
-    <div class="activity-item" style="animation-delay:${i*0.05}s">
-      <div class="act-icon ${it.icon}">${it.emoji}</div>
-      <div class="act-text">${it.text}</div>
-      <div class="act-time">${it.ago}</div>
-    </div>
-  `).join("");
-}
-renderFeed();
-function refreshFeed(){ renderFeed(); }
-
-/* auto-refresh feed every 30s */
-setInterval(()=>{
-  const feed = document.getElementById("activityFeed");
-  if(!feed) return;
-  const newItem = randomFeed();
-  const el = document.createElement("div");
-  el.className = "activity-item";
-  el.innerHTML = `<div class="act-icon ${newItem.icon}">${newItem.emoji}</div><div class="act-text">${newItem.text}</div><div class="act-time">just now</div>`;
-  feed.prepend(el);
-  if(feed.children.length > 12) feed.lastElementChild.remove();
-}, 8000);
 
 /* ── Boost modal ── */
 const BOOST_PLANS = {
@@ -694,17 +594,18 @@ function loadActiveCampaigns(){
       <div style="height:5px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">
         <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#71ff00,#fb923c);border-radius:3px;transition:width 1s;"></div>
       </div>
+      <!-- Views / clicks / inquiries have no canonical source yet (they used to be Math.random()); shown as — until one exists. -->
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
         <div style="flex:1;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:9px;padding:8px 12px;text-align:center;">
-          <div style="font-size:16px;font-weight:900;color:#71ff00;">${Math.floor(Math.random()*900+200)}</div>
+          <div style="font-size:16px;font-weight:900;color:#71ff00;">—</div>
           <div style="font-size:9px;color:rgba(255,255,255,0.3);">Views</div>
         </div>
         <div style="flex:1;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:9px;padding:8px 12px;text-align:center;">
-          <div style="font-size:16px;font-weight:900;color:#fb923c;">${Math.floor(Math.random()*80+20)}</div>
+          <div style="font-size:16px;font-weight:900;color:#fb923c;">—</div>
           <div style="font-size:9px;color:rgba(255,255,255,0.3);">Clicks</div>
         </div>
         <div style="flex:1;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:9px;padding:8px 12px;text-align:center;">
-          <div style="font-size:16px;font-weight:900;color:white;">${Math.floor(Math.random()*15+3)}</div>
+          <div style="font-size:16px;font-weight:900;color:white;">—</div>
           <div style="font-size:9px;color:rgba(255,255,255,0.3);">Inquiries</div>
         </div>
       </div>
@@ -747,7 +648,6 @@ window.closeShareModal = closeShareModal;
 window.copyStoreUrl = copyStoreUrl;
 window.openReferralTool = openReferralTool;
 window.openBundleTool = openBundleTool;
-window.refreshFeed = refreshFeed;
 </script>
 <script src="hub-register.js" defer></script>
 <script src="scroll-top.js" defer></script>

@@ -2050,23 +2050,29 @@ function displayRecommendedProducts(){
                   style="display:inline-flex;align-items:center;gap:7px;padding:11px 24px;
                          background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);
                          border-radius:12px;color:#71ff00;font-size:12px;font-weight:800;text-decoration:none;">
-                 ✨ See All ${window.__sokoniProductCount || products.length}+ Products →
+                 ✨ See All${typeof window.__sokoniProductCount === "number" ? " " + window.__sokoniProductCount.toLocaleString("en-KE") : ""} Products →
                </a>
              </div>` : "");
     _attachPcardDelegation(container);
 
-    /* Update marketplace stats with real counts */
-    const statsSection = document.getElementById("marketplaceStats");
-    if(statsSection) statsSection.style.display = "flex";
-    const countEl = document.getElementById("statProductCount");
-    if(countEl) countEl.textContent = Math.max(window.__sokoniProductCount || products.length, 500) + "+";
-    const sellerEl = document.getElementById("statSellerCount");
-    if(sellerEl){
-        const sellers = new Set(products.map(p=>p.sellerEmail||p.sellerName)).size;
-        sellerEl.textContent = Math.max(sellers, 120) + "+";
-    }
+    /* Marketplace stats (2026-10-01): shown ONLY from the Firestore aggregate count
+       (window.__sokoniProductCount, set by SokoniDB.countProducts below). The old code raised
+       real counts to invented floors (500+, 120+) and counted "sellers" over the loaded page. */
+    _sokoniRenderProductStat();
 }
 
+
+/* One writer for the home "Products Listed" figure: canonical aggregate only. Unknown → the
+   section stays hidden (never 0, never a floor). */
+function _sokoniRenderProductStat() {
+    var n = window.__sokoniProductCount;
+    var el = document.getElementById("statProductCount");
+    var sec = document.getElementById("marketplaceStats");
+    if (!el || !sec) return;
+    if (typeof n !== "number" || !isFinite(n) || n < 1) return;
+    el.textContent = n.toLocaleString("en-KE");
+    sec.style.display = "flex";
+}
 /* =========================
    DAILY AUTO-SELECTIONS
 ========================= */
@@ -3192,27 +3198,13 @@ window.selectSuggestion = selectSuggestion;
 ========================= */
 
 function loadHomepageReviews(){
-    const FALLBACK_REVIEWS = [
-        { name:"Brian K.", rating:5, comment:"Sokoni is amazing! Got my electronics in 2 hours. Fast delivery and great prices.", date:"21 May 2026" },
-        { name:"Grace W.", rating:5, comment:"Best online marketplace in Kenya. Very easy to use and the sellers are 100% legit.", date:"20 May 2026" },
-        { name:"James O.", rating:4, comment:"Great platform! Bought fashion items and they were exactly as described. Shopping again!", date:"19 May 2026" },
-        { name:"Fatuma A.", rating:5, comment:"Ordered medicine through Healthcare Hub — arrived in 1.5 hours. Absolutely incredible!", date:"18 May 2026" },
-        { name:"Daniel M.", rating:5, comment:"Booked a DJ for my wedding through Entertainment Hub. He was phenomenal. Worth every shilling!", date:"17 May 2026" },
-        { name:"Mercy A.", rating:5, comment:"Used catering for my corporate event. Chef was professional, food was incredible!", date:"27 May 2026" },
-    ];
-    let reviews = [];
-    try { reviews = JSON.parse(localStorage.getItem("sokoniReviews")) || []; } catch(e) {}
-    const platformRevs = reviews.filter(r => r.type === "platform");
+    /* 2026-10-01 — UI Data Integrity. This used to render six invented reviews ("Brian K.",
+       "Grace W." …, dated May 2026) whenever fewer than three "real" ones existed, and the "real"
+       ones were read from the visitor's own localStorage — neither is a platform review. No review
+       card is rendered here until a server-backed, moderated source exists; the teaser keeps its
+       links to reviews.html and unboxing.html, where reviews come from the server. */
     const container = document.getElementById("homepageReviews");
-    const section   = document.getElementById("reviewsTeaser");
-    if(!container) return;
-
-    /* Always use the best available reviews — prefer real ones, fall back to demo */
-    const display = platformRevs.length >= 3 ? platformRevs.slice(0, 6) : FALLBACK_REVIEWS;
-    container.innerHTML = display.map(r => reviewCard(r)).join("");
-
-    /* Always show the section */
-    if(section) section.style.display = "flex";
+    if(container) container.innerHTML = "";
 }
 
 function reviewCard(r){
@@ -4779,7 +4771,7 @@ window._homeMergeFirestore = function (fsProducts, meta) {
                 var t1 = document.getElementById("pTrendCount");
                 if (t1) t1.textContent = n + "+ products";
                 var t2 = document.getElementById("statProductCount");
-                if (t2) t2.textContent = Math.max(n, 500) + "+";
+                _sokoniRenderProductStat();
             }).catch(function () {});
         });
     }

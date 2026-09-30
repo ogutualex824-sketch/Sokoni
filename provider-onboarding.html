@@ -482,8 +482,10 @@ const W=(()=>{
       _pid=r.data&&r.data.providerId?r.data.providerId:'';
       hideLoad();
       _q('bNext').style.display='none';_q('bBack').style.display='none';_q('bSkip').style.display='none';
-      _q('sContent').innerHTML=sSuccess(_pid);
-      _q('sTitle').textContent='You\'re Live!';_q('pFill').style.width='100%';
+      /* approved===false → submitted for review; an older server omits the field and published live. */
+      const _pending=!!(r.data&&r.data.approved===false);
+      _q('sContent').innerHTML=sSuccess(_pid,_pending);
+      _q('sTitle').textContent=_pending?'Submitted for Review':'You\'re Live!';_q('pFill').style.width='100%';
     }catch(e){hideLoad();toast('Publish failed: '+e.message,'err')}
   }
   function _collect(){
@@ -737,7 +739,19 @@ function sLegal(d){
 
 /* Final: Publish success */
 function sPublish(d){return sSuccess(d&&d.providerId?d.providerId:'')}
-function sSuccess(pid){
+function sSuccess(pid, pending){
+  /* 2026-10-01 — a profile that is not yet approved is SAVED, not live. The server says which
+     (providerPublish returns approved:false); only an approved provider is told they are live. */
+  if (pending) return`<div class="sscreen">
+    <div class="scheck">📝</div>
+    <h2 class="stitle">Profile submitted for review</h2>
+    <p style="color:var(--sub);margin-bottom:14px">Your profile is saved. SOKONI reviews every provider before they appear in search or can take bookings — we will notify you when a decision is made.</p>
+    ${pid?`<div class="idcard"><div class="il">Provider ID</div><div class="id">${_esc(pid)}</div></div>`:''}
+    <div class="slinks">
+      <a href="provider-dashboard.html" class="btn btn-p">Go to Dashboard →</a>
+      <a href="onboarding.html" class="btn btn-s">Add Another Role</a>
+    </div>
+  </div>`;
   return`<div class="sscreen">
     <div class="scheck">🚀</div>
     <h2 class="stitle">You're live on <span class="ac">SOKONI</span>!</h2>

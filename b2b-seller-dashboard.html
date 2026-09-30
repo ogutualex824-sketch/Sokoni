@@ -373,12 +373,11 @@ function renderLeads() {
   /* Simulate leads from enquiries stored in b2b_enquiries */
   const enquiries = JSON.parse(localStorage.getItem('b2b_enquiries')||'[]').filter(e=>e.supplierId===_sid);
   const list = document.getElementById('leadsList');
-  const sample = [
-    {name:'Eastleigh Trader',product:'Bulk Fabric',interest:'high',ts:Date.now()-3600000*2},
-    {name:'Gikomba Dealer',product:'Wholesale Phones',interest:'medium',ts:Date.now()-3600000*6},
-    {name:'Downtown Store',product:'Electronics Bundle',interest:'high',ts:Date.now()-3600000*14},
-  ];
-  const leads = [...enquiries.map(e=>({name:e.buyerName||'Anonymous',product:e.product||'Products',interest:'medium',ts:e.ts||Date.now()})),...sample];
+  /* Three invented "sample" leads used to be appended here. Only real
+     enquiries are listed now; none → an honest empty state. */
+  const leads = enquiries.map(e=>({name:e.buyerName||'Anonymous',product:e.product||'Products',interest:'medium',ts:e.ts||Date.now()}));
+  if(!leads.length){ list.innerHTML = '<div class="sd-empty"><p>No leads yet.</p></div>'; }
+  else
   list.innerHTML = leads.slice(0,5).map(l=>`
     <div class="lead-row">
       <div class="lead-icon">${l.interest==='high'?'🔥':'⭐'}</div>
@@ -394,19 +393,12 @@ function renderLeads() {
 }
 
 function renderAnalytics() {
-  /* Revenue chart */
-  const months = ['Jan','Feb','Mar','Apr','May','Jun'];
-  const revs = months.map(()=>Math.floor(Math.random()*80000)+10000);
-  const maxRev = Math.max(...revs);
-  document.getElementById('revChart').innerHTML = months.map((m,i)=>`
-    <div class="sd-bar-row">
-      <div class="sd-bar-lbl">${m}</div>
-      <div class="sd-bar-track"><div class="sd-bar-fill" style="width:${(revs[i]/maxRev)*100}%;background:rgba(113,255,0,0.2);border-right:2px solid #71ff00;"></div></div>
-      <div class="sd-bar-val" style="color:#71ff00;">KES ${B.fmt(revs[i])}</div>
-    </div>`).join('');
+  /* Revenue chart — used to plot six months of Math.random() revenue. There is
+     no canonical revenue source for this dashboard, so it shows no data. */
+  document.getElementById('revChart').innerHTML = '<div class="sd-empty"><p>No revenue data yet.</p></div>';
 
   /* RFQ funnel */
-  const stats = _sid ? B.getSupplierStats(_sid) : {incomingRFQs:12,quotesSubmitted:8,accepted:3,orderCount:2};
+  const stats = _sid ? B.getSupplierStats(_sid) : {incomingRFQs:'—',quotesSubmitted:'—',accepted:'—',orderCount:'—'};
   document.getElementById('rfqFunnel').innerHTML = `
     <div style="font-size:12px;color:rgba(255,255,255,0.5);padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);">📋 Received: <strong style="color:white;">${stats.incomingRFQs}</strong></div>
     <div style="font-size:12px;color:rgba(255,255,255,0.5);padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);">💬 Quoted: <strong style="color:white;">${stats.quotesSubmitted}</strong></div>
@@ -415,24 +407,26 @@ function renderAnalytics() {
 
   /* Rating */
   const sup = _sid ? B.getSupplierById(_sid) : null;
-  const rating = sup?.rating||4.5;
-  document.getElementById('ratingBlock').innerHTML = `
+  /* No rating on record → no rating shown (it used to default to 4.5). */
+  const rating = (typeof sup?.rating === 'number' && sup.rating > 0) ? sup.rating : null;
+  document.getElementById('ratingBlock').innerHTML = rating === null
+    ? `<div style="font-size:36px;font-weight:900;color:rgba(255,255,255,0.35);text-align:center;">—</div>
+    <div style="text-align:center;font-size:11px;color:rgba(255,255,255,0.35);">No ratings yet</div>`
+    : `
     <div style="font-size:36px;font-weight:900;color:#f59e0b;text-align:center;">${rating}</div>
     <div style="text-align:center;font-size:20px;margin:6px 0;">${B.starsHTML(rating)}</div>
-    <div style="text-align:center;font-size:11px;color:rgba(255,255,255,0.35);">${sup?.reviews||0} reviews</div>`;
+    <div style="text-align:center;font-size:11px;color:rgba(255,255,255,0.35);">${typeof sup?.reviews === 'number' ? sup.reviews + ' reviews' : ''}</div>`;
 
   /* Products chart */
   const prods = _sid ? B.getProductsBySupplierId(_sid).slice(0,5) : B.PRODUCTS.slice(0,5);
-  const maxEnq = 50;
-  document.getElementById('prodChart').innerHTML = prods.map(p=>{
-    const enq = Math.floor(Math.random()*maxEnq)+5;
-    return `
+  /* Per-product enquiry counts used to be Math.random(); no canonical count
+     exists, so each product shows "—" and an empty bar. */
+  document.getElementById('prodChart').innerHTML = prods.length ? prods.map(p=>`
     <div class="sd-bar-row">
       <div class="sd-bar-lbl" style="font-size:10px;">${p.name.slice(0,10)}</div>
-      <div class="sd-bar-track"><div class="sd-bar-fill" style="width:${(enq/maxEnq)*100}%;background:rgba(0,170,255,0.3);border-right:2px solid #00aaff;"></div></div>
-      <div class="sd-bar-val" style="color:#00aaff;">${enq} enquiries</div>
-    </div>`;
-  }).join('');
+      <div class="sd-bar-track"></div>
+      <div class="sd-bar-val" style="color:rgba(255,255,255,0.35);">—</div>
+    </div>`).join('') : '<div class="sd-empty"><p>No data yet.</p></div>';
 }
 
 function openQuoteForm(rfqId) {

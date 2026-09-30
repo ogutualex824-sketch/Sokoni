@@ -26,7 +26,7 @@ const SokoniSEO = (() => {
     logo:        "https://mysokoni.co.ke/assets/logosokoni.png",
     description: "Kenya's all-in-one marketplace — shop products, book services, find rentals, BnBs, healthcare, entertainment and B2B wholesale. Pay via M-Pesa.",
     phone:       "+254705726803",
-    email:       "info@sokoni.co.ke",
+    email:       "info@mysokoni.co.ke",
     address: {
       streetAddress: "Westlands",
       addressLocality: "Nairobi",

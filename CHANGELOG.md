@@ -1,3 +1,40 @@
+## [2026-10-01] — Trust integrity: fabricated metrics, reviews, ratings, "verified" claims and fake contacts removed (hosting, NOT deployed)
+
+**Why:** the 2026-10-01 security/privacy census (docs/SECURITY_PRIVACY_GAP_CENSUS_2026-10-01.md, P0 #1 and #6) proved on live 72dca56 that customer-facing pages showed invented numbers and people, against the UI Data Integrity rule.
+**Removed (each PROVEN live at census time):**
+- **Home page:**
+  - the "SOKONI By the Numbers" block (50K+, 1,200+, 47 counties, 4.9★, 24/7 WhatsApp, KES 500M+);
+  - real hospitals, pharmacies and labs marked "✓ VERIFIED" with invented review counts, and an invented doctor;
+  - three hardcoded "SOKONI VERIFIED" shops with invented sales;
+  - "Trusted by thousands", "Join 500+ sellers", "1,000+ products", "thousands of satisfied buyers", "3× more buyer clicks" and the unlabelled "KES 800–2K/day".
+- **`script.js`:**
+  - the `Math.max(n, 500)` / `Math.max(sellers, 120)` floors on real counts;
+  - the six invented `FALLBACK_REVIEWS`;
+  - the teaser that presented the visitor's own localStorage as platform reviews.
+  The product-count writer is now one function that renders only a real aggregate. The section itself is removed, because the only aggregate counts unlisted and tombstoned items too.
+- **healthcare.html:** the 28 invented providers (real institutions plus invented doctors, ratings and "Open Now"), 17 invented specialists and 5 teleconsult doctors. The grid now reads the canonical `providers` registry via `SokoniProviders`, as cleaning.html does, with escaped output.
+- **Hub pages:**
+  - banking, cleaning and car-rental: hero stats and testimonials;
+  - electrical, plumbing and phone-repair: stats, testimonials, card ratings, "N+ jobs" and "✓ Verified";
+  - marketing: the random live feed, the ticker and the platform stats. Random campaign metrics now show "—";
+  - trust: the random transaction count. Unknown counts and the score it feeds show "—";
+  - b2b-seller-dashboard: the random revenue chart, invented leads, the funnel fallback and the 4.5 rating fallback;
+  - rider-dashboard: a default 5.0 ★★★★★ in the header and the performance bar, and a default 100% completion.
+- **Contacts:**
+  - `support.html` `tel:+254700000000` → +254 705 726 803;
+  - `onboarding-driver.html` placeholder number → the support line plus a ticket link;
+  - `invoice.html`, `seo.js`, `sokoni-search-pro.js` `@sokoni.co.ke` (an unrelated domain) → `@mysokoni.co.ke`;
+  - a `sports-hub.html` wa.me link to a placeholder number removed.
+- **Provider wizard (`provider-onboarding.html`):** says "Submitted for Review" when `providerPublish` reports `approved:false`. It no longer says "You're live" to an unapproved provider. It stays compatible with the current server.
+
+**Files:** index.html, script.js, healthcare.html, banking.html, cleaning.html, car-rental.html, electrical.html, plumbing.html, phone-repair.html, marketing.html, trust.html, b2b-seller-dashboard.html, rider-dashboard.html, support.html, onboarding-driver.html, invoice.html, sports-hub.html, pos-printer-setup.html (test QR URL), provider-onboarding.html, seo.js, sokoni-search-pro.js, scripts/test-trust-integrity.js (33/0).
+**Still open, not in this change:**
+- electrical / plumbing / phone-repair / car-rental still list invented providers and vehicles with fake phone numbers behind WhatsApp booking hand-offs. They need the registry rewire and overlap sokoni-32's WhatsApp slice.
+- checkout.html sends `buyer@sokoni.co.ke` to IntaSend as a fallback email. That is a payment path and needs an owner decision.
+- Demo print strings use +254700000000.
+
+**Functions / rules / DB / API:** none. **Security:** healthcare output is now escaped. **Deploy:** hosting, after sokoni-aa's chain and sokoni-32's B2 (overlapping files), merged on top of them.
+
 ## [2026-10-01] — ODPC certificate image shown on the legal page (hosting)
 
 **Why:** the owner asked for the ODPC Certificate of Registration to be displayed on the legal page. sokoni-27 (83363cd) added the registration text; this adds the certificate itself inside that section, with no second copy of the text.
