@@ -26,12 +26,15 @@ function _h() {
       require('./provider-ops')._h,
       require('./booking-service')._h,             /* Phase B: authoritative service create */
       require('./booking-availability-guard')._h,  /* read-only availability-vs-booking impact check */
-      require('./booking-resolution')._h);         /* Slice 2: affected-booking resolution engine */
+      require('./booking-resolution')._h,          /* Slice 2: affected-booking resolution engine */
+      require('./business-workspace')._h);         /* shell gate: the ONE business workspace authority (derived approval state) */
   }
   return _mod;
 }
 
 const ROUTES = [
+  'businessWorkspace',
+  'workspaceHome',
   'providerSaveDraft',
   'providerGetDraft',
   'providerSelectPlan',
