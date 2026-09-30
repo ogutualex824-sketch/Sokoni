@@ -1,3 +1,13 @@
+## [2026-09-30] - providerDispatch deploy ATTEMPT (owner-authorized b28567c after a green final preflight) ABORTED BY THE CLI BEFORE UPLOAD — production unchanged; owner decision needed on minInstances
+
+Final preflight 01:18Z green (11/12, estate caveat controlled: no Cloud Build in progress, no function updated in 30 min, all three peer sessions
+confirmed no competing deploy). firebase deploy --only functions:providerDispatch from C:/temp/sok-pd-cand @ b28567c ran the base's predeploy
+chain (all PASS), packaged 2.61 MB, then stopped: "Pass the --force option to deploy functions that increase the minimum bill". Cause: the
+ARCHIVE's own provider-dispatch.js declares minInstances: 1, while the live function runs with minInstanceCount 0 — a cost-bearing
+configuration change that is NOT part of the shell gate. No build started; providerdispatch-00048-qiz still serves 100%. Not forced.
+Options for the owner: (a) --force and accept one always-warm 512 MiB instance; (b) set minInstances: 0 in the candidate dispatcher to
+match live exactly (a third, config-only edit; re-certify + re-manifest); (c) hold. Peers notified the window is released.
+
 ## [2026-09-30] - DEPLOYMENT PREFLIGHT (READ ONLY) for the providerDispatch shell-gate candidate — 11/12 pass, 1 live-estate caveat; deployment NOT authorized
 
 docs/DEPLOY_PREFLIGHT_PROVIDERDISPATCH_SHELL_GATE.md + docs/release-gates/deploy-preflight-providerdispatch.json. Rollback target
