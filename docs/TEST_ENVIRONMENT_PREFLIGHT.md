@@ -67,3 +67,9 @@ The preflight's first run on the live machine reported, truthfully: free physica
 - Process facts come from Windows CIM; on another OS the process checks are UNPROVEN and the result is NOT_READY.
 - The lock is advisory: a session that does not use the runner is only detected through its live processes.
 - Thresholds are conservative and hand-set; change them in one place (`T` in the script) with a reason.
+
+## 7 · Governance dependency recorded 2026-09-30 — the inventory gate is a release prerequisite for any `/inventory/i` path
+
+`scripts/gate-inventory.js` runs `test-inventory.js --gate` (every `scripts/test-*.js`) inside the hosting predeploy whenever a changed file matches `/inventory/i` (or `functions/shared/**`, `functions/index.js`, `firestore.rules`, `firestore.indexes.json`, `firebase.js`) — even when the change is unrelated to inventory behaviour. Candidate `82d8ce0` (readers + writers for the `uploadedAt` ordering key) touches `sokoni-inventory.js` and therefore inherits the gate, which is currently **BLOCKED by pre-existing findings that reproduce identically on the pre-slice tree `07088bb`** (`docs/release-gates/82d8ce0.json`): cart-universal (mixed line endings in `agreement-acknowledge.html` / `complete-application.html`; `track.html` tags), map-engine ratchet (`business-apply.html`, 16 vs 15), merchant-capability (13 routes vs 12; 3 withheld vs 2), merchant-products-2c-media (BLOCKED: no `storage.rules.deployed` snapshot); seller-wiring change-detection hangs after its 13th case on both trees (TIMEOUT, non-blocking).
+
+This is a governance dependency, **not** evidence that `82d8ce0` broke inventory. The rule that follows: those findings are repaired in their own slices; the gate is never weakened, and a candidate is never altered merely to evade the path filter.
