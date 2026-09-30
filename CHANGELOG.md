@@ -1,3 +1,38 @@
+## [2026-09-30] — `payment-success.js`: two raw control bytes made a payment file invisible to text tooling (live lineage, NOT deployed)
+
+`functions/payment-success.js` was classified **binary** by git and grep. Cause established before any
+change was made, and the repair touches exactly two bytes.
+
+- **What was there.** Exactly two raw control bytes — **0x00 at offset 3396 and 0x1F at 3398** — and no
+  others. They sit **inside a regex character class**: `String(v).replace(/[<0x00>-<0x1F>]/g, '')`, a
+  control-character sanitiser. So they are syntactic, not stray padding and not part of a string asset. The
+  author plainly wrote `\u0000-\u001f` and something resolved the escapes into literal bytes.
+- **Not corruption over time.** Present in the file's **only** commit, `0bbf35f`, and byte-identical on both
+  lineages.
+- **The classification was caused solely by the NUL.** It falls inside git's 8000-byte heuristic window.
+  Substituting only those two bytes flips `grep` from BINARY to **TEXT**.
+- **Why it mattered.** A payment file invisible to grep silently defeats text-based auditing. It hid two
+  blocked `payment_success` notify call sites from the first pass of the 2026-09-30 census; they were only
+  found by reading the file through Node with an explicit latin1 decode.
+
+### The change, byte for byte
+
+| | before | after |
+|---|---|---|
+| size | 9611 | 9621 (+10) |
+| sha256 | `6c93cd2c…825f` | `23544d60…128e` |
+| control bytes | `3396:0x00  3398:0x1f` | none |
+| differences | — | exactly 2: `3396 0x00 → \u0000`, `3398 0x1f → \u001f` |
+
+Applied by a script that **refuses** unless the file is byte-for-byte what the audit established and
+**refuses** if the result differs anywhere other than those two sites; it ran as a dry run first.
+
+**Behaviour proven identical**, not assumed: `/[<0x00>-<0x1F>]/g` and `/[\u0000-\u001f]/g` strip the same
+characters from a probe containing 0x00, 0x07, 0x1F and printable text. The file parses. **No payment
+business logic was altered** — no amount, state, ownership, idempotency or provider path is touched.
+
+**Not deployed.**
+
 ## [2026-09-30] — Notification integrity: six types that threw, and an SMS recipient nobody resolved (live lineage, NOT deployed)
 
 Two repairs to `functions/notify.js`, in dependency order. **A** had to come first: restoring recipient
