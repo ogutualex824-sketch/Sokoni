@@ -164,7 +164,9 @@
 }
 
 /* ── THE RETURN SHEET ──────────────────────────────────────────────────────── */
-.wty-sheet { position: fixed; inset: 0; z-index: 9992; display: flex; align-items: flex-end; }
+/* Full-screen and dismissible, so it takes the sheet token and out-ranks the header (scripts/test-overlays.js ratchet;
+   c4 had a hardcoded 9992, below the header's 100001). */
+.wty-sheet { position: fixed; inset: 0; z-index: var(--sk-z-sheet, 100010); display: flex; align-items: flex-end; }
 .wty-scrim { position: absolute; inset: 0; background: rgba(5,15,5,.72); }
 .wty-panelbox {
   position: relative; width: 100%; max-height: 92vh; overflow-y: auto;
