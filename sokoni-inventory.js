@@ -473,10 +473,12 @@ const SokoniInventory = (() => {
   async function getProductByBarcode(barcode) {
     if (_online && _fs) {
       try {
+        /* U7b (2026-09-29): scoped IN THE QUERY to this seller. It used to query every merchant's products and, with
+           no signed-in seller, return the first — another shop's product. No seller now means no remote answer. */
         const seller = _sellerUid();
-        const snap = await productsCol().where('barcode', '==', barcode).limit(5).get();
-        const match = snap.docs.map(d => _toInv(d.id, d.data()))
-          .find(pp => !seller || pp.sellerUid === seller);
+        const snap = seller ? await productsCol().where('sellerUid', '==', seller).where('barcode', '==', barcode).limit(2).get() : { docs: [] };
+        const docs = snap.docs.filter(d => (d.data() || {}).status !== 'archived');
+        const match = docs.length === 1 ? _toInv(docs[0].id, docs[0].data()) : null;
         if (match) { await idbPut('products', match); return match; }
       } catch (_) {}
     }

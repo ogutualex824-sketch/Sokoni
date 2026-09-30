@@ -62,7 +62,7 @@
       stock:    stock,
       track:    stock != null,
       category: c.category || local.category || 'general',
-      barcode:  c.barcode || local.barcode || '',
+      barcode:  c.barcode || (c.specs && c.specs.barcode) || local.barcode || '',
       sku:      c.sku || local.sku || '',
       image:    c.image || (Array.isArray(c.images) ? c.images[0] : '') || local.image || '',
       unit:     c.unit || local.unit || 'pc',

@@ -145,7 +145,7 @@
         /* null, never 0 — an unknown stock rendered as 0 is a fabricated
            figure, and 0 is a real, different answer. */
         stock: stock,
-        sku: p.sku || p.barcode || null,
+        sku: p.sku || null,
         shopId: p.shopId || null,
         lowStock: (stock != null && typeof p.lowStockThreshold === 'number')
           ? stock <= p.lowStockThreshold : (stock != null ? stock <= 5 : null),
@@ -172,6 +172,8 @@
            media surface has to know how many slots are already taken. */
         images: Array.isArray(p.images) ? p.images.filter(Boolean) : [],
         sellerUid: p.sellerUid || null,
+        /* U7b (ported 2026-09-30): the canonical code; a legacy record carries it only in specs.barcode */
+        barcode: p.barcode || (p.specs && p.specs.barcode) || null,
       };
     });
   }
@@ -230,6 +232,29 @@
 
   /* The fields a product record owns. Anything else a caller passes is dropped:
      a writer that forwards arbitrary keys lets a UI invent schema. */
+  /** A scannable code: trimmed, printable, at most 64 characters; empty → null. Letters kept as typed (Code-128 is
+   *  case-sensitive); anything outside [A-Za-z0-9 .-_/+] is refused rather than silently stripped. */
+  function normalizeBarcode(v) {
+    var s = String(v == null ? '' : v).trim();
+    if (!s) return null;
+    if (s.length > 64 || !/^[A-Za-z0-9 .\-_\/+]+$/.test(s)) {
+      var e = new Error('That barcode has characters a scanner cannot produce.'); e.code = 'BARCODE_INVALID'; throw e;
+    }
+    return s;
+  }
+
+  /** U7b: within ONE shop a code names ONE product. Asked of the shop's own catalogue only (the adapter is scoped by
+   *  shopId), so it can never find — or adopt — another merchant's product. Legacy records that carry the code only in
+   *  specs.barcode are found too. A code another shop uses is not this shop's concern and is not looked at. */
+  async function _assertBarcodeFree(o, fields, selfId) {
+    if (!fields.barcode || !o.db || typeof o.db.findByBarcode !== 'function') return;
+    var ids = await o.db.findByBarcode(o.scope, fields.barcode);
+    var other = (ids || []).filter(function (id) { return id && id !== selfId; });
+    if (other.length) {
+      var e = new Error('Another of your products already has that barcode.'); e.code = 'BARCODE_TAKEN'; e.productIds = other; throw e;
+    }
+  }
+
   function _productFields(input) {
     var p = input || {};
     var out = {};
@@ -245,6 +270,10 @@
        no movement record. Opening stock at CREATE is still supported, routed through that same
        server authority — see openingStockOf() and createProduct's openingStock. */
     if (p.sku !== undefined)   out.sku = p.sku ? String(p.sku).trim().slice(0, 64) : null;
+    /* U7b (2026-09-29): the CANONICAL barcode is top-level `barcode` — the field the till mirror, the search indexers
+       and every lookup read. The Listing Studio collects it as specs.barcode; derived here so the two never diverge. */
+    var bc = p.barcode !== undefined ? p.barcode : (p.specs && typeof p.specs === 'object' && p.specs.barcode !== undefined ? p.specs.barcode : undefined);
+    if (bc !== undefined) out.barcode = normalizeBarcode(bc);
     if (p.category !== undefined) out.category = p.category ? String(p.category).slice(0, 64) : null;
     if (p.description !== undefined) out.description = String(p.description || '').slice(0, 4000);
     if (p.status !== undefined) out.status = String(p.status || 'active');
@@ -456,6 +485,7 @@
     var opening = openingStockOf(o.product);
 
     var fields = _productFields(o.product);
+    await _assertBarcodeFree(o, fields, null);   /* U7b: one code, one product in this shop */
     var errs = _validate(fields, { creating: true });
     if (errs.length) { var e = new Error(errs[0]); e.validation = errs; throw e; }
 
@@ -569,6 +599,7 @@
 
     var fields = _productFields(o.patch);
     if (!Object.keys(fields).length) throw new Error('merchant data: nothing to update');
+    await _assertBarcodeFree(o, fields, o.id);   /* U7b */
     var errs = _validate(fields, { creating: false });
     if (errs.length) { var e = new Error(errs[0]); e.validation = errs; throw e; }
 
@@ -906,7 +937,10 @@
   function findByCode(products, code) {
     var t = String(code == null ? '' : code).trim().toLowerCase();
     if (!t) return null;
-    var hits = (products || []).filter(function (p) { return String(p.sku || '').toLowerCase() === t; });
+    /* U7b: a till scan carries the BARCODE; a typed code may be the SKU. Both identify the product. */
+    var hits = (products || []).filter(function (p) {
+      return [p.sku, p.barcode, p.specs && p.specs.barcode].some(function (v) { return String(v == null ? '' : v).trim().toLowerCase() === t; });
+    });
     return hits.length === 1 ? hits[0] : null;
   }
 
@@ -994,6 +1028,7 @@
     cartWarnings: cartWarnings,
     searchProducts: searchProducts,
     findByCode: findByCode,
+    normalizeBarcode: normalizeBarcode,
     formatKES: formatKES,
   };
 }));

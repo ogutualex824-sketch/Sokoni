@@ -627,10 +627,11 @@ async function lookupSKU(sku){
   document.getElementById('resultCard').innerHTML = `<div style="text-align:center;padding:20px;"><span class="spinner"></span> Looking up <b>${esc(sku)}</b>…</div>`;
 
   try {
-    const snap = await db.collection('products').where('sku','==',sku.toUpperCase()).limit(1).get();
+    /* U7b (2026-09-29): this shop's products only — the lookup used to search every merchant's catalogue. */
+    const snap = await db.collection('products').where('sellerUid','==',currentUser.uid).where('sku','==',sku.toUpperCase()).limit(1).get();
     if (snap.empty){
       // Try lowercase
-      const snap2 = await db.collection('products').where('sku','==',sku).limit(1).get();
+      const snap2 = await db.collection('products').where('sellerUid','==',currentUser.uid).where('sku','==',sku).limit(1).get();
       if (snap2.empty){
         currentProduct = null;
         beepError();
