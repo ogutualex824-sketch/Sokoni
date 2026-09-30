@@ -439,6 +439,16 @@
       mobile:true, desktop:true, activeKey:'devices',
       note:'Printer/device state lives in the SHELL context so the GATT connection survives navigation.' },
 
+    /* MV2-1 (2026-09-30): the Sales Control Centre existed only as a button inside the POS
+       app; the owner asked for it in the sidebar. It is the SAME overlay (sokoni-pos-sales.js)
+       reached through the POS frame at #salescontrol — an entry point, never a second surface. */
+    { id:'sales-control', name:'Sales Control Centre', icon:'🛡️', tier:'more',
+      kind:'pos', tab:'pos', action:'salescontrol',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID, CTX.BRANCH_ID],
+      mobile:true, desktop:true, activeKey:'sales-control',
+      note:'Opens pos.html#salescontrol — the existing Sales Control Centre overlay. ' +
+           'Sales stay posCompleteCheckout / the POS ledger; nothing is re-plumbed.' },
+
     { id:'pos-setup', name:'POS Setup', icon:'🖨️', tier:'more',
       kind:'page', src:'pos-printer-setup.html?shell=merchant',
       role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID],
@@ -470,14 +480,17 @@
      This is grouping only. No destination is added, removed, renamed or re-targeted —
      the sidebar renders exactly the same 13 routes it did before, under headings. */
   var MORE_GROUPS = [
-    { key:'main',       label:'Main',
+    /* Owner taxonomy (2026-09-30): Sales · Operations · Growth. Still a total partition. */
+    { key:'sales',      label:'Sales',
+      ids:['sales-control'] },
+    { key:'main',       label:'Operations',
       ids:['reports','availability','shop','fulfilment','verification'] },
     { key:'growth',     label:'Growth',
       ids:['marketing','offers','flash-sale','stories','customers'] },
     /* KRA Tax groups with Operations rather than Main: it is back-office compliance
        configured once alongside Devices and POS Setup, not a surface a merchant reads
        daily the way they read Reports. */
-    { key:'operations', label:'Operations',
+    { key:'operations', label:'Back office',
       ids:['kra-tax','devices','pos-setup'] }
   ];
 
@@ -670,6 +683,11 @@
     'messages','marketing','stories','tax','history','store','team','disputes','flash','pos'];
   var POS_TABS = ['pos','inventory','orders','customers','reports','finance','settings',
     'audit','bos','repair','more'];
+  /* A pos route may also name an ACTION the POS app performs after it is at its tab —
+     a deep-link the POS boot / hashchange handlers honour. 'salescontrol' opens the
+     Sales Control Centre OVERLAY (PosSalesView.open). Overlays are not tabs, so they are
+     validated here and never pretended to be tab-bar entries. */
+  var POS_ACTIONS = ['salescontrol'];
   /* 'exit' is the only kind that LEAVES the shell. Every other kind mounts a destination
      inside /merchant; an exit performs a real full-page navigation and the shell is gone
      afterwards. It exists so the marketplace can be a bottom-nav destination without the
@@ -719,6 +737,7 @@
       if (r.kind === 'pos') {
         if (!r.tab)                              errs.push(at + ': pos route has no tab');
         else if (POS_TABS.indexOf(r.tab) < 0)    errs.push(at + ': tab "' + r.tab + '" is not a pos.html tab');
+        if (r.action && POS_ACTIONS.indexOf(r.action) < 0) errs.push(at + ': action "' + r.action + '" is not a pos.html action');
       }
       if (r.kind === 'page') {
         if (!r.src)                              errs.push(at + ': page route has no src');
