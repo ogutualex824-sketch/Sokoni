@@ -3629,7 +3629,7 @@ function _pdPaint() {
   if (badge) { badge.className = 'pd-badge ' + (PD_TONE[st] || 'mut'); badge.textContent = PD_LABEL[st] || st; }
 
   let h = '<div class="pd-sub" style="margin-bottom:10px;">Customer payments go <strong>directly</strong> to your own ' +
-          'M-PESA account. SOKONI does not hold your sale proceeds — its 5% commission ' +
+          'M-PESA account. SOKONI does not hold your sale proceeds — its ' + (window.SokoniCommission && SokoniCommission.resolve('pos').matched ? SokoniCommission.pct('pos') + '%' : 'published') + ' commission ' +
           '(minimum KES 10 per sale) is billed to you separately.</div>';
 
   if (PD.active) h += _pdDestCard(PD.active, true);

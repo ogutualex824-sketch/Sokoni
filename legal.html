@@ -163,7 +163,7 @@
     <h2>6. Seller Terms</h2>
     <p>See the <strong>Seller Agreement</strong> tab for full seller-specific terms. Key points:</p>
     <ul>
-      <li>SOKONI charges a <strong>12% platform fee</strong> on all completed sales — you keep 88%</li>
+      <li>SOKONI's commission depends on how the sale is made: <strong><span data-sokoni-rate="marketplace">—</span></strong> on online product sales (you keep <span data-sokoni-rate="marketplace" data-sokoni-rate-format="keep">—</span>) and <strong><span data-sokoni-rate="pos">—</span></strong> on in-shop POS / Till / Quick Charge sales, with a minimum of KES 10 per sale. The rate applied to every sale is the one published by the platform commission authority and shown on the sale itself.</li>
       <li>Sellers are solely responsible for product descriptions, legality, safety, and KRA tax compliance</li>
       <li>Prohibited items include counterfeit goods, stolen goods, weapons, illegal substances, and items prohibited under Kenyan law</li>
       <li>SOKONI reserves the right to remove listings or suspend accounts that violate these Terms</li>
@@ -388,12 +388,30 @@
     </div>
 
     <h2>1. Platform Fee</h2>
-    <p>SOKONI charges a <strong>12% commission</strong> on every completed sale. This is deducted from the buyer's payment before payout. You receive <strong>88% of every sale</strong>.</p>
+    <p>SOKONI charges a commission on every completed sale — <strong><span data-sokoni-rate="marketplace">—</span></strong> on online product sales and <strong><span data-sokoni-rate="pos">—</span></strong> on in-shop POS / Till sales (minimum KES 10 per sale). This is deducted from the buyer's payment before payout. You receive <strong>88% of every sale</strong>.</p>
 
     <div class="legal-card">
       <strong>Example:</strong> You sell a product for KES 1,000.<br>
-      SOKONI fee (12%): KES 120<br>
-      <strong>Your payout: KES 880</strong> ✅
+      SOKONI commission (<span data-sokoni-rate="marketplace">—</span> online): KES <span data-sokoni-example="marketplace" data-gross="1000">—</span><br>
+      <strong>Your payout: KES <span data-sokoni-example="marketplace" data-gross="1000" data-part="net">—</span></strong> ✅<br>
+      <span style="opacity:.75">The same sale at your till (<span data-sokoni-rate="pos">—</span>): commission KES <span data-sokoni-example="pos" data-gross="1000">—</span>, payout KES <span data-sokoni-example="pos" data-gross="1000" data-part="net">—</span>.</span>
+      <script>
+        /* Worked example computed from the published authority, never typed in. */
+        (function () {
+          function run() {
+            if (!window.SokoniCommission) return false;
+            document.querySelectorAll('[data-sokoni-example]').forEach(function (el) {
+              var r = window.SokoniCommission.resolve(el.getAttribute('data-sokoni-example'));
+              var gross = Number(el.getAttribute('data-gross')) || 0;
+              if (!r.matched) { el.textContent = '\u2014'; return; }
+              var c = Math.max(Math.round(gross * r.pct / 100) + (r.fixedKES || 0), r.pct > 0 ? window.SokoniCommission.MIN_COMMISSION_KES : 0);
+              el.textContent = (el.getAttribute('data-part') === 'net' ? gross - c : c).toLocaleString();
+            });
+            return true;
+          }
+          if (!run()) document.addEventListener('DOMContentLoaded', run);
+        })();
+      </script>
     </div>
 
     <h2>2. Seller Obligations</h2>
@@ -411,7 +429,7 @@
     <ul>
       <li>You must declare Sokoni income as business income on your <strong>iTax self-assessment</strong></li>
       <li>If your annual turnover exceeds <strong>KES 5,000,000</strong>, you must register for VAT</li>
-      <li>Sokoni commission (12%) is a deductible business expense</li>
+      <li>Sokoni commission (<span data-sokoni-rate="marketplace">—</span> online / <span data-sokoni-rate="pos">—</span> POS, minimum KES 10 per sale) is a deductible business expense</li>
     </ul>
 
     <h2>4. Prohibited Listings</h2>

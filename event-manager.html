@@ -380,7 +380,7 @@
             <p>• Buyers enter the code during checkout on the event page</p>
             <p>• Percent codes apply a % off the total, fixed codes deduct a flat amount</p>
             <p>• Codes are scoped to a single event — create separate codes per event</p>
-            <p>• Platform commission (3%) is applied on the discounted price</p>
+            <p>• Platform commission (<span data-sokoni-rate="events">—</span>) is applied on the discounted price</p>
             <p>• Codes are auto-uppercase alphanumeric only</p>
           </div>
         </div>
@@ -762,7 +762,7 @@
         <div class="card">
           <div class="card-title">Platform Fee</div>
           <div style="font-size:12px;color:var(--text2)">
-            Total revenue: KES ${(a.totalRevenue||0).toLocaleString()} · Platform fee (3%): KES ${(a.platformFees||0).toLocaleString()} · <b style="color:var(--green)">Your payout: KES ${(a.organizerRevenue||0).toLocaleString()}</b>
+            Total revenue: KES ${(a.totalRevenue||0).toLocaleString()} · Platform fee (${window.SokoniCommission && SokoniCommission.resolve("events").matched ? SokoniCommission.pct("events") + "%" : "—"}): KES ${(a.platformFees||0).toLocaleString()} · <b style="color:var(--green)">Your payout: KES ${(a.organizerRevenue||0).toLocaleString()}</b>
           </div>
         </div>`;
     } catch(e) { el.innerHTML = `<div class="empty" style="color:var(--red)">${e.message}</div>`; }

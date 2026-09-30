@@ -66,6 +66,16 @@
     try {
       if (!('serviceWorker' in navigator)) return;
       if (window.__sokoniSwRegisterInjected) return;
+      /* The commission snapshot travels with the header for the same reason: copy on 195
+         pages states a rate, and a page-level literal is a second authority. Idempotent —
+         pages that already include sokoni-commission-rates.js are left alone. */
+      try {
+        if (!document.querySelector('script[src*="sokoni-commission-rates"]')) {
+          var cr = document.createElement('script');
+          cr.src = '/sokoni-commission-rates.js';
+          (document.head || document.documentElement).appendChild(cr);
+        }
+      } catch (_) {}
       if (document.querySelector('script[src*="sw-register"]')) return;
       window.__sokoniSwRegisterInjected = true;
       var s = document.createElement('script');

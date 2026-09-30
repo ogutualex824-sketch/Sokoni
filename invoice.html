@@ -434,7 +434,7 @@ function generateInvoice(orderId){
     <div class="inv-total-row"><span class="inv-total-label">Subtotal (VAT Excl.)</span><span class="inv-total-val">KES ${vatExcl.toLocaleString()}</span></div>
     <div class="inv-total-row"><span class="inv-total-label" style="color:#e07000;">VAT @ 16%</span><span class="inv-total-val" style="color:#e07000;">KES ${vatAmount.toLocaleString()}</span></div>
     <div class="inv-total-row"><span class="inv-total-label">Delivery</span><span class="inv-total-val">FREE</span></div>
-    <div class="inv-total-row"><span class="inv-total-label">Sokoni Platform Fee (12%)</span><span class="inv-total-val">KES ${commission.toLocaleString()}</span></div>
+    <div class="inv-total-row"><span class="inv-total-label">Sokoni Platform Fee (${window.SokoniCommission && SokoniCommission.resolve("marketplace").matched ? SokoniCommission.pct("marketplace") + "%" : "—"})</span><span class="inv-total-val">KES ${commission.toLocaleString()}</span></div>
     <div class="inv-total-row grand"><span class="inv-total-label">TOTAL (VAT Incl.)</span><span class="inv-grand-val">KES ${grossTotal.toLocaleString()}</span></div>
     <div style="margin-top:10px;padding:10px 14px;background:#f0fff0;border:1px solid #c8e6c9;border-radius:8px;font-size:11px;color:#2e7d32;line-height:1.7;">
       <strong>KRA Tax Invoice</strong><br>
@@ -443,7 +443,7 @@ function generateInvoice(orderId){
       ETR Serial: <strong>SKN-ETR-${o.id}</strong><br>
       Taxable Amount: KES ${vatExcl.toLocaleString()} | VAT Amount: KES ${vatAmount.toLocaleString()}
     </div>
-    <div style="margin-top:8px;font-size:11px;color:#888;">Seller net payout: KES ${sellerPayout.toLocaleString()} (after 12% platform fee)</div>
+    <div style="margin-top:8px;font-size:11px;color:#888;">Seller net payout: KES ${sellerPayout.toLocaleString()} (after the ${window.SokoniCommission && SokoniCommission.resolve("marketplace").matched ? SokoniCommission.pct("marketplace") + "%" : "published"} platform fee)</div>
   `;
 
   /* Inject KRA fields into header area if not already there */

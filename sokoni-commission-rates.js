@@ -20,23 +20,27 @@
 
   var RATES = {
     "marketplace": {
-      "pct": 3,
+      "pct": 15,
       "fixedKES": 0
     },
     "food_delivery": {
-      "pct": 5,
+      "pct": 15,
       "fixedKES": 0
     },
     "property": {
-      "pct": 2,
-      "fixedKES": 0
+      "pct": 0,
+      "fixedKES": 5000
     },
     "vehicles": {
       "pct": 0,
       "fixedKES": 2000
     },
     "healthcare": {
-      "pct": 5,
+      "pct": 12,
+      "fixedKES": 0
+    },
+    "healthcare_products": {
+      "pct": 15,
       "fixedKES": 0
     },
     "legal": {
@@ -48,7 +52,7 @@
       "fixedKES": 0
     },
     "hotel": {
-      "pct": 5,
+      "pct": 15,
       "fixedKES": 0
     },
     "digital_products": {
@@ -56,15 +60,31 @@
       "fixedKES": 0
     },
     "event_tickets": {
-      "pct": 3,
+      "pct": 5,
       "fixedKES": 0
     },
     "ppv": {
       "pct": 15,
       "fixedKES": 0
     },
+    "entertainment_bookings": {
+      "pct": 5,
+      "fixedKES": 0
+    },
     "services": {
-      "pct": 15,
+      "pct": 5,
+      "fixedKES": 0
+    },
+    "home_services": {
+      "pct": 14,
+      "fixedKES": 0
+    },
+    "car_rental": {
+      "pct": 16,
+      "fixedKES": 0
+    },
+    "pos": {
+      "pct": 5,
       "fixedKES": 0
     },
     "education": {
@@ -80,7 +100,7 @@
       "fixedKES": 0
     },
     "hub": {
-      "pct": 12,
+      "pct": 17,
       "fixedKES": 0
     },
     "subscriptions": {
@@ -102,15 +122,23 @@
   };
 
   var ALIASES = {
+    "product": "marketplace",
+    "products": "marketplace",
     "shopping": "marketplace",
-    "pos": "marketplace",
     "b2b": "marketplace",
+    "till": "pos",
+    "quick_charge": "pos",
+    "quickcharge": "pos",
+    "subscription": "subscriptions",
+    "healthcare_subscription": "subscriptions",
     "restaurant": "food_delivery",
     "food": "food_delivery",
-    "home_services": "services",
     "insurance": "services",
     "fitness": "services",
-    "pharmacy": "healthcare",
+    "car-rental": "car_rental",
+    "car_hire": "car_rental",
+    "car-hire": "car_rental",
+    "pharmacy": "healthcare_products",
     "property_agent": "property",
     "bnb": "hotel",
     "car_dealer": "vehicles",
@@ -125,6 +153,23 @@
     "digital": "digital_products",
     "ai_services": "digital_products"
   };
+
+  /* MARKETPLACE lane — commission by the seller's PLAN, on orders SOKONI brought them. */
+  var MARKETPLACE_PLAN_PCT = {
+    "free": 15,
+    "professional": 15,
+    "business": 15,
+    "enterprise": 15
+  };
+
+  /* POS / TILL lane — shop sales the merchant made themselves. FLAT, every plan. A
+     subscription buys a better marketplace rate and changes NOTHING at the till. */
+  var POS_FLAT_PCT = 5;
+
+  /* RAW category labels priced by the plan ladder. "pos" is deliberately ABSENT even though
+     it ALIASES to marketplace — keying on the resolved category would put every till sale on
+     the ladder and triple a Free merchant's till commission. */
+  var MARKETPLACE_CATEGORIES = ["marketplace","product","products","shopping","b2b"];
 
   var MIN_COMMISSION_KES = 10;
 
@@ -148,14 +193,32 @@
     ALIASES: ALIASES,
     MIN_COMMISSION_KES: MIN_COMMISSION_KES,
 
+    /* The rate a seller on planId pays on a MARKETPLACE order. An unrecognised or absent
+       plan resolves to Free — the HIGHEST rate — so a display can never under-quote. */
+    marketplacePct: function (planId) {
+      var k = String(planId || '').trim().toLowerCase();
+      /* Mirrors commission-config.MARKETPLACE_TIER_ALIASES exactly. 'starter' and
+         'business' are deliberately absent there and must stay absent here — a client
+         that resolved them would quote a rate the server does not charge. */
+      var alias = { free:'seller_free', basic:'seller_basic', pro:'seller_pro',
+                    enterprise:'seller_enterprise' };
+      if (!Object.prototype.hasOwnProperty.call(MARKETPLACE_PLAN_PCT, k)) k = alias[k] || 'seller_free';
+      return MARKETPLACE_PLAN_PCT[k];
+    },
+    /* The rate on a POS / till sale. Takes no plan, because it does not depend on one. */
+    posPct: function () { return POS_FLAT_PCT; },
+    isMarketplaceSellerSale: function (cat) {
+      return MARKETPLACE_CATEGORIES.indexOf(String(cat || '').trim().toLowerCase()) !== -1;
+    },
+    MARKETPLACE_PLAN_PCT: MARKETPLACE_PLAN_PCT,
+    POS_FLAT_PCT: POS_FLAT_PCT,
+
     /* Refresh from the server so a rate change reaches clients without a client rebuild.
        Merges in place, so anything already rendered keeps working. */
     refresh: function () {
       try {
         if (!window.firebase || !firebase.functions) return Promise.resolve(false);
-        /* COMMISSION CUTOVER — through the one door. Same handler, same
-           response; only the transport changed. */
-        return firebase.functions().httpsCallable('commissionDispatch')({ op: 'getCommissionConfig' })
+        return firebase.functions().httpsCallable('getCommissionConfig')({})
           .then(function (res) {
             var d = res && res.data;
             if (!d || !d.rates) return false;
@@ -170,4 +233,34 @@
       } catch (e) { return Promise.resolve(false); }
     },
   };
+
+  /* Declarative binding for copy that states a rate — one mechanism, no page-level literals.
+       <span data-sokoni-rate="marketplace"></span>                       -> "15%"  (or "KES 2,000" for a flat fee)
+       <span data-sokoni-rate="marketplace" data-sokoni-rate-format="keep"></span> -> "85%"  (the seller share)
+     A category the authority does not know renders an em dash — never the default bucket, never a guess.
+     Runs on DOMContentLoaded and again after refresh(); SokoniCommission.fill(root) re-binds injected markup. */
+  function fill(root) {
+    var scope = root && root.querySelectorAll ? root : (typeof document !== "undefined" ? document : null);
+    if (!scope) return 0;
+    var nodes = scope.querySelectorAll("[data-sokoni-rate]"), n = 0;
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i], r = resolve(el.getAttribute("data-sokoni-rate"));
+      var fmt = el.getAttribute("data-sokoni-rate-format") || "pct";
+      var text = "—";
+      if (r.matched) {
+        if (r.fixedKES && !r.pct) text = "KES " + Number(r.fixedKES).toLocaleString();
+        else if (fmt === "keep") text = (100 - r.pct) + "%";
+        else text = r.pct + "%";
+      }
+      el.textContent = text; n++;
+    }
+    return n;
+  }
+  window.SokoniCommission.fill = fill;
+  if (typeof document !== "undefined") {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { fill(document); });
+    else fill(document);
+  }
+  var _refresh = window.SokoniCommission.refresh;
+  window.SokoniCommission.refresh = function () { return _refresh().then(function (ok) { if (ok) fill(document); return ok; }); };
 })(window);

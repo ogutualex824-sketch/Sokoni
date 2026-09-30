@@ -916,7 +916,7 @@
         </div>
         <div style="display:flex;gap:10px;align-items:flex-start;">
           <div style="width:26px;height:26px;border-radius:50%;background:rgba(113,255,0,0.2);color:#c8ff80;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;">4</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.6);line-height:1.6;"><strong style="color:white;display:block;margin-bottom:2px;">Start Receiving Clients</strong>Clients pay a <strong style="color:#c8ff80;">KES 500 booking deposit</strong> through SOKONI before connecting with you. After case completion, log your total fee and SOKONI invoices <strong style="color:#71ff00;">5% commission</strong> via M-PESA.</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.6);line-height:1.6;"><strong style="color:white;display:block;margin-bottom:2px;">Start Receiving Clients</strong>Clients pay a <strong style="color:#c8ff80;">KES 500 booking deposit</strong> through SOKONI before connecting with you. After case completion, log your total fee and SOKONI invoices <strong style="color:#71ff00;"><span data-sokoni-rate="legal">—</span> commission</strong> via M-PESA.</div>
         </div>
       </div>
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(113,255,0,0.15);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -1045,7 +1045,7 @@
   <!-- """" TAB: LOG CASE COMPLETION """" -->
   <div id="lawpane-completion" class="law-pane">
     <div class="law-alert">
-      <strong>Advocates only:</strong> When you complete a case or consultation that was discovered through SOKONI, log the total fee here. SOKONI will invoice its <strong>5% commission</strong> which you pay via M-PESA. Unpaid commissions will suspend your listing.
+      <strong>Advocates only:</strong> When you complete a case or consultation that was discovered through SOKONI, log the total fee here. SOKONI will invoice its <strong><span data-sokoni-rate="legal">—</span> commission</strong> which you pay via M-PESA. Unpaid commissions will suspend your listing.
     </div>
 
     <!-- How it works -->
@@ -1060,7 +1060,7 @@
       </div>
       <div style="background:rgba(168,85,247,0.05);border:1px solid rgba(168,85,247,0.15);border-radius:12px;padding:14px;">
         <div style="font-size:11px;font-weight:800;color:#c8ff80;margin-bottom:4px;">✅ Log & Pay Commission</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.45);line-height:1.6;">After completion, log the total fee below. SOKONI calculates 5% and shows M-PESA payment details.</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.45);line-height:1.6;">After completion, log the total fee below. SOKONI calculates <span data-sokoni-rate="legal">—</span> and shows M-PESA payment details.</div>
       </div>
     </div>
 
@@ -1110,7 +1110,7 @@
           <span>Total case fee</span><span id="prevTotal" style="color:white;font-weight:800;"></span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:900;margin-bottom:8px;">
-          <span style="color:rgba(255,255,255,0.7);">SOKONI commission (5%)</span><span id="prevOwed" style="color:#71ff00;"></span>
+          <span style="color:rgba(255,255,255,0.7);">SOKONI commission (<span data-sokoni-rate="legal">—</span>)</span><span id="prevOwed" style="color:#71ff00;"></span>
         </div>
         <div style="font-size:11px;color:rgba(255,255,255,0.4);line-height:1.7;">
           Pay via M-PESA: <strong style="color:white;">Paybill <span data-sk-pay="commissionPaybill">522522</span></strong>  Account: <strong style="color:#71ff00;" id="prevRef">SOK-[REF]</strong>

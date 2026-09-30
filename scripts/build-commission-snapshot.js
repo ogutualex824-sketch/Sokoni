@@ -28,6 +28,15 @@ const OUT = path.join(__dirname, '..', 'sokoni-commission-rates.js');
 const rates = {};
 for (const [k, v] of Object.entries(CC.RATES)) rates[k] = { pct: v.pct, fixedKES: v.fixedKES };
 
+/* The two LANE schedules. Without these the browser knows only the category table, so a
+   pricing page would show every seller a flat 5% while the engine charges a Free seller 15%
+   — the same "shown 3%, charged 5%" split that already happened once on this platform, and
+   worse, because the gap is 3x rather than 2 points. */
+const marketplacePlanPct = {};
+for (const [k, v] of Object.entries(CC.MARKETPLACE_PLAN_RATES)) marketplacePlanPct[k] = v.rateFraction * 100;
+const posFlatPct = CC.POS_FLAT_RATE_FRACTION * 100;
+const marketplaceCategories = Array.from(CC.MARKETPLACE_SELLER_CATEGORIES);
+
 const body = `/* ============================================================================
    SOKONI COMMISSION RATES — GENERATED FILE. DO NOT EDIT.
    ----------------------------------------------------------------------------
@@ -52,6 +61,18 @@ const body = `/* ===============================================================
 
   var ALIASES = ${JSON.stringify(CC.ALIASES, null, 2).replace(/\n/g, '\n  ')};
 
+  /* MARKETPLACE lane — commission by the seller's PLAN, on orders SOKONI brought them. */
+  var MARKETPLACE_PLAN_PCT = ${JSON.stringify(marketplacePlanPct, null, 2).replace(/\n/g, '\n  ')};
+
+  /* POS / TILL lane — shop sales the merchant made themselves. FLAT, every plan. A
+     subscription buys a better marketplace rate and changes NOTHING at the till. */
+  var POS_FLAT_PCT = ${posFlatPct};
+
+  /* RAW category labels priced by the plan ladder. "pos" is deliberately ABSENT even though
+     it ALIASES to marketplace — keying on the resolved category would put every till sale on
+     the ladder and triple a Free merchant's till commission. */
+  var MARKETPLACE_CATEGORIES = ${JSON.stringify(marketplaceCategories)};
+
   var MIN_COMMISSION_KES = ${CC.MIN_COMMISSION_KES};
 
   /* Resolve a hub OR category name to its rate. Mirrors commission-config.resolveRate(). */
@@ -74,14 +95,32 @@ const body = `/* ===============================================================
     ALIASES: ALIASES,
     MIN_COMMISSION_KES: MIN_COMMISSION_KES,
 
+    /* The rate a seller on planId pays on a MARKETPLACE order. An unrecognised or absent
+       plan resolves to Free — the HIGHEST rate — so a display can never under-quote. */
+    marketplacePct: function (planId) {
+      var k = String(planId || '').trim().toLowerCase();
+      /* Mirrors commission-config.MARKETPLACE_TIER_ALIASES exactly. 'starter' and
+         'business' are deliberately absent there and must stay absent here — a client
+         that resolved them would quote a rate the server does not charge. */
+      var alias = { free:'seller_free', basic:'seller_basic', pro:'seller_pro',
+                    enterprise:'seller_enterprise' };
+      if (!Object.prototype.hasOwnProperty.call(MARKETPLACE_PLAN_PCT, k)) k = alias[k] || 'seller_free';
+      return MARKETPLACE_PLAN_PCT[k];
+    },
+    /* The rate on a POS / till sale. Takes no plan, because it does not depend on one. */
+    posPct: function () { return POS_FLAT_PCT; },
+    isMarketplaceSellerSale: function (cat) {
+      return MARKETPLACE_CATEGORIES.indexOf(String(cat || '').trim().toLowerCase()) !== -1;
+    },
+    MARKETPLACE_PLAN_PCT: MARKETPLACE_PLAN_PCT,
+    POS_FLAT_PCT: POS_FLAT_PCT,
+
     /* Refresh from the server so a rate change reaches clients without a client rebuild.
        Merges in place, so anything already rendered keeps working. */
     refresh: function () {
       try {
         if (!window.firebase || !firebase.functions) return Promise.resolve(false);
-        /* COMMISSION CUTOVER — through the one door. Same handler, same
-           response; only the transport changed. */
-        return firebase.functions().httpsCallable('commissionDispatch')({ op: 'getCommissionConfig' })
+        return firebase.functions().httpsCallable('getCommissionConfig')({})
           .then(function (res) {
             var d = res && res.data;
             if (!d || !d.rates) return false;
@@ -96,6 +135,36 @@ const body = `/* ===============================================================
       } catch (e) { return Promise.resolve(false); }
     },
   };
+
+  /* Declarative binding for copy that states a rate — one mechanism, no page-level literals.
+       <span data-sokoni-rate="marketplace"></span>                       -> "15%"  (or "KES 2,000" for a flat fee)
+       <span data-sokoni-rate="marketplace" data-sokoni-rate-format="keep"></span> -> "85%"  (the seller share)
+     A category the authority does not know renders an em dash — never the default bucket, never a guess.
+     Runs on DOMContentLoaded and again after refresh(); SokoniCommission.fill(root) re-binds injected markup. */
+  function fill(root) {
+    var scope = root && root.querySelectorAll ? root : (typeof document !== "undefined" ? document : null);
+    if (!scope) return 0;
+    var nodes = scope.querySelectorAll("[data-sokoni-rate]"), n = 0;
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i], r = resolve(el.getAttribute("data-sokoni-rate"));
+      var fmt = el.getAttribute("data-sokoni-rate-format") || "pct";
+      var text = "—";
+      if (r.matched) {
+        if (r.fixedKES && !r.pct) text = "KES " + Number(r.fixedKES).toLocaleString();
+        else if (fmt === "keep") text = (100 - r.pct) + "%";
+        else text = r.pct + "%";
+      }
+      el.textContent = text; n++;
+    }
+    return n;
+  }
+  window.SokoniCommission.fill = fill;
+  if (typeof document !== "undefined") {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { fill(document); });
+    else fill(document);
+  }
+  var _refresh = window.SokoniCommission.refresh;
+  window.SokoniCommission.refresh = function () { return _refresh().then(function (ok) { if (ok) fill(document); return ok; }); };
 })(window);
 `;
 

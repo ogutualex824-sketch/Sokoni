@@ -268,18 +268,53 @@ function setBilling(b, btn){
    same for every plan. A subscription never adds — or changes — the commission
    on a sale. Advertising a per-tier commission rate as a plan feature implied a
    second, tier-dependent charge the server never applied; it is removed. */
-const PLANS_DATA = [
-  { key:"free",     name:"Free",     monthly:0,    annual:0,    listings:3,   leads:5,   badge:false, featured:false,
-    features:["3 active listings","5 booking leads/month","Basic listing card","M-PESA payments"],
-    missing:["Verified badge","Featured placement","Priority support","Analytics dashboard"] },
-  { key:"starter",  name:"Starter",  monthly:499,  annual:399,  listings:20,  leads:30,  badge:true,  featured:false,
-    features:["20 active listings","30 booking leads/month","✅ Verified badge","M-PESA + card payments","Basic analytics"],
-    missing:["Homepage featured","Priority support","Bulk messaging"] },
-  { key:"pro",      name:"Pro",      monthly:1499, annual:1199, listings:999, leads:999, badge:true,  featured:true, popular:true,
-    features:["Unlimited listings","Unlimited leads","✅ Verified badge","🌟 Featured in category","Priority support 24/7","Full analytics dashboard","Customer reviews module","Boost credits: KES 500/mo"] },
-  { key:"business", name:"Business", monthly:4999, annual:3999, listings:999, leads:999, badge:true,  featured:true,
-    features:["Everything in Pro","🏠 Homepage feature slot","Dedicated account manager","Custom WhatsApp catalogue","Bulk broadcast to your clients","API access for integrations","Monthly performance report","Boost credits: KES 2,000/mo"] },
-];
+/* ── Plans: the subscription authority, not a table in this file ─────────────────────
+   subGetPlans returns the canonical catalogue (functions/sub-billing.js PLANS — the same
+   object createPaymentIntent prices from). This page shows the service-provider family it
+   always sold: Free, Starter, Pro, Business. Prices are in cents on the server. Features are
+   the plan's capability flags; nothing here restates a commission — a subscription buys
+   capabilities, the sale rate is published separately (see the table below). */
+let PLANS_DATA = [];
+let PLANS_LOAD_ERROR = false;
+const PLAN_KEYS = { provider_free: "free", starter: "starter", pro: "pro", business: "business" };
+const FEATURE_LABELS = {
+  services_limit: (v) => v === -1 ? "Unlimited service listings" : v + " active service listings",
+  listings_limit: (v) => v === -1 ? "Unlimited listings" : v + " active listings",
+  leads_per_month: (v) => v === -1 ? "Unlimited booking leads" : v + " booking leads / month",
+  calendar: "Booking calendar", online_booking: "Online booking", analytics: "Analytics dashboard",
+  priority_listing: "Priority placement in results", verified_badge: "\u2705 Verified badge",
+  featured_listing: "\ud83c\udf1f Featured in category", priority_support: "Priority support",
+  ai_assistant: "AI assistant", portfolio_items: (v) => v === -1 ? "Unlimited portfolio items" : v + " portfolio items",
+  bulk_messaging: "Bulk messaging to clients", api_access: "API access", dedicated_account_manager: "Dedicated account manager",
+};
+function _planFeatures(f){
+  const out = [], missing = [];
+  Object.keys(f || {}).forEach((k) => {
+    const v = f[k], lab = FEATURE_LABELS[k];
+    if (typeof lab === "function") { out.push(lab(Number(v))); return; }
+    const text = lab || k.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+    if (v === true || (typeof v === "number" && v !== 0)) out.push(typeof v === "number" && v !== -1 ? text + ": " + v : text);
+    else if (v === false || v === 0) missing.push(text);
+  });
+  return { features: out, missing };
+}
+async function loadPlansFromServer(){
+  try {
+    const res = await window.sokoniCallable("subGetPlans")({});
+    const all = (res && res.data && res.data.plans) || [];
+    PLANS_DATA = Object.keys(PLAN_KEYS).map((id) => all.find((p) => p.id === id)).filter(Boolean).map((p) => {
+      const price = p.price || {};
+      const monthly = Math.round(Number(price.monthly ?? p.priceMonthly ?? 0) / 100);
+      const annual  = Math.round(Number(price.annual  ?? p.priceAnnual  ?? monthly * 100) / 100 / 12);
+      const f = _planFeatures(p.features);
+      return { key: PLAN_KEYS[p.id], planId: p.id, name: p.name, monthly, annual, features: f.features, missing: f.missing, popular: p.id === "pro" };
+    });
+    PLANS_LOAD_ERROR = PLANS_DATA.length === 0;
+  } catch (e) {
+    PLANS_LOAD_ERROR = true;
+    console.warn("[subscriptions] subGetPlans unavailable:", e && e.message);
+  }
+}
 
 async function renderPlans(){
   /* Resolve the user's active plan before rendering so the correct card
@@ -288,6 +323,16 @@ async function renderPlans(){
   try {
     if (window.SokoniSubscriptions) _activePlan = await window.SokoniSubscriptions.getMyPlan();
   } catch(_) {}
+
+  /* Plans come from the subscription authority (subGetPlans), the same catalogue
+     createPaymentIntent prices from. Until it answers, or if it cannot, the grid says so —
+     it never shows a table typed into this file. */
+  if (!PLANS_DATA.length) {
+    const grid = document.getElementById("plansGrid");
+    grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:rgba(255,255,255,0.5);padding:32px">' + (PLANS_LOAD_ERROR ? 'Plans are temporarily unavailable. Please try again shortly.' : 'Loading plans…') + '</p>';
+    if (!PLANS_LOAD_ERROR) { await loadPlansFromServer(); if (PLANS_DATA.length) return renderPlans(); }
+    return;
+  }
 
   document.getElementById("plansGrid").innerHTML = PLANS_DATA.map(p=>{
     const price = _billing==="annual" ? p.annual : p.monthly;
@@ -403,55 +448,41 @@ async function subscribePlan(planKey, price){
   }
 }
 
-const COMM_RATES = [
-  /* ── DIRECT PLATFORM PAYMENT (checkout) ── */
-  ["🛒 Products / General Shop","—","5–10%","Commission deducted at checkout"],
-  ["🍽️ Food Delivery (Sokoni Eats)","—","15%","Included in menu pricing"],
-  ["💻 Digital Goods (eBooks, courses)","—","10%","Instant download — platform keeps %"],
-  ["🚗 Car Rental","KES 1,500","12%","Deposit + completion commission"],
-  /* ── WHATSAPP BOOKING WITH DEPOSIT ── */
-  ["⚖️ Legal Consultation","KES 500","5%","WhatsApp booking — lower % on large fees"],
-  ["🏥 Healthcare / Doctor","KES 200","5%","WhatsApp/on-site — NHIF providers exempt"],
-  ["🎧 Entertainment (DJs, Bands, MCs)","KES 500","10%","WhatsApp booking for events"],
-  ["🔧 Mechanics & Garages","KES 200","10%","WhatsApp booking — pay deposit first"],
-  ["🧹 Cleaning & Laundry","KES 200","10%","Per booking interaction"],
-  ["💇 Hair & Beauty (barbers, salons)","KES 200","10%","Per booking"],
-  ["📸 Photography & Videography","KES 300","10%","Per project booking"],
-  ["🏋️ Fitness & Personal Training","KES 150","10%","Per session"],
-  ["🍳 Catering & Chefs","KES 300","8%","Per event"],
-  ["📚 Tutoring & Coaching","KES 150","10%","Per session"],
-  ["⚡ Electrical / Plumbing / IT Repair","KES 200","10%","Per booking"],
-  ["⚽ Sports Facilities & Turf","KES 150","8%","Per slot booking"],
-  ["🧱 Construction Materials","KES 300","3%","High-value bulk — lower %"],
-  /* ── LEAD / REFERRAL FEE (B2B & Gov) ── */
-  ["🤝 B2B Wholesale Inquiry","KES 500","3%","Lead fee + % on completed order"],
-  ["🏛️ NTSA / Government Services","KES 200","—","Facilitation/referral fee only"],
-  ["🛡️ Car Insurance","KES 200","Referral","Referral bonus from insurer"],
-  /* ── PROPERTY & ACCOMMODATION ── */
-  ["🏠 Property Rental","KES 500","2%","Connection fee + % of 1st month rent"],
-  ["🏡 BnB / Short-stay","KES 300","8%","Per confirmed stay"],
-  /* ── PLATFORM FEES ── */
-  ["👑 Subscription Plans","—","Fixed monthly fee","Access to capabilities & premium features"],
-  ["🚀 Listing Boost","KES 100–2,000","—","One-time promotional fee"],
-];
 
-const COMM_SECTION_HEADERS = {
-  0: "💳 Direct Platform Payment — money passes through checkout",
-  4: "💬 WhatsApp Booking Gate — deposit paid first, then provider contacted",
-  18: "📊 Lead & Referral — SOKONI earns a connection/referral fee",
-  21: "🏠 Property & Accommodation",
-  23: "⚙️ Platform Fees",
-};
+/* ── Commission table: generated from the platform commission authority ─────────────
+   sokoni-commission-rates.js is built from functions/commission-config.js — the object the
+   server charges from — so this table cannot disagree with a charge. A category the authority
+   does not know renders an em dash, never a guess. Deposits are set per booking flow and are
+   not a commission, so they are not restated here. */
+const COMM_ROWS = [
+  ["\ud83d\uded2 Products / General Shop (online)", "marketplace", "Deducted at checkout"],
+  ["\ud83c\udfea In-shop POS / Till / Quick Charge", "pos", "Flat rate on every plan · minimum KES 10 per sale"],
+  ["\ud83c\udf7d\ufe0f Food ordered online", "food_delivery", "On the order total"],
+  ["\ud83d\udcbb Digital goods", "digital_products", "Instant delivery"],
+  ["\ud83d\ude97 Car rental", "car_rental", "On the confirmed rental"],
+  ["\ud83c\udfe8 Hotels & BnB", "hotel", "Per confirmed stay"],
+  ["\u2696\ufe0f Legal consultation", "legal", "On the logged fee"],
+  ["\ud83c\udfe5 Healthcare booking", "healthcare", "On the booking"],
+  ["\ud83d\udc8a Healthcare products (pharmacy)", "healthcare_products", "On the order"],
+  ["\ud83c\udfa7 Entertainment bookings", "entertainment_bookings", "Artists, DJs, venues"],
+  ["\ud83e\uddf9 Home services", "home_services", "Cleaning, repairs, beauty at home"],
+  ["\ud83d\udd27 Other service bookings", "services", "Mechanics, tutors, trainers, photographers"],
+  ["\ud83c\udf93 Education", "education", "Courses and tuition"],
+  ["\ud83c\udfab Event tickets", "tickets", "Per ticket sold"],
+  ["\ud83c\udfe0 Property", "property", "Flat fee per completed letting / sale"],
+  ["\ud83d\ude99 Vehicle sales (Car Hub)", "vehicles", "Flat fee per completed sale"],
+  ["\ud83d\udc51 Subscription plans", "subscriptions", "The whole plan fee is SOKONI revenue — it is not a commission"],
+];
 function renderCommTable(){
-  document.getElementById("commRatesTable").innerHTML = COMM_RATES.map((r,i)=>{
-    const header = COMM_SECTION_HEADERS[i]
-      ? `<tr><td colspan="4" style="background:rgba(113,255,0,0.04);color:rgba(113,255,0,0.7);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;padding:8px 14px 6px;border-bottom:1px solid rgba(113,255,0,0.1);">${COMM_SECTION_HEADERS[i]}</td></tr>`
-      : "";
-    return header+`<tr>
+  const C = window.SokoniCommission;
+  document.getElementById("commRatesTable").innerHTML = COMM_ROWS.map((r) => {
+    let rate = "\u2014";
+    if (C) { const x = C.resolve(r[1]); if (x.matched) rate = (x.fixedKES && !x.pct) ? "KES " + Number(x.fixedKES).toLocaleString() : x.pct + "%"; }
+    return `<tr>
       <td>${r[0]}</td>
-      <td class="comm-deposit">${r[1]}</td>
-      <td class="comm-rate">${r[2]}</td>
-      <td style="color:rgba(255,255,255,0.4);">${r[3]}</td>
+      <td class="comm-deposit">\u2014</td>
+      <td class="comm-rate">${rate}</td>
+      <td style="color:rgba(255,255,255,0.4);">${r[2]}</td>
     </tr>`;
   }).join("");
 }
@@ -526,7 +557,7 @@ const FAQS = [
   ["Does my subscription change my commission rate?","No — the platform commission on a sale is a single flat rate, the same on every plan. A subscription buys capabilities — more listings, unlimited leads, featured placement and premium tools — it never adds to, or reduces, the commission on a sale."],
   ["What happens if I don't pay the commission?","Outstanding unpaid commissions will temporarily restrict your listing from receiving new booking leads. Once settled, your listing is reinstated immediately."],
   ["Do I need a subscription to be listed?","No — the Free plan allows 3 listings and 5 booking leads per month. Upgrade only when you need more listings, more leads or premium features."],
-  ["Is legal / healthcare commission the same?","No — legal and healthcare commissions are lower (5%) because service fees are typically higher. The booking deposit is also calibrated accordingly."],
+  ["Is legal / healthcare commission the same?", (function(){ var C=window.SokoniCommission; if(!C) return "Each hub has its own published rate — see the table above."; var l=C.resolve("legal"), h=C.resolve("healthcare"), s=C.resolve("services"); return "Each hub has its own published rate: legal consultations "+(l.matched?l.pct+"%":"—")+", healthcare bookings "+(h.matched?h.pct+"%":"—")+", other service bookings "+(s.matched?s.pct+"%":"—")+". The table above is generated from the same authority the server charges from."; })()],
   ["How do I track my bookings and commissions?","All bookings, deposits paid, and commission obligations are tracked in your Seller Dashboard on SOKONI. Admin can also view the full platform commission report."],
 ];
 

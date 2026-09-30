@@ -3647,7 +3647,8 @@ function loadKraSection(){
     /* Revenue calculations */
     const grossRevenue     = orders.reduce((s,o)=>s+Number(o.total||0),0);
     const annualisedRev    = grossRevenue * (12 / monthsTraded);
-    const commission       = Math.round(grossRevenue * (SokoniCommission.pct("marketplace") / 100)); /* 12% Sokoni fee */
+    const feePct           = SokoniCommission.pct("marketplace");            /* the published online rate — never a literal */
+    const commission       = Math.round(grossRevenue * (feePct / 100));
     const netRevenue       = grossRevenue - commission;
     const vatExclusive     = Math.round(grossRevenue / 1.16);
     const vatCollected     = grossRevenue - vatExclusive; /* 16% VAT embedded in price */
@@ -3693,7 +3694,7 @@ function loadKraSection(){
             <div class="tax-card-note">${orders.length} orders · ${monthsTraded}mo trading</div>
         </div>
         <div class="tax-card">
-            <div class="tax-card-label">Net Revenue (after 12% fee)</div>
+            <div class="tax-card-label">Net Revenue (after ${feePct}% fee)</div>
             <div class="tax-card-value">KES ${netRevenue.toLocaleString()}</div>
             <div class="tax-card-note">Sokoni fee: KES ${commission.toLocaleString()}</div>
         </div>
@@ -3737,7 +3738,7 @@ function loadKraSection(){
                 <th style="padding:8px 10px;text-align:left;">Revenue</th>
                 <th style="padding:8px 10px;text-align:left;">Orders</th>
                 <th style="padding:8px 10px;text-align:left;">VAT (16%)</th>
-                <th style="padding:8px 10px;text-align:left;">Sokoni Fee (12%)</th>
+                <th style="padding:8px 10px;text-align:left;">Sokoni Fee (${feePct}%)</th>
             </tr></thead>
             <tbody>${monthlyRows}</tbody>
         </table>
@@ -3817,7 +3818,7 @@ KRA PIN   : ${pin}
 REVENUE SUMMARY
 ══════════════════════════════════════════════════════
 Gross Revenue (All Time)  : KES ${grossRevenue.toLocaleString()}
-Sokoni Commission (12%)   : KES ${commission.toLocaleString()}
+Sokoni Commission (${feePct}%)   : KES ${commission.toLocaleString()}
 Net Revenue               : KES ${netRevenue.toLocaleString()}
 Total Orders              : ${orders.length}
 
@@ -3888,7 +3889,7 @@ function downloadTaxPDF(){
     <hr style="margin:16px 0;">
     <h2>Revenue</h2>
     <div class="row"><span>Gross Revenue</span><span><strong>KES ${grossRevenue.toLocaleString()}</strong></span></div>
-    <div class="row"><span>Sokoni Commission (12%)</span><span>KES ${commission.toLocaleString()}</span></div>
+    <div class="row"><span>Sokoni Commission (${feePct}%)</span><span>KES ${commission.toLocaleString()}</span></div>
     <div class="row"><span>Net Revenue</span><span><strong>KES ${netRevenue.toLocaleString()}</strong></span></div>
     <h2>Tax Obligations</h2>
     <div class="row"><span>VAT (16%) — excl. VAT rev: KES ${vatExclusive.toLocaleString()}</span><span><strong>KES ${vatCollected.toLocaleString()}</strong></span></div>
@@ -4402,7 +4403,7 @@ function renderSalesAnalytics(tab){
     if(summaryEl) summaryEl.innerHTML = [
         { label:"Orders",        val:count,                      sub:"in period" },
         { label:"Gross Revenue", val:"KES "+revenue.toLocaleString(), sub:"total sales" },
-        { label:"Platform Fee",  val:"KES "+commission.toLocaleString(), sub:"5% commission" },
+        { label:"Platform Fee",  val:"KES "+commission.toLocaleString(), sub:(window.SokoniCommission ? SokoniCommission.pct("marketplace")+"% commission" : "commission") },
         { label:"Net Earnings",  val:"KES "+net.toLocaleString(), sub:"after fee" },
         { label:"Avg Order",     val:"KES "+avgOrder.toLocaleString(), sub:"per transaction" },
     ].map(c=>`
