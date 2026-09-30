@@ -259,6 +259,51 @@ KEBS category list.
 - **KASS chat tip lines** include unverified claims ("Flash deals are live!").
 
 **Not yet converted:** MiniShop, business, provider and service cards.
+## 2026-09-30 — ADMIN LAYOUTS (both consoles, every device): AdminOS sidebar redesign PORTED, merchant-v2 sidebar style on both, phone/tablet/desktop gaps closed — certified, NOT deployed
+
+Owner asks: "make sure the admins layout are fixed in all devices both admins" · "the AdminOS and super-admin sidebars should use
+the merchant-v2.html style" · "it was being built so no duplicates". On `hosting/admin-layout-on-85d74af`. No data logic, callable,
+Firestore read or permission check changed; nothing invented.
+- **Port census (feat/integrations-control-center, slices A–E, 2026-09-29; that branch does not descend from live, so hunks were
+  applied by hand and each commit names its source):** Slice A `a51f268` — NOT ported, already present (its sources f4a7f6a + 8f99418
+  are ancestors of this line) · A2 `5750f8f` — `<html data-admin-shell="own">` on admin-os.html taken; the sokoni-admin-shell.js
+  opt-out, probe lib and test-adminos-single-navigation NOT taken (no shell on this line; its negative control needs a shelled
+  monitor.html) · A3 `9d1d5f2` — min-width:0 chain + `.aos-sidebar` exclusion taken · B `65d3d2e` — `<nav id="aosNav">` single scroller,
+  `.nav-label`, a11y drawer (aria-expanded/controls, focus, Escape, breakpoint reset), focus rings, id-scoped reduced-motion override,
+  aria-current in `SokoniAOS.navigate()` taken · C1 `d007402` — `navigate(section, tab)`, `#section/tab` deep links, `_setNavState`,
+  tab-bar click reports back; children = Marketplace › Products/Orders/Reviews, Financial › Wallets(wallet)/Withdrawals(payouts)/
+  Disputes/Commissions, Communications › Notifications(push); "Config & Settings" (no children); Subscriptions in Tools. **Merchants
+  (estate/sellers) and Applications & Verification NOT ported** — no such sections here, and a child that selects no existing tab does
+  not exist · C2 `94935b1` (+ `f196c70`'s super-admin hunks verbatim) — super-admin.html `data-admin-shell="own"`, min-width:0 chain,
+  "AdminOS Workspaces" group (25 links to routes the AdminOS router validates, same tab), `sokoni-responsive.css` catch-all keyed
+  `html:not([data-admin-shell="own"])` · D `3f437f7` — `--aos-sub` defined, header flex-wrap + ≤640 reflow, breadcrumb truncation,
+  dashboard quick-links removed (Financial OS / Seller Success / Merchant Pipeline moved into Tools), bell → `navigate('comms','push')`,
+  funnel 0% label legible. CHANGELOG hunks of every slice NOT taken (this entry records them). No SOKONI Store button added.
+- **merchant-v2 style on both sidebars:** rounded 11px rows in an 8px-padded single scroller, uppercase 10.5px group labels, active =
+  accent dim fill + line (AdminOS green, Super Admin its own purple), drawer `min(84vw, 220px)`, `.22s cubic-bezier` curve, labels collapse
+  by width/opacity. **Super Admin now carries the same shell contract as AdminOS:** `<nav id="saNav">` one scroller, `.nav-label` on all
+  35 items, `data-label` on the nine section buttons, `_openSidebar/_closeSidebar/_toggleSidebar` with focus management, Escape, breakpoint
+  reset, `SA.nav()` sets `.active` + `aria-current` together. Data loading untouched. No merchant route imported.
+- **Measured baseline (scripts/test-admin-layouts.js on untouched 85d74af, 55/5):** admin-os @390 — Users 405px, Marketplace 398,
+  Communications 435, Content 405, Search 405 (a 200px toolbar floor beside selects; `.aos-main` grew with its widest panel); super-admin
+  @390 — `.sa-topbar` 417px (title + email + Sign Out + profile menu), every section 417, drawer-fits 417. 768 and 1280 clean on both.
+  **Gap fixes:** `.sa-topbar` wraps/truncates, email yields ≤640; `.sa-input/.sa-select` and `.confirm-gate` inputs cap at 100%; AdminOS
+  toolbar controls cap at the toolbar and take a full row ≤768; the shared drawer rule is `min(84vw, 220px)`.
+- **Evidence (static, run on this tree):** predeploy syntax gate 1803 files + 454 inline blocks clean · verify-admin-markup ✓ ·
+  audit-duplicate-ids no regression · audit-orphan-panels ✓ · test-admin-nav-context 3/0 · test-home-logo-routing 31/0 (2 unproven,
+  personas) · before-authority-runtime 16/0 · after-superadmin-link-gating 13/0 (its ">= 3 occurrences" fixture derived from the document
+  now: Slice D removed one of the two links; the contract "every link marked + CSS rule" holds) · after-admin-context ✓ ·
+  before-admin-surface-gate ✓ · census-role-contract ✓ · audit-admin-localstorage ✓. **Pre-existing reds, identical on the untouched
+  base:** after-superadmin-retirement 13/1 (superadmin.html still exists) · before-superadmin-pin-and-health 8/5 (a "before"
+  measurement of the platform-health guard).
+- **Evidence (browser) — QUEUED behind the production deploy hold at the time of this entry:** scripts/test-admin-layouts.js ·
+  test-adminos-sidebar-a11y.js (33/0 on its source line) · test-adminos-nav-coverage.js (25/0 there) · test-adminos-shell-final.js ·
+  probe-admin-os-mobile.js · before/after-admin-profile-model.mjs. Results are appended to this entry when the hold lifts; until then the
+  post-change layout is CERTIFIED BY STATIC CHECKS ONLY.
+- **Files:** `admin-os.html`, `super-admin.html`, `sokoni-aos.js`, `sokoni-responsive.css`, `sokoni-admin-responsive.css`,
+  `scripts/lib/adminos-probe-lib.js` (new), `scripts/test-admin-layouts.js` (new), `scripts/test-adminos-sidebar-a11y.js` (new),
+  `scripts/test-adminos-nav-coverage.js` (new), `scripts/test-adminos-shell-final.js` (new), `scripts/after-superadmin-link-gating.js`,
+  `CHANGELOG.md`. Database / API / security changes: none. Breaking: none (`SokoniAOS.navigate(section)` keeps its one-argument form).
 
 ## 2026-09-30 — MV2-2a (Merchant Operations Convergence): Supply workspace ported to the live line — certified, NOT deployed
 
