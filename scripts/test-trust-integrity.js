@@ -101,5 +101,18 @@ const po = src('provider-onboarding.html');
 ck('D provider wizard: "Submitted for Review" when the server reports approved:false; "You\'re Live!" only otherwise',
   /r\.data&&r\.data\.approved===false/.test(po) && /Submitted for Review/.test(po) && /function sSuccess\(pid, pending\)/.test(po));
 
+console.log('\nE. password reset (hosting half of the 25-minute gate) + claims');
+const au = noJsComments(src('auth.js'));
+const rq = (au.match(/async function requestPasswordReset\(\)\{[\s\S]*?\n\}/) || [''])[0];
+ck('E1 "Forgot password" calls the server gate authRequestPasswordReset, not Firebase sendPasswordResetEmail', /sokoniCallable\('authRequestPasswordReset'\)/.test(rq) && !/sendPasswordResetEmail/.test(rq), rq.slice(0, 160));
+ck('E2 the client audit event no longer carries the email address', !/audit\('PASSWORD_RESET_REQUEST',\s*\{\s*email/.test(au));
+ck('E3 the "link sent" confirmation is shown only after the request succeeded (errors return first)', /catch\(e\)\{[\s\S]{0,900}return;\s*\}/.test(rq));
+const rp = src('reset-password.html');
+ck('E4 reset-password.html: no-referrer, strips the token from the URL, self-updates (sw-register.js)', /name="referrer" content="no-referrer"/.test(rp) && /history\.replaceState/.test(rp) && /src="sw-register\.js"/.test(rp));
+ck('E5 reset-password.html calls authCompletePasswordReset and labels both password fields', /authCompletePasswordReset/.test(rp) && /<label for="pw1">/.test(rp) && /<label for="pw2">/.test(rp) && /role="alert"/.test(rp));
+ck('E6 login reset modal no longer collects an unused date of birth', !/id="resetDobDate"/.test(src('login.html')));
+const claimFiles = fs.readdirSync(ROOT).filter((f) => f.endsWith('.html') && /(Kenya(?:'|&#39;|’)s) #1 /.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
+ck('E7 no page claims "Kenya\'s #1 marketplace"', claimFiles.length === 0, claimFiles);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

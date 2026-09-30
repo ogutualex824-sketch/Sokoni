@@ -1,3 +1,8 @@
+## [2026-10-01] — Password reset: login uses the 25-minute server gate; new reset-password page; unsupported "#1" claims and an unused DOB field removed (hosting, NOT deployed)
+
+**Files:** `auth.js` (Forgot password → `authRequestPasswordReset`; real failures shown as failures; the audit event no longer carries the email), `reset-password.html` (new: no-referrer, token stripped from the URL, labelled fields, role=alert errors, sw-register), `login.html` (unused date-of-birth field removed from the reset modal, reset email labelled, `#forgot` opens the modal), and the "Kenya's #1 marketplace" claim removed from 14 pages (27 occurrences). `scripts/test-trust-integrity.js` 40/0.
+**Order:** deploy ONLY after `functions:authRequestPasswordReset,authCompletePasswordReset` (port/password-reset-25m-on-shell-gate da7cf39) are live — this page calls them.
+
 ## [2026-10-01] — Trust integrity: fabricated metrics, reviews, ratings, "verified" claims and fake contacts removed (hosting, NOT deployed)
 
 **Why:** the 2026-10-01 security/privacy census (docs/SECURITY_PRIVACY_GAP_CENSUS_2026-10-01.md, P0 #1 and #6) proved on live 72dca56 that customer-facing pages showed invented numbers and people, against the UI Data Integrity rule.

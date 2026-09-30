@@ -1102,27 +1102,35 @@ async function requestPasswordReset(){
         return;
     }
 
-    /* Rate limit: 3 reset attempts per 15 minutes per email */
-    if(typeof SokoniSecurity !== 'undefined' && SokoniSecurity.persistentRateLimit){
-        if(!SokoniSecurity.persistentRateLimit('pw_reset_' + email, 3, 900000)){
-            showAuthMsg("Too many reset attempts. Try again in 15 minutes.", "error");
-            return;
-        }
-    }
-
+    /* 2026-10-01 — the reset link is issued by SOKONI's server gate (authRequestPasswordReset):
+       it works ONCE and expires 25 minutes after it is sent (owner requirement). Firebase's own
+       sendPasswordResetEmail issued 1-hour links and was throttled only by a sessionStorage
+       counter the user could clear. Rate limits are now server-side and fail closed.
+       The server answers the same for every email, so this page never learns whether an
+       account exists. A real failure (network, rate limit) is shown as a failure — only a
+       completed request shows the "link sent" confirmation. */
+    const _btn = document.querySelector('#resetStep1 button');
+    if(_btn){ _btn.disabled = true; }
     try {
-        const { sendPasswordResetEmail } = await import(
-            "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"
-        );
-        if(window.firebaseAuth){
-            await sendPasswordResetEmail(window.firebaseAuth, email);
-        }
+        if(typeof window.sokoniCallable !== 'function') throw Object.assign(new Error('not ready'), { code: 'unavailable' });
+        await window.sokoniCallable('authRequestPasswordReset')({ email });
     } catch(e){
-        /* Always show the same message — never confirm whether the email exists */
+        if(_btn){ _btn.disabled = false; }
+        const code = String((e && e.code) || '').replace(/^functions\//, '');
+        if(code === 'resource-exhausted'){
+            const wait = e && e.details && e.details.retryAfterSeconds ? Math.ceil(e.details.retryAfterSeconds / 60) : 15;
+            showAuthMsg("Too many reset attempts. Try again in about " + wait + " minute" + (wait === 1 ? "" : "s") + ".", "error");
+        } else if(code === 'invalid-argument'){
+            showAuthMsg("Please enter a valid email address.", "error");
+        } else {
+            showAuthMsg("We could not send a reset link right now. Check your connection and try again.", "error");
+        }
+        return;
     }
 
     if(typeof SokoniSecurity !== 'undefined'){
-        SokoniSecurity.audit && SokoniSecurity.audit('PASSWORD_RESET_REQUEST', { email });
+        /* No email address in the audit event — it is personal data the event does not need. */
+        SokoniSecurity.audit && SokoniSecurity.audit('PASSWORD_RESET_REQUEST', {});
     }
 
     /* Replace Step 1 content with a confirmation message */
@@ -1134,7 +1142,8 @@ async function requestPasswordReset(){
                 <p style="font-size:14px;color:rgba(255,255,255,0.7);line-height:1.7;">
                     If <strong id="_resetEmailDisplay" style="color:#71ff00;"></strong> is registered,<br>
                     a password reset link has been sent.<br><br>
-                    <span style="font-size:12px;color:rgba(255,255,255,0.4);">
+                    <span style="font-size:12px;color:rgba(255,255,255,0.6);">
+                        The link works once and expires in 25 minutes.<br>
                         Click the link in your email to set a new password.<br>
                         Check your spam folder if it doesn&#x27;t arrive.
                     </span>
@@ -1148,7 +1157,7 @@ async function requestPasswordReset(){
     if(step2) step2.style.display = "none";
 }
 
-/* Stub — Firebase handles password setting on its hosted reset page */
+/* Stub — the new password is set on reset-password.html, opened from the emailed link. */
 async function completePasswordReset(){
     showAuthMsg("Please use the reset link in your email to set a new password.", "info");
 }

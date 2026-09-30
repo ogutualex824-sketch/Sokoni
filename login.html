@@ -10,9 +10,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Welcome Back — Sign in to SOKONI</title>
   <meta name="robots" content="noindex, nofollow">
-  <meta name="description" content="Sign in to your SOKONI account — Kenya's #1 online marketplace.">
+  <meta name="description" content="Sign in to your SOKONI account — Kenya's online marketplace.">
   <meta property="og:title" content="Welcome Back — Sign in to SOKONI">
-  <meta property="og:description" content="Sign in to your SOKONI account — Kenya's #1 online marketplace.">
+  <meta property="og:description" content="Sign in to your SOKONI account — Kenya's online marketplace.">
   <meta property="og:image" content="https://mysokoni.co.ke/assets/logosokoni.png">
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
@@ -206,12 +206,10 @@
       <div id="resetStep1">
         <div class="auth-field">
           📧
-          <input type="email" id="resetEmail" placeholder="Your email address">
+          <input type="email" id="resetEmail" placeholder="Your email address" aria-label="Email address for the reset link" autocomplete="email" style="margin-bottom:16px;">
         </div>
-        <div class="auth-field" style="margin-bottom:16px;">
-          🎂
-          <input type="date" id="resetDobDate" placeholder="Date of birth" style="color-scheme:dark;">
-        </div>
+        <!-- 2026-10-01: a date-of-birth field sat here that no code read — collected for nothing
+             (data minimisation). The emailed link is the proof of ownership. -->
         <button onclick="requestPasswordReset()" style="width:100%;padding:13px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;font-weight:900;font-size:14px;border:none;border-radius:12px;cursor:pointer;margin-bottom:10px;">Send Reset Link</button>
       </div>
       <div id="resetStep2" style="display:none;">
@@ -245,6 +243,7 @@
   <script src="scroll-top.js" defer></script>
   <script src="seo.js" defer></script>
   <script src="analytics.js" defer></script>
+  <script>if(location.hash==="#forgot"){document.addEventListener("DOMContentLoaded",function(){var m=document.getElementById("resetModal");if(m){m.style.display="flex";var e=document.getElementById("resetEmail");if(e)e.focus();}});}</script>
   <script src="sw-register.js" defer></script>
   <script>
   (function(){
