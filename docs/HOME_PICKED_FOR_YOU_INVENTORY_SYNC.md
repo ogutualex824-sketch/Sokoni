@@ -87,6 +87,30 @@ Not proven here: behaviour against production Firestore (App Check) — the harn
 
 Option 1 is the smaller blast radius and removes a whole failure class; option 2 keeps the query as written. Either way the fix must be certified in a **headed** browser with a valid token, since that is the only environment that reaches the index check.
 
+## 4d · Option 1 (ascending `__name__` + `limitToLast`) — BUILT, CERTIFIED AGAINST REAL FIRESTORE, **FALSIFIED**, REVERTED (2026-09-30 11:2xZ)
+
+Owner authorized option 1. The two-file change was made (`sokoni-db.js`: `orderBy(documentId()), limitToLast(cap)` + `.reverse()`; `sokoni-recommendations.js`: `orderBy(documentId()), limitToLast(_CAP)`), parsed, and then served **in place of the live files** to a headed Chrome session on the live origin (Playwright route interception, read-only) that held a **valid App Check token** (`exchanged`, persistent profile, attempt 1).
+
+| Run | App Check | Listener events | Recommendations |
+|---|---|---|---|
+| Live baseline (attempt 2 attested) | exchanged | `listener-attached → failed-precondition: The query requires an index → http-fallback-ok:97 → read-ok:97` | 0 cards, "requires an index" for products and mechanics |
+| **Candidate files served (db:1, recs:1)** | exchanged | **identical**: `listener-attached → failed-precondition: The query requires an index → http-fallback-ok:97 → read-ok:97` | **identical**: 0 cards, "requires an index" |
+
+**Why:** Firestore executes `limitToLast(n)` by reversing every `orderBy` direction server-side and applying `limit(n)`, so an ascending `__name__` + `limitToLast` query is served as `__name__` **DESCENDING** — the very index this project lacks. The form is index-equivalent to the one it replaced. Both source files were reverted; the tree is back at the certified commit. No deploy, no index, no rules change.
+
+**A second premise fell in the same census.** Only **11 of 97** live product ids are `Date.now()`-style; 86 are hand-labelled (`VP97`, `TC101`, `QATEST100`, `F17`…). `orderBy(__name__)` was therefore never "newest first" for this catalogue — lexicographic order puts `VP97` first, which is what Trending shows today. Any `__name__`-based "newest 200" is wrong for this data even with an index.
+
+**Index-free alternatives, with the facts each depends on (owner decision, not applied):**
+
+| Form | Needs | Live coverage | Risk |
+|---|---|---|---|
+| `orderBy('uploadedAt', 'desc'), limit(200)` | the built-in single-field index (exists for every field) | **97 / 97** products carry `uploadedAt` (96 numbers, 1 Timestamp) | a product **without** the field is omitted by Firestore. Writers: `seller.js` and `seller-wiring.js` stamp `Date.now()`; `functions/profile-engine.js` writes `data.uploadedAt \|\| null` (null still sorts, first); POS-side creators (`pos-marketplace-sync.js`, `pos-retail.js`) stamp `createdAt`, not `uploadedAt` — a POS-created product may be invisible to this query. Mixed number/Timestamp values sort by type (Timestamps first under desc). |
+| `limit(200)` with no `orderBy` | nothing | all 97 (under the cap) | implicit `__name__` ascending: past 200 products the **newest** are the ones dropped |
+| `orderBy('updatedAt', 'desc')` | built-in | 92 / 97 | 5 live products omitted today |
+| option 2: index `products` + `mechanics` on `__name__` DESC | an indexes deploy | n/a | governance surface; and it would perpetuate an ordering that is not "newest" for 86 / 97 ids |
+
+The honest "newest first" key for this catalogue is `uploadedAt`, which is what New Arrivals already sorts by client-side; making the server query use it means every product writer must stamp it (a small writer census + one server-side default) — that is a slice of its own, not a two-line query swap.
+
 ## 5 · Performance and security
 
 - **Performance:** no new synchronous script. The three previously hidden daily sections now render, but only when they approach the viewport or at idle (same deferral as New Arrivals), so the load window is unchanged. Recommendations now read ≤200 product docs instead of the whole collection. One failing Firestore listener per home visit is gone.
