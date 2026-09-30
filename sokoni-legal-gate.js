@@ -136,8 +136,16 @@
         done(false, comp);
       });
     }).catch(function () {
-      /* Non-blocking: if the legal service is unavailable, do not trap the user. */
-      done(true, { compliant: true, unavailable: true });
+      /* FAIL CLOSED (2026-10-01). This used to report compliant:true whenever the legal service
+         could not be reached, so an outage silently skipped every agreement. Unknown is not
+         accepted: the person sees why and can retry; the caller is told compliant:false. */
+      el.innerHTML = '<div class="slg-head">We could not load the agreements</div>' +
+        '<div class="slg-sub">They must be confirmed before you continue. Check your connection and try again.</div>' +
+        '<button type="button" class="slg-btn">Try again</button>';
+      el.style.display = 'block';
+      var rb = el.querySelector('.slg-btn');
+      if (rb) rb.addEventListener('click', function () { mount(el, opts); });
+      done(false, { compliant: false, unavailable: true });
     });
   }
 
