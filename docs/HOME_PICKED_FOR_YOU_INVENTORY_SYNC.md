@@ -1,6 +1,6 @@
 # Home — Picked For You, Edit Interests, New Arrivals and the daily grids, in sync with the catalogue
 
-**Date:** 2026-09-30 · **Surface:** `index.html` (Home) · **Lineage:** hosting candidate on `hosting/home-picked-for-you-on-2f3bb6f`, descending from the live hosting commit `2f3bb6f` (v645) · **Status:** built and certified locally; **NOT deployed** — deployment needs the owner's explicit authorization naming the candidate commit.
+**Date:** 2026-09-30 · **Surface:** `index.html` (Home) · **Lineage:** hosting candidate on `hosting/home-picked-for-you-on-2f3bb6f`, descending from the live hosting commit `2f3bb6f` (v645) · **Status:** **DEPLOYED 2026-09-30 09:32Z** as `d55c112` (owner said "deploy"), Hosting v646 `sokoni-20260930093216-v646`; artefacts `12edf13`; rollback version `6f7202bd5dd81d84`. Follow-up `sokoni-recommendations.js` App Check wait+retry committed after, NOT deployed.
 **Suite:** `node scripts/test-home-picked-for-you.js` (39 / 0, real `index.html` in Chromium through the page harness) · registered as a required hosting predeploy suite.
 **Related:** [[RELEASE_GATE_LIVE_CATALOGUE]] · [[HOMEPAGE_FEED_SCALING]] · [[HOME_PERFORMANCE_INVESTIGATION]] · [[Marketplace]]
 
@@ -58,6 +58,18 @@ Live catalogue shape (public `/api/catalogue`, 97 products): all carry numeric `
 | `predeploy-browser-suites.js` (the hosting deploy hook) | **EXECUTED 33 / 33**, including the new suite — packet `docs/release-gates/hosting-preflight-home-picked-for-you.json` |
 
 Not proven here: behaviour against production Firestore (App Check) — the harness shims the SDK. The live post-deploy smoke (`scratchpad/home-smoke2.js` pattern) must show: recommendations widget children > 0, no `[SokoniRecs] module not loaded`, no `[RT] products` warning, Edit Interests opening the editor for a visitor with saved interests, Fastest Selling visible.
+
+## 4b · Live verification after deploy (cache-busted, signed-out Chromium)
+
+| Check | Observed |
+|---|---|
+| `version.json` | commit `d55c112`, v646, dirtyWorkingTree false |
+| Served files vs candidate | inspiq.js, sokoni-lazy.js, script.js, sokoni-recommendations.js, realtime.js, sokoni-db.js **byte-identical**; `/` carries the 4 new markers (`/index.html` is a 301 to `/`) |
+| Edit Interests (visitor with saved interests) | a click renders the editor (picker innerHTML 8,425 chars; was 0 before) |
+| Picked For You | SokoniRecs widget rendered on both personas; InspIQ feed **6** cards for the returning visitor |
+| Fastest Selling | `display:block` (was permanently hidden) |
+| Console | no `[RT] products` warning, no `module not loaded` warning |
+| Caveat | headless Chromium is App-Check-throttled (403), so the recs widget showed its empty state there and the catalogue came through the `/api/catalogue` fallback; a real browser session is needed to see recs cards. Playwright's own click timed out on "element is not stable" (the section animates); a programmatic click worked. |
 
 ## 5 · Performance and security
 

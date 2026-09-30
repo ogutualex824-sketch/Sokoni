@@ -293,10 +293,30 @@
         catch (_) { return collection(db, col); }
       };
 
+      /* App Check is ENFORCED on Firestore and its token is acquired asynchronously. This
+         module is lazy-loaded and used to query the instant it executed, so on a first paint
+         the read could leave before the token existed and come back permission-denied — the
+         widget then rendered its empty state although the catalogue was readable a second
+         later (seen live 2026-09-30, right after the widget first rendered at all). Same
+         remedy the canonical catalogue listener uses: wait for the page's token promise
+         (bounded in firebase.js), and on a denial retry ONCE after forcing a refresh.
+         App Check is not weakened; the request simply carries the token it was owed. */
+      try { await (typeof window !== 'undefined' && window.__sokoniAppCheckReady); } catch (_) {}
+      const _readOnce = (col) => getDocs(_boundedQuery(col));
+      const _read = async (col) => {
+        try { return await _readOnce(col); }
+        catch (e) {
+          if (!/permission-denied|unauthenticated/.test(String(e && e.code || ''))) throw e;
+          try { await ((typeof window !== 'undefined' && window.__sokoniRefreshAppCheckToken) ? window.__sokoniRefreshAppCheckToken() : null); } catch (_) {}
+          await new Promise(r => setTimeout(r, 1500));
+          return _readOnce(col);
+        }
+      };
+
       const results = await Promise.all(
         READABLE.map(async spec => {
           try {
-            const snap = await getDocs(_boundedQuery(spec.col));
+            const snap = await _read(spec.col);
             const items = [];
             snap.forEach(docSnap => {
               const d = docSnap.data();

@@ -1,4 +1,6 @@
-## [2026-09-30] — Home: Edit Interests works, Picked For You renders, every home grid re-syncs with the catalogue — NOT deployed
+## [2026-09-30] - DEPLOYED d55c112 → Hosting v646 (cacheVersion sokoni-20260930093216-v646) 09:32Z, owner-authorized; artefacts 12edf13; rollback 6f7202bd5dd81d84. Live verified: markers served, 6 of 7 files byte-identical (index.html served via / — /index.html is a 301), recs widget renders, feed 6, Fastest Selling visible, no [RT] products warning, no module-not-loaded warning. Follow-up (recs App Check wait+retry) committed, NOT deployed.
+
+## [2026-09-30] — Home: Edit Interests works, Picked For You renders, every home grid re-syncs with the catalogue — DEPLOYED as d55c112 (see line above)
 
 **Files:** `index.html`, `inspiq.js`, `sokoni-lazy.js`, `sokoni-recommendations.js`, `script.js`, `sokoni-db.js`, `realtime.js`, `scripts/lib/page-harness.js`, `scripts/predeploy-browser-suites.js`, new `scripts/test-home-picked-for-you.js`, new `docs/HOME_PICKED_FOR_YOU_INVENTORY_SYNC.md`. Hosting candidate descending from live `2f3bb6f`.
 **Database / rules / indexes:** none (the earlier "products query needs an index" reading was wrong — the live failure was permission-denied from a duplicate listener racing App Check). **API changes:** none. **Breaking changes:** none.
