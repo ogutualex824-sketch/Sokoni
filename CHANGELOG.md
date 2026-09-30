@@ -1,3 +1,5 @@
+## [2026-09-30] - DEPLOYED 2f3bb6f → Hosting release 1790737658252000 / version 6f7202bd5dd81d84 (v645) 03:07:38Z; rollback 3cbdf961791900b8
+
 ## [2026-09-30] — Delivery Hub D2 (hosting half): the rider portal asks the server whether it is online — NOT deployed
 
 **Files:** `driver.html`, `CHANGELOG.md`. Built on the live hosting commit `d108f6c`.
