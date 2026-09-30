@@ -11,7 +11,7 @@
     "runtime": "nodejs22",
     "concurrency": 80,
     "minInstances": 0,
-    "maxInstances": 1000,
+    "maxInstances": 80,
     "memory": "512MiB",
     "timeoutSeconds": 60
   },
