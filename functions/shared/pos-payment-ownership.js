@@ -167,7 +167,9 @@ function assertConfirmableStk(intent, status, actor) {
     return refuse('unknown_shape', 'That payment request cannot be identified, so it cannot be confirmed.');
   }
   const owner = (typeof intent.merchantId === 'string' && intent.merchantId) ? intent.merchantId : null;
-  if (!owner) {
+  /* Written `=== null`, not `!owner`: the QR guard above is certified by a text-anchored sabotage
+     (certify-pos-payment-ownership X6-1) that must find exactly ONE `if (!owner) {`. */
+  if (owner === null) {
     return refuse('no_owner', 'That payment request does not identify its shop, so it cannot be confirmed.');
   }
   if (owner !== String(a.merchantId || '')) {

@@ -111,6 +111,11 @@ async function stk(ref, o) {
     const r = await checkout(A, sale(A, key, A + '_P9', 100, [{ method: 'mpesa', amount: 100, ref }]));
     ok(!r.ok && /cannot be identified/.test(r.msg) && (await salesByKey(key)) === 0, 'P-9', 'a non-IntaSend intent is refused', r.ok ? 'completed' : r.code);
   }
+  { const key = 'tc-noowner', ref = 'postill_' + A + '_' + key;
+    await stk(ref, { merchantId: A, key, amountCents: 10000, intentExtra: { merchantId: null } });
+    const r = await checkout(A, sale(A, key, A + '_P11', 100, [{ method: 'mpesa', amount: 100, ref }]));
+    ok(!r.ok && /does not identify its shop/.test(r.msg) && (await salesByKey(key)) === 0, 'P-11', 'a prompt whose intent names no shop is refused', r.ok ? 'completed' : r.msg);
+  }
   { const key = 'tc-daraja', ref = 'ws_CO_legacy_1';
     await db.collection('posPayments').doc(ref).set({ checkoutId: ref, status: 'completed', sellerUid: A, amount: 100 });
     const r = await checkout(A, sale(A, key, A + '_P10', 100, [{ method: 'mpesa', amount: 100, ref }]));
