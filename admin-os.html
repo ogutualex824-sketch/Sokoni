@@ -432,6 +432,10 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
       <button class="nav-item nav-child" data-section="marketplace" data-tab="reviews" data-label="Reviews" onclick="SokoniAOS.navigate('marketplace','reviews');_closeSidebar()"><span class="nav-icon">&#x2B50;</span><span class="nav-label">Reviews</span></button>
       <button class="nav-item" data-section="services" data-label="Service Hubs" onclick="SokoniAOS.navigate('services');_closeSidebar()"><span class="nav-icon">&#x1F527;</span><span class="nav-label">Service Hubs</span></button>
       <button class="nav-item" data-section="delivery" data-label="Delivery Operations" onclick="SokoniAOS.navigate('delivery');_closeSidebar()"><span class="nav-icon">&#x1F697;</span><span class="nav-label">Delivery</span></button>
+      <!-- SOKONI Store: opens the OPERATOR-only workspace. Every admin sees this entry; only the
+           named operator gets past the server gate (sokoniStoreGetContext) — everyone else lands on
+           "Access denied — the SOKONI Store is operated by its owner". The link authorises nothing. -->
+      <a class="nav-item" href="merchant-v2.html?store=sokoni" data-sokoni-store data-label="SOKONI Store"><span class="nav-icon">&#x1F3EC;</span><span class="nav-label">SOKONI Store</span></a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Operations</div>
