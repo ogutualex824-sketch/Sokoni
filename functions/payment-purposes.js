@@ -583,6 +583,72 @@ const PURPOSES = {
       };
     },
   },
+
+  /* ── Ported 2026-09-30 from the LIVE createPaymentIntent build (2026-09-09, archive gen 1787988598550043).
+     These three purposes were registered in production and consumed by the shipped client
+     (marketing.html → marketing_boost; sokoni-pay.js / subscriptions.html → boost; the commission
+     balance surface → commission_collection) but were absent on this lineage; deploying
+     createPaymentIntent without them would have refused every boost and every commission
+     payment as an unregistered purpose. Byte-for-byte from the archive. */
+  boost: {
+    resourceType: 'listingBoost',
+    async price(uid, data) {
+      /* Authoritative price per boost type — a server constant, never the request.
+         Seeded from the existing SokoniPay.BOOST_PRICES; a rate change is a reviewed
+         code change here, not a value a buyer can send. */
+      const BOOST_KES = { basic: 200, premium: 500, homepage: 2000, urgent: 100 };
+      const key = String(data.boostKey || data.key || '').trim().toLowerCase();
+      if (!Object.hasOwn(BOOST_KES, key)) {
+        fail('invalid-argument', `Unknown boost type "${key}". Valid: ${Object.keys(BOOST_KES).join(', ')}.`);
+      }
+      const cents = BOOST_KES[key] * 100;
+      /* The listing being boosted, if supplied — links the paid intent to what it
+         bought. Optional: a boost with no listing id is still a valid purchase record. */
+      const resourceId = String(data.listingId || data.productId || '').trim() || null;
+      return {
+        amountCents: cents,
+        currency: 'KES',
+        resourceType: 'listingBoost',
+        resourceId: resourceId,
+        metadata: { boostKey: key, durationDays: 7 },
+      };
+    },
+  },
+  marketing_boost: {
+    resourceType: 'marketingBoost',
+    async price(uid, data) {
+      const MKT_KES = { pro: 500, vip: 1500 };
+      const key = String(data.plan || data.boostKey || '').trim().toLowerCase();
+      if (!Object.hasOwn(MKT_KES, key)) {
+        fail('invalid-argument', `Unknown marketing boost plan "${key}". Valid: ${Object.keys(MKT_KES).join(', ')}.`);
+      }
+      const cents = MKT_KES[key] * 100;
+      const resourceId = String(data.product || data.resourceId || '').trim() || null;
+      return {
+        amountCents: cents,
+        currency: 'KES',
+        resourceType: 'marketingBoost',
+        resourceId: resourceId,
+        metadata: { plan: key, category: 'marketing' },
+      };
+    },
+  },
+  commission_collection: {
+    resourceType: 'commissionObligation',
+    async price(uid) {
+      const outstanding = await require('./commission-collection').computeOutstandingKES(uid);
+      if (!(outstanding > 0)) {
+        fail('failed-precondition', 'No outstanding commission to pay.');
+      }
+      return {
+        amountCents: Math.round(outstanding * 100),
+        currency: 'KES',
+        resourceType: 'commissionObligation',
+        resourceId: String(uid),
+        metadata: { kind: 'commission_48h' },
+      };
+    },
+  },
 };
 
 /**

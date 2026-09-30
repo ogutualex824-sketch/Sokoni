@@ -110,6 +110,12 @@ async function invoiceFor(ledgerRow) {
   ck('2a createPaymentIntent prices subscriptions from sub-billing PLANS, not from the request', /require\('\.\/sub-billing'\)/.test(PI) && /PLANS\[planId\]/.test(PI) && !/request\.data\.amount|data\.amount\b/.test(PI));
   const p = SB.PLANS.seller_basic;
   ck('2b PLANS.seller_basic monthly price is in cents and non-zero (99900)', p && p.price && p.price.monthly === 99900, p && p.price);
+  /* every purpose the LIVE createPaymentIntent (2026-09-09 build) registers must stay registered — a purpose the
+     client sends that the server no longer knows is a refused payment (boost / marketing_boost / commission_collection). */
+  const LIVE_PURPOSES = ['digital_download', 'event_ticket', 'service_booking', 'hub_registration', 'boost', 'marketing_boost', 'commission_collection'];
+  const PP = require(path.join(ROOT, 'functions', 'payment-purposes'));
+  ck('2d every purpose the live createPaymentIntent registers is registered here (no client-sent purpose becomes unknown)', LIVE_PURPOSES.every((x) => PP.isRegistered(x)), LIVE_PURPOSES.filter((x) => !PP.isRegistered(x)));
+  ck('2e commission_collection prices from commission-collection.computeOutstandingKES (exists, exported)', typeof require(path.join(ROOT, 'functions', 'commission-collection')).computeOutstandingKES === 'function');
   ck('2c subscription revenue is 100% platform revenue in the commission authority', CC.resolveRate('subscription').pct === 100 && CC.resolveRate('subscriptions').pct === 100 && CC.resolveRate('healthcare_subscription').pct === 100);
 
   /* ── 3. the authority set is closed ────────────────────────────────────────────────── */

@@ -401,7 +401,27 @@ exports.getSellerRestriction = onCall(
   }
 );
 
+/* Ported 2026-09-30 from the LIVE build: the single source of a seller's outstanding 48-hour
+   commission; payment-purposes.commission_collection prices a collection intent from it. */
+async function computeOutstandingKES(sellerUid) {
+  const uid = String(sellerUid || '');
+  if (!uid) return 0;
+  const snap = await _db().collection(LEDGER)
+    .where('sellerUid', '==', uid)
+    .where('billingModel', '==', 'PER_SALE_48H')
+    .where('collectionStatus', 'in', [CS.DUE, CS.REMINDED, CS.OVERDUE])
+    .limit(500)
+    .get();
+  let total = 0;
+  snap.docs.forEach((doc) => {
+    const d = doc.data();
+    total += Number(d.totalOwed || 0) + Number(d.penaltyKES || 0);
+  });
+  return Math.round(total * 100) / 100;
+}
+
 module.exports = {
+  computeOutstandingKES,
   sweepCommissionDue:   exports.sweepCommissionDue,
   getCommissionBalance: exports.getCommissionBalance,
   getSellerRestriction: exports.getSellerRestriction,

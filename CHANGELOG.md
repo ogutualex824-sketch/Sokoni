@@ -1,3 +1,11 @@
+## [2026-09-30] — Pre-deployment lineage gate: two createPaymentIntent regressions caught and ported (boost / marketing_boost / commission_collection + computeOutstandingKES); order corrected (charging authority first) — NOT DEPLOYED (`convergence/commercial-fn-on-ef1e992`)
+
+**Files:** `functions/payment-purposes.js` (three live purposes ported byte-for-byte from the 2026-09-09 production archive), `functions/commission-collection.js` (`computeOutstandingKES` ported + exported), `scripts/test-commercial-facts-invariants.js` (2d/2e pin every live purpose; 24/0), `docs/COMMERCIAL_CONVERGENCE_2026-09-30.md` §10 (per-function reachable-set diffs vs live archives, corrected order, Unit 3 draft `draft/commission-authority-on-68811e1` @ `a0fec85`, hosting candidate re-based to `convergence/commercial-web-on-3e8dd53` @ `358edee`, two functions held). **Database / API:** none. **Breaking:** none. **Production:** none.
+
+- Without the port, deploying `createPaymentIntent` would have refused every boost payment and every commission collection as an unregistered purpose (the shipped client sends all three).
+- `previewCommission` / `getCommissionConfig` must not precede the webhook's commission authority (Unit 3) — the server would quote 15% while charging 5%.
+- `createCheckoutSession` and `onSellerPaymentCreated` (inline in `index.js`) are held until a handler-level diff explains their index-tree delta (7 hosting-only modules, ~3,300 lines outside their call path).
+
 ## [2026-09-30] — FREE-50 backfill tool: readback + verify + rollback evidence; full emulator rehearsal (16/0); authorization packet in report §9 — NO production write (`convergence/commercial-fn-on-ef1e992`)
 
 **Files:** `scripts/backfill-product-counters-v3.js` (`--verify`, per-row readback, rollback evidence, refuse-before-write on any reduction, `--uid`), **new** `scripts/test-backfill-v3-emulator.js`, `docs/COMMERCIAL_CONVERGENCE_2026-09-30.md` §9 (three release gates; the terms/legal-hub VAT-treatment contradiction recorded as a Gate B / hosting blocker). **Database:** none (dry-run only). **Breaking:** none.
