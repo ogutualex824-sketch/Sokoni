@@ -1,3 +1,5 @@
+## [2026-09-30] - c7e26b6: minInstances 0 (matches live); re-certified; supersedes b28567c; NOT deployed
+
 ## [2026-09-30] - CANDIDATE: providerDispatch shell gate — pinned deployed archive (e521e03) + 10 gate modules + two-line dispatcher merge (c49c712); certified, NOT deployed
 
 See docs/CANDIDATE_PROVIDERDISPATCH_SHELL_GATE.md on slice/c4-capability-consumer. This branch exists to be deployed with
