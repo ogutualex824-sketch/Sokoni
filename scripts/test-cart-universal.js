@@ -302,7 +302,7 @@ console.log('\nB. The rollout did not mangle any file');
   ck('B', 'track exemption control: six lost WITHOUT the firebase.js import is still caught',
      !isTrackFirebaseMigration('track.html', SIX, '<html><script src="x.js"></script></html>'));
   ck('B', 'track exemption is not a global Firebase allowance: the Font Awesome pair remains the only other exemption',
-     (SRC_SELF.split('Migration' + 'Only').length - 1) === 4 /* faMigrationOnly define+use, trackMigrationOnly define+use — a third exemption would add two more */);
+     (SRC_SELF.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').split('Migration' + 'Only').length - 1) === 4 /* comment-stripped CODE only: the fa pair (define + use) and the track pair (define + use); a third exemption adds two */);
   /* And prove the trailing bytes were not rewritten — the string round trip that broke
      28 files showed up first as a changed final newline. */
   const tailChanged = rolled.filter(f => {
