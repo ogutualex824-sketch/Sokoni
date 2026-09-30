@@ -11729,6 +11729,18 @@ exports.fulfilmentScan    = _fulfilScan.fulfilmentScan;
 const _clientDiag = require('./client-diagnostics');
 exports.logClientDiagnostic = _clientDiag.logClientDiagnostic;
 
+/* ── App release metrics (Updates centre, 2026-10-01) ──────────────
+   The admin-only release log (bundled functions/data/release-log.json —
+   never a public hosting file) and the ONLY canonical install / update
+   counts. Writes are Admin SDK only; appInstalls + appInstallMetrics have
+   no client rule (default-deny). Re-exported BY NAME: a scheduled function
+   that is not exported under its exact name is never deployed. */
+const _appRelease = require('./app-release-metrics');
+exports.adminReleaseLog          = _appRelease.adminReleaseLog;          // onCall (admin)
+exports.appInstallReport         = _appRelease.appInstallReport;         // onCall (public, App Check)
+exports.scheduledAppInstallStats = _appRelease.scheduledAppInstallStats; // schedule every 6 h
+exports.adminGetAppInstallStats  = _appRelease.adminGetAppInstallStats;  // onCall (admin)
+
 /* ── Age verification (KASS Vapes / restricted categories) ─────────
    adult-gate.js is client-side only and writes nothing to the server, so it
    stops nobody and produces no evidence. These run the check server-side and
