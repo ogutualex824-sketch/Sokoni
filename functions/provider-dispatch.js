@@ -13,7 +13,8 @@ const _OPTS = {
   enforceAppCheck: true,
   timeoutSeconds:  120,
   memory:          '512MiB',
-  minInstances:    1,     /* keep one warm — the provider dashboard's hot path (no cold start on load) */
+  minInstances:    0,     /* MATCHES THE LIVE SERVICE (minInstanceCount 0, 2026-09-30). The archive's source said 1 — a cost-bearing
+                             drift the Firebase CLI refused to deploy without --force; it is not part of the shell gate. */
 };
 
 let _mod;
