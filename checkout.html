@@ -2148,9 +2148,16 @@ async function _placeOrderCore(){
            `_authTotal` is what the buyer is charged. `orderTotal` stays only for
            display and for the mismatch check below. */
         if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('preparing', 'Confirming price…');
-        const { getFunctions: _gf, httpsCallable: _hc } =
-          await import("https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js");
-        const _mkIntent = _hc(_gf(undefined, 'us-central1'), 'createPaymentIntent');
+        /* The shared App-Check-aware callable from firebase.js — NOT a page-local
+           import. The page's app is initialised by firebase.js on SDK 10.12.2; an
+           import of any other SDK version is a separate module with an EMPTY app
+           registry, so getFunctions(undefined) there throws app/no-app, and even a
+           bound call would carry no App Check token (createPaymentIntent enforces
+           it). subscriptions.html hit and fixed the same trap the same way. */
+        if (typeof window.waitForFirebaseReady === 'function') await window.waitForFirebaseReady();
+        if (typeof window.sokoniCallable !== 'function')
+          throw new Error('Could not confirm the order total. Please refresh and try again.');
+        const _mkIntent = window.sokoniCallable('createPaymentIntent');
         const _intentRes = await _mkIntent({
           purpose:         'product_order',
           orderId:         _ordId,
