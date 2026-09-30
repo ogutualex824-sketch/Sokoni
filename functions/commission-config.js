@@ -53,7 +53,7 @@ const RATES = {
      rides the marketplace alias, so raising online sales can never raise the till. */
   marketplace:      { pct: 15,  fixedKES: 0,    _was: 'owner schedule 2026-09-28: online product sales 15% (was 5%; the plan lane was already a flat 15%)' },
   food_delivery:    { pct: 15,  fixedKES: 0,    _was: 'owner schedule 2026-09-28: food ordered online 15% (was 5%)' },
-  property:         { pct: 2,   fixedKES: 0,    _was: 'hub 2% / category 3%' },
+  property:         { pct: 0,   fixedKES: 5000, _was: 'owner schedule 2026-09-28: property KES 5,000 flat (was hub 2% / category 3%)' },
   vehicles:         { pct: 0,   fixedKES: 2000, _was: 'hub flat KES 2000 / category 5%' },
   healthcare:       { pct: 12,  fixedKES: 0,    _was: 'owner schedule 2026-09-28: healthcare BOOKINGS 12% (was 5%)' },
   /* Healthcare PRODUCT sales price as merchant online sales (owner: "same as merchant"). `pharmacy` — the only
@@ -89,7 +89,7 @@ const RATES = {
   education:        { pct: 15,  fixedKES: 0,    _was: 'category only' },
   jobs:             { pct: 15,  fixedKES: 0,    _was: 'category only' },
   classifieds:      { pct: 8,   fixedKES: 0,    _was: 'category only' },
-  hub:              { pct: 12,  fixedKES: 0,    _was: 'delivery 12% platform / 88% rider — the rider-facing promise everywhere (was 8%, which paid riders 92% and contradicted the app)' },
+  hub:              { pct: 17,  fixedKES: 0,    _was: 'owner schedule 2026-09-28: SOKONI delivery share 17–25% per quote, settled by delivery-quote-authority.js (SHARE_MIN_PCT 17 / SHARE_MAX_PCT 25); this row is the FLOOR for a consumer that resolves by category, never the per-delivery share (was 12% / 88% rider)' },
 
   /* ── the platform keeps the whole amount: these are not marketplace sales ── */
   subscriptions:    { pct: 100, fixedKES: 0,    _was: 'category only — full amount is platform revenue' },
@@ -321,6 +321,28 @@ function resolveRate(key) {
   }
   const r = RATES[category];
   return { pct: r.pct, fixedKES: r.fixedKES, category, matched: true };
+}
+
+/* ── FIXED-RATE CATEGORIES — the recorded POS decision is ABSOLUTE, not merely ladder-exempt ──
+   Owner decisions 2026-09-06 (`932ee22`: POS "immune to per-seller overrides"), 2026-09-26
+   (docs/CANONICAL_MONEY_VERSION_DECISIONS.md: "fixed-rate bypass of every override and plan
+   adjustment, recorded as pricingSource 'fixed_rate_category'") and 2026-09-28 (`5db1540`: POS
+   decoupled from online sales, flat 5% on every plan) say the same thing. A category listed here
+   takes RATES[category] and nothing else: commissionRules, revenueConfig/{seller_,hub_,global},
+   a subscription rate and revenueConfig/plan_adjustments are all bypassed by
+   finos-utils.calculateCommission, which records that it did so (`fixedRateCategory`,
+   `overrideIgnored`, `planSkipped: 'fixed_rate_category'`).
+
+   The 2026-09-06 production lineage carried this guard. The 09-28 restructure kept the flat lane
+   (POS_PLAN_RATES) but dropped the guard, which left POS ladder-exempt yet override-able through
+   the finos-utils chain. Restored 2026-09-30 — docs/COMMERCIAL_CONVERGENCE_2026-09-30.md. */
+const FIXED_RATE_CATEGORIES = Object.freeze(['pos']);
+
+/* Accepts a hub id, an alias, or a category, and resolves it the same way resolveRate does,
+   so a caller passing hubId 'pos' and a caller passing category 'till' get the same answer. */
+function isFixedRateCategory(key) {
+  const r = resolveRate(key);
+  return r.matched === true && FIXED_RATE_CATEGORIES.indexOf(r.category) !== -1;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
@@ -642,6 +664,8 @@ function categoryForHub(hub) {
 module.exports = {
   resolveRate,
   listCategories,
+  isFixedRateCategory,
+  FIXED_RATE_CATEGORIES,
   categoryForHub,
   MIN_COMMISSION_KES,
   PLAN_ADJUSTMENTS_DOC,

@@ -393,17 +393,25 @@ async function calculateCommission(db, opts) {
            * decision, not a side effect of centralising the maths. */
           skipMinimum } = opts || {};
 
+  /* ── FIXED-RATE CATEGORY (POS / Till / Quick Charge): the recorded decision is ABSOLUTE ──
+     RATES[category] and nothing else. A matching commissionRule is still detected so the
+     ledger can say an admin override existed and was bypassed (`overrideIgnored`), but it
+     never prices the sale; the revenueConfig, subscription-rate, marketplace-ladder and
+     plan-adjustment lookups are not even made. Restored from the 2026-09-06 production
+     lineage — see commission-config.FIXED_RATE_CATEGORIES. */
+  const fixedCategory = CC.isFixedRateCategory(category);
   /* Fetch rules; small collection — fetch all and pick best match */
   const rulesSnap = await db.collection('commissionRules').where('isActive', '==', true).get().catch(() => null);
   const rules = rulesSnap ? rulesSnap.docs.map(d => ({ id: d.id, ...d.data() })) : [];
 
   /* Priority: seller-specific → hub-specific → category → global default */
-  const rule =
+  const matchedRule =
     rules.find(r => r.entityId === sellerId && (r.category === category || r.category === 'all'))
     || rules.find(r => r.entityId === hubId    && (r.category === category || r.category === 'all'))
     || rules.find(r => !r.entityId && r.category === category)
     || rules.find(r => !r.entityId && r.category === 'all')
     || null;
+  const rule = fixedCategory ? null : matchedRule;
 
   /* revenueConfig overrides — the SECOND override system.
    *
@@ -417,7 +425,7 @@ async function calculateCommission(db, opts) {
    * holidays, date windows), and putting them first preserves the behaviour of every payment
    * that already went through this function. */
   let rcPct = null, rcFixedKES = 0;
-  if (!rule) {
+  if (!rule && !fixedCategory) {
     const rcDocs = await Promise.all([
       sellerId ? db.collection('revenueConfig').doc('seller_' + sellerId).get().catch(() => null) : null,
       db.collection('revenueConfig').doc('hub_' + (hubId || category || 'default')).get().catch(() => null),
@@ -450,7 +458,7 @@ async function calculateCommission(db, opts) {
    * revenueConfig/hub_provider { commissionPct: 15 }, which outranks it. That is the
    * deliberate business decision; this code does not make it. */
   let subRatePct = null;
-  if (!rule && rcPct === null && subscriptionRole && sellerId) {
+  if (!rule && rcPct === null && !fixedCategory && subscriptionRole && sellerId) {
     try {
       const subCore = require('./subscription-core');
       const frac = await subCore.getCommissionRate(sellerId, { role: subscriptionRole });
@@ -485,7 +493,7 @@ async function calculateCommission(db, opts) {
    * — the HIGHEST rate. Every existing subscription document predates this ladder, so that
    * fallback is the normal path rather than an edge case. */
   let mktPct = null, mktPlan = null, mktFloorExempt = false, mktSource = null, mktSkipped = null;
-  if (!rule && rcPct === null && sellerId && CC.isMarketplaceSellerSale(category)) {
+  if (!rule && rcPct === null && !fixedCategory && sellerId && CC.isMarketplaceSellerSale(category)) {
     let tier = null;
     try {
       const sub = await _resolveSellerPlan(sellerId);
@@ -506,13 +514,16 @@ async function calculateCommission(db, opts) {
   }
 
   const base = CC.resolveRate(category);
+  const overrideIgnored = fixedCategory && !!matchedRule;
   let commissionCents;
-  let effectiveRate = rule ? rule.rate
+  let effectiveRate = fixedCategory ? base.pct
+                    : (rule ? rule.rate
                     : (rcPct !== null ? rcPct
                     : (mktPct !== null ? mktPct
-                    : (subRatePct !== null ? subRatePct : base.pct)));
+                    : (subRatePct !== null ? subRatePct : base.pct))));
   /* Flat fees: a revenueConfig override wins, else the config's own fixedKES (e.g. vehicles). */
-  const fixedKES = rcFixedKES || base.fixedKES || 0;
+  /* A fixed category takes its own fixedKES only — same reasoning as the rate. */
+  const fixedKES = fixedCategory ? (base.fixedKES || 0) : (rcFixedKES || base.fixedKES || 0);
   /* True when the plan rate is the authority for this booking — used below to keep the
      platform minimum off a flow that never had one. */
   /* `mktPct === null` is load-bearing: the marketplace ladder OUTRANKS subRatePct, so without
@@ -544,7 +555,10 @@ async function calculateCommission(db, opts) {
      Phase 1 costs one cached config read and nothing else. */
   const planCfg = await _planAdjustmentOverrides(db);
 
-  if (mktPct !== null) {
+  if (fixedCategory) {
+    /* The POS lane is not plan-keyed and takes no adjustment — recorded, not silently skipped. */
+    planSkipped = 'fixed_rate_category';
+  } else if (mktPct !== null) {
     /* The marketplace ladder IS this seller's plan pricing. Discounting it here would apply
        the plan twice — a Pro seller would pay 5% less a Pro discount. The ladder is absolute
        by construction, so the adjustment step stands down and says so. */
@@ -651,18 +665,22 @@ async function calculateCommission(db, opts) {
        over this function instead of a second engine with its own table and its own arithmetic. */
     fixedKES,
     category:   base.category,
-    ruleId:     rule ? rule.id : 'default',
-    ruleSource: rule ? (rule.entityId ? 'entity_specific' : rule.category)
+    ruleId:     fixedCategory ? 'fixed_rate_category' : (rule ? rule.id : 'default'),
+    ruleSource: fixedCategory ? 'fixed_rate_category'
+              : rule ? (rule.entityId ? 'entity_specific' : rule.category)
               : (rcPct !== null ? 'revenue_config'
               : (mktPct !== null ? 'marketplace_plan_ladder'
               : (usingSubRate ? 'subscription_plan_rate' : 'default_table'))),
     /* Which authority actually priced this transaction. Written to the ledger so a settlement
        can be explained years later without re-deriving it. */
-    pricingSource: rule ? 'commission_rule'
+    pricingSource: fixedCategory ? 'fixed_rate_category (universal rule, overrides bypassed)'
+                 : rule ? 'commission_rule'
                  : (rcPct !== null ? 'revenue_config'
                  : (mktPct !== null ? 'marketplace_plan_ladder'
                  : (usingSubRate ? 'subscription_plan_rate (compatibility mode)'
                  : 'category_default'))),
+    fixedRateCategory: fixedCategory,           /* POS / Till: RATES[category] and nothing else */
+    overrideIgnored,                            /* a matching commissionRule existed and was bypassed */
 
     /* ── MARKETPLACE LANE PROVENANCE ────────────────────────────────────────────────────
      * A settlement that records "5%" with no way to prove "5% because Pro" is exactly what

@@ -28,8 +28,8 @@
       "fixedKES": 0
     },
     "property": {
-      "pct": 2,
-      "fixedKES": 0
+      "pct": 0,
+      "fixedKES": 5000
     },
     "vehicles": {
       "pct": 0,
@@ -100,7 +100,7 @@
       "fixedKES": 0
     },
     "hub": {
-      "pct": 12,
+      "pct": 17,
       "fixedKES": 0
     },
     "subscriptions": {

@@ -64,10 +64,12 @@ for (const alias of ['product', 'products', 'shopping', 'b2b']) {
 
 /* ── 2. Unrelated categories untouched ──────────────────────────────────── */
 console.log('\nB. Unrelated categories unchanged\n');
-const EXPECTED = {   /* owner schedule 2026-09-28 (property/jobs/classifieds/ppv/hub/advertising/saas unchanged) */
-  food_delivery: 15, property: 2, vehicles: 0, healthcare: 12, legal: 5, events: 5,
+const EXPECTED = {   /* owner schedule 2026-09-28 (jobs/classifieds/ppv/advertising/saas unchanged;
+                        property -> KES 5,000 flat and hub -> 17% floor of the 17-25% delivery share were
+                        reconciled to the owner's table on 2026-09-30 - docs/COMMERCIAL_CONVERGENCE_2026-09-30.md) */
+  food_delivery: 15, property: 0, vehicles: 0, healthcare: 12, legal: 5, events: 5,
   hotel: 15, digital_products: 10, event_tickets: 5, ppv: 15, services: 5,
-  education: 15, jobs: 15, classifieds: 8, hub: 12, subscriptions: 100,
+  education: 15, jobs: 15, classifieds: 8, hub: 17, subscriptions: 100,
   advertising: 100, saas: 0,
 };
 let drift = [];
@@ -77,6 +79,8 @@ for (const [k, want] of Object.entries(EXPECTED)) {
 }
 ck('all 18 other category rates match the 2026-09-28 schedule', drift.length === 0, drift.join('; ') || 'no drift');
 ck('vehicles keeps its flat fee (KES 2000, 0%)', CC.resolveRate('vehicles').fixedKES === 2000);
+ck('property is a flat KES 5,000 (owner schedule 2026-09-28; was 2%)', CC.resolveRate('property').fixedKES === 5000 && CC.resolveRate('property').pct === 0);
+ck('hub/delivery floor equals delivery-quote-authority.SHARE_MIN_PCT', CC.resolveRate('delivery').pct === require(path.join(ROOT, 'functions', 'delivery-quote-authority')).SHARE_MIN_PCT);
 ck('event_tickets is 5% (owner schedule 2026-09-28; was 3%)', CC.resolveRate('event_tickets').pct === 5);
 
 /* ── 3. The KES 10 minimum ──────────────────────────────────────────────── */

@@ -1,3 +1,15 @@
+## [2026-09-30] — Commission authority: POS fixed-rate bypass restored; property KES 5,000 flat; delivery floor 17% — LOCAL, NOT DEPLOYED (`convergence/commercial-fn-on-ef1e992`)
+
+**Files:** `functions/commission-config.js`, `functions/finos-utils.js`, `sokoni-commission-rates.js` (regenerated, NOT published), `scripts/test-pos-fixed-rate-bypass.js` (new, 20/0), `scripts/test-commission-5pct-agreement.js` (expected table).
+**Database / rules / indexes:** none. **API:** `calculateCommission()` results gain `fixedRateCategory` and `overrideIgnored`; `commission-config` exports `isFixedRateCategory` / `FIXED_RATE_CATEGORIES`. **Breaking:** none.
+**Security / money:** closes the override path by which a `commissionRules` or `revenueConfig` document could re-price a POS / Till sale on the 09-28 lineage; no such document exists in production today (latent). **Performance:** POS sales skip the three `revenueConfig` reads and the plan lookup.
+
+- **POS is ABSOLUTE, per the recorded decision** (owner 2026-09-06 `932ee22` "immune to per-seller overrides"; 2026-09-26 `docs/CANONICAL_MONEY_VERSION_DECISIONS.md` "fixed-rate bypass of every override and plan adjustment"; 2026-09-28 `5db1540` "POS decoupled from online sales"). The 09-28 restructure kept the flat POS lane but dropped the 09-06 `isFixedRateCategory` guard from `finos-utils.calculateCommission`, leaving POS ladder-exempt but override-able. Restored: `FIXED_RATE_CATEGORIES = ['pos']`; a POS / Till / Quick Charge sale takes `RATES.pos` and nothing else, recorded as `pricingSource: 'fixed_rate_category (universal rule, overrides bypassed)'`, `planSkipped: 'fixed_rate_category'`, `overrideIgnored` when a matching rule existed. Proven through the real resolver with a stub that offers every override: POS 5% regardless; a marketplace sale honours the same rule (`test-pos-fixed-rate-bypass.js`).
+- **property → KES 5,000 flat, 0%** (owner schedule 2026-09-28; the 09-28 implementer had left it at 2% as "unchanged" — `test-commission-5pct-agreement.js` pinned that reading and is corrected).
+- **hub / delivery / logistics / driver → 17%**, the floor of the 17–25% share that `delivery-quote-authority.js` (SHARE_MIN_PCT 17 / SHARE_MAX_PCT 25, 2026-09-28) already settles per quote; the row was a second, stale authority at 12% / 88% rider. A test pins the two numbers equal.
+- Snapshot regenerated and `--check` in sync **locally**. Not published: live hosting still serves the 3% file; publication is gated on server == config == snapshot == UI (see the convergence report).
+- Gates on this tree: schedule 25/0 · agreement 62/0 · lane-separation 22/0 · pos-lane 92/0 · pos-sale 78/0 · KASS authority 7/0 · settlement authority 53/0 · healthcare plan 16/0 · single-source PASS · delivery-engine-sync PASS. Pre-existing on pristine `ef1e992` and untouched: `test-commission-48h-destinations` (3 fails) and `test-subscription-commission-classification` (its fixture predates `5db1540`).
+
 ## [2026-09-30] - Till payment labels: every label is a real IntaSend-proven payment, or it is refused
 
 **Local only — NOT deployed, NOT pushed. Branch `slice/c4-convergence` on `8b9ca72`.** Owner:
